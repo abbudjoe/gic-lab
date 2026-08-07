@@ -2,12 +2,16 @@
 
 Unresolved items are recorded here instead of being silently decided during implementation.
 
-## Must resolve before public release
+## Must resolve before licensed reuse or formal publication
 
-- **OQ-001 — Repository licenses:** Choose separate or compatible licenses for source code and authored research content. No repository license has been selected.
-- **OQ-002 — Public identity/contact:** Decide the author name, contact address, citation metadata, and project URL to publish.
-- **OQ-003 — Hosting:** Confirm GitHub organization/repository name, Pages URL, and whether a custom domain is desired.
-- **OQ-011 — Pages activation:** After a remote exists, enable GitHub Pages with GitHub Actions as its source and verify the first deployment. Phase 0 validates the workflow locally but cannot claim a live deployment.
+- **OQ-001 — Repository licenses:** Choose separate or compatible licenses for source code and authored research content. The repository is publicly visible, but no reuse license is granted until this is resolved.
+- **OQ-002 — Public identity/contact:** Decide the author name, contact address, and citation metadata for formal publication.
+- **OQ-003 — Custom domain:** Decide whether the public notebook should remain at its GitHub Pages URL or use a custom domain.
+
+## Resolved publication infrastructure
+
+- **OQ-011 — Pages activation:** Resolved 2026-08-06. GitHub Pages uses GitHub Actions and the first deployment passed at <https://abbudjoe.github.io/gic-lab/>.
+- **Repository hosting:** Resolved 2026-08-06. The public canonical repository is <https://github.com/abbudjoe/gic-lab>.
 
 ## Must resolve before Phase 1 compute
 

@@ -2,7 +2,10 @@
 
 GIC Lab is a public, reproducible research program for determining which proposed mechanisms in the Goal–Identity–Configurator (GIC) architecture are necessary, sufficient, learnable, and measurably better than matched external orchestration.
 
-The repository is currently in **Phase 0: research bootstrap**. No prototype result has been reproduced, and no benchmark or training run has been performed.
+The repository has completed **Phase 0.5: reading reconciliation**. No prototype result has been reproduced, and no benchmark or training run has been performed.
+
+- [Public research notebook](https://abbudjoe.github.io/gic-lab/)
+- [GitHub repository](https://github.com/abbudjoe/gic-lab)
 
 ## Start here
 
@@ -10,7 +13,7 @@ The repository is currently in **Phase 0: research bootstrap**. No prototype res
 - [Research questions](docs/RESEARCH_QUESTIONS.md)
 - [Claim matrix](docs/CLAIM_MATRIX.md)
 - [Falsification notes](docs/FALSIFICATION_NOTES.md)
-- [Active Phase 0 plan](docs/exec-plans/active/PHASE_0_BOOTSTRAP.md)
+- [Completed Phase 0.5 ledger](docs/exec-plans/active/PHASE_0_5_RECONCILIATION.md)
 - [Reproducibility contract](docs/REPRODUCIBILITY.md)
 - [Public notebook source](notebook/index.qmd)
 
@@ -39,4 +42,4 @@ This separation prevents “completed” from being mistaken for “confirmed,�
 
 ## License
 
-The repository's final software and content licenses are intentionally undecided. See [Open Questions](docs/OPEN_QUESTIONS.md) before reusing repository-authored material.
+The repository's final software and content licenses are intentionally undecided. No reuse permission is granted for repository-authored material until licenses are added; see [Open Questions](docs/OPEN_QUESTIONS.md).
