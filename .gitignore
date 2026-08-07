@@ -1,0 +1,61 @@
+# Python and test tooling
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+.tools/
+
+# Quarto output and execution caches
+_site/
+.quarto/
+notebook/.quarto/
+notebook/_freeze/
+notebook/.jupyter_cache/
+notebook/generated/
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials*.json
+secrets*.yaml
+secrets*.yml
+
+# Large or generated research material
+data/
+datasets/
+artifacts/
+checkpoints/
+models/
+traces/
+trajectories/
+screenshots/
+videos/
+wandb/
+mlruns/
+outputs/
+browsing_data/
+*.safetensors
+*.ckpt
+*.pt
+*.pth
+*.onnx
+*.parquet
+*.parquet.zst
+*.tar
+*.tar.gz
+*.zip
+
+# IDE and OS state
+.DS_Store
+.idea/
+.vscode/

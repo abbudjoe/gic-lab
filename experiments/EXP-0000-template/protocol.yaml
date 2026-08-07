@@ -1,0 +1,49 @@
+schema_version: 0.1.0
+experiment_id: EXP-0000
+title: Replace with a descriptive experiment title
+question: Replace with one precise research question.
+hypothesis:
+  statement: Replace with a falsifiable treatment-versus-control statement.
+  null_hypothesis: Replace with the corresponding null statement.
+  falsification_criteria:
+    - Replace with a predeclared observation that would weaken or falsify the claim.
+study_stage: exploratory
+lifecycle_status: planned
+evidence_status: not-evaluated
+outcome_status: pending
+owner: unassigned
+created_at: "2026-07-15"
+updated_at: "2026-07-15"
+source_contracts:
+  - docs/PROJECT_CHARTER.md
+systems:
+  treatment: treatment-placeholder
+  controls:
+    - control-placeholder
+fixed_variables:
+  model_backbone: unresolved
+metrics:
+  primary: primary-metric-placeholder
+  secondary: []
+sampling:
+  dataset_ids: []
+  sample_size: 0
+  replications: 0
+  seeds: []
+budget:
+  max_model_tokens: null
+  max_tool_calls: null
+  max_gpu_hours: 0
+  max_cost_usd: 0
+acceptance_criteria:
+  - Replace before authorization.
+stop_conditions:
+  - Stop if the approved budget or safety boundary would be exceeded.
+execution:
+  authorized: false
+  authorization_reference: null
+paths:
+  protocol: experiments/EXP-0000-template/protocol.yaml
+  config: experiments/EXP-0000-template/config.yaml
+  results: experiments/EXP-0000-template/results-summary.json
+deviations: []

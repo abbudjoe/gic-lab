@@ -1,0 +1,17 @@
+---
+title: "Research program"
+---
+
+The project tests architectural claims through matched comparisons rather than attempting to prove GIC correct.
+
+## Initial question families
+
+1. When does learned planning regulation improve the success–cost frontier over reactive, always-plan, rule-routed, and equal-token reasoning?
+2. Are predicted future states empirically predictive and decision-relevant?
+3. Which state and control belongs in typed infrastructure, and which benefits from internalization?
+4. Can multi-goal state and calibrated identity improve long-horizon decisions without introducing interference or anchoring?
+5. Can bounded, reversible learning improve a target capability without unacceptable retention or calibration cost?
+
+The canonical research-question text is maintained in `docs/RESEARCH_QUESTIONS.md`. Phase 0 approves none of these as an executable protocol.
+
+The public [falsification map](../generated/falsification.qmd) states what evidence would weaken each major architectural claim and which controls are required.

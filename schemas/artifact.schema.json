@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:gic-lab:schema:artifact:0.1.0",
+  "title": "GIC Lab artifact record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "artifact_id",
+    "experiment_id",
+    "producer",
+    "kind",
+    "format",
+    "size_bytes",
+    "sha256",
+    "version",
+    "revision",
+    "commit",
+    "license",
+    "provenance",
+    "storage_uri",
+    "public_access",
+    "sensitivity",
+    "retention",
+    "created_by_commit",
+    "created_at",
+    "verification_status"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1.0"},
+    "artifact_id": {"type": "string", "pattern": "^ART-[0-9]{4,}$"},
+    "experiment_id": {"type": ["string", "null"], "pattern": "^EXP-[0-9]{4}$"},
+    "producer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "id"],
+      "properties": {
+        "kind": {"enum": ["experiment", "source", "manual"]},
+        "id": {"type": "string", "minLength": 1}
+      }
+    },
+    "kind": {"enum": ["trajectory", "dataset", "checkpoint", "analysis", "figure", "table", "log", "report", "other"]},
+    "format": {"type": "string", "minLength": 1},
+    "size_bytes": {"type": "integer", "minimum": 0},
+    "sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+    "version": {"type": ["string", "null"]},
+    "revision": {"type": ["string", "null"]},
+    "commit": {"type": ["string", "null"], "pattern": "^[0-9a-f]{40}$"},
+    "license": {"type": ["string", "null"]},
+    "provenance": {"type": "string", "minLength": 1},
+    "storage_uri": {"type": "string", "minLength": 1},
+    "public_access": {"type": "boolean"},
+    "sensitivity": {"enum": ["public", "internal", "restricted"]},
+    "retention": {"enum": ["ephemeral", "active", "milestone", "permanent"]},
+    "created_by_commit": {"type": ["string", "null"], "pattern": "^[0-9a-f]{40}$"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "verification_status": {"enum": ["unverified", "metadata-verified", "content-hash-verified", "failed"]}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"verification_status": {"const": "content-hash-verified"}}, "required": ["verification_status"]},
+      "then": {"properties": {"sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}}
+    }
+  ]
+}

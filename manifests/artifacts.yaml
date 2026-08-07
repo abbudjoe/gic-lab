@@ -1,0 +1,6 @@
+schema_version: 0.1.0
+kind: artifacts
+entries: []
+entry_contract:
+  schema: schemas/artifact.schema.json
+note: No generated research artifacts exist in Phase 0 beyond tracked source and site files.

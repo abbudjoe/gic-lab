@@ -1,0 +1,24 @@
+---
+title: "Methods and reproducibility"
+---
+
+## Experimental contract
+
+Every real experiment must have:
+
+- one immutable `EXP-NNNN` identity;
+- a falsifiable hypothesis and null;
+- treatment, controls, and fixed variables;
+- declared metrics, sampling, exclusions, budget, acceptance, and stop rules;
+- exact model, dataset, environment, tool, and code revisions;
+- separate lifecycle, evidence, and outcome state;
+- raw transition records and artifact hashes;
+- a complete compute ledger, including aborted allocations.
+
+## Reproduction levels
+
+Artifact execution, directional reproduction, mechanism reproduction, and confirmatory replication are different claims. Reports must name the achieved level.
+
+## Publication boundary
+
+This static site executes no notebook code and has no model/cloud credentials. Generated status and experiment pages are projections of canonical repository YAML, not separately edited summaries.

@@ -1,0 +1,9 @@
+---
+title: "Weekly lab notes"
+---
+
+Public notes report checked questions, methods, outcomes, failures, and next tests. They are timely interpretations, not replacements for protocols, raw evidence, or manifests.
+
+## Entries
+
+- [2026-07-15 — Phase 0 bootstrap](2026-07-15-phase-0.qmd)

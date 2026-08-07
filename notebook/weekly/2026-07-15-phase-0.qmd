@@ -1,0 +1,24 @@
+---
+title: "Phase 0 bootstrap"
+date: 2026-07-15
+---
+
+## Question
+
+What control-plane infrastructure must exist before a public GIC replication program consumes paid compute?
+
+## Completed
+
+- Extracted an auditable Phase 0 definition of done.
+- Pinned current GIC, SiRA, and SR²AM primary sources without committing papers or checkpoints.
+- Established separate operational and scientific-evidence authority planes.
+- Defined typed experiment, artifact, transition, source, and compute contracts.
+- Built a static public notebook and local/CI parity gate.
+
+## Result
+
+This is an infrastructure milestone, not an empirical result. Prototype runs, benchmark runs, accelerator hours, and paid-compute cost remain zero.
+
+## Next gate
+
+Independent human/source reconciliation and a source/license audit are recommended for Phase 0.5. No prototype reproduction begins without explicit approval.

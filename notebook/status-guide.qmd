@@ -1,0 +1,37 @@
+---
+title: "Status semantics"
+---
+
+Experiment status has three independent dimensions.
+
+## Lifecycle
+
+<span class="status status-planned">planned</span>
+<span class="status status-running">running</span>
+<span class="status status-completed">completed</span>
+<span class="status status-blocked">blocked</span>
+<span class="status status-cancelled">cancelled</span>
+
+Lifecycle says what happened operationally. `completed` does not mean confirmed.
+
+## Evidence
+
+<span class="status status-not-evaluated">not-evaluated</span>
+<span class="status status-preliminary">preliminary</span>
+<span class="status status-replicated">replicated</span>
+<span class="status status-confirmed">confirmed</span>
+<span class="status status-inconclusive">inconclusive</span>
+<span class="status status-contradicted">contradicted</span>
+<span class="status status-retracted">retracted</span>
+
+Evidence says how mature the evidence is, not whether the hypothesis won. `confirmed` means the evidence met its predeclared confirmatory contract for the stated scope; it does not mean a claim is universally true.
+
+## Outcome
+
+<span class="status status-pending">pending</span>
+<span class="status status-supported">supported</span>
+<span class="status status-not-supported">not-supported</span>
+<span class="status status-mixed">mixed</span>
+<span class="status status-invalidated">invalidated</span>
+
+Outcome relates valid evidence to a preregistered hypothesis. Infrastructure-invalid runs remain operational records and do not become negative scientific results.

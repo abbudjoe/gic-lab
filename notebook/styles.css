@@ -1,0 +1,68 @@
+:root {
+  --gic-ink: #17212b;
+  --gic-muted: #52606d;
+  --gic-line: #d9e2ec;
+  --gic-accent: #0b7285;
+}
+
+body {
+  color: var(--gic-ink);
+}
+
+.navbar {
+  border-bottom: 1px solid var(--gic-line);
+}
+
+.status {
+  display: inline-block;
+  padding: 0.12rem 0.48rem;
+  border: 1px solid var(--gic-line);
+  border-radius: 999px;
+  color: var(--gic-muted);
+  background: #f8f9fa;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.status-in-progress,
+.status-running,
+.status-preliminary {
+  color: #8a4b08;
+  background: #fff4e6;
+  border-color: #ffd8a8;
+}
+
+.status-successful,
+.status-completed,
+.status-confirmed,
+.status-replicated,
+.status-supported {
+  color: #176b3a;
+  background: #ebfbee;
+  border-color: #b2f2bb;
+}
+
+.status-inconclusive,
+.status-mixed,
+.status-blocked {
+  color: #5f3dc4;
+  background: #f3f0ff;
+  border-color: #d0bfff;
+}
+
+.status-contradicted,
+.status-retracted,
+.status-invalidated,
+.status-not-supported,
+.status-cancelled {
+  color: #a61e4d;
+  background: #fff0f6;
+  border-color: #fcc2d7;
+}
+
+.callout-note {
+  border-left-color: var(--gic-accent);
+}

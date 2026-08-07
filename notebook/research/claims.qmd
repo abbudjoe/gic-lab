@@ -1,0 +1,13 @@
+---
+title: "Claim and evidence map"
+---
+
+The current source reading supports three distinct labels:
+
+| System | Narrow evidence role | Not established by that role |
+|---|---|---|
+| SiRA | Externally modular simulative planning in browser tasks | learned configurator, persistent identity, separate prediction-trained world model, continual learning |
+| SR²AM | Learned/internalized planning structure and per-turn regulation in language/tool tasks | full GIC, separate world model, persistent goals/identity, Growth |
+| GIC | Formal and architectural proposal spanning goal, identity, planning, regulation, and learning | a completed end-to-end implementation |
+
+Every interpretation remains pending human reconciliation. Exact source locations are maintained in `docs/CLAIM_MATRIX.md` and `docs/reading/GIC_AGENT_EXTRACTION_DRAFT.md`; exact source versions and hashes are in `manifests/sources.yaml`.

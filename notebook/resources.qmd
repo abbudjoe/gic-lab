@@ -1,0 +1,13 @@
+---
+title: "Artifacts and sources"
+---
+
+## Canonical manifests
+
+- `manifests/sources.yaml` — versioned papers and official repositories.
+- `manifests/models.yaml` — released model identities and revisions; no local weights.
+- `manifests/datasets.yaml` — currently empty pending audit.
+- `manifests/artifacts.yaml` — generated artifact identities; currently empty.
+- `manifests/compute.yaml` — zero-use Phase 0 compute ledger.
+
+Large artifacts will be hosted outside Git and addressed by stable URI plus SHA-256. This site will expose reviewed summaries and immutable links rather than embedding checkpoints, raw traces, or bulk media.

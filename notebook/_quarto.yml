@@ -1,0 +1,71 @@
+project:
+  type: website
+  output-dir: ../_site
+  render:
+    - "*.qmd"
+    - "research/*.qmd"
+    - "methods/*.qmd"
+    - "weekly/*.qmd"
+    - "failures/*.qmd"
+    - "generated/*.qmd"
+
+website:
+  title: "GIC Lab Notebook"
+  description: "A public, reproducible research notebook for controlled evaluation of GIC, SiRA, and SR²AM."
+  search: true
+  page-navigation: true
+  navbar:
+    left:
+      - href: index.qmd
+        text: Home
+      - href: generated/status.qmd
+        text: Status
+      - href: research/index.qmd
+        text: Research
+      - href: generated/experiments.qmd
+        text: Experiments
+      - href: methods/index.qmd
+        text: Methods
+      - href: weekly/index.qmd
+        text: Lab notes
+      - href: resources.qmd
+        text: Artifacts
+  sidebar:
+    style: docked
+    search: true
+    contents:
+      - section: Project
+        contents:
+          - index.qmd
+          - generated/status.qmd
+          - status-guide.qmd
+      - section: Research
+        contents:
+          - research/index.qmd
+          - research/claims.qmd
+          - generated/falsification.qmd
+      - section: Experiments
+        contents:
+          - generated/experiments.qmd
+          - methods/index.qmd
+      - section: Lab notes
+        contents:
+          - weekly/index.qmd
+          - weekly/2026-07-15-phase-0.qmd
+          - generated/decisions.qmd
+          - failures/index.qmd
+      - resources.qmd
+  page-footer:
+    left: "GIC Lab — research status is explicit on every experiment."
+    right: "Generated from versioned repository records."
+
+format:
+  html:
+    theme: cosmo
+    css: styles.css
+    toc: true
+    code-copy: true
+    link-external-newwindow: true
+
+execute:
+  enabled: false

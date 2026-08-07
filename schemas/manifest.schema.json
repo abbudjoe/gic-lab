@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:gic-lab:schema:manifest:0.1.0",
+  "title": "GIC Lab source, model, or dataset manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "kind", "entries"],
+  "properties": {
+    "schema_version": {"const": "0.1.0"},
+    "kind": {"enum": ["models", "datasets", "sources"]},
+    "entries": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/entry"}
+    },
+    "note": {"type": "string"}
+  },
+  "$defs": {
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "kind",
+        "version",
+        "revision",
+        "commit",
+        "sha256",
+        "license",
+        "provenance",
+        "storage_uri",
+        "retrieved_at",
+        "verification_status"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9]*(?:-[A-Z0-9.]+)+$"
+        },
+        "name": {"type": "string", "minLength": 1},
+        "kind": {"type": "string", "minLength": 1},
+        "version": {"type": ["string", "null"]},
+        "revision": {"type": ["string", "null"]},
+        "commit": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "sha256": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "license": {"type": ["string", "null"]},
+        "provenance": {"type": "string", "minLength": 1},
+        "storage_uri": {"type": "string", "format": "uri"},
+        "canonical_uri": {"type": "string", "format": "uri"},
+        "retrieved_at": {"type": ["string", "null"], "format": "date"},
+        "submitted_at": {"type": ["string", "null"], "format": "date"},
+        "document_date": {"type": ["string", "null"], "format": "date"},
+        "size_bytes": {"type": "integer", "minimum": 0},
+        "local_presence": {"type": "boolean"},
+        "verification_status": {
+          "enum": ["unverified", "metadata-verified", "content-hash-verified"]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "verification_status": {"const": "content-hash-verified"}
+            },
+            "required": ["verification_status"]
+          },
+          "then": {
+            "properties": {
+              "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+            }
+          }
+        }
+      ]
+    }
+  }
+}

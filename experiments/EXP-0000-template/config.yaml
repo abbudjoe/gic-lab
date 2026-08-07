@@ -1,0 +1,12 @@
+schema_version: 0.1.0
+experiment_id: EXP-0000
+execution_enabled: false
+model_ids: []
+dataset_ids: []
+source_ids: []
+environment:
+  kind: not-configured
+  revision: null
+tools: []
+random_seeds: []
+notes: Template only; no executable defaults are supplied.

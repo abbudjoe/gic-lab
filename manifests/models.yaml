@@ -1,0 +1,29 @@
+schema_version: 0.1.0
+kind: models
+entries:
+  - id: MODEL-SR2AM-V0.1-8B
+    name: SR2AM-v0.1-8B
+    kind: model
+    version: v0.1-8B
+    revision: 5d72255092ac2ec006c2f9813029220aff79865e
+    commit: null
+    sha256: null
+    license: Apache-2.0
+    provenance: Official sailing-lab Hugging Face model repository linked by SR2AM.
+    storage_uri: https://huggingface.co/sailing-lab/SR2AM-v0.1-8B/tree/5d72255092ac2ec006c2f9813029220aff79865e
+    retrieved_at: "2026-07-15"
+    verification_status: metadata-verified
+    local_presence: false
+  - id: MODEL-SR2AM-V1.0-30B
+    name: SR2AM-v1.0-30B
+    kind: model
+    version: v1.0-30B
+    revision: 7312f835de92912d073ad8c3b3e0d2ce825288ed
+    commit: null
+    sha256: null
+    license: Apache-2.0
+    provenance: Official sailing-lab Hugging Face model repository linked by SR2AM.
+    storage_uri: https://huggingface.co/sailing-lab/SR2AM-v1.0-30B/tree/7312f835de92912d073ad8c3b3e0d2ce825288ed
+    retrieved_at: "2026-07-15"
+    verification_status: metadata-verified
+    local_presence: false

@@ -1,0 +1,4 @@
+schema_version: 0.1.0
+registry_revision: 1
+template_path: experiments/EXP-0000-template
+experiments: []

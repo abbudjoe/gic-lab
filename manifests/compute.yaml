@@ -1,0 +1,13 @@
+schema_version: 0.1.0
+kind: compute-ledger
+phase_zero_summary:
+  period_start: "2026-07-15"
+  period_end: "2026-07-15"
+  paid_compute_authorized: false
+  cloud_mutations: 0
+  accelerator_hours: 0
+  cost_usd: 0
+  prototype_runs: 0
+  benchmark_runs: 0
+  training_runs: 0
+entries: []

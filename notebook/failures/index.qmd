@@ -1,0 +1,16 @@
+---
+title: "Failure analyses"
+---
+
+No experimental failure analysis exists because no experiment has run.
+
+Future entries will distinguish:
+
+- infrastructure-invalid runs;
+- contract/schema failures;
+- source-parity discrepancies;
+- null or negative scientific outcomes;
+- safety or authorization stops; and
+- retracted interpretations.
+
+Each entry must identify the root cause, affected evidence, corrective action, and whether rerun is permitted. A dependency error is not a negative model result.

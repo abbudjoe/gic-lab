@@ -1,0 +1,17 @@
+# Decision Log
+
+Only explicit, reviewable decisions belong here. Historical estimates and source claims belong elsewhere.
+
+| ID | Date | Decision | Rationale | Revisit trigger |
+|---|---|---|---|---|
+| D-001 | 2026-07-15 | Use one canonical monorepo for code, protocols, public notebook source, and small results. | Keeps each research statement tied to code and configuration history. | Governance or release cadence materially diverges. |
+| D-002 | 2026-07-15 | Generate a static Quarto site from `notebook/` and publish it through GitHub Pages. | Provides a navigable public surface without a second content source or dynamic backend. | Quarto cannot represent a validated publication requirement. |
+| D-003 | 2026-07-15 | Store large artifacts externally and commit identity, hashes, provenance, and summaries. | Git is the provenance/control layer, not the binary artifact store. | None; storage backend may change, identity contract may not. |
+| D-004 | 2026-07-15 | Keep experiment lifecycle, evidence strength, and outcome in separate typed fields. | Prevents completed work from being mislabeled confirmed and infrastructure failure from becoming a scientific negative. | Only through a schema migration with compatibility tests. |
+| D-005 | 2026-07-15 | Maintain separate instruction/control and scientific-evidence authority planes. | Safety policy cannot be overridden by a paper, and project prose cannot rewrite a primary source. | Only through explicit governance revision. |
+| D-006 | 2026-07-15 | Phase 0 performs no prototype, benchmark, training, cloud, or paid-compute operation. | Builds the research control plane before irreversible or costly work. | Phase 0 completion plus explicit approval of a later phase. |
+| D-007 | 2026-07-15 | Defer repository license selection. | The user has not chosen code/content licensing. | Resolve OQ-001 before public release. |
+| D-008 | 2026-08-06 | Use separate canonical claims for architectural mechanisms, conditional theorems, and empirical applicability. | A valid theorem under assumptions is not evidence that an implemented GIC component satisfies those assumptions. | A later source revision materially changes theorem scope. |
+| D-009 | 2026-08-06 | Treat immutable goal authority, permissions, safety obligations, evaluator roots, and promotion authority as GIC Lab governance proposals, not as features established by the paper. | The paper allows identity to include evolving values and does not specify these immutable control-plane boundaries. | A reviewed project safety architecture replaces these provisional boundaries. |
+| D-010 | 2026-08-06 | State Theorem 4's perfect-world-model result as non-inferiority, not guaranteed strict improvement. | The displayed inequality proves `V_mix >= V_env`; the surrounding “outperforming” language is stronger than the formal result. | A corrected source revision or stronger proof establishes strict improvement conditions. |
+| D-011 | 2026-08-06 | Give environment synchronization one owner: the canonical sync target installs the local package non-editably, and all validation commands run with `uv run --no-sync`. | Plain `uv run` silently reversed the non-editable install, recreated a hidden editable `.pth`, and broke later imports. Separating environment construction from execution removes contradictory control paths. | `uv` or Python provides a verified editable-install contract immune to the hidden-file behavior. |

@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:gic-lab:schema:compute:0.1.0",
+  "title": "GIC Lab compute ledger",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "kind", "phase_zero_summary", "entries"],
+  "properties": {
+    "schema_version": {"const": "0.1.0"},
+    "kind": {"const": "compute-ledger"},
+    "phase_zero_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "period_start",
+        "period_end",
+        "paid_compute_authorized",
+        "cloud_mutations",
+        "accelerator_hours",
+        "cost_usd",
+        "prototype_runs",
+        "benchmark_runs",
+        "training_runs"
+      ],
+      "properties": {
+        "period_start": {"type": "string", "format": "date"},
+        "period_end": {"type": ["string", "null"], "format": "date"},
+        "paid_compute_authorized": {"type": "boolean"},
+        "cloud_mutations": {"type": "integer", "minimum": 0},
+        "accelerator_hours": {"type": "number", "minimum": 0},
+        "cost_usd": {"type": "number", "minimum": 0},
+        "prototype_runs": {"type": "integer", "minimum": 0},
+        "benchmark_runs": {"type": "integer", "minimum": 0},
+        "training_runs": {"type": "integer", "minimum": 0}
+      }
+    },
+    "entries": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/entry"}
+    }
+  },
+  "$defs": {
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "experiment_id",
+        "provider",
+        "hardware",
+        "region",
+        "started_at",
+        "ended_at",
+        "wall_clock_hours",
+        "accelerator_hours",
+        "cost_usd",
+        "authorization_reference",
+        "status"
+      ],
+      "properties": {
+        "id": {"type": "string", "pattern": "^CMP-[0-9]{4,}$"},
+        "experiment_id": {"type": "string", "pattern": "^EXP-[0-9]{4}$"},
+        "provider": {"type": "string", "minLength": 1},
+        "hardware": {"type": "string", "minLength": 1},
+        "region": {"type": "string", "minLength": 1},
+        "started_at": {"type": ["string", "null"], "format": "date-time"},
+        "ended_at": {"type": ["string", "null"], "format": "date-time"},
+        "wall_clock_hours": {"type": "number", "minimum": 0},
+        "accelerator_hours": {"type": "number", "minimum": 0},
+        "cost_usd": {"type": "number", "minimum": 0},
+        "authorization_reference": {"type": "string", "minLength": 1},
+        "status": {
+          "enum": ["planned", "running", "completed", "failed", "cancelled"]
+        }
+      }
+    }
+  }
+}

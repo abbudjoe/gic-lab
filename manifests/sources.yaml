@@ -1,0 +1,81 @@
+schema_version: 0.1.0
+kind: sources
+entries:
+  - id: SRC-GIC-PAPER
+    name: Critique of Agent Model
+    kind: paper
+    version: arXiv:2606.23991v1
+    revision: v1
+    commit: null
+    sha256: 3abe1e5cbad9aac107f93dc269237ddf772879bcb55661f10735422805895454
+    size_bytes: 1197188
+    license: CC-BY-NC-SA-4.0
+    provenance: Official arXiv author submission by Eric Xing, Mingkai Deng, and Jinyu Hou.
+    storage_uri: https://arxiv.org/pdf/2606.23991v1
+    canonical_uri: https://arxiv.org/abs/2606.23991v1
+    submitted_at: "2026-06-22"
+    document_date: "2026-06-15"
+    retrieved_at: "2026-07-15"
+    verification_status: content-hash-verified
+  - id: SRC-SR2AM-PAPER
+    name: Efficient Agentic Reasoning Through Self-Regulated Simulative Planning
+    kind: paper
+    version: arXiv:2605.22138v1
+    revision: v1
+    commit: null
+    sha256: 258f6bd8fc5fe88dcbe304e6e7d02752e65b92f74f0417d34cfc677fe7c83f04
+    size_bytes: 1711942
+    license: CC-BY-4.0
+    provenance: Official arXiv author submission by Mingkai Deng and coauthors.
+    storage_uri: https://arxiv.org/pdf/2605.22138v1
+    canonical_uri: https://arxiv.org/abs/2605.22138v1
+    submitted_at: "2026-05-21"
+    document_date: null
+    retrieved_at: "2026-07-15"
+    verification_status: content-hash-verified
+  - id: SRC-SIRA-PAPER
+    name: General Agentic Planning Through Simulative Reasoning with World Models
+    kind: paper
+    version: arXiv:2507.23773v3
+    revision: v3
+    commit: null
+    sha256: dda37ecea238e3dfe9a8bb3d0476e3cf1e3ec2c4395aaefda2ebff81bce2cf25
+    size_bytes: 2027250
+    license: CC-BY-NC-SA-4.0
+    provenance: Official current arXiv author submission by Mingkai Deng and coauthors; earlier versions used the SimuRA name.
+    storage_uri: https://arxiv.org/pdf/2507.23773v3
+    canonical_uri: https://arxiv.org/abs/2507.23773v3
+    submitted_at: "2025-07-31"
+    document_date: null
+    retrieved_at: "2026-07-15"
+    verification_status: content-hash-verified
+  - id: SRC-SR2AM-REPOSITORY
+    name: sailing-lab/sr2am
+    kind: repository
+    version: main-at-2026-07-15
+    revision: main
+    commit: 6f4ac7824ffc7d12453ffaa53d25e5f34bf3aeb0
+    sha256: null
+    license: Apache-2.0
+    provenance: Official repository linked from arXiv:2605.22138v1.
+    storage_uri: https://github.com/sailing-lab/sr2am/tree/6f4ac7824ffc7d12453ffaa53d25e5f34bf3aeb0
+    canonical_uri: https://github.com/sailing-lab/sr2am
+    submitted_at: null
+    document_date: null
+    retrieved_at: "2026-07-15"
+    verification_status: metadata-verified
+  - id: SRC-SIRA-REPOSITORY
+    name: sailing-lab/sira
+    kind: repository
+    version: main-at-2026-07-15
+    revision: main
+    commit: 93fb8d72de71f9a4a13419670adeb34d93cf7acd
+    sha256: null
+    license: Apache-2.0
+    provenance: Official repository linked from arXiv:2507.23773v3.
+    storage_uri: https://github.com/sailing-lab/sira/tree/93fb8d72de71f9a4a13419670adeb34d93cf7acd
+    canonical_uri: https://github.com/sailing-lab/sira
+    submitted_at: null
+    document_date: null
+    retrieved_at: "2026-07-15"
+    verification_status: metadata-verified
