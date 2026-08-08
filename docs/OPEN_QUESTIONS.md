@@ -22,6 +22,13 @@ Unresolved items are recorded here instead of being silently decided during impl
 - **OQ-008 — External services:** Choose search, browser summarization, sandbox, and judge providers; review costs, licenses, privacy, and version stability.
 - **OQ-009 — Data release:** Decide which traces can be public and what redaction/licensing is required.
 - **OQ-010 — Lambda credits:** Verify the specific credit terms and expiry before planning spend. No credential access is authorized.
+
+## Must resolve before later GIC architecture work
+
+These questions do not block the first SiRA artifact execution. They become blockers
+when later work implements, extends, or makes scientific claims about the affected GIC
+architecture contracts.
+
 - **OQ-012 — Configurator state contract:** Resolve whether cached plan `c_(t-1)` is an explicit configurator input, as in §2.5, or must be encoded inside belief, as implied by §5.2 and Equation 7.
 - **OQ-013 — Theorem 2 reward bound:** Determine whether the theorem intends nonnegative rewards or `|r| <= R_max`; the statement gives only an upper bound while Appendix B uses absolute Simulation-Lemma bounds.
 - **OQ-014 — Critic ownership:** Decide whether the first GIC implementation treats the separately pretrained critic as an explicit planner dependency, a planner submodule, or an external evaluator without mislabeling it as a seventh paper factor.

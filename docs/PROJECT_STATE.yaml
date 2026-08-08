@@ -1,11 +1,11 @@
 schema_version: 0.1.0
-phase: "0.5"
-phase_name: reading-reconciliation
-phase_status: successful
+phase: "0.75"
+phase_name: upstream-audit-harness-protocol-lock
+phase_status: in-progress
 paid_compute_allowed: false
 prototype_execution_allowed: false
 benchmark_execution_allowed: false
 training_allowed: false
 cloud_mutation_allowed: false
-authoritative_plan: docs/exec-plans/active/PHASE_0_5_RECONCILIATION.md
-last_updated: "2026-08-06"
+authoritative_plan: docs/exec-plans/active/PHASE_0_75_UPSTREAM_AUDIT_HARNESS_PROTOCOL_LOCK.md
+last_updated: "2026-08-07"

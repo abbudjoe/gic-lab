@@ -2,7 +2,11 @@
 
 GIC Lab is a public, reproducible research program for determining which proposed mechanisms in the Goal–Identity–Configurator (GIC) architecture are necessary, sufficient, learnable, and measurably better than matched external orchestration.
 
-The repository has completed **Phase 0.5: reading reconciliation**. No prototype result has been reproduced, and no benchmark or training run has been performed.
+The repository has completed **Phase 0.5: reading reconciliation** and opened
+**Phase 0.75: upstream audit, experiment harness, and protocol lock**. Phase 0.75 is
+active and permits static upstream audits, non-executing harness construction, and
+protocol lock. No prototype result has been reproduced, and no model, API, benchmark,
+training, cloud, or paid-compute run is authorized.
 
 - [Public research notebook](https://abbudjoe.github.io/gic-lab/)
 - [GitHub repository](https://github.com/abbudjoe/gic-lab)
@@ -13,7 +17,8 @@ The repository has completed **Phase 0.5: reading reconciliation**. No prototype
 - [Research questions](docs/RESEARCH_QUESTIONS.md)
 - [Claim matrix](docs/CLAIM_MATRIX.md)
 - [Falsification notes](docs/FALSIFICATION_NOTES.md)
-- [Completed Phase 0.5 ledger](docs/exec-plans/active/PHASE_0_5_RECONCILIATION.md)
+- [Active Phase 0.75 plan](docs/exec-plans/active/PHASE_0_75_UPSTREAM_AUDIT_HARNESS_PROTOCOL_LOCK.md)
+- [Completed Phase 0.5 ledger](docs/exec-plans/completed/PHASE_0_5_RECONCILIATION.md)
 - [Reproducibility contract](docs/REPRODUCIBILITY.md)
 - [Public notebook source](notebook/index.qmd)
 

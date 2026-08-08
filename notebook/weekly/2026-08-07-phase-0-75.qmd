@@ -1,0 +1,22 @@
+---
+title: "2026-08-07 — Phase 0.75 opened"
+---
+
+## State transition
+
+Phase 0.5 reading reconciliation is complete. Its successful ledger and the successful
+Phase 0 bootstrap ledger are now completed records, not active authorities. One Phase
+0.75 plan is active for the bounded upstream-audit, experiment-harness, and
+protocol-lock phase.
+
+## Current boundary
+
+T00 repairs lifecycle validation and public state only. It does not inspect or clone an
+upstream repository, register an experiment, call a model or API, install a browser,
+run a benchmark, download a checkpoint, or mutate cloud resources. All execution and
+paid-compute permissions remain false.
+
+## Next gate
+
+T00 must pass lifecycle regressions, independent spec-conformance review, and the full
+local parity gate before a separate static-audit or harness workstream may begin.

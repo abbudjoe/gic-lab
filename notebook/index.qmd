@@ -4,9 +4,11 @@ subtitle: "Open, controlled research on learned agent architecture"
 ---
 
 ::: {.callout-note}
-## Phase 0 only
+## Phase 0.75 is active
 
-No prototype, benchmark, training run, or paid GPU job has been executed. The current artifact is the research control plane: hypotheses, provenance, experiment contracts, validation, and publication infrastructure.
+Phase 0.5 reading reconciliation is complete. Phase 0.75 is bounded to static upstream
+audits, non-executing harness implementation, and protocol lock. No model, API,
+prototype, benchmark, training, cloud, or paid-compute run is authorized.
 :::
 
 GIC Lab studies a narrower and more falsifiable question than “can we build a GIC agent?”:
@@ -15,12 +17,13 @@ GIC Lab studies a narrower and more falsifiable question than “can we build a 
 
 The program begins with the authors' released SiRA and SR²AM references, then isolates one mechanism at a time under declared resource budgets. Negative and inconclusive evidence is a valid outcome.
 
-## Current work
+## Phase 0.75 boundary
 
-- Pin primary papers, repositories, and released model revisions.
-- Separate source claims from project interpretations.
-- Define typed lifecycle, evidence, outcome, transition, artifact, and compute contracts.
-- Build a public notebook that cannot silently turn placeholders into results.
-- Prepare an independent human/agent reading reconciliation before Phase 1.
+- Keep completed plans separate from the one authoritative active plan.
+- Prepare source-grounded static audits of pinned SiRA and SR²AM revisions.
+- Build an evidence-preserving harness whose execution defaults to unauthorized.
+- Lock a draft first protocol without registering or running it during control-plane work.
+- Preserve unresolved architecture questions for later architecture work without using
+  them to block the first SiRA artifact execution.
 
 See [project status](generated/status.qmd), the [claim map](research/claims.qmd), and the generated [experiment registry](generated/experiments.qmd).
