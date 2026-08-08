@@ -67,6 +67,15 @@ class IncrementalLimitEnforcement(StrEnum):
     ADAPTER_COMMAND = "adapter-command"
 
 
+class NonWallResource(StrEnum):
+    """Non-wall units that a subprocess may consume."""
+
+    COST_USD = "cost_usd"
+    GPU_HOURS = "gpu_hours"
+    MODEL_TOKENS = "model_tokens"
+    TOOL_CALLS = "tool_calls"
+
+
 class EventProvenance(StrEnum):
     """How a normalized event field was obtained."""
 
@@ -393,6 +402,7 @@ class ResourceProjection:
     model_tokens: int = 0
     tool_calls: int = 0
     enforcement: IncrementalLimitEnforcement = IncrementalLimitEnforcement.NOT_APPLICABLE
+    unbounded_applicable: tuple[NonWallResource, ...] = ()
 
     def __post_init__(self) -> None:
         _require_nonnegative_finite(self.cost_usd, "projected cost_usd")
@@ -405,10 +415,28 @@ class ResourceProjection:
                 raise ValueError(f"{label} must be a non-negative integer")
         if not isinstance(self.enforcement, IncrementalLimitEnforcement):
             raise ValueError("resource projection enforcement must be typed")
+        if any(not isinstance(unit, NonWallResource) for unit in self.unbounded_applicable):
+            raise ValueError("unbounded applicable resources must be typed")
+        unbounded = tuple(sorted(set(self.unbounded_applicable), key=lambda unit: unit.value))
+        if len(unbounded) != len(self.unbounded_applicable):
+            raise ValueError("unbounded applicable resources must be unique")
+        projected_by_unit: Mapping[NonWallResource, float | int] = {
+            NonWallResource.COST_USD: self.cost_usd,
+            NonWallResource.GPU_HOURS: self.gpu_hours,
+            NonWallResource.MODEL_TOKENS: self.model_tokens,
+            NonWallResource.TOOL_CALLS: self.tool_calls,
+        }
+        contradictory = [unit.value for unit in unbounded if projected_by_unit[unit] != 0]
+        if contradictory:
+            raise ValueError(
+                "resources cannot be both finitely projected and applicable-unbounded: "
+                + ", ".join(contradictory)
+            )
         if self.has_usage and self.enforcement is not IncrementalLimitEnforcement.ADAPTER_COMMAND:
             raise ValueError(
                 "nonzero resource projections require adapter-command hard-limit enforcement"
             )
+        object.__setattr__(self, "unbounded_applicable", unbounded)
 
     @property
     def has_usage(self) -> bool:
@@ -420,6 +448,12 @@ class ResourceProjection:
                 self.tool_calls > 0,
             )
         )
+
+    @property
+    def has_unbounded_applicable(self) -> bool:
+        """Return whether an applicable unit lacks a finite command-level upper bound."""
+
+        return bool(self.unbounded_applicable)
 
     def observed_violations(self, usage: BudgetUsage) -> tuple[str, ...]:
         violations: list[str] = []
@@ -462,6 +496,123 @@ def inherited_environment_binding(name: str, value: str) -> InheritedEnvironment
         name=name,
         value_sha256=hashlib.sha256(value.encode("utf-8")).hexdigest(),
     )
+
+
+@dataclass(frozen=True, slots=True)
+class InputTreeBinding:
+    """Content identity for one command input tree, rechecked before launch."""
+
+    root: Path
+    sha256: str
+    excluded_roots: tuple[PurePosixPath, ...] = ()
+    git_commit: str | None = None
+
+    def __post_init__(self) -> None:
+        root = self.root
+        if not root.is_absolute():
+            raise ValueError("input tree root must be an absolute path")
+        try:
+            resolved = root.resolve(strict=False)
+        except (OSError, RuntimeError) as exc:
+            raise ValueError("input tree root must resolve safely") from exc
+        if resolved != root:
+            raise ValueError("input tree root must be a canonical path")
+        if root.exists() and (root.is_symlink() or not root.is_dir()):
+            raise ValueError("input tree root must remain a non-symlink directory")
+        if _SHA256.fullmatch(self.sha256) is None:
+            raise ValueError("input tree sha256 must be a lowercase SHA-256 digest")
+        if self.git_commit is not None and _COMMIT.fullmatch(self.git_commit) is None:
+            raise ValueError("input tree git_commit must be a lowercase 40-character commit")
+        exclusions = tuple(sorted(set(self.excluded_roots), key=lambda item: item.as_posix()))
+        if len(exclusions) != len(self.excluded_roots):
+            raise ValueError("input tree excluded roots must be unique")
+        for exclusion in exclusions:
+            if (
+                exclusion.is_absolute()
+                or not exclusion.parts
+                or any(part in {"", ".", ".."} for part in exclusion.parts)
+            ):
+                raise ValueError("input tree exclusions must be traversal-free relative paths")
+            _require_secret_safe(exclusion.as_posix(), "input tree exclusion")
+        _require_secret_safe(str(root), "input tree root")
+        object.__setattr__(self, "excluded_roots", exclusions)
+
+
+def _is_excluded_tree_path(
+    relative: PurePosixPath,
+    excluded_roots: tuple[PurePosixPath, ...],
+) -> bool:
+    return any(relative == excluded or excluded in relative.parents for excluded in excluded_roots)
+
+
+def input_tree_sha256(
+    root: Path,
+    excluded_roots: tuple[PurePosixPath, ...] = (),
+) -> str:
+    """Hash path names, entry types, and bytes without following links."""
+
+    digest = hashlib.sha256()
+    for path in sorted(root.rglob("*"), key=lambda item: item.relative_to(root).as_posix()):
+        relative = PurePosixPath(path.relative_to(root).as_posix())
+        if _is_excluded_tree_path(relative, excluded_roots):
+            continue
+        encoded_path = relative.as_posix().encode("utf-8")
+        if path.is_symlink():
+            raise ValueError("input tree must not contain symlinks")
+        if path.is_dir():
+            digest.update(b"D\0" + encoded_path + b"\0")
+            continue
+        if not path.is_file():
+            raise ValueError("input tree must contain only directories and regular files")
+        digest.update(b"F\0" + encoded_path + b"\0")
+        with path.open("rb") as handle:
+            while chunk := handle.read(1024 * 1024):
+                digest.update(chunk)
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
+def input_tree_binding(
+    root: Path,
+    *,
+    excluded_roots: tuple[PurePosixPath, ...] = (),
+    git_commit: str | None = None,
+) -> InputTreeBinding:
+    """Capture one canonical input tree for authorization and prelaunch recheck."""
+
+    if root.is_symlink():
+        raise ValueError("input tree root must not be a symlink")
+    try:
+        resolved = root.resolve(strict=True)
+    except (OSError, RuntimeError) as exc:
+        raise ValueError("input tree root must resolve to an existing directory") from exc
+    return InputTreeBinding(
+        root=resolved,
+        sha256=input_tree_sha256(resolved, excluded_roots),
+        excluded_roots=excluded_roots,
+        git_commit=git_commit,
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class OwnedOutputRoot:
+    """Canonical command output root that must belong to the exact run attempt."""
+
+    root: Path
+
+    def __post_init__(self) -> None:
+        root = self.root
+        if not root.is_absolute() or "\0" in str(root):
+            raise ValueError("owned output root must be an absolute path without NUL bytes")
+        try:
+            resolved = root.resolve(strict=False)
+        except (OSError, RuntimeError) as exc:
+            raise ValueError("owned output root must resolve safely") from exc
+        if resolved != root:
+            raise ValueError("owned output root must be a canonical path")
+        if root.exists() and (root.is_symlink() or not root.is_dir()):
+            raise ValueError("owned output root must remain a non-symlink directory")
+        _require_secret_safe(str(root), "owned output root")
 
 
 @dataclass(frozen=True, slots=True)
@@ -524,6 +675,9 @@ class CommandSpec:
     environment: Mapping[str, str] = field(default_factory=dict)
     inherit_environment: tuple[InheritedEnvironmentBinding, ...] = ()
     secret_environment: tuple[str, ...] = ()
+    input_trees: tuple[InputTreeBinding, ...] = ()
+    owned_output_roots: tuple[OwnedOutputRoot, ...] = ()
+    unowned_output_patterns: tuple[PurePosixPath, ...] = ()
     resource_projection: ResourceProjection = field(default_factory=ResourceProjection)
     executable_sha256: str | None = None
 
@@ -573,6 +727,31 @@ class CommandSpec:
         ):
             raise ValueError("inherit_environment must contain typed value bindings")
         inherited = tuple(sorted(self.inherit_environment, key=lambda item: item.name))
+        if any(not isinstance(item, InputTreeBinding) for item in self.input_trees):
+            raise ValueError("input_trees must contain typed tree bindings")
+        input_trees = tuple(sorted(self.input_trees, key=lambda item: str(item.root)))
+        if len({item.root for item in input_trees}) != len(input_trees):
+            raise ValueError("input tree roots must be unique")
+        if any(not isinstance(item, OwnedOutputRoot) for item in self.owned_output_roots):
+            raise ValueError("owned_output_roots must contain typed output-root bindings")
+        output_roots = tuple(sorted(self.owned_output_roots, key=lambda item: str(item.root)))
+        if len({item.root for item in output_roots}) != len(output_roots):
+            raise ValueError("owned output roots must be unique")
+        output_patterns = tuple(
+            sorted(set(self.unowned_output_patterns), key=lambda item: item.as_posix())
+        )
+        if len(output_patterns) != len(self.unowned_output_patterns):
+            raise ValueError("unowned output patterns must be unique")
+        for pattern in output_patterns:
+            if (
+                pattern.is_absolute()
+                or not pattern.parts
+                or any(part in {"", ".", ".."} for part in pattern.parts)
+            ):
+                raise ValueError(
+                    "unowned output patterns must be traversal-free relative POSIX paths"
+                )
+            _require_secret_safe(pattern.as_posix(), "unowned output pattern")
         credential_names = tuple(sorted(self.secret_environment))
         for name in (
             *copied_environment,
@@ -607,6 +786,9 @@ class CommandSpec:
         object.__setattr__(self, "environment", MappingProxyType(copied_environment))
         object.__setattr__(self, "inherit_environment", inherited)
         object.__setattr__(self, "secret_environment", credential_names)
+        object.__setattr__(self, "input_trees", input_trees)
+        object.__setattr__(self, "owned_output_roots", output_roots)
+        object.__setattr__(self, "unowned_output_patterns", output_patterns)
         object.__setattr__(self, "executable_sha256", expected_executable)
 
 
@@ -640,12 +822,28 @@ def command_document(command: CommandSpec) -> dict[str, JsonValue]:
             for item in command.inherit_environment
         ],
         "secret_environment": list(command.secret_environment),
+        "input_trees": [
+            {
+                "root": str(item.root),
+                "sha256": item.sha256,
+                "excluded_roots": [path.as_posix() for path in item.excluded_roots],
+                "git_commit": item.git_commit,
+            }
+            for item in command.input_trees
+        ],
+        "owned_output_roots": [str(item.root) for item in command.owned_output_roots],
+        "unowned_output_patterns": [
+            pattern.as_posix() for pattern in command.unowned_output_patterns
+        ],
         "resource_projection": {
             "cost_usd": command.resource_projection.cost_usd,
             "gpu_hours": command.resource_projection.gpu_hours,
             "model_tokens": command.resource_projection.model_tokens,
             "tool_calls": command.resource_projection.tool_calls,
             "enforcement": command.resource_projection.enforcement.value,
+            "unbounded_applicable": [
+                unit.value for unit in command.resource_projection.unbounded_applicable
+            ],
         },
         "shell": False,
     }
@@ -674,6 +872,9 @@ def command_from_document(value: Mapping[str, object]) -> CommandSpec:
         "environment",
         "inherit_environment",
         "secret_environment",
+        "input_trees",
+        "owned_output_roots",
+        "unowned_output_patterns",
         "resource_projection",
         "shell",
     }
@@ -688,6 +889,9 @@ def command_from_document(value: Mapping[str, object]) -> CommandSpec:
     environment = value["environment"]
     inherited = value["inherit_environment"]
     credential_names = value["secret_environment"]
+    input_trees = value["input_trees"]
+    owned_output_roots = value["owned_output_roots"]
+    unowned_output_patterns = value["unowned_output_patterns"]
     projection = value["resource_projection"]
     if not isinstance(argv, list) or any(not isinstance(item, str) for item in argv):
         raise ValueError("command argv must be an array of strings")
@@ -710,12 +914,52 @@ def command_from_document(value: Mapping[str, object]) -> CommandSpec:
         not isinstance(item, str) for item in credential_names
     ):
         raise ValueError("command secret_environment must be an array of strings")
+    if not isinstance(input_trees, list):
+        raise ValueError("command input_trees must be an array")
+    tree_bindings: list[InputTreeBinding] = []
+    for index, item in enumerate(input_trees):
+        if not isinstance(item, dict) or item.keys() != {
+            "root",
+            "sha256",
+            "excluded_roots",
+            "git_commit",
+        }:
+            raise ValueError(f"command input_trees item {index} is invalid")
+        tree_root = item["root"]
+        tree_digest = item["sha256"]
+        tree_exclusions = item["excluded_roots"]
+        tree_commit = item["git_commit"]
+        if (
+            not isinstance(tree_root, str)
+            or not isinstance(tree_digest, str)
+            or not isinstance(tree_exclusions, list)
+            or any(not isinstance(exclusion, str) for exclusion in tree_exclusions)
+            or (tree_commit is not None and not isinstance(tree_commit, str))
+        ):
+            raise ValueError(f"command input_trees item {index} has invalid types")
+        tree_bindings.append(
+            InputTreeBinding(
+                root=Path(tree_root),
+                sha256=tree_digest,
+                excluded_roots=tuple(PurePosixPath(value) for value in tree_exclusions),
+                git_commit=tree_commit,
+            )
+        )
+    if not isinstance(unowned_output_patterns, list) or any(
+        not isinstance(item, str) for item in unowned_output_patterns
+    ):
+        raise ValueError("command unowned_output_patterns must be an array of strings")
+    if not isinstance(owned_output_roots, list) or any(
+        not isinstance(item, str) for item in owned_output_roots
+    ):
+        raise ValueError("command owned_output_roots must be an array of strings")
     projection_fields = {
         "cost_usd",
         "gpu_hours",
         "model_tokens",
         "tool_calls",
         "enforcement",
+        "unbounded_applicable",
     }
     if not isinstance(projection, dict) or projection.keys() != projection_fields:
         raise ValueError("command resource_projection fields are invalid")
@@ -740,6 +984,7 @@ def command_from_document(value: Mapping[str, object]) -> CommandSpec:
     projected_tokens = projection["model_tokens"]
     projected_tools = projection["tool_calls"]
     enforcement = projection["enforcement"]
+    unbounded_applicable = projection["unbounded_applicable"]
     if (
         isinstance(projected_cost, bool)
         or not isinstance(projected_cost, int | float)
@@ -748,6 +993,8 @@ def command_from_document(value: Mapping[str, object]) -> CommandSpec:
         or type(projected_tokens) is not int
         or type(projected_tools) is not int
         or not isinstance(enforcement, str)
+        or not isinstance(unbounded_applicable, list)
+        or any(not isinstance(item, str) for item in unbounded_applicable)
     ):
         raise ValueError("command resource_projection types are invalid")
     return CommandSpec(
@@ -758,12 +1005,20 @@ def command_from_document(value: Mapping[str, object]) -> CommandSpec:
         environment=cast(dict[str, str], environment),
         inherit_environment=tuple(inherited_bindings),
         secret_environment=tuple(cast(list[str], credential_names)),
+        input_trees=tuple(tree_bindings),
+        owned_output_roots=tuple(
+            OwnedOutputRoot(Path(item)) for item in cast(list[str], owned_output_roots)
+        ),
+        unowned_output_patterns=tuple(
+            PurePosixPath(item) for item in cast(list[str], unowned_output_patterns)
+        ),
         resource_projection=ResourceProjection(
             cost_usd=float(projected_cost),
             gpu_hours=float(projected_gpu),
             model_tokens=projected_tokens,
             tool_calls=projected_tools,
             enforcement=IncrementalLimitEnforcement(enforcement),
+            unbounded_applicable=tuple(NonWallResource(item) for item in unbounded_applicable),
         ),
         executable_sha256=executable_digest,
     )

@@ -1,5 +1,65 @@
-"""Source-neutral adapter contracts; source-specific adapters are added later."""
+"""Source-neutral and pinned source-specific artifact adapters."""
 
-from .base import ArtifactAdapter, NormalizationResult
+from .base import (
+    AdapterNotice,
+    AdapterNoticeSeverity,
+    ArtifactAdapter,
+    NormalizationResult,
+)
+from .sira import (
+    SIRA_DATASET_REVISIONS,
+    SIRA_EVENT_SOURCE,
+    SIRA_FANOUT_PILOT_TASKS,
+    SIRA_FIELD_RULES,
+    SIRA_MODEL,
+    SIRA_RUNNER,
+    SIRA_SECRET_NAME,
+    SIRA_SMOKE_QUERY,
+    SIRA_SOURCE_ID,
+    SIRA_UPSTREAM_COMMIT,
+    SiRAAdapter,
+    SiRACommandConfig,
+    SiRAContractError,
+    SiRADataset,
+    SiRAFieldRule,
+    SiRAMode,
+    SiRAPairDifference,
+    SiRAPairMismatch,
+    SiRAPairReport,
+    SiRATask,
+    SiRATraceError,
+    assert_sira_matched_pair,
+    sira_config_document,
+    sira_config_sha256,
+)
 
-__all__ = ["ArtifactAdapter", "NormalizationResult"]
+__all__ = [
+    "SIRA_DATASET_REVISIONS",
+    "SIRA_EVENT_SOURCE",
+    "SIRA_FANOUT_PILOT_TASKS",
+    "SIRA_FIELD_RULES",
+    "SIRA_MODEL",
+    "SIRA_RUNNER",
+    "SIRA_SECRET_NAME",
+    "SIRA_SMOKE_QUERY",
+    "SIRA_SOURCE_ID",
+    "SIRA_UPSTREAM_COMMIT",
+    "AdapterNotice",
+    "AdapterNoticeSeverity",
+    "ArtifactAdapter",
+    "NormalizationResult",
+    "SiRAAdapter",
+    "SiRACommandConfig",
+    "SiRAContractError",
+    "SiRADataset",
+    "SiRAFieldRule",
+    "SiRAMode",
+    "SiRAPairDifference",
+    "SiRAPairMismatch",
+    "SiRAPairReport",
+    "SiRATask",
+    "SiRATraceError",
+    "assert_sira_matched_pair",
+    "sira_config_document",
+    "sira_config_sha256",
+]
