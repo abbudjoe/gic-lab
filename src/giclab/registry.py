@@ -5,13 +5,13 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, NoReturn, cast
 
 import yaml
 
 
 class DuplicateKeyError(ValueError):
-    """Raised when YAML contains a duplicate mapping key."""
+    """Raised when JSON or YAML contains a duplicate mapping key."""
 
 
 class UniqueKeyLoader(yaml.SafeLoader):
@@ -76,11 +76,34 @@ def load_yaml(path: Path) -> dict[str, Any]:
     return cast(dict[str, Any], value)
 
 
+def _construct_unique_json(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    mapping: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in mapping:
+            raise DuplicateKeyError(f"duplicate JSON key: {key!r}")
+        mapping[key] = value
+    return mapping
+
+
+def _reject_nonfinite_json(value: str) -> NoReturn:
+    raise ValueError(f"non-finite JSON value is forbidden: {value}")
+
+
+def loads_json(value: str | bytes) -> Any:
+    """Decode strict JSON while rejecting duplicate keys and non-finite numbers."""
+
+    return json.loads(
+        value,
+        object_pairs_hook=_construct_unique_json,
+        parse_constant=_reject_nonfinite_json,
+    )
+
+
 def load_json(path: Path) -> dict[str, Any]:
-    """Load one JSON mapping."""
+    """Load one JSON mapping while rejecting duplicate keys at every depth."""
 
     with path.open(encoding="utf-8") as handle:
-        value = json.load(handle)
+        value = loads_json(handle.read())
     if not isinstance(value, dict):
         raise TypeError(f"{path} must contain a top-level object")
     return cast(dict[str, Any], value)

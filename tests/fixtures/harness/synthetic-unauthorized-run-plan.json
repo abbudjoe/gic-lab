@@ -1,0 +1,41 @@
+{
+  "schema_version": "0.1.0",
+  "experiment_id": "EXP-9000",
+  "run_id": "RUN-SYNTHETIC-001",
+  "profile": "smoke",
+  "condition": "synthetic",
+  "attempt": 1,
+  "seed": 7,
+  "interpretation_allowed": false,
+  "execution": {
+    "backend": "local-subprocess",
+    "workload": "prototype",
+    "authorization": {
+      "authorized": false,
+      "authorization_reference": null,
+      "command_sha256": null
+    }
+  },
+  "sources": {
+    "giclab_commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "upstream_source_id": "synthetic-source",
+    "upstream_commit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "protocol_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "config_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "model_revision": null,
+    "dataset_revision": null,
+    "environment_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+  },
+  "budget": {
+    "max_wall_seconds": 10,
+    "max_cost_usd": 0,
+    "max_gpu_hours": 0,
+    "max_model_tokens": 0,
+    "max_tool_calls": 0,
+    "max_output_bytes": 1048576
+  },
+  "artifacts": {
+    "root": "synthetic",
+    "retain_raw": true
+  }
+}

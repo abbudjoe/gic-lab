@@ -33,6 +33,9 @@ SCHEMA_FILES = (
     "schemas/transition.schema.json",
     "schemas/manifest.schema.json",
     "schemas/compute.schema.json",
+    "schemas/run-plan.schema.json",
+    "schemas/harness-event.schema.json",
+    "schemas/cloud-run.schema.json",
 )
 REQUIRED_PATHS = (
     "AGENTS.md",

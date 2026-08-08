@@ -1,0 +1,162 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:gic-lab:schema:run-plan:0.1.0",
+  "title": "GIC Lab run plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "experiment_id",
+    "run_id",
+    "profile",
+    "condition",
+    "attempt",
+    "seed",
+    "interpretation_allowed",
+    "execution",
+    "sources",
+    "budget",
+    "artifacts"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1.0"},
+    "experiment_id": {"type": "string", "pattern": "^EXP-[0-9]{4}$"},
+    "run_id": {
+      "type": "string",
+      "pattern": "^RUN-[A-Z0-9][A-Z0-9._-]{5,127}$"
+    },
+    "profile": {"enum": ["smoke", "pilot", "confirmatory"]},
+    "condition": {"type": "string", "minLength": 1},
+    "attempt": {"type": "integer", "minimum": 1},
+    "seed": {"type": ["integer", "null"], "minimum": 0},
+    "interpretation_allowed": {"type": "boolean"},
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["backend", "workload", "authorization"],
+      "properties": {
+        "backend": {"enum": ["local-subprocess", "cloud"]},
+        "workload": {"enum": ["prototype", "benchmark", "training"]},
+        "authorization": {"$ref": "#/$defs/authorization"}
+      }
+    },
+    "sources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "giclab_commit",
+        "upstream_source_id",
+        "upstream_commit",
+        "protocol_sha256",
+        "config_sha256",
+        "model_revision",
+        "dataset_revision",
+        "environment_sha256"
+      ],
+      "properties": {
+        "giclab_commit": {"$ref": "#/$defs/commit-or-unknown"},
+        "upstream_source_id": {"type": "string", "minLength": 1},
+        "upstream_commit": {"$ref": "#/$defs/commit-or-unknown"},
+        "protocol_sha256": {"$ref": "#/$defs/digest-or-unknown"},
+        "config_sha256": {"$ref": "#/$defs/digest-or-unknown"},
+        "model_revision": {"type": ["string", "null"], "minLength": 1},
+        "dataset_revision": {"type": ["string", "null"], "minLength": 1},
+        "environment_sha256": {"$ref": "#/$defs/digest-or-unknown"}
+      }
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_wall_seconds",
+        "max_cost_usd",
+        "max_gpu_hours",
+        "max_model_tokens",
+        "max_tool_calls",
+        "max_output_bytes"
+      ],
+      "properties": {
+        "max_wall_seconds": {"type": "integer", "minimum": 1},
+        "max_cost_usd": {"type": "number", "minimum": 0},
+        "max_gpu_hours": {"type": "number", "minimum": 0},
+        "max_model_tokens": {"type": ["integer", "null"], "minimum": 0},
+        "max_tool_calls": {"type": ["integer", "null"], "minimum": 0},
+        "max_output_bytes": {"type": "integer", "minimum": 1}
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["root", "retain_raw"],
+      "properties": {
+        "root": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+        },
+        "retain_raw": {"const": true}
+      }
+    }
+  },
+  "$defs": {
+    "commit-or-unknown": {
+      "oneOf": [
+        {"type": "string", "pattern": "^[a-f0-9]{40}$"},
+        {"const": "unknown"}
+      ]
+    },
+    "digest-or-unknown": {
+      "oneOf": [
+        {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        {"const": "unknown"}
+      ]
+    },
+    "authorization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["authorized", "authorization_reference", "command_sha256"],
+      "properties": {
+        "authorized": {"type": "boolean"},
+        "authorization_reference": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{2,127}$"
+        },
+        "command_sha256": {"type": ["string", "null"]}
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"authorized": {"const": true}},
+            "required": ["authorized"]
+          },
+          "then": {
+            "properties": {
+              "authorization_reference": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{2,127}$"
+              },
+              "command_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+            }
+          },
+          "else": {
+            "properties": {
+              "authorization_reference": {"type": "null"},
+              "command_sha256": {"type": "null"}
+            }
+          }
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"profile": {"const": "smoke"}},
+        "required": ["profile"]
+      },
+      "then": {"properties": {"interpretation_allowed": {"const": false}}}
+    }
+  ]
+}
