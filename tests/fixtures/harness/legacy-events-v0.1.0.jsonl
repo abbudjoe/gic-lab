@@ -1,0 +1,3 @@
+{"attempt":1,"event_type":"run_started","payload":{"experiment_id":"EXP-9000"},"provenance":"observed","run_id":"RUN-LEGACY-001","schema_version":"0.1.0","sequence":1,"source":"giclab-harness","timestamp_utc":"2026-08-07T12:00:00Z"}
+{"attempt":1,"event_type":"preflight_completed","payload":{"authorized":false},"provenance":"derived","run_id":"RUN-LEGACY-001","schema_version":"0.1.0","sequence":2,"source":"giclab-harness","timestamp_utc":"2026-08-07T12:00:01Z"}
+{"attempt":1,"event_type":"run_stopped","payload":{"return_code":0,"status":"completed"},"provenance":"observed","run_id":"RUN-LEGACY-001","schema_version":"0.1.0","sequence":3,"source":"giclab-harness","timestamp_utc":"2026-08-07T12:00:02Z"}

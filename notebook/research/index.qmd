@@ -14,4 +14,19 @@ The project tests architectural claims through matched comparisons rather than a
 
 The canonical research-question text is maintained in `docs/RESEARCH_QUESTIONS.md`. Phase 0 approves none of these as an executable protocol.
 
+## Planned/deferred RQ-H2K option
+
+RQ-H2K asks whether externally orchestrated reasoning-control functions could
+eventually be represented inside a learned reasoning model without unacceptable loss
+of auditability, safety, or reversibility. Planning regulation is the first candidate.
+There is no active RQ-H2K experiment, learned kernel, training path, or Phase 2.
+
+Current work preserves only source-grounded trace lineage: who or what selected a mode,
+which mode was selected, the retained evidence supporting it, and which fields remain
+unavailable. A fixed SiRA condition is an external experiment assignment. An explicit
+SR²AM/model output would establish only that an output was emitted, not that it is a
+faithful latent mechanism. EXP-0001 remains unchanged and is not an internalization
+experiment. Phase 1 may later report trace completeness or future-comparison
+feasibility, but not internalization superiority or training readiness.
+
 The public [falsification map](../generated/falsification.qmd) states what evidence would weaken each major architectural claim and which controls are required.

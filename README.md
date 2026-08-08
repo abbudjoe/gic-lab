@@ -2,11 +2,12 @@
 
 GIC Lab is a public, reproducible research program for determining which proposed mechanisms in the Goal–Identity–Configurator (GIC) architecture are necessary, sufficient, learnable, and measurably better than matched external orchestration.
 
-The repository has completed **Phase 0.5: reading reconciliation** and opened
-**Phase 0.75: upstream audit, experiment harness, and protocol lock**. Phase 0.75 is
-active and permits static upstream audits, non-executing harness construction, and
-protocol lock. No prototype result has been reproduced, and no model, API, benchmark,
-training, cloud, or paid-compute run is authorized.
+The repository has completed **Phase 0.75: upstream audit, experiment harness,
+protocol lock, and option preservation** and opened **Phase 1: artifact execution**.
+Phase 1 is active, but every project execution and compute permission remains false.
+`EXP-0001` is planned and not run; only its disabled smoke profile is eligible for a
+later exact human authorization. A protocol, readiness record, or proposed budget is
+not authorization.
 
 - [Public research notebook](https://abbudjoe.github.io/gic-lab/)
 - [GitHub repository](https://github.com/abbudjoe/gic-lab)
@@ -17,7 +18,9 @@ training, cloud, or paid-compute run is authorized.
 - [Research questions](docs/RESEARCH_QUESTIONS.md)
 - [Claim matrix](docs/CLAIM_MATRIX.md)
 - [Falsification notes](docs/FALSIFICATION_NOTES.md)
-- [Active Phase 0.75 plan](docs/exec-plans/active/PHASE_0_75_UPSTREAM_AUDIT_HARNESS_PROTOCOL_LOCK.md)
+- [Active Phase 1 plan](docs/exec-plans/active/PHASE_1_ARTIFACT_EXECUTION.md)
+- [Phase 1 smoke readiness](docs/readiness/PHASE_1_SMOKE_READINESS.md)
+- [Completed Phase 0.75 ledger](docs/exec-plans/completed/PHASE_0_75_UPSTREAM_AUDIT_HARNESS_PROTOCOL_LOCK.md)
 - [Completed Phase 0.5 ledger](docs/exec-plans/completed/PHASE_0_5_RECONCILIATION.md)
 - [Reproducibility contract](docs/REPRODUCIBILITY.md)
 - [Public notebook source](notebook/index.qmd)

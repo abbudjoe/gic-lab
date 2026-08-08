@@ -9,14 +9,17 @@ Phase 0 bootstrap ledger are now completed records, not active authorities. One 
 0.75 plan is active for the bounded upstream-audit, experiment-harness, and
 protocol-lock phase.
 
-## Current boundary
+## Boundary at opening
 
 T00 repairs lifecycle validation and public state only. It does not inspect or clone an
 upstream repository, register an experiment, call a model or API, install a browser,
 run a benchmark, download a checkpoint, or mutate cloud resources. All execution and
 paid-compute permissions remain false.
 
-## Next gate
+## Opening gate (completed)
 
 T00 must pass lifecycle regressions, independent spec-conformance review, and the full
 local parity gate before a separate static-audit or harness workstream may begin.
+
+Phase 0.75 later completed through T06. See the 2026-08-08 Phase 1 opening note for the
+current gate; this page remains the historical opening record.

@@ -2,7 +2,7 @@ schema_version: 0.1.0
 kind: compute-ledger
 phase_zero_summary:
   period_start: "2026-07-15"
-  period_end: "2026-07-15"
+  period_end: "2026-08-08"
   paid_compute_authorized: false
   cloud_mutations: 0
   accelerator_hours: 0

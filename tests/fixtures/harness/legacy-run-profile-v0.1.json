@@ -1,0 +1,60 @@
+{
+  "schema_version": "0.1.0",
+  "experiment_id": "EXP-9000",
+  "plan_id": "PLAN-LEGACY-PILOT",
+  "profile": "pilot",
+  "study_stage": "exploratory",
+  "purpose": "Preserve the original run-profile v0.1 reader contract.",
+  "sample_rationale": "One legacy pair exists only as compatibility evidence.",
+  "interpretation_allowed": true,
+  "execution": {
+    "authorized": true,
+    "authorization_reference": "legacy reference with spaces"
+  },
+  "model": {
+    "provider": "synthetic",
+    "manifest_id": "MODEL-SYNTHETIC",
+    "api": "https://example.invalid/v1/",
+    "upstream_alias": "synthetic",
+    "proposed_immutable_revision": "synthetic-v1",
+    "historical_revision_known": true,
+    "reproduction_level": "artifact-execution",
+    "substitution": null
+  },
+  "sampling": {
+    "pair_count": 1,
+    "conditions": ["legacy-a", "legacy-b"],
+    "task_family": "synthetic",
+    "dataset_ids": [],
+    "counterbalancing": [
+      {
+        "pair_id": "PAIR-LEGACY-001",
+        "task_id": "TASK-LEGACY-001",
+        "task_source": "legacy compatibility fixture",
+        "first": "legacy-a",
+        "second": "legacy-b",
+        "plans": [
+          {"condition": "legacy-a", "path": "legacy-a.json"},
+          {"condition": "legacy-b", "path": "legacy-b.json"}
+        ]
+      }
+    ]
+  },
+  "budget": {
+    "pricing_record": "legacy-pricing.yaml",
+    "max_cost_usd": 0,
+    "max_model_tokens": 0,
+    "max_wall_seconds": 20
+  },
+  "artifacts": {
+    "root": "legacy",
+    "retain_raw": true,
+    "public_release": "blocked-pending-review"
+  },
+  "condition_plan_paths": ["legacy-a.json", "legacy-b.json"],
+  "readiness": {
+    "execution_eligibility": "blocked-pending-later-phase-integration",
+    "approval_changes_required": ["legacy authorization step"],
+    "unresolved_execution_blockers": []
+  }
+}

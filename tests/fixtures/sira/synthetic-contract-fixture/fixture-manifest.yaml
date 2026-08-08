@@ -1,0 +1,23 @@
+schema_version: 0.1.0
+fixture_id: SIRA-SYNTHETIC-CONTRACT-FIXTURE-001
+provenance_class: synthetic-contract-fixture
+upstream_evidence: false
+scientific_evidence: false
+source_contract:
+  manifest_id: SRC-SIRA-REPOSITORY
+  commit: 93fb8d72de71f9a4a13419670adeb34d93cf7acd
+  command_map: docs/audits/sira/COMMAND_CONTRACT.yaml
+  trace_map: docs/audits/sira/TRACE_FIELD_MAP.yaml
+reason: >-
+  The reviewed T01 pinned-source inventory identified no released upstream sample
+  session trace. This hand-authored fixture exercises only the documented structured
+  field shape and must never be cited as upstream behavior or a run result.
+files:
+  - path: sira-output/SYNTHETIC-SIRA-PAIR-SIMULATIVE_2026-08-08-00-00-00.json
+    role: source-shaped-session-json
+  - path: sira-output/debug/1700000000.log
+    role: raw-only-sensitive-log-shape
+  - path: sira-output/isolated-source-logs/agent/2026-08-08-00-00-00-000000.log
+    role: isolated-raw-only-agent-log-shape
+  - path: sira-output/isolated-source-logs/global/sira_2026-08-08.log
+    role: isolated-raw-only-global-log-shape

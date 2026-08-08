@@ -37,6 +37,11 @@ budget:
   max_cost_usd: 0
 acceptance_criteria:
   - Replace before authorization.
+validity:
+  invalid_run_criteria:
+    - Replace with a predeclared infrastructure-invalid criterion.
+  inconclusive_criteria:
+    - Replace with a predeclared insufficient-evidence criterion.
 stop_conditions:
   - Stop if the approved budget or safety boundary would be exceeded.
 execution:

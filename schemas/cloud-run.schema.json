@@ -1,0 +1,153 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:gic-lab:schema:cloud-run:0.1.0",
+  "title": "GIC Lab generic cloud-run contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "provider",
+    "run_id",
+    "attempt",
+    "instance",
+    "pricing",
+    "limits",
+    "storage",
+    "authorization",
+    "termination"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1.0"},
+    "provider": {"type": "string", "minLength": 1},
+    "run_id": {
+      "type": "string",
+      "pattern": "^RUN-[A-Z0-9][A-Z0-9._-]{5,127}$"
+    },
+    "attempt": {"type": "integer", "minimum": 1},
+    "instance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "resource_type",
+        "region",
+        "image",
+        "architecture",
+        "accelerator_count"
+      ],
+      "properties": {
+        "resource_type": {"type": "string", "minLength": 1},
+        "region": {"type": "string", "minLength": 1},
+        "image": {"type": "string", "minLength": 1},
+        "architecture": {"enum": ["x86_64", "arm64"]},
+        "accelerator_count": {"type": "integer", "minimum": 0}
+      }
+    },
+    "pricing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["price_per_accelerator_hour_usd", "verified_at_utc", "source"],
+      "properties": {
+        "price_per_accelerator_hour_usd": {"type": "number", "minimum": 0},
+        "verified_at_utc": {"type": "string", "format": "date-time"},
+        "source": {"type": "string", "minLength": 1}
+      }
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_wall_seconds",
+        "max_cost_usd",
+        "max_gpu_hours",
+        "max_output_bytes",
+        "hard_termination_utc"
+      ],
+      "properties": {
+        "max_wall_seconds": {"type": "integer", "minimum": 1},
+        "max_cost_usd": {"type": "number", "minimum": 0},
+        "max_gpu_hours": {"type": "number", "minimum": 0},
+        "max_output_bytes": {"type": "integer", "minimum": 1},
+        "hard_termination_utc": {"type": "string", "format": "date-time"}
+      }
+    },
+    "storage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["filesystem_action", "artifact_destination"],
+      "properties": {
+        "filesystem_action": {"enum": ["none", "attach-existing", "create-approved"]},
+        "artifact_destination": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^?#]+$"
+        }
+      }
+    },
+    "authorization": {"$ref": "#/$defs/authorization"},
+    "termination": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["authorized", "method", "verify_terminal_state"],
+      "properties": {
+        "authorized": {"type": "boolean"},
+        "method": {"type": "string", "minLength": 1},
+        "verify_terminal_state": {"const": true}
+      }
+    }
+  },
+  "$defs": {
+    "authorization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["authorized", "authorization_reference"],
+      "properties": {
+        "authorized": {"type": "boolean"},
+        "authorization_reference": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{2,127}$"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"authorized": {"const": true}},
+            "required": ["authorized"]
+          },
+          "then": {
+            "properties": {
+              "authorization_reference": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{2,127}$"
+              }
+            }
+          },
+          "else": {
+            "properties": {"authorization_reference": {"type": "null"}}
+          }
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "authorization": {
+            "properties": {"authorized": {"const": true}},
+            "required": ["authorized"]
+          }
+        },
+        "required": ["authorization"]
+      },
+      "then": {
+        "properties": {
+          "termination": {
+            "properties": {"authorized": {"const": true}}
+          }
+        }
+      }
+    }
+  ]
+}

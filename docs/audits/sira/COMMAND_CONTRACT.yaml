@@ -1,0 +1,398 @@
+schema_version: 0.1.0
+contract_id: SIRA-COMMAND-CONTRACT-0.1.0
+status: proposed-unauthorized
+source:
+  manifest_id: SRC-SIRA-REPOSITORY
+  repository: https://github.com/sailing-lab/sira
+  commit: 93fb8d72de71f9a4a13419670adeb34d93cf7acd
+execution:
+  authorized: false
+  interpretation_allowed: false
+  cwd_contract: pinned-sira-repository-root
+  shell_interpolation: false
+  secret_value_in_argv: false
+  required_secret_name: SIRA_API_KEY
+  forbidden_actions_in_t01:
+    - dependency_install
+    - playwright_install
+    - browser_launch
+    - model_or_api_call
+    - evaluator_run
+setup_templates_not_executed:
+  python: ">=3.10,<3.13"
+  preferred_python: "3.10"
+  environment_argv:
+    - uv
+    - sync
+    - --frozen
+    - --extra
+    - eval
+  browser_argv:
+    - uv
+    - run
+    - --frozen
+    - playwright
+    - install
+    - chromium
+  fanout_evaluator_setup_status: blocked
+  fanout_evaluator_setup_blocker: >-
+    evaluation/fanout/utils/norm.py imports spacy and loads en_core_web_sm, but
+    neither dependency is declared or pinned by the upstream project.
+pair_invariant:
+  comparison: positional-argv
+  approved_differences:
+    - argv_index: 5
+      semantic_field: job_name
+    - flag: --mode
+      semantic_field: mode
+  all_other_argv_values_identical: true
+  resolved_mode_owned_differences:
+    - config_name
+    - planner_type
+    - planner_search_num_actions
+    - planner_search_depth
+    - planner_policy_num_samples
+    - planner_critic_num_samples
+    - policy_temperature
+    - policy_top_p
+    - critic_temperature
+    - critic_top_p
+    - model_call_multiplicity
+common_runtime_contract:
+  agent: sira
+  model: gpt-4o
+  model_revision: unavailable-mutable-alias
+  api_key_precedence:
+    - cli_api_key
+    - SIRA_API_KEY
+    - OPENAI_API_KEY
+  selected_secret_source: SIRA_API_KEY
+  outer_max_retry: 0
+  action_timeout_seconds: 30
+  dataset_order_seed: 42
+  model_seed: unavailable
+  api_timeout: unavailable
+  browser_headless: true
+  browser_viewport:
+    width: 1280
+    height: 720
+  output_collision_warning: >-
+    Upstream session filenames have one-second resolution. The future harness must
+    isolate each run and attempt in a unique directory. Evaluator result filenames
+    also overwrite for repeated job/slice identities, so every attempt needs an
+    immutable job identity, immediate stdout capture, and result hashing.
+  upstream_cleanup:
+    environment_close_call: absent
+    finally_cleanup: absent
+    browser_child_verification: absent
+  required_harness_cleanup:
+    - supervise-upstream-process-group
+    - terminate-browser-and-descendant-processes-after-every-attempt
+    - escalate-timeout-termination-deterministically
+    - record-zero-live-child-verification
+resolved_modes:
+  reactive:
+    config_name: web_reactive
+    planner_type: policy
+    base_temperature: 0.0
+    base_top_p: 0.5
+  simulative:
+    config_name: web_simulative
+    planner_type: world_model
+    planner_search_num_actions: 5
+    planner_search_depth: 1
+    planner_policy_num_samples: 20
+    planner_critic_num_samples: 20
+    policy_temperature: 1.0
+    policy_top_p: 0.95
+    critic_temperature: 1.0
+    critic_top_p: 0.95
+    execution_branch:
+      one_cluster: direct-selection-without-world-model-or-critic-call
+      multiple_clusters: one-step-world-model-and-critic-evaluation
+    model_call_multiplicity: runtime-variable-by-cluster-count-and-retries
+profiles:
+  smoke:
+    purpose: command-browser-trace-accounting-and-harness-cleanup-smoke-only
+    interpretation_allowed: false
+    task:
+      kind: open-ended-query
+      source_reference: README.md:93-109
+      query: go to google flights
+    cleanup_source_status: unavailable-without-future-harness-supervision
+    pair:
+      reactive:
+        condition: SIRA-REACTIVE
+        argv:
+          - uv
+          - run
+          - --frozen
+          - python
+          - scripts/run_web_agent.py
+          - EXP-0001-SMOKE-REACTIVE
+          - --query
+          - go to google flights
+          - --mode
+          - reactive
+          - --agent
+          - sira
+          - --model
+          - gpt-4o
+          - --max_steps
+          - "1"
+          - --timeout
+          - "30"
+          - --max_retry
+          - "0"
+          - --output_dir
+          - browsing_data/EXP-0001-smoke
+          - --seed
+          - "42"
+      simulative:
+        condition: SIRA-SIMULATIVE
+        argv:
+          - uv
+          - run
+          - --frozen
+          - python
+          - scripts/run_web_agent.py
+          - EXP-0001-SMOKE-SIMULATIVE
+          - --query
+          - go to google flights
+          - --mode
+          - simulative
+          - --agent
+          - sira
+          - --model
+          - gpt-4o
+          - --max_steps
+          - "1"
+          - --timeout
+          - "30"
+          - --max_retry
+          - "0"
+          - --output_dir
+          - browsing_data/EXP-0001-smoke
+          - --seed
+          - "42"
+  pilot_minimum:
+    purpose: paired-execution-scoring-and-variance-plumbing
+    interpretation_allowed: exploratory-only
+    limitations:
+      - two-pairs-are-not-an-adequately-powered-scientific-sample
+      - live-web-and-provider-drift-remain
+      - fanout-evaluator-dependency-gap-must-be-resolved-before-run
+    order:
+      - task_index: 0
+        sequence:
+          - reactive
+          - simulative
+      - task_index: 1
+        sequence:
+          - simulative
+          - reactive
+    tasks:
+      - task_id: 7dcbbbdc7f1120cd
+        dataset: fanout
+        start_idx: 0
+        end_idx: 1
+        question: What is the batting hand of each of the first five picks in the 1998 MLB draft?
+        pair:
+          reactive:
+            condition: SIRA-REACTIVE
+            argv:
+              - uv
+              - run
+              - --frozen
+              - python
+              - scripts/run_web_agent.py
+              - EXP-0001-PILOT-FANOUT-0000-REACTIVE
+              - --dataset
+              - fanout
+              - --mode
+              - reactive
+              - --agent
+              - sira
+              - --model
+              - gpt-4o
+              - --max_steps
+              - "30"
+              - --timeout
+              - "30"
+              - --max_retry
+              - "0"
+              - --data_root
+              - data
+              - --output_dir
+              - browsing_data/EXP-0001-pilot
+              - --start_idx
+              - "0"
+              - --end_idx
+              - "1"
+              - --seed
+              - "42"
+            evaluator_argv:
+              - uv
+              - run
+              - --frozen
+              - python
+              - evaluation/fanout/run.py
+              - EXP-0001-PILOT-FANOUT-0000-REACTIVE
+              - --browsing_data_dir
+              - browsing_data/EXP-0001-pilot
+              - --groundtruth_path
+              - data/fanout-final-dev.json
+              - --start_idx
+              - "0"
+              - --end_idx
+              - "1"
+          simulative:
+            condition: SIRA-SIMULATIVE
+            argv:
+              - uv
+              - run
+              - --frozen
+              - python
+              - scripts/run_web_agent.py
+              - EXP-0001-PILOT-FANOUT-0000-SIMULATIVE
+              - --dataset
+              - fanout
+              - --mode
+              - simulative
+              - --agent
+              - sira
+              - --model
+              - gpt-4o
+              - --max_steps
+              - "30"
+              - --timeout
+              - "30"
+              - --max_retry
+              - "0"
+              - --data_root
+              - data
+              - --output_dir
+              - browsing_data/EXP-0001-pilot
+              - --start_idx
+              - "0"
+              - --end_idx
+              - "1"
+              - --seed
+              - "42"
+            evaluator_argv:
+              - uv
+              - run
+              - --frozen
+              - python
+              - evaluation/fanout/run.py
+              - EXP-0001-PILOT-FANOUT-0000-SIMULATIVE
+              - --browsing_data_dir
+              - browsing_data/EXP-0001-pilot
+              - --groundtruth_path
+              - data/fanout-final-dev.json
+              - --start_idx
+              - "0"
+              - --end_idx
+              - "1"
+      - task_id: 2120afba8009bad3
+        dataset: fanout
+        start_idx: 1
+        end_idx: 2
+        question: What were box office values of the Star Wars films in the prequel and sequel trilogies?
+        pair:
+          reactive:
+            condition: SIRA-REACTIVE
+            argv:
+              - uv
+              - run
+              - --frozen
+              - python
+              - scripts/run_web_agent.py
+              - EXP-0001-PILOT-FANOUT-0001-REACTIVE
+              - --dataset
+              - fanout
+              - --mode
+              - reactive
+              - --agent
+              - sira
+              - --model
+              - gpt-4o
+              - --max_steps
+              - "30"
+              - --timeout
+              - "30"
+              - --max_retry
+              - "0"
+              - --data_root
+              - data
+              - --output_dir
+              - browsing_data/EXP-0001-pilot
+              - --start_idx
+              - "1"
+              - --end_idx
+              - "2"
+              - --seed
+              - "42"
+            evaluator_argv:
+              - uv
+              - run
+              - --frozen
+              - python
+              - evaluation/fanout/run.py
+              - EXP-0001-PILOT-FANOUT-0001-REACTIVE
+              - --browsing_data_dir
+              - browsing_data/EXP-0001-pilot
+              - --groundtruth_path
+              - data/fanout-final-dev.json
+              - --start_idx
+              - "1"
+              - --end_idx
+              - "2"
+          simulative:
+            condition: SIRA-SIMULATIVE
+            argv:
+              - uv
+              - run
+              - --frozen
+              - python
+              - scripts/run_web_agent.py
+              - EXP-0001-PILOT-FANOUT-0001-SIMULATIVE
+              - --dataset
+              - fanout
+              - --mode
+              - simulative
+              - --agent
+              - sira
+              - --model
+              - gpt-4o
+              - --max_steps
+              - "30"
+              - --timeout
+              - "30"
+              - --max_retry
+              - "0"
+              - --data_root
+              - data
+              - --output_dir
+              - browsing_data/EXP-0001-pilot
+              - --start_idx
+              - "1"
+              - --end_idx
+              - "2"
+              - --seed
+              - "42"
+            evaluator_argv:
+              - uv
+              - run
+              - --frozen
+              - python
+              - evaluation/fanout/run.py
+              - EXP-0001-PILOT-FANOUT-0001-SIMULATIVE
+              - --browsing_data_dir
+              - browsing_data/EXP-0001-pilot
+              - --groundtruth_path
+              - data/fanout-final-dev.json
+              - --start_idx
+              - "1"
+              - --end_idx
+              - "2"

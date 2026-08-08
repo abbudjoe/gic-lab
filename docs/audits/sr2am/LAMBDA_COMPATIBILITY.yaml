@@ -1,0 +1,362 @@
+schema_version: 0.1.0
+kind: sr2am-lambda-compatibility
+status: static-audit-only
+audited_at: "2026-08-07"
+execution_authorized: false
+source:
+  repository: sailing-lab/sr2am
+  commit: 6f4ac7824ffc7d12453ffaa53d25e5f34bf3aeb0
+  model: sailing-lab/SR2AM-v0.1-8B
+  model_revision: 5d72255092ac2ec006c2f9813029220aff79865e
+
+status_definitions:
+  preferred-pending-preflight: >-
+    Best static choice, but T11 must still produce and dry-run a coherent
+    environment lock and verify the current provider image/driver contract.
+  eligible-pending-preflight: >-
+    Static hardware and architecture evidence is favorable, but the exact
+    environment has not been installed or executed.
+  eligible-not-minimal: >-
+    Likely compatible but has unnecessary GPU count, cost, or topology for the
+    one-task smoke.
+  arm-unproven-do-not-select: >-
+    Memory is sufficient, but the complete frozen environment and auxiliary
+    container path are not proven on arm64.
+
+evidence_sources:
+  lambda_instance_shapes:
+    url: https://docs.lambda.ai/public-cloud/on-demand/getting-started/
+    retrieved_at: "2026-08-07"
+  lambda_current_prices:
+    url: https://lambda.ai/instances
+    retrieved_at: "2026-08-07"
+    warning: Prices are mutable and must be refreshed at T11 and at launch.
+  lambda_images_and_architectures:
+    url: https://docs.lambda.ai/public-cloud/on-demand/
+    retrieved_at: "2026-08-07"
+  lambda_gh200_arm_warning:
+    url: https://docs.lambda.ai/public-cloud/on-demand/getting-started/
+    retrieved_at: "2026-08-07"
+  nvidia_cuda_architecture_matrix:
+    url: https://docs.nvidia.com/datacenter/tesla/drivers/cuda-toolkit-driver-and-architecture-matrix.html
+    retrieved_at: "2026-08-07"
+  pypi_metadata:
+    url_template: https://pypi.org/pypi/{package}/{version}/json
+    retrieved_at: "2026-08-07"
+    method: Metadata and wheel filenames only; no wheels were installed.
+  hugging_face_model_metadata:
+    url: https://huggingface.co/api/models/sailing-lab/SR2AM-v0.1-8B/revision/5d72255092ac2ec006c2f9813029220aff79865e?blobs=true
+    retrieved_at: "2026-08-07"
+    method: Metadata only; no checkpoint shard was downloaded.
+
+model_memory_basis:
+  repository_bytes: 16398028091
+  weight_bytes: 16381516768
+  weight_gib: 15.256476372480392
+  dtype: bfloat16
+  layers: 36
+  kv_heads: 8
+  head_dim: 128
+  context_tokens: 40960
+  one_full_context_kv_bytes: 6039797760
+  one_full_context_kv_gib: 5.625
+  weights_plus_one_full_context_kv_gib: 20.881476372480392
+  excluded_from_estimate:
+    - CUDA graphs
+    - activations
+    - allocator fragmentation and reserve
+    - SGLang runtime buffers
+    - concurrent sequences beyond one fully occupied context
+  interpretation: >-
+    The arithmetic supports a conservative 40 GB static floor for TP=1,
+    DP=1, concurrency=1. It is not measured peak VRAM evidence.
+
+environment_evidence:
+  upstream_python: "3.13"
+  lambda_stack_24_04_default_python: "3.12"
+  lambda_stack_22_04_default_python: "3.10"
+  requirement_lines: 349
+  exact_pins: 346
+  lower_bounded_requirements:
+    - langchain-experimental>=0.3.4
+    - numpy>=2.1.0
+    - packaging>=23.2
+  requirements_sha256: ee384e51ec2df84ea42be35acf2f937f96f63da6e1a0640ef8fcb0662a12b18c
+  direct_python_3_13_linux_wheel_screen:
+    target_os_basis: Ubuntu 22.04, glibc 2.35
+    target_python: CPython 3.13
+    algorithm: >-
+      Intersect each artifact's packaging.utils.parse_wheel_filename tags with
+      packaging.tags.cpython_tags((3, 13)) plus compatible_tags((3, 13)) for
+      Linux manylinux tags through glibc 2.35 and the target architecture;
+      reject artifacts whose Requires-Python excludes 3.13.
+    x86_64_compatible_exact_pins: 330
+    x86_64_exact_pins_without_compatible_wheel: 16
+    x86_64_exact_pins_without_compatible_wheel_list:
+      - chess==1.11.2
+      - docopt==0.6.2
+      - ecos==2.0.14
+      - fire==0.7.0
+      - google_search_results==2.4.2
+      - iapws==1.5.4
+      - peewee==3.18.1
+      - pybloom_live==4.0.0
+      - pycosat==0.6.6
+      - pycrypto==2.6.1
+      - pylatexenc==2.10
+      - pysat==3.2.2
+      - rouge_score==0.1.2
+      - sgmllib3k==1.0.0
+      - steam==1.4.4
+      - wikipedia==1.4.0
+    arm64_compatible_exact_pins: 325
+    arm64_exact_pins_without_compatible_wheel: 21
+    arm64_exact_pins_without_compatible_wheel_list:
+      - chess==1.11.2
+      - docopt==0.6.2
+      - ecos==2.0.14
+      - fire==0.7.0
+      - google_search_results==2.4.2
+      - iapws==1.5.4
+      - osqp==1.0.4
+      - peewee==3.18.1
+      - pybloom_live==4.0.0
+      - pycosat==0.6.6
+      - pycrypto==2.6.1
+      - pylatexenc==2.10
+      - pysat==3.2.2
+      - rouge_score==0.1.2
+      - sgmllib3k==1.0.0
+      - steam==1.4.4
+      - torch_memory_saver==0.0.9
+      - torchcodec==0.8.0
+      - wikipedia==1.4.0
+      - xformers==0.0.31
+      - xgrammar==0.1.27
+    unresolved_lower_bounded_requirements: 3
+    caveat: >-
+      Counts cover 346 exact pins; the three lower-bounded requirements were
+      not assigned a version. Pure-Python earlier-minor tags accepted by
+      packaging's standard CPython 3.13 compatible-tag set are included. This
+      is not dependency resolution, import validation, CUDA validation, or
+      proof that source distributions build.
+  explicit_arm64_source_build_risks:
+    - package: osqp
+      version: 1.0.4
+      x86_64_python_3_13_wheel: true
+      arm64_python_3_13_wheel: false
+    - package: torch_memory_saver
+      version: 0.0.9
+      published_wheel: cp39-abi3-manylinux2014_x86_64
+      arm64_wheel: false
+    - package: torchcodec
+      version: 0.8.0
+      x86_64_python_3_13_wheel: true
+      arm64_python_3_13_wheel: false
+    - package: xformers
+      version: 0.0.31
+      published_linux_wheel: cp39-abi3-manylinux_2_28_x86_64
+      arm64_wheel: false
+    - package: xgrammar
+      version: 0.1.27
+      x86_64_python_3_13_wheel: true
+      arm64_python_3_13_wheel: false
+  auxiliary_image_risk:
+    image: docker://varad0309/code_sandbox:server_unsecure
+    digest_pinned: false
+    arm64_manifest_verified: false
+    sandbox_requirements_lines: 256
+    sandbox_requirements_version_specifiers: 0
+    sandbox_requirements_sha256: d04d29c7b5201b8b1ae227cb4659aa8bf223c46720705397afbe70c18c30fb23
+    installer_behavior: >-
+      The setup script installs each unversioned entry through the exposed
+      run_code endpoint and reports failed packages without failing the setup.
+  visit_tokenizer_risk:
+    qwen_path: transformers.AutoTokenizer.from_pretrained(summarize_model)
+    revision_argument: absent
+    local_path_argument_independent_of_remote_model_name: absent
+    non_qwen_path: tiktoken.encoding_for_model("gpt-4o")
+    conclusion: >-
+      The full-topology think-path profile has an implicit local tokenizer/cache and network
+      dependency that cannot be made immutable through the released CLI alone.
+  dependency_contradictions:
+    target_markers: CPython 3.13, Linux, x86_64, no extras
+    algorithm: >-
+      Evaluate each pinned distribution's versioned PyPI Requires-Dist entries
+      against the target markers, then compare every direct dependency that is
+      also pinned in the snapshot.
+    count: 9
+    entries:
+      - parent: ortools==9.14.6206
+        requires: protobuf>=6.31.1,<6.32
+        snapshot: protobuf==6.33.2
+      - parent: vllm==0.13.0
+        requires: anthropic==0.71.0
+        snapshot: anthropic==0.75.0
+      - parent: vllm==0.13.0
+        requires: compressed-tensors==0.12.2
+        snapshot: compressed-tensors==0.13.0
+      - parent: vllm==0.13.0
+        requires: lark==1.2.2
+        snapshot: lark==1.3.1
+      - parent: vllm==0.13.0
+        requires: llguidance>=1.3.0,<1.4.0
+        snapshot: llguidance==0.7.30
+      - parent: vllm==0.13.0
+        requires: torch==2.9.0
+        snapshot: torch==2.9.1
+      - parent: vllm==0.13.0
+        requires: torchaudio==2.9.0
+        snapshot: torchaudio==2.9.1
+      - parent: vllm==0.13.0
+        requires: torchvision==0.24.0
+        snapshot: torchvision==0.24.1
+      - parent: xformers==0.0.31
+        requires: torch==2.7.1
+        snapshot: torch==2.9.1
+  conclusion: >-
+    The upstream snapshot is an environment inventory, not a coherent,
+    hash-locked install contract. T11 must create a serving-only, source-parity
+    x86_64 lock or image and validate imports without silently treating
+    --no-deps as compatibility evidence.
+
+selection:
+  preferred_accelerator: H100 PCIe 80 GB
+  preferred_gpu_count: 1
+  preferred_cpu_architecture: x86_64
+  rationale:
+    - TP=1 and DP=1 are accepted by the 8B source path.
+    - 80 GB gives substantial headroom above the unmeasured 20.881 GiB lower bound.
+    - x86_64 avoids five exact-pin CPython 3.13 ARM wheel gaps and the unverified sandbox image architecture.
+    - PCIe is cheaper than the current one-GPU H100 SXM shape and TP=1 does not need inter-GPU fabric.
+  fallback_order:
+    - H100 SXM 80 GB x1 x86_64
+    - A100 40 GB x1 x86_64
+    - A100 80 GB x8 x86_64 only if no smaller compatible shape is available and a new budget is approved
+  excluded_until_proven:
+    - GH200 96 GB arm64
+
+matrix:
+  - accelerator: H100 PCIe 80 GB
+    provider_shape: 1x
+    cpu_architecture: x86_64
+    cpu_architecture_provenance: expected-provider-shape; confirm in T11
+    gpu_architecture: Hopper
+    gpu_count: 1
+    vram_gb_per_gpu: 80
+    root_volume: 1 TiB
+    current_price_usd_per_gpu_hour: 3.29
+    current_total_usd_per_hour: 3.29
+    source_topology: TP=1, DP=1
+    static_status: preferred-pending-preflight
+    compatibility_basis:
+      - Hopper remains supported by current CUDA architecture documentation.
+      - Core pinned SGLang, vLLM, sgl-kernel, Torch, Triton, and CuPy distributions publish x86_64 paths.
+      - Model and one-full-context KV lower bound leave more than 50 GiB before other runtime allocations.
+    blockers: []
+    t11_gates:
+      - Resolve the contradictory environment into a hash-locked source-parity serving profile.
+      - Pin Lambda image ID and confirm Python, NVIDIA driver, and CUDA runtime compatibility.
+      - Import-smoke SGLang and required kernels without loading the model.
+      - Re-read price and availability.
+
+  - accelerator: H100 SXM 80 GB
+    provider_shape: 1x
+    cpu_architecture: x86_64
+    cpu_architecture_provenance: expected-provider-shape; confirm in T11
+    gpu_architecture: Hopper
+    gpu_count: 1
+    vram_gb_per_gpu: 80
+    root_volume: 2.75 TiB
+    current_price_usd_per_gpu_hour: 4.29
+    current_total_usd_per_hour: 4.29
+    source_topology: TP=1, DP=1
+    static_status: eligible-pending-preflight
+    compatibility_basis:
+      - Same architecture and memory capacity as the preferred H100 class.
+      - Higher memory bandwidth is favorable but not required for TP=1 correctness.
+    blockers: []
+    t11_gates:
+      - Apply every H100 PCIe environment and image gate.
+      - Use only when PCIe capacity is unavailable or a measured need justifies the higher rate.
+
+  - accelerator: GH200 96 GB
+    provider_shape: 1x
+    cpu_architecture: arm64
+    cpu_architecture_provenance: official-provider-warning
+    gpu_architecture: Hopper
+    gpu_count: 1
+    vram_gb_per_gpu: 96
+    root_volume: 4 TiB
+    current_price_usd_per_gpu_hour: 2.29
+    current_total_usd_per_hour: 2.29
+    source_topology: TP=1, DP=1
+    static_status: arm-unproven-do-not-select
+    compatibility_basis:
+      - Memory is ample.
+      - Core serving packages publish arm64 artifacts at the pinned versions.
+      - Lambda Stack 22.04 and 24.04 list arm64 images.
+    blockers:
+      - Five exact pins with x86_64-compatible paths lack a CPython 3.13 arm64 path: osqp, torch_memory_saver, torchcodec, xformers, and xgrammar.
+      - The unpinned SandboxFusion image has no verified arm64 manifest in this audit.
+      - The full 349-line Python 3.13 snapshot was neither resolved nor import-tested on ARM.
+      - Upstream and provider documentation both warn that ARM workflows require explicit validation.
+    t11_gates:
+      - Do not select for the first smoke unless every blocker is closed with arm64 build/import/runtime evidence.
+
+  - accelerator: A100 SXM 80 GB
+    provider_shape: 8x
+    cpu_architecture: x86_64
+    cpu_architecture_provenance: expected-provider-shape; confirm in T11
+    gpu_architecture: Ampere
+    gpu_count: 8
+    vram_gb_per_gpu: 80
+    root_volume: 19.5 TiB
+    current_price_usd_per_gpu_hour: 2.79
+    current_total_usd_per_hour: 22.32
+    source_topology: TP=1, DP=8 when the upstream wrapper receives --num-gpus 8
+    static_status: eligible-not-minimal
+    compatibility_basis:
+      - Ampere remains supported by current CUDA architecture documentation.
+      - Each replica has ample VRAM.
+      - The shape exactly matches the upstream eight-GPU 8B throughput example.
+    blockers:
+      - Current provider shape exposes eight GPUs, multiplying hourly cost and model replicas for a one-row smoke.
+    t11_gates:
+      - Require a separate budget decision; never select merely because its per-GPU price is lower.
+
+  - accelerator: A100 40 GB
+    provider_shapes:
+      - 1x SXM
+      - 1x PCIe
+    cpu_architecture: x86_64
+    cpu_architecture_provenance: expected-provider-shape; confirm in T11
+    gpu_architecture: Ampere
+    gpu_count: 1
+    vram_gb_per_gpu: 40
+    root_volume: 512 GiB
+    current_price_usd_per_gpu_hour: 1.99
+    current_total_usd_per_hour: 1.99
+    source_topology: TP=1, DP=1
+    static_status: eligible-pending-preflight
+    compatibility_basis:
+      - Ampere remains supported by current CUDA architecture documentation.
+      - Static lower-bound arithmetic leaves about 16.37 GiB in a decimal 40 GB device before uncounted runtime allocations.
+      - Root disk is far larger than the approximately 16.4 GB model repository.
+    blockers:
+      - Peak VRAM at 40,960 context has not been measured; CUDA graphs and allocator reserve could reduce headroom.
+      - Expected latency is unmeasured and may make a short hard deadline less reliable than H100.
+    t11_gates:
+      - Validate a dry-run memory budget and define an OOM stop condition.
+      - Prefer H100 for the first smoke unless current availability or an explicit cost decision selects A100.
+
+global_t11_gates:
+  - No row in this matrix is launch authorization.
+  - Resolve current provider instance type IDs, regions, and image IDs from read-only metadata.
+  - Confirm the exact driver and CUDA versions supplied by the selected image.
+  - Preserve argument arrays; do not pass secrets or paths through word-split shell strings.
+  - Set concurrency to one for the one-row smoke.
+  - Attach durable storage at instance creation or explicitly authorize a no-filesystem transfer plan.
+  - Enforce at least max(150 GB, 20 percent of capacity) free on every writable local or attached filesystem before and during the run; T11 may choose a stricter floor.
+  - Recalculate price, wall-time ceiling, spend cap, tax treatment, and persistent-storage cost.
+  - Keep GH200 excluded unless ARM compatibility is positively demonstrated.

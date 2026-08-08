@@ -1,0 +1,129 @@
+schema_version: 0.1.0
+example_id: SIRA-T04-MATCHED-DRY-RUN
+classification: nonexecuting-contract-example
+executed: false
+authorized: false
+interpretation_allowed: false
+source:
+  manifest_id: SRC-SIRA-REPOSITORY
+  commit: 93fb8d72de71f9a4a13419670adeb34d93cf7acd
+placeholders:
+  UV: absolute content-bound uv executable
+  SIRA_ROOT: exact clean Git top level at the audited commit with a bound input-tree digest
+  REACTIVE_ATTEMPT: prospective harness-owned reactive attempt directory
+  SIMULATIVE_ATTEMPT: prospective harness-owned simulative attempt directory
+common_config:
+  profile: smoke
+  task:
+    query: go to google flights
+  model: gpt-4o
+  agent: sira
+  max_steps: 1
+  action_timeout_seconds: 30
+  outer_max_retry: 0
+  dataset_order_seed: 42
+  harness_wall_timeout_seconds: 60
+  named_secret: SIRA_API_KEY
+  shell: false
+pair:
+  reactive:
+    run_id: RUN-SYNTHETIC-SIRA-REACTIVE
+    config_sha256: 2a62b8be8e62bab71663db28b34d3ddb0d59085454e78603681edd06a26069ed
+    condition: SIRA-REACTIVE
+    job_name: SYNTHETIC-SIRA-PAIR-REACTIVE
+    mode: reactive
+    argv:
+      - <UV>
+      - run
+      - --frozen
+      - python
+      - scripts/run_web_agent.py
+      - SYNTHETIC-SIRA-PAIR-REACTIVE
+      - --query
+      - go to google flights
+      - --mode
+      - reactive
+      - --agent
+      - sira
+      - --model
+      - gpt-4o
+      - --max_steps
+      - "1"
+      - --timeout
+      - "30"
+      - --max_retry
+      - "0"
+      - --output_dir
+      - <REACTIVE_ATTEMPT>/sira-output
+      - --seed
+      - "42"
+  simulative:
+    run_id: RUN-SYNTHETIC-SIRA-SIMULATIVE
+    config_sha256: 0b5bb193b4b2a338036c19a3555b9e7fdf1e45a49af51a7678f4db143768edbe
+    condition: SIRA-SIMULATIVE
+    job_name: SYNTHETIC-SIRA-PAIR-SIMULATIVE
+    mode: simulative
+    argv:
+      - <UV>
+      - run
+      - --frozen
+      - python
+      - scripts/run_web_agent.py
+      - SYNTHETIC-SIRA-PAIR-SIMULATIVE
+      - --query
+      - go to google flights
+      - --mode
+      - simulative
+      - --agent
+      - sira
+      - --model
+      - gpt-4o
+      - --max_steps
+      - "1"
+      - --timeout
+      - "30"
+      - --max_retry
+      - "0"
+      - --output_dir
+      - <SIMULATIVE_ATTEMPT>/sira-output
+      - --seed
+      - "42"
+approved_differences:
+  configuration:
+    - job_name
+    - mode
+  command:
+    - argv[5]:job_name
+    - argv[9]:mode
+    - argv[21]:artifact_output_root
+    - owned_output_roots[0]
+  rationale:
+    artifact_output_root: >-
+      T01 permits only job_name and mode as scientific/source differences. The distinct
+      output path is harness-owned evidence isolation required by T03 and does not alter
+      upstream task or model behavior.
+dry_run_blockers:
+  - run plan is not authorized
+  - project state disallows prototype execution
+  - command has applicable non-wall resources without finite command-enforced upper bounds: cost_usd, model_tokens
+  - >-
+    command may write raw artifacts outside harness attempt ownership:
+    logs/sira_*.log, src/sira/web/logs/*.log
+resource_contract:
+  finite_command_projection:
+    tool_calls: 1
+    enforcement: adapter-command-via-max_steps
+  applicable_unbounded:
+    - cost_usd
+    - model_tokens
+  unowned_output_patterns:
+    - logs/sira_*.log
+    - src/sira/web/logs/*.log
+  owned_output_roots:
+    reactive: <REACTIVE_ATTEMPT>/sira-output
+    simulative: <SIMULATIVE_ATTEMPT>/sira-output
+result:
+  commands_rendered: true
+  pair_assertion: expected-to-pass
+  process_created: false
+  evidence_directory_created: false

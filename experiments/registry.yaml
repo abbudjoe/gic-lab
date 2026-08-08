@@ -1,4 +1,9 @@
 schema_version: 0.1.0
-registry_revision: 1
+registry_revision: 2
 template_path: experiments/EXP-0000-template
-experiments: []
+experiments:
+  - experiment_id: EXP-0001
+    protocol: experiments/EXP-0001-sira-simulative-vs-reactive/protocol.yaml
+    run_profiles:
+      - experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/smoke.yaml
+      - experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml

@@ -1,0 +1,521 @@
+schema_version: 0.1.0
+contract_id: SIRA-TRACE-FIELD-MAP-0.1.0
+status: proposed-static-audit
+source:
+  manifest_id: SRC-SIRA-REPOSITORY
+  commit: 93fb8d72de71f9a4a13419670adeb34d93cf7acd
+  runner: scripts/run_web_agent.py
+scope:
+  agent: sira
+  modes:
+    - reactive
+    - simulative
+invariants:
+  retain_complete_raw_artifacts: true
+  invented_normalized_fields_forbidden: true
+  inferred_critic_scores_forbidden: true
+  inferred_gic_state_forbidden: true
+  text_log_parsing_for_canonical_events: false
+  upstream_local_timestamps_are_not_utc: true
+artifacts:
+  session_json:
+    path_pattern: "<output_dir>/<job_name>_YYYY-MM-DD-HH-MM-SS.json"
+    format: json
+    overwrite_risk: same-job-name-and-second
+    default_disposition: canonical-where-listed-below-otherwise-raw-only
+  webarena_output_jsonl:
+    path_pattern: "<output_dir>/output.jsonl"
+    format: jsonl-append
+    availability: webarena-only
+    default_disposition: canonical-where-listed-below-otherwise-raw-only
+  agent_text_log:
+    path_pattern: src/sira/web/logs/YYYY-MM-DD-HH-MM-SS-microseconds.log
+    format: unstructured-text
+    default_disposition: raw-only
+  global_text_log:
+    path_pattern: logs/sira_YYYY-MM-DD.log
+    format: unstructured-text
+    default_disposition: raw-only
+  debug_prompt_log:
+    path_pattern: "<output_dir>/<job-name-tail>/<epoch-seconds>.log"
+    format: unstructured-text
+    availability: DEBUG-positive-only
+    overwrite_risk: multiple-model-calls-in-one-second
+    default_disposition: raw-only
+  fanout_evaluation_csv:
+    path_pattern: evaluation/fanout/results/<job>_<start>_<end>_eval.csv
+    format: csv
+    separate_entry_point: true
+    overwrite_risk: repeated-job-and-slice-identity
+    default_disposition: field-specific-below
+  flight_evaluation_json:
+    path_pattern: evaluation/flight/results/<job>_<start>_<end>_eval.json
+    format: json
+    separate_entry_point: true
+    overwrite_risk: repeated-job-and-slice-identity
+    default_disposition: field-specific-below
+  runner_stdout_stderr:
+    path_pattern: harness-captured-streams
+    format: unstructured-text
+    default_disposition: raw-only
+  fanout_evaluator_stdout_stderr:
+    path_pattern: harness-captured-streams
+    format: unstructured-text
+    default_disposition: raw-only
+  flight_evaluator_stdout_stderr:
+    path_pattern: harness-captured-streams
+    format: unstructured-text
+    default_disposition: raw-only
+  webarena_helper_stdout_stderr:
+    path_pattern: harness-captured-streams
+    format: unstructured-text
+    default_disposition: raw-only
+source_fields:
+  session_json:
+    - path: goal
+      meaning: task query
+      availability: always
+    - path: instance_id
+      meaning: BrowserGym environment ID
+      availability: null-for-query-fanout-flightqa
+    - path: history
+      meaning: ordered list of pre-action observations, requested actions, and step info
+      availability: always-may-be-empty
+    - path: history[*][0]
+      meaning: complete BrowserGym observation mapping after JSON-safe conversions
+      availability: per-step
+    - path: history[*][0].goal
+      meaning: environment goal
+      availability: source-runtime-dependent
+    - path: history[*][0].url
+      meaning: active page URL
+      availability: source-runtime-dependent
+    - path: history[*][0].screenshot
+      meaning: base64 JPEG screenshot without data-URL prefix, quality 10
+      availability: source-runtime-dependent
+    - path: history[*][0].last_action
+      meaning: prior requested browser action
+      availability: source-runtime-dependent
+    - path: history[*][0].last_action_error
+      meaning: prior browser action error text
+      availability: source-runtime-dependent
+    - path: history[*][0].axtree_object
+      meaning: raw accessibility-tree object as made serializable by BrowserGym
+      availability: source-runtime-dependent
+    - path: history[*][0].extra_element_properties
+      meaning: BrowserGym element metadata
+      availability: source-runtime-dependent
+    - path: history[*][0].active_page_index
+      meaning: scalar active page index
+      availability: source-runtime-dependent
+    - path: history[*][0].elapsed_time
+      meaning: BrowserGym elapsed-time scalar with upstream semantics
+      availability: source-runtime-dependent
+    - path: history[*][0].scroll_position.scrollTop
+      meaning: browser window vertical scroll offset
+      availability: per-step
+    - path: history[*][0].scroll_position.windowHeight
+      meaning: browser viewport height
+      availability: per-step
+    - path: history[*][0].scroll_position.documentHeight
+      meaning: document height
+      availability: per-step
+    - path: history[*][0].scroll_position.remainingPixels
+      meaning: pixels below viewport
+      availability: per-step
+    - path: history[*][0].*
+      meaning: any additional BrowserGym observation keys passed through wholesale
+      availability: runtime-provider-defined
+      handling: preserve-raw-no-semantic-inference
+    - path: history[*][1]
+      meaning: requested action string returned by agent
+      availability: per-step
+    - path: history[*][2]
+      meaning: SiRA step_info mapping
+      availability: per-step
+    - path: history[*][2].obs
+      meaning: processed accessibility-tree observation prompt
+      availability: per-step-unless-early-error
+    - path: history[*][2].obs_info.clean_axtree_txt
+      meaning: processed accessibility-tree text including URL and scroll state
+      availability: per-step-unless-early-error
+    - path: history[*][2].obs_info.error_prefix
+      meaning: prior-action error prefix inserted into prompt
+      availability: per-step-unless-early-error
+    - path: history[*][2].obs_info.goal
+      meaning: task goal copied from observation
+      availability: per-step-unless-early-error
+    - path: history[*][2].obs_info.return_action
+      meaning: source-defined terminal action caused by limit or error
+      availability: optional
+    - path: history[*][2].state
+      meaning: encoder-produced natural-language state
+      availability: optional-after-successful-encoding
+    - path: history[*][2].plan
+      meaning: selected intent/plan
+      availability: optional-after-successful-planning
+    - path: history[*][2].intent
+      meaning: duplicate selected plan under policy_output_name
+      availability: optional-after-successful-planning
+    - path: history[*][2].action
+      meaning: requested action string
+      availability: per-step
+    - path: history[*][2].memory_update
+      meaning: prompted memory summary for the completed agent step
+      availability: optional-after-successful-memory-update
+    - path: is_complete
+      meaning: source completion heuristic based on final action string
+      availability: always
+    - path: error
+      meaning: environment step timeout or caught exception string
+      availability: always-may-be-empty
+    - path: rewards
+      meaning: WebArena environment rewards captured after actions
+      availability: webarena-eval-mode-only
+    - path: test_result
+      meaning: float of max WebArena reward greater than zero
+      availability: webarena-eval-mode-only
+  webarena_output_jsonl:
+    - path: instance_id
+      meaning: WebArena environment ID
+      disposition: raw-only-run-metadata
+    - path: goal
+      meaning: WebArena goal
+      disposition: raw-only-task-metadata
+    - path: test_result
+      meaning: binary success derived by upstream from max reward
+      disposition: canonical-outcome-and-metric
+  agent_text_log:
+    default_disposition: raw-only-no-canonical-text-parsing
+    fields:
+    - label: Observation
+      availability: per-step
+    - label: State
+      availability: after-successful-encoding
+    - label: Plan
+      availability: after-successful-planning
+    - label: Action
+      availability: after-successful-acting
+    - label: Memory update
+      availability: after-successful-memory-update
+    - label: Memory Update
+      availability: simulative-prediction-only
+    - label: Cost
+      availability: per-successful-parsed-model-call
+    - label: Total Accumulated Cost
+      availability: after-successful-step
+    - label: Action2Freqs
+      availability: simulative-only
+    - label: Cluster2Freqs
+      availability: simulative-only
+    - label: Num Actions Limit
+      availability: simulative-only
+    - label: Action Options
+      availability: simulative-only
+    - label: Action-Freq-Think
+      availability: simulative-only-one-line-per-clustered-action
+    - label: Proposed Action
+      availability: simulative-only
+    - label: Next State
+      availability: simulative-only
+    - label: Current depth is less than search depth
+      availability: simulative-only-when-search-depth-exceeds-current-depth
+    - label: Thought Example
+      availability: simulative-only
+    - label: Num Reward Samples
+      availability: simulative-only
+    - label: Reward
+      availability: simulative-only
+    - label: clustering-json-response
+      availability: simulative-only
+    - label: retry-or-clustering-free-text
+      availability: error-dependent
+    - label: timestamp-prefix
+      availability: per-log-line
+      semantics: local-time-without-date-or-timezone
+  global_text_log:
+    default_disposition: raw-only-no-canonical-text-parsing
+    labels:
+      - model-info-lookup-warning
+      - transport-retry-error-and-attempt-number
+      - completion-cost-info
+      - custom-cost-per-token-info
+      - unsupported-cost-calculation-warning
+      - timestamp-level-file-line-prefix
+  debug_prompt_log:
+    - path: free_text_messages
+      meaning: role labels and raw prompt/response content
+      availability: debug-only-and-lossy-by-filename-collision
+      disposition: raw-only-sensitive
+  runner_stdout_stderr:
+    default_disposition: raw-only-no-canonical-text-parsing
+    labels:
+      - Environment started
+      - Environment step timed out
+      - Error when trying to take an action
+      - Existing log detected and skipping
+      - BadRequestError and retry count
+      - Max attempts reached exception
+      - uncaught-exception-traceback
+  fanout_evaluation_csv:
+    - path: id
+      disposition: raw-only-evaluator-record-identity
+    - path: question
+      disposition: raw-only-task-text
+    - path: answer
+      disposition: raw-only-model-answer
+    - path: outcome
+      disposition: canonical-outcome
+    - path: acc
+      disposition: canonical-metric
+  fanout_evaluator_stdout_stderr:
+    default_disposition: raw-only-no-canonical-text-parsing
+    fields:
+      - printed_scores.acc_loose
+      - printed_scores.acc_strict
+      - printed_scores.rouge1
+      - printed_scores.rouge2
+      - printed_scores.rougeL
+      - printed_outcome_value_counts
+      - progress_output
+  flight_evaluation_json:
+    - path: "[*].instance"
+      disposition: raw-only-evaluator-record-identity
+    - path: "[*].goal"
+      disposition: raw-only-task-text
+    - path: "[*].constraints"
+      disposition: raw-only-ground-truth-context
+    - path: "[*].observations"
+      disposition: raw-only-duplicate-observation-evidence
+    - path: "[*].message"
+      disposition: raw-only-model-answer
+    - path: "[*].outcome"
+      disposition: canonical-outcome
+    - path: "[*].grounded"
+      disposition: canonical-metric-with-api-evaluator-provenance
+    - path: "[*].relevant"
+      disposition: canonical-metric-with-api-evaluator-provenance
+    - path: "[*].llm_output"
+      disposition: raw-only-evaluator-model-output-not-critic-evidence
+  flight_evaluator_stdout_stderr:
+    default_disposition: raw-only-no-canonical-text-parsing
+    fields:
+      - input-session-basename
+      - aggregate_correct_mean
+      - aggregate_grounded_mean
+      - aggregate_relevant_mean
+      - outcome_value_counts
+      - verbose_correct_instance_list
+      - verbose_grounded_instance_list
+      - verbose_relevant_instance_list
+      - evaluator-parse-retry-text
+      - uncaught-exception-traceback
+  webarena_helper_stdout_stderr:
+    default_disposition: raw-only-no-canonical-text-parsing
+    fields:
+      - successful_instance_list
+      - success_rate
+      - number_of_tasks_finished
+      - paired_total_task_count
+      - pre_success_rate
+      - post_success_rate
+      - paired_t_statistic
+      - paired_p_value
+      - uncaught-exception-traceback
+canonical_events:
+  run_started:
+    availability: unavailable-from-upstream
+    provenance: unavailable
+    producer: future-harness
+  preflight_completed:
+    availability: unavailable-from-upstream
+    provenance: unavailable
+    producer: future-harness
+  command_started:
+    availability: unavailable-from-upstream
+    provenance: unavailable
+    producer: future-harness
+  command_completed:
+    availability: unavailable-from-upstream
+    provenance: unavailable
+    producer: future-harness
+  observation:
+    availability: available
+    provenance: observed
+    one_event_per: session_json.history-item
+    payload_map:
+      raw_observation: history[*][0]
+      processed_observation: history[*][2].obs
+      observation_info: history[*][2].obs_info
+    unavailable_fields:
+      timestamp_utc: upstream-has-no-step-utc-timestamp
+      observation_after_action: only-next-pre-action-observation-is-retained
+  belief_state:
+    availability: available-with-semantic-caveat
+    provenance: observed
+    payload_map:
+      upstream_state: history[*][2].state
+    caveat: >-
+      This is the upstream encoder's natural-language state. It is not evidence of
+      calibrated belief, GIC state, uncertainty, or world-model accuracy.
+  candidate_action:
+    availability: unavailable-for-reliable-normalization
+    provenance: unavailable
+    reason: >-
+      Simulative candidate text/frequency appears only in an unstructured text log
+      without stable candidate IDs or a lossless structured candidate record. The
+      selected plan must not be expanded into a candidate set.
+    raw_preservation:
+      - agent_text_log.Action2Freqs
+      - agent_text_log.Cluster2Freqs
+      - agent_text_log.Action Options
+  predicted_future:
+    availability: unavailable-for-reliable-normalization
+    provenance: unavailable
+    reason: >-
+      Proposed Action and Next State appear only as unstructured log lines without
+      stable prediction/candidate IDs, timestamps, horizons, confidence, or a complete
+      structured association. Do not infer predictions from the selected plan.
+    raw_preservation:
+      - agent_text_log.Proposed Action
+      - agent_text_log.Next State
+  critic_evaluation:
+    availability: unavailable-for-reliable-normalization
+    provenance: unavailable
+    reason: >-
+      The structured session JSON has no critic output. The text log has an aggregate
+      Reward, one thought example, and sample count but not a stable, complete
+      per-candidate/per-sample score association. Do not infer a critic score.
+    raw_preservation:
+      - agent_text_log.Thought Example
+      - agent_text_log.Num Reward Samples
+      - agent_text_log.Reward
+  plan:
+    availability: available
+    provenance: observed
+    payload_map:
+      selected_plan_text: history[*][2].plan
+      upstream_policy_output_alias: history[*][2].intent
+    unavailable_fields:
+      plan_id: upstream-does-not-emit
+      candidate_action_ids: upstream-does-not-emit-stable-ids
+  executed_action:
+    availability: available-as-requested-action-only
+    provenance: observed
+    payload_map:
+      requested_action: history[*][1]
+      duplicate_step_action: history[*][2].action
+    unavailable_fields:
+      action_result: upstream-does-not-structure-env-step-result
+      candidate_action_id: upstream-does-not-emit-stable-ids
+    adjacent_evidence:
+      prior_action_in_next_observation: history[next][0].last_action
+      prior_action_error_in_next_observation: history[next][0].last_action_error
+  outcome:
+    availability: available-partially
+    provenance: observed
+    payload_map:
+      source_is_complete: is_complete
+      source_error: error
+      webarena_rewards: rewards
+      webarena_test_result: test_result
+      fanout_evaluator_outcome: fanout_evaluation_csv.outcome
+      flight_evaluator_outcome: flight_evaluation_json[*].outcome
+    unavailable_fields:
+      generic_environment_result: absent-for-open-ended-fanout-flightqa
+      scientific_outcome: never-emitted-by-adapter
+  metric:
+    availability: available-by-profile
+    provenance: observed
+    payload_map:
+      webarena_rewards: rewards
+      webarena_test_result: test_result
+      fanout_record_accuracy: fanout_evaluation_csv.acc
+      flight_grounded: flight_evaluation_json[*].grounded
+      flight_relevant: flight_evaluation_json[*].relevant
+    unavailable_fields:
+      fanout_aggregate_scores: printed-to-stdout-and-retained-raw-only
+      flight_aggregate_scores: printed-to-stdout-and-retained-raw-only
+      webarena_helper_aggregates: printed-to-stdout-and-retained-raw-only
+    caveat: >-
+      Evaluator artifacts are separate from the session trace. Unstructured stdout is
+      retained raw and is not parsed into canonical events by this contract.
+  budget_update:
+    availability: unavailable-from-structured-upstream-trace
+    provenance: unavailable
+    reason: >-
+      Text logs contain provider-estimated USD cost but no complete structured model
+      calls, tokens, tool calls, latency, or retry accounting.
+    producer: future-harness
+  artifact_recorded:
+    availability: unavailable-from-upstream
+    provenance: unavailable
+    producer: future-harness
+  warning:
+    availability: derivable-by-future-adapter
+    provenance: derived
+    source_paths:
+      - history[*][2].obs_info.error_prefix
+      - history[*][0].last_action_error
+    rule: emit-only-nonempty-source-text-with-raw-path
+  error:
+    availability: available
+    provenance: observed
+    source_paths:
+      - error
+      - history[*][2].obs_info.return_action
+    caveat: source-terminal-return-action-may-represent-limit-rather-than-exception
+  run_stopped:
+    availability: unavailable-from-upstream
+    provenance: unavailable
+    producer: future-harness
+  cloud_instance_launched:
+    availability: not-applicable
+    provenance: unavailable
+  cloud_instance_terminated:
+    availability: not-applicable
+    provenance: unavailable
+canonical_envelope_fields:
+  schema_version:
+    producer: future-harness
+    provenance: derived
+  run_id:
+    producer: future-harness
+    provenance: derived
+    upstream_source: job_name-command-argument-not-retained-as-field
+  sequence:
+    producer: future-harness
+    provenance: derived
+    rule: append-order-over-preserved-source-artifact
+  timestamp_utc:
+    producer: future-harness
+    provenance: derived
+    upstream_source: unavailable-for-step-events
+    prohibition: do-not-label-local-filename-time-as-utc
+  source:
+    producer: future-adapter
+    provenance: derived
+    value: sira-session-json-or-named-auxiliary-artifact
+  provenance:
+    producer: future-adapter
+    rule: use-only-observed-derived-or-unavailable-as-declared-above
+explicitly_unavailable_normalized_fields:
+  - immutable_provider_model_revision
+  - per-step-timestamp-utc
+  - model_seed
+  - model_call_count
+  - model_input_tokens
+  - model_output_tokens
+  - model_latency
+  - generic-tool-call-count
+  - generic-action-execution-result
+  - stable-candidate-action-ids
+  - structured-candidate-action-set
+  - stable-prediction-ids
+  - structured-action-conditioned-predicted-futures
+  - predicted-future-confidence
+  - structured-per-candidate-critic-scores
+  - gic-configurator-decision
+  - gic-state
+  - belief-uncertainty
+  - world-model-calibration

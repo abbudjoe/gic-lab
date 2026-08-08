@@ -1,0 +1,28 @@
+# Proposal only. T02 must not merge this into manifests/models.yaml.
+# T06 owns shared-manifest integration and should reconcile this record by ID.
+schema_version: 0.1.0
+kind: models
+note: >-
+  T02 metadata projection for SR2AM-v0.1-8B. No checkpoint file was downloaded;
+  aggregate SHA-256 therefore remains unknown. size_bytes is the sum of file
+  sizes reported by the pinned Hugging Face revision metadata on 2026-08-07.
+entries:
+  - id: MODEL-SR2AM-V0.1-8B
+    name: SR2AM-v0.1-8B
+    kind: model
+    version: v0.1-8B
+    revision: 5d72255092ac2ec006c2f9813029220aff79865e
+    commit: null
+    sha256: null
+    size_bytes: 16398028091
+    license: Apache-2.0
+    provenance: >-
+      Official sailing-lab Hugging Face model repository linked by the pinned
+      SR2AM source. Revision identity, model metadata, four weight-shard sizes,
+      and their published LFS SHA-256 values were inspected without downloading
+      checkpoint shards.
+    storage_uri: https://huggingface.co/sailing-lab/SR2AM-v0.1-8B/tree/5d72255092ac2ec006c2f9813029220aff79865e
+    canonical_uri: https://huggingface.co/sailing-lab/SR2AM-v0.1-8B
+    retrieved_at: "2026-08-07"
+    local_presence: false
+    verification_status: metadata-verified

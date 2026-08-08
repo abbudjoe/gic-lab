@@ -1,0 +1,191 @@
+schema_version: 0.1.0
+addendum_id: SR2AM-H2K-TRACE-REQUIREMENTS-T04.5-0.1.0
+status: planned-later-phase-capture
+track_id: RQ-H2K
+execution_authorized: false
+source:
+  repository: sailing-lab/sr2am
+  commit: 6f4ac7824ffc7d12453ffaa53d25e5f34bf3aeb0
+  accepted_audit: docs/audits/sr2am/UPSTREAM_AUDIT.md
+  trace_map: docs/audits/sr2am/TRACE_FIELD_MAP.yaml
+  command_contract: docs/audits/sr2am/COMMAND_CONTRACT.yaml
+  method: >-
+    T04.5 projects only the accepted T02 static audit. It did not clone, install, run,
+    download, serve, or call SR2AM, its model, its tools, an evaluator, or cloud compute.
+capture_rule: >-
+  Preserve the exact raw row, messages, resolved configuration, outbound request where
+  instrumented, service identities, and parser provenance before normalization. Emit a
+  regulation_decision only from an explicit structured control record. Free-form text,
+  XML-like tags, or plausible reasoning never establish a latent configurator.
+capture_requirements:
+  - field: explicit_configurator_or_regulation_output
+    later_preflight_action: preserve-if-exposed
+    t02_status: raw-only-unstructured
+    source_paths:
+      - messages[role=assistant].content
+      - messages[role=assistant].reasoning_content
+    normalization: >-
+      Retain complete assistant fields raw. Normalize only if the later pinned artifact
+      emits an explicit structured control record and a versioned parser validates it;
+      tagged/free-form text remains raw and unavailable as a canonical decision.
+  - field: plan_no_plan_choice
+    later_preflight_action: attempt-structured-capture
+    t02_status: unavailable
+    source_paths: []
+    normalization: >-
+      Do not derive from agent_type, tool use, reasoning length, or prose. A selected
+      choice requires an explicit source field or structured model output.
+  - field: plan_horizon_or_depth
+    later_preflight_action: attempt-structured-capture
+    t02_status: unavailable
+    source_paths: []
+    normalization: >-
+      Do not relabel configured max_turns, context length, or tool timeout as a
+      model-selected planning horizon or depth.
+  - field: structured_predicted_futures
+    later_preflight_action: attempt-structured-capture
+    t02_status: unavailable
+    source_paths: []
+    normalization: >-
+      No typed prediction, horizon, confidence, candidate association, or future-state
+      record exists in the accepted trace map; ordinary planning text remains raw.
+  - field: reactive_reasoning_output
+    later_preflight_action: preserve-raw
+    t02_status: observed-raw
+    source_paths:
+      - messages[role=assistant].content
+      - messages[role=assistant].reasoning_content
+    normalization: >-
+      Preserve exact text and role/order. It is model output, not by itself a
+      regulation decision, belief, plan, prediction, or internalization observation.
+  - field: action_output
+    later_preflight_action: preserve-and-join
+    t02_status: structured-partial
+    source_paths:
+      - messages[role=assistant].tool_calls[].id
+      - messages[role=assistant].tool_calls[].function.name
+      - messages[role=assistant].tool_calls[].function.arguments
+      - messages[role=tool].tool_call_id
+      - messages[role=tool].content
+      - messages[role=tool].reward
+      - messages[role=tool].metrics
+    normalization: >-
+      Preserve raw arguments before parsing. A call is executed only when its ID joins
+      to one tool result; calls are selected actions, not a complete candidate set.
+  - field: model_identity
+    later_preflight_action: harness-capture-required
+    t02_status: harness-only
+    source_paths:
+      - run-plan.json.sources.model_revision
+      - command.json
+      - sglang-/v1/models-response
+    normalization: >-
+      Bind the pinned model revision and published shard identities; the upstream row
+      itself does not record model identity.
+  - field: prompt_and_template_identity
+    later_preflight_action: harness-capture-required
+    t02_status: partial-and-profile-dependent
+    source_paths:
+      - messages
+      - exact-outbound-model-request
+      - server-chat-template-identity
+      - tool-schema-serialization
+    normalization: >-
+      Preserve exact outbound messages and rendering identity. Instruct traces retain a
+      system message that was not outbound input; do not infer the request from the raw
+      messages array alone.
+  - field: generation_identity
+    later_preflight_action: harness-capture-required
+    t02_status: partial
+    source_paths:
+      - command.json
+      - model-generation-config.json
+      - server-resolved-sampling-settings
+      - server-accounted-request-usage
+    normalization: >-
+      Record requested and effective temperature, top-k, top-p, seed/deterministic mode,
+      context, completion cap, retries, and usage. Missing default chat response usage
+      remains unavailable rather than reconstructed from post-hoc reasoning counts.
+  - field: serving_identity
+    later_preflight_action: harness-capture-required
+    t02_status: harness-only
+    source_paths:
+      - resolved-environment-manifest
+      - command.json
+      - sglang-health-and-model-list
+      - server-log
+    normalization: >-
+      Record SGLang revision, environment/image/driver/CUDA identity, endpoint owner,
+      readiness evidence, and process/resource identity.
+  - field: tool_identity
+    later_preflight_action: harness-capture-required
+    t02_status: structured-partial-plus-harness
+    source_paths:
+      - messages[role=assistant].tool_calls[].function.name
+      - messages[role=tool].metrics
+      - resolved-service-contracts
+    normalization: >-
+      Bind source commit plus search, Jina, summarizer, tokenizer, sandbox, and selected
+      evaluator identities. Tool names alone do not establish service revisions.
+  - field: raw_source_paths
+    later_preflight_action: preserve-required
+    t02_status: observed-plus-harness
+    source_paths:
+      - filtering-output.jsonl
+      - stdout.log
+      - stderr.log
+      - sglang-server.log
+      - aggregate-stdout
+      - service-logs
+    normalization: >-
+      Preserve each upstream JSONL line byte-for-byte before parsing and retain size,
+      SHA-256, attempt identity, and source-relative path for every accepted artifact.
+  - field: parser_provenance
+    later_preflight_action: harness-capture-required
+    t02_status: unavailable-upstream
+    source_paths:
+      - parser-contract-record
+    normalization: >-
+      Record adapter/parser name, version, GIC Lab commit, input artifact SHA-256,
+      source paths consumed, output event IDs, parse status, and every unavailable field.
+      Parser changes create a new version; historical raw evidence is never rewritten.
+parser_provenance_contract:
+  required_fields:
+    - parser_id
+    - parser_version
+    - giclab_commit
+    - upstream_commit
+    - input_artifact_path
+    - input_artifact_sha256
+    - source_paths_consumed
+    - emitted_event_ids
+    - unavailable_fields
+    - parse_status
+  parse_status_values:
+    - parsed-explicit-structured-record
+    - raw-only-unstructured
+    - unavailable
+    - rejected-malformed
+  overwrite_raw_evidence: false
+explicit_unknowns_from_t02:
+  - typed_configurator_decision
+  - typed_plan_no_plan_choice
+  - model_selected_plan_horizon_or_depth
+  - structured_predicted_futures
+  - prediction_confidence
+  - selected_plan
+  - complete_default_chat_model_usage
+  - upstream_recorded_model_revision
+  - upstream_recorded_environment_revision
+  - upstream_utc_event_time
+analysis_boundary:
+  allowed:
+    - trace_completeness
+    - raw_to_normalized_lineage
+    - explicit_source_classification
+    - later_comparison_feasibility
+  prohibited:
+    - latent_internalization_inference
+    - internalization_superiority_claim
+    - causal_faithfulness_claim
+    - learned_kernel_or_training_authorization

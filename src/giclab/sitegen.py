@@ -64,7 +64,7 @@ Phase {state["phase"]} is the active control-plane phase.
 |---|---|---|
 {completed_rows}
 
-## Recorded Phase 0 resource use
+## Recorded pre-execution-phase resource use
 
 | Measure | Value |
 |---|---:|
@@ -75,10 +75,10 @@ Phase {state["phase"]} is the active control-plane phase.
 | Benchmark runs | {compute["benchmark_runs"]} |
 | Training runs | {compute["training_runs"]} |
 
-Phase 0.5 reading reconciliation is complete. Phase 0.75 is limited to static
-upstream audit, non-executing harness construction, and protocol lock. No prototype
-result has been reproduced, and no model, API, benchmark, training, or cloud execution
-is authorized.
+Completed phase rows and current authority fields above are generated from canonical
+repository records. A protocol, readiness record, or proposed budget is not execution
+authorization: the project-level permission and exact run-specific authorization must
+both be present before any live action.
 """
     )
 

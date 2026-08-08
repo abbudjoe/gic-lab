@@ -1,0 +1,61 @@
+{
+  "goal": "go to google flights",
+  "instance_id": null,
+  "history": [
+    [
+      {
+        "goal": "go to google flights",
+        "url": "https://example.invalid/synthetic-start",
+        "screenshot": "c3ludGhldGljLWpwZWctYnl0ZXM=",
+        "last_action": "",
+        "last_action_error": "",
+        "axtree_object": {
+          "role": "document",
+          "name": "Synthetic page"
+        },
+        "extra_element_properties": {
+          "synthetic-node": {
+            "visible": true
+          }
+        },
+        "active_page_index": 0,
+        "elapsed_time": 0.25,
+        "scroll_position": {
+          "scrollTop": 0,
+          "windowHeight": 720,
+          "documentHeight": 1440,
+          "remainingPixels": 720
+        },
+        "fixture_only_unknown_observation_field": {
+          "preserve_me": [
+            1,
+            2,
+            3
+          ]
+        }
+      },
+      "click('synthetic-node')",
+      {
+        "obs": "Synthetic accessibility-tree prompt at step zero",
+        "obs_info": {
+          "clean_axtree_txt": "Synthetic page",
+          "error_prefix": "",
+          "goal": "go to google flights"
+        },
+        "state": "The synthetic page is visible and no action has run.",
+        "plan": "Inspect the synthetic node.",
+        "intent": "Inspect the synthetic node.",
+        "action": "click('synthetic-node')",
+        "memory_update": "Remember that this record is synthetic.",
+        "fixture_only_unknown_step_field": {
+          "preserve_me": true
+        }
+      }
+    ]
+  ],
+  "is_complete": false,
+  "error": "",
+  "fixture_only_unknown_session_field": {
+    "preserve_me": "raw-only"
+  }
+}
