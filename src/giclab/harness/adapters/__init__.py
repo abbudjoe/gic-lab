@@ -12,6 +12,10 @@ from .sira import (
     SIRA_FANOUT_PILOT_TASKS,
     SIRA_FIELD_RULES,
     SIRA_MODEL,
+    SIRA_REGULATION_DECISION_ID,
+    SIRA_REGULATION_EVENT_SOURCE,
+    SIRA_REGULATION_FIELD_RULES,
+    SIRA_REGULATION_POLICY_ID,
     SIRA_RUNNER,
     SIRA_SECRET_NAME,
     SIRA_SMOKE_QUERY,
@@ -31,6 +35,7 @@ from .sira import (
     assert_sira_matched_pair,
     sira_config_document,
     sira_config_sha256,
+    sira_regulation_policy_metadata,
 )
 
 __all__ = [
@@ -39,6 +44,10 @@ __all__ = [
     "SIRA_FANOUT_PILOT_TASKS",
     "SIRA_FIELD_RULES",
     "SIRA_MODEL",
+    "SIRA_REGULATION_DECISION_ID",
+    "SIRA_REGULATION_EVENT_SOURCE",
+    "SIRA_REGULATION_FIELD_RULES",
+    "SIRA_REGULATION_POLICY_ID",
     "SIRA_RUNNER",
     "SIRA_SECRET_NAME",
     "SIRA_SMOKE_QUERY",
@@ -62,4 +71,5 @@ __all__ = [
     "assert_sira_matched_pair",
     "sira_config_document",
     "sira_config_sha256",
+    "sira_regulation_policy_metadata",
 ]

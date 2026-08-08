@@ -90,3 +90,34 @@ recorded as the explicit value `unknown`; any such value blocks live execution u
 is replaced by a pinned identity. The metadata file `artifact-records.jsonl` is
 control metadata and therefore excludes itself from hashing; every other retained
 regular file must have exactly one record.
+
+## Regulation-decision evidence and event versions
+
+Harness event writers now emit schema version `0.2.0`. The version adds the optional
+source-neutral `regulation_decision` event; it does not make that event mandatory for
+historical or future runs. Readers and validators retain strict read support for
+version `0.1.0`, whose event vocabulary is unchanged. One stream must use exactly one
+version: a writer cannot append v0.2 evidence to a historical v0.1 stream, and a
+`regulation_decision` cannot claim v0.1. Run-plan, command, artifact, and cloud schemas
+remain at their independent v0.1 contracts; event versioning no longer implies that
+every harness schema changed together.
+
+The typed regulation payload records `source_kind`, `selected_mode`, optional policy,
+available-mode, confidence, override, and fallback fields, input-event references, raw
+or resolved-configuration evidence references, and provenance for every field. At
+least one raw artifact or deterministic resolved-configuration reference is required.
+The source vocabulary is limited to experiment assignment, external rule, external
+prompted model, explicit primary-model output, human override, and unknown. There is no
+latent-internalization field: an explicit model output is evidence of that output only.
+The JSON Schema enforces every field-local value/provenance relationship in both
+directions. The typed parser additionally enforces cross-field relationships that
+Draft 2020-12 cannot express by comparing sibling values, including that a known
+`selected_mode` belongs to `available_modes`; event readers always run that semantic
+parser after structural schema validation.
+
+RQ-H2K remains planned/deferred with no active experiment. The SiRA adapter records its
+fixed reactive/simulative condition as `experiment_assignment`; its source-specific
+mapping is in
+[`sira/H2K_REGULATION_DECISION_ADDENDUM.yaml`](sira/H2K_REGULATION_DECISION_ADDENDUM.yaml).
+The generic contract can represent later explicit-model records without claiming they
+are causally faithful or authorizing a learned kernel.

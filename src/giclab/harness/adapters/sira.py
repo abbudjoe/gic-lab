@@ -33,6 +33,14 @@ from ..models import (
     command_document,
     input_tree_binding,
 )
+from ..regulation import (
+    REGULATION_FIELD_NAMES,
+    RegulationDecision,
+    RegulationFallback,
+    RegulationOverride,
+    RegulationSourceKind,
+    regulation_decision_payload,
+)
 from .base import (
     AdapterNotice,
     AdapterNoticeSeverity,
@@ -44,6 +52,9 @@ SIRA_UPSTREAM_COMMIT = "93fb8d72de71f9a4a13419670adeb34d93cf7acd"
 SIRA_RUNNER = PurePosixPath("scripts/run_web_agent.py")
 SIRA_SECRET_NAME = "SIRA_API_KEY"
 SIRA_EVENT_SOURCE = "sira-session-json"
+SIRA_REGULATION_EVENT_SOURCE = "sira-adapter-resolved-configuration"
+SIRA_REGULATION_POLICY_ID = "SIRA-REACTIVE-SIMULATIVE-EXPERIMENT-ASSIGNMENT"
+SIRA_REGULATION_DECISION_ID = "REG-SIRA-MODE-ASSIGNMENT"
 SIRA_MODEL = "gpt-4o"
 SIRA_SMOKE_QUERY = "go to google flights"
 
@@ -387,6 +398,81 @@ SIRA_FIELD_RULES: Mapping[str, Mapping[str, SiRAFieldRule]] = {
     },
 }
 
+SIRA_REGULATION_FIELD_RULES: Mapping[str, SiRAFieldRule] = {
+    "decision_id": SiRAFieldRule(
+        None,
+        "use the stable adapter decision identity within each run attempt",
+        EventProvenance.DERIVED,
+        "derived",
+    ),
+    "source_kind": SiRAFieldRule(
+        "command.json argv planning-mode assignment",
+        "classify the fixed reactive/simulative command choice as experiment_assignment",
+        EventProvenance.DERIVED,
+        "derived",
+    ),
+    "policy_id": SiRAFieldRule(
+        None,
+        "use the source-neutral SiRA experiment-assignment policy identity",
+        EventProvenance.DERIVED,
+        "derived",
+    ),
+    "policy_revision": SiRAFieldRule(
+        "run-plan.json.sources.protocol_sha256",
+        "copy the bound protocol digest when known; otherwise retain null/unavailable",
+        EventProvenance.DERIVED,
+        "conditional",
+    ),
+    "available_modes": SiRAFieldRule(
+        "scripts/run_web_agent.py --mode choices via the reviewed T01 contract",
+        "copy the audited reactive/simulative vocabulary without adding latent categories",
+        EventProvenance.DERIVED,
+        "derived",
+    ),
+    "selected_mode": SiRAFieldRule(
+        "command.json argv value after --mode",
+        "derive from the exact config digest and resolved command-bound mode",
+        EventProvenance.DERIVED,
+        "derived",
+    ),
+    "confidence": SiRAFieldRule(
+        None,
+        "retain null because the pinned assignment emits no confidence",
+        EventProvenance.UNAVAILABLE,
+        "unavailable",
+    ),
+    "override": SiRAFieldRule(
+        None,
+        "retain an all-null unavailable record; do not infer from trace prose",
+        EventProvenance.UNAVAILABLE,
+        "unavailable",
+    ),
+    "fallback": SiRAFieldRule(
+        None,
+        "retain an all-null unavailable record; do not infer from trace prose",
+        EventProvenance.UNAVAILABLE,
+        "unavailable",
+    ),
+    "input_event_sequences": SiRAFieldRule(
+        None,
+        "leave empty because adapter drafts do not own harness event sequence numbers",
+        EventProvenance.UNAVAILABLE,
+        "unavailable",
+    ),
+    "raw_artifact_refs": SiRAFieldRule(
+        "selected structured session artifact path",
+        "reference the retained session bytes without claiming that they encode the assignment",
+        EventProvenance.OBSERVED,
+        "available",
+    ),
+    "resolved_configuration_refs": SiRAFieldRule(
+        "run-plan.json and command.json",
+        "reference harness-retained records that bind the config digest and exact --mode value",
+        EventProvenance.DERIVED,
+        "derived",
+    ),
+}
+
 
 @dataclass(frozen=True, slots=True)
 class SiRAPairDifference:
@@ -602,6 +688,11 @@ def assert_sira_matched_pair(
             "paired SiRA configurations violate declared differences; "
             f"unexpected={unexpected}, missing={missing}"
         )
+
+    reactive_regulation_metadata = sira_regulation_policy_metadata(reactive_plan)
+    simulative_regulation_metadata = sira_regulation_policy_metadata(simulative_plan)
+    if reactive_regulation_metadata != simulative_regulation_metadata:
+        raise SiRAPairMismatch("paired SiRA regulation policy/source metadata differ")
 
     reactive_document = command_document(reactive_command)
     simulative_document = command_document(simulative_command)
@@ -853,8 +944,14 @@ class SiRAAdapter:
             session,
             webarena=self.config.task.dataset is SiRADataset.WEBARENA,
         )
+        regulation_event = _regulation_assignment_event(
+            self.config,
+            plan,
+            session_path=session_path,
+            attempt_root=root,
+        )
         return NormalizationResult(
-            events=events,
+            events=(regulation_event, *events),
             raw_artifacts=raw_artifacts,
             unavailable_fields=unavailable,
             notices=_source_notices(session),
@@ -865,6 +962,75 @@ class SiRAAdapter:
                 tool_calls=None,
             ),
         )
+
+
+def sira_regulation_policy_metadata(plan: RunPlan) -> dict[str, EventInputValue]:
+    """Return pair-invariant source/policy metadata for SiRA mode assignment."""
+
+    return {
+        "source_kind": RegulationSourceKind.EXPERIMENT_ASSIGNMENT.value,
+        "policy_id": SIRA_REGULATION_POLICY_ID,
+        "policy_revision": (
+            None if plan.sources.protocol_sha256 == "unknown" else plan.sources.protocol_sha256
+        ),
+        "available_modes": [mode.value for mode in SiRAMode],
+        "upstream_source_id": plan.sources.upstream_source_id,
+        "upstream_commit": plan.sources.upstream_commit,
+    }
+
+
+def _regulation_assignment_event(
+    config: SiRACommandConfig,
+    plan: RunPlan,
+    *,
+    session_path: Path,
+    attempt_root: Path,
+) -> NormalizedEvent:
+    """Represent the command-bound SiRA condition without an internalization claim."""
+
+    raw_ref = session_path.relative_to(attempt_root).as_posix()
+    policy_revision = (
+        None if plan.sources.protocol_sha256 == "unknown" else plan.sources.protocol_sha256
+    )
+    provenance: dict[str, EventProvenance] = {
+        "decision_id": EventProvenance.DERIVED,
+        "source_kind": EventProvenance.DERIVED,
+        "policy_id": EventProvenance.DERIVED,
+        "policy_revision": (
+            EventProvenance.UNAVAILABLE if policy_revision is None else EventProvenance.DERIVED
+        ),
+        "available_modes": EventProvenance.DERIVED,
+        "selected_mode": EventProvenance.DERIVED,
+        "confidence": EventProvenance.UNAVAILABLE,
+        "override": EventProvenance.UNAVAILABLE,
+        "fallback": EventProvenance.UNAVAILABLE,
+        "input_event_sequences": EventProvenance.UNAVAILABLE,
+        "raw_artifact_refs": EventProvenance.OBSERVED,
+        "resolved_configuration_refs": EventProvenance.DERIVED,
+    }
+    if set(provenance) != set(REGULATION_FIELD_NAMES):
+        raise AssertionError("SiRA regulation provenance coverage drifted")
+    decision = RegulationDecision(
+        decision_id=SIRA_REGULATION_DECISION_ID,
+        source_kind=RegulationSourceKind.EXPERIMENT_ASSIGNMENT,
+        selected_mode=config.mode.value,
+        policy_id=SIRA_REGULATION_POLICY_ID,
+        policy_revision=policy_revision,
+        available_modes=tuple(mode.value for mode in SiRAMode),
+        confidence=None,
+        override=RegulationOverride(),
+        fallback=RegulationFallback(),
+        input_event_sequences=(),
+        raw_artifact_refs=(raw_ref,),
+        resolved_configuration_refs=("run-plan.json", "command.json"),
+        field_provenance=provenance,
+    )
+    return NormalizedEvent(
+        event_type=AdapterEventType.REGULATION_DECISION,
+        source=SIRA_REGULATION_EVENT_SOURCE,
+        provenance=EventProvenance.DERIVED,
+        payload=regulation_decision_payload(decision),
+    )
 
 
 def _trace_root(path: Path) -> Path:
@@ -1422,6 +1588,10 @@ __all__ = [
     "SIRA_FANOUT_PILOT_TASKS",
     "SIRA_FIELD_RULES",
     "SIRA_MODEL",
+    "SIRA_REGULATION_DECISION_ID",
+    "SIRA_REGULATION_EVENT_SOURCE",
+    "SIRA_REGULATION_FIELD_RULES",
+    "SIRA_REGULATION_POLICY_ID",
     "SIRA_RUNNER",
     "SIRA_SECRET_NAME",
     "SIRA_SMOKE_QUERY",
@@ -1441,4 +1611,5 @@ __all__ = [
     "assert_sira_matched_pair",
     "sira_config_document",
     "sira_config_sha256",
+    "sira_regulation_policy_metadata",
 ]

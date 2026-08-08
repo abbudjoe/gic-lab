@@ -19,6 +19,14 @@ Every real experiment must have:
 
 Artifact execution, directional reproduction, mechanism reproduction, and confirmatory replication are different claims. Reports must name the achieved level.
 
+## Regulation-decision provenance
+
+Control-decision traces distinguish fixed experiment assignment, external rules,
+separately prompted modules, explicit primary-model output, human override, and unknown
+source. Missing confidence, override, fallback, or planning fields remain unavailable.
+Ordinary reasoning prose is retained raw and is not evidence of latent internalization.
+The planned/deferred RQ-H2K surface is infrastructure-only and does not alter EXP-0001.
+
 ## Publication boundary
 
 This static site executes no notebook code and has no model/cloud credentials. Generated status and experiment pages are projections of canonical repository YAML, not separately edited summaries.

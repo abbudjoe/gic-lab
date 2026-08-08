@@ -12,6 +12,7 @@ from .budget import BudgetContractChanged, BudgetExceeded, BudgetGuard
 from .events import EventStreamError, JsonlEventWriter, read_events, validate_event_stream
 from .executor import DryRunReport, ExecutionOutcome, LocalRunExecutor, RunSession, render_command
 from .models import (
+    HARNESS_EVENT_SCHEMA_VERSION,
     AdapterEventType,
     ArtifactPolicy,
     ArtifactRecord,
@@ -51,9 +52,20 @@ from .policy import (
     execution_blockers,
     load_project_execution_state,
 )
+from .regulation import (
+    REGULATION_FIELD_NAMES,
+    RegulationDecision,
+    RegulationFallback,
+    RegulationOverride,
+    RegulationSourceKind,
+    regulation_decision_from_mapping,
+    regulation_decision_payload,
+)
 from .safety import CredentialExposureError
 
 __all__ = [
+    "HARNESS_EVENT_SCHEMA_VERSION",
+    "REGULATION_FIELD_NAMES",
     "AdapterEventType",
     "ArtifactError",
     "ArtifactPolicy",
@@ -86,6 +98,10 @@ __all__ = [
     "NormalizedEvent",
     "OwnedOutputRoot",
     "ProjectExecutionState",
+    "RegulationDecision",
+    "RegulationFallback",
+    "RegulationOverride",
+    "RegulationSourceKind",
     "ResourceProjection",
     "RunBudget",
     "RunIdentity",
@@ -106,6 +122,8 @@ __all__ = [
     "load_project_execution_state",
     "load_run_plan",
     "read_events",
+    "regulation_decision_from_mapping",
+    "regulation_decision_payload",
     "render_command",
     "run_plan_document",
     "sha256_file",

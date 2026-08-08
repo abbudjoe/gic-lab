@@ -22,6 +22,11 @@ from .safety import (
 )
 
 SCHEMA_VERSION = "0.1.0"
+LEGACY_HARNESS_EVENT_SCHEMA_VERSION = "0.1.0"
+HARNESS_EVENT_SCHEMA_VERSION = "0.2.0"
+SUPPORTED_HARNESS_EVENT_SCHEMA_VERSIONS = frozenset(
+    {LEGACY_HARNESS_EVENT_SCHEMA_VERSION, HARNESS_EVENT_SCHEMA_VERSION}
+)
 
 _EXPERIMENT_ID = re.compile(r"^EXP-[0-9]{4}$")
 _RUN_ID = re.compile(r"^RUN-[A-Z0-9][A-Z0-9._-]{5,127}$")
@@ -92,6 +97,7 @@ class EventType(StrEnum):
     PREFLIGHT_COMPLETED = "preflight_completed"
     COMMAND_STARTED = "command_started"
     COMMAND_COMPLETED = "command_completed"
+    REGULATION_DECISION = "regulation_decision"
     OBSERVATION = "observation"
     BELIEF_STATE = "belief_state"
     CANDIDATE_ACTION = "candidate_action"
@@ -113,6 +119,7 @@ class EventType(StrEnum):
 class AdapterEventType(StrEnum):
     """Canonical scientific event types that a source adapter may emit."""
 
+    REGULATION_DECISION = "regulation_decision"
     OBSERVATION = "observation"
     BELIEF_STATE = "belief_state"
     CANDIDATE_ACTION = "candidate_action"
@@ -1036,6 +1043,7 @@ class HarnessEvent:
     source: str
     provenance: EventProvenance
     payload: Mapping[str, EventInputValue]
+    schema_version: str = HARNESS_EVENT_SCHEMA_VERSION
 
     def __post_init__(self) -> None:
         if _RUN_ID.fullmatch(self.run_id) is None:
@@ -1047,6 +1055,13 @@ class HarnessEvent:
         _validate_utc_timestamp(self.timestamp_utc, "timestamp_utc")
         if not isinstance(self.event_type, EventType):
             raise ValueError("event_type must be a canonical harness event type")
+        if self.schema_version not in SUPPORTED_HARNESS_EVENT_SCHEMA_VERSIONS:
+            raise ValueError("unsupported harness event schema_version")
+        if (
+            self.schema_version == LEGACY_HARNESS_EVENT_SCHEMA_VERSION
+            and self.event_type is EventType.REGULATION_DECISION
+        ):
+            raise ValueError("regulation_decision requires harness event schema_version 0.2.0")
         if not isinstance(self.provenance, EventProvenance):
             raise ValueError("provenance must be a canonical event provenance")
         _require_nonempty(self.source, "source")
@@ -1062,10 +1077,13 @@ class NormalizedEvent:
     source: str
     provenance: EventProvenance
     payload: Mapping[str, EventInputValue]
+    schema_version: str = HARNESS_EVENT_SCHEMA_VERSION
 
     def __post_init__(self) -> None:
         if not isinstance(self.event_type, AdapterEventType):
             raise ValueError("adapter event_type must be a canonical scientific event type")
+        if self.schema_version != HARNESS_EVENT_SCHEMA_VERSION:
+            raise ValueError("adapters must emit the current harness event schema_version")
         if not isinstance(self.provenance, EventProvenance):
             raise ValueError("provenance must be a canonical event provenance")
         _require_nonempty(self.source, "source")

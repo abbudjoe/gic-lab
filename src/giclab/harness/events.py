@@ -14,7 +14,7 @@ from jsonschema import Draft202012Validator, FormatChecker
 from giclab.registry import load_json, loads_json
 
 from .models import (
-    SCHEMA_VERSION,
+    SUPPORTED_HARNESS_EVENT_SCHEMA_VERSIONS,
     AdapterEventType,
     EventProvenance,
     EventType,
@@ -23,6 +23,7 @@ from .models import (
     RunIdentity,
     thaw_json,
 )
+from .regulation import regulation_decision_from_mapping
 
 EVENT_SCHEMA = "schemas/harness-event.schema.json"
 CONTROL_SOURCE = "giclab-harness"
@@ -36,8 +37,11 @@ class EventStreamError(ValueError):
 def event_document(event: HarnessEvent) -> dict[str, Any]:
     """Return the stable JSON representation of one event."""
 
+    payload = {key: thaw_json(value) for key, value in event.payload.items()}
+    if event.event_type is EventType.REGULATION_DECISION:
+        regulation_decision_from_mapping(payload)
     return {
-        "schema_version": SCHEMA_VERSION,
+        "schema_version": event.schema_version,
         "run_id": event.run_id,
         "attempt": event.attempt,
         "sequence": event.sequence,
@@ -45,7 +49,7 @@ def event_document(event: HarnessEvent) -> dict[str, Any]:
         "event_type": event.event_type.value,
         "source": event.source,
         "provenance": event.provenance.value,
-        "payload": {key: thaw_json(value) for key, value in event.payload.items()},
+        "payload": payload,
     }
 
 
@@ -67,7 +71,10 @@ def _event_from_document(value: Mapping[str, Any], line_number: int) -> HarnessE
         raise EventStreamError(
             f"event line {line_number} has missing={sorted(missing)} unknown={sorted(unknown)}"
         )
-    if value["schema_version"] != SCHEMA_VERSION:
+    if (
+        not isinstance(value["schema_version"], str)
+        or value["schema_version"] not in SUPPORTED_HARNESS_EVENT_SCHEMA_VERSIONS
+    ):
         raise EventStreamError(f"event line {line_number} has unsupported schema_version")
     for key in ("run_id", "timestamp_utc", "event_type", "source", "provenance"):
         if not isinstance(value[key], str):
@@ -79,7 +86,7 @@ def _event_from_document(value: Mapping[str, Any], line_number: int) -> HarnessE
     if not isinstance(payload, dict) or any(not isinstance(key, str) for key in payload):
         raise EventStreamError(f"event line {line_number} payload must be an object")
     try:
-        return HarnessEvent(
+        event = HarnessEvent(
             run_id=value["run_id"],
             attempt=value["attempt"],
             sequence=value["sequence"],
@@ -88,7 +95,11 @@ def _event_from_document(value: Mapping[str, Any], line_number: int) -> HarnessE
             source=value["source"],
             provenance=EventProvenance(value["provenance"]),
             payload=cast(dict[str, JsonValue], payload),
+            schema_version=value["schema_version"],
         )
+        if event.event_type is EventType.REGULATION_DECISION:
+            regulation_decision_from_mapping(payload)
+        return event
     except (KeyError, TypeError, ValueError) as exc:
         raise EventStreamError(f"invalid event line {line_number}: {exc}") from exc
 
@@ -116,10 +127,13 @@ def _typed_events(documents: list[dict[str, Any]], *, path: Path) -> tuple[Harne
     if not events:
         return events
     identity = (events[0].run_id, events[0].attempt)
+    schema_version = events[0].schema_version
     previous = 0
     for event in events:
         if (event.run_id, event.attempt) != identity:
             raise EventStreamError(f"{path}: event stream mixes run attempts")
+        if event.schema_version != schema_version:
+            raise EventStreamError(f"{path}: event stream mixes schema versions")
         if event.sequence <= previous:
             raise EventStreamError(f"{path}: event sequences must increase strictly")
         previous = event.sequence
@@ -277,6 +291,8 @@ class JsonlEventWriter:
                     raise EventStreamError("existing event stream belongs to another run attempt")
                 if existing and event.sequence <= existing[-1].sequence:
                     raise EventStreamError("event sequence must increase strictly")
+                if existing and event.schema_version != existing[-1].schema_version:
+                    raise EventStreamError("event stream cannot mix schema versions")
                 encoded = json.dumps(
                     event_document(event),
                     allow_nan=False,

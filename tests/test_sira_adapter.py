@@ -17,6 +17,9 @@ from giclab.harness.adapters.base import AdapterNoticeSeverity
 from giclab.harness.adapters.sira import (
     SIRA_DATASET_REVISIONS,
     SIRA_FIELD_RULES,
+    SIRA_REGULATION_EVENT_SOURCE,
+    SIRA_REGULATION_FIELD_RULES,
+    SIRA_REGULATION_POLICY_ID,
     SIRA_SECRET_NAME,
     SIRA_SOURCE_ID,
     SIRA_UPSTREAM_COMMIT,
@@ -30,6 +33,7 @@ from giclab.harness.adapters.sira import (
     SiRATraceError,
     assert_sira_matched_pair,
     sira_config_sha256,
+    sira_regulation_policy_metadata,
 )
 from giclab.harness.artifacts import ArtifactWorkspace
 from giclab.harness.executor import LocalRunExecutor
@@ -49,6 +53,7 @@ from giclab.harness.models import (
 )
 from giclab.harness.plan import run_plan_from_mapping
 from giclab.harness.policy import ExecutionDisallowed
+from giclab.harness.regulation import regulation_decision_from_mapping
 from giclab.registry import load_json, load_yaml
 from giclab.validation import ROOT
 
@@ -56,6 +61,7 @@ FIXTURE_ROOT = ROOT / "tests/fixtures/sira/synthetic-contract-fixture"
 SESSION_NAME = "SYNTHETIC-SIRA-PAIR-SIMULATIVE_2026-08-08-00-00-00.json"
 SCHEMA_GAPS = ROOT / "docs/harness/sira/SCHEMA_GAP_REPORT.yaml"
 DRY_RUN_EXAMPLES = ROOT / "docs/harness/sira/DRY_RUN_EXAMPLES.yaml"
+H2K_REGULATION_ADDENDUM = ROOT / "docs/harness/sira/H2K_REGULATION_DECISION_ADDENDUM.yaml"
 TRACE_FIELD_MAP = ROOT / "docs/audits/sira/TRACE_FIELD_MAP.yaml"
 _REAL_VERIFY_PINNED_CHECKOUT = sira_module._verify_pinned_git_checkout
 
@@ -471,6 +477,80 @@ def test_pair_assertion_rejects_config_single_side_and_symmetric_command_drift(
         )
 
 
+def test_sira_pair_emits_identical_regulation_policy_and_source_metadata(
+    tmp_path: Path,
+) -> None:
+    reactive_attempt = _copy_fixture(tmp_path / "reactive-fixture")
+    reactive_session = _session_path(reactive_attempt)
+    reactive_session.rename(
+        reactive_session.with_name("SYNTHETIC-SIRA-PAIR-REACTIVE_2026-08-08-00-00-00.json")
+    )
+    simulative_attempt = _copy_fixture(tmp_path / "simulative-fixture")
+    reactive = _adapter(SiRAMode.REACTIVE)
+    simulative = _adapter(SiRAMode.SIMULATIVE)
+    reactive_plan = _plan_for_config(reactive.config)
+    simulative_plan = _plan_for_config(simulative.config)
+
+    def assignment_payload(adapter: SiRAAdapter, plan: RunPlan, attempt: Path) -> dict[str, Any]:
+        event = next(
+            event
+            for event in adapter.normalize(plan, attempt).events
+            if event.event_type is AdapterEventType.REGULATION_DECISION
+        )
+        return {key: thaw_json(value) for key, value in event.payload.items()}
+
+    reactive_payload = assignment_payload(reactive, reactive_plan, reactive_attempt)
+    simulative_payload = assignment_payload(simulative, simulative_plan, simulative_attempt)
+    invariant_fields = {
+        "decision_id",
+        "source_kind",
+        "policy_id",
+        "policy_revision",
+        "available_modes",
+        "confidence",
+        "override",
+        "fallback",
+        "input_event_sequences",
+        "resolved_configuration_refs",
+        "field_provenance",
+    }
+    assert {key: reactive_payload[key] for key in invariant_fields} == {
+        key: simulative_payload[key] for key in invariant_fields
+    }
+    assert reactive_payload["selected_mode"] == "reactive"
+    assert simulative_payload["selected_mode"] == "simulative"
+    assert reactive_payload["raw_artifact_refs"] != simulative_payload["raw_artifact_refs"]
+    assert sira_regulation_policy_metadata(reactive_plan) == sira_regulation_policy_metadata(
+        simulative_plan
+    )
+
+    source_root = _source_root(tmp_path)
+    reactive_output = tmp_path / "reactive-output"
+    simulative_output = tmp_path / "simulative-output"
+    reactive_command = reactive.build_command(reactive_plan, source_root, reactive_output)
+    simulative_command = simulative.build_command(
+        simulative_plan,
+        source_root,
+        simulative_output,
+    )
+    drifted_plan = replace(
+        simulative_plan,
+        sources=replace(simulative_plan.sources, protocol_sha256="f" * 64),
+    )
+    with pytest.raises(SiRAPairMismatch, match="regulation policy/source metadata"):
+        _assert_pair(
+            reactive,
+            reactive_plan,
+            reactive_command,
+            simulative,
+            drifted_plan,
+            simulative_command,
+            source_root,
+            reactive_output,
+            simulative_output,
+        )
+
+
 @pytest.mark.parametrize(
     "plan_changes,match",
     [
@@ -596,6 +676,7 @@ def test_normalizes_fixture_with_field_contracts_and_preserves_all_raw_bytes(
     }
 
     event_types = [event.event_type for event in result.events]
+    assert event_types.count(AdapterEventType.REGULATION_DECISION) == 1
     assert event_types.count(AdapterEventType.OBSERVATION) == 1
     assert event_types.count(AdapterEventType.BELIEF_STATE) == 1
     assert event_types.count(AdapterEventType.PLAN) == 1
@@ -604,7 +685,40 @@ def test_normalizes_fixture_with_field_contracts_and_preserves_all_raw_bytes(
     assert AdapterEventType.CANDIDATE_ACTION not in event_types
     assert AdapterEventType.PREDICTED_FUTURE not in event_types
     assert AdapterEventType.CRITIC_EVALUATION not in event_types
-    assert all(event.provenance is EventProvenance.OBSERVED for event in result.events)
+    regulation = next(
+        event for event in result.events if event.event_type is AdapterEventType.REGULATION_DECISION
+    )
+    assert regulation.source == SIRA_REGULATION_EVENT_SOURCE
+    assert regulation.provenance is EventProvenance.DERIVED
+    regulation_payload = {key: thaw_json(value) for key, value in regulation.payload.items()}
+    regulation_decision_from_mapping(regulation_payload)
+    assert regulation_payload["source_kind"] == "experiment_assignment"
+    assert regulation_payload["policy_id"] == SIRA_REGULATION_POLICY_ID
+    assert regulation_payload["selected_mode"] == "simulative"
+    assert regulation_payload["available_modes"] == ["reactive", "simulative"]
+    assert regulation_payload["confidence"] is None
+    assert regulation_payload["override"] == {
+        "applied": None,
+        "source": None,
+        "reason": None,
+    }
+    assert regulation_payload["fallback"] == {
+        "triggered": None,
+        "target": None,
+        "reason": None,
+    }
+    assert regulation_payload["raw_artifact_refs"] == [
+        "sira-output/SYNTHETIC-SIRA-PAIR-SIMULATIVE_2026-08-08-00-00-00.json"
+    ]
+    assert regulation_payload["resolved_configuration_refs"] == [
+        "run-plan.json",
+        "command.json",
+    ]
+    assert all(
+        event.provenance is EventProvenance.OBSERVED
+        for event in result.events
+        if event.event_type is not AdapterEventType.REGULATION_DECISION
+    )
     first_observation = next(
         event for event in result.events if event.event_type is AdapterEventType.OBSERVATION
     )
@@ -670,6 +784,36 @@ def test_absent_critic_score_stays_unavailable_and_emits_no_event(tmp_path: Path
         event.event_type is AdapterEventType.CRITIC_EVALUATION for event in result.events
     )
     assert "critic_evaluation.structured_per_candidate_scores" in result.unavailable_fields
+
+
+def test_malformed_upstream_control_like_field_stays_raw_and_unnormalized(
+    tmp_path: Path,
+) -> None:
+    attempt = _copy_fixture(tmp_path)
+    session = load_json(_session_path(attempt))
+    session["history"][0][2]["regulation_decision"] = {
+        "source_kind": "model_explicit_output",
+        "selected_mode": ["malformed", "not-a-string"],
+        "confidence": "high",
+    }
+    _write_session(attempt, session)
+    raw_before = _session_path(attempt).read_bytes()
+
+    result = _adapter(SiRAMode.SIMULATIVE).normalize(
+        _plan(SiRAMode.SIMULATIVE),
+        attempt,
+    )
+
+    regulation_events = [
+        event for event in result.events if event.event_type is AdapterEventType.REGULATION_DECISION
+    ]
+    assert len(regulation_events) == 1
+    payload = {key: thaw_json(value) for key, value in regulation_events[0].payload.items()}
+    assert payload["source_kind"] == "experiment_assignment"
+    assert payload["selected_mode"] == "simulative"
+    assert "regulation_decision" not in payload
+    assert _session_path(attempt).read_bytes() == raw_before
+    assert _session_path(attempt) in result.raw_artifacts
 
 
 def test_source_warnings_and_errors_use_typed_harness_notice_channel(tmp_path: Path) -> None:
@@ -935,7 +1079,9 @@ def test_schema_gap_report_matches_runtime_rules_and_all_canonical_events(
     report = load_yaml(SCHEMA_GAPS)
     assert report["adapter_scope"]["upstream_sample_trace_available"] is False
     canonical = report["canonical_events"]
-    assert set(canonical) == {event.value for event in EventType}
+    assert set(canonical) == {
+        event.value for event in EventType if event is not EventType.REGULATION_DECISION
+    }
     required_field_keys = {
         "field",
         "direct_source_path",
@@ -991,6 +1137,30 @@ def test_schema_gap_report_matches_runtime_rules_and_all_canonical_events(
             assert f"{event_name}.{field}" in normalized.unavailable_fields
     assert canonical["warning"]["fields"][1]["provenance"] == t01["warning"]["provenance"]
     assert canonical["error"]["fields"][0]["provenance"] == t01["error"]["provenance"]
+
+
+def test_h2k_regulation_mapping_addendum_matches_runtime_rules() -> None:
+    addendum = load_yaml(H2K_REGULATION_ADDENDUM)
+    assert addendum["track_id"] == "RQ-H2K"
+    assert addendum["event_schema"] == {
+        "emitted_version": "0.2.0",
+        "legacy_read_version": "0.1.0",
+        "compatibility": "existing-v0.1-streams-remain-readable-without-reinterpretation",
+    }
+    event = addendum["event"]
+    assert event["event_type"] == EventType.REGULATION_DECISION.value
+    assert event["source"] == SIRA_REGULATION_EVENT_SOURCE
+    report_rules = {item["field"]: item for item in event["fields"]}
+    assert set(report_rules) == {*SIRA_REGULATION_FIELD_RULES, "field_provenance"}
+    for field, rule in SIRA_REGULATION_FIELD_RULES.items():
+        report_rule = report_rules[field]
+        assert report_rule["direct_source_path"] == rule.direct_source_path
+        assert report_rule["normalization_rule"] == rule.normalization_rule
+        assert report_rule["provenance"] == rule.provenance.value
+        assert report_rule["status"] == rule.status
+        assert report_rule["missing_behavior"]
+    assert addendum["per_step_control_mapping"]["status"] == "unavailable"
+    assert "no_internalization_boolean_or_category" in addendum["prohibitions"]
 
 
 def test_dataset_revision_is_part_of_task_and_plan_identity() -> None:

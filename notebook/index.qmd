@@ -22,6 +22,8 @@ The program begins with the authors' released SiRA and SR²AM references, then i
 - Keep completed plans separate from the one authoritative active plan.
 - Prepare source-grounded static audits of pinned SiRA and SR²AM revisions.
 - Build an evidence-preserving harness whose execution defaults to unauthorized.
+- Preserve source-grounded regulation-decision traces for planned/deferred RQ-H2K
+  without adding a condition, learned kernel, or later phase.
 - Lock a draft first protocol without registering or running it during control-plane work.
 - Preserve unresolved architecture questions for later architecture work without using
   them to block the first SiRA artifact execution.

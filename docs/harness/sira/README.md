@@ -57,3 +57,15 @@ records, symlinks, traversal, or condition/configuration mismatch are refused.
 The committed fixture is explicitly `synthetic-contract-fixture`; it is neither
 upstream evidence nor a run result. See `SCHEMA_GAP_REPORT.yaml` for the machine-readable
 field contract and `DRY_RUN_EXAMPLES.yaml` for the matched non-executing pair.
+
+## T04.5 regulation assignment
+
+T04.5 supplements the accepted T01/T04 contracts with
+[`H2K_REGULATION_DECISION_ADDENDUM.yaml`](H2K_REGULATION_DECISION_ADDENDUM.yaml).
+Each normalization emits exactly one v0.2 `regulation_decision` derived from the exact
+config digest and resolved `--mode` command value. Its source kind is always
+`experiment_assignment`; the paired reactive/simulative condition is fixed externally
+and is never described as learned self-regulation. The event references the retained
+session plus `run-plan.json` and `command.json`, while confidence, override, fallback,
+and per-step configurator output remain unavailable. Control-like fields not covered by
+the accepted structured source contract stay byte-preserved raw and unnormalized.

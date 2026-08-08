@@ -1,55 +1,485 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:gic-lab:schema:harness-event:0.1.0",
-  "title": "GIC Lab harness event",
-  "type": "object",
-  "additionalProperties": false,
-  "required": [
-    "schema_version",
-    "run_id",
-    "attempt",
-    "sequence",
-    "timestamp_utc",
-    "event_type",
-    "source",
-    "provenance",
-    "payload"
-  ],
-  "properties": {
-    "schema_version": {"const": "0.1.0"},
-    "run_id": {
-      "type": "string",
-      "pattern": "^RUN-[A-Z0-9][A-Z0-9._-]{5,127}$"
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "urn:gic-lab:schema:harness-event:0.2.0",
+    "title": "GIC Lab harness event",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+        "schema_version",
+        "run_id",
+        "attempt",
+        "sequence",
+        "timestamp_utc",
+        "event_type",
+        "source",
+        "provenance",
+        "payload"
+    ],
+    "properties": {
+        "schema_version": {"enum": ["0.1.0", "0.2.0"]},
+        "run_id": {"type": "string", "pattern": "^RUN-[A-Z0-9][A-Z0-9._-]{5,127}$"},
+        "attempt": {"type": "integer", "minimum": 1},
+        "sequence": {"type": "integer", "minimum": 1},
+        "timestamp_utc": {"type": "string", "format": "date-time"},
+        "event_type": {
+            "enum": [
+                "run_started",
+                "preflight_completed",
+                "command_started",
+                "command_completed",
+                "regulation_decision",
+                "observation",
+                "belief_state",
+                "candidate_action",
+                "predicted_future",
+                "critic_evaluation",
+                "plan",
+                "executed_action",
+                "outcome",
+                "metric",
+                "budget_update",
+                "artifact_recorded",
+                "warning",
+                "error",
+                "run_stopped",
+                "cloud_instance_launched",
+                "cloud_instance_terminated"
+            ]
+        },
+        "source": {"type": "string", "minLength": 1},
+        "provenance": {"$ref": "#/$defs/provenance"},
+        "payload": {"type": "object"}
     },
-    "attempt": {"type": "integer", "minimum": 1},
-    "sequence": {"type": "integer", "minimum": 1},
-    "timestamp_utc": {"type": "string", "format": "date-time"},
-    "event_type": {
-      "enum": [
-        "run_started",
-        "preflight_completed",
-        "command_started",
-        "command_completed",
-        "observation",
-        "belief_state",
-        "candidate_action",
-        "predicted_future",
-        "critic_evaluation",
-        "plan",
-        "executed_action",
-        "outcome",
-        "metric",
-        "budget_update",
-        "artifact_recorded",
-        "warning",
-        "error",
-        "run_stopped",
-        "cloud_instance_launched",
-        "cloud_instance_terminated"
-      ]
-    },
-    "source": {"type": "string", "minLength": 1},
-    "provenance": {"enum": ["observed", "derived", "inferred", "unavailable"]},
-    "payload": {"type": "object"}
-  }
+    "allOf": [
+        {
+            "if": {
+                "properties": {"schema_version": {"const": "0.1.0"}},
+                "required": ["schema_version"]
+            },
+            "then": {
+                "properties": {
+                    "event_type": {
+                        "enum": [
+                            "run_started",
+                            "preflight_completed",
+                            "command_started",
+                            "command_completed",
+                            "observation",
+                            "belief_state",
+                            "candidate_action",
+                            "predicted_future",
+                            "critic_evaluation",
+                            "plan",
+                            "executed_action",
+                            "outcome",
+                            "metric",
+                            "budget_update",
+                            "artifact_recorded",
+                            "warning",
+                            "error",
+                            "run_stopped",
+                            "cloud_instance_launched",
+                            "cloud_instance_terminated"
+                        ]
+                    }
+                }
+            }
+        },
+        {
+            "if": {
+                "properties": {"event_type": {"const": "regulation_decision"}},
+                "required": ["event_type"]
+            },
+            "then": {
+                "properties": {
+                    "schema_version": {"const": "0.2.0"},
+                    "payload": {"$ref": "#/$defs/regulation-decision"}
+                }
+            }
+        }
+    ],
+    "$defs": {
+        "provenance": {"enum": ["observed", "derived", "inferred", "unavailable"]},
+        "available-provenance": {"enum": ["observed", "derived", "inferred"]},
+        "reference": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+        },
+        "override": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["applied", "source", "reason"],
+            "properties": {
+                "applied": {"type": ["boolean", "null"]},
+                "source": {"type": ["string", "null"], "minLength": 1},
+                "reason": {"type": ["string", "null"], "minLength": 1}
+            },
+            "allOf": [
+                {
+                    "if": {"properties": {"applied": {"const": true}}, "required": ["applied"]},
+                    "then": {"properties": {"source": {"type": "string", "minLength": 1}}},
+                    "else": {
+                        "properties": {"source": {"type": "null"}, "reason": {"type": "null"}}
+                    }
+                }
+            ]
+        },
+        "fallback": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["triggered", "target", "reason"],
+            "properties": {
+                "triggered": {"type": ["boolean", "null"]},
+                "target": {"type": ["string", "null"], "minLength": 1},
+                "reason": {"type": ["string", "null"], "minLength": 1}
+            },
+            "allOf": [
+                {
+                    "if": {"properties": {"triggered": {"const": true}}, "required": ["triggered"]},
+                    "then": {"properties": {"target": {"type": "string", "minLength": 1}}},
+                    "else": {
+                        "properties": {"target": {"type": "null"}, "reason": {"type": "null"}}
+                    }
+                }
+            ]
+        },
+        "field-provenance": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "decision_id",
+                "source_kind",
+                "policy_id",
+                "policy_revision",
+                "available_modes",
+                "selected_mode",
+                "confidence",
+                "override",
+                "fallback",
+                "input_event_sequences",
+                "raw_artifact_refs",
+                "resolved_configuration_refs"
+            ],
+            "properties": {
+                "decision_id": {"$ref": "#/$defs/available-provenance"},
+                "source_kind": {"$ref": "#/$defs/provenance"},
+                "policy_id": {"$ref": "#/$defs/provenance"},
+                "policy_revision": {"$ref": "#/$defs/provenance"},
+                "available_modes": {"$ref": "#/$defs/provenance"},
+                "selected_mode": {"$ref": "#/$defs/available-provenance"},
+                "confidence": {"$ref": "#/$defs/provenance"},
+                "override": {"$ref": "#/$defs/provenance"},
+                "fallback": {"$ref": "#/$defs/provenance"},
+                "input_event_sequences": {"$ref": "#/$defs/provenance"},
+                "raw_artifact_refs": {"$ref": "#/$defs/provenance"},
+                "resolved_configuration_refs": {"$ref": "#/$defs/provenance"}
+            }
+        },
+        "regulation-decision": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "decision_id",
+                "source_kind",
+                "policy_id",
+                "policy_revision",
+                "available_modes",
+                "selected_mode",
+                "confidence",
+                "override",
+                "fallback",
+                "input_event_sequences",
+                "raw_artifact_refs",
+                "resolved_configuration_refs",
+                "field_provenance"
+            ],
+            "properties": {
+                "decision_id": {"type": "string", "minLength": 1},
+                "source_kind": {
+                    "enum": [
+                        "experiment_assignment",
+                        "external_rule",
+                        "external_prompted_model",
+                        "model_explicit_output",
+                        "human_override",
+                        "unknown"
+                    ]
+                },
+                "policy_id": {"type": ["string", "null"], "minLength": 1},
+                "policy_revision": {"type": ["string", "null"], "minLength": 1},
+                "available_modes": {
+                    "oneOf": [
+                        {"type": "null"},
+                        {
+                            "type": "array",
+                            "minItems": 1,
+                            "uniqueItems": true,
+                            "items": {"type": "string", "minLength": 1}
+                        }
+                    ]
+                },
+                "selected_mode": {"type": "string", "minLength": 1},
+                "confidence": {
+                    "oneOf": [{"type": "null"}, {"type": "number", "minimum": 0, "maximum": 1}]
+                },
+                "override": {"$ref": "#/$defs/override"},
+                "fallback": {"$ref": "#/$defs/fallback"},
+                "input_event_sequences": {
+                    "type": "array",
+                    "uniqueItems": true,
+                    "items": {"type": "integer", "minimum": 1}
+                },
+                "raw_artifact_refs": {
+                    "type": "array",
+                    "uniqueItems": true,
+                    "items": {"$ref": "#/$defs/reference"}
+                },
+                "resolved_configuration_refs": {
+                    "type": "array",
+                    "uniqueItems": true,
+                    "items": {"$ref": "#/$defs/reference"}
+                },
+                "field_provenance": {"$ref": "#/$defs/field-provenance"}
+            },
+            "anyOf": [
+                {"properties": {"raw_artifact_refs": {"minItems": 1}}},
+                {"properties": {"resolved_configuration_refs": {"minItems": 1}}}
+            ],
+            "allOf": [
+                {
+                    "if": {
+                        "properties": {"source_kind": {"const": "unknown"}},
+                        "required": ["source_kind"]
+                    },
+                    "then": {
+                        "properties": {
+                            "field_provenance": {
+                                "properties": {"source_kind": {"const": "unavailable"}}
+                            }
+                        }
+                    },
+                    "else": {
+                        "properties": {
+                            "field_provenance": {
+                                "properties": {
+                                    "source_kind": {"$ref": "#/$defs/available-provenance"}
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "if": {
+                        "properties": {"policy_id": {"type": "null"}},
+                        "required": ["policy_id"]
+                    },
+                    "then": {
+                        "properties": {
+                            "field_provenance": {
+                                "properties": {"policy_id": {"const": "unavailable"}}
+                            }
+                        }
+                    },
+                    "else": {
+                        "properties": {
+                            "field_provenance": {
+                                "properties": {
+                                    "policy_id": {"$ref": "#/$defs/available-provenance"}
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "if": {
+                        "properties": {"policy_revision": {"type": "null"}},
+                        "required": ["policy_revision"]
+                    },
+                    "then": {
+                        "properties": {
+                            "field_provenance": {
+                                "properties": {"policy_revision": {"const": "unavailable"}}
+                            }
+                        }
+                    },
+                    "else": {
+                        "properties": {
+                            "field_provenance": {
+                                "properties": {
+                                    "policy_revision": {"$ref": "#/$defs/available-provenance"}
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "if": {
+                        "properties": {"available_modes": {"type": "null"}},
+                        "required": ["available_modes"]
+                    },
+                    "then": {
+                        "properties": {
+                            "field_provenance": {
+                                "properties": {"available_modes": {"const": "unavailable"}}
+                            }
+                        }
+                    },
+                    "else": {
+                        "properties": {
+                            "field_provenance": {
+                                "properties": {
+                                    "available_modes": {"$ref": "#/$defs/available-provenance"}
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "if": {
+                        "properties": {"confidence": {"type": "null"}},
+                        "required": ["confidence"]
+                    },
+                    "then": {
+                        "properties": {
+                            "field_provenance": {
+                                "properties": {"confidence": {"const": "unavailable"}}
+                            }
+                        }
+                    },
+                    "else": {
+                        "properties": {
+                            "field_provenance": {
+                                "properties": {
+                                    "confidence": {"$ref": "#/$defs/available-provenance"}
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "if": {
+                        "properties": {
+                            "override": {
+                                "properties": {"applied": {"type": "null"}},
+                                "required": ["applied"]
+                            }
+                        },
+                        "required": ["override"]
+                    },
+                    "then": {
+                        "properties": {
+                            "field_provenance": {
+                                "properties": {"override": {"const": "unavailable"}}
+                            }
+                        }
+                    },
+                    "else": {
+                        "properties": {
+                            "field_provenance": {
+                                "properties": {"override": {"$ref": "#/$defs/available-provenance"}}
+                            }
+                        }
+                    }
+                },
+                {
+                    "if": {
+                        "properties": {
+                            "fallback": {
+                                "properties": {"triggered": {"type": "null"}},
+                                "required": ["triggered"]
+                            }
+                        },
+                        "required": ["fallback"]
+                    },
+                    "then": {
+                        "properties": {
+                            "field_provenance": {
+                                "properties": {"fallback": {"const": "unavailable"}}
+                            }
+                        }
+                    },
+                    "else": {
+                        "properties": {
+                            "field_provenance": {
+                                "properties": {"fallback": {"$ref": "#/$defs/available-provenance"}}
+                            }
+                        }
+                    }
+                },
+                {
+                    "if": {
+                        "properties": {"input_event_sequences": {"maxItems": 0}},
+                        "required": ["input_event_sequences"]
+                    },
+                    "then": {
+                        "properties": {
+                            "field_provenance": {
+                                "properties": {"input_event_sequences": {"const": "unavailable"}}
+                            }
+                        }
+                    },
+                    "else": {
+                        "properties": {
+                            "field_provenance": {
+                                "properties": {
+                                    "input_event_sequences": {
+                                        "$ref": "#/$defs/available-provenance"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "if": {
+                        "properties": {"raw_artifact_refs": {"maxItems": 0}},
+                        "required": ["raw_artifact_refs"]
+                    },
+                    "then": {
+                        "properties": {
+                            "field_provenance": {
+                                "properties": {"raw_artifact_refs": {"const": "unavailable"}}
+                            }
+                        }
+                    },
+                    "else": {
+                        "properties": {
+                            "field_provenance": {
+                                "properties": {
+                                    "raw_artifact_refs": {"$ref": "#/$defs/available-provenance"}
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "if": {
+                        "properties": {"resolved_configuration_refs": {"maxItems": 0}},
+                        "required": ["resolved_configuration_refs"]
+                    },
+                    "then": {
+                        "properties": {
+                            "field_provenance": {
+                                "properties": {
+                                    "resolved_configuration_refs": {"const": "unavailable"}
+                                }
+                            }
+                        }
+                    },
+                    "else": {
+                        "properties": {
+                            "field_provenance": {
+                                "properties": {
+                                    "resolved_configuration_refs": {
+                                        "$ref": "#/$defs/available-provenance"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            ]
+        }
+    }
 }
