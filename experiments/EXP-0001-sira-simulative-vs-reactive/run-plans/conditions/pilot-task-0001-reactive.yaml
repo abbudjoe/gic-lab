@@ -1,0 +1,47 @@
+schema_version: 0.1.0
+experiment_id: EXP-0001
+run_id: RUN-EXP0001-PILOT-0001-REACTIVE
+profile: pilot
+profile_plan_id: PLAN-EXP0001-PILOT
+profile_sha256: 1e0dbd6bedbc4802a1a57d8896f828511b7c15f9bc8251696f79f48d379267b3
+condition: SIRA-REACTIVE
+attempt: 1
+seed: 42
+interpretation_allowed: true
+execution:
+  backend: local-subprocess
+  workload: benchmark
+  authorization:
+    authorized: false
+    authorization_reference: null
+    command_sha256: null
+sources:
+  giclab_commit: unknown
+  upstream_source_id: SRC-SIRA-REPOSITORY
+  upstream_commit: 93fb8d72de71f9a4a13419670adeb34d93cf7acd
+  protocol_sha256: unknown
+  config_sha256: unknown
+  model_revision: gpt-4o-2024-11-20
+  dataset_revision: 76ad1feb689b754bfe4e5e24d3ea371b647efa67
+  environment_sha256: unknown
+task:
+  task_id: 2120afba8009bad3
+  source_kind: dataset-slice
+  query: null
+  dataset_id: DATA-SIRA-FANOUTQA-DEV
+  dataset_revision: 76ad1feb689b754bfe4e5e24d3ea371b647efa67
+  start_idx: 1
+  end_idx: 2
+pairing:
+  pair_id: PAIR-EXP0001-PILOT-0001
+  order_index: 2
+budget:
+  max_wall_seconds: 3600
+  max_cost_usd: 10.00
+  max_gpu_hours: 0
+  max_model_tokens: 1000000
+  max_tool_calls: 30
+  max_output_bytes: 2147483648
+artifacts:
+  root: artifacts/EXP-0001/pilot/0001/reactive/attempt-0001
+  retain_raw: true

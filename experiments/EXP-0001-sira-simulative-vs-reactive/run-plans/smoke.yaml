@@ -1,0 +1,67 @@
+schema_version: 0.1.0
+experiment_id: EXP-0001
+plan_id: PLAN-EXP0001-SMOKE
+profile: smoke
+study_stage: exploratory
+purpose: Validate one matched command, browser, trace, accounting, and cleanup pair.
+sample_rationale: One pair is the smallest source-supported operational smoke and is not an outcome sample.
+interpretation_allowed: false
+execution:
+  authorized: false
+  authorization_reference: null
+model:
+  provider: OpenAI
+  manifest_id: MODEL-OPENAI-GPT4O-2024-11-20
+  api: https://api.openai.com/v1/
+  upstream_alias: gpt-4o
+  proposed_immutable_revision: gpt-4o-2024-11-20
+  historical_revision_known: false
+  reproduction_level: directional-reproduction
+  substitution: Exact historical serving revision is unavailable; use a declared dated GPT-4o snapshot.
+sampling:
+  pair_count: 1
+  conditions:
+    - SIRA-SIMULATIVE
+    - SIRA-REACTIVE
+  task_family: open-ended-query
+  dataset_ids: []
+  counterbalancing:
+    - pair_id: PAIR-EXP0001-SMOKE-0000
+      task_id: README-GOOGLE-FLIGHTS
+      task_source: "SRC-SIRA-REPOSITORY:README.md:93-109 query=go to google flights"
+      first: SIRA-REACTIVE
+      second: SIRA-SIMULATIVE
+      plans:
+        - condition: SIRA-REACTIVE
+          path: experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/smoke-reactive.yaml
+        - condition: SIRA-SIMULATIVE
+          path: experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/smoke-simulative.yaml
+budget:
+  pricing_record: experiments/EXP-0001-sira-simulative-vs-reactive/pricing.yaml
+  max_cost_usd: 4.00
+  max_model_tokens: 400000
+  max_wall_seconds: 240
+artifacts:
+  root: artifacts/EXP-0001/smoke
+  retain_raw: true
+  public_release: blocked-pending-review
+condition_plan_paths:
+  - experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/smoke-reactive.yaml
+  - experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/smoke-simulative.yaml
+readiness:
+  execution_eligibility: eligible-after-authorization
+  approval_changes_required:
+    - docs/PROJECT_STATE.yaml.paid_compute_allowed
+    - docs/PROJECT_STATE.yaml.prototype_execution_allowed
+    - execution.authorized
+    - execution.authorization_reference
+    - budget.max_cost_usd
+    - condition_plans[*].execution.authorization
+    - condition_plans[*].budget.max_cost_usd
+  unresolved_execution_blockers: []
+  pre_execution_requirements:
+    - Immutable snapshot binding is not integrated with the pinned upstream command surface.
+    - Finite command-level token and cost enforcement is not implemented.
+    - Source text logs are not yet redirected into the harness-owned attempt root.
+    - Browser process-group cleanup and environment fingerprinting are not yet integrated.
+    - Source, protocol, configuration, environment, and command identities require later materialization.

@@ -1,0 +1,67 @@
+schema_version: 0.1.0
+contract_id: EXP-0001-H2K-EVIDENCE-RETENTION-0.1.0
+experiment_id: EXP-0001
+status: planned-nonexecuting
+role: future-evidence-consumer-only
+future_consumer: RQ-H2K
+scientific_effect_on_exp0001: none
+source_contract: docs/harness/sira/H2K_REGULATION_DECISION_ADDENDUM.yaml
+capture:
+  - field: source_kind
+    requirement: required
+    allowed_value_for_locked_assignment: experiment_assignment
+    provenance_requirement: derived-from-resolved-command-and-config
+  - field: selected_mode
+    requirement: required
+    allowed_values:
+      - reactive
+      - simulative
+    provenance_requirement: derived-from-exact-command-bound-mode
+  - field: policy_id
+    requirement: required-when-known
+    provenance_requirement: source-grounded-or-derived-from-locked-assignment-contract
+  - field: policy_revision
+    requirement: required-when-known
+    provenance_requirement: source-grounded-or-null-with-unavailable-provenance
+  - field: available_modes
+    requirement: required-when-known
+    allowed_values:
+      - reactive
+      - simulative
+    provenance_requirement: derived-from-reviewed-upstream-cli-contract
+  - field: raw_source_references
+    requirement: required
+    provenance_requirement: retained-content-addressed-artifact-references
+  - field: override
+    requirement: capture-only-when-present
+    provenance_requirement: source-grounded-or-null-with-unavailable-provenance
+  - field: fallback
+    requirement: capture-only-when-present
+    provenance_requirement: source-grounded-or-null-with-unavailable-provenance
+  - field: confidence
+    requirement: capture-only-when-present
+    provenance_requirement: source-grounded-or-null-with-unavailable-provenance
+  - field: field_provenance
+    requirement: required-for-every-normalized-field
+    allowed_values:
+      - observed
+      - derived
+      - inferred
+      - unavailable
+  - field: trace_sufficiency
+    requirement: required
+    allowed_values:
+      - sufficient-for-source-classification
+      - insufficient-for-source-classification
+    provenance_requirement: derived-from-required-evidence-presence-only
+trace_sufficiency_boundary: >-
+  Sufficiency means only that retained evidence supports the recorded source kind,
+  selected mode, and field lineage. It does not support learned-regulation,
+  internalization, causal-faithfulness, or latent-state conclusions.
+prohibitions:
+  - no-new-hypothesis-or-outcome
+  - no-new-treatment-control-ablation-or-training-condition
+  - no-exp0001-metric-estimand-or-outcome-classification-effect
+  - no-internalization-boolean-or-latent-state-inference
+  - no-confidence-override-or-fallback-invention
+  - no-phase-two-or-h2k-experiment

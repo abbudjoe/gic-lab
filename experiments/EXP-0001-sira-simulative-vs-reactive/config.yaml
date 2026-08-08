@@ -1,0 +1,107 @@
+schema_version: 0.1.0
+experiment_id: EXP-0001
+execution_enabled: false
+conditions:
+  treatment:
+    id: SIRA-SIMULATIVE
+    upstream_mode: simulative
+  control:
+    id: SIRA-REACTIVE
+    upstream_mode: reactive
+fixed_runtime:
+  upstream_source_id: SRC-SIRA-REPOSITORY
+  upstream_commit: 93fb8d72de71f9a4a13419670adeb34d93cf7acd
+  upstream_uv_lock_sha256: 138585129c7f369887591d30d9727f8dd466639fa78fb00adc5a04f1e9b2d76e
+  python: ">=3.10,<3.13"
+  preferred_python: "3.10"
+  browsergym_core: 0.3.6.dev0
+  playwright: 1.39.0
+  chromium_revision: null
+  agent: sira
+  upstream_model_alias: gpt-4o
+  provider: OpenAI
+  provider_api: https://api.openai.com/v1/
+  proposed_immutable_model_revision: gpt-4o-2024-11-20
+  action_timeout_seconds: 30
+  outer_max_retry: 0
+  dataset_order_seed: 42
+  model_seed: null
+  browser_headless: true
+  browser_viewport:
+    width: 1280
+    height: 720
+  environment_timeout_milliseconds: 5000
+  secret_source: SIRA_API_KEY
+  shell: false
+expected_treatment_differences:
+  simulative:
+    config_name: web_simulative
+    planner_type: world_model
+    planner_search_num_actions: 5
+    planner_search_depth: 1
+    planner_policy_num_samples: 20
+    planner_critic_num_samples: 20
+    policy_temperature: 1.0
+    policy_top_p: 0.95
+    critic_temperature: 1.0
+    critic_top_p: 0.95
+  reactive:
+    config_name: web_reactive
+    planner_type: policy
+    base_temperature: 0.0
+    base_top_p: 0.5
+sampling:
+  smoke:
+    task_family: open-ended-query
+    query: go to google flights
+    pair_count: 1
+    max_steps: 1
+    order:
+      - SIRA-REACTIVE
+      - SIRA-SIMULATIVE
+    interpretation_allowed: false
+  pilot:
+    task_family: FanOutQA
+    dataset_id: DATA-SIRA-FANOUTQA-DEV
+    dataset_sha256: 359300b029c6891567816f351bf8786e9b018d7af8a1a44b7da9ba5ef4651288
+    dataset_revision: 76ad1feb689b754bfe4e5e24d3ea371b647efa67
+    max_steps: 30
+    tasks:
+      - task_id: 7dcbbbdc7f1120cd
+        start_idx: 0
+        end_idx: 1
+        order:
+          - SIRA-REACTIVE
+          - SIRA-SIMULATIVE
+      - task_id: 2120afba8009bad3
+        start_idx: 1
+        end_idx: 2
+        order:
+          - SIRA-SIMULATIVE
+          - SIRA-REACTIVE
+retry_and_exclusion:
+  outer_retry_count: 0
+  preserve_intrinsic_provider_and_parser_retries: true
+  new_attempt_identity_for_infrastructure_retry: true
+  task_failure_is_exclusion: false
+  pairwise_complete_case_only: true
+  rerun_both_conditions_after_pair_contract_invalidity: true
+  exclusion_reasons:
+    - source-or-environment-identity-mismatch
+    - configuration-or-task-drift
+    - authorization-or-budget-contract-violation
+    - missing-or-unverifiable-required-raw-artifact
+    - unresolved-child-process-cleanup
+    - deterministic-evaluator-contract-failure
+raw_retention:
+  retain_session_json: true
+  retain_text_logs: true
+  retain_stdout_stderr: true
+  retain_evaluator_outputs: true
+  retain_environment_and_command_records: true
+  hash_before_normalization: true
+  public_release: blocked-pending-license-privacy-and-redaction-review
+notes:
+  - Reactive and simulative modes are external experiment assignments.
+  - Assignment is not evidence of learned or internal regulation.
+  - No execution is authorized by this configuration.

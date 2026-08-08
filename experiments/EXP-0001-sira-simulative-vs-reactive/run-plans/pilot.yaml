@@ -1,0 +1,80 @@
+schema_version: 0.1.0
+experiment_id: EXP-0001
+plan_id: PLAN-EXP0001-PILOT
+profile: pilot
+study_stage: exploratory
+purpose: Test paired execution, deterministic scoring, and paired-variance plumbing on two locked tasks.
+sample_rationale: Two pairs are the variance-plumbing minimum and are not selected from an effect size or power claim.
+interpretation_allowed: true
+execution:
+  authorized: false
+  authorization_reference: null
+model:
+  provider: OpenAI
+  manifest_id: MODEL-OPENAI-GPT4O-2024-11-20
+  api: https://api.openai.com/v1/
+  upstream_alias: gpt-4o
+  proposed_immutable_revision: gpt-4o-2024-11-20
+  historical_revision_known: false
+  reproduction_level: directional-reproduction
+  substitution: Exact historical serving revision is unavailable; use a declared dated GPT-4o snapshot.
+sampling:
+  pair_count: 2
+  conditions:
+    - SIRA-SIMULATIVE
+    - SIRA-REACTIVE
+  task_family: FanOutQA
+  dataset_ids:
+    - DATA-SIRA-FANOUTQA-DEV
+  counterbalancing:
+    - pair_id: PAIR-EXP0001-PILOT-0000
+      task_id: 7dcbbbdc7f1120cd
+      task_source: DATA-SIRA-FANOUTQA-DEV[0:1]
+      first: SIRA-REACTIVE
+      second: SIRA-SIMULATIVE
+      plans:
+        - condition: SIRA-REACTIVE
+          path: experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-task-0000-reactive.yaml
+        - condition: SIRA-SIMULATIVE
+          path: experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-task-0000-simulative.yaml
+    - pair_id: PAIR-EXP0001-PILOT-0001
+      task_id: 2120afba8009bad3
+      task_source: DATA-SIRA-FANOUTQA-DEV[1:2]
+      first: SIRA-SIMULATIVE
+      second: SIRA-REACTIVE
+      plans:
+        - condition: SIRA-SIMULATIVE
+          path: experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-task-0001-simulative.yaml
+        - condition: SIRA-REACTIVE
+          path: experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-task-0001-reactive.yaml
+budget:
+  pricing_record: experiments/EXP-0001-sira-simulative-vs-reactive/pricing.yaml
+  max_cost_usd: 40.00
+  max_model_tokens: 4000000
+  max_wall_seconds: 14400
+artifacts:
+  root: artifacts/EXP-0001/pilot
+  retain_raw: true
+  public_release: blocked-pending-review
+condition_plan_paths:
+  - experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-task-0000-reactive.yaml
+  - experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-task-0000-simulative.yaml
+  - experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-task-0001-simulative.yaml
+  - experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-task-0001-reactive.yaml
+readiness:
+  execution_eligibility: blocked-pending-prerequisites
+  approval_changes_required:
+    - docs/PROJECT_STATE.yaml.paid_compute_allowed
+    - docs/PROJECT_STATE.yaml.prototype_execution_allowed
+    - execution.authorized
+    - execution.authorization_reference
+    - budget.max_cost_usd
+    - condition_plans[*].execution.authorization
+    - condition_plans[*].budget.max_cost_usd
+  unresolved_execution_blockers:
+    - Smoke integration and evidence review must succeed first.
+  pre_execution_requirements:
+    - Immutable snapshot binding and finite command-level resource enforcement are not integrated.
+    - Source-log ownership, browser cleanup, and complete environment identity are not integrated.
+    - FanOut spaCy and en_core_web_sm evaluator dependencies are not immutably pinned.
+    - Source, protocol, configuration, environment, and command identities require later materialization.

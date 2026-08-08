@@ -1,0 +1,123 @@
+# Generic Experiment Harness
+
+The Phase 0.75 harness is a source-neutral boundary for later experiment execution. It
+does not contain SiRA or SR²AM logic and does not itself grant permission to execute.
+
+The installed CLI is `giclab-harness` with four operations:
+
+- `validate-plan PLAN` validates the run-plan schema and typed semantic invariants.
+- `render-command PLAN --timeout-seconds N -- ARGV...` renders a `shell: false`
+  command and its canonical SHA-256 digest without reading named secret values or
+  executing it.
+- `run-local PLAN --artifact-workspace PATH --dry-run --timeout-seconds N -- ARGV...`
+  reports both project-state and run-plan blockers without creating evidence.
+- `validate-artifacts ATTEMPT_DIR` verifies the append-only event stream and every
+  retained file against its size and SHA-256 record.
+
+Omit `--dry-run` only in a later phase whose project state permits the declared
+workload and whose run plan contains a current explicit authorization reference plus
+the exact `command_sha256` returned by `render-command`. The digest binds the argument
+array, absolute resolved executable path and file digest, resolved working directory,
+working-directory device/inode identity, timeout, literal environment, digests of
+explicitly inherited non-secret environment values, secret environment names, and
+resource projection. Adapters can additionally bind complete input-tree digests,
+declare exact owned output roots, and declare source writes that remain outside attempt
+ownership. An inherited value,
+executable, effective working directory, or bound input tree that changes after
+authorization is refused before evidence or a process is created; filesystem and tree
+identity are checked again immediately before process launch. Any declared unowned
+output pattern is itself a hard live-execution blocker until an isolation wrapper
+removes that gap. Every declared owned output root must resolve inside the exact
+prospective run attempt at preflight and is rechecked immediately before launch. Live
+runs use a new `RUN-ID/attempt-NNNN` directory, refuse collisions, inherit no ambient
+variables by default, and inject secret variables by name through `--secret-env`.
+Dry-run and unauthorized paths never enumerate the ambient environment or read named
+secret values. NUL-bearing arguments and environment values are rejected before
+evidence creation.
+
+Secret-like literal arguments and environment entries are refused. One session-owned
+exact-value scrubber checks the retained plan, command, events, adapter raw artifacts,
+logs, manifest, and every other physical attempt entry. Named secret values are
+redacted from captured stdout and stderr before either log is written; an exact value
+found in a declared or omitted raw entry is refused and the unsafe attempt entry is
+removed. Safe files must be explicitly claimed by normalization before sealing. The
+redaction replacement is itself checked so even a one-character secret cannot survive
+inside the marker.
+
+Local subprocesses run in a dedicated process session. Output is streamed through a
+single hard byte quota and boundary-safe redactor; timeout or quota exhaustion kills
+the complete process group. A successful execution returns an open `RunSession` so a
+source adapter can add normalized events, source-supported raw artifacts, and
+an explicit non-wall accounting attestation before calling `seal()`. Session-owned plan,
+command, budget guard, event writer, and scrubber authority cannot be replaced by a
+caller. Sealing rechecks that authority, writes terminal events, and only then hashes the
+final evidence set. A process budget excess raises `LocalExecutionError` with its open
+failure `RunSession`, so an adapter can claim safe upstream raw output and close non-wall
+accounting before sealing the available failure evidence. The adapterless CLI seals that
+session directly when no adapter-owned files are present. The stop decision cannot be
+recovered by replacing the original limits. Artifact validation also reconciles budget
+event totals with the retained plan.
+
+Adapter command construction receives the pinned upstream source root and the
+prospective run-attempt output root as separate paths. This keeps executable and
+configuration identity separate from raw-artifact ownership; an adapter must not infer
+one path from the other. The adapter must bind each source output directory into
+`owned_output_roots`; the executor, rather than caller convention, enforces the exact
+attempt boundary.
+
+Wall time and captured output are metered directly. Any command that can consume cost,
+GPU time, model tokens, or tool calls must declare a before-action upper bound and use
+`--incremental-limit-enforcement adapter-command`, asserting that its adapter encodes
+those maxima into hard command-level controls. Opaque subprocess resource use without
+that typed enforcement contract is refused. Applicable units for which an adapter
+cannot provide a finite command-enforced upper bound remain typed as
+`unbounded_applicable`; dry runs expose the gap and live execution is refused regardless
+of plan authorization. The projection is checked against the run budget before launch,
+and normalized observed usage must not exceed either the original
+budget or the authorized projection. Each projected unit must be attested as observed
+or explicitly unavailable before sealing. Unavailable use is recorded as unavailable
+and conservatively charged at the authorized projection; it is never invented as zero.
+The adapterless `run-local` CLI refuses nonzero projections because it has no adapter
+accounting channel.
+
+The `--` command delimiter is mandatory for render and run operations so harness
+options and subprocess arguments have one unambiguous boundary.
+
+Artifact roots in plans are always relative to the operator-supplied artifact workspace.
+The retained `run-plan.json` and `command.json` preserve the full source/version and
+authorization-bound execution contract. Unavailable source commits or digests are
+recorded as the explicit value `unknown`; any such value blocks live execution until it
+is replaced by a pinned identity. The metadata file `artifact-records.jsonl` is
+control metadata and therefore excludes itself from hashing; every other retained
+regular file must have exactly one record.
+
+## Regulation-decision evidence and event versions
+
+Harness event writers now emit schema version `0.2.0`. The version adds the optional
+source-neutral `regulation_decision` event; it does not make that event mandatory for
+historical or future runs. Readers and validators retain strict read support for
+version `0.1.0`, whose event vocabulary is unchanged. One stream must use exactly one
+version: a writer cannot append v0.2 evidence to a historical v0.1 stream, and a
+`regulation_decision` cannot claim v0.1. Run-plan, command, artifact, and cloud schemas
+remain at their independent v0.1 contracts; event versioning no longer implies that
+every harness schema changed together.
+
+The typed regulation payload records `source_kind`, `selected_mode`, optional policy,
+available-mode, confidence, override, and fallback fields, input-event references, raw
+or resolved-configuration evidence references, and provenance for every field. At
+least one raw artifact or deterministic resolved-configuration reference is required.
+The source vocabulary is limited to experiment assignment, external rule, external
+prompted model, explicit primary-model output, human override, and unknown. There is no
+latent-internalization field: an explicit model output is evidence of that output only.
+The JSON Schema enforces every field-local value/provenance relationship in both
+directions. The typed parser additionally enforces cross-field relationships that
+Draft 2020-12 cannot express by comparing sibling values, including that a known
+`selected_mode` belongs to `available_modes`; event readers always run that semantic
+parser after structural schema validation.
+
+RQ-H2K remains planned/deferred with no active experiment. The SiRA adapter records its
+fixed reactive/simulative condition as `experiment_assignment`; its source-specific
+mapping is in
+[`sira/H2K_REGULATION_DECISION_ADDENDUM.yaml`](sira/H2K_REGULATION_DECISION_ADDENDUM.yaml).
+The generic contract can represent later explicit-model records without claiming they
+are causally faithful or authorizing a learned kernel.

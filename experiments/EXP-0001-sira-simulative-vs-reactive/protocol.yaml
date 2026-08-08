@@ -1,0 +1,108 @@
+schema_version: 0.1.0
+experiment_id: EXP-0001
+title: SiRA simulative versus matched reactive behavior
+question: >-
+  On the two preregistered FanOutQA development tasks, what is the paired difference
+  in deterministic evaluator accuracy between externally assigned SIRA-SIMULATIVE and
+  SIRA-REACTIVE behavior, and what model, browser-action, latency, and dollar costs
+  accompany that difference?
+hypothesis:
+  statement: >-
+    Exploratory evidence would favor SIRA-SIMULATIVE when its mean within-task
+    accuracy difference over SIRA-REACTIVE is positive without being dominated on the
+    declared success-cost measures.
+  null_hypothesis: >-
+    The mean within-task accuracy difference, SIRA-SIMULATIVE minus SIRA-REACTIVE, is
+    less than or equal to zero, or any positive accuracy difference is dominated on
+    the declared success-cost measures.
+  falsification_criteria:
+    - The mean paired accuracy difference is less than or equal to zero.
+    - Any accuracy gain is dominated by SIRA-REACTIVE on every declared cost measure.
+study_stage: exploratory
+lifecycle_status: planned
+evidence_status: not-evaluated
+outcome_status: pending
+owner: GIC Lab
+created_at: "2026-08-08"
+updated_at: "2026-08-08"
+source_contracts:
+  - docs/PROJECT_CHARTER.md
+  - docs/RESEARCH_QUESTIONS.md
+  - docs/FALSIFICATION_NOTES.md
+  - docs/REPRODUCIBILITY.md
+  - docs/H2K_OPTION_PRESERVATION.md
+  - docs/audits/sira/UPSTREAM_AUDIT.md
+  - docs/audits/sira/COMMAND_CONTRACT.yaml
+  - docs/harness/sira/H2K_REGULATION_DECISION_ADDENDUM.yaml
+  - experiments/EXP-0001-sira-simulative-vs-reactive/README.md
+  - experiments/EXP-0001-sira-simulative-vs-reactive/EVIDENCE_RETENTION_APPENDIX.yaml
+systems:
+  treatment: SIRA-SIMULATIVE
+  controls:
+    - SIRA-REACTIVE
+fixed_variables:
+  upstream_source_id: SRC-SIRA-REPOSITORY
+  upstream_commit: 93fb8d72de71f9a4a13419670adeb34d93cf7acd
+  provider: OpenAI
+  api: https://api.openai.com/v1/
+  upstream_model_alias: gpt-4o
+  proposed_model_revision: gpt-4o-2024-11-20
+  reproduction_level: directional-reproduction
+  agent: sira
+  pilot_task_family: FanOutQA
+  pilot_dataset_revision: 76ad1feb689b754bfe4e5e24d3ea371b647efa67
+  outer_max_retry: 0
+  action_timeout_seconds: 30
+  dataset_order_seed: 42
+  model_seed: unavailable
+  pair_max_steps: 30
+metrics:
+  primary: >-
+    Mean within-task paired difference in deterministic FanOut evaluator record
+    accuracy, SIRA-SIMULATIVE minus SIRA-REACTIVE, over the two locked pilot tasks.
+  secondary:
+    - Per-condition success and paired success discordance.
+    - Provider input, cached-input, and output tokens when directly reported.
+    - Provider cost in USD when directly reported or reproducibly derived from retained usage.
+    - Harness wall time and upstream model-call count.
+    - Browser action count and valid completion rate.
+    - Availability of source-supported state and selected-plan fields, without internalization inference.
+sampling:
+  dataset_ids:
+    - DATA-SIRA-FANOUTQA-DEV
+  sample_size: 2
+  replications: 1
+  seeds:
+    - 42
+budget:
+  max_model_tokens: 4000000
+  max_tool_calls: 120
+  max_gpu_hours: 0
+  max_cost_usd: 40
+acceptance_criteria:
+  - Both conditions complete for each of the two locked pilot tasks under matched pair contracts.
+  - Every launched attempt and retry is retained, hashed, and reconciled before aggregation.
+  - Primary and secondary metrics are computed only from source-supported or harness-observed fields.
+  - Results remain exploratory and use the directional-reproduction qualifier.
+validity:
+  invalid_run_criteria:
+    - Authorization was absent or a declared budget or safety boundary was violated.
+    - Source, model, environment, task, configuration, pair, or evaluator identity drifted.
+    - Required raw evidence, artifact hashes, or zero-live-child cleanup evidence is unavailable.
+  inconclusive_criteria:
+    - Either locked task lacks a complete contract-valid reactive/simulative pair.
+    - The primary metric cannot be reproduced from the retained deterministic evaluator evidence.
+stop_conditions:
+  - Stop before execution while authorization remains false.
+  - Stop before execution until the FanOut evaluator dependency gap is immutably resolved.
+  - Stop before execution until model substitution, token/cost enforcement, raw-log ownership, and browser cleanup are integrated.
+  - Stop an authorized future attempt before its wall, token, tool-call, output-byte, or exact spend cap is exceeded.
+  - Stop and classify the attempt infrastructure-invalid on source, configuration, task, model, environment, artifact, or pair-contract drift.
+execution:
+  authorized: false
+  authorization_reference: null
+paths:
+  protocol: experiments/EXP-0001-sira-simulative-vs-reactive/protocol.yaml
+  config: experiments/EXP-0001-sira-simulative-vs-reactive/config.yaml
+  results: experiments/EXP-0001-sira-simulative-vs-reactive/results-summary.json
+deviations: []

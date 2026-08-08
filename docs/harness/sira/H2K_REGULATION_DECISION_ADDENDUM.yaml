@@ -1,0 +1,127 @@
+schema_version: 0.1.0
+addendum_id: SIRA-H2K-REGULATION-DECISION-T04.5-0.1.0
+status: planned-evidence-preservation-only
+track_id: RQ-H2K
+parent_contracts:
+  t01_trace_map: docs/audits/sira/TRACE_FIELD_MAP.yaml
+  t04_gap_report: docs/harness/sira/SCHEMA_GAP_REPORT.yaml
+  note: >-
+    This T04.5 addendum supplements accepted T01/T04 evidence. It does not rewrite
+    their historical event inventories or claim that the pinned trace contains a
+    per-step configurator.
+event_schema:
+  emitted_version: 0.2.0
+  legacy_read_version: 0.1.0
+  compatibility: existing-v0.1-streams-remain-readable-without-reinterpretation
+event:
+  event_type: regulation_decision
+  producer: sira-adapter
+  source: sira-adapter-resolved-configuration
+  provenance: derived
+  semantic_boundary: >-
+    The reactive/simulative mode is fixed by experiment configuration before the run.
+    It is an experiment_assignment, never evidence of learned or latent self-regulation.
+  fields:
+    - field: decision_id
+      direct_source_path: null
+      normalization_rule: use the stable adapter decision identity within each run attempt
+      provenance: derived
+      status: derived
+      missing_behavior: adapter-contract-error
+    - field: source_kind
+      direct_source_path: command.json argv planning-mode assignment
+      normalization_rule: classify the fixed reactive/simulative command choice as experiment_assignment
+      provenance: derived
+      status: derived
+      missing_behavior: adapter-contract-error
+    - field: policy_id
+      direct_source_path: null
+      normalization_rule: use the source-neutral SiRA experiment-assignment policy identity
+      provenance: derived
+      status: derived
+      missing_behavior: adapter-contract-error
+    - field: policy_revision
+      direct_source_path: run-plan.json.sources.protocol_sha256
+      normalization_rule: copy the bound protocol digest when known; otherwise retain null/unavailable
+      provenance: derived
+      status: conditional
+      missing_behavior: null-with-unavailable-field-provenance
+    - field: available_modes
+      direct_source_path: scripts/run_web_agent.py --mode choices via the reviewed T01 contract
+      normalization_rule: copy the audited reactive/simulative vocabulary without adding latent categories
+      provenance: derived
+      status: derived
+      missing_behavior: adapter-contract-error
+    - field: selected_mode
+      direct_source_path: command.json argv value after --mode
+      normalization_rule: derive from the exact config digest and resolved command-bound mode
+      provenance: derived
+      status: derived
+      missing_behavior: adapter-contract-error
+    - field: confidence
+      direct_source_path: null
+      normalization_rule: retain null because the pinned assignment emits no confidence
+      provenance: unavailable
+      status: unavailable
+      missing_behavior: null-with-unavailable-field-provenance
+    - field: override
+      direct_source_path: null
+      normalization_rule: retain an all-null unavailable record; do not infer from trace prose
+      provenance: unavailable
+      status: unavailable
+      missing_behavior: all-null-with-unavailable-field-provenance
+    - field: fallback
+      direct_source_path: null
+      normalization_rule: retain an all-null unavailable record; do not infer from trace prose
+      provenance: unavailable
+      status: unavailable
+      missing_behavior: all-null-with-unavailable-field-provenance
+    - field: input_event_sequences
+      direct_source_path: null
+      normalization_rule: leave empty because adapter drafts do not own harness event sequence numbers
+      provenance: unavailable
+      status: unavailable
+      missing_behavior: empty-with-unavailable-field-provenance
+    - field: raw_artifact_refs
+      direct_source_path: selected structured session artifact path
+      normalization_rule: reference the retained session bytes without claiming that they encode the assignment
+      provenance: observed
+      status: available
+      missing_behavior: normalization-refused-without-one-session-artifact
+    - field: resolved_configuration_refs
+      direct_source_path: run-plan.json and command.json
+      normalization_rule: reference harness-retained records that bind the config digest and exact --mode value
+      provenance: derived
+      status: derived
+      missing_behavior: live-evidence-invalid-without-retained-config-records
+    - field: field_provenance
+      direct_source_path: this addendum and typed adapter rules
+      normalization_rule: serialize one provenance value for every decision field
+      provenance: derived
+      status: derived
+      missing_behavior: schema-rejected
+pair_contract:
+  invariant_metadata:
+    - source_kind
+    - policy_id
+    - policy_revision
+    - available_modes
+    - upstream_source_id
+    - upstream_commit
+  approved_per-condition_or-attempt_differences:
+    - selected_mode
+    - raw_artifact_refs
+  exact_rule: >-
+    Pair validation rejects any source or policy metadata drift before evidence can be
+    interpreted; attempt-local raw paths may differ and selected_mode must differ.
+per_step_control_mapping:
+  status: unavailable
+  reason: >-
+    The accepted T01 structured trace exposes no explicit per-step regulation record.
+    Unknown or malformed control-like upstream fields remain in raw bytes and are not
+    parsed into additional regulation_decision events.
+prohibitions:
+  - no_internalization_boolean_or_category
+  - no_latent_state_inference_from_plan_state_reasoning_or_log_prose
+  - no_confidence_override_or_fallback_invention
+  - no_exp0001_treatment_control_or_estimand_change

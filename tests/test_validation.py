@@ -131,6 +131,30 @@ def test_manifest_records_reject_unknown_fields() -> None:
     assert any("untyped_claim" in error for error in errors)
 
 
+def test_audited_manifest_fragments_are_reconciled_without_inventing_unknowns() -> None:
+    for canonical_path, proposal_path in (
+        (
+            "manifests/datasets.yaml",
+            "docs/audits/sira/PROPOSED_MANIFEST_FRAGMENT.yaml",
+        ),
+        (
+            "manifests/models.yaml",
+            "docs/audits/sr2am/PROPOSED_MANIFEST_FRAGMENT.yaml",
+        ),
+    ):
+        canonical = {entry["id"]: entry for entry in load_yaml(ROOT / canonical_path)["entries"]}
+        for proposed in load_yaml(ROOT / proposal_path)["entries"]:
+            assert canonical[proposed["id"]] == proposed
+
+    datasets = {
+        entry["id"]: entry for entry in load_yaml(ROOT / "manifests/datasets.yaml")["entries"]
+    }
+    assert datasets["DATA-SIRA-FANOUTQA-DEV"]["license"] is None
+    assert datasets["DATA-SIRA-FLIGHTQA-COUNTERFACTUAL"]["license"] is None
+    models = {entry["id"]: entry for entry in load_yaml(ROOT / "manifests/models.yaml")["entries"]}
+    assert models["MODEL-SR2AM-V0.1-8B"]["sha256"] is None
+
+
 def test_compute_entries_require_the_typed_contract() -> None:
     ledger = deepcopy(load_yaml(ROOT / "manifests/compute.yaml"))
     ledger["entries"].append({"id": "CMP-0001"})
@@ -184,6 +208,35 @@ def test_successful_plan_must_be_in_completed_directory(tmp_path: Path) -> None:
     assert any("successful plan must be under" in error for error in errors)
 
 
+def test_plan_lifecycle_requires_exactly_one_active_plan(tmp_path: Path) -> None:
+    active = tmp_path / "docs/exec-plans/active"
+    active.mkdir(parents=True)
+    for name in ("FIRST.md", "SECOND.md"):
+        (active / name).write_text(
+            "# Phase 1 — Duplicate authority\n\nStatus: **in-progress**\n",
+            encoding="utf-8",
+        )
+    errors = validate_plan_lifecycle(tmp_path)
+    assert any("exactly one active execution plan" in error for error in errors)
+
+
+def test_completed_plan_must_be_successful(tmp_path: Path) -> None:
+    active = tmp_path / "docs/exec-plans/active/CURRENT.md"
+    completed = tmp_path / "docs/exec-plans/completed/STALE.md"
+    active.parent.mkdir(parents=True)
+    completed.parent.mkdir(parents=True)
+    active.write_text(
+        "# Phase 1 — Current\n\nStatus: **in-progress**\n",
+        encoding="utf-8",
+    )
+    completed.write_text(
+        "# Phase 0.75 — Stale\n\nStatus: **review-failed**\n",
+        encoding="utf-8",
+    )
+    errors = validate_plan_lifecycle(tmp_path)
+    assert any("completed plan must be successful" in error for error in errors)
+
+
 def test_project_state_supports_an_authorized_precompute_phase(tmp_path: Path) -> None:
     docs = tmp_path / "docs"
     plan = docs / "exec-plans/active/PHASE_0_5.md"
@@ -231,6 +284,36 @@ def test_project_state_rejects_compute_authority_before_phase_one(tmp_path: Path
     )
     errors = validate_project_state(tmp_path)
     assert any("paid_compute_allowed must be false" in error for error in errors)
+
+
+def test_phase_one_workload_permission_requires_exact_profile_binding(tmp_path: Path) -> None:
+    docs = tmp_path / "docs"
+    plan = docs / "exec-plans/active/PHASE_1.md"
+    plan.parent.mkdir(parents=True)
+    plan.write_text("# Phase 1 — Execution\n\nStatus: **in-progress**\n", encoding="utf-8")
+    (docs / "PROJECT_STATE.yaml").write_text(
+        "\n".join(
+            (
+                'phase: "1"',
+                "phase_name: artifact-execution",
+                "phase_status: in-progress",
+                "paid_compute_allowed: false",
+                "prototype_execution_allowed: true",
+                "benchmark_execution_allowed: false",
+                "training_allowed: false",
+                "cloud_mutation_allowed: false",
+                "authorized_run_profile:",
+                "  plan_id: null",
+                "  profile_path: null",
+                "  profile_sha256: null",
+                "  condition_plan_sha256s: []",
+                "authoritative_plan: docs/exec-plans/active/PHASE_1.md",
+            )
+        ),
+        encoding="utf-8",
+    )
+    errors = validate_project_state(tmp_path)
+    assert any("workload permission requires" in error for error in errors)
 
 
 def test_project_state_requires_active_authoritative_plan_for_active_status(

@@ -7,6 +7,7 @@ project:
     - "methods/*.qmd"
     - "weekly/*.qmd"
     - "failures/*.qmd"
+    - "experiments/*.qmd"
     - "generated/*.qmd"
 
 website:
@@ -47,12 +48,14 @@ website:
       - section: Experiments
         contents:
           - generated/experiments.qmd
+          - experiments/exp-0001-protocol.qmd
           - methods/index.qmd
       - section: Lab notes
         contents:
           - weekly/index.qmd
           - weekly/2026-07-15-phase-0.qmd
           - weekly/2026-08-07-phase-0-75.qmd
+          - weekly/2026-08-08-phase-1.qmd
           - generated/decisions.qmd
           - failures/index.qmd
       - resources.qmd

@@ -1,11 +1,16 @@
 schema_version: 0.1.0
-phase: "0.75"
-phase_name: upstream-audit-harness-protocol-lock
+phase: "1"
+phase_name: artifact-execution
 phase_status: in-progress
 paid_compute_allowed: false
 prototype_execution_allowed: false
 benchmark_execution_allowed: false
 training_allowed: false
 cloud_mutation_allowed: false
-authoritative_plan: docs/exec-plans/active/PHASE_0_75_UPSTREAM_AUDIT_HARNESS_PROTOCOL_LOCK.md
-last_updated: "2026-08-07"
+authorized_run_profile:
+  plan_id: null
+  profile_path: null
+  profile_sha256: null
+  condition_plan_sha256s: []
+authoritative_plan: docs/exec-plans/active/PHASE_1_ARTIFACT_EXECUTION.md
+last_updated: "2026-08-08"
