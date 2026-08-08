@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:gic-lab:schema:harness-event:0.1.0",
+  "title": "GIC Lab harness event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "attempt",
+    "sequence",
+    "timestamp_utc",
+    "event_type",
+    "source",
+    "provenance",
+    "payload"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1.0"},
+    "run_id": {
+      "type": "string",
+      "pattern": "^RUN-[A-Z0-9][A-Z0-9._-]{5,127}$"
+    },
+    "attempt": {"type": "integer", "minimum": 1},
+    "sequence": {"type": "integer", "minimum": 1},
+    "timestamp_utc": {"type": "string", "format": "date-time"},
+    "event_type": {
+      "enum": [
+        "run_started",
+        "preflight_completed",
+        "command_started",
+        "command_completed",
+        "observation",
+        "belief_state",
+        "candidate_action",
+        "predicted_future",
+        "critic_evaluation",
+        "plan",
+        "executed_action",
+        "outcome",
+        "metric",
+        "budget_update",
+        "artifact_recorded",
+        "warning",
+        "error",
+        "run_stopped",
+        "cloud_instance_launched",
+        "cloud_instance_terminated"
+      ]
+    },
+    "source": {"type": "string", "minLength": 1},
+    "provenance": {"enum": ["observed", "derived", "inferred", "unavailable"]},
+    "payload": {"type": "object"}
+  }
+}
