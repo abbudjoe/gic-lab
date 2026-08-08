@@ -49,14 +49,17 @@ condition_plan_paths:
   - experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/smoke-reactive.yaml
   - experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/smoke-simulative.yaml
 readiness:
-  execution_eligibility: blocked-pending-later-phase-integration
+  execution_eligibility: eligible-after-authorization
   approval_changes_required:
+    - docs/PROJECT_STATE.yaml.paid_compute_allowed
+    - docs/PROJECT_STATE.yaml.prototype_execution_allowed
     - execution.authorized
     - execution.authorization_reference
     - budget.max_cost_usd
     - condition_plans[*].execution.authorization
     - condition_plans[*].budget.max_cost_usd
-  unresolved_execution_blockers:
+  unresolved_execution_blockers: []
+  pre_execution_requirements:
     - Immutable snapshot binding is not integrated with the pinned upstream command surface.
     - Finite command-level token and cost enforcement is not implemented.
     - Source text logs are not yet redirected into the harness-owned attempt root.

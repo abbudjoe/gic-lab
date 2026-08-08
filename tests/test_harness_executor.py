@@ -166,7 +166,8 @@ def test_construction_dry_run_and_unauthorized_execution_do_not_read_ambient_sec
         ArtifactWorkspace.open(workspace_root, create=False),
         host_environment=host,
     )
-    executor.dry_run(bind_plan(typed_plan(), command), command, project_state())
+    plan = bind_plan(typed_plan(), command)
+    executor.dry_run(plan, command, project_state(allowed_plan=plan))
     with pytest.raises(ExecutionDisallowed, match="not authorized"):
         executor.execute(typed_plan(), command, project_state())
     assert host.accessed == []
@@ -187,7 +188,7 @@ def test_live_run_refuses_disabled_project_state(tmp_path: Path) -> None:
     command = CommandSpec(argv=(sys.executable, "-c", "pass"), cwd=tmp_path, timeout_seconds=2)
     plan = bind_plan(typed_plan(), command)
     with pytest.raises(ExecutionDisallowed, match="prototype"):
-        executor.execute(plan, command, project_state(prototype=False))
+        executor.execute(plan, command, project_state(prototype=False, allowed_plan=plan))
 
 
 def test_live_run_redacts_named_secrets_and_validates_artifacts(tmp_path: Path) -> None:
@@ -208,7 +209,7 @@ def test_live_run_redacts_named_secrets_and_validates_artifacts(tmp_path: Path) 
         secret_environment=("SYNTHETIC_API_KEY",),
     )
     plan = bind_plan(typed_plan(), command)
-    outcome = executor.execute(plan, command, project_state()).seal()
+    outcome = executor.execute(plan, command, project_state(allowed_plan=plan)).seal()
     assert outcome.return_code == 0
     assert outcome.stdout_redactions == 1
     assert outcome.stderr_redactions == 1
@@ -233,7 +234,7 @@ def test_named_environment_nul_is_refused_before_attempt_creation(tmp_path: Path
         host_environment={"NUL_CREDENTIAL": "bad\0value"},
     )
     with pytest.raises(ExecutionDisallowed, match="NUL byte"):
-        executor.execute(plan, command, project_state())
+        executor.execute(plan, command, project_state(allowed_plan=plan))
     assert list(workspace.root.iterdir()) == []
 
 
@@ -254,7 +255,7 @@ def test_credential_equal_to_owned_artifact_name_is_refused_before_attempt(
         host_environment={"PATH_CREDENTIAL": private_value},
     )
     with pytest.raises(CredentialExposureError, match="artifact path"):
-        executor.execute(plan, command, project_state())
+        executor.execute(plan, command, project_state(allowed_plan=plan))
     assert list(workspace.root.iterdir()) == []
 
 
@@ -267,10 +268,10 @@ def test_retry_collision_cannot_overwrite_raw_logs(tmp_path: Path) -> None:
         timeout_seconds=2,
     )
     plan = bind_plan(typed_plan(), command)
-    outcome = executor.execute(plan, command, project_state()).seal()
+    outcome = executor.execute(plan, command, project_state(allowed_plan=plan)).seal()
     stdout_digest = _digest(outcome.stdout_path)
     with pytest.raises(FileExistsError):
-        executor.execute(plan, command, project_state())
+        executor.execute(plan, command, project_state(allowed_plan=plan))
     assert _digest(outcome.stdout_path) == stdout_digest
 
 
@@ -282,7 +283,7 @@ def test_run_session_authority_and_budget_owner_cannot_be_replaced(tmp_path: Pat
         timeout_seconds=2,
     )
     plan = bind_plan(typed_plan(), command)
-    session = LocalRunExecutor(workspace).execute(plan, command, project_state())
+    session = LocalRunExecutor(workspace).execute(plan, command, project_state(allowed_plan=plan))
     for field in (
         "plan",
         "command",
@@ -324,7 +325,7 @@ def test_secret_value_cannot_be_duplicated_in_serialized_command(tmp_path: Path)
     )
     plan = bind_plan(typed_plan(), command)
     with pytest.raises(CredentialExposureError, match="exact injected credential"):
-        executor.execute(plan, command, project_state())
+        executor.execute(plan, command, project_state(allowed_plan=plan))
 
 
 def test_named_secret_value_cannot_be_duplicated_in_serialized_cwd(tmp_path: Path) -> None:
@@ -345,7 +346,7 @@ def test_named_secret_value_cannot_be_duplicated_in_serialized_cwd(tmp_path: Pat
     )
     plan = bind_plan(typed_plan(), command)
     with pytest.raises(CredentialExposureError, match="exact injected credential"):
-        executor.execute(plan, command, project_state())
+        executor.execute(plan, command, project_state(allowed_plan=plan))
     assert list(workspace.root.iterdir()) == []
 
 
@@ -373,10 +374,10 @@ def test_authorization_binding_covers_command_and_output_ownership(tmp_path: Pat
         ),
     )
     for mutated in mutations:
-        report = executor.dry_run(plan, mutated, project_state())
+        report = executor.dry_run(plan, mutated, project_state(allowed_plan=plan))
         assert "command does not match the run plan authorization binding" in report.blockers
         with pytest.raises(ExecutionDisallowed, match="authorization binding"):
-            executor.execute(plan, mutated, project_state())
+            executor.execute(plan, mutated, project_state(allowed_plan=plan))
     assert list(workspace.root.iterdir()) == []
 
 
@@ -389,7 +390,7 @@ def test_synthetic_adapter_normalizes_and_accounts_before_sealing(tmp_path: Path
     adapter: ArtifactAdapter = _SyntheticAdapter(tmp_path)
     command = adapter.build_command(initial_plan, tmp_path, prospective)
     plan = bind_plan(initial_plan, command)
-    session = LocalRunExecutor(workspace).execute(plan, command, project_state())
+    session = LocalRunExecutor(workspace).execute(plan, command, project_state(allowed_plan=plan))
     session.apply_normalization(adapter.normalize(plan, session.attempt_directory))
     outcome = session.seal()
 
@@ -411,7 +412,7 @@ def test_adapter_notices_emit_harness_owned_typed_control_events(tmp_path: Path)
         timeout_seconds=2,
     )
     plan = bind_plan(typed_plan(), command)
-    session = LocalRunExecutor(workspace).execute(plan, command, project_state())
+    session = LocalRunExecutor(workspace).execute(plan, command, project_state(allowed_plan=plan))
     session.apply_normalization(
         NormalizationResult(
             events=(),
@@ -462,7 +463,7 @@ def test_nonwall_projection_requires_explicit_accounting_before_seal(tmp_path: P
         ),
     )
     plan = bind_plan(typed_plan(max_tool_calls=1), command)
-    session = LocalRunExecutor(workspace).execute(plan, command, project_state())
+    session = LocalRunExecutor(workspace).execute(plan, command, project_state(allowed_plan=plan))
     with pytest.raises(AttributeError, match="write-owned"):
         session._accounting_attested = True
     with pytest.raises(LocalExecutionError, match="must be observed or explicitly unavailable"):
@@ -517,7 +518,7 @@ def test_nonwall_projection_over_budget_cannot_execute_marker(tmp_path: Path) ->
     )
     plan = bind_plan(typed_plan(max_tool_calls=0), command)
     with pytest.raises(ExecutionDisallowed, match="tool_calls"):
-        LocalRunExecutor(workspace).execute(plan, command, project_state())
+        LocalRunExecutor(workspace).execute(plan, command, project_state(allowed_plan=plan))
 
     assert not marker.exists()
     assert list(workspace.root.iterdir()) == []
@@ -542,10 +543,10 @@ def test_command_output_root_outside_exact_attempt_is_refused_before_execution(
     plan = bind_plan(typed_plan(), command)
     executor = LocalRunExecutor(workspace)
 
-    report = executor.dry_run(plan, command, project_state())
+    report = executor.dry_run(plan, command, project_state(allowed_plan=plan))
     assert any("outside the exact harness run attempt" in item for item in report.blockers)
     with pytest.raises(ExecutionDisallowed, match="outside the exact harness run attempt"):
-        executor.execute(plan, command, project_state())
+        executor.execute(plan, command, project_state(allowed_plan=plan))
     assert not marker.exists()
     assert list(workspace.root.iterdir()) == []
 
@@ -572,16 +573,16 @@ def test_owned_output_root_symlink_substitution_is_rechecked(tmp_path: Path) -> 
     )
     plan = bind_plan(initial_plan, command)
     executor = LocalRunExecutor(workspace)
-    assert executor.dry_run(plan, command, project_state()).execution_allowed
+    assert executor.dry_run(plan, command, project_state(allowed_plan=plan)).execution_allowed
 
     attempt.mkdir(parents=True)
     outside = tmp_path / "outside"
     outside.mkdir()
     output_root.symlink_to(outside, target_is_directory=True)
-    report = executor.dry_run(plan, command, project_state())
+    report = executor.dry_run(plan, command, project_state(allowed_plan=plan))
     assert any("owned output root resolution changed" in item for item in report.blockers)
     with pytest.raises(ExecutionDisallowed, match="owned output root resolution changed"):
-        executor.execute(plan, command, project_state())
+        executor.execute(plan, command, project_state(allowed_plan=plan))
     assert not (outside / "must-not-exist").exists()
 
 
@@ -594,7 +595,7 @@ def test_observed_usage_over_projection_seals_failure_evidence(tmp_path: Path) -
     adapter: ArtifactAdapter = _SyntheticAdapter(tmp_path)
     command = adapter.build_command(initial_plan, tmp_path, prospective)
     plan = bind_plan(initial_plan, command)
-    session = LocalRunExecutor(workspace).execute(plan, command, project_state())
+    session = LocalRunExecutor(workspace).execute(plan, command, project_state(allowed_plan=plan))
     normalized = adapter.normalize(plan, session.attempt_directory)
     over_projection = replace(
         normalized,
@@ -630,10 +631,10 @@ def test_changed_inherited_path_is_refused_before_execution(tmp_path: Path) -> N
     plan = bind_plan(typed_plan(), command)
     workspace = ArtifactWorkspace.open(tmp_path / "artifacts", create=True)
     executor = LocalRunExecutor(workspace, host_environment={"PATH": "/substituted/bin"})
-    report = executor.dry_run(plan, command, project_state())
+    report = executor.dry_run(plan, command, project_state(allowed_plan=plan))
     assert "inherited environment binding changed: PATH" in report.blockers
     with pytest.raises(ExecutionDisallowed, match="inherited environment binding changed"):
-        executor.execute(plan, command, project_state())
+        executor.execute(plan, command, project_state(allowed_plan=plan))
     assert not marker.exists()
     assert list(workspace.root.iterdir()) == []
 
@@ -657,10 +658,10 @@ def test_authorized_cwd_cannot_be_replaced_by_a_symlink(tmp_path: Path) -> None:
     authorized_cwd.symlink_to(substituted_cwd, target_is_directory=True)
     workspace = ArtifactWorkspace.open(tmp_path / "artifacts", create=True)
     executor = LocalRunExecutor(workspace)
-    report = executor.dry_run(plan, command, project_state())
+    report = executor.dry_run(plan, command, project_state(allowed_plan=plan))
     assert "command cwd resolution changed after authorization" in report.blockers
     with pytest.raises(ExecutionDisallowed, match="cwd resolution changed"):
-        executor.execute(plan, command, project_state())
+        executor.execute(plan, command, project_state(allowed_plan=plan))
     assert not (substituted_cwd / "must-not-exist").exists()
     assert list(workspace.root.iterdir()) == []
 
@@ -681,7 +682,9 @@ def test_process_group_cleanup_terminates_descendant_holding_stdout(tmp_path: Pa
     plan = bind_plan(typed_plan(), command)
     workspace = ArtifactWorkspace.open(tmp_path / "artifacts", create=True)
     started = time.monotonic()
-    outcome = LocalRunExecutor(workspace).execute(plan, command, project_state()).seal()
+    outcome = (
+        LocalRunExecutor(workspace).execute(plan, command, project_state(allowed_plan=plan)).seal()
+    )
     elapsed = time.monotonic() - started
 
     child_pid = int(child_pid_path.read_text(encoding="utf-8"))
@@ -709,7 +712,7 @@ def test_output_budget_streams_to_a_hard_cap_and_seals_failure_evidence(
     plan = bind_plan(typed_plan(max_output_bytes=1024), command)
     workspace = ArtifactWorkspace.open(tmp_path / "artifacts", create=True)
     with pytest.raises(LocalExecutionError, match="hard budget") as captured:
-        LocalRunExecutor(workspace).execute(plan, command, project_state())
+        LocalRunExecutor(workspace).execute(plan, command, project_state(allowed_plan=plan))
 
     session = captured.value.session
     assert session is not None
@@ -768,7 +771,7 @@ def test_output_quota_applies_after_redaction_expansion(tmp_path: Path) -> None:
         host_environment={"PATH": "", "SHORT_SECRET": private_value},
     )
     with pytest.raises(LocalExecutionError, match="hard budget") as captured:
-        executor.execute(plan, command, project_state())
+        executor.execute(plan, command, project_state(allowed_plan=plan))
 
     session = captured.value.session
     assert session is not None
@@ -790,7 +793,7 @@ def test_launch_failure_has_no_command_started_or_completed_event(tmp_path: Path
     plan = bind_plan(typed_plan(), command)
     workspace = ArtifactWorkspace.open(tmp_path / "artifacts", create=True)
     with pytest.raises(LocalExecutionError, match="could not be started"):
-        LocalRunExecutor(workspace).execute(plan, command, project_state())
+        LocalRunExecutor(workspace).execute(plan, command, project_state(allowed_plan=plan))
 
     attempt = workspace.attempt_directory(plan.artifacts, plan.identity, create=False)
     events = read_events(attempt / "events.jsonl")
@@ -824,7 +827,7 @@ def test_exact_credential_in_retained_run_plan_is_refused_before_attempt(tmp_pat
         host_environment={"PLAN_CREDENTIAL": private_value},
     )
     with pytest.raises(CredentialExposureError, match="retained run plan"):
-        executor.execute(plan, command, project_state())
+        executor.execute(plan, command, project_state(allowed_plan=plan))
     assert list(workspace.root.iterdir()) == []
 
 
@@ -842,7 +845,7 @@ def test_exact_credential_in_normalized_event_is_never_appended(tmp_path: Path) 
         workspace,
         host_environment={"EVENT_CREDENTIAL": private_value},
     )
-    session = executor.execute(plan, command, project_state())
+    session = executor.execute(plan, command, project_state(allowed_plan=plan))
     result = NormalizationResult(
         events=(
             NormalizedEvent(
@@ -878,7 +881,7 @@ def test_exact_credential_in_raw_adapter_artifact_is_never_retained(tmp_path: Pa
         workspace,
         host_environment={"RAW_CREDENTIAL": private_value},
     )
-    session = executor.execute(plan, command, project_state())
+    session = executor.execute(plan, command, project_state(allowed_plan=plan))
     with pytest.raises(AttributeError):
         session._scrubber.private_bytes = ()
     with pytest.raises(AttributeError):
@@ -918,7 +921,7 @@ def test_omitted_credential_file_is_removed_and_prevents_successful_seal(
     session = LocalRunExecutor(
         workspace,
         host_environment={"OMITTED_CREDENTIAL": private_value},
-    ).execute(plan, command, project_state())
+    ).execute(plan, command, project_state(allowed_plan=plan))
     omitted = session.attempt_directory / "omitted-raw.txt"
     omitted.write_text(private_value, encoding="utf-8")
     with pytest.raises(CredentialExposureError, match="refused and removed"):
@@ -943,7 +946,7 @@ def test_credential_bearing_fifo_is_physically_removed_on_refusal(tmp_path: Path
     session = LocalRunExecutor(
         workspace,
         host_environment={"FIFO_CREDENTIAL": private_value},
-    ).execute(plan, command, project_state())
+    ).execute(plan, command, project_state(allowed_plan=plan))
     fifo = session.attempt_directory / private_value
     os.mkfifo(fifo)
     with pytest.raises(CredentialExposureError, match="refused and removed"):
@@ -962,7 +965,7 @@ def test_safe_unowned_file_must_be_claimed_by_normalization(tmp_path: Path) -> N
     )
     plan = bind_plan(typed_plan(), command)
     workspace = ArtifactWorkspace.open(tmp_path / "artifacts", create=True)
-    session = LocalRunExecutor(workspace).execute(plan, command, project_state())
+    session = LocalRunExecutor(workspace).execute(plan, command, project_state(allowed_plan=plan))
     raw_path = session.attempt_directory / "safe-raw.txt"
     raw_path.write_text("safe observed value", encoding="utf-8")
     with pytest.raises(LocalExecutionError, match="must be declared"):
@@ -1001,7 +1004,7 @@ def test_budget_failure_session_preserves_adapter_owned_raw_output(tmp_path: Pat
     )
     plan = bind_plan(initial_plan, command)
     with pytest.raises(LocalExecutionError, match="failure session") as captured:
-        LocalRunExecutor(workspace).execute(plan, command, project_state())
+        LocalRunExecutor(workspace).execute(plan, command, project_state(allowed_plan=plan))
 
     session = captured.value.session
     assert session is not None
@@ -1033,7 +1036,7 @@ def test_wall_budget_failure_outcome_retains_observed_usage(tmp_path: Path) -> N
     plan = bind_plan(typed_plan(max_wall_seconds=1), command)
     workspace = ArtifactWorkspace.open(tmp_path / "artifacts", create=True)
     with pytest.raises(LocalExecutionError, match="hard budget") as captured:
-        LocalRunExecutor(workspace).execute(plan, command, project_state())
+        LocalRunExecutor(workspace).execute(plan, command, project_state(allowed_plan=plan))
 
     session = captured.value.session
     assert session is not None
@@ -1057,7 +1060,7 @@ def test_invalid_adapter_artifact_path_does_not_echo_a_credential(tmp_path: Path
     session = LocalRunExecutor(
         workspace,
         host_environment={"PATH_CREDENTIAL": private_value},
-    ).execute(plan, command, project_state())
+    ).execute(plan, command, project_state(allowed_plan=plan))
     invalid = session.attempt_directory / private_value / "missing.json"
     with pytest.raises(CredentialExposureError) as captured:
         session.apply_normalization(

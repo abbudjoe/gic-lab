@@ -2,6 +2,8 @@ schema_version: 0.1.0
 experiment_id: EXP-0001
 run_id: RUN-EXP0001-PILOT-0001-REACTIVE
 profile: pilot
+profile_plan_id: PLAN-EXP0001-PILOT
+profile_sha256: 1e0dbd6bedbc4802a1a57d8896f828511b7c15f9bc8251696f79f48d379267b3
 condition: SIRA-REACTIVE
 attempt: 1
 seed: 42

@@ -4,6 +4,7 @@ from copy import deepcopy
 
 from harness_test_support import valid_plan_data
 
+from giclab.harness.plan import load_run_plan, run_plan_document
 from giclab.registry import load_json
 from giclab.validation import ROOT, validate_instance
 
@@ -59,8 +60,37 @@ def test_run_plan_schema_accepts_source_neutral_plan() -> None:
 
 
 def test_committed_synthetic_dry_run_fixture_is_valid() -> None:
-    fixture = load_json(ROOT / "tests/fixtures/harness/synthetic-unauthorized-run-plan.json")
+    path = ROOT / "tests/fixtures/harness/synthetic-unauthorized-run-plan.json"
+    fixture = load_json(path)
+    assert "profile_plan_id" not in fixture
+    assert "profile_sha256" not in fixture
     assert validate_instance(fixture, ROOT / "schemas/run-plan.schema.json") == []
+    plan = load_run_plan(path, schema_root=ROOT)
+    assert plan.profile_plan_id is None
+    assert plan.profile_sha256 is None
+    assert run_plan_document(plan) == fixture
+
+
+def test_legacy_authorized_v01_plan_remains_schema_readable_without_parent_binding() -> None:
+    data = valid_plan_data(
+        authorized=True,
+        profile_plan_id=None,
+        profile_sha256_value=None,
+    )
+    assert validate_instance(data, ROOT / "schemas/run-plan.schema.json") == []
+
+
+def test_committed_legacy_v01_authorized_plan_and_profile_remain_readable() -> None:
+    plan_path = ROOT / "tests/fixtures/harness/legacy-authorized-run-plan-v0.1.json"
+    plan_data = load_json(plan_path)
+    assert validate_instance(plan_data, ROOT / "schemas/run-plan.schema.json") == []
+    plan = load_run_plan(plan_path, schema_root=ROOT)
+    assert plan.execution.authorization.authorized
+    assert plan.profile_plan_id is None
+    assert plan.profile_sha256 is None
+
+    profile = load_json(ROOT / "tests/fixtures/harness/legacy-run-profile-v0.1.json")
+    assert validate_instance(profile, ROOT / "schemas/run-profile.schema.json") == []
 
 
 def test_run_plan_schema_rejects_authorized_plan_without_reference() -> None:

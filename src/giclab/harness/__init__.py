@@ -48,8 +48,15 @@ from .models import (
     input_tree_binding,
     input_tree_sha256,
 )
-from .plan import RunPlanError, load_run_plan, run_plan_document, validate_run_plan_data
+from .plan import (
+    RunPlanError,
+    load_run_plan,
+    run_plan_authorization_sha256,
+    run_plan_document,
+    validate_run_plan_data,
+)
 from .policy import (
+    AuthorizedRunProfile,
     ExecutionDisallowed,
     ProjectExecutionState,
     execution_blockers,
@@ -75,6 +82,7 @@ __all__ = [
     "ArtifactRecord",
     "ArtifactRecordWriter",
     "ArtifactWorkspace",
+    "AuthorizedRunProfile",
     "BudgetContractChanged",
     "BudgetExceeded",
     "BudgetGuard",
@@ -131,6 +139,7 @@ __all__ = [
     "regulation_decision_from_mapping",
     "regulation_decision_payload",
     "render_command",
+    "run_plan_authorization_sha256",
     "run_plan_document",
     "sha256_file",
     "validate_artifact_directory",

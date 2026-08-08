@@ -360,17 +360,17 @@ def test_bound_git_head_is_rechecked_even_when_tree_bytes_are_unchanged(
     plan = bind_plan(run_plan_from_mapping(valid_plan_data()), command)
     workspace = ArtifactWorkspace.open(tmp_path / "artifacts", create=True)
     executor = LocalRunExecutor(workspace)
-    assert executor.dry_run(plan, command, project_state()).execution_allowed
+    assert executor.dry_run(plan, command, project_state(allowed_plan=plan)).execution_allowed
 
     subprocess.run(
         ("git", "-C", str(root), "commit", "--allow-empty", "-qm", "identity drift"),
         check=True,
     )
-    report = executor.dry_run(plan, command, project_state())
+    report = executor.dry_run(plan, command, project_state(allowed_plan=plan))
     assert not report.execution_allowed
     assert any("bound Git checkout commit changed" in item for item in report.blockers)
     with pytest.raises(ExecutionDisallowed, match="bound Git checkout commit changed"):
-        executor.execute(plan, command, project_state())
+        executor.execute(plan, command, project_state(allowed_plan=plan))
     assert list(workspace.root.iterdir()) == []
 
 
@@ -387,10 +387,18 @@ def test_bound_source_tree_is_rechecked_before_any_execution(tmp_path: Path) -> 
     (source_root / "injected.py").write_text("drift = True\n", encoding="utf-8")
 
     executor = LocalRunExecutor(workspace)
-    report = executor.dry_run(plan, command, project_state(prototype=True, paid=True))
+    report = executor.dry_run(
+        plan,
+        command,
+        project_state(prototype=True, paid=True, allowed_plan=plan),
+    )
     assert any("bound input tree content changed" in item for item in report.blockers)
     with pytest.raises(ExecutionDisallowed, match="bound input tree content changed"):
-        executor.execute(plan, command, project_state(prototype=True, paid=True))
+        executor.execute(
+            plan,
+            command,
+            project_state(prototype=True, paid=True, allowed_plan=plan),
+        )
     assert not marker.exists()
     assert list(workspace.root.iterdir()) == []
 
@@ -646,7 +654,7 @@ def test_unbounded_resources_and_unowned_logs_block_even_authorized_plan(
     )
     plan = bind_plan(initial_plan, command)
     executor = LocalRunExecutor(workspace)
-    state = project_state(prototype=True, paid=True)
+    state = project_state(prototype=True, paid=True, allowed_plan=plan)
 
     report = executor.dry_run(plan, command, state)
     assert not report.execution_allowed

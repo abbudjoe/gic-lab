@@ -2,6 +2,8 @@ schema_version: 0.1.0
 experiment_id: EXP-0001
 run_id: RUN-EXP0001-SMOKE-SIMULATIVE
 profile: smoke
+profile_plan_id: PLAN-EXP0001-SMOKE
+profile_sha256: ab276b9e49256d49f143e252eddf6fe5c447d6f9c11300745b450fb7f1d0e425
 condition: SIRA-SIMULATIVE
 attempt: 1
 seed: 42

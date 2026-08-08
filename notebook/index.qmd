@@ -4,11 +4,13 @@ subtitle: "Open, controlled research on learned agent architecture"
 ---
 
 ::: {.callout-note}
-## Phase 0.75 is active
+## Phase 1 is active; execution is disabled
 
-Phase 0.5 reading reconciliation is complete. Phase 0.75 is bounded to static upstream
-audits, non-executing harness implementation, and protocol lock. No model, API,
-prototype, benchmark, training, cloud, or paid-compute run is authorized.
+Phase 0.75 is complete. Phase 1 is open for sequential artifact-execution work, but
+paid compute, prototype execution, benchmark execution, training, and cloud mutation
+all remain disabled. `EXP-0001` is planned and not run. `PLAN-EXP0001-SMOKE` still
+requires one exact current-turn human authorization; its USD 4.00 proposal grants no
+authority and is not authorization.
 :::
 
 GIC Lab studies a narrower and more falsifiable question than “can we build a GIC agent?”:
@@ -17,15 +19,16 @@ GIC Lab studies a narrower and more falsifiable question than “can we build a 
 
 The program begins with the authors' released SiRA and SR²AM references, then isolates one mechanism at a time under declared resource budgets. Negative and inconclusive evidence is a valid outcome.
 
-## Phase 0.75 boundary
+## Phase 1 boundary
 
-- Keep completed plans separate from the one authoritative active plan.
-- Prepare source-grounded static audits of pinned SiRA and SR²AM revisions.
-- Build an evidence-preserving harness whose execution defaults to unauthorized.
-- Preserve source-grounded regulation-decision traces for planned/deferred RQ-H2K
-  without adding a condition, learned kernel, or later phase.
-- Lock a draft first protocol without registering or running it during control-plane work.
-- Preserve unresolved architecture questions for later architecture work without using
-  them to block the first SiRA artifact execution.
+- Execute work packages sequentially and only under their exact current-turn human
+  authorization; analysis tasks do not inherit execution authority.
+- Keep the first smoke to one matched SiRA reactive/simulative pair and prohibit
+  scientific interpretation.
+- Preserve raw evidence, version/hash identity, budgets, attempts, and verified cleanup.
+- Record the fixed SiRA mode as `experiment_assignment`, never learned regulation.
+- Treat any planned/deferred RQ-H2K trace-sufficiency output as infrastructure evidence
+  only; it adds no experiment, condition, training path, learned kernel, or later phase.
+- Keep the pilot, SR²AM cloud runs, benchmark execution, and training unauthorized.
 
 See [project status](generated/status.qmd), the [claim map](research/claims.qmd), and the generated [experiment registry](generated/experiments.qmd).

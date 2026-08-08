@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -177,6 +179,8 @@ def run_plan_from_mapping(data: Mapping[str, Any]) -> RunPlan:
     return RunPlan(
         identity=identity,
         profile=RunProfile(_string(data.get("profile"), "profile")),
+        profile_plan_id=_optional_string(data.get("profile_plan_id"), "profile_plan_id"),
+        profile_sha256=_optional_string(data.get("profile_sha256"), "profile_sha256"),
         interpretation_allowed=_boolean(
             data.get("interpretation_allowed"), "interpretation_allowed"
         ),
@@ -233,6 +237,9 @@ def run_plan_document(plan: RunPlan) -> dict[str, Any]:
             "retain_raw": plan.artifacts.retain_raw,
         },
     }
+    if plan.profile_plan_id is not None and plan.profile_sha256 is not None:
+        document["profile_plan_id"] = plan.profile_plan_id
+        document["profile_sha256"] = plan.profile_sha256
     if plan.task is not None and plan.pairing is not None:
         document["task"] = {
             "task_id": plan.task.task_id,
@@ -248,6 +255,19 @@ def run_plan_document(plan: RunPlan) -> dict[str, Any]:
             "order_index": plan.pairing.order_index,
         }
     return document
+
+
+def run_plan_authorization_sha256(plan: RunPlan) -> str:
+    """Hash every child-plan field authorized by a parent, excluding its parent hash.
+
+    Excluding ``profile_sha256`` avoids a circular digest: the parent profile binds this
+    child fingerprint, while the child independently binds the complete parent file.
+    """
+
+    document = run_plan_document(plan)
+    document.pop("profile_sha256", None)
+    encoded = json.dumps(document, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(encoded).hexdigest()
 
 
 def validate_run_plan_data(

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import re
 import subprocess
 import sys
@@ -16,6 +17,11 @@ from urllib.parse import unquote, urlparse
 import yaml
 from jsonschema import Draft202012Validator, FormatChecker
 
+from giclab.harness.policy import ExecutionDisallowed, load_project_execution_state
+from giclab.harness.task_source import (
+    dataset_slice_task_source,
+    open_query_task_source_matches,
+)
 from giclab.plans import PlanContractError, discover_plan_paths, load_plan_header
 from giclab.registry import (
     DuplicateKeyError,
@@ -176,7 +182,14 @@ def validate_plan_lifecycle(root: Path = ROOT) -> list[str]:
     plans_root = root / "docs/exec-plans"
     active_root = plans_root / "active"
     completed_root = plans_root / "completed"
-    for path in discover_plan_paths(root):
+    plan_paths = discover_plan_paths(root)
+    active_paths = tuple(path for path in plan_paths if path.parent == active_root)
+    if len(active_paths) != 1:
+        errors.append(
+            "docs/exec-plans/active: exactly one active execution plan is required; "
+            f"found {len(active_paths)}"
+        )
+    for path in plan_paths:
         try:
             plan = load_plan_header(path)
         except (OSError, PlanContractError) as exc:
@@ -189,6 +202,8 @@ def validate_plan_lifecycle(root: Path = ROOT) -> list[str]:
                 f"{path.relative_to(root)}: successful plan must be under "
                 "docs/exec-plans/completed/"
             )
+        elif path.parent == completed_root and plan.status != "successful":
+            errors.append(f"{path.relative_to(root)}: completed plan must be successful")
     return errors
 
 
@@ -234,6 +249,33 @@ def validate_project_state(root: Path = ROOT) -> list[str]:
     for key in authorization_fields:
         if not isinstance(state.get(key), bool):
             errors.append(f"docs/PROJECT_STATE.yaml: {key} must be a boolean")
+    if (
+        phase_number is not None
+        and phase_number.is_finite()
+        and phase_number >= 1
+        and "authorized_run_profile" not in state
+    ):
+        errors.append(
+            "docs/PROJECT_STATE.yaml: Phase 1+ requires an explicit authorized_run_profile binding"
+        )
+    try:
+        execution_state = load_project_execution_state(root, schema_root=root)
+    except ExecutionDisallowed as exc:
+        errors.append(f"docs/PROJECT_STATE.yaml: {exc}")
+        execution_state = None
+    if (
+        execution_state is not None
+        and (
+            execution_state.prototype_execution_allowed
+            or execution_state.benchmark_execution_allowed
+            or execution_state.training_allowed
+        )
+        and execution_state.authorized_run_profile is None
+    ):
+        errors.append(
+            "docs/PROJECT_STATE.yaml: executable workload permission requires an exact "
+            "authorized_run_profile binding"
+        )
     if phase_number is not None and phase_number.is_finite() and phase_number < 1:
         for key in authorization_fields:
             if state.get(key) is not False:
@@ -373,6 +415,27 @@ def validate_experiment_registry(root: Path = ROOT) -> list[str]:
     return errors
 
 
+def validate_run_profile_readiness(profile: Mapping[str, Any]) -> list[str]:
+    """Enforce current authorization readiness without rewriting v0.1 record syntax."""
+
+    errors: list[str] = []
+    execution = profile.get("execution")
+    readiness = profile.get("readiness")
+    if not isinstance(execution, dict) or not isinstance(readiness, dict):
+        return errors
+    eligibility = readiness.get("execution_eligibility")
+    blockers = readiness.get("unresolved_execution_blockers")
+    if eligibility == "eligible-after-authorization" and blockers != []:
+        errors.append("execution-eligible profile must have no unresolved blockers")
+    if eligibility != "eligible-after-authorization" and (
+        not isinstance(blockers, list) or not blockers
+    ):
+        errors.append("execution-ineligible profile must retain an unresolved blocker")
+    if execution.get("authorized") is True and eligibility != "eligible-after-authorization":
+        errors.append("authorized profile must be execution-eligible")
+    return errors
+
+
 def validate_experiment_run_profiles(root: Path = ROOT) -> list[str]:
     """Validate registry-declared paired profiles and their bound condition plans."""
 
@@ -407,11 +470,20 @@ def validate_experiment_run_profiles(root: Path = ROOT) -> list[str]:
                 errors.append(f"{experiment_id}: missing run profile {profile_relative}")
                 continue
             profile = load_yaml(profile_path)
+            profile_sha256 = hashlib.sha256(profile_path.read_bytes()).hexdigest()
             label = profile_path.relative_to(root)
             errors.extend(
                 f"{label}: {error}"
                 for error in validate_instance(profile, root / "schemas/run-profile.schema.json")
             )
+            errors.extend(f"{label}: {error}" for error in validate_run_profile_readiness(profile))
+            readiness = profile.get("readiness")
+            if (
+                isinstance(readiness, dict)
+                and readiness.get("execution_eligibility")
+                == "blocked-pending-later-phase-integration"
+            ):
+                errors.append(f"{label}: current profile must use a phase-independent blocker")
             profile_name = profile.get("profile")
             if profile.get("experiment_id") != experiment_id:
                 errors.append(f"{label}: experiment ID mismatch")
@@ -452,6 +524,10 @@ def validate_experiment_run_profiles(root: Path = ROOT) -> list[str]:
                     errors.append(f"{condition_label}: experiment ID mismatch")
                 if condition.get("profile") != profile_name:
                     errors.append(f"{condition_label}: profile mismatch")
+                if condition.get("profile_plan_id") != profile.get("plan_id"):
+                    errors.append(f"{condition_label}: parent profile plan ID mismatch")
+                if condition.get("profile_sha256") != profile_sha256:
+                    errors.append(f"{condition_label}: parent profile hash mismatch")
                 task = condition.get("task")
                 pairing = condition.get("pairing")
                 if not isinstance(task, dict) or not isinstance(pairing, dict):
@@ -564,7 +640,14 @@ def validate_experiment_run_profiles(root: Path = ROOT) -> list[str]:
                             errors.append(f"{label}: pair identity/order mismatch")
                     if len(bound_records) == 2:
                         left, right = bound_records
-                        for key in ("task", "budget", "seed", "attempt"):
+                        for key in (
+                            "profile_plan_id",
+                            "profile_sha256",
+                            "task",
+                            "budget",
+                            "seed",
+                            "attempt",
+                        ):
                             if left.get(key) != right.get(key):
                                 errors.append(f"{label}: matched pair drifts on {key}")
                         left_sources = left.get("sources")
@@ -599,14 +682,29 @@ def validate_experiment_run_profiles(root: Path = ROOT) -> list[str]:
                         task_source = pair.get("task_source")
                         if isinstance(task, dict) and isinstance(task_source, str):
                             if task.get("source_kind") == "dataset-slice":
-                                expected_source = (
-                                    f"{task.get('dataset_id')}[{task.get('start_idx')}:"
-                                    f"{task.get('end_idx')}]"
+                                dataset_id = task.get("dataset_id")
+                                start_idx = task.get("start_idx")
+                                end_idx = task.get("end_idx")
+                                if not (
+                                    isinstance(dataset_id, str)
+                                    and isinstance(start_idx, int)
+                                    and isinstance(end_idx, int)
+                                ):
+                                    errors.append(f"{label}: pair task slice identity is invalid")
+                                    continue
+                                expected_source = dataset_slice_task_source(
+                                    dataset_id,
+                                    start_idx,
+                                    end_idx,
                                 )
                                 if task_source != expected_source:
                                     errors.append(f"{label}: pair task source/slice mismatch")
-                            elif f"query={task.get('query')}" not in task_source:
-                                errors.append(f"{label}: pair task source/query mismatch")
+                            else:
+                                query = task.get("query")
+                                if not isinstance(query, str) or not open_query_task_source_matches(
+                                    task_source, query
+                                ):
+                                    errors.append(f"{label}: pair task source/query mismatch")
             if bound_paths != set(condition_records):
                 errors.append(f"{label}: pair bindings/condition plan paths are not bijective")
             profile_budget = profile.get("budget")
@@ -686,6 +784,12 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
             "authorization_reference": None,
         }:
             errors.append(f"EXP-0001 {name}: current authorization must remain false")
+        expected_readiness = {
+            "smoke": "eligible-after-authorization",
+            "pilot": "blocked-pending-prerequisites",
+        }[name]
+        if profile.get("readiness", {}).get("execution_eligibility") != expected_readiness:
+            errors.append(f"EXP-0001 {name}: execution eligibility drift")
     expected_tasks = {
         "smoke": [
             (

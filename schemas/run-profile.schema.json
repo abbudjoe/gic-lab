@@ -36,7 +36,10 @@
       "required": ["authorized", "authorization_reference"],
       "properties": {
         "authorized": {"type": "boolean"},
-        "authorization_reference": {"type": ["string", "null"], "minLength": 1}
+        "authorization_reference": {
+          "type": ["string", "null"],
+          "minLength": 1
+        }
       },
       "allOf": [
         {
@@ -198,7 +201,11 @@
       ],
       "properties": {
         "execution_eligibility": {
-          "enum": ["eligible-after-authorization", "blocked-pending-later-phase-integration"]
+          "enum": [
+            "eligible-after-authorization",
+            "blocked-pending-later-phase-integration",
+            "blocked-pending-prerequisites"
+          ]
         },
         "approval_changes_required": {
           "type": "array",
@@ -207,6 +214,11 @@
           "items": {"type": "string", "minLength": 1}
         },
         "unresolved_execution_blockers": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 8}
+        },
+        "pre_execution_requirements": {
           "type": "array",
           "uniqueItems": true,
           "items": {"type": "string", "minLength": 8}

@@ -193,7 +193,9 @@ def test_artifact_validation_rejects_completed_budget_totals_above_retained_plan
     )
     plan = bind_plan(typed_plan(), command)
     workspace = ArtifactWorkspace.open(tmp_path / "artifacts", create=True)
-    outcome = LocalRunExecutor(workspace).execute(plan, command, project_state()).seal()
+    outcome = (
+        LocalRunExecutor(workspace).execute(plan, command, project_state(allowed_plan=plan)).seal()
+    )
     lines = outcome.events_path.read_text(encoding="utf-8").splitlines()
     documents = [json.loads(line) for line in lines]
     budget = next(item for item in documents if item["event_type"] == "budget_update")
@@ -221,7 +223,7 @@ def test_artifact_validation_requires_projected_nonwall_accounting_evidence(
     )
     plan = bind_plan(typed_plan(max_tool_calls=1), command)
     workspace = ArtifactWorkspace.open(tmp_path / "artifacts", create=True)
-    session = LocalRunExecutor(workspace).execute(plan, command, project_state())
+    session = LocalRunExecutor(workspace).execute(plan, command, project_state(allowed_plan=plan))
     session.apply_normalization(
         NormalizationResult(
             events=(),
@@ -257,7 +259,7 @@ def _zero_accounted_attempt(tmp_path: Path) -> Path:
     )
     plan = bind_plan(typed_plan(), command)
     workspace = ArtifactWorkspace.open(tmp_path / "artifacts", create=True)
-    session = LocalRunExecutor(workspace).execute(plan, command, project_state())
+    session = LocalRunExecutor(workspace).execute(plan, command, project_state(allowed_plan=plan))
     session.apply_normalization(
         NormalizationResult(
             events=(),

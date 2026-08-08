@@ -24,10 +24,16 @@ entries:
     revision: 5d72255092ac2ec006c2f9813029220aff79865e
     commit: null
     sha256: null
+    size_bytes: 16398028091
     license: Apache-2.0
-    provenance: Official sailing-lab Hugging Face model repository linked by SR2AM.
+    provenance: >-
+      Official sailing-lab Hugging Face model repository linked by the pinned SR2AM
+      source. Revision identity, model metadata, four weight-shard sizes, and their
+      published LFS SHA-256 values were inspected without downloading checkpoint
+      shards.
     storage_uri: https://huggingface.co/sailing-lab/SR2AM-v0.1-8B/tree/5d72255092ac2ec006c2f9813029220aff79865e
-    retrieved_at: "2026-07-15"
+    canonical_uri: https://huggingface.co/sailing-lab/SR2AM-v0.1-8B
+    retrieved_at: "2026-08-07"
     verification_status: metadata-verified
     local_presence: false
   - id: MODEL-SR2AM-V1.0-30B
