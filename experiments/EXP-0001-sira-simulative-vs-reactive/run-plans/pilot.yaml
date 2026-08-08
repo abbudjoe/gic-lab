@@ -62,8 +62,10 @@ condition_plan_paths:
   - experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-task-0001-simulative.yaml
   - experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-task-0001-reactive.yaml
 readiness:
-  execution_eligibility: blocked-pending-later-phase-integration
+  execution_eligibility: blocked-pending-prerequisites
   approval_changes_required:
+    - docs/PROJECT_STATE.yaml.paid_compute_allowed
+    - docs/PROJECT_STATE.yaml.prototype_execution_allowed
     - execution.authorized
     - execution.authorization_reference
     - budget.max_cost_usd
@@ -71,6 +73,7 @@ readiness:
     - condition_plans[*].budget.max_cost_usd
   unresolved_execution_blockers:
     - Smoke integration and evidence review must succeed first.
+  pre_execution_requirements:
     - Immutable snapshot binding and finite command-level resource enforcement are not integrated.
     - Source-log ownership, browser cleanup, and complete environment identity are not integrated.
     - FanOut spaCy and en_core_web_sm evaluator dependencies are not immutably pinned.

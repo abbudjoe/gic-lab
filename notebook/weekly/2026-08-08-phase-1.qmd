@@ -1,0 +1,31 @@
+---
+title: "2026-08-08 — Phase 0.75 closed; Phase 1 opened"
+---
+
+## State transition
+
+Phase 0.75 completed its pinned upstream audits, evidence-preserving harness, SiRA
+adapter, regulation-decision provenance retrofit, and locked EXP-0001 protocol. The
+completed ledger passed independent spec-conformance review and the repository gate.
+Phase 1 is now the one active plan.
+
+## Scientific boundary
+
+EXP-0001 remains exactly SiRA simulative versus matched reactive behavior. It has no
+harness-to-kernel condition or internalization claim, and no run has occurred. The
+planned/deferred RQ-H2K track may consume trace-completeness and lineage evidence only;
+that infrastructure record cannot affect EXP-0001 validity, metrics, or outcome.
+
+## Execution boundary
+
+Paid compute, prototype execution, benchmark execution, training, and cloud mutation
+remain false. The only next eligible profile is `PLAN-EXP0001-SMOKE`, a one-pair
+reactive/simulative infrastructure smoke with interpretation disabled. Its proposed
+USD 4.00 cap is not authorization.
+
+## Next gate
+
+A later current-turn human instruction must name the exact smoke plan, OpenAI and the
+`gpt-4o-2024-11-20` substitution, maximum API cost, maximum wall time, and required
+process/browser cleanup. T07 must then pass identity, command-diff, finite-budget,
+artifact-ownership, secret, and cleanup preflight before any live action.

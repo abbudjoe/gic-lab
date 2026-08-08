@@ -46,7 +46,7 @@ or the live web. The model and browser workload therefore remain nondeterministi
 The upstream source requested the mutable alias `gpt-4o` and did not record the exact
 historical serving revision. The proposed provider is OpenAI via its standard API, and
 the proposed immutable substitute is `gpt-4o-2024-11-20`. The upstream command surface
-does not currently accept that snapshot unchanged, so later integration must bind the
+does not currently accept that snapshot unchanged, so T07 preflight must bind the exact
 snapshot before execution. Because the historical serving revision is unknown, any
 future evidence is a **directional reproduction under a declared model substitution**,
 not an exact artifact execution or unqualified reproduction.
@@ -137,9 +137,10 @@ The proposed caps are derived in [`pricing.yaml`](pricing.yaml) from current off
 OpenAI rates using the conservative assumption that every permitted token is charged
 at the more expensive output-token rate.
 
-A human may later approve the smoke by changing only authorization fields and its exact
-spend cap, but approval alone does not make it executable. T06 or a later approved
-integration must first close the already-audited blockers: immutable snapshot binding,
-finite command-level token/cost enforcement, source-log ownership, browser cleanup,
-and the required environment/browser pins. Pilot scoring additionally requires an
-immutable spaCy and `en_core_web_sm` evaluator dependency contract.
+A current-turn human instruction may later authorize the smoke through the exact
+decision fields in the Phase 1 readiness handoff, but authorization alone does not make
+it executable. T07 must then satisfy its deterministic pre-execution requirements:
+immutable snapshot binding, finite command-level token/cost enforcement, source-log
+ownership, browser cleanup, and the required environment/browser pins. These are T07
+preflight requirements, not unresolved integration blockers. Pilot scoring additionally
+requires an immutable spaCy and `en_core_web_sm` evaluator dependency contract.

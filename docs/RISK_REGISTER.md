@@ -8,6 +8,7 @@ authorization.
 |---|---|---|---|
 | Phase drift | Work runs under the wrong authority. | Project-state validation and one authoritative plan. | T00/T06 |
 | Successful plans remain active | Authority becomes ambiguous. | Completed-plan placement and lifecycle/path validation. | T00 |
+| Authorization eligibility is mistaken for execution readiness | A proposed profile bypasses materialization, identity, or cleanup gates. | Keep authorization changes, unresolved blockers, and typed pre-execution requirements separate; an eligible profile must have no unresolved integration blocker and T07 must complete every preflight before launch. | T06/T07 |
 | Upstream commit drift | Artifact evidence is not reproducible. | Pin commits and verify checkout identity. | T01/T02 |
 | Provider/model alias drift | Treatment changes over time. | Pin an immutable provider revision or declare the limitation/substitution. | T01/T05 |
 | Reactive/simulative commands differ elsewhere | The causal comparison is invalid. | Machine-compare resolved configurations and commands. | T04/T05 |

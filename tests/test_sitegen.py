@@ -3,18 +3,18 @@ from __future__ import annotations
 from giclab.sitegen import ROOT, build_experiments, build_falsification, build_status
 
 
-def test_status_is_generated_from_zero_use_phase_state() -> None:
+def test_status_is_generated_from_phase_one_zero_authority_state() -> None:
     page = build_status(ROOT)
     prose = " ".join(page.split())
     assert "`docs/exec-plans/`" in page
-    assert "Phase 0.75 is the active control-plane phase" in page
+    assert "Phase 1 is the active control-plane phase" in page
     assert "| 0.5 | GIC Reading Reconciliation |" in page
-    assert "Phase 0.5 reading reconciliation is complete" in prose
+    assert "| 0.75 | Upstream Audit, Harness, and Protocol Lock |" in page
     assert "Accelerator hours | 0" in page
     assert "Prototype runs | 0" in page
     assert "Paid compute allowed | `false`" in page
     assert "Cloud mutation allowed | `false`" in page
-    assert "No prototype result has been reproduced" in prose
+    assert "proposed budget is not execution authorization" in prose
 
 
 def test_registered_experiment_is_published_and_template_is_not() -> None:

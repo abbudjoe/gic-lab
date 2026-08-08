@@ -30,6 +30,7 @@ SUPPORTED_HARNESS_EVENT_SCHEMA_VERSIONS = frozenset(
 
 _EXPERIMENT_ID = re.compile(r"^EXP-[0-9]{4}$")
 _RUN_ID = re.compile(r"^RUN-[A-Z0-9][A-Z0-9._-]{5,127}$")
+_PLAN_ID = re.compile(r"^PLAN-[A-Z0-9][A-Z0-9._-]{5,127}$")
 _COMMIT = re.compile(r"^[a-f0-9]{40}$")
 _SHA256 = re.compile(r"^[a-f0-9]{64}$")
 _AUTHORIZATION_REFERENCE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{2,127}$")
@@ -731,8 +732,16 @@ class RunPlan:
     artifacts: ArtifactPolicy
     task: RunTask | None = None
     pairing: PairingIdentity | None = None
+    profile_plan_id: str | None = None
+    profile_sha256: str | None = None
 
     def __post_init__(self) -> None:
+        if self.profile_plan_id is not None and _PLAN_ID.fullmatch(self.profile_plan_id) is None:
+            raise ValueError("profile_plan_id must be a canonical PLAN identifier")
+        if self.profile_sha256 is not None and _SHA256.fullmatch(self.profile_sha256) is None:
+            raise ValueError("profile_sha256 must be a lowercase SHA-256 digest")
+        if (self.profile_plan_id is None) != (self.profile_sha256 is None):
+            raise ValueError("parent profile ID and hash must be present together")
         if type(self.interpretation_allowed) is not bool:
             raise ValueError("interpretation_allowed must be a boolean")
         if self.profile is RunProfile.SMOKE and self.interpretation_allowed:

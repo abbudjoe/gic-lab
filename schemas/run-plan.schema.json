@@ -26,6 +26,11 @@
       "pattern": "^RUN-[A-Z0-9][A-Z0-9._-]{5,127}$"
     },
     "profile": {"enum": ["smoke", "pilot", "confirmatory"]},
+    "profile_plan_id": {
+      "type": "string",
+      "pattern": "^PLAN-[A-Z0-9][A-Z0-9._-]{5,127}$"
+    },
+    "profile_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     "condition": {"type": "string", "minLength": 1},
     "attempt": {"type": "integer", "minimum": 1},
     "seed": {"type": ["integer", "null"], "minimum": 0},
@@ -154,6 +159,10 @@
         "order_index": {"enum": [1, 2]}
       }
     }
+  },
+  "dependentRequired": {
+    "profile_plan_id": ["profile_sha256"],
+    "profile_sha256": ["profile_plan_id"]
   },
   "$defs": {
     "commit-or-unknown": {

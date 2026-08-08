@@ -1,6 +1,8 @@
 # Research Questions
 
-These questions are a provisional research map, not approved Phase 1 hypotheses.
+These questions are a provisional research map. Only the locked EXP-0001 SiRA
+simulative-versus-reactive hypothesis is an approved Phase 1 exploratory protocol;
+the remaining questions are not activated by the phase transition.
 
 ## Baseline mechanism
 
@@ -30,4 +32,10 @@ These questions are a provisional research map, not approved Phase 1 hypotheses.
 
 ## Phase gates
 
-Phase 0 answers no empirical research question. Phase 0.5 should reconcile primary sources and the human reading. A later Phase 1 protocol must select a small set of primary and secondary metrics, define matched budgets, declare exploratory versus confirmatory status, and obtain explicit approval before model or benchmark execution. RQ-H2K remains deferred and is not activated by Phase 1 trace capture.
+Phase 0 and Phase 0.5 answered no empirical research question. Primary-source
+reconciliation and the EXP-0001 protocol lock are complete. Phase 1 is active, but all
+execution permissions remain false: the next gate is an explicit authorization for
+only `PLAN-EXP0001-SMOKE`, followed by deterministic preflight. EXP-0001 already locks
+its primary/secondary metrics, matched budgets, exploratory status, and paired
+simulative-versus-reactive conditions. RQ-H2K remains planned/deferred and is not
+activated by Phase 1 trace capture.

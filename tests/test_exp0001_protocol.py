@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from copy import deepcopy
 from decimal import Decimal
 from pathlib import Path
@@ -13,6 +14,7 @@ from giclab.validation import (
     validate_exp0001_contract,
     validate_experiment_run_profiles,
     validate_instance,
+    validate_run_profile_readiness,
 )
 
 EXP_ROOT = ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive"
@@ -91,6 +93,11 @@ def test_smoke_and_pilot_profiles_and_condition_plans_validate() -> None:
     assert "effect size or power" in pilot["sample_rationale"]
     assert smoke["execution"]["authorized"] is False
     assert pilot["execution"]["authorized"] is False
+    assert smoke["readiness"]["execution_eligibility"] == "eligible-after-authorization"
+    assert smoke["readiness"]["unresolved_execution_blockers"] == []
+    assert smoke["readiness"]["pre_execution_requirements"]
+    assert pilot["readiness"]["execution_eligibility"] == "blocked-pending-prerequisites"
+    assert pilot["readiness"]["unresolved_execution_blockers"]
     assert set(smoke["sampling"]["conditions"]) == CONDITIONS
     assert set(pilot["sampling"]["conditions"]) == CONDITIONS
 
@@ -122,6 +129,31 @@ def test_run_profile_schema_allows_known_revision_confirmatory_profiles() -> Non
     profile["readiness"]["execution_eligibility"] = "eligible-after-authorization"
     profile["readiness"]["unresolved_execution_blockers"] = []
     assert validate_instance(profile, ROOT / "schemas/run-profile.schema.json") == []
+
+
+def test_v01_profile_schema_remains_readable_while_current_readiness_policy_is_strict() -> None:
+    schema = ROOT / "schemas/run-profile.schema.json"
+    smoke = load_yaml(EXP_ROOT / "run-plans/smoke.yaml")
+    blocked_eligible = deepcopy(smoke)
+    blocked_eligible["readiness"]["unresolved_execution_blockers"] = [
+        "A later integration decision is still unresolved."
+    ]
+    assert validate_instance(blocked_eligible, schema) == []
+    assert validate_run_profile_readiness(blocked_eligible)
+
+    pilot = load_yaml(EXP_ROOT / "run-plans/pilot.yaml")
+    unblocked_but_ineligible = deepcopy(pilot)
+    unblocked_but_ineligible["readiness"]["unresolved_execution_blockers"] = []
+    assert validate_instance(unblocked_but_ineligible, schema) == []
+    assert validate_run_profile_readiness(unblocked_but_ineligible)
+
+    unauthorized_only = deepcopy(pilot)
+    unauthorized_only["execution"] = {
+        "authorized": True,
+        "authorization_reference": "AUTH-EXP0001-PILOT",
+    }
+    assert validate_instance(unauthorized_only, schema) == []
+    assert validate_run_profile_readiness(unauthorized_only)
 
 
 def test_authorization_transition_is_schema_valid_but_does_not_execute() -> None:
@@ -224,6 +256,18 @@ def _write_yaml(path: Path, value: dict[str, object]) -> None:
     path.write_text(yaml.safe_dump(value, sort_keys=False), encoding="utf-8")
 
 
+def _rebind_condition_profile_hashes(exp_root: Path) -> None:
+    for name in ("smoke", "pilot"):
+        profile_path = exp_root / f"run-plans/{name}.yaml"
+        digest = hashlib.sha256(profile_path.read_bytes()).hexdigest()
+        profile = load_yaml(profile_path)
+        for relative in profile["condition_plan_paths"]:
+            condition_path = exp_root / "run-plans/conditions" / Path(relative).name
+            condition = load_yaml(condition_path)
+            condition["profile_sha256"] = digest
+            _write_yaml(condition_path, condition)
+
+
 def test_profile_validation_rejects_swapped_order_and_model_drift(tmp_path: Path) -> None:
     exp_root = _copy_exp0001_contract(tmp_path)
     condition_path = exp_root / "run-plans/conditions/pilot-task-0000-reactive.yaml"
@@ -271,10 +315,33 @@ def test_profile_validation_rejects_task_source_and_dataset_revision_drift(
     assert any("task/source dataset revision mismatch" in error for error in errors)
 
 
+def test_profile_validation_rejects_open_query_prefix_drift(tmp_path: Path) -> None:
+    exp_root = _copy_exp0001_contract(tmp_path)
+    for name in ("smoke-reactive.yaml", "smoke-simulative.yaml"):
+        condition_path = exp_root / "run-plans/conditions" / name
+        condition = load_yaml(condition_path)
+        condition["task"]["query"] = "go"
+        _write_yaml(condition_path, condition)
+    errors = validate_experiment_run_profiles(tmp_path)
+    assert any("pair task source/query mismatch" in error for error in errors)
+
+
+def test_profile_validation_rejects_parent_identity_and_hash_drift(tmp_path: Path) -> None:
+    exp_root = _copy_exp0001_contract(tmp_path)
+    condition_path = exp_root / "run-plans/conditions/smoke-reactive.yaml"
+    condition = load_yaml(condition_path)
+    condition["profile_plan_id"] = "PLAN-EXP0001-PILOT"
+    condition["profile_sha256"] = "0" * 64
+    _write_yaml(condition_path, condition)
+    errors = validate_experiment_run_profiles(tmp_path)
+    assert any("parent profile plan ID mismatch" in error for error in errors)
+    assert any("parent profile hash mismatch" in error for error in errors)
+
+
 def test_t05_control_plane_records_exact_base_and_no_stale_not_started_claim() -> None:
     ledger = (ROOT / "docs/harness/T05_ASSEMBLY_LEDGER.md").read_text(encoding="utf-8")
     plan = (
-        ROOT / "docs/exec-plans/active/PHASE_0_75_UPSTREAM_AUDIT_HARNESS_PROTOCOL_LOCK.md"
+        ROOT / "docs/exec-plans/completed/PHASE_0_75_UPSTREAM_AUDIT_HARNESS_PROTOCOL_LOCK.md"
     ).read_text(encoding="utf-8")
     plan_prose = " ".join(plan.split())
     assert "471d6950087a1a10983aaa97bde8b2becf3b6aca" in ledger
@@ -293,6 +360,7 @@ def test_generic_profile_validator_does_not_impose_sira_conditions(tmp_path: Pat
         text = text.replace("SIRA-SIMULATIVE", "GENERIC-TREATMENT")
         text = text.replace("SIRA-REACTIVE", "GENERIC-CONTROL")
         path.write_text(text, encoding="utf-8")
+    _rebind_condition_profile_hashes(generic_root)
     registry_path = tmp_path / "experiments/registry.yaml"
     registry_path.write_text(
         yaml.safe_dump(
@@ -326,6 +394,7 @@ def test_materialized_pair_allows_condition_owned_config_and_command_hashes(
         "authorization_reference": "AUTH-EXP0001-SMOKE",
     }
     _write_yaml(profile_path, profile)
+    _rebind_condition_profile_hashes(exp_root)
     for index, relative in enumerate(profile["condition_plan_paths"], start=1):
         condition_path = tmp_path / relative
         condition = load_yaml(condition_path)

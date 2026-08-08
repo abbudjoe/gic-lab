@@ -8,3 +8,4 @@ Public notes report checked questions, methods, outcomes, failures, and next tes
 
 - [2026-07-15 — Phase 0 bootstrap](2026-07-15-phase-0.qmd)
 - [2026-08-07 — Phase 0.75 opened](2026-08-07-phase-0-75.qmd)
+- [2026-08-08 — Phase 0.75 closed; Phase 1 opened](2026-08-08-phase-1.qmd)

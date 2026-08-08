@@ -60,6 +60,30 @@ def test_authorized_run_requires_a_canonical_command_binding() -> None:
         run_plan_from_mapping(data)
 
 
+def test_legacy_v01_parent_binding_absence_remains_typed_readable() -> None:
+    authorized = valid_plan_data(
+        authorized=True,
+        profile_plan_id=None,
+        profile_sha256_value=None,
+    )
+    authorized_plan = run_plan_from_mapping(authorized)
+    assert authorized_plan.profile_plan_id is None
+    assert authorized_plan.profile_sha256 is None
+
+    legacy = valid_plan_data(profile_plan_id=None, profile_sha256_value=None)
+    plan = run_plan_from_mapping(legacy)
+    assert plan.profile_plan_id is None
+    assert plan.profile_sha256 is None
+
+
+def test_parent_profile_binding_is_both_or_neither() -> None:
+    data = valid_plan_data()
+    data.pop("profile_sha256")
+    with pytest.raises(ValueError, match="present together"):
+        run_plan_from_mapping(data)
+    assert validate_run_plan_data(data, schema_root=ROOT)
+
+
 def test_unauthorized_run_cannot_claim_authorization_reference() -> None:
     data = valid_plan_data()
     data["execution"]["authorization"]["authorization_reference"] = "AUTH-STALE"

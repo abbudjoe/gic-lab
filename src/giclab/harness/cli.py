@@ -176,7 +176,10 @@ def run(argv: Sequence[str] | None = None) -> int:
         if args.operation != "run-local":  # pragma: no cover - argparse controls choices
             raise AssertionError(f"unsupported operation: {args.operation}")
         project_root = args.project_root.resolve()
-        state = load_project_execution_state(project_root)
+        state = load_project_execution_state(
+            project_root,
+            schema_root=args.schema_root.resolve(),
+        )
         if not args.dry_run and command_spec.resource_projection.has_usage:
             raise ExecutionDisallowed(
                 "adapterless run-local cannot close non-wall resource accounting; "
