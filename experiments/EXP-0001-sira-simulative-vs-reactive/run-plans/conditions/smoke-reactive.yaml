@@ -1,0 +1,45 @@
+schema_version: 0.1.0
+experiment_id: EXP-0001
+run_id: RUN-EXP0001-SMOKE-REACTIVE
+profile: smoke
+condition: SIRA-REACTIVE
+attempt: 1
+seed: 42
+interpretation_allowed: false
+execution:
+  backend: local-subprocess
+  workload: prototype
+  authorization:
+    authorized: false
+    authorization_reference: null
+    command_sha256: null
+sources:
+  giclab_commit: unknown
+  upstream_source_id: SRC-SIRA-REPOSITORY
+  upstream_commit: 93fb8d72de71f9a4a13419670adeb34d93cf7acd
+  protocol_sha256: unknown
+  config_sha256: unknown
+  model_revision: gpt-4o-2024-11-20
+  dataset_revision: null
+  environment_sha256: unknown
+task:
+  task_id: README-GOOGLE-FLIGHTS
+  source_kind: open-ended-query
+  query: go to google flights
+  dataset_id: null
+  dataset_revision: null
+  start_idx: null
+  end_idx: null
+pairing:
+  pair_id: PAIR-EXP0001-SMOKE-0000
+  order_index: 1
+budget:
+  max_wall_seconds: 120
+  max_cost_usd: 2.00
+  max_gpu_hours: 0
+  max_model_tokens: 200000
+  max_tool_calls: 1
+  max_output_bytes: 104857600
+artifacts:
+  root: artifacts/EXP-0001/smoke/reactive/attempt-0001
+  retain_raw: true

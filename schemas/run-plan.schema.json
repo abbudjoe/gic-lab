@@ -96,6 +96,63 @@
         },
         "retain_raw": {"const": true}
       }
+    },
+    "task": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "task_id",
+        "source_kind",
+        "query",
+        "dataset_id",
+        "dataset_revision",
+        "start_idx",
+        "end_idx"
+      ],
+      "properties": {
+        "task_id": {"type": "string", "minLength": 1},
+        "source_kind": {"enum": ["open-ended-query", "dataset-slice"]},
+        "query": {"type": ["string", "null"], "minLength": 1},
+        "dataset_id": {"type": ["string", "null"], "minLength": 1},
+        "dataset_revision": {"type": ["string", "null"], "minLength": 1},
+        "start_idx": {"type": ["integer", "null"], "minimum": 0},
+        "end_idx": {"type": ["integer", "null"], "minimum": 1}
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"source_kind": {"const": "open-ended-query"}},
+            "required": ["source_kind"]
+          },
+          "then": {
+            "properties": {
+              "query": {"type": "string", "minLength": 1},
+              "dataset_id": {"type": "null"},
+              "dataset_revision": {"type": "null"},
+              "start_idx": {"type": "null"},
+              "end_idx": {"type": "null"}
+            }
+          },
+          "else": {
+            "properties": {
+              "query": {"type": "null"},
+              "dataset_id": {"type": "string", "minLength": 1},
+              "dataset_revision": {"type": "string", "minLength": 1},
+              "start_idx": {"type": "integer", "minimum": 0},
+              "end_idx": {"type": "integer", "minimum": 1}
+            }
+          }
+        }
+      ]
+    },
+    "pairing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pair_id", "order_index"],
+      "properties": {
+        "pair_id": {"type": "string", "pattern": "^PAIR-[A-Z0-9][A-Z0-9._-]{5,127}$"},
+        "order_index": {"enum": [1, 2]}
+      }
     }
   },
   "$defs": {

@@ -65,6 +65,13 @@ class ExecutionBackend(StrEnum):
     CLOUD = "cloud"
 
 
+class TaskSourceKind(StrEnum):
+    """Source form for the exact task bound to one execution plan."""
+
+    OPEN_ENDED_QUERY = "open-ended-query"
+    DATASET_SLICE = "dataset-slice"
+
+
 class IncrementalLimitEnforcement(StrEnum):
     """How non-wall resource maxima are enforced inside an adapter command."""
 
@@ -653,6 +660,65 @@ class ArtifactPolicy:
 
 
 @dataclass(frozen=True, slots=True)
+class RunTask:
+    """Exact task or dataset slice bound to one execution attempt."""
+
+    task_id: str
+    source_kind: TaskSourceKind
+    query: str | None
+    dataset_id: str | None
+    dataset_revision: str | None
+    start_idx: int | None
+    end_idx: int | None
+
+    def __post_init__(self) -> None:
+        _require_nonempty(self.task_id, "task_id")
+        _require_secret_safe(self.task_id, "task_id")
+        if self.source_kind is TaskSourceKind.OPEN_ENDED_QUERY:
+            if self.query is None:
+                raise ValueError("open-ended tasks require a query")
+            _require_nonempty(self.query, "task query")
+            if any(
+                value is not None
+                for value in (
+                    self.dataset_id,
+                    self.dataset_revision,
+                    self.start_idx,
+                    self.end_idx,
+                )
+            ):
+                raise ValueError("open-ended tasks cannot contain dataset slice identity")
+        else:
+            if self.query is not None:
+                raise ValueError("dataset-slice tasks cannot contain a query")
+            if self.dataset_id is None or self.dataset_revision is None:
+                raise ValueError("dataset-slice tasks require dataset identity and revision")
+            _require_nonempty(self.dataset_id, "task dataset_id")
+            _require_nonempty(self.dataset_revision, "task dataset_revision")
+            if (
+                type(self.start_idx) is not int
+                or type(self.end_idx) is not int
+                or self.start_idx < 0
+                or self.end_idx <= self.start_idx
+            ):
+                raise ValueError("dataset-slice tasks require an increasing non-negative slice")
+
+
+@dataclass(frozen=True, slots=True)
+class PairingIdentity:
+    """Matched-pair identity and execution order for one condition attempt."""
+
+    pair_id: str
+    order_index: int
+
+    def __post_init__(self) -> None:
+        _require_nonempty(self.pair_id, "pair_id")
+        _require_secret_safe(self.pair_id, "pair_id")
+        if self.order_index not in {1, 2}:
+            raise ValueError("pair order_index must be 1 or 2")
+
+
+@dataclass(frozen=True, slots=True)
 class RunPlan:
     """Validated execution contract for one run."""
 
@@ -663,12 +729,16 @@ class RunPlan:
     sources: SourceVersions
     budget: RunBudget
     artifacts: ArtifactPolicy
+    task: RunTask | None = None
+    pairing: PairingIdentity | None = None
 
     def __post_init__(self) -> None:
         if type(self.interpretation_allowed) is not bool:
             raise ValueError("interpretation_allowed must be a boolean")
         if self.profile is RunProfile.SMOKE and self.interpretation_allowed:
             raise ValueError("smoke runs cannot permit scientific interpretation")
+        if (self.task is None) != (self.pairing is None):
+            raise ValueError("task and pairing must be present together")
 
 
 @dataclass(frozen=True, slots=True)

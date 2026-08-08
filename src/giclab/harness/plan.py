@@ -17,11 +17,14 @@ from .models import (
     ExecutionAuthorization,
     ExecutionBackend,
     ExecutionContract,
+    PairingIdentity,
     RunBudget,
     RunIdentity,
     RunPlan,
     RunProfile,
+    RunTask,
     SourceVersions,
+    TaskSourceKind,
     WorkloadKind,
 )
 
@@ -149,6 +152,28 @@ def run_plan_from_mapping(data: Mapping[str, Any]) -> RunPlan:
         root=Path(_string(artifact_data.get("root"), "artifacts.root")),
         retain_raw=_boolean(artifact_data.get("retain_raw"), "artifacts.retain_raw"),
     )
+    task: RunTask | None = None
+    pairing: PairingIdentity | None = None
+    task_value = data.get("task")
+    pairing_value = data.get("pairing")
+    if task_value is not None or pairing_value is not None:
+        task_data = _mapping(task_value, "task")
+        pairing_data = _mapping(pairing_value, "pairing")
+        task = RunTask(
+            task_id=_string(task_data.get("task_id"), "task.task_id"),
+            source_kind=TaskSourceKind(_string(task_data.get("source_kind"), "task.source_kind")),
+            query=_optional_string(task_data.get("query"), "task.query"),
+            dataset_id=_optional_string(task_data.get("dataset_id"), "task.dataset_id"),
+            dataset_revision=_optional_string(
+                task_data.get("dataset_revision"), "task.dataset_revision"
+            ),
+            start_idx=_optional_integer(task_data.get("start_idx"), "task.start_idx"),
+            end_idx=_optional_integer(task_data.get("end_idx"), "task.end_idx"),
+        )
+        pairing = PairingIdentity(
+            pair_id=_string(pairing_data.get("pair_id"), "pairing.pair_id"),
+            order_index=_integer(pairing_data.get("order_index"), "pairing.order_index"),
+        )
     return RunPlan(
         identity=identity,
         profile=RunProfile(_string(data.get("profile"), "profile")),
@@ -159,13 +184,15 @@ def run_plan_from_mapping(data: Mapping[str, Any]) -> RunPlan:
         sources=sources,
         budget=budget,
         artifacts=artifacts,
+        task=task,
+        pairing=pairing,
     )
 
 
 def run_plan_document(plan: RunPlan) -> dict[str, Any]:
     """Return the canonical schema-valid representation retained with every run."""
 
-    return {
+    document: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
         "experiment_id": plan.identity.experiment_id,
         "run_id": plan.identity.run_id,
@@ -206,6 +233,21 @@ def run_plan_document(plan: RunPlan) -> dict[str, Any]:
             "retain_raw": plan.artifacts.retain_raw,
         },
     }
+    if plan.task is not None and plan.pairing is not None:
+        document["task"] = {
+            "task_id": plan.task.task_id,
+            "source_kind": plan.task.source_kind.value,
+            "query": plan.task.query,
+            "dataset_id": plan.task.dataset_id,
+            "dataset_revision": plan.task.dataset_revision,
+            "start_idx": plan.task.start_idx,
+            "end_idx": plan.task.end_idx,
+        }
+        document["pairing"] = {
+            "pair_id": plan.pairing.pair_id,
+            "order_index": plan.pairing.order_index,
+        }
+    return document
 
 
 def validate_run_plan_data(

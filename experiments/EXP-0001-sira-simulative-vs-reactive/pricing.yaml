@@ -1,0 +1,38 @@
+schema_version: 0.1.0
+record_id: PRICE-OPENAI-GPT4O-2026-08-08
+provider: OpenAI
+service_tier: standard
+currency: USD
+retrieved_at: "2026-08-08"
+source: https://developers.openai.com/api/docs/models/gpt-4o
+model_manifest_id: MODEL-OPENAI-GPT4O-2024-11-20
+model_family: gpt-4o
+proposed_revision: gpt-4o-2024-11-20
+rates_per_million_tokens:
+  input: 2.50
+  cached_input: 1.25
+  output: 10.00
+cap_method: >-
+  Conservatively price every allowed model token at the output-token rate; input and
+  cached-input tokens are cheaper, so the proposed cap does not depend on an unseen
+  input/output mix. Provider charges outside this token schedule are not authorized.
+profiles:
+  smoke:
+    condition_attempts: 2
+    max_model_tokens_per_attempt: 200000
+    max_cost_usd_per_attempt: 2.00
+    calculation: 200000 / 1000000 * 10.00 = 2.00
+    proposed_profile_cap_usd: 4.00
+  pilot:
+    condition_attempts: 4
+    max_model_tokens_per_attempt: 1000000
+    max_cost_usd_per_attempt: 10.00
+    calculation: 1000000 / 1000000 * 10.00 = 10.00
+    proposed_profile_cap_usd: 40.00
+authorization:
+  smoke: false
+  pilot: false
+limitations:
+  - Prices are a dated proposal and must be reverified before any later authorization.
+  - The current upstream command does not enforce the declared token or cost ceilings.
+  - No provider, model, API, browser, or evaluator call was made to create this record.

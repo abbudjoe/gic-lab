@@ -1,0 +1,223 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:gic-lab:schema:run-profile:0.1.0",
+  "title": "GIC Lab paired run profile",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "experiment_id",
+    "plan_id",
+    "profile",
+    "study_stage",
+    "purpose",
+    "sample_rationale",
+    "interpretation_allowed",
+    "execution",
+    "model",
+    "sampling",
+    "budget",
+    "artifacts",
+    "condition_plan_paths",
+    "readiness"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1.0"},
+    "experiment_id": {"type": "string", "pattern": "^EXP-[0-9]{4}$"},
+    "plan_id": {"type": "string", "pattern": "^PLAN-[A-Z0-9][A-Z0-9._-]{5,127}$"},
+    "profile": {"enum": ["smoke", "pilot", "confirmatory"]},
+    "study_stage": {"enum": ["exploratory", "confirmatory"]},
+    "purpose": {"type": "string", "minLength": 8},
+    "sample_rationale": {"type": "string", "minLength": 8},
+    "interpretation_allowed": {"type": "boolean"},
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["authorized", "authorization_reference"],
+      "properties": {
+        "authorized": {"type": "boolean"},
+        "authorization_reference": {"type": ["string", "null"], "minLength": 1}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"authorized": {"const": true}}, "required": ["authorized"]},
+          "then": {"properties": {"authorization_reference": {"type": "string", "minLength": 1}}},
+          "else": {"properties": {"authorization_reference": {"type": "null"}}}
+        }
+      ]
+    },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider",
+        "manifest_id",
+        "api",
+        "upstream_alias",
+        "proposed_immutable_revision",
+        "historical_revision_known",
+        "reproduction_level",
+        "substitution"
+      ],
+      "properties": {
+        "provider": {"type": "string", "minLength": 1},
+        "manifest_id": {"type": "string", "minLength": 1},
+        "api": {"type": "string", "format": "uri"},
+        "upstream_alias": {"type": "string", "minLength": 1},
+        "proposed_immutable_revision": {"type": "string", "minLength": 1},
+        "historical_revision_known": {"type": "boolean"},
+        "reproduction_level": {
+          "enum": [
+            "artifact-execution",
+            "directional-reproduction",
+            "mechanism-reproduction",
+            "confirmatory-replication"
+          ]
+        },
+        "substitution": {"type": ["string", "null"], "minLength": 8}
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"historical_revision_known": {"const": false}},
+            "required": ["historical_revision_known"]
+          },
+          "then": {"properties": {"substitution": {"type": "string", "minLength": 8}}},
+          "else": {"properties": {"substitution": {"type": "null"}}}
+        }
+      ]
+    },
+    "sampling": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pair_count",
+        "conditions",
+        "task_family",
+        "dataset_ids",
+        "counterbalancing"
+      ],
+      "properties": {
+        "pair_count": {"type": "integer", "minimum": 1},
+        "conditions": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "task_family": {"type": "string", "minLength": 1},
+        "dataset_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "counterbalancing": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "pair_id",
+              "task_id",
+              "task_source",
+              "first",
+              "second",
+              "plans"
+            ],
+            "properties": {
+              "pair_id": {"type": "string", "minLength": 1},
+              "task_id": {"type": "string", "minLength": 1},
+              "task_source": {"type": "string", "minLength": 1},
+              "first": {"type": "string", "minLength": 1},
+              "second": {"type": "string", "minLength": 1},
+              "plans": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "uniqueItems": true,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["condition", "path"],
+                  "properties": {
+                    "condition": {"type": "string", "minLength": 1},
+                    "path": {"type": "string", "minLength": 1}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pricing_record",
+        "max_cost_usd",
+        "max_model_tokens",
+        "max_wall_seconds"
+      ],
+      "properties": {
+        "pricing_record": {"type": "string", "minLength": 1},
+        "max_cost_usd": {"type": "number", "minimum": 0},
+        "max_model_tokens": {"type": "integer", "minimum": 0},
+        "max_wall_seconds": {"type": "integer", "minimum": 1}
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["root", "retain_raw", "public_release"],
+      "properties": {
+        "root": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+        },
+        "retain_raw": {"const": true},
+        "public_release": {"enum": ["blocked-pending-review", "summaries-only"]}
+      }
+    },
+    "condition_plan_paths": {
+      "type": "array",
+      "minItems": 2,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "readiness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "execution_eligibility",
+        "approval_changes_required",
+        "unresolved_execution_blockers"
+      ],
+      "properties": {
+        "execution_eligibility": {
+          "enum": ["eligible-after-authorization", "blocked-pending-later-phase-integration"]
+        },
+        "approval_changes_required": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "unresolved_execution_blockers": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 8}
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"profile": {"const": "smoke"}}, "required": ["profile"]},
+      "then": {"properties": {"interpretation_allowed": {"const": false}}}
+    }
+  ]
+}

@@ -21,18 +21,23 @@ def test_h2k_track_is_planned_deferred_and_has_no_active_experiment() -> None:
     assert "D-014" in decisions
     assert "Fixed external assignment is labeled learned regulation" in risks
     assert "There is no active RQ-H2K experiment" in notebook
-    assert registry["experiments"] == []
+    assert [entry["experiment_id"] for entry in registry["experiments"]] == ["EXP-0001"]
+    assert all("h2k" not in entry["protocol"].lower() for entry in registry["experiments"])
 
 
-def test_active_plan_records_successful_t04_5_dependency_without_starting_t05() -> None:
+def test_active_plan_records_successful_t04_5_and_t05() -> None:
     plan = (
         ROOT / "docs/exec-plans/active/PHASE_0_75_UPSTREAM_AUDIT_HARNESS_PROTOCOL_LOCK.md"
     ).read_text(encoding="utf-8")
-    assert "completed addendum work is T04.5 only; T05 has not begun" in " ".join(plan.split())
+    assert "T04.5 and T05 are complete; T06 is the next permitted assembly item" in " ".join(
+        plan.split()
+    )
     assert "| T04.5 | Preserve the planned/deferred" in plan
     assert "P075-DOD-09 |" in plan and "| met |" in plan
     assert "| T05 | Register and lock draft `EXP-0001`" in plan
-    assert "not-started; dependency on successful T04.5 satisfied" in plan
+    assert any(
+        line.startswith("| T05 |") and line.endswith("| successful |") for line in plan.splitlines()
+    )
     assert "Assembly status: **successful**" in plan
     assert "P075-DOD-09" in plan
 
