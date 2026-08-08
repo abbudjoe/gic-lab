@@ -52,6 +52,7 @@ website:
         contents:
           - weekly/index.qmd
           - weekly/2026-07-15-phase-0.qmd
+          - weekly/2026-08-07-phase-0-75.qmd
           - generated/decisions.qmd
           - failures/index.qmd
       - resources.qmd

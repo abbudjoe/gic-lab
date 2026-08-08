@@ -13,6 +13,7 @@ from giclab.validation import (
     validate_episode_order,
     validate_experiment_protocol,
     validate_instance,
+    validate_plan_lifecycle,
     validate_project_state,
     validate_site_output,
     validate_transition_record,
@@ -145,6 +146,44 @@ def test_confirmed_is_an_explicit_evidence_status() -> None:
     assert validate_experiment_protocol(protocol) == []
 
 
+def test_plan_lifecycle_is_filename_independent(tmp_path: Path) -> None:
+    active = tmp_path / "docs/exec-plans/active/ARBITRARY_CURRENT_WORK.md"
+    completed = tmp_path / "docs/exec-plans/completed/UNRELATED_HISTORY_NAME.md"
+    active.parent.mkdir(parents=True)
+    completed.parent.mkdir(parents=True)
+    active.write_text(
+        "# Phase 3.25 — Current work\n\nStatus: **in-progress**\n",
+        encoding="utf-8",
+    )
+    completed.write_text(
+        "# Phase 2 — Prior work\n\nStatus: **successful**\n",
+        encoding="utf-8",
+    )
+    assert validate_plan_lifecycle(tmp_path) == []
+
+
+def test_plan_lifecycle_rejects_successful_active_plan(tmp_path: Path) -> None:
+    plan = tmp_path / "docs/exec-plans/active/ANY_NAME.md"
+    plan.parent.mkdir(parents=True)
+    plan.write_text(
+        "# Phase 8 — Misplaced\n\nStatus: **successful**\n",
+        encoding="utf-8",
+    )
+    errors = validate_plan_lifecycle(tmp_path)
+    assert any("active plan cannot be successful" in error for error in errors)
+
+
+def test_successful_plan_must_be_in_completed_directory(tmp_path: Path) -> None:
+    plan = tmp_path / "docs/exec-plans/archive/ANY_NAME.md"
+    plan.parent.mkdir(parents=True)
+    plan.write_text(
+        "# Phase 7 — Misplaced\n\nStatus: **successful**\n",
+        encoding="utf-8",
+    )
+    errors = validate_plan_lifecycle(tmp_path)
+    assert any("successful plan must be under" in error for error in errors)
+
+
 def test_project_state_supports_an_authorized_precompute_phase(tmp_path: Path) -> None:
     docs = tmp_path / "docs"
     plan = docs / "exec-plans/active/PHASE_0_5.md"
@@ -192,6 +231,163 @@ def test_project_state_rejects_compute_authority_before_phase_one(tmp_path: Path
     )
     errors = validate_project_state(tmp_path)
     assert any("paid_compute_allowed must be false" in error for error in errors)
+
+
+def test_project_state_requires_active_authoritative_plan_for_active_status(
+    tmp_path: Path,
+) -> None:
+    docs = tmp_path / "docs"
+    plan = docs / "exec-plans/completed/PHASE.md"
+    plan.parent.mkdir(parents=True)
+    plan.write_text("# Phase 0.75 — Current\n\nStatus: **in-progress**\n", encoding="utf-8")
+    (docs / "PROJECT_STATE.yaml").write_text(
+        "\n".join(
+            (
+                'phase: "0.75"',
+                "phase_name: current",
+                "phase_status: in-progress",
+                "paid_compute_allowed: false",
+                "prototype_execution_allowed: false",
+                "benchmark_execution_allowed: false",
+                "training_allowed: false",
+                "cloud_mutation_allowed: false",
+                "authoritative_plan: docs/exec-plans/completed/PHASE.md",
+            )
+        ),
+        encoding="utf-8",
+    )
+    errors = validate_project_state(tmp_path)
+    assert any(
+        "authoritative_plan must be under docs/exec-plans/active/" in error for error in errors
+    )
+
+
+def test_project_state_requires_authoritative_plan_to_exist(tmp_path: Path) -> None:
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "PROJECT_STATE.yaml").write_text(
+        "\n".join(
+            (
+                'phase: "0.75"',
+                "phase_name: current",
+                "phase_status: in-progress",
+                "paid_compute_allowed: false",
+                "prototype_execution_allowed: false",
+                "benchmark_execution_allowed: false",
+                "training_allowed: false",
+                "cloud_mutation_allowed: false",
+                "authoritative_plan: docs/exec-plans/active/MISSING.md",
+            )
+        ),
+        encoding="utf-8",
+    )
+    errors = validate_project_state(tmp_path)
+    assert any("authoritative_plan must resolve to a file" in error for error in errors)
+
+
+def test_project_state_rejects_authoritative_plan_phase_mismatch(tmp_path: Path) -> None:
+    docs = tmp_path / "docs"
+    plan = docs / "exec-plans/active/PHASE.md"
+    plan.parent.mkdir(parents=True)
+    plan.write_text("# Phase 0.5 — Wrong phase\n\nStatus: **in-progress**\n", encoding="utf-8")
+    (docs / "PROJECT_STATE.yaml").write_text(
+        "\n".join(
+            (
+                'phase: "0.75"',
+                "phase_name: current",
+                "phase_status: in-progress",
+                "paid_compute_allowed: false",
+                "prototype_execution_allowed: false",
+                "benchmark_execution_allowed: false",
+                "training_allowed: false",
+                "cloud_mutation_allowed: false",
+                "authoritative_plan: docs/exec-plans/active/PHASE.md",
+            )
+        ),
+        encoding="utf-8",
+    )
+    errors = validate_project_state(tmp_path)
+    assert any("phase must match authoritative plan heading" in error for error in errors)
+
+
+def test_project_state_rejects_authoritative_plan_status_mismatch(tmp_path: Path) -> None:
+    docs = tmp_path / "docs"
+    plan = docs / "exec-plans/active/PHASE.md"
+    plan.parent.mkdir(parents=True)
+    plan.write_text("# Phase 0.75 — Current\n\nStatus: **smoke-failed**\n", encoding="utf-8")
+    (docs / "PROJECT_STATE.yaml").write_text(
+        "\n".join(
+            (
+                'phase: "0.75"',
+                "phase_name: current",
+                "phase_status: in-progress",
+                "paid_compute_allowed: false",
+                "prototype_execution_allowed: false",
+                "benchmark_execution_allowed: false",
+                "training_allowed: false",
+                "cloud_mutation_allowed: false",
+                "authoritative_plan: docs/exec-plans/active/PHASE.md",
+            )
+        ),
+        encoding="utf-8",
+    )
+    errors = validate_project_state(tmp_path)
+    assert any("phase_status must match authoritative plan" in error for error in errors)
+
+
+def test_successful_project_state_accepts_completed_authoritative_plan(
+    tmp_path: Path,
+) -> None:
+    docs = tmp_path / "docs"
+    plan = docs / "exec-plans/completed/PHASE.md"
+    plan.parent.mkdir(parents=True)
+    plan.write_text("# Phase 0.75 — Complete\n\nStatus: **successful**\n", encoding="utf-8")
+    (docs / "PROJECT_STATE.yaml").write_text(
+        "\n".join(
+            (
+                'phase: "0.75"',
+                "phase_name: complete",
+                "phase_status: successful",
+                "paid_compute_allowed: false",
+                "prototype_execution_allowed: false",
+                "benchmark_execution_allowed: false",
+                "training_allowed: false",
+                "cloud_mutation_allowed: false",
+                "authoritative_plan: docs/exec-plans/completed/PHASE.md",
+            )
+        ),
+        encoding="utf-8",
+    )
+    assert validate_project_state(tmp_path) == []
+
+
+def test_successful_project_state_rejects_active_authoritative_plan(
+    tmp_path: Path,
+) -> None:
+    docs = tmp_path / "docs"
+    plan = docs / "exec-plans/active/PHASE.md"
+    plan.parent.mkdir(parents=True)
+    plan.write_text("# Phase 0.75 — Complete\n\nStatus: **successful**\n", encoding="utf-8")
+    (docs / "PROJECT_STATE.yaml").write_text(
+        "\n".join(
+            (
+                'phase: "0.75"',
+                "phase_name: complete",
+                "phase_status: successful",
+                "paid_compute_allowed: false",
+                "prototype_execution_allowed: false",
+                "benchmark_execution_allowed: false",
+                "training_allowed: false",
+                "cloud_mutation_allowed: false",
+                "authoritative_plan: docs/exec-plans/active/PHASE.md",
+            )
+        ),
+        encoding="utf-8",
+    )
+    errors = validate_project_state(tmp_path)
+    assert any(
+        "authoritative_plan must be under docs/exec-plans/completed/" in error for error in errors
+    )
 
 
 @pytest.mark.parametrize("phase", ["NaN", "Infinity", "-Infinity"])

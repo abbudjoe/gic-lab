@@ -5,9 +5,16 @@ from giclab.sitegen import ROOT, build_experiments, build_falsification, build_s
 
 def test_status_is_generated_from_zero_use_phase_state() -> None:
     page = build_status(ROOT)
+    prose = " ".join(page.split())
+    assert "`docs/exec-plans/`" in page
+    assert "Phase 0.75 is the active control-plane phase" in page
+    assert "| 0.5 | GIC Reading Reconciliation |" in page
+    assert "Phase 0.5 reading reconciliation is complete" in prose
     assert "Accelerator hours | 0" in page
     assert "Prototype runs | 0" in page
-    assert "No prototype result has been reproduced" in page
+    assert "Paid compute allowed | `false`" in page
+    assert "Cloud mutation allowed | `false`" in page
+    assert "No prototype result has been reproduced" in prose
 
 
 def test_template_is_not_published_as_an_experiment() -> None:

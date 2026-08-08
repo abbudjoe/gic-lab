@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
+from giclab.plans import discover_plan_paths, load_plan_header
 from giclab.registry import discover_repo_root, load_yaml, resolve_repo_path
 
 ROOT = discover_repo_root()
@@ -27,10 +29,19 @@ def _write(path: Path, content: str) -> None:
 def build_status(root: Path) -> str:
     state = load_yaml(root / "docs/PROJECT_STATE.yaml")
     compute = load_yaml(root / "manifests/compute.yaml")["phase_zero_summary"]
+    completed = []
+    for path in discover_plan_paths(root):
+        plan = load_plan_header(path)
+        if path.parent.name == "completed" and plan.status == "successful":
+            completed.append(plan)
+    completed_rows = "\n".join(
+        f"| {plan.phase} | {plan.title} | {_badge(plan.status)} |"
+        for plan in sorted(completed, key=lambda item: Decimal(item.phase))
+    )
     return (
         _front_matter("Project status")
         + f"""
-This page is generated from `docs/PROJECT_STATE.yaml` and
+This page is generated from `docs/PROJECT_STATE.yaml`, `docs/exec-plans/`, and
 `manifests/compute.yaml`. Do not edit it directly.
 
 ## Current gate
@@ -45,6 +56,14 @@ This page is generated from `docs/PROJECT_STATE.yaml` and
 | Training allowed | `{str(state["training_allowed"]).lower()}` |
 | Cloud mutation allowed | `{str(state["cloud_mutation_allowed"]).lower()}` |
 
+Phase {state["phase"]} is the active control-plane phase.
+
+## Completed phases
+
+| Phase | Workstream | Status |
+|---|---|---|
+{completed_rows}
+
 ## Recorded Phase 0 resource use
 
 | Measure | Value |
@@ -56,8 +75,10 @@ This page is generated from `docs/PROJECT_STATE.yaml` and
 | Benchmark runs | {compute["benchmark_runs"]} |
 | Training runs | {compute["training_runs"]} |
 
-No prototype result has been reproduced. Current work is repository and
-research-control infrastructure only.
+Phase 0.5 reading reconciliation is complete. Phase 0.75 is limited to static
+upstream audit, non-executing harness construction, and protocol lock. No prototype
+result has been reproduced, and no model, API, benchmark, training, or cloud execution
+is authorized.
 """
     )
 

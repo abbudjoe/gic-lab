@@ -16,6 +16,7 @@ from urllib.parse import unquote, urlparse
 import yaml
 from jsonschema import Draft202012Validator, FormatChecker
 
+from giclab.plans import PlanContractError, discover_plan_paths, load_plan_header
 from giclab.registry import (
     DuplicateKeyError,
     discover_repo_root,
@@ -48,7 +49,8 @@ REQUIRED_PATHS = (
     "docs/SECURITY_AND_SECRETS.md",
     "docs/PLANS.md",
     "docs/PROJECT_STATE.yaml",
-    "docs/exec-plans/active/PHASE_0_BOOTSTRAP.md",
+    "docs/exec-plans/active",
+    "docs/exec-plans/completed",
     "docs/handoffs/INITIAL_CONVERSATION_SUMMARY.md",
     "docs/reading/GIC_HUMAN_READING_TEMPLATE.md",
     "docs/reading/GIC_AGENT_EXTRACTION_DRAFT.md",
@@ -164,6 +166,27 @@ def validate_required_paths(root: Path = ROOT) -> list[str]:
     ]
 
 
+def validate_plan_lifecycle(root: Path = ROOT) -> list[str]:
+    errors: list[str] = []
+    plans_root = root / "docs/exec-plans"
+    active_root = plans_root / "active"
+    completed_root = plans_root / "completed"
+    for path in discover_plan_paths(root):
+        try:
+            plan = load_plan_header(path)
+        except (OSError, PlanContractError) as exc:
+            errors.append(f"{path.relative_to(root)}: {exc}")
+            continue
+        if path.parent == active_root and plan.status == "successful":
+            errors.append(f"{path.relative_to(root)}: active plan cannot be successful")
+        elif plan.status == "successful" and path.parent != completed_root:
+            errors.append(
+                f"{path.relative_to(root)}: successful plan must be under "
+                "docs/exec-plans/completed/"
+            )
+    return errors
+
+
 def validate_project_state(root: Path = ROOT) -> list[str]:
     errors: list[str] = []
     try:
@@ -223,12 +246,26 @@ def validate_project_state(root: Path = ROOT) -> list[str]:
     if not plan_path.is_file():
         errors.append("docs/PROJECT_STATE.yaml: authoritative_plan must resolve to a file")
         return errors
-    plan_text = plan_path.read_text(encoding="utf-8")
-    if isinstance(phase, str) and not plan_text.startswith(f"# Phase {phase}"):
+    try:
+        plan_header = load_plan_header(plan_path)
+    except (OSError, PlanContractError) as exc:
+        errors.append(f"docs/PROJECT_STATE.yaml: authoritative_plan is invalid: {exc}")
+        return errors
+    if isinstance(phase, str) and plan_header.phase != phase:
         errors.append("docs/PROJECT_STATE.yaml: phase must match authoritative plan heading")
-    status_match = re.search(r"^Status: \*\*([^*]+)\*\*$", plan_text, flags=re.MULTILINE)
-    if status_match is None or status_match.group(1) != phase_status:
+    if plan_header.status != phase_status:
         errors.append("docs/PROJECT_STATE.yaml: phase_status must match authoritative plan")
+    expected_plan_root = (
+        root / "docs/exec-plans/completed"
+        if phase_status == "successful"
+        else root / "docs/exec-plans/active"
+    )
+    if plan_path.parent != expected_plan_root.resolve():
+        location = "completed" if phase_status == "successful" else "active"
+        errors.append(
+            "docs/PROJECT_STATE.yaml: authoritative_plan must be under "
+            f"docs/exec-plans/{location}/ for phase_status {phase_status}"
+        )
     return errors
 
 
@@ -508,7 +545,8 @@ def _repository_files(root: Path) -> list[Path]:
         check=True,
         capture_output=True,
     )
-    return [root / item.decode("utf-8") for item in result.stdout.split(b"\0") if item]
+    paths = [root / item.decode("utf-8") for item in result.stdout.split(b"\0") if item]
+    return [path for path in paths if path.exists()]
 
 
 def validate_hygiene(root: Path = ROOT) -> list[str]:
@@ -654,6 +692,7 @@ def validate_site_output(root: Path = ROOT) -> list[str]:
 def run_all(root: Path = ROOT) -> list[str]:
     validators: Iterable[tuple[str, Any]] = (
         ("required paths", validate_required_paths),
+        ("plan lifecycle", validate_plan_lifecycle),
         ("project state", validate_project_state),
         ("schemas", validate_schema_documents),
         ("experiments", validate_experiment_registry),
