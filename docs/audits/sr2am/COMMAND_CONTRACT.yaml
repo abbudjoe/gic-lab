@@ -1,0 +1,744 @@
+schema_version: 0.1.0
+kind: sr2am-command-contract
+status: static-unexecuted
+execution_authorized: false
+interpretation_allowed: false
+source:
+  repository: sailing-lab/sr2am
+  commit: 6f4ac7824ffc7d12453ffaa53d25e5f34bf3aeb0
+  model: sailing-lab/SR2AM-v0.1-8B
+  model_revision: 5d72255092ac2ec006c2f9813029220aff79865e
+
+contract_rules:
+  - Commands are argument arrays. A later harness must reject unresolved slots.
+  - Secret values are environment-only and must never appear in resolved commands or logs.
+  - The source, model, input, environment, and command identities must be hashed before execution.
+  - Every attempt gets a fresh run ID and output directory; no raw file is overwritten.
+  - This document does not authorize model, service, checkpoint, or cloud execution.
+
+storage_safety_contract:
+  policy_source: docs/STORAGE_POLICY.md
+  applies_to: >-
+    Every local or attached filesystem that may receive checkpoint, cache,
+    environment, log, trace, or artifact writes.
+  minimum_free_space: max(150 GB, 20 percent of filesystem capacity)
+  t11_may_choose_stricter_floor: true
+  preflight: >-
+    Measure capacity and free space and require that free space minus declared
+    worst-case writes remains at or above the policy floor.
+  runtime_stop: >-
+    Re-measure during writes and stop before the next write or download that
+    could reduce free space below the policy floor; flush and preserve already
+    produced evidence without violating the same floor.
+
+slots:
+  PYTHON:
+    type: absolute-path
+    description: Python 3.13 executable from the T11-validated x86_64 environment.
+  UPSTREAM_ROOT:
+    type: absolute-directory
+    must_be_git_commit: 6f4ac7824ffc7d12453ffaa53d25e5f34bf3aeb0
+  MODEL_DIR:
+    type: absolute-directory
+    must_match_model_revision: 5d72255092ac2ec006c2f9813029220aff79865e
+  INPUT_JSONL:
+    type: absolute-file
+    expected_rows: 1
+  OUTPUT_JSONL:
+    type: absolute-new-file
+    overwrite_allowed: false
+  SGLANG_LOG:
+    type: absolute-new-file
+    overwrite_allowed: false
+  SUMMARIZER_MODEL:
+    type: remote-model-identifier
+    immutable_by_itself: false
+    note: >-
+      The released runner also uses this string to select and load a local
+      tokenizer, without a tokenizer revision argument.
+    required_for:
+      - full-topology-think-path-smoke
+  SUMMARIZER_BASE_URL:
+    type: https-or-private-http-url
+    required_for:
+      - full-topology-think-path-smoke
+  VISIT_TOKENIZER_ARTIFACT:
+    type: immutable-artifact-identity
+    required_for:
+      - full-topology-think-path-smoke
+    released_cli_mapping: unavailable
+    t11_resolution: >-
+      Approve a source patch that separates the local tokenizer path/revision
+      from the remote summarizer model ID, or prove a hash-verified offline
+      cache contract with network fallback disabled.
+  SANDBOX_HOST:
+    type: hostname-without-port
+    required_for:
+      - full-topology-think-path-smoke
+
+nonsecret_environment:
+  WANDB_MODE: disabled
+  TOKENIZERS_PARALLELISM: "false"
+  PYTHONUNBUFFERED: "1"
+
+secret_environment_contract:
+  service-free-model-scorer-smoke:
+    required: []
+    optional: []
+  full-topology-think-path-smoke:
+    required:
+      - SERPAPI_API_KEY
+    optional:
+      - JINA_API_KEY
+    selected_search_provider: serpapi
+    alternative_search_provider:
+      name: serper_dev
+      replace_required_with: SERPER_DEV_API_KEY
+  forbidden_for_selected_local_rule_scorer:
+    - OPENAI_API_KEY
+
+process_environment_contract:
+  base_rule:
+    inherit_full_parent_environment: false
+    nonsecret_allowlist_identity: required-from-T11-environment-manifest
+    reject_unlisted_secret_names: true
+  sglang_server:
+    allowed_secret_names: []
+    must_remove_if_ambient:
+      - SERPAPI_API_KEY
+      - SERPER_DEV_API_KEY
+      - JINA_API_KEY
+      - OPENAI_API_KEY
+      - WANDB_API_KEY
+      - HF_TOKEN
+    rationale: The model is loaded from the already verified local MODEL_DIR.
+  service-free-agent-and-scorer:
+    allowed_secret_names: []
+    must_remove_if_ambient:
+      - SERPAPI_API_KEY
+      - SERPER_DEV_API_KEY
+      - JINA_API_KEY
+      - OPENAI_API_KEY
+      - WANDB_API_KEY
+      - HF_TOKEN
+  full-topology-agent:
+    allowed_secret_names:
+      - selected search provider key
+      - optional JINA_API_KEY when approved
+    forbidden:
+      - OPENAI_API_KEY
+      - WANDB_API_KEY
+      - HF_TOKEN
+    note: >-
+      The released visit client uses literal EMPTY for the summarizer API key;
+      summarizer-service credentials are separately scoped and are not inherited
+      by the agent.
+  external_summarizer_service:
+    environment_owner: separately-versioned-service-contract
+    inherited_from_agent_or_sglang: false
+  sandbox_service:
+    environment_owner: separately-versioned-sandbox-contract
+    inherited_from_agent_or_sglang: false
+
+nonselected_evaluator_contracts:
+  status: prohibited-in-both-proposed-smoke-profiles
+  self_hosted_openai_compatible:
+    endpoint_and_model_pairs:
+      - [MATH_LLM_JUDGE_URL, MATH_LLM_JUDGE_MODEL]
+      - [STEM_LLM_JUDGE_URL, STEM_LLM_JUDGE_MODEL]
+      - [WEB_LLM_JUDGE_URL, WEB_LLM_JUDGE_MODEL]
+    source_client_api_key_literal: EMPTY
+  direct_openai:
+    credential_name: OPENAI_API_KEY
+    hard_coded_models_observed:
+      - gpt-4.1-mini-2025-04-14
+      - gpt-4.1-2025-04-14
+      - o4-mini-2025-04-16
+      - o4-mini
+  enablement_gate: >-
+    T11 must identify the exact dispatcher branch and separately pin its
+    endpoint type, model and revision, process environment, retry and token
+    limits, cost ceiling, readiness probe, and evidence fields. Ambient
+    evaluator configuration never opts a run into these paths.
+
+service_lifecycle_contracts:
+  rule: >-
+    Every endpoint or process has exactly one lifecycle mode and owner before
+    preflight. No separately launched process or resource may remain running or
+    billable after the attempt.
+  sglang:
+    lifecycle_mode: harness-launched-local-process
+    owner: t11-run-harness
+    identity: owned-pid-and-process-group
+    cleanup: bounded TERM then KILL, verify process tree and GPU use are gone
+  search_provider:
+    lifecycle_mode: pre-existing-external-saas
+    owner: selected-provider-account
+    harness_launch_allowed: false
+    cleanup: close client activity and preserve final request/spend counters; do not mutate provider service state
+  jina_reader:
+    lifecycle_mode: pre-existing-external-saas
+    owner: jina-provider
+    harness_launch_allowed: false
+    cleanup: close client activity and preserve final request/spend counters; do not mutate provider service state
+  browsing_summarizer:
+    lifecycle_mode: required-t11-choice
+    allowed_modes:
+      - pre-existing-external-readiness-only
+      - harness-launched-owned-process-or-resource
+    required_identity:
+      - owner
+      - endpoint
+      - model revision
+      - process PID or provider resource ID when harness-launched
+    cleanup: >-
+      Leave a declared pre-existing external service untouched. For a
+      harness-launched process or resource, perform bounded stop/termination,
+      poll to terminal or non-billable state, and retain logs and proof.
+  visit_tokenizer_cache:
+    lifecycle_mode: harness-mounted-read-only-artifact
+    owner: t11-artifact-contract
+    cleanup: remove only disposable local staging; retain verified durable cache according to retention policy
+  sandboxfusion:
+    lifecycle_mode: required-t11-choice
+    allowed_modes:
+      - pre-existing-external-readiness-only
+      - harness-launched-owned-process-or-resource
+    required_identity:
+      - owner
+      - endpoint
+      - image digest
+      - package-lock hash
+      - process PID or provider resource ID when harness-launched
+    cleanup: >-
+      Leave a declared pre-existing external service untouched. For a
+      harness-launched process or resource, stop accepting code, perform bounded
+      process or provider termination, poll to terminal or non-billable state,
+      and retain logs and proof.
+  nonselected_evaluator_services:
+    lifecycle_mode: prohibited
+    owner: none-for-these-profiles
+
+input_contract:
+  profile: service-free-model-scorer-smoke
+  format: jsonl
+  exact_row:
+    id: giclab-sr2am-smoke-math-0001
+    question: >-
+      What is 1 + 1? You should provide your final answer in the format
+      \boxed{YOUR_ANSWER}.
+    reward_model:
+      ground_truth: "2"
+      style: rule
+    data_source: giclab_static_smoke_v1
+    general_domain: lighteval/MATH
+  scoring_dispatch:
+    source_file: evaluation/reward_score/__init__.py
+    selector: lighteval/MATH
+    scorer_file: evaluation/reward_score/math.py
+    scorer_type: deterministic-last-boxed-string-equivalence
+    external_api_required: false
+  coverage_limit: >-
+    This row validates model serving, one generation, source JSONL output, and
+    local scoring. Because it uses agent_type=instruct, it does not validate the
+    configurator/planner or any tool service.
+
+profiles:
+  service-free-model-scorer-smoke:
+    purpose: Smallest source-supported 8B load/generate/write/score smoke.
+    gpu_count: 1
+    tensor_parallel: 1
+    data_parallel: 1
+    request_concurrency: 1
+    service_dependencies: []
+    server:
+      cwd: ${UPSTREAM_ROOT}
+      argv:
+        - ${PYTHON}
+        - -m
+        - sglang.launch_server
+        - --model-path
+        - ${MODEL_DIR}
+        - --served-model-name
+        - SR2AM-v0.1-8B
+        - --context-length
+        - "40960"
+        - --tp
+        - "1"
+        - --dp
+        - "1"
+        - --tool-call-parser
+        - qwen
+        - --sampling-defaults
+        - model
+        - --host
+        - 127.0.0.1
+        - --port
+        - "8000"
+      stdout_stderr: ${SGLANG_LOG}
+      readiness:
+        interval_seconds: 10
+        timeout_seconds: 600
+        checks:
+          - type: process-alive
+            require_owned_pid: true
+          - type: http-get
+            url: http://127.0.0.1:8000/health
+            accepted_status: 200-299
+          - type: openai-model-list
+            url: http://127.0.0.1:8000/v1/models
+            require_model_id: SR2AM-v0.1-8B
+        upstream_gap: >-
+          The wrapper uses curl -s without --fail, so any HTTP response can
+          satisfy its loop. These stricter checks are a T11 harness contract.
+    agent:
+      cwd: ${UPSTREAM_ROOT}
+      argv:
+        - ${PYTHON}
+        - run_agent.py
+        - --input_file
+        - ${INPUT_JSONL}
+        - --output_file
+        - ${OUTPUT_JSONL}
+        - --model
+        - SR2AM-v0.1-8B
+        - --model_base_url
+        - http://127.0.0.1:8000/v1
+        - --model_api_key
+        - EMPTY
+        - --model_timeout
+        - "300"
+        - --agent_type
+        - instruct
+        - --max_concurrent
+        - "1"
+        - --num_retries
+        - "1"
+        - --start_idx
+        - "0"
+        - --end_idx
+        - "1"
+        - --max_turns
+        - "1"
+        - --response_timeout
+        - "300"
+        - --generate_response_timeout
+        - "360"
+        - --judge_answer_timeout
+        - "60"
+        - --filtering
+        - --remove_tags
+        - --no_break_early
+        - --fix_datetime
+      effective_generation_limit:
+        max_completion_tokens: 4096
+        provenance: hard-coded in VLLMModelInstructAgent.get_response
+        context_contract: >-
+          Before the request, use the exact server-accounted input count or
+          reproduce the pinned server's rendered user-only prompt, including
+          chat-template and control-token overhead. Require that input plus 4096
+          requested output tokens is no greater than 40960. The raw-retained
+          system message is not outbound in this profile, and there are no tool
+          schemas.
+      outer_question_attempt_budget:
+        configured_total_attempts: 1
+        retries_after_first_attempt: 0
+        source_semantics: Both question processors iterate range(num_retries).
+      sampling_control:
+        status: inherited-stochastic-model-defaults
+        pinned_generation_config_observed:
+          do_sample: true
+          temperature: 0.6
+          top_k: 20
+          top_p: 0.95
+        effective_sglang_defaults:
+          temperature: 0.6
+          top_k: 20
+          top_p: 0.95
+        observed_but_not_consumed_by_sglang_default_loader:
+          do_sample: true
+        seed_forwarded_by_instruct_request: false
+        current_server_deterministic_inference: false
+        t11_server_control_candidate:
+          flag: --enable-deterministic-inference
+          absent_request_seed_fallback: 42
+          decision_required: >-
+            Validate its batch-invariant backend and performance effects, then
+            record whether it is enabled; the current source-parity command
+            deliberately does not assume that change.
+        detail: >-
+          VLLMModelInstructAgent does not forward the parsed temperature or
+          max_completion_tokens arguments. SGLang 0.5.7 defaults
+          sampling_defaults to model but whitelists only repetition_penalty,
+          temperature, top_k, top_p, and min_p from generation_config.json.
+          The effective nonzero sampling values make the smoke nondeterministic.
+      system_prompt_control:
+        status: unavailable-in-instruct-path
+        fix_datetime_effect: stable-raw-system-message-not-model-input
+        detail: >-
+          The raw result's messages array retains the system prompt seeded by
+          Agent.__init__, but VLLMModelInstructAgent sends only user messages in
+          the outbound model request. The parsed system prompt, including the
+          fixed-date variant, is printed and retained in raw JSONL but is not
+          model input. The flag is retained to avoid a wall-clock-dependent raw
+          trace.
+    scorer_preflight:
+      timing: before-model-request
+      source_function: agent_base.judge_answer
+      call_contract:
+        row: input_contract.exact_row
+        remove_tags: true
+        async: true
+      cases:
+        - answer: "\\boxed{2}"
+          expected_result:
+            score: 1.0
+        - answer: "\\boxed{3}"
+          expected_result:
+            score: 0.0
+      acceptance:
+        - Both async calls return dictionaries with the exact expected scores and no error key.
+        - Captured stdout and stderr are both empty.
+      rationale: >-
+        This exercises the exact judge_answer -> compute_single_reward ->
+        default_compute_score -> math.compute_score dispatch used by the run.
+        The math scorer catches its own exceptions as 0.0 and prints to stdout,
+        while the outer dispatcher can encode an exception as score 0.0 plus
+        error. A numeric score alone is not a scorer-readiness check.
+    aggregate:
+      cwd: ${UPSTREAM_ROOT}
+      argv:
+        - ${PYTHON}
+        - evaluation/compute_rep_results.py
+        - --input_file
+        - ${OUTPUT_JSONL}
+        - --k
+        - "1"
+        - --num_reps
+        - "1"
+      capture_stdout_as_artifact: true
+    success_criteria:
+      - Every ordered SGLang readiness check passes within 600 seconds.
+      - Every required preflight command exits 0.
+      - The agent command exits 0; a row flushed before a later nonzero exit is failure evidence, not success.
+      - Exactly one non-error JSONL row is preserved.
+      - The row contains dataset, question, messages, answer, correct, judge_result, generate_response_time, rep_idx, and timestamp.
+      - answer is a non-empty string.
+      - judge_result has no error field, judge_result.score is numeric, and correct is boolean; smoke success does not require correct=true.
+      - Both pre-model scorer self-test cases pass.
+      - The aggregate command exits 0 and its stdout artifact is non-empty.
+      - Raw artifacts are hashed and verified in durable storage before provider termination.
+
+  full-topology-think-path-smoke:
+    purpose: Smallest topology smoke that constructs and exposes the released three-tool think agent.
+    coverage: >-
+      Service readiness, tool construction, and think-path generation are in
+      scope. Tool-call/result integration is only covered when a joined call
+      and result are observed; the math row does not force tool use.
+    gpu_count: 1
+    tensor_parallel: 1
+    data_parallel: 1
+    request_concurrency: 1
+    service_dependencies:
+      - selected search provider with credential
+      - Jina Reader network access
+      - OpenAI-compatible browsing summarizer
+      - hash-verified local visit tokenizer/cache or approved source patch
+      - SandboxFusion server
+    server_ref: profiles.service-free-model-scorer-smoke.server
+    service_preflight:
+      search:
+        provider: serpapi
+        credential_name: SERPAPI_API_KEY
+        concurrency: 1
+        timeout_seconds: 60
+        source_default_results_per_query: 10
+        source_schema_for_num: unbounded-number
+        t11_max_results_per_query: 10
+        t11_num_validation: integer-in-closed-range-1-through-10
+        per_run_requested_results_counter: >-
+          Before each search call, add query_count times validated num, where a
+          string query has query_count 1 and an array uses its length. Reject
+          the call before dispatch when the cumulative
+          search_results_requested budget would be exceeded.
+      visit:
+        fetch_provider: jina-reader
+        credential_name: JINA_API_KEY
+        credential_requirement: optional-upstream; decide-and-preflight-in-T11
+        summarizer_model: ${SUMMARIZER_MODEL}
+        summarizer_base_url: ${SUMMARIZER_BASE_URL}
+        concurrency: 1
+        timeout_seconds: 60
+        max_webpage_tokens: 28000
+        max_context_length: 32768
+        local_tokenizer:
+          artifact: ${VISIT_TOKENIZER_ARTIFACT}
+          released_source_call: AutoTokenizer.from_pretrained(summarize_model)
+          revision_argument: absent
+          readiness: hash identity verified and unexpected network egress disabled
+        input_token_contract: >-
+          Use server-accounted input tokens or reproduce the exact pinned
+          summarizer's rendered prompt, including its chat template, control
+          tokens, and all messages. The source's len(enc.encode(msgs[0].content))
+          plus one estimate is not an acceptance measurement; if exact
+          accounting is unavailable, block the request.
+      sandbox:
+        host: ${SANDBOX_HOST}
+        port: 8080
+        readiness_path: /run_code
+        readiness_program: print("ok")
+        concurrency: 1
+        timeout_seconds: 60
+        image_digest_required: true
+        package_lock_required: true
+        upstream_requirements:
+          lines: 256
+          version_specifiers: 0
+          sha256: d04d29c7b5201b8b1ae227cb4659aa8bf223c46720705397afbe70c18c30fb23
+        fail_on_required_package_error: true
+    agent:
+      cwd: ${UPSTREAM_ROOT}
+      argv:
+        - ${PYTHON}
+        - run_agent.py
+        - --input_file
+        - ${INPUT_JSONL}
+        - --output_file
+        - ${OUTPUT_JSONL}
+        - --model
+        - SR2AM-v0.1-8B
+        - --model_base_url
+        - http://127.0.0.1:8000/v1
+        - --model_api_key
+        - EMPTY
+        - --model_timeout
+        - "300"
+        - --agent_type
+        - think
+        - --max_concurrent
+        - "1"
+        - --num_retries
+        - "1"
+        - --start_idx
+        - "0"
+        - --end_idx
+        - "1"
+        - --search_concurrency
+        - "1"
+        - --search_timeout
+        - "60"
+        - --search_provider
+        - serpapi
+        - --browsing_summarize_model
+        - ${SUMMARIZER_MODEL}
+        - --browsing_summarize_model_base_url
+        - ${SUMMARIZER_BASE_URL}
+        - --visit_concurrency
+        - "1"
+        - --visit_timeout
+        - "60"
+        - --code_sandbox_servers
+        - ${SANDBOX_HOST}
+        - --code_timeout
+        - "60"
+        - --code_concurrency
+        - "1"
+        - --response_timeout
+        - "600"
+        - --tool_execution_timeout
+        - "300"
+        - --generate_response_timeout
+        - "3600"
+        - --judge_answer_timeout
+        - "60"
+        - --max_turns
+        - "50"
+        - --max_completion_tokens
+        - "16384"
+        - --temperature
+        - "0.8"
+        - --filtering
+        - --remove_tags
+        - --no_break_early
+        - --fix_datetime
+      effective_generation:
+        max_completion_tokens: 16384
+        request_temperature: 0.8
+        inherited_top_k: 20
+        inherited_top_p: 0.95
+        seed: unavailable
+        source_model_config_match: none
+        extra_body: {}
+        stochastic: true
+        note: >-
+          get_model_config uses substring matching, and SR2AM-v0.1-8B matches
+          none of the registered keys, including Qwen3-8B. The think request
+          therefore adds no model-specific chat_template_kwargs.
+      context_control:
+        source_pruning_or_compaction: absent
+        source_loop_ceiling_turns: 50
+        requested_output_tokens_per_turn: 16384
+        naive_requested_output_ceiling_tokens: 819200
+        server_context_tokens: 40960
+        required_t11_gate: >-
+          Before every model request, use the exact server-accounted input count
+          or reproduce the pinned server's full rendered prompt, including chat
+          template and control tokens, every accumulated outbound message, and
+          the complete tool-schema serialization. Reserve the requested output
+          allowance and stop before the 40960-token context would be exceeded.
+          Preserve measured counts and record any truncation, compaction,
+          reduced completion cap, or turn reduction as a protocol deviation.
+      outer_question_attempt_budget:
+        configured_total_attempts: 1
+        retries_after_first_attempt: 0
+        source_semantics: Both question processors iterate range(num_retries).
+    source_cardinality_and_retry_bounds:
+      logical_model_calls: 50
+      openai_sdk_default_max_retries: 2
+      model_http_attempts: 150
+      assistant_tool_calls_per_turn: unbounded-by-source-schema
+      search_queries_per_tool_call: unbounded-array
+      search_results_requested_per_query: unbounded-number; source-default-10
+      visit_urls_per_tool_call: unbounded-array
+      jina_attempts_per_url: 4
+      logical_summarizer_sdk_calls_per_url: 80
+      summarizer_http_attempts_per_url: 240
+      sandbox_server_attempts_per_tool_call: number-of-configured-hosts
+      outer_tool_execution_timeout_seconds: 300
+      caveat: >-
+        Semaphore values of one bound simultaneity, not cardinality or billed
+        provider attempts. The HTTP-attempt figures include openai==2.6.1's
+        default of two retries per logical SDK call; outer timeouts can interrupt
+        the static maxima. The source has no hard API spend counter.
+    required_t11_hard_budgets:
+      - model_calls
+      - model_http_attempts
+      - model_input_tokens
+      - model_output_tokens
+      - assistant_tool_calls
+      - search_queries
+      - search_results_requested
+      - visit_urls
+      - jina_requests
+      - logical_summarizer_calls
+      - summarizer_http_attempts
+      - summarizer_input_tokens
+      - summarizer_output_tokens
+      - sandbox_requests
+      - external_api_spend_usd
+      - gpu_spend_usd
+      - wall_seconds
+    aggregate_ref: profiles.service-free-model-scorer-smoke.aggregate
+    success_criteria:
+      - Every service preflight succeeds before the model call.
+      - Every required preflight command exits 0.
+      - The agent command exits 0; a row flushed before a later nonzero exit is failure evidence, not success.
+      - Exactly one non-error raw result row is preserved; structured error rows are retained as failure evidence, not success.
+      - answer is a non-empty string and judge_result has no error field.
+      - Every observed tool call and response remains in messages.
+      - Tool non-use is valid for the math row but yields no tool-integration coverage and must not be represented as a service result.
+      - If T11 selects tool-integration coverage, at least one assistant tool_call is joined by ID to a matching tool result; otherwise the gate fails.
+      - Every configured hard budget remains within its limit and counters are preserved.
+      - Every search num is an integer from 1 through 10, and the cumulative search_results_requested counter is checked before dispatch and preserved.
+      - Before each model or summarizer request, exact server-accounted or pinned-rendered input (including template/control tokens and, for think, all tool schemas), requested output, and context budgets are checked; absent exact token instrumentation blocks the gate.
+      - The aggregate command exits 0 and its stdout artifact is non-empty.
+      - Operational success is not scientific evidence and does not require correct=true.
+
+upstream_wrapper_reference:
+  description: >-
+    The official local wrapper is source-supported, but it constructs the
+    SGLang command as a word-split shell string and word-splits EXTRA_ARGS. T11
+    should reproduce its semantics with the explicit argument arrays above.
+  cwd: ${UPSTREAM_ROOT}
+  argv:
+    - bash
+    - scripts/run_inference_local.sh
+    - --model-path
+    - ${MODEL_DIR}
+    - --model-name
+    - SR2AM-v0.1-8B
+    - --model-size
+    - 8b
+    - --num-gpus
+    - "1"
+    - --agent-type
+    - instruct
+    - --max-turns
+    - "1"
+    - --max-concurrent
+    - "1"
+    - --context-length
+    - "40960"
+    - --input-file
+    - ${INPUT_JSONL}
+    - --output-file
+    - ${OUTPUT_JSONL}
+  do_not_execute_from_t02: true
+
+lifecycle_contract:
+  startup_order:
+    - Validate authorization, immutable identities, budget, durable destination, and the policy floor of max(150 GB, 20 percent free) after declared worst-case writes.
+    - Resolve and audit each process-specific environment allowlist; reject ambient secret leakage.
+    - Resolve one lifecycle mode, owner, and immutable process/resource identity for every required auxiliary service.
+    - Start only authorized harness-owned auxiliary services; readiness-check declared pre-existing external services without mutating their lifecycle; pass immutable-cache checks.
+    - Start SGLang in a dedicated process group and pass PID, 2xx health, and model-identity checks.
+    - Pass the deterministic scorer's positive and negative self-tests.
+    - Run the single agent command and require exit status 0.
+    - Run deterministic aggregate capture only after the raw row is closed and require exit status 0.
+  cleanup_order:
+    - Stop accepting new work.
+    - Close external-service client activity without mutating resources declared pre-existing or externally owned.
+    - Stop every harness-launched auxiliary process/resource in reverse dependency order with bounded TERM-to-KILL or provider termination, then verify terminal or non-billable state.
+    - Send TERM to the recorded SGLang process group and wait a bounded interval.
+    - Escalate to KILL if needed and verify no owned GPU process remains.
+    - Flush, hash, copy, and verify every retained artifact.
+    - Update compute accounting.
+    - Terminate the Lambda instance through the provider API and poll to a terminal state.
+  hard_failures:
+    - unresolved command slot
+    - source or model revision mismatch
+    - environment lock or import smoke mismatch
+    - missing required secret name
+    - unexpected secret present in a process environment
+    - any service readiness failure
+    - visit tokenizer identity mismatch or unexpected network fallback
+    - sandbox image, package lock, or required-package mismatch
+    - any required preflight command exits nonzero
+    - model readiness timeout
+    - scorer positive/negative self-test mismatch
+    - agent command exits nonzero, even if it already flushed a row
+    - aggregate command exits nonzero or emits empty stdout
+    - empty generated answer or judge_result.error
+    - selected tool-integration gate has no joined call/result
+    - any hard call, item, token, spend, or wall-time budget exceeded
+    - output path already exists
+    - free space is below, or the next declared write could cross, max(150 GB, 20 percent of filesystem capacity) or a stricter T11 floor
+    - artifact hash or transfer verification failure
+    - lost process or provider observability
+    - provider termination not confirmed
+    - missing or ambiguous service lifecycle mode, owner, process PID, or provider resource ID
+    - mutation of a service declared pre-existing or externally owned
+    - any harness-launched auxiliary process or resource lacks cleanup authority or remains running or billable
+
+known_source_gaps:
+  - The ordinary think/configurator chat-completions implementation drops response usage metadata.
+  - Instruct generation ignores CLI temperature and completion-token controls.
+  - Instruct generation ignores the constructed system prompt; --fix_datetime changes printed and raw-retained system text but not model input.
+  - The pinned generation config declares do_sample=true, but SGLang's model-default loader does not consume that key; effective temperature=0.6, top_k=20, and top_p=0.95 still make instruct stochastic without a seed.
+  - The visit tool receives a literal EMPTY summarizer API key from run_agent.py; an endpoint requiring another credential needs a reviewed source or deployment contract.
+  - The visit tool loads a Qwen tokenizer without a revision or independent local-path argument and may perform an implicit network/cache lookup at construction.
+  - Search and visit array cardinality, assistant tool calls per turn, and provider spend are not source-bounded; summarizer retry nesting can make 80 logical SDK calls and openai==2.6.1 can expand them to 240 HTTP attempts per URL before the outer timeout.
+  - Search num is an unbounded JSON number rather than an integer with a maximum; the source default is 10 results per query.
+  - The think loop retains all assistant and tool messages without pruning or compaction, so 50 turns times 16384 requested output tokens is not feasible within the 40960-token context.
+  - The visit summarizer estimates prompt length from only msgs[0].content plus one; it does not count the endpoint's exact rendered chat-template/control-token input.
+  - Sandbox setup uses an unpinned image and 256 unversioned packages, installs them through run_code, and does not fail on individual package errors.
+  - The upstream health curl omits --fail and can accept a non-2xx response.
+  - The local wrapper parses service CLI flags before sourcing .env, so same-named .env values overwrite per-run flags despite the example's stated precedence.
+  - The wrapper exports the full .env to SGLang, so the model server inherits unrelated search, Jina, judge, and telemetry credentials.
+  - Nonselected LLM-judge branches have heterogeneous endpoint and credential contracts: self-hosted math/STEM/web clients use *_LLM_JUDGE_URL and literal key EMPTY, while direct OpenAI branches use OPENAI_API_KEY and hard-coded model IDs.
+  - Scorer failures can be represented as score 0.0; numeric score and correct fields alone do not prove evaluator success.
+  - Output writes instantiate a new asyncio.Lock per coroutine rather than sharing one lock.
+  - Tool release is not in a finally block when generation raises.
+  - The local wrapper has no readiness or cleanup ownership for auxiliary services.
+  - The local wrapper cleanup does not prove that the full SGLang process tree exited.
+  - Existing outputs can trigger a derived filename that is then opened with write truncation.
