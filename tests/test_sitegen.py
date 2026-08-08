@@ -17,9 +17,12 @@ def test_status_is_generated_from_zero_use_phase_state() -> None:
     assert "No prototype result has been reproduced" in prose
 
 
-def test_template_is_not_published_as_an_experiment() -> None:
+def test_registered_experiment_is_published_and_template_is_not() -> None:
     page = build_experiments(ROOT)
-    assert "No registered experiments" in page
+    assert "| EXP-0001 | SiRA simulative versus matched reactive behavior |" in page
+    assert "planned" in page
+    assert "not-evaluated" in page
+    assert "pending" in page
     assert "| EXP-0000 |" not in page
 
 

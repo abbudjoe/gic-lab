@@ -50,7 +50,7 @@ def _valid_cloud_contract() -> dict[str, object]:
 
 
 def test_harness_schema_documents_are_registered() -> None:
-    for name in ("run-plan", "harness-event", "cloud-run"):
+    for name in ("run-plan", "run-profile", "pricing", "harness-event", "cloud-run"):
         assert "$id" in load_json(ROOT / f"schemas/{name}.schema.json")
 
 

@@ -1,0 +1,41 @@
+---
+title: "EXP-0001 — SiRA simulative versus reactive protocol"
+---
+
+## Current state
+
+`EXP-0001` is **planned**, its evidence is **not evaluated**, and its outcome is
+**pending**. No smoke, pilot, model, API, browser, evaluator, or benchmark run has
+occurred. Execution authorization is false.
+
+## Locked exploratory comparison
+
+The treatment is exactly `SIRA-SIMULATIVE`; the control is exactly `SIRA-REACTIVE`.
+Both are assigned externally by the experiment. The assignment is not evidence of a
+learned internal regulation mechanism.
+
+The smoke is one minimal matched pair on the pinned README query and prohibits
+interpretation. The pilot is two counterbalanced FanOutQA task pairs selected only to
+exercise paired execution, deterministic scoring, and variance plumbing. It is not an
+effect-size-based sample and cannot support a confirmatory or adequately powered
+claim.
+
+The historical upstream run used the mutable `gpt-4o` alias without an immutable
+serving revision. The proposed protocol substitutes a dated GPT-4o snapshot. Any later
+evidence must therefore be called a **directional reproduction under a declared model
+substitution**, never an unqualified reproduction.
+
+## Evidence and future-track boundary
+
+Raw traces, commands, configuration, environment identity, timestamps, hashes, costs,
+and cleanup evidence are retained before normalization. Public raw release remains
+blocked pending licensing, privacy, and redaction review.
+
+The protocol also retains source-grounded regulation-decision provenance for the
+planned/deferred `RQ-H2K` track. This is an additive evidence-preservation appendix,
+not an EXP-0001 hypothesis, metric, outcome, treatment, control, ablation, training
+condition, or interpretation. Trace sufficiency supports only source classification
+and lineage; it does not support internalization.
+
+See the generated [experiment registry](../generated/experiments.qmd) for canonical
+lifecycle, evidence, and outcome state.

@@ -28,6 +28,7 @@ from giclab.harness.models import (
 from giclab.harness.plan import (
     RunPlanError,
     load_run_plan,
+    run_plan_document,
     run_plan_from_mapping,
     validate_run_plan_data,
 )
@@ -71,6 +72,33 @@ def test_unknown_model_and_dataset_revisions_remain_explicit() -> None:
     plan = run_plan_from_mapping(valid_plan_data())
     assert plan.sources.model_revision is None
     assert plan.sources.dataset_revision is None
+
+
+def test_task_and_pair_identity_survive_typed_round_trip() -> None:
+    data = valid_plan_data()
+    data["task"] = {
+        "task_id": "TASK-001",
+        "source_kind": "dataset-slice",
+        "query": None,
+        "dataset_id": "DATA-SYNTHETIC",
+        "dataset_revision": "dataset-revision-1",
+        "start_idx": 3,
+        "end_idx": 4,
+    }
+    data["pairing"] = {"pair_id": "PAIR-SYNTHETIC-001", "order_index": 2}
+    data["sources"]["dataset_revision"] = "dataset-revision-1"
+    assert validate_run_plan_data(data, schema_root=ROOT) == []
+    plan = run_plan_from_mapping(data)
+    assert plan.task is not None and plan.task.task_id == "TASK-001"
+    assert plan.pairing is not None and plan.pairing.order_index == 2
+    assert run_plan_document(plan) == data
+
+
+def test_task_and_pair_identity_must_be_present_together() -> None:
+    data = valid_plan_data()
+    data["pairing"] = {"pair_id": "PAIR-SYNTHETIC-001", "order_index": 1}
+    with pytest.raises(RunPlanError, match="task must be an object"):
+        run_plan_from_mapping(data)
 
 
 def test_unavailable_source_commits_and_digests_are_explicit_but_not_invented() -> None:

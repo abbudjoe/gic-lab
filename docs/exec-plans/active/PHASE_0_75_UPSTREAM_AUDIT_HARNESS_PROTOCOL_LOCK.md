@@ -11,8 +11,8 @@ T00, “Open Phase 0.75 and repair the control plane,” plus the approved v1.1
 harness-to-kernel option-preservation addendum. The original package manifest identifies
 the repository state at commit `d3014d907d8f2c8526d7f671abf3f5b524cdebb4`; the
 addendum inserts T04.5 between the integrated T02/T04 state and T05. This plan adapts
-those packages to the repository's execution-plan and evidence conventions. The
-completed addendum work is T04.5 only; T05 has not begun.
+those packages to the repository's execution-plan and evidence conventions. T04.5 and
+T05 are complete; T06 is the next permitted assembly item.
 
 ## Target contract
 
@@ -48,7 +48,7 @@ condition, Phase 2, or any claim of latent internalization is also out of scope.
 | P075-DOD-02 | Pinned SiRA and SR²AM commits have source-grounded static execution audits without upstream execution. | Audit documents, verified pins, and reviewer findings. | met |
 | P075-DOD-03 | The harness enforces explicit authorization, budgets, argument-array commands, append-only events, raw-evidence preservation, artifact hashes, version identity, and credential isolation. | Typed modules, schemas, unit tests, CLI smoke, and review. | met |
 | P075-DOD-04 | SiRA has a real source-grounded adapter or a documented schema gap; normalized fields are never invented. | Adapter tests, source-derived fixtures, provenance labels, and gap report. | met |
-| P075-DOD-05 | Draft `EXP-0001` and its smoke/pilot run plans exist with execution and interpretation disabled unless their profile explicitly permits interpretation. | Schema-valid protocol/run plans and authorization regressions. | not-started |
+| P075-DOD-05 | Draft `EXP-0001` and its smoke/pilot run plans exist with execution and interpretation disabled unless their profile explicitly permits interpretation. | Schema-valid protocol/run plans and authorization regressions. | met |
 | P075-DOD-06 | Full local checks and independent spec-conformance review pass with no unresolved critical issue. | `make check`, review record, fixes, and post-review `make check`. | partial |
 | P075-DOD-07 | No model/API/benchmark/training/cloud execution occurs and compute accounting remains zero for the phase. | Project state, experiment registry, compute manifest, and repository diff. | partial |
 | P075-DOD-08 | Phase closeout makes only the next SiRA smoke profile eligible for a later, explicit human authorization. | Closed ledger, disabled run plan, and Phase 1 handoff boundary. | not-started |
@@ -64,13 +64,13 @@ condition, Phase 2, or any claim of latent internalization is also out of scope.
 | T03 | Build the generic experiment harness. | P075-DOD-03, P075-DOD-07 | successful |
 | T04 | Build the SiRA adapter and source-derived fixtures. | P075-DOD-03, P075-DOD-04, P075-DOD-07 | successful |
 | T04.5 | Preserve the planned/deferred harness-to-kernel evidence option without activating it. | P075-DOD-03, P075-DOD-04, P075-DOD-06, P075-DOD-07, P075-DOD-09 | successful |
-| T05 | Register and lock draft `EXP-0001` and disabled run plans. | P075-DOD-05, P075-DOD-07, P075-DOD-09 | not-started; dependency on successful T04.5 satisfied |
+| T05 | Register and lock draft `EXP-0001` and disabled run plans. | P075-DOD-05, P075-DOD-07, P075-DOD-09 | successful |
 | T06 | Integrate, review, and close Phase 0.75. | P075-DOD-01 through P075-DOD-09 | blocked until T01 through T05 succeed |
 
 T04.5 began only from the combined accepted T00–T04 state, including T02, and completed
 under its successful ledger. T05 depends on that result; the dependency is satisfied,
-but T05 remains not-started and outside this change. T06 retains ownership of final
-shared-manifest, project-state, experiment-registry, and phase-closeout integration.
+and T05 is the active workstream. T06 retains ownership of final project-state and
+phase-closeout integration after T05 succeeds.
 
 ## T04.5 assembly control
 
@@ -84,6 +84,19 @@ The auditable DoD, implementation mapping, planned evidence, progress, and revie
 are in [`docs/harness/T04_5_ASSEMBLY_LEDGER.md`](../../harness/T04_5_ASSEMBLY_LEDGER.md).
 T04.5 adds no model/GPU scout; its source contract requires deterministic local gates
 and forbids external execution.
+
+## T05 assembly control
+
+Assembly status: **successful**
+
+Target contract: register the locked, exploratory SiRA simulative-versus-reactive
+protocol and disabled smoke/pilot profiles while preserving RQ-H2K evidence as an
+additive, non-scientific future-consumer contract.
+
+The auditable DoD, implementation mapping, planned evidence, progress, and review state
+are in [`docs/harness/T05_ASSEMBLY_LEDGER.md`](../../harness/T05_ASSEMBLY_LEDGER.md).
+T05 adds no model/GPU scout; its source contract requires deterministic local gates and
+forbids model, API, browser, benchmark, training, cloud, and paid execution.
 
 ## T00 assembly ledger
 
