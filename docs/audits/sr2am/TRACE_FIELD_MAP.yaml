@@ -1,0 +1,503 @@
+schema_version: 0.1.0
+kind: sr2am-trace-field-map
+status: static-unexecuted
+source:
+  repository: sailing-lab/sr2am
+  commit: 6f4ac7824ffc7d12453ffaa53d25e5f34bf3aeb0
+  primary_output: filtering-mode JSONL
+  source_files:
+    - agent_base.py
+    - run_agent.py
+    - tools/websailor_tools_fast.py
+    - avg_tokens_before_think_close.py
+
+mapping_rules:
+  - Preserve each upstream JSONL line byte-for-byte as a raw artifact before normalization.
+  - Preserve the complete messages array; never strip reasoning tags from raw evidence.
+  - Use observed only for fields explicitly present in upstream output.
+  - Use derived for mechanical transforms such as message ordinal or post-hoc tokenization.
+  - Do not infer GIC belief, critic, prediction, plan, or configurator state from free-form text or XML-like tags.
+  - Upstream timestamps are naive local-time strings and cannot populate timestamp_utc.
+  - Harness lifecycle, budget, artifact, and cloud events come from the harness, not from SR²AM output.
+
+gic_transition_schema_projection:
+  target_schema: schemas/transition.schema.json
+  target_schema_version: 0.1.0
+  source_only_projection_valid: false
+  reason: >-
+    The schema requires typed state, planning, identity, time, revision, and
+    cost fields that the upstream row does not emit. A harness may add observed
+    lifecycle identities and counters, but it must not infer missing cognitive
+    state from free-form messages.
+  required_fields:
+    schema_version:
+      availability: harness-only
+      value: 0.1.0
+    transition_id:
+      availability: harness-only
+    experiment_id:
+      availability: harness-only
+    episode_id:
+      availability: harness-only
+    step_index:
+      availability: harness-only
+      caveat: Message ordinal is derivable but is not necessarily an environment-transition index.
+    timestamp:
+      availability: harness-only
+      caveat: Upstream timestamp has no timezone and cannot satisfy a canonical UTC event time.
+    goal:
+      availability: partial
+      source_candidates:
+        - question
+        - messages[].role==user.content
+      caveat: The harness must define which source value is the protocol goal.
+    observation_before:
+      availability: unavailable-as-typed-state
+      caveat: User text may be retained, but no canonical environment state is emitted.
+    belief_before:
+      availability: unavailable
+    configurator_decision:
+      availability: unavailable
+      caveat: Tagged configurator text does not satisfy the typed mode/budget object.
+    candidate_actions:
+      availability: unavailable
+      caveat: Emitted tool calls are selected/issued actions, not a complete candidate set.
+    predicted_futures:
+      availability: unavailable
+    selected_plan:
+      availability: unavailable
+    executed_action:
+      availability: partial
+      source: assistant.tool_calls[] joined by ID to a tool result
+      caveat: Only actually issued tool calls can be represented; no stable preselection candidate ID exists upstream.
+    execution_result:
+      availability: partial
+      source: matched tool message content, reward, and metrics
+      caveat: Tool text is not a canonical environment state.
+    observation_after:
+      availability: unavailable-as-typed-state
+      source_candidate: matched tool message content
+    belief_after:
+      availability: unavailable
+    outcome:
+      availability: partial
+      source_candidates:
+        - answer
+        - correct
+        - judge_result
+        - error
+    reward:
+      availability: semantically-unresolved
+      source_candidates:
+        - messages[].role==tool.reward
+        - judge_result.score
+      caveat: Tool reward and final-answer score have different scopes; T11 must not conflate them.
+    cost:
+      availability: partial-with-harness
+      source_fields:
+        latency_seconds: generate_response_time
+        tool_calls: derived from matched tool call IDs
+        model_calls: harness request boundaries
+        model_tokens: unavailable in default chat-completions traces
+        accelerator_seconds: harness-only
+      caveat: A schema-valid cost object requires every field, including unavailable source fields.
+    model_revision:
+      availability: harness-only
+      expected_value: 5d72255092ac2ec006c2f9813029220aff79865e
+    tool_revisions:
+      availability: harness-only
+      source_basis: pinned SR2AM commit plus separately pinned service identities
+    environment_revision:
+      availability: harness-only
+
+harness_event_inventory:
+  run_started:
+    availability: harness-only
+    provenance: observed
+    upstream_fields: []
+    note: Emit before command start with immutable source/model/config identities.
+  preflight_completed:
+    availability: harness-only
+    provenance: observed
+    upstream_fields: []
+    note: Include revision, service, disk, budget, and readiness results.
+  command_started:
+    availability: harness-only
+    provenance: observed
+    upstream_fields: []
+    note: Preserve the resolved argument array and nonsecret environment names.
+  command_completed:
+    availability: harness-only
+    provenance: observed
+    upstream_fields: []
+    note: Capture exit status, monotonic duration, and stdout/stderr artifact IDs.
+  auxiliary_service_started:
+    availability: harness-only-when-harness-launched
+    provenance: observed
+    upstream_fields: []
+    note: Record service type, lifecycle mode, owner, PID/process group or provider resource ID, immutable service identity, start time, and billing boundary.
+  auxiliary_service_stopped:
+    availability: harness-only-when-harness-launched
+    provenance: observed
+    upstream_fields: []
+    note: Record stop method, terminal or non-billable proof, final counters, logs, and stop time; pre-existing external services must not emit a harness-owned stop event.
+  observation:
+    availability: available
+    provenance: observed
+    mappings:
+      - upstream_path: question
+        payload_path: question
+        scope: trajectory
+      - upstream_path: messages[].content
+        condition: message.role == user
+        payload_path: conversation.user_content
+        scope: message
+      - upstream_path: messages[].content
+        condition: message.role == tool
+        payload_path: tool_result.content
+        scope: message
+    caveat: A tool response is observable text, not a validated environment state transition.
+  belief_state:
+    availability: unavailable
+    provenance: unavailable
+    upstream_fields: []
+    caveat: No typed belief field exists; reasoning or configurator tags are not a belief contract.
+  candidate_action:
+    availability: available-for-tool-calls-only
+    provenance: observed
+    mappings:
+      - upstream_path: messages[].tool_calls[].id
+        condition: message.role == assistant
+        payload_path: tool_call.id
+      - upstream_path: messages[].tool_calls[].function.name
+        condition: message.role == assistant
+        payload_path: tool_call.name
+      - upstream_path: messages[].tool_calls[].function.arguments
+        condition: message.role == assistant
+        payload_path: tool_call.arguments_raw
+    caveat: Function arguments are JSON text in the chat-completions path and must be retained before parsing.
+  predicted_future:
+    availability: unavailable
+    provenance: unavailable
+    upstream_fields: []
+    caveat: Free-form planning/reasoning text is not a typed predicted state or horizon.
+  critic_evaluation:
+    availability: unavailable
+    provenance: unavailable
+    upstream_fields: []
+    caveat: judge_result evaluates the final answer; it is not a planner critic score.
+  plan:
+    availability: unavailable
+    provenance: unavailable
+    upstream_fields: []
+    caveat: XML-like planning/configurator blocks may be retained as raw assistant content but cannot be normalized as a plan without a later source-grounded parser contract.
+  executed_action:
+    availability: available-for-completed-tool-calls
+    provenance: observed
+    join_contract:
+      call_path: messages[role=assistant].tool_calls[].id
+      result_path: messages[role=tool].tool_call_id
+      cardinality: one result confirms execution of one matching call
+    payload_fields:
+      - tool_call_id
+      - function.name
+      - function.arguments
+    caveat: A call without a matching tool message is an attempted candidate, not confirmed execution.
+  outcome:
+    availability: available
+    provenance: observed
+    mappings:
+      - upstream_path: answer
+        payload_path: final_answer
+      - upstream_path: correct
+        payload_path: correct
+      - upstream_path: judge_result
+        payload_path: evaluation
+      - upstream_path: messages[].content
+        condition: message.role == tool
+        payload_path: tool_result.content
+      - upstream_path: messages[].reward
+        condition: message.role == tool
+        payload_path: tool_result.reward
+      - upstream_path: error
+        payload_path: error.message
+    caveat: An execution error is an operational outcome, not a negative scientific result.
+  metric:
+    availability: partial
+    provenance: observed-or-derived-per-field
+    mappings:
+      - upstream_path: generate_response_time
+        payload_path: latency.generate_response_seconds
+        provenance: observed
+        caveat: Excludes final judging, setup, readiness, and artifact transfer.
+      - upstream_path: messages[].metrics
+        condition: message.role == tool
+        payload_path: tool.metrics
+        provenance: observed
+      - upstream_path: judge_result.score
+        payload_path: evaluation.score
+        provenance: observed
+      - upstream_path: avg_tokens_before_think_close.py stdout
+        payload_path: reasoning_tokens_posthoc
+        provenance: derived
+        caveat: Requires the pinned local tokenizer and an explicitly selected extraction mode.
+  budget_update:
+    availability: harness-only
+    provenance: observed-or-derived
+    upstream_fields: []
+    note: Upstream output has no complete spend, GPU-time, model-call, or tool-call budget ledger.
+  artifact_recorded:
+    availability: harness-only
+    provenance: observed
+    upstream_fields: []
+    note: Emit after size and SHA-256 are computed for a retained artifact.
+  warning:
+    availability: partial
+    provenance: observed
+    mappings:
+      - upstream_path: error
+        payload_path: warning_or_error
+      - upstream_path: captured stderr/stdout warnings
+        payload_path: message
+    caveat: Severity classification is a harness decision and must preserve original text.
+  error:
+    availability: available
+    provenance: observed
+    mappings:
+      - upstream_path: error
+        payload_path: message
+      - upstream_path: messages
+        payload_path: partial_messages
+        condition: save_partial_messages=true
+  run_stopped:
+    availability: harness-only
+    provenance: observed
+    upstream_fields: []
+    note: Include reason, exit status, artifact-sync state, and cleanup state.
+  cloud_instance_launched:
+    availability: harness-only-later-phase
+    provenance: observed
+    upstream_fields: []
+  cloud_instance_terminated:
+    availability: harness-only-later-phase
+    provenance: observed
+    upstream_fields: []
+
+top_level_filtering_success_row:
+  dataset:
+    type: string
+    availability: always-on-success
+    provenance: observed
+    canonical_use: outcome.payload.dataset
+    source: row.source or row.general_domain at input load time
+  question:
+    type: string
+    availability: always
+    provenance: observed
+    canonical_use: observation.payload.question
+  messages:
+    type: array
+    availability: always-on-success
+    provenance: observed
+    canonical_use: raw conversation artifact plus message-level normalization
+  answer:
+    type: string-or-null
+    availability: success path
+    provenance: observed
+    canonical_use: outcome.payload.final_answer
+  correct:
+    type: boolean
+    availability: filtering success path
+    provenance: observed
+    canonical_use: outcome.payload.correct
+  judge_result:
+    type: object
+    availability: filtering success path
+    provenance: observed
+    canonical_use: outcome.payload.evaluation
+  generate_response_time:
+    type: number
+    unit: seconds
+    clock: time.time wall clock
+    availability: filtering success path
+    provenance: observed
+    canonical_use: metric.payload.latency.generate_response_seconds
+  rep_idx:
+    type: integer
+    availability: filtering success and error paths
+    provenance: observed
+    canonical_use: outcome.payload.rep_idx
+  timestamp:
+    type: string
+    format: "%Y-%m-%d %H:%M:%S"
+    timezone: unavailable
+    availability: always-written
+    provenance: observed
+    canonical_use: raw payload only
+    reason_not_timestamp_utc: No offset or timezone is recorded.
+
+top_level_filtering_error_row:
+  dataset:
+    provenance: observed
+  question:
+    provenance: observed
+  messages:
+    type: array-or-null
+    availability: always-present
+    non_null_condition: >-
+      save_partial_messages=true and the exception carries partial_messages
+    provenance: observed
+  error:
+    provenance: observed
+  rep_idx:
+    provenance: observed
+  timestamp:
+    provenance: observed
+    timezone: unavailable
+
+message_fields:
+  system:
+    observed_fields:
+      - role
+      - content
+    note: >-
+      Agent.__init__ seeds the raw messages array with this system message for
+      every agent class, including instruct. VLLMModelInstructAgent filters the
+      outbound request to user messages only, so an instruct trace's retained
+      system message was not observed model input and must not be normalized as
+      such. --fix_datetime stabilizes this retained raw text even though it has
+      no instruct model-input effect.
+  user:
+    observed_fields:
+      - role
+      - content
+  assistant_chat_completions:
+    observed_fields:
+      - role
+      - content
+      - reasoning_content when returned by server
+      - tool_calls
+    usage_availability: unavailable-in-think-configurator-instruct-overrides
+    reason: The subclass implementations return only the message dump and discard response.usage.
+  assistant_responses_api:
+    observed_fields:
+      - type
+      - role
+      - status
+      - content
+      - function call items
+      - usage attached to the first output item when response usage exists
+    availability: only-when-use_response_api
+  tool:
+    observed_fields:
+      - role
+      - content
+      - reward
+      - metrics
+      - tool_call_id
+
+tool_metric_fields:
+  web_search:
+    observed:
+      - query
+      - result_length
+    unavailable:
+      - provider_request_id
+      - HTTP status
+      - latency
+      - billed_units
+      - result URLs as structured fields
+  visit_tool:
+    observed:
+      - url
+      - goal
+      - result_length
+    unavailable:
+      - fetch HTTP status
+      - summarizer usage
+      - summarizer latency
+      - source-content hash
+      - provider request IDs
+  python_repl_tool:
+    observed:
+      - code
+      - result on success
+      - error on failure
+    unavailable:
+      - selected sandbox host
+      - HTTP status
+      - server-side execution duration in the tool message
+      - sandbox image digest
+
+token_accounting:
+  local_think_chat_completions:
+    model_usage_in_raw_output: unavailable
+    reason: response.usage is dropped by VLLMModelThinkAgent.get_response
+  response_api:
+    model_usage_in_raw_output: partial
+    location: messages first output item usage
+  posthoc_reasoning_count:
+    availability: derived
+    script: avg_tokens_before_think_close.py
+    required_inputs:
+      - raw output JSONL
+      - pinned local model tokenizer
+      - explicit assistant_text_source
+      - explicit think_close_mode
+      - explicit missing_behavior
+    v0_1_8b_documented_mode: configurator
+    caveats:
+      - This is not total prompt-plus-completion billing usage.
+      - Configurator mode counts all matched tagged blocks, including tags.
+      - Missing or malformed tags change the count according to declared options.
+  required_harness_counters:
+    - logical model SDK calls derived from observed request boundaries
+    - model HTTP attempts including OpenAI SDK retries
+    - tool_calls derived from matched tool call IDs
+    - search queries and visit URLs inside tool-call arrays
+    - requested search results computed before dispatch as query count times validated num, accumulated per run
+    - Jina HTTP requests
+    - logical summarizer SDK calls and underlying HTTP attempts
+    - model input tokens from exact server accounting or pinned rendering, including chat-template/control tokens and full tool schemas
+    - model output tokens from new harness/server instrumentation
+    - summarizer input tokens from exact server accounting or pinned rendering, including chat-template/control tokens and all messages
+    - summarizer output tokens from new harness/service instrumentation
+    - sandbox HTTP requests
+    - accelerator_seconds from harness/provider sampling
+    - wall_seconds from monotonic harness clocks
+    - filesystem capacity and free bytes for every writable local or attached filesystem, checked against max(150 GB, 20 percent free) or a stricter T11 floor
+    - provider/API cost from separately versioned rate records
+  sdk_retry_gap:
+    pinned_openai_version: 2.6.1
+    default_max_retries: 2
+    maximum_http_attempts_per_logical_sdk_call: 3
+    source_override: absent
+    implications:
+      - One logical local-model call can make up to three HTTP attempts.
+      - Fifty logical think turns can make up to 150 model HTTP attempts.
+      - Eighty logical summarizer calls per URL can make up to 240 HTTP attempts.
+    caveat: Outer asyncio timeouts can interrupt these static maxima earlier.
+
+explicitly_unavailable_normalized_fields:
+  - field: belief_state
+    reason: No typed upstream field.
+  - field: configurator_decision
+    reason: Only free-form tagged text may exist; no typed decision contract.
+  - field: candidate_actions_beyond_tool_calls
+    reason: Internal alternatives are not emitted structurally.
+  - field: predicted_futures
+    reason: No typed prediction, horizon, or confidence fields.
+  - field: critic_evaluation
+    reason: Final-answer judge output is not a planning critic.
+  - field: selected_plan
+    reason: Planning text is not a structured plan with stable identifiers.
+  - field: observation_after_environment_transition
+    reason: Tool text is captured, but no canonical environment state is emitted.
+  - field: complete_model_token_usage
+    reason: Dropped in the default think/configurator chat-completions path.
+  - field: UTC_event_time
+    reason: Upstream row timestamp has no timezone.
+  - field: environment_revision
+    reason: The output row does not record Python/package/CUDA/image identity.
+  - field: model_revision
+    reason: The output row records neither model revision nor checkpoint hashes.
