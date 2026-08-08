@@ -20,13 +20,20 @@ the exact `command_sha256` returned by `render-command`. The digest binds the ar
 array, absolute resolved executable path and file digest, resolved working directory,
 working-directory device/inode identity, timeout, literal environment, digests of
 explicitly inherited non-secret environment values, secret environment names, and
-resource projection. An inherited value, executable, or effective working directory
-that changes after authorization is refused before evidence or a process is created;
-filesystem identity is checked again immediately before process launch. Live runs use
-a new `RUN-ID/attempt-NNNN` directory, refuse collisions, inherit no ambient variables
-by default, and inject secret variables by name through `--secret-env`. Dry-run and
-unauthorized paths never enumerate the ambient environment or read named secret values.
-NUL-bearing arguments and environment values are rejected before evidence creation.
+resource projection. Adapters can additionally bind complete input-tree digests,
+declare exact owned output roots, and declare source writes that remain outside attempt
+ownership. An inherited value,
+executable, effective working directory, or bound input tree that changes after
+authorization is refused before evidence or a process is created; filesystem and tree
+identity are checked again immediately before process launch. Any declared unowned
+output pattern is itself a hard live-execution blocker until an isolation wrapper
+removes that gap. Every declared owned output root must resolve inside the exact
+prospective run attempt at preflight and is rechecked immediately before launch. Live
+runs use a new `RUN-ID/attempt-NNNN` directory, refuse collisions, inherit no ambient
+variables by default, and inject secret variables by name through `--secret-env`.
+Dry-run and unauthorized paths never enumerate the ambient environment or read named
+secret values. NUL-bearing arguments and environment values are rejected before
+evidence creation.
 
 Secret-like literal arguments and environment entries are refused. One session-owned
 exact-value scrubber checks the retained plan, command, events, adapter raw artifacts,
@@ -51,12 +58,22 @@ session directly when no adapter-owned files are present. The stop decision cann
 recovered by replacing the original limits. Artifact validation also reconciles budget
 event totals with the retained plan.
 
+Adapter command construction receives the pinned upstream source root and the
+prospective run-attempt output root as separate paths. This keeps executable and
+configuration identity separate from raw-artifact ownership; an adapter must not infer
+one path from the other. The adapter must bind each source output directory into
+`owned_output_roots`; the executor, rather than caller convention, enforces the exact
+attempt boundary.
+
 Wall time and captured output are metered directly. Any command that can consume cost,
 GPU time, model tokens, or tool calls must declare a before-action upper bound and use
 `--incremental-limit-enforcement adapter-command`, asserting that its adapter encodes
 those maxima into hard command-level controls. Opaque subprocess resource use without
-that typed enforcement contract is refused. The projection is checked against the run
-budget before launch, and normalized observed usage must not exceed either the original
+that typed enforcement contract is refused. Applicable units for which an adapter
+cannot provide a finite command-enforced upper bound remain typed as
+`unbounded_applicable`; dry runs expose the gap and live execution is refused regardless
+of plan authorization. The projection is checked against the run budget before launch,
+and normalized observed usage must not exceed either the original
 budget or the authorized projection. Each projected unit must be attested as observed
 or explicitly unavailable before sealing. Unavailable use is recorded as unavailable
 and conservatively charged at the authorized projection; it is never invented as zero.

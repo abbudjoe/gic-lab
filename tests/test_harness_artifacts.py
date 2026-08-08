@@ -227,7 +227,7 @@ def test_artifact_validation_requires_projected_nonwall_accounting_evidence(
             events=(),
             raw_artifacts=(),
             unavailable_fields=(),
-            warnings=(),
+            notices=(),
             accounting=NonWallResourceAccounting(0.0, 0.0, 0, 0),
         )
     )
@@ -263,7 +263,7 @@ def _zero_accounted_attempt(tmp_path: Path) -> Path:
             events=(),
             raw_artifacts=(),
             unavailable_fields=(),
-            warnings=(),
+            notices=(),
             accounting=NonWallResourceAccounting(0.0, 0.0, 0, 0),
         )
     )

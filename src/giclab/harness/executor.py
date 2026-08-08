@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 import signal
 import subprocess
 import threading
@@ -16,7 +17,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any, BinaryIO
 
-from .adapters.base import NormalizationResult
+from .adapters.base import AdapterNoticeSeverity, NormalizationResult
 from .artifacts import (
     ARTIFACT_RECORDS,
     COMMAND_RECORD,
@@ -43,6 +44,7 @@ from .models import (
     RunPlan,
     command_document,
     command_sha256,
+    input_tree_sha256,
     thaw_json,
 )
 from .plan import run_plan_document
@@ -152,6 +154,49 @@ def _write_json_exclusive(
     with _open_exclusive(path) as handle:
         handle.write(encoded)
         os.fsync(handle.fileno())
+
+
+def _git_checkout_blockers(root: Path, expected_commit: str) -> tuple[str, ...]:
+    """Reconcile a command-bound Git identity without trusting ambient Git state."""
+
+    git = shutil.which("git")
+    if git is None:
+        return (f"cannot verify bound Git checkout {root}: git is unavailable",)
+
+    def run(*args: str) -> tuple[int, str]:
+        try:
+            completed = subprocess.run(
+                (git, "-C", str(root), *args),
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+        except OSError:
+            return 127, ""
+        return completed.returncode, completed.stdout.strip()
+
+    top_status, top_level = run("rev-parse", "--show-toplevel")
+    head_status, head = run("rev-parse", "HEAD")
+    worktree_status, worktree = run(
+        "status",
+        "--porcelain=v1",
+        "--untracked-files=all",
+        "--ignored=matching",
+    )
+    if top_status != 0 or head_status != 0 or worktree_status != 0:
+        return (f"cannot verify bound Git checkout identity: {root}",)
+    try:
+        canonical_top_level = Path(top_level).resolve(strict=True)
+    except (OSError, RuntimeError):
+        return (f"cannot resolve bound Git checkout top level: {root}",)
+    blockers: list[str] = []
+    if canonical_top_level != root:
+        blockers.append(f"bound Git checkout root changed: {root}")
+    if head != expected_commit:
+        blockers.append(f"bound Git checkout commit changed: {root}")
+    if worktree:
+        blockers.append(f"bound Git checkout is no longer clean: {root}")
+    return tuple(blockers)
 
 
 class _OutputQuota:
@@ -404,11 +449,18 @@ class RunSession:
                     {"kind": "unavailable-field", "field": field},
                     provenance=EventProvenance.UNAVAILABLE,
                 )
-            for warning in result.warnings:
+            for notice in result.notices:
                 self._emit(
-                    EventType.WARNING,
-                    {"kind": "adapter-warning", "message": warning},
-                    provenance=EventProvenance.OBSERVED,
+                    EventType.WARNING
+                    if notice.severity is AdapterNoticeSeverity.WARNING
+                    else EventType.ERROR,
+                    {
+                        "kind": notice.kind,
+                        "message": notice.message,
+                        "adapter_source": notice.source,
+                        "source_paths": list(notice.source_paths),
+                    },
+                    provenance=notice.provenance,
                 )
         except CredentialExposureError:
             object.__setattr__(self, "_status", "credential-evidence-refused")
@@ -908,6 +960,7 @@ class LocalRunExecutor:
             scrubber,
             stdout_path,
             stderr_path,
+            attempt_dir,
             plan.budget.max_output_bytes,
             lambda: emit(EventType.COMMAND_STARTED, render_command(command)),
         )
@@ -1005,6 +1058,7 @@ class LocalRunExecutor:
         scrubber: ExactCredentialScrubber,
         stdout_path: Path,
         stderr_path: Path,
+        attempt_directory: Path,
         max_output_bytes: int,
         started_callback: Callable[[], None],
     ) -> _ProcessResult:
@@ -1015,7 +1069,10 @@ class LocalRunExecutor:
         terminate_group: _ProcessGroupTerminator | None = None
         try:
             try:
-                runtime_blockers = self._runtime_path_blockers(command)
+                runtime_blockers = (
+                    *self._runtime_path_blockers(command),
+                    *self._owned_output_blockers(command, attempt_directory),
+                )
                 if runtime_blockers:
                     raise OSError(
                         "command identity changed immediately before launch: "
@@ -1130,6 +1187,16 @@ class LocalRunExecutor:
         if command.timeout_seconds > plan.budget.max_wall_seconds:
             blockers.append("command timeout exceeds the immutable wall-time budget")
         blockers.extend(self._runtime_path_blockers(command))
+        blockers.extend(
+            self._owned_output_blockers(
+                command,
+                self.workspace.attempt_directory(
+                    plan.artifacts,
+                    plan.identity,
+                    create=False,
+                ),
+            )
+        )
         for binding in command.inherit_environment:
             value = self._host_environment.get(binding.name)
             if value is None:
@@ -1143,6 +1210,17 @@ class LocalRunExecutor:
             elif hashlib.sha256(value.encode("utf-8")).hexdigest() != binding.value_sha256:
                 blockers.append(f"inherited environment binding changed: {binding.name}")
         projection = command.resource_projection
+        if projection.has_unbounded_applicable:
+            blockers.append(
+                "command has applicable non-wall resources without finite "
+                "command-enforced upper bounds: "
+                + ", ".join(unit.value for unit in projection.unbounded_applicable)
+            )
+        if command.unowned_output_patterns:
+            blockers.append(
+                "command may write raw artifacts outside harness attempt ownership: "
+                + ", ".join(pattern.as_posix() for pattern in command.unowned_output_patterns)
+            )
         try:
             BudgetGuard(plan.budget).assert_projected(
                 wall_seconds=float(command.timeout_seconds),
@@ -1153,6 +1231,35 @@ class LocalRunExecutor:
             )
         except BudgetExceeded as exc:
             blockers.append(str(exc))
+        return tuple(blockers)
+
+    @staticmethod
+    def _owned_output_blockers(
+        command: CommandSpec,
+        attempt_directory: Path,
+    ) -> tuple[str, ...]:
+        blockers: list[str] = []
+        try:
+            canonical_attempt = attempt_directory.resolve(strict=False)
+        except (OSError, RuntimeError) as exc:
+            return (f"cannot resolve prospective run attempt ownership: {exc}",)
+        for binding in command.owned_output_roots:
+            root = binding.root
+            try:
+                resolved = root.resolve(strict=False)
+            except (OSError, RuntimeError) as exc:
+                blockers.append(f"cannot verify owned output root {root}: {exc}")
+                continue
+            if resolved != root:
+                blockers.append(f"owned output root resolution changed: {root}")
+                continue
+            if root.exists() and (root.is_symlink() or not root.is_dir()):
+                blockers.append(f"owned output root is not a non-symlink directory: {root}")
+                continue
+            if root != canonical_attempt and canonical_attempt not in root.parents:
+                blockers.append(
+                    f"command output root is outside the exact harness run attempt: {root}"
+                )
         return tuple(blockers)
 
     @staticmethod
@@ -1185,6 +1292,18 @@ class LocalRunExecutor:
                 blockers.append("resolved executable content no longer matches its binding")
         except (OSError, ValueError) as exc:
             blockers.append(f"cannot verify resolved executable identity: {exc}")
+        for binding in command.input_trees:
+            try:
+                if binding.root.is_symlink() or not binding.root.is_dir():
+                    blockers.append(
+                        f"bound input tree is no longer a canonical directory: {binding.root}"
+                    )
+                elif input_tree_sha256(binding.root, binding.excluded_roots) != binding.sha256:
+                    blockers.append(f"bound input tree content changed: {binding.root}")
+            except (OSError, RuntimeError, ValueError) as exc:
+                blockers.append(f"cannot verify bound input tree {binding.root}: {exc}")
+            if binding.git_commit is not None:
+                blockers.extend(_git_checkout_blockers(binding.root, binding.git_commit))
         return tuple(blockers)
 
     def _build_environment(self, command: CommandSpec) -> tuple[dict[str, str], tuple[str, ...]]:

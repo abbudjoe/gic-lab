@@ -12,7 +12,12 @@ from pathlib import Path
 import pytest
 from harness_test_support import bind_plan, project_state, typed_plan
 
-from giclab.harness.adapters.base import ArtifactAdapter, NormalizationResult
+from giclab.harness.adapters.base import (
+    AdapterNotice,
+    AdapterNoticeSeverity,
+    ArtifactAdapter,
+    NormalizationResult,
+)
 from giclab.harness.artifacts import (
     ArtifactWorkspace,
     read_artifact_records,
@@ -28,9 +33,11 @@ from giclab.harness.models import (
     IncrementalLimitEnforcement,
     NonWallResourceAccounting,
     NormalizedEvent,
+    OwnedOutputRoot,
     ResourceProjection,
     RunPlan,
     inherited_environment_binding,
+    thaw_json,
 )
 from giclab.harness.policy import ExecutionDisallowed
 from giclab.harness.safety import CredentialExposureError, ExactCredentialScrubber
@@ -47,17 +54,23 @@ class _SyntheticAdapter:
     def __init__(self, cwd: Path) -> None:
         self.cwd = cwd
 
-    def build_command(self, plan: RunPlan, upstream_root: Path) -> CommandSpec:
+    def build_command(
+        self,
+        plan: RunPlan,
+        upstream_root: Path,
+        upstream_output_root: Path,
+    ) -> CommandSpec:
         del plan
-        raw_path = upstream_root / "synthetic-upstream.json"
+        raw_path = upstream_output_root / "synthetic-upstream.json"
         script = (
             "from pathlib import Path; "
             f"Path({str(raw_path)!r}).write_text('observed', encoding='utf-8')"
         )
         return CommandSpec(
             argv=(sys.executable, "-c", script),
-            cwd=self.cwd,
+            cwd=upstream_root,
             timeout_seconds=2,
+            owned_output_roots=(OwnedOutputRoot(upstream_output_root),),
             resource_projection=ResourceProjection(
                 tool_calls=1,
                 enforcement=IncrementalLimitEnforcement.ADAPTER_COMMAND,
@@ -77,7 +90,7 @@ class _SyntheticAdapter:
             ),
             raw_artifacts=(upstream_output_root / "synthetic-upstream.json",),
             unavailable_fields=("source-unsupported-field",),
-            warnings=(),
+            notices=(),
             accounting=NonWallResourceAccounting(
                 cost_usd=0.0,
                 gpu_hours=0.0,
@@ -336,7 +349,7 @@ def test_named_secret_value_cannot_be_duplicated_in_serialized_cwd(tmp_path: Pat
     assert list(workspace.root.iterdir()) == []
 
 
-def test_authorization_binding_covers_argv_cwd_environment_and_timeout(tmp_path: Path) -> None:
+def test_authorization_binding_covers_command_and_output_ownership(tmp_path: Path) -> None:
     other_cwd = tmp_path / "other"
     other_cwd.mkdir()
     workspace = ArtifactWorkspace.open(tmp_path / "artifacts", create=True)
@@ -354,6 +367,10 @@ def test_authorization_binding_covers_argv_cwd_environment_and_timeout(tmp_path:
         replace(command, cwd=other_cwd),
         replace(command, environment={"SYNTHETIC_MODE": "two"}),
         replace(command, timeout_seconds=3),
+        replace(
+            command,
+            owned_output_roots=(OwnedOutputRoot(tmp_path / "changed-output-owner"),),
+        ),
     )
     for mutated in mutations:
         report = executor.dry_run(plan, mutated, project_state())
@@ -370,7 +387,7 @@ def test_synthetic_adapter_normalizes_and_accounts_before_sealing(tmp_path: Path
         initial_plan.artifacts, initial_plan.identity, create=False
     )
     adapter: ArtifactAdapter = _SyntheticAdapter(tmp_path)
-    command = adapter.build_command(initial_plan, prospective)
+    command = adapter.build_command(initial_plan, tmp_path, prospective)
     plan = bind_plan(initial_plan, command)
     session = LocalRunExecutor(workspace).execute(plan, command, project_state())
     session.apply_normalization(adapter.normalize(plan, session.attempt_directory))
@@ -384,6 +401,53 @@ def test_synthetic_adapter_normalizes_and_accounts_before_sealing(tmp_path: Path
     assert metric.source == "synthetic-adapter"
     assert events[-1].event_type is EventType.RUN_STOPPED
     assert validate_artifact_directory(session.attempt_directory, schema_root=ROOT) == []
+
+
+def test_adapter_notices_emit_harness_owned_typed_control_events(tmp_path: Path) -> None:
+    workspace = ArtifactWorkspace.open(tmp_path / "artifacts", create=True)
+    command = CommandSpec(
+        argv=(sys.executable, "-c", "pass"),
+        cwd=tmp_path,
+        timeout_seconds=2,
+    )
+    plan = bind_plan(typed_plan(), command)
+    session = LocalRunExecutor(workspace).execute(plan, command, project_state())
+    session.apply_normalization(
+        NormalizationResult(
+            events=(),
+            raw_artifacts=(),
+            unavailable_fields=(),
+            notices=(
+                AdapterNotice(
+                    severity=AdapterNoticeSeverity.WARNING,
+                    kind="source-warning",
+                    message="observed source warning",
+                    source="synthetic-adapter",
+                    source_paths=("history[0].warning",),
+                    provenance=EventProvenance.DERIVED,
+                ),
+                AdapterNotice(
+                    severity=AdapterNoticeSeverity.ERROR,
+                    kind="source-error",
+                    message="observed source error",
+                    source="synthetic-adapter",
+                    source_paths=("error",),
+                    provenance=EventProvenance.OBSERVED,
+                ),
+            ),
+            accounting=NonWallResourceAccounting(0.0, 0.0, 0, 0),
+        )
+    )
+    outcome = session.seal()
+    events = read_events(outcome.events_path)
+    warning = next(event for event in events if event.event_type is EventType.WARNING)
+    error = next(event for event in events if event.event_type is EventType.ERROR)
+    assert warning.source == "giclab-harness"
+    assert warning.provenance is EventProvenance.DERIVED
+    assert warning.payload["adapter_source"] == "synthetic-adapter"
+    assert error.source == "giclab-harness"
+    assert error.provenance is EventProvenance.OBSERVED
+    assert thaw_json(error.payload["source_paths"]) == ["error"]
 
 
 def test_nonwall_projection_requires_explicit_accounting_before_seal(tmp_path: Path) -> None:
@@ -409,7 +473,7 @@ def test_nonwall_projection_requires_explicit_accounting_before_seal(tmp_path: P
             events=(),
             raw_artifacts=(),
             unavailable_fields=(),
-            warnings=(),
+            notices=(),
             accounting=NonWallResourceAccounting(
                 cost_usd=0.0,
                 gpu_hours=0.0,
@@ -431,7 +495,7 @@ def test_normalization_result_cannot_omit_accounting_attestation() -> None:
             events=(),
             raw_artifacts=(),
             unavailable_fields=(),
-            warnings=(),
+            notices=(),
         )
 
 
@@ -459,6 +523,68 @@ def test_nonwall_projection_over_budget_cannot_execute_marker(tmp_path: Path) ->
     assert list(workspace.root.iterdir()) == []
 
 
+def test_command_output_root_outside_exact_attempt_is_refused_before_execution(
+    tmp_path: Path,
+) -> None:
+    workspace = ArtifactWorkspace.open(tmp_path / "artifacts", create=True)
+    outside_root = tmp_path / "outside"
+    marker = outside_root / "must-not-exist"
+    command = CommandSpec(
+        argv=(
+            sys.executable,
+            "-c",
+            f"from pathlib import Path; Path({str(marker)!r}).touch()",
+        ),
+        cwd=tmp_path,
+        timeout_seconds=2,
+        owned_output_roots=(OwnedOutputRoot(outside_root),),
+    )
+    plan = bind_plan(typed_plan(), command)
+    executor = LocalRunExecutor(workspace)
+
+    report = executor.dry_run(plan, command, project_state())
+    assert any("outside the exact harness run attempt" in item for item in report.blockers)
+    with pytest.raises(ExecutionDisallowed, match="outside the exact harness run attempt"):
+        executor.execute(plan, command, project_state())
+    assert not marker.exists()
+    assert list(workspace.root.iterdir()) == []
+
+
+def test_owned_output_root_symlink_substitution_is_rechecked(tmp_path: Path) -> None:
+    workspace = ArtifactWorkspace.open(tmp_path / "artifacts", create=True)
+    initial_plan = typed_plan()
+    attempt = workspace.attempt_directory(
+        initial_plan.artifacts,
+        initial_plan.identity,
+        create=False,
+    )
+    output_root = attempt / "source-output"
+    marker = output_root / "must-not-exist"
+    command = CommandSpec(
+        argv=(
+            sys.executable,
+            "-c",
+            f"from pathlib import Path; Path({str(marker)!r}).touch()",
+        ),
+        cwd=tmp_path,
+        timeout_seconds=2,
+        owned_output_roots=(OwnedOutputRoot(output_root),),
+    )
+    plan = bind_plan(initial_plan, command)
+    executor = LocalRunExecutor(workspace)
+    assert executor.dry_run(plan, command, project_state()).execution_allowed
+
+    attempt.mkdir(parents=True)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    output_root.symlink_to(outside, target_is_directory=True)
+    report = executor.dry_run(plan, command, project_state())
+    assert any("owned output root resolution changed" in item for item in report.blockers)
+    with pytest.raises(ExecutionDisallowed, match="owned output root resolution changed"):
+        executor.execute(plan, command, project_state())
+    assert not (outside / "must-not-exist").exists()
+
+
 def test_observed_usage_over_projection_seals_failure_evidence(tmp_path: Path) -> None:
     workspace = ArtifactWorkspace.open(tmp_path / "artifacts", create=True)
     initial_plan = typed_plan(max_tool_calls=2)
@@ -466,7 +592,7 @@ def test_observed_usage_over_projection_seals_failure_evidence(tmp_path: Path) -
         initial_plan.artifacts, initial_plan.identity, create=False
     )
     adapter: ArtifactAdapter = _SyntheticAdapter(tmp_path)
-    command = adapter.build_command(initial_plan, prospective)
+    command = adapter.build_command(initial_plan, tmp_path, prospective)
     plan = bind_plan(initial_plan, command)
     session = LocalRunExecutor(workspace).execute(plan, command, project_state())
     normalized = adapter.normalize(plan, session.attempt_directory)
@@ -728,7 +854,7 @@ def test_exact_credential_in_normalized_event_is_never_appended(tmp_path: Path) 
         ),
         raw_artifacts=(),
         unavailable_fields=(),
-        warnings=(),
+        notices=(),
         accounting=NonWallResourceAccounting(0.0, 0.0, 0, 0),
     )
     with pytest.raises(CredentialExposureError, match="harness event"):
@@ -763,7 +889,7 @@ def test_exact_credential_in_raw_adapter_artifact_is_never_retained(tmp_path: Pa
         events=(),
         raw_artifacts=(raw_path,),
         unavailable_fields=(),
-        warnings=(),
+        notices=(),
         accounting=NonWallResourceAccounting(0.0, 0.0, 0, 0),
     )
     with pytest.raises(CredentialExposureError, match="adapter raw artifact"):
@@ -846,7 +972,7 @@ def test_safe_unowned_file_must_be_claimed_by_normalization(tmp_path: Path) -> N
             events=(),
             raw_artifacts=(raw_path,),
             unavailable_fields=(),
-            warnings=(),
+            notices=(),
             accounting=NonWallResourceAccounting(0.0, 0.0, 0, 0),
         )
     )
@@ -885,7 +1011,7 @@ def test_budget_failure_session_preserves_adapter_owned_raw_output(tmp_path: Pat
             events=(),
             raw_artifacts=(raw_path,),
             unavailable_fields=(),
-            warnings=(),
+            notices=(),
             accounting=NonWallResourceAccounting(0.0, 0.0, 0, 0),
         )
     )
@@ -939,7 +1065,7 @@ def test_invalid_adapter_artifact_path_does_not_echo_a_credential(tmp_path: Path
                 events=(),
                 raw_artifacts=(invalid,),
                 unavailable_fields=(),
-                warnings=(),
+                notices=(),
                 accounting=NonWallResourceAccounting(0.0, 0.0, 0, 0),
             )
         )

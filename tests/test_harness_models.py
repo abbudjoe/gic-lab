@@ -20,6 +20,7 @@ from giclab.harness.models import (
     IncrementalLimitEnforcement,
     InheritedEnvironmentBinding,
     NormalizedEvent,
+    OwnedOutputRoot,
     ResourceProjection,
     inherited_environment_binding,
     thaw_json,
@@ -149,6 +150,18 @@ def test_secret_like_environment_name_cannot_bypass_redaction_by_inheritance() -
 def test_command_requires_an_absolute_resolved_executable() -> None:
     with pytest.raises(ValueError, match="absolute resolved executable"):
         CommandSpec(argv=("python",), cwd=Path.cwd(), timeout_seconds=1)
+
+
+def test_owned_output_root_requires_a_canonical_absolute_path(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="absolute path"):
+        OwnedOutputRoot(Path("relative-output"))
+    with pytest.raises(ValueError, match="typed output-root"):
+        CommandSpec(
+            argv=(sys.executable,),
+            cwd=tmp_path,
+            timeout_seconds=1,
+            owned_output_roots=(tmp_path,),  # type: ignore[arg-type]
+        )
 
 
 def test_nonwall_projection_requires_an_explicit_adapter_enforcement_contract() -> None:
