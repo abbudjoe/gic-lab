@@ -1,0 +1,41 @@
+schema_version: 0.1.0
+kind: datasets
+entries:
+  - id: DATA-SIRA-FANOUTQA-DEV
+    name: SiRA-released FanOutQA development data
+    kind: evaluation-dataset
+    version: sira-commit-93fb8d72
+    revision: 76ad1feb689b754bfe4e5e24d3ea371b647efa67
+    commit: 93fb8d72de71f9a4a13419670adeb34d93cf7acd
+    sha256: 359300b029c6891567816f351bf8786e9b018d7af8a1a44b7da9ba5ef4651288
+    size_bytes: 1177174
+    license: null
+    provenance: >-
+      Exact data/fanout-final-dev.json blob tracked by the pinned sailing-lab/sira
+      repository. The pinned repository does not state this data file's license and
+      directs users to FanOutQA upstream terms.
+    storage_uri: https://github.com/sailing-lab/sira/blob/93fb8d72de71f9a4a13419670adeb34d93cf7acd/data/fanout-final-dev.json
+    canonical_uri: https://github.com/sailing-lab/sira/tree/93fb8d72de71f9a4a13419670adeb34d93cf7acd/data
+    retrieved_at: "2026-08-07"
+    verification_status: content-hash-verified
+  - id: DATA-SIRA-FLIGHTQA-COUNTERFACTUAL
+    name: SiRA-released FlightQA counterfactual data
+    kind: evaluation-dataset
+    version: sira-commit-93fb8d72
+    revision: e2b12250589dcf96501c271429d66139e0cf0b69
+    commit: 93fb8d72de71f9a4a13419670adeb34d93cf7acd
+    sha256: 2550a58636abeddad8ac25b3b5e79048b2e732aa150a7e3b5557454b17aa303b
+    size_bytes: 32618
+    license: null
+    provenance: >-
+      Exact data/flightqa_counterfactual.csv blob tracked by the pinned
+      sailing-lab/sira repository. The pinned repository does not state this data
+      file's license or establish that the included generation script exactly
+      produced this released blob.
+    storage_uri: https://github.com/sailing-lab/sira/blob/93fb8d72de71f9a4a13419670adeb34d93cf7acd/data/flightqa_counterfactual.csv
+    canonical_uri: https://github.com/sailing-lab/sira/tree/93fb8d72de71f9a4a13419670adeb34d93cf7acd/data
+    retrieved_at: "2026-08-07"
+    verification_status: content-hash-verified
+note: >-
+  Proposed T01 fragment only. Do not merge into manifests/datasets.yaml until T06
+  shared-file integration and license review.
