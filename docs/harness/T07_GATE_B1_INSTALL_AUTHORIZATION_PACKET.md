@@ -1,6 +1,7 @@
 # T07 Gate B1 install authorization packet
 
-Status: **Gate B2 authorization blocked by storage floor**
+Status: **SUPERSEDED — Gate B2 authorization blocked pending external-volume
+rebinding**
 
 Prepared: 2026-08-08
 
@@ -9,6 +10,15 @@ Reserved authorization reference: `AUTH-T07-GATE-B2-2026-08-08`.
 This packet authorizes nothing by itself. It contains no authorization for a model
 request, SiRA condition, experimental browser task, scientific change, pilot, cloud
 mutation, or paid compute.
+
+Post-packet governance addendum, 2026-08-09: decision D-017 now requires every
+non-Git artifact, including Docker VM/image data and build cache, beneath
+`/Volumes/Macintosh HD - Data/Users/joseph/.local/share/gic-lab` on APFS volume UUID
+`8478609D-FA37-4ED5-875D-47AE912B9151`. The materialization plan bound below writes
+downloads and artifacts to the internal startup disk and does not bind Docker's disk
+image location. It is therefore non-authorizable and must not be executed. Its prior
+hash and commands are retained only as historical Gate B1 evidence until a reviewed
+external-volume plan replaces them.
 
 ## 1. Exact clean repository commit
 
@@ -181,21 +191,25 @@ stop for a separate metering design.
 
 ## 9. Storage floors
 
-At least 161,061,273,600 free bytes (150 GiB) must remain after build. The exact
-pre-install floor is therefore 173,946,175,488 free bytes (162 GiB).
-
-The exact preflight command is:
+The superseded plan checked the internal startup disk and must not be used:
 
 ```text
 /usr/bin/python3 -c 'import shutil,sys; value=shutil.disk_usage("/Users/joseph").free; print(value); raise SystemExit(0 if value >= 173946175488 else 1)'
 ```
 
-It must pass before installation. The same check, with the threshold changed to
-`161061273600`, must pass after the DMG install, image pull, source/wheel staging,
-build, and every probe. A floor failure stops before the next action. The last Gate B1
-observation at `2026-08-09T04:45:07Z` was **12,029,374,464 bytes**, a
-161,916,801,024-byte shortfall. This packet authorizes no deletion or cleanup to create
-space.
+D-017 instead binds the external APFS container with total capacity
+1,000,240,963,584 bytes. Its exact post-build floor is the greater of 150 GiB and 20%
+of capacity: **200,048,192,717 bytes**. Including the 12,884,901,888-byte incremental
+disk reservation, a replacement plan must require at least **212,933,094,605 free
+bytes** before materialization and recheck the 200,048,192,717-byte floor after every
+artifact-producing stage and probe.
+
+Read-only inspection at `2026-08-09T11:27:04Z` identified the intended external,
+read-write Thunderbolt APFS data volume at `/Volumes/Macintosh HD - Data`, UUID
+`8478609D-FA37-4ED5-875D-47AE912B9151`, with **854,038,687,744 free bytes**. That
+observation clears the raw capacity floor by 641,105,593,139 bytes but does not clear
+authorization: a replacement control plane must verify the volume UUID, external and
+read-write state, resolved artifact-root device, and Docker VM disk-image location.
 
 ## 10. Exact synthetic resource limits
 
@@ -337,73 +351,27 @@ installed a runtime/dependency/browser, or read a real secret.
 
 ## 16. Remaining blockers
 
-1. **Authorization-stopping storage blocker:** 12,029,374,464 bytes were free at the
-   recorded instant; 173,946,175,488 are required.
-2. Docker Desktop is absent and its license/installation is unauthorized.
-3. Runtime/cgroup identity, final image ID, package hash, Chromium executable hash,
+1. **Authorization-stopping storage-target blocker:** the attached volume has adequate
+   observed capacity, but the hashed plan still targets the internal disk and does not
+   verify external volume UUID `8478609D-FA37-4ED5-875D-47AE912B9151`.
+2. Docker Desktop is absent and its license/installation is unauthorized; its exact
+   VM disk-image relocation and verification actions are not yet rendered.
+3. The materialization plan, commands, cleanup paths, packet hash, and authorization
+   block require reviewed external-volume rebinding.
+4. Runtime/cgroup identity, final image ID, package hash, Chromium executable hash,
    and empirical containment remain unknown until Gate B2.
-4. Mock tests do not prove kernel containment; the adversarial probe must pass.
-5. Gate B2 is no-network probe authorization only. Live SiRA still requires a reviewed
+5. Mock tests do not prove kernel containment; the adversarial probe must pass.
+6. Gate B2 is no-network probe authorization only. Live SiRA still requires a reviewed
    isolated-egress network policy, full post-build provenance, condition command
    materialization, current model/price verification, and new current-turn authority.
-6. The implementation commit and materialization-plan SHA-256 are bound. Gate B1 has
-   no remaining implementation or packet blocker.
+7. The historical implementation and plan hashes remain evidence, not executable
+   authorization under D-017.
 
-## 17. Ready-to-copy Gate B2 authorization block
+## 17. Gate B2 authorization status
 
-**Do not use until this packet says ready and the storage blocker is cleared.**
-
-```text
-I authorize T07 Gate B2 only under authorization reference
-AUTH-T07-GATE-B2-2026-08-08, conditional on a read-only preflight first proving at
-least 173946175488 free bytes and on my personal acceptance of the applicable Docker
-license/subscription terms.
-
-I authorize download and installation of exactly Docker Desktop for Apple silicon
-4.85.0 build 235549 from
-https://desktop.docker.com/mac/main/arm64/235549/Docker.dmg only if its byte size is
-573592444 and SHA-256 is
-84b1224c93456fe261955ebc91f3cd88ce19778ffdb6d0a0d423ce37246f7c2b.
-
-I authorize executing exactly materialization plan
-PLAN-T07-GATE-B2-MATERIALIZATION at
-containers/sira-smoke/materialization-plan.json with SHA-256
-10fd0350c5e14c4c6d4e32bf40f1f9f696735eae81815a00cd8032e652beaa25 through the one bounded supervisor command in
-this packet. I do not authorize executing its child arrays separately or retrying a
-failed action.
-
-I authorize pulling only
-mcr.microsoft.com/playwright/python:v1.39.0-jammy@sha256:96955ff5cc37e13f5f1b21f5171afb9fed7e028025aa9d81c690501cd7fa0c6c
-for linux/arm64; cloning only SiRA commit
-93fb8d72de71f9a4a13419670adeb34d93cf7acd; downloading only the pinned uv wheel and
-artifacts selected by uv sync --frozen --extra eval from the recorded lock; and
-building only giclab/sira-smoke:t07-gate-b2-b46f680c40ae from the exact hashed
-Containerfile, patch, runtime adaptation, and archived source in this packet.
-
-I authorize exactly three no-network probes with UUIDs
-b2000000000000000000000000000001, b2000000000000000000000000000002,
-and b2000000000000000000000000000003: adversarial containment, local static-page
-browser preflight, and public dummy-secret preflight. Aggregate probe limits are USD
-0 API cost, 0 model tokens/calls, 3 container attempts, 120 seconds container-workload
-wall time, 1 local browser navigation action, 1 screenshot evidence capture, 67108864
-retained bytes, and 96 Docker lifecycle CLI operations. Automated installation/build
-materialization is limited to the exact hashed 51-action plan, one call per action,
-zero retry, 16777216 output bytes, and 3600 monotonic seconds; authorized transfer is reserved at no more than
-2147483648 bytes with no agent-level command retry; runtime-internal retransmission
-uses the same reservation; incremental disk use is capped at 12884901888 bytes.
-I acknowledge that the expected endpoint list is not mechanically enforced or fully
-observed by the proposed Docker Desktop/buildx commands. This authorization does not
-approve an endpoint outside that list; if enforced endpoint telemetry is required,
-stop for a separate egress-control design. Stop before the next action on any
-observable cap, identity, digest, lock, size, or storage-floor breach.
-
-I authorize creation and deletion only of the public dummy canary file at the exact
-path in this packet. I do not authorize access to a real SIRA_API_KEY or other secret.
-
-I do not authorize any model/provider API or model-availability API request, either
-SiRA condition, experimental browser task, live website navigation, image push,
-floating image, host PID/network/IPC mode, privileged container, runtime socket mount,
-pilot, benchmark, training, scientific-field change, cloud mutation, paid compute, or
-execution authorization materialization. Stop after sealing Gate B2 evidence and
-report exact runtime/image/browser/cleanup identities and blockers.
-```
+There is no ready-to-copy Gate B2 authorization block. The prior block is withdrawn
+because it names internal-disk paths and an unverified Docker data location. A new
+packet must bind the exact external volume UUID and artifact root, verify Docker's VM
+disk location there, rerender every materialization/probe/cleanup path, recompute the
+plan SHA-256, rerun validation and independent review, and only then present a new
+authorization block. Gate B2 and live T07 remain unauthorized.

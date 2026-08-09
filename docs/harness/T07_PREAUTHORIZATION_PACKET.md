@@ -1,7 +1,7 @@
 # T07 preauthorization packet
 
-Status: **live authorization blocked; Gate B2 install/probe authorization also blocked
-by storage floor**
+Status: **live authorization blocked; Gate B2 packet withdrawn pending
+external-volume rebinding**
 
 Prepared: 2026-08-08
 
@@ -50,12 +50,20 @@ Prepared: 2026-08-08
   `4d7e2a25f4313fc754db0fa17aeda51cc5cd75a5653adaf13b01ce87a71cb8ed`.
 - Repository-owned staged build-assets SHA-256:
   `d364c2356a4e73bc847f7aabdb272908e006eca0753bd1f74b3984ea1719b79a`.
-- Gate B2 materialization plan ID: `PLAN-T07-GATE-B2-MATERIALIZATION`.
+- Historical, superseded Gate B2 materialization plan ID:
+  `PLAN-T07-GATE-B2-MATERIALIZATION`.
 - Materialization plan path: `containers/sira-smoke/materialization-plan.json`.
 - Materialization plan SHA-256:
   `10fd0350c5e14c4c6d4e32bf40f1f9f696735eae81815a00cd8032e652beaa25`.
 - Staged-context evidence SHA-256:
   `747575a0c4c1dc9c0e52a839dc28eea1807e898495ee2c58c7b25ae8ab4ba77b`.
+
+Post-packet governance decision D-017 requires every non-Git artifact beneath
+`/Volumes/Macintosh HD - Data/Users/joseph/.local/share/gic-lab` on external APFS
+volume UUID `8478609D-FA37-4ED5-875D-47AE912B9151`, including Docker VM/image data
+and build cache. The historical plan hash above names internal-disk paths and is no
+longer an authorization candidate. It is retained only as provenance until a reviewed
+external-volume plan replaces it.
 
 The profile, protocol, scientific configuration, and both condition plans are
 byte-identical to the previous clean packet. Their execution/authorization fields and
@@ -160,12 +168,15 @@ the dated snapshot and removes its `OPENAI_API_KEY` fallback. The Gate A adaptat
 then installs the complete role-aware budgeted routing surface. The patch was checked
 read-only against the exact pinned upstream source.
 
-No code/configuration change is required before the three Gate B2 no-network probes.
-Code/control-plane work **is** still required before a live request: empirical Gate B2
-must pass; a non-host isolated-egress network policy for the API and browser must be
-implemented/reviewed; final runtime/image/package/browser provenance must be observed;
-and exact containerized condition commands/canonical child hashes must be materialized
-under new authorization. Scientific fields need not and must not be changed.
+Code/configuration change is now required before the three Gate B2 no-network probes:
+the control plane must verify the exact external volume identity and resolved artifact
+root, every materialization/probe/cleanup path must be rerendered there, and Docker's
+VM disk-image location must be bound and verified there before any pull or build.
+Additional work remains before a live request: empirical Gate B2 must pass; a non-host
+isolated-egress network policy for the API and browser must be implemented/reviewed;
+final runtime/image/package/browser provenance must be observed; and exact
+containerized condition commands/canonical child hashes must be materialized under
+new authorization. Scientific fields need not and must not be changed.
 
 ## Installation actions awaiting authorization
 
@@ -284,18 +295,19 @@ pilot, cloud job, or paid compute occurred.
 
 Authorization-stopping blockers:
 
-1. only 12,029,374,464 free bytes were observed versus the exact 173,946,175,488-byte
-   Gate B2 pre-floor;
-2. no supported runtime is installed or running;
-3. kernel containment and browser shutdown are not empirically proven;
-4. final runtime/image/package/Chromium identities are unknown before Gate B2; and
-5. live isolated egress and containerized condition materialization remain unimplemented.
+1. the historical Gate B2 plan targets the internal disk and is withdrawn under D-017;
+2. a replacement plan must verify external APFS UUID
+   `8478609D-FA37-4ED5-875D-47AE912B9151`, bind all artifact paths beneath the
+   authoritative root, and verify Docker's VM disk location there;
+3. no supported runtime is installed or running;
+4. kernel containment and browser shutdown are not empirically proven;
+5. final runtime/image/package/Chromium identities are unknown before Gate B2; and
+6. live isolated egress and containerized condition materialization remain unimplemented.
 
 Public trace release remains blocked by licensing/privacy review but does not block
 private access-controlled future smoke retention. Pilot, benchmarks, training,
 scientific interpretation, and cloud mutation remain prohibited.
 
-The ready-to-copy **conditional Gate B2-only** authorization block is in
-`docs/harness/T07_GATE_B1_INSTALL_AUTHORIZATION_PACKET.md`. It must not be used while
-the packet status is blocked. There is intentionally no ready live-smoke authorization
-block in this packet.
+There is no ready-to-copy Gate B2 authorization block. The previous block in
+`docs/harness/T07_GATE_B1_INSTALL_AUTHORIZATION_PACKET.md` is explicitly withdrawn.
+There is intentionally no ready live-smoke authorization block in this packet.
