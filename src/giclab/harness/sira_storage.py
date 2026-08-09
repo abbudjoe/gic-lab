@@ -1364,10 +1364,6 @@ _ALLOWED_EXECUTABLES = frozenset(
     }
 )
 _FORBIDDEN_ARG_FRAGMENTS = (
-    " pull",
-    " build",
-    " run",
-    " create",
     " playwright",
     " chromium",
     "openai",
