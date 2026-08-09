@@ -1,0 +1,195 @@
+schema_version: 0.1.0
+document_id: T07-GATE-A-SMOKE-CONDITION-DIFF
+status: planned-unauthorized
+profile_plan_id: PLAN-EXP0001-SMOKE
+all_other_fields_equal: true
+common:
+  provider: OpenAI
+  api_base_url: https://api.openai.com/v1/
+  model_revision: gpt-4o-2024-11-20
+  routing_sha256: 8a0e6e2934c98ba3faefab51c6408da2476df428bd43688e41d8aea8280c9619
+  runtime_adaptation_sha256: 894783a47c19efc5e141a90a4dd63920b9440e1ef231aad5b2738b1f524bbbcd
+  upstream_commit: 93fb8d72de71f9a4a13419670adeb34d93cf7acd
+  task:
+    kind: open-ended-query
+    query: go to google flights
+  agent: sira
+  max_steps: 1
+  action_timeout_seconds: 30
+  outer_max_retry: 0
+  max_output_tokens_per_choice: 4096
+  dataset_order_seed: 42
+  secret_variable_names:
+    - SIRA_API_KEY
+  shell: false
+  environment:
+    GICLAB_REQUIRE_DESCENDANT_CONTAINMENT: "1"
+    UV_PROJECT_ENVIRONMENT: /Users/joseph/.local/share/gic-lab/t07/sira-93fb8d72de71f9a4a13419670adeb34d93cf7acd/environment
+    UV_CACHE_DIR: /Users/joseph/.local/share/gic-lab/t07/sira-93fb8d72de71f9a4a13419670adeb34d93cf7acd/uv-cache
+    PLAYWRIGHT_BROWSERS_PATH: /Users/joseph/.local/share/gic-lab/t07/sira-93fb8d72de71f9a4a13419670adeb34d93cf7acd/playwright
+    PYTHONDONTWRITEBYTECODE: "1"
+    PYTHONPATH: /Users/joseph/.codex/worktrees/84b1/gic-lab/src
+  source_root: /Users/joseph/.local/share/gic-lab/t07/sira-93fb8d72de71f9a4a13419670adeb34d93cf7acd/source
+  executable: /opt/homebrew/Cellar/uv/0.11.7/bin/uv
+  argv_prefix:
+    - /opt/homebrew/Cellar/uv/0.11.7/bin/uv
+    - run
+    - --frozen
+    - --no-sync
+    - --project
+    - /Users/joseph/.local/share/gic-lab/t07/sira-93fb8d72de71f9a4a13419670adeb34d93cf7acd/source
+    - python
+    - /Users/joseph/.codex/worktrees/84b1/gic-lab/src/giclab/harness/sira_gate_a_runtime.py
+    - --gate-upstream-runner
+    - /Users/joseph/.local/share/gic-lab/t07/sira-93fb8d72de71f9a4a13419670adeb34d93cf7acd/source/scripts/run_web_agent.py
+  argv_common_suffix:
+    - --gate-adaptation-sha256
+    - 894783a47c19efc5e141a90a4dd63920b9440e1ef231aad5b2738b1f524bbbcd
+    - --
+    - --query
+    - go to google flights
+    - --agent
+    - sira
+    - --model
+    - gpt-4o-2024-11-20
+    - --max_steps
+    - "1"
+    - --timeout
+    - "30"
+    - --max_retry
+    - "0"
+    - --seed
+    - "42"
+differences:
+  configuration:
+    - field: job_name
+      owner: source-contract
+      reactive: EXP-0001-SMOKE-REACTIVE
+      simulative: EXP-0001-SMOKE-SIMULATIVE
+    - field: mode
+      owner: source-declared-treatment
+      reactive: reactive
+      simulative: simulative
+  command:
+    - field: --gate-attempt-root
+      owner: condition-owned-evidence
+      reactive: /Users/joseph/.local/share/gic-lab/artifacts/EXP-0001/smoke/reactive/attempt-0001/RUN-EXP0001-SMOKE-REACTIVE/attempt-0001
+      simulative: /Users/joseph/.local/share/gic-lab/artifacts/EXP-0001/smoke/simulative/attempt-0001/RUN-EXP0001-SMOKE-SIMULATIVE/attempt-0001
+    - field: --gate-mode
+      owner: source-declared-treatment
+      reactive: reactive
+      simulative: simulative
+    - field: positional-job-name
+      owner: source-contract
+      reactive: EXP-0001-SMOKE-REACTIVE
+      simulative: EXP-0001-SMOKE-SIMULATIVE
+    - field: --mode
+      owner: source-declared-treatment
+      reactive: reactive
+      simulative: simulative
+    - field: --output_dir
+      owner: condition-owned-evidence
+      reactive: /Users/joseph/.local/share/gic-lab/artifacts/EXP-0001/smoke/reactive/attempt-0001/RUN-EXP0001-SMOKE-REACTIVE/attempt-0001/sira-output
+      simulative: /Users/joseph/.local/share/gic-lab/artifacts/EXP-0001/smoke/simulative/attempt-0001/RUN-EXP0001-SMOKE-SIMULATIVE/attempt-0001/sira-output
+    - field: owned_output_roots[0]
+      owner: condition-owned-evidence
+      reactive: /Users/joseph/.local/share/gic-lab/artifacts/EXP-0001/smoke/reactive/attempt-0001/RUN-EXP0001-SMOKE-REACTIVE/attempt-0001
+      simulative: /Users/joseph/.local/share/gic-lab/artifacts/EXP-0001/smoke/simulative/attempt-0001/RUN-EXP0001-SMOKE-SIMULATIVE/attempt-0001
+resolved_argv:
+  reactive:
+    - /opt/homebrew/Cellar/uv/0.11.7/bin/uv
+    - run
+    - --frozen
+    - --no-sync
+    - --project
+    - /Users/joseph/.local/share/gic-lab/t07/sira-93fb8d72de71f9a4a13419670adeb34d93cf7acd/source
+    - python
+    - /Users/joseph/.codex/worktrees/84b1/gic-lab/src/giclab/harness/sira_gate_a_runtime.py
+    - --gate-upstream-runner
+    - /Users/joseph/.local/share/gic-lab/t07/sira-93fb8d72de71f9a4a13419670adeb34d93cf7acd/source/scripts/run_web_agent.py
+    - --gate-attempt-root
+    - /Users/joseph/.local/share/gic-lab/artifacts/EXP-0001/smoke/reactive/attempt-0001/RUN-EXP0001-SMOKE-REACTIVE/attempt-0001
+    - --gate-mode
+    - reactive
+    - --gate-adaptation-sha256
+    - 894783a47c19efc5e141a90a4dd63920b9440e1ef231aad5b2738b1f524bbbcd
+    - --
+    - EXP-0001-SMOKE-REACTIVE
+    - --query
+    - go to google flights
+    - --mode
+    - reactive
+    - --agent
+    - sira
+    - --model
+    - gpt-4o-2024-11-20
+    - --max_steps
+    - "1"
+    - --timeout
+    - "30"
+    - --max_retry
+    - "0"
+    - --output_dir
+    - /Users/joseph/.local/share/gic-lab/artifacts/EXP-0001/smoke/reactive/attempt-0001/RUN-EXP0001-SMOKE-REACTIVE/attempt-0001/sira-output
+    - --seed
+    - "42"
+  simulative:
+    - /opt/homebrew/Cellar/uv/0.11.7/bin/uv
+    - run
+    - --frozen
+    - --no-sync
+    - --project
+    - /Users/joseph/.local/share/gic-lab/t07/sira-93fb8d72de71f9a4a13419670adeb34d93cf7acd/source
+    - python
+    - /Users/joseph/.codex/worktrees/84b1/gic-lab/src/giclab/harness/sira_gate_a_runtime.py
+    - --gate-upstream-runner
+    - /Users/joseph/.local/share/gic-lab/t07/sira-93fb8d72de71f9a4a13419670adeb34d93cf7acd/source/scripts/run_web_agent.py
+    - --gate-attempt-root
+    - /Users/joseph/.local/share/gic-lab/artifacts/EXP-0001/smoke/simulative/attempt-0001/RUN-EXP0001-SMOKE-SIMULATIVE/attempt-0001
+    - --gate-mode
+    - simulative
+    - --gate-adaptation-sha256
+    - 894783a47c19efc5e141a90a4dd63920b9440e1ef231aad5b2738b1f524bbbcd
+    - --
+    - EXP-0001-SMOKE-SIMULATIVE
+    - --query
+    - go to google flights
+    - --mode
+    - simulative
+    - --agent
+    - sira
+    - --model
+    - gpt-4o-2024-11-20
+    - --max_steps
+    - "1"
+    - --timeout
+    - "30"
+    - --max_retry
+    - "0"
+    - --output_dir
+    - /Users/joseph/.local/share/gic-lab/artifacts/EXP-0001/smoke/simulative/attempt-0001/RUN-EXP0001-SMOKE-SIMULATIVE/attempt-0001/sira-output
+    - --seed
+    - "42"
+resolved_mode_owned_changes:
+  reactive:
+    config_name: web_reactive
+    planner_type: policy
+    base_temperature: 0.0
+    base_top_p: 0.5
+    maximum_model_call_attempts: 16
+  simulative:
+    config_name: web_simulative
+    planner_type: world_model
+    planner_search_num_actions: 5
+    planner_search_depth: 1
+    planner_policy_num_samples: 20
+    planner_critic_num_samples: 20
+    policy_temperature: 1.0
+    policy_top_p: 0.95
+    critic_temperature: 1.0
+    critic_top_p: 0.95
+    one_cluster_branch: direct-selection-without-world-model-or-critic-call
+    multiple_cluster_branch: one-step-world-model-and-critic-evaluation
+    maximum_model_call_attempts: 61
+command_hash_status: pending-authorized-installation-and-environment-fingerprint
+execution_authorized: false

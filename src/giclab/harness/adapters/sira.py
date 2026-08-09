@@ -41,6 +41,12 @@ from ..regulation import (
     RegulationSourceKind,
     regulation_decision_payload,
 )
+from ..sira_gate_a import (
+    SIRA_MODEL_REVISION,
+    SiRAEnvironmentContract,
+    file_sha256,
+    validate_sira_secret_names,
+)
 from .base import (
     AdapterNotice,
     AdapterNoticeSeverity,
@@ -780,6 +786,144 @@ def assert_sira_matched_pair(
     )
 
 
+def assert_sira_gate_a_matched_pair(
+    reactive_adapter: SiRAAdapter,
+    reactive_plan: RunPlan,
+    reactive_command: CommandSpec,
+    simulative_adapter: SiRAAdapter,
+    simulative_plan: RunPlan,
+    simulative_command: CommandSpec,
+    *,
+    upstream_root: Path,
+    reactive_attempt_root: Path,
+    simulative_attempt_root: Path,
+    environment: SiRAEnvironmentContract,
+    giclab_source_root: Path,
+) -> SiRAPairReport:
+    """Machine-diff the Gate A pair and reject every undeclared difference."""
+
+    expected_reactive = reactive_adapter.build_gate_a_command(
+        reactive_plan,
+        upstream_root,
+        reactive_attempt_root,
+        environment=environment,
+        giclab_source_root=giclab_source_root,
+    )
+    expected_simulative = simulative_adapter.build_gate_a_command(
+        simulative_plan,
+        upstream_root,
+        simulative_attempt_root,
+        environment=environment,
+        giclab_source_root=giclab_source_root,
+    )
+    if command_document(reactive_command) != command_document(expected_reactive):
+        raise SiRAPairMismatch("reactive Gate A command is not its canonical rendering")
+    if command_document(simulative_command) != command_document(expected_simulative):
+        raise SiRAPairMismatch("simulative Gate A command is not its canonical rendering")
+    reactive_config = sira_config_document(reactive_adapter.config)
+    simulative_config = sira_config_document(simulative_adapter.config)
+    config_differences = {
+        field for field in reactive_config if reactive_config[field] != simulative_config[field]
+    }
+    if config_differences != {"job_name", "mode"}:
+        raise SiRAPairMismatch("Gate A configuration drift exceeds job_name and mode")
+    reactive_document = command_document(reactive_command)
+    simulative_document = command_document(simulative_command)
+    for field in reactive_document:
+        if field in {"argv", "owned_output_roots"}:
+            continue
+        if reactive_document[field] != simulative_document[field]:
+            raise SiRAPairMismatch(f"Gate A command drift outside owned fields: {field}")
+    reactive_argv = reactive_command.argv
+    simulative_argv = simulative_command.argv
+    if len(reactive_argv) != len(simulative_argv):
+        raise SiRAPairMismatch("Gate A paired command argument counts differ")
+    delimiter = reactive_argv.index("--")
+    if simulative_argv.index("--") != delimiter:
+        raise SiRAPairMismatch("Gate A paired command boundaries differ")
+    gate_attempt = _flag_value_index(reactive_argv, "--gate-attempt-root")
+    gate_mode = _flag_value_index(reactive_argv, "--gate-mode")
+    upstream_mode = [index + 1 for index, value in enumerate(reactive_argv) if value == "--mode"]
+    if len(upstream_mode) != 1:
+        raise SiRAPairMismatch("Gate A upstream mode field is ambiguous")
+    output_index = _flag_value_index(reactive_argv, "--output_dir")
+    approved = {gate_attempt, gate_mode, delimiter + 1, upstream_mode[0], output_index}
+    actual = {
+        index
+        for index, values in enumerate(zip(reactive_argv, simulative_argv, strict=True))
+        if values[0] != values[1]
+    }
+    if actual != approved:
+        raise SiRAPairMismatch(
+            "Gate A command differences are not exactly condition identity, job, mode, "
+            "and owned paths"
+        )
+    differences = tuple(
+        SiRAPairDifference(
+            surface="command",
+            field=f"argv[{index}]",
+            owner=(
+                "source-declared-treatment"
+                if index in {gate_mode, upstream_mode[0]}
+                else "condition-owned-evidence"
+                if index in {gate_attempt, output_index}
+                else "source-contract"
+            ),
+            reactive=reactive_argv[index],
+            simulative=simulative_argv[index],
+        )
+        for index in sorted(actual)
+    )
+    return SiRAPairReport(
+        config_differences=(
+            SiRAPairDifference(
+                "config",
+                "job_name",
+                "source-contract",
+                reactive_adapter.config.job_name,
+                simulative_adapter.config.job_name,
+            ),
+            SiRAPairDifference(
+                "config",
+                "mode",
+                "source-declared-treatment",
+                reactive_adapter.config.mode.value,
+                simulative_adapter.config.mode.value,
+            ),
+        ),
+        command_differences=(
+            *differences,
+            SiRAPairDifference(
+                "command",
+                "owned_output_roots[0]",
+                "condition-owned-evidence",
+                str(reactive_command.owned_output_roots[0].root),
+                str(simulative_command.owned_output_roots[0].root),
+            ),
+        ),
+    )
+
+
+def sira_pair_report_document(report: SiRAPairReport) -> dict[str, object]:
+    """Render the exact reviewed pair diff as a machine-readable document."""
+
+    def item(difference: SiRAPairDifference) -> dict[str, str]:
+        return {
+            "surface": difference.surface,
+            "field": difference.field,
+            "owner": difference.owner,
+            "reactive": difference.reactive,
+            "simulative": difference.simulative,
+        }
+
+    return {
+        "schema_version": "0.1.0",
+        "config_differences": [item(value) for value in report.config_differences],
+        "command_differences": [item(value) for value in report.command_differences],
+        "all_other_fields_equal": True,
+    }
+
+
 @dataclass(frozen=True, slots=True)
 class SiRAAdapter:
     """Build and normalize only the audited pinned SiRA source surface."""
@@ -799,17 +943,20 @@ class SiRAAdapter:
             raise SiRAContractError("SiRA uv executable must be an executable regular file")
         object.__setattr__(self, "uv_executable", executable)
 
-    def _assert_plan_contract(self, plan: RunPlan) -> None:
+    def _assert_plan_contract(
+        self,
+        plan: RunPlan,
+        *,
+        expected_model_revision: str | None,
+    ) -> None:
         if plan.sources.upstream_source_id != SIRA_SOURCE_ID:
             raise SiRAContractError("run plan does not name the audited SiRA source")
         if plan.sources.upstream_commit != SIRA_UPSTREAM_COMMIT:
             raise SiRAContractError("run plan does not pin the audited SiRA commit")
         if plan.sources.config_sha256 != sira_config_sha256(self.config):
             raise SiRAContractError("run-plan config_sha256 does not bind this SiRA configuration")
-        if plan.sources.model_revision is not None:
-            raise SiRAContractError(
-                "SiRA's mutable provider alias has no verifiable immutable model revision"
-            )
+        if plan.sources.model_revision != expected_model_revision:
+            raise SiRAContractError("run plan does not bind the expected SiRA model identity")
         if plan.sources.dataset_revision != self.config.task.dataset_revision:
             raise SiRAContractError("run-plan dataset revision does not match the SiRA task")
         if plan.identity.condition != self.config.mode.condition:
@@ -821,6 +968,47 @@ class SiRAAdapter:
         if plan.budget.max_tool_calls != self.config.max_steps:
             raise SiRAContractError("run-plan tool-call limit does not match SiRA max_steps")
 
+    def _upstream_arguments(
+        self,
+        output_directory: Path,
+        *,
+        model: str | None = None,
+    ) -> list[str]:
+        arguments = [self.config.job_name]
+        task = self.config.task
+        if task.query is not None:
+            arguments.extend(("--query", task.query))
+        else:
+            dataset = task.dataset
+            if dataset is None:
+                raise AssertionError("dataset task lost its typed dataset")
+            arguments.extend(("--dataset", dataset.value))
+        arguments.extend(
+            (
+                "--mode",
+                self.config.mode.value,
+                "--agent",
+                self.config.agent,
+                "--model",
+                self.config.model if model is None else model,
+                "--max_steps",
+                str(self.config.max_steps),
+                "--timeout",
+                str(self.config.action_timeout_seconds),
+                "--max_retry",
+                str(self.config.max_retry),
+            )
+        )
+        if task.data_root is not None:
+            arguments.extend(("--data_root", str(task.data_root)))
+        arguments.extend(("--output_dir", str(output_directory)))
+        if task.dataset is not None:
+            if task.start_idx is None or task.end_idx is None:
+                raise AssertionError("dataset task lost its typed slice")
+            arguments.extend(("--start_idx", str(task.start_idx), "--end_idx", str(task.end_idx)))
+        arguments.extend(("--seed", str(self.config.seed)))
+        return arguments
+
     def build_command(
         self,
         plan: RunPlan,
@@ -829,7 +1017,7 @@ class SiRAAdapter:
     ) -> CommandSpec:
         """Build the pinned shell-free CLI command without launching any process."""
 
-        self._assert_plan_contract(plan)
+        self._assert_plan_contract(plan, expected_model_revision=None)
         if self.config.task.dataset in {SiRADataset.FLIGHTQA, SiRADataset.WEBARENA}:
             unsupported_dataset = self.config.task.dataset
             raise SiRAContractError(
@@ -861,40 +1049,8 @@ class SiRAAdapter:
             "--frozen",
             "python",
             str(SIRA_RUNNER),
-            self.config.job_name,
         ]
-        task = self.config.task
-        if task.query is not None:
-            argv.extend(("--query", task.query))
-        else:
-            dataset = task.dataset
-            if dataset is None:
-                raise AssertionError("dataset task lost its typed dataset")
-            argv.extend(("--dataset", dataset.value))
-        argv.extend(
-            (
-                "--mode",
-                self.config.mode.value,
-                "--agent",
-                self.config.agent,
-                "--model",
-                self.config.model,
-                "--max_steps",
-                str(self.config.max_steps),
-                "--timeout",
-                str(self.config.action_timeout_seconds),
-                "--max_retry",
-                str(self.config.max_retry),
-            )
-        )
-        if task.data_root is not None:
-            argv.extend(("--data_root", str(task.data_root)))
-        argv.extend(("--output_dir", str(output_directory)))
-        if task.dataset is not None:
-            if task.start_idx is None or task.end_idx is None:
-                raise AssertionError("dataset task lost its typed slice")
-            argv.extend(("--start_idx", str(task.start_idx), "--end_idx", str(task.end_idx)))
-        argv.extend(("--seed", str(self.config.seed)))
+        argv.extend(self._upstream_arguments(output_directory))
 
         return CommandSpec(
             argv=tuple(argv),
@@ -920,13 +1076,114 @@ class SiRAAdapter:
             ),
         )
 
+    def build_gate_a_command(
+        self,
+        plan: RunPlan,
+        upstream_root: Path,
+        attempt_root: Path,
+        *,
+        environment: SiRAEnvironmentContract,
+        giclab_source_root: Path,
+    ) -> CommandSpec:
+        """Build the finite, isolated T07 command without launching or installing."""
+
+        self._assert_plan_contract(plan, expected_model_revision=SIRA_MODEL_REVISION)
+        if plan.profile is not RunProfile.SMOKE:
+            raise SiRAContractError("Gate A authorizes command materialization only for smoke")
+        validate_sira_secret_names(requested=(SIRA_SECRET_NAME,))
+        source_root = _safe_existing_directory(upstream_root, "SiRA upstream root")
+        _verify_pinned_git_checkout(source_root, SIRA_UPSTREAM_COMMIT)
+        if environment.upstream_checkout != source_root:
+            raise SiRAContractError("environment contract does not bind this SiRA checkout")
+        external_environment = _safe_existing_directory(
+            environment.external_environment,
+            "external SiRA environment",
+        )
+        playwright_cache = _safe_existing_directory(
+            environment.playwright_cache,
+            "owned Playwright cache",
+        )
+        uv_cache = _safe_existing_directory(environment.uv_cache, "owned uv cache")
+        source_package = _safe_existing_directory(giclab_source_root, "GIC Lab source root")
+        runtime_adapter = source_package / "giclab/harness/sira_gate_a_runtime.py"
+        try:
+            runtime_adapter = runtime_adapter.resolve(strict=True)
+        except OSError as exc:
+            raise SiRAContractError("Gate A runtime adaptation is missing") from exc
+        runner = (source_root / SIRA_RUNNER).resolve(strict=True)
+        output_root = _safe_future_root(attempt_root)
+        if output_root.exists():
+            raise SiRAContractError("Gate A attempt root must be allocated only by the executor")
+        output_directory = output_root / self.config.output_subdirectory
+        runtime_sha256 = file_sha256(runtime_adapter)
+        argv = [
+            str(self.uv_executable),
+            "run",
+            "--frozen",
+            "--no-sync",
+            "--project",
+            str(source_root),
+            "python",
+            str(runtime_adapter),
+            "--gate-upstream-runner",
+            str(runner),
+            "--gate-attempt-root",
+            str(output_root),
+            "--gate-mode",
+            self.config.mode.value,
+            "--gate-adaptation-sha256",
+            runtime_sha256,
+            "--",
+        ]
+        argv.extend(self._upstream_arguments(output_directory, model=SIRA_MODEL_REVISION))
+        return CommandSpec(
+            argv=tuple(argv),
+            cwd=source_root,
+            timeout_seconds=plan.budget.max_wall_seconds,
+            environment={
+                "GICLAB_REQUIRE_DESCENDANT_CONTAINMENT": "1",
+                "PLAYWRIGHT_BROWSERS_PATH": str(playwright_cache),
+                "PYTHONDONTWRITEBYTECODE": "1",
+                "PYTHONPATH": str(source_package),
+                "UV_CACHE_DIR": str(uv_cache),
+                "UV_PROJECT_ENVIRONMENT": str(external_environment),
+            },
+            secret_environment=(SIRA_SECRET_NAME,),
+            input_trees=(
+                input_tree_binding(
+                    source_root,
+                    excluded_roots=(PurePosixPath(".git"),),
+                    git_commit=SIRA_UPSTREAM_COMMIT,
+                ),
+                input_tree_binding(source_package),
+                input_tree_binding(external_environment),
+                input_tree_binding(playwright_cache),
+                input_tree_binding(uv_cache),
+            ),
+            owned_output_roots=(OwnedOutputRoot(output_root),),
+            resource_projection=ResourceProjection(
+                cost_usd=plan.budget.max_cost_usd,
+                model_tokens=plan.budget.max_model_tokens or 0,
+                tool_calls=self.config.max_steps,
+                enforcement=IncrementalLimitEnforcement.ADAPTER_COMMAND,
+            ),
+        )
+
     def normalize(self, plan: RunPlan, upstream_output_root: Path) -> NormalizationResult:
         """Normalize one unambiguous structured session trace and retain every owned file."""
 
-        self._assert_plan_contract(plan)
+        expected_model = (
+            SIRA_MODEL_REVISION if plan.sources.model_revision == SIRA_MODEL_REVISION else None
+        )
+        self._assert_plan_contract(plan, expected_model_revision=expected_model)
         root = _trace_root(upstream_output_root)
         output_directory = _owned_output_directory(root, self.config.output_subdirectory)
-        raw_artifacts = _raw_artifacts(output_directory)
+        raw_artifacts = tuple(
+            sorted(
+                {*_raw_artifacts(output_directory), *_gate_a_artifacts(root)},
+                key=str,
+            )
+        )
         session_path = _select_session_artifact(
             output_directory,
             raw_artifacts,
@@ -955,12 +1212,7 @@ class SiRAAdapter:
             raw_artifacts=raw_artifacts,
             unavailable_fields=unavailable,
             notices=_source_notices(session),
-            accounting=NonWallResourceAccounting(
-                cost_usd=None,
-                gpu_hours=0.0,
-                model_tokens=None,
-                tool_calls=None,
-            ),
+            accounting=_gate_a_accounting(root, session),
         )
 
 
@@ -1075,6 +1327,97 @@ def _raw_artifacts(output_directory: Path) -> tuple[Path, ...]:
             raise SiRATraceError("SiRA raw output contains a non-regular entry")
         raw.append(resolved)
     return tuple(raw)
+
+
+def _gate_a_artifacts(root: Path) -> tuple[Path, ...]:
+    """Collect only repository-adaptation outputs inside the owned attempt."""
+
+    candidates: list[Path] = []
+    for name in ("provider-budget.json", "runtime-cleanup.json", "runtime-environment.json"):
+        candidate = root / name
+        if candidate.exists():
+            candidates.append(candidate)
+    for directory_name in ("source-logs", "source-runtime", "screenshots", "evaluator"):
+        directory = root / directory_name
+        if not directory.exists():
+            continue
+        if directory.is_symlink() or not directory.is_dir():
+            raise SiRATraceError(f"Gate A {directory_name} path is not an owned directory")
+        candidates.extend(path for path in directory.rglob("*") if not path.is_dir())
+    retained: list[Path] = []
+    for candidate in sorted(set(candidates)):
+        if candidate.is_symlink():
+            raise SiRATraceError("Gate A raw evidence contains a symlink")
+        resolved = candidate.resolve(strict=True)
+        if root not in resolved.parents or not resolved.is_file():
+            raise SiRATraceError("Gate A raw evidence escapes its attempt root")
+        retained.append(resolved)
+    return tuple(retained)
+
+
+def _gate_a_accounting(root: Path, session: Mapping[str, Any]) -> NonWallResourceAccounting:
+    ledger_path = root / "provider-budget.json"
+    if not ledger_path.exists():
+        return NonWallResourceAccounting(
+            cost_usd=None,
+            gpu_hours=0.0,
+            model_tokens=None,
+            tool_calls=None,
+        )
+    try:
+        ledger = load_json(ledger_path)
+    except (DuplicateKeyError, ValueError) as exc:
+        raise SiRATraceError("Gate A provider ledger is malformed") from exc
+    required = {
+        "cost_usd",
+        "input_tokens",
+        "cached_input_tokens",
+        "output_tokens",
+        "total_tokens",
+        "model_call_attempts",
+        "unreconciled_provider_attempts",
+        "browser_actions",
+        "output_bytes",
+    }
+    if not required.issubset(ledger):
+        raise SiRATraceError("Gate A provider ledger omits required accounting")
+    if ledger.get("model_revision") != SIRA_MODEL_REVISION:
+        raise SiRATraceError("Gate A provider ledger changed the immutable model revision")
+    for field in (
+        "input_tokens",
+        "cached_input_tokens",
+        "output_tokens",
+        "total_tokens",
+        "model_call_attempts",
+        "unreconciled_provider_attempts",
+        "browser_actions",
+        "output_bytes",
+    ):
+        if type(ledger[field]) is not int or ledger[field] < 0:
+            raise SiRATraceError(f"Gate A provider ledger has invalid {field}")
+    if (
+        not isinstance(ledger["cost_usd"], int | float)
+        or isinstance(ledger["cost_usd"], bool)
+        or ledger["cost_usd"] < 0
+    ):
+        raise SiRATraceError("Gate A provider ledger has invalid cost_usd")
+    if ledger["cached_input_tokens"] > ledger["input_tokens"]:
+        raise SiRATraceError("Gate A cached input exceeds total input")
+    if ledger["unreconciled_provider_attempts"] > ledger["model_call_attempts"]:
+        raise SiRATraceError("Gate A unreconciled provider attempts exceed total attempts")
+    if ledger["total_tokens"] != ledger["input_tokens"] + ledger["output_tokens"]:
+        raise SiRATraceError("Gate A provider token totals do not reconcile")
+    history = session.get("history")
+    if not isinstance(history, list):
+        raise SiRATraceError("SiRA session history is unavailable for action accounting")
+    if ledger["browser_actions"] != len(history):
+        raise SiRATraceError("Gate A browser-action ledger conflicts with session history")
+    return NonWallResourceAccounting(
+        cost_usd=float(ledger["cost_usd"]),
+        gpu_hours=0.0,
+        model_tokens=int(ledger["total_tokens"]),
+        tool_calls=len(history),
+    )
 
 
 def _select_session_artifact(

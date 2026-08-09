@@ -7,6 +7,7 @@ import json
 import os
 import shutil
 import signal
+import stat
 import subprocess
 import threading
 import time
@@ -94,6 +95,7 @@ class ExecutionOutcome:
     run_plan_path: Path
     command_path: Path
     artifact_records_path: Path
+    cleanup_path: Path
     stdout_redactions: int
     stderr_redactions: int
     usage: BudgetUsage
@@ -110,6 +112,39 @@ class _ProcessResult:
     stderr_redactions: int
     output_bytes: int
     launch_error: OSError | ValueError | None
+    supervision_error: BaseException | None
+    cleanup: _CleanupResult
+
+
+@dataclass(frozen=True, slots=True)
+class _CleanupResult:
+    process_group_id: int | None
+    term_sent: bool
+    kill_sent: bool
+    term_grace_seconds: float
+    live_pids_before: tuple[int, ...]
+    live_pids_after: tuple[int, ...]
+    tracked_descendant_pids: tuple[int, ...] = ()
+    escaped_process_group_pids: tuple[int, ...] = ()
+
+    @property
+    def zero_live_children(self) -> bool:
+        return not self.live_pids_after
+
+
+def _cleanup_document(cleanup: _CleanupResult) -> dict[str, Any]:
+    return {
+        "schema_version": "0.1.0",
+        "process_group_id": cleanup.process_group_id,
+        "term_sent": cleanup.term_sent,
+        "kill_sent": cleanup.kill_sent,
+        "term_grace_seconds": cleanup.term_grace_seconds,
+        "live_pids_before": list(cleanup.live_pids_before),
+        "live_pids_after": list(cleanup.live_pids_after),
+        "tracked_descendant_pids": list(cleanup.tracked_descendant_pids),
+        "escaped_process_group_pids": list(cleanup.escaped_process_group_pids),
+        "zero_live_children": cleanup.zero_live_children,
+    }
 
 
 def _utc_now() -> str:
@@ -203,17 +238,39 @@ class _OutputQuota:
     def __init__(self, maximum: int) -> None:
         self.maximum = maximum
         self.used = 0
+        self.external_used = 0
         self.exceeded = False
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
 
     def take(self, chunk: bytes) -> bytes:
         with self._lock:
-            remaining = max(0, self.maximum - self.used)
+            remaining = max(0, self.maximum - self.used - self.external_used)
             accepted = chunk[:remaining]
             self.used += len(accepted)
             if len(accepted) != len(chunk):
                 self.exceeded = True
             return accepted
+
+    def observe_external(self, count: int) -> bool:
+        with self._lock:
+            self.external_used = count
+            if self.used + self.external_used > self.maximum:
+                self.exceeded = True
+            return self.exceeded
+
+    def mark_exceeded(self) -> None:
+        with self._lock:
+            self.exceeded = True
+
+    def reconcile_retained(self, *, pipe_bytes: int, external_bytes: int) -> None:
+        with self._lock:
+            self.used = pipe_bytes
+            self.external_used = external_bytes
+
+    @property
+    def total_used(self) -> int:
+        with self._lock:
+            return self.used + self.external_used
 
 
 class _StreamingRedactor:
@@ -271,20 +328,201 @@ def _kill_process_group(process: subprocess.Popen[bytes]) -> None:
             raise
 
 
+def _live_process_group_pids(process_group_id: int) -> tuple[int, ...]:
+    """Return non-zombie members of one process group without trusting parentage."""
+
+    try:
+        completed = subprocess.run(
+            ("ps", "-axo", "pid=,pgid=,state="),
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except OSError:
+        return (process_group_id,) if _process_group_exists(process_group_id) else ()
+    live: list[int] = []
+    for line in completed.stdout.splitlines():
+        parts = line.split()
+        if len(parts) != 3:
+            continue
+        try:
+            pid, pgid = int(parts[0]), int(parts[1])
+        except ValueError:
+            continue
+        if pgid == process_group_id and not parts[2].startswith("Z"):
+            live.append(pid)
+    return tuple(sorted(live))
+
+
+def _process_group_exists(process_group_id: int) -> bool:
+    try:
+        os.killpg(process_group_id, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def _complete_descendant_containment_available() -> bool:
+    """Return false until this runner owns a kernel-enforced process container."""
+
+    return False
+
+
+def _process_table() -> dict[int, tuple[int, int, str]]:
+    """Return PID -> (PPID, PGID, state) for descendant ownership checks."""
+
+    try:
+        completed = subprocess.run(
+            ("ps", "-axo", "pid=,ppid=,pgid=,state="),
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except OSError:
+        return {}
+    table: dict[int, tuple[int, int, str]] = {}
+    for line in completed.stdout.splitlines():
+        parts = line.split()
+        if len(parts) != 4:
+            continue
+        try:
+            pid, ppid, pgid = (int(parts[index]) for index in range(3))
+        except ValueError:
+            continue
+        table[pid] = (ppid, pgid, parts[3])
+    return table
+
+
 class _ProcessGroupTerminator:
-    """Issue at most one process-group kill across owner and capture threads."""
+    """Track descendants across sessions and retain bounded zero-child evidence."""
 
-    def __init__(self, process: subprocess.Popen[bytes]) -> None:
+    def __init__(
+        self,
+        process: subprocess.Popen[bytes],
+        *,
+        term_grace_seconds: float = 1.0,
+    ) -> None:
         self.process = process
-        self._lock = threading.Lock()
+        self.process_group_id = process.pid
+        self.term_grace_seconds = term_grace_seconds
+        self._lock = threading.RLock()
         self._terminated = False
+        self._result: _CleanupResult | None = None
+        self._tracked_descendants: set[int] = set()
 
-    def __call__(self) -> None:
+    def observe_descendants(self) -> None:
+        """Remember descendants even if they later reparent or escape the PGID."""
+
+        table = _process_table()
+        ancestry = {self.process.pid, *self._tracked_descendants}
+        changed = True
+        while changed:
+            changed = False
+            for pid, (ppid, _pgid, state) in table.items():
+                if (
+                    pid != self.process.pid
+                    and ppid in ancestry
+                    and not state.startswith("Z")
+                    and pid not in ancestry
+                ):
+                    ancestry.add(pid)
+                    changed = True
+        with self._lock:
+            self._tracked_descendants.update(ancestry - {self.process.pid})
+
+    def _live_tracked(self) -> tuple[int, ...]:
+        table = _process_table()
+        with self._lock:
+            tracked = set(self._tracked_descendants)
+        return tuple(
+            sorted(pid for pid in tracked if pid in table and not table[pid][2].startswith("Z"))
+        )
+
+    @staticmethod
+    def _signal_pids(pids: tuple[int, ...], sig: signal.Signals) -> bool:
+        sent = False
+        for pid in pids:
+            try:
+                os.kill(pid, sig)
+                sent = True
+            except ProcessLookupError:
+                pass
+        return sent
+
+    def __call__(self) -> _CleanupResult:
+        self.observe_descendants()
         with self._lock:
             if self._terminated:
-                return
-            _kill_process_group(self.process)
+                if self._result is None:  # pragma: no cover - guarded by this method
+                    raise AssertionError("cleanup result was not retained")
+                return self._result
+            tracked = tuple(sorted(self._tracked_descendants))
+            table = _process_table()
+            escaped = tuple(
+                pid
+                for pid in tracked
+                if pid in table
+                and table[pid][1] != self.process_group_id
+                and not table[pid][2].startswith("Z")
+            )
+            before = tuple(
+                sorted(
+                    set(_live_process_group_pids(self.process_group_id)) | set(self._live_tracked())
+                )
+            )
+            term_sent = False
+            kill_sent = False
+            if before:
+                try:
+                    os.killpg(self.process_group_id, signal.SIGTERM)
+                    term_sent = True
+                except ProcessLookupError:
+                    pass
+                term_sent = self._signal_pids(escaped, signal.SIGTERM) or term_sent
+                deadline = time.monotonic() + self.term_grace_seconds
+                while time.monotonic() < deadline:
+                    if (
+                        not _live_process_group_pids(self.process_group_id)
+                        and not self._live_tracked()
+                    ):
+                        break
+                    time.sleep(0.01)
+                remaining = self._live_tracked()
+                if _live_process_group_pids(self.process_group_id) or remaining:
+                    try:
+                        os.killpg(self.process_group_id, signal.SIGKILL)
+                        kill_sent = True
+                    except ProcessLookupError:
+                        pass
+                    kill_sent = self._signal_pids(remaining, signal.SIGKILL) or kill_sent
+            deadline = time.monotonic() + 1.0
+            after = tuple(
+                sorted(
+                    set(_live_process_group_pids(self.process_group_id)) | set(self._live_tracked())
+                )
+            )
+            while after and time.monotonic() < deadline:
+                time.sleep(0.01)
+                after = tuple(
+                    sorted(
+                        set(_live_process_group_pids(self.process_group_id))
+                        | set(self._live_tracked())
+                    )
+                )
+            self._result = _CleanupResult(
+                process_group_id=self.process_group_id,
+                term_sent=term_sent,
+                kill_sent=kill_sent,
+                term_grace_seconds=self.term_grace_seconds,
+                live_pids_before=before,
+                live_pids_after=after,
+                tracked_descendant_pids=tracked,
+                escaped_process_group_pids=escaped,
+            )
             self._terminated = True
+            return self._result
 
 
 def _capture_pipe(
@@ -315,12 +553,114 @@ def _capture_pipe(
         pipe.close()
 
 
+def _enforce_attempt_output_quota(
+    attempt_directory: Path,
+    pipe_paths: tuple[Path, Path],
+    baseline_paths: frozenset[Path],
+    quota: _OutputQuota,
+    kill: Callable[[], None] | None,
+) -> None:
+    """Bound retained process output, prioritizing structured files over pipe logs."""
+
+    files: list[tuple[Path, int]] = []
+    for path in attempt_directory.rglob("*"):
+        if path in pipe_paths or path in baseline_paths:
+            continue
+        try:
+            metadata = path.lstat()
+        except FileNotFoundError:
+            continue
+        if stat.S_ISDIR(metadata.st_mode):
+            continue
+        if not stat.S_ISREG(metadata.st_mode):
+            raise RuntimeError("attempt output monitor found a non-regular entry")
+        files.append((path, metadata.st_size))
+    files.sort(key=lambda item: str(item[0]))
+    pipe_sizes = [(path, path.stat().st_size) for path in pipe_paths]
+    external_total = sum(size for _path, size in files)
+    pipe_total = sum(size for _path, size in pipe_sizes)
+    if pipe_total + external_total <= quota.maximum:
+        quota.reconcile_retained(pipe_bytes=pipe_total, external_bytes=external_total)
+        return
+    quota.mark_exceeded()
+    if kill is not None:
+        kill()
+    remaining = quota.maximum
+    external_retained = 0
+    for path, size in files:
+        keep = min(size, remaining)
+        if keep < size:
+            try:
+                with path.open("r+b") as handle:
+                    handle.truncate(keep)
+            except FileNotFoundError:
+                continue
+        external_retained += keep
+        remaining -= keep
+    pipe_retained = 0
+    for path, size in pipe_sizes:
+        keep = min(size, remaining)
+        if keep < size:
+            try:
+                with path.open("r+b") as handle:
+                    handle.truncate(keep)
+            except FileNotFoundError:  # pragma: no cover - pipe paths are owned open files
+                continue
+        pipe_retained += keep
+        remaining -= keep
+    quota.reconcile_retained(pipe_bytes=pipe_retained, external_bytes=external_retained)
+
+
+def _monitor_attempt_output(
+    attempt_directory: Path,
+    pipe_paths: tuple[Path, Path],
+    baseline_paths: frozenset[Path],
+    quota: _OutputQuota,
+    kill: Callable[[], None],
+    stopped: threading.Event,
+    errors: list[BaseException],
+) -> None:
+    """Count and bound every process-created attempt file while it is live."""
+
+    try:
+        while True:
+            _enforce_attempt_output_quota(
+                attempt_directory, pipe_paths, baseline_paths, quota, kill
+            )
+            if stopped.wait(0.02):
+                _enforce_attempt_output_quota(
+                    attempt_directory, pipe_paths, baseline_paths, quota, kill
+                )
+                break
+    except BaseException as exc:  # preserve monitor failures for the owner thread
+        errors.append(exc)
+        kill()
+
+
+def _track_process_descendants(
+    terminator: _ProcessGroupTerminator,
+    stopped: threading.Event,
+    errors: list[BaseException],
+) -> None:
+    """Continuously retain descendant identities before they can reparent."""
+
+    try:
+        while True:
+            terminator.observe_descendants()
+            if stopped.wait(0.01):
+                break
+    except BaseException as exc:
+        errors.append(exc)
+        terminator()
+
+
 class RunSession:
     """Own one run from process completion through normalization and final sealing."""
 
     __slots__ = (
         "_accounting_attested",
         "_attempt_directory",
+        "_cleanup_path",
         "_command",
         "_command_path",
         "_normalization_applied",
@@ -355,6 +695,7 @@ class RunSession:
         stderr_path: Path,
         run_plan_path: Path,
         command_path: Path,
+        cleanup_path: Path,
         scrubber: ExactCredentialScrubber,
         sequence: int,
         status: str,
@@ -368,6 +709,7 @@ class RunSession:
         self._stderr_path = stderr_path
         self._run_plan_path = run_plan_path
         self._command_path = command_path
+        self._cleanup_path = cleanup_path
         self._scrubber = scrubber
         self._sequence = sequence
         self._status = status
@@ -381,6 +723,7 @@ class RunSession:
                 stderr_path: "raw-log",
                 run_plan_path: "run-plan",
                 command_path: "command",
+                cleanup_path: "cleanup-record",
             }
         )
 
@@ -662,6 +1005,7 @@ class RunSession:
             run_plan_path=self._run_plan_path,
             command_path=self._command_path,
             artifact_records_path=manifest.path,
+            cleanup_path=self._cleanup_path,
             stdout_redactions=self._process_result.stdout_redactions,
             stderr_redactions=self._process_result.stderr_redactions,
             usage=self._usage,
@@ -860,6 +1204,7 @@ class LocalRunExecutor:
             ARTIFACT_RECORDS,
             "stdout.log",
             "stderr.log",
+            "cleanup.json",
         ):
             scrubber.assert_bytes(
                 owned_name.encode("utf-8"),
@@ -880,6 +1225,7 @@ class LocalRunExecutor:
         stderr_path = attempt_dir / "stderr.log"
         run_plan_path = attempt_dir / RUN_PLAN_RECORD
         command_path = attempt_dir / COMMAND_RECORD
+        cleanup_path = attempt_dir / "cleanup.json"
         _write_json_exclusive(
             run_plan_path,
             plan_data,
@@ -964,6 +1310,12 @@ class LocalRunExecutor:
             plan.budget.max_output_bytes,
             lambda: emit(EventType.COMMAND_STARTED, render_command(command)),
         )
+        _write_json_exclusive(
+            cleanup_path,
+            _cleanup_document(process_result.cleanup),
+            scrubber=scrubber,
+            label="retained cleanup record",
+        )
         if process_result.launch_error is not None:
             emit(
                 EventType.ERROR,
@@ -983,6 +1335,7 @@ class LocalRunExecutor:
                     "output_budget_exceeded": process_result.output_budget_exceeded,
                     "stdout_redactions": process_result.stdout_redactions,
                     "stderr_redactions": process_result.stderr_redactions,
+                    "cleanup_zero_live_children": process_result.cleanup.zero_live_children,
                 },
             )
             status = (
@@ -993,6 +1346,30 @@ class LocalRunExecutor:
                 else "completed"
                 if process_result.return_code == 0
                 else "command-failed"
+            )
+        supervision_failed = process_result.supervision_error is not None
+        if supervision_failed:
+            supervision_error = process_result.supervision_error
+            if supervision_error is None:  # pragma: no cover - narrowed above
+                raise AssertionError("supervision error disappeared")
+            status = "supervision-failed"
+            emit(
+                EventType.ERROR,
+                {
+                    "error_type": type(supervision_error).__name__,
+                    "message": str(supervision_error),
+                },
+            )
+        cleanup_failed = not process_result.cleanup.zero_live_children
+        if cleanup_failed:
+            status = "cleanup-failed"
+            emit(
+                EventType.ERROR,
+                {
+                    "error_type": "ProcessCleanupError",
+                    "message": "supervised process group retained live descendants",
+                    "live_pids_after": list(process_result.cleanup.live_pids_after),
+                },
             )
         budget_error: BudgetExceeded | None = None
         try:
@@ -1025,6 +1402,7 @@ class LocalRunExecutor:
             stderr_path=stderr_path,
             run_plan_path=run_plan_path,
             command_path=command_path,
+            cleanup_path=cleanup_path,
             scrubber=scrubber,
             sequence=sequence,
             status=status,
@@ -1043,12 +1421,24 @@ class LocalRunExecutor:
             raise LocalExecutionError(
                 f"local command could not be started; evidence: {attempt_dir}"
             ) from process_result.launch_error
+        if supervision_failed:
+            raise LocalExecutionError(
+                "local command supervision failed; normalize and seal the attached "
+                f"failure session: {attempt_dir}",
+                session=session,
+            ) from process_result.supervision_error
         if budget_error is not None or process_result.output_budget_exceeded:
             raise LocalExecutionError(
                 "local command exceeded its hard budget; normalize and seal the attached "
                 f"failure session to preserve evidence: {attempt_dir}",
                 session=session,
             ) from budget_error
+        if cleanup_failed:
+            raise LocalExecutionError(
+                "local command cleanup did not prove zero live descendants; normalize and "
+                f"seal the attached failure session: {attempt_dir}",
+                session=session,
+            )
         return session
 
     def _run_process(
@@ -1097,12 +1487,28 @@ class LocalRunExecutor:
                     stderr_redactions=0,
                     output_bytes=0,
                     launch_error=exc,
+                    supervision_error=None,
+                    cleanup=_CleanupResult(
+                        process_group_id=None,
+                        term_sent=False,
+                        kill_sent=False,
+                        term_grace_seconds=1.0,
+                        live_pids_before=(),
+                        live_pids_after=(),
+                    ),
                 )
             terminate_group = _ProcessGroupTerminator(process)
             started_callback()
             if process.stdout is None or process.stderr is None:  # pragma: no cover
                 raise RuntimeError("subprocess pipes were not created")
             quota = _OutputQuota(max_output_bytes)
+            baseline_paths = frozenset(
+                path
+                for path in attempt_directory.rglob("*")
+                if path not in {stdout_path, stderr_path}
+                and path.is_file()
+                and not path.is_symlink()
+            )
             stdout_redactor = _StreamingRedactor(
                 scrubber.private_bytes,
                 replacement=scrubber.replacement,
@@ -1112,8 +1518,9 @@ class LocalRunExecutor:
                 replacement=scrubber.replacement,
             )
             capture_errors: list[BaseException] = []
+            monitors_stopped = threading.Event()
 
-            threads = (
+            capture_threads = (
                 threading.Thread(
                     target=_capture_pipe,
                     args=(
@@ -1139,7 +1546,27 @@ class LocalRunExecutor:
                     daemon=True,
                 ),
             )
-            for thread in threads:
+            monitor_threads = (
+                threading.Thread(
+                    target=_monitor_attempt_output,
+                    args=(
+                        attempt_directory,
+                        (stdout_path, stderr_path),
+                        baseline_paths,
+                        quota,
+                        terminate_group,
+                        monitors_stopped,
+                        capture_errors,
+                    ),
+                    daemon=True,
+                ),
+                threading.Thread(
+                    target=_track_process_descendants,
+                    args=(terminate_group, monitors_stopped, capture_errors),
+                    daemon=True,
+                ),
+            )
+            for thread in (*capture_threads, *monitor_threads):
                 thread.start()
             timed_out = False
             try:
@@ -1149,13 +1576,22 @@ class LocalRunExecutor:
                 terminate_group()
                 process.wait()
             finally:
-                terminate_group()
-            for thread in threads:
+                cleanup = terminate_group()
+                monitors_stopped.set()
+            for thread in (*capture_threads, *monitor_threads):
                 thread.join(timeout=5)
-            if any(thread.is_alive() for thread in threads):
-                raise RuntimeError("output capture did not terminate after process-group kill")
-            if capture_errors:
-                raise RuntimeError("output capture failed") from capture_errors[0]
+            if any(thread.is_alive() for thread in (*capture_threads, *monitor_threads)):
+                raise RuntimeError("process supervision did not terminate after cleanup")
+            try:
+                _enforce_attempt_output_quota(
+                    attempt_directory,
+                    (stdout_path, stderr_path),
+                    baseline_paths,
+                    quota,
+                    None,
+                )
+            except BaseException as exc:
+                capture_errors.append(exc)
             return _ProcessResult(
                 return_code=process.returncode,
                 wall_seconds=time.monotonic() - started,
@@ -1163,8 +1599,10 @@ class LocalRunExecutor:
                 output_budget_exceeded=quota.exceeded,
                 stdout_redactions=stdout_redactor.redactions,
                 stderr_redactions=stderr_redactor.redactions,
-                output_bytes=quota.used,
+                output_bytes=quota.total_used,
                 launch_error=None,
+                supervision_error=capture_errors[0] if capture_errors else None,
+                cleanup=cleanup,
             )
         finally:
             if process is not None:
@@ -1179,6 +1617,14 @@ class LocalRunExecutor:
 
     def _structural_blockers(self, plan: RunPlan, command: CommandSpec) -> tuple[str, ...]:
         blockers: list[str] = []
+        if (
+            command.environment.get("GICLAB_REQUIRE_DESCENDANT_CONTAINMENT") == "1"
+            and not _complete_descendant_containment_available()
+        ):
+            blockers.append(
+                "command requires kernel-enforced complete descendant containment, "
+                "which this local runner does not implement"
+            )
         if plan.execution.backend is not ExecutionBackend.LOCAL_SUBPROCESS:
             blockers.append("local runner requires the local-subprocess backend")
         expected_command = plan.execution.authorization.command_sha256

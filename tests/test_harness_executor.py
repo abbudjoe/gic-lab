@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import subprocess
 import sys
@@ -694,7 +695,112 @@ def test_process_group_cleanup_terminates_descendant_holding_stdout(tmp_path: Pa
     assert elapsed < 5
     assert not _process_is_live(child_pid)
     assert outcome.return_code == 0
+    cleanup = json.loads(outcome.cleanup_path.read_text(encoding="utf-8"))
+    assert cleanup["term_sent"] is True
+    assert cleanup["zero_live_children"] is True
+    assert cleanup["live_pids_after"] == []
     assert validate_artifact_directory(outcome.events_path.parent, schema_root=ROOT) == []
+
+
+def test_process_group_cleanup_escalates_to_kill_for_stubborn_descendant(
+    tmp_path: Path,
+) -> None:
+    child_pid_path = tmp_path / "stubborn-child.pid"
+    ready_path = tmp_path / "stubborn-child.ready"
+    child = (
+        "import signal,time,pathlib; signal.signal(signal.SIGTERM,signal.SIG_IGN); "
+        f"pathlib.Path({str(ready_path)!r}).touch(); time.sleep(30)"
+    )
+    script = f"""\
+import pathlib
+import subprocess
+import sys
+import time
+child = subprocess.Popen([sys.executable, '-c', {child!r}])
+pathlib.Path({str(child_pid_path)!r}).write_text(str(child.pid), encoding='utf-8')
+ready = pathlib.Path({str(ready_path)!r})
+for _ in range(100):
+    if ready.exists():
+        break
+    time.sleep(0.01)
+print('parent-finished', flush=True)
+"""
+    command = CommandSpec(
+        argv=(sys.executable, "-c", script),
+        cwd=tmp_path,
+        timeout_seconds=3,
+    )
+    plan = bind_plan(typed_plan(), command)
+    workspace = ArtifactWorkspace.open(tmp_path / "artifacts", create=True)
+    outcome = (
+        LocalRunExecutor(workspace).execute(plan, command, project_state(allowed_plan=plan)).seal()
+    )
+    child_pid = int(child_pid_path.read_text(encoding="utf-8"))
+    assert not _process_is_live(child_pid)
+    cleanup = json.loads(outcome.cleanup_path.read_text(encoding="utf-8"))
+    assert cleanup["term_sent"] is True
+    assert cleanup["kill_sent"] is True
+    assert cleanup["zero_live_children"] is True
+
+
+def test_cleanup_tracks_descendant_that_escapes_the_process_group(tmp_path: Path) -> None:
+    child_pid_path = tmp_path / "escaped-child.pid"
+    ready_path = tmp_path / "escaped-child.ready"
+    child = (
+        "import signal,time,pathlib; signal.signal(signal.SIGTERM,signal.SIG_IGN); "
+        f"pathlib.Path({str(ready_path)!r}).touch(); time.sleep(30)"
+    )
+    script = f"""\
+import pathlib
+import subprocess
+import sys
+import time
+child = subprocess.Popen([sys.executable, '-c', {child!r}], start_new_session=True)
+pathlib.Path({str(child_pid_path)!r}).write_text(str(child.pid), encoding='utf-8')
+ready = pathlib.Path({str(ready_path)!r})
+for _ in range(100):
+    if ready.exists():
+        break
+    time.sleep(0.01)
+time.sleep(0.2)
+print('parent-finished', flush=True)
+"""
+    command = CommandSpec(
+        argv=(sys.executable, "-c", script),
+        cwd=tmp_path,
+        timeout_seconds=3,
+    )
+    plan = bind_plan(typed_plan(), command)
+    workspace = ArtifactWorkspace.open(tmp_path / "artifacts", create=True)
+    outcome = (
+        LocalRunExecutor(workspace).execute(plan, command, project_state(allowed_plan=plan)).seal()
+    )
+    child_pid = int(child_pid_path.read_text(encoding="utf-8"))
+    assert not _process_is_live(child_pid)
+    cleanup = json.loads(outcome.cleanup_path.read_text(encoding="utf-8"))
+    assert child_pid in cleanup["tracked_descendant_pids"]
+    assert child_pid in cleanup["escaped_process_group_pids"]
+    assert cleanup["kill_sent"] is True
+    assert cleanup["zero_live_children"] is True
+
+
+def test_required_complete_descendant_containment_fails_closed_before_launch(
+    tmp_path: Path,
+) -> None:
+    command = CommandSpec(
+        argv=(sys.executable, "-c", "raise SystemExit('must not launch')"),
+        cwd=tmp_path,
+        timeout_seconds=2,
+        environment={"GICLAB_REQUIRE_DESCENDANT_CONTAINMENT": "1"},
+    )
+    plan = bind_plan(typed_plan(), command)
+    workspace = ArtifactWorkspace.open(tmp_path / "artifacts", create=True)
+    report = LocalRunExecutor(workspace).dry_run(plan, command, project_state(allowed_plan=plan))
+    assert report.execution_allowed is False
+    assert any(
+        "kernel-enforced complete descendant containment" in item for item in report.blockers
+    )
+    assert list(workspace.root.iterdir()) == []
 
 
 def test_output_budget_streams_to_a_hard_cap_and_seals_failure_evidence(
@@ -723,6 +829,75 @@ def test_output_budget_streams_to_a_hard_cap_and_seals_failure_evidence(
     stopped = read_events(attempt / "events.jsonl")[-1]
     assert stopped.event_type is EventType.RUN_STOPPED
     assert stopped.payload["status"] == "output-budget-exceeded"
+
+
+def test_output_budget_counts_non_pipe_files_in_the_attempt_root(tmp_path: Path) -> None:
+    workspace = ArtifactWorkspace.open(tmp_path / "artifacts", create=True)
+    initial = typed_plan(max_output_bytes=32_768)
+    attempt = workspace.attempt_directory(initial.artifacts, initial.identity, create=False)
+    raw = attempt / "source-session.json"
+    script = f"import pathlib; pathlib.Path({str(raw)!r}).write_bytes(b'x'*1048576)"
+    command = CommandSpec(
+        argv=(sys.executable, "-c", script),
+        cwd=tmp_path,
+        timeout_seconds=3,
+        owned_output_roots=(OwnedOutputRoot(attempt),),
+    )
+    plan = bind_plan(initial, command)
+    with pytest.raises(LocalExecutionError, match="hard budget") as captured:
+        LocalRunExecutor(workspace).execute(plan, command, project_state(allowed_plan=plan))
+    session = captured.value.session
+    assert session is not None
+    assert raw.is_file()
+    assert raw.stat().st_size <= initial.budget.max_output_bytes
+    session.apply_normalization(
+        NormalizationResult(
+            events=(),
+            raw_artifacts=(raw,),
+            unavailable_fields=(),
+            notices=(),
+            accounting=NonWallResourceAccounting(0.0, 0.0, 0, 0),
+        )
+    )
+    outcome = session.seal()
+    assert outcome.output_budget_exceeded is True
+
+
+def test_output_monitor_tolerates_atomic_replace_writers(tmp_path: Path) -> None:
+    workspace = ArtifactWorkspace.open(tmp_path / "artifacts", create=True)
+    initial = typed_plan(max_output_bytes=1_048_576)
+    attempt = workspace.attempt_directory(initial.artifacts, initial.identity, create=False)
+    ledger = attempt / "provider-budget.json"
+    temporary = attempt / "provider-budget.temporary.tmp"
+    script = f"""\
+import os
+from pathlib import Path
+ledger = Path({str(ledger)!r})
+temporary = Path({str(temporary)!r})
+for value in range(500):
+    temporary.write_text(str(value), encoding='utf-8')
+    os.replace(temporary, ledger)
+"""
+    command = CommandSpec(
+        argv=(sys.executable, "-c", script),
+        cwd=tmp_path,
+        timeout_seconds=3,
+        owned_output_roots=(OwnedOutputRoot(attempt),),
+    )
+    plan = bind_plan(initial, command)
+    session = LocalRunExecutor(workspace).execute(plan, command, project_state(allowed_plan=plan))
+    session.apply_normalization(
+        NormalizationResult(
+            events=(),
+            raw_artifacts=(ledger,),
+            unavailable_fields=(),
+            notices=(),
+            accounting=NonWallResourceAccounting(0.0, 0.0, 0, 0),
+        )
+    )
+    outcome = session.seal()
+    assert outcome.return_code == 0
+    assert ledger.read_text(encoding="utf-8") == "499"
 
 
 def test_streaming_redaction_matches_across_input_chunk_boundaries() -> None:

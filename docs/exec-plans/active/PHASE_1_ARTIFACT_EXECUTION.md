@@ -63,7 +63,7 @@ cloud mutation outside the exact T12/T14 authorization contract.
 
 | Task | Work package | Mapped phase DoD | Current permission |
 |---|---|---|---|
-| T07 | Execute one authorized local/API SiRA smoke pair; capture regulation-decision evidence without interpretation. | P1-DOD-02, P1-DOD-11 through P1-DOD-13 | blocked-user-action |
+| T07 | Execute one authorized local/API SiRA smoke pair; capture regulation-decision evidence without interpretation. | P1-DOD-02, P1-DOD-11 through P1-DOD-13 | gate-a-blocked-descendant-containment |
 | T08 | Analyze smoke infrastructure evidence and prepare an unauthorized pilot package. | P1-DOD-03, P1-DOD-11 through P1-DOD-13 | blocked until T07 succeeds |
 | T09 | Execute the freshly authorized exploratory SiRA pilot. | P1-DOD-04, P1-DOD-11 through P1-DOD-13 | blocked until T08 and authorization |
 | T10 | Analyze and publish the exploratory SiRA pilot. | P1-DOD-05, P1-DOD-11 through P1-DOD-13 | blocked until T09 succeeds |
@@ -78,7 +78,7 @@ and an analysis recommendation does not authorize the next execution.
 
 ## T07 assembly control
 
-Assembly status: **blocked-user-action**
+Assembly status: **Gate A blocked: complete descendant containment unavailable**
 
 Exact next profile: `PLAN-EXP0001-SMOKE`.
 
@@ -126,6 +126,12 @@ preflight never supplies mutation authority.
   plans bind the exact profile plan ID and SHA-256; project state fully validates and
   binds the same profile and its canonical declared-child fingerprints before
   execution; and blocked or undeclared plans cannot materialize authorization.
+- 2026-08-08: T07 Gate A implemented immutable all-role routing, durable finite
+  provider accounting, owned attempt/log/environment evidence, exact output capping,
+  external installation contracts, smoke-only authorization materialization, and a
+  machine condition diff. Independent review proved polling cannot guarantee cleanup
+  for a fast reparented child, so the command now fails preflight until kernel-enforced
+  containment exists. No SiRA dependency/browser installation or live action occurred.
 
 ## Decision log
 
@@ -138,8 +144,10 @@ preflight never supplies mutation authority.
 
 ## Blockers and user actions
 
-T07 is blocked on one current-turn human authorization containing every exact field in
-the smoke-readiness document. No other Phase 1 work package may begin first.
+T07 Gate A is blocked on a versioned, tested kernel-enforced descendant-containment
+mechanism and clean rereview. The blocked packet is
+`docs/harness/T07_PREAUTHORIZATION_PACKET.md`; it must not be used to authorize installs
+or live execution. No other Phase 1 work package may begin first.
 
 ## Next permitted work
 

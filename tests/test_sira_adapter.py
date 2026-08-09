@@ -54,6 +54,7 @@ from giclab.harness.models import (
 from giclab.harness.plan import run_plan_from_mapping
 from giclab.harness.policy import ExecutionDisallowed
 from giclab.harness.regulation import regulation_decision_from_mapping
+from giclab.harness.sira_gate_a import SIRA_MODEL_REVISION
 from giclab.registry import load_json, load_yaml
 from giclab.validation import ROOT
 
@@ -563,7 +564,7 @@ def test_sira_pair_emits_identical_regulation_policy_and_source_metadata(
     "plan_changes,match",
     [
         ({"config_sha256": "f" * 64}, "config_sha256"),
-        ({"model_revision": "provider-revision"}, "immutable model revision"),
+        ({"model_revision": "provider-revision"}, "expected SiRA model identity"),
         ({"dataset_revision": "f" * 64}, "dataset revision"),
         ({"max_tool_calls": 2}, "tool-call limit"),
         ({"condition": "SIRA-REACTIVE"}, "condition"),
@@ -760,6 +761,77 @@ def test_normalizes_fixture_with_field_contracts_and_preserves_all_raw_bytes(
         "sira-output/isolated-source-logs/global/sira_2026-08-08.log",
     }
     assert raw_after == raw_before
+
+
+def test_gate_a_provider_and_source_log_evidence_is_owned_and_reconciled(
+    tmp_path: Path,
+) -> None:
+    attempt = _copy_fixture(tmp_path)
+    ledger = {
+        "schema_version": "0.1.0",
+        "model_revision": SIRA_MODEL_REVISION,
+        "cost_usd": 0.001,
+        "input_tokens": 100,
+        "cached_input_tokens": 20,
+        "output_tokens": 25,
+        "total_tokens": 125,
+        "model_call_attempts": 7,
+        "unreconciled_provider_attempts": 0,
+        "browser_actions": 1,
+        "output_bytes": 4096,
+    }
+    (attempt / "provider-budget.json").write_text(
+        json.dumps(ledger, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    (attempt / "runtime-environment.json").write_text(
+        json.dumps({"secret_variable_names": [SIRA_SECRET_NAME]}) + "\n",
+        encoding="utf-8",
+    )
+    (attempt / "runtime-cleanup.json").write_text(
+        json.dumps({"all_environment_closes_succeeded": True}) + "\n",
+        encoding="utf-8",
+    )
+    global_logs = attempt / "source-runtime/logs"
+    global_logs.mkdir(parents=True)
+    (global_logs / "sira_2026-08-08.log").write_text("owned\n", encoding="utf-8")
+    config = _config(SiRAMode.SIMULATIVE)
+    plan = _plan_for_config(config, model_revision=SIRA_MODEL_REVISION)
+    result = _adapter(SiRAMode.SIMULATIVE).normalize(plan, attempt)
+    assert result.accounting.cost_usd == 0.001
+    assert result.accounting.model_tokens == 125
+    assert result.accounting.tool_calls == 1
+    retained = {path.relative_to(attempt).as_posix() for path in result.raw_artifacts}
+    assert "provider-budget.json" in retained
+    assert "runtime-environment.json" in retained
+    assert "runtime-cleanup.json" in retained
+    assert "source-runtime/logs/sira_2026-08-08.log" in retained
+
+
+def test_gate_a_provider_ledger_must_reconcile(tmp_path: Path) -> None:
+    attempt = _copy_fixture(tmp_path)
+    (attempt / "provider-budget.json").write_text(
+        json.dumps(
+            {
+                "model_revision": SIRA_MODEL_REVISION,
+                "cost_usd": 0.001,
+                "input_tokens": 100,
+                "cached_input_tokens": 20,
+                "output_tokens": 25,
+                "total_tokens": 999,
+                "model_call_attempts": 7,
+                "unreconciled_provider_attempts": 0,
+                "browser_actions": 0,
+                "output_bytes": 4096,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(SiRATraceError, match="token totals"):
+        config = _config(SiRAMode.SIMULATIVE)
+        _adapter(SiRAMode.SIMULATIVE).normalize(
+            _plan_for_config(config, model_revision=SIRA_MODEL_REVISION), attempt
+        )
 
 
 def test_missing_belief_is_explicitly_unavailable(tmp_path: Path) -> None:
