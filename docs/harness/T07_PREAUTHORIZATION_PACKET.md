@@ -6,7 +6,7 @@ Prepared: 2026-08-08
 
 ## Authorization target
 
-- Clean GIC Lab implementation commit: `[IMPLEMENTATION_COMMIT_PENDING]`.
+- Clean GIC Lab implementation commit: `97656a8f6535776598a5f636dbd4d8d7cd9ec836`.
 - Branch: `phase-1/sira-smoke`.
 - Profile plan ID: `PLAN-EXP0001-SMOKE`.
 - Profile path:
@@ -319,7 +319,7 @@ DO NOT USE: authorization is blocked until kernel-enforced complete descendant
 containment is implemented, tested, and independently rereviewed.
 
 I authorize T07 Gate B for exactly PLAN-EXP0001-SMOKE at GIC Lab commit
-[IMPLEMENTATION_COMMIT_PENDING], using OpenAI at https://api.openai.com/v1/ and
+97656a8f6535776598a5f636dbd4d8d7cd9ec836, using OpenAI at https://api.openai.com/v1/ and
 exactly gpt-4o-2024-11-20 with no alias or fallback.
 
 I authorize the three exact source/dependency/Playwright installation actions in

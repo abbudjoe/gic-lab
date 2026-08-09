@@ -27,8 +27,8 @@
 | T07-GA-DOD-10 | Accept only the secret name `SIRA_API_KEY`; reject fallback/inheritance and prevent secret material in serialized surfaces or evidence. | Static contract and synthetic secret-handling tests without reading a real value. | met |
 | T07-GA-DOD-11 | Pass focused tests, repository validation, and pre-review `make check`. | Command log in this ledger and packet. | met |
 | T07-GA-DOD-12 | Complete independent spec-conformance review, repair all valid findings, rereview clean, and pass post-review `make check`. | Reviewer findings and post-review command log. | blocked by T07-GA-DOD-06; rereview correctly failed closed |
-| T07-GA-DOD-13 | Regenerate the preauthorization packet with the exact clean implementation commit, hashes, caps, pending installs, commands, cleanup, blockers, and authorization block. | `docs/harness/T07_PREAUTHORIZATION_PACKET.md`. | in progress: blocked packet prepared; exact commit pending |
-| T07-GA-DOD-14 | Commit all Gate A implementation and reviewed evidence on the named T07 branch without executing the smoke. | Clean named-branch commit and zero-execution statement. | not started |
+| T07-GA-DOD-13 | Regenerate the preauthorization packet with the exact clean implementation commit, hashes, caps, pending installs, commands, cleanup, blockers, and authorization block. | `docs/harness/T07_PREAUTHORIZATION_PACKET.md`. | met: blocked packet binds implementation commit `97656a8f6535776598a5f636dbd4d8d7cd9ec836` |
+| T07-GA-DOD-14 | Commit all Gate A implementation and reviewed evidence on the named T07 branch without executing the smoke. | Clean named-branch commit and zero-execution statement. | met |
 
 ## Validation and review log
 
@@ -60,6 +60,6 @@
 
 Gate A is blocked at T07-GA-DOD-06. Provider accounting, output enforcement, and the
 other first/rereview repairs are implemented, but live authorization cannot proceed
-until a kernel-enforced descendant container is implemented and rereviewed. Commit
-closeout and exact blocked-packet commit insertion remain. Live execution remains
-unauthorized.
+until a kernel-enforced descendant container is implemented and rereviewed. The exact
+reviewed implementation commit is `97656a8f6535776598a5f636dbd4d8d7cd9ec836`.
+Live execution remains unauthorized.
