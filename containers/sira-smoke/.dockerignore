@@ -1,0 +1,11 @@
+**
+!Containerfile
+!vendor/
+!vendor/uv-0.11.7-py3-none-manylinux_2_17_aarch64.manylinux2014_aarch64.musllinux_1_1_aarch64.whl
+!upstream/
+!upstream/**
+!sira-immutable-model-routing.patch
+!sira_gate_a_runtime.py
+!container_entrypoint.py
+!fixtures/
+!fixtures/**

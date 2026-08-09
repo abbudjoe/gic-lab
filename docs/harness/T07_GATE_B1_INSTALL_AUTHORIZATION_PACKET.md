@@ -1,0 +1,410 @@
+# T07 Gate B1 install authorization packet
+
+Status: **Gate B2 authorization blocked by storage floor**
+
+Prepared: 2026-08-08
+
+Reserved authorization reference: `AUTH-T07-GATE-B2-2026-08-08`.
+
+This packet authorizes nothing by itself. It contains no authorization for a model
+request, SiRA condition, experimental browser task, scientific change, pilot, cloud
+mutation, or paid compute.
+
+## 1. Exact clean repository commit
+
+- Gate B1 implementation commit: `GATE_B1_IMPLEMENTATION_COMMIT_PENDING`.
+- Branch: `phase-1/sira-smoke`.
+- Gate B1 baseline: `38e27ef20637471325ec15be216b4274bed5be49`.
+- The implementation commit is filled only after review and the post-review full gate.
+  A later packet-only descendant may update this document without changing the bound
+  implementation tree.
+
+## 2. Runtime present or exact installation action
+
+No supported runtime is installed or running. Docker/Podman/Colima/Lima/nerdctl/
+Rancher Desktop/OrbStack/Finch clients, applications, and daemons were absent.
+Client version, server version, and daemon architecture are therefore unavailable.
+
+The proposed runtime is exactly Docker Desktop for Mac (Apple silicon) **4.85.0,
+build 235549**, published 2026-08-03, minimum macOS 14:
+
+```text
+URL: https://desktop.docker.com/mac/main/arm64/235549/Docker.dmg
+Content-Length: 573592444
+SHA-256: 84b1224c93456fe261955ebc91f3cd88ce19778ffdb6d0a0d423ce37246f7c2b
+ETag: 4f9b2b18fabbf15788279792b6ea69a8
+S3 version ID: wsuDysIsQ5IOyQOhS5596yFr.2s94QxI
+```
+
+Official metadata:
+
+- <https://desktop.docker.com/mac/main/arm64/appcast.xml>
+- <https://desktop.docker.com/mac/main/arm64/235549/checksums.txt>
+- <https://docs.docker.com/desktop/setup/install/mac-install/>
+
+After storage preflight passes and the user confirms their Docker license/subscription
+entitlement, the exact proposed installation actions are the ordered actions
+`require-fresh-dmg-path` through `capture-docker-info` in
+`containers/sira-smoke/materialization-plan.json`. The plan hash is
+`MATERIALIZATION_PLAN_SHA256_PENDING`. Its exact shell-free arrays download the one
+DMG, fail-close on its exact size and SHA-256, attach it, invoke the mounted
+`install` binary through `/usr/bin/sudo`, detach it, verify the installed CLI,
+launch Docker Desktop, wait exactly 30 seconds once, and capture version and server
+information. They may run only inside the single bounded supervisor in section 5;
+executing an action separately is not authorized.
+
+Post-install evidence must record product, client/server versions, context, OS,
+architecture, security options, cgroup version/driver, and Docker Root Dir. The server
+must be Linux `arm64`. A different artifact, automatic update, missing daemon, or
+unprovable private PID/cgroup support stops Gate B2. Codex may not accept the license
+for the user.
+
+## 3. Target platform
+
+Chosen: exactly `linux/arm64` native execution. `linux/amd64` is an unapproved
+fallback and may not be selected automatically. The source-grounded matrix is
+`docs/harness/T07_GATE_B1_CONTAINMENT_DECISION.md`.
+
+## 4. Base image and immutable digest
+
+```text
+mcr.microsoft.com/playwright/python:v1.39.0-jammy@sha256:96955ff5cc37e13f5f1b21f5171afb9fed7e028025aa9d81c690501cd7fa0c6c
+```
+
+- Index digest:
+  `sha256:96955ff5cc37e13f5f1b21f5171afb9fed7e028025aa9d81c690501cd7fa0c6c`.
+- Arm64 manifest:
+  `sha256:f8fca31a4730afa691e73ed99b4a6ebf28b2a9bd65a7038bb6da4bd223bb237b`.
+- Arm64 config:
+  `sha256:c0e7e7394b4baa0a5b3f735ca11eef3630c6c18d423c3849ee88c104bd9f1d9d`.
+- Compressed selected layers: 719,590,824 bytes.
+
+The final locally built image ID is intentionally unknown before the prohibited
+build. Gate B2 resolves the local tag once, verifies its build labels, records the
+observed `sha256:` ID, and passes only that ID to `docker container create`.
+
+## 5. Exact pulls and build steps
+
+All materialization outputs are outside both Git checkouts; the hashed plan and
+reviewed source inputs remain in this repository. No action has run. The sole proposed
+entrypoint is the command below; the hashed JSON plan is the authoritative rendering
+of all 51 exact argument arrays, expected-stdout checks, and per-action timeouts.
+
+```text
+PYTHONPATH=/Users/joseph/.codex/worktrees/84b1/gic-lab/src /opt/homebrew/Cellar/uv/0.11.7/bin/uv run --no-sync python -m giclab.harness.sira_container execute-materialization-plan --plan /Users/joseph/.codex/worktrees/84b1/gic-lab/containers/sira-smoke/materialization-plan.json --plan-sha256 MATERIALIZATION_PLAN_SHA256_PENDING --ledger /Users/joseph/.local/share/gic-lab-t07-gate-b2-materialization-ledger.json
+```
+
+The supervisor starts one monotonic 3,600-second deadline before its first action,
+allows exactly one call per action and no retry, gives every child
+`min(per-action cap, aggregate remainder)`, streams stdout/stderr through a hard
+16,777,216-byte aggregate limiter, and records only bounded sizes/hashes in a fresh
+ledger. It stops on timeout, output exhaustion, nonzero status, or expected-stdout
+drift.
+
+Before any download the plan requires a clean worktree descended from
+`GATE_B1_IMPLEMENTATION_COMMIT_PENDING`; the exact implementation-to-HEAD tree delta
+must contain only the materialization plan and three packet/ledger documents. It then
+requires the storage floor. Before attach it
+fail-closes on the DMG's exact size/SHA-256. Before build it requires the exact pinned
+source HEAD and clean status, exact uv wheel size/SHA-256, an equality match between
+the staged and pinned source trees, byte-for-byte mode-0444 repository build inputs,
+the exact uv.lock, no extra build-context top-level entry, successful patch dry-run,
+and this context-evidence digest:
+`747575a0c4c1dc9c0e52a839dc28eea1807e898495ee2c58c7b25ae8ab4ba77b`.
+It checks the 150-GiB floor after install, pull, source/wheel staging, and build, then
+captures the label-verified immutable image identity.
+
+Pre-build hashes must match this packet. Post-build image identity must validate before
+any fixture container is created.
+
+## 6. Dependency and browser downloads
+
+- uv wheel: 23,609,640 bytes, SHA-256
+  `5985a15a92bd9a170fc1947abb1fbc3e9828c5a430ad85b5bed8356c20b67a71`.
+- SiRA lock SHA-256:
+  `138585129c7f369887591d30d9727f8dd466639fa78fb00adc5a04f1e9b2d76e`.
+- Dependency action: exactly `uv sync --frozen --extra eval --python 3.10`.
+- Dependency transport: `UV_HTTP_RETRIES=0` and `UV_PYTHON_DOWNLOADS=never`; no
+  dependency retry or managed-Python download is allowed.
+- Conservative locked-artifact transfer estimate: 313,827,106 bytes.
+- Additional browser-download command: **none**. The immutable Playwright 1.39.0
+  image already contains browser artifacts. `playwright install` and any host browser
+  installer are forbidden.
+- Required browser identity: Playwright 1.39.0 and Chromium revision 1084. Its
+  executable SHA-256 is an observed Gate B2 value, never a guessed field.
+
+## 7. Expected network endpoints
+
+Only HTTPS/443 is expected:
+
+| Phase | Endpoints |
+|---|---|
+| Docker Desktop artifact | `desktop.docker.com` |
+| Base image | `mcr.microsoft.com` |
+| Pinned source | `github.com`, `codeload.github.com` |
+| Python lock artifacts | `pypi.org`, `files.pythonhosted.org` |
+
+No `api.openai.com`, provider model endpoint, Playwright CDN/browser downloader,
+arbitrary website, cloud compute API, image push, or other registry is allowed. An
+endpoint outside the table is not expected or approved. Docker Desktop/buildx does
+not expose an endpoint allowlist or complete egress telemetry through the proposed
+commands, so this expectation is not mechanically enforced. Gate B2 authorization
+must explicitly accept that limitation; if enforced endpoint control is required,
+stop before installation for a separately reviewed egress-gateway design.
+
+## 8. Worst-case transfer and disk usage
+
+- Known transfer components: 1,630,620,014 bytes before the small source archive and
+  protocol overhead.
+- Exact authorized transfer ceiling: 2,147,483,648 bytes (2 GiB), with zero
+  agent-level command retry allowance; runtime-internal retransmission consumes the
+  same reservation.
+- Exact incremental disk ceiling: 12,884,901,888 bytes (12 GiB), including app, VM,
+  image layers, final image, context, and evidence.
+- Exact aggregate automated materialization wall ceiling: 3,600 monotonic seconds,
+  mechanically shared by all 51 plan actions. Per-action maxima include 600 seconds
+  for the DMG, 600 for the image pull, 300 for source fetch, 120 for the uv wheel,
+  and 900 for build; the supervisor always uses the smaller aggregate remainder.
+- Exact materialization command/output caps: 51 shell-free child calls, one attempt
+  per action, zero retry, and 16,777,216 aggregate stdout/stderr bytes. Streaming
+  enforcement kills the action process group before accepting byte 16,777,217.
+- No image push is authorized.
+
+The direct file downloads mechanically enforce their individual byte/wall maxima and
+are followed by exact size/SHA-256 verifiers. Docker
+Desktop does not expose a reliable per-pull/build network-byte meter through these CLI
+commands, so the 2-GiB ceiling is enforced as an immutable-content reservation: one
+digest-pull command, one frozen-build command, no agent retry, and immediate stop on
+observable digest, lock, or size drift. It is not represented as observed transfer
+telemetry. If Gate B2
+requires a live byte-meter rather than this reservation contract, authorization must
+stop for a separate metering design.
+
+## 9. Storage floors
+
+At least 161,061,273,600 free bytes (150 GiB) must remain after build. The exact
+pre-install floor is therefore 173,946,175,488 free bytes (162 GiB).
+
+The exact preflight command is:
+
+```text
+/usr/bin/python3 -c 'import shutil,sys; value=shutil.disk_usage("/Users/joseph").free; print(value); raise SystemExit(0 if value >= 173946175488 else 1)'
+```
+
+It must pass before installation. The same check, with the threshold changed to
+`161061273600`, must pass after the DMG install, image pull, source/wheel staging,
+build, and every probe. A floor failure stops before the next action. The last Gate B1
+observation at `2026-08-09T04:45:07Z` was **12,029,374,464 bytes**, a
+161,916,801,024-byte shortfall. This packet authorizes no deletion or cleanup to create
+space.
+
+## 10. Exact synthetic resource limits
+
+| Probe | CPU | Memory/swap | PIDs | Workload wall | Output: payload/log/evidence | shm | each tmpfs | TERM |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Containment | 1.000 | 536,870,912 B | 64 | 30 s | 16,777,216 B: 8,388,608 / 2,097,152 / 6,291,456 | 67,108,864 B | 67,108,864 B | 1 s |
+| Dummy secret | 1.000 | 536,870,912 B | 64 | 30 s | 16,777,216 B: 8,388,608 / 2,097,152 / 6,291,456 | 67,108,864 B | 67,108,864 B | 1 s |
+| Browser only | 2.000 | 2,147,483,648 B | 256 | 60 s | 33,554,432 B: 16,777,216 / 4,194,304 / 12,582,912 | 1,073,741,824 B | 134,217,728 B | 2 s |
+
+Aggregate probe caps: USD 0 API cost, 0 model tokens, 0 model/API calls, 3 container
+attempts, 120 workload seconds, 1 local browser action, 1 screenshot evidence capture,
+67,108,864 retained bytes, and at most 96 Docker lifecycle CLI operations through
+fixed state machines. Each operation has a 10-second client timeout except stop, which
+adds only the declared 1- or 2-second TERM grace. Screenshot capture is evidence, not
+a second browser navigation/action. Installation/build uses the separate 3,600-second
+ceiling above.
+
+Per-probe API cost, model tokens, and model/API calls are all exactly zero. Browser
+actions are 0 containment, 0 dummy-secret, and 1 browser-only. The per-probe Docker
+lifecycle ceiling is 32 operations.
+
+## 11. Exact no-network containment command
+
+Fixed UUID: `b2000000000000000000000000000001`.
+
+```text
+/bin/test ! -e /Users/joseph/.local/share/gic-lab/t07-gate-b2/attempts
+/bin/mkdir -m 0700 /Users/joseph/.local/share/gic-lab/t07-gate-b2/attempts
+PYTHONPATH=/Users/joseph/.codex/worktrees/84b1/gic-lab/src /opt/homebrew/Cellar/uv/0.11.7/bin/uv run --no-sync python -m giclab.harness.sira_container execute-fixture --repository-root /Users/joseph/.codex/worktrees/84b1/gic-lab --runtime /Applications/Docker.app/Contents/Resources/bin/docker --image-identity /Users/joseph/.local/share/gic-lab/t07-gate-b2/image-identity.json --owned-base /Users/joseph/.local/share/gic-lab/t07-gate-b2/attempts --repository-commit GATE_B1_IMPLEMENTATION_COMMIT_PENDING --attempt-uuid b2000000000000000000000000000001 --authorization-reference AUTH-T07-GATE-B2-2026-08-08 --fixture adversarial-containment
+```
+
+The wrapper renders `--network none`, omits Docker's invalid `--pid private` spelling
+so the runtime creates its default private PID namespace, renders
+`--cgroupns private`, and inspect-verifies both fields before start. Stop/kill use only
+the immutable container ID. Reused attempt or container identities are rejected.
+
+## 12. Exact no-network browser-only command
+
+Fixed UUID: `b2000000000000000000000000000002`.
+
+```text
+PYTHONPATH=/Users/joseph/.codex/worktrees/84b1/gic-lab/src /opt/homebrew/Cellar/uv/0.11.7/bin/uv run --no-sync python -m giclab.harness.sira_container execute-fixture --repository-root /Users/joseph/.codex/worktrees/84b1/gic-lab --runtime /Applications/Docker.app/Contents/Resources/bin/docker --image-identity /Users/joseph/.local/share/gic-lab/t07-gate-b2/image-identity.json --owned-base /Users/joseph/.local/share/gic-lab/t07-gate-b2/attempts --repository-commit GATE_B1_IMPLEMENTATION_COMMIT_PENDING --attempt-uuid b2000000000000000000000000000002 --authorization-reference AUTH-T07-GATE-B2-2026-08-08 --fixture browser-preflight
+```
+
+It performs exactly one navigation action to bundled
+`file:///opt/giclab/fixtures/static.html`, takes one screenshot as evidence, and closes
+the browser. It contains no SiRA condition or model client. After this probe succeeds,
+the complete image-provenance record is assembled exactly once:
+
+```text
+PYTHONPATH=/Users/joseph/.codex/worktrees/84b1/gic-lab/src /opt/homebrew/Cellar/uv/0.11.7/bin/uv run --no-sync python -m giclab.harness.sira_container assemble-image-provenance --repository-root /Users/joseph/.codex/worktrees/84b1/gic-lab --image-identity /Users/joseph/.local/share/gic-lab/t07-gate-b2/image-identity.json --browser-attempt-uuid b2000000000000000000000000000002 --browser-record /Users/joseph/.local/share/gic-lab/t07-gate-b2/attempts/browser-preflight-b2000000000000000000000000000002/browser-preflight.json --browser-pre-removal-evidence /Users/joseph/.local/share/gic-lab/t07-gate-b2/attempts/browser-preflight-b2000000000000000000000000000002/container-evidence-before-removal.json --browser-cleanup-seal /Users/joseph/.local/share/gic-lab/t07-gate-b2/attempts/browser-preflight-b2000000000000000000000000000002/container-cleanup-seal.json --output /Users/joseph/.local/share/gic-lab/t07-gate-b2/image-provenance.json
+```
+
+That assembler equality-matches the raw browser record to the fixture record retained
+before removal, requires the same attempt's successful sealed cleanup evidence, proves
+both inspect snapshots and the cleanup seal name the exact immutable image/attempt,
+and retains SHA-256 hashes of all three inputs. The resulting record combines those
+bindings with the base index/platform digests, Containerfile/source/patch/runtime-
+adaptation/build-assets/lock hashes, installed package manifest hash, Playwright/
+Chromium identity, Chromium executable hash, final image ID, repo-digest status, and
+platform. Missing, stale, failed, or contradictory evidence stops Gate B2.
+
+## 13. Dummy-secret contract
+
+The canary is public test data, not a credential:
+`T07_GATE_B2_DUMMY_CANARY_PUBLIC_NOT_A_CREDENTIAL`. Fixed UUID:
+`b2000000000000000000000000000003`.
+
+```text
+/bin/test ! -e /Users/joseph/.local/share/gic-lab/t07-gate-b2/secrets
+/bin/mkdir -m 0700 /Users/joseph/.local/share/gic-lab/t07-gate-b2/secrets
+PYTHONPATH=/Users/joseph/.codex/worktrees/84b1/gic-lab/src /opt/homebrew/Cellar/uv/0.11.7/bin/uv run --no-sync python -m giclab.harness.sira_container write-dummy-secret --output /Users/joseph/.local/share/gic-lab/t07-gate-b2/secrets/dummy-sira-api-key
+PYTHONPATH=/Users/joseph/.codex/worktrees/84b1/gic-lab/src /opt/homebrew/Cellar/uv/0.11.7/bin/uv run --no-sync python -m giclab.harness.sira_container execute-fixture --repository-root /Users/joseph/.codex/worktrees/84b1/gic-lab --runtime /Applications/Docker.app/Contents/Resources/bin/docker --image-identity /Users/joseph/.local/share/gic-lab/t07-gate-b2/image-identity.json --owned-base /Users/joseph/.local/share/gic-lab/t07-gate-b2/attempts --repository-commit GATE_B1_IMPLEMENTATION_COMMIT_PENDING --attempt-uuid b2000000000000000000000000000003 --authorization-reference AUTH-T07-GATE-B2-2026-08-08 --fixture dummy-secret-preflight --secret-file /Users/joseph/.local/share/gic-lab/t07-gate-b2/secrets/dummy-sira-api-key
+```
+
+The host-user-owned mode-0600 file and mode-0700 attempt root are accessed by the
+exact host numeric UID:GID `501:20` inside the container. The file is mounted read-only
+only at `/run/secrets/sira_api_key`. The entrypoint exports `SIRA_API_KEY` only to
+`secret_probe.py`. Rendered argv, labels, inspect, logs, and every retained file are
+scanned for the exact canary.
+`OPENAI_API_KEY` is rejected. The real secret is neither needed nor permitted.
+
+## 14. Cleanup and removal contract
+
+For every created fixture, including failures:
+
+1. Capture exact ID, name, labels, image ID, policy inspect, and pre-stop process table.
+2. Bound workload/output; stop for the declared grace and KILL the complete container
+   boundary if stop fails or terminal state is absent.
+3. Require terminal state and matching wait/inspect exit code. Capture bounded logs and
+   final inspect, scan the dummy canary where applicable, and fsync pre-removal evidence.
+4. Remove only that terminal, label-validated immutable container ID.
+5. Query all running/stopped containers plus networks and volumes by the attempt UUID;
+   require every result empty.
+6. Seal exact retained bytes. Truncation, incomplete evidence, a failed residual query,
+   or a failed failure-cleanup proof invalidates the probe and blocks progression.
+7. On any post-create exception, repeat label-bound inspect/top/stop/kill/evidence/
+   remove/residual verification. Never substitute a container found only by name.
+8. Remove the public dummy file only after scanning. Retain attempt, runtime, image,
+   build, and failure evidence plus the final local image. Attempt roots are immutable
+   and are not deleted or reused; Docker is not automatically uninstalled.
+9. No host PID cleanup, cloud/provider cleanup, broad Docker prune, evidence deletion,
+   or unrelated-resource mutation is authorized.
+
+Exact canary cleanup proposed:
+
+```text
+/bin/unlink /Users/joseph/.local/share/gic-lab/t07-gate-b2/secrets/dummy-sira-api-key
+```
+
+## 15. Tests and checks run
+
+```text
+git status --short
+git rev-parse HEAD
+git merge-base --is-ancestor 38e27ef20637471325ec15be216b4274bed5be49 HEAD
+PYTHONPATH=src uv run --no-sync pytest -q tests/test_sira_gate_a.py tests/test_sira_adapter.py tests/test_harness_executor.py tests/test_harness_budget.py tests/test_harness_policy.py
+PYTHONPATH=src uv run --no-sync pytest -q tests/test_sira_container.py tests/test_harness_schemas.py
+uv run --no-sync ruff check src/giclab/harness/sira_container.py containers/sira-smoke/fixtures containers/sira-smoke/container_entrypoint.py tests/test_sira_container.py tests/test_harness_schemas.py src/giclab/validation.py
+uv run --no-sync mypy src/giclab/harness/sira_container.py
+/usr/bin/patch --dry-run --silent -d <fresh-directory-containing-pinned-source> -p1 < containers/sira-smoke/sira-immutable-model-routing.patch
+make validate
+make check QUARTO=/private/tmp/giclab-t07-quarto.nT1Msu/bin/quarto
+git diff --check
+```
+
+Observed: pre-edit Gate A passed 133 tests. The final Gate B1/schema suite passes 84;
+the combined Gate A+B1 focused collection is 217. Patch application passed against
+the exact pinned upstream file fetched read-only. Ruff, strict mypy, repository/schema
+validation, and `git diff --check` pass. The initial independent review failed with
+eleven findings; successive rereview exposed and repaired mount allowlisting,
+deadline/endpoint truthfulness, provenance binding, executable/digest validation,
+and materialization cap/tree-binding defects. Final independent spec-conformance
+rereview is clean. The post-repair full check passes 389 tests plus the real Quarto
+render and site validation.
+
+No test called a model API, launched a browser/container, pulled/built an image,
+installed a runtime/dependency/browser, or read a real secret.
+
+## 16. Remaining blockers
+
+1. **Authorization-stopping storage blocker:** 12,029,374,464 bytes were free at the
+   recorded instant; 173,946,175,488 are required.
+2. Docker Desktop is absent and its license/installation is unauthorized.
+3. Runtime/cgroup identity, final image ID, package hash, Chromium executable hash,
+   and empirical containment remain unknown until Gate B2.
+4. Mock tests do not prove kernel containment; the adversarial probe must pass.
+5. Gate B2 is no-network probe authorization only. Live SiRA still requires a reviewed
+   isolated-egress network policy, full post-build provenance, condition command
+   materialization, current model/price verification, and new current-turn authority.
+6. Until the final packet-only commit, the implementation commit and materialization
+   plan SHA-256 placeholders remain pending; rereview and final-check evidence is clean.
+
+## 17. Ready-to-copy Gate B2 authorization block
+
+**Do not use until this packet says ready and the storage blocker is cleared.**
+
+```text
+I authorize T07 Gate B2 only under authorization reference
+AUTH-T07-GATE-B2-2026-08-08, conditional on a read-only preflight first proving at
+least 173946175488 free bytes and on my personal acceptance of the applicable Docker
+license/subscription terms.
+
+I authorize download and installation of exactly Docker Desktop for Apple silicon
+4.85.0 build 235549 from
+https://desktop.docker.com/mac/main/arm64/235549/Docker.dmg only if its byte size is
+573592444 and SHA-256 is
+84b1224c93456fe261955ebc91f3cd88ce19778ffdb6d0a0d423ce37246f7c2b.
+
+I authorize executing exactly materialization plan
+PLAN-T07-GATE-B2-MATERIALIZATION at
+containers/sira-smoke/materialization-plan.json with SHA-256
+MATERIALIZATION_PLAN_SHA256_PENDING through the one bounded supervisor command in
+this packet. I do not authorize executing its child arrays separately or retrying a
+failed action.
+
+I authorize pulling only
+mcr.microsoft.com/playwright/python:v1.39.0-jammy@sha256:96955ff5cc37e13f5f1b21f5171afb9fed7e028025aa9d81c690501cd7fa0c6c
+for linux/arm64; cloning only SiRA commit
+93fb8d72de71f9a4a13419670adeb34d93cf7acd; downloading only the pinned uv wheel and
+artifacts selected by uv sync --frozen --extra eval from the recorded lock; and
+building only giclab/sira-smoke:t07-gate-b2-b46f680c40ae from the exact hashed
+Containerfile, patch, runtime adaptation, and archived source in this packet.
+
+I authorize exactly three no-network probes with UUIDs
+b2000000000000000000000000000001, b2000000000000000000000000000002,
+and b2000000000000000000000000000003: adversarial containment, local static-page
+browser preflight, and public dummy-secret preflight. Aggregate probe limits are USD
+0 API cost, 0 model tokens/calls, 3 container attempts, 120 seconds container-workload
+wall time, 1 local browser navigation action, 1 screenshot evidence capture, 67108864
+retained bytes, and 96 Docker lifecycle CLI operations. Automated installation/build
+materialization is limited to the exact hashed 51-action plan, one call per action,
+zero retry, 16777216 output bytes, and 3600 monotonic seconds; authorized transfer is reserved at no more than
+2147483648 bytes with no agent-level command retry; runtime-internal retransmission
+uses the same reservation; incremental disk use is capped at 12884901888 bytes.
+I acknowledge that the expected endpoint list is not mechanically enforced or fully
+observed by the proposed Docker Desktop/buildx commands. This authorization does not
+approve an endpoint outside that list; if enforced endpoint telemetry is required,
+stop for a separate egress-control design. Stop before the next action on any
+observable cap, identity, digest, lock, size, or storage-floor breach.
+
+I authorize creation and deletion only of the public dummy canary file at the exact
+path in this packet. I do not authorize access to a real SIRA_API_KEY or other secret.
+
+I do not authorize any model/provider API or model-availability API request, either
+SiRA condition, experimental browser task, live website navigation, image push,
+floating image, host PID/network/IPC mode, privileged container, runtime socket mount,
+pilot, benchmark, training, scientific-field change, cloud mutation, paid compute, or
+execution authorization materialization. Stop after sealing Gate B2 evidence and
+report exact runtime/image/browser/cleanup identities and blockers.
+```

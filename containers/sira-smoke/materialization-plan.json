@@ -1,0 +1,299 @@
+{
+  "schema_version": "0.1.0",
+  "plan_id": "PLAN-T07-GATE-B2-MATERIALIZATION",
+  "authorization_reference": "AUTH-T07-GATE-B2-2026-08-08",
+  "aggregate_wall_seconds": 3600,
+  "aggregate_output_bytes": 16777216,
+  "transfer_reservation_bytes": 2147483648,
+  "incremental_disk_limit_bytes": 12884901888,
+  "actions": [
+    {
+      "action_id": "verify-authorized-gic-ancestry",
+      "argv": ["/usr/bin/git", "-C", "/Users/joseph/.codex/worktrees/84b1/gic-lab", "merge-base", "--is-ancestor", "GATE_B1_IMPLEMENTATION_COMMIT_PENDING", "HEAD"],
+      "timeout_seconds": 10,
+      "expected_stdout": ""
+    },
+    {
+      "action_id": "verify-authorized-gic-tree-delta",
+      "argv": ["/usr/bin/git", "-C", "/Users/joseph/.codex/worktrees/84b1/gic-lab", "diff", "--name-only", "GATE_B1_IMPLEMENTATION_COMMIT_PENDING", "HEAD"],
+      "timeout_seconds": 10,
+      "expected_stdout": "containers/sira-smoke/materialization-plan.json\ndocs/harness/T07_GATE_B1_IMPLEMENTATION_LEDGER.md\ndocs/harness/T07_GATE_B1_INSTALL_AUTHORIZATION_PACKET.md\ndocs/harness/T07_PREAUTHORIZATION_PACKET.md\n"
+    },
+    {
+      "action_id": "verify-clean-gic-worktree",
+      "argv": ["/usr/bin/git", "-C", "/Users/joseph/.codex/worktrees/84b1/gic-lab", "status", "--porcelain=v1", "--untracked-files=all"],
+      "timeout_seconds": 10,
+      "expected_stdout": ""
+    },
+    {
+      "action_id": "preflight-storage-floor",
+      "argv": ["/usr/bin/python3", "-c", "import shutil,sys; value=shutil.disk_usage('/Users/joseph').free; print(value); raise SystemExit(0 if value >= 173946175488 else 1)"],
+      "timeout_seconds": 10
+    },
+    {
+      "action_id": "require-fresh-dmg-path",
+      "argv": ["/bin/test", "!", "-e", "/Users/joseph/Downloads/Docker-4.85.0-arm64-235549.dmg"],
+      "timeout_seconds": 10,
+      "expected_stdout": ""
+    },
+    {
+      "action_id": "download-docker-desktop-dmg",
+      "argv": ["/usr/bin/curl", "--fail", "--location", "--proto", "=https", "--tlsv1.2", "--max-time", "600", "--max-filesize", "573592444", "--output", "/Users/joseph/Downloads/Docker-4.85.0-arm64-235549.dmg", "https://desktop.docker.com/mac/main/arm64/235549/Docker.dmg"],
+      "timeout_seconds": 600
+    },
+    {
+      "action_id": "verify-docker-desktop-dmg",
+      "argv": ["/usr/bin/env", "PYTHONPATH=/Users/joseph/.codex/worktrees/84b1/gic-lab/src", "/opt/homebrew/Cellar/uv/0.11.7/bin/uv", "run", "--no-sync", "python", "-m", "giclab.harness.sira_container", "verify-file", "--path", "/Users/joseph/Downloads/Docker-4.85.0-arm64-235549.dmg", "--bytes", "573592444", "--sha256", "84b1224c93456fe261955ebc91f3cd88ce19778ffdb6d0a0d423ce37246f7c2b"],
+      "timeout_seconds": 30,
+      "expected_stdout": "verified\n"
+    },
+    {
+      "action_id": "attach-docker-desktop-dmg",
+      "argv": ["/usr/bin/hdiutil", "attach", "/Users/joseph/Downloads/Docker-4.85.0-arm64-235549.dmg"],
+      "timeout_seconds": 90
+    },
+    {
+      "action_id": "install-docker-desktop",
+      "argv": ["/usr/bin/sudo", "/Volumes/Docker/Docker.app/Contents/MacOS/install"],
+      "timeout_seconds": 300
+    },
+    {
+      "action_id": "detach-docker-desktop-dmg",
+      "argv": ["/usr/bin/hdiutil", "detach", "/Volumes/Docker"],
+      "timeout_seconds": 60
+    },
+    {
+      "action_id": "verify-installed-docker-cli",
+      "argv": ["/bin/test", "-x", "/Applications/Docker.app/Contents/Resources/bin/docker"],
+      "timeout_seconds": 10,
+      "expected_stdout": ""
+    },
+    {
+      "action_id": "launch-docker-desktop",
+      "argv": ["/usr/bin/open", "-a", "/Applications/Docker.app"],
+      "timeout_seconds": 10
+    },
+    {
+      "action_id": "bounded-docker-startup-settle",
+      "argv": ["/bin/sleep", "30"],
+      "timeout_seconds": 31,
+      "expected_stdout": ""
+    },
+    {
+      "action_id": "capture-docker-version",
+      "argv": ["/Applications/Docker.app/Contents/Resources/bin/docker", "version", "--format", "{{json .}}"],
+      "timeout_seconds": 60
+    },
+    {
+      "action_id": "capture-docker-info",
+      "argv": ["/Applications/Docker.app/Contents/Resources/bin/docker", "info", "--format", "{{json .}}"],
+      "timeout_seconds": 60
+    },
+    {
+      "action_id": "post-install-storage-floor",
+      "argv": ["/usr/bin/python3", "-c", "import shutil,sys; value=shutil.disk_usage('/Users/joseph').free; print(value); raise SystemExit(0 if value >= 161061273600 else 1)"],
+      "timeout_seconds": 10
+    },
+    {
+      "action_id": "require-fresh-materialization-root",
+      "argv": ["/bin/test", "!", "-e", "/Users/joseph/.local/share/gic-lab/t07-gate-b2"],
+      "timeout_seconds": 10,
+      "expected_stdout": ""
+    },
+    {
+      "action_id": "create-giclab-data-parent",
+      "argv": ["/bin/mkdir", "-p", "-m", "0700", "/Users/joseph/.local/share/gic-lab"],
+      "timeout_seconds": 10,
+      "expected_stdout": ""
+    },
+    {
+      "action_id": "create-materialization-root",
+      "argv": ["/bin/mkdir", "-m", "0700", "/Users/joseph/.local/share/gic-lab/t07-gate-b2"],
+      "timeout_seconds": 10,
+      "expected_stdout": ""
+    },
+    {
+      "action_id": "pull-pinned-base-image",
+      "argv": ["/Applications/Docker.app/Contents/Resources/bin/docker", "image", "pull", "--platform", "linux/arm64", "mcr.microsoft.com/playwright/python:v1.39.0-jammy@sha256:96955ff5cc37e13f5f1b21f5171afb9fed7e028025aa9d81c690501cd7fa0c6c"],
+      "timeout_seconds": 600
+    },
+    {
+      "action_id": "post-pull-storage-floor",
+      "argv": ["/usr/bin/python3", "-c", "import shutil,sys; value=shutil.disk_usage('/Users/joseph').free; print(value); raise SystemExit(0 if value >= 161061273600 else 1)"],
+      "timeout_seconds": 10
+    },
+    {
+      "action_id": "create-source-checkout",
+      "argv": ["/bin/mkdir", "-m", "0700", "/Users/joseph/.local/share/gic-lab/t07-gate-b2/source"],
+      "timeout_seconds": 10,
+      "expected_stdout": ""
+    },
+    {
+      "action_id": "initialize-source-checkout",
+      "argv": ["/usr/bin/git", "-C", "/Users/joseph/.local/share/gic-lab/t07-gate-b2/source", "init"],
+      "timeout_seconds": 10
+    },
+    {
+      "action_id": "bind-source-origin",
+      "argv": ["/usr/bin/git", "-C", "/Users/joseph/.local/share/gic-lab/t07-gate-b2/source", "remote", "add", "origin", "https://github.com/sailing-lab/sira.git"],
+      "timeout_seconds": 10,
+      "expected_stdout": ""
+    },
+    {
+      "action_id": "fetch-pinned-source-commit",
+      "argv": ["/usr/bin/git", "-C", "/Users/joseph/.local/share/gic-lab/t07-gate-b2/source", "-c", "protocol.version=2", "fetch", "--no-tags", "--depth=1", "origin", "93fb8d72de71f9a4a13419670adeb34d93cf7acd"],
+      "timeout_seconds": 300
+    },
+    {
+      "action_id": "checkout-pinned-source-commit",
+      "argv": ["/usr/bin/git", "-C", "/Users/joseph/.local/share/gic-lab/t07-gate-b2/source", "checkout", "--detach", "FETCH_HEAD"],
+      "timeout_seconds": 10
+    },
+    {
+      "action_id": "verify-pinned-source-head",
+      "argv": ["/usr/bin/git", "-C", "/Users/joseph/.local/share/gic-lab/t07-gate-b2/source", "rev-parse", "HEAD"],
+      "timeout_seconds": 10,
+      "expected_stdout": "93fb8d72de71f9a4a13419670adeb34d93cf7acd\n"
+    },
+    {
+      "action_id": "verify-clean-source-checkout",
+      "argv": ["/usr/bin/git", "-C", "/Users/joseph/.local/share/gic-lab/t07-gate-b2/source", "status", "--porcelain=v1", "--untracked-files=all", "--ignored=matching"],
+      "timeout_seconds": 10,
+      "expected_stdout": ""
+    },
+    {
+      "action_id": "create-build-context",
+      "argv": ["/bin/mkdir", "-m", "0700", "/Users/joseph/.local/share/gic-lab/t07-gate-b2/build-context"],
+      "timeout_seconds": 10,
+      "expected_stdout": ""
+    },
+    {
+      "action_id": "create-staged-source-directory",
+      "argv": ["/bin/mkdir", "-m", "0700", "/Users/joseph/.local/share/gic-lab/t07-gate-b2/build-context/upstream"],
+      "timeout_seconds": 10,
+      "expected_stdout": ""
+    },
+    {
+      "action_id": "create-vendor-directory",
+      "argv": ["/bin/mkdir", "-m", "0700", "/Users/joseph/.local/share/gic-lab/t07-gate-b2/build-context/vendor"],
+      "timeout_seconds": 10,
+      "expected_stdout": ""
+    },
+    {
+      "action_id": "create-fixtures-directory",
+      "argv": ["/bin/mkdir", "-m", "0700", "/Users/joseph/.local/share/gic-lab/t07-gate-b2/build-context/fixtures"],
+      "timeout_seconds": 10,
+      "expected_stdout": ""
+    },
+    {
+      "action_id": "archive-pinned-source",
+      "argv": ["/usr/bin/git", "-C", "/Users/joseph/.local/share/gic-lab/t07-gate-b2/source", "archive", "--format=tar", "--output", "/Users/joseph/.local/share/gic-lab/t07-gate-b2/upstream.tar", "93fb8d72de71f9a4a13419670adeb34d93cf7acd"],
+      "timeout_seconds": 60,
+      "expected_stdout": ""
+    },
+    {
+      "action_id": "extract-pinned-source",
+      "argv": ["/usr/bin/tar", "-xf", "/Users/joseph/.local/share/gic-lab/t07-gate-b2/upstream.tar", "-C", "/Users/joseph/.local/share/gic-lab/t07-gate-b2/build-context/upstream"],
+      "timeout_seconds": 60,
+      "expected_stdout": ""
+    },
+    {
+      "action_id": "stage-containerfile",
+      "argv": ["/usr/bin/install", "-m", "0444", "/Users/joseph/.codex/worktrees/84b1/gic-lab/containers/sira-smoke/Containerfile", "/Users/joseph/.local/share/gic-lab/t07-gate-b2/build-context/Containerfile"],
+      "timeout_seconds": 10,
+      "expected_stdout": ""
+    },
+    {
+      "action_id": "stage-dockerignore",
+      "argv": ["/usr/bin/install", "-m", "0444", "/Users/joseph/.codex/worktrees/84b1/gic-lab/containers/sira-smoke/.dockerignore", "/Users/joseph/.local/share/gic-lab/t07-gate-b2/build-context/.dockerignore"],
+      "timeout_seconds": 10,
+      "expected_stdout": ""
+    },
+    {
+      "action_id": "stage-routing-patch",
+      "argv": ["/usr/bin/install", "-m", "0444", "/Users/joseph/.codex/worktrees/84b1/gic-lab/containers/sira-smoke/sira-immutable-model-routing.patch", "/Users/joseph/.local/share/gic-lab/t07-gate-b2/build-context/sira-immutable-model-routing.patch"],
+      "timeout_seconds": 10,
+      "expected_stdout": ""
+    },
+    {
+      "action_id": "stage-runtime-adaptation",
+      "argv": ["/usr/bin/install", "-m", "0444", "/Users/joseph/.codex/worktrees/84b1/gic-lab/src/giclab/harness/sira_gate_a_runtime.py", "/Users/joseph/.local/share/gic-lab/t07-gate-b2/build-context/sira_gate_a_runtime.py"],
+      "timeout_seconds": 10,
+      "expected_stdout": ""
+    },
+    {
+      "action_id": "stage-container-entrypoint",
+      "argv": ["/usr/bin/install", "-m", "0444", "/Users/joseph/.codex/worktrees/84b1/gic-lab/containers/sira-smoke/container_entrypoint.py", "/Users/joseph/.local/share/gic-lab/t07-gate-b2/build-context/container_entrypoint.py"],
+      "timeout_seconds": 10,
+      "expected_stdout": ""
+    },
+    {
+      "action_id": "stage-adversarial-fixture",
+      "argv": ["/usr/bin/install", "-m", "0444", "/Users/joseph/.codex/worktrees/84b1/gic-lab/containers/sira-smoke/fixtures/adversarial_containment.py", "/Users/joseph/.local/share/gic-lab/t07-gate-b2/build-context/fixtures/adversarial_containment.py"],
+      "timeout_seconds": 10,
+      "expected_stdout": ""
+    },
+    {
+      "action_id": "stage-browser-fixture",
+      "argv": ["/usr/bin/install", "-m", "0444", "/Users/joseph/.codex/worktrees/84b1/gic-lab/containers/sira-smoke/fixtures/browser_preflight.py", "/Users/joseph/.local/share/gic-lab/t07-gate-b2/build-context/fixtures/browser_preflight.py"],
+      "timeout_seconds": 10,
+      "expected_stdout": ""
+    },
+    {
+      "action_id": "stage-secret-fixture",
+      "argv": ["/usr/bin/install", "-m", "0444", "/Users/joseph/.codex/worktrees/84b1/gic-lab/containers/sira-smoke/fixtures/secret_probe.py", "/Users/joseph/.local/share/gic-lab/t07-gate-b2/build-context/fixtures/secret_probe.py"],
+      "timeout_seconds": 10,
+      "expected_stdout": ""
+    },
+    {
+      "action_id": "stage-static-fixture",
+      "argv": ["/usr/bin/install", "-m", "0444", "/Users/joseph/.codex/worktrees/84b1/gic-lab/containers/sira-smoke/fixtures/static.html", "/Users/joseph/.local/share/gic-lab/t07-gate-b2/build-context/fixtures/static.html"],
+      "timeout_seconds": 10,
+      "expected_stdout": ""
+    },
+    {
+      "action_id": "download-pinned-uv-wheel",
+      "argv": ["/usr/bin/curl", "--fail", "--location", "--proto", "=https", "--tlsv1.2", "--max-time", "120", "--max-filesize", "23609640", "--output", "/Users/joseph/.local/share/gic-lab/t07-gate-b2/build-context/vendor/uv-0.11.7-py3-none-manylinux_2_17_aarch64.manylinux2014_aarch64.musllinux_1_1_aarch64.whl", "https://files.pythonhosted.org/packages/f2/7f/fbed29775b0612f4f5679d3226268f1a347161abc1727b4080fb41d9f46f/uv-0.11.7-py3-none-manylinux_2_17_aarch64.manylinux2014_aarch64.musllinux_1_1_aarch64.whl"],
+      "timeout_seconds": 120
+    },
+    {
+      "action_id": "verify-pinned-uv-wheel",
+      "argv": ["/usr/bin/env", "PYTHONPATH=/Users/joseph/.codex/worktrees/84b1/gic-lab/src", "/opt/homebrew/Cellar/uv/0.11.7/bin/uv", "run", "--no-sync", "python", "-m", "giclab.harness.sira_container", "verify-file", "--path", "/Users/joseph/.local/share/gic-lab/t07-gate-b2/build-context/vendor/uv-0.11.7-py3-none-manylinux_2_17_aarch64.manylinux2014_aarch64.musllinux_1_1_aarch64.whl", "--bytes", "23609640", "--sha256", "5985a15a92bd9a170fc1947abb1fbc3e9828c5a430ad85b5bed8356c20b67a71"],
+      "timeout_seconds": 30,
+      "expected_stdout": "verified\n"
+    },
+    {
+      "action_id": "post-staging-storage-floor",
+      "argv": ["/usr/bin/python3", "-c", "import shutil,sys; value=shutil.disk_usage('/Users/joseph').free; print(value); raise SystemExit(0 if value >= 161061273600 else 1)"],
+      "timeout_seconds": 10
+    },
+    {
+      "action_id": "verify-staged-build-context",
+      "argv": ["/usr/bin/env", "PYTHONPATH=/Users/joseph/.codex/worktrees/84b1/gic-lab/src", "/opt/homebrew/Cellar/uv/0.11.7/bin/uv", "run", "--no-sync", "python", "-m", "giclab.harness.sira_container", "verify-build-context", "--repository-root", "/Users/joseph/.codex/worktrees/84b1/gic-lab", "--source-checkout", "/Users/joseph/.local/share/gic-lab/t07-gate-b2/source", "--staged-context", "/Users/joseph/.local/share/gic-lab/t07-gate-b2/build-context"],
+      "timeout_seconds": 60,
+      "expected_stdout": "747575a0c4c1dc9c0e52a839dc28eea1807e898495ee2c58c7b25ae8ab4ba77b\n"
+    },
+    {
+      "action_id": "verify-routing-patch-applies",
+      "argv": ["/usr/bin/git", "-C", "/Users/joseph/.local/share/gic-lab/t07-gate-b2/build-context/upstream", "apply", "--check", "/Users/joseph/.local/share/gic-lab/t07-gate-b2/build-context/sira-immutable-model-routing.patch"],
+      "timeout_seconds": 30,
+      "expected_stdout": ""
+    },
+    {
+      "action_id": "build-pinned-sira-image",
+      "argv": ["/Applications/Docker.app/Contents/Resources/bin/docker", "buildx", "build", "--load", "--platform", "linux/arm64", "--pull=false", "--no-cache", "--network=default", "--provenance=false", "--sbom=false", "--file", "/Users/joseph/.local/share/gic-lab/t07-gate-b2/build-context/Containerfile", "--tag", "giclab/sira-smoke:t07-gate-b2-b46f680c40ae", "--label", "org.giclab.t07.source-commit=93fb8d72de71f9a4a13419670adeb34d93cf7acd", "--label", "org.giclab.t07.source-patch-sha256=4d7e2a25f4313fc754db0fa17aeda51cc5cd75a5653adaf13b01ce87a71cb8ed", "--label", "org.giclab.t07.containerfile-sha256=b46f680c40aea0c65191896fc1674a6b4e00eca73b61f9b48ecbfdde13fb16b1", "--label", "org.giclab.t07.runtime-adaptation-sha256=894783a47c19efc5e141a90a4dd63920b9440e1ef231aad5b2738b1f524bbbcd", "--label", "org.giclab.t07.repository-build-assets-sha256=d364c2356a4e73bc847f7aabdb272908e006eca0753bd1f74b3984ea1719b79a", "--label", "org.giclab.t07.base-image-index-digest=sha256:96955ff5cc37e13f5f1b21f5171afb9fed7e028025aa9d81c690501cd7fa0c6c", "--label", "org.giclab.t07.base-image-platform-digest=sha256:f8fca31a4730afa691e73ed99b4a6ebf28b2a9bd65a7038bb6da4bd223bb237b", "--label", "org.giclab.t07.uv-lock-sha256=138585129c7f369887591d30d9727f8dd466639fa78fb00adc5a04f1e9b2d76e", "--label", "org.giclab.t07.platform=linux/arm64", "--label", "org.giclab.t07.playwright-version=1.39.0", "--label", "org.giclab.t07.chromium-revision=1084", "/Users/joseph/.local/share/gic-lab/t07-gate-b2/build-context"],
+      "timeout_seconds": 900
+    },
+    {
+      "action_id": "post-build-storage-floor",
+      "argv": ["/usr/bin/python3", "-c", "import shutil,sys; value=shutil.disk_usage('/Users/joseph').free; print(value); raise SystemExit(0 if value >= 161061273600 else 1)"],
+      "timeout_seconds": 10
+    },
+    {
+      "action_id": "capture-final-image-identity",
+      "argv": ["/usr/bin/env", "PYTHONPATH=/Users/joseph/.codex/worktrees/84b1/gic-lab/src", "/opt/homebrew/Cellar/uv/0.11.7/bin/uv", "run", "--no-sync", "python", "-m", "giclab.harness.sira_container", "capture-image-identity", "--repository-root", "/Users/joseph/.codex/worktrees/84b1/gic-lab", "--runtime", "/Applications/Docker.app/Contents/Resources/bin/docker", "--local-tag", "giclab/sira-smoke:t07-gate-b2-b46f680c40ae", "--output", "/Users/joseph/.local/share/gic-lab/t07-gate-b2/image-identity.json"],
+      "timeout_seconds": 60,
+      "expected_stdout": ""
+    }
+  ]
+}

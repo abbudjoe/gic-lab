@@ -1,0 +1,187 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:gic-lab:schema:container-attempt:0.1.0",
+  "title": "GIC Lab OCI container attempt lifecycle evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "container_id",
+    "container_name",
+    "attempt_uuid",
+    "fixture",
+    "platform",
+    "image_reference",
+    "image_digest",
+    "runtime_user",
+    "resource_limits",
+    "lifecycle_states",
+    "fixture_ready",
+    "stop_sent",
+    "kill_sent",
+    "wall_timed_out",
+    "output_limit_exceeded",
+    "observed_output_bytes",
+    "retained_output_bytes",
+    "evidence_complete",
+    "probe_succeeded",
+    "container_exit_code",
+    "terminal_state",
+    "removed",
+    "residual_containers",
+    "residual_networks",
+    "residual_volumes",
+    "sealed"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1.0"},
+    "container_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "container_name": {"type": "string", "pattern": "^giclab-t07-[a-z0-9-]+-[1-9][0-9]*-[a-f0-9]{32}$"},
+    "attempt_uuid": {"type": "string", "pattern": "^[a-f0-9]{32}$"},
+    "fixture": {
+      "enum": ["adversarial-containment", "browser-preflight", "dummy-secret-preflight"]
+    },
+    "platform": {"enum": ["linux/arm64", "linux/amd64"]},
+    "image_reference": {
+      "type": "string",
+      "pattern": "^([a-z0-9][a-z0-9._:/-]*(:[A-Za-z0-9._-]+)?@)?sha256:[a-f0-9]{64}$"
+    },
+    "image_digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "runtime_user": {"type": "string", "pattern": "^[1-9][0-9]*:[0-9]+$"},
+    "resource_limits": {"$ref": "#/$defs/resource_limits"},
+    "lifecycle_states": {
+      "type": "array",
+      "uniqueItems": true
+    },
+    "fixture_ready": {"type": "boolean"},
+    "stop_sent": {"const": true},
+    "kill_sent": {"type": "boolean"},
+    "wall_timed_out": {"type": "boolean"},
+    "output_limit_exceeded": {"type": "boolean"},
+    "observed_output_bytes": {"type": "integer", "minimum": 0},
+    "retained_output_bytes": {"type": "integer", "minimum": 0},
+    "evidence_complete": {"type": "boolean"},
+    "probe_succeeded": {"type": "boolean"},
+    "container_exit_code": {"type": "integer", "minimum": 0, "maximum": 255},
+    "terminal_state": {"enum": ["exited", "dead"]},
+    "removed": {"const": true},
+    "residual_containers": {"type": "array", "maxItems": 0},
+    "residual_networks": {"type": "array", "maxItems": 0},
+    "residual_volumes": {"type": "array", "maxItems": 0},
+    "sealed": {"const": true}
+  },
+  "allOf": [
+    {
+      "oneOf": [
+        {
+          "properties": {
+            "kill_sent": {"const": false},
+            "lifecycle_states": {"$ref": "#/$defs/lifecycle_without_kill"}
+          }
+        },
+        {
+          "properties": {
+            "kill_sent": {"const": true},
+            "lifecycle_states": {"$ref": "#/$defs/lifecycle_with_kill"}
+          }
+        }
+      ]
+    },
+    {
+      "if": {"properties": {"probe_succeeded": {"const": true}}},
+      "then": {
+        "properties": {
+          "fixture_ready": {"const": true},
+          "wall_timed_out": {"const": false},
+          "output_limit_exceeded": {"const": false},
+          "evidence_complete": {"const": true}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"fixture_ready": {"const": false}}},
+      "then": {"properties": {"probe_succeeded": {"const": false}}}
+    },
+    {
+      "if": {"properties": {"wall_timed_out": {"const": true}}},
+      "then": {"properties": {"probe_succeeded": {"const": false}}}
+    },
+    {
+      "if": {"properties": {"output_limit_exceeded": {"const": true}}},
+      "then": {"properties": {"probe_succeeded": {"const": false}}}
+    },
+    {
+      "if": {"properties": {"evidence_complete": {"const": false}}},
+      "then": {"properties": {"probe_succeeded": {"const": false}}}
+    }
+  ],
+  "$defs": {
+    "lifecycle_without_kill": {
+      "type": "array",
+      "prefixItems": [
+        {"const": "planned"},
+        {"const": "created"},
+        {"const": "started"},
+        {"const": "process-evidence-captured"},
+        {"const": "stop-requested"},
+        {"const": "terminal-verified"},
+        {"const": "evidence-captured"},
+        {"const": "removed"},
+        {"const": "cleanup-verified"},
+        {"const": "sealed"}
+      ],
+      "items": false,
+      "minItems": 10,
+      "maxItems": 10
+    },
+    "lifecycle_with_kill": {
+      "type": "array",
+      "prefixItems": [
+        {"const": "planned"},
+        {"const": "created"},
+        {"const": "started"},
+        {"const": "process-evidence-captured"},
+        {"const": "stop-requested"},
+        {"const": "kill-requested"},
+        {"const": "terminal-verified"},
+        {"const": "evidence-captured"},
+        {"const": "removed"},
+        {"const": "cleanup-verified"},
+        {"const": "sealed"}
+      ],
+      "items": false,
+      "minItems": 11,
+      "maxItems": 11
+    },
+    "resource_limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cpu_millis",
+        "memory_bytes",
+        "pids",
+        "wall_seconds",
+        "output_bytes",
+        "shm_bytes",
+        "tmpfs_bytes",
+        "stop_grace_seconds",
+        "payload_output_bytes",
+        "log_output_bytes",
+        "evidence_output_bytes"
+      ],
+      "properties": {
+        "cpu_millis": {"type": "integer", "minimum": 1, "maximum": 16000},
+        "memory_bytes": {"type": "integer", "minimum": 1, "maximum": 17179869184},
+        "pids": {"type": "integer", "minimum": 1, "maximum": 1024},
+        "wall_seconds": {"type": "integer", "minimum": 1},
+        "output_bytes": {"type": "integer", "minimum": 1048576, "multipleOf": 8192},
+        "shm_bytes": {"type": "integer", "minimum": 1},
+        "tmpfs_bytes": {"type": "integer", "minimum": 1},
+        "stop_grace_seconds": {"type": "integer", "minimum": 1},
+        "payload_output_bytes": {"type": "integer", "minimum": 1, "multipleOf": 4096},
+        "log_output_bytes": {"type": "integer", "minimum": 1, "multipleOf": 1024},
+        "evidence_output_bytes": {"type": "integer", "minimum": 1, "multipleOf": 3072}
+      }
+    }
+  }
+}

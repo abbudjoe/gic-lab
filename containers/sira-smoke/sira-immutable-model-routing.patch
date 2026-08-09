@@ -1,0 +1,77 @@
+diff --git a/scripts/run_web_agent.py b/scripts/run_web_agent.py
+--- a/scripts/run_web_agent.py
++++ b/scripts/run_web_agent.py
+@@ -22,7 +22,4 @@
++APPROVED_MODEL = "gpt-4o-2024-11-20"
+ MODEL_INFO = {
+-    "gpt-4o": ("https://api.openai.com/v1/", "openai"),
+-    "o1": ("https://api.openai.com/v1/", "openai"),
+-    "o3-mini": ("https://api.openai.com/v1/", "openai"),
+-    "deepseek-chat": ("https://api.deepseek.com", "deepseek"),
+-    "deepseek-reasoner": ("https://api.deepseek.com", "deepseek"),
++    APPROVED_MODEL: ("https://api.openai.com/v1/", "openai"),
+ }
+@@ -42,28 +39,12 @@
+ def make_llm(model: str, api_key: str):
+-    if model in MODEL_INFO:
+-        base_url, custom_llm_provider = MODEL_INFO[model]
+-        return LLM(
+-            model=model,
+-            api_key=api_key,
+-            base_url=base_url,
+-            custom_llm_provider=custom_llm_provider,
+-        )
+-
+-    model_path = Path(model)
+-    if model_path.is_file():
+-        model_config = json.loads(model_path.read_text())
+-        llms = {}
+-        for module, module_model in model_config.items():
+-            base_url, custom_llm_provider = MODEL_INFO[module_model]
+-            llms[module] = LLM(
+-                model=module_model,
+-                api_key=api_key,
+-                base_url=base_url,
+-                custom_llm_provider=custom_llm_provider,
+-            )
+-        return llms
+-
+-    raise RuntimeError(f"Model {model} is neither a supported model name nor a config file")
+-
++    if model != APPROVED_MODEL:
++        raise RuntimeError("Only the repository-approved immutable model is permitted")
++    base_url, custom_llm_provider = MODEL_INFO[APPROVED_MODEL]
++    return LLM(
++        model=APPROVED_MODEL,
++        api_key=api_key,
++        base_url=base_url,
++        custom_llm_provider=custom_llm_provider,
++    )
+-
++
+ def get_default_config(mode: str, dataset: str | None):
+@@ -206,7 +187,7 @@
+     parser.add_argument("--mode", choices=["simulative", "reactive"], default="simulative")
+     parser.add_argument("--agent", choices=["sira", "openhands"], default="sira")
+     parser.add_argument("--config_name", type=str, default=None)
+-    parser.add_argument("--model", type=str, default="gpt-4o")
++    parser.add_argument("--model", type=str, default=APPROVED_MODEL)
+     parser.add_argument("--api_key", type=str, default=None)
+     parser.add_argument("--max_steps", type=int, default=30)
+     parser.add_argument("--timeout", type=int, default=30)
+@@ -223,10 +204,11 @@
+ def main():
+     load_dotenv(REPO_ROOT / ".env")
+     args = parse_args()
+-
++
+-    api_key = args.api_key or os.environ.get("SIRA_API_KEY") or os.environ.get("OPENAI_API_KEY")
++    environment_api_key = os.environ.pop("SIRA_API_KEY", None)
++    api_key = args.api_key or environment_api_key
+     if api_key is None:
+-        raise RuntimeError("Provide an API key with --api_key, SIRA_API_KEY, or OPENAI_API_KEY.")
++        raise RuntimeError("Provide the API key through SIRA_API_KEY.")
+-
++
+     if args.dataset is None and args.query is None:
+         raise RuntimeError("Provide either --query or --dataset.")

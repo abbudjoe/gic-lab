@@ -1,0 +1,37 @@
+FROM --platform=linux/arm64 mcr.microsoft.com/playwright/python:v1.39.0-jammy@sha256:96955ff5cc37e13f5f1b21f5171afb9fed7e028025aa9d81c690501cd7fa0c6c
+
+ARG UV_WHEEL_SHA256=5985a15a92bd9a170fc1947abb1fbc3e9828c5a430ad85b5bed8356c20b67a71
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
+    UV_HTTP_RETRIES=0 \
+    UV_LINK_MODE=copy \
+    UV_NO_MODIFY_PATH=1 \
+    UV_PYTHON_DOWNLOADS=never \
+    UV_PROJECT_ENVIRONMENT=/opt/sira/.venv
+
+USER root
+WORKDIR /opt/sira
+
+COPY vendor/uv-0.11.7-py3-none-manylinux_2_17_aarch64.manylinux2014_aarch64.musllinux_1_1_aarch64.whl /opt/build/uv.whl
+RUN echo "${UV_WHEEL_SHA256}  /opt/build/uv.whl" | sha256sum --check --strict \
+    && python3 -m pip install --no-cache-dir --no-index /opt/build/uv.whl
+
+COPY upstream/ /opt/sira/
+COPY sira-immutable-model-routing.patch /opt/giclab/patches/sira-immutable-model-routing.patch
+RUN test "$(sha256sum uv.lock | cut -d ' ' -f 1)" = "138585129c7f369887591d30d9727f8dd466639fa78fb00adc5a04f1e9b2d76e" \
+    && git apply --check /opt/giclab/patches/sira-immutable-model-routing.patch \
+    && git apply /opt/giclab/patches/sira-immutable-model-routing.patch \
+    && uv sync --frozen --extra eval --python 3.10 \
+    && uv pip freeze --python /opt/sira/.venv/bin/python > /opt/giclab/installed-packages.txt \
+    && rm -rf /root/.cache/uv /opt/build
+
+COPY container_entrypoint.py /opt/giclab/container_entrypoint.py
+COPY fixtures/ /opt/giclab/fixtures/
+COPY sira_gate_a_runtime.py /opt/giclab/sira_gate_a_runtime.py
+RUN chmod 0555 /opt/giclab/container_entrypoint.py /opt/giclab/fixtures/*.py \
+    && chmod 0444 /opt/giclab/fixtures/static.html \
+    && mkdir -p -m 0755 /run/secrets \
+    && find /opt/sira /opt/giclab -xdev -type d -exec chmod a-w {} + \
+    && find /opt/sira /opt/giclab -xdev -type f -exec chmod a-w {} +
+
+WORKDIR /opt/sira
+USER 1000:1000

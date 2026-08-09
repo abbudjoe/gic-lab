@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:gic-lab:schema:container-image-provenance:0.1.0",
+  "title": "GIC Lab container image provenance",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "base_image_reference",
+    "base_image_index_digest",
+    "base_image_platform_digest",
+    "containerfile_sha256",
+    "source_commit",
+    "source_patch_sha256",
+    "runtime_adaptation_sha256",
+    "repository_build_assets_sha256",
+    "uv_lock_sha256",
+    "installed_package_manifest_sha256",
+    "playwright_version",
+    "chromium_revision",
+    "chromium_executable_sha256",
+    "browser_attempt_uuid",
+    "browser_record_sha256",
+    "browser_pre_removal_evidence_sha256",
+    "browser_cleanup_seal_sha256",
+    "final_image_id",
+    "final_repo_digest",
+    "final_repo_digest_status",
+    "platform"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1.0"},
+    "base_image_reference": {
+      "const": "mcr.microsoft.com/playwright/python:v1.39.0-jammy@sha256:96955ff5cc37e13f5f1b21f5171afb9fed7e028025aa9d81c690501cd7fa0c6c"
+    },
+    "base_image_index_digest": {"const": "sha256:96955ff5cc37e13f5f1b21f5171afb9fed7e028025aa9d81c690501cd7fa0c6c"},
+    "base_image_platform_digest": {"const": "sha256:f8fca31a4730afa691e73ed99b4a6ebf28b2a9bd65a7038bb6da4bd223bb237b"},
+    "containerfile_sha256": {"$ref": "#/$defs/sha256"},
+    "source_commit": {"const": "93fb8d72de71f9a4a13419670adeb34d93cf7acd"},
+    "source_patch_sha256": {"$ref": "#/$defs/sha256"},
+    "runtime_adaptation_sha256": {"$ref": "#/$defs/sha256"},
+    "repository_build_assets_sha256": {"$ref": "#/$defs/sha256"},
+    "uv_lock_sha256": {"const": "138585129c7f369887591d30d9727f8dd466639fa78fb00adc5a04f1e9b2d76e"},
+    "installed_package_manifest_sha256": {"$ref": "#/$defs/sha256"},
+    "playwright_version": {"const": "1.39.0"},
+    "chromium_revision": {"const": "1084"},
+    "chromium_executable_sha256": {"$ref": "#/$defs/sha256"},
+    "browser_attempt_uuid": {"type": "string", "pattern": "^[a-f0-9]{32}$"},
+    "browser_record_sha256": {"$ref": "#/$defs/sha256"},
+    "browser_pre_removal_evidence_sha256": {"$ref": "#/$defs/sha256"},
+    "browser_cleanup_seal_sha256": {"$ref": "#/$defs/sha256"},
+    "final_image_id": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "final_repo_digest": {
+      "type": ["string", "null"],
+      "pattern": "^[a-z0-9][a-z0-9._:/-]*(:[A-Za-z0-9._-]+)?@sha256:[a-f0-9]{64}$"
+    },
+    "final_repo_digest_status": {
+      "enum": ["observed", "unavailable-local-build-not-pushed"]
+    },
+    "platform": {"const": "linux/arm64"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"final_repo_digest": {"type": "null"}}},
+      "then": {
+        "properties": {
+          "final_repo_digest_status": {"const": "unavailable-local-build-not-pushed"}
+        }
+      },
+      "else": {
+        "properties": {"final_repo_digest_status": {"const": "observed"}}
+      }
+    }
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  }
+}

@@ -1,0 +1,159 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:gic-lab:schema:container-platform-decision:0.1.0",
+  "title": "GIC Lab container platform compatibility decision",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "candidates",
+    "chosen_platform",
+    "decision_status",
+    "rationale"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1.0"},
+    "candidates": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {"$ref": "#/$defs/candidate"}
+    },
+    "chosen_platform": {"type": ["string", "null"], "enum": ["linux/arm64", "linux/amd64", null]},
+    "decision_status": {"enum": ["chosen", "blocked"]},
+    "rationale": {"type": "string", "minLength": 1}
+  },
+  "allOf": [
+    {
+      "properties": {
+        "candidates": {
+          "allOf": [
+            {
+              "contains": {
+                "type": "object",
+                "required": ["platform"],
+                "properties": {"platform": {"const": "linux/arm64"}}
+              },
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "type": "object",
+                "required": ["platform"],
+                "properties": {"platform": {"const": "linux/amd64"}}
+              },
+              "minContains": 1,
+              "maxContains": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "if": {"properties": {"decision_status": {"const": "blocked"}}},
+      "then": {"properties": {"chosen_platform": {"type": "null"}}},
+      "else": {"properties": {"chosen_platform": {"type": "string"}}}
+    },
+    {
+      "if": {
+        "required": ["chosen_platform"],
+        "properties": {"chosen_platform": {"const": "linux/arm64"}}
+      },
+      "then": {"$ref": "#/$defs/arm64_compatible"}
+    },
+    {
+      "if": {
+        "required": ["chosen_platform"],
+        "properties": {"chosen_platform": {"const": "linux/amd64"}}
+      },
+      "then": {"$ref": "#/$defs/amd64_compatible"}
+    }
+  ],
+  "$defs": {
+    "arm64_compatible": {
+      "properties": {
+        "candidates": {
+          "contains": {
+            "type": "object",
+            "required": [
+              "platform",
+              "python_310_compatible",
+              "uv_frozen_eval_feasible",
+              "playwright_139_compatible",
+              "chromium_revision_1084_compatible",
+              "browsergym_compatible"
+            ],
+            "properties": {
+              "platform": {"const": "linux/arm64"},
+              "python_310_compatible": {"const": true},
+              "uv_frozen_eval_feasible": {"const": true},
+              "playwright_139_compatible": {"const": true},
+              "chromium_revision_1084_compatible": {"const": true},
+              "browsergym_compatible": {"const": true}
+            }
+          }
+        }
+      }
+    },
+    "amd64_compatible": {
+      "properties": {
+        "candidates": {
+          "contains": {
+            "type": "object",
+            "required": [
+              "platform",
+              "python_310_compatible",
+              "uv_frozen_eval_feasible",
+              "playwright_139_compatible",
+              "chromium_revision_1084_compatible",
+              "browsergym_compatible"
+            ],
+            "properties": {
+              "platform": {"const": "linux/amd64"},
+              "python_310_compatible": {"const": true},
+              "uv_frozen_eval_feasible": {"const": true},
+              "playwright_139_compatible": {"const": true},
+              "chromium_revision_1084_compatible": {"const": true},
+              "browsergym_compatible": {"const": true}
+            }
+          }
+        }
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "platform",
+        "execution_path",
+        "platform_manifest_digest",
+        "compressed_base_bytes",
+        "python_310_compatible",
+        "uv_frozen_eval_feasible",
+        "playwright_139_compatible",
+        "chromium_revision_1084_compatible",
+        "browsergym_compatible",
+        "expected_dependency_download_bytes",
+        "expected_runtime_memory_bytes",
+        "reproducibility_risks",
+        "performance_risks"
+      ],
+      "properties": {
+        "platform": {"enum": ["linux/arm64", "linux/amd64"]},
+        "execution_path": {"type": "string", "minLength": 1},
+        "platform_manifest_digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+        "compressed_base_bytes": {"type": "integer", "minimum": 1},
+        "python_310_compatible": {"type": "boolean"},
+        "uv_frozen_eval_feasible": {"type": "boolean"},
+        "playwright_139_compatible": {"type": "boolean"},
+        "chromium_revision_1084_compatible": {"type": "boolean"},
+        "browsergym_compatible": {"type": "boolean"},
+        "expected_dependency_download_bytes": {"type": "integer", "minimum": 1},
+        "expected_runtime_memory_bytes": {"type": "integer", "minimum": 1},
+        "reproducibility_risks": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "performance_risks": {"type": "array", "items": {"type": "string", "minLength": 1}}
+      }
+    }
+  }
+}

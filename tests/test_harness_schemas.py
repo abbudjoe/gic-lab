@@ -51,8 +51,29 @@ def _valid_cloud_contract() -> dict[str, object]:
 
 
 def test_harness_schema_documents_are_registered() -> None:
-    for name in ("run-plan", "run-profile", "pricing", "harness-event", "cloud-run"):
+    for name in (
+        "run-plan",
+        "run-profile",
+        "pricing",
+        "harness-event",
+        "cloud-run",
+        "container-materialization-plan",
+        "container-attempt",
+        "container-image-provenance",
+        "container-platform-decision",
+    ):
         assert "$id" in load_json(ROOT / f"schemas/{name}.schema.json")
+
+
+def test_gate_b2_materialization_plan_matches_its_schema() -> None:
+    plan = load_json(ROOT / "containers/sira-smoke/materialization-plan.json")
+    assert (
+        validate_instance(
+            plan,
+            ROOT / "schemas/container-materialization-plan.schema.json",
+        )
+        == []
+    )
 
 
 def test_run_plan_schema_accepts_source_neutral_plan() -> None:

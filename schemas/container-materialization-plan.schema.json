@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:gic-lab:schema:container-materialization-plan:0.1.0",
+  "title": "GIC Lab bounded container materialization plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "plan_id",
+    "authorization_reference",
+    "aggregate_wall_seconds",
+    "aggregate_output_bytes",
+    "transfer_reservation_bytes",
+    "incremental_disk_limit_bytes",
+    "actions"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1.0"},
+    "plan_id": {"const": "PLAN-T07-GATE-B2-MATERIALIZATION"},
+    "authorization_reference": {"const": "AUTH-T07-GATE-B2-2026-08-08"},
+    "aggregate_wall_seconds": {"const": 3600},
+    "aggregate_output_bytes": {"const": 16777216},
+    "transfer_reservation_bytes": {"const": 2147483648},
+    "incremental_disk_limit_bytes": {"const": 12884901888},
+    "actions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["action_id", "argv", "timeout_seconds"],
+        "properties": {
+          "action_id": {"type": "string", "pattern": "^[a-z][a-z0-9-]{2,63}$"},
+          "argv": {
+            "type": "array",
+            "minItems": 1,
+            "items": {"type": "string", "minLength": 1}
+          },
+          "timeout_seconds": {"type": "integer", "minimum": 1},
+          "expected_stdout": {"type": "string"}
+        }
+      }
+    }
+  }
+}

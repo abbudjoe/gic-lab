@@ -44,6 +44,10 @@ SCHEMA_FILES = (
     "schemas/pricing.schema.json",
     "schemas/harness-event.schema.json",
     "schemas/cloud-run.schema.json",
+    "schemas/container-materialization-plan.schema.json",
+    "schemas/container-attempt.schema.json",
+    "schemas/container-image-provenance.schema.json",
+    "schemas/container-platform-decision.schema.json",
 )
 REQUIRED_PATHS = (
     "AGENTS.md",
@@ -155,7 +159,53 @@ def validate_instance(
 
     schema = load_json(schema_path)
     validator = Draft202012Validator(schema, format_checker=FormatChecker())
-    return _format_validation_errors(validator, instance)
+    errors = _format_validation_errors(validator, instance)
+    if schema_path.name == "container-attempt.schema.json":
+        errors.extend(_validate_container_attempt_semantics(instance))
+    return errors
+
+
+def _validate_container_attempt_semantics(instance: Mapping[str, Any]) -> list[str]:
+    """Enforce cross-field quota relations that standard JSON Schema cannot express."""
+
+    errors: list[str] = []
+    resources = instance.get("resource_limits")
+    if not isinstance(resources, Mapping):
+        return errors
+    total = resources.get("output_bytes")
+    payload = resources.get("payload_output_bytes")
+    logs = resources.get("log_output_bytes")
+    evidence = resources.get("evidence_output_bytes")
+    if type(total) is int and type(payload) is int and type(logs) is int and type(evidence) is int:
+        components = payload + logs + evidence
+        if components != total:
+            errors.append("resource_limits: output sublimits must sum to output_bytes")
+        if payload != total // 2 or logs != total // 8 or evidence != total - payload - logs:
+            errors.append("resource_limits: output sublimits do not match the fixed allocation")
+        retained = instance.get("retained_output_bytes")
+        observed = instance.get("observed_output_bytes")
+        exceeded = instance.get("output_limit_exceeded")
+        if type(retained) is int and retained > total:
+            errors.append("retained_output_bytes: exceeds resource_limits.output_bytes")
+        if type(retained) is int and type(observed) is int and observed < retained:
+            errors.append("observed_output_bytes: cannot be below retained_output_bytes")
+        if type(observed) is int and exceeded is False and observed > total:
+            errors.append("observed_output_bytes: exceeds an unflagged output limit")
+    success_fields = (
+        instance.get("fixture_ready") is True,
+        instance.get("wall_timed_out") is False,
+        instance.get("output_limit_exceeded") is False,
+        instance.get("evidence_complete") is True,
+        instance.get("removed") is True,
+        instance.get("residual_containers") == [],
+        instance.get("residual_networks") == [],
+        instance.get("residual_volumes") == [],
+        instance.get("sealed") is True,
+    )
+    probe_succeeded = instance.get("probe_succeeded")
+    if type(probe_succeeded) is bool and probe_succeeded != all(success_fields):
+        errors.append("probe_succeeded: contradicts the lifecycle and cleanup evidence")
+    return errors
 
 
 def validate_schema_documents(root: Path = ROOT) -> list[str]:
