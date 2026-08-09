@@ -58,12 +58,13 @@ Prepared: 2026-08-08
 - Staged-context evidence SHA-256:
   `747575a0c4c1dc9c0e52a839dc28eea1807e898495ee2c58c7b25ae8ab4ba77b`.
 
-Post-packet governance decision D-017 requires every non-Git artifact beneath
-`/Volumes/Macintosh HD - Data/Users/joseph/.local/share/gic-lab` on external APFS
-volume UUID `8478609D-FA37-4ED5-875D-47AE912B9151`, including Docker VM/image data
-and build cache. The historical plan hash above names internal-disk paths and is no
-longer an authorization candidate. It is retained only as provenance until a reviewed
-external-volume plan replaces it.
+Gate B1.5 observed the MacBook Pro export its APFS storage to the Mac mini through
+Thunderbolt Target Disk Mode. Decision D-017 approves
+`/Volumes/Macintosh HD - Data/Users/joseph/.local/share/gic-lab`, volume UUID
+`8478609D-FA37-4ED5-875D-47AE912B9151`, only for sealed, immutable artifact
+retention. Mutable attempts, builds, and Docker VM/image storage remain unapproved.
+The historical plan hash above names internal-disk paths and is no longer an
+authorization candidate. It is retained only as provenance.
 
 The profile, protocol, scientific configuration, and both condition plans are
 byte-identical to the previous clean packet. Their execution/authorization fields and

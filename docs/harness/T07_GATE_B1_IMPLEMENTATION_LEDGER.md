@@ -87,11 +87,12 @@ Assembly status: **Gate B1 complete**. Gate B2 and live T07 remain unauthorized.
 
 ## Post-completion storage addendum
 
-On 2026-08-09, decision D-017 bound every non-Git artifact to the attached external
-APFS data volume, UUID `8478609D-FA37-4ED5-875D-47AE912B9151`, beneath
-`/Volumes/Macintosh HD - Data/Users/joseph/.local/share/gic-lab`. The reviewed Gate B1
-containment implementation remains evidence, but its materialization plan and Gate B2
+On 2026-08-09, Gate B1.5 refined decision D-017 after observing the MacBook Pro export
+its APFS storage to the Mac mini through Thunderbolt Target Disk Mode. The named root
+is approved only for sealed, immutable artifact retention; mutable attempts, builds,
+and Docker VM/image storage remain unapproved. The reviewed Gate B1 containment
+implementation remains evidence, but its materialization plan and Gate B2
 authorization packet are superseded because they name internal-disk paths and do not
-bind Docker's VM disk-image location. Gate B2 must not proceed until a replacement
+bind a selected runtime-storage topology. Gate B2 must not proceed until a replacement
 plan is implemented, hashed, validated, and independently reviewed. No scientific
 field or execution authorization changed.

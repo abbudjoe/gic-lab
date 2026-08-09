@@ -8,39 +8,51 @@ Git stores source, protocols, small summaries, plots, manifests, and hashes. It 
 
 Every external artifact record includes identity, experiment, format, byte size, SHA-256, version/revision/commit, license, provenance, storage URI, public-access flag, creator commit, and verification status. A missing artifact or hash stays unknown; a filename is not provenance.
 
-## Authoritative local artifact volume
+## Preferred durable artifact volume
 
-All non-Git project artifacts must be stored beneath the attached MacBook Pro data
-volume at
-`/Volumes/Macintosh HD - Data/Users/joseph/.local/share/gic-lab`. This includes
-downloads, external source checkouts, dependency wheels, build contexts, Docker VM
-and image data, build cache, attempt roots, logs, traces, screenshots, browser
-archives, datasets, checkpoints, and generated evidence. There is no fallback to the
-internal startup disk or another volume.
+All sealed, durable non-Git project artifacts must be retained beneath the attached
+MacBook Pro data volume at
+`/Volumes/Macintosh HD - Data/Users/joseph/.local/share/gic-lab`. This approval covers
+immutable, hashed artifact bundles and their copy/verification records. It does not by
+itself approve the volume for mutable attempt roots, build staging, Docker VM/image
+data, or build cache.
 
-The authoritative storage identity is APFS volume UUID
-`8478609D-FA37-4ED5-875D-47AE912B9151`. Before any artifact-producing action, the
-control plane must prove that this exact external volume is mounted read-write at the
-expected mount point and that the resolved artifact root remains on it. A missing,
-renamed, read-only, or identity-mismatched volume stops execution. A path string or
-symlink alone is not proof of storage placement.
+The authoritative retention identity is APFS volume UUID
+`8478609D-FA37-4ED5-875D-47AE912B9151`. Before any sealed-copy or retention action
+targeting this root, the control plane must prove that this exact exported volume is
+mounted read-write at the expected mount point and that the resolved retention root
+remains on it. A missing, renamed, read-only, or identity-mismatched destination stops
+the copy/retention action. A path string or symlink alone is not proof of storage
+placement. Future active-use preflights are topology-specific and are not supplied by
+this retention contract.
 
-The Docker Desktop application may be installed in `/Applications`, but its Linux VM
-disk, image layers, build cache, and every GIC Lab build/run artifact must reside on
-the authoritative external volume. A future installation plan must bind and verify
-Docker's disk-image location before any image pull or build.
+Gate B1.5 classifies the current exposure as the MacBook Pro's storage exported over
+Thunderbolt Target Disk Mode and mounted by the Mac mini as an APFS block device. It
+is not SMB/NFS, but it depends on a separate Mac, cable, Target Disk Mode session, and
+FileVault unlock. Active-attempt and Docker-disk suitability remain unproven. Until a
+reviewed plan positively establishes stronger suitability, the volume is approved for
+sealed artifact retention only. Mutable attempt state must not be placed there by
+default, and no Docker VM disk location is approved. There is no automatic fallback
+to the internal startup disk or another volume.
+
+If the destination is later exposed through a network filesystem, attempts must be
+written on the approved execution host, sealed and hashed there, copied to this
+destination, verified by destination SHA-256, and recorded in a copy ledger. Live
+bidirectional synchronization of mutable attempt state is prohibited.
 
 Repository source, protocols, manifests, small summaries, and hashes remain in Git;
 they are control-plane records rather than external artifacts.
 
 ## Local retention
 
-At `2026-08-09T11:27:04Z`, the authoritative 1,000,240,963,584-byte APFS container
-reported 854,038,687,744 free bytes. This observation is not a durable capacity
-guarantee. Keep active models, at most the latest and previous resumable checkpoint,
+At `2026-08-09T11:43:56Z`, the preferred 1,000,240,963,584-byte APFS container
+reported 854,038,691,840 free bytes. This observation is not a durable capacity
+guarantee and is shared across the APFS container rather than reserved to the data
+volume. Keep active models, at most the latest and previous resumable checkpoint,
 best/final model-only exports, adapters, and recent traces. Maintain at least 150 GiB
-or 20% of the authoritative container capacity free, whichever is greater, and
-recompute the exact floor before each materialization or run.
+or 20% of the preferred container capacity free, whichever is greater, and
+recompute the exact floor before each sealed copy. Any future active-use plan must
+define and enforce its own topology-specific preflight and retained-free-space floor.
 
 ## Upgrade triggers
 

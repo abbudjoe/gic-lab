@@ -11,14 +11,14 @@ This packet authorizes nothing by itself. It contains no authorization for a mod
 request, SiRA condition, experimental browser task, scientific change, pilot, cloud
 mutation, or paid compute.
 
-Post-packet governance addendum, 2026-08-09: decision D-017 now requires every
-non-Git artifact, including Docker VM/image data and build cache, beneath
-`/Volumes/Macintosh HD - Data/Users/joseph/.local/share/gic-lab` on APFS volume UUID
-`8478609D-FA37-4ED5-875D-47AE912B9151`. The materialization plan bound below writes
-downloads and artifacts to the internal startup disk and does not bind Docker's disk
-image location. It is therefore non-authorizable and must not be executed. Its prior
-hash and commands are retained only as historical Gate B1 evidence until a reviewed
-external-volume plan replaces them.
+Post-packet governance addendum, 2026-08-09: Gate B1.5 observed the MacBook Pro export
+its APFS storage to the Mac mini through Thunderbolt Target Disk Mode. Decision D-017
+approves the named root on volume UUID `8478609D-FA37-4ED5-875D-47AE912B9151` only
+for sealed, immutable artifact retention; mutable attempts, builds, and Docker
+VM/image storage remain unapproved. The materialization plan bound below writes to the
+internal startup disk and does not bind a selected runtime-storage topology. It is
+therefore non-authorizable and must not be executed. Its prior hash and commands are
+retained only as historical Gate B1 evidence.
 
 ## 1. Exact clean repository commit
 

@@ -63,7 +63,7 @@ cloud mutation outside the exact T12/T14 authorization contract.
 
 | Task | Work package | Mapped phase DoD | Current permission |
 |---|---|---|---|
-| T07 | Execute one authorized local/API SiRA smoke pair; capture regulation-decision evidence without interpretation. | P1-DOD-02, P1-DOD-11 through P1-DOD-13 | gate-a-blocked-descendant-containment |
+| T07 | Execute one authorized local/API SiRA smoke pair; capture regulation-decision evidence without interpretation. | P1-DOD-02, P1-DOD-11 through P1-DOD-13 | gate-b1.5-blocked-user-topology-selection |
 | T08 | Analyze smoke infrastructure evidence and prepare an unauthorized pilot package. | P1-DOD-03, P1-DOD-11 through P1-DOD-13 | blocked until T07 succeeds |
 | T09 | Execute the freshly authorized exploratory SiRA pilot. | P1-DOD-04, P1-DOD-11 through P1-DOD-13 | blocked until T08 and authorization |
 | T10 | Analyze and publish the exploratory SiRA pilot. | P1-DOD-05, P1-DOD-11 through P1-DOD-13 | blocked until T09 succeeds |
@@ -78,7 +78,7 @@ and an analysis recommendation does not authorize the next execution.
 
 ## T07 assembly control
 
-Assembly status: **Gate A blocked: complete descendant containment unavailable**
+Assembly status: **Gate B1.5 blocked-user-action: runtime storage topology unselected**
 
 Exact next profile: `PLAN-EXP0001-SMOKE`.
 
@@ -92,6 +92,28 @@ expected artifacts, cleanup, questions, and infrastructure-only interpretation b
 are in [`docs/readiness/PHASE_1_SMOKE_READINESS.md`](../../readiness/PHASE_1_SMOKE_READINESS.md).
 The locked profile is
 [`PLAN-EXP0001-SMOKE`](../../../experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/smoke.yaml).
+
+### Gate B1.5 definition of done
+
+Source contract: the user's 2026-08-09 Gate B1.5 storage-topology instruction.
+Baseline: `b8752765594de0b3486edfd9fad84d144b78b7b7`.
+
+| ID | Obligation | Status | Evidence |
+|---|---|---|---|
+| T07-B15-01 | Preserve branch/baseline and all prohibitions. | met | Starting checks; no execution or scientific change. |
+| T07-B15-02 | Classify exposure as block mount, network filesystem, remote mechanism, or separate host. | met | MacBook Pro storage is exported by Thunderbolt Target Disk Mode as UTDM `/dev/disk6`, synthesized as APFS `/dev/disk7s5`, and mounted locally by the Mac mini; no SMB/NFS/FUSE mount. |
+| T07-B15-03 | Record every requested identity, capacity, durability, permission, escape, and suitability field. | met | `docs/harness/T07_GATE_B1_5_STORAGE_TOPOLOGY_DECISION.md`. |
+| T07-B15-04 | Default to sealed-retention-only unless stronger suitability is positively established. | met | Active/Docker suitability remains unapproved. |
+| T07-B15-05 | Encode the network-backed copy/seal branch even though it is not the observed topology. | met | Storage policy and decision contract. |
+| T07-B15-06 | If fully suitable locally, issue exact roots and regenerated plans/hashes; otherwise stop. | blocked | Docker VM-disk and reconnect suitability cannot be proven without a selected topology and later authorized runtime-specific evidence. No new plan/hash issued. |
+| T07-B15-07 | Present alternatives a/b/c without selecting one. | met | Decision and both blocked packets. |
+| T07-B15-08 | Update B1.5, B2a, and B2b documents and keep old Gate B2 hash superseded. | met | Three target documents under `docs/harness/`; no replacement plan/hash issued. |
+| T07-B15-09 | Pass validation, independent spec review, repairs, and post-review smoke. | met | `make validate` and `git diff --check` passed; independent rereview was clean after topology/identity/governance repairs; post-review validation passed. |
+
+Gate B1.5 maps T07-B15-02 through T07-B15-07 to the topology decision;
+T07-B15-04 through T07-B15-06 to `docs/STORAGE_POLICY.md` and
+`docs/DECISIONS.md`; T07-B15-06 through T07-B15-08 to the Gate B2a/B2b packets;
+and T07-B15-01 through T07-B15-09 to this active plan.
 
 ## Authorization and mutation boundary
 
@@ -132,6 +154,20 @@ preflight never supplies mutation authority.
   machine condition diff. Independent review proved polling cannot guarantee cleanup
   for a fast reparented child, so the command now fails preflight until kernel-enforced
   containment exists. No SiRA dependency/browser installation or live action occurred.
+- 2026-08-09: T07 Gate B1 implemented and independently reviewed a private-PID,
+  cgroup-backed OCI containment control plane without installing or launching a
+  runtime. A later storage rule superseded its internal-disk Gate B2 plan.
+- 2026-08-09: Gate B1.5 observed the MacBook Pro exporting storage through
+  Thunderbolt Target Disk Mode to a locally mounted APFS block device on the Mac mini,
+  then positively tested sparse files, same-volume rename, file/full/directory sync,
+  and mode bits. Owners are disabled, symlink escape is possible, Target Disk Mode
+  reconnect/unlock behavior is untested, and Docker disk-image suitability is unknown.
+  It is therefore approved for sealed retention only.
+- 2026-08-09: Independent Gate B1.5 review corrected the initial direct-disk
+  classification to UTDM, separated volume/container/partition/transport identities,
+  reconciled D-017 across historical packets, scoped volume checks to sealed-copy
+  actions, and made positive active/runtime suitability mandatory before B2a plan
+  issuance. Post-repair rereview was clean and post-review validation passed.
 
 ## Decision log
 
@@ -141,15 +177,20 @@ preflight never supplies mutation authority.
 - 2026-08-08: Treat all RQ-H2K trace-sufficiency outputs as infrastructure evidence;
   they neither block EXP-0001 on optional-field absence nor support an internalization
   claim.
+- 2026-08-09: Approve the MacBook Pro Target Disk Mode destination only for sealed,
+  hash-verified artifact retention. Do not infer active-attempt or Docker-disk
+  suitability from its block interface or capacity.
 
 ## Blockers and user actions
 
-T07 Gate A is blocked on a versioned, tested kernel-enforced descendant-containment
-mechanism and clean rereview. The blocked packet is
-`docs/harness/T07_PREAUTHORIZATION_PACKET.md`; it must not be used to authorize installs
-or live execution. No other Phase 1 work package may begin first.
+T07 Gate B1.5 is blocked on the user's selection of one reviewed runtime-storage
+topology. The old Gate B2 plan/hash and authorization remain superseded. The blocked
+Gate B2a and Gate B2b packets must not be used to authorize installation or probes.
+No other Phase 1 work package may begin first.
 
 ## Next permitted work
 
-After that authorization only, T07 may perform its required preflight and, if every
-gate passes, execute exactly `PLAN-EXP0001-SMOKE`. It must stop after the one pair.
+The next permitted action is user selection among: Docker/T07 execution on the
+MacBook Pro under a newly reviewed host topology; a local external SSD on the Mac
+mini; or a separately approved Linux host. After selection, only implementation and
+review of an exact Gate B2a plan is permitted. Gate B2b and the smoke remain blocked.
