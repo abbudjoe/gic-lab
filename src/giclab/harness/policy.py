@@ -51,6 +51,46 @@ class AuthorizedRunProfile:
 
 
 @dataclass(frozen=True, slots=True)
+class PlannedExecutionSubstrate:
+    """Non-authorizing binding for a reviewed future execution substrate."""
+
+    decision_state: str
+    provider: str
+    architecture: str
+    persistent_filesystem: bool
+    gate_l1_authorized: bool
+    gate_l2_authorized: bool
+    gate_l3_state: str
+    gate_l4_authorized: bool
+    local_alternatives: str
+    decision_document: str
+
+    def __post_init__(self) -> None:
+        expected = {
+            "decision_state": (self.decision_state, "lambda-host-selected-design-only"),
+            "provider": (self.provider, "lambda-on-demand-cloud"),
+            "architecture": (self.architecture, "x86_64"),
+            "gate_l3_state": (self.gate_l3_state, "requirements-only"),
+            "local_alternatives": (self.local_alternatives, "terminal-rejected"),
+            "decision_document": (
+                self.decision_document,
+                "docs/harness/T07_GATE_L0_LAMBDA_HOST_DECISION.md",
+            ),
+        }
+        for field, (observed, required) in expected.items():
+            if observed != required:
+                raise ValueError(f"planned substrate {field} must be {required!r}")
+        for field in (
+            "persistent_filesystem",
+            "gate_l1_authorized",
+            "gate_l2_authorized",
+            "gate_l4_authorized",
+        ):
+            if getattr(self, field) is not False:
+                raise ValueError(f"planned substrate {field} must remain false")
+
+
+@dataclass(frozen=True, slots=True)
 class ProjectExecutionState:
     """The project-level half of the execution authorization contract."""
 
@@ -62,6 +102,7 @@ class ProjectExecutionState:
     training_allowed: bool
     cloud_mutation_allowed: bool
     authorized_run_profile: AuthorizedRunProfile | None = None
+    planned_execution_substrate: PlannedExecutionSubstrate | None = None
 
     def __post_init__(self) -> None:
         if not self.phase.strip():
@@ -396,6 +437,71 @@ def load_project_execution_state(
         (schema_root or project_root).resolve(),
         data.get("authorized_run_profile"),
     )
+    raw_substrate = data.get("planned_execution_substrate")
+    planned_substrate: PlannedExecutionSubstrate | None = None
+    if raw_substrate is not None:
+        if not isinstance(raw_substrate, dict):
+            raise ExecutionDisallowed("planned execution substrate must be a mapping")
+        expected_substrate_keys = {
+            "decision_state",
+            "provider",
+            "architecture",
+            "persistent_filesystem",
+            "gate_l1_authorized",
+            "gate_l2_authorized",
+            "gate_l3_state",
+            "gate_l4_authorized",
+            "local_alternatives",
+            "decision_document",
+        }
+        if set(raw_substrate) != expected_substrate_keys:
+            raise ExecutionDisallowed("planned execution substrate field set drifted")
+        for field in (
+            "decision_state",
+            "provider",
+            "architecture",
+            "gate_l3_state",
+            "local_alternatives",
+            "decision_document",
+        ):
+            if not isinstance(raw_substrate[field], str):
+                raise ExecutionDisallowed(f"planned execution substrate {field} must be a string")
+        for field in (
+            "persistent_filesystem",
+            "gate_l1_authorized",
+            "gate_l2_authorized",
+            "gate_l4_authorized",
+        ):
+            if type(raw_substrate[field]) is not bool:
+                raise ExecutionDisallowed(f"planned execution substrate {field} must be a boolean")
+        try:
+            planned_substrate = PlannedExecutionSubstrate(
+                decision_state=raw_substrate["decision_state"],
+                provider=raw_substrate["provider"],
+                architecture=raw_substrate["architecture"],
+                persistent_filesystem=raw_substrate["persistent_filesystem"],
+                gate_l1_authorized=raw_substrate["gate_l1_authorized"],
+                gate_l2_authorized=raw_substrate["gate_l2_authorized"],
+                gate_l3_state=raw_substrate["gate_l3_state"],
+                gate_l4_authorized=raw_substrate["gate_l4_authorized"],
+                local_alternatives=raw_substrate["local_alternatives"],
+                decision_document=raw_substrate["decision_document"],
+            )
+        except (KeyError, ValueError) as exc:
+            raise ExecutionDisallowed(f"invalid planned execution substrate: {exc}") from exc
+        if any(
+            bool(data[field])
+            for field in (
+                "paid_compute_allowed",
+                "prototype_execution_allowed",
+                "benchmark_execution_allowed",
+                "training_allowed",
+                "cloud_mutation_allowed",
+            )
+        ):
+            raise ExecutionDisallowed(
+                "design-only planned substrate requires every execution permission false"
+            )
     return ProjectExecutionState(
         phase=str(data["phase"]),
         phase_status=str(data["phase_status"]),
@@ -405,6 +511,7 @@ def load_project_execution_state(
         training_allowed=bool(data["training_allowed"]),
         cloud_mutation_allowed=bool(data["cloud_mutation_allowed"]),
         authorized_run_profile=authorized_run_profile,
+        planned_execution_substrate=planned_substrate,
     )
 
 

@@ -12,5 +12,16 @@ authorized_run_profile:
   profile_path: null
   profile_sha256: null
   condition_plan_sha256s: []
+planned_execution_substrate:
+  decision_state: lambda-host-selected-design-only
+  provider: lambda-on-demand-cloud
+  architecture: x86_64
+  persistent_filesystem: false
+  gate_l1_authorized: false
+  gate_l2_authorized: false
+  gate_l3_state: requirements-only
+  gate_l4_authorized: false
+  local_alternatives: terminal-rejected
+  decision_document: docs/harness/T07_GATE_L0_LAMBDA_HOST_DECISION.md
 authoritative_plan: docs/exec-plans/active/PHASE_1_ARTIFACT_EXECUTION.md
 last_updated: "2026-08-09"

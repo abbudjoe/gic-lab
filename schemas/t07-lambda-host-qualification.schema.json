@@ -1,0 +1,752 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gic-lab.invalid/schemas/t07-lambda-host-qualification.schema.json",
+  "title": "T07 Lambda ephemeral-host qualification evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "plan_id",
+    "plan_sha256",
+    "run_identity",
+    "lifecycle_state",
+    "authorization",
+    "secret_contract",
+    "inventory_binding",
+    "provider_identity",
+    "budget",
+    "provider_request_pacing",
+    "launch",
+    "ssh_trust",
+    "host_observation",
+    "containment_probe",
+    "local_active_storage",
+    "evidence_copy",
+    "archive_copy",
+    "termination",
+    "actual_usage",
+    "compute_ledger"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1.0"},
+    "plan_id": {"type": "string", "pattern": "^PLAN-T07-GATE-L2-[A-Z0-9._-]+$"},
+    "plan_sha256": {"$ref": "#/$defs/sha256"},
+    "lifecycle_state": {"const": "terminal-confirmed"},
+    "run_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run_id", "attempt", "experiment_id", "profile_plan_id", "gate", "branch", "repository_commit"],
+      "properties": {
+        "run_id": {"type": "string", "pattern": "^RUN-T07-L2-[A-Z0-9._-]+$"},
+        "attempt": {"const": 1},
+        "experiment_id": {"const": "EXP-0001"},
+        "profile_plan_id": {"const": "PLAN-EXP0001-SMOKE"},
+        "gate": {"const": "T07-L2"},
+        "branch": {"const": "phase-1/sira-smoke-lambda"},
+        "repository_commit": {"type": "string", "pattern": "^[a-f0-9]{40}$"}
+      }
+    },
+    "authorization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["authorized", "authorization_reference", "authorization_sha256"],
+      "properties": {
+        "authorized": {"const": true},
+        "authorization_reference": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+        },
+        "authorization_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "secret_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["variable", "channel", "held_in_memory_through_terminal_confirmation", "forbidden_locations", "forbidden_fallbacks", "unavailable_after_launch_action", "leak_scan_clean"],
+      "properties": {
+        "variable": {"const": "LAMBDA_API_KEY"},
+        "channel": {"const": "supervisor-secret-channel"},
+        "held_in_memory_through_terminal_confirmation": {"const": true},
+        "forbidden_locations": {"const": ["argv", "url", "log", "evidence", "hash", "filesystem"]},
+        "forbidden_fallbacks": {"const": ["SIRA_API_KEY", "OPENAI_API_KEY"]},
+        "unavailable_after_launch_action": {"const": "stop-workload-open-billing-incident-request-secret-restoration"},
+        "leak_scan_clean": {"const": true}
+      }
+    },
+    "inventory_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_sha256", "account_lrn_sha256", "workspace_lrn_sha256"],
+      "properties": {
+        "artifact_sha256": {"$ref": "#/$defs/sha256"},
+        "account_lrn_sha256": {"$ref": "#/$defs/sha256"},
+        "workspace_lrn_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "provider_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "instance_id",
+        "instance_type_name",
+        "region_name",
+        "image_id",
+        "image_name",
+        "image_family",
+        "image_version",
+        "architecture",
+        "ssh_key_id",
+        "ssh_key_name",
+        "firewall_ruleset_id",
+        "accelerator_count",
+        "price_cents_per_hour"
+      ],
+      "properties": {
+        "instance_id": {"$ref": "#/$defs/nonempty"},
+        "instance_type_name": {"$ref": "#/$defs/nonempty"},
+        "region_name": {"$ref": "#/$defs/nonempty"},
+        "image_id": {"$ref": "#/$defs/nonempty"},
+        "image_name": {"$ref": "#/$defs/nonempty"},
+        "image_family": {"const": "gpu-base-22-04"},
+        "image_version": {"$ref": "#/$defs/nonempty"},
+        "architecture": {"const": "x86_64"},
+        "ssh_key_id": {"$ref": "#/$defs/nonempty"},
+        "ssh_key_name": {"$ref": "#/$defs/nonempty"},
+        "firewall_ruleset_id": {"$ref": "#/$defs/nonempty"},
+        "accelerator_count": {"type": "integer", "minimum": 0, "maximum": 1},
+        "price_cents_per_hour": {"type": "integer", "minimum": 0, "maximum": 150}
+      }
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_wall_seconds",
+        "max_provider_compute_cents",
+        "max_list_price_cents",
+        "persistent_filesystem_cost_cents",
+        "model_api_cost_cents",
+        "model_tokens",
+        "model_calls",
+        "browser_actions",
+        "sira_executions",
+        "automatic_launch_retries",
+        "max_retained_evidence_bytes"
+        ,"max_accelerator_hours"
+        ,"max_provider_api_calls"
+        ,"minimum_provider_request_start_spacing_seconds"
+        ,"automatic_provider_request_retries"
+        ,"max_provider_api_response_bytes_per_call"
+        ,"max_provider_api_response_bytes_aggregate"
+        ,"max_ssh_readiness_attempts"
+        ,"max_ssh_sessions"
+        ,"max_remote_commands"
+        ,"max_ssh_command_output_bytes_per_call"
+        ,"max_ssh_command_output_bytes_aggregate"
+        ,"max_docker_calls"
+        ,"max_docker_output_bytes_per_call"
+        ,"max_docker_output_bytes_aggregate"
+        ,"max_registry_response_bytes"
+        ,"max_docker_disk_delta_bytes"
+        ,"minimum_root_free_bytes"
+        ,"minimum_docker_root_free_bytes"
+        ,"max_remote_evidence_bytes"
+        ,"max_transfer_bytes"
+        ,"max_mac_active_evidence_bytes"
+        ,"max_sealed_copy_bytes"
+        ,"max_ssh_transfer_calls"
+        ,"max_archive_copy_calls"
+        ,"minimum_mac_active_prewrite_free_bytes"
+        ,"minimum_mac_active_retained_free_bytes"
+        ,"max_mac_active_incremental_bytes"
+      ],
+      "properties": {
+        "max_wall_seconds": {"const": 3600},
+        "max_provider_compute_cents": {"const": 200},
+        "max_list_price_cents": {"type": "integer", "minimum": 0, "maximum": 150},
+        "persistent_filesystem_cost_cents": {"const": 0},
+        "model_api_cost_cents": {"const": 0},
+        "model_tokens": {"const": 0},
+        "model_calls": {"const": 0},
+        "browser_actions": {"const": 0},
+        "sira_executions": {"const": 0},
+        "automatic_launch_retries": {"const": 0},
+        "max_retained_evidence_bytes": {"const": 67108864}
+        ,"max_accelerator_hours": {"type": "integer", "minimum": 0, "maximum": 1}
+        ,"max_provider_api_calls": {"const": 134}
+        ,"minimum_provider_request_start_spacing_seconds": {"const": 1}
+        ,"automatic_provider_request_retries": {"const": 0}
+        ,"max_provider_api_response_bytes_per_call": {"const": 1048576}
+        ,"max_provider_api_response_bytes_aggregate": {"const": 16777216}
+        ,"max_ssh_readiness_attempts": {"const": 30}
+        ,"max_ssh_sessions": {"const": 2}
+        ,"max_remote_commands": {"const": 48}
+        ,"max_ssh_command_output_bytes_per_call": {"const": 1048576}
+        ,"max_ssh_command_output_bytes_aggregate": {"const": 16777216}
+        ,"max_docker_calls": {"const": 32}
+        ,"max_docker_output_bytes_per_call": {"const": 1048576}
+        ,"max_docker_output_bytes_aggregate": {"const": 16777216}
+        ,"max_registry_response_bytes": {"const": 8388608}
+        ,"max_docker_disk_delta_bytes": {"const": 67108864}
+        ,"minimum_root_free_bytes": {"const": 10737418240}
+        ,"minimum_docker_root_free_bytes": {"const": 10737418240}
+        ,"max_remote_evidence_bytes": {"const": 67108864}
+        ,"max_transfer_bytes": {"const": 67108864}
+        ,"max_mac_active_evidence_bytes": {"const": 67108864}
+        ,"max_sealed_copy_bytes": {"const": 67108864}
+        ,"max_ssh_transfer_calls": {"const": 1}
+        ,"max_archive_copy_calls": {"const": 1}
+        ,"minimum_mac_active_prewrite_free_bytes": {"const": 8725200896}
+        ,"minimum_mac_active_retained_free_bytes": {"const": 8589934592}
+        ,"max_mac_active_incremental_bytes": {"const": 135266304}
+      }
+    },
+    "provider_request_pacing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "clock",
+        "minimum_start_spacing_seconds",
+        "request_start_count",
+        "minimum_observed_start_spacing_milliseconds",
+        "spacing_violations",
+        "aggregate_deadline_minted_before_first_request",
+        "launch_deadline_did_not_extend_aggregate",
+        "all_spacing_delay_counted_inside_aggregate_deadline"
+      ],
+      "properties": {
+        "clock": {"const": "monotonic"},
+        "minimum_start_spacing_seconds": {"const": 1},
+        "request_start_count": {"type": "integer", "minimum": 2, "maximum": 134},
+        "minimum_observed_start_spacing_milliseconds": {"type": "integer", "minimum": 1000},
+        "spacing_violations": {"const": 0},
+        "aggregate_deadline_minted_before_first_request": {"const": true},
+        "launch_deadline_did_not_extend_aggregate": {"const": true},
+        "all_spacing_delay_counted_inside_aggregate_deadline": {"const": true}
+      }
+    },
+    "launch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "request_sha256",
+        "request_body",
+        "minted_instance_id",
+        "file_system_names",
+        "file_system_mounts",
+        "launch_count",
+        "instance_id_captured_immediately",
+        "deadline_minted_before_launch_post",
+        "launch_request_started_monotonic_ns",
+        "provider_active_observed_at_utc"
+      ],
+      "properties": {
+        "request_sha256": {"$ref": "#/$defs/sha256"},
+        "request_body": {"$ref": "#/$defs/launch_request"},
+        "minted_instance_id": {"$ref": "#/$defs/nonempty"},
+        "file_system_names": {"type": "array", "maxItems": 0},
+        "file_system_mounts": {"type": "array", "maxItems": 0},
+        "launch_count": {"const": 1},
+        "instance_id_captured_immediately": {"const": true},
+        "deadline_minted_before_launch_post": {"const": true},
+        "launch_request_started_monotonic_ns": {"type": "integer", "minimum": 1},
+        "provider_active_observed_at_utc": {"type": "string", "format": "date-time"}
+      }
+    },
+    "ssh_trust": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["attempt_known_hosts_path", "global_known_hosts_mutated", "host_key_algorithm", "host_key_sha256", "trust_bootstrap_method", "provider_attested_or_separately_authorized", "ssh_keyscan_only"],
+      "properties": {
+        "attempt_known_hosts_path": {"type": "string", "pattern": "^artifacts/t07/lambda/gate-l2/RUN-T07-L2-[A-Z0-9._-]+/known_hosts$"},
+        "global_known_hosts_mutated": {"const": false},
+        "host_key_algorithm": {"$ref": "#/$defs/nonempty"},
+        "host_key_sha256": {"type": "string", "pattern": "^SHA256:[A-Za-z0-9+/]{43}$"},
+        "trust_bootstrap_method": {"$ref": "#/$defs/nonempty"},
+        "provider_attested_or_separately_authorized": {"const": true},
+        "ssh_keyscan_only": {"const": false}
+      }
+    },
+    "host_observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "os_release",
+        "kernel",
+        "architecture",
+        "cgroup_version",
+        "cgroup_driver",
+        "docker_client",
+        "docker_server",
+        "containerd",
+        "runc",
+        "buildkit_or_buildx",
+        "root_filesystem_capacity_bytes",
+        "root_filesystem_free_bytes",
+        "docker_root_capacity_bytes",
+        "docker_root_free_bytes",
+        "preexisting_container_ids",
+        "preexisting_image_ids",
+        "preexisting_network_ids",
+        "preexisting_volume_names",
+        "docker_service_state",
+        "docker_cgroupns_default",
+        "docker_init_supported",
+        "host_mutation_performed"
+      ],
+      "properties": {
+        "os_release": {"$ref": "#/$defs/nonempty"},
+        "kernel": {"$ref": "#/$defs/nonempty"},
+        "architecture": {"const": "x86_64"},
+        "cgroup_version": {"enum": ["v1", "v2"]},
+        "cgroup_driver": {"$ref": "#/$defs/nonempty"},
+        "docker_client": {"$ref": "#/$defs/nonempty"},
+        "docker_server": {"$ref": "#/$defs/nonempty"},
+        "containerd": {"$ref": "#/$defs/nonempty"},
+        "runc": {"$ref": "#/$defs/nonempty"},
+        "buildkit_or_buildx": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/nonempty"}]},
+        "root_filesystem_capacity_bytes": {"type": "integer", "minimum": 107374182400},
+        "root_filesystem_free_bytes": {"type": "integer", "minimum": 10737418240},
+        "docker_root_capacity_bytes": {"type": "integer", "minimum": 107374182400},
+        "docker_root_free_bytes": {"type": "integer", "minimum": 10737418240},
+        "preexisting_container_ids": {"type": "array", "items": {"$ref": "#/$defs/nonempty"}},
+        "preexisting_image_ids": {"type": "array", "items": {"$ref": "#/$defs/nonempty"}},
+        "preexisting_network_ids": {"type": "array", "items": {"$ref": "#/$defs/nonempty"}},
+        "preexisting_volume_names": {"type": "array", "items": {"$ref": "#/$defs/nonempty"}},
+        "docker_service_state": {"$ref": "#/$defs/nonempty"},
+        "docker_cgroupns_default": {"const": "private"},
+        "docker_init_supported": {"const": true},
+        "host_mutation_performed": {"const": false}
+      }
+    },
+    "containment_probe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "image_reference",
+        "image_id",
+        "config_digest",
+        "layer_digest",
+        "container_id",
+        "network_mode",
+        "pid_mode",
+        "cgroupns_mode",
+        "ipc_mode",
+        "privileged",
+        "cap_drop",
+        "no_new_privileges",
+        "read_only_root",
+        "writable_layer_bytes",
+        "runtime_socket_mounted",
+        "cap_add",
+        "devices",
+        "host_bind_mounts",
+        "init_enabled",
+        "cpu_limit",
+        "memory_bytes",
+        "memory_swap_bytes",
+        "pid_limit",
+        "tmpfs_bytes",
+        "shm_bytes",
+        "wall_seconds",
+        "output_bytes",
+        "restart_policy",
+        "log_driver",
+        "log_max_size_bytes",
+        "log_max_files",
+        "labels",
+        "pre_stop_process_evidence",
+        "post_kill_inspect_sha256",
+        "owned_resource_scan_sha256",
+        "applet_verification",
+        "stop_timeout_seconds",
+        "stop_attempted",
+        "kill_escalated",
+        "terminal_or_removed",
+        "residual_owned_resources"
+      ],
+      "properties": {
+        "image_reference": {"const": "busybox@sha256:7a3ebe5bfd1a4a19797d20b0c0bb39d44393e9a03fd852c0865b0f540d868df0"},
+        "image_id": {"const": "sha256:db287cb6be81219cd18c1d82b70908f5d33eb028568b456f78eedff2ff2930e4"},
+        "config_digest": {"const": "sha256:db287cb6be81219cd18c1d82b70908f5d33eb028568b456f78eedff2ff2930e4"},
+        "layer_digest": {"const": "sha256:436a1b1fd078ee8e117111472724c2827077657189af7a781829d0825d48d2ab"},
+        "container_id": {"$ref": "#/$defs/nonempty"},
+        "network_mode": {"const": "none"},
+        "pid_mode": {"const": "private"},
+        "cgroupns_mode": {"const": "private"},
+        "ipc_mode": {"const": "private"},
+        "privileged": {"const": false},
+        "cap_drop": {"const": ["ALL"]},
+        "no_new_privileges": {"const": true},
+        "read_only_root": {"const": true},
+        "writable_layer_bytes": {"const": 0},
+        "runtime_socket_mounted": {"const": false},
+        "cap_add": {"const": []},
+        "devices": {"const": []},
+        "host_bind_mounts": {"const": []},
+        "init_enabled": {"const": true},
+        "cpu_limit": {"const": 1.0},
+        "memory_bytes": {"const": 134217728},
+        "memory_swap_bytes": {"const": 134217728},
+        "pid_limit": {"const": 64},
+        "tmpfs_bytes": {"const": 20971520},
+        "shm_bytes": {"const": 16777216},
+        "wall_seconds": {"const": 30},
+        "output_bytes": {"const": 1048576},
+        "restart_policy": {"const": "no"},
+        "log_driver": {"const": "local"},
+        "log_max_size_bytes": {"const": 1048576},
+        "log_max_files": {"const": 1},
+        "labels": {"$ref": "#/$defs/containment_labels"},
+        "pre_stop_process_evidence": {"$ref": "#/$defs/pre_stop_process_evidence"},
+        "post_kill_inspect_sha256": {"$ref": "#/$defs/sha256"},
+        "owned_resource_scan_sha256": {"$ref": "#/$defs/sha256"},
+        "applet_verification": {"$ref": "#/$defs/applet_verification"},
+        "stop_timeout_seconds": {"const": 5},
+        "stop_attempted": {"const": true},
+        "kill_escalated": {"const": true},
+        "terminal_or_removed": {"const": true},
+        "residual_owned_resources": {"const": 0}
+      }
+    },
+    "evidence_copy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_retained_until_verified",
+        "source_sha256",
+        "destination_sha256",
+        "hashes_match",
+        "bytes",
+        "max_bytes"
+      ],
+      "properties": {
+        "source_retained_until_verified": {"const": true},
+        "source_sha256": {"$ref": "#/$defs/sha256"},
+        "destination_sha256": {"$ref": "#/$defs/sha256"},
+        "hashes_match": {"const": true},
+        "bytes": {"type": "integer", "minimum": 0, "maximum": 67108864},
+        "max_bytes": {"const": 67108864}
+      }
+    },
+    "local_active_storage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "relative_root",
+        "filesystem_type",
+        "fresh_preflight_utc",
+        "writable",
+        "user_owned",
+        "no_symlink_traversal",
+        "runtime_state_present",
+        "operational_headroom_bytes",
+        "max_incremental_bytes",
+        "required_prewrite_free_bytes",
+        "observed_prewrite_free_bytes",
+        "retained_free_floor_bytes",
+        "observed_postseal_free_bytes"
+      ],
+      "properties": {
+        "relative_root": {"type": "string", "pattern": "^artifacts/t07/lambda/gate-l2/RUN-T07-L2-[A-Z0-9._-]+$"},
+        "filesystem_type": {"const": "apfs"},
+        "fresh_preflight_utc": {"type": "string", "format": "date-time"},
+        "writable": {"const": true},
+        "user_owned": {"const": true},
+        "no_symlink_traversal": {"const": true},
+        "runtime_state_present": {"const": false},
+        "operational_headroom_bytes": {"const": 8589934592},
+        "max_incremental_bytes": {"const": 135266304},
+        "required_prewrite_free_bytes": {"const": 8725200896},
+        "observed_prewrite_free_bytes": {"type": "integer", "minimum": 8725200896},
+        "retained_free_floor_bytes": {"const": 8589934592},
+        "observed_postseal_free_bytes": {"type": "integer", "minimum": 8589934592}
+      }
+    },
+    "archive_copy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mount_path",
+        "apfs_data_uuid",
+        "physical_store_uuid",
+        "fresh_identity_guard",
+        "fresh_observation_utc",
+        "held_descriptor_guard",
+        "writable_unlocked",
+        "no_symlink_traversal",
+        "one_way_copy",
+        "source_retained_until_verified",
+        "source_sha256",
+        "destination_sha256",
+        "container_capacity_bytes",
+        "retained_free_floor_bytes",
+        "required_pre_copy_free_bytes",
+        "observed_pre_copy_free_bytes",
+        "observed_post_copy_free_bytes",
+        "bytes",
+        "fsync_complete",
+        "atomic_finalize"
+      ],
+      "properties": {
+        "mount_path": {"const": "/Volumes/Macintosh HD - Data"},
+        "apfs_data_uuid": {"const": "8478609D-FA37-4ED5-875D-47AE912B9151"},
+        "physical_store_uuid": {"const": "7904A6F1-F483-4ED7-9E34-BFECAB31C63E"},
+        "fresh_identity_guard": {"const": true},
+        "fresh_observation_utc": {"type": "string", "format": "date-time"},
+        "held_descriptor_guard": {"const": true},
+        "writable_unlocked": {"const": true},
+        "no_symlink_traversal": {"const": true},
+        "one_way_copy": {"const": true},
+        "source_retained_until_verified": {"const": true},
+        "source_sha256": {"$ref": "#/$defs/sha256"},
+        "destination_sha256": {"$ref": "#/$defs/sha256"},
+        "container_capacity_bytes": {"type": "integer", "minimum": 1},
+        "retained_free_floor_bytes": {"type": "integer", "minimum": 161061273600},
+        "required_pre_copy_free_bytes": {"type": "integer", "minimum": 161128382464},
+        "observed_pre_copy_free_bytes": {"type": "integer", "minimum": 161128382464},
+        "observed_post_copy_free_bytes": {"type": "integer", "minimum": 161061273600},
+        "bytes": {"type": "integer", "minimum": 1, "maximum": 67108864},
+        "fsync_complete": {"const": true},
+        "atomic_finalize": {"const": true}
+      }
+    },
+    "termination": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "method",
+        "instance_ids",
+        "request_count",
+        "terminal_state",
+        "provider_nonbillable_confirmed",
+        "unrelated_instance_ids_touched"
+      ],
+      "properties": {
+        "method": {"const": "provider-api"},
+        "instance_ids": {"type": "array", "minItems": 1, "maxItems": 1, "items": {"$ref": "#/$defs/nonempty"}},
+        "request_count": {"type": "integer", "minimum": 1, "maximum": 3},
+        "terminal_state": {"const": "terminated"},
+        "provider_nonbillable_confirmed": {"const": true},
+        "unrelated_instance_ids_touched": {"const": []}
+      }
+    },
+    "actual_usage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_wall_seconds",
+        "billed_minutes",
+        "estimated_list_cost_cents",
+        "provider_api_calls",
+        "provider_api_response_bytes",
+        "ssh_readiness_attempts",
+        "ssh_sessions",
+        "remote_commands",
+        "ssh_command_output_bytes",
+        "docker_calls",
+        "docker_output_bytes",
+        "registry_response_bytes",
+        "docker_disk_delta_bytes",
+        "fixture_output_bytes",
+        "remote_evidence_bytes",
+        "transfer_bytes",
+        "mac_active_evidence_bytes",
+        "sealed_copy_bytes",
+        "ssh_transfer_calls",
+        "archive_copy_calls"
+        ,"allocated_accelerator_seconds"
+        ,"allocated_accelerator_hours"
+      ],
+      "properties": {
+        "provider_wall_seconds": {"type": "integer", "minimum": 1, "maximum": 3600},
+        "billed_minutes": {"type": "integer", "minimum": 1, "maximum": 60},
+        "estimated_list_cost_cents": {"type": "integer", "minimum": 0, "maximum": 150},
+        "provider_api_calls": {"type": "integer", "minimum": 1, "maximum": 134},
+        "provider_api_response_bytes": {"type": "integer", "minimum": 0, "maximum": 16777216},
+        "ssh_readiness_attempts": {"type": "integer", "minimum": 0, "maximum": 30},
+        "ssh_sessions": {"type": "integer", "minimum": 0, "maximum": 2},
+        "remote_commands": {"type": "integer", "minimum": 0, "maximum": 48},
+        "ssh_command_output_bytes": {"type": "integer", "minimum": 0, "maximum": 16777216},
+        "docker_calls": {"type": "integer", "minimum": 0, "maximum": 32},
+        "docker_output_bytes": {"type": "integer", "minimum": 0, "maximum": 16777216},
+        "registry_response_bytes": {"type": "integer", "minimum": 0, "maximum": 8388608},
+        "docker_disk_delta_bytes": {"type": "integer", "minimum": 0, "maximum": 67108864},
+        "fixture_output_bytes": {"type": "integer", "minimum": 0, "maximum": 1048576},
+        "remote_evidence_bytes": {"type": "integer", "minimum": 0, "maximum": 67108864},
+        "transfer_bytes": {"type": "integer", "minimum": 0, "maximum": 67108864},
+        "mac_active_evidence_bytes": {"type": "integer", "minimum": 0, "maximum": 67108864},
+        "sealed_copy_bytes": {"type": "integer", "minimum": 0, "maximum": 67108864},
+        "ssh_transfer_calls": {"const": 1},
+        "archive_copy_calls": {"const": 1},
+        "allocated_accelerator_seconds": {"type": "integer", "minimum": 0, "maximum": 3600},
+        "allocated_accelerator_hours": {"$ref": "#/$defs/rational_hours"}
+      }
+    },
+    "compute_ledger": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "record_id", "run_id", "append_only", "terminal_reconciled", "estimated_list_cost_cents", "allocated_accelerator_hours", "manifest_sha256"],
+      "properties": {
+        "path": {"const": "manifests/compute.yaml"},
+        "record_id": {"$ref": "#/$defs/nonempty"},
+        "run_id": {"type": "string", "pattern": "^RUN-T07-L2-[A-Z0-9._-]+$"},
+        "append_only": {"const": true},
+        "terminal_reconciled": {"const": true},
+        "estimated_list_cost_cents": {"type": "integer", "minimum": 0, "maximum": 150},
+        "allocated_accelerator_hours": {"$ref": "#/$defs/rational_hours"},
+        "manifest_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "sha256_digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "nonempty": {"type": "string", "minLength": 1, "maxLength": 4096},
+    "launch_tag": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "value"],
+      "properties": {
+        "key": {"$ref": "#/$defs/nonempty"},
+        "value": {"type": "string", "maxLength": 128}
+      }
+    },
+    "launch_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "region_name",
+        "instance_type_name",
+        "ssh_key_names",
+        "file_system_names",
+        "file_system_mounts",
+        "name",
+        "image",
+        "tags",
+        "firewall_rulesets"
+      ],
+      "properties": {
+        "region_name": {"$ref": "#/$defs/nonempty"},
+        "instance_type_name": {"$ref": "#/$defs/nonempty"},
+        "ssh_key_names": {"type": "array", "minItems": 1, "maxItems": 1, "items": {"$ref": "#/$defs/nonempty"}},
+        "file_system_names": {"type": "array", "maxItems": 0},
+        "file_system_mounts": {"type": "array", "maxItems": 0},
+        "name": {"const": "giclab-t07-l2-qualification"},
+        "image": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id"],
+          "properties": {"id": {"$ref": "#/$defs/nonempty"}}
+        },
+        "tags": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "prefixItems": [
+            {"type": "object", "additionalProperties": false, "required": ["key", "value"], "properties": {"key": {"const": "giclab.experiment"}, "value": {"const": "EXP-0001"}}},
+            {"type": "object", "additionalProperties": false, "required": ["key", "value"], "properties": {"key": {"const": "giclab.gate"}, "value": {"const": "T07-L2"}}},
+            {"type": "object", "additionalProperties": false, "required": ["key", "value"], "properties": {"key": {"const": "giclab.authorization"}, "value": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"}}}
+          ],
+          "items": false
+        },
+        "firewall_rulesets": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id"],
+            "properties": {"id": {"$ref": "#/$defs/nonempty"}}
+          }
+        }
+      }
+    },
+    "containment_labels": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["experiment", "gate", "attempt", "authorization", "image_manifest", "repository_commit", "provider_instance_id", "fixture_sha256"],
+      "properties": {
+        "experiment": {"const": "EXP-0001"},
+        "gate": {"const": "T07-L2"},
+        "attempt": {"$ref": "#/$defs/nonempty"},
+        "authorization": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"},
+        "image_manifest": {"const": "sha256:7a3ebe5bfd1a4a19797d20b0c0bb39d44393e9a03fd852c0865b0f540d868df0"},
+        "repository_commit": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
+        "provider_instance_id": {"$ref": "#/$defs/nonempty"},
+        "fixture_sha256": {"const": "09838913b14d23da939225cb89411619e91cb9ee023a2721b5b7c3890ac90aea"}
+      }
+    },
+    "applet_verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["command", "required_applets", "all_required_present", "verification_marker", "fixture_source_sha256"],
+      "properties": {
+        "command": {"const": ["/bin/busybox", "--list"]},
+        "required_applets": {"const": ["sh", "setsid", "sleep", "ps", "kill"]},
+        "all_required_present": {"const": true},
+        "verification_marker": {"const": "T07_APPLETS_VERIFIED=sh,setsid,sleep,ps,kill"},
+        "fixture_source_sha256": {"const": "09838913b14d23da939225cb89411619e91cb9ee023a2721b5b7c3890ac90aea"}
+      }
+    },
+    "pre_stop_process_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sha256",
+        "capture_method",
+        "docker_top_sha256",
+        "fixture_log_sha256",
+        "container_exec_calls",
+        "process_count",
+        "child_observed",
+        "grandchild_observed",
+        "setsid_observed",
+        "reparent_observed",
+        "term_ignored_observed",
+        "pid_limit_observed",
+        "container_init_pid_1_observed"
+      ],
+      "properties": {
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "capture_method": {"const": "docker-top-plus-fixture-log-no-exec"},
+        "docker_top_sha256": {"$ref": "#/$defs/sha256"},
+        "fixture_log_sha256": {"$ref": "#/$defs/sha256"},
+        "container_exec_calls": {"const": 0},
+        "process_count": {"type": "integer", "minimum": 3, "maximum": 64},
+        "child_observed": {"const": true},
+        "grandchild_observed": {"const": true},
+        "setsid_observed": {"const": true},
+        "reparent_observed": {"const": true},
+        "term_ignored_observed": {"const": true},
+        "pid_limit_observed": {"const": true},
+        "container_init_pid_1_observed": {"const": true}
+      }
+    },
+    "rational_hours": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["numerator", "denominator"],
+      "properties": {
+        "numerator": {"type": "integer", "minimum": 0, "maximum": 3600},
+        "denominator": {"const": 3600}
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"lifecycle_state": {"const": "terminal-confirmed"}}},
+      "then": {
+        "properties": {
+          "termination": {
+            "properties": {
+              "terminal_state": {"const": "terminated"},
+              "provider_nonbillable_confirmed": {"const": true}
+            }
+          }
+        }
+      }
+    }
+  ]
+}

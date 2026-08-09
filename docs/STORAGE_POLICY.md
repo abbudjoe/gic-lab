@@ -54,6 +54,38 @@ candidate paths are provenance, not storage authority. A next topology requires 
 user to select a directly attached Mac mini SSD, a separately approved Linux host, or
 a deliberately weaker governance contract; there is no internal-disk fallback.
 
+D-020 selects a separately gated ephemeral Lambda host at design level. Lambda
+persistent filesystems remain forbidden. Mutable qualification/workload state stays
+on the minted provider instance and is destroyed with that instance; Docker images,
+layers, and runtime state are never copied to the Mac mini or retained volume. The Mac
+mini may hold only a per-run, Git-ignored active evidence root capped at 67,108,864
+bytes. Its prewrite floor is 8,725,200,896 bytes: 8 GiB of explicit host-operational
+headroom plus a 135,266,304-byte peak increment consisting of one 64 MiB active copy,
+one 64 MiB seal/verification copy, and 1 MiB of bounded metadata. After sealing, at
+least 8,589,934,592 bytes must remain free. A fresh preflight and post-seal check are
+mandatory; there is no fallback location.
+
+The sealed bundle is copied one-way to the preferred MacBook Pro archive only after a
+fresh identity/held-descriptor guard. For the freshly observed APFS container
+capacity, the retained-free floor is recalculated as
+`max(150 GiB, ceil(container_capacity_bytes / 5))`; the pre-copy requirement adds the
+67,108,864-byte maximum archive copy. Destination SHA-256, fsync, atomic finalization,
+and a post-copy retained-floor check are mandatory. The Mac mini source remains until
+independent archive verification.
+
+Gate L1 inventory uses a smaller dedicated retention contract. Before any account GET,
+the Mac mini must retain at least 8,591,048,704 bytes free: 8 GiB operational headroom
+plus a conservative 1,114,112-byte local write/finalization increment. At least
+8,589,934,592 bytes must remain after its two local files are sealed. The local
+redacted artifact is capped at 524,288 bytes, its verification record at 65,536 bytes,
+and the external three-file bundle at 1,048,576 bytes, for 1,638,400 aggregate retained
+bytes. The external pre-copy floor is freshly recomputed as
+`max(150 GiB, ceil(container_capacity_bytes / 5)) + 1,048,576`; the post-copy floor
+removes only that increment. Success requires held-descriptor identity, no internal
+fallback, source/destination hash equality, fsync, atomic finalization, source
+retention, and a post-copy volume/floor check. An unarchived Gate L1 inventory cannot
+authorize or bind Gate L2.
+
 If the destination is later exposed through a network filesystem, attempts must be
 written on the approved execution host, sealed and hashed there, copied to this
 destination, verified by destination SHA-256, and recorded in a copy ledger. Live

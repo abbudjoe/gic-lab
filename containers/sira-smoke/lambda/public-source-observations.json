@@ -1,0 +1,127 @@
+{
+  "schema_version": "0.1.0",
+  "observed_at_utc": "2026-08-09T20:36:01Z",
+  "account_api_called": false,
+  "payload_downloaded": false,
+  "records": [
+    {
+      "record_id": "LAMBDA-CLOUD-OPENAPI-1.10.0",
+      "publisher": "Lambda",
+      "url": "https://docs.lambda.ai/api/cloud/spec.json",
+      "resolved_api_base_url": "https://cloud.lambda.ai",
+      "version": "1.10.0",
+      "response_bytes": 239644,
+      "sha256": "365488015cf79fda38e1268f44a9e2d4af4fe2794ad3c6878c78a7e1f98caded",
+      "documentation_application_version": "v20260805-b62d0b2",
+      "facts": [
+        "instance types and images expose an x86_64 or arm64 architecture enum",
+        "inventory paths are GET endpoints",
+        "launch and termination are POST endpoints",
+        "firewall protocol enum includes all",
+        "official Lambda Cloud API documentation says firewall rules do not apply in us-south-1",
+        "requests are generally limited to one per second",
+        "launch is limited to one request per twelve seconds or five per minute"
+      ]
+    },
+    {
+      "record_id": "LAMBDA-ODC-CURRENT-PRICING",
+      "publisher": "Lambda",
+      "url": "https://lambda.ai/instances",
+      "retrieved_at_utc": "2026-08-09T20:36:01Z",
+      "facts": [
+        "one-GPU A10 is listed at USD 1.29 per hour",
+        "one-GPU A6000 is listed at USD 1.09 per hour",
+        "one-GPU Quadro RTX 6000 is listed at USD 0.69 per hour",
+        "prices are plus applicable sales tax"
+      ],
+      "account_capacity_observed": false
+    },
+    {
+      "record_id": "LAMBDA-ODC-IMAGE-AND-RUNTIME",
+      "publisher": "Lambda",
+      "url": "https://docs.lambda.ai/public-cloud/on-demand/",
+      "retrieved_at_utc": "2026-08-09T20:36:01Z",
+      "facts": [
+        "GPU Base 22.04 family gpu-base-22-04 supports x86-64 and Python 3.10",
+        "GPU Base includes Docker",
+        "the instance inventory is required to resolve the exact regional image ID"
+      ]
+    },
+    {
+      "record_id": "LAMBDA-ODC-BILLING-AND-TERMINATION",
+      "publisher": "Lambda",
+      "urls": [
+        "https://docs.lambda.ai/public-cloud/billing/",
+        "https://docs.lambda.ai/public-cloud/on-demand/creating-managing-instances/"
+      ],
+      "retrieved_at_utc": "2026-08-09T20:36:01Z",
+      "facts": [
+        "ODC usage is billed in one-minute increments",
+        "billing begins after launch health checks and ends on provider termination",
+        "host shutdown or poweroff does not terminate billing",
+        "provider API termination and terminal-state verification are mandatory"
+      ]
+    },
+    {
+      "record_id": "BUSYBOX-1.37.0-GLIBC-AMD64",
+      "publisher": "Docker Official Images and docker-library/busybox",
+      "registry": "registry-1.docker.io/library/busybox",
+      "source_registry_auth_endpoint": "https://auth.docker.io/token",
+      "source_registry_endpoint": "https://registry-1.docker.io/v2/library/busybox/",
+      "tag_used_for_metadata_resolution_only": "1.37.0-glibc",
+      "execution_reference": "busybox@sha256:7a3ebe5bfd1a4a19797d20b0c0bb39d44393e9a03fd852c0865b0f540d868df0",
+      "index": {
+        "digest": "sha256:4279d9b47df4c1b02d80efd8d02cd59b3a8182c1e785a4ff3f6983bee19dc8b0",
+        "bytes": 8861
+      },
+      "linux_amd64_manifest": {
+        "digest": "sha256:7a3ebe5bfd1a4a19797d20b0c0bb39d44393e9a03fd852c0865b0f540d868df0",
+        "bytes": 610
+      },
+      "config": {
+        "digest": "sha256:db287cb6be81219cd18c1d82b70908f5d33eb028568b456f78eedff2ff2930e4",
+        "bytes": 459,
+        "architecture": "amd64",
+        "os": "linux",
+        "created": "2024-09-26T21:31:42Z",
+        "rootfs_diff_id": "sha256:412f8a616e1efb03d4ab94ce18ebddf3f068b637f1c7ae8dbc82306a852de408"
+      },
+      "layers": [
+        {
+          "digest": "sha256:436a1b1fd078ee8e117111472724c2827077657189af7a781829d0825d48d2ab",
+          "compressed_bytes": 2211507
+        }
+      ],
+      "official_images_source": {
+        "commit": "01fdecf62623f274c7043f3d331512bd0fd1e2cf",
+        "commit_signature_verified": true,
+        "library_url": "https://github.com/docker-library/official-images/blob/01fdecf62623f274c7043f3d331512bd0fd1e2cf/library/busybox",
+        "busybox_source_commit": "e7bf068f570ae5a3236675c3c6b22a576773e833",
+        "amd64_distribution_commit": "70ce0fb98bee360bbcce132660d727bf6ce55a99"
+      },
+      "licenses": [
+        "Apache-2.0 docker-library packaging",
+        "GPL-2.0 BusyBox program"
+      ],
+      "required_fixture_applets": [
+        "sh",
+        "setsid",
+        "sleep",
+        "ps",
+        "kill"
+      ],
+      "applet_source_evidence": [
+        "https://github.com/docker-library/busybox/blob/e7bf068f570ae5a3236675c3c6b22a576773e833/latest-1/glibc/Dockerfile.builder",
+        "https://busybox.net/downloads/BusyBox.html"
+      ],
+      "future_execution_precondition": "The single Gate L2 fixture container must run busybox --list in its own entrypoint, verify sh/setsid/sleep/ps/kill, emit the fixed verification marker, and only then start the adversarial spawn sequence"
+    },
+    {
+      "record_id": "T07-L2-ADVERSARIAL-FIXTURE",
+      "path": "containers/sira-smoke/lambda/adversarial-containment.sh",
+      "bytes": 1384,
+      "sha256": "09838913b14d23da939225cb89411619e91cb9ee023a2721b5b7c3890ac90aea",
+      "executed": false
+    }
+  ]
+}

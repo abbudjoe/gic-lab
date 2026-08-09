@@ -39,7 +39,9 @@ current Phase 1 closeout.
 Out of scope: any execution without the exact current-turn authorization; protocol
 adaptation to observed effects; confirmatory claims; a new EXP-0001 condition; a
 harness-to-kernel comparison; learned-kernel training or distillation; Phase 2; and
-cloud mutation outside the exact T12/T14 authorization contract.
+cloud mutation outside a fresh exact current-turn T07 Gate L2/L4 or T12/T14
+authorization contract. Gate L0 and L3 design work and Gate L1 read-only inventory
+grant no mutation authority; one gate's authorization never carries into another.
 
 ## Phase definition of done ledger
 
@@ -63,7 +65,7 @@ cloud mutation outside the exact T12/T14 authorization contract.
 
 | Task | Work package | Mapped phase DoD | Current permission |
 |---|---|---|---|
-| T07 | Execute one authorized local/API SiRA smoke pair; capture regulation-decision evidence without interpretation. | P1-DOD-02, P1-DOD-11 through P1-DOD-13 | Gate B1.7 complete; local runtime rejected; no B2a authority |
+| T07 | Execute one authorized contained SiRA smoke pair; capture regulation-decision evidence without interpretation. | P1-DOD-02, P1-DOD-11 through P1-DOD-13 | Gate L0 complete; Lambda host selected design-only; L1 unauthorized |
 | T08 | Analyze smoke infrastructure evidence and prepare an unauthorized pilot package. | P1-DOD-03, P1-DOD-11 through P1-DOD-13 | blocked until T07 succeeds |
 | T09 | Execute the freshly authorized exploratory SiRA pilot. | P1-DOD-04, P1-DOD-11 through P1-DOD-13 | blocked until T08 and authorization |
 | T10 | Analyze and publish the exploratory SiRA pilot. | P1-DOD-05, P1-DOD-11 through P1-DOD-13 | blocked until T09 succeeds |
@@ -78,7 +80,7 @@ and an analysis recommendation does not authorize the next execution.
 
 ## T07 assembly control
 
-Assembly status: **Gate B1.7 complete; runtime-candidate-rejected; no executable Gate B2a plan**
+Assembly status: **Gate L0 complete; lambda-host-selected-design-only; Gate L1 unauthorized**
 
 Exact next profile: `PLAN-EXP0001-SMOKE`.
 
@@ -153,6 +155,32 @@ block exists. The sealed-artifact retention decision remains in force.
 This was the final local-runtime selection gate. It does not create another B1.x turn,
 authorize installation or a runtime probe, or alter the EXP-0001 treatment contrast.
 
+### Gate L0 Lambda host pivot
+
+Source contract: `/Users/joseph/Downloads/T07_GATE_L0_LAMBDA_LINUX_HOST_PIVOT.md`,
+SHA-256 `d630b569864a3a1125cd62fb92ad67b023faa2195bdc529829aafcb8dfa12efd`.
+Baseline: `0ce094778f979e303794bbfe01acc93829a7ff1d` on parent
+`phase-1/sira-smoke`; implementation branch `phase-1/sira-smoke-lambda`.
+
+The detailed DoD, implementation mapping, source locks, tests, independent review,
+and final gate evidence are maintained in
+`docs/harness/T07_GATE_L0_IMPLEMENTATION_LEDGER.md`. Gate L0 selects a short-lived
+x86_64 Lambda On-Demand Cloud host as T07's planned substrate, with no persistent
+Lambda filesystem and provider-API termination as the authoritative billing boundary.
+It creates one separately authorizable eight-GET L1 inventory plan, an unauthorized
+non-account-bound L2 host-qualification packet, an L3 requirements-only x86_64 B2b
+successor, and an unauthorized L4 live-pair boundary.
+L1 success includes a held-descriptor, hash-verified one-way copy to the approved
+MacBook archive; L2 cannot consume a Mac-mini-only inventory. L2 also remains blocked
+on an authenticated first-contact SSH server-host-key bootstrap.
+
+The plan remains `lambda-host-selected-design-only`. Current account/workspace,
+capacity, exact type/region/image/price, existing key/ruleset, and running-instance
+facts are intentionally unknown until L1. No account API, cloud mutation, paid
+compute, SSH, runtime/container/browser/model/SiRA action, secret access, or scientific
+field change occurred. Docker Desktop and Colima/Lima remain terminal rejected
+alternatives, not active blockers to L1.
+
 ## Authorization and mutation boundary
 
 Current project state keeps paid compute, prototype execution, benchmark execution,
@@ -161,6 +189,11 @@ turn names every readiness authorization field. T09 requires a fresh pilot
 authorization. T12 and T14 separately require their exact cloud mutation, hardware,
 data, cost/time, artifact-transfer, and termination authority. Read-only inspection or
 preflight never supplies mutation authority.
+
+T07 Gate L1 is a separately authorizable read-only account inspection and does not
+require cloud-mutation or paid-compute permission. Its authority, if later granted,
+cannot imply L2. L2, L3, and L4 each require new exact authorization and state changes
+appropriate to their own operation.
 
 ## Planned evidence
 
@@ -219,6 +252,12 @@ preflight never supplies mutation authority.
   positive writer-closure evidence, issuer-bound rollback ownership, and authoritative
   control-plane alignment. No runtime payload, VM, container, browser, API, secret, or
   SiRA condition was installed, launched, accessed, or executed.
+- 2026-08-09: Gate L0 selected the D-019 Linux-host alternative as a design-only
+  x86_64 Lambda On-Demand Cloud topology. It source-bound Lambda OpenAPI 1.10.0 and a
+  minimal immutable amd64 BusyBox qualification image, implemented strict redacted
+  inventory/selection/no-filesystem/termination contracts, and separated L1 through
+  L4 authority. No Lambda account API, secret, cloud mutation, payload, SSH, runtime,
+  browser, model, or SiRA action occurred.
 
 ## Decision log
 
@@ -239,20 +278,25 @@ preflight never supplies mutation authority.
   sealed-retention root, retain Docker artifacts only as blocked provenance, reject
   the reviewed Colima/Lima topology, and require a new user topology choice before any
   installation or qualification authority can be proposed.
+- 2026-08-09: Under D-020, select a short-lived x86_64 Lambda On-Demand Cloud host as
+  T07's planned substrate. Keep L1 GET-only inventory, L2 host qualification, L3 B2b
+  qualification, and L4 live execution as four separate authorization boundaries;
+  attach no Lambda persistent filesystem and terminate by exact provider instance ID.
 
 ## Blockers and user actions
 
-T07 has no selected local runtime and no executable B2a plan. Docker Desktop plans are
-superseded blocked provenance; the reviewed Colima/Lima candidate is rejected. The
-user must select one of the three terminal alternatives below before a new topology
-can be reviewed. No existing packet may authorize installation or probes, and no
-other Phase 1 work package may begin first.
+T07 has no selected local runtime and no executable local B2a plan. Docker Desktop and
+Colima/Lima remain terminal rejected provenance. The Lambda topology is selected only
+at design level. Gate L1 remains unauthorized; therefore account/workspace, current
+capacity, type/region/image/price, key/ruleset choices, and unrelated running instances
+are unresolved by design. L2 has no executable account-bound plan and L3/L4 remain
+unauthorized.
 
 ## Next permitted work
 
-There is no further B1.x design gate. The next user decision must select, without
-automatic preference, one of: (1) a directly attached local external SSD on the Mac
-mini; (2) a separately approved Linux execution host; or (3) a deliberately less
-strict containment/storage-confidentiality contract approved as a scientific-
-governance change. Only that newly reviewed topology can define later permitted work.
-Gate B2a, Gate B2b, both SiRA conditions, and the smoke remain blocked.
+There is no further local B1.x design gate. The next permitted T07 work is a fresh user
+decision on the exact Gate L1 GET-only inventory block in
+`docs/harness/T07_GATE_L1_READONLY_INVENTORY_AUTHORIZATION_PACKET.md`. If authorized,
+L1 may produce one redacted inventory and must stop before L2. Gate L2 host
+qualification, Gate L3 B2b qualification, Gate L4, both SiRA conditions, and the smoke
+remain blocked pending their own prerequisites and authorizations.

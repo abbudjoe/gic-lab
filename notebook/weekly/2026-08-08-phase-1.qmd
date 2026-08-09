@@ -25,7 +25,26 @@ USD 4.00 cap is not authorization.
 
 ## Next gate
 
-A later current-turn human instruction must name the exact smoke plan, OpenAI and the
-`gpt-4o-2024-11-20` substitution, maximum API cost, maximum wall time, and required
-process/browser cleanup. T07 must then pass identity, command-diff, finite-budget,
-artifact-ownership, secret, and cleanup preflight before any live action.
+The next possible T07 authorization is the bounded Lambda Gate L1 read-only inventory.
+It cannot launch a host. After separate host and workload qualification gates succeed,
+a later live-pair authorization must name the exact smoke plan, Lambda host plan,
+OpenAI and the `gpt-4o-2024-11-20` substitution, provider and API cost caps, wall
+limits, and container/provider cleanup. T07 must pass identity, command-diff,
+finite-budget, artifact-ownership, secret, and cleanup preflight before any live action.
+
+## T07 infrastructure update — design only
+
+The Mac-local Docker Desktop and Colima/Lima paths are now terminal rejected
+infrastructure alternatives. The project selected a short-lived x86_64 Lambda
+On-Demand Cloud host as T07's planned substrate, with no persistent Lambda filesystem
+and provider-API termination as the billing boundary.
+
+This selection is not an experiment run or cloud authorization. The next possible
+action is a separately authorized, eight-GET, redacted Lambda inventory. Host
+qualification, the Playwright/SiRA image probes, the live reactive/simulative pair,
+paid compute, model calls, browser actions, and interpretation all remain unauthorized.
+The inventory is not complete until its redacted artifact is hash-verified in the
+approved MacBook archive; host qualification also needs authenticated first-contact
+SSH host-key trust.
+No Lambda account was queried and no secret, instance, container, browser, model, or
+SiRA condition was accessed or executed for this update.

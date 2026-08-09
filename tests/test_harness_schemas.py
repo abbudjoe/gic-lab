@@ -65,6 +65,9 @@ def test_harness_schema_documents_are_registered() -> None:
         "docker-storage-placement-evidence",
         "sealed-artifact-copy",
         "attempt-close-evidence",
+        "t07-lambda-inventory",
+        "t07-lambda-host-qualification",
+        "t07-lambda-host-qualification-incident",
     ):
         assert "$id" in load_json(ROOT / f"schemas/{name}.schema.json")
 

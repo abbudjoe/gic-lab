@@ -1,6 +1,6 @@
 # Phase 1 SiRA Smoke Readiness
 
-Status: **eligible for explicit authorization; not authorized**
+Status: **profile eligible; Lambda infrastructure gates incomplete; not authorized**
 
 Prepared: 2026-08-08
 
@@ -18,6 +18,13 @@ Prepared: 2026-08-08
 The profile and both condition plans remain unauthorized. This readiness record and
 the proposed budget are not authorization. The pilot plan is not eligible.
 
+T07 now has a design-only x86_64 Lambda On-Demand Cloud substrate. The next possible
+authorization is Gate L1 read-only account inventory, not this live pair. Gate L2 host
+qualification and Gate L3 no-provider workload probes must succeed before the live
+Gate L4 authorization described below can be considered.
+Gate L1 must archive and verify its redacted evidence on the approved MacBook volume;
+Gate L2 additionally needs a separately reviewed SSH server-host-key trust bootstrap.
+
 ## Exact user decision fields
 
 A later current-turn authorization must state one value for every field below:
@@ -28,8 +35,9 @@ A later current-turn authorization must state one value for every field below:
 | `api_provider` | `OpenAI` |
 | `model_revision` | Exactly `gpt-4o-2024-11-20`, used as a declared substitution for the unavailable historical `gpt-4o` serving revision |
 | `maximum_api_cost_usd` | Proposed ceiling: `4.00`; the user must explicitly approve this value or a lower replacement after price reverification |
-| `maximum_wall_time_seconds` | Proposed ceiling: `240` total, comprising at most `120` seconds per condition attempt |
-| `required_cleanup` | Terminate the supervised process group and every browser child, verify zero live child processes, preserve and hash the attempt evidence, and perform no cloud mutation |
+| `maximum_provider_compute_cost_usd` | Must be recomputed from the L1-selected Lambda cents/hour and freshly approved for Gate L4 |
+| `maximum_wall_time_seconds` | Scientific workload ceiling remains proposed `240` total, at most `120` seconds per condition; the fresh Lambda host lifecycle needs a separate aggregate provider wall cap |
+| `required_cleanup` | Stop/KILL each immutable container boundary, prove zero owned resources, preserve/copy/seal evidence, terminate the exact Lambda instance through the provider API, and confirm terminal/nonbillable state |
 
 The authorization reference must identify that current user instruction. Within the
 authorized T07 work item, the control plane may set
@@ -39,8 +47,10 @@ bind `docs/PROJECT_STATE.yaml.authorized_run_profile` to the exact profile path 
 SHA-256 plus the sealed canonical `condition_plan_sha256s`, bind both condition plans
 to the same `profile_plan_id` and `profile_sha256`, and materialize condition-owned
 budgets and command hashes.
-Benchmark, training, and cloud-mutation permissions remain false. No field may be
-inferred from this readiness document or from the proposed price record.
+Benchmark and training permissions remain false. Cloud-mutation permission remains
+false now and may change only in a fresh Gate L4 authorization that binds exactly one
+launch and provider termination for the exact instance ID. No field may be inferred
+from this readiness document, public pricing, or an earlier infrastructure gate.
 
 ## Proposed API spend cap
 
@@ -69,10 +79,15 @@ before the first live model, API, or browser action:
    limits; stop if the upstream surface cannot make them effective.
 5. Redirect source session JSON, text logs, stdout, stderr, screenshots, and evaluator
    output into fresh harness-owned attempt roots before launch.
-6. Pin and record the approved browser/runtime revision, supervise its process group,
-   and verify the cleanup procedure without a live model/API call.
+6. Pin and record the approved browser/runtime revision, run it only inside the
+   empirically qualified private PID/cgroup container boundary,
+   and verify container plus provider cleanup without a live model/API call.
 7. Verify required secret names without printing, persisting, hashing, or placing
    secret values in arguments, paths, events, or artifacts.
+8. Bind successful Gate L2 host/runtime/termination evidence and Gate L3 x86_64
+   image/adversarial/dummy-secret/local-page evidence; revalidate exact account,
+   type/region/image/key/ruleset/price and prove no duplicate T07 instance before the
+   one Gate L4 launch.
 
 Failure of any preflight obligation stops T07 before execution and preserves the
 authorization record as an unconsumed/blocked attempt; it does not relax the protocol.
@@ -95,8 +110,10 @@ For each condition attempt and for the paired profile, retain and validate:
   or per-step planning fields that the pinned source does not expose;
 - pair-equivalence evidence showing that trace instrumentation did not change the
   treatment/control contract; and
-- cleanup evidence showing process-group termination, zero live browser children,
-  sealed append-only artifacts, and reconciled API/compute accounting.
+- cleanup evidence showing immutable container-boundary termination, zero live browser
+  processes, sealed append-only artifacts, reconciled API/compute accounting, container
+  removal, zero owned host resources, hash-verified transfer, provider termination,
+  and terminal/nonbillable state.
 
 These are artifact-execution and infrastructure records. The smoke may not classify
 the EXP-0001 hypothesis or any RQ-H2K outcome.
@@ -105,23 +122,27 @@ the EXP-0001 hypothesis or any RQ-H2K outcome.
 
 - Stop before launch on identity, command, configuration, secret, budget, or artifact-
   ownership drift.
-- On any launched-attempt failure, terminate the complete process group and browser
-  descendants, verify zero live children, retain the failed attempt under its immutable
-  identity, hash what was captured, and record the stop reason.
+- On any launched-attempt failure, stop/KILL the complete immutable container boundary,
+  verify zero owned resources, retain the failed attempt under its immutable identity,
+  hash/copy what was captured, terminate the exact Lambda instance through the
+  provider API, confirm terminal/nonbillable state, and record the stop reason.
 - Never overwrite or reuse an attempt directory; a retry requires a new attempt
   identity and preserves the prior evidence.
 - Do not delete raw evidence as rollback. Revert only unexecuted authorization-state
   materialization after its audit record is retained.
-- No cloud resource is part of this profile, so cloud launch, storage mutation, and
-  provider cleanup are prohibited.
+- No Lambda persistent filesystem is permitted. A future authorized Gate L4 may own
+  exactly one ephemeral instance and must terminate it on every exit; unrelated cloud
+  resources, keys, firewall rules, tags, filesystems, and instances are never rollback
+  targets.
 
 ## Unresolved nonblocking questions
 
 - Dataset and trace public-release licensing/privacy rules remain unresolved; private,
   access-controlled smoke retention can proceed, but publication stays blocked.
 - The final repository software/content licenses and publication identity remain open.
-- Lambda credit terms and SR²AM service choices are later T11/T12 gates and do not
-  block the SiRA smoke.
+- T07 Lambda account capacity, exact selected price, key/ruleset choice, and host/
+  runtime qualification are unresolved until Gates L1 through L3; SR²AM T11/T12
+  remain scientifically and operationally separate.
 - RQ-H2K external-versus-explicit-model comparison feasibility remains undetermined.
   Missing optional regulation fields do not invalidate EXP-0001 when its primary
   evidence contract is complete.

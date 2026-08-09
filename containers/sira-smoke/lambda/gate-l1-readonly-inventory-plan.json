@@ -1,0 +1,122 @@
+{
+  "schema_version": "0.1.0",
+  "plan_id": "PLAN-T07-GATE-L1-LAMBDA-READONLY-INVENTORY-V1",
+  "decision_state": "unauthorized",
+  "provider": "lambda-on-demand-cloud",
+  "api_base_url": "https://cloud.lambda.ai",
+  "api_spec": {
+    "version": "1.10.0",
+    "sha256": "365488015cf79fda38e1268f44a9e2d4af4fe2794ad3c6878c78a7e1f98caded"
+  },
+  "actor": "future-codex-operator-gpt-5.6-luna-max",
+  "run_identity": {
+    "run_id": "RUN-T07-L1-LAMBDA-INVENTORY-0001",
+    "attempt": 1,
+    "experiment_id": "EXP-0001",
+    "profile_plan_id": "PLAN-EXP0001-SMOKE",
+    "gate": "T07-L1",
+    "branch": "phase-1/sira-smoke-lambda"
+  },
+  "secret_contract": {
+    "variable": "LAMBDA_API_KEY",
+    "channel": "supervisor-secret-channel",
+    "print_allowed": false,
+    "hash_allowed": false,
+    "persist_allowed": false,
+    "return_allowed": false,
+    "forbidden_fallbacks": [
+      "SIRA_API_KEY",
+      "OPENAI_API_KEY"
+    ]
+  },
+  "requests": [
+    {
+      "request_id": "account-workspace-identity",
+      "method": "GET",
+      "path": "/api/v1/audit-events?resource_type=cloud.api_key",
+      "max_response_bytes": 262144
+    },
+    {
+      "request_id": "instance-types",
+      "method": "GET",
+      "path": "/api/v1/instance-types",
+      "max_response_bytes": 262144
+    },
+    {
+      "request_id": "images",
+      "method": "GET",
+      "path": "/api/v1/images",
+      "max_response_bytes": 262144
+    },
+    {
+      "request_id": "regions",
+      "method": "GET",
+      "path": "/api/v1/regions",
+      "max_response_bytes": 262144
+    },
+    {
+      "request_id": "ssh-keys",
+      "method": "GET",
+      "path": "/api/v1/ssh-keys",
+      "max_response_bytes": 262144
+    },
+    {
+      "request_id": "firewall-rulesets",
+      "method": "GET",
+      "path": "/api/v1/firewall-rulesets",
+      "max_response_bytes": 262144
+    },
+    {
+      "request_id": "global-firewall-ruleset",
+      "method": "GET",
+      "path": "/api/v1/firewall-rulesets/global",
+      "max_response_bytes": 262144
+    },
+    {
+      "request_id": "running-instances",
+      "method": "GET",
+      "path": "/api/v1/instances",
+      "max_response_bytes": 262144
+    }
+  ],
+  "limits": {
+    "max_calls": 8,
+    "max_total_response_bytes": 2097152,
+    "max_retained_output_bytes": 524288,
+    "max_wall_seconds": 60,
+    "request_start_spacing_seconds": 1,
+    "max_archive_wall_seconds": 60,
+    "max_total_wall_seconds": 180,
+    "max_local_record_bytes": 65536,
+    "max_archive_bytes": 1048576,
+    "max_aggregate_retained_bytes": 1638400,
+    "local_prewrite_floor_bytes": 8591048704,
+    "local_retained_floor_bytes": 8589934592,
+    "max_local_command_calls": 14,
+    "max_local_command_output_bytes": 37814274,
+    "max_local_file_creates": 2,
+    "max_external_file_creates": 3,
+    "max_external_directory_creates": 4,
+    "automatic_retries": 0,
+    "mutation_calls": 0,
+    "provider_cost_usd": 0,
+    "model_api_calls": 0,
+    "model_tokens": 0,
+    "browser_actions": 0,
+    "sira_executions": 0
+  },
+  "output": {
+    "relative_path": "artifacts/t07/lambda/gate-l1/inventory-redacted.json",
+    "copy_record_relative_path": "artifacts/t07/lambda/gate-l1/inventory-copy-record.json",
+    "archive_root": "/Volumes/Macintosh HD - Data/GIC-Lab/t07/sealed-artifacts",
+    "archive_run_directory": "RUN-T07-L1-LAMBDA-INVENTORY-0001",
+    "raw_response_persistence": false,
+    "redaction_required": true,
+    "sha256_required": true,
+    "source_retention_required": true
+  },
+  "authorization": {
+    "authorized": false,
+    "authorization_reference": null
+  }
+}

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from giclab.harness.policy import load_project_execution_state
 from giclab.registry import load_json, load_yaml
 from giclab.validation import ROOT
 
@@ -30,6 +31,24 @@ def test_phase_one_is_the_only_active_non_executable_control_plane() -> None:
         "profile_sha256": None,
         "condition_plan_sha256s": [],
     }
+    assert state["planned_execution_substrate"] == {
+        "decision_state": "lambda-host-selected-design-only",
+        "provider": "lambda-on-demand-cloud",
+        "architecture": "x86_64",
+        "persistent_filesystem": False,
+        "gate_l1_authorized": False,
+        "gate_l2_authorized": False,
+        "gate_l3_state": "requirements-only",
+        "gate_l4_authorized": False,
+        "local_alternatives": "terminal-rejected",
+        "decision_document": "docs/harness/T07_GATE_L0_LAMBDA_HOST_DECISION.md",
+    }
+    execution_state = load_project_execution_state(ROOT)
+    substrate = execution_state.planned_execution_substrate
+    assert substrate is not None
+    assert substrate.decision_state == "lambda-host-selected-design-only"
+    assert substrate.provider == "lambda-on-demand-cloud"
+    assert substrate.architecture == "x86_64"
     assert [path.name for path in (ROOT / "docs/exec-plans/active").glob("*.md")] == [
         "PHASE_1_ARTIFACT_EXECUTION.md"
     ]

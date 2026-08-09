@@ -1,0 +1,367 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gic-lab.invalid/schemas/t07-lambda-host-qualification-incident.schema.json",
+  "title": "T07 Lambda host-qualification failure or billing incident evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "plan_id",
+    "plan_sha256",
+    "run_identity",
+    "outcome",
+    "authorization",
+    "secret_contract",
+    "inventory_binding",
+    "failure",
+    "resource_contract",
+    "provider_request_pacing",
+    "lifecycle",
+    "actual_usage",
+    "storage_observation",
+    "retained_evidence",
+    "compute_ledger",
+    "redaction"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1.0"},
+    "plan_id": {"type": "string", "pattern": "^PLAN-T07-GATE-L2-[A-Z0-9._-]+$"},
+    "plan_sha256": {"$ref": "#/$defs/sha256"},
+    "run_identity": {"$ref": "#/$defs/run_identity"},
+    "outcome": {"const": "failed"},
+    "authorization": {"$ref": "#/$defs/authorization"},
+    "secret_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["variable", "channel", "forbidden_locations", "forbidden_fallbacks", "available_through_terminal_confirmation", "loss_response", "leak_scan_clean"],
+      "properties": {
+        "variable": {"const": "LAMBDA_API_KEY"},
+        "channel": {"const": "supervisor-secret-channel"},
+        "forbidden_locations": {"const": ["argv", "url", "log", "evidence", "hash", "filesystem"]},
+        "forbidden_fallbacks": {"const": ["SIRA_API_KEY", "OPENAI_API_KEY"]},
+        "available_through_terminal_confirmation": {"type": "boolean"},
+        "loss_response": {"enum": ["not-applicable", "stop-workload-open-billing-incident-request-secret-restoration"]},
+        "leak_scan_clean": {"const": true}
+      }
+    },
+    "inventory_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_sha256", "account_lrn_sha256", "workspace_lrn_sha256"],
+      "properties": {
+        "artifact_sha256": {"$ref": "#/$defs/sha256"},
+        "account_lrn_sha256": {"$ref": "#/$defs/sha256"},
+        "workspace_lrn_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "failure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["phase", "category", "safe_detail_code"],
+      "properties": {
+        "phase": {
+          "enum": [
+            "prelaunch-revalidation",
+            "launch-request",
+            "instance-id-capture",
+            "host-observation",
+            "image-pull",
+            "containment",
+            "evidence-copy",
+            "termination-request",
+            "terminal-verification",
+            "archive-copy",
+            "control-plane"
+          ]
+        },
+        "category": {
+          "enum": [
+            "authorization-drift",
+            "account-drift",
+            "cap-exceeded",
+            "launch-failed",
+            "instance-id-missing",
+            "host-nonconformant",
+            "image-mismatch",
+            "containment-failed",
+            "evidence-copy-failed",
+            "termination-request-failed",
+            "terminal-state-unconfirmed",
+            "archive-copy-failed",
+            "unexpected-control-plane-failure"
+          ]
+        },
+        "safe_detail_code": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9._-]{0,127}$"
+        }
+      }
+    },
+    "resource_contract": {"$ref": "#/$defs/resource_contract"},
+    "provider_request_pacing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "clock",
+        "minimum_start_spacing_seconds",
+        "request_start_count",
+        "minimum_observed_start_spacing_milliseconds",
+        "spacing_violations",
+        "state",
+        "aggregate_deadline_minted_before_first_request",
+        "launch_deadline_did_not_extend_aggregate",
+        "all_spacing_delay_counted_inside_aggregate_deadline"
+      ],
+      "properties": {
+        "clock": {"const": "monotonic"},
+        "minimum_start_spacing_seconds": {"const": 1},
+        "request_start_count": {"type": "integer", "minimum": 0, "maximum": 134},
+        "minimum_observed_start_spacing_milliseconds": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "integer", "minimum": 0}
+          ]
+        },
+        "spacing_violations": {"type": "integer", "minimum": 0, "maximum": 133},
+        "state": {"enum": ["no-requests", "single-request", "compliant", "violated"]},
+        "aggregate_deadline_minted_before_first_request": {"type": "boolean"},
+        "launch_deadline_did_not_extend_aggregate": {"type": "boolean"},
+        "all_spacing_delay_counted_inside_aggregate_deadline": {"type": "boolean"}
+      }
+    },
+    "lifecycle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "launch_requests",
+        "launch_outcome",
+        "deadline_minted_before_launch_post",
+        "minted_instance_id",
+        "recovery_lookup_attempted",
+        "recovery_match_instance_ids",
+        "termination_required",
+        "termination_target_ids",
+        "termination_requests",
+        "terminal_state",
+        "provider_nonbillable_confirmed",
+        "billing_incident_open",
+        "evidence_copy_state",
+        "remote_source_retained",
+        "local_source_retained",
+        "cleanup_state",
+        "unrelated_instance_ids_touched"
+      ],
+      "properties": {
+        "launch_requests": {"type": "integer", "minimum": 0, "maximum": 1},
+        "launch_outcome": {"enum": ["not-sent", "provider-rejected", "response-with-id", "response-lost-id-recovered", "response-ambiguous"]},
+        "deadline_minted_before_launch_post": {"type": "boolean"},
+        "minted_instance_id": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/nonempty"}]},
+        "recovery_lookup_attempted": {"type": "boolean"},
+        "recovery_match_instance_ids": {"type": "array", "maxItems": 10, "items": {"$ref": "#/$defs/nonempty"}},
+        "termination_required": {"type": "boolean"},
+        "termination_target_ids": {"type": "array", "maxItems": 1, "items": {"$ref": "#/$defs/nonempty"}},
+        "termination_requests": {"type": "integer", "minimum": 0, "maximum": 3},
+        "terminal_state": {"enum": ["not-launched", "terminated", "active", "unknown"]},
+        "provider_nonbillable_confirmed": {"type": "boolean"},
+        "billing_incident_open": {"type": "boolean"},
+        "evidence_copy_state": {"enum": ["not-started", "partial", "failed", "verified"]},
+        "remote_source_retained": {"type": "boolean"},
+        "local_source_retained": {"type": "boolean"},
+        "cleanup_state": {"enum": ["complete", "incomplete", "not-applicable"]},
+        "unrelated_instance_ids_touched": {"const": []}
+      }
+    },
+    "actual_usage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_wall_seconds",
+        "estimated_list_cost_cents",
+        "provider_api_calls",
+        "provider_api_response_bytes",
+        "ssh_readiness_attempts",
+        "ssh_sessions",
+        "remote_commands",
+        "ssh_command_output_bytes",
+        "docker_calls",
+        "docker_output_bytes",
+        "registry_response_bytes",
+        "docker_disk_delta_bytes",
+        "retained_evidence_bytes",
+        "transfer_bytes",
+        "accelerator_count",
+        "allocated_accelerator_seconds",
+        "allocated_accelerator_hours"
+      ],
+      "properties": {
+        "provider_wall_seconds": {"type": "integer", "minimum": 0},
+        "estimated_list_cost_cents": {"oneOf": [{"type": "null"}, {"type": "integer", "minimum": 0}]},
+        "provider_api_calls": {"type": "integer", "minimum": 0, "maximum": 134},
+        "provider_api_response_bytes": {"type": "integer", "minimum": 0, "maximum": 16777216},
+        "ssh_readiness_attempts": {"type": "integer", "minimum": 0, "maximum": 30},
+        "ssh_sessions": {"type": "integer", "minimum": 0, "maximum": 2},
+        "remote_commands": {"type": "integer", "minimum": 0, "maximum": 48},
+        "ssh_command_output_bytes": {"type": "integer", "minimum": 0, "maximum": 16777216},
+        "docker_calls": {"type": "integer", "minimum": 0, "maximum": 32},
+        "docker_output_bytes": {"type": "integer", "minimum": 0, "maximum": 16777216},
+        "registry_response_bytes": {"type": "integer", "minimum": 0, "maximum": 8388608},
+        "docker_disk_delta_bytes": {"type": "integer", "minimum": 0, "maximum": 67108864},
+        "retained_evidence_bytes": {"type": "integer", "minimum": 0, "maximum": 67108864},
+        "transfer_bytes": {"type": "integer", "minimum": 0, "maximum": 67108864},
+        "accelerator_count": {"type": "integer", "minimum": 0, "maximum": 1},
+        "allocated_accelerator_seconds": {"type": "integer", "minimum": 0},
+        "allocated_accelerator_hours": {"$ref": "#/$defs/rational_hours"}
+      }
+    },
+    "storage_observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mac_active", "external_archive"],
+      "properties": {
+        "mac_active": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["operational_headroom_bytes", "max_incremental_bytes", "required_prewrite_free_bytes", "observed_prewrite_free_bytes", "preflight_passed", "retained_free_floor_bytes", "observed_postseal_free_bytes"],
+          "properties": {
+            "operational_headroom_bytes": {"const": 8589934592},
+            "max_incremental_bytes": {"const": 135266304},
+            "required_prewrite_free_bytes": {"const": 8725200896},
+            "observed_prewrite_free_bytes": {"type": "integer", "minimum": 0},
+            "preflight_passed": {"type": "boolean"},
+            "retained_free_floor_bytes": {"const": 8589934592},
+            "observed_postseal_free_bytes": {"oneOf": [{"type": "null"}, {"type": "integer", "minimum": 0}]}
+          }
+        },
+        "external_archive": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["state", "container_capacity_bytes", "retained_free_floor_bytes", "required_pre_copy_free_bytes", "observed_pre_copy_free_bytes", "observed_post_copy_free_bytes", "bytes"],
+          "properties": {
+            "state": {"enum": ["not-attempted", "guard-failed", "copy-failed", "copied-verified"]},
+            "container_capacity_bytes": {"oneOf": [{"type": "null"}, {"type": "integer", "minimum": 1}]},
+            "retained_free_floor_bytes": {"oneOf": [{"type": "null"}, {"type": "integer", "minimum": 0}]},
+            "required_pre_copy_free_bytes": {"oneOf": [{"type": "null"}, {"type": "integer", "minimum": 0}]},
+            "observed_pre_copy_free_bytes": {"oneOf": [{"type": "null"}, {"type": "integer", "minimum": 0}]},
+            "observed_post_copy_free_bytes": {"oneOf": [{"type": "null"}, {"type": "integer", "minimum": 0}]},
+            "bytes": {"type": "integer", "minimum": 0, "maximum": 67108864}
+          }
+        }
+      }
+    },
+    "retained_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "failure_detail_artifact_sha256",
+        "remote_manifest_sha256",
+        "source_sha256",
+        "destination_sha256",
+        "files",
+        "bytes"
+      ],
+      "properties": {
+        "failure_detail_artifact_sha256": {"$ref": "#/$defs/sha256"},
+        "remote_manifest_sha256": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]},
+        "source_sha256": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]},
+        "destination_sha256": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]},
+        "files": {"type": "integer", "minimum": 1},
+        "bytes": {"type": "integer", "minimum": 1, "maximum": 67108864}
+      }
+    },
+    "compute_ledger": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "record_id", "run_id", "append_only", "disposition", "estimated_list_cost_cents", "allocated_accelerator_hours", "manifest_sha256"],
+      "properties": {
+        "path": {"const": "manifests/compute.yaml"},
+        "record_id": {"$ref": "#/$defs/nonempty"},
+        "run_id": {"type": "string", "pattern": "^RUN-T07-L2-[A-Z0-9._-]+$"},
+        "append_only": {"const": true},
+        "disposition": {"enum": ["terminal-reconciled-failure", "billing-incident-open"]},
+        "estimated_list_cost_cents": {"oneOf": [{"type": "null"}, {"type": "integer", "minimum": 0}]},
+        "allocated_accelerator_hours": {"$ref": "#/$defs/rational_hours"},
+        "manifest_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "redaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["api_keys_retained", "ssh_private_material_retained", "raw_authorization_headers_retained"],
+      "properties": {
+        "api_keys_retained": {"const": false},
+        "ssh_private_material_retained": {"const": false},
+        "raw_authorization_headers_retained": {"const": false}
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "nonempty": {"type": "string", "minLength": 1, "maxLength": 4096},
+    "run_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run_id", "attempt", "experiment_id", "profile_plan_id", "gate", "branch", "repository_commit"],
+      "properties": {
+        "run_id": {"type": "string", "pattern": "^RUN-T07-L2-[A-Z0-9._-]+$"},
+        "attempt": {"const": 1},
+        "experiment_id": {"const": "EXP-0001"},
+        "profile_plan_id": {"const": "PLAN-EXP0001-SMOKE"},
+        "gate": {"const": "T07-L2"},
+        "branch": {"const": "phase-1/sira-smoke-lambda"},
+        "repository_commit": {"type": "string", "pattern": "^[a-f0-9]{40}$"}
+      }
+    },
+    "authorization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["authorized", "authorization_reference", "authorization_sha256"],
+      "properties": {
+        "authorized": {"const": true},
+        "authorization_reference": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"},
+        "authorization_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "resource_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["wall_seconds", "compute_cents", "provider_api_calls", "minimum_provider_request_start_spacing_seconds", "automatic_provider_request_retries", "provider_api_response_bytes_per_call", "provider_api_response_bytes_aggregate", "ssh_readiness_attempts", "ssh_sessions", "remote_commands", "ssh_command_output_bytes_per_call", "ssh_command_output_bytes_aggregate", "docker_calls", "docker_output_bytes_per_call", "docker_output_bytes_aggregate", "registry_response_bytes", "docker_disk_delta_bytes", "retained_evidence_bytes", "mac_active_prewrite_free_bytes", "mac_active_retained_free_bytes", "mac_active_incremental_bytes", "external_archive_copy_bytes", "automatic_launch_retries", "model_calls", "browser_actions", "sira_executions"],
+      "properties": {
+        "wall_seconds": {"const": 3600},
+        "compute_cents": {"const": 200},
+        "provider_api_calls": {"const": 134},
+        "minimum_provider_request_start_spacing_seconds": {"const": 1},
+        "automatic_provider_request_retries": {"const": 0},
+        "provider_api_response_bytes_per_call": {"const": 1048576},
+        "provider_api_response_bytes_aggregate": {"const": 16777216},
+        "ssh_readiness_attempts": {"const": 30},
+        "ssh_sessions": {"const": 2},
+        "remote_commands": {"const": 48},
+        "ssh_command_output_bytes_per_call": {"const": 1048576},
+        "ssh_command_output_bytes_aggregate": {"const": 16777216},
+        "docker_calls": {"const": 32},
+        "docker_output_bytes_per_call": {"const": 1048576},
+        "docker_output_bytes_aggregate": {"const": 16777216},
+        "registry_response_bytes": {"const": 8388608},
+        "docker_disk_delta_bytes": {"const": 67108864},
+        "retained_evidence_bytes": {"const": 67108864},
+        "mac_active_prewrite_free_bytes": {"const": 8725200896},
+        "mac_active_retained_free_bytes": {"const": 8589934592},
+        "mac_active_incremental_bytes": {"const": 135266304},
+        "external_archive_copy_bytes": {"const": 67108864},
+        "automatic_launch_retries": {"const": 0},
+        "model_calls": {"const": 0},
+        "browser_actions": {"const": 0},
+        "sira_executions": {"const": 0}
+      }
+    },
+    "rational_hours": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["numerator", "denominator"],
+      "properties": {
+        "numerator": {"type": "integer", "minimum": 0},
+        "denominator": {"const": 3600}
+      }
+    }
+  }
+}

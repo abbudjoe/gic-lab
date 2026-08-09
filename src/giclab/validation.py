@@ -54,6 +54,9 @@ SCHEMA_FILES = (
     "schemas/attempt-close-evidence.schema.json",
     "schemas/runtime-candidate-decision.schema.json",
     "schemas/runtime-rollback-evidence.schema.json",
+    "schemas/t07-lambda-inventory.schema.json",
+    "schemas/t07-lambda-host-qualification.schema.json",
+    "schemas/t07-lambda-host-qualification-incident.schema.json",
 )
 REQUIRED_PATHS = (
     "AGENTS.md",
@@ -168,6 +171,18 @@ def validate_instance(
     errors = _format_validation_errors(validator, instance)
     if schema_path.name == "container-attempt.schema.json":
         errors.extend(_validate_container_attempt_semantics(instance))
+    if schema_path.name == "t07-lambda-host-qualification.schema.json":
+        from giclab.harness.lambda_cloud import (
+            validate_host_qualification_evidence_semantics,
+        )
+
+        errors.extend(validate_host_qualification_evidence_semantics(instance))
+    if schema_path.name == "t07-lambda-host-qualification-incident.schema.json":
+        from giclab.harness.lambda_cloud import (
+            validate_host_qualification_incident_semantics,
+        )
+
+        errors.extend(validate_host_qualification_incident_semantics(instance))
     return errors
 
 
