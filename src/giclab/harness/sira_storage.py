@@ -11,17 +11,17 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import math
 import os
 import plistlib
 import re
 import shutil
 import stat
+import subprocess
 import time
 import xml.etree.ElementTree as ET
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from contextlib import suppress
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
@@ -46,10 +46,27 @@ SEALED_ARTIFACT_ROOT = APPROVED_EXTERNAL_ROOT / "t07/sealed-artifacts"
 SYSTEM_DATA_MOUNT = Path("/System/Volumes/Data")
 SYSTEM_DATA_VOLUME_UUID = "285BFF35-A72D-452D-82A9-BD1ED7223CDE"
 SYSTEM_CAPACITY_BYTES = 245_107_195_904
-ACTIVE_ATTEMPT_ROOT = Path("/Users/joseph/.local/share/gic-lab/t07-gate-b2a/attempts")
-B2A_WORK_ROOT = Path("/Users/joseph/.local/share/gic-lab/t07-gate-b2a")
+SYSTEM_GICLAB_ROOT = Path("/Users/joseph/.local/share/gic-lab")
+ACTIVE_ATTEMPT_ROOT = SYSTEM_GICLAB_ROOT / "t07-gate-b2a/attempts"
+B2A_WORK_ROOT = SYSTEM_GICLAB_ROOT / "t07-gate-b2a"
 B2A_DOWNLOAD_ROOT = B2A_WORK_ROOT / "downloads"
 B2A_EVIDENCE_ROOT = B2A_WORK_ROOT / "evidence"
+B2A_SCRIPT_PATH = Path(
+    "/Users/joseph/.codex/worktrees/84b1/gic-lab/src/giclab/harness/sira_storage.py"
+)
+B2A_PYTHON_PATH = Path("/Users/joseph/.codex/worktrees/84b1/gic-lab/.venv/bin/python")
+B2A_APPCAST_PATH = B2A_DOWNLOAD_ROOT / "appcast.xml"
+B2A_CHECKSUMS_PATH = B2A_DOWNLOAD_ROOT / "checksums.txt"
+B2A_DMG_PATH = B2A_DOWNLOAD_ROOT / "Docker-4.85.0-arm64-235549.dmg"
+B2A_EVIDENCE_SESSION_ROOT = B2A_EVIDENCE_ROOT / "session"
+B2A_COPY_RECORD_PATH = B2A_EVIDENCE_ROOT / "copy-records/T07-GATE-B2A-EVIDENCE-001.json"
+B2A_IMPLEMENTATION_BOUND_PATHS = (
+    "src/giclab/harness/sira_container.py",
+    "src/giclab/harness/sira_storage.py",
+    "schemas/docker-storage-qualification-plan.schema.json",
+    "schemas/docker-storage-placement-evidence.schema.json",
+    "schemas/sealed-artifact-copy.schema.json",
+)
 CANDIDATE_DEFAULT_INTERNAL_DOCKER_RAW = Path(
     "/Users/joseph/Library/Containers/com.docker.docker/Data/vms/0/data/Docker.raw"
 )
@@ -81,6 +98,8 @@ _SHA256 = re.compile(r"^[a-f0-9]{64}$")
 _COMMIT = re.compile(r"^[a-f0-9]{40}$")
 _PLAN_ID = re.compile(r"^PLAN-[A-Z0-9][A-Z0-9._-]{2,127}$")
 _ACTION_ID = re.compile(r"^[a-z][a-z0-9-]{2,63}$")
+_AUTHORIZATION_REFERENCE = re.compile(r"^AUTH-[A-Z0-9][A-Z0-9._-]{2,127}$")
+_ARCHIVE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{2,127}$")
 _UUID = re.compile(r"^[A-F0-9]{8}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{12}$")
 _UTC_TIMESTAMP = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$")
 
@@ -90,7 +109,7 @@ def retained_free_floor(total_bytes: int) -> int:
 
     if total_bytes <= 0:
         raise StorageContractError("volume capacity must be positive")
-    percent_floor = math.ceil(total_bytes * PROJECT_FREE_PERCENT / 100)
+    percent_floor = (total_bytes * PROJECT_FREE_PERCENT + 99) // 100
     return max(PROJECT_MINIMUM_FREE_BYTES, percent_floor)
 
 
@@ -188,6 +207,9 @@ class VolumeObservation:
             )
 
     def validate_system(self, *, floor_inputs: SystemFloorInputs) -> None:
+        self.validate_system_floor(floor_inputs.resolved_floor_bytes())
+
+    def validate_system_floor(self, floor_bytes: int) -> None:
         if self.mount_path != SYSTEM_DATA_MOUNT:
             raise StorageContractError("Mac mini system Data volume mount mismatch")
         if self.filesystem.casefold() != "apfs" or not self.writable:
@@ -198,10 +220,11 @@ class VolumeObservation:
             raise StorageContractError("Mac mini system Data volume resolved externally")
         if self.total_bytes != SYSTEM_CAPACITY_BYTES:
             raise StorageContractError("Mac mini system Data capacity changed")
-        floor = floor_inputs.resolved_floor_bytes()
-        if self.free_bytes < floor:
+        if floor_bytes <= 0:
+            raise StorageContractError("Mac mini system floor must be positive")
+        if self.free_bytes < floor_bytes:
             raise StorageContractError(
-                f"system free bytes {self.free_bytes} are below required {floor}"
+                f"system free bytes {self.free_bytes} are below required {floor_bytes}"
             )
 
 
@@ -242,6 +265,9 @@ def volume_observation_from_diskutil(
     assert isinstance(total, int)
     assert isinstance(free, int)
     assert isinstance(physical_uuid, str)
+    locked = raw.get("Locked")
+    if not isinstance(locked, bool):
+        raise StorageContractError("diskutil lock-state evidence is incomplete")
     writable = raw.get("Writable") is True and raw.get("WritableVolume") is True
     return VolumeObservation(
         mount_path=Path(mount),
@@ -254,7 +280,7 @@ def volume_observation_from_diskutil(
         internal=bool(raw.get("Internal", True)) or bool(raw.get("OSInternalMedia", True)),
         owners_enabled=bool(raw.get("GlobalPermissionsEnabled", raw.get("Owners", False))),
         encrypted=bool(raw.get("Encryption", raw.get("Encrypted", False))),
-        unlocked=not bool(raw.get("Locked", False)),
+        unlocked=not locked,
         device_identifier=device,
         bus_protocol=raw.get("BusProtocol") if isinstance(raw.get("BusProtocol"), str) else None,
         device_tree_path=(
@@ -340,6 +366,7 @@ def validate_path_contract(
     external_mount_device: int,
     system_mount_device: int,
     allow_missing_leaf: bool = True,
+    device_resolver: Callable[[Path], int] | None = None,
 ) -> None:
     """Reject path escape, symlinks, role confusion, and internal fallback."""
 
@@ -364,14 +391,16 @@ def validate_path_contract(
             expected_device=external_mount_device,
             prohibited_device=system_mount_device,
             allow_missing_leaf=allow_missing_leaf,
+            device_resolver=device_resolver,
         )
     else:
         validate_bounded_path(
             path,
-            approved_root=Path("/Users/joseph/.local/share/gic-lab"),
+            approved_root=SYSTEM_GICLAB_ROOT,
             expected_device=system_mount_device,
             prohibited_device=external_mount_device,
             allow_missing_leaf=allow_missing_leaf,
+            device_resolver=device_resolver,
         )
 
 
@@ -382,6 +411,7 @@ def validate_bounded_path(
     expected_device: int,
     prohibited_device: int,
     allow_missing_leaf: bool,
+    device_resolver: Callable[[Path], int] | None = None,
 ) -> None:
     """Validate a path role without resolving through symlink components.
 
@@ -406,7 +436,8 @@ def validate_bounded_path(
             if existing == existing.parent:
                 raise StorageContractError("no existing ancestor for approved path") from None
             existing = existing.parent
-    if observed.st_dev != expected_device:
+    observed_device = observed.st_dev if device_resolver is None else device_resolver(existing)
+    if observed_device != expected_device:
         raise StorageContractError("storage path ancestor resolved to an unexpected device")
 
 
@@ -420,6 +451,10 @@ class StorageGuardToken:
     physical_store_uuid: str
     external_device: int
     system_device: int
+    system_floor_bytes: int
+    external_volume: bool
+    allow_missing_leaf: bool
+    guard_id: str
     issued_monotonic_ns: int
     maximum_age_ns: int = 5_000_000_000
     consumed: bool = False
@@ -429,6 +464,7 @@ class StorageGuardToken:
         *,
         observation: VolumeObservation,
         now_monotonic_ns: int | None = None,
+        device_resolver: Callable[[Path], int] | None = None,
     ) -> None:
         if self.consumed:
             raise StorageContractError("storage guard token was already consumed")
@@ -437,20 +473,161 @@ class StorageGuardToken:
             current_ns - self.issued_monotonic_ns > self.maximum_age_ns
         ):
             raise StorageContractError("storage guard token is stale")
-        if (
-            observation.volume_uuid.upper() != self.volume_uuid.upper()
-            or (observation.physical_store_uuid or "").upper() != self.physical_store_uuid.upper()
-        ):
+        if observation.volume_uuid.upper() != self.volume_uuid.upper():
             raise StorageContractError("storage identity changed after guard issuance")
-        observation.validate_external(reserve_incremental=True)
+        if self.external_volume:
+            if (observation.physical_store_uuid or "").upper() != self.physical_store_uuid.upper():
+                raise StorageContractError("storage identity changed after guard issuance")
+            observation.validate_external(reserve_incremental=True)
+        else:
+            observation.validate_system_floor(self.system_floor_bytes)
         validate_path_contract(
             self.path,
             purpose=self.purpose,
             external_mount_device=self.external_device,
             system_mount_device=self.system_device,
-            allow_missing_leaf=True,
+            allow_missing_leaf=self.allow_missing_leaf,
+            device_resolver=device_resolver,
         )
         self.consumed = True
+
+
+@dataclass(slots=True)
+class StorageGuardBundle:
+    """Typed, fresh storage evidence consumed by exactly one planned action."""
+
+    guard_id: str
+    external: VolumeObservation
+    system: VolumeObservation
+    external_device: int
+    system_device: int
+    system_floor_bytes: int
+    issued_monotonic_ns: int
+    tokens: dict[RootPurpose, StorageGuardToken]
+
+    def consume(
+        self,
+        purposes: Sequence[RootPurpose],
+        *,
+        now_monotonic_ns: int | None = None,
+        device_resolver: Callable[[Path], int] | None = None,
+    ) -> None:
+        requested = tuple(purposes)
+        if not requested or len(set(requested)) != len(requested):
+            raise StorageContractError("storage guard purposes must be unique and nonempty")
+        for purpose in requested:
+            token = self.tokens.get(purpose)
+            if token is None:
+                raise StorageContractError("storage guard does not cover the requested purpose")
+            observation = self.external if token.external_volume else self.system
+            token.consume(
+                observation=observation,
+                now_monotonic_ns=now_monotonic_ns,
+                device_resolver=device_resolver,
+            )
+
+    def all_consumed(self, purposes: Sequence[RootPurpose]) -> bool:
+        return all(purpose in self.tokens and self.tokens[purpose].consumed for purpose in purposes)
+
+    def document(self) -> dict[str, object]:
+        return {
+            "guard_id": self.guard_id,
+            "issued_monotonic_ns": self.issued_monotonic_ns,
+            "external_volume_uuid": self.external.volume_uuid,
+            "external_physical_store_uuid": self.external.physical_store_uuid,
+            "external_free_bytes": self.external.free_bytes,
+            "system_volume_uuid": self.system.volume_uuid,
+            "system_free_bytes": self.system.free_bytes,
+            "system_floor_bytes": self.system_floor_bytes,
+            "purposes": sorted(purpose.value for purpose in self.tokens),
+        }
+
+
+def issue_storage_guard(
+    *,
+    external: VolumeObservation,
+    system: VolumeObservation,
+    external_device: int,
+    system_device: int,
+    system_floor_bytes: int,
+    purposes: Sequence[RootPurpose],
+    require_existing: bool,
+    issued_monotonic_ns: int | None = None,
+    device_resolver: Callable[[Path], int] | None = None,
+) -> StorageGuardBundle:
+    """Validate current observations and mint one-shot path-bound guard tokens."""
+
+    external.validate_external(reserve_incremental=True)
+    system.validate_system_floor(system_floor_bytes)
+    requested = tuple(purposes)
+    if not requested or len(set(requested)) != len(requested):
+        raise StorageContractError("storage guard purposes must be unique and nonempty")
+    issued = time.monotonic_ns() if issued_monotonic_ns is None else issued_monotonic_ns
+    if issued <= 0:
+        raise StorageContractError("storage guard monotonic timestamp must be positive")
+    guard_material = json.dumps(
+        {
+            "external_uuid": external.volume_uuid.upper(),
+            "physical_uuid": (external.physical_store_uuid or "").upper(),
+            "system_uuid": system.volume_uuid.upper(),
+            "external_device": external_device,
+            "system_device": system_device,
+            "system_floor_bytes": system_floor_bytes,
+            "purposes": sorted(purpose.value for purpose in requested),
+            "issued_monotonic_ns": issued,
+        },
+        allow_nan=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode()
+    guard_id = hashlib.sha256(guard_material).hexdigest()
+    tokens: dict[RootPurpose, StorageGuardToken] = {}
+    paths = {
+        RootPurpose.DOCKER_DISK: DOCKER_DISK_IMAGE_ROOT,
+        RootPurpose.BUILD_STAGING: BUILD_STAGING_ROOT,
+        RootPurpose.SEALED_ARCHIVE: SEALED_ARTIFACT_ROOT,
+        RootPurpose.ACTIVE_ATTEMPT: ACTIVE_ATTEMPT_ROOT,
+        RootPurpose.B2A_WORK: B2A_WORK_ROOT,
+    }
+    for purpose in requested:
+        path = paths[purpose]
+        validate_path_contract(
+            path,
+            purpose=purpose,
+            external_mount_device=external_device,
+            system_mount_device=system_device,
+            allow_missing_leaf=not require_existing,
+            device_resolver=device_resolver,
+        )
+        external_volume = purpose in {
+            RootPurpose.DOCKER_DISK,
+            RootPurpose.BUILD_STAGING,
+            RootPurpose.SEALED_ARCHIVE,
+        }
+        observation = external if external_volume else system
+        tokens[purpose] = StorageGuardToken(
+            purpose=purpose,
+            path=path,
+            volume_uuid=observation.volume_uuid,
+            physical_store_uuid=(observation.physical_store_uuid or ""),
+            external_device=external_device,
+            system_device=system_device,
+            system_floor_bytes=system_floor_bytes,
+            external_volume=external_volume,
+            allow_missing_leaf=not require_existing,
+            guard_id=guard_id,
+            issued_monotonic_ns=issued,
+        )
+    return StorageGuardBundle(
+        guard_id=guard_id,
+        external=external,
+        system=system,
+        external_device=external_device,
+        system_device=system_device,
+        system_floor_bytes=system_floor_bytes,
+        issued_monotonic_ns=issued,
+        tokens=tokens,
+    )
 
 
 class ReconnectState(StrEnum):
@@ -484,21 +661,56 @@ _RECONNECT_SEQUENCE = (
 
 
 @dataclass(slots=True)
+class DockerDiskIdentity:
+    path: Path
+    inode: int
+    logical_bytes: int
+    birthtime_ns: int
+
+    def validate(self) -> None:
+        if not self.path.is_relative_to(DOCKER_DISK_IMAGE_ROOT):
+            raise StorageContractError("Docker disk identity escaped the approved root")
+        if self.inode <= 0 or self.logical_bytes <= 0 or self.birthtime_ns <= 0:
+            raise StorageContractError("Docker disk identity fields must be positive")
+
+
+@dataclass(slots=True)
+class DockerEngineIdentity:
+    engine_id: str
+    context: str
+    server_os: str
+    architecture: str
+    healthy: bool
+    default_internal_active: bool
+
+    def validate(self) -> None:
+        if not self.engine_id or not self.context:
+            raise StorageContractError("Docker engine/context identity is missing")
+        if self.server_os.casefold() != "linux" or self.architecture != "aarch64":
+            raise StorageContractError("Docker engine platform is not Linux aarch64")
+        if not self.healthy or self.default_internal_active:
+            raise StorageContractError("Docker engine is unhealthy or uses internal storage")
+
+
+@dataclass(slots=True)
 class ReconnectQualification:
     expected_volume_uuid: str
     expected_physical_store_uuid: str
-    expected_disk_identity: str
-    expected_engine_identity: str
+    expected_disk_identity: DockerDiskIdentity
+    expected_engine_identity: DockerEngineIdentity
     state: ReconnectState = ReconnectState.INITIAL
+    _qualified_guard: StorageGuardBundle | None = field(default=None, init=False, repr=False)
 
     def advance(
         self,
         state: ReconnectState,
         *,
-        volume_uuid: str | None = None,
-        physical_store_uuid: str | None = None,
-        disk_identity: str | None = None,
-        engine_identity: str | None = None,
+        volume_observation: VolumeObservation | None = None,
+        storage_guard: StorageGuardBundle | None = None,
+        disk_identity: DockerDiskIdentity | None = None,
+        engine_identity: DockerEngineIdentity | None = None,
+        now_monotonic_ns: int | None = None,
+        device_resolver: Callable[[Path], int] | None = None,
     ) -> None:
         current_index = (
             -1 if self.state is ReconnectState.INITIAL else _RECONNECT_SEQUENCE.index(self.state)
@@ -508,21 +720,60 @@ class ReconnectQualification:
             or _RECONNECT_SEQUENCE[current_index + 1] is not state
         ):
             raise StorageContractError("reconnect evidence is stale, duplicated, or out of order")
-        if state in {ReconnectState.VOLUME_REQUALIFIED, ReconnectState.PATHS_REQUALIFIED}:
-            if (volume_uuid or "").upper() != self.expected_volume_uuid.upper():
+        if state is ReconnectState.VOLUME_REQUALIFIED:
+            if volume_observation is None:
+                raise StorageContractError("reconnected volume evidence is missing")
+            volume_observation.validate_external(reserve_incremental=True)
+            if volume_observation.volume_uuid.upper() != self.expected_volume_uuid.upper():
                 raise StorageContractError("reconnected data-volume UUID mismatch")
-            if (physical_store_uuid or "").upper() != self.expected_physical_store_uuid.upper():
+            if (
+                volume_observation.physical_store_uuid or ""
+            ).upper() != self.expected_physical_store_uuid.upper():
                 raise StorageContractError("reconnected physical-store UUID mismatch")
+        if state is ReconnectState.PATHS_REQUALIFIED:
+            if storage_guard is None:
+                raise StorageContractError("reconnected path guard evidence is missing")
+            purposes = (
+                RootPurpose.DOCKER_DISK,
+                RootPurpose.BUILD_STAGING,
+                RootPurpose.SEALED_ARCHIVE,
+            )
+            storage_guard.consume(
+                purposes,
+                now_monotonic_ns=now_monotonic_ns,
+                device_resolver=device_resolver,
+            )
+            self._qualified_guard = storage_guard
+        if state is ReconnectState.USER_ENGINE_RESTARTED:
+            purposes = (
+                RootPurpose.DOCKER_DISK,
+                RootPurpose.BUILD_STAGING,
+                RootPurpose.SEALED_ARCHIVE,
+            )
+            if (
+                storage_guard is None
+                or storage_guard is not self._qualified_guard
+                or not storage_guard.all_consumed(purposes)
+            ):
+                raise StorageContractError(
+                    "Docker restart is not bound to the consumed reconnect guard"
+                )
         if (
             state is ReconnectState.SAME_DISK_REOPENED
             and disk_identity != self.expected_disk_identity
         ):
             raise StorageContractError("Docker reopened a different disk-image identity")
+        if state is ReconnectState.SAME_DISK_REOPENED:
+            assert disk_identity is not None
+            disk_identity.validate()
         if (
             state is ReconnectState.ENGINE_HEALTHY
             and engine_identity != self.expected_engine_identity
         ):
             raise StorageContractError("Docker engine identity changed after reconnect")
+        if state is ReconnectState.ENGINE_HEALTHY:
+            assert engine_identity is not None
+            engine_identity.validate()
         self.state = state
 
 
@@ -560,15 +811,50 @@ class DockerPlacementEvidence:
     default_internal_exists: bool
     default_internal_active: bool
 
-    def validate(self, *, external_device: int, sanitized_settings: Mapping[str, object]) -> None:
+    def validate(
+        self,
+        *,
+        external_device: int,
+        sanitized_settings: Mapping[str, object],
+        observed_stat: os.stat_result | None = None,
+    ) -> None:
+        if sanitized_settings.get("dataFolder") != str(DOCKER_DISK_IMAGE_ROOT):
+            raise StorageContractError(
+                "sanitized Docker settings do not bind the approved data folder"
+            )
         if self.configured_data_folder != DOCKER_DISK_IMAGE_ROOT:
             raise StorageContractError("Docker configured data folder is not the approved root")
-        if not self.disk_path.is_relative_to(DOCKER_DISK_IMAGE_ROOT):
+        if (
+            ".." in self.disk_path.parts
+            or self.disk_path.parent != DOCKER_DISK_IMAGE_ROOT
+            or not self.disk_path.name
+        ):
             raise StorageContractError("Docker disk image escaped the approved root")
-        if self.disk_device != external_device:
+        if observed_stat is None:
+            try:
+                observed_stat = self.disk_path.lstat()
+            except OSError as error:
+                raise StorageContractError(
+                    "Docker disk image stat evidence is unavailable"
+                ) from error
+        if stat.S_ISLNK(observed_stat.st_mode) or not stat.S_ISREG(observed_stat.st_mode):
+            raise StorageContractError("Docker disk image is not one regular non-symlink file")
+        if self.disk_device != external_device or observed_stat.st_dev != external_device:
             raise StorageContractError("Docker disk image is not on the approved external device")
-        if min(self.disk_inode, self.disk_logical_bytes, self.disk_allocated_bytes) < 0:
+        if (
+            self.disk_inode <= 0
+            or self.disk_logical_bytes <= 0
+            or self.disk_allocated_bytes < 0
+            or observed_stat.st_ino != self.disk_inode
+            or observed_stat.st_size != self.disk_logical_bytes
+        ):
             raise StorageContractError("Docker disk-image stat evidence is invalid")
+        observed_blocks = getattr(observed_stat, "st_blocks", None)
+        if (
+            not isinstance(observed_blocks, int)
+            or self.disk_allocated_bytes != observed_blocks * 512
+        ):
+            raise StorageContractError("Docker allocated-byte stat evidence is invalid")
         if not self.engine_identity:
             raise StorageContractError("Docker engine identity is missing")
         encoded = json.dumps(
@@ -654,9 +940,150 @@ def _regular_file_manifest(root: Path, *, max_bytes: int) -> tuple[list[dict[str
     return entries, total
 
 
+def _device_for_path(path: Path) -> int:
+    return path.stat(follow_symlinks=False).st_dev
+
+
+@dataclass(slots=True)
+class ArchivePlacementToken:
+    """Fresh, single-use proof that an archive copy crosses the approved volumes."""
+
+    source: Path
+    archive_parent: Path
+    source_device: int
+    destination_device: int
+    source_volume_uuid: str
+    destination_volume_uuid: str
+    system_floor_bytes: int
+    issued_monotonic_ns: int
+    maximum_age_ns: int = 5_000_000_000
+    consumed: bool = False
+
+    def consume(
+        self,
+        *,
+        source_observation: VolumeObservation,
+        destination_observation: VolumeObservation,
+        now_monotonic_ns: int | None = None,
+        device_resolver: Callable[[Path], int] = _device_for_path,
+    ) -> None:
+        if self.consumed:
+            raise StorageContractError("archive placement token was already consumed")
+        current_ns = time.monotonic_ns() if now_monotonic_ns is None else now_monotonic_ns
+        if current_ns < self.issued_monotonic_ns or (
+            current_ns - self.issued_monotonic_ns > self.maximum_age_ns
+        ):
+            raise StorageContractError("archive placement token is stale")
+        source_observation.validate_system_floor(self.system_floor_bytes)
+        destination_observation.validate_external(reserve_incremental=True)
+        if source_observation.volume_uuid.upper() != self.source_volume_uuid:
+            raise StorageContractError("archive source volume identity changed")
+        if destination_observation.volume_uuid.upper() != self.destination_volume_uuid:
+            raise StorageContractError("archive destination volume identity changed")
+        _validate_archive_roots(
+            self.source,
+            self.archive_parent,
+            source_device=self.source_device,
+            destination_device=self.destination_device,
+            device_resolver=device_resolver,
+        )
+        self.consumed = True
+
+
+def _validate_archive_roots(
+    source: Path,
+    archive_parent: Path,
+    *,
+    source_device: int,
+    destination_device: int,
+    device_resolver: Callable[[Path], int],
+) -> None:
+    if source_device == destination_device:
+        raise StorageContractError("archive source and destination must be different volumes")
+    if source == B2A_EVIDENCE_SESSION_ROOT:
+        approved_source_root = B2A_EVIDENCE_ROOT
+    elif source.parent == ACTIVE_ATTEMPT_ROOT and _ARCHIVE_ID.fullmatch(source.name):
+        approved_source_root = ACTIVE_ATTEMPT_ROOT
+    else:
+        raise StorageContractError("archive source is outside the approved active roots")
+    if archive_parent != SEALED_ARTIFACT_ROOT:
+        raise StorageContractError("archive destination is not the approved sealed root")
+    validate_bounded_path(
+        source,
+        approved_root=approved_source_root,
+        expected_device=source_device,
+        prohibited_device=destination_device,
+        allow_missing_leaf=False,
+        device_resolver=device_resolver,
+    )
+    validate_bounded_path(
+        archive_parent,
+        approved_root=APPROVED_EXTERNAL_ROOT,
+        expected_device=destination_device,
+        prohibited_device=source_device,
+        allow_missing_leaf=False,
+        device_resolver=device_resolver,
+    )
+
+
+def qualify_archive_placement(
+    source: Path,
+    *,
+    archive_parent: Path,
+    source_observation: VolumeObservation,
+    destination_observation: VolumeObservation,
+    system_floor_bytes: int,
+    issued_monotonic_ns: int | None = None,
+    device_resolver: Callable[[Path], int] = _device_for_path,
+) -> ArchivePlacementToken:
+    source_observation.validate_system_floor(system_floor_bytes)
+    destination_observation.validate_external(reserve_incremental=True)
+    source_device = device_resolver(SYSTEM_DATA_MOUNT)
+    destination_device = device_resolver(APPROVED_MOUNT)
+    _validate_archive_roots(
+        source,
+        archive_parent,
+        source_device=source_device,
+        destination_device=destination_device,
+        device_resolver=device_resolver,
+    )
+    issued = time.monotonic_ns() if issued_monotonic_ns is None else issued_monotonic_ns
+    if issued <= 0:
+        raise StorageContractError("archive placement timestamp must be positive")
+    return ArchivePlacementToken(
+        source=source,
+        archive_parent=archive_parent,
+        source_device=source_device,
+        destination_device=destination_device,
+        source_volume_uuid=source_observation.volume_uuid.upper(),
+        destination_volume_uuid=destination_observation.volume_uuid.upper(),
+        system_floor_bytes=system_floor_bytes,
+        issued_monotonic_ns=issued,
+    )
+
+
+def _copy_file_exclusive(source: Path, target: Path) -> None:
+    descriptor = os.open(
+        target,
+        os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
+        0o600,
+    )
+    try:
+        with os.fdopen(descriptor, "wb") as output, source.open("rb") as input_handle:
+            shutil.copyfileobj(input_handle, output, length=1024 * 1024)
+            output.flush()
+            os.fsync(output.fileno())
+    except Exception:
+        with suppress(OSError):
+            os.close(descriptor)
+        raise
+
+
 def seal_attempt(source: Path, *, attempt_id: str, max_bytes: int) -> Mapping[str, object]:
     """Fsync, hash, and make a closed attempt tree read-only."""
 
+    if _ARCHIVE_ID.fullmatch(attempt_id) is None:
+        raise StorageContractError("attempt identity is unsafe")
     entries, total = _regular_file_manifest(source, max_bytes=max_bytes)
     for entry in entries:
         candidate = source / str(entry["path"])
@@ -686,6 +1113,12 @@ def seal_attempt(source: Path, *, attempt_id: str, max_bytes: int) -> Mapping[st
     ):
         os.chmod(directory, 0o500)
     os.chmod(source, 0o500)
+    for entry in entries:
+        with (source / str(entry["path"])).open("rb") as handle:
+            os.fsync(handle.fileno())
+    with (source / "SEAL.json").open("rb") as handle:
+        os.fsync(handle.fileno())
+    _fsync_directory(source.parent)
     return seal
 
 
@@ -696,22 +1129,33 @@ def copy_sealed_attempt(
     archive_id: str,
     copy_record_path: Path,
     max_bytes: int,
-    source_volume_uuid: str,
-    destination_volume_uuid: str,
+    placement: ArchivePlacementToken,
+    source_observation: VolumeObservation,
+    destination_observation: VolumeObservation,
     copied_at_utc: str,
+    now_monotonic_ns: int | None = None,
+    device_resolver: Callable[[Path], int] = _device_for_path,
 ) -> Mapping[str, object]:
     """Copy an immutable source to a fresh staging tree and verify before rename.
 
     The source is deliberately retained.  No cleanup or deletion is performed.
     """
 
-    if (
-        _UUID.fullmatch(source_volume_uuid.upper()) is None
-        or _UUID.fullmatch(destination_volume_uuid.upper()) is None
-    ):
-        raise StorageContractError("archive copy volume UUID is invalid")
+    if _ARCHIVE_ID.fullmatch(archive_id) is None:
+        raise StorageContractError("archive identity is unsafe")
+    expected_copy_record = B2A_EVIDENCE_ROOT / "copy-records" / f"{archive_id}.json"
+    if copy_record_path != expected_copy_record or ".." in copy_record_path.parts:
+        raise StorageContractError("archive copy record escaped its approved root")
     if _UTC_TIMESTAMP.fullmatch(copied_at_utc) is None:
         raise StorageContractError("archive copy timestamp must be an exact UTC value")
+    if placement.source != source or placement.archive_parent != archive_parent:
+        raise StorageContractError("archive placement token paths do not match the copy")
+    placement.consume(
+        source_observation=source_observation,
+        destination_observation=destination_observation,
+        now_monotonic_ns=now_monotonic_ns,
+        device_resolver=device_resolver,
+    )
     seal_path = source / "SEAL.json"
     if not seal_path.is_file() or stat.S_IMODE(source.stat().st_mode) & 0o222:
         raise StorageContractError("source attempt is not sealed and immutable")
@@ -741,22 +1185,12 @@ def copy_sealed_attempt(
                 raise StorageContractError("sealed source file is missing or unsafe")
             target = staging / relative
             target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-            descriptor = os.open(
-                target,
-                os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
-                0o600,
-            )
-            with os.fdopen(descriptor, "wb") as output, source_file.open("rb") as input_handle:
-                shutil.copyfileobj(input_handle, output, length=1024 * 1024)
-                output.flush()
-                os.fsync(output.fileno())
+            _copy_file_exclusive(source_file, target)
             expected_size = raw_entry.get("bytes")
             expected_hash = raw_entry.get("sha256")
             if target.stat().st_size != expected_size or file_sha256(target) != expected_hash:
                 raise StorageContractError("destination archive verification failed")
-        shutil.copyfile(seal_path, staging / "SEAL.json")
-        with (staging / "SEAL.json").open("rb") as handle:
-            os.fsync(handle.fileno())
+        _copy_file_exclusive(seal_path, staging / "SEAL.json")
         for directory in sorted(
             (candidate for candidate in staging.rglob("*") if candidate.is_dir()),
             key=lambda item: len(item.parts),
@@ -789,21 +1223,40 @@ def copy_sealed_attempt(
             raise StorageContractError("sealed source mutated during archival copy")
         if file_sha256(destination / final_relative) != expected_hash:
             raise StorageContractError("final archive file hash mismatch")
+    for candidate in (path for path in destination.rglob("*") if path.is_file()):
+        os.chmod(candidate, 0o400)
+        with candidate.open("rb") as handle:
+            os.fsync(handle.fileno())
+    for directory in sorted(
+        (candidate for candidate in destination.rglob("*") if candidate.is_dir()),
+        key=lambda item: len(item.parts),
+        reverse=True,
+    ):
+        os.chmod(directory, 0o500)
+        _fsync_directory(directory)
+    os.chmod(destination, 0o500)
+    _fsync_directory(archive_parent)
     record: dict[str, object] = {
         "schema_version": "0.1.0",
         "archive_id": archive_id,
         "source_path": str(source),
         "destination_path": str(destination),
-        "source_device": source.stat().st_dev,
-        "destination_device": destination.stat().st_dev,
-        "source_volume_uuid": source_volume_uuid.upper(),
-        "destination_volume_uuid": destination_volume_uuid.upper(),
+        "source_device": placement.source_device,
+        "destination_device": placement.destination_device,
+        "source_volume_uuid": source_observation.volume_uuid.upper(),
+        "destination_volume_uuid": destination_observation.volume_uuid.upper(),
+        "source_mount_path": str(source_observation.mount_path),
+        "destination_mount_path": str(destination_observation.mount_path),
+        "destination_physical_store_uuid": (
+            destination_observation.physical_store_uuid or ""
+        ).upper(),
         "copied_at_utc": copied_at_utc,
         "seal_sha256": file_sha256(seal_path),
         "destination_seal_sha256": file_sha256(destination / "SEAL.json"),
         "files_verified": len(seal["files"]),
         "total_payload_bytes": total,
         "source_retained": True,
+        "destination_read_only": True,
     }
     if record["seal_sha256"] != record["destination_seal_sha256"]:
         raise StorageContractError("destination seal hash mismatch")
@@ -831,6 +1284,9 @@ class B2AStep:
     instruction: str | None
     stop_on_failure: bool
     retry_limit: int
+    expected_stdout: str | None = None
+    guard_for_action: str | None = None
+    guard_purposes: tuple[RootPurpose, ...] = ()
 
     def validate(self) -> None:
         if _ACTION_ID.fullmatch(self.action_id) is None:
@@ -851,6 +1307,44 @@ class B2AStep:
             _validate_b2a_argv(self.argv)
         elif self.argv is not None or not self.instruction:
             raise StorageContractError("user-only actions require an instruction and no argv")
+        if self.kind is B2AStepKind.USER_ONLY and self.expected_stdout is not None:
+            raise StorageContractError("user-only actions cannot declare expected stdout")
+        if self.guard_for_action is None:
+            if self.guard_purposes:
+                raise StorageContractError("only guard actions may declare guard purposes")
+        else:
+            if (
+                self.kind is not B2AStepKind.AUTOMATABLE
+                or _ACTION_ID.fullmatch(self.guard_for_action) is None
+                or not self.guard_purposes
+                or len(set(self.guard_purposes)) != len(self.guard_purposes)
+                or self.argv is None
+                or "guard-storage" not in self.argv
+            ):
+                raise StorageContractError("Gate B2a guard action metadata is malformed")
+
+    def requires_storage_guard(self) -> bool:
+        if self.guard_for_action is not None:
+            return False
+        if (
+            self.download_limit_bytes > 0
+            or self.external_disk_limit_bytes > 0
+            or self.internal_disk_limit_bytes is None
+            or (self.internal_disk_limit_bytes or 0) > 0
+        ):
+            return True
+        if self.argv is not None and self.argv[0] in {
+            "/bin/mkdir",
+            "/usr/bin/ditto",
+            "/usr/bin/hdiutil",
+            "/usr/bin/open",
+        }:
+            return True
+        return self.action_id in {
+            "select-external-disk-location",
+            "apply-storage-binding-restart",
+            "restart-after-remount-guard",
+        }
 
 
 _ALLOWED_EXECUTABLES = frozenset(
@@ -866,6 +1360,7 @@ _ALLOWED_EXECUTABLES = frozenset(
         "/Users/joseph/.codex/worktrees/84b1/gic-lab/.venv/bin/python",
         "/bin/mkdir",
         "/usr/libexec/PlistBuddy",
+        "/usr/bin/open",
     }
 )
 _FORBIDDEN_ARG_FRAGMENTS = (
@@ -884,6 +1379,58 @@ _FORBIDDEN_ARG_FRAGMENTS = (
     "execute-condition",
 )
 
+_B2A_GUARD_SCOPES: Mapping[str, tuple[tuple[RootPurpose, ...], bool]] = {
+    "create-external-project-root": (
+        (RootPurpose.DOCKER_DISK, RootPurpose.BUILD_STAGING, RootPurpose.SEALED_ARCHIVE),
+        False,
+    ),
+    "create-external-t07-root": (
+        (RootPurpose.DOCKER_DISK, RootPurpose.BUILD_STAGING, RootPurpose.SEALED_ARCHIVE),
+        False,
+    ),
+    "create-external-docker-parent": ((RootPurpose.DOCKER_DISK,), False),
+    "create-external-docker-disk-root": ((RootPurpose.DOCKER_DISK,), False),
+    "create-external-build-staging": ((RootPurpose.BUILD_STAGING,), False),
+    "create-external-sealed-artifacts": ((RootPurpose.SEALED_ARCHIVE,), False),
+    "create-b2a-work-root": ((RootPurpose.B2A_WORK,), False),
+    "create-b2a-download-root": ((RootPurpose.B2A_WORK,), False),
+    "create-b2a-evidence-root": ((RootPurpose.B2A_WORK,), False),
+    "fetch-current-appcast": ((RootPurpose.B2A_WORK,), True),
+    "fetch-current-checksums": ((RootPurpose.B2A_WORK,), True),
+    "download-selected-dmg": ((RootPurpose.B2A_WORK,), True),
+    "attach-selected-dmg": ((RootPurpose.B2A_WORK,), True),
+    "install-selected-application": ((RootPurpose.B2A_WORK,), True),
+    "detach-selected-dmg": ((RootPurpose.B2A_WORK,), True),
+    "accept-terms-personally": ((RootPurpose.B2A_WORK,), True),
+    "disable-automatic-update": ((RootPurpose.B2A_WORK,), True),
+    "initial-start-after-guard": (
+        (RootPurpose.DOCKER_DISK, RootPurpose.BUILD_STAGING, RootPurpose.B2A_WORK),
+        True,
+    ),
+    "select-external-disk-location": (
+        (RootPurpose.DOCKER_DISK, RootPurpose.BUILD_STAGING, RootPurpose.B2A_WORK),
+        True,
+    ),
+    "apply-storage-binding-restart": (
+        (RootPurpose.DOCKER_DISK, RootPurpose.BUILD_STAGING, RootPurpose.B2A_WORK),
+        True,
+    ),
+    "capture-location-only-screenshot": ((RootPurpose.B2A_WORK,), True),
+    "restart-after-remount-guard": (
+        (
+            RootPurpose.DOCKER_DISK,
+            RootPurpose.BUILD_STAGING,
+            RootPurpose.SEALED_ARCHIVE,
+            RootPurpose.B2A_WORK,
+        ),
+        True,
+    ),
+    "seal-and-copy-b2a-evidence": (
+        (RootPurpose.SEALED_ARCHIVE, RootPurpose.B2A_WORK),
+        True,
+    ),
+}
+
 
 def _validate_b2a_argv(argv: Sequence[str]) -> None:
     if not argv or argv[0] not in _ALLOWED_EXECUTABLES:
@@ -891,11 +1438,208 @@ def _validate_b2a_argv(argv: Sequence[str]) -> None:
     joined = " " + " ".join(argv).casefold()
     if any(fragment in joined for fragment in _FORBIDDEN_ARG_FRAGMENTS):
         raise StorageContractError("Gate B2a action contains a prohibited workload operation")
-    if argv[0].endswith("/docker"):
-        if len(argv) < 2 or argv[1] not in {"version", "info", "context", "system"}:
-            raise StorageContractError("Gate B2a Docker command is not read-only or stop-only")
-        if argv[1] == "system" and tuple(argv[2:]) != ("dial-stdio",):
-            raise StorageContractError("unrecognized Docker system action")
+    exact = tuple(argv)
+    if (
+        len(exact) == 5
+        and exact[:3] == ("/usr/bin/git", "merge-base", "--is-ancestor")
+        and _COMMIT.fullmatch(exact[3]) is not None
+        and exact[4] == "HEAD"
+    ):
+        return
+    if (
+        len(exact) == 5 + len(B2A_IMPLEMENTATION_BOUND_PATHS)
+        and exact[:3] == ("/usr/bin/git", "diff", "--quiet")
+        and _COMMIT.fullmatch(exact[3]) is not None
+        and exact[4] == "--"
+        and exact[5:] == B2A_IMPLEMENTATION_BOUND_PATHS
+    ):
+        return
+    if exact not in _allowed_b2a_argv():
+        raise StorageContractError("Gate B2a argument array is not an exact rendered action")
+
+
+def _curl_argv(*, url: str, output: Path, max_seconds: int, max_bytes: int) -> tuple[str, ...]:
+    return (
+        "/usr/bin/curl",
+        "--fail",
+        "--silent",
+        "--show-error",
+        "--location",
+        "--proto",
+        "=https",
+        "--tlsv1.2",
+        "--max-time",
+        str(max_seconds),
+        "--max-filesize",
+        str(max_bytes),
+        "--output",
+        str(output),
+        url,
+    )
+
+
+def _guard_argv(
+    action_id: str,
+    purposes: Sequence[RootPurpose],
+    *,
+    require_existing: bool,
+) -> tuple[str, ...]:
+    argv = (
+        str(B2A_PYTHON_PATH),
+        str(B2A_SCRIPT_PATH),
+        "guard-storage",
+        "--system-floor-bytes",
+        "unresolved",
+        "--next-action",
+        action_id,
+        "--purposes",
+        ",".join(purpose.value for purpose in purposes),
+    )
+    return argv + (("--require-existing",) if require_existing else ())
+
+
+def _allowed_b2a_argv() -> frozenset[tuple[str, ...]]:
+    python_prefix = (str(B2A_PYTHON_PATH), str(B2A_SCRIPT_PATH))
+    docker = "/Applications/Docker.app/Contents/Resources/bin/docker"
+    directories = {
+        APPROVED_EXTERNAL_ROOT,
+        APPROVED_EXTERNAL_ROOT / "t07",
+        APPROVED_EXTERNAL_ROOT / "t07/docker-desktop",
+        DOCKER_DISK_IMAGE_ROOT,
+        BUILD_STAGING_ROOT,
+        SEALED_ARTIFACT_ROOT,
+        B2A_WORK_ROOT,
+        B2A_DOWNLOAD_ROOT,
+        B2A_EVIDENCE_ROOT,
+    }
+    commands: set[tuple[str, ...]] = {
+        ("/usr/bin/git", "status", "--short"),
+        ("/usr/bin/git", "branch", "--show-current"),
+        diskutil_info_argv(APPROVED_MOUNT),
+        diskutil_info_argv(SYSTEM_DATA_MOUNT),
+        ("/usr/sbin/diskutil", "apfs", "list", "-plist"),
+        _curl_argv(
+            url="https://desktop.docker.com/mac/main/arm64/appcast.xml",
+            output=B2A_APPCAST_PATH,
+            max_seconds=60,
+            max_bytes=2 * MIB,
+        ),
+        _curl_argv(
+            url="https://desktop.docker.com/mac/main/arm64/235549/checksums.txt",
+            output=B2A_CHECKSUMS_PATH,
+            max_seconds=60,
+            max_bytes=2 * MIB,
+        ),
+        _curl_argv(
+            url=DOCKER_DMG_URL,
+            output=B2A_DMG_PATH,
+            max_seconds=600,
+            max_bytes=DOCKER_DMG_BYTES,
+        ),
+        (
+            *python_prefix,
+            "verify-official-metadata",
+            "--appcast",
+            str(B2A_APPCAST_PATH),
+            "--checksums",
+            str(B2A_CHECKSUMS_PATH),
+        ),
+        (*python_prefix, "verify-dmg", "--path", str(B2A_DMG_PATH)),
+        (*python_prefix, "assert-path-absent", "--path", "/Applications/Docker.app"),
+        (
+            *python_prefix,
+            "seal-and-copy",
+            "--source",
+            str(B2A_EVIDENCE_SESSION_ROOT),
+            "--archive-parent",
+            str(SEALED_ARTIFACT_ROOT),
+            "--archive-id",
+            "T07-GATE-B2A-EVIDENCE-001",
+            "--copy-record",
+            str(B2A_COPY_RECORD_PATH),
+            "--max-bytes",
+            str(B2A_EVIDENCE_CAP_BYTES),
+            "--system-floor-bytes",
+            "unresolved",
+        ),
+        (
+            "/usr/bin/hdiutil",
+            "attach",
+            "-readonly",
+            "-nobrowse",
+            str(B2A_DMG_PATH),
+        ),
+        ("/usr/bin/hdiutil", "detach", "/Volumes/Docker"),
+        (
+            "/usr/bin/ditto",
+            "/Volumes/Docker/Docker.app",
+            "/Applications/Docker.app",
+        ),
+        (
+            "/usr/libexec/PlistBuddy",
+            "-c",
+            "Print :CFBundleShortVersionString",
+            "/Applications/Docker.app/Contents/Info.plist",
+        ),
+        (
+            "/usr/libexec/PlistBuddy",
+            "-c",
+            "Print :CFBundleVersion",
+            "/Applications/Docker.app/Contents/Info.plist",
+        ),
+        (docker, "version", "--format", "{{json .}}"),
+        (docker, "info", "--format", "{{json .}}"),
+        (docker, "context", "show"),
+        ("/usr/bin/open", "-na", "/Applications/Docker.app"),
+    }
+    commands.update(("/bin/mkdir", "-m", "0700", str(path)) for path in directories)
+    commands.update(
+        _guard_argv(action_id, purposes, require_existing=require_existing)
+        for action_id, (purposes, require_existing) in _B2A_GUARD_SCOPES.items()
+    )
+    return frozenset(commands)
+
+
+def inspect_and_guard_current_storage(
+    *,
+    system_floor_bytes: int,
+    purposes: Sequence[RootPurpose],
+    require_existing: bool,
+) -> StorageGuardBundle:
+    """Inspect both volumes and enforce every path/floor predicate in one process."""
+
+    commands = (
+        diskutil_info_argv(APPROVED_MOUNT),
+        ("/usr/sbin/diskutil", "apfs", "list", "-plist"),
+        diskutil_info_argv(SYSTEM_DATA_MOUNT),
+    )
+    outputs: list[bytes] = []
+    for command in commands:
+        try:
+            completed = subprocess.run(
+                command,
+                check=True,
+                capture_output=True,
+                timeout=10,
+            )
+        except (OSError, subprocess.SubprocessError) as error:
+            raise StorageContractError("read-only diskutil storage inspection failed") from error
+        if completed.stderr or len(completed.stdout) > MIB:
+            raise StorageContractError("diskutil storage evidence exceeded its clean output cap")
+        outputs.append(completed.stdout)
+    external = volume_observation_from_diskutil(outputs[0], outputs[1])
+    system = volume_observation_from_diskutil(outputs[2], outputs[1])
+    external_device = APPROVED_MOUNT.stat().st_dev
+    system_device = SYSTEM_DATA_MOUNT.stat().st_dev
+    return issue_storage_guard(
+        external=external,
+        system=system,
+        external_device=external_device,
+        system_device=system_device,
+        system_floor_bytes=system_floor_bytes,
+        purposes=purposes,
+        require_existing=require_existing,
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -915,16 +1659,21 @@ class B2APlan:
     steps: tuple[B2AStep, ...]
     superseded_plan_id: str
     superseded_plan_sha256: str
+    aggregate_automatable_calls: int | None = None
 
     def validate(self) -> None:
         if self.schema_version != "0.1.0":
             raise StorageContractError("unsupported Gate B2a plan schema version")
         if self.plan_id != B2A_PLAN_ID or _PLAN_ID.fullmatch(self.plan_id) is None:
             raise StorageContractError("Gate B2a plan ID is stale or unexpected")
-        if self.authorization_reference != B2A_AUTHORIZATION_PLACEHOLDER or self.authorized:
-            raise StorageContractError(
-                "Gate B2a plan must remain unauthorized with its placeholder"
-            )
+        if self.authorized:
+            if (
+                self.authorization_reference == B2A_AUTHORIZATION_PLACEHOLDER
+                or _AUTHORIZATION_REFERENCE.fullmatch(self.authorization_reference) is None
+            ):
+                raise StorageContractError("authorized Gate B2a plan lacks fresh authority")
+        elif self.authorization_reference != B2A_AUTHORIZATION_PLACEHOLDER:
+            raise StorageContractError("blocked Gate B2a plan must retain its placeholder")
         if _COMMIT.fullmatch(self.implementation_commit) is None:
             raise StorageContractError("Gate B2a implementation commit is not exact")
         if self.aggregate_wall_seconds <= 0 or self.aggregate_output_bytes <= 0:
@@ -938,10 +1687,14 @@ class B2APlan:
             # must replace every unknown term and acquire a new hash/authorization.
             if self.authorized:
                 raise
-        if self.system_incremental_disk_bytes is not None:
-            raise StorageContractError(
-                "blocked B1.6 plan must not invent a Mac mini incremental disk cap"
-            )
+        if self.authorized:
+            if (
+                self.system_incremental_disk_bytes is None
+                or self.system_incremental_disk_bytes <= 0
+            ):
+                raise StorageContractError("authorized Gate B2a system disk cap is unresolved")
+        elif self.system_incremental_disk_bytes is not None:
+            raise StorageContractError("blocked B1.6 plan must not invent a Mac mini disk cap")
         if self.external_incremental_disk_bytes != EXTERNAL_INCREMENTAL_RESERVATION_BYTES:
             raise StorageContractError("Gate B2a external disk cap changed")
         if self.active_attempt_bytes != ACTIVE_ATTEMPT_CAP_BYTES:
@@ -964,12 +1717,25 @@ class B2APlan:
             wall += step.timeout_seconds
             output += step.output_limit_bytes
             download += step.download_limit_bytes
+        automatable_calls = sum(step.kind is B2AStepKind.AUTOMATABLE for step in self.steps)
+        if self.aggregate_automatable_calls != automatable_calls:
+            raise StorageContractError("Gate B2a automatable-call cap must equal the exact plan")
         if wall > self.aggregate_wall_seconds:
             raise StorageContractError("per-action walls exceed the aggregate wall cap")
         if output > self.aggregate_output_bytes:
             raise StorageContractError("per-action outputs exceed the aggregate output cap")
         if download > self.aggregate_download_bytes:
             raise StorageContractError("per-action downloads exceed the aggregate download cap")
+        for index, step in enumerate(self.steps):
+            if not step.requires_storage_guard():
+                continue
+            if index == 0:
+                raise StorageContractError("sensitive Gate B2a action lacks a preceding guard")
+            guard = self.steps[index - 1]
+            if guard.guard_for_action != step.action_id:
+                raise StorageContractError("sensitive Gate B2a action lacks an adjacent guard")
+            if self.authorized and step.internal_disk_limit_bytes is None:
+                raise StorageContractError("authorized Gate B2a action has an unresolved disk cap")
         required_user_actions = {
             "accept-terms-personally",
             "disable-automatic-update",
@@ -1014,6 +1780,17 @@ def load_b2a_plan(path: Path, *, expected_sha256: str) -> B2APlan:
             instruction_raw = item.get("instruction")
             if instruction_raw is not None and not isinstance(instruction_raw, str):
                 raise StorageContractError("Gate B2a user instruction must be a string")
+            expected_stdout_raw = item.get("expected_stdout")
+            if expected_stdout_raw is not None and not isinstance(expected_stdout_raw, str):
+                raise StorageContractError("Gate B2a expected stdout must be a string")
+            guard_for_action_raw = item.get("guard_for_action")
+            if guard_for_action_raw is not None and not isinstance(guard_for_action_raw, str):
+                raise StorageContractError("Gate B2a guard target must be a string")
+            guard_purposes_raw = item.get("guard_purposes", [])
+            if not isinstance(guard_purposes_raw, list) or not all(
+                isinstance(value, str) for value in guard_purposes_raw
+            ):
+                raise StorageContractError("Gate B2a guard purposes must be a string array")
             steps.append(
                 B2AStep(
                     action_id=str(item["action_id"]),
@@ -1031,6 +1808,9 @@ def load_b2a_plan(path: Path, *, expected_sha256: str) -> B2APlan:
                     instruction=instruction_raw,
                     stop_on_failure=bool(item["stop_on_failure"]),
                     retry_limit=int(item["retry_limit"]),
+                    expected_stdout=expected_stdout_raw,
+                    guard_for_action=guard_for_action_raw,
+                    guard_purposes=tuple(RootPurpose(value) for value in guard_purposes_raw),
                 )
             )
         limits = raw["limits"]
@@ -1066,6 +1846,7 @@ def load_b2a_plan(path: Path, *, expected_sha256: str) -> B2APlan:
             steps=tuple(steps),
             superseded_plan_id=str(superseded["plan_id"]),
             superseded_plan_sha256=str(superseded["sha256"]),
+            aggregate_automatable_calls=int(limits["aggregate_automatable_calls"]),
         )
     except (KeyError, TypeError, ValueError) as error:
         if isinstance(error, StorageContractError):
@@ -1073,6 +1854,228 @@ def load_b2a_plan(path: Path, *, expected_sha256: str) -> B2APlan:
         raise StorageContractError("Gate B2a plan is malformed") from error
     plan.validate()
     return plan
+
+
+@dataclass(frozen=True, slots=True)
+class B2AResourceSnapshot:
+    system_free_bytes: int
+    external_free_bytes: int
+    active_attempt_bytes: int
+
+    def validate(self) -> None:
+        if (
+            min(
+                self.system_free_bytes,
+                self.external_free_bytes,
+                self.active_attempt_bytes,
+            )
+            < 0
+        ):
+            raise StorageContractError("Gate B2a resource snapshot contains negative bytes")
+
+
+@dataclass(frozen=True, slots=True)
+class B2AActionResult:
+    exit_code: int
+    stdout: bytes
+    stderr: bytes
+    downloaded_bytes: int
+    resources_after: B2AResourceSnapshot
+
+
+class B2AExecutionSupervisor:
+    """Stateful cap/order/guard control plane for a future authorized B2a driver.
+
+    The supervisor deliberately does not spawn processes.  A separately authorized
+    driver must feed it observations immediately before and after each exact argv or
+    user action.  This keeps the B1.6 implementation deterministic and testable.
+    """
+
+    def __init__(self, plan: B2APlan) -> None:
+        plan.validate()
+        if not plan.authorized:
+            raise StorageContractError("Gate B2a plan is unauthorized; execution is blocked")
+        self.plan = plan
+        self.system_floor_bytes = plan.system_floor_inputs.resolved_floor_bytes()
+        assert plan.system_incremental_disk_bytes is not None
+        self._index = 0
+        self._started_ns: int | None = None
+        self._action_started_ns: int | None = None
+        self._before: B2AResourceSnapshot | None = None
+        self._active_step: B2AStep | None = None
+        self._pending_guard: StorageGuardBundle | None = None
+        self._pending_guard_target: str | None = None
+        self._output_bytes = 0
+        self._download_bytes = 0
+        self._internal_growth_bytes = 0
+        self._external_growth_bytes = 0
+        self._automatable_calls = 0
+
+    def start(self, resources: B2AResourceSnapshot, *, now_monotonic_ns: int) -> None:
+        if self._started_ns is not None or now_monotonic_ns <= 0:
+            raise StorageContractError("Gate B2a supervisor start is stale or duplicated")
+        self._validate_snapshot(resources, pre_action=True, external_mutation=False)
+        self._started_ns = now_monotonic_ns
+
+    def begin_action(
+        self,
+        action_id: str,
+        resources: B2AResourceSnapshot,
+        *,
+        now_monotonic_ns: int,
+        device_resolver: Callable[[Path], int] | None = None,
+    ) -> B2AStep:
+        if self._started_ns is None or self._active_step is not None:
+            raise StorageContractError("Gate B2a action begin is out of state")
+        if self._index >= len(self.plan.steps):
+            raise StorageContractError("Gate B2a has no remaining action")
+        step = self.plan.steps[self._index]
+        if step.action_id != action_id:
+            raise StorageContractError("Gate B2a action is stale or out of order")
+        if now_monotonic_ns < self._started_ns:
+            raise StorageContractError("Gate B2a monotonic clock moved backwards")
+        self._validate_aggregate_wall(now_monotonic_ns)
+        self._validate_snapshot(
+            resources,
+            pre_action=True,
+            external_mutation=step.external_disk_limit_bytes > 0,
+        )
+        if step.requires_storage_guard():
+            if self._pending_guard is None or self._pending_guard_target != step.action_id:
+                raise StorageContractError("sensitive Gate B2a action lacks a fresh guard")
+            guard_step = self.plan.steps[self._index - 1]
+            self._pending_guard.consume(
+                guard_step.guard_purposes,
+                now_monotonic_ns=now_monotonic_ns,
+                device_resolver=device_resolver,
+            )
+            self._pending_guard = None
+            self._pending_guard_target = None
+        if step.kind is B2AStepKind.AUTOMATABLE:
+            self._automatable_calls += 1
+            assert self.plan.aggregate_automatable_calls is not None
+            if self._automatable_calls > self.plan.aggregate_automatable_calls:
+                raise StorageContractError("Gate B2a automatable-call cap exceeded")
+        self._active_step = step
+        self._action_started_ns = now_monotonic_ns
+        self._before = resources
+        return step
+
+    def finish_action(
+        self,
+        result: B2AActionResult,
+        *,
+        now_monotonic_ns: int,
+        guard_bundle: StorageGuardBundle | None = None,
+    ) -> None:
+        step = self._active_step
+        before = self._before
+        if step is None or before is None or self._action_started_ns is None:
+            raise StorageContractError("Gate B2a action finish is out of state")
+        if now_monotonic_ns < self._action_started_ns:
+            raise StorageContractError("Gate B2a monotonic clock moved backwards")
+        elapsed_ns = now_monotonic_ns - self._action_started_ns
+        if elapsed_ns > step.timeout_seconds * 1_000_000_000:
+            raise StorageContractError("Gate B2a per-action wall cap exceeded")
+        self._validate_aggregate_wall(now_monotonic_ns)
+        output_bytes = len(result.stdout) + len(result.stderr)
+        if output_bytes > step.output_limit_bytes:
+            raise StorageContractError("Gate B2a per-action output cap exceeded")
+        if result.downloaded_bytes < 0 or result.downloaded_bytes > step.download_limit_bytes:
+            raise StorageContractError("Gate B2a per-action download cap exceeded")
+        if result.exit_code != 0:
+            raise StorageContractError("Gate B2a action failed; retry is prohibited")
+        if step.expected_stdout is not None:
+            try:
+                stdout = result.stdout.decode("utf-8")
+            except UnicodeDecodeError as error:
+                raise StorageContractError("Gate B2a expected stdout is not UTF-8") from error
+            if stdout != step.expected_stdout:
+                raise StorageContractError("Gate B2a expected stdout drifted")
+        result.resources_after.validate()
+        internal_growth = max(
+            0, before.system_free_bytes - result.resources_after.system_free_bytes
+        )
+        external_growth = max(
+            0, before.external_free_bytes - result.resources_after.external_free_bytes
+        )
+        if step.internal_disk_limit_bytes is None:
+            raise StorageContractError("Gate B2a per-action system disk cap is unresolved")
+        if internal_growth > step.internal_disk_limit_bytes:
+            raise StorageContractError("Gate B2a per-action system disk cap exceeded")
+        if external_growth > step.external_disk_limit_bytes:
+            raise StorageContractError("Gate B2a per-action external disk cap exceeded")
+        self._output_bytes += output_bytes
+        self._download_bytes += result.downloaded_bytes
+        self._internal_growth_bytes += internal_growth
+        self._external_growth_bytes += external_growth
+        assert self.plan.system_incremental_disk_bytes is not None
+        if self._output_bytes > self.plan.aggregate_output_bytes:
+            raise StorageContractError("Gate B2a aggregate output cap exceeded")
+        if self._download_bytes > self.plan.aggregate_download_bytes:
+            raise StorageContractError("Gate B2a aggregate download cap exceeded")
+        if self._internal_growth_bytes > self.plan.system_incremental_disk_bytes:
+            raise StorageContractError("Gate B2a aggregate system disk cap exceeded")
+        if self._external_growth_bytes > self.plan.external_incremental_disk_bytes:
+            raise StorageContractError("Gate B2a aggregate external disk cap exceeded")
+        self._validate_snapshot(
+            result.resources_after,
+            pre_action=False,
+            external_mutation=False,
+        )
+        if step.guard_for_action is not None:
+            if guard_bundle is None:
+                raise StorageContractError("Gate B2a guard action produced no typed guard")
+            if guard_bundle.system_floor_bytes != self.system_floor_bytes:
+                raise StorageContractError("Gate B2a guard used a different system floor")
+            if set(step.guard_purposes) != set(guard_bundle.tokens):
+                raise StorageContractError("Gate B2a guard scope differs from the plan")
+            self._pending_guard = guard_bundle
+            self._pending_guard_target = step.guard_for_action
+        elif guard_bundle is not None:
+            raise StorageContractError("non-guard Gate B2a action returned guard evidence")
+        self._index += 1
+        self._active_step = None
+        self._action_started_ns = None
+        self._before = None
+
+    def complete(self, *, now_monotonic_ns: int) -> None:
+        if (
+            self._started_ns is None
+            or self._active_step is not None
+            or self._index != len(self.plan.steps)
+            or self._pending_guard is not None
+        ):
+            raise StorageContractError("Gate B2a supervisor cannot seal an incomplete plan")
+        self._validate_aggregate_wall(now_monotonic_ns)
+        assert self.plan.aggregate_automatable_calls is not None
+        if self._automatable_calls != self.plan.aggregate_automatable_calls:
+            raise StorageContractError("Gate B2a automatable-call count is incomplete")
+
+    def _validate_aggregate_wall(self, now_monotonic_ns: int) -> None:
+        assert self._started_ns is not None
+        if now_monotonic_ns - self._started_ns > self.plan.aggregate_wall_seconds * 1_000_000_000:
+            raise StorageContractError("Gate B2a aggregate wall cap exceeded")
+
+    def _validate_snapshot(
+        self,
+        resources: B2AResourceSnapshot,
+        *,
+        pre_action: bool,
+        external_mutation: bool,
+    ) -> None:
+        resources.validate()
+        if resources.system_free_bytes < self.system_floor_bytes:
+            raise StorageContractError("Gate B2a system free-space floor failed")
+        external_floor = (
+            EXTERNAL_PRE_B2A_FREE_FLOOR_BYTES
+            if pre_action and external_mutation
+            else EXTERNAL_RETAINED_FREE_FLOOR_BYTES
+        )
+        if resources.external_free_bytes < external_floor:
+            raise StorageContractError("Gate B2a external free-space floor failed")
+        if resources.active_attempt_bytes > self.plan.active_attempt_bytes:
+            raise StorageContractError("Gate B2a active-attempt byte cap exceeded")
 
 
 def verify_official_docker_metadata(
@@ -1163,7 +2166,25 @@ def _build_parser() -> argparse.ArgumentParser:
     archive.add_argument("--archive-id", required=True)
     archive.add_argument("--copy-record", type=Path, required=True)
     archive.add_argument("--max-bytes", type=int, required=True)
+    archive.add_argument("--system-floor-bytes", required=True)
+    guard = subparsers.add_parser("guard-storage")
+    guard.add_argument("--system-floor-bytes", required=True)
+    guard.add_argument("--next-action", required=True)
+    guard.add_argument("--purposes", required=True)
+    guard.add_argument("--require-existing", action="store_true")
     return parser
+
+
+def _parse_system_floor(value: str) -> int:
+    if value == "unresolved":
+        raise StorageContractError("Mac mini system floor is unresolved; stop")
+    try:
+        floor = int(value)
+    except ValueError as error:
+        raise StorageContractError("Mac mini system floor is not an integer") from error
+    if floor <= 0:
+        raise StorageContractError("Mac mini system floor must be positive")
+    return floor
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -1179,11 +2200,46 @@ def main(argv: Sequence[str] | None = None) -> int:
         if arguments.path.exists() or arguments.path.is_symlink():
             raise StorageContractError("path required to be absent already exists")
         evidence = {"path": str(arguments.path), "absent": True}
+    elif arguments.command == "guard-storage":
+        expected_scope = _B2A_GUARD_SCOPES.get(arguments.next_action)
+        if expected_scope is None:
+            raise StorageContractError("Gate B2a guard target is not approved")
+        try:
+            purposes = tuple(RootPurpose(value) for value in arguments.purposes.split(","))
+        except ValueError as error:
+            raise StorageContractError("Gate B2a guard purpose is not approved") from error
+        if expected_scope != (purposes, arguments.require_existing):
+            raise StorageContractError("Gate B2a guard scope differs from the exact plan")
+        bundle = inspect_and_guard_current_storage(
+            system_floor_bytes=_parse_system_floor(arguments.system_floor_bytes),
+            purposes=purposes,
+            require_existing=arguments.require_existing,
+        )
+        evidence = bundle.document() | {"next_action": arguments.next_action}
     else:
+        system_floor_bytes = _parse_system_floor(arguments.system_floor_bytes)
+        pre_seal_guard = inspect_and_guard_current_storage(
+            system_floor_bytes=system_floor_bytes,
+            purposes=(RootPurpose.B2A_WORK,),
+            require_existing=True,
+        )
+        pre_seal_guard.consume((RootPurpose.B2A_WORK,))
         seal_attempt(
             arguments.source,
             attempt_id=arguments.archive_id,
             max_bytes=arguments.max_bytes,
+        )
+        copy_guard = inspect_and_guard_current_storage(
+            system_floor_bytes=system_floor_bytes,
+            purposes=(RootPurpose.B2A_WORK, RootPurpose.SEALED_ARCHIVE),
+            require_existing=True,
+        )
+        placement = qualify_archive_placement(
+            arguments.source,
+            archive_parent=arguments.archive_parent,
+            source_observation=copy_guard.system,
+            destination_observation=copy_guard.external,
+            system_floor_bytes=system_floor_bytes,
         )
         evidence = copy_sealed_attempt(
             arguments.source,
@@ -1191,8 +2247,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             archive_id=arguments.archive_id,
             copy_record_path=arguments.copy_record,
             max_bytes=arguments.max_bytes,
-            source_volume_uuid=SYSTEM_DATA_VOLUME_UUID,
-            destination_volume_uuid=APPROVED_VOLUME_UUID,
+            placement=placement,
+            source_observation=copy_guard.system,
+            destination_observation=copy_guard.external,
             copied_at_utc=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         )
     print(json.dumps(evidence, allow_nan=False, sort_keys=True, separators=(",", ":")))

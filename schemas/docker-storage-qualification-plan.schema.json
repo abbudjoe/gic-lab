@@ -64,6 +64,7 @@
         "aggregate_wall_seconds",
         "aggregate_output_bytes",
         "aggregate_download_bytes",
+        "aggregate_automatable_calls",
         "system_incremental_disk_bytes",
         "external_incremental_disk_bytes",
         "active_attempt_bytes",
@@ -77,6 +78,7 @@
         "aggregate_wall_seconds": {"const": 7200},
         "aggregate_output_bytes": {"const": 16777216},
         "aggregate_download_bytes": {"const": 577786748},
+        "aggregate_automatable_calls": {"type": "integer", "minimum": 1},
         "system_incremental_disk_bytes": {"type": "null"},
         "external_incremental_disk_bytes": {"const": 12884901888},
         "active_attempt_bytes": {"const": 67108864},
@@ -136,7 +138,23 @@
             "minItems": 1,
             "items": {"type": "string", "minLength": 1}
           },
-          "instruction": {"type": "string", "minLength": 1}
+          "instruction": {"type": "string", "minLength": 1},
+          "expected_stdout": {"type": "string"},
+          "guard_for_action": {"type": "string", "pattern": "^[a-z][a-z0-9-]{2,63}$"},
+          "guard_purposes": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "enum": [
+                "docker-disk-image",
+                "build-staging",
+                "sealed-artifact-archive",
+                "active-attempt",
+                "b2a-work"
+              ]
+            }
+          }
         },
         "allOf": [
           {

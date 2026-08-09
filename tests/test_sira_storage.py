@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import plistlib
+import stat
 from dataclasses import replace
 from pathlib import Path
 
@@ -30,19 +31,27 @@ from giclab.harness.sira_storage import (
     SYSTEM_CAPACITY_BYTES,
     SYSTEM_DATA_MOUNT,
     SYSTEM_DATA_VOLUME_UUID,
+    B2AActionResult,
+    B2AExecutionSupervisor,
     B2APlan,
+    B2AResourceSnapshot,
     B2AStep,
     B2AStepKind,
+    DockerDiskIdentity,
+    DockerEngineIdentity,
     DockerPlacementEvidence,
     ReconnectQualification,
     ReconnectState,
     RootPurpose,
     StorageContractError,
-    StorageGuardToken,
     SystemFloorInputs,
     VolumeObservation,
+    _guard_argv,
     _validate_b2a_argv,
     copy_sealed_attempt,
+    issue_storage_guard,
+    load_b2a_plan,
+    qualify_archive_placement,
     retained_free_floor,
     sanitize_docker_settings,
     seal_attempt,
@@ -109,6 +118,29 @@ def _user_step(action_id: str) -> B2AStep:
 
 
 def _blocked_plan() -> B2APlan:
+    select_guard = B2AStep(
+        action_id="guard-select-external-disk-location",
+        kind=B2AStepKind.AUTOMATABLE,
+        timeout_seconds=10,
+        output_limit_bytes=1024,
+        download_limit_bytes=0,
+        internal_disk_limit_bytes=0,
+        external_disk_limit_bytes=0,
+        argv=_guard_argv(
+            "select-external-disk-location",
+            (RootPurpose.DOCKER_DISK, RootPurpose.BUILD_STAGING, RootPurpose.B2A_WORK),
+            require_existing=True,
+        ),
+        instruction=None,
+        stop_on_failure=True,
+        retry_limit=0,
+        guard_for_action="select-external-disk-location",
+        guard_purposes=(
+            RootPurpose.DOCKER_DISK,
+            RootPurpose.BUILD_STAGING,
+            RootPurpose.B2A_WORK,
+        ),
+    )
     steps = (
         B2AStep(
             action_id="repository-preflight",
@@ -125,6 +157,7 @@ def _blocked_plan() -> B2APlan:
         ),
         _user_step("accept-terms-personally"),
         _user_step("disable-automatic-update"),
+        select_guard,
         _user_step("select-external-disk-location"),
         _user_step("eject-disconnect"),
         _user_step("reconnect-remount-unlock"),
@@ -145,6 +178,7 @@ def _blocked_plan() -> B2APlan:
         steps=steps,
         superseded_plan_id=SUPERSEDED_PLAN_ID,
         superseded_plan_sha256=SUPERSEDED_PLAN_SHA256,
+        aggregate_automatable_calls=2,
     )
 
 
@@ -250,6 +284,7 @@ def test_diskutil_parser_rejects_missing_or_duplicate_volume_container_match() -
             "DeviceIdentifier": "disk99s5",
             "Writable": True,
             "WritableVolume": True,
+            "Locked": False,
         }
     )
     container = {
@@ -264,6 +299,37 @@ def test_diskutil_parser_rejects_missing_or_duplicate_volume_container_match() -
         volume_observation_from_diskutil(
             volume, plistlib.dumps({"Containers": [container, container]})
         )
+
+
+def test_diskutil_parser_requires_explicit_lock_and_utdm_evidence() -> None:
+    volume = {
+        "MountPoint": str(APPROVED_MOUNT),
+        "FilesystemType": "apfs",
+        "VolumeUUID": APPROVED_VOLUME_UUID,
+        "DeviceIdentifier": "disk99s5",
+        "Writable": True,
+        "WritableVolume": True,
+        "Internal": False,
+        "OSInternalMedia": False,
+        "BusProtocol": "Thunderbolt",
+        "DeviceTreePath": "IODeviceTree:/UTDM@0",
+    }
+    container = {
+        "CapacityCeiling": APPROVED_EXTERNAL_CAPACITY_BYTES,
+        "CapacityFree": EXTERNAL_PRE_B2A_FREE_FLOOR_BYTES,
+        "PhysicalStores": [{"DiskUUID": APPROVED_PHYSICAL_STORE_UUID}],
+        "Volumes": [{"APFSVolumeUUID": APPROVED_VOLUME_UUID}],
+    }
+    with pytest.raises(StorageContractError, match="lock-state"):
+        volume_observation_from_diskutil(
+            plistlib.dumps(volume), plistlib.dumps({"Containers": [container]})
+        )
+    volume["Locked"] = False
+    observation = volume_observation_from_diskutil(
+        plistlib.dumps(volume), plistlib.dumps({"Containers": [container]})
+    )
+    with pytest.raises(StorageContractError, match="Thunderbolt UTDM"):
+        replace(observation, bus_protocol="USB").validate_external(reserve_incremental=True)
 
 
 def test_path_guard_rejects_symlink_escape_and_internal_fallback(tmp_path: Path) -> None:
@@ -321,22 +387,43 @@ def test_storage_guard_token_is_single_use_and_stale_safe(
     disk_root = external / "disk"
     monkeypatch.setattr("giclab.harness.sira_storage.DOCKER_DISK_IMAGE_ROOT", disk_root)
     monkeypatch.setattr("giclab.harness.sira_storage.APPROVED_EXTERNAL_ROOT", external)
-    guard = StorageGuardToken(
-        purpose=RootPurpose.DOCKER_DISK,
-        path=disk_root,
-        volume_uuid=APPROVED_VOLUME_UUID,
-        physical_store_uuid=APPROVED_PHYSICAL_STORE_UUID,
-        external_device=external.stat().st_dev,
-        system_device=external.stat().st_dev + 1,
+    external_device = 101
+    system_device = 202
+
+    def resolve_device(path: Path) -> int:
+        return external_device if path.is_relative_to(external) else system_device
+
+    bundle = issue_storage_guard(
+        external=_external_observation(),
+        system=_system_observation(),
+        external_device=external_device,
+        system_device=system_device,
+        system_floor_bytes=1,
+        purposes=(RootPurpose.DOCKER_DISK,),
+        require_existing=False,
         issued_monotonic_ns=100,
-        maximum_age_ns=10,
+        device_resolver=resolve_device,
     )
-    guard.consume(observation=_external_observation(), now_monotonic_ns=105)
+    guard = bundle.tokens[RootPurpose.DOCKER_DISK]
+    guard.maximum_age_ns = 10
+    guard.consume(
+        observation=_external_observation(),
+        now_monotonic_ns=105,
+        device_resolver=resolve_device,
+    )
     with pytest.raises(StorageContractError, match="already consumed"):
-        guard.consume(observation=_external_observation(), now_monotonic_ns=106)
+        guard.consume(
+            observation=_external_observation(),
+            now_monotonic_ns=106,
+            device_resolver=resolve_device,
+        )
     stale = replace(guard, consumed=False, issued_monotonic_ns=100)
     with pytest.raises(StorageContractError, match="stale"):
-        stale.consume(observation=_external_observation(), now_monotonic_ns=111)
+        stale.consume(
+            observation=_external_observation(),
+            now_monotonic_ns=111,
+            device_resolver=resolve_device,
+        )
 
 
 def test_active_attempt_and_external_archive_roles_are_distinct() -> None:
@@ -348,12 +435,44 @@ def test_active_attempt_and_external_archive_roles_are_distinct() -> None:
     assert len({DOCKER_DISK_IMAGE_ROOT, BUILD_STAGING_ROOT, SEALED_ARTIFACT_ROOT}) == 3
 
 
-def test_reconnect_state_machine_rejects_skip_replay_and_identity_change() -> None:
+def test_reconnect_state_machine_rejects_skip_replay_and_identity_change(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    external_root = tmp_path / "external"
+    disk_root = external_root / "disk"
+    build_root = external_root / "build"
+    archive_root = external_root / "archive"
+    for path in (disk_root, build_root, archive_root):
+        path.mkdir(parents=True)
+    monkeypatch.setattr("giclab.harness.sira_storage.APPROVED_EXTERNAL_ROOT", external_root)
+    monkeypatch.setattr("giclab.harness.sira_storage.DOCKER_DISK_IMAGE_ROOT", disk_root)
+    monkeypatch.setattr("giclab.harness.sira_storage.BUILD_STAGING_ROOT", build_root)
+    monkeypatch.setattr("giclab.harness.sira_storage.SEALED_ARTIFACT_ROOT", archive_root)
+    external_device = 101
+    system_device = 202
+
+    def resolve_device(path: Path) -> int:
+        return external_device if path.is_relative_to(external_root) else system_device
+
+    disk = DockerDiskIdentity(
+        path=disk_root / "Docker.raw",
+        inode=123,
+        logical_bytes=456,
+        birthtime_ns=789,
+    )
+    engine = DockerEngineIdentity(
+        engine_id="engine-1",
+        context="desktop-linux",
+        server_os="linux",
+        architecture="aarch64",
+        healthy=True,
+        default_internal_active=False,
+    )
     qualification = ReconnectQualification(
         expected_volume_uuid=APPROVED_VOLUME_UUID,
         expected_physical_store_uuid=APPROVED_PHYSICAL_STORE_UUID,
-        expected_disk_identity="inode:123:size:456",
-        expected_engine_identity="engine-1",
+        expected_disk_identity=disk,
+        expected_engine_identity=engine,
     )
     with pytest.raises(StorageContractError, match="out of order"):
         qualification.advance(ReconnectState.USER_EJECTED)
@@ -364,33 +483,60 @@ def test_reconnect_state_machine_rejects_skip_replay_and_identity_change() -> No
     with pytest.raises(StorageContractError, match="UUID mismatch"):
         qualification.advance(
             ReconnectState.VOLUME_REQUALIFIED,
-            volume_uuid="wrong",
-            physical_store_uuid=APPROVED_PHYSICAL_STORE_UUID,
+            volume_observation=replace(
+                _external_observation(),
+                volume_uuid="00000000-0000-0000-0000-000000000000",
+            ),
         )
     qualification.advance(
         ReconnectState.VOLUME_REQUALIFIED,
-        volume_uuid=APPROVED_VOLUME_UUID,
-        physical_store_uuid=APPROVED_PHYSICAL_STORE_UUID,
+        volume_observation=_external_observation(),
+    )
+    bundle = issue_storage_guard(
+        external=_external_observation(),
+        system=_system_observation(),
+        external_device=external_device,
+        system_device=system_device,
+        system_floor_bytes=1,
+        purposes=(
+            RootPurpose.DOCKER_DISK,
+            RootPurpose.BUILD_STAGING,
+            RootPurpose.SEALED_ARCHIVE,
+        ),
+        require_existing=True,
+        issued_monotonic_ns=100,
+        device_resolver=resolve_device,
     )
     qualification.advance(
         ReconnectState.PATHS_REQUALIFIED,
-        volume_uuid=APPROVED_VOLUME_UUID,
-        physical_store_uuid=APPROVED_PHYSICAL_STORE_UUID,
+        storage_guard=bundle,
+        now_monotonic_ns=105,
+        device_resolver=resolve_device,
     )
-    qualification.advance(ReconnectState.USER_ENGINE_RESTARTED)
+    qualification.advance(ReconnectState.USER_ENGINE_RESTARTED, storage_guard=bundle)
     with pytest.raises(StorageContractError, match="different disk"):
-        qualification.advance(ReconnectState.SAME_DISK_REOPENED, disk_identity="inode:999:size:456")
-    qualification.advance(ReconnectState.SAME_DISK_REOPENED, disk_identity="inode:123:size:456")
-    qualification.advance(ReconnectState.ENGINE_HEALTHY, engine_identity="engine-1")
+        qualification.advance(
+            ReconnectState.SAME_DISK_REOPENED,
+            disk_identity=replace(disk, inode=999),
+        )
+    qualification.advance(ReconnectState.SAME_DISK_REOPENED, disk_identity=disk)
+    qualification.advance(ReconnectState.ENGINE_HEALTHY, engine_identity=engine)
     qualification.advance(ReconnectState.FINAL_ENGINE_STOPPED)
     qualification.advance(ReconnectState.EVIDENCE_SEALED)
     with pytest.raises(StorageContractError, match="out of order"):
         qualification.advance(ReconnectState.EVIDENCE_SEALED)
 
 
-def test_settings_evidence_is_minimized_and_placement_is_machine_checked() -> None:
+def test_settings_evidence_is_minimized_and_placement_is_machine_checked(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    disk_root = tmp_path / "docker-disk"
+    disk_root.mkdir()
+    disk_path = disk_root / "Docker.raw"
+    disk_path.write_bytes(b"sparse-disk-fixture")
+    monkeypatch.setattr("giclab.harness.sira_storage.DOCKER_DISK_IMAGE_ROOT", disk_root)
     settings = {
-        "dataFolder": str(DOCKER_DISK_IMAGE_ROOT),
+        "dataFolder": str(disk_root),
         "diskSizeMiB": 65536,
         "autoDownloadUpdates": False,
         "credentialHelper": "must-not-retain",
@@ -399,33 +545,45 @@ def test_settings_evidence_is_minimized_and_placement_is_machine_checked() -> No
     sanitized = sanitize_docker_settings(settings)
     assert set(sanitized) == {"dataFolder", "diskSizeMiB", "autoDownloadUpdates"}
     encoded = json.dumps(sanitized, sort_keys=True, separators=(",", ":")).encode()
+    observed = disk_path.lstat()
     evidence = DockerPlacementEvidence(
-        configured_data_folder=DOCKER_DISK_IMAGE_ROOT,
-        disk_path=DOCKER_DISK_IMAGE_ROOT / "Docker.raw",
-        disk_device=44,
-        disk_inode=123,
-        disk_logical_bytes=64 * 1024**3,
-        disk_allocated_bytes=1024,
+        configured_data_folder=disk_root,
+        disk_path=disk_path,
+        disk_device=observed.st_dev,
+        disk_inode=observed.st_ino,
+        disk_logical_bytes=observed.st_size,
+        disk_allocated_bytes=observed.st_blocks * 512,
         engine_identity="engine-1",
         settings_sha256=hashlib.sha256(encoded).hexdigest(),
         default_internal_exists=False,
         default_internal_active=False,
     )
-    evidence.validate(external_device=44, sanitized_settings=sanitized)
+    evidence.validate(external_device=observed.st_dev, sanitized_settings=sanitized)
+    with pytest.raises(StorageContractError, match="data folder"):
+        evidence.validate(external_device=observed.st_dev, sanitized_settings={})
+    schema_settings = {
+        "dataFolder": "/Volumes/Macintosh HD - Data/GIC-Lab/t07/docker-desktop/disk-image",
+        "diskSizeMiB": 65536,
+        "autoDownloadUpdates": False,
+    }
+    schema_settings_hash = hashlib.sha256(
+        json.dumps(schema_settings, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
     placement_document = {
         "schema_version": "0.1.0",
         "volume_uuid": APPROVED_VOLUME_UUID,
         "physical_store_uuid": APPROVED_PHYSICAL_STORE_UUID,
-        "configured_data_folder": str(DOCKER_DISK_IMAGE_ROOT),
+        "configured_data_folder": schema_settings["dataFolder"],
         "settings_source": "/version-verified/source",
         "settings_key": "versionVerifiedKey",
-        "settings_sha256": evidence.settings_sha256,
+        "sanitized_settings": schema_settings,
+        "settings_sha256": schema_settings_hash,
         "disk": {
-            "path": str(evidence.disk_path),
-            "device": evidence.disk_device,
-            "inode": evidence.disk_inode,
-            "logical_bytes": evidence.disk_logical_bytes,
-            "allocated_bytes": evidence.disk_allocated_bytes,
+            "path": schema_settings["dataFolder"] + "/Docker.raw",
+            "device": 44,
+            "inode": 123,
+            "logical_bytes": 64 * 1024**3,
+            "allocated_bytes": 1024,
         },
         "engine_identity": evidence.engine_identity,
         "default_internal": {
@@ -444,35 +602,94 @@ def test_settings_evidence_is_minimized_and_placement_is_machine_checked() -> No
     )
     with pytest.raises(StorageContractError, match="internal"):
         replace(evidence, default_internal_exists=True).validate(
-            external_device=44, sanitized_settings=sanitized
+            external_device=observed.st_dev, sanitized_settings=sanitized
         )
+    escaped = replace(evidence, disk_path=disk_root / ".." / "escape.raw")
+    with pytest.raises(StorageContractError, match="escaped"):
+        escaped.validate(external_device=observed.st_dev, sanitized_settings=sanitized)
 
 
-def test_archive_copy_verifies_hashes_and_retains_source(tmp_path: Path) -> None:
-    source = tmp_path / "active" / "attempt-1"
+def test_archive_copy_verifies_hashes_and_retains_source(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    system_root = tmp_path / "system"
+    external_root = tmp_path / "external/GIC-Lab"
+    evidence_root = system_root / "evidence"
+    source = evidence_root / "session"
     source.mkdir(parents=True)
     (source / "nested").mkdir()
     (source / "nested/evidence.txt").write_text("bounded evidence\n")
-    archive = tmp_path / "archive"
-    archive.mkdir()
-    records = tmp_path / "records"
+    archive = external_root / "t07/sealed-artifacts"
+    archive.mkdir(parents=True)
+    monkeypatch.setattr("giclab.harness.sira_storage.APPROVED_EXTERNAL_ROOT", external_root)
+    monkeypatch.setattr("giclab.harness.sira_storage.SEALED_ARTIFACT_ROOT", archive)
+    monkeypatch.setattr("giclab.harness.sira_storage.B2A_EVIDENCE_ROOT", evidence_root)
+    monkeypatch.setattr("giclab.harness.sira_storage.B2A_EVIDENCE_SESSION_ROOT", source)
+    source_device = 101
+    destination_device = 202
+
+    def resolve_device(path: Path) -> int:
+        if path == SYSTEM_DATA_MOUNT or path.is_relative_to(system_root):
+            return source_device
+        if path == APPROVED_MOUNT or path.is_relative_to(external_root):
+            return destination_device
+        raise AssertionError(f"unexpected fixture path: {path}")
+
     seal = seal_attempt(source, attempt_id="attempt-1", max_bytes=1024)
+    placement = qualify_archive_placement(
+        source,
+        archive_parent=archive,
+        source_observation=_system_observation(),
+        destination_observation=_external_observation(),
+        system_floor_bytes=1,
+        issued_monotonic_ns=100,
+        device_resolver=resolve_device,
+    )
+    record_path = evidence_root / "copy-records/attempt-1-sealed.json"
+    with pytest.raises(StorageContractError, match="identity is unsafe"):
+        copy_sealed_attempt(
+            source,
+            archive_parent=archive,
+            archive_id="../escape",
+            copy_record_path=record_path,
+            max_bytes=1024,
+            placement=placement,
+            source_observation=_system_observation(),
+            destination_observation=_external_observation(),
+            copied_at_utc="2026-08-09T16:00:00Z",
+            now_monotonic_ns=105,
+            device_resolver=resolve_device,
+        )
     record = copy_sealed_attempt(
         source,
         archive_parent=archive,
         archive_id="attempt-1-sealed",
-        copy_record_path=records / "attempt-1.json",
+        copy_record_path=record_path,
         max_bytes=1024,
-        source_volume_uuid=SYSTEM_DATA_VOLUME_UUID,
-        destination_volume_uuid=APPROVED_VOLUME_UUID,
+        placement=placement,
+        source_observation=_system_observation(),
+        destination_observation=_external_observation(),
         copied_at_utc="2026-08-09T16:00:00Z",
+        now_monotonic_ns=105,
+        device_resolver=resolve_device,
     )
     assert seal["total_payload_bytes"] == len("bounded evidence\n")
     assert record["source_retained"] is True
     assert source.exists()
     assert (archive / "attempt-1-sealed/nested/evidence.txt").read_text() == "bounded evidence\n"
-    assert json.loads((records / "attempt-1.json").read_text())["files_verified"] == 1
+    assert json.loads(record_path.read_text())["files_verified"] == 1
+    assert stat.S_IMODE((archive / "attempt-1-sealed").stat().st_mode) == 0o500
+    assert stat.S_IMODE((archive / "attempt-1-sealed/nested/evidence.txt").stat().st_mode) == 0o400
     assert validate_instance(record, ROOT / "schemas/sealed-artifact-copy.schema.json") == []
+    for candidate in sorted(
+        (archive / "attempt-1-sealed").rglob("*"),
+        key=lambda item: len(item.parts),
+    ):
+        if candidate.is_dir():
+            os.chmod(candidate, 0o700)
+        else:
+            os.chmod(candidate, 0o600)
+    os.chmod(archive / "attempt-1-sealed", 0o700)
     os.chmod(source, 0o700)
     os.chmod(source / "nested", 0o700)
     os.chmod(source / "nested/evidence.txt", 0o600)
@@ -499,6 +716,159 @@ def test_blocked_b2a_plan_is_separate_from_b2b_and_old_plan() -> None:
     assert not plan.authorized
     with pytest.raises(StorageContractError, match="stale"):
         replace(plan, plan_id=SUPERSEDED_PLAN_ID).validate()
+
+
+def test_b2a_supervisor_blocks_unauthorized_plan_and_enforces_caps() -> None:
+    with pytest.raises(StorageContractError, match="unauthorized"):
+        B2AExecutionSupervisor(_blocked_plan())
+    authorized = replace(
+        _blocked_plan(),
+        authorization_reference="AUTH-T07-GATE-B2A-TEST",
+        authorized=True,
+        system_incremental_disk_bytes=1024,
+        system_floor_inputs=SystemFloorInputs(
+            os_operating_headroom_bytes=0,
+            installed_app_bytes=0,
+            support_files_bytes=0,
+            update_rollback_bytes=0,
+            failure_cleanup_bytes=0,
+            first_start_internal_bytes=0,
+        ),
+    )
+    supervisor = B2AExecutionSupervisor(authorized)
+    floor = authorized.system_floor_inputs.resolved_floor_bytes()
+    snapshot = B2AResourceSnapshot(
+        system_free_bytes=floor + 1024,
+        external_free_bytes=EXTERNAL_PRE_B2A_FREE_FLOOR_BYTES + 1024,
+        active_attempt_bytes=0,
+    )
+    supervisor.start(snapshot, now_monotonic_ns=100)
+    supervisor.begin_action("repository-preflight", snapshot, now_monotonic_ns=101)
+    with pytest.raises(StorageContractError, match="output cap"):
+        supervisor.finish_action(
+            B2AActionResult(
+                exit_code=0,
+                stdout=b"x" * 1025,
+                stderr=b"",
+                downloaded_bytes=0,
+                resources_after=snapshot,
+            ),
+            now_monotonic_ns=102,
+        )
+
+
+def test_b2a_supervisor_consumes_adjacent_guard_and_exact_call_count(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    plan = replace(
+        _blocked_plan(),
+        authorization_reference="AUTH-T07-GATE-B2A-TEST",
+        authorized=True,
+        system_incremental_disk_bytes=1024,
+        system_floor_inputs=SystemFloorInputs(
+            os_operating_headroom_bytes=0,
+            installed_app_bytes=0,
+            support_files_bytes=0,
+            update_rollback_bytes=0,
+            failure_cleanup_bytes=0,
+            first_start_internal_bytes=0,
+        ),
+    )
+    external_root = tmp_path / "external"
+    system_root = tmp_path / "system"
+    disk_root = external_root / "disk"
+    build_root = external_root / "build"
+    work_root = system_root / "work"
+    for path in (disk_root, build_root, work_root):
+        path.mkdir(parents=True)
+    monkeypatch.setattr("giclab.harness.sira_storage.APPROVED_EXTERNAL_ROOT", external_root)
+    monkeypatch.setattr("giclab.harness.sira_storage.DOCKER_DISK_IMAGE_ROOT", disk_root)
+    monkeypatch.setattr("giclab.harness.sira_storage.BUILD_STAGING_ROOT", build_root)
+    monkeypatch.setattr("giclab.harness.sira_storage.SYSTEM_GICLAB_ROOT", system_root)
+    monkeypatch.setattr("giclab.harness.sira_storage.B2A_WORK_ROOT", work_root)
+    external_device = 101
+    system_device = 202
+
+    def resolve_device(path: Path) -> int:
+        return external_device if path.is_relative_to(external_root) else system_device
+
+    guard = issue_storage_guard(
+        external=_external_observation(),
+        system=_system_observation(),
+        external_device=external_device,
+        system_device=system_device,
+        system_floor_bytes=plan.system_floor_inputs.resolved_floor_bytes(),
+        purposes=(
+            RootPurpose.DOCKER_DISK,
+            RootPurpose.BUILD_STAGING,
+            RootPurpose.B2A_WORK,
+        ),
+        require_existing=True,
+        issued_monotonic_ns=1_000,
+        device_resolver=resolve_device,
+    )
+    snapshot = B2AResourceSnapshot(
+        system_free_bytes=plan.system_floor_inputs.resolved_floor_bytes() + 1024,
+        external_free_bytes=EXTERNAL_PRE_B2A_FREE_FLOOR_BYTES + 1024,
+        active_attempt_bytes=0,
+    )
+    supervisor = B2AExecutionSupervisor(plan)
+    supervisor.start(snapshot, now_monotonic_ns=1_000)
+    now = 1_001
+    for step in plan.steps:
+        supervisor.begin_action(
+            step.action_id,
+            snapshot,
+            now_monotonic_ns=now,
+            device_resolver=resolve_device,
+        )
+        now += 1
+        supervisor.finish_action(
+            B2AActionResult(
+                exit_code=0,
+                stdout=b"",
+                stderr=b"",
+                downloaded_bytes=0,
+                resources_after=snapshot,
+            ),
+            now_monotonic_ns=now,
+            guard_bundle=(guard if step.guard_for_action is not None else None),
+        )
+        now += 1
+    supervisor.complete(now_monotonic_ns=now)
+    assert guard.all_consumed(
+        (RootPurpose.DOCKER_DISK, RootPurpose.BUILD_STAGING, RootPurpose.B2A_WORK)
+    )
+
+
+def test_committed_b2a_plan_has_exact_hash_and_remains_blocked() -> None:
+    path = ROOT / "containers/sira-smoke/gate-b2a-install-storage-binding-plan.json"
+    digest = "9c8f022fe306e50cb26eaccf1a7a0a7da0d935b4a1613b26a2aa641d31ba5892"
+    plan = load_b2a_plan(path, expected_sha256=digest)
+    assert plan.implementation_commit == "088ad05ee747a922dc457f0ccf22fee6ca083c46"
+    assert not plan.authorized
+    assert plan.system_incremental_disk_bytes is None
+
+
+def test_b2b_stub_contains_requirements_but_no_executable_authority() -> None:
+    stub = (ROOT / "docs/harness/T07_GATE_B2B_REQUIREMENTS_STUB.md").read_text()
+    assert "Required B2a outputs" in stub
+    for prohibited in (
+        "PLAN-T07-GATE-B2B",
+        "AUTH-T07-GATE-B2B",
+        '"argv"',
+        "/usr/bin/",
+        "/Applications/",
+    ):
+        assert prohibited not in stub
+
+
+def test_b2a_packet_is_bound_and_explicitly_authorizes_nothing() -> None:
+    packet = (ROOT / "docs/harness/T07_GATE_B2A_INSTALL_AUTHORIZATION_PACKET.md").read_text()
+    assert "this packet and its plan authorize nothing" in packet
+    assert "9c8f022fe306e50cb26eaccf1a7a0a7da0d935b4a1613b26a2aa641d31ba5892" in packet
+    assert "088ad05ee747a922dc457f0ccf22fee6ca083c46" in packet
+    assert "There is no truthful ready-to-copy **installation authorization**" in packet
 
 
 def test_official_metadata_verifier_binds_selected_item_not_channel_link(
@@ -551,6 +921,17 @@ def test_dmg_verifier_requires_exact_bytes_and_hash(
         ("/usr/bin/python3", "-m", "playwright", "install", "chromium"),
         ("/usr/bin/python3", "-m", "giclab", "--secret-file", "/tmp/value"),
         ("/bin/sh", "-c", "true"),
+        ("/usr/sbin/diskutil", "eraseDisk", "APFS", "bad", "disk99"),
+        ("/usr/bin/git", "clean", "-fdx"),
+        ("/usr/bin/python3", "-c", "print('unexpected')"),
+        (
+            "/usr/bin/curl",
+            "--output",
+            "/tmp/unbounded",
+            "https://example.com/unapproved",
+        ),
+        ("/Applications/Docker.app/Contents/Resources/bin/docker", "system", "dial-stdio"),
+        ("/bin/mkdir", "-m", "0700", "/tmp/outside-approved-roots"),
     ],
 )
 def test_b2a_rejects_pull_build_container_browser_api_secret_and_shell(

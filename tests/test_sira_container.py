@@ -63,6 +63,9 @@ from giclab.harness.sira_container import (
     verify_exact_file,
     write_dummy_secret_file,
 )
+from giclab.harness.sira_container import (
+    main as sira_container_main,
+)
 from giclab.harness.sira_gate_a import SIRA_UPSTREAM_COMMIT
 from giclab.validation import ROOT, validate_instance
 
@@ -363,34 +366,17 @@ class FakeMaterializationRunner:
         return CommandResult(args, 0, "")
 
 
-def test_materialization_plan_is_hashed_shell_free_and_uses_available_host_binaries() -> None:
+def test_historical_materialization_plan_is_preserved_but_non_executable() -> None:
     path = (ROOT / "containers/sira-smoke/materialization-plan.json").resolve(strict=True)
     digest = hashlib.sha256(path.read_bytes()).hexdigest()
-    plan = load_materialization_plan(path, expected_sha256=digest)
-    assert plan.max_command_calls == 51
-    assert {action.action_id for action in plan.actions}.issuperset(
-        {
-            "verify-docker-desktop-dmg",
-            "verify-pinned-uv-wheel",
-            "verify-staged-build-context",
-            "post-staging-storage-floor",
-        }
-    )
-    for action in plan.actions:
-        executable = Path(action.argv[0])
-        assert executable != Path("/usr/bin/test")
-        if executable == DOCKER:
-            continue  # created only by the authorized install action
-        assert executable.is_file() and os.access(executable, os.X_OK)
-        if executable == Path("/usr/bin/env"):
-            nested = Path(action.argv[2])
-            assert nested.is_file() and os.access(nested, os.X_OK)
+    with pytest.raises(ContainerContractError, match="superseded and non-executable"):
+        load_materialization_plan(path, expected_sha256=digest)
 
     with pytest.raises(ContainerContractError, match="hash does not match"):
         load_materialization_plan(path, expected_sha256="0" * 64)
 
 
-def test_materialization_executor_uses_one_deadline_and_one_call_per_action(
+def test_historical_materialization_executor_is_disabled(
     tmp_path: Path,
 ) -> None:
     actions = (
@@ -398,16 +384,51 @@ def test_materialization_executor_uses_one_deadline_and_one_call_per_action(
         MaterializationAction("second-action", ("/bin/test", "-e", "/bin/test"), 60, ""),
     )
     runner = FakeMaterializationRunner()
-    clock_values = iter((0.0, 3_500.0, 3_500.0, 3_599.75, 3_599.8, 3_599.9))
-    ledger = BoundedMaterializationExecutor(
-        runner=runner,
-        clock=lambda: next(clock_values),
-    ).execute(_materialization_plan(actions), ledger_path=tmp_path / "ledger.json")
-    assert runner.calls == [action.argv for action in actions]
-    assert runner.deadlines == [3_560.0, 3_600.0]
-    assert ledger["status"] == "complete"
-    assert ledger["attempts_per_action"] == 1
-    assert ledger["command_calls"] == 2
+    with pytest.raises(ContainerContractError, match="superseded and non-executable"):
+        BoundedMaterializationExecutor(runner=runner).execute(
+            _materialization_plan(actions), ledger_path=tmp_path / "ledger.json"
+        )
+    assert runner.calls == []
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        (
+            "capture-image-identity",
+            "--repository-root",
+            str(ROOT),
+            "--runtime",
+            "/Applications/Docker.app/Contents/Resources/bin/docker",
+            "--local-tag",
+            "giclab/sira-smoke:stale",
+            "--output",
+            "/tmp/stale-image.json",
+        ),
+        (
+            "execute-fixture",
+            "--repository-root",
+            str(ROOT),
+            "--runtime",
+            "/Applications/Docker.app/Contents/Resources/bin/docker",
+            "--image-identity",
+            "/tmp/stale-image.json",
+            "--owned-base",
+            "/tmp/stale-owned",
+            "--repository-commit",
+            "a" * 40,
+            "--attempt-uuid",
+            "b" * 32,
+            "--authorization-reference",
+            "AUTH-T07-GATE-B2-STALE",
+            "--fixture",
+            "adversarial-containment",
+        ),
+    ],
+)
+def test_b2b_image_and_fixture_cli_paths_are_disabled(argv: tuple[str, ...]) -> None:
+    with pytest.raises(ContainerContractError, match="B2b is undesigned and unauthorized"):
+        sira_container_main(argv)
 
 
 def test_materialization_streaming_runner_stops_at_output_cap() -> None:

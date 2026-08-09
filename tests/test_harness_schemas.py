@@ -79,6 +79,17 @@ def test_gate_b2_materialization_plan_matches_its_schema() -> None:
     )
 
 
+def test_gate_b2a_storage_plan_matches_its_dedicated_schema() -> None:
+    plan = load_json(ROOT / "containers/sira-smoke/gate-b2a-install-storage-binding-plan.json")
+    assert (
+        validate_instance(
+            plan,
+            ROOT / "schemas/docker-storage-qualification-plan.schema.json",
+        )
+        == []
+    )
+
+
 def test_run_plan_schema_accepts_source_neutral_plan() -> None:
     assert validate_instance(valid_plan_data(), ROOT / "schemas/run-plan.schema.json") == []
 

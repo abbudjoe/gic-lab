@@ -875,6 +875,10 @@ def load_materialization_plan(path: Path, *, expected_sha256: str) -> Materializ
         value = json.loads(encoded)
     except json.JSONDecodeError as exc:
         raise ContainerContractError("materialization plan is not JSON") from exc
+    if isinstance(value, Mapping) and value.get("plan_id") == "PLAN-T07-GATE-B2-MATERIALIZATION":
+        raise ContainerContractError(
+            "historical combined Gate B2 materialization plan is superseded and non-executable"
+        )
     if not isinstance(value, Mapping) or set(value) != {
         "schema_version",
         "plan_id",
@@ -951,6 +955,10 @@ class BoundedMaterializationExecutor:
         self.clock = clock
 
     def execute(self, plan: MaterializationPlan, *, ledger_path: Path) -> Mapping[str, object]:
+        if plan.plan_id == "PLAN-T07-GATE-B2-MATERIALIZATION":
+            raise ContainerContractError(
+                "historical combined Gate B2 materialization plan is superseded and non-executable"
+            )
         if (
             not ledger_path.is_absolute()
             or ledger_path.resolve(strict=False) != ledger_path
@@ -3236,6 +3244,10 @@ def _cli_parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = _cli_parser().parse_args(argv)
+    if args.operation in {"capture-image-identity", "execute-fixture"}:
+        raise ContainerContractError(
+            "Gate B2b is undesigned and unauthorized; Docker image/fixture execution is disabled"
+        )
     if args.operation == "write-dummy-secret":
         write_dummy_secret_file(args.output.resolve(strict=False))
         return 0

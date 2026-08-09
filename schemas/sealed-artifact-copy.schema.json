@@ -13,12 +13,16 @@
     "destination_device",
     "source_volume_uuid",
     "destination_volume_uuid",
+    "source_mount_path",
+    "destination_mount_path",
+    "destination_physical_store_uuid",
     "copied_at_utc",
     "seal_sha256",
     "destination_seal_sha256",
     "files_verified",
     "total_payload_bytes",
-    "source_retained"
+    "source_retained",
+    "destination_read_only"
   ],
   "properties": {
     "schema_version": {"const": "0.1.0"},
@@ -27,13 +31,17 @@
     "destination_path": {"type": "string", "pattern": "^/"},
     "source_device": {"type": "integer", "minimum": 0},
     "destination_device": {"type": "integer", "minimum": 0},
-    "source_volume_uuid": {"type": "string", "pattern": "^[A-F0-9-]{36}$"},
+    "source_volume_uuid": {"const": "285BFF35-A72D-452D-82A9-BD1ED7223CDE"},
     "destination_volume_uuid": {"const": "8478609D-FA37-4ED5-875D-47AE912B9151"},
+    "source_mount_path": {"const": "/System/Volumes/Data"},
+    "destination_mount_path": {"const": "/Volumes/Macintosh HD - Data"},
+    "destination_physical_store_uuid": {"const": "7904A6F1-F483-4ED7-9E34-BFECAB31C63E"},
     "copied_at_utc": {"type": "string", "format": "date-time"},
     "seal_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     "destination_seal_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     "files_verified": {"type": "integer", "minimum": 0},
     "total_payload_bytes": {"type": "integer", "minimum": 0, "maximum": 67108864},
-    "source_retained": {"const": true}
+    "source_retained": {"const": true},
+    "destination_read_only": {"const": true}
   }
 }

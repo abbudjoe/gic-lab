@@ -11,6 +11,7 @@
     "configured_data_folder",
     "settings_source",
     "settings_key",
+    "sanitized_settings",
     "settings_sha256",
     "disk",
     "engine_identity",
@@ -24,6 +25,18 @@
     "configured_data_folder": {"const": "/Volumes/Macintosh HD - Data/GIC-Lab/t07/docker-desktop/disk-image"},
     "settings_source": {"type": "string", "minLength": 1},
     "settings_key": {"type": "string", "minLength": 1},
+    "sanitized_settings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dataFolder"],
+      "properties": {
+        "dataFolder": {"const": "/Volumes/Macintosh HD - Data/GIC-Lab/t07/docker-desktop/disk-image"},
+        "diskSizeMiB": {"type": "integer", "minimum": 1},
+        "autoDownloadUpdates": {"type": "boolean"},
+        "checkForUpdates": {"type": "boolean"},
+        "useVirtualizationFramework": {"type": "boolean"}
+      }
+    },
     "settings_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     "disk": {
       "type": "object",
