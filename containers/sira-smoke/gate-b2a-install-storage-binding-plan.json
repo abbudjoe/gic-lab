@@ -1,0 +1,1630 @@
+{
+  "artifact": {
+    "build": "235549",
+    "bytes": 573592444,
+    "platform": "macos/arm64",
+    "product": "Docker Desktop",
+    "sha256": "84b1224c93456fe261955ebc91f3cd88ce19778ffdb6d0a0d423ce37246f7c2b",
+    "url": "https://desktop.docker.com/mac/main/arm64/235549/Docker.dmg",
+    "verification_status": "historically-verified-current-reverification-required",
+    "version": "4.85.0"
+  },
+  "authorization_reference": "AUTH-T07-GATE-B2A-PENDING",
+  "authorized": false,
+  "blocking_requirements": [
+    "Fresh official appcast, checksum, and object metadata must reverify the selected artifact before its download.",
+    "Every Mac mini system-floor term must be exact and committed in a replacement plan before download or installation.",
+    "A version-specific supported no-substitution and automatic-update control must be sourced before first start.",
+    "Version-specific first-start internal VM allocation must be avoided by a supported preseed or exactly bounded and separately accepted.",
+    "The persisted disk-location setting source/key, default internal disk path, clean-stop method, and placement evidence commands must be version-verified and committed in a replacement plan.",
+    "This blocked-design plan must be replaced by a new executable plan ID/hash after all blockers are resolved.",
+    "Resolve every Mac mini system-floor term and every null per-action/internal aggregate disk cap from first-party or bounded authorized observations.",
+    "Regenerate this plan with numeric system guards, a non-placeholder current-turn authorization reference, authorized=true, and a new SHA-256; this blocked artifact cannot be edited in place or executed.",
+    "Bind the eventual driver to B2AExecutionSupervisor so every adjacent guard, action order, call count, deadline, output/download/disk delta, free-space floor, and zero-retry rule is enforced.",
+    "Close the storage-guard identity race by binding fresh diskutil UUID evidence to held mount descriptors and re-observing identity at guard consumption.",
+    "Add version-specific machine evidence and supervisor wiring for Docker stopped state, settings and VM-file placement, default-internal inactivity, and reconnect identity before any executable replacement plan.",
+    "Replace prose-only rollback with a typed fail-state executor that enforces the exact one-time detach, verified Docker stop, evidence retention, and no-deletion contract.",
+    "Provide an authorized in-process driver that mints and consumes the supervisor-owned writer-closure capability; the standalone seal-and-copy CLI remains disabled."
+  ],
+  "implementation_commit": "321136b2a23158a7618e1489a4d2005d7f7ba1cd",
+  "limits": {
+    "active_attempt_bytes": 67108864,
+    "aggregate_automatable_calls": 66,
+    "aggregate_download_bytes": 577786748,
+    "aggregate_output_bytes": 16777216,
+    "aggregate_wall_seconds": 7200,
+    "evidence_bytes": 16777216,
+    "external_incremental_disk_bytes": 12884901888,
+    "external_pre_action_free_floor_bytes": 212933094605,
+    "external_retained_free_floor_bytes": 200048192717,
+    "retry_limit": 0,
+    "system_floor": {
+      "active_evidence_bytes": 67108864,
+      "dmg_download_peak_bytes": 573592444,
+      "failure_cleanup_bytes": null,
+      "first_start_internal_bytes": null,
+      "installed_app_bytes": null,
+      "os_operating_headroom_bytes": null,
+      "status": "unresolved-blocking",
+      "support_files_bytes": null,
+      "update_rollback_bytes": null
+    },
+    "system_incremental_disk_bytes": null
+  },
+  "paths": {
+    "active_attempts": "/Users/joseph/.local/share/gic-lab/t07-gate-b2a/attempts",
+    "b2a_work": "/Users/joseph/.local/share/gic-lab/t07-gate-b2a",
+    "build_staging": "/Volumes/Macintosh HD - Data/GIC-Lab/t07/docker-build-staging",
+    "docker_disk_image": "/Volumes/Macintosh HD - Data/GIC-Lab/t07/docker-desktop/disk-image",
+    "downloads": "/Users/joseph/.local/share/gic-lab/t07-gate-b2a/downloads",
+    "evidence": "/Users/joseph/.local/share/gic-lab/t07-gate-b2a/evidence",
+    "external_root": "/Volumes/Macintosh HD - Data/GIC-Lab",
+    "sealed_artifacts": "/Volumes/Macintosh HD - Data/GIC-Lab/t07/sealed-artifacts"
+  },
+  "plan_id": "PLAN-T07-GATE-B2A-DOCKER-STORAGE-QUALIFICATION-V1",
+  "rollback_cleanup": [
+    "Stop immediately on every failed guard, limit, identity, user attestation, or evidence check; authorize no retry.",
+    "If the DMG is mounted, attempt exactly one clean hdiutil detach of /Volumes/Docker and retain failure evidence.",
+    "If Docker Desktop is running, require the user to Quit it and machine-verify stopped state before reconnect or sealing.",
+    "Do not uninstall Docker Desktop automatically, delete a default internal VM disk, remove external Docker state, or delete any user file.",
+    "Retain the verified DMG, all local B2a evidence, failed staging trees, and the sealed source; do not reuse attempt or archive identities.",
+    "Remove no external directory or artifact automatically; any later disposition requires a separately reviewed exact target."
+  ],
+  "schema_version": "0.1.0",
+  "status": "blocked-design-only",
+  "steps": [
+    {
+      "action_id": "repository-status",
+      "argv": [
+        "/usr/bin/git",
+        "status",
+        "--short"
+      ],
+      "download_limit_bytes": 0,
+      "expected_stdout": "",
+      "external_disk_limit_bytes": 0,
+      "internal_disk_limit_bytes": 0,
+      "kind": "automatable",
+      "output_limit_bytes": 65536,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 10
+    },
+    {
+      "action_id": "repository-branch",
+      "argv": [
+        "/usr/bin/git",
+        "branch",
+        "--show-current"
+      ],
+      "download_limit_bytes": 0,
+      "expected_stdout": "phase-1/sira-smoke\n",
+      "external_disk_limit_bytes": 0,
+      "internal_disk_limit_bytes": 0,
+      "kind": "automatable",
+      "output_limit_bytes": 65536,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 10
+    },
+    {
+      "action_id": "repository-implementation-ancestor",
+      "argv": [
+        "/usr/bin/git",
+        "merge-base",
+        "--is-ancestor",
+        "321136b2a23158a7618e1489a4d2005d7f7ba1cd",
+        "HEAD"
+      ],
+      "download_limit_bytes": 0,
+      "expected_stdout": "",
+      "external_disk_limit_bytes": 0,
+      "internal_disk_limit_bytes": 0,
+      "kind": "automatable",
+      "output_limit_bytes": 65536,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 10
+    },
+    {
+      "action_id": "repository-implementation-tree",
+      "argv": [
+        "/usr/bin/git",
+        "diff",
+        "--quiet",
+        "321136b2a23158a7618e1489a4d2005d7f7ba1cd",
+        "--",
+        "src/giclab/harness/sira_container.py",
+        "src/giclab/harness/sira_storage.py",
+        "src/giclab/validation.py",
+        "schemas/docker-storage-qualification-plan.schema.json",
+        "schemas/docker-storage-placement-evidence.schema.json",
+        "schemas/sealed-artifact-copy.schema.json",
+        "schemas/attempt-close-evidence.schema.json"
+      ],
+      "download_limit_bytes": 0,
+      "expected_stdout": "",
+      "external_disk_limit_bytes": 0,
+      "internal_disk_limit_bytes": 0,
+      "kind": "automatable",
+      "output_limit_bytes": 65536,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 10
+    },
+    {
+      "action_id": "repository-science-tree",
+      "argv": [
+        "/usr/bin/git",
+        "diff",
+        "--quiet",
+        "321136b2a23158a7618e1489a4d2005d7f7ba1cd",
+        "--",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/protocol.yaml",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/config.yaml",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/smoke.yaml",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/smoke-reactive.yaml",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/smoke-simulative.yaml"
+      ],
+      "download_limit_bytes": 0,
+      "expected_stdout": "",
+      "external_disk_limit_bytes": 0,
+      "internal_disk_limit_bytes": 0,
+      "kind": "automatable",
+      "output_limit_bytes": 65536,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 10
+    },
+    {
+      "action_id": "inspect-external-volume",
+      "argv": [
+        "/usr/sbin/diskutil",
+        "info",
+        "-plist",
+        "/Volumes/Macintosh HD - Data"
+      ],
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 0,
+      "internal_disk_limit_bytes": 0,
+      "kind": "automatable",
+      "output_limit_bytes": 262144,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 10
+    },
+    {
+      "action_id": "inspect-apfs-containers",
+      "argv": [
+        "/usr/sbin/diskutil",
+        "apfs",
+        "list",
+        "-plist"
+      ],
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 0,
+      "internal_disk_limit_bytes": 0,
+      "kind": "automatable",
+      "output_limit_bytes": 1048576,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 10
+    },
+    {
+      "action_id": "inspect-system-volume",
+      "argv": [
+        "/usr/sbin/diskutil",
+        "info",
+        "-plist",
+        "/System/Volumes/Data"
+      ],
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 0,
+      "internal_disk_limit_bytes": 0,
+      "kind": "automatable",
+      "output_limit_bytes": 262144,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 10
+    },
+    {
+      "action_id": "guard-create-external-project-root",
+      "argv": [
+        "/Users/joseph/.codex/worktrees/84b1/gic-lab/.venv/bin/python",
+        "/Users/joseph/.codex/worktrees/84b1/gic-lab/src/giclab/harness/sira_storage.py",
+        "guard-storage",
+        "--system-floor-bytes",
+        "unresolved",
+        "--next-action",
+        "create-external-project-root",
+        "--purposes",
+        "docker-disk-image,build-staging,sealed-artifact-archive"
+      ],
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 0,
+      "guard_for_action": "create-external-project-root",
+      "guard_purposes": [
+        "docker-disk-image",
+        "build-staging",
+        "sealed-artifact-archive"
+      ],
+      "internal_disk_limit_bytes": 0,
+      "kind": "automatable",
+      "output_limit_bytes": 65536,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 30
+    },
+    {
+      "action_id": "create-external-project-root",
+      "argv": [
+        "/bin/mkdir",
+        "-m",
+        "0700",
+        "/Volumes/Macintosh HD - Data/GIC-Lab"
+      ],
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 4096,
+      "internal_disk_limit_bytes": 0,
+      "kind": "automatable",
+      "output_limit_bytes": 4096,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 10
+    },
+    {
+      "action_id": "guard-create-external-t07-root",
+      "argv": [
+        "/Users/joseph/.codex/worktrees/84b1/gic-lab/.venv/bin/python",
+        "/Users/joseph/.codex/worktrees/84b1/gic-lab/src/giclab/harness/sira_storage.py",
+        "guard-storage",
+        "--system-floor-bytes",
+        "unresolved",
+        "--next-action",
+        "create-external-t07-root",
+        "--purposes",
+        "docker-disk-image,build-staging,sealed-artifact-archive"
+      ],
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 0,
+      "guard_for_action": "create-external-t07-root",
+      "guard_purposes": [
+        "docker-disk-image",
+        "build-staging",
+        "sealed-artifact-archive"
+      ],
+      "internal_disk_limit_bytes": 0,
+      "kind": "automatable",
+      "output_limit_bytes": 65536,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 30
+    },
+    {
+      "action_id": "create-external-t07-root",
+      "argv": [
+        "/bin/mkdir",
+        "-m",
+        "0700",
+        "/Volumes/Macintosh HD - Data/GIC-Lab/t07"
+      ],
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 4096,
+      "internal_disk_limit_bytes": 0,
+      "kind": "automatable",
+      "output_limit_bytes": 4096,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 10
+    },
+    {
+      "action_id": "guard-create-external-docker-parent",
+      "argv": [
+        "/Users/joseph/.codex/worktrees/84b1/gic-lab/.venv/bin/python",
+        "/Users/joseph/.codex/worktrees/84b1/gic-lab/src/giclab/harness/sira_storage.py",
+        "guard-storage",
+        "--system-floor-bytes",
+        "unresolved",
+        "--next-action",
+        "create-external-docker-parent",
+        "--purposes",
+        "docker-disk-image"
+      ],
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 0,
+      "guard_for_action": "create-external-docker-parent",
+      "guard_purposes": [
+        "docker-disk-image"
+      ],
+      "internal_disk_limit_bytes": 0,
+      "kind": "automatable",
+      "output_limit_bytes": 65536,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 30
+    },
+    {
+      "action_id": "create-external-docker-parent",
+      "argv": [
+        "/bin/mkdir",
+        "-m",
+        "0700",
+        "/Volumes/Macintosh HD - Data/GIC-Lab/t07/docker-desktop"
+      ],
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 4096,
+      "internal_disk_limit_bytes": 0,
+      "kind": "automatable",
+      "output_limit_bytes": 4096,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 10
+    },
+    {
+      "action_id": "guard-create-external-docker-disk-root",
+      "argv": [
+        "/Users/joseph/.codex/worktrees/84b1/gic-lab/.venv/bin/python",
+        "/Users/joseph/.codex/worktrees/84b1/gic-lab/src/giclab/harness/sira_storage.py",
+        "guard-storage",
+        "--system-floor-bytes",
+        "unresolved",
+        "--next-action",
+        "create-external-docker-disk-root",
+        "--purposes",
+        "docker-disk-image"
+      ],
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 0,
+      "guard_for_action": "create-external-docker-disk-root",
+      "guard_purposes": [
+        "docker-disk-image"
+      ],
+      "internal_disk_limit_bytes": 0,
+      "kind": "automatable",
+      "output_limit_bytes": 65536,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 30
+    },
+    {
+      "action_id": "create-external-docker-disk-root",
+      "argv": [
+        "/bin/mkdir",
+        "-m",
+        "0700",
+        "/Volumes/Macintosh HD - Data/GIC-Lab/t07/docker-desktop/disk-image"
+      ],
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 4096,
+      "internal_disk_limit_bytes": 0,
+      "kind": "automatable",
+      "output_limit_bytes": 4096,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 10
+    },
+    {
+      "action_id": "guard-create-external-build-staging",
+      "argv": [
+        "/Users/joseph/.codex/worktrees/84b1/gic-lab/.venv/bin/python",
+        "/Users/joseph/.codex/worktrees/84b1/gic-lab/src/giclab/harness/sira_storage.py",
+        "guard-storage",
+        "--system-floor-bytes",
+        "unresolved",
+        "--next-action",
+        "create-external-build-staging",
+        "--purposes",
+        "build-staging"
+      ],
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 0,
+      "guard_for_action": "create-external-build-staging",
+      "guard_purposes": [
+        "build-staging"
+      ],
+      "internal_disk_limit_bytes": 0,
+      "kind": "automatable",
+      "output_limit_bytes": 65536,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 30
+    },
+    {
+      "action_id": "create-external-build-staging",
+      "argv": [
+        "/bin/mkdir",
+        "-m",
+        "0700",
+        "/Volumes/Macintosh HD - Data/GIC-Lab/t07/docker-build-staging"
+      ],
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 4096,
+      "internal_disk_limit_bytes": 0,
+      "kind": "automatable",
+      "output_limit_bytes": 4096,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 10
+    },
+    {
+      "action_id": "guard-create-external-sealed-artifacts",
+      "argv": [
+        "/Users/joseph/.codex/worktrees/84b1/gic-lab/.venv/bin/python",
+        "/Users/joseph/.codex/worktrees/84b1/gic-lab/src/giclab/harness/sira_storage.py",
+        "guard-storage",
+        "--system-floor-bytes",
+        "unresolved",
+        "--next-action",
+        "create-external-sealed-artifacts",
+        "--purposes",
+        "sealed-artifact-archive"
+      ],
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 0,
+      "guard_for_action": "create-external-sealed-artifacts",
+      "guard_purposes": [
+        "sealed-artifact-archive"
+      ],
+      "internal_disk_limit_bytes": 0,
+      "kind": "automatable",
+      "output_limit_bytes": 65536,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 30
+    },
+    {
+      "action_id": "create-external-sealed-artifacts",
+      "argv": [
+        "/bin/mkdir",
+        "-m",
+        "0700",
+        "/Volumes/Macintosh HD - Data/GIC-Lab/t07/sealed-artifacts"
+      ],
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 4096,
+      "internal_disk_limit_bytes": 0,
+      "kind": "automatable",
+      "output_limit_bytes": 4096,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 10
+    },
+    {
+      "action_id": "guard-create-b2a-work-root",
+      "argv": [
+        "/Users/joseph/.codex/worktrees/84b1/gic-lab/.venv/bin/python",
+        "/Users/joseph/.codex/worktrees/84b1/gic-lab/src/giclab/harness/sira_storage.py",
+        "guard-storage",
+        "--system-floor-bytes",
+        "unresolved",
+        "--next-action",
+        "create-b2a-work-root",
+        "--purposes",
+        "b2a-work"
+      ],
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 0,
+      "guard_for_action": "create-b2a-work-root",
+      "guard_purposes": [
+        "b2a-work"
+      ],
+      "internal_disk_limit_bytes": 0,
+      "kind": "automatable",
+      "output_limit_bytes": 65536,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 30
+    },
+    {
+      "action_id": "create-b2a-work-root",
+      "argv": [
+        "/bin/mkdir",
+        "-m",
+        "0700",
+        "/Users/joseph/.local/share/gic-lab/t07-gate-b2a"
+      ],
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 0,
+      "internal_disk_limit_bytes": 4096,
+      "kind": "automatable",
+      "output_limit_bytes": 4096,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 10
+    },
+    {
+      "action_id": "guard-create-b2a-download-root",
+      "argv": [
+        "/Users/joseph/.codex/worktrees/84b1/gic-lab/.venv/bin/python",
+        "/Users/joseph/.codex/worktrees/84b1/gic-lab/src/giclab/harness/sira_storage.py",
+        "guard-storage",
+        "--system-floor-bytes",
+        "unresolved",
+        "--next-action",
+        "create-b2a-download-root",
+        "--purposes",
+        "b2a-work"
+      ],
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 0,
+      "guard_for_action": "create-b2a-download-root",
+      "guard_purposes": [
+        "b2a-work"
+      ],
+      "internal_disk_limit_bytes": 0,
+      "kind": "automatable",
+      "output_limit_bytes": 65536,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 30
+    },
+    {
+      "action_id": "create-b2a-download-root",
+      "argv": [
+        "/bin/mkdir",
+        "-m",
+        "0700",
+        "/Users/joseph/.local/share/gic-lab/t07-gate-b2a/downloads"
+      ],
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 0,
+      "internal_disk_limit_bytes": 4096,
+      "kind": "automatable",
+      "output_limit_bytes": 4096,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 10
+    },
+    {
+      "action_id": "guard-create-b2a-evidence-root",
+      "argv": [
+        "/Users/joseph/.codex/worktrees/84b1/gic-lab/.venv/bin/python",
+        "/Users/joseph/.codex/worktrees/84b1/gic-lab/src/giclab/harness/sira_storage.py",
+        "guard-storage",
+        "--system-floor-bytes",
+        "unresolved",
+        "--next-action",
+        "create-b2a-evidence-root",
+        "--purposes",
+        "b2a-work"
+      ],
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 0,
+      "guard_for_action": "create-b2a-evidence-root",
+      "guard_purposes": [
+        "b2a-work"
+      ],
+      "internal_disk_limit_bytes": 0,
+      "kind": "automatable",
+      "output_limit_bytes": 65536,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 30
+    },
+    {
+      "action_id": "create-b2a-evidence-root",
+      "argv": [
+        "/bin/mkdir",
+        "-m",
+        "0700",
+        "/Users/joseph/.local/share/gic-lab/t07-gate-b2a/evidence"
+      ],
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 0,
+      "internal_disk_limit_bytes": 4096,
+      "kind": "automatable",
+      "output_limit_bytes": 4096,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 10
+    },
+    {
+      "action_id": "guard-create-b2a-evidence-session",
+      "argv": [
+        "/Users/joseph/.codex/worktrees/84b1/gic-lab/.venv/bin/python",
+        "/Users/joseph/.codex/worktrees/84b1/gic-lab/src/giclab/harness/sira_storage.py",
+        "guard-storage",
+        "--system-floor-bytes",
+        "unresolved",
+        "--next-action",
+        "create-b2a-evidence-session",
+        "--purposes",
+        "b2a-work"
+      ],
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 0,
+      "guard_for_action": "create-b2a-evidence-session",
+      "guard_purposes": [
+        "b2a-work"
+      ],
+      "internal_disk_limit_bytes": 0,
+      "kind": "automatable",
+      "output_limit_bytes": 65536,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 30
+    },
+    {
+      "action_id": "create-b2a-evidence-session",
+      "argv": [
+        "/bin/mkdir",
+        "-m",
+        "0700",
+        "/Users/joseph/.local/share/gic-lab/t07-gate-b2a/evidence/session"
+      ],
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 0,
+      "internal_disk_limit_bytes": 4096,
+      "kind": "automatable",
+      "output_limit_bytes": 4096,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 10
+    },
+    {
+      "action_id": "guard-fetch-current-appcast",
+      "argv": [
+        "/Users/joseph/.codex/worktrees/84b1/gic-lab/.venv/bin/python",
+        "/Users/joseph/.codex/worktrees/84b1/gic-lab/src/giclab/harness/sira_storage.py",
+        "guard-storage",
+        "--system-floor-bytes",
+        "unresolved",
+        "--next-action",
+        "fetch-current-appcast",
+        "--purposes",
+        "b2a-work",
+        "--require-existing"
+      ],
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 0,
+      "guard_for_action": "fetch-current-appcast",
+      "guard_purposes": [
+        "b2a-work"
+      ],
+      "internal_disk_limit_bytes": 0,
+      "kind": "automatable",
+      "output_limit_bytes": 65536,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 30
+    },
+    {
+      "action_id": "fetch-current-appcast",
+      "argv": [
+        "/usr/bin/curl",
+        "--fail",
+        "--silent",
+        "--show-error",
+        "--location",
+        "--proto",
+        "=https",
+        "--tlsv1.2",
+        "--max-time",
+        "60",
+        "--max-filesize",
+        "2097152",
+        "--output",
+        "/Users/joseph/.local/share/gic-lab/t07-gate-b2a/downloads/appcast.xml",
+        "https://desktop.docker.com/mac/main/arm64/appcast.xml"
+      ],
+      "download_limit_bytes": 2097152,
+      "external_disk_limit_bytes": 0,
+      "internal_disk_limit_bytes": 2097152,
+      "kind": "automatable",
+      "output_limit_bytes": 65536,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 60
+    },
+    {
+      "action_id": "guard-fetch-current-checksums",
+      "argv": [
+        "/Users/joseph/.codex/worktrees/84b1/gic-lab/.venv/bin/python",
+        "/Users/joseph/.codex/worktrees/84b1/gic-lab/src/giclab/harness/sira_storage.py",
+        "guard-storage",
+        "--system-floor-bytes",
+        "unresolved",
+        "--next-action",
+        "fetch-current-checksums",
+        "--purposes",
+        "b2a-work",
+        "--require-existing"
+      ],
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 0,
+      "guard_for_action": "fetch-current-checksums",
+      "guard_purposes": [
+        "b2a-work"
+      ],
+      "internal_disk_limit_bytes": 0,
+      "kind": "automatable",
+      "output_limit_bytes": 65536,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 30
+    },
+    {
+      "action_id": "fetch-current-checksums",
+      "argv": [
+        "/usr/bin/curl",
+        "--fail",
+        "--silent",
+        "--show-error",
+        "--location",
+        "--proto",
+        "=https",
+        "--tlsv1.2",
+        "--max-time",
+        "60",
+        "--max-filesize",
+        "2097152",
+        "--output",
+        "/Users/joseph/.local/share/gic-lab/t07-gate-b2a/downloads/checksums.txt",
+        "https://desktop.docker.com/mac/main/arm64/235549/checksums.txt"
+      ],
+      "download_limit_bytes": 2097152,
+      "external_disk_limit_bytes": 0,
+      "internal_disk_limit_bytes": 2097152,
+      "kind": "automatable",
+      "output_limit_bytes": 65536,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 60
+    },
+    {
+      "action_id": "verify-current-official-metadata",
+      "argv": [
+        "/Users/joseph/.codex/worktrees/84b1/gic-lab/.venv/bin/python",
+        "/Users/joseph/.codex/worktrees/84b1/gic-lab/src/giclab/harness/sira_storage.py",
+        "verify-official-metadata",
+        "--appcast",
+        "/Users/joseph/.local/share/gic-lab/t07-gate-b2a/downloads/appcast.xml",
+        "--checksums",
+        "/Users/joseph/.local/share/gic-lab/t07-gate-b2a/downloads/checksums.txt"
+      ],
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 0,
+      "internal_disk_limit_bytes": 0,
+      "kind": "automatable",
+      "output_limit_bytes": 65536,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 30
+    },
+    {
+      "action_id": "guard-download-selected-dmg",
+      "argv": [
+        "/Users/joseph/.codex/worktrees/84b1/gic-lab/.venv/bin/python",
+        "/Users/joseph/.codex/worktrees/84b1/gic-lab/src/giclab/harness/sira_storage.py",
+        "guard-storage",
+        "--system-floor-bytes",
+        "unresolved",
+        "--next-action",
+        "download-selected-dmg",
+        "--purposes",
+        "b2a-work",
+        "--require-existing"
+      ],
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 0,
+      "guard_for_action": "download-selected-dmg",
+      "guard_purposes": [
+        "b2a-work"
+      ],
+      "internal_disk_limit_bytes": 0,
+      "kind": "automatable",
+      "output_limit_bytes": 65536,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 30
+    },
+    {
+      "action_id": "download-selected-dmg",
+      "argv": [
+        "/usr/bin/curl",
+        "--fail",
+        "--silent",
+        "--show-error",
+        "--location",
+        "--proto",
+        "=https",
+        "--tlsv1.2",
+        "--max-time",
+        "600",
+        "--max-filesize",
+        "573592444",
+        "--output",
+        "/Users/joseph/.local/share/gic-lab/t07-gate-b2a/downloads/Docker-4.85.0-arm64-235549.dmg",
+        "https://desktop.docker.com/mac/main/arm64/235549/Docker.dmg"
+      ],
+      "download_limit_bytes": 573592444,
+      "external_disk_limit_bytes": 0,
+      "internal_disk_limit_bytes": 573592444,
+      "kind": "automatable",
+      "output_limit_bytes": 65536,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 600
+    },
+    {
+      "action_id": "verify-selected-dmg",
+      "argv": [
+        "/Users/joseph/.codex/worktrees/84b1/gic-lab/.venv/bin/python",
+        "/Users/joseph/.codex/worktrees/84b1/gic-lab/src/giclab/harness/sira_storage.py",
+        "verify-dmg",
+        "--path",
+        "/Users/joseph/.local/share/gic-lab/t07-gate-b2a/downloads/Docker-4.85.0-arm64-235549.dmg"
+      ],
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 0,
+      "internal_disk_limit_bytes": 0,
+      "kind": "automatable",
+      "output_limit_bytes": 65536,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 120
+    },
+    {
+      "action_id": "require-docker-app-absent",
+      "argv": [
+        "/Users/joseph/.codex/worktrees/84b1/gic-lab/.venv/bin/python",
+        "/Users/joseph/.codex/worktrees/84b1/gic-lab/src/giclab/harness/sira_storage.py",
+        "assert-path-absent",
+        "--path",
+        "/Applications/Docker.app"
+      ],
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 0,
+      "internal_disk_limit_bytes": 0,
+      "kind": "automatable",
+      "output_limit_bytes": 65536,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 10
+    },
+    {
+      "action_id": "guard-attach-selected-dmg",
+      "argv": [
+        "/Users/joseph/.codex/worktrees/84b1/gic-lab/.venv/bin/python",
+        "/Users/joseph/.codex/worktrees/84b1/gic-lab/src/giclab/harness/sira_storage.py",
+        "guard-storage",
+        "--system-floor-bytes",
+        "unresolved",
+        "--next-action",
+        "attach-selected-dmg",
+        "--purposes",
+        "b2a-work",
+        "--require-existing"
+      ],
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 0,
+      "guard_for_action": "attach-selected-dmg",
+      "guard_purposes": [
+        "b2a-work"
+      ],
+      "internal_disk_limit_bytes": 0,
+      "kind": "automatable",
+      "output_limit_bytes": 65536,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 30
+    },
+    {
+      "action_id": "attach-selected-dmg",
+      "argv": [
+        "/usr/bin/hdiutil",
+        "attach",
+        "-readonly",
+        "-nobrowse",
+        "/Users/joseph/.local/share/gic-lab/t07-gate-b2a/downloads/Docker-4.85.0-arm64-235549.dmg"
+      ],
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 0,
+      "internal_disk_limit_bytes": null,
+      "kind": "automatable",
+      "output_limit_bytes": 262144,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 120
+    },
+    {
+      "action_id": "guard-install-selected-application",
+      "argv": [
+        "/Users/joseph/.codex/worktrees/84b1/gic-lab/.venv/bin/python",
+        "/Users/joseph/.codex/worktrees/84b1/gic-lab/src/giclab/harness/sira_storage.py",
+        "guard-storage",
+        "--system-floor-bytes",
+        "unresolved",
+        "--next-action",
+        "install-selected-application",
+        "--purposes",
+        "b2a-work",
+        "--require-existing"
+      ],
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 0,
+      "guard_for_action": "install-selected-application",
+      "guard_purposes": [
+        "b2a-work"
+      ],
+      "internal_disk_limit_bytes": 0,
+      "kind": "automatable",
+      "output_limit_bytes": 65536,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 30
+    },
+    {
+      "action_id": "install-selected-application",
+      "argv": [
+        "/usr/bin/ditto",
+        "/Volumes/Docker/Docker.app",
+        "/Applications/Docker.app"
+      ],
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 0,
+      "internal_disk_limit_bytes": null,
+      "kind": "automatable",
+      "output_limit_bytes": 262144,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 600
+    },
+    {
+      "action_id": "guard-detach-selected-dmg",
+      "argv": [
+        "/Users/joseph/.codex/worktrees/84b1/gic-lab/.venv/bin/python",
+        "/Users/joseph/.codex/worktrees/84b1/gic-lab/src/giclab/harness/sira_storage.py",
+        "guard-storage",
+        "--system-floor-bytes",
+        "unresolved",
+        "--next-action",
+        "detach-selected-dmg",
+        "--purposes",
+        "b2a-work",
+        "--require-existing"
+      ],
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 0,
+      "guard_for_action": "detach-selected-dmg",
+      "guard_purposes": [
+        "b2a-work"
+      ],
+      "internal_disk_limit_bytes": 0,
+      "kind": "automatable",
+      "output_limit_bytes": 65536,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 30
+    },
+    {
+      "action_id": "detach-selected-dmg",
+      "argv": [
+        "/usr/bin/hdiutil",
+        "detach",
+        "/Volumes/Docker"
+      ],
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 0,
+      "internal_disk_limit_bytes": 0,
+      "kind": "automatable",
+      "output_limit_bytes": 262144,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 120
+    },
+    {
+      "action_id": "guard-accept-terms-personally",
+      "argv": [
+        "/Users/joseph/.codex/worktrees/84b1/gic-lab/.venv/bin/python",
+        "/Users/joseph/.codex/worktrees/84b1/gic-lab/src/giclab/harness/sira_storage.py",
+        "guard-storage",
+        "--system-floor-bytes",
+        "unresolved",
+        "--next-action",
+        "accept-terms-personally",
+        "--purposes",
+        "b2a-work",
+        "--require-existing"
+      ],
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 0,
+      "guard_for_action": "accept-terms-personally",
+      "guard_purposes": [
+        "b2a-work"
+      ],
+      "internal_disk_limit_bytes": 0,
+      "kind": "automatable",
+      "output_limit_bytes": 65536,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 30
+    },
+    {
+      "action_id": "accept-terms-personally",
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 0,
+      "instruction": "Personally review and accept the applicable Docker Desktop terms. Record only a timestamp, displayed product version/build, and attestation; Codex must not click, accept, or attest.",
+      "internal_disk_limit_bytes": null,
+      "kind": "user-only",
+      "output_limit_bytes": 0,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 300
+    },
+    {
+      "action_id": "guard-disable-automatic-update",
+      "argv": [
+        "/Users/joseph/.codex/worktrees/84b1/gic-lab/.venv/bin/python",
+        "/Users/joseph/.codex/worktrees/84b1/gic-lab/src/giclab/harness/sira_storage.py",
+        "guard-storage",
+        "--system-floor-bytes",
+        "unresolved",
+        "--next-action",
+        "disable-automatic-update",
+        "--purposes",
+        "b2a-work",
+        "--require-existing"
+      ],
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 0,
+      "guard_for_action": "disable-automatic-update",
+      "guard_purposes": [
+        "b2a-work"
+      ],
+      "internal_disk_limit_bytes": 0,
+      "kind": "automatable",
+      "output_limit_bytes": 65536,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 30
+    },
+    {
+      "action_id": "disable-automatic-update",
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 0,
+      "instruction": "Before permitting an engine start, disable automatic download/update or version substitution through the current officially supported Docker Desktop 4.85.0 control and attest the exact displayed setting. If no such pre-start control is available, stop.",
+      "internal_disk_limit_bytes": null,
+      "kind": "user-only",
+      "output_limit_bytes": 0,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 180
+    },
+    {
+      "action_id": "guard-initial-start-after-guard",
+      "argv": [
+        "/Users/joseph/.codex/worktrees/84b1/gic-lab/.venv/bin/python",
+        "/Users/joseph/.codex/worktrees/84b1/gic-lab/src/giclab/harness/sira_storage.py",
+        "guard-storage",
+        "--system-floor-bytes",
+        "unresolved",
+        "--next-action",
+        "initial-start-after-guard",
+        "--purposes",
+        "docker-disk-image,build-staging,b2a-work",
+        "--require-existing"
+      ],
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 0,
+      "guard_for_action": "initial-start-after-guard",
+      "guard_purposes": [
+        "docker-disk-image",
+        "build-staging",
+        "b2a-work"
+      ],
+      "internal_disk_limit_bytes": 0,
+      "kind": "automatable",
+      "output_limit_bytes": 65536,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 30
+    },
+    {
+      "action_id": "initial-start-after-guard",
+      "argv": [
+        "/usr/bin/open",
+        "-na",
+        "/Applications/Docker.app"
+      ],
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 0,
+      "internal_disk_limit_bytes": null,
+      "kind": "automatable",
+      "output_limit_bytes": 65536,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 300
+    },
+    {
+      "action_id": "inspect-installed-short-version",
+      "argv": [
+        "/usr/libexec/PlistBuddy",
+        "-c",
+        "Print :CFBundleShortVersionString",
+        "/Applications/Docker.app/Contents/Info.plist"
+      ],
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 0,
+      "internal_disk_limit_bytes": 0,
+      "kind": "automatable",
+      "output_limit_bytes": 65536,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 10
+    },
+    {
+      "action_id": "inspect-installed-build",
+      "argv": [
+        "/usr/libexec/PlistBuddy",
+        "-c",
+        "Print :CFBundleVersion",
+        "/Applications/Docker.app/Contents/Info.plist"
+      ],
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 0,
+      "internal_disk_limit_bytes": 0,
+      "kind": "automatable",
+      "output_limit_bytes": 65536,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 10
+    },
+    {
+      "action_id": "capture-initial-docker-version",
+      "argv": [
+        "/Applications/Docker.app/Contents/Resources/bin/docker",
+        "version",
+        "--format",
+        "{{json .}}"
+      ],
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 0,
+      "internal_disk_limit_bytes": 0,
+      "kind": "automatable",
+      "output_limit_bytes": 131072,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 30
+    },
+    {
+      "action_id": "capture-initial-docker-info",
+      "argv": [
+        "/Applications/Docker.app/Contents/Resources/bin/docker",
+        "info",
+        "--format",
+        "{{json .}}"
+      ],
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 0,
+      "internal_disk_limit_bytes": 0,
+      "kind": "automatable",
+      "output_limit_bytes": 262144,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 30
+    },
+    {
+      "action_id": "capture-docker-context",
+      "argv": [
+        "/Applications/Docker.app/Contents/Resources/bin/docker",
+        "context",
+        "show"
+      ],
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 0,
+      "internal_disk_limit_bytes": 0,
+      "kind": "automatable",
+      "output_limit_bytes": 65536,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 30
+    },
+    {
+      "action_id": "guard-select-external-disk-location",
+      "argv": [
+        "/Users/joseph/.codex/worktrees/84b1/gic-lab/.venv/bin/python",
+        "/Users/joseph/.codex/worktrees/84b1/gic-lab/src/giclab/harness/sira_storage.py",
+        "guard-storage",
+        "--system-floor-bytes",
+        "unresolved",
+        "--next-action",
+        "select-external-disk-location",
+        "--purposes",
+        "docker-disk-image,build-staging,b2a-work",
+        "--require-existing"
+      ],
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 0,
+      "guard_for_action": "select-external-disk-location",
+      "guard_purposes": [
+        "docker-disk-image",
+        "build-staging",
+        "b2a-work"
+      ],
+      "internal_disk_limit_bytes": 0,
+      "kind": "automatable",
+      "output_limit_bytes": 65536,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 30
+    },
+    {
+      "action_id": "select-external-disk-location",
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 12884901888,
+      "instruction": "In Docker Desktop Settings -> Resources -> Advanced -> Disk image location, select exactly /Volumes/Macintosh HD - Data/GIC-Lab/t07/docker-desktop/disk-image and record the user-action timestamp. Do not move a VM file manually in Finder.",
+      "internal_disk_limit_bytes": null,
+      "kind": "user-only",
+      "output_limit_bytes": 0,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 300
+    },
+    {
+      "action_id": "guard-apply-storage-binding-restart",
+      "argv": [
+        "/Users/joseph/.codex/worktrees/84b1/gic-lab/.venv/bin/python",
+        "/Users/joseph/.codex/worktrees/84b1/gic-lab/src/giclab/harness/sira_storage.py",
+        "guard-storage",
+        "--system-floor-bytes",
+        "unresolved",
+        "--next-action",
+        "apply-storage-binding-restart",
+        "--purposes",
+        "docker-disk-image,build-staging,b2a-work",
+        "--require-existing"
+      ],
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 0,
+      "guard_for_action": "apply-storage-binding-restart",
+      "guard_purposes": [
+        "docker-disk-image",
+        "build-staging",
+        "b2a-work"
+      ],
+      "internal_disk_limit_bytes": 0,
+      "kind": "automatable",
+      "output_limit_bytes": 65536,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 30
+    },
+    {
+      "action_id": "apply-storage-binding-restart",
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 12884901888,
+      "instruction": "Use Docker Desktop's Apply/Restart control exactly once after the machine guard rechecks both volumes. Stop on migration, substitution, update, default-internal activity, or unbounded allocation.",
+      "internal_disk_limit_bytes": null,
+      "kind": "user-only",
+      "output_limit_bytes": 0,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 300
+    },
+    {
+      "action_id": "guard-capture-location-only-screenshot",
+      "argv": [
+        "/Users/joseph/.codex/worktrees/84b1/gic-lab/.venv/bin/python",
+        "/Users/joseph/.codex/worktrees/84b1/gic-lab/src/giclab/harness/sira_storage.py",
+        "guard-storage",
+        "--system-floor-bytes",
+        "unresolved",
+        "--next-action",
+        "capture-location-only-screenshot",
+        "--purposes",
+        "b2a-work",
+        "--require-existing"
+      ],
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 0,
+      "guard_for_action": "capture-location-only-screenshot",
+      "guard_purposes": [
+        "b2a-work"
+      ],
+      "internal_disk_limit_bytes": 0,
+      "kind": "automatable",
+      "output_limit_bytes": 65536,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 30
+    },
+    {
+      "action_id": "capture-location-only-screenshot",
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 0,
+      "instruction": "Permit one cropped screenshot containing only Docker Desktop version/build and the Disk image location control. Exclude account, proxy, sharing, credential, extension, and unrelated settings.",
+      "internal_disk_limit_bytes": 2097152,
+      "kind": "user-only",
+      "output_limit_bytes": 0,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 120
+    },
+    {
+      "action_id": "capture-bound-docker-version",
+      "argv": [
+        "/Applications/Docker.app/Contents/Resources/bin/docker",
+        "version",
+        "--format",
+        "{{json .}}"
+      ],
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 0,
+      "internal_disk_limit_bytes": 0,
+      "kind": "automatable",
+      "output_limit_bytes": 131072,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 30
+    },
+    {
+      "action_id": "capture-bound-docker-info",
+      "argv": [
+        "/Applications/Docker.app/Contents/Resources/bin/docker",
+        "info",
+        "--format",
+        "{{json .}}"
+      ],
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 0,
+      "internal_disk_limit_bytes": 0,
+      "kind": "automatable",
+      "output_limit_bytes": 262144,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 30
+    },
+    {
+      "action_id": "stop-before-disconnect",
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 0,
+      "instruction": "Quit Docker Desktop cleanly and wait for machine evidence that its engine/backend is stopped and no process has the exact external VM file open.",
+      "internal_disk_limit_bytes": 0,
+      "kind": "user-only",
+      "output_limit_bytes": 0,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 180
+    },
+    {
+      "action_id": "inspect-pre-disconnect-volume",
+      "argv": [
+        "/usr/sbin/diskutil",
+        "info",
+        "-plist",
+        "/Volumes/Macintosh HD - Data"
+      ],
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 0,
+      "internal_disk_limit_bytes": 0,
+      "kind": "automatable",
+      "output_limit_bytes": 262144,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 10
+    },
+    {
+      "action_id": "eject-disconnect",
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 0,
+      "instruction": "After machine-confirmed Docker stop, eject the MacBook Data volume, disconnect the Target Disk Mode link, and attest the physical-action timestamp. Do not restart Docker.",
+      "internal_disk_limit_bytes": 0,
+      "kind": "user-only",
+      "output_limit_bytes": 0,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 300
+    },
+    {
+      "action_id": "reconnect-remount-unlock",
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 0,
+      "instruction": "Reconnect Target Disk Mode and remount/unlock the MacBook Data volume. Attest only the physical/user-action timestamp; do not start Docker before machine requalification.",
+      "internal_disk_limit_bytes": 0,
+      "kind": "user-only",
+      "output_limit_bytes": 0,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 600
+    },
+    {
+      "action_id": "inspect-remounted-volume",
+      "argv": [
+        "/usr/sbin/diskutil",
+        "info",
+        "-plist",
+        "/Volumes/Macintosh HD - Data"
+      ],
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 0,
+      "internal_disk_limit_bytes": 0,
+      "kind": "automatable",
+      "output_limit_bytes": 262144,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 10
+    },
+    {
+      "action_id": "inspect-remounted-apfs-containers",
+      "argv": [
+        "/usr/sbin/diskutil",
+        "apfs",
+        "list",
+        "-plist"
+      ],
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 0,
+      "internal_disk_limit_bytes": 0,
+      "kind": "automatable",
+      "output_limit_bytes": 1048576,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 10
+    },
+    {
+      "action_id": "guard-restart-after-remount-guard",
+      "argv": [
+        "/Users/joseph/.codex/worktrees/84b1/gic-lab/.venv/bin/python",
+        "/Users/joseph/.codex/worktrees/84b1/gic-lab/src/giclab/harness/sira_storage.py",
+        "guard-storage",
+        "--system-floor-bytes",
+        "unresolved",
+        "--next-action",
+        "restart-after-remount-guard",
+        "--purposes",
+        "docker-disk-image,build-staging,sealed-artifact-archive,b2a-work",
+        "--require-existing"
+      ],
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 0,
+      "guard_for_action": "restart-after-remount-guard",
+      "guard_purposes": [
+        "docker-disk-image",
+        "build-staging",
+        "sealed-artifact-archive",
+        "b2a-work"
+      ],
+      "internal_disk_limit_bytes": 0,
+      "kind": "automatable",
+      "output_limit_bytes": 65536,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 30
+    },
+    {
+      "action_id": "restart-after-remount-guard",
+      "argv": [
+        "/usr/bin/open",
+        "-na",
+        "/Applications/Docker.app"
+      ],
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 1073741824,
+      "internal_disk_limit_bytes": null,
+      "kind": "automatable",
+      "output_limit_bytes": 65536,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 300
+    },
+    {
+      "action_id": "capture-reopened-docker-version",
+      "argv": [
+        "/Applications/Docker.app/Contents/Resources/bin/docker",
+        "version",
+        "--format",
+        "{{json .}}"
+      ],
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 0,
+      "internal_disk_limit_bytes": 0,
+      "kind": "automatable",
+      "output_limit_bytes": 131072,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 30
+    },
+    {
+      "action_id": "capture-reopened-docker-info",
+      "argv": [
+        "/Applications/Docker.app/Contents/Resources/bin/docker",
+        "info",
+        "--format",
+        "{{json .}}"
+      ],
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 0,
+      "internal_disk_limit_bytes": 0,
+      "kind": "automatable",
+      "output_limit_bytes": 262144,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 30
+    },
+    {
+      "action_id": "final-docker-stop",
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 0,
+      "instruction": "Quit Docker Desktop again and wait for machine verification of final stopped state, no open external VM file, and no active default internal VM disk before evidence sealing.",
+      "internal_disk_limit_bytes": 0,
+      "kind": "user-only",
+      "output_limit_bytes": 0,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 180
+    },
+    {
+      "action_id": "guard-seal-and-copy-b2a-evidence",
+      "argv": [
+        "/Users/joseph/.codex/worktrees/84b1/gic-lab/.venv/bin/python",
+        "/Users/joseph/.codex/worktrees/84b1/gic-lab/src/giclab/harness/sira_storage.py",
+        "guard-storage",
+        "--system-floor-bytes",
+        "unresolved",
+        "--next-action",
+        "seal-and-copy-b2a-evidence",
+        "--purposes",
+        "sealed-artifact-archive,b2a-work",
+        "--require-existing"
+      ],
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 0,
+      "guard_for_action": "seal-and-copy-b2a-evidence",
+      "guard_purposes": [
+        "sealed-artifact-archive",
+        "b2a-work"
+      ],
+      "internal_disk_limit_bytes": 0,
+      "kind": "automatable",
+      "output_limit_bytes": 65536,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 30
+    },
+    {
+      "action_id": "seal-and-copy-b2a-evidence",
+      "argv": [
+        "/Users/joseph/.codex/worktrees/84b1/gic-lab/.venv/bin/python",
+        "/Users/joseph/.codex/worktrees/84b1/gic-lab/src/giclab/harness/sira_storage.py",
+        "seal-and-copy",
+        "--source",
+        "/Users/joseph/.local/share/gic-lab/t07-gate-b2a/evidence/session",
+        "--archive-parent",
+        "/Volumes/Macintosh HD - Data/GIC-Lab/t07/sealed-artifacts",
+        "--archive-id",
+        "T07-GATE-B2A-EVIDENCE-001",
+        "--copy-record",
+        "/Users/joseph/.local/share/gic-lab/t07-gate-b2a/evidence/copy-records/T07-GATE-B2A-EVIDENCE-001.json",
+        "--max-bytes",
+        "16777216",
+        "--system-floor-bytes",
+        "unresolved"
+      ],
+      "download_limit_bytes": 0,
+      "external_disk_limit_bytes": 16777216,
+      "internal_disk_limit_bytes": 16777216,
+      "kind": "automatable",
+      "output_limit_bytes": 65536,
+      "retry_limit": 0,
+      "stop_on_failure": true,
+      "timeout_seconds": 300
+    }
+  ],
+  "stop_conditions": [
+    "The plan status or authorization remains false, or any blocking requirement remains unresolved.",
+    "Repository branch, implementation ancestry, plan hash, worktree cleanliness, or locked scientific hashes differ.",
+    "Either storage UUID, exact mount, APFS/writable/unlocked/UTDM state, path ancestry, device role, or free-space guard fails.",
+    "Any system-floor term remains unknown or observed system free space is below the resolved floor.",
+    "Current official metadata, DMG byte size/SHA-256, installed version/build, or update policy differs.",
+    "Any first-party bootstrap allocation is unclassified/unbounded, or any T07 workload image/container/browser/API/secret action appears.",
+    "Disk location, exact VM file identity, default internal inactivity, engine/context identity, or reconnect state cannot be proven mechanically.",
+    "Any per-action or aggregate wall, output, download, internal/external disk, evidence, or retry limit would be exceeded.",
+    "The user declines or cannot personally complete a required terms, GUI, stop, eject, reconnect, unlock, or restart action.",
+    "Evidence cannot be completely sealed, copied, destination-hash verified, and retained locally."
+  ],
+  "superseded_plan": {
+    "plan_id": "PLAN-T07-GATE-B2-MATERIALIZATION",
+    "sha256": "10fd0350c5e14c4c6d4e32bf40f1f9f696735eae81815a00cd8032e652beaa25"
+  }
+}

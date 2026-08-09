@@ -20,6 +20,12 @@ internal startup disk and does not bind a selected runtime-storage topology. It 
 therefore non-authorizable and must not be executed. Its prior hash and commands are
 retained only as historical Gate B1 evidence.
 
+Gate B1.6 successor notice, 2026-08-09: the current blocked-design packet is
+`docs/harness/T07_GATE_B2A_INSTALL_AUTHORIZATION_PACKET.md`, plan SHA-256
+`7ccd43e413ec8c4a21a4af043bef2477ede14b5bd40885c979cdeb7e48081eb1`.
+It also authorizes nothing; this historical packet cannot fill its unresolved system
+floor or version-specific storage-binding requirements.
+
 ## 1. Exact clean repository commit
 
 - Gate B1 implementation commit: `4be81e4a13fd06b77e36db21c4ad57165f7c115f`.

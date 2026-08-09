@@ -1,7 +1,6 @@
 # T07 preauthorization packet
 
-Status: **live authorization blocked; Gate B2 packet withdrawn pending
-external-volume rebinding**
+Status: **live authorization blocked; Gate B2a design remains non-executable**
 
 Prepared: 2026-08-08
 
@@ -55,16 +54,24 @@ Prepared: 2026-08-08
 - Materialization plan path: `containers/sira-smoke/materialization-plan.json`.
 - Materialization plan SHA-256:
   `10fd0350c5e14c4c6d4e32bf40f1f9f696735eae81815a00cd8032e652beaa25`.
+- Blocked Gate B2a design plan ID:
+  `PLAN-T07-GATE-B2A-DOCKER-STORAGE-QUALIFICATION-V1`.
+- Blocked Gate B2a design plan path:
+  `containers/sira-smoke/gate-b2a-install-storage-binding-plan.json`.
+- Blocked Gate B2a design plan SHA-256:
+  `7ccd43e413ec8c4a21a4af043bef2477ede14b5bd40885c979cdeb7e48081eb1`.
+- Bound Gate B1.6 implementation commit:
+  `321136b2a23158a7618e1489a4d2005d7f7ba1cd`.
 - Staged-context evidence SHA-256:
   `747575a0c4c1dc9c0e52a839dc28eea1807e898495ee2c58c7b25ae8ab4ba77b`.
 
-Gate B1.5 observed the MacBook Pro export its APFS storage to the Mac mini through
-Thunderbolt Target Disk Mode. Decision D-017 approves
-`/Volumes/Macintosh HD - Data/Users/joseph/.local/share/gic-lab`, volume UUID
-`8478609D-FA37-4ED5-875D-47AE912B9151`, only for sealed, immutable artifact
-retention. Mutable attempts, builds, and Docker VM/image storage remain unapproved.
-The historical plan hash above names internal-disk paths and is no longer an
-authorization candidate. It is retained only as provenance.
+Gate B1.6 evaluates the user-selected Mac mini plus MacBook Target Disk Mode topology
+under new dedicated root `/Volumes/Macintosh HD - Data/GIC-Lab`. Sealed immutable
+retention is approved beneath its `t07/sealed-artifacts` child; live attempts remain
+on the Mac mini. Docker VM/image storage remains a qualification candidate, not an
+approved runtime location. The new Gate B2a plan is deliberately
+`blocked-design-only`, has `authorized=false`, and contains null system-floor/cap
+fields. The historical combined plan remains provenance only.
 
 The profile, protocol, scientific configuration, and both condition plans are
 byte-identical to the previous clean packet. Their execution/authorization fields and
@@ -169,11 +176,14 @@ the dated snapshot and removes its `OPENAI_API_KEY` fallback. The Gate A adaptat
 then installs the complete role-aware budgeted routing surface. The patch was checked
 read-only against the exact pinned upstream source.
 
-Code/configuration change is now required before the three Gate B2 no-network probes:
-the control plane must verify the exact external volume identity and resolved artifact
-root, every materialization/probe/cleanup path must be rerendered there, and Docker's
-VM disk-image location must be bound and verified there before any pull or build.
-Additional work remains before a live request: empirical Gate B2 must pass; a non-host
+The external-volume parser, exact-role paths, bounded guard/state primitives, and
+sealed-copy fixtures are implemented and mock-tested. A replacement executable Gate
+B2a plan is still required because current official Docker behavior, a numeric system
+floor, supported pre-first-start binding/update control, persisted location/default
+paths, held-descriptor mount identity, machine stop/reconnect/placement semantics,
+typed rollback, and the authorized writer-probe/seal driver are unresolved. Additional
+work remains before a live request: empirical
+Gate B2a/B2b must pass; a non-host
 isolated-egress network policy for the API and browser must be implemented/reviewed;
 final runtime/image/package/browser provenance must be observed; and exact
 containerized condition commands/canonical child hashes must be materialized under
@@ -181,21 +191,17 @@ new authorization. Scientific fields need not and must not be changed.
 
 ## Installation actions awaiting authorization
 
-Nothing has been installed, pulled, built, or launched. Exact Docker Desktop, base
-image, source archive, pinned uv wheel, frozen dependency, build, image-identity, and
-three no-network fixture actions are enumerated in the Gate B1 install packet. The
-first group is one hashed 51-action materialization plan with one 3,600-second
-monotonic deadline, one call per action, zero retry, and a hard 16,777,216-byte
-streamed-output cap. It verifies the reviewed tree delta and all staged inputs before
-download/build and retains a hashed action ledger.
-Additional Playwright/Chromium installation is exactly zero because the pinned base
-contains Playwright 1.39.0 browser artifacts; `playwright install` is forbidden.
+Nothing has been installed, pulled, built, or launched. The blocked Gate B2a design
+contains 66 automatable arrays and 9 user-only actions (75 total), zero retries, a
+7,200-second aggregate wall cap, 16,777,216-byte output cap, and 577,786,748-byte
+metadata-plus-DMG download cap. It stops before every image pull, build,
+dependency/browser install, or container action.
 
-The Gate B2 transfer cap is 2,147,483,648 bytes and incremental disk cap is
-12,884,901,888 bytes. Storage policy requires 173,946,175,488 free bytes before work
-and 161,061,273,600 after. The exact observation at `2026-08-09T04:45:07Z` was
-12,029,374,464 free bytes, so installation cannot currently be authorized from this
-packet.
+The external retained-free floor is exactly 200,048,192,717 bytes and pre-action
+floor is 212,933,094,605 bytes. The Mac mini floor remains an exact equation with six
+unknown terms; the numeric floor and internal incremental cap are intentionally null.
+That is an authorization blocker, not an unbounded allowance. The current B2a packet
+is `docs/harness/T07_GATE_B2A_INSTALL_AUTHORIZATION_PACKET.md`.
 
 ## Secret contract
 
@@ -271,22 +277,22 @@ unknown, not guessed.
 | Zero container/network/volume leftovers | met in fake state machine; empirical proof pending |
 | Source-clean build context and hashed patch | met; authorized staging/build pending |
 | Image/runtime/browser provenance | assembler binds raw/pre-removal/sealed evidence to exact attempt/image; observed values pending Gate B2 |
-| Materialization wall/output/call caps | one hashed 51-action monotonic supervisor; unauthorized and not run |
+| Gate B2a wall/output/download/call caps | hashed 75-step blocked design; system disk cap unresolved; unauthorized and not run |
 | Secret-file channel and canary scanning | met and fake-tested; real secret untouched |
-| Exact no-network Gate B2 commands | met; unauthorized and not run |
+| Historical no-network Gate B2 commands | superseded and non-authorizing; B2b remains requirements-only and undesigned |
 | Exact live isolated-egress policy/commands | blocked; not Gate B1 scope |
 | Project/profile/condition authorization | false |
 | Live smoke/pilot | not run and unauthorized |
 
 ## Validation and review
 
-Pre-edit Gate A focused tests passed 133 tests. The final Gate B1/schema suite passes
-84 tests; the combined focused collection is 217 and the full collection is 389.
-Ruff, strict mypy for the new module, schema validation, repository validation,
-`git diff --check`, a dry-run patch against the exact pinned upstream source, and the
-real Quarto render/site validation pass. The first independent review failed with
-eleven findings; successive rereview defects were repaired with regressions. Final
-independent spec-conformance rereview is clean.
+Pre-edit focused Gate A/B1 tests passed 84 tests and repository validation passed. The
+first independent B1.6 review failed and identified authority, archive, guard,
+reconnect, rollback, binding, and documentation defects. The implementation was
+repaired with regressions or the unsatisfied obligation was converted into an explicit
+blocking requirement. Final command and rereview evidence is recorded in
+`docs/harness/T07_GATE_B1_6_IMPLEMENTATION_LEDGER.md`; no Quarto success is claimed
+unless the local renderer is actually available.
 
 No model/API request, model-availability API request, runtime/dependency/browser
 installation, image pull/build, container/browser launch, SiRA condition, evaluator,
@@ -296,19 +302,27 @@ pilot, cloud job, or paid compute occurred.
 
 Authorization-stopping blockers:
 
-1. the historical Gate B2 plan targets the internal disk and is withdrawn under D-017;
-2. a replacement plan must verify external APFS UUID
-   `8478609D-FA37-4ED5-875D-47AE912B9151`, bind all artifact paths beneath the
-   authoritative root, and verify Docker's VM disk location there;
-3. no supported runtime is installed or running;
-4. kernel containment and browser shutdown are not empirically proven;
-5. final runtime/image/package/Chromium identities are unknown before Gate B2; and
-6. live isolated egress and containerized condition materialization remain unimplemented.
+1. current official Docker artifact/behavior metadata is not freshly verified;
+2. six Mac mini floor terms, its numeric floor, and internal incremental cap are
+   unresolved;
+3. pre-first-start external binding or an exact transient internal VM allocation is
+   unproven;
+4. version-specific update suppression, persisted location key/source, default
+   internal path, clean-stop method, placement commands, and first-party endpoints are
+   not sourced;
+5. diskutil identity is not bound to a held mount descriptor and freshly re-observed
+   when a guard is consumed;
+6. machine stop/open-file, placement, default-internal inactivity, reconnect semantics,
+   typed rollback, and the authorized writer-probe/seal driver remain unwired;
+7. no supported runtime is installed or running;
+8. kernel containment and browser shutdown are not empirically proven; and
+9. final runtime/image/package/Chromium identity, isolated egress, and condition
+   materialization remain unknown/unimplemented.
 
 Public trace release remains blocked by licensing/privacy review but does not block
 private access-controlled future smoke retention. Pilot, benchmarks, training,
 scientific interpretation, and cloud mutation remain prohibited.
 
-There is no ready-to-copy Gate B2 authorization block. The previous block in
-`docs/harness/T07_GATE_B1_INSTALL_AUTHORIZATION_PACKET.md` is explicitly withdrawn.
-There is intentionally no ready live-smoke authorization block in this packet.
+There is no ready-to-copy installation or live-smoke authorization block. The previous
+combined Gate B2 block is withdrawn. The B2a packet contains only a ready-to-copy
+non-authorization/blocker-resolution block. B2b has requirements only.

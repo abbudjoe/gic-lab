@@ -15,10 +15,11 @@ remain on the Mac mini, and only sealed nonsecret artifacts would be copied one-
 to the MacBook volume. No other host or storage topology was selected.
 
 This turn qualifies the deterministic control plane, not the live topology. Docker is
-absent and was not downloaded, installed, started, or probed. Two blockers prevent an
-installation authorization: the current official artifact metadata could not be
-reverified under the no-network contract, and an exact evidence-based Mac mini
-operational floor cannot yet be calculated.
+absent and was not downloaded, installed, started, or probed. Multiple blockers
+prevent installation authorization, including unavailable current artifact
+reverification, an unresolved Mac mini operational floor, version-specific Docker
+placement/reconnect evidence, mount-identity freshness, typed rollback, and the
+authorized seal driver.
 
 ## Exact paths
 
@@ -92,9 +93,21 @@ numbers are evidence only.
 
 Every exact path is lexically role-bound and traversed component-by-component with
 descriptor-relative `O_NOFOLLOW`; missing roots, renamed mounts, symlinks, path
-traversal, device mismatch, and internal fallback stop. A fresh, single-use,
-five-second guard token must be consumed immediately before every future Docker
-start/restart or materialization action.
+traversal, device mismatch, and internal fallback stop. Missing lock-state evidence
+also stops. A fresh, typed, single-use, five-second guard capability must be consumed
+immediately before every future Docker start/restart or materialization action. The
+hashed plan places 24 guards directly before all 24 sensitive actions. The present
+guard rechecks exact path/device roles but reuses its issuance-time volume
+observation; it does not bind diskutil identity to a held mount descriptor and
+freshly re-observe it at consumption. That TOCTOU gap blocks execution.
+
+The stateful B2a supervisor refuses the current unauthorized/null-cap plan. For a
+future resolved plan it enforces exact action order and call count, per-action and
+aggregate monotonic deadlines, expected repository stdout, output/download/disk-delta
+caps, both free-space floors, active-evidence bytes, adjacent guard consumption, zero
+retry, and complete action accounting. It mints an in-memory, single-use
+writer-closure capability only at the seal boundary. The standalone seal/copy CLI is
+disabled; an authorized in-process driver and exact writer probe remain required.
 
 Machine placement proof must combine a version-verified single setting-key extract,
 a cropped location-only GUI image, exact VM-file device/inode/logical/allocated stat,
@@ -110,18 +123,27 @@ evidence must establish the real setting key/source and default path first.
 
 ## Reconnect and archival contract
 
-The reconnect state machine requires clean stop, user eject/disconnect/reconnect,
-machine requalification of both UUIDs and paths, user restart only after the guard,
+The reconnect design requires clean stop, user eject/disconnect/reconnect,
+machine requalification of both UUIDs and paths, engine restart only after the guard,
 same external disk identity, same engine identity, healthy reopen, final clean stop,
 and sealed evidence. Skips, replay, stale evidence, identity drift, or active default
-internal storage block B2b.
+internal storage block B2b. Current state-order tests do not yet prove stopped/open
+file state, refresh the restart guard, or semantically bind version-specific Docker
+outputs; those requirements remain blocked.
 
-Attempt sealing rejects symlinks/special files and byte overflow; fsyncs files and
-directories; writes a deterministic size/SHA-256 manifest; and removes source write
-permissions. Archival uses a fresh external staging identity, exclusive no-follow
-writes, destination size/hash verification, directory fsync, same-volume atomic
-rename, final seal-hash comparison, and a separate copy record. The local source is
-retained automatically; neither success nor failure deletes it.
+Attempt sealing rejects unsafe IDs, symlinks/special files, and byte overflow;
+requires a supervisor-minted, single-use close capability with zero observed writers;
+fsyncs files and directories; writes a deterministic size/SHA-256 manifest; removes
+source write permissions; and applies filesystem user-immutable flags. Archival
+requires a fresh typed, single-use placement proof for the exact
+Mac mini source root and external sealed root, distinct devices, both stable volume
+identities, floors, and no-symlink paths. It then uses a fresh external staging
+identity, exclusive no-follow writes, destination size/hash verification, directory
+fsync, same-volume atomic rename, final read-only modes, seal-hash comparison, and a
+separate copy record written through held no-follow directory descriptors. Every
+source payload and directory must remain immutable through the copy. The local source
+is retained automatically; neither success nor failure deletes it. These are bounded
+local-fixture results, not a live cross-volume qualification.
 
 ## `noowners` residual risk
 
@@ -144,6 +166,24 @@ settings were not changed.
    maximum allocation are unknown.
 4. Version-specific disk-location setting/key, default internal path, clean stop,
    automatic-update control, and reconnect semantics are not locally sourced.
+5. The current blocked plan cannot be converted in place: all null system limits and
+   the `unresolved` guard value require a freshly hashed, current-turn-authorized
+   replacement wired through the supervisor.
+6. The mount-identity race, version-specific placement/reconnect/stop semantic wiring,
+   typed rollback executor, and authorized writer-probe/seal driver remain unresolved
+   implementation blockers.
+
+These blockers are represented in blocked-design plan
+`PLAN-T07-GATE-B2A-DOCKER-STORAGE-QUALIFICATION-V1` at
+`containers/sira-smoke/gate-b2a-install-storage-binding-plan.json`, SHA-256
+`7ccd43e413ec8c4a21a4af043bef2477ede14b5bd40885c979cdeb7e48081eb1`.
+The plan binds implementation commit
+`321136b2a23158a7618e1489a4d2005d7f7ba1cd`, carries `authorized=false`, and must be
+replaced rather than executed.
+
+The historical combined materialization loader/executor and the Docker image/fixture
+CLI paths reject stale B2/B2b execution authority. Their historical documents remain
+provenance only.
 
 No Docker, image, container, browser, provider, API, secret, SiRA, scientific, cloud,
 or user-file cleanup action occurred.

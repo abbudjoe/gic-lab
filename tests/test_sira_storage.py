@@ -1257,9 +1257,9 @@ def test_b2a_supervisor_mints_single_use_close_capability(
 
 def test_committed_b2a_plan_has_exact_hash_and_remains_blocked() -> None:
     path = ROOT / "containers/sira-smoke/gate-b2a-install-storage-binding-plan.json"
-    digest = "c7f7079ce92a0d5596498716a63153e3db7ff155abe287d7a51e0a4b7239c8ea"
+    digest = "7ccd43e413ec8c4a21a4af043bef2477ede14b5bd40885c979cdeb7e48081eb1"
     plan = load_b2a_plan(path, expected_sha256=digest)
-    assert plan.implementation_commit == "6d35887a5a75fe499650aed346aa7a7435207ed9"
+    assert plan.implementation_commit == "321136b2a23158a7618e1489a4d2005d7f7ba1cd"
     assert not plan.authorized
     assert plan.system_incremental_disk_bytes is None
 
@@ -1280,8 +1280,8 @@ def test_b2b_stub_contains_requirements_but_no_executable_authority() -> None:
 def test_b2a_packet_is_bound_and_explicitly_authorizes_nothing() -> None:
     packet = (ROOT / "docs/harness/T07_GATE_B2A_INSTALL_AUTHORIZATION_PACKET.md").read_text()
     assert "this packet and its plan authorize nothing" in packet
-    assert "c7f7079ce92a0d5596498716a63153e3db7ff155abe287d7a51e0a4b7239c8ea" in packet
-    assert "6d35887a5a75fe499650aed346aa7a7435207ed9" in packet
+    assert "7ccd43e413ec8c4a21a4af043bef2477ede14b5bd40885c979cdeb7e48081eb1" in packet
+    assert "321136b2a23158a7618e1489a4d2005d7f7ba1cd" in packet
     assert "There is no truthful ready-to-copy **installation authorization**" in packet
 
 
