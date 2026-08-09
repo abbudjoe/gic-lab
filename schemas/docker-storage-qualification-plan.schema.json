@@ -45,14 +45,16 @@
     "paths": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["external_root", "docker_disk_image", "build_staging", "sealed_artifacts", "active_attempts", "b2a_work"],
+      "required": ["external_root", "docker_disk_image", "build_staging", "sealed_artifacts", "active_attempts", "b2a_work", "downloads", "evidence"],
       "properties": {
         "external_root": {"const": "/Volumes/Macintosh HD - Data/GIC-Lab"},
         "docker_disk_image": {"const": "/Volumes/Macintosh HD - Data/GIC-Lab/t07/docker-desktop/disk-image"},
         "build_staging": {"const": "/Volumes/Macintosh HD - Data/GIC-Lab/t07/docker-build-staging"},
         "sealed_artifacts": {"const": "/Volumes/Macintosh HD - Data/GIC-Lab/t07/sealed-artifacts"},
         "active_attempts": {"const": "/Users/joseph/.local/share/gic-lab/t07-gate-b2a/attempts"},
-        "b2a_work": {"const": "/Users/joseph/.local/share/gic-lab/t07-gate-b2a"}
+        "b2a_work": {"const": "/Users/joseph/.local/share/gic-lab/t07-gate-b2a"},
+        "downloads": {"const": "/Users/joseph/.local/share/gic-lab/t07-gate-b2a/downloads"},
+        "evidence": {"const": "/Users/joseph/.local/share/gic-lab/t07-gate-b2a/evidence"}
       }
     },
     "limits": {

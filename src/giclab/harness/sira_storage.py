@@ -22,6 +22,7 @@ import xml.etree.ElementTree as ET
 from collections.abc import Mapping, Sequence
 from contextlib import suppress
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
 
@@ -47,6 +48,8 @@ SYSTEM_DATA_VOLUME_UUID = "285BFF35-A72D-452D-82A9-BD1ED7223CDE"
 SYSTEM_CAPACITY_BYTES = 245_107_195_904
 ACTIVE_ATTEMPT_ROOT = Path("/Users/joseph/.local/share/gic-lab/t07-gate-b2a/attempts")
 B2A_WORK_ROOT = Path("/Users/joseph/.local/share/gic-lab/t07-gate-b2a")
+B2A_DOWNLOAD_ROOT = B2A_WORK_ROOT / "downloads"
+B2A_EVIDENCE_ROOT = B2A_WORK_ROOT / "evidence"
 CANDIDATE_DEFAULT_INTERNAL_DOCKER_RAW = Path(
     "/Users/joseph/Library/Containers/com.docker.docker/Data/vms/0/data/Docker.raw"
 )
@@ -861,6 +864,8 @@ _ALLOWED_EXECUTABLES = frozenset(
         "/usr/sbin/diskutil",
         "/Applications/Docker.app/Contents/Resources/bin/docker",
         "/Users/joseph/.codex/worktrees/84b1/gic-lab/.venv/bin/python",
+        "/bin/mkdir",
+        "/usr/libexec/PlistBuddy",
     }
 )
 _FORBIDDEN_ARG_FRAGMENTS = (
@@ -1150,6 +1155,14 @@ def _build_parser() -> argparse.ArgumentParser:
     plan = subparsers.add_parser("validate-plan")
     plan.add_argument("--path", type=Path, required=True)
     plan.add_argument("--sha256", required=True)
+    absent = subparsers.add_parser("assert-path-absent")
+    absent.add_argument("--path", type=Path, required=True)
+    archive = subparsers.add_parser("seal-and-copy")
+    archive.add_argument("--source", type=Path, required=True)
+    archive.add_argument("--archive-parent", type=Path, required=True)
+    archive.add_argument("--archive-id", required=True)
+    archive.add_argument("--copy-record", type=Path, required=True)
+    archive.add_argument("--max-bytes", type=int, required=True)
     return parser
 
 
@@ -1159,9 +1172,29 @@ def main(argv: Sequence[str] | None = None) -> int:
         evidence = verify_official_docker_metadata(arguments.appcast, arguments.checksums)
     elif arguments.command == "verify-dmg":
         evidence = verify_docker_dmg(arguments.path)
-    else:
+    elif arguments.command == "validate-plan":
         plan = load_b2a_plan(arguments.path, expected_sha256=arguments.sha256)
         evidence = {"plan_id": plan.plan_id, "authorized": plan.authorized}
+    elif arguments.command == "assert-path-absent":
+        if arguments.path.exists() or arguments.path.is_symlink():
+            raise StorageContractError("path required to be absent already exists")
+        evidence = {"path": str(arguments.path), "absent": True}
+    else:
+        seal_attempt(
+            arguments.source,
+            attempt_id=arguments.archive_id,
+            max_bytes=arguments.max_bytes,
+        )
+        evidence = copy_sealed_attempt(
+            arguments.source,
+            archive_parent=arguments.archive_parent,
+            archive_id=arguments.archive_id,
+            copy_record_path=arguments.copy_record,
+            max_bytes=arguments.max_bytes,
+            source_volume_uuid=SYSTEM_DATA_VOLUME_UUID,
+            destination_volume_uuid=APPROVED_VOLUME_UUID,
+            copied_at_utc=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+        )
     print(json.dumps(evidence, allow_nan=False, sort_keys=True, separators=(",", ":")))
     return 0
 
