@@ -395,6 +395,11 @@ def test_historical_materialization_executor_is_disabled(
     "argv",
     [
         (
+            "write-dummy-secret",
+            "--output",
+            "/tmp/stale-dummy-secret",
+        ),
+        (
             "capture-image-identity",
             "--repository-root",
             str(ROOT),
@@ -423,6 +428,23 @@ def test_historical_materialization_executor_is_disabled(
             "AUTH-T07-GATE-B2-STALE",
             "--fixture",
             "adversarial-containment",
+        ),
+        (
+            "assemble-image-provenance",
+            "--repository-root",
+            str(ROOT),
+            "--image-identity",
+            "/tmp/stale-image.json",
+            "--browser-attempt-uuid",
+            "c" * 32,
+            "--browser-record",
+            "/tmp/browser-record.json",
+            "--browser-pre-removal-evidence",
+            "/tmp/pre-removal.json",
+            "--browser-cleanup-seal",
+            "/tmp/cleanup-seal.json",
+            "--output",
+            "/tmp/provenance.json",
         ),
     ],
 )

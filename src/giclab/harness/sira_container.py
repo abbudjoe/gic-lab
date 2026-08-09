@@ -3244,7 +3244,12 @@ def _cli_parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = _cli_parser().parse_args(argv)
-    if args.operation in {"capture-image-identity", "execute-fixture"}:
+    if args.operation in {
+        "write-dummy-secret",
+        "capture-image-identity",
+        "assemble-image-provenance",
+        "execute-fixture",
+    }:
         raise ContainerContractError(
             "Gate B2b is undesigned and unauthorized; Docker image/fixture execution is disabled"
         )

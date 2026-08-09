@@ -22,10 +22,10 @@
   ],
   "properties": {
     "schema_version": {"const": "0.1.0"},
-    "plan_id": {"const": "PLAN-T07-GATE-B2A-DOCKER-STORAGE-QUALIFICATION-V1"},
-    "authorization_reference": {"const": "AUTH-T07-GATE-B2A-PENDING"},
-    "authorized": {"const": false},
-    "status": {"const": "blocked-design-only"},
+    "plan_id": {"type": "string", "pattern": "^PLAN-T07-GATE-B2A-DOCKER-STORAGE-QUALIFICATION-V[A-Z0-9._-]+$"},
+    "authorization_reference": {"type": "string", "pattern": "^AUTH-[A-Z0-9][A-Z0-9._-]{2,127}$"},
+    "authorized": {"type": "boolean"},
+    "status": {"enum": ["blocked-design-only", "authorized-executable"]},
     "implementation_commit": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
     "artifact": {
       "type": "object",
@@ -39,7 +39,7 @@
         "url": {"const": "https://desktop.docker.com/mac/main/arm64/235549/Docker.dmg"},
         "bytes": {"const": 573592444},
         "sha256": {"const": "84b1224c93456fe261955ebc91f3cd88ce19778ffdb6d0a0d423ce37246f7c2b"},
-        "verification_status": {"const": "historically-verified-current-reverification-required"}
+        "verification_status": {"enum": ["historically-verified-current-reverification-required", "current-verified"]}
       }
     },
     "paths": {
@@ -79,7 +79,9 @@
         "aggregate_output_bytes": {"const": 16777216},
         "aggregate_download_bytes": {"const": 577786748},
         "aggregate_automatable_calls": {"type": "integer", "minimum": 1},
-        "system_incremental_disk_bytes": {"type": "null"},
+        "system_incremental_disk_bytes": {
+          "anyOf": [{"type": "integer", "minimum": 1}, {"type": "null"}]
+        },
         "external_incremental_disk_bytes": {"const": 12884901888},
         "active_attempt_bytes": {"const": 67108864},
         "evidence_bytes": {"const": 16777216},
@@ -101,15 +103,27 @@
             "first_start_internal_bytes"
           ],
           "properties": {
-            "status": {"const": "unresolved-blocking"},
-            "os_operating_headroom_bytes": {"type": "null"},
+            "status": {"enum": ["unresolved-blocking", "resolved"]},
+            "os_operating_headroom_bytes": {
+              "anyOf": [{"type": "integer", "minimum": 0}, {"type": "null"}]
+            },
             "dmg_download_peak_bytes": {"const": 573592444},
-            "installed_app_bytes": {"type": "null"},
-            "support_files_bytes": {"type": "null"},
-            "update_rollback_bytes": {"type": "null"},
+            "installed_app_bytes": {
+              "anyOf": [{"type": "integer", "minimum": 0}, {"type": "null"}]
+            },
+            "support_files_bytes": {
+              "anyOf": [{"type": "integer", "minimum": 0}, {"type": "null"}]
+            },
+            "update_rollback_bytes": {
+              "anyOf": [{"type": "integer", "minimum": 0}, {"type": "null"}]
+            },
             "active_evidence_bytes": {"const": 67108864},
-            "failure_cleanup_bytes": {"type": "null"},
-            "first_start_internal_bytes": {"type": "null"}
+            "failure_cleanup_bytes": {
+              "anyOf": [{"type": "integer", "minimum": 0}, {"type": "null"}]
+            },
+            "first_start_internal_bytes": {
+              "anyOf": [{"type": "integer", "minimum": 0}, {"type": "null"}]
+            }
           }
         }
       }
@@ -177,7 +191,7 @@
     },
     "blocking_requirements": {
       "type": "array",
-      "minItems": 1,
+      "minItems": 0,
       "items": {"type": "string", "minLength": 1}
     },
     "superseded_plan": {
@@ -189,5 +203,70 @@
         "sha256": {"const": "10fd0350c5e14c4c6d4e32bf40f1f9f696735eae81815a00cd8032e652beaa25"}
       }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"authorized": {"const": true}}, "required": ["authorized"]},
+      "then": {
+        "properties": {
+          "plan_id": {
+            "pattern": "^PLAN-T07-GATE-B2A-DOCKER-STORAGE-QUALIFICATION-V(?:[2-9]|[1-9][0-9]+)[A-Z0-9._-]*$"
+          },
+          "authorization_reference": {"not": {"const": "AUTH-T07-GATE-B2A-PENDING"}},
+          "status": {"const": "authorized-executable"},
+          "artifact": {
+            "properties": {"verification_status": {"const": "current-verified"}}
+          },
+          "limits": {
+            "properties": {
+              "system_incremental_disk_bytes": {"type": "integer", "minimum": 1},
+              "system_floor": {
+                "properties": {
+                  "status": {"const": "resolved"},
+                  "os_operating_headroom_bytes": {"type": "integer", "minimum": 0},
+                  "dmg_download_peak_bytes": {"type": "integer", "minimum": 0},
+                  "installed_app_bytes": {"type": "integer", "minimum": 0},
+                  "support_files_bytes": {"type": "integer", "minimum": 0},
+                  "update_rollback_bytes": {"type": "integer", "minimum": 0},
+                  "active_evidence_bytes": {"type": "integer", "minimum": 0},
+                  "failure_cleanup_bytes": {"type": "integer", "minimum": 0},
+                  "first_start_internal_bytes": {"type": "integer", "minimum": 0}
+                }
+              }
+            }
+          },
+          "blocking_requirements": {"maxItems": 0}
+        }
+      },
+      "else": {
+        "properties": {
+          "plan_id": {"const": "PLAN-T07-GATE-B2A-DOCKER-STORAGE-QUALIFICATION-V1"},
+          "authorization_reference": {"const": "AUTH-T07-GATE-B2A-PENDING"},
+          "status": {"const": "blocked-design-only"},
+          "artifact": {
+            "properties": {
+              "verification_status": {"const": "historically-verified-current-reverification-required"}
+            }
+          },
+          "limits": {
+            "properties": {
+              "system_incremental_disk_bytes": {"type": "null"},
+              "system_floor": {
+                "properties": {
+                  "status": {"const": "unresolved-blocking"},
+                  "os_operating_headroom_bytes": {"type": "null"},
+                  "installed_app_bytes": {"type": "null"},
+                  "support_files_bytes": {"type": "null"},
+                  "update_rollback_bytes": {"type": "null"},
+                  "failure_cleanup_bytes": {"type": "null"},
+                  "first_start_internal_bytes": {"type": "null"}
+                }
+              }
+            }
+          },
+          "blocking_requirements": {"minItems": 1}
+        }
+      }
+    }
+  ]
 }

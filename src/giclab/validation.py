@@ -48,6 +48,10 @@ SCHEMA_FILES = (
     "schemas/container-attempt.schema.json",
     "schemas/container-image-provenance.schema.json",
     "schemas/container-platform-decision.schema.json",
+    "schemas/docker-storage-qualification-plan.schema.json",
+    "schemas/docker-storage-placement-evidence.schema.json",
+    "schemas/sealed-artifact-copy.schema.json",
+    "schemas/attempt-close-evidence.schema.json",
 )
 REQUIRED_PATHS = (
     "AGENTS.md",

@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:gic-lab:schema:attempt-close-evidence:0.1.0",
+  "title": "T07 attempt writer-closure evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "attempt_id",
+    "source_path",
+    "supervisor_plan_id",
+    "supervisor_plan_sha256",
+    "authorization_reference",
+    "all_actions_before_seal_complete",
+    "open_writer_count",
+    "closed_at_utc"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1.0"},
+    "attempt_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{2,127}$"},
+    "source_path": {"type": "string", "pattern": "^/"},
+    "supervisor_plan_id": {
+      "type": "string",
+      "pattern": "^PLAN-T07-GATE-B2A-DOCKER-STORAGE-QUALIFICATION-V(?:[2-9]|[1-9][0-9]+)[A-Z0-9._-]*$"
+    },
+    "supervisor_plan_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "authorization_reference": {"type": "string", "pattern": "^AUTH-[A-Z0-9][A-Z0-9._-]{2,127}$"},
+    "all_actions_before_seal_complete": {"const": true},
+    "open_writer_count": {"const": 0},
+    "closed_at_utc": {"type": "string", "format": "date-time"}
+  }
+}

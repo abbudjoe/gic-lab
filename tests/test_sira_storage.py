@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 from giclab.harness.sira_storage import (
+    _SUPERVISOR_CLOSE_ISSUER,
     ACTIVE_ATTEMPT_CAP_BYTES,
     ACTIVE_ATTEMPT_ROOT,
     APPROVED_EXTERNAL_CAPACITY_BYTES,
@@ -18,7 +19,10 @@ from giclab.harness.sira_storage import (
     APPROVED_PHYSICAL_STORE_UUID,
     APPROVED_VOLUME_UUID,
     B2A_AGGREGATE_DOWNLOAD_CAP_BYTES,
+    B2A_AGGREGATE_OUTPUT_CAP_BYTES,
+    B2A_AGGREGATE_WALL_SECONDS,
     B2A_AUTHORIZATION_PLACEHOLDER,
+    B2A_IMPLEMENTATION_BOUND_PATHS,
     B2A_PLAN_ID,
     BUILD_STAGING_ROOT,
     DOCKER_DISK_IMAGE_ROOT,
@@ -31,6 +35,7 @@ from giclab.harness.sira_storage import (
     SYSTEM_CAPACITY_BYTES,
     SYSTEM_DATA_MOUNT,
     SYSTEM_DATA_VOLUME_UUID,
+    AttemptCloseEvidence,
     B2AActionResult,
     B2AExecutionSupervisor,
     B2APlan,
@@ -47,6 +52,7 @@ from giclab.harness.sira_storage import (
     SystemFloorInputs,
     VolumeObservation,
     _guard_argv,
+    _seal_and_copy_argv,
     _validate_b2a_argv,
     copy_sealed_attempt,
     issue_storage_guard,
@@ -60,12 +66,17 @@ from giclab.harness.sira_storage import (
     verify_official_docker_metadata,
     volume_observation_from_diskutil,
 )
+from giclab.harness.sira_storage import (
+    main as storage_main,
+)
 from giclab.validation import validate_instance
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def _external_observation(*, free_bytes: int = EXTERNAL_PRE_B2A_FREE_FLOOR_BYTES):
+def _external_observation(
+    *, free_bytes: int = EXTERNAL_PRE_B2A_FREE_FLOOR_BYTES
+) -> VolumeObservation:
     return VolumeObservation(
         mount_path=APPROVED_MOUNT,
         filesystem="apfs",
@@ -84,7 +95,7 @@ def _external_observation(*, free_bytes: int = EXTERNAL_PRE_B2A_FREE_FLOOR_BYTES
     )
 
 
-def _system_observation(*, free_bytes: int = SYSTEM_CAPACITY_BYTES):
+def _system_observation(*, free_bytes: int = SYSTEM_CAPACITY_BYTES) -> VolumeObservation:
     return VolumeObservation(
         mount_path=SYSTEM_DATA_MOUNT,
         filesystem="APFS",
@@ -98,6 +109,20 @@ def _system_observation(*, free_bytes: int = SYSTEM_CAPACITY_BYTES):
         encrypted=True,
         unlocked=True,
         device_identifier="disk3s5",
+    )
+
+
+def _close_evidence(source: Path, attempt_id: str) -> AttemptCloseEvidence:
+    return AttemptCloseEvidence(
+        attempt_id=attempt_id,
+        source_path=source,
+        supervisor_plan_id="PLAN-T07-GATE-B2A-DOCKER-STORAGE-QUALIFICATION-V2-TEST",
+        supervisor_plan_sha256="c" * 64,
+        authorization_reference="AUTH-T07-GATE-B2A-TEST",
+        all_actions_before_seal_complete=True,
+        open_writer_count=0,
+        closed_at_utc="2026-08-09T16:00:00Z",
+        _issuer=_SUPERVISOR_CLOSE_ISSUER,
     )
 
 
@@ -118,6 +143,54 @@ def _user_step(action_id: str) -> B2AStep:
 
 
 def _blocked_plan() -> B2APlan:
+    implementation_commit = "a" * 40
+    repository_steps = tuple(
+        B2AStep(
+            action_id=action_id,
+            kind=B2AStepKind.AUTOMATABLE,
+            timeout_seconds=10,
+            output_limit_bytes=1024,
+            download_limit_bytes=0,
+            internal_disk_limit_bytes=0,
+            external_disk_limit_bytes=0,
+            argv=argv,
+            instruction=None,
+            stop_on_failure=True,
+            retry_limit=0,
+            expected_stdout=expected_stdout,
+        )
+        for action_id, argv, expected_stdout in (
+            ("repository-status", ("/usr/bin/git", "status", "--short"), ""),
+            (
+                "repository-branch",
+                ("/usr/bin/git", "branch", "--show-current"),
+                "phase-1/sira-smoke\n",
+            ),
+            (
+                "repository-implementation-ancestor",
+                (
+                    "/usr/bin/git",
+                    "merge-base",
+                    "--is-ancestor",
+                    implementation_commit,
+                    "HEAD",
+                ),
+                "",
+            ),
+            (
+                "repository-implementation-tree",
+                (
+                    "/usr/bin/git",
+                    "diff",
+                    "--quiet",
+                    implementation_commit,
+                    "--",
+                    *B2A_IMPLEMENTATION_BOUND_PATHS,
+                ),
+                "",
+            ),
+        )
+    )
     select_guard = B2AStep(
         action_id="guard-select-external-disk-location",
         kind=B2AStepKind.AUTOMATABLE,
@@ -142,19 +215,7 @@ def _blocked_plan() -> B2APlan:
         ),
     )
     steps = (
-        B2AStep(
-            action_id="repository-preflight",
-            kind=B2AStepKind.AUTOMATABLE,
-            timeout_seconds=10,
-            output_limit_bytes=1024,
-            download_limit_bytes=0,
-            internal_disk_limit_bytes=0,
-            external_disk_limit_bytes=0,
-            argv=("/usr/bin/git", "status", "--short"),
-            instruction=None,
-            stop_on_failure=True,
-            retry_limit=0,
-        ),
+        *repository_steps,
         _user_step("accept-terms-personally"),
         _user_step("disable-automatic-update"),
         select_guard,
@@ -165,11 +226,13 @@ def _blocked_plan() -> B2APlan:
     return B2APlan(
         schema_version="0.1.0",
         plan_id=B2A_PLAN_ID,
+        status="blocked-design-only",
+        blocking_requirements=("synthetic unresolved storage evidence",),
         authorization_reference=B2A_AUTHORIZATION_PLACEHOLDER,
         authorized=False,
-        implementation_commit="a" * 40,
-        aggregate_wall_seconds=600,
-        aggregate_output_bytes=2048,
+        implementation_commit=implementation_commit,
+        aggregate_wall_seconds=B2A_AGGREGATE_WALL_SECONDS,
+        aggregate_output_bytes=B2A_AGGREGATE_OUTPUT_CAP_BYTES,
         aggregate_download_bytes=B2A_AGGREGATE_DOWNLOAD_CAP_BYTES,
         system_incremental_disk_bytes=None,
         system_floor_inputs=SystemFloorInputs(os_operating_headroom_bytes=None),
@@ -178,7 +241,46 @@ def _blocked_plan() -> B2APlan:
         steps=steps,
         superseded_plan_id=SUPERSEDED_PLAN_ID,
         superseded_plan_sha256=SUPERSEDED_PLAN_SHA256,
-        aggregate_automatable_calls=2,
+        aggregate_automatable_calls=5,
+        document_sha256="c" * 64,
+    )
+
+
+def _authorized_plan() -> B2APlan:
+    floor_inputs = SystemFloorInputs(
+        os_operating_headroom_bytes=0,
+        installed_app_bytes=0,
+        support_files_bytes=0,
+        update_rollback_bytes=0,
+        failure_cleanup_bytes=0,
+        first_start_internal_bytes=0,
+    )
+    floor = floor_inputs.resolved_floor_bytes()
+    blocked = _blocked_plan()
+    steps = tuple(
+        replace(
+            step,
+            argv=_guard_argv(
+                step.guard_for_action,
+                step.guard_purposes,
+                require_existing=True,
+                system_floor_bytes=str(floor),
+            ),
+        )
+        if step.guard_for_action is not None
+        else step
+        for step in blocked.steps
+    )
+    return replace(
+        blocked,
+        plan_id="PLAN-T07-GATE-B2A-DOCKER-STORAGE-QUALIFICATION-V2-TEST",
+        status="authorized-executable",
+        blocking_requirements=(),
+        authorization_reference="AUTH-T07-GATE-B2A-TEST",
+        authorized=True,
+        system_incremental_disk_bytes=1024,
+        system_floor_inputs=floor_inputs,
+        steps=steps,
     )
 
 
@@ -561,8 +663,9 @@ def test_settings_evidence_is_minimized_and_placement_is_machine_checked(
     evidence.validate(external_device=observed.st_dev, sanitized_settings=sanitized)
     with pytest.raises(StorageContractError, match="data folder"):
         evidence.validate(external_device=observed.st_dev, sanitized_settings={})
+    schema_data_folder = "/Volumes/Macintosh HD - Data/GIC-Lab/t07/docker-desktop/disk-image"
     schema_settings = {
-        "dataFolder": "/Volumes/Macintosh HD - Data/GIC-Lab/t07/docker-desktop/disk-image",
+        "dataFolder": schema_data_folder,
         "diskSizeMiB": 65536,
         "autoDownloadUpdates": False,
     }
@@ -579,7 +682,7 @@ def test_settings_evidence_is_minimized_and_placement_is_machine_checked(
         "sanitized_settings": schema_settings,
         "settings_sha256": schema_settings_hash,
         "disk": {
-            "path": schema_settings["dataFolder"] + "/Docker.raw",
+            "path": schema_data_folder + "/Docker.raw",
             "device": 44,
             "inode": 123,
             "logical_bytes": 64 * 1024**3,
@@ -635,7 +738,15 @@ def test_archive_copy_verifies_hashes_and_retains_source(
             return destination_device
         raise AssertionError(f"unexpected fixture path: {path}")
 
-    seal = seal_attempt(source, attempt_id="attempt-1", max_bytes=1024)
+    archive_id = "attempt-1-sealed"
+    immutable_paths: set[Path] = set()
+    seal = seal_attempt(
+        source,
+        attempt_id=archive_id,
+        max_bytes=1024,
+        close_evidence=_close_evidence(source, archive_id),
+        immutable_setter=immutable_paths.add,
+    )
     placement = qualify_archive_placement(
         source,
         archive_parent=archive,
@@ -645,7 +756,7 @@ def test_archive_copy_verifies_hashes_and_retains_source(
         issued_monotonic_ns=100,
         device_resolver=resolve_device,
     )
-    record_path = evidence_root / "copy-records/attempt-1-sealed.json"
+    record_path = evidence_root / "copy-records" / f"{archive_id}.json"
     with pytest.raises(StorageContractError, match="identity is unsafe"):
         copy_sealed_attempt(
             source,
@@ -659,11 +770,32 @@ def test_archive_copy_verifies_hashes_and_retains_source(
             copied_at_utc="2026-08-09T16:00:00Z",
             now_monotonic_ns=105,
             device_resolver=resolve_device,
+            immutability_probe=immutable_paths.__contains__,
         )
+    redirected = system_root / "redirected-copy-records"
+    redirected.mkdir()
+    record_path.parent.symlink_to(redirected, target_is_directory=True)
+    with pytest.raises(StorageContractError, match="symlink"):
+        copy_sealed_attempt(
+            source,
+            archive_parent=archive,
+            archive_id=archive_id,
+            copy_record_path=record_path,
+            max_bytes=1024,
+            placement=placement,
+            source_observation=_system_observation(),
+            destination_observation=_external_observation(),
+            copied_at_utc="2026-08-09T16:00:00Z",
+            now_monotonic_ns=105,
+            device_resolver=resolve_device,
+            immutability_probe=immutable_paths.__contains__,
+        )
+    record_path.parent.unlink()
+    assert list(redirected.iterdir()) == []
     record = copy_sealed_attempt(
         source,
         archive_parent=archive,
-        archive_id="attempt-1-sealed",
+        archive_id=archive_id,
         copy_record_path=record_path,
         max_bytes=1024,
         placement=placement,
@@ -672,9 +804,11 @@ def test_archive_copy_verifies_hashes_and_retains_source(
         copied_at_utc="2026-08-09T16:00:00Z",
         now_monotonic_ns=105,
         device_resolver=resolve_device,
+        immutability_probe=immutable_paths.__contains__,
     )
     assert seal["total_payload_bytes"] == len("bounded evidence\n")
     assert record["source_retained"] is True
+    assert record["source_immutable"] is True
     assert source.exists()
     assert (archive / "attempt-1-sealed/nested/evidence.txt").read_text() == "bounded evidence\n"
     assert json.loads(record_path.read_text())["files_verified"] == 1
@@ -699,13 +833,75 @@ def test_archive_copy_verifies_hashes_and_retains_source(
 def test_archive_rejects_symlinks_and_byte_overflow(tmp_path: Path) -> None:
     source = tmp_path / "attempt"
     source.mkdir()
+    with pytest.raises(StorageContractError, match="no evidence"):
+        seal_attempt(
+            source,
+            attempt_id="attempt",
+            max_bytes=1024,
+            close_evidence=_close_evidence(source, "attempt"),
+        )
     (source / "escape").symlink_to(tmp_path)
     with pytest.raises(StorageContractError, match="symlink"):
-        seal_attempt(source, attempt_id="attempt", max_bytes=1024)
+        seal_attempt(
+            source,
+            attempt_id="attempt",
+            max_bytes=1024,
+            close_evidence=_close_evidence(source, "attempt"),
+        )
     (source / "escape").unlink()
     (source / "large").write_bytes(b"x" * 10)
     with pytest.raises(StorageContractError, match="byte cap"):
-        seal_attempt(source, attempt_id="attempt", max_bytes=9)
+        seal_attempt(
+            source,
+            attempt_id="attempt",
+            max_bytes=9,
+            close_evidence=_close_evidence(source, "attempt"),
+        )
+
+
+def test_attempt_close_evidence_requires_fresh_executable_authority(tmp_path: Path) -> None:
+    source = tmp_path / "attempt"
+    source.mkdir()
+    (source / "evidence.txt").write_text("bounded\n")
+    close = _close_evidence(source, "attempt")
+    with pytest.raises(StorageContractError, match="executable authority"):
+        seal_attempt(
+            source,
+            attempt_id="attempt",
+            max_bytes=1024,
+            close_evidence=replace(
+                close,
+                authorization_reference=B2A_AUTHORIZATION_PLACEHOLDER,
+            ),
+        )
+    assert (
+        validate_instance(
+            close.document(),
+            ROOT / "schemas/attempt-close-evidence.schema.json",
+        )
+        == []
+    )
+
+
+def test_standalone_seal_and_copy_is_fail_closed() -> None:
+    with pytest.raises(StorageContractError, match="supervisor-owned"):
+        storage_main(
+            [
+                "seal-and-copy",
+                "--source",
+                "/not/used",
+                "--archive-parent",
+                "/not/used",
+                "--archive-id",
+                "not-used",
+                "--copy-record",
+                "/not/used",
+                "--max-bytes",
+                "1",
+                "--system-floor-bytes",
+                "1",
+            ]
+        )
 
 
 def test_blocked_b2a_plan_is_separate_from_b2b_and_old_plan() -> None:
@@ -714,28 +910,56 @@ def test_blocked_b2a_plan_is_separate_from_b2b_and_old_plan() -> None:
     assert plan.plan_id != SUPERSEDED_PLAN_ID
     assert "B2B" not in plan.plan_id
     assert not plan.authorized
-    with pytest.raises(StorageContractError, match="stale"):
+    with pytest.raises(StorageContractError, match="V1 identity"):
         replace(plan, plan_id=SUPERSEDED_PLAN_ID).validate()
+    with pytest.raises(StorageContractError, match="binding is incomplete"):
+        replace(plan, implementation_commit="b" * 40).validate()
+
+
+def test_authorized_plan_requires_exact_numeric_guard_floor() -> None:
+    plan = _authorized_plan()
+    plan.validate()
+    floor = str(plan.system_floor_inputs.resolved_floor_bytes())
+    guard_index = next(
+        index for index, step in enumerate(plan.steps) if step.guard_for_action is not None
+    )
+    guard = plan.steps[guard_index]
+    assert guard.argv is not None and floor in guard.argv and "unresolved" not in guard.argv
+    drifted_guard = replace(
+        guard, argv=tuple("1" if value == floor else value for value in guard.argv)
+    )
+    drifted_steps = list(plan.steps)
+    drifted_steps[guard_index] = drifted_guard
+    with pytest.raises(StorageContractError, match="exact rendered action"):
+        replace(plan, steps=tuple(drifted_steps)).validate()
+    drifted_steps[guard_index] = replace(guard, guard_purposes=(RootPurpose.B2A_WORK,))
+    with pytest.raises(StorageContractError, match="guard action metadata"):
+        replace(plan, steps=tuple(drifted_steps)).validate()
 
 
 def test_b2a_supervisor_blocks_unauthorized_plan_and_enforces_caps() -> None:
     with pytest.raises(StorageContractError, match="unauthorized"):
-        B2AExecutionSupervisor(_blocked_plan())
-    authorized = replace(
-        _blocked_plan(),
-        authorization_reference="AUTH-T07-GATE-B2A-TEST",
-        authorized=True,
-        system_incremental_disk_bytes=1024,
-        system_floor_inputs=SystemFloorInputs(
-            os_operating_headroom_bytes=0,
-            installed_app_bytes=0,
-            support_files_bytes=0,
-            update_rollback_bytes=0,
-            failure_cleanup_bytes=0,
-            first_start_internal_bytes=0,
-        ),
+        blocked = _blocked_plan()
+        B2AExecutionSupervisor(
+            blocked,
+            expected_plan_id=blocked.plan_id,
+            expected_plan_sha256=blocked.document_sha256 or "",
+            expected_authorization_reference=blocked.authorization_reference,
+        )
+    authorized = _authorized_plan()
+    with pytest.raises(StorageContractError, match="external authority"):
+        B2AExecutionSupervisor(
+            authorized,
+            expected_plan_id=authorized.plan_id,
+            expected_plan_sha256="d" * 64,
+            expected_authorization_reference=authorized.authorization_reference,
+        )
+    supervisor = B2AExecutionSupervisor(
+        authorized,
+        expected_plan_id=authorized.plan_id,
+        expected_plan_sha256=authorized.document_sha256 or "",
+        expected_authorization_reference=authorized.authorization_reference,
     )
-    supervisor = B2AExecutionSupervisor(authorized)
     floor = authorized.system_floor_inputs.resolved_floor_bytes()
     snapshot = B2AResourceSnapshot(
         system_free_bytes=floor + 1024,
@@ -743,7 +967,7 @@ def test_b2a_supervisor_blocks_unauthorized_plan_and_enforces_caps() -> None:
         active_attempt_bytes=0,
     )
     supervisor.start(snapshot, now_monotonic_ns=100)
-    supervisor.begin_action("repository-preflight", snapshot, now_monotonic_ns=101)
+    supervisor.begin_action("repository-status", snapshot, now_monotonic_ns=101)
     with pytest.raises(StorageContractError, match="output cap"):
         supervisor.finish_action(
             B2AActionResult(
@@ -760,20 +984,7 @@ def test_b2a_supervisor_blocks_unauthorized_plan_and_enforces_caps() -> None:
 def test_b2a_supervisor_consumes_adjacent_guard_and_exact_call_count(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    plan = replace(
-        _blocked_plan(),
-        authorization_reference="AUTH-T07-GATE-B2A-TEST",
-        authorized=True,
-        system_incremental_disk_bytes=1024,
-        system_floor_inputs=SystemFloorInputs(
-            os_operating_headroom_bytes=0,
-            installed_app_bytes=0,
-            support_files_bytes=0,
-            update_rollback_bytes=0,
-            failure_cleanup_bytes=0,
-            first_start_internal_bytes=0,
-        ),
-    )
+    plan = _authorized_plan()
     external_root = tmp_path / "external"
     system_root = tmp_path / "system"
     disk_root = external_root / "disk"
@@ -812,7 +1023,12 @@ def test_b2a_supervisor_consumes_adjacent_guard_and_exact_call_count(
         external_free_bytes=EXTERNAL_PRE_B2A_FREE_FLOOR_BYTES + 1024,
         active_attempt_bytes=0,
     )
-    supervisor = B2AExecutionSupervisor(plan)
+    supervisor = B2AExecutionSupervisor(
+        plan,
+        expected_plan_id=plan.plan_id,
+        expected_plan_sha256=plan.document_sha256 or "",
+        expected_authorization_reference=plan.authorization_reference,
+    )
     supervisor.start(snapshot, now_monotonic_ns=1_000)
     now = 1_001
     for step in plan.steps:
@@ -826,7 +1042,7 @@ def test_b2a_supervisor_consumes_adjacent_guard_and_exact_call_count(
         supervisor.finish_action(
             B2AActionResult(
                 exit_code=0,
-                stdout=b"",
+                stdout=(b"" if step.expected_stdout is None else step.expected_stdout.encode()),
                 stderr=b"",
                 downloaded_bytes=0,
                 resources_after=snapshot,
@@ -841,11 +1057,190 @@ def test_b2a_supervisor_consumes_adjacent_guard_and_exact_call_count(
     )
 
 
+def test_b2a_supervisor_mints_single_use_close_capability(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    base = _authorized_plan()
+    floor = base.system_floor_inputs.resolved_floor_bytes()
+    seal_purposes = (RootPurpose.SEALED_ARCHIVE, RootPurpose.B2A_WORK)
+    seal_guard_step = B2AStep(
+        action_id="guard-seal-and-copy-b2a-evidence",
+        kind=B2AStepKind.AUTOMATABLE,
+        timeout_seconds=10,
+        output_limit_bytes=1024,
+        download_limit_bytes=0,
+        internal_disk_limit_bytes=0,
+        external_disk_limit_bytes=0,
+        argv=_guard_argv(
+            "seal-and-copy-b2a-evidence",
+            seal_purposes,
+            require_existing=True,
+            system_floor_bytes=str(floor),
+        ),
+        instruction=None,
+        stop_on_failure=True,
+        retry_limit=0,
+        guard_for_action="seal-and-copy-b2a-evidence",
+        guard_purposes=seal_purposes,
+    )
+    seal_step = B2AStep(
+        action_id="seal-and-copy-b2a-evidence",
+        kind=B2AStepKind.AUTOMATABLE,
+        timeout_seconds=10,
+        output_limit_bytes=1024,
+        download_limit_bytes=0,
+        internal_disk_limit_bytes=0,
+        external_disk_limit_bytes=1024,
+        argv=_seal_and_copy_argv(system_floor_bytes=str(floor)),
+        instruction=None,
+        stop_on_failure=True,
+        retry_limit=0,
+    )
+    plan = replace(
+        base,
+        steps=(*base.steps, seal_guard_step, seal_step),
+        aggregate_automatable_calls=(base.aggregate_automatable_calls or 0) + 2,
+    )
+    plan.validate()
+    supervisor = B2AExecutionSupervisor(
+        plan,
+        expected_plan_id=plan.plan_id,
+        expected_plan_sha256=plan.document_sha256 or "",
+        expected_authorization_reference=plan.authorization_reference,
+    )
+
+    external_root = tmp_path / "external"
+    system_root = tmp_path / "system"
+    disk_root = external_root / "disk"
+    build_root = external_root / "build"
+    archive_root = external_root / "archive"
+    work_root = system_root / "work"
+    source = work_root / "evidence/session"
+    for path in (disk_root, build_root, archive_root, source):
+        path.mkdir(parents=True)
+    (source / "evidence.txt").write_text("bounded\n")
+    monkeypatch.setattr("giclab.harness.sira_storage.APPROVED_EXTERNAL_ROOT", external_root)
+    monkeypatch.setattr("giclab.harness.sira_storage.DOCKER_DISK_IMAGE_ROOT", disk_root)
+    monkeypatch.setattr("giclab.harness.sira_storage.BUILD_STAGING_ROOT", build_root)
+    monkeypatch.setattr("giclab.harness.sira_storage.SEALED_ARTIFACT_ROOT", archive_root)
+    monkeypatch.setattr("giclab.harness.sira_storage.SYSTEM_GICLAB_ROOT", system_root)
+    monkeypatch.setattr("giclab.harness.sira_storage.B2A_WORK_ROOT", work_root)
+    external_device = 101
+    system_device = 202
+
+    def resolve_device(path: Path) -> int:
+        return external_device if path.is_relative_to(external_root) else system_device
+
+    select_guard = issue_storage_guard(
+        external=_external_observation(),
+        system=_system_observation(),
+        external_device=external_device,
+        system_device=system_device,
+        system_floor_bytes=floor,
+        purposes=(
+            RootPurpose.DOCKER_DISK,
+            RootPurpose.BUILD_STAGING,
+            RootPurpose.B2A_WORK,
+        ),
+        require_existing=True,
+        issued_monotonic_ns=1_000,
+        device_resolver=resolve_device,
+    )
+    seal_guard = issue_storage_guard(
+        external=_external_observation(),
+        system=_system_observation(),
+        external_device=external_device,
+        system_device=system_device,
+        system_floor_bytes=floor,
+        purposes=seal_purposes,
+        require_existing=True,
+        issued_monotonic_ns=1_000,
+        device_resolver=resolve_device,
+    )
+    guards = {
+        "guard-select-external-disk-location": select_guard,
+        "guard-seal-and-copy-b2a-evidence": seal_guard,
+    }
+    snapshot = B2AResourceSnapshot(
+        system_free_bytes=floor + 1024,
+        external_free_bytes=EXTERNAL_PRE_B2A_FREE_FLOOR_BYTES + 1024,
+        active_attempt_bytes=0,
+    )
+    supervisor.start(snapshot, now_monotonic_ns=1_000)
+    now = 1_001
+    for step in plan.steps[:-1]:
+        supervisor.begin_action(
+            step.action_id,
+            snapshot,
+            now_monotonic_ns=now,
+            device_resolver=resolve_device,
+        )
+        now += 1
+        supervisor.finish_action(
+            B2AActionResult(
+                exit_code=0,
+                stdout=(b"" if step.expected_stdout is None else step.expected_stdout.encode()),
+                stderr=b"",
+                downloaded_bytes=0,
+                resources_after=snapshot,
+            ),
+            now_monotonic_ns=now,
+            guard_bundle=guards.get(step.action_id),
+        )
+        now += 1
+    with pytest.raises(StorageContractError, match="open writers"):
+        supervisor.prepare_seal(
+            source=source,
+            attempt_id="attempt-close",
+            closed_at_utc="2026-08-09T16:00:00Z",
+            now_monotonic_ns=now,
+            writer_probe=lambda _: 1,
+        )
+    close = supervisor.prepare_seal(
+        source=source,
+        attempt_id="attempt-close",
+        closed_at_utc="2026-08-09T16:00:00Z",
+        now_monotonic_ns=now,
+        writer_probe=lambda _: 0,
+    )
+    supervisor.begin_action(
+        seal_step.action_id,
+        snapshot,
+        now_monotonic_ns=now + 1,
+        device_resolver=resolve_device,
+    )
+    immutable_paths: set[Path] = set()
+    seal_attempt(
+        source,
+        attempt_id="attempt-close",
+        max_bytes=1024,
+        close_evidence=close,
+        immutable_setter=immutable_paths.add,
+    )
+    supervisor.finish_action(
+        B2AActionResult(
+            exit_code=0,
+            stdout=b"",
+            stderr=b"",
+            downloaded_bytes=0,
+            resources_after=snapshot,
+        ),
+        now_monotonic_ns=now + 2,
+        close_evidence=close,
+    )
+    supervisor.complete(now_monotonic_ns=now + 3)
+    with pytest.raises(StorageContractError, match="already consumed"):
+        close.validate(source=source, attempt_id="attempt-close")
+    os.chmod(source, 0o700)
+    os.chmod(source / "evidence.txt", 0o600)
+    os.chmod(source / "SEAL.json", 0o600)
+
+
 def test_committed_b2a_plan_has_exact_hash_and_remains_blocked() -> None:
     path = ROOT / "containers/sira-smoke/gate-b2a-install-storage-binding-plan.json"
-    digest = "9c8f022fe306e50cb26eaccf1a7a0a7da0d935b4a1613b26a2aa641d31ba5892"
+    digest = "cf6bf1f5dc2047e9dac9c6baf19ea3722725c57a6a62f5a57227941e247751ed"
     plan = load_b2a_plan(path, expected_sha256=digest)
-    assert plan.implementation_commit == "088ad05ee747a922dc457f0ccf22fee6ca083c46"
+    assert plan.implementation_commit == "e23cebc7897384de4e3a435fe76e99709292d7b3"
     assert not plan.authorized
     assert plan.system_incremental_disk_bytes is None
 
@@ -866,8 +1261,8 @@ def test_b2b_stub_contains_requirements_but_no_executable_authority() -> None:
 def test_b2a_packet_is_bound_and_explicitly_authorizes_nothing() -> None:
     packet = (ROOT / "docs/harness/T07_GATE_B2A_INSTALL_AUTHORIZATION_PACKET.md").read_text()
     assert "this packet and its plan authorize nothing" in packet
-    assert "9c8f022fe306e50cb26eaccf1a7a0a7da0d935b4a1613b26a2aa641d31ba5892" in packet
-    assert "088ad05ee747a922dc457f0ccf22fee6ca083c46" in packet
+    assert "cf6bf1f5dc2047e9dac9c6baf19ea3722725c57a6a62f5a57227941e247751ed" in packet
+    assert "e23cebc7897384de4e3a435fe76e99709292d7b3" in packet
     assert "There is no truthful ready-to-copy **installation authorization**" in packet
 
 

@@ -22,7 +22,6 @@ import xml.etree.ElementTree as ET
 from collections.abc import Callable, Mapping, Sequence
 from contextlib import suppress
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
 
@@ -59,13 +58,16 @@ B2A_APPCAST_PATH = B2A_DOWNLOAD_ROOT / "appcast.xml"
 B2A_CHECKSUMS_PATH = B2A_DOWNLOAD_ROOT / "checksums.txt"
 B2A_DMG_PATH = B2A_DOWNLOAD_ROOT / "Docker-4.85.0-arm64-235549.dmg"
 B2A_EVIDENCE_SESSION_ROOT = B2A_EVIDENCE_ROOT / "session"
+B2A_CLOSE_EVIDENCE_PATH = B2A_EVIDENCE_SESSION_ROOT / "ATTEMPT_CLOSED.json"
 B2A_COPY_RECORD_PATH = B2A_EVIDENCE_ROOT / "copy-records/T07-GATE-B2A-EVIDENCE-001.json"
 B2A_IMPLEMENTATION_BOUND_PATHS = (
     "src/giclab/harness/sira_container.py",
     "src/giclab/harness/sira_storage.py",
+    "src/giclab/validation.py",
     "schemas/docker-storage-qualification-plan.schema.json",
     "schemas/docker-storage-placement-evidence.schema.json",
     "schemas/sealed-artifact-copy.schema.json",
+    "schemas/attempt-close-evidence.schema.json",
 )
 CANDIDATE_DEFAULT_INTERNAL_DOCKER_RAW = Path(
     "/Users/joseph/Library/Containers/com.docker.docker/Data/vms/0/data/Docker.raw"
@@ -79,6 +81,8 @@ PROJECT_FREE_PERCENT = 20
 EXTERNAL_INCREMENTAL_RESERVATION_BYTES = 12 * GIB
 ACTIVE_ATTEMPT_CAP_BYTES = 64 * MIB
 B2A_EVIDENCE_CAP_BYTES = 16 * MIB
+B2A_AGGREGATE_WALL_SECONDS = 7200
+B2A_AGGREGATE_OUTPUT_CAP_BYTES = 16 * MIB
 
 DOCKER_DMG_URL = "https://desktop.docker.com/mac/main/arm64/235549/Docker.dmg"
 DOCKER_DMG_BYTES = 573_592_444
@@ -99,9 +103,13 @@ _COMMIT = re.compile(r"^[a-f0-9]{40}$")
 _PLAN_ID = re.compile(r"^PLAN-[A-Z0-9][A-Z0-9._-]{2,127}$")
 _ACTION_ID = re.compile(r"^[a-z][a-z0-9-]{2,63}$")
 _AUTHORIZATION_REFERENCE = re.compile(r"^AUTH-[A-Z0-9][A-Z0-9._-]{2,127}$")
+_B2A_EXECUTABLE_PLAN_ID = re.compile(
+    r"^PLAN-T07-GATE-B2A-DOCKER-STORAGE-QUALIFICATION-V(?:[2-9]|[1-9][0-9]+)[A-Z0-9._-]*$"
+)
 _ARCHIVE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{2,127}$")
 _UUID = re.compile(r"^[A-F0-9]{8}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{12}$")
 _UTC_TIMESTAMP = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$")
+_SUPERVISOR_CLOSE_ISSUER = object()
 
 
 def retained_free_floor(total_bytes: int) -> int:
@@ -906,6 +914,31 @@ def _write_json_exclusive(path: Path, value: Mapping[str, object]) -> None:
         raise
 
 
+def _write_json_exclusive_at(
+    directory_descriptor: int,
+    filename: str,
+    value: Mapping[str, object],
+) -> None:
+    if not filename or filename in {".", ".."} or "/" in filename:
+        raise StorageContractError("evidence filename is unsafe")
+    encoded = json.dumps(value, allow_nan=False, indent=2, sort_keys=True).encode() + b"\n"
+    descriptor = os.open(
+        filename,
+        os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
+        0o600,
+        dir_fd=directory_descriptor,
+    )
+    try:
+        with os.fdopen(descriptor, "wb") as handle:
+            descriptor = -1
+            handle.write(encoded)
+            handle.flush()
+            os.fsync(handle.fileno())
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+
+
 def _regular_file_manifest(root: Path, *, max_bytes: int) -> tuple[list[dict[str, object]], int]:
     if max_bytes <= 0:
         raise StorageContractError("archive byte cap must be positive")
@@ -937,6 +970,8 @@ def _regular_file_manifest(root: Path, *, max_bytes: int) -> tuple[list[dict[str
         if total > max_bytes:
             raise StorageContractError("archive source exceeds its byte cap")
         entries.append({"path": relative, "bytes": size, "sha256": file_sha256(candidate)})
+    if not entries:
+        raise StorageContractError("archive source contains no evidence files")
     return entries, total
 
 
@@ -1079,11 +1114,182 @@ def _copy_file_exclusive(source: Path, target: Path) -> None:
         raise
 
 
-def seal_attempt(source: Path, *, attempt_id: str, max_bytes: int) -> Mapping[str, object]:
-    """Fsync, hash, and make a closed attempt tree read-only."""
+@dataclass(slots=True)
+class AttemptCloseEvidence:
+    attempt_id: str
+    source_path: Path
+    supervisor_plan_id: str
+    supervisor_plan_sha256: str
+    authorization_reference: str
+    all_actions_before_seal_complete: bool
+    open_writer_count: int
+    closed_at_utc: str
+    _issuer: object = field(repr=False, compare=False)
+    _consumed: bool = field(default=False, init=False, repr=False, compare=False)
+
+    def validate(self, *, source: Path, attempt_id: str) -> None:
+        if self._issuer is not _SUPERVISOR_CLOSE_ISSUER or self._consumed:
+            raise StorageContractError("attempt close capability is untrusted or already consumed")
+        if (
+            _ARCHIVE_ID.fullmatch(self.attempt_id) is None
+            or self.attempt_id != attempt_id
+            or self.source_path != source
+        ):
+            raise StorageContractError("attempt close evidence identity/path mismatch")
+        if (
+            _B2A_EXECUTABLE_PLAN_ID.fullmatch(self.supervisor_plan_id) is None
+            or _SHA256.fullmatch(self.supervisor_plan_sha256) is None
+            or _AUTHORIZATION_REFERENCE.fullmatch(self.authorization_reference) is None
+            or self.authorization_reference == B2A_AUTHORIZATION_PLACEHOLDER
+        ):
+            raise StorageContractError("attempt close evidence lacks executable authority")
+        if (
+            not self.all_actions_before_seal_complete
+            or type(self.open_writer_count) is not int
+            or self.open_writer_count != 0
+        ):
+            raise StorageContractError("attempt close evidence does not prove writer closure")
+        if _UTC_TIMESTAMP.fullmatch(self.closed_at_utc) is None:
+            raise StorageContractError("attempt close timestamp must be exact UTC")
+
+    def consume(self, *, source: Path, attempt_id: str) -> None:
+        self.validate(source=source, attempt_id=attempt_id)
+        self._consumed = True
+
+    def document(self) -> dict[str, object]:
+        return {
+            "schema_version": "0.1.0",
+            "attempt_id": self.attempt_id,
+            "source_path": str(self.source_path),
+            "supervisor_plan_id": self.supervisor_plan_id,
+            "supervisor_plan_sha256": self.supervisor_plan_sha256,
+            "authorization_reference": self.authorization_reference,
+            "all_actions_before_seal_complete": self.all_actions_before_seal_complete,
+            "open_writer_count": self.open_writer_count,
+            "closed_at_utc": self.closed_at_utc,
+        }
+
+
+def _set_user_immutable(path: Path) -> None:
+    immutable_flag = getattr(stat, "UF_IMMUTABLE", None)
+    change_flags = getattr(os, "chflags", None)
+    current_flags = getattr(path.stat(follow_symlinks=False), "st_flags", None)
+    if (
+        not isinstance(immutable_flag, int)
+        or change_flags is None
+        or not isinstance(current_flags, int)
+    ):
+        raise StorageContractError("filesystem user-immutable flags are unavailable")
+    change_flags(path, current_flags | immutable_flag, follow_symlinks=False)
+    if not _is_user_immutable(path):
+        raise StorageContractError("filesystem user-immutable flag did not persist")
+
+
+def _is_user_immutable(path: Path) -> bool:
+    immutable_flag = getattr(stat, "UF_IMMUTABLE", None)
+    current_flags = getattr(path.stat(follow_symlinks=False), "st_flags", None)
+    return (
+        isinstance(immutable_flag, int)
+        and isinstance(current_flags, int)
+        and bool(current_flags & immutable_flag)
+    )
+
+
+def _validate_copy_record_parent(
+    copy_record_path: Path,
+    *,
+    source_device: int,
+    destination_device: int,
+    device_resolver: Callable[[Path], int],
+) -> None:
+    expected_parent = B2A_EVIDENCE_ROOT / "copy-records"
+    if copy_record_path.parent != expected_parent:
+        raise StorageContractError("archive copy record escaped its approved root")
+    validate_bounded_path(
+        expected_parent,
+        approved_root=B2A_EVIDENCE_ROOT,
+        expected_device=source_device,
+        prohibited_device=destination_device,
+        allow_missing_leaf=True,
+        device_resolver=device_resolver,
+    )
+
+
+def _write_copy_record_safely(
+    copy_record_path: Path,
+    record: Mapping[str, object],
+    *,
+    source_device: int,
+    destination_device: int,
+    device_resolver: Callable[[Path], int],
+) -> None:
+    """Create and write the exact record directory through held no-follow handles."""
+
+    _validate_copy_record_parent(
+        copy_record_path,
+        source_device=source_device,
+        destination_device=destination_device,
+        device_resolver=device_resolver,
+    )
+    directory_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    root_descriptor = -1
+    record_descriptor = -1
+    try:
+        root_descriptor = os.open(B2A_EVIDENCE_ROOT, directory_flags)
+        with suppress(FileExistsError):
+            os.mkdir("copy-records", mode=0o700, dir_fd=root_descriptor)
+        try:
+            record_descriptor = os.open(
+                "copy-records",
+                directory_flags,
+                dir_fd=root_descriptor,
+            )
+        except OSError as error:
+            raise StorageContractError(
+                "archive copy-record directory is a symlink or non-directory"
+            ) from error
+        record_stat = os.fstat(record_descriptor)
+        linked_stat = os.stat(
+            "copy-records",
+            dir_fd=root_descriptor,
+            follow_symlinks=False,
+        )
+        if (
+            not stat.S_ISDIR(record_stat.st_mode)
+            or not stat.S_ISDIR(linked_stat.st_mode)
+            or (record_stat.st_dev, record_stat.st_ino) != (linked_stat.st_dev, linked_stat.st_ino)
+            or device_resolver(copy_record_path.parent) != source_device
+        ):
+            raise StorageContractError("archive copy-record directory identity changed")
+        _write_json_exclusive_at(record_descriptor, copy_record_path.name, record)
+        os.fsync(record_descriptor)
+        written = os.stat(
+            copy_record_path.name,
+            dir_fd=record_descriptor,
+            follow_symlinks=False,
+        )
+        if not stat.S_ISREG(written.st_mode) or written.st_nlink != 1:
+            raise StorageContractError("archive copy record is not one regular file")
+    finally:
+        if record_descriptor >= 0:
+            os.close(record_descriptor)
+        if root_descriptor >= 0:
+            os.close(root_descriptor)
+
+
+def seal_attempt(
+    source: Path,
+    *,
+    attempt_id: str,
+    max_bytes: int,
+    close_evidence: AttemptCloseEvidence,
+    immutable_setter: Callable[[Path], None] = _set_user_immutable,
+) -> Mapping[str, object]:
+    """Require typed writer closure, then fsync, hash, and flag the tree immutable."""
 
     if _ARCHIVE_ID.fullmatch(attempt_id) is None:
         raise StorageContractError("attempt identity is unsafe")
+    close_evidence.consume(source=source, attempt_id=attempt_id)
     entries, total = _regular_file_manifest(source, max_bytes=max_bytes)
     for entry in entries:
         candidate = source / str(entry["path"])
@@ -1119,6 +1325,18 @@ def seal_attempt(source: Path, *, attempt_id: str, max_bytes: int) -> Mapping[st
     with (source / "SEAL.json").open("rb") as handle:
         os.fsync(handle.fileno())
     _fsync_directory(source.parent)
+    immutable_paths = [
+        *(source / str(entry["path"]) for entry in entries),
+        source / "SEAL.json",
+        *sorted(
+            (candidate for candidate in source.rglob("*") if candidate.is_dir()),
+            key=lambda item: len(item.parts),
+            reverse=True,
+        ),
+        source,
+    ]
+    for candidate in immutable_paths:
+        immutable_setter(candidate)
     return seal
 
 
@@ -1135,6 +1353,7 @@ def copy_sealed_attempt(
     copied_at_utc: str,
     now_monotonic_ns: int | None = None,
     device_resolver: Callable[[Path], int] = _device_for_path,
+    immutability_probe: Callable[[Path], bool] = _is_user_immutable,
 ) -> Mapping[str, object]:
     """Copy an immutable source to a fresh staging tree and verify before rename.
 
@@ -1150,6 +1369,12 @@ def copy_sealed_attempt(
         raise StorageContractError("archive copy timestamp must be an exact UTC value")
     if placement.source != source or placement.archive_parent != archive_parent:
         raise StorageContractError("archive placement token paths do not match the copy")
+    _validate_copy_record_parent(
+        copy_record_path,
+        source_device=placement.source_device,
+        destination_device=placement.destination_device,
+        device_resolver=device_resolver,
+    )
     placement.consume(
         source_observation=source_observation,
         destination_observation=destination_observation,
@@ -1162,9 +1387,15 @@ def copy_sealed_attempt(
     seal = json.loads(seal_path.read_text())
     if not isinstance(seal, dict) or not isinstance(seal.get("files"), list):
         raise StorageContractError("source seal is malformed")
+    if seal.get("attempt_id") != archive_id:
+        raise StorageContractError("source seal identity differs from the archive identity")
     total = seal.get("total_payload_bytes")
     if not isinstance(total, int) or isinstance(total, bool) or total > max_bytes:
         raise StorageContractError("source seal exceeds the archive cap")
+    immutable_paths = [source, seal_path]
+    immutable_paths.extend(candidate for candidate in source.rglob("*") if candidate != seal_path)
+    if not all(immutability_probe(candidate) for candidate in immutable_paths):
+        raise StorageContractError("source attempt lacks filesystem immutability")
     _assert_no_symlink_components(archive_parent, allow_missing_leaf=False)
     if not archive_parent.is_dir():
         raise StorageContractError("archive parent must exist")
@@ -1256,13 +1487,18 @@ def copy_sealed_attempt(
         "files_verified": len(seal["files"]),
         "total_payload_bytes": total,
         "source_retained": True,
+        "source_immutable": True,
         "destination_read_only": True,
     }
     if record["seal_sha256"] != record["destination_seal_sha256"]:
         raise StorageContractError("destination seal hash mismatch")
-    copy_record_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    _write_json_exclusive(copy_record_path, record)
-    _fsync_directory(copy_record_path.parent)
+    _write_copy_record_safely(
+        copy_record_path,
+        record,
+        source_device=placement.source_device,
+        destination_device=placement.destination_device,
+        device_resolver=device_resolver,
+    )
     return record
 
 
@@ -1288,7 +1524,7 @@ class B2AStep:
     guard_for_action: str | None = None
     guard_purposes: tuple[RootPurpose, ...] = ()
 
-    def validate(self) -> None:
+    def validate(self, *, system_floor_bytes: int | None = None) -> None:
         if _ACTION_ID.fullmatch(self.action_id) is None:
             raise StorageContractError("invalid Gate B2a action ID")
         if (
@@ -1304,7 +1540,7 @@ class B2AStep:
         if self.kind is B2AStepKind.AUTOMATABLE:
             if not self.argv or self.instruction is not None:
                 raise StorageContractError("automatable actions require only an argv array")
-            _validate_b2a_argv(self.argv)
+            _validate_b2a_argv(self.argv, system_floor_bytes=system_floor_bytes)
         elif self.argv is not None or not self.instruction:
             raise StorageContractError("user-only actions require an instruction and no argv")
         if self.kind is B2AStepKind.USER_ONLY and self.expected_stdout is not None:
@@ -1313,6 +1549,8 @@ class B2AStep:
             if self.guard_purposes:
                 raise StorageContractError("only guard actions may declare guard purposes")
         else:
+            expected_scope = _B2A_GUARD_SCOPES.get(self.guard_for_action)
+            expected_floor = "unresolved" if system_floor_bytes is None else str(system_floor_bytes)
             if (
                 self.kind is not B2AStepKind.AUTOMATABLE
                 or _ACTION_ID.fullmatch(self.guard_for_action) is None
@@ -1320,6 +1558,15 @@ class B2AStep:
                 or len(set(self.guard_purposes)) != len(self.guard_purposes)
                 or self.argv is None
                 or "guard-storage" not in self.argv
+                or expected_scope is None
+                or self.guard_purposes != expected_scope[0]
+                or self.argv
+                != _guard_argv(
+                    self.guard_for_action,
+                    expected_scope[0],
+                    require_existing=expected_scope[1],
+                    system_floor_bytes=expected_floor,
+                )
             ):
                 raise StorageContractError("Gate B2a guard action metadata is malformed")
 
@@ -1344,6 +1591,7 @@ class B2AStep:
             "select-external-disk-location",
             "apply-storage-binding-restart",
             "restart-after-remount-guard",
+            "seal-and-copy-b2a-evidence",
         }
 
 
@@ -1391,6 +1639,7 @@ _B2A_GUARD_SCOPES: Mapping[str, tuple[tuple[RootPurpose, ...], bool]] = {
     "create-b2a-work-root": ((RootPurpose.B2A_WORK,), False),
     "create-b2a-download-root": ((RootPurpose.B2A_WORK,), False),
     "create-b2a-evidence-root": ((RootPurpose.B2A_WORK,), False),
+    "create-b2a-evidence-session": ((RootPurpose.B2A_WORK,), False),
     "fetch-current-appcast": ((RootPurpose.B2A_WORK,), True),
     "fetch-current-checksums": ((RootPurpose.B2A_WORK,), True),
     "download-selected-dmg": ((RootPurpose.B2A_WORK,), True),
@@ -1428,7 +1677,7 @@ _B2A_GUARD_SCOPES: Mapping[str, tuple[tuple[RootPurpose, ...], bool]] = {
 }
 
 
-def _validate_b2a_argv(argv: Sequence[str]) -> None:
+def _validate_b2a_argv(argv: Sequence[str], *, system_floor_bytes: int | None = None) -> None:
     if not argv or argv[0] not in _ALLOWED_EXECUTABLES:
         raise StorageContractError("Gate B2a executable is not allowlisted")
     joined = " " + " ".join(argv).casefold()
@@ -1450,8 +1699,24 @@ def _validate_b2a_argv(argv: Sequence[str]) -> None:
         and exact[5:] == B2A_IMPLEMENTATION_BOUND_PATHS
     ):
         return
-    if exact not in _allowed_b2a_argv():
-        raise StorageContractError("Gate B2a argument array is not an exact rendered action")
+    is_guard_action = "guard-storage" in exact
+    is_seal_action = "seal-and-copy" in exact
+    if exact in _allowed_b2a_argv() and not (
+        (is_guard_action or is_seal_action) and system_floor_bytes is not None
+    ):
+        return
+    guard_floor = "unresolved" if system_floor_bytes is None else str(system_floor_bytes)
+    if exact == _seal_and_copy_argv(system_floor_bytes=guard_floor):
+        return
+    for action_id, (purposes, require_existing) in _B2A_GUARD_SCOPES.items():
+        if exact == _guard_argv(
+            action_id,
+            purposes,
+            require_existing=require_existing,
+            system_floor_bytes=guard_floor,
+        ):
+            return
+    raise StorageContractError("Gate B2a argument array is not an exact rendered action")
 
 
 def _curl_argv(*, url: str, output: Path, max_seconds: int, max_bytes: int) -> tuple[str, ...]:
@@ -1479,19 +1744,40 @@ def _guard_argv(
     purposes: Sequence[RootPurpose],
     *,
     require_existing: bool,
+    system_floor_bytes: str = "unresolved",
 ) -> tuple[str, ...]:
     argv = (
         str(B2A_PYTHON_PATH),
         str(B2A_SCRIPT_PATH),
         "guard-storage",
         "--system-floor-bytes",
-        "unresolved",
+        system_floor_bytes,
         "--next-action",
         action_id,
         "--purposes",
         ",".join(purpose.value for purpose in purposes),
     )
     return argv + (("--require-existing",) if require_existing else ())
+
+
+def _seal_and_copy_argv(*, system_floor_bytes: str) -> tuple[str, ...]:
+    return (
+        str(B2A_PYTHON_PATH),
+        str(B2A_SCRIPT_PATH),
+        "seal-and-copy",
+        "--source",
+        str(B2A_EVIDENCE_SESSION_ROOT),
+        "--archive-parent",
+        str(SEALED_ARTIFACT_ROOT),
+        "--archive-id",
+        "T07-GATE-B2A-EVIDENCE-001",
+        "--copy-record",
+        str(B2A_COPY_RECORD_PATH),
+        "--max-bytes",
+        str(B2A_EVIDENCE_CAP_BYTES),
+        "--system-floor-bytes",
+        system_floor_bytes,
+    )
 
 
 def _allowed_b2a_argv() -> frozenset[tuple[str, ...]]:
@@ -1507,6 +1793,7 @@ def _allowed_b2a_argv() -> frozenset[tuple[str, ...]]:
         B2A_WORK_ROOT,
         B2A_DOWNLOAD_ROOT,
         B2A_EVIDENCE_ROOT,
+        B2A_EVIDENCE_SESSION_ROOT,
     }
     commands: set[tuple[str, ...]] = {
         ("/usr/bin/git", "status", "--short"),
@@ -1542,22 +1829,7 @@ def _allowed_b2a_argv() -> frozenset[tuple[str, ...]]:
         ),
         (*python_prefix, "verify-dmg", "--path", str(B2A_DMG_PATH)),
         (*python_prefix, "assert-path-absent", "--path", "/Applications/Docker.app"),
-        (
-            *python_prefix,
-            "seal-and-copy",
-            "--source",
-            str(B2A_EVIDENCE_SESSION_ROOT),
-            "--archive-parent",
-            str(SEALED_ARTIFACT_ROOT),
-            "--archive-id",
-            "T07-GATE-B2A-EVIDENCE-001",
-            "--copy-record",
-            str(B2A_COPY_RECORD_PATH),
-            "--max-bytes",
-            str(B2A_EVIDENCE_CAP_BYTES),
-            "--system-floor-bytes",
-            "unresolved",
-        ),
+        _seal_and_copy_argv(system_floor_bytes="unresolved"),
         (
             "/usr/bin/hdiutil",
             "attach",
@@ -1642,6 +1914,8 @@ def inspect_and_guard_current_storage(
 class B2APlan:
     schema_version: str
     plan_id: str
+    status: str
+    blocking_requirements: tuple[str, ...]
     authorization_reference: str
     authorized: bool
     implementation_commit: str
@@ -1656,28 +1930,52 @@ class B2APlan:
     superseded_plan_id: str
     superseded_plan_sha256: str
     aggregate_automatable_calls: int | None = None
+    document_sha256: str | None = None
 
     def validate(self) -> None:
         if self.schema_version != "0.1.0":
             raise StorageContractError("unsupported Gate B2a plan schema version")
-        if self.plan_id != B2A_PLAN_ID or _PLAN_ID.fullmatch(self.plan_id) is None:
-            raise StorageContractError("Gate B2a plan ID is stale or unexpected")
+        if _PLAN_ID.fullmatch(self.plan_id) is None:
+            raise StorageContractError("Gate B2a plan ID is malformed")
         if self.authorized:
+            if (
+                self.plan_id == B2A_PLAN_ID
+                or _B2A_EXECUTABLE_PLAN_ID.fullmatch(self.plan_id) is None
+                or self.status != "authorized-executable"
+            ):
+                raise StorageContractError(
+                    "authorized Gate B2a requires a new executable plan identity"
+                )
+            if self.blocking_requirements:
+                raise StorageContractError("authorized Gate B2a cannot retain blockers")
             if (
                 self.authorization_reference == B2A_AUTHORIZATION_PLACEHOLDER
                 or _AUTHORIZATION_REFERENCE.fullmatch(self.authorization_reference) is None
             ):
                 raise StorageContractError("authorized Gate B2a plan lacks fresh authority")
-        elif self.authorization_reference != B2A_AUTHORIZATION_PLACEHOLDER:
-            raise StorageContractError("blocked Gate B2a plan must retain its placeholder")
+        elif (
+            self.plan_id != B2A_PLAN_ID
+            or self.status != "blocked-design-only"
+            or self.authorization_reference != B2A_AUTHORIZATION_PLACEHOLDER
+        ):
+            raise StorageContractError(
+                "blocked Gate B2a plan must retain its V1 identity and placeholder"
+            )
+        elif not self.blocking_requirements:
+            raise StorageContractError("blocked Gate B2a plan must enumerate blockers")
         if _COMMIT.fullmatch(self.implementation_commit) is None:
             raise StorageContractError("Gate B2a implementation commit is not exact")
-        if self.aggregate_wall_seconds <= 0 or self.aggregate_output_bytes <= 0:
-            raise StorageContractError("Gate B2a aggregate limits must be finite")
+        if self.document_sha256 is not None and _SHA256.fullmatch(self.document_sha256) is None:
+            raise StorageContractError("Gate B2a loaded document hash is malformed")
+        if self.aggregate_wall_seconds != B2A_AGGREGATE_WALL_SECONDS:
+            raise StorageContractError("Gate B2a aggregate wall cap changed")
+        if self.aggregate_output_bytes != B2A_AGGREGATE_OUTPUT_CAP_BYTES:
+            raise StorageContractError("Gate B2a aggregate output cap changed")
         if self.aggregate_download_bytes != B2A_AGGREGATE_DOWNLOAD_CAP_BYTES:
             raise StorageContractError("Gate B2a download cap changed")
+        resolved_system_floor: int | None = None
         try:
-            self.system_floor_inputs.resolved_floor_bytes()
+            resolved_system_floor = self.system_floor_inputs.resolved_floor_bytes()
         except StorageContractError:
             # B1.6 is a blocked, unauthorized design plan.  A later executable plan
             # must replace every unknown term and acquire a new hash/authorization.
@@ -1705,11 +2003,13 @@ class B2APlan:
         wall = 0
         output = 0
         download = 0
+        steps_by_id: dict[str, B2AStep] = {}
         for step in self.steps:
-            step.validate()
+            step.validate(system_floor_bytes=(resolved_system_floor if self.authorized else None))
             if step.action_id in seen:
                 raise StorageContractError("Gate B2a action IDs must be unique")
             seen.add(step.action_id)
+            steps_by_id[step.action_id] = step
             wall += step.timeout_seconds
             output += step.output_limit_bytes
             download += step.download_limit_bytes
@@ -1722,6 +2022,48 @@ class B2APlan:
             raise StorageContractError("per-action outputs exceed the aggregate output cap")
         if download > self.aggregate_download_bytes:
             raise StorageContractError("per-action downloads exceed the aggregate download cap")
+        expected_repository_steps = {
+            "repository-status": (
+                ("/usr/bin/git", "status", "--short"),
+                "",
+            ),
+            "repository-branch": (
+                ("/usr/bin/git", "branch", "--show-current"),
+                "phase-1/sira-smoke\n",
+            ),
+            "repository-implementation-ancestor": (
+                (
+                    "/usr/bin/git",
+                    "merge-base",
+                    "--is-ancestor",
+                    self.implementation_commit,
+                    "HEAD",
+                ),
+                "",
+            ),
+            "repository-implementation-tree": (
+                (
+                    "/usr/bin/git",
+                    "diff",
+                    "--quiet",
+                    self.implementation_commit,
+                    "--",
+                    *B2A_IMPLEMENTATION_BOUND_PATHS,
+                ),
+                "",
+            ),
+        }
+        for action_id, (argv, expected_stdout) in expected_repository_steps.items():
+            bound_step = steps_by_id.get(action_id)
+            if (
+                bound_step is None
+                or bound_step.kind is not B2AStepKind.AUTOMATABLE
+                or bound_step.argv != argv
+                or bound_step.expected_stdout != expected_stdout
+            ):
+                raise StorageContractError(
+                    "Gate B2a repository/implementation binding is incomplete"
+                )
         for index, step in enumerate(self.steps):
             if not step.requires_storage_guard():
                 continue
@@ -1746,108 +2088,333 @@ class B2APlan:
             raise StorageContractError("Gate B2a user-only action separation is incomplete")
 
 
+def _read_plan_bytes_once(path: Path) -> bytes:
+    if not path.is_absolute() or path.resolve(strict=False) != path or path.is_symlink():
+        raise StorageContractError("Gate B2a plan path must be absolute and canonical")
+    try:
+        descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    except OSError as error:
+        raise StorageContractError("Gate B2a plan is unreadable") from error
+    try:
+        observed = os.fstat(descriptor)
+        if not stat.S_ISREG(observed.st_mode) or observed.st_size > 4 * MIB:
+            raise StorageContractError("Gate B2a plan must be one bounded regular file")
+        with os.fdopen(descriptor, "rb") as handle:
+            descriptor = -1
+            return handle.read(4 * MIB + 1)
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+
+
+def _strict_int(value: object, label: str, *, nullable: bool = False) -> int | None:
+    if value is None and nullable:
+        return None
+    if type(value) is not int:
+        raise StorageContractError(f"{label} must be an exact integer")
+    return value
+
+
+def _strict_string(value: object, label: str) -> str:
+    if not isinstance(value, str):
+        raise StorageContractError(f"{label} must be a string")
+    return value
+
+
+def _strict_string_list(value: object, label: str) -> list[str]:
+    if (
+        not isinstance(value, list)
+        or not value
+        or any(not isinstance(item, str) or not item for item in value)
+    ):
+        raise StorageContractError(f"{label} must be a nonempty string array")
+    return value
+
+
+def _require_exact_keys(value: object, expected: set[str], label: str) -> dict[str, object]:
+    if not isinstance(value, dict) or set(value) != expected:
+        raise StorageContractError(f"{label} fields are incomplete or unexpected")
+    return value
+
+
 def load_b2a_plan(path: Path, *, expected_sha256: str) -> B2APlan:
+    """Hash and parse the same canonical bytes, then enforce executable authority fields."""
+
     if _SHA256.fullmatch(expected_sha256) is None:
         raise StorageContractError("expected Gate B2a plan hash is invalid")
-    if file_sha256(path) != expected_sha256:
+    encoded = _read_plan_bytes_once(path)
+    if hashlib.sha256(encoded).hexdigest() != expected_sha256:
         raise StorageContractError("Gate B2a plan hash mismatch")
     try:
-        raw = json.loads(path.read_text())
-    except (OSError, json.JSONDecodeError) as error:
-        raise StorageContractError("Gate B2a plan is unreadable") from error
-    if not isinstance(raw, dict):
-        raise StorageContractError("Gate B2a plan must be a JSON object")
-    if raw.get("plan_id") == SUPERSEDED_PLAN_ID:
+        parsed = json.loads(encoded)
+    except json.JSONDecodeError as error:
+        raise StorageContractError("Gate B2a plan is not JSON") from error
+    root_keys = {
+        "schema_version",
+        "plan_id",
+        "authorization_reference",
+        "authorized",
+        "status",
+        "implementation_commit",
+        "artifact",
+        "paths",
+        "limits",
+        "steps",
+        "stop_conditions",
+        "rollback_cleanup",
+        "blocking_requirements",
+        "superseded_plan",
+    }
+    raw = _require_exact_keys(parsed, root_keys, "Gate B2a plan")
+    authorized_raw = raw["authorized"]
+    if type(authorized_raw) is not bool:
+        raise StorageContractError("Gate B2a authorized field must be boolean")
+    authorized = authorized_raw
+    plan_id = _strict_string(raw["plan_id"], "Gate B2a plan ID")
+    if plan_id == SUPERSEDED_PLAN_ID:
         raise StorageContractError("historical combined Gate B2 plan is superseded")
-    steps_raw = raw.get("steps")
-    if not isinstance(steps_raw, list):
-        raise StorageContractError("Gate B2a steps must be an array")
+
+    expected_artifact = {
+        "product": "Docker Desktop",
+        "version": DOCKER_PRODUCT_VERSION,
+        "build": DOCKER_BUILD,
+        "platform": "macos/arm64",
+        "url": DOCKER_DMG_URL,
+        "bytes": DOCKER_DMG_BYTES,
+        "sha256": DOCKER_DMG_SHA256,
+        "verification_status": (
+            "current-verified"
+            if authorized
+            else "historically-verified-current-reverification-required"
+        ),
+    }
+    artifact = _require_exact_keys(raw["artifact"], set(expected_artifact), "Gate B2a artifact")
+    if any(
+        type(artifact[key]) is not type(value) or artifact[key] != value
+        for key, value in expected_artifact.items()
+    ):
+        raise StorageContractError("Gate B2a artifact identity/status changed")
+    expected_paths = {
+        "external_root": str(APPROVED_EXTERNAL_ROOT),
+        "docker_disk_image": str(DOCKER_DISK_IMAGE_ROOT),
+        "build_staging": str(BUILD_STAGING_ROOT),
+        "sealed_artifacts": str(SEALED_ARTIFACT_ROOT),
+        "active_attempts": str(ACTIVE_ATTEMPT_ROOT),
+        "b2a_work": str(B2A_WORK_ROOT),
+        "downloads": str(B2A_DOWNLOAD_ROOT),
+        "evidence": str(B2A_EVIDENCE_ROOT),
+    }
+    paths = _require_exact_keys(raw["paths"], set(expected_paths), "Gate B2a paths")
+    if paths != expected_paths:
+        raise StorageContractError("Gate B2a exact path contract changed")
+
+    limit_keys = {
+        "aggregate_wall_seconds",
+        "aggregate_output_bytes",
+        "aggregate_download_bytes",
+        "aggregate_automatable_calls",
+        "system_incremental_disk_bytes",
+        "external_incremental_disk_bytes",
+        "active_attempt_bytes",
+        "evidence_bytes",
+        "retry_limit",
+        "external_retained_free_floor_bytes",
+        "external_pre_action_free_floor_bytes",
+        "system_floor",
+    }
+    limits = _require_exact_keys(raw["limits"], limit_keys, "Gate B2a limits")
+    floor_keys = {
+        "status",
+        "os_operating_headroom_bytes",
+        "dmg_download_peak_bytes",
+        "installed_app_bytes",
+        "support_files_bytes",
+        "update_rollback_bytes",
+        "active_evidence_bytes",
+        "failure_cleanup_bytes",
+        "first_start_internal_bytes",
+    }
+    floor = _require_exact_keys(limits["system_floor"], floor_keys, "Gate B2a system floor")
+    expected_floor_status = "resolved" if authorized else "unresolved-blocking"
+    if floor["status"] != expected_floor_status:
+        raise StorageContractError("Gate B2a system-floor status contradicts authority")
+    if (
+        floor["dmg_download_peak_bytes"] != DOCKER_DMG_BYTES
+        or floor["active_evidence_bytes"] != ACTIVE_ATTEMPT_CAP_BYTES
+    ):
+        raise StorageContractError("Gate B2a fixed system-floor inputs changed")
+    floor_inputs = SystemFloorInputs(
+        os_operating_headroom_bytes=_strict_int(
+            floor["os_operating_headroom_bytes"], "system os headroom", nullable=True
+        ),
+        dmg_download_peak_bytes=_strict_int(
+            floor["dmg_download_peak_bytes"], "system DMG peak", nullable=True
+        ),
+        installed_app_bytes=_strict_int(
+            floor["installed_app_bytes"], "installed app bytes", nullable=True
+        ),
+        support_files_bytes=_strict_int(
+            floor["support_files_bytes"], "support files bytes", nullable=True
+        ),
+        update_rollback_bytes=_strict_int(
+            floor["update_rollback_bytes"], "update rollback bytes", nullable=True
+        ),
+        active_evidence_bytes=_strict_int(
+            floor["active_evidence_bytes"], "active evidence bytes", nullable=True
+        ),
+        failure_cleanup_bytes=_strict_int(
+            floor["failure_cleanup_bytes"], "failure cleanup bytes", nullable=True
+        ),
+        first_start_internal_bytes=_strict_int(
+            floor["first_start_internal_bytes"], "first-start internal bytes", nullable=True
+        ),
+    )
+    if (
+        _strict_int(limits["evidence_bytes"], "evidence cap") != B2A_EVIDENCE_CAP_BYTES
+        or _strict_int(limits["retry_limit"], "retry cap") != 0
+        or _strict_int(limits["external_retained_free_floor_bytes"], "external floor")
+        != EXTERNAL_RETAINED_FREE_FLOOR_BYTES
+        or _strict_int(limits["external_pre_action_free_floor_bytes"], "external pre-floor")
+        != EXTERNAL_PRE_B2A_FREE_FLOOR_BYTES
+    ):
+        raise StorageContractError("Gate B2a fixed evidence/retry/floor limits changed")
+
+    steps_raw = raw["steps"]
+    if not isinstance(steps_raw, list) or not steps_raw:
+        raise StorageContractError("Gate B2a steps must be a nonempty array")
+    base_step_keys = {
+        "action_id",
+        "kind",
+        "timeout_seconds",
+        "output_limit_bytes",
+        "download_limit_bytes",
+        "internal_disk_limit_bytes",
+        "external_disk_limit_bytes",
+        "stop_on_failure",
+        "retry_limit",
+    }
+    optional_step_keys = {
+        "argv",
+        "instruction",
+        "expected_stdout",
+        "guard_for_action",
+        "guard_purposes",
+    }
     steps: list[B2AStep] = []
     try:
-        for item in steps_raw:
-            if not isinstance(item, dict):
-                raise StorageContractError("Gate B2a step must be an object")
-            argv_raw = item.get("argv")
-            argv = None
-            if argv_raw is not None:
-                if not isinstance(argv_raw, list) or not all(isinstance(v, str) for v in argv_raw):
-                    raise StorageContractError("Gate B2a argv must be a string array")
-                argv = tuple(argv_raw)
-            instruction_raw = item.get("instruction")
-            if instruction_raw is not None and not isinstance(instruction_raw, str):
-                raise StorageContractError("Gate B2a user instruction must be a string")
-            expected_stdout_raw = item.get("expected_stdout")
-            if expected_stdout_raw is not None and not isinstance(expected_stdout_raw, str):
-                raise StorageContractError("Gate B2a expected stdout must be a string")
-            guard_for_action_raw = item.get("guard_for_action")
-            if guard_for_action_raw is not None and not isinstance(guard_for_action_raw, str):
-                raise StorageContractError("Gate B2a guard target must be a string")
-            guard_purposes_raw = item.get("guard_purposes", [])
-            if not isinstance(guard_purposes_raw, list) or not all(
-                isinstance(value, str) for value in guard_purposes_raw
+        for item_raw in steps_raw:
+            if (
+                not isinstance(item_raw, dict)
+                or not base_step_keys.issubset(item_raw)
+                or not set(item_raw).issubset(base_step_keys | optional_step_keys)
+            ):
+                raise StorageContractError("Gate B2a step fields are incomplete or unexpected")
+            if item_raw["stop_on_failure"] is not True:
+                raise StorageContractError("Gate B2a step must stop on failure")
+            argv_raw = item_raw.get("argv")
+            if argv_raw is not None and (
+                not isinstance(argv_raw, list)
+                or not argv_raw
+                or any(not isinstance(value, str) for value in argv_raw)
+            ):
+                raise StorageContractError("Gate B2a argv must be a nonempty string array")
+            guard_raw = item_raw.get("guard_purposes", [])
+            if not isinstance(guard_raw, list) or any(
+                not isinstance(value, str) for value in guard_raw
             ):
                 raise StorageContractError("Gate B2a guard purposes must be a string array")
+            instruction = item_raw.get("instruction")
+            expected_stdout = item_raw.get("expected_stdout")
+            guard_target = item_raw.get("guard_for_action")
+            if instruction is not None and not isinstance(instruction, str):
+                raise StorageContractError("Gate B2a instruction must be a string")
+            if expected_stdout is not None and not isinstance(expected_stdout, str):
+                raise StorageContractError("Gate B2a expected stdout must be a string")
+            if guard_target is not None and not isinstance(guard_target, str):
+                raise StorageContractError("Gate B2a guard target must be a string")
+            internal_limit = _strict_int(
+                item_raw["internal_disk_limit_bytes"],
+                "per-action internal disk cap",
+                nullable=True,
+            )
             steps.append(
                 B2AStep(
-                    action_id=str(item["action_id"]),
-                    kind=B2AStepKind(str(item["kind"])),
-                    timeout_seconds=int(item["timeout_seconds"]),
-                    output_limit_bytes=int(item["output_limit_bytes"]),
-                    download_limit_bytes=int(item["download_limit_bytes"]),
-                    internal_disk_limit_bytes=(
-                        None
-                        if item["internal_disk_limit_bytes"] is None
-                        else int(item["internal_disk_limit_bytes"])
-                    ),
-                    external_disk_limit_bytes=int(item["external_disk_limit_bytes"]),
-                    argv=argv,
-                    instruction=instruction_raw,
-                    stop_on_failure=bool(item["stop_on_failure"]),
-                    retry_limit=int(item["retry_limit"]),
-                    expected_stdout=expected_stdout_raw,
-                    guard_for_action=guard_for_action_raw,
-                    guard_purposes=tuple(RootPurpose(value) for value in guard_purposes_raw),
+                    action_id=_strict_string(item_raw["action_id"], "Gate B2a action ID"),
+                    kind=B2AStepKind(_strict_string(item_raw["kind"], "Gate B2a action kind")),
+                    timeout_seconds=_strict_int(item_raw["timeout_seconds"], "action timeout") or 0,
+                    output_limit_bytes=_strict_int(
+                        item_raw["output_limit_bytes"], "action output cap"
+                    )
+                    or 0,
+                    download_limit_bytes=_strict_int(
+                        item_raw["download_limit_bytes"], "action download cap"
+                    )
+                    or 0,
+                    internal_disk_limit_bytes=internal_limit,
+                    external_disk_limit_bytes=_strict_int(
+                        item_raw["external_disk_limit_bytes"], "action external disk cap"
+                    )
+                    or 0,
+                    argv=None if argv_raw is None else tuple(argv_raw),
+                    instruction=instruction,
+                    stop_on_failure=True,
+                    retry_limit=_strict_int(item_raw["retry_limit"], "action retry cap") or 0,
+                    expected_stdout=expected_stdout,
+                    guard_for_action=guard_target,
+                    guard_purposes=tuple(RootPurpose(value) for value in guard_raw),
                 )
             )
-        limits = raw["limits"]
-        superseded = raw["superseded_plan"]
-        if not isinstance(limits, dict) or not isinstance(superseded, dict):
-            raise StorageContractError("Gate B2a plan limits/supersession are malformed")
-        plan = B2APlan(
-            schema_version=str(raw["schema_version"]),
-            plan_id=str(raw["plan_id"]),
-            authorization_reference=str(raw["authorization_reference"]),
-            authorized=bool(raw["authorized"]),
-            implementation_commit=str(raw["implementation_commit"]),
-            aggregate_wall_seconds=int(limits["aggregate_wall_seconds"]),
-            aggregate_output_bytes=int(limits["aggregate_output_bytes"]),
-            aggregate_download_bytes=int(limits["aggregate_download_bytes"]),
-            system_incremental_disk_bytes=(
-                None
-                if limits["system_incremental_disk_bytes"] is None
-                else int(limits["system_incremental_disk_bytes"])
-            ),
-            system_floor_inputs=SystemFloorInputs(
-                os_operating_headroom_bytes=limits["system_floor"]["os_operating_headroom_bytes"],
-                dmg_download_peak_bytes=limits["system_floor"]["dmg_download_peak_bytes"],
-                installed_app_bytes=limits["system_floor"]["installed_app_bytes"],
-                support_files_bytes=limits["system_floor"]["support_files_bytes"],
-                update_rollback_bytes=limits["system_floor"]["update_rollback_bytes"],
-                active_evidence_bytes=limits["system_floor"]["active_evidence_bytes"],
-                failure_cleanup_bytes=limits["system_floor"]["failure_cleanup_bytes"],
-                first_start_internal_bytes=limits["system_floor"]["first_start_internal_bytes"],
-            ),
-            external_incremental_disk_bytes=int(limits["external_incremental_disk_bytes"]),
-            active_attempt_bytes=int(limits["active_attempt_bytes"]),
-            steps=tuple(steps),
-            superseded_plan_id=str(superseded["plan_id"]),
-            superseded_plan_sha256=str(superseded["sha256"]),
-            aggregate_automatable_calls=int(limits["aggregate_automatable_calls"]),
+    except ValueError as error:
+        raise StorageContractError("Gate B2a step enum value is invalid") from error
+
+    superseded = _require_exact_keys(
+        raw["superseded_plan"], {"plan_id", "sha256"}, "superseded plan"
+    )
+    if superseded != {"plan_id": SUPERSEDED_PLAN_ID, "sha256": SUPERSEDED_PLAN_SHA256}:
+        raise StorageContractError("historical Gate B2 supersession identity changed")
+    for label in ("stop_conditions", "rollback_cleanup"):
+        _strict_string_list(raw[label], f"Gate B2a {label}")
+    blockers_raw = raw["blocking_requirements"]
+    if not isinstance(blockers_raw, list) or any(
+        not isinstance(value, str) or not value for value in blockers_raw
+    ):
+        raise StorageContractError("Gate B2a blockers must be a string array")
+    if (authorized and blockers_raw) or (not authorized and not blockers_raw):
+        raise StorageContractError("Gate B2a blockers contradict authorization state")
+    plan = B2APlan(
+        schema_version=_strict_string(raw["schema_version"], "Gate B2a schema version"),
+        plan_id=plan_id,
+        status=_strict_string(raw["status"], "Gate B2a status"),
+        blocking_requirements=tuple(blockers_raw),
+        authorization_reference=_strict_string(
+            raw["authorization_reference"], "authorization reference"
+        ),
+        authorized=authorized,
+        implementation_commit=_strict_string(raw["implementation_commit"], "implementation commit"),
+        aggregate_wall_seconds=_strict_int(limits["aggregate_wall_seconds"], "aggregate wall") or 0,
+        aggregate_output_bytes=_strict_int(limits["aggregate_output_bytes"], "aggregate output")
+        or 0,
+        aggregate_download_bytes=_strict_int(
+            limits["aggregate_download_bytes"], "aggregate download"
         )
-    except (KeyError, TypeError, ValueError) as error:
-        if isinstance(error, StorageContractError):
-            raise
-        raise StorageContractError("Gate B2a plan is malformed") from error
+        or 0,
+        system_incremental_disk_bytes=_strict_int(
+            limits["system_incremental_disk_bytes"], "system disk cap", nullable=True
+        ),
+        system_floor_inputs=floor_inputs,
+        external_incremental_disk_bytes=_strict_int(
+            limits["external_incremental_disk_bytes"], "external disk cap"
+        )
+        or 0,
+        active_attempt_bytes=_strict_int(limits["active_attempt_bytes"], "active attempt cap") or 0,
+        steps=tuple(steps),
+        superseded_plan_id=_strict_string(superseded["plan_id"], "superseded plan ID"),
+        superseded_plan_sha256=_strict_string(superseded["sha256"], "superseded plan SHA"),
+        aggregate_automatable_calls=_strict_int(
+            limits["aggregate_automatable_calls"], "automatable call cap"
+        ),
+        document_sha256=expected_sha256,
+    )
     plan.validate()
     return plan
 
@@ -1887,8 +2454,24 @@ class B2AExecutionSupervisor:
     user action.  This keeps the B1.6 implementation deterministic and testable.
     """
 
-    def __init__(self, plan: B2APlan) -> None:
+    def __init__(
+        self,
+        plan: B2APlan,
+        *,
+        expected_plan_id: str,
+        expected_plan_sha256: str,
+        expected_authorization_reference: str,
+    ) -> None:
         plan.validate()
+        if (
+            plan.plan_id != expected_plan_id
+            or plan.document_sha256 != expected_plan_sha256
+            or plan.authorization_reference != expected_authorization_reference
+            or _SHA256.fullmatch(expected_plan_sha256) is None
+        ):
+            raise StorageContractError(
+                "Gate B2a execution boundary does not match external authority"
+            )
         if not plan.authorized:
             raise StorageContractError("Gate B2a plan is unauthorized; execution is blocked")
         self.plan = plan
@@ -1901,6 +2484,7 @@ class B2AExecutionSupervisor:
         self._active_step: B2AStep | None = None
         self._pending_guard: StorageGuardBundle | None = None
         self._pending_guard_target: str | None = None
+        self._close_capability: AttemptCloseEvidence | None = None
         self._output_bytes = 0
         self._download_bytes = 0
         self._internal_growth_bytes = 0
@@ -1928,6 +2512,10 @@ class B2AExecutionSupervisor:
         step = self.plan.steps[self._index]
         if step.action_id != action_id:
             raise StorageContractError("Gate B2a action is stale or out of order")
+        if step.action_id == "seal-and-copy-b2a-evidence" and self._close_capability is None:
+            raise StorageContractError(
+                "Gate B2a sealing lacks supervisor-owned writer-closure evidence"
+            )
         if now_monotonic_ns < self._started_ns:
             raise StorageContractError("Gate B2a monotonic clock moved backwards")
         self._validate_aggregate_wall(now_monotonic_ns)
@@ -1963,6 +2551,7 @@ class B2AExecutionSupervisor:
         *,
         now_monotonic_ns: int,
         guard_bundle: StorageGuardBundle | None = None,
+        close_evidence: AttemptCloseEvidence | None = None,
     ) -> None:
         step = self._active_step
         before = self._before
@@ -1981,6 +2570,17 @@ class B2AExecutionSupervisor:
             raise StorageContractError("Gate B2a per-action download cap exceeded")
         if result.exit_code != 0:
             raise StorageContractError("Gate B2a action failed; retry is prohibited")
+        if step.action_id == "seal-and-copy-b2a-evidence":
+            if (
+                close_evidence is not self._close_capability
+                or close_evidence is None
+                or not close_evidence._consumed
+            ):
+                raise StorageContractError(
+                    "Gate B2a seal did not consume the supervisor close capability"
+                )
+        elif close_evidence is not None:
+            raise StorageContractError("non-seal action returned close evidence")
         if step.expected_stdout is not None:
             try:
                 stdout = result.stdout.decode("utf-8")
@@ -2034,6 +2634,51 @@ class B2AExecutionSupervisor:
         self._active_step = None
         self._action_started_ns = None
         self._before = None
+        if step.action_id == "seal-and-copy-b2a-evidence":
+            self._close_capability = None
+
+    def prepare_seal(
+        self,
+        *,
+        source: Path,
+        attempt_id: str,
+        closed_at_utc: str,
+        now_monotonic_ns: int,
+        writer_probe: Callable[[Path], int],
+    ) -> AttemptCloseEvidence:
+        """Mint one in-memory, single-use close capability immediately before sealing."""
+
+        if (
+            self._started_ns is None
+            or self._active_step is not None
+            or self._index >= len(self.plan.steps)
+            or self.plan.steps[self._index].action_id != "seal-and-copy-b2a-evidence"
+            or self._pending_guard_target != "seal-and-copy-b2a-evidence"
+            or self._pending_guard is None
+            or self._close_capability is not None
+        ):
+            raise StorageContractError(
+                "Gate B2a writer closure is out of state or lacks its adjacent guard"
+            )
+        self._validate_aggregate_wall(now_monotonic_ns)
+        open_writer_count = writer_probe(source)
+        if type(open_writer_count) is not int or open_writer_count != 0:
+            raise StorageContractError("Gate B2a evidence source still has open writers")
+        assert self.plan.document_sha256 is not None
+        close_evidence = AttemptCloseEvidence(
+            attempt_id=attempt_id,
+            source_path=source,
+            supervisor_plan_id=self.plan.plan_id,
+            supervisor_plan_sha256=self.plan.document_sha256,
+            authorization_reference=self.plan.authorization_reference,
+            all_actions_before_seal_complete=True,
+            open_writer_count=open_writer_count,
+            closed_at_utc=closed_at_utc,
+            _issuer=_SUPERVISOR_CLOSE_ISSUER,
+        )
+        close_evidence.validate(source=source, attempt_id=attempt_id)
+        self._close_capability = close_evidence
+        return close_evidence
 
     def complete(self, *, now_monotonic_ns: int) -> None:
         if (
@@ -2213,40 +2858,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         evidence = bundle.document() | {"next_action": arguments.next_action}
     else:
-        system_floor_bytes = _parse_system_floor(arguments.system_floor_bytes)
-        pre_seal_guard = inspect_and_guard_current_storage(
-            system_floor_bytes=system_floor_bytes,
-            purposes=(RootPurpose.B2A_WORK,),
-            require_existing=True,
-        )
-        pre_seal_guard.consume((RootPurpose.B2A_WORK,))
-        seal_attempt(
-            arguments.source,
-            attempt_id=arguments.archive_id,
-            max_bytes=arguments.max_bytes,
-        )
-        copy_guard = inspect_and_guard_current_storage(
-            system_floor_bytes=system_floor_bytes,
-            purposes=(RootPurpose.B2A_WORK, RootPurpose.SEALED_ARCHIVE),
-            require_existing=True,
-        )
-        placement = qualify_archive_placement(
-            arguments.source,
-            archive_parent=arguments.archive_parent,
-            source_observation=copy_guard.system,
-            destination_observation=copy_guard.external,
-            system_floor_bytes=system_floor_bytes,
-        )
-        evidence = copy_sealed_attempt(
-            arguments.source,
-            archive_parent=arguments.archive_parent,
-            archive_id=arguments.archive_id,
-            copy_record_path=arguments.copy_record,
-            max_bytes=arguments.max_bytes,
-            placement=placement,
-            source_observation=copy_guard.system,
-            destination_observation=copy_guard.external,
-            copied_at_utc=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+        raise StorageContractError(
+            "standalone seal-and-copy is disabled until an authorized driver mints "
+            "supervisor-owned writer-closure evidence"
         )
     print(json.dumps(evidence, allow_nan=False, sort_keys=True, separators=(",", ":")))
     return 0

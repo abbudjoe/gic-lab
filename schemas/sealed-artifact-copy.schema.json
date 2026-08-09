@@ -22,6 +22,7 @@
     "files_verified",
     "total_payload_bytes",
     "source_retained",
+    "source_immutable",
     "destination_read_only"
   ],
   "properties": {
@@ -39,9 +40,10 @@
     "copied_at_utc": {"type": "string", "format": "date-time"},
     "seal_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     "destination_seal_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
-    "files_verified": {"type": "integer", "minimum": 0},
+    "files_verified": {"type": "integer", "minimum": 1},
     "total_payload_bytes": {"type": "integer", "minimum": 0, "maximum": 67108864},
     "source_retained": {"const": true},
+    "source_immutable": {"const": true},
     "destination_read_only": {"const": true}
   }
 }
