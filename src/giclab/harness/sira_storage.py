@@ -69,6 +69,13 @@ B2A_IMPLEMENTATION_BOUND_PATHS = (
     "schemas/sealed-artifact-copy.schema.json",
     "schemas/attempt-close-evidence.schema.json",
 )
+B2A_SCIENTIFIC_LOCKED_PATHS = (
+    "experiments/EXP-0001-sira-simulative-vs-reactive/protocol.yaml",
+    "experiments/EXP-0001-sira-simulative-vs-reactive/config.yaml",
+    "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/smoke.yaml",
+    "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/smoke-reactive.yaml",
+    "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/smoke-simulative.yaml",
+)
 CANDIDATE_DEFAULT_INTERNAL_DOCKER_RAW = Path(
     "/Users/joseph/Library/Containers/com.docker.docker/Data/vms/0/data/Docker.raw"
 )
@@ -1691,14 +1698,15 @@ def _validate_b2a_argv(argv: Sequence[str], *, system_floor_bytes: int | None = 
         and exact[4] == "HEAD"
     ):
         return
-    if (
-        len(exact) == 5 + len(B2A_IMPLEMENTATION_BOUND_PATHS)
-        and exact[:3] == ("/usr/bin/git", "diff", "--quiet")
-        and _COMMIT.fullmatch(exact[3]) is not None
-        and exact[4] == "--"
-        and exact[5:] == B2A_IMPLEMENTATION_BOUND_PATHS
-    ):
-        return
+    for bound_paths in (B2A_IMPLEMENTATION_BOUND_PATHS, B2A_SCIENTIFIC_LOCKED_PATHS):
+        if (
+            len(exact) == 5 + len(bound_paths)
+            and exact[:3] == ("/usr/bin/git", "diff", "--quiet")
+            and _COMMIT.fullmatch(exact[3]) is not None
+            and exact[4] == "--"
+            and exact[5:] == bound_paths
+        ):
+            return
     is_guard_action = "guard-storage" in exact
     is_seal_action = "seal-and-copy" in exact
     if exact in _allowed_b2a_argv() and not (
@@ -2049,6 +2057,17 @@ class B2APlan:
                     self.implementation_commit,
                     "--",
                     *B2A_IMPLEMENTATION_BOUND_PATHS,
+                ),
+                "",
+            ),
+            "repository-science-tree": (
+                (
+                    "/usr/bin/git",
+                    "diff",
+                    "--quiet",
+                    self.implementation_commit,
+                    "--",
+                    *B2A_SCIENTIFIC_LOCKED_PATHS,
                 ),
                 "",
             ),

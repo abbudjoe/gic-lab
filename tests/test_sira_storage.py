@@ -24,6 +24,7 @@ from giclab.harness.sira_storage import (
     B2A_AUTHORIZATION_PLACEHOLDER,
     B2A_IMPLEMENTATION_BOUND_PATHS,
     B2A_PLAN_ID,
+    B2A_SCIENTIFIC_LOCKED_PATHS,
     BUILD_STAGING_ROOT,
     DOCKER_DISK_IMAGE_ROOT,
     EXTERNAL_INCREMENTAL_RESERVATION_BYTES,
@@ -189,6 +190,18 @@ def _blocked_plan() -> B2APlan:
                 ),
                 "",
             ),
+            (
+                "repository-science-tree",
+                (
+                    "/usr/bin/git",
+                    "diff",
+                    "--quiet",
+                    implementation_commit,
+                    "--",
+                    *B2A_SCIENTIFIC_LOCKED_PATHS,
+                ),
+                "",
+            ),
         )
     )
     select_guard = B2AStep(
@@ -241,7 +254,7 @@ def _blocked_plan() -> B2APlan:
         steps=steps,
         superseded_plan_id=SUPERSEDED_PLAN_ID,
         superseded_plan_sha256=SUPERSEDED_PLAN_SHA256,
-        aggregate_automatable_calls=5,
+        aggregate_automatable_calls=6,
         document_sha256="c" * 64,
     )
 
@@ -914,6 +927,12 @@ def test_blocked_b2a_plan_is_separate_from_b2b_and_old_plan() -> None:
         replace(plan, plan_id=SUPERSEDED_PLAN_ID).validate()
     with pytest.raises(StorageContractError, match="binding is incomplete"):
         replace(plan, implementation_commit="b" * 40).validate()
+    with pytest.raises(StorageContractError, match="binding is incomplete"):
+        replace(
+            plan,
+            steps=tuple(step for step in plan.steps if step.action_id != "repository-science-tree"),
+            aggregate_automatable_calls=(plan.aggregate_automatable_calls or 0) - 1,
+        ).validate()
 
 
 def test_authorized_plan_requires_exact_numeric_guard_floor() -> None:
@@ -1238,9 +1257,9 @@ def test_b2a_supervisor_mints_single_use_close_capability(
 
 def test_committed_b2a_plan_has_exact_hash_and_remains_blocked() -> None:
     path = ROOT / "containers/sira-smoke/gate-b2a-install-storage-binding-plan.json"
-    digest = "cf6bf1f5dc2047e9dac9c6baf19ea3722725c57a6a62f5a57227941e247751ed"
+    digest = "c7f7079ce92a0d5596498716a63153e3db7ff155abe287d7a51e0a4b7239c8ea"
     plan = load_b2a_plan(path, expected_sha256=digest)
-    assert plan.implementation_commit == "e23cebc7897384de4e3a435fe76e99709292d7b3"
+    assert plan.implementation_commit == "6d35887a5a75fe499650aed346aa7a7435207ed9"
     assert not plan.authorized
     assert plan.system_incremental_disk_bytes is None
 
@@ -1261,8 +1280,8 @@ def test_b2b_stub_contains_requirements_but_no_executable_authority() -> None:
 def test_b2a_packet_is_bound_and_explicitly_authorizes_nothing() -> None:
     packet = (ROOT / "docs/harness/T07_GATE_B2A_INSTALL_AUTHORIZATION_PACKET.md").read_text()
     assert "this packet and its plan authorize nothing" in packet
-    assert "cf6bf1f5dc2047e9dac9c6baf19ea3722725c57a6a62f5a57227941e247751ed" in packet
-    assert "e23cebc7897384de4e3a435fe76e99709292d7b3" in packet
+    assert "c7f7079ce92a0d5596498716a63153e3db7ff155abe287d7a51e0a4b7239c8ea" in packet
+    assert "6d35887a5a75fe499650aed346aa7a7435207ed9" in packet
     assert "There is no truthful ready-to-copy **installation authorization**" in packet
 
 
