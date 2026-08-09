@@ -516,11 +516,11 @@ class StorageGuardBundle:
         if not requested or len(set(requested)) != len(requested):
             raise StorageContractError("storage guard purposes must be unique and nonempty")
         for purpose in requested:
-            token = self.tokens.get(purpose)
-            if token is None:
+            guard_capability = self.tokens.get(purpose)
+            if guard_capability is None:
                 raise StorageContractError("storage guard does not cover the requested purpose")
-            observation = self.external if token.external_volume else self.system
-            token.consume(
+            observation = self.external if guard_capability.external_volume else self.system
+            guard_capability.consume(
                 observation=observation,
                 now_monotonic_ns=now_monotonic_ns,
                 device_resolver=device_resolver,
