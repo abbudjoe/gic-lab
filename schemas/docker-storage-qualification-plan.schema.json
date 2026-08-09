@@ -62,6 +62,7 @@
         "aggregate_wall_seconds",
         "aggregate_output_bytes",
         "aggregate_download_bytes",
+        "system_incremental_disk_bytes",
         "external_incremental_disk_bytes",
         "active_attempt_bytes",
         "evidence_bytes",
@@ -73,7 +74,8 @@
       "properties": {
         "aggregate_wall_seconds": {"const": 7200},
         "aggregate_output_bytes": {"const": 16777216},
-        "aggregate_download_bytes": {"const": 573592444},
+        "aggregate_download_bytes": {"const": 577786748},
+        "system_incremental_disk_bytes": {"type": "null"},
         "external_incremental_disk_bytes": {"const": 12884901888},
         "active_attempt_bytes": {"const": 67108864},
         "evidence_bytes": {"const": 16777216},
@@ -114,12 +116,17 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["action_id", "kind", "timeout_seconds", "output_limit_bytes", "stop_on_failure", "retry_limit"],
+        "required": ["action_id", "kind", "timeout_seconds", "output_limit_bytes", "download_limit_bytes", "internal_disk_limit_bytes", "external_disk_limit_bytes", "stop_on_failure", "retry_limit"],
         "properties": {
           "action_id": {"type": "string", "pattern": "^[a-z][a-z0-9-]{2,63}$"},
           "kind": {"enum": ["automatable", "user-only"]},
           "timeout_seconds": {"type": "integer", "minimum": 1},
           "output_limit_bytes": {"type": "integer", "minimum": 0},
+          "download_limit_bytes": {"type": "integer", "minimum": 0},
+          "internal_disk_limit_bytes": {
+            "anyOf": [{"type": "integer", "minimum": 0}, {"type": "null"}]
+          },
+          "external_disk_limit_bytes": {"type": "integer", "minimum": 0},
           "stop_on_failure": {"const": true},
           "retry_limit": {"const": 0},
           "argv": {

@@ -16,11 +16,11 @@ from giclab.harness.sira_storage import (
     APPROVED_MOUNT,
     APPROVED_PHYSICAL_STORE_UUID,
     APPROVED_VOLUME_UUID,
+    B2A_AGGREGATE_DOWNLOAD_CAP_BYTES,
     B2A_AUTHORIZATION_PLACEHOLDER,
     B2A_PLAN_ID,
     BUILD_STAGING_ROOT,
     DOCKER_DISK_IMAGE_ROOT,
-    DOCKER_DMG_BYTES,
     EXTERNAL_INCREMENTAL_RESERVATION_BYTES,
     EXTERNAL_PRE_B2A_FREE_FLOOR_BYTES,
     EXTERNAL_RETAINED_FREE_FLOOR_BYTES,
@@ -47,6 +47,8 @@ from giclab.harness.sira_storage import (
     sanitize_docker_settings,
     seal_attempt,
     validate_bounded_path,
+    verify_docker_dmg,
+    verify_official_docker_metadata,
     volume_observation_from_diskutil,
 )
 from giclab.validation import validate_instance
@@ -96,6 +98,9 @@ def _user_step(action_id: str) -> B2AStep:
         kind=B2AStepKind.USER_ONLY,
         timeout_seconds=60,
         output_limit_bytes=0,
+        download_limit_bytes=0,
+        internal_disk_limit_bytes=0,
+        external_disk_limit_bytes=0,
         argv=None,
         instruction=f"Perform {action_id} personally and stop on any mismatch.",
         stop_on_failure=True,
@@ -110,6 +115,9 @@ def _blocked_plan() -> B2APlan:
             kind=B2AStepKind.AUTOMATABLE,
             timeout_seconds=10,
             output_limit_bytes=1024,
+            download_limit_bytes=0,
+            internal_disk_limit_bytes=0,
+            external_disk_limit_bytes=0,
             argv=("/usr/bin/git", "status", "--short"),
             instruction=None,
             stop_on_failure=True,
@@ -129,7 +137,8 @@ def _blocked_plan() -> B2APlan:
         implementation_commit="a" * 40,
         aggregate_wall_seconds=600,
         aggregate_output_bytes=2048,
-        aggregate_download_bytes=DOCKER_DMG_BYTES,
+        aggregate_download_bytes=B2A_AGGREGATE_DOWNLOAD_CAP_BYTES,
+        system_incremental_disk_bytes=None,
         system_floor_inputs=SystemFloorInputs(os_operating_headroom_bytes=None),
         external_incremental_disk_bytes=EXTERNAL_INCREMENTAL_RESERVATION_BYTES,
         active_attempt_bytes=ACTIVE_ATTEMPT_CAP_BYTES,
@@ -490,6 +499,47 @@ def test_blocked_b2a_plan_is_separate_from_b2b_and_old_plan() -> None:
     assert not plan.authorized
     with pytest.raises(StorageContractError, match="stale"):
         replace(plan, plan_id=SUPERSEDED_PLAN_ID).validate()
+
+
+def test_official_metadata_verifier_binds_selected_item_not_channel_link(
+    tmp_path: Path,
+) -> None:
+    appcast = tmp_path / "appcast.xml"
+    appcast.write_text(
+        """<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+<channel><link>https://desktop.docker.com/mac/main/arm64/older/Docker.dmg</link>
+<item><title>Version 4.85.0 (235549)</title>
+<sparkle:minimumSystemVersion>14.0.0</sparkle:minimumSystemVersion>
+<enclosure url="https://desktop.docker.com/mac/main/arm64/235549/Docker.dmg"
+ sparkle:version="235549" sparkle:shortVersionString="4.85.0"
+ length="573592444" type="application/octet-stream"/></item></channel></rss>"""
+    )
+    checksums = tmp_path / "checksums.txt"
+    checksums.write_text(
+        "84b1224c93456fe261955ebc91f3cd88ce19778ffdb6d0a0d423ce37246f7c2b *Docker.dmg\n"
+    )
+    evidence = verify_official_docker_metadata(appcast, checksums)
+    assert evidence["build"] == "235549"
+    assert evidence["bytes"] == 573_592_444
+    checksums.write_text("0" * 64 + " *Docker.dmg\n")
+    with pytest.raises(StorageContractError, match="checksum"):
+        verify_official_docker_metadata(appcast, checksums)
+
+
+def test_dmg_verifier_requires_exact_bytes_and_hash(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    dmg = tmp_path / "Docker.dmg"
+    dmg.write_bytes(b"selected immutable artifact")
+    monkeypatch.setattr("giclab.harness.sira_storage.DOCKER_DMG_BYTES", dmg.stat().st_size)
+    monkeypatch.setattr(
+        "giclab.harness.sira_storage.DOCKER_DMG_SHA256",
+        hashlib.sha256(dmg.read_bytes()).hexdigest(),
+    )
+    assert verify_docker_dmg(dmg)["bytes"] == dmg.stat().st_size
+    dmg.write_bytes(b"drift")
+    with pytest.raises(StorageContractError):
+        verify_docker_dmg(dmg)
 
 
 @pytest.mark.parametrize(

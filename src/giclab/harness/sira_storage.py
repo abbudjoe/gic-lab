@@ -8,6 +8,7 @@ separately authorized Gate B2a driver.
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import math
@@ -17,6 +18,7 @@ import re
 import shutil
 import stat
 import time
+import xml.etree.ElementTree as ET
 from collections.abc import Mapping, Sequence
 from contextlib import suppress
 from dataclasses import dataclass
@@ -60,9 +62,12 @@ B2A_EVIDENCE_CAP_BYTES = 16 * MIB
 
 DOCKER_DMG_URL = "https://desktop.docker.com/mac/main/arm64/235549/Docker.dmg"
 DOCKER_DMG_BYTES = 573_592_444
+OFFICIAL_METADATA_DOWNLOAD_CAP_BYTES = 4 * MIB
+B2A_AGGREGATE_DOWNLOAD_CAP_BYTES = DOCKER_DMG_BYTES + OFFICIAL_METADATA_DOWNLOAD_CAP_BYTES
 DOCKER_DMG_SHA256 = "84b1224c93456fe261955ebc91f3cd88ce19778ffdb6d0a0d423ce37246f7c2b"
 DOCKER_PRODUCT_VERSION = "4.85.0"
 DOCKER_BUILD = "235549"
+DOCKER_MINIMUM_MACOS = "14.0.0"
 
 B2A_PLAN_ID = "PLAN-T07-GATE-B2A-DOCKER-STORAGE-QUALIFICATION-V1"
 B2A_AUTHORIZATION_PLACEHOLDER = "AUTH-T07-GATE-B2A-PENDING"
@@ -816,6 +821,9 @@ class B2AStep:
     kind: B2AStepKind
     timeout_seconds: int
     output_limit_bytes: int
+    download_limit_bytes: int
+    internal_disk_limit_bytes: int | None
+    external_disk_limit_bytes: int
     argv: tuple[str, ...] | None
     instruction: str | None
     stop_on_failure: bool
@@ -824,7 +832,13 @@ class B2AStep:
     def validate(self) -> None:
         if _ACTION_ID.fullmatch(self.action_id) is None:
             raise StorageContractError("invalid Gate B2a action ID")
-        if self.timeout_seconds <= 0 or self.output_limit_bytes < 0:
+        if (
+            self.timeout_seconds <= 0
+            or self.output_limit_bytes < 0
+            or self.download_limit_bytes < 0
+            or self.external_disk_limit_bytes < 0
+            or (self.internal_disk_limit_bytes is not None and self.internal_disk_limit_bytes < 0)
+        ):
             raise StorageContractError("Gate B2a action limits must be finite")
         if self.retry_limit != 0 or not self.stop_on_failure:
             raise StorageContractError("Gate B2a requires zero retry and stop-on-failure")
@@ -846,6 +860,7 @@ _ALLOWED_EXECUTABLES = frozenset(
         "/usr/bin/python3",
         "/usr/sbin/diskutil",
         "/Applications/Docker.app/Contents/Resources/bin/docker",
+        "/Users/joseph/.codex/worktrees/84b1/gic-lab/.venv/bin/python",
     }
 )
 _FORBIDDEN_ARG_FRAGMENTS = (
@@ -888,6 +903,7 @@ class B2APlan:
     aggregate_wall_seconds: int
     aggregate_output_bytes: int
     aggregate_download_bytes: int
+    system_incremental_disk_bytes: int | None
     system_floor_inputs: SystemFloorInputs
     external_incremental_disk_bytes: int
     active_attempt_bytes: int
@@ -908,8 +924,8 @@ class B2APlan:
             raise StorageContractError("Gate B2a implementation commit is not exact")
         if self.aggregate_wall_seconds <= 0 or self.aggregate_output_bytes <= 0:
             raise StorageContractError("Gate B2a aggregate limits must be finite")
-        if self.aggregate_download_bytes != DOCKER_DMG_BYTES:
-            raise StorageContractError("Gate B2a download cap must equal the one selected DMG")
+        if self.aggregate_download_bytes != B2A_AGGREGATE_DOWNLOAD_CAP_BYTES:
+            raise StorageContractError("Gate B2a download cap changed")
         try:
             self.system_floor_inputs.resolved_floor_bytes()
         except StorageContractError:
@@ -917,6 +933,10 @@ class B2APlan:
             # must replace every unknown term and acquire a new hash/authorization.
             if self.authorized:
                 raise
+        if self.system_incremental_disk_bytes is not None:
+            raise StorageContractError(
+                "blocked B1.6 plan must not invent a Mac mini incremental disk cap"
+            )
         if self.external_incremental_disk_bytes != EXTERNAL_INCREMENTAL_RESERVATION_BYTES:
             raise StorageContractError("Gate B2a external disk cap changed")
         if self.active_attempt_bytes != ACTIVE_ATTEMPT_CAP_BYTES:
@@ -930,6 +950,7 @@ class B2APlan:
         seen: set[str] = set()
         wall = 0
         output = 0
+        download = 0
         for step in self.steps:
             step.validate()
             if step.action_id in seen:
@@ -937,10 +958,13 @@ class B2APlan:
             seen.add(step.action_id)
             wall += step.timeout_seconds
             output += step.output_limit_bytes
+            download += step.download_limit_bytes
         if wall > self.aggregate_wall_seconds:
             raise StorageContractError("per-action walls exceed the aggregate wall cap")
         if output > self.aggregate_output_bytes:
             raise StorageContractError("per-action outputs exceed the aggregate output cap")
+        if download > self.aggregate_download_bytes:
+            raise StorageContractError("per-action downloads exceed the aggregate download cap")
         required_user_actions = {
             "accept-terms-personally",
             "disable-automatic-update",
@@ -991,6 +1015,13 @@ def load_b2a_plan(path: Path, *, expected_sha256: str) -> B2APlan:
                     kind=B2AStepKind(str(item["kind"])),
                     timeout_seconds=int(item["timeout_seconds"]),
                     output_limit_bytes=int(item["output_limit_bytes"]),
+                    download_limit_bytes=int(item["download_limit_bytes"]),
+                    internal_disk_limit_bytes=(
+                        None
+                        if item["internal_disk_limit_bytes"] is None
+                        else int(item["internal_disk_limit_bytes"])
+                    ),
+                    external_disk_limit_bytes=int(item["external_disk_limit_bytes"]),
                     argv=argv,
                     instruction=instruction_raw,
                     stop_on_failure=bool(item["stop_on_failure"]),
@@ -1010,6 +1041,11 @@ def load_b2a_plan(path: Path, *, expected_sha256: str) -> B2APlan:
             aggregate_wall_seconds=int(limits["aggregate_wall_seconds"]),
             aggregate_output_bytes=int(limits["aggregate_output_bytes"]),
             aggregate_download_bytes=int(limits["aggregate_download_bytes"]),
+            system_incremental_disk_bytes=(
+                None
+                if limits["system_incremental_disk_bytes"] is None
+                else int(limits["system_incremental_disk_bytes"])
+            ),
             system_floor_inputs=SystemFloorInputs(
                 os_operating_headroom_bytes=limits["system_floor"]["os_operating_headroom_bytes"],
                 dmg_download_peak_bytes=limits["system_floor"]["dmg_download_peak_bytes"],
@@ -1032,3 +1068,103 @@ def load_b2a_plan(path: Path, *, expected_sha256: str) -> B2APlan:
         raise StorageContractError("Gate B2a plan is malformed") from error
     plan.validate()
     return plan
+
+
+def verify_official_docker_metadata(
+    appcast_path: Path, checksums_path: Path
+) -> Mapping[str, object]:
+    """Verify a bounded current metadata capture against the selected immutable DMG."""
+
+    if appcast_path.stat().st_size > 2 * MIB or checksums_path.stat().st_size > 2 * MIB:
+        raise StorageContractError("official Docker metadata exceeds its byte cap")
+    appcast = appcast_path.read_bytes()
+    if b"<!DOCTYPE" in appcast.upper() or b"<!ENTITY" in appcast.upper():
+        raise StorageContractError("Docker appcast contains a prohibited XML declaration")
+    try:
+        root = ET.fromstring(appcast)
+    except ET.ParseError as error:
+        raise StorageContractError("Docker appcast XML is malformed") from error
+    matching_items: list[ET.Element] = []
+    for item in root.findall("./channel/item"):
+        enclosure = item.find("./enclosure")
+        if enclosure is None:
+            continue
+        attributes = enclosure.attrib
+        version = next(
+            (value for key, value in attributes.items() if key.endswith("}version")), None
+        )
+        short_version = next(
+            (value for key, value in attributes.items() if key.endswith("}shortVersionString")),
+            None,
+        )
+        if (
+            attributes.get("url") == DOCKER_DMG_URL
+            and attributes.get("length") == str(DOCKER_DMG_BYTES)
+            and version == DOCKER_BUILD
+            and short_version == DOCKER_PRODUCT_VERSION
+        ):
+            matching_items.append(item)
+    if len(matching_items) != 1:
+        raise StorageContractError("selected Docker enclosure did not match exactly once")
+    item = matching_items[0]
+    minimum = next(
+        (child.text for child in item if child.tag.endswith("}minimumSystemVersion")),
+        None,
+    )
+    if minimum != DOCKER_MINIMUM_MACOS:
+        raise StorageContractError("selected Docker minimum macOS version changed")
+    checksum_lines = [line.strip() for line in checksums_path.read_text().splitlines()]
+    expected_checksum = f"{DOCKER_DMG_SHA256} *Docker.dmg"
+    if checksum_lines != [expected_checksum]:
+        raise StorageContractError("selected Docker checksum metadata changed")
+    return {
+        "product": "Docker Desktop",
+        "version": DOCKER_PRODUCT_VERSION,
+        "build": DOCKER_BUILD,
+        "minimum_macos": DOCKER_MINIMUM_MACOS,
+        "url": DOCKER_DMG_URL,
+        "bytes": DOCKER_DMG_BYTES,
+        "sha256": DOCKER_DMG_SHA256,
+        "appcast_sha256": file_sha256(appcast_path),
+        "checksums_sha256": file_sha256(checksums_path),
+    }
+
+
+def verify_docker_dmg(path: Path) -> Mapping[str, object]:
+    if path.stat().st_size != DOCKER_DMG_BYTES:
+        raise StorageContractError("Docker DMG byte size mismatch")
+    digest = file_sha256(path)
+    if digest != DOCKER_DMG_SHA256:
+        raise StorageContractError("Docker DMG SHA-256 mismatch")
+    return {"path": str(path), "bytes": DOCKER_DMG_BYTES, "sha256": digest}
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=__doc__)
+    subparsers = parser.add_subparsers(dest="command", required=True)
+    metadata = subparsers.add_parser("verify-official-metadata")
+    metadata.add_argument("--appcast", type=Path, required=True)
+    metadata.add_argument("--checksums", type=Path, required=True)
+    dmg = subparsers.add_parser("verify-dmg")
+    dmg.add_argument("--path", type=Path, required=True)
+    plan = subparsers.add_parser("validate-plan")
+    plan.add_argument("--path", type=Path, required=True)
+    plan.add_argument("--sha256", required=True)
+    return parser
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    arguments = _build_parser().parse_args(argv)
+    if arguments.command == "verify-official-metadata":
+        evidence = verify_official_docker_metadata(arguments.appcast, arguments.checksums)
+    elif arguments.command == "verify-dmg":
+        evidence = verify_docker_dmg(arguments.path)
+    else:
+        plan = load_b2a_plan(arguments.path, expected_sha256=arguments.sha256)
+        evidence = {"plan_id": plan.plan_id, "authorized": plan.authorized}
+    print(json.dumps(evidence, allow_nan=False, sort_keys=True, separators=(",", ":")))
+    return 0
+
+
+if __name__ == "__main__":  # pragma: no cover - exercised through the public functions
+    raise SystemExit(main())
