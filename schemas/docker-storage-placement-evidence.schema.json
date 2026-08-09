@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:gic-lab:schema:docker-storage-placement-evidence:0.1.0",
+  "title": "T07 Docker Desktop external disk placement evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "volume_uuid",
+    "physical_store_uuid",
+    "configured_data_folder",
+    "settings_source",
+    "settings_key",
+    "settings_sha256",
+    "disk",
+    "engine_identity",
+    "default_internal",
+    "captured_at_utc"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1.0"},
+    "volume_uuid": {"const": "8478609D-FA37-4ED5-875D-47AE912B9151"},
+    "physical_store_uuid": {"const": "7904A6F1-F483-4ED7-9E34-BFECAB31C63E"},
+    "configured_data_folder": {"const": "/Volumes/Macintosh HD - Data/GIC-Lab/t07/docker-desktop/disk-image"},
+    "settings_source": {"type": "string", "minLength": 1},
+    "settings_key": {"type": "string", "minLength": 1},
+    "settings_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "disk": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "device", "inode", "logical_bytes", "allocated_bytes"],
+      "properties": {
+        "path": {"type": "string", "pattern": "^/Volumes/Macintosh HD - Data/GIC-Lab/t07/docker-desktop/disk-image/[^/]+$"},
+        "device": {"type": "integer", "minimum": 0},
+        "inode": {"type": "integer", "minimum": 1},
+        "logical_bytes": {"type": "integer", "minimum": 1},
+        "allocated_bytes": {"type": "integer", "minimum": 0}
+      }
+    },
+    "engine_identity": {"type": "string", "minLength": 1},
+    "default_internal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["verified_path", "exists", "active"],
+      "properties": {
+        "verified_path": {"type": "string", "minLength": 1},
+        "exists": {"const": false},
+        "active": {"const": false}
+      }
+    },
+    "captured_at_utc": {"type": "string", "format": "date-time"}
+  }
+}

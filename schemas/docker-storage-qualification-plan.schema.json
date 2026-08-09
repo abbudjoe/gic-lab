@@ -1,0 +1,166 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:gic-lab:schema:docker-storage-qualification-plan:0.1.0",
+  "title": "T07 Gate B2a Docker installation and storage qualification plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "plan_id",
+    "authorization_reference",
+    "authorized",
+    "status",
+    "implementation_commit",
+    "artifact",
+    "paths",
+    "limits",
+    "steps",
+    "stop_conditions",
+    "rollback_cleanup",
+    "blocking_requirements",
+    "superseded_plan"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1.0"},
+    "plan_id": {"const": "PLAN-T07-GATE-B2A-DOCKER-STORAGE-QUALIFICATION-V1"},
+    "authorization_reference": {"const": "AUTH-T07-GATE-B2A-PENDING"},
+    "authorized": {"const": false},
+    "status": {"const": "blocked-design-only"},
+    "implementation_commit": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["product", "version", "build", "platform", "url", "bytes", "sha256", "verification_status"],
+      "properties": {
+        "product": {"const": "Docker Desktop"},
+        "version": {"const": "4.85.0"},
+        "build": {"const": "235549"},
+        "platform": {"const": "macos/arm64"},
+        "url": {"const": "https://desktop.docker.com/mac/main/arm64/235549/Docker.dmg"},
+        "bytes": {"const": 573592444},
+        "sha256": {"const": "84b1224c93456fe261955ebc91f3cd88ce19778ffdb6d0a0d423ce37246f7c2b"},
+        "verification_status": {"const": "historically-verified-current-reverification-required"}
+      }
+    },
+    "paths": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["external_root", "docker_disk_image", "build_staging", "sealed_artifacts", "active_attempts", "b2a_work"],
+      "properties": {
+        "external_root": {"const": "/Volumes/Macintosh HD - Data/GIC-Lab"},
+        "docker_disk_image": {"const": "/Volumes/Macintosh HD - Data/GIC-Lab/t07/docker-desktop/disk-image"},
+        "build_staging": {"const": "/Volumes/Macintosh HD - Data/GIC-Lab/t07/docker-build-staging"},
+        "sealed_artifacts": {"const": "/Volumes/Macintosh HD - Data/GIC-Lab/t07/sealed-artifacts"},
+        "active_attempts": {"const": "/Users/joseph/.local/share/gic-lab/t07-gate-b2a/attempts"},
+        "b2a_work": {"const": "/Users/joseph/.local/share/gic-lab/t07-gate-b2a"}
+      }
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "aggregate_wall_seconds",
+        "aggregate_output_bytes",
+        "aggregate_download_bytes",
+        "external_incremental_disk_bytes",
+        "active_attempt_bytes",
+        "evidence_bytes",
+        "retry_limit",
+        "external_retained_free_floor_bytes",
+        "external_pre_action_free_floor_bytes",
+        "system_floor"
+      ],
+      "properties": {
+        "aggregate_wall_seconds": {"const": 7200},
+        "aggregate_output_bytes": {"const": 16777216},
+        "aggregate_download_bytes": {"const": 573592444},
+        "external_incremental_disk_bytes": {"const": 12884901888},
+        "active_attempt_bytes": {"const": 67108864},
+        "evidence_bytes": {"const": 16777216},
+        "retry_limit": {"const": 0},
+        "external_retained_free_floor_bytes": {"const": 200048192717},
+        "external_pre_action_free_floor_bytes": {"const": 212933094605},
+        "system_floor": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status",
+            "os_operating_headroom_bytes",
+            "dmg_download_peak_bytes",
+            "installed_app_bytes",
+            "support_files_bytes",
+            "update_rollback_bytes",
+            "active_evidence_bytes",
+            "failure_cleanup_bytes",
+            "first_start_internal_bytes"
+          ],
+          "properties": {
+            "status": {"const": "unresolved-blocking"},
+            "os_operating_headroom_bytes": {"type": "null"},
+            "dmg_download_peak_bytes": {"const": 573592444},
+            "installed_app_bytes": {"type": "null"},
+            "support_files_bytes": {"type": "null"},
+            "update_rollback_bytes": {"type": "null"},
+            "active_evidence_bytes": {"const": 67108864},
+            "failure_cleanup_bytes": {"type": "null"},
+            "first_start_internal_bytes": {"type": "null"}
+          }
+        }
+      }
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["action_id", "kind", "timeout_seconds", "output_limit_bytes", "stop_on_failure", "retry_limit"],
+        "properties": {
+          "action_id": {"type": "string", "pattern": "^[a-z][a-z0-9-]{2,63}$"},
+          "kind": {"enum": ["automatable", "user-only"]},
+          "timeout_seconds": {"type": "integer", "minimum": 1},
+          "output_limit_bytes": {"type": "integer", "minimum": 0},
+          "stop_on_failure": {"const": true},
+          "retry_limit": {"const": 0},
+          "argv": {
+            "type": "array",
+            "minItems": 1,
+            "items": {"type": "string", "minLength": 1}
+          },
+          "instruction": {"type": "string", "minLength": 1}
+        },
+        "allOf": [
+          {
+            "if": {"properties": {"kind": {"const": "automatable"}}},
+            "then": {"required": ["argv"], "not": {"required": ["instruction"]}},
+            "else": {"required": ["instruction"], "not": {"required": ["argv"]}}
+          }
+        ]
+      }
+    },
+    "stop_conditions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "rollback_cleanup": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "blocking_requirements": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "superseded_plan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["plan_id", "sha256"],
+      "properties": {
+        "plan_id": {"const": "PLAN-T07-GATE-B2-MATERIALIZATION"},
+        "sha256": {"const": "10fd0350c5e14c4c6d4e32bf40f1f9f696735eae81815a00cd8032e652beaa25"}
+      }
+    }
+  }
+}

@@ -63,7 +63,7 @@ cloud mutation outside the exact T12/T14 authorization contract.
 
 | Task | Work package | Mapped phase DoD | Current permission |
 |---|---|---|---|
-| T07 | Execute one authorized local/API SiRA smoke pair; capture regulation-decision evidence without interpretation. | P1-DOD-02, P1-DOD-11 through P1-DOD-13 | gate-b1.5-blocked-user-topology-selection |
+| T07 | Execute one authorized local/API SiRA smoke pair; capture regulation-decision evidence without interpretation. | P1-DOD-02, P1-DOD-11 through P1-DOD-13 | gate-b1.6-control-plane-only; B2a blocked |
 | T08 | Analyze smoke infrastructure evidence and prepare an unauthorized pilot package. | P1-DOD-03, P1-DOD-11 through P1-DOD-13 | blocked until T07 succeeds |
 | T09 | Execute the freshly authorized exploratory SiRA pilot. | P1-DOD-04, P1-DOD-11 through P1-DOD-13 | blocked until T08 and authorization |
 | T10 | Analyze and publish the exploratory SiRA pilot. | P1-DOD-05, P1-DOD-11 through P1-DOD-13 | blocked until T09 succeeds |
@@ -78,7 +78,7 @@ and an analysis recommendation does not authorize the next execution.
 
 ## T07 assembly control
 
-Assembly status: **Gate B1.5 blocked-user-action: runtime storage topology unselected**
+Assembly status: **Gate B1.6 control-plane implementation; Gate B2a blocked**
 
 Exact next profile: `PLAN-EXP0001-SMOKE`.
 
@@ -114,6 +114,26 @@ Gate B1.5 maps T07-B15-02 through T07-B15-07 to the topology decision;
 T07-B15-04 through T07-B15-06 to `docs/STORAGE_POLICY.md` and
 `docs/DECISIONS.md`; T07-B15-06 through T07-B15-08 to the Gate B2a/B2b packets;
 and T07-B15-01 through T07-B15-09 to this active plan.
+
+### Gate B1.6 definition of done
+
+Source contract: the user's 2026-08-09 Docker-storage qualification instruction,
+SHA-256 `52d05ce39998f1a0ff81c7bbc23d936d1a61e1d709c0adafdfd07b7fb0279e60`.
+Baseline: `e224e781e752869041c78a3e93687aaa5d8c6430`.
+
+The detailed 22-item DoD, mappings, test evidence, blockers, and closeout are maintained
+in `docs/harness/T07_GATE_B1_6_IMPLEMENTATION_LEDGER.md`. Gate B1.6 implements the
+two-volume storage control plane, exact path roles, UUID/physical-store/APFS/UTDM
+guards, reconnect state, minimized placement evidence, and one-way seal/copy
+lifecycle. It does not live-qualify Docker or the topology.
+
+Gate B1.6 is intentionally blocked on two facts that cannot be manufactured locally:
+fresh official Docker metadata and a numeric source-grounded Mac mini operational
+floor. Version-specific first-start internal allocation, settings/default paths,
+update control, and reconnect semantics also require current official evidence. A
+hashed blocked-design B2a plan may record the proposed sequence but cannot confer
+installation authority while those terms remain unknown. B2b remains a
+requirements-only stub.
 
 ## Authorization and mutation boundary
 
@@ -168,6 +188,13 @@ preflight never supplies mutation authority.
   reconciled D-017 across historical packets, scoped volume checks to sealed-copy
   actions, and made positive active/runtime suitability mandatory before B2a plan
   issuance. Post-repair rereview was clean and post-review validation passed.
+- 2026-08-09: The user selected the Mac mini plus MacBook Target Disk Mode topology
+  for Gate B1.6 qualification. The local control plane now separates external Docker,
+  staging, and sealed-artifact roles from the bounded Mac mini attempt root; rejects
+  fallback and stale storage guards; and implements deterministic reconnect and
+  one-way sealed-copy contracts. No Docker or network action occurred. Installation
+  remains blocked because current metadata and an evidence-based internal floor are
+  unresolved.
 
 ## Decision log
 
@@ -180,17 +207,24 @@ preflight never supplies mutation authority.
 - 2026-08-09: Approve the MacBook Pro Target Disk Mode destination only for sealed,
   hash-verified artifact retention. Do not infer active-attempt or Docker-disk
   suitability from its block interface or capacity.
+- 2026-08-09: Evaluate, without yet approving, the user-selected external Docker VM
+  disk topology under a new `/Volumes/Macintosh HD - Data/GIC-Lab` root. Preserve the
+  MacBook volume's sealed-retention approval while requiring a later authorized B2a
+  reconnect probe before runtime-storage qualification.
 
 ## Blockers and user actions
 
-T07 Gate B1.5 is blocked on the user's selection of one reviewed runtime-storage
-topology. The old Gate B2 plan/hash and authorization remain superseded. The blocked
-Gate B2a and Gate B2b packets must not be used to authorize installation or probes.
-No other Phase 1 work package may begin first.
+T07 Gate B1.6 is blocked on fresh official Docker artifact/behavior evidence and a
+fully resolved numeric Mac mini operational floor. The old Gate B2 plan/hash and
+authorization remain superseded. The blocked-design Gate B2a plan and B2b requirements
+stub must not be used to authorize installation or probes. No other Phase 1 work
+package may begin first.
 
 ## Next permitted work
 
-The next permitted action is user selection among: Docker/T07 execution on the
-MacBook Pro under a newly reviewed host topology; a local external SSD on the Mac
-mini; or a separately approved Linux host. After selection, only implementation and
-review of an exact Gate B2a plan is permitted. Gate B2b and the smoke remain blocked.
+The next permitted work is a read-only/current-metadata and storage-floor evidence
+resolution turn, or a narrower separately authorized metadata/DMG inspection gate
+that still stops before installation/start. Only after the numeric floor,
+version-specific first-start/update/storage-binding behavior, and exact candidate
+paths are resolved may a replacement executable Gate B2a plan be authorized. Gate
+B2b and the smoke remain blocked.

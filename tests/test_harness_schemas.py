@@ -61,6 +61,9 @@ def test_harness_schema_documents_are_registered() -> None:
         "container-attempt",
         "container-image-provenance",
         "container-platform-decision",
+        "docker-storage-qualification-plan",
+        "docker-storage-placement-evidence",
+        "sealed-artifact-copy",
     ):
         assert "$id" in load_json(ROOT / f"schemas/{name}.schema.json")
 

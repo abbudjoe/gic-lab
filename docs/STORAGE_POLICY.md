@@ -10,9 +10,12 @@ Every external artifact record includes identity, experiment, format, byte size,
 
 ## Preferred durable artifact volume
 
-All sealed, durable non-Git project artifacts must be retained beneath the attached
+All new sealed, durable non-Git T07 artifacts must be retained beneath the attached
 MacBook Pro data volume at
-`/Volumes/Macintosh HD - Data/Users/joseph/.local/share/gic-lab`. This approval covers
+`/Volumes/Macintosh HD - Data/GIC-Lab/t07/sealed-artifacts`. This is a new dedicated
+top-level project hierarchy; the B1.5 historical candidate beneath
+`/Volumes/Macintosh HD - Data/Users/joseph/.local/share/gic-lab` is superseded before
+any artifact write. This approval covers
 immutable, hashed artifact bundles and their copy/verification records. It does not by
 itself approve the volume for mutable attempt roots, build staging, Docker VM/image
 data, or build cache.
@@ -34,6 +37,13 @@ reviewed plan positively establishes stronger suitability, the volume is approve
 sealed artifact retention only. Mutable attempt state must not be placed there by
 default, and no Docker VM disk location is approved. There is no automatic fallback
 to the internal startup disk or another volume.
+
+Gate B1.6 evaluates, but does not yet approve, Docker runtime storage at
+`/Volumes/Macintosh HD - Data/GIC-Lab/t07/docker-desktop/disk-image` and build staging
+at `/Volumes/Macintosh HD - Data/GIC-Lab/t07/docker-build-staging`. A later authorized
+qualification must prove version-specific placement, default-internal inactivity,
+clean stop, disconnect/reconnect, same-disk healthy reopen, and final stop. Missing or
+mismatched storage stops; it never redirects to the internal startup disk.
 
 If the destination is later exposed through a network filesystem, attempts must be
 written on the approved execution host, sealed and hashed there, copied to this
