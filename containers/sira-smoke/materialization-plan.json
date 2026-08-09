@@ -9,13 +9,13 @@
   "actions": [
     {
       "action_id": "verify-authorized-gic-ancestry",
-      "argv": ["/usr/bin/git", "-C", "/Users/joseph/.codex/worktrees/84b1/gic-lab", "merge-base", "--is-ancestor", "GATE_B1_IMPLEMENTATION_COMMIT_PENDING", "HEAD"],
+      "argv": ["/usr/bin/git", "-C", "/Users/joseph/.codex/worktrees/84b1/gic-lab", "merge-base", "--is-ancestor", "4be81e4a13fd06b77e36db21c4ad57165f7c115f", "HEAD"],
       "timeout_seconds": 10,
       "expected_stdout": ""
     },
     {
       "action_id": "verify-authorized-gic-tree-delta",
-      "argv": ["/usr/bin/git", "-C", "/Users/joseph/.codex/worktrees/84b1/gic-lab", "diff", "--name-only", "GATE_B1_IMPLEMENTATION_COMMIT_PENDING", "HEAD"],
+      "argv": ["/usr/bin/git", "-C", "/Users/joseph/.codex/worktrees/84b1/gic-lab", "diff", "--name-only", "4be81e4a13fd06b77e36db21c4ad57165f7c115f", "HEAD"],
       "timeout_seconds": 10,
       "expected_stdout": "containers/sira-smoke/materialization-plan.json\ndocs/harness/T07_GATE_B1_IMPLEMENTATION_LEDGER.md\ndocs/harness/T07_GATE_B1_INSTALL_AUTHORIZATION_PACKET.md\ndocs/harness/T07_PREAUTHORIZATION_PACKET.md\n"
     },

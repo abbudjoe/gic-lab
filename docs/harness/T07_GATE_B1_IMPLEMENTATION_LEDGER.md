@@ -31,9 +31,9 @@
 | T07-GB1-DOD-12 | Produce complete post-build image provenance, including explicit local repo-digest absence. | Provenance assembler/schema and tests. | met; observed values deferred to Gate B2 |
 | T07-GB1-DOD-13 | Pass only `SIRA_API_KEY` by file to the child, reject `OPENAI_API_KEY`, and prove dummy-canary non-leakage. | Entrypoint, scanner, policy, and fake tests. | met; real secret untouched |
 | T07-GB1-DOD-14 | Preserve every Gate A control and regression. | Focused Gate A suite and full checks. | met |
-| T07-GB1-DOD-15 | Produce the decision, updated preauthorization packet, and exact 17-field Gate B2 packet. | Required documentation paths. | met subject to final commit binding |
+| T07-GB1-DOD-15 | Produce the decision, updated preauthorization packet, and exact 17-field Gate B2 packet. | Required documentation paths. | met |
 | T07-GB1-DOD-16 | Pass focused tests, validation, full checks, independent review, repairs/rereview, and final full check. | Validation/review log. | met |
-| T07-GB1-DOD-17 | Commit the reviewed implementation and final packet on the named branch with a clean tree. | Exact commits and final status. | partial: reviewed implementation ready; commit binding pending |
+| T07-GB1-DOD-17 | Commit the reviewed implementation and final packet on the named branch with a clean tree. | Exact commits and final status. | met: implementation `4be81e4a13fd06b77e36db21c4ad57165f7c115f`; packet-only descendant pending this ledger commit |
 
 ## Implementation mapping
 
@@ -76,8 +76,11 @@
   reviewed-tree controls.
 - Final independent spec-conformance rereview: clean. The post-repair full check
   passed 389 tests plus the real Quarto render and site validation.
+- Reviewed implementation commit:
+  `4be81e4a13fd06b77e36db21c4ad57165f7c115f`.
+- Bound Gate B2 materialization-plan SHA-256:
+  `10fd0350c5e14c4c6d4e32bf40f1f9f696735eae81815a00cd8032e652beaa25`.
 
 ## Gate result
 
-Assembly status: **reviewed implementation ready for commit binding**. Gate B2 and
-live T07 remain unauthorized.
+Assembly status: **Gate B1 complete**. Gate B2 and live T07 remain unauthorized.

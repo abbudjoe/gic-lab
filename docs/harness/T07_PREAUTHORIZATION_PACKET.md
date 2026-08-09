@@ -7,7 +7,7 @@ Prepared: 2026-08-08
 
 ## Exact authorization target
 
-- Clean Gate B1 implementation commit: `GATE_B1_IMPLEMENTATION_COMMIT_PENDING`.
+- Clean Gate B1 implementation commit: `4be81e4a13fd06b77e36db21c4ad57165f7c115f`.
 - Branch: `phase-1/sira-smoke`.
 - Gate B1 baseline/previous clean packet commit:
   `38e27ef20637471325ec15be216b4274bed5be49`.
@@ -52,7 +52,8 @@ Prepared: 2026-08-08
   `d364c2356a4e73bc847f7aabdb272908e006eca0753bd1f74b3984ea1719b79a`.
 - Gate B2 materialization plan ID: `PLAN-T07-GATE-B2-MATERIALIZATION`.
 - Materialization plan path: `containers/sira-smoke/materialization-plan.json`.
-- Materialization plan SHA-256: `MATERIALIZATION_PLAN_SHA256_PENDING`.
+- Materialization plan SHA-256:
+  `10fd0350c5e14c4c6d4e32bf40f1f9f696735eae81815a00cd8032e652beaa25`.
 - Staged-context evidence SHA-256:
   `747575a0c4c1dc9c0e52a839dc28eea1807e898495ee2c58c7b25ae8ab4ba77b`.
 

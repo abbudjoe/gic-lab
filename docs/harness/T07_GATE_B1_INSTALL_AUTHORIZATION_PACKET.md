@@ -12,12 +12,11 @@ mutation, or paid compute.
 
 ## 1. Exact clean repository commit
 
-- Gate B1 implementation commit: `GATE_B1_IMPLEMENTATION_COMMIT_PENDING`.
+- Gate B1 implementation commit: `4be81e4a13fd06b77e36db21c4ad57165f7c115f`.
 - Branch: `phase-1/sira-smoke`.
 - Gate B1 baseline: `38e27ef20637471325ec15be216b4274bed5be49`.
-- The implementation commit is filled only after review and the post-review full gate.
-  A later packet-only descendant may update this document without changing the bound
-  implementation tree.
+- The implementation commit was bound after review and the post-review full gate.
+  This packet-only descendant does not change the bound implementation tree.
 
 ## 2. Runtime present or exact installation action
 
@@ -46,7 +45,7 @@ After storage preflight passes and the user confirms their Docker license/subscr
 entitlement, the exact proposed installation actions are the ordered actions
 `require-fresh-dmg-path` through `capture-docker-info` in
 `containers/sira-smoke/materialization-plan.json`. The plan hash is
-`MATERIALIZATION_PLAN_SHA256_PENDING`. Its exact shell-free arrays download the one
+`10fd0350c5e14c4c6d4e32bf40f1f9f696735eae81815a00cd8032e652beaa25`. Its exact shell-free arrays download the one
 DMG, fail-close on its exact size and SHA-256, attach it, invoke the mounted
 `install` binary through `/usr/bin/sudo`, detach it, verify the installed CLI,
 launch Docker Desktop, wait exactly 30 seconds once, and capture version and server
@@ -91,7 +90,7 @@ entrypoint is the command below; the hashed JSON plan is the authoritative rende
 of all 51 exact argument arrays, expected-stdout checks, and per-action timeouts.
 
 ```text
-PYTHONPATH=/Users/joseph/.codex/worktrees/84b1/gic-lab/src /opt/homebrew/Cellar/uv/0.11.7/bin/uv run --no-sync python -m giclab.harness.sira_container execute-materialization-plan --plan /Users/joseph/.codex/worktrees/84b1/gic-lab/containers/sira-smoke/materialization-plan.json --plan-sha256 MATERIALIZATION_PLAN_SHA256_PENDING --ledger /Users/joseph/.local/share/gic-lab-t07-gate-b2-materialization-ledger.json
+PYTHONPATH=/Users/joseph/.codex/worktrees/84b1/gic-lab/src /opt/homebrew/Cellar/uv/0.11.7/bin/uv run --no-sync python -m giclab.harness.sira_container execute-materialization-plan --plan /Users/joseph/.codex/worktrees/84b1/gic-lab/containers/sira-smoke/materialization-plan.json --plan-sha256 10fd0350c5e14c4c6d4e32bf40f1f9f696735eae81815a00cd8032e652beaa25 --ledger /Users/joseph/.local/share/gic-lab-t07-gate-b2-materialization-ledger.json
 ```
 
 The supervisor starts one monotonic 3,600-second deadline before its first action,
@@ -102,7 +101,7 @@ ledger. It stops on timeout, output exhaustion, nonzero status, or expected-stdo
 drift.
 
 Before any download the plan requires a clean worktree descended from
-`GATE_B1_IMPLEMENTATION_COMMIT_PENDING`; the exact implementation-to-HEAD tree delta
+`4be81e4a13fd06b77e36db21c4ad57165f7c115f`; the exact implementation-to-HEAD tree delta
 must contain only the materialization plan and three packet/ledger documents. It then
 requires the storage floor. Before attach it
 fail-closes on the DMG's exact size/SHA-256. Before build it requires the exact pinned
@@ -225,7 +224,7 @@ Fixed UUID: `b2000000000000000000000000000001`.
 ```text
 /bin/test ! -e /Users/joseph/.local/share/gic-lab/t07-gate-b2/attempts
 /bin/mkdir -m 0700 /Users/joseph/.local/share/gic-lab/t07-gate-b2/attempts
-PYTHONPATH=/Users/joseph/.codex/worktrees/84b1/gic-lab/src /opt/homebrew/Cellar/uv/0.11.7/bin/uv run --no-sync python -m giclab.harness.sira_container execute-fixture --repository-root /Users/joseph/.codex/worktrees/84b1/gic-lab --runtime /Applications/Docker.app/Contents/Resources/bin/docker --image-identity /Users/joseph/.local/share/gic-lab/t07-gate-b2/image-identity.json --owned-base /Users/joseph/.local/share/gic-lab/t07-gate-b2/attempts --repository-commit GATE_B1_IMPLEMENTATION_COMMIT_PENDING --attempt-uuid b2000000000000000000000000000001 --authorization-reference AUTH-T07-GATE-B2-2026-08-08 --fixture adversarial-containment
+PYTHONPATH=/Users/joseph/.codex/worktrees/84b1/gic-lab/src /opt/homebrew/Cellar/uv/0.11.7/bin/uv run --no-sync python -m giclab.harness.sira_container execute-fixture --repository-root /Users/joseph/.codex/worktrees/84b1/gic-lab --runtime /Applications/Docker.app/Contents/Resources/bin/docker --image-identity /Users/joseph/.local/share/gic-lab/t07-gate-b2/image-identity.json --owned-base /Users/joseph/.local/share/gic-lab/t07-gate-b2/attempts --repository-commit 4be81e4a13fd06b77e36db21c4ad57165f7c115f --attempt-uuid b2000000000000000000000000000001 --authorization-reference AUTH-T07-GATE-B2-2026-08-08 --fixture adversarial-containment
 ```
 
 The wrapper renders `--network none`, omits Docker's invalid `--pid private` spelling
@@ -238,7 +237,7 @@ the immutable container ID. Reused attempt or container identities are rejected.
 Fixed UUID: `b2000000000000000000000000000002`.
 
 ```text
-PYTHONPATH=/Users/joseph/.codex/worktrees/84b1/gic-lab/src /opt/homebrew/Cellar/uv/0.11.7/bin/uv run --no-sync python -m giclab.harness.sira_container execute-fixture --repository-root /Users/joseph/.codex/worktrees/84b1/gic-lab --runtime /Applications/Docker.app/Contents/Resources/bin/docker --image-identity /Users/joseph/.local/share/gic-lab/t07-gate-b2/image-identity.json --owned-base /Users/joseph/.local/share/gic-lab/t07-gate-b2/attempts --repository-commit GATE_B1_IMPLEMENTATION_COMMIT_PENDING --attempt-uuid b2000000000000000000000000000002 --authorization-reference AUTH-T07-GATE-B2-2026-08-08 --fixture browser-preflight
+PYTHONPATH=/Users/joseph/.codex/worktrees/84b1/gic-lab/src /opt/homebrew/Cellar/uv/0.11.7/bin/uv run --no-sync python -m giclab.harness.sira_container execute-fixture --repository-root /Users/joseph/.codex/worktrees/84b1/gic-lab --runtime /Applications/Docker.app/Contents/Resources/bin/docker --image-identity /Users/joseph/.local/share/gic-lab/t07-gate-b2/image-identity.json --owned-base /Users/joseph/.local/share/gic-lab/t07-gate-b2/attempts --repository-commit 4be81e4a13fd06b77e36db21c4ad57165f7c115f --attempt-uuid b2000000000000000000000000000002 --authorization-reference AUTH-T07-GATE-B2-2026-08-08 --fixture browser-preflight
 ```
 
 It performs exactly one navigation action to bundled
@@ -269,7 +268,7 @@ The canary is public test data, not a credential:
 /bin/test ! -e /Users/joseph/.local/share/gic-lab/t07-gate-b2/secrets
 /bin/mkdir -m 0700 /Users/joseph/.local/share/gic-lab/t07-gate-b2/secrets
 PYTHONPATH=/Users/joseph/.codex/worktrees/84b1/gic-lab/src /opt/homebrew/Cellar/uv/0.11.7/bin/uv run --no-sync python -m giclab.harness.sira_container write-dummy-secret --output /Users/joseph/.local/share/gic-lab/t07-gate-b2/secrets/dummy-sira-api-key
-PYTHONPATH=/Users/joseph/.codex/worktrees/84b1/gic-lab/src /opt/homebrew/Cellar/uv/0.11.7/bin/uv run --no-sync python -m giclab.harness.sira_container execute-fixture --repository-root /Users/joseph/.codex/worktrees/84b1/gic-lab --runtime /Applications/Docker.app/Contents/Resources/bin/docker --image-identity /Users/joseph/.local/share/gic-lab/t07-gate-b2/image-identity.json --owned-base /Users/joseph/.local/share/gic-lab/t07-gate-b2/attempts --repository-commit GATE_B1_IMPLEMENTATION_COMMIT_PENDING --attempt-uuid b2000000000000000000000000000003 --authorization-reference AUTH-T07-GATE-B2-2026-08-08 --fixture dummy-secret-preflight --secret-file /Users/joseph/.local/share/gic-lab/t07-gate-b2/secrets/dummy-sira-api-key
+PYTHONPATH=/Users/joseph/.codex/worktrees/84b1/gic-lab/src /opt/homebrew/Cellar/uv/0.11.7/bin/uv run --no-sync python -m giclab.harness.sira_container execute-fixture --repository-root /Users/joseph/.codex/worktrees/84b1/gic-lab --runtime /Applications/Docker.app/Contents/Resources/bin/docker --image-identity /Users/joseph/.local/share/gic-lab/t07-gate-b2/image-identity.json --owned-base /Users/joseph/.local/share/gic-lab/t07-gate-b2/attempts --repository-commit 4be81e4a13fd06b77e36db21c4ad57165f7c115f --attempt-uuid b2000000000000000000000000000003 --authorization-reference AUTH-T07-GATE-B2-2026-08-08 --fixture dummy-secret-preflight --secret-file /Users/joseph/.local/share/gic-lab/t07-gate-b2/secrets/dummy-sira-api-key
 ```
 
 The host-user-owned mode-0600 file and mode-0700 attempt root are accessed by the
@@ -347,8 +346,8 @@ installed a runtime/dependency/browser, or read a real secret.
 5. Gate B2 is no-network probe authorization only. Live SiRA still requires a reviewed
    isolated-egress network policy, full post-build provenance, condition command
    materialization, current model/price verification, and new current-turn authority.
-6. Until the final packet-only commit, the implementation commit and materialization
-   plan SHA-256 placeholders remain pending; rereview and final-check evidence is clean.
+6. The implementation commit and materialization-plan SHA-256 are bound. Gate B1 has
+   no remaining implementation or packet blocker.
 
 ## 17. Ready-to-copy Gate B2 authorization block
 
@@ -369,7 +368,7 @@ https://desktop.docker.com/mac/main/arm64/235549/Docker.dmg only if its byte siz
 I authorize executing exactly materialization plan
 PLAN-T07-GATE-B2-MATERIALIZATION at
 containers/sira-smoke/materialization-plan.json with SHA-256
-MATERIALIZATION_PLAN_SHA256_PENDING through the one bounded supervisor command in
+10fd0350c5e14c4c6d4e32bf40f1f9f696735eae81815a00cd8032e652beaa25 through the one bounded supervisor command in
 this packet. I do not authorize executing its child arrays separately or retrying a
 failed action.
 
