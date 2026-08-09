@@ -10,6 +10,8 @@ from pathlib import Path
 
 import pytest
 
+import giclab.harness.sira_colima as colima_module
+from giclab.harness.sira_colima import issue_held_storage_action_guard
 from giclab.harness.sira_storage import (
     _SUPERVISOR_CLOSE_ISSUER,
     ACTIVE_ATTEMPT_CAP_BYTES,
@@ -62,6 +64,7 @@ from giclab.harness.sira_storage import (
     retained_free_floor,
     sanitize_docker_settings,
     seal_attempt,
+    supervised_seal_and_copy,
     validate_bounded_path,
     verify_docker_dmg,
     verify_official_docker_metadata,
@@ -917,6 +920,35 @@ def test_standalone_seal_and_copy_is_fail_closed() -> None:
         )
 
 
+def test_supervised_seal_rejects_a_structural_fake_held_lease(tmp_path: Path) -> None:
+    snapshot = B2AResourceSnapshot(
+        system_free_bytes=SYSTEM_CAPACITY_BYTES,
+        external_free_bytes=EXTERNAL_PRE_B2A_FREE_FLOOR_BYTES,
+        active_attempt_bytes=0,
+    )
+    external = _external_observation()
+    system = _system_observation()
+
+    with pytest.raises(StorageContractError, match="supervisor-issued capability"):
+        supervised_seal_and_copy(
+            None,  # type: ignore[arg-type]
+            held_storage_lease=object(),  # type: ignore[arg-type]
+            fresh_observer=lambda: (external, system),
+            source=tmp_path / "source",
+            archive_parent=tmp_path / "archive",
+            archive_id="attempt-fake-lease",
+            copy_record_path=tmp_path / "copy-record.json",
+            max_bytes=1,
+            closed_at_utc="2026-08-09T16:00:00Z",
+            copied_at_utc="2026-08-09T16:00:01Z",
+            resources_before=snapshot,
+            resource_probe=lambda: snapshot,
+            writer_probe=lambda _: 0,
+            source_observation=system,
+            destination_observation=external,
+        )
+
+
 def test_blocked_b2a_plan_is_separate_from_b2b_and_old_plan() -> None:
     plan = _blocked_plan()
     plan.validate()
@@ -1134,7 +1166,8 @@ def test_b2a_supervisor_mints_single_use_close_capability(
     build_root = external_root / "build"
     archive_root = external_root / "archive"
     work_root = system_root / "work"
-    source = work_root / "evidence/session"
+    evidence_root = work_root / "evidence"
+    source = evidence_root / "session"
     for path in (disk_root, build_root, archive_root, source):
         path.mkdir(parents=True)
     (source / "evidence.txt").write_text("bounded\n")
@@ -1144,15 +1177,27 @@ def test_b2a_supervisor_mints_single_use_close_capability(
     monkeypatch.setattr("giclab.harness.sira_storage.SEALED_ARTIFACT_ROOT", archive_root)
     monkeypatch.setattr("giclab.harness.sira_storage.SYSTEM_GICLAB_ROOT", system_root)
     monkeypatch.setattr("giclab.harness.sira_storage.B2A_WORK_ROOT", work_root)
+    monkeypatch.setattr("giclab.harness.sira_storage.B2A_EVIDENCE_ROOT", evidence_root)
+    monkeypatch.setattr("giclab.harness.sira_storage.B2A_EVIDENCE_SESSION_ROOT", source)
+    monkeypatch.setattr("giclab.harness.sira_storage.APPROVED_MOUNT", external_root)
+    monkeypatch.setattr("giclab.harness.sira_storage.SYSTEM_DATA_MOUNT", system_root)
+    monkeypatch.setattr(colima_module, "APPROVED_MOUNT", external_root)
+    monkeypatch.setattr(colima_module, "SYSTEM_DATA_MOUNT", system_root)
     external_device = 101
     system_device = 202
+    external_observation = replace(_external_observation(), mount_path=external_root)
+    system_observation = replace(_system_observation(), mount_path=system_root)
 
     def resolve_device(path: Path) -> int:
-        return external_device if path.is_relative_to(external_root) else system_device
+        if path == external_root or path.is_relative_to(external_root):
+            return external_device
+        if path == system_root or path.is_relative_to(system_root):
+            return system_device
+        raise AssertionError(f"unexpected fixture path: {path}")
 
     select_guard = issue_storage_guard(
-        external=_external_observation(),
-        system=_system_observation(),
+        external=external_observation,
+        system=system_observation,
         external_device=external_device,
         system_device=system_device,
         system_floor_bytes=floor,
@@ -1166,8 +1211,8 @@ def test_b2a_supervisor_mints_single_use_close_capability(
         device_resolver=resolve_device,
     )
     seal_guard = issue_storage_guard(
-        external=_external_observation(),
-        system=_system_observation(),
+        external=external_observation,
+        system=system_observation,
         external_device=external_device,
         system_device=system_device,
         system_floor_bytes=floor,
@@ -1215,41 +1260,55 @@ def test_b2a_supervisor_mints_single_use_close_capability(
             now_monotonic_ns=now,
             writer_probe=lambda _: 1,
         )
-    close = supervisor.prepare_seal(
-        source=source,
-        attempt_id="attempt-close",
-        closed_at_utc="2026-08-09T16:00:00Z",
-        now_monotonic_ns=now,
-        writer_probe=lambda _: 0,
-    )
-    supervisor.begin_action(
-        seal_step.action_id,
-        snapshot,
-        now_monotonic_ns=now + 1,
-        device_resolver=resolve_device,
-    )
     immutable_paths: set[Path] = set()
-    seal_attempt(
-        source,
-        attempt_id="attempt-close",
+    clock_values = iter(range(10_002, 10_100))
+
+    def observations() -> tuple[VolumeObservation, VolumeObservation]:
+        return external_observation, system_observation
+
+    held_guard = issue_held_storage_action_guard(
+        "seal-and-copy-b2a-evidence",
+        fresh_observer=observations,
+        system_floor_bytes=floor,
+        held_paths=(source, archive_root),
+        issued_monotonic_ns=10_000,
+    )
+    held_lease = held_guard.consume(
+        fresh_observer=observations,
+        now_monotonic_ns=10_001,
+    )
+
+    result = supervised_seal_and_copy(
+        supervisor,
+        held_storage_lease=held_lease,
+        fresh_observer=observations,
+        source=source,
+        archive_parent=archive_root,
+        archive_id="attempt-close",
+        copy_record_path=evidence_root / "copy-records/attempt-close.json",
         max_bytes=1024,
-        close_evidence=close,
+        closed_at_utc="2026-08-09T16:00:00Z",
+        copied_at_utc="2026-08-09T16:00:01Z",
+        resources_before=snapshot,
+        resource_probe=lambda: snapshot,
+        writer_probe=lambda _: 0,
+        source_observation=system_observation,
+        destination_observation=external_observation,
+        clock=clock_values.__next__,
+        device_resolver=resolve_device,
         immutable_setter=immutable_paths.add,
+        immutability_probe=immutable_paths.__contains__,
     )
-    supervisor.finish_action(
-        B2AActionResult(
-            exit_code=0,
-            stdout=b"",
-            stderr=b"",
-            downloaded_bytes=0,
-            resources_after=snapshot,
-        ),
-        now_monotonic_ns=now + 2,
-        close_evidence=close,
-    )
-    supervisor.complete(now_monotonic_ns=now + 3)
-    with pytest.raises(StorageContractError, match="already consumed"):
-        close.validate(source=source, attempt_id="attempt-close")
+    supervisor.complete(now_monotonic_ns=next(clock_values))
+    assert result.close_evidence["open_writer_count"] == 0
+    assert result.copy_record["source_retained"] is True
+    assert (archive_root / "attempt-close/evidence.txt").read_text() == "bounded\n"
+    for candidate in sorted(
+        (archive_root / "attempt-close").rglob("*"),
+        key=lambda item: len(item.parts),
+    ):
+        os.chmod(candidate, 0o700 if candidate.is_dir() else 0o600)
+    os.chmod(archive_root / "attempt-close", 0o700)
     os.chmod(source, 0o700)
     os.chmod(source / "evidence.txt", 0o600)
     os.chmod(source / "SEAL.json", 0o600)

@@ -24,6 +24,10 @@ from contextlib import suppress
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from giclab.harness.sira_colima import HeldStorageActionLease
 
 
 class StorageContractError(ValueError):
@@ -2465,6 +2469,152 @@ class B2AActionResult:
     resources_after: B2AResourceSnapshot
 
 
+@dataclass(frozen=True, slots=True)
+class WriterProbeProcessResult:
+    """Bounded process result supplied to the deterministic writer-probe parser."""
+
+    exit_code: int
+    stdout: bytes
+    stderr: bytes
+
+
+def lsof_writer_probe_argv(source: Path) -> tuple[str, ...]:
+    """Return the shell-free macOS argv for a recursive, machine-readable probe."""
+
+    if not source.is_absolute() or ".." in source.parts:
+        raise StorageContractError("writer-probe source must be absolute and traversal-free")
+    return (
+        "/usr/sbin/lsof",
+        "-n",
+        "-P",
+        "+w",
+        "-V",
+        "-F0apfn",
+        "+D",
+        str(source),
+    )
+
+
+def parse_lsof_open_writer_count(source: Path, payload: bytes) -> int:
+    """Count unique write-capable descriptors in NUL-delimited ``lsof -F`` output."""
+
+    if not source.is_absolute() or ".." in source.parts:
+        raise StorageContractError("writer-probe source must be absolute and traversal-free")
+    try:
+        fields: list[str] = []
+        for raw_field in payload.split(b"\0"):
+            # In ``-F0`` mode lsof terminates fields with NUL and still emits a
+            # newline between process/file record sets.  The separator therefore
+            # prefixes the next field after splitting.  It is framing, not part of
+            # the field value.  Newlines elsewhere (including in a path) are kept.
+            normalized = raw_field.lstrip(b"\n")
+            if normalized:
+                fields.append(normalized.decode("utf-8"))
+    except UnicodeDecodeError as error:
+        raise StorageContractError("writer-probe output is not UTF-8") from error
+    process_id: str | None = None
+    descriptor_id: str | None = None
+    access: str | None = None
+    name: str | None = None
+    writers: set[tuple[str, str]] = set()
+
+    def commit() -> None:
+        if process_id is None or descriptor_id is None or access not in {"w", "u"}:
+            return
+        if name is None:
+            raise StorageContractError("writer-probe record lacks a path")
+        candidate = Path(name)
+        if not candidate.is_absolute() or not (
+            candidate == source or candidate.is_relative_to(source)
+        ):
+            raise StorageContractError("writer-probe returned a path outside the attempt root")
+        writers.add((process_id, descriptor_id))
+
+    for field_value in fields:
+        marker, value = field_value[0], field_value[1:]
+        if marker == "p":
+            commit()
+            if not value.isdecimal():
+                raise StorageContractError("writer-probe process identity is malformed")
+            process_id = value
+            descriptor_id = None
+            access = None
+            name = None
+        elif marker == "f":
+            commit()
+            if process_id is None or not value:
+                raise StorageContractError("writer-probe descriptor identity is malformed")
+            descriptor_id = value
+            access = None
+            name = None
+        elif marker == "a":
+            if descriptor_id is None or value not in {"r", "w", "u", " "}:
+                raise StorageContractError("writer-probe access mode is malformed")
+            access = value
+        elif marker == "n":
+            if descriptor_id is None or not value:
+                raise StorageContractError("writer-probe path record is malformed")
+            name = value
+        else:
+            raise StorageContractError("writer-probe returned an undeclared field")
+    commit()
+    return len(writers)
+
+
+def _verified_lsof_no_match(source: Path, diagnostics: bytes) -> bool:
+    """Accept only lsof ``-V`` no-use records for the exact inspected tree."""
+
+    try:
+        lines = diagnostics.decode("utf-8").splitlines()
+    except UnicodeDecodeError:
+        return False
+    prefix = "lsof: no file use located: "
+    if not lines:
+        return False
+    observed: set[Path] = set()
+    for line in lines:
+        if not line.startswith(prefix):
+            return False
+        candidate = Path(line.removeprefix(prefix))
+        if not candidate.is_absolute() or not (
+            candidate == source or candidate.is_relative_to(source)
+        ):
+            return False
+        observed.add(candidate)
+    return source in observed
+
+
+def probe_open_writer_count(
+    source: Path,
+    *,
+    runner: Callable[[tuple[str, ...], int, int], WriterProbeProcessResult],
+    timeout_seconds: int = 10,
+    output_limit_bytes: int = 256 * 1024,
+) -> int:
+    """Run one bounded writer probe through a supervisor-owned process callback."""
+
+    if timeout_seconds <= 0 or output_limit_bytes <= 0:
+        raise StorageContractError("writer-probe limits must be finite and positive")
+    result = runner(lsof_writer_probe_argv(source), timeout_seconds, output_limit_bytes)
+    output_bytes = len(result.stdout) + len(result.stderr)
+    if output_bytes > output_limit_bytes:
+        raise StorageContractError("writer-probe output cap exceeded")
+    if result.exit_code == 1 and bool(result.stdout) != bool(result.stderr):
+        # lsof uses exit 1 for both a clean no-match and every detected error.
+        # ``-V`` plus warnings enabled makes the former an all-no-use diagnostic
+        # set (one line for the directory and, on macOS, each traversed entry).
+        # Every line must bind to the exact inspected tree; anything else is
+        # ambiguous and fails closed.
+        diagnostics = result.stdout or result.stderr
+        if _verified_lsof_no_match(source, diagnostics):
+            return 0
+    if result.exit_code != 0:
+        raise StorageContractError("writer probe failed closed")
+    if result.stderr:
+        raise StorageContractError("writer probe produced unexpected diagnostics")
+    return parse_lsof_open_writer_count(source, result.stdout)
+
+
 class B2AExecutionSupervisor:
     """Stateful cap/order/guard control plane for a future authorized B2a driver.
 
@@ -2736,6 +2886,126 @@ class B2AExecutionSupervisor:
             raise StorageContractError("Gate B2a external free-space floor failed")
         if resources.active_attempt_bytes > self.plan.active_attempt_bytes:
             raise StorageContractError("Gate B2a active-attempt byte cap exceeded")
+
+
+@dataclass(frozen=True, slots=True)
+class SupervisedSealCopyResult:
+    """Evidence returned by the only supported in-process seal/copy driver."""
+
+    close_evidence: Mapping[str, object]
+    seal: Mapping[str, object]
+    copy_record: Mapping[str, object]
+
+
+def supervised_seal_and_copy(
+    supervisor: B2AExecutionSupervisor,
+    *,
+    held_storage_lease: HeldStorageActionLease,
+    fresh_observer: Callable[[], tuple[VolumeObservation, VolumeObservation]],
+    source: Path,
+    archive_parent: Path,
+    archive_id: str,
+    copy_record_path: Path,
+    max_bytes: int,
+    closed_at_utc: str,
+    copied_at_utc: str,
+    resources_before: B2AResourceSnapshot,
+    resource_probe: Callable[[], B2AResourceSnapshot],
+    writer_probe: Callable[[Path], int],
+    source_observation: VolumeObservation,
+    destination_observation: VolumeObservation,
+    clock: Callable[[], int] = time.monotonic_ns,
+    device_resolver: Callable[[Path], int] = _device_for_path,
+    immutable_setter: Callable[[Path], None] = _set_user_immutable,
+    immutability_probe: Callable[[Path], bool] = _is_user_immutable,
+) -> SupervisedSealCopyResult:
+    """Probe writers, seal, copy, and account through one authorized supervisor.
+
+    This function has no CLI surface.  It can run only when the supervisor has already
+    accepted an authorized immutable plan, an adjacent plan guard, and a freshly
+    consumed held-descriptor storage lease.  On failure it deliberately leaves the
+    local source and any partial archive for typed rollback and evidence capture; it
+    never performs implicit cleanup.
+    """
+
+    # Delayed import avoids a module cycle while rejecting structural fakes.  The
+    # concrete capability is minted only by the fresh-observation guard.
+    from giclab.harness.sira_colima import HeldStorageActionLease as ConcreteHeldLease
+
+    if not isinstance(held_storage_lease, ConcreteHeldLease):
+        raise StorageContractError("held storage lease is not a supervisor-issued capability")
+    held_storage_lease.validate_binding(
+        action_id="seal-and-copy-b2a-evidence",
+        exact_paths=(source, archive_parent),
+    )
+
+    def operation() -> SupervisedSealCopyResult:
+        close_evidence = supervisor.prepare_seal(
+            source=source,
+            attempt_id=archive_id,
+            closed_at_utc=closed_at_utc,
+            now_monotonic_ns=clock(),
+            writer_probe=writer_probe,
+        )
+        supervisor.begin_action(
+            "seal-and-copy-b2a-evidence",
+            resources_before,
+            now_monotonic_ns=clock(),
+            device_resolver=device_resolver,
+        )
+        placement = qualify_archive_placement(
+            source,
+            archive_parent=archive_parent,
+            source_observation=source_observation,
+            destination_observation=destination_observation,
+            system_floor_bytes=supervisor.system_floor_bytes,
+            issued_monotonic_ns=clock(),
+            device_resolver=device_resolver,
+        )
+        seal = seal_attempt(
+            source,
+            attempt_id=archive_id,
+            max_bytes=max_bytes,
+            close_evidence=close_evidence,
+            immutable_setter=immutable_setter,
+        )
+        copy_record = copy_sealed_attempt(
+            source,
+            archive_parent=archive_parent,
+            archive_id=archive_id,
+            copy_record_path=copy_record_path,
+            max_bytes=max_bytes,
+            placement=placement,
+            source_observation=source_observation,
+            destination_observation=destination_observation,
+            copied_at_utc=copied_at_utc,
+            now_monotonic_ns=clock(),
+            device_resolver=device_resolver,
+            immutability_probe=immutability_probe,
+        )
+        resources_after = resource_probe()
+        supervisor.finish_action(
+            B2AActionResult(
+                exit_code=0,
+                stdout=b"",
+                stderr=b"",
+                downloaded_bytes=0,
+                resources_after=resources_after,
+            ),
+            now_monotonic_ns=clock(),
+            close_evidence=close_evidence,
+        )
+        return SupervisedSealCopyResult(
+            close_evidence=close_evidence.document(),
+            seal=seal,
+            copy_record=copy_record,
+        )
+
+    return held_storage_lease.run(
+        operation,
+        fresh_observer=fresh_observer,
+        now_monotonic_ns=clock(),
+    )
 
 
 def verify_official_docker_metadata(

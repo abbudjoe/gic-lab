@@ -1,0 +1,132 @@
+{
+  "schema_version": "0.1.0",
+  "source_audit_id": "T07-COLIMA-LIMA-SOURCE-AUDIT-2026-08-09",
+  "observed_on": "2026-08-09",
+  "payload_downloaded": false,
+  "records": [
+    {
+      "record_id": "LIMA-HOME-CONFIG-DIR",
+      "claim": "Lima resolves LIMA_HOME and joins _config for its config directory.",
+      "immutable_url": "https://github.com/lima-vm/lima/blob/de0816ea4bdc5267b428ab21025889b8dd785526/pkg/limatype/dirnames/dirnames.go#L18-L48",
+      "source_commit": "de0816ea4bdc5267b428ab21025889b8dd785526",
+      "source_blob_sha256": "312b8a9403b018d8b2b9ee96dcaa868dd48b375b21aea3be5f4aa55172f09f19"
+    },
+    {
+      "record_id": "LIMA-PRIVATE-KEY-FILENAME",
+      "claim": "Lima defines ConfigDir as _config and UserPrivateKey as user.",
+      "immutable_url": "https://github.com/lima-vm/lima/blob/de0816ea4bdc5267b428ab21025889b8dd785526/pkg/limatype/filenames/filenames.go#L10-L25",
+      "source_commit": "de0816ea4bdc5267b428ab21025889b8dd785526",
+      "source_blob_sha256": "8b6b21fc3f1a26f1a9e58cbef0fff204396cf2f127720445307bc9b01779ba82"
+    },
+    {
+      "record_id": "LIMA-PRIVATE-KEY-CREATION",
+      "claim": "Lima creates an unencrypted Ed25519 private key in its config directory when the internal key is absent and uses it as IdentityFile.",
+      "immutable_url": "https://github.com/lima-vm/lima/blob/de0816ea4bdc5267b428ab21025889b8dd785526/pkg/sshutil/sshutil.go#L275-L390",
+      "source_commit": "de0816ea4bdc5267b428ab21025889b8dd785526",
+      "source_blob_sha256": "5ec3a807259900eafa7f49e03f1e121520a31a0fcc4598b837b274ba149a8830"
+    },
+    {
+      "record_id": "COLIMA-CORE-ENGINE-REQUEST",
+      "claim": "The colima-core v0.10.4 Docker image build requests Docker Engine 29.5.2.",
+      "immutable_url": "https://github.com/abiosoft/colima-core/blob/078088ada3cce8835b8c42710ab44d17a935b195/scripts/image.sh#L68-L77",
+      "source_commit": "078088ada3cce8835b8c42710ab44d17a935b195",
+      "source_blob_sha256": "df4dd0e81d8a4244005110c1495ab1e234d7cd665f6439ec6a01738b8d764760"
+    },
+    {
+      "record_id": "COLIMA-HOME-CACHE-ROOTS",
+      "claim": "Colima uses COLIMA_HOME only when that path already exists, otherwise falls back to home/XDG; COLIMA_CACHE_HOME and LIMA_HOME are separate roots.",
+      "immutable_url": "https://github.com/abiosoft/colima/blob/00f6c297e92a82c04a4ab507db0a61435650d7e8/config/files.go#L46-L145",
+      "source_commit": "00f6c297e92a82c04a4ab507db0a61435650d7e8",
+      "source_blob_sha256": "e1343b3526b472a59f832bdc65d6170f9cc3aeb9e428467ae54388a076487ea3"
+    },
+    {
+      "record_id": "COLIMA-INITIAL-TEMP-YAML",
+      "claim": "Initial VM creation writes the generated Lima YAML beneath os.TempDir before passing it to limactl start.",
+      "immutable_url": "https://github.com/abiosoft/colima/blob/00f6c297e92a82c04a4ab507db0a61435650d7e8/environment/vm/lima/lima.go#L92-L118",
+      "source_commit": "00f6c297e92a82c04a4ab507db0a61435650d7e8",
+      "source_blob_sha256": "a42f7ba6388c39dcd8a0f2defaef5c7fde1bd1f8ef64bf9f4bb5b6494da362a3"
+    },
+    {
+      "record_id": "COLIMA-CONFIG-HOST-MOUNT-DISK-DEFAULTS",
+      "claim": "The release config documents SSH-config mutation, writable host-home default mounts for an empty mount list, and unsupported forceDiskImage behavior.",
+      "immutable_url": "https://github.com/abiosoft/colima/blob/00f6c297e92a82c04a4ab507db0a61435650d7e8/embedded/defaults/colima.yaml#L217-L251",
+      "source_commit": "00f6c297e92a82c04a4ab507db0a61435650d7e8",
+      "source_blob_sha256": "9d588af1889c81152e0acb57e6408520e11f2104b88ad0cb543a2bc83541f40b"
+    },
+    {
+      "record_id": "COLIMA-EMPTY-MOUNTS-MEANS-HOME",
+      "claim": "The Lima config renderer turns a non-null empty Colima mount list into one writable host-home mount.",
+      "immutable_url": "https://github.com/abiosoft/colima/blob/00f6c297e92a82c04a4ab507db0a61435650d7e8/environment/vm/lima/yaml.go#L380-L405",
+      "source_commit": "00f6c297e92a82c04a4ab507db0a61435650d7e8",
+      "source_blob_sha256": "533d12adde06ccfec76e5cbc201c46bc699647cccfbc970db0ab2065c93b94cf"
+    },
+    {
+      "record_id": "COLIMA-MOUNT-NONE-CLI",
+      "claim": "The start command declares --mount none as the disable form and converts any none argument to a nil mount list.",
+      "immutable_url": "https://github.com/abiosoft/colima/blob/00f6c297e92a82c04a4ab507db0a61435650d7e8/cmd/start.go#L245-L300",
+      "source_commit": "00f6c297e92a82c04a4ab507db0a61435650d7e8",
+      "source_blob_sha256": "9dc35a790909f8532dd54128d9a3e95b1ea4ce17326647c6ced2a6e9899f9ff7"
+    },
+    {
+      "record_id": "COLIMA-DOCKER-CONTEXT-CREATION",
+      "claim": "Docker runtime provisioning creates a named host Docker context when absent; auto-activation controls use, not creation.",
+      "immutable_url": "https://github.com/abiosoft/colima/blob/00f6c297e92a82c04a4ab507db0a61435650d7e8/environment/container/docker/context.go#L17-L35",
+      "source_commit": "00f6c297e92a82c04a4ab507db0a61435650d7e8",
+      "source_blob_sha256": "4878121fe35cf7dd7d04486809bd80bde5d74cac0137a45621a397f86f41c75f"
+    },
+    {
+      "record_id": "COLIMA-DOCKER-RUNTIME-UPDATE-PACKAGES",
+      "claim": "The Docker runtime updater supplies only unversioned docker-ce, docker-ce-cli, and containerd.io package names.",
+      "immutable_url": "https://github.com/abiosoft/colima/blob/00f6c297e92a82c04a4ab507db0a61435650d7e8/environment/container/docker/docker.go#L147-L155",
+      "source_commit": "00f6c297e92a82c04a4ab507db0a61435650d7e8",
+      "source_blob_sha256": "b259c78bcf61b6df8ae178a35baa322d83c08671ba2a4f4872fe28897d491f55"
+    },
+    {
+      "record_id": "COLIMA-DEB-RUNTIME-UPDATE",
+      "claim": "The runtime updater runs apt-get update and installs the unversioned package names after checking the live repository state.",
+      "immutable_url": "https://github.com/abiosoft/colima/blob/00f6c297e92a82c04a4ab507db0a61435650d7e8/util/debutil/debutil.go#L15-L86",
+      "source_commit": "00f6c297e92a82c04a4ab507db0a61435650d7e8",
+      "source_blob_sha256": "a2bc4833f7a1c133805d86368b6cae66d1e9d28fbb1540f9b8968898b92922ce"
+    },
+    {
+      "record_id": "LIMA-HARDCODED-CACHE",
+      "claim": "Lima WithCache resolves os.UserCacheDir()/lima and offers no environment relocation in this call path.",
+      "immutable_url": "https://github.com/lima-vm/lima/blob/de0816ea4bdc5267b428ab21025889b8dd785526/pkg/downloader/downloader.go#L58-L100",
+      "source_commit": "de0816ea4bdc5267b428ab21025889b8dd785526",
+      "source_blob_sha256": "a85b19afbb6a5dde3d9763907c6b318acc058b31a35f464366656795488dfdf5"
+    },
+    {
+      "record_id": "DOCKER-ENGINE-29-6-1",
+      "claim": "Docker Engine 29.6.1 is a signed release that fixes multiple security vulnerabilities.",
+      "immutable_url": "https://github.com/moby/moby/releases/tag/docker-v29.6.1",
+      "tag_object": "5259f1f37f10f37594a18eab40604e3e91622fe9",
+      "source_commit": "8ec5ab355a34b2a0e2b3238d67bdefe77fefa982",
+      "released_on": "2026-06-26"
+    },
+    {
+      "record_id": "DOCKER-ENGINE-29-6-2",
+      "claim": "Docker Engine 29.6.2 is a signed release that fixes multiple named security vulnerabilities.",
+      "immutable_url": "https://github.com/moby/moby/releases/tag/docker-v29.6.2",
+      "tag_object": "1d2e4ee609f836723774470bce2710ae288a011e",
+      "source_commit": "3d80467678f6e36325fa9ae3dd486fe91e5652e3",
+      "released_on": "2026-07-16"
+    },
+    {
+      "record_id": "DOCKER-ENGINE-29-7-0",
+      "claim": "Docker Engine 29.7.0 is a signed release that fixes a named security vulnerability.",
+      "immutable_url": "https://github.com/moby/moby/releases/tag/docker-v29.7.0",
+      "tag_object": "71a8125a9c2e51abaac71b57ffbd3b8a9131e27b",
+      "source_commit": "4b5cb715735a1b7000093bb2ab54295dfedfebfe",
+      "released_on": "2026-07-30"
+    },
+    {
+      "record_id": "DOCKER-ENGINE-29-7-2-CURRENT",
+      "claim": "Docker Engine 29.7.2 was the latest official Engine release on the observation date.",
+      "immutable_url": "https://github.com/moby/moby/releases/tag/docker-v29.7.2",
+      "tag_object": "d681cdaead9340bd36c513c7f5413a21bc679cfa",
+      "source_commit": "6a43e3d5afddf4111da0f864bbc7cae5d7e95001",
+      "released_on": "2026-08-06"
+    }
+  ],
+  "source_blob_sha256_note": "A source blob hash was calculated only for the small exact source responses inspected directly. null means not calculated; commit-qualified URLs and signed tag objects remain the immutable source identities."
+}

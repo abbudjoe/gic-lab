@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gic-lab.example/schemas/runtime-rollback-evidence.schema.json",
+  "title": "Typed runtime rollback evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "plan_id",
+    "attempt_id",
+    "trigger",
+    "actions",
+    "complete",
+    "automatic_retries"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1.0"},
+    "plan_id": {"type": "string", "pattern": "^PLAN-[A-Z0-9][A-Z0-9._-]{2,127}$"},
+    "attempt_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{2,127}$"},
+    "trigger": {
+      "enum": [
+        "partial-binary-install",
+        "failed-vm-creation",
+        "failed-runtime-startup",
+        "external-volume-missing",
+        "wrong-remount-identity",
+        "profile-state-drift",
+        "residual-runtime-resource",
+        "evidence-copy-failure"
+      ]
+    },
+    "actions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["action_id", "operation", "outcome", "exit_code", "output_bytes"],
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{2,127}$"
+          },
+          "operation": {
+            "enum": [
+              "stop-colima-profile",
+              "remove-fresh-owned-path",
+              "preserve-evidence"
+            ]
+          },
+          "outcome": {"enum": ["succeeded", "failed"]},
+          "exit_code": {
+            "oneOf": [
+              {"type": "integer"},
+              {"type": "null"}
+            ]
+          },
+          "output_bytes": {"type": "integer", "minimum": 0}
+        }
+      }
+    },
+    "complete": {"type": "boolean"},
+    "automatic_retries": {"const": 0}
+  }
+}

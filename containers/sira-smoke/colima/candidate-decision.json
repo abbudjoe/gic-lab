@@ -1,0 +1,166 @@
+{
+  "schema_version": "0.1.0",
+  "candidate_id": "T07-COLIMA-LIMA-V1",
+  "decision_state": "runtime-candidate-rejected",
+  "profile": "giclab-t07",
+  "colima_home": "/Volumes/Macintosh HD - Data/GIC-Lab/t07/colima-home",
+  "colima_cache_home": "/Volumes/Macintosh HD - Data/GIC-Lab/t07/colima-cache",
+  "lima_home": "/Volumes/Macintosh HD - Data/GIC-Lab/t07/colima-home/_lima",
+  "external_owners_enabled": false,
+  "external_retained_floor_bytes": 200048192717,
+  "system_floor_bytes": null,
+  "selected_install_method": null,
+  "configuration": {
+    "runtime": "docker",
+    "vm_type": "vz",
+    "arch": "host",
+    "resolved_arch": "arm64",
+    "kubernetes": false,
+    "network_address": false,
+    "port_forwarder": "none",
+    "auto_activate": false,
+    "ssh_config": false,
+    "template": false,
+    "mounts": "none",
+    "binfmt": false,
+    "rosetta": false,
+    "force_disk_image": false,
+    "cpu": 2,
+    "memory_gib": null,
+    "disk_gib": null
+  },
+  "artifacts": [
+    {
+      "component": "colima",
+      "version": "0.10.3",
+      "source_tag": "v0.10.3",
+      "source_commit": "00f6c297e92a82c04a4ab507db0a61435650d7e8",
+      "asset_url": "https://github.com/abiosoft/colima/releases/download/v0.10.3/colima-Darwin-arm64",
+      "byte_size": 15656320,
+      "sha256": "980ad8bf61a4ca370243f4cb41401a61276dcd2c2502bee7b9b86f9250169f34",
+      "sha512": null,
+      "license": "MIT",
+      "macos_arm64_compatible": true,
+      "minimum_macos": "13",
+      "transitive_requirements": [
+        "Lima >= 0.18.0",
+        "Docker CLI for runtime=docker"
+      ]
+    },
+    {
+      "component": "lima",
+      "version": "2.2.0",
+      "source_tag": "v2.2.0",
+      "source_commit": "de0816ea4bdc5267b428ab21025889b8dd785526",
+      "asset_url": "https://github.com/lima-vm/lima/releases/download/v2.2.0/lima-2.2.0-Darwin-arm64.tar.gz",
+      "byte_size": 37586365,
+      "sha256": "bbdef91774885a0d05f7b048c4eb89ae2bcf3a0c252ae7ca7934e63df76d93c3",
+      "sha512": null,
+      "license": "Apache-2.0",
+      "macos_arm64_compatible": true,
+      "minimum_macos": null,
+      "transitive_requirements": [
+        "macOS 13 or newer for vmType=vz",
+        "local non-NFS LIMA_HOME"
+      ]
+    },
+    {
+      "component": "colima-homebrew-bottle",
+      "version": "0.10.3",
+      "source_tag": "homebrew-core@fb44be0e4d23468758c9a1877adaae2511c353ed",
+      "source_commit": "fb44be0e4d23468758c9a1877adaae2511c353ed",
+      "asset_url": "https://ghcr.io/v2/homebrew/core/colima/blobs/sha256:a9dfd1fa0a4aee62fef75974f39f174e4da774f7ba495c43dd0bcc23633381b8",
+      "byte_size": 4152160,
+      "sha256": "a9dfd1fa0a4aee62fef75974f39f174e4da774f7ba495c43dd0bcc23633381b8",
+      "sha512": null,
+      "license": "MIT",
+      "macos_arm64_compatible": true,
+      "minimum_macos": null,
+      "transitive_requirements": [
+        "installed size 10579823 bytes",
+        "audited for isolated extraction only; standard brew install not selected"
+      ]
+    },
+    {
+      "component": "lima-homebrew-bottle",
+      "version": "2.2.0",
+      "source_tag": "homebrew-core@fb44be0e4d23468758c9a1877adaae2511c353ed",
+      "source_commit": "fb44be0e4d23468758c9a1877adaae2511c353ed",
+      "asset_url": "https://ghcr.io/v2/homebrew/core/lima/blobs/sha256:9dfb60d4c7d0c6721eee679ab188d8b502ad61d1063c9914b830b66ce795b4a4",
+      "byte_size": 37584563,
+      "sha256": "9dfb60d4c7d0c6721eee679ab188d8b502ad61d1063c9914b830b66ce795b4a4",
+      "sha512": null,
+      "license": "Apache-2.0",
+      "macos_arm64_compatible": true,
+      "minimum_macos": null,
+      "transitive_requirements": [
+        "installed size 80920034 bytes",
+        "audited for isolated extraction only; standard brew install not selected"
+      ]
+    },
+    {
+      "component": "docker-cli-homebrew-bottle",
+      "version": "29.7.2",
+      "source_tag": "homebrew-core@fb44be0e4d23468758c9a1877adaae2511c353ed",
+      "source_commit": "fb44be0e4d23468758c9a1877adaae2511c353ed",
+      "asset_url": "https://ghcr.io/v2/homebrew/core/docker/blobs/sha256:b061dbca62960f6bbf16b983b156cb960bf810e678e14c6bd366b58506eb4f1a",
+      "byte_size": 9348621,
+      "sha256": "b061dbca62960f6bbf16b983b156cb960bf810e678e14c6bd366b58506eb4f1a",
+      "sha512": null,
+      "license": "Apache-2.0",
+      "macos_arm64_compatible": true,
+      "minimum_macos": null,
+      "transitive_requirements": [
+        "upstream v29.7.2 signed tag commit a7dcaa6fdb6ed04aacbfdc76357fdae01605609e",
+        "no formula dependencies"
+      ]
+    },
+    {
+      "component": "docker-buildx-homebrew-bottle",
+      "version": "0.36.1",
+      "source_tag": "homebrew-core@fb44be0e4d23468758c9a1877adaae2511c353ed",
+      "source_commit": "fb44be0e4d23468758c9a1877adaae2511c353ed",
+      "asset_url": "https://ghcr.io/v2/homebrew/core/docker-buildx/blobs/sha256:df6823aae7eb4f2b9b70e2282f24c5b37f204483b6c2cb2f75c3485b7e4decbb",
+      "byte_size": 21141264,
+      "sha256": "df6823aae7eb4f2b9b70e2282f24c5b37f204483b6c2cb2f75c3485b7e4decbb",
+      "sha512": null,
+      "license": "Apache-2.0",
+      "macos_arm64_compatible": true,
+      "minimum_macos": null,
+      "transitive_requirements": [
+        "upstream v0.36.1 signed tag commit 1d8dde89b8aba914e05e45366770736fea1fd690",
+        "required only for future Gate B2b image build"
+      ]
+    },
+    {
+      "component": "colima-core-arm64-docker-vm-image",
+      "version": "0.10.4",
+      "source_tag": "v0.10.4",
+      "source_commit": "078088ada3cce8835b8c42710ab44d17a935b195",
+      "asset_url": "https://github.com/abiosoft/colima-core/releases/download/v0.10.4/ubuntu-24.04-minimal-cloudimg-arm64-docker.raw.gz",
+      "byte_size": 332354401,
+      "sha256": "1fc0354f4f99734ce3886628cc7af8b0437c1a1d391b126bd09cba0df35ee53f",
+      "sha512": "32242674b046b5057e60c4aba334b51e3665f05412cda89ed081cc2de153ae5c41f6b105b5c442cbe48d78e2cc21e9ba1950e406b6fb4fc2fd1dd2259240abbd",
+      "license": "mixed Ubuntu and package-specific licenses; builder repository MIT",
+      "macos_arm64_compatible": true,
+      "minimum_macos": "13 with vmType=vz",
+      "transitive_requirements": [
+        "Ubuntu 24.04 Noble arm64",
+        "embedded Docker Engine request 29.5.2",
+        "forceDiskImage=false"
+      ]
+    }
+  ],
+  "blockers": [
+    "LIMA_PRIVATE_KEY_ON_NOOWNERS_EXTERNAL_VOLUME",
+    "COLIMA_VM_DOCKER_ENGINE_BEHIND_CURRENT_SECURITY_RELEASE",
+    "COLIMA_RUNTIME_UPDATE_MUTABLE_AFTER_START",
+    "VM_RUNTIME_PACKAGE_MANIFEST_AND_EXECUTABLE_HASHES_UNPUBLISHED",
+    "LIMA_HARDCODED_INTERNAL_CACHE_NONUSE_UNPROVEN",
+    "FIRST_START_NETWORK_ENDPOINT_SET_NOT_CLOSED",
+    "COLIMA_LIMA_EXACT_PAIR_NOT_RELEASE_TESTED",
+    "EXTRACTED_ASSET_PEAKS_UNMEASURED_WITHOUT_PROBE",
+    "MAC_MINI_OPERATIONAL_HEADROOM_UNRESOLVED"
+  ],
+  "executable_plan": null
+}

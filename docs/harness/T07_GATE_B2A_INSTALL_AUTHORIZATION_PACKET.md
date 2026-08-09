@@ -2,6 +2,13 @@
 
 Status: **blocked; this packet and its plan authorize nothing**
 
+Gate B1.7 successor notice, 2026-08-09: this Docker Desktop V1 packet and its
+byte-unchanged plan are **superseded, blocked provenance**. Gate B1.7 rejected the
+replacement Colima/Lima candidate and created no executable plan. See
+`docs/harness/T07_GATE_B1_7_RUNTIME_DECISION.md` and
+`docs/harness/T07_GATE_B2A_COLIMA_AUTHORIZATION_PACKET.md`. Nothing in this historical
+packet may be executed.
+
 Prepared: 2026-08-09
 
 ## Exact repository and plan identity

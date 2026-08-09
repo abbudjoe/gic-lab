@@ -45,6 +45,15 @@ qualification must prove version-specific placement, default-internal inactivity
 clean stop, disconnect/reconnect, same-disk healthy reopen, and final stop. Missing or
 mismatched storage stops; it never redirects to the internal startup disk.
 
+Gate B1.7 terminates local-runtime selection by rejecting Colima/Lima state beneath
+`/Volumes/Macintosh HD - Data/GIC-Lab/t07/colima-home`. Lima necessarily creates a
+private SSH identity under `LIMA_HOME/_config/user`; the reviewed external mount has
+ownership disabled and is not approved for mutable secret-bearing state. The Colima
+VM/runtime and build roots remain unapproved and must not be created. The exact
+candidate paths are provenance, not storage authority. A next topology requires the
+user to select a directly attached Mac mini SSD, a separately approved Linux host, or
+a deliberately weaker governance contract; there is no internal-disk fallback.
+
 If the destination is later exposed through a network filesystem, attempts must be
 written on the approved execution host, sealed and hashed there, copied to this
 destination, verified by destination SHA-256, and recorded in a copy ledger. Live

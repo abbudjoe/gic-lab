@@ -52,6 +52,8 @@ SCHEMA_FILES = (
     "schemas/docker-storage-placement-evidence.schema.json",
     "schemas/sealed-artifact-copy.schema.json",
     "schemas/attempt-close-evidence.schema.json",
+    "schemas/runtime-candidate-decision.schema.json",
+    "schemas/runtime-rollback-evidence.schema.json",
 )
 REQUIRED_PATHS = (
     "AGENTS.md",

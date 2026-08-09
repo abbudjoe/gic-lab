@@ -63,7 +63,7 @@ cloud mutation outside the exact T12/T14 authorization contract.
 
 | Task | Work package | Mapped phase DoD | Current permission |
 |---|---|---|---|
-| T07 | Execute one authorized local/API SiRA smoke pair; capture regulation-decision evidence without interpretation. | P1-DOD-02, P1-DOD-11 through P1-DOD-13 | gate-b1.6-control-plane-only; B2a blocked |
+| T07 | Execute one authorized local/API SiRA smoke pair; capture regulation-decision evidence without interpretation. | P1-DOD-02, P1-DOD-11 through P1-DOD-13 | Gate B1.7 complete; local runtime rejected; no B2a authority |
 | T08 | Analyze smoke infrastructure evidence and prepare an unauthorized pilot package. | P1-DOD-03, P1-DOD-11 through P1-DOD-13 | blocked until T07 succeeds |
 | T09 | Execute the freshly authorized exploratory SiRA pilot. | P1-DOD-04, P1-DOD-11 through P1-DOD-13 | blocked until T08 and authorization |
 | T10 | Analyze and publish the exploratory SiRA pilot. | P1-DOD-05, P1-DOD-11 through P1-DOD-13 | blocked until T09 succeeds |
@@ -78,7 +78,7 @@ and an analysis recommendation does not authorize the next execution.
 
 ## T07 assembly control
 
-Assembly status: **Gate B1.6 control-plane implementation; Gate B2a blocked**
+Assembly status: **Gate B1.7 complete; runtime-candidate-rejected; no executable Gate B2a plan**
 
 Exact next profile: `PLAN-EXP0001-SMOKE`.
 
@@ -134,6 +134,24 @@ update control, and reconnect semantics also require current official evidence. 
 hashed blocked-design B2a plan may record the proposed sequence but cannot confer
 installation authority while those terms remain unknown. B2b remains a
 requirements-only stub.
+
+### Gate B1.7 terminal runtime decision
+
+Source contract: the user's 2026-08-09 final local-runtime selection instruction.
+Baseline: `87d0a759dce2cfb6a6be964b2cf462ae43a1d9c9`.
+
+The detailed DoD, mappings, source locks, repairs, validation, and terminal blockers
+are maintained in `docs/harness/T07_GATE_B1_7_IMPLEMENTATION_LEDGER.md`. Gate B1.7
+supersedes Gate B1.6's proposed Docker next-work path without deleting its evidence.
+Docker Desktop remains blocked provenance. The evaluated Colima v0.10.3/Lima v2.2.0
+candidate is `runtime-candidate-rejected`: required external `LIMA_HOME` would contain
+Lima's private SSH identity on an ownership-disabled volume, the supported image does
+not provide a current immutable pre-start Docker runtime, and required numeric caps
+remain unresolved. No replacement plan ID, path, hash, argv array, or authorization
+block exists. The sealed-artifact retention decision remains in force.
+
+This was the final local-runtime selection gate. It does not create another B1.x turn,
+authorize installation or a runtime probe, or alter the EXP-0001 treatment contrast.
 
 ## Authorization and mutation boundary
 
@@ -195,6 +213,12 @@ preflight never supplies mutation authority.
   one-way sealed-copy contracts. No Docker or network action occurred. Installation
   remains blocked because current metadata and an evidence-based internal floor are
   unresolved.
+- 2026-08-09: Gate B1.7 audited pinned Colima/Lima/Docker release and source metadata,
+  rejected the replacement topology under the binary decision rule, and created no
+  executable B2a plan. Independent review hardened exact-path lease transfer,
+  positive writer-closure evidence, issuer-bound rollback ownership, and authoritative
+  control-plane alignment. No runtime payload, VM, container, browser, API, secret, or
+  SiRA condition was installed, launched, accessed, or executed.
 
 ## Decision log
 
@@ -211,20 +235,24 @@ preflight never supplies mutation authority.
   disk topology under a new `/Volumes/Macintosh HD - Data/GIC-Lab` root. Preserve the
   MacBook volume's sealed-retention approval while requiring a later authorized B2a
   reconnect probe before runtime-storage qualification.
+- 2026-08-09: Terminate the current local-runtime selection under D-019. Preserve the
+  sealed-retention root, retain Docker artifacts only as blocked provenance, reject
+  the reviewed Colima/Lima topology, and require a new user topology choice before any
+  installation or qualification authority can be proposed.
 
 ## Blockers and user actions
 
-T07 Gate B1.6 is blocked on fresh official Docker artifact/behavior evidence and a
-fully resolved numeric Mac mini operational floor. The old Gate B2 plan/hash and
-authorization remain superseded. The blocked-design Gate B2a plan and B2b requirements
-stub must not be used to authorize installation or probes. No other Phase 1 work
-package may begin first.
+T07 has no selected local runtime and no executable B2a plan. Docker Desktop plans are
+superseded blocked provenance; the reviewed Colima/Lima candidate is rejected. The
+user must select one of the three terminal alternatives below before a new topology
+can be reviewed. No existing packet may authorize installation or probes, and no
+other Phase 1 work package may begin first.
 
 ## Next permitted work
 
-The next permitted work is a read-only/current-metadata and storage-floor evidence
-resolution turn, or a narrower separately authorized metadata/DMG inspection gate
-that still stops before installation/start. Only after the numeric floor,
-version-specific first-start/update/storage-binding behavior, and exact candidate
-paths are resolved may a replacement executable Gate B2a plan be authorized. Gate
-B2b and the smoke remain blocked.
+There is no further B1.x design gate. The next user decision must select, without
+automatic preference, one of: (1) a directly attached local external SSD on the Mac
+mini; (2) a separately approved Linux execution host; or (3) a deliberately less
+strict containment/storage-confidentiality contract approved as a scientific-
+governance change. Only that newly reviewed topology can define later permitted work.
+Gate B2a, Gate B2b, both SiRA conditions, and the smoke remain blocked.

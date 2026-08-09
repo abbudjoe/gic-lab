@@ -1,0 +1,235 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gic-lab.example/schemas/runtime-candidate-decision.schema.json",
+  "title": "Runtime candidate decision",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "candidate_id",
+    "decision_state",
+    "profile",
+    "colima_home",
+    "colima_cache_home",
+    "lima_home",
+    "external_owners_enabled",
+    "external_retained_floor_bytes",
+    "system_floor_bytes",
+    "selected_install_method",
+    "configuration",
+    "artifacts",
+    "blockers",
+    "executable_plan"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1.0"},
+    "candidate_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{2,127}$"},
+    "decision_state": {
+      "enum": ["ready-for-B2a-authorization", "runtime-candidate-rejected"]
+    },
+    "profile": {"const": "giclab-t07"},
+    "colima_home": {
+      "const": "/Volumes/Macintosh HD - Data/GIC-Lab/t07/colima-home"
+    },
+    "colima_cache_home": {
+      "const": "/Volumes/Macintosh HD - Data/GIC-Lab/t07/colima-cache"
+    },
+    "lima_home": {
+      "const": "/Volumes/Macintosh HD - Data/GIC-Lab/t07/colima-home/_lima"
+    },
+    "external_owners_enabled": {"type": "boolean"},
+    "external_retained_floor_bytes": {"type": "integer", "minimum": 1},
+    "system_floor_bytes": {
+      "oneOf": [
+        {"type": "integer", "minimum": 1},
+        {"type": "null"}
+      ]
+    },
+    "selected_install_method": {
+      "oneOf": [
+        {"type": "string", "minLength": 1},
+        {"type": "null"}
+      ]
+    },
+    "configuration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runtime",
+        "vm_type",
+        "arch",
+        "resolved_arch",
+        "kubernetes",
+        "network_address",
+        "port_forwarder",
+        "auto_activate",
+        "ssh_config",
+        "template",
+        "mounts",
+        "binfmt",
+        "rosetta",
+        "force_disk_image",
+        "cpu",
+        "memory_gib",
+        "disk_gib"
+      ],
+      "properties": {
+        "runtime": {"const": "docker"},
+        "vm_type": {"const": "vz"},
+        "arch": {"const": "host"},
+        "resolved_arch": {"const": "arm64"},
+        "kubernetes": {"const": false},
+        "network_address": {"const": false},
+        "port_forwarder": {"const": "none"},
+        "auto_activate": {"const": false},
+        "ssh_config": {"const": false},
+        "template": {"const": false},
+        "mounts": {"const": "none"},
+        "binfmt": {"const": false},
+        "rosetta": {"const": false},
+        "force_disk_image": {"const": false},
+        "cpu": {"const": 2},
+        "memory_gib": {
+          "oneOf": [
+            {"type": "integer", "minimum": 1},
+            {"type": "null"}
+          ]
+        },
+        "disk_gib": {
+          "oneOf": [
+            {"type": "integer", "minimum": 1},
+            {"type": "null"}
+          ]
+        }
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/artifact"}
+    },
+    "blockers": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{2,127}$"
+      }
+    },
+    "executable_plan": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["plan_id", "path", "sha256"],
+          "properties": {
+            "plan_id": {"type": "string", "pattern": "^PLAN-[A-Z0-9][A-Z0-9._-]{2,127}$"},
+            "path": {"type": "string", "minLength": 1},
+            "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+          }
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "component",
+        "version",
+        "source_tag",
+        "source_commit",
+        "asset_url",
+        "byte_size",
+        "sha256",
+        "sha512",
+        "license",
+        "macos_arm64_compatible",
+        "minimum_macos",
+        "transitive_requirements"
+      ],
+      "properties": {
+        "component": {"type": "string", "minLength": 1},
+        "version": {"type": "string", "minLength": 1},
+        "source_tag": {"type": "string", "minLength": 1},
+        "source_commit": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
+        "asset_url": {"type": "string", "format": "uri", "pattern": "^https://"},
+        "byte_size": {
+          "oneOf": [
+            {"type": "integer", "minimum": 1},
+            {"type": "null"}
+          ]
+        },
+        "sha256": {
+          "oneOf": [
+            {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+            {"type": "null"}
+          ]
+        },
+        "sha512": {
+          "oneOf": [
+            {"type": "string", "pattern": "^[a-f0-9]{128}$"},
+            {"type": "null"}
+          ]
+        },
+        "license": {"type": "string", "minLength": 1},
+        "macos_arm64_compatible": {"type": "boolean"},
+        "minimum_macos": {
+          "oneOf": [
+            {"type": "string", "minLength": 1},
+            {"type": "null"}
+          ]
+        },
+        "transitive_requirements": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"decision_state": {"const": "runtime-candidate-rejected"}},
+        "required": ["decision_state"]
+      },
+      "then": {
+        "properties": {
+          "blockers": {"minItems": 1},
+          "executable_plan": {"type": "null"}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"decision_state": {"const": "ready-for-B2a-authorization"}},
+        "required": ["decision_state"]
+      },
+      "then": {
+        "properties": {
+          "external_owners_enabled": {"const": true},
+          "system_floor_bytes": {"type": "integer", "minimum": 1},
+          "selected_install_method": {"type": "string", "minLength": 1},
+          "configuration": {
+            "properties": {
+              "memory_gib": {"type": "integer", "minimum": 1},
+              "disk_gib": {"type": "integer", "minimum": 1}
+            }
+          },
+          "artifacts": {
+            "items": {
+              "properties": {
+                "byte_size": {"type": "integer", "minimum": 1},
+                "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+                "macos_arm64_compatible": {"const": true}
+              }
+            }
+          },
+          "blockers": {"maxItems": 0},
+          "executable_plan": {"type": "object"}
+        }
+      }
+    }
+  ]
+}

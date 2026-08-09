@@ -1,8 +1,14 @@
 # T07 preauthorization packet
 
-Status: **live authorization blocked; Gate B2a design remains non-executable**
+Status: **live authorization blocked; local runtime candidate rejected**
 
 Prepared: 2026-08-08
+
+Gate B1.7 successor notice, 2026-08-09: Docker Desktop-specific design is superseded
+blocked provenance. The source-audited Colima/Lima replacement is
+`runtime-candidate-rejected`; no executable B2a plan, SHA-256, or authorization block
+exists. See `docs/harness/T07_GATE_B1_7_RUNTIME_DECISION.md`. Gate B2a, B2b, Gate C,
+both conditions, and the pilot remain unauthorized.
 
 ## Exact authorization target
 

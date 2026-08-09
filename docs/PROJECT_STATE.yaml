@@ -13,4 +13,4 @@ authorized_run_profile:
   profile_sha256: null
   condition_plan_sha256s: []
 authoritative_plan: docs/exec-plans/active/PHASE_1_ARTIFACT_EXECUTION.md
-last_updated: "2026-08-08"
+last_updated: "2026-08-09"
