@@ -34,6 +34,7 @@ from .lambda_ssh_key_fingerprint import (
     LEDGER_RELATIVE_PATH,
     MAX_RESPONSE_BYTES,
     PLAN_ID,
+    PREFLIGHT_DISPOSITION_ROOT_RELATIVE_PATH,
     RUN_ID,
     RUN_ROOT_RELATIVE_PATH,
     SSH_KEYS_PATH,
@@ -47,6 +48,13 @@ LEDGER_SCHEMA_VERSION: Final = "0.1.0"
 
 class SSHKeyRequestLedgerError(SSHKeyFingerprintError):
     """A closed, secret-safe one-request ledger failure."""
+
+
+@dataclass(frozen=True, slots=True)
+class SSHKeyPreflightDisposition:
+    path: Path
+    bytes: int
+    sha256: str
 
 
 LEDGER_CREATE_FAILURE: Final = SanitizedFailure(
@@ -649,3 +657,76 @@ def validate_ssh_key_request_ledger(
     if require_success and not (state.phase == "archive-passed" and state.stopped):
         raise SSHKeyRequestLedgerError("ledger lacks a successful terminal state")
     return tuple(events)
+
+
+def write_ssh_key_preflight_disposition(
+    repository_root: Path,
+    *,
+    plan: SSHKeyFingerprintPlan,
+    run_binding: SSHKeyRunBinding,
+    utc_now: Callable[[], datetime] = lambda: datetime.now(UTC),
+) -> SSHKeyPreflightDisposition:
+    """Record a bounded ledger-creation failure without touching any secret."""
+
+    root = repository_root.resolve(strict=True)
+    if root != repository_root.absolute():
+        raise SSHKeyRequestLedgerError("preflight disposition root is unsafe")
+    relative = Path(PREFLIGHT_DISPOSITION_ROOT_RELATIVE_PATH)
+    _, descriptor = _create_directory_chain(root, relative)
+    path = root / relative / f"{RUN_ID}.json"
+    encoded = (
+        json.dumps(
+            {
+                "schema_version": LEDGER_SCHEMA_VERSION,
+                "run_id": RUN_ID,
+                "plan_id": PLAN_ID,
+                "plan_sha256": plan.plan_sha256,
+                "repository_commit": run_binding.repository_commit,
+                "implementation_commit": run_binding.implementation_commit,
+                "authorization_reference": run_binding.authorization_reference,
+                "authorization_sha256": run_binding.authorization_sha256,
+                "failure_stage": FailureStage.LEDGER_IO.value,
+                "failure_class": FailureClass.LEDGER_CREATE_FAILED.value,
+                "stable_error_code": "L1A_LEDGER_CREATE_FAILED",
+                "account_request_attempted": False,
+                "secret_accessed": False,
+                "recorded_at_utc": utc_now().astimezone(UTC).isoformat().replace("+00:00", "Z"),
+            },
+            allow_nan=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+        + b"\n"
+    )
+    if len(encoded) > plan.limits.max_preflight_disposition_bytes:
+        os.close(descriptor)
+        raise SSHKeyRequestLedgerError("preflight disposition exceeds its byte cap")
+    file_descriptor = -1
+    try:
+        file_descriptor = os.open(
+            path.name,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
+            0o600,
+            dir_fd=descriptor,
+        )
+        offset = 0
+        while offset < len(encoded):
+            written = os.write(file_descriptor, encoded[offset:])
+            if written < 1:
+                raise OSError
+            offset += written
+        os.fsync(file_descriptor)
+        os.fchmod(file_descriptor, 0o400)
+        os.fsync(descriptor)
+    except OSError:
+        raise SSHKeyRequestLedgerError("preflight disposition write failed") from None
+    finally:
+        if file_descriptor >= 0:
+            with suppress(OSError):
+                os.close(file_descriptor)
+        os.close(descriptor)
+    return SSHKeyPreflightDisposition(
+        path=path,
+        bytes=len(encoded),
+        sha256=hashlib.sha256(encoded).hexdigest(),
+    )

@@ -4,6 +4,7 @@ import base64
 import hashlib
 import json
 import os
+import shutil
 import stat
 from pathlib import Path
 from unittest.mock import patch
@@ -70,7 +71,7 @@ def test_unique_match_requires_user_approval_and_hides_sensitive_values(tmp_path
     ssh_root.mkdir(mode=0o700)
     keys = (_public_key(1), _public_key(2), _public_key(3))
     _write_public(ssh_root, "selected", keys[0])
-    local = discover_local_public_keys(ssh_root)
+    local = discover_local_public_keys(home_directory=tmp_path)
     result = match_account_to_local_keys(_projection(keys), local)
     rows = result.sanitized_report["account_key_matches"]
     assert isinstance(rows, list)
@@ -92,7 +93,7 @@ def test_no_match_is_blocked(tmp_path: Path) -> None:
     keys = (_public_key(1), _public_key(2), _public_key(3))
     result = match_account_to_local_keys(
         _projection(keys),
-        discover_local_public_keys(ssh_root),
+        discover_local_public_keys(home_directory=tmp_path),
     )
     rows = result.sanitized_report["account_key_matches"]
     assert isinstance(rows, list)
@@ -109,7 +110,7 @@ def test_duplicate_local_public_key_is_ambiguous(tmp_path: Path) -> None:
     _write_public(ssh_root, "two", keys[0])
     result = match_account_to_local_keys(
         _projection(keys),
-        discover_local_public_keys(ssh_root),
+        discover_local_public_keys(home_directory=tmp_path),
     )
     rows = result.sanitized_report["account_key_matches"]
     assert isinstance(rows, list)
@@ -126,7 +127,7 @@ def test_one_local_key_matching_multiple_account_names_is_ambiguous(tmp_path: Pa
     _write_public(ssh_root, "shared", shared)
     result = match_account_to_local_keys(
         _projection(keys),
-        discover_local_public_keys(ssh_root),
+        discover_local_public_keys(home_directory=tmp_path),
     )
     rows = result.sanitized_report["account_key_matches"]
     assert isinstance(rows, list)
@@ -151,11 +152,27 @@ def test_same_stem_private_file_is_metadata_only(tmp_path: Path) -> None:
         return original_open(path, *args, **kwargs)  # type: ignore[arg-type]
 
     with patch("giclab.harness.lambda_ssh_key_match.os.open", side_effect=observed_open):
-        records = discover_local_public_keys(ssh_root)
+        records = discover_local_public_keys(home_directory=tmp_path)
     assert not attempted_private_open
     assert records[0].same_stem.present
     assert records[0].same_stem.regular_file
     assert records[0].private_key_bytes_accessed is False
+
+
+def test_discovery_is_bound_to_the_dot_ssh_child_of_the_selected_home(
+    tmp_path: Path,
+) -> None:
+    arbitrary = tmp_path / "arbitrary"
+    arbitrary.mkdir()
+    (arbitrary / "outside.pub").write_text(_public_key(1), encoding="utf-8")
+    with pytest.raises(SSHKeyFingerprintError):
+        discover_local_public_keys(home_directory=arbitrary)
+
+    ssh_root = tmp_path / ".ssh"
+    ssh_root.mkdir()
+    _write_public(ssh_root, "inside", _public_key(2), private=False)
+    records = discover_local_public_keys(home_directory=tmp_path)
+    assert [record.basename for record in records] == ["inside.pub"]
 
 
 def test_symlink_nonregular_and_open_swap_are_rejected(tmp_path: Path) -> None:
@@ -165,11 +182,11 @@ def test_symlink_nonregular_and_open_swap_are_rejected(tmp_path: Path) -> None:
     outside.write_text(_public_key(1))
     (ssh_root / "symlink.pub").symlink_to(outside)
     with pytest.raises(SSHKeyFingerprintError):
-        discover_local_public_keys(ssh_root)
+        discover_local_public_keys(home_directory=tmp_path)
     (ssh_root / "symlink.pub").unlink()
     (ssh_root / "directory.pub").mkdir()
     with pytest.raises(SSHKeyFingerprintError):
-        discover_local_public_keys(ssh_root)
+        discover_local_public_keys(home_directory=tmp_path)
     (ssh_root / "directory.pub").rmdir()
     target = ssh_root / "swap.pub"
     target.write_text(_public_key(2))
@@ -180,7 +197,7 @@ def test_symlink_nonregular_and_open_swap_are_rejected(tmp_path: Path) -> None:
         target.symlink_to(outside)
 
     with pytest.raises(SSHKeyFingerprintError):
-        discover_local_public_keys(ssh_root, pre_open_hook=swap)
+        discover_local_public_keys(home_directory=tmp_path, pre_open_hook=swap)
 
 
 def test_private_and_public_documents_validate_and_evidence_writes_exclusively(
@@ -189,6 +206,10 @@ def test_private_and_public_documents_validate_and_evidence_writes_exclusively(
     repository = tmp_path / "repo"
     run_root = repository / RUN_ROOT_RELATIVE_PATH
     run_root.mkdir(parents=True)
+    for relative in (FINGERPRINT_SCHEMA_RELATIVE_PATH, MATCH_SCHEMA_RELATIVE_PATH):
+        target = repository / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(ROOT / relative, target)
     ssh_root = tmp_path / ".ssh"
     ssh_root.mkdir()
     keys = (_public_key(1), _public_key(2), _public_key(3))
@@ -196,7 +217,7 @@ def test_private_and_public_documents_validate_and_evidence_writes_exclusively(
     projection = _projection(keys)
     result = match_account_to_local_keys(
         projection,
-        discover_local_public_keys(ssh_root),
+        discover_local_public_keys(home_directory=tmp_path),
     )
     validate_document_against_schema(
         result.private_manifest,
@@ -229,6 +250,37 @@ def test_private_and_public_documents_validate_and_evidence_writes_exclusively(
         assert stat.S_IMODE((run_root / name).stat().st_mode) == 0o400
     with pytest.raises(SSHKeyFingerprintError):
         write_local_evidence_bundle(repository, raw_response=raw, result=result)
+
+
+def test_oversized_raw_response_stops_before_the_first_evidence_write(
+    tmp_path: Path,
+) -> None:
+    repository = tmp_path / "repo"
+    run_root = repository / RUN_ROOT_RELATIVE_PATH
+    run_root.mkdir(parents=True)
+    keys = (_public_key(1), _public_key(2), _public_key(3))
+    result = match_account_to_local_keys(_projection(keys), ())
+    with pytest.raises(SSHKeyFingerprintError):
+        write_local_evidence_bundle(
+            repository,
+            raw_response=b"x" * 220_000,
+            result=result,
+        )
+    assert list(run_root.iterdir()) == []
+
+
+def test_sanitized_semantics_reject_false_recommendation(tmp_path: Path) -> None:
+    del tmp_path
+    document = invalid_evidence_report(ACCOUNT_NAMES)
+    document["evidence_state"] = "complete-valid"
+    document["selection_state"] = "unique-match-awaiting-user-approval"
+    document["recommended_account_key_name"] = ACCOUNT_NAMES[0]
+    rows = document["account_key_matches"]
+    assert isinstance(rows, list)
+    for row in rows:
+        row["match_status"] = MatchState.NO_MATCH
+    with pytest.raises(SSHKeyFingerprintError):
+        validate_sanitized_report(document, repository_root=ROOT)
 
 
 def test_invalid_evidence_is_blocked_and_schema_valid() -> None:

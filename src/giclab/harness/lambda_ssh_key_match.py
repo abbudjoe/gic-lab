@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import pwd
 import stat
 from collections.abc import Callable, Mapping, Sequence
 from contextlib import suppress
@@ -19,10 +20,14 @@ from pathlib import Path
 from typing import Final
 
 from .lambda_ssh_key_fingerprint import (
+    APPROVED_ACCOUNT_KEY_NAMES,
+    FINGERPRINT_SCHEMA_RELATIVE_PATH,
+    LOCAL_VERIFICATION_RELATIVE_PATH,
     MATCH_SCHEMA_RELATIVE_PATH,
     MAX_LOCAL_RAW_PRIVATE_EVIDENCE_BYTES,
     MAX_LOCAL_VERIFICATION_BYTES,
     MAX_PUBLIC_KEY_TEXT_BYTES,
+    MAX_RESPONSE_BYTES,
     MAX_SANITIZED_MATCH_REPORT_BYTES,
     PLAN_ID,
     PRIVATE_MANIFEST_RELATIVE_PATH,
@@ -182,15 +187,30 @@ def _read_public_file(descriptor: int) -> bytes:
 
 
 def discover_local_public_keys(
-    ssh_root: Path,
     *,
+    home_directory: Path | None = None,
     expected_owner_uid: int | None = None,
     pre_open_hook: Callable[[str], None] | None = None,
 ) -> tuple[LocalPublicKeyRecord, ...]:
-    """Read only held no-follow public files and metadata for same-stem objects."""
+    """Read only the current user's held, no-follow ``~/.ssh/*.pub`` scope.
 
-    root = ssh_root.absolute()
+    ``home_directory`` is an explicit local-fixture seam.  Production callers omit
+    it, which binds discovery to the passwd database entry for the current UID
+    instead of trusting ``HOME`` or an arbitrary caller-supplied SSH directory.
+    Even fixtures can select only the ``.ssh`` child of the injected home.
+    """
+
     owner_uid = os.getuid() if expected_owner_uid is None else expected_owner_uid
+    if home_directory is None:
+        try:
+            home = Path(pwd.getpwuid(owner_uid).pw_dir)
+        except (KeyError, OSError):
+            raise SSHKeyFingerprintError("current-user home identity is unavailable") from None
+    else:
+        home = home_directory
+    if not home.is_absolute() or ".." in home.parts:
+        raise SSHKeyFingerprintError("current-user home identity is unsafe")
+    root = home / ".ssh"
     descriptor = _open_directory_no_symlinks(root)
     records: list[LocalPublicKeyRecord] = []
     aggregate = 0
@@ -339,7 +359,10 @@ def match_account_to_local_keys(
             }
         )
 
-    recommended = approvable[0] if len(approvable) == 1 else None
+    unique_rows = [
+        row for row in public_rows if row["match_status"] == MatchState.UNIQUE_MATCH.value
+    ]
+    recommended = approvable[0] if len(unique_rows) == 1 and len(approvable) == 1 else None
     sanitized: dict[str, object] = {
         "schema_version": "0.1.0",
         "plan_id": PLAN_ID,
@@ -479,62 +502,92 @@ def write_local_evidence_bundle(
         run_root.relative_to(root)
     except ValueError:
         raise SSHKeyFingerprintError("run root escaped the repository") from None
-    descriptor = _open_directory_no_symlinks(run_root)
-    try:
-        raw_identity = _write_exclusive_file(
-            descriptor,
-            Path(RAW_RESPONSE_RELATIVE_PATH).name,
-            raw_response,
+    if not raw_response or len(raw_response) > MAX_RESPONSE_BYTES:
+        raise SSHKeyFingerprintError("raw response violates its byte cap")
+    validate_document_against_schema(
+        result.private_manifest,
+        repository_root=root,
+        schema_relative_path=FINGERPRINT_SCHEMA_RELATIVE_PATH,
+    )
+    validate_sanitized_report(result.sanitized_report, repository_root=root)
+    private_bytes = canonical_json_bytes(
+        result.private_manifest,
+        max_bytes=MAX_LOCAL_RAW_PRIVATE_EVIDENCE_BYTES,
+    )
+    report_bytes = canonical_json_bytes(
+        result.sanitized_report,
+        max_bytes=MAX_SANITIZED_MATCH_REPORT_BYTES,
+    )
+
+    def identity(relative_path: str, encoded: bytes) -> EvidenceFileIdentity:
+        return EvidenceFileIdentity(
+            relative_path=relative_path,
+            bytes=len(encoded),
+            sha256=hashlib.sha256(encoded).hexdigest(),
         )
-        private_bytes = canonical_json_bytes(
-            result.private_manifest,
-            max_bytes=MAX_LOCAL_RAW_PRIVATE_EVIDENCE_BYTES,
-        )
-        private_identity = _write_exclusive_file(
-            descriptor,
-            Path(PRIVATE_MANIFEST_RELATIVE_PATH).name,
-            private_bytes,
-        )
-        report_bytes = canonical_json_bytes(
-            result.sanitized_report,
-            max_bytes=MAX_SANITIZED_MATCH_REPORT_BYTES,
-        )
-        report_identity = _write_exclusive_file(
-            descriptor,
-            Path(SANITIZED_REPORT_RELATIVE_PATH).name,
-            report_bytes,
-        )
-        seal_document: dict[str, object] = {
-            "schema_version": "0.1.0",
-            "plan_id": PLAN_ID,
-            "run_id": RUN_ID,
-            "files": [
-                {
-                    "relative_path": item.relative_path,
-                    "bytes": item.bytes,
-                    "sha256": item.sha256,
-                }
-                for item in (raw_identity, private_identity, report_identity)
-            ],
-            "private_key_bytes_accessed": False,
-            "source_retained": True,
-        }
-        seal_bytes = canonical_json_bytes(
-            seal_document,
-            max_bytes=MAX_LOCAL_VERIFICATION_BYTES,
-        )
-        seal_identity = _write_exclusive_file(
-            descriptor,
-            Path(PRIVATE_SEAL_RELATIVE_PATH).name,
-            seal_bytes,
-        )
-    finally:
-        os.close(descriptor)
+
+    raw_identity = identity(RAW_RESPONSE_RELATIVE_PATH, raw_response)
+    private_identity = identity(PRIVATE_MANIFEST_RELATIVE_PATH, private_bytes)
+    report_identity = identity(SANITIZED_REPORT_RELATIVE_PATH, report_bytes)
+    seal_document: dict[str, object] = {
+        "schema_version": "0.1.0",
+        "plan_id": PLAN_ID,
+        "run_id": RUN_ID,
+        "files": [
+            {
+                "relative_path": item.relative_path,
+                "bytes": item.bytes,
+                "sha256": item.sha256,
+            }
+            for item in (raw_identity, private_identity, report_identity)
+        ],
+        "private_key_bytes_accessed": False,
+        "source_retained": True,
+    }
+    seal_bytes = canonical_json_bytes(
+        seal_document,
+        max_bytes=MAX_LOCAL_VERIFICATION_BYTES,
+    )
+    seal_identity = identity(PRIVATE_SEAL_RELATIVE_PATH, seal_bytes)
     total = sum(
         item.bytes for item in (raw_identity, private_identity, report_identity, seal_identity)
     )
-    if total > MAX_LOCAL_RAW_PRIVATE_EVIDENCE_BYTES + MAX_SANITIZED_MATCH_REPORT_BYTES:
+    if total > (
+        MAX_RESPONSE_BYTES
+        + MAX_LOCAL_RAW_PRIVATE_EVIDENCE_BYTES
+        + MAX_SANITIZED_MATCH_REPORT_BYTES
+        + MAX_LOCAL_VERIFICATION_BYTES
+    ):
         raise SSHKeyFingerprintError("local evidence bundle exceeds its aggregate cap")
+
+    descriptor = _open_directory_no_symlinks(run_root)
+    try:
+        written = (
+            _write_exclusive_file(
+                descriptor,
+                Path(RAW_RESPONSE_RELATIVE_PATH).name,
+                raw_response,
+            ),
+            _write_exclusive_file(
+                descriptor,
+                Path(PRIVATE_MANIFEST_RELATIVE_PATH).name,
+                private_bytes,
+            ),
+            _write_exclusive_file(
+                descriptor,
+                Path(SANITIZED_REPORT_RELATIVE_PATH).name,
+                report_bytes,
+            ),
+            _write_exclusive_file(
+                descriptor,
+                Path(PRIVATE_SEAL_RELATIVE_PATH).name,
+                seal_bytes,
+            ),
+        )
+    finally:
+        os.close(descriptor)
+    if written != (raw_identity, private_identity, report_identity, seal_identity):
+        raise SSHKeyFingerprintError("local evidence identity changed during write")
     return LocalEvidenceBundle(
         raw_response=raw_identity,
         private_manifest=private_identity,
@@ -542,6 +595,28 @@ def write_local_evidence_bundle(
         private_seal=seal_identity,
         total_bytes=total,
     )
+
+
+def write_local_verification_record(
+    repository_root: Path,
+    encoded: bytes,
+) -> EvidenceFileIdentity:
+    """Exclusively retain the bounded post-archive verification record."""
+
+    if not encoded or len(encoded) > MAX_LOCAL_VERIFICATION_BYTES:
+        raise SSHKeyFingerprintError("local verification violates its byte cap")
+    root = repository_root.resolve(strict=True)
+    if root != repository_root.absolute():
+        raise SSHKeyFingerprintError("repository root identity is unsafe")
+    descriptor = _open_directory_no_symlinks(root / RUN_ROOT_RELATIVE_PATH)
+    try:
+        return _write_exclusive_file(
+            descriptor,
+            Path(LOCAL_VERIFICATION_RELATIVE_PATH).name,
+            encoded,
+        )
+    finally:
+        os.close(descriptor)
 
 
 def validate_sanitized_report(
@@ -554,3 +629,50 @@ def validate_sanitized_report(
         repository_root=repository_root,
         schema_relative_path=MATCH_SCHEMA_RELATIVE_PATH,
     )
+    rows = document.get("account_key_matches")
+    if not isinstance(rows, list) or len(rows) != len(APPROVED_ACCOUNT_KEY_NAMES):
+        raise SSHKeyFingerprintError("sanitized match cardinality drifted")
+    if any(not isinstance(row, Mapping) for row in rows):
+        raise SSHKeyFingerprintError("sanitized match row is invalid")
+    names = [row.get("account_key_name") for row in rows]
+    aliases = [row.get("account_key_alias") for row in rows]
+    if set(names) != set(APPROVED_ACCOUNT_KEY_NAMES) or len(set(aliases)) != len(aliases):
+        raise SSHKeyFingerprintError("sanitized match identity drifted")
+    evidence_state = document.get("evidence_state")
+    unique_rows: list[Mapping[str, object]] = []
+    for row in rows:
+        state = row.get("match_status")
+        local_values = (
+            row.get("local_key_alias"),
+            row.get("local_public_key_basename"),
+            row.get("same_stem_private_file_present"),
+        )
+        if state == MatchState.UNIQUE_MATCH.value:
+            if evidence_state != "complete-valid" or any(value is None for value in local_values):
+                raise SSHKeyFingerprintError("unique sanitized match lacks local evidence")
+            unique_rows.append(row)
+        elif state in {
+            MatchState.NO_MATCH.value,
+            MatchState.AMBIGUOUS_MATCH.value,
+            MatchState.INVALID_EVIDENCE.value,
+        }:
+            if any(value is not None for value in local_values):
+                raise SSHKeyFingerprintError("blocked sanitized match exposes local evidence")
+            if state == MatchState.INVALID_EVIDENCE.value and evidence_state != "invalid":
+                raise SSHKeyFingerprintError("invalid sanitized evidence state drifted")
+            if state != MatchState.INVALID_EVIDENCE.value and evidence_state != "complete-valid":
+                raise SSHKeyFingerprintError("complete sanitized evidence state drifted")
+        else:
+            raise SSHKeyFingerprintError("sanitized match state drifted")
+    recommended = document.get("recommended_account_key_name")
+    selection_state = document.get("selection_state")
+    if recommended is None:
+        if selection_state != "blocked":
+            raise SSHKeyFingerprintError("blocked sanitized selection state drifted")
+    elif (
+        selection_state != "unique-match-awaiting-user-approval"
+        or len(unique_rows) != 1
+        or unique_rows[0].get("account_key_name") != recommended
+        or unique_rows[0].get("same_stem_private_file_present") is not True
+    ):
+        raise SSHKeyFingerprintError("sanitized recommendation lacks one unique match")
