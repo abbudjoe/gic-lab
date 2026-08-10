@@ -34,30 +34,28 @@ def test_phase_one_is_the_only_active_non_executable_control_plane() -> None:
         "condition_plan_sha256s": [],
     }
     assert state["planned_execution_substrate"] == {
-        "decision_state": "lambda-host-selected-design-only",
+        "decision_state": "lambda-host-qualification-ready",
         "provider": "lambda-on-demand-cloud",
         "architecture": "x86_64",
         "persistent_filesystem": False,
         "gate_l1_authorized": False,
         "gate_l1_evidence_state": "complete-externally-sealed",
         "gate_l2_authorized": False,
-        "gate_l2_decision_state": "inventory-evidence-insufficient",
+        "gate_l2_decision_state": "ready-for-gate-l2-authorization",
         "gate_l3_state": "requirements-only",
         "gate_l4_authorized": False,
         "local_alternatives": "terminal-rejected",
         "decision_document": "docs/harness/T07_GATE_L0_LAMBDA_HOST_DECISION.md",
-        "security_decision_document": (
-            "docs/harness/T07_GATE_L2_RESOURCE_AND_SECURITY_DECISION_PACKET.md"
-        ),
+        "security_decision_document": "docs/harness/T07_GATE_L2_0_HUMAN_DECISIONS_AND_PLAN.md",
     }
     execution_state = load_project_execution_state(ROOT)
     substrate = execution_state.planned_execution_substrate
     assert substrate is not None
-    assert substrate.decision_state == "lambda-host-selected-design-only"
+    assert substrate.decision_state == "lambda-host-qualification-ready"
     assert substrate.provider == "lambda-on-demand-cloud"
     assert substrate.architecture == "x86_64"
     assert substrate.gate_l1_evidence_state == "complete-externally-sealed"
-    assert substrate.gate_l2_decision_state == "inventory-evidence-insufficient"
+    assert substrate.gate_l2_decision_state == "ready-for-gate-l2-authorization"
     assert [path.name for path in (ROOT / "docs/exec-plans/active").glob("*.md")] == [
         "PHASE_1_ARTIFACT_EXECUTION.md"
     ]
@@ -162,7 +160,7 @@ def test_t07_l13_preserves_all_five_locked_scientific_file_hashes() -> None:
         assert hashlib.sha256(path.read_bytes()).hexdigest() == expected
 
 
-def test_t07_l14_one_request_plan_is_fresh_unauthorized_and_unexecuted() -> None:
+def test_t07_l1a_plan_is_preserved_and_its_consumed_run_is_sealed() -> None:
     relative = "containers/sira-smoke/lambda/gate-l1a-ssh-key-fingerprint-plan-v1.json"
     path = ROOT / relative
     encoded = path.read_bytes()
@@ -194,12 +192,17 @@ def test_t07_l14_one_request_plan_is_fresh_unauthorized_and_unexecuted() -> None
             ),
         }
     ]
-    assert not (
-        ROOT / "artifacts/t07/lambda/gate-l1a/RUN-T07-L1A-LAMBDA-SSH-KEY-FINGERPRINT-0001"
-    ).exists()
+    run_root = ROOT / "artifacts/t07/lambda/gate-l1a/RUN-T07-L1A-LAMBDA-SSH-KEY-FINGERPRINT-0001"
+    assert run_root.is_dir()
+    assert hashlib.sha256((run_root / "request-ledger.jsonl").read_bytes()).hexdigest() == (
+        "41dd54aa76e8cad871f8d4064b44fb8b013a83dea96eb4494a9575df21e30e13"
+    )
+    assert hashlib.sha256((run_root / "match-report.json").read_bytes()).hexdigest() == (
+        "28e66e39bb569327cc3d53abcc4efc07aad59e5aeb51ff0e0959f00c22c2e855"
+    )
 
 
-def test_t07_l14_public_surfaces_keep_key_evidence_pending_and_l2_blocked() -> None:
+def test_t07_public_surfaces_preserve_l1a_and_keep_l2_unauthorized() -> None:
     surfaces = [
         ROOT / "docs/harness/T07_GATE_L1_4_SSH_KEY_FINGERPRINT_DESIGN.md",
         ROOT / "docs/harness/T07_GATE_L1A_SSH_KEY_AUTHORIZATION_PACKET.md",
@@ -216,7 +219,8 @@ def test_t07_l14_public_surfaces_keep_key_evidence_pending_and_l2_blocked() -> N
         "Gate L2",
     ):
         assert required in combined
-    assert "no key is selected" in combined or "does not select one" in combined
+    assert "ready-for-gate-l2-authorization" in combined
+    assert "Gate L2" in combined and "unauthorized" in combined
 
 
 def test_closeout_retains_zero_scientific_execution_and_only_bounded_infrastructure() -> None:
@@ -238,6 +242,8 @@ def test_closeout_retains_zero_scientific_execution_and_only_bounded_infrastruct
     run2_root = "artifacts/t07/lambda/gate-l1/RUN-T07-L1-LAMBDA-INVENTORY-0002"
     run3_root = "artifacts/t07/lambda/gate-l1/RUN-T07-L1-LAMBDA-INVENTORY-0003"
     alias_root = "artifacts/t07/lambda/gate-l1-3/RUN-T07-L1-LAMBDA-INVENTORY-0003"
+    l1a_root = "artifacts/t07/lambda/gate-l1a/RUN-T07-L1A-LAMBDA-SSH-KEY-FINGERPRINT-0001"
+    l20_root = "artifacts/t07/lambda/gate-l2-0/RUN-T07-L2-LAMBDA-HOST-QUALIFICATION-0001"
     retained_hashes = {
         f"{run2_root}/request-ledger.jsonl": (
             "a1cb81ce286881c33d879ce73787e755eed8ecd1f64ca2b9eaca7d39824a2c94"
@@ -256,6 +262,42 @@ def test_closeout_retains_zero_scientific_execution_and_only_bounded_infrastruct
         ),
         f"{alias_root}/IMAGE_ALIAS_MAP_SEAL.json": (
             "ed3fb1ef3323f2b37150204ef060250e4f9510bbeb976d18d2fd1b8d9894c0b5"
+        ),
+        f"{l1a_root}/request-ledger.jsonl": (
+            "41dd54aa76e8cad871f8d4064b44fb8b013a83dea96eb4494a9575df21e30e13"
+        ),
+        f"{l1a_root}/ssh-keys-response.json": (
+            "152828cb49e0720babc9bf0072c87361a8b8b20033f51cf8342f60647dde01eb"
+        ),
+        f"{l1a_root}/private-evidence.json": (
+            "835b5692d67fa1286a84f2b6fc0a41318693a7e28171852d01f0d6db0a7293bb"
+        ),
+        f"{l1a_root}/match-report.json": (
+            "28e66e39bb569327cc3d53abcc4efc07aad59e5aeb51ff0e0959f00c22c2e855"
+        ),
+        f"{l1a_root}/PRIVATE_EVIDENCE_SEAL.json": (
+            "fd6f771318c4fe4ed94d457c0e24596260d0eb6d9cd83e9e18ab8cef43982f90"
+        ),
+        f"{l1a_root}/archive-finalization.jsonl": (
+            "d40af3aa2eefd991ff765a416b4b6dc2d044f438bf05379a1a16990486ddb391"
+        ),
+        f"{l20_root}/human-decision-private.json": (
+            "0b109b0150eec8739e30e86e5f1318b60c818cc3974354c67dc35a4e2dffd4ea"
+        ),
+        f"{l20_root}/HUMAN_DECISION_SEAL.json": (
+            "5a1b9dec78e5a699809a4626876646ad687dfe5183859bf771ba75941f1814fc"
+        ),
+        f"{l20_root}/private-parameters.json": (
+            "633bc9606725eb25881284820a26e9798698e3540b26654920c3dc71e2bee89e"
+        ),
+        f"{l20_root}/PRIVATE_PARAMETERS_SEAL.json": (
+            "0682a25cc2595ef7415734cd5e3353975fca1bd99e23204440e6a1c212d4e31d"
+        ),
+        f"{l20_root}/PRIVATE_BUNDLE_SEAL.json": (
+            "b46b31aa6ee35138fb03fe535aff621161a18218e8540db9e1252d5e0ece7b90"
+        ),
+        f"{l20_root}/PRIVATE_ARCHIVE_COPY_RECORD.json": (
+            "5c0e5bb631cb39f46f1744f75e74e7a549b25f63d669d3e3c9d2b7b23a59c49a"
         ),
     }
     retained_files = {
