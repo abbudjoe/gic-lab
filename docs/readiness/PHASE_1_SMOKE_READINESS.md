@@ -39,7 +39,17 @@ without account public-key material, so no local/account fingerprint match can b
 established. The current infrastructure decision state is therefore
 `inventory-evidence-insufficient`, not ready for Gate L2 authorization.
 
-Gate L2 requires a fresh evidence/decision step for matchable account fingerprints,
+Gate L1.4 has now designed the fresh minimum evidence step without executing it:
+`PLAN-T07-GATE-L1A-LAMBDA-SSH-KEY-FINGERPRINT-V1` permits, only after a new exact
+authorization, one in-process `GET /api/v1/ssh-keys` under fresh run
+`RUN-T07-L1A-LAMBDA-SSH-KEY-FINGERPRINT-0001`. It uses a distinct fsync-backed ledger,
+strict OpenSSH/RFC4716/PKCS8/PEM public-key parsing, held-no-follow local `.pub`
+matching, ignored sealed private evidence, an exact source-loading wrapper, and a
+separate fsync-backed post-ledger archive-finalization disposition. A terminal request
+ledger alone is not complete evidence. The plan remains unauthorized; no
+account request, secret access, SSH, mutation, or paid compute occurred in its design.
+
+Gate L2 requires that fresh evidence/decision step for matchable account fingerprints,
 then exact user choices for candidate, SSH key, global-firewall option, the missing
 regional-ruleset lifecycle or an explicit governance supersession, public `/32`, and
 host-key trust. Gate L2 host qualification and Gate L3 no-provider workload probes
@@ -163,8 +173,10 @@ the EXP-0001 hypothesis or any RQ-H2K outcome.
 - T07 Lambda capacity and price were observed but require fresh prelaunch
   revalidation. No candidate, SSH key, firewall option, public `/32`, or host-key
   method is selected. Gate L2 is additionally blocked because run 0003 contains no
-  account public-key material for local fingerprint matching. SR²AM T11/T12 remain
-  scientifically and operationally separate.
+  account public-key material for local fingerprint matching. The single-request Gate
+  L1A plan exists but is unauthorized and unexecuted, so no match status or key
+  recommendation exists. SR²AM T11/T12 remain scientifically and operationally
+  separate.
 - RQ-H2K external-versus-explicit-model comparison feasibility remains undetermined.
   Missing optional regulation fields do not invalidate EXP-0001 when its primary
   evidence contract is complete.

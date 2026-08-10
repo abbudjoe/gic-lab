@@ -85,7 +85,22 @@ All local files were owned by the current user. Private-key bytes were not read,
 agent was invoked, and no SSH operation occurred. There is no SSH-key recommendation.
 Resolving this fact requires either independently verified account public-key
 fingerprints supplied by the user or a fresh, reviewed, separately authorized minimal
-read-only evidence plan. This turn authorizes neither.
+read-only evidence plan.
+
+Gate L1.4 has created that minimal design as unauthorized plan
+`PLAN-T07-GATE-L1A-LAMBDA-SSH-KEY-FINGERPRINT-V1`, run
+`RUN-T07-L1A-LAMBDA-SSH-KEY-FINGERPRINT-0001`, at
+`containers/sira-smoke/lambda/gate-l1a-ssh-key-fingerprint-plan-v1.json`, SHA-256
+`23b29823b8daf94cfb463b275149ed562656c735955a4f449b8703334de531bc`.
+It would make exactly one separately authorized `GET /api/v1/ssh-keys`, retain raw
+key material only in ignored sealed evidence, and publish only sanitized match states.
+It has not run and authorizes neither a request nor a key choice.
+
+A future `unique_match` would let the user approve one existing account key without a
+credential mutation. `no_match`, `ambiguous_match`, or `invalid_evidence` would instead
+require a separate user choice to create/upload a dedicated public key under another
+mutation gate or select another access path. No outcome automatically authorizes key
+use, SSH, or Gate L2.
 
 ## Global firewall assessment
 
@@ -159,7 +174,7 @@ available.
 
 An executable Gate L2 plan is prohibited until all of these are non-null:
 
-1. matchable account SSH public-key evidence and exactly one user-approved key;
+1. complete sealed Gate L1A fingerprint evidence and exactly one user-approved key;
 2. exactly one user-approved type, region, and image alias after fresh revalidation;
 3. the global-firewall option and the dependency attestation above;
 4. the exact user-approved public IPv4 `/32` when temporary replacement is used;

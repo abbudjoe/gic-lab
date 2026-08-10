@@ -65,7 +65,7 @@ grant no mutation authority; one gate's authorization never carries into another
 
 | Task | Work package | Mapped phase DoD | Current permission |
 |---|---|---|---|
-| T07 | Execute one authorized contained SiRA smoke pair; capture regulation-decision evidence without interpretation. | P1-DOD-02, P1-DOD-11 through P1-DOD-13 | Gate L1 complete/sealed; L1.3 state `inventory-evidence-insufficient`; Gate L2 unauthorized |
+| T07 | Execute one authorized contained SiRA smoke pair; capture regulation-decision evidence without interpretation. | P1-DOD-02, P1-DOD-11 through P1-DOD-13 | Gate L1 complete/sealed; L1.4 one-request design unauthorized; Gate L2 blocked |
 | T08 | Analyze smoke infrastructure evidence and prepare an unauthorized pilot package. | P1-DOD-03, P1-DOD-11 through P1-DOD-13 | blocked until T07 succeeds |
 | T09 | Execute the freshly authorized exploratory SiRA pilot. | P1-DOD-04, P1-DOD-11 through P1-DOD-13 | blocked until T08 and authorization |
 | T10 | Analyze and publish the exploratory SiRA pilot. | P1-DOD-05, P1-DOD-11 through P1-DOD-13 | blocked until T09 succeeds |
@@ -80,8 +80,8 @@ and an analysis recommendation does not authorize the next execution.
 
 ## T07 assembly control
 
-Assembly status: **Gate L1 complete/sealed; Gate L1.3 offline adjudication complete;
-Gate L2 blocked by insufficient SSH-key identity evidence**
+Assembly status: **Gate L1 complete/sealed; Gate L1.4 one-request fingerprint design
+complete and unauthorized; Gate L2 blocked by insufficient SSH-key identity evidence**
 
 Exact next profile: `PLAN-EXP0001-SMOKE`.
 
@@ -275,6 +275,40 @@ evidence plan. L1.3 created no executable plan and performed no account/model re
 real-secret access, cloud mutation, paid compute, SSH, runtime, browser, SiRA, or
 scientific execution.
 
+### Gate L1.4 SSH-key fingerprint design
+
+Source contract: the user's 2026-08-10 Gate L1.4 instruction. Baseline:
+`ae0ec40cb2da067a66f1a8d3d0e5aca857fd9491`.
+
+Gate L1.4 pins the first-party OpenAPI 1.10.0 `GET /api/v1/ssh-keys` response and
+creates fresh unauthorized plan `PLAN-T07-GATE-L1A-LAMBDA-SSH-KEY-FINGERPRINT-V1`,
+run `RUN-T07-L1A-LAMBDA-SSH-KEY-FINGERPRINT-0001`, at
+`containers/sira-smoke/lambda/gate-l1a-ssh-key-fingerprint-plan-v1.json`, 12,448
+bytes, SHA-256
+`23b29823b8daf94cfb463b275149ed562656c735955a4f449b8703334de531bc`.
+It is exactly one no-query/no-redirect/no-pagination/no-retry in-process GET after a
+future current-turn authorization; broad inventory and prior run identities are not
+reused.
+
+The implementation parses OpenSSH, RFC4716, PKCS8/SPKI, and PEM RSA public-key forms
+in process and computes standard SHA-256 fingerprints over canonical SSH wire blobs.
+The plan-bound shell-free supervisor resolves the current UID's passwd home and opens
+only held no-follow `.ssh/*.pub` files, treats same-stem private objects as
+metadata-only, and separates ignored sealed raw/private evidence from a schema-bound
+sanitized match report. Its two-phase driver stages evidence before sealing the
+terminal request ledger, then requires a separate append-only finalization disposition
+after atomic archive publication and post-copy verification. The request ledger alone
+and every partial or failed disposition remain ineligible. A unique match remains
+`unique-match-awaiting-user-approval`; no result selects or uses a key.
+
+The fresh run root and 49,152-byte ledger are exclusive and nonreplayable. Evidence
+uses finite byte/event/process/wall/file caps and the existing held-descriptor,
+external-UUID, no-internal-fallback, one-way copy, source/destination hash, fsync, and
+atomic-finalization contract. Gate L1A is unauthorized and unexecuted; Gate L2 remains
+`inventory-evidence-insufficient`. No account/model request, real-secret access,
+cloud mutation, paid compute, SSH, private-key read, runtime, browser, SiRA, or
+scientific execution occurred.
+
 ## Authorization and mutation boundary
 
 Current project state keeps paid compute, prototype execution, benchmark execution,
@@ -371,6 +405,11 @@ appropriate to their own operation.
   designed strict firewall/host-key decisions. Because account public-key material
   was intentionally not retained, SSH fingerprint matching remains evidence-
   insufficient and no Gate L2 plan or authorization exists.
+- 2026-08-10: Gate L1.4 created a fresh unauthorized one-GET Gate L1A plan for the
+  missing account SSH public-key evidence. New in-process format/fingerprint parsing,
+  no-follow local `.pub` matching, a fresh durable ledger, and private/public evidence
+  schemas passed local fake-only design tests. The request and fresh run remain
+  unexecuted; no key is selected and Gate L2 stays blocked.
 
 ## Decision log
 
@@ -407,6 +446,10 @@ appropriate to their own operation.
   as one alias per official image ID plus regional availability, and stop Gate L2 at
   `inventory-evidence-insufficient` until matchable account SSH public-key evidence
   and the required firewall/host-key human decisions exist.
+- 2026-08-10: Under D-024, minimize the next evidence read to one separately
+  authorized `GET /api/v1/ssh-keys`, with a fresh run/ledger and ignored raw evidence;
+  do not repeat inventory, expose key material publicly, select a key, or imply Gate
+  L2 authority.
 
 ## Blockers and user actions
 
@@ -415,16 +458,15 @@ Colima/Lima remain terminal rejected provenance. The Lambda topology is selected
 at design level. V3 run 0003 is complete, sealed, and nonreplayable; it supplies
 current-at-observation capacity/price/image/firewall facts but no matchable account
 SSH public-key evidence. The V1 and V2 plans/runs remain blocked historical
-provenance; runs 0001 and 0002 are permanently retired. L2 has no executable
-account-bound plan, and L3/L4 remain unauthorized.
+provenance; runs 0001 and 0002 are permanently retired. The new Gate L1A plan exists
+but is unauthorized and run 0001 under that distinct gate is fresh/unexecuted. L2 has
+no executable account-bound plan, and L3/L4 remain unauthorized.
 
 ## Next permitted work
 
-There is no further local B1.x design gate. The next permitted T07 work must resolve
-the precise account-key evidence gap identified in
-`docs/harness/T07_GATE_L2_RESOURCE_AND_SECURITY_DECISION_PACKET.md`, through either
-user-supplied independently verified account fingerprints or a new reviewed and
-separately authorized minimal read-only evidence plan. Only after that fact exists may
+There is no further local B1.x design gate. The next permitted T07 work is either
+user-supplied independently verified account fingerprints or a separately authorized
+execution of the exact Gate L1A one-request plan. Only after that fact exists may
 the user choose a candidate, SSH key, firewall option/public `/32`, and host-key trust
 method. Gate L2 host qualification, Gate L3 B2b qualification, Gate L4, both SiRA
 conditions, and the smoke remain blocked pending their own prerequisites and

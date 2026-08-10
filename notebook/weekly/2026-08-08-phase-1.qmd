@@ -62,3 +62,12 @@ paid compute, model calls, browser actions, and interpretation all remain unauth
 The offline Gate L1.3 work made no account request, accessed no real secret or private
 key, and did not mutate a cloud resource, use SSH, run a container or browser, call a
 model, or execute either SiRA condition.
+
+Gate L1.4 has since prepared an unauthorized minimum-disclosure follow-up: one future
+read-only SSH-key listing, with a fresh durable request ledger and private/public
+evidence separation plus a distinct post-ledger archive-finalization record, can
+classify the existing account-key match without repeating
+the broad inventory. The design supports standard public-key encodings and opens only
+local `.pub` files; it does not expose key bodies, fingerprints, raw provider IDs, or
+home paths publicly. The request has not run, no key is selected, and Gate L2 remains
+blocked and unauthorized.

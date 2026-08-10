@@ -29,6 +29,19 @@ This directory contains the design-only Gate L0 source locks and unauthorized pl
 - `endpoint-schemas-v3/` contains the seven pinned response contracts. Import and
   fake-transport tests in `lambda_*_v3.py` perform no account request and use no real
   credential.
+- `gate-l1a-ssh-key-fingerprint-plan-v1.json` is the fresh, unauthorized one-GET
+  fingerprint-recovery design: plan
+  `PLAN-T07-GATE-L1A-LAMBDA-SSH-KEY-FINGERPRINT-V1`, run
+  `RUN-T07-L1A-LAMBDA-SSH-KEY-FINGERPRINT-0001`, 12,448 bytes, SHA-256
+  `23b29823b8daf94cfb463b275149ed562656c735955a4f449b8703334de531bc`.
+  It permits only a future separately authorized in-process
+  `GET /api/v1/ssh-keys`, binds the shell-free supervisor, exact transport, fresh
+  ledger/root, exact source-loading wrapper, two-phase archive driver, authoritative
+  post-ledger finalization disposition, and privacy-separated evidence, and cannot
+  imply key selection, SSH, mutation, paid compute, or Gate L2.
+- `endpoint-schemas-l1a/` contains the strict response envelope for that future
+  request. Its parser/matcher/ledger/executor/archive tests use local fixtures and
+  fake transports only.
 - `public-source-observations.json` binds the public API and qualification-image
   metadata inspected during Gate L0. No account API or payload was fetched.
 - `public-security-observation-l1-3.json` binds the unauthenticated OpenAPI/firewall
@@ -45,7 +58,8 @@ exists; any future design must preserve both strict global rules and the separat
 governed same-region additive ruleset, plus instance termination before restoration.
 In addition, the sealed inventory intentionally contains account SSH-key names
 without their public-key material. The required local/account fingerprint match is therefore
-`evidence_unavailable`. Gate L2 remains blocked by the exact decisions and evidence
-gap in `docs/harness/T07_GATE_L2_RESOURCE_AND_SECURITY_DECISION_PACKET.md`. The
+`evidence_unavailable`. Gate L1.4 has designed, but not authorized or executed, the
+single-request recovery gate. Gate L2 remains blocked by the exact decisions and evidence gap
+in `docs/harness/T07_GATE_L2_RESOURCE_AND_SECURITY_DECISION_PACKET.md`. The
 official launch contract does not require an account LRN; the project records it as
 unavailable rather than querying broad account history.

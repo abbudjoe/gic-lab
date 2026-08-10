@@ -162,6 +162,63 @@ def test_t07_l13_preserves_all_five_locked_scientific_file_hashes() -> None:
         assert hashlib.sha256(path.read_bytes()).hexdigest() == expected
 
 
+def test_t07_l14_one_request_plan_is_fresh_unauthorized_and_unexecuted() -> None:
+    relative = "containers/sira-smoke/lambda/gate-l1a-ssh-key-fingerprint-plan-v1.json"
+    path = ROOT / relative
+    encoded = path.read_bytes()
+    assert len(encoded) == 12_448
+    assert hashlib.sha256(encoded).hexdigest() == (
+        "23b29823b8daf94cfb463b275149ed562656c735955a4f449b8703334de531bc"
+    )
+    plan = load_json(path)
+    assert plan["plan_id"] == "PLAN-T07-GATE-L1A-LAMBDA-SSH-KEY-FINGERPRINT-V1"
+    assert plan["run_identity"]["run_id"] == ("RUN-T07-L1A-LAMBDA-SSH-KEY-FINGERPRINT-0001")
+    assert plan["authorization"] == {
+        "authorized": False,
+        "authorization_reference": ("AUTH-T07-GATE-L1A-LAMBDA-SSH-KEY-FINGERPRINT-V1-PENDING"),
+    }
+    assert plan["requests"] == [
+        {
+            "request_id": "ssh-key-fingerprints",
+            "method": "GET",
+            "scheme": "https",
+            "host": "cloud.lambda.ai",
+            "path": "/api/v1/ssh-keys",
+            "query_key_names": [],
+            "max_response_bytes": 131072,
+            "response_schema_path": (
+                "containers/sira-smoke/lambda/endpoint-schemas-l1a/ssh-keys.schema.json"
+            ),
+            "response_schema_sha256": (
+                "3cceae5b7fdea392cd16197533c32fb9a240dcdd6bff734f25db31c0baae615c"
+            ),
+        }
+    ]
+    assert not (
+        ROOT / "artifacts/t07/lambda/gate-l1a/RUN-T07-L1A-LAMBDA-SSH-KEY-FINGERPRINT-0001"
+    ).exists()
+
+
+def test_t07_l14_public_surfaces_keep_key_evidence_pending_and_l2_blocked() -> None:
+    surfaces = [
+        ROOT / "docs/harness/T07_GATE_L1_4_SSH_KEY_FINGERPRINT_DESIGN.md",
+        ROOT / "docs/harness/T07_GATE_L1A_SSH_KEY_AUTHORIZATION_PACKET.md",
+        ROOT / "docs/harness/T07_GATE_L2_RESOURCE_AND_SECURITY_DECISION_PACKET.md",
+        ROOT / "docs/readiness/PHASE_1_SMOKE_READINESS.md",
+        ROOT / "docs/exec-plans/active/PHASE_1_ARTIFACT_EXECUTION.md",
+        ROOT / "notebook/weekly/2026-08-08-phase-1.qmd",
+    ]
+    combined = "\n".join(path.read_text(encoding="utf-8") for path in surfaces)
+    for required in (
+        "PLAN-T07-GATE-L1A-LAMBDA-SSH-KEY-FINGERPRINT-V1",
+        "RUN-T07-L1A-LAMBDA-SSH-KEY-FINGERPRINT-0001",
+        "unauthorized",
+        "Gate L2",
+    ):
+        assert required in combined
+    assert "no key is selected" in combined or "does not select one" in combined
+
+
 def test_closeout_retains_zero_scientific_execution_and_only_bounded_infrastructure() -> None:
     compute = load_yaml(ROOT / "manifests/compute.yaml")
     results = load_json(EXP_ROOT / "results-summary.json")

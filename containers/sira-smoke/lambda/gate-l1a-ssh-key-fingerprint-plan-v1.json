@@ -1,0 +1,313 @@
+{
+  "schema_version": "0.1.0",
+  "plan_id": "PLAN-T07-GATE-L1A-LAMBDA-SSH-KEY-FINGERPRINT-V1",
+  "decision_state": "unauthorized",
+  "provider": "lambda-on-demand-cloud",
+  "api_base_url": "https://cloud.lambda.ai",
+  "api_spec": {
+    "url": "https://docs.lambda.ai/api/cloud/spec.json",
+    "version": "1.10.0",
+    "bytes": 239644,
+    "sha256": "365488015cf79fda38e1268f44a9e2d4af4fe2794ad3c6878c78a7e1f98caded",
+    "retrieved_at_utc": "2026-08-10T15:59:37.767582Z"
+  },
+  "actor": "future-codex-operator-gpt-5.6-sol-max",
+  "implementation_binding": {
+    "baseline_commit": "ae0ec40cb2da067a66f1a8d3d0e5aca857fd9491",
+    "implementation_commit": "2a0bea7e34e7a6838e62bb1ac5c94686335ff23a",
+    "implementation_artifacts": [
+      {
+        "path": "pyproject.toml",
+        "sha256": "db1cbace1e2010b8db51eaa8a0540806b9118772e55115fd1573942850cf4059"
+      },
+      {
+        "path": "uv.lock",
+        "sha256": "c40eb3028b77940523b3ed47558beaab0b8c41cdbbd20886df51ff75bfe159e6"
+      },
+      {
+        "path": "src/giclab/harness/lambda_cloud.py",
+        "sha256": "69aa0c54e48f9f49f9dd7d297af12e41468ed6d0c7b9a36e89ba10d3d668c51c"
+      },
+      {
+        "path": "src/giclab/harness/lambda_inventory_v3.py",
+        "sha256": "f88f719c483863e2147e3dbe1055b6291e2963687e98e67382683247e2180253"
+      },
+      {
+        "path": "src/giclab/harness/lambda_archive.py",
+        "sha256": "2004f5c9b23a41a040baad766516e0f2d62e6edf440a4571b484ee061b2d1c4c"
+      },
+      {
+        "path": "src/giclab/harness/lambda_request_ledger_v3.py",
+        "sha256": "4e3f15c8d1651f18cc64d7c9dd47bc15d655bac5b3a348d74b364c12687dfd4c"
+      },
+      {
+        "path": "src/giclab/harness/sira_storage.py",
+        "sha256": "0c8b111a657288278b519351d1a0973641c6897245bccc61228d90ddb5294c11"
+      },
+      {
+        "path": "src/giclab/harness/lambda_ssh_key_fingerprint.py",
+        "sha256": "89570f118d9bd860b1b251fdaa9b3b28e80e5a4476ccffe6607763643967320a"
+      },
+      {
+        "path": "src/giclab/harness/lambda_ssh_key_match.py",
+        "sha256": "8634e71383e4cfb39c8dfeb356f1da738e130a622ce4601239532733223f9c63"
+      },
+      {
+        "path": "src/giclab/harness/lambda_ssh_key_request_ledger.py",
+        "sha256": "19433aa77041365f20c4d43d25b3f1419380239d68a8893a18e15f0eaf4924e4"
+      },
+      {
+        "path": "src/giclab/harness/lambda_ssh_key_archive.py",
+        "sha256": "568a191f1745d8861a1a8847e8bf9e7da81b4b1a36c7fb5de8f173364644ab90"
+      },
+      {
+        "path": "src/giclab/harness/lambda_ssh_key_executor.py",
+        "sha256": "7360939c1ee7cf7875d0425ff51c1354c3b5799463c1d76f95ad2eec5e73ecfd"
+      },
+      {
+        "path": "containers/sira-smoke/lambda/run_gate_l1a.py",
+        "sha256": "4c965c7c3bb22e006121ed3834e03efb06192abfd3c31767c39002f5eedddaeb"
+      },
+      {
+        "path": "containers/sira-smoke/lambda/endpoint-schemas-l1a/ssh-keys.schema.json",
+        "sha256": "3cceae5b7fdea392cd16197533c32fb9a240dcdd6bff734f25db31c0baae615c"
+      },
+      {
+        "path": "schemas/t07-lambda-ssh-key-fingerprint.schema.json",
+        "sha256": "a7a940a12f4a77895661b9e11883495c7f1efc89a4e65609e842777d8c8864a7"
+      },
+      {
+        "path": "schemas/t07-local-public-key-match.schema.json",
+        "sha256": "666ef981556b3f90759d45b7a48b6627951dd7f10518f9de748f4c1e5ac09925"
+      },
+      {
+        "path": "schemas/t07-lambda-ssh-key-request-ledger.schema.json",
+        "sha256": "4f2916e96a4453370f9621b7c78e4e53f7bb67a296e379bff4a79b5fe71d8557"
+      }
+    ],
+    "transport_identity": "giclab.harness.lambda_inventory_v3.LambdaHttpsInventoryTransportV3",
+    "ledger_identity": "giclab.harness.lambda_ssh_key_request_ledger.FsyncSSHKeyRequestLedger",
+    "fingerprint_identity": "giclab.harness.lambda_ssh_key_fingerprint.project_account_ssh_keys",
+    "match_identity": "giclab.harness.lambda_ssh_key_match.match_account_to_local_keys",
+    "executor_identity": "giclab.harness.lambda_ssh_key_executor.execute_authorized_ssh_key_fingerprint",
+    "archive_identity": "giclab.harness.lambda_ssh_key_archive.DurableSSHKeyArchiver",
+    "entrypoint_module": "giclab.harness.lambda_ssh_key_executor",
+    "entrypoint_wrapper": "/Users/joseph/.codex/worktrees/84b1/gic-lab/containers/sira-smoke/lambda/run_gate_l1a.py"
+  },
+  "run_identity": {
+    "run_id": "RUN-T07-L1A-LAMBDA-SSH-KEY-FINGERPRINT-0001",
+    "attempt": 1,
+    "experiment_id": "EXP-0001",
+    "profile_plan_id": "PLAN-EXP0001-SMOKE",
+    "gate": "T07-L1A",
+    "branch": "phase-1/sira-smoke-lambda"
+  },
+  "execution_contract": {
+    "working_directory": "/Users/joseph/.codex/worktrees/84b1/gic-lab",
+    "argv_prefix": [
+      "/Users/joseph/.codex/worktrees/84b1/gic-lab/.venv/bin/python",
+      "/Users/joseph/.codex/worktrees/84b1/gic-lab/containers/sira-smoke/lambda/run_gate_l1a.py"
+    ],
+    "shell": false,
+    "credential_on_argv": false,
+    "credential_environment_variable": "LAMBDA_API_KEY",
+    "exact_arguments_from_authorization": [
+      "--repository-root",
+      "--plan",
+      "--plan-sha256",
+      "--expected-commit",
+      "--implementation-commit",
+      "--authorization-reference",
+      "--authorization-sha256"
+    ]
+  },
+  "secret_contract": {
+    "variable": "LAMBDA_API_KEY",
+    "channel": "supervisor-secret-channel",
+    "print_allowed": false,
+    "hash_allowed": false,
+    "persist_allowed": false,
+    "return_allowed": false,
+    "forbidden_fallbacks": [
+      "SIRA_API_KEY",
+      "OPENAI_API_KEY"
+    ]
+  },
+  "requests": [
+    {
+      "request_id": "ssh-key-fingerprints",
+      "method": "GET",
+      "scheme": "https",
+      "host": "cloud.lambda.ai",
+      "path": "/api/v1/ssh-keys",
+      "query_key_names": [],
+      "max_response_bytes": 131072,
+      "response_schema_path": "containers/sira-smoke/lambda/endpoint-schemas-l1a/ssh-keys.schema.json",
+      "response_schema_sha256": "3cceae5b7fdea392cd16197533c32fb9a240dcdd6bff734f25db31c0baae615c"
+    }
+  ],
+  "transport_contract": {
+    "kind": "in-process-https",
+    "exact_method": "GET",
+    "redirect_follow": false,
+    "automatic_retries": 0,
+    "pagination_requests": 0,
+    "shell_http_processes": 0,
+    "request_intent_fsync_before_send": true,
+    "request_send_started_fsync_before_transport": true,
+    "send_started_without_terminal_outcome_burns_run": true
+  },
+  "ledger_contract": {
+    "schema_path": "schemas/t07-lambda-ssh-key-request-ledger.schema.json",
+    "schema_sha256": "4f2916e96a4453370f9621b7c78e4e53f7bb67a296e379bff4a79b5fe71d8557",
+    "relative_path": "artifacts/t07/lambda/gate-l1a/RUN-T07-L1A-LAMBDA-SSH-KEY-FINGERPRINT-0001/request-ledger.jsonl",
+    "preflight_disposition_root_relative_path": "artifacts/t07/lambda/gate-l1a/preflight-dispositions",
+    "transport_kind": "in-process-https",
+    "limits": {
+      "max_bytes": 49152,
+      "max_events": 24,
+      "max_events_per_request": 9,
+      "max_event_bytes": 2048,
+      "max_preflight_disposition_bytes": 16384
+    }
+  },
+  "schema_contract": {
+    "fingerprint_schema_path": "schemas/t07-lambda-ssh-key-fingerprint.schema.json",
+    "fingerprint_schema_sha256": "a7a940a12f4a77895661b9e11883495c7f1efc89a4e65609e842777d8c8864a7",
+    "match_schema_path": "schemas/t07-local-public-key-match.schema.json",
+    "match_schema_sha256": "666ef981556b3f90759d45b7a48b6627951dd7f10518f9de748f4c1e5ac09925",
+    "required_authoritative_response_fields": [
+      "id",
+      "name",
+      "public_key"
+    ],
+    "compatible_additive_item_keys": true,
+    "unknown_scalar_values_retained": false,
+    "top_level_additive_keys_allowed": false,
+    "pagination_allowed": false
+  },
+  "local_key_contract": {
+    "scope": "~/.ssh/*.pub",
+    "no_follow": true,
+    "regular_files_only": true,
+    "same_stem_private_file_open_allowed": false,
+    "same_stem_private_metadata_only": true,
+    "private_key_bytes_accessed": false,
+    "ssh_agent_allowed": false,
+    "ssh_allowed": false
+  },
+  "privacy_contract": {
+    "private_ignored_evidence_may_retain": [
+      "raw-one-request-response",
+      "raw-account-public-key-bodies",
+      "raw-api-ssh-key-ids",
+      "exact-public-key-fingerprints",
+      "exact-local-pub-paths",
+      "raw-account-to-local-match-map"
+    ],
+    "repository_output_allowlist": [
+      "existing-account-key-name",
+      "opaque-account-key-alias",
+      "match-status",
+      "opaque-local-key-alias-or-basename",
+      "same-stem-private-file-present",
+      "private-key-bytes-accessed-false",
+      "recommended-account-key-name-only-after-unique-match"
+    ],
+    "raw_response_committed": false,
+    "raw_response_printed": false,
+    "raw_ids_committed": false,
+    "fingerprints_committed": false,
+    "home_paths_committed": false
+  },
+  "output": {
+    "run_root_relative_path": "artifacts/t07/lambda/gate-l1a/RUN-T07-L1A-LAMBDA-SSH-KEY-FINGERPRINT-0001",
+    "raw_response_relative_path": "artifacts/t07/lambda/gate-l1a/RUN-T07-L1A-LAMBDA-SSH-KEY-FINGERPRINT-0001/ssh-keys-response.json",
+    "private_manifest_relative_path": "artifacts/t07/lambda/gate-l1a/RUN-T07-L1A-LAMBDA-SSH-KEY-FINGERPRINT-0001/private-evidence.json",
+    "private_seal_relative_path": "artifacts/t07/lambda/gate-l1a/RUN-T07-L1A-LAMBDA-SSH-KEY-FINGERPRINT-0001/PRIVATE_EVIDENCE_SEAL.json",
+    "sanitized_report_relative_path": "artifacts/t07/lambda/gate-l1a/RUN-T07-L1A-LAMBDA-SSH-KEY-FINGERPRINT-0001/match-report.json",
+    "local_verification_relative_path": "artifacts/t07/lambda/gate-l1a/RUN-T07-L1A-LAMBDA-SSH-KEY-FINGERPRINT-0001/archive-finalization.jsonl",
+    "archive_root": "/Volumes/Macintosh HD - Data/GIC-Lab/t07/sealed-artifacts",
+    "archive_run_directory": "RUN-T07-L1A-LAMBDA-SSH-KEY-FINGERPRINT-0001",
+    "raw_response_public": false,
+    "source_retained": true,
+    "no_internal_fallback": true
+  },
+  "storage_contract": {
+    "external_mount": "/Volumes/Macintosh HD - Data",
+    "external_apfs_volume_uuid": "8478609D-FA37-4ED5-875D-47AE912B9151",
+    "external_physical_store_uuid": "7904A6F1-F483-4ED7-9E34-BFECAB31C63E",
+    "external_bus_protocol": "Thunderbolt",
+    "external_classification": "UTDM-external",
+    "held_no_follow_descriptors": true,
+    "no_internal_fallback": true,
+    "local_prewrite_floor_bytes": 8590868480,
+    "local_retained_floor_bytes": 8589934592,
+    "external_dynamic_retained_floor_plus_bytes": 524288,
+    "one_way_copy": true,
+    "source_and_destination_sha256_verification": true,
+    "fsync": true,
+    "atomic_finalization": true,
+    "source_retained_until_independent_verification": true
+  },
+  "limits": {
+    "max_calls": 1,
+    "max_total_response_bytes": 131072,
+    "max_local_raw_private_evidence_bytes": 196608,
+    "max_sanitized_match_report_bytes": 16384,
+    "max_local_verification_bytes": 65536,
+    "max_external_archive_bytes": 524288,
+    "max_aggregate_retained_bytes": 1048576,
+    "max_provider_wall_seconds": 30,
+    "max_archive_wall_seconds": 60,
+    "max_total_wall_seconds": 150,
+    "max_local_process_calls": 15,
+    "max_local_process_output_bytes": 37879810,
+    "max_local_file_creates": 7,
+    "max_external_file_creates": 7,
+    "max_external_directory_creates": 4,
+    "local_prewrite_floor_bytes": 8590868480,
+    "local_retained_floor_bytes": 8589934592,
+    "automatic_retries": 0,
+    "pagination_requests": 0,
+    "redirects_followed": 0,
+    "mutation_calls": 0,
+    "provider_cost_usd": 0,
+    "model_api_calls": 0,
+    "model_tokens": 0,
+    "browser_actions": 0,
+    "ssh_operations": 0,
+    "private_key_reads": 0,
+    "sira_executions": 0
+  },
+  "aggregate_retained_cap_arithmetic": {
+    "raw_response_bytes": 131072,
+    "ledger_bytes": 49152,
+    "private_evidence_bytes": 196608,
+    "sanitized_report_bytes": 16384,
+    "local_verification_bytes": 65536,
+    "external_bundle_bytes": 524288,
+    "preflight_disposition_bytes": 16384,
+    "sum_bytes": 999424,
+    "hard_cap_bytes": 1048576
+  },
+  "scientific_boundary": {
+    "experiment_id": "EXP-0001",
+    "profile_plan_id": "PLAN-EXP0001-SMOKE",
+    "condition_order": [
+      "SIRA-REACTIVE",
+      "SIRA-SIMULATIVE"
+    ],
+    "pair_id": "PAIR-EXP0001-SMOKE-0000",
+    "model_revision": "gpt-4o-2024-11-20",
+    "reproduction_level": "directional reproduction",
+    "interpretation_allowed": false,
+    "pilot_authorized": false,
+    "training": false,
+    "scientific_execution_count": 0
+  },
+  "authorization": {
+    "authorized": false,
+    "authorization_reference": "AUTH-T07-GATE-L1A-LAMBDA-SSH-KEY-FINGERPRINT-V1-PENDING"
+  }
+}
