@@ -73,18 +73,23 @@ capacity, the retained-free floor is recalculated as
 and a post-copy retained-floor check are mandatory. The Mac mini source remains until
 independent archive verification.
 
-Gate L1 inventory uses a smaller dedicated retention contract. Before any account GET,
-the Mac mini must retain at least 8,591,048,704 bytes free: 8 GiB operational headroom
-plus a conservative 1,114,112-byte local write/finalization increment. At least
-8,589,934,592 bytes must remain after its two local files are sealed. The local
-redacted artifact is capped at 524,288 bytes, its verification record at 65,536 bytes,
-and the external three-file bundle at 1,048,576 bytes, for 1,638,400 aggregate retained
-bytes. The external pre-copy floor is freshly recomputed as
+Gate L1 V2 inventory uses a smaller dedicated retention contract. Before any account
+GET, the Mac mini must retain at least 8,591,048,704 bytes free: 8 GiB operational
+headroom plus a conservative 1,114,112-byte local write/finalization increment. That
+increment covers the 851,968-byte successful local evidence set (524,288-byte
+redacted artifact, 262,144-byte durable request ledger, and 65,536-byte verification
+record) plus a 262,144-byte transient ledger-capacity reservation. At least
+8,589,934,592 bytes must remain after local sealing. A separate failed-preflight
+disposition is capped at 16,384 bytes. The external four-file bundle is capped at
+1,048,576 bytes, and aggregate retained evidence including the disposition is capped
+at 1,916,928 bytes. The external pre-copy floor is freshly recomputed as
 `max(150 GiB, ceil(container_capacity_bytes / 5)) + 1,048,576`; the post-copy floor
 removes only that increment. Success requires held-descriptor identity, no internal
 fallback, source/destination hash equality, fsync, atomic finalization, source
-retention, and a post-copy volume/floor check. An unarchived Gate L1 inventory cannot
-authorize or bind Gate L2.
+retention, and a post-copy volume/floor check. A complete schema-valid ledger is one
+of the four sealed files; an unarchived or incomplete-ledger Gate L1 inventory cannot
+authorize or bind Gate L2. The earlier V1 two-local-file/three-file-bundle figures are
+historical only and do not authorize another V1 attempt.
 
 If the destination is later exposed through a network filesystem, attempts must be
 written on the approved execution host, sealed and hashed there, copied to this

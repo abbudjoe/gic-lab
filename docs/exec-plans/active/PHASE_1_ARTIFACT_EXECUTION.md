@@ -65,7 +65,7 @@ grant no mutation authority; one gate's authorization never carries into another
 
 | Task | Work package | Mapped phase DoD | Current permission |
 |---|---|---|---|
-| T07 | Execute one authorized contained SiRA smoke pair; capture regulation-decision evidence without interpretation. | P1-DOD-02, P1-DOD-11 through P1-DOD-13 | Gate L0 complete; Lambda host selected design-only; L1 unauthorized |
+| T07 | Execute one authorized contained SiRA smoke pair; capture regulation-decision evidence without interpretation. | P1-DOD-02, P1-DOD-11 through P1-DOD-13 | Gate L1.1 implementation complete; V2 Gate L1 unauthorized |
 | T08 | Analyze smoke infrastructure evidence and prepare an unauthorized pilot package. | P1-DOD-03, P1-DOD-11 through P1-DOD-13 | blocked until T07 succeeds |
 | T09 | Execute the freshly authorized exploratory SiRA pilot. | P1-DOD-04, P1-DOD-11 through P1-DOD-13 | blocked until T08 and authorization |
 | T10 | Analyze and publish the exploratory SiRA pilot. | P1-DOD-05, P1-DOD-11 through P1-DOD-13 | blocked until T09 succeeds |
@@ -80,7 +80,7 @@ and an analysis recommendation does not authorize the next execution.
 
 ## T07 assembly control
 
-Assembly status: **Gate L0 complete; lambda-host-selected-design-only; Gate L1 unauthorized**
+Assembly status: **Gate L1.1 implementation complete; V2 Gate L1 unauthorized**
 
 Exact next profile: `PLAN-EXP0001-SMOKE`.
 
@@ -181,6 +181,34 @@ compute, SSH, runtime/container/browser/model/SiRA action, secret access, or sci
 field change occurred. Docker Desktop and Colima/Lima remain terminal rejected
 alternatives, not active blockers to L1.
 
+### Gate L1.1 request-ledger repair
+
+Source contract: the user's 2026-08-09 Gate L1.1 request-ledger observability repair
+instruction. Baseline: `f9a80332da409789fefc435583aa0f1a10d3eb11` on
+`phase-1/sira-smoke-lambda`; frozen implementation commit:
+`0b900213801315f4312105297774b8ea5a6d9f04`.
+
+The detailed DoD, implementation mapping, exact caps, test evidence, and independent
+review record are maintained in
+`docs/harness/T07_GATE_L1_1_IMPLEMENTATION_LEDGER.md`. The repair adds an
+exclusive-create, append-only, flush-and-fsync request ledger; commits request intent
+and send-started evidence before entering the future transport; records only closed,
+secret-safe response/failure categories; fails closed on ledger unavailability; and
+requires a complete validated ledger before an inventory can become eligible for
+Gate L2. Fake transports and a public dummy canary are the only request/credential
+surfaces exercised by the repair tests.
+
+The immutable historical V1 plan remains byte-identical at SHA-256
+`c7151737bd029e3ebad45d59dc2d9fcd58f401dc7d8658021f1d384129555c69`.
+Both prior V1 authorizations are blocked historical attempts, and
+`RUN-T07-L1-LAMBDA-INVENTORY-0001` may never be replayed. The fresh, still
+unauthorized contract is plan `PLAN-T07-GATE-L1-LAMBDA-READONLY-INVENTORY-V2`, run
+`RUN-T07-L1-LAMBDA-INVENTORY-0002`, at
+`containers/sira-smoke/lambda/gate-l1-readonly-inventory-plan-v2.json`, SHA-256
+`02d83cb6e303242dec9261146488adfa2b2b026605edc48a95e1fe9ec3b9229e`.
+No account request, real-secret access, cloud mutation, paid compute, SSH, runtime,
+browser, model, SiRA, or scientific execution occurred in Gate L1.1.
+
 ## Authorization and mutation boundary
 
 Current project state keeps paid compute, prototype execution, benchmark execution,
@@ -258,6 +286,13 @@ appropriate to their own operation.
   inventory/selection/no-filesystem/termination contracts, and separated L1 through
   L4 authority. No Lambda account API, secret, cloud mutation, payload, SSH, runtime,
   browser, model, or SiRA action occurred.
+- 2026-08-09: Gate L1.1 repaired the V1 request-evidence defect with a bounded,
+  durable request ledger and a fresh immutable V2/0002 plan. Both V1 attempts and
+  run 0001 remain blocked historical evidence. Local fake-transport tests covered
+  success, reviewed transport and validation failures, ledger I/O failure,
+  outcome-unknown recovery, archive eligibility, run reuse, and secret-canary
+  exclusion. The new plan remains unauthorized; no account request or real-secret
+  access occurred.
 
 ## Decision log
 
@@ -282,21 +317,27 @@ appropriate to their own operation.
   T07's planned substrate. Keep L1 GET-only inventory, L2 host qualification, L3 B2b
   qualification, and L4 live execution as four separate authorization boundaries;
   attach no Lambda persistent filesystem and terminate by exact provider instance ID.
+- 2026-08-09: Under D-021, preserve both V1 Gate L1 attempts, retire run 0001, and
+  require the fresh V2/0002 path to seal a complete durable request ledger before its
+  inventory can bind Gate L2. The V1 observability gap establishes no provider,
+  secret, endpoint, network, or transport fault.
 
 ## Blockers and user actions
 
 T07 has no selected local runtime and no executable local B2a plan. Docker Desktop and
 Colima/Lima remain terminal rejected provenance. The Lambda topology is selected only
-at design level. Gate L1 remains unauthorized; therefore account/workspace, current
-capacity, type/region/image/price, key/ruleset choices, and unrelated running instances
-are unresolved by design. L2 has no executable account-bound plan and L3/L4 remain
-unauthorized.
+at design level. The fresh V2 Gate L1 remains unauthorized; therefore
+account/workspace, current capacity, type/region/image/price, key/ruleset choices, and
+unrelated running instances are unresolved by design. Both V1 attempts are blocked,
+run 0001 is permanently retired, and only a new exact authorization may allow V2/run
+0002. L2 has no executable account-bound plan and L3/L4 remain unauthorized.
 
 ## Next permitted work
 
 There is no further local B1.x design gate. The next permitted T07 work is a fresh user
-decision on the exact Gate L1 GET-only inventory block in
-`docs/harness/T07_GATE_L1_READONLY_INVENTORY_AUTHORIZATION_PACKET.md`. If authorized,
-L1 may produce one redacted inventory and must stop before L2. Gate L2 host
+decision on the exact V2 Gate L1 GET-only inventory block in
+`docs/harness/T07_GATE_L1_V3_AUTHORIZATION_PACKET.md`. If authorized exactly against
+the final clean implementation/packet commit and bound V2 plan hash, L1 may produce
+one redacted inventory plus complete request ledger and must stop before L2. Gate L2 host
 qualification, Gate L3 B2b qualification, Gate L4, both SiRA conditions, and the smoke
 remain blocked pending their own prerequisites and authorizations.

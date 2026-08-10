@@ -18,12 +18,20 @@ Prepared: 2026-08-08
 The profile and both condition plans remain unauthorized. This readiness record and
 the proposed budget are not authorization. The pilot plan is not eligible.
 
-T07 now has a design-only x86_64 Lambda On-Demand Cloud substrate. The next possible
-authorization is Gate L1 read-only account inventory, not this live pair. Gate L2 host
-qualification and Gate L3 no-provider workload probes must succeed before the live
-Gate L4 authorization described below can be considered.
-Gate L1 must archive and verify its redacted evidence on the approved MacBook volume;
-Gate L2 additionally needs a separately reviewed SSH server-host-key trust bootstrap.
+T07 now has a design-only x86_64 Lambda On-Demand Cloud substrate. Two V1 Gate L1
+authorizations are preserved as blocked historical attempts, and
+`RUN-T07-L1-LAMBDA-INVENTORY-0001` is permanently retired. The next possible
+authorization is the fresh V2 read-only account inventory—not this live pair—under
+plan `PLAN-T07-GATE-L1-LAMBDA-READONLY-INVENTORY-V2`, run
+`RUN-T07-L1-LAMBDA-INVENTORY-0002`, and packet
+`docs/harness/T07_GATE_L1_V3_AUTHORIZATION_PACKET.md`. The plan is at
+`containers/sira-smoke/lambda/gate-l1-readonly-inventory-plan-v2.json`, SHA-256
+`02d83cb6e303242dec9261146488adfa2b2b026605edc48a95e1fe9ec3b9229e`, and remains
+unauthorized. Gate L2 host qualification and Gate L3 no-provider workload probes must
+succeed before the live Gate L4 authorization described below can be considered.
+V2 Gate L1 must archive and verify its redacted evidence and complete validated
+request ledger on the approved MacBook volume; Gate L2 additionally needs a
+separately reviewed SSH server-host-key trust bootstrap.
 
 ## Exact user decision fields
 
@@ -141,8 +149,10 @@ the EXP-0001 hypothesis or any RQ-H2K outcome.
   access-controlled smoke retention can proceed, but publication stays blocked.
 - The final repository software/content licenses and publication identity remain open.
 - T07 Lambda account capacity, exact selected price, key/ruleset choice, and host/
-  runtime qualification are unresolved until Gates L1 through L3; SR²AM T11/T12
-  remain scientifically and operationally separate.
+  runtime qualification are unresolved until Gates L1 through L3. The repaired V2
+  inventory is not authorized, and a Gate L2-eligible inventory requires its complete
+  validated and externally sealed request ledger. SR²AM T11/T12 remain scientifically
+  and operationally separate.
 - RQ-H2K external-versus-explicit-model comparison feasibility remains undetermined.
   Missing optional regulation fields do not invalidate EXP-0001 when its primary
   evidence contract is complete.

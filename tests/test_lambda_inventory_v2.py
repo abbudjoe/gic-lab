@@ -21,6 +21,7 @@ from giclab.harness.lambda_inventory_plan import (
     ImplementationArtifactBinding,
     InventoryRunBindingV2,
     ReadOnlyInventoryPlanV2,
+    load_inventory_plan_v2,
     verify_inventory_implementation_v2,
 )
 from giclab.harness.lambda_request_ledger import (
@@ -37,6 +38,8 @@ ROOT = Path(__file__).resolve().parents[1]
 PLAN_SHA256 = "9" * 64
 CANARY = "DUMMY-LAMBDA-SECRET-CANARY"
 RAW_ONLY_CANARY = "DUMMY-RAW-RESPONSE-CANARY"
+COMMITTED_PLAN_V2_SHA256 = "02d83cb6e303242dec9261146488adfa2b2b026605edc48a95e1fe9ec3b9229e"
+IMPLEMENTATION_COMMIT = "0b900213801315f4312105297774b8ea5a6d9f04"
 
 
 def _assert_closed_exception_has_no_canary(
@@ -861,3 +864,17 @@ def test_v1_run_identity_is_burned_and_cannot_bind_v2() -> None:
             authorization_reference="AUTH-T07-GATE-L1-TEST-V3",
             authorization_sha256="8" * 64,
         )
+
+
+def test_committed_v2_plan_binds_frozen_implementation_and_remains_unauthorized() -> None:
+    plan_path = ROOT / "containers/sira-smoke/lambda/gate-l1-readonly-inventory-plan-v2.json"
+    encoded = plan_path.read_bytes()
+    assert len(encoded) == 8_856
+    assert hashlib.sha256(encoded).hexdigest() == COMMITTED_PLAN_V2_SHA256
+    plan = load_inventory_plan_v2(
+        plan_path,
+        expected_sha256=COMMITTED_PLAN_V2_SHA256,
+    )
+    assert plan.implementation_commit == IMPLEMENTATION_COMMIT
+    assert not plan.authorized
+    verify_inventory_implementation_v2(ROOT, plan)
