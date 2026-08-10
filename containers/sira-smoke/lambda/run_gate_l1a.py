@@ -7,13 +7,13 @@ from pathlib import Path
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 SOURCE_ROOT = REPOSITORY_ROOT / "src"
-if not SOURCE_ROOT.is_dir() or REPOSITORY_ROOT != Path(
-    "/Users/joseph/.codex/worktrees/84b1/gic-lab"
+if not (
+    Path("/Users/joseph/.codex/worktrees/84b1/gic-lab") == REPOSITORY_ROOT and SOURCE_ROOT.is_dir()
 ):
     raise SystemExit("Gate L1A launcher repository identity drifted")
 sys.path.insert(0, str(SOURCE_ROOT))
 
-from giclab.harness.lambda_ssh_key_executor import main  # noqa: E402
+from giclab.harness.lambda_ssh_key_executor import main  # noqa: E402, I001
 
 
 if __name__ == "__main__":
