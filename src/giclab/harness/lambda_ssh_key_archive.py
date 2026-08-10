@@ -224,11 +224,7 @@ class FsyncArchiveFinalizationDisposition:
         try:
             descriptor = os.open(
                 path.name,
-                os.O_WRONLY
-                | os.O_CREAT
-                | os.O_EXCL
-                | os.O_APPEND
-                | getattr(os, "O_NOFOLLOW", 0),
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0),
                 0o600,
                 dir_fd=directory_descriptor,
             )
@@ -249,10 +245,7 @@ class FsyncArchiveFinalizationDisposition:
                     event_type=ARCHIVE_FINALIZATION_STARTED,
                     state="started",
                     monotonic_ns=monotonic_ns(),
-                    wall_timestamp_utc=utc_now()
-                    .astimezone(UTC)
-                    .isoformat()
-                    .replace("+00:00", "Z"),
+                    wall_timestamp_utc=utc_now().astimezone(UTC).isoformat().replace("+00:00", "Z"),
                 )
             )
         except Exception:
@@ -298,10 +291,7 @@ class FsyncArchiveFinalizationDisposition:
             event_type=ARCHIVE_FINALIZATION_PASSED,
             state="passed",
             monotonic_ns=self.monotonic_ns(),
-            wall_timestamp_utc=self.utc_now()
-            .astimezone(UTC)
-            .isoformat()
-            .replace("+00:00", "Z"),
+            wall_timestamp_utc=self.utc_now().astimezone(UTC).isoformat().replace("+00:00", "Z"),
         )
         document.update(
             {
@@ -336,10 +326,7 @@ class FsyncArchiveFinalizationDisposition:
             event_type=ARCHIVE_FINALIZATION_FAILED,
             state="failed",
             monotonic_ns=self.monotonic_ns(),
-            wall_timestamp_utc=self.utc_now()
-            .astimezone(UTC)
-            .isoformat()
-            .replace("+00:00", "Z"),
+            wall_timestamp_utc=self.utc_now().astimezone(UTC).isoformat().replace("+00:00", "Z"),
         )
         document.update(
             {
@@ -444,15 +431,17 @@ def validate_gate_l1a_archive_disposition(
         "selection_authorized": False,
         "gate_l2_authorized": False,
     }
-    required_keys = set(_finalization_common(
-        plan,
-        run_binding,
-        sequence=1,
-        event_type=ARCHIVE_FINALIZATION_STARTED,
-        state="started",
-        monotonic_ns=0,
-        wall_timestamp_utc="2026-01-01T00:00:00Z",
-    ))
+    required_keys = set(
+        _finalization_common(
+            plan,
+            run_binding,
+            sequence=1,
+            event_type=ARCHIVE_FINALIZATION_STARTED,
+            state="started",
+            monotonic_ns=0,
+            wall_timestamp_utc="2026-01-01T00:00:00Z",
+        )
+    )
     for sequence, event in enumerate(events, start=1):
         if (
             set(event) != required_keys
