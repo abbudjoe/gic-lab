@@ -16,6 +16,8 @@ from giclab.harness.lambda_ssh_key_fingerprint import (
     API_HOST,
     ARCHIVER_IDENTITY,
     ENTRYPOINT_MODULE,
+    EXECUTION_PYTHON,
+    EXECUTION_WORKING_DIRECTORY,
     EXECUTOR_IDENTITY,
     LEDGER_SCHEMA_RELATIVE_PATH,
     MAX_LEDGER_BYTES,
@@ -286,6 +288,22 @@ def test_one_request_plan_is_exact_when_committed() -> None:
     assert implementation["executor_identity"] == EXECUTOR_IDENTITY
     assert implementation["archive_identity"] == ARCHIVER_IDENTITY
     assert implementation["entrypoint_module"] == ENTRYPOINT_MODULE
+    assert plan.document["execution_contract"] == {
+        "working_directory": EXECUTION_WORKING_DIRECTORY,
+        "argv_prefix": [EXECUTION_PYTHON, "-m", ENTRYPOINT_MODULE],
+        "shell": False,
+        "credential_on_argv": False,
+        "credential_environment_variable": "LAMBDA_API_KEY",
+        "exact_arguments_from_authorization": [
+            "--repository-root",
+            "--plan",
+            "--plan-sha256",
+            "--expected-commit",
+            "--implementation-commit",
+            "--authorization-reference",
+            "--authorization-sha256",
+        ],
+    }
 
 
 def test_module_has_no_account_transport_or_shell_http_primitive() -> None:

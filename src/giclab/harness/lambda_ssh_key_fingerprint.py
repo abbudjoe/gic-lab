@@ -38,6 +38,8 @@ EXECUTOR_IDENTITY: Final = (
 )
 ARCHIVER_IDENTITY: Final = "giclab.harness.lambda_ssh_key_archive.DurableSSHKeyArchiver"
 ENTRYPOINT_MODULE: Final = "giclab.harness.lambda_ssh_key_executor"
+EXECUTION_WORKING_DIRECTORY: Final = "/Users/joseph/.codex/worktrees/84b1/gic-lab"
+EXECUTION_PYTHON: Final = f"{EXECUTION_WORKING_DIRECTORY}/.venv/bin/python"
 
 BASELINE_COMMIT: Final = "ae0ec40cb2da067a66f1a8d3d0e5aca857fd9491"
 MAX_RESPONSE_BYTES: Final = 131_072
@@ -798,6 +800,24 @@ def load_ssh_key_fingerprint_plan(
         "branch": "phase-1/sira-smoke-lambda",
     }:
         raise SSHKeyFingerprintError("one-request run identity drifted")
+    execution = _object(document.get("execution_contract"), context="execution_contract")
+    if execution != {
+        "working_directory": EXECUTION_WORKING_DIRECTORY,
+        "argv_prefix": [EXECUTION_PYTHON, "-m", ENTRYPOINT_MODULE],
+        "shell": False,
+        "credential_on_argv": False,
+        "credential_environment_variable": "LAMBDA_API_KEY",
+        "exact_arguments_from_authorization": [
+            "--repository-root",
+            "--plan",
+            "--plan-sha256",
+            "--expected-commit",
+            "--implementation-commit",
+            "--authorization-reference",
+            "--authorization-sha256",
+        ],
+    }:
+        raise SSHKeyFingerprintError("one-request execution command drifted")
     requests = document.get("requests")
     expected_request: dict[str, object] = {
         "request_id": "ssh-key-fingerprints",
