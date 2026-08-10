@@ -1,0 +1,50 @@
+{
+  "schema_version": "0.1.0",
+  "retrieval_mode": "unauthenticated-first-party-public-document-read",
+  "account_request_count": 0,
+  "openapi": {
+    "url": "https://docs.lambda.ai/api/cloud/spec.json",
+    "retrieved_at_utc": "2026-08-10T14:18:11.958474Z",
+    "bytes": 239644,
+    "sha256": "365488015cf79fda38e1268f44a9e2d4af4fe2794ad3c6878c78a7e1f98caded",
+    "openapi_version": "3.1.0",
+    "declared_api_version": "1.10.0",
+    "relevant_operations": [
+      "GET /api/v1/firewall-rulesets",
+      "POST /api/v1/firewall-rulesets",
+      "GET /api/v1/firewall-rulesets/{id}",
+      "PATCH /api/v1/firewall-rulesets/{id}",
+      "DELETE /api/v1/firewall-rulesets/{id}",
+      "GET /api/v1/firewall-rulesets/global",
+      "PATCH /api/v1/firewall-rulesets/global",
+      "POST /api/v1/instance-operations/launch"
+    ],
+    "image_contract": {
+      "authoritative_identity": "Image.id",
+      "identity_description": "unique image identifier",
+      "region_semantics": "image availability region"
+    },
+    "launch_contract": {
+      "firewall_ruleset_attachment_time": "launch",
+      "firewall_ruleset_region_requirement": "same-region-as-instance"
+    }
+  },
+  "firewall_documentation": {
+    "url": "https://docs.lambda.ai/public-cloud/firewalls/",
+    "retrieved_at_utc": "2026-08-10T14:18:12.111216Z",
+    "bytes": 88233,
+    "sha256": "37fb67fc30565608ca0b2882e023e0e1574c3ebfbc9dadb23e51b89025114623",
+    "source_facts": {
+      "global_rules_apply_workspace_wide": true,
+      "per_instance_rules_are_additive_to_global_rules": true,
+      "per_instance_ruleset_change_after_launch_supported": false,
+      "single_public_ipv4_32_supported": true,
+      "us_south_1_has_distinct_firewall_behavior": true
+    }
+  },
+  "prohibited_observations": {
+    "authenticated_endpoint_called": false,
+    "public_ip_service_called": false,
+    "account_secret_accessed": false
+  }
+}

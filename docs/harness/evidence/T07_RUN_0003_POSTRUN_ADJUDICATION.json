@@ -1,0 +1,705 @@
+{
+  "authorization": {
+    "cloud_mutation_authorized": false,
+    "gate_l2_authorized": false,
+    "paid_compute_authorized": false
+  },
+  "blocking_evidence_gap": {
+    "account_request_authorized": false,
+    "code": "account-ssh-public-key-material-not-retained",
+    "fact": "The sealed run-0003 inventory retains account key names but not account public-key material, so local/account fingerprint equivalence cannot be established.",
+    "minimum_resolution": "A new reviewed and separately authorized minimal read-only evidence plan, or user-provided independently verified account public-key fingerprints, must supply matchable account public-key evidence."
+  },
+  "decision_state": "inventory-evidence-insufficient",
+  "firewall_assessment": {
+    "free_form_descriptions_retained": false,
+    "global_and_per_instance_rules_are_additive": true,
+    "global_rule_count": 4,
+    "no_running_instance_precondition_met": true,
+    "options": [
+      "temporary-global-rule-replacement",
+      "user-permanent-global-cleanup",
+      "no-launch"
+    ],
+    "other_workspace_dependency_attestation_required": true,
+    "per_instance_ruleset_alone_is_sufficient": false,
+    "preferred_option": "temporary-global-rule-replacement",
+    "preferred_option_state": "blocked-human-attestation-and-public-ip",
+    "public_ipv4_placeholder": "<USER_APPROVED_PUBLIC_IPV4/32>",
+    "regional_ruleset_count_observed": 0,
+    "regional_ruleset_is_additive_only": true,
+    "regional_ruleset_requirement_state": "missing-separate-decision-required",
+    "rules": [
+      {
+        "description_classification": "ssh",
+        "is_non_ssh_exposure": false,
+        "is_ssh_rule": true,
+        "ordinal": 1,
+        "port_range": [
+          22,
+          22
+        ],
+        "protocol": "tcp",
+        "source_scope_class": "single-ipv4"
+      },
+      {
+        "description_classification": "custom-network",
+        "is_non_ssh_exposure": true,
+        "is_ssh_rule": false,
+        "ordinal": 2,
+        "port_range": [
+          49100,
+          49100
+        ],
+        "protocol": "tcp",
+        "source_scope_class": "single-ipv4"
+      },
+      {
+        "description_classification": "custom-network",
+        "is_non_ssh_exposure": true,
+        "is_ssh_rule": false,
+        "ordinal": 3,
+        "port_range": [
+          47998,
+          47998
+        ],
+        "protocol": "udp",
+        "source_scope_class": "single-ipv4"
+      },
+      {
+        "description_classification": "custom-network",
+        "is_non_ssh_exposure": true,
+        "is_ssh_rule": false,
+        "ordinal": 4,
+        "port_range": [
+          8210,
+          8210
+        ],
+        "protocol": "tcp",
+        "source_scope_class": "single-ipv4"
+      }
+    ],
+    "run_id": "RUN-T07-L1-LAMBDA-INVENTORY-0003",
+    "running_instance_count_observed": 0,
+    "schema_version": "0.1.0",
+    "source_inventory_sha256": "022835438165e7e6e70dc992d6904f4e8b9448dc933d1d4c3e39ebdcc8914933",
+    "source_network_values_retained": false,
+    "strict_qualification_firewall": false,
+    "strict_regional_ruleset_present": false,
+    "us_south_1_automatically_selectable": false
+  },
+  "gate": "T07-L1.3",
+  "host_key_trust_decision": {
+    "decision_state": "awaiting-user-approval",
+    "fresh_run_owned_known_hosts_required": true,
+    "no_ssh_no_launch_available": true,
+    "preferred_option": "independent-console-fingerprint-verification",
+    "preferred_option_user_action": "After a separately authorized launch, obtain the ED25519 host-key fingerprint inside the authenticated Lambda console or Jupyter terminal and return it for comparison before first SSH login.",
+    "private_host_key_in_cloud_init_allowed": false,
+    "schema_version": "0.1.0",
+    "ssh_keyscan_authorized": false,
+    "strict_host_key_checking_required": true,
+    "tofu_option_state": "blocked-explicit-governance-relaxation-required"
+  },
+  "image_identity_adjudication": {
+    "alias_count": 124,
+    "conflicting_intrinsic_metadata_count": 0,
+    "defect_classification": "verifier_key_bug",
+    "exact_duplicate_extra_rows": 0,
+    "exact_duplicate_group_count": 0,
+    "family_name_groups_with_distinct_ids": 7,
+    "intrinsic_identity_fields": [
+      "name",
+      "family",
+      "version",
+      "architecture"
+    ],
+    "multiplicity_distribution": {
+      "1": 109,
+      "10": 15
+    },
+    "official_availability_field": "Image.region",
+    "official_uniqueness_key": "Image.id",
+    "privacy": {
+      "raw_id_hashes_retained_in_public_record": false,
+      "raw_ids_retained_in_public_record": false,
+      "reversible_aliases_retained_in_public_record": false,
+      "unknown_sensitive_scalars_retained": false
+    },
+    "private_alias_map": {
+      "alias_count": 124,
+      "bytes": 9476,
+      "path": "artifacts/t07/lambda/gate-l1-3/RUN-T07-L1-LAMBDA-INVENTORY-0003/image-id-alias-map.json",
+      "raw_id_hashes_committed": false,
+      "raw_ids_committed": false,
+      "seal_bytes": 340,
+      "seal_path": "artifacts/t07/lambda/gate-l1-3/RUN-T07-L1-LAMBDA-INVENTORY-0003/IMAGE_ALIAS_MAP_SEAL.json",
+      "seal_sha256": "ed3fb1ef3323f2b37150204ef060250e4f9510bbeb976d18d2fd1b8d9894c0b5",
+      "sha256": "9f37b9412110cc7433d5339cf4d8b1eadc92743eaa32db6bf8e4c59024a79d5f",
+      "state": "ignored-sealed-local-evidence"
+    },
+    "raw_images_response_state": "not-retained",
+    "raw_row_count": 259,
+    "region_availability_group_count": 15,
+    "row_field_names": [
+      "architecture",
+      "family",
+      "id",
+      "name",
+      "region",
+      "version"
+    ],
+    "row_field_types": {
+      "architecture": "string",
+      "family": "string",
+      "id": "string",
+      "name": "string",
+      "region": "object",
+      "version": "string"
+    },
+    "run_id": "RUN-T07-L1-LAMBDA-INVENTORY-0003",
+    "schema_version": "0.1.0",
+    "source_inventory_sha256": "022835438165e7e6e70dc992d6904f4e8b9448dc933d1d4c3e39ebdcc8914933",
+    "unique_raw_id_count": 124
+  },
+  "prohibited_operations_observed": {
+    "account_requests": 0,
+    "browser_actions": 0,
+    "cloud_mutations": 0,
+    "container_runs": 0,
+    "model_api_calls": 0,
+    "private_key_byte_reads": 0,
+    "public_ip_requests": 0,
+    "scientific_executions": 0,
+    "sira_executions": 0,
+    "ssh_operations": 0
+  },
+  "resource_candidate_matrix": {
+    "candidate_selected": false,
+    "fresh_price_and_availability_revalidation_required": true,
+    "near_misses": [
+      {
+        "instance_type_name": "cpu_4x_general",
+        "price_cents_per_hour": 20,
+        "reasons": [
+          "vcpus-below-8",
+          "currently-unavailable"
+        ],
+        "region_name": null
+      },
+      {
+        "instance_type_name": "cpu_4x_generalx",
+        "price_cents_per_hour": 20,
+        "reasons": [
+          "vcpus-below-8",
+          "root-storage-below-100-gib",
+          "currently-unavailable"
+        ],
+        "region_name": null
+      },
+      {
+        "instance_type_name": "gpu_1x_rtx6000",
+        "price_cents_per_hour": 69,
+        "reasons": [
+          "currently-unavailable"
+        ],
+        "region_name": null
+      },
+      {
+        "instance_type_name": "gpu_1x_a6000",
+        "price_cents_per_hour": 109,
+        "reasons": [
+          "currently-unavailable"
+        ],
+        "region_name": null
+      },
+      {
+        "instance_type_name": "gpu_1x_a100",
+        "price_cents_per_hour": 199,
+        "reasons": [
+          "price-over-150-cents-per-hour",
+          "currently-unavailable"
+        ],
+        "region_name": null
+      },
+      {
+        "instance_type_name": "gpu_1x_a100_sxm4",
+        "price_cents_per_hour": 199,
+        "reasons": [
+          "price-over-150-cents-per-hour"
+        ],
+        "region_name": null
+      },
+      {
+        "instance_type_name": "gpu_2x_a6000",
+        "price_cents_per_hour": 218,
+        "reasons": [
+          "price-over-150-cents-per-hour",
+          "multi-gpu-excluded",
+          "currently-unavailable"
+        ],
+        "region_name": null
+      },
+      {
+        "instance_type_name": "gpu_1x_gh200",
+        "price_cents_per_hour": 229,
+        "reasons": [
+          "architecture-not-x86_64",
+          "price-over-150-cents-per-hour",
+          "currently-unavailable"
+        ],
+        "region_name": null
+      },
+      {
+        "instance_type_name": "gpu_1x_h100_pcie",
+        "price_cents_per_hour": 329,
+        "reasons": [
+          "price-over-150-cents-per-hour",
+          "currently-unavailable"
+        ],
+        "region_name": null
+      },
+      {
+        "instance_type_name": "gpu_2x_a100",
+        "price_cents_per_hour": 398,
+        "reasons": [
+          "price-over-150-cents-per-hour",
+          "multi-gpu-excluded",
+          "currently-unavailable"
+        ],
+        "region_name": null
+      },
+      {
+        "instance_type_name": "gpu_1x_h100_sxm5",
+        "price_cents_per_hour": 429,
+        "reasons": [
+          "price-over-150-cents-per-hour"
+        ],
+        "region_name": null
+      },
+      {
+        "instance_type_name": "gpu_4x_a6000",
+        "price_cents_per_hour": 436,
+        "reasons": [
+          "price-over-150-cents-per-hour",
+          "multi-gpu-excluded",
+          "currently-unavailable"
+        ],
+        "region_name": null
+      },
+      {
+        "instance_type_name": "gpu_8x_v100",
+        "price_cents_per_hour": 632,
+        "reasons": [
+          "price-over-150-cents-per-hour",
+          "multi-gpu-excluded",
+          "currently-unavailable"
+        ],
+        "region_name": null
+      },
+      {
+        "instance_type_name": "gpu_8x_v100_n",
+        "price_cents_per_hour": 632,
+        "reasons": [
+          "price-over-150-cents-per-hour",
+          "multi-gpu-excluded",
+          "currently-unavailable"
+        ],
+        "region_name": null
+      },
+      {
+        "instance_type_name": "gpu_1x_b200_sxm6",
+        "price_cents_per_hour": 699,
+        "reasons": [
+          "price-over-150-cents-per-hour",
+          "currently-unavailable"
+        ],
+        "region_name": null
+      },
+      {
+        "instance_type_name": "gpu_4x_a100",
+        "price_cents_per_hour": 796,
+        "reasons": [
+          "price-over-150-cents-per-hour",
+          "multi-gpu-excluded",
+          "currently-unavailable"
+        ],
+        "region_name": null
+      },
+      {
+        "instance_type_name": "gpu_2x_h100_sxm5",
+        "price_cents_per_hour": 838,
+        "reasons": [
+          "price-over-150-cents-per-hour",
+          "multi-gpu-excluded"
+        ],
+        "region_name": null
+      },
+      {
+        "instance_type_name": "gpu_2x_b200_sxm6",
+        "price_cents_per_hour": 1378,
+        "reasons": [
+          "price-over-150-cents-per-hour",
+          "multi-gpu-excluded",
+          "currently-unavailable"
+        ],
+        "region_name": null
+      },
+      {
+        "instance_type_name": "gpu_8x_a100",
+        "price_cents_per_hour": 1592,
+        "reasons": [
+          "price-over-150-cents-per-hour",
+          "multi-gpu-excluded"
+        ],
+        "region_name": null
+      },
+      {
+        "instance_type_name": "gpu_4x_h100_sxm5",
+        "price_cents_per_hour": 1636,
+        "reasons": [
+          "price-over-150-cents-per-hour",
+          "multi-gpu-excluded"
+        ],
+        "region_name": null
+      },
+      {
+        "instance_type_name": "gpu_8x_a100_80gb_sxm4",
+        "price_cents_per_hour": 2232,
+        "reasons": [
+          "price-over-150-cents-per-hour",
+          "multi-gpu-excluded"
+        ],
+        "region_name": null
+      },
+      {
+        "instance_type_name": "gpu_8x_h100_sxm5",
+        "price_cents_per_hour": 3192,
+        "reasons": [
+          "price-over-150-cents-per-hour",
+          "multi-gpu-excluded",
+          "currently-unavailable"
+        ],
+        "region_name": null
+      },
+      {
+        "instance_type_name": "gpu_8x_b200_sxm6",
+        "price_cents_per_hour": 5352,
+        "reasons": [
+          "price-over-150-cents-per-hour",
+          "multi-gpu-excluded",
+          "currently-unavailable"
+        ],
+        "region_name": null
+      }
+    ],
+    "policy": {
+      "architecture": "x86_64",
+      "maximum_gpus": 1,
+      "maximum_price_cents_per_hour": 150,
+      "minimum_memory_gib": 16,
+      "minimum_root_storage_gib": 100,
+      "minimum_vcpus": 8,
+      "persistent_filesystem": false,
+      "provider_compute_hard_cap_cents": 200,
+      "qualification_wall_seconds": 3600,
+      "ranking": [
+        "price_cents_per_hour",
+        "instance_type_name",
+        "region_name",
+        "image_alias"
+      ],
+      "required_image_family": "gpu-base-22-04"
+    },
+    "qualifying_candidates": [
+      {
+        "architecture": "x86_64",
+        "gpus": 1,
+        "image_alias": "img-0062",
+        "image_family": "gpu-base-22-04",
+        "image_version": "22.4.5-1459",
+        "instance_type_name": "gpu_1x_a10",
+        "memory_gib": 200,
+        "observed_available": true,
+        "persistent_filesystem": false,
+        "price_cents_per_hour": 129,
+        "provider_docker_path_support": "documented-gpu-base-22-04",
+        "qualification_list_price_cap_cents": 129,
+        "region_name": "us-east-1",
+        "storage_gib": 1400,
+        "vcpus": 30
+      },
+      {
+        "architecture": "x86_64",
+        "gpus": 1,
+        "image_alias": "img-0101",
+        "image_family": "gpu-base-22-04",
+        "image_version": "22.4.5-1722",
+        "instance_type_name": "gpu_1x_a10",
+        "memory_gib": 200,
+        "observed_available": true,
+        "persistent_filesystem": false,
+        "price_cents_per_hour": 129,
+        "provider_docker_path_support": "documented-gpu-base-22-04",
+        "qualification_list_price_cap_cents": 129,
+        "region_name": "us-east-1",
+        "storage_gib": 1400,
+        "vcpus": 30
+      },
+      {
+        "architecture": "x86_64",
+        "gpus": 1,
+        "image_alias": "img-0111",
+        "image_family": "gpu-base-22-04",
+        "image_version": "22.4.5-2141",
+        "instance_type_name": "gpu_1x_a10",
+        "memory_gib": 200,
+        "observed_available": true,
+        "persistent_filesystem": false,
+        "price_cents_per_hour": 129,
+        "provider_docker_path_support": "documented-gpu-base-22-04",
+        "qualification_list_price_cap_cents": 129,
+        "region_name": "us-east-1",
+        "storage_gib": 1400,
+        "vcpus": 30
+      },
+      {
+        "architecture": "x86_64",
+        "gpus": 1,
+        "image_alias": "img-0062",
+        "image_family": "gpu-base-22-04",
+        "image_version": "22.4.5-1459",
+        "instance_type_name": "gpu_1x_a10",
+        "memory_gib": 200,
+        "observed_available": true,
+        "persistent_filesystem": false,
+        "price_cents_per_hour": 129,
+        "provider_docker_path_support": "documented-gpu-base-22-04",
+        "qualification_list_price_cap_cents": 129,
+        "region_name": "us-west-1",
+        "storage_gib": 1400,
+        "vcpus": 30
+      },
+      {
+        "architecture": "x86_64",
+        "gpus": 1,
+        "image_alias": "img-0101",
+        "image_family": "gpu-base-22-04",
+        "image_version": "22.4.5-1722",
+        "instance_type_name": "gpu_1x_a10",
+        "memory_gib": 200,
+        "observed_available": true,
+        "persistent_filesystem": false,
+        "price_cents_per_hour": 129,
+        "provider_docker_path_support": "documented-gpu-base-22-04",
+        "qualification_list_price_cap_cents": 129,
+        "region_name": "us-west-1",
+        "storage_gib": 1400,
+        "vcpus": 30
+      },
+      {
+        "architecture": "x86_64",
+        "gpus": 1,
+        "image_alias": "img-0111",
+        "image_family": "gpu-base-22-04",
+        "image_version": "22.4.5-2141",
+        "instance_type_name": "gpu_1x_a10",
+        "memory_gib": 200,
+        "observed_available": true,
+        "persistent_filesystem": false,
+        "price_cents_per_hour": 129,
+        "provider_docker_path_support": "documented-gpu-base-22-04",
+        "qualification_list_price_cap_cents": 129,
+        "region_name": "us-west-1",
+        "storage_gib": 1400,
+        "vcpus": 30
+      }
+    ],
+    "run_id": "RUN-T07-L1-LAMBDA-INVENTORY-0003",
+    "schema_version": "0.1.0",
+    "source_inventory_sha256": "022835438165e7e6e70dc992d6904f4e8b9448dc933d1d4c3e39ebdcc8914933",
+    "top_three": [
+      {
+        "architecture": "x86_64",
+        "gpus": 1,
+        "image_alias": "img-0062",
+        "image_family": "gpu-base-22-04",
+        "image_version": "22.4.5-1459",
+        "instance_type_name": "gpu_1x_a10",
+        "memory_gib": 200,
+        "observed_available": true,
+        "persistent_filesystem": false,
+        "price_cents_per_hour": 129,
+        "provider_docker_path_support": "documented-gpu-base-22-04",
+        "qualification_list_price_cap_cents": 129,
+        "region_name": "us-east-1",
+        "storage_gib": 1400,
+        "vcpus": 30
+      },
+      {
+        "architecture": "x86_64",
+        "gpus": 1,
+        "image_alias": "img-0101",
+        "image_family": "gpu-base-22-04",
+        "image_version": "22.4.5-1722",
+        "instance_type_name": "gpu_1x_a10",
+        "memory_gib": 200,
+        "observed_available": true,
+        "persistent_filesystem": false,
+        "price_cents_per_hour": 129,
+        "provider_docker_path_support": "documented-gpu-base-22-04",
+        "qualification_list_price_cap_cents": 129,
+        "region_name": "us-east-1",
+        "storage_gib": 1400,
+        "vcpus": 30
+      },
+      {
+        "architecture": "x86_64",
+        "gpus": 1,
+        "image_alias": "img-0111",
+        "image_family": "gpu-base-22-04",
+        "image_version": "22.4.5-2141",
+        "instance_type_name": "gpu_1x_a10",
+        "memory_gib": 200,
+        "observed_available": true,
+        "persistent_filesystem": false,
+        "price_cents_per_hour": 129,
+        "provider_docker_path_support": "documented-gpu-base-22-04",
+        "qualification_list_price_cap_cents": 129,
+        "region_name": "us-east-1",
+        "storage_gib": 1400,
+        "vcpus": 30
+      }
+    ],
+    "us_south_1_automatically_selectable": false
+  },
+  "run_id": "RUN-T07-L1-LAMBDA-INVENTORY-0003",
+  "schema_version": "0.1.0",
+  "source_evidence": {
+    "external_copy_record_sha256": "76d8511282962cb6fdc4f72a63eaf41e7e63239acb9fa38e030f51057cb8a0e7",
+    "external_seal_sha256": "3347b8d03d0f937111de92ef79286c7fbcb02027f652f35ba42ac337cf8f7bd5",
+    "inventory": {
+      "bytes": 59653,
+      "path": "artifacts/t07/lambda/gate-l1/RUN-T07-L1-LAMBDA-INVENTORY-0003/inventory-redacted.json",
+      "sha256": "022835438165e7e6e70dc992d6904f4e8b9448dc933d1d4c3e39ebdcc8914933"
+    },
+    "schema_extension_report": {
+      "bytes": 1863,
+      "location": "inventory-redacted.json#/schema_extension_report/report",
+      "sha256": "20f035039e633e5ef81c544f439b8fac6dc08ee4dafce1eacd2646df0e3a9263"
+    },
+    "request_ledger": {
+      "bytes": 32287,
+      "events": 44,
+      "path": "artifacts/t07/lambda/gate-l1/RUN-T07-L1-LAMBDA-INVENTORY-0003/request-ledger.jsonl",
+      "sha256": "1f94068bdb1d1d2af0075d50c1a0c06eb1c077d4128f90bdc16fd571fa6af707"
+    },
+    "running_instances_observed": 0,
+    "seven_http_200_schema_valid_outcomes": true,
+    "source_destination_equal": true
+  },
+  "ssh_key_match": {
+    "account_key_matches": [
+      {
+        "account_public_key_retained": false,
+        "lambda_key_name": "aic-codex-lambda",
+        "match_state": "evidence_unavailable",
+        "matching_fingerprint": null,
+        "matching_local_public_key_path": null,
+        "private_key_bytes_accessed": false,
+        "same_stem_private_file_present": null
+      },
+      {
+        "account_public_key_retained": false,
+        "lambda_key_name": "codex-fawx-20260527",
+        "match_state": "evidence_unavailable",
+        "matching_fingerprint": null,
+        "matching_local_public_key_path": null,
+        "private_key_bytes_accessed": false,
+        "same_stem_private_file_present": null
+      },
+      {
+        "account_public_key_retained": false,
+        "lambda_key_name": "fractal-lambda-codex",
+        "match_state": "evidence_unavailable",
+        "matching_fingerprint": null,
+        "matching_local_public_key_path": null,
+        "private_key_bytes_accessed": false,
+        "same_stem_private_file_present": null
+      }
+    ],
+    "local_public_keys": [
+      {
+        "algorithm": "ssh-ed25519",
+        "fingerprint": "SHA256:jZS7ZqMUWT/mUf/2J80DuXvKlOIvRSKjSlc+qaVUycU",
+        "mode": "0644",
+        "owner_class": "current-user",
+        "path": "~/.ssh/fractal_lambda_ed25519.pub",
+        "private_key_bytes_accessed": false,
+        "same_stem_private_file_present": true
+      },
+      {
+        "algorithm": "ssh-rsa",
+        "fingerprint": "SHA256:rPdA5jGuJ1LbCcepfOS4qOaGqBtgiFAjpVVfLYKgndY",
+        "mode": "0644",
+        "owner_class": "current-user",
+        "path": "~/.ssh/google_compute_engine.pub",
+        "private_key_bytes_accessed": false,
+        "same_stem_private_file_present": true
+      },
+      {
+        "algorithm": "ssh-ed25519",
+        "fingerprint": "SHA256:v/BRQtLI4irTS9DzfsHfGlMy7IHlZvd6WhF3Qa/IGVo",
+        "mode": "0644",
+        "owner_class": "current-user",
+        "path": "~/.ssh/id_ed25519.pub",
+        "private_key_bytes_accessed": false,
+        "same_stem_private_file_present": true
+      },
+      {
+        "algorithm": "ssh-ed25519",
+        "fingerprint": "SHA256:znqRTXzIMkq7nYkZfJPPfoh4QrOUiuPVuk+06kGA56g",
+        "mode": "0644",
+        "owner_class": "current-user",
+        "path": "~/.ssh/id_ed25519_github.pub",
+        "private_key_bytes_accessed": false,
+        "same_stem_private_file_present": true
+      },
+      {
+        "algorithm": "ssh-ed25519",
+        "fingerprint": "SHA256:ESvp3ohE6ZYWkB1nxg7EDfbaJmcWwZneb9LvN/cfAd0",
+        "mode": "0644",
+        "owner_class": "current-user",
+        "path": "~/.ssh/jarvis_tailscale.pub",
+        "private_key_bytes_accessed": false,
+        "same_stem_private_file_present": true
+      },
+      {
+        "algorithm": "ssh-rsa",
+        "fingerprint": "SHA256:34/DLwx96bxIRXJwj3JsS9izW3rmcrCbL8SdjONhfm0",
+        "mode": "0644",
+        "owner_class": "current-user",
+        "path": "~/.ssh/prime_codex_rsa_20260517.pub",
+        "private_key_bytes_accessed": false,
+        "same_stem_private_file_present": true
+      },
+      {
+        "algorithm": "ssh-ed25519",
+        "fingerprint": "SHA256:omJTSzs1UVrzRxFW9pCbWKAtXSnYwYExi2tMxOj1tX8",
+        "mode": "0644",
+        "owner_class": "current-user",
+        "path": "~/.ssh/real2sim_codex_ed25519.pub",
+        "private_key_bytes_accessed": false,
+        "same_stem_private_file_present": true
+      }
+    ],
+    "private_key_bytes_accessed": false,
+    "recommended_lambda_key_name": null,
+    "run_id": "RUN-T07-L1-LAMBDA-INVENTORY-0003",
+    "schema_version": "0.1.0",
+    "selection_state": "blocked",
+    "source_inventory_sha256": "022835438165e7e6e70dc992d6904f4e8b9448dc933d1d4c3e39ebdcc8914933",
+    "ssh_agent_used": false,
+    "ssh_invoked": false
+  }
+}

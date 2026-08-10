@@ -22,19 +22,28 @@ the proposed budget are not authorization. The pilot plan is not eligible.
 
 T07 now has a design-only x86_64 Lambda On-Demand Cloud substrate. The V1/V2 Gate L1
 plans and runs are preserved as blocked historical evidence; runs 0001 and 0002 are
-permanently retired. Run 0002's missing raw response makes its exact schema mismatch
-`unadjudicated_raw_body_absent`. The next possible authorization is the fresh V3
-seven-GET read-only account inventory—not this live pair—under plan
-`PLAN-T07-GATE-L1-LAMBDA-READONLY-INVENTORY-V3`, run
-`RUN-T07-L1-LAMBDA-INVENTORY-0003`, and packet
-`docs/harness/T07_GATE_L1_V4_AUTHORIZATION_PACKET.md`. The plan is at
-`containers/sira-smoke/lambda/gate-l1-readonly-inventory-plan-v3.json`, SHA-256
-`b5ec82aaa84882a7c3269ebdb695a6c694f891d66d367c05f82eaf9797515331`, and remains
-unauthorized. Gate L2 host qualification and Gate L3 no-provider workload probes must
-succeed before the live Gate L4 authorization described below can be considered.
-V3 Gate L1 must archive and verify its redacted evidence and complete validated
-request ledger on the approved MacBook volume; Gate L2 additionally needs a
-separately reviewed SSH server-host-key trust bootstrap.
+permanently retired. Authorized V3 run `RUN-T07-L1-LAMBDA-INVENTORY-0003` completed
+all seven GETs and externally sealed its schema-valid inventory and complete request
+ledger. It is historical and nonreplayable.
+
+Gate L1.3 repaired the post-run image projection without changing run 0003: 259
+regional availability rows map to 124 nonconflicting opaque aliases, and six
+`gpu_1x_a10` tuples satisfy the fixed resource policy at the observed USD 1.29/hour
+price. The global firewall remains non-strict because three rules expose non-SSH
+ports, and no same-region per-instance ruleset exists. A future Gate L2 design must
+preserve both global strictness and D-020's additive regional-ruleset requirement,
+freshly prove zero running instances account-wide, and require same-instance terminal
+evidence before restoring the sealed original globals. Most importantly, the
+privacy-minimized inventory retained account key names
+without account public-key material, so no local/account fingerprint match can be
+established. The current infrastructure decision state is therefore
+`inventory-evidence-insufficient`, not ready for Gate L2 authorization.
+
+Gate L2 requires a fresh evidence/decision step for matchable account fingerprints,
+then exact user choices for candidate, SSH key, global-firewall option, the missing
+regional-ruleset lifecycle or an explicit governance supersession, public `/32`, and
+host-key trust. Gate L2 host qualification and Gate L3 no-provider workload probes
+must succeed before the live Gate L4 authorization described below can be considered.
 
 ## Exact user decision fields
 
@@ -151,11 +160,11 @@ the EXP-0001 hypothesis or any RQ-H2K outcome.
 - Dataset and trace public-release licensing/privacy rules remain unresolved; private,
   access-controlled smoke retention can proceed, but publication stays blocked.
 - The final repository software/content licenses and publication identity remain open.
-- T07 Lambda account capacity, exact selected price, key/ruleset choice, and host/
-  runtime qualification are unresolved until Gates L1 through L3. The repaired V3
-  inventory is not authorized, and a Gate L2-eligible inventory requires its complete
-  validated and externally sealed request ledger. SR²AM T11/T12 remain scientifically
-  and operationally separate.
+- T07 Lambda capacity and price were observed but require fresh prelaunch
+  revalidation. No candidate, SSH key, firewall option, public `/32`, or host-key
+  method is selected. Gate L2 is additionally blocked because run 0003 contains no
+  account public-key material for local fingerprint matching. SR²AM T11/T12 remain
+  scientifically and operationally separate.
 - RQ-H2K external-versus-explicit-model comparison feasibility remains undetermined.
   Missing optional regulation fields do not invalidate EXP-0001 when its primary
   evidence contract is complete.

@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gic-lab.invalid/schemas/t07-lambda-firewall-assessment.schema.json",
+  "title": "T07 Lambda firewall assessment",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "source_inventory_sha256",
+    "global_rule_count",
+    "rules",
+    "strict_qualification_firewall",
+    "per_instance_ruleset_alone_is_sufficient",
+    "global_and_per_instance_rules_are_additive",
+    "regional_ruleset_count_observed",
+    "strict_regional_ruleset_present",
+    "regional_ruleset_is_additive_only",
+    "regional_ruleset_requirement_state",
+    "running_instance_count_observed",
+    "no_running_instance_precondition_met",
+    "preferred_option",
+    "preferred_option_state",
+    "public_ipv4_placeholder",
+    "other_workspace_dependency_attestation_required",
+    "us_south_1_automatically_selectable",
+    "source_network_values_retained",
+    "free_form_descriptions_retained",
+    "options"
+  ],
+  "properties": {
+    "schema_version": { "const": "0.1.0" },
+    "run_id": { "const": "RUN-T07-L1-LAMBDA-INVENTORY-0003" },
+    "source_inventory_sha256": {
+      "const": "022835438165e7e6e70dc992d6904f4e8b9448dc933d1d4c3e39ebdcc8914933"
+    },
+    "global_rule_count": { "type": "integer", "minimum": 0 },
+    "rules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ordinal",
+          "protocol",
+          "port_range",
+          "source_scope_class",
+          "description_classification",
+          "is_ssh_rule",
+          "is_non_ssh_exposure"
+        ],
+        "properties": {
+          "ordinal": { "type": "integer", "minimum": 1 },
+          "protocol": { "enum": ["tcp", "udp", "icmp", "all"] },
+          "port_range": {
+            "oneOf": [
+              { "type": "null" },
+              {
+                "type": "array",
+                "prefixItems": [
+                  { "type": "integer", "minimum": 1, "maximum": 65535 },
+                  { "type": "integer", "minimum": 1, "maximum": 65535 }
+                ],
+                "items": false,
+                "minItems": 2,
+                "maxItems": 2
+              }
+            ]
+          },
+          "source_scope_class": { "enum": ["any-ipv4", "single-ipv4", "restricted-cidr"] },
+          "description_classification": {
+            "enum": ["ssh", "http", "https", "icmp", "all-protocol", "custom-network"]
+          },
+          "is_ssh_rule": { "type": "boolean" },
+          "is_non_ssh_exposure": { "type": "boolean" }
+        }
+      }
+    },
+    "strict_qualification_firewall": { "type": "boolean" },
+    "per_instance_ruleset_alone_is_sufficient": { "const": false },
+    "global_and_per_instance_rules_are_additive": { "const": true },
+    "regional_ruleset_count_observed": { "const": 0 },
+    "strict_regional_ruleset_present": { "const": false },
+    "regional_ruleset_is_additive_only": { "const": true },
+    "regional_ruleset_requirement_state": {
+      "const": "missing-separate-decision-required"
+    },
+    "running_instance_count_observed": { "type": "integer", "minimum": 0 },
+    "no_running_instance_precondition_met": { "type": "boolean" },
+    "preferred_option": { "const": "temporary-global-rule-replacement" },
+    "preferred_option_state": { "const": "blocked-human-attestation-and-public-ip" },
+    "public_ipv4_placeholder": { "const": "<USER_APPROVED_PUBLIC_IPV4/32>" },
+    "other_workspace_dependency_attestation_required": { "const": true },
+    "us_south_1_automatically_selectable": { "const": false },
+    "source_network_values_retained": { "const": false },
+    "free_form_descriptions_retained": { "const": false },
+    "options": {
+      "const": [
+        "temporary-global-rule-replacement",
+        "user-permanent-global-cleanup",
+        "no-launch"
+      ]
+    }
+  }
+}

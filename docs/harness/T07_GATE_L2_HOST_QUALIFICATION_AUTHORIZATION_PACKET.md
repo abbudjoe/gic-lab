@@ -1,7 +1,14 @@
 # T07 Gate L2 Lambda host qualification packet
 
-Status: **design complete; unauthorized; non-account-bound; non-executable until an
-authorized Gate L1 succeeds**
+Status: **superseded blocked provenance; unauthorized; non-executable**
+
+Gate L1 run `RUN-T07-L1-LAMBDA-INVENTORY-0003` has since completed and been sealed.
+Its Gate L1.3 adjudication supersedes this packet's assumptions about globally unique
+image rows, an existing regional SSH-only ruleset, and available account public-key
+evidence. The active account-bound decision record is
+`docs/harness/T07_GATE_L2_RESOURCE_AND_SECURITY_DECISION_PACKET.md`, whose terminal
+state is `inventory-evidence-insufficient`. This historical packet supplies design
+provenance only and must not be copied, authorized, or executed.
 
 This is a requirements packet, not a launch plan. It deliberately has no Gate L2 plan
 ID/hash, authorization reference, sealed Gate L1 binding, instance type, region,

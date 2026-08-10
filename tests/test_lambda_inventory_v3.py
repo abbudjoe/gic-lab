@@ -694,7 +694,13 @@ def test_v1_v2_plans_and_run_0002_ledger_remain_byte_identical() -> None:
     assert hashlib.sha256(ledger.read_bytes()).hexdigest() == (
         "a1cb81ce286881c33d879ce73787e755eed8ecd1f64ca2b9eaca7d39824a2c94"
     )
-    assert not (ROOT / "artifacts/t07/lambda/gate-l1/RUN-T07-L1-LAMBDA-INVENTORY-0003").exists()
+    run3 = ROOT / "artifacts/t07/lambda/gate-l1/RUN-T07-L1-LAMBDA-INVENTORY-0003"
+    assert hashlib.sha256((run3 / "inventory-redacted.json").read_bytes()).hexdigest() == (
+        "022835438165e7e6e70dc992d6904f4e8b9448dc933d1d4c3e39ebdcc8914933"
+    )
+    assert hashlib.sha256((run3 / "request-ledger.jsonl").read_bytes()).hexdigest() == (
+        "1f94068bdb1d1d2af0075d50c1a0c06eb1c077d4128f90bdc16fd571fa6af707"
+    )
 
 
 def test_historical_adjudication_is_additive_and_never_makes_run_0002_eligible() -> None:

@@ -18,10 +18,13 @@ planned_execution_substrate:
   architecture: x86_64
   persistent_filesystem: false
   gate_l1_authorized: false
+  gate_l1_evidence_state: complete-externally-sealed
   gate_l2_authorized: false
+  gate_l2_decision_state: inventory-evidence-insufficient
   gate_l3_state: requirements-only
   gate_l4_authorized: false
   local_alternatives: terminal-rejected
   decision_document: docs/harness/T07_GATE_L0_LAMBDA_HOST_DECISION.md
+  security_decision_document: docs/harness/T07_GATE_L2_RESOURCE_AND_SECURITY_DECISION_PACKET.md
 authoritative_plan: docs/exec-plans/active/PHASE_1_ARTIFACT_EXECUTION.md
 last_updated: "2026-08-10"

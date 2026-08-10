@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gic-lab.invalid/schemas/t07-lambda-ssh-key-match.schema.json",
+  "title": "T07 Lambda SSH key match",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "source_inventory_sha256",
+    "local_public_keys",
+    "account_key_matches",
+    "recommended_lambda_key_name",
+    "selection_state",
+    "private_key_bytes_accessed",
+    "ssh_agent_used",
+    "ssh_invoked"
+  ],
+  "properties": {
+    "schema_version": { "const": "0.1.0" },
+    "run_id": { "const": "RUN-T07-L1-LAMBDA-INVENTORY-0003" },
+    "source_inventory_sha256": {
+      "const": "022835438165e7e6e70dc992d6904f4e8b9448dc933d1d4c3e39ebdcc8914933"
+    },
+    "local_public_keys": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "algorithm",
+          "fingerprint",
+          "mode",
+          "owner_class",
+          "same_stem_private_file_present",
+          "private_key_bytes_accessed"
+        ],
+        "properties": {
+          "path": { "type": "string", "pattern": "^~/.ssh/[^/]+\\.pub$" },
+          "algorithm": { "type": "string", "minLength": 1 },
+          "fingerprint": { "type": "string", "pattern": "^SHA256:[A-Za-z0-9+/]+$" },
+          "mode": { "type": "string", "pattern": "^[0-7]{4}$" },
+          "owner_class": { "enum": ["current-user", "different-user"] },
+          "same_stem_private_file_present": { "type": "boolean" },
+          "private_key_bytes_accessed": { "const": false }
+        }
+      }
+    },
+    "account_key_matches": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "lambda_key_name",
+          "match_state",
+          "matching_local_public_key_path",
+          "matching_fingerprint",
+          "same_stem_private_file_present",
+          "private_key_bytes_accessed",
+          "account_public_key_retained"
+        ],
+        "properties": {
+          "lambda_key_name": { "type": "string", "minLength": 1 },
+          "match_state": {
+            "enum": ["unique_match", "no_match", "multiple_matches", "evidence_unavailable"]
+          },
+          "matching_local_public_key_path": {
+            "type": ["string", "null"],
+            "pattern": "^~/.ssh/[^/]+\\.pub$"
+          },
+          "matching_fingerprint": {
+            "type": ["string", "null"],
+            "pattern": "^SHA256:[A-Za-z0-9+/]+$"
+          },
+          "same_stem_private_file_present": { "type": ["boolean", "null"] },
+          "private_key_bytes_accessed": { "const": false },
+          "account_public_key_retained": { "const": false }
+        }
+      }
+    },
+    "recommended_lambda_key_name": { "type": ["string", "null"] },
+    "selection_state": { "enum": ["unique-match-awaiting-user-approval", "blocked"] },
+    "private_key_bytes_accessed": { "const": false },
+    "ssh_agent_used": { "const": false },
+    "ssh_invoked": { "const": false }
+  }
+}

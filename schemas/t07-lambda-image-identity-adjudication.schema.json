@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gic-lab.invalid/schemas/t07-lambda-image-identity-adjudication.schema.json",
+  "title": "T07 Lambda image identity adjudication",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "source_inventory_sha256",
+    "raw_images_response_state",
+    "defect_classification",
+    "official_uniqueness_key",
+    "official_availability_field",
+    "intrinsic_identity_fields",
+    "raw_row_count",
+    "unique_raw_id_count",
+    "alias_count",
+    "multiplicity_distribution",
+    "region_availability_group_count",
+    "exact_duplicate_group_count",
+    "exact_duplicate_extra_rows",
+    "conflicting_intrinsic_metadata_count",
+    "family_name_groups_with_distinct_ids",
+    "row_field_names",
+    "row_field_types",
+    "privacy",
+    "private_alias_map"
+  ],
+  "properties": {
+    "schema_version": { "const": "0.1.0" },
+    "run_id": { "const": "RUN-T07-L1-LAMBDA-INVENTORY-0003" },
+    "source_inventory_sha256": {
+      "const": "022835438165e7e6e70dc992d6904f4e8b9448dc933d1d4c3e39ebdcc8914933"
+    },
+    "raw_images_response_state": { "const": "not-retained" },
+    "defect_classification": {
+      "enum": [
+        "verifier_key_bug",
+        "exact_duplicate_api_rows",
+        "distinct_raw_ids_collapsed_to_same_redacted_placeholder",
+        "same_raw_id_conflicting_metadata",
+        "duplicate_family_name_not_duplicate_id"
+      ]
+    },
+    "official_uniqueness_key": { "const": "Image.id" },
+    "official_availability_field": { "const": "Image.region" },
+    "intrinsic_identity_fields": {
+      "const": ["name", "family", "version", "architecture"]
+    },
+    "raw_row_count": { "type": "integer", "minimum": 1 },
+    "unique_raw_id_count": { "type": "integer", "minimum": 1 },
+    "alias_count": { "type": "integer", "minimum": 1 },
+    "multiplicity_distribution": {
+      "type": "object",
+      "propertyNames": { "pattern": "^[1-9][0-9]*$" },
+      "additionalProperties": { "type": "integer", "minimum": 1 }
+    },
+    "region_availability_group_count": { "type": "integer", "minimum": 0 },
+    "exact_duplicate_group_count": { "type": "integer", "minimum": 0 },
+    "exact_duplicate_extra_rows": { "type": "integer", "minimum": 0 },
+    "conflicting_intrinsic_metadata_count": { "type": "integer", "minimum": 0 },
+    "family_name_groups_with_distinct_ids": { "type": "integer", "minimum": 0 },
+    "row_field_names": {
+      "const": ["architecture", "family", "id", "name", "region", "version"]
+    },
+    "row_field_types": {
+      "const": {
+        "architecture": "string",
+        "family": "string",
+        "id": "string",
+        "name": "string",
+        "region": "object",
+        "version": "string"
+      }
+    },
+    "privacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "raw_ids_retained_in_public_record",
+        "raw_id_hashes_retained_in_public_record",
+        "reversible_aliases_retained_in_public_record",
+        "unknown_sensitive_scalars_retained"
+      ],
+      "properties": {
+        "raw_ids_retained_in_public_record": { "const": false },
+        "raw_id_hashes_retained_in_public_record": { "const": false },
+        "reversible_aliases_retained_in_public_record": { "const": false },
+        "unknown_sensitive_scalars_retained": { "const": false }
+      }
+    },
+    "private_alias_map": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "path",
+        "bytes",
+        "sha256",
+        "seal_path",
+        "seal_bytes",
+        "seal_sha256",
+        "alias_count",
+        "raw_ids_committed",
+        "raw_id_hashes_committed"
+      ],
+      "properties": {
+        "state": { "const": "ignored-sealed-local-evidence" },
+        "path": { "type": "string", "pattern": "^artifacts/t07/lambda/gate-l1-3/" },
+        "bytes": { "type": "integer", "minimum": 1 },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "seal_path": { "type": "string", "pattern": "^artifacts/t07/lambda/gate-l1-3/" },
+        "seal_bytes": { "type": "integer", "minimum": 1 },
+        "seal_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "alias_count": { "type": "integer", "minimum": 1 },
+        "raw_ids_committed": { "const": false },
+        "raw_id_hashes_committed": { "const": false }
+      }
+    }
+  }
+}

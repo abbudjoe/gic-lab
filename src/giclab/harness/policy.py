@@ -59,22 +59,37 @@ class PlannedExecutionSubstrate:
     architecture: str
     persistent_filesystem: bool
     gate_l1_authorized: bool
+    gate_l1_evidence_state: str
     gate_l2_authorized: bool
+    gate_l2_decision_state: str
     gate_l3_state: str
     gate_l4_authorized: bool
     local_alternatives: str
     decision_document: str
+    security_decision_document: str
 
     def __post_init__(self) -> None:
         expected = {
             "decision_state": (self.decision_state, "lambda-host-selected-design-only"),
             "provider": (self.provider, "lambda-on-demand-cloud"),
             "architecture": (self.architecture, "x86_64"),
+            "gate_l1_evidence_state": (
+                self.gate_l1_evidence_state,
+                "complete-externally-sealed",
+            ),
+            "gate_l2_decision_state": (
+                self.gate_l2_decision_state,
+                "inventory-evidence-insufficient",
+            ),
             "gate_l3_state": (self.gate_l3_state, "requirements-only"),
             "local_alternatives": (self.local_alternatives, "terminal-rejected"),
             "decision_document": (
                 self.decision_document,
                 "docs/harness/T07_GATE_L0_LAMBDA_HOST_DECISION.md",
+            ),
+            "security_decision_document": (
+                self.security_decision_document,
+                "docs/harness/T07_GATE_L2_RESOURCE_AND_SECURITY_DECISION_PACKET.md",
             ),
         }
         for field, (observed, required) in expected.items():
@@ -448,11 +463,14 @@ def load_project_execution_state(
             "architecture",
             "persistent_filesystem",
             "gate_l1_authorized",
+            "gate_l1_evidence_state",
             "gate_l2_authorized",
+            "gate_l2_decision_state",
             "gate_l3_state",
             "gate_l4_authorized",
             "local_alternatives",
             "decision_document",
+            "security_decision_document",
         }
         if set(raw_substrate) != expected_substrate_keys:
             raise ExecutionDisallowed("planned execution substrate field set drifted")
@@ -460,9 +478,12 @@ def load_project_execution_state(
             "decision_state",
             "provider",
             "architecture",
+            "gate_l1_evidence_state",
+            "gate_l2_decision_state",
             "gate_l3_state",
             "local_alternatives",
             "decision_document",
+            "security_decision_document",
         ):
             if not isinstance(raw_substrate[field], str):
                 raise ExecutionDisallowed(f"planned execution substrate {field} must be a string")
@@ -481,11 +502,14 @@ def load_project_execution_state(
                 architecture=raw_substrate["architecture"],
                 persistent_filesystem=raw_substrate["persistent_filesystem"],
                 gate_l1_authorized=raw_substrate["gate_l1_authorized"],
+                gate_l1_evidence_state=raw_substrate["gate_l1_evidence_state"],
                 gate_l2_authorized=raw_substrate["gate_l2_authorized"],
+                gate_l2_decision_state=raw_substrate["gate_l2_decision_state"],
                 gate_l3_state=raw_substrate["gate_l3_state"],
                 gate_l4_authorized=raw_substrate["gate_l4_authorized"],
                 local_alternatives=raw_substrate["local_alternatives"],
                 decision_document=raw_substrate["decision_document"],
+                security_decision_document=raw_substrate["security_decision_document"],
             )
         except (KeyError, ValueError) as exc:
             raise ExecutionDisallowed(f"invalid planned execution substrate: {exc}") from exc

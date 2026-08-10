@@ -1,0 +1,147 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gic-lab.invalid/schemas/t07-lambda-resource-candidate-matrix.schema.json",
+  "title": "T07 Lambda resource candidate matrix",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "source_inventory_sha256",
+    "policy",
+    "qualifying_candidates",
+    "top_three",
+    "near_misses",
+    "candidate_selected",
+    "fresh_price_and_availability_revalidation_required",
+    "us_south_1_automatically_selectable"
+  ],
+  "properties": {
+    "schema_version": { "const": "0.1.0" },
+    "run_id": { "const": "RUN-T07-L1-LAMBDA-INVENTORY-0003" },
+    "source_inventory_sha256": {
+      "const": "022835438165e7e6e70dc992d6904f4e8b9448dc933d1d4c3e39ebdcc8914933"
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "architecture",
+        "minimum_vcpus",
+        "minimum_memory_gib",
+        "minimum_root_storage_gib",
+        "maximum_gpus",
+        "maximum_price_cents_per_hour",
+        "persistent_filesystem",
+        "required_image_family",
+        "ranking",
+        "provider_compute_hard_cap_cents",
+        "qualification_wall_seconds"
+      ],
+      "properties": {
+        "architecture": { "const": "x86_64" },
+        "minimum_vcpus": { "const": 8 },
+        "minimum_memory_gib": { "const": 16 },
+        "minimum_root_storage_gib": { "const": 100 },
+        "maximum_gpus": { "const": 1 },
+        "maximum_price_cents_per_hour": { "const": 150 },
+        "persistent_filesystem": { "const": false },
+        "required_image_family": { "const": "gpu-base-22-04" },
+        "ranking": {
+          "const": [
+            "price_cents_per_hour",
+            "instance_type_name",
+            "region_name",
+            "image_alias"
+          ]
+        },
+        "provider_compute_hard_cap_cents": { "const": 200 },
+        "qualification_wall_seconds": { "const": 3600 }
+      }
+    },
+    "qualifying_candidates": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/candidate" }
+    },
+    "top_three": {
+      "type": "array",
+      "maxItems": 3,
+      "items": { "$ref": "#/$defs/candidate" }
+    },
+    "near_misses": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/near_miss" }
+    },
+    "candidate_selected": { "const": false },
+    "fresh_price_and_availability_revalidation_required": { "const": true },
+    "us_south_1_automatically_selectable": { "const": false }
+  },
+  "$defs": {
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "instance_type_name",
+        "region_name",
+        "image_alias",
+        "image_family",
+        "image_version",
+        "architecture",
+        "price_cents_per_hour",
+        "vcpus",
+        "memory_gib",
+        "storage_gib",
+        "gpus",
+        "persistent_filesystem",
+        "observed_available",
+        "provider_docker_path_support",
+        "qualification_list_price_cap_cents"
+      ],
+      "properties": {
+        "instance_type_name": { "type": "string", "minLength": 1 },
+        "region_name": { "type": "string", "minLength": 1, "not": { "const": "us-south-1" } },
+        "image_alias": { "type": "string", "pattern": "^img-[0-9]{4}$" },
+        "image_family": { "const": "gpu-base-22-04" },
+        "image_version": { "type": "string", "minLength": 1 },
+        "architecture": { "const": "x86_64" },
+        "price_cents_per_hour": { "type": "integer", "minimum": 0, "maximum": 150 },
+        "vcpus": { "type": "integer", "minimum": 8 },
+        "memory_gib": { "type": "integer", "minimum": 16 },
+        "storage_gib": { "type": "integer", "minimum": 100 },
+        "gpus": { "type": "integer", "minimum": 0, "maximum": 1 },
+        "persistent_filesystem": { "const": false },
+        "observed_available": { "const": true },
+        "provider_docker_path_support": { "const": "documented-gpu-base-22-04" },
+        "qualification_list_price_cap_cents": { "type": "integer", "minimum": 0, "maximum": 200 }
+      }
+    },
+    "near_miss": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["instance_type_name", "region_name", "price_cents_per_hour", "reasons"],
+      "properties": {
+        "instance_type_name": { "type": "string", "minLength": 1 },
+        "region_name": { "type": ["string", "null"] },
+        "price_cents_per_hour": { "type": "integer", "minimum": 0 },
+        "reasons": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "architecture-not-x86_64",
+              "vcpus-below-8",
+              "memory-below-16-gib",
+              "root-storage-below-100-gib",
+              "price-over-150-cents-per-hour",
+              "multi-gpu-excluded",
+              "currently-unavailable",
+              "firewall-exception-region-not-auto-selectable",
+              "no-compatible-approved-image"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

@@ -25,12 +25,15 @@ USD 4.00 cap is not authorization.
 
 ## Next gate
 
-The next possible T07 authorization is the bounded Lambda Gate L1 read-only inventory.
-It cannot launch a host. After separate host and workload qualification gates succeed,
-a later live-pair authorization must name the exact smoke plan, Lambda host plan,
-OpenAI and the `gpt-4o-2024-11-20` substitution, provider and API cost caps, wall
-limits, and container/provider cleanup. T07 must pass identity, command-diff,
-finite-budget, artifact-ownership, secret, and cleanup preflight before any live action.
+The bounded Lambda Gate L1 read-only inventory has completed and its redacted evidence
+is externally sealed. Gate L2 cannot yet be authorized: the minimized inventory did
+not retain account public-key material needed to match an account key to a local public
+fingerprint. After that evidence gap and the separate host/workload qualification
+gates are resolved, a later live-pair authorization must name the exact smoke plan,
+Lambda host plan, OpenAI and the `gpt-4o-2024-11-20` substitution, provider and API
+cost caps, wall limits, and container/provider cleanup. T07 must pass identity,
+command-diff, finite-budget, artifact-ownership, secret, and cleanup preflight before
+any live action.
 
 ## T07 infrastructure update — design only
 
@@ -39,18 +42,23 @@ infrastructure alternatives. The project selected a short-lived x86_64 Lambda
 On-Demand Cloud host as T07's planned substrate, with no persistent Lambda filesystem
 and provider-API termination as the billing boundary.
 
-This selection is not an experiment run or cloud authorization. A prior authorized
-inventory attempt stopped after its first read-only audit request; the raw response was
-not retained, so its exact schema mismatch remains unadjudicated and the run is
-nonreplayable. Audit history is not needed for host selection. The next possible
-action is therefore a fresh, separately authorized, seven-GET redacted Lambda
-inventory that requests only capacity, image, region, SSH-key, firewall, and running-
-instance facts. Host
+This selection is not an experiment run or cloud authorization. The seven-GET
+inventory later completed with schema-valid responses, no running instance, and a
+hash-verified copy on the approved MacBook archive. Offline adjudication found that
+the apparent duplicate images were regional availability rows, not conflicting image
+identities. Six resource tuples satisfy the fixed policy at the observed price, but
+none is selected.
+
+The effective global firewall also contains non-SSH rules, and no regional/per-instance
+ruleset exists. Such a ruleset would be additive, not a substitute for strict global
+rules. A future gate must preserve the separate same-region ruleset requirement and
+would also need fresh account-wide-zero evidence, an explicit workspace-dependency
+attestation, an approved public IPv4 `/32`, a sealed original snapshot, provider
+termination before verified restoration, and independent host-key trust. Because the sealed
+inventory retained only account SSH-key names, it cannot prove which local public key
+matches. The current state is therefore `inventory-evidence-insufficient`; host
 qualification, the Playwright/SiRA image probes, the live reactive/simulative pair,
 paid compute, model calls, browser actions, and interpretation all remain unauthorized.
-The inventory is not complete until its redacted artifact is hash-verified in the
-approved MacBook archive; host qualification also needs authenticated first-contact
-SSH host-key trust.
-The offline Gate L1.2 repair made no account request and accessed no real secret. It
-did not launch or mutate an instance, use SSH, run a container or browser, call a model,
-or execute either SiRA condition.
+The offline Gate L1.3 work made no account request, accessed no real secret or private
+key, and did not mutate a cloud resource, use SSH, run a container or browser, call a
+model, or execute either SiRA condition.

@@ -65,7 +65,7 @@ grant no mutation authority; one gate's authorization never carries into another
 
 | Task | Work package | Mapped phase DoD | Current permission |
 |---|---|---|---|
-| T07 | Execute one authorized contained SiRA smoke pair; capture regulation-decision evidence without interpretation. | P1-DOD-02, P1-DOD-11 through P1-DOD-13 | Gate L1.2 complete; seven-GET V3 Gate L1 unauthorized |
+| T07 | Execute one authorized contained SiRA smoke pair; capture regulation-decision evidence without interpretation. | P1-DOD-02, P1-DOD-11 through P1-DOD-13 | Gate L1 complete/sealed; L1.3 state `inventory-evidence-insufficient`; Gate L2 unauthorized |
 | T08 | Analyze smoke infrastructure evidence and prepare an unauthorized pilot package. | P1-DOD-03, P1-DOD-11 through P1-DOD-13 | blocked until T07 succeeds |
 | T09 | Execute the freshly authorized exploratory SiRA pilot. | P1-DOD-04, P1-DOD-11 through P1-DOD-13 | blocked until T08 and authorization |
 | T10 | Analyze and publish the exploratory SiRA pilot. | P1-DOD-05, P1-DOD-11 through P1-DOD-13 | blocked until T09 succeeds |
@@ -80,7 +80,8 @@ and an analysis recommendation does not authorize the next execution.
 
 ## T07 assembly control
 
-Assembly status: **Gate L1.2 complete; seven-GET V3 Gate L1 unauthorized**
+Assembly status: **Gate L1 complete/sealed; Gate L1.3 offline adjudication complete;
+Gate L2 blocked by insufficient SSH-key identity evidence**
 
 Exact next profile: `PLAN-EXP0001-SMOKE`.
 
@@ -238,6 +239,42 @@ Gate L1.2 made no authenticated account/model request, accessed no real secret, 
 performed no cloud mutation, paid compute, SSH, runtime, browser, SiRA, or scientific
 execution.
 
+### Gate L1.3 resource identity and Gate L2 security design
+
+Source contract: the user's 2026-08-10 Gate L1.3 instruction. Baseline:
+`42f74481e5a500cacb4973c6b29da4c3470679fe`.
+
+Authorized V3 run `RUN-T07-L1-LAMBDA-INVENTORY-0003` completed all seven GETs with
+HTTP 200/schema-valid outcomes, zero pagination, and zero running instances. Its
+59,653-byte inventory, 32,287-byte/44-event request ledger, external seal, and copy
+record remain byte-bound and source/archive-equal.
+
+Offline adjudication classified the duplicate-image failure as `verifier_key_bug`:
+259 regional availability rows represent 124 official `Image.id` identities. Fifteen
+identities appear in ten regions with identical intrinsic metadata; there are no
+same-ID/same-region duplicates and no conflicting metadata. A sealed ignored alias
+map now supports a 124-alias public projection. The fixed Gate L0 policy yields six
+unselected `gpu_1x_a10` tuples at the observed USD 1.29/hour price.
+
+The current global firewall has one SSH and three non-SSH rules, so it is not strict.
+Temporary global replacement is the preferred future design only after a dependency
+attestation, exact approved public IPv4 `/32`, and fresh proof of zero running
+instances account-wide. The original rules require a durable exact seal; the same
+immutable qualification instance must be provider-terminal before verified
+restoration, or the state is a high-severity incident. No regional/per-instance
+ruleset exists, so a future gate must separately authorize its strict same-region
+create/attach/delete lifecycle or explicitly supersede D-020's regional-ruleset
+requirement. Host-key trust remains an independent console/Jupyter fingerprint
+decision.
+
+Gate L2 cannot progress to human choices because run 0003 retained account SSH-key
+names but not account public-key material. Local/account fingerprint matching is
+therefore `evidence_unavailable`. Resolving that fact requires independently verified
+account fingerprints or a fresh reviewed and separately authorized minimal read-only
+evidence plan. L1.3 created no executable plan and performed no account/model request,
+real-secret access, cloud mutation, paid compute, SSH, runtime, browser, SiRA, or
+scientific execution.
+
 ## Authorization and mutation boundary
 
 Current project state keeps paid compute, prototype execution, benchmark execution,
@@ -328,6 +365,12 @@ appropriate to their own operation.
   compatible-extension reporting, strict sensitive-field redaction, commit ancestry,
   and Gate-L2 evidence cross-binding passed local fake-transport and independent
   privacy/spec review. No account request or real-secret access occurred in L1.2.
+- 2026-08-10: Authorized Gate L1 V4 completed the seven-GET V3 inventory and sealed
+  its ledger/inventory to the approved external archive. Gate L1.3 then repaired the
+  regional image-identity verifier offline, derived six unselected candidates, and
+  designed strict firewall/host-key decisions. Because account public-key material
+  was intentionally not retained, SSH fingerprint matching remains evidence-
+  insufficient and no Gate L2 plan or authorization exists.
 
 ## Decision log
 
@@ -360,23 +403,29 @@ appropriate to their own operation.
   classify its exact mismatch as unadjudicated because the raw body is absent, and
   replace its future execution path with a fresh seven-GET V3 plan that omits broad
   audit history and requires no account LRN.
+- 2026-08-10: Under D-023, preserve successful sealed run 0003, repair image identity
+  as one alias per official image ID plus regional availability, and stop Gate L2 at
+  `inventory-evidence-insufficient` until matchable account SSH public-key evidence
+  and the required firewall/host-key human decisions exist.
 
 ## Blockers and user actions
 
 T07 has no selected local runtime and no executable local B2a plan. Docker Desktop and
 Colima/Lima remain terminal rejected provenance. The Lambda topology is selected only
-at design level. The fresh V3 Gate L1 remains unauthorized; therefore current
-capacity, type/region/image/price, key/ruleset choices, and unrelated running instances
-are unresolved by design. The V1 and V2 plans/runs are blocked historical provenance;
-runs 0001 and 0002 are permanently retired. Only a new exact authorization may allow
-V3/run 0003. L2 has no executable account-bound plan and L3/L4 remain unauthorized.
+at design level. V3 run 0003 is complete, sealed, and nonreplayable; it supplies
+current-at-observation capacity/price/image/firewall facts but no matchable account
+SSH public-key evidence. The V1 and V2 plans/runs remain blocked historical
+provenance; runs 0001 and 0002 are permanently retired. L2 has no executable
+account-bound plan, and L3/L4 remain unauthorized.
 
 ## Next permitted work
 
-There is no further local B1.x design gate. The next permitted T07 work is a fresh user
-decision on the exact V3 Gate L1 seven-GET inventory block in
-`docs/harness/T07_GATE_L1_V4_AUTHORIZATION_PACKET.md`. If authorized exactly against
-the final clean implementation/packet commit and bound V3 plan hash, L1 may produce
-one redacted inventory plus complete request ledger and must stop before L2. Gate L2 host
-qualification, Gate L3 B2b qualification, Gate L4, both SiRA conditions, and the smoke
-remain blocked pending their own prerequisites and authorizations.
+There is no further local B1.x design gate. The next permitted T07 work must resolve
+the precise account-key evidence gap identified in
+`docs/harness/T07_GATE_L2_RESOURCE_AND_SECURITY_DECISION_PACKET.md`, through either
+user-supplied independently verified account fingerprints or a new reviewed and
+separately authorized minimal read-only evidence plan. Only after that fact exists may
+the user choose a candidate, SSH key, firewall option/public `/32`, and host-key trust
+method. Gate L2 host qualification, Gate L3 B2b qualification, Gate L4, both SiRA
+conditions, and the smoke remain blocked pending their own prerequisites and
+authorizations.

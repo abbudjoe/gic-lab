@@ -3,6 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 
 from harness_test_support import valid_plan_data
+from jsonschema import Draft202012Validator
 
 from giclab.harness.plan import load_run_plan, run_plan_document
 from giclab.registry import load_json
@@ -74,8 +75,14 @@ def test_harness_schema_documents_are_registered() -> None:
         "t07-lambda-request-ledger-v3",
         "t07-lambda-host-qualification",
         "t07-lambda-host-qualification-incident",
+        "t07-lambda-image-identity-adjudication",
+        "t07-lambda-resource-candidate-matrix",
+        "t07-lambda-firewall-assessment",
+        "t07-lambda-ssh-key-match",
     ):
-        assert "$id" in load_json(ROOT / f"schemas/{name}.schema.json")
+        schema = load_json(ROOT / f"schemas/{name}.schema.json")
+        assert "$id" in schema
+        Draft202012Validator.check_schema(schema)
 
 
 def test_gate_b2_materialization_plan_matches_its_schema() -> None:

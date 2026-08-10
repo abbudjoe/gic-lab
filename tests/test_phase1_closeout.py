@@ -39,11 +39,16 @@ def test_phase_one_is_the_only_active_non_executable_control_plane() -> None:
         "architecture": "x86_64",
         "persistent_filesystem": False,
         "gate_l1_authorized": False,
+        "gate_l1_evidence_state": "complete-externally-sealed",
         "gate_l2_authorized": False,
+        "gate_l2_decision_state": "inventory-evidence-insufficient",
         "gate_l3_state": "requirements-only",
         "gate_l4_authorized": False,
         "local_alternatives": "terminal-rejected",
         "decision_document": "docs/harness/T07_GATE_L0_LAMBDA_HOST_DECISION.md",
+        "security_decision_document": (
+            "docs/harness/T07_GATE_L2_RESOURCE_AND_SECURITY_DECISION_PACKET.md"
+        ),
     }
     execution_state = load_project_execution_state(ROOT)
     substrate = execution_state.planned_execution_substrate
@@ -51,6 +56,8 @@ def test_phase_one_is_the_only_active_non_executable_control_plane() -> None:
     assert substrate.decision_state == "lambda-host-selected-design-only"
     assert substrate.provider == "lambda-on-demand-cloud"
     assert substrate.architecture == "x86_64"
+    assert substrate.gate_l1_evidence_state == "complete-externally-sealed"
+    assert substrate.gate_l2_decision_state == "inventory-evidence-insufficient"
     assert [path.name for path in (ROOT / "docs/exec-plans/active").glob("*.md")] == [
         "PHASE_1_ARTIFACT_EXECUTION.md"
     ]
@@ -133,7 +140,29 @@ def test_exp0001_science_and_h2k_boundary_remain_orthogonal() -> None:
     assert "| T16 |" not in phase_plan
 
 
-def test_closeout_retains_zero_scientific_execution_and_only_historical_infrastructure() -> None:
+def test_t07_l13_preserves_all_five_locked_scientific_file_hashes() -> None:
+    locked = {
+        EXP_ROOT / "protocol.yaml": (
+            "5bdf3fdcf2c486883ad74044bd373c1804362c7d9ad8e990f5e10fa1c0f99b4c"
+        ),
+        EXP_ROOT / "config.yaml": (
+            "f05767de862f3f519f429f5b73baa67043ed96209f3d47db9fd2d084847ec16d"
+        ),
+        EXP_ROOT / "run-plans/smoke.yaml": (
+            "ab276b9e49256d49f143e252eddf6fe5c447d6f9c11300745b450fb7f1d0e425"
+        ),
+        EXP_ROOT / "run-plans/conditions/smoke-reactive.yaml": (
+            "7ca19470e550e48978090c9b7014e047c56d80962e40275b846f589b08bfb018"
+        ),
+        EXP_ROOT / "run-plans/conditions/smoke-simulative.yaml": (
+            "68f5f4a4a123620bab039ba7bc6844243cad229ed992df6562bf0d8562874436"
+        ),
+    }
+    for path, expected in locked.items():
+        assert hashlib.sha256(path.read_bytes()).hexdigest() == expected
+
+
+def test_closeout_retains_zero_scientific_execution_and_only_bounded_infrastructure() -> None:
     compute = load_yaml(ROOT / "manifests/compute.yaml")
     results = load_json(EXP_ROOT / "results-summary.json")
     assert compute["entries"] == []
@@ -149,18 +178,37 @@ def test_closeout_retains_zero_scientific_execution_and_only_historical_infrastr
     assert results["run_status"] == "not-run"
     assert results["measurements"] == []
     assert results["artifacts"] == []
-    ledger = (
-        ROOT / "artifacts/t07/lambda/gate-l1/RUN-T07-L1-LAMBDA-INVENTORY-0002/request-ledger.jsonl"
-    )
+    run2_root = "artifacts/t07/lambda/gate-l1/RUN-T07-L1-LAMBDA-INVENTORY-0002"
+    run3_root = "artifacts/t07/lambda/gate-l1/RUN-T07-L1-LAMBDA-INVENTORY-0003"
+    alias_root = "artifacts/t07/lambda/gate-l1-3/RUN-T07-L1-LAMBDA-INVENTORY-0003"
+    retained_hashes = {
+        f"{run2_root}/request-ledger.jsonl": (
+            "a1cb81ce286881c33d879ce73787e755eed8ecd1f64ca2b9eaca7d39824a2c94"
+        ),
+        f"{run3_root}/request-ledger.jsonl": (
+            "1f94068bdb1d1d2af0075d50c1a0c06eb1c077d4128f90bdc16fd571fa6af707"
+        ),
+        f"{run3_root}/inventory-redacted.json": (
+            "022835438165e7e6e70dc992d6904f4e8b9448dc933d1d4c3e39ebdcc8914933"
+        ),
+        f"{run3_root}/inventory-copy-record.json": (
+            "65068ff4884880ac8e6568652c0aba089e39c8fea621c4544e4da46edd01a5a8"
+        ),
+        f"{alias_root}/image-id-alias-map.json": (
+            "9f37b9412110cc7433d5339cf4d8b1eadc92743eaa32db6bf8e4c59024a79d5f"
+        ),
+        f"{alias_root}/IMAGE_ALIAS_MAP_SEAL.json": (
+            "ed3fb1ef3323f2b37150204ef060250e4f9510bbeb976d18d2fd1b8d9894c0b5"
+        ),
+    }
     retained_files = {
         path.relative_to(ROOT).as_posix()
         for path in (ROOT / "artifacts").rglob("*")
         if path.is_file()
     }
-    assert retained_files == {ledger.relative_to(ROOT).as_posix()}
-    assert hashlib.sha256(ledger.read_bytes()).hexdigest() == (
-        "a1cb81ce286881c33d879ce73787e755eed8ecd1f64ca2b9eaca7d39824a2c94"
-    )
+    assert retained_files == set(retained_hashes)
+    for relative, expected in retained_hashes.items():
+        assert hashlib.sha256((ROOT / relative).read_bytes()).hexdigest() == expected
     assert not (ROOT / "traces").exists()
 
 
