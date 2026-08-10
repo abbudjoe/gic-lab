@@ -89,13 +89,13 @@ _SHA256 = re.compile(r"^[a-f0-9]{64}$")
 _COMMIT = re.compile(r"^[a-f0-9]{40}$")
 _IDENTIFIER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 _ACCOUNT_ALIAS = re.compile(r"^account-key-[0-9]{4}$")
-_PRIVATE_MARKERS = (
-    "-----BEGIN PRIVATE KEY-----",
-    "-----BEGIN ENCRYPTED PRIVATE KEY-----",
-    "-----BEGIN RSA PRIVATE KEY-----",
-    "-----BEGIN OPENSSH PRIVATE KEY-----",
-    "-----BEGIN EC PRIVATE KEY-----",
-    "-----BEGIN DSA PRIVATE KEY-----",
+_PRIVATE_LABELS = (
+    "PRIVATE KEY",
+    "ENCRYPTED PRIVATE KEY",
+    "RSA PRIVATE KEY",
+    "OPENSSH PRIVATE KEY",
+    "EC PRIVATE KEY",
+    "DSA PRIVATE KEY",
 )
 _RSA_OID = bytes.fromhex("2a864886f70d010101")
 _ED25519_OID = bytes.fromhex("2b6570")
@@ -493,7 +493,7 @@ def parse_public_key(value: str) -> ParsedPublicKey:
     if not encoded or len(encoded) > MAX_PUBLIC_KEY_TEXT_BYTES or "\x00" in value:
         raise SSHKeyFingerprintError("public-key text violates its byte contract")
     upper = value.upper()
-    if any(marker in upper for marker in _PRIVATE_MARKERS):
+    if any(f"-----BEGIN {label}-----" in upper for label in _PRIVATE_LABELS):
         raise SSHKeyFingerprintError("private-key input is forbidden")
     stripped = value.strip()
     if stripped.startswith("---- BEGIN SSH2 PUBLIC KEY ----"):
@@ -900,8 +900,8 @@ def load_ssh_key_fingerprint_plan(
         "authorization_reference": PENDING_AUTHORIZATION_REFERENCE,
     }:
         raise SSHKeyFingerprintError("one-request plan must remain unauthorized")
-    secret = _object(document.get("secret_contract"), context="secret_contract")
-    if secret != {
+    secret_contract = _object(document.get("secret_contract"), context="secret_contract")
+    if secret_contract != {
         "variable": "LAMBDA_API_KEY",
         "channel": "supervisor-secret-channel",
         "print_allowed": False,

@@ -97,6 +97,10 @@ def _pem(label: str, der: bytes) -> str:
     return f"-----BEGIN {label}-----\n" + "\n".join(lines) + f"\n-----END {label}-----\n"
 
 
+def _synthetic_private_marker(label: str) -> str:
+    return f"-----BEGIN {label}-----\nAA==\n-----END {label}-----"
+
+
 def _rsa_spki() -> bytes:
     rsa_oid = _der(0x06, bytes.fromhex("2a864886f70d010101"))
     algorithm = _der(0x30, rsa_oid + _der(0x05, b""))
@@ -172,8 +176,8 @@ def test_valid_pem_rsa_public_key() -> None:
     [
         "ssh-ed25519 !!!not-base64!!!",
         _openssh(_ssh_string(b"ecdsa-sha2-nistp256") + _ssh_string(b"bad"), "ssh-rsa"),
-        "-----BEGIN PRIVATE KEY-----\nAA==\n-----END PRIVATE KEY-----",
-        "-----BEGIN RSA PRIVATE KEY-----\nAA==\n-----END RSA PRIVATE KEY-----",
+        _synthetic_private_marker("PRIVATE KEY"),
+        _synthetic_private_marker("RSA PRIVATE KEY"),
         _openssh(_ed25519_wire(1), "ssh-ed25519")
         + "\n"
         + _openssh(_ed25519_wire(2), "ssh-ed25519"),
