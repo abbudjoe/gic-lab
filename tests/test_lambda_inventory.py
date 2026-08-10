@@ -148,7 +148,7 @@ def test_l1_supervisor_uses_exact_get_set_and_seals_only_redacted_output(
     transport = FakeInventoryTransport(_responses())
     archiver = FakeArchiver()
     deadlines = FakeDeadlineFactory()
-    result = runner.execute_authorized_inventory(
+    result = runner._execute_historical_inventory_fixture(
         repository_root=root,
         plan_path=PLAN_PATH,
         plan_sha256=PLAN_SHA256,
@@ -213,7 +213,7 @@ def test_l1_supervisor_stops_on_status_or_wall_cap_without_leaking_secret(
 
     canary = "DUMMY-LAMBDA-SECRET-CANARY"
     with pytest.raises(LambdaCloudContractError) as captured:
-        runner.execute_authorized_inventory(
+        runner._execute_historical_inventory_fixture(
             repository_root=root,
             plan_path=PLAN_PATH,
             plan_sha256=PLAN_SHA256,
@@ -229,7 +229,7 @@ def test_l1_supervisor_stops_on_status_or_wall_cap_without_leaking_secret(
 
     ticks = iter([0.0, 0.0, 181.0])
     with pytest.raises(LambdaCloudContractError, match="wall budget"):
-        runner.execute_authorized_inventory(
+        runner._execute_historical_inventory_fixture(
             repository_root=root,
             plan_path=PLAN_PATH,
             plan_sha256=PLAN_SHA256,
@@ -261,7 +261,7 @@ def test_l1_supervisor_paces_request_starts_inside_provider_deadline(
         sleeps.append(seconds)
         now[0] += seconds
 
-    runner.execute_authorized_inventory(
+    runner._execute_historical_inventory_fixture(
         repository_root=root,
         plan_path=PLAN_PATH,
         plan_sha256=PLAN_SHA256,
@@ -326,6 +326,47 @@ def test_process_deadline_watchdog_real_helper_arms_and_disarms() -> None:
     assert watchdog.process.poll() is None
     watchdog.close()
     assert watchdog.process.returncode == 0
+
+
+def test_historical_v1_executable_is_permanently_disabled(capsys) -> None:
+    exit_code = runner.main(
+        [
+            "--repository-root",
+            "/synthetic",
+            "--plan",
+            "/synthetic/plan.json",
+            "--plan-sha256",
+            "1" * 64,
+            "--expected-commit",
+            "2" * 40,
+            "--authorization-reference",
+            "AUTH-SYNTHETIC",
+            "--authorization-sha256",
+            "3" * 64,
+        ]
+    )
+    assert exit_code == 2
+    assert "permanently disabled" in capsys.readouterr().err
+
+
+def test_historical_v1_public_executor_rejects_before_any_boundary(tmp_path: Path) -> None:
+    transport = FakeInventoryTransport(_responses())
+    archiver = FakeArchiver()
+    deadlines = FakeDeadlineFactory()
+    with pytest.raises(LambdaCloudContractError, match="permanently disabled"):
+        runner.execute_authorized_inventory(
+            repository_root=tmp_path,
+            plan_path=PLAN_PATH,
+            plan_sha256=PLAN_SHA256,
+            run_binding=_binding(),
+            credential="DUMMY-LAMBDA-SECRET-CANARY",
+            transport=transport,
+            archiver=archiver,
+            watchdog_factory=deadlines,
+        )
+    assert transport.request_ids == []
+    assert archiver.prepared is None
+    assert deadlines.deadlines == []
 
 
 def test_deadline_watchdog_kills_only_its_exact_parent_at_expiry(

@@ -55,6 +55,8 @@ SCHEMA_FILES = (
     "schemas/runtime-candidate-decision.schema.json",
     "schemas/runtime-rollback-evidence.schema.json",
     "schemas/t07-lambda-inventory.schema.json",
+    "schemas/t07-lambda-inventory-v2.schema.json",
+    "schemas/t07-lambda-request-ledger.schema.json",
     "schemas/t07-lambda-host-qualification.schema.json",
     "schemas/t07-lambda-host-qualification-incident.schema.json",
 )

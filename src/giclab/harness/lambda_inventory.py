@@ -563,7 +563,33 @@ def execute_authorized_inventory(
     sleeper: Callable[[float], None] = time.sleep,
     utc_now: Callable[[], datetime] = lambda: datetime.now(UTC),
 ) -> InventoryRunResult:
-    """Execute one L1 plan under an authoritative whole-process deadline."""
+    """Reject the burned V1/0001 identity before touching any execution boundary."""
+
+    raise LambdaCloudContractError("Gate L1 V1 execution is superseded and permanently disabled")
+
+
+def _execute_historical_inventory_fixture(
+    *,
+    repository_root: Path,
+    plan_path: Path,
+    plan_sha256: str,
+    run_binding: InventoryRunBinding,
+    credential: str,
+    transport: InventoryTransport,
+    archiver: InventoryArchiver,
+    watchdog_factory: ProcessDeadlineFactory,
+    clock: Callable[[], float] = time.monotonic,
+    sleeper: Callable[[float], None] = time.sleep,
+    utc_now: Callable[[], datetime] = lambda: datetime.now(UTC),
+) -> InventoryRunResult:
+    """Exercise historical V1 logic only with the public synthetic canary and fakes."""
+
+    if (
+        credential != "DUMMY-LAMBDA-SECRET-CANARY"
+        or isinstance(transport, LambdaHttpsInventoryTransport)
+        or isinstance(archiver, DurableInventoryArchiver)
+    ):
+        raise LambdaCloudContractError("historical V1 fixture requires fake boundaries")
 
     with _armed_process_deadline(watchdog_factory, MAX_INVENTORY_TOTAL_WALL_SECONDS):
         return _execute_inventory_within_total_deadline(
@@ -729,6 +755,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     if raw_arguments[:1] == ["_deadline-watchdog"]:
         return _deadline_watchdog_main(raw_arguments[1:])
     args = _parser().parse_args(raw_arguments)
+    print(
+        "giclab-lambda-inventory: V1 execution is superseded and permanently disabled",
+        file=sys.stderr,
+    )
+    return 2
+
+    # Historical implementation remains below for byte-level regression review.
+    # It is unreachable from the executable entry point; only V2 may receive a
+    # future fresh authorization.
     try:
         with _armed_process_deadline(
             SubprocessDeadlineWatchdog.arm, MAX_INVENTORY_TOTAL_WALL_SECONDS

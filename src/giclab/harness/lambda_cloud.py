@@ -17,7 +17,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import Final, Never
+from typing import Final, Never, Protocol
 
 
 class LambdaCloudContractError(ValueError):
@@ -38,11 +38,28 @@ class InstanceSelectionError(LambdaCloudContractError):
         self.code = code
 
 
+class InventoryResponseFailureKind(StrEnum):
+    JSON_DECODE = "json_decode"
+    SCHEMA_VALIDATION = "schema_validation"
+    PAGINATION = "pagination"
+
+
+class InventoryResponseValidationError(LambdaCloudContractError):
+    """Closed response-validation failure used by the observable V2 supervisor."""
+
+    def __init__(self, kind: InventoryResponseFailureKind, stable_code: str) -> None:
+        super().__init__(stable_code)
+        self.kind = kind
+        self.stable_code = stable_code
+
+
 API_BASE_URL: Final = "https://cloud.lambda.ai"
 API_SPEC_VERSION: Final = "1.10.0"
 API_SPEC_SHA256: Final = "365488015cf79fda38e1268f44a9e2d4af4fe2794ad3c6878c78a7e1f98caded"
 INVENTORY_PLAN_ID: Final = "PLAN-T07-GATE-L1-LAMBDA-READONLY-INVENTORY-V1"
 INVENTORY_RUN_ID: Final = "RUN-T07-L1-LAMBDA-INVENTORY-0001"
+INVENTORY_PLAN_V2_ID: Final = "PLAN-T07-GATE-L1-LAMBDA-READONLY-INVENTORY-V2"
+INVENTORY_RUN_V2_ID: Final = "RUN-T07-L1-LAMBDA-INVENTORY-0002"
 LAMBDA_BRANCH: Final = "phase-1/sira-smoke-lambda"
 QUALIFICATION_INSTANCE_NAME: Final = "giclab-t07-l2-qualification"
 QUALIFICATION_IMAGE_FAMILY: Final = "gpu-base-22-04"
@@ -1031,11 +1048,8 @@ def _parse_firewall_rule(value: object, *, context: str) -> FirewallRule:
     )
 
 
-def _parse_firewall_rulesets(
-    regional_encoded: bytes,
-    regional_request: InventoryRequest,
-    global_encoded: bytes,
-    global_request: InventoryRequest,
+def _parse_regional_firewall_rulesets(
+    regional_encoded: bytes, regional_request: InventoryRequest
 ) -> tuple[FirewallRuleset, ...]:
     regional_envelope = _envelope(regional_encoded, request=regional_request)
     _expect_exact_keys(regional_envelope, {"data"}, context=regional_request.request_id)
@@ -1069,26 +1083,44 @@ def _parse_firewall_rulesets(
                 ),
             )
         )
+    if len({item.ruleset_id for item in rulesets}) != len(rulesets):
+        raise LambdaCloudContractError("regional firewall ruleset IDs must be unique")
+    return tuple(sorted(rulesets, key=lambda item: item.ruleset_id))
+
+
+def _parse_global_firewall_ruleset(
+    global_encoded: bytes, global_request: InventoryRequest
+) -> FirewallRuleset:
     global_envelope = _envelope(global_encoded, request=global_request)
     _expect_exact_keys(global_envelope, {"data"}, context=global_request.request_id)
     global_record = _mapping(global_envelope["data"], context="global firewall ruleset")
     _expect_exact_keys(global_record, {"id", "name", "rules"}, context="global ruleset")
     if global_record["id"] != "global":
         raise LambdaCloudContractError("global firewall ruleset ID drifted")
-    rulesets.append(
-        FirewallRuleset(
-            ruleset_id="global",
-            name=_string(global_record["name"], context="global ruleset name"),
-            scope="global",
-            region=None,
-            rules=tuple(
-                _parse_firewall_rule(item, context=f"global ruleset rule {index}")
-                for index, item in enumerate(
-                    _list(global_record["rules"], context="global ruleset rules")
-                )
-            ),
-        )
+    return FirewallRuleset(
+        ruleset_id="global",
+        name=_string(global_record["name"], context="global ruleset name"),
+        scope="global",
+        region=None,
+        rules=tuple(
+            _parse_firewall_rule(item, context=f"global ruleset rule {index}")
+            for index, item in enumerate(
+                _list(global_record["rules"], context="global ruleset rules")
+            )
+        ),
     )
+
+
+def _parse_firewall_rulesets(
+    regional_encoded: bytes,
+    regional_request: InventoryRequest,
+    global_encoded: bytes,
+    global_request: InventoryRequest,
+) -> tuple[FirewallRuleset, ...]:
+    rulesets = [
+        *_parse_regional_firewall_rulesets(regional_encoded, regional_request),
+        _parse_global_firewall_ruleset(global_encoded, global_request),
+    ]
     if len({item.ruleset_id for item in rulesets}) != len(rulesets):
         raise LambdaCloudContractError("firewall ruleset IDs must be unique")
     return tuple(sorted(rulesets, key=lambda item: (item.scope, item.ruleset_id)))
@@ -1179,6 +1211,180 @@ def _parse_running_instances(
     if len({item.instance_id for item in instances}) != len(instances):
         raise LambdaCloudContractError("running instance IDs must be unique")
     return tuple(sorted(instances, key=lambda item: item.instance_id))
+
+
+class InventoryResponsePlan(Protocol):
+    @property
+    def requests(self) -> tuple[InventoryRequest, ...]: ...
+
+    @property
+    def max_total_response_bytes(self) -> int: ...
+
+
+_PAGINATION_KEYS: Final = frozenset(
+    {
+        "page_token",
+        "next_page_token",
+        "next_token",
+        "continuation_token",
+        "cursor",
+        "has_more",
+    }
+)
+
+
+def _pagination_marker_present(value: object) -> bool:
+    if isinstance(value, Mapping):
+        for key, child in value.items():
+            if key in _PAGINATION_KEYS and child not in (None, False, "", [], {}):
+                return True
+            if _pagination_marker_present(child):
+                return True
+    elif isinstance(value, list):
+        return any(_pagination_marker_present(child) for child in value)
+    return False
+
+
+@dataclass(slots=True)
+class IncrementalInventoryParser:
+    """Validate and normalize each V2 response before the next request intent."""
+
+    plan: InventoryResponsePlan
+    accepted_requests: int = 0
+    total_response_bytes: int = 0
+    binding: AccountWorkspaceBinding | None = None
+    instance_types: tuple[InstanceTypeOffer, ...] | None = None
+    images: tuple[ProviderImage, ...] | None = None
+    regions: tuple[Region, ...] | None = None
+    ssh_keys: tuple[SSHKeyIdentity, ...] | None = None
+    regional_firewall_rulesets: tuple[FirewallRuleset, ...] | None = None
+    global_firewall_ruleset: FirewallRuleset | None = None
+    running_instances: tuple[RunningInstance, ...] | None = None
+
+    def accept(self, request: InventoryRequest, encoded: bytes) -> None:
+        if self.accepted_requests >= len(self.plan.requests):
+            raise InventoryResponseValidationError(
+                InventoryResponseFailureKind.SCHEMA_VALIDATION,
+                "L1_RESPONSE_SET_OVERFLOW",
+            )
+        if request != self.plan.requests[self.accepted_requests]:
+            raise InventoryResponseValidationError(
+                InventoryResponseFailureKind.SCHEMA_VALIDATION,
+                "L1_RESPONSE_ORDER_DRIFT",
+            )
+        if (
+            len(encoded) > request.max_response_bytes
+            or self.total_response_bytes + len(encoded) > self.plan.max_total_response_bytes
+        ):
+            raise InventoryResponseValidationError(
+                InventoryResponseFailureKind.SCHEMA_VALIDATION,
+                "L1_RESPONSE_SIZE_DRIFT",
+            )
+        try:
+            decoded = _json_object(encoded, context="incremental inventory response")
+        except LambdaCloudContractError:
+            raise InventoryResponseValidationError(
+                InventoryResponseFailureKind.JSON_DECODE,
+                "L1_RESPONSE_JSON_INVALID",
+            ) from None
+        if _pagination_marker_present(decoded):
+            raise InventoryResponseValidationError(
+                InventoryResponseFailureKind.PAGINATION,
+                "L1_RESPONSE_PAGINATION_PRESENT",
+            )
+        try:
+            if request.request_id == "account-workspace-identity":
+                binding = _parse_account_binding(encoded, request)
+                if not binding.source_page_complete:
+                    raise InventoryResponseValidationError(
+                        InventoryResponseFailureKind.PAGINATION,
+                        "L1_RESPONSE_PAGINATION_PRESENT",
+                    )
+                self.binding = binding
+            elif request.request_id == "instance-types":
+                self.instance_types = _parse_instance_types(encoded, request)
+            elif request.request_id == "images":
+                self.images = _parse_images(encoded, request)
+            elif request.request_id == "regions":
+                self.regions = _parse_regions(encoded, request)
+            elif request.request_id == "ssh-keys":
+                self.ssh_keys = _parse_ssh_keys(encoded, request)
+            elif request.request_id == "firewall-rulesets":
+                self.regional_firewall_rulesets = _parse_regional_firewall_rulesets(
+                    encoded, request
+                )
+            elif request.request_id == "global-firewall-ruleset":
+                self.global_firewall_ruleset = _parse_global_firewall_ruleset(encoded, request)
+            elif request.request_id == "running-instances":
+                self.running_instances = _parse_running_instances(encoded, request)
+            else:
+                raise LambdaCloudContractError("inventory response ID drifted")
+        except InventoryResponseValidationError:
+            raise
+        except LambdaCloudContractError:
+            raise InventoryResponseValidationError(
+                InventoryResponseFailureKind.SCHEMA_VALIDATION,
+                "L1_RESPONSE_SCHEMA_DRIFT",
+            ) from None
+        self.total_response_bytes += len(encoded)
+        self.accepted_requests += 1
+
+    def finish(self) -> Inventory:
+        if self.accepted_requests != len(self.plan.requests):
+            raise InventoryResponseValidationError(
+                InventoryResponseFailureKind.SCHEMA_VALIDATION,
+                "L1_RESPONSE_SET_INCOMPLETE",
+            )
+        if (
+            self.binding is None
+            or self.instance_types is None
+            or self.images is None
+            or self.regions is None
+            or self.ssh_keys is None
+            or self.regional_firewall_rulesets is None
+            or self.global_firewall_ruleset is None
+            or self.running_instances is None
+        ):
+            raise InventoryResponseValidationError(
+                InventoryResponseFailureKind.SCHEMA_VALIDATION,
+                "L1_RESPONSE_TYPED_STATE_INCOMPLETE",
+            )
+        firewall_rulesets = (
+            *self.regional_firewall_rulesets,
+            self.global_firewall_ruleset,
+        )
+        if len({item.ruleset_id for item in firewall_rulesets}) != len(firewall_rulesets):
+            raise InventoryResponseValidationError(
+                InventoryResponseFailureKind.SCHEMA_VALIDATION,
+                "L1_FIREWALL_IDENTITY_DRIFT",
+            )
+        inventory = Inventory(
+            binding=self.binding,
+            instance_types=self.instance_types,
+            images=self.images,
+            regions=self.regions,
+            ssh_keys=self.ssh_keys,
+            firewall_rulesets=tuple(
+                sorted(firewall_rulesets, key=lambda item: (item.scope, item.ruleset_id))
+            ),
+            running_instances=self.running_instances,
+        )
+        if not inventory.regions:
+            raise InventoryResponseValidationError(
+                InventoryResponseFailureKind.SCHEMA_VALIDATION,
+                "L1_REGION_INVENTORY_EMPTY",
+            )
+        known_regions = {region.name for region in inventory.regions}
+        if any(
+            region.name not in known_regions
+            for offer in inventory.instance_types
+            for region in offer.capacity_regions
+        ) or any(image.region.name not in known_regions for image in inventory.images):
+            raise InventoryResponseValidationError(
+                InventoryResponseFailureKind.SCHEMA_VALIDATION,
+                "L1_REGION_REFERENCE_DRIFT",
+            )
+        return inventory
 
 
 def parse_inventory_responses(
@@ -1453,14 +1659,32 @@ def validate_no_filesystem_launch_request(
         raise LambdaCloudContractError("qualification launch forbids hidden config and quantity")
 
 
+class InventoryArtifactRunBinding(Protocol):
+    @property
+    def run_id(self) -> str: ...
+
+    @property
+    def repository_commit(self) -> str: ...
+
+    @property
+    def authorization_reference(self) -> str: ...
+
+    @property
+    def authorization_sha256(self) -> str: ...
+
+
 def inventory_document(
     inventory: Inventory,
     candidate: ComputeCandidate | None,
     *,
     observed_at_utc: str,
     inventory_plan_sha256: str,
-    run_binding: InventoryRunBinding,
+    run_binding: InventoryArtifactRunBinding,
     selection_failure: InstanceSelectionError | None = None,
+    plan_id: str = INVENTORY_PLAN_ID,
+    run_attempt: int = 1,
+    limits_document: Mapping[str, int] | None = None,
+    request_ledger_contract: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
     """Return the bounded redacted L1 artifact; no raw secret-bearing fields survive."""
 
@@ -1471,6 +1695,20 @@ def inventory_document(
         raise LambdaCloudContractError("inventory observation time must be an explicit UTC value")
     if _SHA256.fullmatch(inventory_plan_sha256) is None:
         raise LambdaCloudContractError("inventory artifact plan hash is not canonical")
+    is_v1 = (
+        plan_id == INVENTORY_PLAN_ID and run_binding.run_id == INVENTORY_RUN_ID and run_attempt == 1
+    )
+    is_v2 = (
+        plan_id == INVENTORY_PLAN_V2_ID
+        and run_binding.run_id == INVENTORY_RUN_V2_ID
+        and run_attempt == 2
+    )
+    if not (is_v1 or is_v2):
+        raise LambdaCloudContractError("inventory artifact plan/run identity drifted")
+    if is_v1 and (limits_document is not None or request_ledger_contract is not None):
+        raise LambdaCloudContractError("historical V1 inventory cannot carry V2 controls")
+    if is_v2 and (limits_document is None or request_ledger_contract is None):
+        raise LambdaCloudContractError("V2 inventory requires ledger and limit bindings")
     if (candidate is None) == (selection_failure is None):
         raise LambdaCloudContractError(
             "inventory artifact requires exactly one selected candidate or typed selection failure"
@@ -1505,17 +1743,43 @@ def inventory_document(
             "ssh_key_binding": None,
             "firewall_ruleset_binding": None,
         }
+    default_limits: dict[str, int] = {
+        "provider_api_calls": MAX_INVENTORY_CALLS,
+        "provider_wall_seconds": MAX_INVENTORY_WALL_SECONDS,
+        "request_start_spacing_seconds": MIN_INVENTORY_REQUEST_SPACING_SECONDS,
+        "archive_wall_seconds": MAX_INVENTORY_ARCHIVE_WALL_SECONDS,
+        "total_wall_seconds": MAX_INVENTORY_TOTAL_WALL_SECONDS,
+        "raw_response_bytes": MAX_INVENTORY_TOTAL_RESPONSE_BYTES,
+        "retained_output_bytes": MAX_INVENTORY_RETAINED_BYTES,
+        "local_copy_record_bytes": MAX_INVENTORY_LOCAL_RECORD_BYTES,
+        "external_archive_bytes": MAX_INVENTORY_ARCHIVE_BYTES,
+        "aggregate_retained_bytes": MAX_INVENTORY_AGGREGATE_RETAINED_BYTES,
+        "local_command_calls": MAX_INVENTORY_LOCAL_COMMAND_CALLS,
+        "local_command_output_bytes": MAX_INVENTORY_LOCAL_COMMAND_OUTPUT_BYTES,
+        "local_file_creates": MAX_INVENTORY_LOCAL_FILE_CREATES,
+        "external_file_creates": MAX_INVENTORY_EXTERNAL_FILE_CREATES,
+        "external_directory_creates": MAX_INVENTORY_EXTERNAL_DIRECTORY_CREATES,
+        "local_prewrite_floor_bytes": MAX_INVENTORY_LOCAL_PREWRITE_FLOOR_BYTES,
+        "local_retained_floor_bytes": MAX_INVENTORY_LOCAL_RETAINED_FLOOR_BYTES,
+        "automatic_retries": 0,
+        "cloud_mutations": 0,
+        "provider_cost_cents": 0,
+        "model_calls": 0,
+        "model_tokens": 0,
+        "browser_actions": 0,
+        "sira_executions": 0,
+    }
     document: dict[str, object] = {
-        "schema_version": "0.1.0",
+        "schema_version": "0.1.0" if is_v1 else "0.2.0",
         "provider": "lambda-on-demand-cloud",
         "api_spec": {"version": API_SPEC_VERSION, "sha256": API_SPEC_SHA256},
         "inventory_plan": {
-            "plan_id": INVENTORY_PLAN_ID,
+            "plan_id": plan_id,
             "sha256": inventory_plan_sha256,
         },
         "run_identity": {
             "run_id": run_binding.run_id,
-            "attempt": 1,
+            "attempt": run_attempt,
             "experiment_id": "EXP-0001",
             "profile_plan_id": "PLAN-EXP0001-SMOKE",
             "gate": "T07-L1",
@@ -1527,32 +1791,7 @@ def inventory_document(
             "authorization_sha256": run_binding.authorization_sha256,
             "authorized": True,
         },
-        "limits": {
-            "provider_api_calls": MAX_INVENTORY_CALLS,
-            "provider_wall_seconds": MAX_INVENTORY_WALL_SECONDS,
-            "request_start_spacing_seconds": MIN_INVENTORY_REQUEST_SPACING_SECONDS,
-            "archive_wall_seconds": MAX_INVENTORY_ARCHIVE_WALL_SECONDS,
-            "total_wall_seconds": MAX_INVENTORY_TOTAL_WALL_SECONDS,
-            "raw_response_bytes": MAX_INVENTORY_TOTAL_RESPONSE_BYTES,
-            "retained_output_bytes": MAX_INVENTORY_RETAINED_BYTES,
-            "local_copy_record_bytes": MAX_INVENTORY_LOCAL_RECORD_BYTES,
-            "external_archive_bytes": MAX_INVENTORY_ARCHIVE_BYTES,
-            "aggregate_retained_bytes": MAX_INVENTORY_AGGREGATE_RETAINED_BYTES,
-            "local_command_calls": MAX_INVENTORY_LOCAL_COMMAND_CALLS,
-            "local_command_output_bytes": MAX_INVENTORY_LOCAL_COMMAND_OUTPUT_BYTES,
-            "local_file_creates": MAX_INVENTORY_LOCAL_FILE_CREATES,
-            "external_file_creates": MAX_INVENTORY_EXTERNAL_FILE_CREATES,
-            "external_directory_creates": MAX_INVENTORY_EXTERNAL_DIRECTORY_CREATES,
-            "local_prewrite_floor_bytes": MAX_INVENTORY_LOCAL_PREWRITE_FLOOR_BYTES,
-            "local_retained_floor_bytes": MAX_INVENTORY_LOCAL_RETAINED_FLOOR_BYTES,
-            "automatic_retries": 0,
-            "cloud_mutations": 0,
-            "provider_cost_cents": 0,
-            "model_calls": 0,
-            "model_tokens": 0,
-            "browser_actions": 0,
-            "sira_executions": 0,
-        },
+        "limits": default_limits if limits_document is None else dict(limits_document),
         "observed_at_utc": observed_at_utc,
         "account_binding": {
             "account_lrn_sha256": inventory.binding.account_lrn_sha256,
@@ -1630,6 +1869,8 @@ def inventory_document(
             "audit_actor_fields_retained": False,
         },
     }
+    if request_ledger_contract is not None:
+        document["request_ledger"] = dict(request_ledger_contract)
     encoded = json.dumps(document, allow_nan=False, sort_keys=True, separators=(",", ":")).encode()
     if len(encoded) > MAX_INVENTORY_RETAINED_BYTES:
         raise LambdaCloudContractError("redacted inventory artifact exceeds retained-output cap")
