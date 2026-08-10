@@ -435,6 +435,37 @@ def test_untyped_failure_after_send_is_durably_unknown_and_stops(tmp_path: Path)
     assert CANARY not in ledger.read_text()
 
 
+def test_response_schema_failure_preserves_completed_response_metadata(tmp_path: Path) -> None:
+    repository, plan_path, plan, plan_sha = _copy_bound_repository(tmp_path)
+    body = b'{"data":[]}\n'
+    prepared = _FakePreparedArchive(tmp_path / "external" / RUN_ID)
+    with pytest.raises(InventoryObservedFailure):
+        execute_authorized_ssh_key_fingerprint(
+            repository_root=repository,
+            plan_path=plan_path,
+            plan_sha256=plan_sha,
+            run_binding=_run_binding(plan),
+            credential_provider=lambda: CANARY,
+            transport=_FakeTransport(body),
+            archiver=_FakeArchiver(prepared),
+            deadline_factory=lambda seconds: _FakeDeadline(),
+            repository_inspector=lambda root, expected_commit: RepositoryState(
+                "phase-1/sira-smoke-lambda", expected_commit, True
+            ),
+            ancestry_verifier=lambda *args, **kwargs: None,
+            local_key_discoverer=lambda: (),
+        )
+    ledger = repository / RUN_ROOT_RELATIVE_PATH / "request-ledger.jsonl"
+    events = [json.loads(line) for line in ledger.read_text().splitlines()]
+    assert events[-2]["event_type"] == "request_failed"
+    assert events[-2]["sanitized_failure_class"] == "schema_drift"
+    assert events[-2]["bytes_received_so_far"] == len(body)
+    assert events[-2]["http_status"] == 200
+    assert events[-2]["content_type"] == "application/json"
+    assert events[-2]["elapsed_ms"] == 5
+    assert events[-1]["event_type"] == "run_stopped"
+
+
 def test_archive_finalize_failure_has_separate_durable_ineligible_disposition(
     tmp_path: Path,
 ) -> None:

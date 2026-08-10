@@ -614,7 +614,13 @@ def _execute_within_deadline(
             or response.content_type != observer.content_type
             or len(response.body) > MAX_RESPONSE_BYTES
         ):
-            raise InventoryObservedFailure(SCHEMA_FAILURE)
+            raise InventoryObservedFailure(
+                SCHEMA_FAILURE,
+                http_status=response.status_code,
+                content_type=response.content_type,
+                bytes_received=len(response.body),
+                elapsed_ms=response.elapsed_ms,
+            )
         ledger.append(
             LedgerEventType.RESPONSE_BODY_COMPLETED,
             request=request_context,
@@ -626,7 +632,13 @@ def _execute_within_deadline(
         try:
             projection = project_account_ssh_keys(response.body)
         except SSHKeyFingerprintError:
-            raise InventoryObservedFailure(SCHEMA_FAILURE) from None
+            raise InventoryObservedFailure(
+                SCHEMA_FAILURE,
+                http_status=response.status_code,
+                content_type=response.content_type,
+                bytes_received=len(response.body),
+                elapsed_ms=response.elapsed_ms,
+            ) from None
         ledger.append(
             LedgerEventType.RESPONSE_VALIDATION_PASSED,
             request=request_context,
