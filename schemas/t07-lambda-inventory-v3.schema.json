@@ -1,0 +1,625 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gic-lab.invalid/schemas/t07-lambda-inventory-v3.schema.json",
+  "title": "T07 redacted Lambda inventory artifact with V3 endpoint schemas",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "provider",
+    "api_base_url",
+    "api_spec",
+    "inventory_plan",
+    "run_identity",
+    "authorization_binding",
+    "account_identity",
+    "endpoint_outcomes",
+    "schema_extension_report",
+    "limits",
+    "request_ledger",
+    "observed_at_utc",
+    "instance_types",
+    "images",
+    "regions",
+    "ssh_keys",
+    "firewall_rulesets",
+    "running_instances",
+    "selection",
+    "redaction"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.3.0"},
+    "provider": {"const": "lambda-on-demand-cloud"},
+    "api_base_url": {"const": "https://cloud.lambda.ai"},
+    "api_spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "sha256"],
+      "properties": {
+        "version": {"const": "1.10.0"},
+        "sha256": {"const": "365488015cf79fda38e1268f44a9e2d4af4fe2794ad3c6878c78a7e1f98caded"}
+      }
+    },
+    "inventory_plan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["plan_id", "sha256"],
+      "properties": {
+        "plan_id": {"const": "PLAN-T07-GATE-L1-LAMBDA-READONLY-INVENTORY-V3"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "run_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "run_id",
+        "attempt",
+        "experiment_id",
+        "profile_plan_id",
+        "gate",
+        "branch",
+        "implementation_commit",
+        "repository_commit"
+      ],
+      "properties": {
+        "run_id": {"const": "RUN-T07-L1-LAMBDA-INVENTORY-0003"},
+        "attempt": {"const": 3},
+        "experiment_id": {"const": "EXP-0001"},
+        "profile_plan_id": {"const": "PLAN-EXP0001-SMOKE"},
+        "gate": {"const": "T07-L1"},
+        "branch": {"const": "phase-1/sira-smoke-lambda"},
+        "implementation_commit": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
+        "repository_commit": {"type": "string", "pattern": "^[a-f0-9]{40}$"}
+      }
+    },
+    "authorization_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["authorization_reference", "authorization_sha256", "authorized"],
+      "properties": {
+        "authorization_reference": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+        },
+        "authorization_sha256": {"$ref": "#/$defs/sha256"},
+        "authorized": {"const": true}
+      }
+    },
+    "account_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "source"],
+      "properties": {
+        "state": {"const": "unavailable_not_required"},
+        "source": {"const": "audit_endpoint_not_requested"}
+      }
+    },
+    "endpoint_outcomes": {
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 7,
+      "prefixItems": [
+        {"$ref": "#/$defs/instance_types_outcome"},
+        {"$ref": "#/$defs/images_outcome"},
+        {"$ref": "#/$defs/regions_outcome"},
+        {"$ref": "#/$defs/ssh_keys_outcome"},
+        {"$ref": "#/$defs/firewall_rulesets_outcome"},
+        {"$ref": "#/$defs/global_firewall_outcome"},
+        {"$ref": "#/$defs/instances_outcome"}
+      ],
+      "items": false
+    },
+    "schema_extension_report": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_path", "schema_sha256", "report"],
+      "properties": {
+        "schema_path": {"const": "schemas/t07-lambda-schema-extension-report.schema.json"},
+        "schema_sha256": {"$ref": "#/$defs/sha256"},
+        "report": {"$ref": "#/$defs/extension_report"}
+      }
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_api_calls",
+        "provider_wall_seconds",
+        "request_start_spacing_seconds",
+        "archive_wall_seconds",
+        "total_wall_seconds",
+        "raw_response_bytes",
+        "retained_output_bytes",
+        "schema_extension_report_bytes",
+        "request_ledger_bytes",
+        "request_ledger_events",
+        "request_ledger_events_per_request",
+        "request_ledger_event_bytes",
+        "preflight_disposition_bytes",
+        "local_copy_record_bytes",
+        "external_archive_bytes",
+        "aggregate_retained_bytes",
+        "local_command_calls",
+        "local_command_output_bytes",
+        "local_file_creates",
+        "external_file_creates",
+        "external_directory_creates",
+        "local_prewrite_floor_bytes",
+        "local_retained_floor_bytes",
+        "automatic_retries",
+        "cloud_mutations",
+        "provider_cost_cents",
+        "model_calls",
+        "model_tokens",
+        "browser_actions",
+        "ssh_operations",
+        "sira_executions"
+      ],
+      "properties": {
+        "provider_api_calls": {"const": 7},
+        "provider_wall_seconds": {"const": 60},
+        "request_start_spacing_seconds": {"const": 1},
+        "archive_wall_seconds": {"const": 60},
+        "total_wall_seconds": {"const": 180},
+        "raw_response_bytes": {"const": 1835008},
+        "retained_output_bytes": {"const": 524288},
+        "schema_extension_report_bytes": {"const": 65536},
+        "request_ledger_bytes": {"const": 172032},
+        "request_ledger_events": {"const": 84},
+        "request_ledger_events_per_request": {"const": 9},
+        "request_ledger_event_bytes": {"const": 2048},
+        "preflight_disposition_bytes": {"const": 16384},
+        "local_copy_record_bytes": {"const": 65536},
+        "external_archive_bytes": {"const": 1048576},
+        "aggregate_retained_bytes": {"const": 1826816},
+        "local_command_calls": {"const": 15},
+        "local_command_output_bytes": {"const": 37879810},
+        "local_file_creates": {"const": 4},
+        "external_file_creates": {"const": 4},
+        "external_directory_creates": {"const": 4},
+        "local_prewrite_floor_bytes": {"const": 8590868480},
+        "local_retained_floor_bytes": {"const": 8589934592},
+        "automatic_retries": {"const": 0},
+        "cloud_mutations": {"const": 0},
+        "provider_cost_cents": {"const": 0},
+        "model_calls": {"const": 0},
+        "model_tokens": {"const": 0},
+        "browser_actions": {"const": 0},
+        "ssh_operations": {"const": 0},
+        "sira_executions": {"const": 0}
+      }
+    },
+    "request_ledger": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_path",
+        "schema_sha256",
+        "relative_path",
+        "archive_eligible_prefix_event",
+        "required_terminal_events",
+        "complete_success_required",
+        "unknown_after_send_allowed_for_gate_l2"
+      ],
+      "properties": {
+        "schema_path": {"const": "schemas/t07-lambda-request-ledger-v3.schema.json"},
+        "schema_sha256": {"$ref": "#/$defs/sha256"},
+        "relative_path": {
+          "const": "artifacts/t07/lambda/gate-l1/RUN-T07-L1-LAMBDA-INVENTORY-0003/request-ledger.jsonl"
+        },
+        "archive_eligible_prefix_event": {"const": "inventory_validation_passed"},
+        "required_terminal_events": {
+          "const": ["archive_passed", "run_stopped"]
+        },
+        "complete_success_required": {"const": true},
+        "unknown_after_send_allowed_for_gate_l2": {"const": false}
+      }
+    },
+    "observed_at_utc": {"type": "string", "format": "date-time"},
+    "instance_types": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/instance_type"}
+    },
+    "images": {"type": "array", "items": {"$ref": "#/$defs/image"}},
+    "regions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/region"}
+    },
+    "ssh_keys": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "name"],
+        "properties": {
+          "id": {"$ref": "#/$defs/nonempty"},
+          "name": {"$ref": "#/$defs/nonempty"}
+        }
+      }
+    },
+    "firewall_rulesets": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/firewall_ruleset"}
+    },
+    "running_instances": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/running_instance"}
+    },
+    "selection": {
+      "oneOf": [
+        {"$ref": "#/$defs/selected_selection"},
+        {"$ref": "#/$defs/blocked_selection"}
+      ]
+    },
+    "redaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "raw_responses_retained",
+        "api_key_retained",
+        "ssh_public_keys_retained",
+        "instance_ip_addresses_retained",
+        "firewall_source_cidrs_retained",
+        "jupyter_credentials_retained",
+        "audit_history_requested",
+        "unknown_scalar_values_retained"
+      ],
+      "properties": {
+        "raw_responses_retained": {"const": false},
+        "api_key_retained": {"const": false},
+        "ssh_public_keys_retained": {"const": false},
+        "instance_ip_addresses_retained": {"const": false},
+        "firewall_source_cidrs_retained": {"const": true},
+        "jupyter_credentials_retained": {"const": false},
+        "audit_history_requested": {"const": false},
+        "unknown_scalar_values_retained": {"const": false}
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "nonempty": {"type": "string", "minLength": 1, "maxLength": 4096},
+    "architecture": {"enum": ["x86_64", "arm64"]},
+    "extension_report": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "policy",
+        "unknown_scalar_values_retained",
+        "observations",
+        "report_sha256"
+      ],
+      "properties": {
+        "schema_version": {"const": "0.1.0"},
+        "policy": {"const": "documented-required-strict-additive-keys-report-only"},
+        "unknown_scalar_values_retained": {"const": false},
+        "observations": {
+          "type": "array",
+          "minItems": 7,
+          "maxItems": 7,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "request_id",
+              "validation_state",
+              "unknown_locations",
+              "structural_summary_sha256"
+            ],
+            "properties": {
+              "request_id": {
+                "enum": [
+                  "instance-types",
+                  "images",
+                  "regions",
+                  "ssh-keys",
+                  "firewall-rulesets",
+                  "global-firewall-ruleset",
+                  "running-instances"
+                ]
+              },
+              "validation_state": {"enum": ["exact", "compatible_extension_observed"]},
+              "unknown_locations": {
+                "type": "array",
+                "maxItems": 256,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["path", "key_names", "value_types"],
+                  "properties": {
+                    "path": {"type": "string", "maxLength": 512},
+                    "key_names": {
+                      "type": "array",
+                      "items": {"type": "string", "maxLength": 128},
+                      "uniqueItems": true,
+                      "maxItems": 128
+                    },
+                    "value_types": {
+                      "type": "object",
+                      "propertyNames": {"type": "string", "maxLength": 128},
+                      "additionalProperties": {
+                        "enum": ["null", "boolean", "integer", "number", "string", "array", "object"]
+                      }
+                    }
+                  }
+                }
+              },
+              "structural_summary_sha256": {"$ref": "#/$defs/sha256"}
+            }
+          }
+        },
+        "report_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "endpoint_outcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "request_id",
+        "method",
+        "path",
+        "http_status",
+        "response_bytes",
+        "schema_path",
+        "schema_sha256",
+        "validation_state"
+      ],
+      "properties": {
+        "request_id": {"type": "string"},
+        "method": {"const": "GET"},
+        "path": {"type": "string", "pattern": "^/api/v1/"},
+        "http_status": {"const": 200},
+        "response_bytes": {"type": "integer", "minimum": 0, "maximum": 262144},
+        "schema_path": {"type": "string"},
+        "schema_sha256": {"$ref": "#/$defs/sha256"},
+        "validation_state": {"enum": ["exact", "compatible_extension_observed"]}
+      }
+    },
+    "instance_types_outcome": {
+      "allOf": [
+        {"$ref": "#/$defs/endpoint_outcome"},
+        {"properties": {
+          "request_id": {"const": "instance-types"},
+          "path": {"const": "/api/v1/instance-types"},
+          "schema_path": {"const": "containers/sira-smoke/lambda/endpoint-schemas-v3/instance-types.schema.json"}
+        }}
+      ]
+    },
+    "images_outcome": {
+      "allOf": [
+        {"$ref": "#/$defs/endpoint_outcome"},
+        {"properties": {
+          "request_id": {"const": "images"},
+          "path": {"const": "/api/v1/images"},
+          "schema_path": {"const": "containers/sira-smoke/lambda/endpoint-schemas-v3/images.schema.json"}
+        }}
+      ]
+    },
+    "regions_outcome": {
+      "allOf": [
+        {"$ref": "#/$defs/endpoint_outcome"},
+        {"properties": {
+          "request_id": {"const": "regions"},
+          "path": {"const": "/api/v1/regions"},
+          "schema_path": {"const": "containers/sira-smoke/lambda/endpoint-schemas-v3/regions.schema.json"}
+        }}
+      ]
+    },
+    "ssh_keys_outcome": {
+      "allOf": [
+        {"$ref": "#/$defs/endpoint_outcome"},
+        {"properties": {
+          "request_id": {"const": "ssh-keys"},
+          "path": {"const": "/api/v1/ssh-keys"},
+          "schema_path": {"const": "containers/sira-smoke/lambda/endpoint-schemas-v3/ssh-keys.schema.json"}
+        }}
+      ]
+    },
+    "firewall_rulesets_outcome": {
+      "allOf": [
+        {"$ref": "#/$defs/endpoint_outcome"},
+        {"properties": {
+          "request_id": {"const": "firewall-rulesets"},
+          "path": {"const": "/api/v1/firewall-rulesets"},
+          "schema_path": {"const": "containers/sira-smoke/lambda/endpoint-schemas-v3/firewall-rulesets.schema.json"}
+        }}
+      ]
+    },
+    "global_firewall_outcome": {
+      "allOf": [
+        {"$ref": "#/$defs/endpoint_outcome"},
+        {"properties": {
+          "request_id": {"const": "global-firewall-ruleset"},
+          "path": {"const": "/api/v1/firewall-rulesets/global"},
+          "schema_path": {"const": "containers/sira-smoke/lambda/endpoint-schemas-v3/global-firewall-ruleset.schema.json"}
+        }}
+      ]
+    },
+    "instances_outcome": {
+      "allOf": [
+        {"$ref": "#/$defs/endpoint_outcome"},
+        {"properties": {
+          "request_id": {"const": "running-instances"},
+          "path": {"const": "/api/v1/instances"},
+          "schema_path": {"const": "containers/sira-smoke/lambda/endpoint-schemas-v3/instances.schema.json"}
+        }}
+      ]
+    },
+    "region": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {"name": {"$ref": "#/$defs/nonempty"}}
+    },
+    "specs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["vcpus", "memory_gib", "storage_gib", "gpus"],
+      "properties": {
+        "vcpus": {"type": "integer", "minimum": 1},
+        "memory_gib": {"type": "integer", "minimum": 1},
+        "storage_gib": {"type": "integer", "minimum": 1},
+        "gpus": {"type": "integer", "minimum": 0}
+      }
+    },
+    "instance_type": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "architecture", "price_cents_per_hour", "specs", "capacity_regions"],
+      "properties": {
+        "name": {"$ref": "#/$defs/nonempty"},
+        "architecture": {"$ref": "#/$defs/architecture"},
+        "price_cents_per_hour": {"type": "integer", "minimum": 0},
+        "specs": {"$ref": "#/$defs/specs"},
+        "capacity_regions": {"type": "array", "items": {"$ref": "#/$defs/region"}}
+      }
+    },
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "family", "version", "architecture", "region"],
+      "properties": {
+        "id": {"$ref": "#/$defs/nonempty"},
+        "name": {"$ref": "#/$defs/nonempty"},
+        "family": {"$ref": "#/$defs/nonempty"},
+        "version": {"$ref": "#/$defs/nonempty"},
+        "architecture": {"$ref": "#/$defs/architecture"},
+        "region": {"$ref": "#/$defs/region"}
+      }
+    },
+    "firewall_rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol", "port_range", "source_network"],
+      "properties": {
+        "protocol": {"enum": ["tcp", "udp", "icmp", "all"]},
+        "port_range": {
+          "oneOf": [
+            {"type": "null"},
+            {
+              "type": "array",
+              "prefixItems": [
+                {"type": "integer", "minimum": 1, "maximum": 65535},
+                {"type": "integer", "minimum": 1, "maximum": 65535}
+              ],
+              "items": false,
+              "minItems": 2,
+              "maxItems": 2
+            }
+          ]
+        },
+        "source_network": {"$ref": "#/$defs/nonempty"}
+      }
+    },
+    "firewall_ruleset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "scope", "region_name", "ssh_only", "rules"],
+      "properties": {
+        "id": {"$ref": "#/$defs/nonempty"},
+        "name": {"$ref": "#/$defs/nonempty"},
+        "scope": {"enum": ["global", "regional"]},
+        "region_name": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/nonempty"}]},
+        "ssh_only": {"type": "boolean"},
+        "rules": {"type": "array", "items": {"$ref": "#/$defs/firewall_rule"}}
+      }
+    },
+    "running_instance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "status",
+        "region_name",
+        "instance_type_name",
+        "file_system_count",
+        "firewall_ruleset_ids",
+        "t07_owned"
+      ],
+      "properties": {
+        "id": {"$ref": "#/$defs/nonempty"},
+        "name": {"oneOf": [{"type": "null"}, {"type": "string", "maxLength": 64}]},
+        "status": {"$ref": "#/$defs/nonempty"},
+        "region_name": {"$ref": "#/$defs/nonempty"},
+        "instance_type_name": {"$ref": "#/$defs/nonempty"},
+        "file_system_count": {"type": "integer", "minimum": 0},
+        "firewall_ruleset_ids": {"type": "array", "items": {"$ref": "#/$defs/nonempty"}},
+        "t07_owned": {"type": "boolean"}
+      }
+    },
+    "selected_selection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "instance_type_name",
+        "region_name",
+        "image_id",
+        "image_name",
+        "image_family",
+        "image_version",
+        "architecture",
+        "price_cents_per_hour",
+        "vcpus",
+        "memory_gib",
+        "storage_gib",
+        "gpus",
+        "eligible_firewall_ruleset_ids",
+        "qualification_list_price_cap_cents",
+        "provider_compute_hard_cap_cents",
+        "ssh_key_binding",
+        "firewall_ruleset_binding"
+      ],
+      "properties": {
+        "state": {"const": "selected"},
+        "instance_type_name": {"$ref": "#/$defs/nonempty"},
+        "region_name": {"$ref": "#/$defs/nonempty"},
+        "image_id": {"$ref": "#/$defs/nonempty"},
+        "image_name": {"$ref": "#/$defs/nonempty"},
+        "image_family": {"const": "gpu-base-22-04"},
+        "image_version": {"$ref": "#/$defs/nonempty"},
+        "architecture": {"const": "x86_64"},
+        "price_cents_per_hour": {"type": "integer", "minimum": 0, "maximum": 150},
+        "vcpus": {"type": "integer", "minimum": 8},
+        "memory_gib": {"type": "integer", "minimum": 16},
+        "storage_gib": {"type": "integer", "minimum": 100},
+        "gpus": {"type": "integer", "minimum": 0, "maximum": 1},
+        "eligible_firewall_ruleset_ids": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/nonempty"}
+        },
+        "qualification_list_price_cap_cents": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 150
+        },
+        "provider_compute_hard_cap_cents": {"const": 200},
+        "ssh_key_binding": {"type": "null"},
+        "firewall_ruleset_binding": {"type": "null"}
+      }
+    },
+    "blocked_selection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "reason_code", "ssh_key_binding", "firewall_ruleset_binding"],
+      "properties": {
+        "state": {"const": "blocked"},
+        "reason_code": {
+          "enum": [
+            "existing-t07-instance",
+            "global-firewall-not-ssh-only",
+            "no-qualifying-candidate"
+          ]
+        },
+        "ssh_key_binding": {"type": "null"},
+        "firewall_ruleset_binding": {"type": "null"}
+      }
+    }
+  }
+}

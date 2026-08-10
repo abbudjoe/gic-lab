@@ -1,0 +1,51 @@
+{
+  "schema_version": "0.1.0",
+  "record_id": "T07-L1-V3-LAMBDA-OPENAPI-1.10.0",
+  "provider": "Lambda Cloud",
+  "api_base_url": "https://cloud.lambda.ai",
+  "specification": {
+    "url": "https://docs.lambda.ai/api/cloud/spec.json",
+    "documentation_url": "https://docs-api.lambda.ai/api/cloud",
+    "declared_version": "1.10.0",
+    "bytes": 239644,
+    "sha256": "365488015cf79fda38e1268f44a9e2d4af4fe2794ad3c6878c78a7e1f98caded",
+    "retrieved_at_utc": "2026-08-09T20:36:01Z",
+    "revalidated_at_utc": "2026-08-10T11:35:38Z",
+    "revalidation_observation": "The first-party public documentation still advertises Download OpenAPI spec 1.10.0. The byte count and SHA-256 remain bound to the prior first-party spec retrieval; they were not inferred from the rendered documentation page."
+  },
+  "relevant_read_only_endpoints": [
+    "/api/v1/instance-types",
+    "/api/v1/images",
+    "/api/v1/regions",
+    "/api/v1/ssh-keys",
+    "/api/v1/firewall-rulesets",
+    "/api/v1/firewall-rulesets/global",
+    "/api/v1/instances"
+  ],
+  "audit_contract_observation": {
+    "path": "/api/v1/audit-events",
+    "success_envelope_required_fields": ["data", "page_token"],
+    "data_type": "array",
+    "page_token_type": ["string", "null"],
+    "page_token_required": true,
+    "event_required_fields": [
+      "service_name",
+      "resource_name",
+      "action",
+      "catalog_version",
+      "event_id",
+      "event_time",
+      "actor_lrn",
+      "resource_lrns",
+      "resource_owner_lrn",
+      "request_api_key_lrn",
+      "additional_details"
+    ],
+    "additional_properties_explicitly_forbidden": false
+  },
+  "launch_contract_requires_account_lrn": false,
+  "account_api_called": false,
+  "authenticated_request_made": false,
+  "real_secret_accessed": false,
+  "payload_downloaded": false
+}

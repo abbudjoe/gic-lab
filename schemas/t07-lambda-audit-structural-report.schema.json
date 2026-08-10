@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gic-lab.invalid/schemas/t07-lambda-audit-structural-report.schema.json",
+  "title": "T07 Lambda audit response structural report",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "source_run_id",
+    "source_response_bytes",
+    "top_level_key_names",
+    "top_level_value_types",
+    "data_array_length",
+    "item_key_name_sets",
+    "nullability_observations",
+    "unknown_key_names",
+    "required_key_omissions",
+    "type_mismatches",
+    "page_token_state",
+    "sensitive_scalar_values_retained",
+    "summary_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1.0"},
+    "source_run_id": {"const": "RUN-T07-L1-LAMBDA-INVENTORY-0002"},
+    "source_response_bytes": {"type": "integer", "minimum": 0, "maximum": 262144},
+    "top_level_key_names": {"$ref": "#/$defs/unique_names"},
+    "top_level_value_types": {"$ref": "#/$defs/type_map"},
+    "data_array_length": {"type": ["integer", "null"], "minimum": 0},
+    "item_key_name_sets": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/unique_names"},
+      "maxItems": 4096
+    },
+    "nullability_observations": {
+      "type": "object",
+      "propertyNames": {"type": "string", "maxLength": 128},
+      "additionalProperties": {"enum": ["always_null", "sometimes_null", "never_null", "absent"]}
+    },
+    "unknown_key_names": {"$ref": "#/$defs/unique_names"},
+    "required_key_omissions": {"$ref": "#/$defs/unique_names"},
+    "type_mismatches": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "expected", "observed"],
+        "properties": {
+          "path": {"type": "string", "maxLength": 256},
+          "expected": {"type": "string", "maxLength": 128},
+          "observed": {"$ref": "#/$defs/json_type"}
+        },
+        "additionalProperties": false
+      }
+    },
+    "page_token_state": {
+      "enum": ["null", "non_null", "absent", "wrong_type", "unobserved_raw_body_absent"]
+    },
+    "sensitive_scalar_values_retained": {"const": false},
+    "summary_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "json_type": {"enum": ["null", "boolean", "integer", "number", "string", "array", "object"]},
+    "unique_names": {
+      "type": "array",
+      "items": {"type": "string", "maxLength": 128},
+      "uniqueItems": true,
+      "maxItems": 256
+    },
+    "type_map": {
+      "type": "object",
+      "propertyNames": {"type": "string", "maxLength": 128},
+      "additionalProperties": {"$ref": "#/$defs/json_type"}
+    }
+  }
+}

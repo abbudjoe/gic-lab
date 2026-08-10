@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gic-lab.invalid/schemas/lambda-v3-instance-types-response.schema.json",
+  "title": "Lambda Cloud instance-types response used by T07 Gate L1 V3",
+  "type": "object",
+  "required": ["data"],
+  "properties": {
+    "data": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["instance_type", "regions_with_capacity_available"],
+        "properties": {
+          "instance_type": {"$ref": "#/$defs/instance_type"},
+          "regions_with_capacity_available": {
+            "type": "array",
+            "items": {"$ref": "#/$defs/region"}
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "region": {
+      "type": "object",
+      "required": ["name", "description"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "description": {"type": "string"}
+      },
+      "additionalProperties": true
+    },
+    "instance_type": {
+      "type": "object",
+      "required": [
+        "name",
+        "description",
+        "gpu_description",
+        "price_cents_per_hour",
+        "specs",
+        "architecture"
+      ],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "description": {"type": "string"},
+        "gpu_description": {"type": "string"},
+        "price_cents_per_hour": {"type": "integer", "minimum": 0},
+        "specs": {
+          "type": "object",
+          "required": ["vcpus", "memory_gib", "storage_gib", "gpus"],
+          "properties": {
+            "vcpus": {"type": "integer", "minimum": 1},
+            "memory_gib": {"type": "integer", "minimum": 1},
+            "storage_gib": {"type": "integer", "minimum": 1},
+            "gpus": {"type": "integer", "minimum": 0}
+          },
+          "additionalProperties": true
+        },
+        "architecture": {"enum": ["x86_64", "arm64"]}
+      },
+      "additionalProperties": true
+    }
+  }
+}

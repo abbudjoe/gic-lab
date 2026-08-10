@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gic-lab.invalid/schemas/t07-lambda-schema-extension-report.schema.json",
+  "title": "T07 Lambda endpoint schema-extension report",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "policy",
+    "unknown_scalar_values_retained",
+    "observations",
+    "report_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1.0"},
+    "policy": {"const": "documented-required-strict-additive-keys-report-only"},
+    "unknown_scalar_values_retained": {"const": false},
+    "observations": {
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 7,
+      "items": {
+        "type": "object",
+        "required": [
+          "request_id",
+          "validation_state",
+          "unknown_locations",
+          "structural_summary_sha256"
+        ],
+        "properties": {
+          "request_id": {
+            "enum": [
+              "instance-types",
+              "images",
+              "regions",
+              "ssh-keys",
+              "firewall-rulesets",
+              "global-firewall-ruleset",
+              "running-instances"
+            ]
+          },
+          "validation_state": {"enum": ["exact", "compatible_extension_observed"]},
+          "unknown_locations": {
+            "type": "array",
+            "maxItems": 256,
+            "items": {
+              "type": "object",
+              "required": ["path", "key_names", "value_types"],
+              "properties": {
+                "path": {"type": "string", "maxLength": 512},
+                "key_names": {
+                  "type": "array",
+                  "items": {"type": "string", "maxLength": 128},
+                  "uniqueItems": true,
+                  "maxItems": 128
+                },
+                "value_types": {
+                  "type": "object",
+                  "propertyNames": {"type": "string", "maxLength": 128},
+                  "additionalProperties": {
+                    "enum": ["null", "boolean", "integer", "number", "string", "array", "object"]
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "structural_summary_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+        },
+        "additionalProperties": false
+      }
+    },
+    "report_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  },
+  "additionalProperties": false
+}

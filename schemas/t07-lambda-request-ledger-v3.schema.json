@@ -1,0 +1,358 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gic-lab.invalid/schemas/t07-lambda-request-ledger-v3.schema.json",
+  "title": "T07 Gate L1 V3 seven-endpoint append-only request-ledger event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "event_type",
+    "run_id",
+    "plan_id",
+    "authorization_reference",
+    "event_sequence",
+    "request_ordinal",
+    "method",
+    "scheme",
+    "host",
+    "path",
+    "query_key_names",
+    "transport_kind",
+    "monotonic_timestamp_ns",
+    "wall_timestamp_utc",
+    "bytes_received_so_far",
+    "http_status",
+    "content_type",
+    "elapsed_ms",
+    "sanitized_failure_stage",
+    "sanitized_failure_class",
+    "stable_error_code",
+    "retry_count",
+    "pagination_request"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1.0"},
+    "event_type": {
+      "enum": [
+        "run_preflight_started",
+        "run_preflight_passed",
+        "run_preflight_failed",
+        "secret_presence_check_passed",
+        "secret_presence_check_failed",
+        "request_intent_committed",
+        "request_send_started",
+        "response_headers_received",
+        "response_body_progress",
+        "response_body_completed",
+        "response_validation_passed",
+        "request_failed",
+        "request_outcome_unknown_after_send",
+        "run_stopped",
+        "inventory_validation_started",
+        "inventory_validation_passed",
+        "inventory_validation_failed",
+        "archive_started",
+        "archive_passed",
+        "archive_failed"
+      ]
+    },
+    "run_id": {"const": "RUN-T07-L1-LAMBDA-INVENTORY-0003"},
+    "plan_id": {"const": "PLAN-T07-GATE-L1-LAMBDA-READONLY-INVENTORY-V3"},
+    "authorization_reference": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+    },
+    "event_sequence": {"type": "integer", "minimum": 1, "maximum": 84},
+    "request_ordinal": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "integer", "minimum": 1, "maximum": 7}
+      ]
+    },
+    "method": {"enum": [null, "GET"]},
+    "scheme": {"enum": [null, "https"]},
+    "host": {"enum": [null, "cloud.lambda.ai"]},
+    "path": {
+      "enum": [
+        null,
+        "/api/v1/instance-types",
+        "/api/v1/images",
+        "/api/v1/regions",
+        "/api/v1/ssh-keys",
+        "/api/v1/firewall-rulesets",
+        "/api/v1/firewall-rulesets/global",
+        "/api/v1/instances"
+      ]
+    },
+    "query_key_names": {
+      "type": "array",
+      "maxItems": 0,
+      "items": false
+    },
+    "transport_kind": {"const": "in-process-https"},
+    "monotonic_timestamp_ns": {"type": "integer", "minimum": 0},
+    "wall_timestamp_utc": {"type": "string", "format": "date-time"},
+    "bytes_received_so_far": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 262144
+    },
+    "http_status": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "integer", "minimum": 100, "maximum": 599}
+      ]
+    },
+    "content_type": {"enum": [null, "application/json", "unexpected"]},
+    "elapsed_ms": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "integer", "minimum": 0, "maximum": 180000}
+      ]
+    },
+    "sanitized_failure_stage": {
+      "enum": [
+        null,
+        "secret_source",
+        "dns",
+        "tcp_connect",
+        "tls_handshake",
+        "request_write",
+        "response_headers",
+        "response_body",
+        "http_status",
+        "redirect",
+        "rate_limit",
+        "content_type",
+        "response_size",
+        "json_decode",
+        "schema_validation",
+        "pagination",
+        "ledger_io",
+        "archive_io",
+        "unknown"
+      ]
+    },
+    "sanitized_failure_class": {
+      "enum": [
+        null,
+        "secret_missing",
+        "secret_malformed",
+        "dns_failure",
+        "tcp_connect_failure",
+        "tls_failure",
+        "request_write_failure",
+        "response_headers_failure",
+        "response_body_failure",
+        "http_unauthorized",
+        "http_forbidden",
+        "http_rate_limited",
+        "http_redirect",
+        "http_unexpected_status",
+        "unexpected_content_type",
+        "response_too_large",
+        "malformed_json",
+        "schema_drift",
+        "pagination_present",
+        "ledger_create_failed",
+        "ledger_write_failed",
+        "archive_failed",
+        "outcome_unknown",
+        "deadline_exceeded",
+        "internal_failure"
+      ]
+    },
+    "stable_error_code": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{2,63}$"
+        }
+      ]
+    },
+    "retry_count": {"const": 0},
+    "pagination_request": {"const": false}
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "enum": [
+              "request_intent_committed",
+              "request_send_started",
+              "response_headers_received",
+              "response_body_progress",
+              "response_body_completed",
+              "response_validation_passed",
+              "request_failed",
+              "request_outcome_unknown_after_send"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "request_ordinal": {"type": "integer", "minimum": 1, "maximum": 7},
+          "method": {"const": "GET"},
+          "scheme": {"const": "https"},
+          "host": {"const": "cloud.lambda.ai"},
+          "path": {"type": "string"}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "enum": [
+              "response_headers_received",
+              "response_body_progress",
+              "response_body_completed",
+              "response_validation_passed"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "http_status": {"type": "integer", "minimum": 100, "maximum": 599},
+          "content_type": {"enum": ["application/json", "unexpected"]},
+          "elapsed_ms": {"type": "integer", "minimum": 0, "maximum": 60000}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "enum": [
+              "run_preflight_failed",
+              "secret_presence_check_failed",
+              "request_failed",
+              "request_outcome_unknown_after_send",
+              "inventory_validation_failed",
+              "archive_failed"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "sanitized_failure_stage": {"type": "string"},
+          "sanitized_failure_class": {"type": "string"},
+          "stable_error_code": {"type": "string"}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "not": {
+              "enum": [
+                "request_intent_committed",
+                "request_send_started",
+                "response_headers_received",
+                "response_body_progress",
+                "response_body_completed",
+                "response_validation_passed",
+                "request_failed",
+                "request_outcome_unknown_after_send"
+              ]
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "request_ordinal": {"type": "null"},
+          "method": {"type": "null"},
+          "scheme": {"type": "null"},
+          "host": {"type": "null"},
+          "path": {"type": "null"},
+          "query_key_names": {"maxItems": 0},
+          "bytes_received_so_far": {"const": 0},
+          "http_status": {"type": "null"},
+          "content_type": {"type": "null"},
+          "elapsed_ms": {"type": "null"}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "enum": ["request_intent_committed", "request_send_started"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "bytes_received_so_far": {"const": 0},
+          "http_status": {"type": "null"},
+          "content_type": {"type": "null"},
+          "elapsed_ms": {"type": "null"}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"event_type": {"const": "response_headers_received"}}
+      },
+      "then": {
+        "properties": {"bytes_received_so_far": {"const": 0}}
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "not": {
+              "enum": [
+                "run_preflight_failed",
+                "secret_presence_check_failed",
+                "request_failed",
+                "request_outcome_unknown_after_send",
+                "inventory_validation_failed",
+                "archive_failed",
+                "run_stopped"
+              ]
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "sanitized_failure_stage": {"type": "null"},
+          "sanitized_failure_class": {"type": "null"},
+          "stable_error_code": {"type": "null"}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"event_type": {"const": "run_stopped"}}
+      },
+      "then": {
+        "oneOf": [
+          {
+            "properties": {
+              "sanitized_failure_stage": {"type": "null"},
+              "sanitized_failure_class": {"type": "null"},
+              "stable_error_code": {"type": "null"}
+            }
+          },
+          {
+            "properties": {
+              "sanitized_failure_stage": {"type": "string"},
+              "sanitized_failure_class": {"type": "string"},
+              "stable_error_code": {"type": "string"}
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

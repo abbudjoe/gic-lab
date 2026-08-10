@@ -1,0 +1,68 @@
+{
+  "schema_version": "0.1.0",
+  "historical_run_id": "RUN-T07-L1-LAMBDA-INVENTORY-0002",
+  "plan": {
+    "plan_id": "PLAN-T07-GATE-L1-LAMBDA-READONLY-INVENTORY-V2",
+    "path": "containers/sira-smoke/lambda/gate-l1-readonly-inventory-plan-v2.json",
+    "sha256": "02d83cb6e303242dec9261146488adfa2b2b026605edc48a95e1fe9ec3b9229e"
+  },
+  "request_ledger": {
+    "path": "artifacts/t07/lambda/gate-l1/RUN-T07-L1-LAMBDA-INVENTORY-0002/request-ledger.jsonl",
+    "sha256": "a1cb81ce286881c33d879ce73787e755eed8ecd1f64ca2b9eaca7d39824a2c94"
+  },
+  "request": {
+    "ordinal": 1,
+    "method": "GET",
+    "path": "/api/v1/audit-events",
+    "query_key_names": ["resource_type"],
+    "http_status": 200,
+    "response_bytes": 18058,
+    "elapsed_ms": 542,
+    "outcome_unknown_after_send": false
+  },
+  "original_classification": "schema_drift",
+  "adjudicated_classification": "unadjudicated_raw_body_absent",
+  "official_specification": {
+    "url": "https://docs.lambda.ai/api/cloud/spec.json",
+    "documentation_url": "https://docs-api.lambda.ai/api/cloud",
+    "version": "1.10.0",
+    "bytes": 239644,
+    "sha256": "365488015cf79fda38e1268f44a9e2d4af4fe2794ad3c6878c78a7e1f98caded",
+    "retrieved_at_utc": "2026-08-09T20:36:01Z",
+    "revalidated_at_utc": "2026-08-10T11:35:38Z"
+  },
+  "raw_response_body": {
+    "state": "absent",
+    "path": null,
+    "bytes": null,
+    "sha256": null
+  },
+  "sanitized_structural_report": {
+    "state": "not_produced_raw_body_absent",
+    "path": null,
+    "sha256": null
+  },
+  "page_token_state": "unobserved_raw_body_absent",
+  "parser_contract_assessment": {
+    "state": "documented_contract_incompatible_with_historical_v2_parser",
+    "official_required_event_field_count": 11,
+    "historical_parser_required_event_field_count": 18,
+    "historical_parser_required_undocumented_fields": [
+      "actor_display_name",
+      "actor_email",
+      "client_ip",
+      "client_user_agent",
+      "result",
+      "surface",
+      "workspace_lrn"
+    ],
+    "historical_parser_required_exactly_one_workspace_lrn": true,
+    "official_contract_requires_workspace_lrn": false,
+    "exact_live_response_difference_proven": false
+  },
+  "historical_run_complete": false,
+  "gate_l2_eligible": false,
+  "no_replay": true,
+  "original_ledger_modified": false,
+  "account_values_retained": false
+}

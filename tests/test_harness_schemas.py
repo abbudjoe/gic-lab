@@ -68,6 +68,10 @@ def test_harness_schema_documents_are_registered() -> None:
         "t07-lambda-inventory",
         "t07-lambda-inventory-v2",
         "t07-lambda-request-ledger",
+        "t07-lambda-audit-structural-report",
+        "t07-lambda-schema-extension-report",
+        "t07-lambda-inventory-v3",
+        "t07-lambda-request-ledger-v3",
         "t07-lambda-host-qualification",
         "t07-lambda-host-qualification-incident",
     ):
