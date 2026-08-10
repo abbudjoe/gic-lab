@@ -1,0 +1,149 @@
+{
+  "schema_version": "0.1.0",
+  "gate": "T07-L2.1",
+  "retrieved_at_utc": "2026-08-10T21:14:56Z",
+  "authenticated_account_requests": 0,
+  "lambda_openapi": {
+    "url": "https://docs-api.lambda.ai/api/cloud/spec.json",
+    "declared_api_version": "1.10.0",
+    "openapi_version": "3.1.0",
+    "bytes": 240288,
+    "sha256": "320f4877924984f060b179e86595ed58918a1d0696b60b99cae548ec164934f4",
+    "idempotency_key_or_header_documented": false,
+    "launch_rate_limit_documented": "one request per 12 seconds or five requests per minute",
+    "general_rate_limit_documented": "one request per second"
+  },
+  "relevant_schema_extractions": {
+    "canonicalization": "sorted-key compact JSON plus LF",
+    "launch_request": {
+      "bytes": 2939,
+      "sha256": "5f08f5c134701a795ad5ca5c05cac90a27f2707884ac564273f858f9232b2275"
+    },
+    "launch_response": {
+      "bytes": 274,
+      "sha256": "f38e99230b0252a567ca5f8dcaf11c27cccfcf52dc43f2dcc987bf94d023f041"
+    },
+    "instance": {
+      "bytes": 2703,
+      "sha256": "117682f990895fe98ee8ee833f727cbdee5d8e28f4658fe8fdcacefaa00b574e"
+    },
+    "instance_status": {
+      "bytes": 174,
+      "sha256": "ceb4770a600f7c59286996143e6bde4866362c863cfd6c78a917f1cab9893ec0"
+    },
+    "instance_list_200": {
+      "bytes": 155,
+      "sha256": "9d00807ecb78e093304cae42b675b7de34b4bc78d82a7eab8a88b6c6d8cb20c9"
+    },
+    "instance_detail_200": {
+      "bytes": 130,
+      "sha256": "af7b227647369914eb847d0f763a17ad0a6e368338031aedf0c4150e85bebfe8"
+    },
+    "terminate_request": {
+      "bytes": 328,
+      "sha256": "00ec916d6ae765cb7507012371a0c8d962a2a45cd6dca255e530f9df03dfc37b"
+    },
+    "terminate_response_200": {
+      "bytes": 1307,
+      "sha256": "a1d9cd67d52d0b942689ef209d505a6a64ceec244dfd4a2408fa1c9ef9d12112"
+    },
+    "requested_tag": {
+      "bytes": 316,
+      "sha256": "a2005fd1d4879491d2ea6d1147d4c51214434aba6944ae2607d80d9c6bb0c58a"
+    },
+    "tag": {
+      "bytes": 245,
+      "sha256": "7324d80174af3a662962c6d789bd73e66f46817eb94627a29f2a31915c044fce"
+    },
+    "firewall_ruleset_entry": {
+      "bytes": 265,
+      "sha256": "63300b2fa2f8084219942db8f38e1bb0b94050aa31021c7a349032a7e814930b"
+    }
+  },
+  "source_adjudication": {
+    "launch_required_fields": [
+      "region_name",
+      "instance_type_name",
+      "ssh_key_names"
+    ],
+    "launch_optional_ownership_fields": [
+      "name",
+      "hostname",
+      "tags"
+    ],
+    "launch_success_requires_instance_ids": true,
+    "instance_required_fields": [
+      "id",
+      "status",
+      "ssh_key_names",
+      "file_system_names",
+      "region",
+      "instance_type",
+      "actions"
+    ],
+    "instance_optional_ownership_fields": [
+      "name",
+      "hostname",
+      "tags",
+      "firewall_rulesets",
+      "file_system_mounts"
+    ],
+    "image_returned_by_instance_schema": false,
+    "instance_status_enum": [
+      "booting",
+      "active",
+      "unhealthy",
+      "terminated",
+      "terminating",
+      "preempted"
+    ],
+    "terminate_accepts_exact_instance_ids": true,
+    "name_or_hostname_uniqueness_documented": false,
+    "launch_visibility_consistency_window_documented": false
+  },
+  "lambda_public_docs": {
+    "api_url": "https://docs.lambda.ai/public-cloud/cloud-api/",
+    "billing_url": "https://docs.lambda.ai/public-cloud/billing/",
+    "instance_management_url": "https://docs.lambda.ai/public-cloud/on-demand/creating-managing-instances/",
+    "billing_observation": "ODC billing ends when the instance is terminated; instances are billed while running.",
+    "termination_observation": "The console and API are documented termination mechanisms; host shutdown is explicitly not termination and billing continues.",
+    "list_observation": "GET /api/v1/instances is documented as listing running instances."
+  },
+  "apple_local_sources": {
+    "host": {
+      "product": "macOS",
+      "version": "26.5.1",
+      "build": "25F80",
+      "architecture": "arm64"
+    },
+    "launchctl_manpage": {
+      "path": "/usr/share/man/man1/launchctl.1",
+      "bytes": 25952,
+      "sha256": "cf8752dd8eb8c3370c7d03b333430aa68a665c907c475ea407cb1b6542083ae2"
+    },
+    "launchd_plist_manpage": {
+      "path": "/usr/share/man/man5/launchd.plist.5",
+      "bytes": 33172,
+      "sha256": "1c5f5041c1d3492988bfa6f9dc6d969dfd072d20af2703c28d9a8f6ed6aaadcb"
+    },
+    "observations": [
+      "launchctl submit keeps a no-plist job alive after failure but supplies no reviewed nonpersistent credential-reacquisition contract",
+      "launchd KeepAlive can restart jobs and AbandonProcessGroup defaults false",
+      "ExitTimeOut controls TERM-to-KILL timing and zero means infinity",
+      "a separate-session double-fork can retain an in-memory pipe-delivered credential but is not restartable after its own failure"
+    ]
+  },
+  "watchdog_decision": {
+    "evaluated_candidate": "darwin-separate-session-double-fork",
+    "terminal_state": "manual-console-launch-required",
+    "candidate_authoritative": false,
+    "launchd_transient_job_selected": false,
+    "rejection_reason": "the offline pipe, session, heartbeat, and flock primitives are not integrated into a source-grounded independently supervised provider-cleanup runner with shared budgets and mutation exclusion",
+    "residual_limits": [
+      "Mac power loss",
+      "local network loss",
+      "Lambda API or console outage",
+      "simultaneous supervisor and watchdog failure"
+    ]
+  }
+}

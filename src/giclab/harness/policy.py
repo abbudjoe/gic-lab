@@ -70,7 +70,10 @@ class PlannedExecutionSubstrate:
 
     def __post_init__(self) -> None:
         expected = {
-            "decision_state": (self.decision_state, "lambda-host-qualification-blocked"),
+            "decision_state": (
+                self.decision_state,
+                "lambda-host-qualification-manual-console-required",
+            ),
             "provider": (self.provider, "lambda-on-demand-cloud"),
             "architecture": (self.architecture, "x86_64"),
             "gate_l1_evidence_state": (
@@ -79,7 +82,7 @@ class PlannedExecutionSubstrate:
             ),
             "gate_l2_decision_state": (
                 self.gate_l2_decision_state,
-                "blocked-human-or-source-decision",
+                "manual-console-launch-required",
             ),
             "gate_l3_state": (self.gate_l3_state, "requirements-only"),
             "local_alternatives": (self.local_alternatives, "terminal-rejected"),
@@ -89,7 +92,7 @@ class PlannedExecutionSubstrate:
             ),
             "security_decision_document": (
                 self.security_decision_document,
-                "docs/harness/T07_GATE_L2_0_HUMAN_DECISIONS_AND_PLAN.md",
+                "docs/harness/T07_GATE_L2_1_LAUNCH_RECOVERY_DESIGN.md",
             ),
         }
         for field, (observed, required) in expected.items():

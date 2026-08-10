@@ -82,6 +82,10 @@ def test_harness_schema_documents_are_registered() -> None:
         "t07-lambda-ssh-key-fingerprint",
         "t07-local-public-key-match",
         "t07-lambda-ssh-key-request-ledger",
+        "t07-lambda-owned-launch-marker",
+        "t07-lambda-l2-transaction-journal",
+        "t07-lambda-l2-watchdog-journal",
+        "t07-lambda-l2-launch-recovery-decision",
     ):
         schema = load_json(ROOT / f"schemas/{name}.schema.json")
         assert "$id" in schema

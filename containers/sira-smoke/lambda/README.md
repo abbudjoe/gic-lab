@@ -54,16 +54,38 @@ This directory contains the design-only Gate L0 source locks and unauthorized pl
   OpenAPI/docs, local OpenSSH manuals, and official BusyBox OCI metadata used by the
   offline Gate L2.0 design. It records the same-version OpenAPI byte change without
   making an account request or fetching a layer.
+- `public-source-observations-l2-1.json` binds the Gate L2.1 launch/list/detail/
+  terminate schema extracts, Lambda billing/termination observations, and the local
+  Apple watchdog-source identities. It records no account response or private value.
+- `T07_L2_LAUNCH_RECOVERY_DECISION_TEMPLATE.json` is a deliberately invalid,
+  fail-closed public record of the decisions the rejected automated design would have
+  needed. The user should not materialize it for execution; this repository file is
+  not a decision or authorization.
 Gate L1A subsequently produced a unique sealed match for `fractal-lambda-codex`.
 Gate L2.0 validated and privately sealed the user's type/region/image/key/firewall/
 host-key choices. Independent review found that first-party sources cannot guarantee
 identification and termination of an accepted launch after an unknown response, and
 that the repository lacks one authoritative end-to-end supervisor/evidence path.
-The terminal decision is `blocked-human-or-source-decision`.
+That L2.0 historical decision was `blocked-human-or-source-decision`.
+
+Gate L2.1 evaluated that blocked API-launch path with a private random ownership
+conjunction, irreversible no-replay state, exact-ID discovery and termination,
+fsync-backed transaction/watchdog journals, separate-session cleanup-watchdog
+primitives, draft aggregate caps, and complete-evidence checks.
+Independent review found
+that they are not one authoritative live transaction: effect ordering, shared
+cross-process limits/lease, cleanup-on-every-failure, concrete watchdog execution,
+terminal polling, exact process arrays, and evidence closure remain incomplete. The
+terminal decision is `manual-console-launch-required`. No launch-recovery decision or
+executable V2 plan exists, and completing the public decision template would not make
+one. Concrete Gate L2.1 HTTPS, subprocess, and watchdog-spawn entrypoints are guarded
+to fail before connection, process, pipe, or fork effects; retained tests use fakes.
 
 No `gate-l2-host-qualification-plan.json` is committed. The proposed V1 plan/run
-identities are rejected and non-reusable. Gate L2 schemas, renderers, state helpers,
-and fake tests are retained only as non-authoritative draft controls. The blocked
-disposition is recorded in
+and draft V2 identities are rejected and non-reusable. Gate L2 schemas, renderers,
+state helpers, and fake tests are retained only as non-authoritative draft controls.
+The terminal disposition is recorded in
 `docs/harness/T07_GATE_L2_HOST_QUALIFICATION_AUTHORIZATION_PACKET.md`; it contains no
-authorization block and permits no current action.
+plan hash or authorization block and permits no current action. A future Gate L2, if
+requested, must use a newly reviewed human-operated console topology and fresh
+identities.

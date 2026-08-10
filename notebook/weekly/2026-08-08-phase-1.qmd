@@ -85,3 +85,16 @@ response, and the draft code does not yet form one enforceable supervisor/eviden
 path. No executable Gate L2 plan or authorization block exists. No cloud mutation,
 paid compute, SSH, container, browser, model call, SiRA condition, or scientific result
 occurred in Gate L2.0.
+
+Gate L2.1 was an offline recovery/control-plane adjudication only. It source-bound the
+provider's optional instance name, hostname, and tag fields into a private random
+ownership conjunction; burns the marker after a possible send; and adds bounded
+discovery, exact-ID termination, a separate-session cleanup watchdog, aggregate
+budgets, privacy projection, and complete-evidence eligibility. Public records contain
+only structure, limits, aliases, and hashes. Independent review found that the
+fake-tested pieces do not form one authoritative effecting supervisor or independently
+surviving watchdog. The automated path therefore ended at
+`manual-console-launch-required`. No executable Gate L2 plan or authorization exists;
+future progress requires a newly reviewed human-operated console launch and cleanup
+contract with fresh authority. No account, cloud, SSH, container, browser, model,
+SiRA, or scientific action occurred.

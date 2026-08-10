@@ -1,6 +1,6 @@
 # Phase 1 SiRA Smoke Readiness
 
-Status: **profile eligible; Gate L2 blocked; not authorized**
+Status: **profile eligible; manual-console Gate L2 required; not authorized**
 
 Prepared: 2026-08-08
 
@@ -36,8 +36,8 @@ freshly prove zero running instances account-wide, and require same-instance ter
 evidence before restoring the sealed original globals. Most importantly, the
 privacy-minimized inventory retained account key names
 without account public-key material, so no local/account fingerprint match can be
-established. The current infrastructure decision state is therefore
-`inventory-evidence-insufficient`, not ready for Gate L2 authorization.
+established. At that historical Gate L1.3 checkpoint the infrastructure decision was
+`inventory-evidence-insufficient`; Gate L1A later supplied the missing key evidence.
 
 Gate L1.4 has now designed the fresh minimum evidence step without executing it:
 `PLAN-T07-GATE-L1A-LAMBDA-SSH-KEY-FINGERPRINT-V1` permits, only after a new exact
@@ -56,13 +56,18 @@ strict global-plus-regional `/32` controls, and independent Jupyter ED25519 trus
 Raw IDs, source network, paths, and fingerprints remain in ignored parameters whose
 hash-verified copy is sealed to the approved external archive.
 
-Independent review found no source-backed safe recovery for an accepted launch after
-an unknown response and no authoritative end-to-end supervisor/evidence path. The
-infrastructure decision is `blocked-human-or-source-decision`; no executable Gate L2
-plan or authorization block exists, and the proposed V1 identities are rejected.
-Cloud mutation and paid compute remain false. A new source-backed implementation and
-fresh reviewed plan are required before Gate L2 can be considered; Gate L3 and Gate
-L4 remain blocked.
+Gate L2.1 then pinned the current launch/list/detail/terminate contract and built
+fake-tested marker, journal, discovery, termination, watchdog, cap, privacy, and
+archive primitives. Independent review found that these pieces do not compose one
+authoritative live transaction: mutation effects/order, cleanup from every failure,
+cross-process budget/lease enforcement, an independently supervised watchdog,
+duplicate/terminal polling, exact process arrays, and evidence closure remain
+incomplete. The automated API-launch path therefore terminated at
+`manual-console-launch-required`. No executable Gate L2 plan or authorization block
+exists; the V1 and draft V2 identities are rejected. Cloud mutation and paid compute
+remain false. Any future Gate L2 proposal must be a newly reviewed human-operated
+console launch/observation/cleanup contract with fresh identities and current-turn
+authorization. Gate L3 and Gate L4 remain blocked.
 
 ## Exact user decision fields
 
@@ -180,12 +185,12 @@ the EXP-0001 hypothesis or any RQ-H2K outcome.
   access-controlled smoke retention can proceed, but publication stays blocked.
 - The final repository software/content licenses and publication identity remain open.
 - T07 Lambda capacity and price were observed and the candidate, SSH key, firewall,
-  private `/32`, and host-key method were validated and privately sealed. Gate L2 is
-  blocked because the first-party contract does not guarantee safe discovery and
-  exact-ID termination after an unknown launch response, and no authoritative
-  end-to-end supervisor/evidence path exists. A source-backed resolution plus a new
-  reviewed implementation and fresh plan/run identities are required. SR²AM T11/T12
-  remain scientifically and operationally separate.
+  private `/32`, and host-key method were validated and privately sealed. Gate L2's
+  automated API-launch design ended at `manual-console-launch-required`; the offline
+  supervisor/watchdog primitives are not execution authority. Continuing requires a
+  user-requested, newly reviewed human-operated console launch/observation/cleanup
+  contract with fresh plan/run identities and fresh authority. SR²AM T11/T12 remain
+  scientifically and operationally separate.
 - RQ-H2K external-versus-explicit-model comparison feasibility remains undetermined.
   Missing optional regulation fields do not invalidate EXP-0001 when its primary
   evidence contract is complete.

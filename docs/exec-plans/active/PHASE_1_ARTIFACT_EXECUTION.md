@@ -65,7 +65,7 @@ grant no mutation authority; one gate's authorization never carries into another
 
 | Task | Work package | Mapped phase DoD | Current permission |
 |---|---|---|---|
-| T07 | Execute one authorized contained SiRA smoke pair; capture regulation-decision evidence without interpretation. | P1-DOD-02, P1-DOD-11 through P1-DOD-13 | Gate L1/L1A complete/sealed; Gate L2 blocked by source/control-plane gaps |
+| T07 | Execute one authorized contained SiRA smoke pair; capture regulation-decision evidence without interpretation. | P1-DOD-02, P1-DOD-11 through P1-DOD-13 | Gate L1/L1A complete/sealed; automated Gate L2 ended at `manual-console-launch-required` |
 | T08 | Analyze smoke infrastructure evidence and prepare an unauthorized pilot package. | P1-DOD-03, P1-DOD-11 through P1-DOD-13 | blocked until T07 succeeds |
 | T09 | Execute the freshly authorized exploratory SiRA pilot. | P1-DOD-04, P1-DOD-11 through P1-DOD-13 | blocked until T08 and authorization |
 | T10 | Analyze and publish the exploratory SiRA pilot. | P1-DOD-05, P1-DOD-11 through P1-DOD-13 | blocked until T09 succeeds |
@@ -81,7 +81,7 @@ and an analysis recommendation does not authorize the next execution.
 ## T07 assembly control
 
 Assembly status: **Gate L1/L1A complete and sealed; Gate L2.0 human choices valid;
-Gate L2 blocked by source and end-to-end control-plane gaps**
+Gate L2.1 terminated automated launch at `manual-console-launch-required`**
 
 Exact next profile: `PLAN-EXP0001-SMOKE`.
 
@@ -420,6 +420,16 @@ appropriate to their own operation.
   authoritative end-to-end supervisor/evidence path. No executable plan or
   authorization block exists. No account/model request, secret, cloud mutation,
   paid compute, SSH, container, browser, SiRA, or scientific execution occurred.
+- 2026-08-10: Gate L2.1 pinned Lambda OpenAPI 1.10.0, designed a private random
+  ownership conjunction, and fake-tested transaction, watchdog, cap, privacy, and
+  descriptor-held archive primitives. Independent review found no authoritative live
+  composition: effecting mutations and cleanup are not phase-exact, supervisor and
+  watchdog do not share enforced cross-process budgets/lease, the watchdog has no
+  concrete independently supervised cleanup entrypoint, and success/terminal evidence
+  remains assertion-capable. The automated path therefore ended at
+  `manual-console-launch-required`; no V2 plan or authorization block was created.
+  No account/model request, secret access, cloud mutation, paid compute, SSH,
+  container, browser, SiRA, or scientific execution occurred.
 
 ## Decision log
 
@@ -469,21 +479,26 @@ appropriate to their own operation.
 - 2026-08-10: Under D-026, remove local SSH fingerprints and paths from the current
   public run-0003 adjudication while preserving the original Git object and leaving
   sealed evidence untouched.
+- 2026-08-10: Under D-027, terminate the automated Lambda API-launch design at
+  `manual-console-launch-required`. Retain the Gate L2.1 marker/journal/watchdog/cap
+  code as non-authoritative offline evidence, reject the unmaterialized V2 identities,
+  and require any future Gate L2 proposal to use a newly reviewed human-operated
+  console launch/observation/cleanup topology with fresh authority.
 
 ## Blockers and user actions
 
 T07 has no selected local runtime and no executable local B2a plan. Docker Desktop and
 Colima/Lima remain terminal rejected provenance. The Lambda inventory and L1A key
 evidence are complete, sealed, and nonreplayable. Gate L2.0 validated all human
-values privately but has no executable account-bound plan. The blockers are a
-source-backed launch-ambiguity/cleanup contract and a new reviewed authoritative
-supervisor for request order, limits, SSH, evidence eligibility, and archive
-finalization. L3/L4 remain unauthorized.
+values privately, but Gate L2.1 rejected automated API launch because no authoritative
+supervisor/watchdog composition closes launch ambiguity, effect ordering, shared
+limits, cleanup, and evidence eligibility. L3/L4 remain unauthorized.
 
 ## Next permitted work
 
-There is no further local B1.x or Gate L1 design gate and no Gate L2 plan that can be
-authorized. Further work requires a source-backed resolution and a newly reviewed
-end-to-end implementation with fresh plan/run identities. Gate L3 B2b qualification,
-Gate L4, both SiRA conditions, and the smoke remain blocked pending their own
-prerequisites and authorizations.
+There is no further local B1.x, Gate L1, or automated Gate L2 design loop and no Gate
+L2 plan that can be authorized. If the user chooses to continue, the next proposal
+must be a newly reviewed human-operated console launch/observation/cleanup contract
+with fresh plan/run identities and fresh current-turn authorization. Gate L3 B2b
+qualification, Gate L4, both SiRA conditions, and the smoke remain blocked pending
+that prerequisite and their own authorizations.

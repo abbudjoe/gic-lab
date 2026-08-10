@@ -2,11 +2,12 @@
 
 Status: **blocked design record; non-executable; unauthorized and unexecuted**
 
-Gate L2.0 ended in `blocked-human-or-source-decision`. No authoritative supervisor,
-executable plan, or instance exists, so the user must not perform this step. The
-proposed V1 run/checkpoint identities below are rejected design provenance and must
-not be reused. A future source-backed implementation must issue fresh identities and
-instructions after a new review and authorization.
+Gate L2.0 ended in `blocked-human-or-source-decision`, and Gate L2.1 terminated the
+automated launch design at `manual-console-launch-required`. No authoritative
+supervisor, executable plan, or instance exists, so the user must not perform this
+step. The proposed V1/V2 run/checkpoint identities are rejected design provenance and
+must not be reused. A future human-operated console proposal must issue fresh
+identities and instructions after a new review and authorization.
 
 This checkpoint supplies an independent first-contact ED25519 host-key fingerprint
 for exactly one future Gate L2 instance. It is not TOFU: the fingerprint comes from

@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gic-lab.invalid/schemas/t07-lambda-owned-launch-marker.schema.json",
+  "$comment": "Private ignored evidence only; this schema grants no cloud authority and no marker value may enter Git.",
+  "title": "T07 Lambda private owned-launch marker",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "seed_hex",
+    "seed_bytes",
+    "binding",
+    "binding_sha256",
+    "fragment",
+    "name",
+    "hostname",
+    "tags",
+    "marker_sha256",
+    "single_use"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1.0"},
+    "seed_hex": {"type": "string", "pattern": "^[a-f0-9]{40,}$", "maxLength": 128},
+    "seed_bytes": {"type": "integer", "minimum": 20, "maximum": 64},
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "authorization_reference",
+        "human_decision_seal_sha256",
+        "image_identity_sha256",
+        "instance_type_name",
+        "launch_recovery_decision_seal_sha256",
+        "plan_id",
+        "plan_sha256",
+        "region_name",
+        "regional_ruleset_identity_sha256",
+        "ssh_key_identity_sha256"
+      ],
+      "properties": {
+        "authorization_reference": {"type": "string", "minLength": 1, "maxLength": 256},
+        "human_decision_seal_sha256": {"$ref": "#/$defs/sha256"},
+        "image_identity_sha256": {"$ref": "#/$defs/sha256"},
+        "instance_type_name": {"type": "string", "minLength": 1, "maxLength": 128},
+        "launch_recovery_decision_seal_sha256": {"$ref": "#/$defs/sha256"},
+        "plan_id": {"type": "string", "minLength": 1, "maxLength": 256},
+        "plan_sha256": {"$ref": "#/$defs/sha256"},
+        "region_name": {"type": "string", "minLength": 1, "maxLength": 128},
+        "regional_ruleset_identity_sha256": {"$ref": "#/$defs/sha256"},
+        "ssh_key_identity_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "binding_sha256": {"$ref": "#/$defs/sha256"},
+    "fragment": {"type": "string", "pattern": "^[a-f0-9]{32}$"},
+    "name": {"type": "string", "pattern": "^t07-[a-f0-9]{32}$", "maxLength": 64},
+    "hostname": {"type": "string", "pattern": "^t07-[a-f0-9]{32}$", "maxLength": 63},
+    "tags": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "prefixItems": [
+        {"$ref": "#/$defs/ownership_tag"},
+        {"$ref": "#/$defs/purpose_tag"}
+      ],
+      "items": false
+    },
+    "marker_sha256": {"$ref": "#/$defs/sha256"},
+    "single_use": {"const": true}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "ownership_tag": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "value"],
+      "properties": {
+        "key": {"const": "giclab-owner"},
+        "value": {"type": "string", "pattern": "^[a-f0-9]{32}$"}
+      }
+    },
+    "purpose_tag": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "value"],
+      "properties": {
+        "key": {"const": "giclab-purpose"},
+        "value": {"type": "string", "pattern": "^t07-host-qualification-[a-f0-9]{32}$"}
+      }
+    }
+  }
+}

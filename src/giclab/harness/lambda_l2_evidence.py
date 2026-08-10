@@ -1,8 +1,9 @@
-"""Non-authoritative bounded evidence/archive draft for blocked Gate L2.
+"""Non-authoritative Gate L2 V1 evidence/archive primitives.
 
-Import is inert. The writer does not yet enforce complete success/incident eligibility
-or a descriptor-held end-to-end archive lifecycle and must not be used as execution
-authority. Local tests exercise only its bounded draft behavior.
+Import is inert, and this historical V1 writer never grants execution authority. The
+descriptor-held finalization primitive avoids a post-rename path reopen, but no V2
+schema/archive path or authoritative supervisor exists under the terminal Gate L2.1
+decision.
 """
 
 from __future__ import annotations
@@ -275,7 +276,6 @@ def copy_sealed_evidence_bundle(
     source = _HeldDirectory.open(bundle.root)
     destination = _HeldDirectory.open(destination_parent)
     staging: _HeldDirectory | None = None
-    finalized: _HeldDirectory | None = None
     try:
         if require_distinct_device and source.device == destination.device:
             raise L2EvidenceError("Gate L2 archive fell back to the source filesystem")
@@ -347,10 +347,13 @@ def copy_sealed_evidence_bundle(
         )
         os.fsync(destination.descriptor)
         final = destination_parent / archive_id
-        finalized = _HeldDirectory.open(final)
+        # The descriptor opened on the staging directory remains bound to the same
+        # directory object after the atomic rename.  Verify through that held
+        # descriptor instead of reopening the final pathname and reintroducing a
+        # post-guard path race.
         for item in copied:
             encoded = _read_regular(
-                finalized.descriptor,
+                staging.descriptor,
                 str(item["name"]),
                 max_bytes=MAX_RECORD_BYTES,
             )
@@ -358,13 +361,13 @@ def copy_sealed_evidence_bundle(
                 raise L2EvidenceError("finalized external member verification failed")
         if sha256_bytes(
             _read_regular(
-                finalized.descriptor,
+                staging.descriptor,
                 EXTERNAL_COPY_RECORD_NAME,
                 max_bytes=MAX_RECORD_BYTES,
             )
         ) != copy_sha or sha256_bytes(
             _read_regular(
-                finalized.descriptor,
+                staging.descriptor,
                 EXTERNAL_SEAL_NAME,
                 max_bytes=MAX_RECORD_BYTES,
             )
@@ -384,8 +387,6 @@ def copy_sealed_evidence_bundle(
     except (OSError, InventoryArchiveError):
         raise L2EvidenceError("Gate L2 archive filesystem contract failed") from None
     finally:
-        if finalized is not None:
-            finalized.close()
         if staging is not None:
             staging.close()
         destination.close()

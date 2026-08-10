@@ -3,9 +3,11 @@
 Status: **requirements only; blocked until successful Gate L2; unauthorized and
 non-executable**
 
-Gate L2.0 ended at `blocked-human-or-source-decision` and supplies no executable
-plan. Its proposed V1 plan/run identities were rejected and must not be reused. Gate
-L3 still requires a future, separately reviewed and authorized Gate L2 run with
+Gate L2.0 ended at `blocked-human-or-source-decision`; its proposed V1 plan/run
+identities were rejected and must not be reused. Gate L2.1's independent review then
+terminated the automated API-launch path at `manual-console-launch-required`; its
+draft V2 identities are also rejected and no executable plan exists. Gate L3 still
+requires a future, separately reviewed and authorized human-operated Gate L2 run with
 externally sealed success evidence, exact provider termination, restored firewall
 state, and zero owned residue. The proposed BusyBox probe is a non-executable Gate L2
 design input only and cannot substitute for the three Gate L3 image/browser/

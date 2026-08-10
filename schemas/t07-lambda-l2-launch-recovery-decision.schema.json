@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gic-lab.invalid/schemas/t07-lambda-l2-launch-recovery-decision.schema.json",
+  "$comment": "Retired automated-path decision schema retained as provenance; validation cannot authorize Gate L2 after the manual-console-launch-required terminal decision.",
+  "title": "T07 Gate L2 launch-recovery residual-risk decision",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "decision_id",
+    "approve_unique_marker_discovery",
+    "approve_terminate_all_exact_full_marker_matches",
+    "approve_no_launch_retry_after_possible_send",
+    "approve_manual_console_fallback",
+    "acknowledge_provider_control_plane_outage_residual_risk",
+    "residual_risk_statement",
+    "manual_console_fallback_operator",
+    "manual_console_response_window_seconds",
+    "decision_nonce"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1.0"},
+    "decision_id": {"const": "T07-L2-LAUNCH-RECOVERY-DECISION-V1"},
+    "approve_unique_marker_discovery": {"type": "boolean"},
+    "approve_terminate_all_exact_full_marker_matches": {"type": "boolean"},
+    "approve_no_launch_retry_after_possible_send": {"type": "boolean"},
+    "approve_manual_console_fallback": {"type": "boolean"},
+    "acknowledge_provider_control_plane_outage_residual_risk": {"type": "boolean"},
+    "residual_risk_statement": {
+      "const": "The Lambda API does not document launch idempotency. A unique name/hostname/tag marker plus prelaunch zero-match check and exact-ID discovery provides strong ownership evidence but cannot guarantee cleanup during a prolonged Lambda API and console outage, Mac power/network loss, or simultaneous supervisor/watchdog failure. In those cases a billable instance may remain until control-plane access is restored."
+    },
+    "manual_console_fallback_operator": {"const": "user"},
+    "manual_console_response_window_seconds": {"const": 900},
+    "decision_nonce": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  }
+}

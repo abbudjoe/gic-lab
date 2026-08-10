@@ -57,6 +57,32 @@ def test_transfer_hash_mismatch_stops_before_write(tmp_path: Path) -> None:
     writer.close()
 
 
+def test_v1_bundle_verifies_after_descriptor_held_rename(tmp_path: Path) -> None:
+    repository = tmp_path / "repository"
+    repository.mkdir(mode=0o700)
+    writer = GateL2EvidenceWriter.create(repository)
+    encoded = b'{"synthetic":"descriptor-held evidence"}\n'
+    writer.write_transferred_record(
+        name="0001-host.json",
+        encoded=encoded,
+        source_transport_sha256=hashlib.sha256(encoded).hexdigest(),
+    )
+    bundle = writer.seal()
+    destination = tmp_path / "external"
+    destination.mkdir(mode=0o700)
+    archived = copy_sealed_evidence_bundle(
+        bundle,
+        destination_parent=destination,
+        archive_id="RUN-T07-L2-LAMBDA-HOST-QUALIFICATION-0001-HOST-EVIDENCE",
+        require_distinct_device=False,
+    )
+    copy_record = json.loads((archived.destination / "COPY_RECORD.json").read_text())
+    assert copy_record["run_id"] == "RUN-T07-L2-LAMBDA-HOST-QUALIFICATION-0001"
+    assert copy_record["destination_hashes_verified"] is True
+    assert not (destination / f".{archived.destination.name}.partial").exists()
+    writer.close()
+
+
 def test_l2_success_and_incident_schemas_are_coherent_with_caps() -> None:
     success_schema = json.loads(
         (ROOT / "schemas/t07-lambda-l2-host-evidence.schema.json").read_text()

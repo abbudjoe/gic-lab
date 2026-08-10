@@ -1,0 +1,13 @@
+{
+  "schema_version": "0.1.0",
+  "decision_id": "T07-L2-LAUNCH-RECOVERY-DECISION-V1",
+  "approve_unique_marker_discovery": false,
+  "approve_terminate_all_exact_full_marker_matches": false,
+  "approve_no_launch_retry_after_possible_send": false,
+  "approve_manual_console_fallback": false,
+  "acknowledge_provider_control_plane_outage_residual_risk": false,
+  "residual_risk_statement": "The Lambda API does not document launch idempotency. A unique name/hostname/tag marker plus prelaunch zero-match check and exact-ID discovery provides strong ownership evidence but cannot guarantee cleanup during a prolonged Lambda API and console outage, Mac power/network loss, or simultaneous supervisor/watchdog failure. In those cases a billable instance may remain until control-plane access is restored.",
+  "manual_console_fallback_operator": "user",
+  "manual_console_response_window_seconds": 900,
+  "decision_nonce": "REPLACE_WITH_64_LOWERCASE_HEX_CHARACTERS_FROM_32_RANDOM_BYTES"
+}
