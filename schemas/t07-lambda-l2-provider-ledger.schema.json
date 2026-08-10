@@ -1,0 +1,141 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gic-lab.invalid/schemas/t07-lambda-l2-provider-ledger.schema.json",
+  "title": "T07 Gate L2 append-only provider request ledger event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "plan_id",
+    "authorization_reference",
+    "event_sequence",
+    "event_type",
+    "monotonic_timestamp_ns",
+    "wall_timestamp_utc",
+    "retry_count",
+    "response_bytes"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1.0"},
+    "run_id": {"const": "RUN-T07-L2-LAMBDA-HOST-QUALIFICATION-0001"},
+    "plan_id": {"const": "PLAN-T07-GATE-L2-LAMBDA-HOST-QUALIFICATION-V1"},
+    "authorization_reference": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "not": {"pattern": "-PENDING$"}
+    },
+    "event_sequence": {"type": "integer", "minimum": 1, "maximum": 768},
+    "event_type": {
+      "enum": [
+        "run_preflight_started",
+        "run_preflight_passed",
+        "run_preflight_failed",
+        "request_intent_committed",
+        "request_send_started",
+        "response_headers_received",
+        "response_body_completed",
+        "request_failed",
+        "request_outcome_unknown_after_send",
+        "state_transition",
+        "run_stopped",
+        "archive_started",
+        "archive_passed",
+        "archive_failed"
+      ]
+    },
+    "call_ordinal": {"type": "integer", "minimum": 1, "maximum": 140},
+    "operation_ordinal": {"type": "integer", "minimum": 1, "maximum": 22},
+    "operation_id": {"type": "string", "minLength": 1, "maxLength": 96},
+    "method": {"enum": ["GET", "POST", "PATCH", "DELETE"]},
+    "scheme": {"const": "https"},
+    "host": {"const": "cloud.lambda.ai"},
+    "path": {"type": "string", "pattern": "^/api/v1/[A-Za-z0-9_./:-]+$"},
+    "request_body_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "monotonic_timestamp_ns": {"type": "integer", "minimum": 0},
+    "wall_timestamp_utc": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$"
+    },
+    "retry_count": {"const": 0},
+    "http_status": {"type": "integer", "minimum": 100, "maximum": 599},
+    "content_type": {"enum": ["application/json", "unexpected"]},
+    "response_bytes": {"type": "integer", "minimum": 0, "maximum": 1048576},
+    "elapsed_ms": {"type": "integer", "minimum": 0, "maximum": 60000},
+    "sanitized_failure_stage": {
+      "enum": [
+        "secret_source",
+        "dns",
+        "tcp_connect",
+        "tls_handshake",
+        "request_write",
+        "response_headers",
+        "response_body",
+        "http_status",
+        "redirect",
+        "content_type",
+        "response_size",
+        "schema_validation",
+        "ledger_io",
+        "archive_io",
+        "deadline",
+        "unknown"
+      ]
+    },
+    "sanitized_failure_class": {
+      "enum": [
+        "secret_missing",
+        "secret_malformed",
+        "dns_failure",
+        "tcp_connect_failure",
+        "tls_failure",
+        "request_write_failure",
+        "response_headers_failure",
+        "response_body_failure",
+        "http_unauthorized",
+        "http_forbidden",
+        "http_rate_limited",
+        "http_redirect",
+        "http_unexpected_status",
+        "unexpected_content_type",
+        "response_too_large",
+        "schema_drift",
+        "ledger_write_failed",
+        "archive_failed",
+        "deadline_exceeded",
+        "outcome_unknown",
+        "internal_failure"
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "enum": [
+              "request_intent_committed",
+              "request_send_started",
+              "response_headers_received",
+              "response_body_completed",
+              "request_failed",
+              "request_outcome_unknown_after_send"
+            ]
+          }
+        },
+        "required": ["event_type"]
+      },
+      "then": {
+        "required": [
+          "call_ordinal",
+          "operation_ordinal",
+          "operation_id",
+          "method",
+          "scheme",
+          "host",
+          "path"
+        ]
+      }
+    }
+  ]
+}

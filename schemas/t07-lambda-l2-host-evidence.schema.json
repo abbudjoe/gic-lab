@@ -1,0 +1,158 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gic-lab.invalid/schemas/t07-lambda-l2-host-evidence.schema.json",
+  "title": "T07 Gate L2 successful host-qualification evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "plan_id",
+    "run_id",
+    "authorization_reference",
+    "repository_commit",
+    "provider",
+    "request_ledger",
+    "firewall",
+    "ssh",
+    "containment",
+    "evidence",
+    "actual_usage",
+    "scientific_boundary"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1.0"},
+    "plan_id": {"const": "PLAN-T07-GATE-L2-LAMBDA-HOST-QUALIFICATION-V1"},
+    "run_id": {"const": "RUN-T07-L2-LAMBDA-HOST-QUALIFICATION-0001"},
+    "authorization_reference": {"$ref": "#/$defs/activeIdentity"},
+    "repository_commit": {"$ref": "#/$defs/commit"},
+    "provider": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["instance_id", "status", "billing_ended", "instance_count", "persistent_filesystem_count"],
+      "properties": {
+        "instance_id": {"$ref": "#/$defs/nonempty"},
+        "status": {"const": "terminated"},
+        "billing_ended": {"const": true},
+        "instance_count": {"const": 1},
+        "persistent_filesystem_count": {"const": 0}
+      }
+    },
+    "request_ledger": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha256", "bytes", "events", "complete", "unknown_outcome"],
+      "properties": {
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "bytes": {"type": "integer", "minimum": 1, "maximum": 1048576},
+        "events": {"type": "integer", "minimum": 1, "maximum": 768},
+        "complete": {"const": true},
+        "unknown_outcome": {"const": false}
+      }
+    },
+    "firewall": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fresh_original_response_sha256",
+        "strict_global_verified",
+        "regional_owned_verified",
+        "instance_terminal_before_regional_delete",
+        "regional_absent_verified",
+        "global_exactly_restored",
+        "final_zero_owned_instances_verified"
+      ],
+      "properties": {
+        "fresh_original_response_sha256": {"$ref": "#/$defs/sha256"},
+        "strict_global_verified": {"const": true},
+        "regional_owned_verified": {"const": true},
+        "instance_terminal_before_regional_delete": {"const": true},
+        "regional_absent_verified": {"const": true},
+        "global_exactly_restored": {"const": true},
+        "final_zero_owned_instances_verified": {"const": true}
+      }
+    },
+    "ssh": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["checkpoint_fresh", "host_key_verified", "agent_unique_match", "private_key_reads", "sessions", "remote_commands", "output_bytes"],
+      "properties": {
+        "checkpoint_fresh": {"const": true},
+        "host_key_verified": {"const": true},
+        "agent_unique_match": {"const": true},
+        "private_key_reads": {"const": 0},
+        "sessions": {"type": "integer", "minimum": 1, "maximum": 33},
+        "remote_commands": {"type": "integer", "minimum": 1, "maximum": 33},
+        "output_bytes": {"type": "integer", "minimum": 0, "maximum": 16777216}
+      }
+    },
+    "containment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["image_reference", "image_id", "cpu", "memory_bytes", "pid_limit", "wall_seconds", "output_bytes", "tmpfs_bytes", "shm_bytes", "stop_seconds", "kill_escalated", "private_namespaces", "init", "residual_containers", "residual_networks", "residual_volumes", "residual_processes"],
+      "properties": {
+        "image_reference": {"const": "busybox@sha256:7a3ebe5bfd1a4a19797d20b0c0bb39d44393e9a03fd852c0865b0f540d868df0"},
+        "image_id": {"const": "sha256:db287cb6be81219cd18c1d82b70908f5d33eb028568b456f78eedff2ff2930e4"},
+        "cpu": {"const": "1.000"},
+        "memory_bytes": {"const": 268435456},
+        "pid_limit": {"const": 64},
+        "wall_seconds": {"const": 30},
+        "output_bytes": {"type": "integer", "minimum": 0, "maximum": 16777216},
+        "tmpfs_bytes": {"const": 16777216},
+        "shm_bytes": {"const": 16777216},
+        "stop_seconds": {"const": 1},
+        "kill_escalated": {"const": true},
+        "private_namespaces": {"const": true},
+        "init": {"const": true},
+        "residual_containers": {"const": 0},
+        "residual_networks": {"const": 0},
+        "residual_volumes": {"const": 0},
+        "residual_processes": {"const": 0}
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["local_manifest_sha256", "local_bytes", "archive_bundle_sha256", "archive_bytes", "source_retained", "destination_hashes_verified", "atomic_finalization", "internal_fallback"],
+      "properties": {
+        "local_manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "local_bytes": {"type": "integer", "minimum": 1, "maximum": 67108864},
+        "archive_bundle_sha256": {"$ref": "#/$defs/sha256"},
+        "archive_bytes": {"type": "integer", "minimum": 1, "maximum": 67108864},
+        "source_retained": {"const": true},
+        "destination_hashes_verified": {"const": true},
+        "atomic_finalization": {"const": true},
+        "internal_fallback": {"const": false}
+      }
+    },
+    "actual_usage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider_calls", "provider_wall_seconds", "estimated_cost_cents"],
+      "properties": {
+        "provider_calls": {"type": "integer", "minimum": 1, "maximum": 140},
+        "provider_wall_seconds": {"type": "integer", "minimum": 1, "maximum": 3600},
+        "estimated_cost_cents": {"type": "integer", "minimum": 1, "maximum": 200}
+      }
+    },
+    "scientific_boundary": {"$ref": "#/$defs/zeroScientific"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "commit": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
+    "nonempty": {"type": "string", "minLength": 1, "maxLength": 256},
+    "activeIdentity": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$", "not": {"pattern": "-PENDING$"}},
+    "zeroScientific": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["model_calls", "model_tokens", "browser_actions", "sira_executions", "scientific_executions", "interpretation_allowed"],
+      "properties": {
+        "model_calls": {"const": 0},
+        "model_tokens": {"const": 0},
+        "browser_actions": {"const": 0},
+        "sira_executions": {"const": 0},
+        "scientific_executions": {"const": 0},
+        "interpretation_allowed": {"const": false}
+      }
+    }
+  }
+}

@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 from dataclasses import replace
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -27,12 +28,19 @@ from giclab.harness.lambda_l20_plan import (
     ed25519_fingerprint,
     exact_limits,
     load_human_decision,
+    prepare_host_key_checkpoint_wait,
     provider_operations,
     render_container_create_argv,
+    render_global_restore_body,
+    render_launch_body,
     render_public_plan,
     render_ssh_argv,
+    render_terminate_body,
     require_unique_agent_match,
+    resolve_owned_instance_id,
+    resolve_owned_regional_ruleset_id,
     transition_gate_l2,
+    validate_fresh_prelaunch_responses,
     validate_host_key_checkpoint,
     validate_human_decision_document,
     validate_public_plan,
@@ -73,7 +81,7 @@ def decision_document(*, nonce: str = "ab" * 32, cidr: str = "8.8.8.8/32") -> di
 
 def private_binding() -> PrivateBindingSeal:
     return PrivateBindingSeal(
-        root=ROOT / "artifacts/t07/lambda/gate-l2-0" / RUN_ID,
+        root=ROOT / "artifacts/t07/lambda/gate-l2-0" / RUN_ID / "parameters-v2",
         decision_alias="l2-decision-0123456789ab",
         decision_sha256="1" * 64,
         decision_seal_sha256="2" * 64,
@@ -83,7 +91,7 @@ def private_binding() -> PrivateBindingSeal:
         total_bytes=4096,
         external_archive_path=(
             "/Volumes/Macintosh HD - Data/GIC-Lab/t07/sealed-artifacts/"
-            "RUN-T07-L2-LAMBDA-HOST-QUALIFICATION-0001-PRIVATE-PARAMETERS"
+            "RUN-T07-L2-LAMBDA-HOST-QUALIFICATION-0001-PRIVATE-PARAMETERS-V2"
         ),
         external_archive_seal_sha256="6" * 64,
         external_copy_record_sha256="7" * 64,
@@ -139,10 +147,17 @@ def test_private_decision_requires_global_ipv4_32(cidr: str) -> None:
         validate_human_decision_document(decision_document(cidr=cidr))
 
 
-def test_private_decision_hash_is_nonce_protected() -> None:
+def test_private_decision_hash_is_nonce_protected_and_fixture_dictionary_cannot_recover() -> None:
     first = canonical_bytes(decision_document(nonce="11" * 32))
     second = canonical_bytes(decision_document(nonce="22" * 32))
     assert hashlib.sha256(first).digest() != hashlib.sha256(second).digest()
+    private_nonce = hashlib.sha256(b"synthetic-nonce-not-in-public-fixture").hexdigest()
+    target = hashlib.sha256(canonical_bytes(decision_document(nonce=private_nonce))).hexdigest()
+    guesses = (
+        hashlib.sha256(canonical_bytes(decision_document(nonce=f"{value:04x}" * 16))).hexdigest()
+        for value in range(4096)
+    )
+    assert target not in guesses
 
 
 def test_private_decision_file_mode_owner_and_nofollow(tmp_path: Path) -> None:
@@ -183,7 +198,14 @@ def test_agent_one_match_passes_without_private_key_material() -> None:
 
 def test_launch_send_is_single_use_and_unknown_outcome_not_replayable() -> None:
     state = GateL2State()
+    state = transition_gate_l2(state, GateL2Event.GLOBAL_PATCH_SEND_STARTED)
     state = transition_gate_l2(state, GateL2Event.GLOBAL_REPLACEMENT_VERIFIED)
+    state = transition_gate_l2(state, GateL2Event.REGIONAL_CREATE_SEND_STARTED)
+    state = transition_gate_l2(
+        state,
+        GateL2Event.REGIONAL_ID_OBSERVED,
+        ruleset_id="ruleset-a",
+    )
     state = transition_gate_l2(state, GateL2Event.REGIONAL_RULESET_VERIFIED)
     state = transition_gate_l2(state, GateL2Event.LAUNCH_SEND_STARTED)
     assert state.phase is GateL2Phase.LAUNCH_OUTCOME_UNKNOWN
@@ -191,10 +213,43 @@ def test_launch_send_is_single_use_and_unknown_outcome_not_replayable() -> None:
         transition_gate_l2(state, GateL2Event.LAUNCH_SEND_STARTED)
 
 
+def test_regional_create_unknown_requires_single_owned_name_recovery() -> None:
+    state = GateL2State()
+    state = transition_gate_l2(state, GateL2Event.GLOBAL_PATCH_SEND_STARTED)
+    state = transition_gate_l2(state, GateL2Event.GLOBAL_REPLACEMENT_VERIFIED)
+    state = transition_gate_l2(state, GateL2Event.REGIONAL_CREATE_SEND_STARTED)
+    assert state.phase is GateL2Phase.REGIONAL_CREATE_OUTCOME_UNKNOWN
+    aborted = transition_gate_l2(state, GateL2Event.ABORT)
+    assert aborted.phase is GateL2Phase.INCIDENT
+    state = transition_gate_l2(
+        state,
+        GateL2Event.REGIONAL_RECOVERY_OBSERVED,
+        ruleset_id="ruleset-a",
+    )
+    assert state.regional_recovery_requests == 1
+    assert state.owned_regional_ruleset_id == "ruleset-a"
+    with pytest.raises(L20ContractError):
+        transition_gate_l2(
+            replace(state, phase=GateL2Phase.REGIONAL_CREATE_OUTCOME_UNKNOWN),
+            GateL2Event.REGIONAL_RECOVERY_OBSERVED,
+            ruleset_id="ruleset-a",
+        )
+
+
 def test_launch_one_response_one_identity_and_active_poll() -> None:
     state = GateL2State()
     for event in (
+        GateL2Event.GLOBAL_PATCH_SEND_STARTED,
         GateL2Event.GLOBAL_REPLACEMENT_VERIFIED,
+        GateL2Event.REGIONAL_CREATE_SEND_STARTED,
+    ):
+        state = transition_gate_l2(state, event)
+    state = transition_gate_l2(
+        state,
+        GateL2Event.REGIONAL_ID_OBSERVED,
+        ruleset_id="ruleset-a",
+    )
+    for event in (
         GateL2Event.REGIONAL_RULESET_VERIFIED,
         GateL2Event.LAUNCH_SEND_STARTED,
     ):
@@ -203,6 +258,23 @@ def test_launch_one_response_one_identity_and_active_poll() -> None:
     state = transition_gate_l2(state, GateL2Event.ACTIVE_OBSERVED)
     assert state.phase is GateL2Phase.INSTANCE_ACTIVE
     assert state.owned_instance_id == "instance-a"
+
+
+@pytest.mark.parametrize(
+    "event",
+    [GateL2Event.ACTIVE_ERROR_OBSERVED, GateL2Event.ACTIVE_POLL_TIMEOUT],
+)
+def test_active_error_or_timeout_requires_termination(event: GateL2Event) -> None:
+    state = GateL2State(
+        phase=GateL2Phase.INSTANCE_OWNED,
+        launch_requests=1,
+        owned_instance_id="instance-a",
+        global_mutated=True,
+        regional_created=True,
+        owned_regional_ruleset_id="ruleset-a",
+    )
+    state = transition_gate_l2(state, event)
+    assert state.phase is GateL2Phase.TERMINATION_REQUIRED
 
 
 def test_ambiguity_recovery_is_single_use() -> None:
@@ -239,9 +311,11 @@ def test_termination_precedes_regional_delete_and_global_restore() -> None:
         state,
         GateL2Event.TERMINAL_OBSERVED,
         instance_id="instance-a",
+        terminal_status="terminated",
     )
     state = transition_gate_l2(state, GateL2Event.REGIONAL_DELETE_VERIFIED)
     state = transition_gate_l2(state, GateL2Event.GLOBAL_RESTORE_VERIFIED)
+    state = transition_gate_l2(state, GateL2Event.ZERO_OWNED_INSTANCES_VERIFIED)
     assert state.phase is GateL2Phase.CLOSED
     assert not state.global_mutated
 
@@ -261,12 +335,268 @@ def test_termination_failure_preserves_strict_firewall() -> None:
     assert state.regional_created
 
 
+def test_global_restoration_failure_is_incident_and_never_claims_closed() -> None:
+    state = GateL2State(
+        phase=GateL2Phase.REGIONAL_DELETED,
+        launch_requests=1,
+        owned_instance_id="instance-a",
+        termination_requests=1,
+        global_mutated=True,
+        regional_created=False,
+        instance_terminal=True,
+    )
+    state = transition_gate_l2(state, GateL2Event.CLEANUP_FAILED)
+    assert state.phase is GateL2Phase.INCIDENT
+    assert state.global_mutated
+
+
+def test_terminal_proof_requires_exact_terminated_state() -> None:
+    state = GateL2State(
+        phase=GateL2Phase.TERMINATING,
+        launch_requests=1,
+        owned_instance_id="instance-a",
+        termination_requests=1,
+        global_mutated=True,
+        regional_created=True,
+    )
+    for status in (None, "terminating", "preempted", "error"):
+        with pytest.raises(L20ContractError):
+            transition_gate_l2(
+                state,
+                GateL2Event.TERMINAL_OBSERVED,
+                instance_id="instance-a",
+                terminal_status=status,
+            )
+
+
+def test_launch_unknown_abort_preserves_strict_firewall_incident() -> None:
+    state = GateL2State(
+        phase=GateL2Phase.LAUNCH_OUTCOME_UNKNOWN,
+        launch_requests=1,
+        global_mutated=True,
+        regional_created=True,
+        owned_regional_ruleset_id="ruleset-a",
+    )
+    state = transition_gate_l2(state, GateL2Event.ABORT)
+    assert state.phase is GateL2Phase.INCIDENT
+    assert state.global_mutated
+    assert state.regional_created
+
+
+def test_launch_recovery_zero_allows_cleanup_but_requires_final_zero_proof() -> None:
+    state = GateL2State(
+        phase=GateL2Phase.LAUNCH_OUTCOME_UNKNOWN,
+        launch_requests=1,
+        global_mutated=True,
+        regional_created=True,
+        owned_regional_ruleset_id="ruleset-a",
+    )
+    state = transition_gate_l2(state, GateL2Event.AMBIGUITY_RECOVERY_ZERO_OWNED)
+    state = transition_gate_l2(state, GateL2Event.REGIONAL_DELETE_VERIFIED)
+    state = transition_gate_l2(state, GateL2Event.GLOBAL_RESTORE_VERIFIED)
+    assert state.phase is GateL2Phase.GLOBAL_RESTORED
+    state = transition_gate_l2(state, GateL2Event.ZERO_OWNED_INSTANCES_VERIFIED)
+    assert state.phase is GateL2Phase.CLOSED
+
+
+def test_restore_body_uses_complete_fresh_response_not_redacted_baseline() -> None:
+    fresh_rules = [
+        {
+            "protocol": "tcp",
+            "source_network": "8.8.8.8/32",
+            "port_range": [22, 22],
+            "description": "synthetic original",
+        }
+    ]
+    assert render_global_restore_body({"data": {"rules": fresh_rules}}) == {"rules": fresh_rules}
+    redacted_rules = [
+        {
+            "protocol": "tcp",
+            "source_network": "8.8.8.8/32",
+            "port_range": [22, 22],
+        }
+    ]
+    with pytest.raises(L20ContractError):
+        render_global_restore_body({"data": {"rules": redacted_rules}})
+
+
+def test_runtime_body_renderers_are_exact_and_placeholder_free() -> None:
+    template = {
+        "region_name": "us-east-1",
+        "instance_type_name": "gpu_1x_a10",
+        "ssh_key_names": ["fractal-lambda-codex"],
+        "file_system_names": [],
+        "file_system_mounts": [],
+        "name": "giclab-t07-l2-0123456789ab",
+        "hostname": "giclab-t07-l2-0123456789ab",
+        "image": {"id": "image-a"},
+        "tags": [
+            {"key": "giclab-experiment", "value": "EXP-0001"},
+            {"key": "giclab-gate", "value": "T07-L2"},
+            {"key": "giclab-run", "value": RUN_ID},
+            {"key": "giclab-owner", "value": "0123456789ab"},
+            {"key": "giclab-plan", "value": PLAN_ID},
+        ],
+        "authorization_tag_runtime_binding": "authorization_reference",
+        "firewall_rulesets_runtime_binding": "owned_regional_ruleset_id",
+    }
+    body = render_launch_body(
+        template,
+        owned_regional_ruleset_id="ruleset-a",
+        authorization_reference="AUTH-T07-L2-TEST-0001",
+    )
+    assert body["firewall_rulesets"] == [{"id": "ruleset-a"}]
+    assert body["file_system_names"] == []
+    assert body["file_system_mounts"] == []
+    assert all("runtime_binding" not in key for key in body)
+    assert render_terminate_body("instance-a") == {"instance_ids": ["instance-a"]}
+
+
+def test_create_and_launch_response_shapes_have_distinct_typed_recovery() -> None:
+    assert (
+        resolve_owned_regional_ruleset_id(
+            expected_name="owned",
+            expected_region="us-east-1",
+            create_response={"data": {"id": "ruleset-a"}},
+        )
+        == "ruleset-a"
+    )
+    assert (
+        resolve_owned_regional_ruleset_id(
+            expected_name="owned",
+            expected_region="us-east-1",
+            recovery_response={
+                "data": [
+                    {"id": "unrelated", "name": "other", "region": {"name": "us-east-1"}},
+                    {"id": "ruleset-a", "name": "owned", "region": {"name": "us-east-1"}},
+                ]
+            },
+        )
+        == "ruleset-a"
+    )
+    tags = [{"key": "owner", "value": "nonce"}]
+    assert (
+        resolve_owned_instance_id(
+            expected_name="owned",
+            expected_tags=tags,
+            launch_response={"data": {"instance_ids": ["instance-a"]}},
+        )
+        == "instance-a"
+    )
+    assert (
+        resolve_owned_instance_id(
+            expected_name="owned",
+            expected_tags=tags,
+            recovery_response={
+                "data": [
+                    {"id": "instance-a", "name": "owned", "tags": tags},
+                ]
+            },
+        )
+        == "instance-a"
+    )
+    assert (
+        resolve_owned_instance_id(
+            expected_name="owned",
+            expected_tags=tags,
+            recovery_response={"data": []},
+        )
+        is None
+    )
+
+
+def test_fresh_prelaunch_revalidates_price_capacity_image_key_firewall_and_zero_instances() -> None:
+    region = {"name": "us-east-1", "description": "synthetic"}
+    instance_type = {
+        "name": "gpu_1x_a10",
+        "description": "synthetic",
+        "gpu_description": "synthetic",
+        "price_cents_per_hour": 129,
+        "specs": {"vcpus": 30, "memory_gib": 200, "storage_gib": 1400, "gpus": 1},
+        "architecture": "x86_64",
+    }
+    rule = {
+        "protocol": "tcp",
+        "port_range": [22, 22],
+        "source_network": "8.8.4.4/32",
+        "description": "synthetic original",
+    }
+    responses = {
+        "instance-types": {
+            "data": {
+                "gpu_1x_a10": {
+                    "instance_type": instance_type,
+                    "regions_with_capacity_available": [region],
+                }
+            }
+        },
+        "images": {
+            "data": [
+                {
+                    "id": "image-a",
+                    "created_time": "2026-08-01T00:00:00Z",
+                    "updated_time": "2026-08-01T00:00:00Z",
+                    "name": "synthetic",
+                    "description": "synthetic",
+                    "family": "gpu-base-22-04",
+                    "version": "22.4.5-2141",
+                    "architecture": "x86_64",
+                    "region": region,
+                }
+            ]
+        },
+        "regions": {"data": [region]},
+        "ssh-keys": {
+            "data": [{"id": "key-a", "name": "fractal-lambda-codex", "public_key": "dummy"}]
+        },
+        "firewall-rulesets": {"data": []},
+        "global-firewall-ruleset": {"data": {"id": "global", "name": "global", "rules": [rule]}},
+        "instances": {"data": []},
+    }
+    private = {
+        "selected_resource": {"raw_image_id": "image-a", "raw_ssh_key_id": "key-a"},
+        "owned_names": {"regional_ruleset_name": "owned-ruleset"},
+        "original_global_firewall": {
+            "rules": [
+                {
+                    "protocol": "tcp",
+                    "port_range": [22, 22],
+                    "source_network": "8.8.4.4/32",
+                }
+            ]
+        },
+    }
+    assert (
+        validate_fresh_prelaunch_responses(
+            ROOT,
+            responses=responses,
+            private_parameters=private,
+        )
+        is responses["global-firewall-ruleset"]
+    )
+    responses["instance-types"]["data"]["gpu_1x_a10"]["instance_type"][  # type: ignore[index]
+        "price_cents_per_hour"
+    ] = 130
+    with pytest.raises(L20ContractError):
+        validate_fresh_prelaunch_responses(
+            ROOT,
+            responses=responses,
+            private_parameters=private,
+        )
+
+
 def test_host_checkpoint_accepts_exact_private_identity(tmp_path: Path) -> None:
     path = tmp_path / "checkpoint.json"
+    wait = prepare_host_key_checkpoint_wait(
+        path=path,
+        challenge_nonce="ab" * 32,
+        started_monotonic_ns=1_000_000_000,
+        started_wall_utc=datetime(2026, 8, 10, 18, 59, tzinfo=UTC),
+    )
     document = {
         "schema_version": "0.1.0",
         "checkpoint_id": "CHECKPOINT-T07-L2-0001",
-        "checkpoint_nonce": "ab" * 32,
+        "checkpoint_challenge_nonce": "ab" * 32,
         "run_id": RUN_ID,
         "provider_instance_id": "instance-a",
         "algorithm": "ssh-ed25519",
@@ -279,10 +609,10 @@ def test_host_checkpoint_accepts_exact_private_identity(tmp_path: Path) -> None:
     assert (
         validate_host_key_checkpoint(
             ROOT,
-            path=path,
+            wait_binding=wait,
             expected_instance_id="instance-a",
-            started_monotonic_ns=1_000_000_000,
             observed_monotonic_ns=2_000_000_000,
+            observed_wall_utc=datetime(2026, 8, 10, 19, 1, tzinfo=UTC),
         )
         == document
     )
@@ -291,24 +621,36 @@ def test_host_checkpoint_accepts_exact_private_identity(tmp_path: Path) -> None:
 @pytest.mark.parametrize("elapsed_seconds", [601, 900])
 def test_late_host_checkpoint_stops(tmp_path: Path, elapsed_seconds: int) -> None:
     path = tmp_path / "checkpoint.json"
+    wait = prepare_host_key_checkpoint_wait(
+        path=path,
+        challenge_nonce="ab" * 32,
+        started_monotonic_ns=1,
+        started_wall_utc=datetime(2026, 8, 10, 18, 59, tzinfo=UTC),
+    )
     path.write_bytes(b"{}\n")
     path.chmod(0o600)
     with pytest.raises(L20ContractError):
         validate_host_key_checkpoint(
             ROOT,
-            path=path,
+            wait_binding=wait,
             expected_instance_id="instance-a",
-            started_monotonic_ns=1,
             observed_monotonic_ns=1 + elapsed_seconds * 1_000_000_000,
+            observed_wall_utc=datetime(2026, 8, 10, 19, 20, tzinfo=UTC),
         )
 
 
 def test_host_checkpoint_mismatch_stops(tmp_path: Path) -> None:
     path = tmp_path / "checkpoint.json"
+    wait = prepare_host_key_checkpoint_wait(
+        path=path,
+        challenge_nonce="ab" * 32,
+        started_monotonic_ns=1,
+        started_wall_utc=datetime(2026, 8, 10, 18, 59, tzinfo=UTC),
+    )
     document = {
         "schema_version": "0.1.0",
         "checkpoint_id": "CHECKPOINT-T07-L2-0001",
-        "checkpoint_nonce": "ab" * 32,
+        "checkpoint_challenge_nonce": "ab" * 32,
         "run_id": RUN_ID,
         "provider_instance_id": "instance-other",
         "algorithm": "ssh-ed25519",
@@ -321,10 +663,23 @@ def test_host_checkpoint_mismatch_stops(tmp_path: Path) -> None:
     with pytest.raises(L20ContractError):
         validate_host_key_checkpoint(
             ROOT,
-            path=path,
+            wait_binding=wait,
             expected_instance_id="instance-a",
-            started_monotonic_ns=1,
             observed_monotonic_ns=2,
+            observed_wall_utc=datetime(2026, 8, 10, 19, 1, tzinfo=UTC),
+        )
+
+
+def test_host_checkpoint_must_be_absent_before_wait(tmp_path: Path) -> None:
+    path = tmp_path / "checkpoint.json"
+    path.write_bytes(b"{}\n")
+    path.chmod(0o600)
+    with pytest.raises(L20ContractError):
+        prepare_host_key_checkpoint_wait(
+            path=path,
+            challenge_nonce="ab" * 32,
+            started_monotonic_ns=1,
+            started_wall_utc=datetime(2026, 8, 10, 18, 59, tzinfo=UTC),
         )
 
 
@@ -384,6 +739,9 @@ def test_container_create_is_digest_pinned_no_network_and_bounded() -> None:
     argv = render_container_create_argv(
         container_name="giclab-t07-l2-containment-0123456789ab",
         fixture_script=fixture,
+        authorization_reference="AUTH-T07-L2-TEST-0001",
+        repository_commit="a" * 40,
+        provider_instance_id="instance-a",
     )
     rendered = "\n".join(argv)
     assert BUSYBOX_REFERENCE in argv
@@ -397,10 +755,33 @@ def test_container_create_is_digest_pinned_no_network_and_bounded() -> None:
         "--memory",
         "--cpus",
         "--restart",
+        "--init",
     ):
         assert required in argv or required in rendered
     assert "/var/run/docker.sock" not in rendered
     assert "--privileged" not in argv
+    for label in (
+        "giclab.experiment=EXP-0001",
+        "giclab.profile=PLAN-EXP0001-SMOKE",
+        f"giclab.plan={PLAN_ID}",
+        "giclab.authorization=AUTH-T07-L2-TEST-0001",
+        f"giclab.repository_commit={'a' * 40}",
+        "giclab.attempt=giclab-t07-l2-containment-0123456789ab",
+        "giclab.provider_instance_id=instance-a",
+    ):
+        assert label in argv
+
+
+def test_container_create_rejects_pending_authorization() -> None:
+    fixture = (ROOT / CONTAINMENT_FIXTURE_PATH).read_text()
+    with pytest.raises(L20ContractError):
+        render_container_create_argv(
+            container_name="giclab-t07-l2-containment-0123456789ab",
+            fixture_script=fixture,
+            authorization_reference=AUTHORIZATION_PLACEHOLDER,
+            repository_commit="a" * 40,
+            provider_instance_id="instance-a",
+        )
 
 
 def test_fixture_hash_is_locked() -> None:
@@ -410,9 +791,9 @@ def test_fixture_hash_is_locked() -> None:
 
 def test_provider_call_budget_is_exactly_derived() -> None:
     operations = provider_operations()
-    assert len(operations) == 21
+    assert len(operations) == 22
     assert sum(int(operation["max_calls"]) for operation in operations) == MAX_PROVIDER_API_CALLS
-    assert [operation["ordinal"] for operation in operations] == list(range(1, 22))
+    assert [operation["ordinal"] for operation in operations] == list(range(1, 23))
 
 
 def test_exact_limits_are_finite_and_scientifically_zero() -> None:
@@ -435,6 +816,7 @@ def test_public_plan_is_complete_unauthorized_and_private_safe() -> None:
     assert plan["authorization_reference"] == AUTHORIZATION_PLACEHOLDER
     assert plan["authorized"] is False
     assert plan["terminal_state"] == "ready-for-gate-l2-authorization"
+    assert len(plan["runtime_bindings"]) == 6
     encoded = canonical_bytes(plan)
     assert b"source_ipv4_cidr" not in encoded
     assert b"raw_image_id" not in encoded
@@ -506,6 +888,9 @@ def test_schema_files_are_valid_json() -> None:
         "schemas/t07-lambda-l2-private-parameters.schema.json",
         "schemas/t07-lambda-l2-host-key-checkpoint.schema.json",
         "schemas/t07-lambda-l2-plan.schema.json",
+        "schemas/t07-lambda-l2-provider-ledger.schema.json",
+        "schemas/t07-lambda-l2-host-evidence.schema.json",
+        "schemas/t07-lambda-l2-incident.schema.json",
     ):
         assert isinstance(json.loads((ROOT / relative).read_text()), dict)
 

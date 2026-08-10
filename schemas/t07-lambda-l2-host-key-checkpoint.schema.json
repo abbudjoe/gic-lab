@@ -7,7 +7,7 @@
   "required": [
     "schema_version",
     "checkpoint_id",
-    "checkpoint_nonce",
+    "checkpoint_challenge_nonce",
     "run_id",
     "provider_instance_id",
     "algorithm",
@@ -21,7 +21,7 @@
       "type": "string",
       "pattern": "^CHECKPOINT-T07-L2-[A-Z0-9._-]+$"
     },
-    "checkpoint_nonce": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "checkpoint_challenge_nonce": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     "run_id": {"const": "RUN-T07-L2-LAMBDA-HOST-QUALIFICATION-0001"},
     "provider_instance_id": {"type": "string", "minLength": 1, "maxLength": 256},
     "algorithm": {"const": "ssh-ed25519"},

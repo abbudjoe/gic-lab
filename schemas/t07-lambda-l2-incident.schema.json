@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gic-lab.invalid/schemas/t07-lambda-l2-incident.schema.json",
+  "title": "T07 Gate L2 fail-closed incident evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "plan_id",
+    "run_id",
+    "authorization_reference",
+    "repository_commit",
+    "incident_phase",
+    "sanitized_failure_class",
+    "provider_calls",
+    "provider_wall_seconds",
+    "estimated_cost_cents",
+    "launch_requests",
+    "termination_requests",
+    "owned_instance_id_state",
+    "provider_terminal_confirmed",
+    "strict_global_firewall_preserved",
+    "regional_cleanup_verified",
+    "global_restored",
+    "request_ledger_sha256",
+    "evidence_sealed",
+    "scientific_boundary"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1.0"},
+    "plan_id": {"const": "PLAN-T07-GATE-L2-LAMBDA-HOST-QUALIFICATION-V1"},
+    "run_id": {"const": "RUN-T07-L2-LAMBDA-HOST-QUALIFICATION-0001"},
+    "authorization_reference": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$", "not": {"pattern": "-PENDING$"}},
+    "repository_commit": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
+    "incident_phase": {"enum": ["global-mutation", "regional-create", "launch", "active-poll", "host-key", "ssh", "containment", "termination", "regional-cleanup", "global-restore", "archive"]},
+    "sanitized_failure_class": {"type": "string", "pattern": "^[a-z][a-z0-9_]{2,63}$"},
+    "provider_calls": {"type": "integer", "minimum": 0, "maximum": 140},
+    "provider_wall_seconds": {"type": "integer", "minimum": 0, "maximum": 3600},
+    "estimated_cost_cents": {"type": "integer", "minimum": 0, "maximum": 200},
+    "launch_requests": {"type": "integer", "minimum": 0, "maximum": 1},
+    "termination_requests": {"type": "integer", "minimum": 0, "maximum": 1},
+    "owned_instance_id_state": {"enum": ["not-launched", "bound", "unknown-after-send", "zero-proven"]},
+    "provider_terminal_confirmed": {"type": "boolean"},
+    "strict_global_firewall_preserved": {"type": "boolean"},
+    "regional_cleanup_verified": {"type": "boolean"},
+    "global_restored": {"type": "boolean"},
+    "request_ledger_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "evidence_sealed": {"type": "boolean"},
+    "scientific_boundary": {"$ref": "#/$defs/zeroScientific"}
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "provider_terminal_confirmed": {"const": false},
+          "launch_requests": {"const": 1}
+        },
+        "required": ["provider_terminal_confirmed", "launch_requests"]
+      },
+      "then": {
+        "properties": {
+          "strict_global_firewall_preserved": {"const": true},
+          "global_restored": {"const": false}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"owned_instance_id_state": {"const": "unknown-after-send"}}, "required": ["owned_instance_id_state"]},
+      "then": {
+        "properties": {
+          "strict_global_firewall_preserved": {"const": true},
+          "global_restored": {"const": false}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "zeroScientific": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["model_calls", "model_tokens", "browser_actions", "sira_executions", "scientific_executions", "interpretation_allowed"],
+      "properties": {
+        "model_calls": {"const": 0},
+        "model_tokens": {"const": 0},
+        "browser_actions": {"const": 0},
+        "sira_executions": {"const": 0},
+        "scientific_executions": {"const": 0},
+        "interpretation_allowed": {"const": false}
+      }
+    }
+  }
+}

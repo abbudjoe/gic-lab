@@ -20,6 +20,7 @@ import stat
 from collections.abc import Mapping, Sequence
 from contextlib import suppress
 from dataclasses import dataclass, field, replace
+from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
 from typing import Final
@@ -71,7 +72,7 @@ PLAN_ID: Final = "PLAN-T07-GATE-L2-LAMBDA-HOST-QUALIFICATION-V1"
 RUN_ID: Final = "RUN-T07-L2-LAMBDA-HOST-QUALIFICATION-0001"
 AUTHORIZATION_PLACEHOLDER: Final = "AUTH-T07-GATE-L2-LAMBDA-HOST-QUALIFICATION-V1-PENDING"
 DECISION_PATH: Final = Path.home() / ".config/gic-lab/t07/l2-human-decisions.json"
-PRIVATE_ROOT_RELATIVE: Final = Path("artifacts/t07/lambda/gate-l2-0") / RUN_ID
+PRIVATE_ROOT_RELATIVE: Final = Path("artifacts/t07/lambda/gate-l2-0") / RUN_ID / "parameters-v2"
 PRIVATE_DECISION_NAME: Final = "human-decision-private.json"
 PRIVATE_DECISION_SEAL_NAME: Final = "HUMAN_DECISION_SEAL.json"
 PRIVATE_PARAMETERS_NAME: Final = "private-parameters.json"
@@ -80,12 +81,15 @@ PRIVATE_BUNDLE_SEAL_NAME: Final = "PRIVATE_BUNDLE_SEAL.json"
 PRIVATE_COPY_RECORD_NAME: Final = "PRIVATE_ARCHIVE_COPY_RECORD.json"
 EXTERNAL_COPY_RECORD_NAME: Final = "COPY_RECORD.json"
 EXTERNAL_ARCHIVE_ROOT: Final = Path("/Volumes/Macintosh HD - Data/GIC-Lab/t07/sealed-artifacts")
-EXTERNAL_ARCHIVE_ID: Final = f"{RUN_ID}-PRIVATE-PARAMETERS"
+EXTERNAL_ARCHIVE_ID: Final = f"{RUN_ID}-PRIVATE-PARAMETERS-V2"
 
 HUMAN_DECISION_SCHEMA_PATH: Final = "schemas/t07-lambda-l2-human-decision.schema.json"
 PRIVATE_PARAMETERS_SCHEMA_PATH: Final = "schemas/t07-lambda-l2-private-parameters.schema.json"
 HOST_KEY_CHECKPOINT_SCHEMA_PATH: Final = "schemas/t07-lambda-l2-host-key-checkpoint.schema.json"
 PLAN_SCHEMA_PATH: Final = "schemas/t07-lambda-l2-plan.schema.json"
+PROVIDER_LEDGER_SCHEMA_PATH: Final = "schemas/t07-lambda-l2-provider-ledger.schema.json"
+HOST_EVIDENCE_SCHEMA_PATH: Final = "schemas/t07-lambda-l2-host-evidence.schema.json"
+INCIDENT_SCHEMA_PATH: Final = "schemas/t07-lambda-l2-incident.schema.json"
 
 CURRENT_OPENAPI_VERSION: Final = "1.10.0"
 CURRENT_OPENAPI_URL: Final = "https://docs-api.lambda.ai/api/cloud/spec.json"
@@ -109,10 +113,10 @@ MAX_PROVIDER_WALL_SECONDS: Final = 3_600
 MAX_PROVIDER_COST_CENTS: Final = 200
 SELECTED_LIST_PRICE_CENTS_PER_HOUR: Final = 129
 MAX_HUMAN_CHECKPOINT_SECONDS: Final = 600
-MAX_PROVIDER_API_CALLS: Final = 139
+MAX_PROVIDER_API_CALLS: Final = 140
 MAX_READ_ONLY_PRELAUNCH_CALLS: Final = 7
 MAX_FIREWALL_MUTATION_CALLS: Final = 4
-MAX_FIREWALL_VERIFICATION_CALLS: Final = 4
+MAX_FIREWALL_VERIFICATION_CALLS: Final = 5
 MAX_LAUNCH_CALLS: Final = 1
 MAX_LAUNCH_RECOVERY_CALLS: Final = 1
 MAX_ACTIVE_POLLS: Final = 60
@@ -126,14 +130,18 @@ MAX_PROVIDER_RESPONSE_BYTES_PER_CALL: Final = 1_048_576
 MAX_PROVIDER_RESPONSE_BYTES_AGGREGATE: Final = 16_777_216
 MAX_PROVIDER_LEDGER_BYTES: Final = 1_048_576
 MAX_PROVIDER_LEDGER_EVENTS: Final = 768
+MAX_PROVIDER_LEDGER_EVENT_BYTES: Final = 4_096
+MAX_PROVIDER_REQUEST_BODY_BYTES: Final = 65_536
+MAX_REGIONAL_CREATE_RECOVERY_CALLS: Final = 1
 MAX_TCP_READINESS_PROBES: Final = 30
 MAX_SSH_KEYSCAN_CALLS: Final = 1
 MAX_SSH_AGENT_INSPECTION_CALLS: Final = 1
-MAX_SSH_SESSIONS: Final = 3
-MAX_REMOTE_COMMANDS: Final = 32
+MAX_HOST_INSPECTION_COMMANDS: Final = 9
+MAX_SSH_SESSIONS: Final = 33
+MAX_REMOTE_COMMANDS: Final = 33
 MAX_SSH_OUTPUT_BYTES_PER_CALL: Final = 1_048_576
 MAX_SSH_OUTPUT_BYTES_AGGREGATE: Final = 16_777_216
-MAX_SSH_TRANSFER_CALLS: Final = 1
+MAX_SSH_TRANSFER_CALLS: Final = 33
 MAX_DOCKER_CALLS: Final = 24
 MAX_DOCKER_OUTPUT_BYTES_PER_CALL: Final = 1_048_576
 MAX_DOCKER_OUTPUT_BYTES_AGGREGATE: Final = 16_777_216
@@ -142,8 +150,8 @@ MAX_REGISTRY_RESPONSE_BYTES: Final = 4_194_304
 MAX_DOCKER_DISK_DELTA_BYTES: Final = 33_554_432
 MIN_ROOT_FREE_BYTES: Final = 10_737_418_240
 MIN_DOCKER_ROOT_FREE_BYTES: Final = 10_737_418_240
-MAX_REMOTE_EVIDENCE_BYTES: Final = 67_108_864
-MAX_TRANSFER_BYTES: Final = 67_108_864
+MAX_REMOTE_EVIDENCE_BYTES: Final = 62_914_560
+MAX_TRANSFER_BYTES: Final = 62_914_560
 MAX_MAC_ACTIVE_EVIDENCE_BYTES: Final = 67_108_864
 MAX_ARCHIVE_BYTES: Final = 67_108_864
 MAX_LOCAL_INCREMENTAL_BYTES: Final = 135_266_304
@@ -152,6 +160,9 @@ MIN_LOCAL_RETAINED_FREE_BYTES: Final = 8_589_934_592
 MAX_ARCHIVE_COPY_CALLS: Final = 1
 MAX_PRIVATE_BINDING_BYTES: Final = 262_144
 MAX_PRIVATE_ARCHIVE_BYTES: Final = 1_048_576
+EXTERNAL_CONTAINER_CAPACITY_BYTES: Final = 1_000_240_963_584
+EXTERNAL_RETAINED_FREE_FLOOR_BYTES: Final = 200_048_192_717
+EXTERNAL_PRECOPY_FREE_FLOOR_BYTES: Final = 200_115_301_581
 
 CONTAINER_CPU: Final = "1.000"
 CONTAINER_MEMORY_BYTES: Final = 268_435_456
@@ -611,6 +622,7 @@ def resolve_private_parameters(
         {"key": "giclab-gate", "value": "T07-L2"},
         {"key": "giclab-run", "value": RUN_ID},
         {"key": "giclab-owner", "value": suffix},
+        {"key": "giclab-plan", "value": PLAN_ID},
     ]
     launch_template: dict[str, object] = {
         "region_name": decision.document["selected_region"],
@@ -622,7 +634,8 @@ def resolve_private_parameters(
         "hostname": hostname,
         "image": {"id": raw_image_id},
         "tags": tags,
-        "firewall_rulesets": [{"runtime_binding": "created_regional_ruleset_response.data.id"}],
+        "authorization_tag_runtime_binding": "authorization_reference",
+        "firewall_rulesets_runtime_binding": "owned_regional_ruleset_id",
     }
     private_document: dict[str, object] = {
         "schema_version": "0.1.0",
@@ -667,34 +680,40 @@ def resolve_private_parameters(
                 "rules": [strict_rule],
             },
             "launch_body_template": launch_template,
-            "terminate_body_template": {
-                "instance_ids": [{"runtime_binding": "launch_or_recovery_owned_instance_id"}]
+            "terminate_body_template": {"instance_ids_runtime_binding": "owned_instance_id"},
+            "restore_global_patch_body": {
+                "rules_runtime_binding": "sealed_original_global_response.data.rules"
             },
-            "restore_global_patch_body": {"rules": list(original_rules)},
         },
         "runtime_bindings": [
             {
-                "name": "created_regional_ruleset_response.data.id",
-                "source_operation": "create-owned-regional-ruleset",
-                "json_pointer": "/data/id",
+                "name": "owned_regional_ruleset_id",
+                "source_operation": "create-response-or-one-owned-name-recovery",
+                "resolver": "giclab.harness.lambda_l20_plan.resolve_owned_regional_ruleset_id",
                 "cardinality": 1,
             },
             {
-                "name": "launch_or_recovery_owned_instance_id",
-                "source_operation": "launch-instance-or-single-ambiguity-recovery",
-                "json_pointer": "/data/instance_ids/0",
+                "name": "owned_instance_id",
+                "source_operation": "launch-response-or-one-owned-name-tag-recovery",
+                "resolver": "giclab.harness.lambda_l20_plan.resolve_owned_instance_id",
                 "cardinality": 1,
             },
             {
                 "name": "owned_instance_public_ipv4",
                 "source_operation": "get-owned-instance-active",
-                "json_pointer": "/data/ip",
+                "resolver": "giclab.harness.lambda_l20_plan.resolve_owned_instance_active_ipv4",
                 "cardinality": 1,
             },
             {
                 "name": "approved_agent_socket",
                 "source_operation": "local-agent-preflight",
-                "json_pointer": "/agent_socket/path",
+                "resolver": "giclab.harness.lambda_l20_plan.require_unique_agent_match",
+                "cardinality": 1,
+            },
+            {
+                "name": "sealed_original_global_response.data.rules",
+                "source_operation": "get-global-firewall-before-first-mutation",
+                "resolver": "giclab.harness.lambda_l20_plan.render_global_restore_body",
                 "cardinality": 1,
             },
         ],
@@ -1257,7 +1276,10 @@ def load_private_binding(repository_root: Path) -> PrivateBindingSeal:
 
 class GateL2Phase(StrEnum):
     PREFLIGHT = "preflight"
+    GLOBAL_OUTCOME_UNKNOWN = "global-outcome-unknown"
     GLOBAL_STRICT = "global-strict"
+    REGIONAL_CREATE_OUTCOME_UNKNOWN = "regional-create-outcome-unknown"
+    REGIONAL_OWNED = "regional-owned"
     REGIONAL_STRICT = "regional-strict"
     LAUNCH_OUTCOME_UNKNOWN = "launch-outcome-unknown"
     INSTANCE_OWNED = "instance-owned"
@@ -1268,18 +1290,26 @@ class GateL2Phase(StrEnum):
     TERMINATING = "terminating"
     INSTANCE_TERMINAL = "instance-terminal"
     REGIONAL_DELETED = "regional-deleted"
+    GLOBAL_RESTORED = "global-restored"
     CLOSED = "closed"
     INCIDENT = "incident"
 
 
 class GateL2Event(StrEnum):
     PREFLIGHT_PASSED = "preflight-passed"
+    GLOBAL_PATCH_SEND_STARTED = "global-patch-send-started"
     GLOBAL_REPLACEMENT_VERIFIED = "global-replacement-verified"
+    REGIONAL_CREATE_SEND_STARTED = "regional-create-send-started"
+    REGIONAL_ID_OBSERVED = "regional-id-observed"
+    REGIONAL_RECOVERY_OBSERVED = "regional-recovery-observed"
     REGIONAL_RULESET_VERIFIED = "regional-ruleset-verified"
     LAUNCH_SEND_STARTED = "launch-send-started"
     INSTANCE_ID_OBSERVED = "instance-id-observed"
     AMBIGUITY_RECOVERY_OBSERVED = "ambiguity-recovery-observed"
+    AMBIGUITY_RECOVERY_ZERO_OWNED = "ambiguity-recovery-zero-owned"
     ACTIVE_OBSERVED = "active-observed"
+    ACTIVE_ERROR_OBSERVED = "active-error-observed"
+    ACTIVE_POLL_TIMEOUT = "active-poll-timeout"
     CHECKPOINT_VALIDATED = "checkpoint-validated"
     QUALIFICATION_FINISHED = "qualification-finished"
     ABORT = "abort"
@@ -1287,6 +1317,7 @@ class GateL2Event(StrEnum):
     TERMINAL_OBSERVED = "terminal-observed"
     REGIONAL_DELETE_VERIFIED = "regional-delete-verified"
     GLOBAL_RESTORE_VERIFIED = "global-restore-verified"
+    ZERO_OWNED_INSTANCES_VERIFIED = "zero-owned-instances-verified"
     CLEANUP_FAILED = "cleanup-failed"
 
 
@@ -1295,11 +1326,14 @@ class GateL2State:
     phase: GateL2Phase = GateL2Phase.PREFLIGHT
     launch_requests: int = 0
     ambiguity_recovery_requests: int = 0
+    regional_recovery_requests: int = 0
     owned_instance_id: str | None = field(default=None, repr=False)
+    owned_regional_ruleset_id: str | None = field(default=None, repr=False)
     termination_requests: int = 0
     global_mutated: bool = False
     regional_created: bool = False
     instance_terminal: bool = False
+    zero_owned_instances_proven: bool = False
 
 
 def transition_gate_l2(
@@ -1307,6 +1341,8 @@ def transition_gate_l2(
     event: GateL2Event,
     *,
     instance_id: str | None = None,
+    ruleset_id: str | None = None,
+    terminal_status: str | None = None,
 ) -> GateL2State:
     """Advance the fail-closed future lifecycle without performing any action."""
 
@@ -1314,10 +1350,42 @@ def transition_gate_l2(
         return replace(state, phase=GateL2Phase.INCIDENT)
     if state.phase is GateL2Phase.PREFLIGHT and event is GateL2Event.PREFLIGHT_PASSED:
         return state
-    if state.phase is GateL2Phase.PREFLIGHT and event is GateL2Event.GLOBAL_REPLACEMENT_VERIFIED:
+    if state.phase is GateL2Phase.PREFLIGHT and event is GateL2Event.GLOBAL_PATCH_SEND_STARTED:
+        return replace(state, phase=GateL2Phase.GLOBAL_OUTCOME_UNKNOWN)
+    if (
+        state.phase is GateL2Phase.GLOBAL_OUTCOME_UNKNOWN
+        and event is GateL2Event.GLOBAL_REPLACEMENT_VERIFIED
+    ):
         return replace(state, phase=GateL2Phase.GLOBAL_STRICT, global_mutated=True)
-    if state.phase is GateL2Phase.GLOBAL_STRICT and event is GateL2Event.REGIONAL_RULESET_VERIFIED:
-        return replace(state, phase=GateL2Phase.REGIONAL_STRICT, regional_created=True)
+    if (
+        state.phase is GateL2Phase.GLOBAL_STRICT
+        and event is GateL2Event.REGIONAL_CREATE_SEND_STARTED
+    ):
+        return replace(state, phase=GateL2Phase.REGIONAL_CREATE_OUTCOME_UNKNOWN)
+    if state.phase is GateL2Phase.REGIONAL_CREATE_OUTCOME_UNKNOWN and event in {
+        GateL2Event.REGIONAL_ID_OBSERVED,
+        GateL2Event.REGIONAL_RECOVERY_OBSERVED,
+    }:
+        if not isinstance(ruleset_id, str) or not ruleset_id:
+            raise L20ContractError("owned regional ruleset identity is absent")
+        if (
+            event is GateL2Event.REGIONAL_RECOVERY_OBSERVED
+            and state.regional_recovery_requests != 0
+        ):
+            raise L20ContractError("regional create recovery cannot be replayed")
+        return replace(
+            state,
+            phase=GateL2Phase.REGIONAL_OWNED,
+            regional_recovery_requests=(
+                1
+                if event is GateL2Event.REGIONAL_RECOVERY_OBSERVED
+                else state.regional_recovery_requests
+            ),
+            owned_regional_ruleset_id=ruleset_id,
+            regional_created=True,
+        )
+    if state.phase is GateL2Phase.REGIONAL_OWNED and event is GateL2Event.REGIONAL_RULESET_VERIFIED:
+        return replace(state, phase=GateL2Phase.REGIONAL_STRICT)
     if state.phase is GateL2Phase.REGIONAL_STRICT and event is GateL2Event.LAUNCH_SEND_STARTED:
         if state.launch_requests != 0:
             raise L20ContractError("launch request identity cannot be replayed")
@@ -1347,12 +1415,36 @@ def transition_gate_l2(
             ),
             owned_instance_id=instance_id,
         )
+    if (
+        state.phase is GateL2Phase.LAUNCH_OUTCOME_UNKNOWN
+        and event is GateL2Event.AMBIGUITY_RECOVERY_ZERO_OWNED
+    ):
+        if state.ambiguity_recovery_requests != 0:
+            raise L20ContractError("launch ambiguity recovery cannot be replayed")
+        return replace(
+            state,
+            phase=GateL2Phase.INSTANCE_TERMINAL,
+            ambiguity_recovery_requests=1,
+            instance_terminal=True,
+            zero_owned_instances_proven=True,
+        )
     if state.phase is GateL2Phase.INSTANCE_OWNED and event is GateL2Event.ACTIVE_OBSERVED:
         return replace(state, phase=GateL2Phase.INSTANCE_ACTIVE)
+    if state.phase is GateL2Phase.INSTANCE_OWNED and event in {
+        GateL2Event.ACTIVE_ERROR_OBSERVED,
+        GateL2Event.ACTIVE_POLL_TIMEOUT,
+    }:
+        return replace(state, phase=GateL2Phase.TERMINATION_REQUIRED)
     if state.phase is GateL2Phase.INSTANCE_ACTIVE and event is GateL2Event.CHECKPOINT_VALIDATED:
         return replace(state, phase=GateL2Phase.CHECKPOINT_PASSED)
     if state.phase is GateL2Phase.CHECKPOINT_PASSED and event is GateL2Event.QUALIFICATION_FINISHED:
         return replace(state, phase=GateL2Phase.QUALIFICATION_COMPLETE)
+    if event is GateL2Event.ABORT and state.phase in {
+        GateL2Phase.GLOBAL_OUTCOME_UNKNOWN,
+        GateL2Phase.REGIONAL_CREATE_OUTCOME_UNKNOWN,
+        GateL2Phase.LAUNCH_OUTCOME_UNKNOWN,
+    }:
+        return replace(state, phase=GateL2Phase.INCIDENT)
     if event is GateL2Event.ABORT and state.global_mutated:
         if state.owned_instance_id is not None:
             return replace(state, phase=GateL2Phase.TERMINATION_REQUIRED)
@@ -1391,6 +1483,8 @@ def transition_gate_l2(
     if state.phase is GateL2Phase.TERMINATING and event is GateL2Event.TERMINAL_OBSERVED:
         if instance_id != state.owned_instance_id:
             raise L20ContractError("terminal evidence does not bind the owned instance")
+        if terminal_status != "terminated":
+            raise L20ContractError("provider terminal evidence is not exact terminated state")
         return replace(
             state,
             phase=GateL2Phase.INSTANCE_TERMINAL,
@@ -1406,14 +1500,19 @@ def transition_gate_l2(
     if state.phase is GateL2Phase.REGIONAL_DELETED and event is GateL2Event.GLOBAL_RESTORE_VERIFIED:
         if state.owned_instance_id is not None and not state.instance_terminal:
             raise L20ContractError("global restoration cannot precede instance termination")
-        return replace(state, phase=GateL2Phase.CLOSED, global_mutated=False)
+        return replace(state, phase=GateL2Phase.GLOBAL_RESTORED, global_mutated=False)
     if (
         state.phase is GateL2Phase.GLOBAL_STRICT
         and event is GateL2Event.GLOBAL_RESTORE_VERIFIED
         and state.owned_instance_id is None
         and not state.regional_created
     ):
-        return replace(state, phase=GateL2Phase.CLOSED, global_mutated=False)
+        return replace(state, phase=GateL2Phase.GLOBAL_RESTORED, global_mutated=False)
+    if (
+        state.phase is GateL2Phase.GLOBAL_RESTORED
+        and event is GateL2Event.ZERO_OWNED_INSTANCES_VERIFIED
+    ):
+        return replace(state, phase=GateL2Phase.CLOSED, zero_owned_instances_proven=True)
     raise L20ContractError("Gate L2 lifecycle transition is unsafe")
 
 
@@ -1426,22 +1525,376 @@ def require_unique_agent_match(observed: Sequence[str], expected: str) -> str:
     return matches[0]
 
 
+def render_global_restore_body(
+    sealed_original_response: Mapping[str, object],
+) -> dict[str, object]:
+    """Render exact rollback rules from the fresh sealed pre-mutation response.
+
+    The historical redacted inventory is evidence for selection and drift checks, but
+    it intentionally omits values such as rule descriptions. It cannot be the
+    authoritative rollback payload.
+    """
+
+    data = _mapping(sealed_original_response.get("data"), context="global response data")
+    rules = _sequence(data.get("rules"), context="fresh global firewall rules")
+    if not 1 <= len(rules) <= 100:
+        raise L20ContractError("fresh global firewall rules count is outside contract")
+    rendered: list[dict[str, object]] = []
+    allowed = {"protocol", "source_network", "port_range", "description"}
+    required = {"protocol", "source_network", "description"}
+    for value in rules:
+        rule = _mapping(value, context="fresh global firewall rule")
+        if not required.issubset(rule) or not set(rule).issubset(allowed):
+            raise L20ContractError("fresh global firewall rule shape is not exact")
+        if rule.get("protocol") not in {"tcp", "udp", "icmp", "all"}:
+            raise L20ContractError("fresh global firewall protocol is unsupported")
+        source = rule.get("source_network")
+        description = rule.get("description")
+        if not isinstance(source, str) or not source:
+            raise L20ContractError("fresh global firewall source is absent")
+        if not isinstance(description, str) or len(description) > 128:
+            raise L20ContractError("fresh global firewall description is invalid")
+        port_range = rule.get("port_range")
+        if port_range is not None and (
+            not isinstance(port_range, list)
+            or len(port_range) != 2
+            or any(type(port) is not int or not 1 <= port <= 65_535 for port in port_range)
+        ):
+            raise L20ContractError("fresh global firewall port range is invalid")
+        rendered.append(dict(rule))
+    return {"rules": rendered}
+
+
+def render_launch_body(
+    template: Mapping[str, object],
+    *,
+    owned_regional_ruleset_id: str,
+    authorization_reference: str,
+) -> dict[str, object]:
+    """Substitute the two typed launch bindings and reject every other drift."""
+
+    if _SAFE_ID.fullmatch(owned_regional_ruleset_id) is None:
+        raise L20ContractError("owned regional ruleset ID is unsafe")
+    if _SAFE_ID.fullmatch(authorization_reference) is None or authorization_reference.endswith(
+        "-PENDING"
+    ):
+        raise L20ContractError("launch authorization identity is not active")
+    expected_keys = {
+        "region_name",
+        "instance_type_name",
+        "ssh_key_names",
+        "file_system_names",
+        "file_system_mounts",
+        "name",
+        "hostname",
+        "image",
+        "tags",
+        "authorization_tag_runtime_binding",
+        "firewall_rulesets_runtime_binding",
+    }
+    if set(template) != expected_keys:
+        raise L20ContractError("launch template keys drifted")
+    if (
+        template.get("authorization_tag_runtime_binding") != "authorization_reference"
+        or template.get("firewall_rulesets_runtime_binding") != "owned_regional_ruleset_id"
+        or template.get("file_system_names") != []
+        or template.get("file_system_mounts") != []
+        or template.get("ssh_key_names") != ["fractal-lambda-codex"]
+    ):
+        raise L20ContractError("launch template security binding drifted")
+    tags = [
+        dict(_mapping(value, context="launch ownership tag"))
+        for value in _sequence(template.get("tags"), context="launch ownership tags")
+    ]
+    if len(tags) != 5 or any(set(tag) != {"key", "value"} for tag in tags):
+        raise L20ContractError("launch ownership tag set drifted")
+    rendered = {
+        key: json.loads(json.dumps(value))
+        for key, value in template.items()
+        if key not in {"authorization_tag_runtime_binding", "firewall_rulesets_runtime_binding"}
+    }
+    rendered["tags"] = [
+        *tags,
+        {"key": "giclab-authorization", "value": authorization_reference},
+    ]
+    rendered["firewall_rulesets"] = [{"id": owned_regional_ruleset_id}]
+    return rendered
+
+
+def render_terminate_body(owned_instance_id: str) -> dict[str, object]:
+    """Render the only authorized termination target."""
+
+    if _SAFE_ID.fullmatch(owned_instance_id) is None:
+        raise L20ContractError("owned instance ID is unsafe")
+    return {"instance_ids": [owned_instance_id]}
+
+
+def resolve_owned_regional_ruleset_id(
+    *,
+    expected_name: str,
+    expected_region: str,
+    create_response: Mapping[str, object] | None = None,
+    recovery_response: Mapping[str, object] | None = None,
+) -> str | None:
+    """Resolve one owned ruleset from either POST success or one recovery list GET."""
+
+    if (create_response is None) == (recovery_response is None):
+        raise L20ContractError("regional identity needs exactly one response source")
+    if create_response is not None:
+        data = _mapping(create_response.get("data"), context="regional create response data")
+        value = _nonempty(data.get("id"), context="created regional ruleset ID")
+        return value
+    assert recovery_response is not None
+    candidates = []
+    for raw in _sequence(recovery_response.get("data"), context="regional recovery data"):
+        item = _mapping(raw, context="regional recovery item")
+        region = item.get("region")
+        region_name = region.get("name") if isinstance(region, Mapping) else region
+        if item.get("name") == expected_name and region_name == expected_region:
+            candidates.append(_nonempty(item.get("id"), context="recovered regional ruleset ID"))
+    if len(candidates) > 1:
+        raise L20ContractError("regional create recovery matched multiple owned identities")
+    return candidates[0] if candidates else None
+
+
+def resolve_owned_instance_id(
+    *,
+    expected_name: str,
+    expected_tags: Sequence[Mapping[str, object]],
+    launch_response: Mapping[str, object] | None = None,
+    recovery_response: Mapping[str, object] | None = None,
+) -> str | None:
+    """Resolve one launch identity without conflating POST and list response shapes."""
+
+    if (launch_response is None) == (recovery_response is None):
+        raise L20ContractError("instance identity needs exactly one response source")
+    if launch_response is not None:
+        data = _mapping(launch_response.get("data"), context="launch response data")
+        values = _sequence(data.get("instance_ids"), context="launch instance IDs")
+        if len(values) != 1:
+            raise L20ContractError("launch response did not contain exactly one instance ID")
+        return _nonempty(values[0], context="launched instance ID")
+    assert recovery_response is not None
+    expected_tag_set = {
+        (_nonempty(tag.get("key"), context="expected tag key"), str(tag.get("value", "")))
+        for tag in expected_tags
+    }
+    candidates: list[str] = []
+    for raw in _sequence(recovery_response.get("data"), context="instance recovery data"):
+        item = _mapping(raw, context="instance recovery item")
+        observed_tags = {
+            (
+                _nonempty(_mapping(tag, context="instance tag").get("key"), context="tag key"),
+                str(_mapping(tag, context="instance tag").get("value", "")),
+            )
+            for tag in _sequence(item.get("tags"), context="instance tags")
+        }
+        if item.get("name") == expected_name and expected_tag_set.issubset(observed_tags):
+            candidates.append(_nonempty(item.get("id"), context="recovered instance ID"))
+    if len(candidates) > 1:
+        raise L20ContractError("launch recovery matched multiple owned instances")
+    return candidates[0] if candidates else None
+
+
+def resolve_owned_instance_active_ipv4(
+    response: Mapping[str, object], *, owned_instance_id: str
+) -> str:
+    """Bind one active instance response to one exact public IPv4."""
+
+    data = _mapping(response.get("data"), context="instance detail response")
+    if data.get("id") != owned_instance_id or data.get("status") != "active":
+        raise L20ContractError("active instance response identity or state drifted")
+    return str(
+        _public_ipv4_32(f"{_nonempty(data.get('ip'), context='instance IP')}/32")
+    ).removesuffix("/32")
+
+
+def validate_fresh_prelaunch_responses(
+    repository_root: Path,
+    *,
+    responses: Mapping[str, Mapping[str, object]],
+    private_parameters: Mapping[str, object],
+) -> Mapping[str, object]:
+    """Revalidate all seven account facts immediately before the first mutation."""
+
+    schema_paths = {
+        "instance-types": (
+            "containers/sira-smoke/lambda/endpoint-schemas-v3/instance-types.schema.json"
+        ),
+        "images": "containers/sira-smoke/lambda/endpoint-schemas-v3/images.schema.json",
+        "regions": "containers/sira-smoke/lambda/endpoint-schemas-v3/regions.schema.json",
+        "ssh-keys": "containers/sira-smoke/lambda/endpoint-schemas-v3/ssh-keys.schema.json",
+        "firewall-rulesets": (
+            "containers/sira-smoke/lambda/endpoint-schemas-v3/firewall-rulesets.schema.json"
+        ),
+        "global-firewall-ruleset": (
+            "containers/sira-smoke/lambda/endpoint-schemas-v3/global-firewall-ruleset.schema.json"
+        ),
+        "instances": "containers/sira-smoke/lambda/endpoint-schemas-v3/instances.schema.json",
+    }
+    if set(responses) != set(schema_paths):
+        raise L20ContractError("fresh prelaunch response set is incomplete or expanded")
+    for name, relative in schema_paths.items():
+        _validate_schema(
+            responses[name],
+            repository_root=repository_root,
+            schema_relative_path=relative,
+        )
+    selected = _mapping(private_parameters.get("selected_resource"), context="selected resource")
+    owned = _mapping(private_parameters.get("owned_names"), context="owned names")
+    instance_types = _mapping(responses["instance-types"].get("data"), context="instance types")
+    type_row = _mapping(instance_types.get("gpu_1x_a10"), context="selected type row")
+    type_identity = _mapping(type_row.get("instance_type"), context="selected instance type")
+    specs = _mapping(type_identity.get("specs"), context="selected instance specs")
+    capacity = [
+        _mapping(value, context="capacity region").get("name")
+        for value in _sequence(type_row.get("regions_with_capacity_available"), context="capacity")
+    ]
+    if (
+        type_identity.get("name") != "gpu_1x_a10"
+        or type_identity.get("price_cents_per_hour") != SELECTED_LIST_PRICE_CENTS_PER_HOUR
+        or type_identity.get("architecture") != "x86_64"
+        or specs.get("vcpus") != 30
+        or specs.get("memory_gib") != 200
+        or specs.get("storage_gib") != 1400
+        or specs.get("gpus") != 1
+        or "us-east-1" not in capacity
+    ):
+        raise L20ContractError("fresh selected type, price, specs, or capacity drifted")
+    raw_image_id = selected.get("raw_image_id")
+    image_matches = [
+        _mapping(value, context="fresh image")
+        for value in _sequence(responses["images"].get("data"), context="fresh images")
+        if _mapping(value, context="fresh image").get("id") == raw_image_id
+    ]
+    if len(image_matches) != 1:
+        raise L20ContractError("fresh selected image identity is absent or ambiguous")
+    image = image_matches[0]
+    region = _mapping(image.get("region"), context="fresh image region")
+    if (
+        image.get("family") != "gpu-base-22-04"
+        or image.get("version") != "22.4.5-2141"
+        or image.get("architecture") != "x86_64"
+        or region.get("name") != "us-east-1"
+    ):
+        raise L20ContractError("fresh selected image metadata drifted")
+    region_names = {
+        _mapping(value, context="fresh region").get("name")
+        for value in _sequence(responses["regions"].get("data"), context="fresh regions")
+    }
+    if "us-east-1" not in region_names:
+        raise L20ContractError("fresh selected region is absent")
+    ssh_matches = [
+        _mapping(value, context="fresh SSH key")
+        for value in _sequence(responses["ssh-keys"].get("data"), context="fresh SSH keys")
+        if _mapping(value, context="fresh SSH key").get("id") == selected.get("raw_ssh_key_id")
+        and _mapping(value, context="fresh SSH key").get("name") == "fractal-lambda-codex"
+    ]
+    if len(ssh_matches) != 1:
+        raise L20ContractError("fresh selected SSH key identity drifted")
+    if _sequence(responses["instances"].get("data"), context="fresh instances"):
+        raise L20ContractError("fresh prelaunch state contains a running instance")
+    owned_ruleset_name = owned.get("regional_ruleset_name")
+    if any(
+        _mapping(value, context="fresh ruleset").get("name") == owned_ruleset_name
+        for value in _sequence(
+            responses["firewall-rulesets"].get("data"),
+            context="fresh firewall rulesets",
+        )
+    ):
+        raise L20ContractError("fresh owned regional ruleset name already exists")
+    fresh_global = responses["global-firewall-ruleset"]
+    render_global_restore_body(fresh_global)
+    historical = _mapping(
+        private_parameters.get("original_global_firewall"),
+        context="historical global baseline",
+    )
+    historical_rules = [
+        dict(_mapping(value, context="historical firewall rule"))
+        for value in _sequence(historical.get("rules"), context="historical firewall rules")
+    ]
+    fresh_rules = [
+        {
+            key: value
+            for key, value in _mapping(raw, context="fresh global rule").items()
+            if key in {"protocol", "source_network", "port_range"}
+        }
+        for raw in _sequence(
+            _mapping(fresh_global.get("data"), context="fresh global data").get("rules"),
+            context="fresh global rules",
+        )
+    ]
+    if fresh_rules != historical_rules:
+        raise L20ContractError("fresh global firewall differs from the sealed redacted baseline")
+    return fresh_global
+
+
+@dataclass(frozen=True, slots=True)
+class CheckpointWaitBinding:
+    path: Path = field(repr=False)
+    challenge_nonce: str = field(repr=False)
+    started_monotonic_ns: int
+    started_wall_utc: datetime
+
+
+def prepare_host_key_checkpoint_wait(
+    *,
+    path: Path,
+    challenge_nonce: str,
+    started_monotonic_ns: int,
+    started_wall_utc: datetime,
+) -> CheckpointWaitBinding:
+    """Mint a wait binding only while the future checkpoint path is absent."""
+
+    if not path.is_absolute() or ".." in path.parts or _NONCE.fullmatch(challenge_nonce) is None:
+        raise L20ContractError("host-key checkpoint wait binding is unsafe")
+    if started_monotonic_ns < 0 or started_wall_utc.tzinfo is None:
+        raise L20ContractError("host-key checkpoint start time is invalid")
+    current = Path(path.anchor)
+    for component in path.parts[1:-1]:
+        current /= component
+        try:
+            status = os.lstat(current)
+        except OSError:
+            raise L20ContractError("host-key checkpoint parent is unavailable") from None
+        if not stat.S_ISDIR(status.st_mode) or stat.S_ISLNK(status.st_mode):
+            raise L20ContractError("host-key checkpoint parent hierarchy is unsafe")
+    try:
+        os.lstat(path)
+    except FileNotFoundError:
+        pass
+    except OSError:
+        raise L20ContractError("host-key checkpoint absence check failed") from None
+    else:
+        raise L20ContractError("host-key checkpoint path already existed before the wait")
+    return CheckpointWaitBinding(
+        path=path,
+        challenge_nonce=challenge_nonce,
+        started_monotonic_ns=started_monotonic_ns,
+        started_wall_utc=started_wall_utc.astimezone(UTC),
+    )
+
+
 def validate_host_key_checkpoint(
     repository_root: Path,
     *,
-    path: Path,
+    wait_binding: CheckpointWaitBinding,
     expected_instance_id: str,
-    started_monotonic_ns: int,
     observed_monotonic_ns: int,
+    observed_wall_utc: datetime,
 ) -> dict[str, object]:
     """Validate a fresh private Jupyter fingerprint checkpoint by held file identity."""
 
-    if observed_monotonic_ns < started_monotonic_ns:
+    if observed_monotonic_ns < wait_binding.started_monotonic_ns:
         raise L20ContractError("checkpoint monotonic timestamps are reversed")
-    elapsed = (observed_monotonic_ns - started_monotonic_ns) / 1_000_000_000
+    elapsed = (observed_monotonic_ns - wait_binding.started_monotonic_ns) / 1_000_000_000
     if elapsed > MAX_HUMAN_CHECKPOINT_SECONDS:
         raise L20ContractError("host-key checkpoint arrived after its deadline")
-    encoded = _read_regular_no_follow(path, max_bytes=16_384, required_mode=0o600)
+    encoded = _read_regular_no_follow(
+        wait_binding.path,
+        max_bytes=16_384,
+        required_mode=0o600,
+    )
     document = _strict_json(encoded, context="host-key checkpoint")
     _validate_schema(
         document,
@@ -1451,10 +1904,21 @@ def validate_host_key_checkpoint(
     if (
         document.get("run_id") != RUN_ID
         or document.get("provider_instance_id") != expected_instance_id
+        or document.get("checkpoint_challenge_nonce") != wait_binding.challenge_nonce
     ):
         raise L20ContractError("host-key checkpoint identity does not match the owned instance")
     if document.get("algorithm") != "ssh-ed25519":
         raise L20ContractError("host-key checkpoint algorithm is not ED25519")
+    if observed_wall_utc.tzinfo is None:
+        raise L20ContractError("checkpoint observation wall time is not timezone aware")
+    try:
+        documented = datetime.fromisoformat(
+            str(document.get("observed_at_utc")).replace("Z", "+00:00")
+        )
+    except ValueError:
+        raise L20ContractError("checkpoint wall timestamp is invalid") from None
+    if not wait_binding.started_wall_utc <= documented <= observed_wall_utc.astimezone(UTC):
+        raise L20ContractError("checkpoint timestamp is outside the minted wait window")
     return document
 
 
@@ -1514,6 +1978,96 @@ def verified_known_hosts_line(
     return f"{address} {fields[1]} {fields[2]}\n".encode("ascii")
 
 
+REMOTE_STATIC_COMMANDS: Final = (
+    ("/usr/bin/uname", "-srmo"),
+    ("/usr/bin/cat", "/etc/os-release"),
+    ("/usr/bin/stat", "-fc", "%T", "/sys/fs/cgroup"),
+    ("containerd", "--version"),
+    ("runc", "--version"),
+    ("/usr/bin/df", "-B1", "/"),
+    ("systemctl", "is-active", "docker"),
+    ("/bin/ps", "-eo", "pid,ppid,sid,pgid,stat,comm,args"),
+    ("docker", "version", "--format", "{{json .}}"),
+    ("docker", "info", "--format", "{{json .}}"),
+    ("docker", "buildx", "version"),
+    ("docker", "ps", "--no-trunc", "--format", "{{json .}}"),
+    ("docker", "image", "ls", "--no-trunc", "--format", "{{json .}}"),
+    ("docker", "network", "ls", "--no-trunc", "--format", "{{json .}}"),
+    ("docker", "volume", "ls", "--format", "{{json .}}"),
+)
+
+
+def validate_remote_argv(remote_argv: Sequence[str]) -> None:
+    """Reject every remote command outside the finite host/container contract."""
+
+    argv = tuple(remote_argv)
+    if argv in REMOTE_STATIC_COMMANDS:
+        return
+    if len(argv) == 3 and argv[:2] == ("/usr/bin/df", "-B1"):
+        docker_root = Path(argv[2])
+        if docker_root.is_absolute() and ".." not in docker_root.parts:
+            return
+    if argv in {
+        ("docker", "pull", "--platform", "linux/amd64", BUSYBOX_REFERENCE),
+        ("docker", "image", "inspect", BUSYBOX_REFERENCE),
+    }:
+        return
+    if len(argv) >= 3 and argv[:2] == ("docker", "create"):
+        try:
+            name = argv[argv.index("--name") + 1]
+            labels = {
+                argv[index + 1].split("=", 1)[0]: argv[index + 1].split("=", 1)[1]
+                for index, value in enumerate(argv[:-1])
+                if value == "--label"
+            }
+            expected = render_container_create_argv(
+                container_name=name,
+                fixture_script=argv[-1],
+                authorization_reference=labels["giclab.authorization"],
+                repository_commit=labels["giclab.repository_commit"],
+                provider_instance_id=labels["giclab.provider_instance_id"],
+            )
+        except (KeyError, IndexError, ValueError, L20ContractError):
+            pass
+        else:
+            if argv == tuple(expected):
+                return
+    id_index = (
+        2
+        if len(argv) > 2
+        and argv[:2]
+        in {
+            ("docker", "inspect"),
+            ("docker", "start"),
+            ("docker", "top"),
+            ("docker", "logs"),
+            ("docker", "rm"),
+        }
+        else len(argv) - 1
+    )
+    container_id = argv[id_index] if argv else ""
+    if re.fullmatch(r"[a-f0-9]{64}", container_id) is not None:
+        allowed_dynamic = {
+            ("docker", "inspect", container_id),
+            ("docker", "start", container_id),
+            ("docker", "top", container_id, "-eo", "pid,ppid,sid,pgid,stat,comm,args"),
+            ("docker", "stop", "--time", str(CONTAINER_STOP_SECONDS), container_id),
+            ("docker", "kill", "--signal", "KILL", container_id),
+            ("docker", "logs", "--timestamps", container_id),
+            ("docker", "rm", container_id),
+        }
+        if argv in allowed_dynamic:
+            return
+    label_filter = f"label=giclab.run={RUN_ID}"
+    if argv in {
+        ("docker", "ps", "-a", "--no-trunc", "--filter", label_filter),
+        ("docker", "network", "ls", "--no-trunc", "--filter", label_filter),
+        ("docker", "volume", "ls", "--filter", label_filter),
+    }:
+        return
+    raise L20ContractError("remote command is outside the exact qualification allowlist")
+
+
 def render_ssh_argv(
     *,
     agent_socket: str,
@@ -1534,9 +2088,7 @@ def render_ssh_argv(
         raise L20ContractError("SSH target is invalid") from None
     if not isinstance(address, ipaddress.IPv4Address) or not address.is_global:
         raise L20ContractError("SSH target is not a public IPv4")
-    forbidden = {"apt", "apt-get", "dnf", "yum", "pacman", "brew", "pip", "uv"}
-    if any(Path(value).name in forbidden for value in remote_argv):
-        raise L20ContractError("remote command allowlist forbids package mutation")
+    validate_remote_argv(remote_argv)
     return [
         "/usr/bin/ssh",
         "-F",
@@ -1580,13 +2132,30 @@ def render_ssh_argv(
     ]
 
 
-def render_container_create_argv(*, container_name: str, fixture_script: str) -> list[str]:
+def render_container_create_argv(
+    *,
+    container_name: str,
+    fixture_script: str,
+    authorization_reference: str,
+    repository_commit: str,
+    provider_instance_id: str,
+) -> list[str]:
     """Render the immutable-image, no-network adversarial container create array."""
 
     if re.fullmatch(r"giclab-t07-l2-containment-[a-f0-9]{12}", container_name) is None:
         raise L20ContractError("containment container name is not run-owned")
-    if not fixture_script.startswith("#!/bin/sh\n"):
-        raise L20ContractError("containment fixture source is not the reviewed shell fixture")
+    if sha256_bytes(fixture_script.encode()) != CONTAINMENT_FIXTURE_SHA256:
+        raise L20ContractError("containment fixture bytes differ from the reviewed fixture")
+    if (
+        not authorization_reference
+        or authorization_reference.endswith("-PENDING")
+        or _SAFE_ID.fullmatch(authorization_reference) is None
+    ):
+        raise L20ContractError("containment authorization identity is not exact and active")
+    if _COMMIT.fullmatch(repository_commit) is None:
+        raise L20ContractError("containment repository commit is not immutable")
+    if _SAFE_ID.fullmatch(provider_instance_id) is None:
+        raise L20ContractError("containment provider instance identity is unsafe")
     return [
         "docker",
         "create",
@@ -1596,6 +2165,23 @@ def render_container_create_argv(*, container_name: str, fixture_script: str) ->
         f"giclab.run={RUN_ID}",
         "--label",
         "giclab.gate=T07-L2",
+        "--label",
+        "giclab.experiment=EXP-0001",
+        "--label",
+        "giclab.profile=PLAN-EXP0001-SMOKE",
+        "--label",
+        f"giclab.plan={PLAN_ID}",
+        "--label",
+        f"giclab.authorization={authorization_reference}",
+        "--label",
+        f"giclab.repository_commit={repository_commit}",
+        "--label",
+        f"giclab.provider_instance_id={provider_instance_id}",
+        "--label",
+        f"giclab.image_digest={BUSYBOX_REFERENCE.split('@', maxsplit=1)[1]}",
+        "--label",
+        f"giclab.attempt={container_name}",
+        "--init",
         "--network",
         "none",
         "--pid",
@@ -1649,6 +2235,7 @@ def exact_limits() -> dict[str, object]:
         "read_only_prelaunch_requests": MAX_READ_ONLY_PRELAUNCH_CALLS,
         "firewall_mutation_requests": MAX_FIREWALL_MUTATION_CALLS,
         "firewall_verification_requests": MAX_FIREWALL_VERIFICATION_CALLS,
+        "regional_create_recovery_requests": MAX_REGIONAL_CREATE_RECOVERY_CALLS,
         "launch_requests": MAX_LAUNCH_CALLS,
         "launch_ambiguity_recovery_requests": MAX_LAUNCH_RECOVERY_CALLS,
         "active_instance_polls": MAX_ACTIVE_POLLS,
@@ -1664,9 +2251,12 @@ def exact_limits() -> dict[str, object]:
         "provider_response_bytes_aggregate": MAX_PROVIDER_RESPONSE_BYTES_AGGREGATE,
         "provider_ledger_bytes": MAX_PROVIDER_LEDGER_BYTES,
         "provider_ledger_events": MAX_PROVIDER_LEDGER_EVENTS,
+        "provider_ledger_event_bytes": MAX_PROVIDER_LEDGER_EVENT_BYTES,
+        "provider_request_body_bytes": MAX_PROVIDER_REQUEST_BODY_BYTES,
         "tcp_readiness_probes": MAX_TCP_READINESS_PROBES,
         "ssh_agent_inspection_calls": MAX_SSH_AGENT_INSPECTION_CALLS,
         "ssh_keyscan_calls": MAX_SSH_KEYSCAN_CALLS,
+        "host_inspection_commands": MAX_HOST_INSPECTION_COMMANDS,
         "ssh_sessions": MAX_SSH_SESSIONS,
         "remote_commands": MAX_REMOTE_COMMANDS,
         "ssh_output_bytes_per_call": MAX_SSH_OUTPUT_BYTES_PER_CALL,
@@ -1688,6 +2278,9 @@ def exact_limits() -> dict[str, object]:
         "mac_active_incremental_bytes": MAX_LOCAL_INCREMENTAL_BYTES,
         "mac_prewrite_free_floor_bytes": MIN_LOCAL_PREWRITE_FREE_BYTES,
         "mac_retained_free_floor_bytes": MIN_LOCAL_RETAINED_FREE_BYTES,
+        "external_container_capacity_bytes": EXTERNAL_CONTAINER_CAPACITY_BYTES,
+        "external_retained_free_floor_bytes": EXTERNAL_RETAINED_FREE_FLOOR_BYTES,
+        "external_precopy_free_floor_bytes": EXTERNAL_PRECOPY_FREE_FLOOR_BYTES,
         "private_binding_bytes": MAX_PRIVATE_BINDING_BYTES,
         "private_archive_bytes": MAX_PRIVATE_ARCHIVE_BYTES,
         "instance_count": 1,
@@ -1714,7 +2307,7 @@ def exact_limits() -> dict[str, object]:
 def provider_operations() -> list[dict[str, object]]:
     """Return the exact ordered provider operation classes and finite cardinalities."""
 
-    return [
+    operations: list[dict[str, object]] = [
         {
             "ordinal": 1,
             "id": "list-instance-types",
@@ -1789,13 +2382,21 @@ def provider_operations() -> list[dict[str, object]]:
         },
         {
             "ordinal": 11,
+            "id": "recover-owned-regional-ruleset-after-unknown-create",
+            "method": "GET",
+            "path": "/api/v1/firewall-rulesets",
+            "max_calls": 1,
+            "incident_only": True,
+        },
+        {
+            "ordinal": 12,
             "id": "verify-owned-regional-ruleset",
             "method": "GET",
             "path": "/api/v1/firewall-rulesets/{owned_ruleset_id}",
             "max_calls": 1,
         },
         {
-            "ordinal": 12,
+            "ordinal": 13,
             "id": "launch-instance",
             "method": "POST",
             "path": "/api/v1/instance-operations/launch",
@@ -1803,14 +2404,14 @@ def provider_operations() -> list[dict[str, object]]:
             "private_body": "launch_body_rendered",
         },
         {
-            "ordinal": 13,
+            "ordinal": 14,
             "id": "poll-instance-active",
             "method": "GET",
             "path": "/api/v1/instances/{owned_instance_id}",
             "max_calls": MAX_ACTIVE_POLLS,
         },
         {
-            "ordinal": 14,
+            "ordinal": 15,
             "id": "launch-ambiguity-recovery",
             "method": "GET",
             "path": "/api/v1/instances",
@@ -1818,7 +2419,7 @@ def provider_operations() -> list[dict[str, object]]:
             "incident_only": True,
         },
         {
-            "ordinal": 15,
+            "ordinal": 16,
             "id": "terminate-owned-instance",
             "method": "POST",
             "path": "/api/v1/instance-operations/terminate",
@@ -1826,49 +2427,50 @@ def provider_operations() -> list[dict[str, object]]:
             "private_body": "terminate_body_rendered",
         },
         {
-            "ordinal": 16,
+            "ordinal": 17,
             "id": "poll-instance-terminal",
             "method": "GET",
             "path": "/api/v1/instances/{owned_instance_id}",
             "max_calls": MAX_TERMINAL_POLLS,
         },
         {
-            "ordinal": 17,
+            "ordinal": 18,
             "id": "delete-owned-regional-ruleset",
             "method": "DELETE",
             "path": "/api/v1/firewall-rulesets/{owned_ruleset_id}",
             "max_calls": 1,
         },
         {
-            "ordinal": 18,
+            "ordinal": 19,
             "id": "verify-owned-regional-ruleset-absent",
             "method": "GET",
             "path": "/api/v1/firewall-rulesets/{owned_ruleset_id}",
             "max_calls": 1,
         },
         {
-            "ordinal": 19,
+            "ordinal": 20,
             "id": "restore-global-firewall",
             "method": "PATCH",
             "path": "/api/v1/firewall-rulesets/global",
             "max_calls": 1,
-            "private_body": "restore_global_patch_body",
+            "private_body": "restore_global_patch_body_from_sealed_runtime_binding",
         },
         {
-            "ordinal": 20,
+            "ordinal": 21,
             "id": "verify-global-restored",
             "method": "GET",
             "path": "/api/v1/firewall-rulesets/global",
             "max_calls": 1,
         },
         {
-            "ordinal": 21,
+            "ordinal": 22,
             "id": "verify-zero-owned-instances",
             "method": "GET",
             "path": "/api/v1/instances",
             "max_calls": 1,
         },
     ]
+    return [{**operation, "expected_status": 200} for operation in operations]
 
 
 def _contains_null(value: object) -> bool:
@@ -1947,6 +2549,12 @@ def render_public_plan(
             "secret_channel": "approved-nonlogging-in-process-channel",
             "secret_retained_through_terminal_confirmation": True,
             "account_api_requests_authorized_now": 0,
+            "request_renderer": "giclab.harness.lambda_l2_execution.render_provider_request",
+            "request_executor": "giclab.harness.lambda_l2_execution.execute_observed_request",
+            "request_ledger": "giclab.harness.lambda_l2_execution.FsyncL2ProviderLedger",
+            "request_ledger_schema": PROVIDER_LEDGER_SCHEMA_PATH,
+            "ledger_capacity_reserved_before_first_request": True,
+            "raw_request_bodies_in_ledger": False,
         },
         "source_contracts": {
             "openapi": {
@@ -1994,6 +2602,12 @@ def render_public_plan(
         "private_binding": binding.public_binding(),
         "runtime_bindings": [
             {
+                "name": "original_global_rules_for_restore",
+                "producer": "fresh-pre-mutation-global-firewall-response",
+                "cardinality": 1,
+                "replay_allowed": False,
+            },
+            {
                 "name": "owned_ruleset_id",
                 "producer": "create-owned-regional-ruleset",
                 "cardinality": 1,
@@ -2033,6 +2647,8 @@ def render_public_plan(
             "strict_source_state": "private-parameter-seal",
             "per_instance_rules_additive_only": True,
             "original_response_sealed_before_first_mutation": True,
+            "restore_body_source": "sealed-fresh-pre-mutation-response-data-rules",
+            "redacted_inventory_is_restore_body": False,
             "instance_terminal_before_regional_delete": True,
             "regional_delete_before_global_restore": True,
             "termination_unconfirmed_action": (
@@ -2052,6 +2668,8 @@ def render_public_plan(
             "file_system_mounts": [],
             "user_data_present": False,
             "unknown_outcome_action": "one-read-only-owned-instance-recovery-get-no-replay",
+            "zero-match_recovery_action": "prove-zero-owned-before-firewall-cleanup",
+            "multiple-match_recovery_action": "preserve-strict-firewall-high-severity-incident",
         },
         "host_key_checkpoint": {
             "actor": "user",
@@ -2065,6 +2683,9 @@ def render_public_plan(
                 "sha256",
             ],
             "private_checkpoint_schema": HOST_KEY_CHECKPOINT_SCHEMA_PATH,
+            "path_must_be_absent_before_wait": True,
+            "supervisor_minted_challenge_nonce_after_absence_check": True,
+            "checkpoint_timestamp_must_be_inside_wait_window": True,
             "max_seconds": MAX_HUMAN_CHECKPOINT_SECONDS,
             "absent_or_invalid_action": "no-ssh-terminate-and-restore",
         },
@@ -2088,22 +2709,14 @@ def render_public_plan(
             "identity_file": "sealed-matching-public-key-file",
             "identity_agent": "held-approved-agent-socket",
             "ssh_argv_renderer": "giclab.harness.lambda_l20_plan.render_ssh_argv",
-            "remote_command_allowlist": [
-                ["/usr/bin/uname", "-srmo"],
-                ["/usr/bin/cat", "/etc/os-release"],
-                ["/usr/bin/stat", "-fc", "%T", "/sys/fs/cgroup"],
-                ["docker", "version", "--format", "{{json .}}"],
-                ["docker", "info", "--format", "{{json .}}"],
-                ["containerd", "--version"],
-                ["runc", "--version"],
-                ["docker", "buildx", "version"],
-                ["/usr/bin/df", "-B1", "/"],
-                ["docker", "ps", "--no-trunc", "--format", "{{json .}}"],
-                ["docker", "image", "ls", "--no-trunc", "--format", "{{json .}}"],
-                ["docker", "network", "ls", "--no-trunc", "--format", "{{json .}}"],
-                ["docker", "volume", "ls", "--format", "{{json .}}"],
-                ["systemctl", "is-active", "docker"],
-            ],
+            "remote_static_command_allowlist": [list(value) for value in REMOTE_STATIC_COMMANDS],
+            "remote_dynamic_command_validator": (
+                "giclab.harness.lambda_l20_plan.validate_remote_argv"
+            ),
+            "one-command-per-ssh-session": True,
+            "stdout_transfer": (
+                "bounded-in-process-stream-to-exclusive-fsync-local-evidence-record"
+            ),
             "package_or_daemon_mutation_commands": [],
         },
         "containment_probe": {
@@ -2133,6 +2746,30 @@ def render_public_plan(
                 ["docker", "inspect", "{immutable-container-id}"],
                 ["docker", "logs", "--timestamps", "{immutable-container-id}"],
                 ["docker", "rm", "{immutable-container-id}"],
+                [
+                    "docker",
+                    "ps",
+                    "-a",
+                    "--no-trunc",
+                    "--filter",
+                    f"label=giclab.run={RUN_ID}",
+                ],
+                [
+                    "docker",
+                    "network",
+                    "ls",
+                    "--no-trunc",
+                    "--filter",
+                    f"label=giclab.run={RUN_ID}",
+                ],
+                [
+                    "docker",
+                    "volume",
+                    "ls",
+                    "--filter",
+                    f"label=giclab.run={RUN_ID}",
+                ],
+                ["/bin/ps", "-eo", "pid,ppid,sid,pgid,stat,comm,args"],
             ],
             "network": "none",
             "cap_drop_all": True,
@@ -2140,7 +2777,25 @@ def render_public_plan(
             "read_only_root": True,
             "restart_policy": "no",
             "term_to_kill_required": True,
+            "wall_deadline_enforced_by": "provider-supervisor-monotonic-deadline",
+            "output_cap_enforced_by": "bounded-ssh-stream-writer",
+            "init_process": True,
+            "ownership_labels_required": [
+                "experiment",
+                "profile",
+                "gate",
+                "plan",
+                "run",
+                "authorization",
+                "repository_commit",
+                "image_digest",
+                "attempt",
+                "provider_instance_id",
+            ],
             "residual_owned_resources_required": 0,
+            "residual_process_analyzer": (
+                "reject-container-id-name-or-owned-cgroup-in-final-host-process-snapshot"
+            ),
         },
         "network_allowlist": [
             {"host": "cloud.lambda.ai", "port": 443, "purpose": "provider-control"},
@@ -2162,14 +2817,28 @@ def render_public_plan(
             },
         ],
         "evidence_and_cleanup": {
+            "success_schema": HOST_EVIDENCE_SCHEMA_PATH,
+            "incident_schema": INCIDENT_SCHEMA_PATH,
+            "stream_writer": "giclab.harness.lambda_l2_evidence.GateL2EvidenceWriter",
+            "archive_executor": "giclab.harness.lambda_l2_evidence.archive_to_approved_external",
+            "archive_id": "RUN-T07-L2-LAMBDA-HOST-QUALIFICATION-0001-HOST-EVIDENCE",
             "remote_source_retained_until_local_hash_verification": True,
             "transfer_failure_does_not_delay_termination": True,
             "provider_api_termination_required": True,
+            "required_provider_terminal_status": "terminated",
+            "billing_ended_source_contract": True,
+            "final_zero_owned_instances_get_required": True,
             "host_shutdown_is_termination": False,
             "local_source_retained": True,
             "external_archive_root": str(EXTERNAL_ARCHIVE_ROOT),
             "external_volume_uuid": "8478609D-FA37-4ED5-875D-47AE912B9151",
             "external_physical_store_uuid": "7904A6F1-F483-4ED7-9E34-BFECAB31C63E",
+            "observed_container_capacity_bytes": EXTERNAL_CONTAINER_CAPACITY_BYTES,
+            "retained_free_floor_bytes": EXTERNAL_RETAINED_FREE_FLOOR_BYTES,
+            "required_precopy_free_bytes": EXTERNAL_PRECOPY_FREE_FLOOR_BYTES,
+            "future_revalidation_formula": (
+                "max(150_GiB,ceil(container_capacity_bytes/5))+archive_bytes"
+            ),
             "held_no_follow_guard": True,
             "one_way_copy": True,
             "source_destination_sha256_verification": True,
@@ -2242,6 +2911,56 @@ def validate_public_plan(
         or plan.get("paid_compute_allowed_now") is not False
     ):
         raise L20ContractError("public plan prematurely grants execution authority")
+    provider = _mapping(plan.get("provider"), context="plan provider")
+    if provider != {
+        "name": "lambda-on-demand-cloud",
+        "api_base_url": API_BASE_URL,
+        "transport": "python-stdlib-in-process-https-no-redirect",
+        "secret_variable": "LAMBDA_API_KEY",
+        "secret_channel": "approved-nonlogging-in-process-channel",
+        "secret_retained_through_terminal_confirmation": True,
+        "account_api_requests_authorized_now": 0,
+        "request_renderer": "giclab.harness.lambda_l2_execution.render_provider_request",
+        "request_executor": "giclab.harness.lambda_l2_execution.execute_observed_request",
+        "request_ledger": "giclab.harness.lambda_l2_execution.FsyncL2ProviderLedger",
+        "request_ledger_schema": PROVIDER_LEDGER_SCHEMA_PATH,
+        "ledger_capacity_reserved_before_first_request": True,
+        "raw_request_bodies_in_ledger": False,
+    }:
+        raise L20ContractError("provider transport or ledger contract drifted")
+    scientific = _mapping(plan.get("scientific_boundary"), context="scientific boundary")
+    if scientific != {
+        "experiment_id": "EXP-0001",
+        "profile_plan_id": "PLAN-EXP0001-SMOKE",
+        "reactive_first": True,
+        "simulative_second": True,
+        "pair_id": "PAIR-EXP0001-SMOKE-0000",
+        "model": "gpt-4o-2024-11-20",
+        "reproduction_level": "directional-reproduction",
+        "interpretation_allowed": False,
+        "pilot_authorized": False,
+        "training_allowed": False,
+    }:
+        raise L20ContractError("scientific boundary drifted")
+    selection = _mapping(plan.get("public_selection"), context="public selection")
+    expected_selection = {
+        "instance_type_name": "gpu_1x_a10",
+        "region_name": "us-east-1",
+        "image_alias": "img-0111",
+        "image_family": "gpu-base-22-04",
+        "image_version": "22.4.5-2141",
+        "architecture": "x86_64",
+        "price_cents_per_hour": SELECTED_LIST_PRICE_CENTS_PER_HOUR,
+        "vcpus": 30,
+        "memory_gib": 200,
+        "root_storage_gib": 1400,
+        "gpus": 1,
+        "ssh_key_name": "fractal-lambda-codex",
+        "ssh_access_mode": "preloaded-ssh-agent",
+        "persistent_filesystem_count": 0,
+    }
+    if selection != expected_selection:
+        raise L20ContractError("public resource selection drifted")
     limits = _mapping(plan.get("limits"), context="plan limits")
     if dict(limits) != exact_limits():
         raise L20ContractError("public plan limits drifted")
@@ -2260,11 +2979,67 @@ def validate_public_plan(
     if (
         containment.get("image_reference") != BUSYBOX_REFERENCE
         or containment.get("network") != "none"
+        or containment.get("config_digest") != BUSYBOX_CONFIG_DIGEST
+        or containment.get("layer_digest") != BUSYBOX_LAYER_DIGEST
+        or containment.get("cap_drop_all") is not True
+        or containment.get("no_new_privileges") is not True
+        or containment.get("read_only_root") is not True
+        or containment.get("restart_policy") != "no"
+        or containment.get("term_to_kill_required") is not True
+        or containment.get("init_process") is not True
+        or containment.get("residual_owned_resources_required") != 0
     ):
         raise L20ContractError("containment image or network contract drifted")
     launch = _mapping(plan.get("launch_contract"), context="launch contract")
     if launch.get("launch_count") != 1 or launch.get("automatic_retry_count") != 0:
         raise L20ContractError("launch count or replay policy drifted")
+    firewall = _mapping(plan.get("firewall_transaction"), context="firewall transaction")
+    if (
+        firewall.get("global_before_regional_before_launch") is not True
+        or firewall.get("strict_rule_count") != 1
+        or firewall.get("strict_protocol") != "tcp"
+        or firewall.get("strict_port_range") != [22, 22]
+        or firewall.get("original_response_sealed_before_first_mutation") is not True
+        or firewall.get("restore_body_source") != "sealed-fresh-pre-mutation-response-data-rules"
+        or firewall.get("redacted_inventory_is_restore_body") is not False
+        or firewall.get("instance_terminal_before_regional_delete") is not True
+        or firewall.get("regional_delete_before_global_restore") is not True
+    ):
+        raise L20ContractError("firewall transaction contract drifted")
+    checkpoint = _mapping(plan.get("host_key_checkpoint"), context="host-key checkpoint")
+    if (
+        checkpoint.get("path_must_be_absent_before_wait") is not True
+        or checkpoint.get("supervisor_minted_challenge_nonce_after_absence_check") is not True
+        or checkpoint.get("checkpoint_timestamp_must_be_inside_wait_window") is not True
+        or checkpoint.get("max_seconds") != MAX_HUMAN_CHECKPOINT_SECONDS
+    ):
+        raise L20ContractError("host-key checkpoint freshness contract drifted")
+    ssh = _mapping(plan.get("ssh_contract"), context="SSH contract")
+    if (
+        ssh.get("private_key_file_reads") != 0
+        or ssh.get("private_key_exports") != 0
+        or ssh.get("agent_forwarding") is not False
+        or ssh.get("one-command-per-ssh-session") is not True
+        or ssh.get("remote_static_command_allowlist")
+        != [list(value) for value in REMOTE_STATIC_COMMANDS]
+        or ssh.get("package_or_daemon_mutation_commands") != []
+    ):
+        raise L20ContractError("SSH command or private-key contract drifted")
+    evidence = _mapping(plan.get("evidence_and_cleanup"), context="evidence cleanup")
+    if (
+        evidence.get("success_schema") != HOST_EVIDENCE_SCHEMA_PATH
+        or evidence.get("incident_schema") != INCIDENT_SCHEMA_PATH
+        or evidence.get("source_destination_sha256_verification") is not True
+        or evidence.get("atomic_finalization") is not True
+        or evidence.get("local_source_retained") is not True
+        or evidence.get("provider_api_termination_required") is not True
+        or evidence.get("required_provider_terminal_status") != "terminated"
+        or evidence.get("final_zero_owned_instances_get_required") is not True
+        or evidence.get("broad_prune_allowed") is not False
+        or evidence.get("retained_free_floor_bytes") != EXTERNAL_RETAINED_FREE_FLOOR_BYTES
+        or evidence.get("required_precopy_free_bytes") != EXTERNAL_PRECOPY_FREE_FLOOR_BYTES
+    ):
+        raise L20ContractError("evidence, termination, or archive contract drifted")
     _assert_public_privacy(plan)
 
 
@@ -2277,6 +3052,9 @@ def schema_hashes(repository_root: Path) -> dict[str, str]:
         PRIVATE_PARAMETERS_SCHEMA_PATH,
         HOST_KEY_CHECKPOINT_SCHEMA_PATH,
         PLAN_SCHEMA_PATH,
+        PROVIDER_LEDGER_SCHEMA_PATH,
+        HOST_EVIDENCE_SCHEMA_PATH,
+        INCIDENT_SCHEMA_PATH,
     ):
         encoded = _read_regular_no_follow(
             repository_root / relative,

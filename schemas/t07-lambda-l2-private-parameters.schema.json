@@ -99,8 +99,8 @@
         "hostname": {"type": "string", "pattern": "^giclab-t07-l2-[a-f0-9]{12}$"},
         "tags": {
           "type": "array",
-          "minItems": 4,
-          "maxItems": 4,
+          "minItems": 5,
+          "maxItems": 5,
           "items": {
             "type": "object",
             "additionalProperties": false,
@@ -135,23 +135,57 @@
             "rules": {"type": "array", "minItems": 1, "maxItems": 1, "items": {"$ref": "#/$defs/firewallRule"}}
           }
         },
-        "launch_body_template": {"type": "object", "minProperties": 10},
-        "terminate_body_template": {"type": "object", "minProperties": 1},
-        "restore_global_patch_body": {"$ref": "#/$defs/rulesBody"}
+        "launch_body_template": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "region_name",
+            "instance_type_name",
+            "ssh_key_names",
+            "file_system_names",
+            "file_system_mounts",
+            "name",
+            "hostname",
+            "image",
+            "tags",
+            "authorization_tag_runtime_binding",
+            "firewall_rulesets_runtime_binding"
+          ],
+          "properties": {
+            "region_name": {"const": "us-east-1"},
+            "instance_type_name": {"const": "gpu_1x_a10"},
+            "ssh_key_names": {"type": "array", "minItems": 1, "maxItems": 1, "items": {"const": "fractal-lambda-codex"}},
+            "file_system_names": {"type": "array", "maxItems": 0},
+            "file_system_mounts": {"type": "array", "maxItems": 0},
+            "name": {"type": "string", "pattern": "^giclab-t07-l2-[a-f0-9]{12}$"},
+            "hostname": {"type": "string", "pattern": "^giclab-t07-l2-[a-f0-9]{12}$"},
+            "image": {"type": "object", "additionalProperties": false, "required": ["id"], "properties": {"id": {"$ref": "#/$defs/nonempty"}}},
+            "tags": {"type": "array", "minItems": 5, "maxItems": 5},
+            "authorization_tag_runtime_binding": {"const": "authorization_reference"},
+            "firewall_rulesets_runtime_binding": {"const": "owned_regional_ruleset_id"}
+          }
+        },
+        "terminate_body_template": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["instance_ids_runtime_binding"],
+          "properties": {"instance_ids_runtime_binding": {"const": "owned_instance_id"}}
+        },
+        "restore_global_patch_body": {"$ref": "#/$defs/runtimeRulesBody"}
       }
     },
     "runtime_bindings": {
       "type": "array",
-      "minItems": 4,
-      "maxItems": 4,
+      "minItems": 5,
+      "maxItems": 5,
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["name", "source_operation", "json_pointer", "cardinality"],
+        "required": ["name", "source_operation", "resolver", "cardinality"],
         "properties": {
           "name": {"$ref": "#/$defs/nonempty"},
           "source_operation": {"$ref": "#/$defs/nonempty"},
-          "json_pointer": {"type": "string", "pattern": "^/"},
+          "resolver": {"type": "string", "pattern": "^giclab\\.harness\\.lambda_l20_plan\\.[A-Za-z0-9_]+$"},
           "cardinality": {"const": 1}
         }
       }
@@ -196,6 +230,16 @@
       "required": ["rules"],
       "properties": {
         "rules": {"type": "array", "minItems": 1, "maxItems": 100, "items": {"$ref": "#/$defs/firewallRule"}}
+      }
+    },
+    "runtimeRulesBody": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rules_runtime_binding"],
+      "properties": {
+        "rules_runtime_binding": {
+          "const": "sealed_original_global_response.data.rules"
+        }
       }
     }
   }
