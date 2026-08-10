@@ -4,7 +4,7 @@ Status: **design complete; unauthorized; non-account-bound; non-executable until
 authorized Gate L1 succeeds**
 
 This is a requirements packet, not a launch plan. It deliberately has no Gate L2 plan
-ID/hash, authorization reference, account/workspace binding, instance type, region,
+ID/hash, authorization reference, sealed Gate L1 binding, instance type, region,
 provider image ID, SSH key, firewall ruleset, launch request, instance ID, or ready
 authorization block. Inventing any of those values would violate Gate L0. The packet
 must be regenerated after L1 and a fresh user decision.
@@ -22,7 +22,8 @@ contract, never kernel containment or provider termination.
 Before a Gate L2 plan can exist, all of the following must be met:
 
 1. An explicitly authorized Gate L1 run produces a schema-valid, bounded, redacted
-   inventory with path, bytes, SHA-256, observation time, account/workspace hashes, and
+   inventory with path, bytes, SHA-256, observation time, exact V3 authorization,
+   plan, implementation/execution commits, seven endpoint outcomes, ledger hash, and
    exact selected type/region/image/price; the inventory and copy record must also be
    sealed and hash-verified at the approved MacBook archive. An unarchived L1 artifact
    is not consumable by L2.
@@ -130,7 +131,7 @@ integer cents/hour before authorization.
 | Lambda persistent filesystem | 0 attached; 0 cents | both `file_system_names` and `file_system_mounts` exact empty arrays |
 | Launch targets/requests/retries | 1 instance; 1 request; 0 retries | no batch/quantity field |
 | Termination targets/requests | 1 exact minted ID; at most 3 requests | initial plus at most 2 safety retries; no unrelated ID |
-| Provider API requests | at most 134 | 8 revalidation GET + 60 active polls + 1 ambiguity-recovery GET + 1 launch POST + 3 termination POST + 60 terminal polls + 1 final GET |
+| Provider API requests | at most 133 | 7 revalidation GET + 60 active polls + 1 ambiguity-recovery GET + 1 launch POST + 3 termination POST + 60 terminal polls + 1 final GET |
 | Provider request pacing/retry | >=1 monotonic second between every request start; 0 automatic transport retries | all pacing delay counts inside the single 3,600-second aggregate deadline; termination's at-most-two safety retries are explicit lifecycle requests, not transport retries |
 | Provider API response bytes | 16,777,216 B | 1,048,576 B per response; streaming abort before retention/parse overrun |
 | SSH readiness attempts | 30 | 10-second spacing; 300-second aggregate |

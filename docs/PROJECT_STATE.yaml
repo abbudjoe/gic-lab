@@ -24,4 +24,4 @@ planned_execution_substrate:
   local_alternatives: terminal-rejected
   decision_document: docs/harness/T07_GATE_L0_LAMBDA_HOST_DECISION.md
 authoritative_plan: docs/exec-plans/active/PHASE_1_ARTIFACT_EXECUTION.md
-last_updated: "2026-08-09"
+last_updated: "2026-08-10"

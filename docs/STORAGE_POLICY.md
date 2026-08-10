@@ -73,23 +73,26 @@ capacity, the retained-free floor is recalculated as
 and a post-copy retained-floor check are mandatory. The Mac mini source remains until
 independent archive verification.
 
-Gate L1 V2 inventory uses a smaller dedicated retention contract. Before any account
-GET, the Mac mini must retain at least 8,591,048,704 bytes free: 8 GiB operational
-headroom plus a conservative 1,114,112-byte local write/finalization increment. That
-increment covers the 851,968-byte successful local evidence set (524,288-byte
-redacted artifact, 262,144-byte durable request ledger, and 65,536-byte verification
-record) plus a 262,144-byte transient ledger-capacity reservation. At least
+Gate L1 V3 inventory uses a smaller dedicated retention contract. Before any account
+GET, the Mac mini must retain at least 8,590,868,480 bytes free: 8 GiB operational
+headroom plus a conservative 933,888-byte local write/finalization increment. That
+increment covers the 761,856-byte successful local evidence set (524,288-byte
+redacted artifact, 172,032-byte durable request ledger, and 65,536-byte verification
+record) plus a 172,032-byte transient ledger-capacity reservation. At least
 8,589,934,592 bytes must remain after local sealing. A separate failed-preflight
 disposition is capped at 16,384 bytes. The external four-file bundle is capped at
 1,048,576 bytes, and aggregate retained evidence including the disposition is capped
-at 1,916,928 bytes. The external pre-copy floor is freshly recomputed as
+at 1,826,816 bytes. The external pre-copy floor is freshly recomputed as
 `max(150 GiB, ceil(container_capacity_bytes / 5)) + 1,048,576`; the post-copy floor
 removes only that increment. Success requires held-descriptor identity, no internal
 fallback, source/destination hash equality, fsync, atomic finalization, source
 retention, and a post-copy volume/floor check. A complete schema-valid ledger is one
 of the four sealed files; an unarchived or incomplete-ledger Gate L1 inventory cannot
 authorize or bind Gate L2. The earlier V1 two-local-file/three-file-bundle figures are
-historical only and do not authorize another V1 attempt.
+historical only and do not authorize another V1 attempt. The V2 figures—262,144-byte
+ledger, 1,114,112-byte prewrite increment, 8,591,048,704-byte prewrite floor, and
+1,916,928-byte aggregate retention—are also historical only and do not authorize
+replay of run 0002.
 
 If the destination is later exposed through a network filesystem, attempts must be
 written on the approved execution host, sealed and hashed there, copied to this

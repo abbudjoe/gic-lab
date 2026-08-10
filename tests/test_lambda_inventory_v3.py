@@ -39,6 +39,7 @@ from giclab.harness.lambda_inventory_plan_v3 import (
     ReadOnlyInventoryPlanV3,
     inventory_ledger_contract_document_v3,
     inventory_limits_document_v3,
+    load_inventory_plan_v3,
     verify_inventory_implementation_v3,
 )
 from giclab.harness.lambda_request_ledger_v3 import validate_request_ledger_bytes
@@ -55,6 +56,7 @@ JUPYTER_URL_CANARY = "https://example.invalid/jupyter?token=PUBLIC-DUMMY-JUPYTER
 TAG_KEY_CANARY = "unrelated-sensitive-tag-key"
 TAG_VALUE_CANARY = "unrelated-sensitive-tag-value"
 PLAN_SHA256 = "1" * 64
+COMMITTED_PLAN_SHA256 = "b5ec82aaa84882a7c3269ebdb695a6c694f891d66d367c05f82eaf9797515331"
 
 
 def _encoded(value: object) -> bytes:
@@ -333,6 +335,14 @@ def test_v3_plan_is_exactly_seven_gets_and_has_no_audit_or_account_lrn() -> None
     assert plan.max_aggregate_retained_bytes == 1_826_816
     assert plan.max_local_command_calls == 15
     assert plan.max_local_command_output_bytes == 37_879_810
+
+
+def test_committed_v3_plan_loads_and_binds_the_frozen_implementation() -> None:
+    path = ROOT / "containers/sira-smoke/lambda/gate-l1-readonly-inventory-plan-v3.json"
+    assert hashlib.sha256(path.read_bytes()).hexdigest() == COMMITTED_PLAN_SHA256
+    plan = load_inventory_plan_v3(path, expected_sha256=COMMITTED_PLAN_SHA256)
+    assert plan.implementation_commit == "718c75c694b3033fa7ef2ed5e7c4696fd8c389f3"
+    verify_inventory_implementation_v3(ROOT, plan)
 
 
 def test_schema_bindings_must_match_the_implementation_manifest() -> None:

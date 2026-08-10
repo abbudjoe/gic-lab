@@ -14,7 +14,8 @@ authorization block.
 Gate L3 may be materialized only after a separately authorized Gate L2 has sealed
 schema-valid evidence of:
 
-- exact Lambda account/workspace/type/region/image/key/ruleset/price/instance identity;
+- exact sealed Gate L1 authorization/plan/commit/ledger plus selected Lambda
+  type/region/image/key/ruleset/price/instance identity;
 - x86_64 OS/kernel and private PID/cgroup/IPC behavior;
 - exact Docker client/server, containerd, runc, cgroup driver and log driver;
 - one immutable BusyBox containment probe with bounded stop/KILL cleanup and zero

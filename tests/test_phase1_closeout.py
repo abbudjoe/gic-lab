@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+
 from giclab.harness.policy import load_project_execution_state
 from giclab.registry import load_json, load_yaml
 from giclab.validation import ROOT
@@ -131,7 +133,7 @@ def test_exp0001_science_and_h2k_boundary_remain_orthogonal() -> None:
     assert "| T16 |" not in phase_plan
 
 
-def test_closeout_retains_zero_execution_and_empty_evidence_state() -> None:
+def test_closeout_retains_zero_scientific_execution_and_only_historical_infrastructure() -> None:
     compute = load_yaml(ROOT / "manifests/compute.yaml")
     results = load_json(EXP_ROOT / "results-summary.json")
     assert compute["entries"] == []
@@ -147,7 +149,18 @@ def test_closeout_retains_zero_execution_and_empty_evidence_state() -> None:
     assert results["run_status"] == "not-run"
     assert results["measurements"] == []
     assert results["artifacts"] == []
-    assert not (ROOT / "artifacts").exists()
+    ledger = (
+        ROOT / "artifacts/t07/lambda/gate-l1/RUN-T07-L1-LAMBDA-INVENTORY-0002/request-ledger.jsonl"
+    )
+    retained_files = {
+        path.relative_to(ROOT).as_posix()
+        for path in (ROOT / "artifacts").rglob("*")
+        if path.is_file()
+    }
+    assert retained_files == {ledger.relative_to(ROOT).as_posix()}
+    assert hashlib.sha256(ledger.read_bytes()).hexdigest() == (
+        "a1cb81ce286881c33d879ce73787e755eed8ecd1f64ca2b9eaca7d39824a2c94"
+    )
     assert not (ROOT / "traces").exists()
 
 

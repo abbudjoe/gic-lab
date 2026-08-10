@@ -39,12 +39,18 @@ infrastructure alternatives. The project selected a short-lived x86_64 Lambda
 On-Demand Cloud host as T07's planned substrate, with no persistent Lambda filesystem
 and provider-API termination as the billing boundary.
 
-This selection is not an experiment run or cloud authorization. The next possible
-action is a separately authorized, eight-GET, redacted Lambda inventory. Host
+This selection is not an experiment run or cloud authorization. A prior authorized
+inventory attempt stopped after its first read-only audit request; the raw response was
+not retained, so its exact schema mismatch remains unadjudicated and the run is
+nonreplayable. Audit history is not needed for host selection. The next possible
+action is therefore a fresh, separately authorized, seven-GET redacted Lambda
+inventory that requests only capacity, image, region, SSH-key, firewall, and running-
+instance facts. Host
 qualification, the Playwright/SiRA image probes, the live reactive/simulative pair,
 paid compute, model calls, browser actions, and interpretation all remain unauthorized.
 The inventory is not complete until its redacted artifact is hash-verified in the
 approved MacBook archive; host qualification also needs authenticated first-contact
 SSH host-key trust.
-No Lambda account was queried and no secret, instance, container, browser, model, or
-SiRA condition was accessed or executed for this update.
+The offline Gate L1.2 repair made no account request and accessed no real secret. It
+did not launch or mutate an instance, use SSH, run a container or browser, call a model,
+or execute either SiRA condition.
