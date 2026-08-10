@@ -1086,9 +1086,14 @@ def test_l13_control_plane_contains_no_network_or_ssh_execution_primitive() -> N
 
 
 def test_committed_postrun_evidence_is_schema_valid_and_stays_blocked() -> None:
-    evidence = json.loads(
-        (ROOT / "docs/harness/evidence/T07_RUN_0003_POSTRUN_ADJUDICATION.json").read_text()
+    path = ROOT / "docs/harness/evidence/T07_RUN_0003_POSTRUN_ADJUDICATION.json"
+    encoded = path.read_bytes()
+    assert hashlib.sha256(encoded).hexdigest() == (
+        "23ae723811cb15b2cbc1229592d507624c9107851fc883d9ce023464301631d0"
     )
+    assert b"SHA256:" not in encoded
+    assert b"/.ssh/" not in encoded
+    evidence = json.loads(encoded)
     assert evidence["decision_state"] == "inventory-evidence-insufficient"
     assert evidence["authorization"] == {
         "cloud_mutation_authorized": False,
@@ -1120,6 +1125,7 @@ def test_committed_postrun_evidence_is_schema_valid_and_stays_blocked() -> None:
         row["match_state"] == "evidence_unavailable"
         for row in evidence["ssh_key_match"]["account_key_matches"]
     )
+    assert evidence["ssh_key_match"]["local_public_keys"] == []
     inventory = json.loads(
         (
             ROOT

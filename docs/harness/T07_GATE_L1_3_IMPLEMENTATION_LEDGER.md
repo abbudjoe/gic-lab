@@ -47,8 +47,11 @@ the required baseline.
 
 ## Evidence identities and validation
 
-- post-run adjudication: 23,043 B, SHA-256
+- original post-run adjudication at the L1.3 commit: 23,043 B, SHA-256
   `95b08f6e9345aa09ba4b81dcb6b70484ca0a4d2a964cc553f2a3ae4fe96ee782`;
+- current privacy-minimized public adjudication: 20,703 B, SHA-256
+  `23ae723811cb15b2cbc1229592d507624c9107851fc883d9ce023464301631d0`;
+  the original Git object and all sealed evidence remain preserved;
 - image-identity schema SHA-256:
   `554f5ef4e456f75339ccf20eb2f44e9e0e7db7e6fefb0fbb4b41cefe2ad3d2ea`;
 - candidate-matrix schema SHA-256:

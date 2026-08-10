@@ -1,7 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://gic-lab.invalid/schemas/t07-lambda-l2-plan.schema.json",
-  "title": "T07 Gate L2 executable but unauthorized Lambda host plan",
+  "$comment": "Non-authoritative rejected design; Gate L2 is blocked and no executable plan exists.",
+  "title": "T07 Gate L2 rejected non-executable Lambda host design",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -45,8 +46,8 @@
     "plan_id": {"const": "PLAN-T07-GATE-L2-LAMBDA-HOST-QUALIFICATION-V1"},
     "run_id": {"const": "RUN-T07-L2-LAMBDA-HOST-QUALIFICATION-0001"},
     "authorization_reference": {"const": "AUTH-T07-GATE-L2-LAMBDA-HOST-QUALIFICATION-V1-PENDING"},
-    "authorization_state": {"const": "pending-user-authorization"},
-    "executable_after_exact_authorization": {"const": true},
+    "authorization_state": {"const": "blocked-source-and-control-plane"},
+    "executable_after_exact_authorization": {"const": false},
     "authorized": {"const": false},
     "branch": {"const": "phase-1/sira-smoke-lambda"},
     "reviewed_implementation_commit": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
@@ -89,8 +90,8 @@
       "additionalProperties": {"type": ["integer", "string"]}
     },
     "actors": {"type": "array", "minItems": 6, "maxItems": 6, "items": {"$ref": "#/$defs/object"}},
-    "terminal_state": {"const": "ready-for-gate-l2-authorization"},
-    "next_gate": {"const": "Gate L2 exact user authorization only"},
+    "terminal_state": {"const": "blocked-human-or-source-decision"},
+    "next_gate": {"const": "source-and-control-plane-repair-requires-new-reviewed-plan"},
     "cloud_mutation_allowed_now": {"const": false},
     "paid_compute_allowed_now": {"const": false},
     "ssh_allowed_now": {"const": false},

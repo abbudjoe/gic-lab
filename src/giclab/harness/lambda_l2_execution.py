@@ -1,8 +1,9 @@
-"""Network-inert-on-import execution primitives for a future authorized Gate L2.
+"""Network-inert-on-import, non-authoritative Gate L2 draft primitives.
 
-The module supplies the mutation-capable in-process HTTPS transport, exact typed
-request rendering, and an append-only fsync request ledger. Tests inject a fake
-transport; importing or constructing these objects performs no account request.
+The module contains a mutation-capable in-process HTTPS transport, typed request
+rendering, and an append-only fsync request ledger. It does not implement the required
+end-to-end supervisor and must not be treated as executable authority. Tests inject a
+fake transport; importing or constructing these objects performs no account request.
 """
 
 from __future__ import annotations

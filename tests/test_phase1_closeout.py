@@ -34,14 +34,14 @@ def test_phase_one_is_the_only_active_non_executable_control_plane() -> None:
         "condition_plan_sha256s": [],
     }
     assert state["planned_execution_substrate"] == {
-        "decision_state": "lambda-host-qualification-ready",
+        "decision_state": "lambda-host-qualification-blocked",
         "provider": "lambda-on-demand-cloud",
         "architecture": "x86_64",
         "persistent_filesystem": False,
         "gate_l1_authorized": False,
         "gate_l1_evidence_state": "complete-externally-sealed",
         "gate_l2_authorized": False,
-        "gate_l2_decision_state": "ready-for-gate-l2-authorization",
+        "gate_l2_decision_state": "blocked-human-or-source-decision",
         "gate_l3_state": "requirements-only",
         "gate_l4_authorized": False,
         "local_alternatives": "terminal-rejected",
@@ -51,11 +51,11 @@ def test_phase_one_is_the_only_active_non_executable_control_plane() -> None:
     execution_state = load_project_execution_state(ROOT)
     substrate = execution_state.planned_execution_substrate
     assert substrate is not None
-    assert substrate.decision_state == "lambda-host-qualification-ready"
+    assert substrate.decision_state == "lambda-host-qualification-blocked"
     assert substrate.provider == "lambda-on-demand-cloud"
     assert substrate.architecture == "x86_64"
     assert substrate.gate_l1_evidence_state == "complete-externally-sealed"
-    assert substrate.gate_l2_decision_state == "ready-for-gate-l2-authorization"
+    assert substrate.gate_l2_decision_state == "blocked-human-or-source-decision"
     assert [path.name for path in (ROOT / "docs/exec-plans/active").glob("*.md")] == [
         "PHASE_1_ARTIFACT_EXECUTION.md"
     ]
@@ -110,7 +110,7 @@ def test_readiness_names_every_exact_decision_and_future_track_boundary() -> Non
         "regulation_decision",
         "source_kind: experiment_assignment",
         "Rollback and cleanup",
-        "Unresolved nonblocking questions",
+        "Remaining blockers and nonblocking questions",
         "infrastructure evidence only",
     ):
         assert required in readiness
@@ -219,8 +219,9 @@ def test_t07_public_surfaces_preserve_l1a_and_keep_l2_unauthorized() -> None:
         "Gate L2",
     ):
         assert required in combined
-    assert "ready-for-gate-l2-authorization" in combined
+    assert "blocked-human-or-source-decision" in combined
     assert "Gate L2" in combined and "unauthorized" in combined
+    assert "gate-l2-host-qualification-plan.json" not in combined
 
 
 def test_closeout_retains_zero_scientific_execution_and_only_bounded_infrastructure() -> None:
@@ -244,6 +245,7 @@ def test_closeout_retains_zero_scientific_execution_and_only_bounded_infrastruct
     alias_root = "artifacts/t07/lambda/gate-l1-3/RUN-T07-L1-LAMBDA-INVENTORY-0003"
     l1a_root = "artifacts/t07/lambda/gate-l1a/RUN-T07-L1A-LAMBDA-SSH-KEY-FINGERPRINT-0001"
     l20_root = "artifacts/t07/lambda/gate-l2-0/RUN-T07-L2-LAMBDA-HOST-QUALIFICATION-0001"
+    l20_v2_root = f"{l20_root}/parameters-v2"
     retained_hashes = {
         f"{run2_root}/request-ledger.jsonl": (
             "a1cb81ce286881c33d879ce73787e755eed8ecd1f64ca2b9eaca7d39824a2c94"
@@ -298,6 +300,24 @@ def test_closeout_retains_zero_scientific_execution_and_only_bounded_infrastruct
         ),
         f"{l20_root}/PRIVATE_ARCHIVE_COPY_RECORD.json": (
             "5c0e5bb631cb39f46f1744f75e74e7a549b25f63d669d3e3c9d2b7b23a59c49a"
+        ),
+        f"{l20_v2_root}/human-decision-private.json": (
+            "0b109b0150eec8739e30e86e5f1318b60c818cc3974354c67dc35a4e2dffd4ea"
+        ),
+        f"{l20_v2_root}/HUMAN_DECISION_SEAL.json": (
+            "5a1b9dec78e5a699809a4626876646ad687dfe5183859bf771ba75941f1814fc"
+        ),
+        f"{l20_v2_root}/private-parameters.json": (
+            "89028846f059c305d10a741c14681c537556666ac04f290dff9be8985bfe913b"
+        ),
+        f"{l20_v2_root}/PRIVATE_PARAMETERS_SEAL.json": (
+            "4a6c6c3cfbf3a142b645fa361018bf6f6e6a8da99ec5ce01160d789b61b28dea"
+        ),
+        f"{l20_v2_root}/PRIVATE_BUNDLE_SEAL.json": (
+            "7382a8b4b4262060b2cc01f686d18444c56af918e8bb552e9bee6e470b45e555"
+        ),
+        f"{l20_v2_root}/PRIVATE_ARCHIVE_COPY_RECORD.json": (
+            "20240e23b7ad291ad728191a4b3d6133e693515999cfaf72d9eaa30608ad91d5"
         ),
     }
     retained_files = {

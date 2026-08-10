@@ -1,6 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://gic-lab.invalid/schemas/t07-lambda-l2-provider-ledger.schema.json",
+  "$comment": "Non-authoritative draft; Gate L2 is blocked and no executable plan exists.",
   "title": "T07 Gate L2 append-only provider request ledger event",
   "type": "object",
   "additionalProperties": false,

@@ -65,7 +65,7 @@ grant no mutation authority; one gate's authorization never carries into another
 
 | Task | Work package | Mapped phase DoD | Current permission |
 |---|---|---|---|
-| T07 | Execute one authorized contained SiRA smoke pair; capture regulation-decision evidence without interpretation. | P1-DOD-02, P1-DOD-11 through P1-DOD-13 | Gate L1 complete/sealed; L1.4 one-request design unauthorized; Gate L2 blocked |
+| T07 | Execute one authorized contained SiRA smoke pair; capture regulation-decision evidence without interpretation. | P1-DOD-02, P1-DOD-11 through P1-DOD-13 | Gate L1/L1A complete/sealed; Gate L2 blocked by source/control-plane gaps |
 | T08 | Analyze smoke infrastructure evidence and prepare an unauthorized pilot package. | P1-DOD-03, P1-DOD-11 through P1-DOD-13 | blocked until T07 succeeds |
 | T09 | Execute the freshly authorized exploratory SiRA pilot. | P1-DOD-04, P1-DOD-11 through P1-DOD-13 | blocked until T08 and authorization |
 | T10 | Analyze and publish the exploratory SiRA pilot. | P1-DOD-05, P1-DOD-11 through P1-DOD-13 | blocked until T09 succeeds |
@@ -80,8 +80,8 @@ and an analysis recommendation does not authorize the next execution.
 
 ## T07 assembly control
 
-Assembly status: **Gate L1 complete/sealed; Gate L1.4 one-request fingerprint design
-complete and unauthorized; Gate L2 blocked by insufficient SSH-key identity evidence**
+Assembly status: **Gate L1/L1A complete and sealed; Gate L2.0 human choices valid;
+Gate L2 blocked by source and end-to-end control-plane gaps**
 
 Exact next profile: `PLAN-EXP0001-SMOKE`.
 
@@ -158,7 +158,7 @@ authorize installation or a runtime probe, or alter the EXP-0001 treatment contr
 
 ### Gate L0 Lambda host pivot
 
-Source contract: `/Users/joseph/Downloads/T07_GATE_L0_LAMBDA_LINUX_HOST_PIVOT.md`,
+Source contract basename: `T07_GATE_L0_LAMBDA_LINUX_HOST_PIVOT.md`,
 SHA-256 `d630b569864a3a1125cd62fb92ad67b023faa2195bdc529829aafcb8dfa12efd`.
 Baseline: `0ce094778f979e303794bbfe01acc93829a7ff1d` on parent
 `phase-1/sira-smoke`; implementation branch `phase-1/sira-smoke-lambda`.
@@ -410,6 +410,16 @@ appropriate to their own operation.
   no-follow local `.pub` matching, a fresh durable ledger, and private/public evidence
   schemas passed local fake-only design tests. The request and fresh run remain
   unexecuted; no key is selected and Gate L2 stays blocked.
+- 2026-08-10: Gate L1A completed with a unique sealed local/account match for
+  `fractal-lambda-codex`. Gate L2.0 then validated the user's private candidate,
+  firewall, `/32`, agent, no-filesystem, and Jupyter-host-key choices; resolved raw
+  provider values only into nonce-protected ignored parameters; copied the sealed
+  bundle one-way to the approved external archive; and entered
+  `blocked-human-or-source-decision`. Independent review found no source-backed safe
+  identification/termination of an accepted launch after an unknown response and no
+  authoritative end-to-end supervisor/evidence path. No executable plan or
+  authorization block exists. No account/model request, secret, cloud mutation,
+  paid compute, SSH, container, browser, SiRA, or scientific execution occurred.
 
 ## Decision log
 
@@ -450,24 +460,30 @@ appropriate to their own operation.
   authorized `GET /api/v1/ssh-keys`, with a fresh run/ledger and ignored raw evidence;
   do not repeat inventory, expose key material publicly, select a key, or imply Gate
   L2 authority.
+- 2026-08-10: Under D-025, accept the user's sealed Gate L2 choices and unique Gate
+  L1A key match, bind the current same-version-drifted OpenAPI bytes, but stop at
+  `blocked-human-or-source-decision`. The source contract cannot guarantee discovery
+  and exact-ID termination after an unknown launch response, and independent review
+  found the draft controls do not form one enforceable supervisor/evidence path. No
+  executable plan or authorization block is issued.
+- 2026-08-10: Under D-026, remove local SSH fingerprints and paths from the current
+  public run-0003 adjudication while preserving the original Git object and leaving
+  sealed evidence untouched.
 
 ## Blockers and user actions
 
 T07 has no selected local runtime and no executable local B2a plan. Docker Desktop and
-Colima/Lima remain terminal rejected provenance. The Lambda topology is selected only
-at design level. V3 run 0003 is complete, sealed, and nonreplayable; it supplies
-current-at-observation capacity/price/image/firewall facts but no matchable account
-SSH public-key evidence. The V1 and V2 plans/runs remain blocked historical
-provenance; runs 0001 and 0002 are permanently retired. The new Gate L1A plan exists
-but is unauthorized and run 0001 under that distinct gate is fresh/unexecuted. L2 has
-no executable account-bound plan, and L3/L4 remain unauthorized.
+Colima/Lima remain terminal rejected provenance. The Lambda inventory and L1A key
+evidence are complete, sealed, and nonreplayable. Gate L2.0 validated all human
+values privately but has no executable account-bound plan. The blockers are a
+source-backed launch-ambiguity/cleanup contract and a new reviewed authoritative
+supervisor for request order, limits, SSH, evidence eligibility, and archive
+finalization. L3/L4 remain unauthorized.
 
 ## Next permitted work
 
-There is no further local B1.x design gate. The next permitted T07 work is either
-user-supplied independently verified account fingerprints or a separately authorized
-execution of the exact Gate L1A one-request plan. Only after that fact exists may
-the user choose a candidate, SSH key, firewall option/public `/32`, and host-key trust
-method. Gate L2 host qualification, Gate L3 B2b qualification, Gate L4, both SiRA
-conditions, and the smoke remain blocked pending their own prerequisites and
-authorizations.
+There is no further local B1.x or Gate L1 design gate and no Gate L2 plan that can be
+authorized. Further work requires a source-backed resolution and a newly reviewed
+end-to-end implementation with fresh plan/run identities. Gate L3 B2b qualification,
+Gate L4, both SiRA conditions, and the smoke remain blocked pending their own
+prerequisites and authorizations.

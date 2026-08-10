@@ -70,7 +70,7 @@ class PlannedExecutionSubstrate:
 
     def __post_init__(self) -> None:
         expected = {
-            "decision_state": (self.decision_state, "lambda-host-qualification-ready"),
+            "decision_state": (self.decision_state, "lambda-host-qualification-blocked"),
             "provider": (self.provider, "lambda-on-demand-cloud"),
             "architecture": (self.architecture, "x86_64"),
             "gate_l1_evidence_state": (
@@ -79,7 +79,7 @@ class PlannedExecutionSubstrate:
             ),
             "gate_l2_decision_state": (
                 self.gate_l2_decision_state,
-                "ready-for-gate-l2-authorization",
+                "blocked-human-or-source-decision",
             ),
             "gate_l3_state": (self.gate_l3_state, "requirements-only"),
             "local_alternatives": (self.local_alternatives, "terminal-rejected"),

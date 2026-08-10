@@ -583,11 +583,6 @@
       "path": "artifacts/t07/lambda/gate-l1/RUN-T07-L1-LAMBDA-INVENTORY-0003/inventory-redacted.json",
       "sha256": "022835438165e7e6e70dc992d6904f4e8b9448dc933d1d4c3e39ebdcc8914933"
     },
-    "schema_extension_report": {
-      "bytes": 1863,
-      "location": "inventory-redacted.json#/schema_extension_report/report",
-      "sha256": "20f035039e633e5ef81c544f439b8fac6dc08ee4dafce1eacd2646df0e3a9263"
-    },
     "request_ledger": {
       "bytes": 32287,
       "events": 44,
@@ -595,6 +590,11 @@
       "sha256": "1f94068bdb1d1d2af0075d50c1a0c06eb1c077d4128f90bdc16fd571fa6af707"
     },
     "running_instances_observed": 0,
+    "schema_extension_report": {
+      "bytes": 1863,
+      "location": "inventory-redacted.json#/schema_extension_report/report",
+      "sha256": "20f035039e633e5ef81c544f439b8fac6dc08ee4dafce1eacd2646df0e3a9263"
+    },
     "seven_http_200_schema_valid_outcomes": true,
     "source_destination_equal": true
   },
@@ -628,71 +628,7 @@
         "same_stem_private_file_present": null
       }
     ],
-    "local_public_keys": [
-      {
-        "algorithm": "ssh-ed25519",
-        "fingerprint": "SHA256:jZS7ZqMUWT/mUf/2J80DuXvKlOIvRSKjSlc+qaVUycU",
-        "mode": "0644",
-        "owner_class": "current-user",
-        "path": "~/.ssh/fractal_lambda_ed25519.pub",
-        "private_key_bytes_accessed": false,
-        "same_stem_private_file_present": true
-      },
-      {
-        "algorithm": "ssh-rsa",
-        "fingerprint": "SHA256:rPdA5jGuJ1LbCcepfOS4qOaGqBtgiFAjpVVfLYKgndY",
-        "mode": "0644",
-        "owner_class": "current-user",
-        "path": "~/.ssh/google_compute_engine.pub",
-        "private_key_bytes_accessed": false,
-        "same_stem_private_file_present": true
-      },
-      {
-        "algorithm": "ssh-ed25519",
-        "fingerprint": "SHA256:v/BRQtLI4irTS9DzfsHfGlMy7IHlZvd6WhF3Qa/IGVo",
-        "mode": "0644",
-        "owner_class": "current-user",
-        "path": "~/.ssh/id_ed25519.pub",
-        "private_key_bytes_accessed": false,
-        "same_stem_private_file_present": true
-      },
-      {
-        "algorithm": "ssh-ed25519",
-        "fingerprint": "SHA256:znqRTXzIMkq7nYkZfJPPfoh4QrOUiuPVuk+06kGA56g",
-        "mode": "0644",
-        "owner_class": "current-user",
-        "path": "~/.ssh/id_ed25519_github.pub",
-        "private_key_bytes_accessed": false,
-        "same_stem_private_file_present": true
-      },
-      {
-        "algorithm": "ssh-ed25519",
-        "fingerprint": "SHA256:ESvp3ohE6ZYWkB1nxg7EDfbaJmcWwZneb9LvN/cfAd0",
-        "mode": "0644",
-        "owner_class": "current-user",
-        "path": "~/.ssh/jarvis_tailscale.pub",
-        "private_key_bytes_accessed": false,
-        "same_stem_private_file_present": true
-      },
-      {
-        "algorithm": "ssh-rsa",
-        "fingerprint": "SHA256:34/DLwx96bxIRXJwj3JsS9izW3rmcrCbL8SdjONhfm0",
-        "mode": "0644",
-        "owner_class": "current-user",
-        "path": "~/.ssh/prime_codex_rsa_20260517.pub",
-        "private_key_bytes_accessed": false,
-        "same_stem_private_file_present": true
-      },
-      {
-        "algorithm": "ssh-ed25519",
-        "fingerprint": "SHA256:omJTSzs1UVrzRxFW9pCbWKAtXSnYwYExi2tMxOj1tX8",
-        "mode": "0644",
-        "owner_class": "current-user",
-        "path": "~/.ssh/real2sim_codex_ed25519.pub",
-        "private_key_bytes_accessed": false,
-        "same_stem_private_file_present": true
-      }
-    ],
+    "local_public_keys": [],
     "private_key_bytes_accessed": false,
     "recommended_lambda_key_name": null,
     "run_id": "RUN-T07-L1-LAMBDA-INVENTORY-0003",

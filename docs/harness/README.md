@@ -3,6 +3,13 @@
 The Phase 0.75 harness is a source-neutral boundary for later experiment execution. It
 does not contain SiRA or SR²AM logic and does not itself grant permission to execute.
 
+For the active Lambda path, Gate L2.0 ended at
+`blocked-human-or-source-decision`. The required disposition is recorded in
+`docs/harness/T07_GATE_L2_HOST_QUALIFICATION_AUTHORIZATION_PACKET.md`, but no
+executable plan or authorization block exists. Private resource values are
+nonce-protected, ignored, externally sealed evidence. Draft Gate L2 modules and
+schemas are non-authoritative and authorize no action.
+
 The installed CLI is `giclab-harness` with four operations:
 
 - `validate-plan PLAN` validates the run-plan schema and typed semantic invariants.

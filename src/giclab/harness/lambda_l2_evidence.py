@@ -1,8 +1,8 @@
-"""Bounded local evidence writer and one-way Gate L2 archive implementation.
+"""Non-authoritative bounded evidence/archive draft for blocked Gate L2.
 
-Import is inert. A future authorized supervisor writes each bounded SSH/provider/
-container record exclusively, verifies its transport hash after fsync, seals a flat
-manifest, then copies that immutable bundle to the approved external APFS archive.
+Import is inert. The writer does not yet enforce complete success/incident eligibility
+or a descriptor-held end-to-end archive lifecycle and must not be used as execution
+authority. Local tests exercise only its bounded draft behavior.
 """
 
 from __future__ import annotations

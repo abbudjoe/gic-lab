@@ -760,6 +760,7 @@ def test_container_create_is_digest_pinned_no_network_and_bounded() -> None:
         assert required in argv or required in rendered
     assert "/var/run/docker.sock" not in rendered
     assert "--privileged" not in argv
+    assert "--pid" not in argv
     for label in (
         "giclab.experiment=EXP-0001",
         "giclab.profile=PLAN-EXP0001-SMOKE",
@@ -808,20 +809,23 @@ def test_exact_limits_are_finite_and_scientifically_zero() -> None:
     assert limits["scientific_executions"] == 0
 
 
-def test_public_plan_is_complete_unauthorized_and_private_safe() -> None:
+def test_public_design_is_blocked_non_executable_and_private_safe() -> None:
     plan = render_plan()
     assert plan["plan_id"] == PLAN_ID
     assert plan["run_id"] == RUN_ID
     assert plan["branch"] == BRANCH
     assert plan["authorization_reference"] == AUTHORIZATION_PLACEHOLDER
     assert plan["authorized"] is False
-    assert plan["terminal_state"] == "ready-for-gate-l2-authorization"
+    assert plan["authorization_state"] == "blocked-source-and-control-plane"
+    assert plan["executable_after_exact_authorization"] is False
+    assert plan["terminal_state"] == "blocked-human-or-source-decision"
     assert len(plan["runtime_bindings"]) == 6
     encoded = canonical_bytes(plan)
     assert b"source_ipv4_cidr" not in encoded
     assert b"raw_image_id" not in encoded
     assert b"raw_ssh_key_id" not in encoded
     assert b"SHA256:" not in encoded
+    assert not (ROOT / "containers/sira-smoke/lambda/gate-l2-host-qualification-plan.json").exists()
 
 
 def test_public_plan_rejects_private_cidr_and_null_identity() -> None:
@@ -892,7 +896,27 @@ def test_schema_files_are_valid_json() -> None:
         "schemas/t07-lambda-l2-host-evidence.schema.json",
         "schemas/t07-lambda-l2-incident.schema.json",
     ):
-        assert isinstance(json.loads((ROOT / relative).read_text()), dict)
+        schema = json.loads((ROOT / relative).read_text())
+        assert isinstance(schema, dict)
+        assert "no Gate L2 execution authority" in schema["$comment"] or (
+            "no executable plan exists" in schema["$comment"]
+        )
+
+
+def test_bound_public_sources_leave_unknown_launch_recovery_blocked() -> None:
+    observation = json.loads(
+        (ROOT / "containers/sira-smoke/lambda/public-source-observations-l2-0.json").read_text()
+    )
+    findings = observation["source_findings"]
+    for field in (
+        "instance_response_name_required",
+        "instance_response_tags_required",
+        "launch_idempotency_contract_found_in_bound_sources",
+        "running_instance_list_strong_consistency_found_in_bound_sources",
+        "bounded_launch_visibility_contract_found_in_bound_sources",
+        "unknown_launch_exact_id_recovery_source_complete",
+    ):
+        assert findings[field] is False
 
 
 def test_no_external_account_transport_is_invoked(monkeypatch: pytest.MonkeyPatch) -> None:

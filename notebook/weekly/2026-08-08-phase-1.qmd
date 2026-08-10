@@ -71,3 +71,17 @@ the broad inventory. The design supports standard public-key encodings and opens
 local `.pub` files; it does not expose key bodies, fingerprints, raw provider IDs, or
 home paths publicly. The request has not run, no key is selected, and Gate L2 remains
 blocked and unauthorized.
+
+That minimum read later completed and established one unique account/local public-key
+match without reading private-key bytes. Gate L2.0 then consumed the sealed evidence
+and a private user decision file offline. It validated the public resource tuple
+`gpu_1x_a10` / `us-east-1` / `img-0111` (`22.4.5-2141`) at the observed USD 1.29/hour,
+while keeping raw IDs, the source network, fingerprints, and local paths outside the
+current public record.
+
+Independent review blocked authorization: the pinned provider contract does not
+guarantee safe discovery and termination of an accepted launch after an unknown
+response, and the draft code does not yet form one enforceable supervisor/evidence
+path. No executable Gate L2 plan or authorization block exists. No cloud mutation,
+paid compute, SSH, container, browser, model call, SiRA condition, or scientific result
+occurred in Gate L2.0.

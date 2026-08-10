@@ -1,10 +1,10 @@
-"""Offline Gate L2.0 decision materialization and host-plan controls.
+"""Offline Gate L2.0 decision materialization and rejected draft controls.
 
 This module is intentionally network and subprocess inert.  It validates the private
 human decision through a no-follow descriptor, consumes only already sealed Gate L1 /
-L1A evidence, materializes private request parameters under an ignored run root, and
-renders/validates the public unauthorized Gate L2 plan.  A later, separately
-authorized operator owns every provider, SSH, and Docker action.
+L1A evidence and materializes private request parameters under an ignored run root.
+Independent review rejected the draft execution design. Its renderers and validators
+are non-authoritative local test primitives; no executable Gate L2 plan exists.
 """
 
 from __future__ import annotations
@@ -571,8 +571,7 @@ def resolve_private_parameters(
     if len(local_matches) != 1 or local_matches[0].get("private_key_bytes_accessed") is not False:
         raise L20ContractError("local public identity evidence is unsafe")
     local_key = local_matches[0]
-    if local_key.get("basename") != "fractal_lambda_ed25519.pub":
-        raise L20ContractError("selected local public key basename drifted")
+    _nonempty(local_key.get("basename"), context="private local public-key basename")
     if l1a.get("private_key_bytes_accessed") is not False or l1a.get("ssh_invoked") is not False:
         raise L20ContractError("Gate L1A evidence indicates prohibited private access or SSH")
 
@@ -2184,8 +2183,6 @@ def render_container_create_argv(
         "--init",
         "--network",
         "none",
-        "--pid",
-        "private",
         "--ipc",
         "private",
         "--cgroupns",
@@ -2516,7 +2513,7 @@ def render_public_plan(
     binding: PrivateBindingSeal,
     implementation_hashes: Mapping[str, str],
 ) -> dict[str, object]:
-    """Render the complete executable-but-unauthorized public Gate L2 plan."""
+    """Render the rejected, non-executable Gate L2 design for local validation."""
 
     if _COMMIT.fullmatch(implementation_commit) is None:
         raise L20ContractError("reviewed implementation commit is invalid")
@@ -2536,8 +2533,8 @@ def render_public_plan(
         "plan_id": PLAN_ID,
         "run_id": RUN_ID,
         "authorization_reference": AUTHORIZATION_PLACEHOLDER,
-        "authorization_state": "pending-user-authorization",
-        "executable_after_exact_authorization": True,
+        "authorization_state": "blocked-source-and-control-plane",
+        "executable_after_exact_authorization": False,
         "authorized": False,
         "branch": BRANCH,
         "reviewed_implementation_commit": implementation_commit,
@@ -2874,8 +2871,8 @@ def render_public_plan(
             },
             {"step": "terminate-restore-seal-and-stop", "actor": "codex", "authorized_now": False},
         ],
-        "terminal_state": "ready-for-gate-l2-authorization",
-        "next_gate": "Gate L2 exact user authorization only",
+        "terminal_state": "blocked-human-or-source-decision",
+        "next_gate": "source-and-control-plane-repair-requires-new-reviewed-plan",
         "cloud_mutation_allowed_now": False,
         "paid_compute_allowed_now": False,
         "ssh_allowed_now": False,
@@ -2893,7 +2890,7 @@ def validate_public_plan(
     *,
     repository_root: Path,
 ) -> None:
-    """Validate schema, privacy, exact limits, calls, and unauthorized state."""
+    """Validate the rejected draft's schema, privacy, limits, and blocked state."""
 
     _validate_schema(
         plan,
@@ -2907,10 +2904,13 @@ def validate_public_plan(
     if (
         plan.get("authorized") is not False
         or plan.get("authorization_reference") != AUTHORIZATION_PLACEHOLDER
+        or plan.get("authorization_state") != "blocked-source-and-control-plane"
+        or plan.get("executable_after_exact_authorization") is not False
+        or plan.get("terminal_state") != "blocked-human-or-source-decision"
         or plan.get("cloud_mutation_allowed_now") is not False
         or plan.get("paid_compute_allowed_now") is not False
     ):
-        raise L20ContractError("public plan prematurely grants execution authority")
+        raise L20ContractError("rejected Gate L2 draft implies execution authority")
     provider = _mapping(plan.get("provider"), context="plan provider")
     if provider != {
         "name": "lambda-on-demand-cloud",

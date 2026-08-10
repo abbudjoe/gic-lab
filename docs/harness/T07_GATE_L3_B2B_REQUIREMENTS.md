@@ -3,6 +3,14 @@
 Status: **requirements only; blocked until successful Gate L2; unauthorized and
 non-executable**
 
+Gate L2.0 ended at `blocked-human-or-source-decision` and supplies no executable
+plan. Its proposed V1 plan/run identities were rejected and must not be reused. Gate
+L3 still requires a future, separately reviewed and authorized Gate L2 run with
+externally sealed success evidence, exact provider termination, restored firewall
+state, and zero owned residue. The proposed BusyBox probe is a non-executable Gate L2
+design input only and cannot substitute for the three Gate L3 image/browser/
+dummy-secret probes.
+
 This document supersedes `docs/harness/T07_GATE_B2B_REQUIREMENTS.md` only for the
 selected future Lambda x86_64 topology. The older local/arm64 document remains
 terminal rejected provenance and is not rewritten. This document has no plan ID,

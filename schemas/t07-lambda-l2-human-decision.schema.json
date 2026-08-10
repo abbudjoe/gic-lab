@@ -1,6 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://gic-lab.invalid/schemas/t07-lambda-l2-human-decision.schema.json",
+  "$comment": "Offline decision-validation contract only; it grants no Gate L2 execution authority.",
   "title": "T07 Gate L2 private human decisions",
   "type": "object",
   "additionalProperties": false,

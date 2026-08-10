@@ -1,6 +1,6 @@
 # Phase 1 SiRA Smoke Readiness
 
-Status: **profile eligible; Lambda infrastructure gates incomplete; not authorized**
+Status: **profile eligible; Gate L2 blocked; not authorized**
 
 Prepared: 2026-08-08
 
@@ -49,11 +49,20 @@ separate fsync-backed post-ledger archive-finalization disposition. A terminal r
 ledger alone is not complete evidence. The plan remains unauthorized; no
 account request, secret access, SSH, mutation, or paid compute occurred in its design.
 
-Gate L2 requires that fresh evidence/decision step for matchable account fingerprints,
-then exact user choices for candidate, SSH key, global-firewall option, the missing
-regional-ruleset lifecycle or an explicit governance supersession, public `/32`, and
-host-key trust. Gate L2 host qualification and Gate L3 no-provider workload probes
-must succeed before the live Gate L4 authorization described below can be considered.
+Gate L1A completed the minimum evidence step and sealed one unique match for
+`fractal-lambda-codex`. Gate L2.0 then validated the user's private decisions and
+selected `gpu_1x_a10` in `us-east-1` with `img-0111` / `22.4.5-2141`, temporary
+strict global-plus-regional `/32` controls, and independent Jupyter ED25519 trust.
+Raw IDs, source network, paths, and fingerprints remain in ignored parameters whose
+hash-verified copy is sealed to the approved external archive.
+
+Independent review found no source-backed safe recovery for an accepted launch after
+an unknown response and no authoritative end-to-end supervisor/evidence path. The
+infrastructure decision is `blocked-human-or-source-decision`; no executable Gate L2
+plan or authorization block exists, and the proposed V1 identities are rejected.
+Cloud mutation and paid compute remain false. A new source-backed implementation and
+fresh reviewed plan are required before Gate L2 can be considered; Gate L3 and Gate
+L4 remain blocked.
 
 ## Exact user decision fields
 
@@ -165,18 +174,18 @@ the EXP-0001 hypothesis or any RQ-H2K outcome.
   resources, keys, firewall rules, tags, filesystems, and instances are never rollback
   targets.
 
-## Unresolved nonblocking questions
+## Remaining blockers and nonblocking questions
 
 - Dataset and trace public-release licensing/privacy rules remain unresolved; private,
   access-controlled smoke retention can proceed, but publication stays blocked.
 - The final repository software/content licenses and publication identity remain open.
-- T07 Lambda capacity and price were observed but require fresh prelaunch
-  revalidation. No candidate, SSH key, firewall option, public `/32`, or host-key
-  method is selected. Gate L2 is additionally blocked because run 0003 contains no
-  account public-key material for local fingerprint matching. The single-request Gate
-  L1A plan exists but is unauthorized and unexecuted, so no match status or key
-  recommendation exists. SR²AM T11/T12 remain scientifically and operationally
-  separate.
+- T07 Lambda capacity and price were observed and the candidate, SSH key, firewall,
+  private `/32`, and host-key method were validated and privately sealed. Gate L2 is
+  blocked because the first-party contract does not guarantee safe discovery and
+  exact-ID termination after an unknown launch response, and no authoritative
+  end-to-end supervisor/evidence path exists. A source-backed resolution plus a new
+  reviewed implementation and fresh plan/run identities are required. SR²AM T11/T12
+  remain scientifically and operationally separate.
 - RQ-H2K external-versus-explicit-model comparison feasibility remains undetermined.
   Missing optional regulation fields do not invalidate EXP-0001 when its primary
   evidence contract is complete.

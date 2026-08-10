@@ -46,20 +46,24 @@ This directory contains the design-only Gate L0 source locks and unauthorized pl
   metadata inspected during Gate L0. No account API or payload was fetched.
 - `public-security-observation-l1-3.json` binds the unauthenticated OpenAPI/firewall
   documentation used for the offline image-identity and firewall adjudication.
-- `adversarial-containment.sh` is a future Gate L2 fixture source. It was not run in
-  Gate L0 and is not a standalone containment boundary.
+- `adversarial-containment.sh` is the immutable future Gate L2 fixture source,
+  SHA-256
+  `09838913b14d23da939225cb89411619e91cb9ee023a2721b5b7c3890ac90aea`.
+  It has not run and is not a standalone containment boundary.
+- `public-source-observations-l2-0.json` binds the current first-party Lambda
+  OpenAPI/docs, local OpenSSH manuals, and official BusyBox OCI metadata used by the
+  offline Gate L2.0 design. It records the same-version OpenAPI byte change without
+  making an account request or fetching a layer.
+Gate L1A subsequently produced a unique sealed match for `fractal-lambda-codex`.
+Gate L2.0 validated and privately sealed the user's type/region/image/key/firewall/
+host-key choices. Independent review found that first-party sources cannot guarantee
+identification and termination of an accepted launch after an unknown response, and
+that the repository lacks one authoritative end-to-end supervisor/evidence path.
+The terminal decision is `blocked-human-or-source-decision`.
 
-No executable Gate L2 launch plan may be added yet. Gate L1.3 repaired the image
-identity projection and derived six policy-qualifying type/region/image-alias tuples,
-with an authoritative consumer that binds each alias to the ignored no-follow sealed
-provider-ID map and revalidates the immutable ledger, extension report, archive, and
-public adjudication. The global rules remain non-strict and no regional ruleset
-exists; any future design must preserve both strict global rules and the separately
-governed same-region additive ruleset, plus instance termination before restoration.
-In addition, the sealed inventory intentionally contains account SSH-key names
-without their public-key material. The required local/account fingerprint match is therefore
-`evidence_unavailable`. Gate L1.4 has designed, but not authorized or executed, the
-single-request recovery gate. Gate L2 remains blocked by the exact decisions and evidence gap
-in `docs/harness/T07_GATE_L2_RESOURCE_AND_SECURITY_DECISION_PACKET.md`. The
-official launch contract does not require an account LRN; the project records it as
-unavailable rather than querying broad account history.
+No `gate-l2-host-qualification-plan.json` is committed. The proposed V1 plan/run
+identities are rejected and non-reusable. Gate L2 schemas, renderers, state helpers,
+and fake tests are retained only as non-authoritative draft controls. The blocked
+disposition is recorded in
+`docs/harness/T07_GATE_L2_HOST_QUALIFICATION_AUTHORIZATION_PACKET.md`; it contains no
+authorization block and permits no current action.

@@ -22,8 +22,11 @@ The required starting state was verified before editing:
   `3347b8d03d0f937111de92ef79286c7fbcb02027f652f35ba42ac337cf8f7bd5`;
 - external `COPY_RECORD.json` SHA-256
   `76d8511282962cb6fdc4f72a63eaf41e7e63239acb9fa38e030f51057cb8a0e7`;
-- post-run adjudication SHA-256
+- historical post-run adjudication SHA-256 at the L1.4 baseline
   `95b08f6e9345aa09ba4b81dcb6b70484ca0a4d2a964cc553f2a3ae4fe96ee782`;
+- current privacy-minimized public adjudication SHA-256
+  `23ae723811cb15b2cbc1229592d507624c9107851fc883d9ce023464301631d0`;
+  the historical Git object and sealed evidence remain preserved;
 - ignored alias map, 9,476 bytes, SHA-256
   `9f37b9412110cc7433d5339cf4d8b1eadc92743eaa32db6bf8e4c59024a79d5f`;
 - ignored alias seal, 340 bytes, SHA-256
