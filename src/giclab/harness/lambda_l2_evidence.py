@@ -356,24 +356,19 @@ def copy_sealed_evidence_bundle(
             )
             if sha256_bytes(encoded) != item["sha256"] or len(encoded) != item["bytes"]:
                 raise L2EvidenceError("finalized external member verification failed")
-        if (
-            sha256_bytes(
-                _read_regular(
-                    finalized.descriptor,
-                    EXTERNAL_COPY_RECORD_NAME,
-                    max_bytes=MAX_RECORD_BYTES,
-                )
+        if sha256_bytes(
+            _read_regular(
+                finalized.descriptor,
+                EXTERNAL_COPY_RECORD_NAME,
+                max_bytes=MAX_RECORD_BYTES,
             )
-            != copy_sha
-            or sha256_bytes(
-                _read_regular(
-                    finalized.descriptor,
-                    EXTERNAL_SEAL_NAME,
-                    max_bytes=MAX_RECORD_BYTES,
-                )
+        ) != copy_sha or sha256_bytes(
+            _read_regular(
+                finalized.descriptor,
+                EXTERNAL_SEAL_NAME,
+                max_bytes=MAX_RECORD_BYTES,
             )
-            != sha256_bytes(external_seal)
-        ):
+        ) != sha256_bytes(external_seal):
             raise L2EvidenceError("finalized external control-record verification failed")
         bundle_hash = sha256_bytes(
             canonical_bytes({"members": copied, "copy_record_sha256": copy_sha})
