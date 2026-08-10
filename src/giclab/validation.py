@@ -59,10 +59,6 @@ SCHEMA_FILES = (
     "schemas/t07-lambda-request-ledger.schema.json",
     "schemas/t07-lambda-host-qualification.schema.json",
     "schemas/t07-lambda-host-qualification-incident.schema.json",
-    "schemas/t07-lambda-l2-human-decision.schema.json",
-    "schemas/t07-lambda-l2-private-parameters.schema.json",
-    "schemas/t07-lambda-l2-host-key-checkpoint.schema.json",
-    "schemas/t07-lambda-l2-plan.schema.json",
 )
 REQUIRED_PATHS = (
     "AGENTS.md",
