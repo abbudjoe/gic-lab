@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gic-lab.invalid/schemas/t07-local-public-key-match.schema.json",
+  "title": "T07 Gate L1A sanitized local public-key match report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "plan_id",
+    "run_id",
+    "evidence_state",
+    "account_key_matches",
+    "recommended_account_key_name",
+    "selection_state",
+    "selection_authorized",
+    "private_key_bytes_accessed",
+    "ssh_agent_used",
+    "ssh_invoked",
+    "raw_public_key_bodies_retained",
+    "raw_api_key_ids_retained",
+    "exact_fingerprints_retained",
+    "exact_home_paths_retained"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1.0"},
+    "plan_id": {"const": "PLAN-T07-GATE-L1A-LAMBDA-SSH-KEY-FINGERPRINT-V1"},
+    "run_id": {"const": "RUN-T07-L1A-LAMBDA-SSH-KEY-FINGERPRINT-0001"},
+    "evidence_state": {"enum": ["complete-valid", "invalid"]},
+    "account_key_matches": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "account_key_name",
+          "account_key_alias",
+          "match_status",
+          "local_key_alias",
+          "local_public_key_basename",
+          "same_stem_private_file_present",
+          "private_key_bytes_accessed"
+        ],
+        "properties": {
+          "account_key_name": {
+            "enum": [
+              "aic-codex-lambda",
+              "codex-fawx-20260527",
+              "fractal-lambda-codex"
+            ]
+          },
+          "account_key_alias": {"type": "string", "pattern": "^account-key-[0-9]{4}$"},
+          "match_status": {
+            "enum": ["unique_match", "no_match", "ambiguous_match", "invalid_evidence"]
+          },
+          "local_key_alias": {
+            "oneOf": [
+              {"type": "null"},
+              {"type": "string", "pattern": "^local-key-[0-9]{4}$"}
+            ]
+          },
+          "local_public_key_basename": {
+            "oneOf": [
+              {"type": "null"},
+              {"type": "string", "pattern": "^[^/]+\\.pub$", "maxLength": 255}
+            ]
+          },
+          "same_stem_private_file_present": {"type": ["boolean", "null"]},
+          "private_key_bytes_accessed": {"const": false}
+        }
+      }
+    },
+    "recommended_account_key_name": {
+      "enum": [
+        null,
+        "aic-codex-lambda",
+        "codex-fawx-20260527",
+        "fractal-lambda-codex"
+      ]
+    },
+    "selection_state": {"enum": ["unique-match-awaiting-user-approval", "blocked"]},
+    "selection_authorized": {"const": false},
+    "private_key_bytes_accessed": {"const": false},
+    "ssh_agent_used": {"const": false},
+    "ssh_invoked": {"const": false},
+    "raw_public_key_bodies_retained": {"const": false},
+    "raw_api_key_ids_retained": {"const": false},
+    "exact_fingerprints_retained": {"const": false},
+    "exact_home_paths_retained": {"const": false}
+  }
+}

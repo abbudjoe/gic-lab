@@ -1,0 +1,195 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gic-lab.invalid/schemas/t07-lambda-ssh-key-fingerprint.schema.json",
+  "title": "T07 Gate L1A private SSH-key fingerprint evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "plan_id",
+    "run_id",
+    "raw_response",
+    "account_keys",
+    "compatible_extension_key_names",
+    "raw_values_publicly_retained",
+    "local_public_keys",
+    "account_to_local_matches",
+    "sanitized_report_relative_path",
+    "selection_authorized",
+    "private_key_bytes_accessed",
+    "ssh_invoked"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1.0"},
+    "plan_id": {"const": "PLAN-T07-GATE-L1A-LAMBDA-SSH-KEY-FINGERPRINT-V1"},
+    "run_id": {"const": "RUN-T07-L1A-LAMBDA-SSH-KEY-FINGERPRINT-0001"},
+    "raw_response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["relative_path", "bytes", "sha256"],
+      "properties": {
+        "relative_path": {
+          "const": "artifacts/t07/lambda/gate-l1a/RUN-T07-L1A-LAMBDA-SSH-KEY-FINGERPRINT-0001/ssh-keys-response.json"
+        },
+        "bytes": {"type": "integer", "minimum": 1, "maximum": 131072},
+        "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+      }
+    },
+    "account_keys": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "account_key_alias",
+          "raw_api_key_id",
+          "name",
+          "algorithm",
+          "fingerprint",
+          "source_format",
+          "multiplicity",
+          "unknown_key_names"
+        ],
+        "properties": {
+          "account_key_alias": {
+            "type": "string",
+            "pattern": "^account-key-[0-9]{4}$"
+          },
+          "raw_api_key_id": {"type": "string", "minLength": 1, "maxLength": 256},
+          "name": {
+            "enum": [
+              "aic-codex-lambda",
+              "codex-fawx-20260527",
+              "fractal-lambda-codex"
+            ]
+          },
+          "algorithm": {"enum": ["ssh-ed25519", "ssh-rsa"]},
+          "fingerprint": {
+            "type": "string",
+            "pattern": "^SHA256:[A-Za-z0-9+/]{43}$"
+          },
+          "source_format": {
+            "enum": ["openssh", "rfc4716", "pkcs8-public", "pem-rsa-public"]
+          },
+          "multiplicity": {"type": "integer", "minimum": 1, "maximum": 128},
+          "unknown_key_names": {
+            "type": "array",
+            "uniqueItems": true,
+            "maxItems": 64,
+            "items": {"type": "string", "minLength": 1, "maxLength": 128}
+          }
+        }
+      }
+    },
+    "compatible_extension_key_names": {
+      "type": "array",
+      "uniqueItems": true,
+      "maxItems": 64,
+      "items": {"type": "string", "minLength": 1, "maxLength": 128}
+    },
+    "raw_values_publicly_retained": {"const": false},
+    "local_public_keys": {
+      "type": "array",
+      "maxItems": 128,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "local_key_alias",
+          "basename",
+          "exact_path",
+          "algorithm",
+          "fingerprint",
+          "source_format",
+          "owner_class",
+          "mode",
+          "same_stem_private_file",
+          "private_key_bytes_accessed"
+        ],
+        "properties": {
+          "local_key_alias": {"type": "string", "pattern": "^local-key-[0-9]{4}$"},
+          "basename": {"type": "string", "pattern": "^[^/]+\\.pub$", "maxLength": 255},
+          "exact_path": {"type": "string", "minLength": 2, "maxLength": 4096},
+          "algorithm": {"enum": ["ssh-ed25519", "ssh-rsa"]},
+          "fingerprint": {
+            "type": "string",
+            "pattern": "^SHA256:[A-Za-z0-9+/]{43}$"
+          },
+          "source_format": {
+            "enum": ["openssh", "rfc4716", "pkcs8-public", "pem-rsa-public"]
+          },
+          "owner_class": {"const": "current-user"},
+          "mode": {"type": "string", "pattern": "^[0-7]{4}$"},
+          "same_stem_private_file": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["present", "owner_class", "mode", "regular_file"],
+            "properties": {
+              "present": {"type": "boolean"},
+              "owner_class": {"enum": [null, "current-user", "different-user"]},
+              "mode": {
+                "oneOf": [
+                  {"type": "null"},
+                  {"type": "string", "pattern": "^[0-7]{4}$"}
+                ]
+              },
+              "regular_file": {"type": ["boolean", "null"]}
+            }
+          },
+          "private_key_bytes_accessed": {"const": false}
+        }
+      }
+    },
+    "account_to_local_matches": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "account_key_alias",
+          "raw_api_key_id",
+          "account_key_name",
+          "algorithm",
+          "fingerprint",
+          "matching_local_key_aliases",
+          "match_status"
+        ],
+        "properties": {
+          "account_key_alias": {"type": "string", "pattern": "^account-key-[0-9]{4}$"},
+          "raw_api_key_id": {"type": "string", "minLength": 1, "maxLength": 256},
+          "account_key_name": {
+            "enum": [
+              "aic-codex-lambda",
+              "codex-fawx-20260527",
+              "fractal-lambda-codex"
+            ]
+          },
+          "algorithm": {"enum": ["ssh-ed25519", "ssh-rsa"]},
+          "fingerprint": {
+            "type": "string",
+            "pattern": "^SHA256:[A-Za-z0-9+/]{43}$"
+          },
+          "matching_local_key_aliases": {
+            "type": "array",
+            "uniqueItems": true,
+            "maxItems": 128,
+            "items": {"type": "string", "pattern": "^local-key-[0-9]{4}$"}
+          },
+          "match_status": {
+            "enum": ["unique_match", "no_match", "ambiguous_match", "invalid_evidence"]
+          }
+        }
+      }
+    },
+    "sanitized_report_relative_path": {
+      "const": "artifacts/t07/lambda/gate-l1a/RUN-T07-L1A-LAMBDA-SSH-KEY-FINGERPRINT-0001/match-report.json"
+    },
+    "selection_authorized": {"const": false},
+    "private_key_bytes_accessed": {"const": false},
+    "ssh_invoked": {"const": false}
+  }
+}

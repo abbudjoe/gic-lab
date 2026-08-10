@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gic-lab.invalid/schemas/lambda-l1a-ssh-keys-response.schema.json",
+  "title": "Lambda Cloud SSH keys response for T07 Gate L1A",
+  "type": "object",
+  "required": ["data"],
+  "properties": {
+    "data": {
+      "type": "array",
+      "maxItems": 128,
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "public_key"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1, "maxLength": 256},
+          "name": {
+            "type": "string",
+            "enum": [
+              "aic-codex-lambda",
+              "codex-fawx-20260527",
+              "fractal-lambda-codex"
+            ]
+          },
+          "public_key": {"type": "string", "minLength": 1, "maxLength": 4096}
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": false
+}

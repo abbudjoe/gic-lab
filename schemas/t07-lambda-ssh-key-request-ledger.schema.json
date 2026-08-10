@@ -1,0 +1,213 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gic-lab.invalid/schemas/t07-lambda-ssh-key-request-ledger.schema.json",
+  "title": "T07 Gate L1A append-only SSH-key request-ledger event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "event_type",
+    "run_id",
+    "plan_id",
+    "authorization_reference",
+    "event_sequence",
+    "request_ordinal",
+    "method",
+    "scheme",
+    "host",
+    "path",
+    "query_key_names",
+    "transport_kind",
+    "monotonic_timestamp_ns",
+    "wall_timestamp_utc",
+    "bytes_received_so_far",
+    "http_status",
+    "content_type",
+    "elapsed_ms",
+    "sanitized_failure_stage",
+    "sanitized_failure_class",
+    "stable_error_code",
+    "retry_count",
+    "pagination_request"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1.0"},
+    "event_type": {
+      "enum": [
+        "run_preflight_started",
+        "run_preflight_passed",
+        "run_preflight_failed",
+        "secret_presence_check_passed",
+        "secret_presence_check_failed",
+        "request_intent_committed",
+        "request_send_started",
+        "response_headers_received",
+        "response_body_progress",
+        "response_body_completed",
+        "response_validation_passed",
+        "request_failed",
+        "request_outcome_unknown_after_send",
+        "run_stopped",
+        "inventory_validation_started",
+        "inventory_validation_passed",
+        "inventory_validation_failed",
+        "archive_started",
+        "archive_passed",
+        "archive_failed"
+      ]
+    },
+    "run_id": {"const": "RUN-T07-L1A-LAMBDA-SSH-KEY-FINGERPRINT-0001"},
+    "plan_id": {"const": "PLAN-T07-GATE-L1A-LAMBDA-SSH-KEY-FINGERPRINT-V1"},
+    "authorization_reference": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+    },
+    "event_sequence": {"type": "integer", "minimum": 1, "maximum": 24},
+    "request_ordinal": {"enum": [null, 1]},
+    "method": {"enum": [null, "GET"]},
+    "scheme": {"enum": [null, "https"]},
+    "host": {"enum": [null, "cloud.lambda.ai"]},
+    "path": {"enum": [null, "/api/v1/ssh-keys"]},
+    "query_key_names": {"type": "array", "maxItems": 0},
+    "transport_kind": {"const": "in-process-https"},
+    "monotonic_timestamp_ns": {"type": "integer", "minimum": 0},
+    "wall_timestamp_utc": {"type": "string", "format": "date-time"},
+    "bytes_received_so_far": {"type": "integer", "minimum": 0, "maximum": 131072},
+    "http_status": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "integer", "minimum": 100, "maximum": 599}
+      ]
+    },
+    "content_type": {"enum": [null, "application/json", "unexpected"]},
+    "elapsed_ms": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "integer", "minimum": 0, "maximum": 150000}
+      ]
+    },
+    "sanitized_failure_stage": {
+      "enum": [
+        null,
+        "secret_source",
+        "dns",
+        "tcp_connect",
+        "tls_handshake",
+        "request_write",
+        "response_headers",
+        "response_body",
+        "http_status",
+        "redirect",
+        "rate_limit",
+        "content_type",
+        "response_size",
+        "json_decode",
+        "schema_validation",
+        "pagination",
+        "ledger_io",
+        "archive_io",
+        "unknown"
+      ]
+    },
+    "sanitized_failure_class": {
+      "enum": [
+        null,
+        "secret_missing",
+        "secret_malformed",
+        "dns_failure",
+        "tcp_connect_failure",
+        "tls_failure",
+        "request_write_failure",
+        "response_headers_failure",
+        "response_body_failure",
+        "http_unauthorized",
+        "http_forbidden",
+        "http_rate_limited",
+        "http_redirect",
+        "http_unexpected_status",
+        "unexpected_content_type",
+        "response_too_large",
+        "malformed_json",
+        "schema_drift",
+        "pagination_present",
+        "ledger_create_failed",
+        "ledger_write_failed",
+        "archive_failed",
+        "outcome_unknown",
+        "deadline_exceeded",
+        "internal_failure"
+      ]
+    },
+    "stable_error_code": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{2,63}$"}
+      ]
+    },
+    "retry_count": {"const": 0},
+    "pagination_request": {"const": false}
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "enum": [
+              "request_intent_committed",
+              "request_send_started",
+              "response_headers_received",
+              "response_body_progress",
+              "response_body_completed",
+              "response_validation_passed",
+              "request_failed",
+              "request_outcome_unknown_after_send"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "request_ordinal": {"const": 1},
+          "method": {"const": "GET"},
+          "scheme": {"const": "https"},
+          "host": {"const": "cloud.lambda.ai"},
+          "path": {"const": "/api/v1/ssh-keys"},
+          "query_key_names": {"maxItems": 0}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "enum": [
+              "response_headers_received",
+              "response_body_progress",
+              "response_body_completed",
+              "response_validation_passed"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "http_status": {"type": "integer"},
+          "content_type": {"type": "string"},
+          "elapsed_ms": {"type": "integer"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"event_type": {"const": "response_validation_passed"}}},
+      "then": {
+        "properties": {
+          "http_status": {"const": 200},
+          "content_type": {"const": "application/json"},
+          "sanitized_failure_stage": {"type": "null"},
+          "sanitized_failure_class": {"type": "null"},
+          "stable_error_code": {"type": "null"}
+        }
+      }
+    }
+  ]
+}
