@@ -14,6 +14,9 @@ from jsonschema import Draft202012Validator
 from giclab.harness.lambda_request_ledger_v3 import LedgerEventType
 from giclab.harness.lambda_ssh_key_fingerprint import (
     API_HOST,
+    ARCHIVER_IDENTITY,
+    ENTRYPOINT_MODULE,
+    EXECUTOR_IDENTITY,
     LEDGER_SCHEMA_RELATIVE_PATH,
     MAX_LEDGER_BYTES,
     MAX_LEDGER_EVENT_BYTES,
@@ -275,7 +278,14 @@ def test_one_request_plan_is_exact_when_committed() -> None:
     assert plan.requests[0].path == SSH_KEYS_PATH
     assert plan.requests[0].method.value == "GET"
     assert plan.document["api_base_url"] == f"https://{API_HOST}"
-    assert plan.document["authorization"]["authorized"] is False
+    authorization = plan.document["authorization"]
+    assert isinstance(authorization, dict)
+    assert authorization["authorized"] is False
+    implementation = plan.document["implementation_binding"]
+    assert isinstance(implementation, dict)
+    assert implementation["executor_identity"] == EXECUTOR_IDENTITY
+    assert implementation["archive_identity"] == ARCHIVER_IDENTITY
+    assert implementation["entrypoint_module"] == ENTRYPOINT_MODULE
 
 
 def test_module_has_no_account_transport_or_shell_http_primitive() -> None:

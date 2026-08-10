@@ -33,6 +33,11 @@ API_SPEC_VERSION: Final = "1.10.0"
 API_SPEC_BYTES: Final = 239_644
 API_SPEC_SHA256: Final = "365488015cf79fda38e1268f44a9e2d4af4fe2794ad3c6878c78a7e1f98caded"
 API_SPEC_RETRIEVED_AT_UTC: Final = "2026-08-10T15:59:37.767582Z"
+EXECUTOR_IDENTITY: Final = (
+    "giclab.harness.lambda_ssh_key_executor.execute_authorized_ssh_key_fingerprint"
+)
+ARCHIVER_IDENTITY: Final = "giclab.harness.lambda_ssh_key_archive.DurableSSHKeyArchiver"
+ENTRYPOINT_MODULE: Final = "giclab.harness.lambda_ssh_key_executor"
 
 BASELINE_COMMIT: Final = "ae0ec40cb2da067a66f1a8d3d0e5aca857fd9491"
 MAX_RESPONSE_BYTES: Final = 131_072
@@ -768,6 +773,20 @@ def load_ssh_key_fingerprint_plan(
         artifacts.append(binding)
     if len({item.path for item in artifacts}) != len(artifacts):
         raise SSHKeyFingerprintError("implementation artifact paths repeat")
+    if (
+        implementation.get("transport_identity")
+        != "giclab.harness.lambda_inventory_v3.LambdaHttpsInventoryTransportV3"
+        or implementation.get("ledger_identity")
+        != "giclab.harness.lambda_ssh_key_request_ledger.FsyncSSHKeyRequestLedger"
+        or implementation.get("fingerprint_identity")
+        != "giclab.harness.lambda_ssh_key_fingerprint.project_account_ssh_keys"
+        or implementation.get("match_identity")
+        != "giclab.harness.lambda_ssh_key_match.match_account_to_local_keys"
+        or implementation.get("executor_identity") != EXECUTOR_IDENTITY
+        or implementation.get("archive_identity") != ARCHIVER_IDENTITY
+        or implementation.get("entrypoint_module") != ENTRYPOINT_MODULE
+    ):
+        raise SSHKeyFingerprintError("one-request implementation composition drifted")
 
     run = _object(document.get("run_identity"), context="run_identity")
     if run != {
