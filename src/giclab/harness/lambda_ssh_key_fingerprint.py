@@ -40,6 +40,9 @@ ARCHIVER_IDENTITY: Final = "giclab.harness.lambda_ssh_key_archive.DurableSSHKeyA
 ENTRYPOINT_MODULE: Final = "giclab.harness.lambda_ssh_key_executor"
 EXECUTION_WORKING_DIRECTORY: Final = "/Users/joseph/.codex/worktrees/84b1/gic-lab"
 EXECUTION_PYTHON: Final = f"{EXECUTION_WORKING_DIRECTORY}/.venv/bin/python"
+EXECUTION_WRAPPER: Final = (
+    f"{EXECUTION_WORKING_DIRECTORY}/containers/sira-smoke/lambda/run_gate_l1a.py"
+)
 
 BASELINE_COMMIT: Final = "ae0ec40cb2da067a66f1a8d3d0e5aca857fd9491"
 MAX_RESPONSE_BYTES: Final = 131_072
@@ -79,7 +82,7 @@ RAW_RESPONSE_RELATIVE_PATH: Final = f"{RUN_ROOT_RELATIVE_PATH}/ssh-keys-response
 PRIVATE_MANIFEST_RELATIVE_PATH: Final = f"{RUN_ROOT_RELATIVE_PATH}/private-evidence.json"
 PRIVATE_SEAL_RELATIVE_PATH: Final = f"{RUN_ROOT_RELATIVE_PATH}/PRIVATE_EVIDENCE_SEAL.json"
 SANITIZED_REPORT_RELATIVE_PATH: Final = f"{RUN_ROOT_RELATIVE_PATH}/match-report.json"
-LOCAL_VERIFICATION_RELATIVE_PATH: Final = f"{RUN_ROOT_RELATIVE_PATH}/archive-verification.json"
+LOCAL_VERIFICATION_RELATIVE_PATH: Final = f"{RUN_ROOT_RELATIVE_PATH}/archive-finalization.jsonl"
 PREFLIGHT_DISPOSITION_ROOT_RELATIVE_PATH: Final = (
     "artifacts/t07/lambda/gate-l1a/preflight-dispositions"
 )
@@ -787,6 +790,7 @@ def load_ssh_key_fingerprint_plan(
         or implementation.get("executor_identity") != EXECUTOR_IDENTITY
         or implementation.get("archive_identity") != ARCHIVER_IDENTITY
         or implementation.get("entrypoint_module") != ENTRYPOINT_MODULE
+        or implementation.get("entrypoint_wrapper") != EXECUTION_WRAPPER
     ):
         raise SSHKeyFingerprintError("one-request implementation composition drifted")
 
@@ -803,7 +807,7 @@ def load_ssh_key_fingerprint_plan(
     execution = _object(document.get("execution_contract"), context="execution_contract")
     if execution != {
         "working_directory": EXECUTION_WORKING_DIRECTORY,
-        "argv_prefix": [EXECUTION_PYTHON, "-m", ENTRYPOINT_MODULE],
+        "argv_prefix": [EXECUTION_PYTHON, EXECUTION_WRAPPER],
         "shell": False,
         "credential_on_argv": False,
         "credential_environment_variable": "LAMBDA_API_KEY",

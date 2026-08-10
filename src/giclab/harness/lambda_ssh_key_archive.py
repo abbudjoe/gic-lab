@@ -15,6 +15,7 @@ import stat
 import time
 import uuid
 from collections.abc import Callable
+from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -39,6 +40,7 @@ from .lambda_request_ledger_v3 import RequestLedgerSnapshot
 from .lambda_ssh_key_fingerprint import (
     ARCHIVE_ROOT,
     LEDGER_RELATIVE_PATH,
+    LOCAL_VERIFICATION_RELATIVE_PATH,
     MAX_ARCHIVE_WALL_SECONDS,
     MAX_EXTERNAL_ARCHIVE_BYTES,
     MAX_LEDGER_BYTES,
@@ -59,6 +61,17 @@ ARCHIVE_ACTION_ID = "t07-l1a-ssh-key-seal-copy"
 LEDGER_ARCHIVE_NAME = "request-ledger.jsonl"
 COPY_RECORD_NAME = "COPY_RECORD.json"
 SEAL_NAME = "SEAL.json"
+ARCHIVE_FINALIZATION_SCHEMA_VERSION = "0.1.0"
+ARCHIVE_FINALIZATION_STARTED = "archive_finalization_started"
+ARCHIVE_FINALIZATION_PASSED = "archive_finalization_passed"
+ARCHIVE_FINALIZATION_FAILED = "archive_finalization_failed"
+ARCHIVE_FINALIZATION_FAILURE_CODES = frozenset(
+    {
+        "L1A_ARCHIVE_FINALIZATION_FAILED",
+        "L1A_ARCHIVE_DISPOSITION_FAILED",
+        "L1A_TERMINAL_LEDGER_FAILED",
+    }
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,6 +81,462 @@ class ArchivedSSHKeyEvidence:
     copy_record_sha256: str
     ledger_sha256: str
     local_verification_record: bytes
+
+
+@dataclass(frozen=True, slots=True)
+class ArchiveFinalizationEvidence:
+    """Authoritative post-ledger disposition for the complete L1A archive."""
+
+    path: Path
+    sha256: str
+    bytes: int
+    events: int
+    state: str
+    gate_l1a_evidence_complete: bool
+
+    def __post_init__(self) -> None:
+        if (
+            self.events != 2
+            or self.state not in {"passed", "failed"}
+            or self.gate_l1a_evidence_complete != (self.state == "passed")
+            or len(self.sha256) != 64
+            or self.bytes <= 0
+            or self.bytes > MAX_LOCAL_VERIFICATION_BYTES
+        ):
+            raise InventoryArchiveError("Gate L1A archive disposition is inconsistent")
+
+
+def _finalization_common(
+    plan: SSHKeyFingerprintPlan,
+    run_binding: SSHKeyRunBinding,
+    *,
+    sequence: int,
+    event_type: str,
+    state: str,
+    monotonic_ns: int,
+    wall_timestamp_utc: str,
+) -> dict[str, object]:
+    return {
+        "schema_version": ARCHIVE_FINALIZATION_SCHEMA_VERSION,
+        "event_type": event_type,
+        "event_sequence": sequence,
+        "plan_id": PLAN_ID,
+        "plan_sha256": plan.plan_sha256,
+        "run_id": RUN_ID,
+        "repository_commit": run_binding.repository_commit,
+        "implementation_commit": run_binding.implementation_commit,
+        "authorization_reference": run_binding.authorization_reference,
+        "authorization_sha256": run_binding.authorization_sha256,
+        "monotonic_timestamp_ns": monotonic_ns,
+        "wall_timestamp_utc": wall_timestamp_utc,
+        "archive_finalization_state": state,
+        "terminal_request_ledger_sha256": None,
+        "destination_path": None,
+        "destination_copy_record_sha256": None,
+        "destination_seal_sha256": None,
+        "archive_verification_record_sha256": None,
+        "archive_verification": None,
+        "sanitized_failure_stage": None,
+        "sanitized_failure_class": None,
+        "stable_error_code": None,
+        "source_destination_sha256_equal": False,
+        "gate_l1a_evidence_complete": False,
+        "selection_authorized": False,
+        "gate_l2_authorized": False,
+    }
+
+
+def _validate_verification_document(
+    encoded: bytes,
+    *,
+    archived: ArchivedSSHKeyEvidence,
+    ledger: RequestLedgerSnapshot,
+) -> dict[str, object]:
+    if not encoded.endswith(b"\n") or len(encoded) > MAX_LOCAL_VERIFICATION_BYTES:
+        raise InventoryArchiveError("Gate L1A archive verification envelope is invalid")
+    try:
+        document = json.loads(encoded)
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        raise InventoryArchiveError("Gate L1A archive verification is not JSON") from None
+    if (
+        not isinstance(document, dict)
+        or any(not isinstance(key, str) for key in document)
+        or document.get("run_id") != RUN_ID
+        or document.get("plan_id") != PLAN_ID
+        or document.get("destination_path") != str(archived.destination)
+        or document.get("destination_copy_record_sha256") != archived.copy_record_sha256
+        or document.get("destination_seal_sha256") != archived.seal_sha256
+        or archived.ledger_sha256 != ledger.sha256
+        or document.get("terminal_ledger_validated") is not True
+        or document.get("source_destination_sha256_equal") is not True
+        or document.get("source_retained_until_independent_verification") is not True
+        or document.get("private_key_bytes_accessed") is not False
+    ):
+        raise InventoryArchiveError("Gate L1A archive verification contract drifted")
+    return document
+
+
+@dataclass(slots=True)
+class FsyncArchiveFinalizationDisposition:
+    """Append-only authority for post-ledger archive completion or failure.
+
+    The request ledger can prove only that its evidence was staged before the
+    ledger was sealed.  This separate file is created and fsynced before the
+    external archive is finalized.  A complete L1A evidence set therefore
+    requires a terminal ``passed`` event here; a terminal request ledger alone
+    is never sufficient.
+    """
+
+    repository_root: Path
+    path: Path
+    descriptor: int
+    plan: SSHKeyFingerprintPlan
+    run_binding: SSHKeyRunBinding
+    monotonic_ns: Callable[[], int]
+    utc_now: Callable[[], datetime]
+    next_sequence: int = 1
+    bytes_written: int = 0
+    closed: bool = False
+    tainted: bool = False
+
+    @classmethod
+    def create(
+        cls,
+        repository_root: Path,
+        *,
+        plan: SSHKeyFingerprintPlan,
+        run_binding: SSHKeyRunBinding,
+        monotonic_ns: Callable[[], int] = time.monotonic_ns,
+        utc_now: Callable[[], datetime] = lambda: datetime.now(UTC),
+    ) -> FsyncArchiveFinalizationDisposition:
+        root = repository_root.resolve(strict=True)
+        path = root / LOCAL_VERIFICATION_RELATIVE_PATH
+        if (
+            root != repository_root.absolute()
+            or plan.plan_id != PLAN_ID
+            or plan.run_id != RUN_ID
+            or run_binding.plan_id != PLAN_ID
+            or run_binding.run_id != RUN_ID
+        ):
+            raise InventoryArchiveError("Gate L1A archive disposition binding drifted")
+        directory_descriptor = _open_directory_no_symlinks(path.parent)
+        descriptor = -1
+        try:
+            descriptor = os.open(
+                path.name,
+                os.O_WRONLY
+                | os.O_CREAT
+                | os.O_EXCL
+                | os.O_APPEND
+                | getattr(os, "O_NOFOLLOW", 0),
+                0o600,
+                dir_fd=directory_descriptor,
+            )
+            os.fsync(directory_descriptor)
+        except OSError:
+            if descriptor >= 0:
+                os.close(descriptor)
+            raise InventoryArchiveError("Gate L1A archive disposition creation failed") from None
+        finally:
+            os.close(directory_descriptor)
+        writer = cls(root, path, descriptor, plan, run_binding, monotonic_ns, utc_now)
+        try:
+            writer._append(
+                _finalization_common(
+                    plan,
+                    run_binding,
+                    sequence=1,
+                    event_type=ARCHIVE_FINALIZATION_STARTED,
+                    state="started",
+                    monotonic_ns=monotonic_ns(),
+                    wall_timestamp_utc=utc_now()
+                    .astimezone(UTC)
+                    .isoformat()
+                    .replace("+00:00", "Z"),
+                )
+            )
+        except Exception:
+            writer.close_preserving_incomplete()
+            raise
+        return writer
+
+    def _append(self, document: dict[str, object]) -> None:
+        if self.closed or self.tainted or document.get("event_sequence") != self.next_sequence:
+            raise InventoryArchiveError("Gate L1A archive disposition state is invalid")
+        encoded = _canonical_bytes(document)
+        if self.bytes_written + len(encoded) > MAX_LOCAL_VERIFICATION_BYTES:
+            raise InventoryArchiveError("Gate L1A archive disposition exceeds its byte cap")
+        offset = 0
+        try:
+            while offset < len(encoded):
+                written = os.write(self.descriptor, encoded[offset:])
+                if written < 1:
+                    raise OSError
+                offset += written
+            os.fsync(self.descriptor)
+        except OSError:
+            self.tainted = bool(offset)
+            raise InventoryArchiveError("Gate L1A archive disposition append failed") from None
+        self.next_sequence += 1
+        self.bytes_written += len(encoded)
+
+    def record_passed(
+        self,
+        *,
+        archived: ArchivedSSHKeyEvidence,
+        ledger: RequestLedgerSnapshot,
+    ) -> ArchiveFinalizationEvidence:
+        verification = _validate_verification_document(
+            archived.local_verification_record,
+            archived=archived,
+            ledger=ledger,
+        )
+        document = _finalization_common(
+            self.plan,
+            self.run_binding,
+            sequence=2,
+            event_type=ARCHIVE_FINALIZATION_PASSED,
+            state="passed",
+            monotonic_ns=self.monotonic_ns(),
+            wall_timestamp_utc=self.utc_now()
+            .astimezone(UTC)
+            .isoformat()
+            .replace("+00:00", "Z"),
+        )
+        document.update(
+            {
+                "terminal_request_ledger_sha256": ledger.sha256,
+                "destination_path": str(archived.destination),
+                "destination_copy_record_sha256": archived.copy_record_sha256,
+                "destination_seal_sha256": archived.seal_sha256,
+                "archive_verification_record_sha256": hashlib.sha256(
+                    archived.local_verification_record
+                ).hexdigest(),
+                "archive_verification": verification,
+                "source_destination_sha256_equal": True,
+                "gate_l1a_evidence_complete": True,
+            }
+        )
+        self._append(document)
+        return self._seal(expected_state="passed", archived=archived, ledger=ledger)
+
+    def record_failed(
+        self,
+        *,
+        stable_error_code: str,
+        ledger: RequestLedgerSnapshot | None,
+        archived: ArchivedSSHKeyEvidence | None = None,
+    ) -> ArchiveFinalizationEvidence:
+        if stable_error_code not in ARCHIVE_FINALIZATION_FAILURE_CODES:
+            raise InventoryArchiveError("Gate L1A archive failure code is not allowlisted")
+        document = _finalization_common(
+            self.plan,
+            self.run_binding,
+            sequence=2,
+            event_type=ARCHIVE_FINALIZATION_FAILED,
+            state="failed",
+            monotonic_ns=self.monotonic_ns(),
+            wall_timestamp_utc=self.utc_now()
+            .astimezone(UTC)
+            .isoformat()
+            .replace("+00:00", "Z"),
+        )
+        document.update(
+            {
+                "terminal_request_ledger_sha256": ledger.sha256 if ledger is not None else None,
+                "destination_path": str(archived.destination) if archived is not None else None,
+                "destination_copy_record_sha256": (
+                    archived.copy_record_sha256 if archived is not None else None
+                ),
+                "destination_seal_sha256": archived.seal_sha256 if archived is not None else None,
+                "sanitized_failure_stage": "archive_io",
+                "sanitized_failure_class": "archive_failed",
+                "stable_error_code": stable_error_code,
+            }
+        )
+        self._append(document)
+        return self._seal(expected_state="failed", archived=archived, ledger=ledger)
+
+    def _seal(
+        self,
+        *,
+        expected_state: str,
+        archived: ArchivedSSHKeyEvidence | None,
+        ledger: RequestLedgerSnapshot | None,
+    ) -> ArchiveFinalizationEvidence:
+        if self.closed or self.tainted or self.next_sequence != 3:
+            raise InventoryArchiveError("Gate L1A archive disposition cannot be sealed")
+        try:
+            os.fchmod(self.descriptor, 0o400)
+            os.fsync(self.descriptor)
+            os.close(self.descriptor)
+        except OSError:
+            self.closed = True
+            raise InventoryArchiveError("Gate L1A archive disposition seal failed") from None
+        self.closed = True
+        return validate_gate_l1a_archive_disposition(
+            self.repository_root,
+            plan=self.plan,
+            run_binding=self.run_binding,
+            expected_state=expected_state,
+            archived=archived,
+            ledger=ledger,
+        )
+
+    def close_preserving_incomplete(self) -> None:
+        if self.closed:
+            return
+        with suppress(OSError):
+            os.fsync(self.descriptor)
+        with suppress(OSError):
+            os.close(self.descriptor)
+        self.closed = True
+
+
+def validate_gate_l1a_archive_disposition(
+    repository_root: Path,
+    *,
+    plan: SSHKeyFingerprintPlan,
+    run_binding: SSHKeyRunBinding,
+    expected_state: str,
+    archived: ArchivedSSHKeyEvidence | None,
+    ledger: RequestLedgerSnapshot | None,
+) -> ArchiveFinalizationEvidence:
+    """Require the post-ledger disposition; a request ledger alone is ineligible."""
+
+    if expected_state not in {"passed", "failed"}:
+        raise InventoryArchiveError("Gate L1A archive disposition expectation is invalid")
+    root = repository_root.resolve(strict=True)
+    path = root / LOCAL_VERIFICATION_RELATIVE_PATH
+    descriptor = _open_directory_no_symlinks(path.parent)
+    try:
+        encoded = _read_regular_at(
+            descriptor,
+            path.name,
+            max_bytes=MAX_LOCAL_VERIFICATION_BYTES,
+        )
+        observed = os.stat(path.name, dir_fd=descriptor, follow_symlinks=False)
+    finally:
+        os.close(descriptor)
+    if (
+        not encoded.endswith(b"\n")
+        or not stat.S_ISREG(observed.st_mode)
+        or observed.st_nlink != 1
+        or observed.st_uid != os.getuid()
+        or stat.S_IMODE(observed.st_mode) != 0o400
+    ):
+        raise InventoryArchiveError("Gate L1A archive disposition identity is invalid")
+    try:
+        events = [json.loads(line) for line in encoded.splitlines()]
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        raise InventoryArchiveError("Gate L1A archive disposition is not JSONL") from None
+    if len(events) != 2 or any(not isinstance(event, dict) for event in events):
+        raise InventoryArchiveError("Gate L1A archive disposition is incomplete")
+    common = {
+        "schema_version": ARCHIVE_FINALIZATION_SCHEMA_VERSION,
+        "plan_id": PLAN_ID,
+        "plan_sha256": plan.plan_sha256,
+        "run_id": RUN_ID,
+        "repository_commit": run_binding.repository_commit,
+        "implementation_commit": run_binding.implementation_commit,
+        "authorization_reference": run_binding.authorization_reference,
+        "authorization_sha256": run_binding.authorization_sha256,
+        "selection_authorized": False,
+        "gate_l2_authorized": False,
+    }
+    required_keys = set(_finalization_common(
+        plan,
+        run_binding,
+        sequence=1,
+        event_type=ARCHIVE_FINALIZATION_STARTED,
+        state="started",
+        monotonic_ns=0,
+        wall_timestamp_utc="2026-01-01T00:00:00Z",
+    ))
+    for sequence, event in enumerate(events, start=1):
+        if (
+            set(event) != required_keys
+            or event.get("event_sequence") != sequence
+            or any(event.get(key) != value for key, value in common.items())
+            or type(event.get("monotonic_timestamp_ns")) is not int
+            or int(event["monotonic_timestamp_ns"]) < 0
+            or not isinstance(event.get("wall_timestamp_utc"), str)
+        ):
+            raise InventoryArchiveError("Gate L1A archive disposition fields drifted")
+    first, terminal = events
+    if (
+        first.get("event_type") != ARCHIVE_FINALIZATION_STARTED
+        or first.get("archive_finalization_state") != "started"
+        or first.get("gate_l1a_evidence_complete") is not False
+        or any(
+            first.get(field) is not None
+            for field in (
+                "terminal_request_ledger_sha256",
+                "destination_path",
+                "destination_copy_record_sha256",
+                "destination_seal_sha256",
+                "archive_verification_record_sha256",
+                "archive_verification",
+                "sanitized_failure_stage",
+                "sanitized_failure_class",
+                "stable_error_code",
+            )
+        )
+    ):
+        raise InventoryArchiveError("Gate L1A archive start disposition drifted")
+    if expected_state == "passed":
+        if archived is None or ledger is None:
+            raise InventoryArchiveError("Gate L1A passed disposition lacks bound evidence")
+        verification = _validate_verification_document(
+            archived.local_verification_record,
+            archived=archived,
+            ledger=ledger,
+        )
+        if (
+            terminal.get("event_type") != ARCHIVE_FINALIZATION_PASSED
+            or terminal.get("archive_finalization_state") != "passed"
+            or terminal.get("terminal_request_ledger_sha256") != ledger.sha256
+            or terminal.get("destination_path") != str(archived.destination)
+            or terminal.get("destination_copy_record_sha256") != archived.copy_record_sha256
+            or terminal.get("destination_seal_sha256") != archived.seal_sha256
+            or terminal.get("archive_verification_record_sha256")
+            != hashlib.sha256(archived.local_verification_record).hexdigest()
+            or terminal.get("archive_verification") != verification
+            or terminal.get("source_destination_sha256_equal") is not True
+            or terminal.get("gate_l1a_evidence_complete") is not True
+            or any(
+                terminal.get(field) is not None
+                for field in (
+                    "sanitized_failure_stage",
+                    "sanitized_failure_class",
+                    "stable_error_code",
+                )
+            )
+        ):
+            raise InventoryArchiveError("Gate L1A passed archive disposition drifted")
+    else:
+        if (
+            terminal.get("event_type") != ARCHIVE_FINALIZATION_FAILED
+            or terminal.get("archive_finalization_state") != "failed"
+            or terminal.get("gate_l1a_evidence_complete") is not False
+            or terminal.get("source_destination_sha256_equal") is not False
+            or terminal.get("sanitized_failure_stage") != "archive_io"
+            or terminal.get("sanitized_failure_class") != "archive_failed"
+            or terminal.get("stable_error_code") not in ARCHIVE_FINALIZATION_FAILURE_CODES
+            or terminal.get("archive_verification_record_sha256") is not None
+            or terminal.get("archive_verification") is not None
+            or terminal.get("terminal_request_ledger_sha256")
+            != (ledger.sha256 if ledger is not None else None)
+        ):
+            raise InventoryArchiveError("Gate L1A failed archive disposition drifted")
+    return ArchiveFinalizationEvidence(
+        path=path,
+        sha256=hashlib.sha256(encoded).hexdigest(),
+        bytes=len(encoded),
+        events=len(events),
+        state=expected_state,
+        gate_l1a_evidence_complete=expected_state == "passed",
+    )
 
 
 class PreparedSSHKeyArchive(Protocol):

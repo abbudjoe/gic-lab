@@ -5,6 +5,7 @@ import hashlib
 import json
 import shutil
 import stat
+import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -18,6 +19,7 @@ from giclab.harness.lambda_ssh_key_fingerprint import (
     ENTRYPOINT_MODULE,
     EXECUTION_PYTHON,
     EXECUTION_WORKING_DIRECTORY,
+    EXECUTION_WRAPPER,
     EXECUTOR_IDENTITY,
     LEDGER_SCHEMA_RELATIVE_PATH,
     MAX_LEDGER_BYTES,
@@ -290,7 +292,7 @@ def test_one_request_plan_is_exact_when_committed() -> None:
     assert implementation["entrypoint_module"] == ENTRYPOINT_MODULE
     assert plan.document["execution_contract"] == {
         "working_directory": EXECUTION_WORKING_DIRECTORY,
-        "argv_prefix": [EXECUTION_PYTHON, "-m", ENTRYPOINT_MODULE],
+        "argv_prefix": [EXECUTION_PYTHON, EXECUTION_WRAPPER],
         "shell": False,
         "credential_on_argv": False,
         "credential_environment_variable": "LAMBDA_API_KEY",
@@ -304,6 +306,21 @@ def test_one_request_plan_is_exact_when_committed() -> None:
             "--authorization-sha256",
         ],
     }
+
+
+def test_exact_plan_bound_wrapper_loads_hash_bound_source() -> None:
+    completed = subprocess.run(
+        [EXECUTION_PYTHON, EXECUTION_WRAPPER, "--help"],
+        cwd=EXECUTION_WORKING_DIRECTORY,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        check=False,
+        timeout=10,
+        env={"PATH": "/usr/bin:/bin"},
+    )
+    assert completed.returncode == 0
+    assert b"--authorization-sha256" in completed.stdout
+    assert len(completed.stdout) + len(completed.stderr) < 16_384
 
 
 def test_module_has_no_account_transport_or_shell_http_primitive() -> None:

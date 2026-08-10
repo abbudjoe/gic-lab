@@ -52,11 +52,14 @@ from .lambda_request_ledger_v3 import (
 )
 from .lambda_ssh_key_archive import (
     ArchivedSSHKeyEvidence,
+    ArchiveFinalizationEvidence,
     DurableSSHKeyArchiver,
+    FsyncArchiveFinalizationDisposition,
     PreparedSSHKeyArchive,
     SSHKeyArchiver,
 )
 from .lambda_ssh_key_fingerprint import (
+    EXECUTION_WRAPPER,
     MAX_PROVIDER_WALL_SECONDS,
     MAX_RESPONSE_BYTES,
     MAX_TOTAL_WALL_SECONDS,
@@ -76,7 +79,6 @@ from .lambda_ssh_key_match import (
     match_account_to_local_keys,
     validate_sanitized_report,
     write_local_evidence_bundle,
-    write_local_verification_record,
 )
 from .lambda_ssh_key_request_ledger import (
     FsyncSSHKeyRequestLedger,
@@ -165,7 +167,7 @@ class SSHKeyRunResult:
     bundle: LocalEvidenceBundle
     ledger: RequestLedgerSnapshot
     archive: ArchivedSSHKeyEvidence
-    verification_sha256: str
+    archive_finalization: ArchiveFinalizationEvidence
 
 
 @dataclass(slots=True)
@@ -184,8 +186,7 @@ class SSHKeyDeadlineWatchdog:
         ready_read_descriptor, ready_write_descriptor = os.pipe()
         command = [
             sys.executable,
-            "-m",
-            "giclab.harness.lambda_ssh_key_executor",
+            EXECUTION_WRAPPER,
             "_deadline-watchdog",
             str(read_descriptor),
             str(ready_write_descriptor),
@@ -495,6 +496,9 @@ def _execute_within_deadline(
 
     ledger: FsyncSSHKeyRequestLedger | None = None
     prepared: PreparedSSHKeyArchive | None = None
+    finalization: FsyncArchiveFinalizationDisposition | None = None
+    snapshot: RequestLedgerSnapshot | None = None
+    archived: ArchivedSSHKeyEvidence | None = None
     request_context: SSHKeyRequestContext | None = None
     request_started: float | None = None
     credential: str | None = None
@@ -610,17 +614,40 @@ def _execute_within_deadline(
             prepared.stage(bundle)
         except (InventoryArchiveError, OSError):
             raise InventoryObservedFailure(ARCHIVE_FAILURE) from None
+        try:
+            finalization_writer = FsyncArchiveFinalizationDisposition.create(
+                root,
+                plan=plan,
+                run_binding=run_binding,
+                monotonic_ns=monotonic_ns,
+                utc_now=utc_now,
+            )
+            finalization = finalization_writer
+        except (InventoryArchiveError, OSError):
+            raise InventoryObservedFailure(ARCHIVE_FAILURE) from None
+        # In this request ledger, archive_passed means that all source evidence
+        # was durably staged and the separate post-ledger finalization journal
+        # exists.  Only that journal can attest overall archive completion.
         ledger.append(LedgerEventType.ARCHIVE_PASSED)
         _append_stopped(ledger, failure=None)
-        snapshot = ledger.seal(require_success=True)
+        terminal_snapshot = ledger.seal(require_success=True)
+        snapshot = terminal_snapshot
         check_wall()
         try:
-            archived = prepared.finalize(bundle, ledger=snapshot)
-            verification = write_local_verification_record(
-                root,
-                archived.local_verification_record,
+            archived_result = prepared.finalize(bundle, ledger=terminal_snapshot)
+            archived = archived_result
+            completion = finalization_writer.record_passed(
+                archived=archived_result,
+                ledger=terminal_snapshot,
             )
         except (InventoryArchiveError, SSHKeyFingerprintError, OSError):
+            if not finalization_writer.closed:
+                with contextlib.suppress(InventoryArchiveError):
+                    finalization_writer.record_failed(
+                        stable_error_code="L1A_ARCHIVE_FINALIZATION_FAILED",
+                        ledger=terminal_snapshot,
+                        archived=archived,
+                    )
             raise InventoryObservedFailure(ARCHIVE_FAILURE) from None
         check_wall()
         return SSHKeyRunResult(
@@ -630,15 +657,29 @@ def _execute_within_deadline(
             projection=projection,
             match=match,
             bundle=bundle,
-            ledger=snapshot,
-            archive=archived,
-            verification_sha256=verification.sha256,
+            ledger=terminal_snapshot,
+            archive=archived_result,
+            archive_finalization=completion,
         )
     except SSHKeyRequestLedgerError:
+        if finalization is not None and not finalization.closed:
+            with contextlib.suppress(InventoryArchiveError):
+                finalization.record_failed(
+                    stable_error_code="L1A_TERMINAL_LEDGER_FAILED",
+                    ledger=snapshot,
+                    archived=archived,
+                )
         if ledger is not None:
             ledger.close_preserving_incomplete()
         raise
     except InventoryObservedFailure as error:
+        if finalization is not None and not finalization.closed:
+            with contextlib.suppress(InventoryArchiveError):
+                finalization.record_failed(
+                    stable_error_code="L1A_ARCHIVE_FINALIZATION_FAILED",
+                    ledger=snapshot,
+                    archived=archived,
+                )
         if ledger is not None:
             elapsed_ms = (
                 None
@@ -649,11 +690,21 @@ def _execute_within_deadline(
                 ledger,
                 request=request_context,
                 failure=error.failure,
-                possible_send=possible_send,
+                # A typed InventoryObservedFailure is itself the durable,
+                # closed-category observation of the network outcome.  Only
+                # an unexpected exception after send has unknown outcome.
+                possible_send=False,
                 elapsed_ms=elapsed_ms,
             )
         raise
     except BaseException:
+        if finalization is not None and not finalization.closed:
+            with contextlib.suppress(InventoryArchiveError):
+                finalization.record_failed(
+                    stable_error_code="L1A_ARCHIVE_DISPOSITION_FAILED",
+                    ledger=snapshot,
+                    archived=archived,
+                )
         if ledger is not None:
             elapsed_ms = (
                 None
@@ -673,6 +724,8 @@ def _execute_within_deadline(
         if prepared is not None:
             with contextlib.suppress(Exception):
                 prepared.close()
+        if finalization is not None:
+            finalization.close_preserving_incomplete()
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -734,7 +787,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "archive_path": str(result.archive.destination),
                 "archive_seal_sha256": result.archive.seal_sha256,
                 "archive_copy_record_sha256": result.archive.copy_record_sha256,
-                "local_verification_sha256": result.verification_sha256,
+                "archive_finalization_path": str(result.archive_finalization.path),
+                "archive_finalization_sha256": result.archive_finalization.sha256,
+                "archive_finalization_state": result.archive_finalization.state,
+                "gate_l1a_evidence_complete": (
+                    result.archive_finalization.gate_l1a_evidence_complete
+                ),
                 "selection_state": result.match.sanitized_report["selection_state"],
                 "recommended_account_key_name": result.match.sanitized_report[
                     "recommended_account_key_name"

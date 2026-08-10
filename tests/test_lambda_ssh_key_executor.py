@@ -23,7 +23,10 @@ from giclab.harness.lambda_request_ledger_v3 import (
     RequestLedgerSnapshot,
     SanitizedFailure,
 )
-from giclab.harness.lambda_ssh_key_archive import ArchivedSSHKeyEvidence
+from giclab.harness.lambda_ssh_key_archive import (
+    ArchivedSSHKeyEvidence,
+    InventoryArchiveError,
+)
 from giclab.harness.lambda_ssh_key_executor import (
     SSHKeyRunResult,
     execute_authorized_ssh_key_fingerprint,
@@ -193,10 +196,30 @@ class _FailAfterHeadersTransport:
 
 
 @dataclass
+class _CrashAfterHeadersTransport:
+    def fetch(
+        self,
+        request: InventoryRequest,
+        *,
+        credential: str,
+        timeout_seconds: float,
+        observer: InventoryTransportObserver,
+    ) -> InventoryHttpResponseV3:
+        del request, credential, timeout_seconds
+        observer.response_headers_received(
+            status_code=200,
+            content_type="application/json",
+            elapsed_ms=2,
+        )
+        raise RuntimeError("synthetic untyped post-send crash")
+
+
+@dataclass
 class _FakePreparedArchive:
     destination: Path
     staged: LocalEvidenceBundle | None = None
     closed: bool = False
+    fail_finalize: bool = False
 
     def stage(self, bundle: LocalEvidenceBundle) -> None:
         assert self.staged is None
@@ -209,13 +232,36 @@ class _FakePreparedArchive:
         ledger: RequestLedgerSnapshot,
     ) -> ArchivedSSHKeyEvidence:
         assert bundle == self.staged
+        if self.fail_finalize:
+            raise InventoryArchiveError("synthetic finalization failure")
         ledger_sha = str(ledger.sha256)
+        copy_sha = "b" * 64
+        seal_sha = "a" * 64
+        verification = (
+            json.dumps(
+                {
+                    "schema_version": "0.1.0",
+                    "plan_id": "PLAN-T07-GATE-L1A-LAMBDA-SSH-KEY-FINGERPRINT-V1",
+                    "run_id": RUN_ID,
+                    "destination_path": str(self.destination),
+                    "destination_copy_record_sha256": copy_sha,
+                    "destination_seal_sha256": seal_sha,
+                    "terminal_ledger_validated": True,
+                    "source_destination_sha256_equal": True,
+                    "source_retained_until_independent_verification": True,
+                    "private_key_bytes_accessed": False,
+                },
+                separators=(",", ":"),
+                sort_keys=True,
+            ).encode()
+            + b"\n"
+        )
         return ArchivedSSHKeyEvidence(
             destination=self.destination,
-            seal_sha256="a" * 64,
-            copy_record_sha256="b" * 64,
+            seal_sha256=seal_sha,
+            copy_record_sha256=copy_sha,
             ledger_sha256=ledger_sha,
-            local_verification_record=b'{"source_destination_sha256_equal":true}\n',
+            local_verification_record=verification,
         )
 
     def close(self) -> None:
@@ -252,6 +298,7 @@ def _execute(
     tmp_path: Path,
     *,
     transport: ObservableInventoryTransport,
+    prepared: _FakePreparedArchive | None = None,
 ) -> tuple[SSHKeyRunResult, Path, _FakePreparedArchive]:
     repository, plan_path, plan, plan_sha = _copy_bound_repository(tmp_path)
     home = tmp_path / "home"
@@ -259,7 +306,7 @@ def _execute(
     ssh_root.mkdir(parents=True)
     (ssh_root / "candidate.pub").write_text(_public_key(1), encoding="utf-8")
     (ssh_root / "candidate").write_text("synthetic-private-counterpart", encoding="utf-8")
-    prepared = _FakePreparedArchive(tmp_path / "external" / RUN_ID)
+    prepared = prepared or _FakePreparedArchive(tmp_path / "external" / RUN_ID)
     result = execute_authorized_ssh_key_fingerprint(
         repository_root=repository,
         plan_path=plan_path,
@@ -293,6 +340,15 @@ def test_fake_end_to_end_executor_composes_one_request_ledger_match_and_archive(
     assert result.ledger.events == 13
     assert prepared.staged == result.bundle and prepared.closed
     assert (repository / LOCAL_VERIFICATION_RELATIVE_PATH).is_file()
+    disposition = [
+        json.loads(line)
+        for line in (repository / LOCAL_VERIFICATION_RELATIVE_PATH).read_text().splitlines()
+    ]
+    assert [event["event_type"] for event in disposition] == [
+        "archive_finalization_started",
+        "archive_finalization_passed",
+    ]
+    assert result.archive_finalization.gate_l1a_evidence_complete
     public = json.dumps(result.match.sanitized_report, sort_keys=True)
     assert CANARY not in public
     assert "synthetic-id" not in public
@@ -318,7 +374,7 @@ def test_fake_end_to_end_executor_composes_one_request_ledger_match_and_archive(
         )
 
 
-def test_failure_after_send_is_durably_unknown_and_stops(tmp_path: Path) -> None:
+def test_typed_failure_after_send_remains_exact_and_stops(tmp_path: Path) -> None:
     repository, plan_path, plan, plan_sha = _copy_bound_repository(tmp_path)
     prepared = _FakePreparedArchive(tmp_path / "external" / RUN_ID)
     with pytest.raises(InventoryObservedFailure):
@@ -339,7 +395,81 @@ def test_failure_after_send_is_durably_unknown_and_stops(tmp_path: Path) -> None
         )
     ledger = repository / RUN_ROOT_RELATIVE_PATH / "request-ledger.jsonl"
     events = [json.loads(line) for line in ledger.read_text().splitlines()]
-    assert events[-2]["event_type"] == "request_outcome_unknown_after_send"
+    assert events[-2]["event_type"] == "request_failed"
+    assert events[-2]["sanitized_failure_stage"] == "response_body"
+    assert events[-2]["sanitized_failure_class"] == "response_body_failure"
+    assert events[-2]["stable_error_code"] == "L1A_TEST_BODY_FAILURE"
     assert events[-1]["event_type"] == "run_stopped"
     assert prepared.staged is None and prepared.closed
     assert CANARY not in ledger.read_text()
+
+
+def test_untyped_failure_after_send_is_durably_unknown_and_stops(tmp_path: Path) -> None:
+    repository, plan_path, plan, plan_sha = _copy_bound_repository(tmp_path)
+    prepared = _FakePreparedArchive(tmp_path / "external" / RUN_ID)
+    with pytest.raises(InventoryObservedFailure):
+        execute_authorized_ssh_key_fingerprint(
+            repository_root=repository,
+            plan_path=plan_path,
+            plan_sha256=plan_sha,
+            run_binding=_run_binding(plan),
+            credential_provider=lambda: CANARY,
+            transport=_CrashAfterHeadersTransport(),
+            archiver=_FakeArchiver(prepared),
+            deadline_factory=lambda seconds: _FakeDeadline(),
+            repository_inspector=lambda root, expected_commit: RepositoryState(
+                "phase-1/sira-smoke-lambda", expected_commit, True
+            ),
+            ancestry_verifier=lambda *args, **kwargs: None,
+            local_key_discoverer=lambda: (),
+        )
+    ledger = repository / RUN_ROOT_RELATIVE_PATH / "request-ledger.jsonl"
+    events = [json.loads(line) for line in ledger.read_text().splitlines()]
+    assert events[-2]["event_type"] == "request_outcome_unknown_after_send"
+    assert events[-2]["sanitized_failure_class"] == "outcome_unknown"
+    assert events[-1]["event_type"] == "run_stopped"
+    assert CANARY not in ledger.read_text()
+
+
+def test_archive_finalize_failure_has_separate_durable_ineligible_disposition(
+    tmp_path: Path,
+) -> None:
+    repository, plan_path, plan, plan_sha = _copy_bound_repository(tmp_path)
+    home = tmp_path / "home"
+    ssh_root = home / ".ssh"
+    ssh_root.mkdir(parents=True)
+    (ssh_root / "candidate.pub").write_text(_public_key(1), encoding="utf-8")
+    (ssh_root / "candidate").write_text("synthetic-private-counterpart", encoding="utf-8")
+    prepared = _FakePreparedArchive(
+        tmp_path / "external" / RUN_ID,
+        fail_finalize=True,
+    )
+    with pytest.raises(InventoryObservedFailure):
+        execute_authorized_ssh_key_fingerprint(
+            repository_root=repository,
+            plan_path=plan_path,
+            plan_sha256=plan_sha,
+            run_binding=_run_binding(plan),
+            credential_provider=lambda: CANARY,
+            transport=_FakeTransport(_response()),
+            archiver=_FakeArchiver(prepared),
+            deadline_factory=lambda seconds: _FakeDeadline(),
+            repository_inspector=lambda root, expected_commit: RepositoryState(
+                "phase-1/sira-smoke-lambda", expected_commit, True
+            ),
+            ancestry_verifier=lambda *args, **kwargs: None,
+            local_key_discoverer=lambda: discover_local_public_keys(home_directory=home),
+        )
+    ledger = repository / RUN_ROOT_RELATIVE_PATH / "request-ledger.jsonl"
+    request_events = [json.loads(line) for line in ledger.read_text().splitlines()]
+    assert request_events[-2]["event_type"] == "archive_passed"
+    assert request_events[-1]["event_type"] == "run_stopped"
+    disposition_path = repository / LOCAL_VERIFICATION_RELATIVE_PATH
+    disposition = [json.loads(line) for line in disposition_path.read_text().splitlines()]
+    assert disposition[-1]["event_type"] == "archive_finalization_failed"
+    assert disposition[-1]["archive_finalization_state"] == "failed"
+    assert disposition[-1]["gate_l1a_evidence_complete"] is False
+    assert disposition[-1]["gate_l2_authorized"] is False
+    assert disposition[-1]["stable_error_code"] == "L1A_ARCHIVE_FINALIZATION_FAILED"
+    assert prepared.closed
+    assert CANARY not in disposition_path.read_text()
