@@ -1,0 +1,118 @@
+{
+  "schema_version": "0.1.0",
+  "gate": "T07-L2.0",
+  "retrieval_date": "2026-08-10",
+  "account_requests": 0,
+  "payload_downloads": 0,
+  "sources": [
+    {
+      "kind": "lambda-openapi",
+      "requested_url": "https://docs.lambda.ai/api/cloud/spec.json",
+      "resolved_url": "https://docs-api.lambda.ai/api/cloud/spec.json",
+      "retrieved_at_utc": "2026-08-10T18:55:19.805786Z",
+      "declared_openapi_version": "3.1.0",
+      "declared_api_version": "1.10.0",
+      "bytes": 240288,
+      "sha256": "320f4877924984f060b179e86595ed58918a1d0696b60b99cae548ec164934f4",
+      "previous_same_api_version_sha256": "365488015cf79fda38e1268f44a9e2d4af4fe2794ad3c6878c78a7e1f98caded",
+      "same_version_byte_drift_recorded": true,
+      "production_base_url": "https://cloud.lambda.ai/"
+    },
+    {
+      "kind": "lambda-documentation",
+      "url": "https://docs.lambda.ai/public-cloud/firewalls/",
+      "retrieved_at_utc": "2026-08-10T18:45:23.150090Z",
+      "bytes": 88233,
+      "sha256": "37fb67fc30565608ca0b2882e023e0e1574c3ebfbc9dadb23e51b89025114623"
+    },
+    {
+      "kind": "lambda-documentation",
+      "url": "https://docs.lambda.ai/public-cloud/on-demand/creating-managing-instances/",
+      "retrieved_at_utc": "2026-08-10T18:45:23.338043Z",
+      "bytes": 84693,
+      "sha256": "6ddecdd2fa7279a8def8f61cbd0c8f89e069feafa627c491b9e0908c6868fbf4"
+    },
+    {
+      "kind": "lambda-documentation",
+      "url": "https://docs.lambda.ai/public-cloud/on-demand/connecting-instance/",
+      "retrieved_at_utc": "2026-08-10T18:45:23.533241Z",
+      "bytes": 94987,
+      "sha256": "c7c9abe16fb8da1bd1cc0e77f4ab360ca63d0650271b1d12372ed321d438a929"
+    },
+    {
+      "kind": "lambda-documentation",
+      "url": "https://docs.lambda.ai/public-cloud/on-demand/managing-system-environment/",
+      "retrieved_at_utc": "2026-08-10T18:45:23.735195Z",
+      "bytes": 94340,
+      "sha256": "33067d94ff1fd5eb3836e54d121feb1361f8acc3657060616738dbfcceeb7abc"
+    },
+    {
+      "kind": "lambda-documentation",
+      "url": "https://docs.lambda.ai/public-cloud/billing/",
+      "retrieved_at_utc": "2026-08-10T18:45:23.957159Z",
+      "bytes": 77250,
+      "sha256": "4dc7d91bc45d65d325f3e7a323d7aeec31135ff78aca2c51a839a1a350e61b21"
+    },
+    {
+      "kind": "lambda-documentation",
+      "url": "https://docs.lambda.ai/public-cloud/console/",
+      "retrieved_at_utc": "2026-08-10T18:45:24.121153Z",
+      "bytes": 89564,
+      "sha256": "4f176d3bc6fab4705fd196fb33273b1c54c5b6b7bd32c5416fe8913e3e790052"
+    },
+    {
+      "kind": "lambda-documentation",
+      "url": "https://docs.lambda.ai/public-cloud/on-demand/",
+      "retrieved_at_utc": "2026-08-10T18:45:24.300018Z",
+      "bytes": 94148,
+      "sha256": "a8c52603d2a0dc6b91aea2d25ea08396fb87e3907822213d02240a148b1401a8"
+    },
+    {
+      "kind": "official-oci-metadata",
+      "registry": "registry-1.docker.io",
+      "repository": "library/busybox",
+      "platform": "linux/amd64",
+      "retrieved_at_utc": "2026-08-10T18:46:33.444633Z",
+      "manifest_digest": "sha256:7a3ebe5bfd1a4a19797d20b0c0bb39d44393e9a03fd852c0865b0f540d868df0",
+      "manifest_bytes": 610,
+      "config_digest": "sha256:db287cb6be81219cd18c1d82b70908f5d33eb028568b456f78eedff2ff2930e4",
+      "config_bytes": 459,
+      "layer_digest": "sha256:436a1b1fd078ee8e117111472724c2827077657189af7a781829d0825d48d2ab",
+      "layer_bytes": 2211507,
+      "layers_downloaded": 0
+    },
+    {
+      "kind": "local-first-party-manual",
+      "path": "/usr/share/man/man5/ssh_config.5",
+      "bytes": 71807,
+      "sha256": "48d2793f3e4af6cb25a4b4a9a8f90563e8f79bbc5b1caea79950685cae009fe9"
+    },
+    {
+      "kind": "local-first-party-manual",
+      "path": "/usr/share/man/man1/ssh-keygen.1",
+      "bytes": 41642,
+      "sha256": "77a388107bab445793c78869b96c559826e3ec6df53604fce6c91642d4123d47"
+    }
+  ],
+  "source_findings": {
+    "firewall_rules_are_additive": true,
+    "global_firewall_patch_supported": true,
+    "regional_ruleset_create_get_delete_supported": true,
+    "launch_exactly_one_ssh_key_supported": true,
+    "launch_exact_image_id_supported": true,
+    "launch_no_filesystem_supported": true,
+    "launch_one_same_region_firewall_ruleset_supported": true,
+    "provider_username": "ubuntu",
+    "jupyter_console_supported": true,
+    "billing_begins_after_launch_health_checks": true,
+    "billing_ends_on_provider_termination": true,
+    "host_shutdown_is_provider_termination": false,
+    "gpu_base_22_04_python": "3.10",
+    "gpu_base_22_04_docker_preinstalled": true,
+    "ssh_public_identity_file_can_constrain_agent_identity": true,
+    "identities_only_required": true,
+    "identity_agent_can_bind_exact_socket": true,
+    "general_api_request_spacing_seconds": 1,
+    "launch_requests_per_minute": 5
+  }
+}

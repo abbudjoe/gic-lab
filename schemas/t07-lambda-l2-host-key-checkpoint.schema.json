@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gic-lab.invalid/schemas/t07-lambda-l2-host-key-checkpoint.schema.json",
+  "title": "T07 Gate L2 private Jupyter host-key checkpoint",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "checkpoint_id",
+    "checkpoint_nonce",
+    "run_id",
+    "provider_instance_id",
+    "algorithm",
+    "fingerprint",
+    "observed_at_utc",
+    "observation_method"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1.0"},
+    "checkpoint_id": {
+      "type": "string",
+      "pattern": "^CHECKPOINT-T07-L2-[A-Z0-9._-]+$"
+    },
+    "checkpoint_nonce": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "run_id": {"const": "RUN-T07-L2-LAMBDA-HOST-QUALIFICATION-0001"},
+    "provider_instance_id": {"type": "string", "minLength": 1, "maxLength": 256},
+    "algorithm": {"const": "ssh-ed25519"},
+    "fingerprint": {
+      "type": "string",
+      "pattern": "^SHA256:[A-Za-z0-9+/]{43}$"
+    },
+    "observed_at_utc": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$"
+    },
+    "observation_method": {"const": "lambda-authenticated-jupyter-terminal"}
+  }
+}

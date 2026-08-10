@@ -1,0 +1,202 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gic-lab.invalid/schemas/t07-lambda-l2-private-parameters.schema.json",
+  "title": "T07 Gate L2 ignored sealed private parameters",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "plan_id",
+    "run_id",
+    "decision_alias",
+    "decision_file_sha256",
+    "decision_nonce",
+    "selected_resource",
+    "source_ipv4_cidr",
+    "original_global_firewall",
+    "owned_names",
+    "requests",
+    "runtime_bindings",
+    "access",
+    "persistent_filesystem_count",
+    "scientific_execution_allowed"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1.0"},
+    "plan_id": {"const": "PLAN-T07-GATE-L2-LAMBDA-HOST-QUALIFICATION-V1"},
+    "run_id": {"const": "RUN-T07-L2-LAMBDA-HOST-QUALIFICATION-0001"},
+    "decision_alias": {
+      "type": "string",
+      "pattern": "^l2-decision-[a-f0-9]{12}$"
+    },
+    "decision_file_sha256": {"$ref": "#/$defs/sha256"},
+    "decision_nonce": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "selected_resource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "instance_type_name",
+        "region_name",
+        "image_alias",
+        "image_version",
+        "image_family",
+        "architecture",
+        "raw_image_id",
+        "price_cents_per_hour",
+        "ssh_key_name",
+        "raw_ssh_key_id",
+        "local_public_key_alias",
+        "local_public_key_basename",
+        "local_public_identity_file",
+        "local_public_key_fingerprint"
+      ],
+      "properties": {
+        "instance_type_name": {"const": "gpu_1x_a10"},
+        "region_name": {"const": "us-east-1"},
+        "image_alias": {"const": "img-0111"},
+        "image_version": {"const": "22.4.5-2141"},
+        "image_family": {"const": "gpu-base-22-04"},
+        "architecture": {"const": "x86_64"},
+        "raw_image_id": {"$ref": "#/$defs/nonempty"},
+        "price_cents_per_hour": {"const": 129},
+        "ssh_key_name": {"const": "fractal-lambda-codex"},
+        "raw_ssh_key_id": {"$ref": "#/$defs/nonempty"},
+        "local_public_key_alias": {"$ref": "#/$defs/nonempty"},
+        "local_public_key_basename": {"const": "fractal_lambda_ed25519.pub"},
+        "local_public_identity_file": {"type": "string", "pattern": "^/"},
+        "local_public_key_fingerprint": {
+          "type": "string",
+          "pattern": "^SHA256:[A-Za-z0-9+/]{43}$"
+        }
+      }
+    },
+    "source_ipv4_cidr": {
+      "type": "string",
+      "pattern": "^(?:[0-9]{1,3}\\.){3}[0-9]{1,3}/32$"
+    },
+    "original_global_firewall": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["inventory_sha256", "rules", "normalized_rules_sha256"],
+      "properties": {
+        "inventory_sha256": {"$ref": "#/$defs/sha256"},
+        "rules": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 100,
+          "items": {"$ref": "#/$defs/firewallRule"}
+        },
+        "normalized_rules_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "owned_names": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["regional_ruleset_name", "instance_name", "hostname", "tags"],
+      "properties": {
+        "regional_ruleset_name": {"type": "string", "pattern": "^giclab-t07-l2-rs-[a-f0-9]{12}$"},
+        "instance_name": {"type": "string", "pattern": "^giclab-t07-l2-[a-f0-9]{12}$"},
+        "hostname": {"type": "string", "pattern": "^giclab-t07-l2-[a-f0-9]{12}$"},
+        "tags": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["key", "value"],
+            "properties": {
+              "key": {"type": "string", "minLength": 1},
+              "value": {"type": "string", "minLength": 1}
+            }
+          }
+        }
+      }
+    },
+    "requests": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "strict_global_patch_body",
+        "regional_create_body",
+        "launch_body_template",
+        "terminate_body_template",
+        "restore_global_patch_body"
+      ],
+      "properties": {
+        "strict_global_patch_body": {"$ref": "#/$defs/rulesBody"},
+        "regional_create_body": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "region", "rules"],
+          "properties": {
+            "name": {"type": "string", "minLength": 1, "maxLength": 64},
+            "region": {"const": "us-east-1"},
+            "rules": {"type": "array", "minItems": 1, "maxItems": 1, "items": {"$ref": "#/$defs/firewallRule"}}
+          }
+        },
+        "launch_body_template": {"type": "object", "minProperties": 10},
+        "terminate_body_template": {"type": "object", "minProperties": 1},
+        "restore_global_patch_body": {"$ref": "#/$defs/rulesBody"}
+      }
+    },
+    "runtime_bindings": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "source_operation", "json_pointer", "cardinality"],
+        "properties": {
+          "name": {"$ref": "#/$defs/nonempty"},
+          "source_operation": {"$ref": "#/$defs/nonempty"},
+          "json_pointer": {"type": "string", "pattern": "^/"},
+          "cardinality": {"const": 1}
+        }
+      }
+    },
+    "access": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "provider_username", "private_key_file_read_allowed", "agent_forwarding_allowed", "host_key_method"],
+      "properties": {
+        "mode": {"const": "preloaded-ssh-agent"},
+        "provider_username": {"const": "ubuntu"},
+        "private_key_file_read_allowed": {"const": false},
+        "agent_forwarding_allowed": {"const": false},
+        "host_key_method": {"const": "lambda-jupyter-independent-ed25519-fingerprint"}
+      }
+    },
+    "persistent_filesystem_count": {"const": 0},
+    "scientific_execution_allowed": {"const": false}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "nonempty": {"type": "string", "minLength": 1, "maxLength": 1024},
+    "firewallRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol", "source_network", "port_range"],
+      "properties": {
+        "protocol": {"enum": ["tcp", "udp", "icmp", "all"]},
+        "source_network": {"type": "string", "minLength": 1},
+        "port_range": {
+          "type": ["array", "null"],
+          "items": {"type": "integer", "minimum": 1, "maximum": 65535},
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "description": {"type": "string", "maxLength": 128}
+      }
+    },
+    "rulesBody": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rules"],
+      "properties": {
+        "rules": {"type": "array", "minItems": 1, "maxItems": 100, "items": {"$ref": "#/$defs/firewallRule"}}
+      }
+    }
+  }
+}
