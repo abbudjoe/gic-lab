@@ -190,7 +190,7 @@ class _FailAfterHeadersTransport:
             ),
             http_status=200,
             content_type="application/json",
-            bytes_received=0,
+            bytes_received=123,
             elapsed_ms=3,
         )
 
@@ -399,6 +399,10 @@ def test_typed_failure_after_send_remains_exact_and_stops(tmp_path: Path) -> Non
     assert events[-2]["sanitized_failure_stage"] == "response_body"
     assert events[-2]["sanitized_failure_class"] == "response_body_failure"
     assert events[-2]["stable_error_code"] == "L1A_TEST_BODY_FAILURE"
+    assert events[-2]["bytes_received_so_far"] == 123
+    assert events[-2]["http_status"] == 200
+    assert events[-2]["content_type"] == "application/json"
+    assert events[-2]["elapsed_ms"] == 3
     assert events[-1]["event_type"] == "run_stopped"
     assert prepared.staged is None and prepared.closed
     assert CANARY not in ledger.read_text()

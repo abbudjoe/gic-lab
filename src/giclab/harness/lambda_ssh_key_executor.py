@@ -371,7 +371,11 @@ def _terminate_after_failure(
     request: SSHKeyRequestContext | None,
     failure: SanitizedFailure,
     possible_send: bool,
-    elapsed_ms: int | None,
+    fallback_elapsed_ms: int | None,
+    observed_bytes: int | None = None,
+    observed_http_status: int | None = None,
+    observed_content_type: str | None = None,
+    observed_elapsed_ms: int | None = None,
 ) -> None:
     if ledger.closed or ledger.tainted:
         ledger.close_preserving_incomplete()
@@ -385,6 +389,41 @@ def _terminate_after_failure(
             "progress",
             "body-complete",
         }:
+            if observed_bytes is not None and (
+                observed_bytes < ledger.state.response_bytes or observed_bytes > MAX_RESPONSE_BYTES
+            ):
+                raise SSHKeyRequestLedgerError("typed failure response bytes are invalid")
+            if ledger.state.response_status is None:
+                if (
+                    observed_http_status is not None
+                    or observed_content_type is not None
+                    or (observed_bytes or 0) != 0
+                ):
+                    raise SSHKeyRequestLedgerError(
+                        "typed failure bypassed durable response headers"
+                    )
+            elif observed_http_status not in {
+                None,
+                ledger.state.response_status,
+            } or observed_content_type not in {None, ledger.state.response_content_type}:
+                raise SSHKeyRequestLedgerError("typed failure response identity drifted")
+            if observed_elapsed_ms is not None and (
+                observed_elapsed_ms < 0
+                or observed_elapsed_ms > 150_000
+                or (
+                    ledger.state.last_elapsed_ms is not None
+                    and observed_elapsed_ms < ledger.state.last_elapsed_ms
+                )
+            ):
+                raise SSHKeyRequestLedgerError("typed failure elapsed time is invalid")
+            terminal_bytes = (
+                ledger.state.response_bytes if observed_bytes is None else observed_bytes
+            )
+            terminal_elapsed_ms = (
+                observed_elapsed_ms
+                if observed_elapsed_ms is not None
+                else ledger.state.last_elapsed_ms or fallback_elapsed_ms
+            )
             if possible_send and phase in {"send-started", "headers", "progress"}:
                 ledger.append(
                     LedgerEventType.REQUEST_OUTCOME_UNKNOWN_AFTER_SEND,
@@ -392,7 +431,7 @@ def _terminate_after_failure(
                     bytes_received=ledger.state.response_bytes,
                     http_status=ledger.state.response_status,
                     content_type=ledger.state.response_content_type,
-                    elapsed_ms=ledger.state.last_elapsed_ms or elapsed_ms,
+                    elapsed_ms=terminal_elapsed_ms,
                     failure=OUTCOME_UNKNOWN_FAILURE,
                 )
                 failure = OUTCOME_UNKNOWN_FAILURE
@@ -400,10 +439,10 @@ def _terminate_after_failure(
                 ledger.append(
                     LedgerEventType.REQUEST_FAILED,
                     request=request,
-                    bytes_received=ledger.state.response_bytes,
+                    bytes_received=terminal_bytes,
                     http_status=ledger.state.response_status,
                     content_type=ledger.state.response_content_type,
-                    elapsed_ms=ledger.state.last_elapsed_ms or elapsed_ms,
+                    elapsed_ms=terminal_elapsed_ms,
                     failure=failure,
                 )
         elif phase in {"preflight-started", "secret-failed"}:
@@ -694,7 +733,11 @@ def _execute_within_deadline(
                 # closed-category observation of the network outcome.  Only
                 # an unexpected exception after send has unknown outcome.
                 possible_send=False,
-                elapsed_ms=elapsed_ms,
+                fallback_elapsed_ms=elapsed_ms,
+                observed_bytes=error.bytes_received,
+                observed_http_status=error.http_status,
+                observed_content_type=error.content_type,
+                observed_elapsed_ms=error.elapsed_ms,
             )
         raise
     except BaseException:
@@ -716,7 +759,7 @@ def _execute_within_deadline(
                 request=request_context,
                 failure=PRESEND_FAILURE,
                 possible_send=possible_send,
-                elapsed_ms=elapsed_ms,
+                fallback_elapsed_ms=elapsed_ms,
             )
         raise InventoryObservedFailure(PRESEND_FAILURE) from None
     finally:
