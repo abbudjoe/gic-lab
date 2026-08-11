@@ -72,7 +72,7 @@ class PlannedExecutionSubstrate:
         expected = {
             "decision_state": (
                 self.decision_state,
-                "lambda-host-qualification-ready-for-manual-console-authorization",
+                "lambda-firewall-baseline-capture-required",
             ),
             "provider": (self.provider, "lambda-on-demand-cloud"),
             "architecture": (self.architecture, "x86_64"),
@@ -82,7 +82,7 @@ class PlannedExecutionSubstrate:
             ),
             "gate_l2_decision_state": (
                 self.gate_l2_decision_state,
-                "ready-for-manual-console-qualification-authorization",
+                "fresh-readonly-firewall-baseline-required",
             ),
             "gate_l3_state": (self.gate_l3_state, "requirements-only"),
             "local_alternatives": (self.local_alternatives, "terminal-rejected"),
@@ -92,7 +92,7 @@ class PlannedExecutionSubstrate:
             ),
             "security_decision_document": (
                 self.security_decision_document,
-                "docs/harness/T07_GATE_L2_3_DECISION_BINDING.md",
+                "docs/harness/T07_GATE_L2M_1_FIREWALL_BASELINE_REPAIR.md",
             ),
         }
         for field, (observed, required) in expected.items():

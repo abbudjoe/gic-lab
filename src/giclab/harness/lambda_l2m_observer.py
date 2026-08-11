@@ -1113,12 +1113,42 @@ def firewall_semantic_sha256(rules: object) -> str:
 
 
 def verify_global_firewall_restoration(
-    rules: object, *, sealed_original_semantic_sha256: str
+    ruleset: object,
+    *,
+    sealed_original_ruleset_id: str,
+    sealed_original_ruleset_name: str,
+    sealed_original_semantic_sha256: str,
 ) -> None:
-    if _SHA256.fullmatch(sealed_original_semantic_sha256) is None:
-        raise L2MContractError("sealed global firewall hash is invalid")
-    if firewall_semantic_sha256(rules) != sealed_original_semantic_sha256:
-        raise L2MContractError("global firewall was not exactly restored")
+    from .lambda_firewall_baseline import (
+        FirewallBaselineError,
+        verify_exact_firewall_baseline,
+    )
+
+    try:
+        verify_exact_firewall_baseline(
+            ruleset,
+            expected_ruleset_id=sealed_original_ruleset_id,
+            expected_ruleset_name=sealed_original_ruleset_name,
+            expected_semantic_sha256=sealed_original_semantic_sha256,
+        )
+    except FirewallBaselineError:
+        raise L2MContractError("global firewall was not exactly restored") from None
+
+
+def verify_global_firewall_identity(
+    ruleset: object,
+    *,
+    sealed_original_ruleset_id: str,
+    sealed_original_ruleset_name: str,
+) -> None:
+    current = _mapping(ruleset, context="global firewall ruleset")
+    if (
+        set(current) != {"id", "name", "rules"}
+        or sealed_original_ruleset_id != "global"
+        or current.get("id") != sealed_original_ruleset_id
+        or current.get("name") != sealed_original_ruleset_name
+    ):
+        raise L2MContractError("global firewall ruleset identity drifted")
 
 
 def require_zero_prelaunch_instances(instances: object) -> None:
@@ -3085,6 +3115,8 @@ class L2MReadOnlyObserverEngine:
     source_ipv4_cidr: str = field(repr=False)
     human_decision: ValidatedHumanDecision = field(repr=False)
     sealed_original_global_sha256: str = field(repr=False)
+    sealed_original_global_ruleset_id: str = field(repr=False)
+    sealed_original_global_ruleset_name: str = field(repr=False)
     image_selection_checkpoint_sha256: str = field(repr=False)
     private_selected_image_id: str = field(repr=False)
     private_selected_ssh_key_id: str = field(repr=False)
@@ -3185,6 +3217,8 @@ class L2MReadOnlyObserverEngine:
             or _SHA256.fullmatch(self.authorization_sha256) is None
             or _RULESET_NAME.fullmatch(self.private_marker_name) is None
             or _SHA256.fullmatch(self.sealed_original_global_sha256) is None
+            or self.sealed_original_global_ruleset_id != "global"
+            or not self.sealed_original_global_ruleset_name
             or _SHA256.fullmatch(self.image_selection_checkpoint_sha256) is None
             or _PRIVATE_ID.fullmatch(self.private_selected_image_id) is None
             or _PRIVATE_ID.fullmatch(self.private_selected_ssh_key_id) is None
@@ -3602,7 +3636,9 @@ class L2MReadOnlyObserverEngine:
             context="preflight global firewall",
         )
         verify_global_firewall_restoration(
-            global_data.get("rules"),
+            global_data,
+            sealed_original_ruleset_id=self.sealed_original_global_ruleset_id,
+            sealed_original_ruleset_name=self.sealed_original_global_ruleset_name,
             sealed_original_semantic_sha256=self.sealed_original_global_sha256,
         )
         self._preflight_complete = True
@@ -3632,7 +3668,9 @@ class L2MReadOnlyObserverEngine:
         )
         global_data = _mapping(observed.data, context="fresh original global firewall")
         verify_global_firewall_restoration(
-            global_data.get("rules"),
+            global_data,
+            sealed_original_ruleset_id=self.sealed_original_global_ruleset_id,
+            sealed_original_ruleset_name=self.sealed_original_global_ruleset_name,
             sealed_original_semantic_sha256=self.sealed_original_global_sha256,
         )
         try:
@@ -4590,6 +4628,11 @@ class L2MReadOnlyObserverEngine:
             global_data = _mapping(observed.data, context="global firewall data")
             valid = True
             try:
+                verify_global_firewall_identity(
+                    global_data,
+                    sealed_original_ruleset_id=self.sealed_original_global_ruleset_id,
+                    sealed_original_ruleset_name=self.sealed_original_global_ruleset_name,
+                )
                 validate_strict_firewall_rules(
                     global_data.get("rules"), source_ipv4_cidr=self.source_ipv4_cidr
                 )
@@ -5029,7 +5072,9 @@ class L2MReadOnlyObserverEngine:
             valid = not self._ruleset_cleanup_required or self._ruleset_cleanup_proven
             try:
                 verify_global_firewall_restoration(
-                    global_data.get("rules"),
+                    global_data,
+                    sealed_original_ruleset_id=self.sealed_original_global_ruleset_id,
+                    sealed_original_ruleset_name=self.sealed_original_global_ruleset_name,
                     sealed_original_semantic_sha256=self.sealed_original_global_sha256,
                 )
             except L2MContractError:

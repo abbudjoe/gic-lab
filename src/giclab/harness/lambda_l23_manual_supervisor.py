@@ -728,6 +728,12 @@ def _create_bound_engine(
             sealed_original_global_sha256=_text(
                 original_global.get("semantic_sha256"), context="global semantic hash"
             ),
+            sealed_original_global_ruleset_id=_text(
+                original_global.get("ruleset_id"), context="global ruleset ID"
+            ),
+            sealed_original_global_ruleset_name=_text(
+                original_global.get("ruleset_name"), context="global ruleset name"
+            ),
             image_selection_checkpoint_sha256=preflight.private.seal.decision_seal_sha256,
             private_selected_image_id=_text(selected.get("raw_image_id"), context="raw image"),
             private_selected_ssh_key_id=_text(

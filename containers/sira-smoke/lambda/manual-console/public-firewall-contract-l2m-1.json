@@ -38,12 +38,14 @@
     "required": ["protocol", "source_network", "description"],
     "protocol": {
       "type": "string",
+      "nullable": false,
       "enum": ["tcp", "udp", "icmp", "all"]
     },
     "port_range": {
       "required_for": ["tcp", "udp", "all"],
       "forbidden_for": ["icmp"],
       "type_when_present": "array",
+      "nullable_when_present": false,
       "items": 2,
       "item_type": "integer",
       "minimum": 1,
@@ -52,6 +54,7 @@
     },
     "source_network": {
       "type": "string",
+      "nullable": false,
       "format": "ipv4network",
       "host_without_mask_means_prefix": 32
     },

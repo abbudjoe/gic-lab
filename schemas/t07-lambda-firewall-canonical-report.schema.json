@@ -69,6 +69,7 @@
           "types": {
             "type": "object",
             "additionalProperties": false,
+            "required": ["description", "port_range", "protocol", "source_network"],
             "properties": {
               "description": {"enum": ["string", "absent"]},
               "port_range": {"enum": ["array", "absent"]},

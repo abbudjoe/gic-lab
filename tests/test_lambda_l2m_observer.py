@@ -312,6 +312,8 @@ def make_observer_engine(
             else human_decision
         ),
         sealed_original_global_sha256=firewall_semantic_sha256(original_rules),
+        sealed_original_global_ruleset_id="global",
+        sealed_original_global_ruleset_name="global",
         image_selection_checkpoint_sha256="2" * 64,
         private_selected_image_id="raw-b",
         private_selected_ssh_key_id="ssh-key-private",
@@ -1362,6 +1364,8 @@ def test_engine_derives_proofs_and_drives_verified_failure_cleanup(tmp_path: Pat
         source_ipv4_cidr="8.8.8.8/32",
         human_decision=validated_decision(decision_alias="l2m-decision-0123456789ab"),
         sealed_original_global_sha256=original_sha256,
+        sealed_original_global_ruleset_id="global",
+        sealed_original_global_ruleset_name="global",
         image_selection_checkpoint_sha256=image_checkpoint_sha256,
         private_selected_image_id="raw-b",
         private_selected_ssh_key_id="ssh-key-private",
@@ -2597,11 +2601,24 @@ def test_global_firewall_restoration_and_zero_prelaunch_are_observed() -> None:
     ]
     semantic_hash = firewall_semantic_sha256(original)
     verify_global_firewall_restoration(
-        list(reversed(original)), sealed_original_semantic_sha256=semantic_hash
+        {"id": "global", "name": "global", "rules": list(reversed(original))},
+        sealed_original_ruleset_id="global",
+        sealed_original_ruleset_name="global",
+        sealed_original_semantic_sha256=semantic_hash,
     )
     with pytest.raises(L2MContractError, match="not exactly restored"):
         verify_global_firewall_restoration(
-            [strict_rule()], sealed_original_semantic_sha256=semantic_hash
+            {"id": "global", "name": "renamed", "rules": original},
+            sealed_original_ruleset_id="global",
+            sealed_original_ruleset_name="global",
+            sealed_original_semantic_sha256=semantic_hash,
+        )
+    with pytest.raises(L2MContractError, match="not exactly restored"):
+        verify_global_firewall_restoration(
+            {"id": "global", "name": "global", "rules": [strict_rule()]},
+            sealed_original_ruleset_id="global",
+            sealed_original_ruleset_name="global",
+            sealed_original_semantic_sha256=semantic_hash,
         )
     require_zero_prelaunch_instances([])
     with pytest.raises(L2MContractError, match="not instance-empty"):
@@ -3598,6 +3615,8 @@ def test_engine_stops_on_status_content_or_pagination_without_retry(
         source_ipv4_cidr="8.8.8.8/32",
         human_decision=validated_decision(),
         sealed_original_global_sha256="1" * 64,
+        sealed_original_global_ruleset_id="global",
+        sealed_original_global_ruleset_name="global",
         image_selection_checkpoint_sha256="2" * 64,
         private_selected_image_id="raw-b",
         private_selected_ssh_key_id="ssh-key-private",

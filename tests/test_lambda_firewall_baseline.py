@@ -70,9 +70,11 @@ def test_cidr_semantics_and_port_contract_are_exact() -> None:
     host = canonicalize_firewall_rules([rule(source="192.0.2.1")])
     host_cidr = canonicalize_firewall_rules([rule(source="192.0.2.1/32")])
     assert host.semantic_sha256 == host_cidr.semantic_sha256
-    network_variant = canonicalize_firewall_rules([rule(source="192.0.2.7/24")])
-    canonical_network = canonicalize_firewall_rules([rule(source="192.0.2.0/24")])
-    assert network_variant.semantic_sha256 == canonical_network.semantic_sha256
+    with pytest.raises(FirewallBaselineError, match="IPv4 CIDR"):
+        canonicalize_firewall_rules([rule(source="192.0.2.7/24")])
+    assert canonicalize_firewall_rules(
+        [rule(source="192.0.2.0/24")]
+    ).semantic_sha256
     with pytest.raises(FirewallBaselineError, match="port range"):
         canonicalize_firewall_rules([rule(ports=[444, 443])])
     with pytest.raises(FirewallBaselineError, match="omit port_range"):
@@ -174,13 +176,13 @@ def test_materialized_capture_plan_is_exact_and_unauthorized() -> None:
     encoded = path.read_bytes()
     assert len(encoded) == 5_754
     assert hashlib.sha256(encoded).hexdigest() == (
-        "0d353f1283e906c7d6fd02ed278e6546cfb4c64e19f64370afb2860aa67501e1"
+        "962a4ba6d36af6aaf2f99d75ccb45f3156760c51ad7623a89381eafb71202c4b"
     )
     plan = json.loads(encoded)
     baseline.validate_capture_plan(plan, repository_root=ROOT)
     assert plan == baseline.render_capture_plan(
         ROOT,
-        reviewed_implementation_commit="a55d66a96a6fa4e722cf0d12c258ff15f9eab659",
+        reviewed_implementation_commit="cae34f96ec1c77395a1470a2eb452e61925235c9",
     )
     assert plan["authorization"]["authorized"] is False
 
@@ -417,6 +419,90 @@ def test_capture_schema_drift_stops_without_retry(
         )
 
 
+@pytest.mark.parametrize(
+    "body",
+    [
+        b'{"data":{"id":"global","name":"Synthetic","rules":[]},"data":{}}',
+        b'{"data":{"id":"global","id":"global","name":"Synthetic","rules":[]}}',
+        b'{"data":{"id":"global","name":"Synthetic","rules":[{"description":"x","description":"y","port_range":[443,443],"protocol":"tcp","source_network":"192.0.2.1/32"}]}}',
+    ],
+)
+def test_capture_rejects_duplicate_json_keys_but_retains_exact_raw_body(
+    body: bytes, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    root = capture_fixture_root(tmp_path)
+    monkeypatch.setattr(baseline, "MIN_LOCAL_PREWRITE_FREE_BYTES", 0)
+    transport = FakeCaptureTransport(body)
+    with pytest.raises(FirewallBaselineError, match="duplicate key"):
+        baseline.capture_with_fakeable_transport(
+            root,
+            authorization_reference="AUTH-T07-GATE-L2M-FIREWALL-BASELINE-CAPTURE-V1-TEST",
+            credential_provider=lambda: "PUBLIC-DUMMY-CANARY-NOT-A-SECRET",
+            transport=transport,
+        )
+    assert (
+        root / baseline.CAPTURE_RUN_ROOT_RELATIVE / "raw-global-firewall-response.json"
+    ).read_bytes() == body
+
+
+def test_capture_writes_raw_body_before_claiming_body_completion(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    root = capture_fixture_root(tmp_path)
+    monkeypatch.setattr(baseline, "MIN_LOCAL_PREWRITE_FREE_BYTES", 0)
+    body = baseline.canonical_json_bytes(
+        {"data": {"id": "global", "name": "Synthetic", "rules": [rule()]}}
+    )
+    original_write = baseline._write_private_file_at
+
+    def observed_write(directory: int, name: str, encoded: bytes, *, cap: int) -> None:
+        if name == "raw-global-firewall-response.json":
+            ledger_rows = [
+                json.loads(line)
+                for line in (root / baseline.CAPTURE_LEDGER_RELATIVE).read_text().splitlines()
+            ]
+            assert all(row["event_type"] != "response_body_completed" for row in ledger_rows)
+        original_write(directory, name, encoded, cap=cap)
+
+    monkeypatch.setattr(baseline, "_write_private_file_at", observed_write)
+    baseline.capture_with_fakeable_transport(
+        root,
+        authorization_reference="AUTH-T07-GATE-L2M-FIREWALL-BASELINE-CAPTURE-V1-TEST",
+        credential_provider=lambda: "PUBLIC-DUMMY-CANARY-NOT-A-SECRET",
+        transport=FakeCaptureTransport(body),
+    )
+
+
+def test_partial_archive_preserves_raw_body_written_before_completion_event(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    root = capture_fixture_root(tmp_path)
+    monkeypatch.setattr(baseline, "MIN_LOCAL_PREWRITE_FREE_BYTES", 0)
+    body = baseline.canonical_json_bytes(
+        {"data": {"id": "global", "name": "Synthetic", "rules": [rule()]}}
+    )
+    original_write = baseline._write_private_file_at
+
+    def crash_after_raw(directory: int, name: str, encoded: bytes, *, cap: int) -> None:
+        original_write(directory, name, encoded, cap=cap)
+        if name == "raw-global-firewall-response.json":
+            raise FirewallBaselineError("synthetic crash after raw retention")
+
+    monkeypatch.setattr(baseline, "_write_private_file_at", crash_after_raw)
+    with pytest.raises(FirewallBaselineError, match="synthetic crash"):
+        baseline.capture_with_fakeable_transport(
+            root,
+            authorization_reference="AUTH-T07-GATE-L2M-FIREWALL-BASELINE-CAPTURE-V1-TEST",
+            credential_provider=lambda: "PUBLIC-DUMMY-CANARY-NOT-A-SECRET",
+            transport=FakeCaptureTransport(body),
+        )
+    members = baseline._capture_local_members(
+        root / baseline.CAPTURE_RUN_ROOT_RELATIVE,
+        require_complete=False,
+    )
+    assert members["raw-global-firewall-response.json"] == body
+
+
 def test_capture_ledger_rejects_reuse_and_sequence_gap(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -434,6 +520,68 @@ def test_capture_ledger_rejects_reuse_and_sequence_gap(
             root,
             authorization_reference="AUTH-T07-GATE-L2M-FIREWALL-BASELINE-CAPTURE-V1-TEST2",
         )
+
+
+def test_capture_run_root_rejects_symlinked_parent(
+    tmp_path: Path,
+) -> None:
+    root = capture_fixture_root(tmp_path)
+    escape = tmp_path / "escape"
+    escape.mkdir()
+    parent = root / "artifacts/t07/lambda"
+    parent.mkdir(parents=True)
+    (parent / "gate-l2m").symlink_to(escape, target_is_directory=True)
+    with pytest.raises(FirewallBaselineError):
+        baseline.CaptureLedger.create(
+            root,
+            authorization_reference="AUTH-T07-GATE-L2M-FIREWALL-BASELINE-CAPTURE-V1-TEST",
+        )
+    assert not (escape / baseline.CAPTURE_RUN_ID).exists()
+
+
+def test_total_deadline_stops_before_secret_access(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    root = capture_fixture_root(tmp_path)
+    monkeypatch.setattr(baseline, "MIN_LOCAL_PREWRITE_FREE_BYTES", 0)
+    secret_calls = 0
+
+    def secret() -> str:
+        nonlocal secret_calls
+        secret_calls += 1
+        return "PUBLIC-DUMMY-CANARY-NOT-A-SECRET"
+
+    transport = FakeCaptureTransport(b"{}")
+    with pytest.raises(FirewallBaselineError, match="before secret access"):
+        baseline.capture_with_fakeable_transport(
+            root,
+            authorization_reference="AUTH-T07-GATE-L2M-FIREWALL-BASELINE-CAPTURE-V1-TEST",
+            credential_provider=secret,
+            transport=transport,
+            absolute_deadline_monotonic_ns=1,
+            clock_ns=lambda: 2,
+        )
+    assert secret_calls == 0
+    assert transport.calls == 0
+
+
+def test_total_deadline_stops_after_secret_but_before_send(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    root = capture_fixture_root(tmp_path)
+    monkeypatch.setattr(baseline, "MIN_LOCAL_PREWRITE_FREE_BYTES", 0)
+    observed_times = iter((1, 6))
+    transport = FakeCaptureTransport(b"{}")
+    with pytest.raises(FirewallBaselineError, match="before request send"):
+        baseline.capture_with_fakeable_transport(
+            root,
+            authorization_reference="AUTH-T07-GATE-L2M-FIREWALL-BASELINE-CAPTURE-V1-TEST",
+            credential_provider=lambda: "PUBLIC-DUMMY-CANARY-NOT-A-SECRET",
+            transport=transport,
+            absolute_deadline_monotonic_ns=5,
+            clock_ns=lambda: next(observed_times),
+        )
+    assert transport.calls == 0
 
 
 def test_capture_plan_caps_are_finite_and_science_is_locked() -> None:
@@ -479,6 +627,14 @@ def test_capture_plan_caps_are_finite_and_science_is_locked() -> None:
         "training": False,
         "gate_scope": "read-only-firewall-baseline-capture-only",
     }
+    bound_paths = {item["path"] for item in plan["implementation_binding"]["artifacts"]}
+    assert {
+        "src/giclab/harness/lambda_firewall_baseline.py",
+        "src/giclab/harness/lambda_l2m_observer.py",
+        "src/giclab/harness/lambda_archive.py",
+        "src/giclab/harness/lambda_cloud.py",
+        "src/giclab/harness/sira_storage.py",
+    } <= bound_paths
 
 
 @pytest.mark.parametrize(
@@ -514,6 +670,9 @@ def test_public_contract_and_schema_identities_are_current() -> None:
         "source_network",
         "description",
     ]
+    assert contract["firewall_rule"]["protocol"]["nullable"] is False
+    assert contract["firewall_rule"]["source_network"]["nullable"] is False
+    assert contract["firewall_rule"]["port_range"]["nullable_when_present"] is False
     assert contract["authenticated_request_made"] is False
     assert contract["cloud_mutation_performed"] is False
     assert baseline.CANONICALIZATION_VERSION == CANONICALIZATION_VERSION
@@ -524,6 +683,12 @@ def test_capture_authorization_rejects_pending_or_malformed_bindings() -> None:
         baseline.CaptureAuthorization(
             "a" * 40,
             baseline.CAPTURE_AUTHORIZATION_PLACEHOLDER,
+            "b" * 64,
+        ).validate()
+    with pytest.raises(FirewallBaselineError, match="authorization"):
+        baseline.CaptureAuthorization(
+            "a" * 40,
+            "AUTH-T07-GATE-L2M-FIREWALL-BASELINE-CAPTURE-V2-TEST",
             "b" * 64,
         ).validate()
     with pytest.raises(FirewallBaselineError, match="authorization"):
@@ -550,3 +715,12 @@ def test_no_live_http_or_mutation_surface_is_imported_by_capture_plan() -> None:
     )
     assert "SIRA_API_KEY" not in source
     assert "OPENAI_API_KEY" not in source
+
+
+def test_canonical_report_cross_field_invariants_are_enforced() -> None:
+    complete = canonicalize_firewall_rules([rule()])
+    report = baseline.complete_canonical_report(complete)
+    baseline.validate_canonical_report(report, repository_root=ROOT)
+    report["rule_count"] = 2
+    with pytest.raises(FirewallBaselineError, match="shape count"):
+        baseline.validate_canonical_report(report, repository_root=ROOT)

@@ -15,6 +15,7 @@ import json
 import os
 import re
 import secrets
+import signal
 import stat
 import subprocess
 import sys
@@ -131,7 +132,7 @@ _REQUIRED_RULE_FIELDS: Final = frozenset({"protocol", "source_network", "descrip
 _PROTOCOLS: Final = frozenset({"tcp", "udp", "icmp", "all"})
 _COMMIT: Final = re.compile(r"^[a-f0-9]{40}$")
 _CAPTURE_AUTHORIZATION: Final = re.compile(
-    r"^AUTH-T07-GATE-L2M-FIREWALL-BASELINE-CAPTURE-V[0-9]+-[A-Z0-9._:-]{3,96}$"
+    r"^AUTH-T07-GATE-L2M-FIREWALL-BASELINE-CAPTURE-V1-[A-Z0-9][A-Z0-9._:-]{2,95}$"
 )
 MAX_GIT_OUTPUT_BYTES: Final = 65_536
 GIT_TIMEOUT_SECONDS: Final = 10
@@ -282,7 +283,11 @@ def _parse_firewall_rule(value: object) -> PrivateFirewallRule:
     if len(source) > 18 or source != source.strip():
         raise FirewallBaselineError("firewall source network is not canonical input text")
     try:
-        parsed_network = ipaddress.ip_network(source, strict=False)
+        # The pinned contract establishes a network value (and the documented
+        # bare-host shorthand, which ipaddress treats as /32).  It does not establish
+        # that host bits in an explicitly prefixed network are accepted, so reject
+        # those rather than silently changing provider-observed restoration bytes.
+        parsed_network = ipaddress.ip_network(source, strict=True)
     except ValueError:
         raise FirewallBaselineError("firewall source network is not an IPv4 CIDR") from None
     if parsed_network.version != 4:
@@ -457,6 +462,58 @@ def structural_report_for_historical_projection(
     }
 
 
+def validate_canonical_report(
+    report: Mapping[str, object], *, repository_root: Path
+) -> None:
+    """Validate schema plus cross-field shape/count invariants.
+
+    JSON Schema cannot express all of the cardinality and key/type correspondence
+    needed for a privacy-safe report.  Keep those relations in one executable
+    validator so a malformed public report can never be sealed as evidence.
+    """
+
+    schema, _ = _load_schema(repository_root, CANONICAL_REPORT_SCHEMA_RELATIVE)
+    if next(Draft202012Validator(schema).iter_errors(dict(report)), None) is not None:
+        raise FirewallBaselineError("firewall canonical report failed its schema")
+    rule_count = report.get("rule_count")
+    shapes = _sequence(report.get("rule_shapes"), context="canonical report rule shapes")
+    if type(rule_count) is not int or len(shapes) != rule_count:
+        raise FirewallBaselineError("canonical report rule shape count drifted")
+    for value in shapes:
+        shape = _mapping(value, context="canonical report rule shape")
+        fields = _sequence(shape.get("fields"), context="canonical report rule fields")
+        types = _mapping(shape.get("types"), context="canonical report rule types")
+        if set(types) != _CANONICAL_FIELDS or any(
+            (name in fields) != (types.get(name) != "absent") for name in _CANONICAL_FIELDS
+        ):
+            raise FirewallBaselineError("canonical report rule field/type correspondence drifted")
+    empty = report.get("empty_description_count")
+    nonempty = report.get("nonempty_description_count")
+    if type(empty) is not int or type(nonempty) is not int or empty + nonempty != rule_count:
+        raise FirewallBaselineError("canonical report description counts drifted")
+    for fields_key, types_key in (
+        ("observation_top_level_fields", "observation_top_level_types"),
+        ("global_ruleset_fields", "global_ruleset_types"),
+    ):
+        fields = _sequence(report.get(fields_key), context=f"canonical report {fields_key}")
+        types = _mapping(report.get(types_key), context=f"canonical report {types_key}")
+        if set(fields) != set(types):
+            raise FirewallBaselineError("canonical report key-name/type-key correspondence drifted")
+    classification = report.get("evidence_classification")
+    if classification in {
+        "complete_pre_mutation_provider_baseline",
+        "lossless_structured_pre_mutation_baseline",
+    } and (
+        not isinstance(report.get("baseline_alias"), str)
+        or _SHA256.fullmatch(str(report.get("canonical_semantic_sha256"))) is None
+        or report.get("all_current_required_fields_present") is not True
+        or report.get("all_port_range_presence_distinguished") is not True
+        or report.get("raw_response_retained") is not True
+        or report.get("unknown_raw_key_structure_retained") is not True
+    ):
+        raise FirewallBaselineError("complete canonical report lacks lossless evidence invariants")
+
+
 @dataclass(frozen=True, slots=True)
 class HistoricalAdjudication:
     document: Mapping[str, object]
@@ -488,29 +545,69 @@ def adjudicate_historical_run(repository_root: Path) -> HistoricalAdjudication:
         encoded[HISTORICAL_OBSERVATION_RELATIVE], context="historical observation"
     )
     journal_rows = [
-        _mapping(json.loads(line), context="historical journal event")
+        _strict_json(line, context="historical journal event")
         for line in encoded[HISTORICAL_JOURNAL_RELATIVE].splitlines()
         if line
     ]
-    terminal = [
-        event
-        for event in journal_rows
-        if event.get("event_type") == "observation_failed" and event.get("request_ordinal") == 6
+    request_operations = (
+        "list_images",
+        "list_instance_types",
+        "list_ssh_keys",
+        "list_instances",
+        "list_rulesets",
+        "get_global_firewall",
+    )
+    expected_events: list[tuple[str, int, str]] = [("preflight_started", 0, "none")]
+    for ordinal, operation in enumerate(request_operations, start=1):
+        expected_events.extend(
+            [
+                ("observation_intent_committed", ordinal, operation),
+                ("observation_send_started", ordinal, operation),
+                (
+                    "observation_completed" if ordinal < 6 else "observation_failed",
+                    ordinal,
+                    operation,
+                ),
+            ]
+        )
+    expected_events.append(("run_stopped", 0, "none"))
+    observed_events = [
+        (
+            row.get("event_type"),
+            row.get("request_ordinal"),
+            row.get("operation"),
+        )
+        for row in journal_rows
     ]
+    request_rows = [row for row in journal_rows if row.get("request_ordinal") in range(1, 7)]
+    terminal = journal_rows[-2] if len(journal_rows) >= 2 else {}
     if (
-        len(journal_rows) != 20
-        or len(terminal) != 1
-        or terminal[0].get("method") != "GET"
-        or terminal[0].get("path") is not None
-        or terminal[0].get("http_status") != 200
-        or terminal[0].get("bytes_received") != 660
-        or terminal[0].get("response_sha256") != observation.get("raw_response_sha256")
-        or terminal[0].get("sanitized_outcome") != "schema_failure"
+        observed_events != expected_events
+        or any(row.get("event_sequence") != ordinal for ordinal, row in enumerate(journal_rows, 1))
+        or any(row.get("run_id") != HISTORICAL_RUN_ID for row in journal_rows)
+        or any(
+            row.get("method") != "GET"
+            or row.get("host") != "cloud.lambda.ai"
+            or row.get("transport_kind") != "in-process-https"
+            or row.get("retry_count") != 0
+            or row.get("pagination_request") is not False
+            for row in request_rows
+        )
+        or terminal.get("method") != "GET"
+        or terminal.get("path") is not None
+        or terminal.get("http_status") != 200
+        or terminal.get("bytes_received") != 660
+        or terminal.get("response_sha256") != observation.get("raw_response_sha256")
+        or terminal.get("sanitized_outcome") != "schema_failure"
         or journal_rows[-1].get("event_type") != "run_stopped"
         or journal_rows[-1].get("sanitized_outcome") != "schema_failure"
+        or observation.get("schema_version") != "0.1.0"
+        or observation.get("operation") != "get_global_firewall"
+        or observation.get("raw_response_bytes") != 660
     ):
         raise FirewallBaselineError("historical journal provenance drifted")
     report = structural_report_for_historical_projection(observation)
+    validate_canonical_report(report, repository_root=root)
     document: dict[str, object] = {
         "schema_version": "0.1.0",
         "historical_run_id": HISTORICAL_RUN_ID,
@@ -574,6 +671,10 @@ def render_capture_plan(
     artifacts = [
         Path("src/giclab/harness/lambda_firewall_baseline.py"),
         CAPTURE_BOOTSTRAP_RELATIVE,
+        Path("src/giclab/harness/lambda_l2m_observer.py"),
+        Path("src/giclab/harness/lambda_archive.py"),
+        Path("src/giclab/harness/lambda_cloud.py"),
+        Path("src/giclab/harness/sira_storage.py"),
         BASELINE_SCHEMA_RELATIVE,
         CANONICAL_REPORT_SCHEMA_RELATIVE,
         RESTORATION_SCHEMA_RELATIVE,
@@ -982,15 +1083,115 @@ _CAPTURE_EVENT_ORDER: Final = {
 }
 
 
+def _directory_open_flags() -> int:
+    return os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+
+
+def _create_held_capture_run_root(repository_root: Path) -> int:
+    """Create the exact run root through same-device, owner-only dirfd traversal."""
+
+    descriptor = os.open(repository_root, _directory_open_flags())
+    try:
+        repository_stat = os.fstat(descriptor)
+        if not stat.S_ISDIR(repository_stat.st_mode) or repository_stat.st_uid != os.getuid():
+            raise FirewallBaselineError("capture repository root identity is unsafe")
+        for index, component in enumerate(CAPTURE_RUN_ROOT_RELATIVE.parts):
+            if component in {"", ".", ".."} or "/" in component:
+                raise FirewallBaselineError("capture run-root component is unsafe")
+            final = index == len(CAPTURE_RUN_ROOT_RELATIVE.parts) - 1
+            created = False
+            try:
+                os.mkdir(component, mode=0o700, dir_fd=descriptor)
+                created = True
+            except FileExistsError:
+                if final:
+                    raise FirewallBaselineError("capture run identity is not fresh") from None
+            child = os.open(component, _directory_open_flags(), dir_fd=descriptor)
+            observed = os.fstat(child)
+            if (
+                not stat.S_ISDIR(observed.st_mode)
+                or observed.st_uid != os.getuid()
+                or observed.st_dev != repository_stat.st_dev
+                or stat.S_IMODE(observed.st_mode) & 0o022
+            ):
+                os.close(child)
+                raise FirewallBaselineError("capture run-root hierarchy is unsafe")
+            if created:
+                os.fsync(descriptor)
+            os.close(descriptor)
+            descriptor = child
+        os.fsync(descriptor)
+        return descriptor
+    except BaseException:
+        os.close(descriptor)
+        raise
+
+
+def _require_deadline(
+    absolute_deadline_monotonic_ns: int,
+    *,
+    clock_ns: Callable[[], int],
+    context: str,
+) -> None:
+    if absolute_deadline_monotonic_ns <= 0 or clock_ns() >= absolute_deadline_monotonic_ns:
+        raise FirewallBaselineError(f"capture {context} deadline exhausted")
+
+
+class _CaptureHardAlarm:
+    """Hard process wall protecting live capture and archive boundaries."""
+
+    def __init__(self, seconds: float, *, message: str) -> None:
+        if seconds <= 0:
+            raise FirewallBaselineError(message)
+        self._message = message
+        self._old_handler = signal.getsignal(signal.SIGALRM)
+        self._old_timer = signal.getitimer(signal.ITIMER_REAL)
+        self._started = time.monotonic()
+        self._closed = False
+        try:
+            signal.signal(signal.SIGALRM, self._expired)
+            signal.setitimer(signal.ITIMER_REAL, seconds)
+        except (OSError, ValueError):
+            with suppress(OSError, ValueError):
+                signal.setitimer(signal.ITIMER_REAL, 0)
+                signal.signal(signal.SIGALRM, self._old_handler)
+            self._closed = True
+            raise FirewallBaselineError("capture hard deadline is unavailable") from None
+
+    def _expired(self, signum: int, frame: object) -> None:
+        del signum, frame
+        raise FirewallBaselineError(self._message)
+
+    def close(self) -> None:
+        if self._closed:
+            return
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, self._old_handler)
+        remaining, interval = self._old_timer
+        if remaining > 0:
+            elapsed = time.monotonic() - self._started
+            signal.setitimer(signal.ITIMER_REAL, max(0.001, remaining - elapsed), interval)
+        self._closed = True
+
+    def __enter__(self) -> _CaptureHardAlarm:
+        return self
+
+    def __exit__(self, exc_type: object, exc: object, traceback: object) -> None:
+        del exc_type, exc, traceback
+        self.close()
+
+
 @dataclass(slots=True)
 class CaptureLedger:
     descriptor: int
+    run_root_descriptor: int
     path: Path
     validator: Draft202012Validator
     authorization_reference: str
     events: int = 0
     bytes_written: int = 0
     terminal: bool = False
+    closed: bool = False
 
     @classmethod
     def create(
@@ -1004,34 +1205,25 @@ class CaptureLedger:
         ):
             raise FirewallBaselineError("capture authorization reference is pending or invalid")
         root = repository_root.resolve(strict=True)
+        schema, _ = _load_schema(root, CAPTURE_LEDGER_SCHEMA_RELATIVE)
         run_root = root / CAPTURE_RUN_ROOT_RELATIVE
-        if run_root.exists() or run_root.is_symlink():
-            raise FirewallBaselineError("capture run identity is not fresh")
+        run_root_descriptor = -1
         try:
-            run_root.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-            run_root.mkdir(mode=0o700)
-            parent_fd = os.open(
-                run_root.parent,
-                os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0),
-            )
-            try:
-                os.fsync(parent_fd)
-            finally:
-                os.close(parent_fd)
+            run_root_descriptor = _create_held_capture_run_root(root)
             descriptor = os.open(
-                run_root / "request-ledger.jsonl",
+                "request-ledger.jsonl",
                 os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0),
                 0o600,
+                dir_fd=run_root_descriptor,
             )
+            os.fsync(run_root_descriptor)
         except OSError:
+            if run_root_descriptor >= 0:
+                os.close(run_root_descriptor)
             raise FirewallBaselineError("capture ledger could not be created exclusively") from None
-        try:
-            schema, _ = _load_schema(root, CAPTURE_LEDGER_SCHEMA_RELATIVE)
-        except BaseException:
-            os.close(descriptor)
-            raise
         return cls(
             descriptor,
+            run_root_descriptor,
             run_root / "request-ledger.jsonl",
             Draft202012Validator(schema, format_checker=FormatChecker()),
             authorization_reference,
@@ -1105,6 +1297,8 @@ class CaptureLedger:
             self.terminal = True
 
     def close(self) -> tuple[int, str]:
+        if self.closed:
+            raise FirewallBaselineError("capture ledger is already closed")
         try:
             os.fsync(self.descriptor)
             os.lseek(self.descriptor, 0, os.SEEK_SET)
@@ -1114,22 +1308,29 @@ class CaptureLedger:
             return len(encoded), sha256_bytes(encoded)
         finally:
             os.close(self.descriptor)
+            os.close(self.run_root_descriptor)
+            self.closed = True
 
 
-def _write_private_file(run_root: Path, name: str, encoded: bytes, *, cap: int) -> None:
+def _write_private_file_at(directory: int, name: str, encoded: bytes, *, cap: int) -> None:
     if not encoded or len(encoded) > cap:
         raise FirewallBaselineError("capture private artifact exceeds its cap")
-    directory = os.open(
-        run_root,
-        os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0),
-    )
     try:
         _write_exclusive_at(directory, name, encoded)
         os.fsync(directory)
     except InventoryArchiveError:
         raise FirewallBaselineError("capture private artifact write failed") from None
+
+
+def _write_private_file(run_root: Path, name: str, encoded: bytes, *, cap: int) -> None:
+    try:
+        held = _HeldDirectory.open(run_root)
+    except InventoryArchiveError:
+        raise FirewallBaselineError("capture private artifact root is unsafe") from None
+    try:
+        _write_private_file_at(held.descriptor, name, encoded, cap=cap)
     finally:
-        os.close(directory)
+        held.close()
 
 
 def capture_with_fakeable_transport(
@@ -1138,10 +1339,16 @@ def capture_with_fakeable_transport(
     authorization_reference: str,
     credential_provider: Callable[[], str | None],
     transport: CaptureTransport,
+    absolute_deadline_monotonic_ns: int | None = None,
+    clock_ns: Callable[[], int] = time.monotonic_ns,
 ) -> CaptureEvidence:
     """Exercise one complete capture locally; callers must establish live authority."""
 
     root = repository_root.resolve(strict=True)
+    if absolute_deadline_monotonic_ns is None:
+        absolute_deadline_monotonic_ns = (
+            clock_ns() + MAX_CAPTURE_TOTAL_WALL_SECONDS * 1_000_000_000
+        )
     ledger = CaptureLedger.create(root, authorization_reference=authorization_reference)
     run_root = root / CAPTURE_RUN_ROOT_RELATIVE
     failure_stage = "preflight"
@@ -1153,6 +1360,11 @@ def capture_with_fakeable_transport(
         if free_bytes < MIN_LOCAL_PREWRITE_FREE_BYTES + MAX_CAPTURE_LEDGER_BYTES:
             raise FirewallBaselineError("capture ledger capacity cannot be reserved")
         ledger.append("ledger_capacity_reserved")
+        _require_deadline(
+            absolute_deadline_monotonic_ns,
+            clock_ns=clock_ns,
+            context="total before secret access",
+        )
         failure_stage = "secret_source"
         failure_class = "secret_missing"
         credential = credential_provider()
@@ -1166,14 +1378,24 @@ def capture_with_fakeable_transport(
         ledger.append("secret_presence_check_passed")
         ledger.append("run_preflight_passed")
         ledger.append("request_intent_committed", request=True)
+        _require_deadline(
+            absolute_deadline_monotonic_ns,
+            clock_ns=clock_ns,
+            context="total before request send",
+        )
         ledger.append("request_send_started", request=True)
         request_started = True
         failure_stage = "transport"
         failure_class = "transport_failed"
+        provider_started_ns = clock_ns()
+        provider_deadline_ns = min(
+            absolute_deadline_monotonic_ns,
+            provider_started_ns + MAX_CAPTURE_PROVIDER_WALL_SECONDS * 1_000_000_000,
+        )
         try:
             response = transport.fetch(
                 credential=credential,
-                timeout_seconds=MAX_CAPTURE_PROVIDER_WALL_SECONDS,
+                timeout_seconds=(provider_deadline_ns - provider_started_ns) / 1_000_000_000,
                 max_response_bytes=MAX_CAPTURE_RESPONSE_BYTES,
             )
         except BaseException:
@@ -1201,7 +1423,7 @@ def capture_with_fakeable_transport(
             request=True,
             status=response.status,
             content_type=normalized_content_type,
-            elapsed_ms=response.elapsed_ms,
+            elapsed_ms=min(max(response.elapsed_ms, 0), MAX_CAPTURE_PROVIDER_WALL_SECONDS * 1_000),
             response_sha256=response_sha256,
         )
         failure_stage = "response_size"
@@ -1213,7 +1435,9 @@ def capture_with_fakeable_transport(
                 bytes_received=min(len(response.body), MAX_CAPTURE_RESPONSE_BYTES),
                 status=response.status,
                 content_type=normalized_content_type,
-                elapsed_ms=response.elapsed_ms,
+                elapsed_ms=min(
+                    max(response.elapsed_ms, 0), MAX_CAPTURE_PROVIDER_WALL_SECONDS * 1_000
+                ),
                 response_sha256=response_sha256,
                 failure_stage="response_size",
                 failure_class="response_too_large",
@@ -1224,26 +1448,49 @@ def capture_with_fakeable_transport(
                 failure_class="response_too_large",
             )
             raise FirewallBaselineError("capture response failed its byte contract")
+        # Preserve the complete provider body before parsing it.  A later status,
+        # content-type, JSON, schema, or material-extension stop must not recreate the
+        # evidence defect that prompted this gate.  Only then may the durable ledger
+        # claim that the response body is complete.
+        failure_stage = "seal_io"
+        failure_class = "seal_failed"
+        _write_private_file_at(
+            ledger.run_root_descriptor,
+            "raw-global-firewall-response.json",
+            response.body,
+            cap=MAX_CAPTURE_RESPONSE_BYTES,
+        )
         ledger.append(
             "response_body_completed",
             request=True,
             bytes_received=len(response.body),
             status=response.status,
-            content_type="application/json",
-            elapsed_ms=response.elapsed_ms,
+            content_type=normalized_content_type,
+            elapsed_ms=min(
+                max(response.elapsed_ms, 0), MAX_CAPTURE_PROVIDER_WALL_SECONDS * 1_000
+            ),
             response_sha256=response_sha256,
         )
-        # Preserve the complete provider body before parsing it.  A later status,
-        # content-type, JSON, schema, or material-extension stop must not recreate the
-        # evidence defect that prompted this gate.
-        failure_stage = "seal_io"
-        failure_class = "seal_failed"
-        _write_private_file(
-            run_root,
-            "raw-global-firewall-response.json",
-            response.body,
-            cap=MAX_CAPTURE_RESPONSE_BYTES,
-        )
+        if response.elapsed_ms > MAX_CAPTURE_PROVIDER_WALL_SECONDS * 1_000 or (
+            clock_ns() > provider_deadline_ns
+        ):
+            ledger.append(
+                "request_failed",
+                request=True,
+                bytes_received=len(response.body),
+                status=response.status,
+                content_type=normalized_content_type,
+                elapsed_ms=MAX_CAPTURE_PROVIDER_WALL_SECONDS * 1_000,
+                response_sha256=response_sha256,
+                failure_stage="deadline",
+                failure_class="deadline_exceeded",
+            )
+            ledger.append(
+                "run_stopped",
+                failure_stage="deadline",
+                failure_class="deadline_exceeded",
+            )
+            raise FirewallBaselineError("capture provider deadline exceeded")
         failure_stage = "schema_validation"
         failure_class = "schema_drift"
         if response.status != 200 or normalized_content_type != "application/json":
@@ -1253,7 +1500,9 @@ def capture_with_fakeable_transport(
                 bytes_received=len(response.body),
                 status=response.status,
                 content_type=normalized_content_type,
-                elapsed_ms=response.elapsed_ms,
+                elapsed_ms=min(
+                    max(response.elapsed_ms, 0), MAX_CAPTURE_PROVIDER_WALL_SECONDS * 1_000
+                ),
                 response_sha256=response_sha256,
                 failure_stage=("http_status" if response.status != 200 else "content_type"),
                 failure_class=(
@@ -1268,7 +1517,7 @@ def capture_with_fakeable_transport(
                 ),
             )
             raise FirewallBaselineError("capture response failed status/content contract")
-        envelope = _load_json(response.body, context="capture response")
+        envelope = _strict_json(response.body, context="capture response")
         if set(envelope) != {"data"}:
             raise FirewallBaselineError("capture response envelope has unknown or missing fields")
         ruleset = _mapping(envelope.get("data"), context="capture global ruleset")
@@ -1285,7 +1534,9 @@ def capture_with_fakeable_transport(
             bytes_received=len(response.body),
             status=200,
             content_type="application/json",
-            elapsed_ms=response.elapsed_ms,
+            elapsed_ms=min(
+                max(response.elapsed_ms, 0), MAX_CAPTURE_PROVIDER_WALL_SECONDS * 1_000
+            ),
             response_sha256=response_sha256,
         )
         ledger.append("baseline_seal_started")
@@ -1343,30 +1594,22 @@ def capture_with_fakeable_transport(
             raise FirewallBaselineError("capture baseline failed its private schema")
         baseline_encoded = canonical_json_bytes(baseline_document)
         canonical_report = complete_canonical_report(baseline)
-        canonical_report_schema, _ = _load_schema(root, CANONICAL_REPORT_SCHEMA_RELATIVE)
-        if (
-            next(
-                Draft202012Validator(canonical_report_schema).iter_errors(canonical_report),
-                None,
-            )
-            is not None
-        ):
-            raise FirewallBaselineError("capture canonical report failed its schema")
+        validate_canonical_report(canonical_report, repository_root=root)
         canonical_report_encoded = canonical_json_bytes(canonical_report)
-        _write_private_file(
-            run_root,
+        _write_private_file_at(
+            ledger.run_root_descriptor,
             "firewall-baseline.json",
             baseline_encoded,
             cap=MAX_CAPTURE_LOCAL_ARTIFACT_BYTES,
         )
-        _write_private_file(
-            run_root,
+        _write_private_file_at(
+            ledger.run_root_descriptor,
             "restoration-payload.json",
             restoration_encoded,
             cap=MAX_CAPTURE_LOCAL_ARTIFACT_BYTES,
         )
-        _write_private_file(
-            run_root,
+        _write_private_file_at(
+            ledger.run_root_descriptor,
             "canonical-report.json",
             canonical_report_encoded,
             cap=MAX_CAPTURE_LOCAL_ARTIFACT_BYTES,
@@ -1464,19 +1707,28 @@ _CAPTURE_SOURCE_NAMES: Final = (
 
 
 def _capture_local_members(local_root: Path, *, require_complete: bool) -> dict[str, bytes]:
+    held: _HeldDirectory | None = None
     try:
-        observed_names = set(os.listdir(local_root))
-    except OSError:
+        held = _HeldDirectory.open(local_root)
+        observed_names = set(os.listdir(held.descriptor))
+        local_members = {
+            name: _read_regular_at(
+                held.descriptor,
+                name,
+                max_bytes=MAX_CAPTURE_LOCAL_ARTIFACT_BYTES,
+            )
+            for name in _CAPTURE_SOURCE_NAMES
+            if name in observed_names
+        }
+    except (OSError, InventoryArchiveError):
         raise FirewallBaselineError("capture local evidence root is unavailable") from None
+    finally:
+        if held is not None:
+            held.close()
     allowed_names = set(_CAPTURE_SOURCE_NAMES)
     required_names = allowed_names if require_complete else {"request-ledger.jsonl"}
     if not required_names <= observed_names or not observed_names <= allowed_names:
         raise FirewallBaselineError("capture local evidence member set is invalid")
-    local_members = {
-        name: _read_regular_no_follow(local_root / name, max_bytes=MAX_CAPTURE_LOCAL_ARTIFACT_BYTES)
-        for name in _CAPTURE_SOURCE_NAMES
-        if name in observed_names
-    }
     ledger_rows = [
         _strict_json(line, context="capture ledger event")
         for line in local_members["request-ledger.jsonl"].splitlines()
@@ -1493,8 +1745,20 @@ def _capture_local_members(local_root: Path, *, require_complete: bool) -> dict[
     response_completed = any(
         row.get("event_type") == "response_body_completed" for row in ledger_rows
     )
-    if response_completed != ("raw-global-firewall-response.json" in local_members):
+    raw_response = local_members.get("raw-global-firewall-response.json")
+    if response_completed and raw_response is None:
         raise FirewallBaselineError("capture raw-response retention differs from its ledger")
+    if require_complete and not response_completed:
+        raise FirewallBaselineError("complete capture lacks a retained response ledger event")
+    if response_completed:
+        completed = next(
+            row for row in ledger_rows if row.get("event_type") == "response_body_completed"
+        )
+        if (
+            completed.get("bytes_received_so_far") != len(raw_response or b"")
+            or completed.get("response_sha256") != sha256_bytes(raw_response or b"")
+        ):
+            raise FirewallBaselineError("capture raw-response identity differs from its ledger")
     if sum(len(value) for value in local_members.values()) > MAX_CAPTURE_LOCAL_ARTIFACT_BYTES:
         raise FirewallBaselineError("capture local evidence exceeds its aggregate cap")
     return local_members
@@ -1508,14 +1772,22 @@ def seal_capture_evidence_to_approved_external(
     require_complete: bool = True,
     volume_observer: Callable[[], tuple[VolumeObservation, VolumeObservation]] | None = None,
     utc_now: Callable[[], datetime] = lambda: datetime.now(UTC),
+    absolute_deadline_monotonic_ns: int | None = None,
+    clock_ns: Callable[[], int] = time.monotonic_ns,
 ) -> CaptureArchiveSeal:
     """Seal the complete capture one-way under held storage capabilities."""
 
     if _SHA256.fullmatch(plan_sha256) is None or _SHA256.fullmatch(authorization_sha256) is None:
         raise FirewallBaselineError("capture archive binding hash is invalid")
+    archive_started_ns = clock_ns()
+    archive_deadline_ns = archive_started_ns + MAX_CAPTURE_ARCHIVE_WALL_SECONDS * 1_000_000_000
+    if absolute_deadline_monotonic_ns is not None:
+        archive_deadline_ns = min(archive_deadline_ns, absolute_deadline_monotonic_ns)
+    _require_deadline(archive_deadline_ns, clock_ns=clock_ns, context="archive")
     root = repository_root.resolve(strict=True)
     local_root = root / CAPTURE_RUN_ROOT_RELATIVE
     local_members = _capture_local_members(local_root, require_complete=require_complete)
+    _require_deadline(archive_deadline_ns, clock_ns=clock_ns, context="archive")
     manifest = canonical_json_bytes(
         {
             "schema_version": "0.1.0",
@@ -1552,9 +1824,10 @@ def seal_capture_evidence_to_approved_external(
     repository_handle: _HeldDirectory | None = None
     archive_root: _HeldDirectory | None = None
     staging_fd = -1
-    started = time.monotonic()
     try:
+        _require_deadline(archive_deadline_ns, clock_ns=clock_ns, context="archive")
         external_pre, system_pre = observer()
+        _require_deadline(archive_deadline_ns, clock_ns=clock_ns, context="archive")
         external_floor = _validate_external(
             external_pre, incremental_bytes=MAX_CAPTURE_ARCHIVE_BYTES
         )
@@ -1583,6 +1856,7 @@ def seal_capture_evidence_to_approved_external(
             dir_fd=archive_root.descriptor,
         )
         for name, encoded in sorted(local_members.items()):
+            _require_deadline(archive_deadline_ns, clock_ns=clock_ns, context="archive")
             _write_exclusive_at(staging_fd, name, encoded)
         copy_record = canonical_json_bytes(
             {
@@ -1630,6 +1904,7 @@ def seal_capture_evidence_to_approved_external(
             raise FirewallBaselineError("capture external archive exceeds its cap")
         _write_exclusive_at(staging_fd, "COPY_RECORD.json", copy_record)
         _write_exclusive_at(staging_fd, "SEAL.json", external_seal)
+        _require_deadline(archive_deadline_ns, clock_ns=clock_ns, context="archive")
         os.fsync(staging_fd)
         os.fchmod(staging_fd, 0o500)
         os.rename(
@@ -1651,12 +1926,14 @@ def seal_capture_evidence_to_approved_external(
                 "SEAL.json": external_seal,
             }
             for name, expected in expected_members.items():
+                _require_deadline(archive_deadline_ns, clock_ns=clock_ns, context="archive")
                 observed = _read_regular_at(final_fd, name, max_bytes=MAX_CAPTURE_ARCHIVE_BYTES)
                 if observed != expected or sha256_bytes(observed) != sha256_bytes(expected):
                     raise FirewallBaselineError("capture destination hash verification failed")
         finally:
             os.close(final_fd)
         external_post, system_post = observer()
+        _require_deadline(archive_deadline_ns, clock_ns=clock_ns, context="archive")
         if not _same_identity(external_pre, external_post) or not _same_identity(
             system_pre, system_post
         ):
@@ -1665,8 +1942,6 @@ def seal_capture_evidence_to_approved_external(
         _validate_system(system_post, floor_bytes=MIN_LOCAL_RETAINED_FREE_BYTES)
         if external_post.free_bytes < external_floor:
             raise FirewallBaselineError("capture external retained floor failed")
-        if time.monotonic() - started > MAX_CAPTURE_ARCHIVE_WALL_SECONDS:
-            raise FirewallBaselineError("capture archive wall cap exceeded")
         local_record = canonical_json_bytes(
             {
                 "schema_version": "0.1.0",
@@ -1686,6 +1961,7 @@ def seal_capture_evidence_to_approved_external(
             local_record,
             cap=MAX_CAPTURE_LOCAL_ARTIFACT_BYTES,
         )
+        _require_deadline(archive_deadline_ns, clock_ns=clock_ns, context="archive")
         return CaptureArchiveSeal(
             archive_alias,
             sha256_bytes(manifest),
@@ -2012,41 +2288,73 @@ def main(argv: Sequence[str] | None = None) -> int:
         args.authorization_reference,
         args.authorization_sha256,
     )
-    started = time.monotonic()
+    total_deadline_ns = time.monotonic_ns() + MAX_CAPTURE_TOTAL_WALL_SECONDS * 1_000_000_000
     try:
-        verify_capture_preflight(
-            args.repository_root,
-            plan_path=args.plan,
-            expected_plan_sha256=args.plan_sha256,
-            authorization=authorization,
-        )
-        try:
-            capture_with_fakeable_transport(
+        with _CaptureHardAlarm(
+            MAX_CAPTURE_TOTAL_WALL_SECONDS,
+            message="capture total hard deadline exceeded",
+        ):
+            verify_capture_preflight(
                 args.repository_root,
-                authorization_reference=authorization.authorization_reference,
-                credential_provider=lambda: os.environ.get("LAMBDA_API_KEY"),
-                transport=L2MObserverCaptureTransport(),
+                plan_path=args.plan,
+                expected_plan_sha256=args.plan_sha256,
+                authorization=authorization,
             )
-        except (FirewallBaselineError, OSError, ValueError):
-            # A complete response that later fails validation must still be sealed;
-            # otherwise the next investigation would repeat run 0003's evidence gap.
-            # Archive failure never permits replay and leaves the local source intact.
-            if (args.repository_root / CAPTURE_RUN_ROOT_RELATIVE).exists():
-                with suppress(FirewallBaselineError, OSError, ValueError):
-                    seal_capture_evidence_to_approved_external(
-                        args.repository_root,
-                        plan_sha256=args.plan_sha256,
-                        authorization_sha256=authorization.authorization_sha256,
-                        require_complete=False,
-                    )
-            raise
-        seal_capture_evidence_to_approved_external(
-            args.repository_root,
-            plan_sha256=args.plan_sha256,
-            authorization_sha256=authorization.authorization_sha256,
-        )
-        if time.monotonic() - started > MAX_CAPTURE_TOTAL_WALL_SECONDS:
-            raise FirewallBaselineError("capture total wall cap exceeded")
+            _require_deadline(
+                total_deadline_ns,
+                clock_ns=time.monotonic_ns,
+                context="total before secret-bearing capture",
+            )
+            try:
+                capture_with_fakeable_transport(
+                    args.repository_root,
+                    authorization_reference=authorization.authorization_reference,
+                    credential_provider=lambda: os.environ.get("LAMBDA_API_KEY"),
+                    transport=L2MObserverCaptureTransport(),
+                    absolute_deadline_monotonic_ns=total_deadline_ns,
+                )
+            except (FirewallBaselineError, OSError, ValueError):
+                # A complete response that later fails validation must still be sealed;
+                # otherwise the next investigation would repeat run 0003's evidence gap.
+                # Archive failure never permits replay and leaves the local source intact.
+                if (args.repository_root / CAPTURE_RUN_ROOT_RELATIVE).exists():
+                    with suppress(FirewallBaselineError, OSError, ValueError):
+                        _require_deadline(
+                            total_deadline_ns,
+                            clock_ns=time.monotonic_ns,
+                            context="total before partial archive",
+                        )
+                        remaining_seconds = (
+                            total_deadline_ns - time.monotonic_ns()
+                        ) / 1_000_000_000
+                        with _CaptureHardAlarm(
+                            min(MAX_CAPTURE_ARCHIVE_WALL_SECONDS, remaining_seconds),
+                            message="capture partial archive hard deadline exceeded",
+                        ):
+                            seal_capture_evidence_to_approved_external(
+                                args.repository_root,
+                                plan_sha256=args.plan_sha256,
+                                authorization_sha256=authorization.authorization_sha256,
+                                require_complete=False,
+                                absolute_deadline_monotonic_ns=total_deadline_ns,
+                            )
+                raise
+            _require_deadline(
+                total_deadline_ns,
+                clock_ns=time.monotonic_ns,
+                context="total before archive",
+            )
+            remaining_seconds = (total_deadline_ns - time.monotonic_ns()) / 1_000_000_000
+            with _CaptureHardAlarm(
+                min(MAX_CAPTURE_ARCHIVE_WALL_SECONDS, remaining_seconds),
+                message="capture archive hard deadline exceeded",
+            ):
+                seal_capture_evidence_to_approved_external(
+                    args.repository_root,
+                    plan_sha256=args.plan_sha256,
+                    authorization_sha256=authorization.authorization_sha256,
+                    absolute_deadline_monotonic_ns=total_deadline_ns,
+                )
     except (FirewallBaselineError, OSError, ValueError):
         print(
             "giclab-firewall-baseline: stopped; inspect private sealed evidence",

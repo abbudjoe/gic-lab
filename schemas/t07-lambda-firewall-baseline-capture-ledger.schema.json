@@ -40,10 +40,10 @@
     "elapsed_ms": {"oneOf": [{"type": "null"}, {"type": "integer", "minimum": 0, "maximum": 60000}]},
     "response_sha256": {"oneOf": [{"type": "null"}, {"type": "string", "pattern": "^[a-f0-9]{64}$"}]},
     "sanitized_failure_stage": {
-      "enum": [null, "preflight", "secret_source", "transport", "http_status", "content_type", "response_size", "json_decode", "schema_validation", "ledger_io", "seal_io", "archive_io", "unknown"]
+      "enum": [null, "preflight", "secret_source", "transport", "deadline", "http_status", "content_type", "response_size", "json_decode", "schema_validation", "ledger_io", "seal_io", "archive_io", "unknown"]
     },
     "sanitized_failure_class": {
-      "enum": [null, "preflight_failed", "secret_missing", "secret_malformed", "transport_failed", "http_failure", "unexpected_content_type", "response_too_large", "malformed_json", "schema_drift", "ledger_failed", "seal_failed", "archive_failed", "outcome_unknown"]
+      "enum": [null, "preflight_failed", "secret_missing", "secret_malformed", "transport_failed", "deadline_exceeded", "http_failure", "unexpected_content_type", "response_too_large", "malformed_json", "schema_drift", "ledger_failed", "seal_failed", "archive_failed", "outcome_unknown"]
     },
     "retry_count": {"const": 0},
     "pagination_request": {"const": false}
