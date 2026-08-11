@@ -1,6 +1,11 @@
 # T07 Gate L2.3 decision binding
 
-Status: **ready-for-manual-console-qualification-authorization; unauthorized**
+Status: **historical decision binding; V3 burned and superseded; unauthorized**
+
+Gate L2M.1 preserves this private decision binding but invalidates the manual
+execution path: run 0003 stopped before mutation and its firewall projection is not
+lossless restoration authority. This record cannot authorize or regenerate V3. A
+fresh one-GET baseline capture is required before any new manual-plan design.
 
 Date: 2026-08-11
 

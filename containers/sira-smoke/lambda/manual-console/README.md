@@ -1,17 +1,30 @@
 # T07 Gate L2M manual-console bundle
 
-This directory contains the exact, executable-but-unauthorized Gate L2M host
-qualification control plane. Nothing here authorizes a Lambda request, console
-mutation, instance, Jupyter session, image pull, container or paid compute.
+This directory preserves the blocked Gate L2M manual qualification control plane and
+contains one fresh executable-but-unauthorized read-only firewall-baseline capture
+plan. Nothing here authorizes a Lambda request, console mutation, instance, Jupyter
+session, image pull, container or paid compute.
 
-The V1 and V2 plans remain preserved as historical provenance. The active replacement is
-`gate-l2m-host-qualification-plan-v3.json`, plan
+V3/run 0003 stopped safely after six GETs and before mutation. Its retained firewall
+projection is not provably lossless, so V3 is burned and the user runbook is
+historical. No V4 manual plan exists. The sole active proposal is
+`gate-l2m-firewall-baseline-capture-plan-v1.json`, plan
+`PLAN-T07-GATE-L2M-FIREWALL-BASELINE-CAPTURE-V1`, run
+`RUN-T07-L2M-FIREWALL-BASELINE-CAPTURE-0001`, 6,311 bytes, SHA-256
+`bd61aed7ed1da74ad39ed24c56145d9e816e7ab9b2063f2c962e1cfb79d8a63b`.
+It permits one GET of the global firewall, no retry/pagination/redirect, complete
+private response retention, and exact evidence sealing under a future separate
+authorization.
+
+The V1 and V2 plans remain preserved as historical provenance. The former manual
+replacement is `gate-l2m-host-qualification-plan-v3.json`, plan
 `PLAN-T07-GATE-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-V3`, run
 `RUN-T07-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-0003`, 21,641 bytes, SHA-256
 `1931fcacda4194063c0116ff9630d82f3b8f4ec07ff9b0310342335db629f654`.
 It is bound to reviewed implementation commit
 `af54784f02e4675e25cd21925fd3c5d62cd0ed68`, has 23 ordered actor steps and 13
-single-use user checkpoint templates, and keeps all authority fields false. Its public
+single-use user checkpoint templates, and keeps all authority fields false. It is
+burned and cannot be authorized or replayed. Its public
 metadata permits a supervisor start no later than `2026-08-12T05:15:19.646016Z`;
 expiry requires a new immutable bundle, plan, review and authorization.
 

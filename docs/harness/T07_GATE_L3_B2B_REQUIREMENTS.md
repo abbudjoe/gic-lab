@@ -3,6 +3,12 @@
 Status: **requirements only; blocked until successful Gate L2; unauthorized and
 non-executable**
 
+Gate L2M.1 additionally blocks progression on a complete, sealed, description-aware
+global-firewall baseline. Historical V3/run 0003 stopped before mutation, is burned,
+and cannot supply restoration authority. A separately authorized one-GET baseline
+capture must succeed before a fresh manual plan can be designed; that read-only
+capture itself cannot satisfy Gate L2 or authorize any Gate L3 action.
+
 Gate L2.0 ended at `blocked-human-or-source-decision`; its proposed V1 plan/run
 identities were rejected and must not be reused. Gate L2.1's independent review then
 terminated the automated API-launch path at `manual-console-launch-required`; its

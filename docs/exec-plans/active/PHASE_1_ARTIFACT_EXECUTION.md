@@ -65,7 +65,7 @@ grant no mutation authority; one gate's authorization never carries into another
 
 | Task | Work package | Mapped phase DoD | Current permission |
 |---|---|---|---|
-| T07 | Execute one authorized contained SiRA smoke pair; capture regulation-decision evidence without interpretation. | P1-DOD-02, P1-DOD-11 through P1-DOD-13 | Gate L1/L1A complete/sealed; Gate L2M exact manual plan ready but unauthorized |
+| T07 | Execute one authorized contained SiRA smoke pair; capture regulation-decision evidence without interpretation. | P1-DOD-02, P1-DOD-11 through P1-DOD-13 | Gate L1/L1A complete/sealed; Gate L2M V3 burned; fresh one-GET firewall baseline capture required and unauthorized |
 | T08 | Analyze smoke infrastructure evidence and prepare an unauthorized pilot package. | P1-DOD-03, P1-DOD-11 through P1-DOD-13 | blocked until T07 succeeds |
 | T09 | Execute the freshly authorized exploratory SiRA pilot. | P1-DOD-04, P1-DOD-11 through P1-DOD-13 | blocked until T08 and authorization |
 | T10 | Analyze and publish the exploratory SiRA pilot. | P1-DOD-05, P1-DOD-11 through P1-DOD-13 | blocked until T09 succeeds |
@@ -80,8 +80,9 @@ and an analysis recommendation does not authorize the next execution.
 
 ## T07 assembly control
 
-Assembly status: **Gate L1/L1A complete and sealed; Gate L2.1 terminated automated
-launch; Gate L2.3 rendered an exact manual/Jupyter plan that remains unauthorized**
+Assembly status: **Gate L1/L1A complete and sealed; Gate L2M V3 stopped before
+mutation and is burned; one fresh read-only firewall-baseline GET is the sole
+unauthorized next proposal**
 
 Exact next profile: `PLAN-EXP0001-SMOKE`.
 
@@ -520,25 +521,29 @@ completed L2M authorization must be closed and reset rather than reused by L3 or
   manual-console transaction. Keep user console mutations separate from the GET-only
   observer, restrict incident termination to ruleset-bound private IDs, require exact
   restoration/sealing, and expire the plan rather than using stale public metadata.
+- 2026-08-11: Under D-030, preserve V3/run 0003 as a safe pre-mutation failure. Its
+  observation projected all current firewall fields but did not retain raw bytes or
+  unknown key structure, so it is not lossless restoration authority. Supersede the
+  V3 manual packet, require the fresh one-GET baseline-capture plan, and prohibit a
+  V4 manual plan until that response is completely retained, validated and sealed.
 
 ## Blockers and user actions
 
 T07 has no selected local runtime and no executable local B2a plan. Docker Desktop and
 Colima/Lima remain terminal rejected provenance. The Lambda inventory and L1A key
 evidence are complete, sealed, and nonreplayable. Gate L2.1 rejected automated API
-launch. Gate L2.3 resolved the later private decision and now has one exact
-manual/Jupyter plan, but it remains unauthorized. It must begin before
-`2026-08-12T05:15:19.646016Z`, pass fresh repository/secret/storage/account/
-offeredness preflight, remain within USD 2.00 and 3,600 provider seconds, and complete
-manual termination/firewall restoration plus verified evidence sealing. L3/L4 remain
+launch. Gate L2M V3/run 0003 then stopped safely after six GETs and before mutation.
+It is burned, its manual packet is superseded, and no manual qualification plan is
+active. Plan `PLAN-T07-GATE-L2M-FIREWALL-BASELINE-CAPTURE-V1` proposes exactly one
+read-only global-firewall GET under run
+`RUN-T07-L2M-FIREWALL-BASELINE-CAPTURE-0001`; it remains unauthorized. L3/L4 remain
 unauthorized.
 
 ## Next permitted work
 
-There is no further local B1.x, Gate L1, or automated Gate L2 design loop. The next
-permissible live input is a fresh exact user authorization of the final clean commit,
-the Gate L2M V1 plan/hash, sealed decision binding, GET-only observer, explicit manual
-console actions, cost/wall/evidence caps and cleanup contract. If the latest-safe start
-passes first, the next permitted work is instead a new bounded metadata/bundle/plan
-materialization and review with no mutation. Gate L3 B2b qualification, Gate L4, both
-SiRA conditions, and the smoke remain blocked.
+There is no further local B1.x or automated Gate L2 design loop. The next permissible
+live input is a fresh exact user authorization of the final clean commit and the
+one-GET firewall-baseline capture plan/hash, ledger, complete private retention and
+APFS archive contract. That read-only result may support later offline design; it
+cannot authorize a manual console action. Gate L2M qualification, Gate L3 B2b, Gate
+L4, both SiRA conditions, and the smoke remain blocked.

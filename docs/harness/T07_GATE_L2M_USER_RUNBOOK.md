@@ -1,8 +1,16 @@
 # T07 Gate L2M user runbook
 
-Status: **executable plan rendered; unauthorized; do not execute**
+Status: **historical V3 runbook; blocked and superseded; do not execute**
 
-This runbook describes the human side of active plan
+Gate L2M.1 burned V3/run 0003 after a safe pre-mutation stop. The retained global
+firewall projection cannot prove exact restoration because the provider response and
+unknown raw-key structure were not retained. Every manual step below is therefore
+historical only. The next possible action is a separately authorized one-GET baseline
+capture under
+`docs/harness/T07_GATE_L2M_FIREWALL_BASELINE_CAPTURE_AUTHORIZATION_PACKET.md`.
+There is no current manual-console qualification plan or authorization.
+
+This runbook preserves the human side of historical plan
 `PLAN-T07-GATE-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-V3`, run
 `RUN-T07-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-0003`. The plan is 21,641 bytes,
 SHA-256 `1931fcacda4194063c0116ff9630d82f3b8f4ec07ff9b0310342335db629f654`,

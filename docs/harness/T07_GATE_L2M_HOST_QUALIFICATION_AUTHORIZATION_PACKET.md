@@ -1,8 +1,22 @@
 # T07 Gate L2M host-qualification authorization packet
 
-Status: **ready-for-manual-console-qualification-authorization; unauthorized**
+Status: **blocked historical V3 packet; superseded; do not authorize**
 
 Date: 2026-08-11
+
+## L2M.1 supersession notice
+
+Run `RUN-T07-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-0003` used this packet and
+stopped after six read-only GETs, before any mutation. The retained global-firewall
+projection is not provably lossless restoration authority because the raw response
+and unknown raw-key structure were not retained. The plan and run are burned and
+nonreplayable. The description-aware observer implementation has also changed, so V3
+fails its immutable implementation binding before credential access.
+
+Do not use the historical authorization text below. No manual-console plan currently
+exists. The sole next proposal is the unauthorized one-GET capture packet at
+`docs/harness/T07_GATE_L2M_FIREWALL_BASELINE_CAPTURE_AUTHORIZATION_PACKET.md`, plan
+SHA-256 `bd61aed7ed1da74ad39ed24c56145d9e816e7ab9b2063f2c962e1cfb79d8a63b`.
 
 ## Exact immutable identities
 
@@ -239,11 +253,10 @@ observer-only durable receipts.
 5. Gate L3 and Gate L4 remain separately blocked and unauthorized even after a
    successful Gate L2M.
 
-## Ready-to-copy authorization block
+## Historical authorization text — revoked and non-executable
 
-The user may authorize one fresh run by binding the final clean commit and the
-authorization-text SHA-256. All other limits and stop rules are inherited directly
-from the immutable V2 plan above; no prose-only cap or authority expansion is valid.
+This text is retained only as blocked provenance. It must not be copied, renewed, or
+treated as authority. L2M.1 requires a separate read-only baseline capture first.
 
 ```text
 Continue T07 with Gate L2M manual-console host qualification only.

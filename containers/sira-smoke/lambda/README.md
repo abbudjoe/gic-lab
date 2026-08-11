@@ -2,6 +2,13 @@
 
 This directory contains the design-only Gate L0 source locks and unauthorized plans.
 
+Gate L2M V3/run 0003 is now blocked historical evidence: it stopped after six
+read-only GETs and before mutation, and its transformed global-firewall projection is
+not exact restoration authority. The active proposal is the unauthorized one-GET
+`manual-console/gate-l2m-firewall-baseline-capture-plan-v1.json`. It retains the raw
+response privately, uses the description-aware canonicalizer, and seals one-way to
+the approved archive. It authorizes no request or mutation by itself.
+
 - `gate-l1-readonly-inventory-plan.json` is the byte-preserved historical V1 GET-only
   contract. Both V1 authorizations are blocked evidence; run
   `RUN-T07-L1-LAMBDA-INVENTORY-0001` is permanently retired, and the public V1

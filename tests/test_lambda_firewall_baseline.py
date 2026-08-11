@@ -174,13 +174,13 @@ def test_materialized_capture_plan_is_exact_and_unauthorized() -> None:
     encoded = path.read_bytes()
     assert len(encoded) == 6_311
     assert hashlib.sha256(encoded).hexdigest() == (
-        "08b5284286a150e21906d8f306a4478060e76443c20cd2d6913579af6e9ab8ad"
+        "bd61aed7ed1da74ad39ed24c56145d9e816e7ab9b2063f2c962e1cfb79d8a63b"
     )
     plan = json.loads(encoded)
     baseline.validate_capture_plan(plan, repository_root=ROOT)
     assert plan == baseline.render_capture_plan(
         ROOT,
-        reviewed_implementation_commit="f023dede72bdaa10e0e7b6c928996d111f6bea89",
+        reviewed_implementation_commit="7e199dc634cee955b00fc587728a14c46cdf232a",
     )
     assert plan["authorization"]["authorized"] is False
 

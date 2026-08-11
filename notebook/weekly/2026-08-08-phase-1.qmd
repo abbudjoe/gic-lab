@@ -118,3 +118,11 @@ remains false. The plan expires before credential access if not started by its f
 metadata deadline. No account/model request, secret access, cloud mutation, paid
 compute, SSH, Jupyter, image pull, container, browser, SiRA condition, or scientific
 execution occurred. This remains infrastructure planning, not experimental evidence.
+
+The later Gate L2M attempt stopped safely after six read-only observations and before
+any mutation. Its global-firewall projection contained every currently expected rule
+field, but the raw provider response and unknown-key structure were not retained, so
+it cannot serve as exact restoration authority. The run is burned. A new unauthorized
+plan proposes only one read-only global-firewall capture with complete private
+retention and sealing; no manual qualification plan is currently active. This is
+infrastructure evidence only and does not change or execute EXP-0001.

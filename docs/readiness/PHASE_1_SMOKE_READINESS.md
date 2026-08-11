@@ -1,6 +1,6 @@
 # Phase 1 SiRA Smoke Readiness
 
-Status: **profile eligible; Gate L2M ready for exact authorization; not authorized**
+Status: **profile eligible; fresh read-only firewall baseline required; not authorized**
 
 Prepared: 2026-08-08
 
@@ -90,6 +90,16 @@ All plan authority fields and project execution permissions remain false. A fres
 current-turn authorization must bind the final clean commit and start the supervisor
 no later than `2026-08-12T05:15:19.646016Z`; expiry requires a new metadata record,
 bundle, plan and review.
+
+Gate L2M V3/run 0003 subsequently stopped safely after exactly six GETs and before
+any mutation. Its global-firewall projection contains all currently expected fields
+but not the raw provider response or unknown raw-key structure, so it cannot prove
+exact restoration. V3 is burned and superseded; no manual plan is active. The sole
+next proposal is unauthorized plan
+`PLAN-T07-GATE-L2M-FIREWALL-BASELINE-CAPTURE-V1`, run
+`RUN-T07-L2M-FIREWALL-BASELINE-CAPTURE-0001`, one GET of the global firewall with
+complete private retention and one-way evidence sealing. A successful capture would
+still require a new offline manual-plan review and a separate mutation authorization.
 
 ## Exact user decision fields
 
@@ -216,11 +226,11 @@ the EXP-0001 hypothesis or any RQ-H2K outcome.
 - T07 Lambda capacity and price were observed and the candidate, SSH key, firewall,
   private `/32`, and host-key method were validated and privately sealed. Gate L2's
   automated API-launch design ended at `manual-console-launch-required`; the offline
-  supervisor/watchdog primitives are not execution authority. Gate L2.3 has now
-  validated/sealed the complete replacement human decision and issued the fresh
-  unauthorized plan above. The remaining blockers are an exact current-turn Gate L2M
-  authorization, an unexpired start, fresh preflight/storage/secret checks, visible
-  launch-wizard offeredness, and successful user-operated cleanup/evidence sealing.
+  supervisor/watchdog primitives are not execution authority. Gate L2M V3/run 0003
+  is now preserved as a pre-mutation failure, and its lossy firewall baseline blocks
+  the manual transaction. The immediate blocker is a fresh authorization and
+  successful sealing of the exact one-GET baseline-capture plan. A new manual plan,
+  review, and mutation authorization would still be required afterward.
   SR²AM T11/T12 remain scientifically and operationally separate.
 - RQ-H2K external-versus-explicit-model comparison feasibility remains undetermined.
   Missing optional regulation fields do not invalidate EXP-0001 when its primary
