@@ -8,22 +8,22 @@ Status: **ready for a fresh user decision; unauthorized; do not execute from thi
 |---|---|
 | Branch | `phase-1/sira-smoke-bounded` |
 | Fork / frozen parent | `397a391b736528dd1049023d629100193e823c49` |
-| Reviewed implementation commit | `8ce3629e3ccf3a89ba836df7c9c887fbb06dbdbf` |
+| Reviewed implementation commit | `4c15b8aaf61a260dbdc0063538a2d8500ac95a45` |
 | Required execution commit | `<EXACT_FINAL_CLEAN_BOUNDED_SMOKE_PACKET_COMMIT>`; supplied by the final handoff |
 | Plan ID | `PLAN-T07-BOUNDED-SIRA-SMOKE-V1` |
 | Host run | `RUN-T07-BOUNDED-HOST-0001` |
 | Reactive / simulative runs | `RUN-T07-BOUNDED-SIRA-REACTIVE-0001` / `RUN-T07-BOUNDED-SIRA-SIMULATIVE-0001` |
 | Plan | `containers/sira-smoke/bounded/bounded-smoke-plan-v1.json` |
-| Plan bytes / SHA-256 | 48,108 / `3e087ce38c272f81e4f46567c77cfe61fa36198316900e5710e817b3e5e4b1a6` |
-| Plan schema bytes / SHA-256 | 11,332 / `a46a7fece8020a7beaa300ca5864c2055e7a5e4e83676c3ce6b0e1a0cb19d993` |
+| Plan bytes / SHA-256 | 48,677 / `f469d25e3527a5f0bc678a52d458ec29dcb3d27342f045ed54f1ff0c18e813d3` |
+| Plan schema bytes / SHA-256 | 11,572 / `be96e9e729f2930780d80c343eba68b70c23a9fb61ef0c0b6dc47c3e5903450e` |
 | Authorization schema bytes / SHA-256 | 3,194 / `4821844cf2e7ba540ce1b5fea97ca7d61f926b8a22b2d11260858b5741434879` |
 | Private-binding schema bytes / SHA-256 | 3,415 / `39e9f8ea7205e924fef25995b6c801196b35f85473e32ce58d18ed110a857b43` |
 | Observer-ledger schema bytes / SHA-256 | 3,312 / `2d9ad9e1e43d7a229ee2ebfb44af82b5f7e6234300bd9a14d1072e0a53c4ad61` |
 | Evidence schema bytes / SHA-256 | 1,423 / `3f1b710ca9256696a56936a8fcbb71f9eed7fc36392579ed50ca0767df30d22e` |
-| Contract module bytes / SHA-256 | 61,349 / `8fba11e27a017d25297acd2bab04da384d65c7fdfe4ad0d16f8f50f10ac2f210` |
-| Local supervisor bytes / SHA-256 | 79,642 / `8be7624c77ffdca2faf197ad124e57b70fefa46625230178e585ed1d77e037d0` |
+| Contract module bytes / SHA-256 | 62,161 / `bed93df0df4f9ece7a90ca713385bf6f2ea0e37b2fa618236bc563d612660d82` |
+| Local supervisor bytes / SHA-256 | 117,242 / `ab206d00bbd8e7ba8fe69e1c08de350184bab5c821ecaa526efeb2ba23e69951` |
 | Local hash-first bootstrap bytes / SHA-256 | 4,999 / `bab1a3f59dccc8becbe372d2a2c7d92643164cefc86ed6659d8dceba0ba82f6c` |
-| Remote bootstrap bytes / SHA-256 | 57,425 / `50b4dff93ffd0e08975031c84da865818422c7dff5b627dac736f2b3cd0add24` |
+| Remote bootstrap bytes / SHA-256 | 68,702 / `9a90c8285350f64e27b7652d3e45c0c04c6530210b26f67afc095f3145f81dc7` |
 
 The plan binds 34 implementation artifacts by exact byte size and SHA-256. A Git
 document cannot contain its own final commit SHA, so the copy-ready block contains one
@@ -54,8 +54,11 @@ ordered reactive/simulative pair. The local observer may issue only these 13 GET
 5. final security verification: `/api/v1/firewall-rulesets`,
    `/api/v1/firewall-rulesets/global`.
 
-Each intent/send/outcome is append-only and fsynced. An unknown post-send outcome
-stops and burns the run. Raw provider values remain in the private ignored run root.
+Each intent/send/outcome is append-only and fsynced. An unknown post-send outcome is
+never replayed and converts the run to cleanup-only; termination/restoration GETs may
+continue after expiry. Raw provider bodies are discarded after in-memory validation;
+only schema-declared, credential-filtered receipts remain in the private ignored run
+root.
 
 Only the user applies/restores the privately bound global rule, creates/deletes the
 owned regional ruleset, clicks launch once, opens Jupyter, uploads/downloads files,
@@ -116,7 +119,8 @@ configuration, logs, screenshots, ledgers, archives, Git, or notebook content.
 - Observer: 13 GETs; 1,048,576 response bytes each/13,631,488 aggregate;
   262,144-byte/96-event ledger; 4,096 bytes per event; 3,600 seconds total.
 - Evidence/storage: 268,435,456-byte remote evidence cap; 301,989,888-byte local and
-  external archive cap; 128 local archive files; 600 archive seconds; Mac
+  external archive cap; exactly 125 copied payload files plus three seal files; 600
+  archive seconds; Mac
   prewrite/retained floors 8,891,924,480/8,589,934,592 bytes; external
   prewrite/retained floors 200,350,182,605/200,048,192,717 bytes.
 
@@ -137,10 +141,10 @@ secret-channel, or storage drift requires a new reviewed packet.
 I authorize T07 bounded SiRA smoke V1 only on exact clean commit
 <EXACT_FINAL_CLEAN_BOUNDED_SMOKE_PACKET_COMMIT> of branch
 phase-1/sira-smoke-bounded, descended from reviewed implementation commit
-8ce3629e3ccf3a89ba836df7c9c887fbb06dbdbf with all 34 plan-bound artifact hashes
+4c15b8aaf61a260dbdc0063538a2d8500ac95a45 with all 34 plan-bound artifact hashes
 unchanged, using plan PLAN-T07-BOUNDED-SIRA-SMOKE-V1 at
-containers/sira-smoke/bounded/bounded-smoke-plan-v1.json, 48,108 bytes, SHA-256
-3e087ce38c272f81e4f46567c77cfe61fa36198316900e5710e817b3e5e4b1a6,
+containers/sira-smoke/bounded/bounded-smoke-plan-v1.json, 48,677 bytes, SHA-256
+f469d25e3527a5f0bc678a52d458ec29dcb3d27342f045ed54f1ff0c18e813d3,
 host run RUN-T07-BOUNDED-HOST-0001, reactive run
 RUN-T07-BOUNDED-SIRA-REACTIVE-0001, simulative run
 RUN-T07-BOUNDED-SIRA-SIMULATIVE-0001, and fresh authorization reference
@@ -176,7 +180,8 @@ forbidden.
 
 I authorize the exact success-or-failure evidence capture and one-way hash-verified
 archive copy to the approved APFS/UTDM root, with source retention, held no-follow
-identity checks, exact floors, and no internal fallback. On any stop condition, do not
+identity checks, decoded ZIP/member/manifest/pair verification, exact floors, and no
+internal fallback. On any stop condition, do not
 retry: preserve safe evidence, remove owned containers when possible, terminate the
 exact bound instance, verify terminal/nonbillable state, remove only the owned
 ruleset, and restore the exact firewall baseline. Stop after the pair or first terminal

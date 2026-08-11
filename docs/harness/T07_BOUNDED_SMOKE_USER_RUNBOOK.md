@@ -8,16 +8,16 @@ shell strings, improvise a retry, or substitute a resource.
 
 ## Bound identities
 
-- Plan: `PLAN-T07-BOUNDED-SIRA-SMOKE-V1`, 48,108 bytes, SHA-256
-  `3e087ce38c272f81e4f46567c77cfe61fa36198316900e5710e817b3e5e4b1a6`.
+- Plan: `PLAN-T07-BOUNDED-SIRA-SMOKE-V1`, 48,677 bytes, SHA-256
+  `f469d25e3527a5f0bc678a52d458ec29dcb3d27342f045ed54f1ff0c18e813d3`.
 - Contract: SHA-256
-  `8fba11e27a017d25297acd2bab04da384d65c7fdfe4ad0d16f8f50f10ac2f210`.
+  `bed93df0df4f9ece7a90ca713385bf6f2ea0e37b2fa618236bc563d612660d82`.
 - Local supervisor: SHA-256
-  `8be7624c77ffdca2faf197ad124e57b70fefa46625230178e585ed1d77e037d0`.
+  `ab206d00bbd8e7ba8fe69e1c08de350184bab5c821ecaa526efeb2ba23e69951`.
 - Local hash-first bootstrap: SHA-256
   `bab1a3f59dccc8becbe372d2a2c7d92643164cefc86ed6659d8dceba0ba82f6c`.
 - Reviewed implementation commit:
-  `8ce3629e3ccf3a89ba836df7c9c887fbb06dbdbf`.
+  `4c15b8aaf61a260dbdc0063538a2d8500ac95a45`.
 
 ## Ordered procedure
 
@@ -30,6 +30,8 @@ shell strings, improvise a retry, or substitute a resource.
    authorization, private binding, observer state, request ledger, and summary under
    `artifacts/t07/bounded/RUN-T07-BOUNDED-HOST-0001/`. Stop if that root already
    exists or any identity, hash, permission, storage, freshness, or floor check fails.
+   The exact local arrays require the repository's pinned `.venv/bin/python`; do not
+   substitute macOS `/usr/bin/python3`.
 3. Run `observe_prelaunch` once. Its seven GETs must prove the exact offered
    `gpu_1x_a10`, `us-east-1`, `img-0032`, `fractal-lambda-codex`, 129-cent/hour
    price, capacity, key fingerprint, sealed global baseline, zero nonterminal
@@ -64,10 +66,12 @@ shell strings, improvise a retry, or substitute a resource.
 15. On success, seal the complete evidence. On any post-root failure, seal the bounded
     secret-scanned partial evidence. In either case remove all four owned containers
     through immutable IDs and verify zero owned containers/networks/volumes.
-16. Download the produced success or failure archive, `ARCHIVE_IDENTITY.json`, and
-    `TERMINATE_REQUIRED.json` into the fresh local inbound root. Verify size, archive
-    hash, manifest, and every member hash before continuing. Do not edit or unpack
-    over an existing root.
+16. Download the produced success or failure archive, its exact identity JSON, and
+    `TERMINATE_REQUIRED.json` into the fresh local inbound root. The local verifier
+    must validate canonical stored ZIP paths, the complete member/manifest/hash set,
+    decoded secret absence, and—on success—the pair budget, command diff, normalized
+    events, regulation decisions, and compute closeout. Do not edit or unpack over an
+    existing root.
 17. Click **Terminate** for the exact bound instance regardless of workload outcome.
 18. Run `observe_termination` once. Its one GET must prove the bound instance terminal
     or absent before changing the security resources.
@@ -78,7 +82,8 @@ shell strings, improvise a retry, or substitute a resource.
 21. Run exactly one local archive array: `archive_complete` only for a validated pair,
     otherwise `archive_failed`. It must use held no-follow APFS/UTDM descriptors,
     reread every destination, verify every SHA-256, fsync, atomically finalize, retain
-    the local source, and use no internal fallback. Then stop; do not interpret.
+    the local source, and use no internal fallback. The 128-file maximum is exactly
+    125 copied payload files plus three seal files. Then stop; do not interpret.
 
 ## Immediate stop and incident rule
 

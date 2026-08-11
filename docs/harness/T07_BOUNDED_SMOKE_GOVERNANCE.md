@@ -68,8 +68,11 @@ the global baseline; then archive the local evidence.
 ## Retained controls
 
 - An executable local supervisor, not a prose-only observer declaration. It writes a
-  bounded append-only fsync ledger before each of 13 GET-only requests and retains
-  private raw responses under the ignored run root.
+  bounded append-only fsync ledger before each of 13 GET-only requests, validates raw
+  bodies in memory, and retains only schema-declared, credential-filtered receipts
+  under the ignored run root. A failed execution phase becomes a typed cleanup-only
+  capability: attempted ordinals cannot replay, while termination/restoration GETs
+  remain available after the execution window expires.
 - Seven prelaunch GETs; two security GETs after manual firewall/ruleset changes and
   before launch; one post-launch instance binding GET; one terminal-instance GET
   before ruleset deletion; and two final security GETs after restoration.
@@ -83,17 +86,23 @@ the global baseline; then archive the local evidence.
   root, restart `no`, finite CPU/memory/PID/shared-memory/log/wall/call limits.
 - Every container writes to a hard 67,108,864-byte `/giclab/attempt` tmpfs. Evidence is
   copied out through immutable container ID before removal; no writable host evidence
-  bind is used. Stop failure escalates to kill, followed by terminal inspection,
-  removal proof, and zero owned container/network/volume residue checks.
+  bind is used. A bounded opt-in entrypoint barrier lets the supervisor prove a live
+  running state and nonempty process snapshot before release. Stop failure escalates
+  to kill, followed by terminal inspection, removal proof, and zero owned
+  container/network/volume residue checks.
 - `SIRA_API_KEY` is a private mode-0600 file mounted read-only at
   `/run/secrets/sira_api_key`; only the in-container child receives the environment
   value. `LAMBDA_API_KEY` is used only by the local in-process observer.
   `OPENAI_API_KEY` is rejected. No value belongs in Git, argv, labels, image,
   container configuration, path, log, screenshot, ledger, or archive.
 - Success and post-root failure paths both produce bounded, secret-scanned evidence
-  archives. The local archive driver permits only the fixed run-root surface, reads
-  every destination back, verifies source/destination SHA-256, fsyncs, atomically
-  finalizes, retains the source, and has no internal-disk fallback.
+  archives. Success includes the exact condition-command diff, normalized lifecycle
+  events, per-condition regulation decisions, pair budgets, and runtime compute-use
+  closeout. Before local sealing, the verifier checks decoded ZIP members, canonical
+  paths, manifest membership and hashes, pair linkages, credential shapes, and the
+  exact supplied secret value. The archive driver permits only the fixed run-root
+  surface, reads every destination back, verifies source/destination SHA-256, fsyncs,
+  atomically finalizes, retains the source, and has no internal-disk fallback.
 
 ## Deferred limitations
 

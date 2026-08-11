@@ -109,7 +109,7 @@ with one manually supervised Lambda/Jupyter session under the Occam admission ru
 The unauthorized execution plan is `PLAN-T07-BOUNDED-SIRA-SMOKE-V1`, host run
 `RUN-T07-BOUNDED-HOST-0001`, at
 `containers/sira-smoke/bounded/bounded-smoke-plan-v1.json`, SHA-256
-`3e087ce38c272f81e4f46567c77cfe61fa36198316900e5710e817b3e5e4b1a6`.
+`f469d25e3527a5f0bc678a52d458ec29dcb3d27342f045ed54f1ff0c18e813d3`.
 
 The design binds one exact host, one launch click, zero persistent filesystem, an
 immutable amd64 source/image/model path, an external single-run authorization overlay,

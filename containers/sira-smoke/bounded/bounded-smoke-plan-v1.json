@@ -96,6 +96,7 @@
         "/usr/bin/python3",
         "${IMAGE_ID}",
         "/opt/giclab/container_entrypoint.py",
+        "--supervised-release",
         "--",
         "/opt/sira/.venv/bin/python",
         "/opt/giclab-src/giclab/harness/sira_gate_a_runtime.py",
@@ -128,7 +129,7 @@
         "--seed",
         "42"
       ],
-      "container_create_template_sha256": "db2203fefd2680255d2706ac4de9aa76b327521d22fc2cb5f7a0a1e008421f4e",
+      "container_create_template_sha256": "ab30886c8c4c60ae80163495fd07f93e952f21be3dc385553de298c569815582",
       "inner_argv_template": [
         "/opt/sira/.venv/bin/python",
         "/opt/giclab-src/giclab/harness/sira_gate_a_runtime.py",
@@ -242,6 +243,7 @@
         "/usr/bin/python3",
         "${IMAGE_ID}",
         "/opt/giclab/container_entrypoint.py",
+        "--supervised-release",
         "--",
         "/opt/sira/.venv/bin/python",
         "/opt/giclab-src/giclab/harness/sira_gate_a_runtime.py",
@@ -274,7 +276,7 @@
         "--seed",
         "42"
       ],
-      "container_create_template_sha256": "ab4dced212698c014b26ed58ae729acfb3690e3b785f28510f3d7c2f3dc18b67",
+      "container_create_template_sha256": "180ec0f4e81882553690fab85d6689dc8f7cca24fdc4c6b6d8fc88ac41626c1b",
       "inner_argv_template": [
         "/opt/sira/.venv/bin/python",
         "/opt/giclab-src/giclab/harness/sira_gate_a_runtime.py",
@@ -343,6 +345,11 @@
       "kill",
       "${CONTAINER_ID}"
     ],
+    "logs": [
+      "/usr/bin/docker",
+      "logs",
+      "${CONTAINER_ID}"
+    ],
     "network_residue": [
       "/usr/bin/docker",
       "network",
@@ -359,6 +366,13 @@
       "/usr/bin/test",
       "-f",
       "${READINESS_PATH}"
+    ],
+    "release": [
+      "/usr/bin/docker",
+      "exec",
+      "${CONTAINER_ID}",
+      "/usr/bin/touch",
+      "/giclab/attempt/.giclab-release"
     ],
     "remove": [
       "/usr/bin/docker",
@@ -399,6 +413,11 @@
       "label=org.giclab.t07.run-id=${RUN_ID}",
       "--format",
       "{{.Name}}"
+    ],
+    "wait": [
+      "/usr/bin/docker",
+      "wait",
+      "${CONTAINER_ID}"
     ]
   },
   "deferred_limitations": [
@@ -460,9 +479,9 @@
         "sha256": "b545b449475d31188cac65eb33832e7d737b769cc7dada8ae074bb6432961c33"
       },
       {
-        "bytes": 57425,
+        "bytes": 68702,
         "path": "containers/sira-smoke/bounded/bootstrap.py",
-        "sha256": "50b4dff93ffd0e08975031c84da865818422c7dff5b627dac736f2b3cd0add24"
+        "sha256": "9a90c8285350f64e27b7652d3e45c0c04c6530210b26f67afc095f3145f81dc7"
       },
       {
         "bytes": 3093,
@@ -485,9 +504,9 @@
         "sha256": "69658bc62aca322eaa129e02fd2db595e351d7ea95a2aa5c7d3a763dcabbb82b"
       },
       {
-        "bytes": 2163,
+        "bytes": 3200,
         "path": "containers/sira-smoke/container_entrypoint.py",
-        "sha256": "cf1de16ee629186e9848a3116e7fdcaab06679202e634dffb153c06dd6e5b840"
+        "sha256": "780925b1c11ddc76dfdb4c741a33fb07796b16c3121e1ef1d3b9bc2895f7f176"
       },
       {
         "bytes": 237,
@@ -535,9 +554,9 @@
         "sha256": "4d7e2a25f4313fc754db0fa17aeda51cc5cd75a5653adaf13b01ce87a71cb8ed"
       },
       {
-        "bytes": 2718,
+        "bytes": 3449,
         "path": "docs/COMPUTE_POLICY.md",
-        "sha256": "f7b02b5e1490dfd63ae75000a797f8d7a4f351787988d308026adcde81a7c310"
+        "sha256": "0dd7dde65e85981a14460e2744102a0baeeac50aabbef638994062d9287f2d4a"
       },
       {
         "bytes": 1082,
@@ -570,9 +589,9 @@
         "sha256": "2d9ad9e1e43d7a229ee2ebfb44af82b5f7e6234300bd9a14d1072e0a53c4ad61"
       },
       {
-        "bytes": 11332,
+        "bytes": 11572,
         "path": "schemas/t07-bounded-smoke-plan.schema.json",
-        "sha256": "a46a7fece8020a7beaa300ca5864c2055e7a5e4e83676c3ce6b0e1a0cb19d993"
+        "sha256": "be96e9e729f2930780d80c343eba68b70c23a9fb61ef0c0b6dc47c3e5903450e"
       },
       {
         "bytes": 3415,
@@ -605,14 +624,14 @@
         "sha256": "0c8b111a657288278b519351d1a0973641c6897245bccc61228d90ddb5294c11"
       },
       {
-        "bytes": 61349,
+        "bytes": 62161,
         "path": "src/giclab/harness/t07_bounded_smoke.py",
-        "sha256": "8fba11e27a017d25297acd2bab04da384d65c7fdfe4ad0d16f8f50f10ac2f210"
+        "sha256": "bed93df0df4f9ece7a90ca713385bf6f2ea0e37b2fa618236bc563d612660d82"
       },
       {
-        "bytes": 79642,
+        "bytes": 117242,
         "path": "src/giclab/harness/t07_bounded_supervisor.py",
-        "sha256": "8be7624c77ffdca2faf197ad124e57b70fefa46625230178e585ed1d77e037d0"
+        "sha256": "ab206d00bbd8e7ba8fe69e1c08de350184bab5c821ecaa526efeb2ba23e69951"
       },
       {
         "bytes": 4099,
@@ -620,7 +639,7 @@
         "sha256": "b71b8c979529e8530e9157069b3e765f649ee0349d8c6233d4244b98e3f658ad"
       }
     ],
-    "reviewed_commit": "8ce3629e3ccf3a89ba836df7c9c887fbb06dbdbf"
+    "reviewed_commit": "4c15b8aaf61a260dbdc0063538a2d8500ac95a45"
   },
   "lambda": {
     "api_base_url": "https://cloud.lambda.ai",
@@ -859,11 +878,12 @@
         "/usr/bin/python3",
         "${IMAGE_ID}",
         "/opt/giclab/container_entrypoint.py",
+        "--supervised-release",
         "--",
         "/usr/bin/python3",
         "/opt/giclab/model_preflight.py"
       ],
-      "container_create_template_sha256": "43b68a7c8e373d7d4d32818ac050209f6913336d77f1806ac9e914f89d10a775",
+      "container_create_template_sha256": "eb5a7c049fe1472e42c9ffd7804d3267b1ad635658a9e5cbf38d375af7e548ca",
       "metadata_gets": 1,
       "method": "GET",
       "model_calls": 0,
@@ -884,7 +904,7 @@
   "provider_observer": {
     "argv_templates": {
       "archive_complete": [
-        "/usr/bin/python3",
+        "${REPOSITORY_ROOT}/.venv/bin/python",
         "-I",
         "${REPOSITORY_ROOT}/containers/sira-smoke/bounded/local_supervisor_bootstrap.py",
         "--repository-root",
@@ -916,7 +936,7 @@
         "complete"
       ],
       "archive_failed": [
-        "/usr/bin/python3",
+        "${REPOSITORY_ROOT}/.venv/bin/python",
         "-I",
         "${REPOSITORY_ROOT}/containers/sira-smoke/bounded/local_supervisor_bootstrap.py",
         "--repository-root",
@@ -948,7 +968,7 @@
         "failed"
       ],
       "materialize": [
-        "/usr/bin/python3",
+        "${REPOSITORY_ROOT}/.venv/bin/python",
         "-I",
         "${REPOSITORY_ROOT}/containers/sira-smoke/bounded/local_supervisor_bootstrap.py",
         "--repository-root",
@@ -980,7 +1000,7 @@
         "50ca7febe9f160ada862371376485ea2ece11b373d25179ccd578d9c7acd42b8"
       ],
       "observe_post_launch": [
-        "/usr/bin/python3",
+        "${REPOSITORY_ROOT}/.venv/bin/python",
         "-I",
         "${REPOSITORY_ROOT}/containers/sira-smoke/bounded/local_supervisor_bootstrap.py",
         "--repository-root",
@@ -1012,7 +1032,7 @@
         "post_launch"
       ],
       "observe_prelaunch": [
-        "/usr/bin/python3",
+        "${REPOSITORY_ROOT}/.venv/bin/python",
         "-I",
         "${REPOSITORY_ROOT}/containers/sira-smoke/bounded/local_supervisor_bootstrap.py",
         "--repository-root",
@@ -1044,7 +1064,7 @@
         "prelaunch"
       ],
       "observe_security": [
-        "/usr/bin/python3",
+        "${REPOSITORY_ROOT}/.venv/bin/python",
         "-I",
         "${REPOSITORY_ROOT}/containers/sira-smoke/bounded/local_supervisor_bootstrap.py",
         "--repository-root",
@@ -1076,7 +1096,7 @@
         "security"
       ],
       "observe_terminal": [
-        "/usr/bin/python3",
+        "${REPOSITORY_ROOT}/.venv/bin/python",
         "-I",
         "${REPOSITORY_ROOT}/containers/sira-smoke/bounded/local_supervisor_bootstrap.py",
         "--repository-root",
@@ -1108,7 +1128,7 @@
         "terminal"
       ],
       "observe_termination": [
-        "/usr/bin/python3",
+        "${REPOSITORY_ROOT}/.venv/bin/python",
         "-I",
         "${REPOSITORY_ROOT}/containers/sira-smoke/bounded/local_supervisor_bootstrap.py",
         "--repository-root",

@@ -9,14 +9,14 @@ Status: **executable design; unauthorized; no external execution performed**
 | Parent/fork commit | `397a391b736528dd1049023d629100193e823c49` |
 | Frozen milestone | annotated tag `t07-high-assurance-infrastructure-v1` |
 | Branch | `phase-1/sira-smoke-bounded` |
-| Reviewed implementation commit | `8ce3629e3ccf3a89ba836df7c9c887fbb06dbdbf` |
+| Reviewed implementation commit | `4c15b8aaf61a260dbdc0063538a2d8500ac95a45` |
 | Plan ID | `PLAN-T07-BOUNDED-SIRA-SMOKE-V1` |
 | Host run | `RUN-T07-BOUNDED-HOST-0001` |
 | Reactive run | `RUN-T07-BOUNDED-SIRA-REACTIVE-0001` |
 | Simulative run | `RUN-T07-BOUNDED-SIRA-SIMULATIVE-0001` |
 | Plan path | `containers/sira-smoke/bounded/bounded-smoke-plan-v1.json` |
-| Plan bytes / SHA-256 | 48,108 / `3e087ce38c272f81e4f46567c77cfe61fa36198316900e5710e817b3e5e4b1a6` |
-| Plan schema SHA-256 | `a46a7fece8020a7beaa300ca5864c2055e7a5e4e83676c3ce6b0e1a0cb19d993` |
+| Plan bytes / SHA-256 | 48,677 / `f469d25e3527a5f0bc678a52d458ec29dcb3d27342f045ed54f1ff0c18e813d3` |
+| Plan schema SHA-256 | `be96e9e729f2930780d80c343eba68b70c23a9fb61ef0c0b6dc47c3e5903450e` |
 | Authorization schema SHA-256 | `4821844cf2e7ba540ce1b5fea97ca7d61f926b8a22b2d11260858b5741434879` |
 | Private-binding schema SHA-256 | `39e9f8ea7205e924fef25995b6c801196b35f85473e32ce58d18ed110a857b43` |
 | Observer-ledger schema SHA-256 | `2d9ad9e1e43d7a229ee2ebfb44af82b5f7e6234300bd9a14d1072e0a53c4ad61` |
@@ -65,9 +65,11 @@ redirect, pagination request, or retry. It uses exactly 13 GETs in this order:
    `/api/v1/firewall-rulesets/global`.
 
 Every request has a durable intent and send-started ledger event. A response or closed
-failure event is fsynced before advancing. An uncertain post-send outcome burns the
-run and is never replayed. Raw provider responses remain private under the ignored run
-root; public records contain only safe aliases, counts, and hashes.
+failure event is fsynced before advancing. An uncertain post-send outcome is never
+replayed and converts the run to cleanup-only. Cleanup GETs may continue after expiry;
+execution GETs cannot. Raw bodies are validated in memory and discarded. Retained
+receipts contain only schema-declared fields after credential-key filtering; public
+records contain only safe aliases, counts, and hashes.
 
 Only the user may apply the private global rule, create the owned regional ruleset,
 click launch once, open Jupyter, upload/download files, terminate the exact bound
@@ -122,7 +124,7 @@ site-dependent HTTPS egress. There is no image push.
 | Retained condition output | 209,715,200 B | 104,857,600 B |
 | In-container attempt tmpfs | 134,217,728 B | 67,108,864 B |
 | Remote evidence bundle | 268,435,456 B | 4,096 files maximum |
-| Local/external sealed run archive | 301,989,888 B | 128 files; 600 s |
+| Local/external sealed run archive | 301,989,888 B | 125 payload + 3 seal files; 600 s |
 | Observer responses | 13,631,488 B | 1,048,576 B per GET |
 | Observer ledger | 262,144 B / 96 events | 4,096 B per event |
 | Provider wall/cost | 3,600 s / USD 2.00 | termination click by 3,300 s; projected USD 1.29 |
@@ -145,16 +147,16 @@ tmpfs and immutable-ID copy-out before removal.
 The plan contains shell-free local materialize/observe/archive arrays and the one
 remote bootstrap array. Their governing module hashes are:
 
-- contract: `8fba11e27a017d25297acd2bab04da384d65c7fdfe4ad0d16f8f50f10ac2f210`;
-- local supervisor: `8be7624c77ffdca2faf197ad124e57b70fefa46625230178e585ed1d77e037d0`;
+- contract: `bed93df0df4f9ece7a90ca713385bf6f2ea0e37b2fa618236bc563d612660d82`;
+- local supervisor: `ab206d00bbd8e7ba8fe69e1c08de350184bab5c821ecaa526efeb2ba23e69951`;
 - local hash-first bootstrap: `bab1a3f59dccc8becbe372d2a2c7d92643164cefc86ed6659d8dceba0ba82f6c`;
-- remote bootstrap: `50b4dff93ffd0e08975031c84da865818422c7dff5b627dac736f2b3cd0add24`.
+- remote bootstrap: `9a90c8285350f64e27b7652d3e45c0c04c6530210b26f67afc095f3145f81dc7`.
 
 Container-create template hashes are browser
 `af86b7d3b9407f7e5f04c253d49fe7a94f5af77543b17c159a3482becb067b88`,
-model `43b68a7c8e373d7d4d32818ac050209f6913336d77f1806ac9e914f89d10a775`,
-reactive `db2203fefd2680255d2706ac4de9aa76b327521d22fc2cb5f7a0a1e008421f4e`,
-and simulative `ab4dced212698c014b26ed58ae729acfb3690e3b785f28510f3d7c2f3dc18b67`.
+model `eb5a7c049fe1472e42c9ffd7804d3267b1ad635658a9e5cbf38d375af7e548ca`,
+reactive `ab30886c8c4c60ae80163495fd07f93e952f21be3dc385553de298c569815582`,
+and simulative `180ec0f4e81882553690fab85d6689dc8f7cca24fdc4c6b6d8fc88ac41626c1b`.
 
 Reactive and simulative arrays differ only in container name, condition/run labels,
 gate mode, source job name, and upstream mode. Task, model, seed, max step, timeout,
@@ -165,13 +167,15 @@ and `f6edc9b65add534cda1556f7095a1befe484846ceb14ce618c8f16a3e33daa39`.
 
 ## Evidence, cleanup, and storage
 
-Before removal, each container is inspected, its process tree is captured, and its
-tmpfs payload is copied to the fresh remote evidence root. Stop always has kill
+Before release, each bounded workload container must be live and expose a nonempty
+process snapshot through its immutable ID. Before removal, the container is inspected
+and its tmpfs payload is copied to the fresh remote evidence root. Stop always has kill
 escalation, terminal inspection, forced removal, removal proof, and zero labeled
 container/network/volume residue. Success seals session JSON, source logs,
 screenshots, stdout/stderr, accounting, exact commands, runtime/image/package/browser
-identities, and cleanup. Failure seals every safe partial file plus a manifest and
-records excluded credential-shaped/cap-exceeding counts without retaining values.
+identities, exact condition diff, normalized events, regulation decisions, compute-use
+closeout, and cleanup. Failure seals every safe partial file plus a manifest and
+records excluded secret/cap-exceeding counts without retaining values.
 
 After manual download and local hash verification, the user terminates the bound
 instance. The termination observer must prove it terminal or absent before the user
@@ -179,7 +183,8 @@ deletes the owned ruleset/restores the firewall. Final GETs prove ruleset absenc
 baseline semantic hash
 `b0ef711158113cdbdbb1707cb43f21a635271bb2e93bfc0e898ce7118589f764`.
 
-The final local archive is copied to
+The downloaded ZIP is structurally and cryptographically checked before the final
+local archive is copied to
 `/Volumes/Macintosh HD - Data/GIC-Lab/t07/sealed-artifacts/RUN-T07-BOUNDED-HOST-0001`
 through held no-follow descriptors. It requires APFS UUID
 `8478609D-FA37-4ED5-875D-47AE912B9151`, physical-store UUID
@@ -187,6 +192,10 @@ through held no-follow descriptors. It requires APFS UUID
 Mac prewrite/retained floors 8,891,924,480/8,589,934,592 bytes, and external
 prewrite/retained floors 200,350,182,605/200,048,192,717 bytes. Every destination is
 read back and compared before atomic finalization; the source remains local.
+
+After a run, `compute-use.json` preserves runtime wall/accelerator time, list-price
+upper bound, observed API cost, and a null actual invoice. A separate repository
+closeout must reconcile `CMP-0001` before interpretation or successor execution.
 
 No repository code/configuration change is currently required before a live request.
 Fresh user authorization and every dynamic identity, price, resource, secret,
