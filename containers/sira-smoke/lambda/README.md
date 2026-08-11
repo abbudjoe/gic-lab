@@ -89,3 +89,29 @@ The terminal disposition is recorded in
 plan hash or authorization block and permits no current action. A future Gate L2, if
 requested, must use a newly reviewed human-operated console topology and fresh
 identities.
+
+Gate L2.2 has now evaluated that topology offline. `manual-console/` contains the
+sanitized image decision, current first-party source/OCI observations, deliberately
+invalid private-decision template, deterministic Jupyter upload bundle, and no plan.
+The existing `img-0111` GPU Base decision lacks a documented JupyterLab guarantee;
+`img-0032` / Lambda Stack 22.04 / `22.4.5-2141` is recommended but unselected.
+Accordingly the current state is `blocked-human-image-selection`. The observer module
+is inert on import and exposes only an explicitly constructed, in-process GET
+transport plus a status/content/pagination-checking checkpoint engine; it has no
+mutation, shell HTTP, SSH, Jupyter, or browser boundary. Request authority and
+terminal-ledger capacity are reserved before send; preflight requires five exact
+ordered observations; post-send failures burn the run; evidence capabilities are
+engine scoped; and sealed output is copied through held local/UTDM descriptors after
+source-hash verification. Raw provider bytes are hashed and schema-validated only in
+memory; durable private observations are exact allowlisted projections that exclude
+Jupyter credentials/URLs and unknown additive scalar fields. The aggregate is 44
+read-only GETs, with ten list-only observations each for instance binding and terminal
+verification. The bundle also reserves ten calls and 1 MiB of its fixed
+Docker-output budget for emergency cleanup. An outcome-unknown create occurs early
+enough that unused aggregate headroom additionally covers five identity polls, one
+recovered-ID inspect, kill/remove, three stable-absence polls, and final residue proof
+without weakening the 32-call aggregate. Its manifest now binds the exact public
+BusyBox observation; the driver validates that record and a maximum 86,400-second age
+before any Docker call, while separately recording that it makes no live metadata
+request. An expired record requires a newly hashed and reviewed bundle. The bundle has
+not been uploaded or run.

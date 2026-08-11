@@ -1,0 +1,203 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gic-lab.invalid/schemas/t07-lambda-l2m-observer-journal.schema.json",
+  "$comment": "Public-safe observer journal event; private IDs, IPs, URLs, headers, credentials, and response values are forbidden by omission.",
+  "title": "T07 Gate L2M observer journal event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "authorization_reference",
+    "authorization_sha256",
+    "human_decision_sha256",
+    "event_sequence",
+    "event_type",
+    "monotonic_timestamp_ns",
+    "transport_entry_monotonic_ns",
+    "wall_timestamp_utc",
+    "operation",
+    "observer_phase",
+    "request_ordinal",
+    "method",
+    "host",
+    "path_template",
+    "transport_kind",
+    "bytes_received",
+    "elapsed_ms",
+    "content_type",
+    "sanitized_outcome",
+    "response_sha256",
+    "request_binding_sha256",
+    "checkpoint_type",
+    "checkpoint_sha256",
+    "verification_kind",
+    "evidence_sha256",
+    "source_request_ordinal",
+    "semantic_outcome",
+    "semantic_count",
+    "retry_count",
+    "pagination_request"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1.0"},
+    "run_id": {"type": "string", "pattern": "^RUN-T07-L2M-[A-Z0-9._-]{3,64}$"},
+    "authorization_reference": {"type": "string", "pattern": "^AUTH-T07-L2M-[A-Z0-9._-]{3,96}$"},
+    "authorization_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "human_decision_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "event_sequence": {"type": "integer", "minimum": 1, "maximum": 512},
+    "event_type": {
+      "enum": [
+        "preflight_started",
+        "preflight_passed",
+        "launch_window_armed",
+        "observation_intent_committed",
+        "observation_send_started",
+        "observation_completed",
+        "observation_failed",
+        "checkpoint_intent_committed",
+        "checkpoint_validated",
+        "checkpoint_verification_failed",
+        "evidence_validation_intent_committed",
+        "evidence_validated",
+        "evidence_validation_failed",
+        "evidence_sealed",
+        "archive_completed",
+        "manual_incident",
+        "run_stopped"
+      ]
+    },
+    "monotonic_timestamp_ns": {"type": "integer", "minimum": 0},
+    "transport_entry_monotonic_ns": {"type": ["integer", "null"], "minimum": 0},
+    "wall_timestamp_utc": {"type": "string", "format": "date-time", "pattern": "Z$"},
+    "operation": {
+      "enum": [
+        "none",
+        "list_instance_types",
+        "list_images",
+        "list_instances",
+        "get_instance",
+        "list_rulesets",
+        "get_ruleset",
+        "get_global_firewall",
+        "local_checkpoint",
+        "local_evidence"
+      ]
+    },
+    "observer_phase": {
+      "enum": [
+        "none",
+        "preflight",
+        "global_restricted_verify",
+        "ruleset_bind",
+        "instance_bind",
+        "cloud_ide_checkpoint",
+        "qualification_local",
+        "termination_verify",
+        "ruleset_absence",
+        "global_restore",
+        "incident"
+      ]
+    },
+    "request_ordinal": {"type": "integer", "minimum": 0, "maximum": 44},
+    "method": {"enum": ["none", "GET"]},
+    "host": {"enum": ["none", "cloud.lambda.ai"]},
+    "path_template": {
+      "enum": [
+        "none",
+        "/api/v1/instance-types",
+        "/api/v1/images",
+        "/api/v1/instances",
+        "/api/v1/instances/{private_instance_id}",
+        "/api/v1/firewall-rulesets",
+        "/api/v1/firewall-rulesets/{private_ruleset_id}",
+        "/api/v1/firewall-rulesets/global"
+      ]
+    },
+    "transport_kind": {"enum": ["none", "in-process-https"]},
+    "bytes_received": {"type": "integer", "minimum": 0, "maximum": 1048576},
+    "elapsed_ms": {"type": "integer", "minimum": 0, "maximum": 6300000},
+    "http_status": {"type": ["integer", "null"], "minimum": 100, "maximum": 599},
+    "content_type": {"enum": ["none", "application/json", "unexpected"]},
+    "sanitized_outcome": {
+      "enum": [
+        "not_applicable",
+        "passed",
+        "http_failure",
+        "schema_failure",
+        "pagination_stop",
+        "timeout",
+        "outcome_unknown",
+        "provider_outage",
+        "privacy_failure",
+        "resource_identity_ambiguous",
+        "cleanup_required",
+        "cleanup_complete_evidence_incomplete",
+        "qualification_failed_cleanup_complete",
+        "manual_stop"
+      ]
+    },
+    "response_sha256": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"},
+    "request_binding_sha256": {
+      "type": ["string", "null"],
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "checkpoint_type": {
+      "enum": [
+        "none",
+        "global_firewall_restricted",
+        "regional_ruleset_created",
+        "launch_clicked_once",
+        "instance_bound",
+        "cloud_ide_opened",
+        "qualification_command_started",
+        "qualification_command_completed",
+        "qualification_bundle_downloaded",
+        "termination_confirmed_by_user",
+        "instance_terminal_verified",
+        "regional_ruleset_deleted",
+        "global_firewall_restored"
+      ]
+    },
+    "checkpoint_sha256": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"},
+    "verification_kind": {
+      "enum": [
+        "none",
+        "global_firewall_exact",
+        "ruleset_exact",
+        "launch_click_attested",
+        "instance_exact",
+        "cloud_ide_attested",
+        "qualification_started_attested",
+        "qualification_completed_attested",
+        "archive_exact",
+        "termination_attested",
+        "instance_terminal",
+        "ruleset_absent",
+        "global_firewall_restored_exact"
+      ]
+    },
+    "evidence_sha256": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"},
+    "source_request_ordinal": {"type": "integer", "minimum": 0, "maximum": 44},
+    "semantic_outcome": {
+      "enum": [
+        "none",
+        "schema_valid",
+        "global_firewall_exact",
+        "ruleset_exact",
+        "launch_configuration_user_attested",
+        "instance_provider_fields_exact_image_user_attested",
+        "user_attested",
+        "qualification_exact",
+        "qualification_failure",
+        "instance_terminal_or_absent",
+        "ruleset_absent",
+        "global_firewall_restored_exact",
+        "verification_failed"
+      ]
+    },
+    "semantic_count": {"type": ["integer", "null"], "minimum": 0},
+    "retry_count": {"const": 0},
+    "pagination_request": {"const": false}
+  }
+}

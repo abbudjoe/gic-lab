@@ -1,0 +1,48 @@
+{
+  "schema_version": "0.1.0",
+  "bundle_id": "BUNDLE-T07-L2M-JUPYTER-HOST-QUALIFICATION-V1",
+  "python_contract": "3.10",
+  "busybox_reference": "busybox@sha256:7a3ebe5bfd1a4a19797d20b0c0bb39d44393e9a03fd852c0865b0f540d868df0",
+  "network_contract": "one-future-authorized-pinned-busybox-pull-only",
+  "files": [
+    {
+      "path": "adversarial-containment.sh",
+      "bytes": 1273,
+      "sha256": "67c80f74069c4260a5131fa6311d7394e645fe14fdd078de59583447a25b6355"
+    },
+    {
+      "path": "docker_inspector.py",
+      "bytes": 23123,
+      "sha256": "6995c486a4945159a33d2aac5837569ab66dc459033b185eb57968f6fc5ae230"
+    },
+    {
+      "path": "evidence_packager.py",
+      "bytes": 14825,
+      "sha256": "7db3a4cfd6ba5e8b20fc95ad2f2301555a23b394b75044ef8ac592215b08b28a"
+    },
+    {
+      "path": "host_facts.py",
+      "bytes": 6277,
+      "sha256": "a0010817187a419fc0f1497861b4920724a1b43d0edf613f082eb68eb6042cc1"
+    },
+    {
+      "path": "public-source-observations-l2-2.json",
+      "bytes": 6815,
+      "sha256": "56a1ba759d4fc5ac6eba2ee85c5bff2a08d0d71f538793f3de5732bb80d0b1a5"
+    },
+    {
+      "path": "qualification_driver.py",
+      "bytes": 62821,
+      "sha256": "ab9a3f8981d2e60ea5b57bb7cf63512f64cdb89f26d8183788aedc2dbe4b5050"
+    }
+  ],
+  "prohibitions": {
+    "ssh": true,
+    "apt_or_dependency_install": true,
+    "runtime_update_or_reconfiguration": true,
+    "browser": true,
+    "model_or_provider_model_api": true,
+    "sira": true,
+    "scientific_execution": true
+  }
+}

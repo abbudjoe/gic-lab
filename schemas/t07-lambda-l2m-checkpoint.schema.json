@@ -1,0 +1,289 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://gic-lab.invalid/schemas/t07-lambda-l2m-checkpoint.schema.json",
+    "$comment": "Private single-use user checkpoint. Raw resource bindings must remain outside Git and public output.",
+    "title": "T07 Gate L2M private checkpoint",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+        "schema_version",
+        "checkpoint_id",
+        "checkpoint_type",
+        "checkpoint_nonce",
+        "run_id",
+        "decision_alias",
+        "marker_alias",
+        "observed_at_utc",
+        "actor",
+        "action_confirmed",
+        "details"
+    ],
+    "properties": {
+        "schema_version": {"const": "0.1.0"},
+        "checkpoint_id": {"type": "string", "pattern": "^CHECKPOINT-T07-L2M-[A-Z0-9_-]{3,64}$"},
+        "checkpoint_type": {
+            "enum": [
+                "global_firewall_restricted",
+                "regional_ruleset_created",
+                "launch_clicked_once",
+                "instance_bound",
+                "cloud_ide_opened",
+                "qualification_command_started",
+                "qualification_command_completed",
+                "qualification_bundle_downloaded",
+                "termination_confirmed_by_user",
+                "instance_terminal_verified",
+                "regional_ruleset_deleted",
+                "global_firewall_restored"
+            ]
+        },
+        "checkpoint_nonce": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "run_id": {"type": "string", "pattern": "^RUN-T07-L2M-[A-Z0-9._-]{3,64}$"},
+        "decision_alias": {"type": "string", "pattern": "^l2m-decision-[a-f0-9]{12}$"},
+        "marker_alias": {"type": "string", "pattern": "^l2m-marker-[a-f0-9]{12}$"},
+        "observed_at_utc": {"type": "string", "format": "date-time", "pattern": "Z$"},
+        "actor": {"const": "user"},
+        "action_confirmed": {"const": true},
+        "details": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "global_firewall_restricted": {"type": "boolean"},
+                "regional_ruleset_created": {"type": "boolean"},
+                "launch_clicked_once": {"type": "boolean"},
+                "approved_image_offered_for_selected_type_region": {"type": "boolean"},
+                "launch_configuration_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+                "instance_bound": {"type": "boolean"},
+                "instance_binding_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+                "cloud_ide_opened": {"type": "boolean"},
+                "qualification_command_started": {"type": "boolean"},
+                "qualification_command_completed": {"type": "boolean"},
+                "qualification_bundle_downloaded": {"type": "boolean"},
+                "termination_confirmed_by_user": {"type": "boolean"},
+                "instance_terminal_verified": {"type": "boolean"},
+                "terminal_or_absent": {"type": "boolean"},
+                "launch_identity_state": {
+                    "enum": [
+                        "zero_match_stop_and_terminate",
+                        "exact_one_bound",
+                        "multiple_match_manual_incident",
+                        "bound_instance_semantic_drift"
+                    ]
+                },
+                "regional_ruleset_deleted": {"type": "boolean"},
+                "regional_ruleset_absent": {"type": "boolean"},
+                "global_firewall_restored": {"type": "boolean"},
+                "global_firewall_semantic_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+                "qualification_archive_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+            }
+        }
+    },
+    "allOf": [
+        {
+            "if": {"properties": {"checkpoint_type": {"const": "global_firewall_restricted"}}},
+            "then": {
+                "properties": {
+                    "details": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": ["global_firewall_restricted"],
+                        "properties": {"global_firewall_restricted": {"const": true}}
+                    }
+                }
+            }
+        },
+        {
+            "if": {"properties": {"checkpoint_type": {"const": "regional_ruleset_created"}}},
+            "then": {
+                "properties": {
+                    "details": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": ["regional_ruleset_created"],
+                        "properties": {"regional_ruleset_created": {"const": true}}
+                    }
+                }
+            }
+        },
+        {
+            "if": {"properties": {"checkpoint_type": {"const": "launch_clicked_once"}}},
+            "then": {
+                "properties": {
+                    "details": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                            "launch_clicked_once",
+                            "approved_image_offered_for_selected_type_region",
+                            "launch_configuration_sha256"
+                        ],
+                        "properties": {
+                            "launch_clicked_once": {"const": true},
+                            "approved_image_offered_for_selected_type_region": {"const": true},
+                            "launch_configuration_sha256": {
+                                "type": "string",
+                                "pattern": "^[a-f0-9]{64}$"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "if": {"properties": {"checkpoint_type": {"const": "instance_bound"}}},
+            "then": {
+                "properties": {
+                    "details": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": ["instance_bound", "instance_binding_sha256"],
+                        "properties": {
+                            "instance_bound": {"const": true},
+                            "instance_binding_sha256": {
+                                "type": "string",
+                                "pattern": "^[a-f0-9]{64}$"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "if": {"properties": {"checkpoint_type": {"const": "cloud_ide_opened"}}},
+            "then": {
+                "properties": {
+                    "details": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": ["cloud_ide_opened"],
+                        "properties": {"cloud_ide_opened": {"const": true}}
+                    }
+                }
+            }
+        },
+        {
+            "if": {"properties": {"checkpoint_type": {"const": "qualification_command_started"}}},
+            "then": {
+                "properties": {
+                    "details": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": ["qualification_command_started"],
+                        "properties": {"qualification_command_started": {"const": true}}
+                    }
+                }
+            }
+        },
+        {
+            "if": {"properties": {"checkpoint_type": {"const": "qualification_command_completed"}}},
+            "then": {
+                "properties": {
+                    "details": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": ["qualification_command_completed"],
+                        "properties": {"qualification_command_completed": {"const": true}}
+                    }
+                }
+            }
+        },
+        {
+            "if": {"properties": {"checkpoint_type": {"const": "qualification_bundle_downloaded"}}},
+            "then": {
+                "properties": {
+                    "details": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                            "qualification_bundle_downloaded",
+                            "qualification_archive_sha256"
+                        ],
+                        "properties": {
+                            "qualification_bundle_downloaded": {"const": true},
+                            "qualification_archive_sha256": {
+                                "type": "string",
+                                "pattern": "^[a-f0-9]{64}$"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "if": {"properties": {"checkpoint_type": {"const": "termination_confirmed_by_user"}}},
+            "then": {
+                "properties": {
+                    "details": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": ["termination_confirmed_by_user"],
+                        "properties": {"termination_confirmed_by_user": {"const": true}}
+                    }
+                }
+            }
+        },
+        {
+            "if": {"properties": {"checkpoint_type": {"const": "instance_terminal_verified"}}},
+            "then": {
+                "properties": {
+                    "details": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                            "instance_terminal_verified",
+                            "terminal_or_absent",
+                            "launch_identity_state"
+                        ],
+                        "properties": {
+                            "instance_terminal_verified": {"const": true},
+                            "terminal_or_absent": {"const": true},
+                            "launch_identity_state": {
+                                "enum": [
+                                    "zero_match_stop_and_terminate",
+                                    "exact_one_bound",
+                                    "multiple_match_manual_incident",
+                                    "bound_instance_semantic_drift"
+                                ]
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "if": {"properties": {"checkpoint_type": {"const": "regional_ruleset_deleted"}}},
+            "then": {
+                "properties": {
+                    "details": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": ["regional_ruleset_deleted", "regional_ruleset_absent"],
+                        "properties": {
+                            "regional_ruleset_deleted": {"const": true},
+                            "regional_ruleset_absent": {"const": true}
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "if": {"properties": {"checkpoint_type": {"const": "global_firewall_restored"}}},
+            "then": {
+                "properties": {
+                    "details": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": ["global_firewall_restored", "global_firewall_semantic_sha256"],
+                        "properties": {
+                            "global_firewall_restored": {"const": true},
+                            "global_firewall_semantic_sha256": {
+                                "type": "string",
+                                "pattern": "^[a-f0-9]{64}$"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

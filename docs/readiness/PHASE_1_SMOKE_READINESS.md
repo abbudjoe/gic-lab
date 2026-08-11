@@ -1,6 +1,6 @@
 # Phase 1 SiRA Smoke Readiness
 
-Status: **profile eligible; manual-console Gate L2 required; not authorized**
+Status: **profile eligible; Gate L2M blocked on human image selection; not authorized**
 
 Prepared: 2026-08-08
 
@@ -69,6 +69,18 @@ remain false. Any future Gate L2 proposal must be a newly reviewed human-operate
 console launch/observation/cleanup contract with fresh identities and current-turn
 authorization. Gate L3 and Gate L4 remain blocked.
 
+Gate L2.2 has now source-verified the human console/Jupyter-only alternative without
+performing it. Current Lambda documentation lists Docker and JupyterLab for Lambda
+Stack 22.04 but does not list JupyterLab for the selected GPU Base 22.04 image. The
+sealed inventory contains four x86-64 Lambda Stack 22.04 regional candidates in
+`us-east-1`; `img-0032` / `22.4.5-2141` ranks first. Static source evidence does not
+prove type-specific launch-wizard offeredness, so any future transaction must stop
+before Launch unless the approved alias is offered after exact type/region selection.
+Because the existing private decision remains
+`img-0111`, the exact terminal state is `blocked-human-image-selection`. No executable
+manual plan or authorization block exists. The user must make a new private image and
+manual-action decision before a fresh materialization/review could propose execution.
+
 ## Exact user decision fields
 
 A later current-turn authorization must state one value for every field below:
@@ -79,7 +91,8 @@ A later current-turn authorization must state one value for every field below:
 | `api_provider` | `OpenAI` |
 | `model_revision` | Exactly `gpt-4o-2024-11-20`, used as a declared substitution for the unavailable historical `gpt-4o` serving revision |
 | `maximum_api_cost_usd` | Proposed ceiling: `4.00`; the user must explicitly approve this value or a lower replacement after price reverification |
-| `maximum_provider_compute_cost_usd` | Must be recomputed from the L1-selected Lambda cents/hour and freshly approved for Gate L4 |
+| `gate_l2m_maximum_provider_compute_cost_usd` | Proposed qualification-only ceiling `2.00`; requires a fresh Gate L2M authorization and does not carry into Gate L4 |
+| `maximum_provider_compute_cost_usd` | Scientific-host ceiling; must be recomputed from current Lambda pricing and freshly approved for the later Gate L4 launch |
 | `maximum_wall_time_seconds` | Scientific workload ceiling remains proposed `240` total, at most `120` seconds per condition; the fresh Lambda host lifecycle needs a separate aggregate provider wall cap |
 | `required_cleanup` | Stop/KILL each immutable container boundary, prove zero owned resources, preserve/copy/seal evidence, terminate the exact Lambda instance through the provider API, and confirm terminal/nonbillable state |
 
@@ -91,10 +104,14 @@ bind `docs/PROJECT_STATE.yaml.authorized_run_profile` to the exact profile path 
 SHA-256 plus the sealed canonical `condition_plan_sha256s`, bind both condition plans
 to the same `profile_plan_id` and `profile_sha256`, and materialize condition-owned
 budgets and command hashes.
-Benchmark and training permissions remain false. Cloud-mutation permission remains
-false now and may change only in a fresh Gate L4 authorization that binds exactly one
-launch and provider termination for the exact instance ID. No field may be inferred
-from this readiness document, public pricing, or an earlier infrastructure gate.
+Benchmark and training permissions remain false. Cloud-mutation and paid-compute
+permissions remain false now. A fresh Gate L2M qualification authorization may
+temporarily enable only its separately capped human-console firewall/ruleset/one-host
+qualification transaction, with the USD 2.00 and 3,600-second ceilings, and must return
+both flags to false after terminal cleanup. A later Gate L4 authorization separately
+binds one scientific-host launch, cost, and provider termination; Gate L2M authority
+cannot carry into it. No field may be inferred from this readiness document, public
+pricing, or an earlier infrastructure gate.
 
 ## Proposed API spend cap
 
@@ -131,7 +148,9 @@ before the first live model, API, or browser action:
 8. Bind successful Gate L2 host/runtime/termination evidence and Gate L3 x86_64
    image/adversarial/dummy-secret/local-page evidence; revalidate exact account,
    type/region/image/key/ruleset/price and prove no duplicate T07 instance before the
-   one Gate L4 launch.
+   one separately authorized Gate L4 scientific launch. The earlier Gate L2M
+   qualification launch, if authorized and completed, is a distinct paid-compute
+   transaction with a different identity and no reusable mutation authority.
 
 Failure of any preflight obligation stops T07 before execution and preserves the
 authorization record as an unconsumed/blocked attempt; it does not relax the protocol.
@@ -187,10 +206,12 @@ the EXP-0001 hypothesis or any RQ-H2K outcome.
 - T07 Lambda capacity and price were observed and the candidate, SSH key, firewall,
   private `/32`, and host-key method were validated and privately sealed. Gate L2's
   automated API-launch design ended at `manual-console-launch-required`; the offline
-  supervisor/watchdog primitives are not execution authority. Continuing requires a
-  user-requested, newly reviewed human-operated console launch/observation/cleanup
-  contract with fresh plan/run identities and fresh authority. SR²AM T11/T12 remain
-  scientifically and operationally separate.
+  supervisor/watchdog primitives are not execution authority. Gate L2.2 then stopped
+  at `blocked-human-image-selection`: Lambda Stack 22.04 regional candidates exist, but
+  changing from the selected GPU Base image needs a new private user decision.
+  Approval would still require fresh materialization, plan/run identities, review,
+  and current-turn authority. SR²AM T11/T12 remain scientifically and operationally
+  separate.
 - RQ-H2K external-versus-explicit-model comparison feasibility remains undetermined.
   Missing optional regulation fields do not invalidate EXP-0001 when its primary
   evidence contract is complete.

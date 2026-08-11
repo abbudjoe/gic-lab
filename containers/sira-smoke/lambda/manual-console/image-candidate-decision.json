@@ -1,0 +1,63 @@
+{
+    "schema_version": "0.1.0",
+    "gate": "T07-L2.2",
+    "source_inventory_sha256": "022835438165e7e6e70dc992d6904f4e8b9448dc933d1d4c3e39ebdcc8914933",
+    "source_alias_map_sha256": "9f37b9412110cc7433d5339cf4d8b1eadc92743eaa32db6bf8e4c59024a79d5f",
+    "instance_type": "gpu_1x_a10",
+    "region": "us-east-1",
+    "architecture": "x86_64",
+    "required_family": "lambda-stack-22-04",
+    "required_python": "3.10",
+    "documented_components": ["Docker", "JupyterLab"],
+    "ranking": [
+        "required_family",
+        "newest_numeric_version",
+        "update_time_when_available",
+        "opaque_alias"
+    ],
+    "update_time_available": false,
+    "type_specific_image_compatibility_source_available": false,
+    "launch_wizard_offeredness_required_before_launch": true,
+    "existing_selection": {
+        "alias": "img-0111",
+        "family": "gpu-base-22-04",
+        "version": "22.4.5-2141",
+        "documented_docker": true,
+        "documented_jupyterlab": false,
+        "eligible_for_jupyter_only_gate": false
+    },
+    "recommended": {
+        "alias": "img-0032",
+        "family": "lambda-stack-22-04",
+        "version": "22.4.5-2141",
+        "architecture": "x86_64",
+        "region": "us-east-1"
+    },
+    "alternates": [
+        {
+            "alias": "img-0106",
+            "family": "lambda-stack-22-04",
+            "version": "22.4.5-1722",
+            "architecture": "x86_64",
+            "region": "us-east-1"
+        },
+        {
+            "alias": "img-0037",
+            "family": "lambda-stack-22-04",
+            "version": "22.4.5-1459",
+            "architecture": "x86_64",
+            "region": "us-east-1"
+        },
+        {
+            "alias": "img-0012",
+            "family": "lambda-stack-22-04",
+            "version": "22.4.5-1026",
+            "architecture": "x86_64",
+            "region": "us-east-1"
+        }
+    ],
+    "raw_image_ids_retained": false,
+    "selection_changed": false,
+    "human_approval_required": true,
+    "terminal_decision": "blocked-human-image-selection"
+}

@@ -6,8 +6,11 @@ non-executable**
 Gate L2.0 ended at `blocked-human-or-source-decision`; its proposed V1 plan/run
 identities were rejected and must not be reused. Gate L2.1's independent review then
 terminated the automated API-launch path at `manual-console-launch-required`; its
-draft V2 identities are also rejected and no executable plan exists. Gate L3 still
-requires a future, separately reviewed and authorized human-operated Gate L2 run with
+draft V2 identities are also rejected. Gate L2.2 subsequently stopped the
+human-console/Jupyter route at `blocked-human-image-selection`; the regional candidate
+`img-0032` Lambda Stack recommendation is not a selection and no executable plan
+exists. Gate L3 still requires a future, separately reviewed and authorized
+human-operated Gate L2 run with
 externally sealed success evidence, exact provider termination, restored firewall
 state, and zero owned residue. The proposed BusyBox probe is a non-executable Gate L2
 design input only and cannot substitute for the three Gate L3 image/browser/
@@ -26,6 +29,8 @@ schema-valid evidence of:
 
 - exact sealed Gate L1 authorization/plan/commit/ledger plus selected Lambda
   type/region/image/key/ruleset/price/instance identity;
+- explicit private approval of a Jupyter-capable Lambda Stack 22.04 image, rather than
+  inference from Gate L2.2's unselected recommendation;
 - x86_64 OS/kernel and private PID/cgroup/IPC behavior;
 - exact Docker client/server, containerd, runc, cgroup driver and log driver;
 - one immutable BusyBox containment probe with bounded stop/KILL cleanup and zero

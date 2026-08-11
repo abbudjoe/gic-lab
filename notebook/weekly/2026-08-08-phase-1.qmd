@@ -98,3 +98,12 @@ surviving watchdog. The automated path therefore ended at
 future progress requires a newly reviewed human-operated console launch and cleanup
 contract with fresh authority. No account, cloud, SSH, container, browser, model,
 SiRA, or scientific action occurred.
+
+Gate L2.2 then checked that human/Jupyter route against current first-party sources and
+the sealed image inventory. Lambda Stack 22.04 is documented with Docker, JupyterLab,
+x86-64, and Python 3.10; the selected GPU Base 22.04 image is documented with Docker
+but not JupyterLab. A regional Lambda Stack family candidate is recommended, but changing the
+user's private selection requires a new decision. The state is therefore
+`blocked-human-image-selection`, with no executable plan or authorization. Offline
+checkpoint/observer contracts and a deterministic qualification bundle were added;
+nothing was uploaded, launched, connected to, or executed.
