@@ -72,6 +72,7 @@ from .lambda_l2m_observer import (
     SELECTED_INSTANCE_TYPE,
     SELECTED_REGION,
     SELECTED_SSH_KEY_NAME,
+    exact_l2m_caps,
 )
 from .lambda_l13_security import (
     ALIAS_MAP_RELATIVE_ROOT,
@@ -1406,6 +1407,183 @@ def observer_caps() -> dict[str, object]:
     }
 
 
+def _qualification_runtime_caps(repository_root: Path) -> dict[str, object]:
+    """Read the exact inert bundle constants instead of duplicating prose-only caps."""
+
+    bundle_root = repository_root / BUNDLE_ROOT_RELATIVE
+    driver = runpy.run_path(str(bundle_root / "qualification_driver.py"))
+    inspector = runpy.run_path(str(bundle_root / "docker_inspector.py"))
+    budget_type = inspector.get("CommandBudget")
+    fields = getattr(budget_type, "__dataclass_fields__", None)
+    if not isinstance(fields, dict):
+        raise L23ContractError("qualification Docker budget contract is unavailable")
+
+    def default(name: str) -> int:
+        field = fields.get(name)
+        value = getattr(field, "default", None)
+        if not isinstance(value, int):
+            raise L23ContractError("qualification Docker budget cap is unavailable")
+        return value
+
+    create = driver.get("create_arguments")
+    if not callable(create):
+        raise L23ContractError("qualification create renderer is unavailable")
+    arguments = create(
+        name="t07-l2m-0000000000000000",
+        fixture=Path("/private/t07/adversarial-containment.sh"),
+        run_id=RUN_ID,
+        marker_alias="l2m-marker-000000000000",
+    )
+
+    def option(name: str) -> str:
+        try:
+            index = arguments.index(name)
+            value = arguments[index + 1]
+        except (IndexError, ValueError):
+            raise L23ContractError("qualification container cap is unavailable") from None
+        if not isinstance(value, str):
+            raise L23ContractError("qualification container cap is unavailable")
+        return value
+
+    tmpfs_sizes = []
+    for index, value in enumerate(arguments):
+        if value == "--tmpfs" and index + 1 < len(arguments):
+            specification = arguments[index + 1]
+            match = re.search(r"(?:^|,)size=([0-9]+)(?:,|$)", specification)
+            if match is None:
+                raise L23ContractError("qualification tmpfs cap is unavailable")
+            tmpfs_sizes.append(int(match.group(1)))
+    if len(tmpfs_sizes) != 2 or len(set(tmpfs_sizes)) != 1:
+        raise L23ContractError("qualification tmpfs cap drifted")
+
+    log_options: dict[str, str] = {}
+    for index, value in enumerate(arguments):
+        if value == "--log-opt" and index + 1 < len(arguments):
+            key, separator, setting = arguments[index + 1].partition("=")
+            if separator != "=" or not key or not setting or key in log_options:
+                raise L23ContractError("qualification log cap is unavailable")
+            log_options[key] = setting
+    if log_options != {"max-size": "1m", "max-file": "1"}:
+        raise L23ContractError("qualification log cap drifted")
+    max_call_output = inspector.get("MAX_CALL_OUTPUT")
+    if not isinstance(max_call_output, int):
+        raise L23ContractError("qualification per-call output cap is unavailable")
+    driver_caps = {
+        name: driver.get(name)
+        for name in (
+            "WORK_WALL_SECONDS",
+            "TOTAL_WALL_SECONDS",
+            "FIXTURE_WALL_SECONDS",
+            "CREATE_OUTCOME_POLL_OBSERVATIONS",
+            "CREATE_OUTCOME_STABLE_ABSENCE_OBSERVATIONS",
+            "CREATE_OUTCOME_POLL_INTERVAL_SECONDS",
+        )
+    }
+    if any(not isinstance(value, int) for value in driver_caps.values()):
+        raise L23ContractError("qualification driver cap is unavailable")
+    docker_calls = default("max_calls")
+    cleanup_calls = default("cleanup_reserved_calls")
+    docker_output_bytes = default("max_output_bytes")
+    cleanup_output_bytes = default("cleanup_reserved_output_bytes")
+    return {
+        "docker_calls": docker_calls,
+        "docker_ordinary_work_calls": docker_calls - cleanup_calls,
+        "docker_call_output_bytes": max_call_output,
+        "docker_output_bytes": docker_output_bytes,
+        "docker_ordinary_output_bytes": docker_output_bytes - cleanup_output_bytes,
+        "docker_cleanup_reserved_calls": cleanup_calls,
+        "docker_cleanup_reserved_output_bytes": cleanup_output_bytes,
+        "docker_work_wall_seconds": driver_caps["WORK_WALL_SECONDS"],
+        "docker_total_wall_seconds": driver_caps["TOTAL_WALL_SECONDS"],
+        "fixture_wall_seconds": driver_caps["FIXTURE_WALL_SECONDS"],
+        "qualification_containers": 1,
+        "create_outcome_poll_observations": driver_caps["CREATE_OUTCOME_POLL_OBSERVATIONS"],
+        "create_outcome_stable_absence_observations": driver_caps[
+            "CREATE_OUTCOME_STABLE_ABSENCE_OBSERVATIONS"
+        ],
+        "create_outcome_poll_interval_seconds": driver_caps["CREATE_OUTCOME_POLL_INTERVAL_SECONDS"],
+        "container_cpu_millis": round(float(option("--cpus")) * 1_000),
+        "container_memory_bytes": int(option("--memory")),
+        "container_memory_swap_bytes": int(option("--memory-swap")),
+        "container_pids_limit": int(option("--pids-limit")),
+        "container_tmpfs_mounts": len(tmpfs_sizes),
+        "container_tmpfs_bytes_each": tmpfs_sizes[0],
+        "container_shm_bytes": int(option("--shm-size")),
+        "container_log_max_bytes": int(log_options["max-size"].removesuffix("m")) * 1_048_576,
+        "container_log_max_files": int(log_options["max-file"]),
+        "container_network_mode": option("--network"),
+    }
+
+
+def _public_plan_caps(repository_root: Path) -> dict[str, object]:
+    """Return the complete L2.2 cap surface bound by the executable public plan."""
+
+    source = exact_l2m_caps()
+    caps: dict[str, object] = {
+        "read_only_lambda_gets": MAX_OBSERVER_GETS,
+        "minimum_request_spacing_seconds": MIN_REQUEST_SPACING_SECONDS,
+        "response_bytes_per_get": MAX_RESPONSE_BYTES_PER_GET,
+        "aggregate_response_bytes": MAX_AGGREGATE_RESPONSE_BYTES,
+        "private_observation_files": source["private_observation_files"],
+        "private_observation_bytes_per_file": source["private_observation_bytes_per_file"],
+        "private_observation_aggregate_bytes": source["private_observation_aggregate_bytes"],
+        "observer_events": MAX_OBSERVER_EVENTS,
+        "observer_event_bytes": MAX_OBSERVER_EVENT_BYTES,
+        "observer_journal_bytes": MAX_OBSERVER_JOURNAL_BYTES,
+        "observer_total_wall_seconds": MAX_OBSERVER_WALL_SECONDS,
+        "observer_active_seconds": source["observer_active_seconds"],
+        "observer_prelaunch_seconds": source["observer_prelaunch_seconds"],
+        "observer_post_provider_cleanup_seconds": source["observer_post_provider_cleanup_seconds"],
+        "observer_archive_seconds": source["observer_archive_seconds"],
+        "observer_request_seconds": source["observer_request_seconds"],
+        "provider_hard_wall_seconds": MAX_PROVIDER_WALL_SECONDS,
+        "provider_cost_usd": MAX_PROVIDER_COST_CENTS / 100,
+        "normal_termination_click_seconds": source["normal_termination_click_seconds"],
+        "launch_to_active_seconds": source["launch_to_active_seconds"],
+        "cloud_ide_availability_seconds": source["cloud_ide_availability_seconds"],
+        "qualification_command_seconds": source["qualification_command_seconds"],
+        "evidence_download_validation_seconds": source["evidence_download_validation_seconds"],
+        "termination_verification_seconds": source["termination_verification_seconds"],
+        "firewall_cleanup_seconds": source["firewall_cleanup_seconds"],
+        "incident_headroom_seconds": source["incident_headroom_seconds"],
+        "normal_modeled_list_cost_cents": source["normal_modeled_list_cost_cents"],
+        "hard_wall_modeled_list_cost_cents": source["hard_wall_modeled_list_cost_cents"],
+        "checkpoint_window_seconds": MAX_USER_CHECKPOINT_SECONDS,
+        "launch_clicks": 1,
+        "normal_instance_count": 1,
+        "persistent_filesystem_count": 0,
+        "automated_cloud_mutations": 0,
+        "automatic_retries": 0,
+        "pagination_requests": 0,
+        "redirect_follows": 0,
+        "ssh_operations": 0,
+        "model_calls": 0,
+        "model_tokens": 0,
+        "browser_automation_actions": 0,
+        "sira_executions": 0,
+        "local_process_calls": MAX_LOCAL_PROCESS_CALLS,
+        "local_process_output_bytes": MAX_LOCAL_PROCESS_OUTPUT_BYTES,
+        "qualification_archive_bytes": MAX_QUALIFICATION_ARCHIVE_BYTES,
+        "qualification_unpacked_bytes": MAX_QUALIFICATION_UNPACKED_BYTES,
+        "qualification_files": MAX_QUALIFICATION_FILES,
+        "remote_source_bytes_per_evidence_set": source["remote_source_bytes_per_evidence_set"],
+        "remote_archive_bytes_per_evidence_set": source["remote_archive_bytes_per_evidence_set"],
+        "remote_source_retained_bytes": source["remote_source_retained_bytes"],
+        "remote_archive_retained_bytes": source["remote_archive_retained_bytes"],
+        "remote_aggregate_retained_bytes": source["remote_aggregate_retained_bytes"],
+        "local_source_evidence_bytes": source["local_source_evidence_bytes"],
+        "local_sealed_evidence_bytes": source["local_sealed_evidence_bytes"],
+        "mac_active_evidence_bytes": MAX_MAC_ACTIVE_EVIDENCE_BYTES,
+        "external_archive_bytes": MAX_EXTERNAL_ARCHIVE_BYTES,
+        "busybox_layer_bytes": source["busybox_layer_bytes"],
+        "phase_get_limits": {
+            phase.value: count for phase, count in OBSERVER_PHASE_GET_LIMITS.items()
+        },
+    }
+    caps.update(_qualification_runtime_caps(repository_root))
+    return caps
+
+
 def qualification_bootstrap_template(repository_root: Path) -> list[str]:
     """Return the exact hash-first argv shape with private/runtime values unresolved."""
 
@@ -1603,41 +1781,7 @@ def render_public_plan(
             "<FRESH-AUTHORIZATION-SHA256>",
         ],
         "qualification_bootstrap_argv": qualification_bootstrap_template(repository_root),
-        "caps": {
-            "read_only_lambda_gets": MAX_OBSERVER_GETS,
-            "minimum_request_spacing_seconds": MIN_REQUEST_SPACING_SECONDS,
-            "response_bytes_per_get": MAX_RESPONSE_BYTES_PER_GET,
-            "aggregate_response_bytes": MAX_AGGREGATE_RESPONSE_BYTES,
-            "observer_events": MAX_OBSERVER_EVENTS,
-            "observer_event_bytes": MAX_OBSERVER_EVENT_BYTES,
-            "observer_journal_bytes": MAX_OBSERVER_JOURNAL_BYTES,
-            "observer_total_wall_seconds": MAX_OBSERVER_WALL_SECONDS,
-            "provider_hard_wall_seconds": MAX_PROVIDER_WALL_SECONDS,
-            "provider_cost_usd": MAX_PROVIDER_COST_CENTS / 100,
-            "checkpoint_window_seconds": MAX_USER_CHECKPOINT_SECONDS,
-            "launch_clicks": 1,
-            "normal_instance_count": 1,
-            "persistent_filesystem_count": 0,
-            "automated_cloud_mutations": 0,
-            "automatic_retries": 0,
-            "pagination_requests": 0,
-            "redirect_follows": 0,
-            "ssh_operations": 0,
-            "model_calls": 0,
-            "model_tokens": 0,
-            "browser_automation_actions": 0,
-            "sira_executions": 0,
-            "local_process_calls": MAX_LOCAL_PROCESS_CALLS,
-            "local_process_output_bytes": MAX_LOCAL_PROCESS_OUTPUT_BYTES,
-            "qualification_archive_bytes": MAX_QUALIFICATION_ARCHIVE_BYTES,
-            "qualification_unpacked_bytes": MAX_QUALIFICATION_UNPACKED_BYTES,
-            "qualification_files": MAX_QUALIFICATION_FILES,
-            "mac_active_evidence_bytes": MAX_MAC_ACTIVE_EVIDENCE_BYTES,
-            "external_archive_bytes": MAX_EXTERNAL_ARCHIVE_BYTES,
-            "phase_get_limits": {
-                phase.value: count for phase, count in OBSERVER_PHASE_GET_LIMITS.items()
-            },
-        },
+        "caps": _public_plan_caps(repository_root),
         "storage": {
             "local_active_root": str(Path("artifacts/t07/lambda/gate-l2m") / RUN_ID),
             "local_inbound_root": str(Path("artifacts/t07/lambda/gate-l2m") / RUN_ID / "inbound"),
@@ -1850,46 +1994,8 @@ def validate_public_plan(
     }:
         raise L23ContractError("manual plan actor responsibilities drifted")
     caps = _mapping(plan.get("caps"), context="plan caps")
-    exact_caps: dict[str, object] = {
-        "read_only_lambda_gets": MAX_OBSERVER_GETS,
-        "observer_total_wall_seconds": MAX_OBSERVER_WALL_SECONDS,
-        "provider_hard_wall_seconds": MAX_PROVIDER_WALL_SECONDS,
-        "provider_cost_usd": 2.0,
-        "checkpoint_window_seconds": MAX_USER_CHECKPOINT_SECONDS,
-        "launch_clicks": 1,
-        "normal_instance_count": 1,
-        "persistent_filesystem_count": 0,
-        "automated_cloud_mutations": 0,
-        "automatic_retries": 0,
-        "pagination_requests": 0,
-        "redirect_follows": 0,
-        "ssh_operations": 0,
-        "model_calls": 0,
-        "model_tokens": 0,
-        "browser_automation_actions": 0,
-        "sira_executions": 0,
-        "minimum_request_spacing_seconds": MIN_REQUEST_SPACING_SECONDS,
-        "response_bytes_per_get": MAX_RESPONSE_BYTES_PER_GET,
-        "aggregate_response_bytes": MAX_AGGREGATE_RESPONSE_BYTES,
-        "observer_events": MAX_OBSERVER_EVENTS,
-        "observer_event_bytes": MAX_OBSERVER_EVENT_BYTES,
-        "observer_journal_bytes": MAX_OBSERVER_JOURNAL_BYTES,
-        "local_process_calls": MAX_LOCAL_PROCESS_CALLS,
-        "local_process_output_bytes": MAX_LOCAL_PROCESS_OUTPUT_BYTES,
-        "qualification_archive_bytes": MAX_QUALIFICATION_ARCHIVE_BYTES,
-        "qualification_unpacked_bytes": MAX_QUALIFICATION_UNPACKED_BYTES,
-        "qualification_files": MAX_QUALIFICATION_FILES,
-        "mac_active_evidence_bytes": MAX_MAC_ACTIVE_EVIDENCE_BYTES,
-        "external_archive_bytes": MAX_EXTERNAL_ARCHIVE_BYTES,
-    }
-    if set(caps) != {*exact_caps, "phase_get_limits"} or any(
-        caps.get(name) != value for name, value in exact_caps.items()
-    ):
+    if dict(caps) != _public_plan_caps(repository_root):
         raise L23ContractError("manual plan cap drifted")
-    if caps.get("phase_get_limits") != {
-        phase.value: count for phase, count in OBSERVER_PHASE_GET_LIMITS.items()
-    }:
-        raise L23ContractError("manual plan per-phase GET cap drifted")
     checkpoints = _mapping(plan.get("checkpoints"), context="checkpoints")
     if (
         set(checkpoints)
