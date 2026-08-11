@@ -106,6 +106,15 @@ def test_pending_authorization_stops_before_credential_or_transport() -> None:
     assert credential_calls == 0
 
 
+def test_packet_authorization_reference_is_accepted_before_credential_access() -> None:
+    authorization = SupervisorAuthorization(
+        "a" * 40,
+        "AUTH-T07-GATE-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-V1-2026-08-11",
+        "b" * 64,
+    )
+    authorization.validate()
+
+
 def test_public_metadata_expiry_stops_before_any_runtime_setup() -> None:
     latest = dt.datetime(2026, 8, 12, 5, 15, 19, 646016, tzinfo=dt.UTC)
     _validate_plan_start_time(lambda: latest)

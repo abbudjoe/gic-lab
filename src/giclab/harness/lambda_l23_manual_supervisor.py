@@ -87,7 +87,10 @@ GIT_TIMEOUT_SECONDS: Final = 10
 POLL_SECONDS: Final = 0.25
 _SHA256: Final = re.compile(r"^[a-f0-9]{64}$")
 _COMMIT: Final = re.compile(r"^[a-f0-9]{40}$")
-_AUTHORIZATION: Final = re.compile(r"^AUTH-T07-L2M-[A-Z0-9._-]{3,96}$")
+# The public packet uses the explicit ``GATE`` segment.  Fixture tests and older
+# L2M records use the shorter form; both are the same bounded T07 authorization
+# namespace, while the pending placeholder and malformed prefixes remain rejected.
+_AUTHORIZATION: Final = re.compile(r"^AUTH-T07-(?:GATE-)?L2M-[A-Z0-9._-]{3,96}$")
 
 
 @dataclass(slots=True)
