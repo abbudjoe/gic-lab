@@ -25,7 +25,7 @@
     "run_id": {"type": "string", "pattern": "^RUN-T07-L2M-[A-Z0-9._-]{3,64}$"},
     "authorization_reference": {
       "type": "string",
-      "pattern": "^AUTH-T07-L2M-[A-Z0-9._-]{3,96}$"
+      "pattern": "^AUTH-T07-(?:GATE-)?L2M-[A-Z0-9._-]{3,96}$"
     },
     "authorization_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     "decision_alias": {"type": "string", "pattern": "^l2m-decision-[a-f0-9]{12}$"},

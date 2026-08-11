@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gic-lab.invalid/schemas/t07-lambda-l2m-private-decision-seal-v3.schema.json",
+  "$comment": "Public-safe seal for an ignored Gate L2M decision and private parameter bundle. Private scalar values are forbidden by omission.",
+  "title": "T07 Gate L2M private decision seal",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "plan_id",
+    "run_id",
+    "decision_alias",
+    "decision_source_bytes",
+    "decision_source_sha256",
+    "decision_canonical_sha256",
+    "decision_schema_sha256",
+    "decision_validated",
+    "nonce_fresh",
+    "selected_public_resources",
+    "private_bindings",
+    "private_parameters_bytes",
+    "private_parameters_sha256",
+    "private_values_publicly_retained",
+    "source_retained",
+    "sealed_at_utc"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1.0"},
+    "plan_id": {"const": "PLAN-T07-GATE-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-V3"},
+    "run_id": {"const": "RUN-T07-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-0003"},
+    "decision_alias": {
+      "type": "string",
+      "pattern": "^l2m-decision-[a-f0-9]{12}$"
+    },
+    "decision_source_bytes": {"type": "integer", "minimum": 1, "maximum": 16384},
+    "decision_source_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "decision_canonical_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "decision_schema_sha256": {
+      "const": "7054b83d9aa56683b24ba3c1057ca6f9aeb9ae1ee38fc3d2f37179514d4f1d79"
+    },
+    "decision_validated": {"const": true},
+    "nonce_fresh": {"const": true},
+    "selected_public_resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "instance_type",
+        "region",
+        "image_alias",
+        "image_family",
+        "image_version",
+        "architecture",
+        "ssh_key_name",
+        "persistent_filesystem_count"
+      ],
+      "properties": {
+        "instance_type": {"const": "gpu_1x_a10"},
+        "region": {"const": "us-east-1"},
+        "image_alias": {"const": "img-0032"},
+        "image_family": {"const": "lambda-stack-22-04"},
+        "image_version": {"const": "22.4.5-2141"},
+        "architecture": {"const": "x86_64"},
+        "ssh_key_name": {"const": "fractal-lambda-codex"},
+        "persistent_filesystem_count": {"const": 0}
+      }
+    },
+    "private_bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "raw_image_id",
+        "raw_ssh_key_id",
+        "unique_public_key_match",
+        "source_ipv4_cidr",
+        "original_global_firewall",
+        "regional_ruleset_marker",
+        "manual_run_identity",
+        "checkpoint_identities",
+        "archive_identity"
+      ],
+      "properties": {
+        "raw_image_id": {"const": true},
+        "raw_ssh_key_id": {"const": true},
+        "unique_public_key_match": {"const": true},
+        "source_ipv4_cidr": {"const": true},
+        "original_global_firewall": {"const": true},
+        "regional_ruleset_marker": {"const": true},
+        "manual_run_identity": {"const": true},
+        "checkpoint_identities": {"const": true},
+        "archive_identity": {"const": true}
+      }
+    },
+    "private_parameters_bytes": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 262144
+    },
+    "private_parameters_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "private_values_publicly_retained": {"const": false},
+    "source_retained": {"const": true},
+    "sealed_at_utc": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    }
+  }
+}

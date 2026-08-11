@@ -9,6 +9,7 @@ import os
 import signal
 import sys
 import zipfile
+import re
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -2694,6 +2695,13 @@ def test_observer_surface_is_get_only_and_finitely_budgeted() -> None:
 def test_documented_gate_authorization_reference_is_accepted() -> None:
     reference = "AUTH-T07-GATE-L2M-CURRENT-TURN-2026-08-11"
     assert l2m_observer._AUTHORIZATION_REFERENCE.fullmatch(reference) is not None
+    for schema_name in (
+        "t07-lambda-l2m-observer-journal.schema.json",
+        "t07-lambda-l2m-host-evidence.schema.json",
+    ):
+        schema = json.loads((ROOT / "schemas" / schema_name).read_bytes())
+        pattern = schema["properties"]["authorization_reference"]["pattern"]
+        assert re.fullmatch(pattern, reference) is not None
 
 
 def test_engine_rejects_wrong_phase_and_exhausted_caps_before_transport(

@@ -116,19 +116,19 @@ class L23ContractError(ValueError):
 BRANCH: Final = "phase-1/sira-smoke-lambda"
 STARTING_COMMIT: Final = "b71cbbc29f59da600d57b7f0ad28d14572b5fc62"
 L22_IMPLEMENTATION_COMMIT: Final = "82670a862e73ae1404fecaec775232445fddcdd8"
-PLAN_ID: Final = "PLAN-T07-GATE-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-V2"
-RUN_ID: Final = "RUN-T07-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-0002"
-AUTHORIZATION_PLACEHOLDER: Final = "AUTH-T07-GATE-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-V2-PENDING"
+PLAN_ID: Final = "PLAN-T07-GATE-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-V3"
+RUN_ID: Final = "RUN-T07-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-0003"
+AUTHORIZATION_PLACEHOLDER: Final = "AUTH-T07-GATE-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-V3-PENDING"
 TERMINAL_DECISION: Final = "ready-for-manual-console-qualification-authorization"
 
 DECISION_PATH: Final = Path.home() / ".config/gic-lab/t07/l2-manual-console-decisions.json"
 DECISION_SCHEMA_RELATIVE: Final = Path("schemas/t07-lambda-l2m-human-decision.schema.json")
 DECISION_SCHEMA_SHA256: Final = "7054b83d9aa56683b24ba3c1057ca6f9aeb9ae1ee38fc3d2f37179514d4f1d79"
 PRIVATE_SEAL_SCHEMA_RELATIVE: Final = Path(
-    "schemas/t07-lambda-l2m-private-decision-seal-v2.schema.json"
+    "schemas/t07-lambda-l2m-private-decision-seal-v3.schema.json"
 )
 PRIVATE_SEAL_SCHEMA_SHA256: Final = (
-    "6fb6cc73ccd4332287014ca5aea945485f6548b5052a2fdfc32378eef5403ead"
+    "d67f3cbd6811f0b8c965c84fc0cb62823981442de55cd7233f17689782b624ac"
 )
 CHECKPOINT_SCHEMA_RELATIVE: Final = Path("schemas/t07-lambda-l2m-checkpoint.schema.json")
 CHECKPOINT_SCHEMA_SHA256: Final = "a55f9023f8cc8f530acebe31bbe7b50c57d1e1a01b959ced38876e43e0f108ff"
@@ -137,7 +137,7 @@ OBSERVER_JOURNAL_SCHEMA_RELATIVE: Final = Path(
 )
 HOST_EVIDENCE_SCHEMA_RELATIVE: Final = Path("schemas/t07-lambda-l2m-host-evidence.schema.json")
 PLAN_RELATIVE: Final = Path(
-    "containers/sira-smoke/lambda/manual-console/gate-l2m-host-qualification-plan-v2.json"
+    "containers/sira-smoke/lambda/manual-console/gate-l2m-host-qualification-plan-v3.json"
 )
 CHECKPOINT_TEMPLATE_ROOT_RELATIVE: Final = Path(
     "containers/sira-smoke/lambda/manual-console/checkpoints"
