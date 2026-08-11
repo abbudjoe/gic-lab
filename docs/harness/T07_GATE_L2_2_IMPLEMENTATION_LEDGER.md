@@ -32,7 +32,7 @@ execution.
 | L22-16 | Preserve all prior sealed evidence, private decisions, plan/run history, and locked EXP-0001 files byte-for-byte. | met | Starting hashes reverified; post-repair Git diff and hash regressions confirm no locked-file change. |
 | L22-17 | Pass focused, Lambda-wide, schema, repository, privacy, formatting, Ruff, strict mypy, and portable-Quarto full gates. | met | 133 focused L2.2 tests and all 517 Lambda tests pass; the non-editable installed-package regression passes; secret/sensitive-value negative scans are clean; the portable-Quarto `make check` passes Ruff, strict mypy, all 971 tests, repository/site validation, and the 16-page notebook render. |
 | L22-18 | Obtain independent spec/privacy/cloud-safety/human-factors/incident review, repair findings, rereview, and rerun the full post-review gate. | met | Iterative independent review exposed and drove repairs for authority, ownership, evidence, archive-finalization, request-ledger, interrupt-recovery, storage-driver, provenance, offeredness, and cap gaps. Final rereview returned `CLEAN`; the post-review portable-Quarto gate passed Ruff, strict mypy, all 971 tests, repository/site validation, and the 16-page render. |
-| L22-19 | Commit the single permitted terminal state on `phase-1/sira-smoke-lambda` and leave the worktree clean. | planned | Final clean commit and post-commit status proof. |
+| L22-19 | Commit the single permitted terminal state on `phase-1/sira-smoke-lambda` and leave the worktree clean. | met | Gate L2.2 implementation commit `82670a862e73ae1404fecaec775232445fddcdd8`; the ledger-closing commit and final clean-status proof complete the handoff. |
 
 ## Required terminal boundary
 
