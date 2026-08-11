@@ -134,9 +134,12 @@
       "required": [
         "start_attached",
         "start_detached",
+        "wait",
+        "logs",
         "inspect",
         "top",
         "readiness",
+        "release",
         "copy_out",
         "stop",
         "kill",
@@ -152,6 +155,12 @@
         "start_detached": {
           "$ref": "#/$defs/argv"
         },
+        "wait": {
+          "$ref": "#/$defs/argv"
+        },
+        "logs": {
+          "$ref": "#/$defs/argv"
+        },
         "inspect": {
           "$ref": "#/$defs/argv"
         },
@@ -159,6 +168,9 @@
           "$ref": "#/$defs/argv"
         },
         "readiness": {
+          "$ref": "#/$defs/argv"
+        },
+        "release": {
           "$ref": "#/$defs/argv"
         },
         "copy_out": {

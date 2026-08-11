@@ -631,6 +631,7 @@ def model_preflight_create_argv() -> tuple[str, ...]:
             "/usr/bin/python3",
             "${IMAGE_ID}",
             "/opt/giclab/container_entrypoint.py",
+            "--supervised-release",
             "--",
             "/usr/bin/python3",
             "/opt/giclab/model_preflight.py",
@@ -663,6 +664,7 @@ def container_create_argv(condition: str) -> tuple[str, ...]:
             "/usr/bin/python3",
             "${IMAGE_ID}",
             "/opt/giclab/container_entrypoint.py",
+            "--supervised-release",
             "--",
             *condition_inner_argv(condition),
         )
@@ -676,6 +678,8 @@ def lifecycle_argv_templates() -> dict[str, list[str]]:
     return {
         "start_attached": ["/usr/bin/docker", "start", "--attach", "${CONTAINER_ID}"],
         "start_detached": ["/usr/bin/docker", "start", "${CONTAINER_ID}"],
+        "wait": ["/usr/bin/docker", "wait", "${CONTAINER_ID}"],
+        "logs": ["/usr/bin/docker", "logs", "${CONTAINER_ID}"],
         "inspect": ["/usr/bin/docker", "inspect", "${CONTAINER_ID}"],
         "top": [
             "/usr/bin/docker",
@@ -691,6 +695,13 @@ def lifecycle_argv_templates() -> dict[str, list[str]]:
             "/usr/bin/test",
             "-f",
             "${READINESS_PATH}",
+        ],
+        "release": [
+            "/usr/bin/docker",
+            "exec",
+            "${CONTAINER_ID}",
+            "/usr/bin/touch",
+            "/giclab/attempt/.giclab-release",
         ],
         "copy_out": [
             "/usr/bin/docker",
@@ -763,7 +774,7 @@ def bootstrap_argv_template() -> tuple[str, ...]:
 def local_supervisor_argv_templates() -> dict[str, list[str]]:
     repository = "${REPOSITORY_ROOT}"
     base = [
-        "/usr/bin/python3",
+        repository + "/.venv/bin/python",
         "-I",
         repository + "/containers/sira-smoke/bounded/local_supervisor_bootstrap.py",
         "--repository-root",
@@ -1099,9 +1110,13 @@ def validate_container_cleanup(observation: Mapping[str, object]) -> None:
         "owned_volume_residue_count",
         "browser_process_residue_count",
         "evidence_captured_before_removal",
+        "pre_stop_running_state_observed",
+        "pre_stop_process_capture_succeeded",
+        "pre_stop_process_count",
     }
     if set(observation) != required:
         raise BoundedSmokeContractError("container cleanup record has an invalid field set")
+    process_count = observation.get("pre_stop_process_count")
     if (
         observation.get("schema_version") != SCHEMA_VERSION
         or observation.get("condition")
@@ -1111,6 +1126,10 @@ def validate_container_cleanup(observation: Mapping[str, object]) -> None:
         or observation.get("terminal_state_observed") is not True
         or observation.get("removed") is not True
         or observation.get("evidence_captured_before_removal") is not True
+        or observation.get("pre_stop_running_state_observed") is not True
+        or observation.get("pre_stop_process_capture_succeeded") is not True
+        or type(process_count) is not int
+        or process_count < 1
         or any(
             observation.get(field) != 0
             for field in (

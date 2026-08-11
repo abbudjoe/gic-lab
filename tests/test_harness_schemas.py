@@ -88,6 +88,9 @@ def test_harness_schema_documents_are_registered() -> None:
         "t07-lambda-l2-launch-recovery-decision",
         "t07-bounded-smoke-plan",
         "t07-bounded-smoke-evidence",
+        "t07-bounded-smoke-authorization",
+        "t07-bounded-smoke-private-binding",
+        "t07-bounded-smoke-observer-ledger",
     ):
         schema = load_json(ROOT / f"schemas/{name}.schema.json")
         assert "$id" in schema

@@ -14,6 +14,7 @@ import hashlib
 import http.client
 import importlib.util
 import json
+import math
 import os
 import re
 import selectors
@@ -375,7 +376,7 @@ def validate_authorization(
     return document
 
 
-def _validate_secret_file(path: Path, *, forbidden_roots: Sequence[Path]) -> None:
+def _validate_secret_file(path: Path, *, forbidden_roots: Sequence[Path]) -> bytes:
     try:
         linked = path.lstat()
         descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
@@ -394,8 +395,28 @@ def _validate_secret_file(path: Path, *, forbidden_roots: Sequence[Path]) -> Non
             or any(root == resolved or root in resolved.parents for root in forbidden_roots)
         ):
             raise BootstrapError("SIRA secret file contract failed")
+        raw = os.read(descriptor, 16_385)
+        value = raw.rstrip(b"\r\n")
+        if not value or len(raw) != opened.st_size or b"\x00" in value:
+            raise BootstrapError("SIRA secret file contract failed")
+        try:
+            value.decode("utf-8")
+        except UnicodeDecodeError:
+            raise BootstrapError("SIRA secret file contract failed") from None
+        return value
     finally:
         os.close(descriptor)
+
+
+def _assert_secret_absent(root: Path, secret_value: bytes) -> None:
+    for path in root.rglob("*"):
+        if path.is_symlink():
+            raise BootstrapError("evidence contains a symlink")
+        if not path.is_file():
+            continue
+        encoded = _read_regular(path, max_bytes=MAX_EVIDENCE_BYTES)
+        if secret_value in encoded:
+            raise BootstrapError("evidence contains the supplied secret value")
 
 
 def _download_exact(url: str, destination: Path, *, size: int, sha256: str) -> None:
@@ -754,6 +775,25 @@ def _line_count(encoded: bytes) -> int:
     return len([line for line in encoded.splitlines() if line.strip()])
 
 
+def _running_container_observed(encoded: bytes) -> bool:
+    try:
+        document = json.loads(encoded)
+        return (
+            isinstance(document, list)
+            and len(document) == 1
+            and isinstance(document[0], dict)
+            and isinstance(document[0].get("State"), dict)
+            and document[0]["State"].get("Running") is True
+        )
+    except (AttributeError, json.JSONDecodeError, TypeError):
+        return False
+
+
+def _process_snapshot_count(encoded: bytes) -> int:
+    lines = [line for line in encoded.splitlines() if line.strip()]
+    return max(0, len(lines) - 1)
+
+
 def _regular_tree_bytes(root: Path) -> int:
     total = 0
     for path in root.rglob("*"):
@@ -844,11 +884,26 @@ def _cleanup_container(
         "removed": removed.returncode == 0 and removal_probe.returncode != 0,
         **residue,
         "browser_process_residue_count": residue["owned_container_residue_count"],
-        "evidence_captured_before_removal": (
-            (evidence_root / "container-inspect-before-stop.json").is_file()
-            and (evidence_root / "container-processes-before-stop.txt").is_file()
-        ),
+        "evidence_captured_before_removal": False,
+        "pre_stop_running_state_observed": False,
+        "pre_stop_process_capture_succeeded": False,
+        "pre_stop_process_count": 0,
     }
+    pre_stop_inspect = evidence_root / "container-inspect-before-stop.json"
+    pre_stop_processes = evidence_root / "container-processes-before-stop.txt"
+    if pre_stop_inspect.is_file() and pre_stop_processes.is_file():
+        running = _running_container_observed(_read_regular(pre_stop_inspect, max_bytes=1_048_576))
+        process_count = _process_snapshot_count(
+            _read_regular(pre_stop_processes, max_bytes=1_048_576)
+        )
+        record.update(
+            {
+                "evidence_captured_before_removal": running and process_count > 0,
+                "pre_stop_running_state_observed": running,
+                "pre_stop_process_capture_succeeded": process_count > 0,
+                "pre_stop_process_count": process_count,
+            }
+        )
     _write_json(evidence_root / "container-cleanup.json", record)
     contract.validate_container_cleanup(record)
 
@@ -888,14 +943,17 @@ def run_owned_container(
     result: CommandResult | None = None
     try:
         _write_bytes(evidence_root / "container-id.txt", container_id.encode() + b"\n", cap=128)
-        action = "start_attached" if attached else "start_detached"
-        result = work_runner.run(
-            _render_lifecycle(plan, contract, action, lifecycle_substitutions),
+        started = work_runner.run(
+            _render_lifecycle(plan, contract, "start_detached", lifecycle_substitutions),
             cwd=evidence_root,
-            timeout=min(wall_seconds, work_runner.remaining()),
-            check=False,
+            timeout=min(30, work_runner.remaining()),
         )
-        if readiness_container_path is not None:
+        required_readiness = (
+            readiness_container_path
+            if readiness_container_path is not None
+            else "/giclab/attempt/.giclab-entrypoint-ready"
+        )
+        if attached or readiness_container_path is not None:
             readiness_deadline = min(time.monotonic() + 45, work_runner.deadline)
             while True:
                 readiness = work_runner.run(
@@ -905,7 +963,7 @@ def run_owned_container(
                         "readiness",
                         {
                             **lifecycle_substitutions,
-                            "${READINESS_PATH}": readiness_container_path,
+                            "${READINESS_PATH}": required_readiness,
                         },
                     ),
                     cwd=evidence_root,
@@ -923,6 +981,8 @@ def run_owned_container(
             timeout=min(30, work_runner.remaining()),
         )
         _write_bytes(evidence_root / "container-inspect-before-stop.json", inspect.stdout)
+        if not _running_container_observed(inspect.stdout):
+            raise BootstrapError("container was not running for the pre-stop inspection")
         top = work_runner.run(
             _render_lifecycle(plan, contract, "top", lifecycle_substitutions),
             cwd=evidence_root,
@@ -930,6 +990,43 @@ def run_owned_container(
             check=False,
         )
         _write_bytes(evidence_root / "container-processes-before-stop.txt", top.stdout)
+        if top.returncode != 0 or _process_snapshot_count(top.stdout) < 1:
+            raise BootstrapError("container process evidence is empty or unavailable")
+        if attached:
+            work_runner.run(
+                _render_lifecycle(plan, contract, "release", lifecycle_substitutions),
+                cwd=evidence_root,
+                timeout=min(15, work_runner.remaining()),
+            )
+            waited = work_runner.run(
+                _render_lifecycle(plan, contract, "wait", lifecycle_substitutions),
+                cwd=evidence_root,
+                timeout=min(wall_seconds, work_runner.remaining()),
+                check=False,
+            )
+            try:
+                exit_code = int(waited.stdout.decode("ascii", "strict").strip())
+            except (UnicodeDecodeError, ValueError):
+                raise BootstrapError("container wait returned an invalid exit status") from None
+            if waited.returncode != 0 or not 0 <= exit_code <= 255:
+                raise BootstrapError("container wait failed")
+            logs = work_runner.run(
+                _render_lifecycle(plan, contract, "logs", lifecycle_substitutions),
+                cwd=evidence_root,
+                timeout=min(30, work_runner.remaining()),
+                check=False,
+            )
+            if logs.returncode != 0:
+                raise BootstrapError("container logs were unavailable")
+            result = CommandResult(
+                waited.argv,
+                exit_code,
+                logs.stdout,
+                logs.stderr,
+                waited.elapsed_seconds,
+            )
+        else:
+            result = started
         before_copy_bytes = _regular_tree_bytes(evidence_root)
         copied = work_runner.run(
             _render_lifecycle(
@@ -1027,7 +1124,13 @@ def run_condition(
     )
 
 
-def package_evidence(evidence_root: Path, contract: ModuleType) -> Path:
+def package_evidence(
+    evidence_root: Path,
+    contract: ModuleType,
+    *,
+    secret_value: bytes,
+) -> Path:
+    _assert_secret_absent(evidence_root, secret_value)
     manifest = contract.build_evidence_manifest(
         evidence_root,
         max_total_bytes=MAX_EVIDENCE_BYTES,
@@ -1063,7 +1166,13 @@ def package_evidence(evidence_root: Path, contract: ModuleType) -> Path:
     return archive
 
 
-def package_failure_evidence(output_root: Path, evidence_root: Path, contract: ModuleType) -> Path:
+def package_failure_evidence(
+    output_root: Path,
+    evidence_root: Path,
+    contract: ModuleType,
+    *,
+    secret_value: bytes | None = None,
+) -> Path:
     """Create a bounded secret-scanned archive after any post-root bootstrap failure."""
 
     archive = output_root / "t07-bounded-failure-evidence.zip"
@@ -1088,7 +1197,9 @@ def package_failure_evidence(output_root: Path, evidence_root: Path, contract: M
         except BootstrapError:
             skipped_cap += 1
             continue
-        if any(pattern.search(encoded) for pattern in _SECRET_SHAPES):
+        if any(pattern.search(encoded) for pattern in _SECRET_SHAPES) or (
+            secret_value is not None and secret_value in encoded
+        ):
             skipped_sensitive += 1
             continue
         if payload_bytes + len(encoded) > payload_limit:
@@ -1210,6 +1321,150 @@ def validate_pair_evidence(evidence_root: Path, contract: ModuleType) -> None:
     )
 
 
+def _condition_plan_sha256(contract: ModuleType, condition: str) -> str:
+    suffix = "smoke-reactive.yaml" if condition == "SIRA-REACTIVE" else "smoke-simulative.yaml"
+    matches = [
+        digest for path, digest in contract.SCIENTIFIC_HASHES.items() if str(path).endswith(suffix)
+    ]
+    if len(matches) != 1:
+        raise BootstrapError("condition plan identity is unavailable")
+    return str(matches[0])
+
+
+def write_reconstruction_records(
+    evidence_root: Path,
+    *,
+    contract: ModuleType,
+) -> None:
+    events: list[dict[str, object]] = []
+    for condition in contract.CONDITION_ORDER:
+        mode = contract.MODE_VALUES[condition]
+        run_id = contract.RUN_IDS[condition]
+        root = evidence_root / mode
+        budget_path = root / "provider-budget.json"
+        budget_encoded = _read_regular(budget_path, max_bytes=65_536)
+        decision = {
+            "schema_version": contract.SCHEMA_VERSION,
+            "plan_id": contract.PLAN_ID,
+            "host_run_id": contract.HOST_RUN_ID,
+            "run_id": run_id,
+            "condition": condition,
+            "source_kind": "experiment_assignment",
+            "selected_mode": mode,
+            "assignment_policy_sha256": _condition_plan_sha256(contract, condition),
+            "provider_budget_reference": f"{mode}/provider-budget.json",
+            "provider_budget_sha256": _sha256(budget_encoded),
+            "confidence": None,
+            "override": None,
+            "fallback": None,
+            "critic": None,
+            "configurator": None,
+            "per_step_planning": None,
+            "interpretation_allowed": False,
+        }
+        _write_json(root / "regulation-decision.json", decision)
+        for event_type in ("condition_assignment_bound", "condition_execution_completed"):
+            events.append(
+                {
+                    "schema_version": contract.SCHEMA_VERSION,
+                    "plan_id": contract.PLAN_ID,
+                    "host_run_id": contract.HOST_RUN_ID,
+                    "run_id": run_id,
+                    "event_sequence": len(events) + 1,
+                    "event_type": event_type,
+                    "condition": condition,
+                    "source_kind": "experiment_assignment",
+                    "evidence_reference": f"{mode}/regulation-decision.json",
+                    "interpretation_allowed": False,
+                }
+            )
+    event_bytes = b"".join(
+        json.dumps(event, allow_nan=False, separators=(",", ":"), sort_keys=True).encode() + b"\n"
+        for event in events
+    )
+    _write_bytes(evidence_root / "normalized-events.jsonl", event_bytes, cap=65_536)
+    reactive = contract.container_create_argv("SIRA-REACTIVE")
+    simulative = contract.container_create_argv("SIRA-SIMULATIVE")
+    contract.assert_pair_command_contract(reactive, simulative)
+    differences = [
+        {"index": index, "reactive": left, "simulative": right}
+        for index, (left, right) in enumerate(zip(reactive, simulative, strict=True))
+        if left != right
+    ]
+    _write_json(
+        evidence_root / "pair-equivalence.json",
+        {
+            "schema_version": contract.SCHEMA_VERSION,
+            "plan_id": contract.PLAN_ID,
+            "host_run_id": contract.HOST_RUN_ID,
+            "condition_order": list(contract.CONDITION_ORDER),
+            "reactive_command_sha256": contract.template_sha256(reactive),
+            "simulative_command_sha256": contract.template_sha256(simulative),
+            "difference_count": len(differences),
+            "differences": differences,
+            "canonical_condition_diff_only": True,
+            "trace_instrumentation_changed_contrast": False,
+            "interpretation_allowed": False,
+        },
+    )
+
+
+def write_compute_use(
+    evidence_root: Path,
+    *,
+    authorization: Mapping[str, object],
+    contract: ModuleType,
+    status: str,
+    ended_at: datetime | None = None,
+) -> dict[str, object]:
+    if status not in {"completed", "failed"}:
+        raise BootstrapError("compute-use status is invalid")
+    started = _parse_utc(
+        authorization.get("supervised_wall_started_at_utc"), context="compute start"
+    )
+    ended = datetime.now(UTC) if ended_at is None else ended_at.astimezone(UTC)
+    elapsed = (ended - started).total_seconds()
+    if not math.isfinite(elapsed) or elapsed < 0:
+        raise BootstrapError("compute-use wall interval is invalid")
+    billable_minutes = math.ceil(elapsed / 60)
+    provider_cost = billable_minutes * 129 / 6_000
+    api_cost = 0.0
+    for mode in ("reactive", "simulative"):
+        path = evidence_root / mode / "provider-budget.json"
+        if path.is_file() and not path.is_symlink():
+            budget = _strict_json(
+                _read_regular(path, max_bytes=65_536), context=f"{mode} provider budget"
+            )
+            value = budget.get("cost_usd")
+            if not isinstance(value, (int, float)) or isinstance(value, bool):
+                raise BootstrapError("provider budget cost is invalid")
+            api_cost += float(value)
+    within = elapsed <= HARD_PROVIDER_WALL_SECONDS and provider_cost <= 2.0 and api_cost <= 4.0
+    record = {
+        "schema_version": contract.SCHEMA_VERSION,
+        "plan_id": contract.PLAN_ID,
+        "run_id": contract.HOST_RUN_ID,
+        "provider": "Lambda On-Demand Cloud",
+        "hardware": "gpu_1x_a10",
+        "region": "us-east-1",
+        "started_at_utc": started.isoformat().replace("+00:00", "Z"),
+        "ended_at_utc": ended.isoformat().replace("+00:00", "Z"),
+        "wall_clock_seconds": elapsed,
+        "accelerator_hours": elapsed / 3_600,
+        "list_price_upper_bound_usd": provider_cost,
+        "actual_provider_invoice_cost_usd": None,
+        "observed_openai_api_cost_usd": api_cost,
+        "status": status,
+        "within_wall_and_cost_caps": within,
+        "repository_compute_record": "CMP-0001",
+        "repository_closeout_required": True,
+    }
+    _write_json(evidence_root / "compute-use.json", record)
+    if status == "completed" and not within:
+        raise BootstrapError("compute-use closeout exceeds its cap")
+    return record
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument("--plan", type=Path, required=True)
@@ -1252,7 +1507,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         raise BootstrapError("remote output root is not fresh and canonical")
     _assert_remote_capacity(output_root)
     starting_free_bytes = shutil.disk_usage(output_root.parent).free
-    _validate_secret_file(args.secret_file, forbidden_roots=(bundle_root, output_root))
+    secret_value = _validate_secret_file(
+        args.secret_file, forbidden_roots=(bundle_root, output_root)
+    )
     output_root.mkdir(mode=0o700, parents=True, exist_ok=False)
     evidence_root = output_root / "evidence"
     evidence_root.mkdir(mode=0o700)
@@ -1427,9 +1684,24 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         _assert_runtime_disk_increment(output_root, starting_free_bytes=starting_free_bytes)
         validate_pair_evidence(evidence_root, contract)
-        package_evidence(evidence_root, contract)
+        write_reconstruction_records(evidence_root, contract=contract)
+        write_compute_use(
+            evidence_root,
+            authorization=authorization,
+            contract=contract,
+            status="completed",
+        )
+        package_evidence(evidence_root, contract, secret_value=secret_value)
         _assert_runtime_disk_increment(output_root, starting_free_bytes=starting_free_bytes)
     except BaseException as exc:
+        if not (evidence_root / "compute-use.json").exists():
+            with contextlib.suppress(BaseException):
+                write_compute_use(
+                    evidence_root,
+                    authorization=authorization,
+                    contract=contract,
+                    status="failed",
+                )
         _write_json(
             incident,
             {
@@ -1440,7 +1712,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             },
         )
         try:
-            package_failure_evidence(output_root, evidence_root, contract)
+            package_failure_evidence(
+                output_root,
+                evidence_root,
+                contract,
+                secret_value=secret_value,
+            )
         except BaseException:
             with contextlib.suppress(BaseException):
                 _write_json(

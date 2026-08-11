@@ -5,16 +5,22 @@ from __future__ import annotations
 import argparse
 import os
 import stat
+import time
 from collections.abc import Sequence
 from pathlib import Path
 
 CHANNEL_PATH = Path("/run/secrets/sira_api_key")
 SIRA_CHANNEL_NAME = "SIRA_API_KEY"
 MAX_CHANNEL_BYTES = 16_384
+ATTEMPT_ROOT = Path("/giclab/attempt")
+READY_PATH = ATTEMPT_ROOT / ".giclab-entrypoint-ready"
+RELEASE_PATH = ATTEMPT_ROOT / ".giclab-release"
+RELEASE_WAIT_SECONDS = 30
 
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
+    parser.add_argument("--supervised-release", action="store_true")
     parser.add_argument("command", nargs=argparse.REMAINDER)
     return parser
 
@@ -48,6 +54,27 @@ def child_environment(secret: str, ambient: dict[str, str] | None = None) -> dic
     return environment
 
 
+def wait_for_supervisor_release() -> None:
+    if not ATTEMPT_ROOT.is_dir() or ATTEMPT_ROOT.is_symlink():
+        raise RuntimeError("the attempt root is unavailable")
+    descriptor = os.open(
+        READY_PATH,
+        os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
+        0o600,
+    )
+    try:
+        os.write(descriptor, b"ready\n")
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+    deadline = time.monotonic() + RELEASE_WAIT_SECONDS
+    while time.monotonic() < deadline:
+        if RELEASE_PATH.is_file() and not RELEASE_PATH.is_symlink():
+            return
+        time.sleep(0.05)
+    raise RuntimeError("the container supervisor release was not received")
+
+
 def run(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     command = tuple(args.command)
@@ -55,6 +82,8 @@ def run(argv: Sequence[str] | None = None) -> int:
         command = command[1:]
     if not command:
         raise RuntimeError("a SiRA child argument array is required")
+    if args.supervised_release:
+        wait_for_supervisor_release()
     channel_value = read_secret_file()
     environment = child_environment(channel_value)
     os.execvpe(command[0], command, environment)

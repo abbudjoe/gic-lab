@@ -16,6 +16,7 @@ import hashlib
 import http.client
 import ipaddress
 import json
+import math
 import os
 import re
 import socket
@@ -24,10 +25,11 @@ import stat
 import subprocess
 import sys
 import time
+import zipfile
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from types import ModuleType
 from typing import Final, Protocol
 
@@ -67,6 +69,7 @@ PRIVATE_BINDING_SCHEMA_RELATIVE: Final = Path(
     "schemas/t07-bounded-smoke-private-binding.schema.json"
 )
 LEDGER_SCHEMA_RELATIVE: Final = Path("schemas/t07-bounded-smoke-observer-ledger.schema.json")
+EVIDENCE_SCHEMA_RELATIVE: Final = Path("schemas/t07-bounded-smoke-evidence.schema.json")
 ENDPOINT_SCHEMA_ROOT: Final = Path("containers/sira-smoke/lambda/endpoint-schemas-v3")
 ENDPOINT_SCHEMAS: Final[Mapping[str, str]] = {
     "/api/v1/instance-types": "instance-types.schema.json",
@@ -106,6 +109,13 @@ PHASE_START_ORDINAL: Final = {
     "termination": 11,
     "terminal": 12,
 }
+CLEANUP_NEXT_PHASE: Final[Mapping[str, str | None]] = {
+    "prelaunch": "terminal",
+    "security": "terminal",
+    "post_launch": "termination",
+    "termination": "terminal",
+    "terminal": None,
+}
 MAX_REQUESTS: Final = 13
 MAX_RESPONSE_BYTES: Final = 1_048_576
 MAX_RESPONSE_BYTES_AGGREGATE: Final = 13_631_488
@@ -120,6 +130,9 @@ MAX_AUTHORIZATION_BYTES: Final = 65_536
 MAX_PLAN_BYTES: Final = 1_048_576
 MAX_ARCHIVE_BYTES: Final = 301_989_888
 MAX_ARCHIVE_FILES: Final = 128
+MAX_ARCHIVE_PAYLOAD_FILES: Final = MAX_ARCHIVE_FILES - 3
+MAX_REMOTE_EVIDENCE_BYTES: Final = 268_435_456
+MAX_REMOTE_EVIDENCE_FILES: Final = 4_096
 ARCHIVE_WALL_SECONDS: Final = 600
 MAC_PREWRITE_FLOOR_BYTES: Final = 8_891_924_480
 MAC_RETAINED_FLOOR_BYTES: Final = 8_589_934_592
@@ -143,6 +156,32 @@ _SECRET_SHAPES = (
         rb"CRET)[ \t]*=[^\r\n]+$"
     ),
 )
+_SECRET_PREFIX_SHAPES = (
+    re.compile(rb"\bsk-[A-Za-z0-9_-]{20,}\b"),
+    re.compile(rb"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
+    re.compile(rb"(?im)^[ \t]*[A-Z0-9_]*(?:API_KEY|TOKEN|SECRET)[ \t]*="),
+    re.compile(
+        rb"""(?ix)["']?(?:[a-z0-9]+[_-])?"""
+        rb"""(?:api[_-]?key|token|secret|password|authorization|cookie)"""
+        rb"""["']?[ \t]*[:=][ \t]*["']?[a-z0-9._~+/=-]{8,}"""
+    ),
+)
+_SENSITIVE_PROVIDER_KEYS: Final = frozenset(
+    {
+        "authorization",
+        "cookie",
+        "credential",
+        "jupyter_token",
+        "jupyter_url",
+        "password",
+        "secret",
+        "token",
+    }
+)
+CONDITION_PLAN_SHA256: Final[Mapping[str, str]] = {
+    "SIRA-REACTIVE": "7ca19470e550e48978090c9b7014e047c56d80962e40275b846f589b08bfb018",
+    "SIRA-SIMULATIVE": "68f5f4a4a123620bab039ba7bc6844243cad229ed992df6562bf0d8562874436",
+}
 
 
 class BoundedSupervisorError(RuntimeError):
@@ -685,12 +724,15 @@ def materialize_authority(
         "status": "materialized",
         "next_phase": "prelaunch",
         "request_count": 0,
+        "attempted_request_ordinals": [],
         "response_bytes": 0,
         "event_count": 0,
         "last_request_monotonic_ns": None,
         "selected_image_id": None,
         "owned_ruleset_id": None,
         "bound_instance_id": None,
+        "cleanup_origin_phase": None,
+        "termination_verified": False,
     }
     _write_exclusive(run_root / "observer-state.json", canonical_json_bytes(state))
     ledger_schema, _ = _load_schema(root, LEDGER_SCHEMA_RELATIVE)
@@ -748,12 +790,16 @@ class FsyncLedger:
             )
             os.close(descriptor)
         self.event_count = 0
+        self.events: list[dict[str, object]] = []
+        self.sent_ordinals: set[int] = set()
         self._load()
 
     def _load(self) -> None:
         encoded = _read_regular(self.path, max_bytes=MAX_LEDGER_BYTES)
         if not encoded:
             self.event_count = 0
+            self.events = []
+            self.sent_ordinals = set()
             return
         lines = encoded.splitlines(keepends=True)
         if not all(line.endswith(b"\n") for line in lines):
@@ -766,6 +812,12 @@ class FsyncLedger:
                 or event.get("authorization_reference") != self.authorization_reference
             ):
                 raise BoundedSupervisorError("observer ledger sequence or binding drifted")
+            if event.get("event_type") == "request_send_started":
+                ordinal = event.get("request_ordinal")
+                if type(ordinal) is not int or ordinal in self.sent_ordinals:
+                    raise BoundedSupervisorError("observer ledger replays a request ordinal")
+                self.sent_ordinals.add(ordinal)
+            self.events.append(event)
         self.event_count = len(lines)
 
     def append(
@@ -786,6 +838,10 @@ class FsyncLedger:
     ) -> None:
         if self.event_count >= MAX_LEDGER_EVENTS:
             raise BoundedSupervisorError("observer ledger event cap exhausted")
+        if event_type == "request_send_started" and (
+            request_ordinal is None or request_ordinal in self.sent_ordinals
+        ):
+            raise BoundedSupervisorError("observer request ordinal was already sent")
         event = {
             "schema_version": SCHEMA_VERSION,
             "run_id": HOST_RUN_ID,
@@ -828,6 +884,9 @@ class FsyncLedger:
         finally:
             os.close(descriptor)
         self.event_count += 1
+        self.events.append(event)
+        if event_type == "request_send_started" and request_ordinal is not None:
+            self.sent_ordinals.add(request_ordinal)
 
 
 class LambdaHttpsBoundedTransport:
@@ -1002,6 +1061,93 @@ def _endpoint_document(root: Path, path: str, encoded: bytes) -> dict[str, objec
     schema, _ = _load_schema(root, ENDPOINT_SCHEMA_ROOT / ENDPOINT_SCHEMAS[path])
     _validate_schema(document, schema, context="provider response")
     return document
+
+
+def _schema_reference(root_schema: Mapping[str, object], reference: object) -> Mapping[str, object]:
+    if not isinstance(reference, str) or not reference.startswith("#/"):
+        raise BoundedSupervisorError("provider projection schema reference is unsupported")
+    current: object = root_schema
+    for component in reference[2:].split("/"):
+        if not isinstance(current, Mapping) or component not in current:
+            raise BoundedSupervisorError("provider projection schema reference is invalid")
+        current = current[component]
+    return _mapping(current, context="provider projection schema")
+
+
+def _sensitive_provider_key(name: str) -> bool:
+    normalized = name.casefold()
+    return normalized in _SENSITIVE_PROVIDER_KEYS or any(
+        marker in normalized
+        for marker in ("authorization", "cookie", "credential", "password", "secret", "token")
+    )
+
+
+def _project_to_declared_schema(
+    value: object,
+    schema: Mapping[str, object],
+    *,
+    root_schema: Mapping[str, object],
+) -> object:
+    if "$ref" in schema:
+        schema = _schema_reference(root_schema, schema["$ref"])
+    if isinstance(value, Mapping):
+        properties_raw = schema.get("properties", {})
+        properties = properties_raw if isinstance(properties_raw, Mapping) else {}
+        additional = schema.get("additionalProperties")
+        output: dict[str, object] = {}
+        for key, child in value.items():
+            if not isinstance(key, str) or _sensitive_provider_key(key):
+                continue
+            child_schema = properties.get(key)
+            if child_schema is None and isinstance(additional, Mapping):
+                child_schema = additional
+            if not isinstance(child_schema, Mapping):
+                continue
+            output[key] = _project_to_declared_schema(child, child_schema, root_schema=root_schema)
+        return output
+    if isinstance(value, list):
+        items = schema.get("items")
+        prefix = schema.get("prefixItems")
+        projected: list[object] = []
+        for index, child in enumerate(value):
+            item_schema: object = items
+            if (
+                isinstance(prefix, Sequence)
+                and not isinstance(prefix, (str, bytes))
+                and index < len(prefix)
+            ):
+                item_schema = prefix[index]
+            if not isinstance(item_schema, Mapping):
+                continue
+            projected.append(
+                _project_to_declared_schema(child, item_schema, root_schema=root_schema)
+            )
+        return projected
+    return value
+
+
+def _sanitized_provider_receipt(
+    root: Path,
+    *,
+    path: str,
+    document: Mapping[str, object],
+    received_bytes: int,
+) -> bytes:
+    schema, _ = _load_schema(root, ENDPOINT_SCHEMA_ROOT / ENDPOINT_SCHEMAS[path])
+    projection = _project_to_declared_schema(document, schema, root_schema=schema)
+    encoded = canonical_json_bytes(
+        {
+            "schema_version": SCHEMA_VERSION,
+            "path": path,
+            "received_bytes": received_bytes,
+            "projection": projection,
+            "unknown_additive_fields_retained": False,
+            "credential_fields_retained": False,
+        }
+    )
+    if any(pattern.search(encoded) for pattern in _SECRET_SHAPES):
+        raise BoundedSupervisorError("sanitized provider receipt contains secret-shaped data")
+    return encoded
 
 
 def _region_name(value: object) -> str:
@@ -1204,22 +1350,54 @@ def _validate_termination(
     state: dict[str, object],
 ) -> dict[str, object]:
     del private
-    instance_id = _text(state.get("bound_instance_id"), context="bound instance ID")
     instances = [
         _mapping(item, context="instance")
         for item in _sequence(responses["/api/v1/instances"].get("data"), context="instances")
     ]
-    bound_rows = [item for item in instances if item.get("id") == instance_id]
-    if len(bound_rows) > 1 or (
-        bound_rows and bound_rows[0].get("status") not in {"terminated", "preempted"}
-    ):
-        raise BoundedSupervisorError("bound instance is not terminal or absent")
+    bound_value = state.get("bound_instance_id")
+    instance_id: str | None
+    if isinstance(bound_value, str) and bound_value:
+        instance_id = bound_value
+        bound_rows = [item for item in instances if item.get("id") == instance_id]
+        if len(bound_rows) > 1 or (
+            bound_rows and bound_rows[0].get("status") not in {"terminated", "preempted"}
+        ):
+            raise BoundedSupervisorError("bound instance is not terminal or absent")
+    else:
+        ruleset_id = _text(state.get("owned_ruleset_id"), context="bound ruleset ID")
+        candidates: list[Mapping[str, object]] = []
+        for item in instances:
+            attached = {
+                _text(_mapping(value, context="attached ruleset").get("id"), context="ruleset ID")
+                for value in _sequence(item.get("firewall_rulesets"), context="attached rulesets")
+            }
+            instance_type = _mapping(item.get("instance_type"), context="instance type")
+            if (
+                instance_type.get("name") == "gpu_1x_a10"
+                and instance_type.get("architecture") == "x86_64"
+                and _region_name(item.get("region")) == "us-east-1"
+                and list(_sequence(item.get("ssh_key_names"), context="instance SSH keys"))
+                == ["fractal-lambda-codex"]
+                and not list(_sequence(item.get("file_system_names"), context="file systems"))
+                and attached == {ruleset_id}
+            ):
+                candidates.append(item)
+        if any(item.get("status") not in {"terminated", "preempted"} for item in candidates):
+            raise BoundedSupervisorError("an unbound owned instance remains nonterminal")
+        if len(candidates) > 1:
+            raise BoundedSupervisorError("multiple possible owned instances were observed")
+        instance_id = _text(candidates[0].get("id"), context="instance ID") if candidates else None
+        state["bound_instance_id"] = instance_id
+    state["termination_verified"] = True
     return {
         "schema_version": SCHEMA_VERSION,
         "phase": "termination",
         "provider_terminal_or_absent": True,
         "billing_stopped": True,
-        "bound_instance_id_sha256": sha256_bytes(instance_id.encode()),
+        "bound_instance_id_sha256": (
+            sha256_bytes(instance_id.encode()) if instance_id is not None else None
+        ),
+        "identity_recovered_during_cleanup": bound_value is None and instance_id is not None,
     }
 
 
@@ -1228,8 +1406,8 @@ def _validate_terminal(
     private: Mapping[str, object],
     state: dict[str, object],
 ) -> dict[str, object]:
-    instance_id = _text(state.get("bound_instance_id"), context="bound instance ID")
-    ruleset_id = _text(state.get("owned_ruleset_id"), context="bound ruleset ID")
+    instance_id = state.get("bound_instance_id")
+    ruleset_id = state.get("owned_ruleset_id")
     rulesets = [
         _mapping(item, context="ruleset")
         for item in _sequence(
@@ -1237,7 +1415,8 @@ def _validate_terminal(
         )
     ]
     if any(
-        item.get("id") == ruleset_id or item.get("name") == private.get("owned_ruleset_name")
+        (isinstance(ruleset_id, str) and item.get("id") == ruleset_id)
+        or item.get("name") == private.get("owned_ruleset_name")
         for item in rulesets
     ):
         raise BoundedSupervisorError("owned ruleset remains present")
@@ -1246,14 +1425,20 @@ def _validate_terminal(
     )
     if _firewall_semantic_sha256(global_data.get("rules")) != BASELINE_SEMANTIC_SHA256:
         raise BoundedSupervisorError("global firewall baseline was not restored")
+    no_launch_cleanup = state.get("cleanup_origin_phase") in {"prelaunch", "security"}
+    termination_verified = state.get("termination_verified") is True or no_launch_cleanup
     return {
         "schema_version": SCHEMA_VERSION,
         "phase": "terminal",
-        "provider_termination_previously_verified": True,
+        "provider_termination_previously_verified": termination_verified,
         "owned_regional_ruleset_match_count": 0,
         "global_firewall_baseline_sha256": BASELINE_SEMANTIC_SHA256,
-        "bound_instance_id_sha256": sha256_bytes(instance_id.encode()),
-        "owned_ruleset_id_sha256": sha256_bytes(ruleset_id.encode()),
+        "bound_instance_id_sha256": (
+            sha256_bytes(instance_id.encode()) if isinstance(instance_id, str) else None
+        ),
+        "owned_ruleset_id_sha256": (
+            sha256_bytes(ruleset_id.encode()) if isinstance(ruleset_id, str) else None
+        ),
     }
 
 
@@ -1264,6 +1449,15 @@ _PHASE_VALIDATORS: Final = {
     "termination": _validate_termination,
     "terminal": _validate_terminal,
 }
+
+
+def _enter_cleanup_only(state: dict[str, object], *, failed_phase: str) -> None:
+    if state.get("cleanup_origin_phase") is None:
+        state["cleanup_origin_phase"] = failed_phase
+    state["status"] = (
+        "cleanup_required" if CLEANUP_NEXT_PHASE[failed_phase] else "cleanup_incomplete"
+    )
+    state["next_phase"] = CLEANUP_NEXT_PHASE[failed_phase]
 
 
 def execute_observer_phase(
@@ -1295,14 +1489,14 @@ def execute_observer_phase(
         private_binding_path=private_binding_path,
         private_binding_sha256=private_binding_sha256,
         utc_now=utc_now,
+        require_live=phase not in {"termination", "terminal"},
     )
     state = _load_state(root)
     if (
         state.get("next_phase") != phase
-        or state.get("status") in {"burned", "complete"}
+        or state.get("status") in {"complete", "cleanup_complete", "cleanup_incomplete"}
         or state.get("authorization_sha256") != authorization_sha256
         or state.get("private_binding_sha256") != private_binding_sha256
-        or state.get("request_count") != PHASE_START_ORDINAL[phase] - 1
     ):
         raise BoundedSupervisorError("observer phase/state identity drifted")
     ledger_schema, _ = _load_schema(root, LEDGER_SCHEMA_RELATIVE)
@@ -1313,8 +1507,28 @@ def execute_observer_phase(
             authorization.get("authorization_reference"), context="authorization reference"
         ),
     )
+    attempted_raw = state.get("attempted_request_ordinals")
+    if (
+        not isinstance(attempted_raw, list)
+        or any(type(value) is not int for value in attempted_raw)
+        or len(set(attempted_raw)) != len(attempted_raw)
+        or set(attempted_raw) != ledger.sent_ordinals
+        or state.get("request_count") != len(attempted_raw)
+        or len(attempted_raw) > MAX_REQUESTS
+        or any(
+            ordinal in ledger.sent_ordinals
+            for ordinal in range(
+                PHASE_START_ORDINAL[phase],
+                PHASE_START_ORDINAL[phase] + len(PHASE_REQUESTS[phase]),
+            )
+        )
+    ):
+        raise BoundedSupervisorError("observer request history drifted or would replay")
     if state.get("event_count") != ledger.event_count:
         raise BoundedSupervisorError("observer state/ledger event count drifted")
+    cleanup_mode = state.get("status") == "cleanup_required"
+    if cleanup_mode and phase not in {"termination", "terminal"}:
+        raise BoundedSupervisorError("cleanup-only continuation cannot resume execution phases")
     ledger.append("phase_started", phase=phase, monotonic_ns=monotonic_ns(), utc_now=utc_now())
     state["status"] = f"{phase}_running"
     state["event_count"] = ledger.event_count
@@ -1330,8 +1544,7 @@ def execute_observer_phase(
             monotonic_ns=monotonic_ns(),
             utc_now=utc_now(),
         )
-        state["status"] = "burned"
-        state["next_phase"] = None
+        _enter_cleanup_only(state, failed_phase=phase)
         state["event_count"] = ledger.event_count
         _atomic_write(root / STATE_RELATIVE, canonical_json_bytes(state))
         raise BoundedSupervisorError("Lambda observer credential channel failed") from None
@@ -1349,7 +1562,7 @@ def execute_observer_phase(
             monotonic_ns=monotonic_ns(),
             utc_now=utc_now(),
         )
-        state["status"] = "burned"
+        _enter_cleanup_only(state, failed_phase=phase)
         state["event_count"] = ledger.event_count
         _atomic_write(root / STATE_RELATIVE, canonical_json_bytes(state))
         raise BoundedSupervisorError("Lambda observer credential is unavailable")
@@ -1387,6 +1600,11 @@ def execute_observer_phase(
                 utc_now=utc_now(),
             )
             active_terminal_recorded = False
+            attempted = list(attempted_raw)
+            attempted.append(ordinal)
+            attempted_raw = attempted
+            state["attempted_request_ordinals"] = attempted
+            state["request_count"] = len(attempted)
             state["event_count"] = ledger.event_count
             _atomic_write(root / STATE_RELATIVE, canonical_json_bytes(state))
             try:
@@ -1446,8 +1664,6 @@ def execute_observer_phase(
                 )
                 active_terminal_recorded = True
                 raise BoundedSupervisorError("bounded observer HTTP response failed")
-            response_path = root / RESPONSES_RELATIVE / f"{ordinal:03d}.json"
-            _write_exclusive(response_path, response.body)
             try:
                 document = _endpoint_document(root, path, response.body)
             except BoundedSupervisorError as error:
@@ -1469,6 +1685,16 @@ def execute_observer_phase(
                 )
                 active_terminal_recorded = True
                 raise
+            response_path = root / RESPONSES_RELATIVE / f"{ordinal:03d}.json"
+            _write_exclusive(
+                response_path,
+                _sanitized_provider_receipt(
+                    root,
+                    path=path,
+                    document=document,
+                    received_bytes=len(response.body),
+                ),
+            )
             ledger.append(
                 "response_completed",
                 phase=phase,
@@ -1482,7 +1708,6 @@ def execute_observer_phase(
                 utc_now=utc_now(),
             )
             active_terminal_recorded = True
-            state["request_count"] = ordinal
             state["response_bytes"] = _nonnegative_integer(
                 state.get("response_bytes"), context="observer response bytes"
             ) + len(response.body)
@@ -1503,7 +1728,7 @@ def execute_observer_phase(
             )
         )
         report["request_ordinals"] = ordinals
-        report["raw_response_sha256s"] = [
+        report["sanitized_response_sha256s"] = [
             sha256_bytes(
                 _read_regular(
                     root / RESPONSES_RELATIVE / f"{ordinal:03d}.json",
@@ -1515,9 +1740,20 @@ def execute_observer_phase(
         _write_exclusive(
             root / RUN_ROOT_RELATIVE / f"{phase}-report.json", canonical_json_bytes(report)
         )
-        next_index = PHASE_ORDER.index(phase) + 1
-        state["next_phase"] = PHASE_ORDER[next_index] if next_index < len(PHASE_ORDER) else None
-        state["status"] = "complete" if phase == "terminal" else f"{phase}_passed"
+        if cleanup_mode:
+            state["next_phase"] = "terminal" if phase == "termination" else None
+            if phase == "terminal":
+                state["status"] = (
+                    "cleanup_complete"
+                    if report.get("provider_termination_previously_verified") is True
+                    else "cleanup_incomplete"
+                )
+            else:
+                state["status"] = "cleanup_required"
+        else:
+            next_index = PHASE_ORDER.index(phase) + 1
+            state["next_phase"] = PHASE_ORDER[next_index] if next_index < len(PHASE_ORDER) else None
+            state["status"] = "complete" if phase == "terminal" else f"{phase}_passed"
         ledger.append("phase_passed", phase=phase, monotonic_ns=monotonic_ns(), utc_now=utc_now())
         if phase == "terminal":
             ledger.append(
@@ -1527,7 +1763,7 @@ def execute_observer_phase(
         _atomic_write(root / STATE_RELATIVE, canonical_json_bytes(state))
         return report
     except BaseException:
-        if state.get("status") != "burned":
+        if state.get("status") not in {"cleanup_required", "cleanup_incomplete"}:
             if (
                 active_ordinal is not None
                 and active_path is not None
@@ -1553,12 +1789,651 @@ def execute_observer_phase(
                     monotonic_ns=monotonic_ns(),
                     utc_now=utc_now(),
                 )
-            state["status"] = "burned"
-            state["next_phase"] = None
+            _enter_cleanup_only(state, failed_phase=phase)
             state["event_count"] = ledger.event_count
             with contextlib.suppress(OSError, BoundedSupervisorError):
                 _atomic_write(root / STATE_RELATIVE, canonical_json_bytes(state))
         raise
+
+
+def _safe_zip_member_name(name: str) -> str:
+    if not name or "\\" in name or name.endswith("/"):
+        raise BoundedSupervisorError("inbound archive contains an unsafe member name")
+    path = PurePosixPath(name)
+    if (
+        path.is_absolute()
+        or path.as_posix() != name
+        or any(part in {"", ".", ".."} for part in path.parts)
+    ):
+        raise BoundedSupervisorError("inbound archive member escapes its root")
+    return name
+
+
+def _read_verified_zip_member(
+    opened: zipfile.ZipFile,
+    info: zipfile.ZipInfo,
+    *,
+    capture: bool,
+) -> tuple[int, str, bytes | None]:
+    if (
+        info.flag_bits & 0x1
+        or info.compress_type != zipfile.ZIP_STORED
+        or info.compress_size != info.file_size
+        or info.file_size > MAX_REMOTE_EVIDENCE_BYTES
+        or stat.S_ISLNK((info.external_attr >> 16) & 0xFFFF)
+    ):
+        raise BoundedSupervisorError("inbound archive member contract is unsafe")
+    digest = hashlib.sha256()
+    retained = bytearray() if capture else None
+    total = 0
+    tail = b""
+    try:
+        with opened.open(info, "r") as member:
+            while chunk := member.read(65_536):
+                total += len(chunk)
+                if total > info.file_size or total > MAX_REMOTE_EVIDENCE_BYTES:
+                    raise BoundedSupervisorError("inbound archive member exceeds its cap")
+                probe = tail + chunk
+                if any(pattern.search(probe) for pattern in _SECRET_PREFIX_SHAPES):
+                    raise BoundedSupervisorError(
+                        "decoded inbound archive contains credential-shaped material"
+                    )
+                tail = probe[-512:]
+                digest.update(chunk)
+                if retained is not None:
+                    retained.extend(chunk)
+    except BoundedSupervisorError:
+        raise
+    except (OSError, RuntimeError, zipfile.BadZipFile):
+        raise BoundedSupervisorError("inbound archive member could not be verified") from None
+    if total != info.file_size:
+        raise BoundedSupervisorError("inbound archive member length drifted")
+    return total, digest.hexdigest(), bytes(retained) if retained is not None else None
+
+
+def _finite_number(value: object, *, context: str) -> float:
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        raise BoundedSupervisorError(f"{context} must be numeric")
+    number = float(value)
+    if not math.isfinite(number) or number < 0:
+        raise BoundedSupervisorError(f"{context} is invalid")
+    return number
+
+
+def _verify_pair_reconstruction(
+    captured: Mapping[str, bytes],
+    *,
+    plan: Mapping[str, object],
+) -> None:
+    required = {
+        "pair-budget.json",
+        "pair-equivalence.json",
+        "compute-use.json",
+        "normalized-events.jsonl",
+        "reactive/provider-budget.json",
+        "reactive/regulation-decision.json",
+        "simulative/provider-budget.json",
+        "simulative/regulation-decision.json",
+    }
+    if set(captured) != required:
+        raise BoundedSupervisorError("complete evidence lacks reconstruction records")
+    plan_conditions = [
+        _mapping(item, context="plan condition")
+        for item in _sequence(plan.get("conditions"), context="plan conditions")
+    ]
+    if [item.get("condition") for item in plan_conditions] != [
+        "SIRA-REACTIVE",
+        "SIRA-SIMULATIVE",
+    ]:
+        raise BoundedSupervisorError("plan condition order drifted during reconstruction")
+    pair = _strict_json(captured["pair-budget.json"], context="pair budget")
+    pair_conditions = [
+        _mapping(item, context="pair condition")
+        for item in _sequence(pair.get("conditions"), context="pair conditions")
+    ]
+    if (
+        set(pair)
+        != {
+            "schema_version",
+            "plan_id",
+            "host_run_id",
+            "condition_order",
+            "conditions",
+            "within_all_caps",
+        }
+        or pair.get("schema_version") != SCHEMA_VERSION
+        or pair.get("plan_id") != PLAN_ID
+        or pair.get("host_run_id") != HOST_RUN_ID
+        or pair.get("condition_order") != ["SIRA-REACTIVE", "SIRA-SIMULATIVE"]
+        or pair.get("within_all_caps") is not True
+        or len(pair_conditions) != 2
+    ):
+        raise BoundedSupervisorError("pair budget receipt is incomplete")
+    totals: dict[str, float] = {
+        "cost_usd": 0.0,
+        "model_tokens": 0,
+        "model_call_attempts": 0,
+        "browser_actions": 0,
+        "wall_seconds": 0.0,
+        "output_bytes": 0,
+    }
+    for actual, bound in zip(pair_conditions, plan_conditions, strict=True):
+        if (
+            set(actual)
+            != {
+                "condition",
+                "run_id",
+                "cost_usd",
+                "model_tokens",
+                "model_call_attempts",
+                "browser_actions",
+                "wall_seconds",
+                "output_bytes",
+            }
+            or actual.get("condition") != bound.get("condition")
+            or actual.get("run_id") != bound.get("run_id")
+        ):
+            raise BoundedSupervisorError("pair condition identity drifted")
+        cost = _finite_number(actual.get("cost_usd"), context="condition cost")
+        wall = _finite_number(actual.get("wall_seconds"), context="condition wall")
+        for metric in (
+            "model_tokens",
+            "model_call_attempts",
+            "browser_actions",
+            "output_bytes",
+        ):
+            observed = _nonnegative_integer(actual.get(metric), context=metric)
+            limit_name = "model_call_attempts" if metric == "model_call_attempts" else metric
+            if observed > _nonnegative_integer(bound.get(limit_name), context=f"{metric} cap"):
+                raise BoundedSupervisorError("condition evidence exceeds its bound plan")
+            totals[metric] += observed
+        if cost > _finite_number(
+            bound.get("api_cost_usd"), context="condition cost cap"
+        ) or wall > _finite_number(bound.get("wall_seconds"), context="condition wall cap"):
+            raise BoundedSupervisorError("condition evidence exceeds its bound plan")
+        totals["cost_usd"] += cost
+        totals["wall_seconds"] += wall
+    limits = _mapping(plan.get("limits"), context="plan limits")
+    aggregate_caps: dict[str, float] = {
+        "cost_usd": _nonnegative_integer(
+            limits.get("openai_api_cost_cents_aggregate"), context="API cent cap"
+        )
+        / 100,
+        "model_tokens": _nonnegative_integer(
+            limits.get("model_tokens_aggregate"), context="model token cap"
+        ),
+        "model_call_attempts": _nonnegative_integer(
+            limits.get("model_call_attempts_aggregate"), context="model call cap"
+        ),
+        "browser_actions": _nonnegative_integer(
+            limits.get("browser_actions_aggregate"), context="browser action cap"
+        ),
+        "wall_seconds": _nonnegative_integer(
+            limits.get("condition_wall_seconds_aggregate"), context="condition wall cap"
+        ),
+        "output_bytes": _nonnegative_integer(
+            limits.get("condition_output_bytes_aggregate"), context="output cap"
+        ),
+    }
+    if any(totals[field] > cap for field, cap in aggregate_caps.items()):
+        raise BoundedSupervisorError("pair evidence exceeds an aggregate cap")
+
+    reactive_argv = [
+        _text(item, context="reactive command argument")
+        for item in _sequence(
+            plan_conditions[0].get("container_create_argv_template"),
+            context="reactive command",
+        )
+    ]
+    simulative_argv = [
+        _text(item, context="simulative command argument")
+        for item in _sequence(
+            plan_conditions[1].get("container_create_argv_template"),
+            context="simulative command",
+        )
+    ]
+    if len(reactive_argv) != len(simulative_argv):
+        raise BoundedSupervisorError("condition command lengths drifted")
+    expected_differences = [
+        {"index": index, "reactive": left, "simulative": right}
+        for index, (left, right) in enumerate(zip(reactive_argv, simulative_argv, strict=True))
+        if left != right
+    ]
+    equivalence = _strict_json(captured["pair-equivalence.json"], context="pair equivalence")
+    if (
+        set(equivalence)
+        != {
+            "schema_version",
+            "plan_id",
+            "host_run_id",
+            "condition_order",
+            "reactive_command_sha256",
+            "simulative_command_sha256",
+            "difference_count",
+            "differences",
+            "canonical_condition_diff_only",
+            "trace_instrumentation_changed_contrast",
+            "interpretation_allowed",
+        }
+        or equivalence.get("schema_version") != SCHEMA_VERSION
+        or equivalence.get("plan_id") != PLAN_ID
+        or equivalence.get("host_run_id") != HOST_RUN_ID
+        or equivalence.get("condition_order") != ["SIRA-REACTIVE", "SIRA-SIMULATIVE"]
+        or equivalence.get("reactive_command_sha256")
+        != sha256_bytes(canonical_json_bytes(reactive_argv))
+        or equivalence.get("simulative_command_sha256")
+        != sha256_bytes(canonical_json_bytes(simulative_argv))
+        or equivalence.get("difference_count") != len(expected_differences)
+        or equivalence.get("differences") != expected_differences
+        or equivalence.get("canonical_condition_diff_only") is not True
+        or equivalence.get("trace_instrumentation_changed_contrast") is not False
+        or equivalence.get("interpretation_allowed") is not False
+    ):
+        raise BoundedSupervisorError("pair equivalence receipt drifted")
+
+    compute = _strict_json(captured["compute-use.json"], context="compute use")
+    started = _parse_utc(compute.get("started_at_utc"), context="compute start")
+    ended = _parse_utc(compute.get("ended_at_utc"), context="compute end")
+    elapsed = (ended - started).total_seconds()
+    observed_wall = _finite_number(compute.get("wall_clock_seconds"), context="compute wall")
+    accelerator_hours = _finite_number(
+        compute.get("accelerator_hours"), context="accelerator hours"
+    )
+    lambda_cost = _finite_number(compute.get("list_price_upper_bound_usd"), context="Lambda cost")
+    api_cost = _finite_number(compute.get("observed_openai_api_cost_usd"), context="OpenAI cost")
+    if (
+        set(compute)
+        != {
+            "schema_version",
+            "plan_id",
+            "run_id",
+            "provider",
+            "hardware",
+            "region",
+            "started_at_utc",
+            "ended_at_utc",
+            "wall_clock_seconds",
+            "accelerator_hours",
+            "list_price_upper_bound_usd",
+            "actual_provider_invoice_cost_usd",
+            "observed_openai_api_cost_usd",
+            "status",
+            "within_wall_and_cost_caps",
+            "repository_compute_record",
+            "repository_closeout_required",
+        }
+        or compute.get("schema_version") != SCHEMA_VERSION
+        or compute.get("plan_id") != PLAN_ID
+        or compute.get("run_id") != HOST_RUN_ID
+        or compute.get("provider") != "Lambda On-Demand Cloud"
+        or compute.get("hardware") != "gpu_1x_a10"
+        or compute.get("region") != "us-east-1"
+        or compute.get("status") != "completed"
+        or compute.get("within_wall_and_cost_caps") is not True
+        or compute.get("actual_provider_invoice_cost_usd") is not None
+        or compute.get("repository_compute_record") != "CMP-0001"
+        or compute.get("repository_closeout_required") is not True
+        or elapsed < 0
+        or abs(observed_wall - elapsed) > 0.000001
+        or abs(accelerator_hours - elapsed / 3_600) > 0.000001
+        or abs(lambda_cost - math.ceil(elapsed / 60) * 129 / 6_000) > 0.000001
+        or abs(api_cost - float(totals["cost_usd"])) > 0.000001
+        or observed_wall > 3_600
+        or lambda_cost > 2.0
+        or api_cost > 4.0
+    ):
+        raise BoundedSupervisorError("compute-use closeout is incomplete")
+
+    for mode, condition in (("reactive", "SIRA-REACTIVE"), ("simulative", "SIRA-SIMULATIVE")):
+        budget_encoded = captured[f"{mode}/provider-budget.json"]
+        budget_sha256 = sha256_bytes(budget_encoded)
+        budget = _strict_json(budget_encoded, context=f"{mode} provider budget")
+        input_tokens = _nonnegative_integer(
+            budget.get("input_tokens"), context="provider input tokens"
+        )
+        cached_tokens = _nonnegative_integer(
+            budget.get("cached_input_tokens"), context="provider cached tokens"
+        )
+        output_tokens = _nonnegative_integer(
+            budget.get("output_tokens"), context="provider output tokens"
+        )
+        provider_output_bytes = _nonnegative_integer(
+            budget.get("output_bytes"), context="provider output bytes"
+        )
+        condition_record = pair_conditions[0 if condition == "SIRA-REACTIVE" else 1]
+        if (
+            set(budget)
+            != {
+                "schema_version",
+                "model_revision",
+                "cost_usd",
+                "input_tokens",
+                "cached_input_tokens",
+                "output_tokens",
+                "total_tokens",
+                "model_call_attempts",
+                "unreconciled_provider_attempts",
+                "browser_actions",
+                "output_bytes",
+            }
+            or budget.get("schema_version") != SCHEMA_VERSION
+            or budget.get("model_revision") != "gpt-4o-2024-11-20"
+            or cached_tokens > input_tokens
+            or budget.get("total_tokens") != input_tokens + output_tokens
+            or budget.get("unreconciled_provider_attempts") != 0
+            or _finite_number(budget.get("cost_usd"), context="provider cost")
+            != _finite_number(condition_record.get("cost_usd"), context="pair cost")
+            or input_tokens + output_tokens != condition_record.get("model_tokens")
+            or budget.get("model_call_attempts") != condition_record.get("model_call_attempts")
+            or budget.get("browser_actions") != condition_record.get("browser_actions")
+            or provider_output_bytes < 0
+        ):
+            raise BoundedSupervisorError("provider budget reconstruction drifted")
+        decision = _strict_json(
+            captured[f"{mode}/regulation-decision.json"],
+            context=f"{mode} regulation decision",
+        )
+        if (
+            set(decision)
+            != {
+                "schema_version",
+                "plan_id",
+                "host_run_id",
+                "run_id",
+                "condition",
+                "source_kind",
+                "selected_mode",
+                "assignment_policy_sha256",
+                "provider_budget_reference",
+                "provider_budget_sha256",
+                "confidence",
+                "override",
+                "fallback",
+                "critic",
+                "configurator",
+                "per_step_planning",
+                "interpretation_allowed",
+            }
+            or decision.get("schema_version") != SCHEMA_VERSION
+            or decision.get("plan_id") != PLAN_ID
+            or decision.get("host_run_id") != HOST_RUN_ID
+            or decision.get("run_id")
+            != (
+                "RUN-T07-BOUNDED-SIRA-REACTIVE-0001"
+                if condition == "SIRA-REACTIVE"
+                else "RUN-T07-BOUNDED-SIRA-SIMULATIVE-0001"
+            )
+            or decision.get("condition") != condition
+            or decision.get("source_kind") != "experiment_assignment"
+            or decision.get("selected_mode") != mode
+            or decision.get("assignment_policy_sha256") != CONDITION_PLAN_SHA256[condition]
+            or decision.get("provider_budget_reference") != f"{mode}/provider-budget.json"
+            or decision.get("provider_budget_sha256") != budget_sha256
+            or any(
+                decision.get(field) is not None
+                for field in (
+                    "confidence",
+                    "override",
+                    "fallback",
+                    "critic",
+                    "configurator",
+                    "per_step_planning",
+                )
+            )
+            or decision.get("interpretation_allowed") is not False
+        ):
+            raise BoundedSupervisorError("regulation-decision receipt drifted")
+
+    events = [
+        _strict_json(line + b"\n", context="normalized event")
+        for line in captured["normalized-events.jsonl"].splitlines()
+        if line
+    ]
+    expected_events: list[dict[str, object]] = []
+    for condition, run_id, mode in (
+        ("SIRA-REACTIVE", "RUN-T07-BOUNDED-SIRA-REACTIVE-0001", "reactive"),
+        ("SIRA-SIMULATIVE", "RUN-T07-BOUNDED-SIRA-SIMULATIVE-0001", "simulative"),
+    ):
+        for event_type in ("condition_assignment_bound", "condition_execution_completed"):
+            expected_events.append(
+                {
+                    "schema_version": SCHEMA_VERSION,
+                    "plan_id": PLAN_ID,
+                    "host_run_id": HOST_RUN_ID,
+                    "run_id": run_id,
+                    "event_sequence": len(expected_events) + 1,
+                    "event_type": event_type,
+                    "condition": condition,
+                    "source_kind": "experiment_assignment",
+                    "evidence_reference": f"{mode}/regulation-decision.json",
+                    "interpretation_allowed": False,
+                }
+            )
+    if events != expected_events:
+        raise BoundedSupervisorError("normalized reconstruction events drifted")
+
+
+def _verify_zip_payload(
+    root: Path,
+    archive: Path,
+    *,
+    plan: Mapping[str, object],
+    manifest_name: str,
+    failure: bool,
+) -> dict[str, object]:
+    capture_names = {manifest_name}
+    if not failure:
+        capture_names.update(
+            {
+                "pair-budget.json",
+                "pair-equivalence.json",
+                "compute-use.json",
+                "normalized-events.jsonl",
+                "reactive/provider-budget.json",
+                "reactive/regulation-decision.json",
+                "simulative/provider-budget.json",
+                "simulative/regulation-decision.json",
+            }
+        )
+    rows: dict[str, tuple[int, str]] = {}
+    captured: dict[str, bytes] = {}
+    total = 0
+    try:
+        with zipfile.ZipFile(archive, "r") as opened:
+            if opened.comment:
+                raise BoundedSupervisorError("inbound archive contains an unbound comment")
+            infos = opened.infolist()
+            if not infos or len(infos) > MAX_REMOTE_EVIDENCE_FILES + 1:
+                raise BoundedSupervisorError("inbound archive file count is invalid")
+            for info in infos:
+                if info.comment or info.extra:
+                    raise BoundedSupervisorError("inbound archive member contains unbound metadata")
+                name = _safe_zip_member_name(info.filename)
+                if name in rows:
+                    raise BoundedSupervisorError("inbound archive repeats a member")
+                size, digest, retained = _read_verified_zip_member(
+                    opened, info, capture=name in capture_names
+                )
+                total += size
+                if total > MAX_REMOTE_EVIDENCE_BYTES:
+                    raise BoundedSupervisorError("decoded inbound archive exceeds its cap")
+                rows[name] = (size, digest)
+                if retained is not None:
+                    captured[name] = retained
+    except (OSError, zipfile.BadZipFile):
+        raise BoundedSupervisorError("inbound evidence is not a valid archive") from None
+    manifest_encoded = captured.get(manifest_name)
+    if manifest_encoded is None or len(manifest_encoded) > 1_048_576:
+        raise BoundedSupervisorError("inbound evidence manifest is missing or oversized")
+    manifest = _strict_json(manifest_encoded, context="inbound evidence manifest")
+    if failure:
+        required_keys = {
+            "schema_version",
+            "plan_id",
+            "host_run_id",
+            "disposition",
+            "files",
+            "file_count",
+            "payload_bytes",
+            "skipped_secret_shaped_file_count",
+            "skipped_cap_or_unsafe_file_count",
+            "secret_values_retained",
+            "source_retained",
+        }
+        if (
+            set(manifest) != required_keys
+            or manifest.get("schema_version") != SCHEMA_VERSION
+            or manifest.get("plan_id") != PLAN_ID
+            or manifest.get("host_run_id") != HOST_RUN_ID
+            or manifest.get("disposition") != "bootstrap_failed"
+            or manifest.get("secret_values_retained") is not False
+            or manifest.get("source_retained") is not True
+        ):
+            raise BoundedSupervisorError("failure evidence manifest identity drifted")
+    else:
+        schema, _ = _load_schema(root, EVIDENCE_SCHEMA_RELATIVE)
+        _validate_schema(manifest, schema, context="inbound evidence manifest")
+    manifest_rows = _sequence(manifest.get("files"), context="inbound manifest files")
+    expected: dict[str, tuple[int, str]] = {}
+    payload_bytes = 0
+    for raw in manifest_rows:
+        row = _mapping(raw, context="inbound manifest row")
+        if set(row) != {"path", "bytes", "sha256"}:
+            raise BoundedSupervisorError("inbound manifest row shape drifted")
+        name = _safe_zip_member_name(_text(row.get("path"), context="manifest path"))
+        size = _nonnegative_integer(row.get("bytes"), context="manifest bytes")
+        digest = _text(row.get("sha256"), context="manifest SHA-256")
+        if name in expected or _HEX64.fullmatch(digest) is None:
+            raise BoundedSupervisorError("inbound manifest row identity drifted")
+        expected[name] = (size, digest)
+        payload_bytes += size
+    actual_payload = {name: value for name, value in rows.items() if name != manifest_name}
+    if (
+        actual_payload != expected
+        or manifest.get("file_count") != len(expected)
+        or manifest.get("payload_bytes", manifest.get("total_bytes")) != payload_bytes
+    ):
+        raise BoundedSupervisorError("inbound archive members do not match their manifest")
+    if not failure:
+        _verify_pair_reconstruction(
+            {
+                name: captured[name]
+                for name in capture_names
+                if name != manifest_name and name in captured
+            },
+            plan=plan,
+        )
+    return {
+        "archive_member_count": len(rows),
+        "decoded_payload_bytes": total,
+        "manifest_sha256": sha256_bytes(manifest_encoded),
+        "all_member_hashes_verified": True,
+        "decoded_secret_scan_passed": True,
+    }
+
+
+def _verify_inbound_evidence(
+    root: Path,
+    *,
+    plan: Mapping[str, object],
+    disposition: str,
+) -> dict[str, object]:
+    inbound = root / INBOUND_RELATIVE
+    success = {
+        "t07-bounded-evidence.zip",
+        "ARCHIVE_IDENTITY.json",
+        "TERMINATE_REQUIRED.json",
+    }
+    failure = {
+        "t07-bounded-failure-evidence.zip",
+        "FAILURE_ARCHIVE_IDENTITY.json",
+        "TERMINATE_REQUIRED.json",
+    }
+    if not inbound.exists():
+        if disposition == "complete":
+            raise BoundedSupervisorError("complete evidence was not downloaded")
+        return {
+            "schema_version": SCHEMA_VERSION,
+            "plan_id": PLAN_ID,
+            "run_id": HOST_RUN_ID,
+            "remote_archive_kind": "not-produced-before-bootstrap",
+            "all_member_hashes_verified": False,
+            "decoded_secret_scan_passed": True,
+        }
+    if inbound.is_symlink() or not inbound.is_dir():
+        raise BoundedSupervisorError("inbound evidence root is unsafe")
+    observed = {path.name for path in inbound.iterdir()}
+    if any(path.is_symlink() or not path.is_file() for path in inbound.iterdir()):
+        raise BoundedSupervisorError("inbound evidence contains a non-regular entry")
+    if observed == success:
+        archive_name = "t07-bounded-evidence.zip"
+        identity_name = "ARCHIVE_IDENTITY.json"
+        manifest_name = "EVIDENCE_MANIFEST.json"
+        failure_kind = False
+    elif observed == failure and disposition == "failed":
+        archive_name = "t07-bounded-failure-evidence.zip"
+        identity_name = "FAILURE_ARCHIVE_IDENTITY.json"
+        manifest_name = "FAILURE_EVIDENCE_MANIFEST.json"
+        failure_kind = True
+    else:
+        raise BoundedSupervisorError("inbound evidence set is incomplete or ambiguous")
+    archive = inbound / archive_name
+    archive_encoded = _read_regular(archive, max_bytes=MAX_REMOTE_EVIDENCE_BYTES)
+    identity = _strict_json(
+        _read_regular(inbound / identity_name, max_bytes=65_536), context="archive identity"
+    )
+    expected_identity_keys = (
+        {"archive", "bytes", "sha256", "source_retained"}
+        if not failure_kind
+        else {
+            "schema_version",
+            "archive",
+            "bytes",
+            "sha256",
+            "manifest_sha256",
+            "secret_scan_passed",
+            "source_retained",
+        }
+    )
+    if (
+        set(identity) != expected_identity_keys
+        or identity.get("archive") != archive_name
+        or identity.get("bytes") != len(archive_encoded)
+        or identity.get("sha256") != sha256_bytes(archive_encoded)
+        or identity.get("source_retained") is not True
+        or (failure_kind and identity.get("secret_scan_passed") is not True)
+    ):
+        raise BoundedSupervisorError("downloaded archive identity verification failed")
+    incident = _strict_json(
+        _read_regular(inbound / "TERMINATE_REQUIRED.json", max_bytes=65_536),
+        context="termination receipt",
+    )
+    if (
+        incident.get("provider_termination_required") is not True
+        or incident.get("message_retained") is not False
+        or (not failure_kind and incident.get("bootstrap_complete") is not True)
+        or (failure_kind and not isinstance(incident.get("failure_class"), str))
+    ):
+        raise BoundedSupervisorError("provider termination receipt drifted")
+    result = _verify_zip_payload(
+        root,
+        archive,
+        plan=plan,
+        manifest_name=manifest_name,
+        failure=failure_kind,
+    )
+    if failure_kind and identity.get("manifest_sha256") != result["manifest_sha256"]:
+        raise BoundedSupervisorError("failure manifest identity verification failed")
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "plan_id": PLAN_ID,
+        "run_id": HOST_RUN_ID,
+        "remote_archive_kind": "failure" if failure_kind else "complete",
+        "archive": archive_name,
+        "archive_bytes": len(archive_encoded),
+        "archive_sha256": sha256_bytes(archive_encoded),
+        **result,
+    }
 
 
 def _safe_source_files(root: Path, *, disposition: str) -> list[tuple[str, Path]]:
@@ -1569,6 +2444,7 @@ def _safe_source_files(root: Path, *, disposition: str) -> list[tuple[str, Path]
         "observer-state.json",
         "request-ledger.jsonl",
         "MATERIALIZATION_SUMMARY.json",
+        "INBOUND_VERIFICATION.json",
     }
     files: list[tuple[str, Path]] = []
     for path in sorted(run_root.rglob("*")):
@@ -1607,6 +2483,8 @@ def _safe_source_files(root: Path, *, disposition: str) -> list[tuple[str, Path]
         }
         if not expected.issubset(names):
             raise BoundedSupervisorError("complete archive source is missing required evidence")
+    if len(files) > MAX_ARCHIVE_PAYLOAD_FILES:
+        raise BoundedSupervisorError("archive payload file count exceeds its exact cap")
     return files
 
 
@@ -1678,7 +2556,7 @@ def _copy_archive_tree(
             if any(pattern.search(encoded) for pattern in _SECRET_SHAPES):
                 raise BoundedSupervisorError("archive source contains credential-shaped material")
             total += len(encoded)
-            if total > MAX_ARCHIVE_BYTES or len(manifest_rows) >= MAX_ARCHIVE_FILES:
+            if total > MAX_ARCHIVE_BYTES or len(manifest_rows) >= MAX_ARCHIVE_PAYLOAD_FILES:
                 raise BoundedSupervisorError("bounded archive cap exceeded")
             _write_exclusive_at(directories[parent_key], parts[-1], encoded)
             copied = _read_regular_at(directories[parent_key], parts[-1], max_bytes=len(encoded))
@@ -1694,6 +2572,7 @@ def _copy_archive_tree(
             "disposition": disposition,
             "files": manifest_rows,
             "file_count": len(manifest_rows),
+            "total_file_count": len(manifest_rows) + 3,
             "payload_bytes": total,
             "source_retained": True,
         }
@@ -1768,6 +2647,7 @@ def _copy_archive_tree(
             "copy_record_sha256": sha256_bytes(copy_encoded),
             "seal_sha256": sha256_bytes(seal_encoded),
             "file_count": len(manifest_rows),
+            "total_file_count": len(manifest_rows) + 3,
             "payload_bytes": total,
             "source_destination_hashes_verified": True,
             "source_retained": True,
@@ -1817,6 +2697,16 @@ def archive_evidence(
     state = _load_state(root)
     if disposition == "complete" and state.get("status") != "complete":
         raise BoundedSupervisorError("complete archive requires terminal observer evidence")
+    inbound_verification = _verify_inbound_evidence(
+        root,
+        plan=plan,
+        disposition=disposition,
+    )
+    _write_exclusive(
+        root / RUN_ROOT_RELATIVE / "INBOUND_VERIFICATION.json",
+        canonical_json_bytes(inbound_verification),
+        mode=0o644,
+    )
     files = _safe_source_files(root, disposition=disposition)
     if volume_observer is None:
         from giclab.harness.lambda_archive import DiskutilVolumeObserver

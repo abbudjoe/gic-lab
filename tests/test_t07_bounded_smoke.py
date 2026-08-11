@@ -5,6 +5,7 @@ import json
 import sys
 import time
 import zipfile
+from datetime import UTC, datetime
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -390,6 +391,7 @@ class _FakeRunner:
         self.deadline = 10**12
         self.argv: list[tuple[str, ...]] = []
         self.removed = False
+        self.stopped = False
 
     def remaining(self) -> float:
         return 300.0
@@ -410,17 +412,27 @@ class _FakeRunner:
         returncode = 0
         if command[1] == "create":
             stdout = b"a" * 64 + b"\n"
-        elif command[1:3] == ("start", "--attach"):
+        elif command[1] == "wait":
+            stdout = b"0\n"
+            self.stopped = True
+        elif command[1] == "logs":
             stdout = b"completed\n"
         elif command[1] == "inspect":
             if self.removed:
                 returncode = 1
             else:
-                stdout = b'[{"State":{"Running":false,"Status":"exited"}}]\n'
+                running = not self.stopped
+                status = "running" if running else "exited"
+                stdout = (
+                    json.dumps([{"State": {"Running": running, "Status": status}}]).encode() + b"\n"
+                )
         elif command[1] == "top":
-            stdout = b"PID PPID PGID SID STAT COMMAND ARGS\n"
+            stdout = b"PID PPID PGID SID STAT COMMAND ARGS\n1 0 1 1 Ss python entrypoint\n"
         elif command[1] == "stop":
+            self.stopped = True
             returncode = 1
+        elif command[1] == "kill":
+            self.stopped = True
         elif command[1] == "rm":
             self.removed = True
         return bootstrap.CommandResult(command, returncode, stdout, b"", 0.01)
@@ -474,16 +486,51 @@ def test_failure_archive_is_bounded_and_excludes_secret_canary(tmp_path: Path) -
     evidence = tmp_path / "evidence"
     evidence.mkdir()
     (evidence / "safe.json").write_text('{"status":"failed"}\n', encoding="utf-8")
-    canary = "".join(("s", "k-", "public-dummy-canary-abcdefghijklmnopqrstuvwxyz"))
+    canary = "PUBLIC_DUMMY_OPAQUE_CANARY_0123456789"
     (evidence / "unsafe.log").write_text(canary, encoding="utf-8")
     (tmp_path / "TERMINATE_REQUIRED.json").write_text("{}\n", encoding="utf-8")
-    archive = bootstrap.package_failure_evidence(tmp_path, evidence, bounded)
+    archive = bootstrap.package_failure_evidence(
+        tmp_path,
+        evidence,
+        bounded,
+        secret_value=canary.encode(),
+    )
     assert archive.stat().st_size <= bootstrap.MAX_FAILURE_EVIDENCE_BYTES
     with zipfile.ZipFile(archive) as opened:
         names = set(opened.namelist())
         assert "evidence/safe.json" in names
         assert "evidence/unsafe.log" not in names
         assert canary.encode() not in b"".join(opened.read(name) for name in names)
+
+
+def test_reconstruction_and_compute_closeout_records_are_source_grounded(
+    tmp_path: Path,
+) -> None:
+    bootstrap = _load_bootstrap()
+    for mode in ("reactive", "simulative"):
+        root = tmp_path / mode
+        root.mkdir()
+        (root / "provider-budget.json").write_text(
+            json.dumps({"cost_usd": 0.25}) + "\n", encoding="utf-8"
+        )
+    bootstrap.write_reconstruction_records(tmp_path, contract=bounded)
+    compute = bootstrap.write_compute_use(
+        tmp_path,
+        authorization={"supervised_wall_started_at_utc": "2026-08-11T20:00:00Z"},
+        contract=bounded,
+        status="completed",
+        ended_at=datetime(2026, 8, 11, 20, 10, tzinfo=UTC),
+    )
+    assert compute["within_wall_and_cost_caps"] is True
+    assert compute["actual_provider_invoice_cost_usd"] is None
+    assert (tmp_path / "normalized-events.jsonl").read_text().count("\n") == 4
+    equivalence = json.loads((tmp_path / "pair-equivalence.json").read_text())
+    assert equivalence["canonical_condition_diff_only"] is True
+    for mode, condition in (("reactive", "SIRA-REACTIVE"), ("simulative", "SIRA-SIMULATIVE")):
+        decision = json.loads((tmp_path / mode / "regulation-decision.json").read_text())
+        assert decision["condition"] == condition
+        assert decision["source_kind"] == "experiment_assignment"
+        assert decision["interpretation_allowed"] is False
 
 
 def test_committed_plan_matches_runtime_contract_when_present() -> None:

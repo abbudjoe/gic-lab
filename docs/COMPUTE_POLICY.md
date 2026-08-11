@@ -34,6 +34,16 @@ Lambda resources. On completion or failure, the user must terminate the exact bo
 instance; read-only terminal evidence is required before regional-rule deletion, and
 read-only security evidence is required after restoring the global baseline.
 
+Every bounded-smoke remote archive must contain a machine-readable `compute-use.json`
+derived from the supervised wall timestamps and retained provider-usage receipts. It
+records accelerator and wall time, the list-price upper bound, observed API cost,
+whether those values remain within the bound caps, and an explicit `null` actual
+provider invoice until billing is reconciled. After the archive is locally verified,
+the planned `CMP-0001` entry in `manifests/compute.yaml` must be reconciled in a
+separate repository closeout commit before any interpretation or successor execution.
+The runtime record supplements that repository ledger; it does not authorize compute
+or silently convert a planned allocation to an actual one.
+
 ## Historical estimate boundary
 
 The attached conversation discussed a provisional 200–400 H100-equivalent GPU-hour and roughly USD 2,500 first-phase envelope, with about USD 4,000 in Lambda credits available. These are planning estimates, not verified prices, approved protocol budgets, or spending authorization.

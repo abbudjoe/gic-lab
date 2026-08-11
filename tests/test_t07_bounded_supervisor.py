@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import shutil
+import subprocess
 import time
+import zipfile
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -29,6 +32,26 @@ AFTER_NOW = NOW + timedelta(seconds=1)
 COMMIT = "1" * 40
 AUTHORIZATION_REFERENCE = "AUTH-T07-BOUNDED-SIRA-SMOKE-V1-TEST-0001"
 PUBLIC_KEY = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAABAgMEBQYHCAkKCwwNDg8QERITFBUWFxgZGhscHR4f"
+JSON_SECRET_CANARY = "PUBLIC_DUMMY_OPAQUE_JUPYTER_CANARY_0123456789"
+
+
+def _runtime_plan() -> dict[str, object]:
+    conditions: list[dict[str, object]] = []
+    for condition in contract.CONDITION_ORDER:
+        conditions.append(
+            {
+                "condition": condition,
+                "run_id": contract.RUN_IDS[condition],
+                "container_create_argv_template": list(contract.container_create_argv(condition)),
+                "api_cost_usd": 2.0,
+                "model_tokens": 200_000,
+                "model_call_attempts": contract.MODEL_CALL_CAPS[condition],
+                "browser_actions": 1,
+                "wall_seconds": 120,
+                "output_bytes": 104_857_600,
+            }
+        )
+    return {"limits": dict(contract.LIMITS), "conditions": conditions}
 
 
 class FakeTransport:
@@ -93,6 +116,9 @@ def _instance(status: str, ruleset_id: str) -> dict[str, object]:
         "instance_type": _instance_type(),
         "actions": _actions(),
         "firewall_rulesets": [{"id": ruleset_id}],
+        "jupyter_token": JSON_SECRET_CANARY,
+        "jupyter_url": "https://example.invalid/lab?token=" + JSON_SECRET_CANARY,
+        "unknown_secret_material": JSON_SECRET_CANARY,
     }
 
 
@@ -137,6 +163,7 @@ def _copy_schemas(root: Path) -> None:
         supervisor.AUTHORIZATION_SCHEMA_RELATIVE,
         supervisor.PRIVATE_BINDING_SCHEMA_RELATIVE,
         supervisor.LEDGER_SCHEMA_RELATIVE,
+        supervisor.EVIDENCE_SCHEMA_RELATIVE,
     ):
         destination = root / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
@@ -184,7 +211,7 @@ def _materialize(
     monkeypatch.setattr(supervisor, "RESTORATION_SHA256", restoration_sha256)
     monkeypatch.setattr(supervisor, "verify_repository_identity", lambda *_: None)
     monkeypatch.setattr(supervisor, "_validate_base_authority", lambda *_: None)
-    plan = {"limits": dict(contract.LIMITS)}
+    plan = _runtime_plan()
     plan_sha256 = "2" * 64
     summary = supervisor.materialize_authority(
         tmp_path,
@@ -202,6 +229,84 @@ def _materialize(
     return summary, plan_sha256, baseline_sha256
 
 
+def _phase_documents(private: Mapping[str, object]) -> dict[str, dict[str, object]]:
+    baseline = {
+        "data": {
+            "id": "global",
+            "name": "global",
+            "rules": [_rule("synthetic sealed baseline", source="198.51.100.0/24")],
+        }
+    }
+    ruleset_id = "synthetic-ruleset-private"
+    return {
+        "prelaunch": {
+            "/api/v1/instance-types": {
+                "data": {
+                    "gpu_1x_a10": {
+                        "instance_type": _instance_type(),
+                        "regions_with_capacity_available": [_region()],
+                    }
+                }
+            },
+            "/api/v1/images": {
+                "data": [
+                    {
+                        "id": "synthetic-image-private",
+                        "created_time": "2026-08-01T00:00:00Z",
+                        "updated_time": "2026-08-01T00:00:00Z",
+                        "name": "Synthetic image",
+                        "description": "fixture",
+                        "family": "lambda-stack-22-04",
+                        "version": "22.4.5-2141",
+                        "architecture": "x86_64",
+                        "region": _region(),
+                    }
+                ]
+            },
+            "/api/v1/regions": {"data": [_region()]},
+            "/api/v1/ssh-keys": {
+                "data": [
+                    {
+                        "id": "synthetic-key-private",
+                        "name": "fractal-lambda-codex",
+                        "public_key": PUBLIC_KEY,
+                    }
+                ]
+            },
+            "/api/v1/firewall-rulesets": {"data": []},
+            "/api/v1/firewall-rulesets/global": baseline,
+            "/api/v1/instances": {"data": []},
+        },
+        "security": {
+            "/api/v1/firewall-rulesets": {
+                "data": [
+                    {
+                        "id": ruleset_id,
+                        "name": private["owned_ruleset_name"],
+                        "region": _region(),
+                        "rules": [private["owned_ruleset_rule"]],
+                        "created": "2026-08-11T20:00:00Z",
+                        "instance_ids": [],
+                    }
+                ]
+            },
+            "/api/v1/firewall-rulesets/global": {
+                "data": {
+                    "id": "global",
+                    "name": "global",
+                    "rules": [private["strict_firewall_rule"]],
+                }
+            },
+        },
+        "post_launch": {"/api/v1/instances": {"data": [_instance("active", ruleset_id)]}},
+        "termination": {"/api/v1/instances": {"data": [_instance("terminated", ruleset_id)]}},
+        "terminal": {
+            "/api/v1/firewall-rulesets": {"data": []},
+            "/api/v1/firewall-rulesets/global": baseline,
+        },
+    }
+
+
 def _execute_observer(
     tmp_path: Path,
     summary: Mapping[str, object],
@@ -210,10 +315,11 @@ def _execute_observer(
     phase: str,
     transport: supervisor.ReadOnlyTransport,
     monotonic_ns: Callable[[], int] = time.monotonic_ns,
+    utc_now: Callable[[], datetime] = lambda: AFTER_NOW,
 ) -> dict[str, object]:
     return supervisor.execute_observer_phase(
         tmp_path,
-        plan={"limits": dict(contract.LIMITS)},
+        plan=_runtime_plan(),
         plan_sha256=plan_sha256,
         expected_commit=COMMIT,
         phase=phase,
@@ -224,7 +330,7 @@ def _execute_observer(
         transport=transport,
         credential_provider=lambda: "public-dummy-lambda-canary-never-retained",
         monotonic_ns=monotonic_ns,
-        utc_now=lambda: AFTER_NOW,
+        utc_now=utc_now,
         sleeper=lambda _: None,
     )
 
@@ -264,8 +370,37 @@ def test_exact_observer_phase_order_and_shell_free_commands() -> None:
         "archive_failed",
     }
     for argv in commands.values():
-        assert argv[0:2] == ["/usr/bin/python3", "-I"]
+        assert argv[0:2] == ["${REPOSITORY_ROOT}/.venv/bin/python", "-I"]
         assert all(value not in argv for value in ("sh", "bash", "-c", "curl", "wget"))
+
+
+def test_exact_local_supervisor_interpreter_loads_bound_modules() -> None:
+    plan_path = ROOT / "containers/sira-smoke/bounded/bounded-smoke-plan-v1.json"
+    substitutions = {
+        "${REPOSITORY_ROOT}": str(ROOT),
+        "${SUPERVISOR_SHA256}": supervisor.sha256_bytes(
+            (ROOT / "src/giclab/harness/t07_bounded_supervisor.py").read_bytes()
+        ),
+        "${PLAN_SHA256}": supervisor.sha256_bytes(plan_path.read_bytes()),
+        "${CONTRACT_SHA256}": supervisor.sha256_bytes(
+            (ROOT / "src/giclab/harness/t07_bounded_smoke.py").read_bytes()
+        ),
+        "${EXECUTION_COMMIT}": COMMIT,
+        "${AUTHORIZATION_REFERENCE}": AUTHORIZATION_REFERENCE,
+    }
+    argv = contract.materialize_argv(
+        contract.local_supervisor_argv_templates()["materialize"], substitutions
+    )
+    completed = subprocess.run(
+        (*argv, "--help"),
+        cwd=ROOT,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        check=False,
+        timeout=15,
+    )
+    assert completed.returncode == 0, completed.stderr.decode("utf-8", "replace")
+    assert b"usage:" in completed.stdout
 
 
 def test_materialization_and_all_observer_phases_are_durable_and_secret_safe(
@@ -398,12 +533,17 @@ def test_materialization_and_all_observer_phases_are_durable_and_secret_safe(
     assert state["event_count"] == 51
     assert len(ledger.splitlines()) == 51
     assert b"public-dummy-lambda-canary-never-retained" not in ledger
+    response_root = tmp_path / supervisor.RESPONSES_RELATIVE
+    retained_responses = b"".join(path.read_bytes() for path in sorted(response_root.iterdir()))
+    assert JSON_SECRET_CANARY.encode() not in retained_responses
+    assert b"jupyter_token" not in retained_responses
+    assert b"unknown_secret_material" not in retained_responses
     assert baseline_sha256 in (
         tmp_path / supervisor.RUN_ROOT_RELATIVE / "terminal-report.json"
     ).read_text(encoding="utf-8")
 
 
-def test_possible_send_failure_burns_run_and_preserves_terminal_ledger(
+def test_possible_send_failure_enters_nonreplay_cleanup_and_allows_expired_final_checks(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     summary, plan_sha256, _ = _materialize(tmp_path, monkeypatch)
@@ -426,12 +566,282 @@ def test_possible_send_failure_burns_run_and_preserves_terminal_ledger(
         json.loads(line)
         for line in (tmp_path / supervisor.LEDGER_RELATIVE).read_text(encoding="utf-8").splitlines()
     ]
-    assert state["status"] == "burned"
+    assert state["status"] == "cleanup_required"
+    assert state["next_phase"] == "terminal"
+    assert state["attempted_request_ordinals"] == [1]
     assert [event["event_type"] for event in events[-2:]] == [
         "request_outcome_unknown_after_send",
         "phase_failed",
     ]
     assert events[-2]["failure_stage"] == "response_body"
+    with pytest.raises(supervisor.BoundedSupervisorError, match="phase/state"):
+        _execute_observer(
+            tmp_path,
+            summary,
+            plan_sha256,
+            phase="prelaunch",
+            transport=FailedTransport(),
+        )
+    terminal = FakeTransport(
+        {
+            "/api/v1/firewall-rulesets": {"data": []},
+            "/api/v1/firewall-rulesets/global": {
+                "data": {
+                    "id": "global",
+                    "name": "global",
+                    "rules": [_rule("synthetic sealed baseline", source="198.51.100.0/24")],
+                }
+            },
+        }
+    )
+    report = _execute_observer(
+        tmp_path,
+        summary,
+        plan_sha256,
+        phase="terminal",
+        transport=terminal,
+        utc_now=lambda: NOW + timedelta(hours=2),
+    )
+    assert report["provider_termination_previously_verified"] is True
+    state = json.loads((tmp_path / supervisor.STATE_RELATIVE).read_text(encoding="utf-8"))
+    assert state["status"] == "cleanup_complete"
+    assert state["attempted_request_ordinals"] == [1, 12, 13]
+
+
+def test_post_launch_failure_can_only_continue_through_termination_and_final_cleanup(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    summary, plan_sha256, _ = _materialize(tmp_path, monkeypatch)
+    private = json.loads(
+        (tmp_path / supervisor.PRIVATE_BINDING_RELATIVE).read_text(encoding="utf-8")
+    )
+    documents = _phase_documents(private)
+    for phase in ("prelaunch", "security"):
+        _execute_observer(
+            tmp_path,
+            summary,
+            plan_sha256,
+            phase=phase,
+            transport=FakeTransport(documents[phase]),
+        )
+
+    class FailedPostLaunch:
+        def fetch(self, *args: object, **kwargs: object) -> supervisor.HttpResponse:
+            del args, kwargs
+            raise supervisor.TransportFailure("response_body", "synthetic_failure", 0, 1)
+
+    with pytest.raises(supervisor.BoundedSupervisorError, match="transport failed"):
+        _execute_observer(
+            tmp_path,
+            summary,
+            plan_sha256,
+            phase="post_launch",
+            transport=FailedPostLaunch(),
+        )
+    state = json.loads((tmp_path / supervisor.STATE_RELATIVE).read_text(encoding="utf-8"))
+    assert state["status"] == "cleanup_required"
+    assert state["next_phase"] == "termination"
+    assert state["bound_instance_id"] is None
+    termination = _execute_observer(
+        tmp_path,
+        summary,
+        plan_sha256,
+        phase="termination",
+        transport=FakeTransport(documents["termination"]),
+        utc_now=lambda: NOW + timedelta(hours=2),
+    )
+    assert termination["identity_recovered_during_cleanup"] is True
+    terminal = _execute_observer(
+        tmp_path,
+        summary,
+        plan_sha256,
+        phase="terminal",
+        transport=FakeTransport(documents["terminal"]),
+        utc_now=lambda: NOW + timedelta(hours=3),
+    )
+    assert terminal["provider_termination_previously_verified"] is True
+    state = json.loads((tmp_path / supervisor.STATE_RELATIVE).read_text(encoding="utf-8"))
+    assert state["status"] == "cleanup_complete"
+    assert state["attempted_request_ordinals"] == list(range(1, 14))
+
+
+def _write_complete_inbound(run_root: Path, *, secret_member: bool = False) -> None:
+    inbound = run_root / "inbound"
+    inbound.mkdir()
+    pair_conditions = [
+        {
+            "condition": condition,
+            "run_id": contract.RUN_IDS[condition],
+            "cost_usd": 0.25,
+            "model_tokens": 100,
+            "model_call_attempts": 1,
+            "browser_actions": 1,
+            "wall_seconds": 1.0,
+            "output_bytes": 10,
+        }
+        for condition in contract.CONDITION_ORDER
+    ]
+    reactive_argv = list(contract.container_create_argv("SIRA-REACTIVE"))
+    simulative_argv = list(contract.container_create_argv("SIRA-SIMULATIVE"))
+    differences = [
+        {"index": index, "reactive": left, "simulative": right}
+        for index, (left, right) in enumerate(zip(reactive_argv, simulative_argv, strict=True))
+        if left != right
+    ]
+    records: dict[str, bytes] = {
+        "pair-budget.json": supervisor.canonical_json_bytes(
+            {
+                "schema_version": "0.1.0",
+                "plan_id": supervisor.PLAN_ID,
+                "host_run_id": supervisor.HOST_RUN_ID,
+                "condition_order": ["SIRA-REACTIVE", "SIRA-SIMULATIVE"],
+                "conditions": pair_conditions,
+                "within_all_caps": True,
+            }
+        ),
+        "pair-equivalence.json": supervisor.canonical_json_bytes(
+            {
+                "schema_version": "0.1.0",
+                "plan_id": supervisor.PLAN_ID,
+                "host_run_id": supervisor.HOST_RUN_ID,
+                "condition_order": ["SIRA-REACTIVE", "SIRA-SIMULATIVE"],
+                "reactive_command_sha256": contract.template_sha256(reactive_argv),
+                "simulative_command_sha256": contract.template_sha256(simulative_argv),
+                "difference_count": len(differences),
+                "differences": differences,
+                "canonical_condition_diff_only": True,
+                "trace_instrumentation_changed_contrast": False,
+                "interpretation_allowed": False,
+            }
+        ),
+        "compute-use.json": supervisor.canonical_json_bytes(
+            {
+                "schema_version": "0.1.0",
+                "plan_id": supervisor.PLAN_ID,
+                "run_id": supervisor.HOST_RUN_ID,
+                "provider": "Lambda On-Demand Cloud",
+                "hardware": "gpu_1x_a10",
+                "region": "us-east-1",
+                "started_at_utc": "2026-08-11T20:00:00Z",
+                "ended_at_utc": "2026-08-11T20:10:00Z",
+                "wall_clock_seconds": 600.0,
+                "accelerator_hours": 1 / 6,
+                "list_price_upper_bound_usd": 0.215,
+                "actual_provider_invoice_cost_usd": None,
+                "observed_openai_api_cost_usd": 0.5,
+                "status": "completed",
+                "within_wall_and_cost_caps": True,
+                "repository_compute_record": "CMP-0001",
+                "repository_closeout_required": True,
+            }
+        ),
+    }
+    events = []
+    for condition in ("SIRA-REACTIVE", "SIRA-SIMULATIVE"):
+        mode = contract.MODE_VALUES[condition]
+        run_id = contract.RUN_IDS[condition]
+        for event_type in ("condition_assignment_bound", "condition_execution_completed"):
+            events.append(
+                {
+                    "schema_version": "0.1.0",
+                    "plan_id": supervisor.PLAN_ID,
+                    "host_run_id": supervisor.HOST_RUN_ID,
+                    "run_id": run_id,
+                    "event_sequence": len(events) + 1,
+                    "event_type": event_type,
+                    "condition": condition,
+                    "source_kind": "experiment_assignment",
+                    "evidence_reference": f"{mode}/regulation-decision.json",
+                    "interpretation_allowed": False,
+                }
+            )
+    records["normalized-events.jsonl"] = b"".join(
+        json.dumps(event, separators=(",", ":"), sort_keys=True).encode() + b"\n"
+        for event in events
+    )
+    for mode, condition in (("reactive", "SIRA-REACTIVE"), ("simulative", "SIRA-SIMULATIVE")):
+        provider_budget = supervisor.canonical_json_bytes(
+            {
+                "schema_version": "0.1.0",
+                "model_revision": contract.MODEL,
+                "cost_usd": 0.25,
+                "input_tokens": 50,
+                "cached_input_tokens": 0,
+                "output_tokens": 50,
+                "total_tokens": 100,
+                "model_call_attempts": 1,
+                "browser_actions": 1,
+                "unreconciled_provider_attempts": 0,
+                "output_bytes": 10,
+            }
+        )
+        records[f"{mode}/provider-budget.json"] = provider_budget
+        records[f"{mode}/regulation-decision.json"] = supervisor.canonical_json_bytes(
+            {
+                "schema_version": "0.1.0",
+                "plan_id": supervisor.PLAN_ID,
+                "host_run_id": supervisor.HOST_RUN_ID,
+                "run_id": contract.RUN_IDS[condition],
+                "condition": condition,
+                "source_kind": "experiment_assignment",
+                "selected_mode": mode,
+                "assignment_policy_sha256": supervisor.CONDITION_PLAN_SHA256[condition],
+                "provider_budget_reference": f"{mode}/provider-budget.json",
+                "provider_budget_sha256": hashlib.sha256(provider_budget).hexdigest(),
+                "confidence": None,
+                "override": None,
+                "fallback": None,
+                "critic": None,
+                "configurator": None,
+                "per_step_planning": None,
+                "interpretation_allowed": False,
+            }
+        )
+    records["reactive/session.json"] = (
+        supervisor.canonical_json_bytes({"jupyter_token": JSON_SECRET_CANARY})
+        if secret_member
+        else b'{"synthetic":"safe"}\n'
+    )
+    rows = [
+        {"path": name, "bytes": len(encoded), "sha256": hashlib.sha256(encoded).hexdigest()}
+        for name, encoded in sorted(records.items())
+    ]
+    manifest = supervisor.canonical_json_bytes(
+        {
+            "schema_version": "0.1.0",
+            "plan_id": supervisor.PLAN_ID,
+            "host_run_id": supervisor.HOST_RUN_ID,
+            "files": rows,
+            "file_count": len(rows),
+            "total_bytes": sum(len(encoded) for encoded in records.values()),
+        }
+    )
+    archive = inbound / "t07-bounded-evidence.zip"
+    with zipfile.ZipFile(archive, "x", compression=zipfile.ZIP_STORED) as output:
+        output.writestr("EVIDENCE_MANIFEST.json", manifest)
+        for name, encoded in sorted(records.items()):
+            output.writestr(name, encoded)
+    archive_encoded = archive.read_bytes()
+    (inbound / "ARCHIVE_IDENTITY.json").write_bytes(
+        supervisor.canonical_json_bytes(
+            {
+                "archive": archive.name,
+                "bytes": len(archive_encoded),
+                "sha256": hashlib.sha256(archive_encoded).hexdigest(),
+                "source_retained": True,
+            }
+        )
+    )
+    (inbound / "TERMINATE_REQUIRED.json").write_bytes(
+        supervisor.canonical_json_bytes(
+            {
+                "schema_version": "0.1.0",
+                "provider_termination_required": True,
+                "bootstrap_complete": True,
+                "message_retained": False,
+            }
+        )
+    )
 
 
 def test_complete_archive_reads_back_hashes_and_retains_local_source(
@@ -447,11 +857,8 @@ def test_complete_archive_reads_back_hashes_and_retains_local_source(
         (run_root / "responses" / f"{ordinal:03d}.json").write_text("{}\n", encoding="utf-8")
     for phase in ("prelaunch", "security", "post_launch", "termination", "terminal"):
         (run_root / f"{phase}-report.json").write_text("{}\n", encoding="utf-8")
+    _write_complete_inbound(run_root)
     inbound = run_root / "inbound"
-    inbound.mkdir()
-    (inbound / "t07-bounded-evidence.zip").write_bytes(b"synthetic-safe-evidence")
-    (inbound / "ARCHIVE_IDENTITY.json").write_text("{}\n", encoding="utf-8")
-    (inbound / "TERMINATE_REQUIRED.json").write_text("{}\n", encoding="utf-8")
     external_mount = tmp_path / "external"
     external_mount.mkdir()
     external_parent = external_mount / "GIC-Lab/t07/sealed-artifacts"
@@ -462,7 +869,7 @@ def test_complete_archive_reads_back_hashes_and_retains_local_source(
     external = _external_observation(external_mount)
     result = supervisor.archive_evidence(
         tmp_path,
-        plan={"limits": dict(contract.LIMITS)},
+        plan=_runtime_plan(),
         plan_sha256=plan_sha256,
         expected_commit=COMMIT,
         authorization_path=tmp_path / supervisor.AUTHORIZATION_RELATIVE,
@@ -475,7 +882,50 @@ def test_complete_archive_reads_back_hashes_and_retains_local_source(
     )
     assert result["source_destination_hashes_verified"] is True
     assert result["source_retained"] is True
+    assert result["total_file_count"] == result["file_count"] + 3
+    assert int(result["total_file_count"]) <= supervisor.MAX_ARCHIVE_FILES
     destination = external_parent / supervisor.HOST_RUN_ID
     assert destination.is_dir()
     assert (destination / "SEAL.json").is_file()
     assert (inbound / "t07-bounded-evidence.zip").is_file()
+    assert (run_root / "INBOUND_VERIFICATION.json").is_file()
+
+
+def test_complete_archive_rejects_secret_inside_a_self_consistent_zip(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    summary, plan_sha256, _ = _materialize(tmp_path, monkeypatch)
+    run_root = tmp_path / supervisor.RUN_ROOT_RELATIVE
+    state_path = run_root / "observer-state.json"
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state["status"] = "complete"
+    state_path.write_bytes(supervisor.canonical_json_bytes(state))
+    _write_complete_inbound(run_root, secret_member=True)
+    with pytest.raises(supervisor.BoundedSupervisorError, match="credential-shaped"):
+        supervisor.archive_evidence(
+            tmp_path,
+            plan=_runtime_plan(),
+            plan_sha256=plan_sha256,
+            expected_commit=COMMIT,
+            authorization_path=tmp_path / supervisor.AUTHORIZATION_RELATIVE,
+            authorization_sha256=str(summary["authorization_sha256"]),
+            private_binding_path=tmp_path / supervisor.PRIVATE_BINDING_RELATIVE,
+            private_binding_sha256=str(summary["private_binding_sha256"]),
+            disposition="complete",
+            volume_observer=lambda: (_external_observation(), _system_observation()),
+            utc_now=lambda: AFTER_NOW,
+        )
+
+
+def test_archive_file_cap_includes_three_seal_metadata_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _materialize(tmp_path, monkeypatch)
+    run_root = tmp_path / supervisor.RUN_ROOT_RELATIVE
+    (run_root / "INBOUND_VERIFICATION.json").write_text("{}\n", encoding="utf-8")
+    responses = run_root / "responses"
+    for ordinal in range(1, 121):
+        (responses / f"extra-{ordinal:03d}.json").write_text("{}\n", encoding="utf-8")
+    assert supervisor.MAX_ARCHIVE_PAYLOAD_FILES + 3 == supervisor.MAX_ARCHIVE_FILES == 128
+    with pytest.raises(supervisor.BoundedSupervisorError, match="file count"):
+        supervisor._safe_source_files(tmp_path, disposition="failed")
