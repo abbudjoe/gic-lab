@@ -10,12 +10,12 @@ Date: 2026-08-11
 |---|---|
 | Branch | `phase-1/sira-smoke-lambda` |
 | Required final clean execution commit | `<EXACT-FINAL-CLEAN-GATE-L2-3-HANDOFF-COMMIT>`; supplied in the final handoff and fresh user authorization |
-| Reviewed implementation commit | `e2b0cb93bba03599f128621f537c2f6255bae2c8` |
+| Reviewed implementation commit | `9ccc46b49f18558af5645cdb390ae669c484373e` |
 | Plan ID | `PLAN-T07-GATE-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-V1` |
 | Run ID | `RUN-T07-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-0001` |
 | Plan path | `containers/sira-smoke/lambda/manual-console/gate-l2m-host-qualification-plan-v1.json` |
 | Plan bytes | 21,638 |
-| Plan SHA-256 | `670564fad25cc079439d35dfbb2aecb960f3f48093e5ce05b9dd973a9d87e754` |
+| Plan SHA-256 | `fce83fae57cea8b8d1010673b93bf496be2990771faa0dc4986c18c8b0bd1648` |
 | Pending reference | `AUTH-T07-GATE-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-V1-PENDING` (not executable authority) |
 | Decision alias | `l2m-decision-6b7af4f2c567` |
 | Decision source SHA-256 | `1b603e4bfb1e63b9046bb5b3d404a083666e7a28437e63a20613d7321063bad4` |
@@ -79,7 +79,7 @@ The observer invocation is a shell-free array from the clean repository root:
   "containers/sira-smoke/lambda/manual-console/l23_supervisor_bootstrap.py",
   "--repository-root", ".",
   "--plan", "containers/sira-smoke/lambda/manual-console/gate-l2m-host-qualification-plan-v1.json",
-  "--plan-sha256", "670564fad25cc079439d35dfbb2aecb960f3f48093e5ce05b9dd973a9d87e754",
+  "--plan-sha256", "fce83fae57cea8b8d1010673b93bf496be2990771faa0dc4986c18c8b0bd1648",
   "--expected-commit", "<EXACT-FINAL-CLEAN-GATE-L2-3-HANDOFF-COMMIT>",
   "--authorization-reference", "<FRESH-AUTHORIZATION-REFERENCE>",
   "--authorization-sha256", "<SHA256-OF-THE-FRESH-USER-AUTHORIZATION-TEXT>"
@@ -252,10 +252,10 @@ I authorize exact plan PLAN-T07-GATE-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-V1,
 run RUN-T07-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-0001, at
 containers/sira-smoke/lambda/manual-console/gate-l2m-host-qualification-plan-v1.json,
 21,638 bytes, SHA-256
-670564fad25cc079439d35dfbb2aecb960f3f48093e5ce05b9dd973a9d87e754, on branch
+fce83fae57cea8b8d1010673b93bf496be2990771faa0dc4986c18c8b0bd1648, on branch
 phase-1/sira-smoke-lambda at exact clean commit
 <EXACT-FINAL-CLEAN-GATE-L2-3-HANDOFF-COMMIT>. Reviewed implementation commit
-e2b0cb93bba03599f128621f537c2f6255bae2c8 must be an ancestor and every plan-bound
+9ccc46b49f18558af5645cdb390ae669c484373e must be an ancestor and every plan-bound
 artifact hash must remain exact. Use authorization reference
 AUTH-T07-GATE-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-V1-2026-08-11 and start the
 supervisor no later than 2026-08-12T05:15:19.646016Z.

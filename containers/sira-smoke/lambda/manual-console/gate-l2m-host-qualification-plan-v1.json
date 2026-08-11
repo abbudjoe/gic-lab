@@ -150,9 +150,9 @@
         "sha256": "3c8ae545c4d39b633bdd9e02ae3d79a704d0eda5f0a70b0378dd3d32e6afe0f0"
       },
       {
-        "bytes": 316069,
+        "bytes": 316230,
         "path": "src/giclab/harness/lambda_l2m_observer.py",
-        "sha256": "c4c7c8d2b7fa41d3691f75aed0d39dfa359f4324de04056dd7b50d8f4dbac502"
+        "sha256": "72dfc706687aeb319f13f7fd4d358f543f73df51bc57d4d6f4b38001ed546104"
       },
       {
         "bytes": 3367,
@@ -293,7 +293,7 @@
     "branch": "phase-1/sira-smoke-lambda",
     "l2_2_implementation_commit": "82670a862e73ae1404fecaec775232445fddcdd8",
     "required_execution_commit": "<EXACT-FINAL-CLEAN-GATE-L2-3-HANDOFF-COMMIT>",
-    "reviewed_implementation_commit": "e2b0cb93bba03599f128621f537c2f6255bae2c8",
+    "reviewed_implementation_commit": "9ccc46b49f18558af5645cdb390ae669c484373e",
     "starting_commit": "b71cbbc29f59da600d57b7f0ad28d14572b5fc62"
   },
   "incident_rules": {

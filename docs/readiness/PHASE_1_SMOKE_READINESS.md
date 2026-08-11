@@ -85,7 +85,7 @@ manual plan. Its terminal state is
 `RUN-T07-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-0001`, is at
 `containers/sira-smoke/lambda/manual-console/gate-l2m-host-qualification-plan-v1.json`,
 21,638 bytes, SHA-256
-`670564fad25cc079439d35dfbb2aecb960f3f48093e5ce05b9dd973a9d87e754`.
+`fce83fae57cea8b8d1010673b93bf496be2990771faa0dc4986c18c8b0bd1648`.
 All plan authority fields and project execution permissions remain false. A fresh
 current-turn authorization must bind the final clean commit and start the supervisor
 no later than `2026-08-12T05:15:19.646016Z`; expiry requires a new metadata record,
