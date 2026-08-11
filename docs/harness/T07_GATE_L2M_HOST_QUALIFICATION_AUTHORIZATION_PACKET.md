@@ -10,22 +10,22 @@ Date: 2026-08-11
 |---|---|
 | Branch | `phase-1/sira-smoke-lambda` |
 | Required final clean execution commit | `<EXACT-FINAL-CLEAN-GATE-L2-3-HANDOFF-COMMIT>`; supplied in the final handoff and fresh user authorization |
-| Reviewed implementation commit | `9ccc46b49f18558af5645cdb390ae669c484373e` |
-| Plan ID | `PLAN-T07-GATE-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-V1` |
-| Run ID | `RUN-T07-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-0001` |
-| Plan path | `containers/sira-smoke/lambda/manual-console/gate-l2m-host-qualification-plan-v1.json` |
-| Plan bytes | 21,638 |
-| Plan SHA-256 | `fce83fae57cea8b8d1010673b93bf496be2990771faa0dc4986c18c8b0bd1648` |
-| Pending reference | `AUTH-T07-GATE-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-V1-PENDING` (not executable authority) |
+| Reviewed implementation commit | `1163bd62a3573181766e58d595fbcc8594ac6e18` |
+| Plan ID | `PLAN-T07-GATE-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-V2` |
+| Run ID | `RUN-T07-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-0002` |
+| Plan path | `containers/sira-smoke/lambda/manual-console/gate-l2m-host-qualification-plan-v2.json` |
+| Plan bytes | 17,940 |
+| Plan SHA-256 | `c73dba151ac6ca0f2c326ad486aaeac46c93e85f0e805eca9d87605d25e1724a` |
+| Pending reference | `AUTH-T07-GATE-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-V2-PENDING` (not executable authority) |
 | Decision alias | `l2m-decision-6b7af4f2c567` |
 | Decision source SHA-256 | `1b603e4bfb1e63b9046bb5b3d404a083666e7a28437e63a20613d7321063bad4` |
 | Decision canonical SHA-256 | `6b7af4f2c567f8c8e66f3d165e8ffbc144028cf3edf45727bb569e254c7bb75f` |
-| Private decision seal SHA-256 | `2516d9d902c225f3576e7be193a772b27eb208a85fd4ac63b7d9faa3a101eff6` |
-| Private parameters SHA-256 | `cfd40a341759d3a52f7c3161d1f28002d8f4945fbdf1cf62e69e2fccfb76f6b6` |
-| Private bundle seal SHA-256 | `10f4f1798b11593528088c6ceff47418b6d6c3baa7b9caa3d74c1de1dd314c48` |
-| Marker alias | `l2m-marker-dfc9017f4bc5` |
-| External archive alias | `l2m-archive-abdfb6a398ac` |
-| External copy/seal SHA-256 | `3436784c72bb01bce0e0e6fc0b1c42e08e26cb106d5306a9b50f8c8b8f7b1c2d` / `5b1fea4933b1d42db51925af7ab6112826de26912a707bf36a29962b6fe79f95` |
+| Private decision seal SHA-256 | `d01c44107586108e6215b8c493a038d53bf8f115306d9a426256629b7e629d71` |
+| Private parameters SHA-256 | `0aebe0dea9428a2f55076a3d1e5a6cd2e1f905d86fba28e029bac6e83726c046` |
+| Private bundle seal SHA-256 | `eef76e8e30795d18185ae8d3300bd2e6918ec38e51c1c1ce235c7fd8e0b8ee5b` |
+| Marker alias | `l2m-marker-4f2fa3ca23c9` |
+| External archive alias | `l2m-archive-653d000d7747` |
+| External copy/seal SHA-256 | `14bb088bad7a32f0d58c1205bad13007ab80341a8d5440edfd850635fcd5ac9c` / `22bf0c42aced10b792184a6380c4fbc90ee981fe322cf22c36d34f851d535681` |
 
 The plan itself remains `authorized: false`, `cloud_mutation_allowed: false`,
 `paid_compute_allowed: false`, `prototype_execution_allowed: false` and
@@ -56,7 +56,7 @@ substitution, extra ports or SSH.
 
 | Artifact | SHA-256 |
 |---|---|
-| Private decision seal schema | `e4bc66c5759fe700e62ba2bb54dec1c509c68f7f63308170195c6454c607ca3f` |
+| Private decision seal schema | `6fb6cc73ccd4332287014ca5aea945485f6548b5052a2fdfc32378eef5403ead` |
 | User checkpoint schema | `a55f9023f8cc8f530acebe31bbe7b50c57d1e1a01b959ced38876e43e0f108ff` |
 | Observer journal schema | `c9d5fef455c35ce0e8f957fe54040464a641ce10a57a95feadb09f24d3c1bf9f` |
 | Host-evidence schema | `8311ff4dcc82df5bf8272f549119c13fa37baf9ef46e41cea5c3629b11253ef3` |
@@ -78,8 +78,8 @@ The observer invocation is a shell-free array from the clean repository root:
   "-I",
   "containers/sira-smoke/lambda/manual-console/l23_supervisor_bootstrap.py",
   "--repository-root", ".",
-  "--plan", "containers/sira-smoke/lambda/manual-console/gate-l2m-host-qualification-plan-v1.json",
-  "--plan-sha256", "fce83fae57cea8b8d1010673b93bf496be2990771faa0dc4986c18c8b0bd1648",
+  "--plan", "containers/sira-smoke/lambda/manual-console/gate-l2m-host-qualification-plan-v2.json",
+  "--plan-sha256", "c73dba151ac6ca0f2c326ad486aaeac46c93e85f0e805eca9d87605d25e1724a",
   "--expected-commit", "<EXACT-FINAL-CLEAN-GATE-L2-3-HANDOFF-COMMIT>",
   "--authorization-reference", "<FRESH-AUTHORIZATION-REFERENCE>",
   "--authorization-sha256", "<SHA256-OF-THE-FRESH-USER-AUTHORIZATION-TEXT>"
@@ -241,94 +241,36 @@ observer-only durable receipts.
 
 ## Ready-to-copy authorization block
 
-The final handoff must replace the marked clean commit before the user sends this in a
-fresh turn. The operator computes and binds the SHA-256 of the exact received
-authorization text; that digest is evidence, not text to be guessed here.
+The user may authorize one fresh run by binding the final clean commit and the
+authorization-text SHA-256. All other limits and stop rules are inherited directly
+from the immutable V2 plan above; no prose-only cap or authority expansion is valid.
 
 ```text
 Continue T07 with Gate L2M manual-console host qualification only.
 
-I authorize exact plan PLAN-T07-GATE-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-V1,
-run RUN-T07-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-0001, at
-containers/sira-smoke/lambda/manual-console/gate-l2m-host-qualification-plan-v1.json,
-21,638 bytes, SHA-256
-fce83fae57cea8b8d1010673b93bf496be2990771faa0dc4986c18c8b0bd1648, on branch
+I authorize plan PLAN-T07-GATE-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-V2, run
+RUN-T07-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-0002, at
+containers/sira-smoke/lambda/manual-console/gate-l2m-host-qualification-plan-v2.json,
+SHA-256 c73dba151ac6ca0f2c326ad486aaeac46c93e85f0e805eca9d87605d25e1724a, on
 phase-1/sira-smoke-lambda at exact clean commit
-<EXACT-FINAL-CLEAN-GATE-L2-3-HANDOFF-COMMIT>. Reviewed implementation commit
-9ccc46b49f18558af5645cdb390ae669c484373e must be an ancestor and every plan-bound
+<EXACT-FINAL-CLEAN-GATE-L2M-COMMIT>. Reviewed implementation commit
+1163bd62a3573181766e58d595fbcc8594ac6e18 must be an ancestor and every plan-bound
 artifact hash must remain exact. Use authorization reference
-AUTH-T07-GATE-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-V1-2026-08-11 and start the
-supervisor no later than 2026-08-12T05:15:19.646016Z.
+AUTH-T07-GATE-L2M-CURRENT-TURN-2026-08-11 and the SHA-256 of this exact text.
 
-The sealed decision is l2m-decision-6b7af4f2c567, source SHA-256
-1b603e4bfb1e63b9046bb5b3d404a083666e7a28437e63a20613d7321063bad4, canonical
-SHA-256 6b7af4f2c567f8c8e66f3d165e8ffbc144028cf3edf45727bb569e254c7bb75f,
-with private-parameter SHA-256
-cfd40a341759d3a52f7c3161d1f28002d8f4945fbdf1cf62e69e2fccfb76f6b6 and marker
-alias l2m-marker-dfc9017f4bc5. No private scalar may be printed or copied into Git.
+Use the sealed decision and archive aliases/hashes bound in the plan. Access only
+LAMBDA_API_KEY through the approved nonlogging channel. Run the plan's in-process
+GET-only observer and allow only the user-operated console checkpoints; no curl,
+wget, shell HTTP, SSH, browser automation, automated cloud mutation, extra ports,
+model call, Docker outside the plan, SiRA or scientific execution is authorized.
 
-I authorize the exact in-process GET-only observer to access only LAMBDA_API_KEY
-through the documented nonlogging secret channel and make at most 44 GETs to
-https://cloud.lambda.ai using only the plan's exact eight path forms, one-second
-minimum starts, no query, retry, pagination, redirect follow or HTTP subprocess. I
-authorize no automated cloud mutation. SIRA_API_KEY and OPENAI_API_KEY remain
-forbidden.
-
-I authorize the user, through the Lambda console only, to confirm offeredness without
-launch; replace the global firewall with exactly TCP/22 from the private /32; create
-one exact fresh us-east-1 regional ruleset; select gpu_1x_a10, us-east-1, img-0032 /
-22.4.5-2141, no filesystem, fractal-lambda-codex and that ruleset; click Launch
-exactly once; use Cloud IDE/Jupyter only; upload the exact manifest-bound bundle; run
-the hash-first qualification command exactly once; download one evidence archive;
-terminate only the exact bound or ruleset-attached incident-scope instances; delete
-only the owned ruleset after terminal proof; and restore the exact sealed original
-global firewall after ruleset absence. SSH and extra firewall ports are prohibited.
-
-I authorize one pull, capped at the bound 2,211,507-byte compressed layer, of
-busybox@sha256:7a3ebe5bfd1a4a19797d20b0c0bb39d44393e9a03fd852c0865b0f540d868df0
-for linux/amd64 and one no-network qualification container through the exact bundle.
-Docker is limited to 32 calls total, 22 ordinary and ten cleanup-reserved; one
-container; 1,048,576 bytes per call; 8,388,608 bytes aggregate, with 7,340,032
-ordinary and 1,048,576 cleanup-reserved; 30 fixture seconds, 270 ordinary-work seconds
-and 300 seconds including cleanup. The container is capped at 1 CPU, 536,870,912
-bytes memory/swap, 64 PIDs, two 16,777,216-byte tmpfs mounts, 16,777,216-byte shm and
-one 1,048,576-byte local log. No install, runtime update, browser, model or SiRA action
-is authorized.
-
-Observer caps are 44 GETs; 1,048,576 bytes per response/private observation;
-16,777,216 aggregate response/private-observation bytes; 512 events; 4,096 bytes per
-event; 2,097,152 journal bytes; 16 local process calls; 4,194,304 local-process output
-bytes; 60 seconds per request; 6,000 active seconds partitioned into 1,200 prelaunch,
-3,600 provider and 1,200 post-provider cleanup, plus 300 archive seconds and 6,300
-total. Phase deadlines are 600 seconds launch-to-active, 600 Cloud IDE, 300
-qualification, 300 download-validation, 1,800 normal termination click, 600 terminal
-verification, 300 firewall cleanup and 900 incident headroom.
-
-Evidence caps are 16 files; 16,777,216 bytes per source/archive set; 34,603,008 remote
-source bytes; 33,554,432 remote archive bytes; 68,157,440 remote aggregate bytes;
-41,943,040 local source and sealed bytes each; 83,886,080 Mac-active bytes; and
-41,943,040 external sealed-archive bytes. Provider caps are 3,600 seconds, USD 2.00,
-one Launch click, one normal instance and zero persistent filesystems. Automatic
-retries, pagination, redirects, automated mutations, SSH operations, browser
-automation, model calls, model tokens and SiRA executions are all zero.
-
-Revalidate and hold the approved external mount with APFS UUID
-8478609D-FA37-4ED5-875D-47AE912B9151 and physical-store UUID
-7904A6F1-F483-4ED7-9E34-BFECAB31C63E, enforce the 8,725,200,896-byte Mac prewrite
-floor, 8,589,934,592-byte retained floor and dynamic external floor plus 41,943,040
-bytes, prohibit internal fallback, verify every source/destination SHA-256, fsync,
-atomically finalize, and retain the local source.
-
-Stop before mutation on any preflight/offeredness drift. After a launch click, run no
-workload on zero/multiple/drift, never click Launch again, preserve strict firewall on
-outage or ambiguity, never infer authority over an unattached account row, never
-rerun qualification, and complete only the exact authorized cleanup. Observer restart
-burns the run identity. Stop after Gate L2M evidence sealing.
-
-This authorization permits infrastructure qualification only. It does not authorize
-Gate L3, Gate L4, the EXP-0001 pair, any model/provider-model call, browser action,
-SiRA execution, scientific interpretation, pilot, training, unrelated cloud mutation
-or reuse of this authority.
+Revalidate the external APFS volume and all plan storage, identity, cap, freshness and
+cleanup guards. Stop on any mismatch, ambiguous launch outcome, offeredness failure,
+checkpoint failure, observer restart, or evidence failure. Stop after Gate L2M
+evidence sealing; Gate L3, Gate L4, the EXP-0001 pair, pilot, training and
+interpretation remain unauthorized.
 ```
 
-Gate L2M has not been authorized or executed by this packet.
+This packet is the governing contract. It does not itself authorize execution; the
+current-turn authorization is recorded separately and binds the exact final commit,
+plan hash and authorization-text digest.

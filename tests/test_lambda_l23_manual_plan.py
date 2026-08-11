@@ -432,14 +432,14 @@ def test_public_plan_is_exactly_unauthorized_ordered_and_private_safe(tmp_path: 
 
 def test_materialized_public_plan_identity_is_exact_and_unauthorized() -> None:
     encoded = (ROOT / l23.PLAN_RELATIVE).read_bytes()
-    assert len(encoded) == 21_638
+    assert len(encoded) == 17_940
     assert hashlib.sha256(encoded).hexdigest() == (
-        "fce83fae57cea8b8d1010673b93bf496be2990771faa0dc4986c18c8b0bd1648"
+        "c73dba151ac6ca0f2c326ad486aaeac46c93e85f0e805eca9d87605d25e1724a"
     )
     plan = json.loads(encoded)
     validate_public_plan(plan, repository_root=ROOT)
     assert plan["implementation_binding"]["reviewed_implementation_commit"] == (
-        "9ccc46b49f18558af5645cdb390ae669c484373e"
+        "1163bd62a3573181766e58d595fbcc8594ac6e18"
     )
     assert plan["authorization"] == {
         "authorization_reference": AUTHORIZATION_PLACEHOLDER,

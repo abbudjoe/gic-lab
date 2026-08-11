@@ -123,21 +123,15 @@ bindings only into ignored sealed evidence, and verified a one-way external copy
 public decision and marker aliases are `l2m-decision-6b7af4f2c567` and
 `l2m-marker-dfc9017f4bc5`; no private scalar or path is public.
 
-`manual-console/gate-l2m-host-qualification-plan-v1.json` is now the exact
-executable-but-unauthorized plan: 21,638 bytes, SHA-256
-`fce83fae57cea8b8d1010673b93bf496be2990771faa0dc4986c18c8b0bd1648`, plan
-`PLAN-T07-GATE-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-V1`, run
-`RUN-T07-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-0001`. It binds 23 ordered actor
-steps, 13 user checkpoint templates, a GET-only observer, exact caps and incident
-cleanup. User actions are console-only; automated cloud mutation remains zero. The
-L2.3 supervisor expands the historical five-observation preflight to six ordered
-GETs, then performs one separately journaled fresh original-global-firewall GET before
-the first mutation. Its complete 44-GET partition is 6 preflight, 1 original-global
-seal, 1 restricted-global verification, 1 ruleset bind, 9 instance bind, 10 terminal
-verification, 2 ruleset absence, 1 restoration and 13 incident; Cloud IDE and local
-qualification use zero Lambda GETs. The plan also binds every Docker, container,
-phase-deadline, remote/local evidence and BusyBox-download cap rather than leaving
-those controls solely in prose or bundle code. The
-plan must start by `2026-08-12T05:15:19.646016Z` after a fresh exact authorization or
-be replaced rather than edited. Nothing has been launched, uploaded, pulled or run;
-Gate L3 and Gate L4 remain blocked.
+`manual-console/gate-l2m-host-qualification-plan-v1.json` remains preserved as
+historical provenance. The active executable-but-unauthorized replacement is
+`manual-console/gate-l2m-host-qualification-plan-v2.json`: 17,940 bytes, SHA-256
+`c73dba151ac6ca0f2c326ad486aaeac46c93e85f0e805eca9d87605d25e1724a`, plan
+`PLAN-T07-GATE-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-V2`, run
+`RUN-T07-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-0002`. It binds the same 23 ordered
+actor steps, 13 user checkpoint templates, GET-only observer, exact caps and incident
+cleanup while refreshing the reviewed implementation and private-seal schema hashes.
+User actions remain console-only and automated cloud mutation remains zero. The plan
+must start by `2026-08-12T05:15:19.646016Z` after the current-turn authorization
+binding; expiry requires a newly reviewed immutable plan. Nothing has been launched,
+uploaded, pulled or run; Gate L3 and Gate L4 remain blocked.

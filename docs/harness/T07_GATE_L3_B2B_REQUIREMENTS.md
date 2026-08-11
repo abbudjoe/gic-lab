@@ -9,7 +9,7 @@ terminated the automated API-launch path at `manual-console-launch-required`; it
 draft V2 identities are also rejected. Gate L2.2 subsequently stopped the
 human-console/Jupyter route at `blocked-human-image-selection`. Gate L2.3 has now
 validated the user's private `img-0032` selection and rendered
-`PLAN-T07-GATE-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-V1`, but that plan remains
+the repaired `PLAN-T07-GATE-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-V2`, but that plan remains
 unauthorized and unexecuted. Gate L3 still requires a separately authorized and
 successful human-operated Gate L2M run with
 externally sealed success evidence, exact provider termination, restored firewall

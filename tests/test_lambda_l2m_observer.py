@@ -4260,7 +4260,7 @@ def test_cost_wall_arithmetic_and_rejected_automated_plan_absence() -> None:
     assert TERMINAL_DECISION == "blocked-human-image-selection"
     assert not (BUNDLE / "gate-l2-host-qualification-plan.json").exists()
     assert not (BUNDLE / "gate-l2-host-qualification-plan-v2.json").exists()
-    assert (BUNDLE / "gate-l2m-host-qualification-plan-v1.json").is_file()
+    assert (BUNDLE / "gate-l2m-host-qualification-plan-v2.json").is_file()
 
 
 def test_locked_science_and_prior_evidence_hashes_remain_exact() -> None:
