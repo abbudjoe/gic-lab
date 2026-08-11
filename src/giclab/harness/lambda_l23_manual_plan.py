@@ -128,7 +128,7 @@ PRIVATE_SEAL_SCHEMA_RELATIVE: Final = Path(
     "schemas/t07-lambda-l2m-private-decision-seal-v2.schema.json"
 )
 PRIVATE_SEAL_SCHEMA_SHA256: Final = (
-    "b33b18f00559c70ee96a7901387434a7c926a147f9d8d847469018cd95c2ec6a"
+    "6fb6cc73ccd4332287014ca5aea945485f6548b5052a2fdfc32378eef5403ead"
 )
 CHECKPOINT_SCHEMA_RELATIVE: Final = Path("schemas/t07-lambda-l2m-checkpoint.schema.json")
 CHECKPOINT_SCHEMA_SHA256: Final = "a55f9023f8cc8f530acebe31bbe7b50c57d1e1a01b959ced38876e43e0f108ff"
