@@ -452,7 +452,7 @@ completed L2M authorization must be closed and reset rather than reused by L3 or
   sealed evidence, verified a one-way APFS archive copy, and rendered plan
   `PLAN-T07-GATE-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-V1` / run
   `RUN-T07-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-0001`. The 21,638-byte plan has
-  SHA-256 `2b23021800358d476d3ad9ed2818d6992804ae54b5fb13df7b3b860846e2f99b`,
+  SHA-256 `670564fad25cc079439d35dfbb2aecb960f3f48093e5ce05b9dd973a9d87e754`,
   23 ordered actor steps, 13 user checkpoint templates, zero automated mutations and
   an expiry-before-credential guard. It remains unauthorized; no account/model
   request, secret access, cloud mutation, paid compute, SSH, Jupyter, pull, container,

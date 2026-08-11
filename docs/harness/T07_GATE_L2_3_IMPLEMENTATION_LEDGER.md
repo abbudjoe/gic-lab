@@ -8,7 +8,7 @@ Source contract: the user-supplied
 `T07_GATE_L2_3_DECISION_BINDING_AND_MANUAL_PLAN.md`.
 
 Reviewed implementation commit:
-`852f0ba494a5f358931fe95637e2c60ab8dbb57b`.
+`e2b0cb93bba03599f128621f537c2f6255bae2c8`.
 
 This ledger maps the Gate L2.3 definition of done to implementation and evidence. It
 does not grant execution authority. No account/model request, credential access,

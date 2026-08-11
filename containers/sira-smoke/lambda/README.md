@@ -125,7 +125,7 @@ public decision and marker aliases are `l2m-decision-6b7af4f2c567` and
 
 `manual-console/gate-l2m-host-qualification-plan-v1.json` is now the exact
 executable-but-unauthorized plan: 21,638 bytes, SHA-256
-`2b23021800358d476d3ad9ed2818d6992804ae54b5fb13df7b3b860846e2f99b`, plan
+`670564fad25cc079439d35dfbb2aecb960f3f48093e5ce05b9dd973a9d87e754`, plan
 `PLAN-T07-GATE-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-V1`, run
 `RUN-T07-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-0001`. It binds 23 ordered actor
 steps, 13 user checkpoint templates, a GET-only observer, exact caps and incident

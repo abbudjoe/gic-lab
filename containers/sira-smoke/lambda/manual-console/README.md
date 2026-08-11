@@ -8,9 +8,9 @@ The public plan is
 `gate-l2m-host-qualification-plan-v1.json`, plan
 `PLAN-T07-GATE-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-V1`, run
 `RUN-T07-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-0001`, 21,638 bytes, SHA-256
-`2b23021800358d476d3ad9ed2818d6992804ae54b5fb13df7b3b860846e2f99b`.
+`670564fad25cc079439d35dfbb2aecb960f3f48093e5ce05b9dd973a9d87e754`.
 It is bound to reviewed implementation commit
-`852f0ba494a5f358931fe95637e2c60ab8dbb57b`, has 23 ordered actor steps and 13
+`e2b0cb93bba03599f128621f537c2f6255bae2c8`, has 23 ordered actor steps and 13
 single-use user checkpoint templates, and keeps all authority fields false. Its public
 metadata permits a supervisor start no later than `2026-08-12T05:15:19.646016Z`;
 expiry requires a new immutable bundle, plan, review and authorization.

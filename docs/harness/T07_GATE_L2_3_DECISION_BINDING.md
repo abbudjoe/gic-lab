@@ -138,9 +138,9 @@ fallback occurred. Raw mappings remain only in ignored, mode-restricted evidence
   `containers/sira-smoke/lambda/manual-console/gate-l2m-host-qualification-plan-v1.json`.
 - Bytes: 21,638.
 - SHA-256:
-  `2b23021800358d476d3ad9ed2818d6992804ae54b5fb13df7b3b860846e2f99b`.
+  `670564fad25cc079439d35dfbb2aecb960f3f48093e5ce05b9dd973a9d87e754`.
 - Reviewed implementation commit:
-  `852f0ba494a5f358931fe95637e2c60ab8dbb57b`.
+  `e2b0cb93bba03599f128621f537c2f6255bae2c8`.
 - Future authorization placeholder:
   `AUTH-T07-GATE-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-V1-PENDING`.
 - Latest safe supervisor start:

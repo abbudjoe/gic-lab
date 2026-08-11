@@ -140,9 +140,9 @@
         "sha256": "db4807b68c2be1cf29e439e4ac7e6a74d5111cee45fdca99c4c4c5930f282cc2"
       },
       {
-        "bytes": 63402,
+        "bytes": 63656,
         "path": "src/giclab/harness/lambda_l23_manual_supervisor.py",
-        "sha256": "e3b2aace2ebcad36a6f91937e29b0aa1d254356156e0781340dfa690e20f6258"
+        "sha256": "a20c9e7fae89928c7dd44795fadc342ccba4f357ce447805f4846319ae011368"
       },
       {
         "bytes": 33515,
@@ -293,7 +293,7 @@
     "branch": "phase-1/sira-smoke-lambda",
     "l2_2_implementation_commit": "82670a862e73ae1404fecaec775232445fddcdd8",
     "required_execution_commit": "<EXACT-FINAL-CLEAN-GATE-L2-3-HANDOFF-COMMIT>",
-    "reviewed_implementation_commit": "852f0ba494a5f358931fe95637e2c60ab8dbb57b",
+    "reviewed_implementation_commit": "e2b0cb93bba03599f128621f537c2f6255bae2c8",
     "starting_commit": "b71cbbc29f59da600d57b7f0ad28d14572b5fc62"
   },
   "incident_rules": {
