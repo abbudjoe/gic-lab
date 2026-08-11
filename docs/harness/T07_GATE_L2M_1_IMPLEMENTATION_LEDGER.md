@@ -2,8 +2,7 @@
 
 Assembly status: **validation and independent rereview in progress**
 
-Source contract:
-`/Users/joseph/Downloads/T07_GATE_L2M_1_FIREWALL_BASELINE_REPAIR.md`.
+Source contract: user-supplied `T07_GATE_L2M_1_FIREWALL_BASELINE_REPAIR.md`.
 
 This workstream is offline. Authenticated account requests, cloud/console mutation,
 paid compute, SSH, Jupyter, browser, container, model, SiRA, and scientific execution
