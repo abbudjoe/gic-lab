@@ -42,6 +42,10 @@ from giclab.harness.lambda_l2m_checkpoints import (
     is_validated_human_decision,
 )
 from giclab.harness.lambda_l13_security import project_image_identities
+from giclab.harness.lambda_ssh_key_fingerprint import (
+    SSHKeyFingerprintError,
+    parse_public_key,
+)
 
 TERMINAL_DECISION: Final = "blocked-human-image-selection"
 SELECTED_INSTANCE_TYPE: Final = "gpu_1x_a10"
@@ -53,6 +57,7 @@ RECOMMENDED_IMAGE_VERSION: Final = "22.4.5-2141"
 HISTORICAL_GPU_BASE_ALIAS: Final = "img-0111"
 HISTORICAL_GPU_BASE_VERSION: Final = "22.4.5-2141"
 SELECTED_SSH_KEY_NAME: Final = "fractal-lambda-codex"
+BUNDLE_MANIFEST_SHA256: Final = "dc9824649f97fab6cfd105b5fc0d0c6c1c5ff513fa25f70e0d517afa623cc261"
 
 BUSYBOX_REFERENCE: Final = (
     "busybox@sha256:7a3ebe5bfd1a4a19797d20b0c0bb39d44393e9a03fd852c0865b0f540d868df0"
@@ -127,7 +132,7 @@ _BOUND_OBSERVER_JOURNAL_SCHEMA_RELATIVE_PATH: Final = Path(
     "schemas/t07-lambda-l2m-observer-journal.schema.json"
 )
 _BOUND_OBSERVER_JOURNAL_SCHEMA_SHA256: Final = (
-    "5486ff6403c72a9402029560135833c920d719e03e6a74ba6ab095e5006ee6d3"
+    "c9d5fef455c35ce0e8f957fe54040464a641ce10a57a95feadb09f24d3c1bf9f"
 )
 
 _SHA256 = re.compile(r"^[a-f0-9]{64}$")
@@ -174,6 +179,7 @@ class InstanceMatchState(StrEnum):
 class ObserverOperation(StrEnum):
     LIST_INSTANCE_TYPES = "list_instance_types"
     LIST_IMAGES = "list_images"
+    LIST_SSH_KEYS = "list_ssh_keys"
     LIST_INSTANCES = "list_instances"
     GET_INSTANCE = "get_instance"
     LIST_RULESETS = "list_rulesets"
@@ -183,6 +189,7 @@ class ObserverOperation(StrEnum):
 
 class ObserverPhase(StrEnum):
     PREFLIGHT = "preflight"
+    ORIGINAL_GLOBAL_SEAL = "original_global_seal"
     GLOBAL_RESTRICTED_VERIFY = "global_restricted_verify"
     RULESET_BIND = "ruleset_bind"
     INSTANCE_BIND = "instance_bind"
@@ -202,6 +209,10 @@ _ENDPOINT_SCHEMA_BINDINGS: Final[dict[ObserverOperation, tuple[str, str]]] = {
     ObserverOperation.LIST_IMAGES: (
         "containers/sira-smoke/lambda/endpoint-schemas-v3/images.schema.json",
         "ba3b0ba8e6ecf1c97f94a54a3872056b44527ff81e4538fc35c40b911e896cba",
+    ),
+    ObserverOperation.LIST_SSH_KEYS: (
+        "containers/sira-smoke/lambda/endpoint-schemas-v3/ssh-keys.schema.json",
+        "bd5062e1f55e79535a3eb624826339482338600d272b3140b21a4f2096fd84cc",
     ),
     ObserverOperation.LIST_INSTANCES: (
         "containers/sira-smoke/lambda/endpoint-schemas-v3/instances.schema.json",
@@ -227,16 +238,21 @@ _ENDPOINT_SCHEMA_BINDINGS: Final[dict[ObserverOperation, tuple[str, str]]] = {
 
 
 OBSERVER_PHASE_GET_LIMITS: Final[dict[ObserverPhase, int]] = {
-    ObserverPhase.PREFLIGHT: 5,
+    ObserverPhase.PREFLIGHT: 6,
+    ObserverPhase.ORIGINAL_GLOBAL_SEAL: 1,
     ObserverPhase.GLOBAL_RESTRICTED_VERIFY: 1,
     ObserverPhase.RULESET_BIND: 1,
-    ObserverPhase.INSTANCE_BIND: 10,
+    ObserverPhase.INSTANCE_BIND: 9,
     ObserverPhase.CLOUD_IDE_CHECKPOINT: 0,
     ObserverPhase.QUALIFICATION_LOCAL: 0,
     ObserverPhase.TERMINATION_VERIFY: 10,
     ObserverPhase.RULESET_ABSENCE: 2,
     ObserverPhase.GLOBAL_RESTORE: 1,
-    ObserverPhase.INCIDENT: 14,
+    # One request moved from the incident reserve into mandatory SSH-key
+    # preflight.  Thirteen incident GETs still cover the maximum cleanup path:
+    # one instance listing, ten terminal polls, one ruleset listing, and one
+    # global-firewall read.
+    ObserverPhase.INCIDENT: 13,
 }
 
 _OBSERVER_PHASE_OPERATIONS: Final[dict[ObserverPhase, frozenset[ObserverOperation]]] = {
@@ -244,11 +260,13 @@ _OBSERVER_PHASE_OPERATIONS: Final[dict[ObserverPhase, frozenset[ObserverOperatio
         {
             ObserverOperation.LIST_IMAGES,
             ObserverOperation.LIST_INSTANCE_TYPES,
+            ObserverOperation.LIST_SSH_KEYS,
             ObserverOperation.LIST_INSTANCES,
             ObserverOperation.LIST_RULESETS,
             ObserverOperation.GET_GLOBAL_FIREWALL,
         }
     ),
+    ObserverPhase.ORIGINAL_GLOBAL_SEAL: frozenset({ObserverOperation.GET_GLOBAL_FIREWALL}),
     ObserverPhase.GLOBAL_RESTRICTED_VERIFY: frozenset({ObserverOperation.GET_GLOBAL_FIREWALL}),
     ObserverPhase.RULESET_BIND: frozenset({ObserverOperation.LIST_RULESETS}),
     ObserverPhase.INSTANCE_BIND: frozenset({ObserverOperation.LIST_INSTANCES}),
@@ -762,11 +780,14 @@ class ManualPhase(StrEnum):
 
 
 class TransitionVerificationKind(StrEnum):
+    LAUNCH_WIZARD_OFFEREDNESS_ATTESTED = "launch_wizard_offeredness_attested"
     GLOBAL_FIREWALL_EXACT = "global_firewall_exact"
     RULESET_EXACT = "ruleset_exact"
+    LAUNCH_CONFIGURATION_ATTESTED = "launch_configuration_attested"
     LAUNCH_CLICK_ATTESTED = "launch_click_attested"
     INSTANCE_EXACT = "instance_exact"
     CLOUD_IDE_ATTESTED = "cloud_ide_attested"
+    QUALIFICATION_BUNDLE_UPLOADED_ATTESTED = "qualification_bundle_uploaded_attested"
     QUALIFICATION_STARTED_ATTESTED = "qualification_started_attested"
     QUALIFICATION_COMPLETED_ATTESTED = "qualification_completed_attested"
     ARCHIVE_EXACT = "archive_exact"
@@ -1177,28 +1198,42 @@ def classify_instances_for_ruleset(
         raise L2MContractError("private ruleset ID is invalid")
     if _SHA256.fullmatch(image_selection_checkpoint_sha256) is None:
         raise L2MContractError("image selection checkpoint hash is invalid")
-    # Preflight proved an account-wide zero-instance baseline.  Therefore every
-    # post-click row is a possible outcome of this launch, even if the provider failed
-    # to attach the requested ruleset.  Filtering to attached rows would permit an
-    # unattached billable instance to escape both binding and terminal cleanup.
     rows = [_mapping(raw, context="instance") for raw in _sequence(instances, context="instances")]
     if not rows:
         return InstanceMatch(InstanceMatchState.ZERO, 0)
-    observed_ids: list[str] = []
+    attached_rows: list[Mapping[str, object]] = []
+    attached_ids: list[str] = []
     invalid_identity = False
     for row in rows:
         raw_instance_id = row.get("id")
+        attached = _sequence(row.get("firewall_rulesets"), context="instance rulesets")
+        attached_ruleset_ids = [
+            _string(_mapping(item, context="instance ruleset").get("id"), context="ruleset ID")
+            for item in attached
+        ]
+        if private_ruleset_id not in attached_ruleset_ids:
+            continue
+        attached_rows.append(row)
         if not isinstance(raw_instance_id, str) or _PRIVATE_ID.fullmatch(raw_instance_id) is None:
             invalid_identity = True
         else:
-            observed_ids.append(raw_instance_id)
-    if len(rows) > 1:
+            attached_ids.append(raw_instance_id)
+    if not attached_rows:
+        # The private decision authorizes termination only for instances attached to
+        # this run's unique ruleset.  An account row outside that scope is drift, not
+        # inferred ownership from the earlier zero-instance observation.
+        return InstanceMatch(InstanceMatchState.DRIFT, 0)
+    if len(attached_rows) > 1 or len(rows) != len(attached_rows):
         return InstanceMatch(
-            InstanceMatchState.DRIFT if invalid_identity else InstanceMatchState.MULTIPLE,
-            len(rows),
-            instance_ids=tuple(sorted(observed_ids)),
+            (
+                InstanceMatchState.DRIFT
+                if invalid_identity or len(rows) != len(attached_rows)
+                else InstanceMatchState.MULTIPLE
+            ),
+            len(attached_rows),
+            instance_ids=tuple(sorted(attached_ids)),
         )
-    row = rows[0]
+    row = attached_rows[0]
     region = _mapping(row.get("region"), context="instance region")
     instance_type = _mapping(row.get("instance_type"), context="instance type")
     keys = _sequence(row.get("ssh_key_names"), context="SSH key names")
@@ -1293,6 +1328,8 @@ def observer_request(
         path = "/api/v1/instance-types"
     elif operation is ObserverOperation.LIST_IMAGES:
         path = "/api/v1/images"
+    elif operation is ObserverOperation.LIST_SSH_KEYS:
+        path = "/api/v1/ssh-keys"
     elif operation is ObserverOperation.LIST_INSTANCES:
         path = "/api/v1/instances"
     elif operation is ObserverOperation.LIST_RULESETS:
@@ -1333,6 +1370,7 @@ def validate_observer_request(request: ObserverRequest) -> None:
     static_paths = {
         ObserverOperation.LIST_INSTANCE_TYPES: "/api/v1/instance-types",
         ObserverOperation.LIST_IMAGES: "/api/v1/images",
+        ObserverOperation.LIST_SSH_KEYS: "/api/v1/ssh-keys",
         ObserverOperation.LIST_INSTANCES: "/api/v1/instances",
         ObserverOperation.LIST_RULESETS: "/api/v1/firewall-rulesets",
         ObserverOperation.GET_GLOBAL_FIREWALL: "/api/v1/firewall-rulesets/global",
@@ -2717,7 +2755,9 @@ class PrivateObservationStore:
 class CheckpointReader(Protocol):
     binding: CheckpointBinding
     repository_root: Path
-    final_evidence: CheckpointConsumptionEvidence
+
+    @property
+    def final_evidence(self) -> CheckpointConsumptionEvidence: ...
 
     def read_once(
         self,
@@ -2844,6 +2884,7 @@ def _observer_data(
     data = envelope["data"]
     list_operations = {
         ObserverOperation.LIST_IMAGES,
+        ObserverOperation.LIST_SSH_KEYS,
         ObserverOperation.LIST_INSTANCES,
         ObserverOperation.LIST_RULESETS,
     }
@@ -2974,6 +3015,12 @@ def _encode_private_observation_projection(
             )
             for entry in [_mapping(value, context="private observation instance type entry")]
         }
+    elif operation is ObserverOperation.LIST_SSH_KEYS:
+        projected = [
+            {"id": row.get("id"), "name": row.get("name")}
+            for item in _sequence(data, context="private observation SSH keys")
+            for row in [_mapping(item, context="private observation SSH key")]
+        ]
     elif operation is ObserverOperation.LIST_INSTANCES:
         projected = [
             _project_instance(item)
@@ -3055,8 +3102,11 @@ class L2MReadOnlyObserverEngine:
     sealed_original_global_sha256: str = field(repr=False)
     image_selection_checkpoint_sha256: str = field(repr=False)
     private_selected_image_id: str = field(repr=False)
+    private_selected_ssh_key_id: str = field(repr=False)
+    private_selected_ssh_key_fingerprint: str = field(repr=False)
     selected_image_alias: str
     selected_image_version: str
+    require_l23_auxiliary_checkpoints: bool = False
     clock_ns: Callable[[], int] = time.monotonic_ns
     sleeper: Callable[[float], None] = time.sleep
     utc_now: Callable[[], datetime] = lambda: datetime.now(UTC)
@@ -3083,7 +3133,11 @@ class L2MReadOnlyObserverEngine:
     _validated_qualification: ValidatedQualification | None = field(
         default=None, init=False, repr=False
     )
+    _validated_qualification_encoded: bytes | None = field(default=None, init=False, repr=False)
     _validated_qualification_failure: ValidatedQualificationFailure | None = field(
+        default=None, init=False, repr=False
+    )
+    _validated_qualification_failure_encoded: bytes | None = field(
         default=None, init=False, repr=False
     )
     _qualification_consumed: bool = field(default=False, init=False, repr=False)
@@ -3133,6 +3187,10 @@ class L2MReadOnlyObserverEngine:
     _checkpoint_transaction: CheckpointTransactionState | None = field(
         default=None, init=False, repr=False
     )
+    _auxiliary_checkpoint_sha256: dict[str, str] = field(
+        default_factory=dict, init=False, repr=False
+    )
+    _original_global_seal_response_sha256: str | None = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
         if (
@@ -3144,6 +3202,8 @@ class L2MReadOnlyObserverEngine:
             or _SHA256.fullmatch(self.sealed_original_global_sha256) is None
             or _SHA256.fullmatch(self.image_selection_checkpoint_sha256) is None
             or _PRIVATE_ID.fullmatch(self.private_selected_image_id) is None
+            or _PRIVATE_ID.fullmatch(self.private_selected_ssh_key_id) is None
+            or not self.private_selected_ssh_key_fingerprint.startswith("SHA256:")
             or self.selected_image_alias != RECOMMENDED_IMAGE_ALIAS
             or self.selected_image_version != RECOMMENDED_IMAGE_VERSION
             or not is_validated_human_decision(self.human_decision)
@@ -3452,6 +3512,7 @@ class L2MReadOnlyObserverEngine:
         expected_order = (
             ObserverOperation.LIST_IMAGES,
             ObserverOperation.LIST_INSTANCE_TYPES,
+            ObserverOperation.LIST_SSH_KEYS,
             ObserverOperation.LIST_INSTANCES,
             ObserverOperation.LIST_RULESETS,
             ObserverOperation.GET_GLOBAL_FIREWALL,
@@ -3518,6 +3579,27 @@ class L2MReadOnlyObserverEngine:
         ):
             raise L2MContractError("selected instance price, architecture, or capacity drifted")
         self._preflight_price_cents_per_hour = OBSERVED_PRICE_CENTS_PER_HOUR
+        selected_ssh_keys = [
+            _mapping(item, context="preflight SSH key")
+            for item in _sequence(
+                self._preflight_observations[ObserverOperation.LIST_SSH_KEYS].data,
+                context="preflight SSH keys",
+            )
+            if _mapping(item, context="preflight SSH key").get("name") == SELECTED_SSH_KEY_NAME
+        ]
+        current_fingerprint: str | None = None
+        if len(selected_ssh_keys) == 1:
+            public_key = selected_ssh_keys[0].get("public_key")
+            try:
+                current_fingerprint = parse_public_key(str(public_key)).fingerprint
+            except (SSHKeyFingerprintError, ValueError):
+                current_fingerprint = None
+        if (
+            len(selected_ssh_keys) != 1
+            or selected_ssh_keys[0].get("id") != self.private_selected_ssh_key_id
+            or current_fingerprint != self.private_selected_ssh_key_fingerprint
+        ):
+            raise L2MContractError("selected SSH key identity or name drifted")
         require_zero_prelaunch_instances(
             self._preflight_observations[ObserverOperation.LIST_INSTANCES].data
         )
@@ -3540,6 +3622,58 @@ class L2MReadOnlyObserverEngine:
         )
         self._preflight_complete = True
         return True
+
+    def seal_original_global_firewall(self, observation: ObservedDocument) -> str:
+        """Durably bind a fresh post-offeredness baseline before user mutation.
+
+        The earlier preflight observation proves initial consistency, but the user may
+        spend up to one checkpoint window in the launch wizard.  This distinct read
+        closes that interval and must be durably journaled before the supervisor may
+        expose the global-firewall replacement challenge.
+        """
+
+        if (
+            self.stopped
+            or not self._preflight_complete
+            or self.lifecycle.phase is not ManualPhase.PREFLIGHT
+            or "launch_wizard_image_offered" not in self._auxiliary_checkpoint_sha256
+            or self._original_global_seal_response_sha256 is not None
+        ):
+            raise L2MContractError("original global firewall seal is out of order")
+        observed = self._trusted_observation(
+            observation,
+            ObserverOperation.GET_GLOBAL_FIREWALL,
+            frozenset({ObserverPhase.ORIGINAL_GLOBAL_SEAL}),
+        )
+        global_data = _mapping(observed.data, context="fresh original global firewall")
+        verify_global_firewall_restoration(
+            global_data.get("rules"),
+            sealed_original_semantic_sha256=self.sealed_original_global_sha256,
+        )
+        try:
+            self.journal.reserve_capacity(
+                events=1,
+                bytes_upper_bound=MAX_OBSERVER_EVENT_BYTES,
+            )
+            self._append_event(
+                "evidence_sealed",
+                request=observer_request(ObserverOperation.GET_GLOBAL_FIREWALL),
+                observer_phase=ObserverPhase.ORIGINAL_GLOBAL_SEAL,
+                request_ordinal=observed.request_ordinal,
+                response_sha256=observed.response_sha256,
+                request_binding_sha256=observed.request_binding_sha256,
+                evidence_sha256=self.sealed_original_global_sha256,
+                source_request_ordinal=observed.request_ordinal,
+                semantic_outcome="original_global_firewall_sealed",
+                semantic_count=1,
+                sanitized_outcome="passed",
+            )
+            self._consume_trusted_observation(observed)
+        except L2MContractError:
+            self._evidence_incomplete = True
+            raise L2MContractError("original global firewall seal was not durable") from None
+        self._original_global_seal_response_sha256 = observed.response_sha256
+        return observed.response_sha256
 
     def _stop_after_send(
         self,
@@ -3694,6 +3828,7 @@ class L2MReadOnlyObserverEngine:
         preflight_order = (
             ObserverOperation.LIST_IMAGES,
             ObserverOperation.LIST_INSTANCE_TYPES,
+            ObserverOperation.LIST_SSH_KEYS,
             ObserverOperation.LIST_INSTANCES,
             ObserverOperation.LIST_RULESETS,
             ObserverOperation.GET_GLOBAL_FIREWALL,
@@ -4115,6 +4250,10 @@ class L2MReadOnlyObserverEngine:
             or not self._preflight_complete
             or self.lifecycle.phase is not ManualPhase.RULESET_CREATED
             or self._provider_started_ns is not None
+            or (
+                self.require_l23_auxiliary_checkpoints
+                and "launch_configuration_selected" not in self._auxiliary_checkpoint_sha256
+            )
         ):
             raise L2MContractError("launch window cannot be armed in the current state")
         now_ns = self.clock_ns()
@@ -4170,6 +4309,267 @@ class L2MReadOnlyObserverEngine:
             ),
         )
 
+    def launch_configuration_binding_sha256(self) -> str:
+        """Expose only the opaque hash the user must copy into a private checkpoint."""
+
+        if (
+            self.stopped
+            or not self._preflight_complete
+            or self.lifecycle.phase is not ManualPhase.RULESET_CREATED
+        ):
+            raise L2MContractError("launch configuration binding is unavailable")
+        return self._launch_configuration_sha256()
+
+    def instance_binding_challenge_sha256(self, observation: ObservedDocument) -> str:
+        """Derive the opaque exact-one instance binding without consuming its observation."""
+
+        observed = self._trusted_observation(
+            observation,
+            ObserverOperation.LIST_INSTANCES,
+            frozenset({ObserverPhase.INSTANCE_BIND, ObserverPhase.INCIDENT}),
+        )
+        if self.private_ruleset_id is None:
+            raise L2MContractError("instance binding lacks a private ruleset")
+        match = classify_instances_for_ruleset(
+            observed.data,
+            private_ruleset_id=self.private_ruleset_id,
+            image_selection_checkpoint_sha256=self.image_selection_checkpoint_sha256,
+        )
+        if match.state is not InstanceMatchState.EXACT_ONE or match.instance_id is None:
+            raise L2MContractError("instance binding is not exactly one")
+        return hashlib.sha256(
+            json.dumps(
+                {
+                    "image_selection_checkpoint_sha256": self.image_selection_checkpoint_sha256,
+                    "instance_id": match.instance_id,
+                    "launch_configuration_sha256": self._launch_configuration_sha256(),
+                    "ruleset_id": self.private_ruleset_id,
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode()
+        ).hexdigest()
+
+    def assess_instance_binding_observation(
+        self,
+        observation: ObservedDocument,
+        *,
+        zero_is_terminal: bool,
+    ) -> InstanceMatch:
+        """Classify one launch poll without permitting ambiguous recovery to workload.
+
+        ZERO may be treated as explicitly transient by the caller until its final
+        bounded poll.  MULTIPLE and DRIFT always burn the observation and enter the
+        cleanup-only incident state immediately.
+        """
+
+        observed = self._trusted_observation(
+            observation,
+            ObserverOperation.LIST_INSTANCES,
+            frozenset({ObserverPhase.INSTANCE_BIND, ObserverPhase.INCIDENT}),
+        )
+        if self.private_ruleset_id is None:
+            raise L2MContractError("instance assessment lacks a private ruleset")
+        match = classify_instances_for_ruleset(
+            observed.data,
+            private_ruleset_id=self.private_ruleset_id,
+            image_selection_checkpoint_sha256=self.image_selection_checkpoint_sha256,
+        )
+        if (
+            match.state is InstanceMatchState.EXACT_ONE
+            and observed.phase is ObserverPhase.INSTANCE_BIND
+        ):
+            return match
+        retain_for_terminal_commit = (
+            match.state is InstanceMatchState.ZERO
+            and observed.phase is ObserverPhase.INCIDENT
+            and zero_is_terminal
+        )
+        if not retain_for_terminal_commit:
+            self._consume_trusted_observation(observed)
+        if match.state is InstanceMatchState.ZERO and not zero_is_terminal:
+            return match
+        self._launch_match_state = match.state
+        if match.state is InstanceMatchState.EXACT_ONE:
+            self.private_instance_id = match.instance_id
+        self._ambiguous_instance_ids = frozenset(match.instance_ids)
+        self._conservative_account_terminal = match.state is InstanceMatchState.ZERO
+        self._activate_cleanup_incident(None)
+        try:
+            self._append_event(
+                "manual_incident",
+                request=observer_request(ObserverOperation.LIST_INSTANCES),
+                observer_phase=ObserverPhase.INSTANCE_BIND,
+                request_ordinal=observed.request_ordinal,
+                response_sha256=observed.response_sha256,
+                request_binding_sha256=observed.request_binding_sha256,
+                evidence_sha256=observed.response_sha256,
+                source_request_ordinal=observed.request_ordinal,
+                semantic_outcome="verification_failed",
+                semantic_count=match.match_count,
+                sanitized_outcome="resource_identity_ambiguous",
+            )
+        except L2MContractError:
+            self._evidence_incomplete = True
+        return match
+
+    def bind_exact_instance_observation(self, observation: ObservedDocument) -> str:
+        """Commit the observer-only step-11 exact instance receipt."""
+
+        match = self.assess_instance_binding_observation(
+            observation,
+            zero_is_terminal=True,
+        )
+        if (
+            match.state is not InstanceMatchState.EXACT_ONE
+            or match.instance_id is None
+            or self.lifecycle.phase is not ManualPhase.LAUNCH_CLICKED
+            or self.lifecycle.incident_active
+        ):
+            raise L2MContractError("instance observation cannot become an exact binding")
+        binding_sha256 = self.instance_binding_challenge_sha256(observation)
+        try:
+            self.journal.reserve_capacity(events=1, bytes_upper_bound=MAX_OBSERVER_EVENT_BYTES)
+            self._append_event(
+                "evidence_sealed",
+                request=observer_request(ObserverOperation.LIST_INSTANCES),
+                observer_phase=ObserverPhase.INSTANCE_BIND,
+                request_ordinal=observation.request_ordinal,
+                response_sha256=observation.response_sha256,
+                request_binding_sha256=observation.request_binding_sha256,
+                verification_kind=TransitionVerificationKind.INSTANCE_EXACT,
+                evidence_sha256=binding_sha256,
+                source_request_ordinal=observation.request_ordinal,
+                semantic_outcome="instance_provider_fields_exact_image_user_attested",
+                semantic_count=1,
+                sanitized_outcome="passed",
+            )
+            self._consume_trusted_observation(observation)
+        except L2MContractError:
+            self._evidence_incomplete = True
+            self._activate_cleanup_incident(None)
+            raise L2MContractError("exact instance receipt was not durable") from None
+        self.private_instance_id = match.instance_id
+        self.instance_binding_sha256 = binding_sha256
+        self._launch_match_state = InstanceMatchState.EXACT_ONE
+        self._ambiguous_instance_ids = frozenset(match.instance_ids)
+        self._instance_bound_ns = self.clock_ns()
+        self.lifecycle = ManualLifecycle(
+            ManualPhase.INSTANCE_BOUND,
+            self.lifecycle.strict_firewall_preserved,
+            False,
+            self._proof_issuer,
+        )
+        return binding_sha256
+
+    def incident_scope_instance_ids(self) -> tuple[str, ...]:
+        """Return only private IDs explicitly attached to the owned ruleset."""
+
+        identifiers = set(self._ambiguous_instance_ids)
+        if self.private_instance_id is not None:
+            identifiers.add(self.private_instance_id)
+        return tuple(sorted(identifiers))
+
+    def terminal_checkpoint_state(self) -> str:
+        """Return only the closed-enum state needed for the private terminal checkpoint."""
+
+        if self._launch_match_state is None:
+            raise L2MContractError("launch identity state is not yet classified")
+        return self._launch_match_state.value
+
+    def commit_terminal_instance_observation(self, observation: ObservedDocument) -> str:
+        """Commit observer-only terminal evidence for exactly the authorized scope."""
+
+        observed = self._trusted_observation(
+            observation,
+            ObserverOperation.LIST_INSTANCES,
+            frozenset({ObserverPhase.TERMINATION_VERIFY, ObserverPhase.INCIDENT}),
+        )
+        if (
+            self.lifecycle.phase
+            not in {
+                ManualPhase.TERMINATION_CONFIRMED,
+                ManualPhase.LAUNCH_CLICKED,
+                ManualPhase.LAUNCH_OUTCOME_UNVERIFIED,
+                ManualPhase.RULESET_CREATED,
+            }
+            or self.lifecycle.incident_active
+        ):
+            raise L2MContractError("terminal observation is out of order")
+        rows = [
+            _mapping(item, context="terminal instance")
+            for item in _sequence(observed.data, context="terminal instances")
+        ]
+        scope_ids = set(self.incident_scope_instance_ids())
+        row_by_id: dict[str, Mapping[str, object]] = {}
+        for row in rows:
+            row_id = row.get("id")
+            if not isinstance(row_id, str) or _PRIVATE_ID.fullmatch(row_id) is None:
+                raise L2MContractError("terminal instance identity drifted")
+            row_by_id[row_id] = row
+        if set(row_by_id) - scope_ids:
+            # An unattached or otherwise unbound account row is outside the private
+            # human termination authority.  Preserve strict firewall state and stop
+            # for a new decision instead of broadening the cleanup scope.
+            self._activate_cleanup_incident(None)
+            raise L2MContractError("terminal observation contains an unowned account row")
+        if any(
+            row_by_id.get(identifier, {}).get("status") not in {"terminated", "preempted"}
+            for identifier in scope_ids
+            if identifier in row_by_id
+        ):
+            raise L2MContractError("incident-scope instance is not terminal")
+        if self._launch_match_state is not InstanceMatchState.ZERO and not scope_ids:
+            raise L2MContractError("terminal observation lacks an authorized instance scope")
+        state = (
+            self._launch_match_state.value
+            if self._launch_match_state is not None
+            else InstanceMatchState.EXACT_ONE.value
+        )
+        evidence_sha256 = hashlib.sha256(
+            json.dumps(
+                {
+                    "launch_identity_state": state,
+                    "response_sha256": observed.response_sha256,
+                    "scoped_ids_sha256": hashlib.sha256(
+                        json.dumps(sorted(scope_ids), separators=(",", ":")).encode()
+                    ).hexdigest(),
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode()
+        ).hexdigest()
+        try:
+            self.journal.reserve_capacity(events=1, bytes_upper_bound=MAX_OBSERVER_EVENT_BYTES)
+            self._append_event(
+                "evidence_sealed",
+                request=observer_request(ObserverOperation.LIST_INSTANCES),
+                observer_phase=observed.phase,
+                request_ordinal=observed.request_ordinal,
+                response_sha256=observed.response_sha256,
+                request_binding_sha256=observed.request_binding_sha256,
+                verification_kind=TransitionVerificationKind.INSTANCE_TERMINAL,
+                evidence_sha256=evidence_sha256,
+                source_request_ordinal=observed.request_ordinal,
+                semantic_outcome="instance_terminal_or_absent",
+                semantic_count=len(scope_ids),
+                sanitized_outcome="passed",
+            )
+            self._consume_trusted_observation(observed)
+        except L2MContractError:
+            self._evidence_incomplete = True
+            self._activate_cleanup_incident(None)
+            raise L2MContractError("terminal instance receipt was not durable") from None
+        self._instance_cleanup_proven = True
+        self._provider_terminal_ns = self.clock_ns()
+        self.lifecycle = ManualLifecycle(
+            ManualPhase.INSTANCE_TERMINAL,
+            self.lifecycle.strict_firewall_preserved,
+            False,
+            self._proof_issuer,
+        )
+        return evidence_sha256
+
     def _prepare_transition(
         self,
         requested: ManualPhase,
@@ -4190,6 +4590,13 @@ class L2MReadOnlyObserverEngine:
                 raise L2MContractError("user checkpoint lacks its exact attestation")
 
         if requested is ManualPhase.GLOBAL_RESTRICTED:
+            if self.require_l23_auxiliary_checkpoints and (
+                "launch_wizard_image_offered" not in self._auxiliary_checkpoint_sha256
+                or self._original_global_seal_response_sha256 is None
+            ):
+                raise L2MContractError(
+                    "offeredness or fresh original-firewall seal was not durable"
+                )
             observed = self._trusted_observation(
                 observation,
                 ObserverOperation.GET_GLOBAL_FIREWALL,
@@ -4410,6 +4817,13 @@ class L2MReadOnlyObserverEngine:
                     self._qualification_completed_ns = now_ns
                 else:
                     self._termination_confirmed_ns = now_ns
+
+            if (
+                requested is ManualPhase.QUALIFICATION_STARTED
+                and self.require_l23_auxiliary_checkpoints
+                and "qualification_bundle_uploaded" not in self._auxiliary_checkpoint_sha256
+            ):
+                raise L2MContractError("qualification bundle upload was not durably attested")
 
             return PreparedTransition(
                 "0" * 64,
@@ -4659,6 +5073,157 @@ class L2MReadOnlyObserverEngine:
 
         raise L2MContractError("checkpoint phase is not observable")
 
+    def consume_auxiliary_checkpoint(
+        self,
+        path: Path,
+        *,
+        expected_type: str,
+        expected_nonce: str,
+        not_before: datetime,
+        not_after: datetime,
+        expected_archive_sha256: str | None = None,
+    ) -> VerifiedCheckpoint:
+        """Consume one L2.3 user action that does not advance the L2.2 lifecycle."""
+
+        contracts = {
+            "launch_wizard_image_offered": (
+                ManualPhase.PREFLIGHT,
+                TransitionVerificationKind.LAUNCH_WIZARD_OFFEREDNESS_ATTESTED,
+                "launch_wizard_offeredness_user_attested",
+            ),
+            "launch_configuration_selected": (
+                ManualPhase.RULESET_CREATED,
+                TransitionVerificationKind.LAUNCH_CONFIGURATION_ATTESTED,
+                "launch_configuration_user_attested",
+            ),
+            "qualification_bundle_uploaded": (
+                ManualPhase.CLOUD_IDE_OPENED,
+                TransitionVerificationKind.QUALIFICATION_BUNDLE_UPLOADED_ATTESTED,
+                "qualification_bundle_uploaded_user_attested",
+            ),
+            "qualification_bundle_downloaded": (
+                ManualPhase.QUALIFICATION_COMPLETED,
+                TransitionVerificationKind.ARCHIVE_EXACT,
+                "user_attested",
+            ),
+        }
+        if (
+            not self.require_l23_auxiliary_checkpoints
+            or self.stopped
+            or not self._preflight_complete
+            or expected_type not in contracts
+            or expected_type in self._auxiliary_checkpoint_sha256
+        ):
+            raise L2MContractError("auxiliary checkpoint is unavailable or already consumed")
+        required_phase, verification_kind, semantic_outcome = contracts[expected_type]
+        if self.lifecycle.phase is not required_phase or self.lifecycle.incident_active:
+            raise L2MContractError("auxiliary checkpoint order drifted")
+
+        def validate_details(checkpoint: VerifiedCheckpoint) -> None:
+            if expected_type == "launch_wizard_image_offered":
+                expected = {
+                    "launch_wizard_image_offered": True,
+                    "selected_instance_type": SELECTED_INSTANCE_TYPE,
+                    "selected_region": SELECTED_REGION,
+                    "selected_image_alias": self.selected_image_alias,
+                    "selected_image_version": self.selected_image_version,
+                }
+            elif expected_type == "launch_configuration_selected":
+                expected = {
+                    "launch_configuration_selected": True,
+                    "launch_configuration_sha256": self._launch_configuration_sha256(),
+                }
+            elif expected_type == "qualification_bundle_uploaded":
+                expected = {
+                    "qualification_bundle_uploaded": True,
+                    "qualification_bundle_manifest_sha256": BUNDLE_MANIFEST_SHA256,
+                }
+            else:
+                if (
+                    expected_archive_sha256 is None
+                    or _SHA256.fullmatch(expected_archive_sha256) is None
+                ):
+                    raise L2MContractError("downloaded archive identity is unavailable")
+                expected = {
+                    "qualification_bundle_downloaded": True,
+                    "qualification_archive_sha256": expected_archive_sha256,
+                }
+            if dict(checkpoint.details) != expected:
+                raise L2MContractError("auxiliary checkpoint details drifted")
+
+        try:
+            self.journal.reserve_capacity(events=2, bytes_upper_bound=2 * MAX_OBSERVER_EVENT_BYTES)
+            self._append_event(
+                "checkpoint_intent_committed",
+                checkpoint_type=expected_type,
+                verification_kind=verification_kind,
+            )
+            checkpoint = self.checkpoint_reader.read_once(
+                path,
+                expected_type=expected_type,
+                expected_nonce=expected_nonce,
+                not_before=not_before,
+                not_after=not_after,
+                detail_validator=validate_details,
+            )
+            receipt = (0, checkpoint.encoded_sha256, verification_kind.value)
+            self._expected_transition_receipts[checkpoint.encoded_sha256] = receipt
+            self._append_event(
+                "checkpoint_validated",
+                checkpoint_type=expected_type,
+                checkpoint_sha256=checkpoint.encoded_sha256,
+                verification_kind=verification_kind,
+                evidence_sha256=checkpoint.encoded_sha256,
+                semantic_outcome=semantic_outcome,
+                semantic_count=1,
+                sanitized_outcome="passed",
+            )
+            self._durable_transition_receipts[checkpoint.encoded_sha256] = receipt
+        except BaseException as failure:
+            if self.lifecycle.strict_firewall_preserved or self._provider_started_ns is not None:
+                self._activate_cleanup_incident(None)
+            if not isinstance(failure, Exception):
+                raise
+            raise L2MContractError("auxiliary checkpoint validation failed") from None
+        self._auxiliary_checkpoint_sha256[expected_type] = checkpoint.encoded_sha256
+        if expected_type == "launch_wizard_image_offered":
+            self.image_selection_checkpoint_sha256 = checkpoint.encoded_sha256
+        return checkpoint
+
+    def commit_validated_qualification(self, qualification: ValidatedQualification) -> str:
+        """Commit observer-only step 16 after the user's step-15 download attestation."""
+
+        if (
+            qualification is not self._validated_qualification
+            or qualification._issuer is not self._proof_issuer
+            or self.lifecycle.phase is not ManualPhase.QUALIFICATION_COMPLETED
+            or "qualification_bundle_downloaded" not in self._auxiliary_checkpoint_sha256
+            or self._qualification_consumed
+        ):
+            raise L2MContractError("validated qualification cannot be committed")
+        try:
+            self.journal.reserve_capacity(events=1, bytes_upper_bound=MAX_OBSERVER_EVENT_BYTES)
+            self._append_event(
+                "evidence_sealed",
+                verification_kind=TransitionVerificationKind.ARCHIVE_EXACT,
+                evidence_sha256=qualification.evidence_sha256,
+                semantic_outcome="qualification_exact",
+                semantic_count=1,
+                sanitized_outcome="passed",
+            )
+        except L2MContractError:
+            self._evidence_incomplete = True
+            self._activate_cleanup_incident(None)
+            raise L2MContractError("qualification receipt was not durable") from None
+        self._qualification_consumed = True
+        self.lifecycle = ManualLifecycle(
+            ManualPhase.BUNDLE_DOWNLOADED,
+            self.lifecycle.strict_firewall_preserved,
+            False,
+            self._proof_issuer,
+        )
+        return qualification.evidence_sha256
+
     def validate_qualification(
         self,
         archive_path: Path,
@@ -4666,6 +5231,7 @@ class L2MReadOnlyObserverEngine:
         schema_path: Path,
         expected_bundle_manifest_sha256: str,
         expected_binding: QualificationEvidenceBinding,
+        archive_directory_descriptor: int | None = None,
     ) -> ValidatedQualification:
         schema_repository_root = _repository_root_for_bound_path(
             schema_path,
@@ -4718,8 +5284,17 @@ class L2MReadOnlyObserverEngine:
                 remaining,
                 message="qualification evidence hard deadline exceeded",
             ):
-                encoded, status = _read_bounded_regular_with_identity(
-                    archive_path, max_bytes=MAX_QUALIFICATION_ARCHIVE_BYTES
+                encoded, status = (
+                    _read_bounded_regular_with_identity(
+                        archive_path,
+                        max_bytes=MAX_QUALIFICATION_ARCHIVE_BYTES,
+                    )
+                    if archive_directory_descriptor is None
+                    else _read_bounded_regular_at_with_identity(
+                        archive_directory_descriptor,
+                        archive_path.name,
+                        max_bytes=MAX_QUALIFICATION_ARCHIVE_BYTES,
+                    )
                 )
                 archive_sha256 = hashlib.sha256(encoded).hexdigest()
                 evidence = validate_qualification_archive(
@@ -4781,6 +5356,7 @@ class L2MReadOnlyObserverEngine:
                 )
                 self._qualification_validation_remaining_seconds()
                 self._validated_qualification = validated_qualification
+                self._validated_qualification_encoded = encoded
         except BaseException as failure:
             self._evidence_incomplete = True
             self._activate_cleanup_incident(None)
@@ -4811,6 +5387,7 @@ class L2MReadOnlyObserverEngine:
         *,
         expected_bundle_manifest_sha256: str,
         expected_binding: QualificationEvidenceBinding,
+        archive_directory_descriptor: int | None = None,
     ) -> ValidatedQualificationFailure:
         """Bind a qualification failure archive to this run and enter cleanup-only state.
 
@@ -4867,9 +5444,17 @@ class L2MReadOnlyObserverEngine:
                 remaining,
                 message="qualification failure evidence hard deadline exceeded",
             ):
-                encoded, status = _read_bounded_regular_with_identity(
-                    archive_path,
-                    max_bytes=MAX_QUALIFICATION_ARCHIVE_BYTES,
+                encoded, status = (
+                    _read_bounded_regular_with_identity(
+                        archive_path,
+                        max_bytes=MAX_QUALIFICATION_ARCHIVE_BYTES,
+                    )
+                    if archive_directory_descriptor is None
+                    else _read_bounded_regular_at_with_identity(
+                        archive_directory_descriptor,
+                        archive_path.name,
+                        max_bytes=MAX_QUALIFICATION_ARCHIVE_BYTES,
+                    )
                 )
                 archive_sha256 = hashlib.sha256(encoded).hexdigest()
                 evidence = validate_qualification_failure_archive(
@@ -4916,6 +5501,7 @@ class L2MReadOnlyObserverEngine:
                 )
                 self._qualification_validation_remaining_seconds()
                 self._validated_qualification_failure = validated
+                self._validated_qualification_failure_encoded = encoded
         except BaseException as failure:
             self._evidence_incomplete = True
             self._activate_cleanup_incident(None)
@@ -5384,6 +5970,65 @@ class L2MReadOnlyObserverEngine:
         self.lifecycle = next_lifecycle
         return self.lifecycle
 
+    def abort_for_separately_authorized_manual_cleanup(
+        self,
+        *,
+        possible_user_mutation_phase: ObserverPhase | None = None,
+    ) -> None:
+        """Burn this run while preserving a truthful cleanup-required disposition.
+
+        This is the fail-closed boundary for a wrapper failure that cannot safely
+        continue the same observer transaction.  It grants no provider authority and
+        never claims cleanup.  A later read-only recovery needs a new reviewed run and
+        authorization; meanwhile the human operator follows the private console
+        incident procedure and keeps the strict firewall in place until every
+        incident-scope instance is terminal or absent.
+        """
+
+        if self.stopped:
+            return
+        try:
+            self.enter_wrapper_incident(possible_user_mutation_phase=possible_user_mutation_phase)
+            self.journal.reserve_capacity(events=1, bytes_upper_bound=MAX_OBSERVER_EVENT_BYTES)
+            self._append_event("run_stopped", sanitized_outcome="cleanup_required")
+        except BaseException:
+            self._evidence_incomplete = True
+        finally:
+            self._finalize_stopped_run()
+
+    def enter_wrapper_incident(
+        self,
+        *,
+        possible_user_mutation_phase: ObserverPhase | None = None,
+    ) -> ManualLifecycle:
+        """Enter cleanup-only state after a non-provider wrapper failure.
+
+        The caller supplies only the two user mutation windows whose provider outcome
+        can be unknown before a verification GET.  Later phases are derived from the
+        engine's lifecycle and never from prose or a raw identifier.
+        """
+
+        if (
+            self.stopped
+            or self.lifecycle.phase is ManualPhase.COMPLETE
+            or possible_user_mutation_phase
+            not in {
+                None,
+                ObserverPhase.GLOBAL_RESTRICTED_VERIFY,
+                ObserverPhase.RULESET_BIND,
+            }
+        ):
+            raise L2MContractError("wrapper incident cannot enter cleanup")
+        self._evidence_incomplete = True
+        self._activate_cleanup_incident(possible_user_mutation_phase)
+        try:
+            self.journal.reserve_capacity(events=1, bytes_upper_bound=MAX_OBSERVER_EVENT_BYTES)
+            self._append_event("manual_incident", sanitized_outcome="cleanup_required")
+        except L2MContractError:
+            self._evidence_incomplete = True
+            raise L2MContractError("wrapper incident receipt failed") from None
+        return self.lifecycle
+
     def stop(self, *, outcome: str = "manual_stop") -> None:
         if self.stopped:
             raise L2MContractError("observer run is already stopped")
@@ -5675,6 +6320,54 @@ def _read_bounded_regular_with_identity(
 def _read_bounded_regular(path: Path, *, max_bytes: int) -> bytes:
     encoded, _ = _read_bounded_regular_with_identity(path, max_bytes=max_bytes)
     return encoded
+
+
+def _read_bounded_regular_at_with_identity(
+    directory_descriptor: int,
+    name: str,
+    *,
+    max_bytes: int,
+) -> tuple[bytes, os.stat_result]:
+    """Read one bounded leaf through a caller-held no-follow directory."""
+
+    if not name or "/" in name or name in {".", ".."}:
+        raise L2MContractError("observer evidence leaf name is unsafe")
+    before = os.stat(name, dir_fd=directory_descriptor, follow_symlinks=False)
+    descriptor = os.open(
+        name,
+        os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0),
+        dir_fd=directory_descriptor,
+    )
+    try:
+        opened = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(opened.st_mode)
+            or opened.st_nlink != 1
+            or opened.st_uid != os.getuid()
+            or opened.st_size > max_bytes
+            or (before.st_dev, before.st_ino) != (opened.st_dev, opened.st_ino)
+        ):
+            raise L2MContractError("observer held-root evidence identity or cap failed")
+        encoded = bytearray()
+        while True:
+            chunk = os.read(descriptor, min(65_536, max_bytes + 1 - len(encoded)))
+            if not chunk:
+                break
+            encoded.extend(chunk)
+            if len(encoded) > max_bytes:
+                raise L2MContractError("observer held-root evidence exceeds its cap")
+        after = os.fstat(descriptor)
+        linked = os.stat(name, dir_fd=directory_descriptor, follow_symlinks=False)
+        if (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns) != (
+            opened.st_dev,
+            opened.st_ino,
+            opened.st_size,
+            opened.st_mtime_ns,
+        ) or (linked.st_dev, linked.st_ino) != (opened.st_dev, opened.st_ino):
+            raise L2MContractError("observer held-root evidence changed while held")
+        return bytes(encoded), after
+    finally:
+        os.close(descriptor)
 
 
 def _verify_final_evidence_source(
@@ -6487,36 +7180,28 @@ def _seal_observer_evidence_impl(
     if effective_qualification_path is not None:
         if validated_qualification is None:  # pragma: no cover - derived above
             raise L2MContractError("qualification token disappeared")
-        qualification_encoded, identity = _read_bounded_regular_with_identity(
-            effective_qualification_path,
-            max_bytes=MAX_QUALIFICATION_ARCHIVE_BYTES,
-        )
+        qualification_encoded = engine._validated_qualification_encoded
         if (
-            identity.st_dev != validated_qualification.archive_device
-            or identity.st_ino != validated_qualification.archive_inode
-            or identity.st_size != validated_qualification.archive_bytes
+            qualification_encoded is None
+            or len(qualification_encoded) != validated_qualification.archive_bytes
             or hashlib.sha256(qualification_encoded).hexdigest()
             != validated_qualification.archive_sha256
         ):
-            raise L2MContractError("validated qualification archive changed before sealing")
+            raise L2MContractError("validated qualification bytes changed before sealing")
     qualification_failure_encoded: bytes | None = None
     if validated_qualification_failure is not None:
-        qualification_failure_encoded, failure_identity = _read_bounded_regular_with_identity(
-            validated_qualification_failure.archive_path,
-            max_bytes=MAX_QUALIFICATION_ARCHIVE_BYTES,
-        )
+        qualification_failure_encoded = engine._validated_qualification_failure_encoded
         if (
-            validated_qualification_failure._issuer is not engine._proof_issuer
+            qualification_failure_encoded is None
+            or validated_qualification_failure._issuer is not engine._proof_issuer
             or validated_qualification_failure.run_id != engine.run_id
             or validated_qualification_failure.authorization_reference
             != engine.authorization_reference
-            or failure_identity.st_dev != validated_qualification_failure.archive_device
-            or failure_identity.st_ino != validated_qualification_failure.archive_inode
-            or failure_identity.st_size != validated_qualification_failure.archive_bytes
+            or len(qualification_failure_encoded) != validated_qualification_failure.archive_bytes
             or hashlib.sha256(qualification_failure_encoded).hexdigest()
             != validated_qualification_failure.archive_sha256
         ):
-            raise L2MContractError("validated qualification failure archive changed before sealing")
+            raise L2MContractError("validated qualification failure bytes changed before sealing")
     source_evidence_bytes = (
         len(journal_encoded)
         + len(checkpoint_encoded)

@@ -25,6 +25,7 @@ from giclab.harness.lambda_l2m_checkpoints import (
     validate_human_decision,
 )
 from giclab.harness.lambda_l2m_observer import (
+    BUNDLE_MANIFEST_SHA256,
     BUSYBOX_CONFIG_DIGEST,
     BUSYBOX_LAYER_DIGEST,
     BUSYBOX_REFERENCE,
@@ -251,6 +252,7 @@ def complete_preflight(engine: L2MReadOnlyObserverEngine) -> None:
     for operation in (
         ObserverOperation.LIST_IMAGES,
         ObserverOperation.LIST_INSTANCE_TYPES,
+        ObserverOperation.LIST_SSH_KEYS,
         ObserverOperation.LIST_INSTANCES,
         ObserverOperation.LIST_RULESETS,
         ObserverOperation.GET_GLOBAL_FIREWALL,
@@ -271,6 +273,7 @@ def make_observer_engine(
     checkpoint_reader: FakeCheckpointReader | None = None,
     source_ipv4_cidr: str = "8.8.8.8/32",
     human_decision: ValidatedHumanDecision | None = None,
+    require_l23_auxiliary_checkpoints: bool = False,
 ) -> L2MReadOnlyObserverEngine:
     original_rules = [
         {
@@ -310,8 +313,11 @@ def make_observer_engine(
         sealed_original_global_sha256=firewall_semantic_sha256(original_rules),
         image_selection_checkpoint_sha256="2" * 64,
         private_selected_image_id="raw-b",
+        private_selected_ssh_key_id="ssh-key-private",
+        private_selected_ssh_key_fingerprint=("SHA256:ZkAslGjFiUHdGf/WUL8rQvkib4PTvQatUV0OUQSncCA"),
         selected_image_alias=RECOMMENDED_IMAGE_ALIAS,
         selected_image_version=RECOMMENDED_IMAGE_VERSION,
+        require_l23_auxiliary_checkpoints=require_l23_auxiliary_checkpoints,
         clock_ns=clock.monotonic_ns,
         sleeper=clock.sleep,
         utc_now=lambda: dt.datetime(2026, 8, 10, tzinfo=dt.UTC),
@@ -338,6 +344,18 @@ def preflight_responses() -> list[ObserverResponse]:
                     ],
                 }
             }
+        ),
+        response(
+            [
+                {
+                    "id": "ssh-key-private",
+                    "name": "fractal-lambda-codex",
+                    "public_key": (
+                        "ssh-ed25519 "
+                        "AAAAC3NzaC1lZDI1NTE5AAAAIAABAgMEBQYHCAkKCwwNDg8QERITFBUWFxgZGhscHR4f"
+                    ),
+                }
+            ]
         ),
         response([]),
         response([]),
@@ -1223,15 +1241,15 @@ def test_instance_ruleset_conjunction_zero_one_multiple_and_drift() -> None:
         image_selection_checkpoint_sha256="1" * 64,
     )
     assert missing_attachment.state is InstanceMatchState.DRIFT
-    assert missing_attachment.instance_ids == ("instance-private",)
+    assert missing_attachment.instance_ids == ()
     extra_unattached = {**instance(instance_id="instance-unattached"), "firewall_rulesets": []}
     account_ambiguous = classify_instances_for_ruleset(
         [instance(), extra_unattached],
         private_ruleset_id="ruleset-private",
         image_selection_checkpoint_sha256="1" * 64,
     )
-    assert account_ambiguous.state is InstanceMatchState.MULTIPLE
-    assert set(account_ambiguous.instance_ids) == {"instance-private", "instance-unattached"}
+    assert account_ambiguous.state is InstanceMatchState.DRIFT
+    assert account_ambiguous.instance_ids == ("instance-private",)
 
 
 def test_engine_derives_proofs_and_drives_verified_failure_cleanup(tmp_path: Path) -> None:
@@ -1345,6 +1363,8 @@ def test_engine_derives_proofs_and_drives_verified_failure_cleanup(tmp_path: Pat
         sealed_original_global_sha256=original_sha256,
         image_selection_checkpoint_sha256=image_checkpoint_sha256,
         private_selected_image_id="raw-b",
+        private_selected_ssh_key_id="ssh-key-private",
+        private_selected_ssh_key_fingerprint=("SHA256:ZkAslGjFiUHdGf/WUL8rQvkib4PTvQatUV0OUQSncCA"),
         selected_image_alias=RECOMMENDED_IMAGE_ALIAS,
         selected_image_version=RECOMMENDED_IMAGE_VERSION,
         clock_ns=clock.monotonic_ns,
@@ -1415,7 +1435,7 @@ def test_engine_derives_proofs_and_drives_verified_failure_cleanup(tmp_path: Pat
     consume("global_firewall_restored", observation=restored_observation)
     assert engine.lifecycle.phase is ManualPhase.COMPLETE
     assert not engine.lifecycle.strict_firewall_preserved
-    assert len(transport.requests) == 11
+    assert len(transport.requests) == 12
     engine.stop()
     journal.close()
     retained = journal.path.read_text(encoding="utf-8")
@@ -2295,22 +2315,6 @@ def test_qualification_validation_receipt_is_inside_hard_alarm_and_interrupt_saf
             ],
             [[], []],
         ),
-        (
-            InstanceMatchState.DRIFT,
-            [{**instance(instance_id="instance-unattached"), "firewall_rulesets": []}],
-            [
-                [{**instance(instance_id="instance-unattached"), "firewall_rulesets": []}],
-                [
-                    {
-                        **instance(
-                            instance_id="instance-unattached",
-                            status="terminated",
-                        ),
-                        "firewall_rulesets": [],
-                    }
-                ],
-            ],
-        ),
     ],
 )
 def test_unbound_or_ambiguous_launch_requires_fresh_terminal_and_attachment_absence(
@@ -2435,8 +2439,6 @@ def test_unbound_or_ambiguous_launch_requires_fresh_terminal_and_attachment_abse
     assert "instance_bound" not in reader.consumed
     if launch_state is InstanceMatchState.MULTIPLE:
         assert len(engine._ambiguous_instance_ids) == 2
-    elif launch_state is InstanceMatchState.DRIFT:
-        assert engine._ambiguous_instance_ids == frozenset({"instance-unattached"})
     engine.resume_incident_cleanup()
     terminal_observation = engine.observe(
         ObserverOperation.LIST_INSTANCES,
@@ -2739,7 +2741,7 @@ def test_engine_rejects_wrong_phase_and_exhausted_caps_before_transport(
         engine.journal.close()
 
 
-def test_preflight_passes_only_after_five_exact_observations(tmp_path: Path) -> None:
+def test_preflight_passes_only_after_six_exact_observations(tmp_path: Path) -> None:
     transport = FakeObserverTransport(preflight_responses())
     engine = make_observer_engine(
         tmp_path,
@@ -2752,6 +2754,7 @@ def test_preflight_passes_only_after_five_exact_observations(tmp_path: Path) -> 
     for operation in (
         ObserverOperation.LIST_IMAGES,
         ObserverOperation.LIST_INSTANCE_TYPES,
+        ObserverOperation.LIST_SSH_KEYS,
         ObserverOperation.LIST_INSTANCES,
         ObserverOperation.LIST_RULESETS,
     ):
@@ -2770,6 +2773,296 @@ def test_preflight_passes_only_after_five_exact_observations(tmp_path: Path) -> 
     engine._evidence_incomplete = True
     engine._finalize_stopped_run()
     engine.journal.close()
+
+
+def test_preflight_rejects_same_named_ssh_key_with_different_public_fingerprint(
+    tmp_path: Path,
+) -> None:
+    responses = preflight_responses()
+    responses[2] = response(
+        [
+            {
+                "id": "ssh-key-private",
+                "name": "fractal-lambda-codex",
+                "public_key": (
+                    "ssh-ed25519 "
+                    "AAAAC3NzaC1lZDI1NTE5AAAAIAABAgMEBQYHCAkKCwwNDg8QERITFBUWFxgZGhscHR4e"
+                ),
+            }
+        ]
+    )
+    engine = make_observer_engine(
+        tmp_path,
+        suffix="SSH-FINGERPRINT-DRIFT",
+        transport=FakeObserverTransport(responses),
+        clock=FakeClock(),
+    )
+    engine.begin()
+    with pytest.raises(L2MContractError, match="SSH key identity"):
+        complete_preflight(engine)
+    assert engine.stopped
+    assert b"public_key" not in engine.journal.path.read_bytes()
+
+
+def test_l23_fresh_original_global_seal_is_required_and_durable(
+    tmp_path: Path,
+) -> None:
+    original_rules = [
+        {
+            "protocol": "tcp",
+            "port_range": [443, 443],
+            "source_network": "0.0.0.0/0",
+            "description": "original fixture",
+        }
+    ]
+    marker = derive_private_ruleset_marker(
+        bytes(range(32)), decision_alias="l2m-decision-0123456789ab"
+    )
+    reader = FakeCheckpointReader(
+        {
+            "launch_wizard_image_offered": {
+                "launch_wizard_image_offered": True,
+                "selected_instance_type": "gpu_1x_a10",
+                "selected_region": "us-east-1",
+                "selected_image_alias": "img-0032",
+                "selected_image_version": "22.4.5-2141",
+            },
+            "global_firewall_restricted": {"global_firewall_restricted": True},
+        },
+        CheckpointBinding(
+            "RUN-T07-L2M-FIXTURE-FRESH-GLOBAL-SEAL",
+            "l2m-decision-0123456789ab",
+            marker.marker_alias,
+        ),
+        tmp_path / "consumption-fresh-global-seal.jsonl",
+    )
+    transport = FakeObserverTransport(
+        [
+            *preflight_responses(),
+            response({"id": "global", "name": "global", "rules": original_rules}),
+            response({"id": "global", "name": "global", "rules": [strict_rule()]}),
+        ]
+    )
+    engine = make_observer_engine(
+        tmp_path,
+        suffix="FRESH-GLOBAL-SEAL",
+        transport=transport,
+        clock=FakeClock(),
+        checkpoint_reader=reader,
+        require_l23_auxiliary_checkpoints=True,
+    )
+    engine.begin()
+    complete_preflight(engine)
+    now = dt.datetime(2026, 8, 10, tzinfo=dt.UTC)
+    engine.consume_auxiliary_checkpoint(
+        tmp_path / "launch_wizard_image_offered.json",
+        expected_type="launch_wizard_image_offered",
+        expected_nonce="1" * 64,
+        not_before=now,
+        not_after=now + dt.timedelta(seconds=1),
+    )
+    fresh = engine.observe(
+        ObserverOperation.GET_GLOBAL_FIREWALL,
+        phase=ObserverPhase.ORIGINAL_GLOBAL_SEAL,
+        credential="dummy-canary-not-a-secret",
+    )
+    engine.seal_original_global_firewall(fresh)
+    restricted = engine.observe(
+        ObserverOperation.GET_GLOBAL_FIREWALL,
+        phase=ObserverPhase.GLOBAL_RESTRICTED_VERIFY,
+        credential="dummy-canary-not-a-secret",
+    )
+    engine.consume_checkpoint(
+        tmp_path / "global_firewall_restricted.json",
+        expected_type="global_firewall_restricted",
+        expected_nonce="1" * 64,
+        not_before=now,
+        not_after=now + dt.timedelta(seconds=1),
+        observation=restricted,
+    )
+    assert engine.lifecycle.phase is ManualPhase.GLOBAL_RESTRICTED
+    events = [json.loads(line) for line in engine.journal.path.read_bytes().splitlines()]
+    assert any(
+        event["observer_phase"] == "original_global_seal"
+        and event["semantic_outcome"] == "original_global_firewall_sealed"
+        for event in events
+    )
+    engine.abort_for_separately_authorized_manual_cleanup()
+
+
+def test_l23_offeredness_mismatch_blocks_before_any_mutation_state(tmp_path: Path) -> None:
+    clock = FakeClock()
+    marker = derive_private_ruleset_marker(
+        bytes(range(32)), decision_alias="l2m-decision-0123456789ab"
+    )
+    reader = FakeCheckpointReader(
+        {
+            "launch_wizard_image_offered": {
+                "launch_wizard_image_offered": True,
+                "selected_instance_type": "gpu_1x_a10",
+                "selected_region": "us-east-1",
+                "selected_image_alias": "img-0032",
+                "selected_image_version": "wrong-version",
+            }
+        },
+        CheckpointBinding(
+            "RUN-T07-L2M-FIXTURE-L23-OFFER-MISMATCH",
+            "l2m-decision-0123456789ab",
+            marker.marker_alias,
+        ),
+        tmp_path / "consumption-l23-offer-mismatch.jsonl",
+    )
+    engine = make_observer_engine(
+        tmp_path,
+        suffix="L23-OFFER-MISMATCH",
+        transport=FakeObserverTransport(preflight_responses(), clock=clock),
+        clock=clock,
+        checkpoint_reader=reader,
+        require_l23_auxiliary_checkpoints=True,
+    )
+    engine.begin()
+    complete_preflight(engine)
+    now = dt.datetime(2026, 8, 10, tzinfo=dt.UTC)
+    with pytest.raises(L2MContractError, match="auxiliary checkpoint validation"):
+        engine.consume_auxiliary_checkpoint(
+            tmp_path / "launch_wizard_image_offered.json",
+            expected_type="launch_wizard_image_offered",
+            expected_nonce="1" * 64,
+            not_before=now,
+            not_after=now + dt.timedelta(seconds=1),
+        )
+    assert engine.lifecycle.phase is ManualPhase.PREFLIGHT
+    assert not engine.lifecycle.incident_active
+    assert reader.consumed == []
+    engine.stop()
+
+
+def test_l23_offeredness_is_required_before_global_transition(tmp_path: Path) -> None:
+    clock = FakeClock()
+    engine = make_observer_engine(
+        tmp_path,
+        suffix="L23-OFFER-REQUIRED",
+        transport=FakeObserverTransport(
+            [
+                *preflight_responses(),
+                response({"id": "global", "name": "global", "rules": [strict_rule()]}),
+            ],
+            clock=clock,
+        ),
+        clock=clock,
+        require_l23_auxiliary_checkpoints=True,
+    )
+    engine.begin()
+    complete_preflight(engine)
+    observed = engine.observe(
+        ObserverOperation.GET_GLOBAL_FIREWALL,
+        phase=ObserverPhase.GLOBAL_RESTRICTED_VERIFY,
+        credential="dummy-canary-not-a-secret",
+    )
+    now = dt.datetime(2026, 8, 10, tzinfo=dt.UTC)
+    with pytest.raises(L2MContractError, match="preparation failed"):
+        engine.consume_checkpoint(
+            tmp_path / "global_firewall_restricted.json",
+            expected_type="global_firewall_restricted",
+            expected_nonce="1" * 64,
+            not_before=now,
+            not_after=now + dt.timedelta(seconds=1),
+            observation=observed,
+        )
+    assert engine.lifecycle.phase is ManualPhase.GLOBAL_MUTATION_UNVERIFIED
+    assert engine.lifecycle.incident_active
+    engine.abort_for_separately_authorized_manual_cleanup(
+        possible_user_mutation_phase=ObserverPhase.GLOBAL_RESTRICTED_VERIFY
+    )
+    assert engine.stopped and not engine.receipt_integrity_complete()
+
+
+def test_l23_launch_and_qualification_require_auxiliary_attestations(tmp_path: Path) -> None:
+    clock = FakeClock()
+    marker = derive_private_ruleset_marker(
+        bytes(range(32)), decision_alias="l2m-decision-0123456789ab"
+    )
+    launch_hash = launch_configuration_sha256(
+        private_image_id="raw-b",
+        image_selection_checkpoint_sha256="2" * 64,
+        image_alias=RECOMMENDED_IMAGE_ALIAS,
+        image_version=RECOMMENDED_IMAGE_VERSION,
+        private_ruleset_id="ruleset-private",
+        private_marker_name=marker.name,
+        price_cents_per_hour=129,
+    )
+    reader = FakeCheckpointReader(
+        {
+            "launch_configuration_selected": {
+                "launch_configuration_selected": True,
+                "launch_configuration_sha256": launch_hash,
+            },
+            "qualification_bundle_uploaded": {
+                "qualification_bundle_uploaded": True,
+                "qualification_bundle_manifest_sha256": BUNDLE_MANIFEST_SHA256,
+            },
+            "qualification_command_started": {"qualification_command_started": True},
+        },
+        CheckpointBinding(
+            "RUN-T07-L2M-FIXTURE-L23-AUXILIARY",
+            "l2m-decision-0123456789ab",
+            marker.marker_alias,
+        ),
+        tmp_path / "consumption-l23-auxiliary.jsonl",
+    )
+    engine = make_observer_engine(
+        tmp_path,
+        suffix="L23-AUXILIARY",
+        transport=FakeObserverTransport([], clock=clock),
+        clock=clock,
+        checkpoint_reader=reader,
+        require_l23_auxiliary_checkpoints=True,
+    )
+    engine.begin()
+    engine._preflight_complete = True
+    engine._preflight_price_cents_per_hour = 129
+    engine.private_ruleset_id = "ruleset-private"
+    engine.lifecycle = ManualLifecycle(
+        ManualPhase.RULESET_CREATED,
+        True,
+        False,
+        engine._proof_issuer,
+    )
+    now = dt.datetime(2026, 8, 10, tzinfo=dt.UTC)
+    with pytest.raises(L2MContractError, match="cannot be armed"):
+        engine.arm_launch_window()
+    engine.consume_auxiliary_checkpoint(
+        tmp_path / "launch_configuration_selected.json",
+        expected_type="launch_configuration_selected",
+        expected_nonce="1" * 64,
+        not_before=now,
+        not_after=now + dt.timedelta(seconds=1),
+    )
+    engine.arm_launch_window()
+    assert engine.lifecycle.phase is ManualPhase.LAUNCH_OUTCOME_UNVERIFIED
+
+    engine.lifecycle = ManualLifecycle(
+        ManualPhase.CLOUD_IDE_OPENED,
+        True,
+        False,
+        engine._proof_issuer,
+    )
+    engine.consume_auxiliary_checkpoint(
+        tmp_path / "qualification_bundle_uploaded.json",
+        expected_type="qualification_bundle_uploaded",
+        expected_nonce="1" * 64,
+        not_before=now,
+        not_after=now + dt.timedelta(seconds=1),
+    )
+    engine.consume_checkpoint(
+        tmp_path / "qualification_command_started.json",
+        expected_type="qualification_command_started",
+        expected_nonce="1" * 64,
+        not_before=now,
+        not_after=now + dt.timedelta(seconds=1),
+    )
+    assert engine.lifecycle.phase is ManualPhase.QUALIFICATION_STARTED
+    engine.abort_for_separately_authorized_manual_cleanup()
 
 
 def test_preflight_allows_unrelated_instance_types_but_binds_selected_fields(
@@ -3022,7 +3315,7 @@ def test_postlaunch_transport_boundary_failure_burns_ordinal_and_keeps_cleanup(
 
     def expire_after_send_started(event: dict[str, object]) -> None:
         original_append(event)
-        if event["event_type"] == "observation_send_started" and event["request_ordinal"] == 6:
+        if event["event_type"] == "observation_send_started" and event["request_ordinal"] == 7:
             clock.nanoseconds += 3_601_000_000_000
 
     monkeypatch.setattr(engine.journal, "append", expire_after_send_started)
@@ -3033,22 +3326,22 @@ def test_postlaunch_transport_boundary_failure_burns_ordinal_and_keeps_cleanup(
             credential="dummy-canary-not-a-secret",
         )
     assert not engine.stopped and engine.lifecycle.incident_active
-    assert engine.budget.request_count == 6
-    assert len(transport.requests) == 5
+    assert engine.budget.request_count == 7
+    assert len(transport.requests) == 6
     recovered = engine.observe(
         ObserverOperation.LIST_INSTANCES,
         phase=ObserverPhase.INCIDENT,
         credential="dummy-canary-not-a-secret",
     )
-    assert recovered.request_ordinal == 7
-    assert engine.budget.request_count == 7
+    assert recovered.request_ordinal == 8
+    assert engine.budget.request_count == 8
     events = [json.loads(line) for line in engine.journal.path.read_text().splitlines()]
     assert any(
-        event["event_type"] == "observation_failed" and event["request_ordinal"] == 6
+        event["event_type"] == "observation_failed" and event["request_ordinal"] == 7
         for event in events
     )
     assert any(
-        event["event_type"] == "observation_completed" and event["request_ordinal"] == 7
+        event["event_type"] == "observation_completed" and event["request_ordinal"] == 8
         for event in events
     )
     engine._evidence_incomplete = True
@@ -3065,7 +3358,7 @@ def test_ruleset_endpoint_schema_rejects_missing_or_wrong_name_before_preflight_
         bad.pop("name")
     else:
         bad["name"] = name_value
-    transport = FakeObserverTransport([*preflight_responses()[:3], response([bad])])
+    transport = FakeObserverTransport([*preflight_responses()[:4], response([bad])])
     engine = make_observer_engine(
         tmp_path,
         suffix=f"SCHEMA-{len(str(name_value))}",
@@ -3080,6 +3373,11 @@ def test_ruleset_endpoint_schema_rejects_missing_or_wrong_name_before_preflight_
     )
     engine.observe(
         ObserverOperation.LIST_INSTANCE_TYPES,
+        phase=ObserverPhase.PREFLIGHT,
+        credential="dummy-canary-not-a-secret",
+    )
+    engine.observe(
+        ObserverOperation.LIST_SSH_KEYS,
         phase=ObserverPhase.PREFLIGHT,
         credential="dummy-canary-not-a-secret",
     )
@@ -3127,7 +3425,7 @@ def test_ruleset_endpoint_schema_rejects_wrong_name_before_absence_claim(
             credential="dummy-canary-not-a-secret",
         )
     assert not engine.stopped and engine.lifecycle.incident_active
-    assert len(engine._issued_observations) == 5
+    assert len(engine._issued_observations) == 6
     engine._evidence_incomplete = True
     engine._finalize_stopped_run()
 
@@ -3218,14 +3516,14 @@ def test_timeline_blocks_late_work_before_send_but_preserves_cleanup_reserve(
             phase=ObserverPhase.INSTANCE_BIND,
             credential="dummy-canary-not-a-secret",
         )
-    assert len(transport.requests) == 5
+    assert len(transport.requests) == 6
     engine.resume_incident_cleanup()
     engine.observe(
         ObserverOperation.LIST_INSTANCES,
         phase=ObserverPhase.TERMINATION_VERIFY,
         credential="dummy-canary-not-a-secret",
     )
-    assert len(transport.requests) == 6
+    assert len(transport.requests) == 7
     clock.sleep(1_200)
     with pytest.raises(L2MContractError, match=r"active wall cap|reserve exhausted"):
         engine.observe(
@@ -3233,7 +3531,7 @@ def test_timeline_blocks_late_work_before_send_but_preserves_cleanup_reserve(
             phase=ObserverPhase.TERMINATION_VERIFY,
             credential="dummy-canary-not-a-secret",
         )
-    assert len(transport.requests) == 6
+    assert len(transport.requests) == 7
     engine._evidence_incomplete = True
     engine._finalize_stopped_run()
 
@@ -3289,6 +3587,8 @@ def test_engine_stops_on_status_content_or_pagination_without_retry(
         sealed_original_global_sha256="1" * 64,
         image_selection_checkpoint_sha256="2" * 64,
         private_selected_image_id="raw-b",
+        private_selected_ssh_key_id="ssh-key-private",
+        private_selected_ssh_key_fingerprint=("SHA256:ZkAslGjFiUHdGf/WUL8rQvkib4PTvQatUV0OUQSncCA"),
         selected_image_alias=RECOMMENDED_IMAGE_ALIAS,
         selected_image_version=RECOMMENDED_IMAGE_VERSION,
         clock_ns=clock.monotonic_ns,

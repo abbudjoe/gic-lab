@@ -23,11 +23,14 @@
         "checkpoint_id": {"type": "string", "pattern": "^CHECKPOINT-T07-L2M-[A-Z0-9_-]{3,64}$"},
         "checkpoint_type": {
             "enum": [
+                "launch_wizard_image_offered",
                 "global_firewall_restricted",
                 "regional_ruleset_created",
+                "launch_configuration_selected",
                 "launch_clicked_once",
                 "instance_bound",
                 "cloud_ide_opened",
+                "qualification_bundle_uploaded",
                 "qualification_command_started",
                 "qualification_command_completed",
                 "qualification_bundle_downloaded",
@@ -48,14 +51,25 @@
             "type": "object",
             "additionalProperties": false,
             "properties": {
+                "launch_wizard_image_offered": {"type": "boolean"},
+                "selected_instance_type": {"type": "string"},
+                "selected_region": {"type": "string"},
+                "selected_image_alias": {"type": "string"},
+                "selected_image_version": {"type": "string"},
                 "global_firewall_restricted": {"type": "boolean"},
                 "regional_ruleset_created": {"type": "boolean"},
+                "launch_configuration_selected": {"type": "boolean"},
                 "launch_clicked_once": {"type": "boolean"},
                 "approved_image_offered_for_selected_type_region": {"type": "boolean"},
                 "launch_configuration_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
                 "instance_bound": {"type": "boolean"},
                 "instance_binding_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
                 "cloud_ide_opened": {"type": "boolean"},
+                "qualification_bundle_uploaded": {"type": "boolean"},
+                "qualification_bundle_manifest_sha256": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                },
                 "qualification_command_started": {"type": "boolean"},
                 "qualification_command_completed": {"type": "boolean"},
                 "qualification_bundle_downloaded": {"type": "boolean"},
@@ -80,6 +94,31 @@
     },
     "allOf": [
         {
+            "if": {"properties": {"checkpoint_type": {"const": "launch_wizard_image_offered"}}},
+            "then": {
+                "properties": {
+                    "details": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                            "launch_wizard_image_offered",
+                            "selected_instance_type",
+                            "selected_region",
+                            "selected_image_alias",
+                            "selected_image_version"
+                        ],
+                        "properties": {
+                            "launch_wizard_image_offered": {"const": true},
+                            "selected_instance_type": {"const": "gpu_1x_a10"},
+                            "selected_region": {"const": "us-east-1"},
+                            "selected_image_alias": {"const": "img-0032"},
+                            "selected_image_version": {"const": "22.4.5-2141"}
+                        }
+                    }
+                }
+            }
+        },
+        {
             "if": {"properties": {"checkpoint_type": {"const": "global_firewall_restricted"}}},
             "then": {
                 "properties": {
@@ -101,6 +140,28 @@
                         "additionalProperties": false,
                         "required": ["regional_ruleset_created"],
                         "properties": {"regional_ruleset_created": {"const": true}}
+                    }
+                }
+            }
+        },
+        {
+            "if": {"properties": {"checkpoint_type": {"const": "launch_configuration_selected"}}},
+            "then": {
+                "properties": {
+                    "details": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                            "launch_configuration_selected",
+                            "launch_configuration_sha256"
+                        ],
+                        "properties": {
+                            "launch_configuration_selected": {"const": true},
+                            "launch_configuration_sha256": {
+                                "type": "string",
+                                "pattern": "^[a-f0-9]{64}$"
+                            }
+                        }
                     }
                 }
             }
@@ -157,6 +218,27 @@
                         "additionalProperties": false,
                         "required": ["cloud_ide_opened"],
                         "properties": {"cloud_ide_opened": {"const": true}}
+                    }
+                }
+            }
+        },
+        {
+            "if": {"properties": {"checkpoint_type": {"const": "qualification_bundle_uploaded"}}},
+            "then": {
+                "properties": {
+                    "details": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                            "qualification_bundle_uploaded",
+                            "qualification_bundle_manifest_sha256"
+                        ],
+                        "properties": {
+                            "qualification_bundle_uploaded": {"const": true},
+                            "qualification_bundle_manifest_sha256": {
+                                "const": "dc9824649f97fab6cfd105b5fc0d0c6c1c5ff513fa25f70e0d517afa623cc261"
+                            }
+                        }
                     }
                 }
             }

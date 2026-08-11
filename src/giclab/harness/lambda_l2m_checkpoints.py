@@ -24,11 +24,14 @@ from typing import Final
 from jsonschema import Draft202012Validator
 
 CHECKPOINT_TYPES: Final = (
+    "launch_wizard_image_offered",
     "global_firewall_restricted",
     "regional_ruleset_created",
+    "launch_configuration_selected",
     "launch_clicked_once",
     "instance_bound",
     "cloud_ide_opened",
+    "qualification_bundle_uploaded",
     "qualification_command_started",
     "qualification_command_completed",
     "qualification_bundle_downloaded",
@@ -36,6 +39,11 @@ CHECKPOINT_TYPES: Final = (
     "instance_terminal_verified",
     "regional_ruleset_deleted",
     "global_firewall_restored",
+)
+USER_CHECKPOINT_TYPES: Final = tuple(
+    checkpoint_type
+    for checkpoint_type in CHECKPOINT_TYPES
+    if checkpoint_type not in {"instance_bound", "instance_terminal_verified"}
 )
 MAX_CHECKPOINT_BYTES: Final = 16_384
 MAX_CHECKPOINT_WINDOW_SECONDS: Final = 300
@@ -45,7 +53,7 @@ _BOUND_CHECKPOINT_SCHEMA_RELATIVE_PATH: Final = Path(
     "schemas/t07-lambda-l2m-checkpoint.schema.json"
 )
 _BOUND_CHECKPOINT_SCHEMA_SHA256: Final = (
-    "8365a8bdac2dc67aeb7cdc0078651429fdbb692541a04685acbbf832d9d05f47"
+    "a55f9023f8cc8f530acebe31bbe7b50c57d1e1a01b959ced38876e43e0f108ff"
 )
 _BOUND_HUMAN_DECISION_SCHEMA_RELATIVE_PATH: Final = Path(
     "schemas/t07-lambda-l2m-human-decision.schema.json"
@@ -324,6 +332,10 @@ class PrivateCheckpointReader:
     consumption_path: Path
     consumption_device: int
     consumption_inode: int
+    checkpoint_root_descriptor: int | None = field(default=None, repr=False)
+    checkpoint_root_path: Path | None = field(default=None, repr=False)
+    checkpoint_root_device: int | None = field(default=None, repr=False)
+    checkpoint_root_inode: int | None = field(default=None, repr=False)
     utc_now: Callable[[], dt.datetime] = lambda: dt.datetime.now(dt.UTC)
     consumed_types: set[str] = field(default_factory=set)
     consumed_nonces: set[str] = field(default_factory=set)
@@ -346,6 +358,8 @@ class PrivateCheckpointReader:
         consumption_path: Path,
         expected_uid: int | None = None,
         utc_now: Callable[[], dt.datetime] | None = None,
+        checkpoint_root_descriptor: int | None = None,
+        checkpoint_root_path: Path | None = None,
     ) -> PrivateCheckpointReader:
         repository_root = _repository_root_for_bound_schema(
             schema_path,
@@ -364,6 +378,25 @@ class PrivateCheckpointReader:
             consumption_path, expected_uid=uid, binding=binding
         )
         identity = os.fstat(descriptor)
+        checkpoint_device: int | None = None
+        checkpoint_inode: int | None = None
+        if (checkpoint_root_descriptor is None) != (checkpoint_root_path is None):
+            os.close(descriptor)
+            raise CheckpointContractError("checkpoint root capability is incomplete")
+        if checkpoint_root_descriptor is not None:
+            checkpoint_identity = os.fstat(checkpoint_root_descriptor)
+            linked = checkpoint_root_path.lstat()  # type: ignore[union-attr]
+            if (
+                not stat.S_ISDIR(checkpoint_identity.st_mode)
+                or checkpoint_identity.st_uid != uid
+                or stat.S_ISLNK(linked.st_mode)
+                or (linked.st_dev, linked.st_ino)
+                != (checkpoint_identity.st_dev, checkpoint_identity.st_ino)
+            ):
+                os.close(descriptor)
+                raise CheckpointContractError("checkpoint root capability is unsafe")
+            checkpoint_device = checkpoint_identity.st_dev
+            checkpoint_inode = checkpoint_identity.st_ino
         return cls(
             schema=value,
             repository_root=repository_root,
@@ -373,6 +406,12 @@ class PrivateCheckpointReader:
             consumption_path=consumption_path.absolute(),
             consumption_device=identity.st_dev,
             consumption_inode=identity.st_ino,
+            checkpoint_root_descriptor=checkpoint_root_descriptor,
+            checkpoint_root_path=(
+                None if checkpoint_root_path is None else checkpoint_root_path.absolute()
+            ),
+            checkpoint_root_device=checkpoint_device,
+            checkpoint_root_inode=checkpoint_inode,
             utc_now=(lambda: dt.datetime.now(dt.UTC)) if utc_now is None else utc_now,
             consumed_types={str(record["checkpoint_type"]) for record in records},
             consumed_nonces={str(record["checkpoint_nonce"]) for record in records},
@@ -408,7 +447,27 @@ class PrivateCheckpointReader:
             or not not_before <= now <= not_after
         ):
             raise CheckpointContractError("checkpoint time window is invalid")
-        before = path.lstat()
+        directory_descriptor = self.checkpoint_root_descriptor
+        if directory_descriptor is not None:
+            if (
+                self.checkpoint_root_path is None
+                or path.parent.absolute() != self.checkpoint_root_path
+                or "/" in path.name
+            ):
+                raise CheckpointContractError("checkpoint escaped its held root")
+            root_opened = os.fstat(directory_descriptor)
+            root_linked = self.checkpoint_root_path.lstat()
+            if (root_opened.st_dev, root_opened.st_ino) != (
+                self.checkpoint_root_device,
+                self.checkpoint_root_inode,
+            ) or (root_linked.st_dev, root_linked.st_ino) != (
+                self.checkpoint_root_device,
+                self.checkpoint_root_inode,
+            ):
+                raise CheckpointContractError("checkpoint root identity changed")
+            before = os.stat(path.name, dir_fd=directory_descriptor, follow_symlinks=False)
+        else:
+            before = path.lstat()
         if (
             not stat.S_ISREG(before.st_mode)
             or before.st_uid != self.expected_uid
@@ -422,7 +481,11 @@ class PrivateCheckpointReader:
         flags = os.O_RDONLY
         if hasattr(os, "O_NOFOLLOW"):
             flags |= os.O_NOFOLLOW
-        descriptor = os.open(path, flags)
+        descriptor = os.open(
+            path.name if directory_descriptor is not None else path,
+            flags,
+            dir_fd=directory_descriptor,
+        )
         try:
             opened = os.fstat(descriptor)
             if (opened.st_dev, opened.st_ino) != (before.st_dev, before.st_ino):
@@ -442,7 +505,11 @@ class PrivateCheckpointReader:
                     raise CheckpointContractError("checkpoint exceeds its byte cap")
             encoded = b"".join(chunks)
             after = os.fstat(descriptor)
-            linked = path.lstat()
+            linked = (
+                os.stat(path.name, dir_fd=directory_descriptor, follow_symlinks=False)
+                if directory_descriptor is not None
+                else path.lstat()
+            )
             if (
                 len(encoded) != opened.st_size
                 or (

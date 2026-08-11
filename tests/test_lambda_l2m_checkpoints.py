@@ -35,13 +35,28 @@ def binding() -> CheckpointBinding:
 
 def checkpoint(kind: str, observed: dt.datetime) -> dict[str, object]:
     details: dict[str, object] = {kind: True}
-    if kind == "launch_clicked_once":
+    if kind == "launch_wizard_image_offered":
+        details.update(
+            {
+                "selected_instance_type": "gpu_1x_a10",
+                "selected_region": "us-east-1",
+                "selected_image_alias": "img-0032",
+                "selected_image_version": "22.4.5-2141",
+            }
+        )
+    elif kind == "launch_configuration_selected":
+        details["launch_configuration_sha256"] = "5" * 64
+    elif kind == "launch_clicked_once":
         details["launch_configuration_sha256"] = "5" * 64
         details["approved_image_offered_for_selected_type_region"] = True
     elif kind == "instance_bound":
         details["instance_binding_sha256"] = "2" * 64
     elif kind == "qualification_bundle_downloaded":
         details["qualification_archive_sha256"] = "3" * 64
+    elif kind == "qualification_bundle_uploaded":
+        details["qualification_bundle_manifest_sha256"] = (
+            "dc9824649f97fab6cfd105b5fc0d0c6c1c5ff513fa25f70e0d517afa623cc261"
+        )
     elif kind == "instance_terminal_verified":
         details["terminal_or_absent"] = True
         details["launch_identity_state"] = "exact_one_bound"

@@ -35,6 +35,8 @@ data/
 datasets/
 artifacts/
 checkpoints/
+!containers/sira-smoke/lambda/manual-console/checkpoints/
+!containers/sira-smoke/lambda/manual-console/checkpoints/**
 models/
 traces/
 trajectories/

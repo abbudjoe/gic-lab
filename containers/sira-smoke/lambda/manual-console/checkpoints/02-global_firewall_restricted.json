@@ -1,0 +1,15 @@
+{
+  "schema_version": "0.1.0",
+  "checkpoint_id": "<PRIVATE-CHECKPOINT-ID-FROM-SEALED-BINDING>",
+  "checkpoint_type": "global_firewall_restricted",
+  "checkpoint_nonce": "<PRIVATE-CHECKPOINT-NONCE-FROM-SEALED-BINDING>",
+  "run_id": "RUN-T07-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-0001",
+  "decision_alias": "<DECISION-ALIAS-FROM-PLAN>",
+  "marker_alias": "<MARKER-ALIAS-FROM-PLAN>",
+  "observed_at_utc": "<CURRENT-UTC-TIMESTAMP-Z>",
+  "actor": "user",
+  "action_confirmed": true,
+  "details": {
+    "global_firewall_restricted": true
+  }
+}
