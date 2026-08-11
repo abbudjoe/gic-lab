@@ -1,6 +1,6 @@
 # Phase 1 SiRA Smoke Readiness
 
-Status: **profile eligible; high-assurance infrastructure frozen; bounded smoke fork planned; not authorized**
+Status: **profile eligible; bounded smoke V1 ready for separate authorization; not authorized**
 
 Prepared: 2026-08-08
 
@@ -36,13 +36,14 @@ description-aware canonicalizer; the exact private baseline and PATCH restoratio
 payload are retained and sealed, while the public records contain only structural
 names, types, counts and hashes.
 
-No executable high-assurance plan or authorization block remains active. The next
-planned work is the separately reviewed child branch
-`phase-1/sira-smoke-bounded`, governed by
-`docs/harness/T07_BOUNDED_SMOKE_FORK_HANDOFF.md` and the Occam admission rule in
-`docs/harness/T07_HIGH_ASSURANCE_RESIDUAL_CONTROLS.md`. That child has no plan,
-authorization or execution identity yet. Every execution permission remains false,
-T07 has not run, and Gate L2M/L3/L4 do not continue on this branch.
+No executable high-assurance plan or authorization block remains active. The bounded
+child has now created unauthorized plan `PLAN-T07-BOUNDED-SIRA-SMOKE-V1`, host run
+`RUN-T07-BOUNDED-HOST-0001`, at
+`containers/sira-smoke/bounded/bounded-smoke-plan-v1.json`, SHA-256
+`3e087ce38c272f81e4f46567c77cfe61fa36198316900e5710e817b3e5e4b1a6`.
+Its governance, exact caps, user runbook, and future authorization packet are under
+`docs/harness/T07_BOUNDED_SMOKE_*`. Every execution permission remains false, T07 has
+not run, and Gate L2M/L3/L4 do not continue.
 
 ## Exact user decision fields
 
@@ -54,24 +55,19 @@ A later current-turn authorization must state one value for every field below:
 | `api_provider` | `OpenAI` |
 | `model_revision` | Exactly `gpt-4o-2024-11-20`, used as a declared substitution for the unavailable historical `gpt-4o` serving revision |
 | `maximum_api_cost_usd` | Proposed ceiling: `4.00`; the user must explicitly approve this value or a lower replacement after price reverification |
-| `bounded_substrate_cost_cap_usd` | Not selected; a new bounded plan must derive and request an exact numeric cap without reusing Gate L2M authority |
-| `maximum_provider_compute_cost_usd` | Not selected; must be recomputed for the bounded topology and freshly approved |
-| `maximum_wall_time_seconds` | Scientific workload ceiling remains proposed `240` total, at most `120` seconds per condition; any bounded host lifecycle needs its own numeric aggregate cap |
+| `bounded_substrate_cost_cap_usd` | Exact ceiling `2.00` for one Lambda instance under the bounded V1 plan |
+| `maximum_provider_compute_cost_usd` | Exact ceiling `2.00`; observed/projected normal one-hour list cost `1.29` |
+| `maximum_wall_time_seconds` | `3,600` from authorization materialization for the complete provider-supervised window, with termination click by `3,300`; scientific workload is `240` total, at most `120` per condition |
 | `required_cleanup` | Stop/KILL each immutable container boundary, prove zero owned resources, preserve/copy/seal evidence, terminate the exact Lambda instance through the provider API, and confirm terminal/nonbillable state |
 
-The authorization reference must identify that current user instruction. Within the
-authorized T07 work item, the control plane may set
-`paid_compute_allowed` and `prototype_execution_allowed` true only for this bounded
-profile, set the profile and both condition authorization records to that reference,
-bind `docs/PROJECT_STATE.yaml.authorized_run_profile` to the exact profile path and
-SHA-256 plus the sealed canonical `condition_plan_sha256s`, bind both condition plans
-to the same `profile_plan_id` and `profile_sha256`, and materialize condition-owned
-budgets and command hashes.
-Benchmark and training permissions remain false. Cloud-mutation, paid-compute and
-prototype-execution permissions remain false now. The frozen Gate L2M/L3/L4 contracts
-cannot be reauthorized. A bounded child must create fresh plan, run, budget, cleanup
-and authorization identities. No field may be inferred from this readiness document,
-public pricing, or an earlier infrastructure gate.
+The authorization reference must identify that current user instruction. The bounded
+control plane materializes it as a fresh mode-0600, Git-ignored single-run overlay
+bound to the final clean commit, plan, 3,600-second window, private resource binding,
+budgets, command hashes, and condition identities. Repository permission fields remain
+false and `CMP-0001` remains a planned record with zero actual time/cost; the overlay
+does not silently rewrite either authority plane. Benchmark and training permissions
+remain false. The frozen Gate L2M/L3/L4 contracts cannot be reauthorized, and no field
+may be inferred from this readiness document, public pricing, or an earlier gate.
 
 ## Proposed API spend cap
 
@@ -161,11 +157,11 @@ the EXP-0001 hypothesis or any RQ-H2K outcome.
 - Dataset and trace public-release licensing/privacy rules remain unresolved; private,
   access-controlled smoke retention can proceed, but publication stays blocked.
 - The final repository software/content licenses and publication identity remain open.
-- T07's high-assurance path is terminally frozen. The parser/baseline evidence defect
-  is repaired, but no high-assurance execution plan may be revived. The bounded child
-  remains blocked on a new concrete topology, exact caps, cleanup/evidence contract,
-  review, and current-turn authorization applying the Occam admission rule. SR²AM
-  T11/T12 remain scientifically and operationally separate.
+- T07's high-assurance path is terminally frozen and cannot be revived. The bounded
+  child has a concrete topology, exact caps, cleanup/evidence contract, and reviewed
+  unauthorized plan. It remains blocked on a fresh current-turn authorization and all
+  dynamic preflight checks. SR²AM T11/T12 remain scientifically and operationally
+  separate.
 - RQ-H2K external-versus-explicit-model comparison feasibility remains undetermined.
   Missing optional regulation fields do not invalidate EXP-0001 when its primary
   evidence contract is complete.

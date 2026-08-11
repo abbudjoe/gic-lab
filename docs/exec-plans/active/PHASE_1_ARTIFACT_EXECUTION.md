@@ -65,7 +65,7 @@ no mutation authority; one gate's authorization never carries into another.
 
 | Task | Work package | Mapped phase DoD | Current permission |
 |---|---|---|---|
-| T07 | Execute one authorized contained SiRA smoke pair; capture regulation-decision evidence without interpretation. | P1-DOD-02, P1-DOD-11 through P1-DOD-13 | High-assurance infrastructure frozen; bounded-smoke child branch is the next planned design; no execution authority |
+| T07 | Execute one authorized contained SiRA smoke pair; capture regulation-decision evidence without interpretation. | P1-DOD-02, P1-DOD-11 through P1-DOD-13 | High-assurance infrastructure frozen; bounded-smoke V1 is the reviewed prospective path; no execution authority |
 | T08 | Analyze smoke infrastructure evidence and prepare an unauthorized pilot package. | P1-DOD-03, P1-DOD-11 through P1-DOD-13 | blocked until T07 succeeds |
 | T09 | Execute the freshly authorized exploratory SiRA pilot. | P1-DOD-04, P1-DOD-11 through P1-DOD-13 | blocked until T08 and authorization |
 | T10 | Analyze and publish the exploratory SiRA pilot. | P1-DOD-05, P1-DOD-11 through P1-DOD-13 | blocked until T09 succeeds |
@@ -80,9 +80,8 @@ and an analysis recommendation does not authorize the next execution.
 
 ## T07 assembly control
 
-Assembly status: **high-assurance infrastructure frozen; firewall capture adjudicated
-and privately sealed; bounded-smoke child branch planned; all execution permissions
-false**
+Assembly status: **high-assurance infrastructure frozen; bounded-smoke V1 plan ready
+for a separate authorization; all execution permissions false**
 
 Exact next profile: `PLAN-EXP0001-SMOKE`.
 
@@ -96,6 +95,31 @@ expected artifacts, cleanup, questions, and infrastructure-only interpretation b
 are in [`docs/readiness/PHASE_1_SMOKE_READINESS.md`](../../readiness/PHASE_1_SMOKE_READINESS.md).
 The locked profile is
 [`PLAN-EXP0001-SMOKE`](../../../experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/smoke.yaml).
+
+### Bounded smoke definition of done
+
+Source contracts: `T07_BOUNDED_SMOKE_FORK_AND_PLAN_FROM_397A391.md` and
+`T07_BOUNDED_SMOKE_GOVERNANCE_PROFILE.md`. Fork:
+`397a391b736528dd1049023d629100193e823c49`.
+
+The exact DoD mapping and validation record are maintained in
+`docs/harness/T07_BOUNDED_SMOKE_IMPLEMENTATION_LEDGER.md`. The child preserves the
+scientific plan byte-for-byte while replacing the frozen high-assurance execution path
+with one manually supervised Lambda/Jupyter session under the Occam admission rule.
+The unauthorized execution plan is `PLAN-T07-BOUNDED-SIRA-SMOKE-V1`, host run
+`RUN-T07-BOUNDED-HOST-0001`, at
+`containers/sira-smoke/bounded/bounded-smoke-plan-v1.json`, SHA-256
+`3e087ce38c272f81e4f46567c77cfe61fa36198316900e5710e817b3e5e4b1a6`.
+
+The design binds one exact host, one launch click, zero persistent filesystem, an
+immutable amd64 source/image/model path, an external single-run authorization overlay,
+a durable 13-GET observer, verified firewall state before launch, a no-network browser
+cleanup preflight, one reactive then one simulative attempt, hard
+API/cloud/time/output/disk/call limits, private file-only secret injection, tmpfs-only
+condition writes with immutable-ID copy-out, success/failure evidence,
+container/provider cleanup, and held-descriptor hash-verified archival. It does not
+authorize an account request, mutation, paid compute, model call, browser, container,
+SiRA, interpretation, pilot, or successor task.
 
 ### Gate B1.5 definition of done
 
@@ -540,20 +564,21 @@ review, and current-turn authority; no earlier gate grants any part of that auth
 
 ## Blockers and user actions
 
-T07 has no selected live runtime and no active execution plan. Docker Desktop and
-Colima/Lima remain terminal rejected provenance; the automated Lambda launch was
-rejected; manual-console qualification was designed but not executed. Lambda
-inventory, key and firewall evidence is complete, sealed and nonreplayable. The
-high-assurance track is frozen, L2M/L3/L4 cannot be resumed on this branch, and the
-smoke remains unexecuted.
+T07's selected prospective bounded runtime is one manually supervised
+`gpu_1x_a10` Lambda/Jupyter host under `PLAN-T07-BOUNDED-SIRA-SMOKE-V1`; the plan is
+executable by design but remains unauthorized. Docker Desktop and Colima/Lima remain
+terminal rejected provenance, and the automated Lambda launch path remains rejected.
+Lambda inventory, key and firewall evidence is complete, sealed and nonreplayable.
+The high-assurance track is frozen, L2M/L3/L4 cannot be resumed, and the smoke remains
+unexecuted. The blocking user action is one fresh authorization against the exact
+clean bounded packet commit, followed by every dynamic fail-closed preflight.
 
 ## Next permitted work
 
-There is no further local B1.x, automated Gate L2, or manual Gate L2M design loop on
-this branch. The next planned work is offline design on
-`phase-1/sira-smoke-bounded`, forked from the final clean closeout commit. It must
-select its own concrete topology and enforce the Occam admission rule: a missing
-control blocks only when it could distort the comparison, expose a secret/private
-value, materially exceed spending, strand a billable resource, or prevent
-reconstruction. Any live account, cloud, model, browser, container or SiRA action
-still requires a new exact plan and current-turn authorization.
+There is no further local B1.x, automated Gate L2, or manual Gate L2M design loop. The
+bounded child has selected its topology and applies the Occam admission rule: a
+missing control blocks only when it could distort the comparison, expose a
+secret/private value, materially exceed spending, strand a billable resource, or
+prevent reconstruction. The next permitted step is a separately supplied exact
+current-turn authorization for the immutable bounded plan; absent that authorization,
+no live account, cloud, model, browser, container, or SiRA action is permitted.
