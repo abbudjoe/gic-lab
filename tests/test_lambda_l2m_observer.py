@@ -2691,6 +2691,11 @@ def test_observer_surface_is_get_only_and_finitely_budgeted() -> None:
         )
 
 
+def test_documented_gate_authorization_reference_is_accepted() -> None:
+    reference = "AUTH-T07-GATE-L2M-CURRENT-TURN-2026-08-11"
+    assert l2m_observer._AUTHORIZATION_REFERENCE.fullmatch(reference) is not None
+
+
 def test_engine_rejects_wrong_phase_and_exhausted_caps_before_transport(
     tmp_path: Path,
 ) -> None:

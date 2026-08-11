@@ -141,7 +141,9 @@ _RULESET_NAME = re.compile(r"^t07-l2m-[a-f0-9]{40}$")
 _RUN_ID = re.compile(r"^RUN-T07-L2M-[A-Z0-9._-]{3,64}$")
 _DECISION_ALIAS = re.compile(r"^l2m-decision-[a-f0-9]{12}$")
 _MARKER_ALIAS = re.compile(r"^l2m-marker-[a-f0-9]{12}$")
-_AUTHORIZATION_REFERENCE = re.compile(r"^AUTH-T07-L2M-[A-Z0-9._-]{3,96}$")
+# Accept the explicit public Gate L2M namespace as well as the shorter fixture
+# namespace; both remain bounded, non-pending authorization references.
+_AUTHORIZATION_REFERENCE = re.compile(r"^AUTH-T07-(?:GATE-)?L2M-[A-Z0-9._-]{3,96}$")
 _VERSION_PART = re.compile(r"\d+")
 
 
