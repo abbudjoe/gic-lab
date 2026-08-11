@@ -17,6 +17,7 @@ from giclab.harness.lambda_firewall_baseline import (
     canonicalize_firewall_rules,
     verify_exact_firewall_baseline,
 )
+from giclab.harness.sira_storage import VolumeObservation
 
 ROOT = Path(__file__).resolve().parents[1]
 V3_PLAN = (
@@ -168,6 +169,22 @@ def test_fallback_plan_is_exactly_one_get_and_no_manual_v4_exists() -> None:
     assert not V4_PLAN.exists()
 
 
+def test_materialized_capture_plan_is_exact_and_unauthorized() -> None:
+    path = ROOT / baseline.CAPTURE_PLAN_RELATIVE
+    encoded = path.read_bytes()
+    assert len(encoded) == 5_754
+    assert hashlib.sha256(encoded).hexdigest() == (
+        "0d353f1283e906c7d6fd02ed278e6546cfb4c64e19f64370afb2860aa67501e1"
+    )
+    plan = json.loads(encoded)
+    baseline.validate_capture_plan(plan, repository_root=ROOT)
+    assert plan == baseline.render_capture_plan(
+        ROOT,
+        reviewed_implementation_commit="a55d66a96a6fa4e722cf0d12c258ff15f9eab659",
+    )
+    assert plan["authorization"]["authorized"] is False
+
+
 def test_historical_plan_and_run_are_immutable_and_old_v3_fails_closed() -> None:
     assert hashlib.sha256(V3_PLAN.read_bytes()).hexdigest() == baseline.HISTORICAL_PLAN_SHA256
     assert (
@@ -184,6 +201,100 @@ def test_historical_plan_and_run_are_immutable_and_old_v3_fails_closed() -> None
         observer_binding["sha256"]
         != hashlib.sha256((ROOT / observer_binding["path"]).read_bytes()).hexdigest()
     )
+
+
+def test_incident_bundle_seals_without_changing_historical_bytes(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    adjudication = baseline.adjudicate_historical_run(ROOT)
+    members = baseline._incident_members(ROOT, adjudication)
+    historical_paths = (
+        baseline.HISTORICAL_JOURNAL_RELATIVE,
+        baseline.HISTORICAL_OBSERVATION_RELATIVE,
+    )
+    for relative, encoded in (
+        (historical_paths[0], adjudication.original_journal),
+        (historical_paths[1], adjudication.original_observation),
+    ):
+        destination = tmp_path / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(encoded)
+    before = {
+        relative: hashlib.sha256((tmp_path / relative).read_bytes()).hexdigest()
+        for relative in historical_paths
+    }
+    external = tmp_path / "external"
+    system = tmp_path / "system"
+    external.mkdir()
+    system.mkdir()
+    monkeypatch.setattr(baseline, "APPROVED_MOUNT", external)
+    monkeypatch.setattr(baseline, "SYSTEM_DATA_MOUNT", system)
+    monkeypatch.setattr(baseline, "adjudicate_historical_run", lambda _root: adjudication)
+    monkeypatch.setattr(baseline, "_incident_members", lambda _root, _value: members)
+    monkeypatch.setattr(baseline, "_validate_external", lambda _value, incremental_bytes: 0)
+    monkeypatch.setattr(baseline, "_validate_system", lambda _value, floor_bytes: None)
+
+    real_open = baseline._HeldDirectory.open.__func__
+
+    def fake_open(cls: type[baseline._HeldDirectory], path: Path) -> baseline._HeldDirectory:
+        held = real_open(cls, path)
+        if path == external:
+            held.device += 100_000
+        return held
+
+    def fake_archive_root(
+        held_external: baseline._HeldDirectory, archive_path: Path
+    ) -> baseline._HeldDirectory:
+        archive_path.mkdir(parents=True, exist_ok=True)
+        held = real_open(baseline._HeldDirectory, archive_path)
+        held.device = held_external.device
+        return held
+
+    monkeypatch.setattr(baseline._HeldDirectory, "open", classmethod(fake_open))
+    monkeypatch.setattr(baseline, "_open_or_create_archive_root", fake_archive_root)
+    external_observation = VolumeObservation(
+        external,
+        "apfs",
+        True,
+        "8478609D-FA37-4ED5-875D-47AE912B9151",
+        "7904A6F1-F483-4ED7-9E34-BFECAB31C63E",
+        1_000_000_000,
+        900_000_000,
+        False,
+        True,
+        True,
+        True,
+        "synthetic-external",
+        "Thunderbolt",
+        "IODeviceTree:/synthetic/UTDM",
+    )
+    system_observation = VolumeObservation(
+        system,
+        "apfs",
+        True,
+        "00000000-0000-0000-0000-000000000001",
+        None,
+        1_000_000_000,
+        900_000_000,
+        True,
+        True,
+        True,
+        True,
+        "synthetic-system",
+    )
+    seal = baseline.seal_run_0003_incident_bundle(
+        tmp_path,
+        volume_observer=lambda: (external_observation, system_observation),
+        entropy=lambda count: b"x" * count,
+    )
+    assert seal.destination_hashes_verified is True
+    assert seal.source_retained is True
+    assert (seal.local_root / "INCIDENT_SEAL.json").is_file()
+    assert (seal.external_root / "SEAL.json").is_file()
+    assert before == {
+        relative: hashlib.sha256((tmp_path / relative).read_bytes()).hexdigest()
+        for relative in historical_paths
+    }
 
 
 class FakeCaptureTransport:
@@ -285,12 +396,25 @@ def test_capture_schema_drift_stops_without_retry(
             transport=transport,
         )
     assert transport.calls == 1
+    assert (
+        root / baseline.CAPTURE_RUN_ROOT_RELATIVE / "raw-global-firewall-response.json"
+    ).read_bytes() == body
     events = [
         json.loads(line)
         for line in (root / baseline.CAPTURE_LEDGER_RELATIVE).read_text().splitlines()
     ]
     assert sum(event["event_type"] == "request_send_started" for event in events) == 1
     assert events[-1]["event_type"] == "run_stopped"
+    partial = baseline._capture_local_members(
+        root / baseline.CAPTURE_RUN_ROOT_RELATIVE,
+        require_complete=False,
+    )
+    assert partial["raw-global-firewall-response.json"] == body
+    with pytest.raises(FirewallBaselineError, match="member set"):
+        baseline._capture_local_members(
+            root / baseline.CAPTURE_RUN_ROOT_RELATIVE,
+            require_complete=True,
+        )
 
 
 def test_capture_ledger_rejects_reuse_and_sequence_gap(

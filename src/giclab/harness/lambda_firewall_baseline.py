@@ -373,6 +373,24 @@ def verify_exact_firewall_baseline(
         raise FirewallBaselineError("global firewall differs from the exact sealed baseline")
 
 
+def _json_type(value: object) -> str:
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "boolean"
+    if isinstance(value, int):
+        return "integer"
+    if isinstance(value, float):
+        return "number"
+    if isinstance(value, str):
+        return "string"
+    if isinstance(value, list):
+        return "array"
+    if isinstance(value, Mapping):
+        return "object"
+    raise FirewallBaselineError("JSON evidence contains an unsupported value type")
+
+
 def structural_report_for_historical_projection(
     observation: Mapping[str, object],
 ) -> dict[str, object]:
@@ -420,6 +438,12 @@ def structural_report_for_historical_projection(
         "canonicalization_version": CANONICALIZATION_VERSION,
         "baseline_alias": None,
         "canonical_semantic_sha256": None,
+        "observation_top_level_fields": sorted(observation),
+        "observation_top_level_types": {
+            key: _json_type(observation[key]) for key in sorted(observation)
+        },
+        "global_ruleset_fields": sorted(data),
+        "global_ruleset_types": {key: _json_type(data[key]) for key in sorted(data)},
         "rule_count": len(rules),
         "rule_shapes": shapes,
         "empty_description_count": empty_descriptions,
@@ -903,6 +927,10 @@ def complete_canonical_report(baseline: CanonicalFirewallBaseline) -> dict[str, 
         "canonicalization_version": baseline.version,
         "baseline_alias": baseline.alias,
         "canonical_semantic_sha256": baseline.semantic_sha256,
+        "observation_top_level_fields": ["data"],
+        "observation_top_level_types": {"data": "object"},
+        "global_ruleset_fields": ["id", "name", "rules"],
+        "global_ruleset_types": {"id": "string", "name": "string", "rules": "array"},
         "rule_count": baseline.rule_count,
         "rule_shapes": shapes,
         "empty_description_count": empty,
@@ -997,7 +1025,11 @@ class CaptureLedger:
             )
         except OSError:
             raise FirewallBaselineError("capture ledger could not be created exclusively") from None
-        schema, _ = _load_schema(root, CAPTURE_LEDGER_SCHEMA_RELATIVE)
+        try:
+            schema, _ = _load_schema(root, CAPTURE_LEDGER_SCHEMA_RELATIVE)
+        except BaseException:
+            os.close(descriptor)
+            raise
         return cls(
             descriptor,
             run_root / "request-ledger.jsonl",
@@ -1112,12 +1144,17 @@ def capture_with_fakeable_transport(
     root = repository_root.resolve(strict=True)
     ledger = CaptureLedger.create(root, authorization_reference=authorization_reference)
     run_root = root / CAPTURE_RUN_ROOT_RELATIVE
+    failure_stage = "preflight"
+    failure_class = "preflight_failed"
+    request_started = False
     try:
         ledger.append("run_preflight_started")
         free_bytes = os.statvfs(run_root).f_bavail * os.statvfs(run_root).f_frsize
         if free_bytes < MIN_LOCAL_PREWRITE_FREE_BYTES + MAX_CAPTURE_LEDGER_BYTES:
             raise FirewallBaselineError("capture ledger capacity cannot be reserved")
         ledger.append("ledger_capacity_reserved")
+        failure_stage = "secret_source"
+        failure_class = "secret_missing"
         credential = credential_provider()
         if (
             not isinstance(credential, str)
@@ -1130,6 +1167,9 @@ def capture_with_fakeable_transport(
         ledger.append("run_preflight_passed")
         ledger.append("request_intent_committed", request=True)
         ledger.append("request_send_started", request=True)
+        request_started = True
+        failure_stage = "transport"
+        failure_class = "transport_failed"
         try:
             response = transport.fetch(
                 credential=credential,
@@ -1164,11 +1204,49 @@ def capture_with_fakeable_transport(
             elapsed_ms=response.elapsed_ms,
             response_sha256=response_sha256,
         )
-        if (
-            response.status != 200
-            or normalized_content_type != "application/json"
-            or not 0 < len(response.body) <= MAX_CAPTURE_RESPONSE_BYTES
-        ):
+        failure_stage = "response_size"
+        failure_class = "response_too_large"
+        if not 0 < len(response.body) <= MAX_CAPTURE_RESPONSE_BYTES:
+            ledger.append(
+                "request_failed",
+                request=True,
+                bytes_received=min(len(response.body), MAX_CAPTURE_RESPONSE_BYTES),
+                status=response.status,
+                content_type=normalized_content_type,
+                elapsed_ms=response.elapsed_ms,
+                response_sha256=response_sha256,
+                failure_stage="response_size",
+                failure_class="response_too_large",
+            )
+            ledger.append(
+                "run_stopped",
+                failure_stage="response_size",
+                failure_class="response_too_large",
+            )
+            raise FirewallBaselineError("capture response failed its byte contract")
+        ledger.append(
+            "response_body_completed",
+            request=True,
+            bytes_received=len(response.body),
+            status=response.status,
+            content_type="application/json",
+            elapsed_ms=response.elapsed_ms,
+            response_sha256=response_sha256,
+        )
+        # Preserve the complete provider body before parsing it.  A later status,
+        # content-type, JSON, schema, or material-extension stop must not recreate the
+        # evidence defect that prompted this gate.
+        failure_stage = "seal_io"
+        failure_class = "seal_failed"
+        _write_private_file(
+            run_root,
+            "raw-global-firewall-response.json",
+            response.body,
+            cap=MAX_CAPTURE_RESPONSE_BYTES,
+        )
+        failure_stage = "schema_validation"
+        failure_class = "schema_drift"
+        if response.status != 200 or normalized_content_type != "application/json":
             ledger.append(
                 "request_failed",
                 request=True,
@@ -1184,19 +1262,12 @@ def capture_with_fakeable_transport(
             )
             ledger.append(
                 "run_stopped",
-                failure_stage="schema_validation",
-                failure_class="schema_drift",
+                failure_stage=("http_status" if response.status != 200 else "content_type"),
+                failure_class=(
+                    "http_failure" if response.status != 200 else "unexpected_content_type"
+                ),
             )
             raise FirewallBaselineError("capture response failed status/content contract")
-        ledger.append(
-            "response_body_completed",
-            request=True,
-            bytes_received=len(response.body),
-            status=response.status,
-            content_type="application/json",
-            elapsed_ms=response.elapsed_ms,
-            response_sha256=response_sha256,
-        )
         envelope = _load_json(response.body, context="capture response")
         if set(envelope) != {"data"}:
             raise FirewallBaselineError("capture response envelope has unknown or missing fields")
@@ -1218,6 +1289,8 @@ def capture_with_fakeable_transport(
             response_sha256=response_sha256,
         )
         ledger.append("baseline_seal_started")
+        failure_stage = "seal_io"
+        failure_class = "seal_failed"
         baseline_document: dict[str, object] = {
             "schema_version": "0.1.0",
             "baseline_alias": baseline.alias,
@@ -1282,12 +1355,6 @@ def capture_with_fakeable_transport(
         canonical_report_encoded = canonical_json_bytes(canonical_report)
         _write_private_file(
             run_root,
-            "raw-global-firewall-response.json",
-            response.body,
-            cap=MAX_CAPTURE_RESPONSE_BYTES,
-        )
-        _write_private_file(
-            run_root,
             "firewall-baseline.json",
             baseline_encoded,
             cap=MAX_CAPTURE_LOCAL_ARTIFACT_BYTES,
@@ -1321,14 +1388,14 @@ def capture_with_fakeable_transport(
             with suppress(FirewallBaselineError):
                 ledger.append(
                     "request_failed",
-                    request=ledger.events >= 6,
-                    failure_stage="schema_validation",
-                    failure_class="schema_drift",
+                    request=request_started,
+                    failure_stage=failure_stage,
+                    failure_class=failure_class,
                 )
                 ledger.append(
                     "run_stopped",
-                    failure_stage="schema_validation",
-                    failure_class="schema_drift",
+                    failure_stage=failure_stage,
+                    failure_class=failure_class,
                 )
         with suppress(OSError, FirewallBaselineError):
             ledger.close()
@@ -1396,11 +1463,49 @@ _CAPTURE_SOURCE_NAMES: Final = (
 )
 
 
+def _capture_local_members(local_root: Path, *, require_complete: bool) -> dict[str, bytes]:
+    try:
+        observed_names = set(os.listdir(local_root))
+    except OSError:
+        raise FirewallBaselineError("capture local evidence root is unavailable") from None
+    allowed_names = set(_CAPTURE_SOURCE_NAMES)
+    required_names = allowed_names if require_complete else {"request-ledger.jsonl"}
+    if not required_names <= observed_names or not observed_names <= allowed_names:
+        raise FirewallBaselineError("capture local evidence member set is invalid")
+    local_members = {
+        name: _read_regular_no_follow(local_root / name, max_bytes=MAX_CAPTURE_LOCAL_ARTIFACT_BYTES)
+        for name in _CAPTURE_SOURCE_NAMES
+        if name in observed_names
+    }
+    ledger_rows = [
+        _strict_json(line, context="capture ledger event")
+        for line in local_members["request-ledger.jsonl"].splitlines()
+        if line
+    ]
+    if (
+        not ledger_rows
+        or ledger_rows[-1].get("event_type") != "run_stopped"
+        or any(
+            row.get("event_sequence") != ordinal for ordinal, row in enumerate(ledger_rows, start=1)
+        )
+    ):
+        raise FirewallBaselineError("capture ledger is not complete enough to archive")
+    response_completed = any(
+        row.get("event_type") == "response_body_completed" for row in ledger_rows
+    )
+    if response_completed != ("raw-global-firewall-response.json" in local_members):
+        raise FirewallBaselineError("capture raw-response retention differs from its ledger")
+    if sum(len(value) for value in local_members.values()) > MAX_CAPTURE_LOCAL_ARTIFACT_BYTES:
+        raise FirewallBaselineError("capture local evidence exceeds its aggregate cap")
+    return local_members
+
+
 def seal_capture_evidence_to_approved_external(
     repository_root: Path,
     *,
     plan_sha256: str,
     authorization_sha256: str,
+    require_complete: bool = True,
     volume_observer: Callable[[], tuple[VolumeObservation, VolumeObservation]] | None = None,
     utc_now: Callable[[], datetime] = lambda: datetime.now(UTC),
 ) -> CaptureArchiveSeal:
@@ -1410,12 +1515,7 @@ def seal_capture_evidence_to_approved_external(
         raise FirewallBaselineError("capture archive binding hash is invalid")
     root = repository_root.resolve(strict=True)
     local_root = root / CAPTURE_RUN_ROOT_RELATIVE
-    local_members = {
-        name: _read_regular_no_follow(local_root / name, max_bytes=MAX_CAPTURE_LOCAL_ARTIFACT_BYTES)
-        for name in _CAPTURE_SOURCE_NAMES
-    }
-    if sum(len(value) for value in local_members.values()) > MAX_CAPTURE_LOCAL_ARTIFACT_BYTES:
-        raise FirewallBaselineError("capture local evidence exceeds its aggregate cap")
+    local_members = _capture_local_members(local_root, require_complete=require_complete)
     manifest = canonical_json_bytes(
         {
             "schema_version": "0.1.0",
@@ -1423,6 +1523,7 @@ def seal_capture_evidence_to_approved_external(
             "plan_sha256": plan_sha256,
             "run_id": CAPTURE_RUN_ID,
             "authorization_sha256": authorization_sha256,
+            "complete_baseline": require_complete,
             "files": [
                 {"path": name, "bytes": len(encoded), "sha256": sha256_bytes(encoded)}
                 for name, encoded in sorted(local_members.items())
@@ -1438,6 +1539,9 @@ def seal_capture_evidence_to_approved_external(
         cap=MAX_CAPTURE_LOCAL_ARTIFACT_BYTES,
     )
     local_members["CAPTURE_MANIFEST.json"] = manifest
+    local_total = sum(len(value) for value in local_members.values())
+    if local_total > MAX_CAPTURE_LOCAL_ARTIFACT_BYTES:
+        raise FirewallBaselineError("capture local evidence and manifest exceed their cap")
     archive_alias = f"l2m-firewall-capture-{sha256_bytes(manifest)[:12]}"
     archive_identity = CAPTURE_RUN_ID
     staging_name = f".{archive_identity}.partial"
@@ -1489,6 +1593,7 @@ def seal_capture_evidence_to_approved_external(
                 "plan_sha256": plan_sha256,
                 "run_id": CAPTURE_RUN_ID,
                 "authorization_sha256": authorization_sha256,
+                "complete_baseline": require_complete,
                 "copied_at_utc": utc_now().astimezone(UTC).isoformat().replace("+00:00", "Z"),
                 "files": [
                     {"path": name, "bytes": len(encoded), "sha256": sha256_bytes(encoded)}
@@ -1508,6 +1613,7 @@ def seal_capture_evidence_to_approved_external(
             {
                 "schema_version": "0.1.0",
                 "archive_alias": archive_alias,
+                "complete_baseline": require_complete,
                 "manifest_sha256": sha256_bytes(manifest),
                 "copy_record_sha256": sha256_bytes(copy_record),
                 "source_retained": True,
@@ -1572,6 +1678,8 @@ def seal_capture_evidence_to_approved_external(
                 "internal_fallback": False,
             }
         )
+        if local_total + len(local_record) > MAX_CAPTURE_LOCAL_ARTIFACT_BYTES:
+            raise FirewallBaselineError("capture local verification exceeds its aggregate cap")
         _write_private_file(
             local_root,
             "EXTERNAL_COPY_VERIFICATION.json",
@@ -1651,7 +1759,7 @@ def seal_run_0003_incident_bundle(
     observer = DiskutilVolumeObserver() if volume_observer is None else volume_observer
     adjudication = adjudicate_historical_run(root)
     members = _incident_members(root, adjudication)
-    local_root = root / "artifacts/t07/lambda/gate-l2m" / HISTORICAL_RUN_ID / "incident-v1"
+    local_root = root / "artifacts/t07/lambda/gate-l2m" / HISTORICAL_RUN_ID / "incident-v2"
     if local_root.exists() or local_root.is_symlink():
         raise FirewallBaselineError("run-0003 incident bundle identity is not fresh")
     original_hashes = {
@@ -1660,6 +1768,14 @@ def seal_run_0003_incident_bundle(
     }
     try:
         local_root.mkdir(mode=0o700)
+        local_parent_fd = os.open(
+            local_root.parent,
+            os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0),
+        )
+        try:
+            os.fsync(local_parent_fd)
+        finally:
+            os.close(local_parent_fd)
         local_fd = os.open(
             local_root,
             os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0),
@@ -1904,12 +2020,26 @@ def main(argv: Sequence[str] | None = None) -> int:
             expected_plan_sha256=args.plan_sha256,
             authorization=authorization,
         )
-        capture_with_fakeable_transport(
-            args.repository_root,
-            authorization_reference=authorization.authorization_reference,
-            credential_provider=lambda: os.environ.get("LAMBDA_API_KEY"),
-            transport=L2MObserverCaptureTransport(),
-        )
+        try:
+            capture_with_fakeable_transport(
+                args.repository_root,
+                authorization_reference=authorization.authorization_reference,
+                credential_provider=lambda: os.environ.get("LAMBDA_API_KEY"),
+                transport=L2MObserverCaptureTransport(),
+            )
+        except (FirewallBaselineError, OSError, ValueError):
+            # A complete response that later fails validation must still be sealed;
+            # otherwise the next investigation would repeat run 0003's evidence gap.
+            # Archive failure never permits replay and leaves the local source intact.
+            if (args.repository_root / CAPTURE_RUN_ROOT_RELATIVE).exists():
+                with suppress(FirewallBaselineError, OSError, ValueError):
+                    seal_capture_evidence_to_approved_external(
+                        args.repository_root,
+                        plan_sha256=args.plan_sha256,
+                        authorization_sha256=authorization.authorization_sha256,
+                        require_complete=False,
+                    )
+            raise
         seal_capture_evidence_to_approved_external(
             args.repository_root,
             plan_sha256=args.plan_sha256,

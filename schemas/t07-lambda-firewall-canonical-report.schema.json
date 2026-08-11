@@ -10,6 +10,10 @@
     "canonicalization_version",
     "baseline_alias",
     "canonical_semantic_sha256",
+    "observation_top_level_fields",
+    "observation_top_level_types",
+    "global_ruleset_fields",
+    "global_ruleset_types",
     "rule_count",
     "rule_shapes",
     "empty_description_count",
@@ -44,6 +48,10 @@
         {"type": "string", "pattern": "^[a-f0-9]{64}$"}
       ]
     },
+    "observation_top_level_fields": {"$ref": "#/$defs/keyNames"},
+    "observation_top_level_types": {"$ref": "#/$defs/keyTypes"},
+    "global_ruleset_fields": {"$ref": "#/$defs/keyNames"},
+    "global_ruleset_types": {"$ref": "#/$defs/keyTypes"},
     "rule_count": {"type": "integer", "minimum": 0, "maximum": 100},
     "rule_shapes": {
       "type": "array",
@@ -83,6 +91,22 @@
     "raw_response_retained": {"type": "boolean"},
     "unknown_raw_key_structure_retained": {"type": "boolean"},
     "sensitive_scalar_values_retained": {"const": false}
+  },
+  "$defs": {
+    "keyNames": {
+      "type": "array",
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,127}$"}
+    },
+    "keyTypes": {
+      "type": "object",
+      "maxProperties": 64,
+      "additionalProperties": {
+        "enum": ["array", "boolean", "integer", "null", "number", "object", "string"]
+      },
+      "propertyNames": {"pattern": "^[A-Za-z_][A-Za-z0-9_]{0,127}$"}
+    }
   },
   "allOf": [
     {

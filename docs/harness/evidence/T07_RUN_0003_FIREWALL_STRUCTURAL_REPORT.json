@@ -6,7 +6,31 @@
   "canonicalization_version": "t07-firewall-canonical-v1",
   "empty_description_count": 0,
   "evidence_classification": "incomplete_or_transformed_baseline",
+  "global_ruleset_fields": [
+    "id",
+    "name",
+    "rules"
+  ],
+  "global_ruleset_types": {
+    "id": "string",
+    "name": "string",
+    "rules": "array"
+  },
   "nonempty_description_count": 4,
+  "observation_top_level_fields": [
+    "data",
+    "operation",
+    "raw_response_bytes",
+    "raw_response_sha256",
+    "schema_version"
+  ],
+  "observation_top_level_types": {
+    "data": "object",
+    "operation": "string",
+    "raw_response_bytes": "integer",
+    "raw_response_sha256": "string",
+    "schema_version": "string"
+  },
   "protocol_classes": [
     "tcp",
     "udp"
