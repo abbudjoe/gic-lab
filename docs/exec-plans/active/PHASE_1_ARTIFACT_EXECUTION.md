@@ -450,9 +450,9 @@ completed L2M authorization must be closed and reset rather than reused by L3 or
 - 2026-08-11: Gate L2.3 validated the new private image/manual-action decision,
   resolved private image/key/firewall/IP and ownership bindings only into ignored
   sealed evidence, verified a one-way APFS archive copy, and rendered plan
-  `PLAN-T07-GATE-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-V2` / run
-  `RUN-T07-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-0002`. The 17,940-byte plan has
-  SHA-256 `c73dba151ac6ca0f2c326ad486aaeac46c93e85f0e805eca9d87605d25e1724a`,
+  `PLAN-T07-GATE-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-V3` / run
+  `RUN-T07-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-0003`. The 21,641-byte plan has
+  SHA-256 `1931fcacda4194063c0116ff9630d82f3b8f4ec07ff9b0310342335db629f654`,
   23 ordered actor steps, 13 user checkpoint templates, zero automated mutations and
   an expiry-before-credential guard. It remains unauthorized; no account/model
   request, secret access, cloud mutation, paid compute, SSH, Jupyter, pull, container,

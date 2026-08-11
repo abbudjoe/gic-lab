@@ -132,17 +132,17 @@ fallback occurred. Raw mappings remain only in ignored, mode-restricted evidence
 
 ## Rendered plan
 
-- Plan: `PLAN-T07-GATE-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-V2`.
-- Run: `RUN-T07-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-0002`.
+- Plan: `PLAN-T07-GATE-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-V3`.
+- Run: `RUN-T07-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-0003`.
 - Path:
-  `containers/sira-smoke/lambda/manual-console/gate-l2m-host-qualification-plan-v2.json`.
-- Bytes: 17,940.
+  `containers/sira-smoke/lambda/manual-console/gate-l2m-host-qualification-plan-v3.json`.
+- Bytes: 21,641.
 - SHA-256:
-  `c73dba151ac6ca0f2c326ad486aaeac46c93e85f0e805eca9d87605d25e1724a`.
+  `1931fcacda4194063c0116ff9630d82f3b8f4ec07ff9b0310342335db629f654`.
 - Reviewed implementation commit:
-  `1163bd62a3573181766e58d595fbcc8594ac6e18`.
+  `af54784f02e4675e25cd21925fd3c5d62cd0ed68`.
 - Future authorization placeholder:
-  `AUTH-T07-GATE-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-V2-PENDING`.
+  `AUTH-T07-GATE-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-V3-PENDING`.
 - Latest safe supervisor start:
   `2026-08-12T05:15:19.646016Z`.
 

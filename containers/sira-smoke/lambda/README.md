@@ -125,12 +125,13 @@ public decision and marker aliases are `l2m-decision-6b7af4f2c567` and
 
 `manual-console/gate-l2m-host-qualification-plan-v1.json` remains preserved as
 historical provenance. The active executable-but-unauthorized replacement is
-`manual-console/gate-l2m-host-qualification-plan-v2.json`: 17,940 bytes, SHA-256
-`c73dba151ac6ca0f2c326ad486aaeac46c93e85f0e805eca9d87605d25e1724a`, plan
-`PLAN-T07-GATE-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-V2`, run
-`RUN-T07-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-0002`. It binds the same 23 ordered
+`manual-console/gate-l2m-host-qualification-plan-v3.json`: 21,641 bytes, SHA-256
+`1931fcacda4194063c0116ff9630d82f3b8f4ec07ff9b0310342335db629f654`, plan
+`PLAN-T07-GATE-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-V3`, run
+`RUN-T07-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-0003`. It binds the same 23 ordered
 actor steps, 13 user checkpoint templates, GET-only observer, exact caps and incident
-cleanup while refreshing the reviewed implementation and private-seal schema hashes.
+cleanup while refreshing the reviewed implementation, journal/evidence schemas and
+private-seal schema hashes.
 User actions remain console-only and automated cloud mutation remains zero. The plan
 must start by `2026-08-12T05:15:19.646016Z` after the current-turn authorization
 binding; expiry requires a newly reviewed immutable plan. Nothing has been launched,

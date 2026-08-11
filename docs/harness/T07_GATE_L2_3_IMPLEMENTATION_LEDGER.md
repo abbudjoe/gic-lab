@@ -8,7 +8,7 @@ Source contract: the user-supplied
 `T07_GATE_L2_3_DECISION_BINDING_AND_MANUAL_PLAN.md`.
 
 Reviewed implementation commit:
-`1163bd62a3573181766e58d595fbcc8594ac6e18`.
+`af54784f02e4675e25cd21925fd3c5d62cd0ed68`.
 
 This ledger maps the Gate L2.3 definition of done to implementation and evidence. It
 does not grant execution authority. No account/model request, credential access,
@@ -35,7 +35,7 @@ scientific execution is permitted by this record.
 | L23-16 | Bind all exact numeric provider, observer, checkpoint, process, Docker, output, evidence and storage caps from L2.2 without stale phase counts. | met | Public plan/packet; phase counts `6+1+1+1+9+0+0+10+2+1+13=44`; cap equality tests. |
 | L23-17 | Bind exact immutable schemas, bundle, source observation, implementation artifacts and hash-first qualification argv. | met | Plan artifact table and validator; manifest `dc9824…c261`, driver `ab9a3f…5050`, exact argv regressions. |
 | L23-18 | Preserve the exact EXP-0001 scientific contract and keep Gate L3/L4/pilot/training/interpretation unauthorized. | met | Locked-file hash tests and public plan `scientific_lock`; no scientific file changed. |
-| L23-19 | Render a fresh executable but unauthorized plan/run with exact bytes/hash and expiry. | met | Historical V1/run 0001 remains preserved; repaired Plan V2/run 0002 is 17,940 bytes, SHA-256 `c73dba…724a`; every authority Boolean false; latest start `2026-08-12T05:15:19.646016Z`. |
+| L23-19 | Render a fresh executable but unauthorized plan/run with exact bytes/hash and expiry. | met | Historical V1/run 0001 and repaired V2/run 0002 remain preserved; repaired Plan V3/run 0003 is 21,641 bytes, SHA-256 `434438…51f81`; every authority Boolean false; latest start `2026-08-12T05:15:19.646016Z`. |
 | L23-20 | Create decision report, ledger, packet, exact runbook, manual-console README and update all required governance/public surfaces. | met | Required files plus project state, policy/test, active plan, D-029, readiness, Gate L3 requirements, Lambda/harness READMEs and sanitized notebook note. |
 | L23-21 | Preserve all prior plans/evidence and avoid every prohibited live action/private disclosure. | met | Prior Git/evidence paths unchanged; public privacy checks contain aliases/hashes only; no real secret/account/runtime action occurred. |
 | L23-22 | Run focused/Lambda/schema/repository/privacy/format/Ruff/mypy/portable-Quarto gates. | met | Focused Gate L2.3 suite: 189 passed; all Lambda suites: 561 passed; final portable-Quarto `make check`: 1,015 tests, repository validation, Ruff, strict mypy and all 16 notebook pages passed. The private-scalar scan examined 42 candidates and found zero public leaks. |

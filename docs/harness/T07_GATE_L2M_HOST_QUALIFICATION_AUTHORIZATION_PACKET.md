@@ -10,22 +10,22 @@ Date: 2026-08-11
 |---|---|
 | Branch | `phase-1/sira-smoke-lambda` |
 | Required final clean execution commit | `<EXACT-FINAL-CLEAN-GATE-L2-3-HANDOFF-COMMIT>`; supplied in the final handoff and fresh user authorization |
-| Reviewed implementation commit | `1163bd62a3573181766e58d595fbcc8594ac6e18` |
-| Plan ID | `PLAN-T07-GATE-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-V2` |
-| Run ID | `RUN-T07-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-0002` |
-| Plan path | `containers/sira-smoke/lambda/manual-console/gate-l2m-host-qualification-plan-v2.json` |
-| Plan bytes | 17,940 |
-| Plan SHA-256 | `c73dba151ac6ca0f2c326ad486aaeac46c93e85f0e805eca9d87605d25e1724a` |
-| Pending reference | `AUTH-T07-GATE-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-V2-PENDING` (not executable authority) |
+| Reviewed implementation commit | `af54784f02e4675e25cd21925fd3c5d62cd0ed68` |
+| Plan ID | `PLAN-T07-GATE-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-V3` |
+| Run ID | `RUN-T07-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-0003` |
+| Plan path | `containers/sira-smoke/lambda/manual-console/gate-l2m-host-qualification-plan-v3.json` |
+| Plan bytes | 21,641 |
+| Plan SHA-256 | `1931fcacda4194063c0116ff9630d82f3b8f4ec07ff9b0310342335db629f654` |
+| Pending reference | `AUTH-T07-GATE-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-V3-PENDING` (not executable authority) |
 | Decision alias | `l2m-decision-6b7af4f2c567` |
 | Decision source SHA-256 | `1b603e4bfb1e63b9046bb5b3d404a083666e7a28437e63a20613d7321063bad4` |
 | Decision canonical SHA-256 | `6b7af4f2c567f8c8e66f3d165e8ffbc144028cf3edf45727bb569e254c7bb75f` |
-| Private decision seal SHA-256 | `d01c44107586108e6215b8c493a038d53bf8f115306d9a426256629b7e629d71` |
-| Private parameters SHA-256 | `0aebe0dea9428a2f55076a3d1e5a6cd2e1f905d86fba28e029bac6e83726c046` |
-| Private bundle seal SHA-256 | `eef76e8e30795d18185ae8d3300bd2e6918ec38e51c1c1ce235c7fd8e0b8ee5b` |
-| Marker alias | `l2m-marker-4f2fa3ca23c9` |
-| External archive alias | `l2m-archive-653d000d7747` |
-| External copy/seal SHA-256 | `14bb088bad7a32f0d58c1205bad13007ab80341a8d5440edfd850635fcd5ac9c` / `22bf0c42aced10b792184a6380c4fbc90ee981fe322cf22c36d34f851d535681` |
+| Private decision seal SHA-256 | `7112be676705f86526cf99f8fd13e59dd9731029be187196f70f790f0f8871fd` |
+| Private parameters SHA-256 | `a9b210594ed3b4c962f414b8a2d9509d14a2d7deb097050e92321e6da4d5d096` |
+| Private bundle seal SHA-256 | `43533446b3d78319678031013d6153d7f978e331812bcf2719e3771a53db82a6` |
+| Marker alias | `l2m-marker-90ead4544041` |
+| External archive alias | `l2m-archive-c976c8fa42b2` |
+| External copy/seal SHA-256 | `c65dabb6cdedc373ac9d937ce6deb191fafae09e3f9666534fa930cc881807be` / `c14705829232f4b80fdcd31e033ad8d00f60eb7fd6c14e876dd5174b50a5ab9a` |
 
 The plan itself remains `authorized: false`, `cloud_mutation_allowed: false`,
 `paid_compute_allowed: false`, `prototype_execution_allowed: false` and
@@ -56,10 +56,10 @@ substitution, extra ports or SSH.
 
 | Artifact | SHA-256 |
 |---|---|
-| Private decision seal schema | `6fb6cc73ccd4332287014ca5aea945485f6548b5052a2fdfc32378eef5403ead` |
+| Private decision seal schema | `d67f3cbd6811f0b8c965c84fc0cb62823981442de55cd7233f17689782b624ac` |
 | User checkpoint schema | `a55f9023f8cc8f530acebe31bbe7b50c57d1e1a01b959ced38876e43e0f108ff` |
-| Observer journal schema | `c9d5fef455c35ce0e8f957fe54040464a641ce10a57a95feadb09f24d3c1bf9f` |
-| Host-evidence schema | `8311ff4dcc82df5bf8272f549119c13fa37baf9ef46e41cea5c3629b11253ef3` |
+| Observer journal schema | `5de43193d400e067ce84acd19dfba0128125cf79d3bc6d862176e7895d20473e` |
+| Host-evidence schema | `5c74fb37b81be2ae3fa2563a5b7508f13d19d2dd764a475e5c07e45b369bd195` |
 | Qualification manifest | `dc9824649f97fab6cfd105b5fc0d0c6c1c5ff513fa25f70e0d517afa623cc261` |
 | Qualification driver | `ab9a3f8981d2e60ea5b57bb7cf63512f64cdb89f26d8183788aedc2dbe4b5050` |
 
@@ -78,8 +78,8 @@ The observer invocation is a shell-free array from the clean repository root:
   "-I",
   "containers/sira-smoke/lambda/manual-console/l23_supervisor_bootstrap.py",
   "--repository-root", ".",
-  "--plan", "containers/sira-smoke/lambda/manual-console/gate-l2m-host-qualification-plan-v2.json",
-  "--plan-sha256", "c73dba151ac6ca0f2c326ad486aaeac46c93e85f0e805eca9d87605d25e1724a",
+  "--plan", "containers/sira-smoke/lambda/manual-console/gate-l2m-host-qualification-plan-v3.json",
+  "--plan-sha256", "1931fcacda4194063c0116ff9630d82f3b8f4ec07ff9b0310342335db629f654",
   "--expected-commit", "<EXACT-FINAL-CLEAN-GATE-L2-3-HANDOFF-COMMIT>",
   "--authorization-reference", "<FRESH-AUTHORIZATION-REFERENCE>",
   "--authorization-sha256", "<SHA256-OF-THE-FRESH-USER-AUTHORIZATION-TEXT>"
@@ -248,13 +248,13 @@ from the immutable V2 plan above; no prose-only cap or authority expansion is va
 ```text
 Continue T07 with Gate L2M manual-console host qualification only.
 
-I authorize plan PLAN-T07-GATE-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-V2, run
-RUN-T07-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-0002, at
-containers/sira-smoke/lambda/manual-console/gate-l2m-host-qualification-plan-v2.json,
-SHA-256 c73dba151ac6ca0f2c326ad486aaeac46c93e85f0e805eca9d87605d25e1724a, on
+I authorize plan PLAN-T07-GATE-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-V3, run
+RUN-T07-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-0003, at
+containers/sira-smoke/lambda/manual-console/gate-l2m-host-qualification-plan-v3.json,
+SHA-256 1931fcacda4194063c0116ff9630d82f3b8f4ec07ff9b0310342335db629f654, on
 phase-1/sira-smoke-lambda at exact clean commit
 <EXACT-FINAL-CLEAN-GATE-L2M-COMMIT>. Reviewed implementation commit
-1163bd62a3573181766e58d595fbcc8594ac6e18 must be an ancestor and every plan-bound
+af54784f02e4675e25cd21925fd3c5d62cd0ed68 must be an ancestor and every plan-bound
 artifact hash must remain exact. Use authorization reference
 AUTH-T07-GATE-L2M-CURRENT-TURN-2026-08-11 and the SHA-256 of this exact text.
 

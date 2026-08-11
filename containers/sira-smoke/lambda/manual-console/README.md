@@ -4,13 +4,13 @@ This directory contains the exact, executable-but-unauthorized Gate L2M host
 qualification control plane. Nothing here authorizes a Lambda request, console
 mutation, instance, Jupyter session, image pull, container or paid compute.
 
-The public V1 plan remains preserved as historical provenance. The active replacement is
-`gate-l2m-host-qualification-plan-v2.json`, plan
-`PLAN-T07-GATE-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-V2`, run
-`RUN-T07-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-0002`, 17,940 bytes, SHA-256
-`c73dba151ac6ca0f2c326ad486aaeac46c93e85f0e805eca9d87605d25e1724a`.
+The V1 and V2 plans remain preserved as historical provenance. The active replacement is
+`gate-l2m-host-qualification-plan-v3.json`, plan
+`PLAN-T07-GATE-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-V3`, run
+`RUN-T07-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-0003`, 21,641 bytes, SHA-256
+`1931fcacda4194063c0116ff9630d82f3b8f4ec07ff9b0310342335db629f654`.
 It is bound to reviewed implementation commit
-`1163bd62a3573181766e58d595fbcc8594ac6e18`, has 23 ordered actor steps and 13
+`af54784f02e4675e25cd21925fd3c5d62cd0ed68`, has 23 ordered actor steps and 13
 single-use user checkpoint templates, and keeps all authority fields false. Its public
 metadata permits a supervisor start no later than `2026-08-12T05:15:19.646016Z`;
 expiry requires a new immutable bundle, plan, review and authorization.

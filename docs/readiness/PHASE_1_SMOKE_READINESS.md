@@ -81,11 +81,11 @@ Gate L2.3 has now validated the user's replacement private decision, selected
 one-way external archive copy, and rendered the exact executable-but-unauthorized
 manual plan. Its terminal state is
 `ready-for-manual-console-qualification-authorization`. Plan
-`PLAN-T07-GATE-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-V2`, run
-`RUN-T07-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-0002`, is at
-`containers/sira-smoke/lambda/manual-console/gate-l2m-host-qualification-plan-v2.json`,
-17,940 bytes, SHA-256
-`c73dba151ac6ca0f2c326ad486aaeac46c93e85f0e805eca9d87605d25e1724a`.
+`PLAN-T07-GATE-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-V3`, run
+`RUN-T07-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-0003`, is at
+`containers/sira-smoke/lambda/manual-console/gate-l2m-host-qualification-plan-v3.json`,
+21,641 bytes, SHA-256
+`1931fcacda4194063c0116ff9630d82f3b8f4ec07ff9b0310342335db629f654`.
 All plan authority fields and project execution permissions remain false. A fresh
 current-turn authorization must bind the final clean commit and start the supervisor
 no later than `2026-08-12T05:15:19.646016Z`; expiry requires a new metadata record,

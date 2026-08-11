@@ -3,9 +3,9 @@
 Status: **executable plan rendered; unauthorized; do not execute**
 
 This runbook describes the human side of active plan
-`PLAN-T07-GATE-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-V2`, run
-`RUN-T07-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-0002`. The plan is 17,940 bytes,
-SHA-256 `c73dba151ac6ca0f2c326ad486aaeac46c93e85f0e805eca9d87605d25e1724a`,
+`PLAN-T07-GATE-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-V3`, run
+`RUN-T07-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-0003`. The plan is 21,641 bytes,
+SHA-256 `1931fcacda4194063c0116ff9630d82f3b8f4ec07ff9b0310342335db629f654`,
 and all authority fields are false. Do not open the Lambda console, start the
 observer, use the credential, mutate a firewall/ruleset, launch an instance, open
 Jupyter, pull an image or run a container until the user supplies a fresh exact
@@ -67,9 +67,9 @@ containers/sira-smoke/lambda/manual-console/l23_supervisor_bootstrap.py
 --repository-root
 .
 --plan
-containers/sira-smoke/lambda/manual-console/gate-l2m-host-qualification-plan-v2.json
+containers/sira-smoke/lambda/manual-console/gate-l2m-host-qualification-plan-v3.json
 --plan-sha256
-c73dba151ac6ca0f2c326ad486aaeac46c93e85f0e805eca9d87605d25e1724a
+1931fcacda4194063c0116ff9630d82f3b8f4ec07ff9b0310342335db629f654
 --expected-commit
 <EXACT-FINAL-CLEAN-GATE-L2-3-HANDOFF-COMMIT>
 --authorization-reference
