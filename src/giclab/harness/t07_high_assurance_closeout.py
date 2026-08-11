@@ -109,6 +109,7 @@ class AuthoritativeFirewallDocuments:
     private_baseline: bytes = field(repr=False)
     restoration_payload: bytes = field(repr=False)
     canonical_report: bytes = field(repr=False)
+    public_structural_report: bytes = field(repr=False)
     adjudication: bytes = field(repr=False)
     raw_response: bytes = field(repr=False)
 
@@ -278,6 +279,12 @@ def build_authoritative_documents(
     )
     firewall.validate_canonical_report(canonical_report_document, repository_root=root)
     canonical_report = firewall.canonical_json_bytes(canonical_report_document)
+    public_structural_report = firewall.canonical_json_bytes(
+        firewall.render_public_structural_report(
+            canonical_report_document,
+            repository_root=root,
+        )
+    )
     baseline_document: dict[str, object] = {
         "schema_version": "0.1.0",
         "baseline_alias": baseline.alias,
@@ -400,6 +407,7 @@ def build_authoritative_documents(
         private_baseline,
         restoration_encoded,
         canonical_report,
+        public_structural_report,
         firewall.canonical_json_bytes(adjudication_document),
         evidence.raw_response,
     )
@@ -463,7 +471,7 @@ def _create_local_bundle(
             "offline-adjudication.json": documents.adjudication,
             "raw-global-firewall-response.json": documents.raw_response,
             "restoration-payload.json": documents.restoration_payload,
-            "sanitized-structural-report.json": documents.canonical_report,
+            "sanitized-structural-report.json": documents.public_structural_report,
         }
         for name, encoded in sorted(members.items()):
             _write_exclusive_at(staging_fd, name, encoded)
@@ -526,6 +534,21 @@ def _create_local_bundle(
         held_parent.close()
 
 
+def _verify_directory_members(directory_fd: int, members: Mapping[str, bytes]) -> None:
+    """Read every staged/final member before it can support a verified seal."""
+
+    for name, expected in sorted(members.items()):
+        observed = _read_regular_at(
+            directory_fd,
+            name,
+            max_bytes=MAX_CLOSEOUT_BUNDLE_BYTES,
+        )
+        if observed != expected or firewall.sha256_bytes(observed) != firewall.sha256_bytes(
+            expected
+        ):
+            raise HighAssuranceCloseoutError("offline closeout destination verification failed")
+
+
 def materialize_authoritative_baseline(
     repository_root: Path,
     *,
@@ -555,7 +578,7 @@ def materialize_authoritative_baseline(
         max_bytes=262_144,
     )
     if committed_adjudication != documents.adjudication or committed_report != (
-        documents.canonical_report
+        documents.public_structural_report
     ):
         raise HighAssuranceCloseoutError("committed public closeout evidence drifted")
     local_root, local_members, manifest, local_seal = _create_local_bundle(
@@ -609,6 +632,7 @@ def materialize_authoritative_baseline(
         )
         for name, encoded in sorted(local_members.items()):
             _write_exclusive_at(staging_fd, name, encoded)
+        _verify_directory_members(staging_fd, local_members)
         copy_record = firewall.canonical_json_bytes(
             {
                 "schema_version": "0.1.0",
@@ -658,8 +682,15 @@ def materialize_authoritative_baseline(
             raise HighAssuranceCloseoutError("offline closeout external bundle exceeds its cap")
         _write_exclusive_at(staging_fd, "COPY_RECORD.json", copy_record)
         _write_exclusive_at(staging_fd, "SEAL.json", external_seal)
+        finalized_members = {
+            **local_members,
+            "COPY_RECORD.json": copy_record,
+            "SEAL.json": external_seal,
+        }
+        _verify_directory_members(staging_fd, finalized_members)
         os.fsync(staging_fd)
         os.fchmod(staging_fd, 0o500)
+        os.fsync(staging_fd)
         os.rename(
             staging_name,
             archive_identity,
@@ -673,22 +704,7 @@ def materialize_authoritative_baseline(
             dir_fd=archive_root.descriptor,
         )
         try:
-            for name, expected in {
-                **local_members,
-                "COPY_RECORD.json": copy_record,
-                "SEAL.json": external_seal,
-            }.items():
-                observed = _read_regular_at(
-                    final_fd,
-                    name,
-                    max_bytes=MAX_CLOSEOUT_BUNDLE_BYTES,
-                )
-                if observed != expected or firewall.sha256_bytes(observed) != (
-                    firewall.sha256_bytes(expected)
-                ):
-                    raise HighAssuranceCloseoutError(
-                        "offline closeout destination verification failed"
-                    )
+            _verify_directory_members(final_fd, finalized_members)
         finally:
             os.close(final_fd)
         external_post, system_post = observer()
@@ -720,6 +736,8 @@ def materialize_authoritative_baseline(
         )
         try:
             _write_exclusive_at(local_fd, "EXTERNAL_COPY_VERIFICATION.json", local_verification)
+            os.fsync(local_fd)
+            os.fchmod(local_fd, 0o500)
             os.fsync(local_fd)
         finally:
             os.close(local_fd)

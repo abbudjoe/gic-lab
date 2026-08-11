@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import stat
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -31,6 +33,7 @@ def fixture_root(tmp_path: Path) -> Path:
     for relative in (
         firewall.BASELINE_SCHEMA_RELATIVE,
         firewall.CANONICAL_REPORT_SCHEMA_RELATIVE,
+        firewall.PUBLIC_STRUCTURAL_REPORT_SCHEMA_RELATIVE,
         firewall.RESTORATION_SCHEMA_RELATIVE,
         closeout.ADJUDICATION_SCHEMA_RELATIVE,
     ):
@@ -67,6 +70,7 @@ def synthetic_documents(tmp_path: Path) -> closeout.AuthoritativeFirewallDocumen
     )
     assert private_workspace.encode() in documents.private_baseline
     assert private_workspace.encode() not in documents.canonical_report
+    assert private_workspace.encode() not in documents.public_structural_report
     assert private_workspace.encode() not in documents.adjudication
     return documents
 
@@ -79,13 +83,17 @@ def test_additive_workspace_metadata_is_adjudicated_without_public_scalar() -> N
         "workspace_id": "PRIVATE-WORKSPACE-CANARY",
     }
     parsed = firewall.parse_global_firewall_response({"data": ruleset})
-    report = firewall.complete_canonical_report(
+    private_report = firewall.complete_canonical_report(
         parsed.parsed_ruleset.baseline,
         envelope=parsed.envelope,
         ruleset=parsed.parsed_ruleset.ruleset,
     )
+    report = firewall.render_public_structural_report(private_report, repository_root=ROOT)
     assert parsed.parsed_ruleset.extension_types == (("workspace_id", "string"),)
     assert report["compatible_top_level_extensions"] == [{"name": "workspace_id", "type": "string"}]
+    assert private_report["protocol_classes"] == ["tcp"]
+    assert report["protocol_class_count"] == 1
+    assert "protocol_classes" not in report
     assert "PRIVATE-WORKSPACE-CANARY" not in json.dumps(report, sort_keys=True)
 
 
@@ -146,15 +154,19 @@ def test_unknown_rule_field_still_blocks() -> None:
         )
 
 
-def test_authoritative_baseline_seals_and_copies_with_source_retained(
+def configure_synthetic_materialization(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
-) -> None:
+) -> tuple[
+    Path,
+    Path,
+    Callable[[], tuple[VolumeObservation, VolumeObservation]],
+]:
     root = fixture_root(tmp_path / "repository")
     documents = synthetic_documents(tmp_path / "documents")
     for relative, encoded in (
         (closeout.PUBLIC_ADJUDICATION_RELATIVE, documents.adjudication),
-        (closeout.PUBLIC_STRUCTURAL_REPORT_RELATIVE, documents.canonical_report),
+        (closeout.PUBLIC_STRUCTURAL_REPORT_RELATIVE, documents.public_structural_report),
     ):
         destination = root / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
@@ -238,20 +250,68 @@ def test_authoritative_baseline_seals_and_copies_with_source_retained(
         True,
         "synthetic-system",
     )
+    return (
+        root,
+        external / "GIC-Lab/t07/sealed-artifacts",
+        lambda: (external_observation, system_observation),
+    )
+
+
+def test_authoritative_baseline_seals_and_copies_with_source_retained(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    root, _archive_root, volume_observer = configure_synthetic_materialization(
+        monkeypatch,
+        tmp_path,
+    )
     seal = closeout.materialize_authoritative_baseline(
         root,
         implementation_commit="a" * 40,
-        volume_observer=lambda: (external_observation, system_observation),
+        volume_observer=volume_observer,
         entropy=lambda count: b"x" * count,
         utc_now=lambda: datetime(2026, 8, 11, tzinfo=UTC),
     )
     assert seal.destination_hashes_verified is True
     assert seal.source_retained is True
     assert (seal.local_root / "BASELINE_SEAL.json").is_file()
+    assert stat.S_IMODE(seal.local_root.stat().st_mode) == 0o500
     assert (seal.external_root / "SEAL.json").is_file()
     assert hashlib.sha256((seal.external_root / "SEAL.json").read_bytes()).hexdigest() == (
         seal.external_seal_sha256
     )
+
+
+def test_staging_readback_failure_cannot_publish_a_verified_bundle(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    root, archive_root, volume_observer = configure_synthetic_materialization(
+        monkeypatch,
+        tmp_path,
+    )
+    real_read = closeout._read_regular_at
+
+    def corrupt_one_staged_member(directory_fd: int, name: str, *, max_bytes: int) -> bytes:
+        observed = real_read(directory_fd, name, max_bytes=max_bytes)
+        if name == "canonical-report.json":
+            return observed + b"corruption"
+        return observed
+
+    monkeypatch.setattr(closeout, "_read_regular_at", corrupt_one_staged_member)
+    with pytest.raises(closeout.HighAssuranceCloseoutError, match="destination verification"):
+        closeout.materialize_authoritative_baseline(
+            root,
+            implementation_commit="a" * 40,
+            volume_observer=volume_observer,
+            entropy=lambda count: b"y" * count,
+            utc_now=lambda: datetime(2026, 8, 11, tzinfo=UTC),
+        )
+    children = tuple(archive_root.iterdir())
+    assert children
+    assert all(child.name.startswith(".") for child in children)
+    assert all(not (child / "COPY_RECORD.json").exists() for child in children)
+    assert all(not (child / "SEAL.json").exists() for child in children)
 
 
 def test_burned_capture_and_scientific_inputs_remain_immutable() -> None:
@@ -268,6 +328,19 @@ def test_burned_capture_and_scientific_inputs_remain_immutable() -> None:
         == closeout.CAPTURE_RAW_SHA256
     )
     closeout.verify_scientific_locks(ROOT)
+
+
+def test_sealed_private_canonical_v1_remains_valid_under_its_unchanged_schema() -> None:
+    assert (
+        hashlib.sha256((ROOT / firewall.CANONICAL_REPORT_SCHEMA_RELATIVE).read_bytes()).hexdigest()
+        == "3fad2ca8f48845fd7394cbd29357f47f9a6be2db90e740a5eb1faa915a8b9a22"
+    )
+    private_report = json.loads(
+        (ROOT / closeout.LOCAL_ROOT_RELATIVE / "canonical-report.json").read_bytes()
+    )
+    firewall.validate_canonical_report(private_report, repository_root=ROOT)
+    assert private_report["schema_version"] == "0.1.0"
+    assert "protocol_classes" in private_report
 
 
 def test_closeout_has_no_external_or_experimental_execution_surface() -> None:
@@ -343,4 +416,9 @@ def test_real_private_firewall_scalars_do_not_enter_public_closeout_surfaces() -
         for relative in public_paths
         if (ROOT / relative).is_file()
         for sensitive in encoded_values
+    )
+    structural_report = (ROOT / closeout.PUBLIC_STRUCTURAL_REPORT_RELATIVE).read_bytes()
+    assert all(
+        json.dumps(private_rule["protocol"]).encode() not in structural_report
+        for private_rule in raw["rules"]
     )

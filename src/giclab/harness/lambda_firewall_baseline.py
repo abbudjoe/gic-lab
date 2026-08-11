@@ -71,6 +71,10 @@ BASELINE_SCHEMA_RELATIVE: Final = Path("schemas/t07-lambda-firewall-baseline.sch
 CANONICAL_REPORT_SCHEMA_RELATIVE: Final = Path(
     "schemas/t07-lambda-firewall-canonical-report.schema.json"
 )
+PUBLIC_STRUCTURAL_REPORT_SCHEMA_RELATIVE: Final = Path(
+    "schemas/t07-lambda-firewall-public-structural-report.schema.json"
+)
+PUBLIC_STRUCTURAL_REPORT_VERSION: Final = "t07-firewall-public-structural-v1"
 RESTORATION_SCHEMA_RELATIVE: Final = Path(
     "schemas/t07-lambda-firewall-restoration-payload.schema.json"
 )
@@ -614,6 +618,47 @@ def validate_canonical_report(report: Mapping[str, object], *, repository_root: 
         or type(extension_observed) is not bool
     ):
         raise FirewallBaselineError("complete canonical report lacks lossless evidence invariants")
+
+
+def render_public_structural_report(
+    canonical_report: Mapping[str, object],
+    *,
+    repository_root: Path,
+) -> dict[str, object]:
+    """Derive the separately versioned value-free public report.
+
+    The private canonical v1 report remains reconstructable and may record observed
+    documented enum values.  This public surface removes those values and exposes only
+    their class count, along with key names, JSON types, counts, aliases and hashes.
+    """
+
+    validate_canonical_report(canonical_report, repository_root=repository_root)
+    protocol_classes = _sequence(
+        canonical_report.get("protocol_classes"),
+        context="private canonical protocol classes",
+    )
+    public = {
+        key: value
+        for key, value in canonical_report.items()
+        if key not in {"schema_version", "protocol_classes"}
+    }
+    public.update(
+        {
+            "schema_version": "0.2.0",
+            "report_version": PUBLIC_STRUCTURAL_REPORT_VERSION,
+            "protocol_class_count": len(protocol_classes),
+        }
+    )
+    schema, _schema_sha256 = _load_schema(
+        repository_root,
+        PUBLIC_STRUCTURAL_REPORT_SCHEMA_RELATIVE,
+    )
+    if next(Draft202012Validator(schema).iter_errors(public), None) is not None:
+        raise FirewallBaselineError("public firewall structural report failed its schema")
+    rule_count = public.get("rule_count")
+    if type(rule_count) is not int or len(protocol_classes) > rule_count:
+        raise FirewallBaselineError("public firewall protocol class count drifted")
+    return public
 
 
 @dataclass(frozen=True, slots=True)

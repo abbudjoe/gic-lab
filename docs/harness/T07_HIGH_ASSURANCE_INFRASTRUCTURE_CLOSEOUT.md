@@ -1,6 +1,6 @@
 # T07 high-assurance infrastructure closeout
 
-Status: **candidate closeout; private materialization pending**
+Status: **high-assurance-infrastructure-frozen; bounded-smoke-fork-ready**
 
 Date: 2026-08-11
 
@@ -37,10 +37,14 @@ Public-safe records:
 - `docs/harness/evidence/T07_FIREWALL_CAPTURE_0001_OFFLINE_ADJUDICATION.json`,
   SHA-256 `894d609ff45aa3e3d1d9ea73da175c32198fc336cebe629e7124ae2841304cd5`;
 - `docs/harness/evidence/T07_FIREWALL_CAPTURE_0001_STRUCTURAL_REPORT.json`,
-  SHA-256 `3d1082138711560b809276d46912c22e8b6dedec8323f1323729356aebbc4887`.
+  version `t07-firewall-public-structural-v1`, SHA-256
+  `842fb662592364a485c1f67306469c7af12d0759614faa6505b135daecc631e7`,
+  under schema SHA-256
+  `2a7eb28f6104d8b0664ca52f1e1ff96a7747e59b81efa421a6714f4e565cbc34`.
 
 No private firewall scalar, workspace identity, provider resource value, or source
-network is present in either record.
+network is present in either record. Even documented protocol values are reduced to a
+class count on this public surface.
 
 ## Authoritative private baseline
 
@@ -48,13 +52,16 @@ network is present in either record.
 |---|---|
 | Canonicalization version | `t07-firewall-canonical-v1` |
 | Response parser version | `t07-firewall-response-v2` |
+| Private canonical-report schema | version `0.1.0`, SHA-256 `3fad2ca8f48845fd7394cbd29357f47f9a6be2db90e740a5eb1faa915a8b9a22` |
 | Baseline alias | `l2m-firewall-baseline-b0ef71115811` |
 | Canonical semantic SHA-256 | `b0ef711158113cdbdbb1707cb43f21a635271bb2e93bfc0e898ce7118589f764` |
 | Restoration payload alias | `l2m-firewall-restoration-50ca7febe9f1` |
 | Restoration payload SHA-256 | `50ca7febe9f160ada862371376485ea2ece11b373d25179ccd578d9c7acd42b8` |
-| Local baseline-seal SHA-256 | `<PENDING_PRIVATE_MATERIALIZATION>` |
-| External copy-record SHA-256 | `<PENDING_PRIVATE_MATERIALIZATION>` |
-| External seal SHA-256 | `<PENDING_PRIVATE_MATERIALIZATION>` |
+| Materialization implementation commit | `2d5e56e6f87b51db216b9fbcfbd86bc3139c667d` |
+| Local baseline-seal SHA-256 | `42715c31d733a5cd23ed06dc47babb112ddf15060c246c7c941fac878282bf7a` |
+| External archive alias | `l2m-firewall-closeout-57bba4b4c13d` |
+| External copy-record SHA-256 | `2103eeba6a6da90839ed7f0d66fcc20434c8b1f963aae448dddfd33ed7449825` |
+| External seal SHA-256 | `e2b78b6d30ef1f7c4c39ca92eb91b450897663a044ab16aa45240220bbef670a` |
 
 The private baseline retains the exact provider response and every rule value. Its
 restoration payload contains only protocol, port range when applicable, source
@@ -62,17 +69,26 @@ network, and exact description. Rule order is non-authoritative; duplicate
 multiplicity and every description/protocol/port/source semantic are authoritative.
 Missing and empty descriptions are distinct. Unknown rule-level fields fail closed.
 
-The local source is retained. The final bundle must be copied one way through held
+The local source is retained. The final bundle was copied one way through held
 no-follow APFS descriptors, fsynced, atomically finalized, hash-verified, and sealed
-on the approved external archive with no internal fallback.
+on the approved external archive with no internal fallback. No account request,
+secret access, cloud mutation or billable work occurred during materialization.
 
 ## Completed controls and terminal negative results
 
-Reusable completed controls include immutable GPT-4o snapshot routing, exact
-reactive/simulative command comparison, aggregate and per-condition budgets, isolated
-secret handling, fresh attempt roots, raw log/session retention, durable request
-ledgers, read-only Lambda inventory, evidence hashing, provider termination checks,
-and the repaired firewall baseline.
+Empirically completed evidence is limited to the authorized read-only Lambda
+inventories/fingerprint/firewall requests, their durable ledgers, the retained raw
+firewall response, and the actual local/external hash-sealing operations. No instance
+or workload existed, so there is no empirical provider-termination or runtime-cleanup
+qualification.
+
+Reusable, fake-tested control-plane implementations include immutable GPT-4o snapshot
+routing, exact reactive/simulative command comparison, aggregate and per-condition
+budgets, isolated secret handling, fresh attempt roots, raw log/session retention,
+durable request ledgers, evidence hashing, provider-terminal/absence verifier logic,
+and the repaired firewall parser/baseline. A bounded child must qualify every control
+whose effect depends on its selected live topology; fake tests are not kernel,
+provider, browser, model, or scientific evidence.
 
 The terminal negative results remain evidence:
 

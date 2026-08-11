@@ -187,14 +187,17 @@ def test_additive_ruleset_metadata_is_compatible_and_publicly_value_free() -> No
     }
     parsed = baseline.parse_global_firewall_response({"data": ruleset})
     assert parsed.parsed_ruleset.extension_types == (("workspace_id", "string"),)
-    report = baseline.complete_canonical_report(
+    private_report = baseline.complete_canonical_report(
         parsed.parsed_ruleset.baseline,
         envelope=parsed.envelope,
         ruleset=parsed.parsed_ruleset.ruleset,
     )
-    baseline.validate_canonical_report(report, repository_root=ROOT)
+    report = baseline.render_public_structural_report(private_report, repository_root=ROOT)
+    assert private_report["protocol_classes"] == ["tcp"]
     assert report["compatible_top_level_extensions"] == [{"name": "workspace_id", "type": "string"}]
     assert report["compatible_extension_observed"] is True
+    assert report["protocol_class_count"] == 1
+    assert "protocol_classes" not in report
     assert private_workspace_value not in json.dumps(report, sort_keys=True)
 
 

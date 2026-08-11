@@ -26,6 +26,12 @@ authorizes execution.
 
 ## Reusable controls
 
+The following are reusable implementations, schemas or evidence patterns—not blanket
+empirical qualification. The read-only account evidence and actual archive copies are
+observed; model routing, workload capture, runtime cleanup and provider termination
+controls are fake-tested/control-plane evidence until the child qualifies them under
+its concrete topology.
+
 - immutable `gpt-4o-2024-11-20` routing across every SiRA model-using module;
 - exact reactive versus simulative command/configuration comparison;
 - aggregate and per-condition API cost, token, wall, browser, call, and output caps;
@@ -35,7 +41,8 @@ authorizes execution.
 - append-only/fsync-backed request observability;
 - sealed read-only Lambda inventory and resource aliases;
 - artifact manifests and SHA-256 verification; 
-- provider-side terminal/absence verification for billable resources; and
+- provider-side terminal/absence verifier logic, requiring fresh empirical
+  qualification for the selected billable resource; and
 - baseline `l2m-firewall-baseline-b0ef71115811`, canonical semantic SHA-256
   `b0ef711158113cdbdbb1707cb43f21a635271bb2e93bfc0e898ce7118589f764`, with
   description-aware restoration payload semantics.
