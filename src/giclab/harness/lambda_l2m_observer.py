@@ -126,13 +126,13 @@ _BOUND_HOST_EVIDENCE_SCHEMA_RELATIVE_PATH: Final = Path(
     "schemas/t07-lambda-l2m-host-evidence.schema.json"
 )
 _BOUND_HOST_EVIDENCE_SCHEMA_SHA256: Final = (
-    "8311ff4dcc82df5bf8272f549119c13fa37baf9ef46e41cea5c3629b11253ef3"
+    "5c74fb37b81be2ae3fa2563a5b7508f13d19d2dd764a475e5c07e45b369bd195"
 )
 _BOUND_OBSERVER_JOURNAL_SCHEMA_RELATIVE_PATH: Final = Path(
     "schemas/t07-lambda-l2m-observer-journal.schema.json"
 )
 _BOUND_OBSERVER_JOURNAL_SCHEMA_SHA256: Final = (
-    "c9d5fef455c35ce0e8f957fe54040464a641ce10a57a95feadb09f24d3c1bf9f"
+    "5de43193d400e067ce84acd19dfba0128125cf79d3bc6d862176e7895d20473e"
 )
 
 _SHA256 = re.compile(r"^[a-f0-9]{64}$")
