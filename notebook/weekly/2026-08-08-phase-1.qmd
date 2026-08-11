@@ -107,3 +107,14 @@ user's private selection requires a new decision. The state is therefore
 `blocked-human-image-selection`, with no executable plan or authorization. Offline
 checkpoint/observer contracts and a deterministic qualification bundle were added;
 nothing was uploaded, launched, connected to, or executed.
+
+Gate L2.3 later validated the replacement decision without publishing its network or
+provider identifiers and sealed the private binding locally and to the approved
+external archive. The selected public aliases are `img-0032` / Lambda Stack 22.04 /
+`22.4.5-2141`, `gpu_1x_a10`, `us-east-1`, and launch-only key name
+`fractal-lambda-codex`. It rendered one 23-step, 13-checkpoint manual-console plan,
+`PLAN-T07-GATE-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-V1`, but every authority field
+remains false. The plan expires before credential access if not started by its fixed
+metadata deadline. No account/model request, secret access, cloud mutation, paid
+compute, SSH, Jupyter, image pull, container, browser, SiRA condition, or scientific
+execution occurred. This remains infrastructure planning, not experimental evidence.

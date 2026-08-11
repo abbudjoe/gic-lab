@@ -1,10 +1,10 @@
 # Phase 1 SiRA Smoke Readiness
 
-Status: **profile eligible; Gate L2M blocked on human image selection; not authorized**
+Status: **profile eligible; Gate L2M ready for exact authorization; not authorized**
 
 Prepared: 2026-08-08
 
-Updated: 2026-08-10
+Updated: 2026-08-11
 
 ## Exact next run plan
 
@@ -76,10 +76,20 @@ sealed inventory contains four x86-64 Lambda Stack 22.04 regional candidates in
 `us-east-1`; `img-0032` / `22.4.5-2141` ranks first. Static source evidence does not
 prove type-specific launch-wizard offeredness, so any future transaction must stop
 before Launch unless the approved alias is offered after exact type/region selection.
-Because the existing private decision remains
-`img-0111`, the exact terminal state is `blocked-human-image-selection`. No executable
-manual plan or authorization block exists. The user must make a new private image and
-manual-action decision before a fresh materialization/review could propose execution.
+Gate L2.3 has now validated the user's replacement private decision, selected
+`img-0032`, resolved raw resources only into ignored sealed parameters, verified the
+one-way external archive copy, and rendered the exact executable-but-unauthorized
+manual plan. Its terminal state is
+`ready-for-manual-console-qualification-authorization`. Plan
+`PLAN-T07-GATE-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-V1`, run
+`RUN-T07-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-0001`, is at
+`containers/sira-smoke/lambda/manual-console/gate-l2m-host-qualification-plan-v1.json`,
+21,638 bytes, SHA-256
+`2b23021800358d476d3ad9ed2818d6992804ae54b5fb13df7b3b860846e2f99b`.
+All plan authority fields and project execution permissions remain false. A fresh
+current-turn authorization must bind the final clean commit and start the supervisor
+no later than `2026-08-12T05:15:19.646016Z`; expiry requires a new metadata record,
+bundle, plan and review.
 
 ## Exact user decision fields
 
@@ -206,12 +216,12 @@ the EXP-0001 hypothesis or any RQ-H2K outcome.
 - T07 Lambda capacity and price were observed and the candidate, SSH key, firewall,
   private `/32`, and host-key method were validated and privately sealed. Gate L2's
   automated API-launch design ended at `manual-console-launch-required`; the offline
-  supervisor/watchdog primitives are not execution authority. Gate L2.2 then stopped
-  at `blocked-human-image-selection`: Lambda Stack 22.04 regional candidates exist, but
-  changing from the selected GPU Base image needs a new private user decision.
-  Approval would still require fresh materialization, plan/run identities, review,
-  and current-turn authority. SR²AM T11/T12 remain scientifically and operationally
-  separate.
+  supervisor/watchdog primitives are not execution authority. Gate L2.3 has now
+  validated/sealed the complete replacement human decision and issued the fresh
+  unauthorized plan above. The remaining blockers are an exact current-turn Gate L2M
+  authorization, an unexpired start, fresh preflight/storage/secret checks, visible
+  launch-wizard offeredness, and successful user-operated cleanup/evidence sealing.
+  SR²AM T11/T12 remain scientifically and operationally separate.
 - RQ-H2K external-versus-explicit-model comparison feasibility remains undetermined.
   Missing optional regulation fields do not invalidate EXP-0001 when its primary
   evidence contract is complete.

@@ -7,10 +7,11 @@ Gate L2.0 ended at `blocked-human-or-source-decision`; its proposed V1 plan/run
 identities were rejected and must not be reused. Gate L2.1's independent review then
 terminated the automated API-launch path at `manual-console-launch-required`; its
 draft V2 identities are also rejected. Gate L2.2 subsequently stopped the
-human-console/Jupyter route at `blocked-human-image-selection`; the regional candidate
-`img-0032` Lambda Stack recommendation is not a selection and no executable plan
-exists. Gate L3 still requires a future, separately reviewed and authorized
-human-operated Gate L2 run with
+human-console/Jupyter route at `blocked-human-image-selection`. Gate L2.3 has now
+validated the user's private `img-0032` selection and rendered
+`PLAN-T07-GATE-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-V1`, but that plan remains
+unauthorized and unexecuted. Gate L3 still requires a separately authorized and
+successful human-operated Gate L2M run with
 externally sealed success evidence, exact provider termination, restored firewall
 state, and zero owned residue. The proposed BusyBox probe is a non-executable Gate L2
 design input only and cannot substitute for the three Gate L3 image/browser/
@@ -18,9 +19,10 @@ dummy-secret probes.
 
 This document supersedes `docs/harness/T07_GATE_B2B_REQUIREMENTS.md` only for the
 selected future Lambda x86_64 topology. The older local/arm64 document remains
-terminal rejected provenance and is not rewritten. This document has no plan ID,
-plan hash, account/instance binding, command arrays, authorization reference, or
-authorization block.
+terminal rejected provenance and is not rewritten. This document has no Gate L3 plan
+ID, plan hash, account/instance binding, command array, authorization reference or
+authorization block. Gate L2M's separate plan and private binding cannot become Gate
+L3 authority.
 
 ## Entry conditions
 
@@ -29,8 +31,8 @@ schema-valid evidence of:
 
 - exact sealed Gate L1 authorization/plan/commit/ledger plus selected Lambda
   type/region/image/key/ruleset/price/instance identity;
-- explicit private approval of a Jupyter-capable Lambda Stack 22.04 image, rather than
-  inference from Gate L2.2's unselected recommendation;
+- the private approval of `img-0032` / Lambda Stack 22.04 / `22.4.5-2141` bound by
+  Gate L2.3, plus the pre-mutation launch-wizard offeredness checkpoint;
 - x86_64 OS/kernel and private PID/cgroup/IPC behavior;
 - exact Docker client/server, containerd, runc, cgroup driver and log driver;
 - one immutable BusyBox containment probe with bounded stop/KILL cleanup and zero

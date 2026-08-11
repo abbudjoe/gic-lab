@@ -65,7 +65,7 @@ grant no mutation authority; one gate's authorization never carries into another
 
 | Task | Work package | Mapped phase DoD | Current permission |
 |---|---|---|---|
-| T07 | Execute one authorized contained SiRA smoke pair; capture regulation-decision evidence without interpretation. | P1-DOD-02, P1-DOD-11 through P1-DOD-13 | Gate L1/L1A complete/sealed; manual Gate L2M blocked at `blocked-human-image-selection` |
+| T07 | Execute one authorized contained SiRA smoke pair; capture regulation-decision evidence without interpretation. | P1-DOD-02, P1-DOD-11 through P1-DOD-13 | Gate L1/L1A complete/sealed; Gate L2M exact manual plan ready but unauthorized |
 | T08 | Analyze smoke infrastructure evidence and prepare an unauthorized pilot package. | P1-DOD-03, P1-DOD-11 through P1-DOD-13 | blocked until T07 succeeds |
 | T09 | Execute the freshly authorized exploratory SiRA pilot. | P1-DOD-04, P1-DOD-11 through P1-DOD-13 | blocked until T08 and authorization |
 | T10 | Analyze and publish the exploratory SiRA pilot. | P1-DOD-05, P1-DOD-11 through P1-DOD-13 | blocked until T09 succeeds |
@@ -81,7 +81,7 @@ and an analysis recommendation does not authorize the next execution.
 ## T07 assembly control
 
 Assembly status: **Gate L1/L1A complete and sealed; Gate L2.1 terminated automated
-launch; Gate L2.2 manual/Jupyter design blocked at `blocked-human-image-selection`**
+launch; Gate L2.3 rendered an exact manual/Jupyter plan that remains unauthorized**
 
 Exact next profile: `PLAN-EXP0001-SMOKE`.
 
@@ -447,6 +447,16 @@ completed L2M authorization must be closed and reset rather than reused by L3 or
   deterministic Jupyter qualification bundle were added, but no executable plan or
   authorization block exists and no account, mutation, paid-compute, SSH, Jupyter,
   container, browser, model, SiRA, or scientific action occurred.
+- 2026-08-11: Gate L2.3 validated the new private image/manual-action decision,
+  resolved private image/key/firewall/IP and ownership bindings only into ignored
+  sealed evidence, verified a one-way APFS archive copy, and rendered plan
+  `PLAN-T07-GATE-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-V1` / run
+  `RUN-T07-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-0001`. The 21,638-byte plan has
+  SHA-256 `2b23021800358d476d3ad9ed2818d6992804ae54b5fb13df7b3b860846e2f99b`,
+  23 ordered actor steps, 13 user checkpoint templates, zero automated mutations and
+  an expiry-before-credential guard. It remains unauthorized; no account/model
+  request, secret access, cloud mutation, paid compute, SSH, Jupyter, pull, container,
+  browser, SiRA or scientific action occurred.
 
 ## Decision log
 
@@ -505,21 +515,30 @@ completed L2M authorization must be closed and reset rather than reused by L3 or
   `blocked-human-image-selection`. Recommend but do not select `img-0032` /
   Lambda Stack 22.04 / `22.4.5-2141`; create no executable plan until the user makes
   a new private image and manual-action decision.
+- 2026-08-11: Under D-029, accept the separately supplied private Gate L2M decision,
+  publish only aliases/hashes, and render one exact executable-but-unauthorized
+  manual-console transaction. Keep user console mutations separate from the GET-only
+  observer, restrict incident termination to ruleset-bound private IDs, require exact
+  restoration/sealing, and expire the plan rather than using stale public metadata.
 
 ## Blockers and user actions
 
 T07 has no selected local runtime and no executable local B2a plan. Docker Desktop and
 Colima/Lima remain terminal rejected provenance. The Lambda inventory and L1A key
 evidence are complete, sealed, and nonreplayable. Gate L2.1 rejected automated API
-launch. Gate L2.2 found a source-supported manual/Jupyter topology but cannot replace
-the user's GPU Base selection: `img-0032` / Lambda Stack 22.04 / `22.4.5-2141`
-requires a new private human decision. L3/L4 remain unauthorized.
+launch. Gate L2.3 resolved the later private decision and now has one exact
+manual/Jupyter plan, but it remains unauthorized. It must begin before
+`2026-08-12T05:15:19.646016Z`, pass fresh repository/secret/storage/account/
+offeredness preflight, remain within USD 2.00 and 3,600 provider seconds, and complete
+manual termination/firewall restoration plus verified evidence sealing. L3/L4 remain
+unauthorized.
 
 ## Next permitted work
 
-There is no further local B1.x, Gate L1, or automated Gate L2 design loop and no Gate
-L2 plan that can be authorized. The next permissible input is the user's private
-approval or rejection of the recommended Lambda Stack image plus the complete manual
-action set. Approval still requires offline materialization, fresh plan/run identities,
-current revalidation, review, and a separate authorization before any console action.
-Gate L3 B2b qualification, Gate L4, both SiRA conditions, and the smoke remain blocked.
+There is no further local B1.x, Gate L1, or automated Gate L2 design loop. The next
+permissible live input is a fresh exact user authorization of the final clean commit,
+the Gate L2M V1 plan/hash, sealed decision binding, GET-only observer, explicit manual
+console actions, cost/wall/evidence caps and cleanup contract. If the latest-safe start
+passes first, the next permitted work is instead a new bounded metadata/bundle/plan
+materialization and review with no mutation. Gate L3 B2b qualification, Gate L4, both
+SiRA conditions, and the smoke remain blocked.

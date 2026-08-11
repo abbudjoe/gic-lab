@@ -4239,7 +4239,7 @@ def test_l2m_default_diskutil_driver_uses_six_exact_bounded_reads(
     assert len(parsed) == 4
 
 
-def test_cost_wall_arithmetic_and_blocked_plan_absence() -> None:
+def test_cost_wall_arithmetic_and_rejected_automated_plan_absence() -> None:
     assert billed_list_cost_cents(1_800) == 65
     assert billed_list_cost_cents(2_400) == 86
     assert billed_list_cost_cents(3_600) == 129
@@ -4253,7 +4253,9 @@ def test_cost_wall_arithmetic_and_blocked_plan_absence() -> None:
     assert caps["observer_archive_seconds"] == 300
     assert caps["automated_cloud_mutations"] == caps["ssh_operations"] == caps["model_calls"] == 0
     assert TERMINAL_DECISION == "blocked-human-image-selection"
-    assert not list(BUNDLE.glob("*plan*.json"))
+    assert not (BUNDLE / "gate-l2-host-qualification-plan.json").exists()
+    assert not (BUNDLE / "gate-l2-host-qualification-plan-v2.json").exists()
+    assert (BUNDLE / "gate-l2m-host-qualification-plan-v1.json").is_file()
 
 
 def test_locked_science_and_prior_evidence_hashes_remain_exact() -> None:

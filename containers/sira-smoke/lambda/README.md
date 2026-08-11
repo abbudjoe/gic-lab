@@ -92,10 +92,11 @@ identities.
 
 Gate L2.2 has now evaluated that topology offline. `manual-console/` contains the
 sanitized image decision, current first-party source/OCI observations, deliberately
-invalid private-decision template, deterministic Jupyter upload bundle, and no plan.
+invalid private-decision template, and deterministic Jupyter upload bundle. That
+historical gate created no plan.
 The existing `img-0111` GPU Base decision lacks a documented JupyterLab guarantee;
 `img-0032` / Lambda Stack 22.04 / `22.4.5-2141` is recommended but unselected.
-Accordingly the current state is `blocked-human-image-selection`. The observer module
+Accordingly Gate L2.2 ended at `blocked-human-image-selection`. Its observer module
 is inert on import and exposes only an explicitly constructed, in-process GET
 transport plus a status/content/pagination-checking checkpoint engine; it has no
 mutation, shell HTTP, SSH, Jupyter, or browser boundary. Request authority and
@@ -115,3 +116,28 @@ BusyBox observation; the driver validates that record and a maximum 86,400-secon
 before any Docker call, while separately recording that it makes no live metadata
 request. An expired record requires a newly hashed and reviewed bundle. The bundle has
 not been uploaded or run.
+
+Gate L2.3 subsequently validated the user's replacement private decision, selected
+`img-0032` / Lambda Stack 22.04 / `22.4.5-2141`, resolved raw image/key/firewall/IP
+bindings only into ignored sealed evidence, and verified a one-way external copy. The
+public decision and marker aliases are `l2m-decision-6b7af4f2c567` and
+`l2m-marker-dfc9017f4bc5`; no private scalar or path is public.
+
+`manual-console/gate-l2m-host-qualification-plan-v1.json` is now the exact
+executable-but-unauthorized plan: 21,638 bytes, SHA-256
+`2b23021800358d476d3ad9ed2818d6992804ae54b5fb13df7b3b860846e2f99b`, plan
+`PLAN-T07-GATE-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-V1`, run
+`RUN-T07-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-0001`. It binds 23 ordered actor
+steps, 13 user checkpoint templates, a GET-only observer, exact caps and incident
+cleanup. User actions are console-only; automated cloud mutation remains zero. The
+L2.3 supervisor expands the historical five-observation preflight to six ordered
+GETs, then performs one separately journaled fresh original-global-firewall GET before
+the first mutation. Its complete 44-GET partition is 6 preflight, 1 original-global
+seal, 1 restricted-global verification, 1 ruleset bind, 9 instance bind, 10 terminal
+verification, 2 ruleset absence, 1 restoration and 13 incident; Cloud IDE and local
+qualification use zero Lambda GETs. The plan also binds every Docker, container,
+phase-deadline, remote/local evidence and BusyBox-download cap rather than leaving
+those controls solely in prose or bundle code. The
+plan must start by `2026-08-12T05:15:19.646016Z` after a fresh exact authorization or
+be replaced rather than edited. Nothing has been launched, uploaded, pulled or run;
+Gate L3 and Gate L4 remain blocked.

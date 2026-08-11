@@ -1,0 +1,546 @@
+{
+  "actors": {
+    "host-bundle": "one deterministic qualification command inside Jupyter",
+    "observer": "read-only Lambda GETs and local validation/sealing",
+    "user": "console mutations and Jupyter interaction"
+  },
+  "authorization": {
+    "authorization_reference": "AUTH-T07-GATE-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-V1-PENDING",
+    "authorized": false,
+    "cloud_mutation_allowed": false,
+    "paid_compute_allowed": false,
+    "prototype_execution_allowed": false,
+    "scientific_interpretation_allowed": false
+  },
+  "caps": {
+    "aggregate_response_bytes": 16777216,
+    "automated_cloud_mutations": 0,
+    "automatic_retries": 0,
+    "browser_automation_actions": 0,
+    "busybox_layer_bytes": 2211507,
+    "checkpoint_window_seconds": 300,
+    "cloud_ide_availability_seconds": 600,
+    "container_cpu_millis": 1000,
+    "container_log_max_bytes": 1048576,
+    "container_log_max_files": 1,
+    "container_memory_bytes": 536870912,
+    "container_memory_swap_bytes": 536870912,
+    "container_network_mode": "none",
+    "container_pids_limit": 64,
+    "container_shm_bytes": 16777216,
+    "container_tmpfs_bytes_each": 16777216,
+    "container_tmpfs_mounts": 2,
+    "create_outcome_poll_interval_seconds": 1,
+    "create_outcome_poll_observations": 5,
+    "create_outcome_stable_absence_observations": 3,
+    "docker_call_output_bytes": 1048576,
+    "docker_calls": 32,
+    "docker_cleanup_reserved_calls": 10,
+    "docker_cleanup_reserved_output_bytes": 1048576,
+    "docker_ordinary_output_bytes": 7340032,
+    "docker_ordinary_work_calls": 22,
+    "docker_output_bytes": 8388608,
+    "docker_total_wall_seconds": 300,
+    "docker_work_wall_seconds": 270,
+    "evidence_download_validation_seconds": 300,
+    "external_archive_bytes": 41943040,
+    "firewall_cleanup_seconds": 300,
+    "fixture_wall_seconds": 30,
+    "hard_wall_modeled_list_cost_cents": 129,
+    "incident_headroom_seconds": 900,
+    "launch_clicks": 1,
+    "launch_to_active_seconds": 600,
+    "local_process_calls": 16,
+    "local_process_output_bytes": 4194304,
+    "local_sealed_evidence_bytes": 41943040,
+    "local_source_evidence_bytes": 41943040,
+    "mac_active_evidence_bytes": 83886080,
+    "minimum_request_spacing_seconds": 1,
+    "model_calls": 0,
+    "model_tokens": 0,
+    "normal_instance_count": 1,
+    "normal_modeled_list_cost_cents": 86,
+    "normal_termination_click_seconds": 1800,
+    "observer_active_seconds": 6000,
+    "observer_archive_seconds": 300,
+    "observer_event_bytes": 4096,
+    "observer_events": 512,
+    "observer_journal_bytes": 2097152,
+    "observer_post_provider_cleanup_seconds": 1200,
+    "observer_prelaunch_seconds": 1200,
+    "observer_request_seconds": 60,
+    "observer_total_wall_seconds": 6300,
+    "pagination_requests": 0,
+    "persistent_filesystem_count": 0,
+    "phase_get_limits": {
+      "cloud_ide_checkpoint": 0,
+      "global_restore": 1,
+      "global_restricted_verify": 1,
+      "incident": 13,
+      "instance_bind": 9,
+      "original_global_seal": 1,
+      "preflight": 6,
+      "qualification_local": 0,
+      "ruleset_absence": 2,
+      "ruleset_bind": 1,
+      "termination_verify": 10
+    },
+    "private_observation_aggregate_bytes": 16777216,
+    "private_observation_bytes_per_file": 1048576,
+    "private_observation_files": 44,
+    "provider_cost_usd": 2.0,
+    "provider_hard_wall_seconds": 3600,
+    "qualification_archive_bytes": 16777216,
+    "qualification_command_seconds": 300,
+    "qualification_containers": 1,
+    "qualification_files": 16,
+    "qualification_unpacked_bytes": 33554432,
+    "read_only_lambda_gets": 44,
+    "redirect_follows": 0,
+    "remote_aggregate_retained_bytes": 68157440,
+    "remote_archive_bytes_per_evidence_set": 16777216,
+    "remote_archive_retained_bytes": 33554432,
+    "remote_source_bytes_per_evidence_set": 16777216,
+    "remote_source_retained_bytes": 34603008,
+    "response_bytes_per_get": 1048576,
+    "sira_executions": 0,
+    "ssh_operations": 0,
+    "termination_verification_seconds": 600
+  },
+  "checkpoints": {
+    "consumption_ledger_bytes": 262144,
+    "count": 13,
+    "maximum_bytes_each": 16384,
+    "private_nonce_bound": true,
+    "schema_path": "schemas/t07-lambda-l2m-checkpoint.schema.json",
+    "schema_sha256": "a55f9023f8cc8f530acebe31bbe7b50c57d1e1a01b959ced38876e43e0f108ff",
+    "single_use": true,
+    "templates": [
+      "containers/sira-smoke/lambda/manual-console/checkpoints/01-launch_wizard_image_offered.json",
+      "containers/sira-smoke/lambda/manual-console/checkpoints/02-global_firewall_restricted.json",
+      "containers/sira-smoke/lambda/manual-console/checkpoints/03-regional_ruleset_created.json",
+      "containers/sira-smoke/lambda/manual-console/checkpoints/04-launch_configuration_selected.json",
+      "containers/sira-smoke/lambda/manual-console/checkpoints/05-launch_clicked_once.json",
+      "containers/sira-smoke/lambda/manual-console/checkpoints/06-cloud_ide_opened.json",
+      "containers/sira-smoke/lambda/manual-console/checkpoints/07-qualification_bundle_uploaded.json",
+      "containers/sira-smoke/lambda/manual-console/checkpoints/08-qualification_command_started.json",
+      "containers/sira-smoke/lambda/manual-console/checkpoints/09-qualification_command_completed.json",
+      "containers/sira-smoke/lambda/manual-console/checkpoints/10-qualification_bundle_downloaded.json",
+      "containers/sira-smoke/lambda/manual-console/checkpoints/11-termination_confirmed_by_user.json",
+      "containers/sira-smoke/lambda/manual-console/checkpoints/12-regional_ruleset_deleted.json",
+      "containers/sira-smoke/lambda/manual-console/checkpoints/13-global_firewall_restored.json"
+    ],
+    "window_seconds": 300
+  },
+  "implementation_binding": {
+    "artifacts": [
+      {
+        "bytes": 91664,
+        "path": "src/giclab/harness/lambda_l23_manual_plan.py",
+        "sha256": "db4807b68c2be1cf29e439e4ac7e6a74d5111cee45fdca99c4c4c5930f282cc2"
+      },
+      {
+        "bytes": 63402,
+        "path": "src/giclab/harness/lambda_l23_manual_supervisor.py",
+        "sha256": "e3b2aace2ebcad36a6f91937e29b0aa1d254356156e0781340dfa690e20f6258"
+      },
+      {
+        "bytes": 33515,
+        "path": "src/giclab/harness/lambda_l2m_checkpoints.py",
+        "sha256": "3c8ae545c4d39b633bdd9e02ae3d79a704d0eda5f0a70b0378dd3d32e6afe0f0"
+      },
+      {
+        "bytes": 316069,
+        "path": "src/giclab/harness/lambda_l2m_observer.py",
+        "sha256": "c4c7c8d2b7fa41d3691f75aed0d39dfa359f4324de04056dd7b50d8f4dbac502"
+      },
+      {
+        "bytes": 3367,
+        "path": "containers/sira-smoke/lambda/manual-console/l23_supervisor_bootstrap.py",
+        "sha256": "2b28bd3f5a937ff180c89a38c134916e5f8a4e1fe8db8d35ffd21abfdf15c2c7"
+      },
+      {
+        "bytes": 3183,
+        "path": "schemas/t07-lambda-l2m-human-decision.schema.json",
+        "sha256": "7054b83d9aa56683b24ba3c1057ca6f9aeb9ae1ee38fc3d2f37179514d4f1d79"
+      },
+      {
+        "bytes": 3713,
+        "path": "schemas/t07-lambda-l2m-private-decision-seal.schema.json",
+        "sha256": "e4bc66c5759fe700e62ba2bb54dec1c509c68f7f63308170195c6454c607ca3f"
+      },
+      {
+        "bytes": 15890,
+        "path": "schemas/t07-lambda-l2m-checkpoint.schema.json",
+        "sha256": "a55f9023f8cc8f530acebe31bbe7b50c57d1e1a01b959ced38876e43e0f108ff"
+      },
+      {
+        "bytes": 6995,
+        "path": "schemas/t07-lambda-l2m-observer-journal.schema.json",
+        "sha256": "c9d5fef455c35ce0e8f957fe54040464a641ce10a57a95feadb09f24d3c1bf9f"
+      },
+      {
+        "bytes": 10562,
+        "path": "schemas/t07-lambda-l2m-host-evidence.schema.json",
+        "sha256": "8311ff4dcc82df5bf8272f549119c13fa37baf9ef46e41cea5c3629b11253ef3"
+      },
+      {
+        "bytes": 1510,
+        "path": "containers/sira-smoke/lambda/manual-console/manifest.json",
+        "sha256": "dc9824649f97fab6cfd105b5fc0d0c6c1c5ff513fa25f70e0d517afa623cc261"
+      },
+      {
+        "bytes": 62821,
+        "path": "containers/sira-smoke/lambda/manual-console/qualification_driver.py",
+        "sha256": "ab9a3f8981d2e60ea5b57bb7cf63512f64cdb89f26d8183788aedc2dbe4b5050"
+      },
+      {
+        "bytes": 6277,
+        "path": "containers/sira-smoke/lambda/manual-console/host_facts.py",
+        "sha256": "a0010817187a419fc0f1497861b4920724a1b43d0edf613f082eb68eb6042cc1"
+      },
+      {
+        "bytes": 23123,
+        "path": "containers/sira-smoke/lambda/manual-console/docker_inspector.py",
+        "sha256": "6995c486a4945159a33d2aac5837569ab66dc459033b185eb57968f6fc5ae230"
+      },
+      {
+        "bytes": 14825,
+        "path": "containers/sira-smoke/lambda/manual-console/evidence_packager.py",
+        "sha256": "7db3a4cfd6ba5e8b20fc95ad2f2301555a23b394b75044ef8ac592215b08b28a"
+      },
+      {
+        "bytes": 1273,
+        "path": "containers/sira-smoke/lambda/manual-console/adversarial-containment.sh",
+        "sha256": "67c80f74069c4260a5131fa6311d7394e645fe14fdd078de59583447a25b6355"
+      },
+      {
+        "bytes": 6815,
+        "path": "containers/sira-smoke/lambda/manual-console/public-source-observations-l2-2.json",
+        "sha256": "56a1ba759d4fc5ac6eba2ee85c5bff2a08d0d71f538793f3de5732bb80d0b1a5"
+      },
+      {
+        "bytes": 1048,
+        "path": "containers/sira-smoke/lambda/manual-console/checkpoints/README.md",
+        "sha256": "14084731962de9eb191d12dafda8e00ccfa6e7e65027224d1881e70a61b75335"
+      },
+      {
+        "bytes": 706,
+        "path": "containers/sira-smoke/lambda/manual-console/checkpoints/01-launch_wizard_image_offered.json",
+        "sha256": "5a6ecc7e36ba0c5e1c3a6f31dda1ba00cbba88dacf34cce27f468282d0cdc2e1"
+      },
+      {
+        "bytes": 539,
+        "path": "containers/sira-smoke/lambda/manual-console/checkpoints/02-global_firewall_restricted.json",
+        "sha256": "365816d3ec07de41f763149cbaab18810e0e12d762beb997acf33b9ff24b9754"
+      },
+      {
+        "bytes": 535,
+        "path": "containers/sira-smoke/lambda/manual-console/checkpoints/03-regional_ruleset_created.json",
+        "sha256": "26d286d032b413f1bd20154904f46858b9af5c858e306422c307edf20989d379"
+      },
+      {
+        "bytes": 631,
+        "path": "containers/sira-smoke/lambda/manual-console/checkpoints/04-launch_configuration_selected.json",
+        "sha256": "a4bee5cce78a1c2e5a7fa035cf3f29b7db4d95f30dec0be6b70c602a120601d0"
+      },
+      {
+        "bytes": 672,
+        "path": "containers/sira-smoke/lambda/manual-console/checkpoints/05-launch_clicked_once.json",
+        "sha256": "5439bf3f9e08299f681a45b8b3551154765f428a2a2338f3c3510e7a05160e2d"
+      },
+      {
+        "bytes": 519,
+        "path": "containers/sira-smoke/lambda/manual-console/checkpoints/06-cloud_ide_opened.json",
+        "sha256": "40679b0f2fe7496171e7cb84411d3d55fd7601dfd2522284f85af66510c7d4f2"
+      },
+      {
+        "bytes": 657,
+        "path": "containers/sira-smoke/lambda/manual-console/checkpoints/07-qualification_bundle_uploaded.json",
+        "sha256": "a15fc2c17aee53f02c9636de5ad4a90d4adc701a499c350f9f65e0835d062e2d"
+      },
+      {
+        "bytes": 545,
+        "path": "containers/sira-smoke/lambda/manual-console/checkpoints/08-qualification_command_started.json",
+        "sha256": "3c9009d41a1f24cc846cb82d2bf331f8c34a163dbf0c80d99e6c867e7424505e"
+      },
+      {
+        "bytes": 549,
+        "path": "containers/sira-smoke/lambda/manual-console/checkpoints/09-qualification_command_completed.json",
+        "sha256": "d03fc548852f913767e57a03c0925c27dee154921697e8f52c887f93fcbd02e9"
+      },
+      {
+        "bytes": 628,
+        "path": "containers/sira-smoke/lambda/manual-console/checkpoints/10-qualification_bundle_downloaded.json",
+        "sha256": "86894809bd26e0a1df606625e4d0141160a4e9a0e41babbbcbc466895b51d15e"
+      },
+      {
+        "bytes": 545,
+        "path": "containers/sira-smoke/lambda/manual-console/checkpoints/11-termination_confirmed_by_user.json",
+        "sha256": "ac21feaf6f94cdfc837e5b6dfc7467e22f6cc3a8b8ad98f1a3017815594b65f6"
+      },
+      {
+        "bytes": 572,
+        "path": "containers/sira-smoke/lambda/manual-console/checkpoints/12-regional_ruleset_deleted.json",
+        "sha256": "5ca6a8867acee17d82a948265132703eea555aceb856e7908ec5a621ec4d1f1f"
+      },
+      {
+        "bytes": 629,
+        "path": "containers/sira-smoke/lambda/manual-console/checkpoints/13-global_firewall_restored.json",
+        "sha256": "105f0072215466258ec6a7504692d304162406ab9347e67b93b33824b9acddc1"
+      }
+    ],
+    "branch": "phase-1/sira-smoke-lambda",
+    "l2_2_implementation_commit": "82670a862e73ae1404fecaec775232445fddcdd8",
+    "required_execution_commit": "<EXACT-FINAL-CLEAN-GATE-L2-3-HANDOFF-COMMIT>",
+    "reviewed_implementation_commit": "852f0ba494a5f358931fe95637e2c60ab8dbb57b",
+    "starting_commit": "b71cbbc29f59da600d57b7f0ad28d14572b5fc62"
+  },
+  "incident_rules": {
+    "archive_unavailable_preserves_local_source": true,
+    "cloud_ide_failure_opens_no_ports_and_uses_no_ssh": true,
+    "control_plane_outage_preserves_strict_firewall": true,
+    "no_second_launch_click": true,
+    "no_workload_on_zero_multiple_or_drift": true,
+    "observer_restart_burns_run_identity": true,
+    "qualification_or_evidence_failure_never_reruns": true,
+    "terminal_and_ruleset_absent_before_global_restore": true,
+    "terminal_before_ruleset_delete": true,
+    "terminate_all_incident_scope_instances": true
+  },
+  "observer_invocation": [
+    ".venv/bin/python",
+    "-I",
+    "containers/sira-smoke/lambda/manual-console/l23_supervisor_bootstrap.py",
+    "--repository-root",
+    ".",
+    "--plan",
+    "containers/sira-smoke/lambda/manual-console/gate-l2m-host-qualification-plan-v1.json",
+    "--plan-sha256",
+    "<EXACT-PLAN-SHA256-FROM-FRESH-AUTHORIZATION>",
+    "--expected-commit",
+    "<EXACT-FINAL-CLEAN-GATE-L2-3-HANDOFF-COMMIT>",
+    "--authorization-reference",
+    "<FRESH-AUTHORIZATION-REFERENCE>",
+    "--authorization-sha256",
+    "<FRESH-AUTHORIZATION-SHA256>"
+  ],
+  "observer_working_directory_contract": "run with cwd equal to the canonical clean repository root",
+  "plan_id": "PLAN-T07-GATE-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-V1",
+  "private_binding": {
+    "archive_alias": "l2m-archive-abdfb6a398ac",
+    "bundle_seal_sha256": "10f4f1798b11593528088c6ceff47418b6d6c3baa7b9caa3d74c1de1dd314c48",
+    "decision_alias": "l2m-decision-6b7af4f2c567",
+    "decision_canonical_sha256": "6b7af4f2c567f8c8e66f3d165e8ffbc144028cf3edf45727bb569e254c7bb75f",
+    "decision_seal_sha256": "2516d9d902c225f3576e7be193a772b27eb208a85fd4ac63b7d9faa3a101eff6",
+    "decision_source_sha256": "1b603e4bfb1e63b9046bb5b3d404a083666e7a28437e63a20613d7321063bad4",
+    "destination_hashes_verified": true,
+    "external_copy_record_sha256": "3436784c72bb01bce0e0e6fc0b1c42e08e26cb106d5306a9b50f8c8b8f7b1c2d",
+    "external_seal_sha256": "5b1fea4933b1d42db51925af7ab6112826de26912a707bf36a29962b6fe79f95",
+    "marker_alias": "l2m-marker-dfc9017f4bc5",
+    "private_parameters_sha256": "cfd40a341759d3a52f7c3161d1f28002d8f4945fbdf1cf62e69e2fccfb76f6b6",
+    "private_values_in_public_plan": false,
+    "source_retained": true,
+    "state": "ignored-sealed-local-and-external-evidence"
+  },
+  "provider": {
+    "api_base_url": "https://cloud.lambda.ai",
+    "name": "Lambda On-Demand Cloud",
+    "observer_operations": "GET-only",
+    "observer_transport": "giclab.harness.lambda_l2m_observer.LambdaHttpsL2MObserverTransport",
+    "user_console_mutations_only": true
+  },
+  "qualification_bootstrap_argv": [
+    "/usr/bin/python3",
+    "-I",
+    "-S",
+    "-c",
+    "import hashlib,os,stat,sys\np=sys.argv[2]\nfd=os.open(p,os.O_RDONLY|getattr(os,'O_NOFOLLOW',0))\ntry:\n s=os.fstat(fd)\n if not stat.S_ISREG(s.st_mode) or s.st_nlink!=1 or s.st_size>1048576: raise SystemExit(90)\n b=bytearray()\n while len(b)<=1048576:\n  c=os.read(fd,min(65536,1048577-len(b)))\n  if not c: break\n  b.extend(c)\n if len(b)!=s.st_size or hashlib.sha256(b).hexdigest()!=sys.argv[1]: raise SystemExit(91)\n cap=object()\n g={'__name__':'__t07_l2m_verified_driver__','__file__':p,'__t07_l2m_bootstrap_capability__':cap}\n exec(compile(bytes(b),p,'exec'),g)\n if g.get('_VERIFIED_BOOTSTRAP_CAPABILITY') is not cap: raise SystemExit(92)\n raise SystemExit(g['main'](sys.argv[3:],_bootstrap_capability=cap))\nfinally: os.close(fd)\n",
+    "ab9a3f8981d2e60ea5b57bb7cf63512f64cdb89f26d8183788aedc2dbe4b5050",
+    "/home/ubuntu/t07-l2m-bundle/qualification_driver.py",
+    "--run-id",
+    "RUN-T07-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-0001",
+    "--decision-alias",
+    "<PRIVATE-DECISION-ALIAS>",
+    "--marker-alias",
+    "<PRIVATE-MARKER-ALIAS>",
+    "--instance-binding-sha256",
+    "<PRIVATE-INSTANCE-BINDING-SHA256>",
+    "--authorization-reference",
+    "<FRESH-AUTHORIZATION-REFERENCE>",
+    "--authorization-sha256",
+    "<FRESH-AUTHORIZATION-SHA256>",
+    "--bundle-manifest-sha256",
+    "dc9824649f97fab6cfd105b5fc0d0c6c1c5ff513fa25f70e0d517afa623cc261",
+    "--output-dir",
+    "/home/ubuntu/t07-l2m-output-0001"
+  ],
+  "run_id": "RUN-T07-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-0001",
+  "schema_version": "0.1.0",
+  "scientific_lock": {
+    "condition_order": [
+      "SIRA-REACTIVE",
+      "SIRA-SIMULATIVE"
+    ],
+    "experiment": "EXP-0001",
+    "gate_scope": "infrastructure-qualification-only",
+    "interpretation_allowed": false,
+    "model": "gpt-4o-2024-11-20",
+    "pair": "PAIR-EXP0001-SMOKE-0000",
+    "pilot_authorized": false,
+    "profile": "PLAN-EXP0001-SMOKE",
+    "reproduction_level": "directional reproduction",
+    "training": false
+  },
+  "selected_resources": {
+    "architecture": "x86_64",
+    "image_alias": "img-0032",
+    "image_family": "lambda-stack-22-04",
+    "image_version": "22.4.5-2141",
+    "instance_type": "gpu_1x_a10",
+    "launch_wizard_offeredness_required": true,
+    "persistent_filesystem_count": 0,
+    "region": "us-east-1",
+    "ssh_key_name": "fractal-lambda-codex",
+    "ssh_use": false
+  },
+  "steps": [
+    {
+      "action": "preflight_and_read_only_revalidation",
+      "actor": "observer",
+      "ordinal": 1
+    },
+    {
+      "action": "launch_wizard_offeredness_check_no_launch",
+      "actor": "user",
+      "ordinal": 2
+    },
+    {
+      "action": "seal_exact_original_global_firewall",
+      "actor": "observer",
+      "ordinal": 3
+    },
+    {
+      "action": "replace_global_firewall_tcp22_private_32",
+      "actor": "user",
+      "ordinal": 4
+    },
+    {
+      "action": "verify_exact_global_restriction",
+      "actor": "observer",
+      "ordinal": 5
+    },
+    {
+      "action": "create_owned_regional_ruleset",
+      "actor": "user",
+      "ordinal": 6
+    },
+    {
+      "action": "bind_and_verify_owned_regional_ruleset",
+      "actor": "observer",
+      "ordinal": 7
+    },
+    {
+      "action": "select_exact_launch_configuration_no_launch",
+      "actor": "user",
+      "ordinal": 8
+    },
+    {
+      "action": "arm_durable_launch_window",
+      "actor": "observer",
+      "ordinal": 9
+    },
+    {
+      "action": "click_launch_exactly_once",
+      "actor": "user",
+      "ordinal": 10
+    },
+    {
+      "action": "bind_exactly_one_instance_or_incident",
+      "actor": "observer",
+      "ordinal": 11
+    },
+    {
+      "action": "open_cloud_ide_jupyter_for_bound_instance",
+      "actor": "user",
+      "ordinal": 12
+    },
+    {
+      "action": "upload_exact_qualification_bundle",
+      "actor": "user",
+      "ordinal": 13
+    },
+    {
+      "action": "run_hash_first_qualification_once",
+      "actor": "user",
+      "ordinal": 14
+    },
+    {
+      "action": "download_evidence_to_exact_inbound_root",
+      "actor": "user",
+      "ordinal": 15
+    },
+    {
+      "action": "validate_archive_and_host_container_evidence",
+      "actor": "observer",
+      "ordinal": 16
+    },
+    {
+      "action": "terminate_bound_or_incident_scope_instances",
+      "actor": "user",
+      "ordinal": 17
+    },
+    {
+      "action": "verify_terminal_or_absent",
+      "actor": "observer",
+      "ordinal": 18
+    },
+    {
+      "action": "delete_owned_regional_ruleset",
+      "actor": "user",
+      "ordinal": 19
+    },
+    {
+      "action": "verify_owned_regional_ruleset_absent",
+      "actor": "observer",
+      "ordinal": 20
+    },
+    {
+      "action": "restore_exact_original_global_firewall",
+      "actor": "user",
+      "ordinal": 21
+    },
+    {
+      "action": "verify_exact_global_restoration",
+      "actor": "observer",
+      "ordinal": 22
+    },
+    {
+      "action": "seal_and_copy_evidence_one_way",
+      "actor": "observer",
+      "ordinal": 23
+    }
+  ],
+  "storage": {
+    "external_archive_root": "/Volumes/Macintosh HD - Data/GIC-Lab/t07/sealed-artifacts",
+    "external_physical_store_uuid": "7904A6F1-F483-4ED7-9E34-BFECAB31C63E",
+    "external_volume_uuid": "8478609D-FA37-4ED5-875D-47AE912B9151",
+    "held_no_follow_descriptors": true,
+    "internal_fallback": false,
+    "local_active_root": "artifacts/t07/lambda/gate-l2m/RUN-T07-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-0001",
+    "local_inbound_root": "artifacts/t07/lambda/gate-l2m/RUN-T07-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-0001/inbound",
+    "mac_prewrite_free_floor_bytes": 8725200896,
+    "mac_retained_free_floor_bytes": 8589934592,
+    "one_way_copy": true,
+    "private_archive_cap_bytes": 1048576,
+    "source_retained": true
+  },
+  "temporal_contract": {
+    "expired_plan_requires_new_bundle_plan_and_authorization": true,
+    "latest_safe_supervisor_start_utc": "2026-08-12T05:15:19.646016Z",
+    "prelaunch_and_jupyter_headroom_seconds": 3600,
+    "public_metadata_max_age_seconds": 86400,
+    "public_metadata_retrieved_at_utc": "2026-08-11T06:15:19.646016Z"
+  },
+  "terminal_decision": "ready-for-manual-console-qualification-authorization"
+}

@@ -8,10 +8,13 @@ For the active Lambda path, Gate L2.0 ended at
 `manual-console-launch-required`. Gate L2.2 then evaluated the human-console/Jupyter
 route and stopped at `blocked-human-image-selection` because the selected GPU Base
 image lacks a documented JupyterLab guarantee; a regional Lambda Stack candidate is
-recommended but not selected. The active disposition is
-`docs/harness/T07_GATE_L2M_HOST_QUALIFICATION_AUTHORIZATION_PACKET.md`; no executable
-plan or authorization block exists. Private resource values are nonce-protected,
-ignored, externally sealed evidence. Draft Gate L2 modules and schemas are
+recommended but not selected. Gate L2.3 then validated the replacement private
+decision, sealed its resource bindings, and rendered one exact manual-console plan.
+The active disposition is
+`docs/harness/T07_GATE_L2M_HOST_QUALIFICATION_AUTHORIZATION_PACKET.md`: the plan is
+executable in structure but remains unauthorized and unexecuted. Private resource
+values are nonce-protected, ignored, externally sealed evidence; public records retain
+only aliases and hashes. Historical automated Gate L2 modules remain
 non-authoritative and authorize no action.
 
 The installed CLI is `giclab-harness` with four operations:

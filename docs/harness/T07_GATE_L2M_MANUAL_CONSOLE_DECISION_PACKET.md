@@ -1,8 +1,15 @@
 # T07 Gate L2M manual-console decision packet
 
-Status: **blocked-human-image-selection; no execution authority**
+Status: **historical decision request; satisfied privately by Gate L2.3; no execution authority**
 
 Date: 2026-08-10
+
+Gate L2.3 later validated and sealed the complete replacement decision without
+publishing its private fields. The active public disposition is
+`docs/harness/T07_GATE_L2_3_DECISION_BINDING.md`; the active unauthorized execution
+packet is `docs/harness/T07_GATE_L2M_HOST_QUALIFICATION_AUTHORIZATION_PACKET.md`.
+The historical requirements below are preserved as provenance and do not themselves
+authorize an action.
 
 ## Required human decision
 

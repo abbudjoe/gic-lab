@@ -13,18 +13,18 @@ authorized_run_profile:
   profile_sha256: null
   condition_plan_sha256s: []
 planned_execution_substrate:
-  decision_state: lambda-host-qualification-blocked-human-image-selection
+  decision_state: lambda-host-qualification-ready-for-manual-console-authorization
   provider: lambda-on-demand-cloud
   architecture: x86_64
   persistent_filesystem: false
   gate_l1_authorized: false
   gate_l1_evidence_state: complete-externally-sealed
   gate_l2_authorized: false
-  gate_l2_decision_state: blocked-human-image-selection
+  gate_l2_decision_state: ready-for-manual-console-qualification-authorization
   gate_l3_state: requirements-only
   gate_l4_authorized: false
   local_alternatives: terminal-rejected
   decision_document: docs/harness/T07_GATE_L0_LAMBDA_HOST_DECISION.md
-  security_decision_document: docs/harness/T07_GATE_L2_2_MANUAL_CONSOLE_DESIGN.md
+  security_decision_document: docs/harness/T07_GATE_L2_3_DECISION_BINDING.md
 authoritative_plan: docs/exec-plans/active/PHASE_1_ARTIFACT_EXECUTION.md
-last_updated: "2026-08-10"
+last_updated: "2026-08-11"
