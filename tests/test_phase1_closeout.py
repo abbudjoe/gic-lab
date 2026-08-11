@@ -51,15 +51,11 @@ def test_phase_one_is_the_only_active_non_executable_control_plane() -> None:
     execution_state = load_project_execution_state(ROOT)
     substrate = execution_state.planned_execution_substrate
     assert substrate is not None
-    assert substrate.decision_state == (
-        "lambda-firewall-baseline-capture-required"
-    )
+    assert substrate.decision_state == ("lambda-firewall-baseline-capture-required")
     assert substrate.provider == "lambda-on-demand-cloud"
     assert substrate.architecture == "x86_64"
     assert substrate.gate_l1_evidence_state == "complete-externally-sealed"
-    assert substrate.gate_l2_decision_state == (
-        "fresh-readonly-firewall-baseline-required"
-    )
+    assert substrate.gate_l2_decision_state == ("fresh-readonly-firewall-baseline-required")
     assert [path.name for path in (ROOT / "docs/exec-plans/active").glob("*.md")] == [
         "PHASE_1_ARTIFACT_EXECUTION.md"
     ]

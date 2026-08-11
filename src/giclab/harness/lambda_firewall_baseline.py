@@ -462,9 +462,7 @@ def structural_report_for_historical_projection(
     }
 
 
-def validate_canonical_report(
-    report: Mapping[str, object], *, repository_root: Path
-) -> None:
+def validate_canonical_report(report: Mapping[str, object], *, repository_root: Path) -> None:
     """Validate schema plus cross-field shape/count invariants.
 
     JSON Schema cannot express all of the cardinality and key/type correspondence
@@ -1346,9 +1344,7 @@ def capture_with_fakeable_transport(
 
     root = repository_root.resolve(strict=True)
     if absolute_deadline_monotonic_ns is None:
-        absolute_deadline_monotonic_ns = (
-            clock_ns() + MAX_CAPTURE_TOTAL_WALL_SECONDS * 1_000_000_000
-        )
+        absolute_deadline_monotonic_ns = clock_ns() + MAX_CAPTURE_TOTAL_WALL_SECONDS * 1_000_000_000
     ledger = CaptureLedger.create(root, authorization_reference=authorization_reference)
     run_root = root / CAPTURE_RUN_ROOT_RELATIVE
     failure_stage = "preflight"
@@ -1466,9 +1462,7 @@ def capture_with_fakeable_transport(
             bytes_received=len(response.body),
             status=response.status,
             content_type=normalized_content_type,
-            elapsed_ms=min(
-                max(response.elapsed_ms, 0), MAX_CAPTURE_PROVIDER_WALL_SECONDS * 1_000
-            ),
+            elapsed_ms=min(max(response.elapsed_ms, 0), MAX_CAPTURE_PROVIDER_WALL_SECONDS * 1_000),
             response_sha256=response_sha256,
         )
         if response.elapsed_ms > MAX_CAPTURE_PROVIDER_WALL_SECONDS * 1_000 or (
@@ -1534,9 +1528,7 @@ def capture_with_fakeable_transport(
             bytes_received=len(response.body),
             status=200,
             content_type="application/json",
-            elapsed_ms=min(
-                max(response.elapsed_ms, 0), MAX_CAPTURE_PROVIDER_WALL_SECONDS * 1_000
-            ),
+            elapsed_ms=min(max(response.elapsed_ms, 0), MAX_CAPTURE_PROVIDER_WALL_SECONDS * 1_000),
             response_sha256=response_sha256,
         )
         ledger.append("baseline_seal_started")
@@ -1754,10 +1746,9 @@ def _capture_local_members(local_root: Path, *, require_complete: bool) -> dict[
         completed = next(
             row for row in ledger_rows if row.get("event_type") == "response_body_completed"
         )
-        if (
-            completed.get("bytes_received_so_far") != len(raw_response or b"")
-            or completed.get("response_sha256") != sha256_bytes(raw_response or b"")
-        ):
+        if completed.get("bytes_received_so_far") != len(raw_response or b"") or completed.get(
+            "response_sha256"
+        ) != sha256_bytes(raw_response or b""):
             raise FirewallBaselineError("capture raw-response identity differs from its ledger")
     if sum(len(value) for value in local_members.values()) > MAX_CAPTURE_LOCAL_ARTIFACT_BYTES:
         raise FirewallBaselineError("capture local evidence exceeds its aggregate cap")

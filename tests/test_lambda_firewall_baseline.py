@@ -72,9 +72,7 @@ def test_cidr_semantics_and_port_contract_are_exact() -> None:
     assert host.semantic_sha256 == host_cidr.semantic_sha256
     with pytest.raises(FirewallBaselineError, match="IPv4 CIDR"):
         canonicalize_firewall_rules([rule(source="192.0.2.7/24")])
-    assert canonicalize_firewall_rules(
-        [rule(source="192.0.2.0/24")]
-    ).semantic_sha256
+    assert canonicalize_firewall_rules([rule(source="192.0.2.0/24")]).semantic_sha256
     with pytest.raises(FirewallBaselineError, match="port range"):
         canonicalize_firewall_rules([rule(ports=[444, 443])])
     with pytest.raises(FirewallBaselineError, match="omit port_range"):
@@ -174,15 +172,15 @@ def test_fallback_plan_is_exactly_one_get_and_no_manual_v4_exists() -> None:
 def test_materialized_capture_plan_is_exact_and_unauthorized() -> None:
     path = ROOT / baseline.CAPTURE_PLAN_RELATIVE
     encoded = path.read_bytes()
-    assert len(encoded) == 5_754
+    assert len(encoded) == 6_311
     assert hashlib.sha256(encoded).hexdigest() == (
-        "962a4ba6d36af6aaf2f99d75ccb45f3156760c51ad7623a89381eafb71202c4b"
+        "08b5284286a150e21906d8f306a4478060e76443c20cd2d6913579af6e9ab8ad"
     )
     plan = json.loads(encoded)
     baseline.validate_capture_plan(plan, repository_root=ROOT)
     assert plan == baseline.render_capture_plan(
         ROOT,
-        reviewed_implementation_commit="cae34f96ec1c77395a1470a2eb452e61925235c9",
+        reviewed_implementation_commit="f023dede72bdaa10e0e7b6c928996d111f6bea89",
     )
     assert plan["authorization"]["authorized"] is False
 
