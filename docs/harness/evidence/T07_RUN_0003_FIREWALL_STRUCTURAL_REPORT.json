@@ -1,0 +1,57 @@
+{
+  "all_current_required_fields_present": true,
+  "all_port_range_presence_distinguished": true,
+  "baseline_alias": null,
+  "canonical_semantic_sha256": null,
+  "canonicalization_version": "t07-firewall-canonical-v1",
+  "empty_description_count": 0,
+  "evidence_classification": "incomplete_or_transformed_baseline",
+  "nonempty_description_count": 4,
+  "protocol_classes": [
+    "tcp",
+    "udp"
+  ],
+  "raw_response_retained": false,
+  "rule_count": 4,
+  "rule_shapes": [
+    {
+      "fields": ["description", "port_range", "protocol", "source_network"],
+      "types": {
+        "description": "string",
+        "port_range": "array",
+        "protocol": "string",
+        "source_network": "string"
+      }
+    },
+    {
+      "fields": ["description", "port_range", "protocol", "source_network"],
+      "types": {
+        "description": "string",
+        "port_range": "array",
+        "protocol": "string",
+        "source_network": "string"
+      }
+    },
+    {
+      "fields": ["description", "port_range", "protocol", "source_network"],
+      "types": {
+        "description": "string",
+        "port_range": "array",
+        "protocol": "string",
+        "source_network": "string"
+      }
+    },
+    {
+      "fields": ["description", "port_range", "protocol", "source_network"],
+      "types": {
+        "description": "string",
+        "port_range": "array",
+        "protocol": "string",
+        "source_network": "string"
+      }
+    }
+  ],
+  "schema_version": "0.1.0",
+  "sensitive_scalar_values_retained": false,
+  "unknown_raw_key_structure_retained": false
+}

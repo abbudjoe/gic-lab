@@ -437,7 +437,11 @@ def test_materialized_public_plan_identity_is_exact_and_unauthorized() -> None:
         "1931fcacda4194063c0116ff9630d82f3b8f4ec07ff9b0310342335db629f654"
     )
     plan = json.loads(encoded)
-    validate_public_plan(plan, repository_root=ROOT)
+    # L2M.1 preserves V3 byte-for-byte as historical evidence while changing the
+    # observer's description-aware firewall canonicalization.  The old lossy plan
+    # must now fail its implementation binding before any execution.
+    with pytest.raises(L23ContractError, match="implementation artifact binding drifted"):
+        validate_public_plan(plan, repository_root=ROOT)
     assert plan["implementation_binding"]["reviewed_implementation_commit"] == (
         "af54784f02e4675e25cd21925fd3c5d62cd0ed68"
     )

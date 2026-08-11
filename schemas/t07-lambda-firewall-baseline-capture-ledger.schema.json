@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gic-lab.invalid/schemas/t07-lambda-firewall-baseline-capture-ledger.schema.json",
+  "title": "One-request private firewall-baseline capture ledger event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "event_type", "run_id", "plan_id", "authorization_reference",
+    "event_sequence", "request_ordinal", "method", "scheme", "host", "path",
+    "monotonic_timestamp_ns", "wall_timestamp_utc", "bytes_received_so_far",
+    "http_status", "content_type", "elapsed_ms", "response_sha256",
+    "sanitized_failure_stage", "sanitized_failure_class", "retry_count",
+    "pagination_request"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1.0"},
+    "event_type": {
+      "enum": [
+        "run_preflight_started", "ledger_capacity_reserved", "secret_presence_check_passed",
+        "run_preflight_passed", "request_intent_committed", "request_send_started",
+        "response_headers_received", "response_body_completed", "response_validation_passed",
+        "baseline_seal_started", "baseline_seal_passed", "archive_started", "archive_passed",
+        "request_failed", "request_outcome_unknown_after_send", "run_stopped"
+      ]
+    },
+    "run_id": {"const": "RUN-T07-L2M-FIREWALL-BASELINE-CAPTURE-0001"},
+    "plan_id": {"const": "PLAN-T07-GATE-L2M-FIREWALL-BASELINE-CAPTURE-V1"},
+    "authorization_reference": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{2,127}$"},
+    "event_sequence": {"type": "integer", "minimum": 1, "maximum": 24},
+    "request_ordinal": {"oneOf": [{"type": "null"}, {"const": 1}]},
+    "method": {"enum": [null, "GET"]},
+    "scheme": {"enum": [null, "https"]},
+    "host": {"enum": [null, "cloud.lambda.ai"]},
+    "path": {"enum": [null, "/api/v1/firewall-rulesets/global"]},
+    "monotonic_timestamp_ns": {"type": "integer", "minimum": 0},
+    "wall_timestamp_utc": {"type": "string", "format": "date-time"},
+    "bytes_received_so_far": {"type": "integer", "minimum": 0, "maximum": 262144},
+    "http_status": {"oneOf": [{"type": "null"}, {"type": "integer", "minimum": 100, "maximum": 599}]},
+    "content_type": {"enum": [null, "application/json", "unexpected"]},
+    "elapsed_ms": {"oneOf": [{"type": "null"}, {"type": "integer", "minimum": 0, "maximum": 60000}]},
+    "response_sha256": {"oneOf": [{"type": "null"}, {"type": "string", "pattern": "^[a-f0-9]{64}$"}]},
+    "sanitized_failure_stage": {
+      "enum": [null, "preflight", "secret_source", "transport", "http_status", "content_type", "response_size", "json_decode", "schema_validation", "ledger_io", "seal_io", "archive_io", "unknown"]
+    },
+    "sanitized_failure_class": {
+      "enum": [null, "preflight_failed", "secret_missing", "secret_malformed", "transport_failed", "http_failure", "unexpected_content_type", "response_too_large", "malformed_json", "schema_drift", "ledger_failed", "seal_failed", "archive_failed", "outcome_unknown"]
+    },
+    "retry_count": {"const": 0},
+    "pagination_request": {"const": false}
+  }
+}

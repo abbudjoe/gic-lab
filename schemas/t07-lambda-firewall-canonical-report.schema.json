@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gic-lab.invalid/schemas/t07-lambda-firewall-canonical-report.schema.json",
+  "title": "Public-safe T07 firewall baseline structural/canonical report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "evidence_classification",
+    "canonicalization_version",
+    "baseline_alias",
+    "canonical_semantic_sha256",
+    "rule_count",
+    "rule_shapes",
+    "empty_description_count",
+    "nonempty_description_count",
+    "protocol_classes",
+    "all_current_required_fields_present",
+    "all_port_range_presence_distinguished",
+    "raw_response_retained",
+    "unknown_raw_key_structure_retained",
+    "sensitive_scalar_values_retained"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1.0"},
+    "evidence_classification": {
+      "enum": [
+        "complete_pre_mutation_provider_baseline",
+        "lossless_structured_pre_mutation_baseline",
+        "incomplete_or_transformed_baseline",
+        "unverifiable_baseline"
+      ]
+    },
+    "canonicalization_version": {"const": "t07-firewall-canonical-v1"},
+    "baseline_alias": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "string", "pattern": "^l2m-firewall-baseline-[a-f0-9]{12}$"}
+      ]
+    },
+    "canonical_semantic_sha256": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+      ]
+    },
+    "rule_count": {"type": "integer", "minimum": 0, "maximum": 100},
+    "rule_shapes": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["fields", "types"],
+        "properties": {
+          "fields": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {"enum": ["description", "port_range", "protocol", "source_network"]}
+          },
+          "types": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "description": {"enum": ["string", "absent"]},
+              "port_range": {"enum": ["array", "absent"]},
+              "protocol": {"enum": ["string", "absent"]},
+              "source_network": {"enum": ["string", "absent"]}
+            }
+          }
+        }
+      }
+    },
+    "empty_description_count": {"type": "integer", "minimum": 0, "maximum": 100},
+    "nonempty_description_count": {"type": "integer", "minimum": 0, "maximum": 100},
+    "protocol_classes": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"enum": ["tcp", "udp", "icmp", "all"]}
+    },
+    "all_current_required_fields_present": {"type": "boolean"},
+    "all_port_range_presence_distinguished": {"type": "boolean"},
+    "raw_response_retained": {"type": "boolean"},
+    "unknown_raw_key_structure_retained": {"type": "boolean"},
+    "sensitive_scalar_values_retained": {"const": false}
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "evidence_classification": {
+            "enum": ["incomplete_or_transformed_baseline", "unverifiable_baseline"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "baseline_alias": {"type": "null"},
+          "canonical_semantic_sha256": {"type": "null"}
+        }
+      }
+    }
+  ]
+}

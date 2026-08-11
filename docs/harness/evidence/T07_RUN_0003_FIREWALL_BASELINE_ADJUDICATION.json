@@ -1,0 +1,39 @@
+{
+  "adjudicated_classification": "incomplete_or_transformed_baseline",
+  "historical_plan_id": "PLAN-T07-GATE-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-V3",
+  "historical_plan_path": "containers/sira-smoke/lambda/manual-console/gate-l2m-host-qualification-plan-v3.json",
+  "historical_plan_sha256": "1931fcacda4194063c0116ff9630d82f3b8f4ec07ff9b0310342335db629f654",
+  "historical_run_id": "RUN-T07-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-0003",
+  "manual_plan_generation_allowed": false,
+  "next_required_state": "fresh-readonly-firewall-baseline-required",
+  "no_mutation_occurred": true,
+  "observation_bytes": 782,
+  "observation_path": "artifacts/t07/lambda/gate-l2m/RUN-T07-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-0003/observer-v1/observer-journal-provider-observations/observation-0006.json",
+  "observation_sha256": "7168f04f6ad961db10fde3431daa59052f3fc4539128b1bbc2c510e66d37ca25",
+  "observer_journal_path": "artifacts/t07/lambda/gate-l2m/RUN-T07-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-0003/observer-v1/observer-journal.jsonl",
+  "observer_journal_sha256": "732ca7f649292ca9d87924d722ccd9d563320529b97c05686c2754d1a2718e4a",
+  "official_contract": {
+    "api_version": "1.10.0",
+    "bytes": 240288,
+    "openapi_version": "3.1.0",
+    "sha256": "320f4877924984f060b179e86595ed58918a1d0696b60b99cae548ec164934f4",
+    "url": "https://docs-api.lambda.ai/api/cloud/spec.json"
+  },
+  "original_failure_classification": "schema_failure",
+  "reason_codes": [
+    "raw_response_not_retained",
+    "projection_drops_unknown_raw_key_structure",
+    "historical_l1_baseline_omitted_required_description"
+  ],
+  "request": {
+    "endpoint_schema_passed": true,
+    "http_status": 200,
+    "method": "GET",
+    "ordinal": 6,
+    "path": "/api/v1/firewall-rulesets/global",
+    "response_bytes": 660
+  },
+  "run_replay_allowed": false,
+  "schema_version": "0.1.0",
+  "sensitive_scalar_values_retained": false
+}

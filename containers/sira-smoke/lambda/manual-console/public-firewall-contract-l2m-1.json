@@ -1,0 +1,69 @@
+{
+  "schema_version": "0.1.0",
+  "record_id": "T07-L2M-1-LAMBDA-FIREWALL-OPENAPI-1.10.0",
+  "provider": "Lambda Cloud",
+  "retrieved_at_utc": "2026-08-11T17:42:05.506294Z",
+  "specification": {
+    "requested_url": "https://docs-api.lambda.ai/api/cloud/spec.json",
+    "documentation_url": "https://docs.lambda.ai/public-cloud/firewalls/",
+    "openapi_version": "3.1.0",
+    "api_version": "1.10.0",
+    "bytes": 240288,
+    "sha256": "320f4877924984f060b179e86595ed58918a1d0696b60b99cae548ec164934f4"
+  },
+  "operations": {
+    "get": {
+      "method": "GET",
+      "path": "/api/v1/firewall-rulesets/global",
+      "operation_id": "getGlobalFirewallRuleset",
+      "success_envelope_required": ["data"],
+      "success_envelope_additional_properties": false,
+      "data_schema": "GlobalFirewallRuleset"
+    },
+    "patch": {
+      "method": "PATCH",
+      "path": "/api/v1/firewall-rulesets/global",
+      "operation_id": "updateGlobalFirewallRuleset",
+      "request_schema": "GlobalFirewallRulesetPatchRequest",
+      "restoration_body_fields": ["rules"]
+    }
+  },
+  "global_ruleset": {
+    "required": ["id", "name", "rules"],
+    "id_const": "global",
+    "response_only_fields": ["id", "name"],
+    "rules_type": "array"
+  },
+  "firewall_rule": {
+    "required": ["protocol", "source_network", "description"],
+    "protocol": {
+      "type": "string",
+      "enum": ["tcp", "udp", "icmp", "all"]
+    },
+    "port_range": {
+      "required_for": ["tcp", "udp", "all"],
+      "forbidden_for": ["icmp"],
+      "type_when_present": "array",
+      "items": 2,
+      "item_type": "integer",
+      "minimum": 1,
+      "maximum": 65535,
+      "inclusive": true
+    },
+    "source_network": {
+      "type": "string",
+      "format": "ipv4network",
+      "host_without_mask_means_prefix": 32
+    },
+    "description": {
+      "type": "string",
+      "nullable": false,
+      "minimum_length": 0,
+      "maximum_length": 128
+    },
+    "additional_properties_explicitly_forbidden": false
+  },
+  "authenticated_request_made": false,
+  "real_secret_accessed": false,
+  "cloud_mutation_performed": false
+}

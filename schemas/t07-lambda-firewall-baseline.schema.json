@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gic-lab.invalid/schemas/t07-lambda-firewall-baseline.schema.json",
+  "$comment": "Private evidence. Values governed by this schema must never enter Git.",
+  "title": "T07 private complete global-firewall baseline",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "baseline_alias",
+    "canonicalization_version",
+    "capture_plan_id",
+    "capture_run_id",
+    "authorization_reference",
+    "provider",
+    "api_base_url",
+    "retrieved_at_utc",
+    "official_contract",
+    "request",
+    "raw_response",
+    "global_ruleset",
+    "canonical_semantic_sha256",
+    "restoration_payload_sha256",
+    "unknown_fields"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1.0"},
+    "baseline_alias": {"type": "string", "pattern": "^l2m-firewall-baseline-[a-f0-9]{12}$"},
+    "canonicalization_version": {"const": "t07-firewall-canonical-v1"},
+    "capture_plan_id": {"const": "PLAN-T07-GATE-L2M-FIREWALL-BASELINE-CAPTURE-V1"},
+    "capture_run_id": {"const": "RUN-T07-L2M-FIREWALL-BASELINE-CAPTURE-0001"},
+    "authorization_reference": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{2,127}$"},
+    "provider": {"const": "lambda-on-demand-cloud"},
+    "api_base_url": {"const": "https://cloud.lambda.ai"},
+    "retrieved_at_utc": {"type": "string", "format": "date-time"},
+    "official_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url", "api_version", "openapi_version", "bytes", "sha256"],
+      "properties": {
+        "url": {"const": "https://docs-api.lambda.ai/api/cloud/spec.json"},
+        "api_version": {"const": "1.10.0"},
+        "openapi_version": {"const": "3.1.0"},
+        "bytes": {"const": 240288},
+        "sha256": {"const": "320f4877924984f060b179e86595ed58918a1d0696b60b99cae548ec164934f4"}
+      }
+    },
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "path", "http_status", "response_bytes", "response_sha256"],
+      "properties": {
+        "method": {"const": "GET"},
+        "path": {"const": "/api/v1/firewall-rulesets/global"},
+        "http_status": {"const": 200},
+        "response_bytes": {"type": "integer", "minimum": 1, "maximum": 262144},
+        "response_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "raw_response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["relative_path", "bytes", "sha256", "byte_preserved"],
+      "properties": {
+        "relative_path": {"const": "raw-global-firewall-response.json"},
+        "bytes": {"type": "integer", "minimum": 1, "maximum": 262144},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "byte_preserved": {"const": true}
+      }
+    },
+    "global_ruleset": {"$ref": "#/$defs/globalRuleset"},
+    "canonical_semantic_sha256": {"$ref": "#/$defs/sha256"},
+    "restoration_payload_sha256": {"$ref": "#/$defs/sha256"},
+    "unknown_fields": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["envelope", "global_ruleset", "rules"],
+      "properties": {
+        "envelope": {"$ref": "#/$defs/keyNames"},
+        "global_ruleset": {"$ref": "#/$defs/keyNames"},
+        "rules": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {"$ref": "#/$defs/keyNames"}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "keyNames": {
+      "type": "array",
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,127}$"}
+    },
+    "globalRuleset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "rules"],
+      "properties": {
+        "id": {"const": "global"},
+        "name": {"type": "string", "minLength": 1},
+        "rules": {"type": "array", "maxItems": 100, "items": {"$ref": "#/$defs/firewallRule"}}
+      }
+    },
+    "firewallRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol", "source_network", "description"],
+      "properties": {
+        "protocol": {"enum": ["tcp", "udp", "icmp", "all"]},
+        "port_range": {
+          "type": "array",
+          "prefixItems": [
+            {"type": "integer", "minimum": 1, "maximum": 65535},
+            {"type": "integer", "minimum": 1, "maximum": 65535}
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "source_network": {"type": "string", "minLength": 1, "maxLength": 18},
+        "description": {"type": "string", "minLength": 0, "maxLength": 128}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"protocol": {"const": "icmp"}}, "required": ["protocol"]},
+          "then": {"not": {"required": ["port_range"]}},
+          "else": {"required": ["port_range"]}
+        }
+      ]
+    }
+  }
+}

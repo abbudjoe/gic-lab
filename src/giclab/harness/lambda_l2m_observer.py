@@ -1097,36 +1097,19 @@ def validate_strict_firewall_rules(rules: object, *, source_ipv4_cidr: str) -> N
 
 
 def firewall_semantic_sha256(rules: object) -> str:
-    """Hash exact authoritative firewall semantics without emitting private values."""
+    """Hash the versioned, description-aware complete firewall-rule multiset."""
 
-    normalized: list[dict[str, object]] = []
-    for raw in _sequence(rules, context="firewall rules"):
-        rule = _mapping(raw, context="firewall rule")
-        if set(rule) != {"protocol", "port_range", "source_network", "description"}:
-            raise L2MContractError("firewall rule authoritative field set drifted")
-        protocol = _string(rule.get("protocol"), context="firewall protocol")
-        source = _string(rule.get("source_network"), context="firewall source")
-        description = rule.get("description")
-        ports = rule.get("port_range")
-        if description is not None and not isinstance(description, str):
-            raise L2MContractError("firewall description type drifted")
-        if ports is not None and (
-            not isinstance(ports, list)
-            or len(ports) != 2
-            or any(type(port) is not int or not 1 <= port <= 65_535 for port in ports)
-        ):
-            raise L2MContractError("firewall port range drifted")
-        normalized.append(
-            {
-                "description": description,
-                "port_range": ports,
-                "protocol": protocol,
-                "source_network": source,
-            }
-        )
-    encoded_rows = [json.dumps(row, sort_keys=True, separators=(",", ":")) for row in normalized]
-    encoded = json.dumps(sorted(encoded_rows), separators=(",", ":")).encode()
-    return hashlib.sha256(encoded).hexdigest()
+    # Keep the manual observer's public exception boundary while sharing one exact
+    # canonicalization contract with capture and future restoration payloads.
+    from .lambda_firewall_baseline import (
+        FirewallBaselineError,
+        canonicalize_firewall_rules,
+    )
+
+    try:
+        return canonicalize_firewall_rules(rules).semantic_sha256
+    except FirewallBaselineError:
+        raise L2MContractError("firewall rule semantics are incomplete or invalid") from None
 
 
 def verify_global_firewall_restoration(
