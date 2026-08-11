@@ -13,18 +13,18 @@ authorized_run_profile:
   profile_sha256: null
   condition_plan_sha256s: []
 planned_execution_substrate:
-  decision_state: high-assurance-infrastructure-frozen
+  decision_state: bounded-smoke-v1-ready-unauthorized
   provider: lambda-on-demand-cloud
   architecture: x86_64
   persistent_filesystem: false
   gate_l1_authorized: false
   gate_l1_evidence_state: complete-externally-sealed
   gate_l2_authorized: false
-  gate_l2_decision_state: high-assurance-track-frozen
-  gate_l3_state: deferred-for-bounded-smoke
+  gate_l2_decision_state: bounded-manual-console-plan-ready-unauthorized
+  gate_l3_state: folded-into-bounded-preflight-unauthorized
   gate_l4_authorized: false
   local_alternatives: terminal-rejected
-  decision_document: docs/harness/T07_GATE_L0_LAMBDA_HOST_DECISION.md
-  security_decision_document: docs/harness/T07_HIGH_ASSURANCE_INFRASTRUCTURE_CLOSEOUT.md
+  decision_document: docs/harness/T07_BOUNDED_SMOKE_GOVERNANCE.md
+  security_decision_document: docs/harness/T07_BOUNDED_SMOKE_EXECUTION_PLAN.md
 authoritative_plan: docs/exec-plans/active/PHASE_1_ARTIFACT_EXECUTION.md
 last_updated: "2026-08-11"

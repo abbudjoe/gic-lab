@@ -73,6 +73,28 @@ capacity, the retained-free floor is recalculated as
 and a post-copy retained-floor check are mandatory. The Mac mini source remains until
 independent archive verification.
 
+The bounded T07 research-smoke profile supersedes the earlier 64 MiB local-evidence
+figures only for `RUN-T07-BOUNDED-HOST-0001`. Each container writes to a 67,108,864-byte
+tmpfs and is copied out before container removal; there is no writable host evidence
+bind. Per-condition retained output remains capped at 104,857,600 bytes and the two
+conditions at 209,715,200 bytes. The complete remote bundle is capped at 268,435,456
+bytes. Local retained provider responses (13,631,488 bytes), ledger (262,144 bytes),
+authorization/private metadata and verification overhead bring the exact local and
+external archive cap to 301,989,888 bytes. Therefore the Mac mini prewrite floor is
+8,891,924,480 bytes (8 GiB retained floor plus the archive increment), and at least
+8,589,934,592 bytes must remain afterward. For the currently observed external APFS
+container, the retained floor is 200,048,192,717 bytes and the prewrite floor is
+200,350,182,605 bytes. Both values are rederived from a fresh observation; a different
+container capacity stops rather than silently changing the committed contract.
+
+The local archive driver admits only the fixed run-root files, scans them for
+credential-shaped material, copies through held no-follow descriptors, reads every
+destination file back, compares source and destination bytes/SHA-256, fsyncs files and
+directories, atomically renames the fresh staging directory, retains the local source,
+and performs post-copy identity and free-space checks. Mutable remote work and Docker
+state remain on the ephemeral Lambda instance and are never placed on the retained
+volume.
+
 Gate L1 V3 inventory uses a smaller dedicated retention contract. Before any account
 GET, the Mac mini must retain at least 8,590,868,480 bytes free: 8 GiB operational
 headroom plus a conservative 933,888-byte local write/finalization increment. That

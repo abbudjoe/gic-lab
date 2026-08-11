@@ -133,6 +133,7 @@ DEFERRED_LIMITATIONS: Final = (
     "provider_or_control_plane_outage_can_extend_billing",
     "runtime_supply_chain_pinning_is_practical_not_exhaustive_attestation",
     "setup_is_manually_supervised_and_not_production_automation",
+    "setup_network_wire_bytes_are_admission_and_disk_accounted_not_exactly_metered",
     "one_pair_smoke_has_no_scientific_power",
 )
 POST_LAUNCH_STOP_CONDITIONS: Final = (
@@ -145,24 +146,27 @@ POST_LAUNCH_STOP_CONDITIONS: Final = (
     "pair_contract_drift",
 )
 STEP_CONTRACT: Final = (
-    (1, "observer", "read_only_provider_preflight"),
-    (2, "user", "apply_temporary_private_32_global_firewall_if_needed"),
-    (3, "user", "create_one_unique_owned_regional_ruleset_if_needed"),
-    (4, "user", "launch_exactly_one_selected_instance_with_one_click"),
-    (5, "observer", "bind_exactly_one_owned_instance"),
-    (6, "user", "open_cloud_ide_jupyter"),
-    (7, "user", "upload_exact_bounded_bundle_secret_file_and_authorization"),
-    (8, "bootstrap", "run_hash_first_bootstrap_once"),
-    (9, "bootstrap", "run_no_network_browser_lifecycle_preflight"),
-    (10, "bootstrap", "verify_exact_model_snapshot_once"),
-    (11, "bootstrap", "run_reactive_once_then_simulative_once"),
-    (12, "bootstrap", "capture_remove_and_verify_owned_containers"),
-    (13, "user", "download_evidence_bundle"),
-    (14, "local-verifier", "verify_evidence_manifest_hashes_and_retain_source"),
-    (15, "user", "terminate_exact_bound_instance"),
-    (16, "observer", "verify_no_running_owned_instance"),
-    (17, "user", "delete_owned_regional_ruleset_and_restore_global_firewall_if_changed"),
-    (18, "observer", "verify_ruleset_absence_and_exact_firewall_restoration"),
+    (1, "local-verifier", "materialize_fresh_external_authorization_and_private_binding"),
+    (2, "observer", "read_only_provider_preflight"),
+    (3, "user", "apply_temporary_private_32_global_firewall_if_needed"),
+    (4, "user", "create_one_unique_owned_regional_ruleset_if_needed"),
+    (5, "observer", "verify_exact_security_controls_before_launch"),
+    (6, "user", "launch_exactly_one_selected_instance_with_one_click"),
+    (7, "observer", "bind_exactly_one_owned_instance"),
+    (8, "user", "open_cloud_ide_jupyter"),
+    (9, "user", "upload_exact_bounded_bundle_secret_file_and_authorization"),
+    (10, "bootstrap", "run_hash_first_bootstrap_once"),
+    (11, "bootstrap", "run_no_network_browser_lifecycle_preflight"),
+    (12, "bootstrap", "verify_exact_model_snapshot_once"),
+    (13, "bootstrap", "run_reactive_once_then_simulative_once"),
+    (14, "bootstrap", "capture_remove_verify_and_package_success_or_failure_evidence"),
+    (15, "user", "download_success_or_failure_evidence_and_identity_records"),
+    (16, "local-verifier", "verify_inbound_manifest_hashes_and_retain_source"),
+    (17, "user", "terminate_exact_bound_instance"),
+    (18, "observer", "verify_exact_instance_terminal_or_absent_and_billing_stopped"),
+    (19, "user", "delete_owned_regional_ruleset_and_restore_global_firewall_if_changed"),
+    (20, "observer", "verify_ruleset_absence_and_exact_firewall_restoration"),
+    (21, "local-verifier", "seal_and_copy_complete_or_failed_evidence_to_external_archive"),
 )
 PUBLIC_METADATA: Final = (
     {
@@ -208,6 +212,7 @@ REQUIRED_IMPLEMENTATION_ARTIFACTS: Final = frozenset(
         "containers/sira-smoke/bounded/.dockerignore",
         "containers/sira-smoke/bounded/Containerfile.amd64",
         "containers/sira-smoke/bounded/bootstrap.py",
+        "containers/sira-smoke/bounded/local_supervisor_bootstrap.py",
         "containers/sira-smoke/bounded/browser_preflight.py",
         "containers/sira-smoke/bounded/harness_init.py",
         "containers/sira-smoke/bounded/model_preflight.py",
@@ -215,11 +220,28 @@ REQUIRED_IMPLEMENTATION_ARTIFACTS: Final = frozenset(
         "containers/sira-smoke/fixtures/static.html",
         "containers/sira-smoke/sira-immutable-model-routing.patch",
         "schemas/t07-bounded-smoke-evidence.schema.json",
+        "schemas/t07-bounded-smoke-authorization.schema.json",
+        "schemas/t07-bounded-smoke-observer-ledger.schema.json",
         "schemas/t07-bounded-smoke-plan.schema.json",
+        "schemas/t07-bounded-smoke-private-binding.schema.json",
+        "containers/sira-smoke/lambda/endpoint-schemas-v3/firewall-rulesets.schema.json",
+        "containers/sira-smoke/lambda/endpoint-schemas-v3/global-firewall-ruleset.schema.json",
+        "containers/sira-smoke/lambda/endpoint-schemas-v3/images.schema.json",
+        "containers/sira-smoke/lambda/endpoint-schemas-v3/instance-types.schema.json",
+        "containers/sira-smoke/lambda/endpoint-schemas-v3/instances.schema.json",
+        "containers/sira-smoke/lambda/endpoint-schemas-v3/regions.schema.json",
+        "containers/sira-smoke/lambda/endpoint-schemas-v3/ssh-keys.schema.json",
+        "docs/COMPUTE_POLICY.md",
+        "docs/PROJECT_STATE.yaml",
+        "docs/STORAGE_POLICY.md",
+        "manifests/compute.yaml",
         "src/giclab/__init__.py",
+        "src/giclab/harness/lambda_archive.py",
         "src/giclab/harness/sira_gate_a.py",
         "src/giclab/harness/sira_gate_a_runtime.py",
+        "src/giclab/harness/sira_storage.py",
         "src/giclab/harness/t07_bounded_smoke.py",
+        "src/giclab/harness/t07_bounded_supervisor.py",
         "src/giclab/registry.py",
     }
 )
@@ -274,20 +296,35 @@ LIMITS: Final[Mapping[str, int | str]] = MappingProxyType(
         "projected_provider_cost_cents": 129,
         "condition_output_bytes_each": 104_857_600,
         "condition_output_bytes_aggregate": 209_715_200,
-        "sealed_bundle_bytes": 268_435_456,
+        "condition_payload_tmpfs_bytes_each": 67_108_864,
+        "condition_control_evidence_reserve_bytes_each": 37_748_736,
+        "sealed_bundle_bytes": 301_989_888,
         "remote_evidence_bytes": 268_435_456,
-        "local_evidence_bytes": 268_435_456,
+        "local_evidence_bytes": 301_989_888,
         "bootstrap_process_output_bytes": 33_554_432,
         "docker_control_output_bytes": 33_554_432,
         "docker_lifecycle_calls": 128,
+        "docker_lifecycle_call_scope": "aggregate-work-and-cleanup",
         "owned_containers": 4,
         "lambda_read_only_gets": 13,
         "lambda_response_bytes_per_get": 1_048_576,
         "lambda_response_bytes_aggregate": 13_631_488,
-        "lambda_observer_wall_seconds": 5_400,
-        "network_download_bytes": 2_147_483_648,
+        "lambda_observer_ledger_bytes": 262_144,
+        "lambda_observer_ledger_events": 96,
+        "lambda_observer_event_bytes": 4_096,
+        "lambda_observer_wall_seconds": 3_600,
+        "local_authorization_bytes": 65_536,
+        "local_private_binding_bytes": 1_048_576,
+        "archive_files": 128,
+        "archive_wall_seconds": 600,
+        "network_download_admission_bytes": 2_147_483_648,
+        "network_download_metering": "exact-for-uv-only-setup-disk-delta-enforced",
         "runtime_disk_increment_bytes": 17_179_869_184,
         "remote_preflight_free_bytes": 34_359_738_368,
+        "mac_prewrite_floor_bytes": 8_891_924_480,
+        "mac_retained_floor_bytes": 8_589_934_592,
+        "external_prewrite_floor_bytes": 200_350_182_605,
+        "external_retained_floor_bytes": 200_048_192_717,
         "container_cpu_millis": 2_000,
         "container_memory_bytes": 4_294_967_296,
         "container_memory_swap_bytes": 4_294_967_296,
@@ -562,8 +599,8 @@ def browser_preflight_create_argv() -> tuple[str, ...]:
     )
     argv.extend(
         (
-            "--mount",
-            "type=bind,src=${HOST_ATTEMPT_ROOT},dst=/giclab/attempt,rw",
+            "--tmpfs",
+            "/giclab/attempt:rw,noexec,nosuid,nodev,size=67108864,uid=1000,gid=1000,mode=0700",
             "--entrypoint",
             "/usr/bin/python3",
             "${IMAGE_ID}",
@@ -586,8 +623,8 @@ def model_preflight_create_argv() -> tuple[str, ...]:
     )
     argv.extend(
         (
-            "--mount",
-            "type=bind,src=${HOST_ATTEMPT_ROOT},dst=/giclab/evidence,rw",
+            "--tmpfs",
+            "/giclab/attempt:rw,noexec,nosuid,nodev,size=67108864,uid=1000,gid=1000,mode=0700",
             "--mount",
             "type=bind,src=${SIRA_SECRET_FILE},dst=/run/secrets/sira_api_key,readonly",
             "--entrypoint",
@@ -618,8 +655,8 @@ def container_create_argv(condition: str) -> tuple[str, ...]:
     )
     argv.extend(
         (
-            "--mount",
-            "type=bind,src=${HOST_ATTEMPT_ROOT},dst=/giclab/attempt,rw",
+            "--tmpfs",
+            "/giclab/attempt:rw,noexec,nosuid,nodev,size=67108864,uid=1000,gid=1000,mode=0700",
             "--mount",
             "type=bind,src=${SIRA_SECRET_FILE},dst=/run/secrets/sira_api_key,readonly",
             "--entrypoint",
@@ -646,6 +683,20 @@ def lifecycle_argv_templates() -> dict[str, list[str]]:
             "${CONTAINER_ID}",
             "-eo",
             "pid,ppid,pgid,sid,stat,comm,args",
+        ],
+        "readiness": [
+            "/usr/bin/docker",
+            "exec",
+            "${CONTAINER_ID}",
+            "/usr/bin/test",
+            "-f",
+            "${READINESS_PATH}",
+        ],
+        "copy_out": [
+            "/usr/bin/docker",
+            "cp",
+            "${CONTAINER_ID}:/giclab/attempt/.",
+            "${HOST_ATTEMPT_ROOT}",
         ],
         "stop": ["/usr/bin/docker", "stop", "--time", "5", "${CONTAINER_ID}"],
         "kill": ["/usr/bin/docker", "kill", "${CONTAINER_ID}"],
@@ -709,6 +760,71 @@ def bootstrap_argv_template() -> tuple[str, ...]:
     )
 
 
+def local_supervisor_argv_templates() -> dict[str, list[str]]:
+    repository = "${REPOSITORY_ROOT}"
+    base = [
+        "/usr/bin/python3",
+        "-I",
+        repository + "/containers/sira-smoke/bounded/local_supervisor_bootstrap.py",
+        "--repository-root",
+        repository,
+        "--supervisor-file",
+        repository + "/src/giclab/harness/t07_bounded_supervisor.py",
+        "--supervisor-sha256",
+        "${SUPERVISOR_SHA256}",
+        "--plan",
+        repository + "/containers/sira-smoke/bounded/bounded-smoke-plan-v1.json",
+        "--plan-sha256",
+        "${PLAN_SHA256}",
+        "--contract-file",
+        repository + "/src/giclab/harness/t07_bounded_smoke.py",
+        "--contract-sha256",
+        "${CONTRACT_SHA256}",
+        "--expected-commit",
+        "${EXECUTION_COMMIT}",
+    ]
+    authority = [
+        "--authorization",
+        repository + "/artifacts/t07/bounded/RUN-T07-BOUNDED-HOST-0001/authorization.json",
+        "--authorization-sha256",
+        "${AUTHORIZATION_SHA256}",
+        "--private-binding",
+        repository + "/artifacts/t07/bounded/RUN-T07-BOUNDED-HOST-0001/private-binding.json",
+        "--private-binding-sha256",
+        "${PRIVATE_BINDING_SHA256}",
+    ]
+    output: dict[str, list[str]] = {
+        "materialize": [
+            *base,
+            "materialize",
+            "--authorization-reference",
+            "${AUTHORIZATION_REFERENCE}",
+            "--source-parameters",
+            repository + "/artifacts/t07/lambda/gate-l2m/"
+            "RUN-T07-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-0003/"
+            "materialization-v1/private-parameters.json",
+            "--source-parameters-sha256",
+            "a9b210594ed3b4c962f414b8a2d9509d14a2d7deb097050e92321e6da4d5d096",
+            "--restoration-payload",
+            repository + "/artifacts/t07/lambda/gate-l2m/"
+            "T07-HIGH-ASSURANCE-FIREWALL-CLOSEOUT-0001/restoration-payload.json",
+            "--restoration-payload-sha256",
+            "50ca7febe9f160ada862371376485ea2ece11b373d25179ccd578d9c7acd42b8",
+        ],
+    }
+    for phase in ("prelaunch", "security", "post_launch", "termination", "terminal"):
+        output[f"observe_{phase}"] = [*base, "observe", *authority, "--phase", phase]
+    for disposition in ("complete", "failed"):
+        output[f"archive_{disposition}"] = [
+            *base,
+            "archive",
+            *authority,
+            "--disposition",
+            disposition,
+        ]
+    return output
+
+
 def provider_observer_contract() -> dict[str, object]:
     return {
         "transport": "in-process-https-no-shell",
@@ -730,22 +846,40 @@ def provider_observer_contract() -> dict[str, object]:
                 ],
             },
             {
-                "phase": "post_launch_bind",
+                "phase": "security",
                 "paths": [
                     "/api/v1/firewall-rulesets",
                     "/api/v1/firewall-rulesets/global",
+                ],
+            },
+            {
+                "phase": "post_launch",
+                "paths": [
                     "/api/v1/instances",
                 ],
             },
             {
-                "phase": "terminal_cleanup",
+                "phase": "termination",
                 "paths": [
                     "/api/v1/instances",
+                ],
+            },
+            {
+                "phase": "terminal",
+                "paths": [
                     "/api/v1/firewall-rulesets",
                     "/api/v1/firewall-rulesets/global",
                 ],
             },
         ],
+        "request_ledger": {
+            "path": ("artifacts/t07/bounded/RUN-T07-BOUNDED-HOST-0001/request-ledger.jsonl"),
+            "fsync_each_event": True,
+            "max_bytes": 262_144,
+            "max_events": 96,
+            "max_event_bytes": 4_096,
+        },
+        "argv_templates": local_supervisor_argv_templates(),
     }
 
 
@@ -760,8 +894,10 @@ def storage_contract() -> dict[str, object]:
         "external_archive_root": (
             EXTERNAL_ARCHIVE_MOUNT + "/GIC-Lab/t07/sealed-artifacts/RUN-T07-BOUNDED-HOST-0001"
         ),
-        "external_prewrite_floor_bytes": 200_316_628_173,
-        "mac_prewrite_floor_bytes": 8_858_370_048,
+        "archive_cap_bytes": 301_989_888,
+        "external_retained_floor_bytes": 200_048_192_717,
+        "external_prewrite_floor_bytes": 200_350_182_605,
+        "mac_prewrite_floor_bytes": 8_891_924_480,
         "mac_retained_floor_bytes": 8_589_934_592,
         "one_way_copy": True,
         "source_retained_until_destination_hash_verified": True,
@@ -1401,6 +1537,7 @@ __all__ = [
     "condition_inner_argv",
     "container_create_argv",
     "lifecycle_argv_templates",
+    "local_supervisor_argv_templates",
     "materialize_argv",
     "model_preflight_create_argv",
     "provider_observer_contract",

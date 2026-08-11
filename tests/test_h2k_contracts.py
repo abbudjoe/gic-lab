@@ -102,4 +102,19 @@ def test_t04_5_preserves_zero_execution_control_plane() -> None:
     assert summary["prototype_runs"] == 0
     assert summary["benchmark_runs"] == 0
     assert summary["training_runs"] == 0
-    assert compute["entries"] == []
+    assert compute["entries"] == [
+        {
+            "id": "CMP-0001",
+            "experiment_id": "EXP-0001",
+            "provider": "Lambda On-Demand Cloud",
+            "hardware": "gpu_1x_a10",
+            "region": "us-east-1",
+            "started_at": None,
+            "ended_at": None,
+            "wall_clock_hours": 0.0,
+            "accelerator_hours": 0.0,
+            "cost_usd": 0.0,
+            "authorization_reference": "AUTH-T07-BOUNDED-SIRA-SMOKE-V1-PENDING",
+            "status": "planned",
+        }
+    ]

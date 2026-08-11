@@ -11,7 +11,7 @@ from pathlib import Path
 HOST = "api.openai.com"
 MODEL = "gpt-4o-2024-11-20"
 PATH = f"/v1/models/{MODEL}"
-OUTPUT = Path("/giclab/evidence/model-availability.json")
+OUTPUT = Path("/giclab/attempt/model-availability.json")
 MAX_RESPONSE_BYTES = 65_536
 
 

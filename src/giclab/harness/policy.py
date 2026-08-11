@@ -69,11 +69,28 @@ class PlannedExecutionSubstrate:
     security_decision_document: str
 
     def __post_init__(self) -> None:
+        profile_fields = {
+            "high-assurance-infrastructure-frozen": {
+                "gate_l2_decision_state": "high-assurance-track-frozen",
+                "gate_l3_state": "deferred-for-bounded-smoke",
+                "decision_document": "docs/harness/T07_GATE_L0_LAMBDA_HOST_DECISION.md",
+                "security_decision_document": (
+                    "docs/harness/T07_HIGH_ASSURANCE_INFRASTRUCTURE_CLOSEOUT.md"
+                ),
+            },
+            "bounded-smoke-v1-ready-unauthorized": {
+                "gate_l2_decision_state": "bounded-manual-console-plan-ready-unauthorized",
+                "gate_l3_state": "folded-into-bounded-preflight-unauthorized",
+                "decision_document": "docs/harness/T07_BOUNDED_SMOKE_GOVERNANCE.md",
+                "security_decision_document": "docs/harness/T07_BOUNDED_SMOKE_EXECUTION_PLAN.md",
+            },
+        }
+        selected_profile = profile_fields.get(self.decision_state)
+        if selected_profile is None:
+            raise ValueError(
+                "planned substrate decision_state must name a reviewed substrate profile"
+            )
         expected = {
-            "decision_state": (
-                self.decision_state,
-                "high-assurance-infrastructure-frozen",
-            ),
             "provider": (self.provider, "lambda-on-demand-cloud"),
             "architecture": (self.architecture, "x86_64"),
             "gate_l1_evidence_state": (
@@ -82,17 +99,17 @@ class PlannedExecutionSubstrate:
             ),
             "gate_l2_decision_state": (
                 self.gate_l2_decision_state,
-                "high-assurance-track-frozen",
+                selected_profile["gate_l2_decision_state"],
             ),
-            "gate_l3_state": (self.gate_l3_state, "deferred-for-bounded-smoke"),
+            "gate_l3_state": (self.gate_l3_state, selected_profile["gate_l3_state"]),
             "local_alternatives": (self.local_alternatives, "terminal-rejected"),
             "decision_document": (
                 self.decision_document,
-                "docs/harness/T07_GATE_L0_LAMBDA_HOST_DECISION.md",
+                selected_profile["decision_document"],
             ),
             "security_decision_document": (
                 self.security_decision_document,
-                "docs/harness/T07_HIGH_ASSURANCE_INFRASTRUCTURE_CLOSEOUT.md",
+                selected_profile["security_decision_document"],
             ),
         }
         for field, (observed, required) in expected.items():

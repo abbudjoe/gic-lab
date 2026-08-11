@@ -149,13 +149,13 @@ def test_high_assurance_capture_plan_is_burned_and_no_manual_v4_exists() -> None
     assert not V4_PLAN.exists()
 
 
-def test_frozen_track_stops_capture_preflight_before_secret_or_transport() -> None:
+def test_historical_capture_binding_stops_before_secret_or_transport() -> None:
     authorization = baseline.CaptureAuthorization(
         "a" * 40,
         "AUTH-T07-GATE-L2M-FIREWALL-BASELINE-CAPTURE-V1-TEST",
         "b" * 64,
     )
-    with pytest.raises(FirewallBaselineError, match="track is frozen"):
+    with pytest.raises(FirewallBaselineError, match="capture plan SHA-256 drifted"):
         baseline.verify_capture_preflight(
             ROOT,
             plan_path=ROOT / baseline.CAPTURE_PLAN_RELATIVE,

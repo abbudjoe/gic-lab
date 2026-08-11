@@ -9,6 +9,7 @@ manual console lifecycle in the bound runbook.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import http.client
 import importlib.util
@@ -26,7 +27,7 @@ import urllib.parse
 import zipfile
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import ModuleType
 from typing import Final, cast
@@ -36,7 +37,10 @@ MAX_AUTHORIZATION_BYTES: Final = 65_536
 MAX_COMMAND_OUTPUT_BYTES: Final = 33_554_432
 MAX_DOWNLOAD_BYTES: Final = 2_147_483_648
 MAX_EVIDENCE_BYTES: Final = 268_435_456
+MAX_FAILURE_EVIDENCE_BYTES: Final = 268_435_456
 MAX_EVIDENCE_FILES: Final = 4_096
+MAX_ATTEMPT_PAYLOAD_BYTES: Final = 67_108_864
+MAX_RUNTIME_DISK_INCREMENT_BYTES: Final = 17_179_869_184
 MIN_REMOTE_FREE_BYTES: Final = 34_359_738_368
 HARD_PROVIDER_WALL_SECONDS: Final = 3_600
 TERMINATION_HEADROOM_SECONDS: Final = 300
@@ -44,6 +48,16 @@ _HEX40 = re.compile(r"^[a-f0-9]{40}$")
 _HEX64 = re.compile(r"^[a-f0-9]{64}$")
 _IMAGE_ID = re.compile(r"^sha256:[a-f0-9]{64}$")
 _AUTHORIZATION = re.compile(r"^AUTH-T07-BOUNDED-SIRA-SMOKE-V1-[A-Z0-9._-]{3,80}$")
+_SECRET_SHAPES: Final = (
+    re.compile(rb"\bsk-[A-Za-z0-9_-]{20,}\b"),
+    re.compile(rb"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
+    re.compile(
+        rb"(?im)^[ \t]*[A-Z0-9_]*(?:API_"
+        rb"KEY|TO"
+        rb"KEN|SE"
+        rb"CRET)[ \t]*=[^\r\n]+$"
+    ),
+)
 
 
 class BootstrapError(RuntimeError):
@@ -59,6 +73,26 @@ class CommandResult:
     elapsed_seconds: float
 
 
+@dataclass(slots=True)
+class CommandMeter:
+    """One aggregate command/output budget shared by work and cleanup paths."""
+
+    max_calls: int
+    output_cap: int
+    call_count: int = 0
+    output_bytes: int = 0
+
+    def begin_call(self) -> None:
+        if self.call_count >= self.max_calls:
+            raise BootstrapError("bounded command call cap is exhausted")
+        self.call_count += 1
+
+    def add_output(self, count: int) -> None:
+        self.output_bytes += count
+        if self.output_bytes > self.output_cap:
+            raise BootstrapError("bounded command output exceeded its aggregate cap")
+
+
 class CommandRunner:
     """Shell-free subprocess runner with one monotonic deadline and output cap."""
 
@@ -68,12 +102,18 @@ class CommandRunner:
         deadline: float,
         output_cap: int = MAX_COMMAND_OUTPUT_BYTES,
         max_calls: int = 128,
+        meter: CommandMeter | None = None,
     ) -> None:
         self.deadline = deadline
-        self.output_cap = output_cap
-        self.max_calls = max_calls
-        self.call_count = 0
-        self.output_bytes = 0
+        self.meter = meter or CommandMeter(max_calls=max_calls, output_cap=output_cap)
+
+    @property
+    def call_count(self) -> int:
+        return self.meter.call_count
+
+    @property
+    def output_bytes(self) -> int:
+        return self.meter.output_bytes
 
     def remaining(self) -> float:
         value = self.deadline - time.monotonic()
@@ -92,9 +132,7 @@ class CommandRunner:
         command = tuple(argv)
         if not command or any(not isinstance(item, str) or not item for item in command):
             raise BootstrapError("command array is invalid")
-        if self.call_count >= self.max_calls:
-            raise BootstrapError("bounded command call cap is exhausted")
-        self.call_count += 1
+        self.meter.begin_call()
         allowed = self.remaining()
         if timeout is not None:
             if not isinstance(timeout, (int, float)) or timeout <= 0:
@@ -141,10 +179,11 @@ class CommandRunner:
                         selector.unregister(key.fileobj)
                         continue
                     output[key.data].extend(chunk)
-                    self.output_bytes += len(chunk)
-                    if self.output_bytes > self.output_cap:
+                    try:
+                        self.meter.add_output(len(chunk))
+                    except BootstrapError:
                         process.kill()
-                        raise BootstrapError("bounded command output exceeded its aggregate cap")
+                        raise
             returncode = process.wait(timeout=max(0.1, allowed - (time.monotonic() - started)))
         except BootstrapError:
             process.kill()
@@ -259,17 +298,23 @@ def validate_authorization(
         "authorized",
         "authorization_reference",
         "execution_commit",
+        "branch",
         "plan_id",
         "plan_sha256",
         "host_run_id",
+        "condition_run_ids",
+        "supervised_wall_started_at_utc",
         "expires_at_utc",
-        "provider_launch_at_utc",
+        "private_binding_sha256",
+        "limits_sha256",
         "pricing",
+        "permissions",
         "user_present",
         "manual_termination_path_confirmed",
     }
     reference = document.get("authorization_reference")
     pricing = document.get("pricing")
+    permissions = document.get("permissions")
     if (
         set(document) != expected_keys
         or document.get("schema_version") != "0.1.0"
@@ -277,9 +322,16 @@ def validate_authorization(
         or not isinstance(reference, str)
         or _AUTHORIZATION.fullmatch(reference) is None
         or reference.endswith("-PENDING")
+        or document.get("branch") != contract.BRANCH
         or document.get("plan_id") != contract.PLAN_ID
         or document.get("host_run_id") != contract.HOST_RUN_ID
         or document.get("plan_sha256") != plan_sha256
+        or document.get("condition_run_ids")
+        != [contract.REACTIVE_RUN_ID, contract.SIMULATIVE_RUN_ID]
+        or not isinstance(document.get("private_binding_sha256"), str)
+        or _HEX64.fullmatch(str(document["private_binding_sha256"])) is None
+        or document.get("limits_sha256")
+        != _sha256(contract.canonical_json_bytes(dict(contract.LIMITS)))
         or not isinstance(document.get("execution_commit"), str)
         or _HEX40.fullmatch(str(document["execution_commit"])) is None
         or document.get("user_present") is not True
@@ -293,13 +345,30 @@ def validate_authorization(
             "output_usd_per_million": 10.0,
             "lambda_cents_per_hour": 129,
         }
+        or permissions
+        != {
+            "lambda_read_only_gets": 13,
+            "user_cloud_mutations": True,
+            "paid_compute": True,
+            "prototype_execution": True,
+            "scientific_interpretation": False,
+            "training": False,
+            "pilot": False,
+            "ssh": False,
+        }
     ):
         raise BootstrapError("authorization contract is incomplete or drifted")
     now = datetime.now(UTC)
-    launch = _parse_utc(document.get("provider_launch_at_utc"), context="provider launch time")
+    launch = _parse_utc(
+        document.get("supervised_wall_started_at_utc"), context="supervised wall start"
+    )
     expiry = _parse_utc(document.get("expires_at_utc"), context="authorization expiry")
     elapsed = (now - launch).total_seconds()
-    if not 0 <= elapsed < HARD_PROVIDER_WALL_SECONDS or now >= expiry:
+    if (
+        expiry - launch != timedelta(seconds=HARD_PROVIDER_WALL_SECONDS)
+        or not 0 <= elapsed < HARD_PROVIDER_WALL_SECONDS
+        or now >= expiry
+    ):
         raise BootstrapError("authorization or provider wall is expired")
     if HARD_PROVIDER_WALL_SECONDS - elapsed <= TERMINATION_HEADROOM_SECONDS:
         raise BootstrapError("provider termination headroom is exhausted")
@@ -422,6 +491,12 @@ def _assert_remote_capacity(root: Path) -> None:
     free = shutil.disk_usage(root.parent).free
     if free < MIN_REMOTE_FREE_BYTES:
         raise BootstrapError("remote root has insufficient free space")
+
+
+def _assert_runtime_disk_increment(root: Path, *, starting_free_bytes: int) -> None:
+    current_free = shutil.disk_usage(root.parent).free
+    if starting_free_bytes - current_free > MAX_RUNTIME_DISK_INCREMENT_BYTES:
+        raise BootstrapError("runtime disk increment exceeded its cap")
 
 
 def _artifact_map(plan: Mapping[str, object]) -> dict[str, tuple[int, str]]:
@@ -679,6 +754,18 @@ def _line_count(encoded: bytes) -> int:
     return len([line for line in encoded.splitlines() if line.strip()])
 
 
+def _regular_tree_bytes(root: Path) -> int:
+    total = 0
+    for path in root.rglob("*"):
+        if path.is_symlink():
+            raise BootstrapError("attempt evidence contains a symlink")
+        if path.is_file():
+            total += path.stat(follow_symlinks=False).st_size
+            if total > MAX_EVIDENCE_BYTES:
+                raise BootstrapError("attempt evidence exceeds the aggregate cap")
+    return total
+
+
 def _cleanup_container(
     *,
     container_id: str,
@@ -779,9 +866,15 @@ def run_owned_container(
     evidence_root: Path,
     attached: bool,
     wall_seconds: int,
-    readiness_path: Path | None = None,
+    readiness_container_path: str | None = None,
 ) -> CommandResult:
-    argv = contract.materialize_argv(create_template, substitutions)
+    needed = {
+        match.group(0)
+        for item in create_template
+        for match in re.finditer(r"\$\{[A-Z][A-Z0-9_]*\}", item)
+    }
+    create_substitutions = {key: value for key, value in substitutions.items() if key in needed}
+    argv = contract.materialize_argv(create_template, create_substitutions)
     created = work_runner.run(
         argv,
         cwd=evidence_root,
@@ -790,11 +883,11 @@ def run_owned_container(
     container_id = created.stdout.decode("utf-8", "strict").strip()
     if re.fullmatch(r"[a-f0-9]{64}", container_id) is None:
         raise BootstrapError("Docker create did not return an immutable container ID")
-    _write_bytes(evidence_root / "container-id.txt", container_id.encode() + b"\n", cap=128)
     lifecycle_substitutions = {"${CONTAINER_ID}": container_id, "${RUN_ID}": run_id}
-    primary_error: Exception | None = None
+    primary_error: BaseException | None = None
     result: CommandResult | None = None
     try:
+        _write_bytes(evidence_root / "container-id.txt", container_id.encode() + b"\n", cap=128)
         action = "start_attached" if attached else "start_detached"
         result = work_runner.run(
             _render_lifecycle(plan, contract, action, lifecycle_substitutions),
@@ -802,12 +895,28 @@ def run_owned_container(
             timeout=min(wall_seconds, work_runner.remaining()),
             check=False,
         )
-        if readiness_path is not None:
+        if readiness_container_path is not None:
             readiness_deadline = min(time.monotonic() + 45, work_runner.deadline)
-            while not readiness_path.is_file():
+            while True:
+                readiness = work_runner.run(
+                    _render_lifecycle(
+                        plan,
+                        contract,
+                        "readiness",
+                        {
+                            **lifecycle_substitutions,
+                            "${READINESS_PATH}": readiness_container_path,
+                        },
+                    ),
+                    cwd=evidence_root,
+                    timeout=min(5, work_runner.remaining()),
+                    check=False,
+                )
+                if readiness.returncode == 0:
+                    break
                 if time.monotonic() >= readiness_deadline:
                     raise BootstrapError("container readiness evidence was not produced")
-                time.sleep(0.1)
+                time.sleep(1)
         inspect = work_runner.run(
             _render_lifecycle(plan, contract, "inspect", lifecycle_substitutions),
             cwd=evidence_root,
@@ -821,14 +930,40 @@ def run_owned_container(
             check=False,
         )
         _write_bytes(evidence_root / "container-processes-before-stop.txt", top.stdout)
+        before_copy_bytes = _regular_tree_bytes(evidence_root)
+        copied = work_runner.run(
+            _render_lifecycle(
+                plan,
+                contract,
+                "copy_out",
+                {
+                    **lifecycle_substitutions,
+                    "${HOST_ATTEMPT_ROOT}": str(evidence_root),
+                },
+            ),
+            cwd=evidence_root,
+            timeout=min(60, work_runner.remaining()),
+        )
+        _capture_json_output(evidence_root / "container-copy-out.json", copied)
+        copied_bytes = _regular_tree_bytes(evidence_root) - before_copy_bytes
+        if not 0 <= copied_bytes <= MAX_ATTEMPT_PAYLOAD_BYTES:
+            raise BootstrapError("container payload exceeded its hard copy-out cap")
+        _write_json(
+            evidence_root / "container-copy-out-budget.json",
+            {
+                "payload_bytes": copied_bytes,
+                "payload_cap_bytes": MAX_ATTEMPT_PAYLOAD_BYTES,
+                "within_cap": True,
+            },
+        )
         _capture_json_output(evidence_root / "container-start.json", result)
         _write_bytes(evidence_root / "stdout.log", result.stdout)
         _write_bytes(evidence_root / "stderr.log", result.stderr)
         if attached and result.returncode != 0:
             raise BootstrapError("owned container workload returned failure")
-    except Exception as exc:
+    except BaseException as exc:
         primary_error = exc
-    cleanup_error: Exception | None = None
+    cleanup_error: BaseException | None = None
     try:
         _cleanup_container(
             container_id=container_id,
@@ -839,7 +974,7 @@ def run_owned_container(
             cleanup_runner=cleanup_runner,
             evidence_root=evidence_root,
         )
-    except Exception as exc:
+    except BaseException as exc:
         cleanup_error = exc
     if primary_error is not None:
         raise primary_error
@@ -872,7 +1007,6 @@ def run_condition(
     condition_root = evidence_root / contract.MODE_VALUES[condition]
     condition_root.mkdir(mode=0o700, exist_ok=False)
     substitutions = {
-        "${HOST_ATTEMPT_ROOT}": str(condition_root),
         "${SIRA_SECRET_FILE}": str(secret_file),
         "${EXECUTION_COMMIT}": str(authorization["execution_commit"]),
         "${AUTHORIZATION_REFERENCE}": str(authorization["authorization_reference"]),
@@ -926,6 +1060,81 @@ def package_evidence(evidence_root: Path, contract: ModuleType) -> Path:
             "source_retained": True,
         },
     )
+    return archive
+
+
+def package_failure_evidence(output_root: Path, evidence_root: Path, contract: ModuleType) -> Path:
+    """Create a bounded secret-scanned archive after any post-root bootstrap failure."""
+
+    archive = output_root / "t07-bounded-failure-evidence.zip"
+    candidates = [
+        path
+        for path in sorted(evidence_root.rglob("*"))
+        if path.is_file() and not path.is_symlink()
+    ]
+    incident = output_root / "TERMINATE_REQUIRED.json"
+    if incident.is_file() and not incident.is_symlink():
+        candidates.append(incident)
+    rows: list[dict[str, object]] = []
+    retained: list[tuple[str, bytes]] = []
+    skipped_sensitive = 0
+    skipped_cap = 0
+    payload_bytes = 0
+    payload_limit = MAX_FAILURE_EVIDENCE_BYTES - 1_048_576
+    for path in candidates[:MAX_EVIDENCE_FILES]:
+        relative = path.relative_to(output_root).as_posix()
+        try:
+            encoded = _read_regular(path, max_bytes=MAX_EVIDENCE_BYTES)
+        except BootstrapError:
+            skipped_cap += 1
+            continue
+        if any(pattern.search(encoded) for pattern in _SECRET_SHAPES):
+            skipped_sensitive += 1
+            continue
+        if payload_bytes + len(encoded) > payload_limit:
+            skipped_cap += 1
+            continue
+        retained.append((relative, encoded))
+        payload_bytes += len(encoded)
+        rows.append({"path": relative, "bytes": len(encoded), "sha256": _sha256(encoded)})
+    manifest = {
+        "schema_version": contract.SCHEMA_VERSION,
+        "plan_id": contract.PLAN_ID,
+        "host_run_id": contract.HOST_RUN_ID,
+        "disposition": "bootstrap_failed",
+        "files": rows,
+        "file_count": len(rows),
+        "payload_bytes": payload_bytes,
+        "skipped_secret_shaped_file_count": skipped_sensitive,
+        "skipped_cap_or_unsafe_file_count": skipped_cap
+        + max(0, len(candidates) - MAX_EVIDENCE_FILES),
+        "secret_values_retained": False,
+        "source_retained": True,
+    }
+    manifest_encoded = (
+        json.dumps(manifest, allow_nan=False, indent=2, sort_keys=True).encode() + b"\n"
+    )
+    with zipfile.ZipFile(archive, "x", compression=zipfile.ZIP_STORED) as output:
+        output.writestr("FAILURE_EVIDENCE_MANIFEST.json", manifest_encoded)
+        for relative, encoded in retained:
+            output.writestr(relative, encoded)
+    archive_size = archive.stat(follow_symlinks=False).st_size
+    if archive_size > MAX_FAILURE_EVIDENCE_BYTES:
+        archive.unlink()
+        raise BootstrapError("failure evidence archive exceeds its cap")
+    archive_encoded = _read_regular(archive, max_bytes=MAX_FAILURE_EVIDENCE_BYTES)
+    identity = {
+        "schema_version": contract.SCHEMA_VERSION,
+        "archive": archive.name,
+        "bytes": archive_size,
+        "sha256": _sha256(archive_encoded),
+        "manifest_sha256": _sha256(manifest_encoded),
+        "secret_scan_passed": True,
+        "source_retained": True,
+    }
+    _write_json(output_root / "FAILURE_ARCHIVE_IDENTITY.json", identity)
+    if evidence_root != output_root / "evidence":
+        raise BootstrapError("failure evidence root identity drifted")
     return archive
 
 
@@ -1042,22 +1251,29 @@ def main(argv: Sequence[str] | None = None) -> int:
     if output_root.exists() or output_root.resolve(strict=False) != output_root:
         raise BootstrapError("remote output root is not fresh and canonical")
     _assert_remote_capacity(output_root)
+    starting_free_bytes = shutil.disk_usage(output_root.parent).free
     _validate_secret_file(args.secret_file, forbidden_roots=(bundle_root, output_root))
     output_root.mkdir(mode=0o700, parents=True, exist_ok=False)
     evidence_root = output_root / "evidence"
     evidence_root.mkdir(mode=0o700)
     incident = output_root / "TERMINATE_REQUIRED.json"
-    launch = _parse_utc(authorization["provider_launch_at_utc"], context="provider launch time")
+    launch = _parse_utc(
+        authorization["supervised_wall_started_at_utc"], context="supervised wall start"
+    )
     remaining = HARD_PROVIDER_WALL_SECONDS - (datetime.now(UTC) - launch).total_seconds()
     now_monotonic = time.monotonic()
     cleanup_reserve = int(contract.LIMITS["container_cleanup_reserve_seconds"])
+    command_meter = CommandMeter(
+        max_calls=int(contract.LIMITS["docker_lifecycle_calls"]),
+        output_cap=int(contract.LIMITS["docker_control_output_bytes"]),
+    )
     work_runner = CommandRunner(
         deadline=now_monotonic + remaining - TERMINATION_HEADROOM_SECONDS - cleanup_reserve,
-        max_calls=int(contract.LIMITS["docker_lifecycle_calls"]),
+        meter=command_meter,
     )
     cleanup_runner = CommandRunner(
         deadline=now_monotonic + remaining - TERMINATION_HEADROOM_SECONDS,
-        max_calls=int(contract.LIMITS["docker_lifecycle_calls"]),
+        meter=command_meter,
     )
     try:
         context = prepare_build_context(
@@ -1075,6 +1291,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             contract=contract,
             evidence_root=evidence_root,
         )
+        _assert_runtime_disk_increment(output_root, starting_free_bytes=starting_free_bytes)
         preflights = plan.get("preflights")
         if not isinstance(preflights, Mapping):
             raise BootstrapError("preflight plan is unavailable")
@@ -1093,7 +1310,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             run_id=contract.BROWSER_PREFLIGHT_RUN_ID,
             create_template=browser_template,
             substitutions={
-                "${HOST_ATTEMPT_ROOT}": str(browser_root),
                 "${EXECUTION_COMMIT}": str(authorization["execution_commit"]),
                 "${AUTHORIZATION_REFERENCE}": str(authorization["authorization_reference"]),
                 "${IMAGE_ID}": image_id,
@@ -1105,7 +1321,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             evidence_root=browser_root,
             attached=False,
             wall_seconds=60,
-            readiness_path=browser_root / "browser-preflight.json",
+            readiness_container_path="/giclab/attempt/browser-preflight.json",
         )
         browser_record = _strict_json(
             _read_regular(browser_root / "browser-preflight.json", max_bytes=65_536),
@@ -1122,6 +1338,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             not in (browser_root / "container-processes-before-stop.txt").read_bytes().lower()
         ):
             raise BootstrapError("browser preflight identity or cleanup drifted")
+        _assert_runtime_disk_increment(output_root, starting_free_bytes=starting_free_bytes)
         _write_json(
             evidence_root / "image-provenance.json",
             {
@@ -1153,7 +1370,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             run_id=contract.MODEL_PREFLIGHT_RUN_ID,
             create_template=model_template,
             substitutions={
-                "${HOST_ATTEMPT_ROOT}": str(model_root),
                 "${SIRA_SECRET_FILE}": str(args.secret_file.resolve(strict=True)),
                 "${EXECUTION_COMMIT}": str(authorization["execution_commit"]),
                 "${AUTHORIZATION_REFERENCE}": str(authorization["authorization_reference"]),
@@ -1185,6 +1401,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "redirect_follow_count": 0,
         } or not isinstance(model_record.get("response_bytes"), int):
             raise BootstrapError("model availability evidence drifted")
+        _assert_runtime_disk_increment(output_root, starting_free_bytes=starting_free_bytes)
         run_condition(
             condition="SIRA-REACTIVE",
             plan=plan,
@@ -1196,6 +1413,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             secret_file=args.secret_file.resolve(strict=True),
             authorization=authorization,
         )
+        _assert_runtime_disk_increment(output_root, starting_free_bytes=starting_free_bytes)
         run_condition(
             condition="SIRA-SIMULATIVE",
             plan=plan,
@@ -1207,9 +1425,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             secret_file=args.secret_file.resolve(strict=True),
             authorization=authorization,
         )
+        _assert_runtime_disk_increment(output_root, starting_free_bytes=starting_free_bytes)
         validate_pair_evidence(evidence_root, contract)
         package_evidence(evidence_root, contract)
-    except Exception as exc:
+        _assert_runtime_disk_increment(output_root, starting_free_bytes=starting_free_bytes)
+    except BaseException as exc:
         _write_json(
             incident,
             {
@@ -1219,6 +1439,20 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "message_retained": False,
             },
         )
+        try:
+            package_failure_evidence(output_root, evidence_root, contract)
+        except BaseException:
+            with contextlib.suppress(BaseException):
+                _write_json(
+                    output_root / "FAILURE_ARCHIVE_ERROR.json",
+                    {
+                        "schema_version": "0.1.0",
+                        "failure_archive_complete": False,
+                        "failure_class": "failure_archive_unavailable",
+                        "message_retained": False,
+                        "provider_termination_required": True,
+                    },
+                )
         raise
     _write_json(
         incident,

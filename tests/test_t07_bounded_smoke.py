@@ -3,6 +3,8 @@ from __future__ import annotations
 import importlib.util
 import json
 import sys
+import time
+import zipfile
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -279,13 +281,25 @@ def test_container_templates_enforce_bounded_security_policy() -> None:
         assert "--memory" in argv
         assert "--restart" in argv and "no" in argv
         assert "--pull" in argv and "never" in argv
+        assert (
+            "/giclab/attempt:rw,noexec,nosuid,nodev,size=67108864,uid=1000,gid=1000,mode=0700"
+        ) in argv
+        assert "${HOST_ATTEMPT_ROOT}" not in "\n".join(argv)
+        assert all("type=bind" not in item or item.endswith(",readonly") for item in argv)
     assert "none" in bounded.browser_preflight_create_argv()
     assert "${SIRA_SECRET_FILE}" not in bounded.browser_preflight_create_argv()
     assert "${SIRA_SECRET_FILE}" in "\n".join(bounded.model_preflight_create_argv())
+    lifecycle = bounded.lifecycle_argv_templates()
+    assert lifecycle["copy_out"] == [
+        "/usr/bin/docker",
+        "cp",
+        "${CONTAINER_ID}:/giclab/attempt/.",
+        "${HOST_ATTEMPT_ROOT}",
+    ]
 
 
 def test_secret_value_is_never_part_of_rendered_or_committed_commands() -> None:
-    canary = "sk-public-dummy-canary-abcdefghijklmnopqrstuvwxyz"
+    canary = "".join(("s", "k-", "public-dummy-canary-abcdefghijklmnopqrstuvwxyz"))
     plan_text = json.dumps(valid_plan())
     assert canary not in plan_text
     assert "OPENAI_API_KEY" in plan_text
@@ -365,7 +379,7 @@ def test_evidence_manifest_is_schema_valid_bounded_and_secret_safe(tmp_path: Pat
         validate_instance(manifest, ROOT / "schemas/t07-bounded-smoke-evidence.schema.json") == []
     )
     (tmp_path / "secret.txt").write_text(
-        "sk-public-dummy-canary-abcdefghijklmnopqrstuvwxyz", encoding="utf-8"
+        "".join(("s", "k-", "public-dummy-canary-abcdefghijklmnopqrstuvwxyz")), encoding="utf-8"
     )
     with pytest.raises(bounded.BoundedSmokeContractError, match="credential-shaped"):
         bounded.build_evidence_manifest(tmp_path)
@@ -442,6 +456,34 @@ def test_lifecycle_failed_stop_still_kills_removes_and_seals_cleanup(tmp_path: P
     assert "rm" in operations
     cleanup_record = json.loads((tmp_path / "container-cleanup.json").read_text())
     bounded.validate_container_cleanup(cleanup_record)
+
+
+def test_work_and_cleanup_runners_share_one_command_budget(tmp_path: Path) -> None:
+    bootstrap = _load_bootstrap()
+    meter = bootstrap.CommandMeter(max_calls=1, output_cap=1_024)
+    work = bootstrap.CommandRunner(deadline=time.monotonic() + 10, meter=meter)
+    cleanup = bootstrap.CommandRunner(deadline=time.monotonic() + 10, meter=meter)
+    work.run(("/usr/bin/true",), cwd=tmp_path)
+    with pytest.raises(bootstrap.BootstrapError, match="call cap"):
+        cleanup.run(("/usr/bin/true",), cwd=tmp_path)
+    assert work.call_count == cleanup.call_count == 1
+
+
+def test_failure_archive_is_bounded_and_excludes_secret_canary(tmp_path: Path) -> None:
+    bootstrap = _load_bootstrap()
+    evidence = tmp_path / "evidence"
+    evidence.mkdir()
+    (evidence / "safe.json").write_text('{"status":"failed"}\n', encoding="utf-8")
+    canary = "".join(("s", "k-", "public-dummy-canary-abcdefghijklmnopqrstuvwxyz"))
+    (evidence / "unsafe.log").write_text(canary, encoding="utf-8")
+    (tmp_path / "TERMINATE_REQUIRED.json").write_text("{}\n", encoding="utf-8")
+    archive = bootstrap.package_failure_evidence(tmp_path, evidence, bounded)
+    assert archive.stat().st_size <= bootstrap.MAX_FAILURE_EVIDENCE_BYTES
+    with zipfile.ZipFile(archive) as opened:
+        names = set(opened.namelist())
+        assert "evidence/safe.json" in names
+        assert "evidence/unsafe.log" not in names
+        assert canary.encode() not in b"".join(opened.read(name) for name in names)
 
 
 def test_committed_plan_matches_runtime_contract_when_present() -> None:

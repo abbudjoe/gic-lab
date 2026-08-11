@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:gic-lab:schema:t07-bounded-smoke-private-binding:0.1.0",
+  "title": "T07 bounded-smoke private resource binding",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "plan_id",
+    "host_run_id",
+    "authorization_reference",
+    "source_parameter_sha256",
+    "restoration_payload_sha256",
+    "source_ipv4_cidr",
+    "owned_ruleset_name",
+    "owned_ruleset_description",
+    "strict_firewall_rule",
+    "owned_ruleset_rule",
+    "restoration_rules",
+    "selected_resource"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1.0"},
+    "plan_id": {"const": "PLAN-T07-BOUNDED-SIRA-SMOKE-V1"},
+    "host_run_id": {"const": "RUN-T07-BOUNDED-HOST-0001"},
+    "authorization_reference": {
+      "type": "string",
+      "pattern": "^AUTH-T07-BOUNDED-SIRA-SMOKE-V1-[A-Z0-9._-]{3,80}$"
+    },
+    "source_parameter_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "restoration_payload_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "source_ipv4_cidr": {
+      "type": "string",
+      "pattern": "^(?:[0-9]{1,3}\\.){3}[0-9]{1,3}/32$"
+    },
+    "owned_ruleset_name": {
+      "type": "string",
+      "pattern": "^giclab-t07-bounded-[a-f0-9]{12}$"
+    },
+    "owned_ruleset_description": {"type": "string", "minLength": 1, "maxLength": 160},
+    "strict_firewall_rule": {"$ref": "#/$defs/rule"},
+    "owned_ruleset_rule": {"$ref": "#/$defs/rule"},
+    "restoration_rules": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/rule"},
+      "maxItems": 128
+    },
+    "selected_resource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "instance_type",
+        "region",
+        "architecture",
+        "image_alias",
+        "image_family",
+        "image_version",
+        "raw_image_id",
+        "ssh_key_name",
+        "raw_ssh_key_id",
+        "ssh_key_fingerprint",
+        "price_cents_per_hour"
+      ],
+      "properties": {
+        "instance_type": {"const": "gpu_1x_a10"},
+        "region": {"const": "us-east-1"},
+        "architecture": {"const": "x86_64"},
+        "image_alias": {"const": "img-0032"},
+        "image_family": {"const": "lambda-stack-22-04"},
+        "image_version": {"const": "22.4.5-2141"},
+        "raw_image_id": {"type": "string", "minLength": 1, "maxLength": 512},
+        "ssh_key_name": {"const": "fractal-lambda-codex"},
+        "raw_ssh_key_id": {"type": "string", "minLength": 1, "maxLength": 512},
+        "ssh_key_fingerprint": {"type": "string", "minLength": 1, "maxLength": 512},
+        "price_cents_per_hour": {"const": 129}
+      }
+    }
+  },
+  "$defs": {
+    "rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol", "port_range", "source_network", "description"],
+      "properties": {
+        "protocol": {"enum": ["tcp", "udp", "icmp", "all"]},
+        "port_range": {
+          "type": ["array", "null"],
+          "prefixItems": [
+            {"type": "integer", "minimum": 1, "maximum": 65535},
+            {"type": "integer", "minimum": 1, "maximum": 65535}
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "source_network": {"type": "string", "minLength": 1, "maxLength": 128},
+        "description": {"type": "string", "maxLength": 512}
+      }
+    }
+  }
+}

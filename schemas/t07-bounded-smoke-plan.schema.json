@@ -136,6 +136,8 @@
         "start_detached",
         "inspect",
         "top",
+        "readiness",
+        "copy_out",
         "stop",
         "kill",
         "remove",
@@ -154,6 +156,12 @@
           "$ref": "#/$defs/argv"
         },
         "top": {
+          "$ref": "#/$defs/argv"
+        },
+        "readiness": {
+          "$ref": "#/$defs/argv"
+        },
+        "copy_out": {
           "$ref": "#/$defs/argv"
         },
         "stop": {
@@ -227,8 +235,8 @@
     },
     "deferred_limitations": {
       "type": "array",
-      "minItems": 6,
-      "maxItems": 6,
+      "minItems": 7,
+      "maxItems": 7,
       "uniqueItems": true,
       "items": {
         "type": "string",

@@ -34,28 +34,28 @@ def test_phase_one_is_the_only_active_non_executable_control_plane() -> None:
         "condition_plan_sha256s": [],
     }
     assert state["planned_execution_substrate"] == {
-        "decision_state": "high-assurance-infrastructure-frozen",
+        "decision_state": "bounded-smoke-v1-ready-unauthorized",
         "provider": "lambda-on-demand-cloud",
         "architecture": "x86_64",
         "persistent_filesystem": False,
         "gate_l1_authorized": False,
         "gate_l1_evidence_state": "complete-externally-sealed",
         "gate_l2_authorized": False,
-        "gate_l2_decision_state": "high-assurance-track-frozen",
-        "gate_l3_state": "deferred-for-bounded-smoke",
+        "gate_l2_decision_state": "bounded-manual-console-plan-ready-unauthorized",
+        "gate_l3_state": "folded-into-bounded-preflight-unauthorized",
         "gate_l4_authorized": False,
         "local_alternatives": "terminal-rejected",
-        "decision_document": "docs/harness/T07_GATE_L0_LAMBDA_HOST_DECISION.md",
-        "security_decision_document": "docs/harness/T07_HIGH_ASSURANCE_INFRASTRUCTURE_CLOSEOUT.md",
+        "decision_document": "docs/harness/T07_BOUNDED_SMOKE_GOVERNANCE.md",
+        "security_decision_document": "docs/harness/T07_BOUNDED_SMOKE_EXECUTION_PLAN.md",
     }
     execution_state = load_project_execution_state(ROOT)
     substrate = execution_state.planned_execution_substrate
     assert substrate is not None
-    assert substrate.decision_state == "high-assurance-infrastructure-frozen"
+    assert substrate.decision_state == "bounded-smoke-v1-ready-unauthorized"
     assert substrate.provider == "lambda-on-demand-cloud"
     assert substrate.architecture == "x86_64"
     assert substrate.gate_l1_evidence_state == "complete-externally-sealed"
-    assert substrate.gate_l2_decision_state == "high-assurance-track-frozen"
+    assert substrate.gate_l2_decision_state == "bounded-manual-console-plan-ready-unauthorized"
     assert [path.name for path in (ROOT / "docs/exec-plans/active").glob("*.md")] == [
         "PHASE_1_ARTIFACT_EXECUTION.md"
     ]
@@ -249,7 +249,22 @@ def test_t07_l21_terminal_state_has_no_executable_plan_or_authorization() -> Non
 def test_closeout_retains_zero_scientific_execution_and_only_bounded_infrastructure() -> None:
     compute = load_yaml(ROOT / "manifests/compute.yaml")
     results = load_json(EXP_ROOT / "results-summary.json")
-    assert compute["entries"] == []
+    assert len(compute["entries"]) == 1
+    planned = compute["entries"][0]
+    assert planned == {
+        "id": "CMP-0001",
+        "experiment_id": "EXP-0001",
+        "provider": "Lambda On-Demand Cloud",
+        "hardware": "gpu_1x_a10",
+        "region": "us-east-1",
+        "started_at": None,
+        "ended_at": None,
+        "wall_clock_hours": 0.0,
+        "accelerator_hours": 0.0,
+        "cost_usd": 0.0,
+        "authorization_reference": "AUTH-T07-BOUNDED-SIRA-SMOKE-V1-PENDING",
+        "status": "planned",
+    }
     summary = compute["phase_zero_summary"]
     assert summary["period_end"] == "2026-08-08"
     assert summary["paid_compute_authorized"] is False

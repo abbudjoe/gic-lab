@@ -10,4 +10,16 @@ phase_zero_summary:
   prototype_runs: 0
   benchmark_runs: 0
   training_runs: 0
-entries: []
+entries:
+  - id: CMP-0001
+    experiment_id: EXP-0001
+    provider: Lambda On-Demand Cloud
+    hardware: gpu_1x_a10
+    region: us-east-1
+    started_at: null
+    ended_at: null
+    wall_clock_hours: 0.0
+    accelerator_hours: 0.0
+    cost_usd: 0.0
+    authorization_reference: AUTH-T07-BOUNDED-SIRA-SMOKE-V1-PENDING
+    status: planned

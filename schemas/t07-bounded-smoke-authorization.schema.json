@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:gic-lab:schema:t07-bounded-smoke-authorization:0.1.0",
+  "title": "T07 bounded-smoke external authorization overlay",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "authorized",
+    "authorization_reference",
+    "execution_commit",
+    "branch",
+    "plan_id",
+    "plan_sha256",
+    "host_run_id",
+    "condition_run_ids",
+    "supervised_wall_started_at_utc",
+    "expires_at_utc",
+    "private_binding_sha256",
+    "limits_sha256",
+    "pricing",
+    "permissions",
+    "user_present",
+    "manual_termination_path_confirmed"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1.0"},
+    "authorized": {"const": true},
+    "authorization_reference": {
+      "type": "string",
+      "pattern": "^AUTH-T07-BOUNDED-SIRA-SMOKE-V1-[A-Z0-9._-]{3,80}$"
+    },
+    "execution_commit": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
+    "branch": {"const": "phase-1/sira-smoke-bounded"},
+    "plan_id": {"const": "PLAN-T07-BOUNDED-SIRA-SMOKE-V1"},
+    "plan_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "host_run_id": {"const": "RUN-T07-BOUNDED-HOST-0001"},
+    "condition_run_ids": {
+      "type": "array",
+      "prefixItems": [
+        {"const": "RUN-T07-BOUNDED-SIRA-REACTIVE-0001"},
+        {"const": "RUN-T07-BOUNDED-SIRA-SIMULATIVE-0001"}
+      ],
+      "items": false,
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "supervised_wall_started_at_utc": {"type": "string", "format": "date-time"},
+    "expires_at_utc": {"type": "string", "format": "date-time"},
+    "private_binding_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "limits_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "pricing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "model",
+        "service_tier",
+        "input_usd_per_million",
+        "cached_input_usd_per_million",
+        "output_usd_per_million",
+        "lambda_cents_per_hour"
+      ],
+      "properties": {
+        "model": {"const": "gpt-4o-2024-11-20"},
+        "service_tier": {"const": "standard"},
+        "input_usd_per_million": {"const": 2.5},
+        "cached_input_usd_per_million": {"const": 1.25},
+        "output_usd_per_million": {"const": 10.0},
+        "lambda_cents_per_hour": {"const": 129}
+      }
+    },
+    "permissions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "lambda_read_only_gets",
+        "user_cloud_mutations",
+        "paid_compute",
+        "prototype_execution",
+        "scientific_interpretation",
+        "training",
+        "pilot",
+        "ssh"
+      ],
+      "properties": {
+        "lambda_read_only_gets": {"const": 13},
+        "user_cloud_mutations": {"const": true},
+        "paid_compute": {"const": true},
+        "prototype_execution": {"const": true},
+        "scientific_interpretation": {"const": false},
+        "training": {"const": false},
+        "pilot": {"const": false},
+        "ssh": {"const": false}
+      }
+    },
+    "user_present": {"const": true},
+    "manual_termination_path_confirmed": {"const": true}
+  }
+}

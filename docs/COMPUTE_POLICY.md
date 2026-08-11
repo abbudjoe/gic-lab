@@ -16,6 +16,24 @@ Before a paid run, its protocol and compute record must declare provider, hardwa
 
 Every allocation and run is recorded in `manifests/compute.yaml`, including aborted or idle allocations. Report both accelerator-hours and wall-clock time; GPU-hours from different hardware are not assumed fungible. External API cost is tracked separately from GPU compute.
 
+## Bounded T07 external authorization overlay
+
+The bounded T07 plan remains unauthorized in Git: the project permission booleans stay
+false, its plan identity says `authorized: false`, and `CMP-0001` is only `planned`.
+A future current-turn user authorization may be converted by the reviewed local
+supervisor into one fresh, mode-0600, Git-ignored authorization overlay. That overlay
+must bind the exact clean execution commit, plan SHA-256, limits SHA-256, private
+resource-binding SHA-256, run identities, price table, allowed actions, and one exact
+3,600-second supervised window. The overlay is a single-run capability, not a change
+to repository authority. A missing, expired, reused, or mismatched overlay leaves all
+repository permissions false and stops before a provider request or execution action.
+
+For this profile, cloud mutations are manual user-console actions only. The local
+observer is limited to the plan's 13 GET requests. The remote bootstrap cannot mutate
+Lambda resources. On completion or failure, the user must terminate the exact bound
+instance; read-only terminal evidence is required before regional-rule deletion, and
+read-only security evidence is required after restoring the global baseline.
+
 ## Historical estimate boundary
 
 The attached conversation discussed a provisional 200–400 H100-equivalent GPU-hour and roughly USD 2,500 first-phase envelope, with about USD 4,000 in Lambda credits available. These are planning estimates, not verified prices, approved protocol budgets, or spending authorization.

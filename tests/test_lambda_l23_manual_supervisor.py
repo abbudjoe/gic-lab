@@ -41,13 +41,18 @@ from giclab.harness.lambda_l23_manual_supervisor import (
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_frozen_track_stops_manual_preflight_before_credential_or_transport() -> None:
+def test_historical_manual_binding_stops_before_credential_or_transport(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setitem(
+        verify_supervisor_preflight.__globals__, "_verify_loaded_module_origins", lambda _root: None
+    )
     authorization = SupervisorAuthorization(
         "a" * 40,
         "AUTH-T07-GATE-L2M-MANUAL-CONSOLE-V3-TEST",
         "b" * 64,
     )
-    with pytest.raises(L23SupervisorError, match="track is frozen"):
+    with pytest.raises(L23SupervisorError, match="manual plan SHA-256 drifted"):
         verify_supervisor_preflight(
             ROOT,
             plan_path=ROOT / PLAN_RELATIVE,
