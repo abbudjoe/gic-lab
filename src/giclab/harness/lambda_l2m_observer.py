@@ -1143,7 +1143,7 @@ def verify_global_firewall_identity(
 ) -> None:
     current = _mapping(ruleset, context="global firewall ruleset")
     if (
-        set(current) != {"id", "name", "rules"}
+        not {"id", "name", "rules"} <= set(current)
         or sealed_original_ruleset_id != "global"
         or current.get("id") != sealed_original_ruleset_id
         or current.get("name") != sealed_original_ruleset_name

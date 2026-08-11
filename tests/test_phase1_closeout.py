@@ -34,28 +34,28 @@ def test_phase_one_is_the_only_active_non_executable_control_plane() -> None:
         "condition_plan_sha256s": [],
     }
     assert state["planned_execution_substrate"] == {
-        "decision_state": "lambda-firewall-baseline-capture-required",
+        "decision_state": "high-assurance-infrastructure-frozen",
         "provider": "lambda-on-demand-cloud",
         "architecture": "x86_64",
         "persistent_filesystem": False,
         "gate_l1_authorized": False,
         "gate_l1_evidence_state": "complete-externally-sealed",
         "gate_l2_authorized": False,
-        "gate_l2_decision_state": "fresh-readonly-firewall-baseline-required",
-        "gate_l3_state": "requirements-only",
+        "gate_l2_decision_state": "high-assurance-track-frozen",
+        "gate_l3_state": "deferred-for-bounded-smoke",
         "gate_l4_authorized": False,
         "local_alternatives": "terminal-rejected",
         "decision_document": "docs/harness/T07_GATE_L0_LAMBDA_HOST_DECISION.md",
-        "security_decision_document": "docs/harness/T07_GATE_L2M_1_FIREWALL_BASELINE_REPAIR.md",
+        "security_decision_document": "docs/harness/T07_HIGH_ASSURANCE_INFRASTRUCTURE_CLOSEOUT.md",
     }
     execution_state = load_project_execution_state(ROOT)
     substrate = execution_state.planned_execution_substrate
     assert substrate is not None
-    assert substrate.decision_state == ("lambda-firewall-baseline-capture-required")
+    assert substrate.decision_state == "high-assurance-infrastructure-frozen"
     assert substrate.provider == "lambda-on-demand-cloud"
     assert substrate.architecture == "x86_64"
     assert substrate.gate_l1_evidence_state == "complete-externally-sealed"
-    assert substrate.gate_l2_decision_state == ("fresh-readonly-firewall-baseline-required")
+    assert substrate.gate_l2_decision_state == "high-assurance-track-frozen"
     assert [path.name for path in (ROOT / "docs/exec-plans/active").glob("*.md")] == [
         "PHASE_1_ARTIFACT_EXECUTION.md"
     ]
@@ -220,7 +220,8 @@ def test_t07_public_surfaces_preserve_l1a_and_keep_l2_unauthorized() -> None:
     ):
         assert required in combined
     assert "manual-console-launch-required" in combined
-    assert "ready-for-manual-console-qualification-authorization" in combined
+    assert "high-assurance-infrastructure-frozen" in combined
+    assert "ready-for-manual-console-qualification-authorization" not in combined
     assert "Gate L2" in combined and "unauthorized" in combined
     assert "gate-l2-host-qualification-plan.json" not in combined
 

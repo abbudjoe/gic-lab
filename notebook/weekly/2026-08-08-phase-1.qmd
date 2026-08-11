@@ -120,9 +120,16 @@ compute, SSH, Jupyter, image pull, container, browser, SiRA condition, or scient
 execution occurred. This remains infrastructure planning, not experimental evidence.
 
 The later Gate L2M attempt stopped safely after six read-only observations and before
-any mutation. Its global-firewall projection contained every currently expected rule
-field, but the raw provider response and unknown-key structure were not retained, so
-it cannot serve as exact restoration authority. The run is burned. A new unauthorized
-plan proposes only one read-only global-firewall capture with complete private
-retention and sealing; no manual qualification plan is currently active. This is
-infrastructure evidence only and does not change or execute EXP-0001.
+any mutation. A subsequent single authorized GET retained the complete global-firewall
+response, then stopped at its historical `schema_drift` disposition. Offline review
+found one compatible additive response-metadata key; all four rules remained valid
+under the strict description-aware canonicalizer. The exact baseline and restoration
+payload are private and hash-sealed; the public record contains only structural
+names/types, counts and hashes.
+
+The high-assurance infrastructure track is now frozen, not deleted. Its completed
+evidence and terminal negative findings remain reproducible, while production-grade
+orchestration controls are deferred under a documented Occam admission rule. A
+separately reviewed bounded-smoke child branch is the next planned design surface, but
+it has no plan or authority. All execution permissions remain false, and no SiRA
+trajectory, browser task, model request or scientific condition has run.

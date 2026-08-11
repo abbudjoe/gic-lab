@@ -1,18 +1,20 @@
 # T07 Gate L2M firewall-baseline capture authorization packet
 
-Status: **executable read-only plan rendered; unauthorized**
+Status: **authorization consumed; run burned; high-assurance track frozen**
 
 Date: 2026-08-11
 
-This packet replaces the blocked Gate L2M V3 authorization path. It authorizes
-nothing by itself and cannot authorize any firewall mutation or manual qualification.
+This packet is preserved as historical provenance for the one consumed read-only
+capture. Run `RUN-T07-L2M-FIREWALL-BASELINE-CAPTURE-0001` may not be replayed, this
+text may not be reused as authorization, and the frozen track has no successor plan.
+It cannot authorize any request, firewall mutation, or manual qualification.
 
 ## Exact identities
 
 | Item | Identity |
 |---|---|
 | Branch | `phase-1/sira-smoke-lambda` |
-| Required clean execution commit | `<EXACT-FINAL-CLEAN-L2M-1-HANDOFF-COMMIT>` |
+| Consumed clean execution commit | `34f26a78272329421f2691be2dcd46ecc842b28f` |
 | Reviewed implementation commit | `7e199dc634cee955b00fc587728a14c46cdf232a` |
 | Plan ID | `PLAN-T07-GATE-L2M-FIREWALL-BASELINE-CAPTURE-V1` |
 | Run ID | `RUN-T07-L2M-FIREWALL-BASELINE-CAPTURE-0001` |
@@ -24,7 +26,7 @@ nothing by itself and cannot authorize any firewall mutation or manual qualifica
 | Canonical report schema SHA-256 | `7cca0d07b4c24a454a959ff579553743f0136c81fe4695ea25026ddf137756a1` |
 | Restoration payload schema SHA-256 | `b1dca29f4912cd24338b3475c667421eb10bae1ef64da67ce058a5299ce8261c` |
 | Public contract record SHA-256 | `c1ead1802013f611e1c9d533a8495f12cbb18f9213889ff1c7299502690036f8` |
-| Pending authorization | `AUTH-T07-GATE-L2M-FIREWALL-BASELINE-CAPTURE-V1-PENDING` |
+| Consumed authorization | `AUTH-T07-GATE-L2M-FIREWALL-BASELINE-CAPTURE-V1-2026-08-11-34F26A7` |
 
 ## Exact operation and transport
 
@@ -90,11 +92,11 @@ unexpected content type, byte cap, malformed JSON, envelope/ruleset/rule schema 
 unknown material rule fields, ledger failure, seal failure, or archive failure. Never
 replay the run identity. No outcome authorizes a PATCH or Gate L2M.
 
-## Fresh authorization template
+## Historical authorization text — consumed; do not copy
 
-Replace the commit and authorization-reference placeholders only after this packet's
-final handoff reports the clean commit. Hash the exact authorization text locally and
-pass that SHA-256 to the shell-free invocation.
+The following text is retained only to explain the historical boundary. Its run and
+authorization identities are consumed and nonreplayable. It must not be completed,
+copied as fresh authority, or used to access the provider.
 
 ```text
 Continue T07 with the read-only global-firewall baseline capture only.

@@ -35,9 +35,25 @@ from giclab.harness.lambda_l23_manual_supervisor import (
     _verify_loaded_module_origins,
     _wait_for_qualification_archive,
     execute_authorized_manual_observer,
+    verify_supervisor_preflight,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_frozen_track_stops_manual_preflight_before_credential_or_transport() -> None:
+    authorization = SupervisorAuthorization(
+        "a" * 40,
+        "AUTH-T07-GATE-L2M-MANUAL-CONSOLE-V3-TEST",
+        "b" * 64,
+    )
+    with pytest.raises(L23SupervisorError, match="track is frozen"):
+        verify_supervisor_preflight(
+            ROOT,
+            plan_path=ROOT / PLAN_RELATIVE,
+            expected_plan_sha256="c" * 64,
+            authorization=authorization,
+        )
 
 
 def test_loaded_control_plane_modules_are_repository_bound() -> None:

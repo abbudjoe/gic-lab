@@ -72,7 +72,7 @@ class PlannedExecutionSubstrate:
         expected = {
             "decision_state": (
                 self.decision_state,
-                "lambda-firewall-baseline-capture-required",
+                "high-assurance-infrastructure-frozen",
             ),
             "provider": (self.provider, "lambda-on-demand-cloud"),
             "architecture": (self.architecture, "x86_64"),
@@ -82,9 +82,9 @@ class PlannedExecutionSubstrate:
             ),
             "gate_l2_decision_state": (
                 self.gate_l2_decision_state,
-                "fresh-readonly-firewall-baseline-required",
+                "high-assurance-track-frozen",
             ),
-            "gate_l3_state": (self.gate_l3_state, "requirements-only"),
+            "gate_l3_state": (self.gate_l3_state, "deferred-for-bounded-smoke"),
             "local_alternatives": (self.local_alternatives, "terminal-rejected"),
             "decision_document": (
                 self.decision_document,
@@ -92,7 +92,7 @@ class PlannedExecutionSubstrate:
             ),
             "security_decision_document": (
                 self.security_decision_document,
-                "docs/harness/T07_GATE_L2M_1_FIREWALL_BASELINE_REPAIR.md",
+                "docs/harness/T07_HIGH_ASSURANCE_INFRASTRUCTURE_CLOSEOUT.md",
             ),
         }
         for field, (observed, required) in expected.items():

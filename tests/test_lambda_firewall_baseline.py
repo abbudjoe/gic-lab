@@ -10,8 +10,6 @@ import pytest
 import giclab.harness.lambda_firewall_baseline as baseline
 from giclab.harness.lambda_firewall_baseline import (
     CANONICALIZATION_VERSION,
-    CAPTURE_PLAN_ID,
-    CAPTURE_RUN_ID,
     FirewallBaselineError,
     build_exact_restoration_payload,
     canonicalize_firewall_rules,
@@ -146,27 +144,24 @@ def test_committed_historical_reports_match_private_structural_analysis() -> Non
     assert "synthetic rule" not in combined
 
 
-def test_fallback_plan_is_exactly_one_get_and_no_manual_v4_exists() -> None:
-    plan = baseline.render_capture_plan(ROOT, reviewed_implementation_commit="a" * 40)
-    baseline.validate_capture_plan(plan, repository_root=ROOT)
-    assert plan["plan_id"] == CAPTURE_PLAN_ID
-    assert plan["run_id"] == CAPTURE_RUN_ID
-    assert plan["terminal_decision"] == "fresh-readonly-firewall-baseline-required"
-    assert plan["request"] == {
-        "ordinal": 1,
-        "method": "GET",
-        "scheme": "https",
-        "host": "cloud.lambda.ai",
-        "path": "/api/v1/firewall-rulesets/global",
-        "query_key_names": [],
-        "redirect_follows": 0,
-        "pagination_requests": 0,
-        "automatic_retries": 0,
-    }
-    assert plan["authorization"]["authorized"] is False
-    assert plan["caps"]["cloud_mutations"] == 0
-    assert plan["caps"]["paid_compute_cents"] == 0
+def test_high_assurance_capture_plan_is_burned_and_no_manual_v4_exists() -> None:
+    assert baseline.HIGH_ASSURANCE_TRACK_STATE == "high-assurance-infrastructure-frozen"
     assert not V4_PLAN.exists()
+
+
+def test_frozen_track_stops_capture_preflight_before_secret_or_transport() -> None:
+    authorization = baseline.CaptureAuthorization(
+        "a" * 40,
+        "AUTH-T07-GATE-L2M-FIREWALL-BASELINE-CAPTURE-V1-TEST",
+        "b" * 64,
+    )
+    with pytest.raises(FirewallBaselineError, match="track is frozen"):
+        baseline.verify_capture_preflight(
+            ROOT,
+            plan_path=ROOT / baseline.CAPTURE_PLAN_RELATIVE,
+            expected_plan_sha256="c" * 64,
+            authorization=authorization,
+        )
 
 
 def test_materialized_capture_plan_is_exact_and_unauthorized() -> None:
@@ -177,12 +172,50 @@ def test_materialized_capture_plan_is_exact_and_unauthorized() -> None:
         "bd61aed7ed1da74ad39ed24c56145d9e816e7ab9b2063f2c962e1cfb79d8a63b"
     )
     plan = json.loads(encoded)
-    baseline.validate_capture_plan(plan, repository_root=ROOT)
-    assert plan == baseline.render_capture_plan(
-        ROOT,
-        reviewed_implementation_commit="7e199dc634cee955b00fc587728a14c46cdf232a",
-    )
+    with pytest.raises(FirewallBaselineError, match="drifted"):
+        baseline.validate_capture_plan(plan, repository_root=ROOT)
     assert plan["authorization"]["authorized"] is False
+
+
+def test_additive_ruleset_metadata_is_compatible_and_publicly_value_free() -> None:
+    private_workspace_value = "PRIVATE-WORKSPACE-CANARY"
+    ruleset = {
+        "id": "global",
+        "name": "Synthetic",
+        "rules": [rule(description="exact description")],
+        "workspace_id": private_workspace_value,
+    }
+    parsed = baseline.parse_global_firewall_response({"data": ruleset})
+    assert parsed.parsed_ruleset.extension_types == (("workspace_id", "string"),)
+    report = baseline.complete_canonical_report(
+        parsed.parsed_ruleset.baseline,
+        envelope=parsed.envelope,
+        ruleset=parsed.parsed_ruleset.ruleset,
+    )
+    baseline.validate_canonical_report(report, repository_root=ROOT)
+    assert report["compatible_top_level_extensions"] == [{"name": "workspace_id", "type": "string"}]
+    assert report["compatible_extension_observed"] is True
+    assert private_workspace_value not in json.dumps(report, sort_keys=True)
+
+
+def test_additive_ruleset_metadata_is_excluded_from_restoration_and_verification() -> None:
+    rules = [rule(description="exact description")]
+    expected = baseline.canonicalize_firewall_rules(rules)
+    current = {
+        "id": "global",
+        "name": "Global",
+        "rules": rules,
+        "workspace_id": "PRIVATE-WORKSPACE-CANARY",
+    }
+    baseline.verify_exact_firewall_baseline(
+        current,
+        expected_ruleset_id="global",
+        expected_ruleset_name="Global",
+        expected_semantic_sha256=expected.semantic_sha256,
+    )
+    payload, encoded, _digest = build_exact_restoration_payload(rules, repository_root=ROOT)
+    assert payload == {"rules": rules}
+    assert b"workspace_id" not in encoded
 
 
 def test_historical_plan_and_run_are_immutable_and_old_v3_fails_closed() -> None:
@@ -671,6 +704,7 @@ def test_public_contract_and_schema_identities_are_current() -> None:
     assert contract["firewall_rule"]["protocol"]["nullable"] is False
     assert contract["firewall_rule"]["source_network"]["nullable"] is False
     assert contract["firewall_rule"]["port_range"]["nullable_when_present"] is False
+    assert contract["global_ruleset"]["additional_properties_explicitly_forbidden"] is False
     assert contract["authenticated_request_made"] is False
     assert contract["cloud_mutation_performed"] is False
     assert baseline.CANONICALIZATION_VERSION == CANONICALIZATION_VERSION

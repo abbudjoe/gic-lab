@@ -1,6 +1,6 @@
 # Phase 1 SiRA Smoke Readiness
 
-Status: **profile eligible; fresh read-only firewall baseline required; not authorized**
+Status: **profile eligible; high-assurance infrastructure frozen; bounded smoke fork planned; not authorized**
 
 Prepared: 2026-08-08
 
@@ -20,86 +20,29 @@ Updated: 2026-08-11
 The profile and both condition plans remain unauthorized. This readiness record and
 the proposed budget are not authorization. The pilot plan is not eligible.
 
-T07 now has a design-only x86_64 Lambda On-Demand Cloud substrate. The V1/V2 Gate L1
-plans and runs are preserved as blocked historical evidence; runs 0001 and 0002 are
-permanently retired. Authorized V3 run `RUN-T07-L1-LAMBDA-INVENTORY-0003` completed
-all seven GETs and externally sealed its schema-valid inventory and complete request
-ledger. It is historical and nonreplayable.
+T07's high-assurance infrastructure track is frozen at
+`high-assurance-infrastructure-frozen`. Gate L1/L1A evidence is complete, sealed and
+nonreplayable. The automated Lambda launch path was rejected, and the manual-console
+qualification was designed but never executed. Its V3/run 0003 stopped after six
+read-only observations and before mutation.
 
-Gate L1.3 repaired the post-run image projection without changing run 0003: 259
-regional availability rows map to 124 nonconflicting opaque aliases, and six
-`gpu_1x_a10` tuples satisfy the fixed resource policy at the observed USD 1.29/hour
-price. The global firewall remains non-strict because three rules expose non-SSH
-ports, and no same-region per-instance ruleset exists. A future Gate L2 design must
-preserve both global strictness and D-020's additive regional-ruleset requirement,
-freshly prove zero running instances account-wide, and require same-instance terminal
-evidence before restoring the sealed original globals. Most importantly, the
-privacy-minimized inventory retained account key names
-without account public-key material, so no local/account fingerprint match can be
-established. At that historical Gate L1.3 checkpoint the infrastructure decision was
-`inventory-evidence-insufficient`; Gate L1A later supplied the missing key evidence.
+The later one-GET firewall capture run
+`RUN-T07-L2M-FIREWALL-BASELINE-CAPTURE-0001` is also burned and immutable. It retained
+a complete HTTP-200 provider response, but the historical parser stopped at
+`schema_drift` because the data object included one additive metadata key. Offline
+adjudication preserved that original disposition and classified the response as
+`compatible_additive_top_level_extension`. All four rules pass the strict,
+description-aware canonicalizer; the exact private baseline and PATCH restoration
+payload are retained and sealed, while the public records contain only structural
+names, types, counts and hashes.
 
-Gate L1.4 has now designed the fresh minimum evidence step without executing it:
-`PLAN-T07-GATE-L1A-LAMBDA-SSH-KEY-FINGERPRINT-V1` permits, only after a new exact
-authorization, one in-process `GET /api/v1/ssh-keys` under fresh run
-`RUN-T07-L1A-LAMBDA-SSH-KEY-FINGERPRINT-0001`. It uses a distinct fsync-backed ledger,
-strict OpenSSH/RFC4716/PKCS8/PEM public-key parsing, held-no-follow local `.pub`
-matching, ignored sealed private evidence, an exact source-loading wrapper, and a
-separate fsync-backed post-ledger archive-finalization disposition. A terminal request
-ledger alone is not complete evidence. The plan remains unauthorized; no
-account request, secret access, SSH, mutation, or paid compute occurred in its design.
-
-Gate L1A completed the minimum evidence step and sealed one unique match for
-`fractal-lambda-codex`. Gate L2.0 then validated the user's private decisions and
-selected `gpu_1x_a10` in `us-east-1` with `img-0111` / `22.4.5-2141`, temporary
-strict global-plus-regional `/32` controls, and independent Jupyter ED25519 trust.
-Raw IDs, source network, paths, and fingerprints remain in ignored parameters whose
-hash-verified copy is sealed to the approved external archive.
-
-Gate L2.1 then pinned the current launch/list/detail/terminate contract and built
-fake-tested marker, journal, discovery, termination, watchdog, cap, privacy, and
-archive primitives. Independent review found that these pieces do not compose one
-authoritative live transaction: mutation effects/order, cleanup from every failure,
-cross-process budget/lease enforcement, an independently supervised watchdog,
-duplicate/terminal polling, exact process arrays, and evidence closure remain
-incomplete. The automated API-launch path therefore terminated at
-`manual-console-launch-required`. No executable Gate L2 plan or authorization block
-exists; the V1 and draft V2 identities are rejected. Cloud mutation and paid compute
-remain false. Any future Gate L2 proposal must be a newly reviewed human-operated
-console launch/observation/cleanup contract with fresh identities and current-turn
-authorization. Gate L3 and Gate L4 remain blocked.
-
-Gate L2.2 has now source-verified the human console/Jupyter-only alternative without
-performing it. Current Lambda documentation lists Docker and JupyterLab for Lambda
-Stack 22.04 but does not list JupyterLab for the selected GPU Base 22.04 image. The
-sealed inventory contains four x86-64 Lambda Stack 22.04 regional candidates in
-`us-east-1`; `img-0032` / `22.4.5-2141` ranks first. Static source evidence does not
-prove type-specific launch-wizard offeredness, so any future transaction must stop
-before Launch unless the approved alias is offered after exact type/region selection.
-Gate L2.3 has now validated the user's replacement private decision, selected
-`img-0032`, resolved raw resources only into ignored sealed parameters, verified the
-one-way external archive copy, and rendered the exact executable-but-unauthorized
-manual plan. Its terminal state is
-`ready-for-manual-console-qualification-authorization`. Plan
-`PLAN-T07-GATE-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-V3`, run
-`RUN-T07-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-0003`, is at
-`containers/sira-smoke/lambda/manual-console/gate-l2m-host-qualification-plan-v3.json`,
-21,641 bytes, SHA-256
-`1931fcacda4194063c0116ff9630d82f3b8f4ec07ff9b0310342335db629f654`.
-All plan authority fields and project execution permissions remain false. A fresh
-current-turn authorization must bind the final clean commit and start the supervisor
-no later than `2026-08-12T05:15:19.646016Z`; expiry requires a new metadata record,
-bundle, plan and review.
-
-Gate L2M V3/run 0003 subsequently stopped safely after exactly six GETs and before
-any mutation. Its global-firewall projection contains all currently expected fields
-but not the raw provider response or unknown raw-key structure, so it cannot prove
-exact restoration. V3 is burned and superseded; no manual plan is active. The sole
-next proposal is unauthorized plan
-`PLAN-T07-GATE-L2M-FIREWALL-BASELINE-CAPTURE-V1`, run
-`RUN-T07-L2M-FIREWALL-BASELINE-CAPTURE-0001`, one GET of the global firewall with
-complete private retention and one-way evidence sealing. A successful capture would
-still require a new offline manual-plan review and a separate mutation authorization.
+No executable high-assurance plan or authorization block remains active. The next
+planned work is the separately reviewed child branch
+`phase-1/sira-smoke-bounded`, governed by
+`docs/harness/T07_BOUNDED_SMOKE_FORK_HANDOFF.md` and the Occam admission rule in
+`docs/harness/T07_HIGH_ASSURANCE_RESIDUAL_CONTROLS.md`. That child has no plan,
+authorization or execution identity yet. Every execution permission remains false,
+T07 has not run, and Gate L2M/L3/L4 do not continue on this branch.
 
 ## Exact user decision fields
 
@@ -111,9 +54,9 @@ A later current-turn authorization must state one value for every field below:
 | `api_provider` | `OpenAI` |
 | `model_revision` | Exactly `gpt-4o-2024-11-20`, used as a declared substitution for the unavailable historical `gpt-4o` serving revision |
 | `maximum_api_cost_usd` | Proposed ceiling: `4.00`; the user must explicitly approve this value or a lower replacement after price reverification |
-| `gate_l2m_maximum_provider_compute_cost_usd` | Proposed qualification-only ceiling `2.00`; requires a fresh Gate L2M authorization and does not carry into Gate L4 |
-| `maximum_provider_compute_cost_usd` | Scientific-host ceiling; must be recomputed from current Lambda pricing and freshly approved for the later Gate L4 launch |
-| `maximum_wall_time_seconds` | Scientific workload ceiling remains proposed `240` total, at most `120` seconds per condition; the fresh Lambda host lifecycle needs a separate aggregate provider wall cap |
+| `bounded_substrate_cost_cap_usd` | Not selected; a new bounded plan must derive and request an exact numeric cap without reusing Gate L2M authority |
+| `maximum_provider_compute_cost_usd` | Not selected; must be recomputed for the bounded topology and freshly approved |
+| `maximum_wall_time_seconds` | Scientific workload ceiling remains proposed `240` total, at most `120` seconds per condition; any bounded host lifecycle needs its own numeric aggregate cap |
 | `required_cleanup` | Stop/KILL each immutable container boundary, prove zero owned resources, preserve/copy/seal evidence, terminate the exact Lambda instance through the provider API, and confirm terminal/nonbillable state |
 
 The authorization reference must identify that current user instruction. Within the
@@ -124,14 +67,11 @@ bind `docs/PROJECT_STATE.yaml.authorized_run_profile` to the exact profile path 
 SHA-256 plus the sealed canonical `condition_plan_sha256s`, bind both condition plans
 to the same `profile_plan_id` and `profile_sha256`, and materialize condition-owned
 budgets and command hashes.
-Benchmark and training permissions remain false. Cloud-mutation and paid-compute
-permissions remain false now. A fresh Gate L2M qualification authorization may
-temporarily enable only its separately capped human-console firewall/ruleset/one-host
-qualification transaction, with the USD 2.00 and 3,600-second ceilings, and must return
-both flags to false after terminal cleanup. A later Gate L4 authorization separately
-binds one scientific-host launch, cost, and provider termination; Gate L2M authority
-cannot carry into it. No field may be inferred from this readiness document, public
-pricing, or an earlier infrastructure gate.
+Benchmark and training permissions remain false. Cloud-mutation, paid-compute and
+prototype-execution permissions remain false now. The frozen Gate L2M/L3/L4 contracts
+cannot be reauthorized. A bounded child must create fresh plan, run, budget, cleanup
+and authorization identities. No field may be inferred from this readiness document,
+public pricing, or an earlier infrastructure gate.
 
 ## Proposed API spend cap
 
@@ -160,17 +100,16 @@ before the first live model, API, or browser action:
    limits; stop if the upstream surface cannot make them effective.
 5. Redirect source session JSON, text logs, stdout, stderr, screenshots, and evaluator
    output into fresh harness-owned attempt roots before launch.
-6. Pin and record the approved browser/runtime revision, run it only inside the
-   empirically qualified private PID/cgroup container boundary,
-   and verify container plus provider cleanup without a live model/API call.
+6. Pin and record the approved browser/runtime revision. Apply the Occam admission
+   rule to the concrete topology, including whether a private PID/cgroup boundary is a
+   hard blocker, and verify bounded runtime plus provider cleanup without a live
+   model/API call.
 7. Verify required secret names without printing, persisting, hashing, or placing
    secret values in arguments, paths, events, or artifacts.
-8. Bind successful Gate L2 host/runtime/termination evidence and Gate L3 x86_64
-   image/adversarial/dummy-secret/local-page evidence; revalidate exact account,
-   type/region/image/key/ruleset/price and prove no duplicate T07 instance before the
-   one separately authorized Gate L4 scientific launch. The earlier Gate L2M
-   qualification launch, if authorized and completed, is a distinct paid-compute
-   transaction with a different identity and no reusable mutation authority.
+8. Bind the bounded child's own host/runtime/termination evidence; revalidate every
+   selected billable resource and price; and prove its cleanup boundary before the
+   separately authorized scientific attempt. No frozen Gate L2M/L3/L4 identity or
+   authority may satisfy this obligation.
 
 Failure of any preflight obligation stops T07 before execution and preserves the
 authorization record as an unconsumed/blocked attempt; it does not relax the protocol.
@@ -205,33 +144,28 @@ the EXP-0001 hypothesis or any RQ-H2K outcome.
 
 - Stop before launch on identity, command, configuration, secret, budget, or artifact-
   ownership drift.
-- On any launched-attempt failure, stop/KILL the complete immutable container boundary,
-  verify zero owned resources, retain the failed attempt under its immutable identity,
-  hash/copy what was captured, terminate the exact Lambda instance through the
-  provider API, confirm terminal/nonbillable state, and record the stop reason.
+- On any launched-attempt failure, stop the complete bounded runtime boundary, verify
+  zero owned resources, retain the failed attempt under its immutable identity,
+  hash/copy what was captured, terminate every exact billable provider resource,
+  confirm terminal/nonbillable state, and record the stop reason.
 - Never overwrite or reuse an attempt directory; a retry requires a new attempt
   identity and preserves the prior evidence.
 - Do not delete raw evidence as rollback. Revert only unexecuted authorization-state
   materialization after its audit record is retained.
-- No Lambda persistent filesystem is permitted. A future authorized Gate L4 may own
-  exactly one ephemeral instance and must terminate it on every exit; unrelated cloud
-  resources, keys, firewall rules, tags, filesystems, and instances are never rollback
-  targets.
+- The bounded child must explicitly constrain persistent storage and exact provider
+  ownership. Unrelated cloud resources, keys, firewall rules, tags, filesystems and
+  instances are never rollback targets.
 
 ## Remaining blockers and nonblocking questions
 
 - Dataset and trace public-release licensing/privacy rules remain unresolved; private,
   access-controlled smoke retention can proceed, but publication stays blocked.
 - The final repository software/content licenses and publication identity remain open.
-- T07 Lambda capacity and price were observed and the candidate, SSH key, firewall,
-  private `/32`, and host-key method were validated and privately sealed. Gate L2's
-  automated API-launch design ended at `manual-console-launch-required`; the offline
-  supervisor/watchdog primitives are not execution authority. Gate L2M V3/run 0003
-  is now preserved as a pre-mutation failure, and its lossy firewall baseline blocks
-  the manual transaction. The immediate blocker is a fresh authorization and
-  successful sealing of the exact one-GET baseline-capture plan. A new manual plan,
-  review, and mutation authorization would still be required afterward.
-  SR²AM T11/T12 remain scientifically and operationally separate.
+- T07's high-assurance path is terminally frozen. The parser/baseline evidence defect
+  is repaired, but no high-assurance execution plan may be revived. The bounded child
+  remains blocked on a new concrete topology, exact caps, cleanup/evidence contract,
+  review, and current-turn authorization applying the Occam admission rule. SR²AM
+  T11/T12 remain scientifically and operationally separate.
 - RQ-H2K external-versus-explicit-model comparison feasibility remains undetermined.
   Missing optional regulation fields do not invalidate EXP-0001 when its primary
   evidence contract is complete.

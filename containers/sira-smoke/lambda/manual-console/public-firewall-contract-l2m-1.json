@@ -29,6 +29,8 @@
     }
   },
   "global_ruleset": {
+    "additional_properties_explicitly_forbidden": false,
+    "compatible_additive_response_metadata_policy": "retain_privately_report_name_and_type_exclude_from_patch",
     "required": ["id", "name", "rules"],
     "id_const": "global",
     "response_only_fields": ["id", "name"],

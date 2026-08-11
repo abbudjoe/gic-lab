@@ -39,9 +39,9 @@ current Phase 1 closeout.
 Out of scope: any execution without the exact current-turn authorization; protocol
 adaptation to observed effects; confirmatory claims; a new EXP-0001 condition; a
 harness-to-kernel comparison; learned-kernel training or distillation; Phase 2; and
-cloud mutation outside a fresh exact current-turn T07 Gate L2/L4 or T12/T14
-authorization contract. Gate L0 and L3 design work and Gate L1 read-only inventory
-grant no mutation authority; one gate's authorization never carries into another.
+cloud mutation outside a fresh exact current-turn bounded T07 or T12/T14 authorization
+contract. Frozen Gate L2M/L3/L4 work and historical Gate L1 read-only inventory grant
+no mutation authority; one gate's authorization never carries into another.
 
 ## Phase definition of done ledger
 
@@ -65,7 +65,7 @@ grant no mutation authority; one gate's authorization never carries into another
 
 | Task | Work package | Mapped phase DoD | Current permission |
 |---|---|---|---|
-| T07 | Execute one authorized contained SiRA smoke pair; capture regulation-decision evidence without interpretation. | P1-DOD-02, P1-DOD-11 through P1-DOD-13 | Gate L1/L1A complete/sealed; Gate L2M V3 burned; fresh one-GET firewall baseline capture required and unauthorized |
+| T07 | Execute one authorized contained SiRA smoke pair; capture regulation-decision evidence without interpretation. | P1-DOD-02, P1-DOD-11 through P1-DOD-13 | High-assurance infrastructure frozen; bounded-smoke child branch is the next planned design; no execution authority |
 | T08 | Analyze smoke infrastructure evidence and prepare an unauthorized pilot package. | P1-DOD-03, P1-DOD-11 through P1-DOD-13 | blocked until T07 succeeds |
 | T09 | Execute the freshly authorized exploratory SiRA pilot. | P1-DOD-04, P1-DOD-11 through P1-DOD-13 | blocked until T08 and authorization |
 | T10 | Analyze and publish the exploratory SiRA pilot. | P1-DOD-05, P1-DOD-11 through P1-DOD-13 | blocked until T09 succeeds |
@@ -80,9 +80,9 @@ and an analysis recommendation does not authorize the next execution.
 
 ## T07 assembly control
 
-Assembly status: **Gate L1/L1A complete and sealed; Gate L2M V3 stopped before
-mutation and is burned; one fresh read-only firewall-baseline GET is the sole
-unauthorized next proposal**
+Assembly status: **high-assurance infrastructure frozen; firewall capture adjudicated
+and privately sealed; bounded-smoke child branch planned; all execution permissions
+false**
 
 Exact next profile: `PLAN-EXP0001-SMOKE`.
 
@@ -319,16 +319,11 @@ authorization. T12 and T14 separately require their exact cloud mutation, hardwa
 data, cost/time, artifact-transfer, and termination authority. Read-only inspection or
 preflight never supplies mutation authority.
 
-T07 Gate L1 is a separately authorizable read-only account inspection and does not
-require cloud-mutation or paid-compute permission. Its authority, if later granted,
-cannot imply L2. L2, L3, and L4 each require new exact authorization and state changes
-appropriate to their own operation.
-
-A future manual Gate L2M host qualification is itself a paid cloud-mutation boundary:
-it may authorize only the exact user-console firewall/ruleset lifecycle, one manual
-qualification-host launch/termination, USD 2.00, and 3,600 seconds. It is distinct
-from the later Gate L4 scientific-host launch. Both permissions are false now, and a
-completed L2M authorization must be closed and reset rather than reused by L3 or L4.
+The Gate L1/L1A account inspections and Gate L2M firewall capture are consumed,
+nonreplayable historical evidence. The high-assurance Gate L2M/L3/L4 path is frozen
+and cannot receive fresh authority on this branch. A bounded-smoke child must define
+new plan/run identities, exact resource and spend caps, cleanup/evidence contracts,
+review, and current-turn authority; no earlier gate grants any part of that authority.
 
 ## Planned evidence
 
@@ -458,6 +453,17 @@ completed L2M authorization must be closed and reset rather than reused by L3 or
   an expiry-before-credential guard. It remains unauthorized; no account/model
   request, secret access, cloud mutation, paid compute, SSH, Jupyter, pull, container,
   browser, SiRA or scientific action occurred.
+- 2026-08-11: The one-GET firewall capture completed HTTP transport and retained the
+  exact 660-byte response, then stopped at its original `schema_drift` disposition.
+  Offline adjudication found one compatible additive data-level metadata key, accepted
+  it by name/type without publishing its value, preserved strict rule semantics, and
+  produced a description-aware private baseline and PATCH restoration payload. The
+  baseline was hash-verified and copied to the approved external archive without any
+  provider request or mutation during closeout.
+- 2026-08-11: Freeze the high-assurance T07 infrastructure track at
+  `high-assurance-infrastructure-frozen`. Preserve its controls and terminal negative
+  results, create no replacement execution plan, and hand future bounded-smoke design
+  to `phase-1/sira-smoke-bounded` under a new plan, review and authorization.
 
 ## Decision log
 
@@ -526,24 +532,28 @@ completed L2M authorization must be closed and reset rather than reused by L3 or
   unknown key structure, so it is not lossless restoration authority. Supersede the
   V3 manual packet, require the fresh one-GET baseline-capture plan, and prohibit a
   V4 manual plan until that response is completely retained, validated and sealed.
+- 2026-08-11: Under D-031, preserve the capture's original `schema_drift` while
+  adjudicating its additive metadata as compatible, seal the exact baseline and
+  restoration semantics, and freeze rather than delete the high-assurance track. A
+  separately governed bounded child may reuse validated controls but must apply the
+  Occam admission rule and obtain fresh execution authority.
 
 ## Blockers and user actions
 
-T07 has no selected local runtime and no executable local B2a plan. Docker Desktop and
-Colima/Lima remain terminal rejected provenance. The Lambda inventory and L1A key
-evidence are complete, sealed, and nonreplayable. Gate L2.1 rejected automated API
-launch. Gate L2M V3/run 0003 then stopped safely after six GETs and before mutation.
-It is burned, its manual packet is superseded, and no manual qualification plan is
-active. Plan `PLAN-T07-GATE-L2M-FIREWALL-BASELINE-CAPTURE-V1` proposes exactly one
-read-only global-firewall GET under run
-`RUN-T07-L2M-FIREWALL-BASELINE-CAPTURE-0001`; it remains unauthorized. L3/L4 remain
-unauthorized.
+T07 has no selected live runtime and no active execution plan. Docker Desktop and
+Colima/Lima remain terminal rejected provenance; the automated Lambda launch was
+rejected; manual-console qualification was designed but not executed. Lambda
+inventory, key and firewall evidence is complete, sealed and nonreplayable. The
+high-assurance track is frozen, L2M/L3/L4 cannot be resumed on this branch, and the
+smoke remains unexecuted.
 
 ## Next permitted work
 
-There is no further local B1.x or automated Gate L2 design loop. The next permissible
-live input is a fresh exact user authorization of the final clean commit and the
-one-GET firewall-baseline capture plan/hash, ledger, complete private retention and
-APFS archive contract. That read-only result may support later offline design; it
-cannot authorize a manual console action. Gate L2M qualification, Gate L3 B2b, Gate
-L4, both SiRA conditions, and the smoke remain blocked.
+There is no further local B1.x, automated Gate L2, or manual Gate L2M design loop on
+this branch. The next planned work is offline design on
+`phase-1/sira-smoke-bounded`, forked from the final clean closeout commit. It must
+select its own concrete topology and enforce the Occam admission rule: a missing
+control blocks only when it could distort the comparison, expose a secret/private
+value, materially exceed spending, strand a billable resource, or prevent
+reconstruction. Any live account, cloud, model, browser, container or SiRA action
+still requires a new exact plan and current-turn authorization.

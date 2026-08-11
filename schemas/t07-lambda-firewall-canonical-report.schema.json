@@ -36,6 +36,7 @@
       ]
     },
     "canonicalization_version": {"const": "t07-firewall-canonical-v1"},
+    "response_parser_version": {"const": "t07-firewall-response-v2"},
     "baseline_alias": {
       "oneOf": [
         {"type": "null"},
@@ -52,6 +53,21 @@
     "observation_top_level_types": {"$ref": "#/$defs/keyTypes"},
     "global_ruleset_fields": {"$ref": "#/$defs/keyNames"},
     "global_ruleset_types": {"$ref": "#/$defs/keyTypes"},
+    "compatible_top_level_extensions": {
+      "type": "array",
+      "maxItems": 61,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "type"],
+        "properties": {
+          "name": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,127}$"},
+          "type": {"enum": ["array", "boolean", "integer", "null", "number", "object", "string"]}
+        }
+      }
+    },
+    "compatible_extension_observed": {"type": "boolean"},
     "rule_count": {"type": "integer", "minimum": 0, "maximum": 100},
     "rule_shapes": {
       "type": "array",
@@ -110,6 +126,22 @@
     }
   },
   "allOf": [
+    {
+      "if": {
+        "properties": {
+          "evidence_classification": {
+            "enum": ["complete_pre_mutation_provider_baseline", "lossless_structured_pre_mutation_baseline"]
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "response_parser_version",
+          "compatible_top_level_extensions",
+          "compatible_extension_observed"
+        ]
+      }
+    },
     {
       "if": {
         "properties": {

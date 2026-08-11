@@ -9,6 +9,7 @@
     "schema_version",
     "baseline_alias",
     "canonicalization_version",
+    "response_parser_version",
     "capture_plan_id",
     "capture_run_id",
     "authorization_reference",
@@ -27,6 +28,7 @@
     "schema_version": {"const": "0.1.0"},
     "baseline_alias": {"type": "string", "pattern": "^l2m-firewall-baseline-[a-f0-9]{12}$"},
     "canonicalization_version": {"const": "t07-firewall-canonical-v1"},
+    "response_parser_version": {"const": "t07-firewall-response-v2"},
     "capture_plan_id": {"const": "PLAN-T07-GATE-L2M-FIREWALL-BASELINE-CAPTURE-V1"},
     "capture_run_id": {"const": "RUN-T07-L2M-FIREWALL-BASELINE-CAPTURE-0001"},
     "authorization_reference": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{2,127}$"},
@@ -96,7 +98,8 @@
     },
     "globalRuleset": {
       "type": "object",
-      "additionalProperties": false,
+      "$comment": "Provider response metadata is retained privately; only id/name/rules are authoritative and only rules enter PATCH restoration.",
+      "additionalProperties": true,
       "required": ["id", "name", "rules"],
       "properties": {
         "id": {"const": "global"},

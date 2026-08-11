@@ -3,19 +3,20 @@
 The Phase 0.75 harness is a source-neutral boundary for later experiment execution. It
 does not contain SiRA or SR²AM logic and does not itself grant permission to execute.
 
-For the active Lambda path, Gate L2.0 ended at
-`blocked-human-or-source-decision`, and Gate L2.1 terminated automated launch at
-`manual-console-launch-required`. Gate L2.2 then evaluated the human-console/Jupyter
-route and stopped at `blocked-human-image-selection` because the selected GPU Base
-image lacks a documented JupyterLab guarantee; a regional Lambda Stack candidate is
-recommended but not selected. Gate L2.3 then validated the replacement private
-decision, sealed its resource bindings, and rendered one exact manual-console plan.
-The active disposition is
-`docs/harness/T07_GATE_L2M_HOST_QUALIFICATION_AUTHORIZATION_PACKET.md`: the plan is
-executable in structure but remains unauthorized and unexecuted. Private resource
-values are nonce-protected, ignored, externally sealed evidence; public records retain
-only aliases and hashes. Historical automated Gate L2 modules remain
-non-authoritative and authorize no action.
+The T07 high-assurance infrastructure track is frozen. Its Lambda inventories and
+private resource evidence remain sealed; automated launch was rejected; the
+manual-console qualification was designed but never executed; and every Gate L2M
+plan/run identity is historical and nonreplayable. The final one-GET firewall capture
+was adjudicated offline as a compatible additive response extension and converted
+into an exact private description-aware baseline/restoration contract without another
+provider request. See `docs/harness/T07_HIGH_ASSURANCE_INFRASTRUCTURE_CLOSEOUT.md`.
+
+The next planned design surface is a separately governed child branch,
+`phase-1/sira-smoke-bounded`, described by
+`docs/harness/T07_BOUNDED_SMOKE_FORK_HANDOFF.md`. It has no execution plan or authority.
+All paid-compute, prototype, cloud-mutation, browser, model and SiRA permissions remain
+false. Historical automated and manual Gate L2 modules are preserved only as
+non-authoritative evidence-hardening controls.
 
 The installed CLI is `giclab-harness` with four operations:
 

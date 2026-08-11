@@ -1,20 +1,22 @@
 # T07 Gate L2M manual-console bundle
 
-This directory preserves the blocked Gate L2M manual qualification control plane and
-contains one fresh executable-but-unauthorized read-only firewall-baseline capture
-plan. Nothing here authorizes a Lambda request, console mutation, instance, Jupyter
-session, image pull, container or paid compute.
+This directory preserves the frozen Gate L2M manual-qualification control plane and
+its consumed/burned read-only firewall-baseline capture plan. Nothing here authorizes
+a Lambda request, console mutation, instance, Jupyter session, image pull, container
+or paid compute.
 
 V3/run 0003 stopped safely after six GETs and before mutation. Its retained firewall
-projection is not provably lossless, so V3 is burned and the user runbook is
-historical. No V4 manual plan exists. The sole active proposal is
+projection was not provably lossless, so V3 is burned and the user runbook is
+historical. No V4 manual plan exists. The later consumed capture plan is
 `gate-l2m-firewall-baseline-capture-plan-v1.json`, plan
 `PLAN-T07-GATE-L2M-FIREWALL-BASELINE-CAPTURE-V1`, run
 `RUN-T07-L2M-FIREWALL-BASELINE-CAPTURE-0001`, 6,311 bytes, SHA-256
 `bd61aed7ed1da74ad39ed24c56145d9e816e7ab9b2063f2c962e1cfb79d8a63b`.
-It permits one GET of the global firewall, no retry/pagination/redirect, complete
-private response retention, and exact evidence sealing under a future separate
-authorization.
+It permitted one GET of the global firewall, no retry/pagination/redirect, complete
+private response retention, and exact evidence sealing. Run 0001 used that authority
+once and is nonreplayable. Offline adjudication repaired the compatible additive-field
+parser defect and sealed the description-aware baseline/restoration evidence. The
+high-assurance track is now frozen; there is no active plan.
 
 The V1 and V2 plans remain preserved as historical provenance. The former manual
 replacement is `gate-l2m-host-qualification-plan-v3.json`, plan

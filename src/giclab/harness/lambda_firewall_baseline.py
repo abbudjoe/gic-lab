@@ -41,6 +41,7 @@ from .lambda_archive import (
     _validate_system,
     _write_exclusive_at,
 )
+from .policy import load_project_execution_state
 from .sira_storage import APPROVED_MOUNT, SYSTEM_DATA_MOUNT, VolumeObservation
 
 
@@ -49,6 +50,8 @@ class FirewallBaselineError(ValueError):
 
 
 CANONICALIZATION_VERSION: Final = "t07-firewall-canonical-v1"
+FIREWALL_RESPONSE_PARSER_VERSION: Final = "t07-firewall-response-v2"
+HIGH_ASSURANCE_TRACK_STATE: Final = "high-assurance-infrastructure-frozen"
 CAPTURE_PLAN_ID: Final = "PLAN-T07-GATE-L2M-FIREWALL-BASELINE-CAPTURE-V1"
 CAPTURE_RUN_ID: Final = "RUN-T07-L2M-FIREWALL-BASELINE-CAPTURE-0001"
 CAPTURE_AUTHORIZATION_PLACEHOLDER: Final = "AUTH-T07-GATE-L2M-FIREWALL-BASELINE-CAPTURE-V1-PENDING"
@@ -129,7 +132,9 @@ _AUTHORIZATION: Final = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{2,127}$")
 _ALIAS: Final = re.compile(r"^l2m-firewall-baseline-[a-f0-9]{12}$")
 _CANONICAL_FIELDS: Final = frozenset({"protocol", "port_range", "source_network", "description"})
 _REQUIRED_RULE_FIELDS: Final = frozenset({"protocol", "source_network", "description"})
+_REQUIRED_RULESET_FIELDS: Final = frozenset({"id", "name", "rules"})
 _PROTOCOLS: Final = frozenset({"tcp", "udp", "icmp", "all"})
+_SAFE_EXTENSION_KEY: Final = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,127}$")
 _COMMIT: Final = re.compile(r"^[a-f0-9]{40}$")
 _CAPTURE_AUTHORIZATION: Final = re.compile(
     r"^AUTH-T07-GATE-L2M-FIREWALL-BASELINE-CAPTURE-V1-[A-Z0-9][A-Z0-9._:-]{2,95}$"
@@ -364,8 +369,7 @@ def verify_exact_firewall_baseline(
     expected_semantic_sha256: str,
 ) -> None:
     current = _mapping(current_ruleset, context="current global ruleset")
-    if set(current) != {"id", "name", "rules"}:
-        raise FirewallBaselineError("global ruleset authoritative field set drifted")
+    parsed = parse_global_firewall_ruleset(current)
     if (
         current.get("id") != expected_ruleset_id
         or current.get("name") != expected_ruleset_name
@@ -373,8 +377,7 @@ def verify_exact_firewall_baseline(
         or _SHA256.fullmatch(expected_semantic_sha256) is None
     ):
         raise FirewallBaselineError("global ruleset identity drifted")
-    observed = canonicalize_firewall_rules(current.get("rules"))
-    if observed.semantic_sha256 != expected_semantic_sha256:
+    if parsed.baseline.semantic_sha256 != expected_semantic_sha256:
         raise FirewallBaselineError("global firewall differs from the exact sealed baseline")
 
 
@@ -394,6 +397,65 @@ def _json_type(value: object) -> str:
     if isinstance(value, Mapping):
         return "object"
     raise FirewallBaselineError("JSON evidence contains an unsupported value type")
+
+
+@dataclass(frozen=True, slots=True)
+class ParsedGlobalFirewallRuleset:
+    """Strict documented rules plus privacy-safe compatible response extensions."""
+
+    baseline: CanonicalFirewallBaseline
+    extension_types: tuple[tuple[str, str], ...]
+    ruleset: Mapping[str, object] = field(repr=False)
+
+    @property
+    def rules(self) -> Sequence[object]:
+        return _sequence(self.ruleset.get("rules"), context="global firewall rules")
+
+
+@dataclass(frozen=True, slots=True)
+class ParsedGlobalFirewallResponse:
+    """A complete provider envelope with additive data metadata kept private."""
+
+    parsed_ruleset: ParsedGlobalFirewallRuleset
+    envelope: Mapping[str, object] = field(repr=False)
+
+
+def parse_global_firewall_ruleset(value: object) -> ParsedGlobalFirewallRuleset:
+    """Validate authoritative fields while accepting non-authoritative additions.
+
+    The pinned provider schema requires ``id``, ``name`` and ``rules`` but does not
+    set ``additionalProperties: false`` on the data object. Additive data-level
+    metadata is therefore retained privately and represented publicly only by its
+    safe key name and JSON type. Rule objects remain exact and fail closed on every
+    unknown field because they form the writable restoration payload.
+    """
+
+    ruleset = _mapping(value, context="global firewall ruleset")
+    missing = _REQUIRED_RULESET_FIELDS - set(ruleset)
+    if missing:
+        raise FirewallBaselineError("global ruleset omits a required authoritative field")
+    if ruleset.get("id") != "global":
+        raise FirewallBaselineError("global ruleset identity drifted")
+    _string(ruleset.get("name"), context="global ruleset name")
+    extensions: list[tuple[str, str]] = []
+    for key in sorted(set(ruleset) - _REQUIRED_RULESET_FIELDS):
+        if _SAFE_EXTENSION_KEY.fullmatch(key) is None:
+            raise FirewallBaselineError("global ruleset extension key is not safely reportable")
+        extensions.append((key, _json_type(ruleset[key])))
+    baseline = canonicalize_firewall_rules(ruleset.get("rules"))
+    return ParsedGlobalFirewallRuleset(baseline, tuple(extensions), ruleset)
+
+
+def parse_global_firewall_response(value: object) -> ParsedGlobalFirewallResponse:
+    """Validate the exact success envelope and its compatible global-ruleset data."""
+
+    envelope = _mapping(value, context="global firewall response")
+    if set(envelope) != {"data"}:
+        raise FirewallBaselineError("global firewall response envelope drifted")
+    return ParsedGlobalFirewallResponse(
+        parse_global_firewall_ruleset(envelope.get("data")),
+        envelope,
+    )
 
 
 def structural_report_for_historical_projection(
@@ -497,6 +559,45 @@ def validate_canonical_report(report: Mapping[str, object], *, repository_root: 
         types = _mapping(report.get(types_key), context=f"canonical report {types_key}")
         if set(fields) != set(types):
             raise FirewallBaselineError("canonical report key-name/type-key correspondence drifted")
+    extensions_value = report.get("compatible_top_level_extensions")
+    extension_observed = report.get("compatible_extension_observed")
+    if extensions_value is not None or extension_observed is not None:
+        extensions = _sequence(
+            extensions_value, context="canonical report compatible top-level extensions"
+        )
+        extension_types: dict[str, str] = {}
+        for value in extensions:
+            item = _mapping(value, context="canonical report compatible extension")
+            if set(item) != {"name", "type"}:
+                raise FirewallBaselineError("canonical report extension field set drifted")
+            name = _string(item.get("name"), context="canonical report extension name")
+            value_type = _string(item.get("type"), context="canonical report extension type")
+            if (
+                _SAFE_EXTENSION_KEY.fullmatch(name) is None
+                or name in _REQUIRED_RULESET_FIELDS
+                or name in extension_types
+            ):
+                raise FirewallBaselineError("canonical report extension name drifted")
+            extension_types[name] = value_type
+        global_fields = set(
+            _sequence(
+                report.get("global_ruleset_fields"),
+                context="canonical report global ruleset fields",
+            )
+        )
+        global_types = _mapping(
+            report.get("global_ruleset_types"),
+            context="canonical report global ruleset types",
+        )
+        expected_extensions = global_fields - _REQUIRED_RULESET_FIELDS
+        if (
+            set(extension_types) != expected_extensions
+            or any(
+                global_types.get(name) != value_type for name, value_type in extension_types.items()
+            )
+            or extension_observed is not bool(extension_types)
+        ):
+            raise FirewallBaselineError("canonical report extension/type correspondence drifted")
     classification = report.get("evidence_classification")
     if classification in {
         "complete_pre_mutation_provider_baseline",
@@ -508,6 +609,9 @@ def validate_canonical_report(report: Mapping[str, object], *, repository_root: 
         or report.get("all_port_range_presence_distinguished") is not True
         or report.get("raw_response_retained") is not True
         or report.get("unknown_raw_key_structure_retained") is not True
+        or report.get("response_parser_version") != FIREWALL_RESPONSE_PARSER_VERSION
+        or extensions_value is None
+        or type(extension_observed) is not bool
     ):
         raise FirewallBaselineError("complete canonical report lacks lossless evidence invariants")
 
@@ -905,6 +1009,10 @@ def verify_capture_preflight(
 
     authorization.validate()
     root = repository_root.resolve(strict=True)
+    project_state = load_project_execution_state(root)
+    substrate = project_state.planned_execution_substrate
+    if substrate is None or substrate.decision_state == HIGH_ASSURANCE_TRACK_STATE:
+        raise FirewallBaselineError("high-assurance infrastructure track is frozen")
     if root != repository_root.absolute() or root != Path.cwd().resolve(strict=True):
         raise FirewallBaselineError("capture must start in the canonical repository root")
     exact_plan = root / CAPTURE_PLAN_RELATIVE
@@ -995,8 +1103,13 @@ class CaptureEvidence:
     root: Path = field(repr=False)
 
 
-def complete_canonical_report(baseline: CanonicalFirewallBaseline) -> dict[str, object]:
-    """Return the public-safe shape and hash report for a complete private baseline."""
+def complete_canonical_report(
+    baseline: CanonicalFirewallBaseline,
+    *,
+    envelope: Mapping[str, object] | None = None,
+    ruleset: Mapping[str, object] | None = None,
+) -> dict[str, object]:
+    """Return a public-safe report without promoting provider scalar metadata."""
 
     shapes: list[dict[str, object]] = []
     empty = 0
@@ -1020,16 +1133,31 @@ def complete_canonical_report(baseline: CanonicalFirewallBaseline) -> dict[str, 
         empty += int(rule.description == "")
         nonempty += int(rule.description != "")
         protocols.add(rule.protocol)
+    envelope_value: Mapping[str, object] = {"data": {}} if envelope is None else envelope
+    ruleset_value: Mapping[str, object] = (
+        {"id": "global", "name": "redacted", "rules": []} if ruleset is None else ruleset
+    )
+    extension_types = [
+        {"name": key, "type": _json_type(ruleset_value[key])}
+        for key in sorted(set(ruleset_value) - _REQUIRED_RULESET_FIELDS)
+    ]
     return {
         "schema_version": "0.1.0",
         "evidence_classification": "complete_pre_mutation_provider_baseline",
         "canonicalization_version": baseline.version,
+        "response_parser_version": FIREWALL_RESPONSE_PARSER_VERSION,
         "baseline_alias": baseline.alias,
         "canonical_semantic_sha256": baseline.semantic_sha256,
-        "observation_top_level_fields": ["data"],
-        "observation_top_level_types": {"data": "object"},
-        "global_ruleset_fields": ["id", "name", "rules"],
-        "global_ruleset_types": {"id": "string", "name": "string", "rules": "array"},
+        "observation_top_level_fields": sorted(envelope_value),
+        "observation_top_level_types": {
+            key: _json_type(envelope_value[key]) for key in sorted(envelope_value)
+        },
+        "global_ruleset_fields": sorted(ruleset_value),
+        "global_ruleset_types": {
+            key: _json_type(ruleset_value[key]) for key in sorted(ruleset_value)
+        },
+        "compatible_top_level_extensions": extension_types,
+        "compatible_extension_observed": bool(extension_types),
         "rule_count": baseline.rule_count,
         "rule_shapes": shapes,
         "empty_description_count": empty,
@@ -1512,13 +1640,10 @@ def capture_with_fakeable_transport(
             )
             raise FirewallBaselineError("capture response failed status/content contract")
         envelope = _strict_json(response.body, context="capture response")
-        if set(envelope) != {"data"}:
-            raise FirewallBaselineError("capture response envelope has unknown or missing fields")
-        ruleset = _mapping(envelope.get("data"), context="capture global ruleset")
-        if set(ruleset) != {"id", "name", "rules"} or ruleset.get("id") != "global":
-            raise FirewallBaselineError("capture global ruleset has unknown or missing fields")
-        rules = _sequence(ruleset.get("rules"), context="capture global rules")
-        baseline = canonicalize_firewall_rules(rules)
+        parsed_response = parse_global_firewall_response(envelope)
+        ruleset = parsed_response.parsed_ruleset.ruleset
+        rules = parsed_response.parsed_ruleset.rules
+        baseline = parsed_response.parsed_ruleset.baseline
         _, restoration_encoded, restoration_sha256 = build_exact_restoration_payload(
             rules, repository_root=root
         )
@@ -1538,6 +1663,7 @@ def capture_with_fakeable_transport(
             "schema_version": "0.1.0",
             "baseline_alias": baseline.alias,
             "canonicalization_version": CANONICALIZATION_VERSION,
+            "response_parser_version": FIREWALL_RESPONSE_PARSER_VERSION,
             "capture_plan_id": CAPTURE_PLAN_ID,
             "capture_run_id": CAPTURE_RUN_ID,
             "authorization_reference": authorization_reference,
@@ -1569,7 +1695,9 @@ def capture_with_fakeable_transport(
             "restoration_payload_sha256": restoration_sha256,
             "unknown_fields": {
                 "envelope": [],
-                "global_ruleset": [],
+                "global_ruleset": [
+                    name for name, _value_type in parsed_response.parsed_ruleset.extension_types
+                ],
                 "rules": [[] for _ in rules],
             },
         }
@@ -1585,7 +1713,11 @@ def capture_with_fakeable_transport(
         ):
             raise FirewallBaselineError("capture baseline failed its private schema")
         baseline_encoded = canonical_json_bytes(baseline_document)
-        canonical_report = complete_canonical_report(baseline)
+        canonical_report = complete_canonical_report(
+            baseline,
+            envelope=parsed_response.envelope,
+            ruleset=ruleset,
+        )
         validate_canonical_report(canonical_report, repository_root=root)
         canonical_report_encoded = canonical_json_bytes(canonical_report)
         _write_private_file_at(

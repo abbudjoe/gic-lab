@@ -1,13 +1,14 @@
 # T07 Lambda host controls
 
-This directory contains the design-only Gate L0 source locks and unauthorized plans.
+This directory preserves the design-only Gate L0 source locks and historical plans.
 
-Gate L2M V3/run 0003 is now blocked historical evidence: it stopped after six
-read-only GETs and before mutation, and its transformed global-firewall projection is
-not exact restoration authority. The active proposal is the unauthorized one-GET
-`manual-console/gate-l2m-firewall-baseline-capture-plan-v1.json`. It retains the raw
-response privately, uses the description-aware canonicalizer, and seals one-way to
-the approved archive. It authorizes no request or mutation by itself.
+The T07 high-assurance infrastructure track is frozen. Gate L2M V3/run 0003 stopped
+after six read-only GETs and before mutation. The later one-GET baseline-capture plan
+was consumed once: its run retained the complete response, stopped at the original
+`schema_drift`, and was adjudicated offline as a compatible additive data-level
+extension. The repaired exact baseline/restoration evidence is private and sealed.
+Every Gate L2M plan/run identity here is burned or superseded; no active proposal or
+authorization block remains.
 
 - `gate-l1-readonly-inventory-plan.json` is the byte-preserved historical V1 GET-only
   contract. Both V1 authorizations are blocked evidence; run
@@ -131,7 +132,7 @@ public decision and marker aliases are `l2m-decision-6b7af4f2c567` and
 `l2m-marker-dfc9017f4bc5`; no private scalar or path is public.
 
 `manual-console/gate-l2m-host-qualification-plan-v1.json` remains preserved as
-historical provenance. The active executable-but-unauthorized replacement is
+historical provenance. Its former executable-but-unauthorized replacement was
 `manual-console/gate-l2m-host-qualification-plan-v3.json`: 21,641 bytes, SHA-256
 `1931fcacda4194063c0116ff9630d82f3b8f4ec07ff9b0310342335db629f654`, plan
 `PLAN-T07-GATE-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-V3`, run
@@ -139,7 +140,8 @@ historical provenance. The active executable-but-unauthorized replacement is
 actor steps, 13 user checkpoint templates, GET-only observer, exact caps and incident
 cleanup while refreshing the reviewed implementation, journal/evidence schemas and
 private-seal schema hashes.
-User actions remain console-only and automated cloud mutation remains zero. The plan
-must start by `2026-08-12T05:15:19.646016Z` after the current-turn authorization
-binding; expiry requires a newly reviewed immutable plan. Nothing has been launched,
-uploaded, pulled or run; Gate L3 and Gate L4 remain blocked.
+The plan is burned, its deadline no longer grants any path to authorization, and its
+user actions were never executed. Automated cloud mutation remains zero. Nothing was
+launched, uploaded, pulled or run. Gate L2M/L3/L4 are frozen on this branch; future
+bounded-smoke design must use fresh identities, review and authority on the child
+branch described by `docs/harness/T07_BOUNDED_SMOKE_FORK_HANDOFF.md`.

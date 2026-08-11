@@ -2601,7 +2601,12 @@ def test_global_firewall_restoration_and_zero_prelaunch_are_observed() -> None:
     ]
     semantic_hash = firewall_semantic_sha256(original)
     verify_global_firewall_restoration(
-        {"id": "global", "name": "global", "rules": list(reversed(original))},
+        {
+            "id": "global",
+            "name": "global",
+            "rules": list(reversed(original)),
+            "workspace_id": "PRIVATE-WORKSPACE-CANARY",
+        },
         sealed_original_ruleset_id="global",
         sealed_original_ruleset_name="global",
         sealed_original_semantic_sha256=semantic_hash,

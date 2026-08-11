@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gic-lab.invalid/schemas/t07-lambda-firewall-capture-adjudication.schema.json",
+  "title": "Public-safe T07 firewall capture offline adjudication",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "capture_run_id",
+    "capture_plan_id",
+    "original_disposition",
+    "adjudicated_classification",
+    "request",
+    "immutable_evidence",
+    "official_contract",
+    "response_parser_version",
+    "compatible_top_level_extensions",
+    "rule_count",
+    "all_rules_strictly_valid",
+    "baseline_alias",
+    "canonical_semantic_sha256",
+    "restoration_payload_alias",
+    "restoration_payload_sha256",
+    "run_replay_allowed",
+    "cloud_mutation_occurred",
+    "external_request_during_adjudication",
+    "private_scalar_values_retained"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1.0"},
+    "capture_run_id": {"const": "RUN-T07-L2M-FIREWALL-BASELINE-CAPTURE-0001"},
+    "capture_plan_id": {"const": "PLAN-T07-GATE-L2M-FIREWALL-BASELINE-CAPTURE-V1"},
+    "original_disposition": {"const": "schema_drift"},
+    "adjudicated_classification": {"const": "compatible_additive_top_level_extension"},
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "path", "http_status", "response_bytes", "elapsed_ms"],
+      "properties": {
+        "method": {"const": "GET"},
+        "path": {"const": "/api/v1/firewall-rulesets/global"},
+        "http_status": {"const": 200},
+        "response_bytes": {"type": "integer", "minimum": 1, "maximum": 262144},
+        "elapsed_ms": {"type": "integer", "minimum": 0, "maximum": 60000}
+      }
+    },
+    "immutable_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "request_ledger_sha256",
+        "raw_response_sha256",
+        "external_manifest_sha256",
+        "external_copy_record_sha256",
+        "external_seal_sha256"
+      ],
+      "properties": {
+        "request_ledger_sha256": {"$ref": "#/$defs/sha256"},
+        "raw_response_sha256": {"$ref": "#/$defs/sha256"},
+        "external_manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "external_copy_record_sha256": {"$ref": "#/$defs/sha256"},
+        "external_seal_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "official_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url", "api_version", "openapi_version", "bytes", "sha256", "additional_properties_explicitly_forbidden"],
+      "properties": {
+        "url": {"const": "https://docs-api.lambda.ai/api/cloud/spec.json"},
+        "api_version": {"const": "1.10.0"},
+        "openapi_version": {"const": "3.1.0"},
+        "bytes": {"const": 240288},
+        "sha256": {"const": "320f4877924984f060b179e86595ed58918a1d0696b60b99cae548ec164934f4"},
+        "additional_properties_explicitly_forbidden": {"const": false}
+      }
+    },
+    "response_parser_version": {"const": "t07-firewall-response-v2"},
+    "compatible_top_level_extensions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 61,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "type"],
+        "properties": {
+          "name": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,127}$"},
+          "type": {"enum": ["array", "boolean", "integer", "null", "number", "object", "string"]}
+        }
+      }
+    },
+    "rule_count": {"type": "integer", "minimum": 0, "maximum": 100},
+    "all_rules_strictly_valid": {"const": true},
+    "baseline_alias": {"type": "string", "pattern": "^l2m-firewall-baseline-[a-f0-9]{12}$"},
+    "canonical_semantic_sha256": {"$ref": "#/$defs/sha256"},
+    "restoration_payload_alias": {"type": "string", "pattern": "^l2m-firewall-restoration-[a-f0-9]{12}$"},
+    "restoration_payload_sha256": {"$ref": "#/$defs/sha256"},
+    "run_replay_allowed": {"const": false},
+    "cloud_mutation_occurred": {"const": false},
+    "external_request_during_adjudication": {"const": false},
+    "private_scalar_values_retained": {"const": false}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  }
+}

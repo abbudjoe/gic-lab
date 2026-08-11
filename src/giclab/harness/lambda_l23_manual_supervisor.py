@@ -70,6 +70,7 @@ from .lambda_l23_manual_plan import (
     validate_execution_storage_preflight,
     validate_public_plan,
 )
+from .policy import load_project_execution_state
 
 
 class L23SupervisorError(ValueError):
@@ -342,6 +343,10 @@ def verify_supervisor_preflight(
 
     authorization.validate()
     root = repository_root.resolve(strict=True)
+    project_state = load_project_execution_state(root)
+    substrate = project_state.planned_execution_substrate
+    if substrate is None or substrate.decision_state == "high-assurance-infrastructure-frozen":
+        raise L23SupervisorError("high-assurance infrastructure track is frozen")
     _verify_loaded_module_origins(root)
     if root != repository_root.absolute() or plan_path.absolute() != root / PLAN_RELATIVE:
         raise L23SupervisorError("repository or plan path differs from the exact contract")
