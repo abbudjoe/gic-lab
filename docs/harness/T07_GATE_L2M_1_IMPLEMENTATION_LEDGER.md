@@ -1,6 +1,6 @@
 # T07 Gate L2M.1 implementation ledger
 
-Assembly status: **validation and independent rereview in progress**
+Assembly status: **complete**
 
 Source contract: user-supplied `T07_GATE_L2M_1_FIREWALL_BASELINE_REPAIR.md`.
 
@@ -18,7 +18,7 @@ are all prohibited.
 | L2M1-06 | Make old lossy baselines fail closed in the manual observer/supervisor; preserve V3 and run 0003. | met | Observer now delegates complete rule semantics to the repaired canonicalizer and separately binds ruleset ID/name; V3 plan/journal/observation hashes remain unchanged and its old observer hash fails closed before credential access. |
 | L2M1-07 | Seal the stopped run-0003 incident bundle locally and to the approved APFS archive without altering historical bytes. | met | Incident alias `l2m-incident-81cff71b09e0`; local seal `552f5d57dbb232c09cdffceb9bb2c337f6995994a0dec564be7f90022e2ba15c`, copy record `ac867c4fac4bb51beb66e5247863cb9c00326e7b6186e5718e5f51957f4a5a77`, external seal `283b992203ccbe85491a3ef853b2741a3e183b70d19a8db729db7db5492f98b1`; destination hashes verified, source retained, original hashes unchanged. |
 | L2M1-08 | Update all required governance, readiness, packet, runbook, Gate L3, and sanitized notebook surfaces. | met | Active plan, decision log, project state/policy, readiness, packets, runbook, READMEs, Gate L3 requirements, and weekly notebook now expose the blocked historical V3 and one-GET capture boundary. |
-| L2M1-09 | Pass focused tests, Lambda regressions, schema/repository validation, privacy scans, Ruff, strict mypy, and portable-Quarto `make check`. | in-progress | Focused firewall/observer/project-state suite, full L2M suite, Lambda inventory/archive/firewall suite, `make validate`, Ruff, and strict mypy pass; privacy scan and full portable-Quarto gate remain. |
-| L2M1-10 | Obtain clean independent spec/privacy/cloud-safety/evidence/restoration review, repair findings, rerun full gate, commit, and leave a clean tree. | in-progress | First review found control-plane gaps; all reported policy, identity, path, deadline, raw-retention, duplicate-key, source-record, authorization, and report-validation issues were repaired. Final rereview and post-review gate remain. |
+| L2M1-09 | Pass focused tests, Lambda regressions, schema/repository validation, privacy scans, Ruff, strict mypy, and portable-Quarto `make check`. | met | Focused firewall/observer/project-state suite, full L2M suite, Lambda inventory/archive/firewall suite, repository validation, Ruff, strict mypy, and sensitive-value/path scans passed. Both the pre-review and post-review offline portable-Quarto full gates passed with 1,048 tests, repository validation, all 16 notebook pages rendered, and site validation. |
+| L2M1-10 | Obtain clean independent spec/privacy/cloud-safety/evidence/restoration review, repair findings, rerun full gate, commit, and leave a clean tree. | met | Independent rereview at clean commit `c5c385ebf0da3aaa1091f53c6798f4eab3834718` found no P0/P1/P2 findings after repairs. The post-review full gate passed; this ledger is the sole final assembly-commit change, after which branch, hashes, ancestry, and clean-tree state are reverified. |
 
 No checklist item authorizes the capture request itself or any manual-console action.
