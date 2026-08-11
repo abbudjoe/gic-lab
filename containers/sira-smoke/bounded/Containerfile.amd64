@@ -1,0 +1,47 @@
+FROM --platform=linux/amd64 mcr.microsoft.com/playwright/python:v1.39.0-jammy@sha256:96955ff5cc37e13f5f1b21f5171afb9fed7e028025aa9d81c690501cd7fa0c6c
+
+ARG UV_WHEEL_SHA256=4e4d5e31bea86e1b6e0f5a0f95e14e80018e6f6c0129256d2915a4b3d793644d
+ARG UV_LOCK_SHA256=138585129c7f369887591d30d9727f8dd466639fa78fb00adc5a04f1e9b2d76e
+ARG ROUTING_PATCH_SHA256=4d7e2a25f4313fc754db0fa17aeda51cc5cd75a5653adaf13b01ce87a71cb8ed
+ARG RUNTIME_ADAPTATION_SHA256=894783a47c19efc5e141a90a4dd63920b9440e1ef231aad5b2738b1f524bbbcd
+
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/opt/giclab-src \
+    UV_HTTP_RETRIES=0 \
+    UV_LINK_MODE=copy \
+    UV_NO_MODIFY_PATH=1 \
+    UV_PYTHON_DOWNLOADS=never \
+    UV_PROJECT_ENVIRONMENT=/opt/sira/.venv
+
+USER root
+WORKDIR /opt/sira
+
+COPY vendor/uv-0.11.7-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl /opt/build/uv.whl
+RUN echo "${UV_WHEEL_SHA256}  /opt/build/uv.whl" | sha256sum --check --strict \
+    && python3 -m pip install --no-cache-dir --no-index /opt/build/uv.whl
+
+COPY upstream/ /opt/sira/
+COPY sira-immutable-model-routing.patch /opt/giclab/patches/sira-immutable-model-routing.patch
+RUN test "$(sha256sum uv.lock | cut -d ' ' -f 1)" = "${UV_LOCK_SHA256}" \
+    && test "$(sha256sum /opt/giclab/patches/sira-immutable-model-routing.patch | cut -d ' ' -f 1)" = "${ROUTING_PATCH_SHA256}" \
+    && git apply --check /opt/giclab/patches/sira-immutable-model-routing.patch \
+    && git apply /opt/giclab/patches/sira-immutable-model-routing.patch \
+    && uv sync --frozen --extra eval --python 3.10 \
+    && uv pip freeze --python /opt/sira/.venv/bin/python > /opt/giclab/installed-packages.txt \
+    && rm -rf /root/.cache/uv /opt/build
+
+COPY giclab/ /opt/giclab-src/giclab/
+COPY container_entrypoint.py /opt/giclab/container_entrypoint.py
+COPY model_preflight.py /opt/giclab/model_preflight.py
+COPY browser_preflight.py /opt/giclab/browser_preflight.py
+COPY static.html /opt/giclab/fixtures/static.html
+RUN test "$(sha256sum /opt/giclab-src/giclab/harness/sira_gate_a_runtime.py | cut -d ' ' -f 1)" = "${RUNTIME_ADAPTATION_SHA256}" \
+    && chmod 0555 /opt/giclab/container_entrypoint.py /opt/giclab/model_preflight.py /opt/giclab/browser_preflight.py \
+    && chmod 0444 /opt/giclab/fixtures/static.html \
+    && mkdir -p -m 0755 /run/secrets /giclab/evidence \
+    && find /opt/sira /opt/giclab /opt/giclab-src -xdev -type d -exec chmod a-w {} + \
+    && find /opt/sira /opt/giclab /opt/giclab-src -xdev -type f -exec chmod a-w {} +
+
+WORKDIR /opt/sira
+USER 1000:1000

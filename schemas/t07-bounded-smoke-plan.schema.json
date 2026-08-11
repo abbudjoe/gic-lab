@@ -1,0 +1,505 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gic-lab.invalid/schemas/t07-bounded-smoke-plan.schema.json",
+  "title": "T07 bounded SiRA smoke execution plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "identity",
+    "scientific_lock",
+    "source_and_runtime",
+    "provider_and_pricing",
+    "public_metadata",
+    "limits",
+    "preflights",
+    "container_lifecycle",
+    "bootstrap_argv_template",
+    "provider_observer",
+    "storage",
+    "conditions",
+    "secrets",
+    "lambda",
+    "hard_blockers",
+    "post_launch_stop_conditions",
+    "deferred_limitations",
+    "steps",
+    "implementation",
+    "execution_permissions_now"
+  ],
+  "properties": {
+    "$schema": {
+      "const": "../../../schemas/t07-bounded-smoke-plan.schema.json"
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "plan_id",
+        "host_run_id",
+        "authorization_reference",
+        "state",
+        "authorized",
+        "branch",
+        "fork_commit",
+        "parent_branch",
+        "frozen_tag"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "0.1.0"
+        },
+        "plan_id": {
+          "const": "PLAN-T07-BOUNDED-SIRA-SMOKE-V1"
+        },
+        "host_run_id": {
+          "const": "RUN-T07-BOUNDED-HOST-0001"
+        },
+        "authorization_reference": {
+          "const": "AUTH-T07-BOUNDED-SIRA-SMOKE-V1-PENDING"
+        },
+        "state": {
+          "const": "ready-for-bounded-smoke-authorization"
+        },
+        "authorized": {
+          "const": false
+        },
+        "branch": {
+          "const": "phase-1/sira-smoke-bounded"
+        },
+        "fork_commit": {
+          "const": "397a391b736528dd1049023d629100193e823c49"
+        },
+        "parent_branch": {
+          "const": "phase-1/sira-smoke-lambda"
+        },
+        "frozen_tag": {
+          "const": "t07-high-assurance-infrastructure-v1"
+        }
+      }
+    },
+    "scientific_lock": {
+      "$ref": "#/$defs/jsonObject"
+    },
+    "source_and_runtime": {
+      "$ref": "#/$defs/jsonObject"
+    },
+    "provider_and_pricing": {
+      "$ref": "#/$defs/jsonObject"
+    },
+    "public_metadata": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": {
+        "$ref": "#/$defs/metadataRecord"
+      }
+    },
+    "limits": {
+      "type": "object",
+      "minProperties": 40,
+      "additionalProperties": {
+        "oneOf": [
+          {
+            "type": "integer",
+            "minimum": 0
+          },
+          {
+            "type": "string",
+            "minLength": 1
+          }
+        ]
+      }
+    },
+    "preflights": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "browser",
+        "model"
+      ],
+      "properties": {
+        "browser": {
+          "$ref": "#/$defs/preflight"
+        },
+        "model": {
+          "$ref": "#/$defs/preflight"
+        }
+      }
+    },
+    "container_lifecycle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "start_attached",
+        "start_detached",
+        "inspect",
+        "top",
+        "stop",
+        "kill",
+        "remove",
+        "container_residue",
+        "network_residue",
+        "volume_residue"
+      ],
+      "properties": {
+        "start_attached": {
+          "$ref": "#/$defs/argv"
+        },
+        "start_detached": {
+          "$ref": "#/$defs/argv"
+        },
+        "inspect": {
+          "$ref": "#/$defs/argv"
+        },
+        "top": {
+          "$ref": "#/$defs/argv"
+        },
+        "stop": {
+          "$ref": "#/$defs/argv"
+        },
+        "kill": {
+          "$ref": "#/$defs/argv"
+        },
+        "remove": {
+          "$ref": "#/$defs/argv"
+        },
+        "container_residue": {
+          "$ref": "#/$defs/argv"
+        },
+        "network_residue": {
+          "$ref": "#/$defs/argv"
+        },
+        "volume_residue": {
+          "$ref": "#/$defs/argv"
+        }
+      }
+    },
+    "bootstrap_argv_template": {
+      "$ref": "#/$defs/argv"
+    },
+    "provider_observer": {
+      "$ref": "#/$defs/jsonObject"
+    },
+    "storage": {
+      "$ref": "#/$defs/jsonObject"
+    },
+    "conditions": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "prefixItems": [
+        {
+          "$ref": "#/$defs/condition"
+        },
+        {
+          "$ref": "#/$defs/condition"
+        }
+      ],
+      "items": false
+    },
+    "secrets": {
+      "$ref": "#/$defs/jsonObject"
+    },
+    "lambda": {
+      "$ref": "#/$defs/jsonObject"
+    },
+    "hard_blockers": {
+      "type": "array",
+      "minItems": 12,
+      "maxItems": 12,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "post_launch_stop_conditions": {
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 7,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "deferred_limitations": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ordinal",
+          "actor",
+          "action",
+          "stop_on_failure"
+        ],
+        "properties": {
+          "ordinal": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "actor": {
+            "enum": [
+              "observer",
+              "user",
+              "bootstrap",
+              "local-verifier"
+            ]
+          },
+          "action": {
+            "type": "string",
+            "minLength": 1
+          },
+          "stop_on_failure": {
+            "const": true
+          }
+        }
+      }
+    },
+    "implementation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reviewed_commit",
+        "artifacts"
+      ],
+      "properties": {
+        "reviewed_commit": {
+          "oneOf": [
+            {
+              "const": "PENDING-IMPLEMENTATION-COMMIT"
+            },
+            {
+              "type": "string",
+              "pattern": "^[a-f0-9]{40}$"
+            }
+          ]
+        },
+        "artifacts": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/artifact"
+          }
+        }
+      }
+    },
+    "execution_permissions_now": {
+      "$ref": "#/$defs/jsonObject"
+    }
+  },
+  "$defs": {
+    "jsonObject": {
+      "type": "object"
+    },
+    "argv": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "preflight": {
+      "type": "object",
+      "required": [
+        "run_id",
+        "model_calls",
+        "container_create_argv_template",
+        "container_create_template_sha256"
+      ],
+      "properties": {
+        "run_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "network": {
+          "type": "string"
+        },
+        "method": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "browser_actions": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "model_calls": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "metadata_gets": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "container_create_argv_template": {
+          "$ref": "#/$defs/argv"
+        },
+        "container_create_template_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      }
+    },
+    "condition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "condition",
+        "run_id",
+        "attempt",
+        "order_index",
+        "mode",
+        "container_create_argv_template",
+        "container_create_template_sha256",
+        "inner_argv_template",
+        "inner_argv_template_sha256",
+        "model_call_attempts",
+        "model_tokens",
+        "api_cost_usd",
+        "wall_seconds",
+        "browser_actions",
+        "output_bytes"
+      ],
+      "properties": {
+        "condition": {
+          "enum": [
+            "SIRA-REACTIVE",
+            "SIRA-SIMULATIVE"
+          ]
+        },
+        "run_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "attempt": {
+          "const": 1
+        },
+        "order_index": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2
+        },
+        "mode": {
+          "enum": [
+            "reactive",
+            "simulative"
+          ]
+        },
+        "container_create_argv_template": {
+          "$ref": "#/$defs/argv"
+        },
+        "container_create_template_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "inner_argv_template": {
+          "$ref": "#/$defs/argv"
+        },
+        "inner_argv_template_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "model_call_attempts": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "model_tokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "api_cost_usd": {
+          "type": "number",
+          "minimum": 0
+        },
+        "wall_seconds": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "browser_actions": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "output_bytes": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "bytes",
+        "sha256"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      }
+    },
+    "metadataRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "subject",
+        "url",
+        "retrieved_at_utc",
+        "bytes",
+        "sha256"
+      ],
+      "properties": {
+        "subject": {
+          "type": "string",
+          "minLength": 1
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://"
+        },
+        "retrieved_at_utc": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      }
+    }
+  }
+}

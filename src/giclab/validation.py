@@ -59,6 +59,8 @@ SCHEMA_FILES = (
     "schemas/t07-lambda-request-ledger.schema.json",
     "schemas/t07-lambda-host-qualification.schema.json",
     "schemas/t07-lambda-host-qualification-incident.schema.json",
+    "schemas/t07-bounded-smoke-plan.schema.json",
+    "schemas/t07-bounded-smoke-evidence.schema.json",
 )
 REQUIRED_PATHS = (
     "AGENTS.md",
