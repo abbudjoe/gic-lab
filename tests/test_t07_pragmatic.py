@@ -99,6 +99,12 @@ def test_run_root_allows_only_two_authorized_launch_ordinals() -> None:
         runner.run_root(3)
 
 
+def test_remote_runner_uses_python_310_compatible_utc_and_ephemeral_host_secret() -> None:
+    assert runner.utc_now().endswith("Z")
+    assert str(runner.REMOTE_SECRET).startswith("/home/ubuntu/")
+    assert ".config/giclab" in str(runner.REMOTE_SECRET)
+
+
 def test_destroy_secret_zeroes_and_unlinks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     path = tmp_path / "secret"
     path.write_bytes(b"dummy-canary")

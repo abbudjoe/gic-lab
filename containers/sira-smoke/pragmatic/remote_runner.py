@@ -17,7 +17,7 @@ import subprocess
 import tarfile
 import tempfile
 import time
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Final
 
@@ -38,7 +38,7 @@ BASE_IMAGE: Final = (
     "96955ff5cc37e13f5f1b21f5171afb9fed7e028025aa9d81c690501cd7fa0c6c"
 )
 REMOTE_REPOSITORY: Final = Path("/home/ubuntu/t07-pragmatic-repository")
-REMOTE_SECRET: Final = Path("/dev/shm/t07-pragmatic-openai-provider-key")
+REMOTE_SECRET: Final = Path("/home/ubuntu/.config/giclab/t07-pragmatic-openai-provider-key")
 CONTAINER_PREFIX: Final = "giclab-t07-pragmatic-"
 CONDITION_TIMEOUT_SECONDS: Final = 150
 MAX_EVIDENCE_BYTES: Final = 268_435_456
@@ -49,7 +49,7 @@ class PragmaticRunError(RuntimeError):
 
 
 def utc_now() -> str:
-    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 def canonical_json(document: object) -> bytes:
