@@ -1,6 +1,6 @@
 # T07 bounded smoke implementation ledger
 
-Status: **final validation and independent rereview pending; plan unauthorized**
+Status: **ready-for-bounded-smoke-authorization; plan unauthorized**
 
 Baseline/fork: `397a391b736528dd1049023d629100193e823c49`
 
@@ -26,9 +26,9 @@ Plan: `PLAN-T07-BOUNDED-SIRA-SMOKE-V1`, 55,789 bytes, SHA-256
 | T07-BS-11 | Bind APFS/UTDM identity/floors, one-way verified archive, source retention, and no fallback. | Held-descriptor archive implementation, at most 125 payload plus three seal files, exact upload-artifact retention, and storage-guard tests. | met |
 | T07-BS-12 | Record 12 blockers, seven post-launch stops, seven deferred limitations, allowed claims, and one-pair expiry. | Governance, plan, schema, and exact validator. | met |
 | T07-BS-13 | Produce required schemas, executable bundle/control plane, governance, plan, runbook, packet, and repository state updates. | Required paths plus repository validation. | met |
-| T07-BS-14 | Run focused/shared tests, schema/repository/privacy checks, Ruff, strict mypy, and portable full gate. | Validation record below. | in-progress |
-| T07-BS-15 | Independent scientific-scope/privacy/spend/cleanup review, repairs, clean rereview, and full post-review gate. | Review and validation records below. | in-progress |
-| T07-BS-16 | Commit the reviewed packet on the bounded branch and leave a clean tree without execution. | Final handoff commit/status. | pending |
+| T07-BS-14 | Run focused/shared tests, schema/repository/privacy checks, Ruff, strict mypy, and portable full gate. | Validation record below. | met |
+| T07-BS-15 | Independent scientific-scope/privacy/spend/cleanup review, repairs, clean rereview, and full post-review gate. | Review and validation records below. | met |
+| T07-BS-16 | Commit the reviewed packet on the bounded branch and leave a clean tree without execution. | Docs-only closeout commit plus final handoff Git checks. | met |
 
 ## First independent review and repairs
 
@@ -124,23 +124,36 @@ bootstrap regression surface. Commit
 the credential detection contract and tests are unchanged. Repository validation now
 accepts that surface.
 
-## Validation record
+## Final validation and independent review
 
-Current pre-rereview validation after the second repair commit and regenerated plan:
+The final plan candidate at commit
+`801025a6b740daeaa46cd60849a18c7bff7774bf` passed:
 
-- focused bounded supervisor/plan/budget/evidence/storage/lifecycle tests: passed;
-- Gate A/container and all Lambda inventory/ledger regression tests: passed;
-- plan/schema/scientific hash validation and repository validation: passed;
-- full Python regression suite, excluding only the deliberately stale committed-plan
-  assertion before regeneration: passed; the regenerated committed-plan test then
-  passed;
-- repository-wide Ruff and strict mypy (57 source files): passed.
-- pre-rereview portable-Quarto 1.9.38 `make check`: 1,092 tests passed;
-  repository validation, 16-page render, and site validation passed. Quarto emitted
-  its known non-fatal external-output-path warning.
+- focused Gate A, bounded plan/budget/evidence/storage/lifecycle, and supervisor suite:
+  105 passed;
+- focused privacy, sensitive-value, and credential regressions: 43 passed;
+- plan/schema/scientific-hash validation and repository validation: passed;
+- repository-wide Ruff and strict mypy (57 source files): passed;
+- frozen-science diff against
+  `397a391b736528dd1049023d629100193e823c49`: empty;
+- offline `make check` with the accepted portable Quarto 1.9.38 path: 1,151 tests,
+  repository validation, 16-page notebook render, and site validation passed. Quarto
+  emitted its known non-fatal external-output-path warning.
 
-Independent rereview, any resulting repair loop, and the final post-review gate remain
-in progress.
+The default `make check` lookup first stopped at the site step because this worktree
+does not contain `.tools/quarto-1.9.38`; that incomplete invocation was not counted as
+a successful gate. The full gate above explicitly used the repository-accepted binary
+at `/Users/joseph/Documents/gic-lab/.tools/quarto-1.9.38/bin/quarto` and made no
+download.
+
+Independent rereview at the same clean candidate commit returned **CLEAN**, with no
+remaining P0/P1/P2 finding in scientific scope, privacy/credential handling,
+spend/service-tier enforcement, lifecycle cleanup, or evidence sealing. The reviewer
+independently verified branch/fork/tag ancestry, the 55,789-byte plan and SHA-256,
+the reviewed implementation commit, all 34 artifact byte/hash bindings with zero
+mismatches, the bootstrap identity, all five scientific hashes, false/pending
+execution authority, the same 1,151-test portable-Quarto full gate, and a clean privacy
+diff. The only requested follow-up was this administrative ledger closeout.
 
 ## Execution boundary
 
