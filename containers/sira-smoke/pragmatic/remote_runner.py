@@ -308,7 +308,7 @@ def docker_common(*, name: str, attempt: Path, network: str, image_id: str) -> l
         "--user",
         "1000:1000",
         "--mount",
-        f"type=bind,src={attempt},dst=/giclab/attempt,rw",
+        f"type=bind,src={attempt},dst=/giclab/attempt",
         "--entrypoint",
         "/usr/bin/python3",
         image_id,
