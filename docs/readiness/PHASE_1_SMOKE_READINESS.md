@@ -1,6 +1,6 @@
 # Phase 1 SiRA Smoke Readiness
 
-Status: **profile eligible; bounded smoke V1 ready for separate authorization; not authorized**
+Status: **profile eligible; bounded smoke V2 ready for separate authorization; not authorized**
 
 Prepared: 2026-08-08
 
@@ -36,12 +36,16 @@ description-aware canonicalizer; the exact private baseline and PATCH restoratio
 payload are retained and sealed, while the public records contain only structural
 names, types, counts and hashes.
 
-No executable high-assurance plan or authorization block remains active. The bounded
-child has now created unauthorized plan `PLAN-T07-BOUNDED-SIRA-SMOKE-V1`, host run
-`RUN-T07-BOUNDED-HOST-0001`, at
-`containers/sira-smoke/bounded/bounded-smoke-plan-v1.json`, SHA-256
-`f469d25e3527a5f0bc678a52d458ec29dcb3d27342f045ed54f1ff0c18e813d3`.
-Its governance, exact caps, user runbook, and future authorization packet are under
+No executable high-assurance plan or authorization block remains active. Bounded-smoke
+V1 stopped before its first account request and is preserved as blocked historical
+provenance. The reviewed prospective replacement remains unauthorized.
+
+Prospective bounded plan: `PLAN-T07-BOUNDED-SIRA-SMOKE-V2`.
+
+Its host run is `RUN-T07-BOUNDED-HOST-0002`; the plan is at
+`containers/sira-smoke/bounded/bounded-smoke-plan-v2.json`, with the exact byte size
+and SHA-256 recorded in the V2 implementation ledger and authorization packet. Its
+governance, exact caps, user runbook, and future authorization packet are under
 `docs/harness/T07_BOUNDED_SMOKE_*`. Every execution permission remains false, T07 has
 not run, and Gate L2M/L3/L4 do not continue.
 
@@ -55,7 +59,7 @@ A later current-turn authorization must state one value for every field below:
 | `api_provider` | `OpenAI` |
 | `model_revision` | Exactly `gpt-4o-2024-11-20`, used as a declared substitution for the unavailable historical `gpt-4o` serving revision |
 | `maximum_api_cost_usd` | Proposed ceiling: `4.00`; the user must explicitly approve this value or a lower replacement after price reverification |
-| `bounded_substrate_cost_cap_usd` | Exact ceiling `2.00` for one Lambda instance under the bounded V1 plan |
+| `bounded_substrate_cost_cap_usd` | Exact ceiling `2.00` for one Lambda instance under the bounded V2 plan |
 | `maximum_provider_compute_cost_usd` | Exact ceiling `2.00`; observed/projected normal one-hour list cost `1.29` |
 | `maximum_wall_time_seconds` | `3,600` from authorization materialization for the complete provider-supervised window, with termination click by `3,300`; scientific workload is `240` total, at most `120` per condition |
 | `required_cleanup` | Stop/KILL each immutable container boundary, prove zero owned resources, preserve/copy/seal evidence, terminate the exact Lambda instance through the provider API, and confirm terminal/nonbillable state |

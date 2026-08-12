@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 
 from giclab.harness.policy import load_project_execution_state
 from giclab.registry import load_json, load_yaml
@@ -86,6 +87,26 @@ def test_only_the_smoke_profile_is_eligible_for_later_authorization() -> None:
         }
         parent = smoke if condition["profile"] == "smoke" else pilot
         assert condition["profile_plan_id"] == parent["plan_id"]
+
+
+def test_active_status_surfaces_name_exactly_one_prospective_bounded_plan() -> None:
+    surfaces = (
+        PHASE_1_PLAN,
+        ROOT / "docs/readiness/PHASE_1_SMOKE_READINESS.md",
+    )
+    prospective_ids: list[str] = []
+    for path in surfaces:
+        text = path.read_text(encoding="utf-8")
+        matches = re.findall(
+            r"^Prospective bounded plan: `([^`]+)`\.$",
+            text,
+            flags=re.MULTILINE,
+        )
+        assert matches == ["PLAN-T07-BOUNDED-SIRA-SMOKE-V2"], path
+        prospective_ids.extend(matches)
+        assert "bounded-smoke V1 is the reviewed prospective path" not in text
+        assert "bounded smoke V1 ready for separate authorization" not in text
+    assert set(prospective_ids) == {"PLAN-T07-BOUNDED-SIRA-SMOKE-V2"}
 
 
 def test_exp0001_readme_assigns_materialization_to_t07_not_completed_t06() -> None:
