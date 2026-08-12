@@ -1,6 +1,13 @@
 # T07 bounded smoke execution plan
 
-Status: **executable design; unauthorized; no external execution performed**
+Status: **blocked historical V1 provenance; superseded; never execute**
+
+V1 stopped before its first Lambda request and before writing a bounded private
+binding. Preserve this document unchanged as design provenance below, but do not use
+its plan or run identities. The active replacement is
+`PLAN-T07-BOUNDED-SIRA-SMOKE-V2`; see
+`T07_BOUNDED_SMOKE_V2_AUTHORIZATION_PACKET.md` and
+`T07_BOUNDED_SMOKE_USER_RUNBOOK.md`. V2 also remains unauthorized.
 
 ## Immutable identity
 

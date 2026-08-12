@@ -39,16 +39,25 @@ The V2 supervisor now:
 
 1. computes firewall semantic hashes using the exact authoritative canonical document
    and has a parity regression against the frozen canonicalizer;
-2. keeps the canonical semantic baseline SHA and restoration-payload seal in separate,
+2. verifies the exact published protected-decision and high-assurance baseline-seal
+   file hashes before parsing them;
+3. keeps the canonical semantic baseline SHA and restoration-payload seal in separate,
    schema-required fields and rejects swaps;
-3. generates the bounded name and opaque binding alias from separate domain-separated
-   hashes of one fresh 128-bit random nonce;
-4. rejects prior-track, malformed, stale, wrongly versioned, or hash-drifted bindings;
-5. materializes only the already sealed, exact V2 binding by its approved SHA-256;
-6. requires the supplied source to be regular, no-follow, user-owned, mode 0600, and
-   under the Git-ignored local artifact root; and
-7. copies that exact binding into the fresh V2 run root rather than regenerating
-   security authority from historical input during a live authorization window.
+4. generates the bounded name and opaque binding alias from separate domain-separated
+   hashes of one fresh 128-bit random nonce, plus an independent 128-bit private
+   locator whose value cannot be derived from either public identity;
+5. rejects prior-track, malformed, stale, wrongly versioned, or hash-drifted bindings;
+6. materializes only the already sealed exact V2 binding after verifying its private
+   local seal and exact held-descriptor external bundle before creating a run root;
+7. requires the supplied source and local seal to be regular, no-follow, user-owned,
+   mode 0600, under the exact Git-ignored private-binding root, and addressed through
+   the independent locator rather than the public alias or binding hash;
+8. verifies destination modes, exact copy/seal records, pre/post volume identity,
+   source/destination equality, retained floors, and absence of internal fallback;
+9. cleans only the exact owned incomplete local/external transaction on failure while
+   preserving every pre-existing destination; and
+10. requires the execution commit to descend from exact reviewed implementation commit
+   `a7ca7475177aee60126e39c631d61e3d9453ca85`.
 
 No scientific logic, provider lifecycle, model route, budget, deferred limitation, or
 cleanup policy changed.
@@ -57,9 +66,10 @@ cleanup policy changed.
 
 Public-safe identity only:
 
-- Alias: `t07-bounded-binding-413dd97fcb1f`.
-- SHA-256: `5599ca1a7e371461a26453ad791cd2292ffaa9714986c48d06dc8253a3f08e6b`.
-- Schema version: `0.2.0`.
+- Alias: `t07-bounded-binding-67eceae4caa9`.
+- SHA-256: `5b06ca70d7821e40574e711b3a68aac6f823b1806d2257395133ced7fc49e96b`.
+- Bytes: 2,660.
+- Schema version: `0.3.0`.
 - Ruleset pattern: `t07-bounded-ruleset-v1`.
 - Baseline: `l2m-firewall-baseline-b0ef71115811`, semantic SHA-256
   `b0ef711158113cdbdbb1707cb43f21a635271bb2e93bfc0e898ce7118589f764`.
@@ -68,12 +78,14 @@ Public-safe identity only:
 - Restoration: `l2m-firewall-restoration-50ca7febe9f1`, payload/seal SHA-256
   `50ca7febe9f160ada862371376485ea2ece11b373d25179ccd578d9c7acd42b8`.
 
-The fresh local binding is regular, no-follow, user-owned, mode 0600, outside Git,
-and retained. Its one-way copy was written through held no-follow descriptors to the
-approved APFS/UTDM archive, fsynced, atomically finalized, reread, and verified byte
-for byte and by SHA-256. No internal fallback occurred. The private path, nonce,
-CIDR, rule values, ruleset name, decision values, and provider IDs are deliberately
-absent from this record.
+The fresh local binding and local seal are regular, no-follow, user-owned, mode 0600,
+outside Git, and retained. Their private locator is independent of and not derivable
+from the public alias or binding SHA. The one-way external bundle was written through
+held no-follow descriptors to the approved APFS/UTDM archive, fsynced, atomically
+finalized, reread, and verified byte for byte and by SHA-256. No internal fallback
+occurred. The private locator, paths, local-seal identity, nonce, CIDR, rule values,
+ruleset name, decision values, and provider IDs are deliberately absent from this
+record.
 
 ## Boundary
 

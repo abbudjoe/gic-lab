@@ -62,7 +62,7 @@ A later current-turn authorization must state one value for every field below:
 | `bounded_substrate_cost_cap_usd` | Exact ceiling `2.00` for one Lambda instance under the bounded V2 plan |
 | `maximum_provider_compute_cost_usd` | Exact ceiling `2.00`; observed/projected normal one-hour list cost `1.29` |
 | `maximum_wall_time_seconds` | `3,600` from authorization materialization for the complete provider-supervised window, with termination click by `3,300`; scientific workload is `240` total, at most `120` per condition |
-| `required_cleanup` | Stop/KILL each immutable container boundary, prove zero owned resources, preserve/copy/seal evidence, terminate the exact Lambda instance through the provider API, and confirm terminal/nonbillable state |
+| `required_cleanup` | Stop/KILL each immutable container boundary, prove zero owned resources, preserve/copy/seal evidence, have the user terminate the exact Lambda instance through the provider console, and confirm terminal/nonbillable state through the read-only observer |
 
 The authorization reference must identify that current user instruction. The bounded
 control plane materializes it as a fresh mode-0600, Git-ignored single-run overlay

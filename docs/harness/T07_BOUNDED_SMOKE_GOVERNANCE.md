@@ -1,6 +1,6 @@
 # T07 bounded research-smoke governance
 
-Status: **ready-for-bounded-smoke-authorization; unauthorized; not executed**
+Status: **ready-for-bounded-smoke-v2-authorization; unauthorized; not executed**
 
 Decision date: 2026-08-11
 
@@ -9,6 +9,11 @@ Decision date: 2026-08-11
 T07's sole prospective execution path is one manually supervised Lambda/Jupyter
 research smoke. The frozen high-assurance track and all burned Gate L1/L2M identities
 remain historical evidence. This profile does not revive or reuse their authority.
+
+Prospective bounded plan: `PLAN-T07-BOUNDED-SIRA-SMOKE-V2`.
+
+Bounded V1 and all `0001` run identities stopped before the first account request and
+remain blocked, immutable, and nonreusable.
 
 The repository deliberately remains unauthorized: every execution-permission boolean
 in `docs/PROJECT_STATE.yaml` is false, the plan says `authorized: false`, and compute
@@ -78,8 +83,10 @@ the global baseline; then archive the local evidence.
 - Seven prelaunch GETs; two security GETs after manual firewall/ruleset changes and
   before launch; one post-launch instance binding GET; one terminal-instance GET
   before ruleset deletion; and two final security GETs after restoration.
-- Private resource values materialized from the sealed inputs into one separately
-  hashed binding. Public documents retain only aliases, counts, and hashes.
+- Private resource values materialized from sealed inputs into one separately hashed
+  binding whose local seal and external bundle are verified before authority exists.
+  Its independent locator cannot be derived from the public alias or binding hash.
+  Public documents retain only approved aliases, counts, and hashes.
 - The local supervisor creates a deterministic tracked-only USTAR upload archive from
   exactly the plan plus its 34 implementation artifacts, with a separately copied
   reviewed bootstrap and a release that binds both hashes. No untracked, ignored,
@@ -96,7 +103,7 @@ the global baseline; then archive the local evidence.
   The release, authorization, private binding, observer-state hash, report hash,
   commit, plan, and active timestamp are revalidated remotely and recorded in
   `bootstrap-authority.json` before any workload command.
-- The fixed canonical root `/home/ubuntu/t07-bounded-output-0001` is exclusively
+- The fixed canonical root `/home/ubuntu/t07-bounded-output-0002` is exclusively
   created and fsynced before fallible invocation, authorization, release, archive,
   plan, contract, or secret validation. That directory—not a later imported module—is
   the one-shot attempt claim: any terminal pre-secret failure burns the run identity,

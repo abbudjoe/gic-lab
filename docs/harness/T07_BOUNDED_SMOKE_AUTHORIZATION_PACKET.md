@@ -1,6 +1,11 @@
 # T07 bounded smoke authorization packet
 
-Status: **ready for a fresh user decision; unauthorized; do not execute from this packet alone**
+Status: **blocked historical V1 authorization; superseded; never execute**
+
+V1 stopped before its first Lambda request, secret access, mutation, or bounded private
+binding write. Its plan and all `0001` run identities are burned and nonreusable. The
+historical content below is retained for provenance only. The active replacement is
+`T07_BOUNDED_SMOKE_V2_AUTHORIZATION_PACKET.md`; V2 also remains unauthorized.
 
 ## Exact immutable binding
 

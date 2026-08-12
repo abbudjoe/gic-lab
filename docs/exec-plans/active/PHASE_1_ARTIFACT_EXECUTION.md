@@ -112,7 +112,7 @@ V1 stopped before its first account request and is blocked historical evidence. 
 fresh unauthorized execution plan is `PLAN-T07-BOUNDED-SIRA-SMOKE-V2`, host run
 `RUN-T07-BOUNDED-HOST-0002`, at
 `containers/sira-smoke/bounded/bounded-smoke-plan-v2.json`, SHA-256
-`3491372e74b5f7ef44d29ad600fea843dddb4e051754a47d21760607df6e34d2`.
+`f0d635783d719d1c5cb5df5351eaf8f6f54e9049da1f2565e4227e66f48ef511`.
 
 The design binds one exact host, one launch click, zero persistent filesystem, an
 immutable amd64 source/image/model path, an external single-run authorization overlay,

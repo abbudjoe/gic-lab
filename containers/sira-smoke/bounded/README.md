@@ -6,11 +6,14 @@ authorization is bound to the committed plan and the user manually invokes the
 bootstrap from the selected Lambda instance.
 
 The local `local_supervisor_bootstrap.py` verifies the exact contract and supervisor
-module hashes before loading either one. The supervisor materializes the external
-single-run authorization/private-resource binding, writes the fsync-backed 13-GET
-observer ledger, verifies security before launch and termination before firewall
-teardown, and performs the held-descriptor external archive copy. It never implements
-a Lambda mutation; those remain explicit user-console actions. Exact local command
+module hashes before loading either one. The supervisor also proves that the execution
+commit descends from the exact reviewed implementation commit, then materializes the
+single-run authorization only after verifying the exact local private-binding seal and
+its held-descriptor external bundle. The private locator is independently generated
+and cannot be derived from the public alias or binding hash. It writes the
+fsync-backed 13-GET observer ledger, verifies security before launch and termination
+before firewall teardown, and performs the held-descriptor external archive copy. It
+never implements a Lambda mutation; those remain explicit user-console actions. Exact local command
 arrays use the repository's pinned `.venv/bin/python` rather than the macOS system
 Python. Provider bodies are validated in memory and reduced to allowlisted,
 secret-free receipts before anything is retained.
@@ -22,7 +25,7 @@ bound into the single-use release and later retained in the sealed external arch
 untracked, ignored, private, environment, Git, artifact, or secret paths are rejected.
 On the host, the standalone bootstrap verifies itself and the archive before importing
 uploaded code, then exclusively claims and fsyncs
-`/home/ubuntu/t07-bounded-output-0001` before authority, plan, contract, release, or
+`/home/ubuntu/t07-bounded-output-0002` before authority, plan, contract, release, or
 secret validation. Any terminal failure burns that canonical run root.
 
 `Containerfile.amd64` builds from the immutable Playwright 1.39.0 multi-platform
@@ -55,4 +58,4 @@ already attempted request ordinal.
 
 The committed plan is unauthorized. Do not run a build, container, browser, model
 metadata request, or SiRA condition from this directory without the fresh
-authorization block in `docs/harness/T07_BOUNDED_SMOKE_AUTHORIZATION_PACKET.md`.
+authorization block in `docs/harness/T07_BOUNDED_SMOKE_V2_AUTHORIZATION_PACKET.md`.

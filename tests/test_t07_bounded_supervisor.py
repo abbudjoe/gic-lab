@@ -292,6 +292,7 @@ def _private_binding_fixture(
         "decision_validated": True,
         "source_retained": True,
     }
+    decision_seal_encoded = supervisor.canonical_json_bytes(decision_seal)
     baseline = {
         "baseline_alias": supervisor.BASELINE_ALIAS,
         "canonical_semantic_sha256": baseline_sha256,
@@ -307,6 +308,7 @@ def _private_binding_fixture(
         "original_capture_unchanged": True,
         "source_retained": True,
     }
+    baseline_seal_encoded = supervisor.canonical_json_bytes(baseline_seal)
     inputs = {
         supervisor.HISTORICAL_SOURCE_PARAMETERS_RELATIVE: source_encoded,
         supervisor.HISTORICAL_DECISION_SEAL_RELATIVE: supervisor.canonical_json_bytes(
@@ -324,6 +326,16 @@ def _private_binding_fixture(
         path.write_bytes(encoded)
         path.chmod(0o600)
     monkeypatch.setattr(supervisor, "HISTORICAL_SOURCE_PARAMETERS_SHA256", source_sha256)
+    monkeypatch.setattr(
+        supervisor,
+        "HISTORICAL_DECISION_SEAL_SHA256",
+        supervisor.sha256_bytes(decision_seal_encoded),
+    )
+    monkeypatch.setattr(
+        supervisor,
+        "AUTHORITATIVE_BASELINE_SEAL_SHA256",
+        supervisor.sha256_bytes(baseline_seal_encoded),
+    )
     monkeypatch.setattr(supervisor, "BASELINE_SEMANTIC_SHA256", baseline_sha256)
     monkeypatch.setattr(supervisor, "RESTORATION_SHA256", restoration_sha256)
     schema_path = tmp_path / supervisor.PRIVATE_BINDING_SCHEMA_RELATIVE
@@ -490,7 +502,16 @@ def test_private_binding_builder_uses_fresh_domain_separated_identities(
     assert cast(dict[str, object], first["stale_source"])["reusable"] is False
 
 
-@pytest.mark.parametrize("drift", ("source_hash", "baseline_version", "restoration_hash"))
+@pytest.mark.parametrize(
+    "drift",
+    (
+        "source_hash",
+        "decision_seal_hash",
+        "baseline_version",
+        "baseline_seal_hash",
+        "restoration_hash",
+    ),
+)
 def test_private_binding_builder_rejects_stale_input_identity(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, drift: str
 ) -> None:
@@ -498,10 +519,20 @@ def test_private_binding_builder_rejects_stale_input_identity(
     if drift == "source_hash":
         target = tmp_path / supervisor.HISTORICAL_SOURCE_PARAMETERS_RELATIVE
         target.write_bytes(target.read_bytes() + b" ")
+    elif drift == "decision_seal_hash":
+        target = tmp_path / supervisor.HISTORICAL_DECISION_SEAL_RELATIVE
+        document = json.loads(target.read_text(encoding="utf-8"))
+        document["closeout_identity"] = "synthetic-drift"
+        target.write_bytes(supervisor.canonical_json_bytes(document))
     elif drift == "baseline_version":
         target = tmp_path / supervisor.AUTHORITATIVE_BASELINE_RELATIVE
         document = json.loads(target.read_text(encoding="utf-8"))
         document["canonicalization_version"] = "stale-canonicalizer"
+        target.write_bytes(supervisor.canonical_json_bytes(document))
+    elif drift == "baseline_seal_hash":
+        target = tmp_path / supervisor.AUTHORITATIVE_BASELINE_SEAL_RELATIVE
+        document = json.loads(target.read_text(encoding="utf-8"))
+        document["closeout_identity"] = "synthetic-drift"
         target.write_bytes(supervisor.canonical_json_bytes(document))
     else:
         target = tmp_path / supervisor.AUTHORITATIVE_RESTORATION_RELATIVE
@@ -528,7 +559,7 @@ def test_private_binding_builder_rejects_symlinked_protected_input(
 
 
 def test_private_binding_seal_is_private_atomic_and_fully_verifiable(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     sealed, observer, external_parent = _sealed_private_binding(tmp_path, monkeypatch)
     private = json.loads(sealed.local_path.read_text(encoding="utf-8"))
@@ -539,6 +570,11 @@ def test_private_binding_seal_is_private_atomic_and_fully_verifiable(
     assert sealed.binding_sha256 not in str(sealed.local_path)
     assert sealed.binding_alias not in external_directory.name
     assert sealed.binding_sha256 not in external_directory.name
+    assert sealed.private_locator not in repr(sealed)
+    assert str(sealed.local_path) not in repr(sealed)
+    assert sealed.local_seal_sha256 not in repr(sealed)
+    captured = capsys.readouterr()
+    assert captured.out == "" and captured.err == ""
     assert sealed.local_path.stat().st_mode & 0o777 == 0o600
     assert (
         sealed.local_path.parent / supervisor.PRIVATE_BINDING_LOCAL_SEAL_FILENAME
@@ -643,6 +679,7 @@ def test_private_binding_seal_cleans_only_owned_incomplete_state(
         "missing_local_seal",
         "tampered_local_seal",
         "tampered_external_copy",
+        "expanded_local_parent",
     ),
 )
 def test_materialization_requires_complete_local_and_external_preseal(
@@ -664,6 +701,8 @@ def test_materialization_requires_complete_local_and_external_preseal(
         local_seal.unlink()
     elif drift == "tampered_local_seal":
         local_seal.write_bytes(local_seal.read_bytes() + b" ")
+    elif drift == "expanded_local_parent":
+        sealed.local_path.parent.chmod(0o755)
     else:
         external_directory.chmod(0o700)
         external_binding = external_directory / supervisor.PRIVATE_BINDING_FILENAME

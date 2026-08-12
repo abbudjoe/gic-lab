@@ -1,4 +1,4 @@
-# T07 bounded smoke user runbook
+# T07 bounded smoke V2 user runbook
 
 Status: **future user-operated procedure; unauthorized now**
 
@@ -8,16 +8,27 @@ shell strings, improvise a retry, or substitute a resource.
 
 ## Bound identities
 
-- Plan: `PLAN-T07-BOUNDED-SIRA-SMOKE-V1`, 55,789 bytes, SHA-256
-  `0128e632e0a3a01f7ee0b9014396fed5782c8afa98459fe9ad4db5cc7db3148f`.
+- Plan: `PLAN-T07-BOUNDED-SIRA-SMOKE-V2`, 43,198 bytes, SHA-256
+  `f0d635783d719d1c5cb5df5351eaf8f6f54e9049da1f2565e4227e66f48ef511`.
+- Private security binding: alias `t07-bounded-binding-67eceae4caa9`, SHA-256
+  `5b06ca70d7821e40574e711b3a68aac6f823b1806d2257395133ced7fc49e96b`, 2,660
+  bytes, schema `0.3.0`. Its independent locator, path, local-seal identity, and
+  values remain in the protected local channel and are not derivable from the alias
+  or SHA.
 - Contract: SHA-256
-  `d6da182643b080e3e297716f1d65ce9c2e04d5157280c9f17aa33b82c840261c`.
+  `fcb0b1a113b5f1c03ce123b24df9abe536b7ac561758915cdf5d340d08929ebc`.
 - Local supervisor: SHA-256
-  `9ee429b7f131079be7327186ba75013c7d5455b71802558261fbff98077e25e3`.
+  `5b2b43691288c2950ddbf9de12bf5c72d4fccf7b7a3fc04c81ea173c5f0f55a2`.
 - Local hash-first bootstrap: SHA-256
   `0cd531ecd7584cb2d61caa3b0df8d6a60a82345c1f97fdddbd3c8aa6a16a9063`.
 - Reviewed implementation commit:
-  `e3c68268ecb02375a7b3f78da0187ce1136f06c0`.
+  `a7ca7475177aee60126e39c631d61e3d9453ca85`.
+- The protected human-decision seal and high-assurance baseline seal must match their
+  exact published SHA-256 identities before either document is parsed; selected-field
+  agreement alone is insufficient.
+
+V1 and all `0001` bounded run identities are blocked historical evidence and must
+never be replayed.
 
 ## Ordered procedure
 
@@ -26,18 +37,27 @@ control visible. The 3,600-second authorization/provider timer begins at
 materialization, not launch; terminate no later than 3,300 seconds after
 materialization. Then perform exactly the plan's 23 steps:
 
-1. Run the plan's `materialize` array once with the exact final clean execution
-   commit and fresh authorization reference. It must create a fresh mode-0600
-   authorization, private binding, observer state, request ledger, and summary under
-   `artifacts/t07/bounded/RUN-T07-BOUNDED-HOST-0001/`. Stop if that root already
-   exists or any identity, hash, permission, storage, freshness, or floor check fails.
+1. Privately resolve the retained local binding and its local seal with the exact
+   alias/SHA above. Supply their protected path and local-seal SHA only as the
+   `${PRIVATE_SECURITY_BINDING_PATH}` and
+   `${PRIVATE_SECURITY_BINDING_SEAL_SHA256}` substitutions; never print, log, or add
+   either value to Git. Run the plan's `materialize` array once with the exact final
+   clean execution commit and a fresh authorization reference. Before creating a run
+   root, it must verify the exact local binding/seal, exact externally sealed bundle,
+   directory/file modes, held volume identities, byte equality, hashes, storage
+   floors, and absence of internal fallback. It then copies the verified binding and
+   creates a fresh mode-0600 authorization, observer state, request ledger, and
+   summary under
+   `artifacts/t07/bounded/RUN-T07-BOUNDED-HOST-0002/`. Stop if that root already
+   exists or any binding identity, hash, permission, storage, freshness, or floor
+   check fails. Never regenerate authority from the historical L2M input.
    The exact local arrays require the repository's pinned `.venv/bin/python`; do not
    substitute macOS `/usr/bin/python3`.
 2. Run `prepare_bundle` once. It must create a deterministic tracked-only USTAR
    archive with exactly 36 members: `BUNDLE_MANIFEST.json`, the plan, and all 34
    plan-bound implementation artifacts. It also emits the reviewed remote bootstrap
    separately under
-   `artifacts/t07/bounded-upload/RUN-T07-BOUNDED-HOST-0001/`. The archive and
+   `artifacts/t07/bounded-upload/RUN-T07-BOUNDED-HOST-0002/`. The archive and
    bootstrap together are capped at 8,388,608 bytes; untracked, ignored, private,
    `.env`, `.git`, `.secrets`, and `artifacts` inputs are forbidden.
 3. Run `observe_prelaunch` once. Its seven GETs must prove the exact offered
@@ -74,7 +94,7 @@ materialization. Then perform exactly the plan's 23 steps:
 12. Execute the plan's `bootstrap_argv_template` once, replacing only its declared
     placeholders. Before importing uploaded implementation code or opening the secret,
     the standalone bootstrap must verify its own hash, claim the fresh canonical root
-    `/home/ubuntu/t07-bounded-output-0001`, verify the exact USTAR archive and release,
+    `/home/ubuntu/t07-bounded-output-0002`, verify the exact USTAR archive and release,
     and extract to `/home/ubuntu/t07-bounded-bundle`. That root is permanently burned
     for this run even on pre-secret failure. The bootstrap then verifies the
     source/tree, immutable patch, lock, uv wheel, digest-pinned Playwright base, final

@@ -93,6 +93,7 @@ def test_active_status_surfaces_name_exactly_one_prospective_bounded_plan() -> N
     surfaces = (
         PHASE_1_PLAN,
         ROOT / "docs/readiness/PHASE_1_SMOKE_READINESS.md",
+        ROOT / "docs/harness/T07_BOUNDED_SMOKE_GOVERNANCE.md",
     )
     prospective_ids: list[str] = []
     for path in surfaces:
@@ -106,6 +107,7 @@ def test_active_status_surfaces_name_exactly_one_prospective_bounded_plan() -> N
         prospective_ids.extend(matches)
         assert "bounded-smoke V1 is the reviewed prospective path" not in text
         assert "bounded smoke V1 ready for separate authorization" not in text
+        assert "/home/ubuntu/t07-bounded-output-0001" not in text
     assert set(prospective_ids) == {"PLAN-T07-BOUNDED-SIRA-SMOKE-V2"}
 
     for path in (

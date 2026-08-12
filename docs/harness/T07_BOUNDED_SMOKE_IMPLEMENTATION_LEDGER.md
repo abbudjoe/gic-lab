@@ -1,6 +1,10 @@
 # T07 bounded smoke implementation ledger
 
-Status: **ready-for-bounded-smoke-authorization; plan unauthorized**
+Status: **blocked historical V1 provenance; superseded; plan/run identities burned**
+
+V1 stopped before its first account request and before writing a bounded private
+binding. Preserve the record below, but never replay it. Active repair evidence is in
+`T07_BOUNDED_SMOKE_V2_IMPLEMENTATION_LEDGER.md`.
 
 Baseline/fork: `397a391b736528dd1049023d629100193e823c49`
 

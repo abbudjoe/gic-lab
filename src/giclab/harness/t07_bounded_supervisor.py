@@ -75,6 +75,9 @@ HISTORICAL_SOURCE_PARAMETERS_SHA256: Final = (
 HISTORICAL_DECISION_SEAL_RELATIVE: Final = (
     HISTORICAL_SOURCE_PARAMETERS_RELATIVE.parent / "PRIVATE_DECISION_SEAL.json"
 )
+HISTORICAL_DECISION_SEAL_SHA256: Final = (
+    "7112be676705f86526cf99f8fd13e59dd9731029be187196f70f790f0f8871fd"
+)
 AUTHORITATIVE_FIREWALL_ROOT_RELATIVE: Final = Path(
     "artifacts/t07/lambda/gate-l2m/T07-HIGH-ASSURANCE-FIREWALL-CLOSEOUT-0001"
 )
@@ -83,6 +86,9 @@ AUTHORITATIVE_BASELINE_RELATIVE: Final = (
 )
 AUTHORITATIVE_BASELINE_SEAL_RELATIVE: Final = (
     AUTHORITATIVE_FIREWALL_ROOT_RELATIVE / "BASELINE_SEAL.json"
+)
+AUTHORITATIVE_BASELINE_SEAL_SHA256: Final = (
+    "42715c31d733a5cd23ed06dc47babb112ddf15060c246c7c941fac878282bf7a"
 )
 AUTHORITATIVE_RESTORATION_RELATIVE: Final = (
     AUTHORITATIVE_FIREWALL_ROOT_RELATIVE / "restoration-payload.json"
@@ -899,6 +905,8 @@ def build_private_security_binding(
     )
     if (
         sha256_bytes(source_encoded) != HISTORICAL_SOURCE_PARAMETERS_SHA256
+        or sha256_bytes(decision_seal_encoded) != HISTORICAL_DECISION_SEAL_SHA256
+        or sha256_bytes(baseline_seal_encoded) != AUTHORITATIVE_BASELINE_SEAL_SHA256
         or sha256_bytes(restoration_encoded) != RESTORATION_SHA256
     ):
         raise BoundedSupervisorError("sealed private input identity drifted")
@@ -1033,6 +1041,8 @@ def _ensure_owned_directory_chain(root: Path, relative: Path) -> Path:
             or linked.st_uid != os.getuid()
         ):
             raise BoundedSupervisorError("private binding directory chain is unsafe")
+    if stat.S_IMODE(current.lstat().st_mode) != 0o700:
+        raise BoundedSupervisorError("private binding parent permissions are unsafe")
     return current
 
 
@@ -1054,6 +1064,16 @@ def seal_private_security_binding(
     except FileExistsError:
         raise BoundedSupervisorError("private binding identity is not fresh") from None
     binding_path = local_directory / PRIVATE_BINDING_FILENAME
+    local_directory_status = local_directory.lstat()
+    if (
+        not stat.S_ISDIR(local_directory_status.st_mode)
+        or stat.S_ISLNK(local_directory_status.st_mode)
+        or local_directory_status.st_uid != os.getuid()
+        or stat.S_IMODE(local_directory_status.st_mode) != 0o700
+    ):
+        with contextlib.suppress(OSError):
+            local_directory.rmdir()
+        raise BoundedSupervisorError("private binding local directory is unsafe")
     archive_handle = None
     external_handle = None
     system_handle = None
@@ -1116,7 +1136,12 @@ def seal_private_security_binding(
         system_handle.revalidate()
         repository_handle.revalidate()
         archive_handle.revalidate()
-        if archive_handle.device != external_handle.device:
+        archive_status = os.fstat(archive_handle.descriptor)
+        if (
+            archive_handle.device != external_handle.device
+            or archive_status.st_uid != os.getuid()
+            or stat.S_IMODE(archive_status.st_mode) != 0o700
+        ):
             raise BoundedSupervisorError("private binding archive escaped its volume")
         for name in (final_name, staging_name):
             try:
@@ -1341,6 +1366,8 @@ def _verify_presealed_private_security_binding(
     try:
         linked = binding_path.lstat()
         relative = binding_path.relative_to(root)
+        local_parent_linked = (root / PRIVATE_BINDING_LOCAL_PARENT_RELATIVE).lstat()
+        local_directory_linked = binding_path.parent.lstat()
     except (OSError, ValueError):
         raise BoundedSupervisorError(
             "private binding source is unavailable or unconfined"
@@ -1352,6 +1379,14 @@ def _verify_presealed_private_security_binding(
         or Path(*relative.parts[: len(PRIVATE_BINDING_LOCAL_PARENT_RELATIVE.parts)])
         != PRIVATE_BINDING_LOCAL_PARENT_RELATIVE
         or relative.parts[-1] != PRIVATE_BINDING_FILENAME
+        or not stat.S_ISDIR(local_parent_linked.st_mode)
+        or stat.S_ISLNK(local_parent_linked.st_mode)
+        or local_parent_linked.st_uid != os.getuid()
+        or stat.S_IMODE(local_parent_linked.st_mode) != 0o700
+        or not stat.S_ISDIR(local_directory_linked.st_mode)
+        or stat.S_ISLNK(local_directory_linked.st_mode)
+        or local_directory_linked.st_uid != os.getuid()
+        or stat.S_IMODE(local_directory_linked.st_mode) != 0o700
         or not stat.S_ISREG(linked.st_mode)
         or stat.S_ISLNK(linked.st_mode)
         or linked.st_nlink != 1
@@ -1426,8 +1461,12 @@ def _verify_presealed_private_security_binding(
             raise BoundedSupervisorError("private binding verification fell back internally")
         for handle in handles:
             handle.revalidate()
+        archive_status = os.fstat(archive.descriptor)
+        if archive_status.st_uid != os.getuid() or stat.S_IMODE(archive_status.st_mode) != 0o700:
+            raise BoundedSupervisorError("private binding archive permissions drifted")
+        destination_status = os.fstat(destination.descriptor)
         destination_mode = stat.S_IMODE(os.fstat(destination.descriptor).st_mode)
-        if destination_mode != 0o500:
+        if destination_status.st_uid != os.getuid() or destination_mode != 0o500:
             raise BoundedSupervisorError("private binding external directory mode drifted")
         for member in (
             PRIVATE_BINDING_FILENAME,
@@ -1438,6 +1477,7 @@ def _verify_presealed_private_security_binding(
             if (
                 not stat.S_ISREG(observed.st_mode)
                 or observed.st_nlink != 1
+                or observed.st_uid != os.getuid()
                 or stat.S_IMODE(observed.st_mode) != 0o400
             ):
                 raise BoundedSupervisorError("private binding external member mode drifted")
