@@ -60,7 +60,7 @@ def valid_plan() -> dict[str, object]:
     browser = bounded.browser_preflight_create_argv()
     model = bounded.model_preflight_create_argv()
     return {
-        "$schema": "../../../schemas/t07-bounded-smoke-plan.schema.json",
+        "$schema": "../../../schemas/t07-bounded-smoke-plan-v2.schema.json",
         "identity": {
             "schema_version": bounded.SCHEMA_VERSION,
             "plan_id": bounded.PLAN_ID,
@@ -156,6 +156,7 @@ def valid_plan() -> dict[str, object]:
         "bootstrap_argv_template": list(bounded.bootstrap_argv_template()),
         "provider_observer": bounded.provider_observer_contract(),
         "storage": bounded.storage_contract(),
+        "private_security_binding": bounded.private_security_binding_contract(),
         "conditions": conditions,
         "secrets": {
             "provider_observer_variable": "LAMBDA_API_KEY",
@@ -221,12 +222,50 @@ def _load_bootstrap() -> ModuleType:
 def test_valid_plan_is_exact_and_schema_valid() -> None:
     plan = valid_plan()
     bounded.validate_plan(plan, repository_root=ROOT)
-    assert validate_instance(plan, ROOT / "schemas/t07-bounded-smoke-plan.schema.json") == []
+    assert validate_instance(plan, ROOT / "schemas/t07-bounded-smoke-plan-v2.schema.json") == []
 
 
 def test_locked_scientific_files_remain_exact() -> None:
     for relative, digest in bounded.SCIENTIFIC_HASHES.items():
         assert bounded.sha256_file(ROOT / relative) == digest
+
+
+def test_v1_plan_and_runs_are_preserved_burned_and_v2_is_fresh() -> None:
+    v1_path = ROOT / "containers/sira-smoke/bounded/bounded-smoke-plan-v1.json"
+    encoded = v1_path.read_bytes()
+    assert len(encoded) == 55_789
+    assert hashlib.sha256(encoded).hexdigest() == (
+        "0128e632e0a3a01f7ee0b9014396fed5782c8afa98459fe9ad4db5cc7db3148f"
+    )
+    v1 = json.loads(encoded)
+    assert v1["identity"]["host_run_id"] == "RUN-T07-BOUNDED-HOST-0001"
+    assert bounded.HOST_RUN_ID == "RUN-T07-BOUNDED-HOST-0002"
+    assert bounded.REACTIVE_RUN_ID == "RUN-T07-BOUNDED-SIRA-REACTIVE-0002"
+    assert bounded.SIMULATIVE_RUN_ID == "RUN-T07-BOUNDED-SIRA-SIMULATIVE-0002"
+    assert v1["limits"] == valid_plan()["limits"]
+    assert v1["scientific_lock"] == valid_plan()["scientific_lock"]
+
+
+def test_v2_private_binding_public_surface_is_minimal_and_command_is_hash_bound() -> None:
+    public = bounded.private_security_binding_contract()
+    assert set(public) == {
+        "binding_alias",
+        "binding_sha256",
+        "schema_version",
+        "ruleset_name_pattern_id",
+        "baseline_alias",
+        "baseline_semantic_sha256",
+        "canonicalizer_version",
+        "parser_version",
+        "restoration_alias",
+        "restoration_payload_sha256",
+    }
+    assert public["binding_alias"].startswith("t07-bounded-binding-")
+    assert len(str(public["binding_sha256"])) == 64
+    materialize = bounded.local_supervisor_argv_templates()["materialize"]
+    assert "${PRIVATE_SECURITY_BINDING_PATH}" in materialize
+    assert str(public["binding_sha256"]) in materialize
+    assert "private-parameters.json" not in "\n".join(materialize)
 
 
 @pytest.mark.parametrize(
@@ -381,7 +420,8 @@ def test_evidence_manifest_is_schema_valid_bounded_and_secret_safe(tmp_path: Pat
     manifest = bounded.build_evidence_manifest(tmp_path)
     bounded.validate_evidence_manifest(manifest)
     assert (
-        validate_instance(manifest, ROOT / "schemas/t07-bounded-smoke-evidence.schema.json") == []
+        validate_instance(manifest, ROOT / "schemas/t07-bounded-smoke-evidence-v2.schema.json")
+        == []
     )
     (tmp_path / "secret.txt").write_text(
         "".join(("s", "k-", "public-dummy-canary-abcdefghijklmnopqrstuvwxyz")), encoding="utf-8"
@@ -449,7 +489,7 @@ def test_secret_lease_path_replacement_truncates_held_inode_and_requires_rotatio
 
 def test_early_failure_bundle_is_bounded_secret_safe_and_complete(tmp_path: Path) -> None:
     bootstrap = _load_bootstrap()
-    output_root = tmp_path / "t07-bounded-output-0001"
+    output_root = tmp_path / "t07-bounded-output-0002"
     cleanup = tmp_path / "cleanup.json"
     cleanup.write_text(
         json.dumps(
@@ -478,7 +518,7 @@ def test_early_failure_bundle_is_bounded_secret_safe_and_complete(tmp_path: Path
         secret_value_read=False,
         secret_cleanup_source=cleanup,
     )
-    early_root = tmp_path / "t07-bounded-output-0001-early-failure"
+    early_root = tmp_path / "t07-bounded-output-0002-early-failure"
     assert archive.parent == early_root
     assert archive.stat().st_size <= bootstrap.MAX_EARLY_FAILURE_EVIDENCE_BYTES
     assert {
@@ -646,7 +686,7 @@ def test_lifecycle_failed_stop_still_kills_removes_and_seals_cleanup(tmp_path: P
             "${HOST_ATTEMPT_ROOT}": str(tmp_path),
             "${SIRA_SECRET_FILE}": "/private/dummy-secret-file",
             "${EXECUTION_COMMIT}": "1" * 40,
-            "${AUTHORIZATION_REFERENCE}": "AUTH-T07-BOUNDED-SIRA-SMOKE-V1-TEST",
+            "${AUTHORIZATION_REFERENCE}": "AUTH-T07-BOUNDED-SIRA-SMOKE-V2-TEST",
             "${IMAGE_ID}": "sha256:" + "2" * 64,
         },
         plan=valid_plan(),
@@ -679,7 +719,7 @@ def test_unsafe_realized_container_policy_blocks_release_and_still_cleans_up(
             substitutions={
                 "${SIRA_SECRET_FILE}": "/private/dummy-secret-file",
                 "${EXECUTION_COMMIT}": "1" * 40,
-                "${AUTHORIZATION_REFERENCE}": "AUTH-T07-BOUNDED-SIRA-SMOKE-V1-TEST",
+                "${AUTHORIZATION_REFERENCE}": "AUTH-T07-BOUNDED-SIRA-SMOKE-V2-TEST",
                 "${IMAGE_ID}": "sha256:" + "2" * 64,
             },
             plan=valid_plan(),
@@ -860,7 +900,7 @@ def test_known_authorization_reference_is_not_a_secret_derivative_false_positive
     bootstrap = _load_bootstrap()
     evidence = tmp_path / "evidence"
     evidence.mkdir()
-    authorization = b"AUTH-T07-BOUNDED-SIRA-SMOKE-V1-TEST"
+    authorization = b"AUTH-T07-BOUNDED-SIRA-SMOKE-V2-TEST"
     (evidence / "authority.json").write_bytes(
         b'{"authorization_reference":"' + authorization + b'"}\n'
     )
@@ -917,9 +957,9 @@ def test_reconstruction_and_compute_closeout_records_are_source_grounded(
 
 
 def test_committed_plan_matches_runtime_contract_when_present() -> None:
-    path = ROOT / "containers/sira-smoke/bounded/bounded-smoke-plan-v1.json"
+    path = ROOT / "containers/sira-smoke/bounded/bounded-smoke-plan-v2.json"
     if not path.exists():
         pytest.skip("plan is generated only after the reviewed implementation commit exists")
     document = json.loads(path.read_text(encoding="utf-8"))
     bounded.validate_plan(document, repository_root=ROOT)
-    assert validate_instance(document, ROOT / "schemas/t07-bounded-smoke-plan.schema.json") == []
+    assert validate_instance(document, ROOT / "schemas/t07-bounded-smoke-plan-v2.schema.json") == []

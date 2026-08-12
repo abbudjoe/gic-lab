@@ -54,11 +54,11 @@ MIN_REMOTE_FREE_BYTES: Final = 34_359_738_368
 HARD_PROVIDER_WALL_SECONDS: Final = 3_600
 TERMINATION_HEADROOM_SECONDS: Final = 300
 SCHEMA_VERSION: Final = "0.1.0"
-PLAN_ID: Final = "PLAN-T07-BOUNDED-SIRA-SMOKE-V1"
-HOST_RUN_ID: Final = "RUN-T07-BOUNDED-HOST-0001"
+PLAN_ID: Final = "PLAN-T07-BOUNDED-SIRA-SMOKE-V2"
+HOST_RUN_ID: Final = "RUN-T07-BOUNDED-HOST-0002"
 BRANCH: Final = "phase-1/sira-smoke-bounded"
-REACTIVE_RUN_ID: Final = "RUN-T07-BOUNDED-SIRA-REACTIVE-0001"
-SIMULATIVE_RUN_ID: Final = "RUN-T07-BOUNDED-SIRA-SIMULATIVE-0001"
+REACTIVE_RUN_ID: Final = "RUN-T07-BOUNDED-SIRA-REACTIVE-0002"
+SIMULATIVE_RUN_ID: Final = "RUN-T07-BOUNDED-SIRA-SIMULATIVE-0002"
 MODEL: Final = "gpt-4o-2024-11-20"
 SELECTED_IMAGE_ALIAS: Final = "img-0032"
 SELECTED_IMAGE_FAMILY: Final = "lambda-stack-22-04"
@@ -68,13 +68,13 @@ REMOTE_BOOTSTRAP_FILE: Final = Path("/home/ubuntu/t07-bounded-bootstrap.py")
 REMOTE_BUNDLE_ARCHIVE: Final = Path("/home/ubuntu/t07-bounded-repository.tar")
 REMOTE_BUNDLE_ROOT: Final = Path("/home/ubuntu/t07-bounded-bundle")
 REMOTE_PLAN_FILE: Final = REMOTE_BUNDLE_ROOT / (
-    "containers/sira-smoke/bounded/bounded-smoke-plan-v1.json"
+    "containers/sira-smoke/bounded/bounded-smoke-plan-v2.json"
 )
 REMOTE_CONTRACT_FILE: Final = REMOTE_BUNDLE_ROOT / "src/giclab/harness/t07_bounded_smoke.py"
 REMOTE_AUTHORIZATION_FILE: Final = Path("/home/ubuntu/t07-bounded-authorization.json")
 REMOTE_RELEASE_FILE: Final = Path("/home/ubuntu/t07-bounded-bootstrap-release.json")
 REMOTE_SECRET_FILE: Final = Path("/home/ubuntu/.config/giclab/sira_api_key")
-REMOTE_OUTPUT_ROOT: Final = Path("/home/ubuntu/t07-bounded-output-0001")
+REMOTE_OUTPUT_ROOT: Final = Path("/home/ubuntu/t07-bounded-output-0002")
 UPLOAD_MANIFEST_NAME: Final = "BUNDLE_MANIFEST.json"
 PRESECRET_FAILURE_STAGES: Final = frozenset(
     {
@@ -125,7 +125,7 @@ FAILURE_CODES: Final = frozenset(
 _HEX40 = re.compile(r"^[a-f0-9]{40}$")
 _HEX64 = re.compile(r"^[a-f0-9]{64}$")
 _IMAGE_ID = re.compile(r"^sha256:[a-f0-9]{64}$")
-_AUTHORIZATION = re.compile(r"^AUTH-T07-BOUNDED-SIRA-SMOKE-V1-[A-Z0-9._-]{3,80}$")
+_AUTHORIZATION = re.compile(r"^AUTH-T07-BOUNDED-SIRA-SMOKE-V2-[A-Z0-9._-]{3,80}$")
 _SECRET_SHAPES: Final = (
     re.compile(rb"\bsk-[A-Za-z0-9_-]{20,}\b"),
     re.compile(rb"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
@@ -878,8 +878,8 @@ def _validate_upload_manifest(
     if (
         set(manifest) != expected_keys
         or manifest.get("schema_version") != "0.1.0"
-        or manifest.get("plan_id") != "PLAN-T07-BOUNDED-SIRA-SMOKE-V1"
-        or manifest.get("host_run_id") != "RUN-T07-BOUNDED-HOST-0001"
+        or manifest.get("plan_id") != "PLAN-T07-BOUNDED-SIRA-SMOKE-V2"
+        or manifest.get("host_run_id") != "RUN-T07-BOUNDED-HOST-0002"
         or manifest.get("execution_commit") != execution_commit
         or manifest.get("plan_sha256") != args.plan_sha256
         or manifest.get("file_count") != len(rows)
@@ -958,10 +958,10 @@ def _validate_bundle_against_plan(
         for row in artifacts
         if isinstance(row, Mapping) and set(row) == {"path", "bytes", "sha256"}
     }
-    plan_encoded = captured.get("containers/sira-smoke/bounded/bounded-smoke-plan-v1.json")
+    plan_encoded = captured.get("containers/sira-smoke/bounded/bounded-smoke-plan-v2.json")
     if plan_encoded is None or len(plan_encoded) > MAX_PLAN_BYTES:
         raise BootstrapError("upload bundle has no bounded plan")
-    expected["containers/sira-smoke/bounded/bounded-smoke-plan-v1.json"] = {
+    expected["containers/sira-smoke/bounded/bounded-smoke-plan-v2.json"] = {
         "bytes": len(plan_encoded),
         "sha256": plan_sha256,
     }
@@ -1135,7 +1135,7 @@ def validate_bootstrap_release(
             )
         )
         or document.get("bootstrap_release") is not True
-        or document.get("single_use_output_root") != "/home/ubuntu/t07-bounded-output-0001"
+        or document.get("single_use_output_root") != "/home/ubuntu/t07-bounded-output-0002"
         or selected_provider_image
         != {
             "alias": SELECTED_IMAGE_ALIAS,
@@ -2276,7 +2276,7 @@ def _append_normalized_event(path: Path, event: Mapping[str, object]) -> None:
 def _condition_configuration_refs(condition: str, mode: str) -> list[str]:
     filename = "smoke-reactive.yaml" if condition == "SIRA-REACTIVE" else "smoke-simulative.yaml"
     return [
-        "containers/sira-smoke/bounded/bounded-smoke-plan-v1.json",
+        "containers/sira-smoke/bounded/bounded-smoke-plan-v2.json",
         "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/" + filename,
         f"{mode}/resolved-command.json",
     ]
@@ -2749,8 +2749,8 @@ def package_early_failure_evidence(
     )
     disposition = {
         "schema_version": "0.1.0",
-        "plan_id": "PLAN-T07-BOUNDED-SIRA-SMOKE-V1",
-        "host_run_id": "RUN-T07-BOUNDED-HOST-0001",
+        "plan_id": "PLAN-T07-BOUNDED-SIRA-SMOKE-V2",
+        "host_run_id": "RUN-T07-BOUNDED-HOST-0002",
         "failure_stage": failure_stage,
         "failure_code": failure_code,
         "message_retained": False,
@@ -2815,8 +2815,8 @@ def package_early_failure_evidence(
         rows.append({"path": relative, "bytes": len(encoded), "sha256": _sha256(encoded)})
     manifest = {
         "schema_version": "0.1.0",
-        "plan_id": "PLAN-T07-BOUNDED-SIRA-SMOKE-V1",
-        "host_run_id": "RUN-T07-BOUNDED-HOST-0001",
+        "plan_id": "PLAN-T07-BOUNDED-SIRA-SMOKE-V2",
+        "host_run_id": "RUN-T07-BOUNDED-HOST-0002",
         "disposition": "bootstrap_failed",
         "files": rows,
         "file_count": len(rows),
@@ -3454,7 +3454,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             execution_commit=bootstrap_release.get("execution_commit"),
         )
         presecret_stage = "plan_validation"
-        plan_bytes = captured.get("containers/sira-smoke/bounded/bounded-smoke-plan-v1.json")
+        plan_bytes = captured.get("containers/sira-smoke/bounded/bounded-smoke-plan-v2.json")
         if (
             plan_bytes is None
             or _HEX64.fullmatch(args.plan_sha256) is None
@@ -3537,7 +3537,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         cleanup_source = args.output_root.absolute() / "evidence/secret-cleanup.json"
         if not secret_lease.destroyed:
             try:
-                early_cleanup = args.secret_file.parent / "t07-bounded-secret-cleanup-0001.json"
+                early_cleanup = args.secret_file.parent / "t07-bounded-secret-cleanup-0002.json"
                 secret_lease.destroy(early_cleanup)
                 cleanup_verified = True
                 cleanup_source = early_cleanup

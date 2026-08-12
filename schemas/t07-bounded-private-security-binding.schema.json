@@ -1,0 +1,158 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:gic-lab:schema:t07-bounded-private-security-binding:0.2.0",
+  "title": "T07 bounded-smoke V2 private security binding",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "binding_alias",
+    "plan_id",
+    "host_run_id",
+    "future_authorization_placeholder",
+    "source_parameter_sha256",
+    "decision_alias",
+    "decision_canonical_sha256",
+    "binding_nonce",
+    "ruleset_name_pattern_id",
+    "source_ipv4_cidr",
+    "owned_ruleset_name",
+    "owned_ruleset_description",
+    "strict_firewall_rule",
+    "owned_ruleset_rule",
+    "baseline",
+    "restoration_rules",
+    "selected_resource",
+    "stale_source"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.2.0"},
+    "binding_alias": {
+      "type": "string",
+      "pattern": "^t07-bounded-binding-[a-f0-9]{12}$"
+    },
+    "plan_id": {"const": "PLAN-T07-BOUNDED-SIRA-SMOKE-V2"},
+    "host_run_id": {"const": "RUN-T07-BOUNDED-HOST-0002"},
+    "future_authorization_placeholder": {
+      "const": "AUTH-T07-BOUNDED-SIRA-SMOKE-V2-PENDING"
+    },
+    "source_parameter_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "decision_alias": {"type": "string", "minLength": 1, "maxLength": 256},
+    "decision_canonical_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "binding_nonce": {"type": "string", "pattern": "^[a-f0-9]{32}$"},
+    "ruleset_name_pattern_id": {"const": "t07-bounded-ruleset-v1"},
+    "source_ipv4_cidr": {
+      "type": "string",
+      "pattern": "^(?:[0-9]{1,3}\\.){3}[0-9]{1,3}/32$"
+    },
+    "owned_ruleset_name": {
+      "type": "string",
+      "pattern": "^giclab-t07-bounded-[a-f0-9]{12}$"
+    },
+    "owned_ruleset_description": {"type": "string", "minLength": 1, "maxLength": 160},
+    "strict_firewall_rule": {"$ref": "#/$defs/rule"},
+    "owned_ruleset_rule": {"$ref": "#/$defs/rule"},
+    "baseline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "alias",
+        "semantic_sha256",
+        "canonicalizer_version",
+        "parser_version",
+        "restoration_alias",
+        "restoration_payload_sha256"
+      ],
+      "properties": {
+        "alias": {"const": "l2m-firewall-baseline-b0ef71115811"},
+        "semantic_sha256": {
+          "const": "b0ef711158113cdbdbb1707cb43f21a635271bb2e93bfc0e898ce7118589f764"
+        },
+        "canonicalizer_version": {"const": "t07-firewall-canonical-v1"},
+        "parser_version": {"const": "t07-firewall-response-v2"},
+        "restoration_alias": {"const": "l2m-firewall-restoration-50ca7febe9f1"},
+        "restoration_payload_sha256": {
+          "const": "50ca7febe9f160ada862371376485ea2ece11b373d25179ccd578d9c7acd42b8"
+        }
+      }
+    },
+    "restoration_rules": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/rule"},
+      "maxItems": 128
+    },
+    "selected_resource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "instance_type",
+        "region",
+        "architecture",
+        "image_alias",
+        "image_family",
+        "image_version",
+        "raw_image_id",
+        "ssh_key_name",
+        "raw_ssh_key_id",
+        "ssh_key_fingerprint",
+        "price_cents_per_hour"
+      ],
+      "properties": {
+        "instance_type": {"const": "gpu_1x_a10"},
+        "region": {"const": "us-east-1"},
+        "architecture": {"const": "x86_64"},
+        "image_alias": {"const": "img-0032"},
+        "image_family": {"const": "lambda-stack-22-04"},
+        "image_version": {"const": "22.4.5-2141"},
+        "raw_image_id": {"type": "string", "minLength": 1, "maxLength": 512},
+        "ssh_key_name": {"const": "fractal-lambda-codex"},
+        "raw_ssh_key_id": {"type": "string", "minLength": 1, "maxLength": 512},
+        "ssh_key_fingerprint": {"type": "string", "minLength": 1, "maxLength": 512},
+        "price_cents_per_hour": {"const": 129}
+      }
+    },
+    "stale_source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "superseded",
+        "reusable",
+        "ruleset_name_classification",
+        "restoration_baseline_classification"
+      ],
+      "properties": {
+        "schema_version": {"type": "string", "minLength": 1, "maxLength": 32},
+        "superseded": {"const": true},
+        "reusable": {"const": false},
+        "ruleset_name_classification": {"const": "stale_high_assurance_name"},
+        "restoration_baseline_classification": {"const": "materializer_baseline_bug"}
+      }
+    }
+  },
+  "$defs": {
+    "rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol", "source_network", "description"],
+      "properties": {
+        "protocol": {"enum": ["tcp", "udp", "icmp", "all"]},
+        "port_range": {
+          "type": "array",
+          "prefixItems": [
+            {"type": "integer", "minimum": 1, "maximum": 65535},
+            {"type": "integer", "minimum": 1, "maximum": 65535}
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "source_network": {"type": "string", "minLength": 1, "maxLength": 128},
+        "description": {"type": "string", "maxLength": 512}
+      }
+    }
+  }
+}

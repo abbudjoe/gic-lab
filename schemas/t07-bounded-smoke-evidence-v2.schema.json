@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gic-lab.invalid/schemas/t07-bounded-smoke-evidence-v2.schema.json",
+  "title": "T07 bounded smoke evidence manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "plan_id",
+    "host_run_id",
+    "files",
+    "file_count",
+    "total_bytes"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "0.1.0"
+    },
+    "plan_id": {
+      "const": "PLAN-T07-BOUNDED-SIRA-SMOKE-V2"
+    },
+    "host_run_id": {
+      "const": "RUN-T07-BOUNDED-HOST-0002"
+    },
+    "files": {
+      "type": "array",
+      "maxItems": 4096,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "bytes",
+          "sha256"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+          },
+          "bytes": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 268435456
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        }
+      }
+    },
+    "file_count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4096
+    },
+    "total_bytes": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 268435456
+    }
+  }
+}

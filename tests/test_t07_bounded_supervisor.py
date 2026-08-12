@@ -22,6 +22,7 @@ import pytest
 import giclab.harness.t07_bounded_supervisor as supervisor
 from giclab.harness import lambda_archive
 from giclab.harness import t07_bounded_smoke as contract
+from giclab.harness.lambda_firewall_baseline import canonicalize_firewall_rules
 from giclab.harness.sira_storage import (
     APPROVED_EXTERNAL_CAPACITY_BYTES,
     APPROVED_MOUNT,
@@ -37,7 +38,7 @@ from giclab.validation import ROOT
 NOW = datetime(2026, 8, 11, 20, 0, 0, tzinfo=UTC)
 AFTER_NOW = NOW + timedelta(seconds=1)
 COMMIT = "1" * 40
-AUTHORIZATION_REFERENCE = "AUTH-T07-BOUNDED-SIRA-SMOKE-V1-TEST-0001"
+AUTHORIZATION_REFERENCE = "AUTH-T07-BOUNDED-SIRA-SMOKE-V2-TEST-0001"
 PUBLIC_KEY = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAABAgMEBQYHCAkKCwwNDg8QERITFBUWFxgZGhscHR4f"
 JSON_SECRET_CANARY = "PUBLIC_DUMMY_OPAQUE_JUPYTER_CANARY_0123456789"
 
@@ -82,7 +83,7 @@ def _runtime_plan() -> dict[str, object]:
         "limits": dict(contract.LIMITS),
         "conditions": conditions,
         "container_lifecycle": contract.lifecycle_argv_templates(),
-        "storage": {"remote_active_root": "/home/ubuntu/t07-bounded-output-0001"},
+        "storage": {"remote_active_root": "/home/ubuntu/t07-bounded-output-0002"},
         "lambda": {
             "image_alias": contract.SELECTED_IMAGE_ALIAS,
             "image_family": contract.SELECTED_IMAGE_FAMILY,
@@ -251,10 +252,40 @@ def _materialize(
     baseline = [_rule("synthetic sealed baseline", source="198.51.100.0/24")]
     baseline_sha256 = supervisor._firewall_semantic_sha256(baseline)
     monkeypatch.setattr(supervisor, "BASELINE_SEMANTIC_SHA256", baseline_sha256)
-    source = {
+    schema_path = tmp_path / supervisor.PRIVATE_BINDING_SCHEMA_RELATIVE
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    schema["properties"]["baseline"]["properties"]["semantic_sha256"] = {"const": baseline_sha256}
+    schema_path.write_bytes(supervisor.canonical_json_bytes(schema))
+    nonce = "01" * 16
+    ruleset_marker = supervisor._derived_binding_marker(nonce, purpose="ruleset")
+    binding_marker = supervisor._derived_binding_marker(nonce, purpose="binding")
+    alias = f"t07-bounded-binding-{binding_marker}"
+    description = f"T07 bounded smoke {ruleset_marker}"
+    private = {
+        "schema_version": supervisor.PRIVATE_BINDING_SCHEMA_VERSION,
+        "binding_alias": alias,
+        "plan_id": supervisor.PLAN_ID,
+        "host_run_id": supervisor.HOST_RUN_ID,
+        "future_authorization_placeholder": supervisor.PRIVATE_BINDING_PENDING_AUTHORIZATION,
+        "source_parameter_sha256": supervisor.HISTORICAL_SOURCE_PARAMETERS_SHA256,
+        "decision_alias": "synthetic-private-decision",
+        "decision_canonical_sha256": "3" * 64,
+        "binding_nonce": nonce,
+        "ruleset_name_pattern_id": supervisor.RULESET_NAME_PATTERN_ID,
         "source_ipv4_cidr": "203.0.113.7/32",
-        "strict_firewall_rule": _rule("source strict rule"),
-        "owned_regional_ruleset": {"rules": [_rule("source owned rule")]},
+        "owned_ruleset_name": f"giclab-t07-bounded-{ruleset_marker}",
+        "owned_ruleset_description": description,
+        "strict_firewall_rule": _rule(description),
+        "owned_ruleset_rule": _rule(description),
+        "baseline": {
+            "alias": supervisor.BASELINE_ALIAS,
+            "semantic_sha256": baseline_sha256,
+            "canonicalizer_version": supervisor.CANONICALIZER_VERSION,
+            "parser_version": supervisor.PARSER_VERSION,
+            "restoration_alias": supervisor.RESTORATION_ALIAS,
+            "restoration_payload_sha256": supervisor.RESTORATION_SHA256,
+        },
+        "restoration_rules": baseline,
         "selected_resource": {
             "instance_type": "gpu_1x_a10",
             "region": "us-east-1",
@@ -265,23 +296,25 @@ def _materialize(
             "raw_image_id": "synthetic-image-private",
             "ssh_key_name": "fractal-lambda-codex",
             "raw_ssh_key_id": "synthetic-key-private",
-            "local_public_key_fingerprint": supervisor._fingerprint(PUBLIC_KEY),
+            "ssh_key_fingerprint": supervisor._fingerprint(PUBLIC_KEY),
             "price_cents_per_hour": 129,
         },
+        "stale_source": {
+            "schema_version": "0.1.0",
+            "superseded": True,
+            "reusable": False,
+            "ruleset_name_classification": "stale_high_assurance_name",
+            "restoration_baseline_classification": "materializer_baseline_bug",
+        },
     }
-    restoration = {"rules": baseline}
-    source_path = tmp_path / supervisor.SOURCE_PARAMETERS_RELATIVE
-    restoration_path = tmp_path / supervisor.RESTORATION_RELATIVE
-    source_path.parent.mkdir(parents=True, exist_ok=True)
-    restoration_path.parent.mkdir(parents=True, exist_ok=True)
-    source_encoded = supervisor.canonical_json_bytes(source)
-    restoration_encoded = supervisor.canonical_json_bytes(restoration)
-    source_path.write_bytes(source_encoded)
-    restoration_path.write_bytes(restoration_encoded)
-    source_sha256 = supervisor.sha256_bytes(source_encoded)
-    restoration_sha256 = supervisor.sha256_bytes(restoration_encoded)
-    monkeypatch.setattr(supervisor, "SOURCE_PARAMETERS_SHA256", source_sha256)
-    monkeypatch.setattr(supervisor, "RESTORATION_SHA256", restoration_sha256)
+    private_path = tmp_path / "artifacts" / "private-fixture" / "binding.json"
+    private_path.parent.mkdir(mode=0o700, parents=True)
+    private_encoded = supervisor.canonical_json_bytes(private)
+    private_path.write_bytes(private_encoded)
+    private_path.chmod(0o600)
+    private_sha256 = supervisor.sha256_bytes(private_encoded)
+    monkeypatch.setattr(supervisor, "PRIVATE_BINDING_ALIAS", alias)
+    monkeypatch.setattr(supervisor, "PRIVATE_BINDING_SHA256", private_sha256)
     monkeypatch.setattr(supervisor, "verify_repository_identity", lambda *_: None)
     monkeypatch.setattr(supervisor, "_validate_base_authority", lambda *_: None)
     plan = _runtime_plan()
@@ -292,10 +325,8 @@ def _materialize(
         plan_sha256=plan_sha256,
         expected_commit=COMMIT,
         authorization_reference=AUTHORIZATION_REFERENCE,
-        source_parameters_path=source_path,
-        source_parameters_sha256=source_sha256,
-        restoration_path=restoration_path,
-        restoration_sha256=restoration_sha256,
+        private_security_binding_path=private_path,
+        private_security_binding_sha256=private_sha256,
         volume_observer=lambda: (_external_observation(), _system_observation()),
         utc_now=lambda: NOW,
     )
@@ -327,6 +358,113 @@ def _materialize(
         supervisor.canonical_json_bytes(upload_identity)
     )
     return summary, plan_sha256, baseline_sha256
+
+
+def _materialized_private(tmp_path: Path) -> dict[str, object]:
+    return json.loads((tmp_path / supervisor.PRIVATE_BINDING_RELATIVE).read_text(encoding="utf-8"))
+
+
+def test_bounded_baseline_hash_matches_authoritative_canonicalizer() -> None:
+    rules = [
+        _rule("synthetic TCP baseline", source="198.51.100.0/24"),
+        {
+            "protocol": "icmp",
+            "source_network": "203.0.113.0/24",
+            "description": "synthetic ICMP baseline",
+        },
+    ]
+    assert supervisor._firewall_semantic_sha256(rules) == (
+        canonicalize_firewall_rules(rules).semantic_sha256
+    )
+
+
+@pytest.mark.parametrize(
+    ("field_path", "replacement"),
+    (
+        (("owned_ruleset_name",), "t07-l2m-" + "a" * 40),
+        (("owned_ruleset_name",), "giclab-t07-bounded-" + "a" * 11),
+        (("owned_ruleset_name",), "giclab-t07-bounded-" + "G" * 12),
+        (("baseline", "semantic_sha256"), "4" * 64),
+        (("baseline", "canonicalizer_version"), "wrong-canonicalizer"),
+        (("baseline", "parser_version"), "wrong-parser"),
+    ),
+)
+def test_private_binding_rejects_stale_or_malformed_security_identity(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    field_path: tuple[str, ...],
+    replacement: str,
+) -> None:
+    _materialize(tmp_path, monkeypatch)
+    private = _materialized_private(tmp_path)
+    target: dict[str, object] = private
+    for component in field_path[:-1]:
+        value = target[component]
+        assert isinstance(value, dict)
+        target = value
+    target[field_path[-1]] = replacement
+    with pytest.raises(supervisor.BoundedSupervisorError):
+        supervisor._validate_private_binding(tmp_path, private)
+
+
+def test_private_binding_keeps_semantic_baseline_and_restoration_seal_distinct(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _materialize(tmp_path, monkeypatch)
+    private = _materialized_private(tmp_path)
+    baseline = private["baseline"]
+    assert isinstance(baseline, dict)
+    semantic = baseline["semantic_sha256"]
+    restoration = baseline["restoration_payload_sha256"]
+    baseline["semantic_sha256"] = restoration
+    baseline["restoration_payload_sha256"] = semantic
+    with pytest.raises(supervisor.BoundedSupervisorError):
+        supervisor._validate_private_binding(tmp_path, private)
+
+
+def test_private_binding_accepts_current_bound_baseline_and_seal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    summary, _, baseline_sha256 = _materialize(tmp_path, monkeypatch)
+    private = _materialized_private(tmp_path)
+    supervisor._validate_private_binding(tmp_path, private)
+    baseline = private["baseline"]
+    assert isinstance(baseline, dict)
+    assert baseline["semantic_sha256"] == baseline_sha256
+    assert baseline["restoration_payload_sha256"] == supervisor.RESTORATION_SHA256
+    assert summary["private_binding_alias"] == private["binding_alias"]
+    materialized = tmp_path / supervisor.PRIVATE_BINDING_RELATIVE
+    linked = materialized.lstat()
+    assert not materialized.is_symlink()
+    assert linked.st_nlink == 1
+    assert linked.st_mode & 0o777 == 0o600
+    assert materialized.relative_to(tmp_path).parts[0] == "artifacts"
+
+
+def test_materializer_rejects_real_private_binding_drift(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _copy_schemas(tmp_path)
+    private_path = tmp_path / "artifacts" / "private-fixture" / "binding.json"
+    private_path.parent.mkdir(parents=True, mode=0o700)
+    private_path.write_bytes(b"{}\n")
+    private_path.chmod(0o600)
+    digest = supervisor.sha256_bytes(private_path.read_bytes())
+    monkeypatch.setattr(supervisor, "PRIVATE_BINDING_SHA256", digest)
+    monkeypatch.setattr(supervisor, "verify_repository_identity", lambda *_: None)
+    monkeypatch.setattr(supervisor, "_validate_base_authority", lambda *_: None)
+    with pytest.raises(supervisor.BoundedSupervisorError):
+        supervisor.materialize_authority(
+            tmp_path,
+            plan=_runtime_plan(),
+            plan_sha256="2" * 64,
+            expected_commit=COMMIT,
+            authorization_reference=AUTHORIZATION_REFERENCE,
+            private_security_binding_path=private_path,
+            private_security_binding_sha256=digest,
+            volume_observer=lambda: (_external_observation(), _system_observation()),
+            utc_now=lambda: NOW,
+        )
 
 
 def _phase_documents(private: Mapping[str, object]) -> dict[str, dict[str, object]]:
@@ -518,13 +656,15 @@ def test_exact_local_supervisor_interpreter_loads_bound_modules(tmp_path: Path) 
     repository.mkdir()
     for relative in (
         "containers/sira-smoke/bounded/local_supervisor_bootstrap.py",
-        "containers/sira-smoke/bounded/bounded-smoke-plan-v1.json",
         "src/giclab/harness/t07_bounded_supervisor.py",
         "src/giclab/harness/t07_bounded_smoke.py",
     ):
         destination = repository / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(ROOT / relative, destination)
+    plan_fixture = repository / "containers/sira-smoke/bounded/bounded-smoke-plan-v2.json"
+    plan_fixture.parent.mkdir(parents=True, exist_ok=True)
+    plan_fixture.write_bytes(b"{}\n")
     (repository / ".venv").symlink_to(ROOT / ".venv")
     subprocess.run(("git", "init", "-q", "-b", contract.BRANCH), cwd=repository, check=True)
     subprocess.run(("git", "add", "."), cwd=repository, check=True)
@@ -546,7 +686,7 @@ def test_exact_local_supervisor_interpreter_loads_bound_modules(tmp_path: Path) 
     fixture_commit = (
         subprocess.check_output(("git", "rev-parse", "HEAD"), cwd=repository).decode().strip()
     )
-    plan_path = repository / "containers/sira-smoke/bounded/bounded-smoke-plan-v1.json"
+    plan_path = repository / "containers/sira-smoke/bounded/bounded-smoke-plan-v2.json"
     substitutions = {
         "${REPOSITORY_ROOT}": str(repository),
         "${SUPERVISOR_SHA256}": supervisor.sha256_bytes(
@@ -558,6 +698,9 @@ def test_exact_local_supervisor_interpreter_loads_bound_modules(tmp_path: Path) 
         ),
         "${EXECUTION_COMMIT}": fixture_commit,
         "${AUTHORIZATION_REFERENCE}": AUTHORIZATION_REFERENCE,
+        "${PRIVATE_SECURITY_BINDING_PATH}": str(
+            repository / "artifacts/private-binding-fixture.json"
+        ),
     }
     argv = contract.materialize_argv(
         contract.local_supervisor_argv_templates()["materialize"], substitutions
@@ -658,12 +801,12 @@ def _patch_remote_paths(
         "archive": home / "t07-bounded-repository.tar",
         "bundle": home / "t07-bounded-bundle",
         "plan": home
-        / "t07-bounded-bundle/containers/sira-smoke/bounded/bounded-smoke-plan-v1.json",
+        / "t07-bounded-bundle/containers/sira-smoke/bounded/bounded-smoke-plan-v2.json",
         "contract": home / "t07-bounded-bundle/src/giclab/harness/t07_bounded_smoke.py",
         "authorization": home / "t07-bounded-authorization.json",
         "release": home / "t07-bounded-bootstrap-release.json",
         "secret": config / "sira_api_key",
-        "output": home / "t07-bounded-output-0001",
+        "output": home / "t07-bounded-output-0002",
     }
     for name, constant in (
         ("REMOTE_BOOTSTRAP_FILE", paths["bootstrap"]),
@@ -817,7 +960,7 @@ def test_replayed_single_use_root_cannot_open_or_destroy_winners_secret(
         "_validate_upload_bundle",
         lambda *args, **kwargs: (
             {"execution_commit": COMMIT},
-            {"containers/sira-smoke/bounded/bounded-smoke-plan-v1.json": plan_bytes},
+            {"containers/sira-smoke/bounded/bounded-smoke-plan-v2.json": plan_bytes},
         ),
     )
     monkeypatch.setattr(bootstrap, "_validate_bundle_against_plan", lambda *a, **k: None)
@@ -1542,7 +1685,7 @@ def _release_for_fixture(
         },
         "issued_at_utc": "2026-08-11T20:00:01Z",
         "bootstrap_release": True,
-        "single_use_output_root": "/home/ubuntu/t07-bounded-output-0001",
+        "single_use_output_root": "/home/ubuntu/t07-bounded-output-0002",
     }
     return release, supervisor.canonical_json_bytes(release)
 
@@ -1588,8 +1731,8 @@ def _write_complete_inbound(
         }
     )
     lifecycle = (
-        ("browser-preflight", "BROWSER-PREFLIGHT", "RUN-T07-BOUNDED-BROWSER-PREFLIGHT-0001"),
-        ("model-preflight", "MODEL-PREFLIGHT", "RUN-T07-BOUNDED-MODEL-PREFLIGHT-0001"),
+        ("browser-preflight", "BROWSER-PREFLIGHT", "RUN-T07-BOUNDED-BROWSER-PREFLIGHT-0002"),
+        ("model-preflight", "MODEL-PREFLIGHT", "RUN-T07-BOUNDED-MODEL-PREFLIGHT-0002"),
         ("reactive", "SIRA-REACTIVE", contract.RUN_IDS["SIRA-REACTIVE"]),
         ("simulative", "SIRA-SIMULATIVE", contract.RUN_IDS["SIRA-SIMULATIVE"]),
     )
@@ -1875,7 +2018,7 @@ def _write_complete_inbound(
         create_argv = list(contract.materialize_argv(template, substitutions))
         inner_argv = list(contract.condition_inner_argv(condition))
         configuration_refs = [
-            "containers/sira-smoke/bounded/bounded-smoke-plan-v1.json",
+            "containers/sira-smoke/bounded/bounded-smoke-plan-v2.json",
             "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/"
             + ("smoke-reactive.yaml" if mode == "reactive" else "smoke-simulative.yaml"),
             f"{mode}/resolved-command.json",
@@ -2561,14 +2704,14 @@ def test_released_early_bootstrap_failure_is_admitted_for_failed_cleanup(
     )
     bootstrap = _load_remote_bootstrap()
     bootstrap.package_early_failure_evidence(
-        remote / "t07-bounded-output-0001",
+        remote / "t07-bounded-output-0002",
         failure_stage="invocation_validation",
         secret_target_identity_established=True,
         secret_cleanup_verified=True,
         secret_value_read=False,
         secret_cleanup_source=cleanup,
     )
-    remote_failure = remote / "t07-bounded-output-0001-early-failure"
+    remote_failure = remote / "t07-bounded-output-0002-early-failure"
     inbound = tmp_path / supervisor.RUN_ROOT_RELATIVE / "inbound"
     inbound.mkdir()
     for name in (
@@ -2625,14 +2768,14 @@ def test_self_consistent_early_failure_omission_is_rejected(
     )
     bootstrap = _load_remote_bootstrap()
     bootstrap.package_early_failure_evidence(
-        remote / "t07-bounded-output-0001",
+        remote / "t07-bounded-output-0002",
         failure_stage="invocation_validation",
         secret_target_identity_established=True,
         secret_cleanup_verified=True,
         secret_value_read=False,
         secret_cleanup_source=cleanup,
     )
-    failure_root = remote / "t07-bounded-output-0001-early-failure"
+    failure_root = remote / "t07-bounded-output-0002-early-failure"
     archive = failure_root / "t07-bounded-early-failure-evidence.zip"
     with zipfile.ZipFile(archive) as opened:
         members = {name: opened.read(name) for name in opened.namelist()}

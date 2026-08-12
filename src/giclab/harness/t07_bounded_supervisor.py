@@ -20,6 +20,7 @@ import json
 import math
 import os
 import re
+import secrets
 import socket
 import ssl
 import stat
@@ -39,8 +40,8 @@ import yaml
 from jsonschema import Draft202012Validator, FormatChecker
 
 SCHEMA_VERSION: Final = "0.1.0"
-PLAN_ID: Final = "PLAN-T07-BOUNDED-SIRA-SMOKE-V1"
-HOST_RUN_ID: Final = "RUN-T07-BOUNDED-HOST-0001"
+PLAN_ID: Final = "PLAN-T07-BOUNDED-SIRA-SMOKE-V2"
+HOST_RUN_ID: Final = "RUN-T07-BOUNDED-HOST-0002"
 BRANCH: Final = "phase-1/sira-smoke-bounded"
 RUN_ROOT_RELATIVE: Final = Path("artifacts/t07/bounded") / HOST_RUN_ID
 INBOUND_RELATIVE: Final = RUN_ROOT_RELATIVE / "inbound"
@@ -60,28 +61,53 @@ UPLOAD_IDENTITY_RELATIVE: Final = RUN_ROOT_RELATIVE / "UPLOAD_BUNDLE_IDENTITY.js
 UPLOAD_ARCHIVE_NAME: Final = "t07-bounded-repository.tar"
 UPLOAD_BOOTSTRAP_NAME: Final = "t07-bounded-bootstrap.py"
 UPLOAD_MANIFEST_NAME: Final = "BUNDLE_MANIFEST.json"
-BOUNDED_PLAN_RELATIVE: Final = Path("containers/sira-smoke/bounded/bounded-smoke-plan-v1.json")
+BOUNDED_PLAN_RELATIVE: Final = Path("containers/sira-smoke/bounded/bounded-smoke-plan-v2.json")
 REMOTE_BOOTSTRAP_RELATIVE: Final = Path("containers/sira-smoke/bounded/bootstrap.py")
 
-SOURCE_PARAMETERS_RELATIVE: Final = Path(
+HISTORICAL_SOURCE_PARAMETERS_RELATIVE: Final = Path(
     "artifacts/t07/lambda/gate-l2m/"
     "RUN-T07-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-0003/"
     "materialization-v1/private-parameters.json"
 )
-SOURCE_PARAMETERS_SHA256: Final = "a9b210594ed3b4c962f414b8a2d9509d14a2d7deb097050e92321e6da4d5d096"
-RESTORATION_RELATIVE: Final = Path(
-    "artifacts/t07/lambda/gate-l2m/"
-    "T07-HIGH-ASSURANCE-FIREWALL-CLOSEOUT-0001/restoration-payload.json"
+HISTORICAL_SOURCE_PARAMETERS_SHA256: Final = (
+    "a9b210594ed3b4c962f414b8a2d9509d14a2d7deb097050e92321e6da4d5d096"
 )
+HISTORICAL_DECISION_SEAL_RELATIVE: Final = (
+    HISTORICAL_SOURCE_PARAMETERS_RELATIVE.parent / "PRIVATE_DECISION_SEAL.json"
+)
+AUTHORITATIVE_FIREWALL_ROOT_RELATIVE: Final = Path(
+    "artifacts/t07/lambda/gate-l2m/T07-HIGH-ASSURANCE-FIREWALL-CLOSEOUT-0001"
+)
+AUTHORITATIVE_BASELINE_RELATIVE: Final = (
+    AUTHORITATIVE_FIREWALL_ROOT_RELATIVE / "firewall-baseline.json"
+)
+AUTHORITATIVE_BASELINE_SEAL_RELATIVE: Final = (
+    AUTHORITATIVE_FIREWALL_ROOT_RELATIVE / "BASELINE_SEAL.json"
+)
+AUTHORITATIVE_RESTORATION_RELATIVE: Final = (
+    AUTHORITATIVE_FIREWALL_ROOT_RELATIVE / "restoration-payload.json"
+)
+RESTORATION_ALIAS: Final = "l2m-firewall-restoration-50ca7febe9f1"
 RESTORATION_SHA256: Final = "50ca7febe9f160ada862371376485ea2ece11b373d25179ccd578d9c7acd42b8"
+BASELINE_ALIAS: Final = "l2m-firewall-baseline-b0ef71115811"
 BASELINE_SEMANTIC_SHA256: Final = "b0ef711158113cdbdbb1707cb43f21a635271bb2e93bfc0e898ce7118589f764"
+CANONICALIZER_VERSION: Final = "t07-firewall-canonical-v1"
+PARSER_VERSION: Final = "t07-firewall-response-v2"
+PRIVATE_BINDING_SCHEMA_VERSION: Final = "0.2.0"
+PRIVATE_BINDING_PENDING_AUTHORIZATION: Final = "AUTH-T07-BOUNDED-SIRA-SMOKE-V2-PENDING"
+RULESET_NAME_PATTERN_ID: Final = "t07-bounded-ruleset-v1"
+PRIVATE_BINDING_ALIAS: Final = "t07-bounded-binding-413dd97fcb1f"
+PRIVATE_BINDING_SHA256: Final = "5599ca1a7e371461a26453ad791cd2292ffaa9714986c48d06dc8253a3f08e6b"
+PRIVATE_BINDING_LOCAL_PARENT_RELATIVE: Final = Path("artifacts/t07/bounded-private-bindings")
 
-AUTHORIZATION_SCHEMA_RELATIVE: Final = Path("schemas/t07-bounded-smoke-authorization.schema.json")
-PRIVATE_BINDING_SCHEMA_RELATIVE: Final = Path(
-    "schemas/t07-bounded-smoke-private-binding.schema.json"
+AUTHORIZATION_SCHEMA_RELATIVE: Final = Path(
+    "schemas/t07-bounded-smoke-authorization-v2.schema.json"
 )
-LEDGER_SCHEMA_RELATIVE: Final = Path("schemas/t07-bounded-smoke-observer-ledger.schema.json")
-EVIDENCE_SCHEMA_RELATIVE: Final = Path("schemas/t07-bounded-smoke-evidence.schema.json")
+PRIVATE_BINDING_SCHEMA_RELATIVE: Final = Path(
+    "schemas/t07-bounded-private-security-binding.schema.json"
+)
+LEDGER_SCHEMA_RELATIVE: Final = Path("schemas/t07-bounded-smoke-observer-ledger-v2.schema.json")
+EVIDENCE_SCHEMA_RELATIVE: Final = Path("schemas/t07-bounded-smoke-evidence-v2.schema.json")
 ENDPOINT_SCHEMA_ROOT: Final = Path("containers/sira-smoke/lambda/endpoint-schemas-v3")
 ENDPOINT_SCHEMAS: Final[Mapping[str, str]] = {
     "/api/v1/instance-types": "instance-types.schema.json",
@@ -158,8 +184,11 @@ EXTERNAL_FINAL: Final = EXTERNAL_PARENT / HOST_RUN_ID
 
 _HEX40 = re.compile(r"^[a-f0-9]{40}$")
 _HEX64 = re.compile(r"^[a-f0-9]{64}$")
-_AUTHORIZATION = re.compile(r"^AUTH-T07-BOUNDED-SIRA-SMOKE-V1-[A-Z0-9._-]{3,80}$")
+_AUTHORIZATION = re.compile(r"^AUTH-T07-BOUNDED-SIRA-SMOKE-V2-[A-Z0-9._-]{3,80}$")
 _OWNED_RULESET = re.compile(r"^giclab-t07-bounded-[a-f0-9]{12}$")
+_HIGH_ASSURANCE_RULESET = re.compile(r"^t07-l2m-[a-f0-9]{40}$")
+_BINDING_ALIAS = re.compile(r"^t07-bounded-binding-[a-f0-9]{12}$")
+_NONCE = re.compile(r"^[a-f0-9]{32}$")
 _SECRET_SHAPES = (
     re.compile(rb"\bsk-[A-Za-z0-9_-]{20,}\b"),
     re.compile(rb"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
@@ -378,6 +407,20 @@ class ArchiveSource:
     byte_count: int
     sha256: str
     content_class: Literal["runtime_evidence", "reviewed_repository_upload"]
+
+
+@dataclass(frozen=True, slots=True)
+class SealedPrivateBinding:
+    """Private locator plus the only public-safe binding facts."""
+
+    local_path: Path = field(repr=False)
+    binding_alias: str
+    binding_sha256: str
+    binding_bytes: int
+    external_copy_sha256: str
+    seal_sha256: str
+    source_retained: bool
+    source_destination_sha256_equal: bool
 
 
 class ReadOnlyTransport(Protocol):
@@ -634,7 +677,7 @@ def _validate_base_authority(root: Path, plan: Mapping[str, object]) -> None:
         "wall_clock_hours": 0.0,
         "accelerator_hours": 0.0,
         "cost_usd": 0.0,
-        "authorization_reference": "AUTH-T07-BOUNDED-SIRA-SMOKE-V1-PENDING",
+        "authorization_reference": "AUTH-T07-BOUNDED-SIRA-SMOKE-V2-PENDING",
         "status": "planned",
     }
     if (
@@ -686,15 +729,45 @@ def _normalize_rule(value: object) -> dict[str, object]:
 
 
 def _firewall_semantic_sha256(rules: object) -> str:
-    canonical = sorted(
-        (_normalize_rule(item) for item in _sequence(rules, context="firewall rules")),
-        key=canonical_json_bytes,
-    )
+    """Implement the pinned authoritative port-presence canonical document exactly."""
+
+    canonical: list[dict[str, object]] = []
+    for item in _sequence(rules, context="firewall rules"):
+        rule = _normalize_rule(item)
+        if len(str(rule["description"])) > 128:
+            raise BoundedSupervisorError("firewall baseline description drifted")
+        canonical.append(
+            {
+                "description": rule["description"],
+                "port_range": (
+                    {"state": "present", "value": rule["port_range"]}
+                    if "port_range" in rule
+                    else {"state": "absent"}
+                ),
+                "protocol": rule["protocol"],
+                "source_network": rule["source_network"],
+            }
+        )
+    canonical.sort(key=canonical_json_bytes)
     return sha256_bytes(
         canonical_json_bytes(
-            {"canonicalization_version": "t07-firewall-canonical-v1", "rules": canonical}
+            {"canonicalization_version": CANONICALIZER_VERSION, "rules": canonical}
         )
     )
+
+
+def _derived_binding_marker(nonce: str, *, purpose: str) -> str:
+    if _NONCE.fullmatch(nonce) is None or purpose not in {"binding", "ruleset"}:
+        raise BoundedSupervisorError("private binding nonce contract drifted")
+    payload = b"\0".join(
+        (
+            purpose.encode("ascii"),
+            bytes.fromhex(nonce),
+            PLAN_ID.encode("ascii"),
+            HOST_RUN_ID.encode(),
+        )
+    )
+    return hashlib.sha256(payload).hexdigest()[:12]
 
 
 def _fingerprint(public_key: str) -> str:
@@ -713,12 +786,24 @@ def _validate_private_binding(
     root: Path,
     document: Mapping[str, object],
     *,
-    authorization_reference: str,
+    require_bound_identity: bool = True,
 ) -> None:
     schema, _ = _load_schema(root, PRIVATE_BINDING_SCHEMA_RELATIVE)
     _validate_schema(document, schema, context="private binding")
-    if document.get("authorization_reference") != authorization_reference:
-        raise BoundedSupervisorError("private binding authorization reference drifted")
+    alias = _text(document.get("binding_alias"), context="private binding alias")
+    nonce = _text(document.get("binding_nonce"), context="private binding nonce")
+    ruleset_name = _text(document.get("owned_ruleset_name"), context="owned ruleset name")
+    expected_alias = "t07-bounded-binding-" + _derived_binding_marker(nonce, purpose="binding")
+    expected_ruleset = "giclab-t07-bounded-" + _derived_binding_marker(nonce, purpose="ruleset")
+    if (
+        alias != expected_alias
+        or ruleset_name != expected_ruleset
+        or (require_bound_identity and alias != PRIVATE_BINDING_ALIAS)
+        or document.get("source_parameter_sha256") != HISTORICAL_SOURCE_PARAMETERS_SHA256
+        or document.get("future_authorization_placeholder") != PRIVATE_BINDING_PENDING_AUTHORIZATION
+        or document.get("ruleset_name_pattern_id") != RULESET_NAME_PATTERN_ID
+    ):
+        raise BoundedSupervisorError("private binding identity drifted")
     cidr = _text(document.get("source_ipv4_cidr"), context="source IPv4 CIDR")
     try:
         network = ipaddress.ip_network(cidr, strict=True)
@@ -728,17 +813,387 @@ def _validate_private_binding(
         raise BoundedSupervisorError("private source must be one IPv4 /32")
     strict = _normalize_rule(document.get("strict_firewall_rule"))
     owned = _normalize_rule(document.get("owned_ruleset_rule"))
+    baseline = _mapping(document.get("baseline"), context="private binding baseline")
+    expected_description = "T07 bounded smoke " + _derived_binding_marker(nonce, purpose="ruleset")
     if (
         strict["protocol"] != "tcp"
         or strict.get("port_range") != [22, 22]
         or strict["source_network"] != cidr
+        or strict["description"] != expected_description
         or owned["protocol"] != "tcp"
         or owned.get("port_range") != [22, 22]
         or owned["source_network"] != cidr
-        or not _OWNED_RULESET.fullmatch(str(document.get("owned_ruleset_name")))
+        or owned["description"] != expected_description
+        or document.get("owned_ruleset_description") != expected_description
+        or _OWNED_RULESET.fullmatch(ruleset_name) is None
+        or baseline.get("alias") != BASELINE_ALIAS
+        or baseline.get("semantic_sha256") != BASELINE_SEMANTIC_SHA256
+        or baseline.get("canonicalizer_version") != CANONICALIZER_VERSION
+        or baseline.get("parser_version") != PARSER_VERSION
+        or baseline.get("restoration_alias") != RESTORATION_ALIAS
+        or baseline.get("restoration_payload_sha256") != RESTORATION_SHA256
         or _firewall_semantic_sha256(document.get("restoration_rules")) != BASELINE_SEMANTIC_SHA256
     ):
         raise BoundedSupervisorError("private security binding drifted")
+
+
+def build_private_security_binding(
+    root: Path,
+    *,
+    random_bytes: Callable[[int], bytes] = secrets.token_bytes,
+) -> tuple[dict[str, object], bytes, str]:
+    """Build a fresh V2 binding from sealed private inputs without exposing values."""
+
+    source_encoded = _read_regular(
+        root / HISTORICAL_SOURCE_PARAMETERS_RELATIVE, max_bytes=MAX_PRIVATE_FILE_BYTES
+    )
+    decision_seal_encoded = _read_regular(
+        root / HISTORICAL_DECISION_SEAL_RELATIVE, max_bytes=MAX_PRIVATE_FILE_BYTES
+    )
+    baseline_encoded = _read_regular(
+        root / AUTHORITATIVE_BASELINE_RELATIVE, max_bytes=MAX_PRIVATE_FILE_BYTES
+    )
+    baseline_seal_encoded = _read_regular(
+        root / AUTHORITATIVE_BASELINE_SEAL_RELATIVE, max_bytes=MAX_PRIVATE_FILE_BYTES
+    )
+    restoration_encoded = _read_regular(
+        root / AUTHORITATIVE_RESTORATION_RELATIVE, max_bytes=MAX_PRIVATE_FILE_BYTES
+    )
+    if (
+        sha256_bytes(source_encoded) != HISTORICAL_SOURCE_PARAMETERS_SHA256
+        or sha256_bytes(restoration_encoded) != RESTORATION_SHA256
+    ):
+        raise BoundedSupervisorError("sealed private input identity drifted")
+    source = _strict_json(source_encoded, context="private human decision")
+    decision_seal = _strict_json(decision_seal_encoded, context="private decision seal")
+    baseline = _strict_json(baseline_encoded, context="authoritative firewall baseline")
+    baseline_seal = _strict_json(
+        baseline_seal_encoded, context="authoritative firewall baseline seal"
+    )
+    restoration = _strict_json(restoration_encoded, context="private restoration payload")
+    if (
+        decision_seal.get("private_parameters_sha256") != HISTORICAL_SOURCE_PARAMETERS_SHA256
+        or decision_seal.get("decision_alias") != source.get("decision_alias")
+        or decision_seal.get("decision_canonical_sha256") != source.get("decision_canonical_sha256")
+        or decision_seal.get("decision_validated") is not True
+        or decision_seal.get("source_retained") is not True
+        or baseline.get("baseline_alias") != BASELINE_ALIAS
+        or baseline.get("canonical_semantic_sha256") != BASELINE_SEMANTIC_SHA256
+        or baseline.get("canonicalization_version") != CANONICALIZER_VERSION
+        or baseline.get("response_parser_version") != PARSER_VERSION
+        or baseline.get("restoration_payload_sha256") != RESTORATION_SHA256
+        or baseline_seal.get("baseline_alias") != BASELINE_ALIAS
+        or baseline_seal.get("canonical_semantic_sha256") != BASELINE_SEMANTIC_SHA256
+        or baseline_seal.get("restoration_payload_alias") != RESTORATION_ALIAS
+        or baseline_seal.get("restoration_payload_sha256") != RESTORATION_SHA256
+        or baseline_seal.get("original_capture_unchanged") is not True
+        or baseline_seal.get("source_retained") is not True
+    ):
+        raise BoundedSupervisorError("authoritative private decision or firewall seal drifted")
+    selected = _mapping(source.get("selected_resource"), context="selected private resource")
+    cidr = _text(source.get("source_ipv4_cidr"), context="source IPv4 CIDR")
+    strict_source = _normalize_rule(source.get("strict_firewall_rule"))
+    owned_container = _mapping(
+        source.get("owned_regional_ruleset"), context="historical owned ruleset"
+    )
+    historical_name = _text(owned_container.get("name"), context="historical ruleset name")
+    owned_rules = _sequence(owned_container.get("rules"), context="owned ruleset rules")
+    if len(owned_rules) != 1 or _HIGH_ASSURANCE_RULESET.fullmatch(historical_name) is None:
+        raise BoundedSupervisorError("historical private input classification drifted")
+    owned_source = _normalize_rule(owned_rules[0])
+    try:
+        network = ipaddress.ip_network(cidr, strict=True)
+    except ValueError:
+        raise BoundedSupervisorError("private source is not a canonical CIDR") from None
+    if (
+        network.version != 4
+        or network.prefixlen != 32
+        or strict_source.get("protocol") != "tcp"
+        or strict_source.get("port_range") != [22, 22]
+        or strict_source.get("source_network") != cidr
+        or owned_source.get("protocol") != "tcp"
+        or owned_source.get("port_range") != [22, 22]
+        or owned_source.get("source_network") != cidr
+    ):
+        raise BoundedSupervisorError("private human decision security contract drifted")
+    restoration_rules = list(_sequence(restoration.get("rules"), context="restoration rules"))
+    if _firewall_semantic_sha256(restoration_rules) != BASELINE_SEMANTIC_SHA256:
+        raise BoundedSupervisorError("authoritative restoration semantics drifted")
+    nonce_bytes = random_bytes(16)
+    if not isinstance(nonce_bytes, bytes) or len(nonce_bytes) != 16:
+        raise BoundedSupervisorError("private binding entropy source drifted")
+    nonce = nonce_bytes.hex()
+    binding_marker = _derived_binding_marker(nonce, purpose="binding")
+    ruleset_marker = _derived_binding_marker(nonce, purpose="ruleset")
+    description = f"T07 bounded smoke {ruleset_marker}"
+    strict_rule = {**strict_source, "description": description}
+    owned_rule = {**owned_source, "description": description}
+    document: dict[str, object] = {
+        "schema_version": PRIVATE_BINDING_SCHEMA_VERSION,
+        "binding_alias": f"t07-bounded-binding-{binding_marker}",
+        "plan_id": PLAN_ID,
+        "host_run_id": HOST_RUN_ID,
+        "future_authorization_placeholder": PRIVATE_BINDING_PENDING_AUTHORIZATION,
+        "source_parameter_sha256": HISTORICAL_SOURCE_PARAMETERS_SHA256,
+        "decision_alias": source.get("decision_alias"),
+        "decision_canonical_sha256": source.get("decision_canonical_sha256"),
+        "binding_nonce": nonce,
+        "ruleset_name_pattern_id": RULESET_NAME_PATTERN_ID,
+        "source_ipv4_cidr": cidr,
+        "owned_ruleset_name": f"giclab-t07-bounded-{ruleset_marker}",
+        "owned_ruleset_description": description,
+        "strict_firewall_rule": strict_rule,
+        "owned_ruleset_rule": owned_rule,
+        "baseline": {
+            "alias": BASELINE_ALIAS,
+            "semantic_sha256": BASELINE_SEMANTIC_SHA256,
+            "canonicalizer_version": CANONICALIZER_VERSION,
+            "parser_version": PARSER_VERSION,
+            "restoration_alias": RESTORATION_ALIAS,
+            "restoration_payload_sha256": RESTORATION_SHA256,
+        },
+        "restoration_rules": restoration_rules,
+        "selected_resource": {
+            "instance_type": selected.get("instance_type"),
+            "region": selected.get("region"),
+            "architecture": selected.get("architecture"),
+            "image_alias": selected.get("image_alias"),
+            "image_family": selected.get("image_family"),
+            "image_version": selected.get("image_version"),
+            "raw_image_id": selected.get("raw_image_id"),
+            "ssh_key_name": selected.get("ssh_key_name"),
+            "raw_ssh_key_id": selected.get("raw_ssh_key_id"),
+            "ssh_key_fingerprint": selected.get("local_public_key_fingerprint"),
+            "price_cents_per_hour": selected.get("price_cents_per_hour"),
+        },
+        "stale_source": {
+            "schema_version": source.get("schema_version"),
+            "superseded": True,
+            "reusable": False,
+            "ruleset_name_classification": "stale_high_assurance_name",
+            "restoration_baseline_classification": "materializer_baseline_bug",
+        },
+    }
+    _validate_private_binding(root, document, require_bound_identity=False)
+    encoded = canonical_json_bytes(document)
+    return document, encoded, sha256_bytes(encoded)
+
+
+def _ensure_owned_directory_chain(root: Path, relative: Path) -> Path:
+    current = root
+    for component in relative.parts:
+        current /= component
+        with contextlib.suppress(FileExistsError):
+            current.mkdir(mode=0o700)
+        linked = current.lstat()
+        if (
+            not stat.S_ISDIR(linked.st_mode)
+            or stat.S_ISLNK(linked.st_mode)
+            or linked.st_uid != os.getuid()
+        ):
+            raise BoundedSupervisorError("private binding directory chain is unsafe")
+    return current
+
+
+def seal_private_security_binding(
+    root: Path,
+    *,
+    volume_observer: Callable[[], tuple[VolumeObservation, VolumeObservation]] | None = None,
+    random_bytes: Callable[[int], bytes] = secrets.token_bytes,
+) -> SealedPrivateBinding:
+    """Create, retain, copy, hash-verify, and seal one fresh private V2 binding."""
+
+    document, encoded, digest = build_private_security_binding(root, random_bytes=random_bytes)
+    alias = _text(document.get("binding_alias"), context="private binding alias")
+    local_parent = _ensure_owned_directory_chain(root, PRIVATE_BINDING_LOCAL_PARENT_RELATIVE)
+    local_directory = local_parent / alias
+    try:
+        local_directory.mkdir(mode=0o700)
+    except FileExistsError:
+        raise BoundedSupervisorError("private binding identity is not fresh") from None
+    binding_path = local_directory / "private-security-binding.json"
+    _write_exclusive(binding_path, encoded, mode=0o600)
+    linked = binding_path.lstat()
+    if (
+        not stat.S_ISREG(linked.st_mode)
+        or stat.S_ISLNK(linked.st_mode)
+        or linked.st_nlink != 1
+        or linked.st_uid != os.getuid()
+        or stat.S_IMODE(linked.st_mode) != 0o600
+        or _read_regular(binding_path, max_bytes=MAX_PRIVATE_FILE_BYTES) != encoded
+    ):
+        raise BoundedSupervisorError("private binding local seal failed")
+    if volume_observer is None:
+        from giclab.harness.lambda_archive import DiskutilVolumeObserver
+
+        observer: Callable[[], tuple[VolumeObservation, VolumeObservation]] = cast(
+            Callable[[], tuple[VolumeObservation, VolumeObservation]],
+            DiskutilVolumeObserver(),
+        )
+    else:
+        observer = volume_observer
+    from giclab.harness.lambda_archive import (
+        _HeldDirectory,
+        _open_or_create_archive_root,
+        _read_regular_at,
+        _validate_external,
+        _validate_system,
+        _write_exclusive_at,
+    )
+    from giclab.harness.sira_storage import SYSTEM_DATA_MOUNT
+
+    external_pre, system_pre = observer()
+    external_floor = _validate_external(
+        cast(Any, external_pre), incremental_bytes=MAX_PRIVATE_FILE_BYTES
+    )
+    _validate_system(cast(Any, system_pre), floor_bytes=MAC_PREWRITE_FLOOR_BYTES)
+    if external_floor != EXTERNAL_RETAINED_FLOOR_BYTES:
+        raise BoundedSupervisorError("private binding storage floor drifted")
+    external_handle = _HeldDirectory.open(EXTERNAL_MOUNT)
+    system_handle = _HeldDirectory.open(SYSTEM_DATA_MOUNT)
+    repository_handle = _HeldDirectory.open(root)
+    archive_handle = None
+    staging_fd = -1
+    destination_fd = -1
+    try:
+        if (
+            repository_handle.device != system_handle.device
+            or external_handle.device == system_handle.device
+        ):
+            raise BoundedSupervisorError("private binding storage fell back internally")
+        archive_handle = _open_or_create_archive_root(external_handle, EXTERNAL_PARENT)
+        external_handle.revalidate()
+        system_handle.revalidate()
+        repository_handle.revalidate()
+        archive_handle.revalidate()
+        if archive_handle.device != external_handle.device:
+            raise BoundedSupervisorError("private binding archive escaped its volume")
+        final_name = f"T07-BOUNDED-PRIVATE-BINDING-{alias.rsplit('-', 1)[-1]}"
+        staging_name = f".{final_name}.staging"
+        for name in (final_name, staging_name):
+            try:
+                os.stat(name, dir_fd=archive_handle.descriptor, follow_symlinks=False)
+            except FileNotFoundError:
+                continue
+            raise BoundedSupervisorError("private binding archive identity is not fresh")
+        os.mkdir(staging_name, mode=0o700, dir_fd=archive_handle.descriptor)
+        staging_fd = os.open(
+            staging_name,
+            os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0),
+            dir_fd=archive_handle.descriptor,
+        )
+        staging = os.fstat(staging_fd)
+        if (
+            not stat.S_ISDIR(staging.st_mode)
+            or staging.st_dev != external_handle.device
+            or staging.st_uid != os.getuid()
+        ):
+            raise BoundedSupervisorError("private binding staging directory is unsafe")
+        copy_record = canonical_json_bytes(
+            {
+                "schema_version": PRIVATE_BINDING_SCHEMA_VERSION,
+                "binding_alias": alias,
+                "binding_sha256": digest,
+                "binding_bytes": len(encoded),
+                "source_retained": True,
+                "source_destination_sha256_equal": True,
+                "one_way_copy": True,
+                "held_no_follow_descriptors": True,
+                "internal_fallback": False,
+            }
+        )
+        copy_record_sha256 = sha256_bytes(copy_record)
+        seal = canonical_json_bytes(
+            {
+                "schema_version": PRIVATE_BINDING_SCHEMA_VERSION,
+                "binding_alias": alias,
+                "binding_sha256": digest,
+                "copy_record_sha256": copy_record_sha256,
+                "baseline_alias": BASELINE_ALIAS,
+                "baseline_semantic_sha256": BASELINE_SEMANTIC_SHA256,
+                "restoration_alias": RESTORATION_ALIAS,
+                "restoration_payload_sha256": RESTORATION_SHA256,
+            }
+        )
+        _write_exclusive_at(staging_fd, "private-security-binding.json", encoded)
+        _write_exclusive_at(staging_fd, "COPY_RECORD.json", copy_record)
+        _write_exclusive_at(staging_fd, "SEAL.json", seal)
+        os.fsync(staging_fd)
+        os.fchmod(staging_fd, 0o500)
+        os.rename(
+            staging_name,
+            final_name,
+            src_dir_fd=archive_handle.descriptor,
+            dst_dir_fd=archive_handle.descriptor,
+        )
+        os.fsync(archive_handle.descriptor)
+        os.close(staging_fd)
+        staging_fd = -1
+        destination_fd = os.open(
+            final_name,
+            os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0),
+            dir_fd=archive_handle.descriptor,
+        )
+        copied = _read_regular_at(
+            destination_fd,
+            "private-security-binding.json",
+            max_bytes=MAX_PRIVATE_FILE_BYTES,
+        )
+        copied_record = _read_regular_at(destination_fd, "COPY_RECORD.json", max_bytes=65_536)
+        copied_seal = _read_regular_at(destination_fd, "SEAL.json", max_bytes=65_536)
+        if copied != encoded or copied_record != copy_record or copied_seal != seal:
+            raise BoundedSupervisorError("private binding destination verification failed")
+        external_post, system_post = observer()
+        retained_floor = _validate_external(cast(Any, external_post), incremental_bytes=0)
+        _validate_system(cast(Any, system_post), floor_bytes=MAC_RETAINED_FLOOR_BYTES)
+        if retained_floor != external_floor or external_post.free_bytes < external_floor:
+            raise BoundedSupervisorError("private binding retained-free floor failed")
+        local_seal = canonical_json_bytes(
+            {
+                "schema_version": PRIVATE_BINDING_SCHEMA_VERSION,
+                "binding_alias": alias,
+                "binding_sha256": digest,
+                "binding_bytes": len(encoded),
+                "external_copy_sha256": sha256_bytes(copied),
+                "copy_record_sha256": copy_record_sha256,
+                "seal_sha256": sha256_bytes(seal),
+                "source_retained": True,
+                "source_destination_sha256_equal": True,
+                "held_no_follow_descriptors": True,
+                "internal_fallback": False,
+            }
+        )
+        _write_exclusive(local_directory / "PRIVATE_BINDING_SEAL.json", local_seal)
+        parent_fd = os.open(
+            local_directory,
+            os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0),
+        )
+        try:
+            os.fsync(parent_fd)
+        finally:
+            os.close(parent_fd)
+        return SealedPrivateBinding(
+            local_path=binding_path,
+            binding_alias=alias,
+            binding_sha256=digest,
+            binding_bytes=len(encoded),
+            external_copy_sha256=sha256_bytes(copied),
+            seal_sha256=sha256_bytes(seal),
+            source_retained=True,
+            source_destination_sha256_equal=True,
+        )
+    except OSError:
+        raise BoundedSupervisorError("private binding archive filesystem action failed") from None
+    finally:
+        if destination_fd >= 0:
+            os.close(destination_fd)
+        if staging_fd >= 0:
+            os.close(staging_fd)
+        if archive_handle is not None:
+            archive_handle.close()
+        repository_handle.close()
+        system_handle.close()
+        external_handle.close()
 
 
 def materialize_authority(
@@ -748,10 +1203,8 @@ def materialize_authority(
     plan_sha256: str,
     expected_commit: str,
     authorization_reference: str,
-    source_parameters_path: Path,
-    source_parameters_sha256: str,
-    restoration_path: Path,
-    restoration_sha256: str,
+    private_security_binding_path: Path,
+    private_security_binding_sha256: str,
     volume_observer: Callable[[], tuple[VolumeObservation, VolumeObservation]] | None = None,
     utc_now: Callable[[], datetime] = lambda: datetime.now(UTC),
 ) -> dict[str, object]:
@@ -778,67 +1231,40 @@ def materialize_authority(
     if (
         _AUTHORIZATION.fullmatch(authorization_reference) is None
         or authorization_reference.endswith("-PENDING")
-        or source_parameters_path != root / SOURCE_PARAMETERS_RELATIVE
-        or source_parameters_sha256 != SOURCE_PARAMETERS_SHA256
-        or restoration_path != root / RESTORATION_RELATIVE
-        or restoration_sha256 != RESTORATION_SHA256
+        or private_security_binding_sha256 != PRIVATE_BINDING_SHA256
+        or private_security_binding_path == root / HISTORICAL_SOURCE_PARAMETERS_RELATIVE
     ):
         raise BoundedSupervisorError("authorization materialization input drifted")
-    source_encoded = _read_regular(source_parameters_path, max_bytes=1_048_576)
-    restoration_encoded = _read_regular(restoration_path, max_bytes=1_048_576)
+    try:
+        linked = private_security_binding_path.lstat()
+    except OSError:
+        raise BoundedSupervisorError("private binding is unavailable") from None
+    try:
+        private_relative = private_security_binding_path.relative_to(root)
+    except ValueError:
+        raise BoundedSupervisorError(
+            "private binding must use the ignored local artifact root"
+        ) from None
     if (
-        sha256_bytes(source_encoded) != source_parameters_sha256
-        or sha256_bytes(restoration_encoded) != restoration_sha256
+        not private_security_binding_path.is_absolute()
+        or private_security_binding_path.resolve(strict=True)
+        != private_security_binding_path.absolute()
+        or not private_relative.parts
+        or private_relative.parts[0] != "artifacts"
+        or not stat.S_ISREG(linked.st_mode)
+        or stat.S_ISLNK(linked.st_mode)
+        or linked.st_nlink != 1
+        or linked.st_uid != os.getuid()
+        or stat.S_IMODE(linked.st_mode) != 0o600
+        or root / ".git" in private_security_binding_path.parents
     ):
-        raise BoundedSupervisorError("private source identity drifted")
-    source = _strict_json(source_encoded, context="private source parameters")
-    restoration = _strict_json(restoration_encoded, context="restoration payload")
-    selected = _mapping(source.get("selected_resource"), context="selected private resource")
-    cidr = _text(source.get("source_ipv4_cidr"), context="source IPv4 CIDR")
-    marker = hashlib.sha256(f"{HOST_RUN_ID}\0{authorization_reference}".encode()).hexdigest()[:12]
-    ruleset_name = f"giclab-t07-bounded-{marker}"
-    description = f"T07 bounded smoke {marker}"
-    strict_source = _normalize_rule(source.get("strict_firewall_rule"))
-    owned_source = _normalize_rule(
-        _sequence(
-            _mapping(source.get("owned_regional_ruleset"), context="owned ruleset").get("rules"),
-            context="owned ruleset rules",
-        )[0]
-    )
-    strict_rule = {**strict_source, "description": description}
-    owned_rule = {**owned_source, "description": description}
-    private_binding: dict[str, object] = {
-        "schema_version": SCHEMA_VERSION,
-        "plan_id": PLAN_ID,
-        "host_run_id": HOST_RUN_ID,
-        "authorization_reference": authorization_reference,
-        "source_parameter_sha256": source_parameters_sha256,
-        "restoration_payload_sha256": restoration_sha256,
-        "source_ipv4_cidr": cidr,
-        "owned_ruleset_name": ruleset_name,
-        "owned_ruleset_description": description,
-        "strict_firewall_rule": strict_rule,
-        "owned_ruleset_rule": owned_rule,
-        "restoration_rules": list(_sequence(restoration.get("rules"), context="restoration rules")),
-        "selected_resource": {
-            "instance_type": selected.get("instance_type"),
-            "region": selected.get("region"),
-            "architecture": selected.get("architecture"),
-            "image_alias": selected.get("image_alias"),
-            "image_family": selected.get("image_family"),
-            "image_version": selected.get("image_version"),
-            "raw_image_id": selected.get("raw_image_id"),
-            "ssh_key_name": selected.get("ssh_key_name"),
-            "raw_ssh_key_id": selected.get("raw_ssh_key_id"),
-            "ssh_key_fingerprint": selected.get("local_public_key_fingerprint"),
-            "price_cents_per_hour": selected.get("price_cents_per_hour"),
-        },
-    }
-    _validate_private_binding(
-        root, private_binding, authorization_reference=authorization_reference
-    )
-    private_encoded = canonical_json_bytes(private_binding)
+        raise BoundedSupervisorError("private binding path or ownership is unsafe")
+    private_encoded = _read_regular(private_security_binding_path, max_bytes=MAX_PRIVATE_FILE_BYTES)
     private_sha256 = sha256_bytes(private_encoded)
+    if private_sha256 != private_security_binding_sha256:
+        raise BoundedSupervisorError("private binding identity drifted")
+    private_binding = _strict_json(private_encoded, context="private security binding")
+    _validate_private_binding(root, private_binding)
     limits = _mapping(plan.get("limits"), context="plan limits")
     started = utc_now().astimezone(UTC)
     if started.microsecond == 0:
@@ -854,8 +1280,8 @@ def materialize_authority(
         "plan_sha256": plan_sha256,
         "host_run_id": HOST_RUN_ID,
         "condition_run_ids": [
-            "RUN-T07-BOUNDED-SIRA-REACTIVE-0001",
-            "RUN-T07-BOUNDED-SIRA-SIMULATIVE-0001",
+            "RUN-T07-BOUNDED-SIRA-REACTIVE-0002",
+            "RUN-T07-BOUNDED-SIRA-SIMULATIVE-0002",
         ],
         "supervised_wall_started_at_utc": _utc_text(started),
         "expires_at_utc": _utc_text(expires),
@@ -933,7 +1359,7 @@ def materialize_authority(
         "authorization_path": str(AUTHORIZATION_RELATIVE),
         "authorization_bytes": len(authorization_encoded),
         "authorization_sha256": sha256_bytes(authorization_encoded),
-        "private_binding_path": str(PRIVATE_BINDING_RELATIVE),
+        "private_binding_alias": PRIVATE_BINDING_ALIAS,
         "private_binding_bytes": len(private_encoded),
         "private_binding_sha256": private_sha256,
         "ledger_path": str(LEDGER_RELATIVE),
@@ -1216,13 +1642,7 @@ def _validate_authority_inputs(
         or (require_live and now >= expires)
     ):
         raise BoundedSupervisorError("bounded authorization wall is unavailable")
-    _validate_private_binding(
-        root,
-        private,
-        authorization_reference=_text(
-            authorization.get("authorization_reference"), context="authorization reference"
-        ),
-    )
+    _validate_private_binding(root, private)
     _validate_base_authority(root, plan)
     return authorization, private
 
@@ -2404,7 +2824,7 @@ def issue_bootstrap_release(
         "bootstrap_file_sha256": upload["bootstrap_sha256"],
         "issued_at_utc": _utc_text(utc_now()),
         "bootstrap_release": True,
-        "single_use_output_root": "/home/ubuntu/t07-bounded-output-0001",
+        "single_use_output_root": "/home/ubuntu/t07-bounded-output-0002",
     }
     encoded = canonical_json_bytes(release)
     path = root / BOOTSTRAP_RELEASE_RELATIVE
@@ -2487,7 +2907,7 @@ def _validate_local_bootstrap_release(
         "bootstrap_file_sha256": upload["bootstrap_sha256"],
         "issued_at_utc": release.get("issued_at_utc"),
         "bootstrap_release": True,
-        "single_use_output_root": "/home/ubuntu/t07-bounded-output-0001",
+        "single_use_output_root": "/home/ubuntu/t07-bounded-output-0002",
     }
     if (
         release != expected
@@ -3629,7 +4049,7 @@ def _verify_condition_surface(
         for item in _sequence(resolved.get("inner_argv"), context="resolved inner command")
     ]
     configuration_refs = [
-        "containers/sira-smoke/bounded/bounded-smoke-plan-v1.json",
+        "containers/sira-smoke/bounded/bounded-smoke-plan-v2.json",
         "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/"
         + ("smoke-reactive.yaml" if mode == "reactive" else "smoke-simulative.yaml"),
         f"{mode}/resolved-command.json",
@@ -3941,10 +4361,10 @@ def _verify_success_surface(
         raise BoundedSupervisorError("remote secret cleanup evidence drifted")
     identities = []
     run_ids = {
-        "browser-preflight": "RUN-T07-BOUNDED-BROWSER-PREFLIGHT-0001",
-        "model-preflight": "RUN-T07-BOUNDED-MODEL-PREFLIGHT-0001",
-        "reactive": "RUN-T07-BOUNDED-SIRA-REACTIVE-0001",
-        "simulative": "RUN-T07-BOUNDED-SIRA-SIMULATIVE-0001",
+        "browser-preflight": "RUN-T07-BOUNDED-BROWSER-PREFLIGHT-0002",
+        "model-preflight": "RUN-T07-BOUNDED-MODEL-PREFLIGHT-0002",
+        "reactive": "RUN-T07-BOUNDED-SIRA-REACTIVE-0002",
+        "simulative": "RUN-T07-BOUNDED-SIRA-SIMULATIVE-0002",
     }
     for root_name, condition in _LIFECYCLE_EVIDENCE_ROOTS.items():
         identities.append(
@@ -4193,7 +4613,7 @@ def _verify_pair_reconstruction(
             context=f"{mode} regulation decision",
         )
         configuration_refs = [
-            "containers/sira-smoke/bounded/bounded-smoke-plan-v1.json",
+            "containers/sira-smoke/bounded/bounded-smoke-plan-v2.json",
             "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/"
             + ("smoke-reactive.yaml" if mode == "reactive" else "smoke-simulative.yaml"),
             f"{mode}/resolved-command.json",
@@ -4238,9 +4658,9 @@ def _verify_pair_reconstruction(
             or decision.get("host_run_id") != HOST_RUN_ID
             or decision.get("run_id")
             != (
-                "RUN-T07-BOUNDED-SIRA-REACTIVE-0001"
+                "RUN-T07-BOUNDED-SIRA-REACTIVE-0002"
                 if condition == "SIRA-REACTIVE"
-                else "RUN-T07-BOUNDED-SIRA-SIMULATIVE-0001"
+                else "RUN-T07-BOUNDED-SIRA-SIMULATIVE-0002"
             )
             or decision.get("condition") != condition
             or decision.get("source_kind") != "experiment_assignment"
@@ -4272,8 +4692,8 @@ def _verify_pair_reconstruction(
     ]
     expected_events: list[dict[str, object]] = []
     for condition, run_id, mode in (
-        ("SIRA-REACTIVE", "RUN-T07-BOUNDED-SIRA-REACTIVE-0001", "reactive"),
-        ("SIRA-SIMULATIVE", "RUN-T07-BOUNDED-SIRA-SIMULATIVE-0001", "simulative"),
+        ("SIRA-REACTIVE", "RUN-T07-BOUNDED-SIRA-REACTIVE-0002", "reactive"),
+        ("SIRA-SIMULATIVE", "RUN-T07-BOUNDED-SIRA-SIMULATIVE-0002", "simulative"),
     ):
         decision = _strict_json(
             captured[f"{mode}/regulation-decision.json"], context="event decision"
@@ -4619,7 +5039,7 @@ def _verify_inbound_evidence(
                 "post_launch_api_image_observation_available": False,
             }
             or release.get("bootstrap_release") is not True
-            or release.get("single_use_output_root") != "/home/ubuntu/t07-bounded-output-0001"
+            or release.get("single_use_output_root") != "/home/ubuntu/t07-bounded-output-0002"
         ):
             raise BoundedSupervisorError("bootstrap release evidence drifted")
     success = {
@@ -5966,10 +6386,8 @@ def _parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="operation", required=True)
     materialize = subparsers.add_parser("materialize")
     materialize.add_argument("--authorization-reference", required=True)
-    materialize.add_argument("--source-parameters", type=Path, required=True)
-    materialize.add_argument("--source-parameters-sha256", required=True)
-    materialize.add_argument("--restoration-payload", type=Path, required=True)
-    materialize.add_argument("--restoration-payload-sha256", required=True)
+    materialize.add_argument("--private-security-binding", type=Path, required=True)
+    materialize.add_argument("--private-security-binding-sha256", required=True)
     for name in ("prepare-bundle", "observe", "release-bootstrap", "verify-inbound", "archive"):
         child = subparsers.add_parser(name)
         child.add_argument("--authorization", type=Path, required=True)
@@ -6009,10 +6427,8 @@ def main(argv: Sequence[str] | None = None, *, contract: ModuleType | None = Non
             plan_sha256=args.plan_sha256,
             expected_commit=args.expected_commit,
             authorization_reference=args.authorization_reference,
-            source_parameters_path=args.source_parameters,
-            source_parameters_sha256=args.source_parameters_sha256,
-            restoration_path=args.restoration_payload,
-            restoration_sha256=args.restoration_payload_sha256,
+            private_security_binding_path=args.private_security_binding,
+            private_security_binding_sha256=args.private_security_binding_sha256,
         )
     elif args.operation == "prepare-bundle":
         result = prepare_upload_bundle(
@@ -6092,6 +6508,7 @@ __all__ = [
     "LambdaHttpsBoundedTransport",
     "TransportFailure",
     "archive_evidence",
+    "build_private_security_binding",
     "execute_observer_phase",
     "issue_bootstrap_release",
     "load_and_validate_plan",

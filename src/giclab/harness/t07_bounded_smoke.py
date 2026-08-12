@@ -27,14 +27,14 @@ FORK_COMMIT: Final = "397a391b736528dd1049023d629100193e823c49"
 PARENT_BRANCH: Final = "phase-1/sira-smoke-lambda"
 FROZEN_TAG: Final = "t07-high-assurance-infrastructure-v1"
 
-PLAN_ID: Final = "PLAN-T07-BOUNDED-SIRA-SMOKE-V1"
-HOST_RUN_ID: Final = "RUN-T07-BOUNDED-HOST-0001"
-REACTIVE_RUN_ID: Final = "RUN-T07-BOUNDED-SIRA-REACTIVE-0001"
-SIMULATIVE_RUN_ID: Final = "RUN-T07-BOUNDED-SIRA-SIMULATIVE-0001"
-BROWSER_PREFLIGHT_RUN_ID: Final = "RUN-T07-BOUNDED-BROWSER-PREFLIGHT-0001"
-MODEL_PREFLIGHT_RUN_ID: Final = "RUN-T07-BOUNDED-MODEL-PREFLIGHT-0001"
-AUTHORIZATION_PLACEHOLDER: Final = "AUTH-T07-BOUNDED-SIRA-SMOKE-V1-PENDING"
-TERMINAL_STATE: Final = "ready-for-bounded-smoke-authorization"
+PLAN_ID: Final = "PLAN-T07-BOUNDED-SIRA-SMOKE-V2"
+HOST_RUN_ID: Final = "RUN-T07-BOUNDED-HOST-0002"
+REACTIVE_RUN_ID: Final = "RUN-T07-BOUNDED-SIRA-REACTIVE-0002"
+SIMULATIVE_RUN_ID: Final = "RUN-T07-BOUNDED-SIRA-SIMULATIVE-0002"
+BROWSER_PREFLIGHT_RUN_ID: Final = "RUN-T07-BOUNDED-BROWSER-PREFLIGHT-0002"
+MODEL_PREFLIGHT_RUN_ID: Final = "RUN-T07-BOUNDED-MODEL-PREFLIGHT-0002"
+AUTHORIZATION_PLACEHOLDER: Final = "AUTH-T07-BOUNDED-SIRA-SMOKE-V2-PENDING"
+TERMINAL_STATE: Final = "ready-for-bounded-smoke-v2-authorization"
 
 EXPERIMENT_ID: Final = "EXP-0001"
 SCIENTIFIC_PROFILE_ID: Final = "PLAN-EXP0001-SMOKE"
@@ -87,6 +87,18 @@ SELECTED_SSH_KEY_NAME: Final = "fractal-lambda-codex"
 OBSERVED_PRICE_CENTS_PER_HOUR: Final = 129
 FIREWALL_BASELINE_ALIAS: Final = "l2m-firewall-baseline-b0ef71115811"
 FIREWALL_BASELINE_SHA256: Final = "b0ef711158113cdbdbb1707cb43f21a635271bb2e93bfc0e898ce7118589f764"
+FIREWALL_CANONICALIZER_VERSION: Final = "t07-firewall-canonical-v1"
+FIREWALL_PARSER_VERSION: Final = "t07-firewall-response-v2"
+FIREWALL_RESTORATION_ALIAS: Final = "l2m-firewall-restoration-50ca7febe9f1"
+FIREWALL_RESTORATION_SHA256: Final = (
+    "50ca7febe9f160ada862371376485ea2ece11b373d25179ccd578d9c7acd42b8"
+)
+PRIVATE_SECURITY_BINDING_SCHEMA_VERSION: Final = "0.2.0"
+PRIVATE_SECURITY_BINDING_ALIAS: Final = "t07-bounded-binding-413dd97fcb1f"
+PRIVATE_SECURITY_BINDING_SHA256: Final = (
+    "5599ca1a7e371461a26453ad791cd2292ffaa9714986c48d06dc8253a3f08e6b"
+)
+PRIVATE_SECURITY_RULESET_PATTERN_ID: Final = "t07-bounded-ruleset-v1"
 EXTERNAL_ARCHIVE_MOUNT: Final = "/Volumes/Macintosh HD - Data"
 EXTERNAL_ARCHIVE_UUID: Final = "8478609D-FA37-4ED5-875D-47AE912B9151"
 EXTERNAL_PHYSICAL_STORE_UUID: Final = "7904A6F1-F483-4ED7-9E34-BFECAB31C63E"
@@ -231,11 +243,11 @@ REQUIRED_IMPLEMENTATION_ARTIFACTS: Final = frozenset(
         "containers/sira-smoke/container_entrypoint.py",
         "containers/sira-smoke/fixtures/static.html",
         "containers/sira-smoke/sira-immutable-model-routing.patch",
-        "schemas/t07-bounded-smoke-evidence.schema.json",
-        "schemas/t07-bounded-smoke-authorization.schema.json",
-        "schemas/t07-bounded-smoke-observer-ledger.schema.json",
-        "schemas/t07-bounded-smoke-plan.schema.json",
-        "schemas/t07-bounded-smoke-private-binding.schema.json",
+        "schemas/t07-bounded-smoke-evidence-v2.schema.json",
+        "schemas/t07-bounded-smoke-authorization-v2.schema.json",
+        "schemas/t07-bounded-smoke-observer-ledger-v2.schema.json",
+        "schemas/t07-bounded-smoke-plan-v2.schema.json",
+        "schemas/t07-bounded-private-security-binding.schema.json",
         "containers/sira-smoke/lambda/endpoint-schemas-v3/firewall-rulesets.schema.json",
         "containers/sira-smoke/lambda/endpoint-schemas-v3/global-firewall-ruleset.schema.json",
         "containers/sira-smoke/lambda/endpoint-schemas-v3/images.schema.json",
@@ -607,7 +619,7 @@ def _container_create_prefix(
 
 def browser_preflight_create_argv() -> tuple[str, ...]:
     argv = _container_create_prefix(
-        name="t07-bounded-browser-preflight-0001",
+        name="t07-bounded-browser-preflight-0002",
         network="none",
         cpu="1.000",
         memory_bytes=1_073_741_824,
@@ -631,7 +643,7 @@ def browser_preflight_create_argv() -> tuple[str, ...]:
 
 def model_preflight_create_argv() -> tuple[str, ...]:
     argv = _container_create_prefix(
-        name="t07-bounded-model-preflight-0001",
+        name="t07-bounded-model-preflight-0002",
         network="bridge",
         cpu="1.000",
         memory_bytes=536_870_912,
@@ -664,7 +676,7 @@ def container_create_argv(condition: str) -> tuple[str, ...]:
         raise BoundedSmokeContractError("condition is outside the locked pair")
     mode = MODE_VALUES[condition]
     argv = _container_create_prefix(
-        name=f"t07-bounded-{mode}-0001",
+        name=f"t07-bounded-{mode}-0002",
         network="bridge",
         cpu="2.000",
         memory_bytes=4_294_967_296,
@@ -918,7 +930,7 @@ def bootstrap_argv_template() -> tuple[str, ...]:
         "--plan",
         (
             "/home/ubuntu/t07-bounded-bundle/containers/sira-smoke/bounded/"
-            "bounded-smoke-plan-v1.json"
+            "bounded-smoke-plan-v2.json"
         ),
         "--plan-sha256",
         "${PLAN_SHA256}",
@@ -939,7 +951,7 @@ def bootstrap_argv_template() -> tuple[str, ...]:
         "--secret-file",
         "/home/ubuntu/.config/giclab/sira_api_key",
         "--output-root",
-        "/home/ubuntu/t07-bounded-output-0001",
+        "/home/ubuntu/t07-bounded-output-0002",
     )
 
 
@@ -956,7 +968,7 @@ def local_supervisor_argv_templates() -> dict[str, list[str]]:
         "--supervisor-sha256",
         "${SUPERVISOR_SHA256}",
         "--plan",
-        repository + "/containers/sira-smoke/bounded/bounded-smoke-plan-v1.json",
+        repository + "/containers/sira-smoke/bounded/bounded-smoke-plan-v2.json",
         "--plan-sha256",
         "${PLAN_SHA256}",
         "--contract-file",
@@ -968,11 +980,11 @@ def local_supervisor_argv_templates() -> dict[str, list[str]]:
     ]
     authority = [
         "--authorization",
-        repository + "/artifacts/t07/bounded/RUN-T07-BOUNDED-HOST-0001/authorization.json",
+        repository + "/artifacts/t07/bounded/RUN-T07-BOUNDED-HOST-0002/authorization.json",
         "--authorization-sha256",
         "${AUTHORIZATION_SHA256}",
         "--private-binding",
-        repository + "/artifacts/t07/bounded/RUN-T07-BOUNDED-HOST-0001/private-binding.json",
+        repository + "/artifacts/t07/bounded/RUN-T07-BOUNDED-HOST-0002/private-binding.json",
         "--private-binding-sha256",
         "${PRIVATE_BINDING_SHA256}",
     ]
@@ -982,17 +994,10 @@ def local_supervisor_argv_templates() -> dict[str, list[str]]:
             "materialize",
             "--authorization-reference",
             "${AUTHORIZATION_REFERENCE}",
-            "--source-parameters",
-            repository + "/artifacts/t07/lambda/gate-l2m/"
-            "RUN-T07-L2M-MANUAL-CONSOLE-HOST-QUALIFICATION-0003/"
-            "materialization-v1/private-parameters.json",
-            "--source-parameters-sha256",
-            "a9b210594ed3b4c962f414b8a2d9509d14a2d7deb097050e92321e6da4d5d096",
-            "--restoration-payload",
-            repository + "/artifacts/t07/lambda/gate-l2m/"
-            "T07-HIGH-ASSURANCE-FIREWALL-CLOSEOUT-0001/restoration-payload.json",
-            "--restoration-payload-sha256",
-            "50ca7febe9f160ada862371376485ea2ece11b373d25179ccd578d9c7acd42b8",
+            "--private-security-binding",
+            "${PRIVATE_SECURITY_BINDING_PATH}",
+            "--private-security-binding-sha256",
+            PRIVATE_SECURITY_BINDING_SHA256,
         ],
         "prepare_bundle": [*base, "prepare-bundle", *authority],
     }
@@ -1071,7 +1076,7 @@ def provider_observer_contract() -> dict[str, object]:
             },
         ],
         "request_ledger": {
-            "path": ("artifacts/t07/bounded/RUN-T07-BOUNDED-HOST-0001/request-ledger.jsonl"),
+            "path": ("artifacts/t07/bounded/RUN-T07-BOUNDED-HOST-0002/request-ledger.jsonl"),
             "fsync_each_event": True,
             "max_bytes": 262_144,
             "max_events": 96,
@@ -1083,20 +1088,20 @@ def provider_observer_contract() -> dict[str, object]:
 
 def storage_contract() -> dict[str, object]:
     return {
-        "remote_active_root": "/home/ubuntu/t07-bounded-output-0001",
-        "remote_single_use_claim_root": "/home/ubuntu/t07-bounded-output-0001",
-        "remote_secondary_failure_root": "/home/ubuntu/t07-bounded-output-0001-early-failure",
+        "remote_active_root": "/home/ubuntu/t07-bounded-output-0002",
+        "remote_single_use_claim_root": "/home/ubuntu/t07-bounded-output-0002",
+        "remote_secondary_failure_root": "/home/ubuntu/t07-bounded-output-0002-early-failure",
         "remote_bundle_archive": "/home/ubuntu/t07-bounded-repository.tar",
         "remote_bundle_root": "/home/ubuntu/t07-bounded-bundle",
         "remote_bootstrap_file": "/home/ubuntu/t07-bounded-bootstrap.py",
         "persistent_filesystem_count": 0,
-        "local_upload_root": ("artifacts/t07/bounded-upload/RUN-T07-BOUNDED-HOST-0001"),
-        "local_inbound_root": "artifacts/t07/bounded/RUN-T07-BOUNDED-HOST-0001/inbound",
+        "local_upload_root": ("artifacts/t07/bounded-upload/RUN-T07-BOUNDED-HOST-0002"),
+        "local_inbound_root": "artifacts/t07/bounded/RUN-T07-BOUNDED-HOST-0002/inbound",
         "external_mount": EXTERNAL_ARCHIVE_MOUNT,
         "external_volume_uuid": EXTERNAL_ARCHIVE_UUID,
         "external_physical_store_uuid": EXTERNAL_PHYSICAL_STORE_UUID,
         "external_archive_root": (
-            EXTERNAL_ARCHIVE_MOUNT + "/GIC-Lab/t07/sealed-artifacts/RUN-T07-BOUNDED-HOST-0001"
+            EXTERNAL_ARCHIVE_MOUNT + "/GIC-Lab/t07/sealed-artifacts/RUN-T07-BOUNDED-HOST-0002"
         ),
         "external_archive_required_upload_artifacts": [
             "upload-bundle/t07-bounded-repository.tar",
@@ -1112,6 +1117,23 @@ def storage_contract() -> dict[str, object]:
         "held_no_follow_descriptors": True,
         "internal_fallback": False,
         "live_bidirectional_sync": False,
+    }
+
+
+def private_security_binding_contract() -> dict[str, object]:
+    """Return the public-safe identity of the separately retained private binding."""
+
+    return {
+        "binding_alias": PRIVATE_SECURITY_BINDING_ALIAS,
+        "binding_sha256": PRIVATE_SECURITY_BINDING_SHA256,
+        "schema_version": PRIVATE_SECURITY_BINDING_SCHEMA_VERSION,
+        "ruleset_name_pattern_id": PRIVATE_SECURITY_RULESET_PATTERN_ID,
+        "baseline_alias": FIREWALL_BASELINE_ALIAS,
+        "baseline_semantic_sha256": FIREWALL_BASELINE_SHA256,
+        "canonicalizer_version": FIREWALL_CANONICALIZER_VERSION,
+        "parser_version": FIREWALL_PARSER_VERSION,
+        "restoration_alias": FIREWALL_RESTORATION_ALIAS,
+        "restoration_payload_sha256": FIREWALL_RESTORATION_SHA256,
     }
 
 
@@ -1156,7 +1178,7 @@ def assert_pair_command_contract(
     if len(reactive) != len(simulative):
         raise BoundedSmokeContractError("condition command lengths differ")
     allowed_pairs = {
-        ("t07-bounded-reactive-0001", "t07-bounded-simulative-0001"),
+        ("t07-bounded-reactive-0002", "t07-bounded-simulative-0002"),
         ("reactive", "simulative"),
         ("EXP-0001-SMOKE-REACTIVE", "EXP-0001-SMOKE-SIMULATIVE"),
         (
@@ -1468,6 +1490,7 @@ def validate_plan(plan: Mapping[str, object], *, repository_root: Path | None = 
         "bootstrap_argv_template",
         "provider_observer",
         "storage",
+        "private_security_binding",
         "conditions",
         "secrets",
         "lambda",
@@ -1480,7 +1503,7 @@ def validate_plan(plan: Mapping[str, object], *, repository_root: Path | None = 
     }
     if (
         set(plan) != expected_top_level
-        or plan.get("$schema") != "../../../schemas/t07-bounded-smoke-plan.schema.json"
+        or plan.get("$schema") != "../../../schemas/t07-bounded-smoke-plan-v2.schema.json"
     ):
         raise BoundedSmokeContractError("plan top-level contract drifted")
     identity = _mapping(plan.get("identity"), context="plan identity")
@@ -1587,6 +1610,11 @@ def validate_plan(plan: Mapping[str, object], *, repository_root: Path | None = 
         raise BoundedSmokeContractError("provider observer contract drifted")
     if _mapping(plan.get("storage"), context="storage") != storage_contract():
         raise BoundedSmokeContractError("storage contract drifted")
+    if (
+        _mapping(plan.get("private_security_binding"), context="private security binding")
+        != private_security_binding_contract()
+    ):
+        raise BoundedSmokeContractError("private security binding identity drifted")
 
     routing = _mapping(plan.get("provider_and_pricing"), context="provider and pricing")
     if (
@@ -1767,6 +1795,7 @@ __all__ = [
     "local_supervisor_argv_templates",
     "materialize_argv",
     "model_preflight_create_argv",
+    "private_security_binding_contract",
     "provider_observer_contract",
     "read_json_file",
     "sha256_bytes",
