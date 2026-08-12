@@ -2714,6 +2714,61 @@ def test_archive_source_rejects_members_outside_exact_verified_set(
         supervisor._safe_source_files(tmp_path, disposition="failed")
 
 
+def test_normal_failure_rejects_missing_rotation_after_incomplete_secret_cleanup(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    summary, plan_sha256, _ = _materialize(tmp_path, monkeypatch)
+    _, _, utc_now = _observe_through_post_launch(tmp_path, summary=summary, plan_sha256=plan_sha256)
+    run_root = tmp_path / supervisor.RUN_ROOT_RELATIVE
+    records = _write_complete_inbound(run_root)
+    inbound = run_root / "inbound"
+    for path in inbound.iterdir():
+        path.unlink()
+
+    remote = tmp_path / "remote-normal-failure"
+    evidence = remote / "evidence"
+    evidence.mkdir(parents=True)
+    (evidence / "bootstrap-authority.json").write_bytes(records["bootstrap-authority.json"])
+    (remote / "TERMINATE_REQUIRED.json").write_bytes(
+        supervisor.canonical_json_bytes(
+            {
+                "schema_version": supervisor.SCHEMA_VERSION,
+                "provider_termination_required": True,
+                "failure_stage": "condition_execution",
+                "failure_class": "bootstrap_contract_rejected",
+                "message_retained": False,
+                "secret_cleanup_verified": False,
+                "manual_secret_deletion_required": True,
+                "manual_credential_rotation_required": False,
+                "secret_target_validation_completed": True,
+                "secret_value_read": True,
+            }
+        )
+    )
+    bootstrap = _load_remote_bootstrap()
+    archive = bootstrap.package_failure_evidence(remote, evidence, contract)
+    for path in (
+        archive,
+        remote / "FAILURE_ARCHIVE_IDENTITY.json",
+        remote / "TERMINATE_REQUIRED.json",
+    ):
+        shutil.copy2(path, inbound / path.name)
+
+    with pytest.raises(supervisor.BoundedSupervisorError, match="termination receipt drifted"):
+        supervisor.verify_inbound_evidence(
+            tmp_path,
+            plan=_runtime_plan(),
+            plan_sha256=plan_sha256,
+            expected_commit=COMMIT,
+            authorization_path=tmp_path / supervisor.AUTHORIZATION_RELATIVE,
+            authorization_sha256=str(summary["authorization_sha256"]),
+            private_binding_path=tmp_path / supervisor.PRIVATE_BINDING_RELATIVE,
+            private_binding_sha256=str(summary["private_binding_sha256"]),
+            disposition="failed",
+            utc_now=utc_now,
+        )
+
+
 def test_compute_closeout_keeps_unverified_remote_secret_cleanup_unresolved(
     tmp_path: Path,
 ) -> None:
@@ -2736,7 +2791,7 @@ def test_compute_closeout_keeps_unverified_remote_secret_cleanup_unresolved(
             "remote_archive_kind": "early_failure",
             "secret_cleanup_verified": False,
             "manual_secret_deletion_required": True,
-            "manual_credential_rotation_required": False,
+            "manual_credential_rotation_required": True,
         },
         observer_verification={
             "provider_active_observed_at_utc": state["provider_active_observed_at_utc"],
@@ -2748,6 +2803,7 @@ def test_compute_closeout_keeps_unverified_remote_secret_cleanup_unresolved(
     assert record["billing_stop_verified"] is True
     assert record["remote_secret_cleanup_verified"] is False
     assert record["manual_secret_deletion_required"] is True
+    assert record["manual_credential_rotation_required"] is True
     assert record["provider_and_security_cleanup_complete"] is False
     assert record["unresolved_billing_or_security"] is True
 

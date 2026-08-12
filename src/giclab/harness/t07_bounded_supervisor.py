@@ -4489,7 +4489,10 @@ def _verify_zip_payload(
             or early_disposition.get("secret_value_read") != incident.get("secret_value_read")
             or early_disposition.get("value_or_hash_retained") is not False
             or incident.get("manual_credential_rotation_required")
-            != (incident.get("failure_class") == "credential_material_detected")
+            != (
+                not cleanup_verified
+                or incident.get("failure_class") == "credential_material_detected"
+            )
         ):
             raise BoundedSupervisorError("early-failure disposition binding drifted")
         if cleanup_verified:
@@ -4706,6 +4709,14 @@ def _verify_inbound_evidence(
         or incident.get("manual_secret_deletion_required")
         != (not bool(incident.get("secret_cleanup_verified")))
         or not isinstance(incident.get("manual_credential_rotation_required"), bool)
+        or incident.get("manual_credential_rotation_required")
+        != (
+            failure_kind
+            and (
+                incident.get("secret_cleanup_verified") is not True
+                or incident.get("failure_class") == "credential_material_detected"
+            )
+        )
         or (not failure_kind and incident.get("secret_cleanup_verified") is not True)
     ):
         raise BoundedSupervisorError("provider termination receipt drifted")

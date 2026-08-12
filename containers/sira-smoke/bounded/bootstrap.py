@@ -2787,7 +2787,9 @@ def package_early_failure_evidence(
         "message_retained": False,
         "secret_cleanup_verified": secret_cleanup_verified,
         "manual_secret_deletion_required": not secret_cleanup_verified,
-        "manual_credential_rotation_required": (failure_code == "credential_material_detected"),
+        "manual_credential_rotation_required": (
+            not secret_cleanup_verified or failure_code == "credential_material_detected"
+        ),
         "secret_target_validation_completed": secret_target_identity_established,
         "secret_value_read": secret_value_read,
     }
@@ -3299,7 +3301,8 @@ def _execute(
                 "secret_cleanup_verified": secret_cleanup_complete,
                 "manual_secret_deletion_required": not secret_cleanup_complete,
                 "manual_credential_rotation_required": (
-                    primary_failure_code == "credential_material_detected"
+                    not secret_cleanup_complete
+                    or primary_failure_code == "credential_material_detected"
                 ),
                 "secret_target_validation_completed": True,
                 "secret_value_read": secret_value is not None,
