@@ -827,14 +827,14 @@ def test_success_and_failure_archives_reject_secret_derivatives(
     tmp_path: Path, transform: Any
 ) -> None:
     bootstrap = _load_bootstrap()
-    secret = b"PUBLIC_DUMMY_OPAQUE_CANARY_0123456789"
-    transformed = transform(secret)
+    canary_bytes = b"PUBLIC_DUMMY_OPAQUE_CANARY_0123456789"
+    transformed = transform(canary_bytes)
 
     success = tmp_path / "success"
     success.mkdir()
     (success / "output.bin").write_bytes(b"prefix:" + transformed + b":suffix")
     with pytest.raises(bootstrap.BootstrapError, match="supplied secret"):
-        bootstrap._assert_secret_absent(success, secret)
+        bootstrap._assert_secret_absent(success, canary_bytes)
 
     failure = tmp_path / "failure"
     evidence = failure / "evidence"
@@ -846,7 +846,7 @@ def test_success_and_failure_archives_reject_secret_derivatives(
         failure,
         evidence,
         bounded,
-        secret_value=secret,
+        secret_value=canary_bytes,
     )
     with zipfile.ZipFile(archive) as opened:
         assert "evidence/unsafe.bin" not in opened.namelist()

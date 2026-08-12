@@ -2577,23 +2577,23 @@ def package_failure_evidence(
         nonlocal actual_secret_derivative_detected, payload_bytes, skipped_cap, skipped_sensitive
         relative = path.relative_to(output_root).as_posix()
         relative_encoded = relative.encode("utf-8")
-        path_has_actual_secret = secret_value is not None and _contains_secret_derivative(
+        path_has_credential_material = secret_value is not None and _contains_secret_derivative(
             relative_encoded, secret_value
         )
         if (
             any(pattern.search(relative_encoded) for pattern in _SECRET_SHAPES)
-            or path_has_actual_secret
+            or path_has_credential_material
         ):
             if mandatory:
                 raise BootstrapError(
                     "mandatory failure evidence has a secret-shaped path",
                     failure_code=(
                         "credential_material_detected"
-                        if path_has_actual_secret
+                        if path_has_credential_material
                         else "bootstrap_contract_rejected"
                     ),
                 )
-            actual_secret_derivative_detected |= path_has_actual_secret
+            actual_secret_derivative_detected |= path_has_credential_material
             skipped_sensitive += 1
             return False
         try:
@@ -2603,20 +2603,20 @@ def package_failure_evidence(
                 raise
             skipped_cap += 1
             return False
-        content_has_actual_secret = secret_value is not None and _contains_secret_derivative(
+        content_has_credential_material = secret_value is not None and _contains_secret_derivative(
             encoded, secret_value
         )
-        if _contains_artifact_secret(encoded) or content_has_actual_secret:
+        if _contains_artifact_secret(encoded) or content_has_credential_material:
             if mandatory:
                 raise BootstrapError(
                     "mandatory failure evidence contains secret-shaped bytes",
                     failure_code=(
                         "credential_material_detected"
-                        if content_has_actual_secret
+                        if content_has_credential_material
                         else "bootstrap_contract_rejected"
                     ),
                 )
-            actual_secret_derivative_detected |= content_has_actual_secret
+            actual_secret_derivative_detected |= content_has_credential_material
             skipped_sensitive += 1
             return False
         if payload_bytes + len(encoded) > payload_limit:
