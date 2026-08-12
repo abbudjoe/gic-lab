@@ -229,6 +229,16 @@ def test_runtime_preflight_covers_every_pre_empirical_module() -> None:
     assert required <= set(module.RUNTIME_MODULES)
     assert module.EXPECTED_PYTHON == (3, 11, 14)
     assert module.UPSTREAM_RUNNER_SHA256 == runner.UPSTREAM_RUNNER_SHA256
+    assert module.UPSTREAM_RUNNER_SHA256 == (
+        "b06793ad1b366a934b798f9f3272fc80a7104a220cb3304ab3bda2eb2a78b331"
+    )
+    assert module.UPSTREAM_RUNNER_SHA256 != (
+        "c2503b99bb8870b9abf9444831bbb3a70c7bbc8091e30ca06ecc3f2e24a7cf23"
+    )
+    containerfile = (ROOT / "containers/sira-smoke/pragmatic/Containerfile.amd64").read_text()
+    assert containerfile.index(
+        "git apply /opt/giclab/patches/sira-immutable-model-routing.patch"
+    ) < (containerfile.index("COPY runtime_preflight.py /opt/giclab/runtime_preflight.py"))
 
 
 def test_upstream_runner_load_probe_is_hash_bound_and_side_effect_free(

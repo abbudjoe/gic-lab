@@ -16,7 +16,7 @@ from pathlib import Path
 
 EXPECTED_PYTHON = (3, 11, 14)
 UPSTREAM_RUNNER = Path("/opt/sira/scripts/run_web_agent.py")
-UPSTREAM_RUNNER_SHA256 = "c2503b99bb8870b9abf9444831bbb3a70c7bbc8091e30ca06ecc3f2e24a7cf23"
+UPSTREAM_RUNNER_SHA256 = "b06793ad1b366a934b798f9f3272fc80a7104a220cb3304ab3bda2eb2a78b331"
 RUNTIME_MODULES = (
     "giclab.registry",
     "giclab.harness.artifacts",
