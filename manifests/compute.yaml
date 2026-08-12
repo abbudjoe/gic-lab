@@ -29,9 +29,9 @@ entries:
     hardware: gpu_1x_a10
     region: us-east-1
     started_at: "2026-08-12T20:01:27.897128Z"
-    ended_at: null
-    wall_clock_hours: 0.0
-    accelerator_hours: 0.0
-    cost_usd: 0.0
+    ended_at: "2026-08-12T20:26:40.632226Z"
+    wall_clock_hours: 0.4202041938888889
+    accelerator_hours: 0.4202041938888889
+    cost_usd: 0.5420634101166667
     authorization_reference: AUTH-T07-PRAGMATIC-RESET-2026-08-12
-    status: running
+    status: failed

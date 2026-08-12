@@ -48,7 +48,7 @@ no mutation authority; one gate's authorization never carries into another.
 | ID | Required outcome | Planned evidence | Status |
 |---|---|---|---|
 | P1-DOD-01 | Phase 0.75 is successful/completed; this is the one authoritative active plan; project execution/compute permissions remain false; only the disabled smoke profile is eligible for a later exact authorization. | Plan lifecycle/state/profile/readiness validation and public render. | met |
-| P1-DOD-02 | T07 executes at most the one authorized SiRA smoke pair with complete raw, normalized, regulation-decision, budget, scoring, and cleanup evidence and no interpretation. | Immutable run/authorization records, artifacts/hashes, accounting, cleanup proof, and validation. | not-started |
+| P1-DOD-02 | T07 executes at most the one authorized SiRA smoke pair with complete raw, normalized, regulation-decision, budget, scoring, and cleanup evidence and no interpretation. | Immutable run/authorization records, artifacts/hashes, accounting, cleanup proof, and validation. | partial |
 | P1-DOD-03 | T08 independently reproduces the smoke summary, separates infrastructure/protocol/upstream/future-track gaps, and leaves any pilot unauthorized. | Raw-to-summary checks, infrastructure-only trace-sufficiency report, review, and gate. | not-started |
 | P1-DOD-04 | T09 executes only a freshly authorized locked SiRA pilot without outcome-adaptive changes and reconciles every attempt. | Frozen task/order records, complete paired artifacts, budgets, and attempt dispositions. | not-started |
 | P1-DOD-05 | T10 produces a reproducible exploratory EXP-0001 analysis with uncertainty, exact reproduction level, cost/deviation reporting, and no internalization or mechanism-attribution overclaim. | Validated result summary, registry/notebook/ledger updates, review, and gate. | not-started |
@@ -57,15 +57,15 @@ no mutation authority; one gate's authorization never carries into another.
 | P1-DOD-08 | T13 validates SR²AM artifact fidelity, runbook safety/cost predictability, and infrastructure-only trace sufficiency before proposing an unauthorized pilot. | Recomputed evidence, source/adapter lineage, repaired tests, review, and gate. | not-started |
 | P1-DOD-09 | T14 executes only a freshly authorized locked SR²AM pilot and verifies artifact transfer, accounting, and termination without in-run design changes. | Immutable pilot records, artifacts/hashes, compute reconciliation, and terminal-state proof. | not-started |
 | P1-DOD-10 | T15 closes the current Phase 1 unit with validated SiRA/SR²AM evidence, precise reproduction levels, uncertainty/cost/deviation reporting, and one proposed next scientific workstream that is not begun. | Result summaries, registry/notebook/decision/risk updates, review, final gate, and plan disposition. | not-started |
-| P1-DOD-11 | Every executed attempt has explicit current-turn authorization, immutable identity, append-only raw evidence, version/hash lineage, finite budget enforcement, secret isolation, and verified cleanup; failed infrastructure is never a scientific negative. | Run/compute/artifact ledgers, policy checks, failure evidence, and cross-task review. | not-started |
+| P1-DOD-11 | Every executed attempt has explicit current-turn authorization, immutable identity, append-only raw evidence, version/hash lineage, finite budget enforcement, secret isolation, and verified cleanup; failed infrastructure is never a scientific negative. | Run/compute/artifact ledgers, policy checks, failure evidence, and cross-task review. | partial |
 | P1-DOD-12 | Regulation/control evidence remains source classified; experiment assignment and ordinary prose are never called learned regulation; RQ-H2K outputs are infrastructure-only and do not affect EXP-0001 validity or interpretation. | Typed events, trace-sufficiency reports, negative boundary tests, and public wording. | not-started |
-| P1-DOD-13 | Every implementation/analysis task passes focused smoke, independent spec-conformance review, post-review smoke, and its required full gate before the next dependency begins. | Per-task assembly ledgers with exact commands, artifacts, reviewer verdicts, and status. | not-started |
+| P1-DOD-13 | Every implementation/analysis task passes focused smoke, independent spec-conformance review, post-review smoke, and its required full gate before the next dependency begins. | Per-task assembly ledgers with exact commands, artifacts, reviewer verdicts, and status. | partial |
 
 ## Work packages and implementation mapping
 
 | Task | Work package | Mapped phase DoD | Current permission |
 |---|---|---|---|
-| T07 | Execute one authorized contained SiRA smoke pair; capture regulation-decision evidence without interpretation. | P1-DOD-02, P1-DOD-11 through P1-DOD-13 | Pragmatic smoke reset authorized in the current turn; implementation/setup may be repaired until the reactive condition begins |
+| T07 | Execute one authorized contained SiRA smoke pair; capture regulation-decision evidence without interpretation. | P1-DOD-02, P1-DOD-11 through P1-DOD-13 | terminal common-infrastructure failure; authorization exhausted; fresh repair, run identity, and authorization required |
 | T08 | Analyze smoke infrastructure evidence and prepare an unauthorized pilot package. | P1-DOD-03, P1-DOD-11 through P1-DOD-13 | blocked until T07 succeeds |
 | T09 | Execute the freshly authorized exploratory SiRA pilot. | P1-DOD-04, P1-DOD-11 through P1-DOD-13 | blocked until T08 and authorization |
 | T10 | Analyze and publish the exploratory SiRA pilot. | P1-DOD-05, P1-DOD-11 through P1-DOD-13 | blocked until T09 succeeds |
@@ -80,9 +80,9 @@ and an analysis recommendation does not authorize the next execution.
 
 ## T07 assembly control
 
-Assembly status: **pragmatic T07 execution in progress under the current-turn reset;
-repository permission booleans remain false and the live authority is the external
-bounded authorization**
+Assembly status: **smoke-failed after the single reactive attempt encountered a
+frozen common-infrastructure incompatibility; simulative was not started, the
+authorization is exhausted, and cleanup is complete**
 
 Prospective bounded plan: `PLAN-T07-BOUNDED-SIRA-SMOKE-V3`.
 
@@ -114,14 +114,27 @@ evidence remains preserved and is not reused as execution authority.
 |---|---|---|---|
 | T07-P-01 | Verify the exact branch/baseline, no unresolved instance, usable pinned SiRA/model, safe credentials, viable termination, capacity, price, and storage. | met | Branch `phase-1/sira-smoke-pragmatic` at `29433a72d7452dae95fffdcba009bd33a4d46e15`; zero live instances; model metadata HTTP 200; A10 offered in two regions at USD 1.29/hour; exact SSH key match; external APFS volume revalidated. |
 | T07-P-02 | Implement the smallest reusable secret filter and remote setup/paired-run/cleanup path, then pass focused validation. | met | `containers/sira-smoke/pragmatic/`; local Ruff, strict mypy, repository validation, and 109 focused SiRA/pragmatic tests pass. Remote setup attempt 06 verified the exact SiRA commit/tree, immutable routing, frozen dependency image, local-static-page Chromium lifecycle, exact model metadata, one A10, Docker 29.2.1, and zero residual setup containers. Earlier Python 3.10, wheel-filename, Docker mount/PID, and browser-interpreter failures are preserved as infrastructure evidence. |
-| T07-P-03 | Before reactive begins, commit all infrastructure, render exact paired commands, write the concise run manifest, and freeze code/configuration. | partial | All infrastructure source changes are committed; this ledger update is the final repository mutation before rendering the exact remote run manifest against its resulting clean commit. No condition has begun. |
-| T07-P-04 | Execute reactive once, then simulative once, preserving each terminal outcome and accounting without interpretation. | not-started | No condition has begun. |
-| T07-P-05 | Retrieve reconstructable evidence, destroy temporary credentials/runtime state, terminate the exact instance, restore firewall state, and verify no T07 instance remains. | not-started | Cleanup is mandatory after the pair or terminal failure. |
+| T07-P-03 | Before reactive begins, commit all infrastructure, render exact paired commands, write the concise run manifest, and freeze code/configuration. | met | Frozen pre-run commit `b2b347759b0cf94d054d0d45ce49766c7dd11c18`; run manifest 6,897 bytes, SHA-256 `c2095b4904d3803a66982e30601be6346cd3ab589ad5f5fd57be6c921c0d0da8`; exact reactive/simulative command-array hashes `9bda77c672c7210b745214fda20f42f7b5bf0e8184640638762ed2c0fa480ffd` / `81e064aabb93bf320a5a379ee8b043311ea2a801ad8c99e54c7098395fd34362`. |
+| T07-P-04 | Execute reactive once, then simulative once, preserving each terminal outcome and accounting without interpretation. | blocked | Reactive started exactly once and failed before model/browser use because the frozen Python 3.10 image could not import `datetime.UTC` through `giclab.harness.artifacts`; this is a common-infrastructure failure. The reset contract therefore prohibited repair/retry and required simulative not to start. No scientific result was established. |
+| T07-P-05 | Retrieve reconstructable evidence, destroy temporary credentials/runtime state, terminate the exact instance, restore firewall state, and verify no T07 instance remains. | met | Remote evidence archive 45,685 bytes, SHA-256 `03a200c31c0510c03b73828af300c51f18cc78f513957eb0e0d4f50b73213fec`, validated against all 115 manifest entries. Remote secret destroyed; owned containers absent; exact instance absent; account running-instance count zero; four-rule global-firewall baseline restored; no regional ruleset created. The APFS/UTDM bundle was atomically finalized with `FINAL_SHA256SUMS` SHA-256 `a8795a75a8b181126a7f869e05241beaf77597ca29c280c767e85dd64b0c5a77`. |
+
+The terminal disposition is `common_infrastructure_failure`, not an EXP-0001
+outcome. The pair was not obtained, no condition generation call or condition browser
+action occurred, and T08/pilot progression remains blocked. A future attempt must
+first repair and locally regress the Python 3.10 compatibility boundary, then use a
+fresh frozen commit, run identities, and authorization.
 
 The current reset explicitly waives a new authorization packet, schema suite,
 independent review, and full repository gate before the smoke. Focused validation is
 the required pre-execution gate; provider termination must not wait on later tests or
 documentation.
+
+Post-run closeout validation: `make validate`, `git diff --check`, and all 13
+pragmatic-runner tests pass. The broader Phase 1 closeout subset has one stale
+pre-execution assertion that the compute ledger contains exactly one entry; it now
+observes the correctly retained `CMP-0002` execution entry and fails. That test was
+not changed after the reactive freeze and is a recorded non-runtime repair for a
+future freshly authorized task.
 
 ### Bounded smoke definition of done
 
