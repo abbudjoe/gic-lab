@@ -88,6 +88,10 @@ def test_condition_commands_are_matched_except_declared_differences(tmp_path: Pa
     assert simulative[simulative.index("--max_retry") + 1] == "0"
     assert reactive[reactive.index("--network") + 1] == "bridge"
     assert simulative[simulative.index("--network") + 1] == "bridge"
+    assert "--pid" not in reactive
+    assert "--pid" not in simulative
+    assert "host" not in reactive
+    assert "host" not in simulative
     assert not any(value.endswith(",rw") for value in reactive)
     assert not any(value.endswith(",rw") for value in simulative)
     assert "EXP-0001-SMOKE-REACTIVE" in reactive

@@ -281,8 +281,6 @@ def docker_common(*, name: str, attempt: Path, network: str, image_id: str) -> l
         "linux/amd64",
         "--network",
         network,
-        "--pid",
-        "private",
         "--ipc",
         "private",
         "--cap-drop",
