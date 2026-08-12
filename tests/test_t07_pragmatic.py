@@ -105,6 +105,14 @@ def test_remote_runner_uses_python_310_compatible_utc_and_ephemeral_host_secret(
     assert ".config/giclab" in str(runner.REMOTE_SECRET)
 
 
+def test_pragmatic_containerfile_preserves_the_canonical_wheel_filename() -> None:
+    containerfile = (ROOT / "containers/sira-smoke/pragmatic/Containerfile.amd64").read_text()
+    assert "/opt/build/uv.whl" not in containerfile
+    assert (
+        "/opt/build/uv-0.11.7-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl"
+    ) in containerfile
+
+
 def test_destroy_secret_zeroes_and_unlinks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     path = tmp_path / "secret"
     path.write_bytes(b"dummy-canary")

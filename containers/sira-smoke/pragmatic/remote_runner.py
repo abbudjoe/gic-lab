@@ -187,7 +187,7 @@ def validate_secret_metadata() -> None:
 def prepare_build_context(root: Path, setup_dir: Path) -> Path:
     context = Path(tempfile.mkdtemp(prefix="build-context-", dir=root))
     shutil.copy2(
-        REMOTE_REPOSITORY / "containers/sira-smoke/bounded/Containerfile.amd64",
+        REMOTE_REPOSITORY / "containers/sira-smoke/pragmatic/Containerfile.amd64",
         context / "Containerfile",
     )
     shutil.copy2(
