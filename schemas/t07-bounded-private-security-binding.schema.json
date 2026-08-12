@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:gic-lab:schema:t07-bounded-private-security-binding:0.2.0",
+  "$id": "urn:gic-lab:schema:t07-bounded-private-security-binding:0.3.0",
   "title": "T07 bounded-smoke V2 private security binding",
   "type": "object",
   "additionalProperties": false,
@@ -14,6 +14,7 @@
     "decision_alias",
     "decision_canonical_sha256",
     "binding_nonce",
+    "private_locator",
     "ruleset_name_pattern_id",
     "source_ipv4_cidr",
     "owned_ruleset_name",
@@ -26,7 +27,7 @@
     "stale_source"
   ],
   "properties": {
-    "schema_version": {"const": "0.2.0"},
+    "schema_version": {"const": "0.3.0"},
     "binding_alias": {
       "type": "string",
       "pattern": "^t07-bounded-binding-[a-f0-9]{12}$"
@@ -43,6 +44,7 @@
       "pattern": "^[a-f0-9]{64}$"
     },
     "binding_nonce": {"type": "string", "pattern": "^[a-f0-9]{32}$"},
+    "private_locator": {"type": "string", "pattern": "^[a-f0-9]{32}$"},
     "ruleset_name_pattern_id": {"const": "t07-bounded-ruleset-v1"},
     "source_ipv4_cidr": {
       "type": "string",

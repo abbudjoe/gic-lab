@@ -108,6 +108,19 @@ def test_active_status_surfaces_name_exactly_one_prospective_bounded_plan() -> N
         assert "bounded smoke V1 ready for separate authorization" not in text
     assert set(prospective_ids) == {"PLAN-T07-BOUNDED-SIRA-SMOKE-V2"}
 
+    for path in (
+        ROOT / "docs/DECISIONS.md",
+        ROOT / "notebook/generated/decisions.qmd",
+    ):
+        rows = [
+            line
+            for line in path.read_text(encoding="utf-8").splitlines()
+            if "only prospective execution path" in line
+            or "supersede D-032's prospective identity" in line
+        ]
+        assert "D-032" in rows[-2] and "PLAN-T07-BOUNDED-SIRA-SMOKE-V1" in rows[-2]
+        assert "D-033" in rows[-1] and "PLAN-T07-BOUNDED-SIRA-SMOKE-V2" in rows[-1]
+
 
 def test_exp0001_readme_assigns_materialization_to_t07_not_completed_t06() -> None:
     readme = " ".join((EXP_ROOT / "README.md").read_text(encoding="utf-8").split())

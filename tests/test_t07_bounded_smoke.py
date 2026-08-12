@@ -194,7 +194,10 @@ def valid_plan() -> dict[str, object]:
             {"ordinal": ordinal, "actor": actor, "action": action, "stop_on_failure": True}
             for ordinal, actor, action in bounded.STEP_CONTRACT
         ],
-        "implementation": {"reviewed_commit": "0" * 40, "artifacts": _artifacts()},
+        "implementation": {
+            "reviewed_commit": bounded.REVIEWED_IMPLEMENTATION_COMMIT,
+            "artifacts": _artifacts(),
+        },
         "execution_permissions_now": {
             "lambda_account_requests": 0,
             "openai_account_requests": 0,
@@ -264,6 +267,7 @@ def test_v2_private_binding_public_surface_is_minimal_and_command_is_hash_bound(
     assert len(str(public["binding_sha256"])) == 64
     materialize = bounded.local_supervisor_argv_templates()["materialize"]
     assert "${PRIVATE_SECURITY_BINDING_PATH}" in materialize
+    assert "${PRIVATE_SECURITY_BINDING_SEAL_SHA256}" in materialize
     assert str(public["binding_sha256"]) in materialize
     assert "private-parameters.json" not in "\n".join(materialize)
 
@@ -286,6 +290,15 @@ def test_plan_rejects_authority_science_and_budget_drift(
     section = plan[path[0]]
     assert isinstance(section, dict)
     section[path[1]] = value
+    with pytest.raises(bounded.BoundedSmokeContractError):
+        bounded.validate_plan(plan)
+
+
+def test_plan_rejects_tampered_reviewed_implementation_commit() -> None:
+    plan = valid_plan()
+    implementation = plan["implementation"]
+    assert isinstance(implementation, dict)
+    implementation["reviewed_commit"] = "0" * 40
     with pytest.raises(bounded.BoundedSmokeContractError):
         bounded.validate_plan(plan)
 

@@ -12,6 +12,7 @@ import tarfile
 import time
 import zipfile
 from collections.abc import Callable, Mapping
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import ModuleType
@@ -245,47 +246,29 @@ def _copy_schemas(root: Path) -> None:
     shutil.copytree(ROOT / supervisor.ENDPOINT_SCHEMA_ROOT, root / supervisor.ENDPOINT_SCHEMA_ROOT)
 
 
-def _materialize(
+def _private_binding_fixture(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> tuple[dict[str, object], str, str]:
+) -> tuple[Callable[[], tuple[VolumeObservation, VolumeObservation]], Path]:
+    """Create synthetic protected inputs and a fake held-descriptor volume topology."""
+
+    from giclab.harness import sira_storage
+
     _copy_schemas(tmp_path)
-    baseline = [_rule("synthetic sealed baseline", source="198.51.100.0/24")]
-    baseline_sha256 = supervisor._firewall_semantic_sha256(baseline)
-    monkeypatch.setattr(supervisor, "BASELINE_SEMANTIC_SHA256", baseline_sha256)
-    schema_path = tmp_path / supervisor.PRIVATE_BINDING_SCHEMA_RELATIVE
-    schema = json.loads(schema_path.read_text(encoding="utf-8"))
-    schema["properties"]["baseline"]["properties"]["semantic_sha256"] = {"const": baseline_sha256}
-    schema_path.write_bytes(supervisor.canonical_json_bytes(schema))
-    nonce = "01" * 16
-    ruleset_marker = supervisor._derived_binding_marker(nonce, purpose="ruleset")
-    binding_marker = supervisor._derived_binding_marker(nonce, purpose="binding")
-    alias = f"t07-bounded-binding-{binding_marker}"
-    description = f"T07 bounded smoke {ruleset_marker}"
-    private = {
-        "schema_version": supervisor.PRIVATE_BINDING_SCHEMA_VERSION,
-        "binding_alias": alias,
-        "plan_id": supervisor.PLAN_ID,
-        "host_run_id": supervisor.HOST_RUN_ID,
-        "future_authorization_placeholder": supervisor.PRIVATE_BINDING_PENDING_AUTHORIZATION,
-        "source_parameter_sha256": supervisor.HISTORICAL_SOURCE_PARAMETERS_SHA256,
+    baseline_rules = [_rule("synthetic sealed baseline", source="198.51.100.0/24")]
+    baseline_sha256 = supervisor._firewall_semantic_sha256(baseline_rules)
+    restoration = {"rules": baseline_rules}
+    restoration_encoded = supervisor.canonical_json_bytes(restoration)
+    restoration_sha256 = supervisor.sha256_bytes(restoration_encoded)
+    source = {
+        "schema_version": "0.1.0",
         "decision_alias": "synthetic-private-decision",
         "decision_canonical_sha256": "3" * 64,
-        "binding_nonce": nonce,
-        "ruleset_name_pattern_id": supervisor.RULESET_NAME_PATTERN_ID,
         "source_ipv4_cidr": "203.0.113.7/32",
-        "owned_ruleset_name": f"giclab-t07-bounded-{ruleset_marker}",
-        "owned_ruleset_description": description,
-        "strict_firewall_rule": _rule(description),
-        "owned_ruleset_rule": _rule(description),
-        "baseline": {
-            "alias": supervisor.BASELINE_ALIAS,
-            "semantic_sha256": baseline_sha256,
-            "canonicalizer_version": supervisor.CANONICALIZER_VERSION,
-            "parser_version": supervisor.PARSER_VERSION,
-            "restoration_alias": supervisor.RESTORATION_ALIAS,
-            "restoration_payload_sha256": supervisor.RESTORATION_SHA256,
+        "strict_firewall_rule": _rule("historical strict fixture"),
+        "owned_regional_ruleset": {
+            "name": "t07-l2m-" + "a" * 40,
+            "rules": [_rule("historical owned fixture")],
         },
-        "restoration_rules": baseline,
         "selected_resource": {
             "instance_type": "gpu_1x_a10",
             "region": "us-east-1",
@@ -296,25 +279,130 @@ def _materialize(
             "raw_image_id": "synthetic-image-private",
             "ssh_key_name": "fractal-lambda-codex",
             "raw_ssh_key_id": "synthetic-key-private",
-            "ssh_key_fingerprint": supervisor._fingerprint(PUBLIC_KEY),
+            "local_public_key_fingerprint": supervisor._fingerprint(PUBLIC_KEY),
             "price_cents_per_hour": 129,
         },
-        "stale_source": {
-            "schema_version": "0.1.0",
-            "superseded": True,
-            "reusable": False,
-            "ruleset_name_classification": "stale_high_assurance_name",
-            "restoration_baseline_classification": "materializer_baseline_bug",
-        },
     }
-    private_path = tmp_path / "artifacts" / "private-fixture" / "binding.json"
-    private_path.parent.mkdir(mode=0o700, parents=True)
-    private_encoded = supervisor.canonical_json_bytes(private)
-    private_path.write_bytes(private_encoded)
-    private_path.chmod(0o600)
-    private_sha256 = supervisor.sha256_bytes(private_encoded)
-    monkeypatch.setattr(supervisor, "PRIVATE_BINDING_ALIAS", alias)
-    monkeypatch.setattr(supervisor, "PRIVATE_BINDING_SHA256", private_sha256)
+    source_encoded = supervisor.canonical_json_bytes(source)
+    source_sha256 = supervisor.sha256_bytes(source_encoded)
+    decision_seal = {
+        "private_parameters_sha256": source_sha256,
+        "decision_alias": source["decision_alias"],
+        "decision_canonical_sha256": source["decision_canonical_sha256"],
+        "decision_validated": True,
+        "source_retained": True,
+    }
+    baseline = {
+        "baseline_alias": supervisor.BASELINE_ALIAS,
+        "canonical_semantic_sha256": baseline_sha256,
+        "canonicalization_version": supervisor.CANONICALIZER_VERSION,
+        "response_parser_version": supervisor.PARSER_VERSION,
+        "restoration_payload_sha256": restoration_sha256,
+    }
+    baseline_seal = {
+        "baseline_alias": supervisor.BASELINE_ALIAS,
+        "canonical_semantic_sha256": baseline_sha256,
+        "restoration_payload_alias": supervisor.RESTORATION_ALIAS,
+        "restoration_payload_sha256": restoration_sha256,
+        "original_capture_unchanged": True,
+        "source_retained": True,
+    }
+    inputs = {
+        supervisor.HISTORICAL_SOURCE_PARAMETERS_RELATIVE: source_encoded,
+        supervisor.HISTORICAL_DECISION_SEAL_RELATIVE: supervisor.canonical_json_bytes(
+            decision_seal
+        ),
+        supervisor.AUTHORITATIVE_BASELINE_RELATIVE: supervisor.canonical_json_bytes(baseline),
+        supervisor.AUTHORITATIVE_BASELINE_SEAL_RELATIVE: supervisor.canonical_json_bytes(
+            baseline_seal
+        ),
+        supervisor.AUTHORITATIVE_RESTORATION_RELATIVE: restoration_encoded,
+    }
+    for relative, encoded in inputs.items():
+        path = tmp_path / relative
+        path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        path.write_bytes(encoded)
+        path.chmod(0o600)
+    monkeypatch.setattr(supervisor, "HISTORICAL_SOURCE_PARAMETERS_SHA256", source_sha256)
+    monkeypatch.setattr(supervisor, "BASELINE_SEMANTIC_SHA256", baseline_sha256)
+    monkeypatch.setattr(supervisor, "RESTORATION_SHA256", restoration_sha256)
+    schema_path = tmp_path / supervisor.PRIVATE_BINDING_SCHEMA_RELATIVE
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    schema["properties"]["baseline"]["properties"]["semantic_sha256"] = {"const": baseline_sha256}
+    schema["properties"]["baseline"]["properties"]["restoration_payload_sha256"] = {
+        "const": restoration_sha256
+    }
+    schema_path.write_bytes(supervisor.canonical_json_bytes(schema))
+
+    external = tmp_path / "external"
+    system = tmp_path / "system"
+    external.mkdir()
+    system.mkdir()
+    external_parent = external / "GIC-Lab/t07/sealed-artifacts"
+    monkeypatch.setattr(supervisor, "EXTERNAL_MOUNT", external)
+    monkeypatch.setattr(supervisor, "EXTERNAL_PARENT", external_parent)
+    monkeypatch.setattr(lambda_archive, "APPROVED_MOUNT", external)
+    monkeypatch.setattr(sira_storage, "SYSTEM_DATA_MOUNT", system)
+
+    held_type = lambda_archive._HeldDirectory
+    original_open = held_type.open.__func__
+
+    def fake_open(
+        cls: type[lambda_archive._HeldDirectory], path: Path
+    ) -> lambda_archive._HeldDirectory:
+        handle = original_open(cls, path)
+        if path in {tmp_path, system}:
+            handle.device += 1
+        return handle
+
+    monkeypatch.setattr(held_type, "open", classmethod(fake_open))
+    monkeypatch.setattr(held_type, "revalidate", lambda self: None)
+
+    external_observation = _external_observation(external)
+    system_observation = VolumeObservation(
+        mount_path=system,
+        filesystem="apfs",
+        writable=True,
+        volume_uuid=SYSTEM_DATA_VOLUME_UUID,
+        physical_store_uuid=None,
+        total_bytes=SYSTEM_CAPACITY_BYTES,
+        free_bytes=20_000_000_000,
+        internal=True,
+        owners_enabled=True,
+        encrypted=True,
+        unlocked=True,
+        device_identifier="disk3s1",
+    )
+
+    def observer() -> tuple[VolumeObservation, VolumeObservation]:
+        return external_observation, system_observation
+
+    return observer, external_parent
+
+
+def _sealed_private_binding(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> tuple[
+    supervisor.SealedPrivateBinding, Callable[[], tuple[VolumeObservation, VolumeObservation]], Path
+]:
+    observer, external_parent = _private_binding_fixture(tmp_path, monkeypatch)
+    sealed = supervisor.seal_private_security_binding(
+        tmp_path,
+        volume_observer=observer,
+        random_bytes=lambda count: bytes(range(count)),
+    )
+    monkeypatch.setattr(supervisor, "PRIVATE_BINDING_ALIAS", sealed.binding_alias)
+    monkeypatch.setattr(supervisor, "PRIVATE_BINDING_SHA256", sealed.binding_sha256)
+    return sealed, observer, external_parent
+
+
+def _materialize(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> tuple[dict[str, object], str, str]:
+    sealed, observer, _ = _sealed_private_binding(tmp_path, monkeypatch)
+    private = json.loads(sealed.local_path.read_text(encoding="utf-8"))
+    baseline = cast(dict[str, object], private["baseline"])
+    baseline_sha256 = cast(str, baseline["semantic_sha256"])
     monkeypatch.setattr(supervisor, "verify_repository_identity", lambda *_: None)
     monkeypatch.setattr(supervisor, "_validate_base_authority", lambda *_: None)
     plan = _runtime_plan()
@@ -325,9 +413,10 @@ def _materialize(
         plan_sha256=plan_sha256,
         expected_commit=COMMIT,
         authorization_reference=AUTHORIZATION_REFERENCE,
-        private_security_binding_path=private_path,
-        private_security_binding_sha256=private_sha256,
-        volume_observer=lambda: (_external_observation(), _system_observation()),
+        private_security_binding_path=sealed.local_path,
+        private_security_binding_sha256=sealed.binding_sha256,
+        private_security_binding_seal_sha256=sealed.local_seal_sha256,
+        volume_observer=observer,
         utc_now=lambda: NOW,
     )
     upload_root = tmp_path / supervisor.UPLOAD_ROOT_RELATIVE
@@ -376,6 +465,228 @@ def test_bounded_baseline_hash_matches_authoritative_canonicalizer() -> None:
     assert supervisor._firewall_semantic_sha256(rules) == (
         canonicalize_firewall_rules(rules).semantic_sha256
     )
+
+
+def test_private_binding_builder_uses_fresh_domain_separated_identities(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _private_binding_fixture(tmp_path, monkeypatch)
+    first, first_encoded, first_sha256 = supervisor.build_private_security_binding(
+        tmp_path, random_bytes=lambda count: bytes(range(count))
+    )
+    second, _, _ = supervisor.build_private_security_binding(
+        tmp_path, random_bytes=lambda count: bytes(reversed(range(count)))
+    )
+    assert first_sha256 == hashlib.sha256(first_encoded).hexdigest()
+    assert first["schema_version"] == "0.3.0"
+    assert first["binding_alias"] != second["binding_alias"]
+    assert first["owned_ruleset_name"] != second["owned_ruleset_name"]
+    assert first["private_locator"] != second["private_locator"]
+    assert first["private_locator"] not in {
+        str(first["binding_nonce"]),
+        str(first["binding_alias"]).rsplit("-", 1)[-1],
+        str(first["owned_ruleset_name"]).rsplit("-", 1)[-1],
+    }
+    assert cast(dict[str, object], first["stale_source"])["reusable"] is False
+
+
+@pytest.mark.parametrize("drift", ("source_hash", "baseline_version", "restoration_hash"))
+def test_private_binding_builder_rejects_stale_input_identity(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, drift: str
+) -> None:
+    _private_binding_fixture(tmp_path, monkeypatch)
+    if drift == "source_hash":
+        target = tmp_path / supervisor.HISTORICAL_SOURCE_PARAMETERS_RELATIVE
+        target.write_bytes(target.read_bytes() + b" ")
+    elif drift == "baseline_version":
+        target = tmp_path / supervisor.AUTHORITATIVE_BASELINE_RELATIVE
+        document = json.loads(target.read_text(encoding="utf-8"))
+        document["canonicalization_version"] = "stale-canonicalizer"
+        target.write_bytes(supervisor.canonical_json_bytes(document))
+    else:
+        target = tmp_path / supervisor.AUTHORITATIVE_RESTORATION_RELATIVE
+        target.write_bytes(target.read_bytes() + b" ")
+    with pytest.raises(supervisor.BoundedSupervisorError):
+        supervisor.build_private_security_binding(
+            tmp_path, random_bytes=lambda count: bytes(range(count))
+        )
+
+
+def test_private_binding_builder_rejects_symlinked_protected_input(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _private_binding_fixture(tmp_path, monkeypatch)
+    target = tmp_path / supervisor.HISTORICAL_SOURCE_PARAMETERS_RELATIVE
+    replacement = target.with_name("synthetic-source-copy.json")
+    replacement.write_bytes(target.read_bytes())
+    target.unlink()
+    target.symlink_to(replacement)
+    with pytest.raises(supervisor.BoundedSupervisorError):
+        supervisor.build_private_security_binding(
+            tmp_path, random_bytes=lambda count: bytes(range(count))
+        )
+
+
+def test_private_binding_seal_is_private_atomic_and_fully_verifiable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sealed, observer, external_parent = _sealed_private_binding(tmp_path, monkeypatch)
+    private = json.loads(sealed.local_path.read_text(encoding="utf-8"))
+    locator = cast(str, private["private_locator"])
+    external_directory = external_parent / f"t07-private-binding-{locator}"
+    assert sealed.local_path.parent.name == locator
+    assert sealed.binding_alias not in str(sealed.local_path)
+    assert sealed.binding_sha256 not in str(sealed.local_path)
+    assert sealed.binding_alias not in external_directory.name
+    assert sealed.binding_sha256 not in external_directory.name
+    assert sealed.local_path.stat().st_mode & 0o777 == 0o600
+    assert (
+        sealed.local_path.parent / supervisor.PRIVATE_BINDING_LOCAL_SEAL_FILENAME
+    ).stat().st_mode & 0o777 == 0o600
+    assert external_directory.stat().st_mode & 0o777 == 0o500
+    assert not list(external_parent.glob("*.staging"))
+    verified, encoded, _, _ = supervisor._verify_presealed_private_security_binding(
+        tmp_path,
+        binding_path=sealed.local_path,
+        binding_sha256=sealed.binding_sha256,
+        local_seal_sha256=sealed.local_seal_sha256,
+        volume_observer=observer,
+    )
+    assert verified["binding_alias"] == sealed.binding_alias
+    assert hashlib.sha256(encoded).hexdigest() == sealed.binding_sha256
+    assert sealed.source_retained and sealed.source_destination_sha256_equal
+
+
+def test_private_binding_seal_rejects_existing_local_identity(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sealed, observer, _ = _sealed_private_binding(tmp_path, monkeypatch)
+    with pytest.raises(supervisor.BoundedSupervisorError, match="not fresh"):
+        supervisor.seal_private_security_binding(
+            tmp_path,
+            volume_observer=observer,
+            random_bytes=lambda count: bytes(range(count)),
+        )
+    assert sealed.local_path.is_file()
+
+
+def test_private_binding_seal_preserves_preexisting_external_identity(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    observer, external_parent = _private_binding_fixture(tmp_path, monkeypatch)
+    document, _, _ = supervisor.build_private_security_binding(
+        tmp_path, random_bytes=lambda count: bytes(range(count))
+    )
+    locator = cast(str, document["private_locator"])
+    external_parent.mkdir(parents=True)
+    preexisting = external_parent / f"t07-private-binding-{locator}"
+    preexisting.mkdir()
+    with pytest.raises(supervisor.BoundedSupervisorError):
+        supervisor.seal_private_security_binding(
+            tmp_path,
+            volume_observer=observer,
+            random_bytes=lambda count: bytes(range(count)),
+        )
+    assert preexisting.is_dir()
+    assert not (tmp_path / supervisor.PRIVATE_BINDING_LOCAL_PARENT_RELATIVE / locator).exists()
+
+
+@pytest.mark.parametrize("failure_stage", ("before_rename", "after_rename"))
+def test_private_binding_seal_cleans_only_owned_incomplete_state(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure_stage: str,
+) -> None:
+    observer, external_parent = _private_binding_fixture(tmp_path, monkeypatch)
+    document, _, _ = supervisor.build_private_security_binding(
+        tmp_path, random_bytes=lambda count: bytes(range(count))
+    )
+    locator = cast(str, document["private_locator"])
+    if failure_stage == "before_rename":
+        original = lambda_archive._write_exclusive_at
+
+        def fail_copy_record(directory_fd: int, name: str, encoded: bytes) -> None:
+            if name == supervisor.PRIVATE_BINDING_COPY_RECORD_FILENAME:
+                raise lambda_archive.InventoryArchiveError("synthetic write failure")
+            original(directory_fd, name, encoded)
+
+        monkeypatch.setattr(lambda_archive, "_write_exclusive_at", fail_copy_record)
+        failing_observer = observer
+    else:
+        calls = 0
+
+        def failing_observer() -> tuple[VolumeObservation, VolumeObservation]:
+            nonlocal calls
+            calls += 1
+            external, system = observer()
+            if calls == 2:
+                external = replace(external, free_bytes=0)
+            return external, system
+
+    with pytest.raises(supervisor.BoundedSupervisorError, match="seal transaction failed"):
+        supervisor.seal_private_security_binding(
+            tmp_path,
+            volume_observer=failing_observer,
+            random_bytes=lambda count: bytes(range(count)),
+        )
+    local = tmp_path / supervisor.PRIVATE_BINDING_LOCAL_PARENT_RELATIVE / locator
+    assert not local.exists()
+    assert not (external_parent / f"t07-private-binding-{locator}").exists()
+    assert not (external_parent / f".t07-private-binding-{locator}.staging").exists()
+
+
+@pytest.mark.parametrize(
+    "drift",
+    (
+        "local_copy_only",
+        "external_copy_only",
+        "missing_local_seal",
+        "tampered_local_seal",
+        "tampered_external_copy",
+    ),
+)
+def test_materialization_requires_complete_local_and_external_preseal(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    drift: str,
+) -> None:
+    sealed, observer, external_parent = _sealed_private_binding(tmp_path, monkeypatch)
+    private = json.loads(sealed.local_path.read_text(encoding="utf-8"))
+    locator = cast(str, private["private_locator"])
+    external_directory = external_parent / f"t07-private-binding-{locator}"
+    local_seal = sealed.local_path.parent / supervisor.PRIVATE_BINDING_LOCAL_SEAL_FILENAME
+    if drift == "local_copy_only":
+        external_directory.chmod(0o700)
+        shutil.rmtree(external_directory)
+    elif drift == "external_copy_only":
+        sealed.local_path.unlink()
+    elif drift == "missing_local_seal":
+        local_seal.unlink()
+    elif drift == "tampered_local_seal":
+        local_seal.write_bytes(local_seal.read_bytes() + b" ")
+    else:
+        external_directory.chmod(0o700)
+        external_binding = external_directory / supervisor.PRIVATE_BINDING_FILENAME
+        external_binding.chmod(0o600)
+        external_binding.write_bytes(external_binding.read_bytes() + b" ")
+        external_binding.chmod(0o400)
+        external_directory.chmod(0o500)
+    monkeypatch.setattr(supervisor, "verify_repository_identity", lambda *_: None)
+    monkeypatch.setattr(supervisor, "_validate_base_authority", lambda *_: None)
+    with pytest.raises(supervisor.BoundedSupervisorError):
+        supervisor.materialize_authority(
+            tmp_path,
+            plan=_runtime_plan(),
+            plan_sha256="2" * 64,
+            expected_commit=COMMIT,
+            authorization_reference=AUTHORIZATION_REFERENCE,
+            private_security_binding_path=sealed.local_path,
+            private_security_binding_sha256=sealed.binding_sha256,
+            private_security_binding_seal_sha256=sealed.local_seal_sha256,
+            volume_observer=observer,
+            utc_now=lambda: NOW,
+        )
+    assert not (tmp_path / supervisor.RUN_ROOT_RELATIVE).exists()
 
 
 @pytest.mark.parametrize(
@@ -462,6 +773,7 @@ def test_materializer_rejects_real_private_binding_drift(
             authorization_reference=AUTHORIZATION_REFERENCE,
             private_security_binding_path=private_path,
             private_security_binding_sha256=digest,
+            private_security_binding_seal_sha256="4" * 64,
             volume_observer=lambda: (_external_observation(), _system_observation()),
             utc_now=lambda: NOW,
         )
@@ -701,6 +1013,7 @@ def test_exact_local_supervisor_interpreter_loads_bound_modules(tmp_path: Path) 
         "${PRIVATE_SECURITY_BINDING_PATH}": str(
             repository / "artifacts/private-binding-fixture.json"
         ),
+        "${PRIVATE_SECURITY_BINDING_SEAL_SHA256}": "4" * 64,
     }
     argv = contract.materialize_argv(
         contract.local_supervisor_argv_templates()["materialize"], substitutions
@@ -724,6 +1037,42 @@ def test_actual_repository_base_authority_accepts_the_v2_candidate() -> None:
         )
     )
     supervisor._validate_base_authority(ROOT, plan)
+
+
+def test_repository_identity_requires_reviewed_commit_ancestry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    reviewed = "a" * 40
+    expected = "b" * 40
+    monkeypatch.setattr(supervisor, "REVIEWED_IMPLEMENTATION_COMMIT", reviewed)
+    calls: list[tuple[str, ...]] = []
+
+    def related_git(root: Path, *args: str) -> str:
+        assert root == tmp_path
+        calls.append(args)
+        if args[:2] == ("branch", "--show-current"):
+            return supervisor.BRANCH
+        if args[:2] == ("rev-parse", "HEAD"):
+            return expected
+        return ""
+
+    monkeypatch.setattr(supervisor, "_git", related_git)
+    supervisor.verify_repository_identity(tmp_path, expected)
+    assert (
+        "merge-base",
+        "--is-ancestor",
+        reviewed,
+        expected,
+    ) in calls
+
+    def unrelated_git(root: Path, *args: str) -> str:
+        if args[:2] == ("merge-base", "--is-ancestor"):
+            raise supervisor.BoundedSupervisorError("synthetic unrelated history")
+        return related_git(root, *args)
+
+    monkeypatch.setattr(supervisor, "_git", unrelated_git)
+    with pytest.raises(supervisor.BoundedSupervisorError, match="unrelated history"):
+        supervisor.verify_repository_identity(tmp_path, expected)
 
 
 def test_hash_first_local_loader_does_not_propagate_credentials_to_git(
@@ -2533,13 +2882,14 @@ def test_complete_archive_reads_back_hashes_and_retains_local_source(
     )
     inbound = run_root / "inbound"
     external_mount = tmp_path / "external"
-    external_mount.mkdir()
+    external_mount.mkdir(exist_ok=True)
     external_parent = external_mount / "GIC-Lab/t07/sealed-artifacts"
     monkeypatch.setattr(supervisor, "EXTERNAL_MOUNT", external_mount)
     monkeypatch.setattr(supervisor, "EXTERNAL_PARENT", external_parent)
     monkeypatch.setattr(supervisor, "EXTERNAL_FINAL", external_parent / supervisor.HOST_RUN_ID)
     monkeypatch.setattr(lambda_archive, "APPROVED_MOUNT", external_mount)
     external = _external_observation(external_mount)
+    system = replace(_system_observation(), mount_path=tmp_path / "system")
     result = supervisor.archive_evidence(
         tmp_path,
         plan=_runtime_plan(),
@@ -2550,7 +2900,7 @@ def test_complete_archive_reads_back_hashes_and_retains_local_source(
         private_binding_path=tmp_path / supervisor.PRIVATE_BINDING_RELATIVE,
         private_binding_sha256=str(summary["private_binding_sha256"]),
         disposition="complete",
-        volume_observer=lambda: (external, _system_observation()),
+        volume_observer=lambda: (external, system),
         utc_now=utc_now,
     )
     assert result["source_destination_hashes_verified"] is True

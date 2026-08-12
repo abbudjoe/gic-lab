@@ -224,7 +224,7 @@
       "properties": {
         "binding_alias": {"pattern": "^t07-bounded-binding-[a-f0-9]{12}$", "type": "string"},
         "binding_sha256": {"pattern": "^[a-f0-9]{64}$", "type": "string"},
-        "schema_version": {"const": "0.2.0"},
+        "schema_version": {"const": "0.3.0"},
         "ruleset_name_pattern_id": {"const": "t07-bounded-ruleset-v1"},
         "baseline_alias": {"const": "l2m-firewall-baseline-b0ef71115811"},
         "baseline_semantic_sha256": {
@@ -332,15 +332,7 @@
       ],
       "properties": {
         "reviewed_commit": {
-          "oneOf": [
-            {
-              "const": "PENDING-IMPLEMENTATION-COMMIT"
-            },
-            {
-              "type": "string",
-              "pattern": "^[a-f0-9]{40}$"
-            }
-          ]
+          "const": "PENDING-IMPLEMENTATION-COMMIT"
         },
         "artifacts": {
           "type": "array",

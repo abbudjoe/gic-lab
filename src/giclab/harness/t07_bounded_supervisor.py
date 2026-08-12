@@ -93,12 +93,17 @@ BASELINE_ALIAS: Final = "l2m-firewall-baseline-b0ef71115811"
 BASELINE_SEMANTIC_SHA256: Final = "b0ef711158113cdbdbb1707cb43f21a635271bb2e93bfc0e898ce7118589f764"
 CANONICALIZER_VERSION: Final = "t07-firewall-canonical-v1"
 PARSER_VERSION: Final = "t07-firewall-response-v2"
-PRIVATE_BINDING_SCHEMA_VERSION: Final = "0.2.0"
+PRIVATE_BINDING_SCHEMA_VERSION: Final = "0.3.0"
 PRIVATE_BINDING_PENDING_AUTHORIZATION: Final = "AUTH-T07-BOUNDED-SIRA-SMOKE-V2-PENDING"
 RULESET_NAME_PATTERN_ID: Final = "t07-bounded-ruleset-v1"
 PRIVATE_BINDING_ALIAS: Final = "t07-bounded-binding-413dd97fcb1f"
 PRIVATE_BINDING_SHA256: Final = "5599ca1a7e371461a26453ad791cd2292ffaa9714986c48d06dc8253a3f08e6b"
 PRIVATE_BINDING_LOCAL_PARENT_RELATIVE: Final = Path("artifacts/t07/bounded-private-bindings")
+REVIEWED_IMPLEMENTATION_COMMIT: Final = "PENDING-IMPLEMENTATION-COMMIT"
+PRIVATE_BINDING_FILENAME: Final = "private-security-binding.json"
+PRIVATE_BINDING_LOCAL_SEAL_FILENAME: Final = "PRIVATE_BINDING_SEAL.json"
+PRIVATE_BINDING_COPY_RECORD_FILENAME: Final = "COPY_RECORD.json"
+PRIVATE_BINDING_EXTERNAL_SEAL_FILENAME: Final = "SEAL.json"
 
 AUTHORIZATION_SCHEMA_RELATIVE: Final = Path(
     "schemas/t07-bounded-smoke-authorization-v2.schema.json"
@@ -414,11 +419,13 @@ class SealedPrivateBinding:
     """Private locator plus the only public-safe binding facts."""
 
     local_path: Path = field(repr=False)
+    private_locator: str = field(repr=False)
     binding_alias: str
     binding_sha256: str
     binding_bytes: int
     external_copy_sha256: str
     seal_sha256: str
+    local_seal_sha256: str = field(repr=False)
     source_retained: bool
     source_destination_sha256_equal: bool
 
@@ -621,6 +628,15 @@ def verify_repository_identity(root: Path, expected_commit: str) -> None:
     resolved = root.resolve(strict=True)
     if resolved != root.absolute() or not _HEX40.fullmatch(expected_commit):
         raise BoundedSupervisorError("repository identity input is invalid")
+    if _HEX40.fullmatch(REVIEWED_IMPLEMENTATION_COMMIT) is None:
+        raise BoundedSupervisorError("reviewed implementation identity is not finalized")
+    _git(
+        root,
+        "merge-base",
+        "--is-ancestor",
+        REVIEWED_IMPLEMENTATION_COMMIT,
+        expected_commit,
+    )
     if (
         _git(root, "branch", "--show-current") != BRANCH
         or _git(root, "rev-parse", "HEAD") != expected_commit
@@ -770,6 +786,20 @@ def _derived_binding_marker(nonce: str, *, purpose: str) -> str:
     return hashlib.sha256(payload).hexdigest()[:12]
 
 
+def _derived_private_locator(entropy: bytes) -> str:
+    if not isinstance(entropy, bytes) or len(entropy) != 16:
+        raise BoundedSupervisorError("private locator entropy source drifted")
+    payload = b"\0".join(
+        (
+            b"private-locator",
+            entropy,
+            PLAN_ID.encode("ascii"),
+            HOST_RUN_ID.encode("ascii"),
+        )
+    )
+    return hashlib.sha256(payload).hexdigest()[:32]
+
+
 def _fingerprint(public_key: str) -> str:
     parts = public_key.strip().split()
     if len(parts) < 2:
@@ -792,12 +822,20 @@ def _validate_private_binding(
     _validate_schema(document, schema, context="private binding")
     alias = _text(document.get("binding_alias"), context="private binding alias")
     nonce = _text(document.get("binding_nonce"), context="private binding nonce")
+    locator = _text(document.get("private_locator"), context="private binding locator")
     ruleset_name = _text(document.get("owned_ruleset_name"), context="owned ruleset name")
     expected_alias = "t07-bounded-binding-" + _derived_binding_marker(nonce, purpose="binding")
     expected_ruleset = "giclab-t07-bounded-" + _derived_binding_marker(nonce, purpose="ruleset")
     if (
         alias != expected_alias
         or ruleset_name != expected_ruleset
+        or _NONCE.fullmatch(locator) is None
+        or locator
+        in {
+            nonce,
+            expected_alias.rsplit("-", 1)[-1],
+            expected_ruleset.rsplit("-", 1)[-1],
+        }
         or (require_bound_identity and alias != PRIVATE_BINDING_ALIAS)
         or document.get("source_parameter_sha256") != HISTORICAL_SOURCE_PARAMETERS_SHA256
         or document.get("future_authorization_placeholder") != PRIVATE_BINDING_PENDING_AUTHORIZATION
@@ -919,10 +957,12 @@ def build_private_security_binding(
     restoration_rules = list(_sequence(restoration.get("rules"), context="restoration rules"))
     if _firewall_semantic_sha256(restoration_rules) != BASELINE_SEMANTIC_SHA256:
         raise BoundedSupervisorError("authoritative restoration semantics drifted")
-    nonce_bytes = random_bytes(16)
-    if not isinstance(nonce_bytes, bytes) or len(nonce_bytes) != 16:
+    entropy = random_bytes(32)
+    if not isinstance(entropy, bytes) or len(entropy) != 32:
         raise BoundedSupervisorError("private binding entropy source drifted")
+    nonce_bytes = entropy[:16]
     nonce = nonce_bytes.hex()
+    private_locator = _derived_private_locator(entropy[16:])
     binding_marker = _derived_binding_marker(nonce, purpose="binding")
     ruleset_marker = _derived_binding_marker(nonce, purpose="ruleset")
     description = f"T07 bounded smoke {ruleset_marker}"
@@ -938,6 +978,7 @@ def build_private_security_binding(
         "decision_alias": source.get("decision_alias"),
         "decision_canonical_sha256": source.get("decision_canonical_sha256"),
         "binding_nonce": nonce,
+        "private_locator": private_locator,
         "ruleset_name_pattern_id": RULESET_NAME_PATTERN_ID,
         "source_ipv4_cidr": cidr,
         "owned_ruleset_name": f"giclab-t07-bounded-{ruleset_marker}",
@@ -1005,57 +1046,66 @@ def seal_private_security_binding(
 
     document, encoded, digest = build_private_security_binding(root, random_bytes=random_bytes)
     alias = _text(document.get("binding_alias"), context="private binding alias")
+    locator = _text(document.get("private_locator"), context="private binding locator")
     local_parent = _ensure_owned_directory_chain(root, PRIVATE_BINDING_LOCAL_PARENT_RELATIVE)
-    local_directory = local_parent / alias
+    local_directory = local_parent / locator
     try:
         local_directory.mkdir(mode=0o700)
     except FileExistsError:
         raise BoundedSupervisorError("private binding identity is not fresh") from None
-    binding_path = local_directory / "private-security-binding.json"
-    _write_exclusive(binding_path, encoded, mode=0o600)
-    linked = binding_path.lstat()
-    if (
-        not stat.S_ISREG(linked.st_mode)
-        or stat.S_ISLNK(linked.st_mode)
-        or linked.st_nlink != 1
-        or linked.st_uid != os.getuid()
-        or stat.S_IMODE(linked.st_mode) != 0o600
-        or _read_regular(binding_path, max_bytes=MAX_PRIVATE_FILE_BYTES) != encoded
-    ):
-        raise BoundedSupervisorError("private binding local seal failed")
-    if volume_observer is None:
-        from giclab.harness.lambda_archive import DiskutilVolumeObserver
-
-        observer: Callable[[], tuple[VolumeObservation, VolumeObservation]] = cast(
-            Callable[[], tuple[VolumeObservation, VolumeObservation]],
-            DiskutilVolumeObserver(),
-        )
-    else:
-        observer = volume_observer
-    from giclab.harness.lambda_archive import (
-        _HeldDirectory,
-        _open_or_create_archive_root,
-        _read_regular_at,
-        _validate_external,
-        _validate_system,
-        _write_exclusive_at,
-    )
-    from giclab.harness.sira_storage import SYSTEM_DATA_MOUNT
-
-    external_pre, system_pre = observer()
-    external_floor = _validate_external(
-        cast(Any, external_pre), incremental_bytes=MAX_PRIVATE_FILE_BYTES
-    )
-    _validate_system(cast(Any, system_pre), floor_bytes=MAC_PREWRITE_FLOOR_BYTES)
-    if external_floor != EXTERNAL_RETAINED_FLOOR_BYTES:
-        raise BoundedSupervisorError("private binding storage floor drifted")
-    external_handle = _HeldDirectory.open(EXTERNAL_MOUNT)
-    system_handle = _HeldDirectory.open(SYSTEM_DATA_MOUNT)
-    repository_handle = _HeldDirectory.open(root)
+    binding_path = local_directory / PRIVATE_BINDING_FILENAME
     archive_handle = None
+    external_handle = None
+    system_handle = None
+    repository_handle = None
     staging_fd = -1
     destination_fd = -1
+    staging_name = f".t07-private-binding-{locator}.staging"
+    final_name = f"t07-private-binding-{locator}"
+    staging_exists = False
+    final_exists = False
+    completed = False
     try:
+        _write_exclusive(binding_path, encoded, mode=0o600)
+        linked = binding_path.lstat()
+        if (
+            not stat.S_ISREG(linked.st_mode)
+            or stat.S_ISLNK(linked.st_mode)
+            or linked.st_nlink != 1
+            or linked.st_uid != os.getuid()
+            or stat.S_IMODE(linked.st_mode) != 0o600
+            or _read_regular(binding_path, max_bytes=MAX_PRIVATE_FILE_BYTES) != encoded
+        ):
+            raise BoundedSupervisorError("private binding local write failed")
+        if volume_observer is None:
+            from giclab.harness.lambda_archive import DiskutilVolumeObserver
+
+            observer: Callable[[], tuple[VolumeObservation, VolumeObservation]] = cast(
+                Callable[[], tuple[VolumeObservation, VolumeObservation]],
+                DiskutilVolumeObserver(),
+            )
+        else:
+            observer = volume_observer
+        from giclab.harness.lambda_archive import (
+            _HeldDirectory,
+            _open_or_create_archive_root,
+            _read_regular_at,
+            _validate_external,
+            _validate_system,
+            _write_exclusive_at,
+        )
+        from giclab.harness.sira_storage import SYSTEM_DATA_MOUNT
+
+        external_pre, system_pre = observer()
+        external_floor = _validate_external(
+            cast(Any, external_pre), incremental_bytes=MAX_PRIVATE_FILE_BYTES
+        )
+        _validate_system(cast(Any, system_pre), floor_bytes=MAC_PREWRITE_FLOOR_BYTES)
+        if external_floor != EXTERNAL_RETAINED_FLOOR_BYTES:
+            raise BoundedSupervisorError("private binding storage floor drifted")
+        external_handle = _HeldDirectory.open(EXTERNAL_MOUNT)
+        system_handle = _HeldDirectory.open(SYSTEM_DATA_MOUNT)
+        repository_handle = _HeldDirectory.open(root)
         if (
             repository_handle.device != system_handle.device
             or external_handle.device == system_handle.device
@@ -1068,8 +1118,6 @@ def seal_private_security_binding(
         archive_handle.revalidate()
         if archive_handle.device != external_handle.device:
             raise BoundedSupervisorError("private binding archive escaped its volume")
-        final_name = f"T07-BOUNDED-PRIVATE-BINDING-{alias.rsplit('-', 1)[-1]}"
-        staging_name = f".{final_name}.staging"
         for name in (final_name, staging_name):
             try:
                 os.stat(name, dir_fd=archive_handle.descriptor, follow_symlinks=False)
@@ -1077,6 +1125,7 @@ def seal_private_security_binding(
                 continue
             raise BoundedSupervisorError("private binding archive identity is not fresh")
         os.mkdir(staging_name, mode=0o700, dir_fd=archive_handle.descriptor)
+        staging_exists = True
         staging_fd = os.open(
             staging_name,
             os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0),
@@ -1089,6 +1138,14 @@ def seal_private_security_binding(
             or staging.st_uid != os.getuid()
         ):
             raise BoundedSupervisorError("private binding staging directory is unsafe")
+        _write_exclusive_at(staging_fd, PRIVATE_BINDING_FILENAME, encoded)
+        staged = _read_regular_at(
+            staging_fd,
+            PRIVATE_BINDING_FILENAME,
+            max_bytes=MAX_PRIVATE_FILE_BYTES,
+        )
+        if staged != encoded:
+            raise BoundedSupervisorError("private binding staging verification failed")
         copy_record = canonical_json_bytes(
             {
                 "schema_version": PRIVATE_BINDING_SCHEMA_VERSION,
@@ -1096,7 +1153,8 @@ def seal_private_security_binding(
                 "binding_sha256": digest,
                 "binding_bytes": len(encoded),
                 "source_retained": True,
-                "source_destination_sha256_equal": True,
+                "staging_binding_sha256": sha256_bytes(staged),
+                "staging_bytes_verified": True,
                 "one_way_copy": True,
                 "held_no_follow_descriptors": True,
                 "internal_fallback": False,
@@ -1115,9 +1173,8 @@ def seal_private_security_binding(
                 "restoration_payload_sha256": RESTORATION_SHA256,
             }
         )
-        _write_exclusive_at(staging_fd, "private-security-binding.json", encoded)
-        _write_exclusive_at(staging_fd, "COPY_RECORD.json", copy_record)
-        _write_exclusive_at(staging_fd, "SEAL.json", seal)
+        _write_exclusive_at(staging_fd, PRIVATE_BINDING_COPY_RECORD_FILENAME, copy_record)
+        _write_exclusive_at(staging_fd, PRIVATE_BINDING_EXTERNAL_SEAL_FILENAME, seal)
         os.fsync(staging_fd)
         os.fchmod(staging_fd, 0o500)
         os.rename(
@@ -1126,6 +1183,8 @@ def seal_private_security_binding(
             src_dir_fd=archive_handle.descriptor,
             dst_dir_fd=archive_handle.descriptor,
         )
+        staging_exists = False
+        final_exists = True
         os.fsync(archive_handle.descriptor)
         os.close(staging_fd)
         staging_fd = -1
@@ -1136,11 +1195,15 @@ def seal_private_security_binding(
         )
         copied = _read_regular_at(
             destination_fd,
-            "private-security-binding.json",
+            PRIVATE_BINDING_FILENAME,
             max_bytes=MAX_PRIVATE_FILE_BYTES,
         )
-        copied_record = _read_regular_at(destination_fd, "COPY_RECORD.json", max_bytes=65_536)
-        copied_seal = _read_regular_at(destination_fd, "SEAL.json", max_bytes=65_536)
+        copied_record = _read_regular_at(
+            destination_fd, PRIVATE_BINDING_COPY_RECORD_FILENAME, max_bytes=65_536
+        )
+        copied_seal = _read_regular_at(
+            destination_fd, PRIVATE_BINDING_EXTERNAL_SEAL_FILENAME, max_bytes=65_536
+        )
         if copied != encoded or copied_record != copy_record or copied_seal != seal:
             raise BoundedSupervisorError("private binding destination verification failed")
         external_post, system_post = observer()
@@ -1151,6 +1214,8 @@ def seal_private_security_binding(
         local_seal = canonical_json_bytes(
             {
                 "schema_version": PRIVATE_BINDING_SCHEMA_VERSION,
+                "private_locator": locator,
+                "external_directory_name": final_name,
                 "binding_alias": alias,
                 "binding_sha256": digest,
                 "binding_bytes": len(encoded),
@@ -1163,7 +1228,12 @@ def seal_private_security_binding(
                 "internal_fallback": False,
             }
         )
-        _write_exclusive(local_directory / "PRIVATE_BINDING_SEAL.json", local_seal)
+        local_seal_sha256 = sha256_bytes(local_seal)
+        _write_exclusive(
+            local_directory / PRIVATE_BINDING_LOCAL_SEAL_FILENAME,
+            local_seal,
+            mode=0o600,
+        )
         parent_fd = os.open(
             local_directory,
             os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0),
@@ -1172,28 +1242,291 @@ def seal_private_security_binding(
             os.fsync(parent_fd)
         finally:
             os.close(parent_fd)
+        completed = True
         return SealedPrivateBinding(
             local_path=binding_path,
+            private_locator=locator,
             binding_alias=alias,
             binding_sha256=digest,
             binding_bytes=len(encoded),
             external_copy_sha256=sha256_bytes(copied),
             seal_sha256=sha256_bytes(seal),
+            local_seal_sha256=local_seal_sha256,
             source_retained=True,
             source_destination_sha256_equal=True,
         )
-    except OSError:
-        raise BoundedSupervisorError("private binding archive filesystem action failed") from None
+    except Exception:
+        raise BoundedSupervisorError("private binding seal transaction failed") from None
     finally:
         if destination_fd >= 0:
             os.close(destination_fd)
         if staging_fd >= 0:
             os.close(staging_fd)
+        cleanup_failed = False
+        if not completed and archive_handle is not None:
+            for name, exists in ((staging_name, staging_exists), (final_name, final_exists)):
+                if not exists:
+                    continue
+                try:
+                    directory_fd = os.open(
+                        name,
+                        os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0),
+                        dir_fd=archive_handle.descriptor,
+                    )
+                    try:
+                        owned = os.fstat(directory_fd)
+                        if (
+                            not stat.S_ISDIR(owned.st_mode)
+                            or owned.st_uid != os.getuid()
+                            or owned.st_dev != archive_handle.device
+                        ):
+                            raise BoundedSupervisorError(
+                                "owned private binding cleanup identity drifted"
+                            )
+                        os.fchmod(directory_fd, 0o700)
+                        allowed = {
+                            PRIVATE_BINDING_FILENAME,
+                            PRIVATE_BINDING_COPY_RECORD_FILENAME,
+                            PRIVATE_BINDING_EXTERNAL_SEAL_FILENAME,
+                        }
+                        entries = set(os.listdir(directory_fd))
+                        if not entries <= allowed:
+                            raise BoundedSupervisorError(
+                                "owned private binding cleanup encountered an unknown member"
+                            )
+                        for member in sorted(entries):
+                            os.unlink(member, dir_fd=directory_fd)
+                    finally:
+                        os.close(directory_fd)
+                    os.rmdir(name, dir_fd=archive_handle.descriptor)
+                    os.fsync(archive_handle.descriptor)
+                except Exception:
+                    cleanup_failed = True
         if archive_handle is not None:
             archive_handle.close()
-        repository_handle.close()
-        system_handle.close()
-        external_handle.close()
+        if repository_handle is not None:
+            repository_handle.close()
+        if system_handle is not None:
+            system_handle.close()
+        if external_handle is not None:
+            external_handle.close()
+        if not completed:
+            try:
+                for member in (
+                    PRIVATE_BINDING_FILENAME,
+                    PRIVATE_BINDING_LOCAL_SEAL_FILENAME,
+                ):
+                    candidate = local_directory / member
+                    with contextlib.suppress(FileNotFoundError):
+                        candidate.unlink()
+                local_directory.rmdir()
+            except OSError:
+                cleanup_failed = True
+            if cleanup_failed:
+                raise BoundedSupervisorError("private binding failure cleanup failed")
+
+
+def _verify_presealed_private_security_binding(
+    root: Path,
+    *,
+    binding_path: Path,
+    binding_sha256: str,
+    local_seal_sha256: str,
+    volume_observer: Callable[[], tuple[VolumeObservation, VolumeObservation]],
+) -> tuple[dict[str, object], bytes, VolumeObservation, VolumeObservation]:
+    """Verify the exact retained local source and external seal before authority exists."""
+
+    if _HEX64.fullmatch(binding_sha256) is None or _HEX64.fullmatch(local_seal_sha256) is None:
+        raise BoundedSupervisorError("private binding seal identity is malformed")
+    try:
+        linked = binding_path.lstat()
+        relative = binding_path.relative_to(root)
+    except (OSError, ValueError):
+        raise BoundedSupervisorError(
+            "private binding source is unavailable or unconfined"
+        ) from None
+    if (
+        not binding_path.is_absolute()
+        or binding_path.resolve(strict=True) != binding_path.absolute()
+        or len(relative.parts) != len(PRIVATE_BINDING_LOCAL_PARENT_RELATIVE.parts) + 2
+        or Path(*relative.parts[: len(PRIVATE_BINDING_LOCAL_PARENT_RELATIVE.parts)])
+        != PRIVATE_BINDING_LOCAL_PARENT_RELATIVE
+        or relative.parts[-1] != PRIVATE_BINDING_FILENAME
+        or not stat.S_ISREG(linked.st_mode)
+        or stat.S_ISLNK(linked.st_mode)
+        or linked.st_nlink != 1
+        or linked.st_uid != os.getuid()
+        or stat.S_IMODE(linked.st_mode) != 0o600
+        or root / ".git" in binding_path.parents
+    ):
+        raise BoundedSupervisorError("private binding source path or ownership is unsafe")
+    encoded = _read_regular(binding_path, max_bytes=MAX_PRIVATE_FILE_BYTES)
+    if sha256_bytes(encoded) != binding_sha256 or binding_sha256 != PRIVATE_BINDING_SHA256:
+        raise BoundedSupervisorError("private binding source identity drifted")
+    document = _strict_json(encoded, context="private security binding")
+    _validate_private_binding(root, document)
+    locator = _text(document.get("private_locator"), context="private binding locator")
+    if binding_path.parent.name != locator:
+        raise BoundedSupervisorError("private binding locator/path mismatch")
+    local_seal_path = binding_path.parent / PRIVATE_BINDING_LOCAL_SEAL_FILENAME
+    try:
+        seal_linked = local_seal_path.lstat()
+    except OSError:
+        raise BoundedSupervisorError("private binding local seal is unavailable") from None
+    if (
+        not stat.S_ISREG(seal_linked.st_mode)
+        or stat.S_ISLNK(seal_linked.st_mode)
+        or seal_linked.st_nlink != 1
+        or seal_linked.st_uid != os.getuid()
+        or stat.S_IMODE(seal_linked.st_mode) != 0o600
+    ):
+        raise BoundedSupervisorError("private binding local seal is unsafe")
+    local_seal_encoded = _read_regular(local_seal_path, max_bytes=65_536)
+    if sha256_bytes(local_seal_encoded) != local_seal_sha256:
+        raise BoundedSupervisorError("private binding local seal hash drifted")
+    local_seal = _strict_json(local_seal_encoded, context="private binding local seal")
+    external_name = f"t07-private-binding-{locator}"
+    if local_seal.get("external_directory_name") != external_name:
+        raise BoundedSupervisorError("private binding external locator drifted")
+
+    from giclab.harness.lambda_archive import (
+        _HeldDirectory,
+        _read_regular_at,
+        _same_identity,
+        _validate_external,
+        _validate_system,
+    )
+    from giclab.harness.sira_storage import SYSTEM_DATA_MOUNT
+
+    external_pre, system_pre = volume_observer()
+    external_floor = _validate_external(
+        cast(Any, external_pre), incremental_bytes=MAX_PRIVATE_FILE_BYTES
+    )
+    _validate_system(cast(Any, system_pre), floor_bytes=MAC_PREWRITE_FLOOR_BYTES)
+    if external_floor != EXTERNAL_RETAINED_FLOOR_BYTES:
+        raise BoundedSupervisorError("private binding verification floor drifted")
+    handles = []
+    try:
+        external = _HeldDirectory.open(EXTERNAL_MOUNT)
+        handles.append(external)
+        system = _HeldDirectory.open(SYSTEM_DATA_MOUNT)
+        handles.append(system)
+        repository = _HeldDirectory.open(root)
+        handles.append(repository)
+        archive = _HeldDirectory.open(EXTERNAL_PARENT)
+        handles.append(archive)
+        destination = _HeldDirectory.open(EXTERNAL_PARENT / external_name)
+        handles.append(destination)
+        if (
+            repository.device != system.device
+            or external.device == system.device
+            or archive.device != external.device
+            or destination.device != external.device
+        ):
+            raise BoundedSupervisorError("private binding verification fell back internally")
+        for handle in handles:
+            handle.revalidate()
+        destination_mode = stat.S_IMODE(os.fstat(destination.descriptor).st_mode)
+        if destination_mode != 0o500:
+            raise BoundedSupervisorError("private binding external directory mode drifted")
+        for member in (
+            PRIVATE_BINDING_FILENAME,
+            PRIVATE_BINDING_COPY_RECORD_FILENAME,
+            PRIVATE_BINDING_EXTERNAL_SEAL_FILENAME,
+        ):
+            observed = os.stat(member, dir_fd=destination.descriptor, follow_symlinks=False)
+            if (
+                not stat.S_ISREG(observed.st_mode)
+                or observed.st_nlink != 1
+                or stat.S_IMODE(observed.st_mode) != 0o400
+            ):
+                raise BoundedSupervisorError("private binding external member mode drifted")
+        copied = _read_regular_at(
+            destination.descriptor,
+            PRIVATE_BINDING_FILENAME,
+            max_bytes=MAX_PRIVATE_FILE_BYTES,
+        )
+        copy_record_encoded = _read_regular_at(
+            destination.descriptor,
+            PRIVATE_BINDING_COPY_RECORD_FILENAME,
+            max_bytes=65_536,
+        )
+        external_seal_encoded = _read_regular_at(
+            destination.descriptor,
+            PRIVATE_BINDING_EXTERNAL_SEAL_FILENAME,
+            max_bytes=65_536,
+        )
+        if copied != encoded:
+            raise BoundedSupervisorError("private binding external copy drifted")
+        copy_record = _strict_json(copy_record_encoded, context="private binding copy record")
+        expected_copy_record = {
+            "schema_version": PRIVATE_BINDING_SCHEMA_VERSION,
+            "binding_alias": PRIVATE_BINDING_ALIAS,
+            "binding_sha256": binding_sha256,
+            "binding_bytes": len(encoded),
+            "source_retained": True,
+            "staging_binding_sha256": binding_sha256,
+            "staging_bytes_verified": True,
+            "one_way_copy": True,
+            "held_no_follow_descriptors": True,
+            "internal_fallback": False,
+        }
+        if copy_record != expected_copy_record:
+            raise BoundedSupervisorError("private binding copy record drifted")
+        copy_record_sha256 = sha256_bytes(copy_record_encoded)
+        expected_external_seal = {
+            "schema_version": PRIVATE_BINDING_SCHEMA_VERSION,
+            "binding_alias": PRIVATE_BINDING_ALIAS,
+            "binding_sha256": binding_sha256,
+            "copy_record_sha256": copy_record_sha256,
+            "baseline_alias": BASELINE_ALIAS,
+            "baseline_semantic_sha256": BASELINE_SEMANTIC_SHA256,
+            "restoration_alias": RESTORATION_ALIAS,
+            "restoration_payload_sha256": RESTORATION_SHA256,
+        }
+        if (
+            _strict_json(external_seal_encoded, context="private binding external seal")
+            != expected_external_seal
+        ):
+            raise BoundedSupervisorError("private binding external seal drifted")
+        expected_local_seal = {
+            "schema_version": PRIVATE_BINDING_SCHEMA_VERSION,
+            "private_locator": locator,
+            "external_directory_name": external_name,
+            "binding_alias": PRIVATE_BINDING_ALIAS,
+            "binding_sha256": binding_sha256,
+            "binding_bytes": len(encoded),
+            "external_copy_sha256": binding_sha256,
+            "copy_record_sha256": copy_record_sha256,
+            "seal_sha256": sha256_bytes(external_seal_encoded),
+            "source_retained": True,
+            "source_destination_sha256_equal": True,
+            "held_no_follow_descriptors": True,
+            "internal_fallback": False,
+        }
+        if local_seal != expected_local_seal:
+            raise BoundedSupervisorError("private binding local seal content drifted")
+        external_post, system_post = volume_observer()
+        _validate_external(cast(Any, external_post), incremental_bytes=0)
+        _validate_system(cast(Any, system_post), floor_bytes=MAC_RETAINED_FLOOR_BYTES)
+        if (
+            not _same_identity(cast(Any, external_pre), cast(Any, external_post))
+            or not _same_identity(cast(Any, system_pre), cast(Any, system_post))
+            or external_post.free_bytes < external_floor
+        ):
+            raise BoundedSupervisorError("private binding verification volume drifted")
+        for handle in handles:
+            handle.revalidate()
+    except BoundedSupervisorError:
+        raise
+    except Exception:
+        raise BoundedSupervisorError("private binding retained seal verification failed") from None
+    finally:
+        for handle in reversed(handles):
+            handle.close()
+    if _read_regular(binding_path, max_bytes=MAX_PRIVATE_FILE_BYTES) != encoded:
+        raise BoundedSupervisorError("private binding local source changed during verification")
+    return document, encoded, external_pre, system_pre
 
 
 def materialize_authority(
@@ -1205,6 +1538,7 @@ def materialize_authority(
     authorization_reference: str,
     private_security_binding_path: Path,
     private_security_binding_sha256: str,
+    private_security_binding_seal_sha256: str,
     volume_observer: Callable[[], tuple[VolumeObservation, VolumeObservation]] | None = None,
     utc_now: Callable[[], datetime] = lambda: datetime.now(UTC),
 ) -> dict[str, object]:
@@ -1219,52 +1553,24 @@ def materialize_authority(
         )
     else:
         observer = volume_observer
-    from giclab.harness.lambda_archive import _validate_external, _validate_system
-
-    external_pre, system_pre = observer()
-    external_floor = _validate_external(
-        cast(Any, external_pre), incremental_bytes=MAX_ARCHIVE_BYTES
-    )
-    _validate_system(cast(Any, system_pre), floor_bytes=MAC_PREWRITE_FLOOR_BYTES)
-    if external_floor != EXTERNAL_RETAINED_FLOOR_BYTES:
-        raise BoundedSupervisorError("bounded storage floor drifted")
     if (
         _AUTHORIZATION.fullmatch(authorization_reference) is None
         or authorization_reference.endswith("-PENDING")
         or private_security_binding_sha256 != PRIVATE_BINDING_SHA256
-        or private_security_binding_path == root / HISTORICAL_SOURCE_PARAMETERS_RELATIVE
     ):
         raise BoundedSupervisorError("authorization materialization input drifted")
-    try:
-        linked = private_security_binding_path.lstat()
-    except OSError:
-        raise BoundedSupervisorError("private binding is unavailable") from None
-    try:
-        private_relative = private_security_binding_path.relative_to(root)
-    except ValueError:
-        raise BoundedSupervisorError(
-            "private binding must use the ignored local artifact root"
-        ) from None
-    if (
-        not private_security_binding_path.is_absolute()
-        or private_security_binding_path.resolve(strict=True)
-        != private_security_binding_path.absolute()
-        or not private_relative.parts
-        or private_relative.parts[0] != "artifacts"
-        or not stat.S_ISREG(linked.st_mode)
-        or stat.S_ISLNK(linked.st_mode)
-        or linked.st_nlink != 1
-        or linked.st_uid != os.getuid()
-        or stat.S_IMODE(linked.st_mode) != 0o600
-        or root / ".git" in private_security_binding_path.parents
-    ):
-        raise BoundedSupervisorError("private binding path or ownership is unsafe")
-    private_encoded = _read_regular(private_security_binding_path, max_bytes=MAX_PRIVATE_FILE_BYTES)
+    _private_binding, private_encoded, external_pre, system_pre = (
+        _verify_presealed_private_security_binding(
+            root,
+            binding_path=private_security_binding_path,
+            binding_sha256=private_security_binding_sha256,
+            local_seal_sha256=private_security_binding_seal_sha256,
+            volume_observer=observer,
+        )
+    )
+    if external_pre.free_bytes < EXTERNAL_PREWRITE_FLOOR_BYTES:
+        raise BoundedSupervisorError("bounded archive prewrite floor is unavailable")
     private_sha256 = sha256_bytes(private_encoded)
-    if private_sha256 != private_security_binding_sha256:
-        raise BoundedSupervisorError("private binding identity drifted")
-    private_binding = _strict_json(private_encoded, context="private security binding")
-    _validate_private_binding(root, private_binding)
     limits = _mapping(plan.get("limits"), context="plan limits")
     started = utc_now().astimezone(UTC)
     if started.microsecond == 0:
@@ -6388,6 +6694,7 @@ def _parser() -> argparse.ArgumentParser:
     materialize.add_argument("--authorization-reference", required=True)
     materialize.add_argument("--private-security-binding", type=Path, required=True)
     materialize.add_argument("--private-security-binding-sha256", required=True)
+    materialize.add_argument("--private-security-binding-seal-sha256", required=True)
     for name in ("prepare-bundle", "observe", "release-bootstrap", "verify-inbound", "archive"):
         child = subparsers.add_parser(name)
         child.add_argument("--authorization", type=Path, required=True)
@@ -6429,6 +6736,7 @@ def main(argv: Sequence[str] | None = None, *, contract: ModuleType | None = Non
             authorization_reference=args.authorization_reference,
             private_security_binding_path=args.private_security_binding,
             private_security_binding_sha256=args.private_security_binding_sha256,
+            private_security_binding_seal_sha256=args.private_security_binding_seal_sha256,
         )
     elif args.operation == "prepare-bundle":
         result = prepare_upload_bundle(
@@ -6515,5 +6823,6 @@ __all__ = [
     "main",
     "materialize_authority",
     "prepare_upload_bundle",
+    "seal_private_security_binding",
     "verify_inbound_evidence",
 ]

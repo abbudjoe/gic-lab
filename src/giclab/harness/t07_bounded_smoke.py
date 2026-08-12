@@ -35,6 +35,7 @@ BROWSER_PREFLIGHT_RUN_ID: Final = "RUN-T07-BOUNDED-BROWSER-PREFLIGHT-0002"
 MODEL_PREFLIGHT_RUN_ID: Final = "RUN-T07-BOUNDED-MODEL-PREFLIGHT-0002"
 AUTHORIZATION_PLACEHOLDER: Final = "AUTH-T07-BOUNDED-SIRA-SMOKE-V2-PENDING"
 TERMINAL_STATE: Final = "ready-for-bounded-smoke-v2-authorization"
+REVIEWED_IMPLEMENTATION_COMMIT: Final = "PENDING-IMPLEMENTATION-COMMIT"
 
 EXPERIMENT_ID: Final = "EXP-0001"
 SCIENTIFIC_PROFILE_ID: Final = "PLAN-EXP0001-SMOKE"
@@ -93,7 +94,7 @@ FIREWALL_RESTORATION_ALIAS: Final = "l2m-firewall-restoration-50ca7febe9f1"
 FIREWALL_RESTORATION_SHA256: Final = (
     "50ca7febe9f160ada862371376485ea2ece11b373d25179ccd578d9c7acd42b8"
 )
-PRIVATE_SECURITY_BINDING_SCHEMA_VERSION: Final = "0.2.0"
+PRIVATE_SECURITY_BINDING_SCHEMA_VERSION: Final = "0.3.0"
 PRIVATE_SECURITY_BINDING_ALIAS: Final = "t07-bounded-binding-413dd97fcb1f"
 PRIVATE_SECURITY_BINDING_SHA256: Final = (
     "5599ca1a7e371461a26453ad791cd2292ffaa9714986c48d06dc8253a3f08e6b"
@@ -998,6 +999,8 @@ def local_supervisor_argv_templates() -> dict[str, list[str]]:
             "${PRIVATE_SECURITY_BINDING_PATH}",
             "--private-security-binding-sha256",
             PRIVATE_SECURITY_BINDING_SHA256,
+            "--private-security-binding-seal-sha256",
+            "${PRIVATE_SECURITY_BINDING_SEAL_SHA256}",
         ],
         "prepare_bundle": [*base, "prepare-bundle", *authority],
     }
@@ -1742,8 +1745,7 @@ def validate_plan(plan: Mapping[str, object], *, repository_root: Path | None = 
     }
     if (
         set(implementation) != {"reviewed_commit", "artifacts"}
-        or not isinstance(reviewed_commit, str)
-        or _HEX40.fullmatch(reviewed_commit) is None
+        or reviewed_commit != REVIEWED_IMPLEMENTATION_COMMIT
         or artifact_paths != REQUIRED_IMPLEMENTATION_ARTIFACTS
     ):
         raise BoundedSmokeContractError("implementation binding is incomplete or drifted")
@@ -1780,6 +1782,7 @@ __all__ = [
     "MODEL_PREFLIGHT_RUN_ID",
     "PLAN_ID",
     "REACTIVE_RUN_ID",
+    "REVIEWED_IMPLEMENTATION_COMMIT",
     "SIMULATIVE_RUN_ID",
     "TERMINAL_STATE",
     "BoundedSmokeContractError",
