@@ -10,6 +10,7 @@ import importlib.util
 import json
 import os
 import platform
+import stat
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -97,8 +98,36 @@ def load_pinned_upstream_runner(
     required_callables = ("main", "make_agent", "make_llm", "run_episode")
     if any(not callable(getattr(module, name, None)) for name in required_callables):
         raise RuntimeError("pinned upstream runner entry surface is incomplete")
-    if any(controlled_cwd.iterdir()):
+    log_directory = controlled_cwd / "logs"
+    expected_log = log_directory / f"sira_{datetime.now().strftime('%Y-%m-%d')}.log"
+    if (
+        set(controlled_cwd.iterdir()) != {log_directory}
+        or log_directory.is_symlink()
+        or not log_directory.is_dir()
+        or set(log_directory.iterdir()) != {expected_log}
+        or expected_log.is_symlink()
+        or not expected_log.is_file()
+    ):
         raise RuntimeError("pinned upstream runner import wrote unexpected files")
+    metadata = expected_log.stat()
+    if (
+        not stat.S_ISREG(metadata.st_mode)
+        or metadata.st_uid != os.getuid()
+        or metadata.st_nlink != 1
+        or metadata.st_size != 0
+        or stat.S_IMODE(metadata.st_mode) & 0o022
+    ):
+        raise RuntimeError("pinned upstream runner import log is unsafe")
+    import_side_effect = {
+        "path": str(expected_log.relative_to(controlled_cwd)),
+        "bytes": metadata.st_size,
+        "sha256": _sha256_file(expected_log),
+        "classification": "expected-empty-pinned-sira-import-log",
+    }
+    expected_log.unlink()
+    log_directory.rmdir()
+    if any(controlled_cwd.iterdir()):
+        raise RuntimeError("pinned upstream runner import scratch cleanup failed")
     return {
         "path": str(path),
         "sha256": observed_sha256,
@@ -107,6 +136,8 @@ def load_pinned_upstream_runner(
         "status": "passed",
         "network_mode": "none",
         "browser_or_model_action": False,
+        "import_side_effect": import_side_effect,
+        "scratch_cleanup": "passed",
     }
 
 

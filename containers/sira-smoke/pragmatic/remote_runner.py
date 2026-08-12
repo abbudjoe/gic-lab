@@ -462,6 +462,12 @@ def runtime_preflight(
         or upstream_import.get("status") != "passed"
         or upstream_import.get("network_mode") != "none"
         or upstream_import.get("browser_or_model_action") is not False
+        or upstream_import.get("scratch_cleanup") != "passed"
+        or not isinstance(upstream_import.get("import_side_effect"), dict)
+        or upstream_import["import_side_effect"].get("bytes") != 0
+        or upstream_import["import_side_effect"].get("sha256") != hashlib.sha256(b"").hexdigest()
+        or upstream_import["import_side_effect"].get("classification")
+        != "expected-empty-pinned-sira-import-log"
     ):
         raise PragmaticRunError("exact runtime preflight did not validate")
 

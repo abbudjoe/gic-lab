@@ -250,7 +250,15 @@ def test_upstream_runner_load_probe_is_hash_bound_and_side_effect_free(
     )
     runner_fixture = tmp_path / "run_web_agent.py"
     runner_fixture.write_text(
-        "def main(): pass\ndef make_agent(): pass\ndef make_llm(): pass\ndef run_episode(): pass\n",
+        "from pathlib import Path\n"
+        "from datetime import datetime\n"
+        "log = Path('logs') / f\"sira_{datetime.now().strftime('%Y-%m-%d')}.log\"\n"
+        "log.parent.mkdir()\n"
+        "log.touch()\n"
+        "def main(): pass\n"
+        "def make_agent(): pass\n"
+        "def make_llm(): pass\n"
+        "def run_episode(): pass\n",
         encoding="utf-8",
     )
     import_cwd = tmp_path / "import-cwd"
@@ -267,6 +275,11 @@ def test_upstream_runner_load_probe_is_hash_bound_and_side_effect_free(
     assert record["sha256"] == expected
     assert record["status"] == "passed"
     assert record["browser_or_model_action"] is False
+    assert record["import_side_effect"]["bytes"] == 0
+    assert record["import_side_effect"]["classification"] == (
+        "expected-empty-pinned-sira-import-log"
+    )
+    assert record["scratch_cleanup"] == "passed"
     assert list(import_cwd.iterdir()) == []
     with pytest.raises(RuntimeError, match="digest drifted"):
         module.load_pinned_upstream_runner(
@@ -297,7 +310,15 @@ def test_runtime_preflight_executes_artifact_budget_command_and_cleanup_paths(
     )
     fixture_runner = tmp_path / "pinned-runner.py"
     fixture_runner.write_text(
-        "def main(): pass\ndef make_agent(): pass\ndef make_llm(): pass\ndef run_episode(): pass\n",
+        "from pathlib import Path\n"
+        "from datetime import datetime\n"
+        "log = Path('logs') / f\"sira_{datetime.now().strftime('%Y-%m-%d')}.log\"\n"
+        "log.parent.mkdir()\n"
+        "log.touch()\n"
+        "def main(): pass\n"
+        "def make_agent(): pass\n"
+        "def make_llm(): pass\n"
+        "def run_episode(): pass\n",
         encoding="utf-8",
     )
     monkeypatch.setattr(module, "UPSTREAM_RUNNER", fixture_runner)
@@ -318,6 +339,7 @@ def test_runtime_preflight_executes_artifact_budget_command_and_cleanup_paths(
     }
     assert document["owned_cleanup"] == "passed"
     assert document["upstream_runner_import"]["status"] == "passed"
+    assert document["upstream_runner_import"]["scratch_cleanup"] == "passed"
     assert (tmp_path / "runtime-preflight.json").is_file()
 
 
