@@ -89,9 +89,11 @@ def test_only_the_smoke_profile_is_eligible_for_later_authorization() -> None:
         assert condition["profile_plan_id"] == parent["plan_id"]
 
 
-def test_active_status_surfaces_name_exactly_one_prospective_bounded_plan() -> None:
+def test_historical_status_surfaces_preserve_the_bounded_v3_plan() -> None:
+    assert "Historical bounded plan: `PLAN-T07-BOUNDED-SIRA-SMOKE-V3`" in (
+        PHASE_1_PLAN.read_text(encoding="utf-8")
+    )
     surfaces = (
-        PHASE_1_PLAN,
         ROOT / "docs/readiness/PHASE_1_SMOKE_READINESS.md",
         ROOT / "docs/harness/T07_BOUNDED_SMOKE_GOVERNANCE.md",
     )
@@ -283,11 +285,11 @@ def test_t07_l21_terminal_state_has_no_executable_plan_or_authorization() -> Non
     assert "i authorize t07 gate l2" not in packet.casefold()
 
 
-def test_closeout_retains_zero_scientific_execution_and_only_bounded_infrastructure() -> None:
+def test_closeout_retains_zero_scientific_interpretation_and_typed_compute() -> None:
     compute = load_yaml(ROOT / "manifests/compute.yaml")
     results = load_json(EXP_ROOT / "results-summary.json")
-    assert len(compute["entries"]) == 1
-    planned = compute["entries"][0]
+    entries = {entry["id"]: entry for entry in compute["entries"]}
+    planned = entries["CMP-0001"]
     assert planned == {
         "id": "CMP-0001",
         "experiment_id": "EXP-0001",
@@ -301,6 +303,34 @@ def test_closeout_retains_zero_scientific_execution_and_only_bounded_infrastruct
         "cost_usd": 0.0,
         "authorization_reference": "AUTH-T07-BOUNDED-SIRA-SMOKE-V3-PENDING",
         "status": "planned",
+    }
+    assert entries["CMP-0002"] == {
+        "id": "CMP-0002",
+        "experiment_id": "EXP-0001",
+        "provider": "Lambda On-Demand Cloud",
+        "hardware": "gpu_1x_a10",
+        "region": "us-east-1",
+        "started_at": "2026-08-12T20:01:27.897128Z",
+        "ended_at": "2026-08-12T20:26:40.632226Z",
+        "wall_clock_hours": 0.4202041938888889,
+        "accelerator_hours": 0.4202041938888889,
+        "cost_usd": 0.5420634101166667,
+        "authorization_reference": "AUTH-T07-PRAGMATIC-RESET-2026-08-12",
+        "status": "failed",
+    }
+    assert entries["CMP-0003"] == {
+        "id": "CMP-0003",
+        "experiment_id": "EXP-0001",
+        "provider": "Lambda On-Demand Cloud",
+        "hardware": "gpu_1x_a10",
+        "region": "us-east-1",
+        "started_at": "2026-08-12T21:26:13.097888Z",
+        "ended_at": "2026-08-12T21:52:35.003136Z",
+        "wall_clock_hours": 0.43941812444444445,
+        "accelerator_hours": 0.43941812444444445,
+        "cost_usd": 0.5668493805333333,
+        "authorization_reference": "AUTH-T07-PRAGMATIC-RETRY2-2026-08-12",
+        "status": "completed",
     }
     summary = compute["phase_zero_summary"]
     assert summary["period_end"] == "2026-08-08"
@@ -396,17 +426,15 @@ def test_closeout_retains_zero_scientific_execution_and_only_bounded_infrastruct
     }
     retained_files = {
         path.relative_to(ROOT).as_posix()
-        for path in (ROOT / "artifacts").rglob("*")
+        for namespace in (run2_root, run3_root, alias_root, l1a_root, l20_root)
+        for path in (ROOT / namespace).rglob("*")
         if path.is_file()
-        and not path.relative_to(ROOT).as_posix().startswith("artifacts/t07/lambda/gate-l2m/")
-        and not path.relative_to(ROOT)
-        .as_posix()
-        .startswith("artifacts/t07/bounded-private-bindings/")
     }
     # Gate L2.3's ignored private materialization is validated through the dedicated
     # held-descriptor/seal tests; this historical inventory continues to pin every
-    # earlier retained artifact without publishing L2.3 or bounded-smoke private path
-    # identities. Those protected namespaces have dedicated mode/no-follow/seal tests.
+    # earlier Lambda-inventory artifact without coupling this historical inventory to
+    # later pragmatic-run or protected private namespaces. Those namespaces have their
+    # own mode/no-follow/seal and evidence-manifest tests.
     assert retained_files == set(retained_hashes)
     for relative, expected in retained_hashes.items():
         assert hashlib.sha256((ROOT / relative).read_bytes()).hexdigest() == expected

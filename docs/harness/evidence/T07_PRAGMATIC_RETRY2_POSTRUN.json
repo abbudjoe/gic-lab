@@ -1,0 +1,130 @@
+{
+  "schema_version": "0.1.0",
+  "disposition": "matched_pair_executed_cleanup_verified",
+  "scientific_interpretation_allowed": false,
+  "identities": {
+    "authorization_reference": "AUTH-T07-PRAGMATIC-RETRY2-2026-08-12",
+    "host_run_id": "RUN-T07-PRAGMATIC-HOST-0002",
+    "reactive_run_id": "RUN-T07-PRAGMATIC-SIRA-REACTIVE-0002",
+    "simulative_run_id": "RUN-T07-PRAGMATIC-SIRA-SIMULATIVE-0002",
+    "final_git_commit": "5698f04dfd08bc85a66d2355b0a4bd7d3ce24a23",
+    "sira_commit": "93fb8d72de71f9a4a13419670adeb34d93cf7acd",
+    "sira_tree": "6a6d9068b94d7632d3533a3d6f013d4de6ff76e8",
+    "run_manifest_sha256": "877c26d16e242733e4f86afc54a058b868ca79ee27b826abc5e1e92ae0427ccd"
+  },
+  "runtime": {
+    "model": "gpt-4o-2024-11-20",
+    "python": "3.11.14",
+    "image_id": "sha256:035edf61718e84a8156f4f0f7817b134b0ce31488d3f0b50bbfba2b4a30cc61c",
+    "base_image": "mcr.microsoft.com/playwright/python:v1.39.0-jammy@sha256:96955ff5cc37e13f5f1b21f5171afb9fed7e028025aa9d81c690501cd7fa0c6c",
+    "playwright_version": "1.39.0",
+    "chromium_revision": "1084",
+    "preflight_setup_attempt": 3,
+    "preflight_status": "passed",
+    "model_metadata_http_status": 200,
+    "earlier_setup_attempts": [
+      {
+        "attempt": 1,
+        "classification": "pre_empirical_runner_identity_repair"
+      },
+      {
+        "attempt": 2,
+        "classification": "pre_empirical_expected_import_side_effect_repair"
+      }
+    ]
+  },
+  "conditions": {
+    "order": [
+      "SIRA-REACTIVE",
+      "SIRA-SIMULATIVE"
+    ],
+    "reactive": {
+      "terminal_state": "executed",
+      "returncode": 0,
+      "model_call_attempts": 4,
+      "input_tokens": 4626,
+      "cached_input_tokens": 0,
+      "output_tokens": 260,
+      "total_tokens": 4886,
+      "cost_usd": 0.014164999999999995,
+      "browser_actions": 1,
+      "wall_seconds": 18.019464842999923,
+      "request_service_tier": "default",
+      "observed_response_service_tiers": [
+        "default"
+      ],
+      "unreconciled_provider_attempts": 0,
+      "session_is_complete": false,
+      "session_error_present": false
+    },
+    "simulative": {
+      "terminal_state": "executed",
+      "returncode": 0,
+      "model_call_attempts": 5,
+      "input_tokens": 5447,
+      "cached_input_tokens": 0,
+      "output_tokens": 1255,
+      "total_tokens": 6702,
+      "cost_usd": 0.026167500000000034,
+      "browser_actions": 1,
+      "wall_seconds": 21.37802647699982,
+      "request_service_tier": "default",
+      "observed_response_service_tiers": [
+        "default"
+      ],
+      "unreconciled_provider_attempts": 0,
+      "session_is_complete": false,
+      "session_error_present": false
+    }
+  },
+  "aggregate_openai": {
+    "model_call_attempts": 9,
+    "input_tokens": 10073,
+    "cached_input_tokens": 0,
+    "output_tokens": 1515,
+    "total_tokens": 11588,
+    "cost_usd": 0.04033250000000003,
+    "browser_actions": 2,
+    "unreconciled_provider_attempts": 0
+  },
+  "provider": {
+    "instance_id": "5e85550b64f4445ebd88a9d2d4172c17",
+    "instance_type": "gpu_1x_a10",
+    "region": "us-east-1",
+    "image_id": "44fab622-b98a-49fe-ac6d-e4ce5531532f",
+    "persistent_filesystems": 0,
+    "launches": 1,
+    "launched_at_utc": "2026-08-12T21:26:13.097888Z",
+    "terminal_absence_verified_at_utc": "2026-08-12T21:52:35.003136Z",
+    "duration_seconds_upper_bound": 1581.905248,
+    "price_usd_per_hour": 1.29,
+    "cost_usd_upper_bound": 0.5668493805333333,
+    "terminal_absent": true,
+    "account_instance_count": 0
+  },
+  "cleanup": {
+    "remote_secret_removed": true,
+    "owned_containers_remaining": 0,
+    "owned_regional_rulesets_remaining": 0,
+    "global_firewall_baseline_unchanged": true,
+    "credential_rotation_required": false,
+    "condition_retries": 0
+  },
+  "evidence": {
+    "local_root": "artifacts/t07/pragmatic/RUN-T07-PRAGMATIC-HOST-0002",
+    "local_run_disposition_sha256": "548f9fa39f68eb6daf5da0ff8b0fe7fb5064765760be41a51e28a0d8b203fb71",
+    "remote_archive_bytes": 65829,
+    "remote_archive_sha256": "4deebc0477581377e2bbb71a8f075bf8b3712188865f0e1faa5c0e7f62dc0450",
+    "remote_evidence_manifest_sha256": "7042a079bccdd6ff4dfdade4c954fd6e403f2c7d6e0cb39c725d4414835a61b1",
+    "external_root": "/Volumes/Macintosh HD - Data/GIC-Lab/t07/sealed-artifacts/RUN-T07-PRAGMATIC-HOST-0002",
+    "external_payload_files": 148,
+    "external_payload_bytes": 22893061,
+    "external_final_sha256sums_sha256": "9fb9ee63c1703e9701e8d5168284a1f757181baadd68a1508095eeac5fc7a167",
+    "source_destination_hashes_match": true,
+    "local_source_retained": true
+  },
+  "pair_contract_valid": true,
+  "same_frozen_runtime": true,
+  "task_completion_claim": false,
+  "scientific_result_claim": false
+}

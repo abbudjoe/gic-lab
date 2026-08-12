@@ -84,7 +84,7 @@ def test_sr2am_h2k_addendum_is_source_grounded_and_preserves_unknowns() -> None:
     assert "latent_internalization_inference" in addendum["analysis_boundary"]["prohibited"]
 
 
-def test_t04_5_preserves_zero_execution_control_plane() -> None:
+def test_t04_5_preserves_closed_phase_zero_summary_and_permissions() -> None:
     state = load_yaml(ROOT / "docs/PROJECT_STATE.yaml")
     compute = load_yaml(ROOT / "manifests/compute.yaml")
     for key in (
@@ -102,19 +102,18 @@ def test_t04_5_preserves_zero_execution_control_plane() -> None:
     assert summary["prototype_runs"] == 0
     assert summary["benchmark_runs"] == 0
     assert summary["training_runs"] == 0
-    assert compute["entries"] == [
-        {
-            "id": "CMP-0001",
-            "experiment_id": "EXP-0001",
-            "provider": "Lambda On-Demand Cloud",
-            "hardware": "gpu_1x_a10",
-            "region": "us-east-1",
-            "started_at": None,
-            "ended_at": None,
-            "wall_clock_hours": 0.0,
-            "accelerator_hours": 0.0,
-            "cost_usd": 0.0,
-            "authorization_reference": "AUTH-T07-BOUNDED-SIRA-SMOKE-V3-PENDING",
-            "status": "planned",
-        }
-    ]
+    entries = {entry["id"]: entry for entry in compute["entries"]}
+    assert entries["CMP-0001"] == {
+        "id": "CMP-0001",
+        "experiment_id": "EXP-0001",
+        "provider": "Lambda On-Demand Cloud",
+        "hardware": "gpu_1x_a10",
+        "region": "us-east-1",
+        "started_at": None,
+        "ended_at": None,
+        "wall_clock_hours": 0.0,
+        "accelerator_hours": 0.0,
+        "cost_usd": 0.0,
+        "authorization_reference": "AUTH-T07-BOUNDED-SIRA-SMOKE-V3-PENDING",
+        "status": "planned",
+    }

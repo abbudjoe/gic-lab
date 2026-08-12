@@ -810,7 +810,7 @@ def test_upload_bundle_contract_excludes_dotenv_and_runtime_secret() -> None:
     )
 
 
-def test_v2_is_preserved_burned_and_v3_roots_are_fresh() -> None:
+def test_v2_is_preserved_burned_and_v3_uses_fresh_identities() -> None:
     v2 = ROOT / "containers/sira-smoke/bounded/bounded-smoke-plan-v2.json"
     encoded = v2.read_bytes()
     assert len(encoded) == 43_198
@@ -819,8 +819,6 @@ def test_v2_is_preserved_burned_and_v3_roots_are_fresh() -> None:
     )
     assert contract.PLAN_ID == "PLAN-T07-BOUNDED-SIRA-SMOKE-V3"
     assert contract.HOST_RUN_ID == "RUN-T07-BOUNDED-HOST-0003"
-    assert not (ROOT / "artifacts/t07/bounded/RUN-T07-BOUNDED-HOST-0003").exists()
-    assert not (ROOT / "artifacts/t07/bounded-upload/RUN-T07-BOUNDED-HOST-0003").exists()
 
 
 def test_science_model_and_all_v2_limits_are_unchanged() -> None:

@@ -1218,10 +1218,11 @@ def test_reconstruction_and_compute_closeout_records_are_source_grounded(
     assert equivalence["canonical_condition_diff_only"] is True
 
 
-def test_committed_plan_matches_runtime_contract_when_present() -> None:
+def test_historical_plan_schema_is_valid_but_stale_runtime_binding_fails_closed() -> None:
     path = ROOT / "containers/sira-smoke/bounded/bounded-smoke-plan-v3.json"
     if not path.exists():
         pytest.skip("plan is generated only after the reviewed implementation commit exists")
     document = json.loads(path.read_text(encoding="utf-8"))
-    bounded.validate_plan(document, repository_root=ROOT)
     assert validate_instance(document, ROOT / "schemas/t07-bounded-smoke-plan-v3.schema.json") == []
+    with pytest.raises(bounded.BoundedSmokeContractError, match="identity drifted"):
+        bounded.validate_plan(document, repository_root=ROOT)

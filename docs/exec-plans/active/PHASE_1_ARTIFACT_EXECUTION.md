@@ -65,8 +65,8 @@ no mutation authority; one gate's authorization never carries into another.
 
 | Task | Work package | Mapped phase DoD | Current permission |
 |---|---|---|---|
-| T07 | Execute one authorized contained SiRA smoke pair; capture regulation-decision evidence without interpretation. | P1-DOD-02, P1-DOD-11 through P1-DOD-13 | terminal common-infrastructure failure; authorization exhausted; fresh repair, run identity, and authorization required |
-| T08 | Analyze smoke infrastructure evidence and prepare an unauthorized pilot package. | P1-DOD-03, P1-DOD-11 through P1-DOD-13 | blocked until T07 succeeds |
+| T07 | Execute one authorized contained SiRA smoke pair; capture regulation-decision evidence without interpretation. | P1-DOD-02, P1-DOD-11 through P1-DOD-13 | complete: Retry 2 matched pair executed and cleanup verified; execution authority exhausted; no pilot authority |
+| T08 | Analyze smoke infrastructure evidence and prepare an unauthorized pilot package. | P1-DOD-03, P1-DOD-11 through P1-DOD-13 | not begun and unauthorized; requires a separate evidence-review instruction |
 | T09 | Execute the freshly authorized exploratory SiRA pilot. | P1-DOD-04, P1-DOD-11 through P1-DOD-13 | blocked until T08 and authorization |
 | T10 | Analyze and publish the exploratory SiRA pilot. | P1-DOD-05, P1-DOD-11 through P1-DOD-13 | blocked until T09 succeeds |
 | T11 | Build and validate the read-only SR²AM Lambda preflight. | P1-DOD-06, P1-DOD-11 through P1-DOD-13 | blocked until T10 succeeds |
@@ -80,13 +80,15 @@ and an analysis recommendation does not authorize the next execution.
 
 ## T07 assembly control
 
-Assembly status: **smoke-failed after the single reactive attempt encountered a
-frozen common-infrastructure incompatibility; simulative was not started, the
-authorization is exhausted, and cleanup is complete**
+Assembly status: **Retry 2 complete: one reactive then one simulative smoke attempt
+executed under the same frozen runtime; cleanup is verified, execution authority is
+exhausted, and interpretation remains prohibited**
 
-Prospective bounded plan: `PLAN-T07-BOUNDED-SIRA-SMOKE-V3`.
+Historical bounded plan: `PLAN-T07-BOUNDED-SIRA-SMOKE-V3` (preserved, not current
+execution authority).
 
-Exact next profile: `PLAN-EXP0001-SMOKE`.
+Next work package: T08 evidence-only independent reproduction and infrastructure
+adjudication. It is not begun and receives no authority from the completed T07 run.
 
 Target contract: materialize and execute one matched reactive/simulative pair under an
 exact human-approved provider/model, API-cost cap, wall-time cap, and cleanup contract;
@@ -130,15 +132,14 @@ the required pre-execution gate; provider termination must not wait on later tes
 documentation.
 
 Post-run closeout validation: `make validate`, `git diff --check`, and all 13
-pragmatic-runner tests pass. The broader Phase 1 closeout subset has one stale
-pre-execution assertion that the compute ledger contains exactly one entry; it now
-observes the correctly retained `CMP-0002` execution entry and fails. That test was
-not changed after the reactive freeze and is a recorded non-runtime repair for a
-future freshly authorized task.
+pragmatic-runner tests pass. After provider termination, the stale pre-execution test
+that coupled the closed Phase 0 zero summary to exactly one all-time compute-ledger
+entry was repaired to assert the Phase 0 record by identity while permitting typed
+Phase 1 allocation records.
 
 ### Pragmatic Retry 2 — 2026-08-12
 
-Assembly status: **in-progress** under the current-turn Retry 2 authorization.
+Assembly status: **complete** under the current-turn Retry 2 authorization.
 
 Source contract:
 `T07 Pragmatic Retry 2 — Repair Python 3.10 Compatibility and Obtain the SiRA
@@ -152,16 +153,22 @@ immutable. Fresh identities are `RUN-T07-PRAGMATIC-HOST-0002`,
 | T07-R2-01 | Verify the exact branch/start commit, prior disposition identity, clean tree, and fresh local/remote/external identities. | met | Clean `phase-1/sira-smoke-pragmatic-r2` at `866c8f376583486bf989de44b06fb15e0b6010a3`; prior disposition SHA-256 `8d4b081b4dd5995e2f021b5defb211d147461b134043d92cef17db3eb332d2fd`; all `0002` roots absent. |
 | T07-R2-02 | Repair the actual Python runtime compatibility boundary without changing scientific fields. | met | `pyproject.toml` and `uv.lock` require Python `>=3.11`; the immutable upstream SiRA `pyproject.toml` at `93fb8d72…` (965 bytes, SHA-256 `63887052447a78cd5cd3fab980db7f4ef4f630f47dc2ad40fc89f80830d13f32`) permits `>=3.10,<3.13`. Reachable repository harness modules use Python-3.11-only `datetime.UTC` and `enum.StrEnum`. The final image therefore creates one exact Python 3.11.14 environment for both conditions and invokes every container child through that environment. No scientific field changed. |
 | T07-R2-03 | Add exact interpreter import, timestamp, evidence, budget, command-rendering, browser, and cleanup regressions; pass focused local gates. | met | Ruff and strict mypy pass; 121 focused pragmatic/Gate-A/container tests pass; exact Python 3.10.20 `compileall` over all shipped runtime sources plus five-module host-side import/UTC smoke passes; exact Python 3.11.14 runtime preflight locally exercises all repository pre-empirical harness imports, a hash-bound controlled load of pinned `run_web_agent.py` and its dependency graph, UTC serialization, artifact writing, budget-ledger persistence, both exact condition-command renderings, and owned cleanup. A failed upstream load prevents setup completion. Repository validation and `git diff --check` pass. The remote container must repeat this evidence before empirical entry. |
-| T07-R2-04 | Obtain clean independent spec-conformance review and pass post-review focused gates. | met | Independent rereview found no remaining P0/P1 issue after the hash-bound, no-network upstream-runner import repair. R2-02 and R2-03 were classified met; remote execution and actual freeze evidence remain for R2-05/R2-06. Post-review Ruff, strict mypy, 121 focused tests, exact Python 3.10 compile/import smoke, repository validation, and diff check pass. |
-| T07-R2-05 | Launch within the authorized budget and pass the full exact-container pre-empirical runtime preflight. | in-progress | Lambda attempt `T07-PRAGMATIC-R2-LAMBDA-ATTEMPT-0001` launched one `gpu_1x_a10` in `us-east-1` with zero persistent filesystems. Setup-attempt 01 built exact Python 3.11.14, then the no-network import probe failed before browser/model/condition activity because it compared the immutable-routing-patched runner to the pristine upstream hash; the corrected in-image patched hash is `b06793ad1b366a934b798f9f3272fc80a7104a220cb3304ab3bda2eb2a78b331`. Setup-attempt 02 confirmed the dependency graph loads with network disabled, then rejected pinned SiRA logger's single expected empty daily import log. Setup-attempt 03 will validate, record, remove, and verify cleanup of exactly that source-grounded bounded side effect. No empirical attempt was consumed. |
-| T07-R2-06 | Commit/freeze the clean runtime, render and machine-diff exact commands/configurations, and hash the immutable run manifest. | not-started | Pending. |
-| T07-R2-07 | Execute reactive then simulative with at most one consumed empirical attempt each and preserve accounting without interpretation. | not-started | Pending. |
-| T07-R2-08 | Retain and hash evidence, destroy secrets/runtime residue, terminate provider compute, restore firewall state, and reconcile compute/accounting. | not-started | Pending. |
+| T07-R2-04 | Obtain clean independent spec-conformance review and pass post-review focused gates. | met | Independent rereview found no remaining P0/P1 issue after the hash-bound no-network runner-import repair and the narrowly classified, removed, and revalidated pinned-SiRA empty-log side effect. Post-review Ruff, strict mypy, 121 focused tests, exact Python 3.10 compile/import smoke, repository validation, and diff check passed. |
+| T07-R2-05 | Launch within the authorized budget and pass the full exact-container pre-empirical runtime preflight. | met | One `gpu_1x_a10` launch in `us-east-1`, zero persistent filesystems. Setup attempts 01 and 02 stopped pre-empirically and retained their diagnostics. Attempt 03 passed exact Python 3.11.14, the frozen dependency/import sweep, patched runner SHA-256 `b06793ad1b366a934b798f9f3272fc80a7104a220cb3304ab3bda2eb2a78b331`, UTC/evidence/budget/command probes, one no-network local-page Chromium action, immutable-model HTTP 200, cleanup, and zero container residue. |
+| T07-R2-06 | Commit/freeze the clean runtime, render and machine-diff exact commands/configurations, and hash the immutable run manifest. | met | Frozen clean commit `5698f04dfd08bc85a66d2355b0a4bd7d3ce24a23`; exact image ID `sha256:035edf61718e84a8156f4f0f7817b134b0ce31488d3f0b50bbfba2b4a30cc61c`; run-manifest SHA-256 `877c26d16e242733e4f86afc54a058b868ca79ee27b826abc5e1e92ae0427ccd`. Machine diffs passed with only the six approved command identity/treatment fields and four approved configuration fields. |
+| T07-R2-07 | Execute reactive then simulative with at most one consumed empirical attempt each and preserve accounting without interpretation. | met | Reactive executed once: exit 0, 4 model calls, 4,886 tokens, one browser action, 18.019 seconds, USD 0.014165. Simulative then executed once: exit 0, 5 model calls, 6,702 tokens, one browser action, 21.378 seconds, USD 0.0261675. Every response reconciled to `gpt-4o-2024-11-20` and `service_tier="default"`; no retry occurred. The one-step sessions did not claim task completion and support no scientific interpretation. |
+| T07-R2-08 | Retain and hash evidence, destroy secrets/runtime residue, terminate provider compute, restore firewall state, and reconcile compute/accounting. | met | Remote archive 65,829 bytes, SHA-256 `4deebc0477581377e2bbb71a8f075bf8b3712188865f0e1faa5c0e7f62dc0450`, validated against 138 payload entries. Remote secret removed; zero owned containers/rulesets/instances; global firewall exactly unchanged. Lambda upper-bound duration/cost: 1,581.905 seconds / USD 0.566849. External bundle `/Volumes/Macintosh HD - Data/GIC-Lab/t07/sealed-artifacts/RUN-T07-PRAGMATIC-HOST-0002` was atomically finalized with 148 payload files and `FINAL_SHA256SUMS` SHA-256 `9fb9ee63c1703e9701e8d5168284a1f757181baadd68a1508095eeac5fc7a167`; local source retained. Sanitized tracked summary `docs/harness/evidence/T07_PRAGMATIC_RETRY2_POSTRUN.json` has SHA-256 `ec1e2fb0a8e04997b4a87f9f2a898f597b70440b1df4f8a9dfba1da67ef5321c`. |
 
 The Retry 2 empirical boundary is the first condition OpenAI request or condition
 browser action. Common-infrastructure failures before both signals remain repairable
 under fresh infrastructure-attempt identities. After either signal, that condition's
 single attempt is consumed and code/configuration remain frozen.
+
+Retry 2 terminal disposition: `matched_pair_executed_cleanup_verified`. The pair is
+sufficiently matched as an artifact-execution smoke only. EXP-0001 remains
+uninterpreted, the pilot and T08 were not started, and the next scientific decision
+must be made from a separately reviewed evidence summary rather than inferred from
+these two one-step trajectories.
 
 ### Bounded smoke definition of done
 

@@ -1106,13 +1106,17 @@ def test_exact_local_supervisor_interpreter_loads_bound_modules(tmp_path: Path) 
     assert b"usage:" in completed.stdout
 
 
-def test_actual_repository_base_authority_accepts_the_v2_candidate() -> None:
+def test_historical_bounded_base_authority_rejects_postrun_compute_drift() -> None:
     plan = json.loads(
         (ROOT / "containers/sira-smoke/bounded/bounded-smoke-plan-v3.json").read_text(
             encoding="utf-8"
         )
     )
-    supervisor._validate_base_authority(ROOT, plan)
+    with pytest.raises(
+        supervisor.BoundedSupervisorError,
+        match="planned compute/base plan authorization drifted",
+    ):
+        supervisor._validate_base_authority(ROOT, plan)
 
 
 def test_repository_identity_requires_reviewed_commit_ancestry(
