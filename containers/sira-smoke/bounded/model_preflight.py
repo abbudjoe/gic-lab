@@ -19,7 +19,12 @@ def _write_exclusive(path: Path, encoded: bytes) -> None:
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
     descriptor = os.open(path, flags, 0o600)
     try:
-        os.write(descriptor, encoded)
+        offset = 0
+        while offset < len(encoded):
+            written = os.write(descriptor, encoded[offset:])
+            if written <= 0:
+                raise RuntimeError("model evidence write made no progress")
+            offset += written
         os.fsync(descriptor)
     finally:
         os.close(descriptor)

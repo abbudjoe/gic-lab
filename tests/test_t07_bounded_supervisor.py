@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
+import io
 import json
 import re
 import shutil
 import subprocess
 import sys
+import tarfile
 import time
 import zipfile
 from collections.abc import Callable, Mapping
@@ -297,6 +299,33 @@ def _materialize(
         volume_observer=lambda: (_external_observation(), _system_observation()),
         utc_now=lambda: NOW,
     )
+    upload_root = tmp_path / supervisor.UPLOAD_ROOT_RELATIVE
+    upload_root.mkdir(parents=True)
+    upload_archive = b"public reviewed repository archive\n"
+    upload_bootstrap = b"# public reviewed bootstrap\n"
+    (upload_root / supervisor.UPLOAD_ARCHIVE_NAME).write_bytes(upload_archive)
+    (upload_root / supervisor.UPLOAD_BOOTSTRAP_NAME).write_bytes(upload_bootstrap)
+    upload_identity = {
+        "archive_path": (
+            supervisor.UPLOAD_ROOT_RELATIVE / supervisor.UPLOAD_ARCHIVE_NAME
+        ).as_posix(),
+        "archive_bytes": len(upload_archive),
+        "archive_sha256": hashlib.sha256(upload_archive).hexdigest(),
+        "bundle_manifest_sha256": "8" * 64,
+        "bootstrap_path": (
+            supervisor.UPLOAD_ROOT_RELATIVE / supervisor.UPLOAD_BOOTSTRAP_NAME
+        ).as_posix(),
+        "bootstrap_bytes": len(upload_bootstrap),
+        "bootstrap_sha256": hashlib.sha256(upload_bootstrap).hexdigest(),
+    }
+    monkeypatch.setattr(
+        supervisor,
+        "_load_upload_bundle_identity",
+        lambda *args, **kwargs: dict(upload_identity),
+    )
+    (tmp_path / supervisor.UPLOAD_IDENTITY_RELATIVE).write_bytes(
+        supervisor.canonical_json_bytes(upload_identity)
+    )
     return summary, plan_sha256, baseline_sha256
 
 
@@ -477,6 +506,7 @@ def test_exact_observer_phase_order_and_shell_free_commands() -> None:
         "verify_inbound_failed",
         "archive_complete",
         "archive_failed",
+        "prepare_bundle",
     }
     for argv in commands.values():
         assert argv[0:2] == ["${REPOSITORY_ROOT}/.venv/bin/python", "-I"]
@@ -567,6 +597,310 @@ def test_hash_first_local_loader_does_not_propagate_credentials_to_git(
         and not {"LAMBDA_API_KEY", "SIRA_API_KEY", "OPENAI_API_KEY"}.intersection(environment)
         for environment in observed_environments
     )
+
+
+def test_upload_bundle_is_exact_tracked_manifest_surface_and_excludes_env(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    artifact_paths = [
+        "containers/sira-smoke/bounded/bootstrap.py",
+        *(f"safe/member-{index:02d}.txt" for index in range(33)),
+    ]
+    artifacts: list[dict[str, object]] = []
+    for index, relative in enumerate(artifact_paths):
+        path = tmp_path / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        encoded = f"public fixture {index}\n".encode()
+        path.write_bytes(encoded)
+        artifacts.append(
+            {
+                "path": relative,
+                "bytes": len(encoded),
+                "sha256": hashlib.sha256(encoded).hexdigest(),
+            }
+        )
+    plan_path = tmp_path / supervisor.BOUNDED_PLAN_RELATIVE
+    plan_path.parent.mkdir(parents=True, exist_ok=True)
+    plan_path.write_text('{"synthetic":true}\n', encoding="utf-8")
+    plan_sha256 = hashlib.sha256(plan_path.read_bytes()).hexdigest()
+    (tmp_path / ".env").write_text("LAMBDA_API_KEY=PUBLIC_DUMMY_NEVER_UPLOAD\n")
+    (tmp_path / "artifacts").mkdir()
+    (tmp_path / "artifacts/private.txt").write_text("PUBLIC_DUMMY_PRIVATE\n")
+    tracked = sorted({supervisor.BOUNDED_PLAN_RELATIVE.as_posix(), *artifact_paths})
+    monkeypatch.setattr(
+        supervisor,
+        "_git",
+        lambda root, *args: "\n".join(tracked),
+    )
+    rows, manifest_encoded = supervisor._plan_upload_rows(
+        tmp_path,
+        plan={"implementation": {"artifacts": artifacts}},
+        plan_sha256=plan_sha256,
+        expected_commit=COMMIT,
+    )
+    names = {name for name, _ in rows}
+    manifest = json.loads(manifest_encoded)
+    assert names == set(tracked)
+    assert manifest["archive_member_count"] == 36
+    assert ".env" not in names
+    assert all(not name.startswith("artifacts/") and ".git" not in name for name in names)
+    assert b"PUBLIC_DUMMY_NEVER_UPLOAD" not in manifest_encoded
+
+
+def _patch_remote_paths(
+    bootstrap: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> dict[str, Path]:
+    home = tmp_path / "home/ubuntu"
+    config = home / ".config/giclab"
+    config.mkdir(parents=True)
+    paths = {
+        "bootstrap": home / "t07-bounded-bootstrap.py",
+        "archive": home / "t07-bounded-repository.tar",
+        "bundle": home / "t07-bounded-bundle",
+        "plan": home
+        / "t07-bounded-bundle/containers/sira-smoke/bounded/bounded-smoke-plan-v1.json",
+        "contract": home / "t07-bounded-bundle/src/giclab/harness/t07_bounded_smoke.py",
+        "authorization": home / "t07-bounded-authorization.json",
+        "release": home / "t07-bounded-bootstrap-release.json",
+        "secret": config / "sira_api_key",
+        "output": home / "t07-bounded-output-0001",
+    }
+    for name, constant in (
+        ("REMOTE_BOOTSTRAP_FILE", paths["bootstrap"]),
+        ("REMOTE_BUNDLE_ARCHIVE", paths["archive"]),
+        ("REMOTE_BUNDLE_ROOT", paths["bundle"]),
+        ("REMOTE_PLAN_FILE", paths["plan"]),
+        ("REMOTE_CONTRACT_FILE", paths["contract"]),
+        ("REMOTE_AUTHORIZATION_FILE", paths["authorization"]),
+        ("REMOTE_RELEASE_FILE", paths["release"]),
+        ("REMOTE_SECRET_FILE", paths["secret"]),
+        ("REMOTE_OUTPUT_ROOT", paths["output"]),
+    ):
+        monkeypatch.setattr(bootstrap, name, constant)
+    paths["bootstrap"].write_text("# reviewed fixture\n")
+    paths["authorization"].write_text("{}\n")
+    paths["release"].write_text("{}\n")
+    paths["secret"].write_text("PUBLIC_DUMMY_WINNER_SECRET\n")
+    paths["secret"].chmod(0o600)
+    return paths
+
+
+def _remote_main_argv(
+    paths: Mapping[str, Path], *, plan_sha256: str, archive_sha256: str, manifest_sha256: str
+) -> list[str]:
+    return [
+        "--bootstrap-file-sha256",
+        "9" * 64,
+        "--bundle-archive",
+        str(paths["archive"]),
+        "--bundle-archive-sha256",
+        archive_sha256,
+        "--bundle-manifest-sha256",
+        manifest_sha256,
+        "--plan",
+        str(paths["plan"]),
+        "--plan-sha256",
+        plan_sha256,
+        "--contract-file",
+        str(paths["contract"]),
+        "--contract-sha256",
+        "a" * 64,
+        "--authorization",
+        str(paths["authorization"]),
+        "--authorization-sha256",
+        "3" * 64,
+        "--bootstrap-release",
+        str(paths["release"]),
+        "--bootstrap-release-sha256",
+        "4" * 64,
+        "--bundle-root",
+        str(paths["bundle"]),
+        "--secret-file",
+        str(paths["secret"]),
+        "--output-root",
+        str(paths["output"]),
+    ]
+
+
+def test_self_consistent_upload_tamper_cannot_import_code_or_open_secret_before_release_binding(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    bootstrap = _load_remote_bootstrap()
+    paths = _patch_remote_paths(bootstrap, tmp_path, monkeypatch)
+    manifest = b'{"synthetic":true}\n'
+    stream = io.BytesIO()
+    with tarfile.open(fileobj=stream, mode="w", format=tarfile.USTAR_FORMAT) as archive:
+        info = tarfile.TarInfo("BUNDLE_MANIFEST.json")
+        info.size = len(manifest)
+        info.mode = 0o444
+        info.mtime = 0
+        archive.addfile(info, io.BytesIO(manifest))
+    archive_bytes = stream.getvalue()
+    paths["archive"].write_bytes(archive_bytes)
+    actual_archive_sha256 = hashlib.sha256(archive_bytes).hexdigest()
+    manifest_sha256 = hashlib.sha256(manifest).hexdigest()
+    monkeypatch.setattr(bootstrap, "_assert_remote_capacity", lambda root: None)
+    monkeypatch.setattr(bootstrap, "_record_presecret_failure", lambda **kwargs: None)
+    monkeypatch.setattr(bootstrap, "_validate_bootstrap_file", lambda **kwargs: None)
+    monkeypatch.setattr(
+        bootstrap,
+        "validate_authorization",
+        lambda *args, **kwargs: {"execution_commit": COMMIT},
+    )
+    monkeypatch.setattr(
+        bootstrap,
+        "validate_bootstrap_release",
+        lambda *args, **kwargs: {
+            "execution_commit": COMMIT,
+            "bundle_archive_sha256": "f" * 64,
+            "bundle_manifest_sha256": manifest_sha256,
+            "bootstrap_file_sha256": "9" * 64,
+        },
+    )
+    imported = False
+    acquired = False
+
+    def import_forbidden(*args: object, **kwargs: object) -> ModuleType:
+        nonlocal imported
+        imported = True
+        raise AssertionError("untrusted contract imported")
+
+    def acquire_forbidden(*args: object, **kwargs: object) -> object:
+        nonlocal acquired
+        acquired = True
+        raise AssertionError("secret opened")
+
+    monkeypatch.setattr(bootstrap, "_load_contract", import_forbidden)
+    monkeypatch.setattr(bootstrap, "acquire_secret_lease", acquire_forbidden)
+    with pytest.raises(bootstrap.BootstrapError, match="archive hash"):
+        bootstrap.main(
+            _remote_main_argv(
+                paths,
+                plan_sha256="2" * 64,
+                archive_sha256=actual_archive_sha256,
+                manifest_sha256=manifest_sha256,
+            )
+        )
+    assert imported is False
+    assert acquired is False
+    assert paths["secret"].read_text() == "PUBLIC_DUMMY_WINNER_SECRET\n"
+
+
+def test_replayed_single_use_root_cannot_open_or_destroy_winners_secret(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    bootstrap = _load_remote_bootstrap()
+    paths = _patch_remote_paths(bootstrap, tmp_path, monkeypatch)
+    paths["archive"].write_bytes(b"synthetic archive")
+    plan_bytes = b"{}\n"
+    plan_sha256 = hashlib.sha256(plan_bytes).hexdigest()
+    paths["output"].mkdir(mode=0o700)
+    monkeypatch.setattr(bootstrap, "_record_presecret_failure", lambda **kwargs: None)
+    monkeypatch.setattr(bootstrap, "_validate_bootstrap_file", lambda **kwargs: None)
+    monkeypatch.setattr(
+        bootstrap,
+        "validate_authorization",
+        lambda *args, **kwargs: {"execution_commit": COMMIT},
+    )
+    monkeypatch.setattr(
+        bootstrap,
+        "validate_bootstrap_release",
+        lambda *args, **kwargs: {
+            "execution_commit": COMMIT,
+            "bundle_archive_sha256": "7" * 64,
+            "bundle_manifest_sha256": "8" * 64,
+            "bootstrap_file_sha256": "9" * 64,
+        },
+    )
+    monkeypatch.setattr(
+        bootstrap,
+        "_validate_upload_bundle",
+        lambda *args, **kwargs: (
+            {"execution_commit": COMMIT},
+            {"containers/sira-smoke/bounded/bounded-smoke-plan-v1.json": plan_bytes},
+        ),
+    )
+    monkeypatch.setattr(bootstrap, "_validate_bundle_against_plan", lambda *a, **k: None)
+    imported = False
+    acquired = False
+
+    def import_forbidden(*args: object, **kwargs: object) -> ModuleType:
+        nonlocal imported
+        imported = True
+        raise AssertionError("contract imported by replay")
+
+    def acquire_forbidden(*args: object, **kwargs: object) -> object:
+        nonlocal acquired
+        acquired = True
+        raise AssertionError("winner secret opened by replay")
+
+    monkeypatch.setattr(bootstrap, "_load_contract", import_forbidden)
+    monkeypatch.setattr(bootstrap, "acquire_secret_lease", acquire_forbidden)
+    with pytest.raises(bootstrap.BootstrapError, match="not fresh"):
+        bootstrap.main(
+            _remote_main_argv(
+                paths,
+                plan_sha256=plan_sha256,
+                archive_sha256="7" * 64,
+                manifest_sha256="8" * 64,
+            )
+        )
+    assert imported is False
+    assert acquired is False
+    assert paths["secret"].read_text() == "PUBLIC_DUMMY_WINNER_SECRET\n"
+
+
+def test_presecret_failure_burns_run_identity_and_cannot_be_replayed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    bootstrap = _load_remote_bootstrap()
+    paths = _patch_remote_paths(bootstrap, tmp_path, monkeypatch)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("SIRA_API_KEY", raising=False)
+    monkeypatch.setattr(bootstrap, "_assert_remote_capacity", lambda root: None)
+    authorization_calls = 0
+    imported = False
+    acquired = False
+
+    def reject_authorization(*args: object, **kwargs: object) -> object:
+        nonlocal authorization_calls
+        authorization_calls += 1
+        raise bootstrap.BootstrapError("synthetic authorization rejection")
+
+    def import_forbidden(*args: object, **kwargs: object) -> ModuleType:
+        nonlocal imported
+        imported = True
+        raise AssertionError("contract imported after burned run")
+
+    def acquire_forbidden(*args: object, **kwargs: object) -> object:
+        nonlocal acquired
+        acquired = True
+        raise AssertionError("secret opened after burned run")
+
+    monkeypatch.setattr(bootstrap, "validate_authorization", reject_authorization)
+    monkeypatch.setattr(bootstrap, "_load_contract", import_forbidden)
+    monkeypatch.setattr(bootstrap, "acquire_secret_lease", acquire_forbidden)
+    argv = _remote_main_argv(
+        paths,
+        plan_sha256="2" * 64,
+        archive_sha256="7" * 64,
+        manifest_sha256="8" * 64,
+    )
+    with pytest.raises(bootstrap.BootstrapError, match="authorization rejection"):
+        bootstrap.main(argv)
+    disposition = json.loads(
+        (paths["output"] / "evidence/early-failure-disposition.json").read_text(encoding="utf-8")
+    )
+    assert disposition["failure_stage"] == "authorization_validation"
+    assert disposition["failure_code"] == "bootstrap_contract_rejected"
+    assert (paths["output"] / "EARLY_FAILURE_ARCHIVE_IDENTITY.json").is_file()
+
+    with pytest.raises(bootstrap.BootstrapError, match="not fresh"):
+        bootstrap.main(argv)
+    assert authorization_calls == 1
+    assert imported is False
+    assert acquired is False
+    assert paths["secret"].read_text() == "PUBLIC_DUMMY_WINNER_SECRET\n"
 
 
 def test_hash_first_loaders_execute_verified_bytes_after_path_replacement(tmp_path: Path) -> None:
@@ -1194,6 +1528,9 @@ def _release_for_fixture(
         "private_binding_sha256": "4" * 64,
         "observer_state_sha256": "5" * 64,
         "post_launch_report_sha256": "6" * 64,
+        "bundle_archive_sha256": "7" * 64,
+        "bundle_manifest_sha256": "8" * 64,
+        "bootstrap_file_sha256": "9" * 64,
         "provider_active_observed_at_utc": "2026-08-11T20:00:00Z",
         "selected_provider_image": {
             "alias": selected["image_alias"],
@@ -1239,6 +1576,9 @@ def _write_complete_inbound(
             "authorization_sha256": release["authorization_sha256"],
             "private_binding_sha256": release["private_binding_sha256"],
             "bootstrap_release_sha256": hashlib.sha256(release_encoded).hexdigest(),
+            "bundle_archive_sha256": release["bundle_archive_sha256"],
+            "bundle_manifest_sha256": release["bundle_manifest_sha256"],
+            "bootstrap_file_sha256": release["bootstrap_file_sha256"],
             "observer_state_sha256": release["observer_state_sha256"],
             "post_launch_report_sha256": release["post_launch_report_sha256"],
             "provider_active_observed_at_utc": release["provider_active_observed_at_utc"],
@@ -1269,6 +1609,10 @@ def _write_complete_inbound(
         "scope": None,
         "argv_sha256": None,
         "returncode": None,
+        "stdout_bytes": None,
+        "stderr_bytes": None,
+        "elapsed_ms": None,
+        "failure_code": None,
         "aggregate_call_count": 0,
         "aggregate_output_bytes": 0,
         "work_call_count": 0,
@@ -1299,6 +1643,9 @@ def _write_complete_inbound(
             "scope": "work",
             "argv_sha256": command_digest,
             "returncode": 0,
+            "stdout_bytes": 2,
+            "stderr_bytes": 0,
+            "elapsed_ms": 1,
             "aggregate_call_count": 1,
             "aggregate_output_bytes": 2,
             "work_call_count": 1,
@@ -1729,6 +2076,7 @@ def _write_complete_inbound(
                 "message_retained": False,
                 "secret_cleanup_verified": True,
                 "manual_secret_deletion_required": False,
+                "manual_credential_rotation_required": False,
             }
         )
     )
@@ -2057,6 +2405,8 @@ def test_complete_archive_reads_back_hashes_and_retains_local_source(
     destination = external_parent / supervisor.HOST_RUN_ID
     assert destination.is_dir()
     assert (destination / "SEAL.json").is_file()
+    assert (destination / "upload-bundle/t07-bounded-repository.tar").is_file()
+    assert (destination / "upload-bundle/t07-bounded-bootstrap.py").is_file()
     assert (inbound / "t07-bounded-evidence.zip").is_file()
     assert (run_root / "INBOUND_VERIFICATION.json").is_file()
 
@@ -2142,11 +2492,12 @@ def test_external_copy_scan_rejects_semantic_secret_key_shapes(
         supervisor._copy_archive_tree(
             tmp_path,
             files=[
-                (
-                    "source.json",
-                    source,
-                    len(canary),
-                    hashlib.sha256(canary).hexdigest(),
+                supervisor.ArchiveSource(
+                    relative="source.json",
+                    path=source,
+                    byte_count=len(canary),
+                    sha256=hashlib.sha256(canary).hexdigest(),
+                    content_class="runtime_evidence",
                 )
             ],
             disposition="failed",
@@ -2208,7 +2559,7 @@ def test_released_early_bootstrap_failure_is_admitted_for_failed_cleanup(
     bootstrap = _load_remote_bootstrap()
     bootstrap.package_early_failure_evidence(
         remote / "t07-bounded-output-0001",
-        failure_stage="bootstrap_preflight",
+        failure_stage="invocation_validation",
         secret_target_identity_established=True,
         secret_cleanup_verified=True,
         secret_value_read=False,
@@ -2272,7 +2623,7 @@ def test_self_consistent_early_failure_omission_is_rejected(
     bootstrap = _load_remote_bootstrap()
     bootstrap.package_early_failure_evidence(
         remote / "t07-bounded-output-0001",
-        failure_stage="bootstrap_preflight",
+        failure_stage="invocation_validation",
         secret_target_identity_established=True,
         secret_cleanup_verified=True,
         secret_value_read=False,
@@ -2385,6 +2736,7 @@ def test_compute_closeout_keeps_unverified_remote_secret_cleanup_unresolved(
             "remote_archive_kind": "early_failure",
             "secret_cleanup_verified": False,
             "manual_secret_deletion_required": True,
+            "manual_credential_rotation_required": False,
         },
         observer_verification={
             "provider_active_observed_at_utc": state["provider_active_observed_at_utc"],
@@ -2396,6 +2748,44 @@ def test_compute_closeout_keeps_unverified_remote_secret_cleanup_unresolved(
     assert record["billing_stop_verified"] is True
     assert record["remote_secret_cleanup_verified"] is False
     assert record["manual_secret_deletion_required"] is True
+    assert record["provider_and_security_cleanup_complete"] is False
+    assert record["unresolved_billing_or_security"] is True
+
+
+def test_compute_closeout_keeps_detected_credential_rotation_unresolved(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / supervisor.RUN_ROOT_RELATIVE).mkdir(parents=True)
+    (tmp_path / supervisor.BOOTSTRAP_RELEASE_RELATIVE).write_text("{}\n", encoding="utf-8")
+    state = {
+        "status": "cleanup_complete",
+        "cleanup_origin_phase": "post_launch",
+        "bound_instance_id": "synthetic-instance-private",
+        "termination_verified": True,
+        "provider_active_observed_at_utc": "2026-08-11T20:00:10Z",
+        "provider_terminal_observed_at_utc": "2026-08-11T20:01:10Z",
+    }
+    record = supervisor._write_compute_closeout(
+        tmp_path,
+        authorization={"supervised_wall_started_at_utc": "2026-08-11T20:00:00Z"},
+        state=state,
+        disposition="failed",
+        inbound_verification={
+            "remote_archive_kind": "failure",
+            "secret_cleanup_verified": True,
+            "manual_secret_deletion_required": False,
+            "manual_credential_rotation_required": True,
+        },
+        observer_verification={
+            "provider_active_observed_at_utc": state["provider_active_observed_at_utc"],
+            "provider_terminal_observed_at_utc": state["provider_terminal_observed_at_utc"],
+            "failed_phases": [],
+        },
+        inbound_verification_sha256="a" * 64,
+    )
+    assert record["billing_stop_verified"] is True
+    assert record["remote_secret_cleanup_verified"] is False
+    assert record["manual_credential_rotation_required"] is True
     assert record["provider_and_security_cleanup_complete"] is False
     assert record["unresolved_billing_or_security"] is True
 

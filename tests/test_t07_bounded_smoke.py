@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import hashlib
 import importlib.util
 import json
 import os
@@ -469,7 +471,7 @@ def test_early_failure_bundle_is_bounded_secret_safe_and_complete(tmp_path: Path
     )
     archive = bootstrap.package_early_failure_evidence(
         output_root,
-        failure_stage="bootstrap_preflight",
+        failure_stage="invocation_validation",
         secret_target_identity_established=True,
         secret_cleanup_verified=True,
         secret_value_read=False,
@@ -708,6 +710,78 @@ def test_work_and_cleanup_runners_share_one_command_budget(tmp_path: Path) -> No
     assert work.call_count == cleanup.call_count == 2
 
 
+def test_bounded_tree_enumerator_counts_directories_and_stops_at_cap(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    bootstrap = _load_bootstrap()
+    monkeypatch.setattr(bootstrap, "MAX_EVIDENCE_FILES", 3)
+    for index in range(4):
+        (tmp_path / f"empty-{index}").mkdir()
+    with pytest.raises(bootstrap.BootstrapError, match="filesystem-entry cap"):
+        bootstrap._bounded_regular_files(tmp_path, context="synthetic evidence")
+
+
+def test_write_all_recovers_from_injected_short_writes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    bootstrap = _load_bootstrap()
+    output = tmp_path / "short-write.bin"
+    original_write = bootstrap.os.write
+
+    def short_write(descriptor: int, encoded: bytes | memoryview) -> int:
+        return original_write(descriptor, bytes(encoded[: max(1, len(encoded) // 3)]))
+
+    monkeypatch.setattr(bootstrap.os, "write", short_write)
+    expected = b"bounded-durable-write" * 64
+    bootstrap._write_bytes(output, expected, cap=len(expected))
+    assert output.read_bytes() == expected
+
+
+def test_failed_command_writes_durable_secret_safe_receipt(tmp_path: Path) -> None:
+    bootstrap = _load_bootstrap()
+    ledger = tmp_path / "command-meter.jsonl"
+    meter = bootstrap.CommandMeter(
+        max_calls=4,
+        output_cap=1_024,
+        cleanup_reserved_calls=1,
+        cleanup_reserved_output_bytes=256,
+        ledger_path=ledger,
+    )
+    runner = bootstrap.CommandRunner(
+        deadline=time.monotonic() + 10,
+        meter=meter,
+        scope="work",
+    )
+    stdout_canary = "PUBLIC_DUMMY_STDOUT_PRIVATE"
+    stderr_canary = "PUBLIC_DUMMY_STDERR_PRIVATE"
+    with pytest.raises(bootstrap.BootstrapError) as caught:
+        runner.run(
+            (
+                sys.executable,
+                "-c",
+                (
+                    "import sys;"
+                    f"sys.stdout.write({stdout_canary!r});"
+                    f"sys.stderr.write({stderr_canary!r});"
+                    "raise SystemExit(7)"
+                ),
+            ),
+            cwd=tmp_path,
+        )
+    assert caught.value.failure_code == "command_nonzero_exit"
+    events = [json.loads(line) for line in ledger.read_text(encoding="utf-8").splitlines()]
+    failure = events[-1]
+    assert failure["event_type"] == "command_failed"
+    assert failure["returncode"] == 7
+    assert failure["failure_code"] == "command_nonzero_exit"
+    assert failure["stdout_bytes"] == len(stdout_canary)
+    assert failure["stderr_bytes"] == len(stderr_canary)
+    assert isinstance(failure["elapsed_ms"], int) and failure["elapsed_ms"] >= 0
+    retained = ledger.read_bytes()
+    assert stdout_canary.encode() not in retained
+    assert stderr_canary.encode() not in retained
+
+
 def test_failure_archive_is_bounded_and_excludes_secret_canary(tmp_path: Path) -> None:
     bootstrap = _load_bootstrap()
     evidence = tmp_path / "evidence"
@@ -728,6 +802,71 @@ def test_failure_archive_is_bounded_and_excludes_secret_canary(tmp_path: Path) -
         assert "evidence/safe.json" in names
         assert "evidence/unsafe.log" not in names
         assert canary.encode() not in b"".join(opened.read(name) for name in names)
+    incident = json.loads((tmp_path / "TERMINATE_REQUIRED.json").read_text(encoding="utf-8"))
+    assert incident["failure_class"] == "credential_material_detected"
+    assert incident["manual_credential_rotation_required"] is True
+
+
+@pytest.mark.parametrize(
+    "transform",
+    (
+        lambda value: value,
+        lambda value: value.hex().encode("ascii"),
+        lambda value: value.hex().upper().encode("ascii"),
+        base64.b64encode,
+        lambda value: base64.b64encode(value).rstrip(b"="),
+        base64.urlsafe_b64encode,
+        lambda value: base64.urlsafe_b64encode(value).rstrip(b"="),
+        lambda value: hashlib.sha256(value).digest(),
+        lambda value: hashlib.sha256(value).hexdigest().encode("ascii"),
+        lambda value: hashlib.sha256(value).hexdigest().upper().encode("ascii"),
+    ),
+)
+def test_success_and_failure_archives_reject_secret_derivatives(
+    tmp_path: Path, transform: Any
+) -> None:
+    bootstrap = _load_bootstrap()
+    secret = b"PUBLIC_DUMMY_OPAQUE_CANARY_0123456789"
+    transformed = transform(secret)
+
+    success = tmp_path / "success"
+    success.mkdir()
+    (success / "output.bin").write_bytes(b"prefix:" + transformed + b":suffix")
+    with pytest.raises(bootstrap.BootstrapError, match="supplied secret"):
+        bootstrap._assert_secret_absent(success, secret)
+
+    failure = tmp_path / "failure"
+    evidence = failure / "evidence"
+    evidence.mkdir(parents=True)
+    (evidence / "safe.json").write_text('{"status":"failed"}\n', encoding="utf-8")
+    (evidence / "unsafe.bin").write_bytes(b"prefix:" + transformed + b":suffix")
+    (failure / "TERMINATE_REQUIRED.json").write_text("{}\n", encoding="utf-8")
+    archive = bootstrap.package_failure_evidence(
+        failure,
+        evidence,
+        bounded,
+        secret_value=secret,
+    )
+    with zipfile.ZipFile(archive) as opened:
+        assert "evidence/unsafe.bin" not in opened.namelist()
+        retained = b"".join(opened.read(name) for name in opened.namelist())
+    assert transformed not in retained
+
+
+def test_known_authorization_reference_is_not_a_secret_derivative_false_positive(
+    tmp_path: Path,
+) -> None:
+    bootstrap = _load_bootstrap()
+    evidence = tmp_path / "evidence"
+    evidence.mkdir()
+    authorization = b"AUTH-T07-BOUNDED-SIRA-SMOKE-V1-TEST"
+    (evidence / "authority.json").write_bytes(
+        b'{"authorization_reference":"' + authorization + b'"}\n'
+    )
+    bootstrap._assert_secret_absent(
+        evidence,
+        b"PUBLIC_DUMMY_OPAQUE_CANARY_0123456789",
+    )
 
 
 def test_failure_archive_reserves_mandatory_incident_and_cleanup_at_file_cap(
@@ -739,7 +878,7 @@ def test_failure_archive_reserves_mandatory_incident_and_cleanup_at_file_cap(
     evidence.mkdir()
     cleanup = evidence / "secret-cleanup.json"
     cleanup.write_text('{"absence_verified":true}\n', encoding="utf-8")
-    for ordinal in range(10):
+    for ordinal in range(3):
         (evidence / f"optional-{ordinal:02d}.json").write_text("{}\n", encoding="utf-8")
     (tmp_path / "TERMINATE_REQUIRED.json").write_text(
         '{"provider_termination_required":true}\n', encoding="utf-8"
@@ -753,7 +892,7 @@ def test_failure_archive_reserves_mandatory_incident_and_cleanup_at_file_cap(
     assert "TERMINATE_REQUIRED.json" in names
     assert "evidence/secret-cleanup.json" in names
     assert manifest["file_count"] == 4
-    assert manifest["skipped_cap_or_unsafe_file_count"] == 8
+    assert manifest["skipped_cap_or_unsafe_file_count"] == 1
 
 
 def test_reconstruction_and_compute_closeout_records_are_source_grounded(

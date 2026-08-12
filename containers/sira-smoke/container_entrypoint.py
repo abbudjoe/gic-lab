@@ -18,6 +18,15 @@ RELEASE_PATH = ATTEMPT_ROOT / ".giclab-release"
 RELEASE_WAIT_SECONDS = 30
 
 
+def _write_all(descriptor: int, encoded: bytes) -> None:
+    offset = 0
+    while offset < len(encoded):
+        written = os.write(descriptor, encoded[offset:])
+        if written <= 0:
+            raise RuntimeError("supervisor marker write made no progress")
+        offset += written
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument("--supervised-release", action="store_true")
@@ -63,7 +72,7 @@ def wait_for_supervisor_release() -> None:
         0o600,
     )
     try:
-        os.write(descriptor, b"ready\n")
+        _write_all(descriptor, b"ready\n")
         os.fsync(descriptor)
     finally:
         os.close(descriptor)

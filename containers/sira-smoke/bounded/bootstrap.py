@@ -9,9 +9,11 @@ manual console lifecycle in the bound runbook.
 from __future__ import annotations
 
 import argparse
+import base64
 import contextlib
 import hashlib
 import http.client
+import io
 import json
 import math
 import os
@@ -29,12 +31,14 @@ import zipfile
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from types import ModuleType
 from typing import Final, cast
 
 MAX_PLAN_BYTES: Final = 1_048_576
 MAX_AUTHORIZATION_BYTES: Final = 65_536
+MAX_UPLOAD_BUNDLE_BYTES: Final = 8_388_608
+MAX_UPLOAD_BUNDLE_FILES: Final = 36
 MAX_COMMAND_OUTPUT_BYTES: Final = 33_554_432
 MAX_COMMAND_CALLS: Final = 128
 CLEANUP_RESERVED_CALLS: Final = 48
@@ -49,6 +53,75 @@ MAX_RUNTIME_DISK_INCREMENT_BYTES: Final = 17_179_869_184
 MIN_REMOTE_FREE_BYTES: Final = 34_359_738_368
 HARD_PROVIDER_WALL_SECONDS: Final = 3_600
 TERMINATION_HEADROOM_SECONDS: Final = 300
+SCHEMA_VERSION: Final = "0.1.0"
+PLAN_ID: Final = "PLAN-T07-BOUNDED-SIRA-SMOKE-V1"
+HOST_RUN_ID: Final = "RUN-T07-BOUNDED-HOST-0001"
+BRANCH: Final = "phase-1/sira-smoke-bounded"
+REACTIVE_RUN_ID: Final = "RUN-T07-BOUNDED-SIRA-REACTIVE-0001"
+SIMULATIVE_RUN_ID: Final = "RUN-T07-BOUNDED-SIRA-SIMULATIVE-0001"
+MODEL: Final = "gpt-4o-2024-11-20"
+SELECTED_IMAGE_ALIAS: Final = "img-0032"
+SELECTED_IMAGE_FAMILY: Final = "lambda-stack-22-04"
+SELECTED_IMAGE_VERSION: Final = "22.4.5-2141"
+LIMITS_SHA256: Final = "316ae4bbd6ac83ac78cf54cef29763cf5d9aac716631b149ab1c7ceb8b0a8703"
+REMOTE_BOOTSTRAP_FILE: Final = Path("/home/ubuntu/t07-bounded-bootstrap.py")
+REMOTE_BUNDLE_ARCHIVE: Final = Path("/home/ubuntu/t07-bounded-repository.tar")
+REMOTE_BUNDLE_ROOT: Final = Path("/home/ubuntu/t07-bounded-bundle")
+REMOTE_PLAN_FILE: Final = REMOTE_BUNDLE_ROOT / (
+    "containers/sira-smoke/bounded/bounded-smoke-plan-v1.json"
+)
+REMOTE_CONTRACT_FILE: Final = REMOTE_BUNDLE_ROOT / "src/giclab/harness/t07_bounded_smoke.py"
+REMOTE_AUTHORIZATION_FILE: Final = Path("/home/ubuntu/t07-bounded-authorization.json")
+REMOTE_RELEASE_FILE: Final = Path("/home/ubuntu/t07-bounded-bootstrap-release.json")
+REMOTE_SECRET_FILE: Final = Path("/home/ubuntu/.config/giclab/sira_api_key")
+REMOTE_OUTPUT_ROOT: Final = Path("/home/ubuntu/t07-bounded-output-0001")
+UPLOAD_MANIFEST_NAME: Final = "BUNDLE_MANIFEST.json"
+PRESECRET_FAILURE_STAGES: Final = frozenset(
+    {
+        "run_identity_reservation",
+        "inherited_environment_guard",
+        "invocation_validation",
+        "authorization_validation",
+        "release_validation",
+        "bootstrap_hash_validation",
+        "archive_validation",
+        "manifest_validation",
+        "plan_validation",
+        "bundle_extraction",
+        "contract_hash_validation",
+        "contract_import",
+        "contract_validation",
+        "secret_target_validation",
+        "normal_failure_packaging",
+    }
+)
+EXECUTION_FAILURE_STAGES: Final = frozenset(
+    {
+        "host_environment",
+        "secret_read",
+        "build_context",
+        "image_build",
+        "browser_preflight",
+        "model_preflight",
+        "reactive_condition",
+        "simulative_condition",
+        "pair_validation",
+        "evidence_packaging",
+    }
+)
+FAILURE_CODES: Final = frozenset(
+    {
+        "bootstrap_contract_rejected",
+        "command_nonzero_exit",
+        "command_start_failure",
+        "command_timeout",
+        "command_supervision_failure",
+        "command_output_cap",
+        "credential_material_detected",
+        "filesystem_io_failure",
+        "unexpected_internal_failure",
+    }
+)
 _HEX40 = re.compile(r"^[a-f0-9]{40}$")
 _HEX64 = re.compile(r"^[a-f0-9]{64}$")
 _IMAGE_ID = re.compile(r"^sha256:[a-f0-9]{64}$")
@@ -163,8 +236,54 @@ def _contains_artifact_secret(encoded: bytes) -> bool:
     return _json_contains_artifact_secret(document)
 
 
+def _secret_derivatives(secret_value: bytes) -> tuple[bytes, ...]:
+    """Return exact deterministic representations forbidden from retained evidence."""
+
+    if not secret_value:
+        raise BootstrapError("secret derivative scan requires a nonempty secret")
+    digest = hashlib.sha256(secret_value).digest()
+    standard_base64 = base64.b64encode(secret_value)
+    urlsafe_base64 = base64.urlsafe_b64encode(secret_value)
+    markers = {
+        secret_value,
+        secret_value.hex().encode("ascii"),
+        secret_value.hex().upper().encode("ascii"),
+        standard_base64,
+        standard_base64.rstrip(b"="),
+        urlsafe_base64,
+        urlsafe_base64.rstrip(b"="),
+        digest,
+        digest.hex().encode("ascii"),
+        digest.hex().upper().encode("ascii"),
+    }
+    return tuple(sorted(markers, key=lambda value: (len(value), value), reverse=True))
+
+
+def _contains_secret_derivative(encoded: bytes, secret_value: bytes) -> bool:
+    return any(marker in encoded for marker in _secret_derivatives(secret_value))
+
+
 class BootstrapError(RuntimeError):
-    """The one-shot bounded bootstrap failed closed."""
+    """The one-shot bounded bootstrap failed closed with a secret-safe code."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        failure_code: str = "bootstrap_contract_rejected",
+    ) -> None:
+        if failure_code not in FAILURE_CODES:
+            raise ValueError("bootstrap failure code is outside the closed taxonomy")
+        super().__init__(message)
+        self.failure_code = failure_code
+
+
+def _sanitized_failure_code(exc: BaseException) -> str:
+    if isinstance(exc, BootstrapError):
+        return exc.failure_code
+    if isinstance(exc, OSError):
+        return "filesystem_io_failure"
+    return "unexpected_internal_failure"
 
 
 @dataclass(frozen=True, slots=True)
@@ -203,7 +322,16 @@ class CommandMeter:
             flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
             descriptor = os.open(self.ledger_path, flags, 0o600)
             os.close(descriptor)
-            self._append("meter_started", scope=None, argv_sha256=None, returncode=None)
+            self._append(
+                "meter_started",
+                scope=None,
+                argv_sha256=None,
+                returncode=None,
+                stdout_bytes=None,
+                stderr_bytes=None,
+                elapsed_ms=None,
+                failure_code=None,
+            )
 
     def _append(
         self,
@@ -212,6 +340,10 @@ class CommandMeter:
         scope: str | None,
         argv_sha256: str | None,
         returncode: int | None,
+        stdout_bytes: int | None,
+        stderr_bytes: int | None,
+        elapsed_ms: int | None,
+        failure_code: str | None,
     ) -> None:
         if self.ledger_path is None:
             return
@@ -223,6 +355,10 @@ class CommandMeter:
             "scope": scope,
             "argv_sha256": argv_sha256,
             "returncode": returncode,
+            "stdout_bytes": stdout_bytes,
+            "stderr_bytes": stderr_bytes,
+            "elapsed_ms": elapsed_ms,
+            "failure_code": failure_code,
             "aggregate_call_count": self.call_count,
             "aggregate_output_bytes": self.output_bytes,
             "work_call_count": self.work_call_count,
@@ -262,7 +398,16 @@ class CommandMeter:
             self.work_call_count += 1
         else:
             self.cleanup_call_count += 1
-        self._append("command_started", scope=scope, argv_sha256=argv_sha256, returncode=None)
+        self._append(
+            "command_started",
+            scope=scope,
+            argv_sha256=argv_sha256,
+            returncode=None,
+            stdout_bytes=None,
+            stderr_bytes=None,
+            elapsed_ms=None,
+            failure_code=None,
+        )
 
     def add_output(self, scope: str, count: int) -> None:
         self.output_bytes += count
@@ -271,21 +416,49 @@ class CommandMeter:
         else:
             self.cleanup_output_bytes += count
         if self.output_bytes > self.output_cap:
-            raise BootstrapError("bounded command output exceeded its aggregate cap")
+            raise BootstrapError(
+                "bounded command output exceeded its aggregate cap",
+                failure_code="command_output_cap",
+            )
         if (
             scope == "work"
             and self.work_output_bytes > self.output_cap - self.cleanup_reserved_output_bytes
         ):
-            raise BootstrapError("bounded work output cap preserves cleanup reserve")
+            raise BootstrapError(
+                "bounded work output cap preserves cleanup reserve",
+                failure_code="command_output_cap",
+            )
         if scope == "cleanup" and self.cleanup_output_bytes > self.cleanup_reserved_output_bytes:
-            raise BootstrapError("bounded cleanup command output cap is exhausted")
+            raise BootstrapError(
+                "bounded cleanup command output cap is exhausted",
+                failure_code="command_output_cap",
+            )
 
-    def finish_call(self, scope: str, argv_sha256: str, returncode: int | None) -> None:
+    def finish_call(
+        self,
+        scope: str,
+        argv_sha256: str,
+        result: CommandResult | None,
+        *,
+        failure_code: str | None,
+    ) -> None:
+        returncode = result.returncode if result is not None else None
+        failed = result is None or failure_code is not None
+        if failed != (failure_code is not None) or (
+            failure_code is not None and failure_code not in FAILURE_CODES
+        ):
+            raise BootstrapError("command failure receipt classification drifted")
         self._append(
-            "command_completed" if returncode is not None else "command_failed",
+            "command_failed" if failed else "command_completed",
             scope=scope,
             argv_sha256=argv_sha256,
             returncode=returncode,
+            stdout_bytes=len(result.stdout) if result is not None else None,
+            stderr_bytes=len(result.stderr) if result is not None else None,
+            elapsed_ms=(
+                max(0, math.ceil(result.elapsed_seconds * 1_000)) if result is not None else None
+            ),
+            failure_code=failure_code,
         )
 
 
@@ -340,12 +513,26 @@ class CommandRunner:
                 cwd=cwd,
                 timeout=timeout,
             )
-        except BaseException:
-            self.meter.finish_call(self.scope, argv_sha256, None)
+        except BaseException as exc:
+            self.meter.finish_call(
+                self.scope,
+                argv_sha256,
+                None,
+                failure_code=_sanitized_failure_code(exc),
+            )
             raise
-        self.meter.finish_call(self.scope, argv_sha256, result.returncode)
+        failure_code = "command_nonzero_exit" if check and result.returncode != 0 else None
+        self.meter.finish_call(
+            self.scope,
+            argv_sha256,
+            result,
+            failure_code=failure_code,
+        )
         if check and result.returncode != 0:
-            raise BootstrapError("bounded command returned failure")
+            raise BootstrapError(
+                "bounded command returned failure",
+                failure_code="command_nonzero_exit",
+            )
         return result
 
     def _run_started(
@@ -379,7 +566,10 @@ class CommandRunner:
                 start_new_session=False,
             )
         except OSError:
-            raise BootstrapError("bounded command could not start") from None
+            raise BootstrapError(
+                "bounded command could not start",
+                failure_code="command_start_failure",
+            ) from None
         selector = selectors.DefaultSelector()
         if process.stdout is None or process.stderr is None:
             process.kill()
@@ -394,7 +584,10 @@ class CommandRunner:
                 elapsed = time.monotonic() - started
                 if elapsed >= allowed:
                     process.kill()
-                    raise BootstrapError("bounded command exceeded its wall limit")
+                    raise BootstrapError(
+                        "bounded command exceeded its wall limit",
+                        failure_code="command_timeout",
+                    )
                 for key, _ in selector.select(min(0.1, allowed - elapsed)):
                     chunk = os.read(key.fd, 65_536)
                     if not chunk:
@@ -414,7 +607,10 @@ class CommandRunner:
         except (OSError, subprocess.SubprocessError):
             process.kill()
             process.wait()
-            raise BootstrapError("bounded command supervision failed") from None
+            raise BootstrapError(
+                "bounded command supervision failed",
+                failure_code="command_supervision_failure",
+            ) from None
         finally:
             selector.close()
         result = CommandResult(
@@ -497,6 +693,286 @@ def _sha256(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
 
 
+def _write_all(descriptor: int, encoded: bytes) -> None:
+    view = memoryview(encoded)
+    offset = 0
+    while offset < len(view):
+        written = os.write(descriptor, view[offset:])
+        if written <= 0:
+            raise BootstrapError(
+                "bounded file write made no progress",
+                failure_code="filesystem_io_failure",
+            )
+        offset += written
+
+
+def _bounded_regular_files(root: Path, *, context: str) -> list[Path]:
+    files: list[Path] = []
+    entries = 0
+    for path in root.rglob("*"):
+        entries += 1
+        if entries > MAX_EVIDENCE_FILES:
+            raise BootstrapError(f"{context} exceeds the filesystem-entry cap")
+        if path.is_symlink():
+            raise BootstrapError(f"{context} contains a symlink")
+        if not path.is_file():
+            continue
+        files.append(path)
+    return sorted(files)
+
+
+def _validate_invocation_paths(args: argparse.Namespace) -> None:
+    expected = {
+        "bundle_archive": REMOTE_BUNDLE_ARCHIVE,
+        "plan": REMOTE_PLAN_FILE,
+        "contract_file": REMOTE_CONTRACT_FILE,
+        "authorization": REMOTE_AUTHORIZATION_FILE,
+        "bootstrap_release": REMOTE_RELEASE_FILE,
+        "bundle_root": REMOTE_BUNDLE_ROOT,
+        "secret_file": REMOTE_SECRET_FILE,
+        "output_root": REMOTE_OUTPUT_ROOT,
+    }
+    if any(Path(getattr(args, name)) != path for name, path in expected.items()):
+        raise BootstrapError("remote bootstrap invocation path contract drifted")
+
+
+def _validate_bootstrap_file(*, argv_sha256: str, release_sha256: object) -> None:
+    source = Path(__file__)
+    if source != REMOTE_BOOTSTRAP_FILE or source.resolve(strict=True) != source:
+        raise BootstrapError("remote bootstrap file path is not exact and canonical")
+    encoded = _read_regular(source, max_bytes=MAX_UPLOAD_BUNDLE_BYTES)
+    if (
+        not isinstance(release_sha256, str)
+        or _HEX64.fullmatch(argv_sha256) is None
+        or argv_sha256 != release_sha256
+        or _sha256(encoded) != release_sha256
+    ):
+        raise BootstrapError("remote bootstrap file hash drifted")
+
+
+def _safe_bundle_member_name(name: str) -> str:
+    path = PurePosixPath(name)
+    if (
+        not name
+        or "\\" in name
+        or path.is_absolute()
+        or path.as_posix() != name
+        or any(
+            part in {"", ".", "..", ".git", ".env", "artifacts", ".secrets"} for part in path.parts
+        )
+    ):
+        raise BootstrapError("upload bundle member path is unsafe")
+    return name
+
+
+def _read_validated_upload_archive(
+    args: argparse.Namespace,
+    *,
+    release_archive_sha256: object,
+) -> dict[str, bytes]:
+    archive_encoded = _read_regular(args.bundle_archive, max_bytes=MAX_UPLOAD_BUNDLE_BYTES)
+    if (
+        not isinstance(release_archive_sha256, str)
+        or _HEX64.fullmatch(args.bundle_archive_sha256) is None
+        or args.bundle_archive_sha256 != release_archive_sha256
+        or _sha256(archive_encoded) != release_archive_sha256
+    ):
+        raise BootstrapError("upload bundle archive hash drifted")
+    destination = Path(args.bundle_root)
+    if destination.exists() or destination.is_symlink():
+        raise BootstrapError("upload bundle extraction root is not fresh")
+    try:
+        with tarfile.open(fileobj=io.BytesIO(archive_encoded), mode="r:") as archive:
+            members = archive.getmembers()
+            if len(members) != MAX_UPLOAD_BUNDLE_FILES:
+                raise BootstrapError("upload bundle member count drifted")
+            captured: dict[str, bytes] = {}
+            total = 0
+            for member in members:
+                name = _safe_bundle_member_name(member.name)
+                if (
+                    name in captured
+                    or not member.isfile()
+                    or member.size < 0
+                    or member.mode != 0o444
+                    or member.mtime != 0
+                    or member.uid != 0
+                    or member.gid != 0
+                    or member.pax_headers
+                ):
+                    raise BootstrapError("upload bundle member metadata drifted")
+                total += member.size
+                if total > MAX_UPLOAD_BUNDLE_BYTES:
+                    raise BootstrapError("upload bundle extracted bytes exceed their cap")
+                reader = archive.extractfile(member)
+                if reader is None:
+                    raise BootstrapError("upload bundle member is unreadable")
+                encoded = reader.read(MAX_UPLOAD_BUNDLE_BYTES + 1)
+                if len(encoded) != member.size:
+                    raise BootstrapError("upload bundle member size drifted")
+                captured[name] = encoded
+    except (tarfile.TarError, OSError):
+        raise BootstrapError("upload bundle archive is invalid") from None
+    return captured
+
+
+def _validate_upload_manifest(
+    args: argparse.Namespace,
+    captured: Mapping[str, bytes],
+    *,
+    release_manifest_sha256: object,
+    execution_commit: object,
+) -> dict[str, object]:
+    manifest_encoded = captured.get(UPLOAD_MANIFEST_NAME)
+    if (
+        manifest_encoded is None
+        or not isinstance(release_manifest_sha256, str)
+        or _HEX64.fullmatch(args.bundle_manifest_sha256) is None
+        or args.bundle_manifest_sha256 != release_manifest_sha256
+        or _sha256(manifest_encoded) != release_manifest_sha256
+    ):
+        raise BootstrapError("upload bundle manifest hash drifted")
+    manifest = _strict_json(manifest_encoded, context="upload bundle manifest")
+    raw_rows = manifest.get("files")
+    if not isinstance(raw_rows, list):
+        raise BootstrapError("upload bundle manifest files are invalid")
+    expected_keys = {
+        "schema_version",
+        "plan_id",
+        "host_run_id",
+        "execution_commit",
+        "plan_sha256",
+        "files",
+        "file_count",
+        "archive_member_count",
+        "payload_bytes",
+        "tracked_files_only",
+        "forbidden_untracked_inputs_absent",
+    }
+    rows: dict[str, tuple[int, str]] = {}
+    payload_bytes = 0
+    for raw in raw_rows:
+        if not isinstance(raw, Mapping) or set(raw) != {"path", "bytes", "sha256"}:
+            raise BootstrapError("upload bundle manifest row is invalid")
+        name = _safe_bundle_member_name(str(raw.get("path")))
+        byte_count = raw.get("bytes")
+        sha256 = raw.get("sha256")
+        if (
+            name == UPLOAD_MANIFEST_NAME
+            or name in rows
+            or type(byte_count) is not int
+            or byte_count < 0
+            or not isinstance(sha256, str)
+            or _HEX64.fullmatch(sha256) is None
+        ):
+            raise BootstrapError("upload bundle manifest row drifted")
+        member_encoded = captured.get(name)
+        if (
+            member_encoded is None
+            or len(member_encoded) != byte_count
+            or _sha256(member_encoded) != sha256
+        ):
+            raise BootstrapError("upload bundle member differs from its manifest")
+        rows[name] = (byte_count, sha256)
+        payload_bytes += byte_count
+    if (
+        set(manifest) != expected_keys
+        or manifest.get("schema_version") != "0.1.0"
+        or manifest.get("plan_id") != "PLAN-T07-BOUNDED-SIRA-SMOKE-V1"
+        or manifest.get("host_run_id") != "RUN-T07-BOUNDED-HOST-0001"
+        or manifest.get("execution_commit") != execution_commit
+        or manifest.get("plan_sha256") != args.plan_sha256
+        or manifest.get("file_count") != len(rows)
+        or manifest.get("archive_member_count") != len(captured)
+        or manifest.get("payload_bytes") != payload_bytes
+        or manifest.get("tracked_files_only") is not True
+        or manifest.get("forbidden_untracked_inputs_absent") is not True
+        or set(captured) != {UPLOAD_MANIFEST_NAME, *rows}
+    ):
+        raise BootstrapError("upload bundle manifest contract drifted")
+    return manifest
+
+
+def _validate_upload_bundle(
+    args: argparse.Namespace,
+    *,
+    release_archive_sha256: object,
+    release_manifest_sha256: object,
+    execution_commit: object,
+) -> tuple[dict[str, object], dict[str, bytes]]:
+    """Validate both upload layers for direct unit callers.
+
+    The executable path invokes the two helpers separately so its durable failure
+    evidence distinguishes archive failures from manifest failures.
+    """
+
+    captured = _read_validated_upload_archive(
+        args,
+        release_archive_sha256=release_archive_sha256,
+    )
+    manifest = _validate_upload_manifest(
+        args,
+        captured,
+        release_manifest_sha256=release_manifest_sha256,
+        execution_commit=execution_commit,
+    )
+    return manifest, captured
+
+
+def _extract_validated_bundle(captured: Mapping[str, bytes]) -> None:
+    destination = REMOTE_BUNDLE_ROOT
+    if destination.exists() or destination.is_symlink():
+        raise BootstrapError("upload bundle extraction root is not fresh")
+    destination.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    destination.mkdir(mode=0o700, exist_ok=False)
+    for name, encoded in captured.items():
+        target = destination / name
+        target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        _write_bytes(target, encoded, cap=MAX_UPLOAD_BUNDLE_BYTES)
+
+
+def _validate_bundle_against_plan(
+    manifest: Mapping[str, object],
+    captured: Mapping[str, bytes],
+    *,
+    plan: Mapping[str, object],
+    plan_sha256: str,
+    execution_commit: object,
+) -> None:
+    raw_rows = manifest.get("files")
+    if not isinstance(raw_rows, list):
+        raise BootstrapError("upload bundle manifest files are unavailable")
+    observed = {
+        str(row["path"]): {"bytes": row["bytes"], "sha256": row["sha256"]}
+        for row in raw_rows
+        if isinstance(row, Mapping) and set(row) == {"path", "bytes", "sha256"}
+    }
+    implementation = plan.get("implementation")
+    if not isinstance(implementation, Mapping):
+        raise BootstrapError("plan implementation binding is unavailable")
+    artifacts = implementation.get("artifacts")
+    if not isinstance(artifacts, list):
+        raise BootstrapError("plan artifact binding is unavailable")
+    expected = {
+        str(row["path"]): {"bytes": row["bytes"], "sha256": row["sha256"]}
+        for row in artifacts
+        if isinstance(row, Mapping) and set(row) == {"path", "bytes", "sha256"}
+    }
+    plan_encoded = captured.get("containers/sira-smoke/bounded/bounded-smoke-plan-v1.json")
+    if plan_encoded is None or len(plan_encoded) > MAX_PLAN_BYTES:
+        raise BootstrapError("upload bundle has no bounded plan")
+    expected["containers/sira-smoke/bounded/bounded-smoke-plan-v1.json"] = {
+        "bytes": len(plan_encoded),
+        "sha256": plan_sha256,
+    }
+    if (
+        observed != expected
+        or manifest.get("execution_commit") != execution_commit
+        or set(captured) != {UPLOAD_MANIFEST_NAME, *expected}
+    ):
+        raise BootstrapError("extracted upload bundle differs from the reviewed plan")
+
+
 def _parse_utc(value: object, *, context: str) -> datetime:
     if not isinstance(value, str) or not value.endswith("Z"):
         raise BootstrapError(f"{context} is not an exact UTC timestamp")
@@ -512,7 +988,6 @@ def validate_authorization(
     *,
     expected_sha256: str,
     plan_sha256: str,
-    contract: ModuleType,
 ) -> dict[str, object]:
     if _HEX64.fullmatch(expected_sha256) is None or _sha256(encoded) != expected_sha256:
         raise BootstrapError("authorization file hash differs from the supplied binding")
@@ -546,23 +1021,21 @@ def validate_authorization(
         or not isinstance(reference, str)
         or _AUTHORIZATION.fullmatch(reference) is None
         or reference.endswith("-PENDING")
-        or document.get("branch") != contract.BRANCH
-        or document.get("plan_id") != contract.PLAN_ID
-        or document.get("host_run_id") != contract.HOST_RUN_ID
+        or document.get("branch") != BRANCH
+        or document.get("plan_id") != PLAN_ID
+        or document.get("host_run_id") != HOST_RUN_ID
         or document.get("plan_sha256") != plan_sha256
-        or document.get("condition_run_ids")
-        != [contract.REACTIVE_RUN_ID, contract.SIMULATIVE_RUN_ID]
+        or document.get("condition_run_ids") != [REACTIVE_RUN_ID, SIMULATIVE_RUN_ID]
         or not isinstance(document.get("private_binding_sha256"), str)
         or _HEX64.fullmatch(str(document["private_binding_sha256"])) is None
-        or document.get("limits_sha256")
-        != _sha256(contract.canonical_json_bytes(dict(contract.LIMITS)))
+        or document.get("limits_sha256") != LIMITS_SHA256
         or not isinstance(document.get("execution_commit"), str)
         or _HEX40.fullmatch(str(document["execution_commit"])) is None
         or document.get("user_present") is not True
         or document.get("manual_termination_path_confirmed") is not True
         or pricing
         != {
-            "model": contract.MODEL,
+            "model": MODEL,
             "service_tier": "standard",
             "input_usd_per_million": 2.5,
             "cached_input_usd_per_million": 1.25,
@@ -606,7 +1079,6 @@ def validate_bootstrap_release(
     plan_sha256: str,
     authorization_sha256: str,
     authorization: Mapping[str, object],
-    contract: ModuleType,
 ) -> dict[str, object]:
     if _HEX64.fullmatch(expected_sha256) is None or _sha256(encoded) != expected_sha256:
         raise BootstrapError("bootstrap release hash differs from its supplied binding")
@@ -624,6 +1096,9 @@ def validate_bootstrap_release(
         "post_launch_report_sha256",
         "provider_active_observed_at_utc",
         "selected_provider_image",
+        "bundle_archive_sha256",
+        "bundle_manifest_sha256",
+        "bootstrap_file_sha256",
         "issued_at_utc",
         "bootstrap_release",
         "single_use_output_root",
@@ -639,9 +1114,9 @@ def validate_bootstrap_release(
     selected_provider_image = document.get("selected_provider_image")
     if (
         set(document) != required
-        or document.get("schema_version") != contract.SCHEMA_VERSION
-        or document.get("plan_id") != contract.PLAN_ID
-        or document.get("host_run_id") != contract.HOST_RUN_ID
+        or document.get("schema_version") != SCHEMA_VERSION
+        or document.get("plan_id") != PLAN_ID
+        or document.get("host_run_id") != HOST_RUN_ID
         or document.get("authorization_reference") != authorization.get("authorization_reference")
         or document.get("execution_commit") != authorization.get("execution_commit")
         or document.get("plan_sha256") != plan_sha256
@@ -650,15 +1125,21 @@ def validate_bootstrap_release(
         or any(
             not isinstance(document.get(field), str)
             or _HEX64.fullmatch(str(document[field])) is None
-            for field in ("observer_state_sha256", "post_launch_report_sha256")
+            for field in (
+                "observer_state_sha256",
+                "post_launch_report_sha256",
+                "bundle_archive_sha256",
+                "bundle_manifest_sha256",
+                "bootstrap_file_sha256",
+            )
         )
         or document.get("bootstrap_release") is not True
         or document.get("single_use_output_root") != "/home/ubuntu/t07-bounded-output-0001"
         or selected_provider_image
         != {
-            "alias": contract.SELECTED_IMAGE_ALIAS,
-            "family": contract.SELECTED_IMAGE_FAMILY,
-            "version": contract.SELECTED_IMAGE_VERSION,
+            "alias": SELECTED_IMAGE_ALIAS,
+            "family": SELECTED_IMAGE_FAMILY,
+            "version": SELECTED_IMAGE_VERSION,
             "attestation": "confirmed-in-provider-console",
             "binding_basis": "prelaunch-offered-plus-user-console-attestation",
             "post_launch_api_image_observation_available": False,
@@ -809,18 +1290,34 @@ def acquire_secret_lease(path: Path, *, forbidden_roots: Sequence[Path]) -> Secr
         raise
 
 
-def _assert_secret_absent(root: Path, secret_value: bytes) -> None:
-    for path in root.rglob("*"):
-        if path.is_symlink():
-            raise BootstrapError("evidence contains a symlink")
-        if not path.is_file():
-            continue
+def _assert_secret_absent(
+    root: Path,
+    secret_value: bytes,
+    *,
+    captured: Sequence[tuple[Path, bytes]] | None = None,
+) -> None:
+    evidence = (
+        list(captured)
+        if captured is not None
+        else [
+            (path, _read_regular(path, max_bytes=MAX_EVIDENCE_BYTES))
+            for path in _bounded_regular_files(root, context="evidence")
+        ]
+    )
+    for path, encoded in evidence:
         relative = path.relative_to(root).as_posix().encode("utf-8")
-        if secret_value in relative or any(pattern.search(relative) for pattern in _SECRET_SHAPES):
-            raise BootstrapError("evidence path contains the supplied secret value")
-        encoded = _read_regular(path, max_bytes=MAX_EVIDENCE_BYTES)
-        if secret_value in encoded or _contains_artifact_secret(encoded):
-            raise BootstrapError("evidence contains the supplied secret value")
+        if _contains_secret_derivative(relative, secret_value) or any(
+            pattern.search(relative) for pattern in _SECRET_SHAPES
+        ):
+            raise BootstrapError(
+                "evidence path contains the supplied secret value",
+                failure_code="credential_material_detected",
+            )
+        if _contains_secret_derivative(encoded, secret_value) or _contains_artifact_secret(encoded):
+            raise BootstrapError(
+                "evidence contains the supplied secret value",
+                failure_code="credential_material_detected",
+            )
 
 
 def _download_exact(url: str, destination: Path, *, size: int, sha256: str) -> None:
@@ -848,13 +1345,19 @@ def _download_exact(url: str, destination: Path, *, size: int, sha256: str) -> N
                 if written > size or written > MAX_DOWNLOAD_BYTES:
                     raise BootstrapError("artifact download exceeded its exact byte contract")
                 digest.update(chunk)
-                os.write(descriptor, chunk)
+                _write_all(descriptor, chunk)
             os.fsync(descriptor)
         finally:
             os.close(descriptor)
     finally:
         connection.close()
-    if written != size or digest.hexdigest() != sha256:
+    persisted = _read_regular(destination, max_bytes=MAX_DOWNLOAD_BYTES)
+    if (
+        written != size
+        or digest.hexdigest() != sha256
+        or len(persisted) != size
+        or _sha256(persisted) != sha256
+    ):
         raise BootstrapError("artifact download identity drifted")
 
 
@@ -866,7 +1369,7 @@ def _copy_exact(source: Path, destination: Path, *, sha256: str) -> None:
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
     descriptor = os.open(destination, flags, 0o400)
     try:
-        os.write(descriptor, encoded)
+        _write_all(descriptor, encoded)
         os.fsync(descriptor)
     finally:
         os.close(descriptor)
@@ -894,7 +1397,7 @@ def _write_json(path: Path, value: object) -> None:
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
     descriptor = os.open(path, flags, 0o600)
     try:
-        os.write(descriptor, encoded)
+        _write_all(descriptor, encoded)
         os.fsync(descriptor)
     finally:
         os.close(descriptor)
@@ -906,7 +1409,7 @@ def _write_bytes(path: Path, encoded: bytes, *, cap: int = MAX_COMMAND_OUTPUT_BY
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
     descriptor = os.open(path, flags, 0o600)
     try:
-        os.write(descriptor, encoded)
+        _write_all(descriptor, encoded)
         os.fsync(descriptor)
     finally:
         os.close(descriptor)
@@ -1355,13 +1858,10 @@ def _process_snapshot_count(encoded: bytes) -> int:
 
 def _regular_tree_bytes(root: Path) -> int:
     total = 0
-    for path in root.rglob("*"):
-        if path.is_symlink():
-            raise BootstrapError("attempt evidence contains a symlink")
-        if path.is_file():
-            total += path.stat(follow_symlinks=False).st_size
-            if total > MAX_EVIDENCE_BYTES:
-                raise BootstrapError("attempt evidence exceeds the aggregate cap")
+    for path in _bounded_regular_files(root, context="attempt evidence"):
+        total += path.stat(follow_symlinks=False).st_size
+        if total > MAX_EVIDENCE_BYTES:
+            raise BootstrapError("attempt evidence exceeds the aggregate cap")
     return total
 
 
@@ -1766,7 +2266,7 @@ def _append_normalized_event(path: Path, event: Mapping[str, object]) -> None:
         raise BootstrapError("normalized event exceeds its cap")
     descriptor = os.open(path, os.O_WRONLY | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0))
     try:
-        os.write(descriptor, encoded)
+        _write_all(descriptor, encoded)
         os.fsync(descriptor)
     finally:
         os.close(descriptor)
@@ -1902,10 +2402,8 @@ def run_condition(
     payload = condition_root / "payload"
     artifact_paths = [
         path
-        for path in sorted(payload.rglob("*"))
-        if path.is_file()
-        and not path.is_symlink()
-        and (
+        for path in _bounded_regular_files(payload, context="condition payload")
+        if (
             path.parent == payload / "sira-output"
             or payload / "source-logs" in path.parents
             or path.name
@@ -1977,19 +2475,39 @@ def package_evidence(
     *,
     secret_value: bytes,
 ) -> Path:
-    _assert_secret_absent(evidence_root, secret_value)
-    manifest = contract.build_evidence_manifest(
-        evidence_root,
-        max_total_bytes=MAX_EVIDENCE_BYTES,
-        max_files=MAX_EVIDENCE_FILES,
-    )
+    captured = [
+        (path, _read_regular(path, max_bytes=MAX_EVIDENCE_BYTES))
+        for path in _bounded_regular_files(evidence_root, context="success evidence")
+    ]
+    _assert_secret_absent(evidence_root, secret_value, captured=captured)
+    rows = [
+        {
+            "path": path.relative_to(evidence_root).as_posix(),
+            "bytes": len(encoded),
+            "sha256": _sha256(encoded),
+        }
+        for path, encoded in captured
+        if path.name != "EVIDENCE_MANIFEST.json"
+    ]
+    total = sum(len(encoded) for path, encoded in captured if path.name != "EVIDENCE_MANIFEST.json")
+    if len(rows) > MAX_EVIDENCE_FILES or total > MAX_EVIDENCE_BYTES:
+        raise BootstrapError("success evidence exceeds its file or byte cap")
+    manifest = {
+        "schema_version": contract.SCHEMA_VERSION,
+        "plan_id": contract.PLAN_ID,
+        "host_run_id": contract.HOST_RUN_ID,
+        "files": rows,
+        "file_count": len(rows),
+        "total_bytes": total,
+    }
+    contract.validate_evidence_manifest(manifest)
     manifest_path = evidence_root / "EVIDENCE_MANIFEST.json"
     _write_json(manifest_path, manifest)
+    manifest_encoded = _read_regular(manifest_path, max_bytes=1_048_576)
     archive = evidence_root.parent / "t07-bounded-evidence.zip"
     with zipfile.ZipFile(archive, "x", compression=zipfile.ZIP_STORED) as output:
-        for path in sorted(evidence_root.rglob("*")):
-            if path.is_file() and not path.is_symlink():
-                output.write(path, path.relative_to(evidence_root).as_posix())
+        for path, encoded in [*captured, (manifest_path, manifest_encoded)]:
+            output.writestr(path.relative_to(evidence_root).as_posix(), encoded)
     if archive.stat().st_size > MAX_EVIDENCE_BYTES:
         raise BootstrapError("sealed evidence archive exceeds its cap")
     archive_descriptor = os.open(archive, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
@@ -2023,17 +2541,19 @@ def package_failure_evidence(
     """Create a bounded secret-scanned archive after any post-root bootstrap failure."""
 
     archive = output_root / "t07-bounded-failure-evidence.zip"
-    optional_candidates = [
-        path
-        for path in sorted(evidence_root.rglob("*"))
-        if path.is_file() and not path.is_symlink()
-    ]
+    optional_candidates = _bounded_regular_files(evidence_root, context="failure evidence")
     incident = output_root / "TERMINATE_REQUIRED.json"
     if not incident.is_file() or incident.is_symlink():
         raise BootstrapError("failure evidence termination incident is unavailable")
     cleanup = evidence_root / "secret-cleanup.json"
     authority = evidence_root / "bootstrap-authority.json"
     mandatory_candidates = [incident]
+    command_meter = evidence_root / "command-meter.jsonl"
+    if command_meter.exists():
+        if not command_meter.is_file() or command_meter.is_symlink():
+            raise BootstrapError("failure evidence command meter is unsafe")
+        mandatory_candidates.append(command_meter)
+        optional_candidates.remove(command_meter)
     if authority.exists():
         if not authority.is_file() or authority.is_symlink():
             raise BootstrapError("failure evidence bootstrap authority is unsafe")
@@ -2047,19 +2567,32 @@ def package_failure_evidence(
     rows: list[dict[str, object]] = []
     retained: list[tuple[str, bytes]] = []
     skipped_sensitive = 0
+    actual_secret_derivative_detected = False
     skipped_cap = 0
     payload_bytes = 0
     payload_limit = MAX_FAILURE_EVIDENCE_BYTES - 1_048_576
 
     def retain(path: Path, *, mandatory: bool) -> bool:
-        nonlocal payload_bytes, skipped_cap, skipped_sensitive
+        nonlocal actual_secret_derivative_detected, payload_bytes, skipped_cap, skipped_sensitive
         relative = path.relative_to(output_root).as_posix()
         relative_encoded = relative.encode("utf-8")
-        if any(pattern.search(relative_encoded) for pattern in _SECRET_SHAPES) or (
-            secret_value is not None and secret_value in relative_encoded
+        path_has_actual_secret = secret_value is not None and _contains_secret_derivative(
+            relative_encoded, secret_value
+        )
+        if (
+            any(pattern.search(relative_encoded) for pattern in _SECRET_SHAPES)
+            or path_has_actual_secret
         ):
             if mandatory:
-                raise BootstrapError("mandatory failure evidence has a secret-shaped path")
+                raise BootstrapError(
+                    "mandatory failure evidence has a secret-shaped path",
+                    failure_code=(
+                        "credential_material_detected"
+                        if path_has_actual_secret
+                        else "bootstrap_contract_rejected"
+                    ),
+                )
+            actual_secret_derivative_detected |= path_has_actual_secret
             skipped_sensitive += 1
             return False
         try:
@@ -2069,11 +2602,20 @@ def package_failure_evidence(
                 raise
             skipped_cap += 1
             return False
-        if _contains_artifact_secret(encoded) or (
-            secret_value is not None and secret_value in encoded
-        ):
+        content_has_actual_secret = secret_value is not None and _contains_secret_derivative(
+            encoded, secret_value
+        )
+        if _contains_artifact_secret(encoded) or content_has_actual_secret:
             if mandatory:
-                raise BootstrapError("mandatory failure evidence contains secret-shaped bytes")
+                raise BootstrapError(
+                    "mandatory failure evidence contains secret-shaped bytes",
+                    failure_code=(
+                        "credential_material_detected"
+                        if content_has_actual_secret
+                        else "bootstrap_contract_rejected"
+                    ),
+                )
+            actual_secret_derivative_detected |= content_has_actual_secret
             skipped_sensitive += 1
             return False
         if payload_bytes + len(encoded) > payload_limit:
@@ -2093,6 +2635,20 @@ def package_failure_evidence(
     optional_slots = MAX_EVIDENCE_FILES - len(mandatory_candidates)
     for path in optional_candidates[:optional_slots]:
         retain(path, mandatory=False)
+    if actual_secret_derivative_detected:
+        incident_record = _strict_json(
+            _read_regular(incident, max_bytes=65_536), context="termination incident"
+        )
+        incident_record["failure_stage"] = "evidence_packaging"
+        incident_record["failure_class"] = "credential_material_detected"
+        incident_record["manual_credential_rotation_required"] = True
+        incident.unlink()
+        _write_json(incident, incident_record)
+        incident_relative = incident.relative_to(output_root).as_posix()
+        retained = [row for row in retained if row[0] != incident_relative]
+        rows = [row for row in rows if row["path"] != incident_relative]
+        payload_bytes = sum(len(encoded) for _, encoded in retained)
+        retain(incident, mandatory=True)
     manifest = {
         "schema_version": contract.SCHEMA_VERSION,
         "plan_id": contract.PLAN_ID,
@@ -2148,31 +2704,54 @@ def _create_early_failure_root(output_root: Path) -> tuple[Path, Path]:
     return root, evidence
 
 
+def _use_reserved_early_failure_root(output_root: Path) -> tuple[Path, Path]:
+    root = output_root.absolute()
+    evidence = root / "evidence"
+    if (
+        root != REMOTE_OUTPUT_ROOT
+        or root.resolve(strict=True) != root
+        or root.is_symlink()
+        or not root.is_dir()
+        or evidence.resolve(strict=True) != evidence
+        or evidence.is_symlink()
+        or not evidence.is_dir()
+        or {path.name for path in root.iterdir()} != {"evidence"}
+        or any(evidence.iterdir())
+    ):
+        raise BootstrapError("reserved early-failure output root is not pristine")
+    return root, evidence
+
+
 def package_early_failure_evidence(
     output_root: Path,
     *,
     failure_stage: str,
+    failure_code: str = "bootstrap_contract_rejected",
     secret_target_identity_established: bool,
     secret_cleanup_verified: bool,
     secret_value_read: bool,
     secret_cleanup_source: Path | None = None,
+    reserved_output_root: bool = False,
 ) -> Path:
     """Seal a predictable minimal failure set when normal output setup never completed."""
 
-    if failure_stage not in {
-        "secret_target_validation",
-        "bootstrap_preflight",
-        "normal_failure_packaging",
-    }:
+    if failure_stage not in PRESECRET_FAILURE_STAGES:
         raise BootstrapError("early-failure stage is invalid")
+    if failure_code not in FAILURE_CODES:
+        raise BootstrapError("early-failure code is invalid")
     if secret_cleanup_verified != (secret_cleanup_source is not None):
         raise BootstrapError("early-failure cleanup receipt presence drifted")
-    root, evidence = _create_early_failure_root(output_root)
+    root, evidence = (
+        _use_reserved_early_failure_root(output_root)
+        if reserved_output_root
+        else _create_early_failure_root(output_root)
+    )
     disposition = {
         "schema_version": "0.1.0",
         "plan_id": "PLAN-T07-BOUNDED-SIRA-SMOKE-V1",
         "host_run_id": "RUN-T07-BOUNDED-HOST-0001",
         "failure_stage": failure_stage,
+        "failure_code": failure_code,
         "message_retained": False,
         "secret_target_identity_established": secret_target_identity_established,
         "secret_cleanup_verified": secret_cleanup_verified,
@@ -2203,10 +2782,12 @@ def package_early_failure_evidence(
     incident = {
         "schema_version": "0.1.0",
         "provider_termination_required": True,
-        "failure_class": failure_stage,
+        "failure_stage": failure_stage,
+        "failure_class": failure_code,
         "message_retained": False,
         "secret_cleanup_verified": secret_cleanup_verified,
         "manual_secret_deletion_required": not secret_cleanup_verified,
+        "manual_credential_rotation_required": (failure_code == "credential_material_detected"),
         "secret_target_validation_completed": secret_target_identity_established,
         "secret_value_read": secret_value_read,
     }
@@ -2296,8 +2877,7 @@ def validate_pair_evidence(evidence_root: Path, contract: ModuleType) -> None:
             raise BootstrapError("condition accounting, routing, or browser cleanup drifted")
         output_bytes = sum(
             path.stat().st_size
-            for path in root.rglob("*")
-            if path.is_file() and not path.is_symlink()
+            for path in _bounded_regular_files(root, context="condition evidence")
         )
         usage = contract.BudgetUsage(
             condition=condition,
@@ -2414,6 +2994,10 @@ def write_bootstrap_execution(
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
+    parser.add_argument("--bootstrap-file-sha256", required=True)
+    parser.add_argument("--bundle-archive", type=Path, required=True)
+    parser.add_argument("--bundle-archive-sha256", required=True)
+    parser.add_argument("--bundle-manifest-sha256", required=True)
     parser.add_argument("--plan", type=Path, required=True)
     parser.add_argument("--plan-sha256", required=True)
     parser.add_argument("--contract-file", type=Path, required=True)
@@ -2428,44 +3012,29 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _execute(args: argparse.Namespace, secret_lease: SecretLease) -> int:
+def _execute(
+    args: argparse.Namespace,
+    secret_lease: SecretLease,
+    *,
+    contract: ModuleType,
+    plan: Mapping[str, object],
+    authorization: Mapping[str, object],
+    bootstrap_release: Mapping[str, object],
+    starting_free_bytes: int,
+) -> int:
     if "OPENAI_API_KEY" in os.environ or "SIRA_API_KEY" in os.environ:
         raise BootstrapError("credentials must not be inherited by the bootstrap")
-    contract_bytes = _read_regular(args.contract_file, max_bytes=1_048_576)
-    if (
-        _HEX64.fullmatch(args.contract_sha256) is None
-        or _sha256(contract_bytes) != args.contract_sha256
-    ):
-        raise BootstrapError("bounded contract module hash drifted")
-    contract = _load_contract(args.contract_file, contract_bytes)
-    plan_bytes = _read_regular(args.plan, max_bytes=MAX_PLAN_BYTES)
-    if _HEX64.fullmatch(args.plan_sha256) is None or _sha256(plan_bytes) != args.plan_sha256:
-        raise BootstrapError("bounded plan hash drifted")
-    plan = _strict_json(plan_bytes, context="bounded plan")
-    contract.validate_plan(plan, repository_root=args.bundle_root)
-    authorization = validate_authorization(
-        _read_regular(args.authorization, max_bytes=MAX_AUTHORIZATION_BYTES),
-        expected_sha256=args.authorization_sha256,
-        plan_sha256=args.plan_sha256,
-        contract=contract,
-    )
-    bootstrap_release = validate_bootstrap_release(
-        _read_regular(args.bootstrap_release, max_bytes=MAX_AUTHORIZATION_BYTES),
-        expected_sha256=args.bootstrap_release_sha256,
-        plan_sha256=args.plan_sha256,
-        authorization_sha256=args.authorization_sha256,
-        authorization=authorization,
-        contract=contract,
-    )
     output_root = args.output_root.absolute()
     bundle_root = args.bundle_root.resolve(strict=True)
-    if output_root.exists() or output_root.resolve(strict=False) != output_root:
-        raise BootstrapError("remote output root is not fresh and canonical")
-    _assert_remote_capacity(output_root)
-    starting_free_bytes = shutil.disk_usage(output_root.parent).free
-    output_root.mkdir(mode=0o700, parents=True, exist_ok=False)
     evidence_root = output_root / "evidence"
-    evidence_root.mkdir(mode=0o700)
+    if (
+        output_root != REMOTE_OUTPUT_ROOT
+        or not output_root.is_dir()
+        or output_root.is_symlink()
+        or not evidence_root.is_dir()
+        or evidence_root.is_symlink()
+    ):
+        raise BootstrapError("reserved remote output root identity drifted")
     _write_json(
         evidence_root / "bootstrap-authority.json",
         {
@@ -2479,6 +3048,9 @@ def _execute(args: argparse.Namespace, secret_lease: SecretLease) -> int:
             "authorization_sha256": args.authorization_sha256,
             "private_binding_sha256": bootstrap_release["private_binding_sha256"],
             "bootstrap_release_sha256": args.bootstrap_release_sha256,
+            "bundle_archive_sha256": args.bundle_archive_sha256,
+            "bundle_manifest_sha256": args.bundle_manifest_sha256,
+            "bootstrap_file_sha256": args.bootstrap_file_sha256,
             "observer_state_sha256": bootstrap_release["observer_state_sha256"],
             "post_launch_report_sha256": bootstrap_release["post_launch_report_sha256"],
             "provider_active_observed_at_utc": bootstrap_release["provider_active_observed_at_utc"],
@@ -2514,6 +3086,7 @@ def _execute(args: argparse.Namespace, secret_lease: SecretLease) -> int:
     )
     secret_value: bytes | None = None
     secret_cleanup_complete = False
+    execution_stage = "host_environment"
     try:
         # The guarded failure path begins before the first byte of the real secret
         # is read.  If validation cannot prove an exact safe file identity, the
@@ -2525,7 +3098,9 @@ def _execute(args: argparse.Namespace, secret_lease: SecretLease) -> int:
             bootstrap_release=bootstrap_release,
             contract=contract,
         )
+        execution_stage = "secret_read"
         secret_value = secret_lease.read_value()
+        execution_stage = "build_context"
         context = prepare_build_context(
             bundle_root=bundle_root,
             work_root=output_root,
@@ -2533,6 +3108,7 @@ def _execute(args: argparse.Namespace, secret_lease: SecretLease) -> int:
             contract=contract,
             runner=work_runner,
         )
+        execution_stage = "image_build"
         image_id = build_image(
             context=context,
             execution_commit=str(authorization["execution_commit"]),
@@ -2553,6 +3129,7 @@ def _execute(args: argparse.Namespace, secret_lease: SecretLease) -> int:
         model_template = model_plan.get("container_create_argv_template")
         if not isinstance(browser_template, list) or not isinstance(model_template, list):
             raise BootstrapError("preflight command template is unavailable")
+        execution_stage = "browser_preflight"
         browser_root = evidence_root / "browser-preflight"
         browser_root.mkdir(mode=0o700)
         run_owned_container(
@@ -2614,6 +3191,7 @@ def _execute(args: argparse.Namespace, secret_lease: SecretLease) -> int:
                 "platform": "linux/amd64",
             },
         )
+        execution_stage = "model_preflight"
         model_root = evidence_root / "model-preflight"
         model_root.mkdir(mode=0o700)
         run_owned_container(
@@ -2654,6 +3232,7 @@ def _execute(args: argparse.Namespace, secret_lease: SecretLease) -> int:
             raise BootstrapError("model availability evidence drifted")
         _assert_runtime_disk_increment(output_root, starting_free_bytes=starting_free_bytes)
         initialize_normalized_event_ledger(evidence_root)
+        execution_stage = "reactive_condition"
         run_condition(
             condition="SIRA-REACTIVE",
             plan=plan,
@@ -2666,6 +3245,7 @@ def _execute(args: argparse.Namespace, secret_lease: SecretLease) -> int:
             authorization=authorization,
         )
         _assert_runtime_disk_increment(output_root, starting_free_bytes=starting_free_bytes)
+        execution_stage = "simulative_condition"
         run_condition(
             condition="SIRA-SIMULATIVE",
             plan=plan,
@@ -2678,6 +3258,7 @@ def _execute(args: argparse.Namespace, secret_lease: SecretLease) -> int:
             authorization=authorization,
         )
         _assert_runtime_disk_increment(output_root, starting_free_bytes=starting_free_bytes)
+        execution_stage = "pair_validation"
         validate_pair_evidence(evidence_root, contract)
         write_reconstruction_records(evidence_root, contract=contract)
         write_bootstrap_execution(
@@ -2686,11 +3267,13 @@ def _execute(args: argparse.Namespace, secret_lease: SecretLease) -> int:
             status="completed",
             started_at=bootstrap_started_at,
         )
+        execution_stage = "evidence_packaging"
         secret_lease.destroy(evidence_root / "secret-cleanup.json")
         secret_cleanup_complete = True
         package_evidence(evidence_root, contract, secret_value=secret_value)
         _assert_runtime_disk_increment(output_root, starting_free_bytes=starting_free_bytes)
     except BaseException as exc:
+        primary_failure_code = _sanitized_failure_code(exc)
         if not secret_cleanup_complete:
             try:
                 secret_lease.destroy(evidence_root / "secret-cleanup.json")
@@ -2710,10 +3293,14 @@ def _execute(args: argparse.Namespace, secret_lease: SecretLease) -> int:
             {
                 "schema_version": "0.1.0",
                 "provider_termination_required": True,
-                "failure_class": type(exc).__name__,
+                "failure_stage": execution_stage,
+                "failure_class": primary_failure_code,
                 "message_retained": False,
                 "secret_cleanup_verified": secret_cleanup_complete,
                 "manual_secret_deletion_required": not secret_cleanup_complete,
+                "manual_credential_rotation_required": (
+                    primary_failure_code == "credential_material_detected"
+                ),
                 "secret_target_validation_completed": True,
                 "secret_value_read": secret_value is not None,
             },
@@ -2725,7 +3312,18 @@ def _execute(args: argparse.Namespace, secret_lease: SecretLease) -> int:
                 contract,
                 secret_value=secret_value,
             )
-        except BaseException:
+        except BaseException as packaging_exc:
+            if _sanitized_failure_code(packaging_exc) == "credential_material_detected":
+                with contextlib.suppress(BaseException):
+                    existing = _strict_json(
+                        _read_regular(incident, max_bytes=65_536),
+                        context="termination incident",
+                    )
+                    existing["failure_stage"] = "evidence_packaging"
+                    existing["failure_class"] = "credential_material_detected"
+                    existing["manual_credential_rotation_required"] = True
+                    incident.unlink()
+                    _write_json(incident, existing)
             with contextlib.suppress(BaseException):
                 _write_json(
                     output_root / "FAILURE_ARCHIVE_ERROR.json",
@@ -2747,13 +3345,156 @@ def _execute(args: argparse.Namespace, secret_lease: SecretLease) -> int:
             "message_retained": False,
             "secret_cleanup_verified": True,
             "manual_secret_deletion_required": False,
+            "manual_credential_rotation_required": False,
         },
     )
     return 0
 
 
+def _reserve_single_use_output_root() -> int:
+    output_root = REMOTE_OUTPUT_ROOT
+    parent = output_root.parent
+    if (
+        output_root != output_root.absolute()
+        or output_root.resolve(strict=False) != output_root
+        or parent.resolve(strict=True) != parent
+        or output_root.exists()
+        or output_root.is_symlink()
+    ):
+        raise BootstrapError("remote output root is not fresh and canonical")
+    os.mkdir(output_root, mode=0o700)
+    parent_descriptor = os.open(
+        parent,
+        os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0),
+    )
+    try:
+        os.fsync(parent_descriptor)
+    finally:
+        os.close(parent_descriptor)
+    evidence_root = output_root / "evidence"
+    evidence_root.mkdir(mode=0o700)
+    output_descriptor = os.open(
+        output_root,
+        os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0),
+    )
+    try:
+        os.fsync(output_descriptor)
+    finally:
+        os.close(output_descriptor)
+    starting_free_bytes = shutil.disk_usage(parent).free
+    _assert_remote_capacity(output_root)
+    return starting_free_bytes
+
+
+def _record_presecret_failure(*, failure_stage: str, failure_code: str) -> None:
+    with contextlib.suppress(BaseException):
+        package_early_failure_evidence(
+            REMOTE_OUTPUT_ROOT,
+            failure_stage=failure_stage,
+            failure_code=failure_code,
+            secret_target_identity_established=False,
+            secret_cleanup_verified=False,
+            secret_value_read=False,
+            reserved_output_root=True,
+        )
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
+    presecret_stage = "run_identity_reservation"
+    attempt_claimed = False
+    try:
+        # The fixed output root is the authoritative one-shot run claim.  It is
+        # reserved before any fallible authority, archive, plan, or contract
+        # validation so every terminal pre-secret failure burns this run identity.
+        starting_free_bytes = _reserve_single_use_output_root()
+        attempt_claimed = True
+        presecret_stage = "inherited_environment_guard"
+        if "OPENAI_API_KEY" in os.environ or "SIRA_API_KEY" in os.environ:
+            raise BootstrapError("credentials must not be inherited by the bootstrap")
+        presecret_stage = "invocation_validation"
+        _validate_invocation_paths(args)
+        presecret_stage = "authorization_validation"
+        authorization = validate_authorization(
+            _read_regular(args.authorization, max_bytes=MAX_AUTHORIZATION_BYTES),
+            expected_sha256=args.authorization_sha256,
+            plan_sha256=args.plan_sha256,
+        )
+        presecret_stage = "release_validation"
+        bootstrap_release = validate_bootstrap_release(
+            _read_regular(args.bootstrap_release, max_bytes=MAX_AUTHORIZATION_BYTES),
+            expected_sha256=args.bootstrap_release_sha256,
+            plan_sha256=args.plan_sha256,
+            authorization_sha256=args.authorization_sha256,
+            authorization=authorization,
+        )
+        presecret_stage = "bootstrap_hash_validation"
+        _validate_bootstrap_file(
+            argv_sha256=args.bootstrap_file_sha256,
+            release_sha256=bootstrap_release.get("bootstrap_file_sha256"),
+        )
+        presecret_stage = "archive_validation"
+        captured = _read_validated_upload_archive(
+            args,
+            release_archive_sha256=bootstrap_release.get("bundle_archive_sha256"),
+        )
+        presecret_stage = "manifest_validation"
+        bundle_manifest = _validate_upload_manifest(
+            args,
+            captured,
+            release_manifest_sha256=bootstrap_release.get("bundle_manifest_sha256"),
+            execution_commit=bootstrap_release.get("execution_commit"),
+        )
+        presecret_stage = "plan_validation"
+        plan_bytes = captured.get("containers/sira-smoke/bounded/bounded-smoke-plan-v1.json")
+        if (
+            plan_bytes is None
+            or _HEX64.fullmatch(args.plan_sha256) is None
+            or _sha256(plan_bytes) != args.plan_sha256
+        ):
+            raise BootstrapError("bounded plan hash drifted")
+        plan = _strict_json(plan_bytes, context="bounded plan")
+        _validate_bundle_against_plan(
+            bundle_manifest,
+            captured,
+            plan=plan,
+            plan_sha256=args.plan_sha256,
+            execution_commit=bootstrap_release["execution_commit"],
+        )
+        presecret_stage = "bundle_extraction"
+        _extract_validated_bundle(captured)
+        presecret_stage = "contract_hash_validation"
+        contract_bytes = _read_regular(args.contract_file, max_bytes=1_048_576)
+        if (
+            _HEX64.fullmatch(args.contract_sha256) is None
+            or _sha256(contract_bytes) != args.contract_sha256
+        ):
+            raise BootstrapError("bounded contract module hash drifted")
+        presecret_stage = "contract_import"
+        contract = _load_contract(args.contract_file, contract_bytes)
+        presecret_stage = "contract_validation"
+        contract.validate_plan(plan, repository_root=args.bundle_root)
+        if (
+            contract.SCHEMA_VERSION != SCHEMA_VERSION
+            or contract.PLAN_ID != PLAN_ID
+            or contract.HOST_RUN_ID != HOST_RUN_ID
+            or contract.BRANCH != BRANCH
+            or contract.REACTIVE_RUN_ID != REACTIVE_RUN_ID
+            or contract.SIMULATIVE_RUN_ID != SIMULATIVE_RUN_ID
+            or contract.MODEL != MODEL
+            or contract.SELECTED_IMAGE_ALIAS != SELECTED_IMAGE_ALIAS
+            or contract.SELECTED_IMAGE_FAMILY != SELECTED_IMAGE_FAMILY
+            or contract.SELECTED_IMAGE_VERSION != SELECTED_IMAGE_VERSION
+            or _sha256(contract.canonical_json_bytes(dict(contract.LIMITS))) != LIMITS_SHA256
+        ):
+            raise BootstrapError("reviewed contract differs from bootstrap trust anchors")
+    except BaseException as exc:
+        if attempt_claimed or REMOTE_OUTPUT_ROOT.is_dir():
+            _record_presecret_failure(
+                failure_stage=presecret_stage,
+                failure_code=_sanitized_failure_code(exc),
+            )
+        raise
     forbidden_roots = (
         args.bundle_root.resolve(strict=False),
         args.output_root.absolute(),
@@ -2762,19 +3503,29 @@ def main(argv: Sequence[str] | None = None) -> int:
         secret_lease = acquire_secret_lease(
             args.secret_file.absolute(), forbidden_roots=forbidden_roots
         )
-    except BaseException:
+    except BaseException as exc:
         with contextlib.suppress(BaseException):
             package_early_failure_evidence(
                 args.output_root,
                 failure_stage="secret_target_validation",
+                failure_code=_sanitized_failure_code(exc),
                 secret_target_identity_established=False,
                 secret_cleanup_verified=False,
                 secret_value_read=False,
+                reserved_output_root=True,
             )
         raise
     try:
-        return _execute(args, secret_lease)
-    except BaseException:
+        return _execute(
+            args,
+            secret_lease,
+            contract=contract,
+            plan=plan,
+            authorization=authorization,
+            bootstrap_release=bootstrap_release,
+            starting_free_bytes=starting_free_bytes,
+        )
+    except BaseException as exc:
         cleanup_source = args.output_root.absolute() / "evidence/secret-cleanup.json"
         if not secret_lease.destroyed:
             try:
@@ -2791,11 +3542,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             with contextlib.suppress(BaseException):
                 package_early_failure_evidence(
                     args.output_root,
-                    failure_stage=(
-                        "normal_failure_packaging"
-                        if args.output_root.absolute().exists()
-                        else "bootstrap_preflight"
-                    ),
+                    failure_stage="normal_failure_packaging",
+                    failure_code=_sanitized_failure_code(exc),
                     secret_target_identity_established=True,
                     secret_cleanup_verified=cleanup_verified,
                     secret_value_read=secret_lease.value_read,

@@ -147,27 +147,28 @@ POST_LAUNCH_STOP_CONDITIONS: Final = (
 )
 STEP_CONTRACT: Final = (
     (1, "local-verifier", "materialize_fresh_external_authorization_and_private_binding"),
-    (2, "observer", "read_only_provider_preflight"),
-    (3, "user", "apply_temporary_private_32_global_firewall_if_needed"),
-    (4, "user", "create_one_unique_owned_regional_ruleset_if_needed"),
-    (5, "observer", "verify_exact_security_controls_before_launch"),
-    (6, "user", "launch_exactly_one_selected_instance_with_one_click"),
-    (7, "observer", "bind_exactly_one_owned_instance"),
-    (8, "local-verifier", "issue_single_use_bootstrap_release_after_image_attestation"),
-    (9, "user", "open_cloud_ide_jupyter"),
-    (10, "user", "upload_exact_bundle_secret_authorization_and_bootstrap_release"),
-    (11, "bootstrap", "run_hash_first_bootstrap_once"),
-    (12, "bootstrap", "run_no_network_browser_lifecycle_preflight"),
-    (13, "bootstrap", "verify_exact_model_snapshot_once"),
-    (14, "bootstrap", "run_reactive_once_then_simulative_once"),
-    (15, "bootstrap", "capture_remove_verify_and_package_success_or_failure_evidence"),
-    (16, "user", "download_normal_or_early_failure_evidence_and_identity_records"),
-    (17, "local-verifier", "verify_inbound_manifest_hashes_before_provider_termination"),
-    (18, "user", "terminate_exact_bound_instance"),
-    (19, "observer", "verify_exact_instance_terminal_or_absent_and_billing_stopped"),
-    (20, "user", "delete_owned_regional_ruleset_and_restore_global_firewall_if_changed"),
-    (21, "observer", "verify_ruleset_absence_and_exact_firewall_restoration"),
-    (22, "local-verifier", "seal_and_copy_complete_or_failed_evidence_to_external_archive"),
+    (2, "local-verifier", "prepare_exact_manifest_owned_upload_bundle"),
+    (3, "observer", "read_only_provider_preflight"),
+    (4, "user", "apply_temporary_private_32_global_firewall_if_needed"),
+    (5, "user", "create_one_unique_owned_regional_ruleset_if_needed"),
+    (6, "observer", "verify_exact_security_controls_before_launch"),
+    (7, "user", "launch_exactly_one_selected_instance_with_one_click"),
+    (8, "observer", "bind_exactly_one_owned_instance"),
+    (9, "local-verifier", "issue_single_use_bootstrap_release_after_image_attestation"),
+    (10, "user", "open_cloud_ide_jupyter"),
+    (11, "user", "upload_exact_archive_bootstrap_secret_authorization_and_release"),
+    (12, "bootstrap", "verify_and_extract_exact_bundle_then_run_once"),
+    (13, "bootstrap", "run_no_network_browser_lifecycle_preflight"),
+    (14, "bootstrap", "verify_exact_model_snapshot_once"),
+    (15, "bootstrap", "run_reactive_once_then_simulative_once"),
+    (16, "bootstrap", "capture_remove_verify_and_package_success_or_failure_evidence"),
+    (17, "user", "download_normal_or_early_failure_evidence_and_identity_records"),
+    (18, "local-verifier", "verify_inbound_manifest_hashes_before_provider_termination"),
+    (19, "user", "terminate_exact_bound_instance"),
+    (20, "observer", "verify_exact_instance_terminal_or_absent_and_billing_stopped"),
+    (21, "user", "delete_owned_regional_ruleset_and_restore_global_firewall_if_changed"),
+    (22, "observer", "verify_ruleset_absence_and_exact_firewall_restoration"),
+    (23, "local-verifier", "seal_and_copy_complete_or_failed_evidence_to_external_archive"),
 )
 PUBLIC_METADATA: Final = (
     {
@@ -303,6 +304,8 @@ LIMITS: Final[Mapping[str, int | str]] = MappingProxyType(
         "remote_evidence_bytes": 268_435_456,
         "local_evidence_bytes": 301_989_888,
         "early_failure_evidence_bytes": 1_048_576,
+        "upload_bundle_bytes": 8_388_608,
+        "upload_bundle_files": 36,
         "bootstrap_process_output_bytes": 33_554_432,
         "docker_control_output_bytes": 33_554_432,
         "docker_lifecycle_calls": 128,
@@ -893,7 +896,15 @@ def bootstrap_argv_template() -> tuple[str, ...]:
     return (
         "/usr/bin/python3",
         "-I",
-        "/home/ubuntu/t07-bounded-bundle/containers/sira-smoke/bounded/bootstrap.py",
+        "/home/ubuntu/t07-bounded-bootstrap.py",
+        "--bootstrap-file-sha256",
+        "${REMOTE_BOOTSTRAP_SHA256}",
+        "--bundle-archive",
+        "/home/ubuntu/t07-bounded-repository.tar",
+        "--bundle-archive-sha256",
+        "${BUNDLE_ARCHIVE_SHA256}",
+        "--bundle-manifest-sha256",
+        "${BUNDLE_MANIFEST_SHA256}",
         "--plan",
         (
             "/home/ubuntu/t07-bounded-bundle/containers/sira-smoke/bounded/"
@@ -973,6 +984,7 @@ def local_supervisor_argv_templates() -> dict[str, list[str]]:
             "--restoration-payload-sha256",
             "50ca7febe9f160ada862371376485ea2ece11b373d25179ccd578d9c7acd42b8",
         ],
+        "prepare_bundle": [*base, "prepare-bundle", *authority],
     }
     for phase in ("prelaunch", "security", "post_launch", "termination", "terminal"):
         output[f"observe_{phase}"] = [*base, "observe", *authority, "--phase", phase]
@@ -1062,8 +1074,13 @@ def provider_observer_contract() -> dict[str, object]:
 def storage_contract() -> dict[str, object]:
     return {
         "remote_active_root": "/home/ubuntu/t07-bounded-output-0001",
-        "remote_early_failure_root": "/home/ubuntu/t07-bounded-output-0001-early-failure",
+        "remote_single_use_claim_root": "/home/ubuntu/t07-bounded-output-0001",
+        "remote_secondary_failure_root": "/home/ubuntu/t07-bounded-output-0001-early-failure",
+        "remote_bundle_archive": "/home/ubuntu/t07-bounded-repository.tar",
+        "remote_bundle_root": "/home/ubuntu/t07-bounded-bundle",
+        "remote_bootstrap_file": "/home/ubuntu/t07-bounded-bootstrap.py",
         "persistent_filesystem_count": 0,
+        "local_upload_root": ("artifacts/t07/bounded-upload/RUN-T07-BOUNDED-HOST-0001"),
         "local_inbound_root": "artifacts/t07/bounded/RUN-T07-BOUNDED-HOST-0001/inbound",
         "external_mount": EXTERNAL_ARCHIVE_MOUNT,
         "external_volume_uuid": EXTERNAL_ARCHIVE_UUID,
@@ -1071,6 +1088,10 @@ def storage_contract() -> dict[str, object]:
         "external_archive_root": (
             EXTERNAL_ARCHIVE_MOUNT + "/GIC-Lab/t07/sealed-artifacts/RUN-T07-BOUNDED-HOST-0001"
         ),
+        "external_archive_required_upload_artifacts": [
+            "upload-bundle/t07-bounded-repository.tar",
+            "upload-bundle/t07-bounded-bootstrap.py",
+        ],
         "archive_cap_bytes": 301_989_888,
         "external_retained_floor_bytes": 200_048_192_717,
         "external_prewrite_floor_bytes": 200_350_182_605,

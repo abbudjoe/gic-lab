@@ -14,6 +14,7 @@ import binascii
 import contextlib
 import hashlib
 import http.client
+import io
 import ipaddress
 import json
 import math
@@ -24,6 +25,7 @@ import ssl
 import stat
 import subprocess
 import sys
+import tarfile
 import time
 import zipfile
 from collections.abc import Callable, Mapping, Sequence
@@ -31,7 +33,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path, PurePosixPath
 from types import ModuleType
-from typing import Any, Final, Protocol, cast
+from typing import Any, Final, Literal, Protocol, cast
 
 import yaml
 from jsonschema import Draft202012Validator, FormatChecker
@@ -53,6 +55,13 @@ INBOUND_VERIFICATION_RELATIVE: Final = RUN_ROOT_RELATIVE / "INBOUND_VERIFICATION
 COMPUTE_CLOSEOUT_RELATIVE: Final = RUN_ROOT_RELATIVE / "COMPUTE_USE_CLOSEOUT.json"
 OBSERVER_VERIFICATION_RELATIVE: Final = RUN_ROOT_RELATIVE / "OBSERVER_EVIDENCE_VERIFICATION.json"
 RESPONSES_RELATIVE: Final = RUN_ROOT_RELATIVE / "responses"
+UPLOAD_ROOT_RELATIVE: Final = Path("artifacts/t07/bounded-upload") / HOST_RUN_ID
+UPLOAD_IDENTITY_RELATIVE: Final = RUN_ROOT_RELATIVE / "UPLOAD_BUNDLE_IDENTITY.json"
+UPLOAD_ARCHIVE_NAME: Final = "t07-bounded-repository.tar"
+UPLOAD_BOOTSTRAP_NAME: Final = "t07-bounded-bootstrap.py"
+UPLOAD_MANIFEST_NAME: Final = "BUNDLE_MANIFEST.json"
+BOUNDED_PLAN_RELATIVE: Final = Path("containers/sira-smoke/bounded/bounded-smoke-plan-v1.json")
+REMOTE_BOOTSTRAP_RELATIVE: Final = Path("containers/sira-smoke/bounded/bootstrap.py")
 
 SOURCE_PARAMETERS_RELATIVE: Final = Path(
     "artifacts/t07/lambda/gate-l2m/"
@@ -131,6 +140,8 @@ MAX_LEDGER_EVENT_BYTES: Final = 4_096
 MAX_PRIVATE_FILE_BYTES: Final = 1_048_576
 MAX_AUTHORIZATION_BYTES: Final = 65_536
 MAX_PLAN_BYTES: Final = 1_048_576
+MAX_UPLOAD_BUNDLE_BYTES: Final = 8_388_608
+MAX_UPLOAD_BUNDLE_FILES: Final = 36
 MAX_ARCHIVE_BYTES: Final = 301_989_888
 MAX_ARCHIVE_FILES: Final = 128
 MAX_ARCHIVE_PAYLOAD_FILES: Final = MAX_ARCHIVE_FILES - 3
@@ -356,6 +367,17 @@ class TransportFailure(Exception):
     classification: str
     bytes_received: int = 0
     elapsed_ms: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class ArchiveSource:
+    """One exact archive source with an explicit privacy-validation class."""
+
+    relative: str
+    path: Path
+    byte_count: int
+    sha256: str
+    content_class: Literal["runtime_evidence", "reviewed_repository_upload"]
 
 
 class ReadOnlyTransport(Protocol):
@@ -2005,6 +2027,280 @@ def execute_observer_phase(
         raise
 
 
+def _plan_upload_rows(
+    root: Path,
+    *,
+    plan: Mapping[str, object],
+    plan_sha256: str,
+    expected_commit: str,
+) -> tuple[list[tuple[str, bytes]], bytes]:
+    implementation = _mapping(plan.get("implementation"), context="plan implementation")
+    raw_artifacts = _sequence(implementation.get("artifacts"), context="implementation artifacts")
+    plan_path = root / BOUNDED_PLAN_RELATIVE
+    plan_encoded = _read_regular(plan_path, max_bytes=MAX_PLAN_BYTES)
+    if sha256_bytes(plan_encoded) != plan_sha256:
+        raise BoundedSupervisorError("upload bundle plan hash drifted")
+    rows: list[tuple[str, bytes]] = [(BOUNDED_PLAN_RELATIVE.as_posix(), plan_encoded)]
+    expected_metadata: dict[str, tuple[int, str]] = {}
+    for raw in raw_artifacts:
+        artifact = _mapping(raw, context="implementation artifact")
+        relative = _text(artifact.get("path"), context="implementation artifact path")
+        pure = PurePosixPath(relative)
+        if (
+            pure.is_absolute()
+            or ".." in pure.parts
+            or any(part in {".git", ".env", "artifacts", ".secrets"} for part in pure.parts)
+            or relative in expected_metadata
+        ):
+            raise BoundedSupervisorError("upload bundle member path is unsafe")
+        expected_metadata[relative] = (
+            _nonnegative_integer(artifact.get("bytes"), context="artifact bytes"),
+            _text(artifact.get("sha256"), context="artifact SHA-256"),
+        )
+    tracked = set(
+        filter(
+            None,
+            _git(
+                root,
+                "ls-files",
+                "--",
+                BOUNDED_PLAN_RELATIVE.as_posix(),
+                *sorted(expected_metadata),
+            ).splitlines(),
+        )
+    )
+    required_tracked = {BOUNDED_PLAN_RELATIVE.as_posix(), *expected_metadata}
+    if tracked != required_tracked:
+        raise BoundedSupervisorError("upload bundle contains a nontracked input")
+    for relative in sorted(expected_metadata):
+        expected_bytes, expected_sha256 = expected_metadata[relative]
+        encoded = _read_regular(root / relative, max_bytes=MAX_UPLOAD_BUNDLE_BYTES)
+        if len(encoded) != expected_bytes or sha256_bytes(encoded) != expected_sha256:
+            raise BoundedSupervisorError("upload bundle artifact binding drifted")
+        rows.append((relative, encoded))
+    if len(rows) + 1 != MAX_UPLOAD_BUNDLE_FILES:
+        raise BoundedSupervisorError("upload bundle file count drifted")
+    payload_bytes = sum(len(encoded) for _, encoded in rows)
+    if payload_bytes > MAX_UPLOAD_BUNDLE_BYTES:
+        raise BoundedSupervisorError("upload bundle payload exceeds its cap")
+    manifest = {
+        "schema_version": SCHEMA_VERSION,
+        "plan_id": PLAN_ID,
+        "host_run_id": HOST_RUN_ID,
+        "execution_commit": expected_commit,
+        "plan_sha256": plan_sha256,
+        "files": [
+            {"path": relative, "bytes": len(encoded), "sha256": sha256_bytes(encoded)}
+            for relative, encoded in rows
+        ],
+        "file_count": len(rows),
+        "archive_member_count": len(rows) + 1,
+        "payload_bytes": payload_bytes,
+        "tracked_files_only": True,
+        "forbidden_untracked_inputs_absent": True,
+    }
+    return rows, canonical_json_bytes(manifest)
+
+
+def prepare_upload_bundle(
+    root: Path,
+    *,
+    plan: Mapping[str, object],
+    plan_sha256: str,
+    expected_commit: str,
+    authorization_path: Path,
+    authorization_sha256: str,
+    private_binding_path: Path,
+    private_binding_sha256: str,
+    utc_now: Callable[[], datetime] = lambda: datetime.now(UTC),
+) -> dict[str, object]:
+    """Create the only repository payload permitted for manual cloud upload."""
+
+    verify_repository_identity(root, expected_commit)
+    authorization, _ = _validate_authority_inputs(
+        root,
+        plan=plan,
+        plan_sha256=plan_sha256,
+        authorization_path=authorization_path,
+        authorization_sha256=authorization_sha256,
+        private_binding_path=private_binding_path,
+        private_binding_sha256=private_binding_sha256,
+        utc_now=utc_now,
+        require_live=True,
+    )
+    state = _load_state(root)
+    if state.get("status") != "materialized" or state.get("next_phase") != "prelaunch":
+        raise BoundedSupervisorError("upload bundle must be prepared before provider preflight")
+    upload_root = root / UPLOAD_ROOT_RELATIVE
+    identity_path = root / UPLOAD_IDENTITY_RELATIVE
+    if upload_root.exists() or upload_root.is_symlink() or identity_path.exists():
+        raise BoundedSupervisorError("upload bundle identity is not fresh")
+    rows, manifest_encoded = _plan_upload_rows(
+        root,
+        plan=plan,
+        plan_sha256=plan_sha256,
+        expected_commit=expected_commit,
+    )
+    stream = io.BytesIO()
+    with tarfile.open(fileobj=stream, mode="w", format=tarfile.USTAR_FORMAT) as archive:
+        members = [(UPLOAD_MANIFEST_NAME, manifest_encoded), *rows]
+        for relative, encoded in members:
+            info = tarfile.TarInfo(relative)
+            info.size = len(encoded)
+            info.mode = 0o444
+            info.mtime = 0
+            info.uid = 0
+            info.gid = 0
+            info.uname = ""
+            info.gname = ""
+            archive.addfile(info, io.BytesIO(encoded))
+    archive_encoded = stream.getvalue()
+    if len(archive_encoded) > MAX_UPLOAD_BUNDLE_BYTES:
+        raise BoundedSupervisorError("upload bundle archive exceeds its cap")
+    bootstrap_row = next(
+        (encoded for relative, encoded in rows if relative == REMOTE_BOOTSTRAP_RELATIVE.as_posix()),
+        None,
+    )
+    if bootstrap_row is None:
+        raise BoundedSupervisorError("upload bundle has no reviewed remote bootstrap")
+    upload_root.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    upload_root.mkdir(mode=0o700, exist_ok=False)
+    archive_path = upload_root / UPLOAD_ARCHIVE_NAME
+    bootstrap_path = upload_root / UPLOAD_BOOTSTRAP_NAME
+    _write_exclusive(archive_path, archive_encoded)
+    _write_exclusive(bootstrap_path, bootstrap_row)
+    identity = {
+        "schema_version": SCHEMA_VERSION,
+        "plan_id": PLAN_ID,
+        "host_run_id": HOST_RUN_ID,
+        "authorization_reference": authorization.get("authorization_reference"),
+        "authorization_sha256": authorization_sha256,
+        "private_binding_sha256": private_binding_sha256,
+        "execution_commit": expected_commit,
+        "plan_sha256": plan_sha256,
+        "archive_path": (UPLOAD_ROOT_RELATIVE / UPLOAD_ARCHIVE_NAME).as_posix(),
+        "archive_bytes": len(archive_encoded),
+        "archive_sha256": sha256_bytes(archive_encoded),
+        "bundle_manifest_sha256": sha256_bytes(manifest_encoded),
+        "archive_member_count": len(rows) + 1,
+        "bootstrap_path": (UPLOAD_ROOT_RELATIVE / UPLOAD_BOOTSTRAP_NAME).as_posix(),
+        "bootstrap_bytes": len(bootstrap_row),
+        "bootstrap_sha256": sha256_bytes(bootstrap_row),
+        "tracked_files_only": True,
+        "forbidden_untracked_inputs_absent": True,
+        "source_retained": True,
+    }
+    identity_encoded = canonical_json_bytes(identity)
+    _write_exclusive(identity_path, identity_encoded, mode=0o644)
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "plan_id": PLAN_ID,
+        "run_id": HOST_RUN_ID,
+        "upload_bundle_identity_path": str(UPLOAD_IDENTITY_RELATIVE),
+        "upload_bundle_identity_sha256": sha256_bytes(identity_encoded),
+        "archive_path": identity["archive_path"],
+        "archive_bytes": identity["archive_bytes"],
+        "archive_sha256": identity["archive_sha256"],
+        "bundle_manifest_sha256": identity["bundle_manifest_sha256"],
+        "bootstrap_path": identity["bootstrap_path"],
+        "bootstrap_sha256": identity["bootstrap_sha256"],
+    }
+
+
+def _load_upload_bundle_identity(
+    root: Path,
+    *,
+    plan: Mapping[str, object],
+    plan_sha256: str,
+    expected_commit: str,
+    authorization_reference: object,
+    authorization_sha256: str,
+    private_binding_sha256: str,
+) -> dict[str, object]:
+    encoded = _read_regular(root / UPLOAD_IDENTITY_RELATIVE, max_bytes=MAX_RESPONSE_BYTES)
+    identity = _strict_json(encoded, context="upload bundle identity")
+    archive = _read_regular(
+        root / UPLOAD_ROOT_RELATIVE / UPLOAD_ARCHIVE_NAME,
+        max_bytes=MAX_UPLOAD_BUNDLE_BYTES,
+    )
+    bootstrap = _read_regular(
+        root / UPLOAD_ROOT_RELATIVE / UPLOAD_BOOTSTRAP_NAME,
+        max_bytes=MAX_UPLOAD_BUNDLE_BYTES,
+    )
+    rows, manifest_encoded = _plan_upload_rows(
+        root,
+        plan=plan,
+        plan_sha256=plan_sha256,
+        expected_commit=expected_commit,
+    )
+    try:
+        with tarfile.open(fileobj=io.BytesIO(archive), mode="r:") as opened:
+            members = opened.getmembers()
+            captured: dict[str, bytes] = {}
+            for member in members:
+                reader = opened.extractfile(member) if member.isfile() else None
+                if (
+                    reader is None
+                    or member.name in captured
+                    or member.mode != 0o444
+                    or member.mtime != 0
+                    or member.uid != 0
+                    or member.gid != 0
+                    or member.pax_headers
+                ):
+                    raise BoundedSupervisorError("upload bundle archive metadata drifted")
+                captured[member.name] = reader.read(MAX_UPLOAD_BUNDLE_BYTES + 1)
+    except (tarfile.TarError, OSError):
+        raise BoundedSupervisorError("upload bundle archive is invalid") from None
+    expected_members = {UPLOAD_MANIFEST_NAME: manifest_encoded, **dict(rows)}
+    if captured != expected_members:
+        raise BoundedSupervisorError("upload bundle archive differs from its exact source set")
+    artifacts = _sequence(
+        _mapping(plan.get("implementation"), context="plan implementation").get("artifacts"),
+        context="implementation artifacts",
+    )
+    expected_bootstrap = next(
+        (
+            _mapping(item, context="implementation artifact")
+            for item in artifacts
+            if _mapping(item, context="implementation artifact").get("path")
+            == REMOTE_BOOTSTRAP_RELATIVE.as_posix()
+        ),
+        None,
+    )
+    expected = {
+        "schema_version": SCHEMA_VERSION,
+        "plan_id": PLAN_ID,
+        "host_run_id": HOST_RUN_ID,
+        "authorization_reference": authorization_reference,
+        "authorization_sha256": authorization_sha256,
+        "private_binding_sha256": private_binding_sha256,
+        "execution_commit": expected_commit,
+        "plan_sha256": plan_sha256,
+        "archive_path": (UPLOAD_ROOT_RELATIVE / UPLOAD_ARCHIVE_NAME).as_posix(),
+        "archive_bytes": len(archive),
+        "archive_sha256": sha256_bytes(archive),
+        "bundle_manifest_sha256": sha256_bytes(manifest_encoded),
+        "archive_member_count": MAX_UPLOAD_BUNDLE_FILES,
+        "bootstrap_path": (UPLOAD_ROOT_RELATIVE / UPLOAD_BOOTSTRAP_NAME).as_posix(),
+        "bootstrap_bytes": len(bootstrap),
+        "bootstrap_sha256": sha256_bytes(bootstrap),
+        "tracked_files_only": True,
+        "forbidden_untracked_inputs_absent": True,
+        "source_retained": True,
+    }
+    if (
+        identity != expected
+        or expected_bootstrap is None
+        or expected_bootstrap.get("bytes") != len(bootstrap)
+        or expected_bootstrap.get("sha256") != sha256_bytes(bootstrap)
+        or not isinstance(identity.get("bundle_manifest_sha256"), str)
+        or _HEX64.fullmatch(str(identity["bundle_manifest_sha256"])) is None
+    ):
+        raise BoundedSupervisorError("upload bundle identity drifted")
+    return identity
+
+
 def issue_bootstrap_release(
     root: Path,
     *,
@@ -2073,6 +2369,15 @@ def issue_bootstrap_release(
         or replay.get("provider_active_observed_at_utc") != active_at
     ):
         raise BoundedSupervisorError("post-launch evidence cannot authorize bootstrap")
+    upload = _load_upload_bundle_identity(
+        root,
+        plan=plan,
+        plan_sha256=plan_sha256,
+        expected_commit=expected_commit,
+        authorization_reference=authorization.get("authorization_reference"),
+        authorization_sha256=authorization_sha256,
+        private_binding_sha256=private_binding_sha256,
+    )
     release = {
         "schema_version": SCHEMA_VERSION,
         "plan_id": PLAN_ID,
@@ -2093,6 +2398,9 @@ def issue_bootstrap_release(
             "binding_basis": "prelaunch-offered-plus-user-console-attestation",
             "post_launch_api_image_observation_available": False,
         },
+        "bundle_archive_sha256": upload["archive_sha256"],
+        "bundle_manifest_sha256": upload["bundle_manifest_sha256"],
+        "bootstrap_file_sha256": upload["bootstrap_sha256"],
         "issued_at_utc": _utc_text(utc_now()),
         "bootstrap_release": True,
         "single_use_output_root": "/home/ubuntu/t07-bounded-output-0001",
@@ -2138,6 +2446,15 @@ def _validate_local_bootstrap_release(
     )
     report = _strict_json(report_encoded, context="post-launch report")
     selected = _mapping(private.get("selected_resource"), context="selected resource")
+    upload = _load_upload_bundle_identity(
+        root,
+        plan=plan,
+        plan_sha256=plan_sha256,
+        expected_commit=expected_commit,
+        authorization_reference=authorization.get("authorization_reference"),
+        authorization_sha256=authorization_sha256,
+        private_binding_sha256=private_binding_sha256,
+    )
     active = _text(
         snapshot.get("provider_active_observed_at_utc"), context="provider active observation"
     )
@@ -2164,6 +2481,9 @@ def _validate_local_bootstrap_release(
             "binding_basis": "prelaunch-offered-plus-user-console-attestation",
             "post_launch_api_image_observation_available": False,
         },
+        "bundle_archive_sha256": upload["archive_sha256"],
+        "bundle_manifest_sha256": upload["bundle_manifest_sha256"],
+        "bootstrap_file_sha256": upload["bootstrap_sha256"],
         "issued_at_utc": release.get("issued_at_utc"),
         "bootstrap_release": True,
         "single_use_output_root": "/home/ubuntu/t07-bounded-output-0001",
@@ -3151,6 +3471,9 @@ def _verify_bootstrap_authority_surface(
         "authorization_sha256": bootstrap_release.get("authorization_sha256"),
         "private_binding_sha256": bootstrap_release.get("private_binding_sha256"),
         "bootstrap_release_sha256": bootstrap_release_sha256,
+        "bundle_archive_sha256": bootstrap_release.get("bundle_archive_sha256"),
+        "bundle_manifest_sha256": bootstrap_release.get("bundle_manifest_sha256"),
+        "bootstrap_file_sha256": bootstrap_release.get("bootstrap_file_sha256"),
         "observer_state_sha256": bootstrap_release.get("observer_state_sha256"),
         "post_launch_report_sha256": bootstrap_release.get("post_launch_report_sha256"),
         "provider_active_observed_at_utc": bootstrap_release.get("provider_active_observed_at_utc"),
@@ -3450,6 +3773,10 @@ def _verify_success_surface(
                 "scope",
                 "argv_sha256",
                 "returncode",
+                "stdout_bytes",
+                "stderr_bytes",
+                "elapsed_ms",
+                "failure_code",
                 "aggregate_call_count",
                 "aggregate_output_bytes",
                 "work_call_count",
@@ -3494,6 +3821,10 @@ def _verify_success_surface(
                 or event.get("scope") is not None
                 or event.get("argv_sha256") is not None
                 or event.get("returncode") is not None
+                or event.get("stdout_bytes") is not None
+                or event.get("stderr_bytes") is not None
+                or event.get("elapsed_ms") is not None
+                or event.get("failure_code") is not None
                 or any(counters.values())
             ):
                 raise BoundedSupervisorError("command meter did not start empty")
@@ -3514,17 +3845,29 @@ def _verify_success_surface(
             if (
                 _HEX64.fullmatch(digest) is None
                 or event.get("returncode") is not None
+                or event.get("stdout_bytes") is not None
+                or event.get("stderr_bytes") is not None
+                or event.get("elapsed_ms") is not None
+                or event.get("failure_code") is not None
                 or counters != expected_calls
             ):
                 raise BoundedSupervisorError("command meter start counter event drifted")
             open_command = (scope, digest)
         elif event_type == "command_completed":
             scope = _text(event.get("scope"), context="command scope")
+            stdout_bytes = _nonnegative_integer(
+                event.get("stdout_bytes"), context="command stdout bytes"
+            )
+            stderr_bytes = _nonnegative_integer(
+                event.get("stderr_bytes"), context="command stderr bytes"
+            )
+            _nonnegative_integer(event.get("elapsed_ms"), context="command elapsed ms")
             if scope not in {"work", "cleanup"}:
                 raise BoundedSupervisorError("command meter completion scope drifted")
             if (
                 open_command != (scope, event.get("argv_sha256"))
                 or type(event.get("returncode")) is not int
+                or event.get("failure_code") is not None
                 or counters["aggregate_call_count"] != previous_counters["aggregate_call_count"]
                 or counters["work_call_count"] != previous_counters["work_call_count"]
                 or counters["cleanup_call_count"] != previous_counters["cleanup_call_count"]
@@ -3535,6 +3878,9 @@ def _verify_success_surface(
                     counters["aggregate_output_bytes"] - previous_counters["aggregate_output_bytes"]
                     != counters[f"{scope}_output_bytes"]
                     - previous_counters[f"{scope}_output_bytes"]
+                    or stdout_bytes + stderr_bytes
+                    != counters["aggregate_output_bytes"]
+                    - previous_counters["aggregate_output_bytes"]
                 )
                 or counters[f"{'cleanup' if scope == 'work' else 'work'}_output_bytes"]
                 != previous_counters[f"{'cleanup' if scope == 'work' else 'work'}_output_bytes"]
@@ -4121,6 +4467,7 @@ def _verify_zip_payload(
                 "plan_id",
                 "host_run_id",
                 "failure_stage",
+                "failure_code",
                 "message_retained",
                 "secret_target_identity_established",
                 "secret_cleanup_verified",
@@ -4131,7 +4478,8 @@ def _verify_zip_payload(
             or early_disposition.get("schema_version") != SCHEMA_VERSION
             or early_disposition.get("plan_id") != PLAN_ID
             or early_disposition.get("host_run_id") != HOST_RUN_ID
-            or early_disposition.get("failure_stage") != incident.get("failure_class")
+            or early_disposition.get("failure_stage") != incident.get("failure_stage")
+            or early_disposition.get("failure_code") != incident.get("failure_class")
             or early_disposition.get("message_retained") is not False
             or early_disposition.get("secret_target_identity_established")
             != incident.get("secret_target_validation_completed")
@@ -4140,6 +4488,8 @@ def _verify_zip_payload(
             != (not cleanup_verified)
             or early_disposition.get("secret_value_read") != incident.get("secret_value_read")
             or early_disposition.get("value_or_hash_retained") is not False
+            or incident.get("manual_credential_rotation_required")
+            != (incident.get("failure_class") == "credential_material_detected")
         ):
             raise BoundedSupervisorError("early-failure disposition binding drifted")
         if cleanup_verified:
@@ -4218,6 +4568,9 @@ def _verify_inbound_evidence(
                 "private_binding_sha256",
                 "observer_state_sha256",
                 "post_launch_report_sha256",
+                "bundle_archive_sha256",
+                "bundle_manifest_sha256",
+                "bootstrap_file_sha256",
                 "provider_active_observed_at_utc",
                 "selected_provider_image",
                 "issued_at_utc",
@@ -4240,6 +4593,9 @@ def _verify_inbound_evidence(
                     "private_binding_sha256",
                     "observer_state_sha256",
                     "post_launch_report_sha256",
+                    "bundle_archive_sha256",
+                    "bundle_manifest_sha256",
+                    "bootstrap_file_sha256",
                 )
             )
             or release.get("selected_provider_image")
@@ -4345,9 +4701,11 @@ def _verify_inbound_evidence(
         or incident.get("message_retained") is not False
         or (not failure_kind and incident.get("bootstrap_complete") is not True)
         or (failure_kind and not isinstance(incident.get("failure_class"), str))
+        or (failure_kind and not isinstance(incident.get("failure_stage"), str))
         or not isinstance(incident.get("secret_cleanup_verified"), bool)
         or incident.get("manual_secret_deletion_required")
         != (not bool(incident.get("secret_cleanup_verified")))
+        or not isinstance(incident.get("manual_credential_rotation_required"), bool)
         or (not failure_kind and incident.get("secret_cleanup_verified") is not True)
     ):
         raise BoundedSupervisorError("provider termination receipt drifted")
@@ -4381,6 +4739,7 @@ def _verify_inbound_evidence(
         "remote_bootstrap_provably_not_authorized": False,
         "secret_cleanup_verified": incident.get("secret_cleanup_verified"),
         "manual_secret_deletion_required": incident.get("manual_secret_deletion_required"),
+        "manual_credential_rotation_required": incident.get("manual_credential_rotation_required"),
         **result,
     }
 
@@ -5083,6 +5442,7 @@ def _write_compute_closeout(
     ) or (
         inbound_verification.get("secret_cleanup_verified") is True
         and inbound_verification.get("manual_secret_deletion_required") is False
+        and inbound_verification.get("manual_credential_rotation_required") is False
     )
     provider_and_security_cleanup_complete = (
         provider_lifecycle_reconciled
@@ -5111,6 +5471,10 @@ def _write_compute_closeout(
         "billing_stop_verified": provider_lifecycle_reconciled,
         "remote_secret_cleanup_verified": remote_secret_cleanup_verified,
         "manual_secret_deletion_required": not remote_secret_cleanup_verified,
+        "manual_credential_rotation_required": inbound_verification.get(
+            "manual_credential_rotation_required"
+        )
+        is True,
         "observer_terminal_status": state.get("status"),
         "provider_and_security_cleanup_complete": provider_and_security_cleanup_complete,
         "unresolved_billing_or_security": not provider_and_security_cleanup_complete,
@@ -5123,7 +5487,7 @@ def _write_compute_closeout(
     return record
 
 
-def _safe_source_files(root: Path, *, disposition: str) -> list[tuple[str, Path, int, str]]:
+def _safe_source_files(root: Path, *, disposition: str) -> list[ArchiveSource]:
     run_root = root / RUN_ROOT_RELATIVE
     required = {
         "authorization.json",
@@ -5131,6 +5495,7 @@ def _safe_source_files(root: Path, *, disposition: str) -> list[tuple[str, Path,
         "observer-state.json",
         "request-ledger.jsonl",
         "MATERIALIZATION_SUMMARY.json",
+        "UPLOAD_BUNDLE_IDENTITY.json",
         "INBOUND_VERIFICATION.json",
         "OBSERVER_EVIDENCE_VERIFICATION.json",
         "COMPUTE_USE_CLOSEOUT.json",
@@ -5205,21 +5570,79 @@ def _safe_source_files(root: Path, *, disposition: str) -> list[tuple[str, Path,
         raise BoundedSupervisorError("archive source differs from its exact verified member set")
     if len(paths) > MAX_ARCHIVE_PAYLOAD_FILES:
         raise BoundedSupervisorError("archive payload file count exceeds its exact cap")
-    files: list[tuple[str, Path, int, str]] = []
+    files: list[ArchiveSource] = []
     total = 0
     for relative, path in paths:
         encoded = _read_regular(path, max_bytes=MAX_ARCHIVE_BYTES - total)
         total += len(encoded)
         if total > MAX_ARCHIVE_BYTES:
             raise BoundedSupervisorError("archive source exceeds its aggregate cap")
-        files.append((relative, path, len(encoded), sha256_bytes(encoded)))
+        files.append(
+            ArchiveSource(
+                relative=relative,
+                path=path,
+                byte_count=len(encoded),
+                sha256=sha256_bytes(encoded),
+                content_class="runtime_evidence",
+            )
+        )
+
+    upload_identity = _strict_json(
+        _read_regular(root / UPLOAD_IDENTITY_RELATIVE, max_bytes=MAX_RESPONSE_BYTES),
+        context="upload bundle identity",
+    )
+    upload_sources = (
+        (
+            "upload-bundle/t07-bounded-repository.tar",
+            UPLOAD_ROOT_RELATIVE / UPLOAD_ARCHIVE_NAME,
+            "archive_path",
+            "archive_bytes",
+            "archive_sha256",
+        ),
+        (
+            "upload-bundle/t07-bounded-bootstrap.py",
+            UPLOAD_ROOT_RELATIVE / UPLOAD_BOOTSTRAP_NAME,
+            "bootstrap_path",
+            "bootstrap_bytes",
+            "bootstrap_sha256",
+        ),
+    )
+    for archive_relative, source_relative, path_key, bytes_key, hash_key in upload_sources:
+        if upload_identity.get(path_key) != source_relative.as_posix():
+            raise BoundedSupervisorError("upload artifact path identity drifted before archive")
+        source = root / source_relative
+        encoded = _read_regular(source, max_bytes=MAX_ARCHIVE_BYTES - total)
+        byte_count = _nonnegative_integer(
+            upload_identity.get(bytes_key), context="upload artifact bytes"
+        )
+        digest = _text(upload_identity.get(hash_key), context="upload artifact SHA-256")
+        if (
+            len(encoded) != byte_count
+            or sha256_bytes(encoded) != digest
+            or _HEX64.fullmatch(digest) is None
+        ):
+            raise BoundedSupervisorError("upload artifact changed before external archive")
+        total += len(encoded)
+        if total > MAX_ARCHIVE_BYTES:
+            raise BoundedSupervisorError("archive source exceeds its aggregate cap")
+        files.append(
+            ArchiveSource(
+                relative=archive_relative,
+                path=source,
+                byte_count=byte_count,
+                sha256=digest,
+                content_class="reviewed_repository_upload",
+            )
+        )
+    if len(files) > MAX_ARCHIVE_PAYLOAD_FILES:
+        raise BoundedSupervisorError("archive payload file count exceeds its exact cap")
     return files
 
 
 def _copy_archive_tree(
     root: Path,
     *,
-    files: Sequence[tuple[str, Path, int, str]],
+    files: Sequence[ArchiveSource],
     disposition: str,
     volume_observer: Callable[[], tuple[VolumeObservation, VolumeObservation]],
     utc_now: Callable[[], datetime],
@@ -5268,7 +5691,15 @@ def _copy_archive_tree(
         manifest_rows: list[dict[str, object]] = []
         total = 0
         directories = {"": staging_fd}
-        for relative, source, expected_bytes, expected_sha256 in files:
+        reviewed_upload_names = {
+            "upload-bundle/t07-bounded-repository.tar",
+            "upload-bundle/t07-bounded-bootstrap.py",
+        }
+        for item in files:
+            relative = item.relative
+            source = item.path
+            expected_bytes = item.byte_count
+            expected_sha256 = item.sha256
             relative_encoded = relative.encode("utf-8", "strict")
             if any(pattern.search(relative_encoded) for pattern in _SECRET_PREFIX_SHAPES):
                 raise BoundedSupervisorError("archive source path contains credential material")
@@ -5288,8 +5719,13 @@ def _copy_archive_tree(
             encoded = _read_regular(source, max_bytes=MAX_ARCHIVE_BYTES - total)
             if len(encoded) != expected_bytes or sha256_bytes(encoded) != expected_sha256:
                 raise BoundedSupervisorError("archive source changed after verification")
-            if _contains_artifact_secret(encoded):
+            if item.content_class == "runtime_evidence" and _contains_artifact_secret(encoded):
                 raise BoundedSupervisorError("archive source contains credential-shaped material")
+            if (
+                item.content_class == "reviewed_repository_upload"
+                and relative not in reviewed_upload_names
+            ):
+                raise BoundedSupervisorError("reviewed upload archive class is misapplied")
             total += len(encoded)
             if total > MAX_ARCHIVE_BYTES or len(manifest_rows) >= MAX_ARCHIVE_PAYLOAD_FILES:
                 raise BoundedSupervisorError("bounded archive cap exceeded")
@@ -5298,7 +5734,17 @@ def _copy_archive_tree(
             if copied != encoded:
                 raise BoundedSupervisorError("archive destination hash verification failed")
             manifest_rows.append(
-                {"path": relative, "bytes": len(encoded), "sha256": sha256_bytes(encoded)}
+                {
+                    "path": relative,
+                    "bytes": len(encoded),
+                    "sha256": sha256_bytes(encoded),
+                    "content_class": item.content_class,
+                    "secret_scan": (
+                        "semantic-runtime-evidence-scan"
+                        if item.content_class == "runtime_evidence"
+                        else "exact-reviewed-tracked-source-set-before-secret-access"
+                    ),
+                }
             )
         manifest = {
             "schema_version": SCHEMA_VERSION,
@@ -5505,7 +5951,7 @@ def _parser() -> argparse.ArgumentParser:
     materialize.add_argument("--source-parameters-sha256", required=True)
     materialize.add_argument("--restoration-payload", type=Path, required=True)
     materialize.add_argument("--restoration-payload-sha256", required=True)
-    for name in ("observe", "release-bootstrap", "verify-inbound", "archive"):
+    for name in ("prepare-bundle", "observe", "release-bootstrap", "verify-inbound", "archive"):
         child = subparsers.add_parser(name)
         child.add_argument("--authorization", type=Path, required=True)
         child.add_argument("--authorization-sha256", required=True)
@@ -5548,6 +5994,17 @@ def main(argv: Sequence[str] | None = None, *, contract: ModuleType | None = Non
             source_parameters_sha256=args.source_parameters_sha256,
             restoration_path=args.restoration_payload,
             restoration_sha256=args.restoration_payload_sha256,
+        )
+    elif args.operation == "prepare-bundle":
+        result = prepare_upload_bundle(
+            root,
+            plan=plan,
+            plan_sha256=args.plan_sha256,
+            expected_commit=args.expected_commit,
+            authorization_path=args.authorization,
+            authorization_sha256=args.authorization_sha256,
+            private_binding_path=args.private_binding,
+            private_binding_sha256=args.private_binding_sha256,
         )
     elif args.operation == "observe":
         result = execute_observer_phase(
@@ -5621,5 +6078,6 @@ __all__ = [
     "load_and_validate_plan",
     "main",
     "materialize_authority",
+    "prepare_upload_bundle",
     "verify_inbound_evidence",
 ]
