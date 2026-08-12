@@ -34,7 +34,7 @@ def test_phase_one_is_the_only_active_non_executable_control_plane() -> None:
         "condition_plan_sha256s": [],
     }
     assert state["planned_execution_substrate"] == {
-        "decision_state": "bounded-smoke-v1-ready-unauthorized",
+        "decision_state": "bounded-smoke-v2-ready-unauthorized",
         "provider": "lambda-on-demand-cloud",
         "architecture": "x86_64",
         "persistent_filesystem": False,
@@ -46,12 +46,12 @@ def test_phase_one_is_the_only_active_non_executable_control_plane() -> None:
         "gate_l4_authorized": False,
         "local_alternatives": "terminal-rejected",
         "decision_document": "docs/harness/T07_BOUNDED_SMOKE_GOVERNANCE.md",
-        "security_decision_document": "docs/harness/T07_BOUNDED_SMOKE_EXECUTION_PLAN.md",
+        "security_decision_document": ("docs/harness/T07_BOUNDED_SMOKE_SECURITY_BINDING_REPAIR.md"),
     }
     execution_state = load_project_execution_state(ROOT)
     substrate = execution_state.planned_execution_substrate
     assert substrate is not None
-    assert substrate.decision_state == "bounded-smoke-v1-ready-unauthorized"
+    assert substrate.decision_state == "bounded-smoke-v2-ready-unauthorized"
     assert substrate.provider == "lambda-on-demand-cloud"
     assert substrate.architecture == "x86_64"
     assert substrate.gate_l1_evidence_state == "complete-externally-sealed"
@@ -262,7 +262,7 @@ def test_closeout_retains_zero_scientific_execution_and_only_bounded_infrastruct
         "wall_clock_hours": 0.0,
         "accelerator_hours": 0.0,
         "cost_usd": 0.0,
-        "authorization_reference": "AUTH-T07-BOUNDED-SIRA-SMOKE-V1-PENDING",
+        "authorization_reference": "AUTH-T07-BOUNDED-SIRA-SMOKE-V2-PENDING",
         "status": "planned",
     }
     summary = compute["phase_zero_summary"]
@@ -362,10 +362,14 @@ def test_closeout_retains_zero_scientific_execution_and_only_bounded_infrastruct
         for path in (ROOT / "artifacts").rglob("*")
         if path.is_file()
         and not path.relative_to(ROOT).as_posix().startswith("artifacts/t07/lambda/gate-l2m/")
+        and not path.relative_to(ROOT)
+        .as_posix()
+        .startswith("artifacts/t07/bounded-private-bindings/")
     }
     # Gate L2.3's ignored private materialization is validated through the dedicated
     # held-descriptor/seal tests; this historical inventory continues to pin every
-    # earlier retained artifact without publishing L2.3 private path identities.
+    # earlier retained artifact without publishing L2.3 or bounded-smoke private path
+    # identities. Those protected namespaces have dedicated mode/no-follow/seal tests.
     assert retained_files == set(retained_hashes)
     for relative, expected in retained_hashes.items():
         assert hashlib.sha256((ROOT / relative).read_bytes()).hexdigest() == expected

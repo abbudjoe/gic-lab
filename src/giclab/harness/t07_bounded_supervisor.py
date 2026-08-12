@@ -661,7 +661,7 @@ def _validate_base_authority(root: Path, plan: Mapping[str, object]) -> None:
         if state_map.get(permission) is not False:
             raise BoundedSupervisorError("base project permissions must remain false")
     substrate = _mapping(state_map.get("planned_execution_substrate"), context="substrate")
-    if substrate.get("decision_state") != "bounded-smoke-v1-ready-unauthorized":
+    if substrate.get("decision_state") != "bounded-smoke-v2-ready-unauthorized":
         raise BoundedSupervisorError("bounded planned substrate is unavailable")
     entries = _sequence(
         _mapping(compute, context="compute ledger").get("entries"), context="compute"

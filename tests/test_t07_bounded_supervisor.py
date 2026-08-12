@@ -717,6 +717,15 @@ def test_exact_local_supervisor_interpreter_loads_bound_modules(tmp_path: Path) 
     assert b"usage:" in completed.stdout
 
 
+def test_actual_repository_base_authority_accepts_the_v2_candidate() -> None:
+    plan = json.loads(
+        (ROOT / "containers/sira-smoke/bounded/bounded-smoke-plan-v2.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    supervisor._validate_base_authority(ROOT, plan)
+
+
 def test_hash_first_local_loader_does_not_propagate_credentials_to_git(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

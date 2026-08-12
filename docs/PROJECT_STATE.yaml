@@ -13,7 +13,7 @@ authorized_run_profile:
   profile_sha256: null
   condition_plan_sha256s: []
 planned_execution_substrate:
-  decision_state: bounded-smoke-v1-ready-unauthorized
+  decision_state: bounded-smoke-v2-ready-unauthorized
   provider: lambda-on-demand-cloud
   architecture: x86_64
   persistent_filesystem: false
@@ -25,6 +25,6 @@ planned_execution_substrate:
   gate_l4_authorized: false
   local_alternatives: terminal-rejected
   decision_document: docs/harness/T07_BOUNDED_SMOKE_GOVERNANCE.md
-  security_decision_document: docs/harness/T07_BOUNDED_SMOKE_EXECUTION_PLAN.md
+  security_decision_document: docs/harness/T07_BOUNDED_SMOKE_SECURITY_BINDING_REPAIR.md
 authoritative_plan: docs/exec-plans/active/PHASE_1_ARTIFACT_EXECUTION.md
 last_updated: "2026-08-11"
