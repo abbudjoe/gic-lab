@@ -332,7 +332,7 @@
       ],
       "properties": {
         "reviewed_commit": {
-          "const": "PENDING-IMPLEMENTATION-COMMIT"
+          "const": "a7ca7475177aee60126e39c631d61e3d9453ca85"
         },
         "artifacts": {
           "type": "array",
