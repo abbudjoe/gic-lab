@@ -25,12 +25,18 @@ SIRA_COMMIT: Final = "93fb8d72de71f9a4a13419670adeb34d93cf7acd"
 SIRA_TREE: Final = "6a6d9068b94d7632d3533a3d6f013d4de6ff76e8"
 MODEL: Final = "gpt-4o-2024-11-20"
 QUERY: Final = "go to google flights"
-IMAGE_TAG: Final = f"giclab/t07-pragmatic:{SIRA_COMMIT[:12]}"
+PYTHON_RUNTIME_VERSION: Final = "3.11.14"
+HOST_RUN_ID: Final = "RUN-T07-PRAGMATIC-HOST-0002"
+REACTIVE_RUN_ID: Final = "RUN-T07-PRAGMATIC-SIRA-REACTIVE-0002"
+SIMULATIVE_RUN_ID: Final = "RUN-T07-PRAGMATIC-SIRA-SIMULATIVE-0002"
+IMAGE_TAG: Final = f"giclab/t07-pragmatic-r2:{SIRA_COMMIT[:12]}"
 UV_URL: Final = (
     "https://files.pythonhosted.org/packages/83/eb/4e1557daf6693cb446ed28185664ad6682fd98c6dbac9e433cbc35df450a/"
     "uv-0.11.7-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl"
 )
 UV_SHA256: Final = "4e4d5e31bea86e1b6e0f5a0f95e14e80018e6f6c0129256d2915a4b3d793644d"
+UV_LOCK_SHA256: Final = "138585129c7f369887591d30d9727f8dd466639fa78fb00adc5a04f1e9b2d76e"
+UPSTREAM_RUNNER_SHA256: Final = "c2503b99bb8870b9abf9444831bbb3a70c7bbc8091e30ca06ecc3f2e24a7cf23"
 ADAPTATION_SHA256: Final = "c461dce20fea9e743135cad98b664213a393e46f35d1c1a8434212b2f0367dbb"
 ROUTING_PATCH_SHA256: Final = "4d7e2a25f4313fc754db0fa17aeda51cc5cd75a5653adaf13b01ce87a71cb8ed"
 BASE_IMAGE: Final = (
@@ -38,8 +44,8 @@ BASE_IMAGE: Final = (
     "96955ff5cc37e13f5f1b21f5171afb9fed7e028025aa9d81c690501cd7fa0c6c"
 )
 REMOTE_REPOSITORY: Final = Path("/home/ubuntu/t07-pragmatic-repository")
-REMOTE_SECRET: Final = Path("/home/ubuntu/.config/giclab/t07-pragmatic-openai-provider-key")
-CONTAINER_PREFIX: Final = "giclab-t07-pragmatic-"
+REMOTE_SECRET: Final = Path("/home/ubuntu/.config/giclab/t07-pragmatic-r2-openai-provider-key")
+CONTAINER_PREFIX: Final = "giclab-t07-pragmatic-r2-"
 CONDITION_TIMEOUT_SECONDS: Final = 150
 MAX_EVIDENCE_BYTES: Final = 268_435_456
 
@@ -94,7 +100,7 @@ def safe_environment() -> dict[str, str]:
 def run_root(launch_ordinal: int) -> Path:
     if launch_ordinal not in {1, 2}:
         raise PragmaticRunError("launch ordinal must be one or two")
-    return Path(f"/home/ubuntu/t07-pragmatic-run-launch-{launch_ordinal:04d}")
+    return Path(f"/home/ubuntu/t07-pragmatic-r2-run-launch-{launch_ordinal:04d}")
 
 
 def run_capture(
@@ -207,6 +213,10 @@ def prepare_build_context(root: Path, setup_dir: Path) -> Path:
         context / "browser_preflight.py",
     )
     shutil.copy2(
+        REMOTE_REPOSITORY / "containers/sira-smoke/pragmatic/runtime_preflight.py",
+        context / "runtime_preflight.py",
+    )
+    shutil.copy2(
         REMOTE_REPOSITORY / "containers/sira-smoke/fixtures/static.html", context / "static.html"
     )
     shutil.copytree(REMOTE_REPOSITORY / "src/giclab", context / "giclab")
@@ -308,7 +318,7 @@ def docker_common(*, name: str, attempt: Path, network: str, image_id: str) -> l
         "--mount",
         f"type=bind,src={attempt},dst=/giclab/attempt",
         "--entrypoint",
-        "/usr/bin/python3",
+        "/opt/sira/.venv/bin/python",
         image_id,
     ]
 
@@ -323,6 +333,18 @@ def remove_container(prefix: list[str], name: str) -> None:
         check=False,
         timeout=30,
     )
+
+
+def owned_container_residue(prefix: list[str]) -> list[dict[str, str]]:
+    raw = output([*prefix, "ps", "--all", "--format", "{{.ID}}\t{{.Names}}"])
+    residue: list[dict[str, str]] = []
+    for line in raw.splitlines():
+        identifier, separator, name = line.partition("\t")
+        if not separator or not identifier or not name:
+            raise PragmaticRunError("Docker container inventory output is malformed")
+        if name.startswith(CONTAINER_PREFIX):
+            residue.append({"container_id": identifier, "container_name": name})
+    return residue
 
 
 def browser_preflight(
@@ -380,6 +402,70 @@ def browser_preflight(
         raise PragmaticRunError("local-static-page Chromium preflight did not complete")
 
 
+def runtime_preflight(
+    root: Path, setup_dir: Path, prefix: list[str], image_id: str, launch_ordinal: int
+) -> None:
+    attempt = setup_dir / "runtime-preflight"
+    attempt.mkdir(mode=0o700)
+    write_exclusive(
+        attempt / "condition-commands-input.json",
+        {
+            "schema_version": "0.1.0",
+            "commands": {mode: condition_process_argv(mode) for mode in ("reactive", "simulative")},
+        },
+    )
+    name = f"{CONTAINER_PREFIX}runtime-{launch_ordinal:04d}"
+    create = [
+        *prefix,
+        *docker_common(name=name, attempt=attempt, network="none", image_id=image_id),
+        "/opt/giclab/runtime_preflight.py",
+        "--attempt-root",
+        "/giclab/attempt",
+    ]
+    run_capture(
+        create,
+        stdout_path=setup_dir / "runtime-create.stdout",
+        stderr_path=setup_dir / "runtime-create.stderr",
+    )
+    try:
+        run_capture(
+            [*prefix, "start", "--attach", name],
+            stdout_path=setup_dir / "runtime.stdout",
+            stderr_path=setup_dir / "runtime.stderr",
+            timeout=60,
+        )
+        run_capture(
+            [*prefix, "inspect", name],
+            stdout_path=setup_dir / "runtime-inspect.json",
+            stderr_path=setup_dir / "runtime-inspect.stderr",
+        )
+    finally:
+        run_capture(
+            [*prefix, "logs", name],
+            stdout_path=setup_dir / "runtime-logs.stdout",
+            stderr_path=setup_dir / "runtime-logs.stderr",
+            check=False,
+        )
+        remove_container(prefix, name)
+    document = json.loads((attempt / "runtime-preflight.json").read_text())
+    upstream_import = document.get("upstream_runner_import")
+    if (
+        document.get("python_version") != PYTHON_RUNTIME_VERSION
+        or document.get("artifact_writer") != "passed"
+        or document.get("budget_ledger") != "passed"
+        or document.get("condition_command_renderer") != "passed"
+        or document.get("owned_cleanup") != "passed"
+        or document.get("utc_offset_seconds") != 0
+        or not isinstance(upstream_import, dict)
+        or upstream_import.get("path") != "/opt/sira/scripts/run_web_agent.py"
+        or upstream_import.get("sha256") != UPSTREAM_RUNNER_SHA256
+        or upstream_import.get("status") != "passed"
+        or upstream_import.get("network_mode") != "none"
+        or upstream_import.get("browser_or_model_action") is not False
+    ):
+        raise PragmaticRunError("exact runtime preflight did not validate")
+
+
 def model_preflight(setup_dir: Path, prefix: list[str], image_id: str, launch_ordinal: int) -> None:
     validate_secret_metadata()
     attempt = setup_dir / "model-preflight"
@@ -400,7 +486,7 @@ def model_preflight(setup_dir: Path, prefix: list[str], image_id: str, launch_or
             "--runtime-assignment",
             "OPENAI_API_KEY",
             "--",
-            "/usr/bin/python3",
+            "/opt/sira/.venv/bin/python",
             "/opt/giclab/model_preflight.py",
         ]
     )
@@ -451,6 +537,10 @@ def setup(launch_ordinal: int) -> None:
             "build",
             "--pull=false",
             "--progress=plain",
+            "--build-arg",
+            f"RUNTIME_PREFLIGHT_SHA256={sha256_file(context / 'runtime_preflight.py')}",
+            "--build-arg",
+            f"PYTHON_RUNTIME_VERSION={PYTHON_RUNTIME_VERSION}",
             "--tag",
             IMAGE_TAG,
             "--file",
@@ -469,8 +559,35 @@ def setup(launch_ordinal: int) -> None:
         stdout_path=setup_dir / "image-inspect.json",
         stderr_path=setup_dir / "image-inspect.stderr",
     )
+    runtime_preflight(root, setup_dir, prefix, image_id, launch_ordinal)
+    runtime_document = json.loads(
+        (setup_dir / "runtime-preflight/runtime-preflight.json").read_text(encoding="utf-8")
+    )
     browser_preflight(root, setup_dir, prefix, image_id, launch_ordinal)
+    browser_document = json.loads(
+        (setup_dir / "browser-preflight/browser-preflight.json").read_text(encoding="utf-8")
+    )
+    identity_digests = (
+        runtime_document.get("python_executable_sha256"),
+        browser_document.get("installed_package_manifest_sha256"),
+        browser_document.get("chromium_executable_sha256"),
+    )
+    if any(
+        not isinstance(value, str)
+        or len(value) != 64
+        or any(character not in "0123456789abcdef" for character in value)
+        for value in identity_digests
+    ):
+        raise PragmaticRunError("runtime dependency identity is incomplete")
+    if (
+        browser_document.get("playwright_version") != "1.39.0"
+        or browser_document.get("chromium_revision") != "1084"
+    ):
+        raise PragmaticRunError("browser runtime identity drifted")
     model_preflight(setup_dir, prefix, image_id, launch_ordinal)
+    residue = owned_container_residue(prefix)
+    if residue:
+        raise PragmaticRunError("pre-empirical container cleanup is incomplete")
     write_exclusive(
         root / "setup-complete.json",
         {
@@ -479,6 +596,7 @@ def setup(launch_ordinal: int) -> None:
             "launch_ordinal": launch_ordinal,
             "sira_commit": SIRA_COMMIT,
             "sira_tree": SIRA_TREE,
+            "upstream_runner_sha256": UPSTREAM_RUNNER_SHA256,
             "model": MODEL,
             "base_image": BASE_IMAGE,
             "image_id": image_id,
@@ -486,11 +604,65 @@ def setup(launch_ordinal: int) -> None:
             "docker_argv_prefix": prefix,
             "runtime_adaptation_sha256": ADAPTATION_SHA256,
             "routing_patch_sha256": ROUTING_PATCH_SHA256,
+            "python_version": PYTHON_RUNTIME_VERSION,
+            "python_executable_sha256": runtime_document.get("python_executable_sha256"),
+            "uv_lock_sha256": UV_LOCK_SHA256,
+            "runtime_preflight_sha256": sha256_file(context / "runtime_preflight.py"),
+            "runtime_preflight": "passed",
             "browser_preflight": "passed",
+            "installed_package_manifest_sha256": browser_document.get(
+                "installed_package_manifest_sha256"
+            ),
+            "playwright_version": browser_document.get("playwright_version"),
+            "chromium_revision": browser_document.get("chromium_revision"),
+            "chromium_executable_sha256": browser_document.get("chromium_executable_sha256"),
             "model_preflight": "passed",
+            "owned_container_residue": residue,
             "setup_attempt": ordinal,
         },
     )
+
+
+def condition_process_argv(mode: str) -> list[str]:
+    if mode not in {"reactive", "simulative"}:
+        raise PragmaticRunError("condition mode is invalid")
+    return [
+        "/opt/sira/.venv/bin/python",
+        "/opt/giclab/container_entrypoint.py",
+        "--runtime-assignment",
+        "SIRA_API_KEY",
+        "--",
+        "/opt/sira/.venv/bin/python",
+        "/opt/giclab-src/giclab/harness/sira_gate_a_runtime.py",
+        "--gate-upstream-runner",
+        "/opt/sira/scripts/run_web_agent.py",
+        "--gate-attempt-root",
+        "/giclab/attempt",
+        "--gate-mode",
+        mode,
+        "--gate-adaptation-sha256",
+        ADAPTATION_SHA256,
+        "--",
+        f"EXP-0001-SMOKE-{mode.upper()}",
+        "--query",
+        QUERY,
+        "--mode",
+        mode,
+        "--agent",
+        "sira",
+        "--model",
+        MODEL,
+        "--max_steps",
+        "1",
+        "--timeout",
+        "30",
+        "--max_retry",
+        "0",
+        "--output_dir",
+        "/giclab/attempt/sira-output",
+        "--seed",
+        "42",
+    ]
 
 
 def condition_container_argv(root: Path, mode: str, prefix: list[str], image_id: str) -> list[str]:
@@ -507,49 +679,132 @@ def condition_container_argv(root: Path, mode: str, prefix: list[str], image_id:
         "--mount",
         f"type=bind,src={REMOTE_SECRET},dst=/run/secrets/sira_api_key,readonly",
         "--label",
-        "org.giclab.t07.profile=pragmatic-smoke-v1",
+        "org.giclab.t07.profile=pragmatic-smoke-r2",
         "--label",
         f"org.giclab.t07.condition=SIRA-{mode.upper()}",
     ]
-    command.extend(
-        [
-            "/opt/giclab/container_entrypoint.py",
-            "--runtime-assignment",
-            "SIRA_API_KEY",
-            "--",
-            "/opt/sira/.venv/bin/python",
-            "/opt/giclab-src/giclab/harness/sira_gate_a_runtime.py",
-            "--gate-upstream-runner",
-            "/opt/sira/scripts/run_web_agent.py",
-            "--gate-attempt-root",
-            "/giclab/attempt",
-            "--gate-mode",
-            mode,
-            "--gate-adaptation-sha256",
-            ADAPTATION_SHA256,
-            "--",
-            f"EXP-0001-SMOKE-{mode.upper()}",
-            "--query",
-            QUERY,
-            "--mode",
-            mode,
-            "--agent",
-            "sira",
-            "--model",
-            MODEL,
-            "--max_steps",
-            "1",
-            "--timeout",
-            "30",
-            "--max_retry",
-            "0",
-            "--output_dir",
-            "/giclab/attempt/sira-output",
-            "--seed",
-            "42",
-        ]
-    )
+    process_argv = condition_process_argv(mode)
+    if process_argv[0] != "/opt/sira/.venv/bin/python":
+        raise PragmaticRunError("condition process interpreter drifted")
+    command.extend(process_argv[1:])
     return command
+
+
+def condition_command_comparison(root: Path, prefix: list[str], image_id: str) -> dict[str, object]:
+    commands = {
+        mode: condition_container_argv(root, mode, prefix, image_id)
+        for mode in ("reactive", "simulative")
+    }
+    reactive = commands["reactive"]
+    simulative = commands["simulative"]
+    if len(reactive) != len(simulative):
+        raise PragmaticRunError("condition command lengths differ")
+    allowed: dict[int, str] = {}
+    expected_difference_fields = {
+        "container_name",
+        "attempt_root",
+        "condition_label",
+        "gate_mode",
+        "job_name",
+        "upstream_mode",
+    }
+    for index, (left, right) in enumerate(zip(reactive, simulative, strict=True)):
+        if left == right:
+            continue
+        previous = reactive[index - 1] if index else ""
+        if previous == "--name":
+            field = "container_name"
+        elif left.startswith("type=bind,src=") and left.endswith("dst=/giclab/attempt"):
+            field = "attempt_root"
+        elif left.startswith("org.giclab.t07.condition="):
+            field = "condition_label"
+        elif previous == "--gate-mode":
+            field = "gate_mode"
+        elif left == "EXP-0001-SMOKE-REACTIVE" and right == "EXP-0001-SMOKE-SIMULATIVE":
+            field = "job_name"
+        elif previous == "--mode":
+            field = "upstream_mode"
+        else:
+            raise PragmaticRunError(f"undeclared condition command difference at index {index}")
+        if field in allowed.values():
+            raise PragmaticRunError(f"duplicate condition command difference: {field}")
+        allowed[index] = field
+    if set(allowed.values()) != expected_difference_fields:
+        raise PragmaticRunError("condition command differences are incomplete")
+    return {
+        "schema_version": "0.1.0",
+        "matched": True,
+        "command_length": len(reactive),
+        "differences": [
+            {
+                "index": index,
+                "field": field,
+                "reactive": reactive[index],
+                "simulative": simulative[index],
+            }
+            for index, field in sorted(allowed.items())
+        ],
+        "approved_difference_fields": sorted(expected_difference_fields),
+    }
+
+
+def condition_configurations(
+    root: Path, prefix: list[str], image_id: str
+) -> dict[str, dict[str, object]]:
+    configurations: dict[str, dict[str, object]] = {}
+    for mode, order, calls in (("reactive", 1, 16), ("simulative", 2, 61)):
+        configurations[mode] = {
+            "condition": f"SIRA-{mode.upper()}",
+            "order": order,
+            "attempts": 1,
+            "retries": 0,
+            "browser_steps": 1,
+            "model_call_attempt_cap": calls,
+            "model_token_cap": 200_000,
+            "adapter_cost_cap_usd": 2.0,
+            "wall_seconds": 120,
+            "docker_argv": condition_container_argv(root, mode, prefix, image_id),
+        }
+    return configurations
+
+
+def condition_configuration_comparison(
+    configurations: dict[str, dict[str, object]],
+) -> dict[str, object]:
+    reactive = configurations.get("reactive")
+    simulative = configurations.get("simulative")
+    if not isinstance(reactive, dict) or not isinstance(simulative, dict):
+        raise PragmaticRunError("both condition configurations are required")
+    if set(reactive) != set(simulative):
+        raise PragmaticRunError("condition configuration keys differ")
+    approved = {"condition", "docker_argv", "model_call_attempt_cap", "order"}
+    differences: list[dict[str, object]] = []
+    for field in sorted(reactive):
+        left = reactive[field]
+        right = simulative[field]
+        if left == right:
+            continue
+        if field not in approved:
+            raise PragmaticRunError(f"undeclared condition configuration difference: {field}")
+        if field == "docker_argv":
+            if not isinstance(left, list) or not isinstance(right, list):
+                raise PragmaticRunError("condition command configurations must be arrays")
+            difference: dict[str, object] = {
+                "field": field,
+                "reactive_sha256": hashlib.sha256(canonical_json(left)).hexdigest(),
+                "simulative_sha256": hashlib.sha256(canonical_json(right)).hexdigest(),
+            }
+        else:
+            difference = {"field": field, "reactive": left, "simulative": right}
+        differences.append(difference)
+    if {entry["field"] for entry in differences} != approved:
+        raise PragmaticRunError("condition configuration differences are incomplete")
+    return {
+        "schema_version": "0.1.0",
+        "matched": True,
+        "approved_difference_fields": sorted(approved),
+        "differences": differences,
+    }
 
 
 def render_manifest(
@@ -567,25 +822,16 @@ def render_manifest(
         raise PragmaticRunError("built image identity is unavailable")
     if len(execution_commit) != 40 or any(c not in "0123456789abcdef" for c in execution_commit):
         raise PragmaticRunError("execution commit is invalid")
-    conditions = {}
-    for mode, order, calls in (("reactive", 1, 16), ("simulative", 2, 61)):
-        conditions[mode] = {
-            "condition": f"SIRA-{mode.upper()}",
-            "order": order,
-            "attempts": 1,
-            "retries": 0,
-            "browser_steps": 1,
-            "model_call_attempt_cap": calls,
-            "model_token_cap": 200_000,
-            "adapter_cost_cap_usd": 2.0,
-            "wall_seconds": 120,
-            "docker_argv": condition_container_argv(root, mode, prefix, image_id),
-        }
+    command_comparison = condition_command_comparison(root, prefix, image_id)
+    write_exclusive(root / "condition-command-diff.json", command_comparison)
+    conditions = condition_configurations(root, prefix, image_id)
+    configuration_comparison = condition_configuration_comparison(conditions)
+    write_exclusive(root / "condition-configuration-diff.json", configuration_comparison)
     write_exclusive(
         root / "run-manifest.json",
         {
             "schema_version": "0.1.0",
-            "manifest_id": "T07-PRAGMATIC-SMOKE-RUN-0001",
+            "manifest_id": "T07-PRAGMATIC-SMOKE-RUN-0002",
             "frozen_at_utc": utc_now(),
             "git_commit": execution_commit,
             "sira_commit": SIRA_COMMIT,
@@ -593,14 +839,27 @@ def render_manifest(
             "model_snapshot": MODEL,
             "task": {"kind": "open-ended-query", "query": QUERY, "seed": 42, "max_steps": 1},
             "condition_order": ["SIRA-REACTIVE", "SIRA-SIMULATIVE"],
+            "run_identities": {
+                "host": HOST_RUN_ID,
+                "reactive": REACTIVE_RUN_ID,
+                "simulative": SIMULATIVE_RUN_ID,
+            },
             "permitted_condition_differences": [
-                "condition",
-                "mode",
-                "job_name",
                 "attempt_root",
-                "output_dir",
+                "condition_label",
+                "condition_identity",
+                "condition_order",
+                "container_name",
+                "gate_mode",
+                "job_name",
+                "source-derived model-call-attempt cap",
                 "source-declared planner policy",
+                "upstream_mode",
             ],
+            "condition_command_diff_sha256": sha256_file(root / "condition-command-diff.json"),
+            "condition_configuration_diff_sha256": sha256_file(
+                root / "condition-configuration-diff.json"
+            ),
             "conditions": conditions,
             "budgets": {
                 "authorized_openai_aggregate_usd": 10.0,
@@ -620,8 +879,20 @@ def render_manifest(
             "runtime": {
                 "built_image_id": image_id,
                 "base_image": BASE_IMAGE,
+                "python_version": setup_doc.get("python_version"),
+                "python_contract": ">=3.11",
+                "python_executable_sha256": setup_doc.get("python_executable_sha256"),
+                "uv_lock_sha256": setup_doc.get("uv_lock_sha256"),
+                "installed_package_manifest_sha256": setup_doc.get(
+                    "installed_package_manifest_sha256"
+                ),
+                "playwright_version": setup_doc.get("playwright_version"),
+                "chromium_revision": setup_doc.get("chromium_revision"),
+                "chromium_executable_sha256": setup_doc.get("chromium_executable_sha256"),
                 "runtime_adaptation_sha256": ADAPTATION_SHA256,
                 "routing_patch_sha256": ROUTING_PATCH_SHA256,
+                "runtime_preflight_sha256": setup_doc.get("runtime_preflight_sha256"),
+                "upstream_runner_sha256": setup_doc.get("upstream_runner_sha256"),
                 "runner_sha256": sha256_file(Path(__file__).resolve(strict=True)),
             },
             "interpretation_allowed": False,
@@ -629,13 +900,80 @@ def render_manifest(
     )
 
 
+def condition_usage(attempt: Path) -> dict[str, object]:
+    usage: dict[str, object] = {
+        "model_call_attempts": 0,
+        "input_tokens": 0,
+        "cached_input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "cost_usd": 0.0,
+        "browser_actions": 0,
+        "unreconciled_provider_attempts": 0,
+        "provider_budget_present": False,
+        "session_history_actions": 0,
+    }
+    budget_path = attempt / "provider-budget.json"
+    if budget_path.is_file() and not budget_path.is_symlink():
+        document = json.loads(budget_path.read_text(encoding="utf-8"))
+        for name in (
+            "model_call_attempts",
+            "input_tokens",
+            "cached_input_tokens",
+            "output_tokens",
+            "total_tokens",
+            "browser_actions",
+            "unreconciled_provider_attempts",
+        ):
+            value = document.get(name)
+            if type(value) is not int or value < 0:
+                raise PragmaticRunError(f"condition budget field is invalid: {name}")
+            usage[name] = value
+        cost = document.get("cost_usd")
+        if not isinstance(cost, (int, float)) or isinstance(cost, bool) or cost < 0:
+            raise PragmaticRunError("condition budget cost is invalid")
+        usage["cost_usd"] = float(cost)
+        usage["provider_budget_present"] = True
+
+    history_actions = 0
+    output_dir = attempt / "sira-output"
+    if output_dir.is_dir() and not output_dir.is_symlink():
+        for path in sorted(output_dir.glob("*.json")):
+            if path.name == "output.jsonl" or path.is_symlink() or not path.is_file():
+                continue
+            try:
+                session = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+                continue
+            history = session.get("history") if isinstance(session, dict) else None
+            if isinstance(history, list):
+                history_actions += len(history)
+    usage["session_history_actions"] = history_actions
+    ledger_browser_actions = usage["browser_actions"]
+    model_call_attempts = usage["model_call_attempts"]
+    if type(ledger_browser_actions) is not int or type(model_call_attempts) is not int:
+        raise PragmaticRunError("condition empirical-boundary usage is invalid")
+    usage["browser_actions"] = max(ledger_browser_actions, history_actions)
+    usage["empirical_boundary_crossed"] = (
+        model_call_attempts > 0 or max(ledger_browser_actions, history_actions) > 0
+    )
+    return usage
+
+
 def execute_condition(launch_ordinal: int, mode: str) -> int:
     root = run_root(launch_ordinal)
     manifest = json.loads((root / "run-manifest.json").read_text())
     if manifest.get("condition_order") != ["SIRA-REACTIVE", "SIRA-SIMULATIVE"]:
         raise PragmaticRunError("condition order drifted")
-    if mode == "simulative" and not (root / "evidence/reactive/condition-status.json").is_file():
-        raise PragmaticRunError("simulative cannot start before reactive is terminal")
+    if mode == "simulative":
+        reactive_status_path = root / "evidence/reactive/condition-status.json"
+        if not reactive_status_path.is_file():
+            raise PragmaticRunError("simulative cannot start before reactive is terminal")
+        reactive_status = json.loads(reactive_status_path.read_text(encoding="utf-8"))
+        if reactive_status.get("empirical_boundary_crossed") is not True:
+            raise PragmaticRunError(
+                "simulative cannot start after a pre-empirical reactive failure"
+            )
     if mode == "reactive" and (root / "evidence/simulative/condition-started.json").exists():
         raise PragmaticRunError("reactive cannot start after simulative")
     attempt = root / "evidence" / mode
@@ -698,6 +1036,10 @@ def execute_condition(launch_ordinal: int, mode: str) -> int:
         )
         remove_container(prefix, name)
     wall = time.monotonic() - before
+    usage = condition_usage(attempt)
+    empirical_boundary_crossed = usage.pop("empirical_boundary_crossed")
+    if type(empirical_boundary_crossed) is not bool:
+        raise PragmaticRunError("empirical-boundary accounting is invalid")
     write_exclusive(
         attempt / "condition-status.json",
         {
@@ -709,7 +1051,19 @@ def execute_condition(launch_ordinal: int, mode: str) -> int:
             "returncode": returncode,
             "timeout_observed": timeout_observed,
             "wall_seconds": wall,
-            "terminal_state": "executed" if returncode == 0 else "execution_failed",
+            "terminal_state": (
+                "executed"
+                if returncode == 0
+                else (
+                    "execution_failed"
+                    if empirical_boundary_crossed
+                    else "pre_empirical_infrastructure_failed"
+                )
+            ),
+            "empirical_boundary_crossed": empirical_boundary_crossed,
+            "condition_attempt_consumed": empirical_boundary_crossed,
+            "infrastructure_attempt_identity": (f"T07-PRAGMATIC-R2-{mode.upper()}-INFRA-0001"),
+            "usage": usage,
             "container_removed": True,
         },
     )

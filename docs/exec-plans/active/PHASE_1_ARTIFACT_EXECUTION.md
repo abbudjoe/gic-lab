@@ -136,6 +136,33 @@ observes the correctly retained `CMP-0002` execution entry and fails. That test 
 not changed after the reactive freeze and is a recorded non-runtime repair for a
 future freshly authorized task.
 
+### Pragmatic Retry 2 — 2026-08-12
+
+Assembly status: **in-progress** under the current-turn Retry 2 authorization.
+
+Source contract:
+`T07 Pragmatic Retry 2 — Repair Python 3.10 Compatibility and Obtain the SiRA
+Smoke Pair`. The prior `RUN-T07-PRAGMATIC-HOST-0001` disposition and archive remain
+immutable. Fresh identities are `RUN-T07-PRAGMATIC-HOST-0002`,
+`RUN-T07-PRAGMATIC-SIRA-REACTIVE-0002`, and
+`RUN-T07-PRAGMATIC-SIRA-SIMULATIVE-0002`.
+
+| ID | Retry 2 obligation | Status | Evidence |
+|---|---|---|---|
+| T07-R2-01 | Verify the exact branch/start commit, prior disposition identity, clean tree, and fresh local/remote/external identities. | met | Clean `phase-1/sira-smoke-pragmatic-r2` at `866c8f376583486bf989de44b06fb15e0b6010a3`; prior disposition SHA-256 `8d4b081b4dd5995e2f021b5defb211d147461b134043d92cef17db3eb332d2fd`; all `0002` roots absent. |
+| T07-R2-02 | Repair the actual Python runtime compatibility boundary without changing scientific fields. | met | `pyproject.toml` and `uv.lock` require Python `>=3.11`; the immutable upstream SiRA `pyproject.toml` at `93fb8d72…` (965 bytes, SHA-256 `63887052447a78cd5cd3fab980db7f4ef4f630f47dc2ad40fc89f80830d13f32`) permits `>=3.10,<3.13`. Reachable repository harness modules use Python-3.11-only `datetime.UTC` and `enum.StrEnum`. The final image therefore creates one exact Python 3.11.14 environment for both conditions and invokes every container child through that environment. No scientific field changed. |
+| T07-R2-03 | Add exact interpreter import, timestamp, evidence, budget, command-rendering, browser, and cleanup regressions; pass focused local gates. | met | Ruff and strict mypy pass; 121 focused pragmatic/Gate-A/container tests pass; exact Python 3.10.20 `compileall` over all shipped runtime sources plus five-module host-side import/UTC smoke passes; exact Python 3.11.14 runtime preflight locally exercises all repository pre-empirical harness imports, a hash-bound controlled load of pinned `run_web_agent.py` and its dependency graph, UTC serialization, artifact writing, budget-ledger persistence, both exact condition-command renderings, and owned cleanup. A failed upstream load prevents setup completion. Repository validation and `git diff --check` pass. The remote container must repeat this evidence before empirical entry. |
+| T07-R2-04 | Obtain clean independent spec-conformance review and pass post-review focused gates. | met | Independent rereview found no remaining P0/P1 issue after the hash-bound, no-network upstream-runner import repair. R2-02 and R2-03 were classified met; remote execution and actual freeze evidence remain for R2-05/R2-06. Post-review Ruff, strict mypy, 121 focused tests, exact Python 3.10 compile/import smoke, repository validation, and diff check pass. |
+| T07-R2-05 | Launch within the authorized budget and pass the full exact-container pre-empirical runtime preflight. | not-started | Pending. |
+| T07-R2-06 | Commit/freeze the clean runtime, render and machine-diff exact commands/configurations, and hash the immutable run manifest. | not-started | Pending. |
+| T07-R2-07 | Execute reactive then simulative with at most one consumed empirical attempt each and preserve accounting without interpretation. | not-started | Pending. |
+| T07-R2-08 | Retain and hash evidence, destroy secrets/runtime residue, terminate provider compute, restore firewall state, and reconcile compute/accounting. | not-started | Pending. |
+
+The Retry 2 empirical boundary is the first condition OpenAI request or condition
+browser action. Common-infrastructure failures before both signals remain repairable
+under fresh infrastructure-attempt identities. After either signal, that condition's
+single attempt is consumed and code/configuration remain frozen.
+
 ### Bounded smoke definition of done
 
 Source contracts: `T07_BOUNDED_SMOKE_FORK_AND_PLAN_FROM_397A391.md` and
