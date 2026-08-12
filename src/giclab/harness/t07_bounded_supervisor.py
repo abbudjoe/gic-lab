@@ -29,7 +29,7 @@ import sys
 import tarfile
 import time
 import zipfile
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, MutableMapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path, PurePosixPath
@@ -40,8 +40,8 @@ import yaml
 from jsonschema import Draft202012Validator, FormatChecker
 
 SCHEMA_VERSION: Final = "0.1.0"
-PLAN_ID: Final = "PLAN-T07-BOUNDED-SIRA-SMOKE-V2"
-HOST_RUN_ID: Final = "RUN-T07-BOUNDED-HOST-0002"
+PLAN_ID: Final = "PLAN-T07-BOUNDED-SIRA-SMOKE-V3"
+HOST_RUN_ID: Final = "RUN-T07-BOUNDED-HOST-0003"
 BRANCH: Final = "phase-1/sira-smoke-bounded"
 RUN_ROOT_RELATIVE: Final = Path("artifacts/t07/bounded") / HOST_RUN_ID
 INBOUND_RELATIVE: Final = RUN_ROOT_RELATIVE / "inbound"
@@ -52,16 +52,29 @@ LEDGER_RELATIVE: Final = RUN_ROOT_RELATIVE / "request-ledger.jsonl"
 MATERIALIZATION_SUMMARY_RELATIVE: Final = RUN_ROOT_RELATIVE / "MATERIALIZATION_SUMMARY.json"
 BOOTSTRAP_RELEASE_RELATIVE: Final = RUN_ROOT_RELATIVE / "BOOTSTRAP_RELEASE.json"
 BOOTSTRAP_RELEASE_STATE_RELATIVE: Final = RUN_ROOT_RELATIVE / "BOOTSTRAP_RELEASE_STATE.json"
+BOOTSTRAP_RELEASE_UPLOAD_RELATIVE: Final = RUN_ROOT_RELATIVE / "BOOTSTRAP_RELEASE_UPLOAD.json"
 INBOUND_VERIFICATION_RELATIVE: Final = RUN_ROOT_RELATIVE / "INBOUND_VERIFICATION.json"
 COMPUTE_CLOSEOUT_RELATIVE: Final = RUN_ROOT_RELATIVE / "COMPUTE_USE_CLOSEOUT.json"
 OBSERVER_VERIFICATION_RELATIVE: Final = RUN_ROOT_RELATIVE / "OBSERVER_EVIDENCE_VERIFICATION.json"
 RESPONSES_RELATIVE: Final = RUN_ROOT_RELATIVE / "responses"
 UPLOAD_ROOT_RELATIVE: Final = Path("artifacts/t07/bounded-upload") / HOST_RUN_ID
 UPLOAD_IDENTITY_RELATIVE: Final = RUN_ROOT_RELATIVE / "UPLOAD_BUNDLE_IDENTITY.json"
+OPENAI_SECRET_IDENTITY_RELATIVE: Final = RUN_ROOT_RELATIVE / "OPENAI_SECRET_IDENTITY.json"
+OPENAI_SECRET_CLEANUP_RELATIVE: Final = RUN_ROOT_RELATIVE / "OPENAI_SECRET_CLEANUP.json"
+OPENAI_SECRET_ATTEMPT_RELATIVE: Final = (
+    RUN_ROOT_RELATIVE / "OPENAI_SECRET_MATERIALIZATION_ATTEMPT.json"
+)
+OPENAI_SECRET_UPLOAD_OUTCOME_RELATIVE: Final = (
+    RUN_ROOT_RELATIVE / "OPENAI_SECRET_UPLOAD_OUTCOME.json"
+)
+OPENAI_SECRET_FAILURE_RELATIVE: Final = (
+    RUN_ROOT_RELATIVE / "OPENAI_SECRET_MATERIALIZATION_FAILURE.json"
+)
 UPLOAD_ARCHIVE_NAME: Final = "t07-bounded-repository.tar"
 UPLOAD_BOOTSTRAP_NAME: Final = "t07-bounded-bootstrap.py"
+UPLOAD_OPENAI_SECRET_NAME: Final = "t07-bounded-openai-provider-key"
 UPLOAD_MANIFEST_NAME: Final = "BUNDLE_MANIFEST.json"
-BOUNDED_PLAN_RELATIVE: Final = Path("containers/sira-smoke/bounded/bounded-smoke-plan-v2.json")
+BOUNDED_PLAN_RELATIVE: Final = Path("containers/sira-smoke/bounded/bounded-smoke-plan-v3.json")
 REMOTE_BOOTSTRAP_RELATIVE: Final = Path("containers/sira-smoke/bounded/bootstrap.py")
 
 HISTORICAL_SOURCE_PARAMETERS_RELATIVE: Final = Path(
@@ -100,6 +113,8 @@ BASELINE_SEMANTIC_SHA256: Final = "b0ef711158113cdbdbb1707cb43f21a635271bb2e93bf
 CANONICALIZER_VERSION: Final = "t07-firewall-canonical-v1"
 PARSER_VERSION: Final = "t07-firewall-response-v2"
 PRIVATE_BINDING_SCHEMA_VERSION: Final = "0.3.0"
+PRIVATE_BINDING_PLAN_ID: Final = "PLAN-T07-BOUNDED-SIRA-SMOKE-V2"
+PRIVATE_BINDING_HOST_RUN_ID: Final = "RUN-T07-BOUNDED-HOST-0002"
 PRIVATE_BINDING_PENDING_AUTHORIZATION: Final = "AUTH-T07-BOUNDED-SIRA-SMOKE-V2-PENDING"
 RULESET_NAME_PATTERN_ID: Final = "t07-bounded-ruleset-v1"
 PRIVATE_BINDING_ALIAS: Final = "t07-bounded-binding-67eceae4caa9"
@@ -112,13 +127,14 @@ PRIVATE_BINDING_COPY_RECORD_FILENAME: Final = "COPY_RECORD.json"
 PRIVATE_BINDING_EXTERNAL_SEAL_FILENAME: Final = "SEAL.json"
 
 AUTHORIZATION_SCHEMA_RELATIVE: Final = Path(
-    "schemas/t07-bounded-smoke-authorization-v2.schema.json"
+    "schemas/t07-bounded-smoke-authorization-v3.schema.json"
 )
 PRIVATE_BINDING_SCHEMA_RELATIVE: Final = Path(
     "schemas/t07-bounded-private-security-binding.schema.json"
 )
-LEDGER_SCHEMA_RELATIVE: Final = Path("schemas/t07-bounded-smoke-observer-ledger-v2.schema.json")
-EVIDENCE_SCHEMA_RELATIVE: Final = Path("schemas/t07-bounded-smoke-evidence-v2.schema.json")
+LEDGER_SCHEMA_RELATIVE: Final = Path("schemas/t07-bounded-smoke-observer-ledger-v3.schema.json")
+EVIDENCE_SCHEMA_RELATIVE: Final = Path("schemas/t07-bounded-smoke-evidence-v3.schema.json")
+OPENAI_SECRET_SCHEMA_RELATIVE: Final = Path("schemas/t07-bounded-openai-secret-source.schema.json")
 ENDPOINT_SCHEMA_ROOT: Final = Path("containers/sira-smoke/lambda/endpoint-schemas-v3")
 ENDPOINT_SCHEMAS: Final[Mapping[str, str]] = {
     "/api/v1/instance-types": "instance-types.schema.json",
@@ -193,9 +209,52 @@ EXTERNAL_MOUNT: Final = Path("/Volumes/Macintosh HD - Data")
 EXTERNAL_PARENT: Final = EXTERNAL_MOUNT / "GIC-Lab/t07/sealed-artifacts"
 EXTERNAL_FINAL: Final = EXTERNAL_PARENT / HOST_RUN_ID
 
+OPENAI_SOURCE_ASSIGNMENT: Final = "OPENAI_API_KEY"
+OPENAI_RUNTIME_ASSIGNMENT: Final = "SIRA_API_KEY"
+OPENAI_DOTENV_PARSER: Final = "giclab-strict-non-shell-dotenv-v1"
+OPENAI_UPLOAD_SUCCESS_ATTESTATION: Final = (
+    "confirmed-exact-filtered-file-uploaded-and-permissions-qualified"
+)
+OPENAI_UPLOAD_ABORT_NOT_UPLOADED: Final = "confirmed-upload-definitely-not-completed"
+OPENAI_UPLOAD_ABORT_UNKNOWN: Final = "remote-upload-outcome-unknown-or-permissions-unqualified"
+OPENAI_DOTENV_PATH_BINDING_SHA256: Final = (
+    "77e6457a1a47ee8a62240ffa96dc64c5dc7b7352333c5e67318519c3784ff347"
+)
+OPENAI_SECRET_SOURCE_SCHEMA_SHA256: Final = (
+    "38cf99ee79532dbc91c85aa8b97868c26351d12c9acc606f315f77257e8d66d4"
+)
+MAX_DOTENV_BYTES: Final = 65_536
+MAX_OPENAI_SECRET_BYTES: Final = 4_096
+OPENAI_SECRET_FAILURE_CODES: Final = frozenset(
+    {
+        "dotenv_changed_while_held",
+        "dotenv_metadata_unsafe",
+        "dotenv_path_binding_invalid",
+        "dotenv_path_identity_mismatch",
+        "dotenv_path_invalid",
+        "dotenv_syntax_unsupported",
+        "dotenv_unavailable",
+        "openai_assignment_duplicate",
+        "openai_assignment_empty",
+        "openai_assignment_missing",
+        "openai_assignment_too_large",
+        "path_hierarchy_unsafe",
+        "runtime_secret_cleanup_failed",
+        "runtime_secret_cleanup_receipt_unavailable",
+        "runtime_secret_materialization_cleanup_failed",
+        "runtime_secret_failure_receipt_unavailable",
+        "runtime_secret_metadata_unsafe",
+        "runtime_secret_not_fresh",
+        "runtime_secret_remote_upload_receipt_unavailable",
+        "runtime_secret_write_failed",
+        "secret_lease_closed",
+        "unknown",
+    }
+)
+
 _HEX40 = re.compile(r"^[a-f0-9]{40}$")
 _HEX64 = re.compile(r"^[a-f0-9]{64}$")
-_AUTHORIZATION = re.compile(r"^AUTH-T07-BOUNDED-SIRA-SMOKE-V2-[A-Z0-9._-]{3,80}$")
+_AUTHORIZATION = re.compile(r"^AUTH-T07-BOUNDED-SIRA-SMOKE-V3-[A-Z0-9._-]{3,80}$")
 _OWNED_RULESET = re.compile(r"^giclab-t07-bounded-[a-f0-9]{12}$")
 _HIGH_ASSURANCE_RULESET = re.compile(r"^t07-l2m-[a-f0-9]{40}$")
 _BINDING_ALIAS = re.compile(r"^t07-bounded-binding-[a-f0-9]{12}$")
@@ -372,6 +431,465 @@ CONDITION_PLAN_SHA256: Final[Mapping[str, str]] = {
 
 class BoundedSupervisorError(RuntimeError):
     """The bounded local control plane failed closed."""
+
+
+class OpenAISecretSourceError(BoundedSupervisorError):
+    """A closed, secret-safe OpenAI source or cleanup failure."""
+
+    def __init__(self, code: str, *, credential_rotation_required: bool = False) -> None:
+        super().__init__(code)
+        self.code = code
+        self.credential_rotation_required = credential_rotation_required
+
+
+def openai_dotenv_path_binding(path: Path) -> str:
+    """Return the public, domain-separated binding for an exact private source path."""
+
+    absolute = path.absolute()
+    if not absolute.is_absolute() or any(part in {"", ".", ".."} for part in absolute.parts):
+        raise OpenAISecretSourceError("dotenv_path_binding_invalid")
+    return hashlib.sha256(b"giclab-t07-openai-dotenv-path-v1\0" + os.fsencode(absolute)).hexdigest()
+
+
+def validate_operation_secret_environment(
+    operation: str,
+    environment: MutableMapping[str, str],
+) -> None:
+    """Validate ambient secret names without reading any credential value."""
+
+    secret_names = {"LAMBDA_API_KEY", "OPENAI_API_KEY", "SIRA_API_KEY"}
+    present = secret_names.intersection(environment)
+    if operation == "observe":
+        if present.intersection({"OPENAI_API_KEY", "SIRA_API_KEY"}):
+            raise BoundedSupervisorError("Lambda observer ambient secret channel is contaminated")
+        if "LAMBDA_API_KEY" not in present:
+            raise BoundedSupervisorError("Lambda observer credential is unavailable")
+        return
+    if operation in {"cleanup-openai-secret", "abort-openai-secret"}:
+        # Cleanup is an emergency, identity-bound capability.  Ambient credential
+        # names must not strand the temporary file after a hard stop; remove those
+        # inherited names without retrieving their values before any other work.
+        for name in present:
+            del environment[name]
+        return
+    if present:
+        raise BoundedSupervisorError("non-observer operation inherited a secret environment")
+
+
+@dataclass
+class OneShotEnvironmentCredential:
+    """Pop one credential only when the post-preflight observer asks for it once."""
+
+    environment: MutableMapping[str, str]
+    used: bool = False
+
+    def __call__(self) -> str | None:
+        if self.used:
+            raise BoundedSupervisorError("Lambda observer credential channel was reused")
+        self.used = True
+        return self.environment.pop("LAMBDA_API_KEY", None)
+
+
+@dataclass
+class OpenAISecretLease:
+    """Mutable provider bytes that are zeroed when the in-process lease closes."""
+
+    _value: bytearray
+    closed: bool = False
+
+    def __repr__(self) -> str:
+        return "OpenAISecretLease(<redacted>)"
+
+    def write_to(self, descriptor: int) -> None:
+        if self.closed or not self._value:
+            raise OpenAISecretSourceError("secret_lease_closed")
+        offset = 0
+        view = memoryview(self._value)
+        while offset < len(view):
+            written = os.write(descriptor, view[offset:])
+            if written <= 0:
+                raise OpenAISecretSourceError("runtime_secret_write_failed")
+            offset += written
+
+    def close(self) -> None:
+        if self.closed:
+            return
+        for index in range(len(self._value)):
+            self._value[index] = 0
+        self._value.clear()
+        self.closed = True
+
+    def __enter__(self) -> OpenAISecretLease:
+        if self.closed:
+            raise OpenAISecretSourceError("secret_lease_closed")
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        self.close()
+
+
+def _secret_path_components(path: Path) -> tuple[str, ...]:
+    if (
+        not path.is_absolute()
+        or not path.name
+        or any(part in {"", ".", ".."} for part in path.parts[1:])
+    ):
+        raise OpenAISecretSourceError("dotenv_path_invalid")
+    return tuple(path.parts[1:])
+
+
+@contextlib.contextmanager
+def _held_no_follow_parent(path: Path) -> Iterator[tuple[int, str]]:
+    components = _secret_path_components(path)
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    descriptors: list[int] = []
+    try:
+        current = os.open("/", flags)
+        descriptors.append(current)
+        for component in components[:-1]:
+            current = os.open(component, flags, dir_fd=current)
+            descriptors.append(current)
+    except OSError:
+        for descriptor in reversed(descriptors):
+            os.close(descriptor)
+        raise OpenAISecretSourceError("path_hierarchy_unsafe") from None
+    try:
+        yield current, components[-1]
+    finally:
+        for descriptor in reversed(descriptors):
+            os.close(descriptor)
+
+
+def _open_dotenv_source(path: Path) -> int:
+    with _held_no_follow_parent(path) as (parent, basename):
+        try:
+            descriptor = os.open(
+                basename,
+                os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0),
+                dir_fd=parent,
+            )
+        except OSError:
+            raise OpenAISecretSourceError("dotenv_unavailable") from None
+    metadata = os.fstat(descriptor)
+    if (
+        not stat.S_ISREG(metadata.st_mode)
+        or metadata.st_nlink != 1
+        or metadata.st_uid != os.getuid()
+        or metadata.st_mode & 0o022
+        or not 0 < metadata.st_size <= MAX_DOTENV_BYTES
+    ):
+        os.close(descriptor)
+        raise OpenAISecretSourceError("dotenv_metadata_unsafe")
+    return descriptor
+
+
+_DOTENV_NAME_BYTES: Final = frozenset(
+    b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_"
+)
+_DOTENV_VALUE_BYTES: Final = frozenset(
+    b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-"
+)
+
+
+def _finish_dotenv_assignment(
+    name: bytearray,
+    value: bytearray | None,
+    count: int,
+) -> int:
+    if not name:
+        return count
+    try:
+        decoded_name = name.decode("ascii", "strict")
+    except UnicodeDecodeError:
+        raise OpenAISecretSourceError("dotenv_syntax_unsupported") from None
+    if decoded_name != OPENAI_SOURCE_ASSIGNMENT:
+        return count
+    if value is None or not value:
+        raise OpenAISecretSourceError("openai_assignment_empty")
+    if count:
+        raise OpenAISecretSourceError("openai_assignment_duplicate")
+    return count + 1
+
+
+def _parse_openai_assignment(descriptor: int, expected_size: int) -> bytearray:
+    name = bytearray()
+    selected = bytearray()
+    state = "line_start"
+    target_line = False
+    target_count = 0
+    consumed = 0
+    try:
+        while True:
+            chunk = os.read(descriptor, min(4_096, expected_size + 1 - consumed))
+            if not chunk:
+                break
+            consumed += len(chunk)
+            if consumed > expected_size:
+                raise OpenAISecretSourceError("dotenv_changed_while_held")
+            for byte in chunk:
+                if byte in {0, 13}:
+                    raise OpenAISecretSourceError("dotenv_syntax_unsupported")
+                if state == "comment":
+                    if byte == 10:
+                        state = "line_start"
+                    continue
+                if state == "line_start":
+                    if byte == 10:
+                        continue
+                    if byte == 35:
+                        state = "comment"
+                        continue
+                    if byte not in _DOTENV_NAME_BYTES or 48 <= byte <= 57:
+                        raise OpenAISecretSourceError("dotenv_syntax_unsupported")
+                    name.append(byte)
+                    state = "name"
+                    continue
+                if state == "name":
+                    if byte == 61:
+                        target_line = name == OPENAI_SOURCE_ASSIGNMENT.encode("ascii")
+                        if target_line and target_count:
+                            raise OpenAISecretSourceError("openai_assignment_duplicate")
+                        state = "value"
+                        continue
+                    if byte == 10 or byte not in _DOTENV_NAME_BYTES:
+                        raise OpenAISecretSourceError("dotenv_syntax_unsupported")
+                    name.append(byte)
+                    continue
+                if byte == 10:
+                    target_count = _finish_dotenv_assignment(
+                        name,
+                        selected if target_line else bytearray(b"x"),
+                        target_count,
+                    )
+                    name.clear()
+                    target_line = False
+                    state = "line_start"
+                    continue
+                if byte not in _DOTENV_VALUE_BYTES:
+                    raise OpenAISecretSourceError("dotenv_syntax_unsupported")
+                if target_line:
+                    if len(selected) >= MAX_OPENAI_SECRET_BYTES:
+                        raise OpenAISecretSourceError("openai_assignment_too_large")
+                    selected.append(byte)
+        if consumed != expected_size:
+            raise OpenAISecretSourceError("dotenv_changed_while_held")
+        if state == "name":
+            raise OpenAISecretSourceError("dotenv_syntax_unsupported")
+        if state == "value":
+            target_count = _finish_dotenv_assignment(
+                name,
+                selected if target_line else bytearray(b"x"),
+                target_count,
+            )
+        if target_count != 1:
+            raise OpenAISecretSourceError("openai_assignment_missing")
+        return selected
+    except BaseException:
+        for index in range(len(selected)):
+            selected[index] = 0
+        selected.clear()
+        raise
+
+
+def load_openai_secret(path: Path) -> OpenAISecretLease:
+    """Load exactly one strict OPENAI_API_KEY assignment without shell parsing."""
+
+    descriptor = _open_dotenv_source(path)
+    try:
+        before = os.fstat(descriptor)
+        selected = _parse_openai_assignment(descriptor, before.st_size)
+        after = os.fstat(descriptor)
+        if (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns) != (
+            after.st_dev,
+            after.st_ino,
+            after.st_size,
+            after.st_mtime_ns,
+        ):
+            for index in range(len(selected)):
+                selected[index] = 0
+            raise OpenAISecretSourceError("dotenv_changed_while_held")
+        return OpenAISecretLease(selected)
+    finally:
+        os.close(descriptor)
+
+
+def _overwrite_descriptor_with_zeros(descriptor: int, byte_count: int) -> None:
+    os.lseek(descriptor, 0, os.SEEK_SET)
+    remaining = byte_count
+    zeros = bytes(min(4_096, max(1, remaining)))
+    while remaining:
+        written = os.write(descriptor, zeros[:remaining])
+        if written <= 0:
+            raise OSError
+        remaining -= written
+
+
+def _entry_exists_at(parent: int, basename: str) -> bool:
+    try:
+        os.stat(basename, dir_fd=parent, follow_symlinks=False)
+    except FileNotFoundError:
+        return False
+    return True
+
+
+def _path_identity_matches(
+    parent: int,
+    basename: str,
+    *,
+    device: int,
+    inode: int,
+) -> bool:
+    try:
+        current = os.stat(basename, dir_fd=parent, follow_symlinks=False)
+    except OSError:
+        return False
+    return current.st_dev == device and current.st_ino == inode
+
+
+def materialize_runtime_secret(source: Path, destination: Path) -> dict[str, object]:
+    """Create one automatic mode-0600 runtime file without retaining a derivative."""
+
+    with (
+        load_openai_secret(source) as lease,
+        _held_no_follow_parent(destination) as (parent, basename),
+    ):
+        try:
+            descriptor = os.open(
+                basename,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
+                0o600,
+                dir_fd=parent,
+            )
+        except OSError:
+            raise OpenAISecretSourceError("runtime_secret_not_fresh") from None
+        try:
+            lease.write_to(descriptor)
+            os.fsync(descriptor)
+            metadata = os.fstat(descriptor)
+            if (
+                not stat.S_ISREG(metadata.st_mode)
+                or metadata.st_uid != os.getuid()
+                or stat.S_IMODE(metadata.st_mode) != 0o600
+                or metadata.st_nlink != 1
+            ):
+                raise OpenAISecretSourceError("runtime_secret_metadata_unsafe")
+            os.fsync(parent)
+        except BaseException:
+            cleanup_succeeded = False
+            try:
+                metadata = os.fstat(descriptor)
+                if (
+                    not stat.S_ISREG(metadata.st_mode)
+                    or metadata.st_uid != os.getuid()
+                    or stat.S_IMODE(metadata.st_mode) != 0o600
+                    or metadata.st_nlink != 1
+                    or not 0 <= metadata.st_size <= MAX_OPENAI_SECRET_BYTES
+                ):
+                    raise OSError
+                _overwrite_descriptor_with_zeros(descriptor, metadata.st_size)
+                os.fsync(descriptor)
+                if not _path_identity_matches(
+                    parent,
+                    basename,
+                    device=metadata.st_dev,
+                    inode=metadata.st_ino,
+                ):
+                    raise OSError
+                os.unlink(basename, dir_fd=parent)
+                os.fsync(parent)
+                cleanup_succeeded = not _entry_exists_at(parent, basename)
+            except OSError:
+                cleanup_succeeded = False
+            if not cleanup_succeeded:
+                raise OpenAISecretSourceError(
+                    "runtime_secret_materialization_cleanup_failed",
+                    credential_rotation_required=True,
+                ) from None
+            raise
+        finally:
+            os.close(descriptor)
+    return {
+        "parser": OPENAI_DOTENV_PARSER,
+        "source_assignment": OPENAI_SOURCE_ASSIGNMENT,
+        "runtime_assignment": OPENAI_RUNTIME_ASSIGNMENT,
+        "runtime_file_basename": UPLOAD_OPENAI_SECRET_NAME,
+        "runtime_file_mode": "0600",
+        "runtime_file_device": metadata.st_dev,
+        "runtime_file_inode": metadata.st_ino,
+        "complete_dotenv_uploaded": False,
+        "user_managed_sira_file_required": False,
+        "secret_value_retained": False,
+        "secret_hash_retained": False,
+    }
+
+
+def destroy_runtime_secret(
+    path: Path,
+    *,
+    expected_device: int,
+    expected_inode: int,
+) -> dict[str, object]:
+    """Zero and unlink the held one-run runtime file, or require key rotation."""
+
+    try:
+        with _held_no_follow_parent(path) as (parent, basename):
+            descriptor = os.open(
+                basename,
+                os.O_RDWR | getattr(os, "O_NOFOLLOW", 0),
+                dir_fd=parent,
+            )
+            try:
+                metadata = os.fstat(descriptor)
+                if (
+                    not stat.S_ISREG(metadata.st_mode)
+                    or metadata.st_uid != os.getuid()
+                    or stat.S_IMODE(metadata.st_mode) != 0o600
+                    or metadata.st_nlink != 1
+                    or not 0 < metadata.st_size <= MAX_OPENAI_SECRET_BYTES
+                    or metadata.st_dev != expected_device
+                    or metadata.st_ino != expected_inode
+                ):
+                    raise OpenAISecretSourceError(
+                        "runtime_secret_cleanup_failed",
+                        credential_rotation_required=True,
+                    )
+                _overwrite_descriptor_with_zeros(descriptor, metadata.st_size)
+                os.fsync(descriptor)
+                if not _path_identity_matches(
+                    parent,
+                    basename,
+                    device=expected_device,
+                    inode=expected_inode,
+                ):
+                    raise OpenAISecretSourceError(
+                        "runtime_secret_cleanup_failed",
+                        credential_rotation_required=True,
+                    )
+                os.unlink(basename, dir_fd=parent)
+                os.fsync(parent)
+            finally:
+                os.close(descriptor)
+    except OpenAISecretSourceError:
+        raise
+    except OSError:
+        raise OpenAISecretSourceError(
+            "runtime_secret_cleanup_failed",
+            credential_rotation_required=True,
+        ) from None
+    if path.exists() or path.is_symlink():
+        raise OpenAISecretSourceError(
+            "runtime_secret_cleanup_failed",
+            credential_rotation_required=True,
+        )
+    return {
+        "runtime_file_basename": UPLOAD_OPENAI_SECRET_NAME,
+        "runtime_file_device": expected_device,
+        "runtime_file_inode": expected_inode,
+        "cleanup_verified": True,
+        "secret_value_retained": False,
+        "secret_hash_retained": False,
+        "credential_rotation_required": False,
+    }
 
 
 class VolumeObservation(Protocol):
@@ -666,6 +1184,47 @@ def load_and_validate_plan(
     return plan
 
 
+def _validate_cleanup_plan_contract(plan: Mapping[str, object]) -> Mapping[str, object]:
+    """Validate only immutable fields needed by the emergency cleanup capability.
+
+    Cleanup is intentionally independent of the mutable working-tree artifact set.  The
+    hash-first loader has already established the exact supervisor and contract module
+    bytes, and the caller separately binds the exact plan bytes.  Revalidating every
+    plan-bound repository artifact here could strand a materialized credential after a
+    repository hard stop.
+    """
+
+    identity = _mapping(plan.get("identity"), context="cleanup plan identity")
+    if (
+        identity.get("schema_version") != SCHEMA_VERSION
+        or identity.get("plan_id") != PLAN_ID
+        or identity.get("host_run_id") != HOST_RUN_ID
+        or identity.get("branch") != BRANCH
+        or identity.get("authorized") is not False
+        or identity.get("state") != "ready-for-bounded-smoke-v3-authorization"
+    ):
+        raise BoundedSupervisorError("cleanup plan identity drifted")
+    return _validate_openai_secret_contract_fields(plan)
+
+
+def load_cleanup_plan(
+    root: Path,
+    *,
+    plan_path: Path,
+    plan_sha256: str,
+) -> dict[str, object]:
+    """Load the exact plan without traversing unrelated current artifact identities."""
+
+    if plan_path != root / BOUNDED_PLAN_RELATIVE:
+        raise BoundedSupervisorError("cleanup plan path drifted")
+    encoded = _read_regular(plan_path, max_bytes=MAX_PLAN_BYTES)
+    if not _HEX64.fullmatch(plan_sha256) or sha256_bytes(encoded) != plan_sha256:
+        raise BoundedSupervisorError("bounded plan hash drifted")
+    plan = _strict_json(encoded, context="bounded cleanup plan")
+    _validate_cleanup_plan_contract(plan)
+    return plan
+
+
 def _validate_base_authority(root: Path, plan: Mapping[str, object]) -> None:
     try:
         state = yaml.safe_load(_read_regular(root / "docs/PROJECT_STATE.yaml", max_bytes=65_536))
@@ -683,7 +1242,7 @@ def _validate_base_authority(root: Path, plan: Mapping[str, object]) -> None:
         if state_map.get(permission) is not False:
             raise BoundedSupervisorError("base project permissions must remain false")
     substrate = _mapping(state_map.get("planned_execution_substrate"), context="substrate")
-    if substrate.get("decision_state") != "bounded-smoke-v2-ready-unauthorized":
+    if substrate.get("decision_state") != "bounded-smoke-v3-ready-unauthorized":
         raise BoundedSupervisorError("bounded planned substrate is unavailable")
     entries = _sequence(
         _mapping(compute, context="compute ledger").get("entries"), context="compute"
@@ -699,7 +1258,7 @@ def _validate_base_authority(root: Path, plan: Mapping[str, object]) -> None:
         "wall_clock_hours": 0.0,
         "accelerator_hours": 0.0,
         "cost_usd": 0.0,
-        "authorization_reference": "AUTH-T07-BOUNDED-SIRA-SMOKE-V2-PENDING",
+        "authorization_reference": "AUTH-T07-BOUNDED-SIRA-SMOKE-V3-PENDING",
         "status": "planned",
     }
     if (
@@ -785,8 +1344,8 @@ def _derived_binding_marker(nonce: str, *, purpose: str) -> str:
         (
             purpose.encode("ascii"),
             bytes.fromhex(nonce),
-            PLAN_ID.encode("ascii"),
-            HOST_RUN_ID.encode(),
+            PRIVATE_BINDING_PLAN_ID.encode("ascii"),
+            PRIVATE_BINDING_HOST_RUN_ID.encode(),
         )
     )
     return hashlib.sha256(payload).hexdigest()[:12]
@@ -799,8 +1358,8 @@ def _derived_private_locator(entropy: bytes) -> str:
         (
             b"private-locator",
             entropy,
-            PLAN_ID.encode("ascii"),
-            HOST_RUN_ID.encode("ascii"),
+            PRIVATE_BINDING_PLAN_ID.encode("ascii"),
+            PRIVATE_BINDING_HOST_RUN_ID.encode("ascii"),
         )
     )
     return hashlib.sha256(payload).hexdigest()[:32]
@@ -843,6 +1402,8 @@ def _validate_private_binding(
             expected_ruleset.rsplit("-", 1)[-1],
         }
         or (require_bound_identity and alias != PRIVATE_BINDING_ALIAS)
+        or document.get("plan_id") != PRIVATE_BINDING_PLAN_ID
+        or document.get("host_run_id") != PRIVATE_BINDING_HOST_RUN_ID
         or document.get("source_parameter_sha256") != HISTORICAL_SOURCE_PARAMETERS_SHA256
         or document.get("future_authorization_placeholder") != PRIVATE_BINDING_PENDING_AUTHORIZATION
         or document.get("ruleset_name_pattern_id") != RULESET_NAME_PATTERN_ID
@@ -886,7 +1447,7 @@ def build_private_security_binding(
     *,
     random_bytes: Callable[[int], bytes] = secrets.token_bytes,
 ) -> tuple[dict[str, object], bytes, str]:
-    """Build a fresh V2 binding from sealed private inputs without exposing values."""
+    """Build the preserved V2 binding from sealed private inputs without exposing values."""
 
     source_encoded = _read_regular(
         root / HISTORICAL_SOURCE_PARAMETERS_RELATIVE, max_bytes=MAX_PRIVATE_FILE_BYTES
@@ -979,8 +1540,8 @@ def build_private_security_binding(
     document: dict[str, object] = {
         "schema_version": PRIVATE_BINDING_SCHEMA_VERSION,
         "binding_alias": f"t07-bounded-binding-{binding_marker}",
-        "plan_id": PLAN_ID,
-        "host_run_id": HOST_RUN_ID,
+        "plan_id": PRIVATE_BINDING_PLAN_ID,
+        "host_run_id": PRIVATE_BINDING_HOST_RUN_ID,
         "future_authorization_placeholder": PRIVATE_BINDING_PENDING_AUTHORIZATION,
         "source_parameter_sha256": HISTORICAL_SOURCE_PARAMETERS_SHA256,
         "decision_alias": source.get("decision_alias"),
@@ -1626,8 +2187,8 @@ def materialize_authority(
         "plan_sha256": plan_sha256,
         "host_run_id": HOST_RUN_ID,
         "condition_run_ids": [
-            "RUN-T07-BOUNDED-SIRA-REACTIVE-0002",
-            "RUN-T07-BOUNDED-SIRA-SIMULATIVE-0002",
+            "RUN-T07-BOUNDED-SIRA-REACTIVE-0003",
+            "RUN-T07-BOUNDED-SIRA-SIMULATIVE-0003",
         ],
         "supervised_wall_started_at_utc": _utc_text(started),
         "expires_at_utc": _utc_text(expires),
@@ -2974,6 +3535,556 @@ def prepare_upload_bundle(
     }
 
 
+def _validate_openai_secret_contract_fields(
+    plan: Mapping[str, object],
+) -> Mapping[str, object]:
+    secrets = _mapping(plan.get("secrets"), context="secret contract")
+    source = _mapping(secrets.get("openai_provider"), context="OpenAI secret source")
+    if (
+        secrets.get("openai_source_schema_sha256") != OPENAI_SECRET_SOURCE_SCHEMA_SHA256
+        or source.get("provider") != "OpenAI"
+        or source.get("source_file") != "${OPENAI_DOTENV_FILE}"
+        or source.get("source_file_binding") != "private-authorization-substitution"
+        or source.get("source_path_binding_sha256") != OPENAI_DOTENV_PATH_BINDING_SHA256
+        or source.get("source_assignment") != OPENAI_SOURCE_ASSIGNMENT
+        or source.get("parser") != OPENAI_DOTENV_PARSER
+        or source.get("local_runtime_file")
+        != (UPLOAD_ROOT_RELATIVE / UPLOAD_OPENAI_SECRET_NAME).as_posix()
+        or source.get("runtime_file_mode") != "0600"
+        or source.get("runtime_value_contract")
+        != "single-nonempty-ascii-token-[A-Za-z0-9._-]-no-line-terminator-v1"
+        or source.get("remote_runtime_file") != "/home/ubuntu/.config/giclab/openai_provider_key"
+        or source.get("remote_parent_mode") != "0700"
+        or source.get("remote_current_user_owned") is not True
+        or source.get("remote_parent_prepare_argv")
+        != ["/usr/bin/install", "-d", "-m", "0700", "/home/ubuntu/.config/giclab"]
+        or source.get("remote_parent_verify_argvs")
+        != [
+            ["/usr/bin/test", "-d", "/home/ubuntu/.config/giclab"],
+            ["/usr/bin/test", "-O", "/home/ubuntu/.config/giclab"],
+            ["/usr/bin/stat", "--format=%a", "/home/ubuntu/.config/giclab"],
+            [
+                "/usr/bin/realpath",
+                "--canonicalize-existing",
+                "/home/ubuntu/.config/giclab",
+            ],
+            [
+                "/usr/bin/test",
+                "!",
+                "-e",
+                "/home/ubuntu/.config/giclab/openai_provider_key",
+            ],
+            [
+                "/usr/bin/test",
+                "!",
+                "-L",
+                "/home/ubuntu/.config/giclab/openai_provider_key",
+            ],
+        ]
+        or source.get("remote_parent_mode_stdout") != "700"
+        or source.get("remote_parent_realpath_stdout") != "/home/ubuntu/.config/giclab"
+        or source.get("remote_file_prepare_argv")
+        != [
+            "/usr/bin/chmod",
+            "0600",
+            "/home/ubuntu/.config/giclab/openai_provider_key",
+        ]
+        or source.get("remote_file_verify_argvs")
+        != [
+            ["/usr/bin/test", "-f", "/home/ubuntu/.config/giclab/openai_provider_key"],
+            [
+                "/usr/bin/test",
+                "!",
+                "-L",
+                "/home/ubuntu/.config/giclab/openai_provider_key",
+            ],
+            ["/usr/bin/test", "-O", "/home/ubuntu/.config/giclab/openai_provider_key"],
+            [
+                "/usr/bin/stat",
+                "--format=%a",
+                "/home/ubuntu/.config/giclab/openai_provider_key",
+            ],
+        ]
+        or source.get("remote_file_mode_stdout") != "600"
+        or source.get("container_runtime_file") != "/run/secrets/sira_api_key"
+        or source.get("metadata_runtime_name") != OPENAI_SOURCE_ASSIGNMENT
+        or source.get("upstream_runtime_name") != "SIRA_API_KEY"
+        or source.get("runtime_mapping")
+        != "provider-native-metadata-and-ephemeral-sira-child-alias"
+        or source.get("single_run_lifetime") is not True
+        or source.get("cleanup_required") is not True
+        or source.get("complete_env_upload_permitted") is not False
+        or source.get("secret_value_hash_permitted") is not False
+        or source.get("user_created_sira_api_key_file_required") is not False
+        or source.get("provider_credential_fallback") != "none"
+        or source.get("fallbacks") != []
+        or secrets.get("provider_observer_variable") != "LAMBDA_API_KEY"
+        or secrets.get("lambda_forbidden_assignments") != ["OPENAI_API_KEY", "SIRA_API_KEY"]
+        or secrets.get("value_in_argv") is not False
+        or secrets.get("value_in_environment_list") is not False
+        or secrets.get("value_in_image") is not False
+        or secrets.get("value_in_labels") is not False
+        or secrets.get("value_in_evidence") is not False
+    ):
+        raise BoundedSupervisorError("secret-channel separation drifted")
+    return source
+
+
+def _validate_openai_secret_contract(
+    root: Path,
+    plan: Mapping[str, object],
+) -> Mapping[str, object]:
+    source = _validate_openai_secret_contract_fields(plan)
+    schema_encoded = _read_regular(
+        root / OPENAI_SECRET_SCHEMA_RELATIVE,
+        max_bytes=MAX_RESPONSE_BYTES,
+    )
+    if sha256_bytes(schema_encoded) != OPENAI_SECRET_SOURCE_SCHEMA_SHA256:
+        raise BoundedSupervisorError("OpenAI secret-source schema drifted")
+    schema = _strict_json(schema_encoded, context="OpenAI secret-source schema")
+    _validate_schema(source, schema, context="OpenAI secret source")
+    return source
+
+
+def _openai_secret_attempt_record(authorization_reference: object) -> dict[str, object]:
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "plan_id": PLAN_ID,
+        "run_id": HOST_RUN_ID,
+        "authorization_reference": authorization_reference,
+        "state": "intent_committed",
+        "parser": OPENAI_DOTENV_PARSER,
+        "source_assignment": OPENAI_SOURCE_ASSIGNMENT,
+        "source_path_binding_sha256": OPENAI_DOTENV_PATH_BINDING_SHA256,
+        "runtime_assignment": OPENAI_RUNTIME_ASSIGNMENT,
+        "runtime_file": (UPLOAD_ROOT_RELATIVE / UPLOAD_OPENAI_SECRET_NAME).as_posix(),
+        "secret_value_retained": False,
+        "secret_hash_retained": False,
+    }
+
+
+def _write_openai_materialization_failure(
+    path: Path,
+    *,
+    attempt_encoded: bytes,
+    failure_code: str,
+    cleanup_verified: bool,
+    credential_rotation_required: bool,
+) -> bytes:
+    safe_code = failure_code if failure_code in OPENAI_SECRET_FAILURE_CODES else "unknown"
+    document = {
+        "schema_version": SCHEMA_VERSION,
+        "plan_id": PLAN_ID,
+        "run_id": HOST_RUN_ID,
+        "state": ("materialization_failed_cleaned" if cleanup_verified else "cleanup_unresolved"),
+        "source_attempt_sha256": sha256_bytes(attempt_encoded),
+        "failure_code": safe_code,
+        "credential_access_may_have_occurred": True,
+        "partial_runtime_file_may_have_been_created": True,
+        "cleanup_verified": cleanup_verified,
+        "credential_rotation_required": credential_rotation_required,
+        "secret_value_retained": False,
+        "secret_hash_retained": False,
+    }
+    encoded = canonical_json_bytes(document)
+    try:
+        _write_exclusive(path, encoded, mode=0o644)
+    except BaseException:
+        raise OpenAISecretSourceError(
+            "runtime_secret_failure_receipt_unavailable",
+            credential_rotation_required=True,
+        ) from None
+    return encoded
+
+
+def materialize_openai_runtime_secret(
+    root: Path,
+    *,
+    plan: Mapping[str, object],
+    plan_sha256: str,
+    expected_commit: str,
+    authorization_path: Path,
+    authorization_sha256: str,
+    private_binding_path: Path,
+    private_binding_sha256: str,
+    openai_dotenv_path: Path,
+    utc_now: Callable[[], datetime] = lambda: datetime.now(UTC),
+) -> dict[str, object]:
+    """Filter the approved dotenv source into one unarchived single-run file."""
+
+    verify_repository_identity(root, expected_commit)
+    authorization, _ = _validate_authority_inputs(
+        root,
+        plan=plan,
+        plan_sha256=plan_sha256,
+        authorization_path=authorization_path,
+        authorization_sha256=authorization_sha256,
+        private_binding_path=private_binding_path,
+        private_binding_sha256=private_binding_sha256,
+        utc_now=utc_now,
+        require_live=True,
+    )
+    source_contract = _validate_openai_secret_contract(root, plan)
+    if openai_dotenv_path_binding(openai_dotenv_path) != source_contract.get(
+        "source_path_binding_sha256"
+    ):
+        raise OpenAISecretSourceError("dotenv_path_identity_mismatch")
+    state = _load_state(root)
+    if (
+        state.get("status") != "post_launch_passed"
+        or state.get("next_phase") != "termination"
+        or (root / BOOTSTRAP_RELEASE_RELATIVE).exists()
+        or (root / BOOTSTRAP_RELEASE_RELATIVE).is_symlink()
+    ):
+        raise BoundedSupervisorError(
+            "OpenAI runtime secret requires a bound instance before bootstrap release"
+        )
+    upload_root = root / UPLOAD_ROOT_RELATIVE
+    destination = upload_root / UPLOAD_OPENAI_SECRET_NAME
+    attempt_path = root / OPENAI_SECRET_ATTEMPT_RELATIVE
+    identity_path = root / OPENAI_SECRET_IDENTITY_RELATIVE
+    remote_upload_path = root / OPENAI_SECRET_UPLOAD_OUTCOME_RELATIVE
+    cleanup_path = root / OPENAI_SECRET_CLEANUP_RELATIVE
+    failure_path = root / OPENAI_SECRET_FAILURE_RELATIVE
+    if (
+        upload_root.is_symlink()
+        or not upload_root.is_dir()
+        or destination.exists()
+        or destination.is_symlink()
+        or attempt_path.exists()
+        or attempt_path.is_symlink()
+        or identity_path.exists()
+        or identity_path.is_symlink()
+        or remote_upload_path.exists()
+        or remote_upload_path.is_symlink()
+        or cleanup_path.exists()
+        or cleanup_path.is_symlink()
+        or failure_path.exists()
+        or failure_path.is_symlink()
+    ):
+        raise BoundedSupervisorError("OpenAI runtime secret identity is not fresh")
+    attempt_encoded = canonical_json_bytes(
+        _openai_secret_attempt_record(authorization.get("authorization_reference"))
+    )
+    _write_exclusive(attempt_path, attempt_encoded, mode=0o644)
+    materialized_contract: dict[str, object] | None = None
+    try:
+        contract = materialize_runtime_secret(openai_dotenv_path, destination)
+        materialized_contract = contract
+        identity = {
+            "schema_version": SCHEMA_VERSION,
+            "plan_id": PLAN_ID,
+            "run_id": HOST_RUN_ID,
+            "authorization_reference": authorization.get("authorization_reference"),
+            "execution_commit": expected_commit,
+            "plan_sha256": plan_sha256,
+            "authorization_sha256": authorization_sha256,
+            "private_binding_sha256": private_binding_sha256,
+            "source_attempt_sha256": sha256_bytes(attempt_encoded),
+            "parser": contract["parser"],
+            "source_assignment": contract["source_assignment"],
+            "source_path_binding_sha256": OPENAI_DOTENV_PATH_BINDING_SHA256,
+            "runtime_assignment": contract["runtime_assignment"],
+            "runtime_file": (UPLOAD_ROOT_RELATIVE / UPLOAD_OPENAI_SECRET_NAME).as_posix(),
+            "runtime_file_basename": contract["runtime_file_basename"],
+            "runtime_file_mode": contract["runtime_file_mode"],
+            "runtime_file_device": contract["runtime_file_device"],
+            "runtime_file_inode": contract["runtime_file_inode"],
+            "complete_dotenv_uploaded": False,
+            "user_managed_sira_file_required": False,
+            "secret_value_retained": False,
+            "secret_hash_retained": False,
+            "archive_member": False,
+            "single_run": True,
+            "cleanup_required_before_remote_execution": True,
+        }
+        encoded = canonical_json_bytes(identity)
+        _write_exclusive(identity_path, encoded, mode=0o644)
+    except BaseException as exc:
+        cleanup_verified = False
+        rotation_required = True
+        if materialized_contract is not None:
+            try:
+                destroy_runtime_secret(
+                    destination,
+                    expected_device=cast(int, materialized_contract["runtime_file_device"]),
+                    expected_inode=cast(int, materialized_contract["runtime_file_inode"]),
+                )
+                cleanup_verified = True
+                rotation_required = False
+            except OpenAISecretSourceError as cleanup_error:
+                rotation_required = cleanup_error.credential_rotation_required
+        elif isinstance(exc, OpenAISecretSourceError):
+            cleanup_verified = not (destination.exists() or destination.is_symlink())
+            rotation_required = exc.credential_rotation_required or not cleanup_verified
+        failure_code = exc.code if isinstance(exc, OpenAISecretSourceError) else "unknown"
+        _write_openai_materialization_failure(
+            failure_path,
+            attempt_encoded=attempt_encoded,
+            failure_code=failure_code,
+            cleanup_verified=cleanup_verified,
+            credential_rotation_required=rotation_required,
+        )
+        raise OpenAISecretSourceError(
+            failure_code if failure_code in OPENAI_SECRET_FAILURE_CODES else "unknown",
+            credential_rotation_required=rotation_required,
+        ) from None
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "plan_id": PLAN_ID,
+        "run_id": HOST_RUN_ID,
+        "runtime_secret_path": str(UPLOAD_ROOT_RELATIVE / UPLOAD_OPENAI_SECRET_NAME),
+        "runtime_secret_mode": "0600",
+        "attempt_path": str(OPENAI_SECRET_ATTEMPT_RELATIVE),
+        "attempt_sha256": sha256_bytes(attempt_encoded),
+        "identity_path": str(OPENAI_SECRET_IDENTITY_RELATIVE),
+        "identity_sha256": sha256_bytes(encoded),
+        "secret_value_retained_in_output": False,
+        "secret_hash_retained": False,
+    }
+
+
+def cleanup_openai_runtime_secret(
+    root: Path,
+    *,
+    plan: Mapping[str, object],
+    plan_sha256: str,
+    expected_commit: str,
+    authorization_path: Path,
+    authorization_sha256: str,
+    private_binding_path: Path,
+    private_binding_sha256: str,
+    remote_upload_attestation: str,
+    utc_now: Callable[[], datetime] = lambda: datetime.now(UTC),
+) -> dict[str, object]:
+    """Destroy the local upload file after the user confirms its one-way upload."""
+
+    if remote_upload_attestation == OPENAI_UPLOAD_SUCCESS_ATTESTATION:
+        upload_outcome = "confirmed_uploaded_and_permissions_qualified"
+        upload_confirmed = True
+        upload_outcome_unknown = False
+        permissions_qualified = True
+        upload_rotation_required = False
+    elif remote_upload_attestation == OPENAI_UPLOAD_ABORT_NOT_UPLOADED:
+        upload_outcome = "definitely_not_uploaded"
+        upload_confirmed = False
+        upload_outcome_unknown = False
+        permissions_qualified = False
+        upload_rotation_required = False
+    elif remote_upload_attestation == OPENAI_UPLOAD_ABORT_UNKNOWN:
+        upload_outcome = "unknown_or_permissions_unqualified"
+        upload_confirmed = False
+        upload_outcome_unknown = True
+        permissions_qualified = False
+        upload_rotation_required = True
+    else:
+        raise BoundedSupervisorError("remote OpenAI secret upload is not attested")
+
+    # The exact supervisor, contract, and plan bytes are hash-first loaded.  Cleanup
+    # deliberately does not traverse mutable repository, authorization, private-
+    # binding, or schema files: the materialization identity below durably binds the
+    # exact validated inputs and created device/inode.  This keeps only destruction
+    # available after a later hard stop; execution and release still require the
+    # clean repository and full authority validation.
+    _validate_cleanup_plan_contract(plan)
+    if (
+        authorization_path != root / AUTHORIZATION_RELATIVE
+        or private_binding_path != root / PRIVATE_BINDING_RELATIVE
+        or not _HEX40.fullmatch(expected_commit)
+        or not _HEX64.fullmatch(authorization_sha256)
+        or not _HEX64.fullmatch(private_binding_sha256)
+    ):
+        raise BoundedSupervisorError("cleanup capability input is malformed")
+    attempt_encoded = _read_regular(
+        root / OPENAI_SECRET_ATTEMPT_RELATIVE,
+        max_bytes=MAX_RESPONSE_BYTES,
+    )
+    attempt = _strict_json(attempt_encoded, context="OpenAI runtime secret attempt")
+    authorization_reference = attempt.get("authorization_reference")
+    if (
+        not isinstance(authorization_reference, str)
+        or _AUTHORIZATION.fullmatch(authorization_reference) is None
+        or attempt != _openai_secret_attempt_record(authorization_reference)
+    ):
+        raise BoundedSupervisorError("OpenAI runtime secret attempt drifted")
+    identity_encoded = _read_regular(
+        root / OPENAI_SECRET_IDENTITY_RELATIVE,
+        max_bytes=MAX_RESPONSE_BYTES,
+    )
+    identity = _strict_json(identity_encoded, context="OpenAI runtime secret identity")
+    if (
+        identity.get("plan_id") != PLAN_ID
+        or identity.get("run_id") != HOST_RUN_ID
+        or identity.get("authorization_reference") != authorization_reference
+        or identity.get("execution_commit") != expected_commit
+        or identity.get("plan_sha256") != plan_sha256
+        or identity.get("authorization_sha256") != authorization_sha256
+        or identity.get("private_binding_sha256") != private_binding_sha256
+        or identity.get("source_attempt_sha256") != sha256_bytes(attempt_encoded)
+        or identity.get("parser") != OPENAI_DOTENV_PARSER
+        or identity.get("source_assignment") != OPENAI_SOURCE_ASSIGNMENT
+        or identity.get("source_path_binding_sha256") != OPENAI_DOTENV_PATH_BINDING_SHA256
+        or identity.get("runtime_assignment") != OPENAI_RUNTIME_ASSIGNMENT
+        or identity.get("runtime_file_basename") != UPLOAD_OPENAI_SECRET_NAME
+        or identity.get("runtime_file_mode") != "0600"
+        or type(identity.get("runtime_file_device")) is not int
+        or type(identity.get("runtime_file_inode")) is not int
+        or cast(int, identity.get("runtime_file_device")) < 0
+        or cast(int, identity.get("runtime_file_inode")) <= 0
+        or identity.get("complete_dotenv_uploaded") is not False
+        or identity.get("secret_value_retained") is not False
+        or identity.get("secret_hash_retained") is not False
+        or identity.get("archive_member") is not False
+        or identity.get("cleanup_required_before_remote_execution") is not True
+    ):
+        raise BoundedSupervisorError("OpenAI runtime secret identity drifted")
+    remote_upload_path = root / OPENAI_SECRET_UPLOAD_OUTCOME_RELATIVE
+    cleanup_path = root / OPENAI_SECRET_CLEANUP_RELATIVE
+    if (
+        remote_upload_path.exists()
+        or remote_upload_path.is_symlink()
+        or cleanup_path.exists()
+        or cleanup_path.is_symlink()
+    ):
+        raise BoundedSupervisorError("OpenAI runtime secret cleanup cannot be repeated")
+    destination = root / UPLOAD_ROOT_RELATIVE / UPLOAD_OPENAI_SECRET_NAME
+    remote_upload = {
+        "schema_version": SCHEMA_VERSION,
+        "plan_id": PLAN_ID,
+        "run_id": HOST_RUN_ID,
+        "source_identity_sha256": sha256_bytes(identity_encoded),
+        "attestation": remote_upload_attestation,
+        "upload_outcome": upload_outcome,
+        "remote_file_basename": "openai_provider_key",
+        "required_remote_parent_mode": "0700",
+        "required_remote_file_mode": "0600",
+        "observed_remote_parent_mode": "0700" if permissions_qualified else None,
+        "observed_remote_file_mode": "0600" if permissions_qualified else None,
+        "observed_remote_current_user_owned": True if permissions_qualified else None,
+        "remote_permissions_qualified": permissions_qualified,
+        "remote_upload_confirmed": upload_confirmed,
+        "remote_upload_outcome_unknown": upload_outcome_unknown,
+        "remote_bootstrap_authorized": False,
+        "secret_value_retained": False,
+        "secret_hash_retained": False,
+    }
+    remote_upload_encoded = canonical_json_bytes(remote_upload)
+    try:
+        _write_exclusive(remote_upload_path, remote_upload_encoded, mode=0o644)
+    except BaseException:
+        with contextlib.suppress(OpenAISecretSourceError):
+            destroy_runtime_secret(
+                destination,
+                expected_device=cast(int, identity["runtime_file_device"]),
+                expected_inode=cast(int, identity["runtime_file_inode"]),
+            )
+        raise OpenAISecretSourceError(
+            "runtime_secret_remote_upload_receipt_unavailable",
+            credential_rotation_required=True,
+        ) from None
+    try:
+        destroyed = destroy_runtime_secret(
+            destination,
+            expected_device=cast(int, identity["runtime_file_device"]),
+            expected_inode=cast(int, identity["runtime_file_inode"]),
+        )
+        cleanup = {
+            "schema_version": SCHEMA_VERSION,
+            "plan_id": PLAN_ID,
+            "run_id": HOST_RUN_ID,
+            "runtime_file_basename": destroyed["runtime_file_basename"],
+            "runtime_file_device": destroyed["runtime_file_device"],
+            "runtime_file_inode": destroyed["runtime_file_inode"],
+            "source_identity_sha256": sha256_bytes(identity_encoded),
+            "remote_upload_receipt_sha256": sha256_bytes(remote_upload_encoded),
+            "remote_upload_confirmed": upload_confirmed,
+            "remote_upload_outcome_unknown": upload_outcome_unknown,
+            "cleanup_verified": True,
+            "secret_value_retained": False,
+            "secret_hash_retained": False,
+            "credential_rotation_required": upload_rotation_required,
+        }
+    except OpenAISecretSourceError as exc:
+        cleanup = {
+            "schema_version": SCHEMA_VERSION,
+            "plan_id": PLAN_ID,
+            "run_id": HOST_RUN_ID,
+            "runtime_file_basename": UPLOAD_OPENAI_SECRET_NAME,
+            "runtime_file_device": identity.get("runtime_file_device"),
+            "runtime_file_inode": identity.get("runtime_file_inode"),
+            "source_identity_sha256": sha256_bytes(identity_encoded),
+            "remote_upload_receipt_sha256": sha256_bytes(remote_upload_encoded),
+            "remote_upload_confirmed": upload_confirmed,
+            "remote_upload_outcome_unknown": upload_outcome_unknown,
+            "cleanup_verified": False,
+            "secret_value_retained": False,
+            "secret_hash_retained": False,
+            "credential_rotation_required": True,
+        }
+        try:
+            _write_exclusive(cleanup_path, canonical_json_bytes(cleanup), mode=0o644)
+        except BaseException:
+            raise OpenAISecretSourceError(
+                "runtime_secret_cleanup_receipt_unavailable",
+                credential_rotation_required=True,
+            ) from None
+        raise OpenAISecretSourceError(
+            exc.code,
+            credential_rotation_required=True,
+        ) from None
+    encoded = canonical_json_bytes(cleanup)
+    try:
+        _write_exclusive(cleanup_path, encoded, mode=0o644)
+    except BaseException:
+        raise OpenAISecretSourceError(
+            "runtime_secret_cleanup_receipt_unavailable",
+            credential_rotation_required=True,
+        ) from None
+    return {
+        **cleanup,
+        "remote_upload_path": str(OPENAI_SECRET_UPLOAD_OUTCOME_RELATIVE),
+        "remote_upload_sha256": sha256_bytes(remote_upload_encoded),
+        "cleanup_path": str(OPENAI_SECRET_CLEANUP_RELATIVE),
+        "cleanup_sha256": sha256_bytes(encoded),
+    }
+
+
+def abort_openai_runtime_secret(
+    root: Path,
+    *,
+    plan: Mapping[str, object],
+    plan_sha256: str,
+    expected_commit: str,
+    authorization_path: Path,
+    authorization_sha256: str,
+    private_binding_path: Path,
+    private_binding_sha256: str,
+    remote_upload_outcome: str,
+    utc_now: Callable[[], datetime] = lambda: datetime.now(UTC),
+) -> dict[str, object]:
+    """Destroy the local filtered file after a failed or ambiguous user upload."""
+
+    outcome_to_attestation = {
+        "definitely-not-uploaded": OPENAI_UPLOAD_ABORT_NOT_UPLOADED,
+        "unknown-or-permissions-unqualified": OPENAI_UPLOAD_ABORT_UNKNOWN,
+    }
+    attestation = outcome_to_attestation.get(remote_upload_outcome)
+    if attestation is None:
+        raise BoundedSupervisorError("remote OpenAI secret abort outcome is invalid")
+    return cleanup_openai_runtime_secret(
+        root,
+        plan=plan,
+        plan_sha256=plan_sha256,
+        expected_commit=expected_commit,
+        authorization_path=authorization_path,
+        authorization_sha256=authorization_sha256,
+        private_binding_path=private_binding_path,
+        private_binding_sha256=private_binding_sha256,
+        remote_upload_attestation=attestation,
+        utc_now=utc_now,
+    )
+
+
 def _load_upload_bundle_identity(
     root: Path,
     *,
@@ -3106,6 +4217,17 @@ def issue_bootstrap_release(
     )
     state = _load_state(root)
     selected = _mapping(private.get("selected_resource"), context="selected resource")
+    local_secret_state = _verify_local_openai_secret_cleanup(
+        root,
+        disposition="complete",
+        authorization_reference=_text(
+            authorization.get("authorization_reference"), context="authorization reference"
+        ),
+        execution_commit=expected_commit,
+        plan_sha256=plan_sha256,
+        authorization_sha256=authorization_sha256,
+        private_binding_sha256=private_binding_sha256,
+    )
     if provider_image_attestation != "confirmed-in-provider-console":
         raise BoundedSupervisorError("provider image requires an explicit console attestation")
     active_at = state.get("provider_active_observed_at_utc")
@@ -3116,6 +4238,11 @@ def issue_bootstrap_release(
         or not state.get("bound_instance_id")
         or not isinstance(active_at, str)
         or (root / INBOUND_RELATIVE).exists()
+        or local_secret_state["state"] != "cleaned"
+        or local_secret_state["materialized"] is not True
+        or local_secret_state["remote_upload_confirmed"] is not True
+        or local_secret_state["remote_upload_outcome_unknown"] is not False
+        or local_secret_state["cleanup_verified"] is not True
     ):
         raise BoundedSupervisorError("bootstrap release requires a bound active instance")
     state_encoded = _read_regular(root / STATE_RELATIVE, max_bytes=MAX_RESPONSE_BYTES)
@@ -3170,7 +4297,7 @@ def issue_bootstrap_release(
         "bootstrap_file_sha256": upload["bootstrap_sha256"],
         "issued_at_utc": _utc_text(utc_now()),
         "bootstrap_release": True,
-        "single_use_output_root": "/home/ubuntu/t07-bounded-output-0002",
+        "single_use_output_root": "/home/ubuntu/t07-bounded-output-0003",
     }
     encoded = canonical_json_bytes(release)
     path = root / BOOTSTRAP_RELEASE_RELATIVE
@@ -3253,7 +4380,7 @@ def _validate_local_bootstrap_release(
         "bootstrap_file_sha256": upload["bootstrap_sha256"],
         "issued_at_utc": release.get("issued_at_utc"),
         "bootstrap_release": True,
-        "single_use_output_root": "/home/ubuntu/t07-bounded-output-0002",
+        "single_use_output_root": "/home/ubuntu/t07-bounded-output-0003",
     }
     if (
         release != expected
@@ -3288,6 +4415,91 @@ def _validate_local_bootstrap_release(
         ):
             raise BoundedSupervisorError("bootstrap release differs from observer replay")
     return dict(release), release_encoded
+
+
+def attest_bootstrap_release_upload(
+    root: Path,
+    *,
+    plan: Mapping[str, object],
+    plan_sha256: str,
+    expected_commit: str,
+    authorization_path: Path,
+    authorization_sha256: str,
+    private_binding_path: Path,
+    private_binding_sha256: str,
+    release_upload_attestation: str,
+    utc_now: Callable[[], datetime] = lambda: datetime.now(UTC),
+) -> dict[str, object]:
+    """Durably commit the user's exact release-upload checkpoint before bootstrap."""
+
+    if release_upload_attestation != "confirmed-exact-release-uploaded":
+        raise BoundedSupervisorError("bootstrap release upload is not attested")
+    verify_repository_identity(root, expected_commit)
+    authorization, private = _validate_authority_inputs(
+        root,
+        plan=plan,
+        plan_sha256=plan_sha256,
+        authorization_path=authorization_path,
+        authorization_sha256=authorization_sha256,
+        private_binding_path=private_binding_path,
+        private_binding_sha256=private_binding_sha256,
+        utc_now=utc_now,
+        require_live=True,
+    )
+    _, release_encoded = _validate_local_bootstrap_release(
+        root,
+        plan=plan,
+        plan_sha256=plan_sha256,
+        expected_commit=expected_commit,
+        authorization=authorization,
+        authorization_sha256=authorization_sha256,
+        private=private,
+        private_binding_sha256=private_binding_sha256,
+        replay=None,
+    )
+    path = root / BOOTSTRAP_RELEASE_UPLOAD_RELATIVE
+    if path.exists() or path.is_symlink() or (root / INBOUND_RELATIVE).exists():
+        raise BoundedSupervisorError("bootstrap release upload checkpoint is not fresh")
+    receipt = {
+        "schema_version": SCHEMA_VERSION,
+        "plan_id": PLAN_ID,
+        "run_id": HOST_RUN_ID,
+        "release_sha256": sha256_bytes(release_encoded),
+        "release_upload_confirmed": True,
+        "remote_bootstrap_may_have_started": True,
+        "attestation": release_upload_attestation,
+        "secret_value_retained": False,
+    }
+    encoded = canonical_json_bytes(receipt)
+    _write_exclusive(path, encoded, mode=0o644)
+    return {
+        **receipt,
+        "receipt_path": str(BOOTSTRAP_RELEASE_UPLOAD_RELATIVE),
+        "receipt_sha256": sha256_bytes(encoded),
+    }
+
+
+def _release_upload_checkpoint(root: Path, release_encoded: bytes) -> bool:
+    path = root / BOOTSTRAP_RELEASE_UPLOAD_RELATIVE
+    if not path.exists() and not path.is_symlink():
+        return False
+    receipt = _strict_json(
+        _read_regular(path, max_bytes=MAX_RESPONSE_BYTES),
+        context="bootstrap release upload checkpoint",
+    )
+    expected = {
+        "schema_version": SCHEMA_VERSION,
+        "plan_id": PLAN_ID,
+        "run_id": HOST_RUN_ID,
+        "release_sha256": sha256_bytes(release_encoded),
+        "release_upload_confirmed": True,
+        "remote_bootstrap_may_have_started": True,
+        "attestation": "confirmed-exact-release-uploaded",
+        "secret_value_retained": False,
+    }
+    if receipt != expected:
+        raise BoundedSupervisorError("bootstrap release upload checkpoint drifted")
+    return True
 
 
 def _safe_zip_member_name(name: str) -> str:
@@ -3697,7 +4909,7 @@ def _verify_lifecycle_surface(
         root_name=root_name,
         condition=condition,
         substitutions={
-            "${SIRA_SECRET_FILE}": "/home/ubuntu/.config/giclab/sira_api_key",
+            "${SIRA_SECRET_FILE}": "/home/ubuntu/.config/giclab/openai_provider_key",
             "${EXECUTION_COMMIT}": _text(
                 bootstrap_release.get("execution_commit"), context="execution commit"
             ),
@@ -4365,7 +5577,7 @@ def _verify_condition_surface(
         if "${" not in planned and planned != actual:
             raise BoundedSupervisorError("resolved condition command drifted")
         if "${SIRA_SECRET_FILE}" in planned and actual != planned.replace(
-            "${SIRA_SECRET_FILE}", "/home/ubuntu/.config/giclab/sira_api_key"
+            "${SIRA_SECRET_FILE}", "/home/ubuntu/.config/giclab/openai_provider_key"
         ):
             raise BoundedSupervisorError("resolved secret-file path drifted")
         for placeholder, pattern, context in (
@@ -4395,7 +5607,7 @@ def _verify_condition_surface(
         for item in _sequence(resolved.get("inner_argv"), context="resolved inner command")
     ]
     configuration_refs = [
-        "containers/sira-smoke/bounded/bounded-smoke-plan-v2.json",
+        "containers/sira-smoke/bounded/bounded-smoke-plan-v3.json",
         "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/"
         + ("smoke-reactive.yaml" if mode == "reactive" else "smoke-simulative.yaml"),
         f"{mode}/resolved-command.json",
@@ -4695,7 +5907,7 @@ def _verify_success_surface(
     if secret_cleanup != {
         "schema_version": SCHEMA_VERSION,
         "secret_variable_name": "SIRA_API_KEY",
-        "secret_file_basename": "sira_api_key",
+        "secret_file_basename": "openai_provider_key",
         "held_identity_established_before_preflight": True,
         "truncated_before_unlink": True,
         "unlinked": True,
@@ -4707,10 +5919,10 @@ def _verify_success_surface(
         raise BoundedSupervisorError("remote secret cleanup evidence drifted")
     identities = []
     run_ids = {
-        "browser-preflight": "RUN-T07-BOUNDED-BROWSER-PREFLIGHT-0002",
-        "model-preflight": "RUN-T07-BOUNDED-MODEL-PREFLIGHT-0002",
-        "reactive": "RUN-T07-BOUNDED-SIRA-REACTIVE-0002",
-        "simulative": "RUN-T07-BOUNDED-SIRA-SIMULATIVE-0002",
+        "browser-preflight": "RUN-T07-BOUNDED-BROWSER-PREFLIGHT-0003",
+        "model-preflight": "RUN-T07-BOUNDED-MODEL-PREFLIGHT-0003",
+        "reactive": "RUN-T07-BOUNDED-SIRA-REACTIVE-0003",
+        "simulative": "RUN-T07-BOUNDED-SIRA-SIMULATIVE-0003",
     }
     for root_name, condition in _LIFECYCLE_EVIDENCE_ROOTS.items():
         identities.append(
@@ -4959,7 +6171,7 @@ def _verify_pair_reconstruction(
             context=f"{mode} regulation decision",
         )
         configuration_refs = [
-            "containers/sira-smoke/bounded/bounded-smoke-plan-v2.json",
+            "containers/sira-smoke/bounded/bounded-smoke-plan-v3.json",
             "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/"
             + ("smoke-reactive.yaml" if mode == "reactive" else "smoke-simulative.yaml"),
             f"{mode}/resolved-command.json",
@@ -5004,9 +6216,9 @@ def _verify_pair_reconstruction(
             or decision.get("host_run_id") != HOST_RUN_ID
             or decision.get("run_id")
             != (
-                "RUN-T07-BOUNDED-SIRA-REACTIVE-0002"
+                "RUN-T07-BOUNDED-SIRA-REACTIVE-0003"
                 if condition == "SIRA-REACTIVE"
-                else "RUN-T07-BOUNDED-SIRA-SIMULATIVE-0002"
+                else "RUN-T07-BOUNDED-SIRA-SIMULATIVE-0003"
             )
             or decision.get("condition") != condition
             or decision.get("source_kind") != "experiment_assignment"
@@ -5038,8 +6250,8 @@ def _verify_pair_reconstruction(
     ]
     expected_events: list[dict[str, object]] = []
     for condition, run_id, mode in (
-        ("SIRA-REACTIVE", "RUN-T07-BOUNDED-SIRA-REACTIVE-0002", "reactive"),
-        ("SIRA-SIMULATIVE", "RUN-T07-BOUNDED-SIRA-SIMULATIVE-0002", "simulative"),
+        ("SIRA-REACTIVE", "RUN-T07-BOUNDED-SIRA-REACTIVE-0003", "reactive"),
+        ("SIRA-SIMULATIVE", "RUN-T07-BOUNDED-SIRA-SIMULATIVE-0003", "simulative"),
     ):
         decision = _strict_json(
             captured[f"{mode}/regulation-decision.json"], context="event decision"
@@ -5277,7 +6489,7 @@ def _verify_zip_payload(
             if cleanup != {
                 "schema_version": SCHEMA_VERSION,
                 "secret_variable_name": "SIRA_API_KEY",
-                "secret_file_basename": "sira_api_key",
+                "secret_file_basename": "openai_provider_key",
                 "held_identity_established_before_preflight": True,
                 "truncated_before_unlink": True,
                 "unlinked": True,
@@ -5328,6 +6540,7 @@ def _verify_inbound_evidence(
     inbound = root / INBOUND_RELATIVE
     release_path = root / BOOTSTRAP_RELEASE_RELATIVE
     release_encoded: bytes | None = None
+    release: dict[str, object] | None = None
     if release_path.exists():
         release_encoded = _read_regular(release_path, max_bytes=MAX_AUTHORIZATION_BYTES)
         release = _strict_json(release_encoded, context="bootstrap release")
@@ -5385,7 +6598,7 @@ def _verify_inbound_evidence(
                 "post_launch_api_image_observation_available": False,
             }
             or release.get("bootstrap_release") is not True
-            or release.get("single_use_output_root") != "/home/ubuntu/t07-bounded-output-0002"
+            or release.get("single_use_output_root") != "/home/ubuntu/t07-bounded-output-0003"
         ):
             raise BoundedSupervisorError("bootstrap release evidence drifted")
     success = {
@@ -5404,20 +6617,54 @@ def _verify_inbound_evidence(
         "TERMINATE_REQUIRED.json",
     }
     if not inbound.exists():
-        if disposition == "complete" or release_encoded is not None:
+        if disposition == "complete":
             raise BoundedSupervisorError("released bootstrap evidence was not downloaded")
+        if release_encoded is not None:
+            upload_confirmed = _release_upload_checkpoint(root, release_encoded)
+            return {
+                "schema_version": SCHEMA_VERSION,
+                "plan_id": PLAN_ID,
+                "run_id": HOST_RUN_ID,
+                "remote_archive_kind": (
+                    "release-uploaded-no-inbound"
+                    if upload_confirmed
+                    else "release-upload-outcome-unknown"
+                ),
+                "bootstrap_release_present": True,
+                "bootstrap_release_sha256": sha256_bytes(release_encoded),
+                "release_upload_confirmed": upload_confirmed,
+                "remote_bootstrap_outcome": (
+                    "unknown_after_release_upload"
+                    if upload_confirmed
+                    else "unknown_without_durable_upload_receipt"
+                ),
+                "remote_bootstrap_provably_not_authorized": False,
+                "secret_cleanup_verified": False,
+                "manual_secret_deletion_required": True,
+                "manual_credential_rotation_required": False,
+                "all_member_hashes_verified": False,
+                "decoded_secret_scan_passed": True,
+            }
+        if (root / BOOTSTRAP_RELEASE_UPLOAD_RELATIVE).exists() or (
+            root / BOOTSTRAP_RELEASE_UPLOAD_RELATIVE
+        ).is_symlink():
+            raise BoundedSupervisorError("release upload checkpoint has no local release")
         return {
             "schema_version": SCHEMA_VERSION,
             "plan_id": PLAN_ID,
             "run_id": HOST_RUN_ID,
             "remote_archive_kind": "not-produced-before-bootstrap",
             "bootstrap_release_present": False,
+            "release_upload_confirmed": False,
+            "remote_bootstrap_outcome": "not_authorized",
             "remote_bootstrap_provably_not_authorized": True,
             "all_member_hashes_verified": False,
             "decoded_secret_scan_passed": True,
         }
-    if release_encoded is None:
+    if release_encoded is None or release is None:
         raise BoundedSupervisorError("inbound evidence has no durable bootstrap release")
+    if not _release_upload_checkpoint(root, release_encoded):
+        raise BoundedSupervisorError("inbound evidence lacks release-upload authority")
     if inbound.is_symlink() or not inbound.is_dir():
         raise BoundedSupervisorError("inbound evidence root is unsafe")
     observed = {path.name for path in inbound.iterdir()}
@@ -5521,6 +6768,8 @@ def _verify_inbound_evidence(
         "termination_receipt_sha256": sha256_bytes(incident_encoded),
         "bootstrap_release_present": True,
         "bootstrap_release_sha256": sha256_bytes(release_encoded),
+        "release_upload_confirmed": True,
+        "remote_bootstrap_outcome": "terminal_evidence_received",
         "remote_bootstrap_provably_not_authorized": False,
         "secret_cleanup_verified": incident.get("secret_cleanup_verified"),
         "manual_secret_deletion_required": incident.get("manual_secret_deletion_required"),
@@ -6134,12 +7383,28 @@ def _write_compute_closeout(
     root: Path,
     *,
     authorization: Mapping[str, object],
+    authorization_sha256: str,
+    private_binding_sha256: str,
     state: Mapping[str, object],
     disposition: str,
     inbound_verification: Mapping[str, object],
     observer_verification: Mapping[str, object],
     inbound_verification_sha256: str,
 ) -> dict[str, object]:
+    local_credential_state = _verify_local_openai_secret_cleanup(
+        root,
+        disposition=disposition,
+        authorization_reference=_text(
+            authorization.get("authorization_reference"),
+            context="authorization reference",
+        ),
+        execution_commit=_text(
+            authorization.get("execution_commit"), context="authorization execution commit"
+        ),
+        plan_sha256=_text(authorization.get("plan_sha256"), context="authorization plan hash"),
+        authorization_sha256=authorization_sha256,
+        private_binding_sha256=private_binding_sha256,
+    )
     authorization_start = _parse_utc(
         authorization.get("supervised_wall_started_at_utc"), context="authorization start"
     )
@@ -6203,17 +7468,24 @@ def _write_compute_closeout(
     usage_raw = inbound_verification.get("reconstruction_usage")
     usage = usage_raw if isinstance(usage_raw, Mapping) else None
     api_cost_raw = usage.get("cost_usd") if usage is not None else None
-    api_cost = (
-        _finite_number(api_cost_raw, context="reconstructed OpenAI cost")
-        if api_cost_raw is not None
-        else None
+    openai_execution_provably_not_authorized = (
+        inbound_verification.get("remote_bootstrap_provably_not_authorized") is True
+        or explicit_no_launch
     )
+    if api_cost_raw is not None:
+        api_cost = _finite_number(api_cost_raw, context="reconstructed OpenAI cost")
+    elif openai_execution_provably_not_authorized:
+        api_cost = 0.0
+    else:
+        api_cost = None
+    openai_api_cost_reconciled = api_cost is not None
     within = (
         wall_seconds is not None
         and provider_cost is not None
+        and openai_api_cost_reconciled
         and wall_seconds <= 3_600
         and provider_cost <= 2.0
-        and (api_cost is None or api_cost <= 4.0)
+        and cast(float, api_cost) <= 4.0
     )
     if disposition == "complete" and (within is not True or api_cost is None):
         raise BoundedSupervisorError("complete compute closeout exceeds or lacks a cap")
@@ -6221,17 +7493,51 @@ def _write_compute_closeout(
         terminal is not None and state.get("termination_verified") is True
     )
     remote_kind = inbound_verification.get("remote_archive_kind")
+    remote_upload_confirmed = local_credential_state["remote_upload_confirmed"] is True
+    remote_upload_outcome_unknown = local_credential_state["remote_upload_outcome_unknown"] is True
+    remote_secret_at_risk = remote_upload_confirmed or remote_upload_outcome_unknown
     remote_secret_cleanup_verified = (
         remote_kind == "not-produced-before-bootstrap"
         and not (root / BOOTSTRAP_RELEASE_RELATIVE).exists()
+        and not remote_secret_at_risk
     ) or (
         inbound_verification.get("secret_cleanup_verified") is True
         and inbound_verification.get("manual_secret_deletion_required") is False
         and inbound_verification.get("manual_credential_rotation_required") is False
     )
+    remote_secret_destruction_verified = remote_secret_cleanup_verified or (
+        remote_secret_at_risk
+        and bound_instance
+        and provider_lifecycle_reconciled
+        and state.get("termination_verified") is True
+    )
+    local_secret_cleanup_verified = local_credential_state["cleanup_verified"] is True
+    local_secret_materialized = local_credential_state["materialized"] is True
+    local_secret_access_may_have_occurred = (
+        local_credential_state["credential_access_may_have_occurred"] is True
+    )
+    local_rotation_required = local_credential_state["credential_rotation_required"] is True
+    if disposition == "complete" and not (
+        local_secret_materialized and local_secret_cleanup_verified
+    ):
+        raise BoundedSupervisorError(
+            "complete compute closeout lacks verified local OpenAI secret cleanup"
+        )
+    manual_secret_deletion_required = (
+        not remote_secret_destruction_verified or not local_secret_cleanup_verified
+    )
+    manual_credential_rotation_required = (
+        inbound_verification.get("manual_credential_rotation_required") is True
+        or local_rotation_required
+        or (remote_secret_at_risk and not remote_secret_destruction_verified)
+    )
     provider_and_security_cleanup_complete = (
         provider_lifecycle_reconciled
-        and remote_secret_cleanup_verified
+        and remote_secret_destruction_verified
+        and local_secret_cleanup_verified
+        and not manual_credential_rotation_required
+        and openai_api_cost_reconciled
+        and within is True
         and state.get("status") in {"complete", "cleanup_complete"}
     )
     record = {
@@ -6252,14 +7558,19 @@ def _write_compute_closeout(
         "list_price_upper_bound_usd": provider_cost,
         "actual_provider_invoice_cost_usd": None,
         "observed_openai_api_cost_usd": api_cost,
-        "openai_api_cost_reconciled": api_cost is not None,
+        "openai_api_cost_reconciled": openai_api_cost_reconciled,
+        "openai_execution_provably_not_authorized": (openai_execution_provably_not_authorized),
         "billing_stop_verified": provider_lifecycle_reconciled,
         "remote_secret_cleanup_verified": remote_secret_cleanup_verified,
-        "manual_secret_deletion_required": not remote_secret_cleanup_verified,
-        "manual_credential_rotation_required": inbound_verification.get(
-            "manual_credential_rotation_required"
-        )
-        is True,
+        "remote_openai_secret_upload_confirmed": remote_upload_confirmed,
+        "remote_openai_secret_upload_outcome_unknown": remote_upload_outcome_unknown,
+        "remote_secret_destruction_verified": remote_secret_destruction_verified,
+        "local_openai_secret_materialized": local_secret_materialized,
+        "local_openai_secret_access_may_have_occurred": (local_secret_access_may_have_occurred),
+        "local_openai_secret_cleanup_verified": local_secret_cleanup_verified,
+        "local_openai_secret_cleanup_state": local_credential_state["state"],
+        "manual_secret_deletion_required": manual_secret_deletion_required,
+        "manual_credential_rotation_required": manual_credential_rotation_required,
         "observer_terminal_status": state.get("status"),
         "provider_and_security_cleanup_complete": provider_and_security_cleanup_complete,
         "unresolved_billing_or_security": not provider_and_security_cleanup_complete,
@@ -6272,7 +7583,319 @@ def _write_compute_closeout(
     return record
 
 
-def _safe_source_files(root: Path, *, disposition: str) -> list[ArchiveSource]:
+def _verify_local_openai_secret_cleanup(
+    root: Path,
+    *,
+    disposition: str,
+    authorization_reference: str,
+    execution_commit: str | None = None,
+    plan_sha256: str | None = None,
+    authorization_sha256: str | None = None,
+    private_binding_sha256: str | None = None,
+) -> dict[str, object]:
+    """Verify the local filtered-secret lifecycle without reading secret bytes."""
+
+    destination = root / UPLOAD_ROOT_RELATIVE / UPLOAD_OPENAI_SECRET_NAME
+    if destination.exists() or destination.is_symlink():
+        raise BoundedSupervisorError("local OpenAI runtime secret remains before archive")
+    attempt_path = root / OPENAI_SECRET_ATTEMPT_RELATIVE
+    identity_path = root / OPENAI_SECRET_IDENTITY_RELATIVE
+    remote_upload_path = root / OPENAI_SECRET_UPLOAD_OUTCOME_RELATIVE
+    cleanup_path = root / OPENAI_SECRET_CLEANUP_RELATIVE
+    failure_path = root / OPENAI_SECRET_FAILURE_RELATIVE
+    attempt_present = attempt_path.exists() or attempt_path.is_symlink()
+    identity_present = identity_path.exists() or identity_path.is_symlink()
+    remote_upload_present = remote_upload_path.exists() or remote_upload_path.is_symlink()
+    cleanup_present = cleanup_path.exists() or cleanup_path.is_symlink()
+    failure_present = failure_path.exists() or failure_path.is_symlink()
+    if not any(
+        (
+            attempt_present,
+            identity_present,
+            remote_upload_present,
+            cleanup_present,
+            failure_present,
+        )
+    ):
+        if disposition == "complete":
+            raise BoundedSupervisorError(
+                "complete evidence lacks local OpenAI secret lifecycle receipts"
+            )
+        return {
+            "state": "not_materialized",
+            "materialized": False,
+            "credential_access_may_have_occurred": False,
+            "remote_upload_confirmed": False,
+            "remote_upload_outcome_unknown": False,
+            "cleanup_verified": True,
+            "credential_rotation_required": False,
+            "archive_members": [],
+        }
+    if not attempt_present:
+        raise BoundedSupervisorError("local OpenAI secret lifecycle receipts are incomplete")
+
+    attempt_encoded = _read_regular(attempt_path, max_bytes=MAX_RESPONSE_BYTES)
+    attempt = _strict_json(attempt_encoded, context="OpenAI runtime secret attempt")
+    if attempt != _openai_secret_attempt_record(authorization_reference):
+        raise BoundedSupervisorError("OpenAI runtime secret attempt drifted")
+
+    if failure_present:
+        if (
+            identity_present
+            or remote_upload_present
+            or cleanup_present
+            or disposition == "complete"
+        ):
+            raise BoundedSupervisorError("OpenAI materialization failure receipts conflict")
+        failure = _strict_json(
+            _read_regular(failure_path, max_bytes=MAX_RESPONSE_BYTES),
+            context="OpenAI runtime secret materialization failure",
+        )
+        cleanup_verified = failure.get("cleanup_verified")
+        rotation_required = failure.get("credential_rotation_required")
+        state = failure.get("state")
+        failure_code = failure.get("failure_code")
+        expected_failure = {
+            "schema_version": SCHEMA_VERSION,
+            "plan_id": PLAN_ID,
+            "run_id": HOST_RUN_ID,
+            "state": state,
+            "source_attempt_sha256": sha256_bytes(attempt_encoded),
+            "failure_code": failure_code,
+            "credential_access_may_have_occurred": True,
+            "partial_runtime_file_may_have_been_created": True,
+            "cleanup_verified": cleanup_verified,
+            "credential_rotation_required": rotation_required,
+            "secret_value_retained": False,
+            "secret_hash_retained": False,
+        }
+        if (
+            failure != expected_failure
+            or state not in {"materialization_failed_cleaned", "cleanup_unresolved"}
+            or failure_code not in OPENAI_SECRET_FAILURE_CODES
+            or type(cleanup_verified) is not bool
+            or type(rotation_required) is not bool
+            or cleanup_verified is rotation_required
+            or (state == "materialization_failed_cleaned") is not cleanup_verified
+        ):
+            raise BoundedSupervisorError("OpenAI materialization failure receipt drifted")
+        return {
+            "state": state,
+            "materialized": False,
+            "credential_access_may_have_occurred": True,
+            "remote_upload_confirmed": False,
+            "remote_upload_outcome_unknown": False,
+            "cleanup_verified": cleanup_verified,
+            "credential_rotation_required": rotation_required,
+            "archive_members": [
+                "OPENAI_SECRET_MATERIALIZATION_ATTEMPT.json",
+                "OPENAI_SECRET_MATERIALIZATION_FAILURE.json",
+            ],
+        }
+
+    if not identity_present:
+        raise BoundedSupervisorError("local OpenAI secret lifecycle receipts are incomplete")
+
+    identity_encoded = _read_regular(identity_path, max_bytes=MAX_RESPONSE_BYTES)
+    identity = _strict_json(identity_encoded, context="OpenAI runtime secret identity")
+    expected_identity = {
+        "schema_version": SCHEMA_VERSION,
+        "plan_id": PLAN_ID,
+        "run_id": HOST_RUN_ID,
+        "authorization_reference": authorization_reference,
+        "execution_commit": (
+            execution_commit if execution_commit is not None else identity.get("execution_commit")
+        ),
+        "plan_sha256": plan_sha256 if plan_sha256 is not None else identity.get("plan_sha256"),
+        "authorization_sha256": (
+            authorization_sha256
+            if authorization_sha256 is not None
+            else identity.get("authorization_sha256")
+        ),
+        "private_binding_sha256": (
+            private_binding_sha256
+            if private_binding_sha256 is not None
+            else identity.get("private_binding_sha256")
+        ),
+        "source_attempt_sha256": sha256_bytes(attempt_encoded),
+        "parser": OPENAI_DOTENV_PARSER,
+        "source_assignment": OPENAI_SOURCE_ASSIGNMENT,
+        "source_path_binding_sha256": OPENAI_DOTENV_PATH_BINDING_SHA256,
+        "runtime_assignment": OPENAI_RUNTIME_ASSIGNMENT,
+        "runtime_file": (UPLOAD_ROOT_RELATIVE / UPLOAD_OPENAI_SECRET_NAME).as_posix(),
+        "runtime_file_basename": UPLOAD_OPENAI_SECRET_NAME,
+        "runtime_file_mode": "0600",
+        "runtime_file_device": identity.get("runtime_file_device"),
+        "runtime_file_inode": identity.get("runtime_file_inode"),
+        "complete_dotenv_uploaded": False,
+        "user_managed_sira_file_required": False,
+        "secret_value_retained": False,
+        "secret_hash_retained": False,
+        "archive_member": False,
+        "single_run": True,
+        "cleanup_required_before_remote_execution": True,
+    }
+    if (
+        identity != expected_identity
+        or not isinstance(identity.get("execution_commit"), str)
+        or _HEX40.fullmatch(cast(str, identity.get("execution_commit"))) is None
+        or not isinstance(identity.get("plan_sha256"), str)
+        or _HEX64.fullmatch(cast(str, identity.get("plan_sha256"))) is None
+        or not isinstance(identity.get("authorization_sha256"), str)
+        or _HEX64.fullmatch(cast(str, identity.get("authorization_sha256"))) is None
+        or not isinstance(identity.get("private_binding_sha256"), str)
+        or _HEX64.fullmatch(cast(str, identity.get("private_binding_sha256"))) is None
+        or type(identity.get("runtime_file_device")) is not int
+        or type(identity.get("runtime_file_inode")) is not int
+        or cast(int, identity.get("runtime_file_device")) < 0
+        or cast(int, identity.get("runtime_file_inode")) <= 0
+    ):
+        raise BoundedSupervisorError("OpenAI runtime secret identity drifted")
+
+    if not remote_upload_present:
+        if cleanup_present or disposition == "complete":
+            raise BoundedSupervisorError("local OpenAI secret lifecycle receipts are incomplete")
+        return {
+            "state": "remote_upload_outcome_unknown_cleanup_unverified",
+            "materialized": True,
+            "credential_access_may_have_occurred": True,
+            "remote_upload_confirmed": False,
+            "remote_upload_outcome_unknown": True,
+            "cleanup_verified": False,
+            "credential_rotation_required": True,
+            "archive_members": [
+                "OPENAI_SECRET_MATERIALIZATION_ATTEMPT.json",
+                "OPENAI_SECRET_IDENTITY.json",
+            ],
+        }
+
+    remote_upload_encoded = _read_regular(remote_upload_path, max_bytes=MAX_RESPONSE_BYTES)
+    remote_upload = _strict_json(
+        remote_upload_encoded,
+        context="OpenAI runtime secret remote upload",
+    )
+    attestation = remote_upload.get("attestation")
+    if attestation == OPENAI_UPLOAD_SUCCESS_ATTESTATION:
+        upload_outcome = "confirmed_uploaded_and_permissions_qualified"
+        upload_confirmed = True
+        upload_outcome_unknown = False
+        permissions_qualified = True
+    elif attestation == OPENAI_UPLOAD_ABORT_NOT_UPLOADED:
+        upload_outcome = "definitely_not_uploaded"
+        upload_confirmed = False
+        upload_outcome_unknown = False
+        permissions_qualified = False
+    elif attestation == OPENAI_UPLOAD_ABORT_UNKNOWN:
+        upload_outcome = "unknown_or_permissions_unqualified"
+        upload_confirmed = False
+        upload_outcome_unknown = True
+        permissions_qualified = False
+    else:
+        raise BoundedSupervisorError("OpenAI runtime secret upload outcome is invalid")
+    expected_remote_upload = {
+        "schema_version": SCHEMA_VERSION,
+        "plan_id": PLAN_ID,
+        "run_id": HOST_RUN_ID,
+        "source_identity_sha256": sha256_bytes(identity_encoded),
+        "attestation": attestation,
+        "upload_outcome": upload_outcome,
+        "remote_file_basename": "openai_provider_key",
+        "required_remote_parent_mode": "0700",
+        "required_remote_file_mode": "0600",
+        "observed_remote_parent_mode": "0700" if permissions_qualified else None,
+        "observed_remote_file_mode": "0600" if permissions_qualified else None,
+        "observed_remote_current_user_owned": True if permissions_qualified else None,
+        "remote_permissions_qualified": permissions_qualified,
+        "remote_upload_confirmed": upload_confirmed,
+        "remote_upload_outcome_unknown": upload_outcome_unknown,
+        "remote_bootstrap_authorized": False,
+        "secret_value_retained": False,
+        "secret_hash_retained": False,
+    }
+    if remote_upload != expected_remote_upload:
+        raise BoundedSupervisorError("OpenAI runtime secret remote-upload receipt drifted")
+
+    if not cleanup_present:
+        if disposition == "complete":
+            raise BoundedSupervisorError("local OpenAI secret lifecycle receipts are incomplete")
+        return {
+            "state": (
+                "remote_uploaded_local_cleanup_unverified"
+                if upload_confirmed
+                else "upload_abort_local_cleanup_unverified"
+            ),
+            "materialized": True,
+            "credential_access_may_have_occurred": True,
+            "remote_upload_confirmed": upload_confirmed,
+            "remote_upload_outcome_unknown": upload_outcome_unknown,
+            "cleanup_verified": False,
+            "credential_rotation_required": True,
+            "archive_members": [
+                "OPENAI_SECRET_MATERIALIZATION_ATTEMPT.json",
+                "OPENAI_SECRET_IDENTITY.json",
+                "OPENAI_SECRET_UPLOAD_OUTCOME.json",
+            ],
+        }
+
+    cleanup = _strict_json(
+        _read_regular(cleanup_path, max_bytes=MAX_RESPONSE_BYTES),
+        context="OpenAI runtime secret cleanup",
+    )
+    cleanup_verified = cleanup.get("cleanup_verified")
+    rotation_required = cleanup.get("credential_rotation_required")
+    if type(cleanup_verified) is not bool or type(rotation_required) is not bool:
+        raise BoundedSupervisorError("OpenAI runtime secret cleanup state is invalid")
+    expected_cleanup = {
+        "schema_version": SCHEMA_VERSION,
+        "plan_id": PLAN_ID,
+        "run_id": HOST_RUN_ID,
+        "runtime_file_basename": UPLOAD_OPENAI_SECRET_NAME,
+        "runtime_file_device": identity.get("runtime_file_device"),
+        "runtime_file_inode": identity.get("runtime_file_inode"),
+        "source_identity_sha256": sha256_bytes(identity_encoded),
+        "remote_upload_receipt_sha256": sha256_bytes(remote_upload_encoded),
+        "remote_upload_confirmed": upload_confirmed,
+        "remote_upload_outcome_unknown": upload_outcome_unknown,
+        "cleanup_verified": cleanup_verified,
+        "secret_value_retained": False,
+        "secret_hash_retained": False,
+        "credential_rotation_required": rotation_required,
+    }
+    expected_rotation_required = (not cleanup_verified) or upload_outcome_unknown
+    if cleanup != expected_cleanup or rotation_required is not expected_rotation_required:
+        raise BoundedSupervisorError("OpenAI runtime secret cleanup receipt drifted")
+    if not cleanup_verified:
+        lifecycle_state = "cleanup_unresolved"
+    elif upload_confirmed:
+        lifecycle_state = "cleaned"
+    elif upload_outcome_unknown:
+        lifecycle_state = "aborted_unknown_cleaned"
+    else:
+        lifecycle_state = "aborted_not_uploaded_cleaned"
+    return {
+        "state": lifecycle_state,
+        "materialized": True,
+        "credential_access_may_have_occurred": True,
+        "remote_upload_confirmed": upload_confirmed,
+        "remote_upload_outcome_unknown": upload_outcome_unknown,
+        "cleanup_verified": cleanup_verified,
+        "credential_rotation_required": rotation_required,
+        "archive_members": [
+            "OPENAI_SECRET_MATERIALIZATION_ATTEMPT.json",
+            "OPENAI_SECRET_IDENTITY.json",
+            "OPENAI_SECRET_UPLOAD_OUTCOME.json",
+            "OPENAI_SECRET_CLEANUP.json",
+        ],
+    }
+
+
+def _safe_source_files(
+    root: Path,
+    *,
+    disposition: str,
+    authorization_sha256: str,
+    private_binding_sha256: str,
+) -> list[ArchiveSource]:
     run_root = root / RUN_ROOT_RELATIVE
     required = {
         "authorization.json",
@@ -6285,6 +7908,25 @@ def _safe_source_files(root: Path, *, disposition: str) -> list[ArchiveSource]:
         "OBSERVER_EVIDENCE_VERIFICATION.json",
         "COMPUTE_USE_CLOSEOUT.json",
     }
+    authorization = _strict_json(
+        _read_regular(root / AUTHORIZATION_RELATIVE, max_bytes=MAX_AUTHORIZATION_BYTES),
+        context="bounded authorization",
+    )
+    local_credential_state = _verify_local_openai_secret_cleanup(
+        root,
+        disposition=disposition,
+        authorization_reference=_text(
+            authorization.get("authorization_reference"),
+            context="authorization reference",
+        ),
+        execution_commit=_text(
+            authorization.get("execution_commit"), context="authorization execution commit"
+        ),
+        plan_sha256=_text(authorization.get("plan_sha256"), context="authorization plan hash"),
+        authorization_sha256=authorization_sha256,
+        private_binding_sha256=private_binding_sha256,
+    )
+    required.update(cast(list[str], local_credential_state["archive_members"]))
     observer = _strict_json(
         _read_regular(root / OBSERVER_VERIFICATION_RELATIVE, max_bytes=MAX_RESPONSE_BYTES),
         context="observer evidence verification",
@@ -6325,7 +7967,11 @@ def _safe_source_files(root: Path, *, disposition: str) -> list[ArchiveSource]:
             "inbound/EARLY_FAILURE_ARCHIVE_IDENTITY.json",
             "inbound/TERMINATE_REQUIRED.json",
         }
-    elif remote_kind == "not-produced-before-bootstrap":
+    elif remote_kind in {
+        "not-produced-before-bootstrap",
+        "release-upload-outcome-unknown",
+        "release-uploaded-no-inbound",
+    }:
         inbound_members = set()
     else:
         raise BoundedSupervisorError("inbound archive kind is not admissible")
@@ -6338,6 +7984,12 @@ def _safe_source_files(root: Path, *, disposition: str) -> list[ArchiveSource]:
     if inbound.get("bootstrap_release_present") is True:
         expected.add("BOOTSTRAP_RELEASE.json")
         expected.add("BOOTSTRAP_RELEASE_STATE.json")
+        if inbound.get("release_upload_confirmed") is True:
+            expected.add("BOOTSTRAP_RELEASE_UPLOAD.json")
+        elif (root / BOOTSTRAP_RELEASE_UPLOAD_RELATIVE).exists() or (
+            root / BOOTSTRAP_RELEASE_UPLOAD_RELATIVE
+        ).is_symlink():
+            raise BoundedSupervisorError("unverified release upload checkpoint is present")
     elif (root / BOOTSTRAP_RELEASE_RELATIVE).exists() or (
         root / BOOTSTRAP_RELEASE_STATE_RELATIVE
     ).exists():
@@ -6690,13 +8342,20 @@ def archive_evidence(
     _write_compute_closeout(
         root,
         authorization=authorization,
+        authorization_sha256=authorization_sha256,
+        private_binding_sha256=private_binding_sha256,
         state=state,
         disposition=disposition,
         inbound_verification=inbound_verification,
         observer_verification=observer_verification,
         inbound_verification_sha256=inbound_verification_sha256,
     )
-    files = _safe_source_files(root, disposition=disposition)
+    files = _safe_source_files(
+        root,
+        disposition=disposition,
+        authorization_sha256=authorization_sha256,
+        private_binding_sha256=private_binding_sha256,
+    )
     if volume_observer is None:
         from giclab.harness.lambda_archive import DiskutilVolumeObserver
 
@@ -6735,7 +8394,17 @@ def _parser() -> argparse.ArgumentParser:
     materialize.add_argument("--private-security-binding", type=Path, required=True)
     materialize.add_argument("--private-security-binding-sha256", required=True)
     materialize.add_argument("--private-security-binding-seal-sha256", required=True)
-    for name in ("prepare-bundle", "observe", "release-bootstrap", "verify-inbound", "archive"):
+    for name in (
+        "prepare-bundle",
+        "observe",
+        "release-bootstrap",
+        "attest-release-upload",
+        "materialize-openai-secret",
+        "cleanup-openai-secret",
+        "abort-openai-secret",
+        "verify-inbound",
+        "archive",
+    ):
         child = subparsers.add_parser(name)
         child.add_argument("--authorization", type=Path, required=True)
         child.add_argument("--authorization-sha256", required=True)
@@ -6747,6 +8416,29 @@ def _parser() -> argparse.ArgumentParser:
             child.add_argument(
                 "--provider-image-attestation",
                 choices=("confirmed-in-provider-console",),
+                required=True,
+            )
+        elif name == "attest-release-upload":
+            child.add_argument(
+                "--release-upload-attestation",
+                choices=("confirmed-exact-release-uploaded",),
+                required=True,
+            )
+        elif name == "materialize-openai-secret":
+            child.add_argument("--openai-dotenv-file", type=Path, required=True)
+        elif name == "cleanup-openai-secret":
+            child.add_argument(
+                "--remote-upload-attestation",
+                choices=("confirmed-exact-filtered-file-uploaded-and-permissions-qualified",),
+                required=True,
+            )
+        elif name == "abort-openai-secret":
+            child.add_argument(
+                "--remote-upload-outcome",
+                choices=(
+                    "definitely-not-uploaded",
+                    "unknown-or-permissions-unqualified",
+                ),
                 required=True,
             )
         elif name in {"verify-inbound", "archive"}:
@@ -6761,12 +8453,23 @@ def main(argv: Sequence[str] | None = None, *, contract: ModuleType | None = Non
         raise BoundedSupervisorError("repository root contains a symlink")
     if contract is None:
         raise BoundedSupervisorError("supervisor requires its hash-first bootstrap capability")
-    plan = load_and_validate_plan(
-        root,
-        plan_path=args.plan,
-        plan_sha256=args.plan_sha256,
-        contract=contract,
+    validate_operation_secret_environment(args.operation, os.environ)
+    observer_credential = (
+        OneShotEnvironmentCredential(os.environ) if args.operation == "observe" else None
     )
+    if args.operation in {"cleanup-openai-secret", "abort-openai-secret"}:
+        plan = load_cleanup_plan(
+            root,
+            plan_path=args.plan,
+            plan_sha256=args.plan_sha256,
+        )
+    else:
+        plan = load_and_validate_plan(
+            root,
+            plan_path=args.plan,
+            plan_sha256=args.plan_sha256,
+            contract=contract,
+        )
     if args.operation == "materialize":
         result = materialize_authority(
             root,
@@ -6790,6 +8493,7 @@ def main(argv: Sequence[str] | None = None, *, contract: ModuleType | None = Non
             private_binding_sha256=args.private_binding_sha256,
         )
     elif args.operation == "observe":
+        assert observer_credential is not None
         result = execute_observer_phase(
             root,
             plan=plan,
@@ -6801,7 +8505,7 @@ def main(argv: Sequence[str] | None = None, *, contract: ModuleType | None = Non
             private_binding_path=args.private_binding,
             private_binding_sha256=args.private_binding_sha256,
             transport=LambdaHttpsBoundedTransport(),
-            credential_provider=lambda: os.environ.get("LAMBDA_API_KEY"),
+            credential_provider=observer_credential,
         )
     elif args.operation == "release-bootstrap":
         result = issue_bootstrap_release(
@@ -6814,6 +8518,54 @@ def main(argv: Sequence[str] | None = None, *, contract: ModuleType | None = Non
             private_binding_path=args.private_binding,
             private_binding_sha256=args.private_binding_sha256,
             provider_image_attestation=args.provider_image_attestation,
+        )
+    elif args.operation == "attest-release-upload":
+        result = attest_bootstrap_release_upload(
+            root,
+            plan=plan,
+            plan_sha256=args.plan_sha256,
+            expected_commit=args.expected_commit,
+            authorization_path=args.authorization,
+            authorization_sha256=args.authorization_sha256,
+            private_binding_path=args.private_binding,
+            private_binding_sha256=args.private_binding_sha256,
+            release_upload_attestation=args.release_upload_attestation,
+        )
+    elif args.operation == "materialize-openai-secret":
+        result = materialize_openai_runtime_secret(
+            root,
+            plan=plan,
+            plan_sha256=args.plan_sha256,
+            expected_commit=args.expected_commit,
+            authorization_path=args.authorization,
+            authorization_sha256=args.authorization_sha256,
+            private_binding_path=args.private_binding,
+            private_binding_sha256=args.private_binding_sha256,
+            openai_dotenv_path=args.openai_dotenv_file.absolute(),
+        )
+    elif args.operation == "cleanup-openai-secret":
+        result = cleanup_openai_runtime_secret(
+            root,
+            plan=plan,
+            plan_sha256=args.plan_sha256,
+            expected_commit=args.expected_commit,
+            authorization_path=args.authorization,
+            authorization_sha256=args.authorization_sha256,
+            private_binding_path=args.private_binding,
+            private_binding_sha256=args.private_binding_sha256,
+            remote_upload_attestation=args.remote_upload_attestation,
+        )
+    elif args.operation == "abort-openai-secret":
+        result = abort_openai_runtime_secret(
+            root,
+            plan=plan,
+            plan_sha256=args.plan_sha256,
+            expected_commit=args.expected_commit,
+            authorization_path=args.authorization,
+            authorization_sha256=args.authorization_sha256,
+            private_binding_path=args.private_binding,
+            private_binding_sha256=args.private_binding_sha256,
+            remote_upload_outcome=args.remote_upload_outcome,
         )
     elif args.operation == "verify-inbound":
         result = verify_inbound_evidence(
@@ -6854,14 +8606,23 @@ __all__ = [
     "FsyncLedger",
     "HttpResponse",
     "LambdaHttpsBoundedTransport",
+    "OpenAISecretLease",
+    "OpenAISecretSourceError",
     "TransportFailure",
+    "abort_openai_runtime_secret",
     "archive_evidence",
+    "attest_bootstrap_release_upload",
     "build_private_security_binding",
+    "cleanup_openai_runtime_secret",
+    "destroy_runtime_secret",
     "execute_observer_phase",
     "issue_bootstrap_release",
     "load_and_validate_plan",
+    "load_openai_secret",
     "main",
     "materialize_authority",
+    "materialize_openai_runtime_secret",
+    "materialize_runtime_secret",
     "prepare_upload_bundle",
     "seal_private_security_binding",
     "verify_inbound_evidence",

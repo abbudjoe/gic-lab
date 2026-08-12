@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:gic-lab:schema:t07-bounded-smoke-observer-ledger-v3:0.1.0",
+  "title": "T07 bounded-smoke append-only observer event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "plan_id",
+    "authorization_reference",
+    "event_sequence",
+    "event_type",
+    "phase",
+    "monotonic_timestamp_ns",
+    "wall_timestamp_utc",
+    "request_ordinal",
+    "method",
+    "scheme",
+    "host",
+    "path",
+    "bytes_received",
+    "http_status",
+    "content_type",
+    "elapsed_ms",
+    "failure_stage",
+    "failure_class",
+    "retry_count",
+    "pagination_request"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1.0"},
+    "run_id": {"const": "RUN-T07-BOUNDED-HOST-0003"},
+    "plan_id": {"const": "PLAN-T07-BOUNDED-SIRA-SMOKE-V3"},
+    "authorization_reference": {
+      "type": "string",
+      "pattern": "^AUTH-T07-BOUNDED-SIRA-SMOKE-V3-[A-Z0-9._-]{3,80}$"
+    },
+    "event_sequence": {"type": "integer", "minimum": 1, "maximum": 96},
+    "event_type": {
+      "enum": [
+        "run_materialized",
+        "phase_started",
+        "request_intent_committed",
+        "request_send_started",
+        "response_completed",
+        "request_failed",
+        "request_outcome_unknown_after_send",
+        "phase_passed",
+        "phase_failed",
+        "run_stopped"
+      ]
+    },
+    "phase": {
+      "enum": ["materialize", "prelaunch", "security", "post_launch", "termination", "terminal"]
+    },
+    "monotonic_timestamp_ns": {"type": "integer", "minimum": 0},
+    "wall_timestamp_utc": {"type": "string", "format": "date-time"},
+    "request_ordinal": {"type": ["integer", "null"], "minimum": 1, "maximum": 13},
+    "method": {"type": ["string", "null"], "enum": ["GET", null]},
+    "scheme": {"type": ["string", "null"], "enum": ["https", null]},
+    "host": {"type": ["string", "null"], "enum": ["cloud.lambda.ai", null]},
+    "path": {
+      "type": ["string", "null"],
+      "enum": [
+        "/api/v1/instance-types",
+        "/api/v1/images",
+        "/api/v1/regions",
+        "/api/v1/ssh-keys",
+        "/api/v1/firewall-rulesets",
+        "/api/v1/firewall-rulesets/global",
+        "/api/v1/instances",
+        null
+      ]
+    },
+    "bytes_received": {"type": "integer", "minimum": 0, "maximum": 1048576},
+    "http_status": {"type": ["integer", "null"], "minimum": 100, "maximum": 599},
+    "content_type": {"type": ["string", "null"], "maxLength": 128},
+    "elapsed_ms": {"type": ["integer", "null"], "minimum": 0, "maximum": 60000},
+    "failure_stage": {
+      "type": ["string", "null"],
+      "enum": [
+        "preflight",
+        "secret_source",
+        "dns",
+        "tcp_connect",
+        "tls_handshake",
+        "request_write",
+        "response_headers",
+        "response_body",
+        "http_status",
+        "redirect",
+        "rate_limit",
+        "content_type",
+        "response_size",
+        "json_decode",
+        "schema_validation",
+        "pagination",
+        "ledger_io",
+        "state_validation",
+        "archive_io",
+        "unknown",
+        null
+      ]
+    },
+    "failure_class": {"type": ["string", "null"], "maxLength": 96},
+    "retry_count": {"const": 0},
+    "pagination_request": {"const": false}
+  }
+}

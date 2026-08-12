@@ -73,10 +73,11 @@ capacity, the retained-free floor is recalculated as
 and a post-copy retained-floor check are mandatory. The Mac mini source remains until
 independent archive verification.
 
-The bounded T07 research-smoke profile's first materialization policy applied these
-figures to `RUN-T07-BOUNDED-HOST-0001`; that identity is burned and retained only as
+The bounded T07 research-smoke profile's first two materialization policies applied
+these figures to `RUN-T07-BOUNDED-HOST-0001` and
+`RUN-T07-BOUNDED-HOST-0002`; both identities are burned and retained only as
 historical provenance. The same unchanged figures now apply to the sole prospective
-run, `RUN-T07-BOUNDED-HOST-0002`. Each container writes to a 67,108,864-byte tmpfs and
+run, `RUN-T07-BOUNDED-HOST-0003`. Each container writes to a 67,108,864-byte tmpfs and
 is copied out before container removal; there is no writable host evidence bind.
 Per-condition retained output remains capped at 104,857,600 bytes and the two
 conditions at 209,715,200 bytes. The complete remote bundle is capped at 268,435,456

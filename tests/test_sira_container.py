@@ -1105,7 +1105,7 @@ def test_dummy_secret_file_channel_and_retained_surfaces_do_not_leak(
 ) -> None:
     dummy = "T07_DUMMY_CANARY_VALUE_NOT_A_REAL_CREDENTIAL"
     secret_file = tmp_path / "dummy-sira-secret"
-    secret_file.write_text(dummy + "\n", encoding="utf-8")
+    secret_file.write_text(dummy, encoding="utf-8")
     secret_file.chmod(0o600)
     entrypoint = _load_entrypoint()
     assert entrypoint._parser().parse_args(["--", "/usr/bin/true"]).supervised_release is False

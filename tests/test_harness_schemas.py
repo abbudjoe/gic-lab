@@ -91,6 +91,7 @@ def test_harness_schema_documents_are_registered() -> None:
         "t07-bounded-smoke-authorization",
         "t07-bounded-smoke-private-binding",
         "t07-bounded-smoke-observer-ledger",
+        "t07-bounded-openai-secret-source",
     ):
         schema = load_json(ROOT / f"schemas/{name}.schema.json")
         assert "$id" in schema

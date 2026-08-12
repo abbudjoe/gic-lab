@@ -92,6 +92,14 @@ class PlannedExecutionSubstrate:
                     "docs/harness/T07_BOUNDED_SMOKE_SECURITY_BINDING_REPAIR.md"
                 ),
             },
+            "bounded-smoke-v3-ready-unauthorized": {
+                "gate_l2_decision_state": "bounded-manual-console-plan-ready-unauthorized",
+                "gate_l3_state": "folded-into-bounded-preflight-unauthorized",
+                "decision_document": "docs/harness/T07_BOUNDED_SMOKE_GOVERNANCE.md",
+                "security_decision_document": (
+                    "docs/harness/T07_BOUNDED_SMOKE_SECURITY_BINDING_REPAIR.md"
+                ),
+            },
         }
         selected_profile = profile_fields.get(self.decision_state)
         if selected_profile is None:

@@ -1,8 +1,8 @@
 # T07 bounded research-smoke governance
 
-Status: **ready-for-bounded-smoke-v2-authorization; unauthorized; not executed**
+Status: **ready-for-bounded-smoke-v3-authorization; unauthorized; not executed**
 
-Decision date: 2026-08-11
+Decision date: 2026-08-12
 
 ## Decision and authority
 
@@ -10,10 +10,12 @@ T07's sole prospective execution path is one manually supervised Lambda/Jupyter
 research smoke. The frozen high-assurance track and all burned Gate L1/L2M identities
 remain historical evidence. This profile does not revive or reuse their authority.
 
-Prospective bounded plan: `PLAN-T07-BOUNDED-SIRA-SMOKE-V2`.
+Prospective bounded plan: `PLAN-T07-BOUNDED-SIRA-SMOKE-V3`.
 
-Bounded V1 and all `0001` run identities stopped before the first account request and
-remain blocked, immutable, and nonreusable.
+Bounded V1/`0001` and V2/`0002` stopped before the first account request and remain
+blocked, immutable, and nonreusable. V2 stopped because its obsolete secret contract
+required a second user-managed credential file that did not exist; it created no run
+root and accessed no secret.
 
 The repository deliberately remains unauthorized: every execution-permission boolean
 in `docs/PROJECT_STATE.yaml` is false, the plan says `authorized: false`, and compute
@@ -103,7 +105,7 @@ the global baseline; then archive the local evidence.
   The release, authorization, private binding, observer-state hash, report hash,
   commit, plan, and active timestamp are revalidated remotely and recorded in
   `bootstrap-authority.json` before any workload command.
-- The fixed canonical root `/home/ubuntu/t07-bounded-output-0002` is exclusively
+- The fixed canonical root `/home/ubuntu/t07-bounded-output-0003` is exclusively
   created and fsynced before fallible invocation, authorization, release, archive,
   plan, contract, or secret validation. That directory—not a later imported module—is
   the one-shot attempt claim: any terminal pre-secret failure burns the run identity,
@@ -122,15 +124,23 @@ the global baseline; then archive the local evidence.
   hash-bound receipts; residue proof requires exact empty raw outputs. Stop failure
   escalates to kill, followed by terminal inspection, removal proof, and zero owned
   container/network/volume residue checks.
-- `SIRA_API_KEY` is a private mode-0600 file mounted read-only at
-  `/run/secrets/sira_api_key`; only the in-container child receives the environment
-  value. `LAMBDA_API_KEY` is used only by the local in-process observer.
-  `OPENAI_API_KEY` is rejected. The remote bootstrap holds a no-follow file identity,
-  truncates and fsyncs it before unlink, verifies absence, and requires manual deletion
-  plus credential rotation on identity replacement or incomplete cleanup. No value
-  belongs in Git, argv, labels, image, container configuration, path, log, screenshot,
-  ledger, or archive. Semantic key/value and nested-JSON scans run before remote ZIP
-  creation, after local ZIP decoding, and against the external copy.
+- `LAMBDA_API_KEY` remains available only to the local in-process Lambda observer.
+  The separate OpenAI channel strictly parses exactly one `OPENAI_API_KEY` assignment
+  from the privately supplied, repository-external `.env` without shell evaluation.
+  The supervisor automatically creates one unarchived mode-0600 upload file, the user
+  uploads only that filtered file, and the supervisor destroys its local copy after
+  upload confirmation even if the authorization window has expired. The remote
+  bootstrap holds a no-follow identity for the uploaded file, mounts it read-only at
+  `/run/secrets/sira_api_key`, and the container entrypoint supplies an ephemeral
+  `SIRA_API_KEY` alias only to the immediate SiRA child because the pinned adapter
+  requires that name. No second permanent user-managed key file or full `.env` upload
+  exists. Neither channel can select the other key; no key value or hash is generated
+  for evidence. Remote cleanup truncates, fsyncs, unlinks, and verifies absence.
+  Missing receipt proof remains unresolved until exact bound-instance termination
+  proves destruction; detected exposure, local cleanup failure, or destruction still
+  unproven afterward requires rotation. Direct, hex, and base64 value scans plus
+  semantic key/value scans run before remote ZIP creation, after local ZIP decoding,
+  and against the external copy.
 - Success, post-root failure, and pre-root early failure paths all produce bounded,
   secret-scanned evidence archives. Early failure reserves its exact disposition and
   incident records, plus a cleanup receipt only when a secret lease was established
@@ -141,8 +151,8 @@ the global baseline; then archive the local evidence.
   pair budgets, and runtime compute-use closeout. Before provider termination, the
   local verifier must check decoded ZIP members, canonical paths, exact manifest
   membership and hashes, pair linkages, provider/authority binding, command receipts
-  and meters, credential shapes, the actual supplied secret plus its raw/hex/base64/
-  URL-safe/SHA-256 derivatives when safely available, and the closed credential-
+  and meters, credential shapes, the actual supplied secret's direct/hex/base64/
+  URL-safe representations without hashing the key, and the closed credential-
   rotation invariant. Detected credential material or incomplete cleanup requires
   manual credential rotation and keeps security closeout unresolved.
   The final archive admits only the exact expected source set, snapshots each source

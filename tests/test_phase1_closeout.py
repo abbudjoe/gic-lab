@@ -35,7 +35,7 @@ def test_phase_one_is_the_only_active_non_executable_control_plane() -> None:
         "condition_plan_sha256s": [],
     }
     assert state["planned_execution_substrate"] == {
-        "decision_state": "bounded-smoke-v2-ready-unauthorized",
+        "decision_state": "bounded-smoke-v3-ready-unauthorized",
         "provider": "lambda-on-demand-cloud",
         "architecture": "x86_64",
         "persistent_filesystem": False,
@@ -52,7 +52,7 @@ def test_phase_one_is_the_only_active_non_executable_control_plane() -> None:
     execution_state = load_project_execution_state(ROOT)
     substrate = execution_state.planned_execution_substrate
     assert substrate is not None
-    assert substrate.decision_state == "bounded-smoke-v2-ready-unauthorized"
+    assert substrate.decision_state == "bounded-smoke-v3-ready-unauthorized"
     assert substrate.provider == "lambda-on-demand-cloud"
     assert substrate.architecture == "x86_64"
     assert substrate.gate_l1_evidence_state == "complete-externally-sealed"
@@ -103,12 +103,12 @@ def test_active_status_surfaces_name_exactly_one_prospective_bounded_plan() -> N
             text,
             flags=re.MULTILINE,
         )
-        assert matches == ["PLAN-T07-BOUNDED-SIRA-SMOKE-V2"], path
+        assert matches == ["PLAN-T07-BOUNDED-SIRA-SMOKE-V3"], path
         prospective_ids.extend(matches)
         assert "bounded-smoke V1 is the reviewed prospective path" not in text
         assert "bounded smoke V1 ready for separate authorization" not in text
         assert "/home/ubuntu/t07-bounded-output-0001" not in text
-    assert set(prospective_ids) == {"PLAN-T07-BOUNDED-SIRA-SMOKE-V2"}
+    assert set(prospective_ids) == {"PLAN-T07-BOUNDED-SIRA-SMOKE-V3"}
 
     for path in (
         ROOT / "docs/DECISIONS.md",
@@ -119,9 +119,10 @@ def test_active_status_surfaces_name_exactly_one_prospective_bounded_plan() -> N
             for line in path.read_text(encoding="utf-8").splitlines()
             if "only prospective execution path" in line
             or "supersede D-032's prospective identity" in line
+            or "supersede its obsolete second-file secret prerequisite" in line
         ]
-        assert "D-032" in rows[-2] and "PLAN-T07-BOUNDED-SIRA-SMOKE-V1" in rows[-2]
-        assert "D-033" in rows[-1] and "PLAN-T07-BOUNDED-SIRA-SMOKE-V2" in rows[-1]
+        assert "D-033" in rows[-2] and "PLAN-T07-BOUNDED-SIRA-SMOKE-V2" in rows[-2]
+        assert "D-034" in rows[-1] and "PLAN-T07-BOUNDED-SIRA-SMOKE-V3" in rows[-1]
 
 
 def test_exp0001_readme_assigns_materialization_to_t07_not_completed_t06() -> None:
@@ -298,7 +299,7 @@ def test_closeout_retains_zero_scientific_execution_and_only_bounded_infrastruct
         "wall_clock_hours": 0.0,
         "accelerator_hours": 0.0,
         "cost_usd": 0.0,
-        "authorization_reference": "AUTH-T07-BOUNDED-SIRA-SMOKE-V2-PENDING",
+        "authorization_reference": "AUTH-T07-BOUNDED-SIRA-SMOKE-V3-PENDING",
         "status": "planned",
     }
     summary = compute["phase_zero_summary"]

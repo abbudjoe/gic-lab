@@ -39,7 +39,7 @@ from giclab.validation import ROOT
 NOW = datetime(2026, 8, 11, 20, 0, 0, tzinfo=UTC)
 AFTER_NOW = NOW + timedelta(seconds=1)
 COMMIT = "1" * 40
-AUTHORIZATION_REFERENCE = "AUTH-T07-BOUNDED-SIRA-SMOKE-V2-TEST-0001"
+AUTHORIZATION_REFERENCE = "AUTH-T07-BOUNDED-SIRA-SMOKE-V3-TEST-0001"
 PUBLIC_KEY = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAABAgMEBQYHCAkKCwwNDg8QERITFBUWFxgZGhscHR4f"
 JSON_SECRET_CANARY = "PUBLIC_DUMMY_OPAQUE_JUPYTER_CANARY_0123456789"
 
@@ -64,6 +64,14 @@ def _runtime_plan() -> dict[str, object]:
     contract_path = ROOT / "src/giclab/harness/t07_bounded_smoke.py"
     contract_encoded = contract_path.read_bytes()
     return {
+        "identity": {
+            "schema_version": supervisor.SCHEMA_VERSION,
+            "plan_id": supervisor.PLAN_ID,
+            "host_run_id": supervisor.HOST_RUN_ID,
+            "branch": supervisor.BRANCH,
+            "authorized": False,
+            "state": "ready-for-bounded-smoke-v3-authorization",
+        },
         "implementation": {
             "artifacts": [
                 {
@@ -84,7 +92,7 @@ def _runtime_plan() -> dict[str, object]:
         "limits": dict(contract.LIMITS),
         "conditions": conditions,
         "container_lifecycle": contract.lifecycle_argv_templates(),
-        "storage": {"remote_active_root": "/home/ubuntu/t07-bounded-output-0002"},
+        "storage": {"remote_active_root": "/home/ubuntu/t07-bounded-output-0003"},
         "lambda": {
             "image_alias": contract.SELECTED_IMAGE_ALIAS,
             "image_family": contract.SELECTED_IMAGE_FAMILY,
@@ -106,7 +114,17 @@ def _runtime_plan() -> dict[str, object]:
             "chromium_version": contract.CHROMIUM_VERSION,
             "platform": "linux/amd64",
         },
+        "secrets": contract.secrets_contract(),
     }
+
+
+def test_supervisor_rejects_remote_parent_without_exact_realpath_binding() -> None:
+    plan = _runtime_plan()
+    secrets = cast(dict[str, object], plan["secrets"])
+    source = cast(dict[str, object], secrets["openai_provider"])
+    source["remote_parent_realpath_stdout"] = "/redirected/private/location"
+    with pytest.raises(supervisor.BoundedSupervisorError, match="secret-channel separation"):
+        supervisor._validate_openai_secret_contract_fields(plan)
 
 
 def _load_remote_bootstrap() -> ModuleType:
@@ -239,6 +257,7 @@ def _copy_schemas(root: Path) -> None:
         supervisor.PRIVATE_BINDING_SCHEMA_RELATIVE,
         supervisor.LEDGER_SCHEMA_RELATIVE,
         supervisor.EVIDENCE_SCHEMA_RELATIVE,
+        supervisor.OPENAI_SECRET_SCHEMA_RELATIVE,
     ):
         destination = root / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
@@ -463,6 +482,19 @@ def _materialize(
 
 def _materialized_private(tmp_path: Path) -> dict[str, object]:
     return json.loads((tmp_path / supervisor.PRIVATE_BINDING_RELATIVE).read_text(encoding="utf-8"))
+
+
+def test_preserved_v2_private_binding_markers_use_v2_not_v3_identity() -> None:
+    nonce = "0" * 32
+    assert supervisor.PRIVATE_BINDING_PLAN_ID == "PLAN-T07-BOUNDED-SIRA-SMOKE-V2"
+    assert supervisor.PRIVATE_BINDING_HOST_RUN_ID == "RUN-T07-BOUNDED-HOST-0002"
+    assert supervisor._derived_binding_marker(nonce, purpose="binding") == "246f97c6a89d"
+    assert supervisor._derived_binding_marker(nonce, purpose="ruleset") == "cc7305fddb91"
+    assert supervisor._derived_private_locator(bytes(range(16))) == (
+        "854348189eadf9f509b679be744645c8"
+    )
+    assert supervisor.PLAN_ID.endswith("V3")
+    assert supervisor.HOST_RUN_ID.endswith("0003")
 
 
 def test_bounded_baseline_hash_matches_authoritative_canonicalizer() -> None:
@@ -991,11 +1023,16 @@ def test_exact_observer_phase_order_and_shell_free_commands() -> None:
         "observe_termination",
         "observe_terminal",
         "release_bootstrap",
+        "attest_bootstrap_release_upload",
         "verify_inbound_complete",
         "verify_inbound_failed",
         "archive_complete",
         "archive_failed",
         "prepare_bundle",
+        "materialize_openai_secret",
+        "cleanup_openai_secret",
+        "abort_openai_secret_not_uploaded",
+        "abort_openai_secret_unknown",
     }
     for argv in commands.values():
         assert argv[0:2] == ["${REPOSITORY_ROOT}/.venv/bin/python", "-I"]
@@ -1013,7 +1050,7 @@ def test_exact_local_supervisor_interpreter_loads_bound_modules(tmp_path: Path) 
         destination = repository / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(ROOT / relative, destination)
-    plan_fixture = repository / "containers/sira-smoke/bounded/bounded-smoke-plan-v2.json"
+    plan_fixture = repository / "containers/sira-smoke/bounded/bounded-smoke-plan-v3.json"
     plan_fixture.parent.mkdir(parents=True, exist_ok=True)
     plan_fixture.write_bytes(b"{}\n")
     (repository / ".venv").symlink_to(ROOT / ".venv")
@@ -1037,7 +1074,7 @@ def test_exact_local_supervisor_interpreter_loads_bound_modules(tmp_path: Path) 
     fixture_commit = (
         subprocess.check_output(("git", "rev-parse", "HEAD"), cwd=repository).decode().strip()
     )
-    plan_path = repository / "containers/sira-smoke/bounded/bounded-smoke-plan-v2.json"
+    plan_path = repository / "containers/sira-smoke/bounded/bounded-smoke-plan-v3.json"
     substitutions = {
         "${REPOSITORY_ROOT}": str(repository),
         "${SUPERVISOR_SHA256}": supervisor.sha256_bytes(
@@ -1071,7 +1108,7 @@ def test_exact_local_supervisor_interpreter_loads_bound_modules(tmp_path: Path) 
 
 def test_actual_repository_base_authority_accepts_the_v2_candidate() -> None:
     plan = json.loads(
-        (ROOT / "containers/sira-smoke/bounded/bounded-smoke-plan-v2.json").read_text(
+        (ROOT / "containers/sira-smoke/bounded/bounded-smoke-plan-v3.json").read_text(
             encoding="utf-8"
         )
     )
@@ -1198,12 +1235,12 @@ def _patch_remote_paths(
         "archive": home / "t07-bounded-repository.tar",
         "bundle": home / "t07-bounded-bundle",
         "plan": home
-        / "t07-bounded-bundle/containers/sira-smoke/bounded/bounded-smoke-plan-v2.json",
+        / "t07-bounded-bundle/containers/sira-smoke/bounded/bounded-smoke-plan-v3.json",
         "contract": home / "t07-bounded-bundle/src/giclab/harness/t07_bounded_smoke.py",
         "authorization": home / "t07-bounded-authorization.json",
         "release": home / "t07-bounded-bootstrap-release.json",
-        "secret": config / "sira_api_key",
-        "output": home / "t07-bounded-output-0002",
+        "secret": config / "openai_provider_key",
+        "output": home / "t07-bounded-output-0003",
     }
     for name, constant in (
         ("REMOTE_BOOTSTRAP_FILE", paths["bootstrap"]),
@@ -1357,7 +1394,7 @@ def test_replayed_single_use_root_cannot_open_or_destroy_winners_secret(
         "_validate_upload_bundle",
         lambda *args, **kwargs: (
             {"execution_commit": COMMIT},
-            {"containers/sira-smoke/bounded/bounded-smoke-plan-v2.json": plan_bytes},
+            {"containers/sira-smoke/bounded/bounded-smoke-plan-v3.json": plan_bytes},
         ),
     )
     monkeypatch.setattr(bootstrap, "_validate_bundle_against_plan", lambda *a, **k: None)
@@ -1830,7 +1867,7 @@ def _add_lifecycle_records(
     else:
         template = contract.container_create_argv(condition)
     substitutions = {
-        "${SIRA_SECRET_FILE}": "/home/ubuntu/.config/giclab/sira_api_key",
+        "${SIRA_SECRET_FILE}": "/home/ubuntu/.config/giclab/openai_provider_key",
         "${EXECUTION_COMMIT}": COMMIT,
         "${AUTHORIZATION_REFERENCE}": AUTHORIZATION_REFERENCE,
         "${IMAGE_ID}": image_id,
@@ -2082,7 +2119,7 @@ def _release_for_fixture(
         },
         "issued_at_utc": "2026-08-11T20:00:01Z",
         "bootstrap_release": True,
-        "single_use_output_root": "/home/ubuntu/t07-bounded-output-0002",
+        "single_use_output_root": "/home/ubuntu/t07-bounded-output-0003",
     }
     return release, supervisor.canonical_json_bytes(release)
 
@@ -2128,8 +2165,8 @@ def _write_complete_inbound(
         }
     )
     lifecycle = (
-        ("browser-preflight", "BROWSER-PREFLIGHT", "RUN-T07-BOUNDED-BROWSER-PREFLIGHT-0002"),
-        ("model-preflight", "MODEL-PREFLIGHT", "RUN-T07-BOUNDED-MODEL-PREFLIGHT-0002"),
+        ("browser-preflight", "BROWSER-PREFLIGHT", "RUN-T07-BOUNDED-BROWSER-PREFLIGHT-0003"),
+        ("model-preflight", "MODEL-PREFLIGHT", "RUN-T07-BOUNDED-MODEL-PREFLIGHT-0003"),
         ("reactive", "SIRA-REACTIVE", contract.RUN_IDS["SIRA-REACTIVE"]),
         ("simulative", "SIRA-SIMULATIVE", contract.RUN_IDS["SIRA-SIMULATIVE"]),
     )
@@ -2214,7 +2251,7 @@ def _write_complete_inbound(
         {
             "schema_version": supervisor.SCHEMA_VERSION,
             "secret_variable_name": "SIRA_API_KEY",
-            "secret_file_basename": "sira_api_key",
+            "secret_file_basename": "openai_provider_key",
             "held_identity_established_before_preflight": True,
             "truncated_before_unlink": True,
             "unlinked": True,
@@ -2407,7 +2444,7 @@ def _write_complete_inbound(
         ]
         template = list(contract.container_create_argv(condition))
         substitutions = {
-            "${SIRA_SECRET_FILE}": "/home/ubuntu/.config/giclab/sira_api_key",
+            "${SIRA_SECRET_FILE}": "/home/ubuntu/.config/giclab/openai_provider_key",
             "${EXECUTION_COMMIT}": COMMIT,
             "${AUTHORIZATION_REFERENCE}": AUTHORIZATION_REFERENCE,
             "${IMAGE_ID}": image_id,
@@ -2415,7 +2452,7 @@ def _write_complete_inbound(
         create_argv = list(contract.materialize_argv(template, substitutions))
         inner_argv = list(contract.condition_inner_argv(condition))
         configuration_refs = [
-            "containers/sira-smoke/bounded/bounded-smoke-plan-v2.json",
+            "containers/sira-smoke/bounded/bounded-smoke-plan-v3.json",
             "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/"
             + ("smoke-reactive.yaml" if mode == "reactive" else "smoke-simulative.yaml"),
             f"{mode}/resolved-command.json",
@@ -2810,9 +2847,52 @@ def _observe_through_post_launch(
             monotonic_ns=monotonic_ns,
             utc_now=utc_now,
         )
+    return documents, monotonic_ns, utc_now
+
+
+def _materialize_and_cleanup_openai_secret(
+    tmp_path: Path,
+    *,
+    monkeypatch: pytest.MonkeyPatch,
+    summary: Mapping[str, object],
+    plan_sha256: str,
+    utc_now: Callable[[], datetime],
+    attest_release_upload: bool = True,
+) -> None:
+    source = tmp_path / "private-openai.env"
+    source.write_bytes(b"OPENAI_API_KEY=" + b"PUBLIC-DUMMY-" + b"OPENAI-KEY-0123456789\n")
+    source.chmod(0o600)
+    source_binding = supervisor.openai_dotenv_path_binding(source)
+    monkeypatch.setattr(supervisor, "OPENAI_DOTENV_PATH_BINDING_SHA256", source_binding)
+    runtime_plan = _runtime_plan()
+    secrets = cast(dict[str, object], runtime_plan["secrets"])
+    openai_provider = cast(dict[str, object], secrets["openai_provider"])
+    openai_provider["source_path_binding_sha256"] = source_binding
+    common = {
+        "plan": runtime_plan,
+        "plan_sha256": plan_sha256,
+        "expected_commit": COMMIT,
+        "authorization_path": tmp_path / supervisor.AUTHORIZATION_RELATIVE,
+        "authorization_sha256": str(summary["authorization_sha256"]),
+        "private_binding_path": tmp_path / supervisor.PRIVATE_BINDING_RELATIVE,
+        "private_binding_sha256": str(summary["private_binding_sha256"]),
+        "utc_now": utc_now,
+    }
+    supervisor.materialize_openai_runtime_secret(
+        tmp_path,
+        openai_dotenv_path=source,
+        **common,
+    )
+    supervisor.cleanup_openai_runtime_secret(
+        tmp_path,
+        remote_upload_attestation=(
+            "confirmed-exact-filtered-file-uploaded-and-permissions-qualified"
+        ),
+        **{**common, "utc_now": lambda: NOW + timedelta(hours=2)},
+    )
     supervisor.issue_bootstrap_release(
         tmp_path,
-        plan=_runtime_plan(),
+        plan=runtime_plan,
         plan_sha256=plan_sha256,
         expected_commit=COMMIT,
         authorization_path=tmp_path / supervisor.AUTHORIZATION_RELATIVE,
@@ -2822,7 +2902,19 @@ def _observe_through_post_launch(
         provider_image_attestation="confirmed-in-provider-console",
         utc_now=utc_now,
     )
-    return documents, monotonic_ns, utc_now
+    if attest_release_upload:
+        supervisor.attest_bootstrap_release_upload(
+            tmp_path,
+            plan=runtime_plan,
+            plan_sha256=plan_sha256,
+            expected_commit=COMMIT,
+            authorization_path=tmp_path / supervisor.AUTHORIZATION_RELATIVE,
+            authorization_sha256=str(summary["authorization_sha256"]),
+            private_binding_path=tmp_path / supervisor.PRIVATE_BINDING_RELATIVE,
+            private_binding_sha256=str(summary["private_binding_sha256"]),
+            release_upload_attestation="confirmed-exact-release-uploaded",
+            utc_now=utc_now,
+        )
 
 
 def _verify_inbound_and_finish_observer(
@@ -2856,6 +2948,129 @@ def _verify_inbound_and_finish_observer(
             monotonic_ns=monotonic_ns,
             utc_now=utc_now,
         )
+
+
+def test_local_secret_failure_before_release_admits_no_remote_inbound_cleanup(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    summary, plan_sha256, _ = _materialize(tmp_path, monkeypatch)
+    _, _, utc_now = _observe_through_post_launch(
+        tmp_path,
+        summary=summary,
+        plan_sha256=plan_sha256,
+    )
+    source = tmp_path / "private-openai.env"
+    source.write_bytes(b"OPENAI_API_KEY=" + b"PUBLIC-DUMMY-" + b"OPENAI-KEY-0123456789\n")
+    source.chmod(0o600)
+    source_binding = supervisor.openai_dotenv_path_binding(source)
+    monkeypatch.setattr(supervisor, "OPENAI_DOTENV_PATH_BINDING_SHA256", source_binding)
+    runtime_plan = _runtime_plan()
+    secrets = cast(dict[str, object], runtime_plan["secrets"])
+    provider = cast(dict[str, object], secrets["openai_provider"])
+    provider["source_path_binding_sha256"] = source_binding
+
+    def fail_after_partial_write(lease: supervisor.OpenAISecretLease, descriptor: int) -> None:
+        supervisor.os.write(descriptor, lease._value[:7])
+        raise supervisor.OpenAISecretSourceError("runtime_secret_write_failed")
+
+    monkeypatch.setattr(supervisor.OpenAISecretLease, "write_to", fail_after_partial_write)
+    common = {
+        "plan": runtime_plan,
+        "plan_sha256": plan_sha256,
+        "expected_commit": COMMIT,
+        "authorization_path": tmp_path / supervisor.AUTHORIZATION_RELATIVE,
+        "authorization_sha256": str(summary["authorization_sha256"]),
+        "private_binding_path": tmp_path / supervisor.PRIVATE_BINDING_RELATIVE,
+        "private_binding_sha256": str(summary["private_binding_sha256"]),
+    }
+    with pytest.raises(supervisor.OpenAISecretSourceError):
+        supervisor.materialize_openai_runtime_secret(
+            tmp_path,
+            openai_dotenv_path=source,
+            utc_now=utc_now,
+            **common,
+        )
+    assert not (tmp_path / supervisor.BOOTSTRAP_RELEASE_RELATIVE).exists()
+    with pytest.raises(supervisor.BoundedSupervisorError):
+        supervisor.issue_bootstrap_release(
+            tmp_path,
+            provider_image_attestation="confirmed-in-provider-console",
+            utc_now=utc_now,
+            **common,
+        )
+    result = supervisor.verify_inbound_evidence(
+        tmp_path,
+        disposition="failed",
+        utc_now=utc_now,
+        **common,
+    )
+    assert result["cleanup_transition_applied"] is True
+    receipt = json.loads(
+        (tmp_path / supervisor.INBOUND_VERIFICATION_RELATIVE).read_text(encoding="utf-8")
+    )
+    assert receipt["verification"]["remote_archive_kind"] == "not-produced-before-bootstrap"
+    local_state = supervisor._verify_local_openai_secret_cleanup(
+        tmp_path,
+        disposition="failed",
+        authorization_reference=AUTHORIZATION_REFERENCE,
+    )
+    assert local_state["state"] == "materialization_failed_cleaned"
+    assert local_state["credential_access_may_have_occurred"] is True
+
+
+@pytest.mark.parametrize(
+    ("attest_release_upload", "expected_kind", "expected_outcome"),
+    (
+        (
+            False,
+            "release-upload-outcome-unknown",
+            "unknown_without_durable_upload_receipt",
+        ),
+        (True, "release-uploaded-no-inbound", "unknown_after_release_upload"),
+    ),
+)
+def test_release_without_inbound_is_conservatively_typed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    attest_release_upload: bool,
+    expected_kind: str,
+    expected_outcome: str,
+) -> None:
+    summary, plan_sha256, _ = _materialize(tmp_path, monkeypatch)
+    _, _, utc_now = _observe_through_post_launch(
+        tmp_path,
+        summary=summary,
+        plan_sha256=plan_sha256,
+    )
+    _materialize_and_cleanup_openai_secret(
+        tmp_path,
+        monkeypatch=monkeypatch,
+        summary=summary,
+        plan_sha256=plan_sha256,
+        utc_now=utc_now,
+        attest_release_upload=attest_release_upload,
+    )
+    result = supervisor.verify_inbound_evidence(
+        tmp_path,
+        plan=_runtime_plan(),
+        plan_sha256=plan_sha256,
+        expected_commit=COMMIT,
+        authorization_path=tmp_path / supervisor.AUTHORIZATION_RELATIVE,
+        authorization_sha256=str(summary["authorization_sha256"]),
+        private_binding_path=tmp_path / supervisor.PRIVATE_BINDING_RELATIVE,
+        private_binding_sha256=str(summary["private_binding_sha256"]),
+        disposition="failed",
+        utc_now=utc_now,
+    )
+    assert result["cleanup_transition_applied"] is True
+    receipt = json.loads(
+        (tmp_path / supervisor.INBOUND_VERIFICATION_RELATIVE).read_text(encoding="utf-8")
+    )
+    verification = cast(dict[str, object], receipt["verification"])
+    assert verification["remote_archive_kind"] == expected_kind
+    assert verification["remote_bootstrap_outcome"] == expected_outcome
+    assert verification["remote_bootstrap_provably_not_authorized"] is False
+    assert verification["release_upload_confirmed"] is attest_release_upload
 
 
 def test_observer_replay_rejects_coordinated_state_and_report_timestamp_drift(
@@ -2910,6 +3125,13 @@ def test_complete_archive_reads_back_hashes_and_retains_local_source(
     documents, monotonic_ns, utc_now = _observe_through_post_launch(
         tmp_path, summary=summary, plan_sha256=plan_sha256
     )
+    _materialize_and_cleanup_openai_secret(
+        tmp_path,
+        monkeypatch=monkeypatch,
+        summary=summary,
+        plan_sha256=plan_sha256,
+        utc_now=utc_now,
+    )
     _write_complete_inbound(run_root)
     _verify_inbound_and_finish_observer(
         tmp_path,
@@ -2944,6 +3166,8 @@ def test_complete_archive_reads_back_hashes_and_retains_local_source(
     )
     assert result["source_destination_hashes_verified"] is True
     assert result["source_retained"] is True
+    assert result["file_count"] == 39
+    assert result["total_file_count"] == 42
     assert result["total_file_count"] == result["file_count"] + 3
     assert int(result["total_file_count"]) <= supervisor.MAX_ARCHIVE_FILES
     destination = external_parent / supervisor.HOST_RUN_ID
@@ -2960,7 +3184,14 @@ def test_complete_archive_rejects_secret_inside_a_self_consistent_zip(
 ) -> None:
     summary, plan_sha256, _ = _materialize(tmp_path, monkeypatch)
     run_root = tmp_path / supervisor.RUN_ROOT_RELATIVE
-    _observe_through_post_launch(tmp_path, summary=summary, plan_sha256=plan_sha256)
+    _, _, utc_now = _observe_through_post_launch(tmp_path, summary=summary, plan_sha256=plan_sha256)
+    _materialize_and_cleanup_openai_secret(
+        tmp_path,
+        monkeypatch=monkeypatch,
+        summary=summary,
+        plan_sha256=plan_sha256,
+        utc_now=utc_now,
+    )
     _write_complete_inbound(run_root, secret_member=True)
     with pytest.raises(supervisor.BoundedSupervisorError, match="credential-shaped"):
         supervisor.verify_inbound_evidence(
@@ -2992,7 +3223,14 @@ def test_inbound_zip_scan_rejects_semantic_secret_key_shapes(
 ) -> None:
     summary, plan_sha256, _ = _materialize(tmp_path, monkeypatch)
     run_root = tmp_path / supervisor.RUN_ROOT_RELATIVE
-    _observe_through_post_launch(tmp_path, summary=summary, plan_sha256=plan_sha256)
+    _, _, utc_now = _observe_through_post_launch(tmp_path, summary=summary, plan_sha256=plan_sha256)
+    _materialize_and_cleanup_openai_secret(
+        tmp_path,
+        monkeypatch=monkeypatch,
+        summary=summary,
+        plan_sha256=plan_sha256,
+        utc_now=utc_now,
+    )
     _write_complete_inbound(run_root, extra_record=canary)
     with pytest.raises(supervisor.BoundedSupervisorError, match="credential-shaped"):
         supervisor.verify_inbound_evidence(
@@ -3055,7 +3293,14 @@ def test_local_bootstrap_release_tamper_is_rejected_before_inbound_verification(
 ) -> None:
     summary, plan_sha256, _ = _materialize(tmp_path, monkeypatch)
     run_root = tmp_path / supervisor.RUN_ROOT_RELATIVE
-    _observe_through_post_launch(tmp_path, summary=summary, plan_sha256=plan_sha256)
+    _, _, utc_now = _observe_through_post_launch(tmp_path, summary=summary, plan_sha256=plan_sha256)
+    _materialize_and_cleanup_openai_secret(
+        tmp_path,
+        monkeypatch=monkeypatch,
+        summary=summary,
+        plan_sha256=plan_sha256,
+        utc_now=utc_now,
+    )
     release_path = tmp_path / supervisor.BOOTSTRAP_RELEASE_RELATIVE
     release = json.loads(release_path.read_text(encoding="utf-8"))
     release["execution_commit"] = "f" * 40
@@ -3081,6 +3326,13 @@ def test_released_early_bootstrap_failure_is_admitted_for_failed_cleanup(
 ) -> None:
     summary, plan_sha256, _ = _materialize(tmp_path, monkeypatch)
     _, _, utc_now = _observe_through_post_launch(tmp_path, summary=summary, plan_sha256=plan_sha256)
+    _materialize_and_cleanup_openai_secret(
+        tmp_path,
+        monkeypatch=monkeypatch,
+        summary=summary,
+        plan_sha256=plan_sha256,
+        utc_now=utc_now,
+    )
     remote = tmp_path / "remote"
     remote.mkdir()
     cleanup = remote / "cleanup.json"
@@ -3089,7 +3341,7 @@ def test_released_early_bootstrap_failure_is_admitted_for_failed_cleanup(
             {
                 "schema_version": supervisor.SCHEMA_VERSION,
                 "secret_variable_name": "SIRA_API_KEY",
-                "secret_file_basename": "sira_api_key",
+                "secret_file_basename": "openai_provider_key",
                 "held_identity_established_before_preflight": True,
                 "truncated_before_unlink": True,
                 "unlinked": True,
@@ -3102,14 +3354,14 @@ def test_released_early_bootstrap_failure_is_admitted_for_failed_cleanup(
     )
     bootstrap = _load_remote_bootstrap()
     bootstrap.package_early_failure_evidence(
-        remote / "t07-bounded-output-0002",
+        remote / "t07-bounded-output-0003",
         failure_stage="invocation_validation",
         secret_target_identity_established=True,
         secret_cleanup_verified=True,
         secret_value_read=False,
         secret_cleanup_source=cleanup,
     )
-    remote_failure = remote / "t07-bounded-output-0002-early-failure"
+    remote_failure = remote / "t07-bounded-output-0003-early-failure"
     inbound = tmp_path / supervisor.RUN_ROOT_RELATIVE / "inbound"
     inbound.mkdir()
     for name in (
@@ -3145,6 +3397,13 @@ def test_self_consistent_early_failure_omission_is_rejected(
 ) -> None:
     summary, plan_sha256, _ = _materialize(tmp_path, monkeypatch)
     _, _, utc_now = _observe_through_post_launch(tmp_path, summary=summary, plan_sha256=plan_sha256)
+    _materialize_and_cleanup_openai_secret(
+        tmp_path,
+        monkeypatch=monkeypatch,
+        summary=summary,
+        plan_sha256=plan_sha256,
+        utc_now=utc_now,
+    )
     remote = tmp_path / "remote"
     remote.mkdir()
     cleanup = remote / "cleanup.json"
@@ -3153,7 +3412,7 @@ def test_self_consistent_early_failure_omission_is_rejected(
             {
                 "schema_version": supervisor.SCHEMA_VERSION,
                 "secret_variable_name": "SIRA_API_KEY",
-                "secret_file_basename": "sira_api_key",
+                "secret_file_basename": "openai_provider_key",
                 "held_identity_established_before_preflight": True,
                 "truncated_before_unlink": True,
                 "unlinked": True,
@@ -3166,14 +3425,14 @@ def test_self_consistent_early_failure_omission_is_rejected(
     )
     bootstrap = _load_remote_bootstrap()
     bootstrap.package_early_failure_evidence(
-        remote / "t07-bounded-output-0002",
+        remote / "t07-bounded-output-0003",
         failure_stage="invocation_validation",
         secret_target_identity_established=True,
         secret_cleanup_verified=True,
         secret_value_read=False,
         secret_cleanup_source=cleanup,
     )
-    failure_root = remote / "t07-bounded-output-0002-early-failure"
+    failure_root = remote / "t07-bounded-output-0003-early-failure"
     archive = failure_root / "t07-bounded-early-failure-evidence.zip"
     with zipfile.ZipFile(archive) as opened:
         members = {name: opened.read(name) for name in opened.namelist()}
@@ -3239,7 +3498,7 @@ def test_self_consistent_early_failure_omission_is_rejected(
 def test_archive_source_rejects_members_outside_exact_verified_set(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _materialize(tmp_path, monkeypatch)
+    summary, _, _ = _materialize(tmp_path, monkeypatch)
     run_root = tmp_path / supervisor.RUN_ROOT_RELATIVE
     (run_root / "INBOUND_VERIFICATION.json").write_text(
         '{"verification":{"bootstrap_release_present":false,'
@@ -3255,7 +3514,12 @@ def test_archive_source_rejects_members_outside_exact_verified_set(
     (responses / "extra.json").write_text("{}\n", encoding="utf-8")
     assert supervisor.MAX_ARCHIVE_PAYLOAD_FILES + 3 == supervisor.MAX_ARCHIVE_FILES == 128
     with pytest.raises(supervisor.BoundedSupervisorError, match="exact verified member set"):
-        supervisor._safe_source_files(tmp_path, disposition="failed")
+        supervisor._safe_source_files(
+            tmp_path,
+            disposition="failed",
+            authorization_sha256=str(summary["authorization_sha256"]),
+            private_binding_sha256=str(summary["private_binding_sha256"]),
+        )
 
 
 def test_normal_failure_rejects_missing_rotation_after_incomplete_secret_cleanup(
@@ -3263,6 +3527,13 @@ def test_normal_failure_rejects_missing_rotation_after_incomplete_secret_cleanup
 ) -> None:
     summary, plan_sha256, _ = _materialize(tmp_path, monkeypatch)
     _, _, utc_now = _observe_through_post_launch(tmp_path, summary=summary, plan_sha256=plan_sha256)
+    _materialize_and_cleanup_openai_secret(
+        tmp_path,
+        monkeypatch=monkeypatch,
+        summary=summary,
+        plan_sha256=plan_sha256,
+        utc_now=utc_now,
+    )
     run_root = tmp_path / supervisor.RUN_ROOT_RELATIVE
     records = _write_complete_inbound(run_root)
     inbound = run_root / "inbound"
@@ -3328,7 +3599,14 @@ def test_compute_closeout_keeps_unverified_remote_secret_cleanup_unresolved(
     }
     record = supervisor._write_compute_closeout(
         tmp_path,
-        authorization={"supervised_wall_started_at_utc": "2026-08-11T20:00:00Z"},
+        authorization_sha256="b" * 64,
+        private_binding_sha256="c" * 64,
+        authorization={
+            "authorization_reference": AUTHORIZATION_REFERENCE,
+            "execution_commit": COMMIT,
+            "plan_sha256": "d" * 64,
+            "supervised_wall_started_at_utc": "2026-08-11T20:00:00Z",
+        },
         state=state,
         disposition="failed",
         inbound_verification={
@@ -3352,6 +3630,144 @@ def test_compute_closeout_keeps_unverified_remote_secret_cleanup_unresolved(
     assert record["unresolved_billing_or_security"] is True
 
 
+def test_release_failure_after_remote_upload_requires_termination_or_rotation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / supervisor.RUN_ROOT_RELATIVE).mkdir(parents=True)
+    monkeypatch.setattr(
+        supervisor,
+        "_verify_local_openai_secret_cleanup",
+        lambda *args, **kwargs: {
+            "state": "cleaned",
+            "materialized": True,
+            "credential_access_may_have_occurred": True,
+            "remote_upload_confirmed": True,
+            "remote_upload_outcome_unknown": False,
+            "cleanup_verified": True,
+            "credential_rotation_required": False,
+            "archive_members": [],
+        },
+    )
+    state = {
+        "status": "cleanup_incomplete",
+        "cleanup_origin_phase": "post_launch",
+        "bound_instance_id": "synthetic-instance-private",
+        "termination_verified": False,
+        "provider_active_observed_at_utc": "2026-08-11T20:00:10Z",
+        "provider_terminal_observed_at_utc": None,
+    }
+    base = {
+        "root": tmp_path,
+        "authorization_sha256": "b" * 64,
+        "private_binding_sha256": "c" * 64,
+        "authorization": {
+            "authorization_reference": AUTHORIZATION_REFERENCE,
+            "execution_commit": COMMIT,
+            "plan_sha256": "d" * 64,
+            "supervised_wall_started_at_utc": "2026-08-11T20:00:00Z",
+        },
+        "disposition": "failed",
+        "inbound_verification": {
+            "remote_archive_kind": "not-produced-before-bootstrap",
+            "bootstrap_release_present": False,
+            "remote_bootstrap_provably_not_authorized": True,
+        },
+        "inbound_verification_sha256": "a" * 64,
+    }
+    unresolved = supervisor._write_compute_closeout(
+        state=state,
+        observer_verification={
+            "provider_active_observed_at_utc": state["provider_active_observed_at_utc"],
+            "provider_terminal_observed_at_utc": None,
+            "failed_phases": [],
+        },
+        **base,
+    )
+    assert unresolved["remote_openai_secret_upload_confirmed"] is True
+    assert unresolved["remote_secret_cleanup_verified"] is False
+    assert unresolved["remote_secret_destruction_verified"] is False
+    assert unresolved["manual_secret_deletion_required"] is True
+    assert unresolved["manual_credential_rotation_required"] is True
+
+    (tmp_path / supervisor.COMPUTE_CLOSEOUT_RELATIVE).unlink()
+    state["status"] = "cleanup_complete"
+    state["termination_verified"] = True
+    state["provider_terminal_observed_at_utc"] = "2026-08-11T20:01:10Z"
+    terminated = supervisor._write_compute_closeout(
+        state=state,
+        observer_verification={
+            "provider_active_observed_at_utc": state["provider_active_observed_at_utc"],
+            "provider_terminal_observed_at_utc": state["provider_terminal_observed_at_utc"],
+            "failed_phases": [],
+        },
+        **base,
+    )
+    assert terminated["remote_secret_cleanup_verified"] is False
+    assert terminated["remote_secret_destruction_verified"] is True
+    assert terminated["manual_secret_deletion_required"] is False
+    assert terminated["manual_credential_rotation_required"] is False
+
+
+def test_unknown_after_release_keeps_openai_billing_unreconciled_after_termination(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / supervisor.RUN_ROOT_RELATIVE).mkdir(parents=True)
+    (tmp_path / supervisor.BOOTSTRAP_RELEASE_RELATIVE).write_text("{}\n", encoding="utf-8")
+    monkeypatch.setattr(
+        supervisor,
+        "_verify_local_openai_secret_cleanup",
+        lambda *args, **kwargs: {
+            "state": "cleaned",
+            "materialized": True,
+            "credential_access_may_have_occurred": True,
+            "remote_upload_confirmed": True,
+            "remote_upload_outcome_unknown": False,
+            "cleanup_verified": True,
+            "credential_rotation_required": False,
+            "archive_members": [],
+        },
+    )
+    state = {
+        "status": "cleanup_complete",
+        "cleanup_origin_phase": "post_launch",
+        "bound_instance_id": "synthetic-instance-private",
+        "termination_verified": True,
+        "provider_active_observed_at_utc": "2026-08-11T20:00:10Z",
+        "provider_terminal_observed_at_utc": "2026-08-11T20:01:10Z",
+    }
+    record = supervisor._write_compute_closeout(
+        tmp_path,
+        authorization_sha256="b" * 64,
+        private_binding_sha256="c" * 64,
+        authorization={
+            "authorization_reference": AUTHORIZATION_REFERENCE,
+            "execution_commit": COMMIT,
+            "plan_sha256": "d" * 64,
+            "supervised_wall_started_at_utc": "2026-08-11T20:00:00Z",
+        },
+        state=state,
+        disposition="failed",
+        inbound_verification={
+            "remote_archive_kind": "release-upload-outcome-unknown",
+            "remote_bootstrap_provably_not_authorized": False,
+            "secret_cleanup_verified": False,
+            "manual_secret_deletion_required": True,
+            "manual_credential_rotation_required": False,
+        },
+        observer_verification={
+            "provider_active_observed_at_utc": state["provider_active_observed_at_utc"],
+            "provider_terminal_observed_at_utc": state["provider_terminal_observed_at_utc"],
+            "failed_phases": [],
+        },
+        inbound_verification_sha256="a" * 64,
+    )
+    assert record["remote_secret_destruction_verified"] is True
+    assert record["openai_api_cost_reconciled"] is False
+    assert record["within_wall_and_cost_caps"] is False
+    assert record["provider_and_security_cleanup_complete"] is False
+    assert record["unresolved_billing_or_security"] is True
+
+
 def test_compute_closeout_keeps_detected_credential_rotation_unresolved(
     tmp_path: Path,
 ) -> None:
@@ -3367,7 +3783,14 @@ def test_compute_closeout_keeps_detected_credential_rotation_unresolved(
     }
     record = supervisor._write_compute_closeout(
         tmp_path,
-        authorization={"supervised_wall_started_at_utc": "2026-08-11T20:00:00Z"},
+        authorization_sha256="b" * 64,
+        private_binding_sha256="c" * 64,
+        authorization={
+            "authorization_reference": AUTHORIZATION_REFERENCE,
+            "execution_commit": COMMIT,
+            "plan_sha256": "d" * 64,
+            "supervised_wall_started_at_utc": "2026-08-11T20:00:00Z",
+        },
         state=state,
         disposition="failed",
         inbound_verification={
@@ -3408,7 +3831,14 @@ def test_compute_closeout_distinguishes_security_failure_from_post_security_unce
     }
     record = supervisor._write_compute_closeout(
         tmp_path,
-        authorization={"supervised_wall_started_at_utc": "2026-08-11T20:00:00Z"},
+        authorization_sha256="b" * 64,
+        private_binding_sha256="c" * 64,
+        authorization={
+            "authorization_reference": AUTHORIZATION_REFERENCE,
+            "execution_commit": COMMIT,
+            "plan_sha256": "d" * 64,
+            "supervised_wall_started_at_utc": "2026-08-11T20:00:00Z",
+        },
         state=state,
         disposition="failed",
         inbound_verification={"remote_archive_kind": "not-produced-before-bootstrap"},

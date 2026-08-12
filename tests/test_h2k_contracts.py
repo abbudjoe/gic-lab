@@ -114,7 +114,7 @@ def test_t04_5_preserves_zero_execution_control_plane() -> None:
             "wall_clock_hours": 0.0,
             "accelerator_hours": 0.0,
             "cost_usd": 0.0,
-            "authorization_reference": "AUTH-T07-BOUNDED-SIRA-SMOKE-V2-PENDING",
+            "authorization_reference": "AUTH-T07-BOUNDED-SIRA-SMOKE-V3-PENDING",
             "status": "planned",
         }
     ]

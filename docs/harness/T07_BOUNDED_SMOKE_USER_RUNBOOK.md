@@ -1,154 +1,157 @@
-# T07 bounded smoke V2 user runbook
+# T07 bounded smoke V3 user runbook
 
 Status: **future user-operated procedure; unauthorized now**
 
 Use this runbook only after a fresh authorization names the exact final clean commit
-and plan below. Use the argument arrays in the plan directly; never reconstruct them as
-shell strings, improvise a retry, or substitute a resource.
+and the exact V3 plan below. Use only the plan's fixed argument arrays; never
+improvise a retry, alternate resource, or alternate secret source.
 
 ## Bound identities
 
-- Plan: `PLAN-T07-BOUNDED-SIRA-SMOKE-V2`, 43,198 bytes, SHA-256
-  `f0d635783d719d1c5cb5df5351eaf8f6f54e9049da1f2565e4227e66f48ef511`.
-- Private security binding: alias `t07-bounded-binding-67eceae4caa9`, SHA-256
-  `5b06ca70d7821e40574e711b3a68aac6f823b1806d2257395133ced7fc49e96b`, 2,660
-  bytes, schema `0.3.0`. Its independent locator, path, local-seal identity, and
-  values remain in the protected local channel and are not derivable from the alias
-  or SHA.
-- Contract: SHA-256
-  `fcb0b1a113b5f1c03ce123b24df9abe536b7ac561758915cdf5d340d08929ebc`.
-- Local supervisor: SHA-256
-  `5b2b43691288c2950ddbf9de12bf5c72d4fccf7b7a3fc04c81ea173c5f0f55a2`.
-- Local hash-first bootstrap: SHA-256
-  `0cd531ecd7584cb2d61caa3b0df8d6a60a82345c1f97fdddbd3c8aa6a16a9063`.
-- Reviewed implementation commit:
+- Plan: `PLAN-T07-BOUNDED-SIRA-SMOKE-V3`, 51,401 bytes, SHA-256
+  `30e83897c476dbd403a55d9d128636443f9df8a787ef903665ece083e3e41a53`.
+- Host/reactive/simulative runs: `RUN-T07-BOUNDED-HOST-0003`,
+  `RUN-T07-BOUNDED-SIRA-REACTIVE-0003`, and
+  `RUN-T07-BOUNDED-SIRA-SIMULATIVE-0003`.
+- Private security binding: alias `t07-bounded-binding-67eceae4caa9`, 2,660 bytes,
+  SHA-256 `5b06ca70d7821e40574e711b3a68aac6f823b1806d2257395133ced7fc49e96b`,
+  schema `0.3.0`. Its locator, path, local-seal identity, and private values stay in
+  the protected local channel.
+- OpenAI source schema: 4,411 bytes, SHA-256
+  `38cf99ee79532dbc91c85aa8b97868c26351d12c9acc606f315f77257e8d66d4`;
+  parser `giclab-strict-non-shell-dotenv-v1`; selected assignment
+  `OPENAI_API_KEY`; no provider fallback and no user-managed `SIRA_API_KEY` file.
+- Contract/supervisor/hash-first-bootstrap/remote-bootstrap SHA-256:
+  `2ef4af297f7d1b8a577d9d6a970d5e678f4e852cd10c4dfa55fd836640f18e43`,
+  `ae04aa08503366ac63fdd8a05553d63aa1ff5d6566d1cce3aafe69aa7410cc04`,
+  `caa99fe938a3cb0ce67d6dae1e36866abf26f6cf72c109d1ae3ca2f2ea8e7c4d`,
+  and `95b83f3ad23498f18cdb8efa90b0661713bf036f06a532ee5edb22f3fe065c4c`.
+- Reviewed implementation ancestor:
   `a7ca7475177aee60126e39c631d61e3d9453ca85`.
-- The protected human-decision seal and high-assurance baseline seal must match their
-  exact published SHA-256 identities before either document is parsed; selected-field
-  agreement alone is insufficient.
 
-V1 and all `0001` bounded run identities are blocked historical evidence and must
-never be replayed.
+V1/`0001` and V2/`0002` are blocked historical evidence and must never be
+replayed. The protected human-decision and high-assurance baseline seals must match
+their exact published hashes before either document is parsed.
 
-## Ordered procedure
+## Secret-channel boundary
 
-Remain present for the whole supervised window and keep the Lambda termination
-control visible. The 3,600-second authorization/provider timer begins at
-materialization, not launch; terminate no later than 3,300 seconds after
-materialization. Then perform exactly the plan's 23 steps:
+The Lambda observer receives only `LAMBDA_API_KEY` through its nonlogging local
+channel. The OpenAI channel receives the exact repository-external `.env` path only
+as private `${OPENAI_DOTENV_FILE}`. It opens that exact path through held no-follow
+descriptors and strictly selects one plain, unquoted `OPENAI_API_KEY=...` assignment.
 
-1. Privately resolve the retained local binding and its local seal with the exact
-   alias/SHA above. Supply their protected path and local-seal SHA only as the
-   `${PRIVATE_SECURITY_BINDING_PATH}` and
-   `${PRIVATE_SECURITY_BINDING_SEAL_SHA256}` substitutions; never print, log, or add
-   either value to Git. Run the plan's `materialize` array once with the exact final
-   clean execution commit and a fresh authorization reference. Before creating a run
-   root, it must verify the exact local binding/seal, exact externally sealed bundle,
-   directory/file modes, held volume identities, byte equality, hashes, storage
-   floors, and absence of internal fallback. It then copies the verified binding and
-   creates a fresh mode-0600 authorization, observer state, request ledger, and
-   summary under
-   `artifacts/t07/bounded/RUN-T07-BOUNDED-HOST-0002/`. Stop if that root already
-   exists or any binding identity, hash, permission, storage, freshness, or floor
-   check fails. Never regenerate authority from the historical L2M input.
-   The exact local arrays require the repository's pinned `.venv/bin/python`; do not
-   substitute macOS `/usr/bin/python3`.
-2. Run `prepare_bundle` once. It must create a deterministic tracked-only USTAR
-   archive with exactly 36 members: `BUNDLE_MANIFEST.json`, the plan, and all 34
-   plan-bound implementation artifacts. It also emits the reviewed remote bootstrap
-   separately under
-   `artifacts/t07/bounded-upload/RUN-T07-BOUNDED-HOST-0002/`. The archive and
-   bootstrap together are capped at 8,388,608 bytes; untracked, ignored, private,
-   `.env`, `.git`, `.secrets`, and `artifacts` inputs are forbidden.
-3. Run `observe_prelaunch` once. Its seven GETs must prove the exact offered
-   `gpu_1x_a10`, `us-east-1`, `img-0032`, `fractal-lambda-codex`, 129-cent/hour
-   price, capacity, key fingerprint, sealed global baseline, zero nonterminal
-   instances, and a credible termination path.
-4. In the Lambda console, apply only the privately bound temporary global IPv4 `/32`
-   rule if required. Do not expose the address.
-5. Create exactly the privately bound, uniquely named, same-region regional ruleset
-   with its exact SSH-only rule. Do not reuse an unrelated ruleset.
-6. Run `observe_security` once. Its two GETs must prove the exact temporary global
-   rule and exact owned regional ruleset before launch.
-7. Select exactly one `gpu_1x_a10` in `us-east-1`, image `img-0032`, no persistent
-   filesystem, key `fractal-lambda-codex`, and the bound owned ruleset. Reconfirm
-   price and image. Click **Launch** exactly once; never click again after ambiguity.
-8. Run `observe_post_launch` once. Its one GET must bind exactly one matching active
-   instance and immutable instance ID or stop for incident cleanup.
-9. Run `release_bootstrap` once only after the post-launch report replays cleanly and
-   the user attests that the console offered the exact bound image. The single-use
-   release binds the instance observation, authorization/private binding, plan,
-   execution commit, archive/manifest/bootstrap hashes, and canonical output root.
-10. Open Cloud IDE/Jupyter on that exact instance. Do not use SSH.
-11. Upload exactly `t07-bounded-repository.tar` to
-    `/home/ubuntu/t07-bounded-repository.tar`, `t07-bounded-bootstrap.py` to
-    `/home/ubuntu/t07-bounded-bootstrap.py`, the authorization to
-    `/home/ubuntu/t07-bounded-authorization.json`, the release to
-    `/home/ubuntu/t07-bounded-bootstrap-release.json`, and the private mode-0600
-    secret file to `/home/ubuntu/.config/giclab/sira_api_key`. Created and uploaded
-    outside every notebook cell and logged command, that file contains only the raw
-    value assigned to `SIRA_API_KEY`, optionally followed by one newline—never an
-    `SIRA_API_KEY=` prefix. It stays outside source/evidence roots, and the value never
-    enters a cell, argv, label, log, screenshot, environment/configuration listing, or
-    path.
-12. Execute the plan's `bootstrap_argv_template` once, replacing only its declared
-    placeholders. Before importing uploaded implementation code or opening the secret,
-    the standalone bootstrap must verify its own hash, claim the fresh canonical root
-    `/home/ubuntu/t07-bounded-output-0002`, verify the exact USTAR archive and release,
-    and extract to `/home/ubuntu/t07-bounded-bundle`. That root is permanently burned
-    for this run even on pre-secret failure. The bootstrap then verifies the
-    source/tree, immutable patch, lock, uv wheel, digest-pinned Playwright base, final
-    image ID, runtime-disk cap, and shared work/cleanup call meter.
-13. Require the one no-network local-static-page Chromium lifecycle preflight to pass,
-   including stop/kill/remove and zero owned residue.
-14. Require the one authenticated metadata GET to return exactly
-   `gpt-4o-2024-11-20`; verify price and budget boundaries before either condition.
-   Every Chat Completions request must explicitly carry `service_tier="default"`,
-   and every reconciled response must report `service_tier="default"`.
-15. Execute `SIRA-REACTIVE` once, then `SIRA-SIMULATIVE` once. Each gets at most one
-   browser action, 120 seconds, 200,000 tokens, USD 2.00 API cost, and no retry.
-16. On success, seal the complete evidence. On any failure, seal the bounded
-    secret-scanned normal or early-failure evidence under the already claimed root.
-    Retained command events record only argv hashes, return codes, byte counts, elapsed
-    time, and closed failure codes. In every case remove all four owned containers
-    through immutable IDs and verify zero owned containers/networks/volumes.
-17. Download the produced success or failure archive, its exact identity JSON, and
-   `TERMINATE_REQUIRED.json` into the fresh local inbound root. The local verifier
-   must validate canonical stored ZIP paths, the complete member/manifest/hash set,
-   decoded secret absence, and—on success—the pair budget, command diff, normalized
-   events, regulation decisions, and compute closeout. Do not edit or unpack over an
-   existing root.
-18. Run exactly one inbound verifier: `verify_inbound_complete` for a complete pair or
-    `verify_inbound_failed` otherwise. Verification must finish before provider
-    termination. Any actual secret derivative forces a credential-material incident
-    and manual credential rotation; incomplete deletion also requires rotation.
-19. Click **Terminate** for the exact bound instance regardless of workload outcome.
-20. Run `observe_termination` once. Its one GET must prove the bound instance terminal
-   or absent before changing the security resources.
-21. Delete only the bound owned regional ruleset, and restore the exact sealed global
-   baseline if it was changed.
-22. Run `observe_terminal` once. Its two GETs must prove owned-ruleset absence and the
-   exact global-baseline semantic hash.
-23. Run exactly one local archive array: `archive_complete` only for a validated pair,
-   otherwise `archive_failed`. It must use held no-follow APFS/UTDM descriptors,
-   reread every destination, verify every SHA-256, fsync, atomically finalize, retain
-   the local source, and use no internal fallback. The exact upload archive and
-   bootstrap must appear in the external archive as
-   `upload-bundle/t07-bounded-repository.tar` and
-   `upload-bundle/t07-bounded-bootstrap.py`. The cap is at most 125 copied payload
-   files plus three seal files (128 total); the expected complete-run set is 34
-   payload files plus three seal files (37 total). Then stop; do not interpret.
+The supervisor automatically writes only the selected bytes to one fresh mode-0600
+local upload file. The user uploads that filtered file—not `.env`—to
+`/home/ubuntu/.config/giclab/openai_provider_key`. Local cleanup destroys the exact
+device/inode before any release can be issued. The metadata child later receives
+`OPENAI_API_KEY` directly; each SiRA condition child receives the same bytes only as
+an ephemeral `SIRA_API_KEY` alias. `LAMBDA_API_KEY` reaches neither. No key or key hash
+may enter a command line, notebook cell, environment/configuration record, label,
+image, path, log, screenshot, ledger, archive, Git file, chat, or public output.
+
+## Exact 29-step procedure
+
+Remain present for the complete supervised window and keep Lambda's termination
+control available. The 3,600-second timer starts at authorization materialization;
+click termination no later than 3,300 seconds.
+
+1. Privately resolve the retained binding and local seal. Supply only their protected
+   path/SHA substitutions to `materialize`, plus the exact final clean commit and
+   fresh authorization reference. The verifier must establish binding, external
+   bundle, Git, storage, permission, and freshness identities before creating the
+   V3 run root.
+2. Run `prepare_bundle` once. It creates a deterministic tracked-only USTAR archive
+   with exactly 36 members—manifest, V3 plan, and 34 implementation artifacts—and a
+   separate reviewed bootstrap. The archive plus bootstrap stay within 8,388,608
+   bytes. `.env`, the temporary credential, Git metadata, ignored/private files, and
+   prior artifacts are excluded.
+3. Run `observe_prelaunch` once. Its seven GETs must prove resource offeredness,
+   129-cent/hour price, capacity, key fingerprint, sealed firewall baseline, zero
+   nonterminal instances, and a credible termination path.
+4. **User checkpoint:** in Lambda console, apply only the privately bound temporary
+   global IPv4 `/32` restriction if required. Do not disclose the value.
+5. **User checkpoint:** create exactly the privately bound unique regional ruleset
+   with its exact SSH-only rule. Do not reuse another ruleset.
+6. Run `observe_security` once. Its two GETs must verify both exact security controls.
+7. **User checkpoint:** select one `gpu_1x_a10` in `us-east-1`, image `img-0032`, key
+   `fractal-lambda-codex`, no persistent filesystem, and the bound ruleset. Reconfirm
+   price/image and click **Launch** exactly once.
+8. Run `observe_post_launch` once to bind one matching active instance and immutable
+   provider ID.
+9. **User checkpoint:** open Cloud IDE/Jupyter for only the bound instance. Do not use
+   SSH.
+10. **User checkpoint:** in its terminal, execute only the plan's fixed
+    `remote_parent_prepare_argv`, followed by every
+    `remote_parent_verify_argvs` array. Require current-user ownership, stdout mode
+    `700`, canonical stdout `/home/ubuntu/.config/giclab`, and both `test ! -e` and
+    `test ! -L` success for the final credential path. Stop before local secret access
+    if the parent hierarchy is redirected or the target already exists.
+11. Run `materialize_openai_secret` once with the exact private `.env` path as
+    `${OPENAI_DOTENV_FILE}`. Never print the path or value in Jupyter or chat.
+12. **User checkpoint:** upload exactly the repository archive, reviewed bootstrap,
+    authorization, and generated filtered runtime file to their fixed paths. Do not
+    upload the complete `.env` and do not upload a bootstrap release yet.
+13. **User checkpoint:** run only `remote_file_prepare_argv`, then every
+    `remote_file_verify_argvs` array. Require a regular non-symlink file, current-user
+    ownership, and exact stdout mode `600`. Do not read or display the file.
+14. Run exactly one local secret closeout operation. If upload and permission
+    qualification are confirmed, run `cleanup_openai_secret`. If upload definitely
+    did not occur, run `abort_openai_secret_not_uploaded`; if the outcome or remote
+    metadata is uncertain, run `abort_openai_secret_unknown`. Every path must destroy
+    the exact local device/inode and fsync its receipt. Either abort path prohibits
+    release; the unknown path requires credential rotation.
+15. Only after the positive-upload cleanup receipt passes, run `release_bootstrap`
+    once with exact console image attestation.
+16. **User checkpoint:** upload only the newly issued exact bootstrap-release file to
+    its fixed path. Do not run bootstrap yet.
+17. Run `attest_bootstrap_release_upload` once. Receipt failure after an attempted
+    upload is an unknown remote outcome, never proof of non-upload.
+18. Execute `bootstrap_argv_template` once. It verifies its own hash before importing
+    uploaded code, claims `/home/ubuntu/t07-bounded-output-0003`, verifies/extracts
+    the bundle, and validates source, dependencies, image, budgets, release, and held
+    secret-file identity.
+19. Require the one no-network local-static-page Chromium lifecycle preflight,
+    removal, and zero-residue checks to pass before the credential is read.
+20. Require one authenticated metadata GET to return exactly
+    `gpt-4o-2024-11-20`. The metadata child receives only `OPENAI_API_KEY`; every Chat
+    Completions request and reconciled response must report `service_tier="default"`.
+21. Execute `SIRA-REACTIVE` once, then `SIRA-SIMULATIVE` once. Each condition receives
+    only the ephemeral `SIRA_API_KEY` alias and has one browser action, 120 seconds,
+    200,000 tokens, USD 2.00, one attempt, and zero retry.
+22. Seal success or the maximal safe failure prefix. Scan untrusted bytes before any
+    hash/retention, destroy the remote secret, remove all owned containers by immutable
+    ID, and prove zero owned container/network/volume/browser residue.
+23. **User checkpoint:** download the complete or failed evidence ZIP, exact identity
+    JSON, and `TERMINATE_REQUIRED.json` into the fresh local inbound root.
+24. Run one matching inbound verifier before provider termination. Any credential
+    representation, unknown workload/accounting outcome, or incomplete cleanup stays
+    unresolved and requires the typed response.
+25. **User checkpoint:** click **Terminate** for the exact bound instance regardless
+    of workload outcome.
+26. Run `observe_termination` once and require terminal/absent provider evidence.
+27. **User checkpoint:** delete only the owned regional ruleset and restore the exact
+    sealed global baseline if changed.
+28. Run `observe_terminal` once to prove ruleset absence and exact restoration.
+29. Run `archive_complete` only for a validated pair; otherwise run `archive_failed`.
+    Copy one way through held no-follow APFS/UTDM descriptors, reread/hash each
+    destination, fsync, atomically finalize, retain the source, and use no internal
+    fallback. The cap remains 125 payload plus three seal files; a complete V3 run has
+    exactly 39 payload plus three seal files, including four nonsecret local-secret
+    lifecycle receipts and the two reviewed upload artifacts, but never the temporary
+    credential or a derivative. Then stop.
 
 ## Immediate stop and incident rule
 
-Any hard blocker stops before launch. After launch, Cloud IDE, source/bootstrap,
-model/API, browser/container, budget/wall/disk/call/output, evidence download, pair
-contract, observer-ledger, or archive failure ends the attempt: preserve safe evidence,
-remove owned containers when possible, terminate the exact instance, verify terminal
-state, and restore only the owned security resources. A provider/control-plane outage
-is an incident; remain present and keep using the same manual termination control. It
-does not authorize another resource or retry.
+Any hard blocker stops before launch. After launch, any console, upload, secret,
+release, bootstrap, model/API, browser/container, budget, wall, disk, call, output,
+evidence, observer, cleanup, or archive failure ends the attempt. If the local secret
+exists, use only the typed identity-bound cleanup/abort capability even after expiry
+or repository drift. Preserve safe evidence, remove owned containers where possible,
+terminate the exact instance, verify terminal/nonbillable state, remove only the owned
+ruleset, restore the exact baseline, and do not retry. Unknown release-upload or
+remote-bootstrap outcomes keep OpenAI usage unreconciled; exact instance termination
+can prove destruction but cannot fabricate missing billing/evidence.
 
 The profile expires after the first matched pair or first terminal infrastructure
-failure. It authorizes no interpretation, pilot, T08, production claim, SSH, second
-launch, or second condition attempt.
+failure. It authorizes no scientific interpretation, pilot, T08, production claim,
+SSH, second launch, or second condition attempt.

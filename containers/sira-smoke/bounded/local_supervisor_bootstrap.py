@@ -17,6 +17,7 @@ from typing import Final
 
 MAX_MODULE_BYTES: Final = 2_097_152
 _BOOTSTRAP_OPTIONS: Final = ("--supervisor-file", "--supervisor-sha256")
+_CLEANUP_OPERATIONS: Final = frozenset({"cleanup-openai-secret", "abort-openai-secret"})
 
 
 class LocalSupervisorBootstrapError(RuntimeError):
@@ -160,6 +161,13 @@ def _without_bootstrap_options(argv: list[str]) -> list[str]:
     return result
 
 
+def _operation(argv: list[str]) -> str:
+    candidates = [value for value in argv if value in _CLEANUP_OPERATIONS]
+    if len(candidates) > 1:
+        raise LocalSupervisorBootstrapError("cleanup operation is ambiguous")
+    return candidates[0] if candidates else ""
+
+
 def main(argv: list[str] | None = None) -> int:
     arguments = list(sys.argv[1:] if argv is None else argv)
     repository_root = Path(_option(arguments, "--repository-root")).resolve(strict=True)
@@ -169,9 +177,10 @@ def main(argv: list[str] | None = None) -> int:
     expected_supervisor = repository_root / "src/giclab/harness/t07_bounded_supervisor.py"
     if contract_path != expected_contract or supervisor_path != expected_supervisor:
         raise LocalSupervisorBootstrapError("bound module path escaped the repository contract")
-    _verify_clean_repository(repository_root, _option(arguments, "--expected-commit"))
     contract_bytes = _verified(contract_path, _option(arguments, "--contract-sha256"))
     supervisor_bytes = _verified(supervisor_path, _option(arguments, "--supervisor-sha256"))
+    if _operation(arguments) not in _CLEANUP_OPERATIONS:
+        _verify_clean_repository(repository_root, _option(arguments, "--expected-commit"))
     sys.path.insert(0, str(repository_root / "src"))
     _install_inert_package_surface(repository_root)
     contract = _load_verified_bytes(contract_path, contract_bytes, "t07_bounded_contract")

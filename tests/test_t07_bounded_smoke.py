@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import importlib.util
+import inspect
 import json
 import os
 import sys
@@ -60,7 +61,7 @@ def valid_plan() -> dict[str, object]:
     browser = bounded.browser_preflight_create_argv()
     model = bounded.model_preflight_create_argv()
     return {
-        "$schema": "../../../schemas/t07-bounded-smoke-plan-v2.schema.json",
+        "$schema": "../../../schemas/t07-bounded-smoke-plan-v3.schema.json",
         "identity": {
             "schema_version": bounded.SCHEMA_VERSION,
             "plan_id": bounded.PLAN_ID,
@@ -158,17 +159,7 @@ def valid_plan() -> dict[str, object]:
         "storage": bounded.storage_contract(),
         "private_security_binding": bounded.private_security_binding_contract(),
         "conditions": conditions,
-        "secrets": {
-            "provider_observer_variable": "LAMBDA_API_KEY",
-            "workload_variable": "SIRA_API_KEY",
-            "workload_file": "/run/secrets/sira_api_key",
-            "forbidden_fallback": "OPENAI_API_KEY",
-            "value_in_argv": False,
-            "value_in_environment_list": False,
-            "value_in_image": False,
-            "value_in_labels": False,
-            "value_in_evidence": False,
-        },
+        "secrets": bounded.secrets_contract(),
         "lambda": {
             "product": "Lambda On-Demand Cloud",
             "api_base_url": "https://cloud.lambda.ai",
@@ -225,7 +216,7 @@ def _load_bootstrap() -> ModuleType:
 def test_valid_plan_is_exact_and_schema_valid() -> None:
     plan = valid_plan()
     bounded.validate_plan(plan, repository_root=ROOT)
-    assert validate_instance(plan, ROOT / "schemas/t07-bounded-smoke-plan-v2.schema.json") == []
+    assert validate_instance(plan, ROOT / "schemas/t07-bounded-smoke-plan-v3.schema.json") == []
 
 
 def test_locked_scientific_files_remain_exact() -> None:
@@ -233,7 +224,7 @@ def test_locked_scientific_files_remain_exact() -> None:
         assert bounded.sha256_file(ROOT / relative) == digest
 
 
-def test_v1_plan_and_runs_are_preserved_burned_and_v2_is_fresh() -> None:
+def test_v1_v2_plans_and_runs_are_preserved_burned_and_v3_is_fresh() -> None:
     v1_path = ROOT / "containers/sira-smoke/bounded/bounded-smoke-plan-v1.json"
     encoded = v1_path.read_bytes()
     assert len(encoded) == 55_789
@@ -242,11 +233,21 @@ def test_v1_plan_and_runs_are_preserved_burned_and_v2_is_fresh() -> None:
     )
     v1 = json.loads(encoded)
     assert v1["identity"]["host_run_id"] == "RUN-T07-BOUNDED-HOST-0001"
-    assert bounded.HOST_RUN_ID == "RUN-T07-BOUNDED-HOST-0002"
-    assert bounded.REACTIVE_RUN_ID == "RUN-T07-BOUNDED-SIRA-REACTIVE-0002"
-    assert bounded.SIMULATIVE_RUN_ID == "RUN-T07-BOUNDED-SIRA-SIMULATIVE-0002"
+    v2_path = ROOT / "containers/sira-smoke/bounded/bounded-smoke-plan-v2.json"
+    v2_encoded = v2_path.read_bytes()
+    assert len(v2_encoded) == 43_198
+    assert hashlib.sha256(v2_encoded).hexdigest() == (
+        "f0d635783d719d1c5cb5df5351eaf8f6f54e9049da1f2565e4227e66f48ef511"
+    )
+    v2 = json.loads(v2_encoded)
+    assert v2["identity"]["host_run_id"] == "RUN-T07-BOUNDED-HOST-0002"
+    assert bounded.HOST_RUN_ID == "RUN-T07-BOUNDED-HOST-0003"
+    assert bounded.REACTIVE_RUN_ID == "RUN-T07-BOUNDED-SIRA-REACTIVE-0003"
+    assert bounded.SIMULATIVE_RUN_ID == "RUN-T07-BOUNDED-SIRA-SIMULATIVE-0003"
     assert v1["limits"] == valid_plan()["limits"]
     assert v1["scientific_lock"] == valid_plan()["scientific_lock"]
+    assert v2["limits"] == valid_plan()["limits"]
+    assert v2["scientific_lock"] == valid_plan()["scientific_lock"]
 
 
 def test_v2_private_binding_public_surface_is_minimal_and_command_is_hash_bound() -> None:
@@ -345,7 +346,12 @@ def test_container_templates_enforce_bounded_security_policy() -> None:
         assert all("type=bind" not in item or item.endswith(",readonly") for item in argv)
     assert "none" in bounded.browser_preflight_create_argv()
     assert "${SIRA_SECRET_FILE}" not in bounded.browser_preflight_create_argv()
-    assert "${SIRA_SECRET_FILE}" in "\n".join(bounded.model_preflight_create_argv())
+    model = bounded.model_preflight_create_argv()
+    assert "${SIRA_SECRET_FILE}" in "\n".join(model)
+    assert model[model.index("--runtime-assignment") + 1] == "OPENAI_API_KEY"
+    for condition in bounded.CONDITION_ORDER:
+        argv = bounded.container_create_argv(condition)
+        assert "--runtime-assignment" not in argv
     lifecycle = bounded.lifecycle_argv_templates()
     assert lifecycle["copy_out"] == [
         "/usr/bin/docker",
@@ -353,6 +359,59 @@ def test_container_templates_enforce_bounded_security_policy() -> None:
         "${CONTAINER_ID}:/giclab/attempt/.",
         "${HOST_ATTEMPT_ROOT}",
     ]
+
+
+def test_remote_secret_metadata_qualification_is_an_explicit_user_checkpoint() -> None:
+    source = bounded.openai_secret_source_contract()
+    assert source["remote_runtime_file"] == "/home/ubuntu/.config/giclab/openai_provider_key"
+    assert source["remote_parent_mode"] == "0700"
+    assert source["runtime_file_mode"] == "0600"
+    assert source["remote_current_user_owned"] is True
+    assert source["remote_parent_prepare_argv"] == [
+        "/usr/bin/install",
+        "-d",
+        "-m",
+        "0700",
+        "/home/ubuntu/.config/giclab",
+    ]
+    assert ["/usr/bin/test", "-O", "/home/ubuntu/.config/giclab"] in source[
+        "remote_parent_verify_argvs"
+    ]
+    assert source["remote_parent_mode_stdout"] == "700"
+    assert [
+        "/usr/bin/realpath",
+        "--canonicalize-existing",
+        "/home/ubuntu/.config/giclab",
+    ] in source["remote_parent_verify_argvs"]
+    assert source["remote_parent_realpath_stdout"] == "/home/ubuntu/.config/giclab"
+    assert [
+        "/usr/bin/test",
+        "!",
+        "-e",
+        "/home/ubuntu/.config/giclab/openai_provider_key",
+    ] in source["remote_parent_verify_argvs"]
+    assert [
+        "/usr/bin/test",
+        "!",
+        "-L",
+        "/home/ubuntu/.config/giclab/openai_provider_key",
+    ] in source["remote_parent_verify_argvs"]
+    assert source["remote_file_prepare_argv"] == [
+        "/usr/bin/chmod",
+        "0600",
+        "/home/ubuntu/.config/giclab/openai_provider_key",
+    ]
+    assert [
+        "/usr/bin/test",
+        "-O",
+        "/home/ubuntu/.config/giclab/openai_provider_key",
+    ] in source["remote_file_verify_argvs"]
+    assert source["remote_file_mode_stdout"] == "600"
+    actions = [action for _, _, action in bounded.STEP_CONTRACT]
+    assert "create_and_qualify_exact_remote_secret_parent_without_secret_access" in actions
+    assert "qualify_remote_secret_owner_mode_and_exact_file_identity" in actions
+    cleanup = bounded.local_supervisor_argv_templates()["cleanup_openai_secret"]
+    assert cleanup[-1] == ("confirmed-exact-filtered-file-uploaded-and-permissions-qualified")
 
 
 def test_secret_value_is_never_part_of_rendered_or_committed_commands() -> None:
@@ -433,7 +492,7 @@ def test_evidence_manifest_is_schema_valid_bounded_and_secret_safe(tmp_path: Pat
     manifest = bounded.build_evidence_manifest(tmp_path)
     bounded.validate_evidence_manifest(manifest)
     assert (
-        validate_instance(manifest, ROOT / "schemas/t07-bounded-smoke-evidence-v2.schema.json")
+        validate_instance(manifest, ROOT / "schemas/t07-bounded-smoke-evidence-v3.schema.json")
         == []
     )
     (tmp_path / "secret.txt").write_text(
@@ -452,12 +511,15 @@ def test_secret_lease_holds_identity_and_destroys_without_retaining_value(tmp_pa
     bootstrap = _load_bootstrap()
     secret_root = tmp_path / "secret-root"
     secret_root.mkdir()
+    secret_root.chmod(0o700)
     credential_path = secret_root / "sira_api_key"
     canary = b"PUBLIC_DUMMY_SECRET_CANARY_0123456789"
-    credential_path.write_bytes(canary + b"\n")
+    credential_path.write_bytes(canary)
     credential_path.chmod(0o600)
     lease = bootstrap.acquire_secret_lease(
-        credential_path, forbidden_roots=(tmp_path / "repository",)
+        credential_path,
+        forbidden_roots=(tmp_path / "repository",),
+        expected_path=credential_path,
     )
     try:
         assert lease.read_value() == canary
@@ -470,17 +532,54 @@ def test_secret_lease_holds_identity_and_destroys_without_retaining_value(tmp_pa
         lease.close()
 
 
+@pytest.mark.parametrize(
+    "unsafe_value",
+    [
+        b"OPENAI_API_KEY=PUBLIC-DUMMY\nLAMBDA_API_KEY=PUBLIC-DUMMY-LAMBDA",
+        b"PUBLIC-DUMMY\n",
+        b"PUBLIC-DUMMY\r",
+        b"PUBLIC DUMMY",
+    ],
+)
+def test_remote_secret_lease_rejects_non_filtered_values_before_provider_child(
+    tmp_path: Path, unsafe_value: bytes
+) -> None:
+    bootstrap = _load_bootstrap()
+    runtime_contract = bounded.openai_secret_source_contract()["runtime_value_contract"]
+    assert runtime_contract == bootstrap.REMOTE_SECRET_VALUE_CONTRACT
+    secret_root = tmp_path / "secret-root"
+    secret_root.mkdir()
+    secret_root.chmod(0o700)
+    credential_path = secret_root / "openai_provider_key"
+    credential_path.write_bytes(unsafe_value)
+    credential_path.chmod(0o600)
+    lease = bootstrap.acquire_secret_lease(
+        credential_path,
+        forbidden_roots=(tmp_path / "repository",),
+        expected_path=credential_path,
+    )
+    try:
+        with pytest.raises(bootstrap.BootstrapError, match="secret file contract"):
+            lease.read_value()
+        assert lease.value_read is False
+    finally:
+        lease.close()
+
+
 def test_secret_lease_path_replacement_truncates_held_inode_and_requires_rotation(
     tmp_path: Path,
 ) -> None:
     bootstrap = _load_bootstrap()
     secret_root = tmp_path / "secret-root"
     secret_root.mkdir()
+    secret_root.chmod(0o700)
     credential_path = secret_root / "sira_api_key"
     credential_path.write_text("PUBLIC_DUMMY_OLD_SECRET\n", encoding="utf-8")
     credential_path.chmod(0o600)
     lease = bootstrap.acquire_secret_lease(
-        credential_path, forbidden_roots=(tmp_path / "repository",)
+        credential_path,
+        forbidden_roots=(tmp_path / "repository",),
+        expected_path=credential_path,
     )
     held_copy = secret_root / "held-original"
     credential_path.rename(held_copy)
@@ -502,14 +601,14 @@ def test_secret_lease_path_replacement_truncates_held_inode_and_requires_rotatio
 
 def test_early_failure_bundle_is_bounded_secret_safe_and_complete(tmp_path: Path) -> None:
     bootstrap = _load_bootstrap()
-    output_root = tmp_path / "t07-bounded-output-0002"
+    output_root = tmp_path / "t07-bounded-output-0003"
     cleanup = tmp_path / "cleanup.json"
     cleanup.write_text(
         json.dumps(
             {
                 "schema_version": "0.1.0",
                 "secret_variable_name": "SIRA_API_KEY",
-                "secret_file_basename": "sira_api_key",
+                "secret_file_basename": "openai_provider_key",
                 "held_identity_established_before_preflight": True,
                 "truncated_before_unlink": True,
                 "unlinked": True,
@@ -531,7 +630,7 @@ def test_early_failure_bundle_is_bounded_secret_safe_and_complete(tmp_path: Path
         secret_value_read=False,
         secret_cleanup_source=cleanup,
     )
-    early_root = tmp_path / "t07-bounded-output-0002-early-failure"
+    early_root = tmp_path / "t07-bounded-output-0003-early-failure"
     assert archive.parent == early_root
     assert archive.stat().st_size <= bootstrap.MAX_EARLY_FAILURE_EVIDENCE_BYTES
     assert {
@@ -699,7 +798,7 @@ def test_lifecycle_failed_stop_still_kills_removes_and_seals_cleanup(tmp_path: P
             "${HOST_ATTEMPT_ROOT}": str(tmp_path),
             "${SIRA_SECRET_FILE}": "/private/dummy-secret-file",
             "${EXECUTION_COMMIT}": "1" * 40,
-            "${AUTHORIZATION_REFERENCE}": "AUTH-T07-BOUNDED-SIRA-SMOKE-V2-TEST",
+            "${AUTHORIZATION_REFERENCE}": "AUTH-T07-BOUNDED-SIRA-SMOKE-V3-TEST",
             "${IMAGE_ID}": "sha256:" + "2" * 64,
         },
         plan=valid_plan(),
@@ -732,7 +831,7 @@ def test_unsafe_realized_container_policy_blocks_release_and_still_cleans_up(
             substitutions={
                 "${SIRA_SECRET_FILE}": "/private/dummy-secret-file",
                 "${EXECUTION_COMMIT}": "1" * 40,
-                "${AUTHORIZATION_REFERENCE}": "AUTH-T07-BOUNDED-SIRA-SMOKE-V2-TEST",
+                "${AUTHORIZATION_REFERENCE}": "AUTH-T07-BOUNDED-SIRA-SMOKE-V3-TEST",
                 "${IMAGE_ID}": "sha256:" + "2" * 64,
             },
             plan=valid_plan(),
@@ -871,9 +970,6 @@ def test_failure_archive_is_bounded_and_excludes_secret_canary(tmp_path: Path) -
         lambda value: base64.b64encode(value).rstrip(b"="),
         base64.urlsafe_b64encode,
         lambda value: base64.urlsafe_b64encode(value).rstrip(b"="),
-        lambda value: hashlib.sha256(value).digest(),
-        lambda value: hashlib.sha256(value).hexdigest().encode("ascii"),
-        lambda value: hashlib.sha256(value).hexdigest().upper().encode("ascii"),
     ),
 )
 def test_success_and_failure_archives_reject_secret_derivatives(
@@ -907,13 +1003,166 @@ def test_success_and_failure_archives_reject_secret_derivatives(
     assert transformed not in retained
 
 
+def test_runtime_secret_scanner_never_hashes_the_provider_key() -> None:
+    bootstrap = _load_bootstrap()
+    source = inspect.getsource(bootstrap._secret_derivatives)
+    assert "hashlib" not in source
+    assert "sha256" not in source
+
+
+def test_untrusted_workload_output_is_scanned_before_any_digest_is_retained(
+    tmp_path: Path,
+) -> None:
+    bootstrap = _load_bootstrap()
+    canary = b"PUBLIC_DUMMY_OPAQUE_CANARY_0123456789"
+    digest = hashlib.sha256(canary).hexdigest().encode()
+    result = bootstrap.CommandResult(("/usr/bin/docker", "logs", "dummy"), 0, canary, b"", 0.1)
+    receipt = tmp_path / "container-logs.json"
+    with pytest.raises(bootstrap.BootstrapError) as captured:
+        bootstrap._capture_json_output(receipt, result, secret_value=canary)
+    assert captured.value.failure_code == "credential_material_detected"
+    assert not receipt.exists()
+
+    evidence = tmp_path / "failed" / "evidence"
+    evidence.mkdir(parents=True)
+    (evidence / "raw-workload.log").write_bytes(canary)
+    (evidence.parent / "TERMINATE_REQUIRED.json").write_text("{}\n", encoding="utf-8")
+    archive = bootstrap.package_failure_evidence(
+        evidence.parent,
+        evidence,
+        bounded,
+        secret_value=canary,
+    )
+    with zipfile.ZipFile(archive) as opened:
+        retained = b"".join(opened.read(name) for name in opened.namelist())
+    assert canary not in retained
+    assert digest not in retained
+
+
+@pytest.mark.parametrize("mode", (0o400, 0o500, 0o600, 0o700))
+def test_remote_secret_held_descriptor_requires_exact_mode_0600(tmp_path: Path, mode: int) -> None:
+    bootstrap = _load_bootstrap()
+    parent = tmp_path.resolve() / ".config/giclab"
+    parent.mkdir(parents=True, mode=0o700)
+    parent.chmod(0o700)
+    path = parent / "openai_provider_key"
+    path.write_bytes(b"PUBLIC-DUMMY-REMOTE-MODE-CANARY-0123456789")
+    path.chmod(mode)
+    if mode == 0o600:
+        lease = bootstrap.acquire_secret_lease(path, forbidden_roots=(), expected_path=path)
+        lease.close()
+    else:
+        with pytest.raises(
+            bootstrap.BootstrapError,
+            match=r"secret file (?:is unavailable|contract)",
+        ):
+            bootstrap.acquire_secret_lease(path, forbidden_roots=(), expected_path=path)
+
+
+@pytest.mark.parametrize("phase", ("copy", "cleanup"))
+def test_copy_and_cleanup_outputs_are_scanned_before_hashing(tmp_path: Path, phase: str) -> None:
+    bootstrap = _load_bootstrap()
+    canary = b"PUBLIC_DUMMY_OPAQUE_CANARY_0123456789"
+    digest = hashlib.sha256(canary).hexdigest().encode()
+    evidence = tmp_path / phase
+    evidence.mkdir()
+
+    class CanaryRunner:
+        def remaining(self) -> float:
+            return 60.0
+
+        def run(self, argv: Any, **kwargs: Any) -> Any:
+            return bootstrap.CommandResult(tuple(argv), 0, canary, b"", 0.1)
+
+    runner = CanaryRunner()
+    plan = {"container_lifecycle": bounded.lifecycle_argv_templates()}
+    with pytest.raises(bootstrap.BootstrapError) as captured:
+        if phase == "copy":
+            bootstrap._copy_container_payload(
+                container_id="a" * 64,
+                run_id=bounded.REACTIVE_RUN_ID,
+                phase="prestop",
+                plan=plan,
+                contract=bounded,
+                runner=runner,
+                evidence_root=evidence,
+                secret_value=canary,
+            )
+        else:
+            bootstrap._cleanup_container(
+                container_id="a" * 64,
+                run_id=bounded.REACTIVE_RUN_ID,
+                condition="SIRA-REACTIVE",
+                plan=plan,
+                contract=bounded,
+                cleanup_runner=runner,
+                evidence_root=evidence,
+                payload_captured=True,
+                payload_bytes=0,
+                payload_phase="prestop",
+                secret_value=canary,
+            )
+    assert captured.value.failure_code == "credential_material_detected"
+    retained = b"".join(path.read_bytes() for path in evidence.rglob("*") if path.is_file())
+    assert canary not in retained
+    assert digest not in retained
+
+
+def test_remote_secret_value_read_is_deferred_until_after_build_and_browser() -> None:
+    bootstrap = _load_bootstrap()
+    source = inspect.getsource(bootstrap._execute)
+    assert source.index('execution_stage = "build_context"') < source.index(
+        'execution_stage = "browser_preflight"'
+    )
+    assert source.index('execution_stage = "browser_preflight"') < source.index(
+        "secret_value = secret_lease.read_value()"
+    )
+    assert source.index("secret_value = secret_lease.read_value()") < source.index(
+        'execution_stage = "model_preflight"'
+    )
+    assert source.index("package_evidence(evidence_root") < source.index("secret_value = None")
+
+
+def test_remote_cleanup_receipt_write_failure_is_not_misclassified(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    bootstrap = _load_bootstrap()
+    parent_descriptor = os.open(tmp_path, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+    secret_path = tmp_path / "openai_provider_key"
+    secret_path.write_bytes(b"PUBLIC-DUMMY-NONSECRET")
+    secret_path.chmod(0o600)
+    descriptor = os.open(secret_path, os.O_RDWR | getattr(os, "O_NOFOLLOW", 0))
+    metadata = os.fstat(descriptor)
+    lease = bootstrap.SecretLease(
+        path=secret_path,
+        descriptor=descriptor,
+        parent_descriptor=parent_descriptor,
+        device=metadata.st_dev,
+        inode=metadata.st_ino,
+        size=metadata.st_size,
+    )
+    receipt = tmp_path / "secret-cleanup.json"
+
+    def partial_receipt(path: Path, document: object) -> None:
+        path.write_text("{", encoding="utf-8")
+        raise OSError
+
+    monkeypatch.setattr(bootstrap, "_write_json", partial_receipt)
+    with pytest.raises(OSError):
+        lease.destroy(receipt)
+    assert lease.destroyed is True
+    assert not secret_path.exists()
+    assert bootstrap._validated_secret_cleanup_receipt(receipt) is False
+    lease.close()
+
+
 def test_known_authorization_reference_is_not_a_secret_derivative_false_positive(
     tmp_path: Path,
 ) -> None:
     bootstrap = _load_bootstrap()
     evidence = tmp_path / "evidence"
     evidence.mkdir()
-    authorization = b"AUTH-T07-BOUNDED-SIRA-SMOKE-V2-TEST"
+    authorization = b"AUTH-T07-BOUNDED-SIRA-SMOKE-V3-TEST"
     (evidence / "authority.json").write_bytes(
         b'{"authorization_reference":"' + authorization + b'"}\n'
     )
@@ -970,9 +1219,9 @@ def test_reconstruction_and_compute_closeout_records_are_source_grounded(
 
 
 def test_committed_plan_matches_runtime_contract_when_present() -> None:
-    path = ROOT / "containers/sira-smoke/bounded/bounded-smoke-plan-v2.json"
+    path = ROOT / "containers/sira-smoke/bounded/bounded-smoke-plan-v3.json"
     if not path.exists():
         pytest.skip("plan is generated only after the reviewed implementation commit exists")
     document = json.loads(path.read_text(encoding="utf-8"))
     bounded.validate_plan(document, repository_root=ROOT)
-    assert validate_instance(document, ROOT / "schemas/t07-bounded-smoke-plan-v2.schema.json") == []
+    assert validate_instance(document, ROOT / "schemas/t07-bounded-smoke-plan-v3.schema.json") == []

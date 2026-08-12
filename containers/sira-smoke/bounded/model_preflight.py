@@ -31,11 +31,11 @@ def _write_exclusive(path: Path, encoded: bytes) -> None:
 
 
 def main() -> int:
-    if "OPENAI_API_KEY" in os.environ:
-        raise RuntimeError("OPENAI_API_KEY fallback is forbidden")
-    credential = os.environ.pop("SIRA_API_KEY", None)
+    if "SIRA_API_KEY" in os.environ:
+        raise RuntimeError("SiRA credential alias inheritance is forbidden")
+    credential = os.environ.pop("OPENAI_API_KEY", None)
     if not credential:
-        raise RuntimeError("SIRA_API_KEY is unavailable")
+        raise RuntimeError("OPENAI_API_KEY is unavailable")
     connection = http.client.HTTPSConnection(
         HOST,
         timeout=15,

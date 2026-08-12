@@ -1,6 +1,6 @@
 # Phase 1 SiRA Smoke Readiness
 
-Status: **profile eligible; bounded smoke V2 ready for separate authorization; not authorized**
+Status: **profile eligible; bounded smoke V3 ready for separate authorization; not authorized**
 
 Prepared: 2026-08-08
 
@@ -40,11 +40,11 @@ No executable high-assurance plan or authorization block remains active. Bounded
 V1 stopped before its first account request and is preserved as blocked historical
 provenance. The reviewed prospective replacement remains unauthorized.
 
-Prospective bounded plan: `PLAN-T07-BOUNDED-SIRA-SMOKE-V2`.
+Prospective bounded plan: `PLAN-T07-BOUNDED-SIRA-SMOKE-V3`.
 
-Its host run is `RUN-T07-BOUNDED-HOST-0002`; the plan is at
-`containers/sira-smoke/bounded/bounded-smoke-plan-v2.json`, with the exact byte size
-and SHA-256 recorded in the V2 implementation ledger and authorization packet. Its
+Its host run is `RUN-T07-BOUNDED-HOST-0003`; the plan is at
+`containers/sira-smoke/bounded/bounded-smoke-plan-v3.json`, with the exact byte size
+and SHA-256 recorded in the V3 implementation ledger and authorization packet. Its
 governance, exact caps, user runbook, and future authorization packet are under
 `docs/harness/T07_BOUNDED_SMOKE_*`. Every execution permission remains false, T07 has
 not run, and Gate L2M/L3/L4 do not continue.
@@ -59,7 +59,7 @@ A later current-turn authorization must state one value for every field below:
 | `api_provider` | `OpenAI` |
 | `model_revision` | Exactly `gpt-4o-2024-11-20`, used as a declared substitution for the unavailable historical `gpt-4o` serving revision |
 | `maximum_api_cost_usd` | Proposed ceiling: `4.00`; the user must explicitly approve this value or a lower replacement after price reverification |
-| `bounded_substrate_cost_cap_usd` | Exact ceiling `2.00` for one Lambda instance under the bounded V2 plan |
+| `bounded_substrate_cost_cap_usd` | Exact ceiling `2.00` for one Lambda instance under the bounded V3 plan |
 | `maximum_provider_compute_cost_usd` | Exact ceiling `2.00`; observed/projected normal one-hour list cost `1.29` |
 | `maximum_wall_time_seconds` | `3,600` from authorization materialization for the complete provider-supervised window, with termination click by `3,300`; scientific workload is `240` total, at most `120` per condition |
 | `required_cleanup` | Stop/KILL each immutable container boundary, prove zero owned resources, preserve/copy/seal evidence, have the user terminate the exact Lambda instance through the provider console, and confirm terminal/nonbillable state through the read-only observer |

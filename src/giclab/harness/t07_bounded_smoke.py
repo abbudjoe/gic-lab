@@ -27,14 +27,14 @@ FORK_COMMIT: Final = "397a391b736528dd1049023d629100193e823c49"
 PARENT_BRANCH: Final = "phase-1/sira-smoke-lambda"
 FROZEN_TAG: Final = "t07-high-assurance-infrastructure-v1"
 
-PLAN_ID: Final = "PLAN-T07-BOUNDED-SIRA-SMOKE-V2"
-HOST_RUN_ID: Final = "RUN-T07-BOUNDED-HOST-0002"
-REACTIVE_RUN_ID: Final = "RUN-T07-BOUNDED-SIRA-REACTIVE-0002"
-SIMULATIVE_RUN_ID: Final = "RUN-T07-BOUNDED-SIRA-SIMULATIVE-0002"
-BROWSER_PREFLIGHT_RUN_ID: Final = "RUN-T07-BOUNDED-BROWSER-PREFLIGHT-0002"
-MODEL_PREFLIGHT_RUN_ID: Final = "RUN-T07-BOUNDED-MODEL-PREFLIGHT-0002"
-AUTHORIZATION_PLACEHOLDER: Final = "AUTH-T07-BOUNDED-SIRA-SMOKE-V2-PENDING"
-TERMINAL_STATE: Final = "ready-for-bounded-smoke-v2-authorization"
+PLAN_ID: Final = "PLAN-T07-BOUNDED-SIRA-SMOKE-V3"
+HOST_RUN_ID: Final = "RUN-T07-BOUNDED-HOST-0003"
+REACTIVE_RUN_ID: Final = "RUN-T07-BOUNDED-SIRA-REACTIVE-0003"
+SIMULATIVE_RUN_ID: Final = "RUN-T07-BOUNDED-SIRA-SIMULATIVE-0003"
+BROWSER_PREFLIGHT_RUN_ID: Final = "RUN-T07-BOUNDED-BROWSER-PREFLIGHT-0003"
+MODEL_PREFLIGHT_RUN_ID: Final = "RUN-T07-BOUNDED-MODEL-PREFLIGHT-0003"
+AUTHORIZATION_PLACEHOLDER: Final = "AUTH-T07-BOUNDED-SIRA-SMOKE-V3-PENDING"
+TERMINAL_STATE: Final = "ready-for-bounded-smoke-v3-authorization"
 REVIEWED_IMPLEMENTATION_COMMIT: Final = "a7ca7475177aee60126e39c631d61e3d9453ca85"
 
 EXPERIMENT_ID: Final = "EXP-0001"
@@ -100,6 +100,12 @@ PRIVATE_SECURITY_BINDING_SHA256: Final = (
     "5b06ca70d7821e40574e711b3a68aac6f823b1806d2257395133ced7fc49e96b"
 )
 PRIVATE_SECURITY_RULESET_PATTERN_ID: Final = "t07-bounded-ruleset-v1"
+OPENAI_SECRET_SOURCE_SCHEMA_SHA256: Final = (
+    "38cf99ee79532dbc91c85aa8b97868c26351d12c9acc606f315f77257e8d66d4"
+)
+OPENAI_DOTENV_PATH_BINDING_SHA256: Final = (
+    "77e6457a1a47ee8a62240ffa96dc64c5dc7b7352333c5e67318519c3784ff347"
+)
 EXTERNAL_ARCHIVE_MOUNT: Final = "/Volumes/Macintosh HD - Data"
 EXTERNAL_ARCHIVE_UUID: Final = "8478609D-FA37-4ED5-875D-47AE912B9151"
 EXTERNAL_PHYSICAL_STORE_UUID: Final = "7904A6F1-F483-4ED7-9E34-BFECAB31C63E"
@@ -167,21 +173,27 @@ STEP_CONTRACT: Final = (
     (6, "observer", "verify_exact_security_controls_before_launch"),
     (7, "user", "launch_exactly_one_selected_instance_with_one_click"),
     (8, "observer", "bind_exactly_one_owned_instance"),
-    (9, "local-verifier", "issue_single_use_bootstrap_release_after_image_attestation"),
-    (10, "user", "open_cloud_ide_jupyter"),
-    (11, "user", "upload_exact_archive_bootstrap_secret_authorization_and_release"),
-    (12, "bootstrap", "verify_and_extract_exact_bundle_then_run_once"),
-    (13, "bootstrap", "run_no_network_browser_lifecycle_preflight"),
-    (14, "bootstrap", "verify_exact_model_snapshot_once"),
-    (15, "bootstrap", "run_reactive_once_then_simulative_once"),
-    (16, "bootstrap", "capture_remove_verify_and_package_success_or_failure_evidence"),
-    (17, "user", "download_normal_or_early_failure_evidence_and_identity_records"),
-    (18, "local-verifier", "verify_inbound_manifest_hashes_before_provider_termination"),
-    (19, "user", "terminate_exact_bound_instance"),
-    (20, "observer", "verify_exact_instance_terminal_or_absent_and_billing_stopped"),
-    (21, "user", "delete_owned_regional_ruleset_and_restore_global_firewall_if_changed"),
-    (22, "observer", "verify_ruleset_absence_and_exact_firewall_restoration"),
-    (23, "local-verifier", "seal_and_copy_complete_or_failed_evidence_to_external_archive"),
+    (9, "user", "open_cloud_ide_jupyter"),
+    (10, "user", "create_and_qualify_exact_remote_secret_parent_without_secret_access"),
+    (11, "local-verifier", "materialize_filtered_single_run_openai_runtime_file"),
+    (12, "user", "upload_exact_archive_bootstrap_authorization_and_runtime_file"),
+    (13, "user", "qualify_remote_secret_owner_mode_and_exact_file_identity"),
+    (14, "local-verifier", "commit_remote_upload_then_destroy_local_openai_runtime_file"),
+    (15, "local-verifier", "issue_single_use_bootstrap_release_after_image_attestation"),
+    (16, "user", "upload_exact_single_use_bootstrap_release"),
+    (17, "local-verifier", "commit_exact_bootstrap_release_upload_attestation"),
+    (18, "bootstrap", "verify_and_extract_exact_bundle_then_run_once"),
+    (19, "bootstrap", "run_no_network_browser_lifecycle_preflight"),
+    (20, "bootstrap", "verify_exact_model_snapshot_once"),
+    (21, "bootstrap", "run_reactive_once_then_simulative_once"),
+    (22, "bootstrap", "capture_remove_verify_and_package_success_or_failure_evidence"),
+    (23, "user", "download_normal_or_early_failure_evidence_and_identity_records"),
+    (24, "local-verifier", "verify_inbound_manifest_hashes_before_provider_termination"),
+    (25, "user", "terminate_exact_bound_instance"),
+    (26, "observer", "verify_exact_instance_terminal_or_absent_and_billing_stopped"),
+    (27, "user", "delete_owned_regional_ruleset_and_restore_global_firewall_if_changed"),
+    (28, "observer", "verify_ruleset_absence_and_exact_firewall_restoration"),
+    (29, "local-verifier", "seal_and_copy_complete_or_failed_evidence_to_external_archive"),
 )
 PUBLIC_METADATA: Final = (
     {
@@ -244,10 +256,10 @@ REQUIRED_IMPLEMENTATION_ARTIFACTS: Final = frozenset(
         "containers/sira-smoke/container_entrypoint.py",
         "containers/sira-smoke/fixtures/static.html",
         "containers/sira-smoke/sira-immutable-model-routing.patch",
-        "schemas/t07-bounded-smoke-evidence-v2.schema.json",
-        "schemas/t07-bounded-smoke-authorization-v2.schema.json",
-        "schemas/t07-bounded-smoke-observer-ledger-v2.schema.json",
-        "schemas/t07-bounded-smoke-plan-v2.schema.json",
+        "schemas/t07-bounded-smoke-evidence-v3.schema.json",
+        "schemas/t07-bounded-smoke-authorization-v3.schema.json",
+        "schemas/t07-bounded-smoke-observer-ledger-v3.schema.json",
+        "schemas/t07-bounded-smoke-plan-v3.schema.json",
         "schemas/t07-bounded-private-security-binding.schema.json",
         "containers/sira-smoke/lambda/endpoint-schemas-v3/firewall-rulesets.schema.json",
         "containers/sira-smoke/lambda/endpoint-schemas-v3/global-firewall-ruleset.schema.json",
@@ -620,7 +632,7 @@ def _container_create_prefix(
 
 def browser_preflight_create_argv() -> tuple[str, ...]:
     argv = _container_create_prefix(
-        name="t07-bounded-browser-preflight-0002",
+        name="t07-bounded-browser-preflight-0003",
         network="none",
         cpu="1.000",
         memory_bytes=1_073_741_824,
@@ -644,7 +656,7 @@ def browser_preflight_create_argv() -> tuple[str, ...]:
 
 def model_preflight_create_argv() -> tuple[str, ...]:
     argv = _container_create_prefix(
-        name="t07-bounded-model-preflight-0002",
+        name="t07-bounded-model-preflight-0003",
         network="bridge",
         cpu="1.000",
         memory_bytes=536_870_912,
@@ -664,6 +676,8 @@ def model_preflight_create_argv() -> tuple[str, ...]:
             "${IMAGE_ID}",
             "/opt/giclab/container_entrypoint.py",
             "--supervised-release",
+            "--runtime-assignment",
+            "OPENAI_API_KEY",
             "--",
             "/usr/bin/python3",
             "/opt/giclab/model_preflight.py",
@@ -677,7 +691,7 @@ def container_create_argv(condition: str) -> tuple[str, ...]:
         raise BoundedSmokeContractError("condition is outside the locked pair")
     mode = MODE_VALUES[condition]
     argv = _container_create_prefix(
-        name=f"t07-bounded-{mode}-0002",
+        name=f"t07-bounded-{mode}-0003",
         network="bridge",
         cpu="2.000",
         memory_bytes=4_294_967_296,
@@ -931,7 +945,7 @@ def bootstrap_argv_template() -> tuple[str, ...]:
         "--plan",
         (
             "/home/ubuntu/t07-bounded-bundle/containers/sira-smoke/bounded/"
-            "bounded-smoke-plan-v2.json"
+            "bounded-smoke-plan-v3.json"
         ),
         "--plan-sha256",
         "${PLAN_SHA256}",
@@ -950,9 +964,9 @@ def bootstrap_argv_template() -> tuple[str, ...]:
         "--bundle-root",
         "/home/ubuntu/t07-bounded-bundle",
         "--secret-file",
-        "/home/ubuntu/.config/giclab/sira_api_key",
+        "/home/ubuntu/.config/giclab/openai_provider_key",
         "--output-root",
-        "/home/ubuntu/t07-bounded-output-0002",
+        "/home/ubuntu/t07-bounded-output-0003",
     )
 
 
@@ -969,7 +983,7 @@ def local_supervisor_argv_templates() -> dict[str, list[str]]:
         "--supervisor-sha256",
         "${SUPERVISOR_SHA256}",
         "--plan",
-        repository + "/containers/sira-smoke/bounded/bounded-smoke-plan-v2.json",
+        repository + "/containers/sira-smoke/bounded/bounded-smoke-plan-v3.json",
         "--plan-sha256",
         "${PLAN_SHA256}",
         "--contract-file",
@@ -981,11 +995,11 @@ def local_supervisor_argv_templates() -> dict[str, list[str]]:
     ]
     authority = [
         "--authorization",
-        repository + "/artifacts/t07/bounded/RUN-T07-BOUNDED-HOST-0002/authorization.json",
+        repository + "/artifacts/t07/bounded/RUN-T07-BOUNDED-HOST-0003/authorization.json",
         "--authorization-sha256",
         "${AUTHORIZATION_SHA256}",
         "--private-binding",
-        repository + "/artifacts/t07/bounded/RUN-T07-BOUNDED-HOST-0002/private-binding.json",
+        repository + "/artifacts/t07/bounded/RUN-T07-BOUNDED-HOST-0003/private-binding.json",
         "--private-binding-sha256",
         "${PRIVATE_BINDING_SHA256}",
     ]
@@ -1012,6 +1026,41 @@ def local_supervisor_argv_templates() -> dict[str, list[str]]:
         *authority,
         "--provider-image-attestation",
         "confirmed-in-provider-console",
+    ]
+    output["attest_bootstrap_release_upload"] = [
+        *base,
+        "attest-release-upload",
+        *authority,
+        "--release-upload-attestation",
+        "confirmed-exact-release-uploaded",
+    ]
+    output["materialize_openai_secret"] = [
+        *base,
+        "materialize-openai-secret",
+        *authority,
+        "--openai-dotenv-file",
+        "${OPENAI_DOTENV_FILE}",
+    ]
+    output["cleanup_openai_secret"] = [
+        *base,
+        "cleanup-openai-secret",
+        *authority,
+        "--remote-upload-attestation",
+        "confirmed-exact-filtered-file-uploaded-and-permissions-qualified",
+    ]
+    output["abort_openai_secret_not_uploaded"] = [
+        *base,
+        "abort-openai-secret",
+        *authority,
+        "--remote-upload-outcome",
+        "definitely-not-uploaded",
+    ]
+    output["abort_openai_secret_unknown"] = [
+        *base,
+        "abort-openai-secret",
+        *authority,
+        "--remote-upload-outcome",
+        "unknown-or-permissions-unqualified",
     ]
     for disposition in ("complete", "failed"):
         output[f"verify_inbound_{disposition}"] = [
@@ -1079,7 +1128,7 @@ def provider_observer_contract() -> dict[str, object]:
             },
         ],
         "request_ledger": {
-            "path": ("artifacts/t07/bounded/RUN-T07-BOUNDED-HOST-0002/request-ledger.jsonl"),
+            "path": ("artifacts/t07/bounded/RUN-T07-BOUNDED-HOST-0003/request-ledger.jsonl"),
             "fsync_each_event": True,
             "max_bytes": 262_144,
             "max_events": 96,
@@ -1091,20 +1140,20 @@ def provider_observer_contract() -> dict[str, object]:
 
 def storage_contract() -> dict[str, object]:
     return {
-        "remote_active_root": "/home/ubuntu/t07-bounded-output-0002",
-        "remote_single_use_claim_root": "/home/ubuntu/t07-bounded-output-0002",
-        "remote_secondary_failure_root": "/home/ubuntu/t07-bounded-output-0002-early-failure",
+        "remote_active_root": "/home/ubuntu/t07-bounded-output-0003",
+        "remote_single_use_claim_root": "/home/ubuntu/t07-bounded-output-0003",
+        "remote_secondary_failure_root": "/home/ubuntu/t07-bounded-output-0003-early-failure",
         "remote_bundle_archive": "/home/ubuntu/t07-bounded-repository.tar",
         "remote_bundle_root": "/home/ubuntu/t07-bounded-bundle",
         "remote_bootstrap_file": "/home/ubuntu/t07-bounded-bootstrap.py",
         "persistent_filesystem_count": 0,
-        "local_upload_root": ("artifacts/t07/bounded-upload/RUN-T07-BOUNDED-HOST-0002"),
-        "local_inbound_root": "artifacts/t07/bounded/RUN-T07-BOUNDED-HOST-0002/inbound",
+        "local_upload_root": ("artifacts/t07/bounded-upload/RUN-T07-BOUNDED-HOST-0003"),
+        "local_inbound_root": "artifacts/t07/bounded/RUN-T07-BOUNDED-HOST-0003/inbound",
         "external_mount": EXTERNAL_ARCHIVE_MOUNT,
         "external_volume_uuid": EXTERNAL_ARCHIVE_UUID,
         "external_physical_store_uuid": EXTERNAL_PHYSICAL_STORE_UUID,
         "external_archive_root": (
-            EXTERNAL_ARCHIVE_MOUNT + "/GIC-Lab/t07/sealed-artifacts/RUN-T07-BOUNDED-HOST-0002"
+            EXTERNAL_ARCHIVE_MOUNT + "/GIC-Lab/t07/sealed-artifacts/RUN-T07-BOUNDED-HOST-0003"
         ),
         "external_archive_required_upload_artifacts": [
             "upload-bundle/t07-bounded-repository.tar",
@@ -1137,6 +1186,102 @@ def private_security_binding_contract() -> dict[str, object]:
         "parser_version": FIREWALL_PARSER_VERSION,
         "restoration_alias": FIREWALL_RESTORATION_ALIAS,
         "restoration_payload_sha256": FIREWALL_RESTORATION_SHA256,
+    }
+
+
+def openai_secret_source_contract() -> dict[str, object]:
+    """Return the public-safe V3 provider credential source and delivery contract."""
+
+    return {
+        "provider": "OpenAI",
+        "source_file": "${OPENAI_DOTENV_FILE}",
+        "source_file_binding": "private-authorization-substitution",
+        "source_path_binding_sha256": OPENAI_DOTENV_PATH_BINDING_SHA256,
+        "source_assignment": "OPENAI_API_KEY",
+        "parser": "giclab-strict-non-shell-dotenv-v1",
+        "upstream_runtime_name": "SIRA_API_KEY",
+        "metadata_runtime_name": "OPENAI_API_KEY",
+        "runtime_mapping": "provider-native-metadata-and-ephemeral-sira-child-alias",
+        "local_runtime_file": (
+            "artifacts/t07/bounded-upload/RUN-T07-BOUNDED-HOST-0003/t07-bounded-openai-provider-key"
+        ),
+        "remote_runtime_file": "/home/ubuntu/.config/giclab/openai_provider_key",
+        "container_runtime_file": "/run/secrets/sira_api_key",
+        "runtime_file_mode": "0600",
+        "runtime_value_contract": (
+            "single-nonempty-ascii-token-[A-Za-z0-9._-]-no-line-terminator-v1"
+        ),
+        "remote_parent_mode": "0700",
+        "remote_current_user_owned": True,
+        "remote_parent_prepare_argv": [
+            "/usr/bin/install",
+            "-d",
+            "-m",
+            "0700",
+            "/home/ubuntu/.config/giclab",
+        ],
+        "remote_parent_verify_argvs": [
+            ["/usr/bin/test", "-d", "/home/ubuntu/.config/giclab"],
+            ["/usr/bin/test", "-O", "/home/ubuntu/.config/giclab"],
+            ["/usr/bin/stat", "--format=%a", "/home/ubuntu/.config/giclab"],
+            [
+                "/usr/bin/realpath",
+                "--canonicalize-existing",
+                "/home/ubuntu/.config/giclab",
+            ],
+            [
+                "/usr/bin/test",
+                "!",
+                "-e",
+                "/home/ubuntu/.config/giclab/openai_provider_key",
+            ],
+            [
+                "/usr/bin/test",
+                "!",
+                "-L",
+                "/home/ubuntu/.config/giclab/openai_provider_key",
+            ],
+        ],
+        "remote_parent_mode_stdout": "700",
+        "remote_parent_realpath_stdout": "/home/ubuntu/.config/giclab",
+        "remote_file_prepare_argv": [
+            "/usr/bin/chmod",
+            "0600",
+            "/home/ubuntu/.config/giclab/openai_provider_key",
+        ],
+        "remote_file_verify_argvs": [
+            ["/usr/bin/test", "-f", "/home/ubuntu/.config/giclab/openai_provider_key"],
+            ["/usr/bin/test", "!", "-L", "/home/ubuntu/.config/giclab/openai_provider_key"],
+            ["/usr/bin/test", "-O", "/home/ubuntu/.config/giclab/openai_provider_key"],
+            [
+                "/usr/bin/stat",
+                "--format=%a",
+                "/home/ubuntu/.config/giclab/openai_provider_key",
+            ],
+        ],
+        "remote_file_mode_stdout": "600",
+        "fallbacks": [],
+        "user_created_sira_api_key_file_required": False,
+        "complete_env_upload_permitted": False,
+        "openai_api_key_fallback": "not-applicable-selected-source",
+        "provider_credential_fallback": "none",
+        "secret_value_hash_permitted": False,
+        "single_run_lifetime": True,
+        "cleanup_required": True,
+    }
+
+
+def secrets_contract() -> dict[str, object]:
+    return {
+        "provider_observer_variable": "LAMBDA_API_KEY",
+        "lambda_forbidden_assignments": ["OPENAI_API_KEY", "SIRA_API_KEY"],
+        "openai_source_schema_sha256": OPENAI_SECRET_SOURCE_SCHEMA_SHA256,
+        "openai_provider": openai_secret_source_contract(),
+        "value_in_argv": False,
+        "value_in_environment_list": False,
+        "value_in_image": False,
+        "value_in_labels": False,
+        "value_in_evidence": False,
     }
 
 
@@ -1181,7 +1326,7 @@ def assert_pair_command_contract(
     if len(reactive) != len(simulative):
         raise BoundedSmokeContractError("condition command lengths differ")
     allowed_pairs = {
-        ("t07-bounded-reactive-0002", "t07-bounded-simulative-0002"),
+        ("t07-bounded-reactive-0003", "t07-bounded-simulative-0003"),
         ("reactive", "simulative"),
         ("EXP-0001-SMOKE-REACTIVE", "EXP-0001-SMOKE-SIMULATIVE"),
         (
@@ -1506,7 +1651,7 @@ def validate_plan(plan: Mapping[str, object], *, repository_root: Path | None = 
     }
     if (
         set(plan) != expected_top_level
-        or plan.get("$schema") != "../../../schemas/t07-bounded-smoke-plan-v2.schema.json"
+        or plan.get("$schema") != "../../../schemas/t07-bounded-smoke-plan-v3.schema.json"
     ):
         raise BoundedSmokeContractError("plan top-level contract drifted")
     identity = _mapping(plan.get("identity"), context="plan identity")
@@ -1671,17 +1816,7 @@ def validate_plan(plan: Mapping[str, object], *, repository_root: Path | None = 
     assert_pair_command_contract(commands["SIRA-REACTIVE"], commands["SIRA-SIMULATIVE"])
 
     secrets = _mapping(plan.get("secrets"), context="secret contract")
-    if secrets != {
-        "provider_observer_variable": "LAMBDA_API_KEY",
-        "workload_variable": "SIRA_API_KEY",
-        "workload_file": "/run/secrets/sira_api_key",
-        "forbidden_fallback": "OPENAI_API_KEY",
-        "value_in_argv": False,
-        "value_in_environment_list": False,
-        "value_in_image": False,
-        "value_in_labels": False,
-        "value_in_evidence": False,
-    }:
+    if secrets != secrets_contract():
         raise BoundedSmokeContractError("secret contract drifted")
 
     provider = _mapping(plan.get("lambda"), context="Lambda contract")
@@ -1780,6 +1915,7 @@ __all__ = [
     "LIMITS",
     "MODEL",
     "MODEL_PREFLIGHT_RUN_ID",
+    "OPENAI_SECRET_SOURCE_SCHEMA_SHA256",
     "PLAN_ID",
     "REACTIVE_RUN_ID",
     "REVIEWED_IMPLEMENTATION_COMMIT",
@@ -1798,9 +1934,11 @@ __all__ = [
     "local_supervisor_argv_templates",
     "materialize_argv",
     "model_preflight_create_argv",
+    "openai_secret_source_contract",
     "private_security_binding_contract",
     "provider_observer_contract",
     "read_json_file",
+    "secrets_contract",
     "sha256_bytes",
     "sha256_file",
     "storage_contract",
