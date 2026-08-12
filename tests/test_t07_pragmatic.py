@@ -119,6 +119,13 @@ def test_pragmatic_containerfile_preserves_the_canonical_wheel_filename() -> Non
     ) in containerfile
 
 
+def test_browser_preflight_uses_the_frozen_virtual_environment() -> None:
+    source = (ROOT / "containers/sira-smoke/pragmatic/remote_runner.py").read_text()
+    assert 'create[create.index("--entrypoint") + 1] = "/opt/sira/.venv/bin/python"' in source
+    assert 'stdout_path=setup_dir / "browser-inspect.json"' in source
+    assert 'stdout_path=setup_dir / "browser-logs.stdout"' in source
+
+
 def test_destroy_secret_zeroes_and_unlinks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     path = tmp_path / "secret"
     path.write_bytes(b"dummy-canary")

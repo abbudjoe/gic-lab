@@ -336,11 +336,13 @@ def browser_preflight(
         *docker_common(name=name, attempt=attempt, network="none", image_id=image_id),
         "/opt/giclab/browser_preflight.py",
     ]
+    create[create.index("--entrypoint") + 1] = "/opt/sira/.venv/bin/python"
     run_capture(
         create,
         stdout_path=setup_dir / "browser-create.stdout",
         stderr_path=setup_dir / "browser-create.stderr",
     )
+    completed = False
     try:
         run_capture(
             [*prefix, "start", name],
@@ -350,21 +352,15 @@ def browser_preflight(
         deadline = time.monotonic() + 90
         while time.monotonic() < deadline:
             if (attempt / "browser-preflight.json").is_file():
+                completed = True
                 break
             time.sleep(1)
-        else:
-            raise PragmaticRunError("local-static-page Chromium preflight did not complete")
-        run_capture(
-            [*prefix, "stop", "--time", "10", name],
-            stdout_path=setup_dir / "browser-stop.stdout",
-            stderr_path=setup_dir / "browser-stop.stderr",
-            check=False,
-            timeout=30,
-        )
+    finally:
         run_capture(
             [*prefix, "inspect", name],
             stdout_path=setup_dir / "browser-inspect.json",
             stderr_path=setup_dir / "browser-inspect.stderr",
+            check=False,
         )
         run_capture(
             [*prefix, "logs", name],
@@ -372,8 +368,16 @@ def browser_preflight(
             stderr_path=setup_dir / "browser-logs.stderr",
             check=False,
         )
-    finally:
+        run_capture(
+            [*prefix, "stop", "--time", "10", name],
+            stdout_path=setup_dir / "browser-stop.stdout",
+            stderr_path=setup_dir / "browser-stop.stderr",
+            check=False,
+            timeout=30,
+        )
         remove_container(prefix, name)
+    if not completed:
+        raise PragmaticRunError("local-static-page Chromium preflight did not complete")
 
 
 def model_preflight(setup_dir: Path, prefix: list[str], image_id: str, launch_ordinal: int) -> None:
