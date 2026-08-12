@@ -28,10 +28,10 @@ entries:
     provider: Lambda On-Demand Cloud
     hardware: gpu_1x_a10
     region: us-east-1
-    started_at: null
+    started_at: "2026-08-12T20:01:27.897128Z"
     ended_at: null
     wall_clock_hours: 0.0
     accelerator_hours: 0.0
     cost_usd: 0.0
     authorization_reference: AUTH-T07-PRAGMATIC-RESET-2026-08-12
-    status: planned
+    status: running
