@@ -7,10 +7,9 @@ contract and supervisor modules named by the immutable plan.  Import is inert.
 from __future__ import annotations
 
 import hashlib
-import importlib
-import importlib.util
 import os
 import stat
+import subprocess
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -65,23 +64,84 @@ def _read_exact(path: Path) -> bytes:
         os.close(descriptor)
 
 
-def _verified(path: Path, expected_sha256: str) -> None:
+def _verified(path: Path, expected_sha256: str) -> bytes:
     if len(expected_sha256) != 64 or any(
         value not in "0123456789abcdef" for value in expected_sha256
     ):
         raise LocalSupervisorBootstrapError("bound module digest is malformed")
-    if hashlib.sha256(_read_exact(path)).hexdigest() != expected_sha256:
+    encoded = _read_exact(path)
+    if hashlib.sha256(encoded).hexdigest() != expected_sha256:
         raise LocalSupervisorBootstrapError("bound module digest drifted")
+    return encoded
 
 
-def _load(path: Path, name: str) -> ModuleType:
-    specification = importlib.util.spec_from_file_location(name, path)
-    if specification is None or specification.loader is None:
-        raise LocalSupervisorBootstrapError("bound module loader is unavailable")
-    module = importlib.util.module_from_spec(specification)
+def _load_verified_bytes(path: Path, encoded: bytes, name: str) -> ModuleType:
+    """Execute only the exact bytes already read and hash-verified."""
+
+    module = ModuleType(name)
+    module.__file__ = str(path)
+    module.__package__ = name.rpartition(".")[0]
     sys.modules[name] = module
-    specification.loader.exec_module(module)
+    try:
+        code = compile(encoded, str(path), "exec", dont_inherit=True)
+        exec(code, module.__dict__)
+    except BaseException:
+        sys.modules.pop(name, None)
+        raise
     return module
+
+
+def _verify_clean_repository(repository_root: Path, expected_commit: str) -> None:
+    if len(expected_commit) != 40 or any(
+        value not in "0123456789abcdef" for value in expected_commit
+    ):
+        raise LocalSupervisorBootstrapError("expected repository commit is malformed")
+    commands = (
+        ("/usr/bin/git", "-C", str(repository_root), "rev-parse", "HEAD"),
+        (
+            "/usr/bin/git",
+            "-C",
+            str(repository_root),
+            "status",
+            "--porcelain=v1",
+            "--untracked-files=all",
+        ),
+    )
+    outputs: list[bytes] = []
+    environment = {
+        "HOME": str(repository_root),
+        "LANG": "C",
+        "LC_ALL": "C",
+        "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
+    }
+    for command in commands:
+        try:
+            completed = subprocess.run(
+                command,
+                env=environment,
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                check=False,
+                timeout=15,
+            )
+        except (OSError, subprocess.SubprocessError):
+            raise LocalSupervisorBootstrapError("repository identity check failed") from None
+        if completed.returncode != 0 or completed.stderr:
+            raise LocalSupervisorBootstrapError("repository identity check failed")
+        outputs.append(completed.stdout)
+    if outputs[0].decode("ascii", "strict").strip() != expected_commit or outputs[1]:
+        raise LocalSupervisorBootstrapError("repository is not the exact clean commit")
+
+
+def _install_inert_package_surface(repository_root: Path) -> None:
+    package_root = repository_root / "src/giclab"
+    harness_root = package_root / "harness"
+    giclab = ModuleType("giclab")
+    giclab.__path__ = [str(package_root)]
+    harness = ModuleType("giclab.harness")
+    harness.__path__ = [str(harness_root)]
+    sys.modules["giclab"] = giclab
+    sys.modules["giclab.harness"] = harness
 
 
 def _without_bootstrap_options(argv: list[str]) -> list[str]:
@@ -109,12 +169,15 @@ def main(argv: list[str] | None = None) -> int:
     expected_supervisor = repository_root / "src/giclab/harness/t07_bounded_supervisor.py"
     if contract_path != expected_contract or supervisor_path != expected_supervisor:
         raise LocalSupervisorBootstrapError("bound module path escaped the repository contract")
-    _verified(contract_path, _option(arguments, "--contract-sha256"))
-    _verified(supervisor_path, _option(arguments, "--supervisor-sha256"))
+    _verify_clean_repository(repository_root, _option(arguments, "--expected-commit"))
+    contract_bytes = _verified(contract_path, _option(arguments, "--contract-sha256"))
+    supervisor_bytes = _verified(supervisor_path, _option(arguments, "--supervisor-sha256"))
     sys.path.insert(0, str(repository_root / "src"))
-    importlib.import_module("giclab.harness")
-    contract = _load(contract_path, "t07_bounded_contract")
-    supervisor = _load(supervisor_path, "giclab.harness.t07_bounded_supervisor")
+    _install_inert_package_surface(repository_root)
+    contract = _load_verified_bytes(contract_path, contract_bytes, "t07_bounded_contract")
+    supervisor = _load_verified_bytes(
+        supervisor_path, supervisor_bytes, "giclab.harness.t07_bounded_supervisor"
+    )
     result = supervisor.main(_without_bootstrap_options(arguments), contract=contract)
     if type(result) is not int:
         raise LocalSupervisorBootstrapError("supervisor returned an invalid status")

@@ -12,10 +12,10 @@ import argparse
 import contextlib
 import hashlib
 import http.client
-import importlib.util
 import json
 import math
 import os
+import platform
 import re
 import selectors
 import shutil
@@ -36,9 +36,13 @@ from typing import Final, cast
 MAX_PLAN_BYTES: Final = 1_048_576
 MAX_AUTHORIZATION_BYTES: Final = 65_536
 MAX_COMMAND_OUTPUT_BYTES: Final = 33_554_432
+MAX_COMMAND_CALLS: Final = 128
+CLEANUP_RESERVED_CALLS: Final = 48
+CLEANUP_RESERVED_OUTPUT_BYTES: Final = 8_388_608
 MAX_DOWNLOAD_BYTES: Final = 2_147_483_648
 MAX_EVIDENCE_BYTES: Final = 268_435_456
 MAX_FAILURE_EVIDENCE_BYTES: Final = 268_435_456
+MAX_EARLY_FAILURE_EVIDENCE_BYTES: Final = 1_048_576
 MAX_EVIDENCE_FILES: Final = 4_096
 MAX_ATTEMPT_PAYLOAD_BYTES: Final = 67_108_864
 MAX_RUNTIME_DISK_INCREMENT_BYTES: Final = 17_179_869_184
@@ -58,7 +62,105 @@ _SECRET_SHAPES: Final = (
         rb"KEN|SE"
         rb"CRET)[ \t]*=[^\r\n]+$"
     ),
+    re.compile(
+        rb"""(?ix)["']?(?:(?:api|access|private)[ _-]?key|"""
+        rb"""token|secret|password|cookie|credential)"""
+        rb"""["']?\s*[:=]\s*["']?[a-z0-9._~+/=-]{8,}"""
+    ),
+    re.compile(
+        rb"""(?isx)["']?(?:key|label|name|type)["']?\s*:\s*"""
+        rb"""["']?(?:(?:api|access|private)[ _-]?key|token|secret|password|cookie|"""
+        rb"""credential|authorization)"""
+        rb"""["']?[\s\S]{0,256}?["']?value["']?\s*:\s*"""
+        rb"""["']?[a-z0-9._~+/=-]{8,}"""
+    ),
+    re.compile(
+        rb"""(?isx)["']?value["']?\s*:\s*["']?"""
+        rb"""[a-z0-9._~+/=-]{8,}["']?[\s\S]{0,256}?"""
+        rb"""["']?(?:key|label|name|type)["']?\s*:\s*"""
+        rb"""["']?(?:(?:api|access|private)[ _-]?key|token|secret|password|cookie|"""
+        rb"""credential|authorization)"""
+    ),
 )
+
+
+def _artifact_sensitive_key(name: str) -> bool:
+    normalized = re.sub(r"[^a-z0-9]+", "_", name.casefold()).strip("_")
+    if normalized in {
+        "api_key",
+        "access_key",
+        "private_key",
+        "token",
+        "password",
+        "cookie",
+        "credential",
+        "secret",
+        "authorization",
+    }:
+        return True
+    return any(
+        normalized.endswith("_" + suffix)
+        for suffix in (
+            "api_key",
+            "access_key",
+            "private_key",
+            "token",
+            "password",
+            "cookie",
+            "credential",
+            "secret",
+            "authorization",
+        )
+    )
+
+
+def _json_contains_artifact_secret(value: object) -> bool:
+    if isinstance(value, Mapping):
+        discriminator_sensitive = any(
+            isinstance(key, str)
+            and key.casefold() in {"key", "label", "name", "type"}
+            and isinstance(child, str)
+            and _artifact_sensitive_key(child)
+            for key, child in value.items()
+        )
+        candidate = value.get("value")
+        if (
+            discriminator_sensitive
+            and isinstance(candidate, str)
+            and len(candidate) >= 8
+            and _AUTHORIZATION.fullmatch(candidate) is None
+        ):
+            return True
+        for key, child in value.items():
+            if (
+                isinstance(key, str)
+                and _artifact_sensitive_key(key)
+                and isinstance(child, str)
+                and len(child) >= 8
+                and not (
+                    key.casefold().endswith("authorization")
+                    and _AUTHORIZATION.fullmatch(child) is not None
+                )
+            ):
+                return True
+            if _json_contains_artifact_secret(child):
+                return True
+        return False
+    if isinstance(value, list):
+        return any(_json_contains_artifact_secret(item) for item in value)
+    return False
+
+
+def _contains_artifact_secret(encoded: bytes) -> bool:
+    if any(pattern.search(encoded) for pattern in _SECRET_SHAPES):
+        return True
+    if len(encoded) > 16_777_216:
+        return False
+    try:
+        document = json.loads(encoded)
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return False
+    return _json_contains_artifact_secret(document)
 
 
 class BootstrapError(RuntimeError):
@@ -76,22 +178,115 @@ class CommandResult:
 
 @dataclass(slots=True)
 class CommandMeter:
-    """One aggregate command/output budget shared by work and cleanup paths."""
+    """Aggregate meter with a non-borrowable cleanup reserve and durable ledger."""
 
     max_calls: int
     output_cap: int
+    cleanup_reserved_calls: int = CLEANUP_RESERVED_CALLS
+    cleanup_reserved_output_bytes: int = CLEANUP_RESERVED_OUTPUT_BYTES
+    ledger_path: Path | None = None
     call_count: int = 0
     output_bytes: int = 0
+    work_call_count: int = 0
+    cleanup_call_count: int = 0
+    work_output_bytes: int = 0
+    cleanup_output_bytes: int = 0
+    event_count: int = 0
 
-    def begin_call(self) -> None:
+    def __post_init__(self) -> None:
+        if (
+            not 0 < self.cleanup_reserved_calls < self.max_calls
+            or not 0 < self.cleanup_reserved_output_bytes < self.output_cap
+        ):
+            raise BootstrapError("cleanup command reserve is invalid")
+        if self.ledger_path is not None:
+            flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+            descriptor = os.open(self.ledger_path, flags, 0o600)
+            os.close(descriptor)
+            self._append("meter_started", scope=None, argv_sha256=None, returncode=None)
+
+    def _append(
+        self,
+        event_type: str,
+        *,
+        scope: str | None,
+        argv_sha256: str | None,
+        returncode: int | None,
+    ) -> None:
+        if self.ledger_path is None:
+            return
+        self.event_count += 1
+        event = {
+            "schema_version": "0.1.0",
+            "event_sequence": self.event_count,
+            "event_type": event_type,
+            "scope": scope,
+            "argv_sha256": argv_sha256,
+            "returncode": returncode,
+            "aggregate_call_count": self.call_count,
+            "aggregate_output_bytes": self.output_bytes,
+            "work_call_count": self.work_call_count,
+            "work_output_bytes": self.work_output_bytes,
+            "cleanup_call_count": self.cleanup_call_count,
+            "cleanup_output_bytes": self.cleanup_output_bytes,
+            "aggregate_call_cap": self.max_calls,
+            "aggregate_output_cap_bytes": self.output_cap,
+            "cleanup_reserved_calls": self.cleanup_reserved_calls,
+            "cleanup_reserved_output_bytes": self.cleanup_reserved_output_bytes,
+        }
+        encoded = json.dumps(event, allow_nan=False, separators=(",", ":"), sort_keys=True).encode()
+        encoded += b"\n"
+        descriptor = os.open(
+            self.ledger_path,
+            os.O_WRONLY | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0),
+        )
+        try:
+            written = os.write(descriptor, encoded)
+            if written != len(encoded):
+                raise BootstrapError("command meter append was incomplete")
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+
+    def begin_call(self, scope: str, argv_sha256: str) -> None:
+        if scope not in {"work", "cleanup"}:
+            raise BootstrapError("command budget scope is invalid")
         if self.call_count >= self.max_calls:
             raise BootstrapError("bounded command call cap is exhausted")
+        if scope == "work" and self.work_call_count >= self.max_calls - self.cleanup_reserved_calls:
+            raise BootstrapError("bounded work command call cap preserves cleanup reserve")
+        if scope == "cleanup" and self.cleanup_call_count >= self.cleanup_reserved_calls:
+            raise BootstrapError("bounded cleanup command call cap is exhausted")
         self.call_count += 1
+        if scope == "work":
+            self.work_call_count += 1
+        else:
+            self.cleanup_call_count += 1
+        self._append("command_started", scope=scope, argv_sha256=argv_sha256, returncode=None)
 
-    def add_output(self, count: int) -> None:
+    def add_output(self, scope: str, count: int) -> None:
         self.output_bytes += count
+        if scope == "work":
+            self.work_output_bytes += count
+        else:
+            self.cleanup_output_bytes += count
         if self.output_bytes > self.output_cap:
             raise BootstrapError("bounded command output exceeded its aggregate cap")
+        if (
+            scope == "work"
+            and self.work_output_bytes > self.output_cap - self.cleanup_reserved_output_bytes
+        ):
+            raise BootstrapError("bounded work output cap preserves cleanup reserve")
+        if scope == "cleanup" and self.cleanup_output_bytes > self.cleanup_reserved_output_bytes:
+            raise BootstrapError("bounded cleanup command output cap is exhausted")
+
+    def finish_call(self, scope: str, argv_sha256: str, returncode: int | None) -> None:
+        self._append(
+            "command_completed" if returncode is not None else "command_failed",
+            scope=scope,
+            argv_sha256=argv_sha256,
+            returncode=returncode,
+        )
 
 
 class CommandRunner:
@@ -104,9 +299,13 @@ class CommandRunner:
         output_cap: int = MAX_COMMAND_OUTPUT_BYTES,
         max_calls: int = 128,
         meter: CommandMeter | None = None,
+        scope: str = "work",
     ) -> None:
         self.deadline = deadline
         self.meter = meter or CommandMeter(max_calls=max_calls, output_cap=output_cap)
+        if scope not in {"work", "cleanup"}:
+            raise BootstrapError("command runner scope is invalid")
+        self.scope = scope
 
     @property
     def call_count(self) -> int:
@@ -133,7 +332,29 @@ class CommandRunner:
         command = tuple(argv)
         if not command or any(not isinstance(item, str) or not item for item in command):
             raise BootstrapError("command array is invalid")
-        self.meter.begin_call()
+        argv_sha256 = _sha256(json.dumps(list(command), separators=(",", ":")).encode())
+        self.meter.begin_call(self.scope, argv_sha256)
+        try:
+            result = self._run_started(
+                command,
+                cwd=cwd,
+                timeout=timeout,
+            )
+        except BaseException:
+            self.meter.finish_call(self.scope, argv_sha256, None)
+            raise
+        self.meter.finish_call(self.scope, argv_sha256, result.returncode)
+        if check and result.returncode != 0:
+            raise BootstrapError("bounded command returned failure")
+        return result
+
+    def _run_started(
+        self,
+        command: tuple[str, ...],
+        *,
+        cwd: Path,
+        timeout: float | None,
+    ) -> CommandResult:
         allowed = self.remaining()
         if timeout is not None:
             if not isinstance(timeout, (int, float)) or timeout <= 0:
@@ -181,7 +402,7 @@ class CommandRunner:
                         continue
                     output[key.data].extend(chunk)
                     try:
-                        self.meter.add_output(len(chunk))
+                        self.meter.add_output(self.scope, len(chunk))
                     except BootstrapError:
                         process.kill()
                         raise
@@ -203,21 +424,23 @@ class CommandRunner:
             bytes(output["stderr"]),
             time.monotonic() - started,
         )
-        if check and result.returncode != 0:
-            raise BootstrapError("bounded command returned failure")
         return result
 
 
-def _load_contract(path: Path) -> ModuleType:
+def _load_contract(path: Path, encoded: bytes) -> ModuleType:
+    """Execute the exact contract bytes already held and hash-verified by the caller."""
+
     resolved = path.resolve(strict=True)
-    if resolved.is_symlink() or not resolved.is_file():
-        raise BootstrapError("bounded contract module is unsafe")
-    specification = importlib.util.spec_from_file_location("t07_bounded_contract", resolved)
-    if specification is None or specification.loader is None:
-        raise BootstrapError("bounded contract module cannot be loaded")
-    module = importlib.util.module_from_spec(specification)
-    sys.modules[specification.name] = module
-    specification.loader.exec_module(module)
+    module = ModuleType("t07_bounded_contract")
+    module.__file__ = str(resolved)
+    module.__package__ = ""
+    sys.modules[module.__name__] = module
+    try:
+        code = compile(encoded, str(resolved), "exec", dont_inherit=True)
+        exec(code, module.__dict__)
+    except BaseException:
+        sys.modules.pop(module.__name__, None)
+        raise
     return module
 
 
@@ -376,12 +599,184 @@ def validate_authorization(
     return document
 
 
-def _validate_secret_file(path: Path, *, forbidden_roots: Sequence[Path]) -> bytes:
+def validate_bootstrap_release(
+    encoded: bytes,
+    *,
+    expected_sha256: str,
+    plan_sha256: str,
+    authorization_sha256: str,
+    authorization: Mapping[str, object],
+    contract: ModuleType,
+) -> dict[str, object]:
+    if _HEX64.fullmatch(expected_sha256) is None or _sha256(encoded) != expected_sha256:
+        raise BootstrapError("bootstrap release hash differs from its supplied binding")
+    document = _strict_json(encoded, context="bootstrap release")
+    required = {
+        "schema_version",
+        "plan_id",
+        "host_run_id",
+        "authorization_reference",
+        "execution_commit",
+        "plan_sha256",
+        "authorization_sha256",
+        "private_binding_sha256",
+        "observer_state_sha256",
+        "post_launch_report_sha256",
+        "provider_active_observed_at_utc",
+        "selected_provider_image",
+        "issued_at_utc",
+        "bootstrap_release",
+        "single_use_output_root",
+    }
+    observed_active = _parse_utc(
+        document.get("provider_active_observed_at_utc"), context="provider active observation"
+    )
+    issued = _parse_utc(document.get("issued_at_utc"), context="bootstrap release time")
+    authorized_start = _parse_utc(
+        authorization.get("supervised_wall_started_at_utc"), context="supervised wall start"
+    )
+    expires = _parse_utc(authorization.get("expires_at_utc"), context="authorization expiry")
+    selected_provider_image = document.get("selected_provider_image")
+    if (
+        set(document) != required
+        or document.get("schema_version") != contract.SCHEMA_VERSION
+        or document.get("plan_id") != contract.PLAN_ID
+        or document.get("host_run_id") != contract.HOST_RUN_ID
+        or document.get("authorization_reference") != authorization.get("authorization_reference")
+        or document.get("execution_commit") != authorization.get("execution_commit")
+        or document.get("plan_sha256") != plan_sha256
+        or document.get("authorization_sha256") != authorization_sha256
+        or document.get("private_binding_sha256") != authorization.get("private_binding_sha256")
+        or any(
+            not isinstance(document.get(field), str)
+            or _HEX64.fullmatch(str(document[field])) is None
+            for field in ("observer_state_sha256", "post_launch_report_sha256")
+        )
+        or document.get("bootstrap_release") is not True
+        or document.get("single_use_output_root") != "/home/ubuntu/t07-bounded-output-0001"
+        or selected_provider_image
+        != {
+            "alias": contract.SELECTED_IMAGE_ALIAS,
+            "family": contract.SELECTED_IMAGE_FAMILY,
+            "version": contract.SELECTED_IMAGE_VERSION,
+            "attestation": "confirmed-in-provider-console",
+            "binding_basis": "prelaunch-offered-plus-user-console-attestation",
+            "post_launch_api_image_observation_available": False,
+        }
+        or not authorized_start <= observed_active <= issued < expires
+    ):
+        raise BootstrapError("bootstrap release contract is incomplete or drifted")
+    return document
+
+
+@dataclass(slots=True)
+class SecretLease:
+    """Held no-follow identity for the uploaded secret across the whole bootstrap."""
+
+    path: Path
+    descriptor: int
+    parent_descriptor: int
+    device: int
+    inode: int
+    size: int
+    value_read: bool = False
+    destroyed: bool = False
+
+    def mount_path(self) -> str:
+        try:
+            current = os.stat(
+                self.path.name,
+                dir_fd=self.parent_descriptor,
+                follow_symlinks=False,
+            )
+        except OSError:
+            raise BootstrapError("SIRA secret path identity is unavailable") from None
+        if (current.st_dev, current.st_ino) != (self.device, self.inode):
+            raise BootstrapError("SIRA secret path identity changed")
+        return str(self.path)
+
+    def read_value(self) -> bytes:
+        opened = os.fstat(self.descriptor)
+        if (
+            self.destroyed
+            or (opened.st_dev, opened.st_ino) != (self.device, self.inode)
+            or opened.st_size != self.size
+        ):
+            raise BootstrapError("SIRA secret held identity drifted before read")
+        raw = os.pread(self.descriptor, self.size + 1, 0)
+        value = raw.rstrip(b"\r\n")
+        if len(raw) != self.size or not value or b"\x00" in value:
+            raise BootstrapError("SIRA secret file contract failed")
+        try:
+            value.decode("utf-8")
+        except UnicodeDecodeError:
+            raise BootstrapError("SIRA secret file contract failed") from None
+        self.value_read = True
+        return value
+
+    def destroy(self, receipt_path: Path) -> dict[str, object]:
+        if self.destroyed:
+            raise BootstrapError("secret cleanup cannot be repeated")
+        try:
+            current = os.stat(
+                self.path.name,
+                dir_fd=self.parent_descriptor,
+                follow_symlinks=False,
+            )
+            current_matches = (current.st_dev, current.st_ino) == (self.device, self.inode)
+        except FileNotFoundError:
+            current_matches = False
+        os.ftruncate(self.descriptor, 0)
+        os.fsync(self.descriptor)
+        unlinked = False
+        if current_matches:
+            os.unlink(self.path.name, dir_fd=self.parent_descriptor)
+            os.fsync(self.parent_descriptor)
+            unlinked = True
+        try:
+            remaining = os.stat(
+                self.path.name,
+                dir_fd=self.parent_descriptor,
+                follow_symlinks=False,
+            )
+        except FileNotFoundError:
+            absent = True
+        else:
+            absent = False
+            if (remaining.st_dev, remaining.st_ino) == (self.device, self.inode):
+                raise BootstrapError("secret cleanup left the held identity reachable")
+        self.destroyed = True
+        record = {
+            "schema_version": "0.1.0",
+            "secret_variable_name": "SIRA_API_KEY",
+            "secret_file_basename": "sira_api_key",
+            "held_identity_established_before_preflight": True,
+            "truncated_before_unlink": True,
+            "unlinked": unlinked,
+            "absence_verified": absent,
+            "path_identity_replaced": not current_matches and not absent,
+            "value_or_hash_retained": False,
+            "manual_fallback_deletion_required": not (unlinked and absent),
+        }
+        _write_json(receipt_path, record)
+        if not unlinked or not absent:
+            raise BootstrapError("secret cleanup requires manual delete and credential rotation")
+        return record
+
+    def close(self) -> None:
+        with contextlib.suppress(OSError):
+            os.close(self.descriptor)
+        with contextlib.suppress(OSError):
+            os.close(self.parent_descriptor)
+
+
+def acquire_secret_lease(path: Path, *, forbidden_roots: Sequence[Path]) -> SecretLease:
     try:
         linked = path.lstat()
-        descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+        descriptor = os.open(path, os.O_RDWR | getattr(os, "O_NOFOLLOW", 0))
     except OSError:
         raise BootstrapError("SIRA secret file is unavailable") from None
+    parent_descriptor = -1
     try:
         opened = os.fstat(descriptor)
         resolved = path.resolve(strict=True)
@@ -395,17 +790,23 @@ def _validate_secret_file(path: Path, *, forbidden_roots: Sequence[Path]) -> byt
             or any(root == resolved or root in resolved.parents for root in forbidden_roots)
         ):
             raise BootstrapError("SIRA secret file contract failed")
-        raw = os.read(descriptor, 16_385)
-        value = raw.rstrip(b"\r\n")
-        if not value or len(raw) != opened.st_size or b"\x00" in value:
-            raise BootstrapError("SIRA secret file contract failed")
-        try:
-            value.decode("utf-8")
-        except UnicodeDecodeError:
-            raise BootstrapError("SIRA secret file contract failed") from None
-        return value
-    finally:
+        parent_descriptor = os.open(
+            path.parent,
+            os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0),
+        )
+        return SecretLease(
+            path=path,
+            descriptor=descriptor,
+            parent_descriptor=parent_descriptor,
+            device=opened.st_dev,
+            inode=opened.st_ino,
+            size=opened.st_size,
+        )
+    except BaseException:
         os.close(descriptor)
+        if parent_descriptor >= 0:
+            os.close(parent_descriptor)
+        raise
 
 
 def _assert_secret_absent(root: Path, secret_value: bytes) -> None:
@@ -414,8 +815,11 @@ def _assert_secret_absent(root: Path, secret_value: bytes) -> None:
             raise BootstrapError("evidence contains a symlink")
         if not path.is_file():
             continue
+        relative = path.relative_to(root).as_posix().encode("utf-8")
+        if secret_value in relative or any(pattern.search(relative) for pattern in _SECRET_SHAPES):
+            raise BootstrapError("evidence path contains the supplied secret value")
         encoded = _read_regular(path, max_bytes=MAX_EVIDENCE_BYTES)
-        if secret_value in encoded:
+        if secret_value in encoded or _contains_artifact_secret(encoded):
             raise BootstrapError("evidence contains the supplied secret value")
 
 
@@ -518,6 +922,159 @@ def _assert_runtime_disk_increment(root: Path, *, starting_free_bytes: int) -> N
     current_free = shutil.disk_usage(root.parent).free
     if starting_free_bytes - current_free > MAX_RUNTIME_DISK_INCREMENT_BYTES:
         raise BootstrapError("runtime disk increment exceeded its cap")
+
+
+def _command_observation(result: CommandResult) -> dict[str, object]:
+    return {
+        "argv": list(result.argv),
+        "argv_sha256": _sha256(json.dumps(list(result.argv), separators=(",", ":")).encode()),
+        "returncode": result.returncode,
+        "stdout_bytes": len(result.stdout),
+        "stderr_bytes": len(result.stderr),
+        "elapsed_seconds": result.elapsed_seconds,
+    }
+
+
+def _os_release() -> dict[str, str]:
+    encoded = _read_regular(Path("/etc/os-release"), max_bytes=65_536)
+    values: dict[str, str] = {}
+    for raw_line in encoded.decode("utf-8", "strict").splitlines():
+        if not raw_line or raw_line.startswith("#") or "=" not in raw_line:
+            continue
+        key, value = raw_line.split("=", 1)
+        if key in {"ID", "VERSION_ID", "PRETTY_NAME"}:
+            values[key] = value.strip().strip('"')
+    if set(values) != {"ID", "VERSION_ID", "PRETTY_NAME"}:
+        raise BootstrapError("host OS release identity is incomplete")
+    return values
+
+
+def capture_host_environment(
+    *,
+    evidence_root: Path,
+    runner: CommandRunner,
+    bootstrap_release: Mapping[str, object],
+    contract: ModuleType,
+) -> dict[str, object]:
+    """Capture a bounded, nonsecret host/runtime fingerprint before image build."""
+
+    version_argv = ("/usr/bin/docker", "version", "--format", "{{json .}}")
+    info_format = (
+        '{"driver":{{json .Driver}},"root":{{json .DockerRootDir}},'
+        '"operating_system":{{json .OperatingSystem}},"os_type":{{json .OSType}},'
+        '"architecture":{{json .Architecture}},"cgroup_driver":{{json .CgroupDriver}},'
+        '"cgroup_version":{{json .CgroupVersion}},'
+        '"security_options":{{json .SecurityOptions}}}'
+    )
+    info_argv = ("/usr/bin/docker", "info", "--format", info_format)
+    gpu_argv = (
+        "/usr/bin/nvidia-smi",
+        "--query-gpu=name,uuid,driver_version",
+        "--format=csv,noheader,nounits",
+    )
+    version_result = runner.run(
+        version_argv, cwd=evidence_root, timeout=min(30, runner.remaining())
+    )
+    info_result = runner.run(info_argv, cwd=evidence_root, timeout=min(30, runner.remaining()))
+    gpu_result = runner.run(gpu_argv, cwd=evidence_root, timeout=min(30, runner.remaining()))
+    docker_version = _strict_json(version_result.stdout, context="Docker version")
+    docker_info = _strict_json(info_result.stdout, context="Docker info")
+    client = docker_version.get("Client")
+    server = docker_version.get("Server")
+    if not isinstance(client, Mapping) or not isinstance(server, Mapping):
+        raise BootstrapError("Docker client/server identity is incomplete")
+    security_options = docker_info.get("security_options")
+    if not isinstance(security_options, list) or any(
+        not isinstance(value, str) for value in security_options
+    ):
+        raise BootstrapError("Docker security-option identity is incomplete")
+    docker_root = docker_info.get("root")
+    if not isinstance(docker_root, str) or not docker_root.startswith("/"):
+        raise BootstrapError("Docker root identity is unavailable")
+    gpu_rows: list[dict[str, str]] = []
+    for line in gpu_result.stdout.decode("utf-8", "strict").splitlines():
+        parts = [value.strip() for value in line.split(",", 2)]
+        if len(parts) != 3 or not all(parts):
+            raise BootstrapError("GPU identity output is malformed")
+        gpu_rows.append(
+            {
+                "name": parts[0],
+                "uuid_sha256": _sha256(parts[1].encode()),
+                "driver_version": parts[2],
+            }
+        )
+    if len(gpu_rows) != 1 or "A10" not in gpu_rows[0]["name"]:
+        raise BootstrapError("host GPU identity is not the selected one-A10 substrate")
+    release_image = bootstrap_release.get("selected_provider_image")
+    expected_image = {
+        "alias": contract.SELECTED_IMAGE_ALIAS,
+        "family": contract.SELECTED_IMAGE_FAMILY,
+        "version": contract.SELECTED_IMAGE_VERSION,
+        "attestation": "confirmed-in-provider-console",
+        "binding_basis": "prelaunch-offered-plus-user-console-attestation",
+        "post_launch_api_image_observation_available": False,
+    }
+    if release_image != expected_image:
+        raise BootstrapError("provider image attestation drifted before host capture")
+    os_release = _os_release()
+    if (
+        os_release.get("ID") != "ubuntu"
+        or os_release.get("VERSION_ID") != "22.04"
+        or platform.system() != "Linux"
+        or platform.machine() not in {"x86_64", "amd64"}
+        or client.get("Os") != "linux"
+        or client.get("Arch") not in {"amd64", "x86_64"}
+        or server.get("Os") != "linux"
+        or server.get("Arch") not in {"amd64", "x86_64"}
+        or docker_info.get("os_type") != "linux"
+        or docker_info.get("architecture") not in {"amd64", "x86_64"}
+    ):
+        raise BootstrapError("host OS or Docker architecture differs from the x86_64 plan")
+    record = {
+        "schema_version": contract.SCHEMA_VERSION,
+        "captured_before_image_build": True,
+        "provider_image": expected_image,
+        "provider_image_identity_basis": "user-attested-not-postlaunch-api-observed",
+        "os_release": {
+            "id": os_release["ID"],
+            "version_id": os_release["VERSION_ID"],
+            "pretty_name": os_release["PRETTY_NAME"],
+        },
+        "kernel": {
+            "system": platform.system(),
+            "release": platform.release(),
+            "machine": platform.machine(),
+        },
+        "bootstrap_python": {
+            "executable": sys.executable,
+            "version": platform.python_version(),
+        },
+        "docker": {
+            "client_version": client.get("Version"),
+            "client_os": client.get("Os"),
+            "client_arch": client.get("Arch"),
+            "server_version": server.get("Version"),
+            "server_os": server.get("Os"),
+            "server_arch": server.get("Arch"),
+            "storage_driver": docker_info.get("driver"),
+            "root_dir_sha256": _sha256(docker_root.encode()),
+            "operating_system": docker_info.get("operating_system"),
+            "os_type": docker_info.get("os_type"),
+            "architecture": docker_info.get("architecture"),
+            "cgroup_driver": docker_info.get("cgroup_driver"),
+            "cgroup_version": docker_info.get("cgroup_version"),
+            "security_options": security_options,
+        },
+        "gpus": gpu_rows,
+        "commands": [
+            _command_observation(version_result),
+            _command_observation(info_result),
+            _command_observation(gpu_result),
+        ],
+        "secret_values_retained": False,
+    }
+    _write_json(evidence_root / "host-environment.json", record)
+    return record
 
 
 def _artifact_map(plan: Mapping[str, object]) -> dict[str, tuple[int, str]]:
@@ -746,7 +1303,9 @@ def _capture_json_output(path: Path, result: CommandResult) -> None:
             "argv_sha256": _sha256(json.dumps(list(result.argv), separators=(",", ":")).encode()),
             "returncode": result.returncode,
             "stdout_bytes": len(result.stdout),
+            "stdout_sha256": _sha256(result.stdout),
             "stderr_bytes": len(result.stderr),
+            "stderr_sha256": _sha256(result.stderr),
             "elapsed_seconds": result.elapsed_seconds,
         },
     )
@@ -806,6 +1365,51 @@ def _regular_tree_bytes(root: Path) -> int:
     return total
 
 
+def _copy_container_payload(
+    *,
+    container_id: str,
+    run_id: str,
+    phase: str,
+    plan: Mapping[str, object],
+    contract: ModuleType,
+    runner: CommandRunner,
+    evidence_root: Path,
+) -> tuple[bool, int]:
+    if phase not in {"prestop", "poststop"}:
+        raise BootstrapError("container copy-out phase is invalid")
+    target = evidence_root / f"payload-{phase}"
+    target.mkdir(mode=0o700, exist_ok=False)
+    substitutions = {
+        "${CONTAINER_ID}": container_id,
+        "${RUN_ID}": run_id,
+        "${HOST_ATTEMPT_ROOT}": str(target),
+    }
+    copied = runner.run(
+        _render_lifecycle(plan, contract, "copy_out", substitutions),
+        cwd=evidence_root,
+        timeout=min(60, runner.remaining()),
+        check=False,
+    )
+    _capture_json_output(evidence_root / f"container-copy-out-{phase}.json", copied)
+    payload_bytes = _regular_tree_bytes(target)
+    within = payload_bytes <= MAX_ATTEMPT_PAYLOAD_BYTES
+    complete = copied.returncode == 0 and within
+    _write_json(
+        evidence_root / f"container-copy-out-{phase}-budget.json",
+        {
+            "phase": phase,
+            "payload_bytes": payload_bytes,
+            "payload_cap_bytes": MAX_ATTEMPT_PAYLOAD_BYTES,
+            "within_cap": within,
+            "copy_complete": complete,
+        },
+    )
+    if complete:
+        os.rename(target, evidence_root / "payload")
+        return True, payload_bytes
+    return False, payload_bytes
+
+
 def _cleanup_container(
     *,
     container_id: str,
@@ -815,6 +1419,9 @@ def _cleanup_container(
     contract: ModuleType,
     cleanup_runner: CommandRunner,
     evidence_root: Path,
+    payload_captured: bool,
+    payload_bytes: int,
+    payload_phase: str | None,
 ) -> None:
     substitutions = {"${CONTAINER_ID}": container_id, "${RUN_ID}": run_id}
     stop = cleanup_runner.run(
@@ -837,6 +1444,7 @@ def _cleanup_container(
         timeout=min(15, cleanup_runner.remaining()),
         check=False,
     )
+    _capture_json_output(evidence_root / "container-terminal-inspect-command.json", terminal)
     _write_bytes(evidence_root / "container-terminal-inspect.json", terminal.stdout)
     terminal_state_observed = False
     if terminal.returncode == 0:
@@ -850,6 +1458,21 @@ def _cleanup_container(
             }
         except (IndexError, KeyError, TypeError, json.JSONDecodeError):
             terminal_state_observed = False
+    if not payload_captured:
+        try:
+            payload_captured, payload_bytes = _copy_container_payload(
+                container_id=container_id,
+                run_id=run_id,
+                phase="poststop",
+                plan=plan,
+                contract=contract,
+                runner=cleanup_runner,
+                evidence_root=evidence_root,
+            )
+            if payload_captured:
+                payload_phase = "poststop"
+        except BaseException:
+            payload_captured = False
     removed = cleanup_runner.run(
         _render_lifecycle(plan, contract, "remove", substitutions),
         cwd=evidence_root,
@@ -875,6 +1498,12 @@ def _cleanup_container(
             cwd=evidence_root,
             timeout=min(30, cleanup_runner.remaining()),
         )
+        receipt_name = {
+            "container_residue": "container-residue-containers.json",
+            "network_residue": "container-residue-networks.json",
+            "volume_residue": "container-residue-volumes.json",
+        }[action]
+        _capture_json_output(evidence_root / receipt_name, observed)
         residue[kind] = _line_count(observed.stdout)
     record = {
         "schema_version": contract.SCHEMA_VERSION,
@@ -884,7 +1513,10 @@ def _cleanup_container(
         "removed": removed.returncode == 0 and removal_probe.returncode != 0,
         **residue,
         "browser_process_residue_count": residue["owned_container_residue_count"],
-        "evidence_captured_before_removal": False,
+        "process_evidence_captured_before_removal": False,
+        "payload_capture_complete_before_removal": payload_captured,
+        "payload_capture_phase": payload_phase,
+        "payload_bytes": payload_bytes,
         "pre_stop_running_state_observed": False,
         "pre_stop_process_capture_succeeded": False,
         "pre_stop_process_count": 0,
@@ -898,12 +1530,25 @@ def _cleanup_container(
         )
         record.update(
             {
-                "evidence_captured_before_removal": running and process_count > 0,
+                "process_evidence_captured_before_removal": running and process_count > 0,
                 "pre_stop_running_state_observed": running,
                 "pre_stop_process_capture_succeeded": process_count > 0,
                 "pre_stop_process_count": process_count,
             }
         )
+    _write_json(
+        evidence_root / "container-payload-capture.json",
+        {
+            "schema_version": contract.SCHEMA_VERSION,
+            "condition": condition,
+            "copy_complete": payload_captured,
+            "selected_phase": payload_phase,
+            "payload_root": "payload" if payload_captured else None,
+            "payload_bytes": payload_bytes,
+            "payload_cap_bytes": MAX_ATTEMPT_PAYLOAD_BYTES,
+            "captured_before_removal": payload_captured,
+        },
+    )
     _write_json(evidence_root / "container-cleanup.json", record)
     contract.validate_container_cleanup(record)
 
@@ -935,12 +1580,16 @@ def run_owned_container(
         cwd=evidence_root,
         timeout=min(60, work_runner.remaining()),
     )
+    _capture_json_output(evidence_root / "container-create.json", created)
     container_id = created.stdout.decode("utf-8", "strict").strip()
     if re.fullmatch(r"[a-f0-9]{64}", container_id) is None:
         raise BootstrapError("Docker create did not return an immutable container ID")
     lifecycle_substitutions = {"${CONTAINER_ID}": container_id, "${RUN_ID}": run_id}
     primary_error: BaseException | None = None
     result: CommandResult | None = None
+    payload_captured = False
+    payload_bytes = 0
+    payload_phase: str | None = None
     try:
         _write_bytes(evidence_root / "container-id.txt", container_id.encode() + b"\n", cap=128)
         started = work_runner.run(
@@ -948,6 +1597,7 @@ def run_owned_container(
             cwd=evidence_root,
             timeout=min(30, work_runner.remaining()),
         )
+        _capture_json_output(evidence_root / "container-start.json", started)
         required_readiness = (
             readiness_container_path
             if readiness_container_path is not None
@@ -975,35 +1625,56 @@ def run_owned_container(
                 if time.monotonic() >= readiness_deadline:
                     raise BootstrapError("container readiness evidence was not produced")
                 time.sleep(1)
+            _capture_json_output(evidence_root / "container-readiness.json", readiness)
         inspect = work_runner.run(
             _render_lifecycle(plan, contract, "inspect", lifecycle_substitutions),
             cwd=evidence_root,
             timeout=min(30, work_runner.remaining()),
         )
+        _capture_json_output(evidence_root / "container-inspect-before-stop-command.json", inspect)
         _write_bytes(evidence_root / "container-inspect-before-stop.json", inspect.stdout)
         if not _running_container_observed(inspect.stdout):
             raise BootstrapError("container was not running for the pre-stop inspection")
+        try:
+            inspected = json.loads(inspect.stdout)
+            if (
+                not isinstance(inspected, list)
+                or len(inspected) != 1
+                or not isinstance(inspected[0], dict)
+            ):
+                raise BootstrapError("container inspect response is incomplete")
+            contract.validate_container_inspect(
+                inspected[0],
+                create_argv=list(argv),
+                container_id=container_id,
+                image_id=str(substitutions["${IMAGE_ID}"]),
+            )
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+            raise BootstrapError("container inspect policy could not be validated") from None
         top = work_runner.run(
             _render_lifecycle(plan, contract, "top", lifecycle_substitutions),
             cwd=evidence_root,
             timeout=min(30, work_runner.remaining()),
             check=False,
         )
+        _capture_json_output(evidence_root / "container-top-before-stop-command.json", top)
         _write_bytes(evidence_root / "container-processes-before-stop.txt", top.stdout)
         if top.returncode != 0 or _process_snapshot_count(top.stdout) < 1:
             raise BootstrapError("container process evidence is empty or unavailable")
         if attached:
-            work_runner.run(
+            released = work_runner.run(
                 _render_lifecycle(plan, contract, "release", lifecycle_substitutions),
                 cwd=evidence_root,
                 timeout=min(15, work_runner.remaining()),
             )
+            _capture_json_output(evidence_root / "container-release.json", released)
             waited = work_runner.run(
                 _render_lifecycle(plan, contract, "wait", lifecycle_substitutions),
                 cwd=evidence_root,
                 timeout=min(wall_seconds, work_runner.remaining()),
                 check=False,
             )
+            _capture_json_output(evidence_root / "container-wait.json", waited)
             try:
                 exit_code = int(waited.stdout.decode("ascii", "strict").strip())
             except (UnicodeDecodeError, ValueError):
@@ -1018,6 +1689,7 @@ def run_owned_container(
             )
             if logs.returncode != 0:
                 raise BootstrapError("container logs were unavailable")
+            _capture_json_output(evidence_root / "container-logs.json", logs)
             result = CommandResult(
                 waited.argv,
                 exit_code,
@@ -1027,39 +1699,31 @@ def run_owned_container(
             )
         else:
             result = started
-        before_copy_bytes = _regular_tree_bytes(evidence_root)
-        copied = work_runner.run(
-            _render_lifecycle(
-                plan,
-                contract,
-                "copy_out",
-                {
-                    **lifecycle_substitutions,
-                    "${HOST_ATTEMPT_ROOT}": str(evidence_root),
-                },
-            ),
-            cwd=evidence_root,
-            timeout=min(60, work_runner.remaining()),
-        )
-        _capture_json_output(evidence_root / "container-copy-out.json", copied)
-        copied_bytes = _regular_tree_bytes(evidence_root) - before_copy_bytes
-        if not 0 <= copied_bytes <= MAX_ATTEMPT_PAYLOAD_BYTES:
-            raise BootstrapError("container payload exceeded its hard copy-out cap")
-        _write_json(
-            evidence_root / "container-copy-out-budget.json",
-            {
-                "payload_bytes": copied_bytes,
-                "payload_cap_bytes": MAX_ATTEMPT_PAYLOAD_BYTES,
-                "within_cap": True,
-            },
-        )
-        _capture_json_output(evidence_root / "container-start.json", result)
+        if attached:
+            _capture_json_output(evidence_root / "container-workload-result.json", result)
         _write_bytes(evidence_root / "stdout.log", result.stdout)
         _write_bytes(evidence_root / "stderr.log", result.stderr)
         if attached and result.returncode != 0:
             raise BootstrapError("owned container workload returned failure")
     except BaseException as exc:
         primary_error = exc
+    try:
+        payload_captured, payload_bytes = _copy_container_payload(
+            container_id=container_id,
+            run_id=run_id,
+            phase="prestop",
+            plan=plan,
+            contract=contract,
+            runner=cleanup_runner,
+            evidence_root=evidence_root,
+        )
+        if payload_captured:
+            payload_phase = "prestop"
+        elif primary_error is None:
+            primary_error = BootstrapError("container payload copy-out failed")
+    except BaseException as exc:
+        if primary_error is None:
+            primary_error = exc
     cleanup_error: BaseException | None = None
     try:
         _cleanup_container(
@@ -1070,6 +1734,9 @@ def run_owned_container(
             contract=contract,
             cleanup_runner=cleanup_runner,
             evidence_root=evidence_root,
+            payload_captured=payload_captured,
+            payload_bytes=payload_bytes,
+            payload_phase=payload_phase,
         )
     except BaseException as exc:
         cleanup_error = exc
@@ -1080,6 +1747,54 @@ def run_owned_container(
     if result is None:
         raise BootstrapError("owned container produced no command result")
     return result
+
+
+def initialize_normalized_event_ledger(evidence_root: Path) -> None:
+    path = evidence_root / "normalized-events.jsonl"
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+    descriptor = os.open(path, flags, 0o600)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def _append_normalized_event(path: Path, event: Mapping[str, object]) -> None:
+    encoded = json.dumps(event, allow_nan=False, separators=(",", ":"), sort_keys=True).encode()
+    encoded += b"\n"
+    if len(encoded) > 16_384:
+        raise BootstrapError("normalized event exceeds its cap")
+    descriptor = os.open(path, os.O_WRONLY | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0))
+    try:
+        os.write(descriptor, encoded)
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def _condition_configuration_refs(condition: str, mode: str) -> list[str]:
+    filename = "smoke-reactive.yaml" if condition == "SIRA-REACTIVE" else "smoke-simulative.yaml"
+    return [
+        "containers/sira-smoke/bounded/bounded-smoke-plan-v1.json",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/" + filename,
+        f"{mode}/resolved-command.json",
+    ]
+
+
+def _condition_field_provenance() -> dict[str, str]:
+    return {
+        "source_kind": "observed_from_locked_experiment_assignment",
+        "selected_mode": "derived_from_locked_condition_plan",
+        "assignment_policy_sha256": "observed_file_hash",
+        "resolved_configuration_refs": "observed_repository_paths",
+        "raw_artifact_refs": "observed_owned_output_paths",
+        "confidence": "unavailable_from_pinned_source",
+        "override": "unavailable_from_pinned_source",
+        "fallback": "unavailable_from_pinned_source",
+        "critic": "unavailable_from_pinned_source",
+        "configurator": "unavailable_from_pinned_source",
+        "per_step_planning": "unavailable_from_pinned_source",
+    }
 
 
 def run_condition(
@@ -1109,6 +1824,68 @@ def run_condition(
         "${AUTHORIZATION_REFERENCE}": str(authorization["authorization_reference"]),
         "${IMAGE_ID}": image_id,
     }
+    create_argv = contract.materialize_argv(template, substitutions)
+    inner_argv = contract.condition_inner_argv(condition)
+    configuration_refs = _condition_configuration_refs(condition, contract.MODE_VALUES[condition])
+    _write_json(
+        condition_root / "resolved-command.json",
+        {
+            "schema_version": contract.SCHEMA_VERSION,
+            "condition": condition,
+            "run_id": contract.RUN_IDS[condition],
+            "container_create_argv": list(create_argv),
+            "container_create_argv_sha256": contract.template_sha256(create_argv),
+            "inner_argv": list(inner_argv),
+            "inner_argv_sha256": contract.template_sha256(inner_argv),
+            "configuration_refs": configuration_refs,
+        },
+    )
+    decision = {
+        "schema_version": contract.SCHEMA_VERSION,
+        "plan_id": contract.PLAN_ID,
+        "host_run_id": contract.HOST_RUN_ID,
+        "run_id": contract.RUN_IDS[condition],
+        "condition": condition,
+        "source_kind": "experiment_assignment",
+        "selected_mode": contract.MODE_VALUES[condition],
+        "assignment_policy_sha256": _condition_plan_sha256(contract, condition),
+        "resolved_configuration_refs": configuration_refs,
+        "raw_artifact_roots": [
+            f"{contract.MODE_VALUES[condition]}/payload/sira-output",
+            f"{contract.MODE_VALUES[condition]}/payload/source-logs",
+        ],
+        "field_level_provenance": _condition_field_provenance(),
+        "confidence": None,
+        "override": None,
+        "fallback": None,
+        "critic": None,
+        "configurator": None,
+        "per_step_planning": None,
+        "interpretation_allowed": False,
+    }
+    _write_json(condition_root / "regulation-decision.json", decision)
+    index = list(contract.CONDITION_ORDER).index(condition)
+    event_path = evidence_root / "normalized-events.jsonl"
+    _append_normalized_event(
+        event_path,
+        {
+            "schema_version": contract.SCHEMA_VERSION,
+            "plan_id": contract.PLAN_ID,
+            "host_run_id": contract.HOST_RUN_ID,
+            "run_id": contract.RUN_IDS[condition],
+            "event_sequence": index * 2 + 1,
+            "event_type": "condition_assignment_bound",
+            "condition": condition,
+            "source_kind": "experiment_assignment",
+            "evidence_reference": f"{contract.MODE_VALUES[condition]}/regulation-decision.json",
+            "raw_artifact_refs": [],
+            "resolved_configuration_refs": configuration_refs,
+            "field_level_provenance": _condition_field_provenance(),
+            "monotonic_timestamp_ns": time.monotonic_ns(),
+            "wall_timestamp_utc": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+            "interpretation_allowed": False,
+        },
+    )
     run_owned_container(
         condition=condition,
         run_id=contract.RUN_IDS[condition],
@@ -1121,6 +1898,76 @@ def run_condition(
         evidence_root=condition_root,
         attached=True,
         wall_seconds=120,
+    )
+    payload = condition_root / "payload"
+    artifact_paths = [
+        path
+        for path in sorted(payload.rglob("*"))
+        if path.is_file()
+        and not path.is_symlink()
+        and (
+            path.parent == payload / "sira-output"
+            or payload / "source-logs" in path.parents
+            or path.name
+            in {"provider-budget.json", "runtime-environment.json", "runtime-cleanup.json"}
+        )
+    ]
+    raw_rows = []
+    for path in artifact_paths:
+        encoded = _read_regular(path, max_bytes=MAX_ATTEMPT_PAYLOAD_BYTES)
+        raw_rows.append(
+            {
+                "path": path.relative_to(evidence_root).as_posix(),
+                "bytes": len(encoded),
+                "sha256": _sha256(encoded),
+            }
+        )
+    session_rows = [
+        row
+        for row in raw_rows
+        if str(row["path"]).endswith(".json") and "/sira-output/" in str(row["path"])
+    ]
+    log_rows = [row for row in raw_rows if "/source-logs/" in str(row["path"])]
+    if len(session_rows) != 1 or not log_rows:
+        raise BootstrapError("condition raw session or source-log evidence is incomplete")
+    completion = {
+        "schema_version": contract.SCHEMA_VERSION,
+        "plan_id": contract.PLAN_ID,
+        "host_run_id": contract.HOST_RUN_ID,
+        "run_id": contract.RUN_IDS[condition],
+        "condition": condition,
+        "raw_artifacts": raw_rows,
+        "raw_session_refs": [row["path"] for row in session_rows],
+        "source_log_refs": [row["path"] for row in log_rows],
+        "resolved_configuration_refs": configuration_refs,
+        "field_level_provenance": {
+            "raw_artifacts": "observed_file_bytes",
+            "runtime": "observed_container_output",
+            "accounting": "observed_provider_budget_boundary",
+            "cleanup": "observed_runtime_close_record",
+        },
+        "interpretation_allowed": False,
+    }
+    _write_json(condition_root / "condition-completion.json", completion)
+    _append_normalized_event(
+        event_path,
+        {
+            "schema_version": contract.SCHEMA_VERSION,
+            "plan_id": contract.PLAN_ID,
+            "host_run_id": contract.HOST_RUN_ID,
+            "run_id": contract.RUN_IDS[condition],
+            "event_sequence": index * 2 + 2,
+            "event_type": "condition_execution_completed",
+            "condition": condition,
+            "source_kind": "experiment_assignment",
+            "evidence_reference": f"{contract.MODE_VALUES[condition]}/condition-completion.json",
+            "raw_artifact_refs": [row["path"] for row in raw_rows],
+            "resolved_configuration_refs": configuration_refs,
+            "field_level_provenance": completion["field_level_provenance"],
+            "monotonic_timestamp_ns": time.monotonic_ns(),
+            "wall_timestamp_utc": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+            "interpretation_allowed": False,
+        },
     )
 
 
@@ -1176,38 +2023,76 @@ def package_failure_evidence(
     """Create a bounded secret-scanned archive after any post-root bootstrap failure."""
 
     archive = output_root / "t07-bounded-failure-evidence.zip"
-    candidates = [
+    optional_candidates = [
         path
         for path in sorted(evidence_root.rglob("*"))
         if path.is_file() and not path.is_symlink()
     ]
     incident = output_root / "TERMINATE_REQUIRED.json"
-    if incident.is_file() and not incident.is_symlink():
-        candidates.append(incident)
+    if not incident.is_file() or incident.is_symlink():
+        raise BootstrapError("failure evidence termination incident is unavailable")
+    cleanup = evidence_root / "secret-cleanup.json"
+    authority = evidence_root / "bootstrap-authority.json"
+    mandatory_candidates = [incident]
+    if authority.exists():
+        if not authority.is_file() or authority.is_symlink():
+            raise BootstrapError("failure evidence bootstrap authority is unsafe")
+        mandatory_candidates.append(authority)
+        optional_candidates.remove(authority)
+    if cleanup.exists():
+        if not cleanup.is_file() or cleanup.is_symlink():
+            raise BootstrapError("failure evidence secret cleanup receipt is unsafe")
+        mandatory_candidates.append(cleanup)
+        optional_candidates.remove(cleanup)
     rows: list[dict[str, object]] = []
     retained: list[tuple[str, bytes]] = []
     skipped_sensitive = 0
     skipped_cap = 0
     payload_bytes = 0
     payload_limit = MAX_FAILURE_EVIDENCE_BYTES - 1_048_576
-    for path in candidates[:MAX_EVIDENCE_FILES]:
+
+    def retain(path: Path, *, mandatory: bool) -> bool:
+        nonlocal payload_bytes, skipped_cap, skipped_sensitive
         relative = path.relative_to(output_root).as_posix()
+        relative_encoded = relative.encode("utf-8")
+        if any(pattern.search(relative_encoded) for pattern in _SECRET_SHAPES) or (
+            secret_value is not None and secret_value in relative_encoded
+        ):
+            if mandatory:
+                raise BootstrapError("mandatory failure evidence has a secret-shaped path")
+            skipped_sensitive += 1
+            return False
         try:
             encoded = _read_regular(path, max_bytes=MAX_EVIDENCE_BYTES)
         except BootstrapError:
+            if mandatory:
+                raise
             skipped_cap += 1
-            continue
-        if any(pattern.search(encoded) for pattern in _SECRET_SHAPES) or (
+            return False
+        if _contains_artifact_secret(encoded) or (
             secret_value is not None and secret_value in encoded
         ):
+            if mandatory:
+                raise BootstrapError("mandatory failure evidence contains secret-shaped bytes")
             skipped_sensitive += 1
-            continue
+            return False
         if payload_bytes + len(encoded) > payload_limit:
+            if mandatory:
+                raise BootstrapError("mandatory failure evidence exceeds its payload cap")
             skipped_cap += 1
-            continue
+            return False
         retained.append((relative, encoded))
         payload_bytes += len(encoded)
         rows.append({"path": relative, "bytes": len(encoded), "sha256": _sha256(encoded)})
+        return True
+
+    if len(mandatory_candidates) > MAX_EVIDENCE_FILES:
+        raise BootstrapError("mandatory failure evidence exceeds its file cap")
+    for path in mandatory_candidates:
+        retain(path, mandatory=True)
+    optional_slots = MAX_EVIDENCE_FILES - len(mandatory_candidates)
+    for path in optional_candidates[:optional_slots]:
+        retain(path, mandatory=False)
     manifest = {
         "schema_version": contract.SCHEMA_VERSION,
         "plan_id": contract.PLAN_ID,
@@ -1218,7 +2103,7 @@ def package_failure_evidence(
         "payload_bytes": payload_bytes,
         "skipped_secret_shaped_file_count": skipped_sensitive,
         "skipped_cap_or_unsafe_file_count": skipped_cap
-        + max(0, len(candidates) - MAX_EVIDENCE_FILES),
+        + max(0, len(optional_candidates) - optional_slots),
         "secret_values_retained": False,
         "source_retained": True,
     }
@@ -1249,26 +2134,157 @@ def package_failure_evidence(
     return archive
 
 
+def _create_early_failure_root(output_root: Path) -> tuple[Path, Path]:
+    output = output_root.absolute()
+    if output.resolve(strict=False) != output or output.parent.is_symlink():
+        raise BootstrapError("early-failure output identity is unsafe")
+    parent = output.parent.resolve(strict=True)
+    if parent != output.parent or not parent.is_dir():
+        raise BootstrapError("early-failure output parent is unsafe")
+    root = parent / f"{output.name}-early-failure"
+    root.mkdir(mode=0o700, exist_ok=False)
+    evidence = root / "evidence"
+    evidence.mkdir(mode=0o700)
+    return root, evidence
+
+
+def package_early_failure_evidence(
+    output_root: Path,
+    *,
+    failure_stage: str,
+    secret_target_identity_established: bool,
+    secret_cleanup_verified: bool,
+    secret_value_read: bool,
+    secret_cleanup_source: Path | None = None,
+) -> Path:
+    """Seal a predictable minimal failure set when normal output setup never completed."""
+
+    if failure_stage not in {
+        "secret_target_validation",
+        "bootstrap_preflight",
+        "normal_failure_packaging",
+    }:
+        raise BootstrapError("early-failure stage is invalid")
+    if secret_cleanup_verified != (secret_cleanup_source is not None):
+        raise BootstrapError("early-failure cleanup receipt presence drifted")
+    root, evidence = _create_early_failure_root(output_root)
+    disposition = {
+        "schema_version": "0.1.0",
+        "plan_id": "PLAN-T07-BOUNDED-SIRA-SMOKE-V1",
+        "host_run_id": "RUN-T07-BOUNDED-HOST-0001",
+        "failure_stage": failure_stage,
+        "message_retained": False,
+        "secret_target_identity_established": secret_target_identity_established,
+        "secret_cleanup_verified": secret_cleanup_verified,
+        "manual_secret_deletion_and_rotation_required": not secret_cleanup_verified,
+        "secret_value_read": secret_value_read,
+        "value_or_hash_retained": False,
+    }
+    _write_json(evidence / "early-failure-disposition.json", disposition)
+    if secret_cleanup_source is not None:
+        cleanup = _read_regular(secret_cleanup_source, max_bytes=65_536)
+        if _contains_artifact_secret(cleanup):
+            raise BootstrapError("early-failure cleanup receipt is not secret-safe")
+        cleanup_record = _strict_json(cleanup, context="early-failure secret cleanup")
+        if cleanup_record != {
+            "schema_version": "0.1.0",
+            "secret_variable_name": "SIRA_API_KEY",
+            "secret_file_basename": "sira_api_key",
+            "held_identity_established_before_preflight": True,
+            "truncated_before_unlink": True,
+            "unlinked": True,
+            "absence_verified": True,
+            "path_identity_replaced": False,
+            "value_or_hash_retained": False,
+            "manual_fallback_deletion_required": False,
+        }:
+            raise BootstrapError("early-failure cleanup receipt is incomplete")
+        _write_bytes(evidence / "secret-cleanup.json", cleanup, cap=65_536)
+    incident = {
+        "schema_version": "0.1.0",
+        "provider_termination_required": True,
+        "failure_class": failure_stage,
+        "message_retained": False,
+        "secret_cleanup_verified": secret_cleanup_verified,
+        "manual_secret_deletion_required": not secret_cleanup_verified,
+        "secret_target_validation_completed": secret_target_identity_established,
+        "secret_value_read": secret_value_read,
+    }
+    _write_json(root / "TERMINATE_REQUIRED.json", incident)
+    candidates = [
+        evidence / "early-failure-disposition.json",
+        *([evidence / "secret-cleanup.json"] if secret_cleanup_source is not None else []),
+        root / "TERMINATE_REQUIRED.json",
+    ]
+    retained: list[tuple[str, bytes]] = []
+    rows: list[dict[str, object]] = []
+    payload_bytes = 0
+    for path in candidates:
+        relative = path.relative_to(root).as_posix()
+        encoded = _read_regular(path, max_bytes=65_536)
+        if any(
+            pattern.search(relative.encode("utf-8")) for pattern in _SECRET_SHAPES
+        ) or _contains_artifact_secret(encoded):
+            raise BootstrapError("early-failure evidence is not secret-safe")
+        payload_bytes += len(encoded)
+        retained.append((relative, encoded))
+        rows.append({"path": relative, "bytes": len(encoded), "sha256": _sha256(encoded)})
+    manifest = {
+        "schema_version": "0.1.0",
+        "plan_id": "PLAN-T07-BOUNDED-SIRA-SMOKE-V1",
+        "host_run_id": "RUN-T07-BOUNDED-HOST-0001",
+        "disposition": "bootstrap_failed",
+        "files": rows,
+        "file_count": len(rows),
+        "payload_bytes": payload_bytes,
+        "skipped_secret_shaped_file_count": 0,
+        "skipped_cap_or_unsafe_file_count": 0,
+        "secret_values_retained": False,
+        "source_retained": True,
+    }
+    manifest_encoded = (
+        json.dumps(manifest, allow_nan=False, indent=2, sort_keys=True).encode() + b"\n"
+    )
+    archive = root / "t07-bounded-early-failure-evidence.zip"
+    with zipfile.ZipFile(archive, "x", compression=zipfile.ZIP_STORED) as output:
+        output.writestr("FAILURE_EVIDENCE_MANIFEST.json", manifest_encoded)
+        for relative, encoded in retained:
+            output.writestr(relative, encoded)
+    archive_encoded = _read_regular(archive, max_bytes=MAX_EARLY_FAILURE_EVIDENCE_BYTES)
+    identity = {
+        "schema_version": "0.1.0",
+        "archive": archive.name,
+        "bytes": len(archive_encoded),
+        "sha256": _sha256(archive_encoded),
+        "manifest_sha256": _sha256(manifest_encoded),
+        "secret_scan_passed": True,
+        "source_retained": True,
+    }
+    _write_json(root / "EARLY_FAILURE_ARCHIVE_IDENTITY.json", identity)
+    return archive
+
+
 def validate_pair_evidence(evidence_root: Path, contract: ModuleType) -> None:
     usages: list[object] = []
     records: list[dict[str, object]] = []
     for condition in contract.CONDITION_ORDER:
         mode = contract.MODE_VALUES[condition]
         root = evidence_root / mode
+        payload = root / "payload"
         budget = _strict_json(
-            _read_regular(root / "provider-budget.json", max_bytes=65_536),
+            _read_regular(payload / "provider-budget.json", max_bytes=65_536),
             context=f"{mode} provider budget",
         )
         runtime = _strict_json(
-            _read_regular(root / "runtime-environment.json", max_bytes=65_536),
+            _read_regular(payload / "runtime-environment.json", max_bytes=65_536),
             context=f"{mode} runtime environment",
         )
         cleanup = _strict_json(
-            _read_regular(root / "runtime-cleanup.json", max_bytes=65_536),
+            _read_regular(payload / "runtime-cleanup.json", max_bytes=65_536),
             context=f"{mode} runtime cleanup",
         )
         command = _strict_json(
-            _read_regular(root / "container-start.json", max_bytes=65_536),
+            _read_regular(root / "container-workload-result.json", max_bytes=65_536),
             context=f"{mode} command result",
         )
         if (
@@ -1336,53 +2352,9 @@ def write_reconstruction_records(
     *,
     contract: ModuleType,
 ) -> None:
-    events: list[dict[str, object]] = []
-    for condition in contract.CONDITION_ORDER:
-        mode = contract.MODE_VALUES[condition]
-        run_id = contract.RUN_IDS[condition]
-        root = evidence_root / mode
-        budget_path = root / "provider-budget.json"
-        budget_encoded = _read_regular(budget_path, max_bytes=65_536)
-        decision = {
-            "schema_version": contract.SCHEMA_VERSION,
-            "plan_id": contract.PLAN_ID,
-            "host_run_id": contract.HOST_RUN_ID,
-            "run_id": run_id,
-            "condition": condition,
-            "source_kind": "experiment_assignment",
-            "selected_mode": mode,
-            "assignment_policy_sha256": _condition_plan_sha256(contract, condition),
-            "provider_budget_reference": f"{mode}/provider-budget.json",
-            "provider_budget_sha256": _sha256(budget_encoded),
-            "confidence": None,
-            "override": None,
-            "fallback": None,
-            "critic": None,
-            "configurator": None,
-            "per_step_planning": None,
-            "interpretation_allowed": False,
-        }
-        _write_json(root / "regulation-decision.json", decision)
-        for event_type in ("condition_assignment_bound", "condition_execution_completed"):
-            events.append(
-                {
-                    "schema_version": contract.SCHEMA_VERSION,
-                    "plan_id": contract.PLAN_ID,
-                    "host_run_id": contract.HOST_RUN_ID,
-                    "run_id": run_id,
-                    "event_sequence": len(events) + 1,
-                    "event_type": event_type,
-                    "condition": condition,
-                    "source_kind": "experiment_assignment",
-                    "evidence_reference": f"{mode}/regulation-decision.json",
-                    "interpretation_allowed": False,
-                }
-            )
-    event_bytes = b"".join(
-        json.dumps(event, allow_nan=False, separators=(",", ":"), sort_keys=True).encode() + b"\n"
-        for event in events
-    )
-    _write_bytes(evidence_root / "normalized-events.jsonl", event_bytes, cap=65_536)
+    event_bytes = _read_regular(evidence_root / "normalized-events.jsonl", max_bytes=65_536)
+    if len([line for line in event_bytes.splitlines() if line]) != 4:
+        raise BootstrapError("normalized event ledger is incomplete")
     reactive = contract.container_create_argv("SIRA-REACTIVE")
     simulative = contract.container_create_argv("SIRA-SIMULATIVE")
     contract.assert_pair_command_contract(reactive, simulative)
@@ -1409,59 +2381,34 @@ def write_reconstruction_records(
     )
 
 
-def write_compute_use(
+def write_bootstrap_execution(
     evidence_root: Path,
     *,
-    authorization: Mapping[str, object],
     contract: ModuleType,
     status: str,
+    started_at: datetime,
     ended_at: datetime | None = None,
 ) -> dict[str, object]:
     if status not in {"completed", "failed"}:
-        raise BootstrapError("compute-use status is invalid")
-    started = _parse_utc(
-        authorization.get("supervised_wall_started_at_utc"), context="compute start"
-    )
+        raise BootstrapError("bootstrap execution status is invalid")
+    started = started_at.astimezone(UTC)
     ended = datetime.now(UTC) if ended_at is None else ended_at.astimezone(UTC)
     elapsed = (ended - started).total_seconds()
     if not math.isfinite(elapsed) or elapsed < 0:
-        raise BootstrapError("compute-use wall interval is invalid")
-    billable_minutes = math.ceil(elapsed / 60)
-    provider_cost = billable_minutes * 129 / 6_000
-    api_cost = 0.0
-    for mode in ("reactive", "simulative"):
-        path = evidence_root / mode / "provider-budget.json"
-        if path.is_file() and not path.is_symlink():
-            budget = _strict_json(
-                _read_regular(path, max_bytes=65_536), context=f"{mode} provider budget"
-            )
-            value = budget.get("cost_usd")
-            if not isinstance(value, (int, float)) or isinstance(value, bool):
-                raise BootstrapError("provider budget cost is invalid")
-            api_cost += float(value)
-    within = elapsed <= HARD_PROVIDER_WALL_SECONDS and provider_cost <= 2.0 and api_cost <= 4.0
+        raise BootstrapError("bootstrap execution wall interval is invalid")
     record = {
         "schema_version": contract.SCHEMA_VERSION,
         "plan_id": contract.PLAN_ID,
         "run_id": contract.HOST_RUN_ID,
-        "provider": "Lambda On-Demand Cloud",
-        "hardware": "gpu_1x_a10",
-        "region": "us-east-1",
+        "record_kind": "remote_bootstrap_execution_interval",
         "started_at_utc": started.isoformat().replace("+00:00", "Z"),
         "ended_at_utc": ended.isoformat().replace("+00:00", "Z"),
         "wall_clock_seconds": elapsed,
-        "accelerator_hours": elapsed / 3_600,
-        "list_price_upper_bound_usd": provider_cost,
-        "actual_provider_invoice_cost_usd": None,
-        "observed_openai_api_cost_usd": api_cost,
         "status": status,
-        "within_wall_and_cost_caps": within,
-        "repository_compute_record": "CMP-0001",
-        "repository_closeout_required": True,
+        "provider_allocation_accounting": False,
+        "cost_accounting_authority": "local-post-termination-compute-closeout",
     }
-    _write_json(evidence_root / "compute-use.json", record)
-    if status == "completed" and not within:
-        raise BootstrapError("compute-use closeout exceeds its cap")
+    _write_json(evidence_root / "bootstrap-execution.json", record)
     return record
 
 
@@ -1473,14 +2420,15 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--contract-sha256", required=True)
     parser.add_argument("--authorization", type=Path, required=True)
     parser.add_argument("--authorization-sha256", required=True)
+    parser.add_argument("--bootstrap-release", type=Path, required=True)
+    parser.add_argument("--bootstrap-release-sha256", required=True)
     parser.add_argument("--bundle-root", type=Path, required=True)
     parser.add_argument("--secret-file", type=Path, required=True)
     parser.add_argument("--output-root", type=Path, required=True)
     return parser
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    args = _parser().parse_args(argv)
+def _execute(args: argparse.Namespace, secret_lease: SecretLease) -> int:
     if "OPENAI_API_KEY" in os.environ or "SIRA_API_KEY" in os.environ:
         raise BootstrapError("credentials must not be inherited by the bootstrap")
     contract_bytes = _read_regular(args.contract_file, max_bytes=1_048_576)
@@ -1489,7 +2437,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         or _sha256(contract_bytes) != args.contract_sha256
     ):
         raise BootstrapError("bounded contract module hash drifted")
-    contract = _load_contract(args.contract_file)
+    contract = _load_contract(args.contract_file, contract_bytes)
     plan_bytes = _read_regular(args.plan, max_bytes=MAX_PLAN_BYTES)
     if _HEX64.fullmatch(args.plan_sha256) is None or _sha256(plan_bytes) != args.plan_sha256:
         raise BootstrapError("bounded plan hash drifted")
@@ -1501,18 +2449,45 @@ def main(argv: Sequence[str] | None = None) -> int:
         plan_sha256=args.plan_sha256,
         contract=contract,
     )
+    bootstrap_release = validate_bootstrap_release(
+        _read_regular(args.bootstrap_release, max_bytes=MAX_AUTHORIZATION_BYTES),
+        expected_sha256=args.bootstrap_release_sha256,
+        plan_sha256=args.plan_sha256,
+        authorization_sha256=args.authorization_sha256,
+        authorization=authorization,
+        contract=contract,
+    )
     output_root = args.output_root.absolute()
     bundle_root = args.bundle_root.resolve(strict=True)
     if output_root.exists() or output_root.resolve(strict=False) != output_root:
         raise BootstrapError("remote output root is not fresh and canonical")
     _assert_remote_capacity(output_root)
     starting_free_bytes = shutil.disk_usage(output_root.parent).free
-    secret_value = _validate_secret_file(
-        args.secret_file, forbidden_roots=(bundle_root, output_root)
-    )
     output_root.mkdir(mode=0o700, parents=True, exist_ok=False)
     evidence_root = output_root / "evidence"
     evidence_root.mkdir(mode=0o700)
+    _write_json(
+        evidence_root / "bootstrap-authority.json",
+        {
+            "schema_version": contract.SCHEMA_VERSION,
+            "plan_id": contract.PLAN_ID,
+            "host_run_id": contract.HOST_RUN_ID,
+            "authorization_reference": bootstrap_release["authorization_reference"],
+            "execution_commit": bootstrap_release["execution_commit"],
+            "plan_sha256": args.plan_sha256,
+            "contract_sha256": args.contract_sha256,
+            "authorization_sha256": args.authorization_sha256,
+            "private_binding_sha256": bootstrap_release["private_binding_sha256"],
+            "bootstrap_release_sha256": args.bootstrap_release_sha256,
+            "observer_state_sha256": bootstrap_release["observer_state_sha256"],
+            "post_launch_report_sha256": bootstrap_release["post_launch_report_sha256"],
+            "provider_active_observed_at_utc": bootstrap_release["provider_active_observed_at_utc"],
+            "selected_provider_image": bootstrap_release["selected_provider_image"],
+            "authority_validation_complete": True,
+            "secret_value_or_hash_retained": False,
+        },
+    )
+    bootstrap_started_at = datetime.now(UTC)
     incident = output_root / "TERMINATE_REQUIRED.json"
     launch = _parse_utc(
         authorization["supervised_wall_started_at_utc"], context="supervised wall start"
@@ -1523,16 +2498,34 @@ def main(argv: Sequence[str] | None = None) -> int:
     command_meter = CommandMeter(
         max_calls=int(contract.LIMITS["docker_lifecycle_calls"]),
         output_cap=int(contract.LIMITS["docker_control_output_bytes"]),
+        cleanup_reserved_calls=int(contract.LIMITS["docker_cleanup_reserved_calls"]),
+        cleanup_reserved_output_bytes=int(contract.LIMITS["docker_cleanup_reserved_output_bytes"]),
+        ledger_path=evidence_root / "command-meter.jsonl",
     )
     work_runner = CommandRunner(
         deadline=now_monotonic + remaining - TERMINATION_HEADROOM_SECONDS - cleanup_reserve,
         meter=command_meter,
+        scope="work",
     )
     cleanup_runner = CommandRunner(
         deadline=now_monotonic + remaining - TERMINATION_HEADROOM_SECONDS,
         meter=command_meter,
+        scope="cleanup",
     )
+    secret_value: bytes | None = None
+    secret_cleanup_complete = False
     try:
+        # The guarded failure path begins before the first byte of the real secret
+        # is read.  If validation cannot prove an exact safe file identity, the
+        # incident explicitly requires manual deletion rather than touching an
+        # untrusted target.
+        capture_host_environment(
+            evidence_root=evidence_root,
+            runner=work_runner,
+            bootstrap_release=bootstrap_release,
+            contract=contract,
+        )
+        secret_value = secret_lease.read_value()
         context = prepare_build_context(
             bundle_root=bundle_root,
             work_root=output_root,
@@ -1580,8 +2573,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             wall_seconds=60,
             readiness_container_path="/giclab/attempt/browser-preflight.json",
         )
+        browser_payload = browser_root / "payload"
         browser_record = _strict_json(
-            _read_regular(browser_root / "browser-preflight.json", max_bytes=65_536),
+            _read_regular(browser_payload / "browser-preflight.json", max_bytes=65_536),
             context="browser preflight",
         )
         if (
@@ -1627,7 +2621,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             run_id=contract.MODEL_PREFLIGHT_RUN_ID,
             create_template=model_template,
             substitutions={
-                "${SIRA_SECRET_FILE}": str(args.secret_file.resolve(strict=True)),
+                "${SIRA_SECRET_FILE}": secret_lease.mount_path(),
                 "${EXECUTION_COMMIT}": str(authorization["execution_commit"]),
                 "${AUTHORIZATION_REFERENCE}": str(authorization["authorization_reference"]),
                 "${IMAGE_ID}": image_id,
@@ -1641,7 +2635,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             wall_seconds=60,
         )
         model_record = _strict_json(
-            _read_regular(model_root / "model-availability.json", max_bytes=65_536),
+            _read_regular(model_root / "payload/model-availability.json", max_bytes=65_536),
             context="model availability",
         )
         if model_record != {
@@ -1659,6 +2653,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         } or not isinstance(model_record.get("response_bytes"), int):
             raise BootstrapError("model availability evidence drifted")
         _assert_runtime_disk_increment(output_root, starting_free_bytes=starting_free_bytes)
+        initialize_normalized_event_ledger(evidence_root)
         run_condition(
             condition="SIRA-REACTIVE",
             plan=plan,
@@ -1667,7 +2662,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             cleanup_runner=cleanup_runner,
             image_id=image_id,
             evidence_root=evidence_root,
-            secret_file=args.secret_file.resolve(strict=True),
+            secret_file=Path(secret_lease.mount_path()),
             authorization=authorization,
         )
         _assert_runtime_disk_increment(output_root, starting_free_bytes=starting_free_bytes)
@@ -1679,28 +2674,36 @@ def main(argv: Sequence[str] | None = None) -> int:
             cleanup_runner=cleanup_runner,
             image_id=image_id,
             evidence_root=evidence_root,
-            secret_file=args.secret_file.resolve(strict=True),
+            secret_file=Path(secret_lease.mount_path()),
             authorization=authorization,
         )
         _assert_runtime_disk_increment(output_root, starting_free_bytes=starting_free_bytes)
         validate_pair_evidence(evidence_root, contract)
         write_reconstruction_records(evidence_root, contract=contract)
-        write_compute_use(
+        write_bootstrap_execution(
             evidence_root,
-            authorization=authorization,
             contract=contract,
             status="completed",
+            started_at=bootstrap_started_at,
         )
+        secret_lease.destroy(evidence_root / "secret-cleanup.json")
+        secret_cleanup_complete = True
         package_evidence(evidence_root, contract, secret_value=secret_value)
         _assert_runtime_disk_increment(output_root, starting_free_bytes=starting_free_bytes)
     except BaseException as exc:
-        if not (evidence_root / "compute-use.json").exists():
+        if not secret_cleanup_complete:
+            try:
+                secret_lease.destroy(evidence_root / "secret-cleanup.json")
+                secret_cleanup_complete = True
+            except BaseException:
+                secret_cleanup_complete = False
+        if not (evidence_root / "bootstrap-execution.json").exists():
             with contextlib.suppress(BaseException):
-                write_compute_use(
+                write_bootstrap_execution(
                     evidence_root,
-                    authorization=authorization,
                     contract=contract,
                     status="failed",
+                    started_at=bootstrap_started_at,
                 )
         _write_json(
             incident,
@@ -1709,6 +2712,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "provider_termination_required": True,
                 "failure_class": type(exc).__name__,
                 "message_retained": False,
+                "secret_cleanup_verified": secret_cleanup_complete,
+                "manual_secret_deletion_required": not secret_cleanup_complete,
+                "secret_target_validation_completed": True,
+                "secret_value_read": secret_value is not None,
             },
         )
         try:
@@ -1738,9 +2745,65 @@ def main(argv: Sequence[str] | None = None) -> int:
             "provider_termination_required": True,
             "bootstrap_complete": True,
             "message_retained": False,
+            "secret_cleanup_verified": True,
+            "manual_secret_deletion_required": False,
         },
     )
     return 0
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    args = _parser().parse_args(argv)
+    forbidden_roots = (
+        args.bundle_root.resolve(strict=False),
+        args.output_root.absolute(),
+    )
+    try:
+        secret_lease = acquire_secret_lease(
+            args.secret_file.absolute(), forbidden_roots=forbidden_roots
+        )
+    except BaseException:
+        with contextlib.suppress(BaseException):
+            package_early_failure_evidence(
+                args.output_root,
+                failure_stage="secret_target_validation",
+                secret_target_identity_established=False,
+                secret_cleanup_verified=False,
+                secret_value_read=False,
+            )
+        raise
+    try:
+        return _execute(args, secret_lease)
+    except BaseException:
+        cleanup_source = args.output_root.absolute() / "evidence/secret-cleanup.json"
+        if not secret_lease.destroyed:
+            try:
+                early_cleanup = args.secret_file.parent / "t07-bounded-secret-cleanup-0001.json"
+                secret_lease.destroy(early_cleanup)
+                cleanup_verified = True
+                cleanup_source = early_cleanup
+            except BaseException:
+                cleanup_verified = False
+        else:
+            cleanup_verified = cleanup_source.is_file() and not cleanup_source.is_symlink()
+        normal_identity = args.output_root.absolute() / "FAILURE_ARCHIVE_IDENTITY.json"
+        if not normal_identity.is_file() or normal_identity.is_symlink():
+            with contextlib.suppress(BaseException):
+                package_early_failure_evidence(
+                    args.output_root,
+                    failure_stage=(
+                        "normal_failure_packaging"
+                        if args.output_root.absolute().exists()
+                        else "bootstrap_preflight"
+                    ),
+                    secret_target_identity_established=True,
+                    secret_cleanup_verified=cleanup_verified,
+                    secret_value_read=secret_lease.value_read,
+                    secret_cleanup_source=cleanup_source if cleanup_verified else None,
+                )
+        raise
+    finally:
+        secret_lease.close()
 
 
 if __name__ == "__main__":

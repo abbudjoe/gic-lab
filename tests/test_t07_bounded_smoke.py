@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import sys
 import time
 import zipfile
@@ -272,7 +273,7 @@ def test_container_templates_enforce_bounded_security_policy() -> None:
     ):
         joined = "\n".join(argv)
         assert "--privileged" not in argv
-        assert "--pid" not in argv
+        assert argv[argv.index("--pid") + 1] == "private"
         assert "host" not in argv
         assert "docker.sock" not in joined
         assert "--cap-drop" in argv and "ALL" in argv
@@ -384,14 +385,119 @@ def test_evidence_manifest_is_schema_valid_bounded_and_secret_safe(tmp_path: Pat
     )
     with pytest.raises(bounded.BoundedSmokeContractError, match="credential-shaped"):
         bounded.build_evidence_manifest(tmp_path)
+    (tmp_path / "secret.txt").unlink()
+    secret_shaped_name = "".join(("API_", "KEY=PUBLICDUMMYVALUE.txt"))
+    (tmp_path / secret_shaped_name).write_text("safe\n", encoding="utf-8")
+    with pytest.raises(bounded.BoundedSmokeContractError, match="credential-shaped"):
+        bounded.build_evidence_manifest(tmp_path)
+
+
+def test_secret_lease_holds_identity_and_destroys_without_retaining_value(tmp_path: Path) -> None:
+    bootstrap = _load_bootstrap()
+    secret_root = tmp_path / "secret-root"
+    secret_root.mkdir()
+    credential_path = secret_root / "sira_api_key"
+    canary = b"PUBLIC_DUMMY_SECRET_CANARY_0123456789"
+    credential_path.write_bytes(canary + b"\n")
+    credential_path.chmod(0o600)
+    lease = bootstrap.acquire_secret_lease(
+        credential_path, forbidden_roots=(tmp_path / "repository",)
+    )
+    try:
+        assert lease.read_value() == canary
+        receipt = tmp_path / "secret-cleanup.json"
+        record = lease.destroy(receipt)
+        assert not credential_path.exists()
+        assert record["manual_fallback_deletion_required"] is False
+        assert canary not in receipt.read_bytes()
+    finally:
+        lease.close()
+
+
+def test_secret_lease_path_replacement_truncates_held_inode_and_requires_rotation(
+    tmp_path: Path,
+) -> None:
+    bootstrap = _load_bootstrap()
+    secret_root = tmp_path / "secret-root"
+    secret_root.mkdir()
+    credential_path = secret_root / "sira_api_key"
+    credential_path.write_text("PUBLIC_DUMMY_OLD_SECRET\n", encoding="utf-8")
+    credential_path.chmod(0o600)
+    lease = bootstrap.acquire_secret_lease(
+        credential_path, forbidden_roots=(tmp_path / "repository",)
+    )
+    held_copy = secret_root / "held-original"
+    credential_path.rename(held_copy)
+    credential_path.write_text("PUBLIC_DUMMY_REPLACEMENT\n", encoding="utf-8")
+    credential_path.chmod(0o600)
+    receipt = tmp_path / "secret-cleanup.json"
+    try:
+        with pytest.raises(bootstrap.BootstrapError, match="manual delete"):
+            lease.destroy(receipt)
+        assert os.fstat(lease.descriptor).st_size == 0
+        assert credential_path.read_text(encoding="utf-8") == "PUBLIC_DUMMY_REPLACEMENT\n"
+        record = json.loads(receipt.read_text(encoding="utf-8"))
+        assert record["path_identity_replaced"] is True
+        assert record["manual_fallback_deletion_required"] is True
+        assert b"PUBLIC_DUMMY_OLD_SECRET" not in receipt.read_bytes()
+    finally:
+        lease.close()
+
+
+def test_early_failure_bundle_is_bounded_secret_safe_and_complete(tmp_path: Path) -> None:
+    bootstrap = _load_bootstrap()
+    output_root = tmp_path / "t07-bounded-output-0001"
+    cleanup = tmp_path / "cleanup.json"
+    cleanup.write_text(
+        json.dumps(
+            {
+                "schema_version": "0.1.0",
+                "secret_variable_name": "SIRA_API_KEY",
+                "secret_file_basename": "sira_api_key",
+                "held_identity_established_before_preflight": True,
+                "truncated_before_unlink": True,
+                "unlinked": True,
+                "absence_verified": True,
+                "path_identity_replaced": False,
+                "value_or_hash_retained": False,
+                "manual_fallback_deletion_required": False,
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    archive = bootstrap.package_early_failure_evidence(
+        output_root,
+        failure_stage="bootstrap_preflight",
+        secret_target_identity_established=True,
+        secret_cleanup_verified=True,
+        secret_value_read=False,
+        secret_cleanup_source=cleanup,
+    )
+    early_root = tmp_path / "t07-bounded-output-0001-early-failure"
+    assert archive.parent == early_root
+    assert archive.stat().st_size <= bootstrap.MAX_EARLY_FAILURE_EVIDENCE_BYTES
+    assert {
+        "t07-bounded-early-failure-evidence.zip",
+        "EARLY_FAILURE_ARCHIVE_IDENTITY.json",
+        "TERMINATE_REQUIRED.json",
+        "evidence",
+    } == {path.name for path in early_root.iterdir()}
+    with zipfile.ZipFile(archive) as opened:
+        assert "FAILURE_EVIDENCE_MANIFEST.json" in opened.namelist()
+        assert "evidence/early-failure-disposition.json" in opened.namelist()
+        assert "evidence/secret-cleanup.json" in opened.namelist()
 
 
 class _FakeRunner:
-    def __init__(self) -> None:
+    def __init__(self, *, unsafe_privileged: bool = False) -> None:
         self.deadline = 10**12
         self.argv: list[tuple[str, ...]] = []
         self.removed = False
         self.stopped = False
+        self.create_argv: tuple[str, ...] | None = None
+        self.unsafe_privileged = unsafe_privileged
 
     def remaining(self) -> float:
         return 300.0
@@ -411,6 +517,7 @@ class _FakeRunner:
         stdout = b""
         returncode = 0
         if command[1] == "create":
+            self.create_argv = command
             stdout = b"a" * 64 + b"\n"
         elif command[1] == "wait":
             stdout = b"0\n"
@@ -423,9 +530,94 @@ class _FakeRunner:
             else:
                 running = not self.stopped
                 status = "running" if running else "exited"
-                stdout = (
-                    json.dumps([{"State": {"Running": running, "Status": status}}]).encode() + b"\n"
-                )
+                if running and self.create_argv is not None:
+                    argv = self.create_argv
+
+                    def option(name: str) -> str:
+                        return argv[argv.index(name) + 1]
+
+                    def options(name: str) -> list[str]:
+                        return [
+                            argv[index + 1] for index, value in enumerate(argv) if value == name
+                        ]
+
+                    image = next(value for value in argv if value.startswith("sha256:"))
+                    image_index = argv.index(image)
+                    labels = dict(value.split("=", 1) for value in options("--label"))
+                    tmpfs = {
+                        value.split(":", 1)[0]: value.split(":", 1)[1]
+                        for value in options("--tmpfs")
+                    }
+                    host_mounts: list[dict[str, object]] = []
+                    realized_mounts: list[dict[str, object]] = []
+                    for value in options("--mount"):
+                        fields = dict(
+                            part.split("=", 1) for part in value.split(",") if "=" in part
+                        )
+                        host_mounts.append(
+                            {
+                                "Type": "bind",
+                                "Source": fields["src"],
+                                "Target": fields["dst"],
+                                "ReadOnly": True,
+                            }
+                        )
+                        realized_mounts.append(
+                            {
+                                "Type": "bind",
+                                "Source": fields["src"],
+                                "Destination": fields["dst"],
+                                "RW": False,
+                            }
+                        )
+                    inspected = {
+                        "Id": "a" * 64,
+                        "Name": "/" + option("--name"),
+                        "Image": image,
+                        "State": {"Running": True, "Status": "running"},
+                        "Config": {
+                            "Image": image,
+                            "User": option("--user"),
+                            "Entrypoint": [option("--entrypoint")],
+                            "Cmd": list(argv[image_index + 1 :]),
+                            "Labels": labels,
+                            "Env": ["PATH=/usr/bin"],
+                        },
+                        "HostConfig": {
+                            "Privileged": self.unsafe_privileged,
+                            "PidMode": "private",
+                            "NetworkMode": option("--network"),
+                            "IpcMode": option("--ipc"),
+                            "CgroupnsMode": option("--cgroupns"),
+                            "UTSMode": "",
+                            "CapAdd": None,
+                            "CapDrop": ["ALL"],
+                            "SecurityOpt": ["no-new-privileges=true"],
+                            "ReadonlyRootfs": True,
+                            "Init": True,
+                            "AutoRemove": False,
+                            "RestartPolicy": {"Name": "no", "MaximumRetryCount": 0},
+                            "NanoCpus": int(float(option("--cpus")) * 1_000_000_000),
+                            "Memory": int(option("--memory")),
+                            "MemorySwap": int(option("--memory-swap")),
+                            "PidsLimit": int(option("--pids-limit")),
+                            "ShmSize": int(option("--shm-size")),
+                            "Tmpfs": tmpfs,
+                            "Binds": None,
+                            "VolumesFrom": None,
+                            "Mounts": host_mounts,
+                            "LogConfig": {
+                                "Type": option("--log-driver"),
+                                "Config": dict(
+                                    value.split("=", 1) for value in options("--log-opt")
+                                ),
+                            },
+                        },
+                        "Mounts": realized_mounts,
+                    }
+                else:
+                    inspected = {"Id": "a" * 64, "State": {"Running": running, "Status": status}}
+                stdout = json.dumps([inspected]).encode() + b"\n"
         elif command[1] == "top":
             stdout = b"PID PPID PGID SID STAT COMMAND ARGS\n1 0 1 1 Ss python entrypoint\n"
         elif command[1] == "stop":
@@ -464,21 +656,56 @@ def test_lifecycle_failed_stop_still_kills_removes_and_seals_cleanup(tmp_path: P
     )
     assert result.returncode == 0
     operations = [item[1] for item in cleanup.argv]
-    assert operations[:3] == ["stop", "kill", "inspect"]
+    assert operations[:4] == ["cp", "stop", "kill", "inspect"]
     assert "rm" in operations
     cleanup_record = json.loads((tmp_path / "container-cleanup.json").read_text())
     bounded.validate_container_cleanup(cleanup_record)
 
 
+def test_unsafe_realized_container_policy_blocks_release_and_still_cleans_up(
+    tmp_path: Path,
+) -> None:
+    bootstrap = _load_bootstrap()
+    work = _FakeRunner(unsafe_privileged=True)
+    cleanup = _FakeRunner()
+    with pytest.raises(bootstrap.BootstrapError, match="inspect policy"):
+        bootstrap.run_owned_container(
+            condition="SIRA-REACTIVE",
+            run_id=bounded.REACTIVE_RUN_ID,
+            create_template=bounded.container_create_argv("SIRA-REACTIVE"),
+            substitutions={
+                "${SIRA_SECRET_FILE}": "/private/dummy-secret-file",
+                "${EXECUTION_COMMIT}": "1" * 40,
+                "${AUTHORIZATION_REFERENCE}": "AUTH-T07-BOUNDED-SIRA-SMOKE-V1-TEST",
+                "${IMAGE_ID}": "sha256:" + "2" * 64,
+            },
+            plan=valid_plan(),
+            contract=bounded,
+            work_runner=work,
+            cleanup_runner=cleanup,
+            evidence_root=tmp_path,
+            attached=True,
+            wall_seconds=120,
+        )
+    assert not any("/usr/bin/touch" in command for command in work.argv)
+    assert any(command[1] == "rm" for command in cleanup.argv)
+
+
 def test_work_and_cleanup_runners_share_one_command_budget(tmp_path: Path) -> None:
     bootstrap = _load_bootstrap()
-    meter = bootstrap.CommandMeter(max_calls=1, output_cap=1_024)
-    work = bootstrap.CommandRunner(deadline=time.monotonic() + 10, meter=meter)
-    cleanup = bootstrap.CommandRunner(deadline=time.monotonic() + 10, meter=meter)
+    meter = bootstrap.CommandMeter(
+        max_calls=2,
+        output_cap=1_024,
+        cleanup_reserved_calls=1,
+        cleanup_reserved_output_bytes=512,
+    )
+    work = bootstrap.CommandRunner(deadline=time.monotonic() + 10, meter=meter, scope="work")
+    cleanup = bootstrap.CommandRunner(deadline=time.monotonic() + 10, meter=meter, scope="cleanup")
     work.run(("/usr/bin/true",), cwd=tmp_path)
-    with pytest.raises(bootstrap.BootstrapError, match="call cap"):
-        cleanup.run(("/usr/bin/true",), cwd=tmp_path)
-    assert work.call_count == cleanup.call_count == 1
+    with pytest.raises(bootstrap.BootstrapError, match="preserves cleanup reserve"):
+        work.run(("/usr/bin/true",), cwd=tmp_path)
+    cleanup.run(("/usr/bin/true",), cwd=tmp_path)
+    assert work.call_count == cleanup.call_count == 2
 
 
 def test_failure_archive_is_bounded_and_excludes_secret_canary(tmp_path: Path) -> None:
@@ -503,34 +730,50 @@ def test_failure_archive_is_bounded_and_excludes_secret_canary(tmp_path: Path) -
         assert canary.encode() not in b"".join(opened.read(name) for name in names)
 
 
+def test_failure_archive_reserves_mandatory_incident_and_cleanup_at_file_cap(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    bootstrap = _load_bootstrap()
+    monkeypatch.setattr(bootstrap, "MAX_EVIDENCE_FILES", 4)
+    evidence = tmp_path / "evidence"
+    evidence.mkdir()
+    cleanup = evidence / "secret-cleanup.json"
+    cleanup.write_text('{"absence_verified":true}\n', encoding="utf-8")
+    for ordinal in range(10):
+        (evidence / f"optional-{ordinal:02d}.json").write_text("{}\n", encoding="utf-8")
+    (tmp_path / "TERMINATE_REQUIRED.json").write_text(
+        '{"provider_termination_required":true}\n', encoding="utf-8"
+    )
+
+    archive = bootstrap.package_failure_evidence(tmp_path, evidence, bounded)
+
+    with zipfile.ZipFile(archive) as opened:
+        names = set(opened.namelist())
+        manifest = json.loads(opened.read("FAILURE_EVIDENCE_MANIFEST.json"))
+    assert "TERMINATE_REQUIRED.json" in names
+    assert "evidence/secret-cleanup.json" in names
+    assert manifest["file_count"] == 4
+    assert manifest["skipped_cap_or_unsafe_file_count"] == 8
+
+
 def test_reconstruction_and_compute_closeout_records_are_source_grounded(
     tmp_path: Path,
 ) -> None:
     bootstrap = _load_bootstrap()
-    for mode in ("reactive", "simulative"):
-        root = tmp_path / mode
-        root.mkdir()
-        (root / "provider-budget.json").write_text(
-            json.dumps({"cost_usd": 0.25}) + "\n", encoding="utf-8"
-        )
+    (tmp_path / "normalized-events.jsonl").write_bytes(b"{}\n" * 4)
     bootstrap.write_reconstruction_records(tmp_path, contract=bounded)
-    compute = bootstrap.write_compute_use(
+    compute = bootstrap.write_bootstrap_execution(
         tmp_path,
-        authorization={"supervised_wall_started_at_utc": "2026-08-11T20:00:00Z"},
         contract=bounded,
         status="completed",
+        started_at=datetime(2026, 8, 11, 20, 0, tzinfo=UTC),
         ended_at=datetime(2026, 8, 11, 20, 10, tzinfo=UTC),
     )
-    assert compute["within_wall_and_cost_caps"] is True
-    assert compute["actual_provider_invoice_cost_usd"] is None
+    assert compute["provider_allocation_accounting"] is False
+    assert compute["wall_clock_seconds"] == 600
     assert (tmp_path / "normalized-events.jsonl").read_text().count("\n") == 4
     equivalence = json.loads((tmp_path / "pair-equivalence.json").read_text())
     assert equivalence["canonical_condition_diff_only"] is True
-    for mode, condition in (("reactive", "SIRA-REACTIVE"), ("simulative", "SIRA-SIMULATIVE")):
-        decision = json.loads((tmp_path / mode / "regulation-decision.json").read_text())
-        assert decision["condition"] == condition
-        assert decision["source_kind"] == "experiment_assignment"
-        assert decision["interpretation_allowed"] is False
 
 
 def test_committed_plan_matches_runtime_contract_when_present() -> None:

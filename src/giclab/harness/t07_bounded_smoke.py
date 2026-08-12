@@ -153,20 +153,21 @@ STEP_CONTRACT: Final = (
     (5, "observer", "verify_exact_security_controls_before_launch"),
     (6, "user", "launch_exactly_one_selected_instance_with_one_click"),
     (7, "observer", "bind_exactly_one_owned_instance"),
-    (8, "user", "open_cloud_ide_jupyter"),
-    (9, "user", "upload_exact_bounded_bundle_secret_file_and_authorization"),
-    (10, "bootstrap", "run_hash_first_bootstrap_once"),
-    (11, "bootstrap", "run_no_network_browser_lifecycle_preflight"),
-    (12, "bootstrap", "verify_exact_model_snapshot_once"),
-    (13, "bootstrap", "run_reactive_once_then_simulative_once"),
-    (14, "bootstrap", "capture_remove_verify_and_package_success_or_failure_evidence"),
-    (15, "user", "download_success_or_failure_evidence_and_identity_records"),
-    (16, "local-verifier", "verify_inbound_manifest_hashes_and_retain_source"),
-    (17, "user", "terminate_exact_bound_instance"),
-    (18, "observer", "verify_exact_instance_terminal_or_absent_and_billing_stopped"),
-    (19, "user", "delete_owned_regional_ruleset_and_restore_global_firewall_if_changed"),
-    (20, "observer", "verify_ruleset_absence_and_exact_firewall_restoration"),
-    (21, "local-verifier", "seal_and_copy_complete_or_failed_evidence_to_external_archive"),
+    (8, "local-verifier", "issue_single_use_bootstrap_release_after_image_attestation"),
+    (9, "user", "open_cloud_ide_jupyter"),
+    (10, "user", "upload_exact_bundle_secret_authorization_and_bootstrap_release"),
+    (11, "bootstrap", "run_hash_first_bootstrap_once"),
+    (12, "bootstrap", "run_no_network_browser_lifecycle_preflight"),
+    (13, "bootstrap", "verify_exact_model_snapshot_once"),
+    (14, "bootstrap", "run_reactive_once_then_simulative_once"),
+    (15, "bootstrap", "capture_remove_verify_and_package_success_or_failure_evidence"),
+    (16, "user", "download_normal_or_early_failure_evidence_and_identity_records"),
+    (17, "local-verifier", "verify_inbound_manifest_hashes_before_provider_termination"),
+    (18, "user", "terminate_exact_bound_instance"),
+    (19, "observer", "verify_exact_instance_terminal_or_absent_and_billing_stopped"),
+    (20, "user", "delete_owned_regional_ruleset_and_restore_global_firewall_if_changed"),
+    (21, "observer", "verify_ruleset_absence_and_exact_firewall_restoration"),
+    (22, "local-verifier", "seal_and_copy_complete_or_failed_evidence_to_external_archive"),
 )
 PUBLIC_METADATA: Final = (
     {
@@ -301,10 +302,13 @@ LIMITS: Final[Mapping[str, int | str]] = MappingProxyType(
         "sealed_bundle_bytes": 301_989_888,
         "remote_evidence_bytes": 268_435_456,
         "local_evidence_bytes": 301_989_888,
+        "early_failure_evidence_bytes": 1_048_576,
         "bootstrap_process_output_bytes": 33_554_432,
         "docker_control_output_bytes": 33_554_432,
         "docker_lifecycle_calls": 128,
         "docker_lifecycle_call_scope": "aggregate-work-and-cleanup",
+        "docker_cleanup_reserved_calls": 48,
+        "docker_cleanup_reserved_output_bytes": 8_388_608,
         "owned_containers": 4,
         "lambda_read_only_gets": 13,
         "lambda_response_bytes_per_get": 1_048_576,
@@ -548,6 +552,8 @@ def _container_create_prefix(
         "linux/amd64",
         "--network",
         network,
+        "--pid",
+        "private",
         "--ipc",
         "private",
         "--cgroupns",
@@ -742,6 +748,147 @@ def lifecycle_argv_templates() -> dict[str, list[str]]:
     }
 
 
+def _container_option(argv: Sequence[str], name: str) -> str:
+    indexes = [index for index, value in enumerate(argv) if value == name]
+    if len(indexes) != 1 or indexes[0] + 1 >= len(argv):
+        raise BoundedSmokeContractError(f"container option {name} drifted")
+    return argv[indexes[0] + 1]
+
+
+def _container_options(argv: Sequence[str], name: str) -> list[str]:
+    indexes = [index for index, value in enumerate(argv) if value == name]
+    if any(index + 1 >= len(argv) for index in indexes):
+        raise BoundedSmokeContractError(f"container option {name} drifted")
+    return [argv[index + 1] for index in indexes]
+
+
+def _container_mounts(value: object, *, context: str) -> list[Mapping[str, object]]:
+    if value is None:
+        return []
+    return [_mapping(item, context=context) for item in _sequence(value, context=context)]
+
+
+def _tmpfs_options(value: object, *, context: str) -> frozenset[str]:
+    encoded = _text(value, context=context)
+    options = encoded.split(",")
+    if not options or any(not item for item in options) or len(set(options)) != len(options):
+        raise BoundedSmokeContractError(f"{context} is malformed")
+    return frozenset(options)
+
+
+def validate_container_inspect(
+    inspected: Mapping[str, object],
+    *,
+    create_argv: Sequence[str],
+    container_id: str,
+    image_id: str,
+) -> None:
+    """Fail closed unless Docker realized the complete bounded-container policy."""
+
+    config = _mapping(inspected.get("Config"), context="container inspect config")
+    host = _mapping(inspected.get("HostConfig"), context="container inspect host config")
+    state = _mapping(inspected.get("State"), context="container inspect state")
+    labels = _mapping(config.get("Labels"), context="container inspect labels")
+    expected_labels = dict(
+        _text(value, context="container label").split("=", 1)
+        for value in _container_options(create_argv, "--label")
+    )
+    owned_labels = {
+        str(key): value for key, value in labels.items() if str(key).startswith("org.giclab.t07.")
+    }
+    image_indexes = [index for index, value in enumerate(create_argv) if value == image_id]
+    if len(image_indexes) != 1:
+        raise BoundedSmokeContractError("container image argument drifted")
+    expected_tmpfs = {
+        value.split(":", 1)[0]: _tmpfs_options(value.split(":", 1)[1], context="planned tmpfs")
+        for value in _container_options(create_argv, "--tmpfs")
+        if ":" in value
+    }
+    observed_tmpfs = {
+        str(key): _tmpfs_options(value, context="observed tmpfs")
+        for key, value in _mapping(host.get("Tmpfs"), context="container inspect tmpfs").items()
+    }
+    expected_mounts: list[dict[str, str]] = []
+    for value in _container_options(create_argv, "--mount"):
+        fields = dict(part.split("=", 1) for part in value.split(",") if "=" in part)
+        if value.endswith(",readonly"):
+            fields["readonly"] = "true"
+        expected_mounts.append(fields)
+    configured_mounts = _container_mounts(host.get("Mounts"), context="configured mount")
+    realized_mounts = _container_mounts(inspected.get("Mounts"), context="realized mount")
+    mounts_ok = len(expected_mounts) == len(configured_mounts) == len(realized_mounts)
+    for expected, configured, realized in zip(
+        expected_mounts, configured_mounts, realized_mounts, strict=True
+    ):
+        mounts_ok = mounts_ok and (
+            configured.get("Type") == expected.get("type") == "bind"
+            and configured.get("Source") == expected.get("src")
+            and configured.get("Target") == expected.get("dst")
+            and configured.get("ReadOnly") is True
+            and realized.get("Type") == "bind"
+            and realized.get("Source") == expected.get("src")
+            and realized.get("Destination") == expected.get("dst")
+            and realized.get("RW") is False
+        )
+    restart = _mapping(host.get("RestartPolicy"), context="container restart policy")
+    log_config = _mapping(host.get("LogConfig"), context="container log config")
+    environment = config.get("Env")
+    environment_names = (
+        set()
+        if environment is None
+        else {
+            _text(item, context="container environment").split("=", 1)[0].upper()
+            for item in _sequence(environment, context="container environment")
+        }
+    )
+    encoded = canonical_json_bytes(inspected).lower()
+    if (
+        inspected.get("Id") != container_id
+        or inspected.get("Name") != f"/{_container_option(create_argv, '--name')}"
+        or inspected.get("Image") != image_id
+        or config.get("Image") != image_id
+        or config.get("User") != _container_option(create_argv, "--user")
+        or config.get("Entrypoint") != [_container_option(create_argv, "--entrypoint")]
+        or config.get("Cmd") != list(create_argv[image_indexes[0] + 1 :])
+        or owned_labels != expected_labels
+        or state.get("Running") is not True
+        or host.get("Privileged") is not False
+        or host.get("PidMode") not in {"", "private"}
+        or _container_option(create_argv, "--pid") != "private"
+        or host.get("NetworkMode") != _container_option(create_argv, "--network")
+        or host.get("IpcMode") != _container_option(create_argv, "--ipc")
+        or host.get("CgroupnsMode") != _container_option(create_argv, "--cgroupns")
+        or host.get("UTSMode") not in {None, "", "private"}
+        or host.get("CapAdd") not in (None, [])
+        or host.get("CapDrop") != ["ALL"]
+        or host.get("SecurityOpt") not in (["no-new-privileges=true"], ["no-new-privileges"])
+        or host.get("ReadonlyRootfs") is not True
+        or host.get("Init") is not True
+        or host.get("AutoRemove") is not False
+        or restart.get("Name") != "no"
+        or restart.get("MaximumRetryCount") != 0
+        or host.get("NanoCpus")
+        != int(float(_container_option(create_argv, "--cpus")) * 1_000_000_000)
+        or host.get("Memory") != int(_container_option(create_argv, "--memory"))
+        or host.get("MemorySwap") != int(_container_option(create_argv, "--memory-swap"))
+        or host.get("PidsLimit") != int(_container_option(create_argv, "--pids-limit"))
+        or host.get("ShmSize") != int(_container_option(create_argv, "--shm-size"))
+        or observed_tmpfs != expected_tmpfs
+        or host.get("Binds") not in (None, [])
+        or host.get("VolumesFrom") not in (None, [])
+        or not mounts_ok
+        or log_config.get("Type") != _container_option(create_argv, "--log-driver")
+        or _mapping(log_config.get("Config"), context="container log options")
+        != dict(value.split("=", 1) for value in _container_options(create_argv, "--log-opt"))
+        or any(
+            "API_KEY" in name or "TOKEN" in name or "SECRET" in name for name in environment_names
+        )
+        or b"docker.sock" in encoded
+        or b"podman.sock" in encoded
+    ):
+        raise BoundedSmokeContractError("container inspect policy drifted")
+
+
 def bootstrap_argv_template() -> tuple[str, ...]:
     return (
         "/usr/bin/python3",
@@ -762,6 +909,10 @@ def bootstrap_argv_template() -> tuple[str, ...]:
         "/home/ubuntu/t07-bounded-authorization.json",
         "--authorization-sha256",
         "${AUTHORIZATION_SHA256}",
+        "--bootstrap-release",
+        "/home/ubuntu/t07-bounded-bootstrap-release.json",
+        "--bootstrap-release-sha256",
+        "${BOOTSTRAP_RELEASE_SHA256}",
         "--bundle-root",
         "/home/ubuntu/t07-bounded-bundle",
         "--secret-file",
@@ -825,7 +976,21 @@ def local_supervisor_argv_templates() -> dict[str, list[str]]:
     }
     for phase in ("prelaunch", "security", "post_launch", "termination", "terminal"):
         output[f"observe_{phase}"] = [*base, "observe", *authority, "--phase", phase]
+    output["release_bootstrap"] = [
+        *base,
+        "release-bootstrap",
+        *authority,
+        "--provider-image-attestation",
+        "confirmed-in-provider-console",
+    ]
     for disposition in ("complete", "failed"):
+        output[f"verify_inbound_{disposition}"] = [
+            *base,
+            "verify-inbound",
+            *authority,
+            "--disposition",
+            disposition,
+        ]
         output[f"archive_{disposition}"] = [
             *base,
             "archive",
@@ -897,6 +1062,7 @@ def provider_observer_contract() -> dict[str, object]:
 def storage_contract() -> dict[str, object]:
     return {
         "remote_active_root": "/home/ubuntu/t07-bounded-output-0001",
+        "remote_early_failure_root": "/home/ubuntu/t07-bounded-output-0001-early-failure",
         "persistent_filesystem_count": 0,
         "local_inbound_root": "artifacts/t07/bounded/RUN-T07-BOUNDED-HOST-0001/inbound",
         "external_mount": EXTERNAL_ARCHIVE_MOUNT,
@@ -1109,7 +1275,10 @@ def validate_container_cleanup(observation: Mapping[str, object]) -> None:
         "owned_network_residue_count",
         "owned_volume_residue_count",
         "browser_process_residue_count",
-        "evidence_captured_before_removal",
+        "process_evidence_captured_before_removal",
+        "payload_capture_complete_before_removal",
+        "payload_capture_phase",
+        "payload_bytes",
         "pre_stop_running_state_observed",
         "pre_stop_process_capture_succeeded",
         "pre_stop_process_count",
@@ -1117,6 +1286,7 @@ def validate_container_cleanup(observation: Mapping[str, object]) -> None:
     if set(observation) != required:
         raise BoundedSmokeContractError("container cleanup record has an invalid field set")
     process_count = observation.get("pre_stop_process_count")
+    payload_bytes = observation.get("payload_bytes")
     if (
         observation.get("schema_version") != SCHEMA_VERSION
         or observation.get("condition")
@@ -1125,7 +1295,11 @@ def validate_container_cleanup(observation: Mapping[str, object]) -> None:
         or _HEX64.fullmatch(str(observation["container_id_sha256"])) is None
         or observation.get("terminal_state_observed") is not True
         or observation.get("removed") is not True
-        or observation.get("evidence_captured_before_removal") is not True
+        or observation.get("process_evidence_captured_before_removal") is not True
+        or observation.get("payload_capture_complete_before_removal") is not True
+        or observation.get("payload_capture_phase") not in {"prestop", "poststop"}
+        or type(payload_bytes) is not int
+        or not 0 <= payload_bytes <= 67_108_864
         or observation.get("pre_stop_running_state_observed") is not True
         or observation.get("pre_stop_process_capture_succeeded") is not True
         or type(process_count) is not int
@@ -1164,6 +1338,8 @@ def build_evidence_manifest(
     for path in sorted(root.rglob("*")):
         relative = path.relative_to(root).as_posix()
         _validate_relative_path(relative)
+        if any(pattern.search(relative.encode("utf-8")) for pattern in _SECRET_SHAPES):
+            raise BoundedSmokeContractError("evidence path contains a credential-shaped value")
         metadata = path.lstat()
         if stat.S_ISDIR(metadata.st_mode):
             continue
@@ -1566,6 +1742,7 @@ __all__ = [
     "storage_contract",
     "template_sha256",
     "validate_container_cleanup",
+    "validate_container_inspect",
     "validate_evidence_manifest",
     "validate_pair_budget",
     "validate_plan",
