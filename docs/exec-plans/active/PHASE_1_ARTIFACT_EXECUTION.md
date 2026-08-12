@@ -65,7 +65,7 @@ no mutation authority; one gate's authorization never carries into another.
 
 | Task | Work package | Mapped phase DoD | Current permission |
 |---|---|---|---|
-| T07 | Execute one authorized contained SiRA smoke pair; capture regulation-decision evidence without interpretation. | P1-DOD-02, P1-DOD-11 through P1-DOD-13 | High-assurance infrastructure frozen; bounded-smoke V3 is the reviewed prospective path; no execution authority |
+| T07 | Execute one authorized contained SiRA smoke pair; capture regulation-decision evidence without interpretation. | P1-DOD-02, P1-DOD-11 through P1-DOD-13 | Pragmatic smoke reset authorized in the current turn; implementation/setup may be repaired until the reactive condition begins |
 | T08 | Analyze smoke infrastructure evidence and prepare an unauthorized pilot package. | P1-DOD-03, P1-DOD-11 through P1-DOD-13 | blocked until T07 succeeds |
 | T09 | Execute the freshly authorized exploratory SiRA pilot. | P1-DOD-04, P1-DOD-11 through P1-DOD-13 | blocked until T08 and authorization |
 | T10 | Analyze and publish the exploratory SiRA pilot. | P1-DOD-05, P1-DOD-11 through P1-DOD-13 | blocked until T09 succeeds |
@@ -80,8 +80,9 @@ and an analysis recommendation does not authorize the next execution.
 
 ## T07 assembly control
 
-Assembly status: **high-assurance infrastructure frozen; bounded-smoke V3 plan ready
-for a separate authorization; all execution permissions false**
+Assembly status: **pragmatic T07 execution in progress under the current-turn reset;
+repository permission booleans remain false and the live authority is the external
+bounded authorization**
 
 Prospective bounded plan: `PLAN-T07-BOUNDED-SIRA-SMOKE-V3`.
 
@@ -97,6 +98,30 @@ expected artifacts, cleanup, questions, and infrastructure-only interpretation b
 are in [`docs/readiness/PHASE_1_SMOKE_READINESS.md`](../../readiness/PHASE_1_SMOKE_READINESS.md).
 The locked profile is
 [`PLAN-EXP0001-SMOKE`](../../../experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/smoke.yaml).
+
+### Pragmatic execution reset — 2026-08-12
+
+The current user contract supersedes the historical high-assurance infrastructure
+gates on branch `phase-1/sira-smoke-pragmatic`. It authorizes autonomous repair and
+execution of exactly one reactive/simulative smoke pair, in that order, with the
+pinned SiRA commit, immutable model snapshot, task, one browser step per condition,
+zero condition retries, USD 10 aggregate OpenAI ceiling, USD 5 aggregate Lambda
+ceiling, at most two two-hour Lambda launches, zero persistent filesystems, retained
+evidence, provider termination, and no scientific interpretation. Historical gate
+evidence remains preserved and is not reused as execution authority.
+
+| ID | Pragmatic T07 obligation | Status | Evidence |
+|---|---|---|---|
+| T07-P-01 | Verify the exact branch/baseline, no unresolved instance, usable pinned SiRA/model, safe credentials, viable termination, capacity, price, and storage. | met | Branch `phase-1/sira-smoke-pragmatic` at `29433a72d7452dae95fffdcba009bd33a4d46e15`; zero live instances; model metadata HTTP 200; A10 offered in two regions at USD 1.29/hour; exact SSH key match; external APFS volume revalidated. |
+| T07-P-02 | Implement the smallest reusable secret filter and remote setup/paired-run/cleanup path, then pass focused validation. | partial | `containers/sira-smoke/pragmatic/`; local Ruff, strict mypy, and focused SiRA/pragmatic tests pass; remote setup evidence pending. |
+| T07-P-03 | Before reactive begins, commit all infrastructure, render exact paired commands, write the concise run manifest, and freeze code/configuration. | not-started | Pending remote setup and final pre-run commit. |
+| T07-P-04 | Execute reactive once, then simulative once, preserving each terminal outcome and accounting without interpretation. | not-started | No condition has begun. |
+| T07-P-05 | Retrieve reconstructable evidence, destroy temporary credentials/runtime state, terminate the exact instance, restore firewall state, and verify no T07 instance remains. | not-started | Cleanup is mandatory after the pair or terminal failure. |
+
+The current reset explicitly waives a new authorization packet, schema suite,
+independent review, and full repository gate before the smoke. Focused validation is
+the required pre-execution gate; provider termination must not wait on later tests or
+documentation.
 
 ### Bounded smoke definition of done
 
