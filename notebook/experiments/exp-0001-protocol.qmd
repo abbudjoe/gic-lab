@@ -5,8 +5,11 @@ title: "EXP-0001 — SiRA simulative versus reactive protocol"
 ## Current state
 
 `EXP-0001` is **planned**, its evidence is **not evaluated**, and its outcome is
-**pending**. No smoke, pilot, model, API, browser, evaluator, or benchmark run has
-occurred. Execution authorization is false.
+**pending**. One T07 one-step reactive/simulative artifact smoke occurred and T08
+adjudicated it as a valid matched pair with documented evidence gaps. Both sessions
+recorded `is_complete: false`, so task completion was not observed. The smoke contains
+no EXP-0001 measurement or outcome. No pilot or FanOut evaluator/benchmark run has
+occurred, and execution authorization is false.
 
 ## Locked exploratory comparison
 
@@ -15,7 +18,10 @@ Both are assigned externally by the experiment. The assignment is not evidence o
 learned internal regulation mechanism.
 
 The smoke is one minimal matched pair on the pinned README query and prohibits
-interpretation. The pilot is two counterbalanced FanOutQA task pairs selected only to
+interpretation. Its retained aggregate was 9 model calls, 11,588 tokens, two browser
+actions, 39.397 seconds, and USD 0.0403325; these are artifact-execution accounting,
+not comparative results or representative full-task costs. The pilot is two
+counterbalanced FanOutQA task pairs selected only to
 exercise paired execution, deterministic scoring, and variance plumbing. It is not an
 effect-size-based sample and cannot support a confirmatory or adequately powered
 claim.
@@ -30,6 +36,13 @@ substitution**, never an unqualified reproduction.
 Raw traces, commands, configuration, environment identity, timestamps, hashes, costs,
 and cleanup evidence are retained before normalization. Public raw release remains
 blocked pending licensing, privacy, and redaction review.
+
+T08 classifies cleanup as verified with a nonmaterial gap: private provider-response
+artifacts retained inactive ephemeral Jupyter access fields beyond the historical API-
+key scan. No values are published, the provider instance is terminally absent, and
+future retention must omit or structurally redact them. Pilot protocol preparation is
+eligible, but `PLAN-EXP0001-PILOT` remains unauthorized and blocked on evaluator,
+runtime, protocol-budget, provider, privacy, identity, and fresh-authorization gates.
 
 The protocol also retains source-grounded regulation-decision provenance for the
 planned/deferred `RQ-H2K` track. This is an additive evidence-preservation appendix,

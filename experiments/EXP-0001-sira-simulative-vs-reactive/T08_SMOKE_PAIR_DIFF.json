@@ -1,0 +1,392 @@
+{
+  "allowed_differences": [
+    {
+      "field": "run_and_attempt_identity",
+      "owner": "identity",
+      "reactive": "RUN-T07-PRAGMATIC-SIRA-REACTIVE-0002",
+      "simulative": "RUN-T07-PRAGMATIC-SIRA-SIMULATIVE-0002"
+    },
+    {
+      "field": "condition_label_and_order",
+      "owner": "treatment-assignment",
+      "reactive": {
+        "condition": "SIRA-REACTIVE",
+        "order": 1
+      },
+      "simulative": {
+        "condition": "SIRA-SIMULATIVE",
+        "order": 2
+      }
+    },
+    {
+      "field": "source_declared_mode_and_planner_configuration",
+      "owner": "source-declared-treatment",
+      "reactive": {
+        "base_temperature": 0.0,
+        "base_top_p": 0.5,
+        "config_name": "web_reactive",
+        "planner_type": "policy"
+      },
+      "simulative": {
+        "config_name": "web_simulative",
+        "critic_temperature": 1.0,
+        "critic_top_p": 0.95,
+        "planner_critic_num_samples": 20,
+        "planner_policy_num_samples": 20,
+        "planner_search_depth": 1,
+        "planner_search_num_actions": 5,
+        "planner_type": "world_model",
+        "policy_temperature": 1.0,
+        "policy_top_p": 0.95,
+        "realized_planner_branch": "one_cluster_direct_selection"
+      }
+    },
+    {
+      "field": "condition_owned_output_paths",
+      "owner": "evidence-isolation",
+      "reactive": "remote_archive:evidence/reactive",
+      "simulative": "remote_archive:evidence/simulative"
+    },
+    {
+      "field": "realized_runtime_and_provider_usage",
+      "owner": "realized-events",
+      "reactive": {
+        "browser_actions": 1,
+        "cached_input_tokens": 0,
+        "input_tokens": 4626,
+        "model_calls": 4,
+        "output_tokens": 260,
+        "recomputed_cost_usd": "0.014165",
+        "reported_cost_usd_raw": "0.014164999999999995",
+        "total_tokens": 4886,
+        "unreconciled_provider_attempts": 0,
+        "wall_seconds_raw": "18.019464842999923"
+      },
+      "simulative": {
+        "browser_actions": 1,
+        "cached_input_tokens": 0,
+        "input_tokens": 5447,
+        "model_calls": 5,
+        "output_tokens": 1255,
+        "recomputed_cost_usd": "0.0261675",
+        "reported_cost_usd_raw": "0.026167500000000034",
+        "total_tokens": 6702,
+        "unreconciled_provider_attempts": 0,
+        "wall_seconds_raw": "21.37802647699982"
+      }
+    }
+  ],
+  "classification": "matched_pair_valid_with_documented_evidence_gaps",
+  "command_diff": {
+    "approved_difference_fields": [
+      "attempt_root",
+      "condition_label",
+      "container_name",
+      "gate_mode",
+      "job_name",
+      "upstream_mode"
+    ],
+    "command_length": 79,
+    "differences": [
+      {
+        "field": "container_name",
+        "index": 5,
+        "reactive": "giclab-t07-pragmatic-r2-reactive-0001",
+        "simulative": "giclab-t07-pragmatic-r2-simulative-0001"
+      },
+      {
+        "field": "attempt_root",
+        "index": 35,
+        "reactive": "type=bind,src=/home/ubuntu/t07-pragmatic-r2-run-launch-0001/evidence/reactive,dst=/giclab/attempt",
+        "simulative": "type=bind,src=/home/ubuntu/t07-pragmatic-r2-run-launch-0001/evidence/simulative,dst=/giclab/attempt"
+      },
+      {
+        "field": "condition_label",
+        "index": 41,
+        "reactive": "org.giclab.t07.condition=SIRA-REACTIVE",
+        "simulative": "org.giclab.t07.condition=SIRA-SIMULATIVE"
+      },
+      {
+        "field": "gate_mode",
+        "index": 56,
+        "reactive": "reactive",
+        "simulative": "simulative"
+      },
+      {
+        "field": "job_name",
+        "index": 60,
+        "reactive": "EXP-0001-SMOKE-REACTIVE",
+        "simulative": "EXP-0001-SMOKE-SIMULATIVE"
+      },
+      {
+        "field": "upstream_mode",
+        "index": 64,
+        "reactive": "reactive",
+        "simulative": "simulative"
+      }
+    ],
+    "matched": true,
+    "schema_version": "0.1.0"
+  },
+  "configuration_diff": {
+    "approved_difference_fields": [
+      "condition",
+      "docker_argv",
+      "model_call_attempt_cap",
+      "order"
+    ],
+    "differences": [
+      {
+        "field": "condition",
+        "reactive": "SIRA-REACTIVE",
+        "simulative": "SIRA-SIMULATIVE"
+      },
+      {
+        "field": "docker_argv",
+        "reactive_sha256": "a8729859f21e2b459f17088620452c0878b4306e694a108d6a64389f058a476f",
+        "simulative_sha256": "608da27aac39de83bb59d088fd6d4b455e0c760475502ff4b0c6174996517173"
+      },
+      {
+        "field": "model_call_attempt_cap",
+        "reactive": 16,
+        "simulative": 61
+      },
+      {
+        "field": "order",
+        "reactive": 1,
+        "simulative": 2
+      }
+    ],
+    "matched": true,
+    "schema_version": "0.1.0"
+  },
+  "documented_evidence_gaps": [
+    "per-call provider receipts and token/cost/latency allocation were not retained",
+    "the simulative fifth call's exact role is not reconstructable from retained logs",
+    "normalized events and regulation-decision records were derived in T08, not retained in T07",
+    "locale and timezone identity were not explicitly retained for each condition"
+  ],
+  "equalities": [
+    {
+      "comparison_basis": "shared-immutable-binding",
+      "evidence_refs": [
+        "remote_archive:run-manifest.json"
+      ],
+      "field": "frozen_git_commit",
+      "status": "equal",
+      "value": "5698f04dfd08bc85a66d2355b0a4bd7d3ce24a23"
+    },
+    {
+      "comparison_basis": "shared-immutable-binding",
+      "evidence_refs": [
+        "remote_archive:run-manifest.json"
+      ],
+      "field": "sira_commit",
+      "status": "equal",
+      "value": "93fb8d72de71f9a4a13419670adeb34d93cf7acd"
+    },
+    {
+      "comparison_basis": "condition-owned-records-and-shared-binding",
+      "evidence_refs": [
+        "remote_archive:evidence/reactive/sira-output",
+        "remote_archive:evidence/simulative/sira-output",
+        "remote_archive:run-manifest.json"
+      ],
+      "field": "task",
+      "status": "equal",
+      "value": {
+        "max_steps": 1,
+        "query": "go to google flights",
+        "seed": "42"
+      }
+    },
+    {
+      "comparison_basis": "condition-owned-records",
+      "evidence_refs": [
+        "remote_archive:evidence/reactive/runtime-environment.json",
+        "remote_archive:evidence/simulative/runtime-environment.json"
+      ],
+      "field": "python_version",
+      "status": "equal",
+      "value": "3.11.14"
+    },
+    {
+      "comparison_basis": "shared-immutable-binding",
+      "evidence_refs": [
+        "remote_archive:run-manifest.json"
+      ],
+      "field": "dependencies",
+      "status": "equal",
+      "value": {
+        "installed_package_manifest_sha256": "4ff2603fa5e0f7033ba773decdcb86abf648dcce22e469d26bc48214e390e104",
+        "uv_lock_sha256": "138585129c7f369887591d30d9727f8dd466639fa78fb00adc5a04f1e9b2d76e"
+      }
+    },
+    {
+      "comparison_basis": "condition-owned-records-and-shared-binding",
+      "evidence_refs": [
+        "remote_archive:evidence/reactive/container-inspect.json",
+        "remote_archive:evidence/simulative/container-inspect.json",
+        "remote_archive:run-manifest.json"
+      ],
+      "field": "container_image",
+      "status": "equal",
+      "value": {
+        "base_image": "mcr.microsoft.com/playwright/python:v1.39.0-jammy@sha256:96955ff5cc37e13f5f1b21f5171afb9fed7e028025aa9d81c690501cd7fa0c6c",
+        "image_id": "sha256:035edf61718e84a8156f4f0f7817b134b0ce31488d3f0b50bbfba2b4a30cc61c"
+      }
+    },
+    {
+      "comparison_basis": "shared-immutable-binding",
+      "evidence_refs": [
+        "remote_archive:run-manifest.json"
+      ],
+      "field": "browser_runtime",
+      "status": "equal",
+      "value": {
+        "chromium_executable_sha256": "0498f208c25339f386413ada7b3c35293b0b6250e67d85446ba9541d7fd636f7",
+        "chromium_revision": "1084",
+        "playwright_version": "1.39.0"
+      }
+    },
+    {
+      "comparison_basis": "condition-owned-records",
+      "evidence_refs": [
+        "remote_archive:run-manifest.json#conditions.reactive.docker_argv",
+        "remote_archive:run-manifest.json#conditions.simulative.docker_argv"
+      ],
+      "field": "model_snapshot",
+      "status": "equal",
+      "value": "gpt-4o-2024-11-20"
+    },
+    {
+      "comparison_basis": "condition-owned-records",
+      "evidence_refs": [
+        "remote_archive:evidence/reactive/runtime-environment.json",
+        "remote_archive:evidence/simulative/runtime-environment.json"
+      ],
+      "field": "model_role_routing",
+      "status": "equal",
+      "value": {
+        "routes": {
+          "actor": "gpt-4o-2024-11-20",
+          "critic": "gpt-4o-2024-11-20",
+          "default": "gpt-4o-2024-11-20",
+          "encoder": "gpt-4o-2024-11-20",
+          "fallback": "gpt-4o-2024-11-20",
+          "memory": "gpt-4o-2024-11-20",
+          "policy": "gpt-4o-2024-11-20",
+          "world_model": "gpt-4o-2024-11-20"
+        },
+        "routing_sha256": "8a0e6e2934c98ba3faefab51c6408da2476df428bd43688e41d8aea8280c9619"
+      }
+    },
+    {
+      "comparison_basis": "condition-owned-records-and-shared-binding",
+      "evidence_refs": [
+        "remote_archive:evidence/reactive/runtime-environment.json",
+        "remote_archive:evidence/simulative/runtime-environment.json",
+        "remote_archive:run-manifest.json"
+      ],
+      "field": "instrumentation_and_evidence_code",
+      "status": "equal",
+      "value": {
+        "condition_runtime_adaptation_sha256": "c461dce20fea9e743135cad98b664213a393e46f35d1c1a8434212b2f0367dbb",
+        "runner_sha256": "9f9abcaa474880f0f292fc2e4475508d699dfa368b47cbc8ced9bbe87400c12d",
+        "runtime_adaptation_sha256": "c461dce20fea9e743135cad98b664213a393e46f35d1c1a8434212b2f0367dbb",
+        "runtime_preflight_sha256": "0530b3ad25fac1d3f9372d31da8046bec67b6c74eea3cdd3c8d91353948f1b3d"
+      }
+    },
+    {
+      "comparison_basis": "shared-recomputation-method",
+      "evidence_refs": [
+        "repository:experiments/EXP-0001-sira-simulative-vs-reactive/pricing.yaml",
+        "repository:src/giclab/harness/sira_gate_a.py@frozen-commit"
+      ],
+      "field": "cost_calculation",
+      "status": "equal",
+      "value": {
+        "cached_input_per_million_usd": "1.25",
+        "input_per_million_usd": "2.5",
+        "output_per_million_usd": "10"
+      }
+    },
+    {
+      "comparison_basis": "condition-owned-records",
+      "evidence_refs": [
+        "remote_archive:evidence/reactive/runtime-environment.json",
+        "remote_archive:evidence/simulative/runtime-environment.json"
+      ],
+      "field": "environment",
+      "status": "equal",
+      "value": {
+        "architecture": "x86_64",
+        "environment_variable_names": [
+          "DEBUG_LOG_FOLDER",
+          "PLAYWRIGHT_BROWSERS_PATH",
+          "PYTHONDONTWRITEBYTECODE",
+          "PYTHONPATH",
+          "SIRA_API_KEY",
+          "UV_CACHE_DIR",
+          "UV_PROJECT_ENVIRONMENT"
+        ],
+        "os": "Linux",
+        "python_executable": "/opt/sira/.venv/bin/python",
+        "python_version": "3.11.14",
+        "routing_sha256": "8a0e6e2934c98ba3faefab51c6408da2476df428bd43688e41d8aea8280c9619",
+        "runtime_adaptation_sha256": "c461dce20fea9e743135cad98b664213a393e46f35d1c1a8434212b2f0367dbb",
+        "schema_version": "0.1.0",
+        "secret_variable_names": [
+          "SIRA_API_KEY"
+        ],
+        "upstream_runner": "/opt/sira/scripts/run_web_agent.py"
+      }
+    },
+    {
+      "comparison_basis": "condition-owned-records",
+      "evidence_refs": [
+        "remote_archive:run-manifest.json#conditions.reactive.docker_argv",
+        "remote_archive:run-manifest.json#conditions.simulative.docker_argv",
+        "remote_archive:evidence/reactive/container-inspect.json",
+        "remote_archive:evidence/simulative/container-inspect.json"
+      ],
+      "field": "tools",
+      "status": "equal",
+      "value": {
+        "agent": "sira",
+        "browser": "chromium",
+        "network": "bridge"
+      }
+    },
+    {
+      "comparison_basis": "condition-owned-records-and-shared-binding",
+      "evidence_refs": [
+        "remote_archive:evidence/reactive/sira-output",
+        "remote_archive:evidence/simulative/sira-output",
+        "remote_archive:run-manifest.json"
+      ],
+      "field": "maximum_browser_steps",
+      "status": "equal",
+      "value": 1
+    },
+    {
+      "comparison_basis": "shared-immutable-binding",
+      "evidence_refs": [
+        "remote_archive:run-manifest.json"
+      ],
+      "field": "execution_host_class",
+      "status": "equal",
+      "value": {
+        "instance_type": "gpu_1x_a10",
+        "provider_image_id": "44fab622-b98a-49fe-ac6d-e4ce5531532f",
+        "region": "us-east-1"
+      }
+    }
+  ],
+  "invalidating_differences": [],
+  "pair_diff_id": "T08-SIRA-SMOKE-PAIR-DIFF-0001",
+  "schema_version": "0.1.0",
+  "scientific_interpretation_allowed": false,
+  "source_run_manifest_sha256": "877c26d16e242733e4f86afc54a058b868ca79ee27b826abc5e1e92ae0427ccd",
+  "valid": true
+}

@@ -12,7 +12,8 @@ authorized_run_profile:
   profile_path: null
   profile_sha256: null
   condition_plan_sha256s: []
-planned_execution_substrate:
+planned_execution_substrate: null
+historical_execution_substrate:
   decision_state: bounded-smoke-v3-ready-unauthorized
   provider: lambda-on-demand-cloud
   architecture: x86_64
@@ -26,5 +27,22 @@ planned_execution_substrate:
   local_alternatives: terminal-rejected
   decision_document: docs/harness/T07_BOUNDED_SMOKE_GOVERNANCE.md
   security_decision_document: docs/harness/T07_BOUNDED_SMOKE_SECURITY_BINDING_REPAIR.md
+t08_checkpoint:
+  task: T08
+  source_host_run: RUN-T07-PRAGMATIC-HOST-0002
+  terminal_state: smoke_evidence_validated_pilot_planning_eligible
+  artifact_execution:
+    reactive: passed
+    simulative: passed
+  task_completion:
+    reactive: not_observed
+    simulative: not_observed
+  pair_classification: matched_pair_valid_with_documented_evidence_gaps
+  evidence_complete_for_smoke: true
+  cleanup_classification: cleanup_verified_with_nonmaterial_gap
+  scientific_interpretation_allowed: false
+  next_plan: PLAN-EXP0001-PILOT
+  pilot_protocol_preparation_eligible: true
+  pilot_execution_authorized: false
 authoritative_plan: docs/exec-plans/active/PHASE_1_ARTIFACT_EXECUTION.md
 last_updated: "2026-08-12"

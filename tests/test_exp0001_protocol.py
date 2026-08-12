@@ -21,7 +21,7 @@ EXP_ROOT = ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive"
 CONDITIONS = {"SIRA-SIMULATIVE", "SIRA-REACTIVE"}
 
 
-def test_exp0001_is_registered_with_independent_not_run_state() -> None:
+def test_exp0001_is_registered_with_adjudicated_smoke_and_no_scientific_result() -> None:
     registry = load_yaml(ROOT / "experiments/registry.yaml")
     assert registry["experiments"][0]["experiment_id"] == "EXP-0001"
     assert registry["experiments"][0]["protocol"].endswith("/protocol.yaml")
@@ -35,9 +35,15 @@ def test_exp0001_is_registered_with_independent_not_run_state() -> None:
         "authorization_reference": None,
     }
     results = load_json(EXP_ROOT / "results-summary.json")
-    assert results["run_status"] == "not-run"
+    assert results["run_status"] == "artifact-smoke-adjudicated"
     assert results["measurements"] == []
-    assert results["artifacts"] == []
+    assert results["artifacts"] == [
+        "experiments/EXP-0001-sira-simulative-vs-reactive/T08_SMOKE_ADJUDICATION.json",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/T08_SMOKE_PAIR_DIFF.json",
+    ]
+    assert results["infrastructure_terminal_state"] == (
+        "smoke_evidence_validated_pilot_planning_eligible"
+    )
 
 
 def test_exp0001_locks_exactly_the_two_source_conditions() -> None:
@@ -234,10 +240,12 @@ def test_h2k_appendix_is_additive_source_grounded_and_non_scientific() -> None:
     assert "does not support" in appendix["trace_sufficiency_boundary"]
 
 
-def test_public_protocol_page_states_no_run_and_future_track_boundary() -> None:
+def test_public_protocol_page_states_smoke_only_and_future_track_boundary() -> None:
     page = (ROOT / "notebook/experiments/exp-0001-protocol.qmd").read_text(encoding="utf-8")
     prose = " ".join(page.split())
-    assert "No smoke, pilot, model, API, browser, evaluator, or benchmark run has" in prose
+    assert "One T07 one-step reactive/simulative artifact smoke occurred" in prose
+    assert "task completion was not observed" in prose
+    assert "no EXP-0001 measurement or outcome" in prose
     assert "not evidence of a learned internal regulation mechanism" in prose
     assert "not an EXP-0001 hypothesis, metric, outcome" in prose
 

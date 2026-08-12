@@ -1415,6 +1415,7 @@ def _gate_a_accounting(root: Path, session: Mapping[str, Any]) -> NonWallResourc
     return NonWallResourceAccounting(
         cost_usd=float(ledger["cost_usd"]),
         gpu_hours=0.0,
+        model_calls=int(ledger["model_call_attempts"]),
         model_tokens=int(ledger["total_tokens"]),
         tool_calls=len(history),
     )

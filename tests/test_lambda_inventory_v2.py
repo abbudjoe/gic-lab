@@ -866,7 +866,7 @@ def test_v1_run_identity_is_burned_and_cannot_bind_v2() -> None:
         )
 
 
-def test_committed_v2_plan_binds_frozen_implementation_and_remains_unauthorized() -> None:
+def test_committed_v2_plan_remains_frozen_unauthorized_and_rejects_current_drift() -> None:
     plan_path = ROOT / "containers/sira-smoke/lambda/gate-l1-readonly-inventory-plan-v2.json"
     encoded = plan_path.read_bytes()
     assert len(encoded) == 8_856
@@ -877,4 +877,5 @@ def test_committed_v2_plan_binds_frozen_implementation_and_remains_unauthorized(
     )
     assert plan.implementation_commit == IMPLEMENTATION_COMMIT
     assert not plan.authorized
-    verify_inventory_implementation_v2(ROOT, plan)
+    with pytest.raises(Exception, match="implementation artifact hash drifted"):
+        verify_inventory_implementation_v2(ROOT, plan)

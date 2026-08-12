@@ -22,6 +22,7 @@ def test_budget_guard_tracks_all_bounded_units() -> None:
             max_wall_seconds=100,
             max_cost_usd=2.0,
             max_gpu_hours=1.0,
+            max_model_calls=4,
             max_model_tokens=1000,
             max_tool_calls=10,
         )
@@ -30,12 +31,16 @@ def test_budget_guard_tracks_all_bounded_units() -> None:
         wall_seconds=2.5,
         cost_usd=0.5,
         gpu_hours=0.25,
+        model_calls=2,
         model_tokens=250,
         tool_calls=2,
     )
+    assert usage.model_calls == 2
     assert usage.model_tokens == 250
     assert usage.tool_calls == 2
     assert guard.remaining_wall_seconds == 97.5
+    with pytest.raises(BudgetExceeded, match="model_calls"):
+        guard.record(model_calls=3)
 
 
 @pytest.mark.parametrize("value", [-1.0, float("inf"), float("nan")])

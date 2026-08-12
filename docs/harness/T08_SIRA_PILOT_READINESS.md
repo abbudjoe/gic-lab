@@ -1,0 +1,57 @@
+# T08 SiRA pilot readiness
+
+Status: **pilot protocol preparation eligible; pilot execution blocked and unauthorized**
+
+Plan: `PLAN-EXP0001-PILOT`
+
+The T08 planning gates pass: the smoke pair contract is valid, retained evidence is
+complete enough for its one-step artifact-execution purpose, and cleanup is verified
+with only documented nonmaterial gaps. This permits preparation of T09 planning
+documents. It does not make the pilot execution-eligible.
+
+## Proposed smallest directional pilot
+
+- Two frozen FanOutQA task pairs, four condition attempts total.
+- Dataset revision `76ad1feb689b754bfe4e5e24d3ea371b647efa67`, SHA-256
+  `359300b029c6891567816f351bf8786e9b018d7af8a1a44b7da9ba5ef4651288`.
+- Task IDs `7dcbbbdc7f1120cd` and `2120afba8009bad3`.
+- Counterbalanced order: reactive/simulative on task 0; simulative/reactive on task 1.
+- Immutable proposed model snapshot `gpt-4o-2024-11-20`; directional reproduction
+  under the already declared historical-model substitution.
+- Task-level paired scoring only. Two pairs are enough to test scoring, completion,
+  floor/ceiling behavior, variance plumbing, and cost capture, not effect size or
+  confirmatory inference.
+
+Proposed aggregate ceilings are 4,620 model calls, 4,000,000 model tokens, 120 browser
+actions, 14,400 attempt-wall seconds, USD 40.00 OpenAI spend, 4.0 A10 hours, and USD
+5.16 provider compute at the retained USD 1.29/hour rate, for USD 45.16 total. The
+retained rate is only a planning basis and must be freshly reverified. The T07
+one-step USD 0.0403325 cost is not a full-task cost estimate or pilot evidence.
+
+## Remaining execution blockers
+
+1. A new current-turn user authorization must bind the final clean commit, plan and
+   child hashes, exact provider/model/substrate, all caps, stopping rules, evidence,
+   and cleanup contract.
+2. FanOut spaCy and `en_core_web_sm` evaluator versions, hashes, licenses, and
+   deterministic behavior must be immutably pinned and smoke-tested offline.
+3. Current Lambda price/capacity, exact image, firewall, zero-instance state, and
+   immutable model availability need fresh read-only reverification.
+4. Source, protocol, configuration, environment, image, browser, command, evaluator,
+   and pair-diff identities must be materialized before empirical entry.
+5. The locked experiment protocol still records zero GPU hours. A reviewed version
+   must reconcile that operational cap before cloud authorization without changing
+   treatment, tasks, scoring, or interpretation.
+6. Model-call, token, browser-action, wall, API-spend, provider-spend, accelerator,
+   output, and aggregate stops must be effective in the selected runtime.
+7. Provider-response retention must structurally omit/redact ephemeral Jupyter access
+   values while preserving safe lifecycle evidence.
+8. Complete post-action browser results, normalized events, regulation-decision
+   lineage, per-call receipts when available, artifact hashes, cleanup, transfer, and
+   terminal provider evidence must be retained.
+9. Dataset/evaluator public-release licensing and privacy remain unresolved; raw
+   publication stays blocked.
+
+Until every blocker is closed, `execution.authorized` stays false, project execution
+permissions stay false, child command bindings stay null/unknown, and no T09 run may
+begin.

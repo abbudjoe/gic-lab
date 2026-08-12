@@ -59,6 +59,8 @@ SCHEMA_FILES = (
     "schemas/t07-lambda-request-ledger.schema.json",
     "schemas/t07-lambda-host-qualification.schema.json",
     "schemas/t07-lambda-host-qualification-incident.schema.json",
+    "schemas/t08-sira-smoke-adjudication.schema.json",
+    "schemas/t08-sira-smoke-pair-diff.schema.json",
 )
 REQUIRED_PATHS = (
     "AGENTS.md",
@@ -573,7 +575,10 @@ def validate_experiment_run_profiles(root: Path = ROOT) -> list[str]:
             condition_records: dict[Path, Mapping[str, Any]] = {}
             condition_names: list[str] = []
             condition_cost = Decimal(0)
+            condition_gpu_hours = Decimal(0)
+            condition_model_calls = 0
             condition_tokens = 0
+            condition_tool_calls = 0
             condition_wall = 0
             for condition_relative in condition_relatives:
                 if not isinstance(condition_relative, str):
@@ -636,10 +641,17 @@ def validate_experiment_run_profiles(root: Path = ROOT) -> list[str]:
                     max_cost = budget.get("max_cost_usd")
                     if isinstance(max_cost, (int, float)):
                         condition_cost += Decimal(str(max_cost))
+                    if isinstance(budget.get("max_model_calls"), int):
+                        condition_model_calls += budget["max_model_calls"]
                     if isinstance(budget.get("max_model_tokens"), int):
                         condition_tokens += budget["max_model_tokens"]
+                    if isinstance(budget.get("max_tool_calls"), int):
+                        condition_tool_calls += budget["max_tool_calls"]
                     if isinstance(budget.get("max_wall_seconds"), int):
                         condition_wall += budget["max_wall_seconds"]
+                    max_gpu_hours = budget.get("max_gpu_hours")
+                    if isinstance(max_gpu_hours, (int, float)):
+                        condition_gpu_hours += Decimal(str(max_gpu_hours))
             pair_count = sampling.get("pair_count")
             expected_conditions = sampling.get("conditions", [])
             if isinstance(pair_count, int) and isinstance(expected_conditions, list):
@@ -717,12 +729,26 @@ def validate_experiment_run_profiles(root: Path = ROOT) -> list[str]:
                             "profile_plan_id",
                             "profile_sha256",
                             "task",
-                            "budget",
                             "seed",
                             "attempt",
                         ):
                             if left.get(key) != right.get(key):
                                 errors.append(f"{label}: matched pair drifts on {key}")
+                        left_budget = left.get("budget")
+                        right_budget = right.get("budget")
+                        if isinstance(left_budget, dict) and isinstance(right_budget, dict):
+                            left_fixed_budget = {
+                                key: value
+                                for key, value in left_budget.items()
+                                if key != "max_model_calls"
+                            }
+                            right_fixed_budget = {
+                                key: value
+                                for key, value in right_budget.items()
+                                if key != "max_model_calls"
+                            }
+                            if left_fixed_budget != right_fixed_budget:
+                                errors.append(f"{label}: matched pair drifts on fixed budget")
                         left_sources = left.get("sources")
                         right_sources = right.get("sources")
                         if isinstance(left_sources, dict) and isinstance(right_sources, dict):
@@ -790,8 +816,127 @@ def validate_experiment_run_profiles(root: Path = ROOT) -> list[str]:
                     errors.append(f"{label}: profile/condition cost caps disagree")
                 if profile_budget.get("max_model_tokens") != condition_tokens:
                     errors.append(f"{label}: profile/condition token caps disagree")
+                if (
+                    "max_model_calls" in profile_budget
+                    and profile_budget.get("max_model_calls") != condition_model_calls
+                ):
+                    errors.append(f"{label}: profile/condition model-call caps disagree")
                 if profile_budget.get("max_wall_seconds") != condition_wall:
                     errors.append(f"{label}: profile/condition wall caps disagree")
+                if (
+                    "max_browser_actions" in profile_budget
+                    and profile_budget.get("max_browser_actions") != condition_tool_calls
+                ):
+                    errors.append(f"{label}: profile/condition browser-action caps disagree")
+                if "max_accelerator_hours" in profile_budget:
+                    try:
+                        expected_accelerator_hours = Decimal(
+                            str(profile_budget.get("max_accelerator_hours"))
+                        )
+                    except InvalidOperation:
+                        expected_accelerator_hours = Decimal(-1)
+                    if condition_gpu_hours != expected_accelerator_hours:
+                        errors.append(f"{label}: profile/condition accelerator-hour caps disagree")
+                condition_limits = profile_budget.get("condition_limits")
+                if isinstance(condition_limits, dict):
+                    if set(condition_limits) != set(expected_conditions):
+                        errors.append(f"{label}: condition-limit names/profile conditions disagree")
+                    planned_model_calls = 0
+                    planned_tokens = 0
+                    planned_browser_actions = 0
+                    planned_wall = 0
+                    planned_openai_cost = Decimal(0)
+                    planned_accelerator_hours = Decimal(0)
+                    for condition_name, raw_limit in condition_limits.items():
+                        if not isinstance(condition_name, str) or not isinstance(raw_limit, dict):
+                            continue
+                        attempts = raw_limit.get("attempts")
+                        model_calls = raw_limit.get("max_model_calls_per_attempt")
+                        tokens = raw_limit.get("max_model_tokens_per_attempt")
+                        browser_actions = raw_limit.get("max_browser_actions_per_attempt")
+                        wall = raw_limit.get("max_wall_seconds_per_attempt")
+                        openai_cost = raw_limit.get("max_openai_cost_usd_per_attempt")
+                        accelerator_hours = raw_limit.get("max_accelerator_hours_per_attempt")
+                        if (
+                            not all(
+                                type(value) is int
+                                for value in (attempts, model_calls, tokens, browser_actions, wall)
+                            )
+                            or not isinstance(openai_cost, (int, float))
+                            or not isinstance(accelerator_hours, (int, float))
+                        ):
+                            continue
+                        assert isinstance(attempts, int)
+                        assert isinstance(model_calls, int)
+                        assert isinstance(tokens, int)
+                        assert isinstance(browser_actions, int)
+                        assert isinstance(wall, int)
+                        if condition_names.count(condition_name) != attempts:
+                            errors.append(
+                                f"{label}: {condition_name} condition-limit attempts disagree"
+                            )
+                        planned_model_calls += attempts * model_calls
+                        planned_tokens += attempts * tokens
+                        planned_browser_actions += attempts * browser_actions
+                        planned_wall += attempts * wall
+                        planned_openai_cost += attempts * Decimal(str(openai_cost))
+                        planned_accelerator_hours += attempts * Decimal(str(accelerator_hours))
+                        for condition_record in condition_records.values():
+                            if condition_record.get("condition") != condition_name:
+                                continue
+                            child_budget = condition_record.get("budget")
+                            if not isinstance(child_budget, dict):
+                                continue
+                            expected_child_values = {
+                                "max_model_calls": model_calls,
+                                "max_model_tokens": tokens,
+                                "max_tool_calls": browser_actions,
+                                "max_wall_seconds": wall,
+                                "max_cost_usd": openai_cost,
+                                "max_gpu_hours": accelerator_hours,
+                            }
+                            for field, expected in expected_child_values.items():
+                                observed = child_budget.get(field)
+                                if (
+                                    not isinstance(observed, (int, float))
+                                    or isinstance(observed, bool)
+                                    or Decimal(str(observed)) != Decimal(str(expected))
+                                ):
+                                    errors.append(
+                                        f"{label}: {condition_name} {field} disagrees with "
+                                        "condition limits"
+                                    )
+                    aggregate_fields = {
+                        "max_model_calls": planned_model_calls,
+                        "max_model_tokens": planned_tokens,
+                        "max_browser_actions": planned_browser_actions,
+                        "max_wall_seconds": planned_wall,
+                    }
+                    for field, expected in aggregate_fields.items():
+                        if profile_budget.get(field) != expected:
+                            errors.append(f"{label}: {field} does not sum condition limits")
+                    try:
+                        profile_openai_cost = Decimal(str(profile_budget.get("max_cost_usd")))
+                        profile_accelerator_hours = Decimal(
+                            str(profile_budget.get("max_accelerator_hours"))
+                        )
+                    except InvalidOperation:
+                        profile_openai_cost = Decimal(-1)
+                        profile_accelerator_hours = Decimal(-1)
+                    if planned_openai_cost != profile_openai_cost:
+                        errors.append(f"{label}: model spend does not sum condition limits")
+                    if planned_accelerator_hours != profile_accelerator_hours:
+                        errors.append(f"{label}: accelerator hours do not sum condition limits")
+                    try:
+                        provider_compute_cost = Decimal(
+                            str(profile_budget.get("max_provider_compute_cost_usd"))
+                        )
+                        total_cost = Decimal(str(profile_budget.get("max_total_cost_usd")))
+                    except InvalidOperation:
+                        provider_compute_cost = Decimal(-1)
+                        total_cost = Decimal(-1)
+                    if planned_openai_cost + provider_compute_cost != total_cost:
+                        errors.append(f"{label}: total spend cap arithmetic disagrees")
                 pricing_relative = profile_budget.get("pricing_record")
                 if isinstance(pricing_relative, str):
                     pricing_path = resolve_repo_path(root, pricing_relative)

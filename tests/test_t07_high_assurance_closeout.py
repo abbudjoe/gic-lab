@@ -363,6 +363,8 @@ def test_closeout_has_no_external_or_experimental_execution_surface() -> None:
 
 def test_high_assurance_track_is_frozen_and_bounded_handoff_is_non_authorizing() -> None:
     state = (ROOT / "docs/PROJECT_STATE.yaml").read_text()
+    assert "planned_execution_substrate: null" in state
+    assert "historical_execution_substrate:" in state
     assert "decision_state: bounded-smoke-v3-ready-unauthorized" in state
     assert "gate_l2_decision_state: bounded-manual-console-plan-ready-unauthorized" in state
     for permission in (

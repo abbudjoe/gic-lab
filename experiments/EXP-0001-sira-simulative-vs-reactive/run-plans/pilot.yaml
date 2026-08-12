@@ -3,8 +3,8 @@ experiment_id: EXP-0001
 plan_id: PLAN-EXP0001-PILOT
 profile: pilot
 study_stage: exploratory
-purpose: Test paired execution, deterministic scoring, and paired-variance plumbing on two locked tasks.
-sample_rationale: Two pairs are the variance-plumbing minimum and are not selected from an effect size or power claim.
+purpose: Test paired execution, deterministic scoring, completion-rate measurement, and paired-variance plumbing on two locked tasks.
+sample_rationale: Two pairs are the directional variance-plumbing minimum; they can expose scoring, completion, floor, ceiling, and cost failures but are not selected from an effect size or power claim.
 interpretation_allowed: true
 execution:
   authorized: false
@@ -50,8 +50,30 @@ sampling:
 budget:
   pricing_record: experiments/EXP-0001-sira-simulative-vs-reactive/pricing.yaml
   max_cost_usd: 40.00
+  max_provider_compute_cost_usd: 5.16
+  max_total_cost_usd: 45.16
+  max_model_calls: 4620
   max_model_tokens: 4000000
+  max_browser_actions: 120
   max_wall_seconds: 14400
+  max_accelerator_hours: 4.0
+  condition_limits:
+    SIRA-REACTIVE:
+      attempts: 2
+      max_model_calls_per_attempt: 480
+      max_model_tokens_per_attempt: 1000000
+      max_browser_actions_per_attempt: 30
+      max_wall_seconds_per_attempt: 3600
+      max_openai_cost_usd_per_attempt: 10.00
+      max_accelerator_hours_per_attempt: 1.0
+    SIRA-SIMULATIVE:
+      attempts: 2
+      max_model_calls_per_attempt: 1830
+      max_model_tokens_per_attempt: 1000000
+      max_browser_actions_per_attempt: 30
+      max_wall_seconds_per_attempt: 3600
+      max_openai_cost_usd_per_attempt: 10.00
+      max_accelerator_hours_per_attempt: 1.0
 artifacts:
   root: artifacts/EXP-0001/pilot
   retain_raw: true
@@ -69,12 +91,20 @@ readiness:
     - execution.authorized
     - execution.authorization_reference
     - budget.max_cost_usd
+    - budget.max_provider_compute_cost_usd
+    - budget.max_total_cost_usd
     - condition_plans[*].execution.authorization
     - condition_plans[*].budget.max_cost_usd
+    - condition_plans[*].budget.max_gpu_hours
   unresolved_execution_blockers:
-    - Smoke integration and evidence review must succeed first.
+    - A fresh user authorization must bind the final immutable pilot package and exact cost, time, model, browser, cleanup, and stopping limits.
+    - FanOut spaCy and en_core_web_sm evaluator versions, hashes, licenses, and deterministic scorer behavior are not immutably pinned.
+    - Current Lambda price, capacity, exact image, firewall, zero-instance state, and immutable model availability require fresh read-only reverification.
+    - Final source, protocol, configuration, environment, container, browser, command, and condition-diff identities are not materialized.
+    - The locked experiment protocol still records zero GPU hours; a separately reviewed version must reconcile that operational cap before any cloud authorization without changing the treatment, task, scoring, or interpretation contract.
+    - Future provider evidence must structurally redact or omit ephemeral Jupyter access values while retaining safe lifecycle proof.
   pre_execution_requirements:
-    - Immutable snapshot binding and finite command-level resource enforcement are not integrated.
-    - Source-log ownership, browser cleanup, and complete environment identity are not integrated.
-    - FanOut spaCy and en_core_web_sm evaluator dependencies are not immutably pinned.
-    - Source, protocol, configuration, environment, and command identities require later materialization.
+    - Materialize and enforce the declared per-condition model-call, token, browser-action, wall, API-spend, accelerator-hour, provider-spend, output, and aggregate caps before any empirical action.
+    - Preserve source-log ownership, post-action browser evidence, normalized events, regulation-decision lineage, per-call provider receipts when available, and complete cleanup identities.
+    - Revalidate the two-task frozen subset, counterbalanced order, task-level pairing, deterministic scoring, and no outcome-adaptive design changes.
+    - Treat the T07 one-step smoke only as artifact-execution evidence; do not use its cost or trajectory as pilot outcome evidence.

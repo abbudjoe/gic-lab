@@ -336,6 +336,7 @@ class RunBudget:
     max_wall_seconds: int
     max_cost_usd: float
     max_gpu_hours: float = 0.0
+    max_model_calls: int | None = None
     max_model_tokens: int | None = None
     max_tool_calls: int | None = None
     max_output_bytes: int = 64 * 1024 * 1024
@@ -345,6 +346,10 @@ class RunBudget:
             raise ValueError("max_wall_seconds must be an integer > 0")
         _require_nonnegative_finite(self.max_cost_usd, "max_cost_usd")
         _require_nonnegative_finite(self.max_gpu_hours, "max_gpu_hours")
+        if self.max_model_calls is not None and (
+            type(self.max_model_calls) is not int or self.max_model_calls < 0
+        ):
+            raise ValueError("max_model_calls must be a non-negative integer or null")
         if self.max_model_tokens is not None and (
             type(self.max_model_tokens) is not int or self.max_model_tokens < 0
         ):
@@ -364,6 +369,7 @@ class BudgetUsage:
     wall_seconds: float = 0.0
     cost_usd: float = 0.0
     gpu_hours: float = 0.0
+    model_calls: int = 0
     model_tokens: int = 0
     tool_calls: int = 0
     output_bytes: int = 0
@@ -376,6 +382,7 @@ class BudgetUsage:
         ):
             _require_nonnegative_finite(value, label)
         for label, value in (
+            ("model_calls", self.model_calls),
             ("model_tokens", self.model_tokens),
             ("tool_calls", self.tool_calls),
             ("output_bytes", self.output_bytes),
@@ -392,6 +399,7 @@ class NonWallResourceAccounting:
     gpu_hours: float | None
     model_tokens: int | None
     tool_calls: int | None
+    model_calls: int | None = None
 
     def __post_init__(self) -> None:
         for label, value in (
@@ -401,6 +409,7 @@ class NonWallResourceAccounting:
             if value is not None:
                 _require_nonnegative_finite(value, label)
         for label, value in (
+            ("accounted model_calls", self.model_calls),
             ("accounted model_tokens", self.model_tokens),
             ("accounted tool_calls", self.tool_calls),
         ):

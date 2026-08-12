@@ -3,13 +3,13 @@ experiment_id: EXP-0001
 run_id: RUN-EXP0001-PILOT-0001-REACTIVE
 profile: pilot
 profile_plan_id: PLAN-EXP0001-PILOT
-profile_sha256: 1e0dbd6bedbc4802a1a57d8896f828511b7c15f9bc8251696f79f48d379267b3
+profile_sha256: c06026b1c0a1fdd16ac76ada624c7af2a2818d376d72ad977c8872faf9acbb18
 condition: SIRA-REACTIVE
 attempt: 1
 seed: 42
 interpretation_allowed: true
 execution:
-  backend: local-subprocess
+  backend: cloud
   workload: benchmark
   authorization:
     authorized: false
@@ -38,7 +38,8 @@ pairing:
 budget:
   max_wall_seconds: 3600
   max_cost_usd: 10.00
-  max_gpu_hours: 0
+  max_gpu_hours: 1.0
+  max_model_calls: 480
   max_model_tokens: 1000000
   max_tool_calls: 30
   max_output_bytes: 2147483648

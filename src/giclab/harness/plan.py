@@ -142,6 +142,9 @@ def run_plan_from_mapping(data: Mapping[str, Any]) -> RunPlan:
         max_wall_seconds=_integer(budget_data.get("max_wall_seconds"), "budget.max_wall_seconds"),
         max_cost_usd=_number(budget_data.get("max_cost_usd"), "budget.max_cost_usd"),
         max_gpu_hours=_number(budget_data.get("max_gpu_hours"), "budget.max_gpu_hours"),
+        max_model_calls=_optional_integer(
+            budget_data.get("max_model_calls"), "budget.max_model_calls"
+        ),
         max_model_tokens=_optional_integer(
             budget_data.get("max_model_tokens"), "budget.max_model_tokens"
         ),
@@ -240,6 +243,8 @@ def run_plan_document(plan: RunPlan) -> dict[str, Any]:
     if plan.profile_plan_id is not None and plan.profile_sha256 is not None:
         document["profile_plan_id"] = plan.profile_plan_id
         document["profile_sha256"] = plan.profile_sha256
+    if plan.budget.max_model_calls is not None:
+        document["budget"]["max_model_calls"] = plan.budget.max_model_calls
     if plan.task is not None and plan.pairing is not None:
         document["task"] = {
             "task_id": plan.task.task_id,

@@ -52,7 +52,7 @@ def test_historical_manual_binding_stops_before_credential_or_transport(
         "AUTH-T07-GATE-L2M-MANUAL-CONSOLE-V3-TEST",
         "b" * 64,
     )
-    with pytest.raises(L23SupervisorError, match="manual plan SHA-256 drifted"):
+    with pytest.raises(L23SupervisorError, match="high-assurance infrastructure track is frozen"):
         verify_supervisor_preflight(
             ROOT,
             plan_path=ROOT / PLAN_RELATIVE,

@@ -33,6 +33,7 @@ from giclab.harness.lambda_l13_security import (
     FirewallRulesSnapshot,
     L13ContractError,
     LocalPublicKey,
+    _retained_absolute_path_matches,
     build_resource_candidate_matrix,
     capture_firewall_rules_snapshot,
     firewall_assessment_document,
@@ -1003,6 +1004,23 @@ def test_bound_run_verifier_rejects_any_hash_or_archive_drift() -> None:
             copy_record_bytes=copy_record,
             extension_report_bytes=b"extension",
         )
+
+
+def test_retained_source_path_binding_is_portable_but_suffix_exact() -> None:
+    relative = "artifacts/t07/lambda/run/inventory-redacted.json"
+    assert _retained_absolute_path_matches(
+        "/historical/worktree/gic-lab/" + relative,
+        relative,
+    )
+    assert not _retained_absolute_path_matches("relative/path", relative)
+    assert not _retained_absolute_path_matches(
+        "/historical/worktree/gic-lab/artifacts/t07/lambda/run/other.json",
+        relative,
+    )
+    assert not _retained_absolute_path_matches(
+        "/historical/worktree/../gic-lab/" + relative,
+        relative,
+    )
 
 
 def test_required_l13_schemas_accept_local_contract_documents(tmp_path: Path) -> None:

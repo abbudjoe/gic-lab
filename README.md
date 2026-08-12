@@ -5,9 +5,11 @@ GIC Lab is a public, reproducible research program for determining which propose
 The repository has completed **Phase 0.75: upstream audit, experiment harness,
 protocol lock, and option preservation** and opened **Phase 1: artifact execution**.
 Phase 1 is active, but every project execution and compute permission remains false.
-`EXP-0001` is planned and not run; only its disabled smoke profile is eligible for a
-later exact human authorization. A protocol, readiness record, or proposed budget is
-not authorization.
+The T07 one-step SiRA artifact smoke has been executed and adjudicated offline; both
+sessions were incomplete, no scientific measurement or EXP-0001 outcome was assigned,
+and its authority is exhausted. `PLAN-EXP0001-PILOT` is prepared but blocked on
+prerequisites and a later exact human authorization. A protocol, readiness record, or
+proposed budget is not authorization.
 
 - [Public research notebook](https://abbudjoe.github.io/gic-lab/)
 - [GitHub repository](https://github.com/abbudjoe/gic-lab)

@@ -48,8 +48,8 @@ no mutation authority; one gate's authorization never carries into another.
 | ID | Required outcome | Planned evidence | Status |
 |---|---|---|---|
 | P1-DOD-01 | Phase 0.75 is successful/completed; this is the one authoritative active plan; project execution/compute permissions remain false; only the disabled smoke profile is eligible for a later exact authorization. | Plan lifecycle/state/profile/readiness validation and public render. | met |
-| P1-DOD-02 | T07 executes at most the one authorized SiRA smoke pair with complete raw, normalized, regulation-decision, budget, scoring, and cleanup evidence and no interpretation. | Immutable run/authorization records, artifacts/hashes, accounting, cleanup proof, and validation. | partial |
-| P1-DOD-03 | T08 independently reproduces the smoke summary, separates infrastructure/protocol/upstream/future-track gaps, and leaves any pilot unauthorized. | Raw-to-summary checks, infrastructure-only trace-sufficiency report, review, and gate. | not-started |
+| P1-DOD-02 | T07 executes at most the one authorized SiRA smoke pair with complete raw, normalized, regulation-decision, budget, scoring, and cleanup evidence and no interpretation. | Immutable run/authorization records, artifacts/hashes, accounting, cleanup proof, and validation. | met; T08 documents nonblocking fields that T07 did not retain directly |
+| P1-DOD-03 | T08 independently reproduces the smoke summary, separates infrastructure/protocol/upstream/future-track gaps, and leaves any pilot unauthorized. | Raw-to-summary checks, infrastructure-only trace-sufficiency report, review, and gate. | met |
 | P1-DOD-04 | T09 executes only a freshly authorized locked SiRA pilot without outcome-adaptive changes and reconciles every attempt. | Frozen task/order records, complete paired artifacts, budgets, and attempt dispositions. | not-started |
 | P1-DOD-05 | T10 produces a reproducible exploratory EXP-0001 analysis with uncertainty, exact reproduction level, cost/deviation reporting, and no internalization or mechanism-attribution overclaim. | Validated result summary, registry/notebook/ledger updates, review, and gate. | not-started |
 | P1-DOD-06 | T11 produces a read-only, launch-ready SR²AM-v0.1-8B Lambda contract with current price, hard termination, source-grounded trace requirements, failure tests, and no mutation. | Audited runbook/contracts, dry-run/failure tests, authorization sentence, and gate. | not-started |
@@ -66,8 +66,8 @@ no mutation authority; one gate's authorization never carries into another.
 | Task | Work package | Mapped phase DoD | Current permission |
 |---|---|---|---|
 | T07 | Execute one authorized contained SiRA smoke pair; capture regulation-decision evidence without interpretation. | P1-DOD-02, P1-DOD-11 through P1-DOD-13 | complete: Retry 2 matched pair executed and cleanup verified; execution authority exhausted; no pilot authority |
-| T08 | Analyze smoke infrastructure evidence and prepare an unauthorized pilot package. | P1-DOD-03, P1-DOD-11 through P1-DOD-13 | not begun and unauthorized; requires a separate evidence-review instruction |
-| T09 | Execute the freshly authorized exploratory SiRA pilot. | P1-DOD-04, P1-DOD-11 through P1-DOD-13 | blocked until T08 and authorization |
+| T08 | Analyze smoke infrastructure evidence and prepare an unauthorized pilot package. | P1-DOD-03, P1-DOD-11 through P1-DOD-13 | complete: evidence validated; pilot planning eligible but execution unauthorized |
+| T09 | Execute the freshly authorized exploratory SiRA pilot. | P1-DOD-04, P1-DOD-11 through P1-DOD-13 | planning package prepared; execution blocked on prerequisites and fresh authorization |
 | T10 | Analyze and publish the exploratory SiRA pilot. | P1-DOD-05, P1-DOD-11 through P1-DOD-13 | blocked until T09 succeeds |
 | T11 | Build and validate the read-only SR²AM Lambda preflight. | P1-DOD-06, P1-DOD-11 through P1-DOD-13 | blocked until T10 succeeds |
 | T12 | Launch and monitor the separately authorized SR²AM Lambda smoke. | P1-DOD-07, P1-DOD-11 through P1-DOD-13 | blocked until T11 and authorization |
@@ -87,8 +87,10 @@ exhausted, and interpretation remains prohibited**
 Historical bounded plan: `PLAN-T07-BOUNDED-SIRA-SMOKE-V3` (preserved, not current
 execution authority).
 
-Next work package: T08 evidence-only independent reproduction and infrastructure
-adjudication. It is not begun and receives no authority from the completed T07 run.
+T08 evidence-only independent reproduction and infrastructure adjudication is
+complete. The next possible execution package is T09, but it receives no authority
+from T07 or T08 and remains blocked on the T08 readiness prerequisites plus a fresh
+current-turn authorization.
 
 Target contract: materialize and execute one matched reactive/simulative pair under an
 exact human-approved provider/model, API-cost cap, wall-time cap, and cleanup contract;
@@ -100,6 +102,29 @@ expected artifacts, cleanup, questions, and infrastructure-only interpretation b
 are in [`docs/readiness/PHASE_1_SMOKE_READINESS.md`](../../readiness/PHASE_1_SMOKE_READINESS.md).
 The locked profile is
 [`PLAN-EXP0001-SMOKE`](../../../experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/smoke.yaml).
+
+## T08 assembly control
+
+Assembly status: **complete; independent review and safety rereview passed, focused and
+full gates passed, and pilot execution remains unauthorized**.
+
+T08 rehashed the 138-entry remote archive, 147-entry retained-local manifest, and
+148-entry sealed-external manifest; verified exact source/destination equality;
+reconstructed both condition records with field-level provenance; independently
+recomputed the six-position command diff, four-field configuration diff, provider
+accounting, and cleanup; and emitted terminal state
+`smoke_evidence_validated_pilot_planning_eligible`.
+
+The final full gate passed 1,284 tests, repository validation, a 16-page notebook
+render, and site validation. Both independent review cycles returned clean PASS
+verdicts after material provenance/control-plane and historical-fixture repairs.
+
+The artifact pair is valid only as a one-step smoke. Both sessions report
+`is_complete: false`; no EXP-0001 outcome, comparative mode claim, GIC/RQ-H2K claim,
+or production-readiness claim follows. Pilot plan `PLAN-EXP0001-PILOT` contains two
+counterbalanced tasks and finite proposed caps, but remains unauthorized and
+`blocked-pending-prerequisites`. Exact DoD and review/gate evidence are in
+`docs/harness/T08_SIRA_SMOKE_EVIDENCE_LEDGER.md`.
 
 ### Pragmatic execution reset — 2026-08-12
 

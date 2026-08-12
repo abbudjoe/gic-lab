@@ -8,10 +8,11 @@ title: "Artifacts and sources"
 - `manifests/models.yaml` — released model identities and revisions; no local weights.
 - `manifests/datasets.yaml` — audited dataset identities, revisions, and known/unknown
   content hashes for the locked SiRA protocol.
-- `manifests/artifacts.yaml` — generated artifact identities; currently empty because
-  no experiment has run.
-- `manifests/compute.yaml` — zero-use ledger through Phase 0.75; no model, benchmark,
-  training, cloud, or paid-compute execution has occurred.
+- `manifests/artifacts.yaml` — generated artifact identities; bulk T07 evidence remains
+  outside Git while its hashes and reviewed T08 summaries are versioned.
+- `manifests/compute.yaml` — the zero-use Phase 0 ledger plus separately authorized,
+  typed Phase 1 T07 infrastructure/smoke compute records. T08 itself added no cloud,
+  model, browser, benchmark, training, or paid-compute use.
 
 Large artifacts will be hosted outside Git and addressed by stable URI plus SHA-256
 when a hash is known. Unknown hashes remain explicit rather than inferred. This site

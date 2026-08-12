@@ -84,6 +84,7 @@
         "max_wall_seconds": {"type": "integer", "minimum": 1},
         "max_cost_usd": {"type": "number", "minimum": 0},
         "max_gpu_hours": {"type": "number", "minimum": 0},
+        "max_model_calls": {"type": ["integer", "null"], "minimum": 0},
         "max_model_tokens": {"type": ["integer", "null"], "minimum": 0},
         "max_tool_calls": {"type": ["integer", "null"], "minimum": 0},
         "max_output_bytes": {"type": "integer", "minimum": 1}

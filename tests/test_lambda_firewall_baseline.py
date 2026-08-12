@@ -155,7 +155,9 @@ def test_historical_capture_binding_stops_before_secret_or_transport() -> None:
         "AUTH-T07-GATE-L2M-FIREWALL-BASELINE-CAPTURE-V1-TEST",
         "b" * 64,
     )
-    with pytest.raises(FirewallBaselineError, match="capture plan SHA-256 drifted"):
+    with pytest.raises(
+        FirewallBaselineError, match="high-assurance infrastructure track is frozen"
+    ):
         baseline.verify_capture_preflight(
             ROOT,
             plan_path=ROOT / baseline.CAPTURE_PLAN_RELATIVE,

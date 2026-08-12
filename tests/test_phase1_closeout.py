@@ -34,7 +34,8 @@ def test_phase_one_is_the_only_active_non_executable_control_plane() -> None:
         "profile_sha256": None,
         "condition_plan_sha256s": [],
     }
-    assert state["planned_execution_substrate"] == {
+    assert state["planned_execution_substrate"] is None
+    assert state["historical_execution_substrate"] == {
         "decision_state": "bounded-smoke-v3-ready-unauthorized",
         "provider": "lambda-on-demand-cloud",
         "architecture": "x86_64",
@@ -50,13 +51,11 @@ def test_phase_one_is_the_only_active_non_executable_control_plane() -> None:
         "security_decision_document": ("docs/harness/T07_BOUNDED_SMOKE_SECURITY_BINDING_REPAIR.md"),
     }
     execution_state = load_project_execution_state(ROOT)
-    substrate = execution_state.planned_execution_substrate
-    assert substrate is not None
-    assert substrate.decision_state == "bounded-smoke-v3-ready-unauthorized"
-    assert substrate.provider == "lambda-on-demand-cloud"
-    assert substrate.architecture == "x86_64"
-    assert substrate.gate_l1_evidence_state == "complete-externally-sealed"
-    assert substrate.gate_l2_decision_state == "bounded-manual-console-plan-ready-unauthorized"
+    assert execution_state.planned_execution_substrate is None
+    checkpoint = state["t08_checkpoint"]
+    assert checkpoint["terminal_state"] == ("smoke_evidence_validated_pilot_planning_eligible")
+    assert checkpoint["pilot_execution_authorized"] is False
+    assert checkpoint["scientific_interpretation_allowed"] is False
     assert [path.name for path in (ROOT / "docs/exec-plans/active").glob("*.md")] == [
         "PHASE_1_ARTIFACT_EXECUTION.md"
     ]
@@ -127,11 +126,12 @@ def test_historical_status_surfaces_preserve_the_bounded_v3_plan() -> None:
         assert "D-034" in rows[-1] and "PLAN-T07-BOUNDED-SIRA-SMOKE-V3" in rows[-1]
 
 
-def test_exp0001_readme_assigns_materialization_to_t07_not_completed_t06() -> None:
+def test_exp0001_readme_records_t07_materialization_and_current_pilot_boundary() -> None:
     readme = " ".join((EXP_ROOT / "README.md").read_text(encoding="utf-8").split())
-    assert "T07 preflight must bind the exact snapshot before execution" in readme
-    assert "T07 must then satisfy its deterministic pre-execution requirements" in readme
-    assert "not unresolved integration blockers" in readme
+    assert "T07 bound the immutable substitute `gpt-4o-2024-11-20`" in readme
+    assert "Any pilot must preserve or explicitly revise that immutable binding" in readme
+    assert "T08 makes pilot protocol preparation eligible, not pilot execution" in readme
+    assert "T07 preflight must bind the exact snapshot before execution" not in readme
     assert "later integration must bind" not in readme
     assert "T06 or a later approved integration" not in readme
 
@@ -341,9 +341,9 @@ def test_closeout_retains_zero_scientific_interpretation_and_typed_compute() -> 
     assert summary["prototype_runs"] == 0
     assert summary["benchmark_runs"] == 0
     assert summary["training_runs"] == 0
-    assert results["run_status"] == "not-run"
+    assert results["run_status"] == "artifact-smoke-adjudicated"
     assert results["measurements"] == []
-    assert results["artifacts"] == []
+    assert results["artifacts"]
     run2_root = "artifacts/t07/lambda/gate-l1/RUN-T07-L1-LAMBDA-INVENTORY-0002"
     run3_root = "artifacts/t07/lambda/gate-l1/RUN-T07-L1-LAMBDA-INVENTORY-0003"
     alias_root = "artifacts/t07/lambda/gate-l1-3/RUN-T07-L1-LAMBDA-INVENTORY-0003"
@@ -441,7 +441,7 @@ def test_closeout_retains_zero_scientific_interpretation_and_typed_compute() -> 
     assert not (ROOT / "traces").exists()
 
 
-def test_public_surfaces_report_the_current_phase_and_single_next_gate() -> None:
+def test_public_surfaces_report_the_current_phase_and_unauthorized_next_gate() -> None:
     readme = " ".join((ROOT / "README.md").read_text(encoding="utf-8").split())
     home = " ".join((ROOT / "notebook/index.qmd").read_text(encoding="utf-8").split())
     note = " ".join(
@@ -449,8 +449,13 @@ def test_public_surfaces_report_the_current_phase_and_single_next_gate() -> None
     )
     for page in (readme, home, note):
         assert "Phase 1" in page
-        assert "PLAN-EXP0001-SMOKE" in page or "smoke profile" in page
-        assert "not authorization" in page
+        assert (
+            "PLAN-EXP0001-SMOKE" in page or "PLAN-EXP0001-PILOT" in page or "artifact smoke" in page
+        )
+        assert any(
+            boundary in page.lower()
+            for boundary in ("not authorization", "does not authorize", "unauthorized")
+        )
 
 
 def test_resource_and_research_pages_do_not_reopen_completed_phase_zero_work() -> None:

@@ -1,5 +1,5 @@
 schema_version: 0.1.0
-registry_revision: 2
+registry_revision: 3
 template_path: experiments/EXP-0000-template
 experiments:
   - experiment_id: EXP-0001
@@ -7,3 +7,6 @@ experiments:
     run_profiles:
       - experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/smoke.yaml
       - experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml
+    evidence_records:
+      - experiments/EXP-0001-sira-simulative-vs-reactive/T08_SMOKE_ADJUDICATION.json
+      - experiments/EXP-0001-sira-simulative-vs-reactive/T08_SMOKE_PAIR_DIFF.json

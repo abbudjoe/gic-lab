@@ -248,6 +248,7 @@ def _validate_budget_history(
         "wall_seconds": plan.budget.max_wall_seconds,
         "cost_usd": plan.budget.max_cost_usd,
         "gpu_hours": plan.budget.max_gpu_hours,
+        "model_calls": plan.budget.max_model_calls,
         "model_tokens": plan.budget.max_model_tokens,
         "tool_calls": plan.budget.max_tool_calls,
         "output_bytes": plan.budget.max_output_bytes,
@@ -271,7 +272,12 @@ def _validate_budget_history(
             if field not in payload:
                 continue
             value = payload[field]
-            integer_field = field in {"model_tokens", "tool_calls", "output_bytes"}
+            integer_field = field in {
+                "model_calls",
+                "model_tokens",
+                "tool_calls",
+                "output_bytes",
+            }
             if (
                 isinstance(value, bool)
                 or (integer_field and type(value) is not int)
@@ -290,16 +296,18 @@ def _validate_budget_history(
         if raw_accounting is not None:
             accounting_evidence += 1
             expected_units = set(projected)
+            if plan.budget.max_model_calls is not None:
+                expected_units.add("model_calls")
             if not isinstance(raw_accounting, dict) or set(raw_accounting) != expected_units:
                 errors.append("non-wall accounting evidence has invalid unit fields")
                 continue
             accounting_totals: dict[str, float | int] = {}
-            for field in projected:
+            for field in expected_units:
                 if field not in payload:
                     errors.append(f"non-wall accounting evidence omits its numeric total: {field}")
                     continue
                 value = payload[field]
-                integer_field = field in {"model_tokens", "tool_calls"}
+                integer_field = field in {"model_calls", "model_tokens", "tool_calls"}
                 if (
                     isinstance(value, bool)
                     or (integer_field and type(value) is not int)
@@ -334,6 +342,22 @@ def _validate_budget_history(
                     )
                 if status == "observed" and accounting_total > authorized_projection:
                     projection_exceeded.add(field)
+            if plan.budget.max_model_calls is not None:
+                status = raw_accounting["model_calls"]
+                accounting_total = accounting_totals.get("model_calls")
+                if status not in {"observed", "unavailable-reserved", "not-applicable"}:
+                    errors.append("non-wall accounting model_calls has an invalid status")
+                elif accounting_total is not None:
+                    maximum = plan.budget.max_model_calls
+                    if status == "not-applicable" and (maximum != 0 or accounting_total != 0):
+                        errors.append(
+                            "non-wall accounting model_calls has an impossible not-applicable state"
+                        )
+                    if status == "unavailable-reserved" and accounting_total != maximum:
+                        errors.append(
+                            "unavailable non-wall unit was not charged exactly at its hard cap: "
+                            "model_calls"
+                        )
     terminal_status: str | None = None
     if events and events[-1].event_type is EventType.RUN_STOPPED:
         terminal = {key: thaw_json(value) for key, value in events[-1].payload.items()}

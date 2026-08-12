@@ -52,6 +52,7 @@ class BudgetGuard:
         wall_seconds: float = 0.0,
         cost_usd: float = 0.0,
         gpu_hours: float = 0.0,
+        model_calls: int = 0,
         model_tokens: int = 0,
         tool_calls: int = 0,
         output_bytes: int = 0,
@@ -60,6 +61,7 @@ class BudgetGuard:
             wall_seconds=wall_seconds,
             cost_usd=cost_usd,
             gpu_hours=gpu_hours,
+            model_calls=model_calls,
             model_tokens=model_tokens,
             tool_calls=tool_calls,
             output_bytes=output_bytes,
@@ -73,6 +75,7 @@ class BudgetGuard:
         wall_seconds: float = 0.0,
         cost_usd: float = 0.0,
         gpu_hours: float = 0.0,
+        model_calls: int = 0,
         model_tokens: int = 0,
         tool_calls: int = 0,
         output_bytes: int = 0,
@@ -81,6 +84,7 @@ class BudgetGuard:
             wall_seconds=wall_seconds,
             cost_usd=cost_usd,
             gpu_hours=gpu_hours,
+            model_calls=model_calls,
             model_tokens=model_tokens,
             tool_calls=tool_calls,
             output_bytes=output_bytes,
@@ -94,6 +98,7 @@ class BudgetGuard:
         wall_seconds: float,
         cost_usd: float,
         gpu_hours: float,
+        model_calls: int,
         model_tokens: int,
         tool_calls: int,
         output_bytes: int,
@@ -107,6 +112,7 @@ class BudgetGuard:
             if not math.isfinite(value) or value < 0:
                 raise ValueError(f"{label} increment must be finite and non-negative")
         for label, value in {
+            "model_calls": model_calls,
             "model_tokens": model_tokens,
             "tool_calls": tool_calls,
             "output_bytes": output_bytes,
@@ -118,6 +124,7 @@ class BudgetGuard:
             wall_seconds=self._usage.wall_seconds + wall_seconds,
             cost_usd=self._usage.cost_usd + cost_usd,
             gpu_hours=self._usage.gpu_hours + gpu_hours,
+            model_calls=self._usage.model_calls + model_calls,
             model_tokens=self._usage.model_tokens + model_tokens,
             tool_calls=self._usage.tool_calls + tool_calls,
             output_bytes=self._usage.output_bytes + output_bytes,
@@ -132,6 +139,11 @@ class BudgetGuard:
             violations.append("cost_usd")
         if current.gpu_hours > self._limits.max_gpu_hours:
             violations.append("gpu_hours")
+        if (
+            self._limits.max_model_calls is not None
+            and current.model_calls > self._limits.max_model_calls
+        ):
+            violations.append("model_calls")
         if (
             self._limits.max_model_tokens is not None
             and current.model_tokens > self._limits.max_model_tokens

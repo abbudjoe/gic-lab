@@ -1,0 +1,1823 @@
+{
+  "accounting_reconciliation": {
+    "aggregate": {
+      "browser_actions": 2,
+      "cached_input_tokens": 0,
+      "input_tokens": 10073,
+      "model_calls": 9,
+      "output_tokens": 1515,
+      "recomputed_cost_usd": "0.0403325",
+      "total_tokens": 11588,
+      "unreconciled_provider_attempts": 0,
+      "wall_seconds_display_3dp": "39.397",
+      "wall_seconds_raw": "39.397491319999743"
+    },
+    "formula": "((input_tokens-cached_input_tokens)*2.50 + cached_input_tokens*1.25 + output_tokens*10.00) / 1,000,000",
+    "per_call_usage": {
+      "evidence_refs": [],
+      "note": "No raw per-call provider usage receipt was retained.",
+      "provenance": "unavailable",
+      "value": null
+    },
+    "price_record": {
+      "binding_provenance": "derived",
+      "rates_per_million_tokens": {
+        "cached_input": "1.25",
+        "input": "2.5",
+        "output": "10"
+      },
+      "record_id": "PRICE-OPENAI-GPT4O-2026-08-08",
+      "record_sha256_at_frozen_commit": "60df592cecf4c64eac8be0ec07d6599d3dcd0d06bab02835a3ab726beb89b437",
+      "run_bundle_binds_price_record_hash": false,
+      "runtime_rates_match_record": true
+    },
+    "reactive": {
+      "browser_actions": 1,
+      "cached_input_tokens": 0,
+      "input_tokens": 4626,
+      "model_calls": 4,
+      "output_tokens": 260,
+      "recomputed_cost_usd": "0.014165",
+      "reported_cost_usd_raw": "0.014164999999999995",
+      "total_tokens": 4886,
+      "unreconciled_provider_attempts": 0,
+      "wall_seconds_raw": "18.019464842999923"
+    },
+    "retry_reconciliation": {
+      "condition_retries": {
+        "evidence_refs": [
+          "remote_archive:run-manifest.json"
+        ],
+        "provenance": "observed",
+        "value": 0
+      },
+      "parser_retry_count": {
+        "evidence_refs": [
+          "remote_archive:evidence/reactive/provider-budget.json",
+          "remote_archive:evidence/simulative/provider-budget.json"
+        ],
+        "note": "Observed call counts match the successful one-step paths and retained logs contain no parser failure, but calls were not tagged with retry_kind.",
+        "provenance": "inferred",
+        "value": 0
+      },
+      "transport_retries": {
+        "evidence_refs": [
+          "repository:src/giclab/harness/sira_gate_a_runtime.py@frozen-commit"
+        ],
+        "provenance": "derived",
+        "value": 0
+      }
+    },
+    "rounding": "Exact decimal arithmetic is authoritative; display values use decimal strings. Raw JSON binary-float spellings are retained separately.",
+    "simulative": {
+      "browser_actions": 1,
+      "cached_input_tokens": 0,
+      "input_tokens": 5447,
+      "model_calls": 5,
+      "output_tokens": 1255,
+      "recomputed_cost_usd": "0.0261675",
+      "reported_cost_usd_raw": "0.026167500000000034",
+      "total_tokens": 6702,
+      "unreconciled_provider_attempts": 0,
+      "wall_seconds_raw": "21.37802647699982"
+    }
+  },
+  "adjudication_id": "T08-SIRA-SMOKE-EVIDENCE-ADJUDICATION-0001",
+  "artifact_execution": {
+    "reactive": "passed",
+    "simulative": "passed"
+  },
+  "cleanup": {
+    "api_key_secret_scans_passed": true,
+    "classification": "cleanup_verified_with_nonmaterial_gap",
+    "credential_rotation_required": false,
+    "ephemeral_provider_access_material": {
+      "affected_artifact_count": 37,
+      "affected_artifacts": [
+        "local_retained:instance-poll-007.json",
+        "local_retained:instance-poll-008.json",
+        "local_retained:instance-poll-009.json",
+        "local_retained:instance-poll-010.json",
+        "local_retained:instance-poll-011.json",
+        "local_retained:instance-poll-012.json",
+        "local_retained:instance-poll-013.json",
+        "local_retained:instance-poll-014.json",
+        "local_retained:instance-poll-015.json",
+        "local_retained:instance-poll-016.json",
+        "local_retained:instance-poll-017.json",
+        "local_retained:instance-poll-018.json",
+        "local_retained:instance-poll-019.json",
+        "local_retained:instance-poll-020.json",
+        "local_retained:instance-poll-021.json",
+        "local_retained:instance-poll-022.json",
+        "local_retained:instance-poll-023.json",
+        "local_retained:instance-poll-024.json",
+        "local_retained:termination-poll-001.json",
+        "local_retained:termination-poll-002.json",
+        "local_retained:termination-poll-003.json",
+        "local_retained:termination-poll-004.json",
+        "local_retained:termination-poll-005.json",
+        "local_retained:termination-poll-006.json",
+        "local_retained:termination-poll-007.json",
+        "local_retained:termination-poll-008.json",
+        "local_retained:termination-poll-009.json",
+        "local_retained:termination-poll-010.json",
+        "local_retained:termination-poll-011.json",
+        "local_retained:termination-poll-012.json",
+        "local_retained:termination-poll-013.json",
+        "local_retained:termination-poll-014.json",
+        "local_retained:termination-poll-015.json",
+        "local_retained:termination-poll-016.json",
+        "local_retained:termination-poll-017.json",
+        "local_retained:termination-poll-018.json",
+        "local_retained:termination-response.json"
+      ],
+      "classification": "private-retention-gap",
+      "current_validity": "invalidated-by-provider-instance-termination",
+      "secret_values_emitted": false,
+      "sensitive_key_names": [
+        "jupyter_token",
+        "jupyter_url"
+      ]
+    },
+    "exact_instance_identity": {
+      "evidence_refs": [
+        "local_retained:run-disposition.json"
+      ],
+      "provenance": "observed",
+      "value": "5e85550b64f4445ebd88a9d2d4172c17"
+    },
+    "external_archive": {
+      "file_count": 148,
+      "manifest_sha256": "9fb9ee63c1703e9701e8d5168284a1f757181baadd68a1508095eeac5fc7a167",
+      "mismatches": 0,
+      "source_destination_hashes_match": true,
+      "total_bytes": 22893061
+    },
+    "global_firewall_sha256": "983d231beefd2e446c4b9261be5da812862a7e629535cb063c6413cd67f55adf",
+    "global_firewall_unchanged": true,
+    "launch_timestamp": {
+      "evidence_refs": [
+        "local_retained:run-disposition.json"
+      ],
+      "provenance": "observed",
+      "value": "2026-08-12T21:26:13.097888Z"
+    },
+    "nonmaterial_gaps": [
+      "exact provider termination transition timestamp unavailable",
+      "private raw provider responses retain an ephemeral Jupyter access token/URL outside the historical API-key value scan; the terminated instance makes it inactive, and no value is emitted by T08"
+    ],
+    "owned_containers": 0,
+    "owned_regional_rulesets": 0,
+    "provider_terminal_absent": true,
+    "running_account_instances": 0,
+    "temporary_model_secret_removed": true,
+    "terminal_absence_verified_at": {
+      "evidence_refs": [
+        "local_retained:run-disposition.json"
+      ],
+      "provenance": "observed",
+      "value": "2026-08-12T21:52:35.003136Z"
+    },
+    "termination_timestamp": {
+      "evidence_refs": [],
+      "note": "The exact provider transition timestamp is absent; terminal absence was later observed.",
+      "provenance": "unavailable",
+      "value": null
+    }
+  },
+  "conditions": {
+    "reactive": {
+      "accounting": {
+        "browser_actions": 1,
+        "cached_input_tokens": 0,
+        "input_tokens": 4626,
+        "model_calls": 4,
+        "output_tokens": 260,
+        "recomputed_cost_usd": "0.014165",
+        "reported_cost_usd_raw": "0.014164999999999995",
+        "total_tokens": 4886,
+        "unreconciled_provider_attempts": 0,
+        "wall_seconds_raw": "18.019464842999923"
+      },
+      "artifact_execution": "passed",
+      "artifact_execution_basis": {
+        "browser_action_performed": {
+          "evidence_refs": [
+            "remote_archive:evidence/reactive/sira-output/EXP-0001-SMOKE-REACTIVE_2026-08-12-21-47-52.json",
+            "remote_archive:evidence/reactive/condition-status.json"
+          ],
+          "note": "One requested action is retained and the process exited normally, but no structured post-action result proves env.step completion.",
+          "provenance": "inferred",
+          "value": true
+        },
+        "model_requests_issued": {
+          "evidence_refs": [
+            "remote_archive:evidence/reactive/provider-budget.json"
+          ],
+          "provenance": "observed",
+          "value": true
+        },
+        "normal_exit": {
+          "evidence_refs": [
+            "remote_archive:evidence/reactive/condition-status.json",
+            "remote_archive:evidence/reactive/container-inspect.json"
+          ],
+          "provenance": "observed",
+          "value": true
+        },
+        "owned_state_cleanup": {
+          "evidence_refs": [
+            "remote_archive:evidence/reactive/runtime-cleanup.json",
+            "remote_archive:evidence/reactive/condition-status.json"
+          ],
+          "provenance": "observed",
+          "value": true
+        },
+        "runtime_initialized": {
+          "evidence_refs": [
+            "remote_archive:evidence/reactive/runtime-environment.json",
+            "remote_archive:evidence/reactive/condition-started.json"
+          ],
+          "provenance": "observed",
+          "value": true
+        },
+        "session_evidence_written": {
+          "evidence_refs": [
+            "remote_archive:evidence/reactive/sira-output/EXP-0001-SMOKE-REACTIVE_2026-08-12-21-47-52.json"
+          ],
+          "provenance": "observed",
+          "value": true
+        }
+      },
+      "reconstruction": {
+        "browser_actions": {
+          "evidence_refs": [
+            "remote_archive:evidence/reactive/sira-output/EXP-0001-SMOKE-REACTIVE_2026-08-12-21-47-52.json",
+            "remote_archive:evidence/reactive/provider-budget.json",
+            "remote_archive:evidence/reactive/condition-status.json"
+          ],
+          "note": "The requested action and ledger count are observed records, but the runtime derives that count from session history before env.step. With no post-action result, actual performance is inferred from normal process exit.",
+          "provenance": "inferred",
+          "value": {
+            "performance": "inferred_from_normal_exit",
+            "recorded_request_count": 1,
+            "requested_actions": [
+              "goto('https://www.google.com/flights')"
+            ],
+            "structured_execution_results": null
+          }
+        },
+        "cleanup_record": {
+          "evidence_refs": [
+            "remote_archive:evidence/reactive/runtime-cleanup.json",
+            "remote_archive:evidence/reactive/condition-status.json"
+          ],
+          "provenance": "observed",
+          "value": {
+            "browser_environment": {
+              "all_environment_closes_succeeded": true,
+              "close_error_types": [],
+              "schema_version": "0.1.0",
+              "tracked_browser_environments": 1
+            },
+            "container_removed": true
+          }
+        },
+        "condition_mode": {
+          "evidence_refs": [
+            "remote_archive:run-manifest.json",
+            "remote_archive:evidence/reactive/container-inspect.json"
+          ],
+          "provenance": "observed",
+          "value": "reactive"
+        },
+        "container_image": {
+          "evidence_refs": [
+            "remote_archive:evidence/reactive/container-inspect.json",
+            "remote_archive:run-manifest.json"
+          ],
+          "provenance": "observed",
+          "value": {
+            "base_image": "mcr.microsoft.com/playwright/python:v1.39.0-jammy@sha256:96955ff5cc37e13f5f1b21f5171afb9fed7e028025aa9d81c690501cd7fa0c6c",
+            "image_id": "sha256:035edf61718e84a8156f4f0f7817b134b0ce31488d3f0b50bbfba2b4a30cc61c"
+          }
+        },
+        "environment_identity": {
+          "evidence_refs": [
+            "remote_archive:evidence/reactive/runtime-environment.json"
+          ],
+          "provenance": "observed",
+          "value": {
+            "architecture": "x86_64",
+            "environment_variable_names": [
+              "DEBUG_LOG_FOLDER",
+              "PLAYWRIGHT_BROWSERS_PATH",
+              "PYTHONDONTWRITEBYTECODE",
+              "PYTHONPATH",
+              "SIRA_API_KEY",
+              "UV_CACHE_DIR",
+              "UV_PROJECT_ENVIRONMENT"
+            ],
+            "os": "Linux",
+            "python_executable": "/opt/sira/.venv/bin/python",
+            "python_version": "3.11.14",
+            "routing_sha256": "8a0e6e2934c98ba3faefab51c6408da2476df428bd43688e41d8aea8280c9619",
+            "runtime_adaptation_sha256": "c461dce20fea9e743135cad98b664213a393e46f35d1c1a8434212b2f0367dbb",
+            "schema_version": "0.1.0",
+            "secret_variable_names": [
+              "SIRA_API_KEY"
+            ],
+            "upstream_runner": "/opt/sira/scripts/run_web_agent.py"
+          }
+        },
+        "exact_command": {
+          "evidence_refs": [
+            "remote_archive:run-manifest.json",
+            "remote_archive:evidence/reactive/container-inspect.json"
+          ],
+          "provenance": "observed",
+          "value": [
+            "sudo",
+            "-n",
+            "docker",
+            "create",
+            "--name",
+            "giclab-t07-pragmatic-r2-reactive-0001",
+            "--platform",
+            "linux/amd64",
+            "--network",
+            "bridge",
+            "--ipc",
+            "private",
+            "--cap-drop",
+            "ALL",
+            "--security-opt",
+            "no-new-privileges=true",
+            "--read-only",
+            "--init",
+            "--restart",
+            "no",
+            "--cpus",
+            "2.0",
+            "--memory",
+            "4g",
+            "--memory-swap",
+            "4g",
+            "--pids-limit",
+            "512",
+            "--shm-size",
+            "1g",
+            "--tmpfs",
+            "/tmp:rw,noexec,nosuid,nodev,size=134217728,uid=1000,gid=1000,mode=0700",
+            "--user",
+            "1000:1000",
+            "--mount",
+            "type=bind,src=/home/ubuntu/t07-pragmatic-r2-run-launch-0001/evidence/reactive,dst=/giclab/attempt",
+            "--mount",
+            "type=bind,src=/home/ubuntu/.config/giclab/t07-pragmatic-r2-openai-provider-key,dst=/run/secrets/sira_api_key,readonly",
+            "--label",
+            "org.giclab.t07.profile=pragmatic-smoke-r2",
+            "--label",
+            "org.giclab.t07.condition=SIRA-REACTIVE",
+            "--entrypoint",
+            "/opt/sira/.venv/bin/python",
+            "sha256:035edf61718e84a8156f4f0f7817b134b0ce31488d3f0b50bbfba2b4a30cc61c",
+            "/opt/giclab/container_entrypoint.py",
+            "--runtime-assignment",
+            "SIRA_API_KEY",
+            "--",
+            "/opt/sira/.venv/bin/python",
+            "/opt/giclab-src/giclab/harness/sira_gate_a_runtime.py",
+            "--gate-upstream-runner",
+            "/opt/sira/scripts/run_web_agent.py",
+            "--gate-attempt-root",
+            "/giclab/attempt",
+            "--gate-mode",
+            "reactive",
+            "--gate-adaptation-sha256",
+            "c461dce20fea9e743135cad98b664213a393e46f35d1c1a8434212b2f0367dbb",
+            "--",
+            "EXP-0001-SMOKE-REACTIVE",
+            "--query",
+            "go to google flights",
+            "--mode",
+            "reactive",
+            "--agent",
+            "sira",
+            "--model",
+            "gpt-4o-2024-11-20",
+            "--max_steps",
+            "1",
+            "--timeout",
+            "30",
+            "--max_retry",
+            "0",
+            "--output_dir",
+            "/giclab/attempt/sira-output",
+            "--seed",
+            "42"
+          ]
+        },
+        "maximum_browser_steps": {
+          "evidence_refs": [
+            "remote_archive:run-manifest.json"
+          ],
+          "provenance": "observed",
+          "value": 1
+        },
+        "model_call_sequence": {
+          "evidence_refs": [
+            "remote_archive:evidence/reactive/provider-budget.json",
+            "remote_archive:evidence/reactive/source-logs/agent",
+            "remote_archive:evidence/reactive/source-logs/debug"
+          ],
+          "note": "No per-call provider request/response receipt was retained.",
+          "provenance": "derived",
+          "value": {
+            "attempt_count": 4,
+            "sequence": [
+              {
+                "ordinal": 1,
+                "purpose": "state",
+                "role": "encoder"
+              },
+              {
+                "ordinal": 2,
+                "purpose": "intent/plan",
+                "role": "policy"
+              },
+              {
+                "ordinal": 3,
+                "purpose": "action",
+                "role": "actor"
+              },
+              {
+                "ordinal": 4,
+                "purpose": "memory_update",
+                "role": "memory"
+              }
+            ],
+            "sequence_completeness": "derived_complete_from_four_distinct_debug_logs"
+          }
+        },
+        "model_revision_by_role": {
+          "evidence_refs": [
+            "remote_archive:evidence/reactive/runtime-environment.json",
+            "repository:src/giclab/harness/sira_gate_a.py@frozen-commit"
+          ],
+          "provenance": "derived",
+          "value": {
+            "routes": {
+              "actor": "gpt-4o-2024-11-20",
+              "critic": "gpt-4o-2024-11-20",
+              "default": "gpt-4o-2024-11-20",
+              "encoder": "gpt-4o-2024-11-20",
+              "fallback": "gpt-4o-2024-11-20",
+              "memory": "gpt-4o-2024-11-20",
+              "policy": "gpt-4o-2024-11-20",
+              "world_model": "gpt-4o-2024-11-20"
+            },
+            "routing_sha256": "8a0e6e2934c98ba3faefab51c6408da2476df428bd43688e41d8aea8280c9619"
+          }
+        },
+        "normalized_events": {
+          "evidence_refs": [
+            "remote_archive:evidence/reactive/sira-output/EXP-0001-SMOKE-REACTIVE_2026-08-12-21-47-52.json",
+            "repository:src/giclab/harness/adapters/sira.py@frozen-commit"
+          ],
+          "note": "T07 did not retain a normalized event stream; T08 derives this view.",
+          "provenance": "derived",
+          "value": [
+            {
+              "event_type": "regulation_decision",
+              "provenance": "derived",
+              "selected_mode": "reactive",
+              "source": "sira-adapter-resolved-configuration"
+            },
+            {
+              "event_type": "observation",
+              "provenance": "observed",
+              "source": "sira-session-json",
+              "step_index": 0
+            },
+            {
+              "event_type": "belief_state",
+              "provenance": "observed",
+              "semantic_caveat": "natural-language upstream state; not GIC state",
+              "source": "sira-session-json",
+              "step_index": 0
+            },
+            {
+              "event_type": "plan",
+              "provenance": "observed",
+              "source": "sira-session-json",
+              "step_index": 0
+            },
+            {
+              "event_type": "requested_action",
+              "provenance": "observed",
+              "semantic_caveat": "requested action only; actual performance is inferred from normal exit because no structured execution result was retained",
+              "source": "sira-session-json",
+              "step_index": 0
+            },
+            {
+              "event_type": "outcome",
+              "provenance": "observed",
+              "scientific_outcome": null,
+              "source": "sira-session-json",
+              "source_error_present": false,
+              "source_is_complete": false
+            }
+          ]
+        },
+        "output_locations": {
+          "evidence_refs": [
+            "remote_archive:run-manifest.json",
+            "remote_archive:evidence-manifest.json"
+          ],
+          "provenance": "observed",
+          "value": {
+            "attempt_root": "remote_archive:evidence/reactive",
+            "session_root": "remote_archive:evidence/reactive/sira-output",
+            "source_log_root": "remote_archive:evidence/reactive/source-logs"
+          }
+        },
+        "provider_usage_records": {
+          "evidence_refs": [
+            "remote_archive:evidence/reactive/provider-budget.json"
+          ],
+          "provenance": "observed",
+          "value": {
+            "condition_aggregate": {
+              "browser_actions": 1,
+              "cached_input_tokens": 0,
+              "cost_usd": 0.014164999999999995,
+              "default_service_tier_response_count": 4,
+              "input_tokens": 4626,
+              "model_call_attempts": 4,
+              "model_revision": "gpt-4o-2024-11-20",
+              "observed_response_service_tiers": [
+                "default"
+              ],
+              "output_bytes": 0,
+              "output_tokens": 260,
+              "request_service_tier": "default",
+              "schema_version": "0.1.0",
+              "total_tokens": 4886,
+              "unreconciled_provider_attempts": 0
+            },
+            "per_call_cost": null,
+            "per_call_latency": null,
+            "per_call_usage": null
+          }
+        },
+        "python_runtime": {
+          "evidence_refs": [
+            "remote_archive:evidence/reactive/runtime-environment.json",
+            "remote_archive:run-manifest.json"
+          ],
+          "provenance": "observed",
+          "value": {
+            "executable": "/opt/sira/.venv/bin/python",
+            "executable_sha256": "6ff97f602038740073dca96714310a30e303332326268e0f1bb2767edc820944",
+            "version": "3.11.14"
+          }
+        },
+        "regulation_decision_record": {
+          "evidence_refs": [
+            "remote_archive:run-manifest.json",
+            "remote_archive:evidence/reactive/sira-output/EXP-0001-SMOKE-REACTIVE_2026-08-12-21-47-52.json",
+            "repository:docs/harness/sira/H2K_REGULATION_DECISION_ADDENDUM.yaml"
+          ],
+          "note": "T07 did not retain a standalone regulation-decision artifact.",
+          "provenance": "derived",
+          "value": {
+            "available_modes": [
+              "reactive",
+              "simulative"
+            ],
+            "causal_parent_event_sequences": [],
+            "confidence": null,
+            "decision_id": "REG-SIRA-MODE-ASSIGNMENT",
+            "fallback": null,
+            "field_provenance": {
+              "available_modes": "derived",
+              "causal_parent_event_sequences": "unavailable",
+              "confidence": "unavailable",
+              "decision_id": "derived",
+              "fallback": "unavailable",
+              "override": "unavailable",
+              "policy_id": "derived",
+              "policy_revision": "derived",
+              "raw_artifact_refs": "observed",
+              "resolved_configuration_refs": "derived",
+              "selected_mode": "derived",
+              "source_kind": "derived"
+            },
+            "override": null,
+            "policy_id": "SIRA-REACTIVE-SIMULATIVE-EXPERIMENT-ASSIGNMENT",
+            "policy_revision": "5bdf3fdcf2c486883ad74044bd373c1804362c7d9ad8e990f5e10fa1c0f99b4c",
+            "raw_artifact_refs": [
+              "remote_archive:evidence/reactive/sira-output/EXP-0001-SMOKE-REACTIVE_2026-08-12-21-47-52.json"
+            ],
+            "resolved_configuration_refs": [
+              "remote_archive:run-manifest.json",
+              "repository:docs/audits/sira/COMMAND_CONTRACT.yaml"
+            ],
+            "selected_mode": "reactive",
+            "source_kind": "experiment_assignment"
+          }
+        },
+        "resolved_configuration": {
+          "evidence_refs": [
+            "remote_archive:run-manifest.json",
+            "repository:docs/audits/sira/COMMAND_CONTRACT.yaml",
+            "repository:docs/audits/sira/UPSTREAM_AUDIT.md"
+          ],
+          "note": "The Docker/budget configuration is observed; source-resolved planner fields are derived from the pinned SiRA commit and audited mode contract.",
+          "provenance": "derived",
+          "value": {
+            "adapter_cost_cap_usd": 2.0,
+            "attempts": 1,
+            "browser_steps": 1,
+            "condition": "SIRA-REACTIVE",
+            "docker_argv": [
+              "sudo",
+              "-n",
+              "docker",
+              "create",
+              "--name",
+              "giclab-t07-pragmatic-r2-reactive-0001",
+              "--platform",
+              "linux/amd64",
+              "--network",
+              "bridge",
+              "--ipc",
+              "private",
+              "--cap-drop",
+              "ALL",
+              "--security-opt",
+              "no-new-privileges=true",
+              "--read-only",
+              "--init",
+              "--restart",
+              "no",
+              "--cpus",
+              "2.0",
+              "--memory",
+              "4g",
+              "--memory-swap",
+              "4g",
+              "--pids-limit",
+              "512",
+              "--shm-size",
+              "1g",
+              "--tmpfs",
+              "/tmp:rw,noexec,nosuid,nodev,size=134217728,uid=1000,gid=1000,mode=0700",
+              "--user",
+              "1000:1000",
+              "--mount",
+              "type=bind,src=/home/ubuntu/t07-pragmatic-r2-run-launch-0001/evidence/reactive,dst=/giclab/attempt",
+              "--mount",
+              "type=bind,src=/home/ubuntu/.config/giclab/t07-pragmatic-r2-openai-provider-key,dst=/run/secrets/sira_api_key,readonly",
+              "--label",
+              "org.giclab.t07.profile=pragmatic-smoke-r2",
+              "--label",
+              "org.giclab.t07.condition=SIRA-REACTIVE",
+              "--entrypoint",
+              "/opt/sira/.venv/bin/python",
+              "sha256:035edf61718e84a8156f4f0f7817b134b0ce31488d3f0b50bbfba2b4a30cc61c",
+              "/opt/giclab/container_entrypoint.py",
+              "--runtime-assignment",
+              "SIRA_API_KEY",
+              "--",
+              "/opt/sira/.venv/bin/python",
+              "/opt/giclab-src/giclab/harness/sira_gate_a_runtime.py",
+              "--gate-upstream-runner",
+              "/opt/sira/scripts/run_web_agent.py",
+              "--gate-attempt-root",
+              "/giclab/attempt",
+              "--gate-mode",
+              "reactive",
+              "--gate-adaptation-sha256",
+              "c461dce20fea9e743135cad98b664213a393e46f35d1c1a8434212b2f0367dbb",
+              "--",
+              "EXP-0001-SMOKE-REACTIVE",
+              "--query",
+              "go to google flights",
+              "--mode",
+              "reactive",
+              "--agent",
+              "sira",
+              "--model",
+              "gpt-4o-2024-11-20",
+              "--max_steps",
+              "1",
+              "--timeout",
+              "30",
+              "--max_retry",
+              "0",
+              "--output_dir",
+              "/giclab/attempt/sira-output",
+              "--seed",
+              "42"
+            ],
+            "model_call_attempt_cap": 16,
+            "model_token_cap": 200000,
+            "order": 1,
+            "retries": 0,
+            "source_resolved_mode": {
+              "base_temperature": 0.0,
+              "base_top_p": 0.5,
+              "config_name": "web_reactive",
+              "planner_type": "policy"
+            },
+            "wall_seconds": 120
+          }
+        },
+        "screenshots": {
+          "evidence_refs": [
+            "remote_archive:evidence/reactive/sira-output/EXP-0001-SMOKE-REACTIVE_2026-08-12-21-47-52.json#history[0][0].screenshot"
+          ],
+          "note": "The only screenshot is the pre-action about:blank observation.",
+          "provenance": "observed",
+          "value": {
+            "count": 1,
+            "decoded_bytes": 15026,
+            "embedded_format": "jpeg",
+            "sha256": "e6400451e37653dfed68751b3408bd3393b3a8959799dff588bfaab49dc0a589"
+          }
+        },
+        "service_tier": {
+          "evidence_refs": [
+            "remote_archive:evidence/reactive/provider-budget.json"
+          ],
+          "note": "Tier totals are observed; individual response receipts were not retained.",
+          "provenance": "observed",
+          "value": {
+            "per_call_assignment": null,
+            "requested": "default",
+            "returned_response_count": 4,
+            "returned_values": [
+              "default"
+            ]
+          }
+        },
+        "session_json": {
+          "evidence_refs": [
+            "remote_archive:evidence/reactive/sira-output/EXP-0001-SMOKE-REACTIVE_2026-08-12-21-47-52.json"
+          ],
+          "provenance": "observed",
+          "value": {
+            "bytes": 25840,
+            "error_present": false,
+            "history_items": 1,
+            "is_complete": false,
+            "path": "remote_archive:evidence/reactive/sira-output/EXP-0001-SMOKE-REACTIVE_2026-08-12-21-47-52.json",
+            "sha256": "3daddcd5776a1cbb7af87d02673b8eb42c2781ff8225b842bd8f36d6d5df0103"
+          }
+        },
+        "start_timestamp": {
+          "evidence_refs": [
+            "remote_archive:evidence/reactive/condition-status.json"
+          ],
+          "provenance": "observed",
+          "value": "2026-08-12T21:47:35.259191Z"
+        },
+        "stop_timestamp": {
+          "evidence_refs": [
+            "remote_archive:evidence/reactive/condition-status.json"
+          ],
+          "provenance": "observed",
+          "value": "2026-08-12T21:47:53.322547Z"
+        },
+        "task_query": {
+          "evidence_refs": [
+            "remote_archive:run-manifest.json",
+            "remote_archive:evidence/reactive/sira-output/EXP-0001-SMOKE-REACTIVE_2026-08-12-21-47-52.json"
+          ],
+          "provenance": "observed",
+          "value": "go to google flights"
+        },
+        "terminal_status": {
+          "evidence_refs": [
+            "remote_archive:evidence/reactive/condition-status.json",
+            "remote_archive:evidence/reactive/container-inspect.json"
+          ],
+          "provenance": "observed",
+          "value": {
+            "container_exit_code": 0,
+            "container_state": "exited",
+            "returncode": 0,
+            "terminal_state": "executed"
+          }
+        },
+        "text_logs": {
+          "evidence_refs": [
+            "remote_archive:evidence-manifest.json"
+          ],
+          "provenance": "observed",
+          "value": {
+            "condition_stderr": "remote_archive:evidence/reactive/condition.stderr",
+            "condition_stdout": "remote_archive:evidence/reactive/condition.stdout",
+            "source_logs": [
+              "remote_archive:evidence/reactive/source-logs/agent/2026-08-12-21-47-40-605242.log",
+              "remote_archive:evidence/reactive/source-logs/debug/1786571262.log",
+              "remote_archive:evidence/reactive/source-logs/debug/1786571265.log",
+              "remote_archive:evidence/reactive/source-logs/debug/1786571267.log",
+              "remote_archive:evidence/reactive/source-logs/debug/1786571268.log"
+            ],
+            "source_runtime_logs": [
+              {
+                "bytes": 0,
+                "path": "remote_archive:evidence/reactive/source-runtime/logs/sira_2026-08-12.log"
+              }
+            ]
+          }
+        },
+        "working_directory": {
+          "evidence_refs": [
+            "remote_archive:evidence/reactive/container-inspect.json"
+          ],
+          "provenance": "observed",
+          "value": "/opt/sira"
+        }
+      },
+      "run_id": "RUN-T07-PRAGMATIC-SIRA-REACTIVE-0002",
+      "session_is_complete": false,
+      "task_completion": "not_observed"
+    },
+    "simulative": {
+      "accounting": {
+        "browser_actions": 1,
+        "cached_input_tokens": 0,
+        "input_tokens": 5447,
+        "model_calls": 5,
+        "output_tokens": 1255,
+        "recomputed_cost_usd": "0.0261675",
+        "reported_cost_usd_raw": "0.026167500000000034",
+        "total_tokens": 6702,
+        "unreconciled_provider_attempts": 0,
+        "wall_seconds_raw": "21.37802647699982"
+      },
+      "artifact_execution": "passed",
+      "artifact_execution_basis": {
+        "browser_action_performed": {
+          "evidence_refs": [
+            "remote_archive:evidence/simulative/sira-output/EXP-0001-SMOKE-SIMULATIVE_2026-08-12-21-49-01.json",
+            "remote_archive:evidence/simulative/condition-status.json"
+          ],
+          "note": "One requested action is retained and the process exited normally, but no structured post-action result proves env.step completion.",
+          "provenance": "inferred",
+          "value": true
+        },
+        "model_requests_issued": {
+          "evidence_refs": [
+            "remote_archive:evidence/simulative/provider-budget.json"
+          ],
+          "provenance": "observed",
+          "value": true
+        },
+        "normal_exit": {
+          "evidence_refs": [
+            "remote_archive:evidence/simulative/condition-status.json",
+            "remote_archive:evidence/simulative/container-inspect.json"
+          ],
+          "provenance": "observed",
+          "value": true
+        },
+        "owned_state_cleanup": {
+          "evidence_refs": [
+            "remote_archive:evidence/simulative/runtime-cleanup.json",
+            "remote_archive:evidence/simulative/condition-status.json"
+          ],
+          "provenance": "observed",
+          "value": true
+        },
+        "runtime_initialized": {
+          "evidence_refs": [
+            "remote_archive:evidence/simulative/runtime-environment.json",
+            "remote_archive:evidence/simulative/condition-started.json"
+          ],
+          "provenance": "observed",
+          "value": true
+        },
+        "session_evidence_written": {
+          "evidence_refs": [
+            "remote_archive:evidence/simulative/sira-output/EXP-0001-SMOKE-SIMULATIVE_2026-08-12-21-49-01.json"
+          ],
+          "provenance": "observed",
+          "value": true
+        }
+      },
+      "reconstruction": {
+        "browser_actions": {
+          "evidence_refs": [
+            "remote_archive:evidence/simulative/sira-output/EXP-0001-SMOKE-SIMULATIVE_2026-08-12-21-49-01.json",
+            "remote_archive:evidence/simulative/provider-budget.json",
+            "remote_archive:evidence/simulative/condition-status.json"
+          ],
+          "note": "The requested action and ledger count are observed records, but the runtime derives that count from session history before env.step. With no post-action result, actual performance is inferred from normal process exit.",
+          "provenance": "inferred",
+          "value": {
+            "performance": "inferred_from_normal_exit",
+            "recorded_request_count": 1,
+            "requested_actions": [
+              "goto('https://www.google.com/flights')"
+            ],
+            "structured_execution_results": null
+          }
+        },
+        "cleanup_record": {
+          "evidence_refs": [
+            "remote_archive:evidence/simulative/runtime-cleanup.json",
+            "remote_archive:evidence/simulative/condition-status.json"
+          ],
+          "provenance": "observed",
+          "value": {
+            "browser_environment": {
+              "all_environment_closes_succeeded": true,
+              "close_error_types": [],
+              "schema_version": "0.1.0",
+              "tracked_browser_environments": 1
+            },
+            "container_removed": true
+          }
+        },
+        "condition_mode": {
+          "evidence_refs": [
+            "remote_archive:run-manifest.json",
+            "remote_archive:evidence/simulative/container-inspect.json"
+          ],
+          "provenance": "observed",
+          "value": "simulative"
+        },
+        "container_image": {
+          "evidence_refs": [
+            "remote_archive:evidence/simulative/container-inspect.json",
+            "remote_archive:run-manifest.json"
+          ],
+          "provenance": "observed",
+          "value": {
+            "base_image": "mcr.microsoft.com/playwright/python:v1.39.0-jammy@sha256:96955ff5cc37e13f5f1b21f5171afb9fed7e028025aa9d81c690501cd7fa0c6c",
+            "image_id": "sha256:035edf61718e84a8156f4f0f7817b134b0ce31488d3f0b50bbfba2b4a30cc61c"
+          }
+        },
+        "environment_identity": {
+          "evidence_refs": [
+            "remote_archive:evidence/simulative/runtime-environment.json"
+          ],
+          "provenance": "observed",
+          "value": {
+            "architecture": "x86_64",
+            "environment_variable_names": [
+              "DEBUG_LOG_FOLDER",
+              "PLAYWRIGHT_BROWSERS_PATH",
+              "PYTHONDONTWRITEBYTECODE",
+              "PYTHONPATH",
+              "SIRA_API_KEY",
+              "UV_CACHE_DIR",
+              "UV_PROJECT_ENVIRONMENT"
+            ],
+            "os": "Linux",
+            "python_executable": "/opt/sira/.venv/bin/python",
+            "python_version": "3.11.14",
+            "routing_sha256": "8a0e6e2934c98ba3faefab51c6408da2476df428bd43688e41d8aea8280c9619",
+            "runtime_adaptation_sha256": "c461dce20fea9e743135cad98b664213a393e46f35d1c1a8434212b2f0367dbb",
+            "schema_version": "0.1.0",
+            "secret_variable_names": [
+              "SIRA_API_KEY"
+            ],
+            "upstream_runner": "/opt/sira/scripts/run_web_agent.py"
+          }
+        },
+        "exact_command": {
+          "evidence_refs": [
+            "remote_archive:run-manifest.json",
+            "remote_archive:evidence/simulative/container-inspect.json"
+          ],
+          "provenance": "observed",
+          "value": [
+            "sudo",
+            "-n",
+            "docker",
+            "create",
+            "--name",
+            "giclab-t07-pragmatic-r2-simulative-0001",
+            "--platform",
+            "linux/amd64",
+            "--network",
+            "bridge",
+            "--ipc",
+            "private",
+            "--cap-drop",
+            "ALL",
+            "--security-opt",
+            "no-new-privileges=true",
+            "--read-only",
+            "--init",
+            "--restart",
+            "no",
+            "--cpus",
+            "2.0",
+            "--memory",
+            "4g",
+            "--memory-swap",
+            "4g",
+            "--pids-limit",
+            "512",
+            "--shm-size",
+            "1g",
+            "--tmpfs",
+            "/tmp:rw,noexec,nosuid,nodev,size=134217728,uid=1000,gid=1000,mode=0700",
+            "--user",
+            "1000:1000",
+            "--mount",
+            "type=bind,src=/home/ubuntu/t07-pragmatic-r2-run-launch-0001/evidence/simulative,dst=/giclab/attempt",
+            "--mount",
+            "type=bind,src=/home/ubuntu/.config/giclab/t07-pragmatic-r2-openai-provider-key,dst=/run/secrets/sira_api_key,readonly",
+            "--label",
+            "org.giclab.t07.profile=pragmatic-smoke-r2",
+            "--label",
+            "org.giclab.t07.condition=SIRA-SIMULATIVE",
+            "--entrypoint",
+            "/opt/sira/.venv/bin/python",
+            "sha256:035edf61718e84a8156f4f0f7817b134b0ce31488d3f0b50bbfba2b4a30cc61c",
+            "/opt/giclab/container_entrypoint.py",
+            "--runtime-assignment",
+            "SIRA_API_KEY",
+            "--",
+            "/opt/sira/.venv/bin/python",
+            "/opt/giclab-src/giclab/harness/sira_gate_a_runtime.py",
+            "--gate-upstream-runner",
+            "/opt/sira/scripts/run_web_agent.py",
+            "--gate-attempt-root",
+            "/giclab/attempt",
+            "--gate-mode",
+            "simulative",
+            "--gate-adaptation-sha256",
+            "c461dce20fea9e743135cad98b664213a393e46f35d1c1a8434212b2f0367dbb",
+            "--",
+            "EXP-0001-SMOKE-SIMULATIVE",
+            "--query",
+            "go to google flights",
+            "--mode",
+            "simulative",
+            "--agent",
+            "sira",
+            "--model",
+            "gpt-4o-2024-11-20",
+            "--max_steps",
+            "1",
+            "--timeout",
+            "30",
+            "--max_retry",
+            "0",
+            "--output_dir",
+            "/giclab/attempt/sira-output",
+            "--seed",
+            "42"
+          ]
+        },
+        "maximum_browser_steps": {
+          "evidence_refs": [
+            "remote_archive:run-manifest.json"
+          ],
+          "provenance": "observed",
+          "value": 1
+        },
+        "model_call_sequence": {
+          "evidence_refs": [
+            "remote_archive:evidence/simulative/provider-budget.json",
+            "remote_archive:evidence/simulative/source-logs/agent",
+            "remote_archive:evidence/simulative/source-logs/debug"
+          ],
+          "note": "No per-call provider request/response receipt was retained.",
+          "provenance": "inferred",
+          "value": {
+            "attempt_count": 5,
+            "sequence": [
+              {
+                "ordinal": 1,
+                "purpose": "state",
+                "role": "encoder"
+              },
+              {
+                "ordinal": 2,
+                "purpose": "twenty_policy_samples",
+                "role": "policy"
+              },
+              {
+                "ordinal": 3,
+                "purpose": "one_cluster_planner_processing",
+                "role": null
+              },
+              {
+                "ordinal": 4,
+                "purpose": "action",
+                "role": "actor"
+              },
+              {
+                "ordinal": 5,
+                "purpose": "memory_update",
+                "role": "memory"
+              }
+            ],
+            "sequence_completeness": "inferred_order; one call's exact role and per-call receipt are unavailable"
+          }
+        },
+        "model_revision_by_role": {
+          "evidence_refs": [
+            "remote_archive:evidence/simulative/runtime-environment.json",
+            "repository:src/giclab/harness/sira_gate_a.py@frozen-commit"
+          ],
+          "provenance": "derived",
+          "value": {
+            "routes": {
+              "actor": "gpt-4o-2024-11-20",
+              "critic": "gpt-4o-2024-11-20",
+              "default": "gpt-4o-2024-11-20",
+              "encoder": "gpt-4o-2024-11-20",
+              "fallback": "gpt-4o-2024-11-20",
+              "memory": "gpt-4o-2024-11-20",
+              "policy": "gpt-4o-2024-11-20",
+              "world_model": "gpt-4o-2024-11-20"
+            },
+            "routing_sha256": "8a0e6e2934c98ba3faefab51c6408da2476df428bd43688e41d8aea8280c9619"
+          }
+        },
+        "normalized_events": {
+          "evidence_refs": [
+            "remote_archive:evidence/simulative/sira-output/EXP-0001-SMOKE-SIMULATIVE_2026-08-12-21-49-01.json",
+            "repository:src/giclab/harness/adapters/sira.py@frozen-commit"
+          ],
+          "note": "T07 did not retain a normalized event stream; T08 derives this view.",
+          "provenance": "derived",
+          "value": [
+            {
+              "event_type": "regulation_decision",
+              "provenance": "derived",
+              "selected_mode": "simulative",
+              "source": "sira-adapter-resolved-configuration"
+            },
+            {
+              "event_type": "observation",
+              "provenance": "observed",
+              "source": "sira-session-json",
+              "step_index": 0
+            },
+            {
+              "event_type": "belief_state",
+              "provenance": "observed",
+              "semantic_caveat": "natural-language upstream state; not GIC state",
+              "source": "sira-session-json",
+              "step_index": 0
+            },
+            {
+              "event_type": "plan",
+              "provenance": "observed",
+              "source": "sira-session-json",
+              "step_index": 0
+            },
+            {
+              "event_type": "requested_action",
+              "provenance": "observed",
+              "semantic_caveat": "requested action only; actual performance is inferred from normal exit because no structured execution result was retained",
+              "source": "sira-session-json",
+              "step_index": 0
+            },
+            {
+              "event_type": "outcome",
+              "provenance": "observed",
+              "scientific_outcome": null,
+              "source": "sira-session-json",
+              "source_error_present": false,
+              "source_is_complete": false
+            }
+          ]
+        },
+        "output_locations": {
+          "evidence_refs": [
+            "remote_archive:run-manifest.json",
+            "remote_archive:evidence-manifest.json"
+          ],
+          "provenance": "observed",
+          "value": {
+            "attempt_root": "remote_archive:evidence/simulative",
+            "session_root": "remote_archive:evidence/simulative/sira-output",
+            "source_log_root": "remote_archive:evidence/simulative/source-logs"
+          }
+        },
+        "provider_usage_records": {
+          "evidence_refs": [
+            "remote_archive:evidence/simulative/provider-budget.json"
+          ],
+          "provenance": "observed",
+          "value": {
+            "condition_aggregate": {
+              "browser_actions": 1,
+              "cached_input_tokens": 0,
+              "cost_usd": 0.026167500000000034,
+              "default_service_tier_response_count": 5,
+              "input_tokens": 5447,
+              "model_call_attempts": 5,
+              "model_revision": "gpt-4o-2024-11-20",
+              "observed_response_service_tiers": [
+                "default"
+              ],
+              "output_bytes": 0,
+              "output_tokens": 1255,
+              "request_service_tier": "default",
+              "schema_version": "0.1.0",
+              "total_tokens": 6702,
+              "unreconciled_provider_attempts": 0
+            },
+            "per_call_cost": null,
+            "per_call_latency": null,
+            "per_call_usage": null
+          }
+        },
+        "python_runtime": {
+          "evidence_refs": [
+            "remote_archive:evidence/simulative/runtime-environment.json",
+            "remote_archive:run-manifest.json"
+          ],
+          "provenance": "observed",
+          "value": {
+            "executable": "/opt/sira/.venv/bin/python",
+            "executable_sha256": "6ff97f602038740073dca96714310a30e303332326268e0f1bb2767edc820944",
+            "version": "3.11.14"
+          }
+        },
+        "regulation_decision_record": {
+          "evidence_refs": [
+            "remote_archive:run-manifest.json",
+            "remote_archive:evidence/simulative/sira-output/EXP-0001-SMOKE-SIMULATIVE_2026-08-12-21-49-01.json",
+            "repository:docs/harness/sira/H2K_REGULATION_DECISION_ADDENDUM.yaml"
+          ],
+          "note": "T07 did not retain a standalone regulation-decision artifact.",
+          "provenance": "derived",
+          "value": {
+            "available_modes": [
+              "reactive",
+              "simulative"
+            ],
+            "causal_parent_event_sequences": [],
+            "confidence": null,
+            "decision_id": "REG-SIRA-MODE-ASSIGNMENT",
+            "fallback": null,
+            "field_provenance": {
+              "available_modes": "derived",
+              "causal_parent_event_sequences": "unavailable",
+              "confidence": "unavailable",
+              "decision_id": "derived",
+              "fallback": "unavailable",
+              "override": "unavailable",
+              "policy_id": "derived",
+              "policy_revision": "derived",
+              "raw_artifact_refs": "observed",
+              "resolved_configuration_refs": "derived",
+              "selected_mode": "derived",
+              "source_kind": "derived"
+            },
+            "override": null,
+            "policy_id": "SIRA-REACTIVE-SIMULATIVE-EXPERIMENT-ASSIGNMENT",
+            "policy_revision": "5bdf3fdcf2c486883ad74044bd373c1804362c7d9ad8e990f5e10fa1c0f99b4c",
+            "raw_artifact_refs": [
+              "remote_archive:evidence/simulative/sira-output/EXP-0001-SMOKE-SIMULATIVE_2026-08-12-21-49-01.json"
+            ],
+            "resolved_configuration_refs": [
+              "remote_archive:run-manifest.json",
+              "repository:docs/audits/sira/COMMAND_CONTRACT.yaml"
+            ],
+            "selected_mode": "simulative",
+            "source_kind": "experiment_assignment"
+          }
+        },
+        "resolved_configuration": {
+          "evidence_refs": [
+            "remote_archive:run-manifest.json",
+            "repository:docs/audits/sira/COMMAND_CONTRACT.yaml",
+            "repository:docs/audits/sira/UPSTREAM_AUDIT.md"
+          ],
+          "note": "The Docker/budget configuration is observed; source-resolved planner fields are derived from the pinned SiRA commit and audited mode contract.",
+          "provenance": "derived",
+          "value": {
+            "adapter_cost_cap_usd": 2.0,
+            "attempts": 1,
+            "browser_steps": 1,
+            "condition": "SIRA-SIMULATIVE",
+            "docker_argv": [
+              "sudo",
+              "-n",
+              "docker",
+              "create",
+              "--name",
+              "giclab-t07-pragmatic-r2-simulative-0001",
+              "--platform",
+              "linux/amd64",
+              "--network",
+              "bridge",
+              "--ipc",
+              "private",
+              "--cap-drop",
+              "ALL",
+              "--security-opt",
+              "no-new-privileges=true",
+              "--read-only",
+              "--init",
+              "--restart",
+              "no",
+              "--cpus",
+              "2.0",
+              "--memory",
+              "4g",
+              "--memory-swap",
+              "4g",
+              "--pids-limit",
+              "512",
+              "--shm-size",
+              "1g",
+              "--tmpfs",
+              "/tmp:rw,noexec,nosuid,nodev,size=134217728,uid=1000,gid=1000,mode=0700",
+              "--user",
+              "1000:1000",
+              "--mount",
+              "type=bind,src=/home/ubuntu/t07-pragmatic-r2-run-launch-0001/evidence/simulative,dst=/giclab/attempt",
+              "--mount",
+              "type=bind,src=/home/ubuntu/.config/giclab/t07-pragmatic-r2-openai-provider-key,dst=/run/secrets/sira_api_key,readonly",
+              "--label",
+              "org.giclab.t07.profile=pragmatic-smoke-r2",
+              "--label",
+              "org.giclab.t07.condition=SIRA-SIMULATIVE",
+              "--entrypoint",
+              "/opt/sira/.venv/bin/python",
+              "sha256:035edf61718e84a8156f4f0f7817b134b0ce31488d3f0b50bbfba2b4a30cc61c",
+              "/opt/giclab/container_entrypoint.py",
+              "--runtime-assignment",
+              "SIRA_API_KEY",
+              "--",
+              "/opt/sira/.venv/bin/python",
+              "/opt/giclab-src/giclab/harness/sira_gate_a_runtime.py",
+              "--gate-upstream-runner",
+              "/opt/sira/scripts/run_web_agent.py",
+              "--gate-attempt-root",
+              "/giclab/attempt",
+              "--gate-mode",
+              "simulative",
+              "--gate-adaptation-sha256",
+              "c461dce20fea9e743135cad98b664213a393e46f35d1c1a8434212b2f0367dbb",
+              "--",
+              "EXP-0001-SMOKE-SIMULATIVE",
+              "--query",
+              "go to google flights",
+              "--mode",
+              "simulative",
+              "--agent",
+              "sira",
+              "--model",
+              "gpt-4o-2024-11-20",
+              "--max_steps",
+              "1",
+              "--timeout",
+              "30",
+              "--max_retry",
+              "0",
+              "--output_dir",
+              "/giclab/attempt/sira-output",
+              "--seed",
+              "42"
+            ],
+            "model_call_attempt_cap": 61,
+            "model_token_cap": 200000,
+            "order": 2,
+            "retries": 0,
+            "source_resolved_mode": {
+              "config_name": "web_simulative",
+              "critic_temperature": 1.0,
+              "critic_top_p": 0.95,
+              "planner_critic_num_samples": 20,
+              "planner_policy_num_samples": 20,
+              "planner_search_depth": 1,
+              "planner_search_num_actions": 5,
+              "planner_type": "world_model",
+              "policy_temperature": 1.0,
+              "policy_top_p": 0.95,
+              "realized_planner_branch": "one_cluster_direct_selection"
+            },
+            "wall_seconds": 120
+          }
+        },
+        "screenshots": {
+          "evidence_refs": [
+            "remote_archive:evidence/simulative/sira-output/EXP-0001-SMOKE-SIMULATIVE_2026-08-12-21-49-01.json#history[0][0].screenshot"
+          ],
+          "note": "The only screenshot is the pre-action about:blank observation.",
+          "provenance": "observed",
+          "value": {
+            "count": 1,
+            "decoded_bytes": 15026,
+            "embedded_format": "jpeg",
+            "sha256": "e6400451e37653dfed68751b3408bd3393b3a8959799dff588bfaab49dc0a589"
+          }
+        },
+        "service_tier": {
+          "evidence_refs": [
+            "remote_archive:evidence/simulative/provider-budget.json"
+          ],
+          "note": "Tier totals are observed; individual response receipts were not retained.",
+          "provenance": "observed",
+          "value": {
+            "per_call_assignment": null,
+            "requested": "default",
+            "returned_response_count": 5,
+            "returned_values": [
+              "default"
+            ]
+          }
+        },
+        "session_json": {
+          "evidence_refs": [
+            "remote_archive:evidence/simulative/sira-output/EXP-0001-SMOKE-SIMULATIVE_2026-08-12-21-49-01.json"
+          ],
+          "provenance": "observed",
+          "value": {
+            "bytes": 25538,
+            "error_present": false,
+            "history_items": 1,
+            "is_complete": false,
+            "path": "remote_archive:evidence/simulative/sira-output/EXP-0001-SMOKE-SIMULATIVE_2026-08-12-21-49-01.json",
+            "sha256": "a0cbd81dbded9ae8b5648fb9e16f625973c686e9bd55a6fce77db9094ffe3293"
+          }
+        },
+        "start_timestamp": {
+          "evidence_refs": [
+            "remote_archive:evidence/simulative/condition-status.json"
+          ],
+          "provenance": "observed",
+          "value": "2026-08-12T21:48:41.268939Z"
+        },
+        "stop_timestamp": {
+          "evidence_refs": [
+            "remote_archive:evidence/simulative/condition-status.json"
+          ],
+          "provenance": "observed",
+          "value": "2026-08-12T21:49:02.688173Z"
+        },
+        "task_query": {
+          "evidence_refs": [
+            "remote_archive:run-manifest.json",
+            "remote_archive:evidence/simulative/sira-output/EXP-0001-SMOKE-SIMULATIVE_2026-08-12-21-49-01.json"
+          ],
+          "provenance": "observed",
+          "value": "go to google flights"
+        },
+        "terminal_status": {
+          "evidence_refs": [
+            "remote_archive:evidence/simulative/condition-status.json",
+            "remote_archive:evidence/simulative/container-inspect.json"
+          ],
+          "provenance": "observed",
+          "value": {
+            "container_exit_code": 0,
+            "container_state": "exited",
+            "returncode": 0,
+            "terminal_state": "executed"
+          }
+        },
+        "text_logs": {
+          "evidence_refs": [
+            "remote_archive:evidence-manifest.json"
+          ],
+          "provenance": "observed",
+          "value": {
+            "condition_stderr": "remote_archive:evidence/simulative/condition.stderr",
+            "condition_stdout": "remote_archive:evidence/simulative/condition.stdout",
+            "source_logs": [
+              "remote_archive:evidence/simulative/source-logs/agent/2026-08-12-21-48-46-642430.log",
+              "remote_archive:evidence/simulative/source-logs/debug/1786571328.log",
+              "remote_archive:evidence/simulative/source-logs/debug/1786571337.log",
+              "remote_archive:evidence/simulative/source-logs/debug/1786571338.log"
+            ],
+            "source_runtime_logs": [
+              {
+                "bytes": 0,
+                "path": "remote_archive:evidence/simulative/source-runtime/logs/sira_2026-08-12.log"
+              }
+            ]
+          }
+        },
+        "working_directory": {
+          "evidence_refs": [
+            "remote_archive:evidence/simulative/container-inspect.json"
+          ],
+          "provenance": "observed",
+          "value": "/opt/sira"
+        }
+      },
+      "run_id": "RUN-T07-PRAGMATIC-SIRA-SIMULATIVE-0002",
+      "session_is_complete": false,
+      "task_completion": "not_observed"
+    }
+  },
+  "evidence": {
+    "complete_for_smoke": true,
+    "gaps": [
+      "full T07 authorization payload absent from the run bundle",
+      "per-call provider receipts, token/cost allocation, and latency absent",
+      "normalized event stream and regulation-decision artifacts absent from T07",
+      "structured post-action result and task completion absent",
+      "exact provider termination transition timestamp absent",
+      "container locale/timezone identity absent",
+      "private provider-response artifacts retain an inactive ephemeral Jupyter access credential outside the historical API-key value scan"
+    ],
+    "inventory": [
+      {
+        "artifact": "authorization_and_run_manifest",
+        "classification": "present-valid",
+        "notes": "Run manifest is hash-verified; the authorization reference is retained in the versioned compute manifest, but the full authorization payload is absent from the run bundle."
+      },
+      {
+        "artifact": "exact_commands_and_configurations",
+        "classification": "present-valid",
+        "notes": "Resolved Docker argv and both pair-diff records are retained."
+      },
+      {
+        "artifact": "source_and_environment_identity",
+        "classification": "present-valid",
+        "notes": "Commit/tree/image/Python/package/browser hashes are retained."
+      },
+      {
+        "artifact": "raw_session_json",
+        "classification": "present-valid",
+        "notes": "Exactly one strict JSON session is retained per condition."
+      },
+      {
+        "artifact": "text_logs_stdout_stderr",
+        "classification": "present-valid",
+        "notes": "Agent/debug/runtime logs plus condition/container streams are retained."
+      },
+      {
+        "artifact": "screenshots",
+        "classification": "present-valid",
+        "notes": "One embedded JPEG pre-action screenshot is retained per condition."
+      },
+      {
+        "artifact": "post_action_observation_or_result",
+        "classification": "missing-nonblocking",
+        "notes": "The one-step smoke records a requested action but no structured result."
+      },
+      {
+        "artifact": "normalized_events",
+        "classification": "missing-nonblocking",
+        "notes": "No T07 stream exists; T08 derives the canonical six-event view per run."
+      },
+      {
+        "artifact": "artifact_records",
+        "classification": "present-valid",
+        "notes": "The 138-entry remote evidence hash manifest supplies artifact records."
+      },
+      {
+        "artifact": "token_and_model_call_records",
+        "classification": "present-valid",
+        "notes": "Condition aggregates are valid; per-call receipts are missing-nonblocking."
+      },
+      {
+        "artifact": "browser_action_counts",
+        "classification": "present-valid",
+        "notes": "The runtime ledger count is derived from session history. One requested action is retained per condition; actual performance is inferred from normal exit because no structured post-action result exists."
+      },
+      {
+        "artifact": "wall_time",
+        "classification": "present-valid",
+        "notes": "Monotonic condition wall values and container timestamps are retained."
+      },
+      {
+        "artifact": "cost_records",
+        "classification": "present-valid",
+        "notes": "Condition aggregates reproduce exactly; per-call cost is unavailable."
+      },
+      {
+        "artifact": "regulation_decision_records",
+        "classification": "missing-nonblocking",
+        "notes": "T08 derives source-classified assignment records from immutable commands."
+      },
+      {
+        "artifact": "pair_equivalence_record",
+        "classification": "present-valid",
+        "notes": "Command/config diffs are retained and independently recomputed in T08."
+      },
+      {
+        "artifact": "cleanup_record",
+        "classification": "present-valid",
+        "notes": "Runtime, provider, firewall, secret-removal, and archive evidence is retained."
+      },
+      {
+        "artifact": "deterministic_evaluator_output",
+        "classification": "not-applicable",
+        "notes": "The open-query smoke has no scientific evaluator and forbids interpretation."
+      }
+    ]
+  },
+  "h2k_trace_sufficiency": {
+    "boundary": "Useful for schema and lineage validation, but insufficient for learned regulation, internalization, causal-controller comparison, or a training-ready corpus.",
+    "classification": "partially_sufficient",
+    "fields": {
+      "assigned_mode": "derived-present",
+      "available_modes": "derived-present",
+      "causal_parent_events": "unavailable",
+      "decision_source": "derived-present",
+      "downstream_action": "observed-requested-action",
+      "model_and_tool_costs": "observed-condition-aggregate-only",
+      "override_or_fallback": "source-unavailable",
+      "policy_config_revision": "derived-present",
+      "realized_outcome": "unavailable",
+      "selected_mode": "derived-present"
+    },
+    "infrastructure_evidence_only": true
+  },
+  "identity_verification": {
+    "authorization_reference": {
+      "evidence_refs": [
+        "repository:manifests/compute.yaml#CMP-0003"
+      ],
+      "note": "The complete authorization payload is unavailable in the run bundle.",
+      "provenance": "observed",
+      "value": "AUTH-T07-PRAGMATIC-RETRY2-2026-08-12"
+    },
+    "condition_status_hashes": {
+      "evidence_refs": [
+        "remote_archive:evidence-manifest.json"
+      ],
+      "provenance": "observed",
+      "value": {
+        "reactive": "bcacad4492d42035dc4c2c661e0eff6c3fdadc20e9ce1f63810140771968cced",
+        "simulative": "2f03756fb582c32d1f7b1fc27f6843d6b2eac0d9e4198eafdd1a02f9cd330bc5"
+      }
+    },
+    "container_image": {
+      "evidence_refs": [
+        "remote_archive:run-manifest.json",
+        "remote_archive:setup-attempt-03/image-inspect.json"
+      ],
+      "provenance": "observed",
+      "value": "sha256:035edf61718e84a8156f4f0f7817b134b0ce31488d3f0b50bbfba2b4a30cc61c"
+    },
+    "dependency_runtime": {
+      "evidence_refs": [
+        "remote_archive:setup-complete.json",
+        "remote_archive:setup-attempt-03/browser-preflight/installed-packages.txt"
+      ],
+      "provenance": "observed",
+      "value": {
+        "chromium_revision": "1084",
+        "installed_package_count": 96,
+        "installed_package_manifest_sha256": "4ff2603fa5e0f7033ba773decdcb86abf648dcce22e469d26bc48214e390e104",
+        "playwright_version": "1.39.0",
+        "uv_lock_sha256": "138585129c7f369887591d30d9727f8dd466639fa78fb00adc5a04f1e9b2d76e"
+      }
+    },
+    "frozen_giclab_commit": {
+      "evidence_refs": [
+        "remote_archive:run-manifest.json"
+      ],
+      "provenance": "observed",
+      "value": "5698f04dfd08bc85a66d2355b0a4bd7d3ce24a23"
+    },
+    "local_and_external_manifests": {
+      "evidence_refs": [
+        "remote_archive:evidence-manifest.json",
+        "local_retained:LOCAL_SHA256SUMS.json",
+        "sealed_external:FINAL_SHA256SUMS.json"
+      ],
+      "provenance": "observed",
+      "value": {
+        "external_manifest": {
+          "file_count": 148,
+          "mismatches": 0,
+          "total_bytes": 22893061
+        },
+        "external_manifest_sha256": "9fb9ee63c1703e9701e8d5168284a1f757181baadd68a1508095eeac5fc7a167",
+        "local_manifest": {
+          "file_count": 147,
+          "mismatches": 0,
+          "total_bytes": 22869287
+        },
+        "local_manifest_sha256": "b2576a030ffa56c1b2e3b0b111e9dce71b999cb12acba8add6a78483974b4652",
+        "remote_manifest": {
+          "file_count": 138,
+          "mismatches": 0,
+          "total_bytes": 281235
+        },
+        "remote_manifest_sha256": "7042a079bccdd6ff4dfdade4c954fd6e403f2c7d6e0cb39c725d4414835a61b1"
+      }
+    },
+    "model_snapshot": {
+      "evidence_refs": [
+        "remote_archive:run-manifest.json",
+        "remote_archive:setup-attempt-03/model-preflight/model-availability.json"
+      ],
+      "provenance": "observed",
+      "value": "gpt-4o-2024-11-20"
+    },
+    "python": {
+      "evidence_refs": [
+        "remote_archive:setup-complete.json"
+      ],
+      "provenance": "observed",
+      "value": {
+        "executable_sha256": "6ff97f602038740073dca96714310a30e303332326268e0f1bb2767edc820944",
+        "version": "3.11.14"
+      }
+    },
+    "run_manifest": {
+      "evidence_refs": [
+        "remote_archive:run-manifest.json"
+      ],
+      "provenance": "observed",
+      "value": {
+        "bytes": 8196,
+        "sha256": "877c26d16e242733e4f86afc54a058b868ca79ee27b826abc5e1e92ae0427ccd"
+      }
+    },
+    "sira_commit": {
+      "evidence_refs": [
+        "remote_archive:run-manifest.json"
+      ],
+      "provenance": "observed",
+      "value": "93fb8d72de71f9a4a13419670adeb34d93cf7acd"
+    },
+    "sira_tree": {
+      "evidence_refs": [
+        "remote_archive:run-manifest.json"
+      ],
+      "provenance": "observed",
+      "value": "6a6d9068b94d7632d3533a3d6f013d4de6ff76e8"
+    },
+    "source_destination_equality": {
+      "evidence_refs": [
+        "sealed_external:FINAL_SHA256SUMS.json"
+      ],
+      "provenance": "observed",
+      "value": true
+    },
+    "tracked_postrun_summary": {
+      "evidence_refs": [
+        "repository:docs/harness/evidence/T07_PRAGMATIC_RETRY2_POSTRUN.json"
+      ],
+      "provenance": "observed",
+      "value": {
+        "sha256": "ec1e2fb0a8e04997b4a87f9f2a898f597b70440b1df4f8a9dfba1da67ef5321c"
+      }
+    }
+  },
+  "offline_actions": {
+    "browser_action": false,
+    "cloud_mutation": false,
+    "lambda_or_cloud_request": false,
+    "model_or_provider_request": false,
+    "pilot_execution": false,
+    "scientific_interpretation": false,
+    "sira_condition_execution": false,
+    "training": false
+  },
+  "pair_contract": {
+    "classification": "matched_pair_valid_with_documented_evidence_gaps",
+    "invalidating_differences": [],
+    "pair_diff_id": "T08-SIRA-SMOKE-PAIR-DIFF-0001",
+    "valid": true
+  },
+  "pilot": {
+    "budgets": {
+      "max_browser_actions": 120,
+      "max_lambda_a10_hours": "4.00",
+      "max_lambda_cost_usd_at_retained_rate": "5.16",
+      "max_model_calls": 4620,
+      "max_model_tokens": 4000000,
+      "max_openai_cost_usd": "40.00",
+      "max_total_cost_usd_at_retained_rate": "45.16",
+      "max_wall_seconds": 14400
+    },
+    "execution_authorized": false,
+    "paired_condition_attempts": 4,
+    "plan_id": "PLAN-EXP0001-PILOT",
+    "protocol_preparation_eligible": true,
+    "sample_tasks": 2
+  },
+  "schema_version": "0.1.0",
+  "scientific_interpretation_allowed": false,
+  "source_run": {
+    "frozen_giclab_commit": "5698f04dfd08bc85a66d2355b0a4bd7d3ce24a23",
+    "host_run_id": "RUN-T07-PRAGMATIC-HOST-0002",
+    "reactive_run_id": "RUN-T07-PRAGMATIC-SIRA-REACTIVE-0002",
+    "run_manifest_sha256": "877c26d16e242733e4f86afc54a058b868ca79ee27b826abc5e1e92ae0427ccd",
+    "simulative_run_id": "RUN-T07-PRAGMATIC-SIRA-SIMULATIVE-0002",
+    "sira_commit": "93fb8d72de71f9a4a13419670adeb34d93cf7acd"
+  },
+  "task_completion": {
+    "reactive": "not_observed",
+    "simulative": "not_observed"
+  },
+  "terminal_state": "smoke_evidence_validated_pilot_planning_eligible"
+}

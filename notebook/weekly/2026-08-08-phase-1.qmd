@@ -2,6 +2,21 @@
 title: "2026-08-08 — Phase 0.75 closed; Phase 1 opened"
 ---
 
+## T07/T08 update — 2026-08-12
+
+One T07 reactive/simulative one-step artifact smoke completed under a separate bounded
+authorization, followed by offline T08 adjudication. Both artifacts executed, both
+sessions remained incomplete, the pair is valid with documented evidence gaps, and
+cleanup is verified with a disclosed nonmaterial private-retention gap. No scientific
+measurement or EXP-0001 outcome follows.
+
+T08 independently reconciled 9 model calls, 11,588 tokens, two recorded
+browser-action requests,
+39.397 seconds, and USD 0.0403325. These figures are artifact-execution accounting,
+not a mode comparison or a full-task cost forecast. A two-task counterbalanced pilot
+package is prepared, but evaluator/runtime/protocol/provider/privacy prerequisites and
+a fresh current-turn authorization still block all pilot execution.
+
 ## State transition
 
 Phase 0.75 completed its pinned upstream audits, evidence-preserving harness, SiRA
@@ -11,8 +26,9 @@ Phase 1 is now the one active plan.
 
 ## Scientific boundary
 
-EXP-0001 remains exactly SiRA simulative versus matched reactive behavior. It has no
-harness-to-kernel condition or internalization claim, and no run has occurred. The
+At Phase 1 opening, EXP-0001 remained exactly SiRA simulative versus matched reactive
+behavior, with no harness-to-kernel condition or internalization claim and no run yet.
+The
 planned/deferred RQ-H2K track may consume trace-completeness and lineage evidence only;
 that infrastructure record cannot affect EXP-0001 validity, metrics, or outcome.
 
@@ -127,9 +143,9 @@ under the strict description-aware canonicalizer. The exact baseline and restora
 payload are private and hash-sealed; the public record contains only structural
 names/types, counts and hashes.
 
-The high-assurance infrastructure track is now frozen, not deleted. Its completed
+The high-assurance infrastructure track was then frozen, not deleted. Its completed
 evidence and terminal negative findings remain reproducible, while production-grade
 orchestration controls are deferred under a documented Occam admission rule. A
-separately reviewed bounded-smoke child branch is the next planned design surface, but
-it has no plan or authority. All execution permissions remain false, and no SiRA
-trajectory, browser task, model request or scientific condition has run.
+separately reviewed bounded-smoke child branch became the later T07 execution surface.
+Its history is preserved above; the current T08 checkpoint and continuing false
+execution permissions are summarized at the top of this note.

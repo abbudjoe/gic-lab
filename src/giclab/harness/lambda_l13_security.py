@@ -1714,6 +1714,24 @@ def _read_bound_regular(path: Path, *, maximum_bytes: int) -> bytes:
         raise L13ContractError("bound Gate L1 evidence is missing or unsafe") from None
 
 
+def _retained_absolute_path_matches(raw_path: object, relative_path: str) -> bool:
+    """Validate a historical absolute source path without binding this worktree root."""
+
+    if not isinstance(raw_path, str):
+        return False
+    source = Path(raw_path)
+    relative = Path(relative_path)
+    if (
+        not source.is_absolute()
+        or relative.is_absolute()
+        or not relative.parts
+        or ".." in source.parts
+        or ".." in relative.parts
+    ):
+        return False
+    return source.parts[-len(relative.parts) :] == relative.parts
+
+
 def validate_alias_map_evidence(
     repository_root: Path,
     *,
@@ -2185,15 +2203,28 @@ def validate_l13_gate_l2_evidence(
         local_record.get(key) != value for key, value in common.items()
     ):
         raise L13ContractError("Gate L1.3 archive identity binding drifted")
+    external_source_inventory = external_record.get("source_inventory_path")
+    external_source_ledger = external_record.get("source_ledger_path")
+    if (
+        external_source_inventory != local_record.get("source_inventory_path")
+        or external_source_ledger != local_record.get("source_ledger_path")
+        or not _retained_absolute_path_matches(
+            external_source_inventory,
+            plan.output_relative_path,
+        )
+        or not _retained_absolute_path_matches(
+            external_source_ledger,
+            plan.ledger_relative_path,
+        )
+    ):
+        raise L13ContractError("Gate L1.3 retained source path binding drifted")
     if (
         external_record.get("schema_version") != "0.3.0"
         or local_record.get("schema_version") != "0.3.0"
         or external_record.get("action_id") != ARCHIVE_ACTION_ID_V3
         or local_record.get("action_id") != ARCHIVE_ACTION_ID_V3
-        or external_record.get("source_inventory_path") != str(inventory_path)
         or external_record.get("source_inventory_sha256") != INVENTORY_SHA256
         or external_record.get("source_inventory_bytes") != len(inventory_encoded)
-        or external_record.get("source_ledger_path") != str(ledger_path)
         or external_record.get("source_ledger_sha256") != LEDGER_SHA256
         or external_record.get("source_ledger_bytes") != len(ledger_encoded)
         or external_record.get("source_ledger_events") != len(events)
@@ -2210,10 +2241,8 @@ def validate_l13_gate_l2_evidence(
     ):
         raise L13ContractError("Gate L1.3 external archive evidence drifted")
     if (
-        local_record.get("source_inventory_path") != str(inventory_path)
-        or local_record.get("source_inventory_sha256") != INVENTORY_SHA256
+        local_record.get("source_inventory_sha256") != INVENTORY_SHA256
         or local_record.get("source_inventory_bytes") != len(inventory_encoded)
-        or local_record.get("source_ledger_path") != str(ledger_path)
         or local_record.get("source_ledger_sha256") != LEDGER_SHA256
         or local_record.get("source_ledger_bytes") != len(ledger_encoded)
         or local_record.get("source_ledger_events") != len(events)

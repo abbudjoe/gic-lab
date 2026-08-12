@@ -1,11 +1,15 @@
 {
   "schema_version": "0.1.0",
   "experiment_id": "EXP-0001",
-  "run_status": "not-run",
+  "run_status": "artifact-smoke-adjudicated",
   "lifecycle_status": "planned",
   "evidence_status": "not-evaluated",
   "outcome_status": "pending",
   "measurements": [],
-  "artifacts": [],
-  "note": "Protocol locked; no smoke, pilot, model, API, browser, evaluator, or benchmark execution has occurred."
+  "artifacts": [
+    "experiments/EXP-0001-sira-simulative-vs-reactive/T08_SMOKE_ADJUDICATION.json",
+    "experiments/EXP-0001-sira-simulative-vs-reactive/T08_SMOKE_PAIR_DIFF.json"
+  ],
+  "infrastructure_terminal_state": "smoke_evidence_validated_pilot_planning_eligible",
+  "note": "The one-step T07 reactive/simulative artifact smoke executed and was adjudicated as a valid matched pair with documented evidence gaps; task completion was not observed, measurements remain empty, scientific evidence is not evaluated, and no EXP-0001 outcome is assigned."
 }

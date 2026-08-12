@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:gic-lab:schema:t08-sira-smoke-pair-diff:0.1.0",
+  "title": "T08 SiRA smoke pair diff",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "pair_diff_id",
+    "source_run_manifest_sha256",
+    "classification",
+    "valid",
+    "command_diff",
+    "configuration_diff",
+    "equalities",
+    "allowed_differences",
+    "invalidating_differences",
+    "documented_evidence_gaps",
+    "scientific_interpretation_allowed"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1.0"},
+    "pair_diff_id": {"const": "T08-SIRA-SMOKE-PAIR-DIFF-0001"},
+    "source_run_manifest_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "classification": {
+      "enum": [
+        "matched_pair_valid",
+        "matched_pair_valid_with_documented_evidence_gaps",
+        "matched_pair_invalid"
+      ]
+    },
+    "valid": {"type": "boolean"},
+    "command_diff": {"$ref": "#/$defs/retained_diff"},
+    "configuration_diff": {"$ref": "#/$defs/retained_diff"},
+    "equalities": {
+      "type": "array",
+      "minItems": 15,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["field", "status", "value", "comparison_basis", "evidence_refs"],
+        "properties": {
+          "field": {"type": "string", "minLength": 1},
+          "status": {"const": "equal"},
+          "value": {},
+          "comparison_basis": {
+            "enum": [
+              "condition-owned-records",
+              "shared-immutable-binding",
+              "condition-owned-records-and-shared-binding",
+              "shared-recomputation-method"
+            ]
+          },
+          "evidence_refs": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {"type": "string", "minLength": 1}
+          }
+        }
+      }
+    },
+    "allowed_differences": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["field", "owner", "reactive", "simulative"],
+        "properties": {
+          "field": {"type": "string", "minLength": 1},
+          "owner": {"type": "string", "minLength": 1},
+          "reactive": {},
+          "simulative": {}
+        }
+      }
+    },
+    "invalidating_differences": {"type": "array"},
+    "documented_evidence_gaps": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 8}
+    },
+    "scientific_interpretation_allowed": {"const": false}
+  },
+  "$defs": {
+    "retained_diff": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "approved_difference_fields", "differences", "matched"],
+      "properties": {
+        "schema_version": {"const": "0.1.0"},
+        "approved_difference_fields": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "command_length": {"type": "integer", "minimum": 1},
+        "differences": {"type": "array", "minItems": 1},
+        "matched": {"const": true}
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"classification": {"const": "matched_pair_invalid"}}},
+      "then": {"properties": {"valid": {"const": false}}},
+      "else": {"properties": {"valid": {"const": true}}}
+    }
+  ]
+}

@@ -822,6 +822,7 @@ class RunSession:
         observed = BudgetUsage(
             cost_usd=accounting.cost_usd or 0.0,
             gpu_hours=accounting.gpu_hours or 0.0,
+            model_calls=accounting.model_calls or 0,
             model_tokens=accounting.model_tokens or 0,
             tool_calls=accounting.tool_calls or 0,
         )
@@ -837,6 +838,11 @@ class RunSession:
             "model_tokens": accounting_state(accounting.model_tokens, projection.model_tokens),
             "tool_calls": accounting_state(accounting.tool_calls, projection.tool_calls),
         }
+        if self._plan.budget.max_model_calls is not None:
+            accounting_status["model_calls"] = accounting_state(
+                accounting.model_calls,
+                self._plan.budget.max_model_calls,
+            )
         projection_violations = projection.observed_violations(observed)
         object.__setattr__(self, "_accounting_attested", True)
         if projection_violations:
@@ -852,6 +858,11 @@ class RunSession:
                 ),
                 gpu_hours=(
                     projection.gpu_hours if accounting.gpu_hours is None else accounting.gpu_hours
+                ),
+                model_calls=(
+                    self._plan.budget.max_model_calls or 0
+                    if accounting.model_calls is None
+                    else accounting.model_calls
                 ),
                 model_tokens=(
                     projection.model_tokens
@@ -875,6 +886,7 @@ class RunSession:
                     "observed_nonwall_usage": {
                         "cost_usd": observed.cost_usd,
                         "gpu_hours": observed.gpu_hours,
+                        "model_calls": observed.model_calls,
                         "model_tokens": observed.model_tokens,
                         "tool_calls": observed.tool_calls,
                     },
@@ -891,6 +903,11 @@ class RunSession:
             gpu_hours=(
                 projection.gpu_hours if accounting.gpu_hours is None else accounting.gpu_hours
             ),
+            model_calls=(
+                self._plan.budget.max_model_calls or 0
+                if accounting.model_calls is None
+                else accounting.model_calls
+            ),
             model_tokens=(
                 projection.model_tokens
                 if accounting.model_tokens is None
@@ -905,6 +922,7 @@ class RunSession:
             wall_seconds=self._usage.wall_seconds,
             cost_usd=self._usage.cost_usd + charged.cost_usd,
             gpu_hours=self._usage.gpu_hours + charged.gpu_hours,
+            model_calls=self._usage.model_calls + charged.model_calls,
             model_tokens=self._usage.model_tokens + charged.model_tokens,
             tool_calls=self._usage.tool_calls + charged.tool_calls,
             output_bytes=self._usage.output_bytes,
@@ -933,6 +951,12 @@ class RunSession:
             )
             if value is None and projected > 0
         ]
+        if (
+            self._plan.budget.max_model_calls is not None
+            and self._plan.budget.max_model_calls > 0
+            and accounting.model_calls is None
+        ):
+            unavailable.append("model_calls")
         if unavailable:
             unavailable_values: list[JsonValue] = [unit for unit in unavailable]
             self._emit(
@@ -948,6 +972,7 @@ class RunSession:
             wall_seconds=max(current.wall_seconds, self._process_result.wall_seconds),
             cost_usd=current.cost_usd,
             gpu_hours=current.gpu_hours,
+            model_calls=current.model_calls,
             model_tokens=current.model_tokens,
             tool_calls=current.tool_calls,
             output_bytes=max(current.output_bytes, self._process_result.output_bytes),
@@ -1104,6 +1129,8 @@ class RunSession:
             "tool_calls": usage.tool_calls,
             "output_bytes": usage.output_bytes,
         }
+        if self._plan.budget.max_model_calls is not None:
+            payload["model_calls"] = usage.model_calls
         if accounting_status is not None:
             payload["nonwall_accounting"] = dict(accounting_status)
         self._emit(
@@ -1413,6 +1440,7 @@ class LocalRunExecutor:
                     NonWallResourceAccounting(
                         cost_usd=0.0,
                         gpu_hours=0.0,
+                        model_calls=0,
                         model_tokens=0,
                         tool_calls=0,
                     )

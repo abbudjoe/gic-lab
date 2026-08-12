@@ -2,7 +2,10 @@
 title: "Failure analyses"
 ---
 
-No experimental failure analysis exists because no experiment has run.
+No scientific failure analysis exists because no EXP-0001 pilot or outcome-bearing
+experiment has run. The completed T07 artifact smoke is infrastructure evidence only;
+T08 found task completion not observed and retained its evidence gaps without treating
+them as a negative scientific result.
 
 Future entries will distinguish:
 

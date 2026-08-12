@@ -8,9 +8,10 @@ subtitle: "Open, controlled research on learned agent architecture"
 
 Phase 0.75 is complete. Phase 1 is open for sequential artifact-execution work, but
 paid compute, prototype execution, benchmark execution, training, and cloud mutation
-all remain disabled. `EXP-0001` is planned and not run. `PLAN-EXP0001-SMOKE` still
-requires one exact current-turn human authorization; its USD 4.00 proposal grants no
-authority and is not authorization.
+all remain disabled. The T07 one-step SiRA artifact smoke has been executed and
+offline-adjudicated; both sessions were incomplete, no scientific measurement or
+EXP-0001 outcome was assigned, and its execution authority is exhausted. Pilot
+planning is eligible, but `PLAN-EXP0001-PILOT` remains blocked and unauthorized.
 :::
 
 GIC Lab studies a narrower and more falsifiable question than “can we build a GIC agent?”:
@@ -30,5 +31,7 @@ The program begins with the authors' released SiRA and SR²AM references, then i
 - Treat any planned/deferred RQ-H2K trace-sufficiency output as infrastructure evidence
   only; it adds no experiment, condition, training path, learned kernel, or later phase.
 - Keep the pilot, SR²AM cloud runs, benchmark execution, and training unauthorized.
+- Treat the T07 smoke's usage and trajectories only as artifact-execution evidence;
+  they are neither pilot observations nor representative full-task costs.
 
 See [project status](generated/status.qmd), the [claim map](research/claims.qmd), and the generated [experiment registry](generated/experiments.qmd).

@@ -1,10 +1,28 @@
 # Phase 1 SiRA Smoke Readiness
 
-Status: **profile eligible; bounded smoke V3 ready for separate authorization; not authorized**
+Status: **T07 smoke closed and adjudicated; pilot planning eligible; pilot execution blocked and unauthorized**
 
 Prepared: 2026-08-08
 
 Updated: 2026-08-11
+
+T08 update: 2026-08-12
+
+## Current T08 checkpoint
+
+The T07 Retry 2 pair executed under its now-exhausted authority. T08 independently
+rehashes and reconstructs it as
+`matched_pair_valid_with_documented_evidence_gaps`: both artifacts passed, both task
+completions were not observed, evidence is complete enough for the smoke, and cleanup
+is `cleanup_verified_with_nonmaterial_gap`. EXP-0001 remains planned, scientifically
+not evaluated, and outcome-pending.
+
+Pilot protocol preparation is now eligible. `PLAN-EXP0001-PILOT` remains
+`authorized: false` and `blocked-pending-prerequisites`; see
+`docs/harness/T08_SIRA_PILOT_READINESS.md` and
+`docs/harness/T09_SIRA_PILOT_PREAUTHORIZATION_PACKET.md`. Every execution permission
+below remains false. The rest of this document preserves historical T07 readiness and
+authorization fields; none is current pilot authority.
 
 ## Exact next run plan
 
@@ -17,8 +35,10 @@ Updated: 2026-08-11
 - Pair: `PAIR-EXP0001-SMOKE-0000`
 - Interpretation: prohibited (`interpretation_allowed: false`)
 
-The profile and both condition plans remain unauthorized. This readiness record and
-the proposed budget are not authorization. The pilot plan is not eligible.
+The historical smoke profile and both condition plans remain unauthorized after their
+separate bounded authority was consumed. This readiness record and the historical
+proposed budget are not authorization. The pilot planning package is eligible, but
+pilot execution is not.
 
 T07's high-assurance infrastructure track is frozen at
 `high-assurance-infrastructure-frozen`. Gate L1/L1A evidence is complete, sealed and

@@ -287,7 +287,22 @@ def _assert_profile_children_coherent(
             )
             if (
                 left.task != right.task
-                or left.budget != right.budget
+                or (
+                    left.budget.max_wall_seconds,
+                    left.budget.max_cost_usd,
+                    left.budget.max_gpu_hours,
+                    left.budget.max_model_tokens,
+                    left.budget.max_tool_calls,
+                    left.budget.max_output_bytes,
+                )
+                != (
+                    right.budget.max_wall_seconds,
+                    right.budget.max_cost_usd,
+                    right.budget.max_gpu_hours,
+                    right.budget.max_model_tokens,
+                    right.budget.max_tool_calls,
+                    right.budget.max_output_bytes,
+                )
                 or left.identity.seed != right.identity.seed
                 or left.identity.attempt != right.identity.attempt
                 or left.execution.backend != right.execution.backend
@@ -306,14 +321,100 @@ def _assert_profile_children_coherent(
         (Decimal(str(plan.budget.max_cost_usd)) for plan in condition_records.values()),
         start=Decimal(0),
     )
+    aggregate_model_calls = sum(
+        plan.budget.max_model_calls or 0 for plan in condition_records.values()
+    )
     aggregate_tokens = sum(plan.budget.max_model_tokens or 0 for plan in condition_records.values())
+    aggregate_tool_calls = sum(
+        plan.budget.max_tool_calls or 0 for plan in condition_records.values()
+    )
     aggregate_wall = sum(plan.budget.max_wall_seconds for plan in condition_records.values())
+    aggregate_gpu_hours = sum(
+        (Decimal(str(plan.budget.max_gpu_hours)) for plan in condition_records.values()),
+        start=Decimal(0),
+    )
     if (
         aggregate_cost != Decimal(str(profile_budget.get("max_cost_usd")))
+        or (
+            "max_model_calls" in profile_budget
+            and aggregate_model_calls != profile_budget.get("max_model_calls")
+        )
         or aggregate_tokens != profile_budget.get("max_model_tokens")
         or aggregate_wall != profile_budget.get("max_wall_seconds")
     ):
         raise ExecutionDisallowed("parent budget does not equal aggregate child hard caps")
+    if "max_browser_actions" in profile_budget and (
+        aggregate_tool_calls != profile_budget.get("max_browser_actions")
+    ):
+        raise ExecutionDisallowed("parent browser-action cap does not equal child hard caps")
+    if "max_accelerator_hours" in profile_budget and (
+        aggregate_gpu_hours != Decimal(str(profile_budget.get("max_accelerator_hours")))
+    ):
+        raise ExecutionDisallowed("parent accelerator-hour cap does not equal child hard caps")
+    condition_limits = profile_budget.get("condition_limits")
+    if isinstance(condition_limits, dict):
+        if set(condition_limits) != set(expected_conditions):
+            raise ExecutionDisallowed("parent condition-limit names do not match sampling")
+        planned_model_calls = 0
+        planned_tokens = 0
+        planned_browser_actions = 0
+        planned_wall = 0
+        planned_cost = Decimal(0)
+        planned_gpu_hours = Decimal(0)
+        for condition_name, raw_limit in condition_limits.items():
+            assert isinstance(condition_name, str)
+            assert isinstance(raw_limit, dict)
+            attempts = raw_limit.get("attempts")
+            model_calls = raw_limit.get("max_model_calls_per_attempt")
+            tokens = raw_limit.get("max_model_tokens_per_attempt")
+            browser_actions = raw_limit.get("max_browser_actions_per_attempt")
+            wall = raw_limit.get("max_wall_seconds_per_attempt")
+            cost = raw_limit.get("max_openai_cost_usd_per_attempt")
+            gpu_hours = raw_limit.get("max_accelerator_hours_per_attempt")
+            assert isinstance(attempts, int)
+            assert isinstance(model_calls, int)
+            assert isinstance(tokens, int)
+            assert isinstance(browser_actions, int)
+            assert isinstance(wall, int)
+            assert isinstance(cost, (int, float))
+            assert isinstance(gpu_hours, (int, float))
+            plans = [
+                plan
+                for plan in condition_records.values()
+                if plan.identity.condition == condition_name
+            ]
+            if len(plans) != attempts or any(
+                plan.budget.max_model_calls != model_calls
+                or plan.budget.max_model_tokens != tokens
+                or plan.budget.max_tool_calls != browser_actions
+                or plan.budget.max_wall_seconds != wall
+                or Decimal(str(plan.budget.max_cost_usd)) != Decimal(str(cost))
+                or Decimal(str(plan.budget.max_gpu_hours)) != Decimal(str(gpu_hours))
+                for plan in plans
+            ):
+                raise ExecutionDisallowed("parent condition limits do not match child hard caps")
+            planned_model_calls += attempts * model_calls
+            planned_tokens += attempts * tokens
+            planned_browser_actions += attempts * browser_actions
+            planned_wall += attempts * wall
+            planned_cost += attempts * Decimal(str(cost))
+            planned_gpu_hours += attempts * Decimal(str(gpu_hours))
+        expected_aggregates = {
+            "max_model_calls": planned_model_calls,
+            "max_model_tokens": planned_tokens,
+            "max_browser_actions": planned_browser_actions,
+            "max_wall_seconds": planned_wall,
+        }
+        if any(profile_budget.get(field) != value for field, value in expected_aggregates.items()):
+            raise ExecutionDisallowed("parent aggregate budget does not sum condition limits")
+        if planned_cost != Decimal(str(profile_budget.get("max_cost_usd"))) or (
+            planned_gpu_hours != Decimal(str(profile_budget.get("max_accelerator_hours")))
+        ):
+            raise ExecutionDisallowed("parent condition spend/time units do not reconcile")
+        total_cost = Decimal(str(profile_budget.get("max_total_cost_usd")))
+        provider_cost = Decimal(str(profile_budget.get("max_provider_compute_cost_usd")))
+        if planned_cost + provider_cost != total_cost:
+            raise ExecutionDisallowed("parent total spend cap does not reconcile")
 
 
 def _load_authorized_run_profile(

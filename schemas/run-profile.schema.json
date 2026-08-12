@@ -168,7 +168,17 @@
         "pricing_record": {"type": "string", "minLength": 1},
         "max_cost_usd": {"type": "number", "minimum": 0},
         "max_model_tokens": {"type": "integer", "minimum": 0},
-        "max_wall_seconds": {"type": "integer", "minimum": 1}
+        "max_wall_seconds": {"type": "integer", "minimum": 1},
+        "max_model_calls": {"type": "integer", "minimum": 0},
+        "max_browser_actions": {"type": "integer", "minimum": 0},
+        "max_accelerator_hours": {"type": "number", "minimum": 0},
+        "max_provider_compute_cost_usd": {"type": "number", "minimum": 0},
+        "max_total_cost_usd": {"type": "number", "minimum": 0},
+        "condition_limits": {
+          "type": "object",
+          "minProperties": 2,
+          "additionalProperties": {"$ref": "#/$defs/condition-limit"}
+        }
       }
     },
     "artifacts": {
@@ -226,10 +236,57 @@
       }
     }
   },
+  "$defs": {
+    "condition-limit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attempts",
+        "max_model_calls_per_attempt",
+        "max_model_tokens_per_attempt",
+        "max_browser_actions_per_attempt",
+        "max_wall_seconds_per_attempt",
+        "max_openai_cost_usd_per_attempt",
+        "max_accelerator_hours_per_attempt"
+      ],
+      "properties": {
+        "attempts": {"type": "integer", "minimum": 1},
+        "max_model_calls_per_attempt": {"type": "integer", "minimum": 0},
+        "max_model_tokens_per_attempt": {"type": "integer", "minimum": 0},
+        "max_browser_actions_per_attempt": {"type": "integer", "minimum": 0},
+        "max_wall_seconds_per_attempt": {"type": "integer", "minimum": 1},
+        "max_openai_cost_usd_per_attempt": {"type": "number", "minimum": 0},
+        "max_accelerator_hours_per_attempt": {"type": "number", "minimum": 0}
+      }
+    }
+  },
   "allOf": [
     {
       "if": {"properties": {"profile": {"const": "smoke"}}, "required": ["profile"]},
       "then": {"properties": {"interpretation_allowed": {"const": false}}}
+    },
+    {
+      "if": {
+        "properties": {
+          "profile": {"const": "pilot"},
+          "budget": {"required": ["condition_limits"]}
+        },
+        "required": ["profile", "budget"]
+      },
+      "then": {
+        "properties": {
+          "budget": {
+            "required": [
+              "max_model_calls",
+              "max_browser_actions",
+              "max_accelerator_hours",
+              "max_provider_compute_cost_usd",
+              "max_total_cost_usd",
+              "condition_limits"
+            ]
+          }
+        }
+      }
     }
   ]
 }

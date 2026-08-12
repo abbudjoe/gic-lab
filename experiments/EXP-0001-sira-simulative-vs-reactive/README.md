@@ -4,7 +4,9 @@ Status: **planned / not-evaluated / pending**
 
 Execution authorization: **false**
 
-No run has occurred.
+A two-condition T07 artifact smoke has run and T08 validated its retained evidence.
+That smoke has no scientific interpretation: task completion was not observed, and
+the EXP-0001 pilot has not run.
 
 ## Scientific question and scope
 
@@ -44,18 +46,19 @@ identity are fixed. The dataset-order seed does not seed provider sampling, the 
 or the live web. The model and browser workload therefore remain nondeterministic.
 
 The upstream source requested the mutable alias `gpt-4o` and did not record the exact
-historical serving revision. The proposed provider is OpenAI via its standard API, and
-the proposed immutable substitute is `gpt-4o-2024-11-20`. The upstream command surface
-does not currently accept that snapshot unchanged, so T07 preflight must bind the exact
-snapshot before execution. Because the historical serving revision is unknown, any
-future evidence is a **directional reproduction under a declared model substitution**,
-not an exact artifact execution or unqualified reproduction.
+historical serving revision. T07 bound the immutable substitute
+`gpt-4o-2024-11-20` across all SiRA roles through an audited routing adaptation. The
+historical serving revision remains unknown, so T07 is an **artifact execution under a
+declared model substitution**, not an unqualified historical reproduction. Any pilot
+must preserve or explicitly revise that immutable binding before authorization.
 
 ## Tasks, sampling, and order
 
 The smoke profile is the pinned SiRA README query `go to google flights`, run once in
-each mode with one maximum browser step. It exists only to validate command, browser,
-trace, accounting, and cleanup contracts. Interpretation is prohibited.
+each mode with one maximum browser step during T07. T08 validated command, runtime,
+trace, accounting, pair, and cleanup evidence. Each session retained one requested
+browser action, but no structured post-action result; action performance is inferred
+from normal exit and task completion was not observed. Interpretation is prohibited.
 
 The pilot locks the first two rows of the pinned SiRA FanOutQA development file:
 
@@ -132,15 +135,17 @@ that a separately approved future study might consume.
 
 [`run-plans/smoke.yaml`](run-plans/smoke.yaml) is one minimal matched pair with
 interpretation prohibited. [`run-plans/pilot.yaml`](run-plans/pilot.yaml) is the
-two-pair exploratory pilot. Both profiles and every condition plan are unauthorized.
+two-pair exploratory pilot. The smoke plan is now a historical control record; the
+pilot profile and every pilot condition plan remain unauthorized.
 The proposed caps are derived in [`pricing.yaml`](pricing.yaml) from current official
 OpenAI rates using the conservative assumption that every permitted token is charged
 at the more expensive output-token rate.
 
-A current-turn human instruction may later authorize the smoke through the exact
-decision fields in the Phase 1 readiness handoff, but authorization alone does not make
-it executable. T07 must then satisfy its deterministic pre-execution requirements:
-immutable snapshot binding, finite command-level token/cost enforcement, source-log
-ownership, browser cleanup, and the required environment/browser pins. These are T07
-preflight requirements, not unresolved integration blockers. Pilot scoring additionally
-requires an immutable spaCy and `en_core_web_sm` evaluator dependency contract.
+T08 makes pilot protocol preparation eligible, not pilot execution. Before a later
+current-turn authorization can bind the pilot, the repository must close every blocker
+in [`../../docs/harness/T08_SIRA_PILOT_READINESS.md`](../../docs/harness/T08_SIRA_PILOT_READINESS.md),
+including a reviewed nonzero-GPU protocol version, immutable source/config/environment/
+image/browser/evaluator/command hashes, effective enforcement for every child and
+aggregate cap, dataset/license/privacy review, and dynamic cloud preflight. Pilot
+scoring also requires an immutable spaCy and `en_core_web_sm` evaluator dependency
+contract.

@@ -1,0 +1,484 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:gic-lab:schema:t08-sira-smoke-adjudication:0.1.0",
+  "title": "T08 SiRA smoke evidence adjudication",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "adjudication_id",
+    "source_run",
+    "identity_verification",
+    "conditions",
+    "pair_contract",
+    "accounting_reconciliation",
+    "artifact_execution",
+    "task_completion",
+    "evidence",
+    "h2k_trace_sufficiency",
+    "cleanup",
+    "scientific_interpretation_allowed",
+    "pilot",
+    "terminal_state",
+    "offline_actions"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1.0"},
+    "adjudication_id": {"const": "T08-SIRA-SMOKE-EVIDENCE-ADJUDICATION-0001"},
+    "source_run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "host_run_id",
+        "reactive_run_id",
+        "simulative_run_id",
+        "frozen_giclab_commit",
+        "sira_commit",
+        "run_manifest_sha256"
+      ],
+      "properties": {
+        "host_run_id": {"const": "RUN-T07-PRAGMATIC-HOST-0002"},
+        "reactive_run_id": {"const": "RUN-T07-PRAGMATIC-SIRA-REACTIVE-0002"},
+        "simulative_run_id": {"const": "RUN-T07-PRAGMATIC-SIRA-SIMULATIVE-0002"},
+        "frozen_giclab_commit": {"$ref": "#/$defs/commit"},
+        "sira_commit": {"$ref": "#/$defs/commit"},
+        "run_manifest_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "identity_verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "authorization_reference",
+        "frozen_giclab_commit",
+        "sira_commit",
+        "sira_tree",
+        "run_manifest",
+        "container_image",
+        "python",
+        "dependency_runtime",
+        "model_snapshot",
+        "condition_status_hashes",
+        "local_and_external_manifests",
+        "source_destination_equality",
+        "tracked_postrun_summary"
+      ],
+      "properties": {
+        "authorization_reference": {"$ref": "#/$defs/evidence_field"},
+        "frozen_giclab_commit": {"$ref": "#/$defs/evidence_field"},
+        "sira_commit": {"$ref": "#/$defs/evidence_field"},
+        "sira_tree": {"$ref": "#/$defs/evidence_field"},
+        "run_manifest": {"$ref": "#/$defs/evidence_field"},
+        "container_image": {"$ref": "#/$defs/evidence_field"},
+        "python": {"$ref": "#/$defs/evidence_field"},
+        "dependency_runtime": {"$ref": "#/$defs/evidence_field"},
+        "model_snapshot": {"$ref": "#/$defs/evidence_field"},
+        "condition_status_hashes": {"$ref": "#/$defs/evidence_field"},
+        "local_and_external_manifests": {"$ref": "#/$defs/evidence_field"},
+        "source_destination_equality": {"$ref": "#/$defs/evidence_field"},
+        "tracked_postrun_summary": {"$ref": "#/$defs/evidence_field"}
+      }
+    },
+    "conditions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reactive", "simulative"],
+      "properties": {
+        "reactive": {"$ref": "#/$defs/condition"},
+        "simulative": {"$ref": "#/$defs/condition"}
+      }
+    },
+    "pair_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["valid", "classification", "pair_diff_id", "invalidating_differences"],
+      "properties": {
+        "valid": {"type": "boolean"},
+        "classification": {"$ref": "#/$defs/pair_classification"},
+        "pair_diff_id": {"const": "T08-SIRA-SMOKE-PAIR-DIFF-0001"},
+        "invalidating_differences": {"type": "array"}
+      }
+    },
+    "accounting_reconciliation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "price_record",
+        "formula",
+        "rounding",
+        "reactive",
+        "simulative",
+        "aggregate",
+        "per_call_usage",
+        "retry_reconciliation"
+      ],
+      "properties": {
+        "price_record": {"type": "object"},
+        "formula": {"type": "string", "minLength": 8},
+        "rounding": {"type": "string", "minLength": 8},
+        "reactive": {"$ref": "#/$defs/accounting"},
+        "simulative": {"$ref": "#/$defs/accounting"},
+        "aggregate": {"$ref": "#/$defs/aggregate_accounting"},
+        "per_call_usage": {"$ref": "#/$defs/evidence_field"},
+        "retry_reconciliation": {"type": "object"}
+      }
+    },
+    "artifact_execution": {"$ref": "#/$defs/paired_artifact_execution"},
+    "task_completion": {"$ref": "#/$defs/paired_task_completion"},
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["complete_for_smoke", "gaps", "inventory"],
+      "properties": {
+        "complete_for_smoke": {"type": "boolean"},
+        "gaps": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 8}
+        },
+        "inventory": {
+          "type": "array",
+          "minItems": 16,
+          "items": {"$ref": "#/$defs/inventory_item"}
+        }
+      }
+    },
+    "h2k_trace_sufficiency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["classification", "infrastructure_evidence_only", "fields", "boundary"],
+      "properties": {
+        "classification": {
+          "enum": ["sufficient_for_schema_validation", "partially_sufficient", "insufficient"]
+        },
+        "infrastructure_evidence_only": {"const": true},
+        "fields": {"type": "object"},
+        "boundary": {"type": "string", "minLength": 16}
+      }
+    },
+    "cleanup": {
+      "type": "object",
+      "required": [
+        "classification",
+        "exact_instance_identity",
+        "launch_timestamp",
+        "termination_timestamp",
+        "terminal_absence_verified_at",
+        "provider_terminal_absent",
+        "running_account_instances",
+        "owned_containers",
+        "owned_regional_rulesets",
+        "global_firewall_unchanged",
+        "temporary_model_secret_removed",
+        "credential_rotation_required",
+        "external_archive",
+        "nonmaterial_gaps"
+      ],
+      "properties": {
+        "classification": {
+          "enum": [
+            "cleanup_verified",
+            "cleanup_verified_with_nonmaterial_gap",
+            "cleanup_unverified"
+          ]
+        },
+        "exact_instance_identity": {"$ref": "#/$defs/evidence_field"},
+        "launch_timestamp": {"$ref": "#/$defs/evidence_field"},
+        "termination_timestamp": {"$ref": "#/$defs/evidence_field"},
+        "terminal_absence_verified_at": {"$ref": "#/$defs/evidence_field"},
+        "provider_terminal_absent": {"type": "boolean"},
+        "running_account_instances": {"type": "integer", "minimum": 0},
+        "owned_containers": {"type": "integer", "minimum": 0},
+        "owned_regional_rulesets": {"type": "integer", "minimum": 0},
+        "global_firewall_unchanged": {"type": "boolean"},
+        "temporary_model_secret_removed": {"type": "boolean"},
+        "credential_rotation_required": {"type": "boolean"},
+        "external_archive": {"type": "object"},
+        "nonmaterial_gaps": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 8}
+        }
+      }
+    },
+    "scientific_interpretation_allowed": {"const": false},
+    "pilot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol_preparation_eligible",
+        "execution_authorized",
+        "plan_id",
+        "sample_tasks",
+        "paired_condition_attempts",
+        "budgets"
+      ],
+      "properties": {
+        "protocol_preparation_eligible": {"type": "boolean"},
+        "execution_authorized": {"const": false},
+        "plan_id": {"const": "PLAN-EXP0001-PILOT"},
+        "sample_tasks": {"type": "integer", "minimum": 1},
+        "paired_condition_attempts": {"type": "integer", "minimum": 2},
+        "budgets": {"type": "object"}
+      }
+    },
+    "terminal_state": {
+      "enum": [
+        "smoke_evidence_validated_pilot_planning_eligible",
+        "smoke_evidence_incomplete_repair_required",
+        "smoke_pair_contract_invalid"
+      ]
+    },
+    "offline_actions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "lambda_or_cloud_request",
+        "cloud_mutation",
+        "model_or_provider_request",
+        "browser_action",
+        "sira_condition_execution",
+        "training",
+        "pilot_execution",
+        "scientific_interpretation"
+      ],
+      "properties": {
+        "lambda_or_cloud_request": {"const": false},
+        "cloud_mutation": {"const": false},
+        "model_or_provider_request": {"const": false},
+        "browser_action": {"const": false},
+        "sira_condition_execution": {"const": false},
+        "training": {"const": false},
+        "pilot_execution": {"const": false},
+        "scientific_interpretation": {"const": false}
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "commit": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
+    "evidence_field": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "provenance", "evidence_refs"],
+      "properties": {
+        "value": {},
+        "provenance": {"enum": ["observed", "derived", "inferred", "unavailable"]},
+        "evidence_refs": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "note": {"type": "string", "minLength": 1}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"provenance": {"const": "unavailable"}}},
+          "then": {"properties": {"value": {"type": "null"}}},
+          "else": {"properties": {"evidence_refs": {"minItems": 1}}}
+        }
+      ]
+    },
+    "condition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "run_id",
+        "artifact_execution",
+        "artifact_execution_basis",
+        "task_completion",
+        "session_is_complete",
+        "reconstruction",
+        "accounting"
+      ],
+      "properties": {
+        "run_id": {"type": "string", "pattern": "^RUN-[A-Z0-9._-]+$"},
+        "artifact_execution": {"enum": ["passed", "failed"]},
+        "artifact_execution_basis": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "runtime_initialized",
+            "model_requests_issued",
+            "browser_action_performed",
+            "session_evidence_written",
+            "normal_exit",
+            "owned_state_cleanup"
+          ],
+          "properties": {
+            "runtime_initialized": {"$ref": "#/$defs/evidence_field"},
+            "model_requests_issued": {"$ref": "#/$defs/evidence_field"},
+            "browser_action_performed": {"$ref": "#/$defs/evidence_field"},
+            "session_evidence_written": {"$ref": "#/$defs/evidence_field"},
+            "normal_exit": {"$ref": "#/$defs/evidence_field"},
+            "owned_state_cleanup": {"$ref": "#/$defs/evidence_field"}
+          }
+        },
+        "task_completion": {"enum": ["observed", "not_observed"]},
+        "session_is_complete": {"type": "boolean"},
+        "reconstruction": {"$ref": "#/$defs/reconstruction"},
+        "accounting": {"$ref": "#/$defs/accounting"}
+      }
+    },
+    "reconstruction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "exact_command",
+        "resolved_configuration",
+        "task_query",
+        "condition_mode",
+        "working_directory",
+        "environment_identity",
+        "python_runtime",
+        "container_image",
+        "model_revision_by_role",
+        "service_tier",
+        "maximum_browser_steps",
+        "start_timestamp",
+        "stop_timestamp",
+        "terminal_status",
+        "model_call_sequence",
+        "provider_usage_records",
+        "browser_actions",
+        "output_locations",
+        "session_json",
+        "text_logs",
+        "screenshots",
+        "normalized_events",
+        "regulation_decision_record",
+        "cleanup_record"
+      ],
+      "properties": {
+        "exact_command": {"$ref": "#/$defs/evidence_field"},
+        "resolved_configuration": {"$ref": "#/$defs/evidence_field"},
+        "task_query": {"$ref": "#/$defs/evidence_field"},
+        "condition_mode": {"$ref": "#/$defs/evidence_field"},
+        "working_directory": {"$ref": "#/$defs/evidence_field"},
+        "environment_identity": {"$ref": "#/$defs/evidence_field"},
+        "python_runtime": {"$ref": "#/$defs/evidence_field"},
+        "container_image": {"$ref": "#/$defs/evidence_field"},
+        "model_revision_by_role": {"$ref": "#/$defs/evidence_field"},
+        "service_tier": {"$ref": "#/$defs/evidence_field"},
+        "maximum_browser_steps": {"$ref": "#/$defs/evidence_field"},
+        "start_timestamp": {"$ref": "#/$defs/evidence_field"},
+        "stop_timestamp": {"$ref": "#/$defs/evidence_field"},
+        "terminal_status": {"$ref": "#/$defs/evidence_field"},
+        "model_call_sequence": {"$ref": "#/$defs/evidence_field"},
+        "provider_usage_records": {"$ref": "#/$defs/evidence_field"},
+        "browser_actions": {"$ref": "#/$defs/evidence_field"},
+        "output_locations": {"$ref": "#/$defs/evidence_field"},
+        "session_json": {"$ref": "#/$defs/evidence_field"},
+        "text_logs": {"$ref": "#/$defs/evidence_field"},
+        "screenshots": {"$ref": "#/$defs/evidence_field"},
+        "normalized_events": {"$ref": "#/$defs/evidence_field"},
+        "regulation_decision_record": {"$ref": "#/$defs/evidence_field"},
+        "cleanup_record": {"$ref": "#/$defs/evidence_field"}
+      }
+    },
+    "accounting": {
+      "type": "object",
+      "required": [
+        "model_calls",
+        "input_tokens",
+        "cached_input_tokens",
+        "output_tokens",
+        "total_tokens",
+        "recomputed_cost_usd",
+        "browser_actions",
+        "wall_seconds_raw",
+        "unreconciled_provider_attempts"
+      ],
+      "properties": {
+        "model_calls": {"type": "integer", "minimum": 0},
+        "input_tokens": {"type": "integer", "minimum": 0},
+        "cached_input_tokens": {"type": "integer", "minimum": 0},
+        "output_tokens": {"type": "integer", "minimum": 0},
+        "total_tokens": {"type": "integer", "minimum": 0},
+        "recomputed_cost_usd": {"type": "string", "pattern": "^[0-9]+(?:\\.[0-9]+)?$"},
+        "browser_actions": {"type": "integer", "minimum": 0},
+        "wall_seconds_raw": {"type": "string", "pattern": "^[0-9]+(?:\\.[0-9]+)?$"},
+        "unreconciled_provider_attempts": {"type": "integer", "minimum": 0}
+      }
+    },
+    "aggregate_accounting": {
+      "allOf": [
+        {"$ref": "#/$defs/accounting"},
+        {
+          "type": "object",
+          "required": ["wall_seconds_display_3dp"],
+          "properties": {
+            "wall_seconds_display_3dp": {"type": "string", "pattern": "^[0-9]+\\.[0-9]{3}$"}
+          }
+        }
+      ]
+    },
+    "paired_artifact_execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reactive", "simulative"],
+      "properties": {
+        "reactive": {"enum": ["passed", "failed"]},
+        "simulative": {"enum": ["passed", "failed"]}
+      }
+    },
+    "paired_task_completion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reactive", "simulative"],
+      "properties": {
+        "reactive": {"enum": ["observed", "not_observed"]},
+        "simulative": {"enum": ["observed", "not_observed"]}
+      }
+    },
+    "pair_classification": {
+      "enum": [
+        "matched_pair_valid",
+        "matched_pair_valid_with_documented_evidence_gaps",
+        "matched_pair_invalid"
+      ]
+    },
+    "inventory_item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact", "classification", "notes"],
+      "properties": {
+        "artifact": {"type": "string", "minLength": 1},
+        "classification": {
+          "enum": [
+            "present-valid",
+            "present-invalid",
+            "missing-required",
+            "missing-nonblocking",
+            "not-applicable"
+          ]
+        },
+        "notes": {"type": "string", "minLength": 8}
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "terminal_state": {
+            "const": "smoke_evidence_validated_pilot_planning_eligible"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "pair_contract": {"properties": {"valid": {"const": true}}},
+          "evidence": {"properties": {"complete_for_smoke": {"const": true}}},
+          "cleanup": {
+            "properties": {
+              "classification": {
+                "enum": ["cleanup_verified", "cleanup_verified_with_nonmaterial_gap"]
+              }
+            }
+          },
+          "pilot": {"properties": {"protocol_preparation_eligible": {"const": true}}}
+        }
+      }
+    }
+  ]
+}

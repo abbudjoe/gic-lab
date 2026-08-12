@@ -358,6 +358,7 @@ def test_authorization_reference_is_a_secret_safe_stable_identifier() -> None:
     [
         ("wall_seconds", -1),
         ("cost_usd", float("inf")),
+        ("model_calls", -1),
         ("model_tokens", -1),
         ("output_bytes", -1),
     ],
