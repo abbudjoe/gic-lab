@@ -863,7 +863,8 @@ def materialize_authority(
         "limits_sha256": sha256_bytes(canonical_json_bytes(dict(limits))),
         "pricing": {
             "model": "gpt-4o-2024-11-20",
-            "service_tier": "standard",
+            "api_request_service_tier": "default",
+            "pricing_class": "standard",
             "input_usd_per_million": 2.5,
             "cached_input_usd_per_million": 1.25,
             "output_usd_per_million": 10.0,
@@ -4163,12 +4164,19 @@ def _verify_pair_reconstruction(
                 "output_tokens",
                 "total_tokens",
                 "model_call_attempts",
+                "request_service_tier",
+                "observed_response_service_tiers",
+                "default_service_tier_response_count",
                 "unreconciled_provider_attempts",
                 "browser_actions",
                 "output_bytes",
             }
             or budget.get("schema_version") != SCHEMA_VERSION
             or budget.get("model_revision") != "gpt-4o-2024-11-20"
+            or budget.get("request_service_tier") != "default"
+            or budget.get("observed_response_service_tiers") != ["default"]
+            or budget.get("default_service_tier_response_count")
+            != budget.get("model_call_attempts")
             or cached_tokens > input_tokens
             or budget.get("total_tokens") != input_tokens + output_tokens
             or budget.get("unreconciled_provider_attempts") != 0

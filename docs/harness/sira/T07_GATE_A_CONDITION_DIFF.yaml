@@ -7,8 +7,10 @@ common:
   provider: OpenAI
   api_base_url: https://api.openai.com/v1/
   model_revision: gpt-4o-2024-11-20
+  api_request_service_tier: default
+  required_response_service_tier: default
   routing_sha256: 8a0e6e2934c98ba3faefab51c6408da2476df428bd43688e41d8aea8280c9619
-  runtime_adaptation_sha256: 894783a47c19efc5e141a90a4dd63920b9440e1ef231aad5b2738b1f524bbbcd
+  runtime_adaptation_sha256: c461dce20fea9e743135cad98b664213a393e46f35d1c1a8434212b2f0367dbb
   upstream_commit: 93fb8d72de71f9a4a13419670adeb34d93cf7acd
   task:
     kind: open-ended-query
@@ -44,7 +46,7 @@ common:
     - /Users/joseph/.local/share/gic-lab/t07/sira-93fb8d72de71f9a4a13419670adeb34d93cf7acd/source/scripts/run_web_agent.py
   argv_common_suffix:
     - --gate-adaptation-sha256
-    - 894783a47c19efc5e141a90a4dd63920b9440e1ef231aad5b2738b1f524bbbcd
+    - c461dce20fea9e743135cad98b664213a393e46f35d1c1a8434212b2f0367dbb
     - --
     - --query
     - go to google flights
@@ -112,7 +114,7 @@ resolved_argv:
     - --gate-mode
     - reactive
     - --gate-adaptation-sha256
-    - 894783a47c19efc5e141a90a4dd63920b9440e1ef231aad5b2738b1f524bbbcd
+    - c461dce20fea9e743135cad98b664213a393e46f35d1c1a8434212b2f0367dbb
     - --
     - EXP-0001-SMOKE-REACTIVE
     - --query
@@ -149,7 +151,7 @@ resolved_argv:
     - --gate-mode
     - simulative
     - --gate-adaptation-sha256
-    - 894783a47c19efc5e141a90a4dd63920b9440e1ef231aad5b2738b1f524bbbcd
+    - c461dce20fea9e743135cad98b664213a393e46f35d1c1a8434212b2f0367dbb
     - --
     - EXP-0001-SMOKE-SIMULATIVE
     - --query

@@ -117,7 +117,7 @@ def test_budget_boundary_rejects_worst_case_before_fake_provider_send() -> None:
     def fake(_: ProviderRequest) -> tuple[str, ProviderResponseUsage]:
         nonlocal called
         called = True
-        return "never", ProviderResponseUsage(1, 0, 1)
+        return "never", ProviderResponseUsage(1, 0, 1, "default")
 
     request = ProviderRequest(
         role=ModelRole.POLICY,
@@ -141,13 +141,14 @@ def test_budget_boundary_reconciles_token_categories_and_cost() -> None:
     )
     result = boundary.invoke(
         request,
-        lambda _: ("ok", ProviderResponseUsage(100, 40, 25)),
+        lambda _: ("ok", ProviderResponseUsage(100, 40, 25, "default")),
     )
     assert result == "ok"
     usage = boundary.condition_usage
     assert (usage.input_tokens, usage.cached_input_tokens, usage.output_tokens) == (100, 40, 25)
     assert usage.total_tokens == 125
     assert usage.model_call_attempts == 1
+    assert usage.default_service_tier_responses == 1
     expected = ((60 * 2.5) + (40 * 1.25) + (25 * 10.0)) / 1_000_000
     assert usage.cost_usd == pytest.approx(expected)
 
@@ -163,7 +164,7 @@ def test_usage_over_declared_request_maximum_is_reconciled_before_failure() -> N
     with pytest.raises(ProviderBudgetExceeded, match="after reconciliation"):
         boundary.invoke(
             request,
-            lambda _: ("invalid", ProviderResponseUsage(11, 0, 1)),
+            lambda _: ("invalid", ProviderResponseUsage(11, 0, 1, "default")),
         )
     assert boundary.condition_usage.input_tokens == 11
     assert boundary.condition_usage.output_tokens == 1
@@ -189,7 +190,7 @@ def test_provider_and_parser_retries_share_the_same_attempt_counter() -> None:
     assert failed_usage.output_tokens == 10
     assert boundary.unreconciled_provider_attempts == 1
     parser_retry = replace(request, retry_kind="parser")
-    boundary.invoke(parser_retry, lambda _: ("ok", ProviderResponseUsage(10, 0, 1)))
+    boundary.invoke(parser_retry, lambda _: ("ok", ProviderResponseUsage(10, 0, 1, "default")))
     assert boundary.condition_usage.model_call_attempts == 2
     with pytest.raises(GateAContractError, match="implicit provider retries"):
         replace(request, implicit_transport_retries=1)
@@ -251,7 +252,7 @@ def test_concurrent_provider_requests_reserve_capacity_before_send() -> None:
     def slow(_: ProviderRequest) -> tuple[str, ProviderResponseUsage]:
         entered.set()
         release.wait(timeout=2)
-        return "ok", ProviderResponseUsage(3, 0, 1)
+        return "ok", ProviderResponseUsage(3, 0, 1, "default")
 
     def owner() -> None:
         try:
@@ -265,7 +266,7 @@ def test_concurrent_provider_requests_reserve_capacity_before_send() -> None:
     with pytest.raises(ProviderBudgetExceeded, match="budget exceeded"):
         boundary.invoke(
             replace(request, input_tokens=4, max_output_tokens=4),
-            lambda _: ("never", ProviderResponseUsage(4, 0, 1)),
+            lambda _: ("never", ProviderResponseUsage(4, 0, 1, "default")),
         )
     release.set()
     thread.join(timeout=2)
@@ -344,11 +345,12 @@ def test_source_shaped_llm_factory_routes_every_completion_through_boundary(
             completion_kwargs.append(kwargs)
             output_tokens = 5_000 if kwargs.get("n") == 20 else 2
             return {
+                "service_tier": "default",
                 "usage": {
                     "prompt_tokens": 3,
                     "completion_tokens": output_tokens,
                     "prompt_tokens_details": {"cached_tokens": 1},
-                }
+                },
             }
 
         def completion(self, *args: object, **kwargs: object) -> dict[str, object]:
@@ -380,10 +382,21 @@ def test_source_shaped_llm_factory_routes_every_completion_through_boundary(
     assert all(call["base_url"] == SIRA_API_BASE_URL for call in calls)
     assert all(call["custom_llm_provider"] == "openai" for call in calls)
     assert all(call["num_retries"] == 0 for call in calls)
+    assert all(kwargs["service_tier"] == "default" for kwargs in completion_kwargs)
     assert completion_kwargs[-1]["max_completion_tokens"] == 4_096
     assert boundary.condition_usage.model_call_attempts == len(ModelRole) + 1
     assert boundary.condition_usage.output_tokens == 5_000 + (2 * len(ModelRole))
     assert ledger.is_file()
+    persisted = load_yaml(ledger)
+    assert persisted["request_service_tier"] == "default"
+    assert persisted["observed_response_service_tiers"] == ["default"]
+    assert persisted["default_service_tier_response_count"] == len(ModelRole) + 1
+
+    with pytest.raises(GateAContractError, match="request service_tier"):
+        role_llms[ModelRole.DEFAULT.value].completion(
+            messages=[{"role": "user", "content": "forbidden tier"}],
+            service_tier="priority",
+        )
 
     errors: list[BaseException] = []
 
@@ -404,6 +417,59 @@ def test_source_shaped_llm_factory_routes_every_completion_through_boundary(
     assert load_yaml(ledger)["model_call_attempts"] == len(ModelRole) + 6
     with pytest.raises(GateAContractError, match="unapproved model alias"):
         runner.make_llm("gpt-4o", "synthetic-not-a-secret")  # type: ignore[attr-defined]
+
+
+def test_runtime_rejects_nondefault_or_missing_response_service_tier(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeUpstreamLLM:
+        response_tier: object = None
+
+        def __init__(self, **kwargs: object) -> None:
+            self.model_name = kwargs["model"]
+            self.max_output_tokens = 16
+
+        def get_token_count(self, messages: object) -> int:
+            assert messages
+            return 1
+
+        def _completion(self, *args: object, **kwargs: object) -> dict[str, object]:
+            del args
+            assert kwargs["service_tier"] == "default"
+            return {
+                "service_tier": self.response_tier,
+                "usage": {"prompt_tokens": 1, "completion_tokens": 1},
+            }
+
+        def completion(self, *args: object, **kwargs: object) -> dict[str, object]:
+            return self._completion(*args, **kwargs)
+
+    llm_module = ModuleType("sira.web.utils.llm")
+    llm_module.LLM = FakeUpstreamLLM  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "sira.web.utils.llm", llm_module)
+    runner = ModuleType("source_shaped_tier_runner")
+    ledger = tmp_path / "provider-budget.json"
+    boundary = ProviderBudgetBoundary(
+        routing=ImmutableModelRouting.locked(),
+        aggregate_caps=aggregate_caps(),
+        condition_caps=condition_caps("reactive"),
+        persist=lambda usage, unreconciled: _write_usage_ledger(ledger, usage, unreconciled),
+    )
+    _install_locked_llm_factory(runner, boundary=boundary, ledger_path=ledger)
+    role_llm = runner.make_llm(  # type: ignore[attr-defined]
+        SIRA_MODEL_REVISION, "synthetic-not-a-secret"
+    )[ModelRole.DEFAULT.value]
+
+    for tier in (None, "auto", "priority"):
+        FakeUpstreamLLM.response_tier = tier
+        with pytest.raises(GateAContractError, match="response service_tier"):
+            role_llm.completion(messages=[{"role": "user", "content": "tier"}])
+    assert boundary.condition_usage.default_service_tier_responses == 0
+    assert boundary.unreconciled_provider_attempts == 3
+    failed_ledger = load_yaml(ledger)
+    assert failed_ledger["observed_response_service_tiers"] == []
+    assert failed_ledger["default_service_tier_response_count"] == 0
 
 
 def test_authorization_rejects_unsealed_or_wrong_profile_children() -> None:
@@ -621,6 +687,8 @@ def test_committed_gate_a_condition_diff_has_only_declared_argv_changes() -> Non
         == hashlib.sha256(runtime.read_bytes()).hexdigest()
     )
     assert document["common"]["routing_sha256"] == ImmutableModelRouting.locked().sha256()
+    assert document["common"]["api_request_service_tier"] == "default"
+    assert document["common"]["required_response_service_tier"] == "default"
     reactive = document["resolved_argv"]["reactive"]
     simulative = document["resolved_argv"]["simulative"]
     assert len(reactive) == len(simulative)

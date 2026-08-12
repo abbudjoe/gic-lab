@@ -1818,6 +1818,9 @@ def _write_complete_inbound(
         provider_budget = {
             "schema_version": supervisor.SCHEMA_VERSION,
             "model_revision": contract.MODEL,
+            "request_service_tier": "default",
+            "observed_response_service_tiers": ["default"],
+            "default_service_tier_response_count": 1,
             "cost_usd": 0.25,
             "input_tokens": 50,
             "cached_input_tokens": 0,

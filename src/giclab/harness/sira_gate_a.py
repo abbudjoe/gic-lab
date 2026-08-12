@@ -28,6 +28,7 @@ from giclab.registry import load_yaml
 SIRA_PROVIDER = "OpenAI"
 SIRA_API_BASE_URL = "https://api.openai.com/v1/"
 SIRA_MODEL_REVISION = "gpt-4o-2024-11-20"
+SIRA_SERVICE_TIER = "default"
 SIRA_SECRET_VARIABLE = "SIRA_API_KEY"
 SIRA_PROFILE_PLAN_ID = "PLAN-EXP0001-SMOKE"
 SIRA_UPSTREAM_COMMIT = "93fb8d72de71f9a4a13419670adeb34d93cf7acd"
@@ -146,6 +147,7 @@ class ProviderBudgetUsage:
     output_tokens: int = 0
     total_tokens: int = 0
     model_call_attempts: int = 0
+    default_service_tier_responses: int = 0
     browser_actions: int = 0
     output_bytes: int = 0
 
@@ -158,6 +160,7 @@ class ProviderBudgetUsage:
             "output_tokens",
             "total_tokens",
             "model_call_attempts",
+            "default_service_tier_responses",
             "browser_actions",
             "output_bytes",
         ):
@@ -168,6 +171,8 @@ class ProviderBudgetUsage:
             raise GateAContractError("cached input tokens cannot exceed input tokens")
         if self.total_tokens != self.input_tokens + self.output_tokens:
             raise GateAContractError("total tokens must equal input plus output tokens")
+        if self.default_service_tier_responses > self.model_call_attempts:
+            raise GateAContractError("default-tier responses cannot exceed provider call attempts")
 
 
 @dataclass(frozen=True, slots=True)
@@ -178,6 +183,7 @@ class ProviderRequest:
     model: str
     input_tokens: int
     max_output_tokens: int
+    service_tier: str = SIRA_SERVICE_TIER
     implicit_transport_retries: int = 0
     retry_kind: str = "initial"
 
@@ -190,6 +196,8 @@ class ProviderRequest:
             raise GateAContractError("request input_tokens must be non-negative")
         if type(self.max_output_tokens) is not int or self.max_output_tokens < 0:
             raise GateAContractError("request max_output_tokens must be non-negative")
+        if self.service_tier != SIRA_SERVICE_TIER:
+            raise GateAContractError("provider request service_tier must be exactly default")
         if self.implicit_transport_retries != 0:
             raise GateAContractError(
                 "implicit provider retries are forbidden; retry through the budget boundary"
@@ -205,6 +213,7 @@ class ProviderResponseUsage:
     input_tokens: int
     cached_input_tokens: int
     output_tokens: int
+    service_tier: str
 
     def __post_init__(self) -> None:
         for name in ("input_tokens", "cached_input_tokens", "output_tokens"):
@@ -213,6 +222,8 @@ class ProviderResponseUsage:
                 raise GateAContractError(f"response {name} must be non-negative")
         if self.cached_input_tokens > self.input_tokens:
             raise GateAContractError("cached response tokens cannot exceed input tokens")
+        if self.service_tier != SIRA_SERVICE_TIER:
+            raise GateAContractError("provider response service_tier must be exactly default")
 
 
 T = TypeVar("T")
@@ -301,6 +312,7 @@ class ProviderBudgetBoundary:
         cached_input_tokens: int = 0,
         output_tokens: int = 0,
         model_call_attempts: int = 0,
+        default_service_tier_responses: int = 0,
         browser_actions: int = 0,
         output_bytes: int = 0,
     ) -> ProviderBudgetUsage:
@@ -311,6 +323,9 @@ class ProviderBudgetBoundary:
             output_tokens=usage.output_tokens + output_tokens,
             total_tokens=usage.total_tokens + input_tokens + output_tokens,
             model_call_attempts=usage.model_call_attempts + model_call_attempts,
+            default_service_tier_responses=(
+                usage.default_service_tier_responses + default_service_tier_responses
+            ),
             browser_actions=usage.browser_actions + browser_actions,
             output_bytes=usage.output_bytes + output_bytes,
         )
@@ -403,6 +418,7 @@ class ProviderBudgetBoundary:
                     input_tokens=actual.input_tokens,
                     cached_input_tokens=actual.cached_input_tokens,
                     output_tokens=actual.output_tokens,
+                    default_service_tier_responses=1,
                 ),
             )
             object.__setattr__(
@@ -414,6 +430,7 @@ class ProviderBudgetBoundary:
                     input_tokens=actual.input_tokens,
                     cached_input_tokens=actual.cached_input_tokens,
                     output_tokens=actual.output_tokens,
+                    default_service_tier_responses=1,
                 ),
             )
             self._assert_usage(self.aggregate_usage, self.aggregate_caps, scope="aggregate")
@@ -437,6 +454,7 @@ class ProviderBudgetBoundary:
             cached_input_tokens=second.cached_input_tokens,
             output_tokens=second.output_tokens,
             model_call_attempts=second.model_call_attempts,
+            default_service_tier_responses=second.default_service_tier_responses,
             browser_actions=second.browser_actions,
             output_bytes=second.output_bytes,
         )
@@ -453,6 +471,9 @@ class ProviderBudgetBoundary:
             output_tokens=current.output_tokens - decrement.output_tokens,
             total_tokens=current.total_tokens - decrement.total_tokens,
             model_call_attempts=current.model_call_attempts - decrement.model_call_attempts,
+            default_service_tier_responses=(
+                current.default_service_tier_responses - decrement.default_service_tier_responses
+            ),
             browser_actions=current.browser_actions - decrement.browser_actions,
             output_bytes=current.output_bytes - decrement.output_bytes,
         )

@@ -23,6 +23,7 @@ from giclab.harness.sira_gate_a import (
     SIRA_API_BASE_URL,
     SIRA_MODEL_REVISION,
     SIRA_SECRET_VARIABLE,
+    SIRA_SERVICE_TIER,
     GateAContractError,
     ImmutableModelRouting,
     ModelRole,
@@ -50,6 +51,13 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def _usage(response: Any) -> ProviderResponseUsage:
+    service_tier = (
+        response.get("service_tier")
+        if isinstance(response, Mapping)
+        else getattr(response, "service_tier", None)
+    )
+    if service_tier != SIRA_SERVICE_TIER:
+        raise GateAContractError("provider response service_tier must be exactly default")
     raw = (
         response.get("usage") if isinstance(response, Mapping) else getattr(response, "usage", None)
     )
@@ -87,6 +95,7 @@ def _usage(response: Any) -> ProviderResponseUsage:
         input_tokens=input_tokens,
         cached_input_tokens=cached_tokens,
         output_tokens=output_tokens,
+        service_tier=service_tier,
     )
 
 
@@ -100,6 +109,11 @@ def _ledger_document(
     return {
         "schema_version": "0.1.0",
         "model_revision": SIRA_MODEL_REVISION,
+        "request_service_tier": SIRA_SERVICE_TIER,
+        "observed_response_service_tiers": (
+            [SIRA_SERVICE_TIER] if usage.default_service_tier_responses > 0 else []
+        ),
+        "default_service_tier_response_count": usage.default_service_tier_responses,
         "cost_usd": usage.cost_usd,
         "input_tokens": usage.input_tokens,
         "cached_input_tokens": usage.cached_input_tokens,
@@ -218,11 +232,18 @@ def _install_locked_llm_factory(
                 if type(sample_count) is not int or sample_count < 1:
                     raise GateAContractError("provider sample count must be a positive integer")
                 kwargs["max_completion_tokens"] = per_choice
+                requested_tier = kwargs.get("service_tier", SIRA_SERVICE_TIER)
+                if requested_tier != SIRA_SERVICE_TIER:
+                    raise GateAContractError(
+                        "provider request service_tier must be exactly default"
+                    )
+                kwargs["service_tier"] = SIRA_SERVICE_TIER
                 request = ProviderRequest(
                     role=self._gate_role,
                     model=self.model_name,
                     input_tokens=input_tokens,
                     max_output_tokens=per_choice * sample_count,
+                    service_tier=SIRA_SERVICE_TIER,
                     implicit_transport_retries=0,
                 )
 

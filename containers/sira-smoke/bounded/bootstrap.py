@@ -1036,7 +1036,8 @@ def validate_authorization(
         or pricing
         != {
             "model": MODEL,
-            "service_tier": "standard",
+            "api_request_service_tier": "default",
+            "pricing_class": "standard",
             "input_usd_per_million": 2.5,
             "cached_input_usd_per_million": 1.25,
             "output_usd_per_million": 10.0,
@@ -2872,6 +2873,10 @@ def validate_pair_evidence(evidence_root: Path, contract: ModuleType) -> None:
         )
         if (
             budget.get("model_revision") != contract.MODEL
+            or budget.get("request_service_tier") != "default"
+            or budget.get("observed_response_service_tiers") != ["default"]
+            or budget.get("default_service_tier_response_count")
+            != budget.get("model_call_attempts")
             or budget.get("unreconciled_provider_attempts") != 0
             or runtime.get("routing_sha256") != contract.ROUTING_SHA256
             or cleanup.get("all_environment_closes_succeeded") is not True

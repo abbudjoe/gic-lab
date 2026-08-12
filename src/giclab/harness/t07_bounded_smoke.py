@@ -47,7 +47,7 @@ UPSTREAM_TREE: Final = "6a6d9068b94d7632d3533a3d6f013d4de6ff76e8"
 UPSTREAM_LOCK_SHA256: Final = "138585129c7f369887591d30d9727f8dd466639fa78fb00adc5a04f1e9b2d76e"
 ROUTING_PATCH_SHA256: Final = "4d7e2a25f4313fc754db0fa17aeda51cc5cd75a5653adaf13b01ce87a71cb8ed"
 RUNTIME_ADAPTATION_SHA256: Final = (
-    "894783a47c19efc5e141a90a4dd63920b9440e1ef231aad5b2738b1f524bbbcd"
+    "c461dce20fea9e743135cad98b664213a393e46f35d1c1a8434212b2f0367dbb"
 )
 ROUTING_SHA256: Final = "8a0e6e2934c98ba3faefab51c6408da2476df428bd43688e41d8aea8280c9619"
 
@@ -184,6 +184,16 @@ PUBLIC_METADATA: Final = (
         "retrieved_at_utc": "2026-08-11T20:46:49Z",
         "bytes": 542_673,
         "sha256": "46fd914a3927db808d6d8c0d89933300a12e586927cbc80171097a41715c5104",
+    },
+    {
+        "subject": "OpenAI Chat Completions service-tier API reference",
+        "url": (
+            "https://developers.openai.com/api/reference/resources/chat/"
+            "subresources/completions/methods/create"
+        ),
+        "retrieved_at_utc": "2026-08-12T01:51:26Z",
+        "bytes": 1_619_873,
+        "sha256": "b33c4a8798d3a12f4c466c7791cdb936f47c82810d844b4c551567f0a62ac83e",
     },
     {
         "subject": "SiRA immutable Git commit metadata",
@@ -1587,7 +1597,8 @@ def validate_plan(plan: Mapping[str, object], *, repository_root: Path | None = 
         or routing.get("standard_cached_input_usd_per_million") != 1.25
         or routing.get("standard_output_usd_per_million") != 10.0
         or routing.get("cap_method") != "all-model-tokens-priced-at-output-rate"
-        or routing.get("service_tier") != "standard"
+        or routing.get("api_request_service_tier") != "default"
+        or routing.get("pricing_class") != "standard"
     ):
         raise BoundedSmokeContractError("provider or pricing contract drifted")
 
