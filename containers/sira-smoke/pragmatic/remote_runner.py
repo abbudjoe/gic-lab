@@ -49,7 +49,7 @@ class PragmaticRunError(RuntimeError):
 
 
 def utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")  # noqa: UP017
 
 
 def canonical_json(document: object) -> bytes:
