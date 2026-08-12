@@ -3,7 +3,15 @@
   "bootstrap_argv_template": [
     "/usr/bin/python3",
     "-I",
-    "/home/ubuntu/t07-bounded-bundle/containers/sira-smoke/bounded/bootstrap.py",
+    "/home/ubuntu/t07-bounded-bootstrap.py",
+    "--bootstrap-file-sha256",
+    "${REMOTE_BOOTSTRAP_SHA256}",
+    "--bundle-archive",
+    "/home/ubuntu/t07-bounded-repository.tar",
+    "--bundle-archive-sha256",
+    "${BUNDLE_ARCHIVE_SHA256}",
+    "--bundle-manifest-sha256",
+    "${BUNDLE_MANIFEST_SHA256}",
     "--plan",
     "/home/ubuntu/t07-bounded-bundle/containers/sira-smoke/bounded/bounded-smoke-plan-v1.json",
     "--plan-sha256",
@@ -16,6 +24,10 @@
     "/home/ubuntu/t07-bounded-authorization.json",
     "--authorization-sha256",
     "${AUTHORIZATION_SHA256}",
+    "--bootstrap-release",
+    "/home/ubuntu/t07-bounded-bootstrap-release.json",
+    "--bootstrap-release-sha256",
+    "${BOOTSTRAP_RELEASE_SHA256}",
     "--bundle-root",
     "/home/ubuntu/t07-bounded-bundle",
     "--secret-file",
@@ -40,6 +52,8 @@
         "linux/amd64",
         "--network",
         "bridge",
+        "--pid",
+        "private",
         "--ipc",
         "private",
         "--cgroupns",
@@ -107,7 +121,7 @@
         "--gate-mode",
         "reactive",
         "--gate-adaptation-sha256",
-        "894783a47c19efc5e141a90a4dd63920b9440e1ef231aad5b2738b1f524bbbcd",
+        "c461dce20fea9e743135cad98b664213a393e46f35d1c1a8434212b2f0367dbb",
         "--",
         "EXP-0001-SMOKE-REACTIVE",
         "--query",
@@ -129,7 +143,7 @@
         "--seed",
         "42"
       ],
-      "container_create_template_sha256": "ab30886c8c4c60ae80163495fd07f93e952f21be3dc385553de298c569815582",
+      "container_create_template_sha256": "a33ec29557883b9147fa491b78ee49d7468a99873563b3341971ea9727f8484b",
       "inner_argv_template": [
         "/opt/sira/.venv/bin/python",
         "/opt/giclab-src/giclab/harness/sira_gate_a_runtime.py",
@@ -140,7 +154,7 @@
         "--gate-mode",
         "reactive",
         "--gate-adaptation-sha256",
-        "894783a47c19efc5e141a90a4dd63920b9440e1ef231aad5b2738b1f524bbbcd",
+        "c461dce20fea9e743135cad98b664213a393e46f35d1c1a8434212b2f0367dbb",
         "--",
         "EXP-0001-SMOKE-REACTIVE",
         "--query",
@@ -162,7 +176,7 @@
         "--seed",
         "42"
       ],
-      "inner_argv_template_sha256": "97ddc61a5ea0ace089ed620b9579aff40317dd7cef2e81802d18771294ecd2cb",
+      "inner_argv_template_sha256": "e2202f393a5958a4609286b21c07ba4feb1255e38d6a4dab78cf08d718f9533d",
       "mode": "reactive",
       "model_call_attempts": 16,
       "model_tokens": 200000,
@@ -187,6 +201,8 @@
         "linux/amd64",
         "--network",
         "bridge",
+        "--pid",
+        "private",
         "--ipc",
         "private",
         "--cgroupns",
@@ -254,7 +270,7 @@
         "--gate-mode",
         "simulative",
         "--gate-adaptation-sha256",
-        "894783a47c19efc5e141a90a4dd63920b9440e1ef231aad5b2738b1f524bbbcd",
+        "c461dce20fea9e743135cad98b664213a393e46f35d1c1a8434212b2f0367dbb",
         "--",
         "EXP-0001-SMOKE-SIMULATIVE",
         "--query",
@@ -276,7 +292,7 @@
         "--seed",
         "42"
       ],
-      "container_create_template_sha256": "180ec0f4e81882553690fab85d6689dc8f7cca24fdc4c6b6d8fc88ac41626c1b",
+      "container_create_template_sha256": "3befed62dca595636a9bd3629804663db16816822e5c2e7b4e0397f630ec08df",
       "inner_argv_template": [
         "/opt/sira/.venv/bin/python",
         "/opt/giclab-src/giclab/harness/sira_gate_a_runtime.py",
@@ -287,7 +303,7 @@
         "--gate-mode",
         "simulative",
         "--gate-adaptation-sha256",
-        "894783a47c19efc5e141a90a4dd63920b9440e1ef231aad5b2738b1f524bbbcd",
+        "c461dce20fea9e743135cad98b664213a393e46f35d1c1a8434212b2f0367dbb",
         "--",
         "EXP-0001-SMOKE-SIMULATIVE",
         "--query",
@@ -309,7 +325,7 @@
         "--seed",
         "42"
       ],
-      "inner_argv_template_sha256": "f6edc9b65add534cda1556f7095a1befe484846ceb14ce618c8f16a3e33daa39",
+      "inner_argv_template_sha256": "0c02c8143f3c2ce14becb9ab6921363c6ccc19bd3106a31f618fd8851bea7db4",
       "mode": "simulative",
       "model_call_attempts": 61,
       "model_tokens": 200000,
@@ -476,17 +492,17 @@
       {
         "bytes": 2551,
         "path": "containers/sira-smoke/bounded/Containerfile.amd64",
-        "sha256": "b545b449475d31188cac65eb33832e7d737b769cc7dada8ae074bb6432961c33"
+        "sha256": "bed87d28dd48fb945403069104da0bcc0a81e87534d9e4e5ab31fc084a2f0685"
       },
       {
-        "bytes": 68702,
+        "bytes": 143094,
         "path": "containers/sira-smoke/bounded/bootstrap.py",
-        "sha256": "9a90c8285350f64e27b7652d3e45c0c04c6530210b26f67afc095f3145f81dc7"
+        "sha256": "74aa58c2aacd2fc88423370c9d673fbda03faffe72f1e05de7fd4a1420d21e02"
       },
       {
-        "bytes": 3093,
+        "bytes": 3309,
         "path": "containers/sira-smoke/bounded/browser_preflight.py",
-        "sha256": "b53ae446b3ec84185405c83a30870fe9b42dd534e16430d532bd3e4fdc940150"
+        "sha256": "9a69d3f40e3931a817f7bf137f9fab36d14bebf93bab403511df5ffe3d34ba93"
       },
       {
         "bytes": 65,
@@ -494,19 +510,19 @@
         "sha256": "95dbb185c00497861353a4ac62f626623883c3c51fa8849f9dbf36b586d40d86"
       },
       {
-        "bytes": 4999,
+        "bytes": 7276,
         "path": "containers/sira-smoke/bounded/local_supervisor_bootstrap.py",
-        "sha256": "bab1a3f59dccc8becbe372d2a2c7d92643164cefc86ed6659d8dceba0ba82f6c"
+        "sha256": "0cd531ecd7584cb2d61caa3b0df8d6a60a82345c1f97fdddbd3c8aa6a16a9063"
       },
       {
-        "bytes": 3165,
+        "bytes": 3379,
         "path": "containers/sira-smoke/bounded/model_preflight.py",
-        "sha256": "69658bc62aca322eaa129e02fd2db595e351d7ea95a2aa5c7d3a763dcabbb82b"
+        "sha256": "5ad35223f842bc416faf76f2131111dea5226191c4e663cc79269bc2e9aba437"
       },
       {
-        "bytes": 3200,
+        "bytes": 3492,
         "path": "containers/sira-smoke/container_entrypoint.py",
-        "sha256": "780925b1c11ddc76dfdb4c741a33fb07796b16c3121e1ef1d3b9bc2895f7f176"
+        "sha256": "240e0235f827d1ece71ec24dd8d9dd1e071559095ee01aaab2b9ae4de54ce1e5"
       },
       {
         "bytes": 237,
@@ -574,9 +590,9 @@
         "sha256": "9592eb0e1f2540351d474b80e2a565143ba8b50fa6443c36987341d218e6b524"
       },
       {
-        "bytes": 3194,
+        "bytes": 3290,
         "path": "schemas/t07-bounded-smoke-authorization.schema.json",
-        "sha256": "4821844cf2e7ba540ce1b5fea97ca7d61f926b8a22b2d11260858b5741434879"
+        "sha256": "8b542cd152818304761a1bc11027a1abfa7187cf49698929fb11fedbfed13b09"
       },
       {
         "bytes": 1423,
@@ -591,7 +607,7 @@
       {
         "bytes": 11572,
         "path": "schemas/t07-bounded-smoke-plan.schema.json",
-        "sha256": "be96e9e729f2930780d80c343eba68b70c23a9fb61ef0c0b6dc47c3e5903450e"
+        "sha256": "225c81bb21c5a361ec7c96adcd9eca29c0953b3874c657ed78cb2dc6bea0a71d"
       },
       {
         "bytes": 3415,
@@ -609,14 +625,14 @@
         "sha256": "2004f5c9b23a41a040baad766516e0f2d62e6edf440a4571b484ee061b2d1c4c"
       },
       {
-        "bytes": 37075,
+        "bytes": 38268,
         "path": "src/giclab/harness/sira_gate_a.py",
-        "sha256": "285beab9da67738009cfb87e23d3dc7643490f82477dac72659075cedc1ac638"
+        "sha256": "ddfe615ab0fbd6c5ddbd6e00af3d2782991185134858eae3be89b05c182a9d54"
       },
       {
-        "bytes": 14376,
+        "bytes": 15395,
         "path": "src/giclab/harness/sira_gate_a_runtime.py",
-        "sha256": "894783a47c19efc5e141a90a4dd63920b9440e1ef231aad5b2738b1f524bbbcd"
+        "sha256": "c461dce20fea9e743135cad98b664213a393e46f35d1c1a8434212b2f0367dbb"
       },
       {
         "bytes": 131263,
@@ -624,14 +640,14 @@
         "sha256": "0c8b111a657288278b519351d1a0973641c6897245bccc61228d90ddb5294c11"
       },
       {
-        "bytes": 62161,
+        "bytes": 72269,
         "path": "src/giclab/harness/t07_bounded_smoke.py",
-        "sha256": "bed93df0df4f9ece7a90ca713385bf6f2ea0e37b2fa618236bc563d612660d82"
+        "sha256": "d6da182643b080e3e297716f1d65ce9c2e04d5157280c9f17aa33b82c840261c"
       },
       {
-        "bytes": 117242,
+        "bytes": 262160,
         "path": "src/giclab/harness/t07_bounded_supervisor.py",
-        "sha256": "ab206d00bbd8e7ba8fe69e1c08de350184bab5c821ecaa526efeb2ba23e69951"
+        "sha256": "9ee429b7f131079be7327186ba75013c7d5455b71802558261fbff98077e25e3"
       },
       {
         "bytes": 4099,
@@ -639,7 +655,7 @@
         "sha256": "b71b8c979529e8530e9157069b3e765f649ee0349d8c6233d4244b98e3f658ad"
       }
     ],
-    "reviewed_commit": "4c15b8aaf61a260dbdc0063538a2d8500ac95a45"
+    "reviewed_commit": "e3c68268ecb02375a7b3f78da0187ce1136f06c0"
   },
   "lambda": {
     "api_base_url": "https://cloud.lambda.ai",
@@ -686,9 +702,12 @@
     "container_shm_bytes": 1073741824,
     "container_term_seconds": 5,
     "container_tmpfs_bytes": 134217728,
+    "docker_cleanup_reserved_calls": 48,
+    "docker_cleanup_reserved_output_bytes": 8388608,
     "docker_control_output_bytes": 33554432,
     "docker_lifecycle_call_scope": "aggregate-work-and-cleanup",
     "docker_lifecycle_calls": 128,
+    "early_failure_evidence_bytes": 1048576,
     "external_prewrite_floor_bytes": 200350182605,
     "external_retained_floor_bytes": 200048192717,
     "implicit_provider_retries": 0,
@@ -725,7 +744,9 @@
     "remote_evidence_bytes": 268435456,
     "remote_preflight_free_bytes": 34359738368,
     "runtime_disk_increment_bytes": 17179869184,
-    "sealed_bundle_bytes": 301989888
+    "sealed_bundle_bytes": 301989888,
+    "upload_bundle_bytes": 8388608,
+    "upload_bundle_files": 36
   },
   "post_launch_stop_conditions": [
     "cloud_ide_unavailable",
@@ -750,6 +771,8 @@
         "linux/amd64",
         "--network",
         "none",
+        "--pid",
+        "private",
         "--ipc",
         "private",
         "--cgroupns",
@@ -805,7 +828,7 @@
         "${IMAGE_ID}",
         "/opt/giclab/browser_preflight.py"
       ],
-      "container_create_template_sha256": "af86b7d3b9407f7e5f04c253d49fe7a94f5af77543b17c159a3482becb067b88",
+      "container_create_template_sha256": "fbceb0b9b055315a5664c81e60e0cd983f3ce721216ce4bc748f87c557f80aa6",
       "model_calls": 0,
       "network": "none",
       "run_id": "RUN-T07-BOUNDED-BROWSER-PREFLIGHT-0001"
@@ -822,6 +845,8 @@
         "linux/amd64",
         "--network",
         "bridge",
+        "--pid",
+        "private",
         "--ipc",
         "private",
         "--cgroupns",
@@ -883,7 +908,7 @@
         "/usr/bin/python3",
         "/opt/giclab/model_preflight.py"
       ],
-      "container_create_template_sha256": "eb5a7c049fe1472e42c9ffd7804d3267b1ad635658a9e5cbf38d375af7e548ca",
+      "container_create_template_sha256": "4ba91c797522398b7b26fc80b06d89bbbb54481e8fc79c80e3c4c7cafb6d433a",
       "metadata_gets": 1,
       "method": "GET",
       "model_calls": 0,
@@ -896,7 +921,8 @@
     "cap_method": "all-model-tokens-priced-at-output-rate",
     "model": "gpt-4o-2024-11-20",
     "provider": "OpenAI",
-    "service_tier": "standard",
+    "api_request_service_tier": "default",
+    "pricing_class": "standard",
     "standard_cached_input_usd_per_million": 1.25,
     "standard_input_usd_per_million": 2.5,
     "standard_output_usd_per_million": 10.0
@@ -1158,6 +1184,132 @@
         "${PRIVATE_BINDING_SHA256}",
         "--phase",
         "termination"
+      ],
+      "prepare_bundle": [
+        "${REPOSITORY_ROOT}/.venv/bin/python",
+        "-I",
+        "${REPOSITORY_ROOT}/containers/sira-smoke/bounded/local_supervisor_bootstrap.py",
+        "--repository-root",
+        "${REPOSITORY_ROOT}",
+        "--supervisor-file",
+        "${REPOSITORY_ROOT}/src/giclab/harness/t07_bounded_supervisor.py",
+        "--supervisor-sha256",
+        "${SUPERVISOR_SHA256}",
+        "--plan",
+        "${REPOSITORY_ROOT}/containers/sira-smoke/bounded/bounded-smoke-plan-v1.json",
+        "--plan-sha256",
+        "${PLAN_SHA256}",
+        "--contract-file",
+        "${REPOSITORY_ROOT}/src/giclab/harness/t07_bounded_smoke.py",
+        "--contract-sha256",
+        "${CONTRACT_SHA256}",
+        "--expected-commit",
+        "${EXECUTION_COMMIT}",
+        "prepare-bundle",
+        "--authorization",
+        "${REPOSITORY_ROOT}/artifacts/t07/bounded/RUN-T07-BOUNDED-HOST-0001/authorization.json",
+        "--authorization-sha256",
+        "${AUTHORIZATION_SHA256}",
+        "--private-binding",
+        "${REPOSITORY_ROOT}/artifacts/t07/bounded/RUN-T07-BOUNDED-HOST-0001/private-binding.json",
+        "--private-binding-sha256",
+        "${PRIVATE_BINDING_SHA256}"
+      ],
+      "release_bootstrap": [
+        "${REPOSITORY_ROOT}/.venv/bin/python",
+        "-I",
+        "${REPOSITORY_ROOT}/containers/sira-smoke/bounded/local_supervisor_bootstrap.py",
+        "--repository-root",
+        "${REPOSITORY_ROOT}",
+        "--supervisor-file",
+        "${REPOSITORY_ROOT}/src/giclab/harness/t07_bounded_supervisor.py",
+        "--supervisor-sha256",
+        "${SUPERVISOR_SHA256}",
+        "--plan",
+        "${REPOSITORY_ROOT}/containers/sira-smoke/bounded/bounded-smoke-plan-v1.json",
+        "--plan-sha256",
+        "${PLAN_SHA256}",
+        "--contract-file",
+        "${REPOSITORY_ROOT}/src/giclab/harness/t07_bounded_smoke.py",
+        "--contract-sha256",
+        "${CONTRACT_SHA256}",
+        "--expected-commit",
+        "${EXECUTION_COMMIT}",
+        "release-bootstrap",
+        "--authorization",
+        "${REPOSITORY_ROOT}/artifacts/t07/bounded/RUN-T07-BOUNDED-HOST-0001/authorization.json",
+        "--authorization-sha256",
+        "${AUTHORIZATION_SHA256}",
+        "--private-binding",
+        "${REPOSITORY_ROOT}/artifacts/t07/bounded/RUN-T07-BOUNDED-HOST-0001/private-binding.json",
+        "--private-binding-sha256",
+        "${PRIVATE_BINDING_SHA256}",
+        "--provider-image-attestation",
+        "confirmed-in-provider-console"
+      ],
+      "verify_inbound_complete": [
+        "${REPOSITORY_ROOT}/.venv/bin/python",
+        "-I",
+        "${REPOSITORY_ROOT}/containers/sira-smoke/bounded/local_supervisor_bootstrap.py",
+        "--repository-root",
+        "${REPOSITORY_ROOT}",
+        "--supervisor-file",
+        "${REPOSITORY_ROOT}/src/giclab/harness/t07_bounded_supervisor.py",
+        "--supervisor-sha256",
+        "${SUPERVISOR_SHA256}",
+        "--plan",
+        "${REPOSITORY_ROOT}/containers/sira-smoke/bounded/bounded-smoke-plan-v1.json",
+        "--plan-sha256",
+        "${PLAN_SHA256}",
+        "--contract-file",
+        "${REPOSITORY_ROOT}/src/giclab/harness/t07_bounded_smoke.py",
+        "--contract-sha256",
+        "${CONTRACT_SHA256}",
+        "--expected-commit",
+        "${EXECUTION_COMMIT}",
+        "verify-inbound",
+        "--authorization",
+        "${REPOSITORY_ROOT}/artifacts/t07/bounded/RUN-T07-BOUNDED-HOST-0001/authorization.json",
+        "--authorization-sha256",
+        "${AUTHORIZATION_SHA256}",
+        "--private-binding",
+        "${REPOSITORY_ROOT}/artifacts/t07/bounded/RUN-T07-BOUNDED-HOST-0001/private-binding.json",
+        "--private-binding-sha256",
+        "${PRIVATE_BINDING_SHA256}",
+        "--disposition",
+        "complete"
+      ],
+      "verify_inbound_failed": [
+        "${REPOSITORY_ROOT}/.venv/bin/python",
+        "-I",
+        "${REPOSITORY_ROOT}/containers/sira-smoke/bounded/local_supervisor_bootstrap.py",
+        "--repository-root",
+        "${REPOSITORY_ROOT}",
+        "--supervisor-file",
+        "${REPOSITORY_ROOT}/src/giclab/harness/t07_bounded_supervisor.py",
+        "--supervisor-sha256",
+        "${SUPERVISOR_SHA256}",
+        "--plan",
+        "${REPOSITORY_ROOT}/containers/sira-smoke/bounded/bounded-smoke-plan-v1.json",
+        "--plan-sha256",
+        "${PLAN_SHA256}",
+        "--contract-file",
+        "${REPOSITORY_ROOT}/src/giclab/harness/t07_bounded_smoke.py",
+        "--contract-sha256",
+        "${CONTRACT_SHA256}",
+        "--expected-commit",
+        "${EXECUTION_COMMIT}",
+        "verify-inbound",
+        "--authorization",
+        "${REPOSITORY_ROOT}/artifacts/t07/bounded/RUN-T07-BOUNDED-HOST-0001/authorization.json",
+        "--authorization-sha256",
+        "${AUTHORIZATION_SHA256}",
+        "--private-binding",
+        "${REPOSITORY_ROOT}/artifacts/t07/bounded/RUN-T07-BOUNDED-HOST-0001/private-binding.json",
+        "--private-binding-sha256",
+        "${PRIVATE_BINDING_SHA256}",
+        "--disposition",
+        "failed"
       ]
     },
     "automatic_retries": 0,
@@ -1227,6 +1379,13 @@
       "sha256": "46fd914a3927db808d6d8c0d89933300a12e586927cbc80171097a41715c5104",
       "subject": "OpenAI API pricing documentation",
       "url": "https://openai.com/api/pricing/"
+    },
+    {
+      "bytes": 1619873,
+      "retrieved_at_utc": "2026-08-12T01:51:26Z",
+      "sha256": "b33c4a8798d3a12f4c466c7791cdb936f47c82810d844b4c551567f0a62ac83e",
+      "subject": "OpenAI Chat Completions service-tier API reference",
+      "url": "https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create"
     },
     {
       "bytes": 2368,
@@ -1310,7 +1469,7 @@
     "python": "3.10",
     "routing_patch_sha256": "4d7e2a25f4313fc754db0fa17aeda51cc5cd75a5653adaf13b01ce87a71cb8ed",
     "routing_sha256": "8a0e6e2934c98ba3faefab51c6408da2476df428bd43688e41d8aea8280c9619",
-    "runtime_adaptation_sha256": "894783a47c19efc5e141a90a4dd63920b9440e1ef231aad5b2738b1f524bbbcd",
+    "runtime_adaptation_sha256": "c461dce20fea9e743135cad98b664213a393e46f35d1c1a8434212b2f0367dbb",
     "upstream_commit": "93fb8d72de71f9a4a13419670adeb34d93cf7acd",
     "upstream_tree": "6a6d9068b94d7632d3533a3d6f013d4de6ff76e8",
     "uv_lock_sha256": "138585129c7f369887591d30d9727f8dd466639fa78fb00adc5a04f1e9b2d76e",
@@ -1328,128 +1487,144 @@
       "stop_on_failure": true
     },
     {
+      "action": "prepare_exact_manifest_owned_upload_bundle",
+      "actor": "local-verifier",
+      "ordinal": 2,
+      "stop_on_failure": true
+    },
+    {
       "action": "read_only_provider_preflight",
       "actor": "observer",
-      "ordinal": 2,
+      "ordinal": 3,
       "stop_on_failure": true
     },
     {
       "action": "apply_temporary_private_32_global_firewall_if_needed",
       "actor": "user",
-      "ordinal": 3,
+      "ordinal": 4,
       "stop_on_failure": true
     },
     {
       "action": "create_one_unique_owned_regional_ruleset_if_needed",
       "actor": "user",
-      "ordinal": 4,
+      "ordinal": 5,
       "stop_on_failure": true
     },
     {
       "action": "verify_exact_security_controls_before_launch",
       "actor": "observer",
-      "ordinal": 5,
+      "ordinal": 6,
       "stop_on_failure": true
     },
     {
       "action": "launch_exactly_one_selected_instance_with_one_click",
       "actor": "user",
-      "ordinal": 6,
+      "ordinal": 7,
       "stop_on_failure": true
     },
     {
       "action": "bind_exactly_one_owned_instance",
       "actor": "observer",
-      "ordinal": 7,
+      "ordinal": 8,
+      "stop_on_failure": true
+    },
+    {
+      "action": "issue_single_use_bootstrap_release_after_image_attestation",
+      "actor": "local-verifier",
+      "ordinal": 9,
       "stop_on_failure": true
     },
     {
       "action": "open_cloud_ide_jupyter",
       "actor": "user",
-      "ordinal": 8,
-      "stop_on_failure": true
-    },
-    {
-      "action": "upload_exact_bounded_bundle_secret_file_and_authorization",
-      "actor": "user",
-      "ordinal": 9,
-      "stop_on_failure": true
-    },
-    {
-      "action": "run_hash_first_bootstrap_once",
-      "actor": "bootstrap",
       "ordinal": 10,
       "stop_on_failure": true
     },
     {
-      "action": "run_no_network_browser_lifecycle_preflight",
-      "actor": "bootstrap",
+      "action": "upload_exact_archive_bootstrap_secret_authorization_and_release",
+      "actor": "user",
       "ordinal": 11,
       "stop_on_failure": true
     },
     {
-      "action": "verify_exact_model_snapshot_once",
+      "action": "verify_and_extract_exact_bundle_then_run_once",
       "actor": "bootstrap",
       "ordinal": 12,
       "stop_on_failure": true
     },
     {
-      "action": "run_reactive_once_then_simulative_once",
+      "action": "run_no_network_browser_lifecycle_preflight",
       "actor": "bootstrap",
       "ordinal": 13,
       "stop_on_failure": true
     },
     {
-      "action": "capture_remove_verify_and_package_success_or_failure_evidence",
+      "action": "verify_exact_model_snapshot_once",
       "actor": "bootstrap",
       "ordinal": 14,
       "stop_on_failure": true
     },
     {
-      "action": "download_success_or_failure_evidence_and_identity_records",
-      "actor": "user",
+      "action": "run_reactive_once_then_simulative_once",
+      "actor": "bootstrap",
       "ordinal": 15,
       "stop_on_failure": true
     },
     {
-      "action": "verify_inbound_manifest_hashes_and_retain_source",
-      "actor": "local-verifier",
+      "action": "capture_remove_verify_and_package_success_or_failure_evidence",
+      "actor": "bootstrap",
       "ordinal": 16,
       "stop_on_failure": true
     },
     {
-      "action": "terminate_exact_bound_instance",
+      "action": "download_normal_or_early_failure_evidence_and_identity_records",
       "actor": "user",
       "ordinal": 17,
       "stop_on_failure": true
     },
     {
-      "action": "verify_exact_instance_terminal_or_absent_and_billing_stopped",
-      "actor": "observer",
+      "action": "verify_inbound_manifest_hashes_before_provider_termination",
+      "actor": "local-verifier",
       "ordinal": 18,
       "stop_on_failure": true
     },
     {
-      "action": "delete_owned_regional_ruleset_and_restore_global_firewall_if_changed",
+      "action": "terminate_exact_bound_instance",
       "actor": "user",
       "ordinal": 19,
       "stop_on_failure": true
     },
     {
-      "action": "verify_ruleset_absence_and_exact_firewall_restoration",
+      "action": "verify_exact_instance_terminal_or_absent_and_billing_stopped",
       "actor": "observer",
       "ordinal": 20,
       "stop_on_failure": true
     },
     {
+      "action": "delete_owned_regional_ruleset_and_restore_global_firewall_if_changed",
+      "actor": "user",
+      "ordinal": 21,
+      "stop_on_failure": true
+    },
+    {
+      "action": "verify_ruleset_absence_and_exact_firewall_restoration",
+      "actor": "observer",
+      "ordinal": 22,
+      "stop_on_failure": true
+    },
+    {
       "action": "seal_and_copy_complete_or_failed_evidence_to_external_archive",
       "actor": "local-verifier",
-      "ordinal": 21,
+      "ordinal": 23,
       "stop_on_failure": true
     }
   ],
   "storage": {
     "archive_cap_bytes": 301989888,
+    "external_archive_required_upload_artifacts": [
+      "upload-bundle/t07-bounded-repository.tar",
+      "upload-bundle/t07-bounded-bootstrap.py"
+    ],
     "external_archive_root": "/Volumes/Macintosh HD - Data/GIC-Lab/t07/sealed-artifacts/RUN-T07-BOUNDED-HOST-0001",
     "external_mount": "/Volumes/Macintosh HD - Data",
     "external_physical_store_uuid": "7904A6F1-F483-4ED7-9E34-BFECAB31C63E",
@@ -1460,11 +1635,17 @@
     "internal_fallback": false,
     "live_bidirectional_sync": false,
     "local_inbound_root": "artifacts/t07/bounded/RUN-T07-BOUNDED-HOST-0001/inbound",
+    "local_upload_root": "artifacts/t07/bounded-upload/RUN-T07-BOUNDED-HOST-0001",
     "mac_prewrite_floor_bytes": 8891924480,
     "mac_retained_floor_bytes": 8589934592,
     "one_way_copy": true,
     "persistent_filesystem_count": 0,
     "remote_active_root": "/home/ubuntu/t07-bounded-output-0001",
+    "remote_bootstrap_file": "/home/ubuntu/t07-bounded-bootstrap.py",
+    "remote_bundle_archive": "/home/ubuntu/t07-bounded-repository.tar",
+    "remote_bundle_root": "/home/ubuntu/t07-bounded-bundle",
+    "remote_secondary_failure_root": "/home/ubuntu/t07-bounded-output-0001-early-failure",
+    "remote_single_use_claim_root": "/home/ubuntu/t07-bounded-output-0001",
     "source_retained_until_destination_hash_verified": true
   }
 }

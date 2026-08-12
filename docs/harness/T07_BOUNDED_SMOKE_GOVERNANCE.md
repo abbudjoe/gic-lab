@@ -70,39 +70,79 @@ the global baseline; then archive the local evidence.
 - An executable local supervisor, not a prose-only observer declaration. It writes a
   bounded append-only fsync ledger before each of 13 GET-only requests, validates raw
   bodies in memory, and retains only schema-declared, credential-filtered receipts
-  under the ignored run root. A failed execution phase becomes a typed cleanup-only
-  capability: attempted ordinals cannot replay, while termination/restoration GETs
-  remain available after the execution window expires.
+  under the ignored run root. Every derived report and state transition is replayed
+  from that ledger, including active and terminal observation timestamps. A failed
+  execution phase becomes a typed cleanup-only capability: attempted ordinals cannot
+  replay, while termination/restoration GETs remain available after the execution
+  window expires.
 - Seven prelaunch GETs; two security GETs after manual firewall/ruleset changes and
   before launch; one post-launch instance binding GET; one terminal-instance GET
   before ruleset deletion; and two final security GETs after restoration.
 - Private resource values materialized from the sealed inputs into one separately
   hashed binding. Public documents retain only aliases, counts, and hashes.
+- The local supervisor creates a deterministic tracked-only USTAR upload archive from
+  exactly the plan plus its 34 implementation artifacts, with a separately copied
+  reviewed bootstrap and a release that binds both hashes. No untracked, ignored,
+  private, `.env`, `.git`, `.secrets`, or prior-artifact input is admissible. The two
+  upload files are retained locally and must be included in the sealed external
+  archive.
 - A pinned SiRA commit/tree/lock/patch, pinned amd64 Playwright image identities,
   exact argument arrays, exact dated model routing, and one authenticated model
-  metadata GET before either condition.
-- Four owned containers with private PID/cgroup namespaces, no host PID/network/IPC,
-  no privilege or runtime socket, capabilities dropped, no-new-privileges, read-only
-  root, restart `no`, finite CPU/memory/PID/shared-memory/log/wall/call limits.
+  metadata GET before either condition. Every Chat Completions request explicitly
+  selects API tier `default`; every reconciled response must report `default`, so the
+  standard-price budget never relies on project-default `auto` routing.
+- A single-use bootstrap release is created only after the post-launch ledger/report
+  replay succeeds and the user attests the selected provider image in the console.
+  The release, authorization, private binding, observer-state hash, report hash,
+  commit, plan, and active timestamp are revalidated remotely and recorded in
+  `bootstrap-authority.json` before any workload command.
+- The fixed canonical root `/home/ubuntu/t07-bounded-output-0001` is exclusively
+  created and fsynced before fallible invocation, authorization, release, archive,
+  plan, contract, or secret validation. That directory—not a later imported module—is
+  the one-shot attempt claim: any terminal pre-secret failure burns the run identity,
+  seals a bounded early-failure prefix when possible, and forbids replay.
+- Four owned containers with explicitly private PID and cgroup namespaces, no host
+  PID/network/IPC, no privilege or runtime socket, capabilities dropped,
+  no-new-privileges, read-only root, restart `no`, and finite
+  CPU/memory/PID/shared-memory/log/wall/call limits. The remote bootstrap validates
+  the realized Docker inspect document before release; the local inbound verifier
+  independently replays that full realized policy from retained evidence.
 - Every container writes to a hard 67,108,864-byte `/giclab/attempt` tmpfs. Evidence is
   copied out through immutable container ID before removal; no writable host evidence
   bind is used. A bounded opt-in entrypoint barrier lets the supervisor prove a live
-  running state and nonempty process snapshot before release. Stop failure escalates
-  to kill, followed by terminal inspection, removal proof, and zero owned
+  running state and nonempty process snapshot before release. Create, pre-stop
+  inspect/process, stop/kill, terminal-inspect, removal, and residue commands have
+  hash-bound receipts; residue proof requires exact empty raw outputs. Stop failure
+  escalates to kill, followed by terminal inspection, removal proof, and zero owned
   container/network/volume residue checks.
 - `SIRA_API_KEY` is a private mode-0600 file mounted read-only at
   `/run/secrets/sira_api_key`; only the in-container child receives the environment
   value. `LAMBDA_API_KEY` is used only by the local in-process observer.
-  `OPENAI_API_KEY` is rejected. No value belongs in Git, argv, labels, image,
-  container configuration, path, log, screenshot, ledger, or archive.
-- Success and post-root failure paths both produce bounded, secret-scanned evidence
-  archives. Success includes the exact condition-command diff, normalized lifecycle
-  events, per-condition regulation decisions, pair budgets, and runtime compute-use
-  closeout. Before local sealing, the verifier checks decoded ZIP members, canonical
-  paths, manifest membership and hashes, pair linkages, credential shapes, and the
-  exact supplied secret value. The archive driver permits only the fixed run-root
-  surface, reads every destination back, verifies source/destination SHA-256, fsyncs,
-  atomically finalizes, retains the source, and has no internal-disk fallback.
+  `OPENAI_API_KEY` is rejected. The remote bootstrap holds a no-follow file identity,
+  truncates and fsyncs it before unlink, verifies absence, and requires manual deletion
+  plus credential rotation on identity replacement or incomplete cleanup. No value
+  belongs in Git, argv, labels, image, container configuration, path, log, screenshot,
+  ledger, or archive. Semantic key/value and nested-JSON scans run before remote ZIP
+  creation, after local ZIP decoding, and against the external copy.
+- Success, post-root failure, and pre-root early failure paths all produce bounded,
+  secret-scanned evidence archives. Early failure reserves its exact disposition and
+  incident records, plus a cleanup receipt only when a secret lease was established
+  and destroyed; pre-authority failure does not invent an authority record. These
+  mandatory records precede optional files under a 1,048,576-byte cap.
+  Success includes the exact condition-command diff, raw condition payload/log hashes,
+  host environment, normalized lifecycle events, per-condition regulation decisions,
+  pair budgets, and runtime compute-use closeout. Before provider termination, the
+  local verifier must check decoded ZIP members, canonical paths, exact manifest
+  membership and hashes, pair linkages, provider/authority binding, command receipts
+  and meters, credential shapes, the actual supplied secret plus its raw/hex/base64/
+  URL-safe/SHA-256 derivatives when safely available, and the closed credential-
+  rotation invariant. Detected credential material or incomplete cleanup requires
+  manual credential rotation and keeps security closeout unresolved.
+  The final archive admits only the exact expected source set, snapshots each source
+  SHA-256, rechecks it during copy, reads every destination back, verifies
+  source/destination SHA-256, fsyncs, atomically finalizes, retains the source, and has
+  no internal-disk fallback. Cleanup cannot be declared complete when remote secret
+  cleanup is unverified.
 
 ## Deferred limitations
 

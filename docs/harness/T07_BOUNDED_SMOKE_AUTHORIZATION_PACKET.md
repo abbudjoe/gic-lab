@@ -8,22 +8,22 @@ Status: **ready for a fresh user decision; unauthorized; do not execute from thi
 |---|---|
 | Branch | `phase-1/sira-smoke-bounded` |
 | Fork / frozen parent | `397a391b736528dd1049023d629100193e823c49` |
-| Reviewed implementation commit | `4c15b8aaf61a260dbdc0063538a2d8500ac95a45` |
+| Reviewed implementation commit | `e3c68268ecb02375a7b3f78da0187ce1136f06c0` |
 | Required execution commit | `<EXACT_FINAL_CLEAN_BOUNDED_SMOKE_PACKET_COMMIT>`; supplied by the final handoff |
 | Plan ID | `PLAN-T07-BOUNDED-SIRA-SMOKE-V1` |
 | Host run | `RUN-T07-BOUNDED-HOST-0001` |
 | Reactive / simulative runs | `RUN-T07-BOUNDED-SIRA-REACTIVE-0001` / `RUN-T07-BOUNDED-SIRA-SIMULATIVE-0001` |
 | Plan | `containers/sira-smoke/bounded/bounded-smoke-plan-v1.json` |
-| Plan bytes / SHA-256 | 48,677 / `f469d25e3527a5f0bc678a52d458ec29dcb3d27342f045ed54f1ff0c18e813d3` |
-| Plan schema bytes / SHA-256 | 11,572 / `be96e9e729f2930780d80c343eba68b70c23a9fb61ef0c0b6dc47c3e5903450e` |
-| Authorization schema bytes / SHA-256 | 3,194 / `4821844cf2e7ba540ce1b5fea97ca7d61f926b8a22b2d11260858b5741434879` |
+| Plan bytes / SHA-256 | 55,789 / `0128e632e0a3a01f7ee0b9014396fed5782c8afa98459fe9ad4db5cc7db3148f` |
+| Plan schema bytes / SHA-256 | 11,572 / `225c81bb21c5a361ec7c96adcd9eca29c0953b3874c657ed78cb2dc6bea0a71d` |
+| Authorization schema bytes / SHA-256 | 3,290 / `8b542cd152818304761a1bc11027a1abfa7187cf49698929fb11fedbfed13b09` |
 | Private-binding schema bytes / SHA-256 | 3,415 / `39e9f8ea7205e924fef25995b6c801196b35f85473e32ce58d18ed110a857b43` |
 | Observer-ledger schema bytes / SHA-256 | 3,312 / `2d9ad9e1e43d7a229ee2ebfb44af82b5f7e6234300bd9a14d1072e0a53c4ad61` |
 | Evidence schema bytes / SHA-256 | 1,423 / `3f1b710ca9256696a56936a8fcbb71f9eed7fc36392579ed50ca0767df30d22e` |
-| Contract module bytes / SHA-256 | 62,161 / `bed93df0df4f9ece7a90ca713385bf6f2ea0e37b2fa618236bc563d612660d82` |
-| Local supervisor bytes / SHA-256 | 117,242 / `ab206d00bbd8e7ba8fe69e1c08de350184bab5c821ecaa526efeb2ba23e69951` |
-| Local hash-first bootstrap bytes / SHA-256 | 4,999 / `bab1a3f59dccc8becbe372d2a2c7d92643164cefc86ed6659d8dceba0ba82f6c` |
-| Remote bootstrap bytes / SHA-256 | 68,702 / `9a90c8285350f64e27b7652d3e45c0c04c6530210b26f67afc095f3145f81dc7` |
+| Contract module bytes / SHA-256 | 72,269 / `d6da182643b080e3e297716f1d65ce9c2e04d5157280c9f17aa33b82c840261c` |
+| Local supervisor bytes / SHA-256 | 262,160 / `9ee429b7f131079be7327186ba75013c7d5455b71802558261fbff98077e25e3` |
+| Local hash-first bootstrap bytes / SHA-256 | 7,276 / `0cd531ecd7584cb2d61caa3b0df8d6a60a82345c1f97fdddbd3c8aa6a16a9063` |
+| Remote bootstrap bytes / SHA-256 | 143,094 / `74aa58c2aacd2fc88423370c9d673fbda03faffe72f1e05de7fd4a1420d21e02` |
 
 The plan binds 34 implementation artifacts by exact byte size and SHA-256. A Git
 document cannot contain its own final commit SHA, so the copy-ready block contains one
@@ -72,9 +72,14 @@ The host is exactly `gpu_1x_a10`, `us-east-1`, x86_64, image alias `img-0032`
 The provider is OpenAI at `https://api.openai.com/v1/`; every SiRA role is
 `gpt-4o-2024-11-20`. First-party pages retrieved 2026-08-11 list that dated snapshot
 and standard prices USD 2.50/M input, USD 1.25/M cached input, and USD 10.00/M output.
-Their URL, retrieval time, bytes, and SHA-256 are in the plan. Public documentation is
-not account availability: the single future authenticated model GET must return the
-exact ID before either condition.
+The official Chat Completions reference retrieved 2026-08-12 (1,619,873 bytes,
+SHA-256 `b33c4a8798d3a12f4c466c7791cdb936f47c82810d844b4c551567f0a62ac83e`)
+says omission selects `auto`, while API request tier `default` selects standard
+pricing and the response reports its actual tier. Every completion therefore sends
+`service_tier="default"`; a missing or different response tier stops and remains
+unreconciled. All metadata URL/time/byte/hash records are in the plan. Public
+documentation is not account availability: the single future authenticated model GET
+must return the exact ID before either condition.
 
 SiRA is pinned to commit `93fb8d72de71f9a4a13419670adeb34d93cf7acd`, tree
 `6a6d9068b94d7632d3533a3d6f013d4de6ff76e8`, `uv.lock` SHA-256
@@ -119,7 +124,8 @@ configuration, logs, screenshots, ledgers, archives, Git, or notebook content.
 - Observer: 13 GETs; 1,048,576 response bytes each/13,631,488 aggregate;
   262,144-byte/96-event ledger; 4,096 bytes per event; 3,600 seconds total.
 - Evidence/storage: 268,435,456-byte remote evidence cap; 301,989,888-byte local and
-  external archive cap; exactly 125 copied payload files plus three seal files; 600
+  external archive cap; at most 125 copied payload files plus three seal files (128
+  total), with 34 payload plus three seal files expected on complete success; 600
   archive seconds; Mac
   prewrite/retained floors 8,891,924,480/8,589,934,592 bytes; external
   prewrite/retained floors 200,350,182,605/200,048,192,717 bytes.
@@ -141,18 +147,20 @@ secret-channel, or storage drift requires a new reviewed packet.
 I authorize T07 bounded SiRA smoke V1 only on exact clean commit
 <EXACT_FINAL_CLEAN_BOUNDED_SMOKE_PACKET_COMMIT> of branch
 phase-1/sira-smoke-bounded, descended from reviewed implementation commit
-4c15b8aaf61a260dbdc0063538a2d8500ac95a45 with all 34 plan-bound artifact hashes
+e3c68268ecb02375a7b3f78da0187ce1136f06c0 with all 34 plan-bound artifact hashes
 unchanged, using plan PLAN-T07-BOUNDED-SIRA-SMOKE-V1 at
-containers/sira-smoke/bounded/bounded-smoke-plan-v1.json, 48,677 bytes, SHA-256
-f469d25e3527a5f0bc678a52d458ec29dcb3d27342f045ed54f1ff0c18e813d3,
+containers/sira-smoke/bounded/bounded-smoke-plan-v1.json, 55,789 bytes, SHA-256
+0128e632e0a3a01f7ee0b9014396fed5782c8afa98459fe9ad4db5cc7db3148f,
 host run RUN-T07-BOUNDED-HOST-0001, reactive run
 RUN-T07-BOUNDED-SIRA-REACTIVE-0001, simulative run
 RUN-T07-BOUNDED-SIRA-SIMULATIVE-0001, and fresh authorization reference
 AUTH-T07-BOUNDED-SIRA-SMOKE-V1-2026-08-11.
 
 I authorize materialization of the plan's one mode-0600, Git-ignored, 3,600-second
-single-run authorization overlay and private binding; exactly 13 GET-only Lambda
-observer requests in the plan; and the user-only temporary global-firewall restriction,
+single-run authorization overlay and private binding; preparation of the exact
+tracked-only 36-member/8,388,608-byte-capped upload archive and separate reviewed
+bootstrap; exactly 13 GET-only Lambda observer requests in the plan; and the user-only
+temporary global-firewall restriction,
 creation of one owned regional ruleset, one manual launch click for
 gpu_1x_a10/us-east-1/img-0032 with no persistent filesystem, Cloud IDE/Jupyter access,
 bundle/authorization/secret-file upload, evidence download, termination of the exact
@@ -160,7 +168,9 @@ bound instance, deletion of only the owned ruleset, and exact global-firewall
 restoration. I authorize one pinned source/image/dependency build, one no-network
 local-static-page Chromium preflight, one GET of
 https://api.openai.com/v1/models/gpt-4o-2024-11-20, then SIRA-REACTIVE once followed
-by SIRA-SIMULATIVE once, using gpt-4o-2024-11-20 for every role.
+by SIRA-SIMULATIVE once, using gpt-4o-2024-11-20 for every role. Every Chat
+Completions request must set service_tier="default" and every reconciled response
+must report service_tier="default"; missing or different response tiers stop.
 
 Caps are USD 4.00 OpenAI aggregate/USD 2.00 per condition; 400,000/200,000 model
 tokens; 77 model-call attempts total (16/61); one browser action, 120 seconds,
@@ -169,19 +179,26 @@ Lambda instance, one launch click, zero persistent filesystem, USD 2.00 Lambda n
 cost, 3,600 seconds from authorization materialization with termination click by
 3,300 seconds; 13 Lambda GETs; 2,147,483,648 setup-transfer admission bytes;
 17,179,869,184 incremental runtime bytes; 268,435,456 remote evidence bytes;
-301,989,888 local/external archive bytes; 128 aggregate Docker lifecycle calls; and
+1,048,576 early-failure evidence bytes; 301,989,888 local/external archive bytes;
+4,096 remote evidence entries; 128 aggregate Docker lifecycle calls; and
 the exact CPU/memory/PID/tmpfs/log/output/observer/storage caps in the plan.
 
 The operator may access only LAMBDA_API_KEY through the approved nonlogging local
 channel. I will supply SIRA_API_KEY only as the private mode-0600 secret file named by
-the plan; its value may not enter argv, labels, paths, images, container configuration,
+the plan, containing only its raw value with an optional final newline and no
+`SIRA_API_KEY=` prefix. It is created and uploaded outside notebook cells and logged
+commands; its value may not enter argv, labels, paths, images, container configuration,
 logs, screenshots, ledgers, archives, Git, or notebook output. OPENAI_API_KEY is
 forbidden.
 
 I authorize the exact success-or-failure evidence capture and one-way hash-verified
 archive copy to the approved APFS/UTDM root, with source retention, held no-follow
 identity checks, decoded ZIP/member/manifest/pair verification, exact floors, and no
-internal fallback. On any stop condition, do not
+internal fallback. The canonical remote output root is claimed once before authority,
+bundle, plan, contract, or secret validation and is burned on any terminal failure.
+The external archive must include the exact local upload archive and bootstrap.
+Detected credential material or incomplete secret cleanup requires manual credential
+rotation and keeps security closeout unresolved. On any stop condition, do not
 retry: preserve safe evidence, remove owned containers when possible, terminate the
 exact bound instance, verify terminal/nonbillable state, remove only the owned
 ruleset, and restore the exact firewall baseline. Stop after the pair or first terminal

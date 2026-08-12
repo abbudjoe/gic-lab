@@ -15,6 +15,16 @@ arrays use the repository's pinned `.venv/bin/python` rather than the macOS syst
 Python. Provider bodies are validated in memory and reduced to allowlisted,
 secret-free receipts before anything is retained.
 
+`prepare-bundle` produces one deterministic tracked-only USTAR archive with exactly
+36 members: its manifest, the bounded plan, and the 34 plan-bound implementation
+artifacts. The standalone bootstrap is transferred separately. Both identities are
+bound into the single-use release and later retained in the sealed external archive;
+untracked, ignored, private, environment, Git, artifact, or secret paths are rejected.
+On the host, the standalone bootstrap verifies itself and the archive before importing
+uploaded code, then exclusively claims and fsyncs
+`/home/ubuntu/t07-bounded-output-0001` before authority, plan, contract, release, or
+secret validation. Any terminal failure burns that canonical run root.
+
 `Containerfile.amd64` builds from the immutable Playwright 1.39.0 multi-platform
 index and requires the reviewed linux/amd64 manifest. The future staging step supplies
 only a clean archive of SiRA commit `93fb8d72de71f9a4a13419670adeb34d93cf7acd`,
@@ -24,6 +34,12 @@ context. Runtime outputs use a 64 MiB tmpfs inside each owned container and are 
 out by immutable container ID before removal; there is no writable host evidence bind.
 Both successful and failed post-root bootstraps produce bounded, secret-scanned
 evidence archives for manual download before provider termination.
+
+The secret scan covers the supplied value and its raw, hex, Base64, URL-safe Base64,
+and SHA-256 derivatives. Credential material or incomplete cleanup requires manual
+credential rotation and prevents a resolved security closeout. Every Chat Completions
+request explicitly selects API service tier `default`; only a response that reports
+that same tier can be reconciled as standard-price execution.
 
 The bounded plan opts each workload container into a deterministic entrypoint
 readiness barrier; the shared entrypoint's other callers retain their existing

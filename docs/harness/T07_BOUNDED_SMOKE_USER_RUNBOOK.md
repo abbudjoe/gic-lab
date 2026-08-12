@@ -8,30 +8,38 @@ shell strings, improvise a retry, or substitute a resource.
 
 ## Bound identities
 
-- Plan: `PLAN-T07-BOUNDED-SIRA-SMOKE-V1`, 48,677 bytes, SHA-256
-  `f469d25e3527a5f0bc678a52d458ec29dcb3d27342f045ed54f1ff0c18e813d3`.
+- Plan: `PLAN-T07-BOUNDED-SIRA-SMOKE-V1`, 55,789 bytes, SHA-256
+  `0128e632e0a3a01f7ee0b9014396fed5782c8afa98459fe9ad4db5cc7db3148f`.
 - Contract: SHA-256
-  `bed93df0df4f9ece7a90ca713385bf6f2ea0e37b2fa618236bc563d612660d82`.
+  `d6da182643b080e3e297716f1d65ce9c2e04d5157280c9f17aa33b82c840261c`.
 - Local supervisor: SHA-256
-  `ab206d00bbd8e7ba8fe69e1c08de350184bab5c821ecaa526efeb2ba23e69951`.
+  `9ee429b7f131079be7327186ba75013c7d5455b71802558261fbff98077e25e3`.
 - Local hash-first bootstrap: SHA-256
-  `bab1a3f59dccc8becbe372d2a2c7d92643164cefc86ed6659d8dceba0ba82f6c`.
+  `0cd531ecd7584cb2d61caa3b0df8d6a60a82345c1f97fdddbd3c8aa6a16a9063`.
 - Reviewed implementation commit:
-  `4c15b8aaf61a260dbdc0063538a2d8500ac95a45`.
+  `e3c68268ecb02375a7b3f78da0187ce1136f06c0`.
 
 ## Ordered procedure
 
-1. Remain present for the whole supervised window. Keep the Lambda termination
-   control visible and credible. The 3,600-second authorization/provider timer begins
-   when the local authorization is materialized, not at launch; plan to click
-   terminate no later than 3,300 seconds after materialization.
-2. Run the plan's `materialize` array once with the exact final clean execution
+Remain present for the whole supervised window and keep the Lambda termination
+control visible. The 3,600-second authorization/provider timer begins at
+materialization, not launch; terminate no later than 3,300 seconds after
+materialization. Then perform exactly the plan's 23 steps:
+
+1. Run the plan's `materialize` array once with the exact final clean execution
    commit and fresh authorization reference. It must create a fresh mode-0600
    authorization, private binding, observer state, request ledger, and summary under
    `artifacts/t07/bounded/RUN-T07-BOUNDED-HOST-0001/`. Stop if that root already
    exists or any identity, hash, permission, storage, freshness, or floor check fails.
    The exact local arrays require the repository's pinned `.venv/bin/python`; do not
    substitute macOS `/usr/bin/python3`.
+2. Run `prepare_bundle` once. It must create a deterministic tracked-only USTAR
+   archive with exactly 36 members: `BUNDLE_MANIFEST.json`, the plan, and all 34
+   plan-bound implementation artifacts. It also emits the reviewed remote bootstrap
+   separately under
+   `artifacts/t07/bounded-upload/RUN-T07-BOUNDED-HOST-0001/`. The archive and
+   bootstrap together are capped at 8,388,608 bytes; untracked, ignored, private,
+   `.env`, `.git`, `.secrets`, and `artifacts` inputs are forbidden.
 3. Run `observe_prelaunch` once. Its seven GETs must prove the exact offered
    `gpu_1x_a10`, `us-east-1`, `img-0032`, `fractal-lambda-codex`, 129-cent/hour
    price, capacity, key fingerprint, sealed global baseline, zero nonterminal
@@ -47,43 +55,69 @@ shell strings, improvise a retry, or substitute a resource.
    price and image. Click **Launch** exactly once; never click again after ambiguity.
 8. Run `observe_post_launch` once. Its one GET must bind exactly one matching active
    instance and immutable instance ID or stop for incident cleanup.
-9. Open Cloud IDE/Jupyter on that exact instance. Do not use SSH.
-10. Upload the exact repository bundle, the mode-0600 authorization JSON, and the
-    mode-0600 secret file to the plan's fixed paths. The secret file contains only
-    `SIRA_API_KEY`, stays outside source/evidence roots, and never enters a cell,
-    command, environment assignment, label, log, screenshot, or path.
-11. Execute the plan's `bootstrap_argv_template` once, replacing only its declared
-    placeholders with the exact plan, contract, authorization, and execution-commit
-    hashes. The bootstrap must verify the source/tree, immutable patch, lock, uv wheel,
-    digest-pinned Playwright base, final image ID, runtime-disk cap, and shared
-    work/cleanup call meter.
-12. Require the one no-network local-static-page Chromium lifecycle preflight to pass,
-    including stop/kill/remove and zero owned residue.
-13. Require the one authenticated metadata GET to return exactly
-    `gpt-4o-2024-11-20`; verify price and budget boundaries before either condition.
-14. Execute `SIRA-REACTIVE` once, then `SIRA-SIMULATIVE` once. Each gets at most one
-    browser action, 120 seconds, 200,000 tokens, USD 2.00 API cost, and no retry.
-15. On success, seal the complete evidence. On any post-root failure, seal the bounded
-    secret-scanned partial evidence. In either case remove all four owned containers
+9. Run `release_bootstrap` once only after the post-launch report replays cleanly and
+   the user attests that the console offered the exact bound image. The single-use
+   release binds the instance observation, authorization/private binding, plan,
+   execution commit, archive/manifest/bootstrap hashes, and canonical output root.
+10. Open Cloud IDE/Jupyter on that exact instance. Do not use SSH.
+11. Upload exactly `t07-bounded-repository.tar` to
+    `/home/ubuntu/t07-bounded-repository.tar`, `t07-bounded-bootstrap.py` to
+    `/home/ubuntu/t07-bounded-bootstrap.py`, the authorization to
+    `/home/ubuntu/t07-bounded-authorization.json`, the release to
+    `/home/ubuntu/t07-bounded-bootstrap-release.json`, and the private mode-0600
+    secret file to `/home/ubuntu/.config/giclab/sira_api_key`. Created and uploaded
+    outside every notebook cell and logged command, that file contains only the raw
+    value assigned to `SIRA_API_KEY`, optionally followed by one newline—never an
+    `SIRA_API_KEY=` prefix. It stays outside source/evidence roots, and the value never
+    enters a cell, argv, label, log, screenshot, environment/configuration listing, or
+    path.
+12. Execute the plan's `bootstrap_argv_template` once, replacing only its declared
+    placeholders. Before importing uploaded implementation code or opening the secret,
+    the standalone bootstrap must verify its own hash, claim the fresh canonical root
+    `/home/ubuntu/t07-bounded-output-0001`, verify the exact USTAR archive and release,
+    and extract to `/home/ubuntu/t07-bounded-bundle`. That root is permanently burned
+    for this run even on pre-secret failure. The bootstrap then verifies the
+    source/tree, immutable patch, lock, uv wheel, digest-pinned Playwright base, final
+    image ID, runtime-disk cap, and shared work/cleanup call meter.
+13. Require the one no-network local-static-page Chromium lifecycle preflight to pass,
+   including stop/kill/remove and zero owned residue.
+14. Require the one authenticated metadata GET to return exactly
+   `gpt-4o-2024-11-20`; verify price and budget boundaries before either condition.
+   Every Chat Completions request must explicitly carry `service_tier="default"`,
+   and every reconciled response must report `service_tier="default"`.
+15. Execute `SIRA-REACTIVE` once, then `SIRA-SIMULATIVE` once. Each gets at most one
+   browser action, 120 seconds, 200,000 tokens, USD 2.00 API cost, and no retry.
+16. On success, seal the complete evidence. On any failure, seal the bounded
+    secret-scanned normal or early-failure evidence under the already claimed root.
+    Retained command events record only argv hashes, return codes, byte counts, elapsed
+    time, and closed failure codes. In every case remove all four owned containers
     through immutable IDs and verify zero owned containers/networks/volumes.
-16. Download the produced success or failure archive, its exact identity JSON, and
-    `TERMINATE_REQUIRED.json` into the fresh local inbound root. The local verifier
-    must validate canonical stored ZIP paths, the complete member/manifest/hash set,
-    decoded secret absence, and—on success—the pair budget, command diff, normalized
-    events, regulation decisions, and compute closeout. Do not edit or unpack over an
-    existing root.
-17. Click **Terminate** for the exact bound instance regardless of workload outcome.
-18. Run `observe_termination` once. Its one GET must prove the bound instance terminal
-    or absent before changing the security resources.
-19. Delete only the bound owned regional ruleset, and restore the exact sealed global
-    baseline if it was changed.
-20. Run `observe_terminal` once. Its two GETs must prove owned-ruleset absence and the
-    exact global-baseline semantic hash.
-21. Run exactly one local archive array: `archive_complete` only for a validated pair,
-    otherwise `archive_failed`. It must use held no-follow APFS/UTDM descriptors,
-    reread every destination, verify every SHA-256, fsync, atomically finalize, retain
-    the local source, and use no internal fallback. The 128-file maximum is exactly
-    125 copied payload files plus three seal files. Then stop; do not interpret.
+17. Download the produced success or failure archive, its exact identity JSON, and
+   `TERMINATE_REQUIRED.json` into the fresh local inbound root. The local verifier
+   must validate canonical stored ZIP paths, the complete member/manifest/hash set,
+   decoded secret absence, and—on success—the pair budget, command diff, normalized
+   events, regulation decisions, and compute closeout. Do not edit or unpack over an
+   existing root.
+18. Run exactly one inbound verifier: `verify_inbound_complete` for a complete pair or
+    `verify_inbound_failed` otherwise. Verification must finish before provider
+    termination. Any actual secret derivative forces a credential-material incident
+    and manual credential rotation; incomplete deletion also requires rotation.
+19. Click **Terminate** for the exact bound instance regardless of workload outcome.
+20. Run `observe_termination` once. Its one GET must prove the bound instance terminal
+   or absent before changing the security resources.
+21. Delete only the bound owned regional ruleset, and restore the exact sealed global
+   baseline if it was changed.
+22. Run `observe_terminal` once. Its two GETs must prove owned-ruleset absence and the
+   exact global-baseline semantic hash.
+23. Run exactly one local archive array: `archive_complete` only for a validated pair,
+   otherwise `archive_failed`. It must use held no-follow APFS/UTDM descriptors,
+   reread every destination, verify every SHA-256, fsync, atomically finalize, retain
+   the local source, and use no internal fallback. The exact upload archive and
+   bootstrap must appear in the external archive as
+   `upload-bundle/t07-bounded-repository.tar` and
+   `upload-bundle/t07-bounded-bootstrap.py`. The cap is at most 125 copied payload
+   files plus three seal files (128 total); the expected complete-run set is 34
+   payload files plus three seal files (37 total). Then stop; do not interpret.
 
 ## Immediate stop and incident rule
 
