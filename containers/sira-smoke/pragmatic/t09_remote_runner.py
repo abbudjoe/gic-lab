@@ -688,9 +688,7 @@ def validate_provider_closeout_receipt(
     raise T09HostError(PROVIDER_EXECUTION_BLOCKER)
 
 
-def sanitized_dynamic_receipt(
-    _path: Path, value: dict[str, object]
-) -> dict[str, object]:
+def sanitized_dynamic_receipt(_path: Path, value: dict[str, object]) -> dict[str, object]:
     """Return only the already-sanitized validator projection."""
 
     return dict(value)
@@ -727,9 +725,7 @@ def scientific_seconds_remaining(root: Path, *, reserve_seconds: float = 0.0) ->
     pilot_started = state.get("pilot_started_at_epoch")
     if not isinstance(pilot_started, (int, float)) or isinstance(pilot_started, bool):
         raise T09HostError("scientific-work time origin is unavailable")
-    workload_remaining = MAX_SCIENTIFIC_WORKLOAD_SECONDS - (
-        time.time() - float(pilot_started)
-    )
+    workload_remaining = MAX_SCIENTIFIC_WORKLOAD_SECONDS - (time.time() - float(pilot_started))
     provider_remaining = provider_seconds_remaining(root, reserve_seconds=reserve_seconds)
     remaining = min(workload_remaining, provider_remaining)
     if remaining <= 0:
@@ -1727,9 +1723,7 @@ def execute_condition(args: argparse.Namespace) -> int:
         cleanup_receipt=cleanup_receipt,
     )
     remaining_attempt_seconds = MAX_CONDITION_WALL_SECONDS - (time.monotonic() - attempt_started)
-    remaining_pair_seconds = MAX_PAIR_WALL_SECONDS - (
-        time.time() - float(pair_started_epoch)
-    )
+    remaining_pair_seconds = MAX_PAIR_WALL_SECONDS - (time.time() - float(pair_started_epoch))
     remaining_runtime_seconds = scientific_seconds_remaining(
         artifact_root,
         reserve_seconds=PROVIDER_CLOSEOUT_RESERVE_SECONDS,
@@ -1942,9 +1936,7 @@ def verify_inbound(args: argparse.Namespace) -> None:
             "stage_id": STAGE_ID,
             "archive_sha256": identity["sha256"],
             "archive_bytes": identity["bytes"],
-            "owned_instance_identity_sha256": identity[
-                "owned_instance_identity_sha256"
-            ],
+            "owned_instance_identity_sha256": identity["owned_instance_identity_sha256"],
             "verified_before_provider_termination": True,
             "provider_closeout_still_required": True,
         },
@@ -1974,9 +1966,7 @@ def package(args: argparse.Namespace) -> None:
         expected_owned_instance_identity_sha256=str(
             stage_identity["owned_instance_identity_sha256"]
         ),
-        expected_entry_receipt_sha256=str(
-            stage_identity["provider_entry_receipt_sha256"]
-        ),
+        expected_entry_receipt_sha256=str(stage_identity["provider_entry_receipt_sha256"]),
         expected_package_commit=args.package_commit,
     )
     output_root = args.final_archive_root.resolve(strict=True)

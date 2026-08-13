@@ -508,8 +508,7 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
         and host_state.get("running") is False
     )
     browser_closed = (
-        runtime_cleanup_present
-        and runtime_cleanup.get("all_environment_closes_succeeded") is True
+        runtime_cleanup_present and runtime_cleanup.get("all_environment_closes_succeeded") is True
     ) or host_teardown_proves_browser_closed
     secret_removed = (
         isinstance(credential_cleanup, dict)
