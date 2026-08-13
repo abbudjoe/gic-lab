@@ -53,7 +53,10 @@ restoration. EXP-0001 remains unevaluated.
 Post-run reconciliation passes 57 focused T09/Phase-1 tests, repository validation,
 Ruff, strict mypy over 61 source files, all 1,333 repository tests, portable Quarto
 1.9.38 render of all 16 pages, site validation, and diff hygiene. Independent
-closeout review remains the final Assembly gate.
+closeout review of clean commit
+`0feab7d2f1a9fca013db9cb5bc98ff93411f6c24` returned **PASS** with no material
+finding after independently reconstructing the private provider/archive evidence and
+rerunning the focused and full gates. Final post-review smoke passes unchanged.
 
 The complete active DoD and command/evidence log are maintained in
 `docs/harness/T09_PRAGMATIC_CALIBRATION_PILOT_EXECUTION_PLAN.md`.

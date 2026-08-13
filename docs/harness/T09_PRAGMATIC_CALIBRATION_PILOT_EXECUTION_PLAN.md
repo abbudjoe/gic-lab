@@ -41,7 +41,7 @@ superiority/EXP-0001 conclusions.
 | T09-P3-10 | Retain reconstructable, structurally redacted private evidence and valid evaluator outcomes for every consumed attempt. | Evidence indexes, outcome schemas, archive manifest/hash. | met for the maximal preflight-only failure prefix: zero attempts were consumed, no evaluator outcome exists, and the private stage/provider archive is sealed and hash-bound |
 | T09-P3-11 | Prioritize cleanup, terminate the exact owned instance, verify terminal/absent state, and restore/delete only owned security resources. | Host cleanup, provider closeout, zero-instance/security receipts. | met: owned containers and temporary secret material were removed; the exact host is terminal/absent; zero T09 instances and restored security state are provider-verified |
 | T09-P3-12 | Reconcile actual calls, tokens, actions, wall, OpenAI/Lambda/total cost and update compute/project/experiment/readiness/decision/notebook records without a scientific conclusion. | Post-run commit and repository validation. | met: 0 model calls, 0 tokens, 0 browser actions, USD 0 OpenAI, and USD 0.414064252316667 Lambda are recorded without an EXP-0001 outcome |
-| T09-P3-13 | Pass focused tests, independent spec review, post-review smoke, `make validate`, privacy scans, `git diff --check`, and the final repository gates appropriate after evidence capture. | Command log in this plan. | partial: post-run 57-test focused suite, validation, formatting/diff hygiene, and portable-Quarto full gate with 1,333 tests / 16 pages pass; independent closeout review and post-review smoke remain |
+| T09-P3-13 | Pass focused tests, independent spec review, post-review smoke, `make validate`, privacy scans, `git diff --check`, and the final repository gates appropriate after evidence capture. | Command log in this plan. | met: post-run and independent gates pass; reviewer returned clean PASS at `0feab7d2f1a9fca013db9cb5bc98ff93411f6c24` after independently reconstructing private provider/archive evidence and rerunning 57 focused tests plus the full 1,333-test / 16-page portable-Quarto gate; final post-review smoke passes |
 
 ## Implementation mapping
 
@@ -150,6 +150,13 @@ superiority/EXP-0001 conclusions.
   all 1,333 repository tests, portable Quarto 1.9.38 render of all 16 pages, site
   validation, and `git diff --check`. Independent closeout review remains before the
   final clean handoff commit.
+- 2026-08-13: independent closeout review of clean reconciliation commit
+  `0feab7d2f1a9fca013db9cb5bc98ff93411f6c24` returned **PASS** with no material
+  finding. The reviewer independently reconstructed both provider bundles, every
+  archive member/hash/permission, the empty empirical prefix, image mismatch,
+  accounting, cleanup, privacy, GPU non-use, and public-state convergence; it reran
+  57 focused tests and the full 1,333-test / 16-page portable-Quarto gate. The final
+  post-review smoke and repository validation pass unchanged.
 
 ## Decisions and blockers
 
