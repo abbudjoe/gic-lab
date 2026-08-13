@@ -45,8 +45,9 @@ PLAN_ID: Final = "PLAN-EXP0001-PILOT-V4"
 HOST_RUN_ID: Final = "RUN-T09-PILOT-HOST-0002"
 ARCHIVE_ID: Final = "ARCHIVE-EXP0001-PILOT-V4-0002"
 STAGE_ID: Final = "STAGE-EXP0001-PILOT-V4-0002"
-QUALIFICATION_ID: Final = "QUAL-T09-PILOT-V4-IMAGE-0003"
-PRIOR_QUALIFICATION_ID: Final = "QUAL-T09-PILOT-V4-IMAGE-0002"
+QUALIFICATION_ID: Final = "QUAL-T09-PILOT-V4-IMAGE-0004"
+CONTEXT_FAILURE_QUALIFICATION_ID: Final = "QUAL-T09-PILOT-V4-IMAGE-0002"
+FAILED_CANDIDATE_QUALIFICATION_ID: Final = "QUAL-T09-PILOT-V4-IMAGE-0003"
 MODEL: Final = "gpt-4o-2024-11-20"
 SERVICE_TIER: Final = "default"
 HISTORICAL_IMAGE_ID: Final = (
@@ -58,6 +59,10 @@ SIRA_TREE: Final = "6a6d9068b94d7632d3533a3d6f013d4de6ff76e8"
 REPLACEMENT_IMAGE_TAG: Final = f"giclab/t09-pilot-v4:{SIRA_COMMIT[:12]}-0003"
 PRIOR_REPLACEMENT_IMAGE_TAG: Final = f"giclab/t09-pilot-v4:{SIRA_COMMIT[:12]}-0002"
 PACKAGE_TRANSITION_FROM_COMMIT: Final = "eda1d15387efbc2c269a33176f5c0e04b177e70c"
+PREVIOUS_PACKAGE_TRANSITION_COMMIT: Final = "97358563139532b139a79028909671d8e76f79b7"
+FAILED_CANDIDATE_OFFLINE_STDERR_SHA256: Final = (
+    "ec46a5dee7f41906d4de9d335ee18de31408a2759f6390712963e18ecfd6b16c"
+)
 PINNED_ENV_EXAMPLE_SHA256: Final = (
     "086eb43e37d1f74131ca1290119a7a13cb7544b0d943ff726dd13a45ea282933"
 )
@@ -602,12 +607,125 @@ def _capture_optional_command(
     return receipt
 
 
+def _copy_retained_prefix(source: Path, destination: Path, *, label: str) -> dict[str, object]:
+    before = _retained_tree_manifest(source, label=label)
+    shutil.copytree(source, destination, copy_function=shutil.copy2)
+    after = _retained_tree_manifest(destination, label=f"copied {label}")
+    if before != after:
+        raise T09HostError(f"{label} changed during evidence retention")
+    return before
+
+
+def retain_prior_qualification_failures(
+    *,
+    artifact_root: Path,
+    prior_artifact_root: Path,
+    failed_candidate_root: Path,
+    previous_transition_receipt: Path,
+    package_transition_receipt: Path,
+) -> dict[str, object]:
+    destination = artifact_root / "pilot-v4/prior-qualification-failures"
+    destination.mkdir(parents=True, mode=0o700)
+    context_manifest = _copy_retained_prefix(
+        prior_artifact_root,
+        destination / "qualification-0002",
+        label="context-rejection qualification prefix",
+    )
+    candidate_manifest = _copy_retained_prefix(
+        failed_candidate_root,
+        destination / "qualification-0003",
+        label="offline-preflight candidate prefix",
+    )
+    transition_copies: dict[str, str] = {}
+    for label, source in (
+        ("transition-0003", previous_transition_receipt),
+        ("transition-0004", package_transition_receipt),
+    ):
+        target = destination / f"{label}.json"
+        shutil.copy2(source, target)
+        metadata = target.stat(follow_symlinks=False)
+        if (
+            target.is_symlink()
+            or not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_nlink != 1
+            or stat.S_IMODE(metadata.st_mode) != 0o600
+            or file_sha256(target) != file_sha256(source)
+        ):
+            raise T09HostError("package transition receipt copy drifted")
+        transition_copies[label] = file_sha256(target)
+    receipt: dict[str, object] = {
+        "schema_version": "0.1.0",
+        "plan_id": PLAN_ID,
+        "host_run_id": HOST_RUN_ID,
+        "accepted_qualification_id": QUALIFICATION_ID,
+        "context_failure_manifest": context_manifest,
+        "failed_candidate_manifest": candidate_manifest,
+        "package_transition_receipts": transition_copies,
+        "empirical_entry_crossed": False,
+        "model_metadata_requests_before_acceptance": 0,
+        "task_model_requests": 0,
+        "task_browser_actions": 0,
+        "additional_provider_launches": 0,
+    }
+    write_exclusive(destination / "retention-receipt.json", receipt)
+    return receipt
+
+
+def carry_forward_replacement_image(
+    *,
+    artifact_root: Path,
+    failed_candidate_root: Path,
+    prefix: list[str],
+) -> dict[str, object]:
+    failed = _failed_candidate_manifest(
+        failed_candidate_root,
+        require_image_present=True,
+    )
+    image_id = failed.get("replacement_image_id")
+    if not isinstance(image_id, str) or image_id_if_present(prefix, image_id) != image_id:
+        raise T09HostError("failed candidate image cannot be carried forward")
+    source = failed_candidate_root / "pilot-v4/replacement-image-qualification"
+    destination = artifact_root / "pilot-v4/replacement-image-qualification"
+    _copy_retained_prefix(source, destination, label="failed candidate materialization")
+    prior_receipt_path = destination / "receipt.json"
+    prior_receipt = load_object(prior_receipt_path, label="carried candidate receipt")
+    if (
+        file_sha256(prior_receipt_path) != failed.get("materialization_receipt_sha256")
+        or prior_receipt.get("image_id") != image_id
+        or prior_receipt.get("build_count") != 1
+    ):
+        raise T09HostError("carried candidate materialization receipt drifted")
+    prior_receipt_path.unlink()
+    result: dict[str, object] = {
+        **prior_receipt,
+        "qualification_id": QUALIFICATION_ID,
+        "method": "single-built-candidate-carried-forward-after-host-control-repair",
+        "candidate_qualification_id": FAILED_CANDIDATE_QUALIFICATION_ID,
+        "accepted_qualification_id": QUALIFICATION_ID,
+        "candidate_materialization_receipt_sha256": failed["materialization_receipt_sha256"],
+        "candidate_failure_manifest_sha256": canonical_sha256(failed),
+        "build_count": 1,
+        "additional_build_count": 0,
+        "image_reused_by_exact_id": True,
+        "empirical_entry_before_carry_forward": False,
+    }
+    write_exclusive(prior_receipt_path, result)
+    return result
+
+
 def materialize_replacement_image(
     *,
     repository: Path,
     artifact_root: Path,
     prefix: list[str],
+    failed_candidate_root: Path | None = None,
 ) -> dict[str, object]:
+    if failed_candidate_root is not None:
+        return carry_forward_replacement_image(
+            artifact_root=artifact_root,
+            failed_candidate_root=failed_candidate_root.resolve(strict=True),
+            prefix=prefix,
+        )
     if image_id_if_present(prefix, REPLACEMENT_IMAGE_TAG) is not None:
         raise T09HostError("replacement image tag already exists; exactly one build is allowed")
 
@@ -962,6 +1080,37 @@ def contract_paths(repository: Path) -> dict[str, Path]:
     }
 
 
+def _retained_tree_manifest(root: Path, *, label: str) -> dict[str, object]:
+    files: list[dict[str, object]] = []
+    total = 0
+    for path in sorted(root.rglob("*")):
+        if path.is_symlink():
+            raise T09HostError(f"{label} contains a symlink")
+        metadata = path.stat(follow_symlinks=False)
+        if path.is_dir():
+            continue
+        if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
+            raise T09HostError(f"{label} contains an unsafe file")
+        total += metadata.st_size
+        if total > MAX_PILOT_DISK_BYTES:
+            raise T09HostError(f"{label} exceeds the retained-evidence cap")
+        files.append(
+            {
+                "path": path.relative_to(root).as_posix(),
+                "bytes": metadata.st_size,
+                "sha256": file_sha256(path),
+            }
+        )
+    if not files:
+        raise T09HostError(f"{label} is empty")
+    return {
+        "files": files,
+        "file_count": len(files),
+        "total_bytes": total,
+        "files_sha256": canonical_sha256(files),
+    }
+
+
 def _prior_qualification_failure_manifest(root: Path) -> dict[str, object]:
     if root.name != "t09-pilot-v4-output-0002":
         raise T09HostError("prior qualification root identity drifted")
@@ -981,40 +1130,229 @@ def _prior_qualification_failure_manifest(root: Path) -> dict[str, object]:
         or (root / "pilot-v4/replacement-image-qualification/build-context-manifest.json").exists()
     ):
         raise T09HostError("prior qualification failure prefix is not the exact safe prefix")
-    files: list[dict[str, object]] = []
-    total = 0
-    for path in sorted(root.rglob("*")):
-        if path.is_symlink():
-            raise T09HostError("prior qualification prefix contains a symlink")
-        metadata = path.stat(follow_symlinks=False)
-        if path.is_dir():
-            continue
-        if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
-            raise T09HostError("prior qualification prefix contains an unsafe file")
-        total += metadata.st_size
-        if total > MAX_PILOT_DISK_BYTES:
-            raise T09HostError("prior qualification prefix exceeds the retained-evidence cap")
-        files.append(
-            {
-                "path": path.relative_to(root).as_posix(),
-                "bytes": metadata.st_size,
-                "sha256": file_sha256(path),
-            }
-        )
+    retained = _retained_tree_manifest(root, label="prior qualification prefix")
     return {
         "root_name": root.name,
-        "qualification_id": PRIOR_QUALIFICATION_ID,
+        "qualification_id": CONTEXT_FAILURE_QUALIFICATION_ID,
         "classification": "preentry-pinned-names-only-env-example-rejected",
         "empirical_entry_crossed": False,
         "model_metadata_requests": 0,
         "task_model_requests": 0,
         "task_browser_actions": 0,
         "replacement_image_built": False,
-        "files": files,
-        "file_count": len(files),
-        "total_bytes": total,
-        "files_sha256": canonical_sha256(files),
+        **retained,
     }
+
+
+def _failed_candidate_manifest(
+    root: Path,
+    *,
+    require_image_present: bool,
+) -> dict[str, object]:
+    if root.name != "t09-pilot-v4-output-0003":
+        raise T09HostError("failed candidate root identity drifted")
+    state = load_object(root / "pilot-v4/pilot-state.json", label="failed candidate state")
+    qualification_root = root / "pilot-v4/replacement-image-qualification"
+    receipt_path = qualification_root / "receipt.json"
+    receipt = load_object(receipt_path, label="failed candidate materialization receipt")
+    stderr_path = root / "pilot-v4/offline-runtime-preflight/offline-preflight.stderr"
+    provider_entry = load_object(
+        root / "pilot-v4/provider-entry.json", label="prior provider entry"
+    )
+    image_id = receipt.get("image_id")
+    if (
+        state.get("plan_id") != PLAN_ID
+        or state.get("empirical_attempts_entered") != []
+        or state.get("attempts_completed") != []
+        or receipt.get("qualification_id") != FAILED_CANDIDATE_QUALIFICATION_ID
+        or receipt.get("build_count") != 1
+        or not isinstance(image_id, str)
+        or re.fullmatch(r"sha256:[a-f0-9]{64}", image_id) is None
+        or receipt.get("build_context_exclusions_sha256")
+        != file_sha256(qualification_root / "build-context-exclusions.json")
+        or file_sha256(stderr_path) != FAILED_CANDIDATE_OFFLINE_STDERR_SHA256
+        or "ModuleNotFoundError: No module named 'yaml'"
+        not in stderr_path.read_text(encoding="utf-8")
+        or (root / "pilot-v4/frozen-run-manifest.json").exists()
+        or (root / "pilot-v4/preflight.json").exists()
+        or (root / "pilot-v4/model-metadata-preflight").exists()
+        or (root / "pilot-v4/browser-preflight").exists()
+    ):
+        raise T09HostError("failed candidate prefix is not the exact safe offline failure")
+    if require_image_present and (
+        image_id_if_present(docker_prefix(), REPLACEMENT_IMAGE_TAG) != image_id
+        or image_id_if_present(docker_prefix(), image_id) != image_id
+    ):
+        raise T09HostError("failed candidate image is unavailable or tag-drifted")
+    retained = _retained_tree_manifest(root, label="failed candidate prefix")
+    return {
+        "root_name": root.name,
+        "qualification_id": FAILED_CANDIDATE_QUALIFICATION_ID,
+        "classification": "preentry-offline-control-interpreter-missing-pyyaml",
+        "empirical_entry_crossed": False,
+        "model_metadata_requests": 0,
+        "task_model_requests": 0,
+        "task_browser_actions": 0,
+        "replacement_image_built": True,
+        "replacement_image_id": image_id,
+        "materialization_receipt_sha256": file_sha256(receipt_path),
+        "offline_failure_stderr_sha256": file_sha256(stderr_path),
+        "previous_package_transition_receipt_sha256": provider_entry.get(
+            "package_transition_receipt_sha256"
+        ),
+        **retained,
+    }
+
+
+def _git_transition_fields(
+    repository: Path,
+    *,
+    to_package_commit: str,
+) -> dict[str, object]:
+    ancestry = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repository),
+            "merge-base",
+            "--is-ancestor",
+            PACKAGE_TRANSITION_FROM_COMMIT,
+            to_package_commit,
+        ],
+        env=safe_environment(),
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+        timeout=30,
+    )
+    if ancestry.returncode != 0:
+        raise T09HostError("transition package is not a descendant of the launched package")
+    changed_raw = output(
+        [
+            "git",
+            "-C",
+            str(repository),
+            "diff",
+            "--name-only",
+            "--diff-filter=ACMRT",
+            PACKAGE_TRANSITION_FROM_COMMIT,
+            to_package_commit,
+        ]
+    )
+    changed_paths = sorted(line for line in changed_raw.splitlines() if line)
+    if (
+        not changed_paths
+        or not set(changed_paths).issubset(PACKAGE_TRANSITION_ALLOWED_PATHS)
+        or "containers/sira-smoke/pragmatic/t09_remote_runner.py" not in changed_paths
+        or "src/giclab/harness/t09_sira_pilot.py" not in changed_paths
+    ):
+        raise T09HostError("package transition changed a non-allowlisted or incomplete surface")
+    deleted = output(
+        [
+            "git",
+            "-C",
+            str(repository),
+            "diff",
+            "--name-only",
+            "--diff-filter=D",
+            PACKAGE_TRANSITION_FROM_COMMIT,
+            to_package_commit,
+        ]
+    )
+    if deleted:
+        raise T09HostError("package transition deleted a tracked file")
+    diff = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repository),
+            "diff",
+            "--binary",
+            PACKAGE_TRANSITION_FROM_COMMIT,
+            to_package_commit,
+        ],
+        env=safe_environment(),
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        check=True,
+        timeout=60,
+    ).stdout
+    return {
+        "from_package_commit": PACKAGE_TRANSITION_FROM_COMMIT,
+        "to_package_commit": to_package_commit,
+        "from_package_is_ancestor": True,
+        "to_package_tree": output(
+            ["git", "-C", str(repository), "rev-parse", f"{to_package_commit}^{{tree}}"]
+        ),
+        "changed_paths": changed_paths,
+        "changed_paths_sha256": canonical_sha256(changed_paths),
+        "binary_diff_sha256": hashlib.sha256(diff).hexdigest(),
+    }
+
+
+def _validate_previous_package_transition_receipt(
+    path: Path,
+    *,
+    repository: Path,
+    entry_receipt: Path,
+    entry_source_root: Path,
+    prior_artifact_root: Path,
+) -> dict[str, object]:
+    paths = contract_paths(repository)
+    plan_sha256 = file_sha256(paths["plan"])
+    try:
+        entry = validate_entry_receipt_source_bound(
+            entry_receipt.resolve(strict=True),
+            entry_source_root.resolve(strict=True),
+            package_commit=PACKAGE_TRANSITION_FROM_COMMIT,
+            plan_sha256=plan_sha256,
+        )
+    except T09ProviderError as exc:
+        raise T09HostError("previous transition entry receipt is not source-bound") from exc
+    prior_failure = _prior_qualification_failure_manifest(prior_artifact_root.resolve(strict=True))
+    expected: dict[str, object] = {
+        "schema_version": "0.1.0",
+        "receipt_type": "t09-pragmatic-preentry-package-transition",
+        "plan_id": PLAN_ID,
+        "host_run_id": HOST_RUN_ID,
+        **_git_transition_fields(
+            repository,
+            to_package_commit=PREVIOUS_PACKAGE_TRANSITION_COMMIT,
+        ),
+        "plan_sha256": plan_sha256,
+        "provider_entry_receipt_sha256": file_sha256(entry_receipt),
+        "provider_entry_source_manifest_sha256": entry.get("source_manifest_sha256"),
+        "owned_instance_identity_sha256": entry.get("owned_instance_identity_sha256"),
+        "lambda_started_at_epoch": entry.get("lambda_started_at_epoch"),
+        "prior_failure": prior_failure,
+        "prior_failure_sha256": canonical_sha256(prior_failure),
+        "prior_qualification_id": CONTEXT_FAILURE_QUALIFICATION_ID,
+        "next_qualification_id": FAILED_CANDIDATE_QUALIFICATION_ID,
+        "prior_replacement_image_absent": True,
+        "next_replacement_image_absent": True,
+        "empirical_entry_crossed": False,
+        "scientific_contract_changed": False,
+        "provider_launch_reused": True,
+        "additional_provider_launches": 0,
+    }
+    observed = load_object(path.resolve(strict=True), label="previous package transition receipt")
+    created = observed.pop("created_at_epoch", None)
+    metadata = path.stat(follow_symlinks=False)
+    lambda_started = expected.get("lambda_started_at_epoch")
+    if (
+        observed != expected
+        or not isinstance(created, (int, float))
+        or isinstance(created, bool)
+        or not isinstance(lambda_started, (int, float))
+        or isinstance(lambda_started, bool)
+        or not float(lambda_started) <= float(created) <= time.time()
+        or not stat.S_ISREG(metadata.st_mode)
+        or metadata.st_nlink != 1
+        or stat.S_IMODE(metadata.st_mode) != 0o600
+    ):
+        raise T09HostError("previous package transition receipt drifted")
+    return {**expected, "created_at_epoch": created, "receipt_sha256": file_sha256(path)}
 
 
 def _package_transition_projection(
@@ -1024,7 +1362,9 @@ def _package_transition_projection(
     entry_receipt: Path,
     entry_source_root: Path,
     prior_artifact_root: Path,
-    require_image_absence: bool,
+    failed_candidate_root: Path,
+    previous_transition_receipt: Path,
+    require_candidate_present: bool,
 ) -> dict[str, object]:
     verify_package(repository, package_commit)
     paths = contract_paths(repository)
@@ -1057,87 +1397,47 @@ def _package_transition_projection(
     )
     if ancestry.returncode != 0:
         raise T09HostError("replacement package is not a clean descendant of the launched package")
-    changed_raw = output(
-        [
-            "git",
-            "-C",
-            str(repository),
-            "diff",
-            "--name-only",
-            "--diff-filter=ACMRT",
-            PACKAGE_TRANSITION_FROM_COMMIT,
-            package_commit,
-        ]
-    )
-    changed_paths = sorted(line for line in changed_raw.splitlines() if line)
-    if (
-        not changed_paths
-        or not set(changed_paths).issubset(PACKAGE_TRANSITION_ALLOWED_PATHS)
-        or "containers/sira-smoke/pragmatic/t09_remote_runner.py" not in changed_paths
-        or "src/giclab/harness/t09_sira_pilot.py" not in changed_paths
-    ):
-        raise T09HostError("package transition changed a non-allowlisted or incomplete surface")
-    deleted = output(
-        [
-            "git",
-            "-C",
-            str(repository),
-            "diff",
-            "--name-only",
-            "--diff-filter=D",
-            PACKAGE_TRANSITION_FROM_COMMIT,
-            package_commit,
-        ]
-    )
-    if deleted:
-        raise T09HostError("package transition deleted a tracked file")
-    if require_image_absence and (
-        image_id_if_present(docker_prefix(), PRIOR_REPLACEMENT_IMAGE_TAG) is not None
-        or image_id_if_present(docker_prefix(), REPLACEMENT_IMAGE_TAG) is not None
-    ):
-        raise T09HostError("package transition occurred after a replacement image build")
     failure = _prior_qualification_failure_manifest(prior_artifact_root.resolve(strict=True))
-    diff = subprocess.run(
-        [
-            "git",
-            "-C",
-            str(repository),
-            "diff",
-            "--binary",
-            PACKAGE_TRANSITION_FROM_COMMIT,
-            package_commit,
-        ],
-        env=safe_environment(),
-        stdin=subprocess.DEVNULL,
-        capture_output=True,
-        check=True,
-        timeout=60,
-    ).stdout
+    previous_transition = _validate_previous_package_transition_receipt(
+        previous_transition_receipt,
+        repository=repository,
+        entry_receipt=entry_receipt,
+        entry_source_root=entry_source_root,
+        prior_artifact_root=prior_artifact_root,
+    )
+    failed_candidate = _failed_candidate_manifest(
+        failed_candidate_root.resolve(strict=True),
+        require_image_present=require_candidate_present,
+    )
+    if (
+        failed_candidate.get("previous_package_transition_receipt_sha256")
+        != previous_transition.get("receipt_sha256")
+        or image_id_if_present(docker_prefix(), PRIOR_REPLACEMENT_IMAGE_TAG) is not None
+    ):
+        raise T09HostError("failed candidate does not continue the exact prior transition")
     return {
         "schema_version": "0.1.0",
         "receipt_type": "t09-pragmatic-preentry-package-transition",
         "plan_id": PLAN_ID,
         "host_run_id": HOST_RUN_ID,
-        "from_package_commit": PACKAGE_TRANSITION_FROM_COMMIT,
-        "to_package_commit": package_commit,
+        **_git_transition_fields(repository, to_package_commit=package_commit),
         "plan_sha256": plan_sha256,
-        "from_package_is_ancestor": True,
-        "to_package_tree": output(
-            ["git", "-C", str(repository), "rev-parse", f"{package_commit}^{{tree}}"]
-        ),
-        "changed_paths": changed_paths,
-        "changed_paths_sha256": canonical_sha256(changed_paths),
-        "binary_diff_sha256": hashlib.sha256(diff).hexdigest(),
         "provider_entry_receipt_sha256": file_sha256(entry_receipt),
         "provider_entry_source_manifest_sha256": entry.get("source_manifest_sha256"),
         "owned_instance_identity_sha256": entry.get("owned_instance_identity_sha256"),
         "lambda_started_at_epoch": entry.get("lambda_started_at_epoch"),
         "prior_failure": failure,
         "prior_failure_sha256": canonical_sha256(failure),
-        "prior_qualification_id": PRIOR_QUALIFICATION_ID,
+        "failed_candidate": failed_candidate,
+        "failed_candidate_sha256": canonical_sha256(failed_candidate),
+        "previous_package_transition_receipt_sha256": previous_transition["receipt_sha256"],
+        "prior_qualification_id": FAILED_CANDIDATE_QUALIFICATION_ID,
         "next_qualification_id": QUALIFICATION_ID,
-        "prior_replacement_image_absent": True,
-        "next_replacement_image_absent": True,
+        "context_failure_replacement_image_absent": True,
+        "failed_candidate_replacement_image_present": True,
+        "replacement_image_id": failed_candidate["replacement_image_id"],
+        "replacement_image_reused_without_rebuild": True,
+        "additional_replacement_image_builds": 0,
         "empirical_entry_crossed": False,
         "scientific_contract_changed": False,
         "provider_launch_reused": True,
@@ -1152,7 +1452,9 @@ def write_package_transition_receipt(args: argparse.Namespace) -> None:
         entry_receipt=args.dynamic_receipt.resolve(strict=True),
         entry_source_root=args.dynamic_source_root.resolve(strict=True),
         prior_artifact_root=args.prior_artifact_root.resolve(strict=True),
-        require_image_absence=True,
+        failed_candidate_root=args.failed_candidate_root.resolve(strict=True),
+        previous_transition_receipt=args.previous_package_transition_receipt.resolve(strict=True),
+        require_candidate_present=True,
     )
     write_exclusive(
         args.output.resolve(strict=False),
@@ -1168,8 +1470,10 @@ def validate_package_transition_receipt(
     entry_receipt: Path,
     entry_source_root: Path,
     prior_artifact_root: Path,
+    failed_candidate_root: Path,
+    previous_transition_receipt: Path,
     require_fresh: bool,
-    require_image_absence: bool,
+    require_candidate_present: bool,
 ) -> dict[str, object]:
     observed = load_object(path.resolve(strict=True), label="package transition receipt")
     created = observed.pop("created_at_epoch", None)
@@ -1179,7 +1483,9 @@ def validate_package_transition_receipt(
         entry_receipt=entry_receipt.resolve(strict=True),
         entry_source_root=entry_source_root.resolve(strict=True),
         prior_artifact_root=prior_artifact_root.resolve(strict=True),
-        require_image_absence=require_image_absence,
+        failed_candidate_root=failed_candidate_root.resolve(strict=True),
+        previous_transition_receipt=previous_transition_receipt.resolve(strict=True),
+        require_candidate_present=require_candidate_present,
     )
     metadata = path.stat(follow_symlinks=False)
     lambda_started = expected.get("lambda_started_at_epoch")
@@ -1207,6 +1513,8 @@ def validate_dynamic_receipt(
     source_root: Path | None = None,
     package_transition_receipt: Path | None = None,
     prior_artifact_root: Path | None = None,
+    failed_candidate_root: Path | None = None,
+    previous_transition_receipt: Path | None = None,
 ) -> dict[str, object]:
     """Reconstruct the receipt from retained allowlisted provider projections."""
 
@@ -1218,8 +1526,20 @@ def validate_dynamic_receipt(
     entry_package_commit = expected_package_commit
     transition: dict[str, object] | None = None
     if expected_package_commit != PACKAGE_TRANSITION_FROM_COMMIT:
-        if package_transition_receipt is None or prior_artifact_root is None:
+        if any(
+            item is None
+            for item in (
+                package_transition_receipt,
+                prior_artifact_root,
+                failed_candidate_root,
+                previous_transition_receipt,
+            )
+        ):
             raise T09HostError("a source-bound preentry package transition is required")
+        assert package_transition_receipt is not None
+        assert prior_artifact_root is not None
+        assert failed_candidate_root is not None
+        assert previous_transition_receipt is not None
         transition = validate_package_transition_receipt(
             package_transition_receipt,
             repository=repository,
@@ -1227,8 +1547,10 @@ def validate_dynamic_receipt(
             entry_receipt=path,
             entry_source_root=source,
             prior_artifact_root=prior_artifact_root,
+            failed_candidate_root=failed_candidate_root,
+            previous_transition_receipt=previous_transition_receipt,
             require_fresh=True,
-            require_image_absence=True,
+            require_candidate_present=True,
         )
         entry_package_commit = PACKAGE_TRANSITION_FROM_COMMIT
     try:
@@ -1263,8 +1585,12 @@ def validate_dynamic_receipt(
         result["entry_package_commit"] = entry_package_commit
         result["active_package_commit"] = expected_package_commit
         result["package_transition_receipt_sha256"] = transition["receipt_sha256"]
+        result["previous_package_transition_receipt_sha256"] = transition[
+            "previous_package_transition_receipt_sha256"
+        ]
         result["package_transition_created_at_epoch"] = transition["created_at_epoch"]
-        result["prior_qualification_id"] = PRIOR_QUALIFICATION_ID
+        result["context_failure_qualification_id"] = CONTEXT_FAILURE_QUALIFICATION_ID
+        result["prior_qualification_id"] = FAILED_CANDIDATE_QUALIFICATION_ID
         result["qualification_id"] = QUALIFICATION_ID
     return result
 
@@ -2257,7 +2583,7 @@ def offline_runtime_preflight(
         "--user",
         "1000:1000",
         "--env",
-        "PYTHONPATH=/opt/giclab-src",
+        "PYTHONPATH=/opt/evaluator/.venv/lib/python3.11/site-packages:/opt/giclab-src",
         "--env",
         "CUDA_VISIBLE_DEVICES=",
         "--mount",
@@ -2273,7 +2599,7 @@ def offline_runtime_preflight(
         "--mount",
         f"type=bind,src={paths['commands']},dst=/opt/giclab-contracts/commands.json,readonly",
         "--entrypoint",
-        "/opt/evaluator/.venv/bin/python",
+        "/opt/sira/.venv/bin/python",
         image_id,
         "/opt/giclab/t09_preflight.py",
         "--execution-contract",
@@ -2619,6 +2945,9 @@ def write_frozen_run_manifest(
         "command_manifests_sha256": file_sha256(paths["commands"]),
         "provider_entry_receipt_sha256": dynamic.get("receipt_sha256"),
         "package_transition_receipt_sha256": dynamic.get("package_transition_receipt_sha256"),
+        "previous_package_transition_receipt_sha256": dynamic.get(
+            "previous_package_transition_receipt_sha256"
+        ),
         "owned_instance_identity_sha256": dynamic.get("owned_instance_identity_sha256"),
         "lambda_started_at_epoch": dynamic.get("lambda_started_at_epoch"),
         "replacement_image_id": image_id,
@@ -2663,6 +2992,9 @@ def write_frozen_run_manifest(
             "image_inspect": file_sha256(qualification_root / "replacement-image-inspect.stdout"),
             "evaluator_overlay": file_sha256(
                 artifact_root / "pilot-v4/evaluator-overlay-manifest.json"
+            ),
+            "prior_qualification_failures": file_sha256(
+                artifact_root / "pilot-v4/prior-qualification-failures/retention-receipt.json"
             ),
         },
     }
@@ -2723,6 +3055,9 @@ def load_frozen_run_manifest(
         "command_manifests_sha256": file_sha256(paths["commands"]),
         "package_transition_receipt_sha256": provider_entry.get(
             "package_transition_receipt_sha256"
+        ),
+        "previous_package_transition_receipt_sha256": provider_entry.get(
+            "previous_package_transition_receipt_sha256"
         ),
         "package_manifest_sha256": EXPECTED_PACKAGE_MANIFEST_SHA256,
         "chromium_executable_sha256": EXPECTED_CHROMIUM_SHA256,
@@ -2790,6 +3125,8 @@ def preflight(args: argparse.Namespace) -> None:
         source_root=args.dynamic_source_root.resolve(strict=True),
         package_transition_receipt=args.package_transition_receipt.resolve(strict=True),
         prior_artifact_root=args.prior_artifact_root.resolve(strict=True),
+        failed_candidate_root=args.failed_candidate_root.resolve(strict=True),
+        previous_transition_receipt=args.previous_package_transition_receipt.resolve(strict=True),
     )
     command_document = verify_package(repository, args.package_commit)
     paths = contract_paths(repository)
@@ -2811,10 +3148,18 @@ def preflight(args: argparse.Namespace) -> None:
         artifact_root / "pilot-v4/provider-entry.json",
         sanitized_dynamic_receipt(args.dynamic_receipt, dynamic),
     )
+    retain_prior_qualification_failures(
+        artifact_root=artifact_root,
+        prior_artifact_root=args.prior_artifact_root.resolve(strict=True),
+        failed_candidate_root=args.failed_candidate_root.resolve(strict=True),
+        previous_transition_receipt=args.previous_package_transition_receipt.resolve(strict=True),
+        package_transition_receipt=args.package_transition_receipt.resolve(strict=True),
+    )
     image_materialization = materialize_replacement_image(
         repository=repository,
         artifact_root=artifact_root,
         prefix=prefix,
+        failed_candidate_root=args.failed_candidate_root.resolve(strict=True),
     )
     image_id = image_materialization.get("image_id")
     if not isinstance(image_id, str):
@@ -4443,8 +4788,10 @@ def package(args: argparse.Namespace) -> None:
         entry_receipt=entry_receipt_path,
         entry_source_root=args.provider_entry_source_root.resolve(strict=True),
         prior_artifact_root=args.prior_artifact_root.resolve(strict=True),
+        failed_candidate_root=args.failed_candidate_root.resolve(strict=True),
+        previous_transition_receipt=args.previous_package_transition_receipt.resolve(strict=True),
         require_fresh=False,
-        require_image_absence=False,
+        require_candidate_present=False,
     )
     if (
         not isinstance(lambda_started, (int, float))
@@ -4659,12 +5006,18 @@ def parser() -> argparse.ArgumentParser:
     transition_parser.add_argument("--dynamic-receipt", type=Path, required=True)
     transition_parser.add_argument("--dynamic-source-root", type=Path, required=True)
     transition_parser.add_argument("--prior-artifact-root", type=Path, required=True)
+    transition_parser.add_argument("--failed-candidate-root", type=Path, required=True)
+    transition_parser.add_argument(
+        "--previous-package-transition-receipt", type=Path, required=True
+    )
     transition_parser.add_argument("--output", type=Path, required=True)
     preflight_parser = operations.add_parser("preflight")
     preflight_parser.add_argument("--dynamic-receipt", type=Path, required=True)
     preflight_parser.add_argument("--dynamic-source-root", type=Path, required=True)
     preflight_parser.add_argument("--package-transition-receipt", type=Path, required=True)
     preflight_parser.add_argument("--prior-artifact-root", type=Path, required=True)
+    preflight_parser.add_argument("--failed-candidate-root", type=Path, required=True)
+    preflight_parser.add_argument("--previous-package-transition-receipt", type=Path, required=True)
     condition_export = operations.add_parser("condition-export")
     condition_export.add_argument("--run-id", choices=RUN_IDS, required=True)
     export_only = operations.add_parser("export-only")
@@ -4694,6 +5047,8 @@ def parser() -> argparse.ArgumentParser:
     package_parser.add_argument("--provider-entry-source-root", type=Path, required=True)
     package_parser.add_argument("--package-transition-receipt", type=Path, required=True)
     package_parser.add_argument("--prior-artifact-root", type=Path, required=True)
+    package_parser.add_argument("--failed-candidate-root", type=Path, required=True)
+    package_parser.add_argument("--previous-package-transition-receipt", type=Path, required=True)
     package_parser.add_argument("--final-archive-root", type=Path, required=True)
     operations.add_parser("cleanup")
     return result

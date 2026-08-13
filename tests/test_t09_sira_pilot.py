@@ -584,7 +584,7 @@ def test_runtime_qualification_is_typed_single_build_preentry_and_digest_agnosti
         "schema_version": "0.1.0",
         "plan_id": "PLAN-EXP0001-PILOT-V4",
         "manifest_id": "RUN-MANIFEST-EXP0001-PILOT-V4-0002",
-        "qualification_id": "QUAL-T09-PILOT-V4-IMAGE-0003",
+        "qualification_id": "QUAL-T09-PILOT-V4-IMAGE-0004",
         "clean_package_commit": "a" * 40,
         "replacement_image_id": "sha256:" + "e" * 64,
         "historical_image_id": (
@@ -681,7 +681,8 @@ def test_retry2_preentry_transition_preserves_zero_use_failure_and_narrows_diff(
     assert failure["qualification_id"] == "QUAL-T09-PILOT-V4-IMAGE-0002"
     assert failure["empirical_entry_crossed"] is False
     assert failure["replacement_image_built"] is False
-    assert host.QUALIFICATION_ID == "QUAL-T09-PILOT-V4-IMAGE-0003"
+    assert host.FAILED_CANDIDATE_QUALIFICATION_ID == "QUAL-T09-PILOT-V4-IMAGE-0003"
+    assert host.QUALIFICATION_ID == "QUAL-T09-PILOT-V4-IMAGE-0004"
     assert "protocol.yaml" not in "\n".join(host.PACKAGE_TRANSITION_ALLOWED_PATHS)
     assert "config.yaml" not in "\n".join(host.PACKAGE_TRANSITION_ALLOWED_PATHS)
 
@@ -697,6 +698,83 @@ def test_retry2_preentry_transition_preserves_zero_use_failure_and_narrows_diff(
     )
     with pytest.raises(host.T09HostError, match="not the exact safe prefix"):
         host._prior_qualification_failure_manifest(failure_root)
+
+
+def test_retry2_carries_one_built_candidate_and_uses_combined_pinned_interpreters(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    host = _load_host_runner()
+    image_id = "sha256:" + "e" * 64
+    failed_root = tmp_path / "t09-pilot-v4-output-0003"
+    pilot = failed_root / "pilot-v4"
+    qualification = pilot / "replacement-image-qualification"
+    offline = pilot / "offline-runtime-preflight"
+    qualification.mkdir(parents=True)
+    offline.mkdir()
+    (pilot / "pilot-state.json").write_text(
+        json.dumps(
+            {
+                "plan_id": host.PLAN_ID,
+                "empirical_attempts_entered": [],
+                "attempts_completed": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    exclusion = qualification / "build-context-exclusions.json"
+    exclusion.write_text('{"safe": true}\n', encoding="utf-8")
+    (qualification / "receipt.json").write_text(
+        json.dumps(
+            {
+                "qualification_id": host.FAILED_CANDIDATE_QUALIFICATION_ID,
+                "image_id": image_id,
+                "build_count": 1,
+                "build_context_exclusions_sha256": host.file_sha256(exclusion),
+            }
+        ),
+        encoding="utf-8",
+    )
+    stderr = offline / "offline-preflight.stderr"
+    stderr.write_text(
+        "Traceback (most recent call last):\nModuleNotFoundError: No module named 'yaml'\n",
+        encoding="utf-8",
+    )
+    (pilot / "provider-entry.json").write_text(
+        json.dumps({"package_transition_receipt_sha256": "a" * 64}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        host,
+        "FAILED_CANDIDATE_OFFLINE_STDERR_SHA256",
+        host.file_sha256(stderr),
+    )
+    monkeypatch.setattr(host, "image_id_if_present", lambda _prefix, _image: image_id)
+    monkeypatch.setattr(host, "docker_prefix", lambda: ["docker"])
+    manifest = host._failed_candidate_manifest(
+        failed_root,
+        require_image_present=True,
+    )
+    assert manifest["replacement_image_built"] is True
+    assert manifest["model_metadata_requests"] == 0
+    assert manifest["empirical_entry_crossed"] is False
+
+    artifact_root = tmp_path / "accepted"
+    artifact_root.mkdir()
+    carried = host.carry_forward_replacement_image(
+        artifact_root=artifact_root,
+        failed_candidate_root=failed_root,
+        prefix=["docker"],
+    )
+    assert carried["image_id"] == image_id
+    assert carried["build_count"] == 1
+    assert carried["additional_build_count"] == 0
+    assert carried["qualification_id"] == "QUAL-T09-PILOT-V4-IMAGE-0004"
+
+    source = inspect.getsource(host.offline_runtime_preflight)
+    assert "/opt/sira/.venv/bin/python" in source
+    assert "PYTHONPATH=/opt/evaluator/.venv/lib/python3.11/site-packages:/opt/giclab-src" in source
+    assert '"/opt/evaluator/.venv/bin/python"' not in source
 
 
 def test_v4_runtime_corrects_historical_package_browser_and_patched_runner_identities() -> None:
@@ -2131,7 +2209,7 @@ def test_entered_partial_attempt_emits_schema_valid_invalid_evidence_and_is_cons
                 "clean_package_commit": "a" * 40,
                 "execution_contract_sha256": contract.sha256,
                 "replacement_image_id": replacement_image_id,
-                "qualification_id": "QUAL-T09-PILOT-V4-IMAGE-0003",
+                "qualification_id": "QUAL-T09-PILOT-V4-IMAGE-0004",
                 "build_context_manifest_sha256": "b" * 64,
                 "package_manifest_sha256": (
                     "4ff2603fa5e0f7033ba773decdcb86abf648dcce22e469d26bc48214e390e104"
