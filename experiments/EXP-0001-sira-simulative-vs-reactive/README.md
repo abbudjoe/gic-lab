@@ -142,8 +142,9 @@ private current-turn overlay.
 
 The pragmatic V3 repair makes the 14,400-second provider campaign effective with a
 900-second cleanup reserve and 13,500-second normal termination cutoff. It admits
-each attempt against actual elapsed time only when that attempt's 3,600-second hard
-wall plus cleanup reserve remains; it does not reserve every theoretical maximum at
-campaign start. The user's current-turn instruction authorizes one launch and the
+each attempt against actual elapsed time only when its full 3,600-second condition
+wall, 600-second evaluator/evidence handoff, 60-second termination-dispatch margin,
+and cleanup reserve remain; it does not reserve every theoretical maximum at campaign
+start. The user's current-turn instruction authorizes one launch and the
 frozen four-attempt sequence after the clean freeze and exact dynamic preflight.
 Public raw release remains separately blocked pending license/privacy review.

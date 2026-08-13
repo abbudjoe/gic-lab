@@ -40,16 +40,18 @@
     "runtime": {"type": "object"},
     "provider_lifecycle": {
       "type": "object",
-      "required": ["campaign_clock_origin", "campaign_provider_wall_seconds", "normal_cleanup_reserve_seconds", "provider_termination_cutoff_seconds", "max_lambda_instances", "max_launch_count", "persistent_filesystems", "admission_model", "future_attempt_maxima_reserved_at_campaign_start", "provider_control_plane"],
+      "required": ["campaign_clock_origin", "campaign_provider_wall_seconds", "normal_cleanup_reserve_seconds", "provider_termination_cutoff_seconds", "post_condition_evaluator_evidence_seconds", "termination_dispatch_margin_seconds", "max_lambda_instances", "max_launch_count", "persistent_filesystems", "admission_model", "future_attempt_maxima_reserved_at_campaign_start", "provider_control_plane"],
       "properties": {
         "campaign_clock_origin": {"const": "provider-launch-send-started-conservative"},
         "campaign_provider_wall_seconds": {"const": 14400},
         "normal_cleanup_reserve_seconds": {"const": 900},
         "provider_termination_cutoff_seconds": {"const": 13500},
+        "post_condition_evaluator_evidence_seconds": {"const": 600},
+        "termination_dispatch_margin_seconds": {"const": 60},
         "max_lambda_instances": {"const": 1},
         "max_launch_count": {"const": 1},
         "persistent_filesystems": {"const": 0},
-        "admission_model": {"const": "actual-elapsed-next-attempt-hard-wall-plus-cleanup-reserve"},
+        "admission_model": {"const": "actual-elapsed-next-condition-plus-evidence-handoff-plus-termination-margin-plus-cleanup-reserve"},
         "future_attempt_maxima_reserved_at_campaign_start": {"const": false},
         "provider_control_plane": {"const": "existing-t07-pragmatic-lambda-operations-with-source-derived-projections-no-persistent-framework-or-watchdog"}
       },

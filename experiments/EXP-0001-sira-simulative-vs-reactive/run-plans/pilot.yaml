@@ -79,10 +79,12 @@ provider_lifecycle:
   campaign_provider_wall_seconds: 14400
   normal_cleanup_reserve_seconds: 900
   provider_termination_cutoff_seconds: 13500
+  post_condition_evaluator_evidence_seconds: 600
+  termination_dispatch_margin_seconds: 60
   max_lambda_instances: 1
   max_launch_count: 1
   persistent_filesystems: 0
-  admission_rule: remaining campaign time must cover only the next 3600-second attempt hard wall plus the 900-second cleanup reserve
+  admission_rule: remaining campaign time must cover only the next 3600-second condition hard wall, a 600-second evaluator/evidence handoff, a positive 60-second provider-termination dispatch margin, and the 900-second cleanup reserve
   control_plane: existing T07 pragmatic Lambda operations with source-derived projections; no persistent framework or watchdog
 artifacts:
   root: artifacts/EXP-0001/pilot-v3
@@ -103,5 +105,5 @@ readiness:
   pre_execution_requirements:
     - Bind the exact clean package commit and final plan SHA-256 in a single-use private current-turn authorization overlay.
     - Pass focused fake-clock, pair-diff, science-hash, cap, evidence, repository, privacy, and exact runtime preflight gates before empirical entry.
-    - Start no attempt unless its 3,600-second hard wall plus the 900-second cleanup reserve fits in actual remaining campaign time.
+    - Start no attempt unless its 3,600-second condition wall, 600-second evaluator/evidence handoff, 60-second termination-dispatch margin, and 900-second cleanup reserve fit in actual remaining campaign time.
     - Keep raw task, answer, trace, screenshot, and evaluator evidence private and access controlled; public release remains blocked pending review.

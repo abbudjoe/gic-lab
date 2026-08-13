@@ -30,7 +30,7 @@ superiority/EXP-0001 conclusions.
 | T09-P3-01 | Preserve the exact scientific locks and calibration-only interpretation. | Dataset/evaluator/runtime contracts, scientific-hash regression. | met locally; final package binding pending |
 | T09-P3-02 | Freeze `PLAN-EXP0001-PILOT-V3` and fresh host, four condition, evaluator, pair, and archive identities. | Plan, execution contract, condition plans, command manifests. | partial: identities frozen; final reviewed hashes pending |
 | T09-P3-03 | Enforce a 14,400 s billable-instance campaign, 900 s cleanup reserve, one instance, one launch, zero filesystem, termination by 13,500 s, and no theoretical-maxima admission sum. | Typed campaign limits and fake-clock regressions. | met locally: existing observer and one-shot provider boundary share typed limits; cutoff/ambiguity tests pass |
-| T09-P3-04 | Charge setup, attempts, evaluator, evidence, and cleanup to the same actual campaign clock; admit each attempt only with its hard wall plus cleanup reserve remaining. | Host runner and focused timing tests. | met locally: conservative launch-send origin and exact boundary tests pass |
+| T09-P3-04 | Charge setup, full condition walls, evaluator/evidence handoff, provider dispatch, and cleanup to the same actual campaign clock; admit each attempt only when all four fit. | Host runner and focused timing tests. | met locally: conservative launch-send origin and exact boundary tests pass |
 | T09-P3-05 | Keep model-call, token, OpenAI-cost, browser-step, condition/pair/total wall, output, disk, Lambda-duration/cost, attempt, and zero-retry caps effective. | Runtime cap tests and exact command/config diff. | met locally; final pair manifest regeneration pending |
 | T09-P3-06 | Pass exact local preflight and freeze a clean reviewed pre-run commit before empirical entry. | Preflight receipt, Git commit/hash, plan bytes/hash, independent review. | not-started |
 | T09-P3-07 | Record the current-turn cloud authorization in the private cloud ledger and launch no more than one exact A10 host in `us-east-1` with no persistent filesystem. | Cloud-run ledger and private provider receipts. | not-started |
@@ -76,6 +76,15 @@ superiority/EXP-0001 conclusions.
   through bounded GET reconciliation, and finalized attempt evidence is streamed and
   hash-verified before the next attempt. Focused source tests, Ruff, strict mypy, and
   `git diff --check` pass; package hashes remain intentionally unbound pending review.
+- 2026-08-13: immutable rereview of the first repair failed ten material controls.
+  The follow-up repair now rejects malformed 2xx ambiguity, cleans every identity from
+  a multi-ID launch incident, validates owned state against source-bound entry evidence
+  before termination, polls projected owned identities through active/terminating to
+  terminal, preserves the full 3,600-second condition wall, reserves 600 seconds for
+  evaluator/export plus 60 seconds for termination dispatch, requires a received
+  off-host export acknowledgement before later empirical entry, allowlists provider
+  projections, makes aggregate staging optional, and delegates every read-only GET to
+  the retained T07 observer transport. Cloud admission remains closed for rereview.
 
 ## Decisions and blockers
 

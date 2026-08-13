@@ -80,6 +80,8 @@ class CampaignLifecycleLimits:
     campaign_provider_wall_seconds: int
     normal_cleanup_reserve_seconds: int
     provider_termination_cutoff_seconds: int
+    post_condition_evaluator_evidence_seconds: int
+    termination_dispatch_margin_seconds: int
     max_lambda_instances: int
     max_launch_count: int
     persistent_filesystems: int
@@ -89,6 +91,8 @@ class CampaignLifecycleLimits:
             self.campaign_provider_wall_seconds,
             self.normal_cleanup_reserve_seconds,
             self.provider_termination_cutoff_seconds,
+            self.post_condition_evaluator_evidence_seconds,
+            self.termination_dispatch_margin_seconds,
             self.max_lambda_instances,
             self.max_launch_count,
             self.persistent_filesystems,
@@ -99,6 +103,10 @@ class CampaignLifecycleLimits:
             raise T09PilotError("campaign provider wall must remain 14,400 seconds")
         if self.normal_cleanup_reserve_seconds != 900:
             raise T09PilotError("normal cleanup reserve must remain 900 seconds")
+        if self.post_condition_evaluator_evidence_seconds != 600:
+            raise T09PilotError("post-condition evaluator/evidence handoff must remain 600 seconds")
+        if self.termination_dispatch_margin_seconds != 60:
+            raise T09PilotError("provider termination dispatch margin must remain 60 seconds")
         if (
             self.provider_termination_cutoff_seconds
             != self.campaign_provider_wall_seconds - self.normal_cleanup_reserve_seconds
@@ -133,7 +141,12 @@ class CampaignLifecycleLimits:
     ) -> bool:
         if type(attempt_hard_wall_seconds) is not int or attempt_hard_wall_seconds <= 0:
             raise T09PilotError("attempt hard wall must be a positive integer")
-        required = attempt_hard_wall_seconds + self.normal_cleanup_reserve_seconds
+        required = (
+            attempt_hard_wall_seconds
+            + self.post_condition_evaluator_evidence_seconds
+            + self.termination_dispatch_margin_seconds
+            + self.normal_cleanup_reserve_seconds
+        )
         return self.remaining_seconds(billable_started_at=billable_started_at, now=now) >= required
 
     def termination_due(self, *, billable_started_at: float, now: float) -> bool:
@@ -477,9 +490,7 @@ def load_execution_contract(path: Path, *, expected_sha256: str) -> PilotExecuti
     checkpoint = _strict_object(document.get("first_pair_checkpoint"), context="checkpoint")
     if checkpoint.get("required") is not True:
         raise T09PilotError("first-pair checkpoint must be required")
-    raw_campaign = _strict_object(
-        document.get("provider_lifecycle"), context="provider lifecycle"
-    )
+    raw_campaign = _strict_object(document.get("provider_lifecycle"), context="provider lifecycle")
     campaign = CampaignLifecycleLimits(
         campaign_provider_wall_seconds=_required_int(
             raw_campaign.get("campaign_provider_wall_seconds"),
@@ -492,6 +503,14 @@ def load_execution_contract(path: Path, *, expected_sha256: str) -> PilotExecuti
         provider_termination_cutoff_seconds=_required_int(
             raw_campaign.get("provider_termination_cutoff_seconds"),
             context="provider termination cutoff",
+        ),
+        post_condition_evaluator_evidence_seconds=_required_int(
+            raw_campaign.get("post_condition_evaluator_evidence_seconds"),
+            context="post-condition evaluator/evidence handoff",
+        ),
+        termination_dispatch_margin_seconds=_required_int(
+            raw_campaign.get("termination_dispatch_margin_seconds"),
+            context="provider termination dispatch margin",
         ),
         max_lambda_instances=_required_int(
             raw_campaign.get("max_lambda_instances"), context="Lambda instance cap"
@@ -933,9 +952,7 @@ def first_pair_decision(value: PairCheckpointInput) -> dict[str, object]:
         value.projected_aggregate_cost_usd > 45.16
     ):
         reasons.append("projected_aggregate_cost_exceeds_hard_cap")
-    required_campaign_seconds = (
-        value.next_attempt_hard_wall_seconds + value.cleanup_reserve_seconds
-    )
+    required_campaign_seconds = value.next_attempt_hard_wall_seconds + value.cleanup_reserve_seconds
     if (
         not math.isfinite(value.remaining_campaign_seconds)
         or value.remaining_campaign_seconds < required_campaign_seconds

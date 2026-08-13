@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 import copy
 import importlib.util
+import inspect
 import io
 import json
 import time
@@ -10,11 +11,13 @@ from dataclasses import replace
 from pathlib import Path
 from shutil import copytree
 from types import ModuleType, SimpleNamespace
+from typing import cast
 
 import pytest
 
 from giclab.harness import t09_pragmatic_provider as provider
 from giclab.harness.lambda_campaign_lifecycle import ObserverLifecycleLimits
+from giclab.harness.lambda_l2m_observer import ObserverRequest
 from giclab.harness.sira_gate_a import (
     ImmutableModelRouting,
     ModelRole,
@@ -561,7 +564,10 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
         now[0] += seconds
 
     class FakeTransport:
-        def __init__(self, responses: list[dict[str, object] | BaseException]) -> None:
+        def __init__(
+            self,
+            responses: list[dict[str, object] | bytes | BaseException],
+        ) -> None:
             self.responses = responses
 
         def send(
@@ -582,7 +588,7 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
             return provider.ProviderResponse(
                 200,
                 "application/json",
-                json.dumps(value).encode(),
+                value if isinstance(value, bytes) else json.dumps(value).encode(),
                 clock(),
             )
 
@@ -680,6 +686,56 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
     )
     authorization.chmod(0o600)
     monkeypatch.setattr(provider, "_verify_clean_package", lambda *_args, **_kwargs: None)
+
+    malformed_launch_root = tmp_path / "provider-malformed-launch"
+    with pytest.raises(provider.T09ProviderError, match="launch outcome is unknown"):
+        provider.launch_campaign(
+            repository=ROOT,
+            package_commit=package_commit,
+            authorization_ledger=authorization,
+            dotenv=dotenv,
+            private_root=malformed_launch_root,
+            public_ipv4_file=public_ip_path,
+            ssh_public_key_file=key_path,
+            transport=FakeTransport([*copy.deepcopy(launch_responses[:6]), b"not-json"]),
+            clock=clock,
+            sleeper=sleeper,
+        )
+    assert (
+        load_json(malformed_launch_root / "LAUNCH_OUTCOME_UNKNOWN.json")["second_launch_forbidden"]
+        is True
+    )
+
+    multi_root = tmp_path / "provider-multi-launch"
+    multi_ids = ["instance-fixture-incident-1", "instance-fixture-incident-2"]
+    multi_termination_rows = [
+        {**copy.deepcopy(instance), "id": instance_id, "status": "terminating"}
+        for instance_id in multi_ids
+    ]
+    with pytest.raises(provider.T09ProviderError, match="every returned identity was closed"):
+        provider.launch_campaign(
+            repository=ROOT,
+            package_commit=package_commit,
+            authorization_ledger=authorization,
+            dotenv=dotenv,
+            private_root=multi_root,
+            public_ipv4_file=public_ip_path,
+            ssh_public_key_file=key_path,
+            transport=FakeTransport(
+                [
+                    *copy.deepcopy(launch_responses[:6]),
+                    {"data": {"instance_ids": multi_ids}},
+                    {"data": {"terminated_instances": multi_termination_rows}},
+                    {"data": []},
+                ]
+            ),
+            clock=clock,
+            sleeper=sleeper,
+        )
+    incident = load_json(multi_root / "MULTI_INSTANCE_LAUNCH_INCIDENT.json")
+    assert incident["second_launch_forbidden"] is True
+    assert len(incident["instance_identity_sha256s"]) == 2
+
     private_root = tmp_path / "provider-private"
     entry_path = provider.launch_campaign(
         repository=ROOT,
@@ -701,9 +757,57 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
         source_root=private_root / "entry-source",
     )
     assert validated["receipt_sha256"] == host.file_sha256(entry_path)
+    assert validated["provider_projection_retained_private"] is True
+    assert validated["raw_response_identity_retained"] is True
+    assert validated["raw_provider_payload_retained"] is False
+    assert "workspace-fixture" not in json.dumps(validated)
+
+    owned_state_path = private_root / "owned-state.json"
+    owned_state_original = owned_state_path.read_bytes()
+    tampered_state = json.loads(owned_state_original)
+    tampered_state["instance_id"] = "unrelated-instance"
+    owned_state_path.write_text(json.dumps(tampered_state), encoding="utf-8")
+    no_send = FakeTransport([])
+    with pytest.raises(provider.T09ProviderError, match="not source-bound"):
+        provider.closeout_campaign(
+            repository=ROOT,
+            package_commit=package_commit,
+            authorization_ledger=authorization,
+            dotenv=dotenv,
+            private_root=private_root,
+            transport=no_send,
+            clock=clock,
+            sleeper=sleeper,
+        )
+    assert no_send.responses == []
+    owned_state_path.write_bytes(owned_state_original)
+
+    failed_closeout_root = tmp_path / "provider-failed-closeout"
+    copytree(private_root, failed_closeout_root)
+    with pytest.raises(provider.ProviderOutcomeUnknown):
+        provider.closeout_campaign(
+            repository=ROOT,
+            package_commit=package_commit,
+            authorization_ledger=authorization,
+            dotenv=dotenv,
+            private_root=failed_closeout_root,
+            transport=FakeTransport(
+                [
+                    RuntimeError("termination response ambiguity"),
+                    RuntimeError("poll transport outage"),
+                ]
+            ),
+            clock=clock,
+            sleeper=sleeper,
+        )
+    manual = load_json(failed_closeout_root / "CLOSEOUT_REQUIRES_CONSOLE.json")
+    assert manual["private_instance_id"] == "instance-fixture-0001"
+    assert manual["private_operational_state_not_for_archive"] is True
 
     closeout_responses = [
         RuntimeError("termination response fixture ambiguity"),
+        {"data": [{**copy.deepcopy(instance), "status": "active"}]},
+        {"data": [{**copy.deepcopy(instance), "status": "terminating"}]},
         {"data": []},
         global_firewall,
         {"data": []},
@@ -731,6 +835,14 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
         entry_source_root=private_root / "entry-source",
     )
     assert closeout["receipt_sha256"] == host.file_sha256(closeout_path)
+    assert closeout["raw_provider_payload_retained"] is False
+    termination_polls = [
+        event
+        for event in provider._journal_events(private_root / "closeout-source")
+        if event.get("operation") == "termination-instances"
+        and event.get("event") == "response-complete"
+    ]
+    assert len(termination_polls) == 3
 
     forged = dict(load_json(entry_path))
     forged["launch_count"] = 2
@@ -841,12 +953,55 @@ def test_provider_send_ambiguity_is_durably_unknown_and_never_retried(tmp_path: 
         )
 
     events = [
-        json.loads(line)
-        for line in (root / "request-journal.jsonl").read_text().splitlines()
+        json.loads(line) for line in (root / "request-journal.jsonl").read_text().splitlines()
     ]
     assert transport.calls == 1
     assert [event["event"] for event in events] == ["send-started", "response-unknown"]
     assert provider._response_documents(root) == {}
+
+    class MalformedSuccessTransport:
+        calls = 0
+
+        def send(
+            self,
+            method: str,
+            path: str,
+            *,
+            body: bytes | None,
+            credential: bytearray,
+        ) -> provider.ProviderResponse:
+            del method, path, body, credential
+            self.calls += 1
+            return provider.ProviderResponse(200, "application/json", b"not-json", 101.0)
+
+    malformed_root = tmp_path / "provider-malformed-success"
+    malformed_root.mkdir()
+    malformed = MalformedSuccessTransport()
+    malformed_recorder = provider.RequestRecorder(
+        malformed_root,
+        malformed,
+        bytearray(b"lambda-fixture-credential"),
+        lambda: 100.0,
+    )
+    with pytest.raises(provider.ProviderOutcomeUnknown, match="outcome is unknown"):
+        malformed_recorder.request(
+            "launch",
+            "POST",
+            "/api/v1/instance-operations/launch",
+            body=provider._launch_body(),
+        )
+    malformed_events = [
+        json.loads(line)
+        for line in (malformed_root / "request-journal.jsonl").read_text().splitlines()
+    ]
+    assert malformed.calls == 1
+    assert [event["event"] for event in malformed_events] == [
+        "send-started",
+        "response-unknown",
+    ]
+    assert malformed_events[-1]["classification"] == "untrusted-response-semantics"
+    assert "not-json" not in json.dumps(malformed_events)
+    assert provider._response_documents(malformed_root) == {}
 
 
 def test_removed_provider_receipt_schemas_cannot_be_mistaken_for_execution_contracts() -> None:
@@ -854,11 +1009,86 @@ def test_removed_provider_receipt_schemas_cannot_be_mistaken_for_execution_contr
     assert not (ROOT / "schemas/t09-sira-pilot-provider-closeout.schema.json").exists()
 
 
+def test_t09_provider_is_a_narrow_adapter_over_the_retained_t07_pragmatic_path() -> None:
+    historical_launch = load_json(
+        ROOT / "artifacts/t07/pragmatic/RUN-T07-PRAGMATIC-HOST-0001/launch-request.json"
+    )
+    current_launch = provider._launch_body()
+    assert set(current_launch) == set(historical_launch)
+    for key in (
+        "region_name",
+        "instance_type_name",
+        "ssh_key_names",
+        "file_system_names",
+        "file_system_mounts",
+        "image",
+    ):
+        assert current_launch[key] == historical_launch[key]
+    assert current_launch["name"] == current_launch["hostname"] == provider.INSTANCE_NAME
+
+    calls: list[tuple[object, dict[str, object]]] = []
+
+    class ExistingObserverFixture:
+        def send(self, request: object, **kwargs: object) -> SimpleNamespace:
+            calls.append((request, kwargs))
+            return SimpleNamespace(
+                status=200,
+                content_type="application/json",
+                body=b'{"data":[]}',
+            )
+
+    transport = provider.LambdaTransport()
+    transport._observer = ExistingObserverFixture()  # type: ignore[assignment]
+    response = transport.send(
+        "GET",
+        "/api/v1/instances",
+        body=None,
+        credential=bytearray(b"lambda-fixture-credential"),
+    )
+    assert response.status == 200
+    assert len(calls) == 1
+    request = cast(ObserverRequest, calls[0][0])
+    assert request.operation.value == "list_instances"
+
+
+def test_provider_projection_allowlists_selected_operational_fields() -> None:
+    projected_types = json.loads(
+        provider._project_provider_response(
+            "instance-types",
+            json.dumps(
+                {
+                    "data": {
+                        provider.INSTANCE_TYPE: {
+                            "instance_type": {
+                                "name": provider.INSTANCE_TYPE,
+                                "price_cents_per_hour": 129,
+                                "provider_account_id": "must-not-survive",
+                            },
+                            "regions_with_capacity_available": [
+                                {"name": provider.REGION, "private_cidr": "must-not-survive"}
+                            ],
+                            "workspace_id": "must-not-survive",
+                        },
+                        "unselected-shape": {"account_id": "must-not-survive"},
+                    }
+                }
+            ).encode(),
+        )
+    )
+    serialized = json.dumps(projected_types)
+    assert provider.INSTANCE_TYPE in serialized
+    assert "must-not-survive" not in serialized
+    with pytest.raises(provider.T09ProviderError, match="unsupported provider projection"):
+        provider._project_provider_response("invented-operation", b'{"data":{}}')
+
+
 def test_campaign_lifecycle_uses_actual_elapsed_time_and_preserves_cleanup_reserve() -> None:
     campaign = CampaignLifecycleLimits(
         campaign_provider_wall_seconds=14_400,
         normal_cleanup_reserve_seconds=900,
         provider_termination_cutoff_seconds=13_500,
+        post_condition_evaluator_evidence_seconds=600,
+        termination_dispatch_margin_seconds=60,
         max_lambda_instances=1,
         max_launch_count=1,
         persistent_filesystems=0,
@@ -867,7 +1097,7 @@ def test_campaign_lifecycle_uses_actual_elapsed_time_and_preserves_cleanup_reser
     assert (
         campaign.admit_attempt(
             billable_started_at=100.0,
-            now=10_000.0,
+            now=9_340.0,
             attempt_hard_wall_seconds=3_600,
         )
         is True
@@ -875,7 +1105,7 @@ def test_campaign_lifecycle_uses_actual_elapsed_time_and_preserves_cleanup_reser
     assert (
         campaign.admit_attempt(
             billable_started_at=100.0,
-            now=10_000.1,
+            now=9_340.1,
             attempt_hard_wall_seconds=3_600,
         )
         is False
@@ -905,14 +1135,26 @@ def test_host_campaign_admission_counts_setup_and_attempt_actual_time(
         abs=1,
     )
     assert host.scientific_seconds_remaining(tmp_path) == pytest.approx(14_400, abs=1)
-    monkeypatch.setattr(host.time, "time", lambda: now + 9_900)
+    # 3,600 condition + 600 evaluator/export + 60 termination handoff +
+    # 900 cleanup must all remain on the one actual campaign clock.
+    monkeypatch.setattr(host.time, "time", lambda: now + 9_240)
     assert host.admit_next_attempt(tmp_path) == pytest.approx(3_600)
-    monkeypatch.setattr(host.time, "time", lambda: now + 9_901)
+    monkeypatch.setattr(host.time, "time", lambda: now + 9_241)
     with pytest.raises(host.T09HostError, match="next attempt hard wall"):
         host.admit_next_attempt(tmp_path)
     monkeypatch.setattr(host.time, "time", lambda: now + 13_500)
     assert host.provider_seconds_remaining(tmp_path, reserve_seconds=900) == 0
     assert host.provider_termination_due(tmp_path) is True
+
+
+def test_condition_keeps_full_3600_seconds_and_separates_evidence_handoff() -> None:
+    host = _load_host_runner()
+    assert host.MAX_CONDITION_WALL_SECONDS == 3_600
+    assert host.ATTEMPT_EVIDENCE_EXPORT_RESERVE_SECONDS == 600
+    assert host.PROVIDER_TERMINATION_HANDOFF_SECONDS == 60
+    source = inspect.getsource(host.run_attached_with_caps)
+    assert "elapsed > MAX_CONDITION_WALL_SECONDS" in source
+    assert "MAX_CONDITION_WALL_SECONDS - ATTEMPT_EVIDENCE_EXPORT_RESERVE_SECONDS" not in source
 
 
 def test_finalized_attempt_streams_before_cutoff_without_aggregate_stage(
@@ -935,18 +1177,19 @@ def test_finalized_attempt_streams_before_cutoff_without_aggregate_stage(
     pilot_root = artifact_root / "pilot-v3"
     pilot_root.mkdir(exist_ok=True)
     (pilot_root / "pilot-state.json").write_text(
-        json.dumps({"lambda_started_at_epoch": now - 100}),
+        json.dumps(
+            {
+                "lambda_started_at_epoch": now - 100,
+                "attempts_completed": [ATTEMPT_ORDER[0]],
+            }
+        ),
         encoding="utf-8",
     )
     for name in ("attempt-outcome.json", "evidence-index.json", "host-cleanup-receipt.json"):
         (attempt_root / name).write_text("{}\n", encoding="utf-8")
     (attempt_root / "normalized-events.jsonl").write_text("{}\n", encoding="utf-8")
     (attempt_root / "attempt-wall.json").write_text(
-        json.dumps(
-            {
-                "attempt_hard_deadline_epoch": now + 60,
-            }
-        ),
+        json.dumps({"evidence_handoff_deadline_epoch": now + 60}),
         encoding="utf-8",
     )
     destination = io.BytesIO()
@@ -986,7 +1229,42 @@ def test_finalized_attempt_streams_before_cutoff_without_aggregate_stage(
             provider_entry_receipt=provider_entry,
         )
     )
-    assert (inbound / f"{ATTEMPT_ORDER[0]}-export-verification.json").is_file()
+    verification = inbound / f"{ATTEMPT_ORDER[0]}-export-verification.json"
+    assert verification.is_file()
+    (pilot_root / "provider-entry.json").write_text(
+        json.dumps(
+            {
+                "receipt_sha256": host.file_sha256(provider_entry),
+                "owned_instance_identity_sha256": "b" * 64,
+                "lambda_started_at_epoch": now - 100,
+            }
+        ),
+        encoding="utf-8",
+    )
+    uploaded_ack = tmp_path / "uploaded-export-ack.json"
+    uploaded_ack.write_bytes(verification.read_bytes())
+    host.acknowledge_attempt_export(
+        SimpleNamespace(
+            artifact_root=artifact_root,
+            acknowledgement_file=uploaded_ack,
+            run_id=ATTEMPT_ORDER[0],
+            package_commit="a" * 40,
+        )
+    )
+    host.require_prior_export_acknowledgements(
+        artifact_root,
+        next_attempt_index=1,
+        package_commit="a" * 40,
+    )
+    acknowledgement = host._received_export_ack_path(artifact_root, ATTEMPT_ORDER[0])
+    assert acknowledgement.is_file()
+    acknowledgement.unlink()
+    with pytest.raises(host.T09HostError):
+        host.require_prior_export_acknowledgements(
+            artifact_root,
+            next_attempt_index=1,
+            package_commit="a" * 40,
+        )
 
 
 def test_host_secret_cleanup_finds_cross_chunk_match_and_destroys_exact_file(

@@ -80,6 +80,7 @@ FINALIZATION_RESERVE_SECONDS: Final = 60
 ATTEMPT_EVIDENCE_EXPORT_RESERVE_SECONDS: Final = 600
 PROVIDER_CLOSEOUT_RESERVE_SECONDS: Final = 900
 PROVIDER_TERMINATION_CUTOFF_SECONDS: Final = 13_500
+PROVIDER_TERMINATION_HANDOFF_SECONDS: Final = 60
 MAX_LAMBDA_INSTANCES: Final = 1
 MAX_LAMBDA_LAUNCHES: Final = 1
 MAX_PERSISTENT_FILESYSTEMS: Final = 0
@@ -717,7 +718,7 @@ def validate_dynamic_receipt(
     repository_root: Path | None = None,
     source_root: Path | None = None,
 ) -> dict[str, object]:
-    """Reconstruct the sanitized receipt from retained raw provider responses."""
+    """Reconstruct the receipt from retained allowlisted provider projections."""
 
     if repository_root is None or source_root is None:
         raise T09HostError("provider entry source bundle is required")
@@ -765,7 +766,7 @@ def validate_provider_closeout_receipt(
     entry_receipt_path: Path | None = None,
     entry_source_root: Path | None = None,
 ) -> dict[str, object]:
-    """Reconstruct closeout from raw exact-target provider responses."""
+    """Reconstruct closeout from exact-target provider projections and raw hashes."""
 
     if any(
         item is None
@@ -832,6 +833,68 @@ def _runtime_budget_state(root: Path) -> dict[str, Any]:
     return load_object(root / "pilot-v3/pilot-state.json", label="pilot state")
 
 
+def _received_export_ack_path(root: Path, run_id: str) -> Path:
+    if run_id not in RUN_IDS:
+        raise T09HostError("export acknowledgement run identity is unknown")
+    return root / "pilot-v3/received-export-acknowledgements" / f"{run_id}.json"
+
+
+def require_prior_export_acknowledgements(
+    root: Path,
+    *,
+    next_attempt_index: int,
+    package_commit: str,
+) -> None:
+    """Block empirical progression until every prior archive was verified off-host."""
+
+    entry = load_object(root / "pilot-v3/provider-entry.json", label="provider entry")
+    for run_id in RUN_IDS[:next_attempt_index]:
+        acknowledgement_path = _received_export_ack_path(root, run_id)
+        if not acknowledgement_path.is_file():
+            raise T09HostError(
+                "prior attempt archive lacks its off-host verification acknowledgement"
+            )
+        acknowledgement = load_object(
+            acknowledgement_path,
+            label=f"{run_id} received export acknowledgement",
+        )
+        archive = root / "pilot-v3/attempt-exports" / f"{run_id}.tar.gz"
+        if (
+            set(acknowledgement)
+            != {
+                "schema_version",
+                "plan_id",
+                "host_run_id",
+                "run_id",
+                "package_commit",
+                "archive_path",
+                "archive_bytes",
+                "archive_sha256",
+                "provider_entry_receipt_sha256",
+                "owned_instance_identity_sha256",
+                "lambda_started_at_epoch",
+                "verified_before_provider_termination",
+            }
+            or acknowledgement.get("schema_version") != "0.1.0"
+            or acknowledgement.get("plan_id") != PLAN_ID
+            or acknowledgement.get("host_run_id") != HOST_RUN_ID
+            or acknowledgement.get("run_id") != run_id
+            or acknowledgement.get("package_commit") != package_commit
+            or acknowledgement.get("archive_path") != archive.name
+            or acknowledgement.get("archive_bytes") != archive.stat().st_size
+            or acknowledgement.get("archive_sha256") != file_sha256(archive)
+            or acknowledgement.get("provider_entry_receipt_sha256") != entry.get("receipt_sha256")
+            or acknowledgement.get("owned_instance_identity_sha256")
+            != entry.get("owned_instance_identity_sha256")
+            or acknowledgement.get("lambda_started_at_epoch")
+            != entry.get("lambda_started_at_epoch")
+            or acknowledgement.get("verified_before_provider_termination") is not True
+        ):
+            raise T09HostError(
+                "prior attempt archive lacks its exact off-host verification acknowledgement"
+            )
+
+
 def provider_seconds_remaining(root: Path, *, reserve_seconds: float = 0.0) -> float:
     """Return provider time left while preserving an explicit cleanup reserve."""
 
@@ -859,15 +922,20 @@ def scientific_seconds_remaining(root: Path, *, reserve_seconds: float = 0.0) ->
 
 
 def admit_next_attempt(root: Path) -> float:
-    """Require only the next hard attempt wall plus the normal cleanup reserve."""
+    """Reserve one full condition, its evidence handoff, and provider cleanup."""
 
     usable = provider_seconds_remaining(
         root,
-        reserve_seconds=PROVIDER_CLOSEOUT_RESERVE_SECONDS,
+        reserve_seconds=(
+            PROVIDER_CLOSEOUT_RESERVE_SECONDS
+            + ATTEMPT_EVIDENCE_EXPORT_RESERVE_SECONDS
+            + PROVIDER_TERMINATION_HANDOFF_SECONDS
+        ),
     )
     if usable < MAX_CONDITION_WALL_SECONDS:
         raise T09HostError(
-            "remaining campaign time cannot cover the next attempt hard wall and cleanup reserve"
+            "remaining campaign time cannot cover the next attempt hard wall, evidence handoff, "
+            "termination dispatch, and cleanup reserve"
         )
     return usable
 
@@ -1608,7 +1676,7 @@ def run_attached_with_caps(
             now_wall = time.time()
             elapsed = time.monotonic() - attempt_started
             lambda_elapsed = now_wall - lambda_started_at_epoch
-            if elapsed > (MAX_CONDITION_WALL_SECONDS - ATTEMPT_EVIDENCE_EXPORT_RESERVE_SECONDS):
+            if elapsed > MAX_CONDITION_WALL_SECONDS:
                 stop_reason = "condition_wall_budget_stop"
             elif (
                 now_wall - pair_started_at_epoch
@@ -1622,6 +1690,12 @@ def run_attached_with_caps(
                 stop_reason = "campaign_total_wall_budget_stop"
             elif lambda_elapsed > MAX_LAMBDA_DURATION_SECONDS - PROVIDER_CLOSEOUT_RESERVE_SECONDS:
                 stop_reason = "lambda_duration_budget_stop"
+            elif lambda_elapsed > (
+                PROVIDER_TERMINATION_CUTOFF_SECONDS
+                - ATTEMPT_EVIDENCE_EXPORT_RESERVE_SECONDS
+                - PROVIDER_TERMINATION_HANDOFF_SECONDS
+            ):
+                stop_reason = "provider_termination_handoff_budget_stop"
             elif (
                 lambda_elapsed + PROVIDER_CLOSEOUT_RESERVE_SECONDS
             ) * LAMBDA_HOURLY_PRICE_USD / 3600.0 > MAX_LAMBDA_COST_USD:
@@ -1750,6 +1824,11 @@ def execute_condition(args: argparse.Namespace) -> int:
         raise T09HostError("condition would violate frozen order or zero retry")
     if len(entered) == 2 and state.get("first_pair_decision") != "continue-to-task-b":
         raise T09HostError("Task B is blocked by the first-pair checkpoint")
+    require_prior_export_acknowledgements(
+        artifact_root,
+        next_attempt_index=expected_index,
+        package_commit=args.package_commit,
+    )
     started_epoch = state.get("pilot_started_at_epoch")
     lambda_started_epoch = state.get("lambda_started_at_epoch")
     pair_field = (
@@ -1803,11 +1882,16 @@ def execute_condition(args: argparse.Namespace) -> int:
             "schema_version": "0.1.0",
             "run_id": args.run_id,
             "attempt_started_at_epoch": attempt_started_epoch,
-            "attempt_hard_deadline_epoch": (attempt_started_epoch + MAX_CONDITION_WALL_SECONDS),
-            "empirical_work_stop_seconds": (
-                MAX_CONDITION_WALL_SECONDS - ATTEMPT_EVIDENCE_EXPORT_RESERVE_SECONDS
+            "condition_hard_deadline_epoch": (attempt_started_epoch + MAX_CONDITION_WALL_SECONDS),
+            "evidence_handoff_deadline_epoch": (
+                attempt_started_epoch
+                + MAX_CONDITION_WALL_SECONDS
+                + ATTEMPT_EVIDENCE_EXPORT_RESERVE_SECONDS
             ),
-            "evaluator_and_export_reserve_seconds": (ATTEMPT_EVIDENCE_EXPORT_RESERVE_SECONDS),
+            "condition_hard_wall_seconds": MAX_CONDITION_WALL_SECONDS,
+            "post_condition_evaluator_and_export_seconds": (
+                ATTEMPT_EVIDENCE_EXPORT_RESERVE_SECONDS
+            ),
         },
     )
     created = subprocess.run(
@@ -1900,19 +1984,23 @@ def execute_condition(args: argparse.Namespace) -> int:
         attempt_root=attempt_root,
         cleanup_receipt=cleanup_receipt,
     )
-    remaining_attempt_seconds = MAX_CONDITION_WALL_SECONDS - (time.monotonic() - attempt_started)
+    remaining_evidence_seconds = (
+        MAX_CONDITION_WALL_SECONDS
+        + ATTEMPT_EVIDENCE_EXPORT_RESERVE_SECONDS
+        - (time.monotonic() - attempt_started)
+    )
     remaining_pair_seconds = MAX_PAIR_WALL_SECONDS - (time.time() - float(pair_started_epoch))
     remaining_runtime_seconds = scientific_seconds_remaining(
         artifact_root,
         reserve_seconds=PROVIDER_CLOSEOUT_RESERVE_SECONDS,
     )
     finalizer_seconds = min(
-        remaining_attempt_seconds,
+        remaining_evidence_seconds,
         remaining_pair_seconds,
         remaining_runtime_seconds,
     )
     if finalizer_seconds <= 1:
-        raise T09HostError("attempt wall cap left no time for the offline evaluator")
+        raise T09HostError("post-condition evidence handoff left no time for the evaluator")
     with (
         (attempt_root / "evaluator-finalizer.stdout").open("xb") as stdout,
         (attempt_root / "evaluator-finalizer.stderr").open("xb") as stderr,
@@ -1956,9 +2044,11 @@ def export_attempt(args: argparse.Namespace, destination: BinaryIO) -> dict[str,
     except ValueError:
         raise T09HostError("attempt export root escaped the pilot artifact root") from None
     wall = load_object(attempt_root / "attempt-wall.json", label="attempt wall")
-    hard_deadline_epoch = wall.get("attempt_hard_deadline_epoch")
-    if not isinstance(hard_deadline_epoch, (int, float)) or isinstance(hard_deadline_epoch, bool):
-        raise T09HostError("attempt export lacks its hard deadline")
+    evidence_deadline_epoch = wall.get("evidence_handoff_deadline_epoch")
+    if not isinstance(evidence_deadline_epoch, (int, float)) or isinstance(
+        evidence_deadline_epoch, bool
+    ):
+        raise T09HostError("attempt export lacks its evidence handoff deadline")
     required = {
         "attempt-outcome.json",
         "evidence-index.json",
@@ -2003,9 +2093,11 @@ def export_attempt(args: argparse.Namespace, destination: BinaryIO) -> dict[str,
             "exported_before_provider_termination": True,
         },
     )
-    remaining_attempt = float(hard_deadline_epoch) - time.time()
-    remaining_campaign_to_cutoff = PROVIDER_TERMINATION_CUTOFF_SECONDS - (
-        time.time() - float(_runtime_budget_state(artifact_root)["lambda_started_at_epoch"])
+    remaining_attempt = float(evidence_deadline_epoch) - time.time()
+    remaining_campaign_to_cutoff = (
+        PROVIDER_TERMINATION_CUTOFF_SECONDS
+        - (time.time() - float(_runtime_budget_state(artifact_root)["lambda_started_at_epoch"]))
+        - PROVIDER_TERMINATION_HANDOFF_SECONDS
     )
     timeout = min(remaining_attempt, remaining_campaign_to_cutoff)
     if timeout <= 1:
@@ -2139,6 +2231,7 @@ def verify_attempt_export(args: argparse.Namespace) -> None:
             "plan_id": PLAN_ID,
             "host_run_id": HOST_RUN_ID,
             "run_id": args.run_id,
+            "package_commit": args.package_commit,
             "archive_path": archive.name,
             "archive_bytes": archive.stat().st_size,
             "archive_sha256": file_sha256(archive),
@@ -2150,6 +2243,35 @@ def verify_attempt_export(args: argparse.Namespace) -> None:
             "verified_before_provider_termination": True,
         },
     )
+
+
+def acknowledge_attempt_export(args: argparse.Namespace) -> None:
+    """Register the off-host verifier receipt before any later empirical entry."""
+
+    root = args.artifact_root.resolve(strict=True)
+    incoming = args.acknowledgement_file.resolve(strict=True)
+    acknowledgement = load_object(incoming, label="off-host export acknowledgement")
+    state = _runtime_budget_state(root)
+    completed = state.get("attempts_completed")
+    if not isinstance(completed, list) or args.run_id not in completed:
+        raise T09HostError("cannot acknowledge an attempt that is not finalized")
+    expected_index = RUN_IDS.index(args.run_id)
+    if completed[: expected_index + 1] != list(RUN_IDS[: expected_index + 1]):
+        raise T09HostError("export acknowledgement violates frozen attempt order")
+    destination = _received_export_ack_path(root, args.run_id)
+    destination.parent.mkdir(mode=0o700, exist_ok=True)
+    write_exclusive(destination, acknowledgement)
+    try:
+        require_prior_export_acknowledgements(
+            root,
+            next_attempt_index=expected_index + 1,
+            package_commit=args.package_commit,
+        )
+    except BaseException:
+        destination.unlink(missing_ok=True)
+        raise
+    if incoming != destination:
+        incoming.unlink()
 
 
 def _reconstructable_disposition(root: Path) -> dict[str, Any]:
@@ -2512,7 +2634,8 @@ def cleanup(args: argparse.Namespace) -> None:
             "structural_privacy_scan_passed": not privacy_hits,
             "structural_privacy_violations": privacy_hits,
             "gpu_pretermination_accounting": gpu_snapshot(),
-            "evidence_stage_required_before_provider_termination": True,
+            "evidence_stage_required_before_provider_termination": False,
+            "aggregate_stage_optional_after_verified_direct_exports": True,
             "lambda_seconds_remaining_for_provider_closeout": remaining_runtime,
         },
     )
@@ -2531,10 +2654,13 @@ def parser() -> argparse.ArgumentParser:
     preflight_parser = operations.add_parser("preflight")
     preflight_parser.add_argument("--dynamic-receipt", type=Path, required=True)
     preflight_parser.add_argument("--dynamic-source-root", type=Path, required=True)
-    condition = operations.add_parser("condition")
-    condition.add_argument("--run-id", choices=RUN_IDS, required=True)
     condition_export = operations.add_parser("condition-export")
     condition_export.add_argument("--run-id", choices=RUN_IDS, required=True)
+    export_only = operations.add_parser("export-only")
+    export_only.add_argument("--run-id", choices=RUN_IDS, required=True)
+    acknowledgement = operations.add_parser("acknowledge-attempt-export")
+    acknowledgement.add_argument("--run-id", choices=RUN_IDS, required=True)
+    acknowledgement.add_argument("--acknowledgement-file", type=Path, required=True)
     operations.add_parser("stage")
     inbound_parser = operations.add_parser("verify-inbound")
     inbound_parser.add_argument("--inbound-root", type=Path, required=True)
@@ -2559,11 +2685,15 @@ def main() -> int:
     if args.operation == "preflight":
         preflight(args)
         return 0
-    if args.operation == "condition":
-        return execute_condition(args)
     if args.operation == "condition-export":
         execute_condition(args)
         export_attempt(args, sys.stdout.buffer)
+        return 0
+    if args.operation == "export-only":
+        export_attempt(args, sys.stdout.buffer)
+        return 0
+    if args.operation == "acknowledge-attempt-export":
+        acknowledge_attempt_export(args)
         return 0
     if args.operation == "stage":
         stage(args)

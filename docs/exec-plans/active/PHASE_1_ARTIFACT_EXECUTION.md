@@ -160,8 +160,10 @@ evaluator, model, SiRA revision, counterbalance, scoring, evidence, budgets,
 zero-retry rule, and calibration-only interpretation. The lifecycle now uses actual
 elapsed time from the durable provider launch send-start, a 14,400-second hard campaign wall,
 900-second cleanup reserve, and 13,500-second normal termination cutoff. An attempt
-may start only when its 3,600-second hard wall plus cleanup reserve remains. No new
-watchdog or automated launch framework is introduced.
+may start only when its full 3,600-second condition wall, 600-second evaluator/evidence
+handoff, 60-second termination-dispatch margin, and cleanup reserve remain. The
+provider boundary is a single-use adapter over the retained pragmatic mutation
+shape and T07 observer GET transport; no persistent service or watchdog is introduced.
 
 Local implementation/review/freeze work is governed by
 `docs/exec-plans/active/T09_PRAGMATIC_CALIBRATION_PILOT.md`. Provider mutation remains

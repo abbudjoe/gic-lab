@@ -105,9 +105,12 @@ Hard aggregate ceilings are USD 40 OpenAI, USD 5.16 Lambda, USD 45.16 combined,
 4,620 model calls, 4,000,000 tokens, 120 browser actions, four attempts, and zero
 condition retries. Per-attempt caps are 1,155 calls, 1,000,000 tokens, USD 10 OpenAI,
 30 actions, 3,600 seconds, and 64 MiB output. Pair wall is 7,200 seconds; pilot disk
-is 2 GiB. Each finalized attempt is streamed and hash-verified locally before the
-next attempt, so the 900-second provider cleanup reserve is never borrowed for a
-multi-gigabyte terminal transfer. These are emergency stops, not expected spend.
+is 2 GiB. Each condition retains its full 3,600-second wall; a separate 600-second
+evaluator/export handoff and 60-second provider-termination dispatch margin must also
+fit before admission. Each finalized attempt is streamed, hash-verified locally, and
+acknowledged back to the host before the next empirical entry, so the 900-second
+provider cleanup reserve is never borrowed for terminal transfer. These are emergency
+stops, not expected spend.
 
 ## First-pair checkpoint
 
@@ -115,7 +118,8 @@ After both Task A attempts, continue only when both have reconstructable evidenc
 valid evaluator execution, pair matching remains valid, credential/container/browser
 cleanup is clean, no hard cap was exceeded, actual/projected costs remain below the
 hard ceilings, Task B can still add calibration value, and at least the next
-3,600-second hard attempt wall plus 900-second cleanup reserve remains. Otherwise seal
+3,600-second condition wall, 600-second evaluator/evidence handoff, 60-second
+termination-dispatch margin, and 900-second cleanup reserve remain. Otherwise seal
 `stop-before-task-b`, preserve Task A, and clean up. A passing checkpoint needs no
 second authorization.
 

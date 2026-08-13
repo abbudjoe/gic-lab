@@ -30,9 +30,10 @@ package commit, final plan hash, review, local gates, and private cloud ledger b
   launch and one instance.
 - Billable campaign wall 14,400 seconds; normal cleanup reserve 900 seconds;
   termination begins by 13,500 seconds.
-- Each attempt retains a 3,600-second hard wall. Entry requires actual remaining
-  campaign time of at least 4,500 seconds. No future attempt maxima are reserved at
-  campaign start.
+- Each condition retains its full 3,600-second hard wall. Entry requires actual
+  remaining campaign time of at least 5,160 seconds: condition wall, 600-second
+  evaluator/evidence handoff, 60-second termination-dispatch margin, and 900-second
+  cleanup reserve. No future attempt maxima are reserved at campaign start.
 - Setup, preflight, attempts, evaluator, evidence, and cleanup consume one campaign
   clock. Best-effort termination after the wall is allowed only for provider
   control-plane delay, never for more empirical work.
@@ -46,13 +47,14 @@ approximately USD 7.643970.
 Hard ceilings: USD 40 OpenAI, USD 5.16 Lambda, USD 45.16 combined, 4,620 calls,
 4,000,000 tokens, 120 browser actions, four attempts, zero retry. Per attempt: 1,155
 calls, 1,000,000 tokens, USD 10 OpenAI, 30 actions, 3,600 seconds, 64 MiB output;
-aggregate pilot disk is 2 GiB. Each attempt export is locally hash-verified before
-the next attempt begins.
+aggregate pilot disk is 2 GiB. Each attempt export is locally hash-verified and its
+receipt acknowledged back to the host before the next empirical entry.
 
 Task B opens only when both Task A attempts have reconstructable evidence and valid
 evaluator execution, pair matching and cleanup are valid, no cap/credential issue
 exists, actual/projected spend remains within hard ceilings, Task B can add calibration
-value, and the next attempt wall plus cleanup reserve still fits.
+value, and the next condition wall, evidence handoff, termination margin, and cleanup
+reserve still fit.
 
 ## Evidence and closeout
 

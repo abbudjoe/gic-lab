@@ -83,10 +83,12 @@
     "campaign_provider_wall_seconds": 14400,
     "normal_cleanup_reserve_seconds": 900,
     "provider_termination_cutoff_seconds": 13500,
+    "post_condition_evaluator_evidence_seconds": 600,
+    "termination_dispatch_margin_seconds": 60,
     "max_lambda_instances": 1,
     "max_launch_count": 1,
     "persistent_filesystems": 0,
-    "admission_model": "actual-elapsed-next-attempt-hard-wall-plus-cleanup-reserve",
+    "admission_model": "actual-elapsed-next-condition-plus-evidence-handoff-plus-termination-margin-plus-cleanup-reserve",
     "future_attempt_maxima_reserved_at_campaign_start": false,
     "provider_control_plane": "existing-t07-pragmatic-lambda-operations-with-source-derived-projections-no-persistent-framework-or-watchdog"
   },

@@ -29,6 +29,13 @@ from typing import Final, Protocol, cast
 import yaml
 
 from giclab.harness.lambda_campaign_lifecycle import ObserverLifecycleLimits
+from giclab.harness.lambda_l2m_observer import (
+    MAX_RESPONSE_BYTES_PER_GET,
+    LambdaHttpsL2MObserverTransport,
+    ObserverOperation,
+    ObserverTransportFailure,
+    observer_request,
+)
 
 PLAN_ID: Final = "PLAN-EXP0001-PILOT-V3"
 HOST_RUN_ID: Final = "RUN-T09-PILOT-HOST-0001"
@@ -43,6 +50,7 @@ IMAGE_ID: Final = "44fab622-b98a-49fe-ac6d-e4ce5531532f"
 SSH_KEY_NAME: Final = "fractal-lambda-codex"
 INSTANCE_NAME: Final = "giclab-t09-pilot-v3-0001"
 PRICE_CENTS_PER_HOUR: Final = 129
+SOURCE_OBSERVER: Final = "t07-pragmatic-mutations-plus-l2m-read-only-observer-v1"
 MAX_RESPONSE_BYTES: Final = 16_777_216
 MAX_REQUEST_BYTES: Final = 65_536
 MAX_ENTRY_POLLS: Final = 120
@@ -141,7 +149,12 @@ class ProviderTransport(Protocol):
 
 
 class LambdaTransport:
-    """Exact-host HTTPS transport with no proxy, redirect, or environment handling."""
+    """Thin T09 adapter over the exact T07 pragmatic/observer request path.
+
+    Every GET delegates to the existing T07 observer transport.  The only local
+    extension is the two already-used T07 pragmatic mutation routes (one launch and
+    exact-owned termination); there is no scheduler, service, or watchdog.
+    """
 
     def __init__(
         self,
@@ -151,6 +164,10 @@ class LambdaTransport:
     ) -> None:
         self._context = context or ssl.create_default_context()
         self._clock = clock
+        self._observer = LambdaHttpsL2MObserverTransport(
+            ssl_context=self._context,
+            clock_ns=time.monotonic_ns,
+        )
 
     def send(
         self,
@@ -170,6 +187,38 @@ class LambdaTransport:
             marker in credential for marker in (b"\r", b"\n", b"\0")
         ):
             raise T09ProviderError("Lambda credential is malformed")
+        if method == "GET":
+            operations = {
+                "/api/v1/instance-types": ObserverOperation.LIST_INSTANCE_TYPES,
+                "/api/v1/images": ObserverOperation.LIST_IMAGES,
+                "/api/v1/ssh-keys": ObserverOperation.LIST_SSH_KEYS,
+                "/api/v1/firewall-rulesets": ObserverOperation.LIST_RULESETS,
+                "/api/v1/firewall-rulesets/global": ObserverOperation.GET_GLOBAL_FIREWALL,
+                "/api/v1/instances": ObserverOperation.LIST_INSTANCES,
+            }
+            operation = operations.get(path)
+            if operation is None:
+                raise T09ProviderError("T09 GET escaped the existing observer surface")
+            try:
+                observed = self._observer.send(
+                    observer_request(operation),
+                    credential=credential.decode("ascii", "strict"),
+                    timeout_seconds=REQUEST_TIMEOUT_SECONDS,
+                    absolute_deadline_monotonic_ns=(
+                        time.monotonic_ns() + int(REQUEST_TIMEOUT_SECONDS * 1_000_000_000)
+                    ),
+                    max_response_bytes=MAX_RESPONSE_BYTES_PER_GET,
+                )
+            except ObserverTransportFailure as exc:
+                raise T09ProviderError(
+                    f"existing T07 observer GET failed closed at {exc.stage}"
+                ) from None
+            return ProviderResponse(
+                observed.status,
+                observed.content_type,
+                observed.body,
+                self._clock(),
+            )
         connection = http.client.HTTPSConnection(
             API_HOST,
             API_PORT,
@@ -357,6 +406,13 @@ def _instance_identity_sha256(instance_id: str) -> str:
     return hashlib.sha256(b"giclab-t09-owned-instance-v1\0" + instance_id.encode()).hexdigest()
 
 
+def _instance_set_identity_sha256(instance_ids: list[str]) -> str:
+    if not instance_ids or len(instance_ids) != len(set(instance_ids)):
+        raise T09ProviderError("provider instance identity set is empty or duplicated")
+    identities = sorted(_instance_identity_sha256(instance_id) for instance_id in instance_ids)
+    return _sha256_bytes(_canonical_bytes(identities))
+
+
 def _network_identity_sha256(value: str) -> str:
     return hashlib.sha256(b"giclab-t09-source-cidr-v1\0" + value.encode()).hexdigest()
 
@@ -397,8 +453,40 @@ def _project_provider_response(operation: str, body: bytes) -> bytes:
         raise T09ProviderError(f"{operation} response is not JSON") from exc
     _reject_pagination(document, label=operation)
     data = _envelope(document, label=operation)
-    if operation in {"prelaunch-instances", "active-instances", "termination-instances"}:
-        projected: object = [
+    if operation == "instance-types":
+        offers = _mapping(data, label="instance types")
+        offer = _mapping(offers.get(INSTANCE_TYPE), label="selected A10 offer")
+        identity = _mapping(offer.get("instance_type"), label="selected A10 identity")
+        regions = [
+            _mapping(item, label="selected A10 capacity region")
+            for item in _list(
+                offer.get("regions_with_capacity_available"),
+                label="selected A10 capacity regions",
+            )
+        ]
+        projected: object = {
+            INSTANCE_TYPE: {
+                "instance_type": {
+                    "name": identity.get("name"),
+                    "price_cents_per_hour": identity.get("price_cents_per_hour"),
+                },
+                "regions_with_capacity_available": [
+                    {"name": region.get("name")} for region in regions
+                ],
+            }
+        }
+    elif operation == "images":
+        projected = [
+            {
+                "id": image.get("id"),
+                "region": {"name": _region_name(image)},
+                "family": image.get("family"),
+            }
+            for item in _list(data, label="provider images")
+            if (image := _mapping(item, label="provider image")).get("id") == IMAGE_ID
+        ]
+    elif operation in {"prelaunch-instances", "active-instances", "termination-instances"}:
+        projected = [
             _project_instance(item) for item in _list(data, label=f"{operation} instances")
         ]
     elif operation == "launch":
@@ -412,9 +500,7 @@ def _project_provider_response(operation: str, body: bytes) -> bytes:
         termination = _mapping(data, label="termination response data")
         ids = [
             _string(_mapping(item, label="terminated instance").get("id"), label="terminated ID")
-            for item in _list(
-                termination.get("terminated_instances"), label="terminated instances"
-            )
+            for item in _list(termination.get("terminated_instances"), label="terminated instances")
         ]
         projected = {"instance_identity_sha256s": [_instance_identity_sha256(item) for item in ids]}
     elif operation in {"global-firewall", "post-global-firewall"}:
@@ -440,9 +526,10 @@ def _project_provider_response(operation: str, body: bytes) -> bytes:
                 "public_key": _mapping(item, label="provider SSH key").get("public_key"),
             }
             for item in _list(data, label="provider SSH keys")
+            if _mapping(item, label="provider SSH key").get("name") == SSH_KEY_NAME
         ]
     else:
-        projected = data
+        raise T09ProviderError(f"unsupported provider projection operation: {operation}")
     return _canonical_bytes({"data": projected})
 
 
@@ -463,6 +550,8 @@ def load_campaign_lifecycle(repository: Path) -> CampaignLifecycle:
         "campaign_provider_wall_seconds",
         "normal_cleanup_reserve_seconds",
         "provider_termination_cutoff_seconds",
+        "post_condition_evaluator_evidence_seconds",
+        "termination_dispatch_margin_seconds",
         "max_lambda_instances",
         "max_launch_count",
         "persistent_filesystems",
@@ -470,6 +559,11 @@ def load_campaign_lifecycle(repository: Path) -> CampaignLifecycle:
         "control_plane",
     }:
         raise T09ProviderError("provider lifecycle plan surface drifted")
+    if (
+        raw.get("post_condition_evaluator_evidence_seconds") != 600
+        or raw.get("termination_dispatch_margin_seconds") != 60
+    ):
+        raise T09ProviderError("provider evidence or termination handoff margin drifted")
     return CampaignLifecycle(
         observer_limits=ObserverLifecycleLimits(
             campaign_provider_wall_seconds=_integer(
@@ -708,7 +802,27 @@ class RequestRecorder:
                 },
             )
             raise T09ProviderError(f"provider operation {operation} returned non-2xx")
-        retained = _project_provider_response(operation, response.body)
+        try:
+            retained = _project_provider_response(operation, response.body)
+        except (T09ProviderError, UnicodeDecodeError, ValueError):
+            # A response that crossed send-start but cannot be interpreted is no
+            # safer than a transport ambiguity.  Persist a terminal journal event
+            # before returning control so a mutation can never be silently
+            # repeated from an unmatched send-start record.
+            _append_jsonl(
+                self.root / "request-journal.jsonl",
+                {
+                    **intent,
+                    "event": "response-unknown",
+                    "http_status": response.status,
+                    "response_received_at_epoch": response.received_at_epoch,
+                    "raw_response_sha256": _sha256_bytes(response.body),
+                    "raw_response_bytes": len(response.body),
+                    "outcome_observed_at_epoch": self.clock(),
+                    "classification": "untrusted-response-semantics",
+                },
+            )
+            raise ProviderOutcomeUnknown(operation) from None
         filename = f"{ordinal:03d}-{operation}.json"
         write_bytes_exclusive(self.root / filename, retained)
         _append_jsonl(
@@ -876,8 +990,7 @@ def _validate_prelaunch_documents(
         for item in rules
         if isinstance(item, dict)
         and item.get("protocol") == "tcp"
-        and item.get("source_network_identity_sha256")
-        == source_cidr_sha256
+        and item.get("source_network_identity_sha256") == source_cidr_sha256
         and item.get("port_range") in [[22, 22], [22]]
     ]
     if len(exact_ssh) != 1:
@@ -919,6 +1032,75 @@ def _terminate_body(instance_id: str) -> dict[str, object]:
     return {"instance_ids": [instance_id]}
 
 
+def _terminate_many_body(instance_ids: list[str]) -> dict[str, object]:
+    _instance_set_identity_sha256(instance_ids)
+    return {"instance_ids": list(instance_ids)}
+
+
+def _close_multi_instance_launch_incident(
+    *,
+    recorder: RequestRecorder,
+    entry_root: Path,
+    private_root: Path,
+    instance_ids: list[str],
+    clock: Callable[[], float],
+    sleeper: Callable[[float], None],
+) -> None:
+    """Destroy every ID returned by one contract-violating launch response."""
+
+    target_set = _instance_set_identity_sha256(instance_ids)
+    write_exclusive(
+        private_root / "MULTI_INSTANCE_LAUNCH_INCIDENT.json",
+        {
+            "schema_version": "0.1.0",
+            "plan_id": PLAN_ID,
+            "host_run_id": HOST_RUN_ID,
+            "private_instance_ids": list(instance_ids),
+            "instance_identity_sha256s": sorted(
+                _instance_identity_sha256(instance_id) for instance_id in instance_ids
+            ),
+            "launch_count": 1,
+            "second_launch_forbidden": True,
+            "cleanup_target_set_sha256": target_set,
+            "private_operational_state_not_for_archive": True,
+            "created_at_epoch": clock(),
+        },
+    )
+    with contextlib.suppress(ProviderOutcomeUnknown):
+        recorder.request(
+            "terminate",
+            "POST",
+            "/api/v1/instance-operations/terminate",
+            body=_terminate_many_body(instance_ids),
+            target_identity_sha256=target_set,
+        )
+    expected = {_instance_identity_sha256(instance_id) for instance_id in instance_ids}
+    for _ in range(MAX_TERMINATION_POLLS):
+        sleeper(POLL_SECONDS)
+        recorder.request("termination-instances", "GET", "/api/v1/instances")
+        rows = _instance_rows(
+            _response_documents(entry_root)["termination-instances"][-1][1],
+            label="multi-launch incident instances",
+        )
+        remaining = [
+            row
+            for row in rows
+            if row.get("instance_identity_sha256") in expected
+            and row.get("status") not in TERMINAL_STATES
+        ]
+        if not remaining:
+            seal_source_bundle(entry_root)
+            raise T09ProviderError(
+                "one launch returned multiple instances; every returned identity was closed; "
+                "the campaign is permanently stopped"
+            )
+    seal_source_bundle(entry_root)
+    raise T09ProviderError(
+        "one launch returned multiple instances and bounded cleanup did not prove them terminal; "
+        "use the Lambda console to terminate every identity in MULTI_INSTANCE_LAUNCH_INCIDENT.json"
+    )
+
+
 def _manifest(root: Path) -> dict[str, object]:
     files: list[dict[str, object]] = []
     total = 0
@@ -933,7 +1115,7 @@ def _manifest(root: Path) -> dict[str, object]:
         files.append({"path": path.name, "bytes": size, "sha256": file_sha256(path)})
     return {
         "schema_version": "0.1.0",
-        "source_observer": "t09-plan-driven-pragmatic-provider-v1",
+        "source_observer": SOURCE_OBSERVER,
         "plan_id": PLAN_ID,
         "host_run_id": HOST_RUN_ID,
         "files": files,
@@ -974,9 +1156,7 @@ def _entry_projection(
     launch_event, launch_document = documents["launch"][0]
     launch_data = _mapping(_envelope(launch_document, label="launch"), label="launch data")
     instance_identity_sha256 = _string(
-        _list(
-            launch_data.get("instance_identity_sha256s"), label="launch identities"
-        )[0],
+        _list(launch_data.get("instance_identity_sha256s"), label="launch identities")[0],
         label="instance identity",
     )
     active_documents = documents.get("active-instances", [])
@@ -1017,7 +1197,7 @@ def _entry_projection(
         "owned_instance_identity_sha256": instance_identity_sha256,
         "source_manifest_sha256": file_sha256(root / "source-manifest.json"),
         "source_bundle_bytes": manifest["total_bytes"],
-        "source_observer": "t09-plan-driven-pragmatic-provider-v1",
+        "source_observer": SOURCE_OBSERVER,
         "ssh_public_key_sha256": hashlib.sha256(expected_public_key.strip().encode()).hexdigest(),
         "source_ipv4_cidr_sha256": expected_source_cidr_sha256
         or _network_identity_sha256(f"{expected_public_ipv4}/32"),
@@ -1029,7 +1209,9 @@ def _entry_projection(
         "persistent_filesystems": 0,
         "hourly_price_usd": 1.29,
         "billable_clock_source": "provider-launch-send-started-conservative",
-        "raw_source_retained_private": True,
+        "provider_projection_retained_private": True,
+        "raw_response_identity_retained": True,
+        "raw_provider_payload_retained": False,
         "structural_redaction_passed": True,
     }
 
@@ -1186,9 +1368,7 @@ def _closeout_projection(
     terminations = documents.get("terminate", [])
     for _, document in terminations:
         data = _mapping(_envelope(document, label="termination"), label="termination data")
-        terminated_rows = _list(
-            data.get("instance_identity_sha256s"), label="terminated instances"
-        )
+        terminated_rows = _list(data.get("instance_identity_sha256s"), label="terminated instances")
         if owned_identity_sha256 not in terminated_rows:
             raise T09ProviderError("termination response did not bind the exact owned instance")
     termination_started = min(
@@ -1200,9 +1380,7 @@ def _closeout_projection(
     for event, document in documents.get("termination-instances", []):
         rows = _instance_rows(document, label="termination instances")
         owned = [
-            row
-            for row in rows
-            if row.get("instance_identity_sha256") == owned_identity_sha256
+            row for row in rows if row.get("instance_identity_sha256") == owned_identity_sha256
         ]
         t09 = [row for row in rows if row.get("name") == INSTANCE_NAME]
         timestamp = _number(event["response_received_at_epoch"], label="poll response time")
@@ -1263,12 +1441,14 @@ def _closeout_projection(
         "entry_receipt_sha256": entry_receipt["receipt_sha256"],
         "source_manifest_sha256": file_sha256(root / "source-manifest.json"),
         "source_bundle_bytes": manifest["total_bytes"],
-        "source_observer": "t09-plan-driven-pragmatic-provider-v1",
+        "source_observer": SOURCE_OBSERVER,
         "termination_request_count": len(termination_sends),
         "terminal_or_absent": True,
         "zero_t09_instances": True,
         "security_restored": security_restored,
-        "raw_source_retained_private": True,
+        "provider_projection_retained_private": True,
+        "raw_response_identity_retained": True,
+        "raw_provider_payload_retained": False,
         "structural_redaction_passed": True,
         "campaign_wall_exception": campaign_exception,
     }
@@ -1340,16 +1520,71 @@ def _read_public_file(path: Path, *, maximum_bytes: int) -> str:
     return path.read_text(encoding="utf-8").strip()
 
 
-def _load_or_recover_owned_state(private_root: Path, package_commit: str) -> dict[str, object]:
-    del package_commit
-    for name in ("owned-state-active.json", "owned-state.json"):
+def _load_source_validated_owned_state(
+    private_root: Path,
+    *,
+    repository: Path,
+    package_commit: str,
+) -> dict[str, object]:
+    """Bind the destructive target back to launch evidence before any POST."""
+
+    plan_path = repository / "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml"
+    plan_sha256 = file_sha256(plan_path)
+    entry_source = private_root / "entry-source"
+    entry_path = entry_source / "entry-receipt.json"
+    entry = validate_entry_receipt_source_bound(
+        entry_path,
+        entry_source,
+        package_commit=package_commit,
+        plan_sha256=plan_sha256,
+    )
+    candidates: list[dict[str, object]] = []
+    for name in ("owned-state.json", "owned-state-active.json"):
         candidate = private_root / name
         if candidate.is_file():
-            return _load_json(candidate, maximum_bytes=65_536)
-    raise T09ProviderError(
-        "owned instance state is unavailable; do not relaunch; terminate the unique exact "
-        "instance name through the Lambda console and verify it absent"
-    )
+            state = _load_json(candidate, maximum_bytes=65_536)
+            expected_keys = {
+                "schema_version",
+                "plan_id",
+                "host_run_id",
+                "package_commit",
+                "plan_sha256",
+                "instance_id",
+                "owned_instance_identity_sha256",
+                "instance_name",
+                "lambda_started_at_epoch",
+            }
+            if name == "owned-state-active.json":
+                expected_keys.add("ssh_target")
+            if set(state) != expected_keys:
+                raise T09ProviderError("owned instance state field set drifted")
+            instance_id = _string(state.get("instance_id"), label="owned instance ID")
+            identity = _instance_identity_sha256(instance_id)
+            if (
+                state.get("schema_version") != "0.1.0"
+                or state.get("plan_id") != PLAN_ID
+                or state.get("host_run_id") != HOST_RUN_ID
+                or state.get("package_commit") != package_commit
+                or state.get("plan_sha256") != plan_sha256
+                or state.get("instance_name") != INSTANCE_NAME
+                or state.get("owned_instance_identity_sha256") != identity
+                or entry.get("owned_instance_identity_sha256") != identity
+                or state.get("lambda_started_at_epoch") != entry.get("lambda_started_at_epoch")
+            ):
+                raise T09ProviderError("owned instance state is not source-bound")
+            candidates.append(state)
+    if not candidates:
+        raise T09ProviderError(
+            "owned instance state is unavailable; do not relaunch; terminate the unique exact "
+            "instance name through the Lambda console and verify it absent"
+        )
+    shared = {key: candidates[0][key] for key in candidates[0] if key != "ssh_target"}
+    if any(
+        {key: value for key, value in candidate.items() if key != "ssh_target"} != shared
+        for candidate in candidates[1:]
+    ):
+        raise T09ProviderError("owned instance state copies disagree")
+    return candidates[-1]
 
 
 def launch_campaign(
@@ -1374,6 +1609,8 @@ def launch_campaign(
     )
     lifecycle = load_campaign_lifecycle(repository)
     del lifecycle
+    plan_path = repository / "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml"
+    plan_sha256 = file_sha256(plan_path)
     if private_root.exists():
         raise T09ProviderError("provider private root already exists; launch is single use")
     private_root.mkdir(mode=0o700, parents=True, exist_ok=False)
@@ -1456,13 +1693,41 @@ def launch_campaign(
             json.loads(launch_response.body),
             label="raw launch response",
         )
-        launch_data = _mapping(
-            _envelope(raw_launch, label="raw launch"), label="raw launch data"
-        )
-        instance_id = _string(
-            _list(launch_data.get("instance_ids"), label="launch IDs")[0],
-            label="instance ID",
-        )
+        launch_data = _mapping(_envelope(raw_launch, label="raw launch"), label="raw launch data")
+        instance_ids = [
+            _string(item, label="instance ID")
+            for item in _list(launch_data.get("instance_ids"), label="launch IDs")
+        ]
+        if len(instance_ids) != 1:
+            if instance_ids:
+                _close_multi_instance_launch_incident(
+                    recorder=recorder,
+                    entry_root=entry_root,
+                    private_root=private_root,
+                    instance_ids=instance_ids,
+                    clock=clock,
+                    sleeper=sleeper,
+                )
+            write_exclusive(
+                private_root / "LAUNCH_OUTCOME_UNKNOWN.json",
+                {
+                    "schema_version": "0.1.0",
+                    "plan_id": PLAN_ID,
+                    "host_run_id": HOST_RUN_ID,
+                    "instance_name": INSTANCE_NAME,
+                    "launch_body_sha256": _sha256_bytes(_canonical_bytes(_launch_body())),
+                    "second_launch_forbidden": True,
+                    "required_action": (
+                        "inspect the Lambda console for the unique exact instance name; "
+                        "terminate every match; verify no matching instance remains"
+                    ),
+                },
+            )
+            seal_source_bundle(entry_root)
+            raise T09ProviderError(
+                "launch returned no trustworthy exact-one identity; do not launch again"
+            )
+        instance_id = instance_ids[0]
         owned_hash = _instance_identity_sha256(instance_id)
         documents = _response_documents(entry_root)
         write_exclusive(
@@ -1472,6 +1737,7 @@ def launch_campaign(
                 "plan_id": PLAN_ID,
                 "host_run_id": HOST_RUN_ID,
                 "package_commit": package_commit,
+                "plan_sha256": plan_sha256,
                 "instance_id": instance_id,
                 "owned_instance_identity_sha256": owned_hash,
                 "instance_name": INSTANCE_NAME,
@@ -1480,9 +1746,7 @@ def launch_campaign(
         )
         for _ in range(MAX_ENTRY_POLLS):
             sleeper(POLL_SECONDS)
-            active_response = recorder.request(
-                "active-instances", "GET", "/api/v1/instances"
-            )
+            active_response = recorder.request("active-instances", "GET", "/api/v1/instances")
             rows = _instance_rows(
                 _response_documents(entry_root)["active-instances"][-1][1],
                 label="active instances",
@@ -1495,9 +1759,7 @@ def launch_campaign(
                 and row.get("status") == "active"
             ]
             if len(active) == 1:
-                raw_active = _mapping(
-                    json.loads(active_response.body), label="raw active response"
-                )
+                raw_active = _mapping(json.loads(active_response.body), label="raw active response")
                 raw_rows = _instance_rows(raw_active, label="raw active instances")
                 raw_match = [
                     row
@@ -1518,13 +1780,10 @@ def launch_campaign(
         else:
             raise T09ProviderError("owned instance did not become active in the bounded window")
         seal_source_bundle(entry_root)
-        plan_path = (
-            repository / "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml"
-        )
         return create_entry_receipt(
             entry_root,
             package_commit=package_commit,
-            plan_sha256=file_sha256(plan_path),
+            plan_sha256=plan_sha256,
             expected_public_key=expected_public_key,
             expected_public_ipv4=expected_public_ipv4,
         )
@@ -1550,8 +1809,15 @@ def closeout_campaign(
         package_commit=package_commit,
     )
     lifecycle = load_campaign_lifecycle(repository)
-    state = _load_or_recover_owned_state(private_root, package_commit)
+    state = _load_source_validated_owned_state(
+        private_root,
+        repository=repository,
+        package_commit=package_commit,
+    )
     instance_id = _string(state.get("instance_id"), label="owned instance ID")
+    owned_identity = _string(
+        state.get("owned_instance_identity_sha256"), label="owned instance identity"
+    )
     started = _number(state["lambda_started_at_epoch"], label="Lambda start")
     closeout_root = private_root / "closeout-source"
     closeout_root.mkdir(mode=0o700, exist_ok=False)
@@ -1596,7 +1862,7 @@ def closeout_campaign(
                     "/api/v1/instance-operations/terminate",
                     body=_terminate_body(instance_id),
                     target_identity_sha256=_string(
-                        state.get("owned_instance_identity_sha256"),
+                        owned_identity,
                         label="owned instance identity",
                     ),
                 )
@@ -1607,7 +1873,9 @@ def closeout_campaign(
                     _response_documents(closeout_root)["termination-instances"][-1][1],
                     label="termination instances",
                 )
-                owned = [row for row in rows if row.get("id") == instance_id]
+                owned = [
+                    row for row in rows if row.get("instance_identity_sha256") == owned_identity
+                ]
                 if not owned or all(row.get("status") in TERMINAL_STATES for row in owned):
                     break
             else:
@@ -1634,6 +1902,28 @@ def closeout_campaign(
         for name in ("owned-state-active.json", "owned-state.json"):
             _destroy_operational_file(private_root / name)
         return receipt
+    except BaseException as exc:
+        marker = private_root / "CLOSEOUT_REQUIRES_CONSOLE.json"
+        if not marker.exists():
+            write_exclusive(
+                marker,
+                {
+                    "schema_version": "0.1.0",
+                    "plan_id": PLAN_ID,
+                    "host_run_id": HOST_RUN_ID,
+                    "private_instance_id": instance_id,
+                    "instance_name": INSTANCE_NAME,
+                    "owned_instance_identity_sha256": owned_identity,
+                    "error_type": type(exc).__name__,
+                    "required_action": (
+                        "in the Lambda console, terminate the exact private instance ID if "
+                        "present; verify that ID and every exact T09 instance-name match are "
+                        "terminal or absent; do not launch again"
+                    ),
+                    "private_operational_state_not_for_archive": True,
+                },
+            )
+        raise
     finally:
         _destroy_bytearray(credential)
 

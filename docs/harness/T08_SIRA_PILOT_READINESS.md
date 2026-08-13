@@ -76,7 +76,8 @@ exact evaluator, model, SiRA revision, counterbalance, scoring, evidence, budget
 zero retry, and calibration-only boundary. It replaces the 3,600-second campaign
 wall with one plan-driven 14,400-second actual-time provider campaign, 900-second
 cleanup reserve, and 13,500-second normal termination cutoff. Each attempt is admitted
-only when its own hard wall plus cleanup reserve remains; future maxima are not summed
-at campaign start. Execution still requires the exact clean freeze, private
+only when its full condition wall, evaluator/evidence handoff, positive termination
+margin, and cleanup reserve remain; future maxima are not summed at campaign start.
+Execution still requires the exact clean freeze, private
 single-use overlay, dynamic preflight, and one-launch cloud ledger. Public raw release
 remains independently blocked.

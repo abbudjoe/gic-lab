@@ -1141,8 +1141,9 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
         "max_launch_count": 1,
         "persistent_filesystems": 0,
         "admission_rule": (
-            "remaining campaign time must cover only the next 3600-second attempt "
-            "hard wall plus the 900-second cleanup reserve"
+            "remaining campaign time must cover only the next 3600-second condition hard wall, "
+            "a 600-second evaluator/evidence handoff, a positive 60-second "
+            "provider-termination dispatch margin, and the 900-second cleanup reserve"
         ),
         "control_plane": (
             "existing T07 pragmatic Lambda operations with source-derived projections; "
