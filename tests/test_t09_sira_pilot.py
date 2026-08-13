@@ -718,6 +718,213 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
         is True
     )
 
+    # A one-ID launch owns billable compute before an entry receipt exists.  A
+    # failed active poll must therefore close from the provisional source
+    # binding; an ambiguous termination response is reconciled by fresh GET.
+    capability[0] = tmp_path / "launch-capabilities/active-poll-failure.json"
+    active_failure_root = tmp_path / "provider-active-poll-failure"
+    with pytest.raises(provider.T09ProviderError, match="exact launched instance was closed"):
+        provider.launch_campaign(
+            repository=ROOT,
+            package_commit=package_commit,
+            authorization_ledger=authorization,
+            dotenv=dotenv,
+            private_root=active_failure_root,
+            public_ipv4_file=public_ip_path,
+            ssh_public_key_file=key_path,
+            transport=FakeTransport(
+                [
+                    *copy.deepcopy(launch_responses[:7]),
+                    RuntimeError("active poll transport ambiguity"),
+                    RuntimeError("termination response ambiguity"),
+                    {"data": []},
+                ]
+            ),
+            clock=clock,
+            sleeper=sleeper,
+        )
+    provisional = load_json(active_failure_root / "provisional-owned-state.json")
+    assert provisional["private_instance_id"] == "instance-fixture-0001"
+    assert provisional["launch_capability_state"] == ("consumed-cleanup-only-until-entry-receipt")
+    assert provider._HEX64.fullmatch(str(provisional["launch_journal_prefix_sha256"]))
+    provisional_closed = load_json(active_failure_root / "PROVISIONAL_OWNER_CLOSED.json")
+    assert provisional_closed["provider_disposition"] == "absent"
+    assert provisional_closed["second_launch_forbidden"] is True
+    provider.validate_source_manifest(active_failure_root / "provisional-closeout-source")
+    already_closed_transport = FakeTransport([])
+    assert (
+        provider.closeout_campaign(
+            repository=ROOT,
+            package_commit=package_commit,
+            authorization_ledger=authorization,
+            dotenv=dotenv,
+            private_root=active_failure_root,
+            transport=already_closed_transport,
+            clock=clock,
+            sleeper=sleeper,
+        )
+        == active_failure_root / "PROVISIONAL_OWNER_CLOSED.json"
+    )
+    assert already_closed_transport.calls == []
+
+    # A cleanup poll ambiguity cannot be converted into a false closeout.  It
+    # preserves the exact private target and a no-relaunch console action.
+    capability[0] = tmp_path / "launch-capabilities/cleanup-poll-failure.json"
+    cleanup_failure_root = tmp_path / "provider-cleanup-poll-failure"
+    with pytest.raises(provider.T09ProviderError, match="durable console action"):
+        provider.launch_campaign(
+            repository=ROOT,
+            package_commit=package_commit,
+            authorization_ledger=authorization,
+            dotenv=dotenv,
+            private_root=cleanup_failure_root,
+            public_ipv4_file=public_ip_path,
+            ssh_public_key_file=key_path,
+            transport=FakeTransport(
+                [
+                    *copy.deepcopy(launch_responses[:7]),
+                    RuntimeError("active poll transport ambiguity"),
+                    RuntimeError("termination response ambiguity"),
+                    RuntimeError("cleanup inventory ambiguity"),
+                ]
+            ),
+            clock=clock,
+            sleeper=sleeper,
+        )
+    provisional_console = load_json(
+        cleanup_failure_root / "PROVISIONAL_OWNER_CLEANUP_REQUIRES_CONSOLE.json"
+    )
+    assert provisional_console["private_instance_id"] == "instance-fixture-0001"
+    assert provisional_console["second_launch_forbidden"] is True
+
+    # Exhausting the bounded active window also enters provisional cleanup.
+    capability[0] = tmp_path / "launch-capabilities/active-timeout.json"
+    timeout_root = tmp_path / "provider-active-timeout"
+    booting = {**copy.deepcopy(instance), "status": "booting"}
+    with pytest.raises(provider.T09ProviderError, match="exact launched instance was closed"):
+        provider.launch_campaign(
+            repository=ROOT,
+            package_commit=package_commit,
+            authorization_ledger=authorization,
+            dotenv=dotenv,
+            private_root=timeout_root,
+            public_ipv4_file=public_ip_path,
+            ssh_public_key_file=key_path,
+            transport=FakeTransport(
+                [
+                    *copy.deepcopy(launch_responses[:7]),
+                    *({"data": [copy.deepcopy(booting)]} for _ in range(provider.MAX_ENTRY_POLLS)),
+                    RuntimeError("termination response ambiguity"),
+                    {"data": []},
+                ]
+            ),
+            clock=clock,
+            sleeper=sleeper,
+        )
+    assert (
+        load_json(timeout_root / "PROVISIONAL_OWNER_CLOSED.json")["provider_disposition"]
+        == "absent"
+    )
+
+    original_seal = provider.seal_source_bundle
+
+    def fail_entry_seal(root: Path) -> dict[str, object]:
+        if root.name == "entry-source":
+            raise provider.T09ProviderError("fixture entry seal failure")
+        return original_seal(root)
+
+    capability[0] = tmp_path / "launch-capabilities/entry-seal-failure.json"
+    seal_failure_root = tmp_path / "provider-entry-seal-failure"
+    monkeypatch.setattr(provider, "seal_source_bundle", fail_entry_seal)
+    with pytest.raises(provider.T09ProviderError, match="exact launched instance was closed"):
+        provider.launch_campaign(
+            repository=ROOT,
+            package_commit=package_commit,
+            authorization_ledger=authorization,
+            dotenv=dotenv,
+            private_root=seal_failure_root,
+            public_ipv4_file=public_ip_path,
+            ssh_public_key_file=key_path,
+            transport=FakeTransport(
+                [
+                    *copy.deepcopy(launch_responses),
+                    RuntimeError("termination response ambiguity"),
+                    {"data": []},
+                ]
+            ),
+            clock=clock,
+            sleeper=sleeper,
+        )
+    assert (seal_failure_root / "PROVISIONAL_OWNER_CLOSED.json").is_file()
+    monkeypatch.setattr(provider, "seal_source_bundle", original_seal)
+
+    original_receipt = provider.create_entry_receipt
+
+    def fail_entry_receipt(*_args: object, **_kwargs: object) -> Path:
+        raise provider.T09ProviderError("fixture entry receipt failure")
+
+    capability[0] = tmp_path / "launch-capabilities/entry-receipt-failure.json"
+    receipt_failure_root = tmp_path / "provider-entry-receipt-failure"
+    monkeypatch.setattr(provider, "create_entry_receipt", fail_entry_receipt)
+    with pytest.raises(provider.T09ProviderError, match="exact launched instance was closed"):
+        provider.launch_campaign(
+            repository=ROOT,
+            package_commit=package_commit,
+            authorization_ledger=authorization,
+            dotenv=dotenv,
+            private_root=receipt_failure_root,
+            public_ipv4_file=public_ip_path,
+            ssh_public_key_file=key_path,
+            transport=FakeTransport(
+                [
+                    *copy.deepcopy(launch_responses),
+                    RuntimeError("termination response ambiguity"),
+                    {"data": []},
+                ]
+            ),
+            clock=clock,
+            sleeper=sleeper,
+        )
+    assert (receipt_failure_root / "PROVISIONAL_OWNER_CLOSED.json").is_file()
+    monkeypatch.setattr(provider, "create_entry_receipt", original_receipt)
+
+    original_write = provider.write_exclusive
+
+    def fail_provisional_owner_write(
+        path: Path,
+        value: object,
+        *,
+        mode: int = 0o600,
+    ) -> None:
+        if path.name == "provisional-owned-state.json":
+            raise OSError("fixture provisional owner write failure")
+        original_write(path, value, mode=mode)
+
+    capability[0] = tmp_path / "launch-capabilities/provisional-write-failure.json"
+    write_failure_root = tmp_path / "provider-provisional-write-failure"
+    monkeypatch.setattr(provider, "write_exclusive", fail_provisional_owner_write)
+    with pytest.raises(provider.T09ProviderError, match="exact launched instance was closed"):
+        provider.launch_campaign(
+            repository=ROOT,
+            package_commit=package_commit,
+            authorization_ledger=authorization,
+            dotenv=dotenv,
+            private_root=write_failure_root,
+            public_ipv4_file=public_ip_path,
+            ssh_public_key_file=key_path,
+            transport=FakeTransport(
+                [
+                    *copy.deepcopy(launch_responses[:7]),
+                    RuntimeError("termination response ambiguity"),
+                    {"data": []},
+                ]
+            ),
+            clock=clock,
+            sleeper=sleeper,
+        )
+    assert (write_failure_root / "PROVISIONAL_OWNER_CLOSED.json").is_file()
+    monkeypatch.setattr(provider, "write_exclusive", original_write)
+
     capability[0] = tmp_path / "launch-capabilities/duplicate-cleanup-failure.json"
     duplicate_root = tmp_path / "provider-duplicate-launch"
     duplicate_ids = [

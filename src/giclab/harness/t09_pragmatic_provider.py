@@ -1106,6 +1106,213 @@ def _terminate_many_body(instance_ids: list[str]) -> dict[str, object]:
     return {"instance_ids": list(instance_ids)}
 
 
+def _provisional_owner_binding(
+    *,
+    entry_root: Path,
+    capability_path: Path,
+    package_commit: str,
+    plan_sha256: str,
+    private_root: Path,
+    instance_id: str,
+) -> dict[str, object]:
+    """Bind one returned private ID before any active-state or receipt work."""
+
+    owned_identity = _instance_identity_sha256(instance_id)
+    capability = _load_json(capability_path, maximum_bytes=65_536)
+    expected_private_root_identity = _sha256_bytes(str(private_root.resolve(strict=True)).encode())
+    if (
+        capability.get("plan_id") != PLAN_ID
+        or capability.get("host_run_id") != HOST_RUN_ID
+        or capability.get("package_commit") != package_commit
+        or capability.get("plan_sha256") != plan_sha256
+        or capability.get("launch_body_sha256") != _sha256_bytes(_canonical_bytes(_launch_body()))
+        or capability.get("private_root_identity_sha256") != expected_private_root_identity
+        or capability.get("launch_capability_limit") != 1
+        or capability.get("second_launch_forbidden") is not True
+    ):
+        raise T09ProviderError("consumed launch capability cannot bind provisional ownership")
+    journal = _journal_events(entry_root)
+    launch_sends = [
+        event
+        for event in journal
+        if event.get("event") == "send-started" and event.get("operation") == "launch"
+    ]
+    launch_responses = [
+        event
+        for event in journal
+        if event.get("event") == "response-complete" and event.get("operation") == "launch"
+    ]
+    if len(launch_sends) != 1 or len(launch_responses) != 1:
+        raise T09ProviderError("provisional owner lacks one completed launch journal pair")
+    sent, response = launch_sends[0], launch_responses[0]
+    launch_response_index = journal.index(response)
+    launch_journal_prefix = journal[: launch_response_index + 1]
+    response_file = _string(response.get("response_file"), label="launch projection file")
+    response_path = entry_root / response_file
+    if (
+        response_path.parent != entry_root
+        or sent.get("ordinal") != response.get("ordinal")
+        or sent.get("request_body_sha256") != _sha256_bytes(_canonical_bytes(_launch_body()))
+        or response.get("response_sha256") != file_sha256(response_path)
+        or _mapping(
+            _envelope(_load_json(response_path), label="launch projection"),
+            label="launch projection data",
+        ).get("instance_identity_sha256s")
+        != [owned_identity]
+    ):
+        raise T09ProviderError("provisional owner drifted from the retained launch projection")
+    return {
+        "schema_version": "0.1.0",
+        "plan_id": PLAN_ID,
+        "host_run_id": HOST_RUN_ID,
+        "package_commit": package_commit,
+        "plan_sha256": plan_sha256,
+        "private_instance_id": instance_id,
+        "owned_instance_identity_sha256": owned_identity,
+        "instance_name": INSTANCE_NAME,
+        "lambda_started_at_epoch": sent["send_started_at_epoch"],
+        "launch_request_ordinal": sent["ordinal"],
+        "launch_request_body_sha256": sent["request_body_sha256"],
+        "launch_projection_file": response_file,
+        "launch_projection_sha256": response["response_sha256"],
+        "launch_raw_response_sha256": response["raw_response_sha256"],
+        "launch_journal_prefix_sha256": _sha256_bytes(_canonical_bytes(launch_journal_prefix)),
+        "launch_capability_sha256": file_sha256(capability_path),
+        "launch_capability_state": "consumed-cleanup-only-until-entry-receipt",
+        "second_launch_forbidden": True,
+        "private_operational_state_not_for_archive": True,
+    }
+
+
+def _write_provisional_console_marker(
+    *,
+    private_root: Path,
+    instance_id: str,
+    owned_identity: str,
+    reason: str,
+    clock: Callable[[], float],
+) -> Path:
+    marker = private_root / "PROVISIONAL_OWNER_CLEANUP_REQUIRES_CONSOLE.json"
+    if not marker.exists():
+        write_exclusive(
+            marker,
+            {
+                "schema_version": "0.1.0",
+                "plan_id": PLAN_ID,
+                "host_run_id": HOST_RUN_ID,
+                "private_instance_id": instance_id,
+                "owned_instance_identity_sha256": owned_identity,
+                "instance_name": INSTANCE_NAME,
+                "reason": reason,
+                "launch_capability_state": "consumed-cleanup-only",
+                "second_launch_forbidden": True,
+                "required_action": (
+                    "in the Lambda console, terminate this exact private instance ID if present; "
+                    "verify that ID and every exact T09 instance-name match are terminal or "
+                    "absent; do not launch again"
+                ),
+                "private_operational_state_not_for_archive": True,
+                "created_at_epoch": clock(),
+            },
+        )
+    return marker
+
+
+def _cleanup_provisional_owner(
+    *,
+    transport: ProviderTransport,
+    credential: bytearray,
+    private_root: Path,
+    provisional_binding: Mapping[str, object],
+    clock: Callable[[], float],
+    sleeper: Callable[[float], None],
+) -> None:
+    """Close an exact launched owner without requiring an entry receipt."""
+
+    instance_id = _string(
+        provisional_binding.get("private_instance_id"), label="provisional private instance ID"
+    )
+    owned_identity = _string(
+        provisional_binding.get("owned_instance_identity_sha256"),
+        label="provisional owned identity",
+    )
+    if _instance_identity_sha256(instance_id) != owned_identity:
+        raise T09ProviderError("provisional private ID and identity binding disagree")
+    cleanup_root = private_root / "provisional-closeout-source"
+    cleanup_root.mkdir(mode=0o700, exist_ok=False)
+    write_exclusive(
+        cleanup_root / "provisional-owner-binding.json",
+        dict(provisional_binding),
+    )
+    recorder = RequestRecorder(cleanup_root, transport, credential, clock)
+    try:
+        with contextlib.suppress(T09ProviderError):
+            recorder.request(
+                "terminate",
+                "POST",
+                "/api/v1/instance-operations/terminate",
+                body=_terminate_body(instance_id),
+                target_identity_sha256=owned_identity,
+            )
+        disposition: str | None = None
+        for _ in range(MAX_TERMINATION_POLLS):
+            sleeper(POLL_SECONDS)
+            recorder.request("termination-instances", "GET", "/api/v1/instances")
+            rows = _instance_rows(
+                _response_documents(cleanup_root)["termination-instances"][-1][1],
+                label="provisional cleanup instances",
+            )
+            owned = [row for row in rows if row.get("instance_identity_sha256") == owned_identity]
+            exact_name_nonterminal = [
+                row
+                for row in rows
+                if row.get("name") == INSTANCE_NAME and row.get("status") not in TERMINAL_STATES
+            ]
+            if not exact_name_nonterminal and (
+                not owned or all(row.get("status") in TERMINAL_STATES for row in owned)
+            ):
+                disposition = "absent" if not owned else "terminal"
+                break
+        if disposition is None:
+            raise T09ProviderError(
+                "provisional owner did not become terminal in the bounded window"
+            )
+        manifest = seal_source_bundle(cleanup_root)
+        write_exclusive(
+            private_root / "PROVISIONAL_OWNER_CLOSED.json",
+            {
+                "schema_version": "0.1.0",
+                "plan_id": PLAN_ID,
+                "host_run_id": HOST_RUN_ID,
+                "private_instance_id": instance_id,
+                "owned_instance_identity_sha256": owned_identity,
+                "instance_name": INSTANCE_NAME,
+                "provider_disposition": disposition,
+                "source_manifest_sha256": file_sha256(cleanup_root / "source-manifest.json"),
+                "source_bundle_bytes": manifest["total_bytes"],
+                "launch_capability_state": "consumed-closed-no-relaunch",
+                "second_launch_forbidden": True,
+                "private_operational_state_not_for_archive": True,
+                "closed_at_epoch": clock(),
+            },
+        )
+    except BaseException as exc:
+        with contextlib.suppress(BaseException):
+            _write_provisional_console_marker(
+                private_root=private_root,
+                instance_id=instance_id,
+                owned_identity=owned_identity,
+                reason=type(exc).__name__,
+                clock=clock,
+            )
+        if not (cleanup_root / "source-manifest.json").exists():
+            with contextlib.suppress(BaseException):
+                seal_source_bundle(cleanup_root)
+        raise T09ProviderError(
+            "provisional exact-owner cleanup failed; perform the durable exact-ID console action"
+        ) from exc
+
+
 def _close_multi_instance_launch_incident(
     *,
     recorder: RequestRecorder,
@@ -1701,6 +1908,32 @@ def _load_source_validated_owned_state(
     return candidates[-1]
 
 
+def _load_source_validated_provisional_owner(
+    private_root: Path,
+    *,
+    repository: Path,
+    package_commit: str,
+) -> dict[str, object]:
+    """Recover an exact pre-entry owner after an interrupted launch process."""
+
+    plan_path = repository / "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml"
+    observed = _load_json(private_root / "provisional-owned-state.json", maximum_bytes=65_536)
+    instance_id = _string(
+        observed.get("private_instance_id"), label="provisional private instance ID"
+    )
+    expected = _provisional_owner_binding(
+        entry_root=private_root / "entry-source",
+        capability_path=launch_capability_path(),
+        package_commit=package_commit,
+        plan_sha256=file_sha256(plan_path),
+        private_root=private_root,
+        instance_id=instance_id,
+    )
+    if observed != expected:
+        raise T09ProviderError("provisional owner is not source-bound")
+    return observed
+
+
 def launch_campaign(
     *,
     repository: Path,
@@ -1857,64 +2090,120 @@ def launch_campaign(
             )
         instance_id = instance_ids[0]
         owned_hash = _instance_identity_sha256(instance_id)
-        documents = _response_documents(entry_root)
-        write_exclusive(
-            private_root / "owned-state.json",
-            {
-                "schema_version": "0.1.0",
-                "plan_id": PLAN_ID,
-                "host_run_id": HOST_RUN_ID,
-                "package_commit": package_commit,
-                "plan_sha256": plan_sha256,
-                "instance_id": instance_id,
-                "owned_instance_identity_sha256": owned_hash,
-                "instance_name": INSTANCE_NAME,
-                "lambda_started_at_epoch": documents["launch"][0][0]["send_started_at_epoch"],
-            },
-        )
-        for _ in range(MAX_ENTRY_POLLS):
-            sleeper(POLL_SECONDS)
-            active_response = recorder.request("active-instances", "GET", "/api/v1/instances")
-            rows = _instance_rows(
-                _response_documents(entry_root)["active-instances"][-1][1],
-                label="active instances",
+        provisional_binding: dict[str, object] = {
+            "schema_version": "0.1.0",
+            "plan_id": PLAN_ID,
+            "host_run_id": HOST_RUN_ID,
+            "package_commit": package_commit,
+            "plan_sha256": plan_sha256,
+            "private_instance_id": instance_id,
+            "owned_instance_identity_sha256": owned_hash,
+            "instance_name": INSTANCE_NAME,
+            "second_launch_forbidden": True,
+            "private_operational_state_not_for_archive": True,
+        }
+        try:
+            provisional_binding = _provisional_owner_binding(
+                entry_root=entry_root,
+                capability_path=capability_path,
+                package_commit=package_commit,
+                plan_sha256=plan_sha256,
+                private_root=private_root,
+                instance_id=instance_id,
             )
-            active = [
-                row
-                for row in rows
-                if row.get("instance_identity_sha256") == owned_hash
-                and row.get("name") == INSTANCE_NAME
-                and row.get("status") == "active"
-            ]
-            if len(active) == 1:
-                raw_active = _mapping(json.loads(active_response.body), label="raw active response")
-                raw_rows = _instance_rows(raw_active, label="raw active instances")
-                raw_match = [
+            write_exclusive(
+                private_root / "provisional-owned-state.json",
+                provisional_binding,
+            )
+            write_exclusive(
+                private_root / "owned-state.json",
+                {
+                    "schema_version": "0.1.0",
+                    "plan_id": PLAN_ID,
+                    "host_run_id": HOST_RUN_ID,
+                    "package_commit": package_commit,
+                    "plan_sha256": plan_sha256,
+                    "instance_id": instance_id,
+                    "owned_instance_identity_sha256": owned_hash,
+                    "instance_name": INSTANCE_NAME,
+                    "lambda_started_at_epoch": provisional_binding["lambda_started_at_epoch"],
+                },
+            )
+            for _ in range(MAX_ENTRY_POLLS):
+                sleeper(POLL_SECONDS)
+                active_response = recorder.request("active-instances", "GET", "/api/v1/instances")
+                rows = _instance_rows(
+                    _response_documents(entry_root)["active-instances"][-1][1],
+                    label="active instances",
+                )
+                active = [
                     row
-                    for row in raw_rows
-                    if row.get("id") == instance_id
+                    for row in rows
+                    if row.get("instance_identity_sha256") == owned_hash
                     and row.get("name") == INSTANCE_NAME
                     and row.get("status") == "active"
                 ]
-                if len(raw_match) != 1:
-                    raise T09ProviderError("active instance projection drifted from raw response")
-                ip_value = raw_match[0].get("ip")
-                if not isinstance(ip_value, str) or not ip_value:
-                    raise T09ProviderError("active owned instance lacks its private SSH target")
-                state = _load_json(private_root / "owned-state.json", maximum_bytes=65_536)
-                state["ssh_target"] = ip_value
-                write_exclusive(private_root / "owned-state-active.json", state)
-                break
-        else:
-            raise T09ProviderError("owned instance did not become active in the bounded window")
-        seal_source_bundle(entry_root)
-        return create_entry_receipt(
-            entry_root,
-            package_commit=package_commit,
-            plan_sha256=plan_sha256,
-            expected_public_key=expected_public_key,
-            expected_public_ipv4=expected_public_ipv4,
-        )
+                if len(active) == 1:
+                    raw_active = _mapping(
+                        json.loads(active_response.body), label="raw active response"
+                    )
+                    raw_rows = _instance_rows(raw_active, label="raw active instances")
+                    raw_match = [
+                        row
+                        for row in raw_rows
+                        if row.get("id") == instance_id
+                        and row.get("name") == INSTANCE_NAME
+                        and row.get("status") == "active"
+                    ]
+                    if len(raw_match) != 1:
+                        raise T09ProviderError(
+                            "active instance projection drifted from raw response"
+                        )
+                    ip_value = raw_match[0].get("ip")
+                    if not isinstance(ip_value, str) or not ip_value:
+                        raise T09ProviderError("active owned instance lacks its private SSH target")
+                    state = _load_json(private_root / "owned-state.json", maximum_bytes=65_536)
+                    state["ssh_target"] = ip_value
+                    write_exclusive(private_root / "owned-state-active.json", state)
+                    break
+            else:
+                raise T09ProviderError("owned instance did not become active in the bounded window")
+            seal_source_bundle(entry_root)
+            entry_receipt = create_entry_receipt(
+                entry_root,
+                package_commit=package_commit,
+                plan_sha256=plan_sha256,
+                expected_public_key=expected_public_key,
+                expected_public_ipv4=expected_public_ipv4,
+            )
+        except BaseException as entry_exc:
+            try:
+                _cleanup_provisional_owner(
+                    transport=transport,
+                    credential=credential,
+                    private_root=private_root,
+                    provisional_binding=provisional_binding,
+                    clock=clock,
+                    sleeper=sleeper,
+                )
+            except BaseException as cleanup_exc:
+                with contextlib.suppress(BaseException):
+                    _write_provisional_console_marker(
+                        private_root=private_root,
+                        instance_id=instance_id,
+                        owned_identity=owned_hash,
+                        reason=type(cleanup_exc).__name__,
+                        clock=clock,
+                    )
+                raise T09ProviderError(
+                    "post-launch entry failed and exact-owner cleanup requires the durable "
+                    "console action; do not launch again"
+                ) from cleanup_exc
+            raise T09ProviderError(
+                "post-launch entry failed; the exact launched instance was closed; "
+                "the campaign is permanently stopped"
+            ) from entry_exc
+        return entry_receipt
     finally:
         _destroy_bytearray(credential)
 
@@ -1937,6 +2226,58 @@ def closeout_campaign(
         package_commit=package_commit,
     )
     lifecycle = load_campaign_lifecycle(repository)
+    entry_receipt_path = private_root / "entry-source/entry-receipt.json"
+    provisional_path = private_root / "provisional-owned-state.json"
+    if not entry_receipt_path.is_file() and provisional_path.is_file():
+        provisional = _load_source_validated_provisional_owner(
+            private_root,
+            repository=repository,
+            package_commit=package_commit,
+        )
+        closed_path = private_root / "PROVISIONAL_OWNER_CLOSED.json"
+        if closed_path.is_file():
+            closed = _load_json(closed_path, maximum_bytes=65_536)
+            if (
+                closed.get("private_instance_id") != provisional.get("private_instance_id")
+                or closed.get("owned_instance_identity_sha256")
+                != provisional.get("owned_instance_identity_sha256")
+                or closed.get("provider_disposition") not in {"terminal", "absent"}
+                or closed.get("second_launch_forbidden") is not True
+            ):
+                raise T09ProviderError("provisional closeout marker drifted")
+            return closed_path
+        instance_id = _string(
+            provisional.get("private_instance_id"), label="provisional private instance ID"
+        )
+        owned_identity = _string(
+            provisional.get("owned_instance_identity_sha256"),
+            label="provisional owned identity",
+        )
+        credential = load_dotenv_assignment(dotenv, "LAMBDA_API_KEY")
+        try:
+            _cleanup_provisional_owner(
+                transport=transport,
+                credential=credential,
+                private_root=private_root,
+                provisional_binding=provisional,
+                clock=clock,
+                sleeper=sleeper,
+            )
+        except BaseException as exc:
+            with contextlib.suppress(BaseException):
+                _write_provisional_console_marker(
+                    private_root=private_root,
+                    instance_id=instance_id,
+                    owned_identity=owned_identity,
+                    reason=type(exc).__name__,
+                    clock=clock,
+                )
+            raise
+        finally:
+            _destroy_bytearray(credential)
+        for name in ("owned-state-active.json", "owned-state.json"):
+            _destroy_operational_file(private_root / name)
+        return closed_path
     state = _load_source_validated_owned_state(
         private_root,
         repository=repository,
@@ -2031,7 +2372,11 @@ def closeout_campaign(
             plan_sha256=file_sha256(plan_path),
             lifecycle=lifecycle,
         )
-        for name in ("owned-state-active.json", "owned-state.json"):
+        for name in (
+            "owned-state-active.json",
+            "owned-state.json",
+            "provisional-owned-state.json",
+        ):
             _destroy_operational_file(private_root / name)
         return receipt
     except BaseException as exc:
