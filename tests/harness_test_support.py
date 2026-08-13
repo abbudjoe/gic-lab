@@ -40,8 +40,7 @@ def git_blob(repository_root: Path, commit: str, relative: str) -> bytes:
     result = subprocess.run(
         ["git", "-C", str(repository_root), "show", f"{commit}:{path.as_posix()}"],
         stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         check=False,
     )
     if result.returncode != 0:

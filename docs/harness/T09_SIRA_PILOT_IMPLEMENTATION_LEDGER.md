@@ -85,8 +85,6 @@ is not the reason execution is blocked.
   control behavior, issued reviewed ancestor
   `ec7ce957c37801eb51f3d6f2995e9d1e6859be03`, and regenerated every dependent
   runtime, child-plan, execution-contract, argv, and command-package hash.
-- 2026-08-13: Bound the ancestor into all four child attempts and generated the exact
-  four-command package. Both pair diffs report required equality and are valid.
 - 2026-08-13: Independent review found that the inherited T07 observer fixes a
   3,600-second provider hard wall and 1,800-second normal termination target, whereas
   the candidate T09 plan needs up to 14,400 seconds. Retained timing plus worst-case
@@ -96,6 +94,10 @@ is not the reason execution is blocked.
   T07 infrastructure design. Removed its adapter/verifier/schemas, made provider
   preflight and condition entry fail closed, and changed every control/public surface
   to `t09-pilot-blocked-material-risk` with `authorized: false`.
+- 2026-08-13: Issued blocked-state implementation ancestor
+  `62d3b0f65e7aff404f7be80bc14b7f7a492cdcc4`, bound it into all four child
+  attempts, and regenerated the execution contract and exact four-command package.
+  Both pair diffs report required equality and are valid.
 
 ## Review and gate log
 
