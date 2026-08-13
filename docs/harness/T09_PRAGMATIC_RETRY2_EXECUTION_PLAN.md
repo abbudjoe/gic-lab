@@ -37,8 +37,8 @@ claim; public release of private task or trace evidence.
 | R2-03 | Build the candidate only from pinned inputs and retain base, Containerfile, complete context, source, dependency, browser, evaluator, entrypoint, environment, build-command, Docker/BuildKit, and SOURCE_DATE_EPOCH evidence. | Reviewed builder emits a complete safe context manifest and source/tool/build receipts; live candidate evidence is pending. | met-statically; dynamic-pending |
 | R2-04 | Replace historical image-ID equality with a typed acceptance rule: one accepted replacement image, exact ID bound before empirical entry, and unchanged image verified for every attempt. | Typed qualification plus mode-0600 O_EXCL frozen manifest; every consumer rejects tags/static substitution. The same manifest now binds every evaluator-overlay byte and the exact reviewed 51-package set. | met-statically; dynamic-pending |
 | R2-05 | Compare available T07 image evidence and classify each observed difference without treating digest inequality alone as functional. | Historical inspect/setup hashes are pinned; comparator permits only verified functional equality, approved nonfunctional drift, or `historical_evidence_unavailable`. | met-statically; dynamic-pending |
-| R2-06 | Pass final-container functional equivalence for Python 3.11.14, SiRA/source, workdir/entrypoint, packages/imports/evidence/budgets/tasks, exact offline evaluator fixtures, local browser lifecycle, command/pair diffs, cleanup, and exactly one model metadata request with no task request/action. | Corrected package/Chromium/patched-runner identities, exact fixture expectations, complete overlay inventory, and exact 51-package comparison are enforced; final-container gate awaits the host. | partial: static controls met |
-| R2-07 | Freeze V4 plan, host/condition/evaluator/archive IDs ending in 0002, four commands/configs, code, runtime binding, and manifest before the first condition empirical event. | Plan `1ebfbb…` (6,465 bytes), runtime `f949ff…`, execution `817903…`, commands `48d6fe…`, reviewed source ancestor `f34f8b…`; failed qualification `0002` is preserved and the same-host replacement qualification is fresh `0003`; runtime manifest pending. | partial: static freeze met |
+| R2-06 | Pass final-container functional equivalence for Python 3.11.14, SiRA/source, workdir/entrypoint, packages/imports/evidence/budgets/tasks, exact offline evaluator fixtures, local browser lifecycle, command/pair diffs, cleanup, and exactly one model metadata request with no task request/action. | Candidate `0003` passed build, exact file hashes, 51-package evaluator materialization, secret-channel, and final-image runtime gates, then stopped network-none because the evaluator-only interpreter could not import control-plane PyYAML. The repaired gate uses the qualified SiRA interpreter (which retains pinned PyYAML/jsonschema) with the exact evaluator overlay prepended; all dynamic gates must rerun under `0004`. | partial: common preentry repair static |
+| R2-07 | Freeze V4 plan, host/condition/evaluator/archive IDs ending in 0002, four commands/configs, code, runtime binding, and manifest before the first condition empirical event. | Plan remains `1ebfbb…` (6,465 bytes); runtime `549f7e…`, execution `393439…`, commands `c621de…`, reviewed source ancestor `3303ce…`; failures `0002` and `0003` are preserved, candidate `0003` is reused by exact image ID without another build, and acceptance qualification is fresh `0004`; runtime manifest pending. | partial: static freeze met |
 | R2-08 | Preserve a verified loadable image archive when it does not threaten the campaign/cleanup wall; otherwise record the exact limitation. | Bounded best-effort export path is implemented and cannot borrow cleanup reserve. | dynamic-pending |
 | R2-09 | Enforce one 14,400-second provider clock, 13,500-second termination cutoff, 900-second cleanup reserve, next-attempt-only admission, one instance/launch, and zero persistent filesystem. | Shared typed lifecycle, provider-entry/closeout receipts, and exact fake-clock boundaries pass locally. | met-statically; provider evidence pending |
 | R2-10 | Enforce fresh and cumulative cost limits, 4,620 calls, 4,000,000 tokens, 120 browser actions, four attempts, and zero scientific retry before each billable action. | Runtime counters and private-ledger schema enforce USD 40/5.16/45.16, prior USD 0.414064252316667 and cumulative USD 46, plus scientific caps. | met-statically; dynamic ledger pending |
@@ -64,7 +64,8 @@ claim; public release of private task or trace evidence.
   identity, but never another host launch or a scientific retry. A repair package is
   accepted only as a clean descendant of the launch-bound package through a
   mode-0600 source-derived receipt that binds the original provider entry, the exact
-  allowlisted diff, the retained zero-use failure prefix, and `empirical_entry=false`.
+  allowlisted diff, the retained zero-use failure prefixes, the prior transition,
+  and `empirical_entry=false`.
 - Cleanup is permitted and required from every post-launch prefix, independent of
   qualification or attempt completeness.
 
@@ -114,9 +115,19 @@ claim; public release of private task or trace evidence.
   fail-closed scan. A fresh `0003` qualification must consume the same-host package
   transition receipt; science, provider launch count, and empirical attempts remain
   unchanged at zero.
+- 2026-08-13: qualification `0003` built the single replacement candidate and passed
+  its build-context, exact-image, credential-channel, exact-file, 51-package overlay,
+  and final-runtime gates. It stopped before browser, model metadata, or empirical
+  entry when the network-none gate selected the evaluator-only interpreter to import
+  GIC Lab control code and therefore lacked PyYAML. The qualified SiRA interpreter
+  already contains the pinned PyYAML 6.0.3 and jsonschema 4.26.0. The root repair
+  keeps the evaluator overlay byte-identical, prepends its site-packages to that
+  qualified interpreter, carries candidate `0003` forward by exact image ID, forbids
+  another build, and requires fresh acceptance qualification `0004`.
 
 ## Next permitted phase
 
-Complete replacement-package validation and independent rereview, then bind the
-same-host transition and rerun every dynamic qualification gate. No empirical entry
-is permitted until the fresh `0003` runtime manifest is written and validated.
+Complete the second replacement-package validation and independent rereview, bind the
+chained same-host transition, and rerun every dynamic qualification gate. No
+empirical entry is permitted until the fresh `0004` runtime manifest is written and
+validated.
