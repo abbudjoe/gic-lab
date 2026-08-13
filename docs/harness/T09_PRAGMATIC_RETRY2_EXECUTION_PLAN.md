@@ -38,7 +38,7 @@ claim; public release of private task or trace evidence.
 | R2-04 | Replace historical image-ID equality with a typed acceptance rule: one accepted replacement image, exact ID bound before empirical entry, and unchanged image verified for every attempt. | Typed qualification plus mode-0600 O_EXCL frozen manifest; every consumer rejects tags/static substitution. The same manifest now binds every evaluator-overlay byte and the exact reviewed 51-package set. | met-statically; dynamic-pending |
 | R2-05 | Compare available T07 image evidence and classify each observed difference without treating digest inequality alone as functional. | Historical inspect/setup hashes are pinned; comparator permits only verified functional equality, approved nonfunctional drift, or `historical_evidence_unavailable`. | met-statically; dynamic-pending |
 | R2-06 | Pass final-container functional equivalence for Python 3.11.14, SiRA/source, workdir/entrypoint, packages/imports/evidence/budgets/tasks, exact offline evaluator fixtures, local browser lifecycle, command/pair diffs, cleanup, and exactly one model metadata request with no task request/action. | Corrected package/Chromium/patched-runner identities, exact fixture expectations, complete overlay inventory, and exact 51-package comparison are enforced; final-container gate awaits the host. | partial: static controls met |
-| R2-07 | Freeze V4 plan, host/condition/evaluator/archive IDs ending in 0002, four commands/configs, code, runtime binding, and manifest before the first condition empirical event. | Plan `1ebfbb…` (6,465 bytes), execution `280fe2…`, commands `f56738…`, reviewed source ancestor `626860b…`; runtime manifest pending. | partial: static freeze met |
+| R2-07 | Freeze V4 plan, host/condition/evaluator/archive IDs ending in 0002, four commands/configs, code, runtime binding, and manifest before the first condition empirical event. | Plan `1ebfbb…` (6,465 bytes), runtime `f949ff…`, execution `817903…`, commands `48d6fe…`, reviewed source ancestor `f34f8b…`; failed qualification `0002` is preserved and the same-host replacement qualification is fresh `0003`; runtime manifest pending. | partial: static freeze met |
 | R2-08 | Preserve a verified loadable image archive when it does not threaten the campaign/cleanup wall; otherwise record the exact limitation. | Bounded best-effort export path is implemented and cannot borrow cleanup reserve. | dynamic-pending |
 | R2-09 | Enforce one 14,400-second provider clock, 13,500-second termination cutoff, 900-second cleanup reserve, next-attempt-only admission, one instance/launch, and zero persistent filesystem. | Shared typed lifecycle, provider-entry/closeout receipts, and exact fake-clock boundaries pass locally. | met-statically; provider evidence pending |
 | R2-10 | Enforce fresh and cumulative cost limits, 4,620 calls, 4,000,000 tokens, 120 browser actions, four attempts, and zero scientific retry before each billable action. | Runtime counters and private-ledger schema enforce USD 40/5.16/45.16, prior USD 0.414064252316667 and cumulative USD 46, plus scientific caps. | met-statically; dynamic ledger pending |
@@ -46,7 +46,7 @@ claim; public release of private task or trace evidence.
 | R2-12 | When the checkpoint passes, run Task B simulative then reactive exactly once and evaluate both; otherwise stop without selection claims. | Attempt archives/outcomes or typed checkpoint stop. | not-started |
 | R2-13 | Retain reconstructable, structurally redacted private evidence for every entered attempt and the maximal safe failure prefix. | V4 evidence/score schemas, direct-export verification and acknowledged-manifest regression pass; live archives pending. | partial: interfaces met |
 | R2-14 | Prioritize cleanup: owned containers/browsers absent, temporary secrets destroyed, evidence copied as available, exact instance terminated/absent, firewall restored, regional rulesets absent, no T09 instance running. | Cleanup remains reachable from every prefix; provider closeout and export-deferral regressions pass; live receipts pending. | partial: controls met |
-| R2-15 | Pass focused image/science/pair/timing/budget/evidence/cleanup tests, `make validate`, privacy scan, `git diff --check`, and independent spec-conformance review before launch; repair and rereview any material finding. | Focused 53-test suite, validation, Ruff, strict mypy, and diff hygiene pass. Review findings on overlay/package closure, ceiling handling, privacy keys, pre-entry recovery, and exact secret-materializer binding were repaired with regressions; clean-package rereview is pending. | partial: rereview pending |
+| R2-15 | Pass focused image/science/pair/timing/budget/evidence/cleanup tests, `make validate`, privacy scan, `git diff --check`, and independent spec-conformance review before launch; repair and rereview any material finding. | The prelaunch package passed independent review. The live `.env.example` context rejection has an exact-content exclusion regression, a zero-use failure-prefix regression, and a source-bound same-host package-transition control; focused tests, Ruff, strict mypy, and pair diffs pass. Replacement-package rereview is pending. | partial: rereview pending |
 | R2-16 | After termination, reconcile actual Lambda/OpenAI usage, update public control surfaces without scientific overclaim, run proportionate broader gates/review, commit cleanly, and return all sixteen requested handoff items. | Compute/public records, final validation, clean commit, final response. | not-started |
 
 ## Control-plane decisions
@@ -61,7 +61,10 @@ claim; public release of private task or trace evidence.
   instance binding; it cannot change science or widen limits.
 - The single-use provider authority and tracked V4 plan remain immutable for the
   campaign. Pre-entry infrastructure repairs may create a fresh qualification-attempt
-  identity, but never another host launch or a scientific retry.
+  identity, but never another host launch or a scientific retry. A repair package is
+  accepted only as a clean descendant of the launch-bound package through a
+  mode-0600 source-derived receipt that binds the original provider entry, the exact
+  allowlisted diff, the retained zero-use failure prefix, and `empirical_entry=false`.
 - Cleanup is permitted and required from every post-launch prefix, independent of
   qualification or attempt completeness.
 
@@ -99,10 +102,21 @@ claim; public release of private task or trace evidence.
   `626860b77184db09da059e923a6c8b4803b8560a`, rebound the plan/runtime/execution/four
   condition/command contracts, and passed the focused suite, validation, Ruff, strict
   mypy, and diff hygiene. The final clean-package rereview remains.
+- 2026-08-13: the one authorized Lambda launch succeeded and the source-bound entry
+  proved exactly one active A10 host, no persistent filesystem, and the campaign
+  budget clock. The first dynamic qualification stopped before image build, model
+  metadata request, browser action, task request, or empirical entry because the
+  pinned SiRA tree contains the names-only public file `.env.example`; the generic
+  secret-name scanner rejected its filename. The failed `0002` prefix is retained.
+- 2026-08-13: repaired the root contract without weakening the scanner: qualification
+  verifies the exact 178-byte pinned names-only file (`086eb4…`), emits an exclusion
+  receipt, removes it from the build context, and then applies the unchanged
+  fail-closed scan. A fresh `0003` qualification must consume the same-host package
+  transition receipt; science, provider launch count, and empirical attempts remain
+  unchanged at zero.
 
 ## Next permitted phase
 
-Implement and locally validate the mapped V4 control-plane changes. No provider or
-model request is permitted until R2-01 through R2-10 and R2-15 pass statically, the
-single-use private authority/ledger is materialized, and the clean source package is
-independently approved.
+Complete replacement-package validation and independent rereview, then bind the
+same-host transition and rerun every dynamic qualification gate. No empirical entry
+is permitted until the fresh `0003` runtime manifest is written and validated.
