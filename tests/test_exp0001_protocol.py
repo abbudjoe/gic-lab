@@ -392,7 +392,7 @@ def test_generic_profile_validator_does_not_impose_sira_conditions(tmp_path: Pat
     assert validate_experiment_run_profiles(tmp_path) == []
 
 
-def test_materialized_pair_allows_condition_owned_config_and_command_hashes(
+def test_materialized_pair_rejects_condition_owned_config_drift_but_not_command_hashes(
     tmp_path: Path,
 ) -> None:
     exp_root = _copy_exp0001_contract(tmp_path)
@@ -416,5 +416,5 @@ def test_materialized_pair_allows_condition_owned_config_and_command_hashes(
         _write_yaml(condition_path, condition)
     errors = validate_experiment_run_profiles(tmp_path)
     assert errors
-    assert all("current repository" in error for error in errors)
-    assert not any("drift" in error for error in errors)
+    assert any("matched pair source drift on config_sha256" in error for error in errors)
+    assert not any("command_sha256" in error for error in errors)

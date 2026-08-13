@@ -380,18 +380,18 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
     pilot_state = _load_object(args.pilot_state, label="pilot state")
     entered = pilot_state.get("empirical_attempts_entered")
     artifact_executed = isinstance(entered, list) and attempt.run_id in entered
-    runtime_secret = runtime_cleanup.get("secret_cleanup", {})
+    credential_cleanup = runtime_cleanup.get("secret_cleanup", {})
     runtime_cleanup_present = runtime_cleanup_path.is_file()
     browser_closed = (
         runtime_cleanup_present and runtime_cleanup.get("all_environment_closes_succeeded") is True
     )
     secret_removed = (
-        isinstance(runtime_secret, dict)
+        isinstance(credential_cleanup, dict)
         and (
             not runtime_cleanup_present
             or (
-                runtime_secret.get("credential_removed_from_environment") is True
-                and runtime_secret.get("remaining_exact_credential_matches") == 0
+                credential_cleanup.get("credential_removed_from_environment") is True
+                and credential_cleanup.get("remaining_exact_credential_matches") == 0
             )
         )
         and host_cleanup.get("secret_scan_passed") is True

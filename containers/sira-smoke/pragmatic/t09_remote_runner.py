@@ -1405,16 +1405,16 @@ def execute_condition(args: argparse.Namespace) -> int:
             ),
         },
     )
-    secret = validate_secret(args.secret_file.resolve(strict=True))
-    hits = secret_hits(attempt_root, secret)
+    credential_bytes = validate_secret(args.secret_file.resolve(strict=True))
+    hits = secret_hits(attempt_root, credential_bytes)
     removed_secret_artifacts: list[str] = []
     for relative in hits:
         target = attempt_root / relative
         if target.is_file() and not target.is_symlink():
             target.unlink()
             removed_secret_artifacts.append(relative)
-    remaining_hits = secret_hits(attempt_root, secret)
-    secret = b""
+    remaining_hits = secret_hits(attempt_root, credential_bytes)
+    credential_bytes = b""
     residue = owned_containers(prefix)
     cleanup_receipt = attempt_root / "host-cleanup-receipt.json"
     write_exclusive(
@@ -1531,16 +1531,16 @@ def cleanup(args: argparse.Namespace) -> None:
     removed = [name for name in owned_containers(prefix) if remove_container(prefix, name)]
     residue = owned_containers(prefix)
     secret_path = args.secret_file.resolve(strict=True)
-    secret = validate_secret(secret_path)
-    hits = secret_hits(args.artifact_root.resolve(strict=True), secret)
+    credential_bytes = validate_secret(secret_path)
+    hits = secret_hits(args.artifact_root.resolve(strict=True), credential_bytes)
     removed_secret_artifacts: list[str] = []
     for relative in hits:
         target = args.artifact_root.resolve(strict=True) / relative
         if target.is_file() and not target.is_symlink():
             target.unlink()
             removed_secret_artifacts.append(relative)
-    remaining_hits = secret_hits(args.artifact_root.resolve(strict=True), secret)
-    secret = b""
+    remaining_hits = secret_hits(args.artifact_root.resolve(strict=True), credential_bytes)
+    credential_bytes = b""
     secret_removed = destroy_secret(secret_path)
     write_exclusive(
         args.artifact_root.resolve(strict=True) / "pilot-v2/host-cleanup.json",

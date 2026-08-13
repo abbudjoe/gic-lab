@@ -30,19 +30,19 @@ H2K, or GIC architectural conclusion.
 | ID | Required outcome | Planned evidence | Status |
 |---|---|---|---|
 | T09-DOD-01 | Verify the exact branch and clean required starting commit, preserve the T08/T07/SiRA identities, map the work to Phase 1, and maintain every offline prohibition. | Git identity/status; source-contract review; execution-free command log. | met |
-| T09-DOD-02 | Audit the proposal and classify every known gap as execution blocker, analysis blocker, publication-only blocker, or nonblocking optional evidence gap under the Occam rule. | Compact gap ledger in the T09 plan with source-grounded disposition. | not-started |
-| T09-DOD-03 | Freeze exactly two valid, non-outcome-selected FanOutQA records with release, source, split, stable ID, text/reference hashes, selection/exclusion rules, order, pair, license, and retention classification. | Dataset contract plus machine-readable task-selection contract and focused tests. | not-started |
-| T09-DOD-04 | Bind the exact upstream evaluator, dependency/assets and licenses, output schema, scoring/normalization rules, and deterministic/nondeterministic fields; pass all required offline fixtures without substituting an evaluator. | Evaluator contract, pinned machine record, fixture corpus/results, focused tests. | not-started |
-| T09-DOD-05 | Separate process exit, artifact execution, task completion, answer production, evaluator validity, score, infrastructure invalidity, condition failure, missing evidence, and evaluator failure. | Typed attempt/score contract, documentation, and boundary tests. | not-started |
-| T09-DOD-06 | Predeclare one identical plausible finite browser-step maximum, expected steps, action/condition/pair/total wall limits, stop behavior, and incomplete-answer scoring rule using source and T07 evidence. | Budget derivation and schema-valid runtime contract. | not-started |
-| T09-DOD-07 | Freeze the T07 pragmatic Python/container/model/service-tier runtime and exact preflight/freeze boundary without creating another infrastructure qualification system. | Runtime identity and preflight contract; offline import/render/load checks. | not-started |
-| T09-DOD-08 | Retain reconstructable per-attempt calls, usage, lineage, requested actions and post-action results, answer/scoring, artifacts, cleanup, and explicit unavailable H2K fields while structurally excluding secrets/private values. | Evidence schema/contract, redaction tests, privacy scan, cleanup receipt contract. | not-started |
-| T09-DOD-09 | Freeze fresh host/attempt/evaluator/archive identities and machine-render/diff all four commands/configurations, permitting only declared treatment, identity/output, order, and realized-event differences. | Four command manifests, pair-diff artifact, exact equality/difference tests. | not-started |
-| T09-DOD-10 | Compute expected attempt/pair/total cost, effective hard attempt/aggregate caps, and an automatic first-pair continuation decision with the exact declared pass/stop criteria. | Current primary-source pricing record, arithmetic record, checkpoint schema/tests. | not-started |
-| T09-DOD-11 | Make model-call, token, OpenAI-cost, browser-step, condition/pair/total-wall, output-byte, disk, Lambda-duration/cost, attempt-count, and zero-retry caps effective on the selected runtime path. | Straightforward runtime counters/stops, fail-closed integration tests, rendered command bindings. | not-started |
-| T09-DOD-12 | Record nonzero-GPU accounting honestly; retain `PLAN-EXP0001-PILOT` only if tasks, conditions, evaluator, and scientific meaning remain unchanged; bind the final plan while keeping `authorized: false`. | GPU metadata contract, plan/child identities and hashes, schema validation. | not-started |
-| T09-DOD-13 | Update experiment registry, project state, active Phase 1 plan, decision log, readiness record, and sanitized notebook without passing/failing EXP-0001; emit a truthful ready-to-copy authorization packet. | Control/public-surface diffs and negative-boundary tests. | not-started |
-| T09-DOD-14 | Pass focused fixtures/dataset/evaluator/pair/budget/evidence/cap tests, privacy scans, Ruff, strict mypy, repository validation, independent review and repair/rereview, post-review smoke, and full portable-Quarto `make check`; finish on a clean commit in exactly one allowed terminal state. | Exact commands/results, reviewer verdict, final hashes/bytes, clean Git status. | not-started |
+| T09-DOD-02 | Audit the proposal and classify every known gap as execution blocker, analysis blocker, publication-only blocker, or nonblocking optional evidence gap under the Occam rule. | Compact gap ledger in the T09 plan with source-grounded disposition. | met |
+| T09-DOD-03 | Freeze exactly two valid, non-outcome-selected FanOutQA records with release, source, split, stable ID, text/reference hashes, selection/exclusion rules, order, pair, license, and retention classification. | Dataset contract plus machine-readable task-selection contract and focused tests. | met |
+| T09-DOD-04 | Bind the exact upstream evaluator, dependency/assets and licenses, output schema, scoring/normalization rules, and deterministic/nondeterministic fields; pass all required offline fixtures without substituting an evaluator. | Evaluator contract, pinned machine record, fixture corpus/results, focused tests. | met |
+| T09-DOD-05 | Separate process exit, artifact execution, task completion, answer production, evaluator validity, score, infrastructure invalidity, condition failure, missing evidence, and evaluator failure. | Typed attempt/score contract, documentation, and boundary tests. | met |
+| T09-DOD-06 | Predeclare one identical plausible finite browser-step maximum, expected steps, action/condition/pair/total wall limits, stop behavior, and incomplete-answer scoring rule using source and T07 evidence. | Budget derivation and schema-valid runtime contract. | met |
+| T09-DOD-07 | Freeze the T07 pragmatic Python/container/model/service-tier runtime and exact preflight/freeze boundary without creating another infrastructure qualification system. | Runtime identity and preflight contract; offline import/render/load checks. | met |
+| T09-DOD-08 | Retain reconstructable per-attempt calls, usage, lineage, requested actions and post-action results, answer/scoring, artifacts, cleanup, and explicit unavailable H2K fields while structurally excluding secrets/private values. | Evidence schema/contract, redaction tests, privacy scan, cleanup receipt contract. | met |
+| T09-DOD-09 | Freeze fresh host/attempt/evaluator/archive identities and machine-render/diff all four commands/configurations, permitting only declared treatment, identity/output, order, and realized-event differences. | Four command manifests, pair-diff artifact, exact equality/difference tests. | met |
+| T09-DOD-10 | Compute expected attempt/pair/total cost, effective hard attempt/aggregate caps, and an automatic first-pair continuation decision with the exact declared pass/stop criteria. | Current primary-source pricing record, arithmetic record, checkpoint schema/tests. | met |
+| T09-DOD-11 | Make model-call, token, OpenAI-cost, browser-step, condition/pair/total-wall, output-byte, disk, Lambda-duration/cost, attempt-count, and zero-retry caps effective on the selected runtime path. | Straightforward runtime counters/stops, fail-closed integration tests, rendered command bindings. | met |
+| T09-DOD-12 | Record nonzero-GPU accounting honestly; retain `PLAN-EXP0001-PILOT` only if tasks, conditions, evaluator, and scientific meaning remain unchanged; bind the final plan while keeping `authorized: false`. | GPU metadata contract, plan/child identities and hashes, schema validation. | met |
+| T09-DOD-13 | Update experiment registry, project state, active Phase 1 plan, decision log, readiness record, and sanitized notebook without passing/failing EXP-0001; emit a truthful ready-to-copy authorization packet. | Control/public-surface diffs and negative-boundary tests. | met |
+| T09-DOD-14 | Pass focused fixtures/dataset/evaluator/pair/budget/evidence/cap tests, privacy scans, Ruff, strict mypy, repository validation, independent review and repair/rereview, post-review smoke, and full portable-Quarto `make check`; finish on a clean commit in exactly one allowed terminal state. | Exact commands/results, reviewer verdict, final hashes/bytes, clean Git status. | partial |
 
 No required T09 item may remain `partial`, `blocked`, or `not-started` in
 `ready-for-t09-pilot-authorization`. A publication-only blocker is carried as an
@@ -68,13 +68,28 @@ explicit release restriction and does not block private access-controlled execut
   offline/no-execution boundary, and mapped the work to the DoD above.
 - 2026-08-13: Confirmed the worktree was clean at the exact required commit and
   created `phase-1/sira-pilot` from that commit.
+- 2026-08-13: Preserved the materially different starting proposal, froze
+  `PLAN-EXP0001-PILOT-V2`, two exact dataset rows, the exact evaluator/dependency
+  closure, four fresh counterbalanced attempts, and the calibration-only boundary.
+- 2026-08-13: Implemented the smallest T07-runtime overlay for pre-action provider
+  and browser counters, durable aggregate accounting, per-call usage/lineage,
+  post-action results, task/evaluator state separation, structural secret cleanup,
+  resource caps, zero retry, the automatic Task-A checkpoint, and cleanup receipts.
+- 2026-08-13: Focused offline smoke passed: 48 dataset/evaluator/budget/evidence/cap
+  tests, Ruff, and strict mypy for all seven selected execution-control files. The
+  reviewed implementation ancestor is
+  `06cf17023380b206302082293f87e9b0d84e0e72`.
+- 2026-08-13: Bound the ancestor into all four child attempts and generated the exact
+  four-command package. Both pair diffs report required equality and are valid.
 
 ## Review and gate log
 
-Not started. Independent review is required after implementation and focused smoke.
+Focused smoke is green. Repository validation, privacy scans, independent review,
+post-review smoke, full portable-Quarto `make check`, terminal ledger closeout, and
+the final clean package commit remain pending.
 
 ## Next permitted work
 
-Complete the proposal/source audit, then implement only the contracts and minimal
-runtime instrumentation mapped to `T09-DOD-02` through `T09-DOD-13`. No live or
-cloud execution is permitted.
+Run the focused repository gates, obtain the required independent review, repair and
+rereview any material finding, then run the full offline gate and bind the clean
+terminal commit. No live or cloud execution is permitted.

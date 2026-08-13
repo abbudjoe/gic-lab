@@ -494,12 +494,12 @@ def test_host_secret_cleanup_finds_cross_chunk_match_and_destroys_exact_file(
     tmp_path: Path,
 ) -> None:
     host = _load_host_runner()
-    secret = b"fixture-secret-value-with-cross-chunk-boundary"
+    credential_bytes = b"fixture-secret-value-with-cross-chunk-boundary"
     evidence = tmp_path / "evidence.bin"
-    evidence.write_bytes(b"x" * (1_048_576 - 5) + secret + b"tail")
-    assert host.secret_hits(tmp_path, secret) == ["evidence.bin"]
+    evidence.write_bytes(b"x" * (1_048_576 - 5) + credential_bytes + b"tail")
+    assert host.secret_hits(tmp_path, credential_bytes) == ["evidence.bin"]
     secret_path = tmp_path / "secret"
-    secret_path.write_bytes(secret)
+    secret_path.write_bytes(credential_bytes)
     secret_path.chmod(0o600)
     assert host.destroy_secret(secret_path) is True
     assert not secret_path.exists()

@@ -16,7 +16,7 @@ execution:
     authorization_reference: null
     command_sha256: null
 sources:
-  giclab_commit: unknown
+  giclab_commit: 06cf17023380b206302082293f87e9b0d84e0e72
   upstream_source_id: SRC-SIRA-REPOSITORY
   upstream_commit: 93fb8d72de71f9a4a13419670adeb34d93cf7acd
   protocol_sha256: 5356fc8b3806f4135eb570f65b67da2f94463582db5e3e609320e23dbdb2a3f7
