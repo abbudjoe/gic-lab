@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from harness_test_support import materialize_git_blobs
 from jsonschema import Draft202012Validator, FormatChecker
 
 import giclab.harness.lambda_inventory as v1_runner
@@ -337,12 +338,18 @@ def test_v3_plan_is_exactly_seven_gets_and_has_no_audit_or_account_lrn() -> None
     assert plan.max_local_command_output_bytes == 37_879_810
 
 
-def test_committed_v3_plan_loads_and_binds_the_frozen_implementation() -> None:
+def test_committed_v3_plan_loads_and_binds_the_frozen_implementation(tmp_path: Path) -> None:
     path = ROOT / "containers/sira-smoke/lambda/gate-l1-readonly-inventory-plan-v3.json"
     assert hashlib.sha256(path.read_bytes()).hexdigest() == COMMITTED_PLAN_SHA256
     plan = load_inventory_plan_v3(path, expected_sha256=COMMITTED_PLAN_SHA256)
     assert plan.implementation_commit == "718c75c694b3033fa7ef2ed5e7c4696fd8c389f3"
-    verify_inventory_implementation_v3(ROOT, plan)
+    historical_root = materialize_git_blobs(
+        ROOT,
+        plan.implementation_commit,
+        [binding.path for binding in plan.implementation_artifacts],
+        tmp_path / "frozen-implementation",
+    )
+    verify_inventory_implementation_v3(historical_root, plan)
 
 
 def test_schema_bindings_must_match_the_implementation_manifest() -> None:

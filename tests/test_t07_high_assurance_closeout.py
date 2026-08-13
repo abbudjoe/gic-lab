@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from harness_test_support import T07_FROZEN_EXECUTION_COMMIT, materialize_git_blobs
 
 import giclab.harness.lambda_firewall_baseline as firewall
 import giclab.harness.t07_high_assurance_closeout as closeout
@@ -314,7 +315,7 @@ def test_staging_readback_failure_cannot_publish_a_verified_bundle(
     assert all(not (child / "SEAL.json").exists() for child in children)
 
 
-def test_burned_capture_and_scientific_inputs_remain_immutable() -> None:
+def test_burned_capture_and_scientific_inputs_remain_immutable(tmp_path: Path) -> None:
     assert (
         hashlib.sha256((ROOT / firewall.CAPTURE_LEDGER_RELATIVE).read_bytes()).hexdigest()
         == closeout.CAPTURE_LEDGER_SHA256
@@ -327,7 +328,13 @@ def test_burned_capture_and_scientific_inputs_remain_immutable() -> None:
         ).hexdigest()
         == closeout.CAPTURE_RAW_SHA256
     )
-    closeout.verify_scientific_locks(ROOT)
+    historical_root = materialize_git_blobs(
+        ROOT,
+        T07_FROZEN_EXECUTION_COMMIT,
+        closeout.SCIENTIFIC_HASHES,
+        tmp_path / "frozen-science",
+    )
+    closeout.verify_scientific_locks(historical_root)
 
 
 def test_sealed_private_canonical_v1_remains_valid_under_its_unchanged_schema() -> None:

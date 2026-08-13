@@ -152,10 +152,20 @@ def test_sealed_children_must_match_parent_aggregate_budget(tmp_path: Path) -> N
         load_project_execution_state(tmp_path, schema_root=ROOT)
 
 
-def test_pair_allows_condition_owned_config_and_command_hashes(tmp_path: Path) -> None:
+def test_pair_allows_only_condition_owned_command_hashes(tmp_path: Path) -> None:
     write_project_state(tmp_path, prototype=True)
     state = load_project_execution_state(tmp_path, schema_root=ROOT)
     assert state.authorized_run_profile is not None
+
+
+def test_pair_rejects_config_hash_drift(tmp_path: Path) -> None:
+    write_project_state(
+        tmp_path,
+        prototype=True,
+        companion_source_overrides={"config_sha256": "1" * 64},
+    )
+    with pytest.raises(ExecutionDisallowed, match="fixed source identity drifts"):
+        load_project_execution_state(tmp_path, schema_root=ROOT)
 
 
 def test_pair_rejects_fixed_source_identity_drift(tmp_path: Path) -> None:

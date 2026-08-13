@@ -95,16 +95,27 @@ is not the reason execution is blocked.
   preflight and condition entry fail closed, and changed every control/public surface
   to `t09-pilot-blocked-material-risk` with `authorized: false`.
 - 2026-08-13: Issued blocked-state implementation ancestor
-  `62d3b0f65e7aff404f7be80bc14b7f7a492cdcc4`, bound it into all four child
+  `9ab0bb1000de0049a9067704db9533f4409ccf31`, bound it into all four child
   attempts, and regenerated the execution contract and exact four-command package.
   Both pair diffs report required equality and are valid.
 
 ## Review and gate log
 
-Earlier focused smoke passed for the offline evaluator/dataset/pair/budget/evidence
-primitives. The blocked-state focused regressions, repository validation, privacy
-scans, independent rereview, post-review smoke, full portable-Quarto `make check`,
-terminal ledger closeout, and final clean commit remain pending.
+- Blocked-state focused suite: **68 passed** across the T09 pilot, EXP-0001, and
+  Phase 1 closeout tests, including dataset/evaluator fixtures, actual-argv pair
+  diffs, budget arithmetic, cap refusal, evidence reconstruction, structural
+  redaction, and Task B's direct normalization-edge score regression.
+- Historical T07 and synthetic harness fixtures now resolve immutable inputs from
+  their commit bindings instead of conflating them with T09's versioned mutable
+  protocol/configuration and license records. The full test suite passes with
+  **1,322 tests**.
+- Repository validation, the tracked-file secret/privacy validator, Ruff formatting
+  and lint, and strict mypy over all 59 source files pass.
+- Pre-rereview full gate passed with portable Quarto 1.9.38: lock/sync, Ruff,
+  strict mypy, all 1,322 tests, repository validation, all 16 notebook pages, and
+  site validation.
+- Independent blocked-state rereview, post-review smoke/full gate, terminal ledger
+  closeout, and the final clean commit remain pending.
 
 ## Next permitted work
 

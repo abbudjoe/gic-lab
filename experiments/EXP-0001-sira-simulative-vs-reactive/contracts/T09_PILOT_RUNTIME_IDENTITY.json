@@ -72,11 +72,11 @@
       },
       {
         "path": "containers/sira-smoke/pragmatic/t09_remote_runner.py",
-        "sha256": "055d86e8d43fe81c310f06556f90944e816f86b03aba6ddb1d0628627d519dfa"
+        "sha256": "55898b1b002e03cbe4964cc4443000182087cfa74c423a62a78e01af9c8336da"
       },
       {
         "path": "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py",
-        "sha256": "f6715c849d9913fa244ce58efd94823b52e477ed4d55220e86937411215c9810"
+        "sha256": "25a064b6895ab2bc22fd6601a16e64cc5868f96d1ce2b13e8735c09e03d3db04"
       },
       {
         "path": "containers/sira-smoke/pragmatic/t09_preflight.py",

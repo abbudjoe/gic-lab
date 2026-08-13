@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from harness_test_support import materialize_git_blobs, materialize_worktree_files
 from jsonschema import Draft202012Validator
 
 from giclab.harness.lambda_request_ledger_v3 import LedgerEventType
@@ -265,14 +266,30 @@ def test_new_evidence_schemas_are_well_formed() -> None:
         Draft202012Validator.check_schema(load_json(ROOT / relative))
 
 
-def test_one_request_plan_is_exact_when_committed() -> None:
+def test_one_request_plan_is_exact_when_committed(tmp_path: Path) -> None:
     path = ROOT / PLAN_RELATIVE_PATH
     if not path.exists():
         pytest.skip("plan is generated after the reviewed implementation commit")
     encoded = path.read_bytes()
-    plan = load_ssh_key_fingerprint_plan(
+    document = json.loads(encoded)
+    implementation_binding = document["implementation_binding"]
+    assert isinstance(implementation_binding, dict)
+    implementation_artifacts = implementation_binding["implementation_artifacts"]
+    assert isinstance(implementation_artifacts, list)
+    historical_root = materialize_worktree_files(
         ROOT,
-        path,
+        (PLAN_RELATIVE_PATH,),
+        tmp_path / "frozen-plan",
+    )
+    materialize_git_blobs(
+        ROOT,
+        str(implementation_binding["implementation_commit"]),
+        [str(item["path"]) for item in implementation_artifacts if isinstance(item, dict)],
+        historical_root,
+    )
+    plan = load_ssh_key_fingerprint_plan(
+        historical_root,
+        historical_root / PLAN_RELATIVE_PATH,
         expected_sha256=hashlib.sha256(encoded).hexdigest(),
     )
     assert plan.plan_id == PLAN_ID

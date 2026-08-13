@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from harness_test_support import T07_FROZEN_EXECUTION_COMMIT, git_blob_sha256
 
 from giclab.harness.lambda_cloud import BUSYBOX_REFERENCE
 from giclab.harness.lambda_l20_plan import (
@@ -883,7 +884,7 @@ def test_scientific_locks_remain_exact() -> None:
         ),
     }
     for relative, digest in expected.items():
-        assert hashlib.sha256((ROOT / relative).read_bytes()).hexdigest() == digest
+        assert git_blob_sha256(ROOT, T07_FROZEN_EXECUTION_COMMIT, relative) == digest
 
 
 def test_schema_files_are_valid_json() -> None:

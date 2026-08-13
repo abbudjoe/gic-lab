@@ -15,6 +15,12 @@ from types import ModuleType
 from typing import Any
 
 import pytest
+from harness_test_support import (
+    T07_FROZEN_EXECUTION_COMMIT,
+    git_blob_sha256,
+    materialize_git_blobs,
+    materialize_worktree_files,
+)
 
 from giclab.harness import t07_bounded_smoke as bounded
 from giclab.validation import ROOT, validate_instance
@@ -213,15 +219,22 @@ def _load_bootstrap() -> ModuleType:
     return module
 
 
-def test_valid_plan_is_exact_and_schema_valid() -> None:
+def test_valid_plan_is_exact_and_schema_valid(tmp_path: Path) -> None:
     plan = valid_plan()
-    bounded.validate_plan(plan, repository_root=ROOT)
+    historical_root = materialize_git_blobs(
+        ROOT,
+        T07_FROZEN_EXECUTION_COMMIT,
+        bounded.SCIENTIFIC_HASHES,
+        tmp_path / "frozen-science",
+    )
+    materialize_worktree_files(ROOT, bounded.REQUIRED_IMPLEMENTATION_ARTIFACTS, historical_root)
+    bounded.validate_plan(plan, repository_root=historical_root)
     assert validate_instance(plan, ROOT / "schemas/t07-bounded-smoke-plan-v3.schema.json") == []
 
 
 def test_locked_scientific_files_remain_exact() -> None:
     for relative, digest in bounded.SCIENTIFIC_HASHES.items():
-        assert bounded.sha256_file(ROOT / relative) == digest
+        assert git_blob_sha256(ROOT, T07_FROZEN_EXECUTION_COMMIT, relative) == digest
 
 
 def test_v1_v2_plans_and_runs_are_preserved_burned_and_v3_is_fresh() -> None:
@@ -1218,11 +1231,18 @@ def test_reconstruction_and_compute_closeout_records_are_source_grounded(
     assert equivalence["canonical_condition_diff_only"] is True
 
 
-def test_historical_plan_schema_is_valid_but_stale_runtime_binding_fails_closed() -> None:
+def test_historical_plan_schema_is_valid_but_runtime_binding_is_stale(tmp_path: Path) -> None:
     path = ROOT / "containers/sira-smoke/bounded/bounded-smoke-plan-v3.json"
     if not path.exists():
         pytest.skip("plan is generated only after the reviewed implementation commit exists")
     document = json.loads(path.read_text(encoding="utf-8"))
     assert validate_instance(document, ROOT / "schemas/t07-bounded-smoke-plan-v3.schema.json") == []
+    historical_root = materialize_git_blobs(
+        ROOT,
+        T07_FROZEN_EXECUTION_COMMIT,
+        bounded.SCIENTIFIC_HASHES,
+        tmp_path / "frozen-science",
+    )
+    materialize_worktree_files(ROOT, bounded.REQUIRED_IMPLEMENTATION_ARTIFACTS, historical_root)
     with pytest.raises(bounded.BoundedSmokeContractError, match="identity drifted"):
-        bounded.validate_plan(document, repository_root=ROOT)
+        bounded.validate_plan(document, repository_root=historical_root)

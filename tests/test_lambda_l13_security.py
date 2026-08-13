@@ -10,6 +10,7 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
+from harness_test_support import materialize_git_tree, materialize_worktree_files
 
 from giclab.harness.lambda_inventory_plan_v3 import (
     InventoryRunBindingV3,
@@ -1053,7 +1054,7 @@ def test_required_l13_schemas_accept_local_contract_documents(tmp_path: Path) ->
         assert validate_instance(document, ROOT / "schemas" / schema) == []
 
 
-def test_authoritative_l13_consumer_accepts_exact_real_sealed_run() -> None:
+def test_authoritative_l13_consumer_accepts_exact_real_sealed_run(tmp_path: Path) -> None:
     external = Path(
         "/Volumes/Macintosh HD - Data/GIC-Lab/t07/sealed-artifacts/RUN-T07-L1-LAMBDA-INVENTORY-0003"
     )
@@ -1070,11 +1071,29 @@ def test_authoritative_l13_consumer_accepts_exact_real_sealed_run() -> None:
         authorization_reference="AUTH-T07-GATE-L1-LAMBDA-INPROCESS-V4-2026-08-10",
         authorization_sha256=("7246784915f376d503bab7b63acfc8d48e9c82993be394aa22dacd036a4c7195"),
     )
-    result = validate_l13_gate_l2_evidence(
+    historical_root = materialize_git_tree(ROOT, binding.repository_commit, tmp_path / "frozen-run")
+    materialize_worktree_files(
         ROOT,
+        (
+            plan.output_relative_path,
+            plan.ledger_relative_path,
+            plan.copy_record_relative_path,
+            "docs/harness/evidence/T07_RUN_0003_POSTRUN_ADJUDICATION.json",
+            "artifacts/t07/lambda/gate-l1-3/RUN-T07-L1-LAMBDA-INVENTORY-0003/image-id-alias-map.json",
+            "artifacts/t07/lambda/gate-l1-3/RUN-T07-L1-LAMBDA-INVENTORY-0003/IMAGE_ALIAS_MAP_SEAL.json",
+            "schemas/t07-lambda-image-identity-adjudication.schema.json",
+            "schemas/t07-lambda-resource-candidate-matrix.schema.json",
+            "schemas/t07-lambda-firewall-assessment.schema.json",
+            "schemas/t07-lambda-ssh-key-match.schema.json",
+        ),
+        historical_root,
+    )
+    result = validate_l13_gate_l2_evidence(
+        historical_root,
         plan=plan,
         plan_sha256=PLAN_SHA256,
         run_binding=binding,
+        ancestry_verifier=lambda *args, **kwargs: None,
     )
     assert result.evidence_valid is True
     assert result.decision_state == "inventory-evidence-insufficient"

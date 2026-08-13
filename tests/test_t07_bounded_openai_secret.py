@@ -11,6 +11,11 @@ from pathlib import Path
 from types import ModuleType
 
 import pytest
+from harness_test_support import (
+    T07_FROZEN_EXECUTION_COMMIT,
+    git_blob_sha256,
+    materialize_git_blob,
+)
 
 from giclab.harness import t07_bounded_smoke as contract
 from giclab.harness import t07_bounded_supervisor as supervisor
@@ -542,9 +547,7 @@ def test_main_abort_cleanup_survives_plan_bound_artifact_drift(
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(ROOT / relative, destination)
     for relative in contract.SCIENTIFIC_HASHES:
-        destination = tmp_path / relative
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(ROOT / relative, destination)
+        materialize_git_blob(ROOT, T07_FROZEN_EXECUTION_COMMIT, relative, tmp_path)
     secret_schema = tmp_path / supervisor.OPENAI_SECRET_SCHEMA_RELATIVE
     secret_schema.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(ROOT / supervisor.OPENAI_SECRET_SCHEMA_RELATIVE, secret_schema)
@@ -827,7 +830,7 @@ def test_science_model_and_all_v2_limits_are_unchanged() -> None:
     assert v2["scientific_lock"]["model"] == contract.MODEL
     assert v2["scientific_lock"]["condition_order"] == list(contract.CONDITION_ORDER)
     for relative, digest in contract.SCIENTIFIC_HASHES.items():
-        assert contract.sha256_file(ROOT / relative) == digest
+        assert git_blob_sha256(ROOT, T07_FROZEN_EXECUTION_COMMIT, relative) == digest
 
 
 def test_secret_source_schema_and_v3_plan_are_strict() -> None:

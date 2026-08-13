@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from harness_test_support import materialize_git_blob
 
 from giclab.harness import lambda_archive as archive_base
 from giclab.harness import lambda_ssh_key_archive as archive
@@ -42,17 +43,25 @@ def _copy_bound_repository(tmp_path: Path) -> tuple[Path, SSHKeyFingerprintPlan,
     repository.mkdir()
     plan_document = json.loads((ROOT / PLAN_RELATIVE_PATH).read_bytes())
     implementation = plan_document["implementation_binding"]
-    paths = [PLAN_RELATIVE_PATH]
-    paths.extend(item["path"] for item in implementation["implementation_artifacts"])
-    paths.extend(
-        (
-            plan_document["requests"][0]["response_schema_path"],
-            plan_document["ledger_contract"]["schema_path"],
-            plan_document["schema_contract"]["fingerprint_schema_path"],
-            plan_document["schema_contract"]["match_schema_path"],
+    plan_destination = repository / PLAN_RELATIVE_PATH
+    plan_destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(ROOT / PLAN_RELATIVE_PATH, plan_destination)
+    for item in implementation["implementation_artifacts"]:
+        materialize_git_blob(
+            ROOT,
+            implementation["implementation_commit"],
+            item["path"],
+            repository,
         )
-    )
-    for relative in set(paths):
+    supplemental = {
+        plan_document["requests"][0]["response_schema_path"],
+        plan_document["ledger_contract"]["schema_path"],
+        plan_document["schema_contract"]["fingerprint_schema_path"],
+        plan_document["schema_contract"]["match_schema_path"],
+    }
+    for relative in supplemental:
+        if (repository / relative).exists():
+            continue
         destination = repository / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(ROOT / relative, destination)

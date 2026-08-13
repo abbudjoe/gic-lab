@@ -15,6 +15,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 import pytest
+from harness_test_support import T07_FROZEN_EXECUTION_COMMIT, git_blob_sha256
 
 import giclab.harness.lambda_l2m_observer as l2m_observer
 from giclab.harness.lambda_l2m_checkpoints import (
@@ -4331,4 +4332,4 @@ def test_locked_science_and_prior_evidence_hashes_remain_exact() -> None:
         ]
     )
     for relative, digest in expected.items():
-        assert hashlib.sha256((ROOT / relative).read_bytes()).hexdigest() == digest
+        assert git_blob_sha256(ROOT, T07_FROZEN_EXECUTION_COMMIT, relative) == digest

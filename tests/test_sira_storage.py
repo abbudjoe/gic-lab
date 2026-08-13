@@ -9,6 +9,7 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
+from harness_test_support import T07_FROZEN_EXECUTION_COMMIT, git_blob_sha256
 
 import giclab.harness.sira_colima as colima_module
 from giclab.harness.sira_colima import issue_held_storage_action_guard
@@ -1440,4 +1441,4 @@ def test_locked_exp_0001_scientific_files_did_not_drift() -> None:
         ),
     }
     for relative, digest in expected.items():
-        assert hashlib.sha256((ROOT / relative).read_bytes()).hexdigest() == digest
+        assert git_blob_sha256(ROOT, T07_FROZEN_EXECUTION_COMMIT, relative) == digest

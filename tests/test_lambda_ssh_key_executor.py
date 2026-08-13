@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
+from harness_test_support import materialize_git_blob
 
 from giclab.harness.lambda_cloud import InventoryRequest
 from giclab.harness.lambda_inventory import RepositoryState
@@ -94,26 +95,35 @@ def _copy_bound_repository(tmp_path: Path) -> tuple[Path, Path, dict[str, object
     assert isinstance(implementation, dict)
     artifacts = implementation["implementation_artifacts"]
     assert isinstance(artifacts, list)
-    paths = [PLAN_RELATIVE_PATH]
+    plan_destination = repository / PLAN_RELATIVE_PATH
+    plan_destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(plan_source, plan_destination)
     for item in artifacts:
         assert isinstance(item, dict)
-        paths.append(str(item["path"]))
+        materialize_git_blob(
+            ROOT,
+            str(implementation["implementation_commit"]),
+            str(item["path"]),
+            repository,
+        )
     requests = plan_document["requests"]
     assert isinstance(requests, list) and len(requests) == 1
     request = requests[0]
     assert isinstance(request, dict)
-    paths.append(str(request["response_schema_path"]))
+    supplemental = {str(request["response_schema_path"])}
     ledger = plan_document["ledger_contract"]
     schema = plan_document["schema_contract"]
     assert isinstance(ledger, dict) and isinstance(schema, dict)
-    paths.extend(
-        (
+    supplemental.update(
+        {
             str(ledger["schema_path"]),
             str(schema["fingerprint_schema_path"]),
             str(schema["match_schema_path"]),
-        )
+        }
     )
-    for relative in set(paths):
+    for relative in supplemental:
+        if (repository / relative).exists():
+            continue
         destination = repository / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(ROOT / relative, destination)

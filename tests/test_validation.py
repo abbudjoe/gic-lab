@@ -131,7 +131,7 @@ def test_manifest_records_reject_unknown_fields() -> None:
     assert any("untyped_claim" in error for error in errors)
 
 
-def test_audited_manifest_fragments_are_reconciled_without_inventing_unknowns() -> None:
+def test_audited_manifest_fragments_preserve_identity_and_only_grounded_unknowns_resolve() -> None:
     for canonical_path, proposal_path in (
         (
             "manifests/datasets.yaml",
@@ -144,12 +144,24 @@ def test_audited_manifest_fragments_are_reconciled_without_inventing_unknowns() 
     ):
         canonical = {entry["id"]: entry for entry in load_yaml(ROOT / canonical_path)["entries"]}
         for proposed in load_yaml(ROOT / proposal_path)["entries"]:
-            assert canonical[proposed["id"]] == proposed
+            resolved = canonical[proposed["id"]]
+            if proposed["id"] == "DATA-SIRA-FANOUTQA-DEV":
+                stable_keys = set(proposed) - {"license", "provenance"}
+                assert {key: resolved[key] for key in stable_keys} == {
+                    key: proposed[key] for key in stable_keys
+                }
+            else:
+                assert resolved == proposed
 
     datasets = {
         entry["id"]: entry for entry in load_yaml(ROOT / "manifests/datasets.yaml")["entries"]
     }
-    assert datasets["DATA-SIRA-FANOUTQA-DEV"]["license"] is None
+    fanout = datasets["DATA-SIRA-FANOUTQA-DEV"]
+    assert fanout["license"] == "CC-BY-SA-4.0"
+    assert "byte-identical" in fanout["provenance"]
+    assert (
+        "4e0fd171b79f997e1fb13111149135af19fb91028388746eda82cfee615b553c" in fanout["provenance"]
+    )
     assert datasets["DATA-SIRA-FLIGHTQA-COUNTERFACTUAL"]["license"] is None
     models = {entry["id"]: entry for entry in load_yaml(ROOT / "manifests/models.yaml")["entries"]}
     assert models["MODEL-SR2AM-V0.1-8B"]["sha256"] is None

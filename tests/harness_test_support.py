@@ -3,8 +3,10 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import shutil
 import subprocess
 import tarfile
+from collections.abc import Collection
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -24,6 +26,7 @@ from giclab.harness.policy import AuthorizedRunProfile, ProjectExecutionState
 SYNTHETIC_PROFILE_SHA256 = "9" * 64
 SYNTHETIC_PRIMARY_PLAN = "plans/synthetic.json"
 SYNTHETIC_COMPANION_PLAN = "plans/synthetic-companion.json"
+T07_FROZEN_EXECUTION_COMMIT = "5698f04dfd08bc85a66d2355b0a4bd7d3ce24a23"
 
 
 def git_blob(repository_root: Path, commit: str, relative: str) -> bytes:
@@ -48,6 +51,12 @@ def git_blob(repository_root: Path, commit: str, relative: str) -> bytes:
     return result.stdout
 
 
+def git_blob_sha256(repository_root: Path, commit: str, relative: str) -> str:
+    """Hash one file as it existed at an explicitly bound historical commit."""
+
+    return hashlib.sha256(git_blob(repository_root, commit, relative)).hexdigest()
+
+
 def materialize_git_blob(
     repository_root: Path,
     commit: str,
@@ -60,6 +69,41 @@ def materialize_git_blob(
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_bytes(git_blob(repository_root, commit, relative))
     return destination
+
+
+def materialize_git_blobs(
+    repository_root: Path,
+    commit: str,
+    relatives: Collection[str],
+    destination_root: Path,
+) -> Path:
+    """Materialize a bounded collection of commit-scoped files under one root."""
+
+    if isinstance(relatives, (str, bytes)):
+        raise ValueError("historical Git blob collection must be finite")
+    for relative in relatives:
+        materialize_git_blob(repository_root, commit, relative, destination_root)
+    return destination_root
+
+
+def materialize_worktree_files(
+    repository_root: Path,
+    relatives: Collection[str],
+    destination_root: Path,
+) -> Path:
+    """Copy a bounded set of regular, non-symlink worktree files for an overlay test."""
+
+    if isinstance(relatives, (str, bytes)):
+        raise ValueError("worktree file collection must be finite")
+    for relative in relatives:
+        path = Path(relative)
+        source = repository_root / path
+        destination = destination_root / path
+        if path.is_absolute() or ".." in path.parts or source.is_symlink() or not source.is_file():
+            raise ValueError("worktree fixture file is unsafe")
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, destination)
+    return destination_root
 
 
 def materialize_git_tree(repository_root: Path, commit: str, destination: Path) -> Path:
@@ -279,7 +323,6 @@ def write_project_state(
         assert isinstance(companion_sources, dict)
         primary_sources["model_revision"] = child_model_revision
         companion_sources["model_revision"] = child_model_revision
-        companion_sources["config_sha256"] = "1" * 64
         if companion_source_overrides:
             companion_sources.update(companion_source_overrides)
         companion_authorization = companion["execution"]["authorization"]
