@@ -1,6 +1,6 @@
 # T09 SiRA Calibration Pilot Lock — Assembly Ledger
 
-Assembly status: **blocked pending final offline validation and review closeout**
+Assembly status: **complete at the material-risk boundary; execution remains blocked**
 
 Terminal state: **`t09-pilot-blocked-material-risk`**
 
@@ -42,7 +42,7 @@ H2K, or GIC architectural conclusion.
 | T09-DOD-11 | Make model-call, token, OpenAI-cost, browser-step, condition/pair/total-wall, output-byte, disk, Lambda-duration/cost, attempt-count, and zero-retry caps effective on the selected runtime path. | Straightforward runtime counters/stops, fail-closed integration tests, rendered command bindings. | blocked: no effective 14,400-second provider path exists; preflight and empirical entry now refuse unconditionally |
 | T09-DOD-12 | Record nonzero-GPU accounting honestly; retain `PLAN-EXP0001-PILOT` only if tasks, conditions, evaluator, and scientific meaning remain unchanged; bind the final plan while keeping `authorized: false`. | GPU metadata contract, plan/child identities and hashes, schema validation. | met |
 | T09-DOD-13 | Update experiment registry, project state, active Phase 1 plan, decision log, readiness record, and sanitized notebook without passing/failing EXP-0001; emit an authorization packet only when truthful. | Control/public-surface diffs and negative-boundary tests. | met: every surface converges on blocked-material-risk and the packet is an explicit refusal, not an authorization template |
-| T09-DOD-14 | Pass focused fixtures/dataset/evaluator/pair/budget/evidence/cap tests, privacy scans, Ruff, strict mypy, repository validation, independent review and repair/rereview, post-review smoke, and full portable-Quarto `make check`; finish on a clean commit in exactly one allowed terminal state. | Exact commands/results, reviewer verdict, final hashes/bytes, clean Git status. | partial |
+| T09-DOD-14 | Pass focused fixtures/dataset/evaluator/pair/budget/evidence/cap tests, privacy scans, Ruff, strict mypy, repository validation, independent review and repair/rereview, post-review smoke, and full portable-Quarto `make check`; finish on a clean commit in exactly one allowed terminal state. | Exact commands/results, reviewer verdict, final hashes/bytes, clean Git status. | met: blocked-state review is a clean pass; pre-review and post-review full gates pass; final clean commit is the handoff reported with this ledger |
 
 The allowed blocked terminal state is required because T09-DOD-06/07/10/11 cannot be
 closed without weakening cleanup or reopening the prohibited T07 infrastructure
@@ -114,10 +114,20 @@ is not the reason execution is blocked.
 - Pre-rereview full gate passed with portable Quarto 1.9.38: lock/sync, Ruff,
   strict mypy, all 1,322 tests, repository validation, all 16 notebook pages, and
   site validation.
-- Independent blocked-state rereview, post-review smoke/full gate, terminal ledger
-  closeout, and the final clean commit remain pending.
+- Independent blocked-state spec-conformance review of package
+  `0757cf9a02ffcdcf78475643781c394be9b893d8` and reviewed runtime ancestor
+  `9ab0bb1000de0049a9067704db9533f4409ccf31` returned **CLEAN PASS** with no
+  undisclosed material finding. The verdict explicitly does not grant execution
+  readiness or authorization. The reviewer independently reproduced the 68 focused
+  tests, all 1,322 tests, Ruff, strict mypy, repository validation, portable Quarto
+  render of all 16 pages, and site validation.
+- Post-review focused and full portable-Quarto gates passed unchanged. The final
+  handoff commit closes only this ledger; it does not change the reviewed runtime,
+  plan, execution, command, evaluator, dataset, budget, or evidence bytes.
 
 ## Next permitted work
 
-Finish only offline validation and independent blocked-state rereview. No live or
-cloud execution is permitted, and no authorization may be issued from this plan.
+T09 is closed at `t09-pilot-blocked-material-risk`. No live or cloud execution is
+permitted, and no authorization may be issued from this plan. A future successor may
+proceed only after closing the provider-wall, staging, and cleanup incompatibility
+under a fresh plan, byte bindings, review, and user authorization.
