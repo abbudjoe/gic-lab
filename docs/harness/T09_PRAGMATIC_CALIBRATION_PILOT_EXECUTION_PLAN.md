@@ -30,10 +30,10 @@ superiority/EXP-0001 conclusions.
 | T09-P3-01 | Preserve the exact scientific locks and calibration-only interpretation. | Dataset/evaluator/runtime contracts, scientific-hash regression. | met: exact dataset, task, evaluator, SiRA, model, order, and interpretation bindings pass |
 | T09-P3-02 | Freeze `PLAN-EXP0001-PILOT-V3` and fresh host, four condition, evaluator, pair, and archive identities. | Plan, execution contract, condition plans, command manifests. | met statically: plan is 5,270 bytes / `0b17da814f9b20326a7220cec5f41e84c968a46c9d38e913f327afe267c26210`; every fresh identity and child hash is bound |
 | T09-P3-03 | Enforce a 14,400 s billable-instance campaign, 900 s cleanup reserve, one instance, one launch, zero filesystem, termination by 13,500 s, and no theoretical-maxima admission sum. | Typed campaign limits and fake-clock regressions. | met locally: existing observer and one-shot provider boundary share typed limits; cutoff/ambiguity tests pass |
-| T09-P3-04 | Charge setup, full condition walls, evaluator/evidence handoff, provider dispatch, and cleanup to the same actual campaign clock; admit each attempt only when all four fit. | Host runner and focused timing tests. | met locally: conservative launch-send origin and exact boundary tests pass |
-| T09-P3-05 | Keep model-call, token, OpenAI-cost, browser-step, condition/pair/total wall, output, disk, Lambda-duration/cost, attempt, and zero-retry caps effective. | Runtime cap tests and exact command/config diff. | met offline: cap/evidence tests pass and command package `e32d344069315992824c107508e7cc031a8859c22f6401bb3c84e4dae81c1dd8` reports both pairs valid |
-| T09-P3-06 | Pass exact local preflight and freeze a clean reviewed pre-run commit before empirical entry. | Preflight receipt, Git commit/hash, plan bytes/hash, independent review. | partial: source review passed at `e5edff3f1b256aaa17ad7bc79c255d82350964c7`; final package commit/review and dynamic runtime preflight remain |
-| T09-P3-07 | Record the current-turn cloud authorization in the private cloud ledger and launch no more than one exact A10 host in `us-east-1` with no persistent filesystem. | Cloud-run ledger and private provider receipts. | not-started |
+| T09-P3-04 | Charge setup, full condition walls, evaluator/evidence handoff, provider dispatch, and cleanup to the same actual campaign clock; admit each attempt only when its wall and required handoff/cleanup reserves fit. | Host runner and focused timing tests. | met locally: conservative launch-send origin and exact boundary tests pass |
+| T09-P3-05 | Keep model-call, token, OpenAI-cost, browser-step, condition/pair/total wall, output, disk, Lambda-duration/cost, attempt, and zero-retry caps effective. | Runtime cap tests and exact command/config diff. | met offline: cap/evidence tests pass and command package `8e8d5827df4688a8748828145ea0990d8397c771ae3add43790bbd45f732984d` reports both pairs valid |
+| T09-P3-06 | Pass exact local preflight and freeze a clean reviewed pre-run commit before empirical entry. | Preflight receipt, Git commit/hash, plan bytes/hash, independent review. | partial: repaired source review passed at `6f7c3112777a8b253f085d058972259fad30778f`; replacement package commit/review and dynamic runtime preflight remain |
+| T09-P3-07 | Record the current-turn cloud authorization in the private cloud ledger and launch no more than one exact A10 host in `us-east-1` with no persistent filesystem. | Cloud-run ledger and private provider receipts. | partial: the first private ledger passed; six authenticated read-only prelaunch GETs confirmed zero instances and other entry facts, then stopped before the launch POST on a repaired regional image-catalog validator; ledger rebind and launch remain |
 | T09-P3-08 | Run Task A reactive then simulative exactly once and seal the automatic first-pair continuation decision. | Attempt/evaluator evidence and checkpoint receipt. | not-started |
 | T09-P3-09 | Run Task B simulative then reactive exactly once only if the checkpoint passes and remaining wall admits the next attempt. | Attempt/evaluator evidence or typed stop receipt. | not-started |
 | T09-P3-10 | Retain reconstructable, structurally redacted private evidence and valid evaluator outcomes for every consumed attempt. | Evidence indexes, outcome schemas, archive manifest/hash. | not-started |
@@ -86,16 +86,16 @@ superiority/EXP-0001 conclusions.
   projections, makes aggregate staging optional, and delegates every read-only GET to
   the retained T07 observer transport. Cloud admission remains closed for rereview.
 - 2026-08-13: subsequent immutable reviews drove the disk/archive headroom repair and
-  the immediate provisional exact-ID ownership/cleanup path. Final source commit
+  the immediate provisional exact-ID ownership/cleanup path. Initial frozen source commit
   `e5edff3f1b256aaa17ad7bc79c255d82350964c7` received independent **PASS** with
   39/39 source-focused tests and no material residual; no external request occurred.
 - 2026-08-13: rebound the V3 plan (5,270 bytes, SHA-256
   `0b17da814f9b20326a7220cec5f41e84c968a46c9d38e913f327afe267c26210`),
-  runtime identity (`64ac04be16f952e0d652d3499a57d98dfc6a1e6976ed3d549f471f8851e5f8cc`),
-  execution contract (`3495e965757c51295e147261c0c53157f32c1152acfd83e496ab7351c1c90085`),
+  runtime identity (`6011ba3930dc143473f7ae91d96364480b1c20f6e0931e4800d1e13b7cb8ec0d`),
+  execution contract (`fd0c60f089d75f64cbdb83fb2d90d00446f1c566db7bccbbfd56c4fcccf6891c`),
   all four child plans, and the generated command package
-  (`e32d344069315992824c107508e7cc031a8859c22f6401bb3c84e4dae81c1dd8`).
-  Both normalized actual-argv pair diffs are valid. All 42 T09 tests, all 13
+  (`8e8d5827df4688a8748828145ea0990d8397c771ae3add43790bbd45f732984d`).
+  Both normalized actual-argv pair diffs are valid. All 43 T09 tests, all 13
   Phase-1 control tests, repository validation, Ruff, and strict mypy pass.
 - 2026-08-13: the full gate with the retained portable Quarto 1.9.38 binary passed:
   lock/sync, Ruff, strict mypy over 61 source files, all 1,332 tests, repository
@@ -109,6 +109,15 @@ superiority/EXP-0001 conclusions.
   agree. The rejected `10f221c44e8568a71e0b34866115ed04980ffb4c` package was never launched.
   The replacement full portable-Quarto gate passed all 1,332 tests, 16 pages, and
   repository/site validation.
+- 2026-08-13: the first authenticated provider prelaunch retained six source-bound
+  read-only GET receipts and proved zero running instances, but correctly stopped
+  before launch when the image-catalog validator treated the provider's one-row-per-
+  region response as a duplicate frozen image. No POST, launch, paid instance, model
+  request, browser action, or SiRA attempt occurred. The source-only repair filters
+  the frozen image by `us-east-1` before cardinality enforcement; zero or duplicate
+  regional matches still fail closed. Commit
+  `6f7c3112777a8b253f085d058972259fad30778f` received independent **PASS** and is
+  the reviewed replacement implementation ancestor.
 
 ## Decisions and blockers
 

@@ -81,7 +81,7 @@ outside Git. The overlay must fill and hash-bind these values:
 ```text
 authorization_source_sha256: 1f8285ea3fc52f4084a945f1712870203463cb7fb92cc61ac2eeae47d119e4c7
 clean_package_commit: <FINAL-CLEAN-COMMIT>
-reviewed_implementation_ancestor: e5edff3f1b256aaa17ad7bc79c255d82350964c7
+reviewed_implementation_ancestor: 6f7c3112777a8b253f085d058972259fad30778f
 plan_id: PLAN-EXP0001-PILOT-V3
 plan_path: experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml
 plan_bytes: 5270

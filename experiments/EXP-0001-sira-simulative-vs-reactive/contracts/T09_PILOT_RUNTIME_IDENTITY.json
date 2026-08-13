@@ -80,7 +80,7 @@
       },
       {
         "path": "src/giclab/harness/t09_pragmatic_provider.py",
-        "sha256": "53781b488f9c8f2c085cac220eb20fdc5c3a916f71fd5b680b69407397305331"
+        "sha256": "205ad49455646b075ce22369df0a0cd9911f57cb53044331041da8a088444841"
       },
       {
         "path": "containers/sira-smoke/pragmatic/t09_remote_runner.py",
