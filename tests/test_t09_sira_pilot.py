@@ -538,6 +538,16 @@ def test_runtime_identity_binds_every_selected_executable_file() -> None:
         assert file_sha256(ROOT / item["path"]) == item["sha256"]
 
 
+def test_runtime_and_execution_bind_the_same_current_evaluator_contract() -> None:
+    runtime = load_json(RUNTIME_IDENTITY)
+    execution = load_json(EXECUTION_CONTRACT)
+    evaluator_binding = execution["contract_bindings"]["evaluator"]
+    evaluator_path = ROOT / evaluator_binding["path"]
+    observed_sha256 = file_sha256(evaluator_path)
+    assert evaluator_binding["sha256"] == observed_sha256
+    assert runtime["evaluator_overlay"]["contract_sha256"] == observed_sha256
+
+
 def _load_host_runner() -> ModuleType:
     path = ROOT / "containers/sira-smoke/pragmatic/t09_remote_runner.py"
     spec = importlib.util.spec_from_file_location("giclab_t09_host_runner_test", path)

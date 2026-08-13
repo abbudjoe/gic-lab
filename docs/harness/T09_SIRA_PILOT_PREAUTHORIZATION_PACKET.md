@@ -70,9 +70,13 @@ available evidence handoff, exact instance termination, terminal/absent and zero
 verification, then restoration/deletion of only owned security state. Never delay
 termination for archive perfection, repository tests, or documentation.
 
-## Single-use current-turn authorization projection
+## Descriptive single-use current-turn authorization projection
 
-The private overlay must fill and hash-bind these fields before mutation:
+The following is a human-readable projection, not literal JSON or a directly
+executable command. Before mutation, the private mode-0600 ledger must contain the
+exact typed JSON field set enforced by `validate_authorization_ledger`; its private
+artifact destination resolves to the validator-fixed access-controlled archive root
+outside Git. The overlay must fill and hash-bind these values:
 
 ```text
 authorization_source_sha256: 1f8285ea3fc52f4084a945f1712870203463cb7fb92cc61ac2eeae47d119e4c7

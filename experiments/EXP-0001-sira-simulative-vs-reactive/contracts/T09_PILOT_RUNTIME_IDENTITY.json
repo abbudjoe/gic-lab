@@ -35,7 +35,7 @@
     "simulative_planner_critic_num_samples": 20
   },
   "evaluator_overlay": {
-    "contract_sha256": "ba998466b85d83f8ce11a7308f4d21433e496204f9dc48fe28793b711af28b5b",
+    "contract_sha256": "c28a802a45fc8d1e719f8c1bcb22315c2841df831c4ae161f12ab0f2fd08b321",
     "materialization": "read-only-package-overlay-on-exact-base-image",
     "base_image_materialization": "use-preexisting-exact-image-or-rebuild-from-the-exact-T07-commit-and-reject-any-nonmatching-image-ID",
     "provider_or_model_access": false
