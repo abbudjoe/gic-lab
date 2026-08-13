@@ -3,19 +3,19 @@
   "$id": "urn:gic-lab:schema:t09-sira-pilot-execution:0.1.0",
   "title": "T09 frozen two-task SiRA calibration-pilot execution contract",
   "type": "object",
-  "required": ["schema_version", "contract_id", "plan_id", "experiment_id", "authorized", "terminal_state", "execution_eligibility", "material_blockers", "calibration_only", "sira_commit", "model_revision", "service_tier", "randomization_seed", "contract_bindings", "runtime", "runtime_limits", "budget_calibration", "identities", "attempts", "first_pair_checkpoint", "evidence", "gpu_accounting", "cleanup", "interpretation_boundary"],
+  "required": ["schema_version", "contract_id", "plan_id", "experiment_id", "authorized", "terminal_state", "execution_eligibility", "material_blockers", "calibration_only", "sira_commit", "model_revision", "service_tier", "randomization_seed", "contract_bindings", "runtime", "provider_lifecycle", "runtime_limits", "budget_calibration", "identities", "attempts", "first_pair_checkpoint", "evidence", "gpu_accounting", "cleanup", "interpretation_boundary"],
   "properties": {
     "schema_version": {"const": "0.1.0"},
-    "contract_id": {"const": "EXECUTION-CONTRACT-EXP0001-PILOT-V2"},
-    "plan_id": {"const": "PLAN-EXP0001-PILOT-V2"},
+    "contract_id": {"const": "EXECUTION-CONTRACT-EXP0001-PILOT-V3"},
+    "plan_id": {"const": "PLAN-EXP0001-PILOT-V3"},
     "experiment_id": {"const": "EXP-0001"},
     "authorized": {"const": false},
     "authorization_reference": {"type": "null"},
-    "terminal_state": {"const": "t09-pilot-blocked-material-risk"},
-    "execution_eligibility": {"const": "blocked-material-risk"},
+    "terminal_state": {"const": "ready-for-t09-pilot-authorization"},
+    "execution_eligibility": {"const": "ready-after-current-turn-overlay-and-dynamic-preflight"},
     "material_blockers": {
       "type": "array",
-      "minItems": 1,
+      "maxItems": 0,
       "items": {"type": "string", "minLength": 1}
     },
     "calibration_only": {"const": true},
@@ -38,6 +38,23 @@
       "additionalProperties": false
     },
     "runtime": {"type": "object"},
+    "provider_lifecycle": {
+      "type": "object",
+      "required": ["campaign_clock_origin", "campaign_provider_wall_seconds", "normal_cleanup_reserve_seconds", "provider_termination_cutoff_seconds", "max_lambda_instances", "max_launch_count", "persistent_filesystems", "admission_model", "future_attempt_maxima_reserved_at_campaign_start", "provider_control_plane"],
+      "properties": {
+        "campaign_clock_origin": {"const": "provider-launch-response-received"},
+        "campaign_provider_wall_seconds": {"const": 14400},
+        "normal_cleanup_reserve_seconds": {"const": 900},
+        "provider_termination_cutoff_seconds": {"const": 13500},
+        "max_lambda_instances": {"const": 1},
+        "max_launch_count": {"const": 1},
+        "persistent_filesystems": {"const": 0},
+        "admission_model": {"const": "actual-elapsed-next-attempt-hard-wall-plus-cleanup-reserve"},
+        "future_attempt_maxima_reserved_at_campaign_start": {"const": false},
+        "provider_control_plane": {"const": "existing-t07-pragmatic-lambda-operations-no-new-framework-or-watchdog"}
+      },
+      "additionalProperties": false
+    },
     "runtime_limits": {
       "type": "object",
       "required": ["expected_browser_actions_per_attempt", "max_browser_actions_per_attempt", "action_timeout_seconds", "max_model_calls_per_attempt", "max_model_tokens_per_attempt", "max_openai_cost_usd_per_attempt", "max_condition_wall_seconds", "max_pair_wall_seconds", "max_total_wall_seconds", "max_output_bytes_per_attempt", "max_disk_bytes", "max_lambda_duration_seconds", "max_lambda_cost_usd", "max_attempts", "max_retries_after_empirical_entry"],
@@ -70,8 +87,8 @@
         "type": "object",
         "required": ["run_id", "pair_id", "task_id", "task_index", "condition", "order_index", "output_root", "condition_plan_path", "condition_plan_sha256", "protocol_sha256", "config_sha256", "environment_sha256", "giclab_commit", "upstream_argv"],
         "properties": {
-          "run_id": {"type": "string", "pattern": "^RUN-EXP0001-PILOT-V2-TASK-[AB]-(?:REACTIVE|SIMULATIVE)$"},
-          "pair_id": {"enum": ["PAIR-EXP0001-PILOT-V2-TASK-A", "PAIR-EXP0001-PILOT-V2-TASK-B"]},
+          "run_id": {"type": "string", "pattern": "^RUN-T09-TASK-[AB]-(?:REACTIVE|SIMULATIVE)-0001$"},
+          "pair_id": {"enum": ["PAIR-EXP0001-PILOT-V3-TASK-A", "PAIR-EXP0001-PILOT-V3-TASK-B"]},
           "task_id": {"enum": ["7dcbbbdc7f1120cd", "2120afba8009bad3"]},
           "task_index": {"enum": [0, 1]},
           "condition": {"enum": ["reactive", "simulative"]},

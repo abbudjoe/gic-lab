@@ -27,7 +27,7 @@ from giclab.harness.sira_gate_a import (
     ProviderBudgetUsage,
 )
 
-PLAN_ID: Final = "PLAN-EXP0001-PILOT-V2"
+PLAN_ID: Final = "PLAN-EXP0001-PILOT-V3"
 EXPERIMENT_ID: Final = "EXP-0001"
 SIRA_COMMIT: Final = "93fb8d72de71f9a4a13419670adeb34d93cf7acd"
 MODEL_REVISION: Final = "gpt-4o-2024-11-20"
@@ -49,16 +49,16 @@ TASK_REFERENCE_SHA256S: Final = (
     "2ee9d892e24441d5f5bbf31b7616c1ade5977af26d22e4020f92a162fa23becb",
 )
 ATTEMPT_ORDER: Final = (
-    "RUN-EXP0001-PILOT-V2-TASK-A-REACTIVE",
-    "RUN-EXP0001-PILOT-V2-TASK-A-SIMULATIVE",
-    "RUN-EXP0001-PILOT-V2-TASK-B-SIMULATIVE",
-    "RUN-EXP0001-PILOT-V2-TASK-B-REACTIVE",
+    "RUN-T09-TASK-A-REACTIVE-0001",
+    "RUN-T09-TASK-A-SIMULATIVE-0001",
+    "RUN-T09-TASK-B-SIMULATIVE-0001",
+    "RUN-T09-TASK-B-REACTIVE-0001",
 )
 EVALUATOR_RUN_IDS: Final = (
-    "RUN-EXP0001-PILOT-V2-EVAL-TASK-A-REACTIVE",
-    "RUN-EXP0001-PILOT-V2-EVAL-TASK-A-SIMULATIVE",
-    "RUN-EXP0001-PILOT-V2-EVAL-TASK-B-SIMULATIVE",
-    "RUN-EXP0001-PILOT-V2-EVAL-TASK-B-REACTIVE",
+    "RUN-T09-EVAL-TASK-A-REACTIVE-0001",
+    "RUN-T09-EVAL-TASK-A-SIMULATIVE-0001",
+    "RUN-T09-EVAL-TASK-B-SIMULATIVE-0001",
+    "RUN-T09-EVAL-TASK-B-REACTIVE-0001",
 )
 
 _HEX64 = re.compile(r"^[a-f0-9]{64}$")
@@ -71,6 +71,76 @@ class T09PilotError(ValueError):
 
 class T09BudgetExceeded(RuntimeError):
     """Raised before the next empirical operation would exceed a hard cap."""
+
+
+@dataclass(frozen=True, slots=True)
+class CampaignLifecycleLimits:
+    """One finite, actual-time provider campaign shared by every pilot phase."""
+
+    campaign_provider_wall_seconds: int
+    normal_cleanup_reserve_seconds: int
+    provider_termination_cutoff_seconds: int
+    max_lambda_instances: int
+    max_launch_count: int
+    persistent_filesystems: int
+
+    def __post_init__(self) -> None:
+        values = (
+            self.campaign_provider_wall_seconds,
+            self.normal_cleanup_reserve_seconds,
+            self.provider_termination_cutoff_seconds,
+            self.max_lambda_instances,
+            self.max_launch_count,
+            self.persistent_filesystems,
+        )
+        if any(type(value) is not int or value < 0 for value in values):
+            raise T09PilotError("campaign lifecycle limits must be non-negative integers")
+        if self.campaign_provider_wall_seconds != 14_400:
+            raise T09PilotError("campaign provider wall must remain 14,400 seconds")
+        if self.normal_cleanup_reserve_seconds != 900:
+            raise T09PilotError("normal cleanup reserve must remain 900 seconds")
+        if (
+            self.provider_termination_cutoff_seconds
+            != self.campaign_provider_wall_seconds - self.normal_cleanup_reserve_seconds
+        ):
+            raise T09PilotError("provider termination cutoff must preserve the cleanup reserve")
+        if (
+            self.max_lambda_instances != 1
+            or self.max_launch_count != 1
+            or self.persistent_filesystems != 0
+        ):
+            raise T09PilotError("campaign requires one instance, one launch, and no filesystem")
+
+    def elapsed_seconds(self, *, billable_started_at: float, now: float) -> float:
+        elapsed = now - billable_started_at
+        if not math.isfinite(elapsed) or elapsed < 0:
+            raise T09PilotError("campaign clock is unavailable or in the future")
+        return elapsed
+
+    def remaining_seconds(self, *, billable_started_at: float, now: float) -> float:
+        return max(
+            0.0,
+            self.campaign_provider_wall_seconds
+            - self.elapsed_seconds(billable_started_at=billable_started_at, now=now),
+        )
+
+    def admit_attempt(
+        self,
+        *,
+        billable_started_at: float,
+        now: float,
+        attempt_hard_wall_seconds: int,
+    ) -> bool:
+        if type(attempt_hard_wall_seconds) is not int or attempt_hard_wall_seconds <= 0:
+            raise T09PilotError("attempt hard wall must be a positive integer")
+        required = attempt_hard_wall_seconds + self.normal_cleanup_reserve_seconds
+        return self.remaining_seconds(billable_started_at=billable_started_at, now=now) >= required
+
+    def termination_due(self, *, billable_started_at: float, now: float) -> bool:
+        return (
+            self.elapsed_seconds(billable_started_at=billable_started_at, now=now)
+            >= self.provider_termination_cutoff_seconds
+        )
 
 
 def file_sha256(path: Path) -> str:
@@ -261,6 +331,7 @@ class PilotExecutionContract:
     evaluator_contract_sha256: str
     action_timeout_seconds: int
     first_pair_checkpoint_required: bool
+    campaign: CampaignLifecycleLimits
 
     def attempt(self, run_id: str) -> AttemptBinding:
         matches = [item for item in self.attempts if item.run_id == run_id]
@@ -406,6 +477,37 @@ def load_execution_contract(path: Path, *, expected_sha256: str) -> PilotExecuti
     checkpoint = _strict_object(document.get("first_pair_checkpoint"), context="checkpoint")
     if checkpoint.get("required") is not True:
         raise T09PilotError("first-pair checkpoint must be required")
+    raw_campaign = _strict_object(
+        document.get("provider_lifecycle"), context="provider lifecycle"
+    )
+    campaign = CampaignLifecycleLimits(
+        campaign_provider_wall_seconds=_required_int(
+            raw_campaign.get("campaign_provider_wall_seconds"),
+            context="campaign provider wall",
+        ),
+        normal_cleanup_reserve_seconds=_required_int(
+            raw_campaign.get("normal_cleanup_reserve_seconds"),
+            context="normal cleanup reserve",
+        ),
+        provider_termination_cutoff_seconds=_required_int(
+            raw_campaign.get("provider_termination_cutoff_seconds"),
+            context="provider termination cutoff",
+        ),
+        max_lambda_instances=_required_int(
+            raw_campaign.get("max_lambda_instances"), context="Lambda instance cap"
+        ),
+        max_launch_count=_required_int(
+            raw_campaign.get("max_launch_count"), context="Lambda launch cap"
+        ),
+        persistent_filesystems=_required_int(
+            raw_campaign.get("persistent_filesystems"), context="persistent filesystem cap"
+        ),
+    )
+    if (
+        limits.max_total_wall_seconds != campaign.campaign_provider_wall_seconds
+        or limits.max_lambda_duration_seconds != campaign.campaign_provider_wall_seconds
+    ):
+        raise T09PilotError("runtime and provider campaign walls must be identical")
     return PilotExecutionContract(
         path=path.resolve(strict=True),
         sha256=expected_sha256,
@@ -419,6 +521,7 @@ def load_execution_contract(path: Path, *, expected_sha256: str) -> PilotExecuti
         ),
         action_timeout_seconds=action_timeout,
         first_pair_checkpoint_required=True,
+        campaign=campaign,
     )
 
 
@@ -775,6 +878,9 @@ class PairCheckpointInput:
     actual_pair_wall_seconds: float
     projected_aggregate_cost_usd: float
     actual_lambda_cost_usd: float
+    remaining_campaign_seconds: float
+    next_attempt_hard_wall_seconds: int = 3_600
+    cleanup_reserve_seconds: int = 900
 
 
 def first_pair_decision(value: PairCheckpointInput) -> dict[str, object]:
@@ -827,6 +933,14 @@ def first_pair_decision(value: PairCheckpointInput) -> dict[str, object]:
         value.projected_aggregate_cost_usd > 45.16
     ):
         reasons.append("projected_aggregate_cost_exceeds_hard_cap")
+    required_campaign_seconds = (
+        value.next_attempt_hard_wall_seconds + value.cleanup_reserve_seconds
+    )
+    if (
+        not math.isfinite(value.remaining_campaign_seconds)
+        or value.remaining_campaign_seconds < required_campaign_seconds
+    ):
+        reasons.append("insufficient_campaign_time_for_next_attempt_and_cleanup")
     return {
         "schema_version": "0.1.0",
         "plan_id": PLAN_ID,
@@ -835,6 +949,8 @@ def first_pair_decision(value: PairCheckpointInput) -> dict[str, object]:
         "reasons": reasons,
         "actual_first_pair_total_cost_usd": actual_total_cost,
         "projected_aggregate_cost_usd": value.projected_aggregate_cost_usd,
+        "remaining_campaign_seconds": value.remaining_campaign_seconds,
+        "required_campaign_seconds_for_next_attempt": required_campaign_seconds,
         "thresholds": strict_half_caps,
     }
 
@@ -1166,7 +1282,8 @@ def _validated_upstream_argv(
         "--end_idx": str(attempt.task_index + 1),
         "--seed": "42",
     }
-    upstream_run_id = attempt.run_id.replace("RUN-EXP0001-", "EXP-0001-", 1)
+    upstream_suffix = attempt.run_id.removeprefix("RUN-T09-").removesuffix("-0001")
+    upstream_run_id = f"EXP-0001-PILOT-V3-{upstream_suffix}"
     if argv[0] != upstream_run_id or values != expected:
         raise T09PilotError("upstream argv drifted from the exact task/condition contract")
     return values
@@ -1319,7 +1436,8 @@ def _normalized_actual_argv(manifest: Mapping[str, object]) -> tuple[str, ...] |
             return None
         argv[indexes[0] + 1] = replacement
     downstream = argv[separator + 1 :]
-    expected_upstream_run_id = run_id.replace("RUN-EXP0001-", "EXP-0001-", 1)
+    upstream_suffix = run_id.removeprefix("RUN-T09-").removesuffix("-0001")
+    expected_upstream_run_id = f"EXP-0001-PILOT-V3-{upstream_suffix}"
     if not downstream or downstream[0] != expected_upstream_run_id:
         return None
     downstream[0] = "<UPSTREAM-RUN-ID>"

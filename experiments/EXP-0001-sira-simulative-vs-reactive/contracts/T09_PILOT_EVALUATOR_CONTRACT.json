@@ -1,7 +1,7 @@
 {
   "schema_version": "0.1.0",
-  "contract_id": "EVALUATOR-CONTRACT-EXP0001-PILOT-V2",
-  "plan_id": "PLAN-EXP0001-PILOT-V2",
+  "contract_id": "EVALUATOR-CONTRACT-EXP0001-PILOT-V3",
+  "plan_id": "PLAN-EXP0001-PILOT-V3",
   "identity": {
     "name": "SiRA pinned FanOutQA evaluator",
     "repository": "https://github.com/sailing-lab/sira",

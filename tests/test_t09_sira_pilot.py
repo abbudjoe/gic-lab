@@ -22,6 +22,7 @@ from giclab.harness.sira_gate_a import (
 )
 from giclab.harness.t09_sira_pilot import (
     ATTEMPT_ORDER,
+    CampaignLifecycleLimits,
     EvaluatorIdentity,
     EventWriter,
     PairCheckpointInput,
@@ -295,8 +296,8 @@ def test_frozen_execution_contract_and_all_pair_command_diffs() -> None:
             runtime_adaptation_path="/opt/giclab-src/giclab/harness/sira_gate_a_runtime.py",
             runtime_adaptation_sha256="a" * 64,
             pilot_library_sha256="b" * 64,
-            aggregate_ledger_path="/opt/giclab-artifacts/pilot-v2/aggregate-budget.json",
-            pilot_state_path="/opt/giclab-artifacts/pilot-v2/pilot-state.json",
+            aggregate_ledger_path="/opt/giclab-artifacts/pilot-v3/aggregate-budget.json",
+            pilot_state_path="/opt/giclab-artifacts/pilot-v3/pilot-state.json",
         )
         for attempt in contract.attempts
     ]
@@ -356,6 +357,7 @@ def test_first_pair_checkpoint_passes_only_strictly_below_every_threshold() -> N
         actual_pair_wall_seconds=1_440.0,
         projected_aggregate_cost_usd=2.49,
         actual_lambda_cost_usd=0.52,
+        remaining_campaign_seconds=10_000.0,
     )
     assert first_pair_decision(passing)["decision"] == "continue-to-task-b"
     stopping = replace(passing, cleanup_issue=True)
@@ -364,6 +366,13 @@ def test_first_pair_checkpoint_passes_only_strictly_below_every_threshold() -> N
     reasons = decision["reasons"]
     assert isinstance(reasons, list)
     assert "cleanup_issue" in reasons
+    no_time = replace(passing, remaining_campaign_seconds=4_499.999)
+    no_time_decision = first_pair_decision(no_time)
+    assert no_time_decision["decision"] == "stop-before-task-b"
+    assert (
+        "insufficient_campaign_time_for_next_attempt_and_cleanup"
+        in no_time_decision["reasons"]
+    )
 
 
 def test_attempt_state_enforces_order_cap_checkpoint_and_zero_retry(tmp_path: Path) -> None:
@@ -473,9 +482,12 @@ def test_evidence_redaction_is_structural_and_event_lineage_is_explicit(tmp_path
 def test_execution_schema_and_all_static_file_bindings_resolve() -> None:
     document = load_json(EXECUTION_CONTRACT)
     assert document["authorized"] is False
-    assert document["terminal_state"] == "t09-pilot-blocked-material-risk"
-    assert document["execution_eligibility"] == "blocked-material-risk"
-    assert len(document["material_blockers"]) == 2
+    assert document["terminal_state"] == "ready-for-t09-pilot-authorization"
+    assert (
+        document["execution_eligibility"]
+        == "ready-after-current-turn-overlay-and-dynamic-preflight"
+    )
+    assert document["material_blockers"] == []
     assert (
         validate_instance(
             document,
@@ -533,28 +545,85 @@ def _load_attempt_finalizer() -> ModuleType:
     return module
 
 
-def test_provider_preflight_and_closeout_are_fail_closed_without_a_compatible_lifecycle(
+def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bound(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     host = _load_host_runner()
-    message = "t09-pilot-blocked-material-risk"
-    with pytest.raises(host.T09HostError, match=message):
-        host.validate_dynamic_receipt(
-            tmp_path / "nonexistent-entry.json",
-            expected_package_commit="a" * 40,
-        )
-    with pytest.raises(host.T09HostError, match=message):
-        host.validate_provider_closeout_receipt(
-            tmp_path / "nonexistent-closeout.json",
-            expected_lambda_started_at_epoch=1.0,
-            expected_owned_instance_identity_sha256="a" * 64,
-            expected_entry_receipt_sha256="b" * 64,
-            expected_package_commit="a" * 40,
-        )
-    with pytest.raises(host.T09HostError, match=message):
-        host.preflight(SimpleNamespace())
-    with pytest.raises(host.T09HostError, match=message):
-        host.execute_condition(SimpleNamespace())
+    now = 2_000_000_000.0
+    monkeypatch.setattr(host.time, "time", lambda: now)
+    entry_path = tmp_path / "provider-entry.json"
+    entry = {
+        "schema_version": "0.1.0",
+        "receipt_type": "t09-pragmatic-provider-entry",
+        "plan_id": "PLAN-EXP0001-PILOT-V3",
+        "host_run_id": "RUN-T09-PILOT-HOST-0001",
+        "package_commit": "a" * 40,
+        "captured_at_epoch": now - 10,
+        "lambda_started_at_epoch": now - 20,
+        "owned_instance_identity_sha256": "b" * 64,
+        "source_bundle_sha256": "c" * 64,
+        "source_bundle_bytes": 4096,
+        "source_observer": "t07-pragmatic-lambda-api-receipts-v1",
+        "zero_prior_nonterminal_instances": True,
+        "launch_count": 1,
+        "max_instances": 1,
+        "instance_type": "gpu_1x_a10",
+        "region": "us-east-1",
+        "persistent_filesystems": 0,
+        "hourly_price_usd": 1.29,
+        "billable_clock_source": "provider-launch-response-received",
+        "raw_source_retained_private": True,
+        "structural_redaction_passed": True,
+    }
+    entry_path.write_text(json.dumps(entry), encoding="utf-8")
+    validated = host.validate_dynamic_receipt(
+        entry_path,
+        expected_package_commit="a" * 40,
+    )
+    assert validated["receipt_sha256"] == host.file_sha256(entry_path)
+    drifted = dict(entry)
+    drifted["launch_count"] = 2
+    entry_path.write_text(json.dumps(drifted), encoding="utf-8")
+    with pytest.raises(host.T09HostError, match="entry receipt drifted"):
+        host.validate_dynamic_receipt(entry_path, expected_package_commit="a" * 40)
+
+    entry_path.write_text(json.dumps(entry), encoding="utf-8")
+    entry_sha = host.file_sha256(entry_path)
+    closeout_path = tmp_path / "provider-closeout.json"
+    closeout = {
+        "schema_version": "0.1.0",
+        "receipt_type": "t09-pragmatic-provider-closeout",
+        "plan_id": "PLAN-EXP0001-PILOT-V3",
+        "host_run_id": "RUN-T09-PILOT-HOST-0001",
+        "package_commit": "a" * 40,
+        "captured_at_epoch": now,
+        "lambda_started_at_epoch": now - 20,
+        "termination_started_at_epoch": now - 8,
+        "terminal_observed_at_epoch": now - 4,
+        "zero_instance_observed_at_epoch": now - 2,
+        "owned_instance_identity_sha256": "b" * 64,
+        "termination_target_identity_sha256": "b" * 64,
+        "entry_receipt_sha256": entry_sha,
+        "source_bundle_sha256": "d" * 64,
+        "source_bundle_bytes": 8192,
+        "source_observer": "t07-pragmatic-lambda-api-receipts-v1",
+        "termination_request_count": 1,
+        "terminal_or_absent": True,
+        "zero_t09_instances": True,
+        "security_restored": True,
+        "raw_source_retained_private": True,
+        "structural_redaction_passed": True,
+        "campaign_wall_exception": "none",
+    }
+    closeout_path.write_text(json.dumps(closeout), encoding="utf-8")
+    assert host.validate_provider_closeout_receipt(
+        closeout_path,
+        expected_lambda_started_at_epoch=now - 20,
+        expected_owned_instance_identity_sha256="b" * 64,
+        expected_entry_receipt_sha256=entry_sha,
+        expected_package_commit="a" * 40,
+    )["receipt_sha256"] == host.file_sha256(closeout_path)
 
 
 def test_removed_provider_receipt_schemas_cannot_be_mistaken_for_execution_contracts() -> None:
@@ -562,13 +631,36 @@ def test_removed_provider_receipt_schemas_cannot_be_mistaken_for_execution_contr
     assert not (ROOT / "schemas/t09-sira-pilot-provider-closeout.schema.json").exists()
 
 
-def test_host_timing_partition_preserves_cleanup_and_scientific_envelopes(
+def test_campaign_lifecycle_uses_actual_elapsed_time_and_preserves_cleanup_reserve() -> None:
+    campaign = CampaignLifecycleLimits(
+        campaign_provider_wall_seconds=14_400,
+        normal_cleanup_reserve_seconds=900,
+        provider_termination_cutoff_seconds=13_500,
+        max_lambda_instances=1,
+        max_launch_count=1,
+        persistent_filesystems=0,
+    )
+    assert campaign.elapsed_seconds(billable_started_at=100.0, now=700.0) == 600.0
+    assert campaign.admit_attempt(
+        billable_started_at=100.0,
+        now=10_000.0,
+        attempt_hard_wall_seconds=3_600,
+    ) is True
+    assert campaign.admit_attempt(
+        billable_started_at=100.0,
+        now=10_000.1,
+        attempt_hard_wall_seconds=3_600,
+    ) is False
+    assert campaign.termination_due(billable_started_at=100.0, now=13_600.0) is True
+
+
+def test_host_campaign_admission_counts_setup_and_attempt_actual_time(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     host = _load_host_runner()
     now = time.time()
-    state = tmp_path / "pilot-v2/pilot-state.json"
+    state = tmp_path / "pilot-v3/pilot-state.json"
     state.parent.mkdir(parents=True)
     state.write_text(
         json.dumps(
@@ -579,14 +671,18 @@ def test_host_timing_partition_preserves_cleanup_and_scientific_envelopes(
         ),
         encoding="utf-8",
     )
-    assert host.provider_seconds_remaining(tmp_path, reserve_seconds=1_200) == pytest.approx(
-        2_400,
+    assert host.provider_seconds_remaining(tmp_path, reserve_seconds=900) == pytest.approx(
+        13_500,
         abs=1,
     )
-    assert host.scientific_seconds_remaining(tmp_path) == pytest.approx(2_400, abs=1)
-    monkeypatch.setattr(host.time, "time", lambda: now + 2_401)
-    with pytest.raises(host.T09HostError, match="scientific workload ceiling"):
-        host.scientific_seconds_remaining(tmp_path)
+    assert host.scientific_seconds_remaining(tmp_path) == pytest.approx(14_400, abs=1)
+    monkeypatch.setattr(host.time, "time", lambda: now + 9_900)
+    assert host.admit_next_attempt(tmp_path) == pytest.approx(3_600)
+    monkeypatch.setattr(host.time, "time", lambda: now + 9_901)
+    with pytest.raises(host.T09HostError, match="next attempt hard wall"):
+        host.admit_next_attempt(tmp_path)
+    monkeypatch.setattr(host.time, "time", lambda: now + 13_500)
+    assert host.provider_termination_due(tmp_path) is True
 
 
 def test_host_secret_cleanup_finds_cross_chunk_match_and_destroys_exact_file(

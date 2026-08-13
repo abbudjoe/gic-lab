@@ -1,111 +1,93 @@
-# T09 SiRA pilot preauthorization refusal packet
+# T09 pragmatic calibration pilot preauthorization packet
 
-Status: **`t09-pilot-blocked-material-risk`; unauthorized**
+Status: **ready for one current-turn private execution overlay after final hash binding
+and exact dynamic preflight**
 
-Plan: `PLAN-EXP0001-PILOT-V2`
+Tracked plan: `PLAN-EXP0001-PILOT-V3`, `authorized: false`.
 
-Plan path:
-`experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml`
+This packet documents the immutable execution surface. It is not a reusable grant;
+the user's 2026-08-13 instruction supplies current-turn authority only after the clean
+package commit, final plan hash, review, local gates, and private cloud ledger bind.
 
-Plan bytes: `4,854`; SHA-256:
-`95f73429c449486198c8283b8ca93cf8a0bdeb2f7da43cf717d868f6487b4958`.
+## Immutable science
 
-This is not an authorization packet and contains no executable authorization command
-or ready-to-copy permission text. `authorized: false` remains exact in the parent
-plan, execution contract, and all four condition plans. Provider preflight and
-empirical entry fail closed.
+- Experiment `EXP-0001`; calibration-only interpretation.
+- SiRA `93fb8d72de71f9a4a13419670adeb34d93cf7acd`.
+- Model `gpt-4o-2024-11-20`, service tier `default`, every role.
+- FanOutQA November 2023 development snapshot; official commit
+  `989f4c40d9deea1ecb0897d7a17a9c0fe20d5c33`; blob
+  `76ad1feb689b754bfe4e5e24d3ea371b647efa67`.
+- Tasks `7dcbbbdc7f1120cd` and `2120afba8009bad3`.
+- Exact pinned SiRA FanOutQA evaluator; no judge model or substitute scorer.
+- Order: Task A reactive, Task A simulative, checkpoint, Task B simulative,
+  Task B reactive. Zero condition retry after empirical entry.
 
-## Static package retained
+## Runtime and lifecycle
 
-- Experiment: `EXP-0001`; calibration only.
-- SiRA: `93fb8d72de71f9a4a13419670adeb34d93cf7acd`.
-- Model: `gpt-4o-2024-11-20`, service tier `default`, every role.
-- Runtime candidate: Python 3.11.14 and container
+- Python 3.11.14; image
   `sha256:035edf61718e84a8156f4f0f7817b134b0ce31488d3f0b50bbfba2b4a30cc61c`.
-- Dataset: November 2023 FanOutQA development snapshot, official source commit
-  `989f4c40d9deea1ecb0897d7a17a9c0fe20d5c33`, SHA-256
-  `359300b029c6891567816f351bf8786e9b018d7af8a1a44b7da9ba5ef4651288`.
-- Tasks: `7dcbbbdc7f1120cd` and `2120afba8009bad3`.
-- Order: Task A reactive then simulative; Task B simulative then reactive.
-- Browser actions: 18 expected and 30 maximum per attempt; 30-second action timeout.
-- Retries after empirical entry: zero.
-- Interpretation: descriptive task-level calibration only; no effect, variance,
-  significance, superiority, EXP-0001 decision, or H2K/GIC claim.
+- One Lambda `gpu_1x_a10`, `us-east-1`, no persistent filesystem; maximum one
+  launch and one instance.
+- Billable campaign wall 14,400 seconds; normal cleanup reserve 900 seconds;
+  termination begins by 13,500 seconds.
+- Each attempt retains a 3,600-second hard wall. Entry requires actual remaining
+  campaign time of at least 4,500 seconds. No future attempt maxima are reserved at
+  campaign start.
+- Setup, preflight, attempts, evaluator, evidence, and cleanup consume one campaign
+  clock. Best-effort termination after the wall is allowed only for provider
+  control-plane delay, never for more empirical work.
 
-The exact evaluator, dataset rows, hashes, command manifests, pair diffs, local budget
-primitives, completion semantics, and evidence schemas remain useful offline planning
-evidence. They do not authorize execution or prove provider-lifecycle closure.
+## Budgets and checkpoint
 
-## Material execution blocker
+Planning values: reactive USD 0.512970, simulative USD 0.729015, pair USD 1.241985,
+four attempts USD 2.483970, four-hour Lambda maximum USD 5.16, conservative aggregate
+approximately USD 7.643970.
 
-The inherited frozen T07 GET-only observer has:
+Hard ceilings: USD 40 OpenAI, USD 5.16 Lambda, USD 45.16 combined, 4,620 calls,
+4,000,000 tokens, 120 browser actions, four attempts, zero retry. Per attempt: 1,155
+calls, 1,000,000 tokens, USD 10 OpenAI, 30 actions, 3,600 seconds, 1 GiB output.
 
-- a 1,800-second normal termination target;
-- a 3,600-second hard provider wall;
-- up to three 300-second cleanup checkpoints;
-- additional bounded terminal polling and evidence sealing; and
-- a requirement to stage and verify a reconstructable private failure prefix before
-  the exact manual termination.
+Task B opens only when both Task A attempts have reconstructable evidence and valid
+evaluator execution, pair matching and cleanup are valid, no cap/credential issue
+exists, actual/projected spend remains within hard ceilings, Task B can add calibration
+value, and the next attempt wall plus cleanup reserve still fits.
 
-The requested candidate pilot has four full-task attempts. T07 one-step walls imply a
-linear 18-action planning total of about 1,418.31 seconds for the four conditions
-before evaluator, archive, and transfer work. The retained successful T07 host used
-1,581.905 seconds launch-to-terminal while its two condition processes used only
-39.397 seconds. Worst-case cleanup checkpoints alone consume 900 seconds, before
-polling, sealing, and transfer.
+## Evidence and closeout
 
-Consequently the four-attempt scientific envelope and a defensible cleanup reserve
-cannot both fit the frozen 3,600-second hard wall. The T08 14,400-second/4-A10-hour/
-USD 5.16 Lambda figures are candidate maxima, but no source-compatible T07 lifecycle
-can enforce them. Declaring those values without an enforcement path would violate
-the T09 contract and could leave a billable resource unresolved.
+Retain all plan-required task, command, runtime, call/token/action, post-action,
+session/answer, screenshot, stdout/stderr, evaluator, completion, score, and cleanup
+evidence privately. Structurally exclude credentials, Jupyter URLs/tokens, private
+network values, and unrelated provider/account identifiers. Public raw release is
+blocked pending license, attribution/share-alike, privacy, and third-party-content
+review.
 
-T09 may not solve this by creating automated launch/termination, an independent
-watchdog, or another cloud control plane. The exploratory adapter draft and stale
-provider receipt schemas were removed.
+Cleanup priority is owned containers/browser processes, temporary secret destruction,
+available evidence handoff, exact instance termination, terminal/absent and zero-T09
+verification, then restoration/deletion of only owned security state. Never delay
+termination for archive perfection, repository tests, or documentation.
 
-## Budgets that are not authorized
+## Single-use current-turn authorization projection
 
-Expected planning values remain:
+The private overlay must fill and hash-bind these fields before mutation:
 
-| Quantity | Reactive attempt | Simulative attempt | Pair | Pilot |
-|---|---:|---:|---:|---:|
-| Model calls | 72 | 90 | 162 | 324 |
-| Tokens | 87,948 | 120,636 | 208,584 | 417,168 |
-| Browser actions | 18 | 18 | 36 | 72 |
-| OpenAI USD | 0.254970 | 0.471015 | 0.725985 | 1.451970 |
-| Lambda USD | 0.258000 | 0.258000 | 0.516000 | 1.032000 |
-| Total USD | 0.512970 | 0.729015 | 1.241985 | 2.483970 |
+```text
+authorization_source_sha256: 1f8285ea3fc52f4084a945f1712870203463cb7fb92cc61ac2eeae47d119e4c7
+clean_package_commit: <FINAL-CLEAN-COMMIT>
+reviewed_implementation_ancestor: <REVIEWED-ANCESTOR>
+plan_id: PLAN-EXP0001-PILOT-V3
+plan_path: experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml
+plan_bytes: <FINAL-BYTES>
+plan_sha256: <FINAL-SHA256>
+host_run_id: RUN-T09-PILOT-HOST-0001
+attempt_order: RUN-T09-TASK-A-REACTIVE-0001, RUN-T09-TASK-A-SIMULATIVE-0001, RUN-T09-TASK-B-SIMULATIVE-0001, RUN-T09-TASK-B-REACTIVE-0001
+hardware_region: gpu_1x_a10 / us-east-1
+instances_launches_filesystems: 1 / 1 / 0
+campaign_cleanup_cutoff_seconds: 14400 / 900 / 13500
+openai_lambda_total_caps_usd: 40.00 / 5.16 / 45.16
+condition_attempts_retries: 4 / 0
+artifact_destination: /Volumes/Macintosh HD - Data/GIC-Lab/t09/sealed-artifacts
+cleanup: exact-instance termination plus terminal/absent, zero-T09, and security-restoration evidence
+```
 
-Candidate hard maxima remain USD 40 OpenAI plus USD 5.16 Lambda, USD 45.16 total,
-4,620 calls, 4,000,000 tokens, and 120 browser actions. They are explicitly
-**unenforceable under the frozen provider lifecycle** and therefore cannot be copied
-into an authorization.
-
-## Analysis and publication boundaries
-
-The exact offline evaluator suite covers clearly correct, clearly incorrect, partial,
-malformed, missing, exception, duplicate, and normalization-edge fixtures. Task A's
-ordinary correct fixture scores 0.9 and its normalization edge 1.0. Task B's ordinary
-correct fixture scores 0.5; another normalization-edge form scores 1.0, so 0.5 is not
-a ceiling. These are evaluator properties, not pilot outcomes.
-
-Public raw release remains independently blocked pending CC-BY-SA attribution/
-share-alike, third-party-content, privacy, and structural-redaction review. This is a
-publication-only blocker and is not the reason execution is blocked.
-
-## Required successor boundary
-
-A future plan may become authorization-eligible only after it provides, without
-reopening the prohibited infrastructure work:
-
-1. one source-compatible provider wall and cleanup reserve covering the exact task
-   count and staging envelope;
-2. a read-only, source-grounded entry and closeout evidence path with maximal failure
-   prefixes;
-3. fresh plan/run/archive identities and immutable byte bindings;
-4. focused cap, evidence, privacy, and failure tests; and
-5. clean independent spec-conformance review.
-
-Until then: do not call Lambda or OpenAI, launch or terminate an instance, mutate a
-firewall, start a browser, run SiRA/FanOutQA, access a real key, or begin the pilot.
+No second launch, condition retry, task/evaluator/model/config/order substitution,
+training, pilot expansion, public release, or scientific conclusion is authorized.

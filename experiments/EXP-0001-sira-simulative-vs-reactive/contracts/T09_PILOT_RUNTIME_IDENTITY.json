@@ -1,8 +1,8 @@
 {
   "schema_version": "0.1.0",
-  "identity_id": "RUNTIME-EXP0001-PILOT-V2-T07-PRAGMATIC",
-  "plan_id": "PLAN-EXP0001-PILOT-V2",
-  "execution_status": "blocked-no-source-compatible-provider-lifecycle",
+  "identity_id": "RUNTIME-EXP0001-PILOT-V3-T07-PRAGMATIC",
+  "plan_id": "PLAN-EXP0001-PILOT-V3",
+  "execution_status": "ready-after-current-turn-overlay-and-dynamic-preflight",
   "base_runtime": {
     "source_run": "RUN-T07-PRAGMATIC-HOST-0002",
     "frozen_execution_commit": "5698f04dfd08bc85a66d2355b0a4bd7d3ce24a23",

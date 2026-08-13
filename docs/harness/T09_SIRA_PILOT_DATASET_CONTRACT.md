@@ -1,6 +1,6 @@
 # T09 SiRA pilot dataset contract
 
-Status: **frozen for `PLAN-EXP0001-PILOT-V2`**
+Status: **frozen for `PLAN-EXP0001-PILOT-V3`**
 
 Machine authority:
 `experiments/EXP-0001-sira-simulative-vs-reactive/contracts/T09_PILOT_DATASET_CONTRACT.json`
@@ -56,7 +56,7 @@ No outcome-adaptive task substitution or exclusion is permitted.
   `fc40734fa183e839b56a7c89b16faa5900865cbee7a4210fcb251a99176f98de`.
 - Canonical complete-record SHA-256:
   `cc5c3fdeea2c1f58b6160175bd3104dbea40c290ea8b390d29413e6410d97e15`.
-- Pair: `PAIR-EXP0001-PILOT-V2-TASK-A`; reactive then simulative.
+- Pair: `PAIR-EXP0001-PILOT-V3-TASK-A`; reactive then simulative.
 
 ### Task B
 
@@ -69,7 +69,7 @@ No outcome-adaptive task substitution or exclusion is permitted.
   `2ee9d892e24441d5f5bbf31b7616c1ade5977af26d22e4020f92a162fa23becb`.
 - Canonical complete-record SHA-256:
   `5f5a8ad5353b839def2ffc968c36c4314bb830f11f10268f410faa37690bc129`.
-- Pair: `PAIR-EXP0001-PILOT-V2-TASK-B`; simulative then reactive.
+- Pair: `PAIR-EXP0001-PILOT-V3-TASK-B`; simulative then reactive.
 
 The two-row local test fixture contains only these exact canonical records and hashes
 to `5beff220f4d68bcf78d7a9767b5eb09b36e56944a563a8807220168c56f0eea9`.

@@ -1,5 +1,42 @@
 # T09 SiRA Calibration Pilot Lock — Assembly Ledger
 
+## V3 pragmatic campaign-wall successor
+
+V3 assembly status: **in progress under the user's current-turn execution
+authorization**
+
+Source contract SHA-256:
+`1f8285ea3fc52f4084a945f1712870203463cb7fb92cc61ac2eeae47d119e4c7`.
+Starting branch/commit: `phase-1/sira-pilot-pragmatic` at
+`6ff5ea6a8c3c43d0b860ad69081c0f546ee5f93d`.
+
+The source contract explicitly supersedes only V2's 3,600-second infrastructure
+lifecycle restriction. It preserves every task, evaluator, model, SiRA, pairing,
+order, budget, evidence, cleanup, zero-retry, and calibration-only boundary. V2 is
+retained at `run-plans/proposals/PLAN-EXP0001-PILOT-V2.yaml`; V3 mints fresh plan,
+pair, host, condition, evaluator, stage, and archive identities.
+
+| V3 ID | Requirement | Status |
+|---|---|---|
+| T09-V3-01 | Parameterize one actual-time 14,400-second provider campaign with 900-second cleanup reserve and 13,500-second termination cutoff. | in progress: typed lifecycle and host enforcement implemented; focused fake-clock tests pass |
+| T09-V3-02 | Admit an attempt only when its 3,600-second hard wall plus cleanup reserve remains; do not sum future maxima. | in progress: direct admission regression passes |
+| T09-V3-03 | Preserve science/evaluator/tasks/order/pairing and machine-diff four exact V3 commands. | in progress: scientific constants unchanged and pair render test passes; final hashes pending reviewed ancestor |
+| T09-V3-04 | Keep calls/tokens/actions/cost/wall/output/disk/attempt/zero-retry and evidence counters effective. | in progress: focused cap/evidence tests pass; exact runtime preflight pending |
+| T09-V3-05 | Pass independent spec-conformance review, repair/rereview, and post-review smoke before freeze. | not-started |
+| T09-V3-06 | Freeze a clean pre-run package and single-use private authorization/cloud ledger before one launch. | not-started |
+| T09-V3-07 | Execute Task A pair, checkpoint, eligible Task B pair, and pinned evaluators with zero retry. | not-started |
+| T09-V3-08 | Seal evidence, terminate exact provider resource, prove zero residue/security restoration, reconcile accounting, and update public/control surfaces without a scientific conclusion. | not-started |
+
+Focused evidence so far: campaign/evaluator/pair/budget/checkpoint/provider-receipt
+suite **19 passed**; focused Ruff passes; strict mypy passes after typed chronology
+repair. No Lambda/OpenAI/browser/SiRA/FanOutQA request or cloud mutation has occurred
+in V3 while this entry is in progress.
+
+The complete active DoD and command/evidence log are maintained in
+`docs/exec-plans/active/T09_PRAGMATIC_CALIBRATION_PILOT.md`.
+
+---
+
 Assembly status: **complete at the material-risk boundary; execution remains blocked**
 
 Terminal state: **`t09-pilot-blocked-material-risk`**

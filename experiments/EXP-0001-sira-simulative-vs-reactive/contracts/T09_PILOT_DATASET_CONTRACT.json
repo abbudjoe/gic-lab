@@ -1,7 +1,7 @@
 {
   "schema_version": "0.1.0",
-  "contract_id": "DATASET-CONTRACT-EXP0001-PILOT-V2",
-  "plan_id": "PLAN-EXP0001-PILOT-V2",
+  "contract_id": "DATASET-CONTRACT-EXP0001-PILOT-V3",
+  "plan_id": "PLAN-EXP0001-PILOT-V3",
   "dataset": {
     "dataset_id": "DATA-SIRA-FANOUTQA-DEV",
     "name": "FanOutQA",
@@ -50,7 +50,7 @@
         "Sports",
         "Statistics"
       ],
-      "pair_id": "PAIR-EXP0001-PILOT-V2-TASK-A",
+      "pair_id": "PAIR-EXP0001-PILOT-V3-TASK-A",
       "condition_order": [
         "SIRA-REACTIVE",
         "SIRA-SIMULATIVE"
@@ -77,7 +77,7 @@
         "Economics",
         "Film Studies"
       ],
-      "pair_id": "PAIR-EXP0001-PILOT-V2-TASK-B",
+      "pair_id": "PAIR-EXP0001-PILOT-V3-TASK-B",
       "condition_order": [
         "SIRA-SIMULATIVE",
         "SIRA-REACTIVE"

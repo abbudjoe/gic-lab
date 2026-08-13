@@ -306,6 +306,10 @@ def _first_pair_checkpoint(
         raise T09PilotError("pilot timing origins are invalid")
     lambda_cost = lambda_wall * 1.29 / 3600.0
     actual_total = usage.cost_usd + lambda_cost
+    remaining_campaign = contract.campaign.remaining_seconds(
+        billable_started_at=float(lambda_started),
+        now=now,
+    )
     severe_floor_or_ceiling = all(
         outcome.get("task_completion") == "incomplete" and outcome.get("task_score") == 0.0
         for outcome in outcomes
@@ -336,9 +340,12 @@ def _first_pair_checkpoint(
             actual_pair_wall_seconds=pair_wall,
             projected_aggregate_cost_usd=actual_total * 2.0,
             actual_lambda_cost_usd=lambda_cost,
+            remaining_campaign_seconds=remaining_campaign,
+            next_attempt_hard_wall_seconds=contract.limits.max_condition_wall_seconds,
+            cleanup_reserve_seconds=contract.campaign.normal_cleanup_reserve_seconds,
         )
     )
-    checkpoint_path = artifact_base / "artifacts/EXP-0001/pilot-v2/first-pair-checkpoint.json"
+    checkpoint_path = artifact_base / "artifacts/EXP-0001/pilot-v3/first-pair-checkpoint.json"
     _write_exclusive(checkpoint_path, decision)
     record_first_pair_checkpoint(
         pilot_state,
@@ -596,7 +603,7 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
     session_relative = (
         session_paths[0].relative_to(attempt_root).as_posix() if len(session_paths) == 1 else None
     )
-    evidence_index = {
+    evidence_index: dict[str, object] = {
         "schema_version": "0.1.0",
         "plan_id": PLAN_ID,
         "execution_contract_sha256": contract.sha256,

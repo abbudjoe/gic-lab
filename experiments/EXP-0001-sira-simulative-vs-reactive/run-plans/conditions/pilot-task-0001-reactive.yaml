@@ -1,8 +1,8 @@
 schema_version: 0.1.0
 experiment_id: EXP-0001
-run_id: RUN-EXP0001-PILOT-V2-TASK-B-REACTIVE
+run_id: RUN-T09-TASK-B-REACTIVE-0001
 profile: pilot
-profile_plan_id: PLAN-EXP0001-PILOT-V2
+profile_plan_id: PLAN-EXP0001-PILOT-V3
 profile_sha256: 95f73429c449486198c8283b8ca93cf8a0bdeb2f7da43cf717d868f6487b4958
 condition: SIRA-REACTIVE
 attempt: 1
@@ -33,7 +33,7 @@ task:
   start_idx: 1
   end_idx: 2
 pairing:
-  pair_id: PAIR-EXP0001-PILOT-V2-TASK-B
+  pair_id: PAIR-EXP0001-PILOT-V3-TASK-B
   order_index: 2
 budget:
   max_wall_seconds: 3600
@@ -44,5 +44,5 @@ budget:
   max_tool_calls: 30
   max_output_bytes: 1073741824
 artifacts:
-  root: artifacts/EXP-0001/pilot-v2/task-b/reactive/attempt-0001
+  root: artifacts/EXP-0001/pilot-v3/task-b/reactive/attempt-0001
   retain_raw: true

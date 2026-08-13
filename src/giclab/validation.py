@@ -1224,7 +1224,7 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
     plan_path = exp_root / "run-plans/pilot.yaml"
     if (
         command_document.get("schema_version") != "0.1.0"
-        or command_document.get("plan_id") != "PLAN-EXP0001-PILOT-V2"
+        or command_document.get("plan_id") != "PLAN-EXP0001-PILOT-V3"
         or command_document.get("execution_contract_sha256") != execution_sha256
         or command_document.get("plan_sha256") != hashlib.sha256(plan_path.read_bytes()).hexdigest()
     ):
@@ -1265,8 +1265,8 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
                 runtime_adaptation_path=("/opt/giclab-src/giclab/harness/sira_gate_a_runtime.py"),
                 runtime_adaptation_sha256=runtime_sha256,
                 pilot_library_sha256=library_sha256,
-                aggregate_ledger_path=("/opt/giclab-artifacts/pilot-v2/aggregate-budget.json"),
-                pilot_state_path="/opt/giclab-artifacts/pilot-v2/pilot-state.json",
+                aggregate_ledger_path=("/opt/giclab-artifacts/pilot-v3/aggregate-budget.json"),
+                pilot_state_path="/opt/giclab-artifacts/pilot-v3/pilot-state.json",
             )
             for attempt in typed_contract.attempts
         ]
