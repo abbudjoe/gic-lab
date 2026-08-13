@@ -137,7 +137,7 @@ that a separately approved future study might consume.
 control record. The starting effect-oriented pilot proposal is preserved at
 [`run-plans/proposals/PLAN-EXP0001-PILOT.json`](run-plans/proposals/PLAN-EXP0001-PILOT.json).
 [`run-plans/pilot.yaml`](run-plans/pilot.yaml) is the calibration-only
-`PLAN-EXP0001-PILOT-V3`; V2 remains preserved under `run-plans/proposals/`.
+`PLAN-EXP0001-PILOT-V4`; V2 and V3 remain preserved under `run-plans/proposals/`.
 Tracked authorization stays false and every condition plan requires a single-use
 private current-turn overlay.
 
@@ -152,3 +152,13 @@ was not retained as a verified loadable artifact and the source rebuild produced
 different digest. All four attempts remain `not-run`; the exact host was terminated
 and zero remaining T09 instances were verified. V3 cannot be replayed. Public raw
 release remains separately blocked pending license/privacy review.
+
+Retry 2 preserves that V3 disposition byte-for-byte and classifies it as
+`preflight_blocked_by_overstrict_cross_run_image_digest_requirement`. V4 permits a
+different replacement digest only after one source-derived build passes the exact
+Python, package, patched-runner, browser, evaluator-fixture, command-pair, credential,
+and dated-model metadata gates. A mode-0600 O_EXCL run manifest then binds that exact
+image for every condition before empirical entry. The tracked plan remains
+`authorized: false`; the current-turn authority is a private single-use overlay.
+The exhausted historical plan is `PLAN-EXP0001-PILOT-V3`; no V3/T07 run, evaluator,
+pair, host, stage, or archive identity is reused by V4.

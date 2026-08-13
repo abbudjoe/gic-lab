@@ -1,12 +1,12 @@
 # T09 SiRA two-task pragmatic calibration pilot plan
 
-Status: **V3 stopped at exact runtime preflight; single-use authority exhausted**
+Status: **V4 current-turn authorized; clean package and dynamic replacement qualification pending**
 
-Plan ID: `PLAN-EXP0001-PILOT-V3`
+Plan ID: `PLAN-EXP0001-PILOT-V4`
 
 Frozen planning terminal state: `ready-for-t09-pilot-authorization`
 
-Current execution terminal state: `t09-pilot-blocked-material-risk`
+Current execution state: `prelaunch-v4-package-binding-and-dynamic-qualification-pending`
 
 The tracked plan remains `authorized: false`; repository bytes are not a reusable
 cloud capability. The user's 2026-08-13 single-use private overlay was consumed by
@@ -14,7 +14,17 @@ one launch from frozen package `9dc7363561ec96812072e2c7824141d75b028332`.
 Dynamic preflight stopped before empirical entry because the pinned sources rebuilt
 a container digest different from the frozen runtime identity and the exact frozen
 image was not retained as a loadable artifact. All four attempts and evaluators are
-`not-run`; the exact host was terminated and cleanup verified.
+`not-run`; the exact host was terminated and cleanup verified. That V3 disposition is
+preserved byte-for-byte. Retry 2 supersedes only cross-run equality with the
+unavailable historical image: one V4 replacement must be built from pinned inputs,
+pass the exact functional gates, and be frozen by a source-derived mode-0600 O_EXCL
+run manifest before empirical entry. The same image ID is mandatory for all four
+fresh 0002 attempts. The tracked plan stays `authorized: false`; current authority is
+a private single-use overlay bound to the clean package and source-contract SHA-256
+`3852fe8dabb9ee6b10e40cbc6dc1ab964ea6fce11f71f81f0966e927cadddeb9`.
+
+The V3 gap ledger below is retained as historical rationale. Its final image blocker
+is resolved in V4 by functional qualification rather than historical digest equality.
 
 ## Scope and interpretation
 
@@ -94,10 +104,13 @@ and in-container paths. The empirical boundary is the first task model request o
 task browser action. Before it, common infrastructure may be repaired; after it, the
 attempt is consumed and code/science remain frozen for the campaign.
 
-Runtime identity remains the successful T07 pragmatic environment: Python 3.11.14,
-x86_64 Linux, Playwright 1.39.0, Chromium 1084, image
-`sha256:035edf61718e84a8156f4f0f7817b134b0ce31488d3f0b50bbfba2b4a30cc61c`,
-one Lambda `gpu_1x_a10` in `us-east-1`, no persistent filesystem, and no GPU device
+V4 runtime identity requires the successful T07 pragmatic functional environment:
+Python 3.11.14, x86_64 Linux, Playwright 1.39.0, Chromium 1084, corrected package and
+patched-runner hashes, and one source-derived replacement image ID frozen before
+entry. Equality to historical image
+`sha256:035edf61718e84a8156f4f0f7817b134b0ce31488d3f0b50bbfba2b4a30cc61c`
+is explicitly not required. The substrate remains one Lambda `gpu_1x_a10` in
+`us-east-1`, no persistent filesystem, and no GPU device
 request inside pilot/evaluator containers.
 
 ## Budgets
@@ -117,6 +130,10 @@ fit before admission. Each finalized attempt is streamed, hash-verified locally,
 acknowledged back to the host before the next empirical entry, so the 900-second
 provider cleanup reserve is never borrowed for terminal transfer. These are emergency
 stops, not expected spend.
+
+The prior V3 preflight cost is immutable at USD 0.414064252316667. V4 also enforces a
+USD 46.00 cumulative T09 ceiling; the USD 45.16 new-campaign cap is tighter, but both
+limits are retained and checked.
 
 ## First-pair checkpoint
 

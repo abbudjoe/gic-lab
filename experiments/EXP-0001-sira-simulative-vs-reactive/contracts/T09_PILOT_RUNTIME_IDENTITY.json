@@ -56,7 +56,7 @@
     "approved_offline_fixture_execution_required": true
   },
   "repository_instrumentation": {
-    "reviewed_implementation_ancestor": "b897970cdf3aed0a2b42dc0691c5e07d7589e63e",
+    "reviewed_implementation_ancestor": "dae76df5915aeaa67b87dd13fc43557856e7fdce",
     "scope": [
       "replacement-image-build-context-and-functional-qualification",
       "pre-action-budget-count",
@@ -74,7 +74,7 @@
       {"path": "src/giclab/harness/lambda_campaign_lifecycle.py", "sha256": "b300f4ab18e201454e98f8fe4a0c044e0e6a258ac0bddecc08c631fd9071b97d"},
       {"path": "src/giclab/harness/lambda_l2m_observer.py", "sha256": "3ad5d56abd2b4d115b479c9cf7f0f5202e715d07c1b4842c82dc894fbe8bf6c9"},
       {"path": "src/giclab/harness/t09_pragmatic_provider.py", "sha256": "d03c24c482189f12bce11d5b52898ad40c57bf7cb6daf242e230b85882c1719f"},
-      {"path": "containers/sira-smoke/pragmatic/t09_remote_runner.py", "sha256": "bf44b40c3d6a6024615885a71fd4d7fddddb206d11efd10cd3b4fd075a6c1419"},
+      {"path": "containers/sira-smoke/pragmatic/t09_remote_runner.py", "sha256": "4bd740ee6a817d7f13494df56127a2daa8906bb28805f2cff0f3db3f0c463a43"},
       {"path": "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py", "sha256": "8de097caaa99f1162816abf1db455f013fe6114ba7b05923701c3ff55c9e8028"},
       {"path": "containers/sira-smoke/pragmatic/t09_preflight.py", "sha256": "20066509bb8df0c0bcabcdfbc750e145f04c007920e71f86aeddf2533609c096"},
       {"path": "containers/sira-smoke/pragmatic/t09_freeze_commands.py", "sha256": "af8897a04e1ab09f9c5784217a005c2e895e138dec9a19e0f0f59f98ac7233e7"},

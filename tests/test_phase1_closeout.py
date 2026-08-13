@@ -86,9 +86,9 @@ def test_phase_one_is_the_only_active_non_executable_control_plane() -> None:
     assert retry2["prior_t09_cost_usd"] == 0.414064252316667
     assert retry2["cumulative_t09_cost_cap_usd"] == 46.0
     assert {path.name for path in (ROOT / "docs/exec-plans/active").glob("*.md")} == {
-        "PHASE_1_ARTIFACT_EXECUTION.md",
-        "T09_PRAGMATIC_RETRY2.md",
+        "PHASE_1_ARTIFACT_EXECUTION.md"
     }
+    assert (ROOT / "docs/harness/T09_PRAGMATIC_RETRY2_EXECUTION_PLAN.md").is_file()
     assert "Status: **successful**" in PHASE_075_PLAN.read_text(encoding="utf-8")
     assert "Status: **in-progress**" in PHASE_1_PLAN.read_text(encoding="utf-8")
 

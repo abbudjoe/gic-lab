@@ -1,5 +1,40 @@
 # T09 pragmatic calibration pilot preauthorization packet
 
+## V4 Retry 2 current-turn overlay
+
+Status: **current-turn single-use authority granted; clean package and dynamic
+replacement-runtime qualification pending**
+
+Tracked plan: `PLAN-EXP0001-PILOT-V4`, `authorized: false`.
+
+The user's 2026-08-13 Retry 2 instruction authorizes one fresh private campaign only
+when its private ledger binds source-contract SHA-256
+`3852fe8dabb9ee6b10e40cbc6dc1ab964ea6fce11f71f81f0966e927cadddeb9`, the final
+clean package, the V4 plan hash, one Lambda launch/instance, and the fresh and
+cumulative budgets. Repository bytes are not standing authority.
+
+V4 preserves every V3 scientific field and replaces only the overstrict cross-run
+container-digest equality. The authorized host may build one replacement from pinned
+inputs and qualify it once. A source-derived, mode-0600, O_EXCL frozen-run manifest
+must bind the accepted exact image ID, qualification evidence, four rendered
+commands, pair diffs, package, plan, and provider-entry identity while
+`empirical_entry` is false. Every attempt and evaluator must reload that manifest and
+use the same exact image ID. Qualification includes the approved offline evaluator
+fixtures and exactly one dated-model metadata GET; it permits no task model request
+or task browser action.
+
+New ceilings are USD 40.00 OpenAI, USD 5.16 Lambda, USD 45.16 aggregate, and USD
+46.00 cumulative T09 spend including immutable prior cost USD
+0.414064252316667. All call/token/action/attempt/zero-retry and 14,400/13,500/900
+second lifecycle controls remain unchanged. The fresh order is Task A reactive,
+Task A simulative, checkpoint, Task B simulative, Task B reactive. Cleanup is
+authorized and mandatory from every post-launch prefix.
+
+The rest of this file is the immutable human-readable V3 packet. It is retained for
+audit and must not be copied as current authority.
+
+---
+
 Status: **single-use authority consumed; V3 stopped at preflight and is not replayable**
 
 Tracked plan: `PLAN-EXP0001-PILOT-V3`, `authorized: false`.

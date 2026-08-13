@@ -1,5 +1,31 @@
 # T09 SiRA Calibration Pilot Lock — Assembly Ledger
 
+## V4 pragmatic Retry 2 successor
+
+V4 assembly status: **in progress; no provider or empirical entry yet**
+
+Current plan: `PLAN-EXP0001-PILOT-V4`.
+
+Authoritative source SHA-256:
+`3852fe8dabb9ee6b10e40cbc6dc1ab964ea6fce11f71f81f0966e927cadddeb9`.
+Starting branch/commit: `phase-1/sira-pilot-pragmatic-r2` at
+`5dd1b4f1d026b821d6cdbc86f07f43c3732e3888`.
+
+Retry 2 preserves the V3 failure disposition and all scientific locks while replacing
+only historical image-digest equality with one pre-entry functional qualification.
+The tracked plan remains `authorized: false`; current-turn authority must be
+materialized privately against the final clean package. The accepted image is a
+dynamic resource identity: a source-derived mode-0600 O_EXCL frozen-run manifest
+must bind its exact ID and every qualification/command/provider identity before the
+first task model request or browser action. This two-layer freeze is the only
+sequencing interpretation used by V4; it cannot alter science, budgets, or code.
+
+The active 16-item Definition of Done, evidence log, and phase state are maintained
+in `docs/harness/T09_PRAGMATIC_RETRY2_EXECUTION_PLAN.md`. Until that ledger records the
+prelaunch gates and independent review as met, Lambda/model entry remains prohibited.
+
+---
+
 ## V3 pragmatic campaign-wall successor
 
 V3 assembly status: **blocked-user-action; single-use execution authority exhausted**

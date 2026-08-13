@@ -67,7 +67,7 @@ no mutation authority; one gate's authorization never carries into another.
 |---|---|---|---|
 | T07 | Execute one authorized contained SiRA smoke pair; capture regulation-decision evidence without interpretation. | P1-DOD-02, P1-DOD-11 through P1-DOD-13 | complete: Retry 2 matched pair executed and cleanup verified; execution authority exhausted; no pilot authority |
 | T08 | Analyze smoke infrastructure evidence and prepare an unauthorized pilot package. | P1-DOD-03, P1-DOD-11 through P1-DOD-13 | complete: evidence validated; pilot planning eligible but execution unauthorized |
-| T09 | Lock and execute the two-task pragmatic calibration pilot under the fresh current-turn authorization. | P1-DOD-04, P1-DOD-11 through P1-DOD-13 | `t09-pilot-blocked-material-risk`: V3 preflight failed before empirical entry; authority exhausted; exact host cleanup verified |
+| T09 | Lock and execute the two-task pragmatic calibration pilot under the fresh current-turn authorization. | P1-DOD-04, P1-DOD-11 through P1-DOD-13 | V3 preserved/closed; V4 current-turn authorized and pending pre-entry replacement-image qualification |
 | T10 | Analyze and publish the exploratory SiRA pilot. | P1-DOD-05, P1-DOD-11 through P1-DOD-13 | blocked: T09 produced no pilot attempt or score |
 | T11 | Build and validate the read-only SR²AM Lambda preflight. | P1-DOD-06, P1-DOD-11 through P1-DOD-13 | blocked until T10 succeeds |
 | T12 | Launch and monitor the separately authorized SR²AM Lambda smoke. | P1-DOD-07, P1-DOD-11 through P1-DOD-13 | blocked until T11 and authorization |
@@ -184,6 +184,20 @@ and security restoration are verified. Estimated Lambda cost is USD
 `experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_PREFLIGHT_DISPOSITION.json`;
 private raw evidence remains access-controlled. The consumed V3 authority is not
 replayable. See `docs/harness/T09_PRAGMATIC_CALIBRATION_PILOT_EXECUTION_PLAN.md`.
+
+### T09 pragmatic Retry 2 replacement-runtime execution — 2026-08-13
+
+Assembly status: **prelaunch V4 package binding and dynamic qualification pending**.
+
+Current-turn authority creates `PLAN-EXP0001-PILOT-V4` and fresh host, condition,
+evaluator, and archive identities. It preserves every V3 scientific and calibration
+lock, but supersedes cross-run equality with the unavailable T07 image. One
+replacement is built from pinned reviewed inputs and accepted only after exact
+package, patched-runner, browser, approved evaluator fixture, pair-diff, credential,
+and one dated-model metadata GET gates pass. A source-derived mode-0600 O_EXCL
+manifest freezes the actual image ID before empirical entry, and every later
+condition/evaluator reloads that binding. V3 evidence and its USD
+0.414064252316667 Lambda cost remain separate immutable provenance.
 
 ### Pragmatic execution reset — 2026-08-12
 

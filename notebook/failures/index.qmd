@@ -22,6 +22,12 @@ instances, and restored security state. This is a preflight infrastructure failu
 not evidence about either SiRA condition or EXP-0001. A future attempt requires the
 exact image or a separately reviewed runtime requalification and fresh authorization.
 
+`PLAN-EXP0001-PILOT-V4` is that separately reviewed Retry 2 policy: it preserves the
+V3 record, accepts no historical-digest substitution, and instead requires one
+replacement image built from pinned inputs to pass the exact functional gate and be
+bound immutably before empirical entry. At this prelaunch publication point no V4
+provider, model, browser, condition, or evaluator action has occurred.
+
 Future entries will distinguish:
 
 - infrastructure-invalid runs;

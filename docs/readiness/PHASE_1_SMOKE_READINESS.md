@@ -1,6 +1,6 @@
 # Phase 1 SiRA Smoke Readiness
 
-Status: **T07 smoke closed and adjudicated; pilot planning eligible; pilot execution blocked and unauthorized**
+Status: **T07 smoke closed; T09 Retry 2 current-turn authorized pending exact V4 dynamic qualification**
 
 Prepared: 2026-08-08
 
@@ -45,6 +45,22 @@ security state are verified, and the estimated Lambda charge is USD
 `t09-pilot-blocked-material-risk`. V3 is exhausted and unauthorized; future execution
 requires either the exact verified loadable image or a fresh reviewed successor that
 requalifies a replacement runtime, plus new current-turn authority.
+
+## Current T09 Retry 2 checkpoint
+
+`PLAN-EXP0001-PILOT-V4` is the fresh successor authorized by the current user turn.
+The tracked plan and condition records remain `authorized: false`; execution requires
+one exact private single-use overlay bound to the clean package and this authority.
+V4 preserves the two frozen FanOutQA tasks, evaluator, model, SiRA commit,
+counterbalance, zero retry, caps, evidence, and calibration-only interpretation. It
+supersedes only cross-run equality with the unavailable historical image.
+
+Before empirical entry, the one replacement candidate must be built from the complete
+pinned context, pass exact final-container runtime/package/browser/evaluator-fixture
+and pair-diff gates, perform exactly one dated-model metadata GET with zero task model
+requests/actions, and be frozen by a source-derived mode-0600 O_EXCL run manifest.
+The same image ID must then serve every retained attempt. Current state is prelaunch:
+replacement qualification and empirical attempt counts are both zero.
 
 ## Exact next run plan
 
