@@ -87,6 +87,7 @@ PACKAGE_TRANSITION_ALLOWED_PATHS: Final = frozenset(
         "pilot-v4-task-0001-reactive.yaml",
         "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/"
         "pilot-v4-task-0001-simulative.yaml",
+        "schemas/t09-sira-pilot-evidence.schema.json",
         "src/giclab/harness/t09_sira_pilot.py",
         "tests/test_t09_sira_pilot.py",
     }
