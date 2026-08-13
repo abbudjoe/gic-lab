@@ -1785,9 +1785,7 @@ def _closeout_projection(
         "lambda_list_cost_usd": lambda_list_cost_usd,
         "new_campaign_lambda_cost_cap_usd": 5.16,
         "prior_t09_cost_usd": 0.414064252316667,
-        "cumulative_t09_cost_before_openai_usd": (
-            0.414064252316667 + lambda_list_cost_usd
-        ),
+        "cumulative_t09_cost_before_openai_usd": (0.414064252316667 + lambda_list_cost_usd),
         "cumulative_t09_cost_cap_usd": 46.0,
     }
 
