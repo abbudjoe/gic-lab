@@ -45,7 +45,8 @@ PLAN_ID: Final = "PLAN-EXP0001-PILOT-V4"
 HOST_RUN_ID: Final = "RUN-T09-PILOT-HOST-0002"
 ARCHIVE_ID: Final = "ARCHIVE-EXP0001-PILOT-V4-0002"
 STAGE_ID: Final = "STAGE-EXP0001-PILOT-V4-0002"
-QUALIFICATION_ID: Final = "QUAL-T09-PILOT-V4-IMAGE-0002"
+QUALIFICATION_ID: Final = "QUAL-T09-PILOT-V4-IMAGE-0003"
+PRIOR_QUALIFICATION_ID: Final = "QUAL-T09-PILOT-V4-IMAGE-0002"
 MODEL: Final = "gpt-4o-2024-11-20"
 SERVICE_TIER: Final = "default"
 HISTORICAL_IMAGE_ID: Final = (
@@ -54,7 +55,42 @@ HISTORICAL_IMAGE_ID: Final = (
 T07_EXECUTION_COMMIT: Final = "5698f04dfd08bc85a66d2355b0a4bd7d3ce24a23"
 SIRA_COMMIT: Final = "93fb8d72de71f9a4a13419670adeb34d93cf7acd"
 SIRA_TREE: Final = "6a6d9068b94d7632d3533a3d6f013d4de6ff76e8"
-REPLACEMENT_IMAGE_TAG: Final = f"giclab/t09-pilot-v4:{SIRA_COMMIT[:12]}-0002"
+REPLACEMENT_IMAGE_TAG: Final = f"giclab/t09-pilot-v4:{SIRA_COMMIT[:12]}-0003"
+PRIOR_REPLACEMENT_IMAGE_TAG: Final = f"giclab/t09-pilot-v4:{SIRA_COMMIT[:12]}-0002"
+PACKAGE_TRANSITION_FROM_COMMIT: Final = "eda1d15387efbc2c269a33176f5c0e04b177e70c"
+PINNED_ENV_EXAMPLE_SHA256: Final = (
+    "086eb43e37d1f74131ca1290119a7a13cb7544b0d943ff726dd13a45ea282933"
+)
+PINNED_ENV_EXAMPLE_BYTES: Final = 178
+PINNED_ENV_EXAMPLE_CONTENT: Final = (
+    b"# Copy to .env and fill in the key for the provider you use.\n"
+    b"OPENAI_API_KEY=\n"
+    b"SIRA_API_KEY=\n\n"
+    b"# Optional: set DEBUG=1 to store per-step prompts under browsing_data/<job>/.\n"
+    b"DEBUG=0\n"
+)
+PACKAGE_TRANSITION_ALLOWED_PATHS: Final = frozenset(
+    {
+        "containers/sira-smoke/pragmatic/t09_remote_runner.py",
+        "docs/harness/T09_PRAGMATIC_RETRY2_EXECUTION_PLAN.md",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
+        "T09_PILOT_COMMAND_MANIFESTS.json",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
+        "T09_PILOT_EXECUTION_CONTRACT.json",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
+        "T09_PILOT_RUNTIME_IDENTITY.json",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/"
+        "pilot-v4-task-0000-reactive.yaml",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/"
+        "pilot-v4-task-0000-simulative.yaml",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/"
+        "pilot-v4-task-0001-reactive.yaml",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/"
+        "pilot-v4-task-0001-simulative.yaml",
+        "src/giclab/harness/t09_sira_pilot.py",
+        "tests/test_t09_sira_pilot.py",
+    }
+)
 T07_RUNTIME_SHA256: Final = "c461dce20fea9e743135cad98b664213a393e46f35d1c1a8434212b2f0367dbb"
 T07_RUNTIME_PREFLIGHT_SHA256: Final = (
     "0530b3ad25fac1d3f9372d31da8046bec67b6c74eea3cdd3c8d91353948f1b3d"
@@ -495,6 +531,52 @@ def _build_context_manifest(context: Path) -> dict[str, object]:
     }
 
 
+def _exclude_pinned_nonruntime_env_example(
+    upstream: Path,
+    *,
+    materialization: Path,
+) -> dict[str, object]:
+    """Remove only the exact pinned names-only example before fail-closed scanning."""
+
+    path = upstream / ".env.example"
+    metadata = path.stat(follow_symlinks=False)
+    content = path.read_bytes()
+    if (
+        path.is_symlink()
+        or not stat.S_ISREG(metadata.st_mode)
+        or metadata.st_nlink != 1
+        or metadata.st_size != PINNED_ENV_EXAMPLE_BYTES
+        or content != PINNED_ENV_EXAMPLE_CONTENT
+        or hashlib.sha256(content).hexdigest() != PINNED_ENV_EXAMPLE_SHA256
+    ):
+        raise T09HostError("pinned SiRA environment example identity or content drifted")
+    receipt: dict[str, object] = {
+        "schema_version": "0.1.0",
+        "qualification_id": QUALIFICATION_ID,
+        "source_commit": SIRA_COMMIT,
+        "source_tree": SIRA_TREE,
+        "path": ".env.example",
+        "bytes": metadata.st_size,
+        "sha256": PINNED_ENV_EXAMPLE_SHA256,
+        "classification": "pinned-names-only-nonruntime-example-excluded",
+        "contained_credential_value": False,
+        "runtime_input": False,
+        "scientific_input": False,
+        "build_context_inclusion": False,
+    }
+    receipt_path = materialization / "build-context-exclusions.json"
+    write_exclusive(receipt_path, receipt)
+    path.unlink()
+    directory_fd = os.open(upstream, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+    try:
+        os.fsync(directory_fd)
+    finally:
+        os.close(directory_fd)
+    if path.exists():
+        raise T09HostError("excluded environment example still exists")
+    return receipt
+
+
 def _capture_optional_command(
     argv: list[str],
     *,
@@ -619,6 +701,10 @@ def materialize_replacement_image(
     # fetch-time state.  Retain the verified commit/tree identities in the receipt,
     # then exclude that nondeterministic metadata from the complete build context.
     shutil.rmtree(upstream / ".git")
+    exclusion = _exclude_pinned_nonruntime_env_example(
+        upstream,
+        materialization=materialization,
+    )
     wheel = vendor / "uv-0.11.7-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl"
     run_logged(
         [
@@ -727,6 +813,10 @@ def materialize_replacement_image(
         "containerfile_sha256": file_sha256(context / "Containerfile"),
         "build_context_manifest_sha256": file_sha256(context_manifest_path),
         "build_context_payload_sha256": context_manifest["manifest_payload_sha256"],
+        "build_context_exclusions_sha256": file_sha256(
+            materialization / "build-context-exclusions.json"
+        ),
+        "build_context_exclusion_classification": exclusion["classification"],
         "build_command_sha256": file_sha256(materialization / "build-command.json"),
         "image_inspect_sha256": file_sha256(materialization / "replacement-image-inspect.stdout"),
         "runtime_sha256": T07_RUNTIME_SHA256,
@@ -871,12 +961,251 @@ def contract_paths(repository: Path) -> dict[str, Path]:
     }
 
 
+def _prior_qualification_failure_manifest(root: Path) -> dict[str, object]:
+    if root.name != "t09-pilot-v4-output-0002":
+        raise T09HostError("prior qualification root identity drifted")
+    state_path = root / "pilot-v4/pilot-state.json"
+    state = load_object(state_path, label="prior qualification state")
+    env_example = (
+        root / "pilot-v4/replacement-image-qualification/work/build-context/upstream/.env.example"
+    )
+    if (
+        state.get("plan_id") != PLAN_ID
+        or state.get("empirical_attempts_entered") != []
+        or state.get("attempts_completed") != []
+        or not env_example.is_file()
+        or env_example.stat(follow_symlinks=False).st_size != PINNED_ENV_EXAMPLE_BYTES
+        or file_sha256(env_example) != PINNED_ENV_EXAMPLE_SHA256
+        or (root / "pilot-v4/frozen-run-manifest.json").exists()
+        or (root / "pilot-v4/replacement-image-qualification/build-context-manifest.json").exists()
+    ):
+        raise T09HostError("prior qualification failure prefix is not the exact safe prefix")
+    files: list[dict[str, object]] = []
+    total = 0
+    for path in sorted(root.rglob("*")):
+        if path.is_symlink():
+            raise T09HostError("prior qualification prefix contains a symlink")
+        metadata = path.stat(follow_symlinks=False)
+        if path.is_dir():
+            continue
+        if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
+            raise T09HostError("prior qualification prefix contains an unsafe file")
+        total += metadata.st_size
+        if total > MAX_PILOT_DISK_BYTES:
+            raise T09HostError("prior qualification prefix exceeds the retained-evidence cap")
+        files.append(
+            {
+                "path": path.relative_to(root).as_posix(),
+                "bytes": metadata.st_size,
+                "sha256": file_sha256(path),
+            }
+        )
+    return {
+        "root_name": root.name,
+        "qualification_id": PRIOR_QUALIFICATION_ID,
+        "classification": "preentry-pinned-names-only-env-example-rejected",
+        "empirical_entry_crossed": False,
+        "model_metadata_requests": 0,
+        "task_model_requests": 0,
+        "task_browser_actions": 0,
+        "replacement_image_built": False,
+        "files": files,
+        "file_count": len(files),
+        "total_bytes": total,
+        "files_sha256": canonical_sha256(files),
+    }
+
+
+def _package_transition_projection(
+    *,
+    repository: Path,
+    package_commit: str,
+    entry_receipt: Path,
+    entry_source_root: Path,
+    prior_artifact_root: Path,
+    require_image_absence: bool,
+) -> dict[str, object]:
+    verify_package(repository, package_commit)
+    paths = contract_paths(repository)
+    plan_sha256 = file_sha256(paths["plan"])
+    try:
+        entry = validate_entry_receipt_source_bound(
+            entry_receipt.resolve(strict=True),
+            entry_source_root.resolve(strict=True),
+            package_commit=PACKAGE_TRANSITION_FROM_COMMIT,
+            plan_sha256=plan_sha256,
+        )
+    except T09ProviderError as exc:
+        raise T09HostError("package transition entry receipt is not source-bound") from exc
+    ancestry = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repository),
+            "merge-base",
+            "--is-ancestor",
+            PACKAGE_TRANSITION_FROM_COMMIT,
+            package_commit,
+        ],
+        env=safe_environment(),
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+        timeout=30,
+    )
+    if ancestry.returncode != 0:
+        raise T09HostError("replacement package is not a clean descendant of the launched package")
+    changed_raw = output(
+        [
+            "git",
+            "-C",
+            str(repository),
+            "diff",
+            "--name-only",
+            "--diff-filter=ACMRT",
+            PACKAGE_TRANSITION_FROM_COMMIT,
+            package_commit,
+        ]
+    )
+    changed_paths = sorted(line for line in changed_raw.splitlines() if line)
+    if (
+        not changed_paths
+        or not set(changed_paths).issubset(PACKAGE_TRANSITION_ALLOWED_PATHS)
+        or "containers/sira-smoke/pragmatic/t09_remote_runner.py" not in changed_paths
+        or "src/giclab/harness/t09_sira_pilot.py" not in changed_paths
+    ):
+        raise T09HostError("package transition changed a non-allowlisted or incomplete surface")
+    deleted = output(
+        [
+            "git",
+            "-C",
+            str(repository),
+            "diff",
+            "--name-only",
+            "--diff-filter=D",
+            PACKAGE_TRANSITION_FROM_COMMIT,
+            package_commit,
+        ]
+    )
+    if deleted:
+        raise T09HostError("package transition deleted a tracked file")
+    if require_image_absence and (
+        image_id_if_present(docker_prefix(), PRIOR_REPLACEMENT_IMAGE_TAG) is not None
+        or image_id_if_present(docker_prefix(), REPLACEMENT_IMAGE_TAG) is not None
+    ):
+        raise T09HostError("package transition occurred after a replacement image build")
+    failure = _prior_qualification_failure_manifest(prior_artifact_root.resolve(strict=True))
+    diff = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repository),
+            "diff",
+            "--binary",
+            PACKAGE_TRANSITION_FROM_COMMIT,
+            package_commit,
+        ],
+        env=safe_environment(),
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        check=True,
+        timeout=60,
+    ).stdout
+    return {
+        "schema_version": "0.1.0",
+        "receipt_type": "t09-pragmatic-preentry-package-transition",
+        "plan_id": PLAN_ID,
+        "host_run_id": HOST_RUN_ID,
+        "from_package_commit": PACKAGE_TRANSITION_FROM_COMMIT,
+        "to_package_commit": package_commit,
+        "plan_sha256": plan_sha256,
+        "from_package_is_ancestor": True,
+        "to_package_tree": output(
+            ["git", "-C", str(repository), "rev-parse", f"{package_commit}^{{tree}}"]
+        ),
+        "changed_paths": changed_paths,
+        "changed_paths_sha256": canonical_sha256(changed_paths),
+        "binary_diff_sha256": hashlib.sha256(diff).hexdigest(),
+        "provider_entry_receipt_sha256": file_sha256(entry_receipt),
+        "provider_entry_source_manifest_sha256": entry.get("source_manifest_sha256"),
+        "owned_instance_identity_sha256": entry.get("owned_instance_identity_sha256"),
+        "lambda_started_at_epoch": entry.get("lambda_started_at_epoch"),
+        "prior_failure": failure,
+        "prior_failure_sha256": canonical_sha256(failure),
+        "prior_qualification_id": PRIOR_QUALIFICATION_ID,
+        "next_qualification_id": QUALIFICATION_ID,
+        "prior_replacement_image_absent": True,
+        "next_replacement_image_absent": True,
+        "empirical_entry_crossed": False,
+        "scientific_contract_changed": False,
+        "provider_launch_reused": True,
+        "additional_provider_launches": 0,
+    }
+
+
+def write_package_transition_receipt(args: argparse.Namespace) -> None:
+    projection = _package_transition_projection(
+        repository=args.repository.resolve(strict=True),
+        package_commit=args.package_commit,
+        entry_receipt=args.dynamic_receipt.resolve(strict=True),
+        entry_source_root=args.dynamic_source_root.resolve(strict=True),
+        prior_artifact_root=args.prior_artifact_root.resolve(strict=True),
+        require_image_absence=True,
+    )
+    write_exclusive(
+        args.output.resolve(strict=False),
+        {**projection, "created_at_epoch": time.time()},
+    )
+
+
+def validate_package_transition_receipt(
+    path: Path,
+    *,
+    repository: Path,
+    package_commit: str,
+    entry_receipt: Path,
+    entry_source_root: Path,
+    prior_artifact_root: Path,
+    require_fresh: bool,
+    require_image_absence: bool,
+) -> dict[str, object]:
+    observed = load_object(path.resolve(strict=True), label="package transition receipt")
+    created = observed.pop("created_at_epoch", None)
+    expected = _package_transition_projection(
+        repository=repository.resolve(strict=True),
+        package_commit=package_commit,
+        entry_receipt=entry_receipt.resolve(strict=True),
+        entry_source_root=entry_source_root.resolve(strict=True),
+        prior_artifact_root=prior_artifact_root.resolve(strict=True),
+        require_image_absence=require_image_absence,
+    )
+    metadata = path.stat(follow_symlinks=False)
+    lambda_started = expected.get("lambda_started_at_epoch")
+    if (
+        observed != expected
+        or not isinstance(created, (int, float))
+        or isinstance(created, bool)
+        or not isinstance(lambda_started, (int, float))
+        or isinstance(lambda_started, bool)
+        or not float(lambda_started) <= float(created) <= time.time()
+        or (require_fresh and not 0 <= time.time() - float(created) <= 1_800)
+        or not stat.S_ISREG(metadata.st_mode)
+        or metadata.st_nlink != 1
+        or stat.S_IMODE(metadata.st_mode) != 0o600
+    ):
+        raise T09HostError("package transition receipt drifted or is stale")
+    return {**expected, "created_at_epoch": created, "receipt_sha256": file_sha256(path)}
+
+
 def validate_dynamic_receipt(
     path: Path,
     *,
     expected_package_commit: str,
     repository_root: Path | None = None,
     source_root: Path | None = None,
+    package_transition_receipt: Path | None = None,
+    prior_artifact_root: Path | None = None,
 ) -> dict[str, object]:
     """Reconstruct the receipt from retained allowlisted provider projections."""
 
@@ -885,11 +1214,27 @@ def validate_dynamic_receipt(
     repository = repository_root.resolve(strict=True)
     source = source_root.resolve(strict=True)
     plan = contract_paths(repository)["plan"]
+    entry_package_commit = expected_package_commit
+    transition: dict[str, object] | None = None
+    if expected_package_commit != PACKAGE_TRANSITION_FROM_COMMIT:
+        if package_transition_receipt is None or prior_artifact_root is None:
+            raise T09HostError("a source-bound preentry package transition is required")
+        transition = validate_package_transition_receipt(
+            package_transition_receipt,
+            repository=repository,
+            package_commit=expected_package_commit,
+            entry_receipt=path,
+            entry_source_root=source,
+            prior_artifact_root=prior_artifact_root,
+            require_fresh=True,
+            require_image_absence=True,
+        )
+        entry_package_commit = PACKAGE_TRANSITION_FROM_COMMIT
     try:
         value = validate_entry_receipt_source_bound(
             path.resolve(strict=True),
             source,
-            package_commit=expected_package_commit,
+            package_commit=entry_package_commit,
             plan_sha256=file_sha256(plan),
         )
     except T09ProviderError as exc:
@@ -898,7 +1243,9 @@ def validate_dynamic_receipt(
     if (
         not isinstance(captured, (int, float))
         or isinstance(captured, bool)
-        or not 0 <= time.time() - float(captured) <= 1_800
+        or not 0
+        <= time.time() - float(captured)
+        <= (MAX_TOTAL_WALL_SECONDS if transition is not None else 1_800)
     ):
         raise T09HostError("provider entry receipt is stale")
     encoded = json.dumps(value, sort_keys=True)
@@ -911,6 +1258,13 @@ def validate_dynamic_receipt(
         raise T09HostError("provider entry receipt retained a prohibited value")
     result = dict(value)
     result["receipt_sha256"] = file_sha256(path)
+    if transition is not None:
+        result["entry_package_commit"] = entry_package_commit
+        result["active_package_commit"] = expected_package_commit
+        result["package_transition_receipt_sha256"] = transition["receipt_sha256"]
+        result["package_transition_created_at_epoch"] = transition["created_at_epoch"]
+        result["prior_qualification_id"] = PRIOR_QUALIFICATION_ID
+        result["qualification_id"] = QUALIFICATION_ID
     return result
 
 
@@ -2263,12 +2617,16 @@ def write_frozen_run_manifest(
         "runtime_contract_sha256": file_sha256(paths["runtime"]),
         "command_manifests_sha256": file_sha256(paths["commands"]),
         "provider_entry_receipt_sha256": dynamic.get("receipt_sha256"),
+        "package_transition_receipt_sha256": dynamic.get("package_transition_receipt_sha256"),
         "owned_instance_identity_sha256": dynamic.get("owned_instance_identity_sha256"),
         "lambda_started_at_epoch": dynamic.get("lambda_started_at_epoch"),
         "replacement_image_id": image_id,
         "historical_image_id": HISTORICAL_IMAGE_ID,
         "build_context_manifest_sha256": image_materialization.get("build_context_manifest_sha256"),
         "build_context_payload_sha256": image_materialization.get("build_context_payload_sha256"),
+        "build_context_exclusions_sha256": image_materialization.get(
+            "build_context_exclusions_sha256"
+        ),
         "containerfile_sha256": image_materialization.get("containerfile_sha256"),
         "build_command_sha256": image_materialization.get("build_command_sha256"),
         "image_inspect_sha256": image_materialization.get("image_inspect_sha256"),
@@ -2298,6 +2656,9 @@ def write_frozen_run_manifest(
         "source_receipts": {
             "materialization": file_sha256(qualification_root / "receipt.json"),
             "build_context": file_sha256(qualification_root / "build-context-manifest.json"),
+            "build_context_exclusions": file_sha256(
+                qualification_root / "build-context-exclusions.json"
+            ),
             "image_inspect": file_sha256(qualification_root / "replacement-image-inspect.stdout"),
             "evaluator_overlay": file_sha256(
                 artifact_root / "pilot-v4/evaluator-overlay-manifest.json"
@@ -2306,6 +2667,8 @@ def write_frozen_run_manifest(
     }
     if (
         manifest["build_count"] != 1
+        or not isinstance(manifest["package_transition_receipt_sha256"], str)
+        or _HEX64.fullmatch(manifest["package_transition_receipt_sha256"]) is None
         or not isinstance(manifest["pair_diffs"], list)
         or any(
             not isinstance(item, dict) or item.get("valid") is not True
@@ -2339,6 +2702,10 @@ def load_frozen_run_manifest(
     except T09PilotError as exc:
         raise T09HostError(str(exc)) from exc
     paths = contract_paths(repository)
+    provider_entry = load_object(
+        artifact_root / "pilot-v4/provider-entry.json",
+        label="provider entry summary",
+    )
     expected = {
         "plan_id": PLAN_ID,
         "host_run_id": HOST_RUN_ID,
@@ -2353,6 +2720,9 @@ def load_frozen_run_manifest(
         "execution_contract_sha256": file_sha256(paths["execution"]),
         "runtime_contract_sha256": file_sha256(paths["runtime"]),
         "command_manifests_sha256": file_sha256(paths["commands"]),
+        "package_transition_receipt_sha256": provider_entry.get(
+            "package_transition_receipt_sha256"
+        ),
         "package_manifest_sha256": EXPECTED_PACKAGE_MANIFEST_SHA256,
         "chromium_executable_sha256": EXPECTED_CHROMIUM_SHA256,
         "patched_upstream_runner_sha256": EXPECTED_UPSTREAM_RUNNER_SHA256,
@@ -2368,6 +2738,11 @@ def load_frozen_run_manifest(
     }
     if any(manifest.get(key) != value for key, value in expected.items()):
         raise T09HostError("frozen run manifest binding drifted")
+    exclusion_path = (
+        artifact_root / "pilot-v4/replacement-image-qualification/build-context-exclusions.json"
+    )
+    if manifest.get("build_context_exclusions_sha256") != file_sha256(exclusion_path):
+        raise T09HostError("frozen build-context exclusion receipt drifted")
     image_id = typed_qualification.replacement_image_id
     if (
         not isinstance(image_id, str)
@@ -2412,6 +2787,8 @@ def preflight(args: argparse.Namespace) -> None:
         expected_package_commit=args.package_commit,
         repository_root=repository,
         source_root=args.dynamic_source_root.resolve(strict=True),
+        package_transition_receipt=args.package_transition_receipt.resolve(strict=True),
+        prior_artifact_root=args.prior_artifact_root.resolve(strict=True),
     )
     command_document = verify_package(repository, args.package_commit)
     paths = contract_paths(repository)
@@ -2543,6 +2920,7 @@ def preflight(args: argparse.Namespace) -> None:
             "command_manifests_sha256": file_sha256(paths["commands"]),
             "command_argv_sha256s": [item["argv_sha256"] for item in manifests(command_document)],
             "dynamic_receipt_sha256": file_sha256(args.dynamic_receipt),
+            "package_transition_receipt_sha256": file_sha256(args.package_transition_receipt),
             "dynamic_receipt": sanitized_dynamic_receipt(args.dynamic_receipt, dynamic),
             "image_materialization": image_materialization,
             "replacement_image_id": image_id,
@@ -4057,6 +4435,16 @@ def package(args: argparse.Namespace) -> None:
     lambda_started = entry.get("lambda_started_at_epoch")
     owned_hash = entry.get("owned_instance_identity_sha256")
     entry_sha256 = file_sha256(entry_receipt_path)
+    transition = validate_package_transition_receipt(
+        args.package_transition_receipt.resolve(strict=True),
+        repository=args.repository.resolve(strict=True),
+        package_commit=args.package_commit,
+        entry_receipt=entry_receipt_path,
+        entry_source_root=args.provider_entry_source_root.resolve(strict=True),
+        prior_artifact_root=args.prior_artifact_root.resolve(strict=True),
+        require_fresh=False,
+        require_image_absence=False,
+    )
     if (
         not isinstance(lambda_started, (int, float))
         or isinstance(lambda_started, bool)
@@ -4140,7 +4528,7 @@ def package(args: argparse.Namespace) -> None:
         expected_lambda_started_at_epoch=float(lambda_started),
         expected_owned_instance_identity_sha256=owned_hash,
         expected_entry_receipt_sha256=entry_sha256,
-        expected_package_commit=args.package_commit,
+        expected_package_commit=PACKAGE_TRANSITION_FROM_COMMIT,
         repository_root=args.repository.resolve(strict=True),
         source_root=args.provider_closeout_source_root.resolve(strict=True),
         entry_receipt_path=entry_receipt_path,
@@ -4170,6 +4558,8 @@ def package(args: argparse.Namespace) -> None:
         )
     closeout_summary = final_root / "provider-closeout-summary.json"
     write_exclusive(closeout_summary, closeout)
+    transition_summary = final_root / "package-transition-summary.json"
+    write_exclusive(transition_summary, transition)
     manifest_path = final_root / "evidence-archive-manifest.json"
     write_exclusive(
         manifest_path,
@@ -4185,6 +4575,7 @@ def package(args: argparse.Namespace) -> None:
                 "aggregate-stage" if aggregate_verification_path.is_file() else "direct-prefix"
             ),
             "provider_closeout_receipt_sha256": closeout["receipt_sha256"],
+            "package_transition_receipt_sha256": transition["receipt_sha256"],
             "provider_termination_confirmed": True,
             "zero_owned_instances_confirmed": True,
             "source_retained": True,
@@ -4263,9 +4654,16 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--evaluator-overlay", type=Path, required=True)
     result.add_argument("--package-commit", required=True)
     operations = result.add_subparsers(dest="operation", required=True)
+    transition_parser = operations.add_parser("bind-package-transition")
+    transition_parser.add_argument("--dynamic-receipt", type=Path, required=True)
+    transition_parser.add_argument("--dynamic-source-root", type=Path, required=True)
+    transition_parser.add_argument("--prior-artifact-root", type=Path, required=True)
+    transition_parser.add_argument("--output", type=Path, required=True)
     preflight_parser = operations.add_parser("preflight")
     preflight_parser.add_argument("--dynamic-receipt", type=Path, required=True)
     preflight_parser.add_argument("--dynamic-source-root", type=Path, required=True)
+    preflight_parser.add_argument("--package-transition-receipt", type=Path, required=True)
+    preflight_parser.add_argument("--prior-artifact-root", type=Path, required=True)
     condition_export = operations.add_parser("condition-export")
     condition_export.add_argument("--run-id", choices=RUN_IDS, required=True)
     export_only = operations.add_parser("export-only")
@@ -4293,6 +4691,8 @@ def parser() -> argparse.ArgumentParser:
     package_parser.add_argument("--provider-closeout-source-root", type=Path, required=True)
     package_parser.add_argument("--provider-entry-receipt", type=Path, required=True)
     package_parser.add_argument("--provider-entry-source-root", type=Path, required=True)
+    package_parser.add_argument("--package-transition-receipt", type=Path, required=True)
+    package_parser.add_argument("--prior-artifact-root", type=Path, required=True)
     package_parser.add_argument("--final-archive-root", type=Path, required=True)
     operations.add_parser("cleanup")
     return result
@@ -4300,6 +4700,9 @@ def parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     args = parser().parse_args()
+    if args.operation == "bind-package-transition":
+        write_package_transition_receipt(args)
+        return 0
     if args.operation == "preflight":
         preflight(args)
         return 0

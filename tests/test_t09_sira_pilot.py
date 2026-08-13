@@ -584,7 +584,7 @@ def test_runtime_qualification_is_typed_single_build_preentry_and_digest_agnosti
         "schema_version": "0.1.0",
         "plan_id": "PLAN-EXP0001-PILOT-V4",
         "manifest_id": "RUN-MANIFEST-EXP0001-PILOT-V4-0002",
-        "qualification_id": "QUAL-T09-PILOT-V4-IMAGE-0002",
+        "qualification_id": "QUAL-T09-PILOT-V4-IMAGE-0003",
         "clean_package_commit": "a" * 40,
         "replacement_image_id": "sha256:" + "e" * 64,
         "historical_image_id": (
@@ -617,6 +617,86 @@ def test_runtime_qualification_is_typed_single_build_preentry_and_digest_agnosti
         drifted = {**document, field: value}
         with pytest.raises(ValueError, match="qualification contract drifted"):
             RuntimeQualification.from_document(drifted)
+
+
+def test_retry2_excludes_only_the_exact_pinned_names_only_env_example(
+    tmp_path: Path,
+) -> None:
+    host = _load_host_runner()
+    upstream = tmp_path / "upstream"
+    materialization = tmp_path / "qualification"
+    upstream.mkdir()
+    materialization.mkdir()
+    example = upstream / ".env.example"
+    example.write_bytes(host.PINNED_ENV_EXAMPLE_CONTENT)
+    receipt = host._exclude_pinned_nonruntime_env_example(
+        upstream,
+        materialization=materialization,
+    )
+    assert not example.exists()
+    assert receipt["sha256"] == host.PINNED_ENV_EXAMPLE_SHA256
+    assert receipt["contained_credential_value"] is False
+    assert receipt["runtime_input"] is False
+    assert receipt["scientific_input"] is False
+    assert (materialization / "build-context-exclusions.json").stat().st_mode & 0o777 == 0o600
+
+    unsafe_upstream = tmp_path / "unsafe-upstream"
+    unsafe_materialization = tmp_path / "unsafe-qualification"
+    unsafe_upstream.mkdir()
+    unsafe_materialization.mkdir()
+    (unsafe_upstream / ".env.example").write_bytes(
+        host.PINNED_ENV_EXAMPLE_CONTENT.replace(b"OPENAI_API_KEY=", b"OPENAI_API_KEY=value")
+    )
+    with pytest.raises(host.T09HostError, match="identity or content drifted"):
+        host._exclude_pinned_nonruntime_env_example(
+            unsafe_upstream,
+            materialization=unsafe_materialization,
+        )
+
+
+def test_retry2_preentry_transition_preserves_zero_use_failure_and_narrows_diff(
+    tmp_path: Path,
+) -> None:
+    host = _load_host_runner()
+    failure_root = tmp_path / "t09-pilot-v4-output-0002"
+    state = failure_root / "pilot-v4/pilot-state.json"
+    state.parent.mkdir(parents=True)
+    state.write_text(
+        json.dumps(
+            {
+                "plan_id": host.PLAN_ID,
+                "empirical_attempts_entered": [],
+                "attempts_completed": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    env_example = (
+        failure_root
+        / "pilot-v4/replacement-image-qualification/work/build-context/upstream/.env.example"
+    )
+    env_example.parent.mkdir(parents=True)
+    env_example.write_bytes(host.PINNED_ENV_EXAMPLE_CONTENT)
+    failure = host._prior_qualification_failure_manifest(failure_root)
+    assert failure["qualification_id"] == "QUAL-T09-PILOT-V4-IMAGE-0002"
+    assert failure["empirical_entry_crossed"] is False
+    assert failure["replacement_image_built"] is False
+    assert host.QUALIFICATION_ID == "QUAL-T09-PILOT-V4-IMAGE-0003"
+    assert "protocol.yaml" not in "\n".join(host.PACKAGE_TRANSITION_ALLOWED_PATHS)
+    assert "config.yaml" not in "\n".join(host.PACKAGE_TRANSITION_ALLOWED_PATHS)
+
+    state.write_text(
+        json.dumps(
+            {
+                "plan_id": host.PLAN_ID,
+                "empirical_attempts_entered": [host.RUN_IDS[0]],
+                "attempts_completed": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(host.T09HostError, match="not the exact safe prefix"):
+        host._prior_qualification_failure_manifest(failure_root)
 
 
 def test_v4_runtime_corrects_historical_package_browser_and_patched_runner_identities() -> None:
@@ -984,6 +1064,7 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
     key_path = tmp_path / "key.pub"
     key_path.write_text(public_key, encoding="utf-8")
     package_commit = "a" * 40
+    monkeypatch.setattr(host, "PACKAGE_TRANSITION_FROM_COMMIT", package_commit)
     plan_path = ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml"
     authorization = tmp_path / "authorization.json"
     authorization.write_text(
@@ -2050,7 +2131,7 @@ def test_entered_partial_attempt_emits_schema_valid_invalid_evidence_and_is_cons
                 "clean_package_commit": "a" * 40,
                 "execution_contract_sha256": contract.sha256,
                 "replacement_image_id": replacement_image_id,
-                "qualification_id": "QUAL-T09-PILOT-V4-IMAGE-0002",
+                "qualification_id": "QUAL-T09-PILOT-V4-IMAGE-0003",
                 "build_context_manifest_sha256": "b" * 64,
                 "package_manifest_sha256": (
                     "4ff2603fa5e0f7033ba773decdcb86abf648dcce22e469d26bc48214e390e104"
