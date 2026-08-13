@@ -29,7 +29,7 @@
     },
     "runtime": {
       "path": "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/T09_PILOT_RUNTIME_IDENTITY.json",
-      "sha256": "e469032e030689f0f5396a9c539ff0b2d13b6aad4450ceadc8ea7913aff7070d"
+      "sha256": "1cd53fc7f9c44b3886943ee4366b39ddd7b16cfe6d31085265c7f9e112dda710"
     },
     "execution_schema": {
       "path": "schemas/t09-sira-pilot-execution.schema.json",
@@ -41,7 +41,7 @@
     },
     "evidence_schema": {
       "path": "schemas/t09-sira-pilot-evidence.schema.json",
-      "sha256": "b61d9f4e5073bdc6ccfce0d4509f48939d65d7e02fdabf018d56bfeba42ecb17"
+      "sha256": "d7fe8bde407df9f53ce35149bc6bdd7b323c2d9c561aaa3e9900ea6818fa8745"
     }
   },
   "runtime": {
@@ -209,11 +209,11 @@
       "order_index": 1,
       "output_root": "artifacts/EXP-0001/pilot-v4/task-a/reactive/attempt-0002",
       "condition_plan_path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v4-task-0000-reactive.yaml",
-      "condition_plan_sha256": "ddcd99ef95152acad4a28d58b29dc9db60c6dc7efc5c0c44b6c4b5dacbf866a9",
+      "condition_plan_sha256": "01fdde9f918f67a8db7e14e5abe62c4ab824a3038966f01eae9207383d1e9a5d",
       "protocol_sha256": "5356fc8b3806f4135eb570f65b67da2f94463582db5e3e609320e23dbdb2a3f7",
       "config_sha256": "cf25acd90f9d73d9aef978a7d059cfbc74a1447d901f4e3d27e2b5d9f121d2ed",
-      "environment_sha256": "e469032e030689f0f5396a9c539ff0b2d13b6aad4450ceadc8ea7913aff7070d",
-      "giclab_commit": "dae76df5915aeaa67b87dd13fc43557856e7fdce",
+      "environment_sha256": "1cd53fc7f9c44b3886943ee4366b39ddd7b16cfe6d31085265c7f9e112dda710",
+      "giclab_commit": "626860b77184db09da059e923a6c8b4803b8560a",
       "upstream_argv": [
         "EXP-0001-PILOT-V4-TASK-A-REACTIVE",
         "--dataset",
@@ -253,11 +253,11 @@
       "order_index": 2,
       "output_root": "artifacts/EXP-0001/pilot-v4/task-a/simulative/attempt-0002",
       "condition_plan_path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v4-task-0000-simulative.yaml",
-      "condition_plan_sha256": "409c2be65ee5f64728917325f336072bb4c21d24e382db96ee5b5a7f54dd6907",
+      "condition_plan_sha256": "59ba4c0ce7999d702e083a7335c713d689274037e10d1fe7a8f00c14143c06a1",
       "protocol_sha256": "5356fc8b3806f4135eb570f65b67da2f94463582db5e3e609320e23dbdb2a3f7",
       "config_sha256": "cf25acd90f9d73d9aef978a7d059cfbc74a1447d901f4e3d27e2b5d9f121d2ed",
-      "environment_sha256": "e469032e030689f0f5396a9c539ff0b2d13b6aad4450ceadc8ea7913aff7070d",
-      "giclab_commit": "dae76df5915aeaa67b87dd13fc43557856e7fdce",
+      "environment_sha256": "1cd53fc7f9c44b3886943ee4366b39ddd7b16cfe6d31085265c7f9e112dda710",
+      "giclab_commit": "626860b77184db09da059e923a6c8b4803b8560a",
       "upstream_argv": [
         "EXP-0001-PILOT-V4-TASK-A-SIMULATIVE",
         "--dataset",
@@ -297,11 +297,11 @@
       "order_index": 1,
       "output_root": "artifacts/EXP-0001/pilot-v4/task-b/simulative/attempt-0002",
       "condition_plan_path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v4-task-0001-simulative.yaml",
-      "condition_plan_sha256": "c40ce0bfad14567f0d0d6d39b61f6e200fe30b309becae0d50ef0e7329ce4c11",
+      "condition_plan_sha256": "99f45242fc4d31a5a985a2f2f8f66c6a8dc5ab2cbe9b7633bae47cabf8251fdc",
       "protocol_sha256": "5356fc8b3806f4135eb570f65b67da2f94463582db5e3e609320e23dbdb2a3f7",
       "config_sha256": "cf25acd90f9d73d9aef978a7d059cfbc74a1447d901f4e3d27e2b5d9f121d2ed",
-      "environment_sha256": "e469032e030689f0f5396a9c539ff0b2d13b6aad4450ceadc8ea7913aff7070d",
-      "giclab_commit": "dae76df5915aeaa67b87dd13fc43557856e7fdce",
+      "environment_sha256": "1cd53fc7f9c44b3886943ee4366b39ddd7b16cfe6d31085265c7f9e112dda710",
+      "giclab_commit": "626860b77184db09da059e923a6c8b4803b8560a",
       "upstream_argv": [
         "EXP-0001-PILOT-V4-TASK-B-SIMULATIVE",
         "--dataset",
@@ -341,11 +341,11 @@
       "order_index": 2,
       "output_root": "artifacts/EXP-0001/pilot-v4/task-b/reactive/attempt-0002",
       "condition_plan_path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v4-task-0001-reactive.yaml",
-      "condition_plan_sha256": "ec26b675e2f139718b78371a9e8d496301c22a08ec7064ecb668a88362d8749b",
+      "condition_plan_sha256": "646d7f2b05308f7685c13b25ad9dda66a520fb046038233169c3529af99c7b1a",
       "protocol_sha256": "5356fc8b3806f4135eb570f65b67da2f94463582db5e3e609320e23dbdb2a3f7",
       "config_sha256": "cf25acd90f9d73d9aef978a7d059cfbc74a1447d901f4e3d27e2b5d9f121d2ed",
-      "environment_sha256": "e469032e030689f0f5396a9c539ff0b2d13b6aad4450ceadc8ea7913aff7070d",
-      "giclab_commit": "dae76df5915aeaa67b87dd13fc43557856e7fdce",
+      "environment_sha256": "1cd53fc7f9c44b3886943ee4366b39ddd7b16cfe6d31085265c7f9e112dda710",
+      "giclab_commit": "626860b77184db09da059e923a6c8b4803b8560a",
       "upstream_argv": [
         "EXP-0001-PILOT-V4-TASK-B-REACTIVE",
         "--dataset",

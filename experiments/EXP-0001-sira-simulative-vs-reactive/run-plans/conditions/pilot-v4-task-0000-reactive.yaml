@@ -16,14 +16,14 @@ execution:
     authorization_reference: null
     command_sha256: null
 sources:
-  giclab_commit: dae76df5915aeaa67b87dd13fc43557856e7fdce
+  giclab_commit: 626860b77184db09da059e923a6c8b4803b8560a
   upstream_source_id: SRC-SIRA-REPOSITORY
   upstream_commit: 93fb8d72de71f9a4a13419670adeb34d93cf7acd
   protocol_sha256: 5356fc8b3806f4135eb570f65b67da2f94463582db5e3e609320e23dbdb2a3f7
   config_sha256: cf25acd90f9d73d9aef978a7d059cfbc74a1447d901f4e3d27e2b5d9f121d2ed
   model_revision: gpt-4o-2024-11-20
   dataset_revision: 76ad1feb689b754bfe4e5e24d3ea371b647efa67
-  environment_sha256: e469032e030689f0f5396a9c539ff0b2d13b6aad4450ceadc8ea7913aff7070d
+  environment_sha256: 1cd53fc7f9c44b3886943ee4366b39ddd7b16cfe6d31085265c7f9e112dda710
 task:
   task_id: 7dcbbbdc7f1120cd
   source_kind: dataset-slice
