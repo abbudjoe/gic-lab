@@ -57,8 +57,8 @@ claim; public release of private task or trace evidence.
 | R2-12 | When the checkpoint passes, run Task B simulative then reactive exactly once and evaluate both; otherwise stop without selection claims. | The checkpoint was never reached; both Task B attempts remained `not-run`, with no selection, comparison, or scientific claim. | blocked |
 | R2-13 | Retain reconstructable, structurally redacted private evidence for every entered attempt and the maximal safe failure prefix. | The 3,439,137-byte direct attempt export rehashes at `63ed19b3…`; a 313,658-byte privacy-safe campaign prefix rehashes at `0abe6210…`; both finalizer failures and the accepted one-time reconstruction are retained. | met |
 | R2-14 | Prioritize cleanup: owned containers/browsers absent, temporary secrets destroyed, evidence copied as available, exact instance terminated/absent, firewall restored, regional rulesets absent, no T09 instance running. | Secret removal, zero owned containers, direct-export verification, one termination request, terminal/absent, zero T09 instances, and restored security are source-verified. | met |
-| R2-15 | Pass focused image/science/pair/timing/budget/evidence/cleanup tests, `make validate`, privacy scan, `git diff --check`, and independent spec-conformance review before launch; repair and rereview any material finding. | Prelaunch package and both same-host repair transitions received independent PASS verdicts. Post-termination reconciliation passes 103 focused tests, validation/privacy hygiene, Ruff, strict mypy, diff hygiene, and the full 1,348-test/16-page portable-Quarto gate; independent post-run review is pending. | partial |
-| R2-16 | After termination, reconcile actual Lambda/OpenAI usage, update public control surfaces without scientific overclaim, run proportionate broader gates/review, commit cleanly, and return all sixteen requested handoff items. | Compute and public disposition are reconciled without a pair/outcome claim; the first clean reconciliation commit and independent post-run review are in progress. | partial |
+| R2-15 | Pass focused image/science/pair/timing/budget/evidence/cleanup tests, `make validate`, privacy scan, `git diff --check`, and independent spec-conformance review before launch; repair and rereview any material finding. | Prelaunch package and both same-host repair transitions received independent PASS verdicts. Post-termination reconciliation passes 103 focused tests, validation/privacy hygiene, Ruff, strict mypy, diff hygiene, and the full 1,348-test/16-page portable-Quarto gate. Independent review of clean `cd888412…` returned PASS with no residual material finding. | met |
+| R2-16 | After termination, reconcile actual Lambda/OpenAI usage, update public control surfaces without scientific overclaim, run proportionate broader gates/review, commit cleanly, and return all sixteen requested handoff items. | Compute/public state and cloud ledger are reconciled without a pair/outcome claim; all repository/evidence/review portions are met, and the required 16-item final response completes the handoff. | met at final handoff |
 
 ## Control-plane decisions
 
@@ -161,6 +161,14 @@ claim; public release of private task or trace evidence.
   files, diff hygiene, and the portable-Quarto 1.9.38 full gate: 1,348 tests, all 16
   notebook pages, and site validation. Independent post-run evidence review remains
   the final assembly gate before the clean handoff commit.
+- 2026-08-13: independent post-run review at clean `cd888412…` returned PASS.
+  It rehashed both tar member sets/manifests, the final nine-payload archive identity,
+  attempt/evaluator/recovery/provider evidence, 52 call receipts, 13 browser records,
+  duration/cost/cutoff/cleanup state, and every public projection; it found no stale
+  state, private-value leak, pair/outcome overclaim, or material residual issue. Its
+  independent full gate reproduced all 1,348 tests and validation; the review shell
+  lacked Quarto, while the accepted portable Quarto 1.9.38 gate independently recorded
+  above passed all 16 pages and site validation.
 
 ## Next permitted phase
 
