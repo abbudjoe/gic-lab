@@ -544,6 +544,7 @@ def test_runtime_identity_binds_every_selected_executable_file() -> None:
         "containers/sira-smoke/pragmatic/t09_preflight.py",
         "containers/sira-smoke/pragmatic/t09_freeze_commands.py",
         "containers/sira-smoke/pragmatic/t09_secret_preflight.py",
+        "containers/sira-smoke/pragmatic/materialize_openai_secret.py",
     }
     assert {item["path"] for item in files} == expected
     for item in files:
@@ -652,6 +653,40 @@ def _load_attempt_finalizer() -> ModuleType:
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def _load_openai_secret_materializer() -> ModuleType:
+    path = ROOT / "containers/sira-smoke/pragmatic/materialize_openai_secret.py"
+    spec = importlib.util.spec_from_file_location("giclab_t09_openai_secret_test", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_t09_openai_secret_materializer_is_exact_single_assignment_and_exclusive(
+    tmp_path: Path,
+) -> None:
+    materializer = _load_openai_secret_materializer()
+    raw = b"LAMBDA_API_KEY=lambda-canary\nOPENAI_API_KEY=openai-canary_123\n"
+    assert materializer.parse_openai_api_key(raw) == b"openai-canary_123"
+    with pytest.raises(RuntimeError, match="exactly one"):
+        materializer.parse_openai_api_key(raw + b"OPENAI_API_KEY=second\n")
+    with pytest.raises(RuntimeError, match="single-token"):
+        materializer.parse_openai_api_key(b"OPENAI_API_KEY=unsafe value\n")
+    dotenv = tmp_path / "private.env"
+    dotenv.write_bytes(raw)
+    dotenv.chmod(0o600)
+    assert materializer._read_regular_nofollow(dotenv, max_bytes=65_536) == raw
+    destination = tmp_path / "sira_api_key"
+    materializer.write_secret_exclusive(destination, b"openai-canary_123")
+    assert destination.read_bytes() == b"openai-canary_123"
+    assert destination.stat().st_mode & 0o777 == 0o600
+    with pytest.raises(FileExistsError):
+        materializer.write_secret_exclusive(destination, b"replacement")
+    dotenv.chmod(0o644)
+    with pytest.raises(RuntimeError, match="metadata is unsafe"):
+        materializer._read_regular_nofollow(dotenv, max_bytes=65_536)
 
 
 def test_evaluator_overlay_package_records_match_all_reviewed_versions() -> None:
@@ -2089,6 +2124,7 @@ def test_entered_partial_attempt_emits_schema_valid_invalid_evidence_and_is_cons
         "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py",
         "containers/sira-smoke/pragmatic/t09_preflight.py",
         "containers/sira-smoke/pragmatic/t09_freeze_commands.py",
+        "containers/sira-smoke/pragmatic/materialize_openai_secret.py",
     ],
 )
 def test_selected_t09_control_code_imports_no_provider_cloud_or_browser_client(

@@ -78,7 +78,8 @@
       {"path": "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py", "sha256": "6dc889d2af5eb250594c421ebe15310547e24828eb8cf7455c66c76c2323e9ad"},
       {"path": "containers/sira-smoke/pragmatic/t09_preflight.py", "sha256": "20066509bb8df0c0bcabcdfbc750e145f04c007920e71f86aeddf2533609c096"},
       {"path": "containers/sira-smoke/pragmatic/t09_freeze_commands.py", "sha256": "af8897a04e1ab09f9c5784217a005c2e895e138dec9a19e0f0f59f98ac7233e7"},
-      {"path": "containers/sira-smoke/pragmatic/t09_secret_preflight.py", "sha256": "b4763ac8edc98b86c2f9f617f53cdb6be2ef9cb26d39aad660442e4c1a7506a4"}
+      {"path": "containers/sira-smoke/pragmatic/t09_secret_preflight.py", "sha256": "b4763ac8edc98b86c2f9f617f53cdb6be2ef9cb26d39aad660442e4c1a7506a4"},
+      {"path": "containers/sira-smoke/pragmatic/materialize_openai_secret.py", "sha256": "6cd57c1be7af02e61e0ed9bffc0e6c4e93a78b9b3567a4bfa26fe6cc030095b6"}
     ]
   },
   "gpu": {
