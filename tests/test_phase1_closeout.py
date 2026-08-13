@@ -58,9 +58,24 @@ def test_phase_one_is_the_only_active_non_executable_control_plane() -> None:
     assert checkpoint["pilot_execution_authorized"] is False
     assert checkpoint["scientific_interpretation_allowed"] is False
     t09_checkpoint = state["t09_pragmatic_pilot_checkpoint"]
-    assert t09_checkpoint["terminal_state"] == "ready-for-t09-pilot-authorization"
+    assert t09_checkpoint["terminal_state"] == "t09-pilot-blocked-material-risk"
     assert t09_checkpoint["plan_id"] == "PLAN-EXP0001-PILOT-V3"
+    assert t09_checkpoint["current_execution_and_analysis_blockers"] == [
+        "exact-frozen-T07-container-image-unavailable-as-loadable-artifact"
+    ]
+    assert t09_checkpoint["future_execution_requires_dynamic_preflight"] is True
     assert t09_checkpoint["pilot_execution_authorized"] is False
+    assert t09_checkpoint["current_turn_execution_authorized"] is False
+    assert t09_checkpoint["single_use_authority_exhausted"] is True
+    assert t09_checkpoint["dynamic_preflight_passed"] is False
+    assert t09_checkpoint["empirical_attempts_entered"] == 0
+    assert t09_checkpoint["evaluator_attempts_entered"] == 0
+    assert t09_checkpoint["model_calls"] == 0
+    assert t09_checkpoint["total_tokens"] == 0
+    assert t09_checkpoint["browser_actions"] == 0
+    assert t09_checkpoint["openai_cost_usd"] == 0.0
+    assert t09_checkpoint["lambda_cost_usd"] == 0.414064252316667
+    assert t09_checkpoint["cleanup_verified"] is True
     assert t09_checkpoint["scientific_result_claimed"] is False
     assert {path.name for path in (ROOT / "docs/exec-plans/active").glob("*.md")} == {
         "PHASE_1_ARTIFACT_EXECUTION.md"
@@ -353,6 +368,20 @@ def test_closeout_retains_zero_scientific_interpretation_and_typed_compute() -> 
         "authorization_reference": "AUTH-T07-PRAGMATIC-RETRY2-2026-08-12",
         "status": "completed",
     }
+    assert entries["CMP-0004"] == {
+        "id": "CMP-0004",
+        "experiment_id": "EXP-0001",
+        "provider": "Lambda On-Demand Cloud",
+        "hardware": "gpu_1x_a10",
+        "region": "us-east-1",
+        "started_at": "2026-08-13T18:56:24.700507Z",
+        "ended_at": "2026-08-13T19:15:40.228653Z",
+        "wall_clock_hours": 0.320980040555556,
+        "accelerator_hours": 0.320980040555556,
+        "cost_usd": 0.414064252316667,
+        "authorization_reference": "AUTH-T09-PRAGMATIC-PILOT-2026-08-13",
+        "status": "failed",
+    }
     summary = compute["phase_zero_summary"]
     assert summary["period_end"] == "2026-08-08"
     assert summary["paid_compute_authorized"] is False
@@ -460,6 +489,154 @@ def test_closeout_retains_zero_scientific_interpretation_and_typed_compute() -> 
     for relative, expected in retained_hashes.items():
         assert hashlib.sha256((ROOT / relative).read_bytes()).hexdigest() == expected
     assert not (ROOT / "traces").exists()
+
+
+def test_t09_pragmatic_preflight_disposition_is_non_scientific_and_closed() -> None:
+    disposition_path = EXP_ROOT / "T09_PRAGMATIC_PREFLIGHT_DISPOSITION.json"
+    disposition = load_json(disposition_path)
+    assert disposition["schema_version"] == "0.1.0"
+    assert disposition["record_id"] == "T09-PRAGMATIC-PREFLIGHT-DISPOSITION-0001"
+    assert disposition["plan_id"] == "PLAN-EXP0001-PILOT-V3"
+    assert disposition["frozen_package_commit"] == ("9dc7363561ec96812072e2c7824141d75b028332")
+    assert disposition["terminal_state"] == "t09-pilot-blocked-material-risk"
+    assert disposition["lifecycle_state"] == ("preflight-failed-closed-before-empirical-entry")
+    assert disposition["empirical_entry"] is False
+    assert disposition["scientific_result_claimed"] is False
+    assert disposition["dataset"] == {
+        "revision": "76ad1feb689b754bfe4e5e24d3ea371b647efa67",
+        "task_ids": ["7dcbbbdc7f1120cd", "2120afba8009bad3"],
+    }
+    attempts = disposition["attempts"]
+    assert attempts["empirical_attempts_entered"] == []
+    assert attempts["evaluator_attempts_entered"] == []
+    assert attempts["condition_retries"] == 0
+    assert attempts["first_pair_checkpoint"] == "not-reached"
+    for key in (
+        "task_a_reactive",
+        "task_a_simulative",
+        "task_b_simulative",
+        "task_b_reactive",
+    ):
+        assert attempts[key] == "not-run"
+    attempt_dispositions = attempts["attempt_dispositions"]
+    assert [item["run_id"] for item in attempt_dispositions] == attempts["frozen_order"]
+    assert [item["condition"] for item in attempt_dispositions] == [
+        "reactive",
+        "simulative",
+        "simulative",
+        "reactive",
+    ]
+    for item in attempt_dispositions:
+        assert item["state"] == "not-run"
+        assert item["empirical_entry"] is False
+        assert item["task_completion"] is None
+        assert item["evaluator_validity"] == "not-run"
+        assert item["task_score"] is None
+        assert item["model_calls"] == 0
+        assert item["total_tokens"] == 0
+        assert item["browser_actions"] == 0
+        assert item["openai_cost_usd"] == 0.0
+    assert disposition["evaluator"] == {
+        "identity": "exact-pinned-SiRA-FanOutQA-evaluator",
+        "sira_commit": "93fb8d72de71f9a4a13419670adeb34d93cf7acd",
+        "offline_contract_validated": True,
+        "live_evaluator_executed": False,
+        "live_evaluator_validity": "not-applicable-not-run",
+    }
+    assert disposition["usage"] == {
+        "model_calls": 0,
+        "input_tokens": 0,
+        "cached_input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "browser_actions": 0,
+        "openai_cost_usd": 0.0,
+    }
+    preflight = disposition["preflight"]
+    assert preflight["expected_container_image_digest"] == (
+        "sha256:035edf61718e84a8156f4f0f7817b134b0ce31488d3f0b50bbfba2b4a30cc61c"
+    )
+    assert preflight["rebuilt_container_image_digest"] == (
+        "sha256:07875dc67336b90021df5ab920860a56268bbc9f3aada70accec23848d9905cf"
+    )
+    assert preflight["exact_container_identity_match"] is False
+    assert preflight["frozen_image_retained_or_registry_available"] is False
+    assert preflight["model_metadata_request_performed"] is False
+    assert preflight["task_browser_action_performed"] is False
+    assert preflight["evaluator_loaded"] is False
+    provider = disposition["provider"]
+    assert provider["launch_count"] == provider["maximum_launch_count"] == 1
+    assert provider["persistent_filesystems"] == 0
+    assert provider["conservative_wall_seconds"] == 1155.528146
+    assert provider["accelerator_hours"] == 0.320980040555556
+    assert provider["estimated_cost_usd"] == 0.414064252316667
+    assert provider["terminal_or_absent"] is True
+    assert provider["zero_t09_instances"] is True
+    assert provider["security_restored"] is True
+    assert disposition["gpu_accounting"] == {
+        "a10_host_allocated": True,
+        "pilot_or_evaluator_process_used_gpu": False,
+        "host_gpu_visibility": "visible",
+        "host_gpu_name": "NVIDIA A10",
+        "host_gpu_utilization_percent_at_cleanup": 0,
+        "host_gpu_memory_used_mib_at_cleanup": 0,
+        "pilot_container_cuda_visible_devices": "disabled-empty",
+        "pilot_container_gpu_device_request": "none",
+        "acceleration_claimed": False,
+    }
+    assert disposition["cleanup"] == {
+        "owned_container_residue": [],
+        "temporary_secret_removed": True,
+        "global_secret_scan_passed": True,
+        "structural_privacy_scan_passed": True,
+        "provider_terminal_or_absent": True,
+        "zero_t09_instances": True,
+        "security_restored": True,
+    }
+    assert disposition["pair_matching"]["task_a_static_pair_diff_valid"] is True
+    assert disposition["pair_matching"]["task_b_static_pair_diff_valid"] is True
+    assert disposition["pair_matching"]["command_manifest_sha256"] == (
+        "8e8d5827df4688a8748828145ea0990d8397c771ae3add43790bbd45f732984d"
+    )
+    assert disposition["pair_matching"]["realized_pair_result_available"] is False
+    evidence = disposition["evidence"]
+    assert evidence["stage_archive_bytes"] == 1_195_031
+    assert evidence == {
+        "archive_id": "ARCHIVE-EXP0001-PILOT-V3-0001",
+        "retention": "private-access-controlled-external",
+        "public_release": "blocked-pending-review",
+        "stage_archive_bytes": 1_195_031,
+        "stage_archive_sha256": (
+            "941c61b58ac2fd8717c06ae2f8ef25616ed23c7e36ba64e88d9944924d084bc1"
+        ),
+        "final_archive_manifest_sha256": (
+            "740aa70a7f6a7e659f776038ab35366a6d3448a656d2396a8eda0f3c887df5f2"
+        ),
+        "final_archive_identity_sha256": (
+            "706c5b8e434e16986773f36ec4ba3a8df2a9568026a3744d4f999a79ce4aebf2"
+        ),
+        "provider_entry_receipt_sha256": (
+            "a7a397e8a9f7079c1ae632db42d0264a3bf3a7954db6cc2cb8cc95c7dd93abea"
+        ),
+        "provider_entry_source_manifest_sha256": (
+            "e44d1bf4fabbad359c6478fa8664fe8ca94fef40a653deff0d83ab4030923e0f"
+        ),
+        "provider_closeout_receipt_sha256": (
+            "c41cd84b555f371f27661903f1373ce2645c011ba3a9e41af33e3a1c6f8db4ac"
+        ),
+        "provider_closeout_source_manifest_sha256": (
+            "f2e5d5fc78422dbd7c43476bdc7eea590f5b70b284cd32f040a844b8ab102a90"
+        ),
+    }
+    for key, value in evidence.items():
+        if key.endswith("_sha256"):
+            assert re.fullmatch(r"[0-9a-f]{64}", value)
+
+    registry = load_yaml(ROOT / "experiments/registry.yaml")
+    experiment = next(
+        item for item in registry["experiments"] if item["experiment_id"] == "EXP-0001"
+    )
+    assert disposition_path.relative_to(ROOT).as_posix() in experiment["evidence_records"]
 
 
 def test_public_surfaces_report_the_current_phase_and_unauthorized_next_gate() -> None:

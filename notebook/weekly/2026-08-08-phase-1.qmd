@@ -18,13 +18,18 @@ package is prepared, but evaluator/runtime/protocol/provider/privacy prerequisit
 a fresh current-turn authorization still block all pilot execution.
 
 On 2026-08-13 a fresh pragmatic-pilot instruction authorized a narrow provider-wall
-repair and one calibration execution. The V3 package preserves the two tasks, exact
+repair and one calibration execution. The V3 package preserved the two tasks, exact
 evaluator, model, SiRA revision, order, treatment, scoring, evidence, budgets,
 zero-retry rule, and calibration-only interpretation. Its 14,400-second provider
 campaign uses actual elapsed time, retains a 900-second cleanup reserve, and requires
-normal termination by 13,500 seconds. This planning update is not a pilot result;
-empirical entry remains pending the clean freeze, dynamic preflight, and single-use
-private authorization overlay. Public raw release remains separately blocked.
+normal termination by 13,500 seconds. One A10 host launched from the reviewed frozen
+package, but dynamic runtime preflight stopped before empirical entry because the
+pinned sources rebuilt a container identity different from the frozen required image
+and no verified loadable copy was retained. All four condition/evaluator attempts are
+`not-run`; model calls, tokens, task browser actions, scores, and OpenAI cost are zero.
+The exact host was terminated and zero T09 instances were verified. This is an
+infrastructure preflight disposition, not a pilot result. Public raw release remains
+separately blocked.
 
 ## State transition
 

@@ -7,9 +7,10 @@ protocol lock, and option preservation** and opened **Phase 1: artifact executio
 Phase 1 is active, but every project execution and compute permission remains false.
 The T07 one-step SiRA artifact smoke has been executed and adjudicated offline; both
 sessions were incomplete, no scientific measurement or EXP-0001 outcome was assigned,
-and its authority is exhausted. `PLAN-EXP0001-PILOT` is prepared but blocked on
-prerequisites and a later exact human authorization. A protocol, readiness record, or
-proposed budget is not authorization.
+and its authority is exhausted. The later `PLAN-EXP0001-PILOT-V3` single-use host
+campaign stopped at exact runtime preflight before any pilot condition, evaluator, or
+score; its host was terminated and its authority is exhausted. EXP-0001 remains
+unevaluated. A protocol, readiness record, or proposed budget is not authorization.
 
 - [Public research notebook](https://abbudjoe.github.io/gic-lab/)
 - [GitHub repository](https://github.com/abbudjoe/gic-lab)

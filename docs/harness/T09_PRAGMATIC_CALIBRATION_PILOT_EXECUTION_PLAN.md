@@ -1,6 +1,8 @@
 # T09 pragmatic calibration pilot task plan
 
-Assembly status: **in-progress**
+Assembly status: **blocked-user-action**
+
+Terminal state: **`t09-pilot-blocked-material-risk`**
 
 Source contract: the user's `T09 PRAGMATIC CALIBRATION PILOT — REPAIR THE
 CAMPAIGN WALL AND EXECUTE`, SHA-256
@@ -32,14 +34,14 @@ superiority/EXP-0001 conclusions.
 | T09-P3-03 | Enforce a 14,400 s billable-instance campaign, 900 s cleanup reserve, one instance, one launch, zero filesystem, termination by 13,500 s, and no theoretical-maxima admission sum. | Typed campaign limits and fake-clock regressions. | met locally: existing observer and one-shot provider boundary share typed limits; cutoff/ambiguity tests pass |
 | T09-P3-04 | Charge setup, full condition walls, evaluator/evidence handoff, provider dispatch, and cleanup to the same actual campaign clock; admit each attempt only when its wall and required handoff/cleanup reserves fit. | Host runner and focused timing tests. | met locally: conservative launch-send origin and exact boundary tests pass |
 | T09-P3-05 | Keep model-call, token, OpenAI-cost, browser-step, condition/pair/total wall, output, disk, Lambda-duration/cost, attempt, and zero-retry caps effective. | Runtime cap tests and exact command/config diff. | met offline: cap/evidence tests pass and command package `8e8d5827df4688a8748828145ea0990d8397c771ae3add43790bbd45f732984d` reports both pairs valid |
-| T09-P3-06 | Pass exact local preflight and freeze a clean reviewed pre-run commit before empirical entry. | Preflight receipt, Git commit/hash, plan bytes/hash, independent review. | partial: repaired source review passed at `6f7c3112777a8b253f085d058972259fad30778f`; replacement package commit/review and dynamic runtime preflight remain |
-| T09-P3-07 | Record the current-turn cloud authorization in the private cloud ledger and launch no more than one exact A10 host in `us-east-1` with no persistent filesystem. | Cloud-run ledger and private provider receipts. | partial: the first private ledger passed; six authenticated read-only prelaunch GETs confirmed zero instances and other entry facts, then stopped before the launch POST on a repaired regional image-catalog validator; ledger rebind and launch remain |
-| T09-P3-08 | Run Task A reactive then simulative exactly once and seal the automatic first-pair continuation decision. | Attempt/evaluator evidence and checkpoint receipt. | not-started |
-| T09-P3-09 | Run Task B simulative then reactive exactly once only if the checkpoint passes and remaining wall admits the next attempt. | Attempt/evaluator evidence or typed stop receipt. | not-started |
-| T09-P3-10 | Retain reconstructable, structurally redacted private evidence and valid evaluator outcomes for every consumed attempt. | Evidence indexes, outcome schemas, archive manifest/hash. | not-started |
-| T09-P3-11 | Prioritize cleanup, terminate the exact owned instance, verify terminal/absent state, and restore/delete only owned security resources. | Host cleanup, provider closeout, zero-instance/security receipts. | not-started |
-| T09-P3-12 | Reconcile actual calls, tokens, actions, wall, OpenAI/Lambda/total cost and update compute/project/experiment/readiness/decision/notebook records without a scientific conclusion. | Post-run commit and repository validation. | not-started |
-| T09-P3-13 | Pass focused tests, independent spec review, post-review smoke, `make validate`, privacy scans, `git diff --check`, and the final repository gates appropriate after evidence capture. | Command log in this plan. | partial: focused gates and portable-Quarto full gate (1,332 tests, 16 pages) pass; final package review remains |
+| T09-P3-06 | Pass exact local preflight and freeze a clean reviewed pre-run commit before empirical entry. | Preflight receipt, Git commit/hash, plan bytes/hash, independent review. | blocked at the dynamic preflight: reviewed package `9dc7363561ec96812072e2c7824141d75b028332` was frozen, but rebuilding the pinned runtime produced `sha256:07875dc67336b90021df5ab920860a56268bbc9f3aada70accec23848d9905cf` instead of the required `sha256:035edf61718e84a8156f4f0f7817b134b0ce31488d3f0b50bbfba2b4a30cc61c` |
+| T09-P3-07 | Record the current-turn cloud authorization in the private cloud ledger and launch no more than one exact A10 host in `us-east-1` with no persistent filesystem. | Cloud-run ledger and private provider receipts. | met: the single-use ledger bound package `9dc7363`; exactly one `gpu_1x_a10` host launched in `us-east-1`, with zero persistent filesystems and no second launch |
+| T09-P3-08 | Run Task A reactive then simulative exactly once and seal the automatic first-pair continuation decision. | Attempt/evaluator evidence and checkpoint receipt. | blocked before empirical entry: neither Task A attempt ran and the checkpoint was not reached |
+| T09-P3-09 | Run Task B simulative then reactive exactly once only if the checkpoint passes and remaining wall admits the next attempt. | Attempt/evaluator evidence or typed stop receipt. | blocked before empirical entry: neither Task B attempt ran |
+| T09-P3-10 | Retain reconstructable, structurally redacted private evidence and valid evaluator outcomes for every consumed attempt. | Evidence indexes, outcome schemas, archive manifest/hash. | met for the maximal preflight-only failure prefix: zero attempts were consumed, no evaluator outcome exists, and the private stage/provider archive is sealed and hash-bound |
+| T09-P3-11 | Prioritize cleanup, terminate the exact owned instance, verify terminal/absent state, and restore/delete only owned security resources. | Host cleanup, provider closeout, zero-instance/security receipts. | met: owned containers and temporary secret material were removed; the exact host is terminal/absent; zero T09 instances and restored security state are provider-verified |
+| T09-P3-12 | Reconcile actual calls, tokens, actions, wall, OpenAI/Lambda/total cost and update compute/project/experiment/readiness/decision/notebook records without a scientific conclusion. | Post-run commit and repository validation. | met: 0 model calls, 0 tokens, 0 browser actions, USD 0 OpenAI, and USD 0.414064252316667 Lambda are recorded without an EXP-0001 outcome |
+| T09-P3-13 | Pass focused tests, independent spec review, post-review smoke, `make validate`, privacy scans, `git diff --check`, and the final repository gates appropriate after evidence capture. | Command log in this plan. | partial: post-run 57-test focused suite, validation, formatting/diff hygiene, and portable-Quarto full gate with 1,333 tests / 16 pages pass; independent closeout review and post-review smoke remain |
 
 ## Implementation mapping
 
@@ -118,23 +120,53 @@ superiority/EXP-0001 conclusions.
   regional matches still fail closed. Commit
   `6f7c3112777a8b253f085d058972259fad30778f` received independent **PASS** and is
   the reviewed replacement implementation ancestor.
+- 2026-08-13: froze and independently reviewed clean package
+  `9dc7363561ec96812072e2c7824141d75b028332`; its plan is 5,270 bytes with SHA-256
+  `0b17da814f9b20326a7220cec5f41e84c968a46c9d38e913f327afe267c26210`.
+  The private single-use authorization ledger validated and was consumed by exactly
+  one launch of `gpu_1x_a10` in `us-east-1` with no persistent filesystem.
+- 2026-08-13: installed the plan-pinned Python 3.11.14 and frozen project environment
+  on the host before empirical entry. The exact runtime preflight then failed closed:
+  the pinned sources rebuilt image
+  `sha256:07875dc67336b90021df5ab920860a56268bbc9f3aada70accec23848d9905cf`,
+  not the frozen T07 identity
+  `sha256:035edf61718e84a8156f4f0f7817b134b0ce31488d3f0b50bbfba2b4a30cc61c`.
+  The frozen image was absent locally, from the retained T07 bundle, and from the
+  bound registry reference. Substitution was prohibited, so execution stopped before
+  model metadata, a task browser action, evaluator loading, or empirical entry.
+- 2026-08-13: no condition/evaluator attempt ran. The automatic first-pair checkpoint
+  was not reached. Actual usage is 0 model calls, 0 input/cached/output/total tokens,
+  0 browser actions, and USD 0 OpenAI cost.
+- 2026-08-13: staged the maximal private preflight-failure prefix, verified its
+  1,195,031-byte archive at SHA-256
+  `941c61b58ac2fd8717c06ae2f8ef25616ed23c7e36ba64e88d9944924d084bc1`,
+  terminated the exact host, observed terminal/absent and zero T09 instances, and
+  verified security restoration. Conservative provider wall was 1,155.528146 seconds
+  (0.320980040555556 A10-hours), estimated at USD 0.414064252316667. The final private
+  archive manifest is
+  `740aa70a7f6a7e659f776038ab35366a6d3448a656d2396a8eda0f3c887df5f2`.
+- 2026-08-13: post-run reconciliation passed 57 focused T09/Phase-1 tests,
+  repository validation, Ruff formatting/lint, strict mypy over 61 source files,
+  all 1,333 repository tests, portable Quarto 1.9.38 render of all 16 pages, site
+  validation, and `git diff --check`. Independent closeout review remains before the
+  final clean handoff commit.
 
 ## Decisions and blockers
 
-- The current-turn user message is the sole execution authority. Tracked plans
-  remain `authorized: false`; a single-use private overlay will bind the clean
-  pre-run commit, exact plan/hash, identities, caps, and allowed actions.
+- The current-turn user message was the sole execution authority. Tracked plans
+  remain `authorized: false`; the single-use private overlay was consumed by the one
+  permitted launch and cannot be replayed.
 - The empirical boundary is the first task model request or task browser action.
   Before that boundary common infrastructure defects may be repaired; after it,
   code and scientific configuration remain frozen and a consumed attempt is
   never retried.
-- No user action is currently required. A genuine authenticated Lambda console
-  or Jupyter checkpoint will be requested only after the local freeze and exact
-  preflight are complete.
+- The exact frozen T07 container image was not retained as a loadable artifact and
+  cannot be reconstructed to its frozen digest from the pinned sources alone. This is
+  an execution blocker, not a scientific result or a publication-only blocker.
 
 ## Next permitted phase
 
-Commit the bound package and obtain the final independent package review. Cloud
-mutation remains forbidden until the package is clean, that review passes, the
-single-use private authorization ledger is sealed, and the exact dynamic preflight
-passes.
+Do not replay V3. A future run requires either the exact frozen image as a verified
+loadable artifact or a fresh plan revision that requalifies and binds a replacement
+runtime while preserving the scientific contract. Either path requires a new clean
+package, independent review, and fresh current-turn execution authorization.

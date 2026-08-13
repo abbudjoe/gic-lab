@@ -1,0 +1,186 @@
+{
+  "schema_version": "0.1.0",
+  "record_id": "T09-PRAGMATIC-PREFLIGHT-DISPOSITION-0001",
+  "experiment_id": "EXP-0001",
+  "plan_id": "PLAN-EXP0001-PILOT-V3",
+  "host_run_id": "RUN-T09-PILOT-HOST-0001",
+  "frozen_package_commit": "9dc7363561ec96812072e2c7824141d75b028332",
+  "reviewed_implementation_ancestor": "6f7c3112777a8b253f085d058972259fad30778f",
+  "authorization_reference": "AUTH-T09-PRAGMATIC-PILOT-2026-08-13",
+  "terminal_state": "t09-pilot-blocked-material-risk",
+  "lifecycle_state": "preflight-failed-closed-before-empirical-entry",
+  "calibration_only": true,
+  "empirical_entry": false,
+  "scientific_result_claimed": false,
+  "dataset": {
+    "revision": "76ad1feb689b754bfe4e5e24d3ea371b647efa67",
+    "task_ids": [
+      "7dcbbbdc7f1120cd",
+      "2120afba8009bad3"
+    ]
+  },
+  "attempts": {
+    "frozen_order": [
+      "RUN-T09-TASK-A-REACTIVE-0001",
+      "RUN-T09-TASK-A-SIMULATIVE-0001",
+      "RUN-T09-TASK-B-SIMULATIVE-0001",
+      "RUN-T09-TASK-B-REACTIVE-0001"
+    ],
+    "empirical_attempts_entered": [],
+    "evaluator_attempts_entered": [],
+    "condition_retries": 0,
+    "task_a_reactive": "not-run",
+    "task_a_simulative": "not-run",
+    "task_b_simulative": "not-run",
+    "task_b_reactive": "not-run",
+    "first_pair_checkpoint": "not-reached",
+    "attempt_dispositions": [
+      {
+        "run_id": "RUN-T09-TASK-A-REACTIVE-0001",
+        "task_id": "7dcbbbdc7f1120cd",
+        "pair_id": "PAIR-EXP0001-PILOT-V3-TASK-A",
+        "condition": "reactive",
+        "state": "not-run",
+        "empirical_entry": false,
+        "task_completion": null,
+        "evaluator_validity": "not-run",
+        "task_score": null,
+        "model_calls": 0,
+        "total_tokens": 0,
+        "browser_actions": 0,
+        "openai_cost_usd": 0.0
+      },
+      {
+        "run_id": "RUN-T09-TASK-A-SIMULATIVE-0001",
+        "task_id": "7dcbbbdc7f1120cd",
+        "pair_id": "PAIR-EXP0001-PILOT-V3-TASK-A",
+        "condition": "simulative",
+        "state": "not-run",
+        "empirical_entry": false,
+        "task_completion": null,
+        "evaluator_validity": "not-run",
+        "task_score": null,
+        "model_calls": 0,
+        "total_tokens": 0,
+        "browser_actions": 0,
+        "openai_cost_usd": 0.0
+      },
+      {
+        "run_id": "RUN-T09-TASK-B-SIMULATIVE-0001",
+        "task_id": "2120afba8009bad3",
+        "pair_id": "PAIR-EXP0001-PILOT-V3-TASK-B",
+        "condition": "simulative",
+        "state": "not-run",
+        "empirical_entry": false,
+        "task_completion": null,
+        "evaluator_validity": "not-run",
+        "task_score": null,
+        "model_calls": 0,
+        "total_tokens": 0,
+        "browser_actions": 0,
+        "openai_cost_usd": 0.0
+      },
+      {
+        "run_id": "RUN-T09-TASK-B-REACTIVE-0001",
+        "task_id": "2120afba8009bad3",
+        "pair_id": "PAIR-EXP0001-PILOT-V3-TASK-B",
+        "condition": "reactive",
+        "state": "not-run",
+        "empirical_entry": false,
+        "task_completion": null,
+        "evaluator_validity": "not-run",
+        "task_score": null,
+        "model_calls": 0,
+        "total_tokens": 0,
+        "browser_actions": 0,
+        "openai_cost_usd": 0.0
+      }
+    ]
+  },
+  "evaluator": {
+    "identity": "exact-pinned-SiRA-FanOutQA-evaluator",
+    "sira_commit": "93fb8d72de71f9a4a13419670adeb34d93cf7acd",
+    "offline_contract_validated": true,
+    "live_evaluator_executed": false,
+    "live_evaluator_validity": "not-applicable-not-run"
+  },
+  "preflight": {
+    "expected_container_image_digest": "sha256:035edf61718e84a8156f4f0f7817b134b0ce31488d3f0b50bbfba2b4a30cc61c",
+    "rebuilt_container_image_digest": "sha256:07875dc67336b90021df5ab920860a56268bbc9f3aada70accec23848d9905cf",
+    "exact_container_identity_match": false,
+    "stop_reason": "rebuilt-T07-image-does-not-match-frozen-image-identity",
+    "frozen_image_retained_or_registry_available": false,
+    "model_metadata_request_performed": false,
+    "task_browser_action_performed": false,
+    "evaluator_loaded": false
+  },
+  "usage": {
+    "model_calls": 0,
+    "input_tokens": 0,
+    "cached_input_tokens": 0,
+    "output_tokens": 0,
+    "total_tokens": 0,
+    "browser_actions": 0,
+    "openai_cost_usd": 0.0
+  },
+  "provider": {
+    "provider": "Lambda On-Demand Cloud",
+    "instance_type": "gpu_1x_a10",
+    "region": "us-east-1",
+    "launch_count": 1,
+    "maximum_launch_count": 1,
+    "persistent_filesystems": 0,
+    "billable_started_at": "2026-08-13T18:56:24.700507Z",
+    "termination_started_at": "2026-08-13T19:14:10.083277Z",
+    "terminal_observed_at": "2026-08-13T19:15:38.560948Z",
+    "closeout_captured_at": "2026-08-13T19:15:40.228653Z",
+    "conservative_wall_seconds": 1155.528146,
+    "accelerator_hours": 0.320980040555556,
+    "hourly_price_usd": 1.29,
+    "estimated_cost_usd": 0.414064252316667,
+    "terminal_or_absent": true,
+    "zero_t09_instances": true,
+    "security_restored": true
+  },
+  "gpu_accounting": {
+    "a10_host_allocated": true,
+    "pilot_or_evaluator_process_used_gpu": false,
+    "host_gpu_visibility": "visible",
+    "host_gpu_name": "NVIDIA A10",
+    "host_gpu_utilization_percent_at_cleanup": 0,
+    "host_gpu_memory_used_mib_at_cleanup": 0,
+    "pilot_container_cuda_visible_devices": "disabled-empty",
+    "pilot_container_gpu_device_request": "none",
+    "acceleration_claimed": false
+  },
+  "cleanup": {
+    "owned_container_residue": [],
+    "temporary_secret_removed": true,
+    "global_secret_scan_passed": true,
+    "structural_privacy_scan_passed": true,
+    "provider_terminal_or_absent": true,
+    "zero_t09_instances": true,
+    "security_restored": true
+  },
+  "pair_matching": {
+    "task_a_static_pair_diff_valid": true,
+    "task_b_static_pair_diff_valid": true,
+    "command_manifest_sha256": "8e8d5827df4688a8748828145ea0990d8397c771ae3add43790bbd45f732984d",
+    "realized_pair_result_available": false
+  },
+  "evidence": {
+    "archive_id": "ARCHIVE-EXP0001-PILOT-V3-0001",
+    "retention": "private-access-controlled-external",
+    "public_release": "blocked-pending-review",
+    "stage_archive_bytes": 1195031,
+    "stage_archive_sha256": "941c61b58ac2fd8717c06ae2f8ef25616ed23c7e36ba64e88d9944924d084bc1",
+    "final_archive_manifest_sha256": "740aa70a7f6a7e659f776038ab35366a6d3448a656d2396a8eda0f3c887df5f2",
+    "final_archive_identity_sha256": "706c5b8e434e16986773f36ec4ba3a8df2a9568026a3744d4f999a79ce4aebf2",
+    "provider_entry_receipt_sha256": "a7a397e8a9f7079c1ae632db42d0264a3bf3a7954db6cc2cb8cc95c7dd93abea",
+    "provider_entry_source_manifest_sha256": "e44d1bf4fabbad359c6478fa8664fe8ca94fef40a653deff0d83ab4030923e0f",
+    "provider_closeout_receipt_sha256": "c41cd84b555f371f27661903f1373ce2645c011ba3a9e41af33e3a1c6f8db4ac",
+    "provider_closeout_source_manifest_sha256": "f2e5d5fc78422dbd7c43476bdc7eea590f5b70b284cd32f040a844b8ab102a90"
+  },
+  "remaining_material_blocker": "The exact frozen T07 container image was not retained as a loadable artifact and cannot be reconstructed to its frozen digest from the pinned sources alone.",
+  "required_next_step": "Retain or source the exact frozen image, or create and separately authorize a new plan revision that requalifies and binds a replacement runtime without changing the scientific contract."
+}

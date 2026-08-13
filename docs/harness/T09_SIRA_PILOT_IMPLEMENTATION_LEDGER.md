@@ -2,8 +2,9 @@
 
 ## V3 pragmatic campaign-wall successor
 
-V3 assembly status: **in progress under the user's current-turn execution
-authorization**
+V3 assembly status: **blocked-user-action; single-use execution authority exhausted**
+
+Terminal state: **`t09-pilot-blocked-material-risk`**
 
 Source contract SHA-256:
 `1f8285ea3fc52f4084a945f1712870203463cb7fb92cc61ac2eeae47d119e4c7`.
@@ -21,11 +22,11 @@ pair, host, condition, evaluator, stage, and archive identities.
 | T09-V3-01 | Parameterize one actual-time 14,400-second provider campaign with 900-second cleanup reserve and 13,500-second termination cutoff. | met locally: the existing observer and one-shot provider boundary share one typed immutable V3 limit set; T07 defaults remain 3,600/1,800 |
 | T09-V3-02 | Admit an attempt only when its full 3,600-second condition wall, 600-second evaluator/evidence handoff, 60-second termination-dispatch margin, and cleanup reserve remain; do not sum future maxima. | met locally: exact admission/cutoff fake-clock regressions pass |
 | T09-V3-03 | Preserve science/evaluator/tasks/order/pairing and machine-diff four exact V3 commands. | met statically: plan `0b17da814f9b20326a7220cec5f41e84c968a46c9d38e913f327afe267c26210`; command package `8e8d5827df4688a8748828145ea0990d8397c771ae3add43790bbd45f732984d`; both pairs valid |
-| T09-V3-04 | Keep calls/tokens/actions/cost/wall/output/disk/attempt/zero-retry and evidence counters effective. | met locally: focused cap/evidence tests pass; exact runtime preflight pending clean freeze |
-| T09-V3-05 | Pass independent spec-conformance review, repair/rereview, and post-review smoke before freeze. | partial: repaired source review passed at `6f7c3112777a8b253f085d058972259fad30778f`; replacement bound-package review remains |
-| T09-V3-06 | Freeze a clean pre-run package and single-use private authorization/cloud ledger before one launch. | partial: replacement tracked hashes are bound; clean package commit, private-ledger rebind, and package review remain |
-| T09-V3-07 | Execute Task A pair, checkpoint, eligible Task B pair, and pinned evaluators with zero retry. | not-started |
-| T09-V3-08 | Seal evidence, terminate exact provider resource, prove zero residue/security restoration, reconcile accounting, and update public/control surfaces without a scientific conclusion. | not-started |
+| T09-V3-04 | Keep calls/tokens/actions/cost/wall/output/disk/attempt/zero-retry and evidence counters effective. | met: focused controls passed and the runtime stopped before empirical entry on exact image-identity drift |
+| T09-V3-05 | Pass independent spec-conformance review, repair/rereview, and post-review smoke before freeze. | met: source ancestor `6f7c3112777a8b253f085d058972259fad30778f` and frozen package `9dc7363561ec96812072e2c7824141d75b028332` received independent PASS verdicts |
+| T09-V3-06 | Freeze a clean pre-run package and single-use private authorization/cloud ledger before one launch. | met: package `9dc7363` and the plan/hash/identities were ledger-bound; the overlay was consumed by exactly one launch |
+| T09-V3-07 | Execute Task A pair, checkpoint, eligible Task B pair, and pinned evaluators with zero retry. | blocked before empirical entry: exact frozen image identity could not be materialized; all four attempts and evaluators are `not-run`, and the checkpoint was not reached |
+| T09-V3-08 | Seal evidence, terminate exact provider resource, prove zero residue/security restoration, reconcile accounting, and update public/control surfaces without a scientific conclusion. | met: private preflight evidence is sealed, exact host terminal/absent and zero-instance/security restoration are verified, and USD 0.414064252316667 Lambda / USD 0 OpenAI is reconciled |
 
 Focused evidence: the combined existing-observer and T09 source suite passes;
 source-derived provider entry,
@@ -36,10 +37,23 @@ pass. Final repaired-source review returned **PASS** at
 `6f7c3112777a8b253f085d058972259fad30778f`. The rebound package passes 43 T09
 tests, 13 Phase-1 tests, repository validation, Ruff, strict mypy, and exact pair
 rendering. The portable-Quarto 1.9.38 full gate passes all 1,332 tests and renders
-all 16 notebook pages with site validation. One authenticated six-GET Lambda
-prelaunch inspection stopped before its launch POST on the now-repaired regional
-image-catalog validator. No cloud mutation, paid instance, OpenAI/model request,
-browser action, SiRA/FanOutQA attempt, or empirical entry has occurred.
+all 16 notebook pages with site validation. The definitive package then launched one
+authorized A10 host. Its dynamic preflight failed before empirical entry because the
+pinned sources rebuilt a different container digest and the exact frozen image was
+not retained as a loadable artifact. No OpenAI/model request, task browser action,
+SiRA/FanOutQA attempt, evaluator attempt, or empirical entry occurred.
+
+The preflight-only campaign used 1,155.528146 provider seconds and
+0.320980040555556 A10-hours, estimated at USD 0.414064252316667. The maximal private
+failure prefix was externally sealed; its stage archive is 1,195,031 bytes at
+`941c61b58ac2fd8717c06ae2f8ef25616ed23c7e36ba64e88d9944924d084bc1`.
+Provider closeout proves terminal/absent state, zero T09 instances, and security
+restoration. EXP-0001 remains unevaluated.
+
+Post-run reconciliation passes 57 focused T09/Phase-1 tests, repository validation,
+Ruff, strict mypy over 61 source files, all 1,333 repository tests, portable Quarto
+1.9.38 render of all 16 pages, site validation, and diff hygiene. Independent
+closeout review remains the final Assembly gate.
 
 The complete active DoD and command/evidence log are maintained in
 `docs/harness/T09_PRAGMATIC_CALIBRATION_PILOT_EXECUTION_PLAN.md`.

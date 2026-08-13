@@ -4,7 +4,7 @@ Status: **T07 smoke closed and adjudicated; pilot planning eligible; pilot execu
 
 Prepared: 2026-08-08
 
-Updated: 2026-08-11
+Updated: 2026-08-13
 
 T08 update: 2026-08-12
 
@@ -23,6 +23,28 @@ Pilot protocol preparation is now eligible. `PLAN-EXP0001-PILOT` remains
 `docs/harness/T09_SIRA_PILOT_PREAUTHORIZATION_PACKET.md`. Every execution permission
 below remains false. The rest of this document preserves historical T07 readiness and
 authorization fields; none is current pilot authority.
+
+## Current T09 pragmatic checkpoint
+
+`PLAN-EXP0001-PILOT-V3` was frozen at clean package
+`9dc7363561ec96812072e2c7824141d75b028332` and its one-launch private authority was
+consumed. Exactly one Lambda `gpu_1x_a10` host launched in `us-east-1` with no
+persistent filesystem. Dynamic preflight stopped before the empirical boundary when
+the pinned runtime rebuilt to
+`sha256:07875dc67336b90021df5ab920860a56268bbc9f3aada70accec23848d9905cf`
+rather than the required frozen image
+`sha256:035edf61718e84a8156f4f0f7817b134b0ce31488d3f0b50bbfba2b4a30cc61c`.
+The exact frozen image was not retained as a loadable artifact, and substitution was
+not authorized.
+
+All four condition attempts and evaluator attempts are `not-run`; no model call,
+token, task browser action, score, or OpenAI charge exists, and the Task A checkpoint
+was not reached. The exact host is terminal/absent, zero T09 instances and restored
+security state are verified, and the estimated Lambda charge is USD
+0.414064252316667 for 0.320980040555556 A10-hours. Terminal state is
+`t09-pilot-blocked-material-risk`. V3 is exhausted and unauthorized; future execution
+requires either the exact verified loadable image or a fresh reviewed successor that
+requalifies a replacement runtime, plus new current-turn authority.
 
 ## Exact next run plan
 

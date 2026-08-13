@@ -46,12 +46,13 @@ t08_checkpoint:
   pilot_execution_authorized: false
 t09_pragmatic_pilot_checkpoint:
   task: T09
-  terminal_state: ready-for-t09-pilot-authorization
+  terminal_state: t09-pilot-blocked-material-risk
   plan_id: PLAN-EXP0001-PILOT-V3
   calibration_only: true
   task_count: 2
   condition_attempt_count: 4
-  static_execution_and_analysis_blockers: []
+  current_execution_and_analysis_blockers:
+    - exact-frozen-T07-container-image-unavailable-as-loadable-artifact
   campaign_provider_wall_seconds: 14400
   normal_cleanup_reserve_seconds: 900
   provider_termination_cutoff_seconds: 13500
@@ -59,10 +60,22 @@ t09_pragmatic_pilot_checkpoint:
   max_launch_count: 1
   persistent_filesystems: 0
   publication_release_blocked: true
-  dynamic_preflight_required_after_authorization: true
-  provider_preflight_blocked: false
-  current_turn_execution_authorized: true
+  future_execution_requires_dynamic_preflight: true
+  dynamic_preflight_passed: false
+  provider_preflight_blocked: true
+  current_turn_execution_authorized: false
+  single_use_authority_exhausted: true
   pilot_execution_authorized: false
+  frozen_package_commit: 9dc7363561ec96812072e2c7824141d75b028332
+  empirical_attempts_entered: 0
+  evaluator_attempts_entered: 0
+  model_calls: 0
+  total_tokens: 0
+  browser_actions: 0
+  openai_cost_usd: 0.0
+  lambda_cost_usd: 0.414064252316667
+  cleanup_verified: true
+  evidence_record: experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_PREFLIGHT_DISPOSITION.json
   scientific_result_claimed: false
 authoritative_plan: docs/exec-plans/active/PHASE_1_ARTIFACT_EXECUTION.md
 last_updated: "2026-08-13"

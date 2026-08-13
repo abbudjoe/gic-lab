@@ -70,7 +70,7 @@ remains blocked separately.
 
 ## Pragmatic V3 supersession — 2026-08-13
 
-The user's separately supplied current-turn execution contract supersedes only the
+The user's separately supplied current-turn execution contract superseded only the
 V2 provider-wall restriction. `PLAN-EXP0001-PILOT-V3` preserves the same two rows,
 exact evaluator, model, SiRA revision, counterbalance, scoring, evidence, budgets,
 zero retry, and calibration-only boundary. It replaces the 3,600-second campaign
@@ -78,6 +78,9 @@ wall with one plan-driven 14,400-second actual-time provider campaign, 900-secon
 cleanup reserve, and 13,500-second normal termination cutoff. Each attempt is admitted
 only when its full condition wall, evaluator/evidence handoff, positive termination
 margin, and cleanup reserve remain; future maxima are not summed at campaign start.
-Execution still requires the exact clean freeze, private
-single-use overlay, dynamic preflight, and one-launch cloud ledger. Public raw release
-remains independently blocked.
+The exact clean freeze, private single-use overlay, and one-launch cloud ledger were
+completed. Dynamic preflight then stopped before empirical entry because the source
+rebuild did not match the frozen container digest and no verified loadable copy of the
+exact image was retained. All four attempts remain `not-run`; the host is
+terminal/absent, zero T09 instances and security restoration are verified, and the V3
+authority is exhausted. Public raw release remains independently blocked.

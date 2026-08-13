@@ -1,13 +1,19 @@
 # T09 pragmatic calibration pilot preauthorization packet
 
-Status: **ready for final package review, one current-turn private execution overlay,
-and exact dynamic preflight**
+Status: **single-use authority consumed; V3 stopped at preflight and is not replayable**
 
 Tracked plan: `PLAN-EXP0001-PILOT-V3`, `authorized: false`.
 
-This packet documents the immutable execution surface. It is not a reusable grant;
-the user's 2026-08-13 instruction supplies current-turn authority only after the clean
-package commit, final plan hash, review, local gates, and private cloud ledger bind.
+This packet preserves the immutable execution surface used by frozen package
+`9dc7363561ec96812072e2c7824141d75b028332`. It is not a reusable grant. The user's
+2026-08-13 authority was materialized in a private single-use ledger and consumed by
+one launch. The dynamic runtime preflight stopped before empirical entry because the
+exact frozen container image could not be materialized.
+
+All four condition attempts and evaluators are `not-run`; the first-pair checkpoint
+was not reached. Model calls, tokens, browser actions, and OpenAI cost are zero. The
+exact host was terminated, terminal/absent and zero-instance state were verified, and
+security state was restored. Reusing the block below is prohibited.
 
 ## Immutable science
 
@@ -70,17 +76,15 @@ available evidence handoff, exact instance termination, terminal/absent and zero
 verification, then restoration/deletion of only owned security state. Never delay
 termination for archive perfection, repository tests, or documentation.
 
-## Descriptive single-use current-turn authorization projection
+## Historical single-use authorization projection — exhausted
 
-The following is a human-readable projection, not literal JSON or a directly
-executable command. Before mutation, the private mode-0600 ledger must contain the
-exact typed JSON field set enforced by `validate_authorization_ledger`; its private
-artifact destination resolves to the validator-fixed access-controlled archive root
-outside Git. The overlay must fill and hash-bind these values:
+The following is the human-readable projection that was bound privately before the
+one permitted mutation. It is retained for audit only; it is not literal JSON, a
+directly executable command, or current authority:
 
 ```text
 authorization_source_sha256: 1f8285ea3fc52f4084a945f1712870203463cb7fb92cc61ac2eeae47d119e4c7
-clean_package_commit: <FINAL-CLEAN-COMMIT>
+clean_package_commit: 9dc7363561ec96812072e2c7824141d75b028332
 reviewed_implementation_ancestor: 6f7c3112777a8b253f085d058972259fad30778f
 plan_id: PLAN-EXP0001-PILOT-V3
 plan_path: experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml
@@ -93,9 +97,11 @@ instances_launches_filesystems: 1 / 1 / 0
 campaign_cleanup_cutoff_seconds: 14400 / 900 / 13500
 openai_lambda_total_caps_usd: 40.00 / 5.16 / 45.16
 condition_attempts_retries: 4 / 0
-artifact_destination: <PRIVATE-ACCESS-CONTROLLED-ARTIFACT-DESTINATION>
+artifact_destination: private-access-controlled-external
 cleanup: exact-instance termination plus terminal/absent, zero-T09, and security-restoration evidence
 ```
 
 No second launch, condition retry, task/evaluator/model/config/order substitution,
 training, pilot expansion, public release, or scientific conclusion is authorized.
+Future execution requires the exact frozen image or a freshly reviewed successor plan
+that requalifies a replacement runtime, plus fresh current-turn authorization.

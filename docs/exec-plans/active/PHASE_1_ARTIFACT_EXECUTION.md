@@ -50,7 +50,7 @@ no mutation authority; one gate's authorization never carries into another.
 | P1-DOD-01 | Phase 0.75 is successful/completed; this is the one authoritative active plan; project execution/compute permissions remain false; only the disabled smoke profile is eligible for a later exact authorization. | Plan lifecycle/state/profile/readiness validation and public render. | met |
 | P1-DOD-02 | T07 executes at most the one authorized SiRA smoke pair with complete raw, normalized, regulation-decision, budget, scoring, and cleanup evidence and no interpretation. | Immutable run/authorization records, artifacts/hashes, accounting, cleanup proof, and validation. | met; T08 documents nonblocking fields that T07 did not retain directly |
 | P1-DOD-03 | T08 independently reproduces the smoke summary, separates infrastructure/protocol/upstream/future-track gaps, and leaves any pilot unauthorized. | Raw-to-summary checks, infrastructure-only trace-sufficiency report, review, and gate. | met |
-| P1-DOD-04 | T09 first locks an executable calibration-only SiRA pilot and later executes it only under a fresh exact authorization, without outcome-adaptive changes, while reconciling every entered attempt. | Frozen task/order/evaluator/runtime records, enforced budgets, immutable authorization packet, and later complete attempt dispositions. | in progress: user-authorized V3 lifecycle repair is under pre-entry review/freeze; no empirical attempt has begun |
+| P1-DOD-04 | T09 first locks an executable calibration-only SiRA pilot and later executes it only under a fresh exact authorization, without outcome-adaptive changes, while reconciling every entered attempt. | Frozen task/order/evaluator/runtime records, enforced budgets, immutable authorization packet, and later complete attempt dispositions. | blocked at dynamic preflight: one authorized V3 host campaign stopped before empirical entry on exact container-identity drift; zero attempts were entered and cleanup/accounting are reconciled |
 | P1-DOD-05 | T10 produces a reproducible exploratory EXP-0001 analysis with uncertainty, exact reproduction level, cost/deviation reporting, and no internalization or mechanism-attribution overclaim. | Validated result summary, registry/notebook/ledger updates, review, and gate. | not-started |
 | P1-DOD-06 | T11 produces a read-only, launch-ready SR²AM-v0.1-8B Lambda contract with current price, hard termination, source-grounded trace requirements, failure tests, and no mutation. | Audited runbook/contracts, dry-run/failure tests, authorization sentence, and gate. | not-started |
 | P1-DOD-07 | T12 launches only the exactly authorized SR²AM smoke, retains and transfers required evidence, reconciles cost, and verifies provider termination. | Immutable cloud attempt, raw artifacts/hashes, compute ledger, monitoring, and terminal-state proof. | not-started |
@@ -67,8 +67,8 @@ no mutation authority; one gate's authorization never carries into another.
 |---|---|---|---|
 | T07 | Execute one authorized contained SiRA smoke pair; capture regulation-decision evidence without interpretation. | P1-DOD-02, P1-DOD-11 through P1-DOD-13 | complete: Retry 2 matched pair executed and cleanup verified; execution authority exhausted; no pilot authority |
 | T08 | Analyze smoke infrastructure evidence and prepare an unauthorized pilot package. | P1-DOD-03, P1-DOD-11 through P1-DOD-13 | complete: evidence validated; pilot planning eligible but execution unauthorized |
-| T09 | Lock and execute the two-task pragmatic calibration pilot under the fresh current-turn authorization. | P1-DOD-04, P1-DOD-11 through P1-DOD-13 | V3 lifecycle repair/review/freeze in progress; no empirical entry yet |
-| T10 | Analyze and publish the exploratory SiRA pilot. | P1-DOD-05, P1-DOD-11 through P1-DOD-13 | blocked until T09 succeeds |
+| T09 | Lock and execute the two-task pragmatic calibration pilot under the fresh current-turn authorization. | P1-DOD-04, P1-DOD-11 through P1-DOD-13 | `t09-pilot-blocked-material-risk`: V3 preflight failed before empirical entry; authority exhausted; exact host cleanup verified |
+| T10 | Analyze and publish the exploratory SiRA pilot. | P1-DOD-05, P1-DOD-11 through P1-DOD-13 | blocked: T09 produced no pilot attempt or score |
 | T11 | Build and validate the read-only SR²AM Lambda preflight. | P1-DOD-06, P1-DOD-11 through P1-DOD-13 | blocked until T10 succeeds |
 | T12 | Launch and monitor the separately authorized SR²AM Lambda smoke. | P1-DOD-07, P1-DOD-11 through P1-DOD-13 | blocked until T11 and authorization |
 | T13 | Analyze the SR²AM smoke and prepare an unauthorized pilot. | P1-DOD-08, P1-DOD-11 through P1-DOD-13 | blocked until T12 succeeds |
@@ -151,10 +151,10 @@ browser use, and pilot execution remain false. See
 
 ### T09 pragmatic campaign-wall execution — 2026-08-13
 
-Assembly status: **in progress before empirical entry**.
+Assembly status: **`t09-pilot-blocked-material-risk`; stopped before empirical entry**.
 
-The user's current-turn instruction supersedes the V2 3,600-second provider-wall
-restriction and authorizes the narrow V3 repair plus one `gpu_1x_a10` launch and the
+The user's current-turn instruction superseded the V2 3,600-second provider-wall
+restriction and authorized the narrow V3 repair plus one `gpu_1x_a10` launch and the
 frozen four-attempt campaign. `PLAN-EXP0001-PILOT-V3` retains the exact V2 tasks,
 evaluator, model, SiRA revision, counterbalance, scoring, evidence, budgets,
 zero-retry rule, and calibration-only interpretation. The lifecycle now uses actual
@@ -165,10 +165,25 @@ handoff, 60-second termination-dispatch margin, and cleanup reserve remain. The
 provider boundary is a single-use adapter over the retained pragmatic mutation
 shape and T07 observer GET transport; no persistent service or watchdog is introduced.
 
-Local implementation/review/freeze work is governed by
-`docs/harness/T09_PRAGMATIC_CALIBRATION_PILOT_EXECUTION_PLAN.md`. Provider mutation remains
-forbidden until its focused gates, independent review, exact hashes, clean freeze,
-dynamic preflight, and private cloud authorization ledger are complete.
+The reviewed package froze at
+`9dc7363561ec96812072e2c7824141d75b028332`. Exactly one `gpu_1x_a10` host launched
+in `us-east-1` with no persistent filesystem. Dynamic preflight installed exact Python
+3.11.14, then failed closed because rebuilding the pinned runtime yielded container
+`sha256:07875dc67336b90021df5ab920860a56268bbc9f3aada70accec23848d9905cf`
+instead of frozen identity
+`sha256:035edf61718e84a8156f4f0f7817b134b0ce31488d3f0b50bbfba2b4a30cc61c`.
+The required frozen image was not retained as a loadable artifact, so no substitution
+was permitted.
+
+No model metadata request, task browser action, SiRA/FanOutQA condition, evaluator,
+or empirical attempt ran; the first-pair checkpoint was not reached. Usage was zero
+model calls, tokens, browser actions, and OpenAI cost. The exact host was terminated
+after 1,155.528146 conservative provider seconds; terminal/absent, zero T09 instances,
+and security restoration are verified. Estimated Lambda cost is USD
+0.414064252316667. The public disposition is
+`experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_PREFLIGHT_DISPOSITION.json`;
+private raw evidence remains access-controlled. The consumed V3 authority is not
+replayable. See `docs/harness/T09_PRAGMATIC_CALIBRATION_PILOT_EXECUTION_PLAN.md`.
 
 ### Pragmatic execution reset — 2026-08-12
 

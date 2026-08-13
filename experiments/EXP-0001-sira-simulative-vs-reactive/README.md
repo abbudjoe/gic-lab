@@ -5,8 +5,9 @@ Status: **planned / not-evaluated / pending**
 Execution authorization: **false**
 
 A two-condition T07 artifact smoke has run and T08 validated its retained evidence.
-That smoke has no scientific interpretation: task completion was not observed, and
-the EXP-0001 pilot has not run.
+That smoke has no scientific interpretation: task completion was not observed. One
+T09 V3 preflight-only host campaign later stopped on exact container-identity drift
+before any pilot condition or evaluator ran, so EXP-0001 remains unevaluated.
 
 ## Scientific question and scope
 
@@ -145,6 +146,9 @@ The pragmatic V3 repair makes the 14,400-second provider campaign effective with
 each attempt against actual elapsed time only when its full 3,600-second condition
 wall, 600-second evaluator/evidence handoff, 60-second termination-dispatch margin,
 and cleanup reserve remain; it does not reserve every theoretical maximum at campaign
-start. The user's current-turn instruction authorizes one launch and the
-frozen four-attempt sequence after the clean freeze and exact dynamic preflight.
-Public raw release remains separately blocked pending license/privacy review.
+start. Its single-use authority was consumed by one preflight-only A10 launch. The
+dynamic runtime gate stopped before empirical entry because the exact frozen T07 image
+was not retained as a verified loadable artifact and the source rebuild produced a
+different digest. All four attempts remain `not-run`; the exact host was terminated
+and zero remaining T09 instances were verified. V3 cannot be replayed. Public raw
+release remains separately blocked pending license/privacy review.

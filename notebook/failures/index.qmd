@@ -7,6 +7,21 @@ experiment has run. The completed T07 artifact smoke is infrastructure evidence 
 T08 found task completion not observed and retained its evidence gaps without treating
 them as a negative scientific result.
 
+## T09 V3 runtime-preflight stop
+
+On 2026-08-13, the single authorized `PLAN-EXP0001-PILOT-V3` host stopped before the
+empirical boundary. Rebuilding the pinned T07 runtime produced a container identity
+different from the frozen required digest, while no verified loadable copy of the
+frozen image was retained. Substitution would have changed the runtime contract, so
+the harness failed closed. No condition or evaluator attempt ran; calls, tokens,
+browser actions, scores, and OpenAI cost are all zero.
+
+The exact Lambda host was terminated after the available preflight evidence was
+sealed. Provider evidence verifies terminal/absent state, zero remaining T09
+instances, and restored security state. This is a preflight infrastructure failure,
+not evidence about either SiRA condition or EXP-0001. A future attempt requires the
+exact image or a separately reviewed runtime requalification and fresh authorization.
+
 Future entries will distinguish:
 
 - infrastructure-invalid runs;

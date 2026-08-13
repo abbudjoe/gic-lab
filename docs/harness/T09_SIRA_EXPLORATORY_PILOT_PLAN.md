@@ -1,16 +1,20 @@
 # T09 SiRA two-task pragmatic calibration pilot plan
 
-Status: **V3 lifecycle repair implemented; current-turn execution authorized only
-through a clean-commit private overlay**
+Status: **V3 stopped at exact runtime preflight; single-use authority exhausted**
 
 Plan ID: `PLAN-EXP0001-PILOT-V3`
 
-Planning terminal state: `ready-for-t09-pilot-authorization`
+Frozen planning terminal state: `ready-for-t09-pilot-authorization`
+
+Current execution terminal state: `t09-pilot-blocked-material-risk`
 
 The tracked plan remains `authorized: false`; repository bytes are not a reusable
-cloud capability. The user's 2026-08-13 instruction authorizes one single-use private
-overlay after the focused gates, independent review, clean freeze, and exact dynamic
-preflight pass.
+cloud capability. The user's 2026-08-13 single-use private overlay was consumed by
+one launch from frozen package `9dc7363561ec96812072e2c7824141d75b028332`.
+Dynamic preflight stopped before empirical entry because the pinned sources rebuilt
+a container digest different from the frozen runtime identity and the exact frozen
+image was not retained as a loadable artifact. All four attempts and evaluators are
+`not-run`; the exact host was terminated and cleanup verified.
 
 ## Scope and interpretation
 
@@ -33,6 +37,7 @@ stop is an operational calibration decision, not an unbiased scientific sample.
 | Publication-only blocker | Dataset rows, traces, answers, and screenshots require attribution/share-alike, privacy, and third-party-content review. | Private access-controlled execution is permitted; public raw release remains blocked. |
 | Nonblocking optional gap | Unsupported H2K causal/mechanism fields are absent. | Retain explicit `unavailable` values; never infer them. |
 | Nonblocking optional gap | Pilot processes are not expected to use the A10 GPU. | Record visibility/utilization metadata and make no acceleration claim. |
+| Execution blocker | The exact frozen T07 image is unavailable as a verified loadable artifact; rebuilding the pinned sources does not reproduce its digest. | V3 stopped before empirical entry. A future run needs the exact image or a newly reviewed successor that requalifies a replacement runtime; V3 authority cannot be replayed. |
 
 ## Frozen science and data
 
@@ -153,8 +158,8 @@ condition-owned paths, and realized events may differ.
 
 ## Authorization boundary
 
-Tracked authorization stays false. One private, mode-0600, single-use overlay must
-bind the exact clean package commit, plan bytes/SHA-256, all identities, numeric caps,
-allowed actions, artifact destination, and this current-turn authorization before the
-first provider mutation. No second launch, condition retry, substitution, training,
-pilot expansion, or scientific conclusion is authorized.
+Tracked authorization stays false. The private mode-0600 overlay bound the exact clean
+package commit, plan bytes/SHA-256, identities, caps, allowed actions, and artifact
+destination before the sole provider mutation; it is now consumed. No second launch,
+condition retry, substitution, training, pilot expansion, or scientific conclusion is
+authorized.
