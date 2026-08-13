@@ -1,6 +1,6 @@
 # T09 pragmatic calibration pilot preauthorization packet
 
-Status: **ready for one current-turn private execution overlay after final hash binding
+Status: **ready for final package review, one current-turn private execution overlay,
 and exact dynamic preflight**
 
 Tracked plan: `PLAN-EXP0001-PILOT-V3`, `authorized: false`.
@@ -77,11 +77,11 @@ The private overlay must fill and hash-bind these fields before mutation:
 ```text
 authorization_source_sha256: 1f8285ea3fc52f4084a945f1712870203463cb7fb92cc61ac2eeae47d119e4c7
 clean_package_commit: <FINAL-CLEAN-COMMIT>
-reviewed_implementation_ancestor: <REVIEWED-ANCESTOR>
+reviewed_implementation_ancestor: e5edff3f1b256aaa17ad7bc79c255d82350964c7
 plan_id: PLAN-EXP0001-PILOT-V3
 plan_path: experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml
-plan_bytes: <FINAL-BYTES>
-plan_sha256: <FINAL-SHA256>
+plan_bytes: 5270
+plan_sha256: 0b17da814f9b20326a7220cec5f41e84c968a46c9d38e913f327afe267c26210
 host_run_id: RUN-T09-PILOT-HOST-0001
 attempt_order: RUN-T09-TASK-A-REACTIVE-0001, RUN-T09-TASK-A-SIMULATIVE-0001, RUN-T09-TASK-B-SIMULATIVE-0001, RUN-T09-TASK-B-REACTIVE-0001
 hardware_region: gpu_1x_a10 / us-east-1
@@ -89,7 +89,7 @@ instances_launches_filesystems: 1 / 1 / 0
 campaign_cleanup_cutoff_seconds: 14400 / 900 / 13500
 openai_lambda_total_caps_usd: 40.00 / 5.16 / 45.16
 condition_attempts_retries: 4 / 0
-artifact_destination: /Volumes/Macintosh HD - Data/GIC-Lab/t09/sealed-artifacts
+artifact_destination: <PRIVATE-ACCESS-CONTROLLED-ARTIFACT-DESTINATION>
 cleanup: exact-instance termination plus terminal/absent, zero-T09, and security-restoration evidence
 ```
 

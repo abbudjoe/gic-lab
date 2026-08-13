@@ -23,18 +23,18 @@
   ],
   "properties": {
     "schema_version": {"const": "0.1.0"},
-    "plan_id": {"const": "PLAN-EXP0001-PILOT-V2"},
+    "plan_id": {"const": "PLAN-EXP0001-PILOT-V3"},
     "execution_contract_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     "identity": {
       "type": "object",
       "additionalProperties": false,
       "required": ["run_id", "task_id", "task_text_sha256", "reference_sha256", "pair_id", "order_index", "condition", "attempt"],
       "properties": {
-        "run_id": {"type": "string", "pattern": "^RUN-EXP0001-PILOT-V2-TASK-[AB]-(?:REACTIVE|SIMULATIVE)$"},
+        "run_id": {"type": "string", "pattern": "^RUN-T09-TASK-[AB]-(?:REACTIVE|SIMULATIVE)-0001$"},
         "task_id": {"enum": ["7dcbbbdc7f1120cd", "2120afba8009bad3"]},
         "task_text_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
         "reference_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
-        "pair_id": {"enum": ["PAIR-EXP0001-PILOT-V2-TASK-A", "PAIR-EXP0001-PILOT-V2-TASK-B"]},
+        "pair_id": {"enum": ["PAIR-EXP0001-PILOT-V3-TASK-A", "PAIR-EXP0001-PILOT-V3-TASK-B"]},
         "order_index": {"enum": [1, 2]},
         "condition": {"enum": ["SIRA-REACTIVE", "SIRA-SIMULATIVE"]},
         "attempt": {"const": 1}

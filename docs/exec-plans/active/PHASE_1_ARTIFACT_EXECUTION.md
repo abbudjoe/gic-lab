@@ -166,7 +166,7 @@ provider boundary is a single-use adapter over the retained pragmatic mutation
 shape and T07 observer GET transport; no persistent service or watchdog is introduced.
 
 Local implementation/review/freeze work is governed by
-`docs/exec-plans/active/T09_PRAGMATIC_CALIBRATION_PILOT.md`. Provider mutation remains
+`docs/harness/T09_PRAGMATIC_CALIBRATION_PILOT_EXECUTION_PLAN.md`. Provider mutation remains
 forbidden until its focused gates, independent review, exact hashes, clean freeze,
 dynamic preflight, and private cloud authorization ledger are complete.
 

@@ -63,8 +63,7 @@ def test_phase_one_is_the_only_active_non_executable_control_plane() -> None:
     assert t09_checkpoint["pilot_execution_authorized"] is False
     assert t09_checkpoint["scientific_result_claimed"] is False
     assert {path.name for path in (ROOT / "docs/exec-plans/active").glob("*.md")} == {
-        "PHASE_1_ARTIFACT_EXECUTION.md",
-        "T09_PRAGMATIC_CALIBRATION_PILOT.md",
+        "PHASE_1_ARTIFACT_EXECUTION.md"
     }
     assert "Status: **successful**" in PHASE_075_PLAN.read_text(encoding="utf-8")
     assert "Status: **in-progress**" in PHASE_1_PLAN.read_text(encoding="utf-8")

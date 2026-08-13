@@ -27,7 +27,7 @@ stop is an operational calibration decision, not an unbiased scientific sample.
 | Class | Gap | V3 disposition |
 |---|---|---|
 | Execution blocker | The V2 provider lifecycle fixed the whole campaign to 3,600 seconds while the four-attempt plan allowed 14,400 seconds. | Resolved by the user-authorized, plan-driven 14,400-second actual-time campaign, 13,500-second normal termination cutoff, and 900-second cleanup reserve. |
-| Execution blocker | Admission reserved all future theoretical attempt maxima at campaign start. | Resolved. Each attempt is admitted independently only when its 3,600-second hard wall plus the 900-second cleanup reserve remains. Setup and every later phase consume the same billable clock. |
+| Execution blocker | Admission reserved all future theoretical attempt maxima at campaign start. | Resolved. Each attempt is admitted independently only when its 3,600-second hard wall, 600-second evaluator/evidence handoff, 60-second termination-dispatch margin, and 900-second cleanup reserve remain. Setup and every later phase consume the same billable clock. |
 | Execution blocker | Provider entry/condition execution were hard-disabled at the V2 risk boundary. | Resolved by parameterizing the existing observer timing primitive and retaining source-derived, structurally redacted projections for the one-shot T07-pragmatic Lambda operations. No persistent cloud service or watchdog was added. |
 | Analysis blocker | Upstream evaluator normalization is task-specific. | Resolved by freezing exact upstream scoring and reporting task-level scores only. The ordinary Task B fixture score of 0.5 is not a proven ceiling; a retained edge fixture scores 1.0. |
 | Publication-only blocker | Dataset rows, traces, answers, and screenshots require attribution/share-alike, privacy, and third-party-content review. | Private access-controlled execution is permitted; public raw release remains blocked. |
@@ -78,7 +78,8 @@ absolute wall; it never authorizes more empirical work.
 At every attempt boundary:
 
 1. calculate actual time since the durable provider launch send-start;
-2. require at least 3,600 seconds for the next attempt plus 900 seconds cleanup;
+2. require at least 5,160 seconds for the next condition, evaluator/evidence handoff,
+   provider dispatch, and cleanup envelope;
 3. do not reserve later attempts or setup maxima;
 4. refuse entry, preserve completed evidence, and clean up if the rule fails.
 

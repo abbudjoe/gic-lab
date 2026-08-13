@@ -1137,6 +1137,8 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
         "campaign_provider_wall_seconds": 14_400,
         "normal_cleanup_reserve_seconds": 900,
         "provider_termination_cutoff_seconds": 13_500,
+        "post_condition_evaluator_evidence_seconds": 600,
+        "termination_dispatch_margin_seconds": 60,
         "max_lambda_instances": 1,
         "max_launch_count": 1,
         "persistent_filesystems": 0,

@@ -1,4 +1,4 @@
-# T09 pragmatic calibration pilot execution plan
+# T09 pragmatic calibration pilot task plan
 
 Assembly status: **in-progress**
 
@@ -27,19 +27,19 @@ superiority/EXP-0001 conclusions.
 
 | ID | Requirement | Evidence | Status |
 |---|---|---|---|
-| T09-P3-01 | Preserve the exact scientific locks and calibration-only interpretation. | Dataset/evaluator/runtime contracts, scientific-hash regression. | met locally; final package binding pending |
-| T09-P3-02 | Freeze `PLAN-EXP0001-PILOT-V3` and fresh host, four condition, evaluator, pair, and archive identities. | Plan, execution contract, condition plans, command manifests. | partial: identities frozen; final reviewed hashes pending |
+| T09-P3-01 | Preserve the exact scientific locks and calibration-only interpretation. | Dataset/evaluator/runtime contracts, scientific-hash regression. | met: exact dataset, task, evaluator, SiRA, model, order, and interpretation bindings pass |
+| T09-P3-02 | Freeze `PLAN-EXP0001-PILOT-V3` and fresh host, four condition, evaluator, pair, and archive identities. | Plan, execution contract, condition plans, command manifests. | met statically: plan is 5,270 bytes / `0b17da814f9b20326a7220cec5f41e84c968a46c9d38e913f327afe267c26210`; every fresh identity and child hash is bound |
 | T09-P3-03 | Enforce a 14,400 s billable-instance campaign, 900 s cleanup reserve, one instance, one launch, zero filesystem, termination by 13,500 s, and no theoretical-maxima admission sum. | Typed campaign limits and fake-clock regressions. | met locally: existing observer and one-shot provider boundary share typed limits; cutoff/ambiguity tests pass |
 | T09-P3-04 | Charge setup, full condition walls, evaluator/evidence handoff, provider dispatch, and cleanup to the same actual campaign clock; admit each attempt only when all four fit. | Host runner and focused timing tests. | met locally: conservative launch-send origin and exact boundary tests pass |
-| T09-P3-05 | Keep model-call, token, OpenAI-cost, browser-step, condition/pair/total wall, output, disk, Lambda-duration/cost, attempt, and zero-retry caps effective. | Runtime cap tests and exact command/config diff. | met locally; final pair manifest regeneration pending |
-| T09-P3-06 | Pass exact local preflight and freeze a clean reviewed pre-run commit before empirical entry. | Preflight receipt, Git commit/hash, plan bytes/hash, independent review. | not-started |
+| T09-P3-05 | Keep model-call, token, OpenAI-cost, browser-step, condition/pair/total wall, output, disk, Lambda-duration/cost, attempt, and zero-retry caps effective. | Runtime cap tests and exact command/config diff. | met offline: cap/evidence tests pass and command package `8d25688a3ee4d5b3ae008f930da2cb37e591f4be4e3e4c7ccdf0f93b0fbef299` reports both pairs valid |
+| T09-P3-06 | Pass exact local preflight and freeze a clean reviewed pre-run commit before empirical entry. | Preflight receipt, Git commit/hash, plan bytes/hash, independent review. | partial: source review passed at `e5edff3f1b256aaa17ad7bc79c255d82350964c7`; final package commit/review and dynamic runtime preflight remain |
 | T09-P3-07 | Record the current-turn cloud authorization in the private cloud ledger and launch no more than one exact A10 host in `us-east-1` with no persistent filesystem. | Cloud-run ledger and private provider receipts. | not-started |
 | T09-P3-08 | Run Task A reactive then simulative exactly once and seal the automatic first-pair continuation decision. | Attempt/evaluator evidence and checkpoint receipt. | not-started |
 | T09-P3-09 | Run Task B simulative then reactive exactly once only if the checkpoint passes and remaining wall admits the next attempt. | Attempt/evaluator evidence or typed stop receipt. | not-started |
 | T09-P3-10 | Retain reconstructable, structurally redacted private evidence and valid evaluator outcomes for every consumed attempt. | Evidence indexes, outcome schemas, archive manifest/hash. | not-started |
 | T09-P3-11 | Prioritize cleanup, terminate the exact owned instance, verify terminal/absent state, and restore/delete only owned security resources. | Host cleanup, provider closeout, zero-instance/security receipts. | not-started |
 | T09-P3-12 | Reconcile actual calls, tokens, actions, wall, OpenAI/Lambda/total cost and update compute/project/experiment/readiness/decision/notebook records without a scientific conclusion. | Post-run commit and repository validation. | not-started |
-| T09-P3-13 | Pass focused tests, independent spec review, post-review smoke, `make validate`, privacy scans, `git diff --check`, and the final repository gates appropriate after evidence capture. | Command log in this plan. | not-started |
+| T09-P3-13 | Pass focused tests, independent spec review, post-review smoke, `make validate`, privacy scans, `git diff --check`, and the final repository gates appropriate after evidence capture. | Command log in this plan. | partial: focused gates and portable-Quarto full gate (1,331 tests, 16 pages) pass; final package review remains |
 
 ## Implementation mapping
 
@@ -85,6 +85,23 @@ superiority/EXP-0001 conclusions.
   off-host export acknowledgement before later empirical entry, allowlists provider
   projections, makes aggregate staging optional, and delegates every read-only GET to
   the retained T07 observer transport. Cloud admission remains closed for rereview.
+- 2026-08-13: subsequent immutable reviews drove the disk/archive headroom repair and
+  the immediate provisional exact-ID ownership/cleanup path. Final source commit
+  `e5edff3f1b256aaa17ad7bc79c255d82350964c7` received independent **PASS** with
+  39/39 source-focused tests and no material residual; no external request occurred.
+- 2026-08-13: rebound the V3 plan (5,270 bytes, SHA-256
+  `0b17da814f9b20326a7220cec5f41e84c968a46c9d38e913f327afe267c26210`),
+  runtime identity (`bf881b5e7110f459b87594a6b40cea843753e48e4cf298b6a9774e8035c7d2a8`),
+  execution contract (`badce51c0e7574d22e71ea3915bfb3049ca6460a621ad6e8fde0e029f56b0727`),
+  all four child plans, and the generated command package
+  (`8d25688a3ee4d5b3ae008f930da2cb37e591f4be4e3e4c7ccdf0f93b0fbef299`).
+  Both normalized actual-argv pair diffs are valid. All 42 T09 tests, all 13
+  Phase-1 control tests, repository validation, Ruff, and strict mypy pass.
+- 2026-08-13: the full gate with the retained portable Quarto 1.9.38 binary passed:
+  lock/sync, Ruff, strict mypy over 61 source files, all 1,331 tests, repository
+  validation, all 16 notebook pages, and site validation. The only Quarto diagnostic
+  was the known nonfatal output-path warning. Tracked-file privacy/secret and public
+  path regressions are included in this passing suite.
 
 ## Decisions and blockers
 
@@ -101,7 +118,7 @@ superiority/EXP-0001 conclusions.
 
 ## Next permitted phase
 
-Create the immutable implementation ancestor and obtain independent
-spec-conformance rereview. Cloud mutation remains forbidden until rereview passes,
-all final hashes bind, the package is clean, exact preflight passes, and the private
-cloud authorization ledger is sealed.
+Commit the bound package and obtain the final independent package review. Cloud
+mutation remains forbidden until the package is clean, that review passes, the
+single-use private authorization ledger is sealed, and the exact dynamic preflight
+passes.

@@ -20,25 +20,28 @@ pair, host, condition, evaluator, stage, and archive identities.
 |---|---|---|
 | T09-V3-01 | Parameterize one actual-time 14,400-second provider campaign with 900-second cleanup reserve and 13,500-second termination cutoff. | met locally: the existing observer and one-shot provider boundary share one typed immutable V3 limit set; T07 defaults remain 3,600/1,800 |
 | T09-V3-02 | Admit an attempt only when its full 3,600-second condition wall, 600-second evaluator/evidence handoff, 60-second termination-dispatch margin, and cleanup reserve remain; do not sum future maxima. | met locally: exact admission/cutoff fake-clock regressions pass |
-| T09-V3-03 | Preserve science/evaluator/tasks/order/pairing and machine-diff four exact V3 commands. | partial: scientific constants unchanged and pair render test passes; final hashes pending reviewed ancestor |
+| T09-V3-03 | Preserve science/evaluator/tasks/order/pairing and machine-diff four exact V3 commands. | met statically: plan `0b17da814f9b20326a7220cec5f41e84c968a46c9d38e913f327afe267c26210`; command package `8d25688a3ee4d5b3ae008f930da2cb37e591f4be4e3e4c7ccdf0f93b0fbef299`; both pairs valid |
 | T09-V3-04 | Keep calls/tokens/actions/cost/wall/output/disk/attempt/zero-retry and evidence counters effective. | met locally: focused cap/evidence tests pass; exact runtime preflight pending clean freeze |
-| T09-V3-05 | Pass independent spec-conformance review, repair/rereview, and post-review smoke before freeze. | in progress: second review rejected the first source repair; confirmed ownership, response ambiguity, multi-ID cleanup, export acknowledgement, full condition-wall, handoff, projection, reuse, and staging controls are repaired and immutable rereview is next |
-| T09-V3-06 | Freeze a clean pre-run package and single-use private authorization/cloud ledger before one launch. | not-started |
+| T09-V3-05 | Pass independent spec-conformance review, repair/rereview, and post-review smoke before freeze. | partial: final source review passed at `e5edff3f1b256aaa17ad7bc79c255d82350964c7`; bound package review remains |
+| T09-V3-06 | Freeze a clean pre-run package and single-use private authorization/cloud ledger before one launch. | partial: all tracked hashes are bound; clean package commit and private single-use overlay remain |
 | T09-V3-07 | Execute Task A pair, checkpoint, eligible Task B pair, and pinned evaluators with zero retry. | not-started |
 | T09-V3-08 | Seal evidence, terminate exact provider resource, prove zero residue/security restoration, reconcile accounting, and update public/control surfaces without a scientific conclusion. | not-started |
 
-Focused evidence so far: the combined existing-observer and T09 source suite passes
-after excluding only expected final-package hash tests; source-derived provider entry,
+Focused evidence: the combined existing-observer and T09 source suite passes;
+source-derived provider entry,
 malformed-response ambiguity, multi-ID incident cleanup, source-bound exact-target
 closeout, cutoff, off-host attempt-export acknowledgement, full condition wall,
 campaign admission, science lock, evaluator, pair, budget, and checkpoint regressions
-pass.
-Focused Ruff, strict mypy, and `git diff --check` pass. No Lambda/OpenAI/browser/
+pass. Final source review returned **PASS** at
+`e5edff3f1b256aaa17ad7bc79c255d82350964c7`. The rebound package passes 42 T09
+tests, 13 Phase-1 tests, repository validation, Ruff, strict mypy, and exact pair
+rendering. The portable-Quarto 1.9.38 full gate passes all 1,331 tests and renders
+all 16 notebook pages with site validation. No Lambda/OpenAI/browser/
 SiRA/FanOutQA request or cloud mutation has occurred in V3 while this entry is in
 progress.
 
 The complete active DoD and command/evidence log are maintained in
-`docs/exec-plans/active/T09_PRAGMATIC_CALIBRATION_PILOT.md`.
+`docs/harness/T09_PRAGMATIC_CALIBRATION_PILOT_EXECUTION_PLAN.md`.
 
 ---
 

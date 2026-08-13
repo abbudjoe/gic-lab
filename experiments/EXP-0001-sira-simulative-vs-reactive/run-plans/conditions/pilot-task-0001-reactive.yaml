@@ -3,7 +3,7 @@ experiment_id: EXP-0001
 run_id: RUN-T09-TASK-B-REACTIVE-0001
 profile: pilot
 profile_plan_id: PLAN-EXP0001-PILOT-V3
-profile_sha256: 95f73429c449486198c8283b8ca93cf8a0bdeb2f7da43cf717d868f6487b4958
+profile_sha256: 0b17da814f9b20326a7220cec5f41e84c968a46c9d38e913f327afe267c26210
 condition: SIRA-REACTIVE
 attempt: 1
 seed: 42
@@ -16,14 +16,14 @@ execution:
     authorization_reference: null
     command_sha256: null
 sources:
-  giclab_commit: 9ab0bb1000de0049a9067704db9533f4409ccf31
+  giclab_commit: e5edff3f1b256aaa17ad7bc79c255d82350964c7
   upstream_source_id: SRC-SIRA-REPOSITORY
   upstream_commit: 93fb8d72de71f9a4a13419670adeb34d93cf7acd
   protocol_sha256: 5356fc8b3806f4135eb570f65b67da2f94463582db5e3e609320e23dbdb2a3f7
   config_sha256: cf25acd90f9d73d9aef978a7d059cfbc74a1447d901f4e3d27e2b5d9f121d2ed
   model_revision: gpt-4o-2024-11-20
   dataset_revision: 76ad1feb689b754bfe4e5e24d3ea371b647efa67
-  environment_sha256: 1f095a826705f0894791b4ddfc60c58629c4a934a033d697890d6390c890dfcb
+  environment_sha256: bf881b5e7110f459b87594a6b40cea843753e48e4cf298b6a9774e8035c7d2a8
 task:
   task_id: 2120afba8009bad3
   source_kind: dataset-slice
@@ -42,7 +42,7 @@ budget:
   max_model_calls: 1155
   max_model_tokens: 1000000
   max_tool_calls: 30
-  max_output_bytes: 1073741824
+  max_output_bytes: 67108864
 artifacts:
   root: artifacts/EXP-0001/pilot-v3/task-b/reactive/attempt-0001
   retain_raw: true
