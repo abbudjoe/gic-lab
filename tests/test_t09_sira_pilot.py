@@ -1286,7 +1286,7 @@ def test_finalized_attempt_streams_before_cutoff_without_aggregate_stage(
     interrupted = InterruptedDestination()
     with pytest.raises(OSError, match="operator transfer interrupted"):
         host.export_attempt(arguments, interrupted)
-    quarantined = list(exports.glob("*.partial-*.tar.gz"))
+    quarantined = list(exports.glob("*.tar.gz.partial"))
     assert len(quarantined) == 1
     assert quarantined[0].read_bytes() == b"interrupted-archive-prefix"
     complete_bytes = archive.read_bytes()
@@ -1363,6 +1363,28 @@ def test_finalized_attempt_streams_before_cutoff_without_aggregate_stage(
             next_attempt_index=1,
             package_commit="a" * 40,
         )
+
+    # Logical size, including sparse files, is the hard disk accounting
+    # surface.  An already-complete archive must not bypass that guard.
+    sparse = pilot_root / "sparse-headroom-fixture.bin"
+    with sparse.open("wb") as handle:
+        handle.truncate(host.MAX_PILOT_DISK_BYTES)
+    bytes_before_refusal = host.tree_bytes(artifact_root)
+    with pytest.raises(host.T09HostError, match="aggregate pilot disk headroom"):
+        host.export_attempt(arguments, io.BytesIO())
+    assert host.tree_bytes(artifact_root) == bytes_before_refusal
+    assert archive.read_bytes() == complete_bytes
+    sparse.unlink()
+
+    # Only one quarantined source prefix may exist.  A subsequently corrupted
+    # active archive fails without a second rename or replacement write.
+    archive.write_bytes(b"second-corrupt-archive-prefix")
+    bytes_before_repeat = host.tree_bytes(artifact_root)
+    with pytest.raises(host.T09HostError, match="one bounded partial archive"):
+        host.export_attempt(arguments, io.BytesIO())
+    assert host.tree_bytes(artifact_root) == bytes_before_repeat
+    assert archive.read_bytes() == b"second-corrupt-archive-prefix"
+    assert list(exports.glob("*.tar.gz.partial")) == quarantined
 
 
 def test_host_secret_cleanup_finds_cross_chunk_match_and_destroys_exact_file(

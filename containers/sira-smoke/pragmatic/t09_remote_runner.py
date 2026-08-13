@@ -2107,19 +2107,53 @@ def _attempt_export_archive_matches(
 
 
 def _quarantine_partial_attempt_export(archive: Path) -> Path:
-    """Move an incomplete archive aside without destroying failure evidence."""
+    """Retain at most one bounded incomplete archive for this attempt."""
 
-    for ordinal in range(1, 101):
-        quarantined = archive.with_name(f"{archive.stem}.partial-{ordinal:03d}.tar.gz")
-        if not os.path.lexists(quarantined):
-            archive.rename(quarantined)
-            descriptor = os.open(archive.parent, os.O_RDONLY)
-            try:
-                os.fsync(descriptor)
-            finally:
-                os.close(descriptor)
-            return quarantined
-    raise T09HostError("attempt export has too many quarantined partial archives")
+    quarantined = archive.with_name(f"{archive.name}.partial")
+    if os.path.lexists(quarantined):
+        raise T09HostError("attempt export already retains its one bounded partial archive")
+    archive.rename(quarantined)
+    descriptor = os.open(archive.parent, os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+    return quarantined
+
+
+def _require_pilot_disk_headroom(artifact_root: Path, *, additional_bytes: int) -> int:
+    """Reject a local write unless its full upper bound fits the hard disk cap."""
+
+    if type(additional_bytes) is not int or additional_bytes < 0:
+        raise T09HostError("attempt export disk reservation is invalid")
+    current = tree_bytes(artifact_root)
+    if current > MAX_PILOT_DISK_BYTES or additional_bytes > MAX_PILOT_DISK_BYTES - current:
+        raise T09HostError("attempt export lacks aggregate pilot disk headroom")
+    return current
+
+
+class _BoundedArchiveWriter:
+    """Write-through file adapter that cannot cross the archive byte ceiling."""
+
+    def __init__(self, raw: BinaryIO) -> None:
+        self.raw = raw
+
+    def write(self, value: bytes) -> int:
+        position = self.raw.tell()
+        if position > MAX_ATTEMPT_EXPORT_BYTES or len(value) > MAX_ATTEMPT_EXPORT_BYTES - position:
+            raise T09HostError("attempt export archive exceeded its write-time byte cap")
+        if not value:
+            return 0
+        written = self.raw.write(value)
+        if written is None or written <= 0:
+            raise T09HostError("attempt export archive write made no progress")
+        return written
+
+    def tell(self) -> int:
+        return self.raw.tell()
+
+    def flush(self) -> None:
+        self.raw.flush()
 
 
 def export_attempt(args: argparse.Namespace, destination: BinaryIO) -> dict[str, object]:
@@ -2127,6 +2161,7 @@ def export_attempt(args: argparse.Namespace, destination: BinaryIO) -> dict[str,
 
     repository = args.repository.resolve(strict=True)
     artifact_root = args.artifact_root.resolve(strict=True)
+    _require_pilot_disk_headroom(artifact_root, additional_bytes=0)
     command_document = load_object(
         contract_paths(repository)["commands"], label="command manifest set"
     )
@@ -2187,6 +2222,10 @@ def export_attempt(args: argparse.Namespace, destination: BinaryIO) -> dict[str,
         if load_object(export_manifest_path, label="attempt export manifest") != export_manifest:
             raise T09HostError("retained attempt export manifest drifted")
     else:
+        manifest_bytes = len(
+            (json.dumps(export_manifest, allow_nan=False, indent=2, sort_keys=True) + "\n").encode()
+        )
+        _require_pilot_disk_headroom(artifact_root, additional_bytes=manifest_bytes)
         write_exclusive(export_manifest_path, export_manifest)
     remaining_attempt = float(evidence_deadline_epoch) - time.time()
     remaining_campaign_to_cutoff = (
@@ -2206,17 +2245,35 @@ def export_attempt(args: argparse.Namespace, destination: BinaryIO) -> dict[str,
             export_manifest_path=export_manifest_path,
             export_manifest=export_manifest,
         ):
+            # A rename adds no bytes, but a replacement is useful only when its
+            # complete upper bound already fits.  Check before changing state.
+            _require_pilot_disk_headroom(
+                artifact_root,
+                additional_bytes=MAX_ATTEMPT_EXPORT_BYTES,
+            )
             _quarantine_partial_attempt_export(archive)
         if not archive.exists():
-            with tarfile.open(archive, "x:gz") as handle:
-                for entry in files:
-                    relative = str(entry["path"])
-                    handle.add(attempt_root / relative, arcname=relative, recursive=False)
-                handle.add(
-                    export_manifest_path,
-                    arcname="attempt-export-manifest.json",
-                    recursive=False,
-                )
+            _require_pilot_disk_headroom(
+                artifact_root,
+                additional_bytes=MAX_ATTEMPT_EXPORT_BYTES,
+            )
+            with archive.open("xb") as raw_archive:
+                bounded_archive = _BoundedArchiveWriter(raw_archive)
+                with tarfile.open(
+                    fileobj=cast(BinaryIO, bounded_archive),
+                    mode="w:gz",
+                ) as handle:
+                    for entry in files:
+                        relative = str(entry["path"])
+                        handle.add(attempt_root / relative, arcname=relative, recursive=False)
+                    handle.add(
+                        export_manifest_path,
+                        arcname="attempt-export-manifest.json",
+                        recursive=False,
+                    )
+                bounded_archive.flush()
+                os.fsync(raw_archive.fileno())
+        _require_pilot_disk_headroom(artifact_root, additional_bytes=0)
         if not _attempt_export_archive_matches(
             archive,
             export_manifest_path=export_manifest_path,
