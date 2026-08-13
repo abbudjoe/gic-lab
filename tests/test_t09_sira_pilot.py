@@ -658,9 +658,14 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
             "data": [
                 {
                     "id": provider.IMAGE_ID,
+                    "region": {"name": "us-west-2"},
+                    "family": "lambda-stack-22-04",
+                },
+                {
+                    "id": provider.IMAGE_ID,
                     "region": {"name": provider.REGION},
                     "family": "lambda-stack-22-04",
-                }
+                },
             ]
         },
         {"data": [{"name": provider.SSH_KEY_NAME, "public_key": public_key}]},

@@ -1027,9 +1027,9 @@ def _validate_prelaunch_documents(
     selected_images = [
         _mapping(item, label="image")
         for item in images
-        if isinstance(item, dict) and item.get("id") == IMAGE_ID
+        if isinstance(item, dict) and item.get("id") == IMAGE_ID and _region_name(item) == REGION
     ]
-    if len(selected_images) != 1 or _region_name(selected_images[0]) != REGION:
+    if len(selected_images) != 1:
         raise T09ProviderError("frozen pragmatic image is unavailable in us-east-1")
     keys = _list(
         _envelope(documents["ssh-keys"][0][1], label="SSH keys"),
