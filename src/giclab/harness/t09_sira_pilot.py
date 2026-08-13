@@ -27,7 +27,7 @@ from giclab.harness.sira_gate_a import (
     ProviderBudgetUsage,
 )
 
-PLAN_ID: Final = "PLAN-EXP0001-PILOT-V3"
+PLAN_ID: Final = "PLAN-EXP0001-PILOT-V4"
 EXPERIMENT_ID: Final = "EXP-0001"
 SIRA_COMMIT: Final = "93fb8d72de71f9a4a13419670adeb34d93cf7acd"
 MODEL_REVISION: Final = "gpt-4o-2024-11-20"
@@ -49,16 +49,21 @@ TASK_REFERENCE_SHA256S: Final = (
     "2ee9d892e24441d5f5bbf31b7616c1ade5977af26d22e4020f92a162fa23becb",
 )
 ATTEMPT_ORDER: Final = (
-    "RUN-T09-TASK-A-REACTIVE-0001",
-    "RUN-T09-TASK-A-SIMULATIVE-0001",
-    "RUN-T09-TASK-B-SIMULATIVE-0001",
-    "RUN-T09-TASK-B-REACTIVE-0001",
+    "RUN-T09-TASK-A-REACTIVE-0002",
+    "RUN-T09-TASK-A-SIMULATIVE-0002",
+    "RUN-T09-TASK-B-SIMULATIVE-0002",
+    "RUN-T09-TASK-B-REACTIVE-0002",
 )
 EVALUATOR_RUN_IDS: Final = (
-    "RUN-T09-EVAL-TASK-A-REACTIVE-0001",
-    "RUN-T09-EVAL-TASK-A-SIMULATIVE-0001",
-    "RUN-T09-EVAL-TASK-B-SIMULATIVE-0001",
-    "RUN-T09-EVAL-TASK-B-REACTIVE-0001",
+    "RUN-T09-EVAL-TASK-A-REACTIVE-0002",
+    "RUN-T09-EVAL-TASK-A-SIMULATIVE-0002",
+    "RUN-T09-EVAL-TASK-B-SIMULATIVE-0002",
+    "RUN-T09-EVAL-TASK-B-REACTIVE-0002",
+)
+RUNTIME_QUALIFICATION_ID: Final = "QUAL-T09-PILOT-V4-IMAGE-0002"
+FROZEN_RUN_MANIFEST_ID: Final = "RUN-MANIFEST-EXP0001-PILOT-V4-0002"
+HISTORICAL_IMAGE_ID: Final = (
+    "sha256:035edf61718e84a8156f4f0f7817b134b0ce31488d3f0b50bbfba2b4a30cc61c"
 )
 
 _HEX64 = re.compile(r"^[a-f0-9]{64}$")
@@ -217,6 +222,103 @@ def load_json_object(path: Path, *, context: str) -> dict[str, object]:
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         raise T09PilotError(f"{context} is not readable canonical JSON") from exc
     return _strict_object(value, context=context)
+
+
+@dataclass(frozen=True, slots=True)
+class RuntimeQualification:
+    """The source-derived pre-entry binding for the one accepted V4 image."""
+
+    manifest_id: str
+    qualification_id: str
+    clean_package_commit: str
+    replacement_image_id: str
+    historical_image_id: str
+    build_context_manifest_sha256: str
+    package_manifest_sha256: str
+    chromium_executable_sha256: str
+    patched_upstream_runner_sha256: str
+    model_metadata_request_count: int
+    model_task_request_count: int
+    task_browser_action_count: int
+    build_count: int
+    qualification_count: int
+    empirical_entry_crossed: bool
+
+    @classmethod
+    def from_document(cls, value: object) -> RuntimeQualification:
+        document = _strict_object(value, context="frozen runtime qualification")
+        result = cls(
+            manifest_id=_required_string(
+                document.get("manifest_id"), context="frozen manifest ID"
+            ),
+            qualification_id=_required_string(
+                document.get("qualification_id"), context="qualification ID"
+            ),
+            clean_package_commit=_required_string(
+                document.get("clean_package_commit"), context="clean package commit"
+            ),
+            replacement_image_id=_required_string(
+                document.get("replacement_image_id"), context="replacement image ID"
+            ),
+            historical_image_id=_required_string(
+                document.get("historical_image_id"), context="historical image ID"
+            ),
+            build_context_manifest_sha256=_required_string(
+                document.get("build_context_manifest_sha256"),
+                context="build-context manifest hash",
+            ),
+            package_manifest_sha256=_required_string(
+                document.get("package_manifest_sha256"), context="package manifest hash"
+            ),
+            chromium_executable_sha256=_required_string(
+                document.get("chromium_executable_sha256"), context="Chromium hash"
+            ),
+            patched_upstream_runner_sha256=_required_string(
+                document.get("patched_upstream_runner_sha256"),
+                context="patched upstream runner hash",
+            ),
+            model_metadata_request_count=_required_int(
+                document.get("model_metadata_request_count"),
+                context="model metadata request count",
+            ),
+            model_task_request_count=_required_int(
+                document.get("model_task_request_count"), context="model task request count"
+            ),
+            task_browser_action_count=_required_int(
+                document.get("task_browser_action_count"),
+                context="task browser action count",
+            ),
+            build_count=_required_int(document.get("build_count"), context="build count"),
+            qualification_count=_required_int(
+                document.get("qualification_count"), context="qualification count"
+            ),
+            empirical_entry_crossed=document.get("empirical_entry_crossed") is True,
+        )
+        hashes = (
+            result.build_context_manifest_sha256,
+            result.package_manifest_sha256,
+            result.chromium_executable_sha256,
+            result.patched_upstream_runner_sha256,
+        )
+        if (
+            document.get("schema_version") != "0.1.0"
+            or document.get("plan_id") != PLAN_ID
+            or result.manifest_id != FROZEN_RUN_MANIFEST_ID
+            or result.qualification_id != RUNTIME_QUALIFICATION_ID
+            or re.fullmatch(r"[a-f0-9]{40}", result.clean_package_commit) is None
+            or re.fullmatch(r"sha256:[a-f0-9]{64}", result.replacement_image_id) is None
+            or result.historical_image_id != HISTORICAL_IMAGE_ID
+            or any(_HEX64.fullmatch(item) is None for item in hashes)
+            or result.model_metadata_request_count != 1
+            or result.model_task_request_count != 0
+            or result.task_browser_action_count != 0
+            or result.build_count != 1
+            or result.qualification_count != 1
+            or document.get("empirical_entry_crossed") is not False
+            or document.get("post_entry_code_science_image_freeze") is not True
+        ):
+            raise T09PilotError("frozen runtime qualification contract drifted")
+        return result
 
 
 @dataclass(frozen=True, slots=True)
@@ -405,7 +507,7 @@ def load_execution_contract(path: Path, *, expected_sha256: str) -> PilotExecuti
         raise T09PilotError("execution contract hash does not match")
     document = load_json_object(path, context="T09 execution contract")
     expected_identity = {
-        "schema_version": "0.1.0",
+        "schema_version": "0.2.0",
         "plan_id": PLAN_ID,
         "experiment_id": EXPERIMENT_ID,
         "sira_commit": SIRA_COMMIT,
@@ -923,6 +1025,8 @@ class PairCheckpointInput:
     actual_lambda_cost_usd: float
     remaining_campaign_seconds: float
     next_attempt_hard_wall_seconds: int = 3_600
+    prior_t09_cost_usd: float = 0.414064252316667
+    cumulative_t09_cost_cap_usd: float = 46.0
 
 
 def first_pair_decision(value: PairCheckpointInput) -> dict[str, object]:
@@ -975,6 +1079,11 @@ def first_pair_decision(value: PairCheckpointInput) -> dict[str, object]:
         value.projected_aggregate_cost_usd > 45.16
     ):
         reasons.append("projected_aggregate_cost_exceeds_hard_cap")
+    projected_cumulative = value.prior_t09_cost_usd + value.projected_aggregate_cost_usd
+    if not math.isfinite(projected_cumulative) or (
+        projected_cumulative > value.cumulative_t09_cost_cap_usd
+    ):
+        reasons.append("projected_cumulative_t09_cost_exceeds_hard_cap")
     lifecycle = CampaignLifecycleLimits(
         campaign_provider_wall_seconds=14_400,
         normal_cleanup_reserve_seconds=900,
@@ -1001,6 +1110,9 @@ def first_pair_decision(value: PairCheckpointInput) -> dict[str, object]:
         "reasons": reasons,
         "actual_first_pair_total_cost_usd": actual_total_cost,
         "projected_aggregate_cost_usd": value.projected_aggregate_cost_usd,
+        "prior_t09_cost_usd": value.prior_t09_cost_usd,
+        "projected_cumulative_t09_cost_usd": projected_cumulative,
+        "cumulative_t09_cost_cap_usd": value.cumulative_t09_cost_cap_usd,
         "remaining_campaign_seconds": value.remaining_campaign_seconds,
         "required_campaign_seconds_for_next_attempt": required_campaign_seconds,
         "thresholds": strict_half_caps,
@@ -1265,7 +1377,7 @@ def outcome_contract(
         and not missing_required_evidence
     )
     return {
-        "schema_version": "0.1.0",
+        "schema_version": "0.2.0",
         "process_exit": {
             "observed": process_exit_code is not None,
             "code": process_exit_code,
@@ -1334,8 +1446,8 @@ def _validated_upstream_argv(
         "--end_idx": str(attempt.task_index + 1),
         "--seed": "42",
     }
-    upstream_suffix = attempt.run_id.removeprefix("RUN-T09-").removesuffix("-0001")
-    upstream_run_id = f"EXP-0001-PILOT-V3-{upstream_suffix}"
+    upstream_suffix = attempt.run_id.removeprefix("RUN-T09-").removesuffix("-0002")
+    upstream_run_id = f"EXP-0001-PILOT-V4-{upstream_suffix}"
     if argv[0] != upstream_run_id or values != expected:
         raise T09PilotError("upstream argv drifted from the exact task/condition contract")
     return values
@@ -1395,7 +1507,7 @@ def render_command_manifest(
     equality_surface = {
         "task_id": attempt.task_id,
         "model": MODEL_REVISION,
-        "runtime": "T07-pragmatic-python-3.11.14-image-sha256-035edf61718e",
+        "runtime": "T09-V4-python-3.11.14-preentry-bound-replacement-image",
         "giclab_commit": attempt.giclab_commit,
         "protocol_sha256": attempt.protocol_sha256,
         "config_sha256": attempt.config_sha256,
@@ -1488,8 +1600,8 @@ def _normalized_actual_argv(manifest: Mapping[str, object]) -> tuple[str, ...] |
             return None
         argv[indexes[0] + 1] = replacement
     downstream = argv[separator + 1 :]
-    upstream_suffix = run_id.removeprefix("RUN-T09-").removesuffix("-0001")
-    expected_upstream_run_id = f"EXP-0001-PILOT-V3-{upstream_suffix}"
+    upstream_suffix = run_id.removeprefix("RUN-T09-").removesuffix("-0002")
+    expected_upstream_run_id = f"EXP-0001-PILOT-V4-{upstream_suffix}"
     if not downstream or downstream[0] != expected_upstream_run_id:
         return None
     downstream[0] = "<UPSTREAM-RUN-ID>"

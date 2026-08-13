@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:gic-lab:schema:t09-sira-pilot-score:0.1.0",
+  "$id": "urn:gic-lab:schema:t09-sira-pilot-score:0.2.0",
   "title": "T09 SiRA calibration-pilot attempt outcome and score",
   "type": "object",
   "additionalProperties": false,
@@ -26,11 +26,11 @@
     "score_provenance"
   ],
   "properties": {
-    "schema_version": {"const": "0.1.0"},
-    "plan_id": {"const": "PLAN-EXP0001-PILOT-V3"},
-    "run_id": {"type": "string", "pattern": "^RUN-T09-TASK-[AB]-(?:REACTIVE|SIMULATIVE)-0001$"},
+    "schema_version": {"const": "0.2.0"},
+    "plan_id": {"const": "PLAN-EXP0001-PILOT-V4"},
+    "run_id": {"type": "string", "pattern": "^RUN-T09-TASK-[AB]-(?:REACTIVE|SIMULATIVE)-0002$"},
     "task_id": {"enum": ["7dcbbbdc7f1120cd", "2120afba8009bad3"]},
-    "pair_id": {"enum": ["PAIR-EXP0001-PILOT-V3-TASK-A", "PAIR-EXP0001-PILOT-V3-TASK-B"]},
+    "pair_id": {"enum": ["PAIR-EXP0001-PILOT-V4-TASK-A", "PAIR-EXP0001-PILOT-V4-TASK-B"]},
     "condition": {"enum": ["SIRA-REACTIVE", "SIRA-SIMULATIVE"]},
     "process_exit": {
       "type": "object",

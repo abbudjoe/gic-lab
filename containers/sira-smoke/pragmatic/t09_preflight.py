@@ -18,6 +18,7 @@ from giclab.harness.sira_gate_a import ProviderBudgetUsage
 from giclab.harness.t09_sira_pilot import (
     ATTEMPT_ORDER,
     EvaluatorIdentity,
+    evaluate_retained_session,
     file_sha256,
     load_aggregate_usage,
     load_execution_contract,
@@ -35,6 +36,10 @@ RUNTIME_MODULES = (
 
 class PreflightError(RuntimeError):
     """The exact offline T09 preflight contract failed."""
+
+
+TASK_A = "What is the batting hand of each of the first five picks in the 1998 MLB draft?"
+TASK_B = "What were box office values of the Star Wars films in the prequel and sequel trilogies?"
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -77,6 +82,204 @@ def _load_object(path: Path) -> dict[str, Any]:
     if not isinstance(value, dict) or not all(isinstance(key, str) for key in value):
         raise PreflightError("command manifest document is malformed")
     return cast(dict[str, Any], value)
+
+
+def _fixture_session(
+    path: Path,
+    *,
+    goal: str,
+    action: str,
+    complete: bool,
+    history: bool = True,
+) -> Path:
+    _write_exclusive(
+        path,
+        {
+            "goal": goal,
+            "instance_id": None,
+            "history": (
+                [[{"url": "about:blank"}, action, {"thought": "offline fixture"}]]
+                if history
+                else []
+            ),
+            "is_complete": complete,
+            "error": "",
+        },
+    )
+    return path
+
+
+def _run_evaluator_fixtures(
+    *,
+    attempt_root: Path,
+    evaluator_root: Path,
+    dataset: Path,
+) -> list[dict[str, object]]:
+    fixture_root = attempt_root / "evaluator-fixtures"
+    fixture_root.mkdir(mode=0o700)
+    task_a = EvaluatorIdentity(root=evaluator_root, dataset_path=dataset, task_index=0)
+    task_b = EvaluatorIdentity(root=evaluator_root, dataset_path=dataset, task_index=1)
+    cases = [
+        (
+            "correct",
+            task_a,
+            _fixture_session(
+                fixture_root / "correct.json",
+                goal=TASK_A,
+                action=(
+                    "send_msg_to_user('Pat Burrell Right; Mark Mulder Left; Corey Patterson "
+                    "Left; Jeff Austin Right; JD Drew Left')"
+                ),
+                complete=True,
+            ),
+            0.9,
+            True,
+        ),
+        (
+            "incorrect",
+            task_a,
+            _fixture_session(
+                fixture_root / "incorrect.json",
+                goal=TASK_A,
+                action="send_msg_to_user('No relevant answer.')",
+                complete=True,
+            ),
+            0.0,
+            True,
+        ),
+        (
+            "partial",
+            task_a,
+            _fixture_session(
+                fixture_root / "partial.json",
+                goal=TASK_A,
+                action="send_msg_to_user('Pat Burrell bats Right.')",
+                complete=True,
+            ),
+            0.3,
+            True,
+        ),
+        (
+            "malformed",
+            task_a,
+            _fixture_session(
+                fixture_root / "malformed.json",
+                goal=TASK_A,
+                action="send_msg_to_user('Pat Burrell Right'",
+                complete=False,
+            ),
+            0.3,
+            True,
+        ),
+        (
+            "missing",
+            task_a,
+            _fixture_session(
+                fixture_root / "missing.json",
+                goal=TASK_A,
+                action="click('body')",
+                complete=False,
+            ),
+            0.0,
+            True,
+        ),
+        (
+            "normalization",
+            task_a,
+            _fixture_session(
+                fixture_root / "normalization.json",
+                goal=TASK_A,
+                action=(
+                    "send_msg_to_user('PAT BURRELL: RIGHT! MARK MULDER, LEFT; COREY "
+                    "PATTERSON LEFT. JEFF AUSTIN RIGHT? JD DREW LEFT.')"
+                ),
+                complete=True,
+            ),
+            1.0,
+            True,
+        ),
+        (
+            "task-b-ordinary",
+            task_b,
+            _fixture_session(
+                fixture_root / "task-b-ordinary.json",
+                goal=TASK_B,
+                action=(
+                    "send_msg_to_user('The Phantom Menace $1.027 billion; Attack of the "
+                    "Clones $653.8 million; Revenge of the Sith $868.4 million; The Force "
+                    "Awakens $2.071 billion; The Last Jedi $1.334 billion; The Rise of "
+                    "Skywalker $1.077 billion')"
+                ),
+                complete=True,
+            ),
+            0.5,
+            True,
+        ),
+        (
+            "task-b-normalization-edge",
+            task_b,
+            _fixture_session(
+                fixture_root / "task-b-normalization-edge.json",
+                goal=TASK_B,
+                action=(
+                    "send_msg_to_user('The Phantom Menace x$ 1.027 billion; Attack of the "
+                    "Clones x$ 653.8 million; Revenge of the Sith x$ 868.4 million; The Force "
+                    "Awakens x$ 2.071 billion; The Last Jedi x$ 1.334 billion; The Rise of "
+                    "Skywalker x$ 1.077 billion')"
+                ),
+                complete=True,
+            ),
+            1.0,
+            True,
+        ),
+    ]
+    results: list[dict[str, object]] = []
+    for name, identity, session, expected_score, expected_valid in cases:
+        observed = evaluate_retained_session(identity, [session])
+        score = observed.get("score")
+        if (
+            observed.get("evaluator_valid") is not expected_valid
+            or not isinstance(score, (int, float))
+            or isinstance(score, bool)
+            or abs(float(score) - expected_score) > 1e-12
+        ):
+            raise PreflightError(f"offline evaluator fixture drifted: {name}")
+        results.append(
+            {
+                "name": name,
+                "score": float(score),
+                "evaluator_valid": True,
+                "session_sha256": file_sha256(session),
+            }
+        )
+    exception_session = _fixture_session(
+        fixture_root / "exception.json",
+        goal=TASK_A,
+        action="",
+        complete=False,
+        history=False,
+    )
+    exception_result = evaluate_retained_session(task_a, [exception_session])
+    if (
+        exception_result.get("evaluator_valid") is not False
+        or exception_result.get("failure_code") != "evaluator_exception"
+        or exception_result.get("score") is not None
+    ):
+        raise PreflightError("offline evaluator exception fixture drifted")
+    duplicate_result = evaluate_retained_session(task_a, [cases[0][2], cases[0][2]])
+    if (
+        duplicate_result.get("evaluator_valid") is not False
+        or duplicate_result.get("failure_code") != "duplicate_evidence"
+        or duplicate_result.get("score") is not None
+    ):
+        raise PreflightError("offline evaluator duplicate fixture drifted")
+    results.extend(
+        [
+            {"name": "exception", "score": None, "evaluator_valid": False},
+            {"name": "duplicate", "score": None, "evaluator_valid": False},
+        ]
+    )
+    return results
 
 
 def run(args: argparse.Namespace) -> dict[str, object]:
@@ -188,6 +391,11 @@ def run(args: argparse.Namespace) -> dict[str, object]:
     }
     if observed_versions != expected_versions:
         raise PreflightError("evaluator package version identity drifted")
+    fixture_results = _run_evaluator_fixtures(
+        attempt_root=attempt_root,
+        evaluator_root=evaluator.root,
+        dataset=evaluator.dataset_path,
+    )
 
     result = {
         "schema_version": "0.1.0",
@@ -198,6 +406,8 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "command_rendering": "passed-four-exact-pair-valid",
         "evaluator_loading": "passed-exact-network-none",
         "evaluator_package_versions": observed_versions,
+        "offline_evaluator_fixtures": "passed-approved-exact-results",
+        "offline_evaluator_fixture_results": fixture_results,
         "task_loading": "passed-two-exact-rows",
         "provider_or_task_request": False,
         "browser_action": False,

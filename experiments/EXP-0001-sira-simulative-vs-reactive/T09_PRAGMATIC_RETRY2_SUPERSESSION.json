@@ -1,0 +1,36 @@
+{
+  "schema_version": "0.1.0",
+  "record_id": "T09-PRAGMATIC-RETRY2-SUPERSESSION-0001",
+  "recorded_at": "2026-08-13",
+  "experiment_id": "EXP-0001",
+  "superseded_plan_id": "PLAN-EXP0001-PILOT-V3",
+  "successor_plan_id": "PLAN-EXP0001-PILOT-V4",
+  "historical_disposition": {
+    "path": "experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_PREFLIGHT_DISPOSITION.json",
+    "sha256": "cb6ba0b003b61aec83a2a42188ee784c93ee08ae7e504f5a15a7287af83ac709",
+    "preserved_byte_for_byte": true,
+    "classification": "preflight_blocked_by_overstrict_cross_run_image_digest_requirement",
+    "model_calls": 0,
+    "browser_actions": 0,
+    "condition_attempts": 0,
+    "empirical_boundary_crossed": false,
+    "scientific_result": false
+  },
+  "preserved_archive_id": "ARCHIVE-EXP0001-PILOT-V3-0001",
+  "historical_image_id": "sha256:035edf61718e84a8156f4f0f7817b134b0ce31488d3f0b50bbfba2b4a30cc61c",
+  "superseding_decision": {
+    "historical_digest_equality_required": false,
+    "replacement_policy": "one-build-one-qualification-source-derived-preentry-frozen-run-manifest",
+    "scientific_contract_changed": false,
+    "reason": "A Docker image ID is a bit-level artifact identity, not a scientific variable when all pinned scientific inputs and observable functional runtime contracts are independently verified."
+  },
+  "source_authority": {
+    "reference": "T09 Pragmatic Retry 2 current-turn authorization, 2026-08-13",
+    "sha256": "3852fe8dabb9ee6b10e40cbc6dc1ab964ea6fce11f71f81f0966e927cadddeb9"
+  },
+  "reuse_prohibited": {
+    "prior_host_run_id": "RUN-T09-PILOT-HOST-0001",
+    "prior_attempt_suffix": "0001",
+    "prior_archive_id": "ARCHIVE-EXP0001-PILOT-V3-0001"
+  }
+}

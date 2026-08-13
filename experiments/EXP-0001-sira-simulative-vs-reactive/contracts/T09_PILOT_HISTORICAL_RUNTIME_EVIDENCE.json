@@ -1,0 +1,79 @@
+{
+  "schema_version": "0.1.0",
+  "contract_id": "T09-PILOT-HISTORICAL-RUNTIME-EVIDENCE-V1",
+  "historical_run_id": "RUN-T07-PRAGMATIC-HOST-0002",
+  "historical_image_id": "sha256:035edf61718e84a8156f4f0f7817b134b0ce31488d3f0b50bbfba2b4a30cc61c",
+  "source_image_inspect_path": "artifacts/t07/pragmatic/RUN-T07-PRAGMATIC-HOST-0002/setup-attempt-03/image-inspect.json",
+  "source_image_inspect_sha256": "682782e9fc5a573e2868bc65663129e99cff1ef9d1e543206d03dfb1dd4eb3de",
+  "source_setup_complete_path": "artifacts/t07/pragmatic/RUN-T07-PRAGMATIC-HOST-0002/setup-attempt-03/setup-complete.json",
+  "source_setup_complete_sha256": "7f816ed12215fc9fe09870a4d99ad5ce1facde4ee895a1b2c2da84c74af76334",
+  "base_image": "mcr.microsoft.com/playwright/python:v1.39.0-jammy@sha256:96955ff5cc37e13f5f1b21f5171afb9fed7e028025aa9d81c690501cd7fa0c6c",
+  "python_version": "3.11.14",
+  "installed_package_manifest_sha256": "4ff2603fa5e0f7033ba773decdcb86abf648dcce22e469d26bc48214e390e104",
+  "playwright_version": "1.39.0",
+  "chromium_revision": "1084",
+  "chromium_executable_sha256": "0498f208c25339f386413ada7b3c35293b0b6250e67d85446ba9541d7fd636f7",
+  "patched_upstream_runner_sha256": "b06793ad1b366a934b798f9f3272fc80a7104a220cb3304ab3bda2eb2a78b331",
+  "runtime_adaptation_sha256": "c461dce20fea9e743135cad98b664213a393e46f35d1c1a8434212b2f0367dbb",
+  "runtime_preflight_sha256": "0530b3ad25fac1d3f9372d31da8046bec67b6c74eea3cdd3c8d91353948f1b3d",
+  "routing_patch_sha256": "4d7e2a25f4313fc754db0fa17aeda51cc5cd75a5653adaf13b01ce87a71cb8ed",
+  "sira_commit": "93fb8d72de71f9a4a13419670adeb34d93cf7acd",
+  "sira_tree": "6a6d9068b94d7632d3533a3d6f013d4de6ff76e8",
+  "image_inspect_projection": {
+    "Config": {
+      "User": "1000:1000",
+      "Env": [
+        "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        "PLAYWRIGHT_BROWSERS_PATH=/ms-playwright",
+        "PYTHONDONTWRITEBYTECODE=1",
+        "PYTHONPATH=/opt/giclab-src",
+        "UV_HTTP_RETRIES=0",
+        "UV_LINK_MODE=copy",
+        "UV_NO_MODIFY_PATH=1",
+        "UV_PYTHON_INSTALL_DIR=/opt/giclab-python",
+        "UV_PYTHON_DOWNLOADS=automatic",
+        "UV_PROJECT_ENVIRONMENT=/opt/sira/.venv"
+      ],
+      "Cmd": [
+        "/bin/bash"
+      ],
+      "WorkingDir": "/opt/sira",
+      "Labels": {
+        "org.opencontainers.image.ref.name": "ubuntu",
+        "org.opencontainers.image.version": "22.04"
+      }
+    },
+    "Architecture": "amd64",
+    "Os": "linux",
+    "RootFS": {
+      "Type": "layers",
+      "Layers": [
+        "sha256:256d88da41857db513b95b50ba9a9b28491b58c954e25477d5dad8abb465430b",
+        "sha256:13fdf0b756e22964422123a226c478acf9265a553b0fe55ef63d4dc9eec22e31",
+        "sha256:2ceda1fd393312c3e641f4805968d02e504dd4ee92068d9dcc096cb07b00e458",
+        "sha256:291c46582bf9f11117da5250a5cefcfef96639033c940efab3bf26382ca74a4b",
+        "sha256:92fa01d613f27a87980a4be4113e6610110eddc3068726a4b80d3605d2fedb44",
+        "sha256:0c8d58819ea7b42ed4cc025825e6144eb2d2740f69fae66542863b60d6e06326",
+        "sha256:eaf219d05283b2e63c4ba990e69bab78ef47d4d6e24dda7da510efb20a68928a",
+        "sha256:fdd9a4df5c2854cc34981e97edee287d8ce150c6e0b52b81d419ba4f539edff4",
+        "sha256:98d59cc76281490f11326280251ddd92fe4504bcd9f9b67a5f2a15fc420503f9",
+        "sha256:9d46ef9804a2f7645593fe4de1063b751caa8abfd45e4b0d153a33bec381c684",
+        "sha256:cc14fc7e62b818275a1347c77c778cc1ce24c40c789d205aa3212698ee9e368b",
+        "sha256:7301f6657345ce6b1941217d5fb70c33ca635d7f756380234a3b8bff607ff2ab",
+        "sha256:33759367e0a557d6eb5d12d07b4adc8df24955fd455d045ae7fb5a09ad10d661",
+        "sha256:c2837cd192fb3a91c8649d39ec2ee8f711c2d166428b7bb965267d82e9a39256",
+        "sha256:b05c0cb8bc25c7e05b87d863629abfd022a7788e9f6b372c77e981bdbae9dca9",
+        "sha256:06a2a50c7006eecb9af26c23cf01803e9c39c8e089456e75aeca6db97773b281",
+        "sha256:61f88bb2685d2d48d3b7c1010766dfc36f61c507ddacb0af9f5b2a92354534da",
+        "sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef"
+      ]
+    }
+  },
+  "historical_image_history": {
+    "classification": "historical_evidence_unavailable"
+  },
+  "historical_complete_build_context": {
+    "classification": "historical_evidence_unavailable"
+  },
+  "private_values_retained": false
+}

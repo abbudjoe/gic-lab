@@ -55,6 +55,12 @@ class ObserverLifecycleLimits:
             max_provider_cost_cents=516,
         )
 
+    @classmethod
+    def t09_pragmatic_v4(cls) -> ObserverLifecycleLimits:
+        """Retry 2 keeps the complete V3 campaign wall and cleanup envelope."""
+
+        return cls.t09_pragmatic_v3()
+
     def observer_active_seconds(
         self,
         *,

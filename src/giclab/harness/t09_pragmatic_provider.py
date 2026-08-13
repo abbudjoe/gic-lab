@@ -38,10 +38,10 @@ from giclab.harness.lambda_l2m_observer import (
     observer_request,
 )
 
-PLAN_ID: Final = "PLAN-EXP0001-PILOT-V3"
-HOST_RUN_ID: Final = "RUN-T09-PILOT-HOST-0001"
+PLAN_ID: Final = "PLAN-EXP0001-PILOT-V4"
+HOST_RUN_ID: Final = "RUN-T09-PILOT-HOST-0002"
 AUTHORIZATION_SOURCE_SHA256: Final = (
-    "1f8285ea3fc52f4084a945f1712870203463cb7fb92cc61ac2eeae47d119e4c7"
+    "3852fe8dabb9ee6b10e40cbc6dc1ab964ea6fce11f71f81f0966e927cadddeb9"
 )
 API_HOST: Final = "cloud.lambda.ai"
 API_PORT: Final = 443
@@ -49,7 +49,7 @@ INSTANCE_TYPE: Final = "gpu_1x_a10"
 REGION: Final = "us-east-1"
 IMAGE_ID: Final = "44fab622-b98a-49fe-ac6d-e4ce5531532f"
 SSH_KEY_NAME: Final = "fractal-lambda-codex"
-INSTANCE_NAME: Final = "giclab-t09-pilot-v3-0001"
+INSTANCE_NAME: Final = "giclab-t09-pilot-v4-0002"
 PRICE_CENTS_PER_HOUR: Final = 129
 SOURCE_OBSERVER: Final = "t07-pragmatic-mutations-plus-l2m-read-only-observer-v1"
 MAX_RESPONSE_BYTES: Final = 16_777_216
@@ -100,7 +100,7 @@ class CampaignLifecycle:
 
     def __post_init__(self) -> None:
         if (
-            self.observer_limits != ObserverLifecycleLimits.t09_pragmatic_v3()
+            self.observer_limits != ObserverLifecycleLimits.t09_pragmatic_v4()
             or self.max_instances != 1
             or self.max_launches != 1
             or self.persistent_filesystems != 0
@@ -708,7 +708,7 @@ def validate_authorization_ledger(
     required = {
         "schema_version": "0.1.0",
         "authorization_source_sha256": AUTHORIZATION_SOURCE_SHA256,
-        "authorization_reference": "AUTH-T09-PRAGMATIC-PILOT-2026-08-13",
+        "authorization_reference": "AUTH-T09-PRAGMATIC-RETRY2-2026-08-13",
         "authorized": True,
         "single_use": True,
         "clean_package_commit": package_commit,
@@ -720,6 +720,9 @@ def validate_authorization_ledger(
         "lambda_cost_cap_usd": 5.16,
         "openai_cost_cap_usd": 40.0,
         "aggregate_cost_cap_usd": 45.16,
+        "prior_t09_cost_usd": 0.414064252316667,
+        "cumulative_t09_cost_cap_usd": 46.0,
+        "replacement_image_policy": "one-build-one-qualification-preentry-bound-v1",
         "artifact_destination": ("/Volumes/Macintosh HD - Data/GIC-Lab/t09/sealed-artifacts"),
     }
     if value != required:
@@ -1527,6 +1530,11 @@ def _entry_projection(
         "region": REGION,
         "persistent_filesystems": 0,
         "hourly_price_usd": 1.29,
+        "new_campaign_openai_cost_cap_usd": 40.0,
+        "new_campaign_lambda_cost_cap_usd": 5.16,
+        "new_campaign_aggregate_cost_cap_usd": 45.16,
+        "prior_t09_cost_usd": 0.414064252316667,
+        "cumulative_t09_cost_cap_usd": 46.0,
         "billable_clock_source": "provider-launch-send-started-conservative",
         "provider_projection_retained_private": True,
         "raw_response_identity_retained": True,
@@ -1739,6 +1747,7 @@ def _closeout_projection(
     )
     termination_elapsed = termination_started - started
     terminal_elapsed = max(terminal_at, zero_at) - started
+    lambda_list_cost_usd = terminal_elapsed * 1.29 / 3600.0
     if termination_elapsed > lifecycle.termination_cutoff_seconds:
         campaign_exception = "termination-cutoff-violated"
     elif terminal_elapsed > lifecycle.wall_seconds:
@@ -1772,6 +1781,14 @@ def _closeout_projection(
         "raw_provider_payload_retained": False,
         "structural_redaction_passed": True,
         "campaign_wall_exception": campaign_exception,
+        "lambda_duration_seconds": terminal_elapsed,
+        "lambda_list_cost_usd": lambda_list_cost_usd,
+        "new_campaign_lambda_cost_cap_usd": 5.16,
+        "prior_t09_cost_usd": 0.414064252316667,
+        "cumulative_t09_cost_before_openai_usd": (
+            0.414064252316667 + lambda_list_cost_usd
+        ),
+        "cumulative_t09_cost_cap_usd": 46.0,
     }
 
 

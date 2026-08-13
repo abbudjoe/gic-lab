@@ -44,8 +44,6 @@ from giclab.harness.t09_sira_pilot import (
     record_first_pair_checkpoint,
 )
 
-CONTAINER_IMAGE_DIGEST = "sha256:035edf61718e84a8156f4f0f7817b134b0ce31488d3f0b50bbfba2b4a30cc61c"
-
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
@@ -57,6 +55,9 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--attempt-root", type=Path, required=True)
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--package-commit", required=True)
+    parser.add_argument("--frozen-run-manifest", type=Path, required=True)
+    parser.add_argument("--frozen-run-manifest-sha256", required=True)
+    parser.add_argument("--replacement-image-id", required=True)
     parser.add_argument("--aggregate-ledger", type=Path, required=True)
     parser.add_argument("--pilot-state", type=Path, required=True)
     parser.add_argument("--host-cleanup-receipt", type=Path, required=True)
@@ -344,7 +345,7 @@ def _first_pair_checkpoint(
             next_attempt_hard_wall_seconds=contract.limits.max_condition_wall_seconds,
         )
     )
-    checkpoint_path = artifact_base / "artifacts/EXP-0001/pilot-v3/first-pair-checkpoint.json"
+    checkpoint_path = artifact_base / "artifacts/EXP-0001/pilot-v4/first-pair-checkpoint.json"
     _write_exclusive(checkpoint_path, decision)
     record_first_pair_checkpoint(
         pilot_state,
@@ -364,6 +365,25 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
         args.execution_contract.resolve(strict=True),
         expected_sha256=args.execution_contract_sha256,
     )
+    frozen_manifest_path = args.frozen_run_manifest.resolve(strict=True)
+    if file_sha256(frozen_manifest_path) != args.frozen_run_manifest_sha256:
+        raise T09PilotError("frozen run manifest hash changed")
+    frozen_manifest = _load_object(frozen_manifest_path, label="frozen run manifest")
+    if (
+        frozen_manifest.get("plan_id") != PLAN_ID
+        or frozen_manifest.get("clean_package_commit") != args.package_commit
+        or frozen_manifest.get("execution_contract_sha256") != contract.sha256
+        or frozen_manifest.get("replacement_image_id") != args.replacement_image_id
+        or frozen_manifest.get("package_manifest_sha256")
+        != "4ff2603fa5e0f7033ba773decdcb86abf648dcce22e469d26bc48214e390e104"
+        or frozen_manifest.get("chromium_executable_sha256")
+        != "0498f208c25339f386413ada7b3c35293b0b6250e67d85446ba9541d7fd636f7"
+        or frozen_manifest.get("patched_upstream_runner_sha256")
+        != "b06793ad1b366a934b798f9f3272fc80a7104a220cb3304ab3bda2eb2a78b331"
+        or frozen_manifest.get("empirical_entry_crossed") is not False
+        or frozen_manifest.get("post_entry_code_science_image_freeze") is not True
+    ):
+        raise T09PilotError("frozen replacement runtime binding drifted")
     attempt = contract.attempt(args.run_id)
     attempt_root = args.attempt_root.resolve(strict=True)
     condition_plan_path = args.condition_plan.resolve(strict=True)
@@ -436,7 +456,7 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
     session_paths = _session_paths(attempt_root)
     evaluator_run_id = EVALUATOR_RUN_IDS[ATTEMPT_ORDER.index(attempt.run_id)]
     evaluator_input = {
-        "schema_version": "0.1.0",
+        "schema_version": "0.2.0",
         "evaluator_run_id": evaluator_run_id,
         "task_id": attempt.task_id,
         "session_paths": [path.relative_to(attempt_root).as_posix() for path in session_paths],
@@ -603,7 +623,7 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
         session_paths[0].relative_to(attempt_root).as_posix() if len(session_paths) == 1 else None
     )
     evidence_index: dict[str, object] = {
-        "schema_version": "0.1.0",
+        "schema_version": "0.2.0",
         "plan_id": PLAN_ID,
         "execution_contract_sha256": contract.sha256,
         "identity": {
@@ -621,7 +641,21 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
             "reviewed_implementation_ancestor": attempt.giclab_commit,
             "sira_commit": SIRA_COMMIT,
             "python_version": runtime_environment.get("python_version"),
-            "container_image_digest": CONTAINER_IMAGE_DIGEST,
+            "container_image_digest": args.replacement_image_id,
+            "frozen_run_manifest_sha256": args.frozen_run_manifest_sha256,
+            "qualification_id": frozen_manifest.get("qualification_id"),
+            "build_context_manifest_sha256": frozen_manifest.get(
+                "build_context_manifest_sha256"
+            ),
+            "installed_package_manifest_sha256": frozen_manifest.get(
+                "package_manifest_sha256"
+            ),
+            "chromium_executable_sha256": frozen_manifest.get(
+                "chromium_executable_sha256"
+            ),
+            "patched_upstream_runner_sha256": frozen_manifest.get(
+                "patched_upstream_runner_sha256"
+            ),
             "model_revision": MODEL_REVISION,
             "requested_service_tier": "default",
             "returned_service_tiers": (
