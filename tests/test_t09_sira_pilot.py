@@ -373,10 +373,14 @@ def test_first_pair_checkpoint_passes_only_strictly_below_every_threshold() -> N
     reasons = decision["reasons"]
     assert isinstance(reasons, list)
     assert "cleanup_issue" in reasons
-    no_time = replace(passing, remaining_campaign_seconds=4_499.999)
+    no_time = replace(passing, remaining_campaign_seconds=5_159.999)
     no_time_decision = first_pair_decision(no_time)
     assert no_time_decision["decision"] == "stop-before-task-b"
     assert "insufficient_campaign_time_for_next_attempt_and_cleanup" in no_time_decision["reasons"]
+    exact_time = replace(passing, remaining_campaign_seconds=5_160.0)
+    exact_time_decision = first_pair_decision(exact_time)
+    assert exact_time_decision["decision"] == "continue-to-task-b"
+    assert exact_time_decision["required_campaign_seconds_for_next_attempt"] == 5_160
 
 
 def test_attempt_state_enforces_order_cap_checkpoint_and_zero_retry(tmp_path: Path) -> None:
@@ -566,9 +570,10 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
     class FakeTransport:
         def __init__(
             self,
-            responses: list[dict[str, object] | bytes | BaseException],
+            responses: list[object],
         ) -> None:
             self.responses = responses
+            self.calls: list[tuple[str, str, bytes | None]] = []
 
         def send(
             self,
@@ -582,11 +587,16 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
             assert path in provider.ALLOWED_PATHS
             assert credential == bytearray(b"lambda-fixture-credential")
             assert self.responses
+            self.calls.append((method, path, body))
             value = self.responses.pop(0)
             if isinstance(value, BaseException):
                 raise value
+            status = 200
+            if isinstance(value, tuple):
+                status, value = value
+                assert isinstance(status, int)
             return provider.ProviderResponse(
-                200,
+                status,
                 "application/json",
                 value if isinstance(value, bytes) else json.dumps(value).encode(),
                 clock(),
@@ -686,6 +696,8 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
     )
     authorization.chmod(0o600)
     monkeypatch.setattr(provider, "_verify_clean_package", lambda *_args, **_kwargs: None)
+    capability = [tmp_path / "launch-capabilities/malformed.json"]
+    monkeypatch.setattr(provider, "launch_capability_path", lambda: capability[0])
 
     malformed_launch_root = tmp_path / "provider-malformed-launch"
     with pytest.raises(provider.T09ProviderError, match="launch outcome is unknown"):
@@ -706,12 +718,51 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
         is True
     )
 
+    capability[0] = tmp_path / "launch-capabilities/duplicate-cleanup-failure.json"
+    duplicate_root = tmp_path / "provider-duplicate-launch"
+    duplicate_ids = [
+        "instance-fixture-duplicate-1",
+        "instance-fixture-duplicate-1",
+        "instance-fixture-duplicate-2",
+    ]
+    duplicate_transport = FakeTransport(
+        [
+            *copy.deepcopy(launch_responses[:6]),
+            {"data": {"instance_ids": duplicate_ids}},
+            (503, {"error": "termination rejected"}),
+            RuntimeError("fresh inventory ambiguity"),
+        ]
+    )
+    with pytest.raises(provider.T09ProviderError, match="lost fresh inventory"):
+        provider.launch_campaign(
+            repository=ROOT,
+            package_commit=package_commit,
+            authorization_ledger=authorization,
+            dotenv=dotenv,
+            private_root=duplicate_root,
+            public_ipv4_file=public_ip_path,
+            ssh_public_key_file=key_path,
+            transport=duplicate_transport,
+            clock=clock,
+            sleeper=sleeper,
+        )
+    duplicate_incident = load_json(duplicate_root / "MULTI_INSTANCE_LAUNCH_INCIDENT.json")
+    assert duplicate_incident["private_instance_ids_as_returned"] == duplicate_ids
+    assert duplicate_incident["private_unique_instance_ids"] == list(dict.fromkeys(duplicate_ids))
+    duplicate_console = load_json(duplicate_root / "MULTI_INSTANCE_CLEANUP_REQUIRES_CONSOLE.json")
+    assert duplicate_console["private_unique_instance_ids"] == list(dict.fromkeys(duplicate_ids))
+    termination_body = next(
+        body
+        for method, path, body in duplicate_transport.calls
+        if method == "POST" and path.endswith("/terminate")
+    )
+    assert json.loads(termination_body or b"{}")["instance_ids"] == list(
+        dict.fromkeys(duplicate_ids)
+    )
+
+    capability[0] = tmp_path / "launch-capabilities/multi-cleanup.json"
     multi_root = tmp_path / "provider-multi-launch"
     multi_ids = ["instance-fixture-incident-1", "instance-fixture-incident-2"]
-    multi_termination_rows = [
-        {**copy.deepcopy(instance), "id": instance_id, "status": "terminating"}
-        for instance_id in multi_ids
-    ]
     with pytest.raises(provider.T09ProviderError, match="every returned identity was closed"):
         provider.launch_campaign(
             repository=ROOT,
@@ -725,7 +776,7 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
                 [
                     *copy.deepcopy(launch_responses[:6]),
                     {"data": {"instance_ids": multi_ids}},
-                    {"data": {"terminated_instances": multi_termination_rows}},
+                    RuntimeError("termination response ambiguity"),
                     {"data": []},
                 ]
             ),
@@ -734,8 +785,9 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
         )
     incident = load_json(multi_root / "MULTI_INSTANCE_LAUNCH_INCIDENT.json")
     assert incident["second_launch_forbidden"] is True
-    assert len(incident["instance_identity_sha256s"]) == 2
+    assert len(incident["unique_instance_identity_sha256s"]) == 2
 
+    capability[0] = tmp_path / "launch-capabilities/success.json"
     private_root = tmp_path / "provider-private"
     entry_path = provider.launch_campaign(
         repository=ROOT,
@@ -749,6 +801,24 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
         clock=clock,
         sleeper=sleeper,
     )
+    consumed = load_json(capability[0])
+    assert consumed["launch_capability_state"] == "consumed-cleanup-only-after-this-point"
+    assert consumed["launch_capability_limit"] == 1
+    no_second_launch = FakeTransport([])
+    with pytest.raises(provider.T09ProviderError, match="already consumed"):
+        provider.launch_campaign(
+            repository=ROOT,
+            package_commit=package_commit,
+            authorization_ledger=authorization,
+            dotenv=dotenv,
+            private_root=tmp_path / "different-caller-selected-root",
+            public_ipv4_file=public_ip_path,
+            ssh_public_key_file=key_path,
+            transport=no_second_launch,
+            clock=clock,
+            sleeper=sleeper,
+        )
+    assert no_second_launch.calls == []
     monkeypatch.setattr(host.time, "time", lambda: now[0])
     validated = host.validate_dynamic_receipt(
         entry_path,
@@ -808,6 +878,7 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
         RuntimeError("termination response fixture ambiguity"),
         {"data": [{**copy.deepcopy(instance), "status": "active"}]},
         {"data": [{**copy.deepcopy(instance), "status": "terminating"}]},
+        {"data": [{**copy.deepcopy(instance), "status": "terminated"}]},
         {"data": []},
         global_firewall,
         {"data": []},
@@ -842,7 +913,11 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
         if event.get("operation") == "termination-instances"
         and event.get("event") == "response-complete"
     ]
-    assert len(termination_polls) == 3
+    assert len(termination_polls) == 4
+    assert closeout["zero_t09_instances"] is True
+    closeout_documents = provider._response_documents(private_root / "closeout-source")
+    last_inventory = closeout_documents["termination-instances"][-1][1]
+    assert last_inventory == {"data": []}
 
     forged = dict(load_json(entry_path))
     forged["launch_count"] = 2
@@ -1192,19 +1267,42 @@ def test_finalized_attempt_streams_before_cutoff_without_aggregate_stage(
         json.dumps({"evidence_handoff_deadline_epoch": now + 60}),
         encoding="utf-8",
     )
-    destination = io.BytesIO()
-    result = host.export_attempt(
-        SimpleNamespace(
-            repository=ROOT,
-            artifact_root=artifact_root,
-            run_id=ATTEMPT_ORDER[0],
-            package_commit="a" * 40,
-        ),
-        destination,
+    arguments = SimpleNamespace(
+        repository=ROOT,
+        artifact_root=artifact_root,
+        run_id=ATTEMPT_ORDER[0],
+        package_commit="a" * 40,
     )
+    exports = pilot_root / "attempt-exports"
+    exports.mkdir()
+    archive = exports / f"{ATTEMPT_ORDER[0]}.tar.gz"
+    archive.write_bytes(b"interrupted-archive-prefix")
+
+    class InterruptedDestination(io.BytesIO):
+        def write(self, value: bytes) -> int:
+            super().write(value[: max(1, len(value) // 2)])
+            raise OSError("operator transfer interrupted")
+
+    interrupted = InterruptedDestination()
+    with pytest.raises(OSError, match="operator transfer interrupted"):
+        host.export_attempt(arguments, interrupted)
+    quarantined = list(exports.glob("*.partial-*.tar.gz"))
+    assert len(quarantined) == 1
+    assert quarantined[0].read_bytes() == b"interrupted-archive-prefix"
+    complete_bytes = archive.read_bytes()
+    complete_sha256 = host.file_sha256(archive)
+
+    class ShortWriteDestination(io.BytesIO):
+        def write(self, value: bytes) -> int:
+            return super().write(value[: max(1, len(value) // 2)])
+
+    destination = ShortWriteDestination()
+    result = host.export_attempt(arguments, destination)
     assert result["run_id"] == ATTEMPT_ORDER[0]
     assert result["bytes"] == len(destination.getvalue())
     assert result["bytes"] > 0
+    assert destination.getvalue() == complete_bytes
+    assert result["sha256"] == complete_sha256
     assert (attempt_root / "attempt-export-manifest.json").is_file()
     inbound = tmp_path / "inbound"
     inbound.mkdir()

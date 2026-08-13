@@ -16,6 +16,7 @@ import hashlib
 import http.client
 import json
 import os
+import pwd
 import re
 import ssl
 import stat
@@ -325,6 +326,74 @@ def write_bytes_exclusive(path: Path, value: bytes) -> None:
     finally:
         os.close(descriptor)
     _fsync_parent(path)
+
+
+def launch_capability_path() -> Path:
+    """Return the fixed, non-CLI-selectable single-launch capability path."""
+
+    return (
+        Path(pwd.getpwuid(os.getuid()).pw_dir).resolve(strict=True)
+        / ".gic-lab-t09-private"
+        / f"{PLAN_ID}-{HOST_RUN_ID}-launch-capability-consumed.json"
+    )
+
+
+def _assert_launch_capability_unused(path: Path) -> None:
+    if not path.is_absolute():
+        raise T09ProviderError("single-launch capability path is not absolute")
+    if os.path.lexists(path):
+        raise T09ProviderError(
+            "the plan/package authorization launch capability is already consumed; "
+            "only cleanup is permitted"
+        )
+
+
+def _consume_launch_capability(
+    path: Path,
+    *,
+    authorization_ledger: Path,
+    package_commit: str,
+    plan_sha256: str,
+    private_root: Path,
+    clock: Callable[[], float],
+) -> None:
+    """Atomically and durably burn the campaign's one mutation capability."""
+
+    parent = path.parent
+    parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    metadata = parent.stat(follow_symlinks=False)
+    if (
+        not stat.S_ISDIR(metadata.st_mode)
+        or metadata.st_uid != os.getuid()
+        or stat.S_IMODE(metadata.st_mode) != 0o700
+    ):
+        raise T09ProviderError("single-launch capability directory is unsafe")
+    try:
+        write_exclusive(
+            path,
+            {
+                "schema_version": "0.1.0",
+                "plan_id": PLAN_ID,
+                "host_run_id": HOST_RUN_ID,
+                "package_commit": package_commit,
+                "plan_sha256": plan_sha256,
+                "authorization_source_sha256": AUTHORIZATION_SOURCE_SHA256,
+                "authorization_ledger_sha256": file_sha256(authorization_ledger),
+                "launch_body_sha256": _sha256_bytes(_canonical_bytes(_launch_body())),
+                "private_root_identity_sha256": _sha256_bytes(
+                    str(private_root.resolve(strict=True)).encode()
+                ),
+                "launch_capability_limit": 1,
+                "launch_capability_state": "consumed-cleanup-only-after-this-point",
+                "second_launch_forbidden": True,
+                "consumed_at_epoch": clock(),
+            },
+        )
+    except FileExistsError:
+        raise T09ProviderError(
+            "the plan/package authorization launch capability was concurrently consumed; "
+            "only cleanup is permitted"
+        ) from None
 
 
 def _append_jsonl(path: Path, value: object) -> None:
@@ -1048,40 +1117,82 @@ def _close_multi_instance_launch_incident(
 ) -> None:
     """Destroy every ID returned by one contract-violating launch response."""
 
-    target_set = _instance_set_identity_sha256(instance_ids)
+    # Retain the complete provider-returned list *before* applying exact-set
+    # validation.  In particular, duplicate IDs are an incident fact, not a
+    # reason to lose the identities needed for cleanup.
+    raw_identity_hashes = [_instance_identity_sha256(instance_id) for instance_id in instance_ids]
+    unique_instance_ids = list(dict.fromkeys(instance_ids))
+    projected_target_set = _sha256_bytes(_canonical_bytes(sorted(set(raw_identity_hashes))))
     write_exclusive(
         private_root / "MULTI_INSTANCE_LAUNCH_INCIDENT.json",
         {
             "schema_version": "0.1.0",
             "plan_id": PLAN_ID,
             "host_run_id": HOST_RUN_ID,
-            "private_instance_ids": list(instance_ids),
-            "instance_identity_sha256s": sorted(
-                _instance_identity_sha256(instance_id) for instance_id in instance_ids
-            ),
+            "private_instance_ids_as_returned": list(instance_ids),
+            "private_unique_instance_ids": unique_instance_ids,
+            "instance_identity_sha256s_as_returned": raw_identity_hashes,
+            "unique_instance_identity_sha256s": sorted(set(raw_identity_hashes)),
             "launch_count": 1,
             "second_launch_forbidden": True,
-            "cleanup_target_set_sha256": target_set,
+            "cleanup_target_set_sha256": projected_target_set,
             "private_operational_state_not_for_archive": True,
             "created_at_epoch": clock(),
         },
     )
-    with contextlib.suppress(ProviderOutcomeUnknown):
+    target_set = _instance_set_identity_sha256(unique_instance_ids)
+    if target_set != projected_target_set:
+        raise T09ProviderError("multi-instance cleanup target projection drifted")
+
+    def require_console(reason: str) -> None:
+        marker = private_root / "MULTI_INSTANCE_CLEANUP_REQUIRES_CONSOLE.json"
+        if not marker.exists():
+            write_exclusive(
+                marker,
+                {
+                    "schema_version": "0.1.0",
+                    "plan_id": PLAN_ID,
+                    "host_run_id": HOST_RUN_ID,
+                    "private_unique_instance_ids": unique_instance_ids,
+                    "unique_instance_identity_sha256s": sorted(set(raw_identity_hashes)),
+                    "cleanup_target_set_sha256": target_set,
+                    "reason": reason,
+                    "second_launch_forbidden": True,
+                    "required_action": (
+                        "in the Lambda console, terminate every exact private instance ID; "
+                        "verify every ID is terminal or absent; do not launch again"
+                    ),
+                    "private_operational_state_not_for_archive": True,
+                    "created_at_epoch": clock(),
+                },
+            )
+
+    # A rejected or ambiguous exact-set mutation is reconciled only by fresh
+    # inventory.  It is never repeated as a second scientific launch.
+    with contextlib.suppress(T09ProviderError):
         recorder.request(
             "terminate",
             "POST",
             "/api/v1/instance-operations/terminate",
-            body=_terminate_many_body(instance_ids),
+            body=_terminate_many_body(unique_instance_ids),
             target_identity_sha256=target_set,
         )
-    expected = {_instance_identity_sha256(instance_id) for instance_id in instance_ids}
+    expected = set(raw_identity_hashes)
     for _ in range(MAX_TERMINATION_POLLS):
-        sleeper(POLL_SECONDS)
-        recorder.request("termination-instances", "GET", "/api/v1/instances")
-        rows = _instance_rows(
-            _response_documents(entry_root)["termination-instances"][-1][1],
-            label="multi-launch incident instances",
-        )
+        try:
+            sleeper(POLL_SECONDS)
+            recorder.request("termination-instances", "GET", "/api/v1/instances")
+            rows = _instance_rows(
+                _response_documents(entry_root)["termination-instances"][-1][1],
+                label="multi-launch incident instances",
+            )
+        except T09ProviderError:
+            require_console("fresh-inventory-reconciliation-failed")
+            seal_source_bundle(entry_root)
+            raise T09ProviderError(
+                "multi-instance launch cleanup lost fresh inventory; use the exact-ID "
+                "console marker and do not launch again"
+            ) from None
         remaining = [
             row
             for row in rows
@@ -1094,10 +1205,11 @@ def _close_multi_instance_launch_incident(
                 "one launch returned multiple instances; every returned identity was closed; "
                 "the campaign is permanently stopped"
             )
+    require_console("bounded-cleanup-did-not-prove-terminal")
     seal_source_bundle(entry_root)
     raise T09ProviderError(
         "one launch returned multiple instances and bounded cleanup did not prove them terminal; "
-        "use the Lambda console to terminate every identity in MULTI_INSTANCE_LAUNCH_INCIDENT.json"
+        "use the exact-ID console marker and do not launch again"
     )
 
 
@@ -1386,7 +1498,9 @@ def _closeout_projection(
         timestamp = _number(event["response_received_at_epoch"], label="poll response time")
         if not owned or all(row.get("status") in TERMINAL_STATES for row in owned):
             terminal_at = timestamp
-        if not t09 or all(row.get("status") in TERMINAL_STATES for row in t09):
+        # "Zero" means absent from the all-page exact-name inventory.  A
+        # terminal row is useful billing/cleanup evidence, but it is not zero.
+        if not t09:
             zero_at = timestamp
         if terminal_at is not None and zero_at is not None:
             break
@@ -1601,6 +1715,10 @@ def launch_campaign(
     sleeper: Callable[[float], None] = time.sleep,
 ) -> Path:
     repository = repository.resolve(strict=True)
+    capability_path = launch_capability_path()
+    # This check precedes credential loading and every provider request.  The
+    # later O_EXCL consume is the concurrent, mutation-adjacent enforcement.
+    _assert_launch_capability_unused(capability_path)
     _verify_clean_package(repository, package_commit)
     validate_authorization_ledger(
         authorization_ledger,
@@ -1648,6 +1766,14 @@ def launch_campaign(
             expected_public_key=expected_public_key,
             expected_public_ipv4=expected_public_ipv4,
         )
+        _consume_launch_capability(
+            capability_path,
+            authorization_ledger=authorization_ledger,
+            package_commit=package_commit,
+            plan_sha256=plan_sha256,
+            private_root=private_root,
+            clock=clock,
+        )
         write_exclusive(
             private_root / "launch-intent.json",
             {
@@ -1658,6 +1784,8 @@ def launch_campaign(
                 "launch_body_sha256": _sha256_bytes(_canonical_bytes(_launch_body())),
                 "launch_count_after_send": 1,
                 "max_launch_count": 1,
+                "launch_capability_sha256": file_sha256(capability_path),
+                "launch_capability_state": "consumed-before-provider-post",
                 "created_at_epoch": clock(),
             },
         )
@@ -1876,7 +2004,11 @@ def closeout_campaign(
                 owned = [
                     row for row in rows if row.get("instance_identity_sha256") == owned_identity
                 ]
-                if not owned or all(row.get("status") in TERMINAL_STATES for row in owned):
+                exact_name_rows = [row for row in rows if row.get("name") == INSTANCE_NAME]
+                # Do not stop at a terminal row and later label it as zero.  Keep
+                # polling until both the exact owned identity and every exact-name
+                # row are absent from the all-page inventory.
+                if not owned and not exact_name_rows:
                     break
             else:
                 continue

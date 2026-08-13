@@ -62,7 +62,5 @@ class ObserverLifecycleLimits:
         post_provider_cleanup_seconds: int,
     ) -> int:
         return (
-            prelaunch_seconds
-            + self.campaign_provider_wall_seconds
-            + post_provider_cleanup_seconds
+            prelaunch_seconds + self.campaign_provider_wall_seconds + post_provider_cleanup_seconds
         )

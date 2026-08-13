@@ -132,6 +132,32 @@ class CampaignLifecycleLimits:
             - self.elapsed_seconds(billable_started_at=billable_started_at, now=now),
         )
 
+    def required_attempt_seconds(self, *, attempt_hard_wall_seconds: int) -> int:
+        """Return the one source-of-truth admission envelope for an attempt."""
+
+        if type(attempt_hard_wall_seconds) is not int or attempt_hard_wall_seconds <= 0:
+            raise T09PilotError("attempt hard wall must be a positive integer")
+        return (
+            attempt_hard_wall_seconds
+            + self.post_condition_evaluator_evidence_seconds
+            + self.termination_dispatch_margin_seconds
+            + self.normal_cleanup_reserve_seconds
+        )
+
+    def admit_remaining(
+        self,
+        *,
+        remaining_campaign_seconds: float,
+        attempt_hard_wall_seconds: int,
+    ) -> bool:
+        """Apply the typed admission rule to an already-derived remaining wall."""
+
+        if not math.isfinite(remaining_campaign_seconds) or remaining_campaign_seconds < 0:
+            return False
+        return remaining_campaign_seconds >= self.required_attempt_seconds(
+            attempt_hard_wall_seconds=attempt_hard_wall_seconds
+        )
+
     def admit_attempt(
         self,
         *,
@@ -139,15 +165,13 @@ class CampaignLifecycleLimits:
         now: float,
         attempt_hard_wall_seconds: int,
     ) -> bool:
-        if type(attempt_hard_wall_seconds) is not int or attempt_hard_wall_seconds <= 0:
-            raise T09PilotError("attempt hard wall must be a positive integer")
-        required = (
-            attempt_hard_wall_seconds
-            + self.post_condition_evaluator_evidence_seconds
-            + self.termination_dispatch_margin_seconds
-            + self.normal_cleanup_reserve_seconds
+        return self.admit_remaining(
+            remaining_campaign_seconds=self.remaining_seconds(
+                billable_started_at=billable_started_at,
+                now=now,
+            ),
+            attempt_hard_wall_seconds=attempt_hard_wall_seconds,
         )
-        return self.remaining_seconds(billable_started_at=billable_started_at, now=now) >= required
 
     def termination_due(self, *, billable_started_at: float, now: float) -> bool:
         return (
@@ -899,7 +923,6 @@ class PairCheckpointInput:
     actual_lambda_cost_usd: float
     remaining_campaign_seconds: float
     next_attempt_hard_wall_seconds: int = 3_600
-    cleanup_reserve_seconds: int = 900
 
 
 def first_pair_decision(value: PairCheckpointInput) -> dict[str, object]:
@@ -952,10 +975,22 @@ def first_pair_decision(value: PairCheckpointInput) -> dict[str, object]:
         value.projected_aggregate_cost_usd > 45.16
     ):
         reasons.append("projected_aggregate_cost_exceeds_hard_cap")
-    required_campaign_seconds = value.next_attempt_hard_wall_seconds + value.cleanup_reserve_seconds
-    if (
-        not math.isfinite(value.remaining_campaign_seconds)
-        or value.remaining_campaign_seconds < required_campaign_seconds
+    lifecycle = CampaignLifecycleLimits(
+        campaign_provider_wall_seconds=14_400,
+        normal_cleanup_reserve_seconds=900,
+        provider_termination_cutoff_seconds=13_500,
+        post_condition_evaluator_evidence_seconds=600,
+        termination_dispatch_margin_seconds=60,
+        max_lambda_instances=1,
+        max_launch_count=1,
+        persistent_filesystems=0,
+    )
+    required_campaign_seconds = lifecycle.required_attempt_seconds(
+        attempt_hard_wall_seconds=value.next_attempt_hard_wall_seconds
+    )
+    if not lifecycle.admit_remaining(
+        remaining_campaign_seconds=value.remaining_campaign_seconds,
+        attempt_hard_wall_seconds=value.next_attempt_hard_wall_seconds,
     ):
         reasons.append("insufficient_campaign_time_for_next_attempt_and_cleanup")
     return {

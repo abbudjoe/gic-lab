@@ -2029,6 +2029,99 @@ def execute_condition(args: argparse.Namespace) -> int:
     return returncode
 
 
+def _attempt_export_archive_matches(
+    archive: Path,
+    *,
+    export_manifest_path: Path,
+    export_manifest: dict[str, object],
+) -> bool:
+    """Return whether a retained archive is the exact complete export."""
+
+    if archive.is_symlink() or not archive.is_file():
+        return False
+    try:
+        if not 0 < archive.stat().st_size <= MAX_ATTEMPT_EXPORT_BYTES:
+            return False
+        with tarfile.open(archive, "r:gz") as handle:
+            members = handle.getmembers()
+            if not 1 <= len(members) <= 2_048:
+                return False
+            by_name: dict[str, tarfile.TarInfo] = {}
+            for member in members:
+                relative = PurePosixPath(member.name)
+                if (
+                    not member.isfile()
+                    or relative.is_absolute()
+                    or ".." in relative.parts
+                    or member.name in by_name
+                    or member.size > MAX_ATTEMPT_OUTPUT_BYTES
+                ):
+                    return False
+                by_name[member.name] = member
+            expected = {"attempt-export-manifest.json"}
+            manifest_member = by_name.get("attempt-export-manifest.json")
+            if manifest_member is None or manifest_member.size > 2_097_152:
+                return False
+            manifest_stream = handle.extractfile(manifest_member)
+            if (
+                manifest_stream is None
+                or manifest_stream.read() != export_manifest_path.read_bytes()
+            ):
+                return False
+            files = export_manifest.get("files")
+            if not isinstance(files, list):
+                return False
+            total = 0
+            for raw in files:
+                if not isinstance(raw, dict):
+                    return False
+                name = raw.get("path")
+                size = raw.get("bytes")
+                digest = raw.get("sha256")
+                if (
+                    not isinstance(name, str)
+                    or type(size) is not int
+                    or not isinstance(digest, str)
+                    or _HEX64.fullmatch(digest) is None
+                    or name not in by_name
+                    or by_name[name].size != size
+                ):
+                    return False
+                stream = handle.extractfile(by_name[name])
+                if stream is None:
+                    return False
+                observed = hashlib.sha256()
+                observed_size = 0
+                while chunk := stream.read(1_048_576):
+                    observed.update(chunk)
+                    observed_size += len(chunk)
+                    if observed_size > MAX_ATTEMPT_OUTPUT_BYTES:
+                        return False
+                if observed_size != size or observed.hexdigest() != digest:
+                    return False
+                expected.add(name)
+                total += size
+            return set(by_name) == expected and total == export_manifest.get("total_bytes")
+    except (OSError, tarfile.TarError, EOFError):
+        return False
+
+
+def _quarantine_partial_attempt_export(archive: Path) -> Path:
+    """Move an incomplete archive aside without destroying failure evidence."""
+
+    for ordinal in range(1, 101):
+        quarantined = archive.with_name(f"{archive.stem}.partial-{ordinal:03d}.tar.gz")
+        if not os.path.lexists(quarantined):
+            archive.rename(quarantined)
+            descriptor = os.open(archive.parent, os.O_RDONLY)
+            try:
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
+            return quarantined
+    raise T09HostError("attempt export has too many quarantined partial archives")
+
+
 def export_attempt(args: argparse.Namespace, destination: BinaryIO) -> dict[str, object]:
     """Stream one finalized attempt to the operator inside its 3,600-second wall."""
 
@@ -2077,22 +2170,24 @@ def export_attempt(args: argparse.Namespace, destination: BinaryIO) -> dict[str,
             }
         )
     export_manifest_path = attempt_root / "attempt-export-manifest.json"
-    write_exclusive(
-        export_manifest_path,
-        {
-            "schema_version": "0.1.0",
-            "plan_id": PLAN_ID,
-            "host_run_id": HOST_RUN_ID,
-            "run_id": args.run_id,
-            "package_commit": args.package_commit,
-            "private_access_controlled": True,
-            "public_release": "blocked-pending-review",
-            "files": files,
-            "total_bytes": total,
-            "structural_privacy_scan_passed": True,
-            "exported_before_provider_termination": True,
-        },
-    )
+    export_manifest: dict[str, object] = {
+        "schema_version": "0.1.0",
+        "plan_id": PLAN_ID,
+        "host_run_id": HOST_RUN_ID,
+        "run_id": args.run_id,
+        "package_commit": args.package_commit,
+        "private_access_controlled": True,
+        "public_release": "blocked-pending-review",
+        "files": files,
+        "total_bytes": total,
+        "structural_privacy_scan_passed": True,
+        "exported_before_provider_termination": True,
+    }
+    if export_manifest_path.exists():
+        if load_object(export_manifest_path, label="attempt export manifest") != export_manifest:
+            raise T09HostError("retained attempt export manifest drifted")
+    else:
+        write_exclusive(export_manifest_path, export_manifest)
     remaining_attempt = float(evidence_deadline_epoch) - time.time()
     remaining_campaign_to_cutoff = (
         PROVIDER_TERMINATION_CUTOFF_SECONDS
@@ -2106,20 +2201,36 @@ def export_attempt(args: argparse.Namespace, destination: BinaryIO) -> dict[str,
     exports.mkdir(mode=0o700, exist_ok=True)
     archive = exports / f"{args.run_id}.tar.gz"
     with hard_deadline(timeout, message="attempt evidence export deadline exceeded"):
-        with tarfile.open(archive, "x:gz") as handle:
-            for entry in files:
-                relative = str(entry["path"])
-                handle.add(attempt_root / relative, arcname=relative, recursive=False)
-            handle.add(
-                export_manifest_path,
-                arcname="attempt-export-manifest.json",
-                recursive=False,
-            )
-        if archive.stat().st_size > MAX_ATTEMPT_EXPORT_BYTES:
-            raise T09HostError("attempt export archive exceeds its byte cap")
+        if os.path.lexists(archive) and not _attempt_export_archive_matches(
+            archive,
+            export_manifest_path=export_manifest_path,
+            export_manifest=export_manifest,
+        ):
+            _quarantine_partial_attempt_export(archive)
+        if not archive.exists():
+            with tarfile.open(archive, "x:gz") as handle:
+                for entry in files:
+                    relative = str(entry["path"])
+                    handle.add(attempt_root / relative, arcname=relative, recursive=False)
+                handle.add(
+                    export_manifest_path,
+                    arcname="attempt-export-manifest.json",
+                    recursive=False,
+                )
+        if not _attempt_export_archive_matches(
+            archive,
+            export_manifest_path=export_manifest_path,
+            export_manifest=export_manifest,
+        ):
+            raise T09HostError("attempt export archive is incomplete after materialization")
         with archive.open("rb") as source:
             while chunk := source.read(1_048_576):
-                destination.write(chunk)
+                offset = 0
+                while offset < len(chunk):
+                    written = destination.write(chunk[offset:])
+                    if written is None or written <= 0:
+                        raise T09HostError("attempt evidence export stream made no progress")
+                    offset += written
         destination.flush()
     return {
         "run_id": args.run_id,

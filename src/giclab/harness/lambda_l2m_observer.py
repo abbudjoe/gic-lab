@@ -3265,10 +3265,14 @@ class L2MReadOnlyObserverEngine:
                 )
                 + MAX_OBSERVER_ARCHIVE_SECONDS,
             )
-        elif self.budget.max_wall_seconds != self.provider_limits.observer_active_seconds(
-            prelaunch_seconds=MAX_OBSERVER_PRELAUNCH_SECONDS,
-            post_provider_cleanup_seconds=MAX_OBSERVER_POST_PROVIDER_CLEANUP_SECONDS,
-        ) + MAX_OBSERVER_ARCHIVE_SECONDS:
+        elif (
+            self.budget.max_wall_seconds
+            != self.provider_limits.observer_active_seconds(
+                prelaunch_seconds=MAX_OBSERVER_PRELAUNCH_SECONDS,
+                post_provider_cleanup_seconds=MAX_OBSERVER_POST_PROVIDER_CLEANUP_SECONDS,
+            )
+            + MAX_OBSERVER_ARCHIVE_SECONDS
+        ):
             raise L2MContractError("observer budget and lifecycle wall differ")
         checkpoint_binding = self.checkpoint_reader.binding
         expected_marker_alias = (

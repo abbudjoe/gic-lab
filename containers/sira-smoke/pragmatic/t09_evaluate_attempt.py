@@ -342,7 +342,6 @@ def _first_pair_checkpoint(
             actual_lambda_cost_usd=lambda_cost,
             remaining_campaign_seconds=remaining_campaign,
             next_attempt_hard_wall_seconds=contract.limits.max_condition_wall_seconds,
-            cleanup_reserve_seconds=contract.campaign.normal_cleanup_reserve_seconds,
         )
     )
     checkpoint_path = artifact_base / "artifacts/EXP-0001/pilot-v3/first-pair-checkpoint.json"
