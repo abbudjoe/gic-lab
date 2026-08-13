@@ -47,7 +47,7 @@
         "giclab_commit": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
         "reviewed_implementation_ancestor": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
         "sira_commit": {"const": "93fb8d72de71f9a4a13419670adeb34d93cf7acd"},
-        "python_version": {"const": "3.11.14"},
+        "python_version": {"enum": ["3.11.14", null]},
         "container_image_digest": {"const": "sha256:035edf61718e84a8156f4f0f7817b134b0ce31488d3f0b50bbfba2b4a30cc61c"},
         "model_revision": {"const": "gpt-4o-2024-11-20"},
         "requested_service_tier": {"const": "default"},
@@ -62,9 +62,9 @@
       "additionalProperties": false,
       "required": ["started_at", "stopped_at", "wall_seconds"],
       "properties": {
-        "started_at": {"type": "string", "format": "date-time"},
-        "stopped_at": {"type": "string", "format": "date-time"},
-        "wall_seconds": {"type": "number", "minimum": 0, "maximum": 3600}
+        "started_at": {"type": ["string", "null"], "format": "date-time"},
+        "stopped_at": {"type": ["string", "null"], "format": "date-time"},
+        "wall_seconds": {"type": ["number", "null"], "minimum": 0, "maximum": 3600}
       }
     },
     "command": {

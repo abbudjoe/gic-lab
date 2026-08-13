@@ -18,6 +18,8 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, cast
 
+from jsonschema import Draft202012Validator, FormatChecker
+
 from giclab.harness.t09_sira_pilot import (
     ATTEMPT_ORDER,
     DATASET_REVISION,
@@ -60,6 +62,8 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--host-cleanup-receipt", type=Path, required=True)
     parser.add_argument("--evaluator-root", type=Path, required=True)
     parser.add_argument("--dataset", type=Path, required=True)
+    parser.add_argument("--score-schema", type=Path, required=True)
+    parser.add_argument("--evidence-schema", type=Path, required=True)
     return parser
 
 
@@ -98,6 +102,65 @@ def _events(path: Path) -> list[dict[str, Any]]:
             raise T09PilotError("normalized event record is malformed")
         result.append(cast(dict[str, Any], value))
     return result
+
+
+def _dynamic_object(
+    path: Path,
+    *,
+    label: str,
+    failure_reasons: list[str],
+) -> dict[str, Any]:
+    if not path.is_file() or path.is_symlink():
+        failure_reasons.append(f"missing-{label}")
+        return {}
+    try:
+        return _load_object(path, label=label)
+    except (OSError, UnicodeError, json.JSONDecodeError, T09PilotError):
+        failure_reasons.append(f"malformed-{label}")
+        return {}
+
+
+def _dynamic_events(path: Path, *, failure_reasons: list[str]) -> list[dict[str, Any]]:
+    if not path.is_file() or path.is_symlink():
+        failure_reasons.append("missing-normalized-events")
+        return []
+    try:
+        return _events(path)
+    except (OSError, UnicodeError, json.JSONDecodeError, T09PilotError):
+        failure_reasons.append("malformed-normalized-events")
+        return []
+
+
+def _schema_errors(document: object, schema: dict[str, Any]) -> list[str]:
+    validator = Draft202012Validator(schema, format_checker=FormatChecker())
+    return sorted(
+        f"{'/'.join(str(part) for part in error.absolute_path) or '$'}: {error.message}"
+        for error in validator.iter_errors(document)
+    )
+
+
+def _validate_output_documents(
+    *,
+    outcome: dict[str, object],
+    evidence: dict[str, object],
+    score_schema_path: Path,
+    evidence_schema_path: Path,
+) -> None:
+    score_schema = _load_object(score_schema_path.resolve(strict=True), label="score schema")
+    evidence_schema = _load_object(
+        evidence_schema_path.resolve(strict=True), label="evidence schema"
+    )
+    properties = evidence_schema.get("properties")
+    if not isinstance(properties, dict) or "outcome" not in properties:
+        raise T09PilotError("evidence schema outcome reference is unavailable")
+    properties["outcome"] = score_schema
+    score_errors = _schema_errors(outcome, score_schema)
+    evidence_errors = _schema_errors(evidence, evidence_schema)
+    if score_errors or evidence_errors:
+        raise T09PilotError(
+            "finalized attempt documents violate their schemas: "
+            + "; ".join([*score_errors, *evidence_errors])
+        )
 
 
 def _session_paths(attempt_root: Path) -> list[Path]:
@@ -313,27 +376,56 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
     if command_manifest.get("condition_plan_sha256") != attempt.condition_plan_sha256:
         raise T09PilotError("command/condition binding drifted")
 
-    host_cleanup = _load_object(
-        args.host_cleanup_receipt.resolve(strict=True), label="host cleanup receipt"
+    infrastructure_failure_reasons: list[str] = []
+    host_cleanup_path = args.host_cleanup_receipt.resolve(strict=True)
+    host_cleanup = _dynamic_object(
+        host_cleanup_path,
+        label="host-cleanup-receipt",
+        failure_reasons=infrastructure_failure_reasons,
     )
     runtime_cleanup_path = attempt_root / "runtime-cleanup.json"
     runtime_cleanup = (
-        _load_object(runtime_cleanup_path, label="runtime cleanup receipt")
+        _dynamic_object(
+            runtime_cleanup_path,
+            label="runtime-cleanup-receipt",
+            failure_reasons=infrastructure_failure_reasons,
+        )
         if runtime_cleanup_path.is_file()
         else {}
     )
+    runtime_environment_path = attempt_root / "runtime-environment.json"
+    runtime_environment = _dynamic_object(
+        runtime_environment_path,
+        label="runtime-environment",
+        failure_reasons=infrastructure_failure_reasons,
+    )
     event_path = attempt_root / "normalized-events.jsonl"
-    event_records = _events(event_path) if event_path.is_file() else []
-    provider_records = _provider_records(event_records)
-    browser_records = _browser_records(event_records)
+    event_records = _dynamic_events(
+        event_path,
+        failure_reasons=infrastructure_failure_reasons,
+    )
+    try:
+        provider_records = _provider_records(event_records)
+    except T09PilotError:
+        infrastructure_failure_reasons.append("malformed-provider-call-evidence")
+        provider_records = []
+    try:
+        browser_records = _browser_records(event_records)
+    except T09PilotError:
+        infrastructure_failure_reasons.append("malformed-browser-action-evidence")
+        browser_records = []
     budget_path = attempt_root / "provider-budget.json"
-    budget = _load_object(budget_path, label="provider budget") if budget_path.is_file() else {}
+    budget = _dynamic_object(
+        budget_path,
+        label="provider-budget",
+        failure_reasons=infrastructure_failure_reasons,
+    )
     if budget and budget.get("unreconciled_provider_attempts") != 0:
-        raise T09PilotError("unreconciled provider attempt prevents valid finalization")
+        infrastructure_failure_reasons.append("unreconciled-provider-attempt")
     if budget and len(browser_records) != budget.get("browser_actions"):
-        raise T09PilotError("browser records and pre-action counter disagree")
+        infrastructure_failure_reasons.append("browser-action-count-mismatch")
     if budget and len(provider_records) != budget.get("default_service_tier_response_count"):
-        raise T09PilotError("provider receipts and reconciled response count disagree")
+        infrastructure_failure_reasons.append("provider-receipt-count-mismatch")
 
     session_paths = _session_paths(attempt_root)
     evaluator_run_id = EVALUATOR_RUN_IDS[ATTEMPT_ORDER.index(attempt.run_id)]
@@ -365,26 +457,60 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
         else None
     )
 
-    required_paths = (
-        budget_path,
-        event_path,
-        runtime_cleanup_path,
-        args.host_cleanup_receipt.resolve(strict=True),
-        evaluator_input_path,
-        evaluator_output_path,
-        attempt_root / "runtime-environment.json",
-        attempt_root / "condition.stdout",
-        attempt_root / "condition.stderr",
-    )
-    missing_required = len(session_paths) != 1 or not all(path.is_file() for path in required_paths)
+    required_paths = {
+        "provider-budget": budget_path,
+        "normalized-events": event_path,
+        "host-cleanup-receipt": host_cleanup_path,
+        "evaluator-input": evaluator_input_path,
+        "evaluator-output": evaluator_output_path,
+        "runtime-environment": runtime_environment_path,
+        "condition-stdout": attempt_root / "condition.stdout",
+        "condition-stderr": attempt_root / "condition.stderr",
+    }
+    for label, path in required_paths.items():
+        if not path.is_file() or path.is_symlink():
+            infrastructure_failure_reasons.append(f"missing-{label}")
+    if len(session_paths) != 1:
+        infrastructure_failure_reasons.append(
+            "missing-session-json" if not session_paths else "duplicate-session-json"
+        )
     pilot_state = _load_object(args.pilot_state, label="pilot state")
     entered = pilot_state.get("empirical_attempts_entered")
-    artifact_executed = isinstance(entered, list) and attempt.run_id in entered
+    empirical_entered = isinstance(entered, list) and attempt.run_id in entered
+    source_grounded_event = any(
+        event.get("kind")
+        in {
+            "provider-call-failed",
+            "provider-call-receipt",
+            "requested-browser-action",
+            "post-action-result",
+        }
+        for event in event_records
+    )
+    artifact_executed = empirical_entered and source_grounded_event
+    if empirical_entered and not source_grounded_event:
+        infrastructure_failure_reasons.append("missing-source-grounded-empirical-event")
     credential_cleanup = runtime_cleanup.get("secret_cleanup", {})
     runtime_cleanup_present = runtime_cleanup_path.is_file()
-    browser_closed = (
-        runtime_cleanup_present and runtime_cleanup.get("all_environment_closes_succeeded") is True
+    host_state_path = attempt_root / "container-state.json"
+    host_state = (
+        _dynamic_object(
+            host_state_path,
+            label="container-state",
+            failure_reasons=infrastructure_failure_reasons,
+        )
+        if host_state_path.is_file()
+        else {}
     )
+    host_teardown_proves_browser_closed = (
+        host_cleanup.get("container_removed") is True
+        and host_cleanup.get("owned_container_residue") == []
+        and host_state.get("running") is False
+    )
+    browser_closed = (
+        runtime_cleanup_present
+        and runtime_cleanup.get("all_environment_closes_succeeded") is True
+    ) or host_teardown_proves_browser_closed
     secret_removed = (
         isinstance(credential_cleanup, dict)
         and (
@@ -400,16 +526,37 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
         host_cleanup.get("container_removed") is True
         and host_cleanup.get("owned_container_residue") == []
     )
-    cap_violation = host_cleanup.get("cap_violation") is not None
-    infrastructure_failure = (
-        not browser_closed
-        or not secret_removed
-        or not container_removed
-        or cap_violation
-        or missing_required
+    timing = host_cleanup.get("timing")
+    if not isinstance(timing, dict):
+        infrastructure_failure_reasons.append("missing-host-cleanup-timing")
+        timing = {"started_at": None, "stopped_at": None, "wall_seconds": None}
+    hard_cap_breached = host_cleanup.get("hard_cap_breached") is True
+    if not browser_closed:
+        infrastructure_failure_reasons.append("browser-cleanup-failed-or-missing")
+    if not secret_removed:
+        infrastructure_failure_reasons.append("credential-cleanup-failed-or-missing")
+    if not container_removed:
+        infrastructure_failure_reasons.append("container-cleanup-failed-or-missing")
+    if hard_cap_breached:
+        infrastructure_failure_reasons.append("runtime-cap-violation")
+    infrastructure_failure_reasons = sorted(set(infrastructure_failure_reasons))
+    missing_required = any(
+        reason.startswith(("missing-", "malformed-"))
+        or reason
+        in {
+            "browser-action-count-mismatch",
+            "duplicate-session-json",
+            "provider-receipt-count-mismatch",
+            "unreconciled-provider-attempt",
+        }
+        for reason in infrastructure_failure_reasons
     )
+    infrastructure_failure = bool(infrastructure_failure_reasons)
+    process_exit_code = host_cleanup.get("returncode")
+    if type(process_exit_code) is not int:
+        process_exit_code = None
     outcome = outcome_contract(
-        process_exit_code=host_cleanup.get("returncode"),
+        process_exit_code=process_exit_code,
         artifact_executed=artifact_executed,
         task_completed=evaluator_result.get("task_completed") is True,
         answer_produced=evaluator_result.get("answer_produced") is True,
@@ -417,6 +564,7 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
         score=score,
         infrastructure_failure=infrastructure_failure,
         missing_required_evidence=missing_required,
+        infrastructure_failure_reasons=infrastructure_failure_reasons,
     )
     outcome.update(
         {
@@ -435,14 +583,7 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
         }
     )
     outcome_path = attempt_root / "attempt-outcome.json"
-    _write_exclusive(outcome_path, outcome)
 
-    runtime_environment = _load_object(
-        attempt_root / "runtime-environment.json", label="runtime environment"
-    )
-    timing = host_cleanup.get("timing")
-    if not isinstance(timing, dict):
-        raise T09PilotError("host cleanup timing is missing")
     gpu_accounting_path = attempt_root / "gpu-accounting.json"
     gpu_accounting = (
         _load_object(gpu_accounting_path, label="GPU accounting")
@@ -519,7 +660,8 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
             "browser_closed": browser_closed,
             "container_removed": container_removed,
             "secret_removed": secret_removed,
-            "cap_violation": host_cleanup.get("cap_violation"),
+            "stop_reason": host_cleanup.get("stop_reason"),
+            "hard_cap_breached": hard_cap_breached,
             "receipt_sha256": file_sha256(args.host_cleanup_receipt),
         },
         "h2k_optional_fields": {
@@ -541,7 +683,23 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
             "private_network_values_public": False,
         },
     }
-    _write_exclusive(attempt_root / "evidence-index.json", evidence_index)
+    evidence_path = attempt_root / "evidence-index.json"
+    _validate_output_documents(
+        outcome=outcome,
+        evidence=evidence_index,
+        score_schema_path=args.score_schema,
+        evidence_schema_path=args.evidence_schema,
+    )
+    _write_exclusive(outcome_path, outcome)
+    _write_exclusive(evidence_path, evidence_index)
+    retained_outcome = _load_object(outcome_path, label="retained attempt outcome")
+    retained_evidence = _load_object(evidence_path, label="retained evidence index")
+    _validate_output_documents(
+        outcome=cast(dict[str, object], retained_outcome),
+        evidence=cast(dict[str, object], retained_evidence),
+        score_schema_path=args.score_schema,
+        evidence_schema_path=args.evidence_schema,
+    )
     mark_attempt_completed(
         args.pilot_state,
         execution_contract_sha256=contract.sha256,

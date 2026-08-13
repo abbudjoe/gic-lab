@@ -1006,7 +1006,7 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
             errors.append(f"EXP-0001 {name}: current authorization must remain false")
         expected_readiness = {
             "smoke": "eligible-after-authorization",
-            "pilot": "eligible-after-authorization",
+            "pilot": "blocked-pending-prerequisites",
         }[name]
         if profile.get("readiness", {}).get("execution_eligibility") != expected_readiness:
             errors.append(f"EXP-0001 {name}: execution eligibility drift")
@@ -1237,8 +1237,7 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
         or ".." in Path(generator_relative).parts
         or not isinstance(generator_sha256, str)
         or not (root / generator_relative).is_file()
-        or hashlib.sha256((root / generator_relative).read_bytes()).hexdigest()
-        != generator_sha256
+        or hashlib.sha256((root / generator_relative).read_bytes()).hexdigest() != generator_sha256
     ):
         errors.append("EXP-0001 T09: command generator binding drifted")
     try:
@@ -1263,14 +1262,10 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
                 typed_contract,
                 attempt,
                 execution_contract_runtime_path="/opt/giclab-contracts/execution.json",
-                runtime_adaptation_path=(
-                    "/opt/giclab-src/giclab/harness/sira_gate_a_runtime.py"
-                ),
+                runtime_adaptation_path=("/opt/giclab-src/giclab/harness/sira_gate_a_runtime.py"),
                 runtime_adaptation_sha256=runtime_sha256,
                 pilot_library_sha256=library_sha256,
-                aggregate_ledger_path=(
-                    "/opt/giclab-artifacts/pilot-v2/aggregate-budget.json"
-                ),
+                aggregate_ledger_path=("/opt/giclab-artifacts/pilot-v2/aggregate-budget.json"),
                 pilot_state_path="/opt/giclab-artifacts/pilot-v2/pilot-state.json",
             )
             for attempt in typed_contract.attempts
@@ -1296,9 +1291,9 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
                 for raw in files:
                     if not isinstance(raw, dict):
                         continue
-                    relative_path = raw.get("path")
+                    runtime_relative = raw.get("path")
                     expected_digest = raw.get("sha256")
-                    if not isinstance(relative_path, str) or not isinstance(
+                    if not isinstance(runtime_relative, str) or not isinstance(
                         expected_digest, str
                     ):
                         continue
@@ -1308,7 +1303,7 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
                             "-C",
                             str(root),
                             "show",
-                            f"{reviewed_ancestor}:{relative_path}",
+                            f"{reviewed_ancestor}:{runtime_relative}",
                         ],
                         stdin=subprocess.DEVNULL,
                         stdout=subprocess.PIPE,
@@ -1321,7 +1316,7 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
                     ):
                         errors.append(
                             "EXP-0001 T09: reviewed ancestor runtime bytes drifted: "
-                            + relative_path
+                            + runtime_relative
                         )
         for attempt in typed_contract.attempts:
             condition_path = root / attempt.condition_plan_path
@@ -1331,6 +1326,30 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
                 != attempt.condition_plan_sha256
             ):
                 errors.append(f"EXP-0001 T09: condition binding drifted: {attempt.run_id}")
+                continue
+            condition = load_yaml(condition_path)
+            sources = condition.get("sources")
+            if not isinstance(sources, dict):
+                errors.append(f"EXP-0001 T09: condition sources missing: {attempt.run_id}")
+                continue
+            expected_common = {
+                "protocol_sha256": attempt.protocol_sha256,
+                "config_sha256": attempt.config_sha256,
+                "environment_sha256": attempt.environment_sha256,
+            }
+            if any(sources.get(field) != digest for field, digest in expected_common.items()):
+                errors.append(f"EXP-0001 T09: condition common binding drifted: {attempt.run_id}")
+            actual_common = {
+                "protocol_sha256": hashlib.sha256(
+                    (exp_root / "protocol.yaml").read_bytes()
+                ).hexdigest(),
+                "config_sha256": hashlib.sha256(
+                    (exp_root / "config.yaml").read_bytes()
+                ).hexdigest(),
+                "environment_sha256": hashlib.sha256(runtime_path.read_bytes()).hexdigest(),
+            }
+            if expected_common != actual_common:
+                errors.append(f"EXP-0001 T09: condition common file hash drifted: {attempt.run_id}")
     except (OSError, ValueError) as exc:
         errors.append(f"EXP-0001 T09: typed execution/command contract failed: {exc}")
     return errors

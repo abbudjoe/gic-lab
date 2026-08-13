@@ -58,10 +58,12 @@ begin.
 
 ## T09 supersession — 2026-08-13
 
-T09 preserved this snapshot and resolved its static evaluator, GPU-accounting,
-identity, runtime-cap, post-action evidence, structural-redaction, dataset/license,
-pair-diff, and protocol blockers in `PLAN-EXP0001-PILOT-V2`. The resulting calibration
-package is `ready-for-t09-pilot-authorization`; no execution is authorized or has
-occurred. Public raw release remains blocked separately. A later exact authorization
-must bind the final clean packet and then pass the one dynamic preflight before any
-empirical entry.
+T09 preserved this snapshot and resolved its offline evaluator, GPU-accounting,
+identity, post-action evidence, structural-redaction, dataset/license, pair-diff, and
+protocol contracts in `PLAN-EXP0001-PILOT-V2`. It then found a material provider-cap
+incompatibility: the inherited T07 observer's 3,600-second hard wall cannot cover four
+plausible full-task attempts plus bounded staging and worst-case cleanup, while the
+14,400-second candidate ceiling has no source-compatible enforcement path. The T09
+terminal state is therefore `t09-pilot-blocked-material-risk`; no execution is
+authorized or has occurred, and provider preflight cannot begin. Public raw release
+remains blocked separately.

@@ -125,6 +125,9 @@ class AttemptBinding:
     output_root: str
     condition_plan_path: str
     condition_plan_sha256: str
+    protocol_sha256: str
+    config_sha256: str
+    environment_sha256: str
     giclab_commit: str
     upstream_argv: tuple[str, ...]
 
@@ -150,6 +153,11 @@ class AttemptBinding:
             or _HEX64.fullmatch(self.condition_plan_sha256) is None
         ):
             raise T09PilotError("attempt condition-plan binding is invalid")
+        if any(
+            _HEX64.fullmatch(value) is None
+            for value in (self.protocol_sha256, self.config_sha256, self.environment_sha256)
+        ):
+            raise T09PilotError("attempt common scientific/runtime binding is invalid")
         if (
             self.giclab_commit != "unknown"
             and re.fullmatch(r"[a-f0-9]{40}", self.giclab_commit) is None
@@ -370,6 +378,13 @@ def load_execution_contract(path: Path, *, expected_sha256: str) -> PilotExecuti
                 ),
                 condition_plan_sha256=_required_string(
                     item.get("condition_plan_sha256"), context="condition plan hash"
+                ),
+                protocol_sha256=_required_string(
+                    item.get("protocol_sha256"), context="protocol hash"
+                ),
+                config_sha256=_required_string(item.get("config_sha256"), context="config hash"),
+                environment_sha256=_required_string(
+                    item.get("environment_sha256"), context="environment hash"
                 ),
                 giclab_commit=_required_string(item.get("giclab_commit"), context="GIC Lab commit"),
                 upstream_argv=tuple(cast(list[str], argv)),
@@ -1015,7 +1030,11 @@ def evaluate_retained_session(
             re.fullmatch(r"send_msg_to_user\((['\"])(.*)\1\)", final_action, flags=re.DOTALL)
         )
         outcome = record.get("outcome")
-        task_completed = answer_produced and outcome == "Response Returned"
+        task_completed = (
+            session.get("is_complete") is True
+            and answer_produced
+            and outcome == "Response Returned"
+        )
         return {
             "schema_version": "0.1.0",
             "evaluator_valid": True,
@@ -1061,6 +1080,7 @@ def outcome_contract(
     score: float | None,
     infrastructure_failure: bool,
     missing_required_evidence: bool,
+    infrastructure_failure_reasons: Sequence[str] = (),
 ) -> dict[str, object]:
     """Classify orthogonal attempt states without equating exit zero with success."""
 
@@ -1068,6 +1088,8 @@ def outcome_contract(
         raise T09PilotError("valid evaluator state and score presence must agree")
     if score is not None and (not math.isfinite(score) or not 0.0 <= score <= 1.0):
         raise T09PilotError("task score must be finite and bounded")
+    if infrastructure_failure != bool(infrastructure_failure_reasons):
+        raise T09PilotError("infrastructure failure state and explicit failure reasons must agree")
     valid_scored_attempt = (
         artifact_executed
         and evaluator_valid
@@ -1088,10 +1110,66 @@ def outcome_contract(
         "task_score": score,
         "valid_scored_attempt": valid_scored_attempt,
         "invalid_infrastructure_attempt": infrastructure_failure,
-        "condition_failure": artifact_executed and not task_completed,
+        "infrastructure_failure_reasons": sorted(set(infrastructure_failure_reasons)),
+        "condition_failure": (
+            artifact_executed
+            and evaluator_valid
+            and not task_completed
+            and not infrastructure_failure
+            and not missing_required_evidence
+        ),
         "missing_evidence": missing_required_evidence,
         "evaluator_failure": not evaluator_valid,
     }
+
+
+_UPSTREAM_FLAG_ORDER: Final = (
+    "--dataset",
+    "--mode",
+    "--agent",
+    "--config_name",
+    "--model",
+    "--max_steps",
+    "--timeout",
+    "--max_retry",
+    "--data_root",
+    "--output_dir",
+    "--start_idx",
+    "--end_idx",
+    "--seed",
+)
+
+
+def _validated_upstream_argv(
+    contract: PilotExecutionContract,
+    attempt: AttemptBinding,
+) -> dict[str, str]:
+    argv = attempt.upstream_argv
+    if len(argv) != 1 + 2 * len(_UPSTREAM_FLAG_ORDER):
+        raise T09PilotError("upstream argv has an unexpected cardinality")
+    flags = tuple(argv[index] for index in range(1, len(argv), 2))
+    if flags != _UPSTREAM_FLAG_ORDER:
+        raise T09PilotError("upstream argv flag order or cardinality drifted")
+    values = {argv[index]: argv[index + 1] for index in range(1, len(argv), 2)}
+    expected = {
+        "--dataset": "fanout",
+        "--mode": attempt.condition,
+        "--agent": "sira",
+        "--config_name": ("web_reactive" if attempt.condition == "reactive" else "web_simulative"),
+        "--model": MODEL_REVISION,
+        "--max_steps": str(contract.limits.max_browser_actions_per_attempt),
+        "--timeout": str(contract.action_timeout_seconds),
+        "--max_retry": "0",
+        "--data_root": "/opt/sira/data",
+        "--output_dir": f"/opt/giclab-artifacts/{attempt.output_root}/sira-output",
+        "--start_idx": str(attempt.task_index),
+        "--end_idx": str(attempt.task_index + 1),
+        "--seed": "42",
+    }
+    upstream_run_id = attempt.run_id.replace("RUN-EXP0001-", "EXP-0001-", 1)
+    if argv[0] != upstream_run_id or values != expected:
+        raise T09PilotError("upstream argv drifted from the exact task/condition contract")
+    return values
 
 
 def render_command_manifest(
@@ -1112,6 +1190,7 @@ def render_command_manifest(
         for value in (runtime_adaptation_sha256, pilot_library_sha256)
     ):
         raise T09PilotError("runtime and pilot-library hashes must be SHA-256")
+    upstream_values = _validated_upstream_argv(contract, attempt)
     argv = [
         "/usr/bin/timeout",
         "--signal=TERM",
@@ -1149,6 +1228,9 @@ def render_command_manifest(
         "model": MODEL_REVISION,
         "runtime": "T07-pragmatic-python-3.11.14-image-sha256-035edf61718e",
         "giclab_commit": attempt.giclab_commit,
+        "protocol_sha256": attempt.protocol_sha256,
+        "config_sha256": attempt.config_sha256,
+        "environment_sha256": attempt.environment_sha256,
         "tools": ["browsergym-openended", "playwright-1.39.0", "chromium-1084"],
         "max_browser_steps": contract.limits.max_browser_actions_per_attempt,
         "action_timeout_seconds": contract.action_timeout_seconds,
@@ -1162,6 +1244,11 @@ def render_command_manifest(
             "max_openai_cost_usd": contract.limits.max_openai_cost_usd_per_attempt,
             "max_browser_actions": contract.limits.max_browser_actions_per_attempt,
             "max_output_bytes": contract.limits.max_output_bytes_per_attempt,
+        },
+        "actual_upstream_common_argv": {
+            key: value
+            for key, value in upstream_values.items()
+            if key not in {"--mode", "--config_name", "--output_dir"}
         },
     }
     return {
@@ -1192,6 +1279,71 @@ def render_command_manifest(
     }
 
 
+def _normalized_actual_argv(manifest: Mapping[str, object]) -> tuple[str, ...] | None:
+    raw_argv = manifest.get("argv")
+    condition = manifest.get("condition")
+    run_id = manifest.get("run_id")
+    condition_plan_path = manifest.get("condition_plan_path")
+    condition_owned = manifest.get("permitted_condition_owned")
+    if (
+        not isinstance(raw_argv, list)
+        or not all(isinstance(item, str) for item in raw_argv)
+        or condition not in {"reactive", "simulative"}
+        or not isinstance(run_id, str)
+        or not isinstance(condition_plan_path, str)
+        or not isinstance(condition_owned, Mapping)
+    ):
+        return None
+    output_root = condition_owned.get("output_root")
+    if not isinstance(output_root, str) or raw_argv.count("--") != 1:
+        return None
+    argv = cast(list[str], list(raw_argv))
+    separator = argv.index("--")
+    replacements = {
+        "--gate-attempt-root": (
+            f"/opt/giclab-artifacts/{output_root}",
+            "<CONDITION-OWNED-ATTEMPT-ROOT>",
+        ),
+        "--gate-mode": (str(condition), "<SOURCE-DECLARED-TREATMENT>"),
+        "--gate-pilot-attempt-id": (run_id, "<RUN-ID>"),
+        "--gate-condition-plan": (
+            f"/opt/giclab-contracts/conditions/{Path(condition_plan_path).name}",
+            "<CONDITION-PLAN>",
+        ),
+    }
+    for flag, (expected, replacement) in replacements.items():
+        indexes = [index for index, item in enumerate(argv[:separator]) if item == flag]
+        if len(indexes) != 1 or indexes[0] + 1 >= separator:
+            return None
+        if argv[indexes[0] + 1] != expected:
+            return None
+        argv[indexes[0] + 1] = replacement
+    downstream = argv[separator + 1 :]
+    expected_upstream_run_id = run_id.replace("RUN-EXP0001-", "EXP-0001-", 1)
+    if not downstream or downstream[0] != expected_upstream_run_id:
+        return None
+    downstream[0] = "<UPSTREAM-RUN-ID>"
+    downstream_replacements = {
+        "--mode": (str(condition), "<SOURCE-DECLARED-TREATMENT>"),
+        "--config_name": (
+            "web_reactive" if condition == "reactive" else "web_simulative",
+            "<SOURCE-DECLARED-TREATMENT-CONFIG>",
+        ),
+        "--output_dir": (
+            f"/opt/giclab-artifacts/{output_root}/sira-output",
+            "<CONDITION-OWNED-OUTPUT>",
+        ),
+    }
+    for flag, (expected, replacement) in downstream_replacements.items():
+        indexes = [index for index, item in enumerate(downstream) if item == flag]
+        if len(indexes) != 1 or indexes[0] + 1 >= len(downstream):
+            return None
+        if downstream[indexes[0] + 1] != expected:
+            return None
+        downstream[indexes[0] + 1] = replacement
+    return tuple([*argv[: separator + 1], *downstream])
+
+
 def diff_pair_manifests(
     left: Mapping[str, object],
     right: Mapping[str, object],
@@ -1200,12 +1352,16 @@ def diff_pair_manifests(
 
     left_surface = left.get("equality_surface")
     right_surface = right.get("equality_surface")
-    equal = left_surface == right_surface
+    surface_equal = left_surface == right_surface
+    left_argv = _normalized_actual_argv(left)
+    right_argv = _normalized_actual_argv(right)
+    argv_equal = left_argv is not None and left_argv == right_argv
     return {
         "schema_version": "0.1.0",
         "pair_id": left.get("pair_id"),
         "task_id_equal": left.get("task_id") == right.get("task_id"),
-        "required_equality_surface_equal": equal,
+        "required_equality_surface_equal": surface_equal,
+        "normalized_actual_argv_equal": argv_equal,
         "permitted_differences": [
             "condition_mode",
             "run_id",
@@ -1214,7 +1370,8 @@ def diff_pair_manifests(
             "condition_plan_path_and_sha256",
             "source_declared_treatment_config",
         ],
-        "valid": equal
+        "valid": surface_equal
+        and argv_equal
         and left.get("pair_id") == right.get("pair_id")
         and left.get("task_id") == right.get("task_id")
         and left.get("condition") != right.get("condition"),

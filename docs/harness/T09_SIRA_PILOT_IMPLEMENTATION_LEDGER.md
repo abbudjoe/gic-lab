@@ -1,8 +1,8 @@
 # T09 SiRA Calibration Pilot Lock — Assembly Ledger
 
-Assembly status: **in-progress**
+Assembly status: **blocked pending final offline validation and review closeout**
 
-Terminal state: **pending**
+Terminal state: **`t09-pilot-blocked-material-risk`**
 
 ## Source and target contracts
 
@@ -34,19 +34,20 @@ H2K, or GIC architectural conclusion.
 | T09-DOD-03 | Freeze exactly two valid, non-outcome-selected FanOutQA records with release, source, split, stable ID, text/reference hashes, selection/exclusion rules, order, pair, license, and retention classification. | Dataset contract plus machine-readable task-selection contract and focused tests. | met |
 | T09-DOD-04 | Bind the exact upstream evaluator, dependency/assets and licenses, output schema, scoring/normalization rules, and deterministic/nondeterministic fields; pass all required offline fixtures without substituting an evaluator. | Evaluator contract, pinned machine record, fixture corpus/results, focused tests. | met |
 | T09-DOD-05 | Separate process exit, artifact execution, task completion, answer production, evaluator validity, score, infrastructure invalidity, condition failure, missing evidence, and evaluator failure. | Typed attempt/score contract, documentation, and boundary tests. | met |
-| T09-DOD-06 | Predeclare one identical plausible finite browser-step maximum, expected steps, action/condition/pair/total wall limits, stop behavior, and incomplete-answer scoring rule using source and T07 evidence. | Budget derivation and schema-valid runtime contract. | met |
-| T09-DOD-07 | Freeze the T07 pragmatic Python/container/model/service-tier runtime and exact preflight/freeze boundary without creating another infrastructure qualification system. | Runtime identity and preflight contract; offline import/render/load checks. | met |
+| T09-DOD-06 | Predeclare one identical plausible finite browser-step maximum, expected steps, action/condition/pair/total wall limits, stop behavior, and incomplete-answer scoring rule using source and T07 evidence. | Budget derivation and schema-valid runtime contract. | blocked: 14,400-second candidate envelope is incompatible with the frozen 3,600-second provider hard wall; the smaller envelope cannot credibly cover four tasks plus safe cleanup |
+| T09-DOD-07 | Freeze the T07 pragmatic Python/container/model/service-tier runtime and exact preflight/freeze boundary without creating another infrastructure qualification system. | Runtime identity and preflight contract; offline import/render/load checks. | blocked: inherited manual lifecycle cannot cover the requested attempt/cleanup envelope; a replacement control plane is prohibited |
 | T09-DOD-08 | Retain reconstructable per-attempt calls, usage, lineage, requested actions and post-action results, answer/scoring, artifacts, cleanup, and explicit unavailable H2K fields while structurally excluding secrets/private values. | Evidence schema/contract, redaction tests, privacy scan, cleanup receipt contract. | met |
 | T09-DOD-09 | Freeze fresh host/attempt/evaluator/archive identities and machine-render/diff all four commands/configurations, permitting only declared treatment, identity/output, order, and realized-event differences. | Four command manifests, pair-diff artifact, exact equality/difference tests. | met |
-| T09-DOD-10 | Compute expected attempt/pair/total cost, effective hard attempt/aggregate caps, and an automatic first-pair continuation decision with the exact declared pass/stop criteria. | Current primary-source pricing record, arithmetic record, checkpoint schema/tests. | met |
-| T09-DOD-11 | Make model-call, token, OpenAI-cost, browser-step, condition/pair/total-wall, output-byte, disk, Lambda-duration/cost, attempt-count, and zero-retry caps effective on the selected runtime path. | Straightforward runtime counters/stops, fail-closed integration tests, rendered command bindings. | met |
+| T09-DOD-10 | Compute expected attempt/pair/total cost, effective hard attempt/aggregate caps, and an automatic first-pair continuation decision with the exact declared pass/stop criteria. | Current primary-source pricing record, arithmetic record, checkpoint schema/tests. | partial: expected/candidate arithmetic and checkpoint are exact; the Lambda hard cap is not effective on a source-compatible lifecycle |
+| T09-DOD-11 | Make model-call, token, OpenAI-cost, browser-step, condition/pair/total-wall, output-byte, disk, Lambda-duration/cost, attempt-count, and zero-retry caps effective on the selected runtime path. | Straightforward runtime counters/stops, fail-closed integration tests, rendered command bindings. | blocked: no effective 14,400-second provider path exists; preflight and empirical entry now refuse unconditionally |
 | T09-DOD-12 | Record nonzero-GPU accounting honestly; retain `PLAN-EXP0001-PILOT` only if tasks, conditions, evaluator, and scientific meaning remain unchanged; bind the final plan while keeping `authorized: false`. | GPU metadata contract, plan/child identities and hashes, schema validation. | met |
-| T09-DOD-13 | Update experiment registry, project state, active Phase 1 plan, decision log, readiness record, and sanitized notebook without passing/failing EXP-0001; emit a truthful ready-to-copy authorization packet. | Control/public-surface diffs and negative-boundary tests. | met |
+| T09-DOD-13 | Update experiment registry, project state, active Phase 1 plan, decision log, readiness record, and sanitized notebook without passing/failing EXP-0001; emit an authorization packet only when truthful. | Control/public-surface diffs and negative-boundary tests. | met: every surface converges on blocked-material-risk and the packet is an explicit refusal, not an authorization template |
 | T09-DOD-14 | Pass focused fixtures/dataset/evaluator/pair/budget/evidence/cap tests, privacy scans, Ruff, strict mypy, repository validation, independent review and repair/rereview, post-review smoke, and full portable-Quarto `make check`; finish on a clean commit in exactly one allowed terminal state. | Exact commands/results, reviewer verdict, final hashes/bytes, clean Git status. | partial |
 
-No required T09 item may remain `partial`, `blocked`, or `not-started` in
-`ready-for-t09-pilot-authorization`. A publication-only blocker is carried as an
-explicit release restriction and does not block private access-controlled execution.
+The allowed blocked terminal state is required because T09-DOD-06/07/10/11 cannot be
+closed without weakening cleanup or reopening the prohibited T07 infrastructure
+design. The separate publication blocker remains an access/release restriction and
+is not the reason execution is blocked.
 
 ## Starting evidence
 
@@ -77,19 +78,33 @@ explicit release restriction and does not block private access-controlled execut
   resource caps, zero retry, the automatic Task-A checkpoint, and cleanup receipts.
 - 2026-08-13: Focused offline smoke passed: 48 dataset/evaluator/budget/evidence/cap
   tests, Ruff, and strict mypy for all seven selected execution-control files. The
-  reviewed implementation ancestor is
+  initial reviewed implementation ancestor was
   `06cf17023380b206302082293f87e9b0d84e0e72`.
+- 2026-08-13: The repository privacy gate conservatively interpreted local variables
+  named `secret` as assigned tokens. Renamed those variables without changing the
+  control behavior, issued reviewed ancestor
+  `ec7ce957c37801eb51f3d6f2995e9d1e6859be03`, and regenerated every dependent
+  runtime, child-plan, execution-contract, argv, and command-package hash.
 - 2026-08-13: Bound the ancestor into all four child attempts and generated the exact
   four-command package. Both pair diffs report required equality and are valid.
+- 2026-08-13: Independent review found that the inherited T07 observer fixes a
+  3,600-second provider hard wall and 1,800-second normal termination target, whereas
+  the candidate T09 plan needs up to 14,400 seconds. Retained timing plus worst-case
+  checkpoint/poll/seal/transfer bounds cannot cover four plausible attempts and safe
+  cleanup inside 3,600 seconds.
+- 2026-08-13: Rejected the draft automated provider lifecycle because it reopened
+  T07 infrastructure design. Removed its adapter/verifier/schemas, made provider
+  preflight and condition entry fail closed, and changed every control/public surface
+  to `t09-pilot-blocked-material-risk` with `authorized: false`.
 
 ## Review and gate log
 
-Focused smoke is green. Repository validation, privacy scans, independent review,
-post-review smoke, full portable-Quarto `make check`, terminal ledger closeout, and
-the final clean package commit remain pending.
+Earlier focused smoke passed for the offline evaluator/dataset/pair/budget/evidence
+primitives. The blocked-state focused regressions, repository validation, privacy
+scans, independent rereview, post-review smoke, full portable-Quarto `make check`,
+terminal ledger closeout, and final clean commit remain pending.
 
 ## Next permitted work
 
-Run the focused repository gates, obtain the required independent review, repair and
-rereview any material finding, then run the full offline gate and bind the clean
-terminal commit. No live or cloud execution is permitted.
+Finish only offline validation and independent blocked-state rereview. No live or
+cloud execution is permitted, and no authorization may be issued from this plan.

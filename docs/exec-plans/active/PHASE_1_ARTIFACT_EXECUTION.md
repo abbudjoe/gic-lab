@@ -50,7 +50,7 @@ no mutation authority; one gate's authorization never carries into another.
 | P1-DOD-01 | Phase 0.75 is successful/completed; this is the one authoritative active plan; project execution/compute permissions remain false; only the disabled smoke profile is eligible for a later exact authorization. | Plan lifecycle/state/profile/readiness validation and public render. | met |
 | P1-DOD-02 | T07 executes at most the one authorized SiRA smoke pair with complete raw, normalized, regulation-decision, budget, scoring, and cleanup evidence and no interpretation. | Immutable run/authorization records, artifacts/hashes, accounting, cleanup proof, and validation. | met; T08 documents nonblocking fields that T07 did not retain directly |
 | P1-DOD-03 | T08 independently reproduces the smoke summary, separates infrastructure/protocol/upstream/future-track gaps, and leaves any pilot unauthorized. | Raw-to-summary checks, infrastructure-only trace-sufficiency report, review, and gate. | met |
-| P1-DOD-04 | T09 first locks an executable calibration-only SiRA pilot and later executes it only under a fresh exact authorization, without outcome-adaptive changes, while reconciling every entered attempt. | Frozen task/order/evaluator/runtime records, enforced budgets, immutable authorization packet, and later complete attempt dispositions. | partial: static lock package ready; execution not authorized or started |
+| P1-DOD-04 | T09 first locks an executable calibration-only SiRA pilot and later executes it only under a fresh exact authorization, without outcome-adaptive changes, while reconciling every entered attempt. | Frozen task/order/evaluator/runtime records, enforced budgets, immutable authorization packet, and later complete attempt dispositions. | blocked: frozen 3,600-second T07 provider wall cannot cover four plausible attempts plus bounded staging/cleanup; no authorization issued |
 | P1-DOD-05 | T10 produces a reproducible exploratory EXP-0001 analysis with uncertainty, exact reproduction level, cost/deviation reporting, and no internalization or mechanism-attribution overclaim. | Validated result summary, registry/notebook/ledger updates, review, and gate. | not-started |
 | P1-DOD-06 | T11 produces a read-only, launch-ready SR²AM-v0.1-8B Lambda contract with current price, hard termination, source-grounded trace requirements, failure tests, and no mutation. | Audited runbook/contracts, dry-run/failure tests, authorization sentence, and gate. | not-started |
 | P1-DOD-07 | T12 launches only the exactly authorized SR²AM smoke, retains and transfers required evidence, reconciles cost, and verifies provider termination. | Immutable cloud attempt, raw artifacts/hashes, compute ledger, monitoring, and terminal-state proof. | not-started |
@@ -67,7 +67,7 @@ no mutation authority; one gate's authorization never carries into another.
 |---|---|---|---|
 | T07 | Execute one authorized contained SiRA smoke pair; capture regulation-decision evidence without interpretation. | P1-DOD-02, P1-DOD-11 through P1-DOD-13 | complete: Retry 2 matched pair executed and cleanup verified; execution authority exhausted; no pilot authority |
 | T08 | Analyze smoke infrastructure evidence and prepare an unauthorized pilot package. | P1-DOD-03, P1-DOD-11 through P1-DOD-13 | complete: evidence validated; pilot planning eligible but execution unauthorized |
-| T09 | Lock the two-task calibration pilot; execute it only in a later freshly authorized turn. | P1-DOD-04, P1-DOD-11 through P1-DOD-13 | static package ready for exact authorization; execution remains unauthorized and not started |
+| T09 | Lock the two-task calibration pilot; execute it only in a later freshly authorized turn. | P1-DOD-04, P1-DOD-11 through P1-DOD-13 | `t09-pilot-blocked-material-risk`; execution unauthorized and not started |
 | T10 | Analyze and publish the exploratory SiRA pilot. | P1-DOD-05, P1-DOD-11 through P1-DOD-13 | blocked until T09 succeeds |
 | T11 | Build and validate the read-only SR²AM Lambda preflight. | P1-DOD-06, P1-DOD-11 through P1-DOD-13 | blocked until T10 succeeds |
 | T12 | Launch and monitor the separately authorized SR²AM Lambda smoke. | P1-DOD-07, P1-DOD-11 through P1-DOD-13 | blocked until T11 and authorization |
@@ -88,10 +88,10 @@ Historical bounded plan: `PLAN-T07-BOUNDED-SIRA-SMOKE-V3` (preserved, not curren
 execution authority).
 
 T08 evidence-only independent reproduction and infrastructure adjudication is
-complete. T09 has closed the static planning prerequisites in calibration plan
-`PLAN-EXP0001-PILOT-V2`. That readiness receives no execution authority from T07,
-T08, or this plan; a fresh exact current-turn authorization and the bound dynamic
-preflight remain mandatory.
+complete. T09 froze the offline scientific/calibration contracts in
+`PLAN-EXP0001-PILOT-V2` but found its provider lifecycle materially unsafe: the
+inherited 3,600-second hard wall cannot cover four plausible attempts plus safe
+staging/cleanup. No authorization packet or dynamic preflight is available.
 
 Target contract: materialize and execute one matched reactive/simulative pair under an
 exact human-approved provider/model, API-cost cap, wall-time cap, and cleanup contract;
@@ -129,8 +129,7 @@ preserved and unauthorized. Exact DoD and review/gate evidence are in
 
 ## T09 calibration-pilot lock
 
-Assembly status: **static package complete and ready for exact authorization; no pilot
-execution occurred**.
+Assembly status: **`t09-pilot-blocked-material-risk`; no pilot execution occurred**.
 
 T09 preserves the original effect-oriented proposal and creates
 `PLAN-EXP0001-PILOT-V2` because calibration-only scientific meaning, the exact
@@ -140,10 +139,13 @@ identities; offline-validated evaluator behavior; per-attempt/pair/aggregate lim
 automatic Task-A continuation decision; reconstructable post-action/provider/scoring
 evidence; structural redaction; cleanup/termination; and honest zero-GPU accounting.
 
-The static execution and analysis blocker lists are empty. Public raw release remains
-blocked pending license/privacy review and does not block private access-controlled
-execution. Project permissions, parent/child authorization, cloud mutation, provider
-calls, browser use, and pilot execution remain false. See
+The offline dataset, evaluator, pair, scoring, and evidence contracts are retained.
+Execution remains materially blocked because the frozen T07 provider observer's
+3,600-second wall cannot cover the four-attempt candidate and its bounded cleanup;
+the proposed 14,400-second ceiling has no effective source-compatible enforcement
+path. Public raw release remains separately blocked pending license/privacy review.
+Project permissions, parent/child authorization, cloud mutation, provider calls,
+browser use, and pilot execution remain false. See
 `docs/harness/T09_SIRA_EXPLORATORY_PILOT_PLAN.md` and
 `docs/harness/T09_SIRA_PILOT_PREAUTHORIZATION_PACKET.md`.
 

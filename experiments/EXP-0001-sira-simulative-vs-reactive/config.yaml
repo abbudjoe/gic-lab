@@ -106,4 +106,4 @@ notes:
   - Assignment is not evidence of learned or internal regulation.
   - No execution is authorized by this configuration.
   - The two-task pilot is calibration only; it cannot estimate an effect, variance, significance, condition superiority, or EXP-0001 outcome.
-  - The exact upstream evaluator is not renormalized; Task B has a frozen correct-answer fixture ceiling of 0.5 under its dollar-sign word-boundary behavior.
+  - The exact upstream evaluator is not renormalized; the ordinary fully correct Task B fixture scores 0.5, but no score ceiling is inferred from that fixture.

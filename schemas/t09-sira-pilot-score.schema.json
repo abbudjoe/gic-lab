@@ -19,6 +19,7 @@
     "task_score",
     "valid_scored_attempt",
     "invalid_infrastructure_attempt",
+    "infrastructure_failure_reasons",
     "condition_failure",
     "missing_evidence",
     "evaluator_failure",
@@ -48,6 +49,11 @@
     "task_score": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
     "valid_scored_attempt": {"type": "boolean"},
     "invalid_infrastructure_attempt": {"type": "boolean"},
+    "infrastructure_failure_reasons": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
     "condition_failure": {"type": "boolean"},
     "missing_evidence": {"type": "boolean"},
     "evaluator_failure": {"type": "boolean"},
@@ -73,6 +79,17 @@
     {
       "if": {"properties": {"task_completion": {"const": "completed"}}, "required": ["task_completion"]},
       "then": {"properties": {"answer_production": {"const": true}}}
+    },
+    {
+      "if": {"properties": {"invalid_infrastructure_attempt": {"const": true}}, "required": ["invalid_infrastructure_attempt"]},
+      "then": {
+        "properties": {
+          "condition_failure": {"const": false},
+          "infrastructure_failure_reasons": {"minItems": 1},
+          "valid_scored_attempt": {"const": false}
+        }
+      },
+      "else": {"properties": {"infrastructure_failure_reasons": {"maxItems": 0}}}
     }
   ]
 }

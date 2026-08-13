@@ -81,5 +81,5 @@ The dataset license permits the planned research use. Task text, reference answe
 raw responses, browser traces, and screenshots are retained privately under access
 control. Public raw release is blocked pending CC-BY-SA attribution/share-alike,
 third-party site-content, privacy, and structural-redaction review. That is a
-publication-only blocker and does not block private pilot execution after exact
-authorization.
+publication-only blocker. It is separate from the material provider-lifecycle blocker
+that currently prevents any pilot authorization or execution.

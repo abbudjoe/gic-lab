@@ -72,9 +72,10 @@ reported rather than repaired:
 - Task A: an ordinary fully correct prose fixture scores 0.9, while a capitalization
   and punctuation normalization fixture scores 1.0. The difference comes from
   context-sensitive lemmatization of “Drew.”
-- Task B: a fully correct six-film/six-currency-value fixture scores 0.5. Normalized
-  reference values begin with `$`, and the evaluator's exact word-boundary regular
-  expression cannot match that leading symbol. The effective task ceiling is 0.5.
+- Task B: the ordinary fully correct six-film/six-currency-value fixture scores 0.5
+  under the exact word-boundary implementation, while a directly retained `x$`
+  normalization-edge fixture scores 1.0. The ordinary fixture is therefore not a
+  proof that 0.5 is the task's maximum possible score.
 
 These are offline fixture results about evaluator behavior, not pilot outcomes. Scores
 are therefore reported at task level only; no cross-task effect or superiority
@@ -85,6 +86,7 @@ estimate is authorized.
 `tests/test_t09_sira_pilot.py` covers clearly correct (0.9), clearly incorrect (0.0),
 partial (0.3), malformed output (score 0.3 but no valid answer/completion), missing
 answer (0.0, incomplete), evaluator exception (invalid/null), duplicate evidence
-(invalid/null), normalization edge (1.0), and Task B's correct fixture (0.5). All pass
+(invalid/null), Task A normalization edge (1.0), Task B ordinary correct (0.5), and
+Task B `x$` normalization edge (1.0). All pass
 offline with the exact evaluator and no model, provider, browser, SiRA condition, or
 FanOutQA task execution.

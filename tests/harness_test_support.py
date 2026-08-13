@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
+import subprocess
+import tarfile
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -21,6 +24,76 @@ from giclab.harness.policy import AuthorizedRunProfile, ProjectExecutionState
 SYNTHETIC_PROFILE_SHA256 = "9" * 64
 SYNTHETIC_PRIMARY_PLAN = "plans/synthetic.json"
 SYNTHETIC_COMPANION_PLAN = "plans/synthetic-companion.json"
+
+
+def git_blob(repository_root: Path, commit: str, relative: str) -> bytes:
+    """Read one frozen historical file without conflating it with mutable HEAD."""
+
+    path = Path(relative)
+    if (
+        re.fullmatch(r"[a-f0-9]{40}", commit) is None
+        or path.is_absolute()
+        or not path.parts
+        or ".." in path.parts
+    ):
+        raise ValueError("historical Git blob identity is unsafe")
+    result = subprocess.run(
+        ["git", "-C", str(repository_root), "show", f"{commit}:{path.as_posix()}"],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise ValueError(f"historical Git blob is unavailable: {relative}")
+    return result.stdout
+
+
+def materialize_git_blob(
+    repository_root: Path,
+    commit: str,
+    relative: str,
+    destination_root: Path,
+) -> Path:
+    """Materialize one frozen file into a test-only historical repository."""
+
+    destination = destination_root / relative
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_bytes(git_blob(repository_root, commit, relative))
+    return destination
+
+
+def materialize_git_tree(repository_root: Path, commit: str, destination: Path) -> Path:
+    """Materialize an exact historical Git tree for a commit-scoped regression."""
+
+    if re.fullmatch(r"[a-f0-9]{40}", commit) is None or destination.exists():
+        raise ValueError("historical Git tree identity or destination is unsafe")
+    archive = destination.parent / f"{destination.name}-{commit[:12]}.tar"
+    with archive.open("xb") as handle:
+        result = subprocess.run(
+            ["git", "-C", str(repository_root), "archive", "--format=tar", commit],
+            stdin=subprocess.DEVNULL,
+            stdout=handle,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+    if result.returncode != 0:
+        raise ValueError("historical Git tree is unavailable")
+    destination.mkdir()
+    with tarfile.open(archive, "r:") as bundle:
+        members = bundle.getmembers()
+        for member in members:
+            path = Path(member.name)
+            if (
+                path.is_absolute()
+                or not path.parts
+                or ".." in path.parts
+                or not (member.isfile() or member.isdir())
+            ):
+                raise ValueError("historical Git archive contains an unsafe member")
+        bundle.extractall(destination, members=members)
+    archive.unlink()
+    return destination
 
 
 def valid_plan_data(

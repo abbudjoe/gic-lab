@@ -82,12 +82,9 @@
         "SIRA-SIMULATIVE",
         "SIRA-REACTIVE"
       ],
-      "upstream_evaluator_correct_fixture_score_ceiling": 0.5,
-      "score_ceiling_reason": "exact-upstream-word-boundary-regex-does-not-match-normalized-reference-values-beginning-with-dollar-sign",
-      "score_range": [
-        0.0,
-        0.5
-      ]
+      "ordinary_fully_correct_fixture_score": 0.5,
+      "fixture_description": "six-film-six-currency-value-answer-used-by-the-offline-contract-test",
+      "score_upper_bound_proven": false
     }
   ],
   "license_and_retention": {

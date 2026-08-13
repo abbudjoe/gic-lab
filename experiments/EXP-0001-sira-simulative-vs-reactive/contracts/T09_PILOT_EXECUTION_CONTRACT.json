@@ -5,6 +5,12 @@
   "experiment_id": "EXP-0001",
   "authorized": false,
   "authorization_reference": null,
+  "terminal_state": "t09-pilot-blocked-material-risk",
+  "execution_eligibility": "blocked-material-risk",
+  "material_blockers": [
+    "The frozen T07 manual-console observer has a 3,600-second hard provider wall and 1,800-second normal termination target; four plausible full-task attempts plus bounded staging and worst-case cleanup cannot fit with a safe provider-termination reserve.",
+    "No source-compatible enforcement path exists for the 14,400-second candidate Lambda ceiling, and T09 is prohibited from adding a new automated launch, watchdog, or cloud control plane."
+  ],
   "calibration_only": true,
   "sira_commit": "93fb8d72de71f9a4a13419670adeb34d93cf7acd",
   "model_revision": "gpt-4o-2024-11-20",
@@ -13,32 +19,32 @@
   "contract_bindings": {
     "plan": {
       "path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml",
-      "sha256": "e39cab555ff07ce3e99215f6cf46eb49a0de7cc37268481fa2e4e22addb6ac05",
-      "size_bytes": 4710
+      "sha256": "95f73429c449486198c8283b8ca93cf8a0bdeb2f7da43cf717d868f6487b4958",
+      "size_bytes": 4854
     },
     "dataset": {
       "path": "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/T09_PILOT_DATASET_CONTRACT.json",
-      "sha256": "adc2b2531d322ee9013cff2fd049c2f45e1098901f95cc1122fa57c013280389"
+      "sha256": "46451975c3bd9da799d3d43836fe445afebf14b1226b51e3b5d62b5fe859cd3c"
     },
     "evaluator": {
       "path": "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/T09_PILOT_EVALUATOR_CONTRACT.json",
-      "sha256": "bc019781ab4468a51bcf6f76ac937ea81334d70281f476504b5693df57178a6a"
+      "sha256": "ba998466b85d83f8ce11a7308f4d21433e496204f9dc48fe28793b711af28b5b"
     },
     "runtime": {
       "path": "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/T09_PILOT_RUNTIME_IDENTITY.json",
-      "sha256": "db3041caf860a0e5e383c8c2b71cee7cb43ef8b480bbcca7aca209928520674c"
+      "sha256": "5bdde14f28c1e43c5e117adfcc3c8623bb189bb15905a341df2f5aa0352d158e"
     },
     "execution_schema": {
       "path": "schemas/t09-sira-pilot-execution.schema.json",
-      "sha256": "2cff092e8a657167a482b32e31b25282cdf94552eb80755c6f097f7a4ea94f01"
+      "sha256": "389a3cd61a47cb3160554c204a02acd86cd44a55b6909e96d6541363390302c4"
     },
     "score_schema": {
       "path": "schemas/t09-sira-pilot-score.schema.json",
-      "sha256": "1fae231155e3c3eaef75d76eaf49cf1421250b49649eec2364838757c3a299ee"
+      "sha256": "91bb6e8986ed5e0300eabd1517942906cf635fe23f4440cc1f20f4b5bc331921"
     },
     "evidence_schema": {
       "path": "schemas/t09-sira-pilot-evidence.schema.json",
-      "sha256": "d5aaeacccfc89646c12b56824c92176714c67b694d4f47f5fe15b536e3068e62"
+      "sha256": "67c1d4270b5f1a53d796a291c8d05f679ce4792e9979fa07f2bf3ab1dae61c18"
     }
   },
   "runtime": {
@@ -56,6 +62,9 @@
     "sira_agent_sha256": "8ed6144a42e8fd18fe565f46c44c7855b15fbfb4817a689510e3b31e94952e51",
     "sira_llm_sha256": "ac01dbe0dae9bf839a45a9c0ddf03130e45177849419dd2edbad5b29b2216c23",
     "credential_channel": "host-provisioned-SIRA_API_KEY-only-never-command-argv-log-or-public-artifact",
+    "provider_lifecycle_status": "blocked-no-source-compatible-four-attempt-window",
+    "provider_observer_hard_wall_seconds": 3600,
+    "provider_observer_normal_termination_target_seconds": 1800,
     "preflight": [
       "python-version-and-runtime-imports",
       "evidence-directory-create-write-fsync-and-readback",
@@ -82,12 +91,13 @@
     "max_condition_wall_seconds": 3600,
     "max_pair_wall_seconds": 7200,
     "max_total_wall_seconds": 14400,
-    "max_output_bytes_per_attempt": 2147483648,
+    "max_output_bytes_per_attempt": 1073741824,
     "max_disk_bytes": 12884901888,
     "max_lambda_duration_seconds": 14400,
     "max_lambda_cost_usd": 5.16,
     "max_attempts": 4,
     "max_retries_after_empirical_entry": 0,
+    "enforcement_status": "blocked-before-preflight-no-effective-provider-lifecycle",
     "stop_behavior": "fail-closed-before-next-provider-call-or-browser-action; TERM-condition-process; retain-partial-evidence; run-cleanup; do-not-retry",
     "incomplete_task_scoreable": "yes-only-when-exact-evaluator-runs-on-one-valid-retained-session; otherwise-evaluator-failure-and-null-score"
   },
@@ -110,7 +120,12 @@
       "simulative_tokens_per_step_from_t07": 6702,
       "reactive_openai_cost_per_step_from_t07": 0.014165,
       "simulative_openai_cost_per_step_from_t07": 0.0261675,
-      "expected_wall_seconds_per_attempt": 720
+      "expected_wall_seconds_per_attempt": 720,
+      "t07_observed_four_attempt_linear_wall_seconds": 1418.3096875199907,
+      "t07_retained_successful_host_wall_seconds": 1581.905248,
+      "frozen_provider_hard_wall_seconds": 3600,
+      "minimum_worst_case_cleanup_checkpoint_seconds": 900,
+      "cleanup_poll_seal_and_transfer_reserve_required": true
     },
     "expected": {
       "reactive_attempt": {
@@ -144,7 +159,9 @@
       "aggregate_total_cost_usd": 45.16,
       "aggregate_model_calls": 4620,
       "aggregate_tokens": 4000000,
-      "aggregate_browser_actions": 120
+      "aggregate_browser_actions": 120,
+      "candidate_ceiling_enforceable": false,
+      "blocking_reason": "candidate 14,400-second Lambda ceiling exceeds the frozen observer's 3,600-second hard wall"
     }
   },
   "identities": {
@@ -167,8 +184,11 @@
       "order_index": 1,
       "output_root": "artifacts/EXP-0001/pilot-v2/task-a/reactive/attempt-0001",
       "condition_plan_path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-task-0000-reactive.yaml",
-      "condition_plan_sha256": "8865a395ad05da983411d17f37fe4099f9fd6cb88a64865e1309f0941c2dc499",
-      "giclab_commit": "06cf17023380b206302082293f87e9b0d84e0e72",
+      "condition_plan_sha256": "f8c0c96e7a5043f8cf31807639de3e5ab3e1f0f65e97f6bff2ec4d04d8f17cbc",
+      "protocol_sha256": "5356fc8b3806f4135eb570f65b67da2f94463582db5e3e609320e23dbdb2a3f7",
+      "config_sha256": "cf25acd90f9d73d9aef978a7d059cfbc74a1447d901f4e3d27e2b5d9f121d2ed",
+      "environment_sha256": "5bdde14f28c1e43c5e117adfcc3c8623bb189bb15905a341df2f5aa0352d158e",
+      "giclab_commit": "ec7ce957c37801eb51f3d6f2995e9d1e6859be03",
       "upstream_argv": [
         "EXP-0001-PILOT-V2-TASK-A-REACTIVE",
         "--dataset",
@@ -208,8 +228,11 @@
       "order_index": 2,
       "output_root": "artifacts/EXP-0001/pilot-v2/task-a/simulative/attempt-0001",
       "condition_plan_path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-task-0000-simulative.yaml",
-      "condition_plan_sha256": "9e43824b6978ab75131d7286c02f7feb00b63ed3c1322b0a581da8487032e85f",
-      "giclab_commit": "06cf17023380b206302082293f87e9b0d84e0e72",
+      "condition_plan_sha256": "4e10f97722821e55f4719441ffdabce33e8475716eed46860a4fe1e6531a24d9",
+      "protocol_sha256": "5356fc8b3806f4135eb570f65b67da2f94463582db5e3e609320e23dbdb2a3f7",
+      "config_sha256": "cf25acd90f9d73d9aef978a7d059cfbc74a1447d901f4e3d27e2b5d9f121d2ed",
+      "environment_sha256": "5bdde14f28c1e43c5e117adfcc3c8623bb189bb15905a341df2f5aa0352d158e",
+      "giclab_commit": "ec7ce957c37801eb51f3d6f2995e9d1e6859be03",
       "upstream_argv": [
         "EXP-0001-PILOT-V2-TASK-A-SIMULATIVE",
         "--dataset",
@@ -249,8 +272,11 @@
       "order_index": 1,
       "output_root": "artifacts/EXP-0001/pilot-v2/task-b/simulative/attempt-0001",
       "condition_plan_path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-task-0001-simulative.yaml",
-      "condition_plan_sha256": "f65c85b3c4cb0b7a539b1a784bb81bbd204a0f4d53f71777132c85745f66d09a",
-      "giclab_commit": "06cf17023380b206302082293f87e9b0d84e0e72",
+      "condition_plan_sha256": "f67704a1cdadf49654a962aac6536cea7e7270e43d0fb0f837a6d776bce5fd07",
+      "protocol_sha256": "5356fc8b3806f4135eb570f65b67da2f94463582db5e3e609320e23dbdb2a3f7",
+      "config_sha256": "cf25acd90f9d73d9aef978a7d059cfbc74a1447d901f4e3d27e2b5d9f121d2ed",
+      "environment_sha256": "5bdde14f28c1e43c5e117adfcc3c8623bb189bb15905a341df2f5aa0352d158e",
+      "giclab_commit": "ec7ce957c37801eb51f3d6f2995e9d1e6859be03",
       "upstream_argv": [
         "EXP-0001-PILOT-V2-TASK-B-SIMULATIVE",
         "--dataset",
@@ -290,8 +316,11 @@
       "order_index": 2,
       "output_root": "artifacts/EXP-0001/pilot-v2/task-b/reactive/attempt-0001",
       "condition_plan_path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-task-0001-reactive.yaml",
-      "condition_plan_sha256": "6ef440c46d4123ffa364c44cdf41a64fd4560d6719643827df5789581d587baa",
-      "giclab_commit": "06cf17023380b206302082293f87e9b0d84e0e72",
+      "condition_plan_sha256": "3d1b06e9a79726b8791f74cf6078a698fbba0dbaafab2e6a6c7de2f00efe978b",
+      "protocol_sha256": "5356fc8b3806f4135eb570f65b67da2f94463582db5e3e609320e23dbdb2a3f7",
+      "config_sha256": "cf25acd90f9d73d9aef978a7d059cfbc74a1447d901f4e3d27e2b5d9f121d2ed",
+      "environment_sha256": "5bdde14f28c1e43c5e117adfcc3c8623bb189bb15905a341df2f5aa0352d158e",
+      "giclab_commit": "ec7ce957c37801eb51f3d6f2995e9d1e6859be03",
       "upstream_argv": [
         "EXP-0001-PILOT-V2-TASK-B-REACTIVE",
         "--dataset",
@@ -385,7 +414,7 @@
   "cleanup": {
     "condition": "close-every-tracked-browser-environment-and-container-after-each-attempt",
     "credential": "remove-runtime-secret-and-retain-value-free-cleanup-receipt",
-    "provider": "user-terminates-single-Lambda-instance-before-14400-second-deadline-and-read-only-GET-confirms-zero-instances",
+    "provider": "blocked-no-source-compatible-entry-staging-termination-and-zero-instance-sequence",
     "unresolved_billable_resource_allowed": false
   },
   "interpretation_boundary": {

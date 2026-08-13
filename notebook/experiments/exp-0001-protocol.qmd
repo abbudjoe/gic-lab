@@ -9,8 +9,8 @@ title: "EXP-0001 — SiRA simulative versus reactive protocol"
 adjudicated it as a valid matched pair with documented evidence gaps. Both sessions
 recorded `is_complete: false`, so task completion was not observed. The smoke contains
 no EXP-0001 measurement or outcome. No pilot or live FanOut task has occurred, and
-execution authorization is false. T09 has frozen an exact calibration-only pilot
-package that is ready for a separate authorization.
+execution authorization is false. T09 froze the offline calibration contracts but
+ended at `t09-pilot-blocked-material-risk`; no authorization packet exists.
 
 ## Locked exploratory comparison
 
@@ -42,12 +42,13 @@ blocked pending licensing, privacy, and redaction review.
 T08 classifies cleanup as verified with a nonmaterial gap: private provider-response
 artifacts retained inactive ephemeral Jupyter access fields beyond the historical API-
 key scan. No values are published, the provider instance is terminally absent, and
-future retention must omit or structurally redact them. T09 resolved the static
-evaluator, dataset, runtime-cap, evidence, pair, budget, and identity blockers in
-`PLAN-EXP0001-PILOT-V2`. The plan is ready for a fresh exact authorization but remains
-unauthorized. The later authorized turn must pass one exact dynamic preflight, enforce
-the Task-A continuation checkpoint and every cap, terminate the exact provider
-resource, and verify zero instances.
+future retention must omit or structurally redact them. T09 resolved the offline
+evaluator, dataset, evidence, pair, budget-arithmetic, and identity contracts in
+`PLAN-EXP0001-PILOT-V2`. It also found that the inherited 3,600-second T07 provider
+wall cannot cover four plausible task attempts plus bounded staging and worst-case
+cleanup. The 14,400-second candidate ceiling therefore lacks a source-compatible
+enforcement path. The plan remains unauthorized and its provider preflight fails
+closed.
 
 The exact upstream evaluator is deliberately not repaired or renormalized. Offline
 fixtures show Task A's ordinary correct prose scoring 0.9 (with a normalization-edge

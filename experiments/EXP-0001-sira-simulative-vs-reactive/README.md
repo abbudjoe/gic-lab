@@ -138,10 +138,11 @@ control record. The starting effect-oriented pilot proposal is preserved at
 [`run-plans/pilot.yaml`](run-plans/pilot.yaml) is now the calibration-only
 `PLAN-EXP0001-PILOT-V2`; its profile and every condition plan remain unauthorized.
 
-T09 resolves the static dataset, evaluator, scoring, matching, budget-enforcement,
-evidence, privacy, and identity blockers documented by T08. The package is ready for a
-fresh exact authorization, but project execution permissions and every authorization
-field remain false. A later authorized turn must bind the final clean commit and
-packet, pass the single exact dynamic preflight, enforce the automatic Task-A
-checkpoint, terminate the exact provider resource, and verify zero instances. Public
-raw release remains separately blocked pending license/privacy review.
+T09 resolves the offline dataset, evaluator, scoring, matching, evidence, privacy, and
+identity contracts documented by T08, but ends at
+`t09-pilot-blocked-material-risk`. The inherited T07 observer has a 3,600-second hard
+provider wall; it cannot safely cover four plausible full-task attempts plus bounded
+staging and worst-case cleanup, while the candidate 14,400-second ceiling has no
+source-compatible enforcement path. Project execution permissions and every
+authorization field remain false, and provider preflight is fail-closed. Public raw
+release remains separately blocked pending license/privacy review.

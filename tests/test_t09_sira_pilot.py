@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import ast
+import copy
 import importlib.util
 import json
 import time
 from dataclasses import replace
 from pathlib import Path
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 
 import pytest
 
@@ -58,12 +59,19 @@ RUNTIME_IDENTITY = (
 )
 
 
-def _session(path: Path, *, goal: str, action: str, history: bool = True) -> Path:
+def _session(
+    path: Path,
+    *,
+    goal: str,
+    action: str,
+    history: bool = True,
+    complete: bool | None = None,
+) -> Path:
     value = {
         "goal": goal,
         "instance_id": None,
         "history": [[{"url": "about:blank"}, action, {"thought": "fixture"}]] if history else [],
-        "is_complete": action.startswith("send_msg_to_user"),
+        "is_complete": (action.startswith("send_msg_to_user") if complete is None else complete),
         "error": "",
     }
     path.write_text(json.dumps(value), encoding="utf-8")
@@ -137,6 +145,21 @@ def test_offline_evaluator_malformed_output_is_scored_but_not_completed(tmp_path
     assert result["score"] == pytest.approx(0.3)
 
 
+def test_offline_evaluator_requires_exact_retained_session_completion_state(
+    tmp_path: Path,
+) -> None:
+    session = _session(
+        tmp_path / "not-complete.json",
+        goal=TASK_A,
+        action="send_msg_to_user('Pat Burrell bats Right.')",
+        complete=False,
+    )
+    result = evaluate_retained_session(_identity(), [session])
+    assert result["evaluator_valid"] is True
+    assert result["answer_produced"] is True
+    assert result["task_completed"] is False
+
+
 def test_offline_evaluator_exception_is_explicit_and_unscored(tmp_path: Path) -> None:
     session = _session(
         tmp_path / "exception.json",
@@ -179,10 +202,25 @@ def test_second_frozen_task_scores_with_same_exact_evaluator(tmp_path: Path) -> 
     )
     result = evaluate_retained_session(_identity(1), [session])
     assert result["evaluator_valid"] is True
-    # The exact upstream word-boundary rule cannot match a normalized value that
-    # begins with "$".  The deterministic ceiling for this six-key/six-value
-    # reference is therefore 0.5; T09 records rather than repairs that behavior.
+    # This exact ordinary fully-correct fixture scores 0.5 under the pinned code.
+    # It does not prove a mathematical upper bound over every possible answer.
     assert result["score"] == 0.5
+
+
+def test_second_frozen_task_normalization_edge_can_score_one(tmp_path: Path) -> None:
+    session = _session(
+        tmp_path / "task-b-normalization-edge.json",
+        goal=TASK_B,
+        action=(
+            "send_msg_to_user('The Phantom Menace x$ 1.027 billion; Attack of the Clones "
+            "x$ 653.8 million; Revenge of the Sith x$ 868.4 million; The Force Awakens "
+            "x$ 2.071 billion; The Last Jedi x$ 1.334 billion; The Rise of Skywalker "
+            "x$ 1.077 billion')"
+        ),
+    )
+    result = evaluate_retained_session(_identity(1), [session])
+    assert result["evaluator_valid"] is True
+    assert result["score"] == 1.0
 
 
 def _limits() -> RuntimeLimits:
@@ -195,7 +233,7 @@ def _limits() -> RuntimeLimits:
         max_condition_wall_seconds=3_600,
         max_pair_wall_seconds=7_200,
         max_total_wall_seconds=14_400,
-        max_output_bytes_per_attempt=2_147_483_648,
+        max_output_bytes_per_attempt=1_073_741_824,
         max_disk_bytes=12_884_901_888,
         max_lambda_duration_seconds=14_400,
         max_lambda_cost_usd=5.16,
@@ -264,7 +302,20 @@ def test_frozen_execution_contract_and_all_pair_command_diffs() -> None:
     ]
     assert diff_pair_manifests(manifests[0], manifests[1])["valid"] is True
     assert diff_pair_manifests(manifests[2], manifests[3])["valid"] is True
+    assert (
+        manifests[0]["equality_surface"]["config_sha256"]
+        == manifests[1]["equality_surface"]["config_sha256"]
+    )
+    assert (
+        manifests[2]["equality_surface"]["protocol_sha256"]
+        == manifests[3]["equality_surface"]["protocol_sha256"]
+    )
     assert [manifest["run_id"] for manifest in manifests] == list(ATTEMPT_ORDER)
+
+    drifted = copy.deepcopy(manifests[1])
+    seed_index = drifted["argv"].index("--seed") + 1
+    drifted["argv"][seed_index] = "999"
+    assert diff_pair_manifests(manifests[0], drifted)["valid"] is False
 
 
 def test_resource_guard_stops_before_wall_output_disk_or_lambda_overrun(tmp_path: Path) -> None:
@@ -421,10 +472,17 @@ def test_evidence_redaction_is_structural_and_event_lineage_is_explicit(tmp_path
 
 def test_execution_schema_and_all_static_file_bindings_resolve() -> None:
     document = load_json(EXECUTION_CONTRACT)
-    assert validate_instance(
-        document,
-        ROOT / "schemas/t09-sira-pilot-execution.schema.json",
-    ) == []
+    assert document["authorized"] is False
+    assert document["terminal_state"] == "t09-pilot-blocked-material-risk"
+    assert document["execution_eligibility"] == "blocked-material-risk"
+    assert len(document["material_blockers"]) == 2
+    assert (
+        validate_instance(
+            document,
+            ROOT / "schemas/t09-sira-pilot-execution.schema.json",
+        )
+        == []
+    )
     bindings = document["contract_bindings"]
     assert isinstance(bindings, dict)
     for raw in bindings.values():
@@ -442,12 +500,15 @@ def test_runtime_identity_binds_every_selected_executable_file() -> None:
     files = instrumentation["files"]
     assert isinstance(files, list)
     expected = {
+        "src/giclab/harness/sira_gate_a.py",
+        "src/giclab/harness/safety.py",
         "src/giclab/harness/sira_gate_a_runtime.py",
         "src/giclab/harness/t09_sira_pilot.py",
         "containers/sira-smoke/pragmatic/t09_remote_runner.py",
         "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py",
         "containers/sira-smoke/pragmatic/t09_preflight.py",
         "containers/sira-smoke/pragmatic/t09_freeze_commands.py",
+        "containers/sira-smoke/pragmatic/t09_secret_preflight.py",
     }
     assert {item["path"] for item in files} == expected
     for item in files:
@@ -463,31 +524,69 @@ def _load_host_runner() -> ModuleType:
     return module
 
 
-def test_dynamic_preflight_receipt_requires_real_lambda_wall_origin(tmp_path: Path) -> None:
+def _load_attempt_finalizer() -> ModuleType:
+    path = ROOT / "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py"
+    spec = importlib.util.spec_from_file_location("giclab_t09_attempt_finalizer_test", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_provider_preflight_and_closeout_are_fail_closed_without_a_compatible_lifecycle(
+    tmp_path: Path,
+) -> None:
     host = _load_host_runner()
-    receipt = {
-        "schema_version": "0.1.0",
-        "zero_prior_lambda_instances": True,
-        "model_revision": "gpt-4o-2024-11-20",
-        "service_tier": "default",
-        "model_metadata_available_without_task_request": True,
-        "credential_channel_metadata_valid_without_value_retention": True,
-        "firewall_baseline_valid": True,
-        "provider_image_and_capacity_valid": True,
-        "lambda_hourly_price_usd": 1.29,
-        "openai_input_usd_per_million": 2.5,
-        "openai_cached_input_usd_per_million": 1.25,
-        "openai_output_usd_per_million": 10.0,
-        "zero_instance_check_completed_at_epoch": time.time() - 2,
-        "lambda_started_at_epoch": time.time() - 1,
-    }
-    path = tmp_path / "receipt.json"
-    path.write_text(json.dumps(receipt), encoding="utf-8")
-    assert host.validate_dynamic_receipt(path)["zero_prior_lambda_instances"] is True
-    del receipt["lambda_started_at_epoch"]
-    path.write_text(json.dumps(receipt), encoding="utf-8")
-    with pytest.raises(host.T09HostError, match="Lambda start time"):
-        host.validate_dynamic_receipt(path)
+    message = "t09-pilot-blocked-material-risk"
+    with pytest.raises(host.T09HostError, match=message):
+        host.validate_dynamic_receipt(
+            tmp_path / "nonexistent-entry.json",
+            expected_package_commit="a" * 40,
+        )
+    with pytest.raises(host.T09HostError, match=message):
+        host.validate_provider_closeout_receipt(
+            tmp_path / "nonexistent-closeout.json",
+            expected_lambda_started_at_epoch=1.0,
+            expected_owned_instance_identity_sha256="a" * 64,
+            expected_entry_receipt_sha256="b" * 64,
+            expected_package_commit="a" * 40,
+        )
+    with pytest.raises(host.T09HostError, match=message):
+        host.preflight(SimpleNamespace())
+    with pytest.raises(host.T09HostError, match=message):
+        host.execute_condition(SimpleNamespace())
+
+
+def test_removed_provider_receipt_schemas_cannot_be_mistaken_for_execution_contracts() -> None:
+    assert not (ROOT / "schemas/t09-sira-pilot-dynamic-preflight.schema.json").exists()
+    assert not (ROOT / "schemas/t09-sira-pilot-provider-closeout.schema.json").exists()
+
+
+def test_host_timing_partition_preserves_cleanup_and_scientific_envelopes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    host = _load_host_runner()
+    now = time.time()
+    state = tmp_path / "pilot-v2/pilot-state.json"
+    state.parent.mkdir(parents=True)
+    state.write_text(
+        json.dumps(
+            {
+                "pilot_started_at_epoch": now,
+                "lambda_started_at_epoch": now,
+            }
+        ),
+        encoding="utf-8",
+    )
+    assert host.provider_seconds_remaining(tmp_path, reserve_seconds=1_200) == pytest.approx(
+        2_400,
+        abs=1,
+    )
+    assert host.scientific_seconds_remaining(tmp_path) == pytest.approx(2_400, abs=1)
+    monkeypatch.setattr(host.time, "time", lambda: now + 2_401)
+    with pytest.raises(host.T09HostError, match="scientific workload ceiling"):
+        host.scientific_seconds_remaining(tmp_path)
 
 
 def test_host_secret_cleanup_finds_cross_chunk_match_and_destroys_exact_file(
@@ -505,9 +604,133 @@ def test_host_secret_cleanup_finds_cross_chunk_match_and_destroys_exact_file(
     assert not secret_path.exists()
 
 
+def test_archive_privacy_scan_rejects_private_network_and_unredacted_account_fields(
+    tmp_path: Path,
+) -> None:
+    host = _load_host_runner()
+    (tmp_path / "unsafe.json").write_text(
+        json.dumps(
+            {
+                "network": "10.4.2.9/24",
+                "provider_account_id": "unrelated-account",
+            }
+        ),
+        encoding="utf-8",
+    )
+    hits = host.privacy_violations(tmp_path)
+    assert "unsafe.json:private-network" in hits
+    assert "unsafe.json:sensitive-json-field" in hits
+    (tmp_path / "unsafe.json").write_text(
+        json.dumps(
+            {
+                "provider_account_id": {
+                    "redacted": True,
+                    "reason": "structural-sensitive-field",
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    assert host.privacy_violations(tmp_path) == []
+
+
+def test_entered_partial_attempt_emits_schema_valid_invalid_evidence_and_is_consumed(
+    tmp_path: Path,
+) -> None:
+    finalizer = _load_attempt_finalizer()
+    contract = load_execution_contract(
+        EXECUTION_CONTRACT,
+        expected_sha256=file_sha256(EXECUTION_CONTRACT),
+    )
+    attempt = contract.attempt(ATTEMPT_ORDER[0])
+    attempt_root = tmp_path / "attempt"
+    attempt_root.mkdir()
+    state_path = tmp_path / "pilot-state.json"
+    initialize_pilot_state(
+        state_path,
+        execution_contract_sha256=contract.sha256,
+        pilot_started_at_epoch=time.time() - 10,
+        lambda_started_at_epoch=time.time() - 20,
+    )
+    mark_empirical_entry(
+        state_path,
+        execution_contract_sha256=contract.sha256,
+        run_id=attempt.run_id,
+    )
+    (attempt_root / "normalized-events.jsonl").write_text(
+        json.dumps(
+            {
+                "schema_version": "0.1.0",
+                "event_id": "event-provider-failed",
+                "parent_event_id": None,
+                "kind": "provider-call-failed",
+                "payload": {"exception_type": "FixtureFailure"},
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (attempt_root / "condition.stdout").write_text("", encoding="utf-8")
+    (attempt_root / "condition.stderr").write_text("fixture failure\n", encoding="utf-8")
+    cleanup_path = attempt_root / "host-cleanup-receipt.json"
+    cleanup_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "0.1.0",
+                "run_id": attempt.run_id,
+                "returncode": 1,
+                "container_removed": True,
+                "owned_container_residue": [],
+                "secret_scan_passed": True,
+                "cap_violation": None,
+                "timing": {
+                    "started_at": "2026-08-13T12:00:00Z",
+                    "stopped_at": "2026-08-13T12:00:01Z",
+                    "wall_seconds": 1.0,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    command_path = (
+        ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
+        "T09_PILOT_COMMAND_MANIFESTS.json"
+    )
+    result = finalizer.finalize(
+        SimpleNamespace(
+            execution_contract=EXECUTION_CONTRACT,
+            execution_contract_sha256=contract.sha256,
+            command_manifests=command_path,
+            command_manifests_sha256=file_sha256(command_path),
+            condition_plan=ROOT / attempt.condition_plan_path,
+            attempt_root=attempt_root,
+            run_id=attempt.run_id,
+            package_commit="a" * 40,
+            aggregate_ledger=tmp_path / "aggregate-budget.json",
+            pilot_state=state_path,
+            host_cleanup_receipt=cleanup_path,
+            evaluator_root=EVALUATOR_ROOT,
+            dataset=DATASET_FIXTURE,
+            score_schema=ROOT / "schemas/t09-sira-pilot-score.schema.json",
+            evidence_schema=ROOT / "schemas/t09-sira-pilot-evidence.schema.json",
+        )
+    )
+    outcome = json.loads((attempt_root / "attempt-outcome.json").read_text())
+    evidence = json.loads((attempt_root / "evidence-index.json").read_text())
+    assert result["valid_scored_attempt"] is False
+    assert outcome["artifact_execution"] is True
+    assert outcome["invalid_infrastructure_attempt"] is True
+    assert outcome["condition_failure"] is False
+    assert evidence["outcome"] == outcome
+    state = json.loads(state_path.read_text())
+    assert state["attempts_completed"] == [attempt.run_id]
+
+
 @pytest.mark.parametrize(
     "relative",
     [
+        "src/giclab/harness/sira_gate_a.py",
+        "src/giclab/harness/safety.py",
         "src/giclab/harness/t09_sira_pilot.py",
         "containers/sira-smoke/pragmatic/t09_remote_runner.py",
         "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py",

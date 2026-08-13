@@ -84,14 +84,15 @@ condition_plan_paths:
   - experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-task-0001-simulative.yaml
   - experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-task-0001-reactive.yaml
 readiness:
-  execution_eligibility: eligible-after-authorization
+  execution_eligibility: blocked-pending-prerequisites
   approval_changes_required:
     - execution.authorized
     - execution.authorization_reference
     - condition_plans[*].execution.authorization
-  unresolved_execution_blockers: []
+  unresolved_execution_blockers:
+    - The frozen T07 manual-console observer has a 3,600-second hard provider wall and a 1,800-second normal termination target. Four plausible full-task attempts plus worst-case evidence staging, three bounded cleanup checkpoints, terminal polling, and sealing cannot fit while preserving a safe cleanup reserve.
+    - No source-compatible provider lifecycle can enforce the 14,400-second candidate Lambda ceiling. T09 may not replace the frozen manual lifecycle with a new automated launch or watchdog control plane.
   pre_execution_requirements:
-    - A fresh user authorization must bind the final clean commit, PLAN-EXP0001-PILOT-V2 bytes and SHA-256, execution contract SHA-256, four command hashes, USD 45.16 aggregate cap, and zero-retry rule.
-    - Run the single exact T09 preflight before empirical entry, including read-only current model metadata, Lambda price and zero-instance checks; a failure may be repaired only before the first task model request or browser action.
-    - Enforce the machine execution contract for all four sequential attempts, including the automatic Task-A checkpoint, structural redaction, evidence reconstruction, cleanup, provider termination, and zero-instance closeout.
+    - Do not authorize or execute this plan while either material blocker remains.
+    - A successor requires a source-compatible lifecycle whose total wall and cleanup reserve can cover all four attempts, or a newly scoped plan; either path requires new review, bindings, and authorization.
     - Keep raw task, answer, trace, screenshot, and evaluator evidence private and access controlled; public release remains blocked pending review.

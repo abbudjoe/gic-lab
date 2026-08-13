@@ -1,15 +1,16 @@
 # T09 SiRA two-task calibration pilot plan
 
-Status: **ready for a fresh exact authorization; execution remains unauthorized**
+Status: **blocked by a material provider-lifecycle timing risk; unauthorized**
 
 Plan ID: `PLAN-EXP0001-PILOT-V2`
 
-Terminal planning state: `ready-for-t09-pilot-authorization`
+Terminal planning state: `t09-pilot-blocked-material-risk`
 
 This is an offline execution package. It did not launch or contact Lambda, OpenAI, a
 browser, SiRA, or FanOutQA. `execution.authorized` remains `false` in the parent and
-all four child plans. A later user instruction must bind the final clean commit and
-the exact packet before any dynamic preflight or execution.
+all four child plans. No truthful authorization block exists: the frozen T07 provider
+observer cannot cover the proposed four-attempt envelope and worst-case cleanup inside
+its own hard wall. The host preflight and empirical entry fail closed.
 
 ## Scope and interpretation boundary
 
@@ -40,19 +41,20 @@ rewriting its identity.
 |---|---|---|
 | Execution blocker | Exact evaluator, model asset, package closure, and behavior were unbound. | Resolved by the pinned evaluator contract, exact file hashes, locked dependency group, and offline fixture suite. |
 | Execution blocker | Task records lacked complete release, row, text/reference/record hash, selection, license, and retention bindings. | Resolved by the dataset contract; the existing two rows are retained without outcome-based replacement. |
-| Execution blocker | Post-action results, per-call lineage/usage, aggregate accounting, cleanup receipt, and hard-cap enforcement were incomplete. | Resolved by the small T09 overlay on the T07 pragmatic runtime and fail-closed tests. |
+| Execution blocker | Post-action results, per-call lineage/usage, aggregate accounting, cleanup receipt, and local hard-cap enforcement were incomplete. | The offline attempt/evidence primitives were repaired and tested, but they do not close the provider lifecycle blocker below. |
 | Execution blocker | Condition-owned plans had unequal model-call limits and no exact rendered-command binding. | Resolved with one pair-equal 1,155-call attempt cap, four fresh attempts, and machine-rendered pair diffs. |
-| Execution blocker | The final clean commit, immutable packet hashes, fresh authorization, and dynamic preflight do not yet exist together. | The package supplies the static bindings. Fresh authorization is the only remaining execution blocker; the authorized turn must run the exact preflight before empirical entry. |
-| Analysis blocker | The upstream evaluator has task-specific normalization behavior, including a 0.5 effective correct-fixture ceiling on Task B. | Resolved for calibration analysis by freezing and reporting the exact behavior at task level; no repair, renormalization, or cross-task effect estimate is allowed. |
+| Execution blocker | The candidate plan requires up to 14,400 Lambda seconds, but the frozen T07 manual-console observer has a 3,600-second hard provider wall and a 1,800-second normal termination target. | **Open and material.** Four plausible full-task attempts cannot coexist with bounded staging and cleanup inside the inherited wall. No source-compatible enforcement path exists for the candidate ceiling. |
+| Execution blocker | Frozen worst-case cleanup permits three 300-second human checkpoints, then terminal polling and evidence sealing; a transferable failure-prefix archive must also be staged and verified before termination. | **Open and material.** This consumes at least the proposed 1,200-second non-scientific reserve before polling, sealing, and transfer overhead. Reducing it would risk an unresolved billable host. |
+| Execution blocker | Replacing manual T07 lifecycle with automated launch, termination, or a watchdog could create a new timing/control path. | **Rejected by scope.** T09 may not reopen T07 infrastructure design or create another cloud control plane. The incomplete draft adapter and schemas were removed. |
+| Analysis blocker | The upstream evaluator has task-specific normalization behavior; the ordinary fully correct Task B fixture scores 0.5, without proving a score upper bound. | Resolved for calibration analysis by freezing and reporting the exact fixture behavior at task level; no repair, renormalization, ceiling claim, or cross-task effect estimate is allowed. |
 | Publication-only blocker | Raw tasks/references are CC-BY-SA-4.0 and traces/screenshots may contain third-party or private material. | Private access-controlled research use is permitted; public raw release remains blocked pending attribution, share-alike, third-party-content, privacy, and redaction review. |
 | Nonblocking optional evidence gap | Unsupported H2K mechanism fields and causal lineage unavailable from upstream remain absent. | Record `unavailable` with reason; never infer them. |
 | Nonblocking optional evidence gap | SiRA/evaluator are expected not to use the visible A10. | Record CUDA identity and practical utilization samples; zero use is valid and no acceleration claim is made. |
 | Nonblocking optional evidence gap | The runtime is manually supervised and not production infrastructure. | Documented limitation; it does not affect pairing, scoring, credentials, spend, cleanup, or reconstruction. |
 
-No publication-only or optional gap blocks private pilot execution. Dynamic model
-availability, price, capacity, firewall, credential-channel, and zero-instance checks
-are exact preflight conditions, not reasons to mutate infrastructure in this planning
-turn.
+Publication-only and optional gaps do not block a private pilot. The provider timing
+and cleanup incompatibility does. It is material under the Occam rule because failure
+could exceed approved spending and leave a billable resource unresolved.
 
 ## Frozen scientific and task contract
 
@@ -93,10 +95,9 @@ runs the evaluator unchanged, and retains input and output. All required offline
 pass: clearly correct, clearly incorrect, partial, malformed, missing answer,
 evaluator exception, duplicate evidence, normalization edge, and Task B. Task A's
 ordinary correct fixture scores 0.9 while its capitalization/punctuation edge scores
-1.0 because of context-sensitive lemmatization. Task B's correct six-film fixture
-scores 0.5 because the exact word-boundary expression cannot match normalized
-references beginning with `$`. These are frozen evaluator properties, not observed
-pilot results.
+1.0 because of context-sensitive lemmatization. Task B's ordinary correct six-film
+fixture scores 0.5; a normalization-edge form scores 1.0, so 0.5 is not a proven
+ceiling. These are frozen evaluator properties, not observed pilot results.
 
 ## Orthogonal attempt and score states
 
@@ -127,8 +128,9 @@ evaluator exception are explicit codes; evaluator failure yields a null score.
 The T07 one-step smoke established initialization cost but could not complete FanOutQA.
 The pinned upstream runner accepts a finite `max_steps`; T09 predeclares 18 expected
 and 30 hard browser actions for both conditions. Action timeout is 30 seconds,
-condition wall is 3,600 seconds, pair wall is 7,200 seconds, and total attempt wall is
-14,400 seconds across the pilot. The runtime stops before the next provider call or task browser action,
+condition wall is 3,600 seconds, pair wall is 7,200 seconds, and the candidate total is
+14,400 seconds across the pilot. These are maximum candidate ceilings, not an
+executable budget. The attempt runtime would stop before the next provider call or task browser action,
 terminates the condition process, retains partial evidence, performs cleanup, and
 never retries after empirical entry.
 
@@ -150,15 +152,28 @@ observations, and the future preflight rejects a higher current rate.
 
 Hard per-attempt limits are identical within and across pairs: 1,155 model-call
 attempts, 1,000,000 total tokens, USD 10 OpenAI cost, 30 browser actions, 3,600 wall
-seconds, 2 GiB output, and 1 A10-hour/USD 1.29 Lambda allocation. Aggregate limits are
+seconds, 1 GiB output, and 1 A10-hour/USD 1.29 Lambda allocation. Aggregate limits are
 4 attempts, 4,620 model-call attempts, 4,000,000 tokens, 120 actions, 14,400 attempt
 wall seconds, USD 40 OpenAI, 4 A10-hours/USD 5.16 Lambda, USD 45.16 combined, and 12
-GiB pilot disk. Pair wall is 7,200 seconds; Lambda duration is at most 14,400 seconds.
+GiB pilot disk. Pair wall is 7,200 seconds; the candidate Lambda duration is 14,400
+seconds. The frozen provider observer instead enforces a non-negotiable 3,600-second
+hard wall, so this candidate hard budget is not authorizable.
+
+Timing proof: T07 observed 18.019 seconds for one reactive action and 21.378 seconds
+for one simulative action. Linear 18-action planning implies about 1,418.31 seconds
+for two attempts of each condition before evaluator/staging overhead. The retained
+successful T07 host used 1,581.905 seconds launch-to-terminal even though its two
+conditions used only 39.397 seconds. The frozen lifecycle separately permits three
+cleanup checkpoints of 300 seconds each, terminal polling, a 300-second seal, and
+pre-termination evidence transfer. These bounds cannot all fit inside 3,600 seconds
+with a defensible termination reserve. This is feasibility evidence, not a pilot
+result.
 
 ## First-pair calibration checkpoint
 
-After both Task A attempts, one automatic, persisted checkpoint permits Task B only
-when all conditions below are true:
+If a successor ever resolves the provider blocker, one automatic persisted
+checkpoint after both Task A attempts permits Task B only when all conditions below
+are true:
 
 1. Both Task A attempts have contract-valid, reconstructable evidence.
 2. Both exact evaluator executions succeed.
@@ -171,8 +186,9 @@ when all conditions below are true:
    value.
 
 Any failed criterion produces `stop-before-task-b`; Task A evidence is retained and
-Task B is not entered. Passing produces `continue-to-task-b` without another user
-authorization because the later authorization explicitly binds this rule.
+Task B is not entered. Passing would produce `continue-to-task-b` without another
+user authorization only under a later exact successor authorization. This blocked
+plan cannot reach the checkpoint.
 
 ## Runtime, enforcement, and freeze
 
@@ -182,7 +198,7 @@ Playwright 1.39.0, Chromium revision 1084, container
 OpenAI `gpt-4o-2024-11-20`, service tier `default`. A small repository overlay adds
 only the required T09 evidence and budget controls.
 
-Before a later launch, one preflight must verify runtime imports; evidence and
+The planned preflight would verify runtime imports; evidence and
 fsync/readback; condition/aggregate budget ledgers; all four rendered commands;
 browser startup, screenshot, cleanup without a task action; evaluator hashes/import
 and model load without provider use; task/hash loading; model/service-tier metadata
@@ -192,14 +208,17 @@ capacity, image, and firewall identity are checked there. A preflight failure ma
 repaired only before the first task model request or task browser action. That first
 event is the empirical boundary; code, tasks, order, evaluator, budgets,
 instrumentation, and scientific configuration then freeze across all four attempts.
+No source-compatible producer can satisfy the provider entry/closeout contract inside
+the required wall. `t09_remote_runner.py` rejects both preflight and condition entry
+with `t09-pilot-blocked-material-risk` before empirical work.
 
-Persistent, fsync-backed counters reserve each provider call and browser action before
+Offline-tested, fsync-backed counters reserve each provider call and browser action before
 it is sent, reconcile provider usage receipts after return, and carry aggregate use
 across attempts. The resource guard checks condition/pair/total/Lambda wall, output,
 disk, and Lambda-cost ceilings before empirical operations and at finalization. State
 enforces four exact attempts in order, the Task-A checkpoint, and zero retry.
-Unreconciled provider attempts fail closed. Declared caps and their runtime paths are
-tested directly.
+Unreconciled provider attempts fail closed. The local primitives are tested directly;
+this is non-execution evidence and does not make the provider cap effective.
 
 ## Evidence, redaction, cleanup, and GPU accounting
 
@@ -215,7 +234,8 @@ inferred.
 Structural redaction removes Jupyter tokens/URLs, cloud/API credentials, private
 IP/CIDR values, and unrelated account/provider identifiers before evidence becomes
 eligible for an archive. Exact owned provider termination and a final GET-only
-zero-instance receipt are mandatory closeout conditions in an authorized run.
+zero-instance receipt would be mandatory closeout conditions. Their missing compatible
+timing/source contract is the material blocker; no provider receipt is fabricated.
 
 The host exposes an A10 because it is the previously qualified convenient T07 runtime,
 not because GPU computation is a treatment or expected accelerator path. Pilot,
@@ -239,9 +259,9 @@ events may differ. Counterbalancing changes order, not treatment configuration.
 
 ## Authorization boundary
 
-The ready-to-copy packet is in `T09_SIRA_PILOT_PREAUTHORIZATION_PACKET.md`. A later
-authorization must name its exact final commit, reviewed implementation ancestor,
-plan bytes/hash, execution and command hashes, tasks/order, runtime/model, hard and
-expected budgets, checkpoint, evidence/private-release boundary, cleanup, exact
-provider termination, and zero-instance verification. Until then every permission
-and authorization field remains false, and no preflight or pilot may begin.
+`T09_SIRA_PILOT_PREAUTHORIZATION_PACKET.md` is a refusal packet, not an authorization
+template. It contains no ready-to-copy command or authorization language. Every
+permission and authorization field remains false; no provider preflight or empirical
+attempt may begin. A future successor must first close the lifecycle timing and
+cleanup proof, receive new identities/bindings and independent review, and only then
+prepare a fresh authorization packet.

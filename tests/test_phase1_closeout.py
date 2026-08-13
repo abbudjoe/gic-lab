@@ -58,7 +58,7 @@ def test_phase_one_is_the_only_active_non_executable_control_plane() -> None:
     assert checkpoint["pilot_execution_authorized"] is False
     assert checkpoint["scientific_interpretation_allowed"] is False
     t09_checkpoint = state["t09_preauthorization_checkpoint"]
-    assert t09_checkpoint["terminal_state"] == "ready-for-t09-pilot-authorization"
+    assert t09_checkpoint["terminal_state"] == "t09-pilot-blocked-material-risk"
     assert t09_checkpoint["plan_id"] == "PLAN-EXP0001-PILOT-V2"
     assert t09_checkpoint["pilot_execution_authorized"] is False
     assert t09_checkpoint["scientific_result_claimed"] is False
@@ -69,7 +69,7 @@ def test_phase_one_is_the_only_active_non_executable_control_plane() -> None:
     assert "Status: **in-progress**" in PHASE_1_PLAN.read_text(encoding="utf-8")
 
 
-def test_smoke_and_locked_pilot_are_eligible_but_remain_unauthorized() -> None:
+def test_smoke_is_eligible_and_locked_pilot_is_blocked_and_unauthorized() -> None:
     smoke = load_yaml(EXP_ROOT / "run-plans/smoke.yaml")
     pilot = load_yaml(EXP_ROOT / "run-plans/pilot.yaml")
     assert smoke["plan_id"] == "PLAN-EXP0001-SMOKE"
@@ -82,8 +82,8 @@ def test_smoke_and_locked_pilot_are_eligible_but_remain_unauthorized() -> None:
     assert smoke["readiness"]["pre_execution_requirements"]
     assert pilot["plan_id"] == "PLAN-EXP0001-PILOT-V2"
     assert pilot["execution"]["authorized"] is False
-    assert pilot["readiness"]["execution_eligibility"] == "eligible-after-authorization"
-    assert pilot["readiness"]["unresolved_execution_blockers"] == []
+    assert pilot["readiness"]["execution_eligibility"] == "blocked-pending-prerequisites"
+    assert len(pilot["readiness"]["unresolved_execution_blockers"]) == 2
     assert pilot["readiness"]["pre_execution_requirements"]
     for relative in smoke["condition_plan_paths"] + pilot["condition_plan_paths"]:
         condition = load_yaml(ROOT / relative)
@@ -138,7 +138,8 @@ def test_exp0001_readme_records_t07_materialization_and_current_pilot_boundary()
     readme = " ".join((EXP_ROOT / "README.md").read_text(encoding="utf-8").split())
     assert "T07 bound the immutable substitute `gpt-4o-2024-11-20`" in readme
     assert "Any pilot must preserve or explicitly revise that immutable binding" in readme
-    assert "The package is ready for a fresh exact authorization" in readme
+    assert "`t09-pilot-blocked-material-risk`" in readme
+    assert "provider preflight is fail-closed" in readme
     assert "PLAN-EXP0001-PILOT-V2" in readme
     assert "T07 preflight must bind the exact snapshot before execution" not in readme
     assert "later integration must bind" not in readme

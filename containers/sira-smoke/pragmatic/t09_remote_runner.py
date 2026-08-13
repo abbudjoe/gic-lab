@@ -13,8 +13,10 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import ipaddress
 import json
 import os
+import re
 import resource
 import shutil
 import stat
@@ -28,6 +30,7 @@ from typing import Any, Final, cast
 PLAN_ID: Final = "PLAN-EXP0001-PILOT-V2"
 HOST_RUN_ID: Final = "RUN-EXP0001-PILOT-V2-HOST-0001"
 ARCHIVE_ID: Final = "ARCHIVE-EXP0001-PILOT-V2-0001"
+STAGE_ID: Final = "STAGE-EXP0001-PILOT-V2-0001"
 MODEL: Final = "gpt-4o-2024-11-20"
 SERVICE_TIER: Final = "default"
 IMAGE_ID: Final = "sha256:035edf61718e84a8156f4f0f7817b134b0ce31488d3f0b50bbfba2b4a30cc61c"
@@ -39,9 +42,7 @@ T07_RUNTIME_SHA256: Final = "c461dce20fea9e743135cad98b664213a393e46f35d1c1a8434
 T07_RUNTIME_PREFLIGHT_SHA256: Final = (
     "0530b3ad25fac1d3f9372d31da8046bec67b6c74eea3cdd3c8d91353948f1b3d"
 )
-T07_ROUTING_PATCH_SHA256: Final = (
-    "4d7e2a25f4313fc754db0fa17aeda51cc5cd75a5653adaf13b01ce87a71cb8ed"
-)
+T07_ROUTING_PATCH_SHA256: Final = "4d7e2a25f4313fc754db0fa17aeda51cc5cd75a5653adaf13b01ce87a71cb8ed"
 UV_URL: Final = (
     "https://files.pythonhosted.org/packages/83/eb/4e1557daf6693cb446ed28185664ad6682fd98c6d"
     "bac9e433cbc35df450a/uv-0.11.7-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl"
@@ -54,14 +55,50 @@ RUN_IDS: Final = (
     "RUN-EXP0001-PILOT-V2-TASK-B-REACTIVE",
 )
 CONTAINER_PREFIX: Final = "giclab-t09-pilot-v2-"
-MAX_ATTEMPT_OUTPUT_BYTES: Final = 2_147_483_648
-MAX_PILOT_DISK_BYTES: Final = 12_884_901_888
-MAX_CONDITION_WALL_SECONDS: Final = 3_600
-MAX_PAIR_WALL_SECONDS: Final = 7_200
-MAX_TOTAL_WALL_SECONDS: Final = 14_400
-MAX_LAMBDA_DURATION_SECONDS: Final = 14_400
-MAX_LAMBDA_COST_USD: Final = 5.16
+MAX_ATTEMPT_OUTPUT_BYTES: Final = 67_108_864
+MAX_PILOT_DISK_BYTES: Final = 805_306_368
+MAX_CONDITION_WALL_SECONDS: Final = 600
+MAX_PAIR_WALL_SECONDS: Final = 1_200
+MAX_SCIENTIFIC_WORKLOAD_SECONDS: Final = 2_400
+MAX_TOTAL_WALL_SECONDS: Final = 3_600
+MAX_LAMBDA_DURATION_SECONDS: Final = 3_600
+MAX_LAMBDA_COST_USD: Final = 1.29
 LAMBDA_HOURLY_PRICE_USD: Final = 1.29
+FINALIZATION_RESERVE_SECONDS: Final = 60
+PROVIDER_CLOSEOUT_RESERVE_SECONDS: Final = 1_200
+PROVIDER_TERMINATION_RESERVE_SECONDS: Final = 600
+APPROVED_FINAL_ARCHIVE_ROOT: Final = Path(
+    "/Volumes/Macintosh HD - Data/GIC-Lab/t09/sealed-artifacts"
+)
+_HEX64: Final = re.compile(r"[a-f0-9]{64}")
+_JUPYTER_URL: Final = re.compile(
+    r"https?://[^\s\"'<>]*(?:/lab(?:\?|/)|/tree(?:\?|/)|[?&]token=)[^\s\"'<>]*",
+    re.IGNORECASE,
+)
+_CREDENTIAL_TEXT: Final = re.compile(
+    r"(?:sk-[A-Za-z0-9_-]{16,}|AKIA[A-Z0-9]{16}|Bearer\s+[A-Za-z0-9._~+/=-]{16,})"
+)
+_IPV4_TEXT: Final = re.compile(r"(?<![A-Za-z0-9])(?:\d{1,3}\.){3}\d{1,3}(?:/\d{1,2})?")
+_SENSITIVE_JSON_KEYS: Final = {
+    "account_id",
+    "api_key",
+    "authorization",
+    "cidr",
+    "cloud_credential",
+    "jupyter_token",
+    "jupyter_url",
+    "private_cidr",
+    "private_ip",
+    "provider_account_id",
+}
+MAX_PRIVACY_JSON_BYTES: Final = 16_777_216
+MAX_PRIVACY_LINE_BYTES: Final = 8_388_608
+MAX_PRIVACY_SCAN_CHUNK_BYTES: Final = 1_048_576
+MAX_STAGED_EVIDENCE_BYTES: Final = 335_544_320
+PROVIDER_EXECUTION_BLOCKER: Final = (
+    "t09-pilot-blocked-material-risk: frozen T07 observer hard wall is 3600 seconds; "
+    "four plausible task attempts plus bounded staging and worst-case cleanup cannot fit"
+)
 
 
 class T09HostError(RuntimeError):
@@ -98,6 +135,100 @@ def load_object(path: Path, *, label: str) -> dict[str, Any]:
     return cast(dict[str, Any], value)
 
 
+def _exact_keys(value: dict[str, Any], expected: set[str], *, label: str) -> None:
+    if set(value) != expected:
+        raise T09HostError(f"{label} fields drifted")
+
+
+def _private_network_values(text: str) -> list[str]:
+    hits: list[str] = []
+    for match in _IPV4_TEXT.finditer(text):
+        candidate = match.group(0)
+        try:
+            address = (
+                ipaddress.ip_interface(candidate).ip
+                if "/" in candidate
+                else ipaddress.ip_address(candidate)
+            )
+        except ValueError:
+            continue
+        if not address.is_global:
+            hits.append(candidate)
+    return hits
+
+
+def _stream_text_pattern_hits(path: Path) -> set[str]:
+    labels: set[str] = set()
+    overlap = b""
+    with path.open("rb") as handle:
+        while chunk := handle.read(MAX_PRIVACY_SCAN_CHUNK_BYTES):
+            combined = overlap + chunk
+            text = combined.decode("utf-8", errors="ignore")
+            if _JUPYTER_URL.search(text):
+                labels.add("jupyter-url")
+            if _CREDENTIAL_TEXT.search(text):
+                labels.add("credential-pattern")
+            if _private_network_values(text):
+                labels.add("private-network")
+            overlap = combined[-4_096:]
+    return labels
+
+
+def _sensitive_json_paths(value: object, *, prefix: str = "$") -> list[str]:
+    hits: list[str] = []
+    if isinstance(value, dict):
+        for raw_key, item in value.items():
+            key = str(raw_key)
+            path = f"{prefix}.{key}"
+            if key.lower() in _SENSITIVE_JSON_KEYS and not (
+                isinstance(item, dict)
+                and item == {"reason": "structural-sensitive-field", "redacted": True}
+            ):
+                hits.append(path)
+            hits.extend(_sensitive_json_paths(item, prefix=path))
+    elif isinstance(value, list):
+        for index, item in enumerate(value):
+            hits.extend(_sensitive_json_paths(item, prefix=f"{prefix}[{index}]"))
+    return hits
+
+
+def privacy_violations(root: Path) -> list[str]:
+    """Reject retained text/JSON that still contains explicitly prohibited values."""
+
+    violations: list[str] = []
+    for path in sorted(root.rglob("*")):
+        if (
+            not path.is_file()
+            or path.is_symlink()
+            or path.name.endswith(".tar.gz")
+            or path.stat().st_size > MAX_PILOT_DISK_BYTES
+        ):
+            continue
+        relative = path.relative_to(root).as_posix()
+        for label in _stream_text_pattern_hits(path):
+            violations.append(f"{relative}:{label}")
+        if path.suffix == ".json" and path.stat().st_size <= MAX_PRIVACY_JSON_BYTES:
+            try:
+                value: object = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, UnicodeError, json.JSONDecodeError):
+                continue
+            if _sensitive_json_paths(value):
+                violations.append(f"{relative}:sensitive-json-field")
+        elif path.suffix == ".jsonl":
+            with path.open("rb") as handle:
+                for raw_line in handle:
+                    if len(raw_line) > MAX_PRIVACY_LINE_BYTES:
+                        continue
+                    try:
+                        value = json.loads(raw_line)
+                    except (UnicodeError, json.JSONDecodeError):
+                        continue
+                    if _sensitive_json_paths(value):
+                        violations.append(f"{relative}:sensitive-json-field")
+                        break
+    return sorted(set(violations))
+
+
 def write_exclusive(path: Path, value: object) -> None:
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     encoded = (json.dumps(value, allow_nan=False, indent=2, sort_keys=True) + "\n").encode()
@@ -119,10 +250,32 @@ def write_exclusive(path: Path, value: object) -> None:
 
 
 def safe_environment() -> dict[str, str]:
-    environment = dict(os.environ)
-    for name in ("LAMBDA_API_KEY", "OPENAI_API_KEY", "SIRA_API_KEY"):
-        environment.pop(name, None)
-    environment.update({"GIT_TERMINAL_PROMPT": "0", "PYTHONNOUSERSITE": "1"})
+    """Return the explicit nonsecret host subprocess environment."""
+
+    environment: dict[str, str] = {}
+    for name in (
+        "DOCKER_CONFIG",
+        "DOCKER_CONTEXT",
+        "DOCKER_HOST",
+        "DOCKER_TLS_VERIFY",
+        "LANG",
+        "LC_ALL",
+        "PATH",
+        "SSL_CERT_DIR",
+        "SSL_CERT_FILE",
+        "TMPDIR",
+        "XDG_RUNTIME_DIR",
+    ):
+        value = os.environ.get(name)
+        if value is not None:
+            environment[name] = value
+    environment.update(
+        {
+            "GIT_CONFIG_NOSYSTEM": "1",
+            "GIT_TERMINAL_PROMPT": "0",
+            "PYTHONNOUSERSITE": "1",
+        }
+    )
     return environment
 
 
@@ -149,9 +302,10 @@ def run_logged(
     timeout: int,
 ) -> None:
     evidence_root.mkdir(parents=True, exist_ok=True, mode=0o700)
-    with (evidence_root / f"{label}.stdout").open("xb") as stdout, (
-        evidence_root / f"{label}.stderr"
-    ).open("xb") as stderr:
+    with (
+        (evidence_root / f"{label}.stdout").open("xb") as stdout,
+        (evidence_root / f"{label}.stderr").open("xb") as stderr,
+    ):
         result = subprocess.run(
             argv,
             env=safe_environment(),
@@ -500,57 +654,110 @@ def contract_paths(repository: Path) -> dict[str, Path]:
     }
 
 
-def validate_dynamic_receipt(path: Path) -> dict[str, Any]:
-    value = load_object(path, label="dynamic preflight receipt")
-    required = {
-        "schema_version": "0.1.0",
-        "zero_prior_lambda_instances": True,
-        "model_revision": MODEL,
-        "service_tier": SERVICE_TIER,
-        "model_metadata_available_without_task_request": True,
-        "credential_channel_metadata_valid_without_value_retention": True,
-        "firewall_baseline_valid": True,
-        "provider_image_and_capacity_valid": True,
-    }
-    for key, expected in required.items():
-        if value.get(key) != expected:
-            raise T09HostError(f"dynamic preflight receipt field failed: {key}")
-    rate = value.get("lambda_hourly_price_usd")
-    if not isinstance(rate, (int, float)) or isinstance(rate, bool) or rate > 1.29 or rate < 0:
-        raise T09HostError("dynamic Lambda price exceeds the frozen planning rate")
-    openai_rate_caps = {
-        "openai_input_usd_per_million": 2.5,
-        "openai_cached_input_usd_per_million": 1.25,
-        "openai_output_usd_per_million": 10.0,
-    }
-    for field, cap in openai_rate_caps.items():
-        observed = value.get(field)
-        if (
-            not isinstance(observed, (int, float))
-            or isinstance(observed, bool)
-            or observed < 0
-            or observed > cap
-        ):
-            raise T09HostError(f"dynamic OpenAI price exceeds the frozen planning rate: {field}")
-    lambda_started = value.get("lambda_started_at_epoch")
-    zero_checked = value.get("zero_instance_check_completed_at_epoch")
+def validate_dynamic_receipt(
+    path: Path,
+    *,
+    expected_package_commit: str,
+    repository_root: Path | None = None,
+) -> dict[str, object]:
+    """Refuse entry because no source-compatible T09 provider receipt exists."""
+
+    del path, expected_package_commit, repository_root
+    raise T09HostError(PROVIDER_EXECUTION_BLOCKER)
+
+
+def validate_provider_closeout_receipt(
+    path: Path,
+    *,
+    expected_lambda_started_at_epoch: float,
+    expected_owned_instance_identity_sha256: str,
+    expected_entry_receipt_sha256: str,
+    expected_package_commit: str,
+    repository_root: Path | None = None,
+) -> dict[str, object]:
+    """Refuse closeout projection while the provider lifecycle remains blocked."""
+
+    del (
+        path,
+        expected_lambda_started_at_epoch,
+        expected_owned_instance_identity_sha256,
+        expected_entry_receipt_sha256,
+        expected_package_commit,
+        repository_root,
+    )
+    raise T09HostError(PROVIDER_EXECUTION_BLOCKER)
+
+
+def sanitized_dynamic_receipt(
+    _path: Path, value: dict[str, object]
+) -> dict[str, object]:
+    """Return only the already-sanitized validator projection."""
+
+    return dict(value)
+
+
+def _runtime_budget_state(root: Path) -> dict[str, Any]:
+    return load_object(root / "pilot-v2/pilot-state.json", label="pilot state")
+
+
+def provider_seconds_remaining(root: Path, *, reserve_seconds: float = 0.0) -> float:
+    """Return provider time left while preserving an explicit cleanup reserve."""
+
+    state = _runtime_budget_state(root)
     now = time.time()
-    if (
-        not isinstance(lambda_started, (int, float))
-        or isinstance(lambda_started, bool)
-        or lambda_started <= 0
-        or lambda_started > now
-        or now - float(lambda_started) >= MAX_LAMBDA_DURATION_SECONDS
-    ):
-        raise T09HostError("dynamic Lambda start time is unavailable or already over cap")
-    if (
-        not isinstance(zero_checked, (int, float))
-        or isinstance(zero_checked, bool)
-        or zero_checked <= 0
-        or zero_checked > lambda_started
-    ):
-        raise T09HostError("zero-instance receipt was not captured before launch")
-    return value
+    lambda_started = state.get("lambda_started_at_epoch")
+    if not isinstance(lambda_started, (int, float)) or isinstance(lambda_started, bool):
+        raise T09HostError("Lambda time origin is unavailable")
+    lambda_elapsed = now - float(lambda_started)
+    lambda_limit_from_cost = MAX_LAMBDA_COST_USD * 3600.0 / LAMBDA_HOURLY_PRICE_USD
+    remaining = min(
+        MAX_TOTAL_WALL_SECONDS - lambda_elapsed,
+        MAX_LAMBDA_DURATION_SECONDS - lambda_elapsed,
+        lambda_limit_from_cost - lambda_elapsed,
+    )
+    if remaining <= reserve_seconds:
+        raise T09HostError("provider duration or cost ceiling has no required reserve")
+    return remaining - reserve_seconds
+
+
+def scientific_seconds_remaining(root: Path, *, reserve_seconds: float = 0.0) -> float:
+    """Return scientific-work time without borrowing provider-closeout time."""
+
+    state = _runtime_budget_state(root)
+    pilot_started = state.get("pilot_started_at_epoch")
+    if not isinstance(pilot_started, (int, float)) or isinstance(pilot_started, bool):
+        raise T09HostError("scientific-work time origin is unavailable")
+    workload_remaining = MAX_SCIENTIFIC_WORKLOAD_SECONDS - (
+        time.time() - float(pilot_started)
+    )
+    provider_remaining = provider_seconds_remaining(root, reserve_seconds=reserve_seconds)
+    remaining = min(workload_remaining, provider_remaining)
+    if remaining <= 0:
+        raise T09HostError("scientific workload ceiling has no remaining time")
+    return remaining
+
+
+def container_state_receipt(prefix: list[str], name: str) -> dict[str, object]:
+    raw = output([*prefix, "inspect", "--format", "{{json .State}}", name])
+    try:
+        value: object = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise T09HostError("container state inspection is malformed") from exc
+    if not isinstance(value, dict):
+        raise T09HostError("container state inspection is not an object")
+    state = cast(dict[str, Any], value)
+    return {
+        "status": state.get("Status"),
+        "running": state.get("Running"),
+        "paused": state.get("Paused"),
+        "restarting": state.get("Restarting"),
+        "oom_killed": state.get("OOMKilled"),
+        "dead": state.get("Dead"),
+        "exit_code": state.get("ExitCode"),
+        "started_at": state.get("StartedAt"),
+        "finished_at": state.get("FinishedAt"),
+        "private_network_fields_retained": False,
+    }
 
 
 def manifests(document: dict[str, Any]) -> list[dict[str, Any]]:
@@ -842,6 +1049,7 @@ def browser_lifecycle_preflight(
     run_logged(create, evidence_root=attempt, label="container-create", timeout=60)
     started = False
     removed = False
+    state_receipt: dict[str, object] | None = None
     try:
         run_logged(
             [*prefix, "start", name],
@@ -876,18 +1084,7 @@ def browser_lifecycle_preflight(
                 check=False,
                 timeout=30,
             )
-        with (attempt / "container-inspect.json").open("xb") as stdout, (
-            attempt / "container-inspect.stderr"
-        ).open("xb") as stderr:
-            subprocess.run(
-                [*prefix, "inspect", name],
-                env=safe_environment(),
-                stdin=subprocess.DEVNULL,
-                stdout=stdout,
-                stderr=stderr,
-                check=False,
-                timeout=30,
-            )
+        state_receipt = container_state_receipt(prefix, name)
         removed = remove_container(prefix, name)
     residue = owned_containers(prefix)
     result = {
@@ -899,6 +1096,7 @@ def browser_lifecycle_preflight(
         "container_removed": removed,
         "owned_container_residue": residue,
         "task_browser_action": False,
+        "container_state": state_receipt,
     }
     if not all(
         (
@@ -911,6 +1109,56 @@ def browser_lifecycle_preflight(
         raise T09HostError("browser startup or cleanup preflight failed")
     write_exclusive(attempt / "host-browser-lifecycle.json", result)
     return result
+
+
+def secret_channel_preflight(
+    *,
+    repository: Path,
+    artifact_root: Path,
+    secret_file: Path,
+    prefix: list[str],
+) -> dict[str, Any]:
+    attempt = artifact_root / "pilot-v2/secret-channel-preflight"
+    attempt.mkdir(parents=True, mode=0o700)
+    source = repository / "containers/sira-smoke/pragmatic/t09_secret_preflight.py"
+    command = [
+        *prefix,
+        "run",
+        "--rm",
+        "--network",
+        "none",
+        "--read-only",
+        "--cap-drop",
+        "ALL",
+        "--security-opt",
+        "no-new-privileges=true",
+        "--user",
+        "1000:1000",
+        "--mount",
+        f"type=bind,src={source},dst=/opt/giclab/t09_secret_preflight.py,readonly",
+        "--mount",
+        f"type=bind,src={secret_file},dst=/run/secrets/sira_api_key,readonly",
+        "--mount",
+        f"type=bind,src={attempt},dst=/opt/giclab-evidence",
+        "--entrypoint",
+        "/opt/sira/.venv/bin/python",
+        IMAGE_ID,
+        "/opt/giclab/t09_secret_preflight.py",
+        "--secret",
+        "/run/secrets/sira_api_key",
+        "--output",
+        "/opt/giclab-evidence/receipt.json",
+    ]
+    run_logged(command, evidence_root=attempt, label="secret-channel-probe", timeout=60)
+    receipt = load_object(attempt / "receipt.json", label="secret-channel receipt")
+    if (
+        receipt.get("opened_read_only_without_value_read") is not True
+        or receipt.get("secret_bytes_read") != 0
+        or receipt.get("secret_value_or_hash_retained") is not False
+        or receipt.get("container_effective_uid") != 1000
+    ):
+        raise T09HostError("condition-container credential channel preflight failed")
+    return receipt
 
 
 def offline_runtime_preflight(
@@ -1001,21 +1249,44 @@ def initialize_state(root: Path, execution_sha256: str, *, lambda_started_at_epo
 
 
 def preflight(args: argparse.Namespace) -> None:
+    raise T09HostError(PROVIDER_EXECUTION_BLOCKER)
+
+    # Unreachable implementation draft retained only for offline contract tests.
     repository = args.repository.resolve(strict=True)
     artifact_root = args.artifact_root.resolve(strict=False)
     if artifact_root.exists():
         raise T09HostError("pilot artifact root must be fresh")
     validate_secret_metadata(args.secret_file.resolve(strict=True))
-    dynamic = validate_dynamic_receipt(args.dynamic_receipt.resolve(strict=True))
+    dynamic = validate_dynamic_receipt(
+        args.dynamic_receipt.resolve(strict=True),
+        expected_package_commit=args.package_commit,
+    )
     command_document = verify_package(repository, args.package_commit)
     paths = contract_paths(repository)
     prefix = docker_prefix()
     if owned_containers(prefix):
         raise T09HostError("owned pilot containers already exist")
     artifact_root.mkdir(mode=0o700, parents=True)
+    lambda_started = float(dynamic["lambda_started_at_epoch"])
+    execution_sha256 = file_sha256(paths["execution"])
+    initialize_state(
+        artifact_root,
+        execution_sha256,
+        lambda_started_at_epoch=lambda_started,
+    )
+    write_exclusive(
+        artifact_root / "pilot-v2/provider-entry.json",
+        sanitized_dynamic_receipt(args.dynamic_receipt, dynamic),
+    )
     image_materialization = materialize_t07_image(
         repository=repository,
         artifact_root=artifact_root,
+        prefix=prefix,
+    )
+    credential_channel = secret_channel_preflight(
+        repository=repository,
+        artifact_root=artifact_root,
+        secret_file=args.secret_file.resolve(strict=True),
         prefix=prefix,
     )
     evaluator_overlay(
@@ -1031,19 +1302,12 @@ def preflight(args: argparse.Namespace) -> None:
     )
     browser = browser_lifecycle_preflight(artifact_root=artifact_root, prefix=prefix)
     gpu = gpu_snapshot()
-    lambda_started = float(dynamic["lambda_started_at_epoch"])
     lambda_elapsed = time.time() - lambda_started
     if (
         lambda_elapsed >= MAX_LAMBDA_DURATION_SECONDS
         or lambda_elapsed * LAMBDA_HOURLY_PRICE_USD / 3600.0 >= MAX_LAMBDA_COST_USD
     ):
         raise T09HostError("preflight consumed the Lambda duration or cost ceiling")
-    execution_sha256 = file_sha256(paths["execution"])
-    initialize_state(
-        artifact_root,
-        execution_sha256,
-        lambda_started_at_epoch=lambda_started,
-    )
     write_exclusive(
         artifact_root / "pilot-v2/preflight.json",
         {
@@ -1056,7 +1320,7 @@ def preflight(args: argparse.Namespace) -> None:
             "command_manifests_sha256": file_sha256(paths["commands"]),
             "command_argv_sha256s": [item["argv_sha256"] for item in manifests(command_document)],
             "dynamic_receipt_sha256": file_sha256(args.dynamic_receipt),
-            "dynamic_receipt": dynamic,
+            "dynamic_receipt": sanitized_dynamic_receipt(args.dynamic_receipt, dynamic),
             "image_materialization": image_materialization,
             "runtime_imports": "passed-by-network-none-offline-runtime-preflight",
             "evidence_write_fsync_readback": "passed-by-network-none-offline-runtime-preflight",
@@ -1066,7 +1330,7 @@ def preflight(args: argparse.Namespace) -> None:
             "evaluator_loading": "passed-exact-network-none",
             "task_loading": "passed-two-exact-rows-network-none",
             "model_metadata": "passed-without-task-request",
-            "credential_channel": "metadata-only-passed-value-not-retained",
+            "credential_channel": credential_channel,
             "zero_prior_lambda_instances": True,
             "gpu_accounting": gpu,
             "empirical_entry_crossed": False,
@@ -1160,10 +1424,11 @@ def run_attached_with_caps(
     pair_started_at_epoch: float,
     pilot_started_at_epoch: float,
     lambda_started_at_epoch: float,
-) -> tuple[int, float, str | None]:
+) -> tuple[int, float, str | None, bool]:
     stdout_path = attempt_root / "condition.stdout"
     stderr_path = attempt_root / "condition.stderr"
-    violation: str | None = None
+    stop_reason: str | None = None
+    hard_cap_breached = False
     with stdout_path.open("xb") as stdout, stderr_path.open("xb") as stderr:
         process = subprocess.Popen(
             [*prefix, "start", "--attach", name],
@@ -1177,21 +1442,31 @@ def run_attached_with_caps(
             now_wall = time.time()
             elapsed = time.monotonic() - attempt_started
             lambda_elapsed = now_wall - lambda_started_at_epoch
-            if elapsed > MAX_CONDITION_WALL_SECONDS:
-                violation = "condition_wall_seconds"
-            elif now_wall - pair_started_at_epoch > MAX_PAIR_WALL_SECONDS:
-                violation = "pair_wall_seconds"
-            elif now_wall - pilot_started_at_epoch > MAX_TOTAL_WALL_SECONDS:
-                violation = "total_wall_seconds"
-            elif lambda_elapsed > MAX_LAMBDA_DURATION_SECONDS:
-                violation = "lambda_duration_seconds"
-            elif lambda_elapsed * LAMBDA_HOURLY_PRICE_USD / 3600.0 > MAX_LAMBDA_COST_USD:
-                violation = "lambda_cost_usd"
+            if elapsed > MAX_CONDITION_WALL_SECONDS - FINALIZATION_RESERVE_SECONDS:
+                stop_reason = "condition_wall_budget_stop"
+            elif (
+                now_wall - pair_started_at_epoch
+                > MAX_PAIR_WALL_SECONDS - FINALIZATION_RESERVE_SECONDS
+            ):
+                stop_reason = "pair_wall_budget_stop"
+            elif (
+                now_wall - pilot_started_at_epoch
+                > MAX_SCIENTIFIC_WORKLOAD_SECONDS - FINALIZATION_RESERVE_SECONDS
+            ):
+                stop_reason = "scientific_workload_budget_stop"
+            elif lambda_elapsed > MAX_LAMBDA_DURATION_SECONDS - PROVIDER_CLOSEOUT_RESERVE_SECONDS:
+                stop_reason = "lambda_duration_budget_stop"
+            elif (
+                lambda_elapsed + PROVIDER_CLOSEOUT_RESERVE_SECONDS
+            ) * LAMBDA_HOURLY_PRICE_USD / 3600.0 > MAX_LAMBDA_COST_USD:
+                stop_reason = "lambda_cost_budget_stop"
             elif tree_bytes(attempt_root) > MAX_ATTEMPT_OUTPUT_BYTES:
-                violation = "attempt_output_bytes"
+                stop_reason = "attempt_output_bytes"
+                hard_cap_breached = True
             elif tree_bytes(pilot_root) > MAX_PILOT_DISK_BYTES:
-                violation = "pilot_disk_bytes"
-            if violation is not None:
+                stop_reason = "pilot_disk_bytes"
+                hard_cap_breached = True
+            if stop_reason is not None:
                 subprocess.run(
                     [*prefix, "stop", "--time", "30", name],
                     env=safe_environment(),
@@ -1208,7 +1483,7 @@ def run_attached_with_caps(
         except subprocess.TimeoutExpired:
             process.kill()
             returncode = process.wait(timeout=30)
-    return returncode, time.monotonic() - attempt_started, violation
+    return returncode, time.monotonic() - attempt_started, stop_reason, hard_cap_breached
 
 
 def evaluator_argv(
@@ -1247,6 +1522,8 @@ def evaluator_argv(
         f"type=bind,src={paths['commands']},dst=/opt/giclab-contracts/T09_PILOT_COMMAND_MANIFESTS.json,readonly",
         "--mount",
         f"type=bind,src={paths['conditions']},dst=/opt/giclab-contracts/conditions,readonly",
+        "--mount",
+        f"type=bind,src={repository / 'schemas'},dst=/opt/giclab-schemas,readonly",
         "--entrypoint",
         "/opt/evaluator/.venv/bin/python",
         IMAGE_ID,
@@ -1277,13 +1554,24 @@ def evaluator_argv(
         "/opt/sira/evaluation/fanout",
         "--dataset",
         "/opt/sira/data/fanout-final-dev.json",
+        "--score-schema",
+        "/opt/giclab-schemas/t09-sira-pilot-score.schema.json",
+        "--evidence-schema",
+        "/opt/giclab-schemas/t09-sira-pilot-evidence.schema.json",
     ]
 
 
 def execute_condition(args: argparse.Namespace) -> int:
+    raise T09HostError(PROVIDER_EXECUTION_BLOCKER)
+
+    # Unreachable implementation draft retained only for offline contract tests.
     attempt_started = time.monotonic()
     repository = args.repository.resolve(strict=True)
     artifact_root = args.artifact_root.resolve(strict=True)
+    scientific_seconds_remaining(
+        artifact_root,
+        reserve_seconds=FINALIZATION_RESERVE_SECONDS + PROVIDER_CLOSEOUT_RESERVE_SECONDS,
+    )
     verify_package(repository, args.package_commit)
     paths = contract_paths(repository)
     command_document = load_object(paths["commands"], label="command manifest set")
@@ -1362,10 +1650,12 @@ def execute_condition(args: argparse.Namespace) -> int:
     started_at = utc_now()
     returncode = 125
     wall = 0.0
-    violation: str | None = None
+    stop_reason: str | None = None
+    hard_cap_breached = False
     container_removed = False
+    container_state: dict[str, object] | None = None
     try:
-        returncode, wall, violation = run_attached_with_caps(
+        returncode, wall, stop_reason, hard_cap_breached = run_attached_with_caps(
             prefix=prefix,
             name=name,
             attempt_root=attempt_root,
@@ -1376,16 +1666,8 @@ def execute_condition(args: argparse.Namespace) -> int:
             lambda_started_at_epoch=float(lambda_started_epoch),
         )
     finally:
-        with (attempt_root / "container-inspect.json").open("xb") as stdout:
-            subprocess.run(
-                [*prefix, "inspect", name],
-                env=safe_environment(),
-                stdin=subprocess.DEVNULL,
-                stdout=stdout,
-                stderr=subprocess.DEVNULL,
-                check=False,
-                timeout=30,
-            )
+        container_state = container_state_receipt(prefix, name)
+        write_exclusive(attempt_root / "container-state.json", container_state)
         container_removed = remove_container(prefix, name)
     gpu_after = gpu_snapshot()
     write_exclusive(
@@ -1425,10 +1707,12 @@ def execute_condition(args: argparse.Namespace) -> int:
             "returncode": returncode,
             "container_removed": container_removed and not residue,
             "owned_container_residue": residue,
+            "container_state_receipt": "container-state.json",
             "secret_scan_passed": not remaining_hits,
             "secret_bearing_artifacts_removed": removed_secret_artifacts,
             "secret_matching_paths": remaining_hits,
-            "cap_violation": violation,
+            "stop_reason": stop_reason,
+            "hard_cap_breached": hard_cap_breached,
             "timing": {
                 "started_at": started_at,
                 "stopped_at": utc_now(),
@@ -1443,11 +1727,24 @@ def execute_condition(args: argparse.Namespace) -> int:
         cleanup_receipt=cleanup_receipt,
     )
     remaining_attempt_seconds = MAX_CONDITION_WALL_SECONDS - (time.monotonic() - attempt_started)
-    if remaining_attempt_seconds <= 1:
+    remaining_pair_seconds = MAX_PAIR_WALL_SECONDS - (
+        time.time() - float(pair_started_epoch)
+    )
+    remaining_runtime_seconds = scientific_seconds_remaining(
+        artifact_root,
+        reserve_seconds=PROVIDER_CLOSEOUT_RESERVE_SECONDS,
+    )
+    finalizer_seconds = min(
+        remaining_attempt_seconds,
+        remaining_pair_seconds,
+        remaining_runtime_seconds,
+    )
+    if finalizer_seconds <= 1:
         raise T09HostError("attempt wall cap left no time for the offline evaluator")
-    with (attempt_root / "evaluator-finalizer.stdout").open("xb") as stdout, (
-        attempt_root / "evaluator-finalizer.stderr"
-    ).open("xb") as stderr:
+    with (
+        (attempt_root / "evaluator-finalizer.stdout").open("xb") as stdout,
+        (attempt_root / "evaluator-finalizer.stderr").open("xb") as stderr,
+    ):
         result = subprocess.run(
             finalizer,
             env=safe_environment(),
@@ -1455,7 +1752,7 @@ def execute_condition(args: argparse.Namespace) -> int:
             stdout=stdout,
             stderr=stderr,
             check=False,
-            timeout=min(600, max(1, int(remaining_attempt_seconds))),
+            timeout=min(FINALIZATION_RESERVE_SECONDS, max(1, int(finalizer_seconds))),
         )
     if result.returncode != 0:
         raise T09HostError("offline attempt evaluator/finalizer failed")
@@ -1463,26 +1760,51 @@ def execute_condition(args: argparse.Namespace) -> int:
         raise T09HostError("attempt output cap exceeded during finalization")
     if tree_bytes(artifact_root) > MAX_PILOT_DISK_BYTES:
         raise T09HostError("pilot disk cap exceeded during finalization")
+    if time.time() - float(pair_started_epoch) > MAX_PAIR_WALL_SECONDS:
+        raise T09HostError("pair wall cap exceeded during finalization")
+    scientific_seconds_remaining(
+        artifact_root,
+        reserve_seconds=PROVIDER_CLOSEOUT_RESERVE_SECONDS,
+    )
     return returncode
 
 
-def package(args: argparse.Namespace) -> None:
-    root = args.artifact_root.resolve(strict=True)
-    cleanup_receipt = load_object(root / "pilot-v2/host-cleanup.json", label="cleanup")
+def _reconstructable_disposition(root: Path) -> dict[str, Any]:
+    """Accept every zero-retry prefix that can be preserved for adjudication."""
+
+    state = _runtime_budget_state(root)
+    entered = state.get("empirical_attempts_entered")
+    completed = state.get("attempts_completed")
+    checkpoint = state.get("first_pair_decision")
     if (
-        cleanup_receipt.get("global_secret_scan_passed") is not True
-        or cleanup_receipt.get("remote_secret_removed") is not True
+        not isinstance(entered, list)
+        or not isinstance(completed, list)
+        or entered != list(RUN_IDS[: len(entered)])
+        or completed != entered[: len(completed)]
+        or len(entered) > len(RUN_IDS)
+        or len(entered) - len(completed) > 1
+        or checkpoint not in {None, "continue-to-task-b", "stop-before-task-b"}
+        or (len(entered) > 2 and checkpoint != "continue-to-task-b")
     ):
-        raise T09HostError("global credential cleanup is incomplete")
+        raise T09HostError("pilot attempt disposition is not a valid zero-retry prefix")
+    return state
+
+
+def _evidence_file_manifest(root: Path) -> tuple[list[dict[str, object]], int]:
     files: list[dict[str, object]] = []
     total = 0
     for path in sorted(root.rglob("*")):
-        if not path.is_file() or path.is_symlink() or path.name.endswith(".tar.gz"):
+        if (
+            not path.is_file()
+            or path.is_symlink()
+            or path.name.endswith(".tar.gz")
+            or path.name in {"evidence-stage-manifest.json", "evidence-stage-identity.json"}
+        ):
             continue
         size = path.stat().st_size
         total += size
-        if total > MAX_PILOT_DISK_BYTES:
-            raise T09HostError("pilot evidence exceeds the disk cap")
+        if total > MAX_STAGED_EVIDENCE_BYTES:
+            raise T09HostError("staged evidence exceeds its exact transfer cap")
         files.append(
             {
                 "path": path.relative_to(root).as_posix(),
@@ -1490,23 +1812,61 @@ def package(args: argparse.Namespace) -> None:
                 "sha256": file_sha256(path),
             }
         )
-    archive_upper_bound = int((total + 1_024 * len(files) + 1_048_576) * 1.01)
-    if tree_bytes(root) + archive_upper_bound > MAX_PILOT_DISK_BYTES:
-        raise T09HostError("insufficient bounded disk headroom for the evidence archive")
-    manifest_path = root / "pilot-v2/evidence-archive-manifest.json"
+    return files, total
+
+
+def staged_archive_headroom_ok(*, maximum_attempts: int = 4) -> bool:
+    """Prove the raw-evidence envelope leaves room for one staged archive."""
+
+    maximum_raw = maximum_attempts * MAX_ATTEMPT_OUTPUT_BYTES
+    conservative_archive = maximum_raw + 64 * 1_048_576
+    return (
+        maximum_raw + conservative_archive <= MAX_PILOT_DISK_BYTES
+        and conservative_archive <= MAX_STAGED_EVIDENCE_BYTES
+    )
+
+
+def stage(args: argparse.Namespace) -> None:
+    """Seal one remote evidence archive for the T07-style user download checkpoint."""
+
+    root = args.artifact_root.resolve(strict=True)
+    if not staged_archive_headroom_ok():
+        raise T09HostError("frozen evidence caps do not reserve staged-archive headroom")
+    cleanup_receipt = load_object(root / "pilot-v2/host-cleanup.json", label="cleanup")
+    if (
+        cleanup_receipt.get("global_secret_scan_passed") is not True
+        or cleanup_receipt.get("remote_secret_removed") is not True
+        or cleanup_receipt.get("structural_privacy_scan_passed") is not True
+    ):
+        raise T09HostError("global credential cleanup is incomplete")
+    state = _reconstructable_disposition(root)
+    provider_seconds_remaining(
+        root,
+        reserve_seconds=PROVIDER_TERMINATION_RESERVE_SECONDS,
+    )
+    privacy_hits = privacy_violations(root)
+    if privacy_hits:
+        raise T09HostError(
+            "structural privacy scan failed before staging: " + ", ".join(privacy_hits)
+        )
+    files, total = _evidence_file_manifest(root)
+    manifest_path = root / "pilot-v2/evidence-stage-manifest.json"
     write_exclusive(
         manifest_path,
         {
             "schema_version": "0.1.0",
+            "stage_id": STAGE_ID,
             "archive_id": ARCHIVE_ID,
             "private_access_controlled": True,
             "public_release": "blocked-pending-review",
             "files": files,
             "total_bytes": total,
             "secret_scan_passed": True,
+            "structural_privacy_scan_passed": True,
+            "provider_closeout_pending": True,
         },
     )
-    archive = root / "pilot-v2/t09-pilot-private-evidence.tar.gz"
+    archive = root / "pilot-v2/t09-pilot-private-evidence-stage.tar.gz"
     with tarfile.open(archive, "x:gz") as handle:
         for entry in files:
             handle.add(root / str(entry["path"]), arcname=str(entry["path"]), recursive=False)
@@ -1515,35 +1875,178 @@ def package(args: argparse.Namespace) -> None:
             arcname=manifest_path.relative_to(root).as_posix(),
             recursive=False,
         )
+    if archive.stat().st_size > MAX_STAGED_EVIDENCE_BYTES:
+        raise T09HostError("compressed evidence stage exceeds its transfer cap")
+    lambda_started = state.get("lambda_started_at_epoch")
+    if not isinstance(lambda_started, (int, float)) or isinstance(lambda_started, bool):
+        raise T09HostError("Lambda start time is unavailable at staging")
+    provider_entry_path = root / "pilot-v2/provider-entry.json"
+    dynamic_summary = load_object(provider_entry_path, label="provider entry summary")
+    owned_hash = dynamic_summary.get("owned_instance_identity_sha256")
+    if not isinstance(owned_hash, str) or _HEX64.fullmatch(owned_hash) is None:
+        raise T09HostError("preflight lacks the owned provider identity hash")
+    identity = {
+        "schema_version": "0.1.0",
+        "stage_id": STAGE_ID,
+        "archive_id": ARCHIVE_ID,
+        "bytes": archive.stat().st_size,
+        "sha256": file_sha256(archive),
+        "manifest_sha256": file_sha256(manifest_path),
+        "lambda_started_at_epoch": lambda_started,
+        "owned_instance_identity_sha256": owned_hash,
+        "provider_entry_receipt_sha256": dynamic_summary.get("receipt_sha256"),
+        "provider_closeout_pending": True,
+        "download_then_verify_before_termination": True,
+    }
+    write_exclusive(root / "pilot-v2/evidence-stage-identity.json", identity)
     write_exclusive(
-        root / "pilot-v2/archive-identity.json",
+        root / "pilot-v2/TERMINATE_REQUIRED.json",
+        {
+            "schema_version": "0.1.0",
+            "stage_id": STAGE_ID,
+            "archive_sha256": identity["sha256"],
+            "owned_instance_identity_sha256": owned_hash,
+            "action": (
+                "download-stage-archive-identity-and-marker; verify-inbound; "
+                "terminate-exact-bound-instance"
+            ),
+            "provider_closeout_required": True,
+        },
+    )
+
+
+def verify_inbound(args: argparse.Namespace) -> None:
+    """Verify the three manually downloaded T07-style handoff files locally."""
+
+    inbound = args.inbound_root.resolve(strict=True)
+    archive = inbound / "t09-pilot-private-evidence-stage.tar.gz"
+    identity_path = inbound / "evidence-stage-identity.json"
+    marker_path = inbound / "TERMINATE_REQUIRED.json"
+    identity = load_object(identity_path, label="inbound stage identity")
+    marker = load_object(marker_path, label="inbound termination marker")
+    if (
+        identity.get("stage_id") != STAGE_ID
+        or identity.get("archive_id") != ARCHIVE_ID
+        or identity.get("sha256") != file_sha256(archive)
+        or identity.get("bytes") != archive.stat().st_size
+        or marker.get("stage_id") != STAGE_ID
+        or marker.get("archive_sha256") != identity.get("sha256")
+        or marker.get("provider_closeout_required") is not True
+        or archive.stat().st_size > MAX_STAGED_EVIDENCE_BYTES
+    ):
+        raise T09HostError("inbound evidence-stage identity drifted")
+    write_exclusive(
+        inbound / "inbound-verification.json",
+        {
+            "schema_version": "0.1.0",
+            "stage_id": STAGE_ID,
+            "archive_sha256": identity["sha256"],
+            "archive_bytes": identity["bytes"],
+            "owned_instance_identity_sha256": identity[
+                "owned_instance_identity_sha256"
+            ],
+            "verified_before_provider_termination": True,
+            "provider_closeout_still_required": True,
+        },
+    )
+
+
+def package(args: argparse.Namespace) -> None:
+    """Complete the private archive locally after exact provider closeout."""
+
+    inbound = args.inbound_root.resolve(strict=True)
+    verification = load_object(
+        inbound / "inbound-verification.json",
+        label="inbound verification",
+    )
+    if verification.get("verified_before_provider_termination") is not True:
+        raise T09HostError("inbound evidence was not verified before provider termination")
+    stage_archive = inbound / "t09-pilot-private-evidence-stage.tar.gz"
+    if verification.get("archive_sha256") != file_sha256(stage_archive):
+        raise T09HostError("verified evidence stage changed before final packaging")
+    stage_identity = load_object(inbound / "evidence-stage-identity.json", label="stage identity")
+    lambda_started = stage_identity.get("lambda_started_at_epoch")
+    if not isinstance(lambda_started, (int, float)) or isinstance(lambda_started, bool):
+        raise T09HostError("stage Lambda start time is unavailable")
+    closeout = validate_provider_closeout_receipt(
+        args.provider_closeout_receipt.resolve(strict=True),
+        expected_lambda_started_at_epoch=float(lambda_started),
+        expected_owned_instance_identity_sha256=str(
+            stage_identity["owned_instance_identity_sha256"]
+        ),
+        expected_entry_receipt_sha256=str(
+            stage_identity["provider_entry_receipt_sha256"]
+        ),
+        expected_package_commit=args.package_commit,
+    )
+    output_root = args.final_archive_root.resolve(strict=True)
+    if output_root != APPROVED_FINAL_ARCHIVE_ROOT:
+        raise T09HostError("final archive root is not the approved T07-style APFS path")
+    output_root.mkdir(parents=True, exist_ok=True, mode=0o700)
+    final_root = output_root / ARCHIVE_ID
+    final_root.mkdir(mode=0o700)
+    source_copy = final_root / stage_archive.name
+    with stage_archive.open("rb") as source, source_copy.open("xb") as destination:
+        shutil.copyfileobj(source, destination, length=1_048_576)
+        destination.flush()
+        os.fsync(destination.fileno())
+    if file_sha256(source_copy) != file_sha256(stage_archive):
+        raise T09HostError("one-way stage archive copy verification failed")
+    closeout_summary = final_root / "provider-closeout-summary.json"
+    write_exclusive(closeout_summary, closeout)
+    manifest_path = final_root / "evidence-archive-manifest.json"
+    write_exclusive(
+        manifest_path,
         {
             "schema_version": "0.1.0",
             "archive_id": ARCHIVE_ID,
-            "bytes": archive.stat().st_size,
-            "sha256": file_sha256(archive),
+            "private_access_controlled": True,
+            "public_release": "blocked-pending-review",
+            "stage_archive_bytes": source_copy.stat().st_size,
+            "stage_archive_sha256": file_sha256(source_copy),
+            "provider_closeout_receipt_sha256": closeout["receipt_sha256"],
+            "provider_termination_confirmed": True,
+            "zero_owned_instances_confirmed": True,
+            "source_retained": True,
+            "destination_reread_verified": True,
+        },
+    )
+    write_exclusive(
+        final_root / "archive-identity.json",
+        {
+            "schema_version": "0.1.0",
+            "archive_id": ARCHIVE_ID,
+            "manifest_sha256": file_sha256(manifest_path),
+            "stage_archive_bytes": source_copy.stat().st_size,
+            "stage_archive_sha256": file_sha256(source_copy),
         },
     )
 
 
 def cleanup(args: argparse.Namespace) -> None:
+    root = args.artifact_root.resolve(strict=True)
     prefix = docker_prefix()
     removed = [name for name in owned_containers(prefix) if remove_container(prefix, name)]
     residue = owned_containers(prefix)
     secret_path = args.secret_file.resolve(strict=True)
     credential_bytes = validate_secret(secret_path)
-    hits = secret_hits(args.artifact_root.resolve(strict=True), credential_bytes)
+    hits = secret_hits(root, credential_bytes)
     removed_secret_artifacts: list[str] = []
     for relative in hits:
-        target = args.artifact_root.resolve(strict=True) / relative
+        target = root / relative
         if target.is_file() and not target.is_symlink():
             target.unlink()
             removed_secret_artifacts.append(relative)
-    remaining_hits = secret_hits(args.artifact_root.resolve(strict=True), credential_bytes)
+    remaining_hits = secret_hits(root, credential_bytes)
     credential_bytes = b""
     secret_removed = destroy_secret(secret_path)
+    privacy_hits = privacy_violations(root)
+    try:
+        remaining_runtime = provider_seconds_remaining(root)
+    except T09HostError:
+        remaining_runtime = 0.0
     write_exclusive(
-        args.artifact_root.resolve(strict=True) / "pilot-v2/host-cleanup.json",
+        root / "pilot-v2/host-cleanup.json",
         {
             "schema_version": "0.1.0",
             "completed_at": utc_now(),
@@ -1553,12 +2056,14 @@ def cleanup(args: argparse.Namespace) -> None:
             "global_secret_bearing_artifacts_removed": removed_secret_artifacts,
             "global_secret_matching_paths": remaining_hits,
             "remote_secret_removed": secret_removed,
+            "structural_privacy_scan_passed": not privacy_hits,
+            "structural_privacy_violations": privacy_hits,
             "gpu_pretermination_accounting": gpu_snapshot(),
-            "provider_termination": "required-external-manual-action",
-            "zero_instance_verification": "required-external-read-only-receipt",
+            "evidence_stage_required_before_provider_termination": True,
+            "lambda_seconds_remaining_for_provider_closeout": remaining_runtime,
         },
     )
-    if residue or remaining_hits or not secret_removed:
+    if residue or remaining_hits or not secret_removed or privacy_hits:
         raise T09HostError("owned runtime or credential cleanup is incomplete")
 
 
@@ -1574,7 +2079,13 @@ def parser() -> argparse.ArgumentParser:
     preflight_parser.add_argument("--dynamic-receipt", type=Path, required=True)
     condition = operations.add_parser("condition")
     condition.add_argument("--run-id", choices=RUN_IDS, required=True)
-    operations.add_parser("package")
+    operations.add_parser("stage")
+    inbound_parser = operations.add_parser("verify-inbound")
+    inbound_parser.add_argument("--inbound-root", type=Path, required=True)
+    package_parser = operations.add_parser("package")
+    package_parser.add_argument("--inbound-root", type=Path, required=True)
+    package_parser.add_argument("--provider-closeout-receipt", type=Path, required=True)
+    package_parser.add_argument("--final-archive-root", type=Path, required=True)
     operations.add_parser("cleanup")
     return result
 
@@ -1586,6 +2097,12 @@ def main() -> int:
         return 0
     if args.operation == "condition":
         return execute_condition(args)
+    if args.operation == "stage":
+        stage(args)
+        return 0
+    if args.operation == "verify-inbound":
+        verify_inbound(args)
+        return 0
     if args.operation == "package":
         package(args)
         return 0

@@ -2,6 +2,7 @@
   "schema_version": "0.1.0",
   "identity_id": "RUNTIME-EXP0001-PILOT-V2-T07-PRAGMATIC",
   "plan_id": "PLAN-EXP0001-PILOT-V2",
+  "execution_status": "blocked-no-source-compatible-provider-lifecycle",
   "base_runtime": {
     "source_run": "RUN-T07-PRAGMATIC-HOST-0002",
     "frozen_execution_commit": "5698f04dfd08bc85a66d2355b0a4bd7d3ce24a23",
@@ -34,7 +35,7 @@
     "simulative_planner_critic_num_samples": 20
   },
   "evaluator_overlay": {
-    "contract_sha256": "bc019781ab4468a51bcf6f76ac937ea81334d70281f476504b5693df57178a6a",
+    "contract_sha256": "ba998466b85d83f8ce11a7308f4d21433e496204f9dc48fe28793b711af28b5b",
     "materialization": "read-only-package-overlay-on-exact-base-image",
     "base_image_materialization": "use-preexisting-exact-image-or-rebuild-from-the-exact-T07-commit-and-reject-any-nonmatching-image-ID",
     "provider_or_model_access": false
@@ -58,16 +59,24 @@
         "sha256": "5fde575a7b1bcfa2b7ebc3717548ddedff8fc77e3998ab40ffec56ec772ae4f1"
       },
       {
+        "path": "src/giclab/harness/sira_gate_a.py",
+        "sha256": "b9a3ae20dc07056bb16dbf3807c8f3912bda9cf31b04a47d80c7de453db971af"
+      },
+      {
+        "path": "src/giclab/harness/safety.py",
+        "sha256": "12529af51aea206e02a531abea4959d80976bd271567f05c75e903654527d34c"
+      },
+      {
         "path": "src/giclab/harness/t09_sira_pilot.py",
-        "sha256": "3a19a9ae0910187f288a77ef1a7a175fdb6a5319ac33016dc064a4c7ab35d263"
+        "sha256": "207edb1e48e13b1e2ab0f6a5b45e90025f4a51dc35984561c07fa19b97f67751"
       },
       {
         "path": "containers/sira-smoke/pragmatic/t09_remote_runner.py",
-        "sha256": "c7e4347c580adaf54186a2559dda685d87e4732c9856285d589c6ff9cbbc4d23"
+        "sha256": "055d86e8d43fe81c310f06556f90944e816f86b03aba6ddb1d0628627d519dfa"
       },
       {
         "path": "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py",
-        "sha256": "60bf9374de049d1a499a67fb5ce548db3701792ee4215372ffa64ff8143f6416"
+        "sha256": "f6715c849d9913fa244ce58efd94823b52e477ed4d55220e86937411215c9810"
       },
       {
         "path": "containers/sira-smoke/pragmatic/t09_preflight.py",
@@ -76,6 +85,10 @@
       {
         "path": "containers/sira-smoke/pragmatic/t09_freeze_commands.py",
         "sha256": "c86a33cb3c96a31aee6f2b66710c6daa4ee2c0b0da25cb709e106e5a0f852869"
+      },
+      {
+        "path": "containers/sira-smoke/pragmatic/t09_secret_preflight.py",
+        "sha256": "b4763ac8edc98b86c2f9f617f53cdb6be2ef9cb26d39aad660442e4c1a7506a4"
       }
     ]
   },

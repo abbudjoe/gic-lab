@@ -169,9 +169,9 @@
     },
     {
       "task_id": "2120afba8009bad3",
-      "finding": "correct-six-key-six-currency-value-fixture-scores-0.5",
-      "cause": "word-boundary-regex-cannot-match-normalized-values-beginning-with-dollar-sign",
-      "disposition": "freeze-effective-0.5-ceiling; no-renormalization; interpret-task-level-only"
+      "finding": "ordinary-correct-six-key-six-currency-value-fixture-scores-0.5-while-x-dollar-normalization-edge-scores-1.0",
+      "cause": "exact-fixture-behavior-under-the-pinned-word-boundary-regex;-0.5-is-not-a-global-maximum",
+      "disposition": "report-exact-fixture-result; no-renormalization-or-score-ceiling-claim; interpret-task-level-only"
     }
   ],
   "offline_fixtures": {
@@ -188,7 +188,8 @@
       "evaluator-exception",
       "duplicate-evidence",
       "normalization-edge",
-      "second-frozen-task"
+      "second-frozen-task-ordinary-correct",
+      "second-frozen-task-normalization-edge"
     ],
     "expected_result": "all-pass-offline-with-no-provider-or-judge-request"
   }

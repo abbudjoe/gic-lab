@@ -102,8 +102,8 @@ def test_smoke_and_pilot_profiles_and_condition_plans_validate() -> None:
     assert smoke["readiness"]["execution_eligibility"] == "eligible-after-authorization"
     assert smoke["readiness"]["unresolved_execution_blockers"] == []
     assert smoke["readiness"]["pre_execution_requirements"]
-    assert pilot["readiness"]["execution_eligibility"] == "eligible-after-authorization"
-    assert pilot["readiness"]["unresolved_execution_blockers"] == []
+    assert pilot["readiness"]["execution_eligibility"] == "blocked-pending-prerequisites"
+    assert len(pilot["readiness"]["unresolved_execution_blockers"]) == 2
     assert set(smoke["sampling"]["conditions"]) == CONDITIONS
     assert set(pilot["sampling"]["conditions"]) == CONDITIONS
 
@@ -160,7 +160,9 @@ def test_v01_profile_schema_remains_readable_while_current_readiness_policy_is_s
         "authorization_reference": "AUTH-EXP0001-PILOT",
     }
     assert validate_instance(unauthorized_only, schema) == []
-    assert validate_run_profile_readiness(unauthorized_only) == []
+    assert validate_run_profile_readiness(unauthorized_only) == [
+        "authorized profile must be execution-eligible"
+    ]
 
 
 def test_authorization_transition_is_schema_valid_but_does_not_execute() -> None:
