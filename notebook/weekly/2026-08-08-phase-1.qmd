@@ -31,6 +31,18 @@ The exact host was terminated and zero T09 instances were verified. This is an
 infrastructure preflight disposition, not a pilot result. Public raw release remains
 separately blocked.
 
+Retry 2 subsequently qualified and froze one replacement image, then ran Task A
+reactive exactly once. Retained evidence establishes task completion and a valid exact-
+evaluator descriptive score of 0.0. The frozen host finalizer then failed on an
+incorrect output-root projection and an interpreter/dependency mismatch. One
+network-disabled reconstruction preserved the already-consumed attempt without a new
+model request, browser action, or condition retry, but its corrected invocation could
+not be used for later conditions under the post-entry freeze. Task A simulative and
+both Task B attempts did not run; no pair, checkpoint, condition comparison, or
+EXP-0001 outcome exists. Evidence was retained, the exact host was terminated, zero
+T09 instances and restored security were verified, and the Retry 2 authority is
+exhausted. Public raw release remains separately blocked.
+
 ## State transition
 
 Phase 0.75 completed its pinned upstream audits, evidence-preserving harness, SiRA

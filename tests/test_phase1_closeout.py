@@ -805,6 +805,8 @@ def test_public_surfaces_report_the_current_phase_and_unauthorized_next_gate() -
             boundary in page.lower()
             for boundary in ("not authorization", "does not authorize", "unauthorized")
         )
+        assert "score" in page and "0.0" in page
+        assert "no pair" in page.lower()
 
 
 def test_resource_and_research_pages_do_not_reopen_completed_phase_zero_work() -> None:

@@ -9,8 +9,13 @@ The T07 one-step SiRA artifact smoke has been executed and adjudicated offline; 
 sessions were incomplete, no scientific measurement or EXP-0001 outcome was assigned,
 and its authority is exhausted. The later `PLAN-EXP0001-PILOT-V3` single-use host
 campaign stopped at exact runtime preflight before any pilot condition, evaluator, or
-score; its host was terminated and its authority is exhausted. EXP-0001 remains
-unevaluated. A protocol, readiness record, or proposed budget is not authorization.
+score. Retry 2 then qualified a replacement runtime and produced one completed,
+evaluator-valid Task A reactive calibration attempt with descriptive score 0.0, but
+two frozen finalizer defects forced a stop before its paired simulative attempt. No
+pair, checkpoint, condition comparison, or EXP-0001 outcome exists. Both hosts were
+terminated, zero T09 instances and restored security are verified, and all T09
+single-use authority is exhausted. EXP-0001 remains unevaluated. A protocol,
+readiness record, or proposed budget is not authorization.
 
 - [Public research notebook](https://abbudjoe.github.io/gic-lab/)
 - [GitHub repository](https://github.com/abbudjoe/gic-lab)
