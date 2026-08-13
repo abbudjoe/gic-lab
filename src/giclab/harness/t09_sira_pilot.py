@@ -237,6 +237,9 @@ class RuntimeQualification:
     package_manifest_sha256: str
     chromium_executable_sha256: str
     patched_upstream_runner_sha256: str
+    evaluator_overlay_manifest_sha256: str
+    evaluator_overlay_entries_sha256: str
+    evaluator_overlay_packages_sha256: str
     model_metadata_request_count: int
     model_task_request_count: int
     task_browser_action_count: int
@@ -248,9 +251,7 @@ class RuntimeQualification:
     def from_document(cls, value: object) -> RuntimeQualification:
         document = _strict_object(value, context="frozen runtime qualification")
         result = cls(
-            manifest_id=_required_string(
-                document.get("manifest_id"), context="frozen manifest ID"
-            ),
+            manifest_id=_required_string(document.get("manifest_id"), context="frozen manifest ID"),
             qualification_id=_required_string(
                 document.get("qualification_id"), context="qualification ID"
             ),
@@ -277,6 +278,18 @@ class RuntimeQualification:
                 document.get("patched_upstream_runner_sha256"),
                 context="patched upstream runner hash",
             ),
+            evaluator_overlay_manifest_sha256=_required_string(
+                document.get("evaluator_overlay_manifest_sha256"),
+                context="evaluator overlay manifest hash",
+            ),
+            evaluator_overlay_entries_sha256=_required_string(
+                document.get("evaluator_overlay_entries_sha256"),
+                context="evaluator overlay entries hash",
+            ),
+            evaluator_overlay_packages_sha256=_required_string(
+                document.get("evaluator_overlay_packages_sha256"),
+                context="evaluator overlay packages hash",
+            ),
             model_metadata_request_count=_required_int(
                 document.get("model_metadata_request_count"),
                 context="model metadata request count",
@@ -299,6 +312,9 @@ class RuntimeQualification:
             result.package_manifest_sha256,
             result.chromium_executable_sha256,
             result.patched_upstream_runner_sha256,
+            result.evaluator_overlay_manifest_sha256,
+            result.evaluator_overlay_entries_sha256,
+            result.evaluator_overlay_packages_sha256,
         )
         if (
             document.get("schema_version") != "0.1.0"

@@ -387,9 +387,10 @@ def test_first_pair_checkpoint_passes_only_strictly_below_every_threshold() -> N
         projected_aggregate_cost_usd=45.11,
         prior_t09_cost_usd=0.9,
     )
-    assert "projected_cumulative_t09_cost_exceeds_hard_cap" in first_pair_decision(
-        cumulative_overflow
-    )["reasons"]
+    assert (
+        "projected_cumulative_t09_cost_exceeds_hard_cap"
+        in first_pair_decision(cumulative_overflow)["reasons"]
+    )
 
 
 def test_attempt_state_enforces_order_cap_checkpoint_and_zero_retry(tmp_path: Path) -> None:
@@ -571,8 +572,7 @@ def test_retry2_preserves_and_supersedes_the_zero_use_v3_failure() -> None:
         "preflight_blocked_by_overstrict_cross_run_image_digest_requirement"
     )
     assert {
-        key: historical[key]
-        for key in ("model_calls", "browser_actions", "condition_attempts")
+        key: historical[key] for key in ("model_calls", "browser_actions", "condition_attempts")
     } == {"model_calls": 0, "browser_actions": 0, "condition_attempts": 0}
     assert historical["empirical_boundary_crossed"] is False
     assert supersession["successor_plan_id"] == "PLAN-EXP0001-PILOT-V4"
@@ -593,6 +593,9 @@ def test_runtime_qualification_is_typed_single_build_preentry_and_digest_agnosti
         "package_manifest_sha256": "c" * 64,
         "chromium_executable_sha256": "d" * 64,
         "patched_upstream_runner_sha256": "f" * 64,
+        "evaluator_overlay_manifest_sha256": "1" * 64,
+        "evaluator_overlay_entries_sha256": "2" * 64,
+        "evaluator_overlay_packages_sha256": "3" * 64,
         "model_metadata_request_count": 1,
         "model_task_request_count": 0,
         "task_browser_action_count": 0,
@@ -649,6 +652,181 @@ def _load_attempt_finalizer() -> ModuleType:
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def test_evaluator_overlay_package_records_match_all_reviewed_versions() -> None:
+    host = _load_host_runner()
+    expected = host.expected_evaluator_packages(ROOT)
+    assert len(expected) == 51
+    assert "en-core-web-sm==3.8.0" in expected
+    realized = "\n".join(
+        host.EVALUATOR_DIRECT_URL_RECORD if package == "en-core-web-sm==3.8.0" else package
+        for package in expected
+    )
+    assert (
+        host.normalize_evaluator_package_records(
+            realized,
+            expected_packages=expected,
+        )
+        == expected
+    )
+    with pytest.raises(host.T09HostError, match="unsafe or ambiguous"):
+        host.normalize_evaluator_package_records(
+            realized.replace(host.EVALUATOR_DIRECT_URL_RECORD, "en-core-web-sm @ file:///tmp/x"),
+            expected_packages=expected,
+        )
+    with pytest.raises(host.T09HostError, match="differs from the reviewed contract"):
+        host.normalize_evaluator_package_records(
+            "\n".join(realized.splitlines()[:-1]),
+            expected_packages=expected,
+        )
+
+
+def test_evaluator_overlay_inventory_detects_any_realized_byte_drift(tmp_path: Path) -> None:
+    host = _load_host_runner()
+    overlay = tmp_path / "overlay"
+    overlay.mkdir(mode=0o700)
+    package = overlay / "package"
+    package.mkdir(mode=0o755)
+    module = package / "module.py"
+    module.write_text("VALUE = 1\n", encoding="utf-8")
+    (overlay / "python").symlink_to("package/module.py")
+    retained = host.evaluator_overlay_inventory(overlay)
+    assert {entry["type"] for entry in retained["entries"]} == {
+        "directory",
+        "file",
+        "symlink",
+    }
+    host._validate_evaluator_overlay_inventory(overlay=overlay, retained=retained)
+    module.write_text("VALUE = 2\n", encoding="utf-8")
+    with pytest.raises(host.T09HostError, match="changed after qualification"):
+        host._validate_evaluator_overlay_inventory(overlay=overlay, retained=retained)
+
+
+def test_first_pair_gross_ceiling_stops_task_b() -> None:
+    finalizer = _load_attempt_finalizer()
+    ceiling = [
+        {
+            "valid_scored_attempt": True,
+            "task_completion": "completed",
+            "task_score": 1.0,
+        },
+        {
+            "valid_scored_attempt": True,
+            "task_completion": "completed",
+            "task_score": 1.0,
+        },
+    ]
+    assert finalizer._severe_floor_or_ceiling(ceiling) is True
+    ceiling[1]["task_score"] = 0.5
+    assert finalizer._severe_floor_or_ceiling(ceiling) is False
+
+
+def test_preentry_condition_prefix_is_bound_preserved_and_retryable(tmp_path: Path) -> None:
+    host = _load_host_runner()
+    command_document = load_json(
+        ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
+        "T09_PILOT_COMMAND_MANIFESTS.json"
+    )
+    manifest = command_document["manifests"][0]
+    artifact_root = tmp_path / "artifacts"
+    attempt_root = artifact_root / manifest["permitted_condition_owned"]["output_root"]
+    attempt_root.mkdir(parents=True, mode=0o700)
+    (attempt_root / "container-command.json").write_text("{}\n", encoding="utf-8")
+    prefix_entries = host.preentry_prefix_inventory(attempt_root)
+    execution_sha256 = "a" * 64
+    frozen_sha256 = "b" * 64
+    package_commit = "c" * 40
+    receipt = {
+        "schema_version": "0.1.0",
+        "plan_id": host.PLAN_ID,
+        "host_run_id": host.HOST_RUN_ID,
+        "run_id": manifest["run_id"],
+        "clean_package_commit": package_commit,
+        "execution_contract_sha256": execution_sha256,
+        "frozen_run_manifest_sha256": frozen_sha256,
+        "condition_plan_sha256": manifest["condition_plan_sha256"],
+        "condition_argv_sha256": manifest["argv_sha256"],
+        "empirical_entry_crossed": False,
+        "attempt_identity_consumed": False,
+        "container_absent": True,
+        "remaining_exact_secret_matches": [],
+        "structural_privacy_violations": [],
+        "failure_prefix_entries": prefix_entries,
+        "failure_prefix_entries_sha256": host.canonical_sha256(prefix_entries),
+        "retry_same_frozen_condition_permitted": True,
+    }
+    (attempt_root / "preentry-condition-failure.json").write_text(
+        json.dumps(receipt), encoding="utf-8"
+    )
+    state = {
+        "execution_contract_sha256": execution_sha256,
+        "empirical_attempts_entered": [],
+        "attempts_completed": [],
+    }
+    fresh = host.prepare_condition_attempt_root(
+        artifact_root=artifact_root,
+        manifest=manifest,
+        pilot_state=state,
+        package_commit=package_commit,
+        frozen_run_manifest_sha256=frozen_sha256,
+    )
+    preserved = (
+        artifact_root / "pilot-v4/preentry-condition-repairs" / manifest["run_id"] / "repair-01"
+    )
+    assert fresh == attempt_root and fresh.is_dir() and not list(fresh.iterdir())
+    assert (preserved / "preentry-condition-failure.json").is_file()
+    assert (preserved / "container-command.json").is_file()
+
+
+def test_preentry_condition_prefix_tamper_cannot_authorize_retry(tmp_path: Path) -> None:
+    host = _load_host_runner()
+    command_document = load_json(
+        ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
+        "T09_PILOT_COMMAND_MANIFESTS.json"
+    )
+    manifest = command_document["manifests"][0]
+    artifact_root = tmp_path / "artifacts"
+    attempt_root = artifact_root / manifest["permitted_condition_owned"]["output_root"]
+    attempt_root.mkdir(parents=True, mode=0o700)
+    source = attempt_root / "container-command.json"
+    source.write_text("{}\n", encoding="utf-8")
+    prefix_entries = host.preentry_prefix_inventory(attempt_root)
+    receipt = {
+        "schema_version": "0.1.0",
+        "plan_id": host.PLAN_ID,
+        "host_run_id": host.HOST_RUN_ID,
+        "run_id": manifest["run_id"],
+        "clean_package_commit": "c" * 40,
+        "execution_contract_sha256": "a" * 64,
+        "frozen_run_manifest_sha256": "b" * 64,
+        "condition_plan_sha256": manifest["condition_plan_sha256"],
+        "condition_argv_sha256": manifest["argv_sha256"],
+        "empirical_entry_crossed": False,
+        "attempt_identity_consumed": False,
+        "container_absent": True,
+        "remaining_exact_secret_matches": [],
+        "structural_privacy_violations": [],
+        "failure_prefix_entries": prefix_entries,
+        "failure_prefix_entries_sha256": host.canonical_sha256(prefix_entries),
+        "retry_same_frozen_condition_permitted": True,
+    }
+    (attempt_root / "preentry-condition-failure.json").write_text(
+        json.dumps(receipt), encoding="utf-8"
+    )
+    source.write_text('{"tampered": true}\n', encoding="utf-8")
+    with pytest.raises(host.T09HostError, match="not a repairable pre-entry prefix"):
+        host.prepare_condition_attempt_root(
+            artifact_root=artifact_root,
+            manifest=manifest,
+            pilot_state={
+                "execution_contract_sha256": "a" * 64,
+                "empirical_attempts_entered": [],
+                "attempts_completed": [],
+            },
+            package_commit="c" * 40,
+            frozen_run_manifest_sha256="b" * 64,
+        )
 
 
 def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bound(
@@ -792,9 +970,7 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
                 "aggregate_cost_cap_usd": 45.16,
                 "prior_t09_cost_usd": 0.414064252316667,
                 "cumulative_t09_cost_cap_usd": 46.0,
-                "replacement_image_policy": (
-                    "one-build-one-qualification-preentry-bound-v1"
-                ),
+                "replacement_image_policy": ("one-build-one-qualification-preentry-bound-v1"),
                 "artifact_destination": (
                     "/Volumes/Macintosh HD - Data/GIC-Lab/t09/sealed-artifacts"
                 ),
@@ -1743,7 +1919,7 @@ def test_archive_privacy_scan_rejects_private_network_and_unredacted_account_fie
         json.dumps(
             {
                 "network": "10.4.2.9/24",
-                "provider_account_id": "unrelated-account",
+                "provider_account_identifier": "unrelated-account",
             }
         ),
         encoding="utf-8",
@@ -1754,7 +1930,7 @@ def test_archive_privacy_scan_rejects_private_network_and_unredacted_account_fie
     (tmp_path / "unsafe.json").write_text(
         json.dumps(
             {
-                "provider_account_id": {
+                "provider_account_identifier": {
                     "redacted": True,
                     "reason": "structural-sensitive-field",
                 }
@@ -1829,6 +2005,9 @@ def test_entered_partial_attempt_emits_schema_valid_invalid_evidence_and_is_cons
     )
     replacement_image_id = "sha256:" + "e" * 64
     frozen_manifest = tmp_path / "frozen-run-manifest.json"
+    overlay_manifest_sha256 = "1" * 64
+    overlay_entries_sha256 = "2" * 64
+    overlay_packages_sha256 = "3" * 64
     frozen_manifest.write_text(
         json.dumps(
             {
@@ -1847,8 +2026,22 @@ def test_entered_partial_attempt_emits_schema_valid_invalid_evidence_and_is_cons
                 "patched_upstream_runner_sha256": (
                     "b06793ad1b366a934b798f9f3272fc80a7104a220cb3304ab3bda2eb2a78b331"
                 ),
+                "evaluator_overlay_manifest_sha256": overlay_manifest_sha256,
+                "evaluator_overlay_entries_sha256": overlay_entries_sha256,
+                "evaluator_overlay_packages_sha256": overlay_packages_sha256,
                 "empirical_entry_crossed": False,
                 "post_entry_code_science_image_freeze": True,
+            }
+        ),
+        encoding="utf-8",
+    )
+    (attempt_root / "evaluator-overlay-revalidation.json").write_text(
+        json.dumps(
+            {
+                "overlay_manifest_sha256": overlay_manifest_sha256,
+                "overlay_entries_sha256": overlay_entries_sha256,
+                "overlay_packages_sha256": overlay_packages_sha256,
+                "packages_recomputed": True,
             }
         ),
         encoding="utf-8",

@@ -268,6 +268,24 @@ def _validate_pair_diff(document: Mapping[str, object], pair_index: int) -> bool
     )
 
 
+def _severe_floor_or_ceiling(outcomes: list[dict[str, Any]]) -> bool:
+    """Apply the predeclared calibration stop at either gross score boundary."""
+
+    severe_floor = all(
+        outcome.get("valid_scored_attempt") is True
+        and outcome.get("task_completion") == "incomplete"
+        and outcome.get("task_score") == 0.0
+        for outcome in outcomes
+    )
+    severe_ceiling = all(
+        outcome.get("valid_scored_attempt") is True
+        and outcome.get("task_completion") == "completed"
+        and outcome.get("task_score") == 1.0
+        for outcome in outcomes
+    )
+    return severe_floor or severe_ceiling
+
+
 def _first_pair_checkpoint(
     *,
     contract: PilotExecutionContract,
@@ -311,10 +329,7 @@ def _first_pair_checkpoint(
         billable_started_at=float(lambda_started),
         now=now,
     )
-    severe_floor_or_ceiling = all(
-        outcome.get("task_completion") == "incomplete" and outcome.get("task_score") == 0.0
-        for outcome in outcomes
-    )
+    severe_floor_or_ceiling = _severe_floor_or_ceiling(outcomes)
     decision = first_pair_decision(
         PairCheckpointInput(
             attempt_run_ids=(ATTEMPT_ORDER[0], ATTEMPT_ORDER[1]),
@@ -369,6 +384,14 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
     if file_sha256(frozen_manifest_path) != args.frozen_run_manifest_sha256:
         raise T09PilotError("frozen run manifest hash changed")
     frozen_manifest = _load_object(frozen_manifest_path, label="frozen run manifest")
+    evaluator_overlay_hashes = tuple(
+        frozen_manifest.get(field)
+        for field in (
+            "evaluator_overlay_manifest_sha256",
+            "evaluator_overlay_entries_sha256",
+            "evaluator_overlay_packages_sha256",
+        )
+    )
     if (
         frozen_manifest.get("plan_id") != PLAN_ID
         or frozen_manifest.get("clean_package_commit") != args.package_commit
@@ -380,6 +403,12 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
         != "0498f208c25339f386413ada7b3c35293b0b6250e67d85446ba9541d7fd636f7"
         or frozen_manifest.get("patched_upstream_runner_sha256")
         != "b06793ad1b366a934b798f9f3272fc80a7104a220cb3304ab3bda2eb2a78b331"
+        or any(
+            not isinstance(value, str)
+            or len(value) != 64
+            or any(character not in "0123456789abcdef" for character in value)
+            for value in evaluator_overlay_hashes
+        )
         or frozen_manifest.get("empirical_entry_crossed") is not False
         or frozen_manifest.get("post_entry_code_science_image_freeze") is not True
     ):
@@ -483,6 +512,23 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
         else None
     )
 
+    evaluator_overlay_revalidation_path = attempt_root / "evaluator-overlay-revalidation.json"
+    evaluator_overlay_revalidation = _dynamic_object(
+        evaluator_overlay_revalidation_path,
+        label="evaluator-overlay-revalidation",
+        failure_reasons=infrastructure_failure_reasons,
+    )
+    if (
+        evaluator_overlay_revalidation.get("overlay_manifest_sha256")
+        != frozen_manifest.get("evaluator_overlay_manifest_sha256")
+        or evaluator_overlay_revalidation.get("overlay_entries_sha256")
+        != frozen_manifest.get("evaluator_overlay_entries_sha256")
+        or evaluator_overlay_revalidation.get("overlay_packages_sha256")
+        != frozen_manifest.get("evaluator_overlay_packages_sha256")
+        or evaluator_overlay_revalidation.get("packages_recomputed") is not True
+    ):
+        infrastructure_failure_reasons.append("evaluator-overlay-revalidation-mismatch")
+
     required_paths = {
         "provider-budget": budget_path,
         "normalized-events": event_path,
@@ -490,6 +536,7 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
         "evaluator-input": evaluator_input_path,
         "evaluator-output": evaluator_output_path,
         "runtime-environment": runtime_environment_path,
+        "evaluator-overlay-revalidation": evaluator_overlay_revalidation_path,
         "condition-stdout": attempt_root / "condition.stdout",
         "condition-stderr": attempt_root / "condition.stderr",
     }
@@ -644,17 +691,18 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
             "container_image_digest": args.replacement_image_id,
             "frozen_run_manifest_sha256": args.frozen_run_manifest_sha256,
             "qualification_id": frozen_manifest.get("qualification_id"),
-            "build_context_manifest_sha256": frozen_manifest.get(
-                "build_context_manifest_sha256"
+            "build_context_manifest_sha256": frozen_manifest.get("build_context_manifest_sha256"),
+            "installed_package_manifest_sha256": frozen_manifest.get("package_manifest_sha256"),
+            "chromium_executable_sha256": frozen_manifest.get("chromium_executable_sha256"),
+            "patched_upstream_runner_sha256": frozen_manifest.get("patched_upstream_runner_sha256"),
+            "evaluator_overlay_manifest_sha256": frozen_manifest.get(
+                "evaluator_overlay_manifest_sha256"
             ),
-            "installed_package_manifest_sha256": frozen_manifest.get(
-                "package_manifest_sha256"
+            "evaluator_overlay_entries_sha256": frozen_manifest.get(
+                "evaluator_overlay_entries_sha256"
             ),
-            "chromium_executable_sha256": frozen_manifest.get(
-                "chromium_executable_sha256"
-            ),
-            "patched_upstream_runner_sha256": frozen_manifest.get(
-                "patched_upstream_runner_sha256"
+            "evaluator_overlay_packages_sha256": frozen_manifest.get(
+                "evaluator_overlay_packages_sha256"
             ),
             "model_revision": MODEL_REVISION,
             "requested_service_tier": "default",

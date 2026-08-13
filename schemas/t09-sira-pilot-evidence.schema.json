@@ -42,7 +42,7 @@
     },
     "runtime": {
       "type": "object",
-      "required": ["giclab_commit", "reviewed_implementation_ancestor", "sira_commit", "python_version", "container_image_digest", "frozen_run_manifest_sha256", "qualification_id", "build_context_manifest_sha256", "installed_package_manifest_sha256", "chromium_executable_sha256", "patched_upstream_runner_sha256", "model_revision", "requested_service_tier", "returned_service_tiers", "browser_identity", "gpu_accounting"],
+      "required": ["giclab_commit", "reviewed_implementation_ancestor", "sira_commit", "python_version", "container_image_digest", "frozen_run_manifest_sha256", "qualification_id", "build_context_manifest_sha256", "installed_package_manifest_sha256", "chromium_executable_sha256", "patched_upstream_runner_sha256", "evaluator_overlay_manifest_sha256", "evaluator_overlay_entries_sha256", "evaluator_overlay_packages_sha256", "model_revision", "requested_service_tier", "returned_service_tiers", "browser_identity", "gpu_accounting"],
       "properties": {
         "giclab_commit": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
         "reviewed_implementation_ancestor": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
@@ -55,6 +55,9 @@
         "installed_package_manifest_sha256": {"const": "4ff2603fa5e0f7033ba773decdcb86abf648dcce22e469d26bc48214e390e104"},
         "chromium_executable_sha256": {"const": "0498f208c25339f386413ada7b3c35293b0b6250e67d85446ba9541d7fd636f7"},
         "patched_upstream_runner_sha256": {"const": "b06793ad1b366a934b798f9f3272fc80a7104a220cb3304ab3bda2eb2a78b331"},
+        "evaluator_overlay_manifest_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "evaluator_overlay_entries_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "evaluator_overlay_packages_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
         "model_revision": {"const": "gpt-4o-2024-11-20"},
         "requested_service_tier": {"const": "default"},
         "returned_service_tiers": {"type": "array", "uniqueItems": true, "items": {"const": "default"}},

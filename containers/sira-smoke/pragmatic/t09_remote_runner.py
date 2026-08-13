@@ -65,6 +65,10 @@ UV_URL: Final = (
     "bac9e433cbc35df450a/uv-0.11.7-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl"
 )
 UV_SHA256: Final = "4e4d5e31bea86e1b6e0f5a0f95e14e80018e6f6c0129256d2915a4b3d793644d"
+EVALUATOR_DIRECT_URL_RECORD: Final = (
+    "en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/"
+    "en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl"
+)
 RUN_IDS: Final = (
     "RUN-T09-TASK-A-REACTIVE-0002",
     "RUN-T09-TASK-A-SIMULATIVE-0002",
@@ -75,9 +79,7 @@ CONTAINER_PREFIX: Final = "giclab-t09-pilot-v4-"
 EXPECTED_PACKAGE_MANIFEST_SHA256: Final = (
     "4ff2603fa5e0f7033ba773decdcb86abf648dcce22e469d26bc48214e390e104"
 )
-EXPECTED_CHROMIUM_SHA256: Final = (
-    "0498f208c25339f386413ada7b3c35293b0b6250e67d85446ba9541d7fd636f7"
-)
+EXPECTED_CHROMIUM_SHA256: Final = "0498f208c25339f386413ada7b3c35293b0b6250e67d85446ba9541d7fd636f7"
 EXPECTED_UPSTREAM_RUNNER_SHA256: Final = (
     "b06793ad1b366a934b798f9f3272fc80a7104a220cb3304ab3bda2eb2a78b331"
 )
@@ -125,6 +127,7 @@ _SENSITIVE_JSON_KEYS: Final = {
     "private_cidr",
     "private_ip",
     "provider_account_id",
+    "provider_account_identifier",
 }
 MAX_PRIVACY_JSON_BYTES: Final = 16_777_216
 MAX_PRIVACY_LINE_BYTES: Final = 8_388_608
@@ -134,6 +137,9 @@ MAX_STAGED_EVIDENCE_BYTES: Final = 536_870_912
 MAX_STAGE_SECONDS: Final = 300
 MAX_IMAGE_EXPORT_SECONDS: Final = 300
 MAX_IMAGE_ARCHIVE_BYTES: Final = 2_147_483_648
+MAX_EVALUATOR_OVERLAY_BYTES: Final = 1_073_741_824
+MAX_EVALUATOR_OVERLAY_ENTRIES: Final = 100_000
+MAX_PREENTRY_REPAIRS_PER_RUN: Final = 3
 IMAGE_ARCHIVE_PATH: Final = Path("/home/ubuntu/t09-pilot-v4-replacement-image-0002.tar")
 
 
@@ -722,9 +728,7 @@ def materialize_replacement_image(
         "build_context_manifest_sha256": file_sha256(context_manifest_path),
         "build_context_payload_sha256": context_manifest["manifest_payload_sha256"],
         "build_command_sha256": file_sha256(materialization / "build-command.json"),
-        "image_inspect_sha256": file_sha256(
-            materialization / "replacement-image-inspect.stdout"
-        ),
+        "image_inspect_sha256": file_sha256(materialization / "replacement-image-inspect.stdout"),
         "runtime_sha256": T07_RUNTIME_SHA256,
         "runtime_preflight_sha256": T07_RUNTIME_PREFLIGHT_SHA256,
         "routing_patch_sha256": T07_ROUTING_PATCH_SHA256,
@@ -739,13 +743,9 @@ def materialize_replacement_image(
         "entrypoint_contract": "/opt/giclab/container_entrypoint.py",
         "runtime_environment_contract": "reviewed-Containerfile-exact-environment-v1",
         "source_date_epoch": SOURCE_DATE_EPOCH,
-        "docker_version_receipt_sha256": file_sha256(
-            materialization / "docker-version.json"
-        ),
+        "docker_version_receipt_sha256": file_sha256(materialization / "docker-version.json"),
         "docker_version_available": docker_version["returncode"] == 0,
-        "buildkit_version_receipt_sha256": file_sha256(
-            materialization / "buildkit-version.json"
-        ),
+        "buildkit_version_receipt_sha256": file_sha256(materialization / "buildkit-version.json"),
         "buildkit_version_available": buildkit_version["returncode"] == 0,
         "build_count": 1,
     }
@@ -1048,8 +1048,7 @@ def require_prior_export_acknowledgements(
             or acknowledgement.get("archive_path") != archive.name
             or acknowledgement.get("archive_bytes") != archive.stat().st_size
             or acknowledgement.get("archive_sha256") != file_sha256(archive)
-            or acknowledgement.get("frozen_run_manifest_sha256")
-            != frozen_manifest_sha256
+            or acknowledgement.get("frozen_run_manifest_sha256") != frozen_manifest_sha256
             or acknowledgement.get("replacement_image_id")
             != frozen_manifest.get("replacement_image_id")
             or acknowledgement.get("provider_entry_receipt_sha256") != entry.get("receipt_sha256")
@@ -1223,8 +1222,7 @@ def verify_package(repository: Path, package_commit: str) -> dict[str, Any]:
     if (
         not isinstance(base_runtime, dict)
         or base_runtime.get("python_version") != "3.11.14"
-        or base_runtime.get("installed_package_manifest_sha256")
-        != EXPECTED_PACKAGE_MANIFEST_SHA256
+        or base_runtime.get("installed_package_manifest_sha256") != EXPECTED_PACKAGE_MANIFEST_SHA256
         or base_runtime.get("chromium_sha256") != EXPECTED_CHROMIUM_SHA256
         or not isinstance(scientific_runtime, dict)
         or scientific_runtime.get("runner_sha256") != EXPECTED_UPSTREAM_RUNNER_SHA256
@@ -1345,9 +1343,214 @@ def verify_package(repository: Path, package_commit: str) -> dict[str, Any]:
     return command_document
 
 
+def _evaluator_package_records(
+    *,
+    overlay: Path,
+    prefix: list[str],
+    image_id: str,
+    expected_packages: list[str],
+) -> list[str]:
+    command = [
+        *prefix,
+        "run",
+        "--rm",
+        "--network",
+        "none",
+        "--read-only",
+        "--cap-drop",
+        "ALL",
+        "--security-opt",
+        "no-new-privileges=true",
+        "--user",
+        "1000:1000",
+        "--env",
+        "HOME=/tmp",
+        "--env",
+        "UV_CACHE_DIR=/tmp/uv-cache",
+        "--tmpfs",
+        "/tmp:rw,noexec,nosuid,nodev,size=67108864,uid=1000,gid=1000,mode=0700",
+        "--mount",
+        f"type=bind,src={overlay},dst=/opt/evaluator,readonly",
+        "--entrypoint",
+        "/usr/local/bin/uv",
+        image_id,
+        "pip",
+        "freeze",
+        "--python",
+        "/opt/evaluator/.venv/bin/python",
+    ]
+    result = subprocess.run(
+        command,
+        env=safe_environment(),
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        check=False,
+        timeout=120,
+    )
+    if result.returncode != 0 or len(result.stdout) > 1_048_576:
+        raise T09HostError("exact evaluator package manifest failed")
+    try:
+        raw_text = result.stdout.decode("utf-8", errors="strict")
+    except UnicodeDecodeError as exc:
+        raise T09HostError("evaluator package manifest is not UTF-8") from exc
+    return normalize_evaluator_package_records(raw_text, expected_packages=expected_packages)
+
+
+def normalize_evaluator_package_records(
+    raw_text: str,
+    *,
+    expected_packages: list[str],
+) -> list[str]:
+    """Normalize only the one reviewed direct URL and require exact package closure."""
+
+    raw_packages = sorted(line.strip() for line in raw_text.splitlines() if line.strip())
+    if (
+        not raw_packages
+        or len(raw_packages) != len(set(raw_packages))
+        or any(
+            len(line) > 1_024
+            or any(ord(character) < 32 for character in line)
+            or (
+                re.fullmatch(
+                    r"[A-Za-z0-9][A-Za-z0-9._-]*==[A-Za-z0-9][A-Za-z0-9.!+_-]*",
+                    line,
+                )
+                is None
+                and line != EVALUATOR_DIRECT_URL_RECORD
+            )
+            for line in raw_packages
+        )
+    ):
+        raise T09HostError("evaluator package manifest is unsafe or ambiguous")
+    packages = sorted(
+        "en-core-web-sm==3.8.0" if line == EVALUATOR_DIRECT_URL_RECORD else line
+        for line in raw_packages
+    )
+    if packages != expected_packages:
+        raise T09HostError("realized evaluator package set differs from the reviewed contract")
+    return packages
+
+
+def expected_evaluator_packages(repository: Path) -> list[str]:
+    contract = load_object(contract_paths(repository)["evaluator"], label="evaluator contract")
+    materialization = contract.get("materialization")
+    inventory = (
+        materialization.get("dependency_license_inventory")
+        if isinstance(materialization, dict)
+        else None
+    )
+    if not isinstance(inventory, list) or not inventory:
+        raise T09HostError("evaluator dependency license inventory is unavailable")
+    packages: list[str] = []
+    for item in inventory:
+        if not isinstance(item, str) or item.count("|") != 1:
+            raise T09HostError("evaluator dependency inventory is malformed")
+        package, license_identity = item.split("|", 1)
+        if (
+            re.fullmatch(
+                r"[A-Za-z0-9][A-Za-z0-9._-]*==[A-Za-z0-9][A-Za-z0-9.!+_-]*",
+                package,
+            )
+            is None
+            or not license_identity
+        ):
+            raise T09HostError("evaluator dependency inventory identity is malformed")
+        packages.append(package)
+    result = sorted(packages)
+    if len(result) != len(set(result)):
+        raise T09HostError("evaluator dependency inventory contains duplicates")
+    return result
+
+
+def evaluator_overlay_inventory(overlay: Path) -> dict[str, object]:
+    """Manifest every realized evaluator directory, file, and symlink without following it."""
+
+    root = overlay.resolve(strict=True)
+    root_metadata = root.stat(follow_symlinks=False)
+    if (
+        not stat.S_ISDIR(root_metadata.st_mode)
+        or root.is_symlink()
+        or root_metadata.st_uid != os.getuid()
+        or stat.S_IMODE(root_metadata.st_mode) != 0o700
+    ):
+        raise T09HostError("evaluator overlay root metadata is unsafe")
+    entries: list[dict[str, object]] = []
+    total_regular_bytes = 0
+    for current, raw_directories, raw_files in os.walk(root, topdown=True, followlinks=False):
+        current_path = Path(current)
+        raw_directories.sort()
+        raw_files.sort()
+        names = [*raw_directories, *raw_files]
+        retained_directories: list[str] = []
+        for name in names:
+            path = current_path / name
+            metadata = path.lstat()
+            relative = path.relative_to(root).as_posix()
+            if not relative or relative.startswith("../"):
+                raise T09HostError("evaluator overlay path escaped its root")
+            record: dict[str, object] = {
+                "path": relative,
+                "mode": f"{stat.S_IMODE(metadata.st_mode):04o}",
+            }
+            if stat.S_ISDIR(metadata.st_mode):
+                record["type"] = "directory"
+                retained_directories.append(name)
+            elif stat.S_ISREG(metadata.st_mode):
+                if metadata.st_nlink != 1:
+                    raise T09HostError("evaluator overlay contains a linked regular file")
+                record.update(
+                    {
+                        "type": "file",
+                        "bytes": metadata.st_size,
+                        "sha256": file_sha256(path),
+                    }
+                )
+                total_regular_bytes += metadata.st_size
+            elif stat.S_ISLNK(metadata.st_mode):
+                target = os.readlink(path)
+                if not target or len(os.fsencode(target)) > 4_096 or "\0" in target:
+                    raise T09HostError("evaluator overlay symlink target is unsafe")
+                record.update({"type": "symlink", "target": target})
+            else:
+                raise T09HostError("evaluator overlay contains a special file")
+            entries.append(record)
+            if (
+                len(entries) > MAX_EVALUATOR_OVERLAY_ENTRIES
+                or total_regular_bytes > MAX_EVALUATOR_OVERLAY_BYTES
+            ):
+                raise T09HostError("evaluator overlay exceeds its frozen manifest cap")
+        raw_directories[:] = retained_directories
+    return {
+        "root_mode": "0700",
+        "entries": entries,
+        "entry_count": len(entries),
+        "total_regular_bytes": total_regular_bytes,
+        "entries_sha256": canonical_sha256(entries),
+    }
+
+
+def _validate_evaluator_overlay_inventory(
+    *,
+    overlay: Path,
+    retained: dict[str, Any],
+) -> None:
+    observed = evaluator_overlay_inventory(overlay)
+    for field in (
+        "root_mode",
+        "entries",
+        "entry_count",
+        "total_regular_bytes",
+        "entries_sha256",
+    ):
+        if observed.get(field) != retained.get(field):
+            raise T09HostError("realized evaluator overlay changed after qualification")
+
+
 def evaluator_overlay(
     *,
     repository: Path,
+    artifact_root: Path,
     overlay: Path,
     prefix: list[str],
     image_id: str,
@@ -1360,7 +1563,7 @@ def evaluator_overlay(
         "--network",
         "bridge",
         "--user",
-        "0:0",
+        "1000:1000",
         "--env",
         "UV_PROJECT_ENVIRONMENT=/opt/evaluator/.venv",
         "--env",
@@ -1395,12 +1598,91 @@ def evaluator_overlay(
     )
     if result.returncode != 0:
         raise T09HostError("exact evaluator overlay materialization failed")
+    cache = overlay / "cache"
+    if cache.exists():
+        if cache.is_symlink() or not cache.is_dir():
+            raise T09HostError("evaluator dependency cache has unsafe metadata")
+        shutil.rmtree(cache)
+    expected_packages = expected_evaluator_packages(repository)
+    packages = _evaluator_package_records(
+        overlay=overlay,
+        prefix=prefix,
+        image_id=image_id,
+        expected_packages=expected_packages,
+    )
+    inventory = evaluator_overlay_inventory(overlay)
+    manifest: dict[str, object] = {
+        "schema_version": "0.1.0",
+        "plan_id": PLAN_ID,
+        "qualification_id": QUALIFICATION_ID,
+        "replacement_image_id": image_id,
+        **inventory,
+        "packages": packages,
+        "packages_sha256": canonical_sha256(packages),
+        "reviewed_expected_packages_sha256": canonical_sha256(expected_packages),
+        "lock_sha256": file_sha256(repository / "uv.lock"),
+        "network_materialization_only": True,
+        "runtime_mount_read_only": True,
+    }
+    manifest_path = artifact_root / "pilot-v4/evaluator-overlay-manifest.json"
+    write_exclusive(manifest_path, manifest)
     return {
         "materialized": True,
         "network_mode": "bridge-dependency-materialization-only",
         "provider_or_model_request": False,
         "image_id": image_id,
         "lock_sha256": file_sha256(repository / "uv.lock"),
+        "overlay_manifest_sha256": file_sha256(manifest_path),
+        "overlay_entries_sha256": inventory["entries_sha256"],
+        "overlay_package_manifest_sha256": manifest["packages_sha256"],
+        "overlay_entry_count": inventory["entry_count"],
+        "overlay_total_regular_bytes": inventory["total_regular_bytes"],
+    }
+
+
+def validate_evaluator_overlay_binding(
+    *,
+    artifact_root: Path,
+    repository: Path,
+    overlay: Path,
+    prefix: list[str],
+    image_id: str,
+    frozen_manifest: dict[str, Any],
+    verify_packages: bool,
+) -> dict[str, object]:
+    manifest_path = artifact_root / "pilot-v4/evaluator-overlay-manifest.json"
+    retained = load_object(manifest_path, label="evaluator overlay manifest")
+    if (
+        frozen_manifest.get("evaluator_overlay_manifest_sha256") != file_sha256(manifest_path)
+        or retained.get("schema_version") != "0.1.0"
+        or retained.get("plan_id") != PLAN_ID
+        or retained.get("qualification_id") != QUALIFICATION_ID
+        or retained.get("replacement_image_id") != image_id
+        or retained.get("entries_sha256") != frozen_manifest.get("evaluator_overlay_entries_sha256")
+        or retained.get("packages_sha256")
+        != frozen_manifest.get("evaluator_overlay_packages_sha256")
+        or retained.get("reviewed_expected_packages_sha256")
+        != canonical_sha256(expected_evaluator_packages(repository))
+        or retained.get("runtime_mount_read_only") is not True
+    ):
+        raise T09HostError("frozen evaluator overlay binding drifted")
+    _validate_evaluator_overlay_inventory(overlay=overlay, retained=retained)
+    if verify_packages:
+        packages = _evaluator_package_records(
+            overlay=overlay,
+            prefix=prefix,
+            image_id=image_id,
+            expected_packages=expected_evaluator_packages(repository),
+        )
+        if packages != retained.get("packages") or canonical_sha256(packages) != retained.get(
+            "packages_sha256"
+        ):
+            raise T09HostError("realized evaluator package set changed after qualification")
+    return {
+        "overlay_manifest_sha256": file_sha256(manifest_path),
+        "overlay_entries_sha256": retained["entries_sha256"],
+        "overlay_packages_sha256": retained["packages_sha256"],
+        "packages_recomputed": verify_packages,
     }
 
 
@@ -1501,8 +1783,7 @@ def browser_lifecycle_preflight(
             or record.get("playwright_version") != "1.39.0"
             or record.get("chromium_revision") != "1084"
             or record.get("chromium_executable_sha256") != EXPECTED_CHROMIUM_SHA256
-            or record.get("installed_package_manifest_sha256")
-            != EXPECTED_PACKAGE_MANIFEST_SHA256
+            or record.get("installed_package_manifest_sha256") != EXPECTED_PACKAGE_MANIFEST_SHA256
         ):
             raise T09HostError("browser lifecycle preflight identity drifted")
     finally:
@@ -1847,8 +2128,7 @@ def _replacement_inspect(
     expected_image_id: str,
 ) -> dict[str, Any]:
     inspect_path = (
-        artifact_root
-        / "pilot-v4/replacement-image-qualification/replacement-image-inspect.stdout"
+        artifact_root / "pilot-v4/replacement-image-qualification/replacement-image-inspect.stdout"
     )
     value: object = json.loads(inspect_path.read_text(encoding="utf-8"))
     if not isinstance(value, list) or len(value) != 1 or not isinstance(value[0], dict):
@@ -1890,8 +2170,7 @@ def image_equivalence_adjudication(
     image_id: str,
 ) -> dict[str, object]:
     historical_path = (
-        repository
-        / "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
+        repository / "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
         "T09_PILOT_HISTORICAL_RUNTIME_EVIDENCE.json"
     )
     historical = load_object(historical_path, label="historical runtime evidence")
@@ -1988,12 +2267,8 @@ def write_frozen_run_manifest(
         "lambda_started_at_epoch": dynamic.get("lambda_started_at_epoch"),
         "replacement_image_id": image_id,
         "historical_image_id": HISTORICAL_IMAGE_ID,
-        "build_context_manifest_sha256": image_materialization.get(
-            "build_context_manifest_sha256"
-        ),
-        "build_context_payload_sha256": image_materialization.get(
-            "build_context_payload_sha256"
-        ),
+        "build_context_manifest_sha256": image_materialization.get("build_context_manifest_sha256"),
+        "build_context_payload_sha256": image_materialization.get("build_context_payload_sha256"),
         "containerfile_sha256": image_materialization.get("containerfile_sha256"),
         "build_command_sha256": image_materialization.get("build_command_sha256"),
         "image_inspect_sha256": image_materialization.get("image_inspect_sha256"),
@@ -2004,6 +2279,11 @@ def write_frozen_run_manifest(
         "offline_preflight_sha256": canonical_sha256(offline_receipt),
         "browser_preflight_sha256": canonical_sha256(browser_receipt),
         "evaluator_materialization_sha256": canonical_sha256(evaluator_receipt),
+        "evaluator_overlay_manifest_sha256": evaluator_receipt.get("overlay_manifest_sha256"),
+        "evaluator_overlay_entries_sha256": evaluator_receipt.get("overlay_entries_sha256"),
+        "evaluator_overlay_packages_sha256": evaluator_receipt.get(
+            "overlay_package_manifest_sha256"
+        ),
         "final_image_file_hashes_sha256": canonical_sha256(file_hashes),
         "model_metadata_receipt_sha256": canonical_sha256(model_receipt),
         "model_metadata_request_count": 1,
@@ -2017,11 +2297,10 @@ def write_frozen_run_manifest(
         "post_entry_code_science_image_freeze": True,
         "source_receipts": {
             "materialization": file_sha256(qualification_root / "receipt.json"),
-            "build_context": file_sha256(
-                qualification_root / "build-context-manifest.json"
-            ),
-            "image_inspect": file_sha256(
-                qualification_root / "replacement-image-inspect.stdout"
+            "build_context": file_sha256(qualification_root / "build-context-manifest.json"),
+            "image_inspect": file_sha256(qualification_root / "replacement-image-inspect.stdout"),
+            "evaluator_overlay": file_sha256(
+                artifact_root / "pilot-v4/evaluator-overlay-manifest.json"
             ),
         },
     }
@@ -2077,6 +2356,9 @@ def load_frozen_run_manifest(
         "package_manifest_sha256": EXPECTED_PACKAGE_MANIFEST_SHA256,
         "chromium_executable_sha256": EXPECTED_CHROMIUM_SHA256,
         "patched_upstream_runner_sha256": EXPECTED_UPSTREAM_RUNNER_SHA256,
+        "evaluator_overlay_manifest_sha256": manifest.get("evaluator_overlay_manifest_sha256"),
+        "evaluator_overlay_entries_sha256": manifest.get("evaluator_overlay_entries_sha256"),
+        "evaluator_overlay_packages_sha256": manifest.get("evaluator_overlay_packages_sha256"),
         "model_metadata_request_count": 1,
         "model_task_request_count": 0,
         "task_browser_action_count": 0,
@@ -2168,6 +2450,7 @@ def preflight(args: argparse.Namespace) -> None:
     )
     evaluator = evaluator_overlay(
         repository=repository,
+        artifact_root=artifact_root,
         overlay=args.evaluator_overlay.resolve(strict=False),
         prefix=prefix,
         image_id=image_id,
@@ -2194,6 +2477,19 @@ def preflight(args: argparse.Namespace) -> None:
         artifact_root=artifact_root,
         prefix=prefix,
         image_id=image_id,
+    )
+    evaluator_overlay_verified = validate_evaluator_overlay_binding(
+        artifact_root=artifact_root,
+        repository=repository,
+        overlay=args.evaluator_overlay.resolve(strict=True),
+        prefix=prefix,
+        image_id=image_id,
+        frozen_manifest={
+            "evaluator_overlay_manifest_sha256": evaluator["overlay_manifest_sha256"],
+            "evaluator_overlay_entries_sha256": evaluator["overlay_entries_sha256"],
+            "evaluator_overlay_packages_sha256": evaluator["overlay_package_manifest_sha256"],
+        },
+        verify_packages=True,
     )
     adjudication = image_equivalence_adjudication(
         repository=repository,
@@ -2261,6 +2557,7 @@ def preflight(args: argparse.Namespace) -> None:
             "command_rendering": "passed-four-exact-by-network-none-offline-runtime-preflight",
             "browser_startup_screenshot_cleanup": browser,
             "evaluator_loading": "passed-exact-network-none-with-approved-fixtures",
+            "evaluator_overlay_revalidation": evaluator_overlay_verified,
             "task_loading": "passed-two-exact-rows-network-none",
             "model_metadata": model_metadata,
             "model_metadata_request_count": 1,
@@ -2513,6 +2810,175 @@ def evaluator_argv(
     ]
 
 
+def preentry_prefix_inventory(attempt_root: Path) -> list[dict[str, object]]:
+    """Bind every preserved pre-entry byte except the self-describing receipt."""
+
+    root = attempt_root.resolve(strict=True)
+    if root != attempt_root or root.is_symlink() or not root.is_dir():
+        raise T09HostError("pre-entry attempt root metadata is unsafe")
+    entries: list[dict[str, object]] = []
+    total_bytes = 0
+    for path in sorted(root.rglob("*")):
+        relative = path.relative_to(root).as_posix()
+        if relative == "preentry-condition-failure.json":
+            continue
+        metadata = path.lstat()
+        record: dict[str, object] = {
+            "path": relative,
+            "mode": f"{stat.S_IMODE(metadata.st_mode):04o}",
+        }
+        if stat.S_ISDIR(metadata.st_mode):
+            record["type"] = "directory"
+        elif stat.S_ISREG(metadata.st_mode):
+            if metadata.st_nlink != 1:
+                raise T09HostError("pre-entry prefix contains a linked regular file")
+            record.update(
+                {
+                    "type": "file",
+                    "bytes": metadata.st_size,
+                    "sha256": file_sha256(path),
+                }
+            )
+            total_bytes += metadata.st_size
+        else:
+            raise T09HostError("pre-entry prefix contains a symlink or special file")
+        entries.append(record)
+        if len(entries) > MAX_EVALUATOR_OVERLAY_ENTRIES or total_bytes > MAX_ATTEMPT_OUTPUT_BYTES:
+            raise T09HostError("pre-entry prefix exceeds its bounded repair surface")
+    return entries
+
+
+def prepare_condition_attempt_root(
+    *,
+    artifact_root: Path,
+    manifest: dict[str, Any],
+    pilot_state: dict[str, Any],
+    package_commit: str,
+    frozen_run_manifest_sha256: str,
+) -> Path:
+    """Open a fresh root, preserving only source-marked failures from before entry."""
+
+    run_id = cast(str, manifest["run_id"])
+    attempt_root = artifact_root / manifest_output_root(manifest)
+    if attempt_root.exists() or attempt_root.is_symlink():
+        entered = pilot_state.get("empirical_attempts_entered")
+        completed = pilot_state.get("attempts_completed")
+        receipt = attempt_root / "preentry-condition-failure.json"
+        retained = (
+            load_object(receipt, label="pre-entry condition failure")
+            if (not attempt_root.is_symlink() and receipt.is_file() and not receipt.is_symlink())
+            else {}
+        )
+        observed_prefix = (
+            preentry_prefix_inventory(attempt_root)
+            if not attempt_root.is_symlink() and attempt_root.is_dir()
+            else []
+        )
+        if (
+            attempt_root.is_symlink()
+            or not attempt_root.is_dir()
+            or not isinstance(entered, list)
+            or not isinstance(completed, list)
+            or run_id in entered
+            or run_id in completed
+            or not receipt.is_file()
+            or receipt.is_symlink()
+            or retained.get("schema_version") != "0.1.0"
+            or retained.get("plan_id") != PLAN_ID
+            or retained.get("host_run_id") != HOST_RUN_ID
+            or retained.get("run_id") != run_id
+            or retained.get("clean_package_commit") != package_commit
+            or retained.get("execution_contract_sha256")
+            != pilot_state.get("execution_contract_sha256")
+            or retained.get("frozen_run_manifest_sha256") != frozen_run_manifest_sha256
+            or retained.get("condition_plan_sha256") != manifest.get("condition_plan_sha256")
+            or retained.get("condition_argv_sha256") != manifest.get("argv_sha256")
+            or retained.get("empirical_entry_crossed") is not False
+            or retained.get("attempt_identity_consumed") is not False
+            or retained.get("container_absent") is not True
+            or retained.get("remaining_exact_secret_matches") != []
+            or retained.get("structural_privacy_violations") != []
+            or retained.get("retry_same_frozen_condition_permitted") is not True
+            or retained.get("failure_prefix_entries") != observed_prefix
+            or retained.get("failure_prefix_entries_sha256") != canonical_sha256(observed_prefix)
+            or privacy_violations(attempt_root)
+        ):
+            raise T09HostError("existing attempt root is not a repairable pre-entry prefix")
+        repair_root = artifact_root / "pilot-v4/preentry-condition-repairs" / run_id
+        repair_root.mkdir(mode=0o700, parents=True, exist_ok=True)
+        existing = sorted(path for path in repair_root.iterdir() if path.is_dir())
+        if len(existing) >= MAX_PREENTRY_REPAIRS_PER_RUN:
+            raise T09HostError("pre-entry condition repair limit reached")
+        destination = repair_root / f"repair-{len(existing) + 1:02d}"
+        if destination.exists() or destination.is_symlink():
+            raise T09HostError("pre-entry repair identity is not fresh")
+        os.replace(attempt_root, destination)
+    attempt_root.mkdir(parents=True, mode=0o700, exist_ok=False)
+    return attempt_root
+
+
+def record_preentry_condition_failure(
+    *,
+    attempt_root: Path,
+    secret_file: Path,
+    prefix: list[str],
+    container_name: str,
+    run_id: str,
+    reason: str,
+    returncode: int | None,
+    package_commit: str,
+    execution_contract_sha256: str,
+    frozen_run_manifest_sha256: str,
+    condition_plan_sha256: str,
+    condition_argv_sha256: str,
+) -> None:
+    """Seal a value-safe, non-consumed condition prefix for an autonomous retry."""
+
+    with contextlib.suppress(OSError, subprocess.SubprocessError, T09HostError):
+        remove_container(prefix, container_name)
+    credential = validate_secret(secret_file)
+    matching = secret_hits(attempt_root, credential)
+    removed: list[str] = []
+    for relative in matching:
+        target = attempt_root / relative
+        if target.is_file() and not target.is_symlink():
+            target.unlink()
+            removed.append(relative)
+    remaining = secret_hits(attempt_root, credential)
+    credential = b""
+    residue = [name for name in owned_containers(prefix) if name == container_name]
+    privacy = privacy_violations(attempt_root)
+    failure_prefix_entries = preentry_prefix_inventory(attempt_root)
+    write_exclusive(
+        attempt_root / "preentry-condition-failure.json",
+        {
+            "schema_version": "0.1.0",
+            "plan_id": PLAN_ID,
+            "host_run_id": HOST_RUN_ID,
+            "run_id": run_id,
+            "clean_package_commit": package_commit,
+            "execution_contract_sha256": execution_contract_sha256,
+            "frozen_run_manifest_sha256": frozen_run_manifest_sha256,
+            "condition_plan_sha256": condition_plan_sha256,
+            "condition_argv_sha256": condition_argv_sha256,
+            "empirical_entry_crossed": False,
+            "attempt_identity_consumed": False,
+            "reason": reason,
+            "returncode": returncode,
+            "container_absent": not residue,
+            "secret_bearing_artifacts_removed": removed,
+            "remaining_exact_secret_matches": remaining,
+            "structural_privacy_violations": privacy,
+            "failure_prefix_entries": failure_prefix_entries,
+            "failure_prefix_entries_sha256": canonical_sha256(failure_prefix_entries),
+            "retry_same_frozen_condition_permitted": not residue and not remaining and not privacy,
+            "recorded_at": utc_now(),
+        },
+    )
+    if residue or remaining or privacy:
+        raise T09HostError("pre-entry failure cleanup did not preserve a repairable prefix")
+
+
 def execute_condition(args: argparse.Namespace) -> int:
     attempt_started = time.monotonic()
     attempt_started_epoch = time.time()
@@ -2526,6 +2992,16 @@ def execute_condition(args: argparse.Namespace) -> int:
         package_commit=args.package_commit,
     )
     image_id = cast(str, frozen_manifest["replacement_image_id"])
+    prefix = docker_prefix()
+    validate_evaluator_overlay_binding(
+        artifact_root=artifact_root,
+        repository=repository,
+        overlay=args.evaluator_overlay.resolve(strict=True),
+        prefix=prefix,
+        image_id=image_id,
+        frozen_manifest=frozen_manifest,
+        verify_packages=False,
+    )
     paths = contract_paths(repository)
     command_document = load_object(paths["commands"], label="command manifest set")
     manifest = manifest_for_run(command_document, args.run_id)
@@ -2580,9 +3056,13 @@ def execute_condition(args: argparse.Namespace) -> int:
     if lambda_elapsed * LAMBDA_HOURLY_PRICE_USD / 3600.0 >= MAX_LAMBDA_COST_USD:
         raise T09HostError("Lambda cost cap reached")
 
-    attempt_root = artifact_root / manifest_output_root(manifest)
-    attempt_root.mkdir(parents=True, mode=0o700, exist_ok=False)
-    prefix = docker_prefix()
+    attempt_root = prepare_condition_attempt_root(
+        artifact_root=artifact_root,
+        manifest=manifest,
+        pilot_state=state,
+        package_commit=args.package_commit,
+        frozen_run_manifest_sha256=frozen_manifest_sha256,
+    )
     gpu_before = gpu_snapshot()
     name = f"{CONTAINER_PREFIX}{expected_index + 1:02d}"
     create_argv = container_create_argv(
@@ -2632,6 +3112,20 @@ def execute_condition(args: argparse.Namespace) -> int:
         timeout=60,
     )
     if created.returncode != 0:
+        record_preentry_condition_failure(
+            attempt_root=attempt_root,
+            secret_file=args.secret_file.resolve(strict=True),
+            prefix=prefix,
+            container_name=name,
+            run_id=args.run_id,
+            reason="container-create-failed-before-empirical-entry",
+            returncode=created.returncode,
+            package_commit=args.package_commit,
+            execution_contract_sha256=cast(str, state["execution_contract_sha256"]),
+            frozen_run_manifest_sha256=frozen_manifest_sha256,
+            condition_plan_sha256=cast(str, manifest["condition_plan_sha256"]),
+            condition_argv_sha256=cast(str, manifest["argv_sha256"]),
+        )
         raise T09HostError("condition container creation failed before empirical entry")
     started_at = utc_now()
     returncode = 125
@@ -2640,19 +3134,35 @@ def execute_condition(args: argparse.Namespace) -> int:
     hard_cap_breached = False
     container_removed = False
     container_state: dict[str, object] | None = None
+    runner_exception: Exception | None = None
     try:
-        returncode, wall, stop_reason, hard_cap_breached = run_attached_with_caps(
-            prefix=prefix,
-            name=name,
-            attempt_root=attempt_root,
-            pilot_root=artifact_root,
-            attempt_started=attempt_started,
-            pair_started_at_epoch=float(pair_started_epoch),
-            pilot_started_at_epoch=float(started_epoch),
-            lambda_started_at_epoch=float(lambda_started_epoch),
-        )
+        try:
+            returncode, wall, stop_reason, hard_cap_breached = run_attached_with_caps(
+                prefix=prefix,
+                name=name,
+                attempt_root=attempt_root,
+                pilot_root=artifact_root,
+                attempt_started=attempt_started,
+                pair_started_at_epoch=float(pair_started_epoch),
+                pilot_started_at_epoch=float(started_epoch),
+                lambda_started_at_epoch=float(lambda_started_epoch),
+            )
+        except Exception as exc:  # Preserve the exact pre-entry/empirical disposition.
+            runner_exception = exc
+            returncode = 125
+            wall = time.monotonic() - attempt_started
+            stop_reason = "host-runner-exception"
+            hard_cap_breached = True
     finally:
-        container_state = container_state_receipt(prefix, name)
+        try:
+            container_state = container_state_receipt(prefix, name)
+        except T09HostError as exc:
+            container_state = {
+                "status": "inspection-unavailable",
+                "running": None,
+                "inspection_error_type": type(exc).__name__,
+                "private_network_fields_retained": False,
+            }
         write_exclusive(attempt_root / "container-state.json", container_state)
         container_removed = remove_container(prefix, name)
     gpu_after = gpu_snapshot()
@@ -2699,6 +3209,9 @@ def execute_condition(args: argparse.Namespace) -> int:
             "secret_matching_paths": remaining_hits,
             "stop_reason": stop_reason,
             "hard_cap_breached": hard_cap_breached,
+            "runner_exception_type": (
+                type(runner_exception).__name__ if runner_exception is not None else None
+            ),
             "timing": {
                 "started_at": started_at,
                 "stopped_at": utc_now(),
@@ -2706,6 +3219,32 @@ def execute_condition(args: argparse.Namespace) -> int:
             },
         },
     )
+    state_after_condition = load_object(
+        artifact_root / "pilot-v4/pilot-state.json", label="post-condition pilot state"
+    )
+    entered_after_condition = state_after_condition.get("empirical_attempts_entered")
+    if not isinstance(entered_after_condition, list):
+        raise T09HostError("post-condition empirical state is malformed")
+    if args.run_id not in entered_after_condition:
+        record_preentry_condition_failure(
+            attempt_root=attempt_root,
+            secret_file=args.secret_file.resolve(strict=True),
+            prefix=prefix,
+            container_name=name,
+            run_id=args.run_id,
+            reason="condition-runtime-ended-before-first-model-request-or-browser-action",
+            returncode=returncode,
+            package_commit=args.package_commit,
+            execution_contract_sha256=cast(str, state["execution_contract_sha256"]),
+            frozen_run_manifest_sha256=frozen_manifest_sha256,
+            condition_plan_sha256=cast(str, manifest["condition_plan_sha256"]),
+            condition_argv_sha256=cast(str, manifest["argv_sha256"]),
+        )
+        if runner_exception is not None:
+            raise T09HostError(
+                "condition host runner failed before empirical entry"
+            ) from runner_exception
+        raise T09HostError("condition ended before empirical entry; frozen retry remains permitted")
     finalizer = evaluator_argv(
         args=args,
         manifest=manifest,
@@ -2713,6 +3252,19 @@ def execute_condition(args: argparse.Namespace) -> int:
         cleanup_receipt=cleanup_receipt,
         image_id=image_id,
         frozen_run_manifest_sha256=frozen_manifest_sha256,
+    )
+    evaluator_overlay_revalidation = validate_evaluator_overlay_binding(
+        artifact_root=artifact_root,
+        repository=repository,
+        overlay=args.evaluator_overlay.resolve(strict=True),
+        prefix=prefix,
+        image_id=image_id,
+        frozen_manifest=frozen_manifest,
+        verify_packages=True,
+    )
+    write_exclusive(
+        attempt_root / "evaluator-overlay-revalidation.json",
+        evaluator_overlay_revalidation,
     )
     remaining_evidence_seconds = (
         MAX_CONDITION_WALL_SECONDS
@@ -3080,14 +3632,11 @@ def verify_attempt_export(args: argparse.Namespace) -> None:
             or manifest.get("host_run_id") != HOST_RUN_ID
             or manifest.get("run_id") != args.run_id
             or manifest.get("package_commit") != args.package_commit
-            or manifest.get("frozen_run_manifest_id")
-            != "RUN-MANIFEST-EXP0001-PILOT-V4-0002"
+            or manifest.get("frozen_run_manifest_id") != "RUN-MANIFEST-EXP0001-PILOT-V4-0002"
             or not isinstance(manifest.get("frozen_run_manifest_sha256"), str)
             or _HEX64.fullmatch(cast(str, manifest["frozen_run_manifest_sha256"])) is None
             or not isinstance(manifest.get("replacement_image_id"), str)
-            or re.fullmatch(
-                r"sha256:[a-f0-9]{64}", cast(str, manifest["replacement_image_id"])
-            )
+            or re.fullmatch(r"sha256:[a-f0-9]{64}", cast(str, manifest["replacement_image_id"]))
             is None
             or manifest.get("private_access_controlled") is not True
             or manifest.get("public_release") != "blocked-pending-review"
@@ -3481,10 +4030,7 @@ def verify_inbound(args: argparse.Namespace) -> None:
         or not isinstance(identity.get("frozen_run_manifest_sha256"), str)
         or _HEX64.fullmatch(cast(str, identity["frozen_run_manifest_sha256"])) is None
         or not isinstance(identity.get("replacement_image_id"), str)
-        or re.fullmatch(
-            r"sha256:[a-f0-9]{64}", cast(str, identity["replacement_image_id"])
-        )
-        is None
+        or re.fullmatch(r"sha256:[a-f0-9]{64}", cast(str, identity["replacement_image_id"])) is None
         or archive.stat().st_size > MAX_STAGED_EVIDENCE_BYTES
     ):
         raise T09HostError("inbound evidence-stage identity drifted")

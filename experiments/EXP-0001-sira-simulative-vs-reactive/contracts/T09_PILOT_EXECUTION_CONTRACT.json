@@ -396,7 +396,7 @@
       "projected-aggregate-total-cost-no-more-than-45.16-dollars",
       "prior-plus-projected-new-campaign-cost-no-more-than-46-dollars",
       "actual-remaining-campaign-time-admits-next-5160-second-condition-evaluator-export-dispatch-cleanup-envelope",
-      "no-reference-leakage-contamination-or-two-valid-incomplete-zero-score-results-that-make-Task-B-incapable-of-adding-calibration-value"
+      "no-reference-leakage-contamination-two-valid-incomplete-zero-score-floor-or-two-valid-completed-one-score-ceiling-that-makes-Task-B-incapable-of-adding-calibration-value"
     ],
     "failure_action": "stop-before-Task-B-preserve-Task-A-evidence-cleanup-and-terminate-provider-resource",
     "sampling_claim": "none-calibration-checkpoint-is-not-an-unbiased-scientific-sampling-rule"
