@@ -1,24 +1,39 @@
 {
-  "schema_version": "0.1.0",
-  "identity_id": "RUNTIME-EXP0001-PILOT-V3-T07-PRAGMATIC",
-  "plan_id": "PLAN-EXP0001-PILOT-V3",
-  "execution_status": "ready-after-current-turn-overlay-and-dynamic-preflight",
+  "schema_version": "0.2.0",
+  "identity_id": "RUNTIME-EXP0001-PILOT-V4-REPLACEMENT",
+  "plan_id": "PLAN-EXP0001-PILOT-V4",
+  "execution_status": "current-turn-authorized-pending-source-derived-dynamic-qualification",
   "base_runtime": {
     "source_run": "RUN-T07-PRAGMATIC-HOST-0002",
     "frozen_execution_commit": "5698f04dfd08bc85a66d2355b0a4bd7d3ce24a23",
     "post_run_commit": "27f66e6a82edffa57e497516bf3969a199675f06",
+    "base_image_identity": "mcr.microsoft.com/playwright/python:v1.39.0-jammy@sha256:96955ff5cc37e13f5f1b21f5171afb9fed7e028025aa9d81c690501cd7fa0c6c",
     "python_version": "3.11.14",
-    "container_image_digest": "sha256:035edf61718e84a8156f4f0f7817b134b0ce31488d3f0b50bbfba2b4a30cc61c",
-    "installed_package_manifest_sha256": "4ff2603a286807442a627ba764e4969bcb1f6a2ff6ce95b55b3a35db6cd3fb0c",
+    "container_image_digest": null,
+    "installed_package_manifest_sha256": "4ff2603fa5e0f7033ba773decdcb86abf648dcce22e469d26bc48214e390e104",
     "playwright_version": "1.39.0",
     "chromium_revision": "1084",
-    "chromium_sha256": "0498a571ab8b53ee6f52004fe2f3a385f8c92a8998cdb0e6dd567d04b7029ffe",
+    "chromium_sha256": "0498f208c25339f386413ada7b3c35293b0b6250e67d85446ba9541d7fd636f7",
     "os": "Linux",
     "architecture": "x86_64"
   },
+  "replacement_image_policy": {
+    "historical_image_digest": "sha256:035edf61718e84a8156f4f0f7817b134b0ce31488d3f0b50bbfba2b4a30cc61c",
+    "exact_historical_digest_equality_required": false,
+    "qualification_id": "QUAL-T09-PILOT-V4-IMAGE-0002",
+    "frozen_run_manifest_id": "RUN-MANIFEST-EXP0001-PILOT-V4-0002",
+    "runtime_binding": "source-derived-mode-0600-O_EXCL-frozen-run-manifest",
+    "candidate_build_count": 1,
+    "candidate_qualification_count": 1,
+    "empirical_entry_before_binding_allowed": false,
+    "same_exact_image_all_attempts_required": true,
+    "digest_inequality_alone_is_material": false,
+    "freeze_interpretation": "reviewed-source-and-policy-bytes-are-final-before-launch; the post-gate immutable manifest instantiates the sole unresolved built-artifact identity without changing code or science"
+  },
   "scientific_runtime": {
     "sira_commit": "93fb8d72de71f9a4a13419670adeb34d93cf7acd",
-    "runner_sha256": "c2503b99bb8870b9abf9444831bbb3a70c7bbc8091e30ca06ecc3f2e24a7cf23",
+    "sira_tree": "6a6d9068b94d7632d3533a3d6f013d4de6ff76e8",
+    "runner_sha256": "b06793ad1b366a934b798f9f3272fc80a7104a220cb3304ab3bda2eb2a78b331",
     "agent_configs_sha256": "3c3110b5b69d43e0492fba3cb60171be35ccb8cd652e72d07ffb1ecfd7947072",
     "model_revision_all_roles": "gpt-4o-2024-11-20",
     "service_tier": "default",
@@ -36,72 +51,34 @@
   },
   "evaluator_overlay": {
     "contract_sha256": "c28a802a45fc8d1e719f8c1bcb22315c2841df831c4ae161f12ab0f2fd08b321",
-    "materialization": "read-only-package-overlay-on-exact-base-image",
-    "base_image_materialization": "use-preexisting-exact-image-or-rebuild-from-the-exact-T07-commit-and-reject-any-nonmatching-image-ID",
-    "provider_or_model_access": false
+    "materialization": "read-only-package-overlay-on-source-bound-qualified-image",
+    "provider_or_model_access": false,
+    "approved_offline_fixture_execution_required": true
   },
   "repository_instrumentation": {
-    "runtime_path": "src/giclab/harness/sira_gate_a_runtime.py",
-    "runtime_sha256_binding": "four-command-manifests-bind-final-reviewed-bytes",
-    "contract_path": "src/giclab/harness/t09_sira_pilot.py",
-    "contract_sha256_binding": "four-command-manifests-bind-final-reviewed-bytes",
+    "reviewed_implementation_ancestor": "b897970cdf3aed0a2b42dc0691c5e07d7589e63e",
     "scope": [
+      "replacement-image-build-context-and-functional-qualification",
       "pre-action-budget-count",
       "post-action-result-and-screenshot-retention",
       "per-call-role-lineage-usage-and-service-tier-receipts",
       "condition-and-aggregate-budget-persistence",
-      "resource-cap-checks",
-      "cleanup-receipt"
+      "resource-cap-and-cumulative-accounting-checks",
+      "cleanup-and-exact-provider-closeout-receipts"
     ],
     "files": [
-      {
-        "path": "src/giclab/harness/sira_gate_a_runtime.py",
-        "sha256": "5fde575a7b1bcfa2b7ebc3717548ddedff8fc77e3998ab40ffec56ec772ae4f1"
-      },
-      {
-        "path": "src/giclab/harness/sira_gate_a.py",
-        "sha256": "b9a3ae20dc07056bb16dbf3807c8f3912bda9cf31b04a47d80c7de453db971af"
-      },
-      {
-        "path": "src/giclab/harness/safety.py",
-        "sha256": "12529af51aea206e02a531abea4959d80976bd271567f05c75e903654527d34c"
-      },
-      {
-        "path": "src/giclab/harness/t09_sira_pilot.py",
-        "sha256": "8a196d68aa28e0783b640eaa0e9ca6ababc154a563e1bacc31b53cb3ff176d6c"
-      },
-      {
-        "path": "src/giclab/harness/lambda_campaign_lifecycle.py",
-        "sha256": "48b48e7987fb3b23677503610d1c87a9836d3ad40cf651c96982807fc0ae088e"
-      },
-      {
-        "path": "src/giclab/harness/lambda_l2m_observer.py",
-        "sha256": "3ad5d56abd2b4d115b479c9cf7f0f5202e715d07c1b4842c82dc894fbe8bf6c9"
-      },
-      {
-        "path": "src/giclab/harness/t09_pragmatic_provider.py",
-        "sha256": "205ad49455646b075ce22369df0a0cd9911f57cb53044331041da8a088444841"
-      },
-      {
-        "path": "containers/sira-smoke/pragmatic/t09_remote_runner.py",
-        "sha256": "294645c4aae3f5c1984becedb4f4c3e200c659ee745f86268c4ec218ce2a2627"
-      },
-      {
-        "path": "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py",
-        "sha256": "68fcec3cfd6c08c7a169b6a00e042941d90d7ee783b419dca3879512d5bf9610"
-      },
-      {
-        "path": "containers/sira-smoke/pragmatic/t09_preflight.py",
-        "sha256": "9bbb042c03a3c4a8e2708e43a17e4899da32d9d87d0b2a790c5c651183420ab0"
-      },
-      {
-        "path": "containers/sira-smoke/pragmatic/t09_freeze_commands.py",
-        "sha256": "177caab293c08660bf83583cb67fbd2aaa4c2281768b0353a42a803a23d89336"
-      },
-      {
-        "path": "containers/sira-smoke/pragmatic/t09_secret_preflight.py",
-        "sha256": "b4763ac8edc98b86c2f9f617f53cdb6be2ef9cb26d39aad660442e4c1a7506a4"
-      }
+      {"path": "src/giclab/harness/sira_gate_a_runtime.py", "sha256": "5fde575a7b1bcfa2b7ebc3717548ddedff8fc77e3998ab40ffec56ec772ae4f1"},
+      {"path": "src/giclab/harness/sira_gate_a.py", "sha256": "b9a3ae20dc07056bb16dbf3807c8f3912bda9cf31b04a47d80c7de453db971af"},
+      {"path": "src/giclab/harness/safety.py", "sha256": "12529af51aea206e02a531abea4959d80976bd271567f05c75e903654527d34c"},
+      {"path": "src/giclab/harness/t09_sira_pilot.py", "sha256": "a9f35e7801319b0278b645d1baac068d1d76e3157a114746540c3afca92da903"},
+      {"path": "src/giclab/harness/lambda_campaign_lifecycle.py", "sha256": "b300f4ab18e201454e98f8fe4a0c044e0e6a258ac0bddecc08c631fd9071b97d"},
+      {"path": "src/giclab/harness/lambda_l2m_observer.py", "sha256": "3ad5d56abd2b4d115b479c9cf7f0f5202e715d07c1b4842c82dc894fbe8bf6c9"},
+      {"path": "src/giclab/harness/t09_pragmatic_provider.py", "sha256": "d03c24c482189f12bce11d5b52898ad40c57bf7cb6daf242e230b85882c1719f"},
+      {"path": "containers/sira-smoke/pragmatic/t09_remote_runner.py", "sha256": "bf44b40c3d6a6024615885a71fd4d7fddddb206d11efd10cd3b4fd075a6c1419"},
+      {"path": "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py", "sha256": "8de097caaa99f1162816abf1db455f013fe6114ba7b05923701c3ff55c9e8028"},
+      {"path": "containers/sira-smoke/pragmatic/t09_preflight.py", "sha256": "20066509bb8df0c0bcabcdfbc750e145f04c007920e71f86aeddf2533609c096"},
+      {"path": "containers/sira-smoke/pragmatic/t09_freeze_commands.py", "sha256": "af8897a04e1ab09f9c5784217a005c2e895e138dec9a19e0f0f59f98ac7233e7"},
+      {"path": "containers/sira-smoke/pragmatic/t09_secret_preflight.py", "sha256": "b4763ac8edc98b86c2f9f617f53cdb6be2ef9cb26d39aad660442e4c1a7506a4"}
     ]
   },
   "gpu": {

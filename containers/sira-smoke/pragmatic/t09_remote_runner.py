@@ -1008,6 +1008,9 @@ def require_prior_export_acknowledgements(
     """Block empirical progression until every prior archive was verified off-host."""
 
     entry = load_object(root / "pilot-v4/provider-entry.json", label="provider entry")
+    frozen_manifest_path = root / "pilot-v4/frozen-run-manifest.json"
+    frozen_manifest = load_object(frozen_manifest_path, label="frozen run manifest")
+    frozen_manifest_sha256 = file_sha256(frozen_manifest_path)
     for run_id in RUN_IDS[:next_attempt_index]:
         acknowledgement_path = _received_export_ack_path(root, run_id)
         if not acknowledgement_path.is_file():
@@ -1030,6 +1033,8 @@ def require_prior_export_acknowledgements(
                 "archive_path",
                 "archive_bytes",
                 "archive_sha256",
+                "frozen_run_manifest_sha256",
+                "replacement_image_id",
                 "provider_entry_receipt_sha256",
                 "owned_instance_identity_sha256",
                 "lambda_started_at_epoch",
@@ -1043,6 +1048,10 @@ def require_prior_export_acknowledgements(
             or acknowledgement.get("archive_path") != archive.name
             or acknowledgement.get("archive_bytes") != archive.stat().st_size
             or acknowledgement.get("archive_sha256") != file_sha256(archive)
+            or acknowledgement.get("frozen_run_manifest_sha256")
+            != frozen_manifest_sha256
+            or acknowledgement.get("replacement_image_id")
+            != frozen_manifest.get("replacement_image_id")
             or acknowledgement.get("provider_entry_receipt_sha256") != entry.get("receipt_sha256")
             or acknowledgement.get("owned_instance_identity_sha256")
             != entry.get("owned_instance_identity_sha256")

@@ -1155,6 +1155,26 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
     if pilot_lifecycle != expected_lifecycle:
         errors.append("EXP-0001 pilot: provider lifecycle contract drift")
 
+    historical_disposition = exp_root / "T09_PRAGMATIC_PREFLIGHT_DISPOSITION.json"
+    supersession_path = exp_root / "T09_PRAGMATIC_RETRY2_SUPERSESSION.json"
+    if not historical_disposition.is_file() or not supersession_path.is_file():
+        errors.append("EXP-0001 T09 Retry 2: historical disposition or supersession is missing")
+    else:
+        supersession = load_json(supersession_path)
+        historical = supersession.get("historical_disposition")
+        if (
+            hashlib.sha256(historical_disposition.read_bytes()).hexdigest()
+            != "cb6ba0b003b61aec83a2a42188ee784c93ee08ae7e504f5a15a7287af83ac709"
+            or not isinstance(historical, dict)
+            or historical.get("classification")
+            != "preflight_blocked_by_overstrict_cross_run_image_digest_requirement"
+            or historical.get("model_calls") != 0
+            or historical.get("browser_actions") != 0
+            or historical.get("condition_attempts") != 0
+            or historical.get("empirical_boundary_crossed") is not False
+        ):
+            errors.append("EXP-0001 T09 Retry 2: prior failure preservation drifted")
+
     contract_root = exp_root / "contracts"
     execution_path = contract_root / "T09_PILOT_EXECUTION_CONTRACT.json"
     runtime_path = contract_root / "T09_PILOT_RUNTIME_IDENTITY.json"
@@ -1221,6 +1241,27 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
                 errors.append(f"EXP-0001 T09: {label} binding byte size drifted")
 
     runtime_identity = load_json(runtime_path)
+    base_runtime = runtime_identity.get("base_runtime")
+    replacement_policy = runtime_identity.get("replacement_image_policy")
+    scientific_runtime = runtime_identity.get("scientific_runtime")
+    if (
+        not isinstance(base_runtime, dict)
+        or base_runtime.get("container_image_digest") is not None
+        or base_runtime.get("installed_package_manifest_sha256")
+        != "4ff2603fa5e0f7033ba773decdcb86abf648dcce22e469d26bc48214e390e104"
+        or base_runtime.get("chromium_sha256")
+        != "0498f208c25339f386413ada7b3c35293b0b6250e67d85446ba9541d7fd636f7"
+        or not isinstance(scientific_runtime, dict)
+        or scientific_runtime.get("runner_sha256")
+        != "b06793ad1b366a934b798f9f3272fc80a7104a220cb3304ab3bda2eb2a78b331"
+        or not isinstance(replacement_policy, dict)
+        or replacement_policy.get("historical_image_digest")
+        != "sha256:035edf61718e84a8156f4f0f7817b134b0ce31488d3f0b50bbfba2b4a30cc61c"
+        or replacement_policy.get("exact_historical_digest_equality_required") is not False
+        or replacement_policy.get("runtime_binding")
+        != "source-derived-mode-0600-O_EXCL-frozen-run-manifest"
+    ):
+        errors.append("EXP-0001 T09: replacement runtime semantic identity drifted")
     instrumentation = runtime_identity.get("repository_instrumentation")
     files = instrumentation.get("files") if isinstance(instrumentation, dict) else None
     if not isinstance(files, list) or not files:
@@ -1248,7 +1289,7 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
     plan_path = exp_root / "run-plans/pilot.yaml"
     if (
         command_document.get("schema_version") != "0.1.0"
-        or command_document.get("plan_id") != "PLAN-EXP0001-PILOT-V3"
+        or command_document.get("plan_id") != "PLAN-EXP0001-PILOT-V4"
         or command_document.get("execution_contract_sha256") != execution_sha256
         or command_document.get("plan_sha256") != hashlib.sha256(plan_path.read_bytes()).hexdigest()
     ):
@@ -1289,8 +1330,8 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
                 runtime_adaptation_path=("/opt/giclab-src/giclab/harness/sira_gate_a_runtime.py"),
                 runtime_adaptation_sha256=runtime_sha256,
                 pilot_library_sha256=library_sha256,
-                aggregate_ledger_path=("/opt/giclab-artifacts/pilot-v3/aggregate-budget.json"),
-                pilot_state_path="/opt/giclab-artifacts/pilot-v3/pilot-state.json",
+                aggregate_ledger_path=("/opt/giclab-artifacts/pilot-v4/aggregate-budget.json"),
+                pilot_state_path="/opt/giclab-artifacts/pilot-v4/pilot-state.json",
             )
             for attempt in typed_contract.attempts
         ]

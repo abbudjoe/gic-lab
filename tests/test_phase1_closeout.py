@@ -77,8 +77,17 @@ def test_phase_one_is_the_only_active_non_executable_control_plane() -> None:
     assert t09_checkpoint["lambda_cost_usd"] == 0.414064252316667
     assert t09_checkpoint["cleanup_verified"] is True
     assert t09_checkpoint["scientific_result_claimed"] is False
+    retry2 = state["t09_pragmatic_retry2_checkpoint"]
+    assert retry2["plan_id"] == "PLAN-EXP0001-PILOT-V4"
+    assert retry2["current_turn_execution_authorized"] is True
+    assert retry2["repository_plan_authorized"] is False
+    assert retry2["replacement_image_qualified"] is False
+    assert retry2["empirical_attempts_entered"] == 0
+    assert retry2["prior_t09_cost_usd"] == 0.414064252316667
+    assert retry2["cumulative_t09_cost_cap_usd"] == 46.0
     assert {path.name for path in (ROOT / "docs/exec-plans/active").glob("*.md")} == {
-        "PHASE_1_ARTIFACT_EXECUTION.md"
+        "PHASE_1_ARTIFACT_EXECUTION.md",
+        "T09_PRAGMATIC_RETRY2.md",
     }
     assert "Status: **successful**" in PHASE_075_PLAN.read_text(encoding="utf-8")
     assert "Status: **in-progress**" in PHASE_1_PLAN.read_text(encoding="utf-8")
@@ -95,7 +104,7 @@ def test_smoke_and_pragmatic_pilot_are_locked_and_require_private_authorization(
     assert smoke["readiness"]["execution_eligibility"] == "eligible-after-authorization"
     assert smoke["readiness"]["unresolved_execution_blockers"] == []
     assert smoke["readiness"]["pre_execution_requirements"]
-    assert pilot["plan_id"] == "PLAN-EXP0001-PILOT-V3"
+    assert pilot["plan_id"] == "PLAN-EXP0001-PILOT-V4"
     assert pilot["execution"]["authorized"] is False
     assert pilot["readiness"]["execution_eligibility"] == "eligible-after-authorization"
     assert pilot["readiness"]["unresolved_execution_blockers"] == []

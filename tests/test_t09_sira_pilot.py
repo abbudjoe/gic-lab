@@ -35,6 +35,7 @@ from giclab.harness.t09_sira_pilot import (
     PairCheckpointInput,
     ResourceGuard,
     RuntimeLimits,
+    RuntimeQualification,
     T09BudgetExceeded,
     diff_pair_manifests,
     evaluate_retained_session,
@@ -303,8 +304,8 @@ def test_frozen_execution_contract_and_all_pair_command_diffs() -> None:
             runtime_adaptation_path="/opt/giclab-src/giclab/harness/sira_gate_a_runtime.py",
             runtime_adaptation_sha256="a" * 64,
             pilot_library_sha256="b" * 64,
-            aggregate_ledger_path="/opt/giclab-artifacts/pilot-v3/aggregate-budget.json",
-            pilot_state_path="/opt/giclab-artifacts/pilot-v3/pilot-state.json",
+            aggregate_ledger_path="/opt/giclab-artifacts/pilot-v4/aggregate-budget.json",
+            pilot_state_path="/opt/giclab-artifacts/pilot-v4/pilot-state.json",
         )
         for attempt in contract.attempts
     ]
@@ -381,6 +382,14 @@ def test_first_pair_checkpoint_passes_only_strictly_below_every_threshold() -> N
     exact_time_decision = first_pair_decision(exact_time)
     assert exact_time_decision["decision"] == "continue-to-task-b"
     assert exact_time_decision["required_campaign_seconds_for_next_attempt"] == 5_160
+    cumulative_overflow = replace(
+        passing,
+        projected_aggregate_cost_usd=45.11,
+        prior_t09_cost_usd=0.9,
+    )
+    assert "projected_cumulative_t09_cost_exceeds_hard_cap" in first_pair_decision(
+        cumulative_overflow
+    )["reasons"]
 
 
 def test_attempt_state_enforces_order_cap_checkpoint_and_zero_retry(tmp_path: Path) -> None:
@@ -490,10 +499,12 @@ def test_evidence_redaction_is_structural_and_event_lineage_is_explicit(tmp_path
 def test_execution_schema_and_all_static_file_bindings_resolve() -> None:
     document = load_json(EXECUTION_CONTRACT)
     assert document["authorized"] is False
-    assert document["terminal_state"] == "ready-for-t09-pilot-authorization"
+    assert document["terminal_state"] == (
+        "current-turn-authorized-retry2-pending-dynamic-preflight"
+    )
     assert (
         document["execution_eligibility"]
-        == "ready-after-current-turn-overlay-and-dynamic-preflight"
+        == "current-turn-authorized-after-replacement-image-qualification"
     )
     assert document["material_blockers"] == []
     assert (
@@ -546,6 +557,80 @@ def test_runtime_and_execution_bind_the_same_current_evaluator_contract() -> Non
     observed_sha256 = file_sha256(evaluator_path)
     assert evaluator_binding["sha256"] == observed_sha256
     assert runtime["evaluator_overlay"]["contract_sha256"] == observed_sha256
+
+
+def test_retry2_preserves_and_supersedes_the_zero_use_v3_failure() -> None:
+    experiment = ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive"
+    disposition = experiment / "T09_PRAGMATIC_PREFLIGHT_DISPOSITION.json"
+    supersession = load_json(experiment / "T09_PRAGMATIC_RETRY2_SUPERSESSION.json")
+    assert file_sha256(disposition) == (
+        "cb6ba0b003b61aec83a2a42188ee784c93ee08ae7e504f5a15a7287af83ac709"
+    )
+    historical = supersession["historical_disposition"]
+    assert historical["classification"] == (
+        "preflight_blocked_by_overstrict_cross_run_image_digest_requirement"
+    )
+    assert {
+        key: historical[key]
+        for key in ("model_calls", "browser_actions", "condition_attempts")
+    } == {"model_calls": 0, "browser_actions": 0, "condition_attempts": 0}
+    assert historical["empirical_boundary_crossed"] is False
+    assert supersession["successor_plan_id"] == "PLAN-EXP0001-PILOT-V4"
+
+
+def test_runtime_qualification_is_typed_single_build_preentry_and_digest_agnostic() -> None:
+    document = {
+        "schema_version": "0.1.0",
+        "plan_id": "PLAN-EXP0001-PILOT-V4",
+        "manifest_id": "RUN-MANIFEST-EXP0001-PILOT-V4-0002",
+        "qualification_id": "QUAL-T09-PILOT-V4-IMAGE-0002",
+        "clean_package_commit": "a" * 40,
+        "replacement_image_id": "sha256:" + "e" * 64,
+        "historical_image_id": (
+            "sha256:035edf61718e84a8156f4f0f7817b134b0ce31488d3f0b50bbfba2b4a30cc61c"
+        ),
+        "build_context_manifest_sha256": "b" * 64,
+        "package_manifest_sha256": "c" * 64,
+        "chromium_executable_sha256": "d" * 64,
+        "patched_upstream_runner_sha256": "f" * 64,
+        "model_metadata_request_count": 1,
+        "model_task_request_count": 0,
+        "task_browser_action_count": 0,
+        "build_count": 1,
+        "qualification_count": 1,
+        "empirical_entry_crossed": False,
+        "post_entry_code_science_image_freeze": True,
+    }
+    qualification = RuntimeQualification.from_document(document)
+    assert qualification.replacement_image_id != qualification.historical_image_id
+    for field, value in (
+        ("build_count", 2),
+        ("model_metadata_request_count", 0),
+        ("model_task_request_count", 1),
+        ("task_browser_action_count", 1),
+        ("empirical_entry_crossed", True),
+    ):
+        drifted = {**document, field: value}
+        with pytest.raises(ValueError, match="qualification contract drifted"):
+            RuntimeQualification.from_document(drifted)
+
+
+def test_v4_runtime_corrects_historical_package_browser_and_patched_runner_identities() -> None:
+    runtime = load_json(RUNTIME_IDENTITY)
+    execution = load_json(EXECUTION_CONTRACT)
+    assert runtime["base_runtime"]["installed_package_manifest_sha256"] == (
+        "4ff2603fa5e0f7033ba773decdcb86abf648dcce22e469d26bc48214e390e104"
+    )
+    assert runtime["base_runtime"]["chromium_sha256"] == (
+        "0498f208c25339f386413ada7b3c35293b0b6250e67d85446ba9541d7fd636f7"
+    )
+    assert runtime["scientific_runtime"]["runner_sha256"] == (
+        "b06793ad1b366a934b798f9f3272fc80a7104a220cb3304ab3bda2eb2a78b331"
+    )
+    assert execution["runtime"]["container_image_digest"] is None
+    assert runtime["replacement_image_policy"]["exact_historical_digest_equality_required"] is (
+        False
+    )
 
 
 def _load_host_runner() -> ModuleType:
@@ -693,7 +778,7 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
             {
                 "schema_version": "0.1.0",
                 "authorization_source_sha256": provider.AUTHORIZATION_SOURCE_SHA256,
-                "authorization_reference": "AUTH-T09-PRAGMATIC-PILOT-2026-08-13",
+                "authorization_reference": "AUTH-T09-PRAGMATIC-RETRY2-2026-08-13",
                 "authorized": True,
                 "single_use": True,
                 "clean_package_commit": package_commit,
@@ -705,6 +790,11 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
                 "lambda_cost_cap_usd": 5.16,
                 "openai_cost_cap_usd": 40.0,
                 "aggregate_cost_cap_usd": 45.16,
+                "prior_t09_cost_usd": 0.414064252316667,
+                "cumulative_t09_cost_cap_usd": 46.0,
+                "replacement_image_policy": (
+                    "one-build-one-qualification-preentry-bound-v1"
+                ),
                 "artifact_destination": (
                     "/Volumes/Macintosh HD - Data/GIC-Lab/t09/sealed-artifacts"
                 ),
@@ -1419,7 +1509,7 @@ def test_host_campaign_admission_counts_setup_and_attempt_actual_time(
 ) -> None:
     host = _load_host_runner()
     now = time.time()
-    state = tmp_path / "pilot-v3/pilot-state.json"
+    state = tmp_path / "pilot-v4/pilot-state.json"
     state.parent.mkdir(parents=True)
     state.write_text(
         json.dumps(
@@ -1462,6 +1552,19 @@ def test_finalized_attempt_streams_before_cutoff_without_aggregate_stage(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     host = _load_host_runner()
+    frozen_sha256 = ""
+    replacement_image_id = "sha256:" + "e" * 64
+    monkeypatch.setattr(
+        host,
+        "load_frozen_run_manifest",
+        lambda *_args, **_kwargs: (
+            {
+                "manifest_id": "RUN-MANIFEST-EXP0001-PILOT-V4-0002",
+                "replacement_image_id": replacement_image_id,
+            },
+            frozen_sha256,
+        ),
+    )
     now = time.time()
     monkeypatch.setattr(host.time, "time", lambda: now)
     command_document = load_json(
@@ -1474,8 +1577,13 @@ def test_finalized_attempt_streams_before_cutoff_without_aggregate_stage(
     artifact_root = tmp_path / "artifacts"
     attempt_root = artifact_root / manifest["permitted_condition_owned"]["output_root"]
     attempt_root.mkdir(parents=True)
-    pilot_root = artifact_root / "pilot-v3"
+    pilot_root = artifact_root / "pilot-v4"
     pilot_root.mkdir(exist_ok=True)
+    (pilot_root / "frozen-run-manifest.json").write_text(
+        json.dumps({"replacement_image_id": replacement_image_id}),
+        encoding="utf-8",
+    )
+    frozen_sha256 = host.file_sha256(pilot_root / "frozen-run-manifest.json")
     (pilot_root / "pilot-state.json").write_text(
         json.dumps(
             {
@@ -1719,6 +1827,32 @@ def test_entered_partial_attempt_emits_schema_valid_invalid_evidence_and_is_cons
         ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
         "T09_PILOT_COMMAND_MANIFESTS.json"
     )
+    replacement_image_id = "sha256:" + "e" * 64
+    frozen_manifest = tmp_path / "frozen-run-manifest.json"
+    frozen_manifest.write_text(
+        json.dumps(
+            {
+                "plan_id": "PLAN-EXP0001-PILOT-V4",
+                "clean_package_commit": "a" * 40,
+                "execution_contract_sha256": contract.sha256,
+                "replacement_image_id": replacement_image_id,
+                "qualification_id": "QUAL-T09-PILOT-V4-IMAGE-0002",
+                "build_context_manifest_sha256": "b" * 64,
+                "package_manifest_sha256": (
+                    "4ff2603fa5e0f7033ba773decdcb86abf648dcce22e469d26bc48214e390e104"
+                ),
+                "chromium_executable_sha256": (
+                    "0498f208c25339f386413ada7b3c35293b0b6250e67d85446ba9541d7fd636f7"
+                ),
+                "patched_upstream_runner_sha256": (
+                    "b06793ad1b366a934b798f9f3272fc80a7104a220cb3304ab3bda2eb2a78b331"
+                ),
+                "empirical_entry_crossed": False,
+                "post_entry_code_science_image_freeze": True,
+            }
+        ),
+        encoding="utf-8",
+    )
     result = finalizer.finalize(
         SimpleNamespace(
             execution_contract=EXECUTION_CONTRACT,
@@ -1729,6 +1863,9 @@ def test_entered_partial_attempt_emits_schema_valid_invalid_evidence_and_is_cons
             attempt_root=attempt_root,
             run_id=attempt.run_id,
             package_commit="a" * 40,
+            frozen_run_manifest=frozen_manifest,
+            frozen_run_manifest_sha256=file_sha256(frozen_manifest),
+            replacement_image_id=replacement_image_id,
             aggregate_ledger=tmp_path / "aggregate-budget.json",
             pilot_state=state_path,
             host_cleanup_receipt=cleanup_path,
