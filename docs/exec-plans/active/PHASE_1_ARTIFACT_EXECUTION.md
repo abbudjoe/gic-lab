@@ -50,7 +50,7 @@ no mutation authority; one gate's authorization never carries into another.
 | P1-DOD-01 | Phase 0.75 is successful/completed; this is the one authoritative active plan; project execution/compute permissions remain false; only the disabled smoke profile is eligible for a later exact authorization. | Plan lifecycle/state/profile/readiness validation and public render. | met |
 | P1-DOD-02 | T07 executes at most the one authorized SiRA smoke pair with complete raw, normalized, regulation-decision, budget, scoring, and cleanup evidence and no interpretation. | Immutable run/authorization records, artifacts/hashes, accounting, cleanup proof, and validation. | met; T08 documents nonblocking fields that T07 did not retain directly |
 | P1-DOD-03 | T08 independently reproduces the smoke summary, separates infrastructure/protocol/upstream/future-track gaps, and leaves any pilot unauthorized. | Raw-to-summary checks, infrastructure-only trace-sufficiency report, review, and gate. | met |
-| P1-DOD-04 | T09 executes only a freshly authorized locked SiRA pilot without outcome-adaptive changes and reconciles every attempt. | Frozen task/order records, complete paired artifacts, budgets, and attempt dispositions. | not-started |
+| P1-DOD-04 | T09 first locks an executable calibration-only SiRA pilot and later executes it only under a fresh exact authorization, without outcome-adaptive changes, while reconciling every entered attempt. | Frozen task/order/evaluator/runtime records, enforced budgets, immutable authorization packet, and later complete attempt dispositions. | partial: static lock package ready; execution not authorized or started |
 | P1-DOD-05 | T10 produces a reproducible exploratory EXP-0001 analysis with uncertainty, exact reproduction level, cost/deviation reporting, and no internalization or mechanism-attribution overclaim. | Validated result summary, registry/notebook/ledger updates, review, and gate. | not-started |
 | P1-DOD-06 | T11 produces a read-only, launch-ready SR²AM-v0.1-8B Lambda contract with current price, hard termination, source-grounded trace requirements, failure tests, and no mutation. | Audited runbook/contracts, dry-run/failure tests, authorization sentence, and gate. | not-started |
 | P1-DOD-07 | T12 launches only the exactly authorized SR²AM smoke, retains and transfers required evidence, reconciles cost, and verifies provider termination. | Immutable cloud attempt, raw artifacts/hashes, compute ledger, monitoring, and terminal-state proof. | not-started |
@@ -67,7 +67,7 @@ no mutation authority; one gate's authorization never carries into another.
 |---|---|---|---|
 | T07 | Execute one authorized contained SiRA smoke pair; capture regulation-decision evidence without interpretation. | P1-DOD-02, P1-DOD-11 through P1-DOD-13 | complete: Retry 2 matched pair executed and cleanup verified; execution authority exhausted; no pilot authority |
 | T08 | Analyze smoke infrastructure evidence and prepare an unauthorized pilot package. | P1-DOD-03, P1-DOD-11 through P1-DOD-13 | complete: evidence validated; pilot planning eligible but execution unauthorized |
-| T09 | Execute the freshly authorized exploratory SiRA pilot. | P1-DOD-04, P1-DOD-11 through P1-DOD-13 | planning package prepared; execution blocked on prerequisites and fresh authorization |
+| T09 | Lock the two-task calibration pilot; execute it only in a later freshly authorized turn. | P1-DOD-04, P1-DOD-11 through P1-DOD-13 | static package ready for exact authorization; execution remains unauthorized and not started |
 | T10 | Analyze and publish the exploratory SiRA pilot. | P1-DOD-05, P1-DOD-11 through P1-DOD-13 | blocked until T09 succeeds |
 | T11 | Build and validate the read-only SR²AM Lambda preflight. | P1-DOD-06, P1-DOD-11 through P1-DOD-13 | blocked until T10 succeeds |
 | T12 | Launch and monitor the separately authorized SR²AM Lambda smoke. | P1-DOD-07, P1-DOD-11 through P1-DOD-13 | blocked until T11 and authorization |
@@ -88,9 +88,10 @@ Historical bounded plan: `PLAN-T07-BOUNDED-SIRA-SMOKE-V3` (preserved, not curren
 execution authority).
 
 T08 evidence-only independent reproduction and infrastructure adjudication is
-complete. The next possible execution package is T09, but it receives no authority
-from T07 or T08 and remains blocked on the T08 readiness prerequisites plus a fresh
-current-turn authorization.
+complete. T09 has closed the static planning prerequisites in calibration plan
+`PLAN-EXP0001-PILOT-V2`. That readiness receives no execution authority from T07,
+T08, or this plan; a fresh exact current-turn authorization and the bound dynamic
+preflight remain mandatory.
 
 Target contract: materialize and execute one matched reactive/simulative pair under an
 exact human-approved provider/model, API-cost cap, wall-time cap, and cleanup contract;
@@ -121,10 +122,30 @@ verdicts after material provenance/control-plane and historical-fixture repairs.
 
 The artifact pair is valid only as a one-step smoke. Both sessions report
 `is_complete: false`; no EXP-0001 outcome, comparative mode claim, GIC/RQ-H2K claim,
-or production-readiness claim follows. Pilot plan `PLAN-EXP0001-PILOT` contains two
-counterbalanced tasks and finite proposed caps, but remains unauthorized and
-`blocked-pending-prerequisites`. Exact DoD and review/gate evidence are in
+or production-readiness claim follows. Historical pilot proposal
+`PLAN-EXP0001-PILOT` contains two counterbalanced tasks and proposed caps, but remains
+preserved and unauthorized. Exact DoD and review/gate evidence are in
 `docs/harness/T08_SIRA_SMOKE_EVIDENCE_LEDGER.md`.
+
+## T09 calibration-pilot lock
+
+Assembly status: **static package complete and ready for exact authorization; no pilot
+execution occurred**.
+
+T09 preserves the original effect-oriented proposal and creates
+`PLAN-EXP0001-PILOT-V2` because calibration-only scientific meaning, the exact
+evaluator, and pair-equal enforced caps are material changes. It freezes the same two
+FanOutQA rows and counterbalanced order; exact SiRA/model/runtime; four fresh attempt
+identities; offline-validated evaluator behavior; per-attempt/pair/aggregate limits;
+automatic Task-A continuation decision; reconstructable post-action/provider/scoring
+evidence; structural redaction; cleanup/termination; and honest zero-GPU accounting.
+
+The static execution and analysis blocker lists are empty. Public raw release remains
+blocked pending license/privacy review and does not block private access-controlled
+execution. Project permissions, parent/child authorization, cloud mutation, provider
+calls, browser use, and pilot execution remain false. See
+`docs/harness/T09_SIRA_EXPLORATORY_PILOT_PLAN.md` and
+`docs/harness/T09_SIRA_PILOT_PREAUTHORIZATION_PACKET.md`.
 
 ### Pragmatic execution reset — 2026-08-12
 
@@ -438,9 +459,9 @@ scientific execution occurred.
 ## Authorization and mutation boundary
 
 Current project state keeps paid compute, prototype execution, benchmark execution,
-training, and cloud mutation false. T07 cannot begin a live action until a later user
-turn names every readiness authorization field. T09 requires a fresh pilot
-authorization. T12 and T14 separately require their exact cloud mutation, hardware,
+training, and cloud mutation false. T07 authority is exhausted. T09 requires a fresh
+pilot authorization binding the exact V2 packet before its dynamic preflight or any
+live action. T12 and T14 separately require their exact cloud mutation, hardware,
 data, cost/time, artifact-transfer, and termination authority. Read-only inspection or
 preflight never supplies mutation authority.
 
@@ -465,8 +486,8 @@ review, and current-turn authority; no earlier gate grants any part of that auth
 ## Progress log
 
 - 2026-08-08: T06 created the Phase 1 control plane after integrating and reviewing
-  Phase 0.75. `PLAN-EXP0001-SMOKE` is the only profile eligible for a later human
-  authorization; the pilot and all SR²AM execution remain blocked.
+  Phase 0.75. At that time `PLAN-EXP0001-SMOKE` was the only profile eligible for a
+  later human authorization; the pilot and all SR²AM execution remained blocked.
 - 2026-08-08: All project execution and compute permissions opened as false. No model,
   API, browser, benchmark, training, cloud, or paid-compute action occurred during the
   transition.

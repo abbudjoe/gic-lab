@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:gic-lab:schema:t09-sira-pilot-execution:0.1.0",
+  "title": "T09 frozen two-task SiRA calibration-pilot execution contract",
+  "type": "object",
+  "required": ["schema_version", "contract_id", "plan_id", "experiment_id", "authorized", "calibration_only", "sira_commit", "model_revision", "service_tier", "randomization_seed", "contract_bindings", "runtime", "runtime_limits", "budget_calibration", "identities", "attempts", "first_pair_checkpoint", "evidence", "gpu_accounting", "cleanup", "interpretation_boundary"],
+  "properties": {
+    "schema_version": {"const": "0.1.0"},
+    "contract_id": {"const": "EXECUTION-CONTRACT-EXP0001-PILOT-V2"},
+    "plan_id": {"const": "PLAN-EXP0001-PILOT-V2"},
+    "experiment_id": {"const": "EXP-0001"},
+    "authorized": {"const": false},
+    "authorization_reference": {"type": "null"},
+    "calibration_only": {"const": true},
+    "sira_commit": {"const": "93fb8d72de71f9a4a13419670adeb34d93cf7acd"},
+    "model_revision": {"const": "gpt-4o-2024-11-20"},
+    "service_tier": {"const": "default"},
+    "randomization_seed": {"const": 42},
+    "contract_bindings": {
+      "type": "object",
+      "required": ["plan", "dataset", "evaluator", "runtime", "execution_schema", "score_schema", "evidence_schema"],
+      "properties": {
+        "plan": {"$ref": "#/$defs/fileBindingWithSize"},
+        "dataset": {"$ref": "#/$defs/fileBinding"},
+        "evaluator": {"$ref": "#/$defs/fileBinding"},
+        "runtime": {"$ref": "#/$defs/fileBinding"},
+        "execution_schema": {"$ref": "#/$defs/fileBinding"},
+        "score_schema": {"$ref": "#/$defs/fileBinding"},
+        "evidence_schema": {"$ref": "#/$defs/fileBinding"}
+      },
+      "additionalProperties": false
+    },
+    "runtime": {"type": "object"},
+    "runtime_limits": {
+      "type": "object",
+      "required": ["expected_browser_actions_per_attempt", "max_browser_actions_per_attempt", "action_timeout_seconds", "max_model_calls_per_attempt", "max_model_tokens_per_attempt", "max_openai_cost_usd_per_attempt", "max_condition_wall_seconds", "max_pair_wall_seconds", "max_total_wall_seconds", "max_output_bytes_per_attempt", "max_disk_bytes", "max_lambda_duration_seconds", "max_lambda_cost_usd", "max_attempts", "max_retries_after_empirical_entry"],
+      "properties": {
+        "expected_browser_actions_per_attempt": {"const": 18},
+        "max_browser_actions_per_attempt": {"const": 30},
+        "action_timeout_seconds": {"const": 30},
+        "max_model_calls_per_attempt": {"const": 1155},
+        "max_model_tokens_per_attempt": {"const": 1000000},
+        "max_openai_cost_usd_per_attempt": {"const": 10.0},
+        "max_condition_wall_seconds": {"const": 3600},
+        "max_pair_wall_seconds": {"const": 7200},
+        "max_total_wall_seconds": {"const": 14400},
+        "max_output_bytes_per_attempt": {"const": 2147483648},
+        "max_disk_bytes": {"const": 12884901888},
+        "max_lambda_duration_seconds": {"const": 14400},
+        "max_lambda_cost_usd": {"const": 5.16},
+        "max_attempts": {"const": 4},
+        "max_retries_after_empirical_entry": {"const": 0}
+      },
+      "additionalProperties": true
+    },
+    "budget_calibration": {"type": "object"},
+    "identities": {"type": "object"},
+    "attempts": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "required": ["run_id", "pair_id", "task_id", "task_index", "condition", "order_index", "output_root", "condition_plan_path", "condition_plan_sha256", "giclab_commit", "upstream_argv"],
+        "properties": {
+          "run_id": {"type": "string", "pattern": "^RUN-EXP0001-PILOT-V2-TASK-[AB]-(?:REACTIVE|SIMULATIVE)$"},
+          "pair_id": {"enum": ["PAIR-EXP0001-PILOT-V2-TASK-A", "PAIR-EXP0001-PILOT-V2-TASK-B"]},
+          "task_id": {"enum": ["7dcbbbdc7f1120cd", "2120afba8009bad3"]},
+          "task_index": {"enum": [0, 1]},
+          "condition": {"enum": ["reactive", "simulative"]},
+          "order_index": {"enum": [1, 2]},
+          "output_root": {"type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"},
+          "condition_plan_path": {"type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"},
+          "condition_plan_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "giclab_commit": {"oneOf": [{"type": "string", "pattern": "^[a-f0-9]{40}$"}, {"const": "unknown"}]},
+          "upstream_argv": {"type": "array", "minItems": 20, "items": {"type": "string"}}
+        },
+        "additionalProperties": false
+      }
+    },
+    "first_pair_checkpoint": {"type": "object", "required": ["required", "continue_only_if", "failure_action", "sampling_claim"]},
+    "evidence": {"type": "object"},
+    "gpu_accounting": {"type": "object"},
+    "cleanup": {"type": "object"},
+    "interpretation_boundary": {"type": "object"}
+  },
+  "$defs": {
+    "fileBinding": {
+      "type": "object",
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"},
+        "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+      },
+      "additionalProperties": false
+    },
+    "fileBindingWithSize": {
+      "type": "object",
+      "required": ["path", "sha256", "size_bytes"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"},
+        "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "size_bytes": {"type": "integer", "minimum": 1}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

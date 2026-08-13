@@ -69,7 +69,7 @@ def test_scientific_protocol_locks_sampling_estimand_retry_and_release() -> None
         "replications": 1,
         "seeds": [42],
     }
-    assert "within-task paired difference" in protocol["metrics"]["primary"]
+    assert "no aggregate effect estimate" in protocol["metrics"]["primary"]
     assert config["sampling"]["pilot"]["tasks"][0]["order"] == [
         "SIRA-REACTIVE",
         "SIRA-SIMULATIVE",
@@ -79,7 +79,7 @@ def test_scientific_protocol_locks_sampling_estimand_retry_and_release() -> None
         "SIRA-REACTIVE",
     ]
     assert config["retry_and_exclusion"]["task_failure_is_exclusion"] is False
-    assert config["retry_and_exclusion"]["new_attempt_identity_for_infrastructure_retry"]
+    assert not config["retry_and_exclusion"]["new_attempt_identity_for_infrastructure_retry"]
     assert config["raw_retention"]["hash_before_normalization"]
     assert config["raw_retention"]["public_release"].startswith("blocked-")
     assert protocol["validity"]["invalid_run_criteria"]
@@ -96,14 +96,14 @@ def test_smoke_and_pilot_profiles_and_condition_plans_validate() -> None:
     assert smoke["sampling"]["pair_count"] == 1
     assert smoke["interpretation_allowed"] is False
     assert pilot["sampling"]["pair_count"] == 2
-    assert "effect size or power" in pilot["sample_rationale"]
+    assert "cannot estimate an effect" in pilot["sample_rationale"]
     assert smoke["execution"]["authorized"] is False
     assert pilot["execution"]["authorized"] is False
     assert smoke["readiness"]["execution_eligibility"] == "eligible-after-authorization"
     assert smoke["readiness"]["unresolved_execution_blockers"] == []
     assert smoke["readiness"]["pre_execution_requirements"]
-    assert pilot["readiness"]["execution_eligibility"] == "blocked-pending-prerequisites"
-    assert pilot["readiness"]["unresolved_execution_blockers"]
+    assert pilot["readiness"]["execution_eligibility"] == "eligible-after-authorization"
+    assert pilot["readiness"]["unresolved_execution_blockers"] == []
     assert set(smoke["sampling"]["conditions"]) == CONDITIONS
     assert set(pilot["sampling"]["conditions"]) == CONDITIONS
 
@@ -149,6 +149,7 @@ def test_v01_profile_schema_remains_readable_while_current_readiness_policy_is_s
 
     pilot = load_yaml(EXP_ROOT / "run-plans/pilot.yaml")
     unblocked_but_ineligible = deepcopy(pilot)
+    unblocked_but_ineligible["readiness"]["execution_eligibility"] = "blocked-pending-prerequisites"
     unblocked_but_ineligible["readiness"]["unresolved_execution_blockers"] = []
     assert validate_instance(unblocked_but_ineligible, schema) == []
     assert validate_run_profile_readiness(unblocked_but_ineligible)
@@ -159,7 +160,7 @@ def test_v01_profile_schema_remains_readable_while_current_readiness_policy_is_s
         "authorization_reference": "AUTH-EXP0001-PILOT",
     }
     assert validate_instance(unauthorized_only, schema) == []
-    assert validate_run_profile_readiness(unauthorized_only)
+    assert validate_run_profile_readiness(unauthorized_only) == []
 
 
 def test_authorization_transition_is_schema_valid_but_does_not_execute() -> None:

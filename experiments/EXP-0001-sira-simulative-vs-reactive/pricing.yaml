@@ -1,9 +1,9 @@
 schema_version: 0.1.0
-record_id: PRICE-OPENAI-GPT4O-2026-08-08
+record_id: PRICE-OPENAI-GPT4O-2026-08-13
 provider: OpenAI
-service_tier: standard
+service_tier: default
 currency: USD
-retrieved_at: "2026-08-08"
+retrieved_at: "2026-08-13"
 source: https://developers.openai.com/api/docs/models/gpt-4o
 model_manifest_id: MODEL-OPENAI-GPT4O-2024-11-20
 model_family: gpt-4o
@@ -33,6 +33,6 @@ authorization:
   smoke: false
   pilot: false
 limitations:
-  - Prices are a dated proposal and must be reverified before any later authorization.
-  - The current upstream command does not enforce the declared token or cost ceilings.
+  - Prices are a dated proposal and receive one read-only reverification in the exact preflight before an authorized execution.
+  - T09 runtime counters enforce calls, returned token usage, and derived OpenAI cost before another provider operation.
   - No provider, model, API, browser, or evaluator call was made to create this record.

@@ -1,6 +1,6 @@
 # T08 SiRA pilot readiness
 
-Status: **pilot protocol preparation eligible; pilot execution blocked and unauthorized**
+Status: **historical T08 readiness record; superseded by the T09 lock package**
 
 Plan: `PLAN-EXP0001-PILOT`
 
@@ -55,3 +55,13 @@ one-step USD 0.0403325 cost is not a full-task cost estimate or pilot evidence.
 Until every blocker is closed, `execution.authorized` stays false, project execution
 permissions stay false, child command bindings stay null/unknown, and no T09 run may
 begin.
+
+## T09 supersession — 2026-08-13
+
+T09 preserved this snapshot and resolved its static evaluator, GPU-accounting,
+identity, runtime-cap, post-action evidence, structural-redaction, dataset/license,
+pair-diff, and protocol blockers in `PLAN-EXP0001-PILOT-V2`. The resulting calibration
+package is `ready-for-t09-pilot-authorization`; no execution is authorized or has
+occurred. Public raw release remains blocked separately. A later exact authorization
+must bind the final clean packet and then pass the one dynamic preflight before any
+empirical entry.

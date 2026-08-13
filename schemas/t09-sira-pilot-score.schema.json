@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:gic-lab:schema:t09-sira-pilot-score:0.1.0",
+  "title": "T09 SiRA calibration-pilot attempt outcome and score",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "plan_id",
+    "run_id",
+    "task_id",
+    "pair_id",
+    "condition",
+    "process_exit",
+    "artifact_execution",
+    "task_completion",
+    "answer_production",
+    "evaluator_validity",
+    "task_score",
+    "valid_scored_attempt",
+    "invalid_infrastructure_attempt",
+    "condition_failure",
+    "missing_evidence",
+    "evaluator_failure",
+    "score_provenance"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1.0"},
+    "plan_id": {"const": "PLAN-EXP0001-PILOT-V2"},
+    "run_id": {"type": "string", "pattern": "^RUN-EXP0001-PILOT-V2-TASK-[AB]-(?:REACTIVE|SIMULATIVE)$"},
+    "task_id": {"enum": ["7dcbbbdc7f1120cd", "2120afba8009bad3"]},
+    "pair_id": {"enum": ["PAIR-EXP0001-PILOT-V2-TASK-A", "PAIR-EXP0001-PILOT-V2-TASK-B"]},
+    "condition": {"enum": ["SIRA-REACTIVE", "SIRA-SIMULATIVE"]},
+    "process_exit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["observed", "code", "zero"],
+      "properties": {
+        "observed": {"type": "boolean"},
+        "code": {"type": ["integer", "null"]},
+        "zero": {"type": ["boolean", "null"]}
+      }
+    },
+    "artifact_execution": {"type": "boolean"},
+    "task_completion": {"enum": ["completed", "incomplete"]},
+    "answer_production": {"type": "boolean"},
+    "evaluator_validity": {"type": "boolean"},
+    "task_score": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+    "valid_scored_attempt": {"type": "boolean"},
+    "invalid_infrastructure_attempt": {"type": "boolean"},
+    "condition_failure": {"type": "boolean"},
+    "missing_evidence": {"type": "boolean"},
+    "evaluator_failure": {"type": "boolean"},
+    "score_provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evaluator_revision", "evaluator_sha256", "dataset_revision", "raw_evaluator_output_sha256", "normalization"],
+      "properties": {
+        "evaluator_revision": {"const": "93fb8d72de71f9a4a13419670adeb34d93cf7acd"},
+        "evaluator_sha256": {"const": "2f99ec6ca40a5d5b49beea61c71d55a85652697b07f92a1c2aaefe85e727ab79"},
+        "dataset_revision": {"const": "76ad1feb689b754bfe4e5e24d3ea371b647efa67"},
+        "raw_evaluator_output_sha256": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"},
+        "normalization": {"const": "exact-upstream-no-renormalization"}
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"evaluator_validity": {"const": true}}, "required": ["evaluator_validity"]},
+      "then": {"properties": {"task_score": {"type": "number"}, "evaluator_failure": {"const": false}}},
+      "else": {"properties": {"task_score": {"type": "null"}, "evaluator_failure": {"const": true}}}
+    },
+    {
+      "if": {"properties": {"task_completion": {"const": "completed"}}, "required": ["task_completion"]},
+      "then": {"properties": {"answer_production": {"const": true}}}
+    }
+  ]
+}

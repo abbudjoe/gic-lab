@@ -8,8 +8,9 @@ title: "EXP-0001 — SiRA simulative versus reactive protocol"
 **pending**. One T07 one-step reactive/simulative artifact smoke occurred and T08
 adjudicated it as a valid matched pair with documented evidence gaps. Both sessions
 recorded `is_complete: false`, so task completion was not observed. The smoke contains
-no EXP-0001 measurement or outcome. No pilot or FanOut evaluator/benchmark run has
-occurred, and execution authorization is false.
+no EXP-0001 measurement or outcome. No pilot or live FanOut task has occurred, and
+execution authorization is false. T09 has frozen an exact calibration-only pilot
+package that is ready for a separate authorization.
 
 ## Locked exploratory comparison
 
@@ -21,9 +22,10 @@ The smoke is one minimal matched pair on the pinned README query and prohibits
 interpretation. Its retained aggregate was 9 model calls, 11,588 tokens, two browser
 actions, 39.397 seconds, and USD 0.0403325; these are artifact-execution accounting,
 not comparative results or representative full-task costs. The pilot is two
-counterbalanced FanOutQA task pairs selected only to
-exercise paired execution, deterministic scoring, and variance plumbing. It is not an
-effect-size-based sample and cannot support a confirmatory or adequately powered
+counterbalanced FanOutQA task pairs selected only to exercise full completion, exact
+deterministic scoring, matched execution, reconstruction, gross floor/ceiling checks,
+and cost calibration. It cannot estimate an effect or variance, support significance
+or condition superiority, accept/reject EXP-0001, or support an H2K/GIC architectural
 claim.
 
 The historical upstream run used the mutable `gpt-4o` alias without an immutable
@@ -40,9 +42,23 @@ blocked pending licensing, privacy, and redaction review.
 T08 classifies cleanup as verified with a nonmaterial gap: private provider-response
 artifacts retained inactive ephemeral Jupyter access fields beyond the historical API-
 key scan. No values are published, the provider instance is terminally absent, and
-future retention must omit or structurally redact them. Pilot protocol preparation is
-eligible, but `PLAN-EXP0001-PILOT` remains unauthorized and blocked on evaluator,
-runtime, protocol-budget, provider, privacy, identity, and fresh-authorization gates.
+future retention must omit or structurally redact them. T09 resolved the static
+evaluator, dataset, runtime-cap, evidence, pair, budget, and identity blockers in
+`PLAN-EXP0001-PILOT-V2`. The plan is ready for a fresh exact authorization but remains
+unauthorized. The later authorized turn must pass one exact dynamic preflight, enforce
+the Task-A continuation checkpoint and every cap, terminate the exact provider
+resource, and verify zero instances.
+
+The exact upstream evaluator is deliberately not repaired or renormalized. Offline
+fixtures show Task A's ordinary correct prose scoring 0.9 (with a normalization-edge
+fixture at 1.0) and Task B's correct currency-answer fixture scoring 0.5 because of
+the pinned evaluator's dollar-sign word-boundary behavior. These are evaluator
+properties, not pilot results, and require task-level descriptive reporting only.
+
+The FanOutQA rows are CC-BY-SA-4.0 and private access-controlled research retention is
+permitted. Public raw tasks, answers, traces, and screenshots remain blocked pending
+attribution/share-alike, third-party-content, privacy, and redaction review. This
+publication-only restriction does not authorize or block the private pilot itself.
 
 The protocol also retains source-grounded regulation-decision provenance for the
 planned/deferred `RQ-H2K` track. This is an additive evidence-preservation appendix,

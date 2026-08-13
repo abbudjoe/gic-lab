@@ -249,11 +249,13 @@ class ProviderBudgetBoundary:
         condition_caps: ProviderBudgetCaps,
         monotonic: Callable[[], float] = time.monotonic,
         persist: Callable[[ProviderBudgetUsage, int], None] | None = None,
+        initial_aggregate_usage: ProviderBudgetUsage | None = None,
+        persist_aggregate: Callable[[ProviderBudgetUsage, int], None] | None = None,
     ) -> None:
         self.routing = routing
         self.aggregate_caps = aggregate_caps
         self.condition_caps = condition_caps
-        self.aggregate_usage = ProviderBudgetUsage()
+        self.aggregate_usage = initial_aggregate_usage or ProviderBudgetUsage()
         self.condition_usage = ProviderBudgetUsage()
         self._aggregate_reserved = ProviderBudgetUsage()
         self._condition_reserved = ProviderBudgetUsage()
@@ -262,10 +264,18 @@ class ProviderBudgetBoundary:
         self._started = monotonic()
         self.unreconciled_provider_attempts = 0
         self._persist = persist
+        self._persist_aggregate = persist_aggregate
+        if initial_aggregate_usage is not None:
+            self._assert_usage(self.aggregate_usage, self.aggregate_caps, scope="aggregate")
 
     def _persist_state(self) -> None:
         if self._persist is not None:
             self._persist(self.condition_usage, self.unreconciled_provider_attempts)
+        if self._persist_aggregate is not None:
+            self._persist_aggregate(
+                self.aggregate_usage,
+                self.unreconciled_provider_attempts,
+            )
 
     @staticmethod
     def _cost(input_tokens: int, cached_tokens: int, output_tokens: int) -> float:
@@ -334,6 +344,8 @@ class ProviderBudgetBoundary:
         self,
         request: ProviderRequest,
         send: Callable[[ProviderRequest], tuple[T, ProviderResponseUsage]],
+        *,
+        before_send: Callable[[], None] | None = None,
     ) -> T:
         """Preflight one maximum envelope, send once, then reconcile actual usage."""
 
@@ -369,6 +381,8 @@ class ProviderBudgetBoundary:
                     model_call_attempts=1,
                 )
                 self._assert_usage(projected, caps, scope=scope)
+            if before_send is not None:
+                before_send()
             object.__setattr__(
                 self,
                 "aggregate_usage",
@@ -391,12 +405,12 @@ class ProviderBudgetBoundary:
                     model_call_attempts=1,
                 ),
             )
+            self.unreconciled_provider_attempts += 1
             self._persist_state()
         try:
             result, actual = send(request)
         except Exception:
             with self._lock:
-                self.unreconciled_provider_attempts += 1
                 self._persist_state()
                 self._assert_usage(self.aggregate_usage, self.aggregate_caps, scope="aggregate")
                 self._assert_usage(self.condition_usage, self.condition_caps, scope="condition")
@@ -433,6 +447,9 @@ class ProviderBudgetBoundary:
                     default_service_tier_responses=1,
                 ),
             )
+            if self.unreconciled_provider_attempts <= 0:
+                raise GateAContractError("provider reconciliation state underflow")
+            self.unreconciled_provider_attempts -= 1
             self._assert_usage(self.aggregate_usage, self.aggregate_caps, scope="aggregate")
             self._assert_usage(self.condition_usage, self.condition_caps, scope="condition")
             self._persist_state()
@@ -490,20 +507,27 @@ class ProviderBudgetBoundary:
             self._subtract_usage(self._condition_reserved, reservation),
         )
 
-    def record_browser_action(self) -> None:
-        self._record_nonprovider(browser_actions=1)
+    def record_browser_action(self, *, before_action: Callable[[], None] | None = None) -> None:
+        self._record_nonprovider(before_operation=before_action, browser_actions=1)
 
     def record_output_bytes(self, count: int) -> None:
         if type(count) is not int or count < 0:
             raise GateAContractError("output-byte increment must be non-negative")
         self._record_nonprovider(output_bytes=count)
 
-    def _record_nonprovider(self, **increments: int) -> None:
+    def _record_nonprovider(
+        self,
+        *,
+        before_operation: Callable[[], None] | None = None,
+        **increments: int,
+    ) -> None:
         with self._lock:
             aggregate = self._add_usage(self.aggregate_usage, **increments)
             condition = self._add_usage(self.condition_usage, **increments)
             self._assert_usage(aggregate, self.aggregate_caps, scope="aggregate")
             self._assert_usage(condition, self.condition_caps, scope="condition")
+            if before_operation is not None:
+                before_operation()
             object.__setattr__(self, "aggregate_usage", aggregate)
             object.__setattr__(self, "condition_usage", condition)
             self._persist_state()

@@ -61,6 +61,9 @@ SCHEMA_FILES = (
     "schemas/t07-lambda-host-qualification-incident.schema.json",
     "schemas/t08-sira-smoke-adjudication.schema.json",
     "schemas/t08-sira-smoke-pair-diff.schema.json",
+    "schemas/t09-sira-pilot-score.schema.json",
+    "schemas/t09-sira-pilot-evidence.schema.json",
+    "schemas/t09-sira-pilot-execution.schema.json",
 )
 REQUIRED_PATHS = (
     "AGENTS.md",
@@ -77,6 +80,11 @@ REQUIRED_PATHS = (
     "docs/SECURITY_AND_SECRETS.md",
     "docs/PLANS.md",
     "docs/PROJECT_STATE.yaml",
+    "docs/harness/T09_SIRA_EXPLORATORY_PILOT_PLAN.md",
+    "docs/harness/T09_SIRA_PILOT_PREAUTHORIZATION_PACKET.md",
+    "docs/harness/T09_SIRA_PILOT_IMPLEMENTATION_LEDGER.md",
+    "docs/harness/T09_SIRA_PILOT_EVALUATOR_CONTRACT.md",
+    "docs/harness/T09_SIRA_PILOT_DATASET_CONTRACT.md",
     "docs/exec-plans/active",
     "docs/exec-plans/completed",
     "docs/handoffs/INITIAL_CONVERSATION_SUMMARY.md",
@@ -736,19 +744,12 @@ def validate_experiment_run_profiles(root: Path = ROOT) -> list[str]:
                                 errors.append(f"{label}: matched pair drifts on {key}")
                         left_budget = left.get("budget")
                         right_budget = right.get("budget")
-                        if isinstance(left_budget, dict) and isinstance(right_budget, dict):
-                            left_fixed_budget = {
-                                key: value
-                                for key, value in left_budget.items()
-                                if key != "max_model_calls"
-                            }
-                            right_fixed_budget = {
-                                key: value
-                                for key, value in right_budget.items()
-                                if key != "max_model_calls"
-                            }
-                            if left_fixed_budget != right_fixed_budget:
-                                errors.append(f"{label}: matched pair drifts on fixed budget")
+                        if (
+                            isinstance(left_budget, dict)
+                            and isinstance(right_budget, dict)
+                            and left_budget != right_budget
+                        ):
+                            errors.append(f"{label}: matched pair drifts on fixed budget")
                         left_sources = left.get("sources")
                         right_sources = right.get("sources")
                         if isinstance(left_sources, dict) and isinstance(right_sources, dict):
@@ -757,6 +758,7 @@ def validate_experiment_run_profiles(root: Path = ROOT) -> list[str]:
                                 "upstream_source_id",
                                 "upstream_commit",
                                 "protocol_sha256",
+                                "config_sha256",
                                 "model_revision",
                                 "dataset_revision",
                                 "environment_sha256",
@@ -1004,7 +1006,7 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
             errors.append(f"EXP-0001 {name}: current authorization must remain false")
         expected_readiness = {
             "smoke": "eligible-after-authorization",
-            "pilot": "blocked-pending-prerequisites",
+            "pilot": "eligible-after-authorization",
         }[name]
         if profile.get("readiness", {}).get("execution_eligibility") != expected_readiness:
             errors.append(f"EXP-0001 {name}: execution eligibility drift")
@@ -1128,6 +1130,209 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
         or dataset_entry.get("sha256") != pilot_dataset.get("dataset_sha256")
     ):
         errors.append("EXP-0001: dataset manifest identity does not resolve")
+
+    contract_root = exp_root / "contracts"
+    execution_path = contract_root / "T09_PILOT_EXECUTION_CONTRACT.json"
+    runtime_path = contract_root / "T09_PILOT_RUNTIME_IDENTITY.json"
+    command_path = contract_root / "T09_PILOT_COMMAND_MANIFESTS.json"
+    required_contracts = (
+        contract_root / "T09_PILOT_DATASET_CONTRACT.json",
+        contract_root / "T09_PILOT_EVALUATOR_CONTRACT.json",
+        execution_path,
+        runtime_path,
+        command_path,
+    )
+    missing_contracts = [
+        path.relative_to(root).as_posix() for path in required_contracts if not path.is_file()
+    ]
+    if missing_contracts:
+        errors.append(
+            "EXP-0001 T09: required machine contracts missing: " + ", ".join(missing_contracts)
+        )
+        return errors
+
+    execution = load_json(execution_path)
+    errors.extend(
+        f"EXP-0001 T09 execution: {error}"
+        for error in validate_instance(
+            execution, root / "schemas/t09-sira-pilot-execution.schema.json"
+        )
+    )
+    bindings = execution.get("contract_bindings")
+    if not isinstance(bindings, dict):
+        errors.append("EXP-0001 T09: execution contract bindings are malformed")
+    else:
+        expected_binding_names = {
+            "plan",
+            "dataset",
+            "evaluator",
+            "runtime",
+            "execution_schema",
+            "score_schema",
+            "evidence_schema",
+        }
+        if set(bindings) != expected_binding_names:
+            errors.append("EXP-0001 T09: execution contract binding names drifted")
+        for label, raw in bindings.items():
+            if not isinstance(label, str) or not isinstance(raw, dict):
+                continue
+            binding_relative = raw.get("path")
+            digest = raw.get("sha256")
+            if not isinstance(binding_relative, str) or not isinstance(digest, str):
+                errors.append(f"EXP-0001 T09: {label} binding lacks path or SHA-256")
+                continue
+            relative_path = Path(binding_relative)
+            if relative_path.is_absolute() or ".." in relative_path.parts:
+                errors.append(f"EXP-0001 T09: {label} binding path is unsafe")
+                continue
+            bound = root / relative_path
+            if not bound.is_file():
+                errors.append(f"EXP-0001 T09: {label} binding path does not resolve")
+                continue
+            observed_digest = hashlib.sha256(bound.read_bytes()).hexdigest()
+            if observed_digest != digest:
+                errors.append(f"EXP-0001 T09: {label} binding SHA-256 drifted")
+            size = raw.get("size_bytes")
+            if size is not None and size != bound.stat().st_size:
+                errors.append(f"EXP-0001 T09: {label} binding byte size drifted")
+
+    runtime_identity = load_json(runtime_path)
+    instrumentation = runtime_identity.get("repository_instrumentation")
+    files = instrumentation.get("files") if isinstance(instrumentation, dict) else None
+    if not isinstance(files, list) or not files:
+        errors.append("EXP-0001 T09: runtime instrumentation file bindings are missing")
+    else:
+        for raw in files:
+            if not isinstance(raw, dict):
+                errors.append("EXP-0001 T09: runtime instrumentation binding is malformed")
+                continue
+            file_relative = raw.get("path")
+            digest = raw.get("sha256")
+            if not isinstance(file_relative, str) or not isinstance(digest, str):
+                errors.append("EXP-0001 T09: runtime instrumentation binding is incomplete")
+                continue
+            relative_path = Path(file_relative)
+            if relative_path.is_absolute() or ".." in relative_path.parts:
+                errors.append("EXP-0001 T09: runtime instrumentation path is unsafe")
+                continue
+            bound = root / relative_path
+            if not bound.is_file() or hashlib.sha256(bound.read_bytes()).hexdigest() != digest:
+                errors.append(f"EXP-0001 T09: runtime file binding drifted: {file_relative}")
+
+    command_document = load_json(command_path)
+    execution_sha256 = hashlib.sha256(execution_path.read_bytes()).hexdigest()
+    plan_path = exp_root / "run-plans/pilot.yaml"
+    if (
+        command_document.get("schema_version") != "0.1.0"
+        or command_document.get("plan_id") != "PLAN-EXP0001-PILOT-V2"
+        or command_document.get("execution_contract_sha256") != execution_sha256
+        or command_document.get("plan_sha256") != hashlib.sha256(plan_path.read_bytes()).hexdigest()
+    ):
+        errors.append("EXP-0001 T09: command package identity or contract binding drifted")
+    generator_relative = command_document.get("generator_path")
+    generator_sha256 = command_document.get("generator_sha256")
+    if (
+        not isinstance(generator_relative, str)
+        or Path(generator_relative).is_absolute()
+        or ".." in Path(generator_relative).parts
+        or not isinstance(generator_sha256, str)
+        or not (root / generator_relative).is_file()
+        or hashlib.sha256((root / generator_relative).read_bytes()).hexdigest()
+        != generator_sha256
+    ):
+        errors.append("EXP-0001 T09: command generator binding drifted")
+    try:
+        from giclab.harness.t09_sira_pilot import (
+            diff_pair_manifests,
+            load_execution_contract,
+            render_command_manifest,
+        )
+
+        typed_contract = load_execution_contract(
+            execution_path,
+            expected_sha256=execution_sha256,
+        )
+        runtime_sha256 = hashlib.sha256(
+            (root / "src/giclab/harness/sira_gate_a_runtime.py").read_bytes()
+        ).hexdigest()
+        library_sha256 = hashlib.sha256(
+            (root / "src/giclab/harness/t09_sira_pilot.py").read_bytes()
+        ).hexdigest()
+        rendered = [
+            render_command_manifest(
+                typed_contract,
+                attempt,
+                execution_contract_runtime_path="/opt/giclab-contracts/execution.json",
+                runtime_adaptation_path=(
+                    "/opt/giclab-src/giclab/harness/sira_gate_a_runtime.py"
+                ),
+                runtime_adaptation_sha256=runtime_sha256,
+                pilot_library_sha256=library_sha256,
+                aggregate_ledger_path=(
+                    "/opt/giclab-artifacts/pilot-v2/aggregate-budget.json"
+                ),
+                pilot_state_path="/opt/giclab-artifacts/pilot-v2/pilot-state.json",
+            )
+            for attempt in typed_contract.attempts
+        ]
+        if command_document.get("manifests") != rendered:
+            errors.append("EXP-0001 T09: frozen command manifests differ from exact rerender")
+        expected_diffs = [
+            diff_pair_manifests(rendered[0], rendered[1]),
+            diff_pair_manifests(rendered[2], rendered[3]),
+        ]
+        if command_document.get("pair_diffs") != expected_diffs or any(
+            item.get("valid") is not True for item in expected_diffs
+        ):
+            errors.append("EXP-0001 T09: command/config pair equality failed")
+        commits = {attempt.giclab_commit for attempt in typed_contract.attempts}
+        if len(commits) != 1 or "unknown" in commits:
+            errors.append("EXP-0001 T09: reviewed implementation ancestor is not bound")
+        else:
+            reviewed_ancestor = next(iter(commits))
+            if command_document.get("reviewed_implementation_ancestor") != reviewed_ancestor:
+                errors.append("EXP-0001 T09: command/reviewed-ancestor binding drifted")
+            if isinstance(files, list):
+                for raw in files:
+                    if not isinstance(raw, dict):
+                        continue
+                    relative_path = raw.get("path")
+                    expected_digest = raw.get("sha256")
+                    if not isinstance(relative_path, str) or not isinstance(
+                        expected_digest, str
+                    ):
+                        continue
+                    historical = subprocess.run(
+                        [
+                            "git",
+                            "-C",
+                            str(root),
+                            "show",
+                            f"{reviewed_ancestor}:{relative_path}",
+                        ],
+                        stdin=subprocess.DEVNULL,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.DEVNULL,
+                        check=False,
+                    )
+                    if (
+                        historical.returncode != 0
+                        or hashlib.sha256(historical.stdout).hexdigest() != expected_digest
+                    ):
+                        errors.append(
+                            "EXP-0001 T09: reviewed ancestor runtime bytes drifted: "
+                            + relative_path
+                        )
+        for attempt in typed_contract.attempts:
+            condition_path = root / attempt.condition_plan_path
+            if (
+                not condition_path.is_file()
+                or hashlib.sha256(condition_path.read_bytes()).hexdigest()
+                != attempt.condition_plan_sha256
+            ):
+                errors.append(f"EXP-0001 T09: condition binding drifted: {attempt.run_id}")
+    except (OSError, ValueError) as exc:
+        errors.append(f"EXP-0001 T09: typed execution/command contract failed: {exc}")
     return errors
 
 

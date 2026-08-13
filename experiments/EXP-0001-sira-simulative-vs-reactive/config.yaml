@@ -13,10 +13,10 @@ fixed_runtime:
   upstream_commit: 93fb8d72de71f9a4a13419670adeb34d93cf7acd
   upstream_uv_lock_sha256: 138585129c7f369887591d30d9727f8dd466639fa78fb00adc5a04f1e9b2d76e
   python: ">=3.10,<3.13"
-  preferred_python: "3.10"
+  preferred_python: "3.11.14"
   browsergym_core: 0.3.6.dev0
   playwright: 1.39.0
-  chromium_revision: null
+  chromium_revision: "1084"
   agent: sira
   upstream_model_alias: gpt-4o
   provider: OpenAI
@@ -81,11 +81,11 @@ sampling:
           - SIRA-REACTIVE
 retry_and_exclusion:
   outer_retry_count: 0
-  preserve_intrinsic_provider_and_parser_retries: true
-  new_attempt_identity_for_infrastructure_retry: true
+  preserve_intrinsic_provider_and_parser_retries: false
+  new_attempt_identity_for_infrastructure_retry: false
   task_failure_is_exclusion: false
-  pairwise_complete_case_only: true
-  rerun_both_conditions_after_pair_contract_invalidity: true
+  pairwise_complete_case_only: false
+  rerun_both_conditions_after_pair_contract_invalidity: false
   exclusion_reasons:
     - source-or-environment-identity-mismatch
     - configuration-or-task-drift
@@ -105,3 +105,5 @@ notes:
   - Reactive and simulative modes are external experiment assignments.
   - Assignment is not evidence of learned or internal regulation.
   - No execution is authorized by this configuration.
+  - The two-task pilot is calibration only; it cannot estimate an effect, variance, significance, condition superiority, or EXP-0001 outcome.
+  - The exact upstream evaluator is not renormalized; Task B has a frozen correct-answer fixture ceiling of 0.5 under its dollar-sign word-boundary behavior.

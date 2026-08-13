@@ -1,0 +1,195 @@
+{
+  "schema_version": "0.1.0",
+  "contract_id": "EVALUATOR-CONTRACT-EXP0001-PILOT-V2",
+  "plan_id": "PLAN-EXP0001-PILOT-V2",
+  "identity": {
+    "name": "SiRA pinned FanOutQA evaluator",
+    "repository": "https://github.com/sailing-lab/sira",
+    "revision": "93fb8d72de71f9a4a13419670adeb34d93cf7acd",
+    "license": "Apache-2.0",
+    "judge_model": null,
+    "judge_prompt": null,
+    "provider_request_required": false,
+    "files": [
+      {
+        "path": "evaluation/fanout/evaluator.py",
+        "sha256": "2f99ec6ca40a5d5b49beea61c71d55a85652697b07f92a1c2aaefe85e727ab79"
+      },
+      {
+        "path": "evaluation/fanout/run.py",
+        "sha256": "e6741326a4b0d3a1fe542748d03c86f1e15f87c3de25b4937e17b3e2472afd17"
+      },
+      {
+        "path": "evaluation/fanout/utils/helpers.py",
+        "sha256": "e816bb09d232d820edfc090ff7b2f8f5a4674f27e30b87a9a8d876ffd82c681e"
+      },
+      {
+        "path": "evaluation/fanout/utils/models.py",
+        "sha256": "9638bc652ced674d3c6ff4b63148a913070cee01f350ca773dcbfa2ed1b01cd3"
+      },
+      {
+        "path": "evaluation/fanout/utils/norm.py",
+        "sha256": "c0a5da77ab7014bbb86e8310310b538881f01129d594afc537dd17d565b40eff"
+      }
+    ]
+  },
+  "materialization": {
+    "python": "3.11.14",
+    "dependency_group": "evaluator",
+    "lock_path": "uv.lock",
+    "lock_sha256": "bec09cf0d326c56af9f717782eef9160579e7720dff701083570df9aa712b34b",
+    "direct_packages": [
+      "ftfy==6.3.1",
+      "rouge-score==0.1.2",
+      "spacy==3.8.11",
+      "tqdm==4.67.3",
+      "en-core-web-sm==3.8.0"
+    ],
+    "nlp_asset": {
+      "package": "en-core-web-sm",
+      "version": "3.8.0",
+      "wheel_sha256": "1932429db727d4bff3deed6b34cfc05df17794f4a52eeb26cf8928f7c1a0fb85",
+      "package_license": "MIT",
+      "pipeline_components": [
+        "tok2vec",
+        "tagger",
+        "parser",
+        "attribute_ruler",
+        "lemmatizer",
+        "ner"
+      ],
+      "training_sources": [
+        {
+          "name": "OntoNotes 5.0",
+          "identity": "LDC2013T19",
+          "terms": "LDC-distribution-license; source corpus is not redistributed by GIC Lab"
+        },
+        {
+          "name": "ClearNLP constituent-to-dependency conversion",
+          "terms": "upstream-model-provenance-only; conversion source is not redistributed by GIC Lab"
+        },
+        {
+          "name": "WordNet 3.0",
+          "terms": "WordNet-3.0-license; source corpus is not redistributed by GIC Lab"
+        }
+      ]
+    },
+    "dependency_license_inventory": [
+      "absl-py==2.5.0|Apache-2.0",
+      "annotated-doc==0.0.5|MIT",
+      "annotated-types==0.8.0|MIT",
+      "blis==1.3.3|BSD",
+      "catalogue==2.0.10|MIT",
+      "certifi==2026.7.22|MPL-2.0",
+      "charset-normalizer==3.5.0|MIT",
+      "click==8.4.2|BSD-3-Clause",
+      "cloudpathlib==0.24.0|MIT",
+      "confection==0.1.5|MIT",
+      "cymem==2.0.13|MIT",
+      "defusedxml==0.7.1|PSFL",
+      "en-core-web-sm==3.8.0|MIT",
+      "ftfy==6.3.1|Apache-2.0",
+      "idna==3.18|BSD-3-Clause",
+      "jinja2==3.1.6|BSD-3-Clause",
+      "joblib==1.5.3|BSD-3-Clause",
+      "markdown-it-py==4.2.0|MIT",
+      "markupsafe==3.0.3|BSD-3-Clause",
+      "mdurl==0.1.2|MIT",
+      "murmurhash==1.0.15|MIT",
+      "nltk==3.10.3|Apache-2.0",
+      "numpy==2.4.6|BSD-3-Clause-AND-0BSD-AND-MIT-AND-Zlib-AND-CC0-1.0",
+      "packaging==26.2|Apache-2.0-OR-BSD-2-Clause",
+      "preshed==3.0.13|MIT",
+      "pydantic==2.13.4|MIT",
+      "pydantic-core==2.46.4|MIT",
+      "pygments==2.20.0|BSD-2-Clause",
+      "regex==2026.7.19|Apache-2.0-AND-CNRI-Python",
+      "requests==2.34.2|Apache-2.0",
+      "rich==15.0.0|MIT",
+      "rouge-score==0.1.2|Apache-2.0",
+      "setuptools==84.0.0|MIT",
+      "shellingham==1.5.4|ISC",
+      "six==1.17.0|MIT",
+      "smart-open==7.7.1|MIT",
+      "spacy==3.8.11|MIT",
+      "spacy-legacy==3.0.12|MIT",
+      "spacy-loggers==1.0.5|MIT",
+      "srsly==2.5.3|MIT",
+      "thinc==8.3.11|MIT",
+      "tqdm==4.67.3|MPL-2.0-AND-MIT",
+      "typer==0.27.1|MIT",
+      "typer-slim==0.24.0|MIT",
+      "typing-extensions==4.16.0|PSF-2.0",
+      "typing-inspection==0.4.4|MIT",
+      "urllib3==2.7.0|MIT",
+      "wasabi==1.1.3|MIT",
+      "wcwidth==0.8.2|MIT",
+      "weasel==0.4.3|MIT",
+      "wrapt==2.3.0|BSD-2-Clause"
+    ]
+  },
+  "scoring": {
+    "reference_format": "FanOutQA-answer-field-list-dict-bool-or-scalar",
+    "answer_extraction": "last-history-action-send_msg_to_user-parenthesis-slice",
+    "normalization_order": [
+      "lowercase",
+      "ftfy-fix-text",
+      "remove-commas-inside-numbers",
+      "spacy-en_core_web_sm-lemmatization",
+      "remove-comma-period-question-exclamation-colon-semicolon",
+      "collapse-whitespace"
+    ],
+    "primary_task_score": "acc_loose",
+    "acc_loose": "fraction-of-reference-dict-keys-and-values-found-with-word-boundaries",
+    "acc_strict": "one-only-when-every-reference-string-is-found",
+    "secondary_metrics": [
+      "rouge1-fscore",
+      "rouge2-fscore",
+      "rougeL-fscore"
+    ],
+    "deterministic_fields": [
+      "acc_loose",
+      "acc_strict",
+      "rouge1",
+      "rouge2",
+      "rougeL",
+      "record.acc",
+      "record.outcome"
+    ],
+    "nondeterministic_fields": [],
+    "wrapper_policy": "verify-exact-upstream-files-and-one-session-one-task-cardinality; never-repair-renormalize-or-substitute-upstream-scores",
+    "output_schema": "schemas/t09-sira-pilot-score.schema.json"
+  },
+  "known_task_specific_behavior": [
+    {
+      "task_id": "7dcbbbdc7f1120cd",
+      "finding": "ordinary-correct-prose-fixture-scores-0.9-while-uppercase-punctuation-normalization-fixture-scores-1.0",
+      "cause": "context-sensitive-en_core_web_sm-lemmatization-of-Drew",
+      "disposition": "retain-exact-upstream-score-and-record-task-level-provenance"
+    },
+    {
+      "task_id": "2120afba8009bad3",
+      "finding": "correct-six-key-six-currency-value-fixture-scores-0.5",
+      "cause": "word-boundary-regex-cannot-match-normalized-values-beginning-with-dollar-sign",
+      "disposition": "freeze-effective-0.5-ceiling; no-renormalization; interpret-task-level-only"
+    }
+  ],
+  "offline_fixtures": {
+    "test_path": "tests/test_t09_sira_pilot.py",
+    "fixture_evaluator_path": "tests/fixtures/t09/pinned-evaluator",
+    "fixture_dataset_path": "tests/fixtures/t09/fanout-two-task-fixture.json",
+    "fixture_dataset_sha256": "5beff220f4d68bcf78d7a9767b5eb09b36e56944a563a8807220168c56f0eea9",
+    "cases": [
+      "clearly-correct",
+      "clearly-incorrect",
+      "partial-answer",
+      "malformed-output",
+      "missing-answer",
+      "evaluator-exception",
+      "duplicate-evidence",
+      "normalization-edge",
+      "second-frozen-task"
+    ],
+    "expected_result": "all-pass-offline-with-no-provider-or-judge-request"
+  }
+}

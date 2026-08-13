@@ -1,0 +1,91 @@
+{
+  "schema_version": "0.1.0",
+  "identity_id": "RUNTIME-EXP0001-PILOT-V2-T07-PRAGMATIC",
+  "plan_id": "PLAN-EXP0001-PILOT-V2",
+  "base_runtime": {
+    "source_run": "RUN-T07-PRAGMATIC-HOST-0002",
+    "frozen_execution_commit": "5698f04dfd08bc85a66d2355b0a4bd7d3ce24a23",
+    "post_run_commit": "27f66e6a82edffa57e497516bf3969a199675f06",
+    "python_version": "3.11.14",
+    "container_image_digest": "sha256:035edf61718e84a8156f4f0f7817b134b0ce31488d3f0b50bbfba2b4a30cc61c",
+    "installed_package_manifest_sha256": "4ff2603a286807442a627ba764e4969bcb1f6a2ff6ce95b55b3a35db6cd3fb0c",
+    "playwright_version": "1.39.0",
+    "chromium_revision": "1084",
+    "chromium_sha256": "0498a571ab8b53ee6f52004fe2f3a385f8c92a8998cdb0e6dd567d04b7029ffe",
+    "os": "Linux",
+    "architecture": "x86_64"
+  },
+  "scientific_runtime": {
+    "sira_commit": "93fb8d72de71f9a4a13419670adeb34d93cf7acd",
+    "runner_sha256": "c2503b99bb8870b9abf9444831bbb3a70c7bbc8091e30ca06ecc3f2e24a7cf23",
+    "agent_configs_sha256": "3c3110b5b69d43e0492fba3cb60171be35ccb8cd652e72d07ffb1ecfd7947072",
+    "model_revision_all_roles": "gpt-4o-2024-11-20",
+    "service_tier": "default",
+    "provider_fallback": false,
+    "implicit_provider_retries": 0,
+    "dataset_revision": "76ad1feb689b754bfe4e5e24d3ea371b647efa67",
+    "reactive_config": "web_reactive",
+    "simulative_config": "web_simulative",
+    "reactive_planner_type": "policy",
+    "simulative_planner_type": "world_model",
+    "simulative_planner_search_num_actions": 5,
+    "simulative_planner_search_depth": 1,
+    "simulative_planner_policy_num_samples": 20,
+    "simulative_planner_critic_num_samples": 20
+  },
+  "evaluator_overlay": {
+    "contract_sha256": "bc019781ab4468a51bcf6f76ac937ea81334d70281f476504b5693df57178a6a",
+    "materialization": "read-only-package-overlay-on-exact-base-image",
+    "base_image_materialization": "use-preexisting-exact-image-or-rebuild-from-the-exact-T07-commit-and-reject-any-nonmatching-image-ID",
+    "provider_or_model_access": false
+  },
+  "repository_instrumentation": {
+    "runtime_path": "src/giclab/harness/sira_gate_a_runtime.py",
+    "runtime_sha256_binding": "four-command-manifests-bind-final-reviewed-bytes",
+    "contract_path": "src/giclab/harness/t09_sira_pilot.py",
+    "contract_sha256_binding": "four-command-manifests-bind-final-reviewed-bytes",
+    "scope": [
+      "pre-action-budget-count",
+      "post-action-result-and-screenshot-retention",
+      "per-call-role-lineage-usage-and-service-tier-receipts",
+      "condition-and-aggregate-budget-persistence",
+      "resource-cap-checks",
+      "cleanup-receipt"
+    ],
+    "files": [
+      {
+        "path": "src/giclab/harness/sira_gate_a_runtime.py",
+        "sha256": "5fde575a7b1bcfa2b7ebc3717548ddedff8fc77e3998ab40ffec56ec772ae4f1"
+      },
+      {
+        "path": "src/giclab/harness/t09_sira_pilot.py",
+        "sha256": "3a19a9ae0910187f288a77ef1a7a175fdb6a5319ac33016dc064a4c7ab35d263"
+      },
+      {
+        "path": "containers/sira-smoke/pragmatic/t09_remote_runner.py",
+        "sha256": "aa1807d01af20bf3ff81a0ae0f98766d38444f0105e7a508d96fa302c4218e28"
+      },
+      {
+        "path": "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py",
+        "sha256": "1f396e41d05dbc9d26c1f82ec7c314957ef9409734a0691b0662c98914c8a600"
+      },
+      {
+        "path": "containers/sira-smoke/pragmatic/t09_preflight.py",
+        "sha256": "9bbb042c03a3c4a8e2708e43a17e4899da32d9d87d0b2a790c5c651183420ab0"
+      },
+      {
+        "path": "containers/sira-smoke/pragmatic/t09_freeze_commands.py",
+        "sha256": "c86a33cb3c96a31aee6f2b66710c6daa4ee2c0b0da25cb709e106e5a0f852869"
+      }
+    ]
+  },
+  "gpu": {
+    "hardware": "NVIDIA-A10-24GB",
+    "scientific_variable": false,
+    "acceleration_claim": false,
+    "expected_process_use": "none",
+    "visibility": "host-visible; no Docker GPU device request; CUDA_VISIBLE_DEVICES empty inside every pilot/preflight/evaluator container",
+    "cuda_identity_when_visible": "not-applicable-inside-pilot-process-because-visibility-is-disabled",
+    "utilization_samples_when_practical": "host-nvidia-smi-without-unique-identifiers-at-preflight-attempt-boundaries-and-pretermination"
+  }
+}

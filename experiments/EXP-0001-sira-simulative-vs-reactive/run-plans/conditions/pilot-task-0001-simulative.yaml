@@ -1,9 +1,9 @@
 schema_version: 0.1.0
 experiment_id: EXP-0001
-run_id: RUN-EXP0001-PILOT-0001-SIMULATIVE
+run_id: RUN-EXP0001-PILOT-V2-TASK-B-SIMULATIVE
 profile: pilot
-profile_plan_id: PLAN-EXP0001-PILOT
-profile_sha256: c06026b1c0a1fdd16ac76ada624c7af2a2818d376d72ad977c8872faf9acbb18
+profile_plan_id: PLAN-EXP0001-PILOT-V2
+profile_sha256: e39cab555ff07ce3e99215f6cf46eb49a0de7cc37268481fa2e4e22addb6ac05
 condition: SIRA-SIMULATIVE
 attempt: 1
 seed: 42
@@ -19,11 +19,11 @@ sources:
   giclab_commit: unknown
   upstream_source_id: SRC-SIRA-REPOSITORY
   upstream_commit: 93fb8d72de71f9a4a13419670adeb34d93cf7acd
-  protocol_sha256: unknown
-  config_sha256: unknown
+  protocol_sha256: 5356fc8b3806f4135eb570f65b67da2f94463582db5e3e609320e23dbdb2a3f7
+  config_sha256: a39afc24fbeea3bef9c61c685e08da7ecad50d9ecec5bdf29f5e9eb28ab07c50
   model_revision: gpt-4o-2024-11-20
   dataset_revision: 76ad1feb689b754bfe4e5e24d3ea371b647efa67
-  environment_sha256: unknown
+  environment_sha256: db3041caf860a0e5e383c8c2b71cee7cb43ef8b480bbcca7aca209928520674c
 task:
   task_id: 2120afba8009bad3
   source_kind: dataset-slice
@@ -33,16 +33,16 @@ task:
   start_idx: 1
   end_idx: 2
 pairing:
-  pair_id: PAIR-EXP0001-PILOT-0001
+  pair_id: PAIR-EXP0001-PILOT-V2-TASK-B
   order_index: 1
 budget:
   max_wall_seconds: 3600
   max_cost_usd: 10.00
   max_gpu_hours: 1.0
-  max_model_calls: 1830
+  max_model_calls: 1155
   max_model_tokens: 1000000
   max_tool_calls: 30
   max_output_bytes: 2147483648
 artifacts:
-  root: artifacts/EXP-0001/pilot/0001/simulative/attempt-0001
+  root: artifacts/EXP-0001/pilot-v2/task-b/simulative/attempt-0001
   retain_raw: true

@@ -10,19 +10,16 @@ the EXP-0001 pilot has not run.
 
 ## Scientific question and scope
 
-This exploratory protocol compares exactly two externally assigned modes from the
+This calibration protocol compares exactly two externally assigned modes from the
 pinned SiRA artifact: `SIRA-SIMULATIVE` as treatment and `SIRA-REACTIVE` as control.
-It asks whether simulative mode changes deterministic FanOutQA accuracy relative to
-reactive mode within the same locked tasks, and what observable cost accompanies any
-difference. The primary estimand is the mean of the two within-task accuracy
-differences, simulative minus reactive. With two task pairs, the pilot tests paired
-execution, scoring, and variance plumbing; it cannot establish a stable effect size,
-adequate power, or a confirmatory result.
+It asks whether both conditions can complete and be exactly scored on two matched
+FanOutQA tasks, whether their evidence remains reconstructable, and what task-level
+resource behavior implies for a larger exploratory pilot. Report only the four
+attempts and two pairs descriptively.
 
-The null is that the mean paired accuracy difference is nonpositive, or that any
-positive difference is dominated by reactive mode on all declared cost measures. A
-nonpositive accuracy difference weakens the proposed benefit. A positive difference
-without a favorable success-cost tradeoff does not support a frontier improvement.
+Two pairs cannot estimate an effect or variance, support significance or condition
+superiority, accept or reject EXP-0001, or support an H2K/GIC architectural claim.
+There is no statistical null or primary effect estimand in this calibration pilot.
 
 ## Treatment and control
 
@@ -66,17 +63,18 @@ The pilot locks the first two rows of the pinned SiRA FanOutQA development file:
 2. `2120afba8009bad3`, index `[1, 2)`, simulative then reactive.
 
 Each condition runs once per task. Conditions are kept close in time and their order is
-counterbalanced across tasks. The choice of two pairs is the mathematical minimum for
-testing a paired variance calculation and was made for workflow and variance plumbing,
-not from an unseen effect size or power calculation.
+counterbalanced across tasks. Two pairs can test completion, evaluator plumbing,
+pairing, reconstruction, gross floor/ceiling behavior, and cost capture. The sample
+was not selected from an unseen condition outcome and cannot estimate variance or an
+effect.
 
 ## Retry, exclusion, and invalid-run policy
 
-Upstream outer retry remains disabled (`--max_retry 0`). Intrinsic provider, parser,
-and clustering attempts must be retained rather than selecting only successful output.
-An infrastructure retry receives a new immutable attempt ID; it never overwrites the
-failed attempt. If pair validity is lost, both conditions are rerun under a new pair
-identity after the root cause is repaired.
+Upstream outer retry remains disabled (`--max_retry 0`), provider fallback and implicit
+provider retries are disabled, and every provider call attempt is retained. Once the
+first task model request or browser action occurs, no infrastructure or scientific
+retry is permitted under this plan. Any later rerun requires a new plan, identities,
+review, and authorization; no evidence is overwritten.
 
 Task failure is an outcome, not an exclusion. Scientific aggregation uses only complete
 contract-valid pairs. A pair is infrastructure-invalid—not scientific no-support—if
@@ -88,12 +86,13 @@ cost accounting.
 
 ## Metrics and interpretation
 
-The primary metric is deterministic FanOut evaluator record accuracy; the primary
-estimand is the mean paired difference. Secondary outcomes are paired success
-discordance, directly reported input/cached/output tokens, reproducibly derived or
-directly billed provider USD cost, harness wall time, upstream model-call count,
-browser action count, valid completion rate, and the availability of source-supported
-state and selected-plan fields.
+Primary records are per-attempt completion, answer production, exact FanOut evaluator
+validity/score, and reconstructability. Secondary descriptive records are each
+condition's task-level score, directly reported input/cached/output tokens,
+reproducibly derived or directly billed provider USD cost, harness wall time, upstream
+model-call count, browser action count, valid completion, and availability of
+source-supported state and selected-plan fields. No paired mean is an authorized
+estimand.
 
 Candidate actions, predicted futures, critic evaluations, action results, model
 revision, and token usage are not invented when the accepted source trace does not
@@ -102,13 +101,13 @@ causal use, learned regulation, or internalization.
 
 ## Falsification and outcome classification
 
-A nonpositive paired accuracy difference weakens the benefit claim. A positive
-difference that is cost-dominated does not improve the success-cost frontier. Missing
-complete pairs make the pilot inconclusive or infrastructure-invalid rather than
-negative. With only two exploratory pairs, no p-value, confidence-based confirmatory
-claim, or stable population effect is authorized. Support, no support, mixed evidence,
-invalidation, and infrastructure invalidity remain distinct from lifecycle and
-evidence-strength state.
+Missing complete pairs make the calibration incomplete or infrastructure-invalid
+rather than evidence for either condition. A validly executed condition that does not
+finish is a calibration condition failure, not an infrastructure failure. No p-value,
+confidence interval, effect estimate, variance estimate, population generalization,
+frontier claim, support/no-support classification, or condition-superiority statement
+is authorized. Lifecycle, evidence strength, process exit, artifact execution, task
+completion, evaluator validity, and score remain separate fields.
 
 ## Raw retention and public release
 
@@ -133,19 +132,16 @@ that a separately approved future study might consume.
 
 ## Run plans and current blockers
 
-[`run-plans/smoke.yaml`](run-plans/smoke.yaml) is one minimal matched pair with
-interpretation prohibited. [`run-plans/pilot.yaml`](run-plans/pilot.yaml) is the
-two-pair exploratory pilot. The smoke plan is now a historical control record; the
-pilot profile and every pilot condition plan remain unauthorized.
-The proposed caps are derived in [`pricing.yaml`](pricing.yaml) from current official
-OpenAI rates using the conservative assumption that every permitted token is charged
-at the more expensive output-token rate.
+[`run-plans/smoke.yaml`](run-plans/smoke.yaml) is the historical one-step matched-pair
+control record. The starting effect-oriented pilot proposal is preserved at
+[`run-plans/proposals/PLAN-EXP0001-PILOT.json`](run-plans/proposals/PLAN-EXP0001-PILOT.json).
+[`run-plans/pilot.yaml`](run-plans/pilot.yaml) is now the calibration-only
+`PLAN-EXP0001-PILOT-V2`; its profile and every condition plan remain unauthorized.
 
-T08 makes pilot protocol preparation eligible, not pilot execution. Before a later
-current-turn authorization can bind the pilot, the repository must close every blocker
-in [`../../docs/harness/T08_SIRA_PILOT_READINESS.md`](../../docs/harness/T08_SIRA_PILOT_READINESS.md),
-including a reviewed nonzero-GPU protocol version, immutable source/config/environment/
-image/browser/evaluator/command hashes, effective enforcement for every child and
-aggregate cap, dataset/license/privacy review, and dynamic cloud preflight. Pilot
-scoring also requires an immutable spaCy and `en_core_web_sm` evaluator dependency
-contract.
+T09 resolves the static dataset, evaluator, scoring, matching, budget-enforcement,
+evidence, privacy, and identity blockers documented by T08. The package is ready for a
+fresh exact authorization, but project execution permissions and every authorization
+field remain false. A later authorized turn must bind the final clean commit and
+packet, pass the single exact dynamic preflight, enforce the automatic Task-A
+checkpoint, terminate the exact provider resource, and verify zero instances. Public
+raw release remains separately blocked pending license/privacy review.

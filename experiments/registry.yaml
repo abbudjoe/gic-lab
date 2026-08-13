@@ -1,5 +1,5 @@
 schema_version: 0.1.0
-registry_revision: 3
+registry_revision: 4
 template_path: experiments/EXP-0000-template
 experiments:
   - experiment_id: EXP-0001
@@ -10,3 +10,8 @@ experiments:
     evidence_records:
       - experiments/EXP-0001-sira-simulative-vs-reactive/T08_SMOKE_ADJUDICATION.json
       - experiments/EXP-0001-sira-simulative-vs-reactive/T08_SMOKE_PAIR_DIFF.json
+    planning_contracts:
+      - experiments/EXP-0001-sira-simulative-vs-reactive/contracts/T09_PILOT_DATASET_CONTRACT.json
+      - experiments/EXP-0001-sira-simulative-vs-reactive/contracts/T09_PILOT_EVALUATOR_CONTRACT.json
+      - experiments/EXP-0001-sira-simulative-vs-reactive/contracts/T09_PILOT_RUNTIME_IDENTITY.json
+      - experiments/EXP-0001-sira-simulative-vs-reactive/contracts/T09_PILOT_EXECUTION_CONTRACT.json

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+import subprocess
 
 from giclab.harness.policy import load_project_execution_state
 from giclab.registry import load_json, load_yaml
@@ -56,6 +57,11 @@ def test_phase_one_is_the_only_active_non_executable_control_plane() -> None:
     assert checkpoint["terminal_state"] == ("smoke_evidence_validated_pilot_planning_eligible")
     assert checkpoint["pilot_execution_authorized"] is False
     assert checkpoint["scientific_interpretation_allowed"] is False
+    t09_checkpoint = state["t09_preauthorization_checkpoint"]
+    assert t09_checkpoint["terminal_state"] == "ready-for-t09-pilot-authorization"
+    assert t09_checkpoint["plan_id"] == "PLAN-EXP0001-PILOT-V2"
+    assert t09_checkpoint["pilot_execution_authorized"] is False
+    assert t09_checkpoint["scientific_result_claimed"] is False
     assert [path.name for path in (ROOT / "docs/exec-plans/active").glob("*.md")] == [
         "PHASE_1_ARTIFACT_EXECUTION.md"
     ]
@@ -63,7 +69,7 @@ def test_phase_one_is_the_only_active_non_executable_control_plane() -> None:
     assert "Status: **in-progress**" in PHASE_1_PLAN.read_text(encoding="utf-8")
 
 
-def test_only_the_smoke_profile_is_eligible_for_later_authorization() -> None:
+def test_smoke_and_locked_pilot_are_eligible_but_remain_unauthorized() -> None:
     smoke = load_yaml(EXP_ROOT / "run-plans/smoke.yaml")
     pilot = load_yaml(EXP_ROOT / "run-plans/pilot.yaml")
     assert smoke["plan_id"] == "PLAN-EXP0001-SMOKE"
@@ -74,9 +80,11 @@ def test_only_the_smoke_profile_is_eligible_for_later_authorization() -> None:
     assert smoke["readiness"]["execution_eligibility"] == "eligible-after-authorization"
     assert smoke["readiness"]["unresolved_execution_blockers"] == []
     assert smoke["readiness"]["pre_execution_requirements"]
+    assert pilot["plan_id"] == "PLAN-EXP0001-PILOT-V2"
     assert pilot["execution"]["authorized"] is False
-    assert pilot["readiness"]["execution_eligibility"] == "blocked-pending-prerequisites"
-    assert pilot["readiness"]["unresolved_execution_blockers"]
+    assert pilot["readiness"]["execution_eligibility"] == "eligible-after-authorization"
+    assert pilot["readiness"]["unresolved_execution_blockers"] == []
+    assert pilot["readiness"]["pre_execution_requirements"]
     for relative in smoke["condition_plan_paths"] + pilot["condition_plan_paths"]:
         condition = load_yaml(ROOT / relative)
         assert condition["execution"]["authorization"] == {
@@ -130,7 +138,8 @@ def test_exp0001_readme_records_t07_materialization_and_current_pilot_boundary()
     readme = " ".join((EXP_ROOT / "README.md").read_text(encoding="utf-8").split())
     assert "T07 bound the immutable substitute `gpt-4o-2024-11-20`" in readme
     assert "Any pilot must preserve or explicitly revise that immutable binding" in readme
-    assert "T08 makes pilot protocol preparation eligible, not pilot execution" in readme
+    assert "The package is ready for a fresh exact authorization" in readme
+    assert "PLAN-EXP0001-PILOT-V2" in readme
     assert "T07 preflight must bind the exact snapshot before execution" not in readme
     assert "later integration must bind" not in readme
     assert "T06 or a later approved integration" not in readme
@@ -177,7 +186,7 @@ def test_exp0001_science_and_h2k_boundary_remain_orthogonal() -> None:
     assert "| T16 |" not in phase_plan
 
 
-def test_t07_l13_preserves_all_five_locked_scientific_file_hashes() -> None:
+def test_t07_l13_preserves_all_five_historical_scientific_file_hashes() -> None:
     locked = {
         EXP_ROOT / "protocol.yaml": (
             "5bdf3fdcf2c486883ad74044bd373c1804362c7d9ad8e990f5e10fa1c0f99b4c"
@@ -196,7 +205,18 @@ def test_t07_l13_preserves_all_five_locked_scientific_file_hashes() -> None:
         ),
     }
     for path, expected in locked.items():
-        assert hashlib.sha256(path.read_bytes()).hexdigest() == expected
+        relative = path.relative_to(ROOT).as_posix()
+        encoded = subprocess.run(
+            [
+                "git",
+                "show",
+                f"5698f04dfd08bc85a66d2355b0a4bd7d3ce24a23:{relative}",
+            ],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+        ).stdout
+        assert hashlib.sha256(encoded).hexdigest() == expected
 
 
 def test_t07_l1a_plan_is_preserved_and_its_consumed_run_is_sealed() -> None:

@@ -9,11 +9,12 @@ entries:
     commit: 93fb8d72de71f9a4a13419670adeb34d93cf7acd
     sha256: 359300b029c6891567816f351bf8786e9b018d7af8a1a44b7da9ba5ef4651288
     size_bytes: 1177174
-    license: null
+    license: CC-BY-SA-4.0
     provenance: >-
       Exact data/fanout-final-dev.json blob tracked by the pinned sailing-lab/sira
-      repository. The pinned repository does not state this data file's license and
-      directs users to FanOutQA upstream terms.
+      repository, byte-identical to FanOutQA's archived November 2023 development
+      snapshot. FanOutQA's data license is CC-BY-SA-4.0; license file SHA-256 is
+      4e0fd171b79f997e1fb13111149135af19fb91028388746eda82cfee615b553c.
     storage_uri: https://github.com/sailing-lab/sira/blob/93fb8d72de71f9a4a13419670adeb34d93cf7acd/data/fanout-final-dev.json
     canonical_uri: https://github.com/sailing-lab/sira/tree/93fb8d72de71f9a4a13419670adeb34d93cf7acd/data
     retrieved_at: "2026-08-07"
@@ -38,6 +39,7 @@ entries:
     verification_status: content-hash-verified
 note: >-
   These exact blobs were audited from the pinned SiRA source. EXP-0001 selects only
-  the FanOutQA development blob. Both dataset licenses remain unknown, so public
-  redistribution remains blocked pending review; this manifest does not authorize
-  execution.
+  the FanOutQA development blob. FanOutQA private research use is license-resolved;
+  public traces and screenshots remain blocked pending privacy, third-party-content,
+  attribution, and share-alike review. FlightQA licensing remains unknown. This
+  manifest does not authorize execution.

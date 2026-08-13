@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:gic-lab:schema:t09-sira-pilot-evidence:0.1.0",
+  "title": "T09 SiRA calibration-pilot reconstructable attempt evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "plan_id",
+    "execution_contract_sha256",
+    "identity",
+    "runtime",
+    "timing",
+    "command",
+    "provider_calls",
+    "browser_actions",
+    "retained_artifacts",
+    "outcome",
+    "evaluator",
+    "cleanup",
+    "h2k_optional_fields",
+    "redaction"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1.0"},
+    "plan_id": {"const": "PLAN-EXP0001-PILOT-V2"},
+    "execution_contract_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run_id", "task_id", "task_text_sha256", "reference_sha256", "pair_id", "order_index", "condition", "attempt"],
+      "properties": {
+        "run_id": {"type": "string", "pattern": "^RUN-EXP0001-PILOT-V2-TASK-[AB]-(?:REACTIVE|SIMULATIVE)$"},
+        "task_id": {"enum": ["7dcbbbdc7f1120cd", "2120afba8009bad3"]},
+        "task_text_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "reference_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "pair_id": {"enum": ["PAIR-EXP0001-PILOT-V2-TASK-A", "PAIR-EXP0001-PILOT-V2-TASK-B"]},
+        "order_index": {"enum": [1, 2]},
+        "condition": {"enum": ["SIRA-REACTIVE", "SIRA-SIMULATIVE"]},
+        "attempt": {"const": 1}
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "required": ["giclab_commit", "reviewed_implementation_ancestor", "sira_commit", "python_version", "container_image_digest", "model_revision", "requested_service_tier", "returned_service_tiers", "browser_identity", "gpu_accounting"],
+      "properties": {
+        "giclab_commit": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
+        "reviewed_implementation_ancestor": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
+        "sira_commit": {"const": "93fb8d72de71f9a4a13419670adeb34d93cf7acd"},
+        "python_version": {"const": "3.11.14"},
+        "container_image_digest": {"const": "sha256:035edf61718e84a8156f4f0f7817b134b0ce31488d3f0b50bbfba2b4a30cc61c"},
+        "model_revision": {"const": "gpt-4o-2024-11-20"},
+        "requested_service_tier": {"const": "default"},
+        "returned_service_tiers": {"type": "array", "uniqueItems": true, "items": {"const": "default"}},
+        "browser_identity": {"type": "object"},
+        "gpu_accounting": {"type": "object"}
+      },
+      "additionalProperties": true
+    },
+    "timing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["started_at", "stopped_at", "wall_seconds"],
+      "properties": {
+        "started_at": {"type": "string", "format": "date-time"},
+        "stopped_at": {"type": "string", "format": "date-time"},
+        "wall_seconds": {"type": "number", "minimum": 0, "maximum": 3600}
+      }
+    },
+    "command": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["argv", "argv_sha256", "condition_config_sha256"],
+      "properties": {
+        "argv": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+        "argv_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "condition_config_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+      }
+    },
+    "provider_calls": {
+      "type": "array",
+      "maxItems": 1155,
+      "items": {
+        "type": "object",
+        "required": ["event_id", "parent_event_id", "role", "request_model", "requested_service_tier", "returned_service_tier", "usage", "receipt"],
+        "properties": {
+          "event_id": {"type": "string"},
+          "parent_event_id": {"type": ["string", "null"]},
+          "role": {"enum": ["default", "encoder", "memory", "policy", "world_model", "critic", "actor", "fallback"]},
+          "request_model": {"const": "gpt-4o-2024-11-20"},
+          "requested_service_tier": {"const": "default"},
+          "returned_service_tier": {"const": "default"},
+          "usage": {"type": "object"},
+          "receipt": {"type": "object"}
+        },
+        "additionalProperties": true
+      }
+    },
+    "browser_actions": {
+      "type": "array",
+      "maxItems": 30,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["action_event_id", "parent_event_id", "requested_action", "result_event_id", "post_action_result", "screenshot_sha256"],
+        "properties": {
+          "action_event_id": {"type": "string"},
+          "parent_event_id": {"type": ["string", "null"]},
+          "requested_action": {"type": "string"},
+          "result_event_id": {"type": "string"},
+          "post_action_result": {"type": "object"},
+          "screenshot_sha256": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"}
+        }
+      }
+    },
+    "retained_artifacts": {
+      "type": "object",
+      "required": ["session_json", "raw_answer", "stdout", "stderr", "screenshots", "normalized_events", "regulation_decisions", "provider_ledger", "evaluator_input", "evaluator_output"],
+      "additionalProperties": true
+    },
+    "outcome": {"$ref": "t09-sira-pilot-score.schema.json"},
+    "evaluator": {
+      "type": "object",
+      "required": ["run_id", "input_sha256", "output_sha256", "valid"],
+      "additionalProperties": true
+    },
+    "cleanup": {
+      "type": "object",
+      "required": ["browser_closed", "container_removed", "secret_removed", "receipt_sha256"],
+      "additionalProperties": true
+    },
+    "h2k_optional_fields": {
+      "type": "object",
+      "required": ["availability", "scientific_effect_on_exp0001"],
+      "properties": {
+        "availability": {"enum": ["retained-when-present", "unavailable-explicitly-null"]},
+        "scientific_effect_on_exp0001": {"const": "none"}
+      },
+      "additionalProperties": true
+    },
+    "redaction": {
+      "type": "object",
+      "required": ["structural_policy", "secret_values_retained", "private_network_values_public"],
+      "properties": {
+        "structural_policy": {"const": "t09-structural-sensitive-field-v1"},
+        "secret_values_retained": {"const": false},
+        "private_network_values_public": {"const": false}
+      },
+      "additionalProperties": true
+    }
+  }
+}

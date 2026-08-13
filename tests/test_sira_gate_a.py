@@ -214,7 +214,7 @@ def test_worst_case_attempt_is_persisted_before_provider_send() -> None:
     )
 
     def fail_after_persistence(_: ProviderRequest) -> tuple[str, ProviderResponseUsage]:
-        assert states[-1] == (1, 20, 0)
+        assert states[-1] == (1, 20, 1)
         raise TimeoutError("synthetic in-flight termination")
 
     with pytest.raises(TimeoutError, match="in-flight"):
@@ -282,6 +282,49 @@ def test_browser_action_and_output_byte_caps_are_hard() -> None:
     boundary.record_output_bytes(condition_caps("reactive").max_output_bytes)
     with pytest.raises(ProviderBudgetExceeded, match="output_bytes"):
         boundary.record_output_bytes(1)
+
+
+def test_empirical_callback_runs_only_after_operation_caps_pass() -> None:
+    callbacks: list[str] = []
+    condition = replace(
+        condition_caps("reactive"),
+        max_model_call_attempts=0,
+        max_browser_actions=0,
+    )
+    aggregate = replace(
+        aggregate_caps(),
+        max_model_call_attempts=0,
+        max_browser_actions=0,
+    )
+    boundary = ProviderBudgetBoundary(
+        routing=ImmutableModelRouting.locked(),
+        aggregate_caps=aggregate,
+        condition_caps=condition,
+    )
+    request = ProviderRequest(
+        role=ModelRole.ACTOR,
+        model=SIRA_MODEL_REVISION,
+        input_tokens=1,
+        max_output_tokens=1,
+    )
+    with pytest.raises(ProviderBudgetExceeded, match="model_call_attempts"):
+        boundary.invoke(
+            request,
+            lambda _: ("never", ProviderResponseUsage(1, 0, 1, "default")),
+            before_send=lambda: callbacks.append("provider"),
+        )
+    with pytest.raises(ProviderBudgetExceeded, match="browser_actions"):
+        boundary.record_browser_action(before_action=lambda: callbacks.append("browser"))
+    assert callbacks == []
+
+    allowed = _boundary()
+    allowed.invoke(
+        request,
+        lambda _: ("ok", ProviderResponseUsage(1, 0, 1, "default")),
+        before_send=lambda: callbacks.append("provider"),
+    )
+    allowed.record_browser_action(before_action=lambda: callbacks.append("browser"))
+    assert callbacks == ["provider", "browser"]
 
 
 def test_attempt_root_is_fresh_owned_and_collision_safe(tmp_path: Path) -> None:
@@ -682,10 +725,14 @@ def test_gate_a_commands_are_finite_owned_and_machine_diffed(
 def test_committed_gate_a_condition_diff_has_only_declared_argv_changes() -> None:
     document = load_yaml(ROOT / "docs/harness/sira/T07_GATE_A_CONDITION_DIFF.yaml")
     runtime = ROOT / "src/giclab/harness/sira_gate_a_runtime.py"
-    assert (
-        document["common"]["runtime_adaptation_sha256"]
-        == hashlib.sha256(runtime.read_bytes()).hexdigest()
+    assert document["common"]["runtime_adaptation_sha256"] == (
+        "c461dce20fea9e743135cad98b664213a393e46f35d1c1a8434212b2f0367dbb"
     )
+    assert (
+        hashlib.sha256(runtime.read_bytes()).hexdigest()
+        != document["common"]["runtime_adaptation_sha256"]
+    )
+    assert "--gate-pilot-contract" in runtime.read_text(encoding="utf-8")
     assert document["common"]["routing_sha256"] == ImmutableModelRouting.locked().sha256()
     assert document["common"]["api_request_service_tier"] == "default"
     assert document["common"]["required_response_service_tier"] == "default"

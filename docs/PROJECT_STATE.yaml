@@ -44,5 +44,17 @@ t08_checkpoint:
   next_plan: PLAN-EXP0001-PILOT
   pilot_protocol_preparation_eligible: true
   pilot_execution_authorized: false
+t09_preauthorization_checkpoint:
+  task: T09
+  terminal_state: ready-for-t09-pilot-authorization
+  plan_id: PLAN-EXP0001-PILOT-V2
+  calibration_only: true
+  task_count: 2
+  condition_attempt_count: 4
+  static_execution_and_analysis_blockers: []
+  publication_release_blocked: true
+  dynamic_preflight_required_after_authorization: true
+  pilot_execution_authorized: false
+  scientific_result_claimed: false
 authoritative_plan: docs/exec-plans/active/PHASE_1_ARTIFACT_EXECUTION.md
-last_updated: "2026-08-12"
+last_updated: "2026-08-13"

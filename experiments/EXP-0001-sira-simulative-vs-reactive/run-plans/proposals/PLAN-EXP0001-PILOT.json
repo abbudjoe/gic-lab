@@ -1,0 +1,37 @@
+{
+  "schema_version": "0.1.0",
+  "proposal_id": "PLAN-EXP0001-PILOT",
+  "status": "superseded-before-execution-by-PLAN-EXP0001-PILOT-V2",
+  "preservation_method": "exact-Git-object-at-required-T09-starting-commit",
+  "source_commit": "e7bd4cd7158a0f0cb209e87fe1ca15d7c39711f1",
+  "reason_for_new_plan_id": "the-old-proposal-described-paired-variance-and-effect-oriented-interpretation; T09-requires-calibration-only-scientific-meaning-and-pair-equal-hard-budgets",
+  "files": [
+    {
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml",
+      "bytes": 5728,
+      "sha256": "c06026b1c0a1fdd16ac76ada624c7af2a2818d376d72ad977c8872faf9acbb18"
+    },
+    {
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-task-0000-reactive.yaml",
+      "bytes": 1288,
+      "sha256": "f1de24c9da412fcc1c245c507fe438ed6f4f048782cde98ed3a29c1cf59027bb"
+    },
+    {
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-task-0000-simulative.yaml",
+      "bytes": 1295,
+      "sha256": "77c6a68c00e6e76ef3602e91c2d318f1765922c2f6d047893d99947226023128"
+    },
+    {
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-task-0001-reactive.yaml",
+      "bytes": 1288,
+      "sha256": "29ec6b20871ac779d9a002b9d70a7864dc3d80c0df9476425f1c47b3c3f2e43f"
+    },
+    {
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-task-0001-simulative.yaml",
+      "bytes": 1295,
+      "sha256": "a33fc2c93cefa3f2686118bf39e3b5728abf8d4a8973ca37b4b3cf5e1a007b5d"
+    }
+  ],
+  "restore_command": "git show e7bd4cd7158a0f0cb209e87fe1ca15d7c39711f1:<path>",
+  "empirical_attempts": 0
+}

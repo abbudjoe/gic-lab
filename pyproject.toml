@@ -21,6 +21,13 @@ dev = [
   "types-jsonschema>=4.26.0.20260518,<5",
   "types-pyyaml>=6.0.12.20250516",
 ]
+evaluator = [
+  "en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl",
+  "ftfy==6.3.1",
+  "rouge-score==0.1.2",
+  "spacy==3.8.11",
+  "tqdm==4.67.3",
+]
 
 [project.scripts]
 giclab-validate = "giclab.validation:main"

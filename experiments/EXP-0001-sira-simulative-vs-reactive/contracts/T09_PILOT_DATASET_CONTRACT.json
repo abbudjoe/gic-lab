@@ -1,0 +1,104 @@
+{
+  "schema_version": "0.1.0",
+  "contract_id": "DATASET-CONTRACT-EXP0001-PILOT-V2",
+  "plan_id": "PLAN-EXP0001-PILOT-V2",
+  "dataset": {
+    "dataset_id": "DATA-SIRA-FANOUTQA-DEV",
+    "name": "FanOutQA",
+    "release": "archived-November-2023-development-snapshot",
+    "split": "development",
+    "source_repository": "https://github.com/zhudotexe/FanOutQA",
+    "source_repository_commit_verified": "989f4c40d9deea1ecb0897d7a17a9c0fe20d5c33",
+    "official_archive_path": "fanoutqa/data/fanout-final-dev-nov23.json",
+    "sira_repository": "https://github.com/sailing-lab/sira",
+    "sira_commit": "93fb8d72de71f9a4a13419670adeb34d93cf7acd",
+    "sira_path": "data/fanout-final-dev.json",
+    "git_blob_revision": "76ad1feb689b754bfe4e5e24d3ea371b647efa67",
+    "sha256": "359300b029c6891567816f351bf8786e9b018d7af8a1a44b7da9ba5ef4651288",
+    "size_bytes": 1177174,
+    "record_count": 310,
+    "byte_identity": "official-November-2023-archive-and-pinned-SiRA-copy-are-identical"
+  },
+  "selection": {
+    "rule": "preserve-the-first-two-rows-preregistered-before-T07-and-T08-without-outcome-knowledge",
+    "randomization_seed": 42,
+    "frozen_before_first_condition": true,
+    "outcome_adaptive_selection": false,
+    "known_prior_empirical_use": "neither-row-was-executed-in-T07-or-T08; both-were-plan-audited-only",
+    "upstream_development_or_debug_use": "unknown-not-establishable-from-pinned-public-history",
+    "exclusion_criteria": [
+      "record-not-loadable-under-pinned-SiRA-FanOutQA-runner",
+      "record-requires-unavailable-or-disallowed-private-data",
+      "record-cannot-be-attempted-under-the-predeclared-30-step-ceiling",
+      "record-was-used-for-empirical-development-or-debugging-before-freeze"
+    ],
+    "selection_reason": "two-preexisting-non-outcome-selected-multi-entity-aggregation-records-with-distinct-sports-and-film-currency-structures"
+  },
+  "tasks": [
+    {
+      "assignment": "Task-A",
+      "row_slice": [
+        0,
+        1
+      ],
+      "stable_task_id": "7dcbbbdc7f1120cd",
+      "task_text": "What is the batting hand of each of the first five picks in the 1998 MLB draft?",
+      "task_text_sha256_utf8": "153a4f251fbeb29bee8e5ca4626e6db14426063728b0d5cfa7eed3a9a230992b",
+      "reference_canonical_json_sha256": "fc40734fa183e839b56a7c89b16faa5900865cbee7a4210fcb251a99176f98de",
+      "record_canonical_json_sha256": "cc5c3fdeea2c1f58b6160175bd3104dbea40c290ea8b390d29413e6410d97e15",
+      "categories": [
+        "Sports",
+        "Statistics"
+      ],
+      "pair_id": "PAIR-EXP0001-PILOT-V2-TASK-A",
+      "condition_order": [
+        "SIRA-REACTIVE",
+        "SIRA-SIMULATIVE"
+      ],
+      "upstream_evaluator_observed_correct_fixture_score": 0.9,
+      "upstream_evaluator_normalization_edge_fixture_score": 1.0,
+      "score_range": [
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "assignment": "Task-B",
+      "row_slice": [
+        1,
+        2
+      ],
+      "stable_task_id": "2120afba8009bad3",
+      "task_text": "What were box office values of the Star Wars films in the prequel and sequel trilogies?",
+      "task_text_sha256_utf8": "9b2b443898959b28c7408ed1ff56ebd332c9e7f2142657c11c7d09aa507ba66e",
+      "reference_canonical_json_sha256": "2ee9d892e24441d5f5bbf31b7616c1ade5977af26d22e4020f92a162fa23becb",
+      "record_canonical_json_sha256": "5f5a8ad5353b839def2ffc968c36c4314bb830f11f10268f410faa37690bc129",
+      "categories": [
+        "Economics",
+        "Film Studies"
+      ],
+      "pair_id": "PAIR-EXP0001-PILOT-V2-TASK-B",
+      "condition_order": [
+        "SIRA-SIMULATIVE",
+        "SIRA-REACTIVE"
+      ],
+      "upstream_evaluator_correct_fixture_score_ceiling": 0.5,
+      "score_ceiling_reason": "exact-upstream-word-boundary-regex-does-not-match-normalized-reference-values-beginning-with-dollar-sign",
+      "score_range": [
+        0.0,
+        0.5
+      ]
+    }
+  ],
+  "license_and_retention": {
+    "dataset_license": "CC-BY-SA-4.0",
+    "dataset_license_path": "fanoutqa/data/LICENSE",
+    "dataset_license_sha256": "4e0fd171b79f997e1fb13111149135af19fb91028388746eda82cfee615b553c",
+    "source_code_license": "MIT",
+    "planned_research_use_permitted": true,
+    "raw_task_and_reference_retention": "private-access-controlled",
+    "raw_browser_trace_and_screenshot_retention": "private-access-controlled",
+    "public_release": "blocked-pending-privacy-third-party-content-and-share-alike-review",
+    "public_release_blocker_type": "publication-only"
+  }
+}

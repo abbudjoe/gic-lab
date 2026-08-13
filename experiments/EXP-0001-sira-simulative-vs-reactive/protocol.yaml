@@ -2,29 +2,29 @@ schema_version: 0.1.0
 experiment_id: EXP-0001
 title: SiRA simulative versus matched reactive behavior
 question: >-
-  On the two preregistered FanOutQA development tasks, what is the paired difference
-  in deterministic evaluator accuracy between externally assigned SIRA-SIMULATIVE and
-  SIRA-REACTIVE behavior, and what model, browser-action, latency, and dollar costs
-  accompany that difference?
+  Can both externally assigned SiRA conditions complete, retain, reconstruct, and
+  deterministically score two counterbalanced frozen FanOutQA tasks within matched
+  runtime and budget limits, and do observed task-level costs justify a larger pilot?
 hypothesis:
   statement: >-
-    Exploratory evidence would favor SIRA-SIMULATIVE when its mean within-task
-    accuracy difference over SIRA-REACTIVE is positive without being dominated on the
-    declared success-cost measures.
+    This calibration pilot does not test a condition-superiority hypothesis. It
+    supports planning a larger pilot only when all four attempts are reconstructable,
+    the exact evaluator runs, pairs remain matched, and task-level completion and cost
+    behavior are operationally informative.
   null_hypothesis: >-
-    The mean within-task accuracy difference, SIRA-SIMULATIVE minus SIRA-REACTIVE, is
-    less than or equal to zero, or any positive accuracy difference is dominated on
-    the declared success-cost measures.
+    No statistical null is evaluated with two pairs. Failure of completion, scoring,
+    matching, evidence, cleanup, or budget calibration makes a larger pilot unjustified
+    until the identified operational cause is repaired under a new plan.
   falsification_criteria:
-    - The mean paired accuracy difference is less than or equal to zero.
-    - Any accuracy gain is dominated by SIRA-REACTIVE on every declared cost measure.
+    - A task pair cannot be reconstructed or scored from retained evidence.
+    - Pair matching, cleanup, credential handling, or the approved hard budget fails.
 study_stage: exploratory
 lifecycle_status: planned
 evidence_status: not-evaluated
 outcome_status: pending
 owner: GIC Lab
 created_at: "2026-08-08"
-updated_at: "2026-08-08"
+updated_at: "2026-08-13"
 source_contracts:
   - docs/PROJECT_CHARTER.md
   - docs/RESEARCH_QUESTIONS.md
@@ -36,6 +36,9 @@ source_contracts:
   - docs/harness/sira/H2K_REGULATION_DECISION_ADDENDUM.yaml
   - experiments/EXP-0001-sira-simulative-vs-reactive/README.md
   - experiments/EXP-0001-sira-simulative-vs-reactive/EVIDENCE_RETENTION_APPENDIX.yaml
+  - experiments/EXP-0001-sira-simulative-vs-reactive/contracts/T09_PILOT_DATASET_CONTRACT.json
+  - experiments/EXP-0001-sira-simulative-vs-reactive/contracts/T09_PILOT_EVALUATOR_CONTRACT.json
+  - experiments/EXP-0001-sira-simulative-vs-reactive/contracts/T09_PILOT_EXECUTION_CONTRACT.json
 systems:
   treatment: SIRA-SIMULATIVE
   controls:
@@ -56,12 +59,21 @@ fixed_variables:
   dataset_order_seed: 42
   model_seed: unavailable
   pair_max_steps: 30
+  expected_steps_per_attempt: 18
+  condition_max_model_calls: 1155
+  condition_max_model_tokens: 1000000
+  condition_max_wall_seconds: 3600
+  pair_max_wall_seconds: 7200
+  total_max_wall_seconds: 14400
+  retries_after_empirical_entry: 0
+  interpretation: calibration-only-descriptive-task-level
 metrics:
   primary: >-
-    Mean within-task paired difference in deterministic FanOut evaluator record
-    accuracy, SIRA-SIMULATIVE minus SIRA-REACTIVE, over the two locked pilot tasks.
+    Per-attempt task completion, answer production, exact upstream FanOut evaluator
+    validity and score, and reconstructability, reported separately for all four
+    condition attempts with no aggregate effect estimate.
   secondary:
-    - Per-condition success and paired success discordance.
+    - Task-level reactive and simulative scores shown descriptively, without a mean effect or superiority claim.
     - Provider input, cached-input, and output tokens when directly reported.
     - Provider cost in USD when directly reported or reproducibly derived from retained usage.
     - Harness wall time and upstream model-call count.
@@ -77,26 +89,25 @@ sampling:
 budget:
   max_model_tokens: 4000000
   max_tool_calls: 120
-  max_gpu_hours: 0
-  max_cost_usd: 40
+  max_gpu_hours: 4
+  max_cost_usd: 45.16
 acceptance_criteria:
-  - Both conditions complete for each of the two locked pilot tasks under matched pair contracts.
-  - Every launched attempt and retry is retained, hashed, and reconciled before aggregation.
-  - Primary and secondary metrics are computed only from source-supported or harness-observed fields.
-  - Results remain exploratory and use the directional-reproduction qualifier.
+  - All launched attempts are retained, hashed, scored or explicitly evaluator-invalid, and reconciled without retry.
+  - Pair equality and only the source-declared treatment difference are machine verified.
+  - Primary and secondary task-level fields are computed only from source-supported or observed retained evidence.
+  - Results remain calibration-only and do not pass or fail EXP-0001.
 validity:
   invalid_run_criteria:
     - Authorization was absent or a declared budget or safety boundary was violated.
     - Source, model, environment, task, configuration, pair, or evaluator identity drifted.
     - Required raw evidence, artifact hashes, or zero-live-child cleanup evidence is unavailable.
   inconclusive_criteria:
-    - Either locked task lacks a complete contract-valid reactive/simulative pair.
-    - The primary metric cannot be reproduced from the retained deterministic evaluator evidence.
+    - Either locked task lacks a contract-valid reactive/simulative evidence pair.
+    - A task score cannot be reproduced from the exact retained evaluator input and output.
 stop_conditions:
   - Stop before execution while authorization remains false.
-  - Stop before execution until the FanOut evaluator dependency gap is immutably resolved.
-  - Stop before execution until model substitution, token/cost enforcement, raw-log ownership, and browser cleanup are integrated.
-  - Stop an authorized future attempt before its wall, token, tool-call, output-byte, or exact spend cap is exceeded.
+  - Stop an authorized attempt before its call, token, OpenAI-cost, browser-step, wall, output, disk, Lambda-duration, Lambda-cost, attempt, or zero-retry cap is exceeded.
+  - Stop before Task B whenever the predeclared Task-A continuation contract fails and preserve Task-A evidence.
   - Stop and classify the attempt infrastructure-invalid on source, configuration, task, model, environment, artifact, or pair-contract drift.
 execution:
   authorized: false

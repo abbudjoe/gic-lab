@@ -292,7 +292,7 @@ def test_pilot_profile_has_explicit_unauthorized_sample_and_budget_contract() ->
         "condition_limits": {
             "SIRA-REACTIVE": {
                 "attempts": 2,
-                "max_model_calls_per_attempt": 480,
+                "max_model_calls_per_attempt": 1155,
                 "max_model_tokens_per_attempt": 1_000_000,
                 "max_browser_actions_per_attempt": 30,
                 "max_wall_seconds_per_attempt": 3600,
@@ -301,7 +301,7 @@ def test_pilot_profile_has_explicit_unauthorized_sample_and_budget_contract() ->
             },
             "SIRA-SIMULATIVE": {
                 "attempts": 2,
-                "max_model_calls_per_attempt": 1830,
+                "max_model_calls_per_attempt": 1155,
                 "max_model_tokens_per_attempt": 1_000_000,
                 "max_browser_actions_per_attempt": 30,
                 "max_wall_seconds_per_attempt": 3600,
@@ -318,7 +318,7 @@ def test_pilot_profile_has_explicit_unauthorized_sample_and_budget_contract() ->
         assert child["execution"]["backend"] == "cloud"
         assert child["execution"]["authorization"]["authorized"] is False
         assert child["budget"]["max_gpu_hours"] == 1.0
-        expected_model_calls = 480 if child["condition"] == "SIRA-REACTIVE" else 1830
+        expected_model_calls = 1155
         assert child["budget"]["max_model_calls"] == expected_model_calls
         assert typed_child.budget.max_model_calls == expected_model_calls
 

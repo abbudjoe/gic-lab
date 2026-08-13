@@ -1,10 +1,10 @@
 schema_version: 0.1.0
 experiment_id: EXP-0001
-plan_id: PLAN-EXP0001-PILOT
+plan_id: PLAN-EXP0001-PILOT-V2
 profile: pilot
 study_stage: exploratory
-purpose: Test paired execution, deterministic scoring, completion-rate measurement, and paired-variance plumbing on two locked tasks.
-sample_rationale: Two pairs are the directional variance-plumbing minimum; they can expose scoring, completion, floor, ceiling, and cost failures but are not selected from an effect size or power claim.
+purpose: Calibrate full-task completion, exact upstream scoring, matched-pair execution, reconstruction, task-level resource use, and larger-pilot feasibility on two locked tasks.
+sample_rationale: Two counterbalanced pairs can expose pipeline, scoring, completion, gross floor or ceiling, and cost failures; they cannot estimate an effect, variance, significance, condition superiority, or EXP-0001 outcome.
 interpretation_allowed: true
 execution:
   authorized: false
@@ -27,7 +27,7 @@ sampling:
   dataset_ids:
     - DATA-SIRA-FANOUTQA-DEV
   counterbalancing:
-    - pair_id: PAIR-EXP0001-PILOT-0000
+    - pair_id: PAIR-EXP0001-PILOT-V2-TASK-A
       task_id: 7dcbbbdc7f1120cd
       task_source: DATA-SIRA-FANOUTQA-DEV[0:1]
       first: SIRA-REACTIVE
@@ -37,7 +37,7 @@ sampling:
           path: experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-task-0000-reactive.yaml
         - condition: SIRA-SIMULATIVE
           path: experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-task-0000-simulative.yaml
-    - pair_id: PAIR-EXP0001-PILOT-0001
+    - pair_id: PAIR-EXP0001-PILOT-V2-TASK-B
       task_id: 2120afba8009bad3
       task_source: DATA-SIRA-FANOUTQA-DEV[1:2]
       first: SIRA-SIMULATIVE
@@ -60,7 +60,7 @@ budget:
   condition_limits:
     SIRA-REACTIVE:
       attempts: 2
-      max_model_calls_per_attempt: 480
+      max_model_calls_per_attempt: 1155
       max_model_tokens_per_attempt: 1000000
       max_browser_actions_per_attempt: 30
       max_wall_seconds_per_attempt: 3600
@@ -68,14 +68,14 @@ budget:
       max_accelerator_hours_per_attempt: 1.0
     SIRA-SIMULATIVE:
       attempts: 2
-      max_model_calls_per_attempt: 1830
+      max_model_calls_per_attempt: 1155
       max_model_tokens_per_attempt: 1000000
       max_browser_actions_per_attempt: 30
       max_wall_seconds_per_attempt: 3600
       max_openai_cost_usd_per_attempt: 10.00
       max_accelerator_hours_per_attempt: 1.0
 artifacts:
-  root: artifacts/EXP-0001/pilot
+  root: artifacts/EXP-0001/pilot-v2
   retain_raw: true
   public_release: blocked-pending-review
 condition_plan_paths:
@@ -84,27 +84,14 @@ condition_plan_paths:
   - experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-task-0001-simulative.yaml
   - experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-task-0001-reactive.yaml
 readiness:
-  execution_eligibility: blocked-pending-prerequisites
+  execution_eligibility: eligible-after-authorization
   approval_changes_required:
-    - docs/PROJECT_STATE.yaml.paid_compute_allowed
-    - docs/PROJECT_STATE.yaml.prototype_execution_allowed
     - execution.authorized
     - execution.authorization_reference
-    - budget.max_cost_usd
-    - budget.max_provider_compute_cost_usd
-    - budget.max_total_cost_usd
     - condition_plans[*].execution.authorization
-    - condition_plans[*].budget.max_cost_usd
-    - condition_plans[*].budget.max_gpu_hours
-  unresolved_execution_blockers:
-    - A fresh user authorization must bind the final immutable pilot package and exact cost, time, model, browser, cleanup, and stopping limits.
-    - FanOut spaCy and en_core_web_sm evaluator versions, hashes, licenses, and deterministic scorer behavior are not immutably pinned.
-    - Current Lambda price, capacity, exact image, firewall, zero-instance state, and immutable model availability require fresh read-only reverification.
-    - Final source, protocol, configuration, environment, container, browser, command, and condition-diff identities are not materialized.
-    - The locked experiment protocol still records zero GPU hours; a separately reviewed version must reconcile that operational cap before any cloud authorization without changing the treatment, task, scoring, or interpretation contract.
-    - Future provider evidence must structurally redact or omit ephemeral Jupyter access values while retaining safe lifecycle proof.
+  unresolved_execution_blockers: []
   pre_execution_requirements:
-    - Materialize and enforce the declared per-condition model-call, token, browser-action, wall, API-spend, accelerator-hour, provider-spend, output, and aggregate caps before any empirical action.
-    - Preserve source-log ownership, post-action browser evidence, normalized events, regulation-decision lineage, per-call provider receipts when available, and complete cleanup identities.
-    - Revalidate the two-task frozen subset, counterbalanced order, task-level pairing, deterministic scoring, and no outcome-adaptive design changes.
-    - Treat the T07 one-step smoke only as artifact-execution evidence; do not use its cost or trajectory as pilot outcome evidence.
+    - A fresh user authorization must bind the final clean commit, PLAN-EXP0001-PILOT-V2 bytes and SHA-256, execution contract SHA-256, four command hashes, USD 45.16 aggregate cap, and zero-retry rule.
+    - Run the single exact T09 preflight before empirical entry, including read-only current model metadata, Lambda price and zero-instance checks; a failure may be repaired only before the first task model request or browser action.
+    - Enforce the machine execution contract for all four sequential attempts, including the automatic Task-A checkpoint, structural redaction, evidence reconstruction, cleanup, provider termination, and zero-instance closeout.
+    - Keep raw task, answer, trace, screenshot, and evaluator evidence private and access controlled; public release remains blocked pending review.

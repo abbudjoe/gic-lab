@@ -1,0 +1,409 @@
+{
+  "schema_version": "0.1.0",
+  "contract_id": "EXECUTION-CONTRACT-EXP0001-PILOT-V2",
+  "plan_id": "PLAN-EXP0001-PILOT-V2",
+  "experiment_id": "EXP-0001",
+  "authorized": false,
+  "authorization_reference": null,
+  "calibration_only": true,
+  "sira_commit": "93fb8d72de71f9a4a13419670adeb34d93cf7acd",
+  "model_revision": "gpt-4o-2024-11-20",
+  "service_tier": "default",
+  "randomization_seed": 42,
+  "contract_bindings": {
+    "plan": {
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml",
+      "sha256": "e39cab555ff07ce3e99215f6cf46eb49a0de7cc37268481fa2e4e22addb6ac05",
+      "size_bytes": 4710
+    },
+    "dataset": {
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/T09_PILOT_DATASET_CONTRACT.json",
+      "sha256": "adc2b2531d322ee9013cff2fd049c2f45e1098901f95cc1122fa57c013280389"
+    },
+    "evaluator": {
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/T09_PILOT_EVALUATOR_CONTRACT.json",
+      "sha256": "bc019781ab4468a51bcf6f76ac937ea81334d70281f476504b5693df57178a6a"
+    },
+    "runtime": {
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/T09_PILOT_RUNTIME_IDENTITY.json",
+      "sha256": "db3041caf860a0e5e383c8c2b71cee7cb43ef8b480bbcca7aca209928520674c"
+    },
+    "execution_schema": {
+      "path": "schemas/t09-sira-pilot-execution.schema.json",
+      "sha256": "2cff092e8a657167a482b32e31b25282cdf94552eb80755c6f097f7a4ea94f01"
+    },
+    "score_schema": {
+      "path": "schemas/t09-sira-pilot-score.schema.json",
+      "sha256": "1fae231155e3c3eaef75d76eaf49cf1421250b49649eec2364838757c3a299ee"
+    },
+    "evidence_schema": {
+      "path": "schemas/t09-sira-pilot-evidence.schema.json",
+      "sha256": "d5aaeacccfc89646c12b56824c92176714c67b694d4f47f5fe15b536e3068e62"
+    }
+  },
+  "runtime": {
+    "source": "T07-pragmatic-runtime-reused-with-small-T09-instrumentation-overlay",
+    "t07_frozen_execution_commit": "5698f04dfd08bc85a66d2355b0a4bd7d3ce24a23",
+    "t07_post_run_commit": "27f66e6a82edffa57e497516bf3969a199675f06",
+    "python_version": "3.11.14",
+    "container_image_digest": "sha256:035edf61718e84a8156f4f0f7817b134b0ce31488d3f0b50bbfba2b4a30cc61c",
+    "installed_package_manifest_sha256": "4ff2603a286807442a627ba764e4969bcb1f6a2ff6ce95b55b3a35db6cd3fb0c",
+    "playwright_version": "1.39.0",
+    "chromium_revision": "1084",
+    "chromium_sha256": "0498a571ab8b53ee6f52004fe2f3a385f8c92a8998cdb0e6dd567d04b7029ffe",
+    "sira_runner_sha256": "c2503b99bb8870b9abf9444831bbb3a70c7bbc8091e30ca06ecc3f2e24a7cf23",
+    "sira_agent_configs_sha256": "3c3110b5b69d43e0492fba3cb60171be35ccb8cd652e72d07ffb1ecfd7947072",
+    "sira_agent_sha256": "8ed6144a42e8fd18fe565f46c44c7855b15fbfb4817a689510e3b31e94952e51",
+    "sira_llm_sha256": "ac01dbe0dae9bf839a45a9c0ddf03130e45177849419dd2edbad5b29b2216c23",
+    "credential_channel": "host-provisioned-SIRA_API_KEY-only-never-command-argv-log-or-public-artifact",
+    "preflight": [
+      "python-version-and-runtime-imports",
+      "evidence-directory-create-write-fsync-and-readback",
+      "condition-and-aggregate-budget-ledger-create-validate-and-fsync",
+      "all-four-command-manifest-hashes-and-argv-rendering",
+      "one-browser-startup-about-blank-screenshot-and-clean-close-without-task-action",
+      "exact-evaluator-file-hashes-import-en_core_web_sm-load-and-zero-provider-use",
+      "pinned-dataset-hash-and-two-task-row-hashes",
+      "model-name-and-service-tier-metadata-without-model-request",
+      "credential-channel-name-permissions-and-nonempty-presence-without-reading-or-retaining-value",
+      "Lambda-GET-zero-instances-before-user-launch"
+    ],
+    "preflight_repair_boundary": "repair-permitted-only-before-any-task-model-request-or-task-browser-action",
+    "empirical_entry_boundary": "first-task-model-request-or-task-browser-action-whichever-occurs-first",
+    "post_entry_freeze": "code-scientific-configuration-tasks-order-evaluator-budgets-and-instrumentation-frozen-for-all-four-attempts"
+  },
+  "runtime_limits": {
+    "expected_browser_actions_per_attempt": 18,
+    "max_browser_actions_per_attempt": 30,
+    "action_timeout_seconds": 30,
+    "max_model_calls_per_attempt": 1155,
+    "max_model_tokens_per_attempt": 1000000,
+    "max_openai_cost_usd_per_attempt": 10.0,
+    "max_condition_wall_seconds": 3600,
+    "max_pair_wall_seconds": 7200,
+    "max_total_wall_seconds": 14400,
+    "max_output_bytes_per_attempt": 2147483648,
+    "max_disk_bytes": 12884901888,
+    "max_lambda_duration_seconds": 14400,
+    "max_lambda_cost_usd": 5.16,
+    "max_attempts": 4,
+    "max_retries_after_empirical_entry": 0,
+    "stop_behavior": "fail-closed-before-next-provider-call-or-browser-action; TERM-condition-process; retain-partial-evidence; run-cleanup; do-not-retry",
+    "incomplete_task_scoreable": "yes-only-when-exact-evaluator-runs-on-one-valid-retained-session; otherwise-evaluator-failure-and-null-score"
+  },
+  "budget_calibration": {
+    "pricing": {
+      "openai_input_usd_per_million": 2.5,
+      "openai_cached_input_usd_per_million": 1.25,
+      "openai_output_usd_per_million": 10.0,
+      "lambda_a10_usd_per_hour": 1.29,
+      "openai_pricing_source": "https://developers.openai.com/api/docs/models/gpt-4o",
+      "lambda_pricing_source": "https://lambda.ai/service/gpu-cloud",
+      "verified_date": "2026-08-13"
+    },
+    "basis": {
+      "expected_steps": 18,
+      "hard_steps": 30,
+      "reactive_calls_per_step_from_t07": 4,
+      "simulative_calls_per_step_from_t07": 5,
+      "reactive_tokens_per_step_from_t07": 4886,
+      "simulative_tokens_per_step_from_t07": 6702,
+      "reactive_openai_cost_per_step_from_t07": 0.014165,
+      "simulative_openai_cost_per_step_from_t07": 0.0261675,
+      "expected_wall_seconds_per_attempt": 720
+    },
+    "expected": {
+      "reactive_attempt": {
+        "model_calls": 72,
+        "tokens": 87948,
+        "browser_actions": 18,
+        "openai_cost_usd": 0.25497,
+        "lambda_cost_usd": 0.258,
+        "total_cost_usd": 0.51297
+      },
+      "simulative_attempt": {
+        "model_calls": 90,
+        "tokens": 120636,
+        "browser_actions": 18,
+        "openai_cost_usd": 0.471015,
+        "lambda_cost_usd": 0.258,
+        "total_cost_usd": 0.729015
+      },
+      "pair_cost_usd": 1.241985,
+      "aggregate_openai_cost_usd": 1.45197,
+      "aggregate_lambda_cost_usd": 1.032,
+      "aggregate_total_cost_usd": 2.48397
+    },
+    "hard": {
+      "attempt_openai_cost_usd": 10.0,
+      "attempt_lambda_cost_usd": 1.29,
+      "attempt_total_cost_usd": 11.29,
+      "pair_total_cost_usd": 22.58,
+      "aggregate_openai_cost_usd": 40.0,
+      "aggregate_lambda_cost_usd": 5.16,
+      "aggregate_total_cost_usd": 45.16,
+      "aggregate_model_calls": 4620,
+      "aggregate_tokens": 4000000,
+      "aggregate_browser_actions": 120
+    }
+  },
+  "identities": {
+    "host_run_id": "RUN-EXP0001-PILOT-V2-HOST-0001",
+    "evaluator_run_ids": [
+      "RUN-EXP0001-PILOT-V2-EVAL-TASK-A-REACTIVE",
+      "RUN-EXP0001-PILOT-V2-EVAL-TASK-A-SIMULATIVE",
+      "RUN-EXP0001-PILOT-V2-EVAL-TASK-B-SIMULATIVE",
+      "RUN-EXP0001-PILOT-V2-EVAL-TASK-B-REACTIVE"
+    ],
+    "evidence_archive_id": "ARCHIVE-EXP0001-PILOT-V2-0001"
+  },
+  "attempts": [
+    {
+      "run_id": "RUN-EXP0001-PILOT-V2-TASK-A-REACTIVE",
+      "pair_id": "PAIR-EXP0001-PILOT-V2-TASK-A",
+      "task_id": "7dcbbbdc7f1120cd",
+      "task_index": 0,
+      "condition": "reactive",
+      "order_index": 1,
+      "output_root": "artifacts/EXP-0001/pilot-v2/task-a/reactive/attempt-0001",
+      "condition_plan_path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-task-0000-reactive.yaml",
+      "condition_plan_sha256": "29ce56f14dc0c6b303e1c8e0b93f9b2ac45d920af43c1a6339180708d9daf966",
+      "giclab_commit": "unknown",
+      "upstream_argv": [
+        "EXP-0001-PILOT-V2-TASK-A-REACTIVE",
+        "--dataset",
+        "fanout",
+        "--mode",
+        "reactive",
+        "--agent",
+        "sira",
+        "--config_name",
+        "web_reactive",
+        "--model",
+        "gpt-4o-2024-11-20",
+        "--max_steps",
+        "30",
+        "--timeout",
+        "30",
+        "--max_retry",
+        "0",
+        "--data_root",
+        "/opt/sira/data",
+        "--output_dir",
+        "/opt/giclab-artifacts/artifacts/EXP-0001/pilot-v2/task-a/reactive/attempt-0001/sira-output",
+        "--start_idx",
+        "0",
+        "--end_idx",
+        "1",
+        "--seed",
+        "42"
+      ]
+    },
+    {
+      "run_id": "RUN-EXP0001-PILOT-V2-TASK-A-SIMULATIVE",
+      "pair_id": "PAIR-EXP0001-PILOT-V2-TASK-A",
+      "task_id": "7dcbbbdc7f1120cd",
+      "task_index": 0,
+      "condition": "simulative",
+      "order_index": 2,
+      "output_root": "artifacts/EXP-0001/pilot-v2/task-a/simulative/attempt-0001",
+      "condition_plan_path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-task-0000-simulative.yaml",
+      "condition_plan_sha256": "73521820ab03f350e50dbf9ce3f2755c0e9952fcb7fc7ed3c271a7a11971a487",
+      "giclab_commit": "unknown",
+      "upstream_argv": [
+        "EXP-0001-PILOT-V2-TASK-A-SIMULATIVE",
+        "--dataset",
+        "fanout",
+        "--mode",
+        "simulative",
+        "--agent",
+        "sira",
+        "--config_name",
+        "web_simulative",
+        "--model",
+        "gpt-4o-2024-11-20",
+        "--max_steps",
+        "30",
+        "--timeout",
+        "30",
+        "--max_retry",
+        "0",
+        "--data_root",
+        "/opt/sira/data",
+        "--output_dir",
+        "/opt/giclab-artifacts/artifacts/EXP-0001/pilot-v2/task-a/simulative/attempt-0001/sira-output",
+        "--start_idx",
+        "0",
+        "--end_idx",
+        "1",
+        "--seed",
+        "42"
+      ]
+    },
+    {
+      "run_id": "RUN-EXP0001-PILOT-V2-TASK-B-SIMULATIVE",
+      "pair_id": "PAIR-EXP0001-PILOT-V2-TASK-B",
+      "task_id": "2120afba8009bad3",
+      "task_index": 1,
+      "condition": "simulative",
+      "order_index": 1,
+      "output_root": "artifacts/EXP-0001/pilot-v2/task-b/simulative/attempt-0001",
+      "condition_plan_path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-task-0001-simulative.yaml",
+      "condition_plan_sha256": "23454d35b9987b7aacd76eb67ee47e3179bf5f90490553f43a8ac5474216f773",
+      "giclab_commit": "unknown",
+      "upstream_argv": [
+        "EXP-0001-PILOT-V2-TASK-B-SIMULATIVE",
+        "--dataset",
+        "fanout",
+        "--mode",
+        "simulative",
+        "--agent",
+        "sira",
+        "--config_name",
+        "web_simulative",
+        "--model",
+        "gpt-4o-2024-11-20",
+        "--max_steps",
+        "30",
+        "--timeout",
+        "30",
+        "--max_retry",
+        "0",
+        "--data_root",
+        "/opt/sira/data",
+        "--output_dir",
+        "/opt/giclab-artifacts/artifacts/EXP-0001/pilot-v2/task-b/simulative/attempt-0001/sira-output",
+        "--start_idx",
+        "1",
+        "--end_idx",
+        "2",
+        "--seed",
+        "42"
+      ]
+    },
+    {
+      "run_id": "RUN-EXP0001-PILOT-V2-TASK-B-REACTIVE",
+      "pair_id": "PAIR-EXP0001-PILOT-V2-TASK-B",
+      "task_id": "2120afba8009bad3",
+      "task_index": 1,
+      "condition": "reactive",
+      "order_index": 2,
+      "output_root": "artifacts/EXP-0001/pilot-v2/task-b/reactive/attempt-0001",
+      "condition_plan_path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-task-0001-reactive.yaml",
+      "condition_plan_sha256": "70a3b09e557edb8c830718bbb733db2a04704a7d81911e11d0e48264f457bd06",
+      "giclab_commit": "unknown",
+      "upstream_argv": [
+        "EXP-0001-PILOT-V2-TASK-B-REACTIVE",
+        "--dataset",
+        "fanout",
+        "--mode",
+        "reactive",
+        "--agent",
+        "sira",
+        "--config_name",
+        "web_reactive",
+        "--model",
+        "gpt-4o-2024-11-20",
+        "--max_steps",
+        "30",
+        "--timeout",
+        "30",
+        "--max_retry",
+        "0",
+        "--data_root",
+        "/opt/sira/data",
+        "--output_dir",
+        "/opt/giclab-artifacts/artifacts/EXP-0001/pilot-v2/task-b/reactive/attempt-0001/sira-output",
+        "--start_idx",
+        "1",
+        "--end_idx",
+        "2",
+        "--seed",
+        "42"
+      ]
+    }
+  ],
+  "first_pair_checkpoint": {
+    "required": true,
+    "automatic_when_all_criteria_pass": true,
+    "continue_only_if": [
+      "both-Task-A-attempts-have-complete-valid-reconstructable-evidence",
+      "both-exact-evaluator-attempts-succeeded",
+      "Task-A-pair-diff-remains-valid",
+      "no-credential-exposure-or-channel-issue",
+      "all-browser-container-and-secret-cleanup-receipts-valid",
+      "first-pair-model-calls-strictly-less-than-2310",
+      "first-pair-tokens-strictly-less-than-2000000",
+      "first-pair-browser-actions-strictly-less-than-60",
+      "first-pair-wall-strictly-less-than-7200-seconds",
+      "first-pair-OpenAI-cost-strictly-less-than-20-dollars",
+      "first-pair-Lambda-cost-strictly-less-than-2.58-dollars",
+      "first-pair-total-cost-strictly-less-than-22.58-dollars",
+      "projected-aggregate-total-cost-no-more-than-45.16-dollars",
+      "no-reference-leakage-contamination-or-two-valid-incomplete-zero-score-results-that-make-Task-B-incapable-of-adding-calibration-value"
+    ],
+    "failure_action": "stop-before-Task-B-preserve-Task-A-evidence-cleanup-and-terminate-provider-resource",
+    "sampling_claim": "none-calibration-checkpoint-is-not-an-unbiased-scientific-sampling-rule"
+  },
+  "evidence": {
+    "schema": "schemas/t09-sira-pilot-evidence.schema.json",
+    "per_attempt_required": [
+      "task-id-task-text-hash-reference-hash-pair-order",
+      "exact-command-config-and-frozen-commits",
+      "python-container-browser-model-service-tier",
+      "start-stop-timestamps-and-process-exit",
+      "provider-call-receipt-role-lineage-usage-and-service-tier",
+      "requested-browser-action-and-post-action-observation-result",
+      "session-json-raw-answer-screenshots-stdout-stderr",
+      "normalized-events-and-regulation-decision-assignment",
+      "evaluator-input-output-validity-and-normalized-score",
+      "artifact-execution-task-completion-answer-production-and-condition-failure",
+      "browser-environment-container-secret-and-provider-cleanup-receipts"
+    ],
+    "causal_parent_event_ids": "required-when-naturally-available",
+    "unsupported_h2k_fields": "explicit-null-unavailable-not-a-pilot-blocker",
+    "structural_redaction_keys": [
+      "jupyter_token",
+      "jupyter_url",
+      "api_key",
+      "cloud_credential",
+      "private_ip",
+      "private_cidr",
+      "provider_account_identifier"
+    ],
+    "raw_retention": "private-access-controlled",
+    "public_release": "blocked-pending-review"
+  },
+  "gpu_accounting": {
+    "instance_accelerator": "NVIDIA-A10-24GB",
+    "pilot_process_gpu_use_expected": false,
+    "visibility": "visible-but-unused-unless-preflight-records-disabled",
+    "cuda_environment_identity_required_when_visible": true,
+    "utilization_evidence": "nvidia-smi-start-pre-Task-A-post-Task-A-post-Task-B-and-before-termination-when-practical",
+    "selection_reason": "reuse-qualified-T07-Lambda-instance-type-and-runtime; GPU-is-not-a-treatment-or-acceleration-claim"
+  },
+  "cleanup": {
+    "condition": "close-every-tracked-browser-environment-and-container-after-each-attempt",
+    "credential": "remove-runtime-secret-and-retain-value-free-cleanup-receipt",
+    "provider": "user-terminates-single-Lambda-instance-before-14400-second-deadline-and-read-only-GET-confirms-zero-instances",
+    "unresolved_billable_resource_allowed": false
+  },
+  "interpretation_boundary": {
+    "allowed": [
+      "task-completion-and-answer-production",
+      "evaluator-operation-and-task-level-score",
+      "pair-matching-and-gross-floor-or-ceiling-failure",
+      "task-level-calls-tokens-browser-actions-wall-time-and-cost",
+      "larger-pilot-feasibility"
+    ],
+    "forbidden": [
+      "reliable-effect-size",
+      "meaningful-variance-estimate",
+      "statistical-significance",
+      "condition-superiority",
+      "EXP-0001-acceptance-or-rejection",
+      "H2K-or-GIC-architectural-conclusion"
+    ],
+    "reporting": "descriptive-task-level-results-only"
+  }
+}
