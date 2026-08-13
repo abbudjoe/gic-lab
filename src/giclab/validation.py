@@ -1175,6 +1175,135 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
         ):
             errors.append("EXP-0001 T09 Retry 2: prior failure preservation drifted")
 
+    retry2_disposition_path = exp_root / "T09_PRAGMATIC_RETRY2_DISPOSITION.json"
+    if not retry2_disposition_path.is_file():
+        errors.append("EXP-0001 T09 Retry 2: terminal disposition is missing")
+    else:
+        disposition = load_json(retry2_disposition_path)
+        attempts = disposition.get("attempts")
+        usage = disposition.get("usage")
+        provider = disposition.get("provider")
+        costs = disposition.get("cost_reconciliation")
+        cleanup = disposition.get("cleanup")
+        pair_matching = disposition.get("pair_matching")
+        evidence = disposition.get("evidence")
+        reactive = attempts.get("task_a_reactive") if isinstance(attempts, dict) else None
+        not_run_attempts = (
+            [
+                attempts.get(key)
+                for key in ("task_a_simulative", "task_b_simulative", "task_b_reactive")
+            ]
+            if isinstance(attempts, dict)
+            else []
+        )
+        if (
+            disposition.get("record_id") != "T09-PRAGMATIC-RETRY2-DISPOSITION-0001"
+            or disposition.get("plan_id") != "PLAN-EXP0001-PILOT-V4"
+            or disposition.get("terminal_state") != "t09-pilot-blocked-material-risk"
+            or disposition.get("lifecycle_state")
+            != "stopped-after-one-valid-scored-attempt-before-pair-completion"
+            or disposition.get("calibration_only") is not True
+            or disposition.get("empirical_entry") is not True
+            or disposition.get("scientific_result_claimed") is not False
+            or disposition.get("experiment_outcome_assigned") is not False
+            or disposition.get("experiment_evidence_status") != "not-evaluated"
+        ):
+            errors.append("EXP-0001 T09 Retry 2: terminal scientific boundary drifted")
+        if (
+            not isinstance(attempts, dict)
+            or attempts.get("empirical_attempts_entered") != ["RUN-T09-TASK-A-REACTIVE-0002"]
+            or attempts.get("attempts_completed") != ["RUN-T09-TASK-A-REACTIVE-0002"]
+            or attempts.get("condition_retries") != 0
+            or attempts.get("first_pair_checkpoint")
+            != "not-reached-stopped-before-task-a-simulative"
+            or attempts.get("realized_task_a_pair") is not False
+            or attempts.get("realized_task_b_pair") is not False
+            or not isinstance(reactive, dict)
+            or reactive.get("task_completion") != "completed"
+            or reactive.get("evaluator_validity") is not True
+            or reactive.get("task_score") != 0.0
+            or reactive.get("invalid_infrastructure_attempt") is not False
+            or reactive.get("condition_failure") is not False
+            or any(
+                not isinstance(item, dict)
+                or item.get("state") != "not-run"
+                or item.get("empirical_entry") is not False
+                for item in not_run_attempts
+            )
+        ):
+            errors.append("EXP-0001 T09 Retry 2: one-attempt/no-pair disposition drifted")
+        if usage != {
+            "model_metadata_requests": 1,
+            "task_model_calls": 52,
+            "input_tokens": 114181,
+            "cached_input_tokens": 0,
+            "output_tokens": 7719,
+            "total_tokens": 121900,
+            "browser_actions": 13,
+            "condition_attempts": 1,
+            "condition_retries": 0,
+            "openai_cost_usd": 0.3626425,
+        }:
+            errors.append("EXP-0001 T09 Retry 2: usage reconciliation drifted")
+        if (
+            not isinstance(provider, dict)
+            or provider.get("launch_count") != 1
+            or provider.get("maximum_launch_count") != 1
+            or provider.get("persistent_filesystems") != 0
+            or provider.get("termination_request_count") != 1
+            or provider.get("terminal_or_absent") is not True
+            or provider.get("zero_t09_instances") is not True
+            or provider.get("security_restored") is not True
+            or not isinstance(cleanup, dict)
+            or cleanup.get("temporary_secret_removed") is not True
+            or cleanup.get("direct_attempt_export_verified_before_termination") is not True
+            or cleanup.get("provider_terminal_or_absent") is not True
+            or cleanup.get("zero_t09_instances") is not True
+            or cleanup.get("security_restored") is not True
+        ):
+            errors.append("EXP-0001 T09 Retry 2: cleanup/provider closeout drifted")
+        if (
+            not isinstance(pair_matching, dict)
+            or pair_matching.get("task_a_static_pair_diff_valid") is not True
+            or pair_matching.get("task_b_static_pair_diff_valid") is not True
+            or pair_matching.get("task_a_realized_pair_available") is not False
+            or pair_matching.get("task_b_realized_pair_available") is not False
+            or pair_matching.get("paired_or_comparative_interpretation_permitted") is not False
+        ):
+            errors.append("EXP-0001 T09 Retry 2: pair boundary drifted")
+        if isinstance(costs, dict):
+            try:
+                prior = Decimal(str(costs.get("prior_t09_cost_usd")))
+                openai_cost = Decimal(str(costs.get("new_openai_cost_usd")))
+                lambda_cost = Decimal(str(costs.get("new_lambda_cost_usd")))
+                new_total = Decimal(str(costs.get("new_campaign_total_cost_usd")))
+                cumulative = Decimal(str(costs.get("cumulative_t09_cost_usd")))
+                new_cap = Decimal(str(costs.get("new_campaign_cap_usd")))
+                cumulative_cap = Decimal(str(costs.get("cumulative_t09_cap_usd")))
+            except InvalidOperation:
+                errors.append("EXP-0001 T09 Retry 2: cost reconciliation is malformed")
+            else:
+                if (
+                    new_total != openai_cost + lambda_cost
+                    or abs(cumulative - (prior + new_total)) > Decimal("1e-15")
+                    or new_total > new_cap
+                    or cumulative > cumulative_cap
+                    or costs.get("all_cost_caps_respected") is not True
+                ):
+                    errors.append("EXP-0001 T09 Retry 2: cost reconciliation drifted")
+        else:
+            errors.append("EXP-0001 T09 Retry 2: cost reconciliation is missing")
+        if not isinstance(evidence, dict) or evidence.get("archive_id") != (
+            "ARCHIVE-EXP0001-PILOT-V4-0002"
+        ):
+            errors.append("EXP-0001 T09 Retry 2: evidence archive identity drifted")
+        elif any(
+            not isinstance(value, str) or re.fullmatch(r"[0-9a-f]{64}", value) is None
+            for key, value in evidence.items()
+            if key.endswith("_sha256")
+        ):
+            errors.append("EXP-0001 T09 Retry 2: evidence digest is malformed")
+
     contract_root = exp_root / "contracts"
     execution_path = contract_root / "T09_PILOT_EXECUTION_CONTRACT.json"
     runtime_path = contract_root / "T09_PILOT_RUNTIME_IDENTITY.json"

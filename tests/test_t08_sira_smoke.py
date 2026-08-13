@@ -289,6 +289,8 @@ def test_pilot_profile_has_explicit_unauthorized_sample_and_budget_contract() ->
         "max_browser_actions": 120,
         "max_wall_seconds": 14_400,
         "max_accelerator_hours": 4.0,
+        "prior_t09_cost_usd": 0.414064252316667,
+        "cumulative_t09_cost_cap_usd": 46.0,
         "condition_limits": {
             "SIRA-REACTIVE": {
                 "attempts": 2,
@@ -371,7 +373,10 @@ def test_t08_keeps_exp0001_scientifically_pending_and_every_permission_false() -
     assert results["lifecycle_status"] == "planned"
     assert results["evidence_status"] == "not-evaluated"
     assert results["outcome_status"] == "pending"
-    assert results["measurements"] == []
+    assert len(results["measurements"]) == 1
+    assert results["measurements"][0]["kind"] == "descriptive-calibration-attempt"
+    assert results["measurements"][0]["paired_result_available"] is False
+    assert results["measurements"][0]["interpretation"] == "descriptive-calibration-only"
     state = load_yaml(ROOT / "docs/PROJECT_STATE.yaml")
     for field in (
         "paid_compute_allowed",

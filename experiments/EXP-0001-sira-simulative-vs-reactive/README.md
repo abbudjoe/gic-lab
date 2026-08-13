@@ -7,7 +7,10 @@ Execution authorization: **false**
 A two-condition T07 artifact smoke has run and T08 validated its retained evidence.
 That smoke has no scientific interpretation: task completion was not observed. One
 T09 V3 preflight-only host campaign later stopped on exact container-identity drift
-before any pilot condition or evaluator ran, so EXP-0001 remains unevaluated.
+before any pilot condition or evaluator ran. T09 V4 then qualified a replacement
+runtime and produced one valid scored Task A reactive calibration attempt, but stopped
+before its paired simulative attempt because of frozen finalizer control defects. No
+pair or comparative result exists, so EXP-0001 remains unevaluated.
 
 ## Scientific question and scope
 
@@ -153,12 +156,25 @@ different digest. All four attempts remain `not-run`; the exact host was termina
 and zero remaining T09 instances were verified. V3 cannot be replayed. Public raw
 release remains separately blocked pending license/privacy review.
 
+The exhausted historical plan identity is `PLAN-EXP0001-PILOT-V3`.
+
 Retry 2 preserves that V3 disposition byte-for-byte and classifies it as
 `preflight_blocked_by_overstrict_cross_run_image_digest_requirement`. V4 permits a
 different replacement digest only after one source-derived build passes the exact
 Python, package, patched-runner, browser, evaluator-fixture, command-pair, credential,
 and dated-model metadata gates. A mode-0600 O_EXCL run manifest then binds that exact
-image for every condition before empirical entry. The tracked plan remains
-`authorized: false`; the current-turn authority is a private single-use overlay.
-The exhausted historical plan is `PLAN-EXP0001-PILOT-V3`; no V3/T07 run, evaluator,
-pair, host, stage, or archive identity is reused by V4.
+image for every condition before empirical entry. Those gates passed for replacement
+`sha256:e2603f5a…`, and Task A reactive ran exactly once. Retained evidence establishes
+task completion and an exact-evaluator descriptive score of 0.0. The frozen host
+finalizer then failed on an incorrect output-root projection and an interpreter/
+dependency mismatch. One network-disabled reconstruction preserved that consumed
+attempt, but using its corrected invocation for later conditions would violate the
+post-entry freeze. Task A simulative and both Task B attempts did not run; no pair,
+checkpoint, condition comparison, or EXP-0001 outcome exists.
+
+The tracked plan remains `authorized: false`; its private single-use overlay is
+exhausted. Provider cleanup is verified: secret/container residue is absent, the exact
+host is terminal/absent, zero T09 instances remain, and security state is restored.
+Future execution requires both finalizer repairs, fresh plan/run/evaluator/pair/stage/
+archive/provider identities, independent review, and new current-turn authority.
+Public raw release remains separately blocked pending privacy and publication review.

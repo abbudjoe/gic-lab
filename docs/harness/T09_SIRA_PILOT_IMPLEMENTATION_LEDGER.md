@@ -2,7 +2,10 @@
 
 ## V4 pragmatic Retry 2 successor
 
-V4 assembly status: **in progress; no provider or empirical entry yet**
+V4 assembly status: **blocked-user-action; campaign closed after one valid scored
+attempt and before pair completion**
+
+Terminal state: **`t09-pilot-blocked-material-risk`**
 
 Current plan: `PLAN-EXP0001-PILOT-V4`.
 
@@ -11,18 +14,22 @@ Authoritative source SHA-256:
 Starting branch/commit: `phase-1/sira-pilot-pragmatic-r2` at
 `5dd1b4f1d026b821d6cdbc86f07f43c3732e3888`.
 
-Retry 2 preserves the V3 failure disposition and all scientific locks while replacing
+Retry 2 preserved the V3 failure disposition and all scientific locks while replacing
 only historical image-digest equality with one pre-entry functional qualification.
-The tracked plan remains `authorized: false`; current-turn authority must be
-materialized privately against the final clean package. The accepted image is a
-dynamic resource identity: a source-derived mode-0600 O_EXCL frozen-run manifest
-must bind its exact ID and every qualification/command/provider identity before the
-first task model request or browser action. This two-layer freeze is the only
-sequencing interpretation used by V4; it cannot alter science, budgets, or code.
+Replacement image `sha256:e2603f5a…` passed the gate and was frozen before empirical
+entry. Task A reactive then ran exactly once and was reconstructed from its retained
+raw prefix as completed with a valid exact-evaluator score of 0.0. Two frozen
+host-finalizer defects prevented the reviewed finalizer command from running; the
+one-time offline reconstruction was accepted only for that consumed attempt. Task A
+simulative and Task B did not run, so no pair, checkpoint, comparison, or EXP-0001
+outcome exists.
 
 The active 16-item Definition of Done, evidence log, and phase state are maintained
-in `docs/harness/T09_PRAGMATIC_RETRY2_EXECUTION_PLAN.md`. Until that ledger records the
-prelaunch gates and independent review as met, Lambda/model entry remains prohibited.
+in `docs/harness/T09_PRAGMATIC_RETRY2_EXECUTION_PLAN.md`. The single-use authority is
+exhausted; paid compute is terminal/absent, zero T09 instances and restored security
+are verified, and future execution requires both source repairs, fresh identities,
+review, and new current-turn authority. The machine-readable terminal record is
+`experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY2_DISPOSITION.json`.
 
 ---
 

@@ -4,21 +4,23 @@ subtitle: "Open, controlled research on learned agent architecture"
 ---
 
 ::: {.callout-note}
-## Phase 1 is active; T09 Retry 2 is at the pre-entry qualification gate
+## Phase 1 is active; T09 Retry 2 stopped before pair completion
 
 Phase 0.75 is complete. Phase 1 is open for sequential artifact-execution work, but
 paid compute, prototype execution, benchmark execution, training, and cloud mutation
 all remain disabled. The T07 one-step SiRA artifact smoke has been executed and
 offline-adjudicated; both sessions were incomplete, no scientific measurement or
 EXP-0001 outcome was assigned, and its execution authority is exhausted. The tracked
-Historical `PLAN-EXP0001-PILOT-V3` remains unauthorized (`authorized: false`). Its one-launch
-private authority was consumed by a preflight-only Lambda campaign, which stopped
-before any model request, task browser action, condition, evaluator, or score because
-the exact frozen T07 container image could not be materialized. The host was
-terminated and zero T09 instances were verified. The current-turn-authorized V4
-successor preserves every scientific lock, supersedes only historical image-digest
-equality, and must qualify and freeze one exact replacement image before any task
-model request or task browser action. EXP-0001 remains unevaluated.
+Historical `PLAN-EXP0001-PILOT-V3` remains unauthorized (`authorized: false`). Retry
+2 qualified and froze one replacement runtime under `PLAN-EXP0001-PILOT-V4`, then ran
+Task A reactive exactly once. The task completed and the pinned evaluator produced a
+descriptive score of 0.0 from retained evidence. Two frozen host-finalizer control
+defects required one network-disabled reconstruction of that already-consumed attempt;
+the corrected invocation could not conformantly carry into later conditions. Task A
+simulative and both Task B attempts did not run, so there is no pair, checkpoint,
+condition comparison, or EXP-0001 outcome. The exact host was terminated, zero T09
+instances and restored security were verified, and the single-use authority is
+exhausted. EXP-0001 remains unevaluated.
 :::
 
 GIC Lab studies a narrower and more falsifiable question than “can we build a GIC agent?”:
@@ -38,8 +40,8 @@ The program begins with the authors' released SiRA and SR²AM references, then i
 - Treat any planned/deferred RQ-H2K trace-sufficiency output as infrastructure evidence
   only; it adds no experiment, condition, training path, learned kernel, or later phase.
 - Keep reusable tracked pilot authority, SR²AM cloud runs, and training disabled;
-  T09 V3's consumed single-use overlay grants no replay authority; Retry 2 uses fresh
-  V4/0002 identities and a separate private single-use overlay.
+  neither T09 V3 nor V4 grants replay authority. A future paired calibration requires
+  repaired finalizer controls, fresh identities, review, and new authorization.
 - Treat the T07 smoke's usage and trajectories only as artifact-execution evidence;
   they are neither pilot observations nor representative full-task costs.
 

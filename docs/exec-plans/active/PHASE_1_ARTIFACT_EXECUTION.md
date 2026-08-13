@@ -50,14 +50,14 @@ no mutation authority; one gate's authorization never carries into another.
 | P1-DOD-01 | Phase 0.75 is successful/completed; this is the one authoritative active plan; project execution/compute permissions remain false; only the disabled smoke profile is eligible for a later exact authorization. | Plan lifecycle/state/profile/readiness validation and public render. | met |
 | P1-DOD-02 | T07 executes at most the one authorized SiRA smoke pair with complete raw, normalized, regulation-decision, budget, scoring, and cleanup evidence and no interpretation. | Immutable run/authorization records, artifacts/hashes, accounting, cleanup proof, and validation. | met; T08 documents nonblocking fields that T07 did not retain directly |
 | P1-DOD-03 | T08 independently reproduces the smoke summary, separates infrastructure/protocol/upstream/future-track gaps, and leaves any pilot unauthorized. | Raw-to-summary checks, infrastructure-only trace-sufficiency report, review, and gate. | met |
-| P1-DOD-04 | T09 first locks an executable calibration-only SiRA pilot and later executes it only under a fresh exact authorization, without outcome-adaptive changes, while reconciling every entered attempt. | Frozen task/order/evaluator/runtime records, enforced budgets, immutable authorization packet, and later complete attempt dispositions. | blocked at dynamic preflight: one authorized V3 host campaign stopped before empirical entry on exact container-identity drift; zero attempts were entered and cleanup/accounting are reconciled |
+| P1-DOD-04 | T09 first locks an executable calibration-only SiRA pilot and later executes it only under a fresh exact authorization, without outcome-adaptive changes, while reconciling every entered attempt. | Frozen task/order/evaluator/runtime records, enforced budgets, immutable authorization packet, and later complete attempt dispositions. | incomplete and blocked: V4 qualified/froze its replacement runtime and reconciled one valid scored Task A reactive attempt, then stopped before Task A simulative because two frozen finalizer control defects prohibited conformant continuation; no pair/checkpoint or scientific result exists |
 | P1-DOD-05 | T10 produces a reproducible exploratory EXP-0001 analysis with uncertainty, exact reproduction level, cost/deviation reporting, and no internalization or mechanism-attribution overclaim. | Validated result summary, registry/notebook/ledger updates, review, and gate. | not-started |
 | P1-DOD-06 | T11 produces a read-only, launch-ready SR²AM-v0.1-8B Lambda contract with current price, hard termination, source-grounded trace requirements, failure tests, and no mutation. | Audited runbook/contracts, dry-run/failure tests, authorization sentence, and gate. | not-started |
 | P1-DOD-07 | T12 launches only the exactly authorized SR²AM smoke, retains and transfers required evidence, reconciles cost, and verifies provider termination. | Immutable cloud attempt, raw artifacts/hashes, compute ledger, monitoring, and terminal-state proof. | not-started |
 | P1-DOD-08 | T13 validates SR²AM artifact fidelity, runbook safety/cost predictability, and infrastructure-only trace sufficiency before proposing an unauthorized pilot. | Recomputed evidence, source/adapter lineage, repaired tests, review, and gate. | not-started |
 | P1-DOD-09 | T14 executes only a freshly authorized locked SR²AM pilot and verifies artifact transfer, accounting, and termination without in-run design changes. | Immutable pilot records, artifacts/hashes, compute reconciliation, and terminal-state proof. | not-started |
 | P1-DOD-10 | T15 closes the current Phase 1 unit with validated SiRA/SR²AM evidence, precise reproduction levels, uncertainty/cost/deviation reporting, and one proposed next scientific workstream that is not begun. | Result summaries, registry/notebook/decision/risk updates, review, final gate, and plan disposition. | not-started |
-| P1-DOD-11 | Every executed attempt has explicit current-turn authorization, immutable identity, append-only raw evidence, version/hash lineage, finite budget enforcement, secret isolation, and verified cleanup; failed infrastructure is never a scientific negative. | Run/compute/artifact ledgers, policy checks, failure evidence, and cross-task review. | partial |
+| P1-DOD-11 | Every executed attempt has explicit current-turn authorization, immutable identity, append-only raw evidence, version/hash lineage, finite budget enforcement, secret isolation, and verified cleanup; failed infrastructure is never a scientific negative. | Run/compute/artifact ledgers, policy checks, failure evidence, and cross-task review. | partial: the sole V4 empirical attempt and its offline reconstruction are reconciled; direct evidence transfer, secret/container cleanup, exact provider termination, zero-instance state, security restoration, and budget compliance are verified, while public release remains blocked |
 | P1-DOD-12 | Regulation/control evidence remains source classified; experiment assignment and ordinary prose are never called learned regulation; RQ-H2K outputs are infrastructure-only and do not affect EXP-0001 validity or interpretation. | Typed events, trace-sufficiency reports, negative boundary tests, and public wording. | not-started |
 | P1-DOD-13 | Every implementation/analysis task passes focused smoke, independent spec-conformance review, post-review smoke, and its required full gate before the next dependency begins. | Per-task assembly ledgers with exact commands, artifacts, reviewer verdicts, and status. | partial |
 
@@ -67,8 +67,8 @@ no mutation authority; one gate's authorization never carries into another.
 |---|---|---|---|
 | T07 | Execute one authorized contained SiRA smoke pair; capture regulation-decision evidence without interpretation. | P1-DOD-02, P1-DOD-11 through P1-DOD-13 | complete: Retry 2 matched pair executed and cleanup verified; execution authority exhausted; no pilot authority |
 | T08 | Analyze smoke infrastructure evidence and prepare an unauthorized pilot package. | P1-DOD-03, P1-DOD-11 through P1-DOD-13 | complete: evidence validated; pilot planning eligible but execution unauthorized |
-| T09 | Lock and execute the two-task pragmatic calibration pilot under the fresh current-turn authorization. | P1-DOD-04, P1-DOD-11 through P1-DOD-13 | V3 preserved/closed; V4 current-turn authorized and pending pre-entry replacement-image qualification |
-| T10 | Analyze and publish the exploratory SiRA pilot. | P1-DOD-05, P1-DOD-11 through P1-DOD-13 | blocked: T09 produced no pilot attempt or score |
+| T09 | Lock and execute the two-task pragmatic calibration pilot under the fresh current-turn authorization. | P1-DOD-04, P1-DOD-11 through P1-DOD-13 | blocked/closed: V4 produced one valid scored Task A reactive attempt but no realized pair; authority exhausted and fresh repaired successor required |
+| T10 | Analyze and publish the exploratory SiRA pilot. | P1-DOD-05, P1-DOD-11 through P1-DOD-13 | blocked: T09 produced no complete pilot pair or checkpoint; the lone descriptive score supports no comparative analysis |
 | T11 | Build and validate the read-only SR²AM Lambda preflight. | P1-DOD-06, P1-DOD-11 through P1-DOD-13 | blocked until T10 succeeds |
 | T12 | Launch and monitor the separately authorized SR²AM Lambda smoke. | P1-DOD-07, P1-DOD-11 through P1-DOD-13 | blocked until T11 and authorization |
 | T13 | Analyze the SR²AM smoke and prepare an unauthorized pilot. | P1-DOD-08, P1-DOD-11 through P1-DOD-13 | blocked until T12 succeeds |
@@ -129,7 +129,8 @@ preserved and unauthorized. Exact DoD and review/gate evidence are in
 
 ## T09 calibration-pilot lock
 
-Assembly status: **`t09-pilot-blocked-material-risk`; no pilot execution occurred**.
+Assembly status: **V2 planning terminal `t09-pilot-blocked-material-risk`; no V2
+pilot execution occurred**.
 
 T09 preserves the original effect-oriented proposal and creates
 `PLAN-EXP0001-PILOT-V2` because calibration-only scientific meaning, the exact
@@ -187,7 +188,8 @@ replayable. See `docs/harness/T09_PRAGMATIC_CALIBRATION_PILOT_EXECUTION_PLAN.md`
 
 ### T09 pragmatic Retry 2 replacement-runtime execution — 2026-08-13
 
-Assembly status: **prelaunch V4 package binding and dynamic qualification pending**.
+Assembly status: **`t09-pilot-blocked-material-risk`; single-use authority exhausted
+after one valid scored attempt and before pair completion**.
 
 Current-turn authority creates `PLAN-EXP0001-PILOT-V4` and fresh host, condition,
 evaluator, and archive identities. It preserves every V3 scientific and calibration
@@ -198,6 +200,37 @@ and one dated-model metadata GET gates pass. A source-derived mode-0600 O_EXCL
 manifest freezes the actual image ID before empirical entry, and every later
 condition/evaluator reloads that binding. V3 evidence and its USD
 0.414064252316667 Lambda cost remain separate immutable provenance.
+
+Clean pre-run package `9f02f733cd2cb57546aa262dac3e783e948504a4` passed
+independent review. One replacement image,
+`sha256:e2603f5aac97b8c48567b5de624e7d193dade0327a2f1040d2dd67d0cd86c2ba`,
+passed qualification `QUAL-T09-PILOT-V4-IMAGE-0004`; exact manifest
+`9071c152600a59e0001cd075e79abef08589d80d475b82fd0e5c15541026b09a`
+froze it before empirical entry. Task A reactive ran once and exited zero. Its
+retained raw prefix reconstructs as task completed, evaluator valid, score 0.0, with
+52 model calls, 121,900 tokens, 13 browser actions, 199.196380 seconds, and USD
+0.3626425 OpenAI cost.
+
+The frozen host finalizer then exposed two control defects: it read `output_root`
+from a nonexistent top-level command-manifest field, and its next invocation selected
+the evaluator-only interpreter without the qualified control dependency closure. A
+single network-disabled reconstruction using the same image, evaluator, dataset, and
+retained prefix preserved the consumed attempt with zero additional model/browser
+activity. Independent review accepted that evidence recovery for the consumed attempt
+only; applying the corrected invocation to later attempts would change frozen
+post-entry configuration. The campaign therefore stopped before Task A simulative.
+No first-pair checkpoint or Task B attempt exists, and EXP-0001 remains unevaluated.
+
+The direct attempt export and a privacy-safe maximal campaign prefix were copied and
+rehash-verified. The aggregate stage failed closed on fixture-shaped and historical
+source literals, so public raw release remains blocked. Temporary secret and owned
+containers were removed; one termination request produced terminal/absent, zero T09
+instances, and restored-security evidence. Lambda duration/cost were 1.359774964
+A10-hours / USD 1.754109703373909; new campaign cost was USD 2.116752203373909 and
+cumulative T09 cost was USD 2.5308164556905757. The public disposition is
+`experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY2_DISPOSITION.json`.
+V4 cannot be replayed; a future paired campaign requires both source repairs, fresh
+identities, independent review, and new current-turn authority.
 
 ### Pragmatic execution reset — 2026-08-12
 

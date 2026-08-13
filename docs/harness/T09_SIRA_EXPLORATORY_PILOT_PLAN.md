@@ -1,30 +1,32 @@
 # T09 SiRA two-task pragmatic calibration pilot plan
 
-Status: **V4 current-turn authorized; clean package and dynamic replacement qualification pending**
+Status: **V4 single-use authority exhausted; stopped before pair completion**
 
 Plan ID: `PLAN-EXP0001-PILOT-V4`
 
 Frozen planning terminal state: `ready-for-t09-pilot-authorization`
 
-Current execution state: `prelaunch-v4-package-binding-and-dynamic-qualification-pending`
+Current execution state: `t09-pilot-blocked-material-risk`
 
 The tracked plan remains `authorized: false`; repository bytes are not a reusable
-cloud capability. The user's 2026-08-13 single-use private overlay was consumed by
-one launch from frozen package `9dc7363561ec96812072e2c7824141d75b028332`.
-Dynamic preflight stopped before empirical entry because the pinned sources rebuilt
-a container digest different from the frozen runtime identity and the exact frozen
-image was not retained as a loadable artifact. All four attempts and evaluators are
-`not-run`; the exact host was terminated and cleanup verified. That V3 disposition is
-preserved byte-for-byte. Retry 2 supersedes only cross-run equality with the
-unavailable historical image: one V4 replacement must be built from pinned inputs,
-pass the exact functional gates, and be frozen by a source-derived mode-0600 O_EXCL
-run manifest before empirical entry. The same image ID is mandatory for all four
-fresh 0002 attempts. The tracked plan stays `authorized: false`; current authority is
-a private single-use overlay bound to the clean package and source-contract SHA-256
-`3852fe8dabb9ee6b10e40cbc6dc1ab964ea6fce11f71f81f0966e927cadddeb9`.
+cloud capability. The user's 2026-08-13 private overlay was consumed by one V4 host
+campaign from clean package `9f02f733cd2cb57546aa262dac3e783e948504a4`.
+Replacement image `sha256:e2603f5a…` passed functional qualification and was frozen in
+source-derived mode-0600 manifest `9071c152…` before empirical entry. Task A reactive
+then ran exactly once. Its retained prefix was deterministically reconstructed as a
+completed, evaluator-valid attempt with descriptive score 0.0 after two frozen
+host-finalizer control defects prevented the reviewed finalizer command from
+starting. The reconstruction used no network, model request, browser action, or
+condition retry and is valid only for the already-consumed attempt. Continuing with
+a changed finalizer invocation would violate the post-entry freeze, so Task A
+simulative and both Task B attempts did not run. No pair/checkpoint or scientific
+outcome exists. Cleanup and exact provider termination are verified; the V4 authority
+is exhausted and cannot be replayed.
 
-The V3 gap ledger below is retained as historical rationale. Its final image blocker
-is resolved in V4 by functional qualification rather than historical digest equality.
+The V3 gap ledger below is retained as historical rationale. V4 resolved its image
+blocker by functional qualification; the current blockers are the frozen finalizer's
+incorrect output-root projection and its interpreter/dependency mismatch. Both require
+a fresh reviewed successor package and new authority before another paired campaign.
 
 ## Scope and interpretation
 

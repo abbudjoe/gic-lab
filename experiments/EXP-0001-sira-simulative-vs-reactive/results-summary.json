@@ -1,15 +1,37 @@
 {
   "schema_version": "0.1.0",
   "experiment_id": "EXP-0001",
-  "run_status": "artifact-smoke-adjudicated",
+  "run_status": "calibration-pilot-incomplete-one-valid-scored-attempt",
   "lifecycle_status": "planned",
   "evidence_status": "not-evaluated",
   "outcome_status": "pending",
-  "measurements": [],
+  "measurements": [
+    {
+      "measurement_id": "MEAS-EXP0001-T09-V4-TASK-A-REACTIVE-0001",
+      "kind": "descriptive-calibration-attempt",
+      "run_id": "RUN-T09-TASK-A-REACTIVE-0002",
+      "task_id": "7dcbbbdc7f1120cd",
+      "condition": "SIRA-REACTIVE",
+      "task_completed": true,
+      "answer_produced": true,
+      "evaluator_valid": true,
+      "task_score": 0.0,
+      "model_calls": 52,
+      "total_tokens": 121900,
+      "browser_actions": 13,
+      "openai_cost_usd": 0.3626425,
+      "wall_seconds": 199.19638025899985,
+      "paired_result_available": false,
+      "interpretation": "descriptive-calibration-only"
+    }
+  ],
   "artifacts": [
     "experiments/EXP-0001-sira-simulative-vs-reactive/T08_SMOKE_ADJUDICATION.json",
-    "experiments/EXP-0001-sira-simulative-vs-reactive/T08_SMOKE_PAIR_DIFF.json"
+    "experiments/EXP-0001-sira-simulative-vs-reactive/T08_SMOKE_PAIR_DIFF.json",
+    "experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_PREFLIGHT_DISPOSITION.json",
+    "experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY2_SUPERSESSION.json",
+    "experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY2_DISPOSITION.json"
   ],
-  "infrastructure_terminal_state": "smoke_evidence_validated_pilot_planning_eligible",
-  "note": "The one-step T07 reactive/simulative artifact smoke executed and was adjudicated as a valid matched pair with documented evidence gaps; task completion was not observed, measurements remain empty, scientific evidence is not evaluated, and no EXP-0001 outcome is assigned."
+  "infrastructure_terminal_state": "t09-pilot-blocked-material-risk",
+  "note": "T09 Retry 2 qualified and froze one replacement runtime, then entered Task A reactive once. The task completed and the exact pinned evaluator deterministically scored it 0.0 after one network-disabled evidence-reconstruction step necessitated by two frozen host-finalizer control defects. Task A simulative and both Task B attempts did not run, no realized pair or checkpoint exists, scientific evidence remains not evaluated, and no EXP-0001 outcome or condition comparison is assigned."
 }

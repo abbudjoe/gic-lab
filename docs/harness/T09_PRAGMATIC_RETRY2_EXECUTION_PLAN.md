@@ -1,6 +1,17 @@
 # T09 pragmatic Retry 2 execution plan
 
-Assembly status: **in-progress**
+Assembly status: **blocked-user-action**
+
+Terminal state: **`t09-pilot-blocked-material-risk`**
+
+The single-use Retry 2 authority is exhausted. One Task A reactive attempt crossed
+the empirical boundary and was preserved as a valid scored calibration attempt. Two
+frozen host-finalizer control defects then made the reviewed finalizer command
+unusable. A one-time, network-disabled reconstruction recovered the already-consumed
+attempt without another model request, browser action, or condition execution; it did
+not authorize a changed invocation for later conditions. Task A simulative and both
+Task B attempts therefore did not run, no pair or checkpoint exists, and no
+scientific outcome is assigned.
 
 ## Source contract
 
@@ -34,20 +45,20 @@ claim; public release of private task or trace evidence.
 |---|---|---|---|
 | R2-01 | Preserve the V3 disposition, archive, provider receipts, image observation, and all V3/T07 identities byte-for-byte. | Disposition remains `cb6ba0…`; V3 plan/condition bytes are archived; the typed V4 supersession records zero prior empirical use. | met |
 | R2-02 | Freeze exactly the existing science: EXP-0001, two task IDs/hashes, FanOutQA revision, SiRA commit, GPT-4o snapshot, evaluator, counterbalance, zero retry, calibration-only interpretation. | Dataset/evaluator hashes, V3/V4 science-lock regression, execution schema, and four fresh 0002 attempts. | met |
-| R2-03 | Build the candidate only from pinned inputs and retain base, Containerfile, complete context, source, dependency, browser, evaluator, entrypoint, environment, build-command, Docker/BuildKit, and SOURCE_DATE_EPOCH evidence. | Reviewed builder emits a complete safe context manifest and source/tool/build receipts; live candidate evidence is pending. | met-statically; dynamic-pending |
-| R2-04 | Replace historical image-ID equality with a typed acceptance rule: one accepted replacement image, exact ID bound before empirical entry, and unchanged image verified for every attempt. | Typed qualification plus mode-0600 O_EXCL frozen manifest; every consumer rejects tags/static substitution. The same manifest now binds every evaluator-overlay byte and the exact reviewed 51-package set. | met-statically; dynamic-pending |
-| R2-05 | Compare available T07 image evidence and classify each observed difference without treating digest inequality alone as functional. | Historical inspect/setup hashes are pinned; comparator permits only verified functional equality, approved nonfunctional drift, or `historical_evidence_unavailable`. | met-statically; dynamic-pending |
-| R2-06 | Pass final-container functional equivalence for Python 3.11.14, SiRA/source, workdir/entrypoint, packages/imports/evidence/budgets/tasks, exact offline evaluator fixtures, local browser lifecycle, command/pair diffs, cleanup, and exactly one model metadata request with no task request/action. | Candidate `0003` passed build, exact file hashes, 51-package evaluator materialization, secret-channel, and final-image runtime gates, then stopped network-none because the evaluator-only interpreter could not import control-plane PyYAML. The repaired gate uses the qualified SiRA interpreter (which retains pinned PyYAML/jsonschema) with the exact evaluator overlay prepended; all dynamic gates must rerun under `0004`. | partial: common preentry repair static |
-| R2-07 | Freeze V4 plan, host/condition/evaluator/archive IDs ending in 0002, four commands/configs, code, runtime binding, and manifest before the first condition empirical event. | Plan remains `1ebfbb…` (6,465 bytes); runtime `549f7e…`, execution `393439…`, commands `c621de…`, reviewed source ancestor `3303ce…`; failures `0002` and `0003` are preserved, candidate `0003` is reused by exact image ID without another build, and acceptance qualification is fresh `0004`; runtime manifest pending. | partial: static freeze met |
-| R2-08 | Preserve a verified loadable image archive when it does not threaten the campaign/cleanup wall; otherwise record the exact limitation. | Bounded best-effort export path is implemented and cannot borrow cleanup reserve. | dynamic-pending |
-| R2-09 | Enforce one 14,400-second provider clock, 13,500-second termination cutoff, 900-second cleanup reserve, next-attempt-only admission, one instance/launch, and zero persistent filesystem. | Shared typed lifecycle, provider-entry/closeout receipts, and exact fake-clock boundaries pass locally. | met-statically; provider evidence pending |
-| R2-10 | Enforce fresh and cumulative cost limits, 4,620 calls, 4,000,000 tokens, 120 browser actions, four attempts, and zero scientific retry before each billable action. | Runtime counters and private-ledger schema enforce USD 40/5.16/45.16, prior USD 0.414064252316667 and cumulative USD 46, plus scientific caps. | met-statically; dynamic ledger pending |
-| R2-11 | Run Task A reactive then simulative exactly once, evaluate both, and make the predeclared first-pair continuation decision. | Attempt archives/outcomes and checkpoint receipt; regressions enforce both gross zero/incomplete floor and one/completed ceiling stops. | not-started |
-| R2-12 | When the checkpoint passes, run Task B simulative then reactive exactly once and evaluate both; otherwise stop without selection claims. | Attempt archives/outcomes or typed checkpoint stop. | not-started |
-| R2-13 | Retain reconstructable, structurally redacted private evidence for every entered attempt and the maximal safe failure prefix. | V4 evidence/score schemas, direct-export verification and acknowledged-manifest regression pass; live archives pending. | partial: interfaces met |
-| R2-14 | Prioritize cleanup: owned containers/browsers absent, temporary secrets destroyed, evidence copied as available, exact instance terminated/absent, firewall restored, regional rulesets absent, no T09 instance running. | Cleanup remains reachable from every prefix; provider closeout and export-deferral regressions pass; live receipts pending. | partial: controls met |
-| R2-15 | Pass focused image/science/pair/timing/budget/evidence/cleanup tests, `make validate`, privacy scan, `git diff --check`, and independent spec-conformance review before launch; repair and rereview any material finding. | The prelaunch package passed independent review. The live `.env.example` context rejection has an exact-content exclusion regression, a zero-use failure-prefix regression, and a source-bound same-host package-transition control; focused tests, Ruff, strict mypy, and pair diffs pass. Replacement-package rereview is pending. | partial: rereview pending |
-| R2-16 | After termination, reconcile actual Lambda/OpenAI usage, update public control surfaces without scientific overclaim, run proportionate broader gates/review, commit cleanly, and return all sixteen requested handoff items. | Compute/public records, final validation, clean commit, final response. | not-started |
+| R2-03 | Build the candidate only from pinned inputs and retain base, Containerfile, complete context, source, dependency, browser, evaluator, entrypoint, environment, build-command, Docker/BuildKit, and SOURCE_DATE_EPOCH evidence. | One candidate was built from the source-bound complete context; qualification and build receipts are retained in the private archive. | met |
+| R2-04 | Replace historical image-ID equality with a typed acceptance rule: one accepted replacement image, exact ID bound before empirical entry, and unchanged image verified for every attempt. | Replacement `sha256:e2603f5a…` passed `QUAL-T09-PILOT-V4-IMAGE-0004` and was frozen in manifest `9071c152…` before entry; no second image was built. | met |
+| R2-05 | Compare available T07 image evidence and classify each observed difference without treating digest inequality alone as functional. | Functional equivalence passed. The precise digest cause remains `historical_evidence_unavailable` because the old history/build context was not retained. | met |
+| R2-06 | Pass final-container functional equivalence for Python 3.11.14, SiRA/source, workdir/entrypoint, packages/imports/evidence/budgets/tasks, exact offline evaluator fixtures, local browser lifecycle, command/pair diffs, cleanup, and exactly one model metadata request with no task request/action. | Qualification passed, including 51 evaluator packages, exact fixtures, browser cleanup, both pair diffs, and exactly one metadata GET. It did not exercise the exact host finalizer command, whose output-root projection and interpreter closure later failed after empirical entry. | partial |
+| R2-07 | Freeze V4 plan, host/condition/evaluator/archive IDs ending in 0002, four commands/configs, code, runtime binding, and manifest before the first condition empirical event. | Clean package `9f02f733…`, reviewed ancestor `3303ceac…`, plan `1ebfbb64…` (6,465 bytes), four command manifests, and frozen runtime manifest `9071c152…` were fixed before Task A reactive entry. | met |
+| R2-08 | Preserve a verified loadable image archive when it does not threaten the campaign/cleanup wall; otherwise record the exact limitation. | No loadable image archive was retained; export was abandoned after the terminal control failure so evidence transfer and exact provider termination retained priority. | met |
+| R2-09 | Enforce one 14,400-second provider clock, 13,500-second termination cutoff, 900-second cleanup reserve, next-attempt-only admission, one instance/launch, and zero persistent filesystem. | One A10 instance launched with zero persistent filesystems; termination began before cutoff and terminal/zero/security state was verified at 4,895.189870 seconds. | met |
+| R2-10 | Enforce fresh and cumulative cost limits, 4,620 calls, 4,000,000 tokens, 120 browser actions, four attempts, and zero scientific retry before each billable action. | Realized usage was 52 task calls, 121,900 tokens, 13 actions, one condition attempt, zero retries, USD 2.116752203373909 new and USD 2.5308164556905757 cumulative T09. Every cap held. | met |
+| R2-11 | Run Task A reactive then simulative exactly once, evaluate both, and make the predeclared first-pair continuation decision. | Task A reactive ran once and was reconstructed as completed/evaluator-valid/score 0.0. The frozen finalizer defects prohibited using a corrected invocation for Task A simulative, so the campaign stopped before a pair or checkpoint. | blocked |
+| R2-12 | When the checkpoint passes, run Task B simulative then reactive exactly once and evaluate both; otherwise stop without selection claims. | The checkpoint was never reached; both Task B attempts remained `not-run`, with no selection, comparison, or scientific claim. | blocked |
+| R2-13 | Retain reconstructable, structurally redacted private evidence for every entered attempt and the maximal safe failure prefix. | The 3,439,137-byte direct attempt export rehashes at `63ed19b3…`; a 313,658-byte privacy-safe campaign prefix rehashes at `0abe6210…`; both finalizer failures and the accepted one-time reconstruction are retained. | met |
+| R2-14 | Prioritize cleanup: owned containers/browsers absent, temporary secrets destroyed, evidence copied as available, exact instance terminated/absent, firewall restored, regional rulesets absent, no T09 instance running. | Secret removal, zero owned containers, direct-export verification, one termination request, terminal/absent, zero T09 instances, and restored security are source-verified. | met |
+| R2-15 | Pass focused image/science/pair/timing/budget/evidence/cleanup tests, `make validate`, privacy scan, `git diff --check`, and independent spec-conformance review before launch; repair and rereview any material finding. | Prelaunch package and both same-host repair transitions received independent PASS verdicts. Post-termination reconciliation passes 103 focused tests, validation/privacy hygiene, Ruff, strict mypy, diff hygiene, and the full 1,348-test/16-page portable-Quarto gate; independent post-run review is pending. | partial |
+| R2-16 | After termination, reconcile actual Lambda/OpenAI usage, update public control surfaces without scientific overclaim, run proportionate broader gates/review, commit cleanly, and return all sixteen requested handoff items. | Compute and public disposition are reconciled without a pair/outcome claim; the first clean reconciliation commit and independent post-run review are in progress. | partial |
 
 ## Control-plane decisions
 
@@ -124,10 +135,37 @@ claim; public release of private task or trace evidence.
   keeps the evaluator overlay byte-identical, prepends its site-packages to that
   qualified interpreter, carries candidate `0003` forward by exact image ID, forbids
   another build, and requires fresh acceptance qualification `0004`.
+- 2026-08-13: qualification `0004` accepted exact replacement image
+  `sha256:e2603f5aac97b8c48567b5de624e7d193dade0327a2f1040d2dd67d0cd86c2ba`,
+  passed the complete functional gate, made exactly one dated-model metadata GET, and
+  froze mode-0600 run manifest `9071c152…` before empirical entry. Both static task
+  pair diffs remained valid.
+- 2026-08-13: Task A reactive crossed empirical entry once and exited zero after
+  52 model calls, 121,900 tokens, 13 browser actions, 199.196380 seconds, and USD
+  0.3626425 OpenAI spend. The exact evaluator later established task completion and
+  a descriptive score of 0.0.
+- 2026-08-13: the frozen wrapper then failed before evaluator start because it read
+  `output_root` from the wrong command-manifest level. Its second frozen finalizer
+  invocation used the evaluator-only interpreter without the qualified control-plane
+  dependency closure. A single network-disabled reconstruction preserved the already
+  consumed raw prefix with zero additional model/browser activity. Independent review
+  accepted that reconstruction only for Task A reactive and rejected using the
+  changed invocation for later attempts under the post-entry freeze.
+- 2026-08-13: stopped before Task A simulative. No pair/checkpoint or Task B attempt
+  exists. The task archive and maximal safe campaign prefix were copied and rehashed;
+  temporary secrets and containers were removed; one exact termination request
+  produced terminal/absent, zero-instance, and restored-security evidence. New cost
+  was USD 2.116752203373909; cumulative T09 cost was USD 2.5308164556905757.
+- 2026-08-13: public reconciliation passed 103 focused T09/Phase-1/EXP-0001/T08
+  tests, repository validation and privacy hygiene, Ruff, strict mypy over 61 source
+  files, diff hygiene, and the portable-Quarto 1.9.38 full gate: 1,348 tests, all 16
+  notebook pages, and site validation. Independent post-run evidence review remains
+  the final assembly gate before the clean handoff commit.
 
 ## Next permitted phase
 
-Complete the second replacement-package validation and independent rereview, bind the
-chained same-host transition, and rerun every dynamic qualification gate. No
-empirical entry is permitted until the fresh `0004` runtime manifest is written and
-validated.
+The V4 campaign is closed and its authority cannot be replayed. Repair both frozen
+finalizer primitives—the command-manifest output-root projection and the evaluator
+interpreter/dependency closure—then add exact live-command regressions. Any new pilot
+requires fresh plan, host, attempt, evaluator, pair, stage, archive, and provider
+identities; an independently reviewed clean package; and new current-turn authority.

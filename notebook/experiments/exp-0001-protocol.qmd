@@ -8,10 +8,11 @@ title: "EXP-0001 — SiRA simulative versus reactive protocol"
 **pending**. One T07 one-step reactive/simulative artifact smoke occurred and T08
 adjudicated it as a valid matched pair with documented evidence gaps. Both sessions
 recorded `is_complete: false`, so task completion was not observed. The smoke contains
-no EXP-0001 measurement or outcome. No live FanOut condition or evaluator attempt has
-occurred. The tracked V3 plan remains unauthorized. Its single-use private authority
-was consumed by one preflight-only host campaign, which stopped before empirical entry
-on exact frozen-container identity drift and completed provider cleanup.
+no EXP-0001 measurement or outcome. T09 V4 later produced one descriptive full-task
+calibration measurement: Task A reactive completed and the exact evaluator scored it
+0.0. Its paired Task A simulative attempt and both Task B attempts did not run, so no
+realized pair, checkpoint, condition comparison, or EXP-0001 outcome exists. V3 and
+V4 single-use authorities are exhausted and provider cleanup is verified.
 
 ## Locked exploratory comparison
 
@@ -46,7 +47,7 @@ key scan. No values are published, the provider instance is terminally absent, a
 future retention must omit or structurally redact them. T09 resolved the offline
 evaluator, dataset, evidence, pair, budget-arithmetic, and identity contracts in
 `PLAN-EXP0001-PILOT-V2`. The current pragmatic successor,
-`PLAN-EXP0001-PILOT-V3`, preserves those scientific locks while parameterizing the
+`PLAN-EXP0001-PILOT-V3`, preserved those scientific locks while parameterizing the
 existing observer with a 14,400-second actual-time campaign, 900-second cleanup
 reserve, and 13,500-second termination cutoff. The reviewed V3 package launched one
 A10 host, but the source rebuild did not match the frozen required container digest
@@ -54,6 +55,16 @@ and no verified loadable copy of that image was retained. The runtime gate there
 stopped before any model request, task browser action, condition, evaluator, or score.
 The host was terminated and zero T09 instances were verified. This is infrastructure
 preflight evidence, not a pilot result; V3 authority is exhausted.
+
+V4 requalified and froze replacement image `sha256:e2603f5a…`, then ran Task A
+reactive once. The frozen finalizer failed on an incorrect command-manifest
+output-root projection and an interpreter/dependency mismatch. A single
+network-disabled reconstruction of the retained prefix established task completion
+and the score without another task call, browser action, or condition retry. That
+changed reconstruction invocation could not be used for later conditions under the
+post-entry freeze, so the campaign stopped before pair completion. The exact host is
+terminal/absent, zero T09 instances and restored security are verified. This one
+descriptive attempt supports pipeline/cost calibration only, not a condition claim.
 
 The exact upstream evaluator is deliberately not repaired or renormalized. Offline
 fixtures show Task A's ordinary correct prose scoring 0.9 (with a normalization-edge

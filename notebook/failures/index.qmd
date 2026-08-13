@@ -2,10 +2,10 @@
 title: "Failure analyses"
 ---
 
-No scientific failure analysis exists because no EXP-0001 pilot or outcome-bearing
-experiment has run. The completed T07 artifact smoke is infrastructure evidence only;
-T08 found task completion not observed and retained its evidence gaps without treating
-them as a negative scientific result.
+No outcome-bearing paired EXP-0001 experiment exists. The completed T07 artifact smoke
+is infrastructure evidence only. T09 Retry 2 produced one descriptive calibration
+attempt but no realized pair or checkpoint, so its score is not evidence for either
+condition's superiority and no EXP-0001 outcome is assigned.
 
 ## T09 V3 runtime-preflight stop
 
@@ -22,11 +22,32 @@ instances, and restored security state. This is a preflight infrastructure failu
 not evidence about either SiRA condition or EXP-0001. A future attempt requires the
 exact image or a separately reviewed runtime requalification and fresh authorization.
 
-`PLAN-EXP0001-PILOT-V4` is that separately reviewed Retry 2 policy: it preserves the
-V3 record, accepts no historical-digest substitution, and instead requires one
-replacement image built from pinned inputs to pass the exact functional gate and be
-bound immutably before empirical entry. At this prelaunch publication point no V4
-provider, model, browser, condition, or evaluator action has occurred.
+`PLAN-EXP0001-PILOT-V4` was that separately reviewed Retry 2 policy. It preserved the
+V3 record and accepted one replacement image only after functional qualification.
+
+## T09 V4 post-entry finalizer stop
+
+On 2026-08-13, V4 replacement image `sha256:e2603f5a…` passed the pinned runtime,
+browser, evaluator-fixture, command-pair, credential, and model-metadata gates and was
+frozen before empirical entry. Task A reactive ran exactly once: process exit zero,
+task completed, exact evaluator valid, descriptive score 0.0, 52 model calls, 121,900
+tokens, 13 browser actions, and USD 0.3626425 OpenAI cost.
+
+The frozen host finalizer then failed twice before evaluator completion. First, it
+looked for `output_root` at the command manifest's top level even though the frozen
+manifest stored it under `permitted_condition_owned`. Second, its evaluator-only
+Python environment lacked a dependency that the preflight-qualified SiRA-Python plus
+evaluator-overlay environment contained. A one-time, network-disabled reconstruction
+used the retained immutable raw prefix and exact pinned evaluator to preserve the
+already-consumed attempt; it made no new model request, browser action, or condition
+attempt. That recovery was not a scientific retry.
+
+The corrected reconstruction invocation was not the frozen later-attempt command.
+Continuing would therefore have changed post-entry configuration. The campaign stopped
+before Task A simulative; no first-pair checkpoint or Task B attempt exists. Evidence
+was transferred, temporary secrets and owned containers were removed, and the exact
+provider host is terminal/absent with zero T09 instances and restored security. This
+is a control-plane stop, not a negative result for either SiRA condition.
 
 Future entries will distinguish:
 

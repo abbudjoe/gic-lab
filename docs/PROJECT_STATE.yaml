@@ -79,25 +79,58 @@ t09_pragmatic_pilot_checkpoint:
   scientific_result_claimed: false
 t09_pragmatic_retry2_checkpoint:
   task: T09-PRAGMATIC-RETRY2
-  terminal_state: prelaunch-v4-package-binding-and-dynamic-qualification-pending
+  terminal_state: t09-pilot-blocked-material-risk
   plan_id: PLAN-EXP0001-PILOT-V4
   source_authorization_sha256: 3852fe8dabb9ee6b10e40cbc6dc1ab964ea6fce11f71f81f0966e927cadddeb9
   calibration_only: true
-  current_turn_execution_authorized: true
+  current_turn_execution_authorized: false
   repository_plan_authorized: false
   private_single_use_overlay_required: true
+  single_use_authority_exhausted: true
+  pilot_execution_authorized: false
   replacement_image_digest_may_differ_from_t07: true
-  replacement_image_qualified: false
-  frozen_run_manifest_written: false
-  dynamic_preflight_passed: false
-  empirical_attempts_entered: 0
-  model_metadata_requests: 0
-  task_model_calls: 0
-  browser_actions: 0
+  replacement_image_qualified: true
+  replacement_image_id: sha256:e2603f5aac97b8c48567b5de624e7d193dade0327a2f1040d2dd67d0cd86c2ba
+  frozen_run_manifest_written: true
+  frozen_run_manifest_sha256: 9071c152600a59e0001cd075e79abef08589d80d475b82fd0e5c15541026b09a
+  dynamic_preflight_passed: true
+  empirical_attempts_entered: 1
+  attempts_completed: 1
+  condition_retries: 0
+  model_metadata_requests: 1
+  task_model_calls: 52
+  total_tokens: 121900
+  browser_actions: 13
+  task_a_reactive:
+    state: valid-scored-attempt-reconstructed-offline-after-frozen-host-finalizer-control-failure
+    task_completion: completed
+    evaluator_valid: true
+    score: 0.0
+  task_a_simulative: not-run
+  task_b_simulative: not-run
+  task_b_reactive: not-run
+  first_pair_checkpoint: not-reached-stopped-before-task-a-simulative
+  static_pair_diffs_valid: true
+  realized_pairs: 0
   prior_t09_cost_usd: 0.414064252316667
+  openai_cost_usd: 0.3626425
+  lambda_cost_usd: 1.754109703373909
+  new_campaign_total_cost_usd: 2.116752203373909
+  cumulative_t09_cost_usd: 2.5308164556905757
   new_campaign_cost_cap_usd: 45.16
   cumulative_t09_cost_cap_usd: 46.0
+  current_execution_and_analysis_blockers:
+    - frozen-finalizer-output-root-projection-is-invalid
+    - frozen-finalizer-interpreter-does-not-match-qualified-dependency-closure
+  future_execution_requires_new_plan_identities_review_authorization: true
+  cleanup_verified: true
+  provider_terminal_or_absent: true
+  zero_t09_instances: true
+  security_restored: true
+  evidence_archive_id: ARCHIVE-EXP0001-PILOT-V4-0002
+  evidence_record: experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY2_DISPOSITION.json
   publication_release_blocked: true
   scientific_result_claimed: false
+  experiment_outcome_assigned: false
 authoritative_plan: docs/exec-plans/active/PHASE_1_ARTIFACT_EXECUTION.md
 last_updated: "2026-08-13"

@@ -1,6 +1,6 @@
 # Phase 1 SiRA Smoke Readiness
 
-Status: **T07 smoke closed; T09 Retry 2 current-turn authorized pending exact V4 dynamic qualification**
+Status: **T07 smoke closed; T09 Retry 2 stopped after one valid scored attempt and no pair**
 
 Prepared: 2026-08-08
 
@@ -48,19 +48,24 @@ requalifies a replacement runtime, plus new current-turn authority.
 
 ## Current T09 Retry 2 checkpoint
 
-`PLAN-EXP0001-PILOT-V4` is the fresh successor authorized by the current user turn.
-The tracked plan and condition records remain `authorized: false`; execution requires
-one exact private single-use overlay bound to the clean package and this authority.
-V4 preserves the two frozen FanOutQA tasks, evaluator, model, SiRA commit,
-counterbalance, zero retry, caps, evidence, and calibration-only interpretation. It
-supersedes only cross-run equality with the unavailable historical image.
+`PLAN-EXP0001-PILOT-V4` consumed its private single-use overlay. Exact replacement
+image `sha256:e2603f5a…` passed the final-container, evaluator-fixture, browser,
+pair-diff, credential, and one-metadata-GET gates and was frozen before empirical
+entry. Task A reactive then ran once: exit zero, task completed, exact evaluator
+valid, descriptive score 0.0, 52 model calls, 121,900 tokens, 13 browser actions,
+199.196380 seconds, and USD 0.3626425 OpenAI cost.
 
-Before empirical entry, the one replacement candidate must be built from the complete
-pinned context, pass exact final-container runtime/package/browser/evaluator-fixture
-and pair-diff gates, perform exactly one dated-model metadata GET with zero task model
-requests/actions, and be frozen by a source-derived mode-0600 O_EXCL run manifest.
-The same image ID must then serve every retained attempt. Current state is prelaunch:
-replacement qualification and empirical attempt counts are both zero.
+The frozen host finalizer read `output_root` from the wrong manifest level and then
+selected an interpreter without the qualified evaluator/control dependency closure.
+One network-disabled reconstruction preserved the already-consumed attempt with zero
+additional model/browser activity, but independent review correctly rejected using
+that changed invocation for later conditions. Task A simulative and both Task B
+attempts are `not-run`; no first-pair checkpoint, realized pair, comparison, or
+scientific outcome exists. The exact host is terminal/absent, zero T09 instances and
+restored security are verified. New campaign cost is USD 2.116752203373909 and
+cumulative T09 cost is USD 2.5308164556905757. Terminal state is
+`t09-pilot-blocked-material-risk`; future execution needs both finalizer repairs,
+fresh identities, independent review, and new current-turn authority.
 
 ## Exact next run plan
 

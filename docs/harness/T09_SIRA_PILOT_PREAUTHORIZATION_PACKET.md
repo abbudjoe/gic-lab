@@ -2,33 +2,32 @@
 
 ## V4 Retry 2 current-turn overlay
 
-Status: **current-turn single-use authority granted; clean package and dynamic
-replacement-runtime qualification pending**
+Status: **single-use V4 authority exhausted; campaign stopped and not replayable**
 
 Tracked plan: `PLAN-EXP0001-PILOT-V4`, `authorized: false`.
 
-The user's 2026-08-13 Retry 2 instruction authorizes one fresh private campaign only
-when its private ledger binds source-contract SHA-256
-`3852fe8dabb9ee6b10e40cbc6dc1ab964ea6fce11f71f81f0966e927cadddeb9`, the final
-clean package, the V4 plan hash, one Lambda launch/instance, and the fresh and
-cumulative budgets. Repository bytes are not standing authority.
+The user's 2026-08-13 Retry 2 instruction authorized one fresh private campaign. That
+authority was consumed by the V4 launch and is now exhausted. Repository bytes are
+not standing authority, and no block in this packet may be copied to launch another
+host or condition.
 
-V4 preserves every V3 scientific field and replaces only the overstrict cross-run
-container-digest equality. The authorized host may build one replacement from pinned
-inputs and qualify it once. A source-derived, mode-0600, O_EXCL frozen-run manifest
-must bind the accepted exact image ID, qualification evidence, four rendered
-commands, pair diffs, package, plan, and provider-entry identity while
-`empirical_entry` is false. Every attempt and evaluator must reload that manifest and
-use the same exact image ID. Qualification includes the approved offline evaluator
-fixtures and exactly one dated-model metadata GET; it permits no task model request
-or task browser action.
+V4 preserved every V3 scientific field and replaced only the overstrict cross-run
+container-digest equality. One replacement image passed qualification and was frozen
+before Task A reactive crossed empirical entry. That condition ran once; retained
+evidence was reconstructed as one completed, evaluator-valid, score-0.0 descriptive
+attempt after the frozen host finalizer failed. Because the one-time reconstruction
+invocation was not the frozen command, it could not be used for later attempts. Task
+A simulative and both Task B attempts did not run; no pair, checkpoint, comparison,
+or EXP-0001 outcome exists.
 
 New ceilings are USD 40.00 OpenAI, USD 5.16 Lambda, USD 45.16 aggregate, and USD
 46.00 cumulative T09 spend including immutable prior cost USD
 0.414064252316667. All call/token/action/attempt/zero-retry and 14,400/13,500/900
-second lifecycle controls remain unchanged. The fresh order is Task A reactive,
-Task A simulative, checkpoint, Task B simulative, Task B reactive. Cleanup is
-authorized and mandatory from every post-launch prefix.
+second lifecycle controls held. Actual new campaign cost was USD
+2.116752203373909 and cumulative T09 cost was USD 2.5308164556905757. The exact host
+is terminal/absent, zero T09 instances and restored security are verified, and the
+single-use overlay cannot be reused. A successor requires repaired finalizer controls,
+fresh identities, a clean review, and new current-turn authority.
 
 The rest of this file is the immutable human-readable V3 packet. It is retained for
 audit and must not be copied as current authority.

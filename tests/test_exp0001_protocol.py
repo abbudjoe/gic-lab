@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from copy import deepcopy
 from decimal import Decimal
 from pathlib import Path
@@ -21,7 +22,7 @@ EXP_ROOT = ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive"
 CONDITIONS = {"SIRA-SIMULATIVE", "SIRA-REACTIVE"}
 
 
-def test_exp0001_is_registered_with_adjudicated_smoke_and_no_scientific_result() -> None:
+def test_exp0001_is_registered_with_incomplete_calibration_and_no_scientific_result() -> None:
     registry = load_yaml(ROOT / "experiments/registry.yaml")
     assert registry["experiments"][0]["experiment_id"] == "EXP-0001"
     assert registry["experiments"][0]["protocol"].endswith("/protocol.yaml")
@@ -35,15 +36,38 @@ def test_exp0001_is_registered_with_adjudicated_smoke_and_no_scientific_result()
         "authorization_reference": None,
     }
     results = load_json(EXP_ROOT / "results-summary.json")
-    assert results["run_status"] == "artifact-smoke-adjudicated"
-    assert results["measurements"] == []
+    assert results["run_status"] == "calibration-pilot-incomplete-one-valid-scored-attempt"
+    assert results["measurements"] == [
+        {
+            "measurement_id": "MEAS-EXP0001-T09-V4-TASK-A-REACTIVE-0001",
+            "kind": "descriptive-calibration-attempt",
+            "run_id": "RUN-T09-TASK-A-REACTIVE-0002",
+            "task_id": "7dcbbbdc7f1120cd",
+            "condition": "SIRA-REACTIVE",
+            "task_completed": True,
+            "answer_produced": True,
+            "evaluator_valid": True,
+            "task_score": 0.0,
+            "model_calls": 52,
+            "total_tokens": 121900,
+            "browser_actions": 13,
+            "openai_cost_usd": 0.3626425,
+            "wall_seconds": 199.19638025899985,
+            "paired_result_available": False,
+            "interpretation": "descriptive-calibration-only",
+        }
+    ]
     assert results["artifacts"] == [
         "experiments/EXP-0001-sira-simulative-vs-reactive/T08_SMOKE_ADJUDICATION.json",
         "experiments/EXP-0001-sira-simulative-vs-reactive/T08_SMOKE_PAIR_DIFF.json",
+        (
+            "experiments/EXP-0001-sira-simulative-vs-reactive/"
+            "T09_PRAGMATIC_PREFLIGHT_DISPOSITION.json"
+        ),
+        ("experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY2_SUPERSESSION.json"),
+        ("experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY2_DISPOSITION.json"),
     ]
-    assert results["infrastructure_terminal_state"] == (
-        "smoke_evidence_validated_pilot_planning_eligible"
-    )
+    assert results["infrastructure_terminal_state"] == "t09-pilot-blocked-material-risk"
 
 
 def test_exp0001_locks_exactly_the_two_source_conditions() -> None:
@@ -241,12 +265,13 @@ def test_h2k_appendix_is_additive_source_grounded_and_non_scientific() -> None:
     assert "does not support" in appendix["trace_sufficiency_boundary"]
 
 
-def test_public_protocol_page_states_smoke_only_and_future_track_boundary() -> None:
+def test_public_protocol_page_states_incomplete_calibration_and_future_track_boundary() -> None:
     page = (ROOT / "notebook/experiments/exp-0001-protocol.qmd").read_text(encoding="utf-8")
     prose = " ".join(page.split())
     assert "One T07 one-step reactive/simulative artifact smoke occurred" in prose
     assert "task completion was not observed" in prose
-    assert "no EXP-0001 measurement or outcome" in prose
+    assert "one descriptive full-task calibration measurement" in prose
+    assert "no realized pair, checkpoint, condition comparison, or EXP-0001 outcome" in prose
     assert "not evidence of a learned internal regulation mechanism" in prose
     assert "not an EXP-0001 hypothesis, metric, outcome" in prose
 
@@ -279,7 +304,7 @@ def _rebind_condition_profile_hashes(exp_root: Path) -> None:
 
 def test_profile_validation_rejects_swapped_order_and_model_drift(tmp_path: Path) -> None:
     exp_root = _copy_exp0001_contract(tmp_path)
-    condition_path = exp_root / "run-plans/conditions/pilot-task-0000-reactive.yaml"
+    condition_path = exp_root / "run-plans/conditions/pilot-v4-task-0000-reactive.yaml"
     condition = load_yaml(condition_path)
     condition["pairing"]["order_index"] = 2
     condition["sources"]["model_revision"] = "wrong-revision"
@@ -295,7 +320,7 @@ def test_exp0001_validation_rejects_duplicate_task_and_wrong_slice(tmp_path: Pat
     profile = load_yaml(profile_path)
     profile["sampling"]["counterbalancing"][1]["task_id"] = "7dcbbbdc7f1120cd"
     _write_yaml(profile_path, profile)
-    for name in ("pilot-task-0000-reactive.yaml", "pilot-task-0000-simulative.yaml"):
+    for name in ("pilot-v4-task-0000-reactive.yaml", "pilot-v4-task-0000-simulative.yaml"):
         condition_path = exp_root / "run-plans/conditions" / name
         condition = load_yaml(condition_path)
         condition["task"]["start_idx"] = 9
@@ -307,6 +332,19 @@ def test_exp0001_validation_rejects_duplicate_task_and_wrong_slice(tmp_path: Pat
     assert any("locked task or slice drift" in error for error in specific_errors)
 
 
+def test_exp0001_validation_rejects_retry2_pair_overclaim(tmp_path: Path) -> None:
+    exp_root = _copy_exp0001_contract(tmp_path)
+    disposition_path = exp_root / "T09_PRAGMATIC_RETRY2_DISPOSITION.json"
+    disposition = load_json(disposition_path)
+    disposition["attempts"]["realized_task_a_pair"] = True
+    disposition_path.write_text(
+        json.dumps(disposition, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    errors = validate_exp0001_contract(tmp_path)
+    assert any("one-attempt/no-pair disposition drifted" in error for error in errors)
+
+
 def test_profile_validation_rejects_task_source_and_dataset_revision_drift(
     tmp_path: Path,
 ) -> None:
@@ -315,7 +353,7 @@ def test_profile_validation_rejects_task_source_and_dataset_revision_drift(
     profile = load_yaml(profile_path)
     profile["sampling"]["counterbalancing"][0]["task_source"] = "DATA-SIRA-FANOUTQA-DEV[8:9]"
     _write_yaml(profile_path, profile)
-    condition_path = exp_root / "run-plans/conditions/pilot-task-0000-reactive.yaml"
+    condition_path = exp_root / "run-plans/conditions/pilot-v4-task-0000-reactive.yaml"
     condition = load_yaml(condition_path)
     condition["task"]["dataset_revision"] = "wrong-dataset-revision"
     _write_yaml(condition_path, condition)
