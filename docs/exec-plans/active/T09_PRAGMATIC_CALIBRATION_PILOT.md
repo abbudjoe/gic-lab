@@ -27,11 +27,11 @@ superiority/EXP-0001 conclusions.
 
 | ID | Requirement | Evidence | Status |
 |---|---|---|---|
-| T09-P3-01 | Preserve the exact scientific locks and calibration-only interpretation. | Dataset/evaluator/runtime contracts, scientific-hash regression. | not-started |
-| T09-P3-02 | Freeze `PLAN-EXP0001-PILOT-V3` and fresh host, four condition, evaluator, pair, and archive identities. | Plan, execution contract, condition plans, command manifests. | not-started |
-| T09-P3-03 | Enforce a 14,400 s billable-instance campaign, 900 s cleanup reserve, one instance, one launch, zero filesystem, termination by 13,500 s, and no theoretical-maxima admission sum. | Typed campaign limits and fake-clock regressions. | not-started |
-| T09-P3-04 | Charge setup, attempts, evaluator, evidence, and cleanup to the same actual campaign clock; admit each attempt only with its hard wall plus cleanup reserve remaining. | Host runner and focused timing tests. | not-started |
-| T09-P3-05 | Keep model-call, token, OpenAI-cost, browser-step, condition/pair/total wall, output, disk, Lambda-duration/cost, attempt, and zero-retry caps effective. | Runtime cap tests and exact command/config diff. | not-started |
+| T09-P3-01 | Preserve the exact scientific locks and calibration-only interpretation. | Dataset/evaluator/runtime contracts, scientific-hash regression. | met locally; final package binding pending |
+| T09-P3-02 | Freeze `PLAN-EXP0001-PILOT-V3` and fresh host, four condition, evaluator, pair, and archive identities. | Plan, execution contract, condition plans, command manifests. | partial: identities frozen; final reviewed hashes pending |
+| T09-P3-03 | Enforce a 14,400 s billable-instance campaign, 900 s cleanup reserve, one instance, one launch, zero filesystem, termination by 13,500 s, and no theoretical-maxima admission sum. | Typed campaign limits and fake-clock regressions. | met locally: existing observer and one-shot provider boundary share typed limits; cutoff/ambiguity tests pass |
+| T09-P3-04 | Charge setup, attempts, evaluator, evidence, and cleanup to the same actual campaign clock; admit each attempt only with its hard wall plus cleanup reserve remaining. | Host runner and focused timing tests. | met locally: conservative launch-send origin and exact boundary tests pass |
+| T09-P3-05 | Keep model-call, token, OpenAI-cost, browser-step, condition/pair/total wall, output, disk, Lambda-duration/cost, attempt, and zero-retry caps effective. | Runtime cap tests and exact command/config diff. | met locally; final pair manifest regeneration pending |
 | T09-P3-06 | Pass exact local preflight and freeze a clean reviewed pre-run commit before empirical entry. | Preflight receipt, Git commit/hash, plan bytes/hash, independent review. | not-started |
 | T09-P3-07 | Record the current-turn cloud authorization in the private cloud ledger and launch no more than one exact A10 host in `us-east-1` with no persistent filesystem. | Cloud-run ledger and private provider receipts. | not-started |
 | T09-P3-08 | Run Task A reactive then simulative exactly once and seal the automatic first-pair continuation decision. | Attempt/evaluator evidence and checkpoint receipt. | not-started |
@@ -43,13 +43,16 @@ superiority/EXP-0001 conclusions.
 
 ## Implementation mapping
 
-- Campaign timing and attempt admission: `src/giclab/harness/t09_sira_pilot.py`
-  and `containers/sira-smoke/pragmatic/t09_remote_runner.py`.
+- Campaign timing and attempt admission: `src/giclab/harness/lambda_campaign_lifecycle.py`,
+  the parameterized `src/giclab/harness/lambda_l2m_observer.py`,
+  `src/giclab/harness/t09_sira_pilot.py`, and
+  `containers/sira-smoke/pragmatic/t09_remote_runner.py`.
 - Frozen identities, limits, tasks, evaluator, commands, and evidence:
   `experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/` and
   `contracts/`.
-- Provider mutation remains the already-used pragmatic Lambda API/console path;
-  the repository runtime adds no automated launch framework or watchdog.
+- Provider mutation uses one exact, single-use T07-pragmatic Lambda request path in
+  `src/giclab/harness/t09_pragmatic_provider.py`. It retains source-derived redacted
+  receipts, never retries a launch, and adds no persistent service or watchdog.
 - Scientific attempts/evaluator/evidence reuse the reviewed T09 runtime overlay.
 - Governance and closeout use the existing registry, project state, Phase 1 plan,
   decision log, readiness record, compute manifest, and sanitized notebook.
@@ -63,6 +66,16 @@ superiority/EXP-0001 conclusions.
   3,600-second lifecycle blocker.
 - 2026-08-13: confirmed the retained V2 task/evaluator/pairing contract and the
   user's diagnosis that the campaign wall is the execution blocker to repair.
+- 2026-08-13: independent source review correctly found that the first V3 draft had
+  changed only the host clock and accepted caller-authored provider receipts. The
+  draft was not frozen or launched.
+- 2026-08-13: repaired the root controls: the existing observer now consumes a typed
+  immutable lifecycle (T07 defaults unchanged; V3 is 14,400/13,500/900), provider
+  entry/closeout receipts are reconstructed from retained structural projections,
+  launch ambiguity durably forbids a second launch, exact-target cleanup can recover
+  through bounded GET reconciliation, and finalized attempt evidence is streamed and
+  hash-verified before the next attempt. Focused source tests, Ruff, strict mypy, and
+  `git diff --check` pass; package hashes remain intentionally unbound pending review.
 
 ## Decisions and blockers
 
@@ -79,7 +92,7 @@ superiority/EXP-0001 conclusions.
 
 ## Next permitted phase
 
-Implement and locally validate the campaign-wall repair. Cloud mutation is not
-permitted until the focused smoke, independent spec-conformance review, clean
-pre-run freeze, exact runtime preflight, and private cloud authorization ledger
-are complete.
+Create the immutable implementation ancestor and obtain independent
+spec-conformance rereview. Cloud mutation remains forbidden until rereview passes,
+all final hashes bind, the package is clean, exact preflight passes, and the private
+cloud authorization ledger is sealed.

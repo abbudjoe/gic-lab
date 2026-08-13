@@ -12,6 +12,7 @@ the separately authorized manual provider lifecycle.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import ipaddress
 import json
@@ -19,13 +20,25 @@ import os
 import re
 import resource
 import shutil
+import signal
 import stat
 import subprocess
+import sys
 import tarfile
 import time
+from collections.abc import Iterator
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
-from typing import Any, Final, cast
+from typing import Any, BinaryIO, Final, cast
+
+from giclab.harness.t09_pragmatic_provider import (
+    T09ProviderError,
+    load_campaign_lifecycle,
+    validate_entry_receipt_source_bound,
+)
+from giclab.harness.t09_pragmatic_provider import (
+    validate_closeout_receipt as validate_source_bound_closeout,
+)
 
 PLAN_ID: Final = "PLAN-EXP0001-PILOT-V3"
 HOST_RUN_ID: Final = "RUN-T09-PILOT-HOST-0001"
@@ -55,8 +68,8 @@ RUN_IDS: Final = (
     "RUN-T09-TASK-B-REACTIVE-0001",
 )
 CONTAINER_PREFIX: Final = "giclab-t09-pilot-v3-"
-MAX_ATTEMPT_OUTPUT_BYTES: Final = 1_073_741_824
-MAX_PILOT_DISK_BYTES: Final = 12_884_901_888
+MAX_ATTEMPT_OUTPUT_BYTES: Final = 67_108_864
+MAX_PILOT_DISK_BYTES: Final = 2_147_483_648
 MAX_CONDITION_WALL_SECONDS: Final = 3_600
 MAX_PAIR_WALL_SECONDS: Final = 7_200
 MAX_TOTAL_WALL_SECONDS: Final = 14_400
@@ -64,8 +77,8 @@ MAX_LAMBDA_DURATION_SECONDS: Final = 14_400
 MAX_LAMBDA_COST_USD: Final = 5.16
 LAMBDA_HOURLY_PRICE_USD: Final = 1.29
 FINALIZATION_RESERVE_SECONDS: Final = 60
+ATTEMPT_EVIDENCE_EXPORT_RESERVE_SECONDS: Final = 600
 PROVIDER_CLOSEOUT_RESERVE_SECONDS: Final = 900
-PROVIDER_TERMINATION_RESERVE_SECONDS: Final = 900
 PROVIDER_TERMINATION_CUTOFF_SECONDS: Final = 13_500
 MAX_LAMBDA_INSTANCES: Final = 1
 MAX_LAMBDA_LAUNCHES: Final = 1
@@ -97,11 +110,33 @@ _SENSITIVE_JSON_KEYS: Final = {
 MAX_PRIVACY_JSON_BYTES: Final = 16_777_216
 MAX_PRIVACY_LINE_BYTES: Final = 8_388_608
 MAX_PRIVACY_SCAN_CHUNK_BYTES: Final = 1_048_576
-MAX_STAGED_EVIDENCE_BYTES: Final = 5_368_709_120
+MAX_ATTEMPT_EXPORT_BYTES: Final = 100_663_296
+MAX_STAGED_EVIDENCE_BYTES: Final = 536_870_912
+MAX_STAGE_SECONDS: Final = 300
 
 
 class T09HostError(RuntimeError):
     """The authorized host would violate its exact T09 contract."""
+
+
+@contextlib.contextmanager
+def hard_deadline(seconds: float, *, message: str) -> Iterator[None]:
+    """Bound one synchronous evidence operation without creating a watchdog."""
+
+    if not 0 < seconds <= MAX_CONDITION_WALL_SECONDS:
+        raise T09HostError(message)
+    previous_handler = signal.getsignal(signal.SIGALRM)
+
+    def expired(_signum: int, _frame: object) -> None:
+        raise T09HostError(message)
+
+    signal.signal(signal.SIGALRM, expired)
+    signal.setitimer(signal.ITIMER_REAL, seconds)
+    try:
+        yield
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, previous_handler)
 
 
 def utc_now() -> str:
@@ -680,72 +715,31 @@ def validate_dynamic_receipt(
     *,
     expected_package_commit: str,
     repository_root: Path | None = None,
+    source_root: Path | None = None,
 ) -> dict[str, object]:
-    """Validate the sanitized projection of the retained pragmatic launch evidence."""
+    """Reconstruct the sanitized receipt from retained raw provider responses."""
 
-    del repository_root
-    value = load_object(path, label="provider entry receipt")
-    _exact_keys(
-        value,
-        {
-            "schema_version",
-            "receipt_type",
-            "plan_id",
-            "host_run_id",
-            "package_commit",
-            "captured_at_epoch",
-            "lambda_started_at_epoch",
-            "owned_instance_identity_sha256",
-            "source_bundle_sha256",
-            "source_bundle_bytes",
-            "source_observer",
-            "zero_prior_nonterminal_instances",
-            "launch_count",
-            "max_instances",
-            "instance_type",
-            "region",
-            "persistent_filesystems",
-            "hourly_price_usd",
-            "billable_clock_source",
-            "raw_source_retained_private",
-            "structural_redaction_passed",
-        },
-        label="provider entry receipt",
-    )
-    now = time.time()
+    if repository_root is None or source_root is None:
+        raise T09HostError("provider entry source bundle is required")
+    repository = repository_root.resolve(strict=True)
+    source = source_root.resolve(strict=True)
+    plan = contract_paths(repository)["plan"]
+    try:
+        value = validate_entry_receipt_source_bound(
+            path.resolve(strict=True),
+            source,
+            package_commit=expected_package_commit,
+            plan_sha256=file_sha256(plan),
+        )
+    except T09ProviderError as exc:
+        raise T09HostError("provider entry receipt is not source-bound") from exc
     captured = value.get("captured_at_epoch")
-    started = value.get("lambda_started_at_epoch")
-    source_bytes = value.get("source_bundle_bytes")
     if (
-        value.get("schema_version") != "0.1.0"
-        or value.get("receipt_type") != "t09-pragmatic-provider-entry"
-        or value.get("plan_id") != PLAN_ID
-        or value.get("host_run_id") != HOST_RUN_ID
-        or value.get("package_commit") != expected_package_commit
-        or re.fullmatch(r"[a-f0-9]{40}", expected_package_commit) is None
-        or not isinstance(captured, (int, float))
+        not isinstance(captured, (int, float))
         or isinstance(captured, bool)
-        or not isinstance(started, (int, float))
-        or isinstance(started, bool)
-        or not 0 <= float(captured) - float(started) <= 1_800
-        or not 0 <= now - float(captured) <= 1_800
-        or _HEX64.fullmatch(str(value.get("owned_instance_identity_sha256"))) is None
-        or _HEX64.fullmatch(str(value.get("source_bundle_sha256"))) is None
-        or type(source_bytes) is not int
-        or not 1 <= source_bytes <= 16_777_216
-        or value.get("source_observer") != "t07-pragmatic-lambda-api-receipts-v1"
-        or value.get("zero_prior_nonterminal_instances") is not True
-        or value.get("launch_count") != MAX_LAMBDA_LAUNCHES
-        or value.get("max_instances") != MAX_LAMBDA_INSTANCES
-        or value.get("instance_type") != "gpu_1x_a10"
-        or value.get("region") != "us-east-1"
-        or value.get("persistent_filesystems") != MAX_PERSISTENT_FILESYSTEMS
-        or value.get("hourly_price_usd") != LAMBDA_HOURLY_PRICE_USD
-        or value.get("billable_clock_source") != "provider-launch-response-received"
-        or value.get("raw_source_retained_private") is not True
-        or value.get("structural_redaction_passed") is not True
+        or not 0 <= time.time() - float(captured) <= 1_800
     ):
-        raise T09HostError("provider entry receipt drifted from the exact campaign contract")
+        raise T09HostError("provider entry receipt is stale")
     encoded = json.dumps(value, sort_keys=True)
     if (
         _CREDENTIAL_TEXT.search(encoded)
@@ -767,40 +761,34 @@ def validate_provider_closeout_receipt(
     expected_entry_receipt_sha256: str,
     expected_package_commit: str,
     repository_root: Path | None = None,
+    source_root: Path | None = None,
+    entry_receipt_path: Path | None = None,
+    entry_source_root: Path | None = None,
 ) -> dict[str, object]:
-    """Validate exact-target termination and terminal/zero-instance evidence."""
+    """Reconstruct closeout from raw exact-target provider responses."""
 
-    del repository_root
-    value = load_object(path, label="provider closeout receipt")
-    _exact_keys(
-        value,
-        {
-            "schema_version",
-            "receipt_type",
-            "plan_id",
-            "host_run_id",
-            "package_commit",
-            "captured_at_epoch",
-            "lambda_started_at_epoch",
-            "termination_started_at_epoch",
-            "terminal_observed_at_epoch",
-            "zero_instance_observed_at_epoch",
-            "owned_instance_identity_sha256",
-            "termination_target_identity_sha256",
-            "entry_receipt_sha256",
-            "source_bundle_sha256",
-            "source_bundle_bytes",
-            "source_observer",
-            "termination_request_count",
-            "terminal_or_absent",
-            "zero_t09_instances",
-            "security_restored",
-            "raw_source_retained_private",
-            "structural_redaction_passed",
-            "campaign_wall_exception",
-        },
-        label="provider closeout receipt",
-    )
+    if any(
+        item is None
+        for item in (repository_root, source_root, entry_receipt_path, entry_source_root)
+    ):
+        raise T09HostError("provider closeout source bundles are required")
+    assert repository_root is not None
+    assert source_root is not None
+    assert entry_receipt_path is not None
+    assert entry_source_root is not None
+    repository = repository_root.resolve(strict=True)
+    try:
+        value = validate_source_bound_closeout(
+            path.resolve(strict=True),
+            source_root.resolve(strict=True),
+            entry_receipt_path=entry_receipt_path.resolve(strict=True),
+            entry_source_root=entry_source_root.resolve(strict=True),
+            package_commit=expected_package_commit,
+            plan_sha256=file_sha256(contract_paths(repository)["plan"]),
+            lifecycle=load_campaign_lifecycle(repository),
+        )
+    except T09ProviderError as exc:
+        raise T09HostError("provider closeout receipt is not source-bound") from exc
     timeline = [
         value.get("lambda_started_at_epoch"),
         value.get("termination_started_at_epoch"),
@@ -809,41 +797,18 @@ def validate_provider_closeout_receipt(
         value.get("captured_at_epoch"),
     ]
     if any(not isinstance(item, (int, float)) or isinstance(item, bool) for item in timeline):
-        raise T09HostError("provider closeout receipt chronology is malformed")
+        raise T09HostError("provider closeout chronology is malformed")
     numeric_timeline = [float(cast(int | float, item)) for item in timeline]
-    source_bytes = value.get("source_bundle_bytes")
-    termination_request_count = value.get("termination_request_count")
     if (
-        value.get("schema_version") != "0.1.0"
-        or value.get("receipt_type") != "t09-pragmatic-provider-closeout"
-        or value.get("plan_id") != PLAN_ID
-        or value.get("host_run_id") != HOST_RUN_ID
-        or value.get("package_commit") != expected_package_commit
-        or re.fullmatch(r"[a-f0-9]{40}", expected_package_commit) is None
-        or numeric_timeline != sorted(numeric_timeline)
+        numeric_timeline != sorted(numeric_timeline)
         or abs(numeric_timeline[0] - expected_lambda_started_at_epoch) > 1.0
-        or time.time() - numeric_timeline[-1] < 0
-        or time.time() - numeric_timeline[-1] > 1_800
-        or value.get("owned_instance_identity_sha256")
-        != expected_owned_instance_identity_sha256
+        or value.get("owned_instance_identity_sha256") != expected_owned_instance_identity_sha256
         or value.get("termination_target_identity_sha256")
         != expected_owned_instance_identity_sha256
         or value.get("entry_receipt_sha256") != expected_entry_receipt_sha256
-        or _HEX64.fullmatch(str(value.get("source_bundle_sha256"))) is None
-        or type(source_bytes) is not int
-        or not 1 <= source_bytes <= 16_777_216
-        or value.get("source_observer") != "t07-pragmatic-lambda-api-receipts-v1"
-        or type(termination_request_count) is not int
-        or not 1 <= termination_request_count <= 3
-        or value.get("terminal_or_absent") is not True
-        or value.get("zero_t09_instances") is not True
-        or value.get("security_restored") is not True
-        or value.get("raw_source_retained_private") is not True
-        or value.get("structural_redaction_passed") is not True
-        or value.get("campaign_wall_exception")
-        not in {"none", "best-effort-termination-provider-control-plane-delay"}
+        or not 0 <= time.time() - numeric_timeline[-1] <= 1_800
     ):
-        raise T09HostError("provider closeout receipt drifted from exact owned-resource cleanup")
+        raise T09HostError("provider closeout identity or chronology drifted")
     encoded = json.dumps(value, sort_keys=True)
     if (
         _CREDENTIAL_TEXT.search(encoded)
@@ -882,7 +847,7 @@ def provider_seconds_remaining(root: Path, *, reserve_seconds: float = 0.0) -> f
         MAX_LAMBDA_DURATION_SECONDS - lambda_elapsed,
         lambda_limit_from_cost - lambda_elapsed,
     )
-    if remaining <= reserve_seconds:
+    if remaining < reserve_seconds:
         raise T09HostError("provider duration or cost ceiling has no required reserve")
     return remaining - reserve_seconds
 
@@ -962,6 +927,19 @@ def manifest_for_run(document: dict[str, Any], run_id: str) -> dict[str, Any]:
     if len(matches) != 1:
         raise T09HostError("run command manifest is missing or duplicated")
     return matches[0]
+
+
+def manifest_output_root(manifest: dict[str, Any]) -> str:
+    owned = manifest.get("permitted_condition_owned")
+    if not isinstance(owned, dict):
+        raise T09HostError("command manifest lacks its condition-owned surface")
+    output_root = owned.get("output_root")
+    if not isinstance(output_root, str):
+        raise T09HostError("command manifest lacks its condition-owned output root")
+    relative = PurePosixPath(output_root)
+    if relative.is_absolute() or ".." in relative.parts:
+        raise T09HostError("condition-owned output root is unsafe")
+    return output_root
 
 
 def verify_package(repository: Path, package_commit: str) -> dict[str, Any]:
@@ -1436,6 +1414,8 @@ def preflight(args: argparse.Namespace) -> None:
     dynamic = validate_dynamic_receipt(
         args.dynamic_receipt.resolve(strict=True),
         expected_package_commit=args.package_commit,
+        repository_root=repository,
+        source_root=args.dynamic_source_root.resolve(strict=True),
     )
     command_document = verify_package(repository, args.package_commit)
     paths = contract_paths(repository)
@@ -1444,9 +1424,7 @@ def preflight(args: argparse.Namespace) -> None:
         raise T09HostError("owned pilot containers already exist")
     artifact_root.mkdir(mode=0o700, parents=True)
     lambda_started_raw = dynamic["lambda_started_at_epoch"]
-    if not isinstance(lambda_started_raw, (int, float)) or isinstance(
-        lambda_started_raw, bool
-    ):
+    if not isinstance(lambda_started_raw, (int, float)) or isinstance(lambda_started_raw, bool):
         raise T09HostError("provider entry receipt lacks the billable time origin")
     lambda_started = float(lambda_started_raw)
     execution_sha256 = file_sha256(paths["execution"])
@@ -1630,7 +1608,7 @@ def run_attached_with_caps(
             now_wall = time.time()
             elapsed = time.monotonic() - attempt_started
             lambda_elapsed = now_wall - lambda_started_at_epoch
-            if elapsed > MAX_CONDITION_WALL_SECONDS - FINALIZATION_RESERVE_SECONDS:
+            if elapsed > (MAX_CONDITION_WALL_SECONDS - ATTEMPT_EVIDENCE_EXPORT_RESERVE_SECONDS):
                 stop_reason = "condition_wall_budget_stop"
             elif (
                 now_wall - pair_started_at_epoch
@@ -1751,6 +1729,7 @@ def evaluator_argv(
 
 def execute_condition(args: argparse.Namespace) -> int:
     attempt_started = time.monotonic()
+    attempt_started_epoch = time.time()
     repository = args.repository.resolve(strict=True)
     artifact_root = args.artifact_root.resolve(strict=True)
     admit_next_attempt(artifact_root)
@@ -1797,7 +1776,7 @@ def execute_condition(args: argparse.Namespace) -> int:
     if lambda_elapsed * LAMBDA_HOURLY_PRICE_USD / 3600.0 >= MAX_LAMBDA_COST_USD:
         raise T09HostError("Lambda cost cap reached")
 
-    attempt_root = artifact_root / manifest["output_root"]
+    attempt_root = artifact_root / manifest_output_root(manifest)
     attempt_root.mkdir(parents=True, mode=0o700, exist_ok=False)
     prefix = docker_prefix()
     gpu_before = gpu_snapshot()
@@ -1816,6 +1795,19 @@ def execute_condition(args: argparse.Namespace) -> int:
             "docker_create_argv": create_argv,
             "docker_create_argv_sha256": canonical_sha256(create_argv),
             "condition_argv_sha256": manifest["argv_sha256"],
+        },
+    )
+    write_exclusive(
+        attempt_root / "attempt-wall.json",
+        {
+            "schema_version": "0.1.0",
+            "run_id": args.run_id,
+            "attempt_started_at_epoch": attempt_started_epoch,
+            "attempt_hard_deadline_epoch": (attempt_started_epoch + MAX_CONDITION_WALL_SECONDS),
+            "empirical_work_stop_seconds": (
+                MAX_CONDITION_WALL_SECONDS - ATTEMPT_EVIDENCE_EXPORT_RESERVE_SECONDS
+            ),
+            "evaluator_and_export_reserve_seconds": (ATTEMPT_EVIDENCE_EXPORT_RESERVE_SECONDS),
         },
     )
     created = subprocess.run(
@@ -1949,6 +1941,217 @@ def execute_condition(args: argparse.Namespace) -> int:
     return returncode
 
 
+def export_attempt(args: argparse.Namespace, destination: BinaryIO) -> dict[str, object]:
+    """Stream one finalized attempt to the operator inside its 3,600-second wall."""
+
+    repository = args.repository.resolve(strict=True)
+    artifact_root = args.artifact_root.resolve(strict=True)
+    command_document = load_object(
+        contract_paths(repository)["commands"], label="command manifest set"
+    )
+    manifest = manifest_for_run(command_document, args.run_id)
+    attempt_root = (artifact_root / manifest_output_root(manifest)).resolve(strict=True)
+    try:
+        attempt_root.relative_to(artifact_root)
+    except ValueError:
+        raise T09HostError("attempt export root escaped the pilot artifact root") from None
+    wall = load_object(attempt_root / "attempt-wall.json", label="attempt wall")
+    hard_deadline_epoch = wall.get("attempt_hard_deadline_epoch")
+    if not isinstance(hard_deadline_epoch, (int, float)) or isinstance(hard_deadline_epoch, bool):
+        raise T09HostError("attempt export lacks its hard deadline")
+    required = {
+        "attempt-outcome.json",
+        "evidence-index.json",
+        "host-cleanup-receipt.json",
+        "normalized-events.jsonl",
+    }
+    if any(not (attempt_root / name).is_file() for name in required):
+        raise T09HostError("attempt export lacks reconstructable finalized evidence")
+    privacy_hits = privacy_violations(attempt_root)
+    if privacy_hits:
+        raise T09HostError("attempt export failed structural privacy validation")
+    files: list[dict[str, object]] = []
+    total = 0
+    for path in sorted(attempt_root.rglob("*")):
+        if not path.is_file() or path.is_symlink() or path.name == "attempt-export-manifest.json":
+            continue
+        size = path.stat().st_size
+        total += size
+        if total > MAX_ATTEMPT_OUTPUT_BYTES:
+            raise T09HostError("attempt export exceeds its raw byte cap")
+        files.append(
+            {
+                "path": path.relative_to(attempt_root).as_posix(),
+                "bytes": size,
+                "sha256": file_sha256(path),
+            }
+        )
+    export_manifest_path = attempt_root / "attempt-export-manifest.json"
+    write_exclusive(
+        export_manifest_path,
+        {
+            "schema_version": "0.1.0",
+            "plan_id": PLAN_ID,
+            "host_run_id": HOST_RUN_ID,
+            "run_id": args.run_id,
+            "package_commit": args.package_commit,
+            "private_access_controlled": True,
+            "public_release": "blocked-pending-review",
+            "files": files,
+            "total_bytes": total,
+            "structural_privacy_scan_passed": True,
+            "exported_before_provider_termination": True,
+        },
+    )
+    remaining_attempt = float(hard_deadline_epoch) - time.time()
+    remaining_campaign_to_cutoff = PROVIDER_TERMINATION_CUTOFF_SECONDS - (
+        time.time() - float(_runtime_budget_state(artifact_root)["lambda_started_at_epoch"])
+    )
+    timeout = min(remaining_attempt, remaining_campaign_to_cutoff)
+    if timeout <= 1:
+        raise T09HostError("attempt evidence cannot export before provider termination cutoff")
+    exports = artifact_root / "pilot-v3/attempt-exports"
+    exports.mkdir(mode=0o700, exist_ok=True)
+    archive = exports / f"{args.run_id}.tar.gz"
+    with hard_deadline(timeout, message="attempt evidence export deadline exceeded"):
+        with tarfile.open(archive, "x:gz") as handle:
+            for entry in files:
+                relative = str(entry["path"])
+                handle.add(attempt_root / relative, arcname=relative, recursive=False)
+            handle.add(
+                export_manifest_path,
+                arcname="attempt-export-manifest.json",
+                recursive=False,
+            )
+        if archive.stat().st_size > MAX_ATTEMPT_EXPORT_BYTES:
+            raise T09HostError("attempt export archive exceeds its byte cap")
+        with archive.open("rb") as source:
+            while chunk := source.read(1_048_576):
+                destination.write(chunk)
+        destination.flush()
+    return {
+        "run_id": args.run_id,
+        "bytes": archive.stat().st_size,
+        "sha256": file_sha256(archive),
+        "manifest_sha256": file_sha256(export_manifest_path),
+    }
+
+
+def verify_attempt_export(args: argparse.Namespace) -> None:
+    """Verify one directly streamed attempt archive before provider termination."""
+
+    inbound = args.inbound_root.resolve(strict=True)
+    archive = args.attempt_export.resolve(strict=True)
+    expected_name = f"{args.run_id}.tar.gz"
+    if archive.parent != inbound or archive.name != expected_name:
+        raise T09HostError("attempt export is not at its exact inbound path")
+    if archive.stat().st_size > MAX_ATTEMPT_EXPORT_BYTES:
+        raise T09HostError("inbound attempt export exceeds its byte cap")
+    with tarfile.open(archive, "r:gz") as handle:
+        members = handle.getmembers()
+        if not 1 <= len(members) <= 2_048:
+            raise T09HostError("attempt export member count is invalid")
+        by_name: dict[str, tarfile.TarInfo] = {}
+        for member in members:
+            relative = PurePosixPath(member.name)
+            if (
+                not member.isfile()
+                or relative.is_absolute()
+                or ".." in relative.parts
+                or member.name in by_name
+                or member.size > MAX_ATTEMPT_OUTPUT_BYTES
+            ):
+                raise T09HostError("attempt export contains an unsafe member")
+            by_name[member.name] = member
+        manifest_member = by_name.get("attempt-export-manifest.json")
+        if manifest_member is None:
+            raise T09HostError("attempt export manifest is absent")
+        manifest_stream = handle.extractfile(manifest_member)
+        if manifest_stream is None or manifest_member.size > 2_097_152:
+            raise T09HostError("attempt export manifest is unreadable")
+        try:
+            manifest: object = json.loads(manifest_stream.read())
+        except json.JSONDecodeError as exc:
+            raise T09HostError("attempt export manifest is malformed") from exc
+        if not isinstance(manifest, dict):
+            raise T09HostError("attempt export manifest is not an object")
+        files = manifest.get("files")
+        if (
+            manifest.get("schema_version") != "0.1.0"
+            or manifest.get("plan_id") != PLAN_ID
+            or manifest.get("host_run_id") != HOST_RUN_ID
+            or manifest.get("run_id") != args.run_id
+            or manifest.get("package_commit") != args.package_commit
+            or manifest.get("private_access_controlled") is not True
+            or manifest.get("public_release") != "blocked-pending-review"
+            or manifest.get("structural_privacy_scan_passed") is not True
+            or manifest.get("exported_before_provider_termination") is not True
+            or not isinstance(files, list)
+        ):
+            raise T09HostError("attempt export manifest contract drifted")
+        expected_members = {"attempt-export-manifest.json"}
+        total = 0
+        for raw in files:
+            if not isinstance(raw, dict):
+                raise T09HostError("attempt export file record is malformed")
+            name = raw.get("path")
+            size = raw.get("bytes")
+            digest = raw.get("sha256")
+            if (
+                not isinstance(name, str)
+                or type(size) is not int
+                or not isinstance(digest, str)
+                or _HEX64.fullmatch(digest) is None
+                or name not in by_name
+                or by_name[name].size != size
+            ):
+                raise T09HostError("attempt export file identity drifted")
+            stream = handle.extractfile(by_name[name])
+            if stream is None:
+                raise T09HostError("attempt export file is unreadable")
+            observed = hashlib.sha256()
+            observed_size = 0
+            while chunk := stream.read(1_048_576):
+                observed.update(chunk)
+                observed_size += len(chunk)
+                if observed_size > MAX_ATTEMPT_OUTPUT_BYTES:
+                    raise T09HostError("attempt export expanded beyond its cap")
+            if observed_size != size or observed.hexdigest() != digest:
+                raise T09HostError("attempt export member hash mismatch")
+            expected_members.add(name)
+            total += size
+        if set(by_name) != expected_members or total != manifest.get("total_bytes"):
+            raise T09HostError("attempt export member set or aggregate bytes drifted")
+    entry = load_object(args.provider_entry_receipt.resolve(strict=True), label="provider entry")
+    owned_hash = entry.get("owned_instance_identity_sha256")
+    lambda_started = entry.get("lambda_started_at_epoch")
+    if (
+        not isinstance(owned_hash, str)
+        or _HEX64.fullmatch(owned_hash) is None
+        or not isinstance(lambda_started, (int, float))
+        or isinstance(lambda_started, bool)
+    ):
+        raise T09HostError("attempt export lacks the source-bound provider entry identity")
+    write_exclusive(
+        inbound / f"{args.run_id}-export-verification.json",
+        {
+            "schema_version": "0.1.0",
+            "plan_id": PLAN_ID,
+            "host_run_id": HOST_RUN_ID,
+            "run_id": args.run_id,
+            "archive_path": archive.name,
+            "archive_bytes": archive.stat().st_size,
+            "archive_sha256": file_sha256(archive),
+            "provider_entry_receipt_sha256": file_sha256(
+                args.provider_entry_receipt.resolve(strict=True)
+            ),
+            "owned_instance_identity_sha256": owned_hash,
+            "lambda_started_at_epoch": float(lambda_started),
+            "verified_before_provider_termination": True,
+        },
+    )
+
+
 def _reconstructable_disposition(root: Path) -> dict[str, Any]:
     """Accept every zero-retry prefix that can be preserved for adjudication."""
 
@@ -2020,10 +2223,20 @@ def stage(args: argparse.Namespace) -> None:
     ):
         raise T09HostError("global credential cleanup is incomplete")
     state = _reconstructable_disposition(root)
-    provider_seconds_remaining(
-        root,
-        reserve_seconds=PROVIDER_TERMINATION_RESERVE_SECONDS,
+    runtime_state = _runtime_budget_state(root)
+    lambda_started_for_stage = runtime_state.get("lambda_started_at_epoch")
+    if not isinstance(lambda_started_for_stage, (int, float)) or isinstance(
+        lambda_started_for_stage, bool
+    ):
+        raise T09HostError("evidence stage lacks the provider time origin")
+    seconds_to_termination_cutoff = PROVIDER_TERMINATION_CUTOFF_SECONDS - (
+        time.time() - float(lambda_started_for_stage)
     )
+    if seconds_to_termination_cutoff <= 1:
+        raise T09HostError(
+            "provider termination is due; use the direct attempt exports and terminate now"
+        )
+    stage_timeout = min(MAX_STAGE_SECONDS, seconds_to_termination_cutoff)
     privacy_hits = privacy_violations(root)
     if privacy_hits:
         raise T09HostError(
@@ -2047,9 +2260,16 @@ def stage(args: argparse.Namespace) -> None:
         },
     )
     archive = root / "pilot-v3/t09-pilot-private-evidence-stage.tar.gz"
-    with tarfile.open(archive, "x:gz") as handle:
+    with (
+        hard_deadline(stage_timeout, message="aggregate evidence stage deadline exceeded"),
+        tarfile.open(archive, "x:gz") as handle,
+    ):
         for entry in files:
-            handle.add(root / str(entry["path"]), arcname=str(entry["path"]), recursive=False)
+            handle.add(
+                root / str(entry["path"]),
+                arcname=str(entry["path"]),
+                recursive=False,
+            )
         handle.add(
             manifest_path,
             arcname=manifest_path.relative_to(root).as_posix(),
@@ -2130,30 +2350,76 @@ def verify_inbound(args: argparse.Namespace) -> None:
 
 
 def package(args: argparse.Namespace) -> None:
-    """Complete the private archive locally after exact provider closeout."""
+    """Complete the private archive from aggregate or direct-prefix handoff evidence."""
 
     inbound = args.inbound_root.resolve(strict=True)
-    verification = load_object(
-        inbound / "inbound-verification.json",
-        label="inbound verification",
-    )
-    if verification.get("verified_before_provider_termination") is not True:
-        raise T09HostError("inbound evidence was not verified before provider termination")
-    stage_archive = inbound / "t09-pilot-private-evidence-stage.tar.gz"
-    if verification.get("archive_sha256") != file_sha256(stage_archive):
-        raise T09HostError("verified evidence stage changed before final packaging")
-    stage_identity = load_object(inbound / "evidence-stage-identity.json", label="stage identity")
-    lambda_started = stage_identity.get("lambda_started_at_epoch")
-    if not isinstance(lambda_started, (int, float)) or isinstance(lambda_started, bool):
-        raise T09HostError("stage Lambda start time is unavailable")
+    entry_receipt_path = args.provider_entry_receipt.resolve(strict=True)
+    entry = load_object(entry_receipt_path, label="provider entry receipt")
+    lambda_started = entry.get("lambda_started_at_epoch")
+    owned_hash = entry.get("owned_instance_identity_sha256")
+    entry_sha256 = file_sha256(entry_receipt_path)
+    if (
+        not isinstance(lambda_started, (int, float))
+        or isinstance(lambda_started, bool)
+        or not isinstance(owned_hash, str)
+        or _HEX64.fullmatch(owned_hash) is None
+    ):
+        raise T09HostError("source-bound provider entry identity is unavailable")
+    source_archives: list[Path] = []
+    aggregate_verification_path = inbound / "inbound-verification.json"
+    if aggregate_verification_path.is_file():
+        verification = load_object(
+            aggregate_verification_path,
+            label="inbound verification",
+        )
+        stage_archive = inbound / "t09-pilot-private-evidence-stage.tar.gz"
+        stage_identity = load_object(
+            inbound / "evidence-stage-identity.json", label="stage identity"
+        )
+        if (
+            verification.get("verified_before_provider_termination") is not True
+            or verification.get("archive_sha256") != file_sha256(stage_archive)
+            or stage_identity.get("lambda_started_at_epoch") != lambda_started
+            or stage_identity.get("owned_instance_identity_sha256") != owned_hash
+            or stage_identity.get("provider_entry_receipt_sha256") != entry_sha256
+        ):
+            raise T09HostError("verified aggregate evidence stage drifted")
+        source_archives.append(stage_archive)
+    else:
+        prefix_open = True
+        for run_id in RUN_IDS:
+            verification_path = inbound / f"{run_id}-export-verification.json"
+            if not verification_path.is_file():
+                prefix_open = False
+                continue
+            if not prefix_open:
+                raise T09HostError("direct attempt exports are not a frozen-order prefix")
+            verification = load_object(
+                verification_path,
+                label="attempt export verification",
+            )
+            archive = inbound / f"{run_id}.tar.gz"
+            if (
+                verification.get("run_id") != run_id
+                or verification.get("verified_before_provider_termination") is not True
+                or verification.get("archive_sha256") != file_sha256(archive)
+                or verification.get("archive_bytes") != archive.stat().st_size
+                or verification.get("provider_entry_receipt_sha256") != entry_sha256
+                or verification.get("owned_instance_identity_sha256") != owned_hash
+                or verification.get("lambda_started_at_epoch") != lambda_started
+            ):
+                raise T09HostError("direct attempt export verification drifted")
+            source_archives.append(archive)
     closeout = validate_provider_closeout_receipt(
         args.provider_closeout_receipt.resolve(strict=True),
         expected_lambda_started_at_epoch=float(lambda_started),
-        expected_owned_instance_identity_sha256=str(
-            stage_identity["owned_instance_identity_sha256"]
-        ),
-        expected_entry_receipt_sha256=str(stage_identity["provider_entry_receipt_sha256"]),
+        expected_owned_instance_identity_sha256=owned_hash,
+        expected_entry_receipt_sha256=entry_sha256,
         expected_package_commit=args.package_commit,
+        repository_root=args.repository.resolve(strict=True),
+        source_root=args.provider_closeout_source_root.resolve(strict=True),
+        entry_receipt_path=entry_receipt_path,
+        entry_source_root=args.provider_entry_source_root.resolve(strict=True),
     )
     output_root = args.final_archive_root.resolve(strict=True)
     if output_root != APPROVED_FINAL_ARCHIVE_ROOT:
@@ -2161,13 +2427,22 @@ def package(args: argparse.Namespace) -> None:
     output_root.mkdir(parents=True, exist_ok=True, mode=0o700)
     final_root = output_root / ARCHIVE_ID
     final_root.mkdir(mode=0o700)
-    source_copy = final_root / stage_archive.name
-    with stage_archive.open("rb") as source, source_copy.open("xb") as destination:
-        shutil.copyfileobj(source, destination, length=1_048_576)
-        destination.flush()
-        os.fsync(destination.fileno())
-    if file_sha256(source_copy) != file_sha256(stage_archive):
-        raise T09HostError("one-way stage archive copy verification failed")
+    copied: list[dict[str, object]] = []
+    for source_archive in source_archives:
+        source_copy = final_root / source_archive.name
+        with source_archive.open("rb") as source, source_copy.open("xb") as destination:
+            shutil.copyfileobj(source, destination, length=1_048_576)
+            destination.flush()
+            os.fsync(destination.fileno())
+        if file_sha256(source_copy) != file_sha256(source_archive):
+            raise T09HostError("one-way evidence archive copy verification failed")
+        copied.append(
+            {
+                "path": source_copy.name,
+                "bytes": source_copy.stat().st_size,
+                "sha256": file_sha256(source_copy),
+            }
+        )
     closeout_summary = final_root / "provider-closeout-summary.json"
     write_exclusive(closeout_summary, closeout)
     manifest_path = final_root / "evidence-archive-manifest.json"
@@ -2178,8 +2453,10 @@ def package(args: argparse.Namespace) -> None:
             "archive_id": ARCHIVE_ID,
             "private_access_controlled": True,
             "public_release": "blocked-pending-review",
-            "stage_archive_bytes": source_copy.stat().st_size,
-            "stage_archive_sha256": file_sha256(source_copy),
+            "payload_archives": copied,
+            "payload_mode": (
+                "aggregate-stage" if aggregate_verification_path.is_file() else "direct-prefix"
+            ),
             "provider_closeout_receipt_sha256": closeout["receipt_sha256"],
             "provider_termination_confirmed": True,
             "zero_owned_instances_confirmed": True,
@@ -2193,8 +2470,8 @@ def package(args: argparse.Namespace) -> None:
             "schema_version": "0.1.0",
             "archive_id": ARCHIVE_ID,
             "manifest_sha256": file_sha256(manifest_path),
-            "stage_archive_bytes": source_copy.stat().st_size,
-            "stage_archive_sha256": file_sha256(source_copy),
+            "payload_archive_count": len(copied),
+            "payload_archives_sha256": canonical_sha256(copied),
         },
     )
 
@@ -2253,14 +2530,25 @@ def parser() -> argparse.ArgumentParser:
     operations = result.add_subparsers(dest="operation", required=True)
     preflight_parser = operations.add_parser("preflight")
     preflight_parser.add_argument("--dynamic-receipt", type=Path, required=True)
+    preflight_parser.add_argument("--dynamic-source-root", type=Path, required=True)
     condition = operations.add_parser("condition")
     condition.add_argument("--run-id", choices=RUN_IDS, required=True)
+    condition_export = operations.add_parser("condition-export")
+    condition_export.add_argument("--run-id", choices=RUN_IDS, required=True)
     operations.add_parser("stage")
     inbound_parser = operations.add_parser("verify-inbound")
     inbound_parser.add_argument("--inbound-root", type=Path, required=True)
+    attempt_export = operations.add_parser("verify-attempt-export")
+    attempt_export.add_argument("--run-id", choices=RUN_IDS, required=True)
+    attempt_export.add_argument("--inbound-root", type=Path, required=True)
+    attempt_export.add_argument("--attempt-export", type=Path, required=True)
+    attempt_export.add_argument("--provider-entry-receipt", type=Path, required=True)
     package_parser = operations.add_parser("package")
     package_parser.add_argument("--inbound-root", type=Path, required=True)
     package_parser.add_argument("--provider-closeout-receipt", type=Path, required=True)
+    package_parser.add_argument("--provider-closeout-source-root", type=Path, required=True)
+    package_parser.add_argument("--provider-entry-receipt", type=Path, required=True)
+    package_parser.add_argument("--provider-entry-source-root", type=Path, required=True)
     package_parser.add_argument("--final-archive-root", type=Path, required=True)
     operations.add_parser("cleanup")
     return result
@@ -2273,11 +2561,18 @@ def main() -> int:
         return 0
     if args.operation == "condition":
         return execute_condition(args)
+    if args.operation == "condition-export":
+        execute_condition(args)
+        export_attempt(args, sys.stdout.buffer)
+        return 0
     if args.operation == "stage":
         stage(args)
         return 0
     if args.operation == "verify-inbound":
         verify_inbound(args)
+        return 0
+    if args.operation == "verify-attempt-export":
+        verify_attempt_export(args)
         return 0
     if args.operation == "package":
         package(args)

@@ -18,24 +18,29 @@ pair, host, condition, evaluator, stage, and archive identities.
 
 | V3 ID | Requirement | Status |
 |---|---|---|
-| T09-V3-01 | Parameterize one actual-time 14,400-second provider campaign with 900-second cleanup reserve and 13,500-second termination cutoff. | in progress: typed lifecycle and host enforcement implemented; focused fake-clock tests pass |
-| T09-V3-02 | Admit an attempt only when its 3,600-second hard wall plus cleanup reserve remains; do not sum future maxima. | in progress: direct admission regression passes |
-| T09-V3-03 | Preserve science/evaluator/tasks/order/pairing and machine-diff four exact V3 commands. | in progress: scientific constants unchanged and pair render test passes; final hashes pending reviewed ancestor |
-| T09-V3-04 | Keep calls/tokens/actions/cost/wall/output/disk/attempt/zero-retry and evidence counters effective. | in progress: focused cap/evidence tests pass; exact runtime preflight pending |
-| T09-V3-05 | Pass independent spec-conformance review, repair/rereview, and post-review smoke before freeze. | not-started |
+| T09-V3-01 | Parameterize one actual-time 14,400-second provider campaign with 900-second cleanup reserve and 13,500-second termination cutoff. | met locally: the existing observer and one-shot provider boundary share one typed immutable V3 limit set; T07 defaults remain 3,600/1,800 |
+| T09-V3-02 | Admit an attempt only when its 3,600-second hard wall plus cleanup reserve remains; do not sum future maxima. | met locally: direct admission/cutoff fake-clock regressions pass |
+| T09-V3-03 | Preserve science/evaluator/tasks/order/pairing and machine-diff four exact V3 commands. | partial: scientific constants unchanged and pair render test passes; final hashes pending reviewed ancestor |
+| T09-V3-04 | Keep calls/tokens/actions/cost/wall/output/disk/attempt/zero-retry and evidence counters effective. | met locally: focused cap/evidence tests pass; exact runtime preflight pending clean freeze |
+| T09-V3-05 | Pass independent spec-conformance review, repair/rereview, and post-review smoke before freeze. | in progress: first review failed four real lifecycle/provenance controls; root repairs landed and rereview is next |
 | T09-V3-06 | Freeze a clean pre-run package and single-use private authorization/cloud ledger before one launch. | not-started |
 | T09-V3-07 | Execute Task A pair, checkpoint, eligible Task B pair, and pinned evaluators with zero retry. | not-started |
 | T09-V3-08 | Seal evidence, terminate exact provider resource, prove zero residue/security restoration, reconcile accounting, and update public/control surfaces without a scientific conclusion. | not-started |
 
-Focused evidence so far: campaign/evaluator/pair/budget/checkpoint/provider-receipt
-suite **19 passed**; focused Ruff passes; strict mypy passes after typed chronology
-repair. No Lambda/OpenAI/browser/SiRA/FanOutQA request or cloud mutation has occurred
-in V3 while this entry is in progress.
+Focused evidence so far: the combined existing-observer and T09 source suite passes
+after excluding only expected final-package hash tests; source-derived provider entry,
+ambiguous termination, exact-target closeout, cutoff, attempt export, campaign
+admission, science lock, evaluator, pair, budget, and checkpoint regressions pass.
+Focused Ruff, strict mypy, and `git diff --check` pass. No Lambda/OpenAI/browser/
+SiRA/FanOutQA request or cloud mutation has occurred in V3 while this entry is in
+progress.
 
 The complete active DoD and command/evidence log are maintained in
 `docs/exec-plans/active/T09_PRAGMATIC_CALIBRATION_PILOT.md`.
 
 ---
+
+## Historical V2 blocked-state assembly (superseded only by V3)
 
 Assembly status: **complete at the material-risk boundary; execution remains blocked**
 
@@ -162,9 +167,9 @@ is not the reason execution is blocked.
   handoff commit closes only this ledger; it does not change the reviewed runtime,
   plan, execution, command, evaluator, dataset, budget, or evidence bytes.
 
-## Next permitted work
+## Historical V2 next permitted work
 
-T09 is closed at `t09-pilot-blocked-material-risk`. No live or cloud execution is
-permitted, and no authorization may be issued from this plan. A future successor may
-proceed only after closing the provider-wall, staging, and cleanup incompatibility
-under a fresh plan, byte bindings, review, and user authorization.
+V2 was closed at `t09-pilot-blocked-material-risk`. It grants no live or cloud
+authority. The current V3 section above is the fresh successor requested by the user;
+it may proceed only after its own byte bindings, rereview, clean freeze, exact
+preflight, and private single-use authorization overlay pass.

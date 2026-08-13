@@ -28,7 +28,7 @@ stop is an operational calibration decision, not an unbiased scientific sample.
 |---|---|---|
 | Execution blocker | The V2 provider lifecycle fixed the whole campaign to 3,600 seconds while the four-attempt plan allowed 14,400 seconds. | Resolved by the user-authorized, plan-driven 14,400-second actual-time campaign, 13,500-second normal termination cutoff, and 900-second cleanup reserve. |
 | Execution blocker | Admission reserved all future theoretical attempt maxima at campaign start. | Resolved. Each attempt is admitted independently only when its 3,600-second hard wall plus the 900-second cleanup reserve remains. Setup and every later phase consume the same billable clock. |
-| Execution blocker | Provider entry/condition execution were hard-disabled at the V2 risk boundary. | Resolved with exact sanitized projections of the retained T07-pragmatic Lambda receipts and the already-reviewed T09 host/condition/evaluator/cleanup paths. No new launch framework or watchdog was added. |
+| Execution blocker | Provider entry/condition execution were hard-disabled at the V2 risk boundary. | Resolved by parameterizing the existing observer timing primitive and retaining source-derived, structurally redacted projections for the one-shot T07-pragmatic Lambda operations. No persistent cloud service or watchdog was added. |
 | Analysis blocker | Upstream evaluator normalization is task-specific. | Resolved by freezing exact upstream scoring and reporting task-level scores only. The ordinary Task B fixture score of 0.5 is not a proven ceiling; a retained edge fixture scores 1.0. |
 | Publication-only blocker | Dataset rows, traces, answers, and screenshots require attribution/share-alike, privacy, and third-party-content review. | Private access-controlled execution is permitted; public raw release remains blocked. |
 | Nonblocking optional gap | Unsupported H2K causal/mechanism fields are absent. | Retain explicit `unavailable` values; never infer them. |
@@ -67,7 +67,8 @@ missing required evidence yields a null score and explicit reason.
 
 ## Lifecycle and runtime enforcement
 
-The campaign clock begins when the sole Lambda instance becomes billable. Setup,
+The campaign clock begins conservatively immediately before the sole launch request
+crosses send-start. Setup,
 runtime preflight, all attempts, evaluator work, evidence handling, and cleanup consume
 that same actual clock. The hard provider/Lambda wall is 14,400 seconds. Normal
 termination must begin by 13,500 seconds, preserving 900 seconds for cleanup. Only a
@@ -76,7 +77,7 @@ absolute wall; it never authorizes more empirical work.
 
 At every attempt boundary:
 
-1. calculate actual time since the provider launch response;
+1. calculate actual time since the durable provider launch send-start;
 2. require at least 3,600 seconds for the next attempt plus 900 seconds cleanup;
 3. do not reserve later attempts or setup maxima;
 4. refuse entry, preserve completed evidence, and clean up if the rule fails.
@@ -103,8 +104,10 @@ conservative expected aggregate envelope is approximately USD 7.643970.
 Hard aggregate ceilings are USD 40 OpenAI, USD 5.16 Lambda, USD 45.16 combined,
 4,620 model calls, 4,000,000 tokens, 120 browser actions, four attempts, and zero
 condition retries. Per-attempt caps are 1,155 calls, 1,000,000 tokens, USD 10 OpenAI,
-30 actions, 3,600 seconds, and 1 GiB output. Pair wall is 7,200 seconds; pilot disk is
-12 GiB. These are emergency stops, not expected spend.
+30 actions, 3,600 seconds, and 64 MiB output. Pair wall is 7,200 seconds; pilot disk
+is 2 GiB. Each finalized attempt is streamed and hash-verified locally before the
+next attempt, so the 900-second provider cleanup reserve is never borrowed for a
+multi-gigabyte terminal transfer. These are emergency stops, not expected spend.
 
 ## First-pair checkpoint
 

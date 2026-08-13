@@ -45,7 +45,9 @@ approximately USD 7.643970.
 
 Hard ceilings: USD 40 OpenAI, USD 5.16 Lambda, USD 45.16 combined, 4,620 calls,
 4,000,000 tokens, 120 browser actions, four attempts, zero retry. Per attempt: 1,155
-calls, 1,000,000 tokens, USD 10 OpenAI, 30 actions, 3,600 seconds, 1 GiB output.
+calls, 1,000,000 tokens, USD 10 OpenAI, 30 actions, 3,600 seconds, 64 MiB output;
+aggregate pilot disk is 2 GiB. Each attempt export is locally hash-verified before
+the next attempt begins.
 
 Task B opens only when both Task A attempts have reconstructable evidence and valid
 evaluator execution, pair matching and cleanup are valid, no cap/credential issue

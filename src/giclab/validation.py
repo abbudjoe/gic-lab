@@ -1006,7 +1006,7 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
             errors.append(f"EXP-0001 {name}: current authorization must remain false")
         expected_readiness = {
             "smoke": "eligible-after-authorization",
-            "pilot": "blocked-pending-prerequisites",
+            "pilot": "eligible-after-authorization",
         }[name]
         if profile.get("readiness", {}).get("execution_eligibility") != expected_readiness:
             errors.append(f"EXP-0001 {name}: execution eligibility drift")
@@ -1130,6 +1130,27 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
         or dataset_entry.get("sha256") != pilot_dataset.get("dataset_sha256")
     ):
         errors.append("EXP-0001: dataset manifest identity does not resolve")
+
+    pilot_lifecycle = profiles["pilot"].get("provider_lifecycle")
+    expected_lifecycle = {
+        "campaign_clock_origin": "provider-launch-send-started-conservative",
+        "campaign_provider_wall_seconds": 14_400,
+        "normal_cleanup_reserve_seconds": 900,
+        "provider_termination_cutoff_seconds": 13_500,
+        "max_lambda_instances": 1,
+        "max_launch_count": 1,
+        "persistent_filesystems": 0,
+        "admission_rule": (
+            "remaining campaign time must cover only the next 3600-second attempt "
+            "hard wall plus the 900-second cleanup reserve"
+        ),
+        "control_plane": (
+            "existing T07 pragmatic Lambda operations with source-derived projections; "
+            "no persistent framework or watchdog"
+        ),
+    }
+    if pilot_lifecycle != expected_lifecycle:
+        errors.append("EXP-0001 pilot: provider lifecycle contract drift")
 
     contract_root = exp_root / "contracts"
     execution_path = contract_root / "T09_PILOT_EXECUTION_CONTRACT.json"

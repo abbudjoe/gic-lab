@@ -33,6 +33,12 @@ from typing import Final, Protocol, cast
 
 from jsonschema import Draft202012Validator
 
+from giclab.harness.lambda_campaign_lifecycle import (
+    ObserverLifecycleLimits,
+)
+from giclab.harness.lambda_campaign_lifecycle import (
+    billed_list_cost_cents as _billed_list_cost_cents,
+)
 from giclab.harness.lambda_l2m_checkpoints import (
     CheckpointBinding,
     CheckpointConsumptionEvidence,
@@ -103,6 +109,8 @@ MAX_OBSERVER_ACTIVE_SECONDS: Final = (
 MAX_OBSERVER_WALL_SECONDS: Final = MAX_OBSERVER_ACTIVE_SECONDS + MAX_OBSERVER_ARCHIVE_SECONDS
 MAX_OBSERVER_REQUEST_SECONDS: Final = 60
 MIN_REQUEST_SPACING_SECONDS: Final = 1
+
+
 MAX_OBSERVER_EVENTS: Final = 512
 MAX_OBSERVER_EVENT_BYTES: Final = 4_096
 MAX_OBSERVER_JOURNAL_BYTES: Final = 2_097_152
@@ -602,6 +610,7 @@ class ObserverBudget:
     phase_counts: tuple[int, ...] = (0,) * len(ObserverPhase)
     first_start_monotonic_ns: int | None = None
     last_start_monotonic_ns: int | None = None
+    max_wall_seconds: int = MAX_OBSERVER_WALL_SECONDS
 
     def prepare(
         self,
@@ -734,7 +743,7 @@ class ObserverBudget:
         )
         if updated.response_bytes > MAX_AGGREGATE_RESPONSE_BYTES:
             raise L2MContractError("observer aggregate response cap exceeded")
-        if wall_elapsed_ms > MAX_OBSERVER_WALL_SECONDS * 1_000:
+        if wall_elapsed_ms > self.max_wall_seconds * 1_000:
             raise L2MContractError("observer wall cap exceeded")
         return updated
 
@@ -1395,13 +1404,19 @@ def validate_observer_request(request: ObserverRequest) -> None:
 
 
 def billed_list_cost_cents(seconds: int) -> int:
-    if seconds < 0:
-        raise L2MContractError("provider wall cannot be negative")
-    minutes = (seconds + 59) // 60
-    return (minutes * OBSERVED_PRICE_CENTS_PER_HOUR + 59) // 60
+    try:
+        return _billed_list_cost_cents(
+            seconds,
+            price_cents_per_hour=OBSERVED_PRICE_CENTS_PER_HOUR,
+        )
+    except ValueError:
+        raise L2MContractError("provider wall cannot be negative") from None
 
 
-def exact_l2m_caps() -> dict[str, int | str]:
+def exact_l2m_caps(
+    lifecycle_limits: ObserverLifecycleLimits | None = None,
+) -> dict[str, int | str]:
+    limits = lifecycle_limits or ObserverLifecycleLimits()
     caps: dict[str, int | str] = {
         "observer_gets": MAX_OBSERVER_GETS,
         "response_bytes_per_get": MAX_RESPONSE_BYTES_PER_GET,
@@ -1409,8 +1424,15 @@ def exact_l2m_caps() -> dict[str, int | str]:
         "private_observation_files": MAX_OBSERVER_GETS,
         "private_observation_bytes_per_file": MAX_RESPONSE_BYTES_PER_GET,
         "private_observation_aggregate_bytes": MAX_AGGREGATE_RESPONSE_BYTES,
-        "observer_wall_seconds": MAX_OBSERVER_WALL_SECONDS,
-        "observer_active_seconds": MAX_OBSERVER_ACTIVE_SECONDS,
+        "observer_wall_seconds": limits.observer_active_seconds(
+            prelaunch_seconds=MAX_OBSERVER_PRELAUNCH_SECONDS,
+            post_provider_cleanup_seconds=MAX_OBSERVER_POST_PROVIDER_CLEANUP_SECONDS,
+        )
+        + MAX_OBSERVER_ARCHIVE_SECONDS,
+        "observer_active_seconds": limits.observer_active_seconds(
+            prelaunch_seconds=MAX_OBSERVER_PRELAUNCH_SECONDS,
+            post_provider_cleanup_seconds=MAX_OBSERVER_POST_PROVIDER_CLEANUP_SECONDS,
+        ),
         "observer_prelaunch_seconds": MAX_OBSERVER_PRELAUNCH_SECONDS,
         "observer_post_provider_cleanup_seconds": (MAX_OBSERVER_POST_PROVIDER_CLEANUP_SECONDS),
         "observer_archive_seconds": MAX_OBSERVER_ARCHIVE_SECONDS,
@@ -1420,9 +1442,9 @@ def exact_l2m_caps() -> dict[str, int | str]:
         "observer_journal_bytes": MAX_OBSERVER_JOURNAL_BYTES,
         "local_process_calls": MAX_LOCAL_PROCESS_CALLS,
         "local_process_output_bytes": MAX_LOCAL_PROCESS_OUTPUT_BYTES,
-        "provider_wall_seconds": MAX_PROVIDER_WALL_SECONDS,
-        "provider_cost_cents": MAX_PROVIDER_COST_CENTS,
-        "normal_termination_click_seconds": NORMAL_TERMINATION_CLICK_DEADLINE_SECONDS,
+        "provider_wall_seconds": limits.campaign_provider_wall_seconds,
+        "provider_cost_cents": limits.max_provider_cost_cents,
+        "normal_termination_click_seconds": limits.normal_termination_cutoff_seconds,
         "launch_to_active_seconds": LAUNCH_TO_ACTIVE_SECONDS,
         "cloud_ide_availability_seconds": CLOUD_IDE_AVAILABILITY_SECONDS,
         "qualification_command_seconds": JUPYTER_QUALIFICATION_SECONDS,
@@ -1431,7 +1453,9 @@ def exact_l2m_caps() -> dict[str, int | str]:
         "firewall_cleanup_seconds": FIREWALL_CLEANUP_SECONDS,
         "incident_headroom_seconds": INCIDENT_HEADROOM_SECONDS,
         "normal_modeled_list_cost_cents": billed_list_cost_cents(2_400),
-        "hard_wall_modeled_list_cost_cents": billed_list_cost_cents(MAX_PROVIDER_WALL_SECONDS),
+        "hard_wall_modeled_list_cost_cents": billed_list_cost_cents(
+            limits.campaign_provider_wall_seconds
+        ),
         "qualification_archive_bytes": MAX_QUALIFICATION_ARCHIVE_BYTES,
         "qualification_unpacked_bytes": MAX_QUALIFICATION_UNPACKED_BYTES,
         "remote_source_bytes_per_evidence_set": MAX_REMOTE_SOURCE_BYTES_PER_EVIDENCE_SET,
@@ -3124,6 +3148,7 @@ class L2MReadOnlyObserverEngine:
     selected_image_alias: str
     selected_image_version: str
     require_l23_auxiliary_checkpoints: bool = False
+    provider_limits: ObserverLifecycleLimits = field(default_factory=ObserverLifecycleLimits)
     clock_ns: Callable[[], int] = time.monotonic_ns
     sleeper: Callable[[float], None] = time.sleep
     utc_now: Callable[[], datetime] = lambda: datetime.now(UTC)
@@ -3231,6 +3256,20 @@ class L2MReadOnlyObserverEngine:
             or self.checkpoint_reader.repository_root != self.journal.repository_root
         ):
             raise L2MContractError("observer engine binding is invalid or pending")
+        if self.budget == ObserverBudget():
+            self.budget = replace(
+                self.budget,
+                max_wall_seconds=self.provider_limits.observer_active_seconds(
+                    prelaunch_seconds=MAX_OBSERVER_PRELAUNCH_SECONDS,
+                    post_provider_cleanup_seconds=MAX_OBSERVER_POST_PROVIDER_CLEANUP_SECONDS,
+                )
+                + MAX_OBSERVER_ARCHIVE_SECONDS,
+            )
+        elif self.budget.max_wall_seconds != self.provider_limits.observer_active_seconds(
+            prelaunch_seconds=MAX_OBSERVER_PRELAUNCH_SECONDS,
+            post_provider_cleanup_seconds=MAX_OBSERVER_POST_PROVIDER_CLEANUP_SECONDS,
+        ) + MAX_OBSERVER_ARCHIVE_SECONDS:
+            raise L2MContractError("observer budget and lifecycle wall differ")
         checkpoint_binding = self.checkpoint_reader.binding
         expected_marker_alias = (
             "l2m-marker-" + hashlib.sha256(self.private_marker_name.encode()).hexdigest()[:12]
@@ -3314,7 +3353,19 @@ class L2MReadOnlyObserverEngine:
                 "path_template": "none" if request is None else _observer_path_template(request),
                 "transport_kind": "none" if request is None else "in-process-https",
                 "bytes_received": min(bytes_received, MAX_RESPONSE_BYTES_PER_GET),
-                "elapsed_ms": min(elapsed_ms, MAX_OBSERVER_WALL_SECONDS * 1_000),
+                "elapsed_ms": min(
+                    elapsed_ms,
+                    (
+                        self.provider_limits.observer_active_seconds(
+                            prelaunch_seconds=MAX_OBSERVER_PRELAUNCH_SECONDS,
+                            post_provider_cleanup_seconds=(
+                                MAX_OBSERVER_POST_PROVIDER_CLEANUP_SECONDS
+                            ),
+                        )
+                        + MAX_OBSERVER_ARCHIVE_SECONDS
+                    )
+                    * 1_000,
+                ),
                 "http_status": http_status,
                 "content_type": content_type,
                 "sanitized_outcome": sanitized_outcome,
@@ -3344,7 +3395,14 @@ class L2MReadOnlyObserverEngine:
     def _check_timeline(self, now_ns: int, *, cleanup_allowed: bool) -> None:
         if self._observer_started_ns is None or now_ns < self._observer_started_ns:
             raise L2MContractError("observer monotonic lifecycle is unavailable")
-        if now_ns - self._observer_started_ns > MAX_OBSERVER_ACTIVE_SECONDS * 1_000_000_000:
+        if (
+            now_ns - self._observer_started_ns
+            > self.provider_limits.observer_active_seconds(
+                prelaunch_seconds=MAX_OBSERVER_PRELAUNCH_SECONDS,
+                post_provider_cleanup_seconds=MAX_OBSERVER_POST_PROVIDER_CLEANUP_SECONDS,
+            )
+            * 1_000_000_000
+        ):
             raise L2MContractError("observer active wall cap exhausted")
         if self._provider_started_ns is None:
             if now_ns - self._observer_started_ns > MAX_OBSERVER_PRELAUNCH_SECONDS * 1_000_000_000:
@@ -3358,12 +3416,18 @@ class L2MReadOnlyObserverEngine:
                 raise L2MContractError("observer post-provider cleanup wall cap exhausted")
             return
         provider_elapsed_ns = now_ns - self._provider_started_ns
-        if provider_elapsed_ns > MAX_PROVIDER_WALL_SECONDS * 1_000_000_000:
+        if (
+            provider_elapsed_ns
+            > self.provider_limits.campaign_provider_wall_seconds * 1_000_000_000
+        ):
             if not cleanup_allowed:
                 raise L2MContractError("provider wall cap permits cleanup observations only")
             if (
                 provider_elapsed_ns
-                > (MAX_PROVIDER_WALL_SECONDS + MAX_OBSERVER_POST_PROVIDER_CLEANUP_SECONDS)
+                > (
+                    self.provider_limits.campaign_provider_wall_seconds
+                    + MAX_OBSERVER_POST_PROVIDER_CLEANUP_SECONDS
+                )
                 * 1_000_000_000
             ):
                 raise L2MContractError("provider cleanup observation reserve exhausted")
@@ -3381,7 +3445,10 @@ class L2MReadOnlyObserverEngine:
         if phase in _CLEANUP_OBSERVER_PHASES or self._provider_started_ns is None:
             return
         provider_elapsed = now_ns - self._provider_started_ns
-        if provider_elapsed > NORMAL_TERMINATION_CLICK_DEADLINE_SECONDS * 1_000_000_000:
+        if (
+            provider_elapsed
+            > self.provider_limits.normal_termination_cutoff_seconds * 1_000_000_000
+        ):
             self._reject_late_normal_progression(
                 "normal provider window expired; cleanup observations only"
             )
@@ -3402,7 +3469,10 @@ class L2MReadOnlyObserverEngine:
         }
         if self._provider_started_ns is not None and requested not in cleanup_types:
             provider_elapsed = now_ns - self._provider_started_ns
-            if provider_elapsed > NORMAL_TERMINATION_CLICK_DEADLINE_SECONDS * 1_000_000_000:
+            if (
+                provider_elapsed
+                > self.provider_limits.normal_termination_cutoff_seconds * 1_000_000_000
+            ):
                 self._reject_late_normal_progression(
                     "normal provider window expired; cleanup checkpoints only"
                 )
@@ -3427,7 +3497,10 @@ class L2MReadOnlyObserverEngine:
             if (
                 self._provider_started_ns is None
                 or now_ns - self._provider_started_ns
-                > (NORMAL_TERMINATION_CLICK_DEADLINE_SECONDS - required_headroom_seconds)
+                > (
+                    self.provider_limits.normal_termination_cutoff_seconds
+                    - required_headroom_seconds
+                )
                 * 1_000_000_000
             ):
                 self._reject_late_normal_progression(
@@ -3453,7 +3526,7 @@ class L2MReadOnlyObserverEngine:
             if (
                 self._provider_started_ns is not None
                 and now_ns - self._provider_started_ns
-                > NORMAL_TERMINATION_CLICK_DEADLINE_SECONDS * 1_000_000_000
+                > self.provider_limits.normal_termination_cutoff_seconds * 1_000_000_000
             ):
                 self._deadline_breached = True
                 self._incident_cleanup_only = True
@@ -3481,7 +3554,14 @@ class L2MReadOnlyObserverEngine:
         self._check_timeline(now_ns, cleanup_allowed=cleanup_allowed)
         if self._observer_started_ns is None:  # pragma: no cover - guarded above
             raise L2MContractError("observer monotonic lifecycle is unavailable")
-        deadlines = [self._observer_started_ns + MAX_OBSERVER_ACTIVE_SECONDS * 1_000_000_000]
+        deadlines = [
+            self._observer_started_ns
+            + self.provider_limits.observer_active_seconds(
+                prelaunch_seconds=MAX_OBSERVER_PRELAUNCH_SECONDS,
+                post_provider_cleanup_seconds=MAX_OBSERVER_POST_PROVIDER_CLEANUP_SECONDS,
+            )
+            * 1_000_000_000
+        ]
         if self._provider_started_ns is None:
             deadlines.append(
                 self._observer_started_ns + MAX_OBSERVER_PRELAUNCH_SECONDS * 1_000_000_000
@@ -3492,7 +3572,7 @@ class L2MReadOnlyObserverEngine:
                 + MAX_OBSERVER_POST_PROVIDER_CLEANUP_SECONDS * 1_000_000_000
             )
         else:
-            provider_seconds = MAX_PROVIDER_WALL_SECONDS + (
+            provider_seconds = self.provider_limits.campaign_provider_wall_seconds + (
                 MAX_OBSERVER_POST_PROVIDER_CLEANUP_SECONDS if cleanup_allowed else 0
             )
             deadlines.append(self._provider_started_ns + provider_seconds * 1_000_000_000)
@@ -3517,8 +3597,14 @@ class L2MReadOnlyObserverEngine:
             raise L2MContractError("qualification validation deadline is unavailable")
         deadline_ns = min(
             self._qualification_completed_ns + EVIDENCE_DOWNLOAD_VALIDATION_SECONDS * 1_000_000_000,
-            self._provider_started_ns + NORMAL_TERMINATION_CLICK_DEADLINE_SECONDS * 1_000_000_000,
-            self._observer_started_ns + MAX_OBSERVER_ACTIVE_SECONDS * 1_000_000_000,
+            self._provider_started_ns
+            + self.provider_limits.normal_termination_cutoff_seconds * 1_000_000_000,
+            self._observer_started_ns
+            + self.provider_limits.observer_active_seconds(
+                prelaunch_seconds=MAX_OBSERVER_PRELAUNCH_SECONDS,
+                post_provider_cleanup_seconds=MAX_OBSERVER_POST_PROVIDER_CLEANUP_SECONDS,
+            )
+            * 1_000_000_000,
         )
         remaining_ns = deadline_ns - now_ns
         if remaining_ns <= 0:

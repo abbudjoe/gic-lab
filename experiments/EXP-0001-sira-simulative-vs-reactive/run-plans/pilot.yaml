@@ -9,7 +9,6 @@ interpretation_allowed: true
 execution:
   authorized: false
   authorization_reference: null
-  current_turn_overlay_required: true
 model:
   provider: OpenAI
   manifest_id: MODEL-OPENAI-GPT4O-2024-11-20
@@ -67,16 +66,6 @@ budget:
       max_wall_seconds_per_attempt: 3600
       max_openai_cost_usd_per_attempt: 10.00
       max_accelerator_hours_per_attempt: 1.0
-provider_lifecycle:
-  campaign_clock_origin: provider-launch-response-received
-  campaign_provider_wall_seconds: 14400
-  normal_cleanup_reserve_seconds: 900
-  provider_termination_cutoff_seconds: 13500
-  max_lambda_instances: 1
-  max_launch_count: 1
-  persistent_filesystems: 0
-  admission_rule: remaining campaign time must cover only the next 3600-second attempt hard wall plus the 900-second cleanup reserve
-  control_plane: existing T07 pragmatic Lambda request and read-only polling operations; no new launch framework or watchdog
     SIRA-SIMULATIVE:
       attempts: 2
       max_model_calls_per_attempt: 1155
@@ -85,6 +74,16 @@ provider_lifecycle:
       max_wall_seconds_per_attempt: 3600
       max_openai_cost_usd_per_attempt: 10.00
       max_accelerator_hours_per_attempt: 1.0
+provider_lifecycle:
+  campaign_clock_origin: provider-launch-send-started-conservative
+  campaign_provider_wall_seconds: 14400
+  normal_cleanup_reserve_seconds: 900
+  provider_termination_cutoff_seconds: 13500
+  max_lambda_instances: 1
+  max_launch_count: 1
+  persistent_filesystems: 0
+  admission_rule: remaining campaign time must cover only the next 3600-second attempt hard wall plus the 900-second cleanup reserve
+  control_plane: existing T07 pragmatic Lambda operations with source-derived projections; no persistent framework or watchdog
 artifacts:
   root: artifacts/EXP-0001/pilot-v3
   retain_raw: true
@@ -95,7 +94,7 @@ condition_plan_paths:
   - experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-task-0001-simulative.yaml
   - experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-task-0001-reactive.yaml
 readiness:
-  execution_eligibility: ready-for-current-turn-authorized-execution-after-freeze
+  execution_eligibility: eligible-after-authorization
   approval_changes_required:
     - execution.authorized
     - execution.authorization_reference

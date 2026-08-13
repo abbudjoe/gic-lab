@@ -135,14 +135,15 @@ that a separately approved future study might consume.
 [`run-plans/smoke.yaml`](run-plans/smoke.yaml) is the historical one-step matched-pair
 control record. The starting effect-oriented pilot proposal is preserved at
 [`run-plans/proposals/PLAN-EXP0001-PILOT.json`](run-plans/proposals/PLAN-EXP0001-PILOT.json).
-[`run-plans/pilot.yaml`](run-plans/pilot.yaml) is now the calibration-only
-`PLAN-EXP0001-PILOT-V2`; its profile and every condition plan remain unauthorized.
+[`run-plans/pilot.yaml`](run-plans/pilot.yaml) is the calibration-only
+`PLAN-EXP0001-PILOT-V3`; V2 remains preserved under `run-plans/proposals/`.
+Tracked authorization stays false and every condition plan requires a single-use
+private current-turn overlay.
 
-T09 resolves the offline dataset, evaluator, scoring, matching, evidence, privacy, and
-identity contracts documented by T08, but ends at
-`t09-pilot-blocked-material-risk`. The inherited T07 observer has a 3,600-second hard
-provider wall; it cannot safely cover four plausible full-task attempts plus bounded
-staging and worst-case cleanup, while the candidate 14,400-second ceiling has no
-source-compatible enforcement path. Project execution permissions and every
-authorization field remain false, and provider preflight is fail-closed. Public raw
-release remains separately blocked pending license/privacy review.
+The pragmatic V3 repair makes the 14,400-second provider campaign effective with a
+900-second cleanup reserve and 13,500-second normal termination cutoff. It admits
+each attempt against actual elapsed time only when that attempt's 3,600-second hard
+wall plus cleanup reserve remains; it does not reserve every theoretical maximum at
+campaign start. The user's current-turn instruction authorizes one launch and the
+frozen four-attempt sequence after the clean freeze and exact dynamic preflight.
+Public raw release remains separately blocked pending license/privacy review.

@@ -67,3 +67,16 @@ plausible full-task attempts plus bounded staging and worst-case cleanup, while 
 terminal state is therefore `t09-pilot-blocked-material-risk`; no execution is
 authorized or has occurred, and provider preflight cannot begin. Public raw release
 remains blocked separately.
+
+## Pragmatic V3 supersession — 2026-08-13
+
+The user's separately supplied current-turn execution contract supersedes only the
+V2 provider-wall restriction. `PLAN-EXP0001-PILOT-V3` preserves the same two rows,
+exact evaluator, model, SiRA revision, counterbalance, scoring, evidence, budgets,
+zero retry, and calibration-only boundary. It replaces the 3,600-second campaign
+wall with one plan-driven 14,400-second actual-time provider campaign, 900-second
+cleanup reserve, and 13,500-second normal termination cutoff. Each attempt is admitted
+only when its own hard wall plus cleanup reserve remains; future maxima are not summed
+at campaign start. Execution still requires the exact clean freeze, private
+single-use overlay, dynamic preflight, and one-launch cloud ledger. Public raw release
+remains independently blocked.

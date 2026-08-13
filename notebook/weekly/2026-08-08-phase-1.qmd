@@ -17,6 +17,15 @@ not a mode comparison or a full-task cost forecast. A two-task counterbalanced p
 package is prepared, but evaluator/runtime/protocol/provider/privacy prerequisites and
 a fresh current-turn authorization still block all pilot execution.
 
+On 2026-08-13 a fresh pragmatic-pilot instruction authorized a narrow provider-wall
+repair and one calibration execution. The V3 package preserves the two tasks, exact
+evaluator, model, SiRA revision, order, treatment, scoring, evidence, budgets,
+zero-retry rule, and calibration-only interpretation. Its 14,400-second provider
+campaign uses actual elapsed time, retains a 900-second cleanup reserve, and requires
+normal termination by 13,500 seconds. This planning update is not a pilot result;
+empirical entry remains pending the clean freeze, dynamic preflight, and single-use
+private authorization overlay. Public raw release remains separately blocked.
+
 ## State transition
 
 Phase 0.75 completed its pinned upstream audits, evidence-preserving harness, SiRA

@@ -79,7 +79,7 @@
     "post_entry_freeze": "code-scientific-configuration-tasks-order-evaluator-budgets-and-instrumentation-frozen-for-all-four-attempts"
   },
   "provider_lifecycle": {
-    "campaign_clock_origin": "provider-launch-response-received",
+    "campaign_clock_origin": "provider-launch-send-started-conservative",
     "campaign_provider_wall_seconds": 14400,
     "normal_cleanup_reserve_seconds": 900,
     "provider_termination_cutoff_seconds": 13500,
@@ -88,7 +88,7 @@
     "persistent_filesystems": 0,
     "admission_model": "actual-elapsed-next-attempt-hard-wall-plus-cleanup-reserve",
     "future_attempt_maxima_reserved_at_campaign_start": false,
-    "provider_control_plane": "existing-t07-pragmatic-lambda-operations-no-new-framework-or-watchdog"
+    "provider_control_plane": "existing-t07-pragmatic-lambda-operations-with-source-derived-projections-no-persistent-framework-or-watchdog"
   },
   "runtime_limits": {
     "expected_browser_actions_per_attempt": 18,
@@ -100,8 +100,8 @@
     "max_condition_wall_seconds": 3600,
     "max_pair_wall_seconds": 7200,
     "max_total_wall_seconds": 14400,
-    "max_output_bytes_per_attempt": 1073741824,
-    "max_disk_bytes": 12884901888,
+    "max_output_bytes_per_attempt": 67108864,
+    "max_disk_bytes": 2147483648,
     "max_lambda_duration_seconds": 14400,
     "max_lambda_cost_usd": 5.16,
     "max_attempts": 4,
@@ -156,7 +156,10 @@
       "pair_cost_usd": 1.241985,
       "aggregate_openai_cost_usd": 1.45197,
       "aggregate_lambda_cost_usd": 1.032,
-      "aggregate_total_cost_usd": 2.48397
+      "aggregate_total_cost_usd": 2.48397,
+      "four_hour_lambda_maximum_usd": 5.16,
+      "expected_authorization_envelope_usd": 7.64397,
+      "expected_authorization_envelope_basis": "four-attempt expected total plus the full four-hour Lambda maximum, as required by the current-turn authorization"
     },
     "hard": {
       "attempt_openai_cost_usd": 10.0,
@@ -423,7 +426,7 @@
   "cleanup": {
     "condition": "close-every-tracked-browser-environment-and-container-after-each-attempt",
     "credential": "remove-runtime-secret-and-retain-value-free-cleanup-receipt",
-    "provider": "blocked-no-source-compatible-entry-staging-termination-and-zero-instance-sequence",
+    "provider": "source-derived-entry-and-exact-target-closeout-with-terminal-zero-t09-and-security-restoration-receipts",
     "unresolved_billable_resource_allowed": false
   },
   "interpretation_boundary": {

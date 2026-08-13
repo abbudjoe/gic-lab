@@ -44,19 +44,24 @@ t08_checkpoint:
   next_plan: PLAN-EXP0001-PILOT
   pilot_protocol_preparation_eligible: true
   pilot_execution_authorized: false
-t09_preauthorization_checkpoint:
+t09_pragmatic_pilot_checkpoint:
   task: T09
-  terminal_state: t09-pilot-blocked-material-risk
-  plan_id: PLAN-EXP0001-PILOT-V2
+  terminal_state: ready-for-t09-pilot-authorization
+  plan_id: PLAN-EXP0001-PILOT-V3
   calibration_only: true
   task_count: 2
   condition_attempt_count: 4
-  static_execution_and_analysis_blockers:
-    - frozen-t07-provider-hard-wall-3600-seconds-cannot-cover-four-plausible-attempts-plus-bounded-staging-and-cleanup
-    - candidate-14400-second-lambda-ceiling-has-no-source-compatible-enforcement-path
+  static_execution_and_analysis_blockers: []
+  campaign_provider_wall_seconds: 14400
+  normal_cleanup_reserve_seconds: 900
+  provider_termination_cutoff_seconds: 13500
+  max_lambda_instances: 1
+  max_launch_count: 1
+  persistent_filesystems: 0
   publication_release_blocked: true
-  dynamic_preflight_required_after_authorization: false
-  provider_preflight_blocked: true
+  dynamic_preflight_required_after_authorization: true
+  provider_preflight_blocked: false
+  current_turn_execution_authorized: true
   pilot_execution_authorized: false
   scientific_result_claimed: false
 authoritative_plan: docs/exec-plans/active/PHASE_1_ARTIFACT_EXECUTION.md

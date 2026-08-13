@@ -50,7 +50,7 @@ no mutation authority; one gate's authorization never carries into another.
 | P1-DOD-01 | Phase 0.75 is successful/completed; this is the one authoritative active plan; project execution/compute permissions remain false; only the disabled smoke profile is eligible for a later exact authorization. | Plan lifecycle/state/profile/readiness validation and public render. | met |
 | P1-DOD-02 | T07 executes at most the one authorized SiRA smoke pair with complete raw, normalized, regulation-decision, budget, scoring, and cleanup evidence and no interpretation. | Immutable run/authorization records, artifacts/hashes, accounting, cleanup proof, and validation. | met; T08 documents nonblocking fields that T07 did not retain directly |
 | P1-DOD-03 | T08 independently reproduces the smoke summary, separates infrastructure/protocol/upstream/future-track gaps, and leaves any pilot unauthorized. | Raw-to-summary checks, infrastructure-only trace-sufficiency report, review, and gate. | met |
-| P1-DOD-04 | T09 first locks an executable calibration-only SiRA pilot and later executes it only under a fresh exact authorization, without outcome-adaptive changes, while reconciling every entered attempt. | Frozen task/order/evaluator/runtime records, enforced budgets, immutable authorization packet, and later complete attempt dispositions. | blocked: frozen 3,600-second T07 provider wall cannot cover four plausible attempts plus bounded staging/cleanup; no authorization issued |
+| P1-DOD-04 | T09 first locks an executable calibration-only SiRA pilot and later executes it only under a fresh exact authorization, without outcome-adaptive changes, while reconciling every entered attempt. | Frozen task/order/evaluator/runtime records, enforced budgets, immutable authorization packet, and later complete attempt dispositions. | in progress: user-authorized V3 lifecycle repair is under pre-entry review/freeze; no empirical attempt has begun |
 | P1-DOD-05 | T10 produces a reproducible exploratory EXP-0001 analysis with uncertainty, exact reproduction level, cost/deviation reporting, and no internalization or mechanism-attribution overclaim. | Validated result summary, registry/notebook/ledger updates, review, and gate. | not-started |
 | P1-DOD-06 | T11 produces a read-only, launch-ready SR²AM-v0.1-8B Lambda contract with current price, hard termination, source-grounded trace requirements, failure tests, and no mutation. | Audited runbook/contracts, dry-run/failure tests, authorization sentence, and gate. | not-started |
 | P1-DOD-07 | T12 launches only the exactly authorized SR²AM smoke, retains and transfers required evidence, reconciles cost, and verifies provider termination. | Immutable cloud attempt, raw artifacts/hashes, compute ledger, monitoring, and terminal-state proof. | not-started |
@@ -67,7 +67,7 @@ no mutation authority; one gate's authorization never carries into another.
 |---|---|---|---|
 | T07 | Execute one authorized contained SiRA smoke pair; capture regulation-decision evidence without interpretation. | P1-DOD-02, P1-DOD-11 through P1-DOD-13 | complete: Retry 2 matched pair executed and cleanup verified; execution authority exhausted; no pilot authority |
 | T08 | Analyze smoke infrastructure evidence and prepare an unauthorized pilot package. | P1-DOD-03, P1-DOD-11 through P1-DOD-13 | complete: evidence validated; pilot planning eligible but execution unauthorized |
-| T09 | Lock the two-task calibration pilot; execute it only in a later freshly authorized turn. | P1-DOD-04, P1-DOD-11 through P1-DOD-13 | `t09-pilot-blocked-material-risk`; execution unauthorized and not started |
+| T09 | Lock and execute the two-task pragmatic calibration pilot under the fresh current-turn authorization. | P1-DOD-04, P1-DOD-11 through P1-DOD-13 | V3 lifecycle repair/review/freeze in progress; no empirical entry yet |
 | T10 | Analyze and publish the exploratory SiRA pilot. | P1-DOD-05, P1-DOD-11 through P1-DOD-13 | blocked until T09 succeeds |
 | T11 | Build and validate the read-only SR²AM Lambda preflight. | P1-DOD-06, P1-DOD-11 through P1-DOD-13 | blocked until T10 succeeds |
 | T12 | Launch and monitor the separately authorized SR²AM Lambda smoke. | P1-DOD-07, P1-DOD-11 through P1-DOD-13 | blocked until T11 and authorization |
@@ -148,6 +148,25 @@ Project permissions, parent/child authorization, cloud mutation, provider calls,
 browser use, and pilot execution remain false. See
 `docs/harness/T09_SIRA_EXPLORATORY_PILOT_PLAN.md` and
 `docs/harness/T09_SIRA_PILOT_PREAUTHORIZATION_PACKET.md`.
+
+### T09 pragmatic campaign-wall execution — 2026-08-13
+
+Assembly status: **in progress before empirical entry**.
+
+The user's current-turn instruction supersedes the V2 3,600-second provider-wall
+restriction and authorizes the narrow V3 repair plus one `gpu_1x_a10` launch and the
+frozen four-attempt campaign. `PLAN-EXP0001-PILOT-V3` retains the exact V2 tasks,
+evaluator, model, SiRA revision, counterbalance, scoring, evidence, budgets,
+zero-retry rule, and calibration-only interpretation. The lifecycle now uses actual
+elapsed time from the durable provider launch send-start, a 14,400-second hard campaign wall,
+900-second cleanup reserve, and 13,500-second normal termination cutoff. An attempt
+may start only when its 3,600-second hard wall plus cleanup reserve remains. No new
+watchdog or automated launch framework is introduced.
+
+Local implementation/review/freeze work is governed by
+`docs/exec-plans/active/T09_PRAGMATIC_CALIBRATION_PILOT.md`. Provider mutation remains
+forbidden until its focused gates, independent review, exact hashes, clean freeze,
+dynamic preflight, and private cloud authorization ledger are complete.
 
 ### Pragmatic execution reset — 2026-08-12
 

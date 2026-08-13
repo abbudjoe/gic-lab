@@ -48,6 +48,7 @@ from giclab.harness.lambda_l2m_observer import (
     ObservedDocument,
     ObserverBudget,
     ObserverJournal,
+    ObserverLifecycleLimits,
     ObserverOperation,
     ObserverPhase,
     ObserverRequest,
@@ -276,6 +277,7 @@ def make_observer_engine(
     source_ipv4_cidr: str = "8.8.8.8/32",
     human_decision: ValidatedHumanDecision | None = None,
     require_l23_auxiliary_checkpoints: bool = False,
+    provider_limits: ObserverLifecycleLimits | None = None,
 ) -> L2MReadOnlyObserverEngine:
     original_rules = [
         {
@@ -322,6 +324,7 @@ def make_observer_engine(
         selected_image_alias=RECOMMENDED_IMAGE_ALIAS,
         selected_image_version=RECOMMENDED_IMAGE_VERSION,
         require_l23_auxiliary_checkpoints=require_l23_auxiliary_checkpoints,
+        provider_limits=provider_limits or ObserverLifecycleLimits(),
         clock_ns=clock.monotonic_ns,
         sleeper=clock.sleep,
         utc_now=lambda: dt.datetime(2026, 8, 10, tzinfo=dt.UTC),
@@ -2016,6 +2019,45 @@ def test_each_qualification_window_rejects_elapsed_time_over_three_hundred_secon
                 ),
             )
     assert engine.lifecycle.incident_active
+    engine._evidence_incomplete = True
+    engine._finalize_stopped_run()
+
+
+def test_t09_plan_driven_provider_wall_extends_the_existing_observer_only() -> None:
+    limits = ObserverLifecycleLimits.t09_pragmatic_v3()
+    caps = exact_l2m_caps(limits)
+
+    assert caps["provider_wall_seconds"] == 14_400
+    assert caps["normal_termination_click_seconds"] == 13_500
+    assert caps["provider_cost_cents"] == 516
+    assert limits.cleanup_reserve_seconds == 900
+    assert exact_l2m_caps()["provider_wall_seconds"] == 3_600
+
+
+def test_t09_existing_observer_enforces_cutoff_and_cleanup_only_extension(
+    tmp_path: Path,
+) -> None:
+    clock = FakeClock()
+    engine = make_observer_engine(
+        tmp_path,
+        suffix="T09-V3-0001",
+        transport=FakeObserverTransport([]),
+        clock=clock,
+        provider_limits=ObserverLifecycleLimits.t09_pragmatic_v3(),
+    )
+    engine.begin()
+    engine._provider_started_ns = clock.monotonic_ns()
+
+    clock.sleep(13_500)
+    engine._check_timeline(clock.monotonic_ns(), cleanup_allowed=False)
+    clock.sleep(1)
+    with pytest.raises(L2MContractError, match="normal provider window expired"):
+        engine._enforce_observation_deadline(ObserverPhase.PREFLIGHT, clock.monotonic_ns())
+    clock.sleep(900)
+    with pytest.raises(L2MContractError, match="cleanup observations only"):
+        engine._check_timeline(clock.monotonic_ns(), cleanup_allowed=False)
+    engine._check_timeline(clock.monotonic_ns(), cleanup_allowed=True)
+
     engine._evidence_incomplete = True
     engine._finalize_stopped_run()
 

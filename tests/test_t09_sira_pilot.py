@@ -3,14 +3,18 @@ from __future__ import annotations
 import ast
 import copy
 import importlib.util
+import io
 import json
 import time
 from dataclasses import replace
 from pathlib import Path
+from shutil import copytree
 from types import ModuleType, SimpleNamespace
 
 import pytest
 
+from giclab.harness import t09_pragmatic_provider as provider
+from giclab.harness.lambda_campaign_lifecycle import ObserverLifecycleLimits
 from giclab.harness.sira_gate_a import (
     ImmutableModelRouting,
     ModelRole,
@@ -369,10 +373,7 @@ def test_first_pair_checkpoint_passes_only_strictly_below_every_threshold() -> N
     no_time = replace(passing, remaining_campaign_seconds=4_499.999)
     no_time_decision = first_pair_decision(no_time)
     assert no_time_decision["decision"] == "stop-before-task-b"
-    assert (
-        "insufficient_campaign_time_for_next_attempt_and_cleanup"
-        in no_time_decision["reasons"]
-    )
+    assert "insufficient_campaign_time_for_next_attempt_and_cleanup" in no_time_decision["reasons"]
 
 
 def test_attempt_state_enforces_order_cap_checkpoint_and_zero_retry(tmp_path: Path) -> None:
@@ -550,80 +551,302 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     host = _load_host_runner()
-    now = 2_000_000_000.0
-    monkeypatch.setattr(host.time, "time", lambda: now)
-    entry_path = tmp_path / "provider-entry.json"
-    entry = {
-        "schema_version": "0.1.0",
-        "receipt_type": "t09-pragmatic-provider-entry",
-        "plan_id": "PLAN-EXP0001-PILOT-V3",
-        "host_run_id": "RUN-T09-PILOT-HOST-0001",
-        "package_commit": "a" * 40,
-        "captured_at_epoch": now - 10,
-        "lambda_started_at_epoch": now - 20,
-        "owned_instance_identity_sha256": "b" * 64,
-        "source_bundle_sha256": "c" * 64,
-        "source_bundle_bytes": 4096,
-        "source_observer": "t07-pragmatic-lambda-api-receipts-v1",
-        "zero_prior_nonterminal_instances": True,
-        "launch_count": 1,
-        "max_instances": 1,
-        "instance_type": "gpu_1x_a10",
-        "region": "us-east-1",
-        "persistent_filesystems": 0,
-        "hourly_price_usd": 1.29,
-        "billable_clock_source": "provider-launch-response-received",
-        "raw_source_retained_private": True,
-        "structural_redaction_passed": True,
+    now = [2_000_000_000.0]
+
+    def clock() -> float:
+        now[0] += 1.0
+        return now[0]
+
+    def sleeper(seconds: float) -> None:
+        now[0] += seconds
+
+    class FakeTransport:
+        def __init__(self, responses: list[dict[str, object] | BaseException]) -> None:
+            self.responses = responses
+
+        def send(
+            self,
+            method: str,
+            path: str,
+            *,
+            body: bytes | None,
+            credential: bytearray,
+        ) -> provider.ProviderResponse:
+            assert method in {"GET", "POST"}
+            assert path in provider.ALLOWED_PATHS
+            assert credential == bytearray(b"lambda-fixture-credential")
+            assert self.responses
+            value = self.responses.pop(0)
+            if isinstance(value, BaseException):
+                raise value
+            return provider.ProviderResponse(
+                200,
+                "application/json",
+                json.dumps(value).encode(),
+                clock(),
+            )
+
+    public_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFixture t09-fixture"
+    public_ipv4 = "203.0.113.7"
+    global_firewall = {
+        "data": {
+            "id": "global",
+            "name": "global",
+            "workspace_id": "workspace-fixture",
+            "rules": [
+                {
+                    "protocol": "tcp",
+                    "port_range": [22, 22],
+                    "source_network": f"{public_ipv4}/32",
+                    "description": "fixture",
+                }
+            ],
+        }
     }
-    entry_path.write_text(json.dumps(entry), encoding="utf-8")
+    instance = {
+        "id": "instance-fixture-0001",
+        "name": provider.INSTANCE_NAME,
+        "hostname": provider.INSTANCE_NAME,
+        "instance_type": {"name": provider.INSTANCE_TYPE},
+        "region": {"name": provider.REGION},
+        "status": "active",
+        "ip": "198.51.100.9",
+        "file_system_names": [],
+    }
+    launch_responses = [
+        {
+            "data": {
+                provider.INSTANCE_TYPE: {
+                    "instance_type": {
+                        "name": provider.INSTANCE_TYPE,
+                        "price_cents_per_hour": 129,
+                    },
+                    "regions_with_capacity_available": [{"name": provider.REGION}],
+                }
+            }
+        },
+        {
+            "data": [
+                {
+                    "id": provider.IMAGE_ID,
+                    "region": {"name": provider.REGION},
+                    "family": "lambda-stack-22-04",
+                }
+            ]
+        },
+        {"data": [{"name": provider.SSH_KEY_NAME, "public_key": public_key}]},
+        global_firewall,
+        {"data": []},
+        {"data": []},
+        {"data": {"instance_ids": ["instance-fixture-0001"]}},
+        {"data": [instance]},
+    ]
+    dotenv = tmp_path / ".env"
+    dotenv.write_text(
+        "OPENAI_API_KEY=openai-fixture-credential\nLAMBDA_API_KEY=lambda-fixture-credential\n",
+        encoding="utf-8",
+    )
+    dotenv.chmod(0o600)
+    public_ip_path = tmp_path / "public-ip.private"
+    public_ip_path.write_text(public_ipv4, encoding="utf-8")
+    key_path = tmp_path / "key.pub"
+    key_path.write_text(public_key, encoding="utf-8")
+    package_commit = "a" * 40
+    plan_path = ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml"
+    authorization = tmp_path / "authorization.json"
+    authorization.write_text(
+        json.dumps(
+            {
+                "schema_version": "0.1.0",
+                "authorization_source_sha256": provider.AUTHORIZATION_SOURCE_SHA256,
+                "authorization_reference": "AUTH-T09-PRAGMATIC-PILOT-2026-08-13",
+                "authorized": True,
+                "single_use": True,
+                "clean_package_commit": package_commit,
+                "plan_id": provider.PLAN_ID,
+                "plan_sha256": provider.file_sha256(plan_path),
+                "max_lambda_instances": 1,
+                "max_launch_count": 1,
+                "persistent_filesystems": 0,
+                "lambda_cost_cap_usd": 5.16,
+                "openai_cost_cap_usd": 40.0,
+                "aggregate_cost_cap_usd": 45.16,
+                "artifact_destination": (
+                    "/Volumes/Macintosh HD - Data/GIC-Lab/t09/sealed-artifacts"
+                ),
+            }
+        ),
+        encoding="utf-8",
+    )
+    authorization.chmod(0o600)
+    monkeypatch.setattr(provider, "_verify_clean_package", lambda *_args, **_kwargs: None)
+    private_root = tmp_path / "provider-private"
+    entry_path = provider.launch_campaign(
+        repository=ROOT,
+        package_commit=package_commit,
+        authorization_ledger=authorization,
+        dotenv=dotenv,
+        private_root=private_root,
+        public_ipv4_file=public_ip_path,
+        ssh_public_key_file=key_path,
+        transport=FakeTransport(launch_responses),
+        clock=clock,
+        sleeper=sleeper,
+    )
+    monkeypatch.setattr(host.time, "time", lambda: now[0])
     validated = host.validate_dynamic_receipt(
         entry_path,
-        expected_package_commit="a" * 40,
+        expected_package_commit=package_commit,
+        repository_root=ROOT,
+        source_root=private_root / "entry-source",
     )
     assert validated["receipt_sha256"] == host.file_sha256(entry_path)
-    drifted = dict(entry)
-    drifted["launch_count"] = 2
-    entry_path.write_text(json.dumps(drifted), encoding="utf-8")
-    with pytest.raises(host.T09HostError, match="entry receipt drifted"):
-        host.validate_dynamic_receipt(entry_path, expected_package_commit="a" * 40)
 
-    entry_path.write_text(json.dumps(entry), encoding="utf-8")
-    entry_sha = host.file_sha256(entry_path)
-    closeout_path = tmp_path / "provider-closeout.json"
-    closeout = {
-        "schema_version": "0.1.0",
-        "receipt_type": "t09-pragmatic-provider-closeout",
-        "plan_id": "PLAN-EXP0001-PILOT-V3",
-        "host_run_id": "RUN-T09-PILOT-HOST-0001",
-        "package_commit": "a" * 40,
-        "captured_at_epoch": now,
-        "lambda_started_at_epoch": now - 20,
-        "termination_started_at_epoch": now - 8,
-        "terminal_observed_at_epoch": now - 4,
-        "zero_instance_observed_at_epoch": now - 2,
-        "owned_instance_identity_sha256": "b" * 64,
-        "termination_target_identity_sha256": "b" * 64,
-        "entry_receipt_sha256": entry_sha,
-        "source_bundle_sha256": "d" * 64,
-        "source_bundle_bytes": 8192,
-        "source_observer": "t07-pragmatic-lambda-api-receipts-v1",
-        "termination_request_count": 1,
-        "terminal_or_absent": True,
-        "zero_t09_instances": True,
-        "security_restored": True,
-        "raw_source_retained_private": True,
-        "structural_redaction_passed": True,
-        "campaign_wall_exception": "none",
-    }
-    closeout_path.write_text(json.dumps(closeout), encoding="utf-8")
-    assert host.validate_provider_closeout_receipt(
+    closeout_responses = [
+        RuntimeError("termination response fixture ambiguity"),
+        {"data": []},
+        global_firewall,
+        {"data": []},
+    ]
+    closeout_path = provider.closeout_campaign(
+        repository=ROOT,
+        package_commit=package_commit,
+        authorization_ledger=authorization,
+        dotenv=dotenv,
+        private_root=private_root,
+        transport=FakeTransport(closeout_responses),
+        clock=clock,
+        sleeper=sleeper,
+    )
+    monkeypatch.setattr(host.time, "time", lambda: now[0])
+    closeout = host.validate_provider_closeout_receipt(
         closeout_path,
-        expected_lambda_started_at_epoch=now - 20,
-        expected_owned_instance_identity_sha256="b" * 64,
-        expected_entry_receipt_sha256=entry_sha,
-        expected_package_commit="a" * 40,
-    )["receipt_sha256"] == host.file_sha256(closeout_path)
+        expected_lambda_started_at_epoch=float(validated["lambda_started_at_epoch"]),
+        expected_owned_instance_identity_sha256=str(validated["owned_instance_identity_sha256"]),
+        expected_entry_receipt_sha256=host.file_sha256(entry_path),
+        expected_package_commit=package_commit,
+        repository_root=ROOT,
+        source_root=private_root / "closeout-source",
+        entry_receipt_path=entry_path,
+        entry_source_root=private_root / "entry-source",
+    )
+    assert closeout["receipt_sha256"] == host.file_sha256(closeout_path)
+
+    forged = dict(load_json(entry_path))
+    forged["launch_count"] = 2
+    forged_path = tmp_path / "forged-entry.json"
+    forged_path.write_text(json.dumps(forged), encoding="utf-8")
+    with pytest.raises(host.T09HostError, match="not source-bound"):
+        host.validate_dynamic_receipt(
+            forged_path,
+            expected_package_commit=package_commit,
+            repository_root=ROOT,
+            source_root=private_root / "entry-source",
+        )
+
+    late_root = tmp_path / "late-closeout-source"
+    copytree(private_root / "closeout-source", late_root)
+    (late_root / "source-manifest.json").unlink()
+    (late_root / "closeout-receipt.json").unlink()
+    journal_lines = (late_root / "request-journal.jsonl").read_text().splitlines()
+    events = [json.loads(line) for line in journal_lines]
+    late_base = float(validated["lambda_started_at_epoch"]) + 14_000
+    for index, event in enumerate(events):
+        event["send_started_at_epoch"] = late_base + index
+        if "response_received_at_epoch" in event:
+            event["response_received_at_epoch"] = late_base + index + 0.5
+    (late_root / "request-journal.jsonl").write_text(
+        "".join(json.dumps(event, sort_keys=True) + "\n" for event in events),
+        encoding="utf-8",
+    )
+    provider.seal_source_bundle(late_root)
+    late_receipt = provider.create_closeout_receipt(
+        late_root,
+        entry_receipt_path=entry_path,
+        entry_source_root=private_root / "entry-source",
+        package_commit=package_commit,
+        plan_sha256=provider.file_sha256(plan_path),
+        lifecycle=provider.load_campaign_lifecycle(ROOT),
+    )
+    with pytest.raises(host.T09HostError, match="not source-bound"):
+        host.validate_provider_closeout_receipt(
+            late_receipt,
+            expected_lambda_started_at_epoch=float(validated["lambda_started_at_epoch"]),
+            expected_owned_instance_identity_sha256=str(
+                validated["owned_instance_identity_sha256"]
+            ),
+            expected_entry_receipt_sha256=host.file_sha256(entry_path),
+            expected_package_commit=package_commit,
+            repository_root=ROOT,
+            source_root=late_root,
+            entry_receipt_path=entry_path,
+            entry_source_root=private_root / "entry-source",
+        )
+
+
+def test_closeout_rejects_termination_after_campaign_cutoff() -> None:
+    lifecycle = provider.CampaignLifecycle(
+        observer_limits=ObserverLifecycleLimits.t09_pragmatic_v3(),
+        max_instances=1,
+        max_launches=1,
+        persistent_filesystems=0,
+    )
+    assert lifecycle.termination_due(
+        started_at_epoch=100.0,
+        now_epoch=13_600.0,
+    )
+    observer = ObserverLifecycleLimits.t09_pragmatic_v3()
+    assert (
+        lifecycle.wall_seconds,
+        lifecycle.cleanup_reserve_seconds,
+        lifecycle.termination_cutoff_seconds,
+    ) == (
+        observer.campaign_provider_wall_seconds,
+        observer.cleanup_reserve_seconds,
+        observer.normal_termination_cutoff_seconds,
+    )
+
+
+def test_provider_send_ambiguity_is_durably_unknown_and_never_retried(tmp_path: Path) -> None:
+    class UnknownTransport:
+        calls = 0
+
+        def send(
+            self,
+            method: str,
+            path: str,
+            *,
+            body: bytes | None,
+            credential: bytearray,
+        ) -> provider.ProviderResponse:
+            del method, path, body, credential
+            self.calls += 1
+            raise RuntimeError("fixture transport ambiguity")
+
+    root = tmp_path / "provider-source"
+    root.mkdir()
+    transport = UnknownTransport()
+    recorder = provider.RequestRecorder(
+        root,
+        transport,
+        bytearray(b"lambda-fixture-credential"),
+        lambda: 100.0,
+    )
+    with pytest.raises(provider.ProviderOutcomeUnknown, match="outcome is unknown"):
+        recorder.request(
+            "launch",
+            "POST",
+            "/api/v1/instance-operations/launch",
+            body=provider._launch_body(),
+        )
+
+    events = [
+        json.loads(line)
+        for line in (root / "request-journal.jsonl").read_text().splitlines()
+    ]
+    assert transport.calls == 1
+    assert [event["event"] for event in events] == ["send-started", "response-unknown"]
+    assert provider._response_documents(root) == {}
 
 
 def test_removed_provider_receipt_schemas_cannot_be_mistaken_for_execution_contracts() -> None:
@@ -641,16 +864,22 @@ def test_campaign_lifecycle_uses_actual_elapsed_time_and_preserves_cleanup_reser
         persistent_filesystems=0,
     )
     assert campaign.elapsed_seconds(billable_started_at=100.0, now=700.0) == 600.0
-    assert campaign.admit_attempt(
-        billable_started_at=100.0,
-        now=10_000.0,
-        attempt_hard_wall_seconds=3_600,
-    ) is True
-    assert campaign.admit_attempt(
-        billable_started_at=100.0,
-        now=10_000.1,
-        attempt_hard_wall_seconds=3_600,
-    ) is False
+    assert (
+        campaign.admit_attempt(
+            billable_started_at=100.0,
+            now=10_000.0,
+            attempt_hard_wall_seconds=3_600,
+        )
+        is True
+    )
+    assert (
+        campaign.admit_attempt(
+            billable_started_at=100.0,
+            now=10_000.1,
+            attempt_hard_wall_seconds=3_600,
+        )
+        is False
+    )
     assert campaign.termination_due(billable_started_at=100.0, now=13_600.0) is True
 
 
@@ -682,7 +911,82 @@ def test_host_campaign_admission_counts_setup_and_attempt_actual_time(
     with pytest.raises(host.T09HostError, match="next attempt hard wall"):
         host.admit_next_attempt(tmp_path)
     monkeypatch.setattr(host.time, "time", lambda: now + 13_500)
+    assert host.provider_seconds_remaining(tmp_path, reserve_seconds=900) == 0
     assert host.provider_termination_due(tmp_path) is True
+
+
+def test_finalized_attempt_streams_before_cutoff_without_aggregate_stage(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    host = _load_host_runner()
+    now = time.time()
+    monkeypatch.setattr(host.time, "time", lambda: now)
+    command_document = load_json(
+        ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
+        "T09_PILOT_COMMAND_MANIFESTS.json"
+    )
+    manifest = next(
+        item for item in command_document["manifests"] if item["run_id"] == ATTEMPT_ORDER[0]
+    )
+    artifact_root = tmp_path / "artifacts"
+    attempt_root = artifact_root / manifest["permitted_condition_owned"]["output_root"]
+    attempt_root.mkdir(parents=True)
+    pilot_root = artifact_root / "pilot-v3"
+    pilot_root.mkdir(exist_ok=True)
+    (pilot_root / "pilot-state.json").write_text(
+        json.dumps({"lambda_started_at_epoch": now - 100}),
+        encoding="utf-8",
+    )
+    for name in ("attempt-outcome.json", "evidence-index.json", "host-cleanup-receipt.json"):
+        (attempt_root / name).write_text("{}\n", encoding="utf-8")
+    (attempt_root / "normalized-events.jsonl").write_text("{}\n", encoding="utf-8")
+    (attempt_root / "attempt-wall.json").write_text(
+        json.dumps(
+            {
+                "attempt_hard_deadline_epoch": now + 60,
+            }
+        ),
+        encoding="utf-8",
+    )
+    destination = io.BytesIO()
+    result = host.export_attempt(
+        SimpleNamespace(
+            repository=ROOT,
+            artifact_root=artifact_root,
+            run_id=ATTEMPT_ORDER[0],
+            package_commit="a" * 40,
+        ),
+        destination,
+    )
+    assert result["run_id"] == ATTEMPT_ORDER[0]
+    assert result["bytes"] == len(destination.getvalue())
+    assert result["bytes"] > 0
+    assert (attempt_root / "attempt-export-manifest.json").is_file()
+    inbound = tmp_path / "inbound"
+    inbound.mkdir()
+    inbound_archive = inbound / f"{ATTEMPT_ORDER[0]}.tar.gz"
+    inbound_archive.write_bytes(destination.getvalue())
+    provider_entry = tmp_path / "provider-entry.json"
+    provider_entry.write_text(
+        json.dumps(
+            {
+                "owned_instance_identity_sha256": "b" * 64,
+                "lambda_started_at_epoch": now - 100,
+            }
+        ),
+        encoding="utf-8",
+    )
+    host.verify_attempt_export(
+        SimpleNamespace(
+            inbound_root=inbound,
+            attempt_export=inbound_archive,
+            run_id=ATTEMPT_ORDER[0],
+            package_commit="a" * 40,
+            provider_entry_receipt=provider_entry,
+        )
+    )
+    assert (inbound / f"{ATTEMPT_ORDER[0]}-export-verification.json").is_file()
 
 
 def test_host_secret_cleanup_finds_cross_chunk_match_and_destroys_exact_file(
