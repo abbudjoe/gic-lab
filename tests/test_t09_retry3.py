@@ -1038,6 +1038,11 @@ def test_retry3_slot2_authority_retention_is_manifest_complete_and_minimal(
     nested = authority / "slot1-entry-source"
     nested.mkdir()
     host.write_exclusive(nested / "entry-receipt.json", {"entry": True})
+    host.write_exclusive(nested / "source-manifest.json", {"entry_source": True})
+    closeout = authority / "slot1-closeout-source"
+    closeout.mkdir()
+    host.write_exclusive(closeout / "closeout-receipt.json", {"closeout": True})
+    host.write_exclusive(closeout / "source-manifest.json", {"closeout_source": True})
     source_manifest = provider._slot2_authority_tree_manifest(authority)
     host.write_exclusive(authority / "source-manifest.json", source_manifest)
     host.write_exclusive(source / "unrelated-owned-state.json", {"private": True})
@@ -1049,12 +1054,71 @@ def test_retry3_slot2_authority_retention_is_manifest_complete_and_minimal(
         "slot2-eligibility-source/source-manifest.json",
         "slot2-eligibility-source/transition.json",
         "slot2-eligibility-source/slot1-entry-source/entry-receipt.json",
+        "slot2-eligibility-source/slot1-entry-source/source-manifest.json",
+        "slot2-eligibility-source/slot1-closeout-source/closeout-receipt.json",
+        "slot2-eligibility-source/slot1-closeout-source/source-manifest.json",
     }
     assert not (destination / "unrelated-owned-state.json").exists()
 
     host.write_exclusive(authority / "undeclared-extra.json", {"extra": True})
     with pytest.raises(host.T09HostError, match="member set"):
         host.retain_slot2_authority(source, tmp_path / "rejected")
+
+
+def test_retry3_preentry_secret_match_is_a_monotonic_campaign_stop(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    host = _load(HOST_SOURCE, "giclab_t09_retry3_preentry_secret_stop")
+    artifact_root = tmp_path / "artifacts"
+    state_path = artifact_root / "pilot-v5/pilot-state.json"
+    initialize_pilot_state(
+        state_path,
+        execution_contract_sha256="f" * 64,
+        pilot_started_at_epoch=1.0,
+        lambda_started_at_epoch=1.0,
+    )
+    attempt_root = artifact_root / "attempt"
+    attempt_root.mkdir(parents=True, mode=0o700)
+    secret = tmp_path / "secret"
+    secret_value = b"fixture-preentry-secret-that-must-not-survive"
+    secret.write_bytes(secret_value)
+    secret.chmod(0o600)
+    leaked = attempt_root / "condition.stderr"
+    leaked.write_bytes(secret_value)
+    monkeypatch.setattr(host, "remove_container", lambda _prefix, _name: True)
+    monkeypatch.setattr(host, "owned_containers", lambda _prefix: [])
+
+    with pytest.raises(host.T09HostError, match="actual credential exposure"):
+        host.record_preentry_condition_failure(
+            pilot_state_path=state_path,
+            attempt_root=attempt_root,
+            secret_file=secret,
+            prefix=["docker"],
+            container_name="fixture-container",
+            run_id=ATTEMPT_ORDER[0],
+            reason="fixture-create-failure",
+            returncode=125,
+            package_commit="a" * 40,
+            execution_contract_sha256="f" * 64,
+            frozen_run_manifest_sha256="b" * 64,
+            condition_plan_sha256="c" * 64,
+            condition_argv_sha256="d" * 64,
+        )
+    assert not leaked.exists()
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    assert state["actual_credential_exposure_detected"] is True
+    assert state["credential_safety_stop_detected"] is True
+    receipt = json.loads(
+        (attempt_root / "preentry-condition-failure.json").read_text(encoding="utf-8")
+    )
+    assert receipt["actual_credential_exposure_detected"] is True
+    assert receipt["retry_same_frozen_condition_permitted"] is False
+    with pytest.raises(T09BudgetExceeded, match="credential safety"):
+        mark_empirical_entry(
+            state_path,
+            execution_contract_sha256="f" * 64,
+            run_id=ATTEMPT_ORDER[0],
+        )
 
 
 def test_retry3_private_regression_archive_requires_private_single_link_metadata(

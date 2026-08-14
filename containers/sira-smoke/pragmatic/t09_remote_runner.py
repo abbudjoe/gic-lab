@@ -5844,6 +5844,7 @@ def prepare_condition_attempt_root(
 
 def record_preentry_condition_failure(
     *,
+    pilot_state_path: Path,
     attempt_root: Path,
     secret_file: Path,
     prefix: list[str],
@@ -5874,6 +5875,16 @@ def record_preentry_condition_failure(
     remaining = secret_hits(attempt_root, credential)
     credential = b""
     exposure_detected = actual_credential_exposure_detected or bool(matching)
+    if exposure_detected:
+        mark_actual_credential_exposure(
+            pilot_state_path,
+            execution_contract_sha256=execution_contract_sha256,
+        )
+    if credential_cleanup_integrity_failure:
+        mark_credential_cleanup_integrity_failure(
+            pilot_state_path,
+            execution_contract_sha256=execution_contract_sha256,
+        )
     residue = [name for name in owned_containers(prefix) if name == container_name]
     privacy = privacy_violations(attempt_root)
     failure_prefix_entries = preentry_prefix_inventory(attempt_root)
@@ -6403,6 +6414,7 @@ def execute_condition(args: argparse.Namespace) -> int:
     )
     if created.returncode != 0:
         record_preentry_condition_failure(
+            pilot_state_path=artifact_root / "pilot-v5/pilot-state.json",
             attempt_root=attempt_root,
             secret_file=args.secret_file.resolve(strict=True),
             prefix=prefix,
@@ -6570,6 +6582,7 @@ def execute_condition(args: argparse.Namespace) -> int:
         raise T09HostError("post-condition empirical state is malformed")
     if args.run_id not in entered_after_condition:
         record_preentry_condition_failure(
+            pilot_state_path=artifact_root / "pilot-v5/pilot-state.json",
             attempt_root=attempt_root,
             secret_file=args.secret_file.resolve(strict=True),
             prefix=prefix,
