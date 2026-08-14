@@ -170,12 +170,14 @@ def test_retry3_slot2_uses_separate_campaign_and_active_lambda_clocks(
 
 
 def test_retry3_slot2_transition_and_launch_headroom_are_fail_closed() -> None:
-    package_commit = subprocess.run(
-        ["git", "-C", str(ROOT), "rev-parse", "HEAD"],
-        capture_output=True,
-        check=True,
-        text=True,
-    ).stdout.strip()
+    disposition = json.loads(
+        (
+            ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive/"
+            "T09_PRAGMATIC_RETRY3_DISPOSITION.json"
+        ).read_text(encoding="utf-8")
+    )
+    package_commit = disposition["frozen_package_commit"]
+    assert package_commit == "4a4ecc1e8aa0a00d43301161a90425ae439a2cfd"
     transition = provider._slot2_git_transition(ROOT, package_commit)
     assert transition["from_package_commit"] == provider.SLOT1_PACKAGE_COMMIT
     assert transition["to_package_commit"] == package_commit
