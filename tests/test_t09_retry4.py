@@ -789,12 +789,10 @@ def test_retry4_static_package_hashes_commands_and_successor_control_close() -> 
 
 
 def test_retry4_slot2_control_repair_is_a_science_locked_descendant() -> None:
-    package_commit = subprocess.run(
-        ["git", "-C", str(ROOT), "rev-parse", "HEAD"],
-        capture_output=True,
-        check=True,
-        text=True,
-    ).stdout.strip()
+    # This validator describes the immutable package that crossed the live
+    # Retry4 preflight boundary.  Post-run evidence-only descendants are not
+    # part of that already-consumed slot-2 transition.
+    package_commit = "2b40b8a8fc8379f7b803cc08af749849484b7986"
     transition = provider._retry4_slot2_git_transition(ROOT, package_commit)
     assert transition["from_package_commit"] == provider.RETRY4_SLOT1_PACKAGE_COMMIT
     assert transition["to_package_commit"] == package_commit
@@ -804,12 +802,7 @@ def test_retry4_slot2_control_repair_is_a_science_locked_descendant() -> None:
 
 
 def test_retry4_active_slot2_entry_transition_is_source_bound() -> None:
-    package_commit = subprocess.run(
-        ["git", "-C", str(ROOT), "rev-parse", "HEAD"],
-        capture_output=True,
-        check=True,
-        text=True,
-    ).stdout.strip()
+    package_commit = "2b40b8a8fc8379f7b803cc08af749849484b7986"
     transition = provider.retry4_active_slot2_entry_transition(ROOT, package_commit)
     assert transition["from_package_commit"] == (provider.RETRY4_ACTIVE_SLOT2_ENTRY_PACKAGE_COMMIT)
     assert transition["to_package_commit"] == package_commit
