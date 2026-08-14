@@ -526,7 +526,7 @@ def run(argv: Sequence[str] | None = None) -> int:
         pilot_control_root = pilot_state_path.parent
         pilot_root = pilot_control_root.parent
         if (
-            pilot_control_root.name != "pilot-v5"
+            pilot_control_root.name != "pilot-v6"
             or aggregate_ledger_path.parent != pilot_control_root
             or pilot_root not in attempt_root.parents
         ):

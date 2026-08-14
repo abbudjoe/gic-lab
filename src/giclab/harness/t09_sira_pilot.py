@@ -28,7 +28,7 @@ from giclab.harness.sira_gate_a import (
     ProviderBudgetUsage,
 )
 
-PLAN_ID: Final = "PLAN-EXP0001-PILOT-V5"
+PLAN_ID: Final = "PLAN-EXP0001-PILOT-V6"
 EXPERIMENT_ID: Final = "EXP-0001"
 SIRA_COMMIT: Final = "93fb8d72de71f9a4a13419670adeb34d93cf7acd"
 MODEL_REVISION: Final = "gpt-4o-2024-11-20"
@@ -50,19 +50,19 @@ TASK_REFERENCE_SHA256S: Final = (
     "2ee9d892e24441d5f5bbf31b7616c1ade5977af26d22e4020f92a162fa23becb",
 )
 ATTEMPT_ORDER: Final = (
-    "RUN-T09-TASK-A-REACTIVE-0003",
-    "RUN-T09-TASK-A-SIMULATIVE-0003",
-    "RUN-T09-TASK-B-SIMULATIVE-0003",
-    "RUN-T09-TASK-B-REACTIVE-0003",
+    "RUN-T09-TASK-A-REACTIVE-0004",
+    "RUN-T09-TASK-A-SIMULATIVE-0004",
+    "RUN-T09-TASK-B-SIMULATIVE-0004",
+    "RUN-T09-TASK-B-REACTIVE-0004",
 )
 EVALUATOR_RUN_IDS: Final = (
-    "RUN-T09-EVAL-TASK-A-REACTIVE-0003",
-    "RUN-T09-EVAL-TASK-A-SIMULATIVE-0003",
-    "RUN-T09-EVAL-TASK-B-SIMULATIVE-0003",
-    "RUN-T09-EVAL-TASK-B-REACTIVE-0003",
+    "RUN-T09-EVAL-TASK-A-REACTIVE-0004",
+    "RUN-T09-EVAL-TASK-A-SIMULATIVE-0004",
+    "RUN-T09-EVAL-TASK-B-SIMULATIVE-0004",
+    "RUN-T09-EVAL-TASK-B-REACTIVE-0004",
 )
-RUNTIME_QUALIFICATION_ID: Final = "QUAL-T09-PILOT-V5-IMAGE-0002"
-FROZEN_RUN_MANIFEST_ID: Final = "RUN-MANIFEST-EXP0001-PILOT-V5-0003"
+RUNTIME_QUALIFICATION_ID: Final = "QUAL-T09-PILOT-V6-IMAGE-0001"
+FROZEN_RUN_MANIFEST_ID: Final = "RUN-MANIFEST-EXP0001-PILOT-V6-0004"
 HISTORICAL_IMAGE_ID: Final = (
     "sha256:035edf61718e84a8156f4f0f7817b134b0ce31488d3f0b50bbfba2b4a30cc61c"
 )
@@ -85,43 +85,51 @@ class T09BudgetExceeded(RuntimeError):
 
 @dataclass(frozen=True, slots=True)
 class CampaignLifecycleLimits:
-    """One finite, actual-time provider campaign shared by every pilot phase."""
+    """Three-clock Retry 4 lifecycle authority."""
 
-    campaign_provider_wall_seconds: int
-    normal_cleanup_reserve_seconds: int
-    provider_termination_cutoff_seconds: int
-    post_condition_evaluator_evidence_seconds: int
-    termination_dispatch_margin_seconds: int
+    preflight_wall_seconds: int
+    failed_preflight_termination_dispatch_seconds: int
+    empirical_campaign_wall_seconds: int
+    empirical_cleanup_reserve_seconds: int
+    empirical_termination_cutoff_seconds: int
+    maximum_successful_host_active_seconds: int
+    maximum_cumulative_active_seconds: int
     max_lambda_instances: int
     max_launch_count: int
     persistent_filesystems: int
 
     def __post_init__(self) -> None:
         values = (
-            self.campaign_provider_wall_seconds,
-            self.normal_cleanup_reserve_seconds,
-            self.provider_termination_cutoff_seconds,
-            self.post_condition_evaluator_evidence_seconds,
-            self.termination_dispatch_margin_seconds,
+            self.preflight_wall_seconds,
+            self.failed_preflight_termination_dispatch_seconds,
+            self.empirical_campaign_wall_seconds,
+            self.empirical_cleanup_reserve_seconds,
+            self.empirical_termination_cutoff_seconds,
+            self.maximum_successful_host_active_seconds,
+            self.maximum_cumulative_active_seconds,
             self.max_lambda_instances,
             self.max_launch_count,
             self.persistent_filesystems,
         )
         if any(type(value) is not int or value < 0 for value in values):
             raise T09PilotError("campaign lifecycle limits must be non-negative integers")
-        if self.campaign_provider_wall_seconds != 14_400:
-            raise T09PilotError("campaign provider wall must remain 14,400 seconds")
-        if self.normal_cleanup_reserve_seconds != 900:
-            raise T09PilotError("normal cleanup reserve must remain 900 seconds")
-        if self.post_condition_evaluator_evidence_seconds != 600:
-            raise T09PilotError("post-condition evaluator/evidence handoff must remain 600 seconds")
-        if self.termination_dispatch_margin_seconds != 60:
-            raise T09PilotError("provider termination dispatch margin must remain 60 seconds")
+        if self.preflight_wall_seconds != 3_600:
+            raise T09PilotError("preflight wall must remain 3,600 seconds")
+        if self.failed_preflight_termination_dispatch_seconds != 300:
+            raise T09PilotError("failed-preflight termination dispatch must remain 300 seconds")
+        if self.empirical_campaign_wall_seconds != 14_400:
+            raise T09PilotError("empirical campaign wall must remain 14,400 seconds")
+        if self.empirical_cleanup_reserve_seconds != 900:
+            raise T09PilotError("empirical cleanup reserve must remain 900 seconds")
         if (
-            self.provider_termination_cutoff_seconds
-            != self.campaign_provider_wall_seconds - self.normal_cleanup_reserve_seconds
+            self.empirical_termination_cutoff_seconds
+            != self.empirical_campaign_wall_seconds - self.empirical_cleanup_reserve_seconds
         ):
             raise T09PilotError("provider termination cutoff must preserve the cleanup reserve")
+        if self.maximum_successful_host_active_seconds != 18_000:
+            raise T09PilotError("successful-host active cap must remain 18,000 seconds")
+        if self.maximum_cumulative_active_seconds != 21_600:
+            raise T09PilotError("cumulative active cap must remain 21,600 seconds")
         if (
             self.max_lambda_instances != 1
             or self.max_launch_count != 2
@@ -141,16 +149,16 @@ class CampaignLifecycleLimits:
     def remaining_seconds(self, *, billable_started_at: float, now: float) -> float:
         return max(
             0.0,
-            self.campaign_provider_wall_seconds
+            self.empirical_campaign_wall_seconds
             - self.elapsed_seconds(billable_started_at=billable_started_at, now=now),
         )
 
     def required_attempt_seconds(self, *, attempt_hard_wall_seconds: int) -> int:
-        """Return the empirical admission envelope required by the Retry 3 contract."""
+        """Return the empirical admission envelope required by the Retry 4 contract."""
 
         if type(attempt_hard_wall_seconds) is not int or attempt_hard_wall_seconds <= 0:
             raise T09PilotError("attempt hard wall must be a positive integer")
-        return attempt_hard_wall_seconds + self.normal_cleanup_reserve_seconds
+        return attempt_hard_wall_seconds + self.empirical_cleanup_reserve_seconds
 
     def admit_remaining(
         self,
@@ -184,7 +192,7 @@ class CampaignLifecycleLimits:
     def termination_due(self, *, billable_started_at: float, now: float) -> bool:
         return (
             self.elapsed_seconds(billable_started_at=billable_started_at, now=now)
-            >= self.provider_termination_cutoff_seconds
+            >= self.empirical_termination_cutoff_seconds
         )
 
 
@@ -288,7 +296,7 @@ def load_json_object(path: Path, *, context: str) -> dict[str, object]:
 
 @dataclass(frozen=True, slots=True)
 class RuntimeQualification:
-    """The source-derived pre-entry binding for the one accepted V5 image."""
+    """The source-derived pre-entry binding for the one accepted V6 image."""
 
     manifest_id: str
     qualification_id: str
@@ -304,6 +312,7 @@ class RuntimeQualification:
     evaluator_overlay_manifest_sha256: str
     evaluator_overlay_entries_sha256: str
     evaluator_overlay_packages_sha256: str
+    regression_archive_staging_sha256: str
     qualified_real_evidence_regression_sha256: str
     local_finalizer_qualification_sha256: str
     local_finalizer_interpreter_dependency_manifest_sha256: str
@@ -315,7 +324,7 @@ class RuntimeQualification:
     build_count: int
     qualification_count: int
     empirical_entry_crossed: bool
-    preflight_transition_mode: Literal["fresh", "slot2-replacement"]
+    preflight_transition_mode: Literal["fresh", "replacement-launch"]
     preflight_resume_source_sha256: str | None
     preflight_resume_argv_sha256: str | None
     preflight_resume_transition_sha256: str | None
@@ -394,6 +403,10 @@ class RuntimeQualification:
                 document.get("evaluator_overlay_packages_sha256"),
                 context="evaluator overlay packages hash",
             ),
+            regression_archive_staging_sha256=_required_string(
+                document.get("regression_archive_staging_sha256"),
+                context="regression archive staging hash",
+            ),
             qualified_real_evidence_regression_sha256=_required_string(
                 document.get("qualified_real_evidence_regression_sha256"),
                 context="qualified real-evidence regression hash",
@@ -431,7 +444,7 @@ class RuntimeQualification:
             ),
             empirical_entry_crossed=document.get("empirical_entry_crossed") is True,
             preflight_transition_mode=cast(
-                Literal["fresh", "slot2-replacement"],
+                Literal["fresh", "replacement-launch"],
                 _required_string(
                     document.get("preflight_transition_mode"),
                     context="preflight transition mode",
@@ -519,6 +532,7 @@ class RuntimeQualification:
             result.evaluator_overlay_manifest_sha256,
             result.evaluator_overlay_entries_sha256,
             result.evaluator_overlay_packages_sha256,
+            result.regression_archive_staging_sha256,
             result.qualified_real_evidence_regression_sha256,
             result.local_finalizer_qualification_sha256,
             result.local_finalizer_interpreter_dependency_manifest_sha256,
@@ -538,16 +552,16 @@ class RuntimeQualification:
             or result.model_metadata_request_count != 1
             or result.model_task_request_count != 0
             or result.task_browser_action_count != 0
-            or result.build_count != 1
+            or result.build_count not in {0, 1}
             or result.qualification_count != 1
             or document.get("empirical_entry_crossed") is not False
             or document.get("post_entry_code_science_image_freeze") is not True
-            or result.preflight_transition_mode not in {"fresh", "slot2-replacement"}
+            or result.preflight_transition_mode not in {"fresh", "replacement-launch"}
             or result.launch_slot not in {1, 2}
             or result.launch_count != result.launch_slot
             or result.campaign_started_at_epoch <= 0
-            or result.owned_lambda_started_at_epoch < result.campaign_started_at_epoch
-            or result.first_pair_started_at_epoch < result.owned_lambda_started_at_epoch
+            or result.owned_lambda_started_at_epoch > result.campaign_started_at_epoch
+            or result.first_pair_started_at_epoch < result.campaign_started_at_epoch
             or result.prior_lambda_duration_seconds < 0
             or result.prior_lambda_cost_usd < 0
         ):
@@ -565,34 +579,40 @@ class RuntimeQualification:
             result.preflight_retained_materialization_sha256,
         )
         if result.preflight_transition_mode == "fresh":
-            if result.preflight_prior_package_commit is not None or any(
-                item is not None for item in recovery_hashes
+            if (
+                result.launch_slot != 1
+                or result.prior_lambda_duration_seconds != 0
+                or result.prior_lambda_cost_usd != 0
+                or result.replacement_eligibility_sha256 is not None
+                or result.replacement_eligibility_source_manifest_sha256 is not None
+                or result.preflight_prior_package_commit is not None
+                or any(item is not None for item in recovery_hashes)
             ):
                 raise T09PilotError("fresh preflight retained resume authority")
         else:
-            slot2_hashes = (
+            replacement_hashes = (
                 result.replacement_eligibility_sha256,
                 result.replacement_eligibility_source_manifest_sha256,
-                result.slot1_failure_archive_sha256,
-                result.slot1_image_archive_sha256,
-                result.slot1_entry_receipt_sha256,
-                result.slot1_closeout_receipt_sha256,
             )
             if (
                 result.launch_slot != 2
                 or result.launch_count != 2
                 or result.prior_lambda_duration_seconds <= 0
                 or result.prior_lambda_cost_usd <= 0
-                or result.image_import_count != 1
-                or result.additional_build_count != 0
                 or result.preflight_prior_package_commit is not None
                 or any(item is not None for item in recovery_hashes)
                 or any(
                     not isinstance(item, str) or _HEX64.fullmatch(item) is None
-                    for item in slot2_hashes
+                    for item in replacement_hashes
                 )
             ):
-                raise T09PilotError("slot-2 replacement qualification binding drifted")
+                raise T09PilotError("replacement-launch qualification binding drifted")
+        if (
+            result.additional_build_count != 0
+            or (result.build_count == 0 and result.image_import_count != 1)
+            or (result.build_count == 1 and result.image_import_count != 0)
+        ):
+            raise T09PilotError("V6 image load/build selection drifted")
         return result
 
 
@@ -700,8 +720,8 @@ class RuntimeLimits:
             raise T09PilotError("pair wall cap must equal two condition caps")
         if self.max_total_wall_seconds != 2 * self.max_pair_wall_seconds:
             raise T09PilotError("total wall cap must equal two pair caps")
-        if self.max_lambda_duration_seconds != self.max_total_wall_seconds:
-            raise T09PilotError("Lambda and total wall caps must be identical")
+        if self.max_lambda_duration_seconds != 21_600:
+            raise T09PilotError("cumulative Lambda active cap must remain 21,600 seconds")
         if self.max_attempts != 4 or self.max_retries_after_empirical_entry != 0:
             raise T09PilotError("the calibration pilot requires four attempts and zero retry")
         for value in (self.max_openai_cost_usd_per_attempt, self.max_lambda_cost_usd):
@@ -906,25 +926,32 @@ def load_execution_contract(path: Path, *, expected_sha256: str) -> PilotExecuti
         raise T09PilotError("first-pair checkpoint must be required")
     raw_campaign = _strict_object(document.get("provider_lifecycle"), context="provider lifecycle")
     campaign = CampaignLifecycleLimits(
-        campaign_provider_wall_seconds=_required_int(
-            raw_campaign.get("campaign_provider_wall_seconds"),
-            context="campaign provider wall",
+        preflight_wall_seconds=_required_int(
+            raw_campaign.get("preflight_wall_seconds"), context="preflight wall"
         ),
-        normal_cleanup_reserve_seconds=_required_int(
-            raw_campaign.get("normal_cleanup_reserve_seconds"),
-            context="normal cleanup reserve",
+        failed_preflight_termination_dispatch_seconds=_required_int(
+            raw_campaign.get("failed_preflight_termination_dispatch_seconds"),
+            context="failed-preflight termination dispatch",
         ),
-        provider_termination_cutoff_seconds=_required_int(
-            raw_campaign.get("provider_termination_cutoff_seconds"),
-            context="provider termination cutoff",
+        empirical_campaign_wall_seconds=_required_int(
+            raw_campaign.get("empirical_campaign_wall_seconds"),
+            context="empirical campaign wall",
         ),
-        post_condition_evaluator_evidence_seconds=_required_int(
-            raw_campaign.get("post_condition_evaluator_evidence_seconds"),
-            context="post-condition evaluator/evidence handoff",
+        empirical_cleanup_reserve_seconds=_required_int(
+            raw_campaign.get("empirical_cleanup_reserve_seconds"),
+            context="empirical cleanup reserve",
         ),
-        termination_dispatch_margin_seconds=_required_int(
-            raw_campaign.get("termination_dispatch_margin_seconds"),
-            context="provider termination dispatch margin",
+        empirical_termination_cutoff_seconds=_required_int(
+            raw_campaign.get("empirical_termination_cutoff_seconds"),
+            context="empirical termination cutoff",
+        ),
+        maximum_successful_host_active_seconds=_required_int(
+            raw_campaign.get("maximum_successful_host_active_seconds"),
+            context="successful-host active cap",
+        ),
+        maximum_cumulative_active_seconds=_required_int(
+            raw_campaign.get("maximum_cumulative_active_seconds"),
+            context="cumulative active cap",
         ),
         max_lambda_instances=_required_int(
             raw_campaign.get("max_lambda_instances"), context="Lambda instance cap"
@@ -937,10 +964,10 @@ def load_execution_contract(path: Path, *, expected_sha256: str) -> PilotExecuti
         ),
     )
     if (
-        limits.max_total_wall_seconds != campaign.campaign_provider_wall_seconds
-        or limits.max_lambda_duration_seconds != campaign.campaign_provider_wall_seconds
+        limits.max_total_wall_seconds != campaign.empirical_campaign_wall_seconds
+        or limits.max_lambda_duration_seconds != campaign.maximum_cumulative_active_seconds
     ):
-        raise T09PilotError("runtime and provider campaign walls must be identical")
+        raise T09PilotError("runtime limits and three-clock lifecycle disagree")
     return PilotExecutionContract(
         path=path.resolve(strict=True),
         sha256=expected_sha256,
@@ -1056,8 +1083,8 @@ def initialize_pilot_state(
         "lambda_started_at_epoch": lambda_started_at_epoch,
         "campaign_started_at_epoch": pilot_started_at_epoch,
         "owned_lambda_started_at_epoch": lambda_started_at_epoch,
-        "prior_retry3_lambda_duration_seconds": 0.0,
-        "prior_retry3_lambda_cost_usd": 0.0,
+        "prior_campaign_lambda_duration_seconds": 0.0,
+        "prior_campaign_lambda_cost_usd": 0.0,
         "first_pair_started_at_epoch": pilot_started_at_epoch,
         "second_pair_started_at_epoch": None,
         "empirical_attempts_entered": [],
@@ -1794,8 +1821,8 @@ def pilot_state_time_origins(
         state.get("campaign_started_at_epoch", state.get("pilot_started_at_epoch")),
         state.get("owned_lambda_started_at_epoch"),
     )
-    prior_duration = state.get("prior_retry3_lambda_duration_seconds")
-    prior_cost = state.get("prior_retry3_lambda_cost_usd")
+    prior_duration = state.get("prior_campaign_lambda_duration_seconds")
+    prior_cost = state.get("prior_campaign_lambda_cost_usd")
     valid_epoch_types = all(
         isinstance(value, (int, float)) and not isinstance(value, bool) for value in epoch_values
     )
@@ -1882,7 +1909,7 @@ class ResourceGuard:
                     lambda_hourly_price_usd,
                 )
             )
-            or not campaign_started <= owned_lambda_started <= pair_started <= condition_started
+            or not owned_lambda_started <= campaign_started <= pair_started <= condition_started
             or min(
                 prior_lambda_duration_seconds,
                 prior_lambda_cost_usd,
@@ -1977,8 +2004,8 @@ class PairCheckpointInput:
     actual_lambda_cost_usd: float
     remaining_campaign_seconds: float
     next_attempt_hard_wall_seconds: int = 3_600
-    prior_t09_cost_usd: float = 2.5308164556905757
-    cumulative_t09_cost_cap_usd: float = 48.0
+    prior_t09_cost_usd: float = 4.04142013524027
+    cumulative_t09_cost_cap_usd: float = 55.0
 
 
 def first_pair_decision(value: PairCheckpointInput) -> dict[str, object]:
@@ -2006,8 +2033,8 @@ def first_pair_decision(value: PairCheckpointInput) -> dict[str, object]:
         "browser_actions": 60,
         "wall_seconds": 7_200,
         "openai_cost_usd": 20.0,
-        "lambda_cost_usd": 2.58,
-        "total_cost_usd": 22.58,
+        "lambda_cost_usd": 4.0,
+        "total_cost_usd": 24.0,
     }
     actual_total_cost = usage.cost_usd + value.actual_lambda_cost_usd
     if usage.model_call_attempts >= strict_half_caps["model_calls"]:
@@ -2028,7 +2055,7 @@ def first_pair_decision(value: PairCheckpointInput) -> dict[str, object]:
     if actual_total_cost >= strict_half_caps["total_cost_usd"]:
         reasons.append("first_pair_total_cost_threshold_reached")
     if not math.isfinite(value.projected_aggregate_cost_usd) or (
-        value.projected_aggregate_cost_usd > 45.16
+        value.projected_aggregate_cost_usd > 48.0
     ):
         reasons.append("projected_aggregate_cost_exceeds_hard_cap")
     projected_cumulative = value.prior_t09_cost_usd + value.projected_aggregate_cost_usd
@@ -2037,11 +2064,13 @@ def first_pair_decision(value: PairCheckpointInput) -> dict[str, object]:
     ):
         reasons.append("projected_cumulative_t09_cost_exceeds_hard_cap")
     lifecycle = CampaignLifecycleLimits(
-        campaign_provider_wall_seconds=14_400,
-        normal_cleanup_reserve_seconds=900,
-        provider_termination_cutoff_seconds=13_500,
-        post_condition_evaluator_evidence_seconds=600,
-        termination_dispatch_margin_seconds=60,
+        preflight_wall_seconds=3_600,
+        failed_preflight_termination_dispatch_seconds=300,
+        empirical_campaign_wall_seconds=14_400,
+        empirical_cleanup_reserve_seconds=900,
+        empirical_termination_cutoff_seconds=13_500,
+        maximum_successful_host_active_seconds=18_000,
+        maximum_cumulative_active_seconds=21_600,
         max_lambda_instances=1,
         max_launch_count=2,
         persistent_filesystems=0,
@@ -2398,8 +2427,8 @@ def _validated_upstream_argv(
         "--end_idx": str(attempt.task_index + 1),
         "--seed": "42",
     }
-    upstream_suffix = attempt.run_id.removeprefix("RUN-T09-").removesuffix("-0003")
-    upstream_run_id = f"EXP-0001-PILOT-V5-{upstream_suffix}"
+    upstream_suffix = attempt.run_id.removeprefix("RUN-T09-").removesuffix("-0004")
+    upstream_run_id = f"EXP-0001-PILOT-V6-{upstream_suffix}"
     if argv[0] != upstream_run_id or values != expected:
         raise T09PilotError("upstream argv drifted from the exact task/condition contract")
     return values
@@ -2459,7 +2488,7 @@ def render_command_manifest(
     equality_surface = {
         "task_id": attempt.task_id,
         "model": MODEL_REVISION,
-        "runtime": "T09-V5-python-3.11.14-preentry-bound-replacement-image",
+        "runtime": "T09-V6-python-3.11.14-preentry-bound-replacement-image",
         "giclab_commit": attempt.giclab_commit,
         "protocol_sha256": attempt.protocol_sha256,
         "config_sha256": attempt.config_sha256,
@@ -2556,8 +2585,8 @@ def _normalized_actual_argv(manifest: Mapping[str, object]) -> tuple[str, ...] |
             return None
         argv[indexes[0] + 1] = replacement
     downstream = argv[separator + 1 :]
-    upstream_suffix = run_id.removeprefix("RUN-T09-").removesuffix("-0003")
-    expected_upstream_run_id = f"EXP-0001-PILOT-V5-{upstream_suffix}"
+    upstream_suffix = run_id.removeprefix("RUN-T09-").removesuffix("-0004")
+    expected_upstream_run_id = f"EXP-0001-PILOT-V6-{upstream_suffix}"
     if not downstream or downstream[0] != expected_upstream_run_id:
         return None
     downstream[0] = "<UPSTREAM-RUN-ID>"

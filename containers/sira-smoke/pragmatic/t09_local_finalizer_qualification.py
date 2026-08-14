@@ -288,7 +288,7 @@ def qualify(args: argparse.Namespace) -> dict[str, object]:
     _disable_network()
     execution_path = args.execution_contract.resolve(strict=True)
     execution_contract = _object(execution_path, label="execution contract")
-    if execution_contract.get("plan_id") != "PLAN-EXP0001-PILOT-V5":
+    if execution_contract.get("plan_id") != "PLAN-EXP0001-PILOT-V6":
         raise LocalQualificationError("local finalizer execution contract drifted")
     base_site_packages, base_packages = _local_base_packages(execution_contract)
     base_dependency_tree = _dependency_tree_inventory(
@@ -361,8 +361,8 @@ def qualify(args: argparse.Namespace) -> dict[str, object]:
     }
     receipt: dict[str, object] = {
         "schema_version": "0.1.0",
-        "qualification_id": "QUAL-T09-PILOT-V5-LOCAL-FINALIZER-0001",
-        "plan_id": "PLAN-EXP0001-PILOT-V5",
+        "qualification_id": "QUAL-T09-PILOT-V6-LOCAL-FINALIZER-0001",
+        "plan_id": "PLAN-EXP0001-PILOT-V6",
         "package_commit": args.package_commit,
         **interpreter_identity,
         "python_version": "3.11.14",

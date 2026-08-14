@@ -1,0 +1,103 @@
+{
+  "schema_version": "0.3.0",
+  "identity_id": "RUNTIME-EXP0001-PILOT-V5-REPLACEMENT",
+  "plan_id": "PLAN-EXP0001-PILOT-V5",
+  "execution_status": "current-turn-authorized-pending-source-derived-dynamic-qualification",
+  "base_runtime": {
+    "source_run": "RUN-T07-PRAGMATIC-HOST-0003",
+    "frozen_execution_commit": "5698f04dfd08bc85a66d2355b0a4bd7d3ce24a23",
+    "post_run_commit": "27f66e6a82edffa57e497516bf3969a199675f06",
+    "base_image_identity": "mcr.microsoft.com/playwright/python:v1.39.0-jammy@sha256:96955ff5cc37e13f5f1b21f5171afb9fed7e028025aa9d81c690501cd7fa0c6c",
+    "python_version": "3.11.14",
+    "container_image_digest": null,
+    "installed_package_manifest_sha256": "4ff2603fa5e0f7033ba773decdcb86abf648dcce22e469d26bc48214e390e104",
+    "playwright_version": "1.39.0",
+    "chromium_revision": "1084",
+    "chromium_sha256": "0498f208c25339f386413ada7b3c35293b0b6250e67d85446ba9541d7fd636f7",
+    "os": "Linux",
+    "architecture": "x86_64"
+  },
+  "replacement_image_policy": {
+    "historical_image_digest": "sha256:035edf61718e84a8156f4f0f7817b134b0ce31488d3f0b50bbfba2b4a30cc61c",
+    "exact_historical_digest_equality_required": false,
+    "qualification_id": "QUAL-T09-PILOT-V5-IMAGE-0002",
+    "frozen_run_manifest_id": "RUN-MANIFEST-EXP0001-PILOT-V5-0003",
+    "runtime_binding": "source-derived-mode-0600-O_EXCL-frozen-run-manifest",
+    "candidate_build_count": 1,
+    "candidate_qualification_count": 2,
+    "selected_image_predecessor_qualification_id": "QUAL-T09-PILOT-V5-IMAGE-0001",
+    "selected_image_lineage": "slot1-built-once-terminal-zero-use-closeout-then-exact-archive-imported-slot2-with-zero-additional-builds",
+    "empirical_entry_before_binding_allowed": false,
+    "same_exact_image_all_attempts_required": true,
+    "python_interpreter_identity": "source-derived-path-and-executable-sha256-in-frozen-run-manifest",
+    "digest_inequality_alone_is_material": false,
+    "freeze_interpretation": "reviewed-source-and-policy-bytes-are-final-before-launch; the post-gate immutable manifest instantiates the sole unresolved built-artifact identity without changing code or science"
+  },
+  "scientific_runtime": {
+    "sira_commit": "93fb8d72de71f9a4a13419670adeb34d93cf7acd",
+    "sira_tree": "6a6d9068b94d7632d3533a3d6f013d4de6ff76e8",
+    "runner_sha256": "b06793ad1b366a934b798f9f3272fc80a7104a220cb3304ab3bda2eb2a78b331",
+    "agent_configs_sha256": "3c3110b5b69d43e0492fba3cb60171be35ccb8cd652e72d07ffb1ecfd7947072",
+    "model_revision_all_roles": "gpt-4o-2024-11-20",
+    "service_tier": "default",
+    "provider_fallback": false,
+    "implicit_provider_retries": 0,
+    "dataset_revision": "76ad1feb689b754bfe4e5e24d3ea371b647efa67",
+    "reactive_config": "web_reactive",
+    "simulative_config": "web_simulative",
+    "reactive_planner_type": "policy",
+    "simulative_planner_type": "world_model",
+    "simulative_planner_search_num_actions": 5,
+    "simulative_planner_search_depth": 1,
+    "simulative_planner_policy_num_samples": 20,
+    "simulative_planner_critic_num_samples": 20
+  },
+  "evaluator_overlay": {
+    "contract_sha256": "c28a802a45fc8d1e719f8c1bcb22315c2841df831c4ae161f12ab0f2fd08b321",
+    "materialization": "read-only-package-overlay-on-source-bound-qualified-image",
+    "provider_or_model_access": false,
+    "approved_offline_fixture_execution_required": true
+  },
+  "repository_instrumentation": {
+    "reviewed_implementation_ancestor": "a36c3c9720611cdf730ef1ce7f83224eacd72851",
+    "scope": [
+      "replacement-image-build-context-and-functional-qualification",
+      "pre-action-budget-count",
+      "post-action-result-and-screenshot-retention",
+      "per-call-role-lineage-usage-and-service-tier-receipts",
+      "condition-and-aggregate-budget-persistence",
+      "immutable-raw-attempt-seal-and-export-acknowledgement",
+      "pure-repairable-finalizer-projection-and-append-only-selection",
+      "qualified-provider-independent-local-finalizer-runtime",
+      "resource-cap-and-cumulative-accounting-checks",
+      "cleanup-and-exact-provider-closeout-receipts"
+    ],
+    "files": [
+      {"path": "src/giclab/harness/sira_gate_a_runtime.py", "sha256": "d095ad2f0562a33e54bc6db421ad09437c80e20c18b1c7a8cb37e38037a3ec53"},
+      {"path": "src/giclab/harness/sira_gate_a.py", "sha256": "b9a3ae20dc07056bb16dbf3807c8f3912bda9cf31b04a47d80c7de453db971af"},
+      {"path": "src/giclab/harness/safety.py", "sha256": "12529af51aea206e02a531abea4959d80976bd271567f05c75e903654527d34c"},
+      {"path": "src/giclab/harness/t09_sira_pilot.py", "sha256": "b02731886ba657f5f9fdfa4ee69f558692be954e0e5c9637ac81e188a62dc774"},
+      {"path": "src/giclab/harness/lambda_campaign_lifecycle.py", "sha256": "a2ae10595dc270fef26a8136197d9127f0b24b8477ca0e9760743b8d5bd824dd"},
+      {"path": "src/giclab/harness/lambda_l2m_observer.py", "sha256": "3ad5d56abd2b4d115b479c9cf7f0f5202e715d07c1b4842c82dc894fbe8bf6c9"},
+      {"path": "src/giclab/harness/t09_pragmatic_provider.py", "sha256": "7ac566ab3f30a61e7187f352d2d0be9c663c352de1160176c1af1410ae0e0b7f"},
+      {"path": "containers/sira-smoke/pragmatic/t09_remote_runner.py", "sha256": "bb891637db1abe5de80677ab80c10b386a7a90bd5fd039c92e877528babcc86a"},
+      {"path": "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py", "sha256": "71e93127a163503d55267be92791a6989c91ebc20c27bac4d8a7f1d718f0e93e"},
+      {"path": "containers/sira-smoke/pragmatic/t09_preflight.py", "sha256": "5c630ea2a8cda817952deb2b315c741ae530f6bc94af7033daef5b5f1f3b0155"},
+      {"path": "containers/sira-smoke/pragmatic/t09_freeze_commands.py", "sha256": "fe19336d859e905d24af2bd7976e077b64c8c37f9abc8fe98313bd833bd403db"},
+      {"path": "containers/sira-smoke/pragmatic/t09_secret_preflight.py", "sha256": "b4763ac8edc98b86c2f9f617f53cdb6be2ef9cb26d39aad660442e4c1a7506a4"},
+      {"path": "containers/sira-smoke/pragmatic/materialize_openai_secret.py", "sha256": "6cd57c1be7af02e61e0ed9bffc0e6c4e93a78b9b3567a4bfa26fe6cc030095b6"},
+      {"path": "containers/sira-smoke/pragmatic/t09_real_evidence_regression.py", "sha256": "75d7b0dd611828941b159cbed8b38a60a23b79aec2e5a47aff622f1952003fcc"},
+      {"path": "containers/sira-smoke/pragmatic/t09_finalizer_projection.py", "sha256": "bda16a10a291129d93f4ba7081fea3b4c0415182751ec15a94b3bf0b9cdd9040"},
+      {"path": "containers/sira-smoke/pragmatic/t09_local_finalizer_qualification.py", "sha256": "a1429115d08e838fb29faab51e3af9a8a645f320c285d49736822f8e27a9e9eb"}
+    ]
+  },
+  "gpu": {
+    "hardware": "NVIDIA-A10-24GB",
+    "scientific_variable": false,
+    "acceleration_claim": false,
+    "expected_process_use": "none",
+    "visibility": "host-visible; no Docker GPU device request; CUDA_VISIBLE_DEVICES empty inside every pilot/preflight/evaluator container",
+    "cuda_identity_when_visible": "not-applicable-inside-pilot-process-because-visibility-is-disabled",
+    "utilization_samples_when_practical": "host-nvidia-smi-without-unique-identifiers-at-preflight-attempt-boundaries-and-pretermination"
+  }
+}

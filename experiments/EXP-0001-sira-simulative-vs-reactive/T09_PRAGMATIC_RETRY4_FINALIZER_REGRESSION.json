@@ -1,0 +1,226 @@
+{
+  "accepted_scientific_and_evaluator_fields_equal": true,
+  "additional_browser_actions": 0,
+  "additional_model_requests": 0,
+  "dataset_bytes": 1177174,
+  "dataset_sha256": "359300b029c6891567816f351bf8786e9b018d7af8a1a44b7da9ba5ef4651288",
+  "deterministic_distinct_finalization_roots": [
+    {
+      "root": "finalization-0001",
+      "semantic_projection_file_sha256": "8173a8efd78d6a8c9c9cf8c1e36123b83bf8a4379734726aa79a2a41c74484b3",
+      "semantic_projection_sha256": "7bdf21f24f6ce201952aec805e583a8485c6eca032684fd45277ac5886397976"
+    },
+    {
+      "root": "finalization-0002",
+      "semantic_projection_file_sha256": "8173a8efd78d6a8c9c9cf8c1e36123b83bf8a4379734726aa79a2a41c74484b3",
+      "semantic_projection_sha256": "7bdf21f24f6ce201952aec805e583a8485c6eca032684fd45277ac5886397976"
+    }
+  ],
+  "deterministic_repeat_projection_sha256": "7bdf21f24f6ce201952aec805e583a8485c6eca032684fd45277ac5886397976",
+  "evaluator_closure": {
+    "dependency_package_manifest_sha256": "2bb90a5f017787b05834a1dcd3555756f8159787244ed4336809ab783d58fa3b",
+    "dependency_package_records": [
+      "absl-py==2.5.0",
+      "annotated-doc==0.0.5",
+      "annotated-types==0.8.0",
+      "blis==1.3.3",
+      "catalogue==2.0.10",
+      "certifi==2026.7.22",
+      "charset-normalizer==3.5.0",
+      "click==8.4.2",
+      "cloudpathlib==0.24.0",
+      "confection==0.1.5",
+      "cymem==2.0.13",
+      "defusedxml==0.7.1",
+      "en-core-web-sm==3.8.0",
+      "ftfy==6.3.1",
+      "idna==3.18",
+      "jinja2==3.1.6",
+      "joblib==1.5.3",
+      "markdown-it-py==4.2.0",
+      "markupsafe==3.0.3",
+      "mdurl==0.1.2",
+      "murmurhash==1.0.15",
+      "nltk==3.10.3",
+      "numpy==2.4.6",
+      "packaging==26.2",
+      "preshed==3.0.13",
+      "pydantic-core==2.46.4",
+      "pydantic==2.13.4",
+      "pygments==2.20.0",
+      "regex==2026.7.19",
+      "requests==2.34.2",
+      "rich==15.0.0",
+      "rouge-score==0.1.2",
+      "setuptools==84.0.0",
+      "shellingham==1.5.4",
+      "six==1.17.0",
+      "smart-open==7.7.1",
+      "spacy-legacy==3.0.12",
+      "spacy-loggers==1.0.5",
+      "spacy==3.8.11",
+      "srsly==2.5.3",
+      "thinc==8.3.11",
+      "tqdm==4.67.3",
+      "typer-slim==0.24.0",
+      "typer==0.27.1",
+      "typing-extensions==4.16.0",
+      "typing-inspection==0.4.4",
+      "urllib3==2.7.0",
+      "wasabi==1.1.3",
+      "wcwidth==0.8.2",
+      "weasel==0.4.3",
+      "wrapt==2.3.0"
+    ],
+    "evaluator_contract_sha256": "c28a802a45fc8d1e719f8c1bcb22315c2841df831c4ae161f12ab0f2fd08b321",
+    "evaluator_files": [
+      {
+        "path": "evaluation/fanout/evaluator.py",
+        "sha256": "2f99ec6ca40a5d5b49beea61c71d55a85652697b07f92a1c2aaefe85e727ab79"
+      },
+      {
+        "path": "evaluation/fanout/run.py",
+        "sha256": "e6741326a4b0d3a1fe542748d03c86f1e15f87c3de25b4937e17b3e2472afd17"
+      },
+      {
+        "path": "evaluation/fanout/utils/helpers.py",
+        "sha256": "e816bb09d232d820edfc090ff7b2f8f5a4674f27e30b87a9a8d876ffd82c681e"
+      },
+      {
+        "path": "evaluation/fanout/utils/models.py",
+        "sha256": "9638bc652ced674d3c6ff4b63148a913070cee01f350ca773dcbfa2ed1b01cd3"
+      },
+      {
+        "path": "evaluation/fanout/utils/norm.py",
+        "sha256": "c0a5da77ab7014bbb86e8310310b538881f01129d594afc537dd17d565b40eff"
+      }
+    ],
+    "evaluator_files_sha256": "a8f087cb1bd7958004f7b4e9a37671044a1d8b532a357916b3131f588c0fb9b1",
+    "evaluator_lock_sha256": "bec09cf0d326c56af9f717782eef9160579e7720dff701083570df9aa712b34b",
+    "evaluator_revision": "93fb8d72de71f9a4a13419670adeb34d93cf7acd"
+  },
+  "finalizer_source_sha256": "32937302bddec910eb696c1c513b28e67b5a86b4e300171396504a926232bb5d",
+  "interpreter": {
+    "executable_name": "python3.11",
+    "executable_sha256": "8355d4af6cef1a0b42db3896ca3be9ff7cfd9d62f1d790042f42ed5749898b49",
+    "implementation": "cpython",
+    "version": "3.11.14"
+  },
+  "network_disabled": true,
+  "prior_attempt_excluded_from_v5_campaign": true,
+  "prior_attempt_excluded_from_v6_campaign": true,
+  "private_source_path_retained": false,
+  "receipt_id": "T09-PRAGMATIC-RETRY4-REAL-EVIDENCE-REGRESSION-0001",
+  "schema_version": "0.1.0",
+  "selected_raw_members": [
+    {
+      "bytes": 331,
+      "path": "attempt-wall.json",
+      "sha256": "57f1055e2f99ae794e26d2d7769c0fea5abe036ac9640b0830ec02b654503022"
+    },
+    {
+      "bytes": 67309,
+      "path": "condition.stderr",
+      "sha256": "4f22252dcbbda8bfc51a5ddef046b445ed9bfb705f1e910c254a6873ce537c04"
+    },
+    {
+      "bytes": 20,
+      "path": "condition.stdout",
+      "sha256": "9e1a849e802a83bed91432b4d5026f9b28f5cd53369b40d6a90d3de6cb676c80"
+    },
+    {
+      "bytes": 3901,
+      "path": "container-command.json",
+      "sha256": "1f996f56ff9c38d6c52b543a53f57255742e9cc22a11f8d75b4dd406cb19a1ad"
+    },
+    {
+      "bytes": 289,
+      "path": "container-state.json",
+      "sha256": "d657303fa3904acf8e8acd19e1991d6753d159331c7d905f780fb5f0119daa15"
+    },
+    {
+      "bytes": 1163,
+      "path": "gpu-accounting.json",
+      "sha256": "e6b7961fa82385eb7e1b047d6202ac5d6f05f79ecfebaa40b624fd7579269017"
+    },
+    {
+      "bytes": 555,
+      "path": "host-cleanup-receipt.json",
+      "sha256": "7c2880e3ba1c50117668a92847fa4c72100399dce0a64818a11ef58614e2a69d"
+    },
+    {
+      "bytes": 6202591,
+      "path": "normalized-events.jsonl",
+      "sha256": "51987778a667c561f5d2c82eaab4a06f49b7f78f390ce173c10c258c9e02e3ca"
+    },
+    {
+      "bytes": 464,
+      "path": "provider-budget.json",
+      "sha256": "a17eeae48e37762efb4fe2bf7fce861269adb9b0d801cba27ac8d9d2515f3a9e"
+    },
+    {
+      "bytes": 426,
+      "path": "runtime-cleanup.json",
+      "sha256": "9d65595b6c0be8ef364e37e78ca44668dca72cc33715fd3bdef4c4badbd130d8"
+    },
+    {
+      "bytes": 1021,
+      "path": "runtime-environment.json",
+      "sha256": "b81d6578089fc5201a8609562b81a088c59f06cc50ca3fc89304c8e4fbab418f"
+    },
+    {
+      "bytes": 5738862,
+      "path": "sira-output/EXP-0001-PILOT-V4-TASK-A-REACTIVE_0_2026-08-13-22-42-26.json",
+      "sha256": "ef46795e87488280736bfe74669ac6469c9fb71096424eb6e3d28bd5caec204c"
+    }
+  ],
+  "selected_raw_members_sha256": "d6cb230dac6114eafd310bffe441fa7db243b0c1eeca2793ef477d8c940bc907",
+  "semantic_projection": {
+    "answer_produced": true,
+    "browser_action_count": 13,
+    "condition": "SIRA-REACTIVE",
+    "evaluator_output_semantic_sha256": "1cee38753cfc1960db0e73430d93c47d61220e9f092c06d3010a1dcef61f0f75",
+    "evaluator_valid": true,
+    "model_revision": "gpt-4o-2024-11-20",
+    "provider_call_count": 52,
+    "raw_consistency": {
+      "browser_action_count_matched": true,
+      "cleanup_complete": true,
+      "model_revision_matched": true,
+      "one_session": true,
+      "provider_receipt_count_matched": true,
+      "provider_reconciled": true,
+      "python_version_matched": true
+    },
+    "score": 0.0,
+    "session_sha256": "ef46795e87488280736bfe74669ac6469c9fb71096424eb6e3d28bd5caec204c",
+    "session_sha256s": [
+      "ef46795e87488280736bfe74669ac6469c9fb71096424eb6e3d28bd5caec204c"
+    ],
+    "sira_commit": "93fb8d72de71f9a4a13419670adeb34d93cf7acd",
+    "task_completed": true,
+    "task_id": "7dcbbbdc7f1120cd",
+    "timing": {
+      "started_at": "2026-08-13T22:39:09.293373Z",
+      "stopped_at": "2026-08-13T22:42:27.665407Z",
+      "wall_seconds": 199.19638025899985
+    },
+    "usage": {
+      "browser_actions": 13,
+      "cached_input_tokens": 0,
+      "cost_usd": 0.3626425,
+      "input_tokens": 114181,
+      "model_call_attempts": 52,
+      "output_tokens": 7719,
+      "total_tokens": 121900
+    }
+  },
+  "semantic_projection_sha256": "7bdf21f24f6ce201952aec805e583a8485c6eca032684fd45277ac5886397976",
+  "source_archive_rehashed_after": true,
+  "source_archive_sha256": "63ed19b35bcb4cb62c3796a80a48004937340eb3826f9657a1006e251772255d",
+  "source_plan_id": "PLAN-EXP0001-PILOT-V4",
+  "source_public_disposition_rehashed_after": true,
+  "source_public_disposition_sha256": "ecc0e135695e16f68d52b7aa85b70d42b1f1e945f7dd119fb7c7ff0e42fc8231",
+  "source_raw_mutated": false,
+  "source_run_id": "RUN-T09-TASK-A-REACTIVE-0002"
+}

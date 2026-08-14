@@ -184,59 +184,84 @@
       }
     },
     "provider_lifecycle": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "campaign_clock_origin",
-        "campaign_provider_wall_seconds",
-        "normal_cleanup_reserve_seconds",
-        "provider_termination_cutoff_seconds",
-        "post_condition_evaluator_evidence_seconds",
-        "termination_dispatch_margin_seconds",
-        "max_lambda_instances",
-        "max_launch_count",
-        "persistent_filesystems",
-        "replacement_launch_rule",
-        "admission_rule",
-        "control_plane"
-      ],
-      "properties": {
-        "campaign_clock_origin": {
-          "const": "provider-launch-send-started-conservative"
-        },
-        "campaign_provider_wall_seconds": {"type": "integer", "minimum": 1},
-        "normal_cleanup_reserve_seconds": {"type": "integer", "minimum": 1},
-        "provider_termination_cutoff_seconds": {"type": "integer", "minimum": 1},
-        "post_condition_evaluator_evidence_seconds": {"const": 600},
-        "termination_dispatch_margin_seconds": {"const": 60},
-        "max_lambda_instances": {"const": 1},
-        "max_launch_count": {"enum": [1, 2]},
-        "persistent_filesystems": {"const": 0},
-        "replacement_launch_rule": {
+      "oneOf": [
+        {
           "type": "object",
           "additionalProperties": false,
           "required": [
-            "allowed_only_before_empirical_entry",
-            "prior_instance_terminal_and_absent_required",
-            "prior_host_empirical_attempts_required",
-            "prior_host_model_requests_required",
-            "prior_host_browser_actions_required",
-            "ownership_outcome_unknown_forbidden",
-            "cumulative_lambda_cap_required"
+            "campaign_clock_origin",
+            "campaign_provider_wall_seconds",
+            "normal_cleanup_reserve_seconds",
+            "provider_termination_cutoff_seconds",
+            "post_condition_evaluator_evidence_seconds",
+            "termination_dispatch_margin_seconds",
+            "max_lambda_instances",
+            "max_launch_count",
+            "persistent_filesystems",
+            "replacement_launch_rule",
+            "admission_rule",
+            "control_plane"
           ],
           "properties": {
-            "allowed_only_before_empirical_entry": {"const": true},
-            "prior_instance_terminal_and_absent_required": {"const": true},
-            "prior_host_empirical_attempts_required": {"const": 0},
-            "prior_host_model_requests_required": {"const": 0},
-            "prior_host_browser_actions_required": {"const": 0},
-            "ownership_outcome_unknown_forbidden": {"const": true},
-            "cumulative_lambda_cap_required": {"const": true}
+            "campaign_clock_origin": {
+              "const": "provider-launch-send-started-conservative"
+            },
+            "campaign_provider_wall_seconds": {"const": 14400},
+            "normal_cleanup_reserve_seconds": {"const": 900},
+            "provider_termination_cutoff_seconds": {"const": 13500},
+            "post_condition_evaluator_evidence_seconds": {"const": 600},
+            "termination_dispatch_margin_seconds": {"const": 60},
+            "max_lambda_instances": {"const": 1},
+            "max_launch_count": {"enum": [1, 2]},
+            "persistent_filesystems": {"const": 0},
+            "replacement_launch_rule": {"$ref": "#/$defs/replacement-launch-rule"},
+            "admission_rule": {"type": "string", "minLength": 8},
+            "control_plane": {"type": "string", "minLength": 8}
           }
         },
-        "admission_rule": {"type": "string", "minLength": 8},
-        "control_plane": {"type": "string", "minLength": 8}
-      }
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "cumulative_accounting_origin",
+            "preflight_clock_origin",
+            "preflight_wall_seconds",
+            "failed_preflight_termination_dispatch_seconds",
+            "empirical_clock_origin",
+            "empirical_campaign_wall_seconds",
+            "empirical_cleanup_reserve_seconds",
+            "empirical_termination_cutoff_seconds",
+            "maximum_successful_host_active_seconds",
+            "maximum_cumulative_active_seconds",
+            "max_lambda_instances",
+            "max_launch_count",
+            "persistent_filesystems",
+            "replacement_launch_rule",
+            "admission_rule",
+            "control_plane"
+          ],
+          "properties": {
+            "cumulative_accounting_origin": {"const": "actual-active-lambda-seconds"},
+            "preflight_clock_origin": {"const": "provider-launch-send-started"},
+            "preflight_wall_seconds": {"const": 3600},
+            "failed_preflight_termination_dispatch_seconds": {"const": 300},
+            "empirical_clock_origin": {
+              "const": "after-durable-frozen-run-manifest-publication"
+            },
+            "empirical_campaign_wall_seconds": {"const": 14400},
+            "empirical_cleanup_reserve_seconds": {"const": 900},
+            "empirical_termination_cutoff_seconds": {"const": 13500},
+            "maximum_successful_host_active_seconds": {"const": 18000},
+            "maximum_cumulative_active_seconds": {"const": 21600},
+            "max_lambda_instances": {"const": 1},
+            "max_launch_count": {"enum": [1, 2]},
+            "persistent_filesystems": {"const": 0},
+            "replacement_launch_rule": {"$ref": "#/$defs/replacement-launch-rule"},
+            "admission_rule": {"type": "string", "minLength": 8},
+            "control_plane": {"type": "string", "minLength": 8}
+          }
+        }
+      ]
     },
     "replacement_image_policy": {
       "type": "object",
@@ -259,7 +284,7 @@
           "pattern": "^sha256:[a-f0-9]{64}$"
         },
         "exact_historical_digest_equality_required": {"const": false},
-        "candidate_builds_normally": {"const": 1},
+        "candidate_builds_normally": {"enum": [0, 1]},
         "candidate_qualifications_normally": {"const": 1},
         "source_inputs": {"type": "string", "minLength": 8},
         "acceptance": {"type": "string", "minLength": 8},
@@ -371,6 +396,28 @@
     }
   },
   "$defs": {
+    "replacement-launch-rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "allowed_only_before_empirical_entry",
+        "prior_instance_terminal_and_absent_required",
+        "prior_host_empirical_attempts_required",
+        "prior_host_model_requests_required",
+        "prior_host_browser_actions_required",
+        "ownership_outcome_unknown_forbidden",
+        "cumulative_lambda_cap_required"
+      ],
+      "properties": {
+        "allowed_only_before_empirical_entry": {"const": true},
+        "prior_instance_terminal_and_absent_required": {"const": true},
+        "prior_host_empirical_attempts_required": {"const": 0},
+        "prior_host_model_requests_required": {"const": 0},
+        "prior_host_browser_actions_required": {"const": 0},
+        "ownership_outcome_unknown_forbidden": {"const": true},
+        "cumulative_lambda_cap_required": {"const": true}
+      }
+    },
     "condition-limit": {
       "type": "object",
       "additionalProperties": false,

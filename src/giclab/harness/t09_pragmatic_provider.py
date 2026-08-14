@@ -1,9 +1,10 @@
-"""Exact provider lifecycle for the authorized T09 Retry 3 campaign.
+"""Exact provider lifecycle for the authorized T09 Retry 4 campaign.
 
 This module is inert on import.  It reuses the provider request pattern retained by
 the successful T07 pragmatic run, but makes its previously implicit lifecycle
-contract explicit: one plan-derived campaign clock, at most two pre-empirical launch
-slots, one simultaneous owned instance, bounded read-only polls, exact-target
+contract explicit: separate cumulative-active, per-launch-preflight, and empirical
+campaign clocks; at most two pre-empirical launch slots; one simultaneous owned
+instance; bounded read-only polls; exact-target
 termination, and source-bound entry/closeout receipts.  It is deliberately a small
 linear lifecycle utility, not a general cloud platform or an independent watchdog.
 """
@@ -31,7 +32,7 @@ from typing import Final, Protocol, cast
 
 import yaml
 
-from giclab.harness.lambda_campaign_lifecycle import ObserverLifecycleLimits
+from giclab.harness.lambda_campaign_lifecycle import Retry4LifecycleLimits
 from giclab.harness.lambda_l2m_observer import (
     MAX_RESPONSE_BYTES_PER_GET,
     LambdaHttpsL2MObserverTransport,
@@ -40,10 +41,10 @@ from giclab.harness.lambda_l2m_observer import (
     observer_request,
 )
 
-PLAN_ID: Final = "PLAN-EXP0001-PILOT-V5"
-HOST_RUN_ID: Final = "RUN-T09-PILOT-HOST-0003"
+PLAN_ID: Final = "PLAN-EXP0001-PILOT-V6"
+HOST_RUN_ID: Final = "RUN-T09-PILOT-HOST-0004"
 AUTHORIZATION_SOURCE_SHA256: Final = (
-    "5731b3ccdad25f5d656272841d47f93418ae1535802602a9856c97552ac0b8b8"
+    "e3222d38c9b21091a51839122d42594d691577716bc87fd3e09296c6b766df51"
 )
 API_HOST: Final = "cloud.lambda.ai"
 API_PORT: Final = 443
@@ -51,13 +52,13 @@ INSTANCE_TYPE: Final = "gpu_1x_a10"
 REGION: Final = "us-east-1"
 IMAGE_ID: Final = "44fab622-b98a-49fe-ac6d-e4ce5531532f"
 SSH_KEY_NAME: Final = "fractal-lambda-codex"
-INSTANCE_NAME: Final = "giclab-t09-pilot-v5-0003"
+INSTANCE_NAME: Final = "giclab-t09-pilot-v6-0004"
 PRICE_CENTS_PER_HOUR: Final = 129
-PRIOR_T09_COST_USD: Final = 2.5308164556905757
-NEW_CAMPAIGN_LAMBDA_CAP_USD: Final = 5.16
+PRIOR_T09_COST_USD: Final = 4.04142013524027
+NEW_CAMPAIGN_LAMBDA_CAP_USD: Final = 8.0
 NEW_CAMPAIGN_OPENAI_CAP_USD: Final = 40.0
-NEW_CAMPAIGN_AGGREGATE_CAP_USD: Final = 45.16
-CUMULATIVE_T09_CAP_USD: Final = 48.0
+NEW_CAMPAIGN_AGGREGATE_CAP_USD: Final = 48.0
+CUMULATIVE_T09_CAP_USD: Final = 55.0
 SLOT1_PACKAGE_COMMIT: Final = "3640f061ea6c0f0f3d24bf2a346d4beda1a400cf"
 SLOT1_PLAN_SHA256: Final = "e7e214500348c8b876beb034df7b592c84f5ab79788ab6f310ef187fd797613c"
 SLOT1_CLOSEOUT_RECEIPT_SHA256: Final = (
@@ -110,7 +111,7 @@ SLOT2_TRANSITION_ALLOWED_PATHS: Final = frozenset(
         "tests/test_t09_sira_pilot.py",
     }
 )
-SOURCE_OBSERVER: Final = "t07-pragmatic-mutations-plus-l2m-read-only-observer-v1"
+SOURCE_OBSERVER: Final = "t09-retry4-pragmatic-mutations-plus-l2m-read-only-observer-v1"
 MAX_RESPONSE_BYTES: Final = 16_777_216
 MAX_REQUEST_BYTES: Final = 65_536
 MAX_ENTRY_POLLS: Final = 120
@@ -152,14 +153,14 @@ class ProviderOutcomeUnknown(T09ProviderError):
 
 @dataclass(frozen=True, slots=True)
 class CampaignLifecycle:
-    observer_limits: ObserverLifecycleLimits
+    retry4_limits: Retry4LifecycleLimits
     max_instances: int
     max_launches: int
     persistent_filesystems: int
 
     def __post_init__(self) -> None:
         if (
-            self.observer_limits != ObserverLifecycleLimits.t09_pragmatic_v5()
+            self.retry4_limits != Retry4LifecycleLimits()
             or self.max_instances != 1
             or self.max_launches != 2
             or self.persistent_filesystems != 0
@@ -168,15 +169,19 @@ class CampaignLifecycle:
 
     @property
     def wall_seconds(self) -> int:
-        return self.observer_limits.campaign_provider_wall_seconds
+        return self.retry4_limits.empirical_campaign_wall_seconds
+
+    @property
+    def preflight_wall_seconds(self) -> int:
+        return self.retry4_limits.preflight_wall_seconds
 
     @property
     def cleanup_reserve_seconds(self) -> int:
-        return self.observer_limits.cleanup_reserve_seconds
+        return self.retry4_limits.empirical_cleanup_reserve_seconds
 
     @property
     def termination_cutoff_seconds(self) -> int:
-        return self.observer_limits.normal_termination_cutoff_seconds
+        return self.retry4_limits.empirical_termination_cutoff_seconds
 
     def elapsed(self, *, started_at_epoch: float, now_epoch: float) -> float:
         if now_epoch < started_at_epoch:
@@ -689,15 +694,17 @@ def load_campaign_lifecycle(repository: Path) -> CampaignLifecycle:
     if profile.get("plan_id") != PLAN_ID:
         raise T09ProviderError("provider lifecycle loaded the wrong pilot plan")
     raw = _mapping(profile.get("provider_lifecycle"), label="provider lifecycle")
-    if raw.get("campaign_clock_origin") != "provider-launch-send-started-conservative" or set(
-        raw
-    ) != {
-        "campaign_clock_origin",
-        "campaign_provider_wall_seconds",
-        "normal_cleanup_reserve_seconds",
-        "provider_termination_cutoff_seconds",
-        "post_condition_evaluator_evidence_seconds",
-        "termination_dispatch_margin_seconds",
+    if set(raw) != {
+        "cumulative_accounting_origin",
+        "preflight_clock_origin",
+        "preflight_wall_seconds",
+        "failed_preflight_termination_dispatch_seconds",
+        "empirical_clock_origin",
+        "empirical_campaign_wall_seconds",
+        "empirical_cleanup_reserve_seconds",
+        "empirical_termination_cutoff_seconds",
+        "maximum_successful_host_active_seconds",
+        "maximum_cumulative_active_seconds",
         "max_lambda_instances",
         "max_launch_count",
         "persistent_filesystems",
@@ -707,8 +714,9 @@ def load_campaign_lifecycle(repository: Path) -> CampaignLifecycle:
     }:
         raise T09ProviderError("provider lifecycle plan surface drifted")
     if (
-        raw.get("post_condition_evaluator_evidence_seconds") != 600
-        or raw.get("termination_dispatch_margin_seconds") != 60
+        raw.get("cumulative_accounting_origin") != "actual-active-lambda-seconds"
+        or raw.get("preflight_clock_origin") != "provider-launch-send-started"
+        or raw.get("empirical_clock_origin") != "after-durable-frozen-run-manifest-publication"
         or raw.get("replacement_launch_rule")
         != {
             "allowed_only_before_empirical_entry": True,
@@ -720,20 +728,35 @@ def load_campaign_lifecycle(repository: Path) -> CampaignLifecycle:
             "cumulative_lambda_cap_required": True,
         }
     ):
-        raise T09ProviderError("provider evidence or termination handoff margin drifted")
-    return CampaignLifecycle(
-        observer_limits=ObserverLifecycleLimits(
-            campaign_provider_wall_seconds=_integer(
-                raw["campaign_provider_wall_seconds"], label="campaign wall"
-            ),
-            cleanup_reserve_seconds=_integer(
-                raw["normal_cleanup_reserve_seconds"], label="cleanup reserve"
-            ),
-            normal_termination_cutoff_seconds=_integer(
-                raw["provider_termination_cutoff_seconds"], label="termination cutoff"
-            ),
-            max_provider_cost_cents=516,
+        raise T09ProviderError("provider clock or replacement-launch contract drifted")
+    limits = Retry4LifecycleLimits(
+        preflight_wall_seconds=_integer(raw["preflight_wall_seconds"], label="preflight wall"),
+        failed_preflight_termination_dispatch_seconds=_integer(
+            raw["failed_preflight_termination_dispatch_seconds"],
+            label="failed-preflight dispatch",
         ),
+        empirical_campaign_wall_seconds=_integer(
+            raw["empirical_campaign_wall_seconds"], label="empirical wall"
+        ),
+        empirical_cleanup_reserve_seconds=_integer(
+            raw["empirical_cleanup_reserve_seconds"], label="cleanup reserve"
+        ),
+        empirical_termination_cutoff_seconds=_integer(
+            raw["empirical_termination_cutoff_seconds"], label="termination cutoff"
+        ),
+        maximum_successful_host_active_seconds=_integer(
+            raw["maximum_successful_host_active_seconds"], label="successful-host active cap"
+        ),
+        maximum_cumulative_active_seconds=_integer(
+            raw["maximum_cumulative_active_seconds"], label="cumulative active cap"
+        ),
+        maximum_provider_cost_cents=800,
+        maximum_launches=_integer(raw["max_launch_count"], label="launch cap"),
+        maximum_simultaneous_instances=_integer(raw["max_lambda_instances"], label="instance cap"),
+        persistent_filesystems=_integer(raw["persistent_filesystems"], label="filesystem cap"),
+    )
+    return CampaignLifecycle(
+        retry4_limits=limits,
         max_instances=_integer(raw["max_lambda_instances"], label="instance cap"),
         max_launches=_integer(raw["max_launch_count"], label="launch cap"),
         persistent_filesystems=_integer(raw["persistent_filesystems"], label="filesystem cap"),
@@ -796,7 +819,7 @@ def validate_authorization_ledger(
     required = {
         "schema_version": "0.1.0",
         "authorization_source_sha256": AUTHORIZATION_SOURCE_SHA256,
-        "authorization_reference": "AUTH-T09-PRAGMATIC-RETRY3-2026-08-13",
+        "authorization_reference": "AUTH-T09-PRAGMATIC-RETRY4-2026-08-14",
         "authorized": True,
         "single_use": True,
         "clean_package_commit": package_commit,
@@ -805,12 +828,12 @@ def validate_authorization_ledger(
         "max_lambda_instances": 1,
         "max_launch_count": 2,
         "persistent_filesystems": 0,
-        "lambda_cost_cap_usd": 5.16,
+        "lambda_cost_cap_usd": 8.0,
         "openai_cost_cap_usd": 40.0,
-        "aggregate_cost_cap_usd": 45.16,
-        "prior_t09_cost_usd": 2.5308164556905757,
-        "cumulative_t09_cost_cap_usd": 48.0,
-        "replacement_image_policy": "one-build-one-qualification-preentry-bound-v1",
+        "aggregate_cost_cap_usd": 48.0,
+        "prior_t09_cost_usd": 4.04142013524027,
+        "cumulative_t09_cost_cap_usd": 55.0,
+        "replacement_image_policy": "retained-exact-load-or-one-fallback-build-v1",
         "artifact_destination": ("/Volumes/Macintosh HD - Data/GIC-Lab/t09/sealed-artifacts"),
     }
     if value != required:
@@ -1700,7 +1723,7 @@ def _entry_projection(
         or prior_lambda_duration < 0
         or prior_lambda_cost < 0
         or (launch_slot == 1 and (prior_lambda_duration != 0 or prior_lambda_cost != 0))
-        or (launch_slot == 2 and campaign_started >= float(launch_started))
+        or campaign_started != float(launch_started)
     ):
         raise T09ProviderError("campaign launch chronology or cumulative binding drifted")
     eligibility_sha256 = campaign_binding.get("replacement_eligibility_sha256")
@@ -1733,6 +1756,7 @@ def _entry_projection(
         "plan_sha256": plan_sha256,
         "captured_at_epoch": float(captured),
         "lambda_started_at_epoch": campaign_started,
+        "provider_preflight_started_at_epoch": campaign_started,
         "owned_lambda_started_at_epoch": float(launch_started),
         "owned_instance_identity_sha256": instance_identity_sha256,
         "source_manifest_sha256": file_sha256(root / "source-manifest.json"),
@@ -1754,11 +1778,11 @@ def _entry_projection(
         "new_campaign_openai_cost_cap_usd": NEW_CAMPAIGN_OPENAI_CAP_USD,
         "new_campaign_lambda_cost_cap_usd": NEW_CAMPAIGN_LAMBDA_CAP_USD,
         "new_campaign_aggregate_cost_cap_usd": NEW_CAMPAIGN_AGGREGATE_CAP_USD,
-        "prior_retry3_lambda_duration_seconds": prior_lambda_duration,
-        "prior_retry3_lambda_cost_usd": prior_lambda_cost,
+        "prior_campaign_lambda_duration_seconds": prior_lambda_duration,
+        "prior_campaign_lambda_cost_usd": prior_lambda_cost,
         "prior_t09_cost_usd": PRIOR_T09_COST_USD,
         "cumulative_t09_cost_cap_usd": CUMULATIVE_T09_CAP_USD,
-        "billable_clock_source": "provider-launch-send-started-conservative",
+        "billable_clock_source": "actual-active-lambda-seconds",
         "provider_projection_retained_private": True,
         "raw_response_identity_retained": True,
         "raw_provider_payload_retained": False,
@@ -1895,7 +1919,12 @@ def _closeout_projection(
     package_commit: str,
     plan_sha256: str,
     lifecycle: CampaignLifecycle,
+    empirical_clock_manifest: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
+    if empirical_clock_manifest is None:
+        retained_clock = root / "empirical-clock-manifest.json"
+        if retained_clock.is_file():
+            empirical_clock_manifest = _load_json(retained_clock, maximum_bytes=1_048_576)
     manifest = validate_source_manifest(root)
     documents = _response_documents(root)
     owned_state = _load_json(root / "owned-state-binding.json", maximum_bytes=65_536)
@@ -1907,11 +1936,11 @@ def _closeout_projection(
         entry_receipt["owned_lambda_started_at_epoch"], label="owned Lambda start"
     )
     prior_lambda_duration = _number(
-        entry_receipt["prior_retry3_lambda_duration_seconds"],
-        label="prior Retry 3 Lambda duration",
+        entry_receipt["prior_campaign_lambda_duration_seconds"],
+        label="prior campaign Lambda duration",
     )
     prior_lambda_cost = _number(
-        entry_receipt["prior_retry3_lambda_cost_usd"], label="prior Retry 3 Lambda cost"
+        entry_receipt["prior_campaign_lambda_cost_usd"], label="prior campaign Lambda cost"
     )
     if owned_state.get("owned_instance_identity_sha256") != entry_receipt.get(
         "owned_instance_identity_sha256"
@@ -1985,8 +2014,26 @@ def _closeout_projection(
         terminal_at,
         zero_at,
     )
-    termination_elapsed = termination_started - started
-    terminal_elapsed = max(terminal_at, zero_at) - started
+    empirical_started: float | None = None
+    if empirical_clock_manifest is not None:
+        empirical_started = _number(
+            empirical_clock_manifest.get("campaign_started_at_epoch"),
+            label="empirical campaign start",
+        )
+        if (
+            empirical_clock_manifest.get("plan_id") != PLAN_ID
+            or empirical_clock_manifest.get("host_run_id") != HOST_RUN_ID
+            or empirical_clock_manifest.get("clean_package_commit") != package_commit
+            or empirical_clock_manifest.get("provider_entry_receipt_sha256")
+            != entry_receipt.get("receipt_sha256")
+            or empirical_clock_manifest.get("owned_instance_identity_sha256")
+            != owned_identity_sha256
+            or empirical_started <= started
+        ):
+            raise T09ProviderError("empirical clock manifest is not source-bound")
+    clock_origin = empirical_started if empirical_started is not None else started
+    termination_elapsed = termination_started - clock_origin
+    terminal_elapsed = max(terminal_at, zero_at) - clock_origin
     owned_lambda_duration = max(terminal_at, zero_at) - owned_started
     lambda_duration = prior_lambda_duration + owned_lambda_duration
     lambda_list_cost_usd = prior_lambda_cost + owned_lambda_duration * 1.29 / 3600.0
@@ -1997,10 +2044,34 @@ def _closeout_projection(
         or lambda_list_cost_usd > NEW_CAMPAIGN_LAMBDA_CAP_USD
         or PRIOR_T09_COST_USD + lambda_list_cost_usd > CUMULATIVE_T09_CAP_USD
     ):
-        raise T09ProviderError("Retry 3 Lambda duration or cumulative cost exceeded its cap")
-    if termination_elapsed > lifecycle.termination_cutoff_seconds:
+        raise T09ProviderError("Retry 4 Lambda duration or cumulative cost exceeded its cap")
+    preflight_failure_timing: dict[str, object] | None = None
+    if empirical_started is None and (root / "preflight-failure-timing.json").is_file():
+        preflight_failure_timing = _load_json(
+            root / "preflight-failure-timing.json", maximum_bytes=65_536
+        )
+        dispatch_deadline = _number(
+            preflight_failure_timing.get("termination_dispatch_deadline_epoch"),
+            label="preflight dispatch deadline",
+        )
+        if (
+            preflight_failure_timing.get("plan_id") != PLAN_ID
+            or preflight_failure_timing.get("host_run_id") != HOST_RUN_ID
+            or termination_started > dispatch_deadline
+        ):
+            campaign_exception = "failed-preflight-termination-dispatch-violated"
+        else:
+            campaign_exception = "none"
+    elif empirical_started is None and termination_elapsed > (
+        lifecycle.preflight_wall_seconds
+        + lifecycle.retry4_limits.failed_preflight_termination_dispatch_seconds
+    ):
+        campaign_exception = "failed-preflight-termination-dispatch-violated"
+    elif (
+        empirical_started is not None and termination_elapsed > lifecycle.termination_cutoff_seconds
+    ):
         campaign_exception = "termination-cutoff-violated"
-    elif terminal_elapsed > lifecycle.wall_seconds:
+    elif empirical_started is not None and terminal_elapsed > lifecycle.wall_seconds:
         campaign_exception = "best-effort-termination-provider-control-plane-delay"
     else:
         campaign_exception = "none"
@@ -2013,6 +2084,7 @@ def _closeout_projection(
         "plan_sha256": plan_sha256,
         "captured_at_epoch": captured,
         "lambda_started_at_epoch": started,
+        "empirical_campaign_started_at_epoch": empirical_started,
         "owned_lambda_started_at_epoch": owned_started,
         "termination_started_at_epoch": termination_started,
         "terminal_observed_at_epoch": terminal_at,
@@ -2036,8 +2108,16 @@ def _closeout_projection(
         "structural_redaction_passed": True,
         "campaign_wall_exception": campaign_exception,
         "campaign_elapsed_seconds": terminal_elapsed,
+        "provider_preflight_duration_seconds": (
+            empirical_started - started if empirical_started is not None else None
+        ),
+        "preflight_failure_timing_sha256": (
+            file_sha256(root / "preflight-failure-timing.json")
+            if preflight_failure_timing is not None
+            else None
+        ),
         "owned_lambda_duration_seconds": owned_lambda_duration,
-        "prior_retry3_lambda_duration_seconds": prior_lambda_duration,
+        "prior_campaign_lambda_duration_seconds": prior_lambda_duration,
         "lambda_duration_seconds": lambda_duration,
         "lambda_list_cost_usd": lambda_list_cost_usd,
         "new_campaign_lambda_cost_cap_usd": NEW_CAMPAIGN_LAMBDA_CAP_USD,
@@ -2055,6 +2135,7 @@ def create_closeout_receipt(
     package_commit: str,
     plan_sha256: str,
     lifecycle: CampaignLifecycle,
+    empirical_clock_manifest: Mapping[str, object] | None = None,
 ) -> Path:
     entry = _load_json(entry_receipt_path, maximum_bytes=65_536)
     entry["receipt_sha256"] = file_sha256(entry_receipt_path)
@@ -2065,6 +2146,7 @@ def create_closeout_receipt(
         package_commit=package_commit,
         plan_sha256=plan_sha256,
         lifecycle=lifecycle,
+        empirical_clock_manifest=empirical_clock_manifest,
     )
     path = root / "closeout-receipt.json"
     write_exclusive(path, receipt)
@@ -2089,6 +2171,11 @@ def validate_closeout_receipt(
         plan_sha256=plan_sha256,
     )
     entry["receipt_sha256"] = file_sha256(entry_receipt_path)
+    empirical_clock_manifest = (
+        _load_json(source_root / "empirical-clock-manifest.json", maximum_bytes=1_048_576)
+        if (source_root / "empirical-clock-manifest.json").is_file()
+        else None
+    )
     expected = _closeout_projection(
         source_root,
         entry_receipt=entry,
@@ -2096,11 +2183,15 @@ def validate_closeout_receipt(
         package_commit=package_commit,
         plan_sha256=plan_sha256,
         lifecycle=lifecycle,
+        empirical_clock_manifest=empirical_clock_manifest,
     )
     if observed != expected:
         raise T09ProviderError("provider closeout receipt is not derived from its source bundle")
-    if observed.get("campaign_wall_exception") == "termination-cutoff-violated":
-        raise T09ProviderError("provider termination began after the 13,500-second cutoff")
+    if observed.get("campaign_wall_exception") in {
+        "termination-cutoff-violated",
+        "failed-preflight-termination-dispatch-violated",
+    }:
+        raise T09ProviderError("provider termination missed its source-bound cutoff")
     if observed.get("security_restored") is not True:
         raise T09ProviderError("provider security state was not restored")
     return observed
@@ -2716,36 +2807,31 @@ def validate_slot2_launch_headroom(
     lifecycle: CampaignLifecycle,
     now: float,
 ) -> dict[str, float]:
-    """Enforce the inherited campaign wall and active-cost gate at slot-2 send."""
+    """Enforce cumulative active-time/cost headroom at the slot-2 send boundary."""
 
-    campaign_started = _number(
-        eligibility.get("campaign_started_at_epoch"), label="slot-2 campaign start"
-    )
     prior_duration = _number(
         eligibility.get("prior_lambda_duration_seconds"), label="slot-1 Lambda duration"
     )
     prior_cost = _number(eligibility.get("prior_lambda_cost_usd"), label="slot-1 Lambda cost")
-    campaign_elapsed = now - campaign_started
-    minimum_projected_cost = prior_cost + (
-        SLOT2_MINIMUM_LAUNCH_REMAINING_SECONDS * PRICE_CENTS_PER_HOUR / 100 / 3600
+    limits = lifecycle.retry4_limits
+    projected_duration = prior_duration + limits.maximum_successful_host_active_seconds
+    projected_cost = prior_cost + (
+        limits.maximum_successful_host_active_seconds * PRICE_CENTS_PER_HOUR / 100 / 3600
     )
     if (
-        campaign_elapsed < 0
-        or campaign_elapsed + SLOT2_MINIMUM_LAUNCH_REMAINING_SECONDS > lifecycle.wall_seconds
-        or campaign_elapsed >= lifecycle.termination_cutoff_seconds
+        now <= 0
         or prior_duration < 0
-        or minimum_projected_cost > NEW_CAMPAIGN_LAMBDA_CAP_USD
-        or PRIOR_T09_COST_USD + minimum_projected_cost > CUMULATIVE_T09_CAP_USD
+        or prior_duration > limits.preflight_wall_seconds
+        or projected_duration > limits.maximum_cumulative_active_seconds
+        or projected_cost > NEW_CAMPAIGN_LAMBDA_CAP_USD
+        or PRIOR_T09_COST_USD + projected_cost > CUMULATIVE_T09_CAP_USD
     ):
-        raise T09ProviderError(
-            "slot-2 launch lacks the inherited campaign wall, cleanup, or cost headroom"
-        )
+        raise T09ProviderError("slot-2 launch lacks cumulative active-time or cost headroom")
     return {
-        "campaign_elapsed_seconds": campaign_elapsed,
-        "campaign_remaining_seconds": lifecycle.wall_seconds - campaign_elapsed,
         "prior_lambda_duration_seconds": prior_duration,
         "prior_lambda_cost_usd": prior_cost,
-        "minimum_projected_lambda_cost_usd": minimum_projected_cost,
+        "projected_cumulative_active_seconds": projected_duration,
+        "projected_cumulative_lambda_cost_usd": projected_cost,
     }
 
 
@@ -2900,6 +2986,9 @@ def _validate_replacement_launch_eligibility(
         "host_preempirical_source_manifest_sha256": file_sha256(
             retained_preempirical_source / "source-manifest.json"
         ),
+        "source_manifest_sha256": file_sha256(
+            retained_preempirical_source / "source-manifest.json"
+        ),
         "campaign_started_at_epoch": entry["lambda_started_at_epoch"],
         "prior_lambda_duration_seconds": closeout["lambda_duration_seconds"],
         "prior_lambda_cost_usd": closeout["lambda_list_cost_usd"],
@@ -2907,6 +2996,9 @@ def _validate_replacement_launch_eligibility(
         "model_task_requests": 0,
         "task_browser_actions": 0,
         "replacement_image_build_count": 0,
+        "replacement_image_import_count": host_disposition["replacement_image_import_count"],
+        "replacement_image_id": host_disposition["replacement_image_id"],
+        "replacement_image_archive_sha256": host_disposition["replacement_image_archive_sha256"],
         "terminal_or_absent": True,
         "zero_t09_instances": True,
         "security_restored": True,
@@ -2967,8 +3059,33 @@ def _validate_host_preempirical_disposition(
     value = _load_json(receipt, maximum_bytes=65_536)
     state_path = source / "pilot-state.json"
     cleanup_path = source / "host-cleanup.json"
+    failure_path = source / "preflight-failure.json"
     state = _load_json(state_path, maximum_bytes=65_536)
     cleanup = _load_json(cleanup_path, maximum_bytes=65_536)
+    failure = _load_json(failure_path, maximum_bytes=65_536)
+    failed_at = _number(failure.get("failed_at_epoch"), label="preflight failure time")
+    dispatch_deadline = _number(
+        failure.get("termination_dispatch_deadline_epoch"),
+        label="preflight termination dispatch deadline",
+    )
+    image_import_count = value.get("replacement_image_import_count")
+    replacement_image_id = value.get("replacement_image_id")
+    replacement_archive_sha256 = value.get("replacement_image_archive_sha256")
+    if (
+        (
+            image_import_count == 0
+            and (replacement_image_id is not None or replacement_archive_sha256 is not None)
+        )
+        or (
+            image_import_count == 1
+            and (
+                replacement_image_id != SLOT1_REPLACEMENT_IMAGE_ID
+                or replacement_archive_sha256 != SLOT1_IMAGE_ARCHIVE_SHA256
+            )
+        )
+        or image_import_count not in {0, 1}
+    ):
+        raise T09ProviderError("pre-empirical image materialization evidence drifted")
     required = {
         "schema_version": "0.1.0",
         "plan_id": PLAN_ID,
@@ -2977,10 +3094,16 @@ def _validate_host_preempirical_disposition(
         "provider_entry_receipt_sha256": entry_receipt_sha256,
         "pilot_state_sha256": file_sha256(state_path),
         "host_cleanup_sha256": file_sha256(cleanup_path),
+        "preflight_failure_sha256": file_sha256(failure_path),
+        "preflight_failed_at_epoch": failed_at,
+        "termination_dispatch_deadline_epoch": dispatch_deadline,
         "empirical_attempts_entered": 0,
         "model_task_requests": 0,
         "task_browser_actions": 0,
         "replacement_image_build_count": 0,
+        "replacement_image_import_count": image_import_count,
+        "replacement_image_id": replacement_image_id,
+        "replacement_image_archive_sha256": replacement_archive_sha256,
         "credentials_removed": True,
         "owned_containers_absent": True,
         "replacement_launch_evidence_only": True,
@@ -2993,6 +3116,13 @@ def _validate_host_preempirical_disposition(
         or cleanup.get("owned_container_residue") != []
         or cleanup.get("global_secret_scan_passed") is not True
         or cleanup.get("remote_secret_removed") is not True
+        or failure.get("plan_id") != PLAN_ID
+        or failure.get("host_run_id") != HOST_RUN_ID
+        or failure.get("package_commit") != package_commit
+        or failure.get("empirical_attempts_entered") != 0
+        or failure.get("termination_dispatch_required") is not True
+        or dispatch_deadline
+        != failed_at + Retry4LifecycleLimits().failed_preflight_termination_dispatch_seconds
     ):
         raise T09ProviderError("host pre-empirical disposition is not source-grounded zero-use")
     return value
@@ -3181,7 +3311,7 @@ def launch_campaign(
 ) -> Path:
     repository = repository.resolve(strict=True)
     if launch_slot not in (1, 2):
-        raise T09ProviderError("launch slot is outside the authorized Retry 3 bound")
+        raise T09ProviderError("launch slot is outside the authorized Retry 4 bound")
     replacement_eligibility: dict[str, object] | None = None
     if launch_slot == 1:
         if prior_private_root is not None or slot1_image_archive is not None:
@@ -3474,11 +3604,10 @@ def launch_campaign(
                     "host_run_id": HOST_RUN_ID,
                     "package_commit": package_commit,
                     "launch_slot": launch_slot,
-                    "campaign_started_at_epoch": (
-                        replacement_eligibility["campaign_started_at_epoch"]
-                        if replacement_eligibility is not None
-                        else owned_started
-                    ),
+                    # Retry 4 gives every launch its own infrastructure-preflight
+                    # origin.  Prior active time is carried separately below and
+                    # offline gaps never consume a billable or empirical clock.
+                    "campaign_started_at_epoch": owned_started,
                     "owned_lambda_started_at_epoch": owned_started,
                     "prior_lambda_duration_seconds": (
                         replacement_eligibility["prior_lambda_duration_seconds"]
@@ -3549,6 +3678,7 @@ def closeout_campaign(
     transport: ProviderTransport,
     preempirical_receipt: Path | None = None,
     preempirical_source_root: Path | None = None,
+    empirical_clock_manifest: Path | None = None,
     clock: Callable[[], float] = time.time,
     sleeper: Callable[[float], None] = time.sleep,
 ) -> Path:
@@ -3564,6 +3694,7 @@ def closeout_campaign(
         raise T09ProviderError("pre-empirical replacement evidence is incomplete")
     replacement_evidence_validated = False
     retained_preempirical_source: Path | None = None
+    validated_host_disposition: dict[str, object] | None = None
     if preempirical_receipt is not None and preempirical_source_root is not None:
         if preempirical_receipt.name != "preempirical-disposition.json":
             raise T09ProviderError("pre-empirical receipt identity is unexpected")
@@ -3657,6 +3788,36 @@ def closeout_campaign(
     started = _number(entry_for_clock["lambda_started_at_epoch"], label="campaign start")
     closeout_root = private_root / "closeout-source"
     closeout_root.mkdir(mode=0o700, exist_ok=False)
+    if validated_host_disposition is not None:
+        write_exclusive(
+            closeout_root / "preflight-failure-timing.json",
+            {
+                "schema_version": "0.1.0",
+                "plan_id": PLAN_ID,
+                "host_run_id": HOST_RUN_ID,
+                "preflight_failure_sha256": validated_host_disposition["preflight_failure_sha256"],
+                "failed_at_epoch": validated_host_disposition["preflight_failed_at_epoch"],
+                "termination_dispatch_deadline_epoch": validated_host_disposition[
+                    "termination_dispatch_deadline_epoch"
+                ],
+            },
+        )
+    if empirical_clock_manifest is not None:
+        source_manifest = empirical_clock_manifest.resolve(strict=True)
+        metadata = source_manifest.stat(follow_symlinks=False)
+        if (
+            source_manifest.is_symlink()
+            or not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_nlink != 1
+            or metadata.st_size > 1_048_576
+        ):
+            raise T09ProviderError("empirical clock manifest metadata is unsafe")
+        destination = closeout_root / "empirical-clock-manifest.json"
+        with source_manifest.open("rb") as source, destination.open("xb") as target:
+            shutil.copyfileobj(source, target, 1_048_576)
+            target.flush()
+            os.fsync(target.fileno())
+        destination.chmod(0o600)
     write_exclusive(
         closeout_root / "owned-state-binding.json",
         {
@@ -3731,6 +3892,14 @@ def closeout_campaign(
             repository / "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml"
         )
         entry_path = private_root / "entry-source/entry-receipt.json"
+        empirical_clock_document = (
+            _load_json(
+                closeout_root / "empirical-clock-manifest.json",
+                maximum_bytes=1_048_576,
+            )
+            if (closeout_root / "empirical-clock-manifest.json").is_file()
+            else None
+        )
         receipt = create_closeout_receipt(
             closeout_root,
             entry_receipt_path=entry_path,
@@ -3738,6 +3907,7 @@ def closeout_campaign(
             package_commit=package_commit,
             plan_sha256=file_sha256(plan_path),
             lifecycle=lifecycle,
+            empirical_clock_manifest=empirical_clock_document,
         )
         entry_document = _load_json(entry_path, maximum_bytes=65_536)
         if replacement_evidence_validated:
@@ -3764,6 +3934,9 @@ def closeout_campaign(
                 "host_preempirical_source_manifest_sha256": file_sha256(
                     retained_preempirical_source / "source-manifest.json"
                 ),
+                "source_manifest_sha256": file_sha256(
+                    retained_preempirical_source / "source-manifest.json"
+                ),
                 "campaign_started_at_epoch": entry_document["lambda_started_at_epoch"],
                 "prior_lambda_duration_seconds": closeout_document["lambda_duration_seconds"],
                 "prior_lambda_cost_usd": closeout_document["lambda_list_cost_usd"],
@@ -3771,6 +3944,13 @@ def closeout_campaign(
                 "model_task_requests": 0,
                 "task_browser_actions": 0,
                 "replacement_image_build_count": 0,
+                "replacement_image_import_count": retained_host_disposition[
+                    "replacement_image_import_count"
+                ],
+                "replacement_image_id": retained_host_disposition["replacement_image_id"],
+                "replacement_image_archive_sha256": retained_host_disposition[
+                    "replacement_image_archive_sha256"
+                ],
                 "terminal_or_absent": True,
                 "zero_t09_instances": True,
                 "security_restored": True,
@@ -3827,6 +4007,7 @@ def parser() -> argparse.ArgumentParser:
     closeout = operations.add_parser("closeout")
     closeout.add_argument("--preempirical-receipt", type=Path)
     closeout.add_argument("--preempirical-source-root", type=Path)
+    closeout.add_argument("--empirical-clock-manifest", type=Path)
     eligibility = operations.add_parser("derive-replacement-eligibility")
     eligibility.add_argument("--prior-private-root", type=Path, required=True)
     eligibility.add_argument("--slot1-failure-archive", type=Path, required=True)
@@ -3862,6 +4043,7 @@ def main() -> int:
             transport=transport,
             preempirical_receipt=args.preempirical_receipt,
             preempirical_source_root=args.preempirical_source_root,
+            empirical_clock_manifest=args.empirical_clock_manifest,
         )
         return 0
     if args.operation == "derive-replacement-eligibility":

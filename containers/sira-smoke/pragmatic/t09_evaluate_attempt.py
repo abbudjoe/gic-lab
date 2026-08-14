@@ -609,7 +609,7 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
         if (
             local_qualification.get("schema_version") != "0.1.0"
             or local_qualification.get("qualification_id")
-            != "QUAL-T09-PILOT-V5-LOCAL-FINALIZER-0001"
+            != "QUAL-T09-PILOT-V6-LOCAL-FINALIZER-0001"
             or local_qualification.get("package_commit") != args.package_commit
             or local_qualification.get("execution_contract_sha256") != contract.sha256
             or any(

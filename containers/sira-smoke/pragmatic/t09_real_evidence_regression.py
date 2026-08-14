@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Re-run the Retry 3 finalizer semantic primitive on the sealed V4 raw fixture.
+"""Re-run the current finalizer semantic primitive on the sealed V4 raw fixture.
 
 The fixed archive is read-only input.  Only an allowlisted raw subset is extracted
 into a temporary private directory; accepted V4 derived output is read solely as the
@@ -93,6 +93,8 @@ def _parser() -> argparse.ArgumentParser:
         choices=(
             "T09-PRAGMATIC-RETRY3-REAL-EVIDENCE-REGRESSION-0001",
             "T09-PRAGMATIC-RETRY3-QUALIFIED-IMAGE-REGRESSION-0001",
+            "T09-PRAGMATIC-RETRY4-REAL-EVIDENCE-REGRESSION-0001",
+            "T09-PRAGMATIC-RETRY4-QUALIFIED-IMAGE-REGRESSION-0001",
         ),
         required=True,
     )
@@ -488,6 +490,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             "source_archive_rehashed_after": True,
             "source_public_disposition_rehashed_after": True,
             "prior_attempt_excluded_from_v5_campaign": True,
+            "prior_attempt_excluded_from_v6_campaign": True,
             "private_source_path_retained": False,
         }
     _write_exclusive(args.output.resolve(strict=False), receipt)

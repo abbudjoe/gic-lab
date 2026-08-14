@@ -34,20 +34,11 @@ from typing import IO, Any, BinaryIO, Final, cast
 
 from jsonschema import Draft202012Validator, FormatChecker
 
+from giclab.harness.lambda_campaign_lifecycle import Retry4LifecycleLimits
 from giclab.harness.sira_gate_a import ProviderBudgetUsage
 from giclab.harness.t09_pragmatic_provider import (
-    SLOT1_CLOSEOUT_RECEIPT_SHA256,
-    SLOT1_IMAGE_ARCHIVE_BYTES,
-    SLOT1_IMAGE_ARCHIVE_SHA256,
-    SLOT1_PACKAGE_COMMIT,
-    SLOT1_QUALIFICATION_ID,
-    SLOT1_REPLACEMENT_IMAGE_ID,
-    SLOT1_ZERO_USE_ARCHIVE_BYTES,
-    SLOT1_ZERO_USE_ARCHIVE_SHA256,
-    SLOT2_QUALIFICATION_ID,
     T09ProviderError,
     load_campaign_lifecycle,
-    validate_built_image_replacement_eligibility,
     validate_entry_receipt_source_bound,
 )
 from giclab.harness.t09_pragmatic_provider import (
@@ -72,14 +63,14 @@ from giclab.harness.t09_sira_pilot import (
     transition_zero_usage_preflight_state,
 )
 
-PLAN_ID: Final = "PLAN-EXP0001-PILOT-V5"
-HOST_RUN_ID: Final = "RUN-T09-PILOT-HOST-0003"
-ARCHIVE_ID: Final = "ARCHIVE-EXP0001-PILOT-V5-0003"
-STAGE_ID: Final = "STAGE-EXP0001-PILOT-V5-0003"
-QUALIFICATION_ID: Final = SLOT2_QUALIFICATION_ID
-FROZEN_RUN_MANIFEST_ID: Final = "RUN-MANIFEST-EXP0001-PILOT-V5-0003"
+PLAN_ID: Final = "PLAN-EXP0001-PILOT-V6"
+HOST_RUN_ID: Final = "RUN-T09-PILOT-HOST-0004"
+ARCHIVE_ID: Final = "ARCHIVE-EXP0001-PILOT-V6-0004"
+STAGE_ID: Final = "STAGE-EXP0001-PILOT-V6-0004"
+QUALIFICATION_ID: Final = "QUAL-T09-PILOT-V6-IMAGE-0001"
+FROZEN_RUN_MANIFEST_ID: Final = "RUN-MANIFEST-EXP0001-PILOT-V6-0004"
 AUTHORIZATION_SOURCE_SHA256: Final = (
-    "5731b3ccdad25f5d656272841d47f93418ae1535802602a9856c97552ac0b8b8"
+    "e3222d38c9b21091a51839122d42594d691577716bc87fd3e09296c6b766df51"
 )
 MODEL: Final = "gpt-4o-2024-11-20"
 SERVICE_TIER: Final = "default"
@@ -89,7 +80,12 @@ HISTORICAL_IMAGE_ID: Final = (
 T07_EXECUTION_COMMIT: Final = "5698f04dfd08bc85a66d2355b0a4bd7d3ce24a23"
 SIRA_COMMIT: Final = "93fb8d72de71f9a4a13419670adeb34d93cf7acd"
 SIRA_TREE: Final = "6a6d9068b94d7632d3533a3d6f013d4de6ff76e8"
-REPLACEMENT_IMAGE_TAG: Final = f"giclab/t09-pilot-v5:{SIRA_COMMIT[:12]}-0002"
+REPLACEMENT_IMAGE_TAG: Final = f"giclab/t09-pilot-v6:{SIRA_COMMIT[:12]}-0001"
+RETAINED_IMAGE_ARCHIVE_BYTES: Final = 1_207_128_576
+RETAINED_IMAGE_ARCHIVE_SHA256: Final = (
+    "623e717c2182eca9cee2f471b7ecd9a57bead2f5263dee64aa5cd954eae5ddb0"
+)
+RETAINED_IMAGE_ID: Final = "sha256:abe8ed38f5c5b5a0a63fa726a74034dc5c192a12c0fccfe1319f97c27ceaf0a3"
 # Historical Retry 2 transition helpers remain importable for archived-receipt
 # verification only.  No Retry 3 parser route invokes them.
 CONTEXT_FAILURE_QUALIFICATION_ID: Final = "QUAL-T09-PILOT-V4-IMAGE-0002"
@@ -122,13 +118,13 @@ PACKAGE_TRANSITION_ALLOWED_PATHS: Final = frozenset(
         "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
         "T09_PILOT_RUNTIME_IDENTITY.json",
         "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/"
-        "pilot-v5-task-0000-reactive.yaml",
+        "pilot-v6-task-0000-reactive.yaml",
         "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/"
-        "pilot-v5-task-0000-simulative.yaml",
+        "pilot-v6-task-0000-simulative.yaml",
         "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/"
-        "pilot-v5-task-0001-reactive.yaml",
+        "pilot-v6-task-0001-reactive.yaml",
         "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/"
-        "pilot-v5-task-0001-simulative.yaml",
+        "pilot-v6-task-0001-simulative.yaml",
         "schemas/t09-sira-pilot-evidence.schema.json",
         "src/giclab/harness/t09_sira_pilot.py",
         "tests/test_t09_sira_pilot.py",
@@ -149,12 +145,12 @@ EVALUATOR_DIRECT_URL_RECORD: Final = (
     "en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl"
 )
 RUN_IDS: Final = (
-    "RUN-T09-TASK-A-REACTIVE-0003",
-    "RUN-T09-TASK-A-SIMULATIVE-0003",
-    "RUN-T09-TASK-B-SIMULATIVE-0003",
-    "RUN-T09-TASK-B-REACTIVE-0003",
+    "RUN-T09-TASK-A-REACTIVE-0004",
+    "RUN-T09-TASK-A-SIMULATIVE-0004",
+    "RUN-T09-TASK-B-SIMULATIVE-0004",
+    "RUN-T09-TASK-B-REACTIVE-0004",
 )
-CONTAINER_PREFIX: Final = "giclab-t09-pilot-v5-"
+CONTAINER_PREFIX: Final = "giclab-t09-pilot-v6-"
 EXPECTED_PACKAGE_MANIFEST_SHA256: Final = (
     "4ff2603fa5e0f7033ba773decdcb86abf648dcce22e469d26bc48214e390e104"
 )
@@ -172,8 +168,11 @@ MAX_PILOT_DISK_BYTES: Final = 2_147_483_648
 MAX_CONDITION_WALL_SECONDS: Final = 3_600
 MAX_PAIR_WALL_SECONDS: Final = 7_200
 MAX_TOTAL_WALL_SECONDS: Final = 14_400
-MAX_LAMBDA_DURATION_SECONDS: Final = 14_400
-MAX_LAMBDA_COST_USD: Final = 5.16
+MAX_PREFLIGHT_WALL_SECONDS: Final = 3_600
+FAILED_PREFLIGHT_TERMINATION_DISPATCH_SECONDS: Final = 300
+MAX_SUCCESSFUL_HOST_ACTIVE_SECONDS: Final = 18_000
+MAX_LAMBDA_DURATION_SECONDS: Final = 21_600
+MAX_LAMBDA_COST_USD: Final = 8.00
 LAMBDA_HOURLY_PRICE_USD: Final = 1.29
 FINALIZER_INVOCATION_TIMEOUT_SECONDS: Final = 600
 ATTEMPT_EVIDENCE_EXPORT_RESERVE_SECONDS: Final = 600
@@ -227,7 +226,7 @@ FINALIZER_PROJECTION_RELATIVE_PATH: Final = (
 LOCAL_FINALIZER_QUALIFICATION_RELATIVE_PATH: Final = (
     "containers/sira-smoke/pragmatic/t09_local_finalizer_qualification.py"
 )
-IMAGE_ARCHIVE_PATH: Final = Path("/home/ubuntu/t09-pilot-v5-replacement-image-0001.tar")
+IMAGE_ARCHIVE_PATH: Final = Path("/home/ubuntu/t09-pilot-v6-replacement-image-0001.tar")
 PRIVATE_REGRESSION_ARCHIVE_PATH: Final = Path(
     "/tmp/giclab-t09-private-v4-task-a-reactive-0002.tar.gz"
 )
@@ -254,28 +253,28 @@ PREENTRY_RESUME_ALLOWED_PATHS: Final = frozenset(
         "T09_PILOT_RUNTIME_IDENTITY.json",
         "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml",
         "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/"
-        "pilot-v5-task-0000-reactive.yaml",
+        "pilot-v6-task-0000-reactive.yaml",
         "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/"
-        "pilot-v5-task-0000-simulative.yaml",
+        "pilot-v6-task-0000-simulative.yaml",
         "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/"
-        "pilot-v5-task-0001-reactive.yaml",
+        "pilot-v6-task-0001-reactive.yaml",
         "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/"
-        "pilot-v5-task-0001-simulative.yaml",
+        "pilot-v6-task-0001-simulative.yaml",
         "src/giclab/harness/t09_sira_pilot.py",
         "tests/test_t09_retry3.py",
         "tests/test_t09_sira_pilot.py",
     }
 )
 ATTEMPT_EXPORT_REQUIRED_CONTROL_PATHS: Final = (
-    "pilot-v5/provider-entry.json",
-    "pilot-v5/frozen-run-manifest.json",
-    "pilot-v5/postfreeze-validation.json",
-    "pilot-v5/model-metadata-credential-scan.json",
-    "pilot-v5/final-image-file-hashes/receipt.json",
-    "pilot-v5/qualified-real-evidence-regression/receipt.json",
-    "pilot-v5/local-finalizer-qualification.json",
-    "pilot-v5/replacement-image-qualification/build-context-exclusions.json",
-    "pilot-v5/pilot-state.json",
+    "pilot-v6/provider-entry.json",
+    "pilot-v6/frozen-run-manifest.json",
+    "pilot-v6/postfreeze-validation.json",
+    "pilot-v6/model-metadata-credential-scan.json",
+    "pilot-v6/final-image-file-hashes/receipt.json",
+    "pilot-v6/qualified-real-evidence-regression/receipt.json",
+    "pilot-v6/local-finalizer-qualification.json",
+    "pilot-v6/replacement-image-qualification/build-context-exclusions.json",
+    "pilot-v6/pilot-state.json",
 )
 
 
@@ -313,6 +312,163 @@ def file_sha256(path: Path) -> str:
         while chunk := handle.read(1_048_576):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _open_parent_directory_no_follow(path: Path) -> tuple[int, str]:
+    """Open every parent component without traversing a symlink."""
+
+    if not path.is_absolute() or path.name in {"", ".", ".."}:
+        raise T09HostError("archive staging paths must be absolute file paths")
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_CLOEXEC", 0)
+    descriptor = os.open("/", flags)
+    try:
+        for component in path.parts[1:-1]:
+            if component in {"", ".", ".."}:
+                raise T09HostError("archive staging path contains an unsafe component")
+            next_descriptor = os.open(
+                component,
+                flags | getattr(os, "O_NOFOLLOW", 0),
+                dir_fd=descriptor,
+            )
+            os.close(descriptor)
+            descriptor = next_descriptor
+        return descriptor, path.name
+    except BaseException:
+        os.close(descriptor)
+        raise
+
+
+def _sha256_descriptor(descriptor: int) -> str:
+    os.lseek(descriptor, 0, os.SEEK_SET)
+    digest = hashlib.sha256()
+    while chunk := os.read(descriptor, 1_048_576):
+        digest.update(chunk)
+    os.lseek(descriptor, 0, os.SEEK_SET)
+    return digest.hexdigest()
+
+
+def _copy_descriptor_exact(source: int, destination: int) -> int:
+    copied = 0
+    os.lseek(source, 0, os.SEEK_SET)
+    while chunk := os.read(source, 1_048_576):
+        offset = 0
+        while offset < len(chunk):
+            written = os.write(destination, chunk[offset:])
+            if written <= 0:
+                raise T09HostError("archive staging copy made no progress")
+            offset += written
+            copied += written
+    return copied
+
+
+def stage_verified_archive(
+    source_path: Path,
+    canonical_target_path: Path,
+    expected_size: int,
+    expected_sha256: str,
+) -> dict[str, object]:
+    """Stage one private archive by content, never by its operator pathname."""
+
+    if (
+        type(expected_size) is not int
+        or expected_size <= 0
+        or re.fullmatch(r"[a-f0-9]{64}", expected_sha256) is None
+    ):
+        raise T09HostError("archive staging expectation is invalid")
+    source_parent, source_name = _open_parent_directory_no_follow(source_path)
+    source_descriptor = -1
+    target_parent = -1
+    target_descriptor = -1
+    target_name = ""
+    target_created = False
+    try:
+        source_descriptor = os.open(
+            source_name,
+            os.O_RDONLY
+            | getattr(os, "O_NONBLOCK", 0)
+            | getattr(os, "O_NOFOLLOW", 0)
+            | getattr(os, "O_CLOEXEC", 0),
+            dir_fd=source_parent,
+        )
+        source_before = os.fstat(source_descriptor)
+        if not stat.S_ISREG(source_before.st_mode):
+            raise T09HostError("archive staging source is not a regular file")
+        if source_before.st_size != expected_size:
+            raise T09HostError("archive staging source size drifted")
+        if _sha256_descriptor(source_descriptor) != expected_sha256:
+            raise T09HostError("archive staging source hash drifted")
+
+        target_parent, target_name = _open_parent_directory_no_follow(canonical_target_path)
+        target_descriptor = os.open(
+            target_name,
+            os.O_RDWR
+            | os.O_CREAT
+            | os.O_EXCL
+            | getattr(os, "O_NOFOLLOW", 0)
+            | getattr(os, "O_CLOEXEC", 0),
+            0o600,
+            dir_fd=target_parent,
+        )
+        target_created = True
+        os.fchmod(target_descriptor, 0o600)
+        copied = _copy_descriptor_exact(source_descriptor, target_descriptor)
+        os.fsync(target_descriptor)
+        os.fsync(target_parent)
+        target_metadata = os.fstat(target_descriptor)
+        target_sha256 = _sha256_descriptor(target_descriptor)
+        source_after = os.fstat(source_descriptor)
+        source_identity_before = (
+            source_before.st_dev,
+            source_before.st_ino,
+            source_before.st_size,
+            source_before.st_mtime_ns,
+            source_before.st_ctime_ns,
+            source_before.st_mode,
+        )
+        source_identity_after = (
+            source_after.st_dev,
+            source_after.st_ino,
+            source_after.st_size,
+            source_after.st_mtime_ns,
+            source_after.st_ctime_ns,
+            source_after.st_mode,
+        )
+        if (
+            copied != expected_size
+            or not stat.S_ISREG(target_metadata.st_mode)
+            or target_metadata.st_size != expected_size
+            or stat.S_IMODE(target_metadata.st_mode) != 0o600
+            or target_sha256 != expected_sha256
+            or source_identity_after != source_identity_before
+        ):
+            raise T09HostError("archive staging target revalidation failed")
+        return {
+            "schema_version": "0.1.0",
+            "archive_role": "historical-v4-real-evidence-regression",
+            "source_provenance_category": "private-operator-run-owned-input",
+            "source_absolute_path_retained": False,
+            "source_no_follow_regular_file": True,
+            "source_unchanged": True,
+            "bytes": expected_size,
+            "sha256": expected_sha256,
+            "canonical_staged_destination": canonical_target_path.as_posix(),
+            "exclusive_creation": True,
+            "target_mode": "0600",
+            "target_fsync": True,
+            "parent_directory_fsync": True,
+            "target_rehash_verified": True,
+        }
+    except BaseException:
+        if target_created and target_parent >= 0 and target_name:
+            with contextlib.suppress(OSError):
+                os.unlink(target_name, dir_fd=target_parent)
+                os.fsync(target_parent)
+        raise
+    finally:
+        for descriptor in (target_descriptor, target_parent, source_descriptor, source_parent):
+            if descriptor >= 0:
+                with contextlib.suppress(OSError):
+                    os.close(descriptor)
 
 
 def git_file_sha256(repository: Path, commit: str, relative: str) -> str:
@@ -457,6 +613,41 @@ def write_exclusive(path: Path, value: object) -> None:
         os.fsync(descriptor)
     finally:
         os.close(descriptor)
+    parent_descriptor = os.open(
+        path.parent,
+        os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_CLOEXEC", 0),
+    )
+    try:
+        os.fsync(parent_descriptor)
+    finally:
+        os.close(parent_descriptor)
+
+
+def write_bytes_exclusive(path: Path, value: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    descriptor = os.open(
+        path,
+        os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
+        0o600,
+    )
+    try:
+        offset = 0
+        while offset < len(value):
+            written = os.write(descriptor, value[offset:])
+            if written <= 0:
+                raise T09HostError("binary evidence write made no progress")
+            offset += written
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+    parent_descriptor = os.open(
+        path.parent,
+        os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_CLOEXEC", 0),
+    )
+    try:
+        os.fsync(parent_descriptor)
+    finally:
+        os.close(parent_descriptor)
 
 
 def write_atomic(path: Path, value: object) -> None:
@@ -479,6 +670,14 @@ def write_atomic(path: Path, value: object) -> None:
     finally:
         os.close(descriptor)
     os.replace(temporary, path)
+    parent_descriptor = os.open(
+        path.parent,
+        os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_CLOEXEC", 0),
+    )
+    try:
+        os.fsync(parent_descriptor)
+    finally:
+        os.close(parent_descriptor)
 
 
 def safe_environment() -> dict[str, str]:
@@ -842,7 +1041,7 @@ def retain_prior_qualification_failures(
     previous_transition_receipt: Path,
     package_transition_receipt: Path,
 ) -> dict[str, object]:
-    destination = artifact_root / "pilot-v5/prior-qualification-failures"
+    destination = artifact_root / "pilot-v6/prior-qualification-failures"
     destination.mkdir(parents=True, mode=0o700)
     context_manifest = _copy_retained_prefix(
         prior_artifact_root,
@@ -902,8 +1101,8 @@ def carry_forward_replacement_image(
     image_id = failed.get("replacement_image_id")
     if not isinstance(image_id, str) or image_id_if_present(prefix, image_id) != image_id:
         raise T09HostError("failed candidate image cannot be carried forward")
-    source = failed_candidate_root / "pilot-v5/replacement-image-qualification"
-    destination = artifact_root / "pilot-v5/replacement-image-qualification"
+    source = failed_candidate_root / "pilot-v6/replacement-image-qualification"
+    destination = artifact_root / "pilot-v6/replacement-image-qualification"
     _copy_retained_prefix(source, destination, label="failed candidate materialization")
     prior_receipt_path = destination / "receipt.json"
     prior_receipt = load_object(prior_receipt_path, label="carried candidate receipt")
@@ -940,7 +1139,7 @@ def materialize_replacement_image(
     if image_id_if_present(prefix, REPLACEMENT_IMAGE_TAG) is not None:
         raise T09HostError("replacement image tag already exists; exactly one build is allowed")
 
-    materialization = artifact_root / "pilot-v5/replacement-image-qualification"
+    materialization = artifact_root / "pilot-v6/replacement-image-qualification"
     logs = materialization / "logs"
     work = materialization / "work"
     snapshot = work / "snapshot"
@@ -1174,152 +1373,212 @@ def materialize_replacement_image(
     return result
 
 
-def import_slot1_replacement_image(
+def materialize_retained_or_build_image(
     *,
     repository: Path,
     package_commit: str,
     artifact_root: Path,
-    authority_root: Path,
     image_archive: Path,
     prefix: list[str],
-) -> tuple[dict[str, object], dict[str, object]]:
-    """Import the exact slot-1 candidate without consuming a second build."""
+) -> dict[str, object]:
+    """Prefer the exact retained image; fall back to one frozen-input build."""
 
-    authority = validate_built_image_replacement_eligibility(
-        authority_root.resolve(strict=True),
-        repository=repository,
-        package_commit=package_commit,
-        slot1_image_archive=image_archive.resolve(strict=True),
-    )
-    archive = image_archive.resolve(strict=True)
-    archive_metadata = archive.stat(follow_symlinks=False)
-    if (
-        archive.is_symlink()
-        or not stat.S_ISREG(archive_metadata.st_mode)
-        or archive_metadata.st_uid != os.getuid()
-        or archive_metadata.st_nlink != 1
-        or stat.S_IMODE(archive_metadata.st_mode) != 0o600
-        or archive_metadata.st_size != SLOT1_IMAGE_ARCHIVE_BYTES
-        or file_sha256(archive) != SLOT1_IMAGE_ARCHIVE_SHA256
-        or authority.get("slot1_replacement_image_id") != SLOT1_REPLACEMENT_IMAGE_ID
-        or authority.get("candidate_build_attempt_count") != 1
-        or authority.get("additional_image_build_count") != 0
-    ):
-        raise T09HostError("slot-1 replacement-image archive binding drifted")
-    if (
-        image_id_if_present(prefix, REPLACEMENT_IMAGE_TAG) is not None
-        or image_id_if_present(prefix, SLOT1_REPLACEMENT_IMAGE_ID) is not None
-    ):
-        raise T09HostError("slot-2 host is not fresh before exact image import")
-    materialization = artifact_root / "pilot-v5/replacement-image-qualification"
+    if image_id_if_present(prefix, REPLACEMENT_IMAGE_TAG) is not None:
+        raise T09HostError("V6 image tag already exists before materialization")
+    materialization = artifact_root / "pilot-v6/replacement-image-qualification"
     logs = materialization / "logs"
     materialization.mkdir(parents=True, mode=0o700)
-    failure_archive = (
-        authority_root.resolve(strict=True) / "slot2-eligibility-source/slot1-zero-use.tar.gz"
-    )
-    failure_metadata = failure_archive.stat(follow_symlinks=False)
-    if (
-        failure_archive.is_symlink()
-        or not stat.S_ISREG(failure_metadata.st_mode)
-        or failure_metadata.st_nlink != 1
-        or stat.S_IMODE(failure_metadata.st_mode) != 0o600
-        or failure_metadata.st_size != SLOT1_ZERO_USE_ARCHIVE_BYTES
-        or file_sha256(failure_archive) != SLOT1_ZERO_USE_ARCHIVE_SHA256
-    ):
-        raise T09HostError("slot-1 zero-use archive binding drifted")
-    retained_prefix = "t09-pilot-v5/pilot-v5/replacement-image-qualification/"
-    extracted: list[dict[str, object]] = []
-    with tarfile.open(failure_archive, "r:gz") as source:
-        for member in source.getmembers():
-            if not member.name.startswith(retained_prefix) or member.isdir():
-                continue
-            relative = PurePosixPath(member.name[len(retained_prefix) :])
-            if (
-                not relative.parts
-                or relative.is_absolute()
-                or ".." in relative.parts
-                or not member.isfile()
-            ):
-                raise T09HostError("slot-1 materialization archive member is unsafe")
-            target = materialization.joinpath(*relative.parts)
-            target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-            source_file = source.extractfile(member)
-            if source_file is None:
-                raise T09HostError("slot-1 materialization member is unavailable")
-            with target.open("xb") as destination:
-                shutil.copyfileobj(source_file, destination, 1_048_576)
-                destination.flush()
-                os.fsync(destination.fileno())
-            target.chmod(0o600)
-            extracted.append(
-                {
-                    "path": relative.as_posix(),
-                    "bytes": target.stat().st_size,
-                    "sha256": file_sha256(target),
-                }
+    archive_valid = False
+    archive_reason = "unavailable"
+    archive_descriptor = -1
+    archive_parent_descriptor = -1
+    archive_identity: tuple[int, int, int, int, int, int] | None = None
+    try:
+        archive_parent_descriptor, archive_name = _open_parent_directory_no_follow(image_archive)
+        archive_descriptor = os.open(
+            archive_name,
+            os.O_RDONLY
+            | getattr(os, "O_NONBLOCK", 0)
+            | getattr(os, "O_NOFOLLOW", 0)
+            | getattr(os, "O_CLOEXEC", 0),
+            dir_fd=archive_parent_descriptor,
+        )
+        metadata = os.fstat(archive_descriptor)
+        archive_identity = (
+            metadata.st_dev,
+            metadata.st_ino,
+            metadata.st_size,
+            metadata.st_mtime_ns,
+            metadata.st_ctime_ns,
+            metadata.st_mode,
+        )
+        archive_valid = (
+            stat.S_ISREG(metadata.st_mode)
+            and metadata.st_uid == os.getuid()
+            and metadata.st_nlink == 1
+            and stat.S_IMODE(metadata.st_mode) == 0o600
+            and metadata.st_size == RETAINED_IMAGE_ARCHIVE_BYTES
+            and _sha256_descriptor(archive_descriptor) == RETAINED_IMAGE_ARCHIVE_SHA256
+        )
+        archive_reason = "verified" if archive_valid else "identity-mismatch"
+    except (FileNotFoundError, OSError, T09HostError):
+        archive_reason = "unavailable-or-unsafe"
+    if not archive_valid:
+        if archive_descriptor >= 0:
+            os.close(archive_descriptor)
+            archive_descriptor = -1
+        if archive_parent_descriptor >= 0:
+            os.close(archive_parent_descriptor)
+            archive_parent_descriptor = -1
+    try:
+        write_exclusive(
+            materialization / "retained-image-input.json",
+            {
+                "schema_version": "0.1.0",
+                "archive_role": "retry3-qualified-candidate-image",
+                "archive_path_retained": False,
+                "expected_bytes": RETAINED_IMAGE_ARCHIVE_BYTES,
+                "expected_sha256": RETAINED_IMAGE_ARCHIVE_SHA256,
+                "expected_image_id": RETAINED_IMAGE_ID,
+                "validation": archive_reason,
+            },
+        )
+    except BaseException:
+        if archive_descriptor >= 0:
+            os.close(archive_descriptor)
+        if archive_parent_descriptor >= 0:
+            os.close(archive_parent_descriptor)
+        raise
+    if archive_valid:
+        assert archive_descriptor >= 0
+        assert archive_identity is not None
+        try:
+            try:
+                load = subprocess.run(
+                    [*prefix, "load", "--input", f"/proc/self/fd/{archive_descriptor}"],
+                    env=safe_environment(),
+                    stdin=subprocess.DEVNULL,
+                    capture_output=True,
+                    check=False,
+                    pass_fds=(archive_descriptor,),
+                    timeout=min(
+                        MAX_IMAGE_EXPORT_SECONDS,
+                        max(1.0, preflight_seconds_remaining(artifact_root)),
+                    ),
+                )
+            except subprocess.TimeoutExpired as exc:
+                load = subprocess.CompletedProcess(
+                    args=exc.cmd,
+                    returncode=124,
+                    stdout=exc.stdout or b"",
+                    stderr=exc.stderr or b"docker load timed out",
+                )
+            archive_after = os.fstat(archive_descriptor)
+            archive_unchanged = (
+                archive_identity
+                == (
+                    archive_after.st_dev,
+                    archive_after.st_ino,
+                    archive_after.st_size,
+                    archive_after.st_mtime_ns,
+                    archive_after.st_ctime_ns,
+                    archive_after.st_mode,
+                )
+                and _sha256_descriptor(archive_descriptor) == RETAINED_IMAGE_ARCHIVE_SHA256
             )
-    prior_receipt_path = materialization / "receipt.json"
-    prior_receipt = load_object(prior_receipt_path, label="slot-1 materialization receipt")
-    if (
-        prior_receipt.get("qualification_id") != SLOT1_QUALIFICATION_ID
-        or prior_receipt.get("image_id") != SLOT1_REPLACEMENT_IMAGE_ID
-        or prior_receipt.get("build_count") != 1
-        or not (materialization / "build-context-manifest.json").is_file()
-        or not (materialization / "build-context-exclusions.json").is_file()
-    ):
-        raise T09HostError("slot-1 materialization receipt cannot qualify slot 2")
-    prior_receipt_sha256 = file_sha256(prior_receipt_path)
-    prior_receipt_path.unlink()
-    run_logged(
-        [*prefix, "load", "--input", str(archive)],
-        evidence_root=logs,
-        label="docker-image-import",
-        timeout=MAX_IMAGE_EXPORT_SECONDS,
+        finally:
+            os.close(archive_descriptor)
+            archive_descriptor = -1
+            os.close(archive_parent_descriptor)
+            archive_parent_descriptor = -1
+        write_bytes_exclusive(logs / "docker-image-import.stdout", load.stdout)
+        write_bytes_exclusive(logs / "docker-image-import.stderr", load.stderr)
+        write_exclusive(
+            logs / "docker-image-import.json",
+            {"argv_role": "docker-load-exact-retained-archive", "returncode": load.returncode},
+        )
+        imported = image_id_if_present(prefix, RETAINED_IMAGE_ID)
+        if load.returncode == 0 and archive_unchanged and imported == RETAINED_IMAGE_ID:
+            run_logged(
+                [*prefix, "tag", imported, REPLACEMENT_IMAGE_TAG],
+                evidence_root=logs,
+                label="docker-image-retag",
+                timeout=60,
+            )
+            run_logged(
+                [*prefix, "image", "inspect", imported],
+                evidence_root=materialization,
+                label="replacement-image-inspect",
+                timeout=60,
+            )
+            context_receipt = {
+                "schema_version": "0.1.0",
+                "classification": "retained-image-import-no-new-build-context",
+                "archive_sha256": RETAINED_IMAGE_ARCHIVE_SHA256,
+                "archive_bytes": RETAINED_IMAGE_ARCHIVE_BYTES,
+                "image_id": imported,
+            }
+            write_exclusive(materialization / "build-context-manifest.json", context_receipt)
+            write_exclusive(
+                materialization / "build-context-exclusions.json",
+                {**context_receipt, "exclusions": "not-applicable-no-new-build"},
+            )
+            result: dict[str, object] = {
+                "schema_version": "0.1.0",
+                "qualification_id": QUALIFICATION_ID,
+                "method": "exact-retained-image-archive-import",
+                "image_id": imported,
+                "historical_image_id": HISTORICAL_IMAGE_ID,
+                "repository_runtime_commit": package_commit,
+                "build_context_manifest_sha256": file_sha256(
+                    materialization / "build-context-manifest.json"
+                ),
+                "build_context_payload_sha256": canonical_sha256(context_receipt),
+                "build_context_exclusions_sha256": file_sha256(
+                    materialization / "build-context-exclusions.json"
+                ),
+                "containerfile_sha256": None,
+                "build_command_sha256": None,
+                "image_inspect_sha256": file_sha256(
+                    materialization / "replacement-image-inspect.stdout"
+                ),
+                "retained_image_archive_sha256": RETAINED_IMAGE_ARCHIVE_SHA256,
+                "retained_image_archive_bytes": RETAINED_IMAGE_ARCHIVE_BYTES,
+                "build_count": 0,
+                "additional_build_count": 0,
+                "image_import_count": 1,
+            }
+            write_exclusive(materialization / "receipt.json", result)
+            return result
+        # A failed/incompatible load may have left the expected image behind.  It
+        # cannot silently become the accepted image; remove only the exact known
+        # candidate before the one authorized fallback build.
+        if imported is not None:
+            subprocess.run(
+                [*prefix, "image", "rm", "--force", imported],
+                env=safe_environment(),
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+                timeout=60,
+            )
+    if archive_descriptor >= 0:
+        os.close(archive_descriptor)
+    if archive_parent_descriptor >= 0:
+        os.close(archive_parent_descriptor)
+    built = materialize_replacement_image(
+        repository=repository,
+        artifact_root=artifact_root,
+        prefix=prefix,
     )
-    imported = image_id_if_present(prefix, SLOT1_REPLACEMENT_IMAGE_ID)
-    if imported != SLOT1_REPLACEMENT_IMAGE_ID:
-        raise T09HostError("Docker import did not restore the exact slot-1 image ID")
-    run_logged(
-        [*prefix, "tag", imported, REPLACEMENT_IMAGE_TAG],
-        evidence_root=logs,
-        label="docker-image-retag",
-        timeout=60,
-    )
-    if image_id_if_present(prefix, REPLACEMENT_IMAGE_TAG) != imported:
-        raise T09HostError("slot-2 replacement image tag does not resolve to the exact ID")
-    run_logged(
-        [*prefix, "image", "inspect", imported],
-        evidence_root=materialization,
-        label="replacement-image-inspect-slot2",
-        timeout=60,
-    )
-    result: dict[str, object] = {
-        **prior_receipt,
-        "qualification_id": QUALIFICATION_ID,
-        "method": "exact-slot1-image-archive-imported-after-terminal-zero-closeout",
-        "image_id": imported,
-        "repository_runtime_commit": package_commit,
-        "slot1_qualification_id": SLOT1_QUALIFICATION_ID,
-        "slot1_materialization_receipt_sha256": prior_receipt_sha256,
-        "slot1_failure_archive_sha256": SLOT1_ZERO_USE_ARCHIVE_SHA256,
-        "slot1_image_archive_sha256": SLOT1_IMAGE_ARCHIVE_SHA256,
-        "slot1_image_archive_bytes": SLOT1_IMAGE_ARCHIVE_BYTES,
-        "slot2_eligibility_receipt_sha256": authority["receipt_sha256"],
-        "slot2_eligibility_source_manifest_sha256": authority["source_manifest_sha256"],
-        "image_inspect_sha256": file_sha256(
-            materialization / "replacement-image-inspect-slot2.stdout"
-        ),
-        "candidate_build_attempt_count": 1,
-        "selected_image_build_count": 1,
-        "build_count": 1,
-        "additional_build_count": 0,
-        "image_import_count": 1,
-        "image_reused_by_exact_id": True,
-        "empirical_entry_before_import": False,
-        "retained_slot1_materialization_files_sha256": canonical_sha256(extracted),
-    }
-    write_exclusive(prior_receipt_path, result)
-    return result, authority
+    built["image_import_count"] = 0
+    built["additional_build_count"] = 0
+    built["retained_image_archive_validation"] = archive_reason
+    receipt_path = artifact_root / "pilot-v6/replacement-image-qualification/receipt.json"
+    receipt_path.unlink()
+    write_exclusive(receipt_path, built)
+    return built
 
 
 def remove_container(prefix: list[str], name: str) -> bool:
@@ -1453,7 +1712,7 @@ def record_preflight_credential_scan(
     exposure_detected = bool(hits)
     if exposure_detected:
         mark_actual_credential_exposure(
-            artifact_root / "pilot-v5/pilot-state.json",
+            artifact_root / "pilot-v6/pilot-state.json",
             execution_contract_sha256=execution_contract_sha256,
         )
     receipt: dict[str, object] = {
@@ -1467,7 +1726,7 @@ def record_preflight_credential_scan(
         "recorded_at": utc_now(),
     }
     write_exclusive(
-        artifact_root / "pilot-v5/model-metadata-credential-scan.json",
+        artifact_root / "pilot-v6/model-metadata-credential-scan.json",
         receipt,
     )
     if exposure_detected or remaining:
@@ -1488,7 +1747,7 @@ def contract_paths(repository: Path) -> dict[str, Path]:
         "dataset": experiment / "contracts/T09_PILOT_DATASET_CONTRACT.json",
         "evaluator": experiment / "contracts/T09_PILOT_EVALUATOR_CONTRACT.json",
         "runtime": experiment / "contracts/T09_PILOT_RUNTIME_IDENTITY.json",
-        "real_regression": experiment / "T09_PRAGMATIC_RETRY3_FINALIZER_REGRESSION.json",
+        "real_regression": experiment / "T09_PRAGMATIC_RETRY4_FINALIZER_REGRESSION.json",
     }
 
 
@@ -1506,7 +1765,7 @@ def validate_real_evidence_regression(
     repeat_roots = receipt.get("deterministic_distinct_finalization_roots")
     if (
         receipt.get("schema_version") != "0.1.0"
-        or receipt.get("receipt_id") != "T09-PRAGMATIC-RETRY3-REAL-EVIDENCE-REGRESSION-0001"
+        or receipt.get("receipt_id") != "T09-PRAGMATIC-RETRY4-REAL-EVIDENCE-REGRESSION-0001"
         or receipt.get("source_plan_id") != "PLAN-EXP0001-PILOT-V4"
         or receipt.get("source_run_id") != "RUN-T09-TASK-A-REACTIVE-0002"
         or receipt.get("source_archive_sha256")
@@ -1550,7 +1809,7 @@ def validate_real_evidence_regression(
         or receipt.get("additional_model_requests") != 0
         or receipt.get("additional_browser_actions") != 0
         or receipt.get("source_raw_mutated") is not False
-        or receipt.get("prior_attempt_excluded_from_v5_campaign") is not True
+        or receipt.get("prior_attempt_excluded_from_v6_campaign") is not True
         or receipt.get("private_source_path_retained") is not False
     ):
         raise T09HostError("real-evidence finalizer regression receipt drifted")
@@ -1589,12 +1848,12 @@ def _retained_tree_manifest(root: Path, *, label: str) -> dict[str, object]:
 
 
 def _prior_qualification_failure_manifest(root: Path) -> dict[str, object]:
-    if root.name != "t09-pilot-v5-output-0002":
+    if root.name != "t09-pilot-v6-output-0002":
         raise T09HostError("prior qualification root identity drifted")
-    state_path = root / "pilot-v5/pilot-state.json"
+    state_path = root / "pilot-v6/pilot-state.json"
     state = load_object(state_path, label="prior qualification state")
     env_example = (
-        root / "pilot-v5/replacement-image-qualification/work/build-context/upstream/.env.example"
+        root / "pilot-v6/replacement-image-qualification/work/build-context/upstream/.env.example"
     )
     if (
         state.get("plan_id") != PLAN_ID
@@ -1603,8 +1862,8 @@ def _prior_qualification_failure_manifest(root: Path) -> dict[str, object]:
         or not env_example.is_file()
         or env_example.stat(follow_symlinks=False).st_size != PINNED_ENV_EXAMPLE_BYTES
         or file_sha256(env_example) != PINNED_ENV_EXAMPLE_SHA256
-        or (root / "pilot-v5/frozen-run-manifest.json").exists()
-        or (root / "pilot-v5/replacement-image-qualification/build-context-manifest.json").exists()
+        or (root / "pilot-v6/frozen-run-manifest.json").exists()
+        or (root / "pilot-v6/replacement-image-qualification/build-context-manifest.json").exists()
     ):
         raise T09HostError("prior qualification failure prefix is not the exact safe prefix")
     retained = _retained_tree_manifest(root, label="prior qualification prefix")
@@ -1626,15 +1885,15 @@ def _failed_candidate_manifest(
     *,
     require_image_present: bool,
 ) -> dict[str, object]:
-    if root.name != "t09-pilot-v5-output-0003":
+    if root.name != "t09-pilot-v6-output-0003":
         raise T09HostError("failed candidate root identity drifted")
-    state = load_object(root / "pilot-v5/pilot-state.json", label="failed candidate state")
-    qualification_root = root / "pilot-v5/replacement-image-qualification"
+    state = load_object(root / "pilot-v6/pilot-state.json", label="failed candidate state")
+    qualification_root = root / "pilot-v6/replacement-image-qualification"
     receipt_path = qualification_root / "receipt.json"
     receipt = load_object(receipt_path, label="failed candidate materialization receipt")
-    stderr_path = root / "pilot-v5/offline-runtime-preflight/offline-preflight.stderr"
+    stderr_path = root / "pilot-v6/offline-runtime-preflight/offline-preflight.stderr"
     provider_entry = load_object(
-        root / "pilot-v5/provider-entry.json", label="prior provider entry"
+        root / "pilot-v6/provider-entry.json", label="prior provider entry"
     )
     image_id = receipt.get("image_id")
     if (
@@ -1650,10 +1909,10 @@ def _failed_candidate_manifest(
         or file_sha256(stderr_path) != FAILED_CANDIDATE_OFFLINE_STDERR_SHA256
         or "ModuleNotFoundError: No module named 'yaml'"
         not in stderr_path.read_text(encoding="utf-8")
-        or (root / "pilot-v5/frozen-run-manifest.json").exists()
-        or (root / "pilot-v5/preflight.json").exists()
-        or (root / "pilot-v5/model-metadata-preflight").exists()
-        or (root / "pilot-v5/browser-preflight").exists()
+        or (root / "pilot-v6/frozen-run-manifest.json").exists()
+        or (root / "pilot-v6/preflight.json").exists()
+        or (root / "pilot-v6/model-metadata-preflight").exists()
+        or (root / "pilot-v6/browser-preflight").exists()
     ):
         raise T09HostError("failed candidate prefix is not the exact safe offline failure")
     if require_image_present and (
@@ -2021,6 +2280,7 @@ def validate_dynamic_receipt(
     ):
         raise T09HostError("provider entry receipt retained a prohibited value")
     result = dict(value)
+    result["provider_preflight_started_at_epoch"] = value.get("owned_lambda_started_at_epoch")
     result["receipt_sha256"] = file_sha256(path)
     return result
 
@@ -2101,13 +2361,13 @@ def sanitized_dynamic_receipt(_path: Path, value: dict[str, object]) -> dict[str
 
 
 def _runtime_budget_state(root: Path) -> dict[str, Any]:
-    return load_object(root / "pilot-v5/pilot-state.json", label="pilot state")
+    return load_object(root / "pilot-v6/pilot-state.json", label="pilot state")
 
 
 def _received_export_ack_path(root: Path, run_id: str) -> Path:
     if run_id not in RUN_IDS:
         raise T09HostError("export acknowledgement run identity is unknown")
-    return root / "pilot-v5/received-export-acknowledgements" / f"{run_id}.json"
+    return root / "pilot-v6/received-export-acknowledgements" / f"{run_id}.json"
 
 
 def require_prior_export_acknowledgements(
@@ -2118,8 +2378,8 @@ def require_prior_export_acknowledgements(
 ) -> None:
     """Block empirical progression until every prior archive was verified off-host."""
 
-    entry = load_object(root / "pilot-v5/provider-entry.json", label="provider entry")
-    frozen_manifest_path = root / "pilot-v5/frozen-run-manifest.json"
+    entry = load_object(root / "pilot-v6/provider-entry.json", label="provider entry")
+    frozen_manifest_path = root / "pilot-v6/frozen-run-manifest.json"
     frozen_manifest = load_object(frozen_manifest_path, label="frozen run manifest")
     frozen_manifest_sha256 = file_sha256(frozen_manifest_path)
     for run_id in RUN_IDS[:next_attempt_index]:
@@ -2132,7 +2392,7 @@ def require_prior_export_acknowledgements(
             acknowledgement_path,
             label=f"{run_id} received export acknowledgement",
         )
-        archive = root / "pilot-v5/attempt-exports" / f"{run_id}.tar.gz"
+        archive = root / "pilot-v6/attempt-exports" / f"{run_id}.tar.gz"
         if (
             set(acknowledgement)
             != {
@@ -2193,52 +2453,79 @@ def require_attempt_export_acknowledgement(
     )
 
 
-def provider_seconds_remaining(root: Path, *, reserve_seconds: float = 0.0) -> float:
-    """Return provider time left while preserving an explicit cleanup reserve."""
-
+def _active_lambda_accounting(root: Path, *, now: float) -> tuple[dict[str, Any], float, float]:
     state = _runtime_budget_state(root)
-    now = time.time()
-    campaign_started = state.get("campaign_started_at_epoch", state.get("pilot_started_at_epoch"))
     owned_started = state.get("owned_lambda_started_at_epoch", state.get("lambda_started_at_epoch"))
-    prior_duration = state.get("prior_retry3_lambda_duration_seconds", 0.0)
-    prior_cost = state.get("prior_retry3_lambda_cost_usd", 0.0)
+    prior_duration = state.get("prior_campaign_lambda_duration_seconds", 0.0)
+    prior_cost = state.get("prior_campaign_lambda_cost_usd", 0.0)
     if not all(
         isinstance(value, (int, float)) and not isinstance(value, bool)
-        for value in (campaign_started, owned_started, prior_duration, prior_cost)
+        for value in (owned_started, prior_duration, prior_cost)
     ):
-        raise T09HostError("campaign or active Lambda time origin is unavailable")
-    campaign_elapsed = now - float(cast(int | float, campaign_started))
+        raise T09HostError("active Lambda accounting is unavailable")
     owned_elapsed = now - float(cast(int | float, owned_started))
     active_duration = float(cast(int | float, prior_duration)) + owned_elapsed
     active_cost = float(cast(int | float, prior_cost)) + (
         owned_elapsed * LAMBDA_HOURLY_PRICE_USD / 3600.0
     )
-    if min(campaign_elapsed, owned_elapsed, active_duration, active_cost) < 0:
-        raise T09HostError("campaign or active Lambda chronology is invalid")
-    lambda_duration_remaining = MAX_LAMBDA_DURATION_SECONDS - active_duration
-    lambda_cost_remaining_seconds = (
-        (MAX_LAMBDA_COST_USD - active_cost) * 3600.0 / LAMBDA_HOURLY_PRICE_USD
-    )
+    if min(owned_elapsed, active_duration, active_cost) < 0:
+        raise T09HostError("active Lambda chronology is invalid")
+    return state, active_duration, active_cost
+
+
+def provider_seconds_remaining(root: Path, *, reserve_seconds: float = 0.0) -> float:
+    """Return cumulative active-provider headroom, independent of offline gaps."""
+
+    _, active_duration, active_cost = _active_lambda_accounting(root, now=time.time())
     remaining = min(
-        MAX_TOTAL_WALL_SECONDS - campaign_elapsed,
-        lambda_duration_remaining,
-        lambda_cost_remaining_seconds,
+        MAX_LAMBDA_DURATION_SECONDS - active_duration,
+        (MAX_LAMBDA_COST_USD - active_cost) * 3600.0 / LAMBDA_HOURLY_PRICE_USD,
     )
     if remaining + 1e-9 < reserve_seconds:
         raise T09HostError("provider duration or cost ceiling has no required reserve")
     return max(0.0, remaining - reserve_seconds)
 
 
-def scientific_seconds_remaining(root: Path, *, reserve_seconds: float = 0.0) -> float:
-    """Return actual campaign time without reserving theoretical future attempts."""
+def preflight_seconds_remaining(root: Path) -> float:
+    """Return the fresh per-launch qualification window and cumulative headroom."""
 
-    return provider_seconds_remaining(root, reserve_seconds=reserve_seconds)
+    state, _, _ = _active_lambda_accounting(root, now=time.time())
+    started = state.get("provider_preflight_started_at_epoch")
+    if not isinstance(started, (int, float)) or isinstance(started, bool):
+        raise T09HostError("provider preflight time origin is unavailable")
+    lifecycle = Retry4LifecycleLimits()
+    return min(
+        lifecycle.preflight_remaining(
+            launched_at_epoch=float(started),
+            now_epoch=time.time(),
+        ),
+        provider_seconds_remaining(root),
+    )
+
+
+def scientific_seconds_remaining(root: Path, *, reserve_seconds: float = 0.0) -> float:
+    """Return post-freeze empirical time plus cumulative active-provider headroom."""
+
+    state, _, _ = _active_lambda_accounting(root, now=time.time())
+    empirical_started = state.get("campaign_started_at_epoch")
+    if not isinstance(empirical_started, (int, float)) or isinstance(empirical_started, bool):
+        raise T09HostError("empirical campaign clock has not started")
+    lifecycle = Retry4LifecycleLimits()
+    empirical_remaining = lifecycle.empirical_remaining(
+        empirical_started_at_epoch=float(empirical_started),
+        now_epoch=time.time(),
+    )
+    active_remaining = provider_seconds_remaining(root)
+    remaining = min(empirical_remaining, active_remaining)
+    if remaining + 1e-9 < reserve_seconds:
+        raise T09HostError("empirical or active-provider ceiling has no required reserve")
+    return max(0.0, remaining - reserve_seconds)
 
 
 def admit_next_attempt(root: Path) -> float:
     """Require only the next condition hard wall and the cleanup reserve."""
 
-    usable = provider_seconds_remaining(
+    usable = scientific_seconds_remaining(
         root,
         reserve_seconds=PROVIDER_CLOSEOUT_RESERVE_SECONDS,
     )
@@ -2253,9 +2540,12 @@ def provider_termination_due(root: Path) -> bool:
     """Return whether normal provider termination must already have begun."""
 
     state = _runtime_budget_state(root)
-    started = state.get("campaign_started_at_epoch", state.get("pilot_started_at_epoch"))
+    started = state.get("campaign_started_at_epoch")
     if not isinstance(started, (int, float)) or isinstance(started, bool):
-        raise T09HostError("Lambda time origin is unavailable")
+        preflight_started = state.get("provider_preflight_started_at_epoch")
+        if not isinstance(preflight_started, (int, float)) or isinstance(preflight_started, bool):
+            raise T09HostError("provider preflight time origin is unavailable")
+        return time.time() - float(preflight_started) >= MAX_PREFLIGHT_WALL_SECONDS
     return time.time() - float(started) >= PROVIDER_TERMINATION_CUTOFF_SECONDS
 
 
@@ -2339,10 +2629,7 @@ def verify_package(
         not isinstance(runtime, dict)
         or runtime.get("container_image_digest") is not None
         or runtime.get("container_image_policy")
-        != (
-            "slot1-built-once-slot2-exact-archive-import-zero-additional-builds-"
-            "preentry-frozen-run-manifest-v1"
-        )
+        != ("retained-exact-archive-load-or-one-fallback-build-preentry-frozen-run-manifest-v1")
         or runtime.get("historical_container_image_digest") != HISTORICAL_IMAGE_ID
     ):
         raise T09HostError("replacement image policy drifted")
@@ -2949,7 +3236,7 @@ def evaluator_overlay(
         "network_materialization_only": True,
         "runtime_mount_read_only": True,
     }
-    manifest_path = artifact_root / "pilot-v5/evaluator-overlay-manifest.json"
+    manifest_path = artifact_root / "pilot-v6/evaluator-overlay-manifest.json"
     write_exclusive(manifest_path, manifest)
     return {
         "materialized": True,
@@ -2975,7 +3262,7 @@ def validate_evaluator_overlay_binding(
     frozen_manifest: dict[str, Any],
     verify_packages: bool,
 ) -> dict[str, object]:
-    manifest_path = artifact_root / "pilot-v5/evaluator-overlay-manifest.json"
+    manifest_path = artifact_root / "pilot-v6/evaluator-overlay-manifest.json"
     retained = load_object(manifest_path, label="evaluator overlay manifest")
     if (
         frozen_manifest.get("evaluator_overlay_manifest_sha256") != file_sha256(manifest_path)
@@ -3050,7 +3337,7 @@ def browser_lifecycle_preflight(
     prefix: list[str],
     image_id: str,
 ) -> dict[str, object]:
-    attempt = artifact_root / "pilot-v5/browser-preflight"
+    attempt = artifact_root / "pilot-v6/browser-preflight"
     attempt.mkdir(parents=True, mode=0o700)
     name = f"{CONTAINER_PREFIX}browser-preflight"
     create = [
@@ -3160,7 +3447,7 @@ def secret_channel_preflight(
     prefix: list[str],
     image_id: str,
 ) -> dict[str, Any]:
-    attempt = artifact_root / "pilot-v5/secret-channel-preflight"
+    attempt = artifact_root / "pilot-v6/secret-channel-preflight"
     attempt.mkdir(parents=True, mode=0o700)
     source = repository / "containers/sira-smoke/pragmatic/t09_secret_preflight.py"
     command = [
@@ -3212,7 +3499,7 @@ def offline_runtime_preflight(
     image_id: str,
 ) -> dict[str, Any]:
     paths = contract_paths(repository)
-    attempt = artifact_root / "pilot-v5/offline-runtime-preflight"
+    attempt = artifact_root / "pilot-v6/offline-runtime-preflight"
     attempt.mkdir(parents=True, mode=0o700)
     source = repository / "containers/sira-smoke/pragmatic/t09_preflight.py"
     finalizer_source = repository / FINALIZER_RELATIVE_PATH
@@ -3265,11 +3552,11 @@ def offline_runtime_preflight(
         "--pilot-library-sha256",
         library_sha256,
         "--attempt-root",
-        "/opt/giclab-artifacts/pilot-v5/offline-runtime-preflight",
+        "/opt/giclab-artifacts/pilot-v6/offline-runtime-preflight",
         "--aggregate-ledger",
-        "/opt/giclab-artifacts/pilot-v5/aggregate-budget.json",
+        "/opt/giclab-artifacts/pilot-v6/aggregate-budget.json",
         "--pilot-state",
-        "/opt/giclab-artifacts/pilot-v5/pilot-state.json",
+        "/opt/giclab-artifacts/pilot-v6/pilot-state.json",
         "--evaluator-root",
         "/opt/sira/evaluation/fanout",
         "--dataset",
@@ -3336,7 +3623,7 @@ def qualified_real_evidence_regression(
 
     archive = validate_private_regression_archive(archive)
     paths = contract_paths(repository)
-    attempt = artifact_root / "pilot-v5/qualified-real-evidence-regression"
+    attempt = artifact_root / "pilot-v6/qualified-real-evidence-regression"
     attempt.mkdir(parents=True, mode=0o700, exist_ok=False)
     regression_source = (
         repository / "containers/sira-smoke/pragmatic/t09_real_evidence_regression.py"
@@ -3398,7 +3685,7 @@ def qualified_real_evidence_regression(
         "--dataset",
         "/opt/sira/data/fanout-final-dev.json",
         "--receipt-id",
-        "T09-PRAGMATIC-RETRY3-QUALIFIED-IMAGE-REGRESSION-0001",
+        "T09-PRAGMATIC-RETRY4-QUALIFIED-IMAGE-REGRESSION-0001",
         "--output",
         "/opt/giclab-output/receipt.json",
     ]
@@ -3409,7 +3696,7 @@ def qualified_real_evidence_regression(
     closure = receipt.get("evaluator_closure")
     static_projection = static_receipt.get("semantic_projection")
     if (
-        receipt.get("receipt_id") != "T09-PRAGMATIC-RETRY3-QUALIFIED-IMAGE-REGRESSION-0001"
+        receipt.get("receipt_id") != "T09-PRAGMATIC-RETRY4-QUALIFIED-IMAGE-REGRESSION-0001"
         or receipt.get("source_archive_sha256")
         != "63ed19b35bcb4cb62c3796a80a48004937340eb3826f9657a1006e251772255d"
         or receipt.get("dataset_sha256")
@@ -3435,7 +3722,7 @@ def final_image_runtime_preflight(
     image_id: str,
     command_document: dict[str, Any],
 ) -> dict[str, Any]:
-    attempt = artifact_root / "pilot-v5/final-image-runtime-preflight"
+    attempt = artifact_root / "pilot-v6/final-image-runtime-preflight"
     attempt.mkdir(parents=True, mode=0o700)
     command_manifests = manifests(command_document)
     reactive = next(item for item in command_manifests if item["condition"] == "reactive")
@@ -3492,7 +3779,7 @@ def final_image_file_hashes(
     prefix: list[str],
     image_id: str,
 ) -> dict[str, str]:
-    evidence = artifact_root / "pilot-v5/final-image-file-hashes"
+    evidence = artifact_root / "pilot-v6/final-image-file-hashes"
     expected_paths = {
         "/opt/giclab/container_entrypoint.py": (
             "2696c3d9980a6d3c14dcb55fc5b540732a953fb388c8117af020b464dfacb4da"
@@ -3550,7 +3837,7 @@ def model_metadata_preflight(
     prefix: list[str],
     image_id: str,
 ) -> dict[str, Any]:
-    attempt = artifact_root / "pilot-v5/model-metadata-preflight"
+    attempt = artifact_root / "pilot-v6/model-metadata-preflight"
     attempt.mkdir(parents=True, mode=0o700)
     command = [
         *prefix,
@@ -3600,7 +3887,7 @@ def _replacement_inspect(
     expected_image_id: str,
 ) -> dict[str, Any]:
     inspect_path = (
-        artifact_root / "pilot-v5/replacement-image-qualification/replacement-image-inspect.stdout"
+        artifact_root / "pilot-v6/replacement-image-qualification/replacement-image-inspect.stdout"
     )
     value: object = json.loads(inspect_path.read_text(encoding="utf-8"))
     if not isinstance(value, list) or len(value) != 1 or not isinstance(value[0], dict):
@@ -3688,7 +3975,7 @@ def image_equivalence_adjudication(
             "build-context bytes; the exact digest cause is not determinable"
         ),
     }
-    write_exclusive(artifact_root / "pilot-v5/image-equivalence-adjudication.json", adjudication)
+    write_exclusive(artifact_root / "pilot-v6/image-equivalence-adjudication.json", adjudication)
     return adjudication
 
 
@@ -3710,6 +3997,7 @@ def write_frozen_run_manifest(
     adjudication: dict[str, object],
     static_real_evidence_regression: dict[str, Any],
     qualified_real_evidence_regression_receipt: dict[str, Any],
+    regression_archive_staging_receipt: dict[str, object],
     local_finalizer_qualification_receipt: dict[str, Any],
     preflight_resume_transition: dict[str, Any] | None = None,
     slot2_authority: dict[str, object] | None = None,
@@ -3744,17 +4032,17 @@ def write_frozen_run_manifest(
         or not isinstance(owned_lambda_started, (int, float))
         or isinstance(owned_lambda_started, bool)
         or first_pair_started < owned_lambda_started
-        or first_pair_started > time.time()
+        or first_pair_started > time.time() + 30.0
     ):
         raise T09HostError("first-pair wall origin cannot be frozen")
-    qualification_root = artifact_root / "pilot-v5/replacement-image-qualification"
+    qualification_root = artifact_root / "pilot-v6/replacement-image-qualification"
     if qualified_real_evidence_regression_receipt.get(
         "semantic_projection"
     ) != static_real_evidence_regression.get("semantic_projection"):
         raise T09HostError("static and qualified real-evidence regressions disagree")
     if preflight_resume_transition is not None:
         raise T09HostError("same-host preflight resume is permanently disabled")
-    if slot2_authority is None:
+    if dynamic.get("launch_slot") == 1:
         resume_fields: dict[str, object] = {
             "preflight_transition_mode": "fresh",
             "preflight_resume_source_sha256": None,
@@ -3771,7 +4059,7 @@ def write_frozen_run_manifest(
         }
     else:
         resume_fields = {
-            "preflight_transition_mode": "slot2-replacement",
+            "preflight_transition_mode": "replacement-launch",
             "preflight_resume_source_sha256": None,
             "preflight_resume_argv_sha256": None,
             "preflight_resume_transition_sha256": None,
@@ -3800,39 +4088,23 @@ def write_frozen_run_manifest(
         "command_manifests_sha256": file_sha256(paths["commands"]),
         "provider_entry_receipt_sha256": dynamic.get("receipt_sha256"),
         "owned_instance_identity_sha256": dynamic.get("owned_instance_identity_sha256"),
-        "lambda_started_at_epoch": dynamic.get("lambda_started_at_epoch"),
-        "campaign_started_at_epoch": dynamic.get("lambda_started_at_epoch"),
+        "lambda_started_at_epoch": dynamic.get("provider_preflight_started_at_epoch"),
+        "provider_preflight_started_at_epoch": dynamic.get("provider_preflight_started_at_epoch"),
+        "campaign_started_at_epoch": runtime_state.get("campaign_started_at_epoch"),
         "owned_lambda_started_at_epoch": dynamic.get("owned_lambda_started_at_epoch"),
         "first_pair_started_at_epoch": float(first_pair_started),
-        "prior_lambda_duration_seconds": dynamic.get("prior_retry3_lambda_duration_seconds"),
-        "prior_lambda_cost_usd": dynamic.get("prior_retry3_lambda_cost_usd"),
+        "prior_lambda_duration_seconds": dynamic.get("prior_campaign_lambda_duration_seconds"),
+        "prior_lambda_cost_usd": dynamic.get("prior_campaign_lambda_cost_usd"),
         "launch_slot": dynamic.get("launch_slot"),
         "launch_count": dynamic.get("launch_count"),
         "replacement_eligibility_sha256": dynamic.get("replacement_eligibility_sha256"),
         "replacement_eligibility_source_manifest_sha256": dynamic.get(
             "replacement_eligibility_source_manifest_sha256"
         ),
-        "slot1_failure_archive_sha256": (
-            cast(dict[str, object], slot2_authority["slot1_failure"]).get("archive_sha256")
-            if isinstance(slot2_authority, dict)
-            and isinstance(slot2_authority.get("slot1_failure"), dict)
-            else None
-        ),
-        "slot1_image_archive_sha256": (
-            slot2_authority.get("slot1_image_archive_sha256")
-            if slot2_authority is not None
-            else None
-        ),
-        "slot1_entry_receipt_sha256": (
-            slot2_authority.get("slot1_entry_receipt_sha256")
-            if slot2_authority is not None
-            else None
-        ),
-        "slot1_closeout_receipt_sha256": (
-            slot2_authority.get("slot1_closeout_receipt_sha256")
-            if slot2_authority is not None
-            else None
-        ),
+        "slot1_failure_archive_sha256": None,
+        "slot1_image_archive_sha256": None,
+        "slot1_entry_receipt_sha256": None,
+        "slot1_closeout_receipt_sha256": None,
         "image_import_count": image_materialization.get("image_import_count", 0),
         "additional_build_count": image_materialization.get("additional_build_count", 0),
         "replacement_image_id": image_id,
@@ -3869,14 +4141,26 @@ def write_frozen_run_manifest(
         "credential_safety_stop_detected": False,
         "image_adjudication_sha256": canonical_sha256(adjudication),
         "static_real_evidence_regression_sha256": file_sha256(paths["real_regression"]),
+        "regression_archive_staging_sha256": file_sha256(
+            artifact_root / "pilot-v6/regression-archive-staging/receipt.json"
+        ),
+        "regression_archive_role": regression_archive_staging_receipt.get("archive_role"),
+        "regression_archive_bytes": regression_archive_staging_receipt.get("bytes"),
+        "regression_archive_sha256": regression_archive_staging_receipt.get("sha256"),
+        "regression_archive_canonical_staged_destination": (
+            regression_archive_staging_receipt.get("canonical_staged_destination")
+        ),
+        "regression_archive_source_provenance_category": (
+            regression_archive_staging_receipt.get("source_provenance_category")
+        ),
         "qualified_real_evidence_regression_sha256": file_sha256(
-            artifact_root / "pilot-v5/qualified-real-evidence-regression/receipt.json"
+            artifact_root / "pilot-v6/qualified-real-evidence-regression/receipt.json"
         ),
         "qualified_real_evidence_semantic_sha256": qualified_real_evidence_regression_receipt.get(
             "semantic_projection_sha256"
         ),
         "local_finalizer_qualification_sha256": file_sha256(
-            artifact_root / "pilot-v5/local-finalizer-qualification.json"
+            artifact_root / "pilot-v6/local-finalizer-qualification.json"
         ),
         "local_finalizer_interpreter_sha256": local_finalizer_qualification_receipt.get(
             "interpreter_sha256"
@@ -3904,34 +4188,33 @@ def write_frozen_run_manifest(
             ),
             "image_inspect": file_sha256(qualification_root / "replacement-image-inspect.stdout"),
             "final_image_file_hashes": file_sha256(
-                artifact_root / "pilot-v5/final-image-file-hashes/receipt.json"
+                artifact_root / "pilot-v6/final-image-file-hashes/receipt.json"
             ),
             "evaluator_overlay": file_sha256(
-                artifact_root / "pilot-v5/evaluator-overlay-manifest.json"
+                artifact_root / "pilot-v6/evaluator-overlay-manifest.json"
             ),
             "model_metadata_credential_scan": file_sha256(
-                artifact_root / "pilot-v5/model-metadata-credential-scan.json"
+                artifact_root / "pilot-v6/model-metadata-credential-scan.json"
             ),
             "static_real_evidence_regression": file_sha256(paths["real_regression"]),
+            "regression_archive_staging": file_sha256(
+                artifact_root / "pilot-v6/regression-archive-staging/receipt.json"
+            ),
             "qualified_real_evidence_regression": file_sha256(
-                artifact_root / "pilot-v5/qualified-real-evidence-regression/receipt.json"
+                artifact_root / "pilot-v6/qualified-real-evidence-regression/receipt.json"
             ),
             "local_finalizer_qualification": file_sha256(
-                artifact_root / "pilot-v5/local-finalizer-qualification.json"
+                artifact_root / "pilot-v6/local-finalizer-qualification.json"
             ),
             "preflight_resume_transition": resume_fields["preflight_resume_transition_sha256"],
-            "slot2_eligibility": (
-                slot2_authority.get("receipt_sha256") if slot2_authority is not None else None
-            ),
-            "slot2_authority_source": (
-                slot2_authority.get("source_manifest_sha256")
-                if slot2_authority is not None
-                else None
-            ),
+            "slot2_eligibility": dynamic.get("replacement_eligibility_sha256"),
+            "slot2_authority_source": dynamic.get("replacement_eligibility_source_manifest_sha256"),
         },
     }
     if (
-        manifest["build_count"] != 1
+        manifest["build_count"] not in {0, 1}
+        or (manifest["build_count"] == 0 and manifest["image_import_count"] != 1)
+        or (manifest["build_count"] == 1 and manifest["image_import_count"] != 0)
         or not isinstance(manifest["pair_diffs"], list)
         or any(
             not isinstance(item, dict) or item.get("valid") is not True
@@ -3939,7 +4222,7 @@ def write_frozen_run_manifest(
         )
     ):
         raise T09HostError("replacement runtime cannot be frozen")
-    path = artifact_root / "pilot-v5/frozen-run-manifest.json"
+    path = artifact_root / "pilot-v6/frozen-run-manifest.json"
     write_exclusive(path, manifest)
     return path, manifest
 
@@ -3951,7 +4234,7 @@ def load_frozen_run_manifest(
     package_commit: str,
     require_image: bool = True,
 ) -> tuple[dict[str, Any], str]:
-    path = artifact_root / "pilot-v5/frozen-run-manifest.json"
+    path = artifact_root / "pilot-v6/frozen-run-manifest.json"
     metadata = path.stat(follow_symlinks=False)
     if (
         not stat.S_ISREG(metadata.st_mode)
@@ -3967,14 +4250,36 @@ def load_frozen_run_manifest(
         raise T09HostError(str(exc)) from exc
     paths = contract_paths(repository)
     provider_entry = load_object(
-        artifact_root / "pilot-v5/provider-entry.json",
+        artifact_root / "pilot-v6/provider-entry.json",
         label="provider entry summary",
     )
-    model_credential_scan_path = artifact_root / "pilot-v5/model-metadata-credential-scan.json"
+    model_credential_scan_path = artifact_root / "pilot-v6/model-metadata-credential-scan.json"
     model_credential_scan = load_object(
         model_credential_scan_path,
         label="model metadata credential scan",
     )
+    archive_staging_path = artifact_root / "pilot-v6/regression-archive-staging/receipt.json"
+    archive_staging = load_object(
+        archive_staging_path,
+        label="regression archive staging",
+    )
+    if archive_staging != {
+        "schema_version": "0.1.0",
+        "archive_role": "historical-v4-real-evidence-regression",
+        "source_provenance_category": "private-operator-run-owned-input",
+        "source_absolute_path_retained": False,
+        "source_no_follow_regular_file": True,
+        "source_unchanged": True,
+        "bytes": PRIVATE_REGRESSION_ARCHIVE_BYTES,
+        "sha256": PRIVATE_REGRESSION_ARCHIVE_SHA256,
+        "canonical_staged_destination": PRIVATE_REGRESSION_ARCHIVE_PATH.as_posix(),
+        "exclusive_creation": True,
+        "target_mode": "0600",
+        "target_fsync": True,
+        "parent_directory_fsync": True,
+        "target_rehash_verified": True,
+    }:
+        raise T09HostError("regression archive staging receipt drifted")
     if (
         model_credential_scan.get("actual_credential_exposure_detected") is not False
         or model_credential_scan.get("secret_bearing_artifacts_removed") != []
@@ -3989,7 +4294,7 @@ def load_frozen_run_manifest(
         "host_run_id": HOST_RUN_ID,
         "qualification_id": QUALIFICATION_ID,
         "qualification_count": 1,
-        "build_count": 1,
+        "build_count": manifest.get("build_count"),
         "source_contract_sha256": AUTHORIZATION_SOURCE_SHA256,
         "clean_package_commit": package_commit,
         "plan_sha256": file_sha256(paths["plan"]),
@@ -3998,22 +4303,28 @@ def load_frozen_run_manifest(
         "command_manifests_sha256": file_sha256(paths["commands"]),
         "provider_entry_receipt_sha256": provider_entry.get("receipt_sha256"),
         "owned_instance_identity_sha256": provider_entry.get("owned_instance_identity_sha256"),
-        "lambda_started_at_epoch": provider_entry.get("lambda_started_at_epoch"),
-        "campaign_started_at_epoch": provider_entry.get("lambda_started_at_epoch"),
+        "lambda_started_at_epoch": provider_entry.get("provider_preflight_started_at_epoch"),
+        "provider_preflight_started_at_epoch": provider_entry.get(
+            "provider_preflight_started_at_epoch"
+        ),
+        "campaign_started_at_epoch": runtime_state.get("campaign_started_at_epoch"),
         "owned_lambda_started_at_epoch": provider_entry.get("owned_lambda_started_at_epoch"),
         "first_pair_started_at_epoch": runtime_state.get("first_pair_started_at_epoch"),
-        "prior_lambda_duration_seconds": provider_entry.get("prior_retry3_lambda_duration_seconds"),
-        "prior_lambda_cost_usd": provider_entry.get("prior_retry3_lambda_cost_usd"),
-        "launch_slot": 2,
-        "launch_count": 2,
+        "prior_lambda_duration_seconds": provider_entry.get(
+            "prior_campaign_lambda_duration_seconds"
+        ),
+        "prior_lambda_cost_usd": provider_entry.get("prior_campaign_lambda_cost_usd"),
+        "launch_slot": provider_entry.get("launch_slot"),
+        "launch_count": provider_entry.get("launch_count"),
         "replacement_eligibility_sha256": provider_entry.get("replacement_eligibility_sha256"),
         "replacement_eligibility_source_manifest_sha256": provider_entry.get(
             "replacement_eligibility_source_manifest_sha256"
         ),
-        "slot1_failure_archive_sha256": SLOT1_ZERO_USE_ARCHIVE_SHA256,
-        "slot1_image_archive_sha256": SLOT1_IMAGE_ARCHIVE_SHA256,
-        "slot1_closeout_receipt_sha256": SLOT1_CLOSEOUT_RECEIPT_SHA256,
-        "image_import_count": 1,
+        "slot1_failure_archive_sha256": None,
+        "slot1_image_archive_sha256": None,
+        "slot1_entry_receipt_sha256": None,
+        "slot1_closeout_receipt_sha256": None,
+        "image_import_count": manifest.get("image_import_count"),
         "additional_build_count": 0,
         "package_manifest_sha256": EXPECTED_PACKAGE_MANIFEST_SHA256,
         "chromium_executable_sha256": EXPECTED_CHROMIUM_SHA256,
@@ -4029,11 +4340,21 @@ def load_frozen_run_manifest(
         "actual_credential_exposure_detected": False,
         "credential_safety_stop_detected": False,
         "static_real_evidence_regression_sha256": file_sha256(paths["real_regression"]),
+        "regression_archive_staging_sha256": file_sha256(archive_staging_path),
+        "regression_archive_role": archive_staging["archive_role"],
+        "regression_archive_bytes": archive_staging["bytes"],
+        "regression_archive_sha256": archive_staging["sha256"],
+        "regression_archive_canonical_staged_destination": archive_staging[
+            "canonical_staged_destination"
+        ],
+        "regression_archive_source_provenance_category": archive_staging[
+            "source_provenance_category"
+        ],
         "qualified_real_evidence_regression_sha256": file_sha256(
-            artifact_root / "pilot-v5/qualified-real-evidence-regression/receipt.json"
+            artifact_root / "pilot-v6/qualified-real-evidence-regression/receipt.json"
         ),
         "local_finalizer_qualification_sha256": file_sha256(
-            artifact_root / "pilot-v5/local-finalizer-qualification.json"
+            artifact_root / "pilot-v6/local-finalizer-qualification.json"
         ),
         "local_finalizer_interpreter_dependency_manifest_sha256": (
             manifest.get("local_finalizer_interpreter_dependency_manifest_sha256")
@@ -4058,36 +4379,11 @@ def load_frozen_run_manifest(
     ):
         raise T09HostError("frozen first-pair wall origin drifted")
     source_receipts_for_transition = manifest.get("source_receipts")
-    if typed_qualification.preflight_transition_mode != "slot2-replacement":
-        raise T09HostError("selected Retry 3 package permits only the reviewed slot-2 path")
-    authority_root = artifact_root / "pilot-v5/slot2-authority"
-    authority_path = authority_root / "replacement-launch-eligibility.json"
-    authority_source_manifest = authority_root / "slot2-eligibility-source/source-manifest.json"
-    authority = load_object(authority_path, label="slot-2 replacement eligibility")
-    failure = authority.get("slot1_failure")
+    expected_transition_mode = (
+        "fresh" if provider_entry.get("launch_slot") == 1 else "replacement-launch"
+    )
     if (
-        file_sha256(authority_path) != typed_qualification.replacement_eligibility_sha256
-        or file_sha256(authority_source_manifest)
-        != typed_qualification.replacement_eligibility_source_manifest_sha256
-        or authority.get("slot2_package_commit") != package_commit
-        or authority.get("slot1_package_commit") != SLOT1_PACKAGE_COMMIT
-        or authority.get("slot2_plan_sha256") != file_sha256(paths["plan"])
-        or authority.get("slot1_replacement_image_id") != manifest.get("replacement_image_id")
-        or authority.get("slot1_closeout_receipt_sha256")
-        != typed_qualification.slot1_closeout_receipt_sha256
-        or not isinstance(failure, dict)
-        or failure.get("archive_sha256") != typed_qualification.slot1_failure_archive_sha256
-        or authority.get("slot1_image_archive_sha256")
-        != typed_qualification.slot1_image_archive_sha256
-        or authority.get("candidate_build_attempt_count") != 1
-        or authority.get("additional_image_build_count") != 0
-        or authority.get("empirical_attempts_entered") != 0
-        or authority.get("model_metadata_requests") != 0
-        or authority.get("task_model_requests") != 0
-        or authority.get("task_browser_actions") != 0
-        or authority.get("terminal_or_absent") is not True
-        or authority.get("zero_t09_instances") is not True
-        or authority.get("security_restored") is not True
+        typed_qualification.preflight_transition_mode != expected_transition_mode
         or not isinstance(source_receipts_for_transition, dict)
         or source_receipts_for_transition.get("preflight_resume_transition") is not None
         or source_receipts_for_transition.get("slot2_eligibility")
@@ -4095,12 +4391,33 @@ def load_frozen_run_manifest(
         or source_receipts_for_transition.get("slot2_authority_source")
         != typed_qualification.replacement_eligibility_source_manifest_sha256
     ):
-        raise T09HostError("frozen slot-2 replacement authority drifted")
-    file_hash_receipt_path = artifact_root / "pilot-v5/final-image-file-hashes/receipt.json"
+        raise T09HostError("frozen launch transition authority drifted")
+    file_hash_receipt_path = artifact_root / "pilot-v6/final-image-file-hashes/receipt.json"
     file_hash_receipt = load_object(file_hash_receipt_path, label="final image file hashes")
+    materialization_path = artifact_root / "pilot-v6/replacement-image-qualification/receipt.json"
+    materialization = load_object(materialization_path, label="image materialization")
+    if (
+        materialization.get("qualification_id") != QUALIFICATION_ID
+        or materialization.get("image_id") != manifest.get("replacement_image_id")
+        or materialization.get("build_count") != typed_qualification.build_count
+        or materialization.get("image_import_count") != typed_qualification.image_import_count
+        or materialization.get("additional_build_count") != 0
+        or (
+            typed_qualification.build_count == 0
+            and (
+                materialization.get("method") != "exact-retained-image-archive-import"
+                or materialization.get("retained_image_archive_sha256")
+                != RETAINED_IMAGE_ARCHIVE_SHA256
+                or materialization.get("retained_image_archive_bytes")
+                != RETAINED_IMAGE_ARCHIVE_BYTES
+                or materialization.get("image_id") != RETAINED_IMAGE_ID
+            )
+        )
+    ):
+        raise T09HostError("frozen image load/build materialization drifted")
     source_receipts = manifest.get("source_receipts")
     qualified_regression_path = (
-        artifact_root / "pilot-v5/qualified-real-evidence-regression/receipt.json"
+        artifact_root / "pilot-v6/qualified-real-evidence-regression/receipt.json"
     )
     qualified_regression = load_object(
         qualified_regression_path,
@@ -4114,7 +4431,7 @@ def load_frozen_run_manifest(
             FINALIZER_RELATIVE_PATH,
         ),
     )
-    local_qualification_path = artifact_root / "pilot-v5/local-finalizer-qualification.json"
+    local_qualification_path = artifact_root / "pilot-v6/local-finalizer-qualification.json"
     local_qualification = validate_local_finalizer_qualification(
         local_qualification_path,
         repository=repository,
@@ -4123,6 +4440,7 @@ def load_frozen_run_manifest(
     )
     if (
         not isinstance(source_receipts, dict)
+        or source_receipts.get("materialization") != file_sha256(materialization_path)
         or source_receipts.get("final_image_file_hashes") != file_sha256(file_hash_receipt_path)
         or source_receipts.get("model_metadata_credential_scan")
         != file_sha256(model_credential_scan_path)
@@ -4131,6 +4449,7 @@ def load_frozen_run_manifest(
         != typed_qualification.python_interpreter_sha256
         or source_receipts.get("static_real_evidence_regression")
         != file_sha256(paths["real_regression"])
+        or source_receipts.get("regression_archive_staging") != file_sha256(archive_staging_path)
         or source_receipts.get("qualified_real_evidence_regression")
         != file_sha256(qualified_regression_path)
         or source_receipts.get("local_finalizer_qualification")
@@ -4146,16 +4465,29 @@ def load_frozen_run_manifest(
         or qualified_regression.get("semantic_projection")
         != static_regression.get("semantic_projection")
         or qualified_regression.get("receipt_id")
-        != "T09-PRAGMATIC-RETRY3-QUALIFIED-IMAGE-REGRESSION-0001"
+        != "T09-PRAGMATIC-RETRY4-QUALIFIED-IMAGE-REGRESSION-0001"
         or qualified_regression.get("network_disabled") is not True
         or qualified_regression.get("additional_model_requests") != 0
         or qualified_regression.get("additional_browser_actions") != 0
     ):
         raise T09HostError("frozen Python interpreter source receipt drifted")
     exclusion_path = (
-        artifact_root / "pilot-v5/replacement-image-qualification/build-context-exclusions.json"
+        artifact_root / "pilot-v6/replacement-image-qualification/build-context-exclusions.json"
     )
-    if manifest.get("build_context_exclusions_sha256") != file_sha256(exclusion_path):
+    context_path = (
+        artifact_root / "pilot-v6/replacement-image-qualification/build-context-manifest.json"
+    )
+    inspect_path = (
+        artifact_root / "pilot-v6/replacement-image-qualification/replacement-image-inspect.stdout"
+    )
+    if (
+        manifest.get("build_context_manifest_sha256") != file_sha256(context_path)
+        or manifest.get("build_context_exclusions_sha256") != file_sha256(exclusion_path)
+        or manifest.get("image_inspect_sha256") != file_sha256(inspect_path)
+        or source_receipts.get("build_context") != file_sha256(context_path)
+        or source_receipts.get("build_context_exclusions") != file_sha256(exclusion_path)
+        or source_receipts.get("image_inspect") != file_sha256(inspect_path)
+    ):
         raise T09HostError("frozen build-context exclusion receipt drifted")
     image_id = typed_qualification.replacement_image_id
     if (
@@ -4195,12 +4527,13 @@ def initialize_state(
         "schema_version": "0.2.0",
         "plan_id": PLAN_ID,
         "execution_contract_sha256": execution_sha256,
-        "pilot_started_at_epoch": lambda_started_at_epoch,
+        "pilot_started_at_epoch": None,
         "lambda_started_at_epoch": lambda_started_at_epoch,
-        "campaign_started_at_epoch": lambda_started_at_epoch,
+        "provider_preflight_started_at_epoch": owned_started,
+        "campaign_started_at_epoch": None,
         "owned_lambda_started_at_epoch": owned_started,
-        "prior_retry3_lambda_duration_seconds": prior_lambda_duration_seconds,
-        "prior_retry3_lambda_cost_usd": prior_lambda_cost_usd,
+        "prior_campaign_lambda_duration_seconds": prior_lambda_duration_seconds,
+        "prior_campaign_lambda_cost_usd": prior_lambda_cost_usd,
         "launch_slot": launch_slot,
         "launch_count": launch_slot,
         "replacement_eligibility_sha256": replacement_eligibility_sha256,
@@ -4221,7 +4554,37 @@ def initialize_state(
         "actual_credential_exposure_detected": False,
         "credential_safety_stop_detected": False,
     }
-    write_exclusive(root / "pilot-v5/pilot-state.json", state)
+    write_exclusive(root / "pilot-v6/pilot-state.json", state)
+
+
+def schedule_empirical_campaign_start(
+    root: Path,
+    *,
+    execution_contract_sha256: str,
+    delay_seconds: float = 5.0,
+) -> float:
+    """Choose one near-future empirical origin before the manifest is serialized."""
+
+    if not 1.0 <= delay_seconds <= 30.0:
+        raise T09HostError("empirical clock publication delay is outside its narrow bound")
+    state_path = root / "pilot-v6/pilot-state.json"
+    state = load_object(state_path, label="pilot state")
+    if (
+        state.get("execution_contract_sha256") != execution_contract_sha256
+        or state.get("pilot_started_at_epoch") is not None
+        or state.get("campaign_started_at_epoch") is not None
+        or state.get("first_pair_started_at_epoch") is not None
+        or state.get("empirical_attempts_entered") != []
+        or state.get("raw_attempts_complete") != []
+        or state.get("attempts_completed") != []
+    ):
+        raise T09HostError("empirical campaign clock cannot be scheduled from this state")
+    start = time.time() + delay_seconds
+    state["pilot_started_at_epoch"] = start
+    state["campaign_started_at_epoch"] = start
+    state["first_pair_started_at_epoch"] = start
+    write_atomic(state_path, state)
+    return start
 
 
 def _preflight_resume_argv() -> list[str]:
@@ -4395,7 +4758,7 @@ def _resume_evaluator_receipt(
     prefix: list[str],
     image_id: str,
 ) -> dict[str, object]:
-    manifest_path = artifact_root / "pilot-v5/evaluator-overlay-manifest.json"
+    manifest_path = artifact_root / "pilot-v6/evaluator-overlay-manifest.json"
     manifest = load_object(manifest_path, label="resumed evaluator overlay manifest")
     expected = expected_evaluator_packages(repository)
     if (
@@ -4463,7 +4826,7 @@ def prepare_preflight_resume(
         raise T09HostError("preflight resume requires a fresh distinct artifact root")
     prior_metadata = prior_root.stat(follow_symlinks=False)
     if (
-        prior_root.name != "t09-pilot-v5-preflight-failure-0001"
+        prior_root.name != "t09-pilot-v6-preflight-failure-0001"
         or prior_root.is_symlink()
         or not stat.S_ISDIR(prior_metadata.st_mode)
         or prior_metadata.st_uid != os.getuid()
@@ -4506,7 +4869,7 @@ def prepare_preflight_resume(
         or not 0 <= time.time() - float(lambda_started) < PROVIDER_TERMINATION_CUTOFF_SECONDS
     ):
         raise T09HostError("preflight resume is outside the original campaign clock")
-    pilot = prior_root / "pilot-v5"
+    pilot = prior_root / "pilot-v6"
     state_path = pilot / "pilot-state.json"
     aggregate_path = pilot / "aggregate-budget.json"
     old_state = load_object(state_path, label="failed preflight state")
@@ -4560,7 +4923,7 @@ def prepare_preflight_resume(
         require_local_runtime=False,
     )
     artifact_root.mkdir(mode=0o700, parents=True)
-    resume_root = artifact_root / "pilot-v5/preflight-resume"
+    resume_root = artifact_root / "pilot-v6/preflight-resume"
     resume_root.mkdir(parents=True, mode=0o700)
     retained_prefix = _copy_retained_prefix(
         prior_root,
@@ -4576,29 +4939,29 @@ def prepare_preflight_resume(
     for relative in ("replacement-image-qualification",):
         _copy_retained_prefix(
             pilot / relative,
-            artifact_root / "pilot-v5" / relative,
+            artifact_root / "pilot-v6" / relative,
             label=f"retained {relative}",
         )
     shutil.copy2(
         pilot / "evaluator-overlay-manifest.json",
-        artifact_root / "pilot-v5/evaluator-overlay-manifest.json",
+        artifact_root / "pilot-v6/evaluator-overlay-manifest.json",
     )
     write_exclusive(
-        artifact_root / "pilot-v5/provider-entry.json",
+        artifact_root / "pilot-v6/provider-entry.json",
         sanitized_dynamic_receipt(args.dynamic_receipt, dynamic),
     )
     shutil.copy2(
         args.local_finalizer_qualification.resolve(strict=True),
-        artifact_root / "pilot-v5/local-finalizer-qualification.json",
+        artifact_root / "pilot-v6/local-finalizer-qualification.json",
     )
     transition_state_path = resume_root / "transition-pilot-state.json"
     transition_aggregate_path = resume_root / "transition-aggregate-budget.json"
     write_exclusive(transition_state_path, next_state)
     write_exclusive(transition_aggregate_path, next_aggregate)
-    shutil.copy2(transition_state_path, artifact_root / "pilot-v5/pilot-state.json")
+    shutil.copy2(transition_state_path, artifact_root / "pilot-v6/pilot-state.json")
     shutil.copy2(
         transition_aggregate_path,
-        artifact_root / "pilot-v5/aggregate-budget.json",
+        artifact_root / "pilot-v6/aggregate-budget.json",
     )
     evaluator = _resume_evaluator_receipt(
         repository=repository,
@@ -4641,7 +5004,7 @@ def prepare_preflight_resume(
         "prior_aggregate_sha256": file_sha256(aggregate_path),
         "transition_aggregate_sha256": file_sha256(transition_aggregate_path),
         "retained_materialization_receipt_sha256": file_sha256(
-            artifact_root / "pilot-v5/replacement-image-qualification/receipt.json"
+            artifact_root / "pilot-v6/replacement-image-qualification/receipt.json"
         ),
         "recovery_source_sha256": file_sha256(Path(__file__).resolve(strict=True)),
         "recovery_argv": recovery_argv,
@@ -4714,10 +5077,20 @@ def resume_preflight(args: argparse.Namespace) -> None:
         prefix=prefix,
         image_id=image_id,
     )
+    archive_staging = stage_verified_archive(
+        args.real_evidence_archive,
+        PRIVATE_REGRESSION_ARCHIVE_PATH,
+        PRIVATE_REGRESSION_ARCHIVE_BYTES,
+        PRIVATE_REGRESSION_ARCHIVE_SHA256,
+    )
+    write_exclusive(
+        artifact_root / "pilot-v6/regression-archive-staging/receipt.json",
+        archive_staging,
+    )
     qualified_real_regression = qualified_real_evidence_regression(
         repository=repository,
         artifact_root=artifact_root,
-        archive=args.real_evidence_archive,
+        archive=PRIVATE_REGRESSION_ARCHIVE_PATH,
         overlay=args.evaluator_overlay.resolve(strict=True),
         prefix=prefix,
         image_id=image_id,
@@ -4758,7 +5131,7 @@ def resume_preflight(args: argparse.Namespace) -> None:
         or owned_containers(prefix)
         or _runtime_budget_state(artifact_root).get("empirical_attempts_entered") != []
         or load_aggregate_usage(
-            artifact_root / "pilot-v5/aggregate-budget.json",
+            artifact_root / "pilot-v6/aggregate-budget.json",
             contract_sha256=execution_sha256,
         )
         != ProviderBudgetUsage()
@@ -4792,15 +5165,16 @@ def resume_preflight(args: argparse.Namespace) -> None:
         adjudication=adjudication,
         static_real_evidence_regression=real_evidence_regression,
         qualified_real_evidence_regression_receipt=qualified_real_regression,
+        regression_archive_staging_receipt=archive_staging,
         local_finalizer_qualification_receipt=local_finalizer_qualification,
         preflight_resume_transition=transition,
     )
-    state_path = artifact_root / "pilot-v5/pilot-state.json"
+    state_path = artifact_root / "pilot-v6/pilot-state.json"
     state = load_object(state_path, label="pilot state")
     state["first_pair_started_at_epoch"] = time.time()
     write_atomic(state_path, state)
     admitted_seconds = admit_next_attempt(artifact_root)
-    preflight_path = artifact_root / "pilot-v5/preflight.json"
+    preflight_path = artifact_root / "pilot-v6/preflight.json"
     write_exclusive(
         preflight_path,
         {
@@ -4835,7 +5209,7 @@ def resume_preflight(args: argparse.Namespace) -> None:
             "real_evidence_finalizer_regression": {
                 "static_receipt_sha256": file_sha256(paths["real_regression"]),
                 "qualified_receipt_sha256": file_sha256(
-                    artifact_root / "pilot-v5/qualified-real-evidence-regression/receipt.json"
+                    artifact_root / "pilot-v6/qualified-real-evidence-regression/receipt.json"
                 ),
                 "semantic_projection_sha256": real_evidence_regression[
                     "semantic_projection_sha256"
@@ -4849,7 +5223,7 @@ def resume_preflight(args: argparse.Namespace) -> None:
             },
             "local_post_termination_finalizer": {
                 "qualification_sha256": file_sha256(
-                    artifact_root / "pilot-v5/local-finalizer-qualification.json"
+                    artifact_root / "pilot-v6/local-finalizer-qualification.json"
                 ),
                 "interpreter_sha256": local_finalizer_qualification["interpreter_sha256"],
                 "interpreter_dependency_manifest_sha256": local_finalizer_qualification[
@@ -4869,7 +5243,7 @@ def resume_preflight(args: argparse.Namespace) -> None:
             "model_metadata": model_metadata,
             "model_metadata_request_count": 1,
             "model_metadata_credential_scan_sha256": file_sha256(
-                artifact_root / "pilot-v5/model-metadata-credential-scan.json"
+                artifact_root / "pilot-v6/model-metadata-credential-scan.json"
             ),
             "actual_credential_exposure_detected": False,
             "model_task_request_count": 0,
@@ -4905,7 +5279,7 @@ def resume_preflight(args: argparse.Namespace) -> None:
     ):
         raise T09HostError("post-resume preflight zero-use validation failed")
     write_exclusive(
-        artifact_root / "pilot-v5/preflight-resume/postfreeze-validation.json",
+        artifact_root / "pilot-v6/preflight-resume/postfreeze-validation.json",
         {
             "schema_version": "0.1.0",
             "plan_id": PLAN_ID,
@@ -4935,33 +5309,31 @@ def preflight(args: argparse.Namespace) -> None:
         repository_root=repository,
         source_root=args.dynamic_source_root.resolve(strict=True),
     )
-    if (
-        dynamic.get("launch_slot") != 2
-        or dynamic.get("launch_count") != 2
-        or dynamic.get("replacement_eligibility_sha256") is None
-        or dynamic.get("replacement_eligibility_source_manifest_sha256") is None
+    launch_slot = dynamic.get("launch_slot")
+    if launch_slot not in {1, 2} or dynamic.get("launch_count") != launch_slot:
+        raise T09HostError("Retry 4 entry launch identity is invalid")
+    if launch_slot == 1 and (
+        dynamic.get("replacement_eligibility_sha256") is not None
+        or dynamic.get("replacement_eligibility_source_manifest_sha256") is not None
     ):
-        raise T09HostError("Retry 3 slot-2 preflight requires the exact replacement entry")
-    command_document = verify_package(repository, args.package_commit)
-    real_evidence_regression = validate_real_evidence_regression(repository)
-    local_finalizer_qualification = validate_local_finalizer_qualification(
-        args.local_finalizer_qualification,
-        repository=repository,
-        package_commit=args.package_commit,
-        require_local_runtime=False,
-    )
+        raise T09HostError("first Retry 4 launch retained replacement authority")
+    if launch_slot == 2 and (
+        not isinstance(dynamic.get("replacement_eligibility_sha256"), str)
+        or not isinstance(dynamic.get("replacement_eligibility_source_manifest_sha256"), str)
+    ):
+        raise T09HostError("second Retry 4 launch lacks exact replacement authority")
     paths = contract_paths(repository)
     prefix = docker_prefix()
     if owned_containers(prefix):
         raise T09HostError("owned pilot containers already exist")
     artifact_root.mkdir(mode=0o700, parents=True)
-    lambda_started_raw = dynamic["lambda_started_at_epoch"]
+    lambda_started_raw = dynamic["provider_preflight_started_at_epoch"]
     if not isinstance(lambda_started_raw, (int, float)) or isinstance(lambda_started_raw, bool):
         raise T09HostError("provider entry receipt lacks the billable time origin")
     lambda_started = float(lambda_started_raw)
     owned_lambda_started_raw = dynamic.get("owned_lambda_started_at_epoch")
-    prior_lambda_duration_raw = dynamic.get("prior_retry3_lambda_duration_seconds")
-    prior_lambda_cost_raw = dynamic.get("prior_retry3_lambda_cost_usd")
+    prior_lambda_duration_raw = dynamic.get("prior_campaign_lambda_duration_seconds")
+    prior_lambda_cost_raw = dynamic.get("prior_campaign_lambda_cost_usd")
     if not all(
         isinstance(value, (int, float)) and not isinstance(value, bool)
         for value in (
@@ -4982,42 +5354,37 @@ def preflight(args: argparse.Namespace) -> None:
         owned_lambda_started_at_epoch=float(owned_lambda_started_raw),
         prior_lambda_duration_seconds=float(prior_lambda_duration_raw),
         prior_lambda_cost_usd=float(prior_lambda_cost_raw),
-        launch_slot=2,
-        replacement_eligibility_sha256=cast(str, dynamic["replacement_eligibility_sha256"]),
+        launch_slot=cast(int, launch_slot),
+        replacement_eligibility_sha256=cast(
+            str | None, dynamic.get("replacement_eligibility_sha256")
+        ),
         replacement_eligibility_source_manifest_sha256=cast(
-            str, dynamic["replacement_eligibility_source_manifest_sha256"]
+            str | None, dynamic.get("replacement_eligibility_source_manifest_sha256")
         ),
     )
     write_exclusive(
-        artifact_root / "pilot-v5/provider-entry.json",
+        artifact_root / "pilot-v6/provider-entry.json",
         sanitized_dynamic_receipt(args.dynamic_receipt, dynamic),
     )
+    command_document = verify_package(repository, args.package_commit)
+    real_evidence_regression = validate_real_evidence_regression(repository)
+    local_finalizer_qualification = validate_local_finalizer_qualification(
+        args.local_finalizer_qualification,
+        repository=repository,
+        package_commit=args.package_commit,
+        require_local_runtime=False,
+    )
     write_exclusive(
-        artifact_root / "pilot-v5/local-finalizer-qualification.json",
+        artifact_root / "pilot-v6/local-finalizer-qualification.json",
         local_finalizer_qualification,
     )
-    retained_authority_root = artifact_root / "pilot-v5/slot2-authority"
-    retain_slot2_authority(
-        args.slot2_authority_root.resolve(strict=True),
-        retained_authority_root,
-    )
-    image_materialization, slot2_authority = import_slot1_replacement_image(
+    image_materialization = materialize_retained_or_build_image(
         repository=repository,
         package_commit=args.package_commit,
         artifact_root=artifact_root,
-        authority_root=retained_authority_root,
-        image_archive=args.replacement_image_archive.resolve(strict=True),
+        image_archive=args.replacement_image_archive,
         prefix=prefix,
     )
-    if (
-        slot2_authority.get("receipt_sha256") != dynamic.get("replacement_eligibility_sha256")
-        or slot2_authority.get("source_manifest_sha256")
-        != dynamic.get("replacement_eligibility_source_manifest_sha256")
-        or slot2_authority.get("campaign_started_at_epoch") != lambda_started
-        or slot2_authority.get("prior_lambda_duration_seconds") != float(prior_lambda_duration_raw)
-        or slot2_authority.get("prior_lambda_cost_usd") != float(prior_lambda_cost_raw)
-    ):
-        raise T09HostError("slot-2 provider entry and retained authority disagree")
     image_id = image_materialization.get("image_id")
     if not isinstance(image_id, str):
         raise T09HostError("replacement image materialization lacks its identity")
@@ -5053,10 +5420,20 @@ def preflight(args: argparse.Namespace) -> None:
         prefix=prefix,
         image_id=image_id,
     )
+    archive_staging = stage_verified_archive(
+        args.real_evidence_archive,
+        PRIVATE_REGRESSION_ARCHIVE_PATH,
+        PRIVATE_REGRESSION_ARCHIVE_BYTES,
+        PRIVATE_REGRESSION_ARCHIVE_SHA256,
+    )
+    write_exclusive(
+        artifact_root / "pilot-v6/regression-archive-staging/receipt.json",
+        archive_staging,
+    )
     qualified_real_regression = qualified_real_evidence_regression(
         repository=repository,
         artifact_root=artifact_root,
-        archive=args.real_evidence_archive,
+        archive=PRIVATE_REGRESSION_ARCHIVE_PATH,
         overlay=args.evaluator_overlay.resolve(strict=True),
         prefix=prefix,
         image_id=image_id,
@@ -5087,23 +5464,26 @@ def preflight(args: argparse.Namespace) -> None:
         image_id=image_id,
     )
     gpu = gpu_snapshot()
-    campaign_elapsed = time.time() - lambda_started
+    preflight_elapsed = time.time() - lambda_started
     owned_lambda_elapsed = time.time() - float(owned_lambda_started_raw)
     active_lambda_duration = float(prior_lambda_duration_raw) + owned_lambda_elapsed
     active_lambda_cost = float(prior_lambda_cost_raw) + (
         owned_lambda_elapsed * LAMBDA_HOURLY_PRICE_USD / 3600.0
     )
     if (
-        campaign_elapsed >= MAX_TOTAL_WALL_SECONDS
+        preflight_elapsed >= MAX_PREFLIGHT_WALL_SECONDS
         or active_lambda_duration >= MAX_LAMBDA_DURATION_SECONDS
         or active_lambda_cost >= MAX_LAMBDA_COST_USD
     ):
-        raise T09HostError("preflight consumed the Lambda duration or cost ceiling")
-    state_path = artifact_root / "pilot-v5/pilot-state.json"
-    state = load_object(state_path, label="pilot state")
-    state["first_pair_started_at_epoch"] = time.time()
-    write_atomic(state_path, state)
-    admitted_seconds = admit_next_attempt(artifact_root)
+        raise T09HostError("preflight consumed its wall or cumulative Lambda ceiling")
+    remaining_before_metadata = preflight_seconds_remaining(artifact_root)
+    active_headroom_before_metadata = provider_seconds_remaining(artifact_root)
+    if remaining_before_metadata <= 0:
+        raise T09HostError("provider preflight wall is exhausted before model metadata")
+    if active_headroom_before_metadata < MAX_TOTAL_WALL_SECONDS:
+        raise T09HostError(
+            "cumulative active-provider headroom cannot cover the fresh empirical campaign"
+        )
     # This is the one authorized provider metadata GET and is intentionally the last
     # fallible functional gate before the immutable run manifest is written.
     model_metadata = model_metadata_preflight(
@@ -5115,6 +5495,10 @@ def preflight(args: argparse.Namespace) -> None:
     model_credential_scan = record_preflight_credential_scan(
         artifact_root=artifact_root,
         secret_file=args.secret_file.resolve(strict=True),
+        execution_contract_sha256=execution_sha256,
+    )
+    empirical_start = schedule_empirical_campaign_start(
+        artifact_root,
         execution_contract_sha256=execution_sha256,
     )
     frozen_manifest_path, frozen_manifest = write_frozen_run_manifest(
@@ -5134,9 +5518,14 @@ def preflight(args: argparse.Namespace) -> None:
         adjudication=adjudication,
         static_real_evidence_regression=real_evidence_regression,
         qualified_real_evidence_regression_receipt=qualified_real_regression,
+        regression_archive_staging_receipt=archive_staging,
         local_finalizer_qualification_receipt=local_finalizer_qualification,
-        slot2_authority=slot2_authority,
+        slot2_authority=None,
     )
+    manifest_published_at = time.time()
+    if manifest_published_at > empirical_start:
+        raise T09HostError("frozen manifest publication missed the empirical clock boundary")
+    time.sleep(max(0.0, empirical_start - manifest_published_at))
     loaded_manifest, loaded_manifest_sha256 = load_frozen_run_manifest(
         artifact_root,
         repository=repository,
@@ -5147,7 +5536,8 @@ def preflight(args: argparse.Namespace) -> None:
         frozen_manifest_path
     ):
         raise T09HostError("post-freeze manifest revalidation drifted")
-    postfreeze_path = artifact_root / "pilot-v5/postfreeze-validation.json"
+    admitted_seconds = admit_next_attempt(artifact_root)
+    postfreeze_path = artifact_root / "pilot-v6/postfreeze-validation.json"
     write_exclusive(
         postfreeze_path,
         {
@@ -5157,21 +5547,26 @@ def preflight(args: argparse.Namespace) -> None:
             "package_commit": args.package_commit,
             "frozen_run_manifest_sha256": loaded_manifest_sha256,
             "replacement_image_id": image_id,
-            "slot2_eligibility_sha256": slot2_authority["receipt_sha256"],
+            "replacement_eligibility_sha256": dynamic.get("replacement_eligibility_sha256"),
             "first_pair_started_at_epoch": frozen_manifest["first_pair_started_at_epoch"],
+            "empirical_campaign_started_at_epoch": empirical_start,
+            "frozen_manifest_published_before_empirical_clock": True,
             "model_metadata_request_count": 1,
             "model_metadata_credential_scan_sha256": file_sha256(
-                artifact_root / "pilot-v5/model-metadata-credential-scan.json"
+                artifact_root / "pilot-v6/model-metadata-credential-scan.json"
             ),
             "actual_credential_exposure_detected": False,
             "model_task_request_count": 0,
             "task_browser_action_count": 0,
-            "next_attempt_admission_passed_before_metadata_get": True,
+            "fresh_empirical_campaign_headroom_passed_before_metadata_get": True,
+            "active_provider_seconds_available_before_metadata_get": (
+                active_headroom_before_metadata
+            ),
             "completed_at_epoch": time.time(),
         },
     )
     write_exclusive(
-        artifact_root / "pilot-v5/preflight.json",
+        artifact_root / "pilot-v6/preflight.json",
         {
             "schema_version": "0.1.0",
             "plan_id": PLAN_ID,
@@ -5188,8 +5583,10 @@ def preflight(args: argparse.Namespace) -> None:
             "frozen_run_manifest_sha256": file_sha256(frozen_manifest_path),
             "frozen_run_manifest_id": frozen_manifest["manifest_id"],
             "postfreeze_validation_sha256": file_sha256(postfreeze_path),
-            "slot2_eligibility_sha256": slot2_authority["receipt_sha256"],
-            "slot2_eligibility_source_manifest_sha256": slot2_authority["source_manifest_sha256"],
+            "replacement_eligibility_sha256": dynamic.get("replacement_eligibility_sha256"),
+            "replacement_eligibility_source_manifest_sha256": dynamic.get(
+                "replacement_eligibility_source_manifest_sha256"
+            ),
             "first_pair_started_at_epoch": frozen_manifest["first_pair_started_at_epoch"],
             "image_equivalence_adjudication": adjudication,
             "final_image_file_hashes": image_files,
@@ -5203,7 +5600,7 @@ def preflight(args: argparse.Namespace) -> None:
             "real_evidence_finalizer_regression": {
                 "static_receipt_sha256": file_sha256(paths["real_regression"]),
                 "qualified_receipt_sha256": file_sha256(
-                    artifact_root / "pilot-v5/qualified-real-evidence-regression/receipt.json"
+                    artifact_root / "pilot-v6/qualified-real-evidence-regression/receipt.json"
                 ),
                 "semantic_projection_sha256": real_evidence_regression[
                     "semantic_projection_sha256"
@@ -5217,7 +5614,7 @@ def preflight(args: argparse.Namespace) -> None:
             },
             "local_post_termination_finalizer": {
                 "qualification_sha256": file_sha256(
-                    artifact_root / "pilot-v5/local-finalizer-qualification.json"
+                    artifact_root / "pilot-v6/local-finalizer-qualification.json"
                 ),
                 "interpreter_sha256": local_finalizer_qualification["interpreter_sha256"],
                 "interpreter_dependency_manifest_sha256": local_finalizer_qualification[
@@ -5249,6 +5646,70 @@ def preflight(args: argparse.Namespace) -> None:
             "seconds_available_after_cleanup_reserve": admitted_seconds,
         },
     )
+
+
+def preflight_with_deadline(args: argparse.Namespace) -> None:
+    """Apply the per-launch preflight clock and retain one concise failure receipt."""
+
+    repository = args.repository.resolve(strict=True)
+    dynamic = validate_dynamic_receipt(
+        args.dynamic_receipt.resolve(strict=True),
+        expected_package_commit=args.package_commit,
+        repository_root=repository,
+        source_root=args.dynamic_source_root.resolve(strict=True),
+    )
+    started = dynamic.get("provider_preflight_started_at_epoch")
+    prior_duration = dynamic.get("prior_campaign_lambda_duration_seconds")
+    prior_cost = dynamic.get("prior_campaign_lambda_cost_usd")
+    if not all(
+        isinstance(value, (int, float)) and not isinstance(value, bool)
+        for value in (started, prior_duration, prior_cost)
+    ):
+        raise T09HostError("provider entry lacks Retry 4 clock accounting")
+    assert isinstance(started, (int, float))
+    assert isinstance(prior_duration, (int, float))
+    assert isinstance(prior_cost, (int, float))
+    now = time.time()
+    current_elapsed = now - float(started)
+    active_elapsed = float(prior_duration) + current_elapsed
+    active_cost = float(prior_cost) + current_elapsed * LAMBDA_HOURLY_PRICE_USD / 3600.0
+    deadline = min(
+        MAX_PREFLIGHT_WALL_SECONDS - current_elapsed,
+        MAX_LAMBDA_DURATION_SECONDS - active_elapsed,
+        (MAX_LAMBDA_COST_USD - active_cost) * 3600.0 / LAMBDA_HOURLY_PRICE_USD,
+    )
+    if deadline <= 0:
+        raise T09HostError("provider preflight or cumulative active cap is exhausted")
+    try:
+        with hard_deadline(deadline, message="provider preflight wall expired"):
+            preflight(args)
+    except BaseException as exc:
+        root = args.artifact_root.resolve(strict=False)
+        if root.is_dir():
+            receipt = root / "pilot-v6/preflight-failure.json"
+            if not receipt.exists():
+                failed_at = time.time()
+                write_exclusive(
+                    receipt,
+                    {
+                        "schema_version": "0.1.0",
+                        "plan_id": PLAN_ID,
+                        "host_run_id": HOST_RUN_ID,
+                        "package_commit": args.package_commit,
+                        "launch_slot": dynamic.get("launch_slot"),
+                        "provider_preflight_started_at_epoch": float(started),
+                        "failed_at_epoch": failed_at,
+                        "elapsed_seconds": failed_at - float(started),
+                        "failure_type": type(exc).__name__,
+                        "failure_message": str(exc)[:1024],
+                        "empirical_attempts_entered": 0,
+                        "termination_dispatch_required": True,
+                        "termination_dispatch_deadline_epoch": (
+                            failed_at + FAILED_PREFLIGHT_TERMINATION_DISPATCH_SECONDS
+                        ),
+                    },
+                )
+        raise
 
 
 def container_create_argv(
@@ -5435,7 +5896,7 @@ def evaluator_argv(
     if finalizer_sha256 != finalizer_source_sha256:
         raise T09HostError("validated finalizer source changed before projection")
     frozen_manifest = load_object(
-        artifact_root / "pilot-v5/frozen-run-manifest.json", label="frozen run manifest"
+        artifact_root / "pilot-v6/frozen-run-manifest.json", label="frozen run manifest"
     )
     finalizer_closure = {
         "finalizer_execution_mode": "qualified-image",
@@ -5477,7 +5938,7 @@ def evaluator_argv(
     invocation_name = f"{finalizer_sha256}-invocation-{invocation:04d}"
     finalized_root = finalized_base / invocation_name
     finalized_root.mkdir(mode=0o700, exist_ok=False)
-    control_root = (artifact_root / "pilot-v5").resolve(strict=True)
+    control_root = (artifact_root / "pilot-v6").resolve(strict=True)
     projected = finalizer_projection.build_finalizer_argv(
         docker_prefix=docker_prefix(),
         artifact_root=str(artifact_root),
@@ -5675,7 +6136,7 @@ def local_evaluator_invocation(
         finalizer_source_sha256=finalizer_source_sha256,
         finalizer_projection_source_sha256=finalizer_projection_source_sha256,
         finalizer_dependency_manifest_sha256=dependency_manifest_sha256,
-        frozen_run_manifest=str(artifact_root / "pilot-v5/frozen-run-manifest.json"),
+        frozen_run_manifest=str(artifact_root / "pilot-v6/frozen-run-manifest.json"),
         frozen_run_manifest_sha256=frozen_run_manifest_sha256,
         replacement_image_id=cast(str, frozen_manifest["replacement_image_id"]),
         host_cleanup_receipt=str(raw_root / "host-cleanup-receipt.json"),
@@ -5819,7 +6280,7 @@ def prepare_condition_attempt_root(
             or privacy_violations(attempt_root)
         ):
             raise T09HostError("existing attempt root is not a repairable pre-entry prefix")
-        repair_root = artifact_root / "pilot-v5/preentry-condition-repairs" / run_id
+        repair_root = artifact_root / "pilot-v6/preentry-condition-repairs" / run_id
         repair_root.mkdir(mode=0o700, parents=True, exist_ok=True)
         existing = sorted(path for path in repair_root.iterdir() if path.is_dir())
         if len(existing) >= MAX_PREENTRY_REPAIRS_PER_RUN:
@@ -5981,7 +6442,7 @@ def seal_raw_attempt(
     }
     missing = sorted(name for name in required if not (raw_root / name).is_file())
     cleanup = load_object(raw_root / "host-cleanup-receipt.json", label="host cleanup")
-    state = load_object(artifact_root / "pilot-v5/pilot-state.json", label="pilot state")
+    state = load_object(artifact_root / "pilot-v6/pilot-state.json", label="pilot state")
     entered = state.get("empirical_attempts_entered")
     exposure_detected = cleanup.get("actual_credential_exposure_detected")
     cleanup_integrity_failure = cleanup.get("runtime_secret_cleanup_malformed")
@@ -6137,7 +6598,7 @@ def seal_raw_attempt(
         package_commit=package_commit,
     )
     mark_raw_attempt_complete(
-        artifact_root / "pilot-v5/pilot-state.json",
+        artifact_root / "pilot-v6/pilot-state.json",
         execution_contract_sha256=execution_contract_sha256,
         run_id=run_id,
         raw_manifest_sha256=file_sha256(raw_manifest_path),
@@ -6195,11 +6656,11 @@ def validate_raw_attempt_seal(
     return manifest, receipt
 
 
-def validate_live_slot2_state_binding(
+def validate_live_frozen_state_binding(
     state: dict[str, Any],
     frozen_manifest: dict[str, Any],
 ) -> None:
-    """Keep mutable scientific admission state bound to the immutable slot-2 freeze."""
+    """Keep mutable scientific admission state bound to the immutable V6 freeze."""
 
     expected = {
         "execution_contract_sha256": frozen_manifest.get("execution_contract_sha256"),
@@ -6207,12 +6668,12 @@ def validate_live_slot2_state_binding(
         "campaign_started_at_epoch": frozen_manifest.get("campaign_started_at_epoch"),
         "lambda_started_at_epoch": frozen_manifest.get("lambda_started_at_epoch"),
         "owned_lambda_started_at_epoch": frozen_manifest.get("owned_lambda_started_at_epoch"),
-        "prior_retry3_lambda_duration_seconds": frozen_manifest.get(
+        "prior_campaign_lambda_duration_seconds": frozen_manifest.get(
             "prior_lambda_duration_seconds"
         ),
-        "prior_retry3_lambda_cost_usd": frozen_manifest.get("prior_lambda_cost_usd"),
-        "launch_slot": 2,
-        "launch_count": 2,
+        "prior_campaign_lambda_cost_usd": frozen_manifest.get("prior_lambda_cost_usd"),
+        "launch_slot": frozen_manifest.get("launch_slot"),
+        "launch_count": frozen_manifest.get("launch_count"),
         "replacement_eligibility_sha256": frozen_manifest.get("replacement_eligibility_sha256"),
         "replacement_eligibility_source_manifest_sha256": frozen_manifest.get(
             "replacement_eligibility_source_manifest_sha256"
@@ -6222,7 +6683,7 @@ def validate_live_slot2_state_binding(
         "credential_safety_stop_detected": False,
     }
     if any(state.get(key) != value for key, value in expected.items()):
-        raise T09HostError("live slot-2 state drifted from the frozen admission authority")
+        raise T09HostError("live state drifted from the frozen admission authority")
 
 
 def execute_condition(args: argparse.Namespace) -> int:
@@ -6251,11 +6712,11 @@ def execute_condition(args: argparse.Namespace) -> int:
     paths = contract_paths(repository)
     command_document = load_object(paths["commands"], label="command manifest set")
     manifest = manifest_for_run(command_document, args.run_id)
-    preflight_path = artifact_root / "pilot-v5/preflight.json"
+    preflight_path = artifact_root / "pilot-v6/preflight.json"
     if not preflight_path.is_file():
         raise T09HostError("exact preflight did not complete")
     preflight_receipt = load_object(preflight_path, label="exact preflight")
-    postfreeze_path = artifact_root / "pilot-v5/postfreeze-validation.json"
+    postfreeze_path = artifact_root / "pilot-v6/postfreeze-validation.json"
     if not postfreeze_path.is_file():
         raise T09HostError("post-freeze validation did not publish its final completion receipt")
     postfreeze = load_object(postfreeze_path, label="post-freeze validation")
@@ -6270,7 +6731,7 @@ def execute_condition(args: argparse.Namespace) -> int:
         or postfreeze.get("replacement_image_id") != image_id
         or postfreeze.get("model_metadata_request_count") != 1
         or postfreeze.get("model_metadata_credential_scan_sha256")
-        != file_sha256(artifact_root / "pilot-v5/model-metadata-credential-scan.json")
+        != file_sha256(artifact_root / "pilot-v6/model-metadata-credential-scan.json")
         or postfreeze.get("actual_credential_exposure_detected") is not False
         or postfreeze.get("model_task_request_count") != 0
         or postfreeze.get("task_browser_action_count") != 0
@@ -6279,12 +6740,12 @@ def execute_condition(args: argparse.Namespace) -> int:
         or postfreeze.get("next_attempt_admission_passed_before_metadata_get") is not True
     ):
         raise T09HostError("preflight and frozen runtime manifest drifted")
-    state = load_object(artifact_root / "pilot-v5/pilot-state.json", label="pilot state")
+    state = load_object(artifact_root / "pilot-v6/pilot-state.json", label="pilot state")
     entered = state.get("empirical_attempts_entered")
     completed = state.get("attempts_completed")
     if not isinstance(entered, list) or not isinstance(completed, list):
         raise T09HostError("pilot attempt state is malformed")
-    validate_live_slot2_state_binding(state, frozen_manifest)
+    validate_live_frozen_state_binding(state, frozen_manifest)
     expected_index = len(entered)
     if expected_index >= len(RUN_IDS) or RUN_IDS[expected_index] != args.run_id:
         raise T09HostError("condition would violate frozen order or zero retry")
@@ -6306,8 +6767,8 @@ def execute_condition(args: argparse.Namespace) -> int:
     )
     started_epoch = state.get("campaign_started_at_epoch")
     owned_lambda_started_epoch = state.get("owned_lambda_started_at_epoch")
-    prior_lambda_duration = state.get("prior_retry3_lambda_duration_seconds")
-    prior_lambda_cost = state.get("prior_retry3_lambda_cost_usd")
+    prior_lambda_duration = state.get("prior_campaign_lambda_duration_seconds")
+    prior_lambda_cost = state.get("prior_campaign_lambda_cost_usd")
     pair_field = (
         "first_pair_started_at_epoch" if expected_index < 2 else "second_pair_started_at_epoch"
     )
@@ -6414,7 +6875,7 @@ def execute_condition(args: argparse.Namespace) -> int:
     )
     if created.returncode != 0:
         record_preentry_condition_failure(
-            pilot_state_path=artifact_root / "pilot-v5/pilot-state.json",
+            pilot_state_path=artifact_root / "pilot-v6/pilot-state.json",
             attempt_root=attempt_root,
             secret_file=args.secret_file.resolve(strict=True),
             prefix=prefix,
@@ -6517,12 +6978,12 @@ def execute_condition(args: argparse.Namespace) -> int:
     actual_credential_exposure_detected = bool(hits or runtime_removed_secret_artifacts)
     if actual_credential_exposure_detected:
         mark_actual_credential_exposure(
-            artifact_root / "pilot-v5/pilot-state.json",
+            artifact_root / "pilot-v6/pilot-state.json",
             execution_contract_sha256=cast(str, state["execution_contract_sha256"]),
         )
     if runtime_secret_cleanup_malformed:
         mark_credential_cleanup_integrity_failure(
-            artifact_root / "pilot-v5/pilot-state.json",
+            artifact_root / "pilot-v6/pilot-state.json",
             execution_contract_sha256=cast(str, state["execution_contract_sha256"]),
         )
     residue = owned_containers(prefix)
@@ -6575,14 +7036,14 @@ def execute_condition(args: argparse.Namespace) -> int:
         },
     )
     state_after_condition = load_object(
-        artifact_root / "pilot-v5/pilot-state.json", label="post-condition pilot state"
+        artifact_root / "pilot-v6/pilot-state.json", label="post-condition pilot state"
     )
     entered_after_condition = state_after_condition.get("empirical_attempts_entered")
     if not isinstance(entered_after_condition, list):
         raise T09HostError("post-condition empirical state is malformed")
     if args.run_id not in entered_after_condition:
         record_preentry_condition_failure(
-            pilot_state_path=artifact_root / "pilot-v5/pilot-state.json",
+            pilot_state_path=artifact_root / "pilot-v6/pilot-state.json",
             attempt_root=attempt_root,
             secret_file=args.secret_file.resolve(strict=True),
             prefix=prefix,
@@ -6748,7 +7209,7 @@ def validate_local_finalizer_qualification(
         or metadata.st_nlink != 1
         or stat.S_IMODE(metadata.st_mode) != 0o600
         or receipt.get("schema_version") != "0.1.0"
-        or receipt.get("qualification_id") != "QUAL-T09-PILOT-V5-LOCAL-FINALIZER-0001"
+        or receipt.get("qualification_id") != "QUAL-T09-PILOT-V6-LOCAL-FINALIZER-0001"
         or receipt.get("plan_id") != PLAN_ID
         or receipt.get("package_commit") != package_commit
         or receipt.get("python_version") != "3.11.14"
@@ -7233,7 +7694,7 @@ def finalize_attempt(args: argparse.Namespace) -> dict[str, object]:
             evaluator_root=args.local_evaluator_root,
             dataset=args.local_dataset,
         )
-        retained_qualification_path = artifact_root / "pilot-v5/local-finalizer-qualification.json"
+        retained_qualification_path = artifact_root / "pilot-v6/local-finalizer-qualification.json"
         if load_object(
             retained_qualification_path, label="retained local qualification"
         ) != local_qualification or file_sha256(retained_qualification_path) != frozen_manifest.get(
@@ -7420,7 +7881,7 @@ def finalize_attempt(args: argparse.Namespace) -> dict[str, object]:
         raise T09HostError("downstream completion projection exceeded its pure contract")
     write_exclusive(completion_path, completion)
     mark_attempt_completed(
-        artifact_root / "pilot-v5/pilot-state.json",
+        artifact_root / "pilot-v6/pilot-state.json",
         execution_contract_sha256=contract.sha256,
         run_id=args.run_id,
         finalizer_execution_mode=closure["finalizer_execution_mode"],
@@ -7478,10 +7939,10 @@ def first_pair_checkpoint(args: argparse.Namespace) -> dict[str, object]:
     contract = load_execution_contract(
         paths["execution"], expected_sha256=file_sha256(paths["execution"])
     )
-    state_path = artifact_root / "pilot-v5/pilot-state.json"
+    state_path = artifact_root / "pilot-v6/pilot-state.json"
     state = load_object(state_path, label="pilot state")
-    validate_live_slot2_state_binding(state, frozen_manifest)
-    checkpoint_path = artifact_root / "pilot-v5/first-pair-checkpoint.json"
+    validate_live_frozen_state_binding(state, frozen_manifest)
+    checkpoint_path = artifact_root / "pilot-v6/first-pair-checkpoint.json"
     if checkpoint_path.exists():
         decision = load_object(checkpoint_path, label="first-pair checkpoint")
         checkpoint_binding = state.get("first_pair_checkpoint_binding")
@@ -7550,12 +8011,12 @@ def first_pair_checkpoint(args: argparse.Namespace) -> dict[str, object]:
     )
     outcomes = [cast(dict[str, Any], document["outcome"]) for document in evidence]
     usage = load_aggregate_usage(
-        artifact_root / "pilot-v5/aggregate-budget.json", contract_sha256=contract.sha256
+        artifact_root / "pilot-v6/aggregate-budget.json", contract_sha256=contract.sha256
     )
     pair_started = state.get("first_pair_started_at_epoch")
     campaign_started = state.get("campaign_started_at_epoch", state.get("pilot_started_at_epoch"))
     owned_lambda_started = state.get("owned_lambda_started_at_epoch")
-    prior_lambda_cost = state.get("prior_retry3_lambda_cost_usd")
+    prior_lambda_cost = state.get("prior_campaign_lambda_cost_usd")
     if not all(
         isinstance(value, (int, float)) and not isinstance(value, bool)
         for value in (pair_started, campaign_started, owned_lambda_started, prior_lambda_cost)
@@ -7640,7 +8101,7 @@ def campaign_evidence_disposition(args: argparse.Namespace) -> dict[str, object]
         paths["execution"], expected_sha256=file_sha256(paths["execution"])
     )
     state = _runtime_budget_state(artifact_root)
-    validate_live_slot2_state_binding(state, frozen_manifest)
+    validate_live_frozen_state_binding(state, frozen_manifest)
     if (
         state.get("empirical_attempts_entered") != list(RUN_IDS)
         or state.get("raw_attempts_complete") != list(RUN_IDS)
@@ -7719,12 +8180,12 @@ def campaign_evidence_disposition(args: argparse.Namespace) -> dict[str, object]
     if len(closures) != 1:
         raise T09HostError("all four attempts must select one full finalizer closure")
     aggregate = load_aggregate_usage(
-        artifact_root / "pilot-v5/aggregate-budget.json",
+        artifact_root / "pilot-v6/aggregate-budget.json",
         contract_sha256=contract.sha256,
     )
     document: dict[str, object] = {
         "schema_version": "0.1.0",
-        "record_id": "T09-PRAGMATIC-RETRY3-CAMPAIGN-EVIDENCE-0001",
+        "record_id": "T09-PRAGMATIC-RETRY4-CAMPAIGN-EVIDENCE-0001",
         "plan_id": PLAN_ID,
         "host_run_id": HOST_RUN_ID,
         "experiment_id": "EXP-0001",
@@ -7751,7 +8212,7 @@ def campaign_evidence_disposition(args: argparse.Namespace) -> dict[str, object]
         "prior_v4_unpaired_attempt_excluded": True,
         "recorded_at": utc_now(),
     }
-    destination = artifact_root / "pilot-v5/campaign-evidence-disposition.json"
+    destination = artifact_root / "pilot-v6/campaign-evidence-disposition.json"
     if destination.exists():
         retained = load_object(destination, label="campaign evidence disposition")
         retained.pop("recorded_at", None)
@@ -7912,23 +8373,23 @@ def _attempt_export_control_sources(
             raise T09HostError("attempt export control snapshot is partial")
         relative_paths = list(ATTEMPT_EXPORT_REQUIRED_CONTROL_PATHS)
         frozen_for_export = load_object(
-            artifact_root / "pilot-v5/frozen-run-manifest.json",
+            artifact_root / "pilot-v6/frozen-run-manifest.json",
             label="attempt export frozen runtime",
         )
         transition_mode = frozen_for_export.get("preflight_transition_mode")
         if transition_mode == "slot2-replacement":
-            authority_root = artifact_root / "pilot-v5/slot2-authority"
+            authority_root = artifact_root / "pilot-v6/slot2-authority"
             if authority_root.is_symlink() or not authority_root.is_dir():
                 raise T09HostError("slot-2 attempt export lacks its authority root")
             relative_paths.extend(
-                f"pilot-v5/slot2-authority/{relative}"
+                f"pilot-v6/slot2-authority/{relative}"
                 for relative in _slot2_authority_relative_paths(authority_root)
             )
         elif transition_mode not in {None, "fresh"}:
             raise T09HostError("attempt export transition mode is unsupported")
         optional_roots = (
-            artifact_root / "pilot-v5/received-export-acknowledgements",
-            artifact_root / "pilot-v5/finalization-selections",
+            artifact_root / "pilot-v6/received-export-acknowledgements",
+            artifact_root / "pilot-v6/finalization-selections",
         )
         for root in optional_roots:
             if not root.exists():
@@ -7940,10 +8401,10 @@ def _attempt_export_control_sources(
                 for path in sorted(root.rglob("*"))
                 if path.is_file()
             )
-        checkpoint = artifact_root / "pilot-v5/first-pair-checkpoint.json"
+        checkpoint = artifact_root / "pilot-v6/first-pair-checkpoint.json"
         if checkpoint.exists():
             relative_paths.append(checkpoint.relative_to(artifact_root).as_posix())
-        aggregate = artifact_root / "pilot-v5/aggregate-budget.json"
+        aggregate = artifact_root / "pilot-v6/aggregate-budget.json"
         if aggregate.exists():
             relative_paths.append(aggregate.relative_to(artifact_root).as_posix())
         snapshot_root.mkdir(mode=0o700, exist_ok=False)
@@ -8027,7 +8488,7 @@ def _attempt_export_control_sources(
             raise T09HostError("attempt export control snapshot bytes drifted")
         result[archive_name] = source
     state = load_object(
-        snapshot_root / "pilot-v5/pilot-state.json",
+        snapshot_root / "pilot-v6/pilot-state.json",
         label="export pilot-state snapshot",
     )
     raw_complete = state.get("raw_attempts_complete")
@@ -8160,7 +8621,7 @@ def export_attempt(args: argparse.Namespace, destination: BinaryIO) -> dict[str,
     timeout = min(remaining_attempt, remaining_campaign_to_cutoff)
     if timeout <= 1:
         raise T09HostError("attempt evidence cannot export before provider termination cutoff")
-    exports = artifact_root / "pilot-v5/attempt-exports"
+    exports = artifact_root / "pilot-v6/attempt-exports"
     exports.mkdir(mode=0o700, exist_ok=True)
     archive = exports / f"{args.run_id}.tar.gz"
     with hard_deadline(timeout, message="attempt evidence export deadline exceeded"):
@@ -8266,7 +8727,7 @@ def verify_attempt_export(args: argparse.Namespace) -> None:
             or manifest.get("host_run_id") != HOST_RUN_ID
             or manifest.get("run_id") != args.run_id
             or manifest.get("package_commit") != args.package_commit
-            or manifest.get("frozen_run_manifest_id") != "RUN-MANIFEST-EXP0001-PILOT-V5-0003"
+            or manifest.get("frozen_run_manifest_id") != "RUN-MANIFEST-EXP0001-PILOT-V6-0004"
             or not isinstance(manifest.get("frozen_run_manifest_sha256"), str)
             or _HEX64.fullmatch(cast(str, manifest["frozen_run_manifest_sha256"])) is None
             or not isinstance(manifest.get("replacement_image_id"), str)
@@ -8336,7 +8797,7 @@ def verify_attempt_export(args: argparse.Namespace) -> None:
                 raise T09HostError(f"attempt export {label} is not an object")
             return value
 
-        frozen_control_member = by_name.get("control/pilot-v5/frozen-run-manifest.json")
+        frozen_control_member = by_name.get("control/pilot-v6/frozen-run-manifest.json")
         frozen_control_stream = (
             handle.extractfile(frozen_control_member) if frozen_control_member is not None else None
         )
@@ -8351,7 +8812,7 @@ def verify_attempt_export(args: argparse.Namespace) -> None:
         transition_mode = frozen_transition_probe.get("preflight_transition_mode")
         if transition_mode == "slot2-replacement":
             source_manifest_name = (
-                "control/pilot-v5/slot2-authority/slot2-eligibility-source/source-manifest.json"
+                "control/pilot-v6/slot2-authority/slot2-eligibility-source/source-manifest.json"
             )
             authority_manifest = archive_json(
                 source_manifest_name,
@@ -8380,7 +8841,7 @@ def verify_attempt_export(args: argparse.Namespace) -> None:
             ):
                 raise T09HostError("attempt export slot-2 authority manifest drifted")
             slot2_required = {
-                "control/pilot-v5/slot2-authority/replacement-launch-eligibility.json",
+                "control/pilot-v6/slot2-authority/replacement-launch-eligibility.json",
                 source_manifest_name,
             }
             authority_total = 0
@@ -8397,7 +8858,7 @@ def verify_attempt_export(args: argparse.Namespace) -> None:
                 if relative.is_absolute() or not relative.parts or ".." in relative.parts:
                     raise T09HostError("attempt export slot-2 authority path escaped")
                 archive_name = (
-                    "control/pilot-v5/slot2-authority/slot2-eligibility-source/"
+                    "control/pilot-v6/slot2-authority/slot2-eligibility-source/"
                     + relative.as_posix()
                 )
                 record = control_records_by_path.get(archive_name)
@@ -8418,8 +8879,8 @@ def verify_attempt_export(args: argparse.Namespace) -> None:
         elif transition_mode not in {None, "fresh"}:
             raise T09HostError("attempt export transition mode is unsupported")
         optional_control_names = {
-            "control/pilot-v5/first-pair-checkpoint.json",
-            "control/pilot-v5/aggregate-budget.json",
+            "control/pilot-v6/first-pair-checkpoint.json",
+            "control/pilot-v6/aggregate-budget.json",
         }
         if (
             control_snapshot_member is None
@@ -8427,16 +8888,16 @@ def verify_attempt_export(args: argparse.Namespace) -> None:
             or any(
                 name not in required_control_names
                 and name not in optional_control_names
-                and not name.startswith("control/pilot-v5/received-export-acknowledgements/")
-                and not name.startswith("control/pilot-v5/finalization-selections/")
+                and not name.startswith("control/pilot-v6/received-export-acknowledgements/")
+                and not name.startswith("control/pilot-v6/finalization-selections/")
                 for name in control_names
             )
         ):
             raise T09HostError("attempt export control snapshot is incomplete or overbroad")
 
-        frozen_control_name = "control/pilot-v5/frozen-run-manifest.json"
-        provider_control_name = "control/pilot-v5/provider-entry.json"
-        local_qualification_name = "control/pilot-v5/local-finalizer-qualification.json"
+        frozen_control_name = "control/pilot-v6/frozen-run-manifest.json"
+        provider_control_name = "control/pilot-v6/provider-entry.json"
+        local_qualification_name = "control/pilot-v6/local-finalizer-qualification.json"
         frozen_control = archive_json(frozen_control_name, label="frozen run manifest")
         provider_control = archive_json(provider_control_name, label="provider entry")
         local_qualification = archive_json(
@@ -8476,7 +8937,7 @@ def verify_attempt_export(args: argparse.Namespace) -> None:
             or frozen_control.get("clean_package_commit") != args.package_commit
             or frozen_control.get("replacement_image_id") != manifest.get("replacement_image_id")
             or local_qualification.get("qualification_id")
-            != "QUAL-T09-PILOT-V5-LOCAL-FINALIZER-0001"
+            != "QUAL-T09-PILOT-V6-LOCAL-FINALIZER-0001"
             or local_qualification.get("package_commit") != args.package_commit
             or frozen_control.get("local_finalizer_qualification_sha256")
             != next(
@@ -8704,17 +9165,17 @@ def restore_verified_attempt_export(
                 destination = raw_root / name.removeprefix("raw/")
             elif name.startswith("control/"):
                 control_relative = name.removeprefix("control/")
-                if control_relative == "pilot-v5/pilot-state.json":
+                if control_relative == "pilot-v6/pilot-state.json":
                     destination = (
                         restoration_root
-                        / "pilot-v5/restored-control-snapshots"
+                        / "pilot-v6/restored-control-snapshots"
                         / run_id
                         / "pilot-state.json"
                     )
-                elif control_relative == "pilot-v5/aggregate-budget.json":
+                elif control_relative == "pilot-v6/aggregate-budget.json":
                     destination = (
                         restoration_root
-                        / "pilot-v5/restored-control-snapshots"
+                        / "pilot-v6/restored-control-snapshots"
                         / run_id
                         / "aggregate-budget.json"
                     )
@@ -8735,7 +9196,7 @@ def restore_verified_attempt_export(
                 expected_bytes=size,
                 expected_sha256=digest,
             )
-            if name == "control/pilot-v5/pilot-state.json":
+            if name == "control/pilot-v6/pilot-state.json":
                 snapshot_state = load_object(destination, label="restored pilot-state snapshot")
         manifest_record = next(
             (
@@ -8772,7 +9233,7 @@ def restore_verified_attempt_export(
         or snapshot_state.get("execution_contract_sha256") != contract.sha256
     ):
         raise T09HostError("offline restoration state is not the exact consumed raw prefix")
-    state_path = restoration_root / "pilot-v5/pilot-state.json"
+    state_path = restoration_root / "pilot-v6/pilot-state.json"
     if state_path.exists():
         retained = load_object(state_path, label="existing restored pilot state")
         retained_raw = retained.get("raw_attempts_complete")
@@ -8789,7 +9250,7 @@ def restore_verified_attempt_export(
             raise T09HostError("repeated offline restoration state snapshot drifted")
     _replace_restored_state(state_path, snapshot_state)
     aggregate_snapshot_path = (
-        restoration_root / "pilot-v5/restored-control-snapshots" / run_id / "aggregate-budget.json"
+        restoration_root / "pilot-v6/restored-control-snapshots" / run_id / "aggregate-budget.json"
     )
     if aggregate_snapshot_path.exists():
         aggregate_snapshot = load_object(
@@ -8799,10 +9260,10 @@ def restore_verified_attempt_export(
         if aggregate_snapshot.get("execution_contract_sha256") != contract.sha256:
             raise T09HostError("offline restoration aggregate budget binding drifted")
         _replace_restored_state(
-            restoration_root / "pilot-v5/aggregate-budget.json",
+            restoration_root / "pilot-v6/aggregate-budget.json",
             aggregate_snapshot,
         )
-    export_destination = restoration_root / "pilot-v5/attempt-exports" / archive.name
+    export_destination = restoration_root / "pilot-v6/attempt-exports" / archive.name
     with archive.open("rb") as source:
         _write_stream_exclusive_or_compare(
             stream=source,
@@ -8979,7 +9440,7 @@ def export_image(args: argparse.Namespace) -> None:
         + PROVIDER_TERMINATION_HANDOFF_SECONDS
         + PROVIDER_CLOSEOUT_RESERVE_SECONDS
     )
-    receipt_path = root / "pilot-v5/replacement-image-export.json"
+    receipt_path = root / "pilot-v6/replacement-image-export.json"
     if remaining < required_next_attempt + MAX_IMAGE_EXPORT_SECONDS:
         write_exclusive(
             receipt_path,
@@ -9062,24 +9523,24 @@ def stage(args: argparse.Namespace) -> None:
     root = args.artifact_root.resolve(strict=True)
     if not staged_archive_headroom_ok():
         raise T09HostError("frozen evidence caps do not reserve staged-archive headroom")
-    cleanup_receipt = load_object(root / "pilot-v5/host-cleanup.json", label="cleanup")
+    cleanup_receipt = load_object(root / "pilot-v6/host-cleanup.json", label="cleanup")
     if (
         cleanup_receipt.get("global_secret_scan_passed") is not True
         or cleanup_receipt.get("remote_secret_removed") is not True
     ):
         raise T09HostError("global credential cleanup is incomplete")
     state = _reconstructable_disposition(root)
-    frozen_manifest_path = root / "pilot-v5/frozen-run-manifest.json"
+    frozen_manifest_path = root / "pilot-v6/frozen-run-manifest.json"
     frozen_manifest = load_object(frozen_manifest_path, label="frozen run manifest")
     frozen_manifest_sha256 = file_sha256(frozen_manifest_path)
     runtime_state = _runtime_budget_state(root)
-    lambda_started_for_stage = runtime_state.get("lambda_started_at_epoch")
-    if not isinstance(lambda_started_for_stage, (int, float)) or isinstance(
-        lambda_started_for_stage, bool
+    empirical_started_for_stage = runtime_state.get("campaign_started_at_epoch")
+    if not isinstance(empirical_started_for_stage, (int, float)) or isinstance(
+        empirical_started_for_stage, bool
     ):
-        raise T09HostError("evidence stage lacks the provider time origin")
+        raise T09HostError("evidence stage lacks the empirical time origin")
     seconds_to_termination_cutoff = PROVIDER_TERMINATION_CUTOFF_SECONDS - (
-        time.time() - float(lambda_started_for_stage)
+        time.time() - float(empirical_started_for_stage)
     )
     if seconds_to_termination_cutoff <= 1:
         raise T09HostError(
@@ -9088,7 +9549,7 @@ def stage(args: argparse.Namespace) -> None:
     stage_timeout = min(MAX_STAGE_SECONDS, seconds_to_termination_cutoff)
     privacy_hits = privacy_violations(root)
     files, total = _evidence_file_manifest(root)
-    manifest_path = root / "pilot-v5/evidence-stage-manifest.json"
+    manifest_path = root / "pilot-v6/evidence-stage-manifest.json"
     write_exclusive(
         manifest_path,
         {
@@ -9108,7 +9569,7 @@ def stage(args: argparse.Namespace) -> None:
             "provider_closeout_pending": True,
         },
     )
-    archive = root / "pilot-v5/t09-pilot-private-evidence-stage.tar.gz"
+    archive = root / "pilot-v6/t09-pilot-private-evidence-stage.tar.gz"
     with (
         hard_deadline(stage_timeout, message="aggregate evidence stage deadline exceeded"),
         tarfile.open(archive, "x:gz") as handle,
@@ -9129,7 +9590,7 @@ def stage(args: argparse.Namespace) -> None:
     lambda_started = state.get("lambda_started_at_epoch")
     if not isinstance(lambda_started, (int, float)) or isinstance(lambda_started, bool):
         raise T09HostError("Lambda start time is unavailable at staging")
-    provider_entry_path = root / "pilot-v5/provider-entry.json"
+    provider_entry_path = root / "pilot-v6/provider-entry.json"
     dynamic_summary = load_object(provider_entry_path, label="provider entry summary")
     owned_hash = dynamic_summary.get("owned_instance_identity_sha256")
     if not isinstance(owned_hash, str) or _HEX64.fullmatch(owned_hash) is None:
@@ -9149,9 +9610,9 @@ def stage(args: argparse.Namespace) -> None:
         "provider_closeout_pending": True,
         "download_then_verify_before_termination": True,
     }
-    write_exclusive(root / "pilot-v5/evidence-stage-identity.json", identity)
+    write_exclusive(root / "pilot-v6/evidence-stage-identity.json", identity)
     write_exclusive(
-        root / "pilot-v5/TERMINATE_REQUIRED.json",
+        root / "pilot-v6/TERMINATE_REQUIRED.json",
         {
             "schema_version": "0.1.0",
             "stage_id": STAGE_ID,
@@ -9364,6 +9825,22 @@ def cleanup(args: argparse.Namespace) -> None:
     prefix = docker_prefix()
     removed = [name for name in owned_containers(prefix) if remove_container(prefix, name)]
     residue = owned_containers(prefix)
+    image_removed = False
+    materialization_path = root / "pilot-v6/replacement-image-qualification/receipt.json"
+    if materialization_path.is_file():
+        materialization = load_object(materialization_path, label="image materialization")
+        image_id = materialization.get("image_id")
+        if isinstance(image_id, str) and image_id_if_present(prefix, image_id) == image_id:
+            removal = subprocess.run(
+                [*prefix, "image", "rm", "--force", image_id],
+                env=safe_environment(),
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+                timeout=60,
+            )
+            image_removed = removal.returncode == 0
     secret_path = args.secret_file.resolve(strict=True)
     credential_bytes = validate_secret(secret_path)
     hits = secret_hits(root, credential_bytes)
@@ -9375,7 +9852,7 @@ def cleanup(args: argparse.Namespace) -> None:
             removed_secret_artifacts.append(relative)
     remaining_hits = secret_hits(root, credential_bytes)
     credential_bytes = b""
-    state_path = root / "pilot-v5/pilot-state.json"
+    state_path = root / "pilot-v6/pilot-state.json"
     credential_state_updated = False
     retained_actual_exposure = False
     retained_safety_stop = False
@@ -9417,7 +9894,7 @@ def cleanup(args: argparse.Namespace) -> None:
     except T09HostError:
         remaining_runtime = 0.0
     write_exclusive(
-        root / "pilot-v5/host-cleanup.json",
+        root / "pilot-v6/host-cleanup.json",
         {
             "schema_version": "0.1.0",
             "completed_at": utc_now(),
@@ -9435,6 +9912,8 @@ def cleanup(args: argparse.Namespace) -> None:
             "replacement_image_archive_removed_after_copy_or_deferral": (
                 image_archive_removed or not IMAGE_ARCHIVE_PATH.exists()
             ),
+            "qualified_runtime_image_removed": image_removed
+            or image_id_if_present(prefix, REPLACEMENT_IMAGE_TAG) is None,
             "private_regression_archive_removed": (
                 regression_archive_removed or not PRIVATE_REGRESSION_ARCHIVE_PATH.exists()
             ),
@@ -9464,15 +9943,16 @@ def preempirical_replacement_disposition(args: argparse.Namespace) -> dict[str, 
     repository = args.repository.resolve(strict=True)
     root = args.artifact_root.resolve(strict=True)
     verify_package(repository, args.package_commit)
-    state_path = root / "pilot-v5/pilot-state.json"
-    cleanup_path = root / "pilot-v5/host-cleanup.json"
-    provider_entry_path = root / "pilot-v5/provider-entry.json"
+    state_path = root / "pilot-v6/pilot-state.json"
+    cleanup_path = root / "pilot-v6/host-cleanup.json"
+    provider_entry_path = root / "pilot-v6/provider-entry.json"
+    failure_path = root / "pilot-v6/preflight-failure.json"
     state = load_object(state_path, label="pre-empirical pilot state")
     cleanup_receipt = load_object(cleanup_path, label="pre-empirical host cleanup")
     provider_entry = load_object(provider_entry_path, label="provider entry summary")
-    qualification_root = root / "pilot-v5/replacement-image-qualification"
-    build_log = qualification_root / "work/docker-build.log"
-    build_receipt = qualification_root / "materialization-receipt.json"
+    failure = load_object(failure_path, label="preflight failure")
+    qualification_root = root / "pilot-v6/replacement-image-qualification"
+    materialization_receipt = qualification_root / "receipt.json"
     prefix = docker_prefix()
     if (
         state.get("empirical_attempts_entered") != []
@@ -9481,18 +9961,45 @@ def preempirical_replacement_disposition(args: argparse.Namespace) -> dict[str, 
         or cleanup_receipt.get("owned_container_residue") != []
         or cleanup_receipt.get("global_secret_scan_passed") is not True
         or cleanup_receipt.get("remote_secret_removed") is not True
-        or build_log.exists()
-        or build_receipt.exists()
         or image_id_if_present(prefix, REPLACEMENT_IMAGE_TAG) is not None
+        or failure.get("empirical_attempts_entered") != 0
+        or failure.get("termination_dispatch_required") is not True
+        or not isinstance(failure.get("failed_at_epoch"), (int, float))
+        or failure.get("termination_dispatch_deadline_epoch")
+        != cast(float, failure.get("failed_at_epoch"))
+        + FAILED_PREFLIGHT_TERMINATION_DISPATCH_SECONDS
     ):
-        raise T09HostError("launch slot 1 is not a zero-use zero-build replacement candidate")
+        raise T09HostError("launch slot 1 is not a zero-use replacement candidate")
+    if materialization_receipt.is_file():
+        materialization = load_object(
+            materialization_receipt,
+            label="pre-empirical image materialization",
+        )
+        if (
+            materialization.get("method") != "exact-retained-image-archive-import"
+            or materialization.get("image_id") != RETAINED_IMAGE_ID
+            or materialization.get("build_count") != 0
+            or materialization.get("image_import_count") != 1
+            or materialization.get("retained_image_archive_sha256") != RETAINED_IMAGE_ARCHIVE_SHA256
+        ):
+            raise T09HostError(
+                "only the exact retained-image zero-build prefix can authorize slot 2"
+            )
+        image_import_count = 1
+        replacement_image_id: str | None = RETAINED_IMAGE_ID
+        replacement_archive_sha256: str | None = RETAINED_IMAGE_ARCHIVE_SHA256
+    else:
+        image_import_count = 0
+        replacement_image_id = None
+        replacement_archive_sha256 = None
     entry_sha256 = provider_entry.get("receipt_sha256")
     if not isinstance(entry_sha256, str) or _HEX64.fullmatch(entry_sha256) is None:
         raise T09HostError("provider entry summary lacks its source receipt hash")
-    source = root / "pilot-v5/preempirical-replacement-source"
+    source = root / "pilot-v6/preempirical-replacement-source"
     source.mkdir(mode=0o700, exist_ok=False)
     write_exclusive(source / "pilot-state.json", state)
     write_exclusive(source / "host-cleanup.json", cleanup_receipt)
+    write_exclusive(source / "preflight-failure.json", failure)
     receipt: dict[str, object] = {
         "schema_version": "0.1.0",
         "plan_id": PLAN_ID,
@@ -9501,10 +10008,16 @@ def preempirical_replacement_disposition(args: argparse.Namespace) -> dict[str, 
         "provider_entry_receipt_sha256": entry_sha256,
         "pilot_state_sha256": file_sha256(source / "pilot-state.json"),
         "host_cleanup_sha256": file_sha256(source / "host-cleanup.json"),
+        "preflight_failure_sha256": file_sha256(source / "preflight-failure.json"),
+        "preflight_failed_at_epoch": failure["failed_at_epoch"],
+        "termination_dispatch_deadline_epoch": failure["termination_dispatch_deadline_epoch"],
         "empirical_attempts_entered": 0,
         "model_task_requests": 0,
         "task_browser_actions": 0,
         "replacement_image_build_count": 0,
+        "replacement_image_import_count": image_import_count,
+        "replacement_image_id": replacement_image_id,
+        "replacement_image_archive_sha256": replacement_archive_sha256,
         "credentials_removed": True,
         "owned_containers_absent": True,
         "replacement_launch_evidence_only": True,
@@ -9548,7 +10061,6 @@ def parser() -> argparse.ArgumentParser:
     preflight_parser.add_argument("--dynamic-source-root", type=Path, required=True)
     preflight_parser.add_argument("--real-evidence-archive", type=Path, required=True)
     preflight_parser.add_argument("--local-finalizer-qualification", type=Path, required=True)
-    preflight_parser.add_argument("--slot2-authority-root", type=Path, required=True)
     preflight_parser.add_argument("--replacement-image-archive", type=Path, required=True)
     condition_export = operations.add_parser("condition-export")
     condition_export.add_argument("--run-id", choices=RUN_IDS, required=True)
@@ -9603,7 +10115,7 @@ def parser() -> argparse.ArgumentParser:
 def main() -> int:
     args = parser().parse_args()
     if args.operation == "preflight":
-        preflight(args)
+        preflight_with_deadline(args)
         return 0
     if args.operation == "condition-export":
         execute_condition(args)
