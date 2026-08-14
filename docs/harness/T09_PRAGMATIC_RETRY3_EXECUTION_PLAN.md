@@ -1,6 +1,6 @@
 # T09 pragmatic Retry 3 execution plan
 
-Assembly status: **closeout in progress at the material-risk boundary**
+Assembly status: **complete at the material-risk boundary; execution remains blocked**
 
 Terminal state: **`t09-pilot-blocked-material-risk`**
 
@@ -67,7 +67,7 @@ uniformly before pair continuation or final analysis. A condition is never retri
 | R3-13 | Enforce calls, tokens, actions, attempts, zero retry, output/disk/wall, OpenAI/Lambda/new/cumulative cost, and checkpoint limits before billable actions. | The pre-POST 4,500-second gate admitted slot 2, the repeated admission gate then stopped before empirical entry when activation consumed the margin, and all usage/cost counters reconcile under their caps: zero attempt activity, USD 1.5106036795496942 new and USD 4.04142013524027 cumulative T09 cost. | met |
 | R3-14 | Execute all four fresh attempts in fixed order, apply one uniform finalizer closure, and make the predeclared first-pair floor/ceiling checkpoint. | Blocked before the first empirical attempt; all four V5 attempts are `not-run` and no checkpoint or pair exists. | blocked |
 | R3-15 | Preserve reconstructable success/failure prefixes, prioritize cleanup, transfer evidence, destroy secrets, remove containers, terminate the exact provider instance, verify zero instances/security, and reconcile usage. | Both maximal pre-empirical prefixes and provider lineages were copied and independently validated; private archive `ARCHIVE-EXP0001-PILOT-V5-PREEMPIRICAL-0003` has 224 files/2,792,322 payload bytes and manifest SHA-256 `e8af18d0…`; cleanup, exact termination, zero instances, security restoration, and costs reconcile. | met |
-| R3-16 | Pass focused tests, validation, privacy, diff, Ruff, strict mypy, independent prelaunch review, post-termination broad gates/evidence review, public reconciliation, clean commits, and the 16-item handoff. | Source review passed; 86 focused tests, validation, Ruff, strict mypy, diff hygiene, and offline archive regression pass; package review and all post-run gates remain pending. | partial |
+| R3-16 | Pass focused tests, validation, privacy, diff, Ruff, strict mypy, independent prelaunch review, post-termination broad gates/evidence review, public reconciliation, clean commits, and the 16-item handoff. | Independent prelaunch/package/evidence reviews passed; sealed evidence and public reconciliation rehash; the portable-Quarto full gate passes Ruff, strict mypy, 1,381 tests, repository validation, all 16 pages, and site validation. The final terminal-control rereview and 16-item response are the only remaining handoff actions. | partial pending final handoff |
 
 ## Planned execution evidence
 
@@ -138,6 +138,11 @@ uniformly before pair continuation or final analysis. A condition is never retri
   is 4,215.638175 seconds / 1.171010604 A10-hours / USD 1.5106036795496942, and
   cumulative T09 cost is USD 4.04142013524027. The two-launch capability, campaign
   clock, and every V5 execution identity are exhausted without a scientific result.
+- 2026-08-14: terminal control record
+  `T09_PRAGMATIC_RETRY3_TERMINAL_CONTROL.json` now binds the disposition and exact
+  frozen smoke/V5 profile and V5 execution-contract hashes. Project state, registry,
+  runtime policy, validation, and replay regressions treat both registered plan IDs
+  as consumed and nonreplayable without rewriting the historical package bytes.
 
 ## Next permitted phase
 

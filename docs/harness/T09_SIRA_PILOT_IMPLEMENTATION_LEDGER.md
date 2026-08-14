@@ -2,7 +2,8 @@
 
 ## V5 pragmatic Retry 3 raw-first successor
 
-V5 assembly status: **closeout in progress at `t09-pilot-blocked-material-risk`**
+V5 assembly status: **complete at `t09-pilot-blocked-material-risk`; execution remains
+blocked**
 
 Current plan: `PLAN-EXP0001-PILOT-V5`.
 
@@ -22,6 +23,10 @@ pair, checkpoint, comparison, measurement, or EXP-0001 outcome exists. The activ
 DoD and evidence log are in `docs/harness/T09_PRAGMATIC_RETRY3_EXECUTION_PLAN.md`; the
 machine-readable terminal record is
 `experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY3_DISPOSITION.json`.
+The authoritative current execution overlay is
+`experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY3_TERMINAL_CONTROL.json`;
+it preserves the frozen profile/contract bytes as historical evidence while runtime
+policy rejects both registered plan IDs as consumed and nonreplayable.
 
 ---
 
