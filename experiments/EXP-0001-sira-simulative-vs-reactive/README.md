@@ -195,4 +195,6 @@ reconciled. All four V5 attempts remain `not-run`, the frozen run manifest was n
 written, and the two-launch/nonreset-campaign authority cannot be replayed. Any future
 paired calibration needs fresh identities, campaign clock, review, and current-turn
 authorization; the retained image archive may be reused only through a new
-source-bound contract.
+source-bound contract. The registry/project-state-bound Retry 3 terminal-control
+record is the current machine authority: it preserves the frozen profile and execution
+contract bytes as history while rejecting their consumed plan IDs as nonreplayable.

@@ -6,9 +6,10 @@ import subprocess
 
 from giclab.harness.policy import load_project_execution_state
 from giclab.registry import load_json, load_yaml
-from giclab.validation import ROOT
+from giclab.validation import ROOT, validate_instance
 
 EXP_ROOT = ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive"
+TERMINAL_CONTROL_PATH = EXP_ROOT / "T09_PRAGMATIC_RETRY3_TERMINAL_CONTROL.json"
 PHASE_075_PLAN = (
     ROOT / "docs/exec-plans/completed/PHASE_0_75_UPSTREAM_AUDIT_HARNESS_PROTOCOL_LOCK.md"
 )
@@ -35,6 +36,10 @@ def test_phase_one_is_the_only_active_non_executable_control_plane() -> None:
         "profile_sha256": None,
         "condition_plan_sha256s": [],
     }
+    assert state["current_execution_control"] == {
+        "path": TERMINAL_CONTROL_PATH.relative_to(ROOT).as_posix(),
+        "sha256": hashlib.sha256(TERMINAL_CONTROL_PATH.read_bytes()).hexdigest(),
+    }
     assert state["planned_execution_substrate"] is None
     assert state["historical_execution_substrate"] == {
         "decision_state": "bounded-smoke-v3-ready-unauthorized",
@@ -53,6 +58,10 @@ def test_phase_one_is_the_only_active_non_executable_control_plane() -> None:
     }
     execution_state = load_project_execution_state(ROOT)
     assert execution_state.planned_execution_substrate is None
+    assert execution_state.terminal_execution_control is not None
+    assert execution_state.terminal_execution_control.superseded_plan_ids == frozenset(
+        {"PLAN-EXP0001-SMOKE", "PLAN-EXP0001-PILOT-V5"}
+    )
     checkpoint = state["t08_checkpoint"]
     assert checkpoint["terminal_state"] == ("smoke_evidence_validated_pilot_planning_eligible")
     assert checkpoint["pilot_execution_authorized"] is False
@@ -145,9 +154,11 @@ def test_phase_one_is_the_only_active_non_executable_control_plane() -> None:
     assert "Status: **in-progress**" in PHASE_1_PLAN.read_text(encoding="utf-8")
 
 
-def test_smoke_and_pragmatic_pilot_are_locked_and_require_private_authorization() -> None:
+def test_frozen_profiles_are_unauthorized_and_terminal_control_makes_them_nonreplayable() -> None:
     smoke = load_yaml(EXP_ROOT / "run-plans/smoke.yaml")
     pilot = load_yaml(EXP_ROOT / "run-plans/pilot.yaml")
+    terminal = load_json(TERMINAL_CONTROL_PATH)
+    registry = load_yaml(ROOT / "experiments/registry.yaml")["experiments"][0]
     assert smoke["plan_id"] == "PLAN-EXP0001-SMOKE"
     assert smoke["execution"] == {
         "authorized": False,
@@ -161,6 +172,21 @@ def test_smoke_and_pragmatic_pilot_are_locked_and_require_private_authorization(
     assert pilot["readiness"]["execution_eligibility"] == "eligible-after-authorization"
     assert pilot["readiness"]["unresolved_execution_blockers"] == []
     assert pilot["readiness"]["pre_execution_requirements"]
+    assert terminal["execution_eligibility"] == "blocked-pending-prerequisites"
+    assert terminal["authorized"] is terminal["replayable"] is False
+    assert terminal["supersedes_registered_profile_readiness"] is True
+    assert {item["plan_id"] for item in terminal["superseded_registered_profiles"]} == {
+        "PLAN-EXP0001-SMOKE",
+        "PLAN-EXP0001-PILOT-V5",
+    }
+    assert all(
+        item["current_interpretation"] == "historical-consumed-nonreplayable"
+        for item in terminal["superseded_registered_profiles"]
+    )
+    assert registry["current_execution_control"] == {
+        "path": TERMINAL_CONTROL_PATH.relative_to(ROOT).as_posix(),
+        "sha256": hashlib.sha256(TERMINAL_CONTROL_PATH.read_bytes()).hexdigest(),
+    }
     for relative in smoke["condition_plan_paths"] + pilot["condition_plan_paths"]:
         condition = load_yaml(ROOT / relative)
         assert condition["execution"]["authorization"] == {
@@ -222,6 +248,44 @@ def test_current_public_surfaces_define_no_replayable_successor_profile() -> Non
         assert "No exact successor execution profile is currently eligible" in text or (
             "No exact SiRA successor profile is currently eligible" in text
         )
+
+
+def test_terminal_control_supersedes_frozen_profile_and_execution_contract_claims() -> None:
+    terminal = load_json(TERMINAL_CONTROL_PATH)
+    assert (
+        validate_instance(terminal, ROOT / "schemas/terminal-execution-control.schema.json") == []
+    )
+    disposition_path = ROOT / terminal["terminal_record"]["path"]
+    disposition = load_json(disposition_path)
+    assert (
+        hashlib.sha256(disposition_path.read_bytes()).hexdigest()
+        == (terminal["terminal_record"]["sha256"])
+    )
+    assert terminal["terminal_state"] == disposition["terminal_state"]
+    assert disposition["single_use_authority_exhausted"] is True
+    assert disposition["launch_slots_exhausted"] is True
+    assert disposition["empirical_entry"] is False
+
+    for binding in terminal["superseded_registered_profiles"]:
+        path = ROOT / binding["path"]
+        profile = load_yaml(path)
+        assert hashlib.sha256(path.read_bytes()).hexdigest() == binding["sha256"]
+        assert profile["plan_id"] == binding["plan_id"]
+        assert (
+            profile["readiness"]["execution_eligibility"]
+            == (binding["historical_execution_eligibility"])
+        )
+        assert profile["execution"]["authorized"] is False
+
+    [binding] = terminal["superseded_execution_contracts"]
+    contract_path = ROOT / binding["path"]
+    contract = load_json(contract_path)
+    assert hashlib.sha256(contract_path.read_bytes()).hexdigest() == binding["sha256"]
+    assert contract["contract_id"] == binding["contract_id"]
+    assert contract["terminal_state"] == binding["historical_terminal_state"]
+    assert contract["execution_eligibility"] == binding["historical_execution_eligibility"]
+    assert contract["authorized"] is False
+    assert contract["material_blockers"] == []
 
 
 def test_exp0001_readme_records_t07_materialization_and_current_pilot_boundary() -> None:

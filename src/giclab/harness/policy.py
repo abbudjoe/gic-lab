@@ -51,6 +51,36 @@ class AuthorizedRunProfile:
 
 
 @dataclass(frozen=True, slots=True)
+class TerminalExecutionControl:
+    """Authoritative terminal overlay for consumed, immutable run profiles."""
+
+    control_id: str
+    experiment_id: str
+    terminal_state: str
+    execution_eligibility: str
+    superseded_plan_ids: frozenset[str]
+    blockers: tuple[str, ...]
+    source_path: str
+    source_sha256: str
+
+    def __post_init__(self) -> None:
+        if not self.control_id.strip() or not self.experiment_id.strip():
+            raise ValueError("terminal execution control identities must not be empty")
+        if self.terminal_state != "t09-pilot-blocked-material-risk":
+            raise ValueError("terminal execution control state is not blocked material risk")
+        if self.execution_eligibility != "blocked-pending-prerequisites":
+            raise ValueError("terminal execution control must remain execution-ineligible")
+        if not self.superseded_plan_ids or any(
+            _PLAN_ID.fullmatch(plan_id) is None for plan_id in self.superseded_plan_ids
+        ):
+            raise ValueError("terminal execution control requires canonical superseded plan IDs")
+        if not self.blockers or any(not blocker.strip() for blocker in self.blockers):
+            raise ValueError("terminal execution control requires explicit blockers")
+        if _SHA256.fullmatch(self.source_sha256) is None:
+            raise ValueError("terminal execution control source hash must be SHA-256")
+
+
+@dataclass(frozen=True, slots=True)
 class PlannedExecutionSubstrate:
     """Non-authorizing binding for a reviewed future execution substrate."""
 
@@ -153,6 +183,7 @@ class ProjectExecutionState:
     training_allowed: bool
     cloud_mutation_allowed: bool
     authorized_run_profile: AuthorizedRunProfile | None = None
+    terminal_execution_control: TerminalExecutionControl | None = None
     planned_execution_substrate: PlannedExecutionSubstrate | None = None
 
     def __post_init__(self) -> None:
@@ -169,6 +200,196 @@ class ProjectExecutionState:
         ):
             if type(getattr(self, label)) is not bool:
                 raise ValueError(f"project {label} must be a boolean")
+
+
+def _load_terminal_execution_control(
+    project_root: Path,
+    schema_root: Path,
+    value: object,
+) -> TerminalExecutionControl | None:
+    """Load and source-bind the terminal overlay that supersedes frozen readiness bytes."""
+
+    registry_path = project_root / "experiments/registry.yaml"
+    if not registry_path.is_file():
+        if value is None:
+            return None
+        raise ExecutionDisallowed("terminal execution control requires an experiment registry")
+    try:
+        registry = load_yaml(registry_path)
+    except (OSError, TypeError, DuplicateKeyError, yaml.YAMLError) as exc:
+        raise ExecutionDisallowed(f"cannot load registry terminal-control binding: {exc}") from exc
+    if not isinstance(registry, dict):
+        raise ExecutionDisallowed("experiment registry must be a mapping")
+    registry_experiments = registry.get("experiments")
+    if not isinstance(registry_experiments, list):
+        raise ExecutionDisallowed("experiment registry experiments must be a list")
+    registry_control_entries = [
+        entry
+        for entry in registry_experiments
+        if isinstance(entry, dict) and entry.get("current_execution_control") is not None
+    ]
+    if value is None:
+        if registry_control_entries:
+            raise ExecutionDisallowed(
+                "project state must bind the registry terminal execution control"
+            )
+        return None
+    if not isinstance(value, dict) or set(value) != {"path", "sha256"}:
+        raise ExecutionDisallowed(
+            "project state current_execution_control must contain exactly path and sha256"
+        )
+    relative = value.get("path")
+    recorded_sha256 = value.get("sha256")
+    if not isinstance(relative, str) or not isinstance(recorded_sha256, str):
+        raise ExecutionDisallowed("terminal execution-control binding fields must be strings")
+    if _SHA256.fullmatch(recorded_sha256) is None:
+        raise ExecutionDisallowed("terminal execution-control hash must be lowercase SHA-256")
+    try:
+        control_path = resolve_repo_path(project_root, relative)
+    except ValueError as exc:
+        raise ExecutionDisallowed(f"terminal execution-control path is invalid: {exc}") from exc
+    if not control_path.is_file():
+        raise ExecutionDisallowed("terminal execution-control path does not resolve to a file")
+    if hashlib.sha256(control_path.read_bytes()).hexdigest() != recorded_sha256:
+        raise ExecutionDisallowed("terminal execution-control hash does not match its file")
+    try:
+        document = load_json(control_path)
+        schema = load_json(schema_root / "schemas/terminal-execution-control.schema.json")
+    except (OSError, TypeError, ValueError) as exc:
+        raise ExecutionDisallowed(f"cannot load terminal execution control: {exc}") from exc
+    schema_errors = sorted(
+        Draft202012Validator(schema, format_checker=FormatChecker()).iter_errors(document),
+        key=lambda item: list(item.absolute_path),
+    )
+    if schema_errors:
+        first = schema_errors[0]
+        location = ".".join(str(part) for part in first.absolute_path) or "<root>"
+        raise ExecutionDisallowed(
+            f"terminal execution control is schema-invalid at {location}: {first.message}"
+        )
+
+    def bound_path(relative_path: str, label: str) -> Path:
+        try:
+            return resolve_repo_path(project_root, relative_path)
+        except ValueError as exc:
+            raise ExecutionDisallowed(f"{label} path is invalid: {exc}") from exc
+
+    registry_entries = [
+        entry
+        for entry in registry_experiments
+        if isinstance(entry, dict) and entry.get("experiment_id") == document["experiment_id"]
+    ]
+    if len(registry_entries) != 1:
+        raise ExecutionDisallowed("terminal execution control requires one registry experiment")
+    if registry_entries[0].get("current_execution_control") != value:
+        raise ExecutionDisallowed("project-state and registry terminal-control bindings differ")
+
+    terminal_binding = document["terminal_record"]
+    terminal_path = bound_path(terminal_binding["path"], "terminal disposition")
+    if (
+        not terminal_path.is_file()
+        or hashlib.sha256(terminal_path.read_bytes()).hexdigest() != terminal_binding["sha256"]
+    ):
+        raise ExecutionDisallowed("terminal disposition binding does not match retained bytes")
+    try:
+        terminal_record = load_json(terminal_path)
+    except (OSError, TypeError, ValueError) as exc:
+        raise ExecutionDisallowed(f"cannot load terminal disposition: {exc}") from exc
+    terminal_projection = {
+        "experiment_id": terminal_record.get("experiment_id"),
+        "terminal_state": terminal_record.get("terminal_state"),
+        "single_use_authority_exhausted": terminal_record.get("single_use_authority_exhausted"),
+        "launch_slots_exhausted": terminal_record.get("launch_slots_exhausted"),
+        "empirical_entry": terminal_record.get("empirical_entry"),
+    }
+    if terminal_projection != {
+        "experiment_id": document["experiment_id"],
+        "terminal_state": document["terminal_state"],
+        "single_use_authority_exhausted": True,
+        "launch_slots_exhausted": True,
+        "empirical_entry": False,
+    }:
+        raise ExecutionDisallowed(
+            "terminal disposition does not prove exhausted zero-use authority"
+        )
+
+    superseded_plan_ids: set[str] = set()
+    superseded_profile_paths: set[str] = set()
+    for binding in document["superseded_registered_profiles"]:
+        plan_id = binding["plan_id"]
+        profile_relative = binding["path"]
+        if plan_id in superseded_plan_ids or profile_relative in superseded_profile_paths:
+            raise ExecutionDisallowed("terminal control repeats a superseded profile binding")
+        superseded_plan_ids.add(plan_id)
+        superseded_profile_paths.add(profile_relative)
+        profile_path = bound_path(profile_relative, "superseded profile")
+        if (
+            not profile_path.is_file()
+            or hashlib.sha256(profile_path.read_bytes()).hexdigest() != binding["sha256"]
+        ):
+            raise ExecutionDisallowed("superseded profile binding does not match frozen bytes")
+        try:
+            profile = load_yaml(profile_path)
+        except (OSError, TypeError, DuplicateKeyError, yaml.YAMLError) as exc:
+            raise ExecutionDisallowed(f"cannot load superseded profile: {exc}") from exc
+        readiness = profile.get("readiness")
+        execution = profile.get("execution")
+        if (
+            profile.get("plan_id") != plan_id
+            or not isinstance(readiness, dict)
+            or readiness.get("execution_eligibility") != binding["historical_execution_eligibility"]
+            or not isinstance(execution, dict)
+            or execution.get("authorized") is not False
+        ):
+            raise ExecutionDisallowed("superseded profile projection contradicts frozen bytes")
+    registered_profiles = registry_entries[0].get("run_profiles")
+    if not isinstance(registered_profiles, list) or set(registered_profiles) != (
+        superseded_profile_paths
+    ):
+        raise ExecutionDisallowed(
+            "terminal control must supersede every currently registered run profile"
+        )
+
+    for binding in document["superseded_execution_contracts"]:
+        contract_path = bound_path(binding["path"], "superseded execution contract")
+        if (
+            not contract_path.is_file()
+            or hashlib.sha256(contract_path.read_bytes()).hexdigest() != binding["sha256"]
+        ):
+            raise ExecutionDisallowed("superseded execution-contract binding does not match bytes")
+        try:
+            contract = load_json(contract_path)
+        except (OSError, TypeError, ValueError) as exc:
+            raise ExecutionDisallowed(f"cannot load superseded execution contract: {exc}") from exc
+        if {
+            "contract_id": contract.get("contract_id"),
+            "plan_id": contract.get("plan_id"),
+            "terminal_state": contract.get("terminal_state"),
+            "execution_eligibility": contract.get("execution_eligibility"),
+            "authorized": contract.get("authorized"),
+            "material_blockers": contract.get("material_blockers"),
+        } != {
+            "contract_id": binding["contract_id"],
+            "plan_id": binding["plan_id"],
+            "terminal_state": binding["historical_terminal_state"],
+            "execution_eligibility": binding["historical_execution_eligibility"],
+            "authorized": False,
+            "material_blockers": [],
+        }:
+            raise ExecutionDisallowed(
+                "superseded execution-contract projection contradicts frozen bytes"
+            )
+
+    return TerminalExecutionControl(
+        control_id=document["control_id"],
+        experiment_id=document["experiment_id"],
+        terminal_state=document["terminal_state"],
+        execution_eligibility=document["execution_eligibility"],
+        superseded_plan_ids=frozenset(superseded_plan_ids),
+        blockers=tuple(document["blockers"]),
+        source_path=relative,
+        source_sha256=recorded_sha256,
+    )
 
 
 def _assert_profile_children_coherent(
@@ -424,6 +645,7 @@ def _load_authorized_run_profile(
     project_root: Path,
     schema_root: Path,
     value: object,
+    terminal_control: TerminalExecutionControl | None,
 ) -> AuthorizedRunProfile | None:
     if value is None:
         return None
@@ -471,6 +693,10 @@ def _load_authorized_run_profile(
     assert isinstance(recorded_sha256, str)
     if _PLAN_ID.fullmatch(plan_id) is None:
         raise ExecutionDisallowed("authorized run profile plan_id is invalid")
+    if terminal_control is not None and plan_id in terminal_control.superseded_plan_ids:
+        raise ExecutionDisallowed(
+            "authorized run profile is consumed and nonreplayable under terminal control"
+        )
     if _SHA256.fullmatch(recorded_sha256) is None:
         raise ExecutionDisallowed("authorized run profile profile_sha256 is invalid")
     try:
@@ -587,10 +813,16 @@ def load_project_execution_state(
     for key, expected in required.items():
         if type(data.get(key)) is not expected:
             raise ExecutionDisallowed(f"project state {key} must be {expected.__name__}")
+    terminal_control = _load_terminal_execution_control(
+        project_root,
+        (schema_root or project_root).resolve(),
+        data.get("current_execution_control"),
+    )
     authorized_run_profile = _load_authorized_run_profile(
         project_root,
         (schema_root or project_root).resolve(),
         data.get("authorized_run_profile"),
+        terminal_control,
     )
     raw_substrate = data.get("planned_execution_substrate")
     planned_substrate: PlannedExecutionSubstrate | None = None
@@ -675,6 +907,7 @@ def load_project_execution_state(
         training_allowed=bool(data["training_allowed"]),
         cloud_mutation_allowed=bool(data["cloud_mutation_allowed"]),
         authorized_run_profile=authorized_run_profile,
+        terminal_execution_control=terminal_control,
         planned_execution_substrate=planned_substrate,
     )
 
@@ -687,6 +920,12 @@ def execution_blockers(plan: RunPlan, state: ProjectExecutionState) -> tuple[str
         blockers.append(f"project phase status {state.phase_status!r} is not executable")
     if not plan.execution.authorization.authorized:
         blockers.append("run plan is not authorized")
+    terminal_control = state.terminal_execution_control
+    if (
+        terminal_control is not None
+        and plan.profile_plan_id in terminal_control.superseded_plan_ids
+    ):
+        blockers.append("run plan parent profile is consumed and nonreplayable")
     profile = state.authorized_run_profile
     if profile is None:
         blockers.append("project state has no authorized run profile")

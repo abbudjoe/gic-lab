@@ -18,7 +18,8 @@ archive path error, and provider activation on the second consumed the remaining
 admission margin. Both Retry 3 hosts are terminal or absent, zero T09 instances and
 restored security are verified, and all Retry 3 authority is exhausted. No pair,
 checkpoint, condition comparison, or EXP-0001 outcome exists. EXP-0001 remains
-unevaluated. A protocol,
+unevaluated. A typed terminal execution-control overlay makes the frozen smoke and V5
+profile identities nonreplayable; no registered successor profile exists. A protocol,
 readiness record, or proposed budget is not authorization.
 
 - [Public research notebook](https://abbudjoe.github.io/gic-lab/)

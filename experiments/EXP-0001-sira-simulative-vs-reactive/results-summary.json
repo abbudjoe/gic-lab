@@ -32,7 +32,8 @@
     "experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY2_SUPERSESSION.json",
     "experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY2_DISPOSITION.json",
     "experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY3_FINALIZER_REGRESSION.json",
-    "experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY3_DISPOSITION.json"
+    "experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY3_DISPOSITION.json",
+    "experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY3_TERMINAL_CONTROL.json"
   ],
   "infrastructure_terminal_state": "t09-pilot-blocked-material-risk",
   "note": "T09 Retry 2 remains the sole descriptive calibration measurement: one unpaired Task A reactive attempt completed and scored 0.0. Retry 3 repaired and twice reproduced the downstream finalizer against that immutable V4 archive without new model or browser activity, then used two authorized provider launches but stopped before metadata, dynamic qualification, or any V5 empirical attempt when the nonreset campaign could no longer admit one 3,600-second condition plus the 900-second cleanup reserve. Both Retry 3 hosts are terminal or absent, zero T09 instances and restored security are verified, no realized pair or checkpoint exists, scientific evidence remains not evaluated, and no EXP-0001 outcome or condition comparison is assigned."

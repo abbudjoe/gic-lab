@@ -64,6 +64,7 @@ SCHEMA_FILES = (
     "schemas/t09-sira-pilot-score.schema.json",
     "schemas/t09-sira-pilot-evidence.schema.json",
     "schemas/t09-sira-pilot-execution.schema.json",
+    "schemas/terminal-execution-control.schema.json",
 )
 REQUIRED_PATHS = (
     "AGENTS.md",

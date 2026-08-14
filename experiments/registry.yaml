@@ -1,5 +1,5 @@
 schema_version: 0.1.0
-registry_revision: 7
+registry_revision: 8
 template_path: experiments/EXP-0000-template
 experiments:
   - experiment_id: EXP-0001
@@ -7,6 +7,9 @@ experiments:
     run_profiles:
       - experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/smoke.yaml
       - experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml
+    current_execution_control:
+      path: experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY3_TERMINAL_CONTROL.json
+      sha256: 7fc4f4e20d11d9f1dd7b5b268d942444ea1bd683c206c88acd6bdf54d0ccc5c3
     evidence_records:
       - experiments/EXP-0001-sira-simulative-vs-reactive/T08_SMOKE_ADJUDICATION.json
       - experiments/EXP-0001-sira-simulative-vs-reactive/T08_SMOKE_PAIR_DIFF.json
@@ -15,6 +18,7 @@ experiments:
       - experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY2_DISPOSITION.json
       - experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY3_FINALIZER_REGRESSION.json
       - experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY3_DISPOSITION.json
+      - experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY3_TERMINAL_CONTROL.json
     planning_contracts:
       - experiments/EXP-0001-sira-simulative-vs-reactive/contracts/T09_PILOT_DATASET_CONTRACT.json
       - experiments/EXP-0001-sira-simulative-vs-reactive/contracts/T09_PILOT_EVALUATOR_CONTRACT.json

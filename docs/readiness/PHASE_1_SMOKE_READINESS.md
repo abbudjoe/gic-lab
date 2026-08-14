@@ -89,6 +89,12 @@ two-launch capability and campaign clock are exhausted. Terminal state is
 `t09-pilot-blocked-material-risk`; any future paired campaign requires fresh
 identities, a new clock, independent review, and new current-turn authority.
 
+Current machine authority comes from the registry/project-state-bound
+`T09_PRAGMATIC_RETRY3_TERMINAL_CONTROL.json`. It cryptographically preserves the
+historical smoke/V5 profiles and V5 execution contract while superseding their
+embedded pre-run readiness strings; policy rejects both consumed plan IDs as
+nonreplayable. No registered successor profile exists.
+
 ## Historical consumed smoke record
 
 - Experiment: `EXP-0001`

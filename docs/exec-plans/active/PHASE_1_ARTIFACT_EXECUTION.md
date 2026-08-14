@@ -273,6 +273,13 @@ checkpoint, comparison, or EXP-0001 result exists. The two-launch capability and
 campaign clock are exhausted. A future calibration requires fresh identities, a new
 campaign clock, independent review, and new current-turn authority.
 
+The exact smoke/V5 profile and V5 execution-contract files remain byte-frozen as
+historical package evidence, so their embedded pre-run readiness strings are not a
+current authority surface. The registry and project state instead bind
+`T09_PRAGMATIC_RETRY3_TERMINAL_CONTROL.json`; runtime policy validates its terminal
+disposition and frozen-file hashes and rejects both consumed plan IDs as
+nonreplayable. No registered successor profile exists.
+
 ### Pragmatic execution reset — 2026-08-12
 
 The current user contract supersedes the historical high-assurance infrastructure

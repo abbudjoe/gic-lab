@@ -76,6 +76,10 @@ A future paired calibration requires fresh identities, a new campaign clock with
 provider-activation/preflight slack, independent review, and new current-turn user
 authorization.
 
+The current machine-readable gate is the terminal Retry 3 execution-control overlay,
+not the pre-run readiness strings retained inside the frozen historical profiles. It
+blocks both registered plan IDs and names no successor.
+
 ## Next gate
 
 There is no current SiRA execution gate. Historical T07 infrastructure and bounded

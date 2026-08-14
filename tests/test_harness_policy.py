@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import hashlib
 from dataclasses import replace
 from pathlib import Path
+from shutil import copytree
 
 import pytest
+import yaml
 from harness_test_support import project_state, typed_plan, write_project_state
 
 from giclab.harness.models import (
@@ -19,6 +22,7 @@ from giclab.harness.policy import (
     execution_blockers,
     load_project_execution_state,
 )
+from giclab.registry import load_yaml
 from giclab.validation import ROOT
 
 
@@ -140,6 +144,40 @@ def test_invalid_profile_readiness_cannot_materialize_runtime_authorization(
     )
     with pytest.raises(ExecutionDisallowed, match=message):
         load_project_execution_state(tmp_path, schema_root=ROOT)
+
+
+def test_terminal_control_prevents_authorizing_a_consumed_registered_profile(
+    tmp_path: Path,
+) -> None:
+    copytree(ROOT / "experiments", tmp_path / "experiments")
+    copytree(ROOT / "schemas", tmp_path / "schemas")
+    (tmp_path / "docs").mkdir()
+    state = load_yaml(ROOT / "docs/PROJECT_STATE.yaml")
+    smoke_path = "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/smoke.yaml"
+    state["authorized_run_profile"] = {
+        "plan_id": "PLAN-EXP0001-SMOKE",
+        "profile_path": smoke_path,
+        "profile_sha256": hashlib.sha256((tmp_path / smoke_path).read_bytes()).hexdigest(),
+        "condition_plan_sha256s": ["0" * 64],
+    }
+    (tmp_path / "docs/PROJECT_STATE.yaml").write_text(
+        yaml.safe_dump(state, sort_keys=False), encoding="utf-8"
+    )
+    with pytest.raises(ExecutionDisallowed, match="consumed and nonreplayable"):
+        load_project_execution_state(tmp_path, schema_root=tmp_path)
+
+
+def test_project_state_cannot_drop_a_registered_terminal_control(tmp_path: Path) -> None:
+    copytree(ROOT / "experiments", tmp_path / "experiments")
+    copytree(ROOT / "schemas", tmp_path / "schemas")
+    (tmp_path / "docs").mkdir()
+    state = load_yaml(ROOT / "docs/PROJECT_STATE.yaml")
+    state.pop("current_execution_control")
+    (tmp_path / "docs/PROJECT_STATE.yaml").write_text(
+        yaml.safe_dump(state, sort_keys=False), encoding="utf-8"
+    )
+    with pytest.raises(ExecutionDisallowed, match="must bind the registry terminal"):
+        load_project_execution_state(tmp_path, schema_root=tmp_path)
 
 
 def test_sealed_children_must_match_parent_aggregate_budget(tmp_path: Path) -> None:
