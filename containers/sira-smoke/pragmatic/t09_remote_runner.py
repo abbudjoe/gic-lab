@@ -5222,6 +5222,13 @@ def validate_selected_finalization(
     relative = selection.get("finalized_output_root")
     if set(selection) != expected_keys or not isinstance(relative, str):
         raise T09HostError("selected finalization closure is malformed")
+    execution_mode = selection.get("finalizer_execution_mode")
+    expected_network = {
+        "qualified-image": "none",
+        "qualified-local": "socket-construction-denied",
+    }.get(execution_mode)
+    if expected_network is None:
+        raise T09HostError("selected finalization execution mode is invalid")
     finalized_root = (artifact_root / relative).resolve(strict=True)
     try:
         finalized_root.relative_to(artifact_root)
@@ -5311,7 +5318,7 @@ def validate_selected_finalization(
         or selection.get("interpreter") != closure.get("interpreter")
         or selection.get("interpreter_sha256") != closure.get("interpreter_sha256")
         or selection.get("semantic_projection_sha256") != canonical_sha256(semantic_projection)
-        or completion.get("network") != "none"
+        or completion.get("network") != expected_network
         or completion.get("additional_model_calls") != 0
         or completion.get("additional_browser_actions") != 0
         or completion.get("raw_source_mutated") is not False

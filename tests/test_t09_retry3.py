@@ -5,6 +5,7 @@ import json
 import shutil
 import stat
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import yaml
@@ -383,6 +384,183 @@ def test_retry3_local_finalizer_projection_is_explicit_and_provider_independent(
     assert 'network="socket-construction-denied" if local_mode else "none"' in host_source
     assert "def restore_verified_attempt_export(" in host_source
     assert "require_attempt_export_acknowledgement(" in host_source
+
+
+def test_retry3_selected_local_completion_reconstructs_and_opens_checkpoint(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    host = _load(HOST_SOURCE, "giclab_t09_retry3_selected_local")
+    run_id = ATTEMPT_ORDER[0]
+    package_commit = "a" * 40
+    artifact_root = tmp_path / "artifacts"
+    attempt = SimpleNamespace(
+        output_root="attempt",
+        raw_output_root="attempt/raw",
+        finalized_output_root="attempt/finalized",
+    )
+    attempt_root = artifact_root / attempt.output_root
+    raw_root = artifact_root / attempt.raw_output_root
+    finalized_root = artifact_root / attempt.finalized_output_root / "local-invocation-0001"
+    raw_root.mkdir(parents=True)
+    finalized_root.mkdir(parents=True)
+    raw_manifest = {"raw": "manifest"}
+    raw_receipt = {"raw": "receipt"}
+    host.write_exclusive(attempt_root / "raw-attempt-manifest.json", raw_manifest)
+    host.write_exclusive(attempt_root / "raw-attempt-complete.json", raw_receipt)
+    outcome = {"valid_scored_attempt": True, "task_score": 0.0}
+    evidence = {"identity": {"run_id": run_id}}
+    semantic = {"run_id": run_id, "score": 0.0}
+    for name, value in (
+        ("attempt-outcome.json", outcome),
+        ("evidence-index.json", evidence),
+        ("semantic-projection.json", semantic),
+    ):
+        host.write_exclusive(finalized_root / name, value)
+    output_files = [
+        {
+            "path": name,
+            "bytes": (finalized_root / name).stat().st_size,
+            "sha256": host.file_sha256(finalized_root / name),
+        }
+        for name in (
+            "attempt-outcome.json",
+            "evidence-index.json",
+            "semantic-projection.json",
+        )
+    ]
+    closure = {
+        "finalizer_execution_mode": "qualified-local",
+        "finalizer_runtime_qualification_sha256": "0" * 64,
+        "finalizer_commit": "b" * 40,
+        "finalizer_source_sha256": "1" * 64,
+        "finalizer_projection_source_sha256": "2" * 64,
+        "scientific_package_commit": package_commit,
+        "pilot_library_sha256": "3" * 64,
+        "interpreter": "/qualified/python3.11",
+        "interpreter_sha256": "4" * 64,
+        "replacement_image_id": "sha256:" + "5" * 64,
+        "execution_contract_sha256": "6" * 64,
+        "command_manifests_sha256": "7" * 64,
+        "dataset_contract_sha256": "8" * 64,
+        "evaluator_contract_sha256": "9" * 64,
+        "score_schema_sha256": "c" * 64,
+        "evidence_schema_sha256": "d" * 64,
+        "evaluator_overlay_entries_sha256": "e" * 64,
+        "evaluator_overlay_packages_sha256": "f" * 64,
+    }
+    completion = {
+        "schema_version": "0.1.0",
+        "plan_id": host.PLAN_ID,
+        "host_run_id": host.HOST_RUN_ID,
+        "run_id": run_id,
+        "raw_manifest_sha256_before": host.file_sha256(attempt_root / "raw-attempt-manifest.json"),
+        "raw_manifest_sha256_after": host.file_sha256(attempt_root / "raw-attempt-manifest.json"),
+        "raw_receipt_sha256": host.file_sha256(attempt_root / "raw-attempt-complete.json"),
+        "raw_manifest_payload_sha256": host.canonical_sha256(raw_manifest),
+        "raw_receipt_payload_sha256": host.canonical_sha256(raw_receipt),
+        "output_files": output_files,
+        "output_files_sha256": host.canonical_sha256(output_files),
+        "outcome_sha256": host.file_sha256(finalized_root / "attempt-outcome.json"),
+        "evidence_index_sha256": host.file_sha256(finalized_root / "evidence-index.json"),
+        "semantic_projection_file_sha256": host.file_sha256(
+            finalized_root / "semantic-projection.json"
+        ),
+        "semantic_projection_sha256": host.canonical_sha256(semantic),
+        "finalizer_closure": closure,
+        "finalizer_dependency_manifest_sha256": host.canonical_sha256(closure),
+        "interpreter": closure["interpreter"],
+        "interpreter_sha256": closure["interpreter_sha256"],
+        "network": "socket-construction-denied",
+        "additional_model_calls": 0,
+        "additional_browser_actions": 0,
+        "raw_source_mutated": False,
+        "output_schema_valid": True,
+    }
+    completion_path = finalized_root / "finalization-complete.json"
+    host.write_exclusive(completion_path, completion)
+    selection = {
+        "finalizer_execution_mode": closure["finalizer_execution_mode"],
+        "finalizer_runtime_qualification_sha256": closure["finalizer_runtime_qualification_sha256"],
+        "finalizer_source_sha256": closure["finalizer_source_sha256"],
+        "finalizer_projection_source_sha256": closure["finalizer_projection_source_sha256"],
+        "finalizer_commit": closure["finalizer_commit"],
+        "finalizer_dependency_manifest_sha256": host.canonical_sha256(closure),
+        "evaluator_contract_sha256": closure["evaluator_contract_sha256"],
+        "interpreter": closure["interpreter"],
+        "interpreter_sha256": closure["interpreter_sha256"],
+        "semantic_projection_sha256": host.canonical_sha256(semantic),
+        "finalized_output_root": finalized_root.relative_to(artifact_root).as_posix(),
+        "finalization_complete_sha256": host.file_sha256(completion_path),
+    }
+    monkeypatch.setattr(
+        host,
+        "validate_raw_attempt_seal",
+        lambda **_kwargs: (raw_manifest, raw_receipt),
+    )
+    monkeypatch.setattr(
+        host,
+        "validate_finalized_attempt",
+        lambda **_kwargs: (outcome, evidence, semantic, output_files),
+    )
+    reconstructed = host.validate_selected_finalization(
+        repository=ROOT,
+        artifact_root=artifact_root,
+        contract=SimpleNamespace(attempt=lambda _run_id: attempt),
+        run_id=run_id,
+        package_commit=package_commit,
+        selection=selection,
+    )
+    assert reconstructed == (outcome, evidence)
+
+    state = tmp_path / "checkpoint" / "pilot-state.json"
+    initialize_pilot_state(
+        state,
+        execution_contract_sha256="f" * 64,
+        pilot_started_at_epoch=1.0,
+        lambda_started_at_epoch=1.0,
+    )
+    for index, task_a_run_id in enumerate(ATTEMPT_ORDER[:2], start=1):
+        mark_empirical_entry(
+            state,
+            execution_contract_sha256="f" * 64,
+            run_id=task_a_run_id,
+        )
+        mark_raw_attempt_complete(
+            state,
+            execution_contract_sha256="f" * 64,
+            run_id=task_a_run_id,
+            raw_manifest_sha256=f"{index}" * 64,
+            raw_receipt_sha256=f"{index + 2}" * 64,
+        )
+        mark_attempt_completed(
+            state,
+            execution_contract_sha256="f" * 64,
+            run_id=task_a_run_id,
+            finalizer_execution_mode="qualified-local",
+            finalizer_runtime_qualification_sha256="0" * 64,
+            finalizer_source_sha256="1" * 64,
+            finalizer_projection_source_sha256="2" * 64,
+            finalizer_commit="b" * 40,
+            finalizer_dependency_manifest_sha256="3" * 64,
+            evaluator_contract_sha256="4" * 64,
+            interpreter="/qualified/python3.11",
+            interpreter_sha256="5" * 64,
+            semantic_projection_sha256=f"{index + 5}" * 64,
+            finalized_output_root=f"finalized/{task_a_run_id}/local",
+            finalization_complete_sha256=f"{index + 7}" * 64,
+        )
+    record_first_pair_checkpoint(
+        state,
+        execution_contract_sha256="f" * 64,
+        decision={"decision": "continue-to-task-b"},
+        decided_at_epoch=2.0,
+    )
+    mark_empirical_entry(
+        state,
+        execution_contract_sha256="f" * 64,
+        run_id=ATTEMPT_ORDER[2],
+    )
 
 
 def test_retry3_provider_has_two_distinct_single_use_slots_and_cumulative_caps(
