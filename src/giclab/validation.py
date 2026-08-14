@@ -1313,6 +1313,179 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
         ):
             errors.append("EXP-0001 T09 Retry 2: evidence digest is malformed")
 
+    retry3_disposition_path = exp_root / "T09_PRAGMATIC_RETRY3_DISPOSITION.json"
+    if not retry3_disposition_path.is_file():
+        errors.append("EXP-0001 T09 Retry 3: terminal disposition is missing")
+    else:
+        disposition = load_json(retry3_disposition_path)
+        attempts = disposition.get("attempts")
+        runtime = disposition.get("replacement_runtime")
+        usage = disposition.get("usage")
+        provider = disposition.get("provider")
+        costs = disposition.get("cost_reconciliation")
+        cleanup = disposition.get("cleanup")
+        pair_matching = disposition.get("pair_matching")
+        evidence = disposition.get("evidence")
+        if (
+            disposition.get("record_id") != "T09-PRAGMATIC-RETRY3-DISPOSITION-0001"
+            or disposition.get("plan_id") != "PLAN-EXP0001-PILOT-V5"
+            or disposition.get("terminal_state") != "t09-pilot-blocked-material-risk"
+            or disposition.get("lifecycle_state")
+            != (
+                "stopped-preempirically-after-two-authorized-launches-"
+                "campaign-admission-window-exhausted"
+            )
+            or disposition.get("calibration_only") is not True
+            or disposition.get("empirical_entry") is not False
+            or disposition.get("scientific_result_claimed") is not False
+            or disposition.get("experiment_outcome_assigned") is not False
+            or disposition.get("experiment_evidence_status") != "not-evaluated"
+            or disposition.get("single_use_authority_exhausted") is not True
+            or disposition.get("launch_slots_exhausted") is not True
+        ):
+            errors.append("EXP-0001 T09 Retry 3: terminal scientific boundary drifted")
+        expected_not_run_ids = {
+            "task_a_reactive": "RUN-T09-TASK-A-REACTIVE-0003",
+            "task_a_simulative": "RUN-T09-TASK-A-SIMULATIVE-0003",
+            "task_b_simulative": "RUN-T09-TASK-B-SIMULATIVE-0003",
+            "task_b_reactive": "RUN-T09-TASK-B-REACTIVE-0003",
+        }
+        if (
+            not isinstance(attempts, dict)
+            or attempts.get("empirical_attempts_entered") != []
+            or attempts.get("raw_attempts_complete") != []
+            or attempts.get("attempts_completed") != []
+            or attempts.get("condition_retries") != 0
+            or attempts.get("first_pair_checkpoint") != "not-reached-no-empirical-attempt-started"
+            or attempts.get("realized_task_a_pair") is not False
+            or attempts.get("realized_task_b_pair") is not False
+            or any(
+                not isinstance(attempts.get(key), dict)
+                or attempts[key].get("run_id") != run_id
+                or attempts[key].get("state") != "not-run"
+                or attempts[key].get("empirical_entry") is not False
+                for key, run_id in expected_not_run_ids.items()
+            )
+        ):
+            errors.append("EXP-0001 T09 Retry 3: zero-attempt disposition drifted")
+        if usage != {
+            "model_metadata_requests": 0,
+            "task_model_calls": 0,
+            "input_tokens": 0,
+            "cached_input_tokens": 0,
+            "output_tokens": 0,
+            "total_tokens": 0,
+            "browser_actions": 0,
+            "condition_attempts": 0,
+            "condition_retries": 0,
+            "openai_cost_usd": 0.0,
+        }:
+            errors.append("EXP-0001 T09 Retry 3: zero-usage reconciliation drifted")
+        if (
+            not isinstance(runtime, dict)
+            or runtime.get("candidate_build_attempt_count") != 1
+            or runtime.get("additional_build_count_on_slot2") != 0
+            or runtime.get("loadable_image_archive_preserved") is not True
+            or runtime.get("slot2_image_import_started") is not False
+            or runtime.get("slot2_functional_qualification_started") is not False
+            or runtime.get("replacement_image_qualified_for_v5") is not False
+            or runtime.get("frozen_run_manifest_written") is not False
+            or runtime.get("frozen_run_manifest_sha256") is not None
+            or runtime.get("model_metadata_requests") != 0
+            or runtime.get("task_model_requests") != 0
+            or runtime.get("task_browser_actions") != 0
+        ):
+            errors.append("EXP-0001 T09 Retry 3: pre-empirical runtime boundary drifted")
+        slot1 = provider.get("slot1") if isinstance(provider, dict) else None
+        slot2 = provider.get("slot2") if isinstance(provider, dict) else None
+        if (
+            not isinstance(provider, dict)
+            or provider.get("launch_count") != 2
+            or provider.get("maximum_launch_count") != 2
+            or provider.get("persistent_filesystems") != 0
+            or provider.get("termination_request_count") != 2
+            or provider.get("terminal_or_absent") is not True
+            or provider.get("zero_t09_instances") is not True
+            or provider.get("security_restored") is not True
+            or provider.get("campaign_wall_exception") != "none"
+            or not isinstance(slot1, dict)
+            or not isinstance(slot2, dict)
+            or any(
+                slot.get("termination_request_count") != 1
+                or slot.get("terminal_or_absent") is not True
+                or slot.get("zero_t09_instances") is not True
+                or slot.get("security_restored") is not True
+                for slot in (slot1, slot2)
+            )
+            or not isinstance(cleanup, dict)
+            or cleanup.get("slot1_temporary_secret_removed") is not True
+            or cleanup.get("slot2_remote_secret_uploaded") is not False
+            or cleanup.get("slot2_host_access_started") is not False
+            or cleanup.get("provider_terminal_or_absent") is not True
+            or cleanup.get("zero_t09_instances") is not True
+            or cleanup.get("security_restored") is not True
+            or cleanup.get("owned_provider_state_removed") is not True
+        ):
+            errors.append("EXP-0001 T09 Retry 3: provider/cleanup closeout drifted")
+        if isinstance(provider, dict) and isinstance(slot1, dict) and isinstance(slot2, dict):
+            try:
+                active = Decimal(str(provider.get("active_lambda_duration_seconds")))
+                active_sum = Decimal(str(slot1.get("owned_lambda_duration_seconds"))) + Decimal(
+                    str(slot2.get("owned_lambda_duration_seconds"))
+                )
+                lambda_cost = Decimal(str(provider.get("list_cost_usd")))
+                slot_cost_sum = Decimal(str(slot1.get("list_cost_usd"))) + Decimal(
+                    str(slot2.get("list_cost_usd"))
+                )
+            except InvalidOperation:
+                errors.append("EXP-0001 T09 Retry 3: provider accounting is malformed")
+            else:
+                if abs(active - active_sum) > Decimal("1e-12") or abs(
+                    lambda_cost - slot_cost_sum
+                ) > Decimal("1e-15"):
+                    errors.append("EXP-0001 T09 Retry 3: two-slot provider accounting drifted")
+        if (
+            not isinstance(pair_matching, dict)
+            or pair_matching.get("task_a_static_pair_diff_valid") is not True
+            or pair_matching.get("task_b_static_pair_diff_valid") is not True
+            or pair_matching.get("task_a_realized_pair_available") is not False
+            or pair_matching.get("task_b_realized_pair_available") is not False
+            or pair_matching.get("paired_or_comparative_interpretation_permitted") is not False
+        ):
+            errors.append("EXP-0001 T09 Retry 3: pair boundary drifted")
+        if isinstance(costs, dict):
+            try:
+                prior = Decimal(str(costs.get("prior_t09_cost_usd")))
+                openai_cost = Decimal(str(costs.get("new_openai_cost_usd")))
+                lambda_cost = Decimal(str(costs.get("new_lambda_cost_usd")))
+                new_total = Decimal(str(costs.get("new_campaign_total_cost_usd")))
+                cumulative = Decimal(str(costs.get("cumulative_t09_cost_usd")))
+                new_cap = Decimal(str(costs.get("new_campaign_cap_usd")))
+                cumulative_cap = Decimal(str(costs.get("cumulative_t09_cap_usd")))
+            except InvalidOperation:
+                errors.append("EXP-0001 T09 Retry 3: cost reconciliation is malformed")
+            else:
+                if (
+                    new_total != openai_cost + lambda_cost
+                    or abs(cumulative - (prior + new_total)) > Decimal("1e-15")
+                    or new_total > new_cap
+                    or cumulative > cumulative_cap
+                    or costs.get("all_cost_caps_respected") is not True
+                ):
+                    errors.append("EXP-0001 T09 Retry 3: cost reconciliation drifted")
+        else:
+            errors.append("EXP-0001 T09 Retry 3: cost reconciliation is missing")
+        if not isinstance(evidence, dict) or evidence.get("archive_id") != (
+            "ARCHIVE-EXP0001-PILOT-V5-PREEMPIRICAL-0003"
+        ):
+            errors.append("EXP-0001 T09 Retry 3: evidence archive identity drifted")
+        elif any(
+            not isinstance(value, str) or re.fullmatch(r"[0-9a-f]{64}", value) is None
+            for key, value in evidence.items()
+            if key.endswith("_sha256")
+        ):
+            errors.append("EXP-0001 T09 Retry 3: evidence digest is malformed")
+
     contract_root = exp_root / "contracts"
     execution_path = contract_root / "T09_PILOT_EXECUTION_CONTRACT.json"
     runtime_path = contract_root / "T09_PILOT_RUNTIME_IDENTITY.json"

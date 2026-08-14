@@ -12,7 +12,9 @@ no EXP-0001 measurement or outcome. T09 V4 later produced one descriptive full-t
 calibration measurement: Task A reactive completed and the exact evaluator scored it
 0.0. Its paired Task A simulative attempt and both Task B attempts did not run, so no
 realized pair, checkpoint, condition comparison, or EXP-0001 outcome exists. V3 and
-V4 single-use authorities are exhausted and provider cleanup is verified.
+V4 single-use authority is exhausted and provider cleanup is verified. V5 repaired
+the downstream finalizer but stopped before any new empirical attempt, so the V4
+measurement remains the only descriptive calibration record.
 
 ## Locked exploratory comparison
 
@@ -65,6 +67,17 @@ changed reconstruction invocation could not be used for later conditions under t
 post-entry freeze, so the campaign stopped before pair completion. The exact host is
 terminal/absent, zero T09 instances and restored security are verified. This one
 descriptive attempt supports pipeline/cost calibration only, not a condition claim.
+
+V5 separated immutable raw evidence from versioned finalized output and twice
+reproduced the repaired finalizer against the exact V4 archive with networking
+disabled. Its first authorized host built and preserved a candidate runtime, then
+stopped before metadata or empirical entry on a private archive path error. Its second
+and final host stopped before access or dynamic preflight when provider activation
+left less than one full condition wall plus the protected cleanup reserve. Both hosts
+are terminal or absent, zero T09 instances and restored security are verified, and V5
+recorded zero metadata requests, task model calls, browser actions, conditions,
+evaluators, or scores. This is infrastructure/calibration-control evidence only; it
+adds no EXP-0001 measurement and cannot be replayed.
 
 The exact upstream evaluator is deliberately not repaired or renormalized. Offline
 fixtures show Task A's ordinary correct prose scoring 0.9 (with a normalization-edge

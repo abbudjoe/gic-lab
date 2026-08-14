@@ -10,7 +10,9 @@ T09 V3 preflight-only host campaign later stopped on exact container-identity dr
 before any pilot condition or evaluator ran. T09 V4 then qualified a replacement
 runtime and produced one valid scored Task A reactive calibration attempt, but stopped
 before its paired simulative attempt because of frozen finalizer control defects. No
-pair or comparative result exists, so EXP-0001 remains unevaluated.
+pair or comparative result exists. T09 V5 repaired and offline-verified those
+downstream controls, but its two authorized launches both stopped before empirical
+entry and produced zero new attempts. EXP-0001 therefore remains unevaluated.
 
 ## Scientific question and scope
 
@@ -140,9 +142,9 @@ that a separately approved future study might consume.
 control record. The starting effect-oriented pilot proposal is preserved at
 [`run-plans/proposals/PLAN-EXP0001-PILOT.json`](run-plans/proposals/PLAN-EXP0001-PILOT.json).
 [`run-plans/pilot.yaml`](run-plans/pilot.yaml) is the calibration-only
-`PLAN-EXP0001-PILOT-V4`; V2 and V3 remain preserved under `run-plans/proposals/`.
-Tracked authorization stays false and every condition plan requires a single-use
-private current-turn overlay.
+`PLAN-EXP0001-PILOT-V5`; V2 through V4 remain preserved under
+`run-plans/proposals/`. Tracked authorization stays false and every condition plan
+requires a single-use private current-turn overlay.
 
 The pragmatic V3 repair makes the 14,400-second provider campaign effective with a
 900-second cleanup reserve and 13,500-second normal termination cutoff. It admits
@@ -178,3 +180,19 @@ host is terminal/absent, zero T09 instances remain, and security state is restor
 Future execution requires both finalizer repairs, fresh plan/run/evaluator/pair/stage/
 archive/provider identities, independent review, and new current-turn authority.
 Public raw release remains separately blocked pending privacy and publication review.
+
+Retry 3 implemented and twice reproduced the repaired pure finalizer against the
+immutable V4 archive with networking disabled and no new model or browser activity.
+Its first authorized host built and preserved candidate image `sha256:abe8ed38…`, then
+stopped before the metadata gate because the private regression archive was supplied
+at the wrong host path. After exact cleanup and a source-bound slot-2 transition, the
+second and final launch passed the pre-POST headroom gate, but provider activation and
+entry observation consumed the remaining positive margin. The campaign therefore
+stopped before host access, dynamic qualification, metadata GET, browser use, or any
+V5 condition. Both hosts are terminal or absent; zero T09 instances, restored
+security, USD 1.5106036795496942 Retry3 Lambda cost, and zero Retry3 OpenAI cost are
+reconciled. All four V5 attempts remain `not-run`, the frozen run manifest was never
+written, and the two-launch/nonreset-campaign authority cannot be replayed. Any future
+paired calibration needs fresh identities, campaign clock, review, and current-turn
+authorization; the retained image archive may be reused only through a new
+source-bound contract.

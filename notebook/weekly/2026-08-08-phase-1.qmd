@@ -43,6 +43,15 @@ EXP-0001 outcome exists. Evidence was retained, the exact host was terminated, z
 T09 instances and restored security were verified, and the Retry 2 authority is
 exhausted. Public raw release remains separately blocked.
 
+Retry 3 subsequently repaired and offline-verified both downstream finalizer defects
+against the immutable V4 archive. Its first authorized host built and preserved a
+replacement image but stopped before metadata or empirical entry on a private archive
+path error. The second and final launch stopped before host access when provider
+activation consumed the remaining admission margin. Both resources are terminal or
+absent, zero T09 instances and restored security are verified, and Retry3 recorded
+zero metadata, model, browser, evaluator, or condition activity. It adds no scientific
+measurement; its two-launch authority is exhausted.
+
 ## State transition
 
 Phase 0.75 completed its pinned upstream audits, evidence-preserving harness, SiRA

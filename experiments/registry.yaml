@@ -1,5 +1,5 @@
 schema_version: 0.1.0
-registry_revision: 6
+registry_revision: 7
 template_path: experiments/EXP-0000-template
 experiments:
   - experiment_id: EXP-0001
@@ -13,6 +13,8 @@ experiments:
       - experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_PREFLIGHT_DISPOSITION.json
       - experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY2_SUPERSESSION.json
       - experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY2_DISPOSITION.json
+      - experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY3_FINALIZER_REGRESSION.json
+      - experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY3_DISPOSITION.json
     planning_contracts:
       - experiments/EXP-0001-sira-simulative-vs-reactive/contracts/T09_PILOT_DATASET_CONTRACT.json
       - experiments/EXP-0001-sira-simulative-vs-reactive/contracts/T09_PILOT_EVALUATOR_CONTRACT.json

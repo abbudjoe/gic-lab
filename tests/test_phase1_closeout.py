@@ -108,6 +108,35 @@ def test_phase_one_is_the_only_active_non_executable_control_plane() -> None:
     assert retry2["security_restored"] is True
     assert retry2["scientific_result_claimed"] is False
     assert retry2["experiment_outcome_assigned"] is False
+    retry3 = state["t09_pragmatic_retry3_checkpoint"]
+    assert retry3["plan_id"] == "PLAN-EXP0001-PILOT-V5"
+    assert retry3["terminal_state"] == "t09-pilot-blocked-material-risk"
+    assert retry3["current_turn_execution_authorized"] is False
+    assert retry3["repository_plan_authorized"] is False
+    assert retry3["single_use_authority_exhausted"] is True
+    assert retry3["launch_slots_exhausted"] is True
+    assert retry3["provider_launch_count"] == retry3["maximum_launch_count"] == 2
+    assert retry3["replacement_image_archive_preserved"] is True
+    assert retry3["replacement_image_qualified"] is False
+    assert retry3["dynamic_preflight_passed"] is False
+    assert retry3["frozen_run_manifest_written"] is False
+    assert retry3["empirical_attempts_entered"] == 0
+    assert retry3["attempts_completed"] == 0
+    assert retry3["condition_retries"] == 0
+    assert retry3["model_metadata_requests"] == 0
+    assert retry3["task_model_calls"] == 0
+    assert retry3["total_tokens"] == 0
+    assert retry3["browser_actions"] == 0
+    assert retry3["realized_pairs"] == 0
+    assert retry3["openai_cost_usd"] == 0.0
+    assert retry3["lambda_cost_usd"] == 1.5106036795496942
+    assert retry3["cumulative_t09_cost_usd"] == 4.04142013524027
+    assert retry3["cleanup_verified"] is True
+    assert retry3["provider_terminal_or_absent"] is True
+    assert retry3["zero_t09_instances"] is True
+    assert retry3["security_restored"] is True
+    assert retry3["scientific_result_claimed"] is False
+    assert retry3["experiment_outcome_assigned"] is False
     assert {path.name for path in (ROOT / "docs/exec-plans/active").glob("*.md")} == {
         "PHASE_1_ARTIFACT_EXECUTION.md"
     }
@@ -428,6 +457,34 @@ def test_closeout_retains_zero_scientific_interpretation_and_typed_compute() -> 
         "authorization_reference": "AUTH-T09-PRAGMATIC-RETRY2-2026-08-13",
         "status": "failed",
     }
+    assert entries["CMP-0006"] == {
+        "id": "CMP-0006",
+        "experiment_id": "EXP-0001",
+        "provider": "Lambda On-Demand Cloud",
+        "hardware": "gpu_1x_a10",
+        "region": "us-east-1",
+        "started_at": "2026-08-14T12:13:58.357649Z",
+        "ended_at": "2026-08-14T13:18:41.588704Z",
+        "wall_clock_hours": 1.0786752931276957,
+        "accelerator_hours": 1.0786752931276957,
+        "cost_usd": 1.3914911281347275,
+        "authorization_reference": "AUTH-T09-PRAGMATIC-RETRY3-2026-08-13",
+        "status": "failed",
+    }
+    assert entries["CMP-0007"] == {
+        "id": "CMP-0007",
+        "experiment_id": "EXP-0001",
+        "provider": "Lambda On-Demand Cloud",
+        "hardware": "gpu_1x_a10",
+        "region": "us-east-1",
+        "started_at": "2026-08-14T14:55:37.113076Z",
+        "ended_at": "2026-08-14T15:01:09.520196Z",
+        "wall_clock_hours": 0.0923353111743927,
+        "accelerator_hours": 0.0923353111743927,
+        "cost_usd": 0.11911255141496659,
+        "authorization_reference": "AUTH-T09-PRAGMATIC-RETRY3-2026-08-13",
+        "status": "failed",
+    }
     summary = compute["phase_zero_summary"]
     assert summary["period_end"] == "2026-08-08"
     assert summary["paid_compute_authorized"] is False
@@ -437,7 +494,9 @@ def test_closeout_retains_zero_scientific_interpretation_and_typed_compute() -> 
     assert summary["prototype_runs"] == 0
     assert summary["benchmark_runs"] == 0
     assert summary["training_runs"] == 0
-    assert results["run_status"] == "calibration-pilot-incomplete-one-valid-scored-attempt"
+    assert results["run_status"] == (
+        "calibration-pilot-incomplete-one-historical-unpaired-measurement-retry3-zero-attempts"
+    )
     assert len(results["measurements"]) == 1
     assert results["measurements"][0]["paired_result_available"] is False
     assert results["evidence_status"] == "not-evaluated"
@@ -778,6 +837,136 @@ def test_t09_retry2_disposition_reconciles_one_attempt_without_a_pair_or_outcome
             assert re.fullmatch(r"[0-9a-f]{64}", value)
     public_text = disposition_path.read_text(encoding="utf-8")
     assert not re.search(r"\b(?:\d{1,3}\.){3}\d{1,3}\b", public_text)
+    assert "JUPYTER_TOKEN" not in public_text
+    assert "OPENAI_API_KEY" not in public_text
+    assert "LAMBDA_API_KEY" not in public_text
+    assert 'provider_account_identifier"' not in public_text
+
+    registry = load_yaml(ROOT / "experiments/registry.yaml")
+    experiment = next(
+        item for item in registry["experiments"] if item["experiment_id"] == "EXP-0001"
+    )
+    assert disposition_path.relative_to(ROOT).as_posix() in experiment["evidence_records"]
+
+
+def test_t09_retry3_disposition_reconciles_two_launches_and_zero_attempts() -> None:
+    disposition_path = EXP_ROOT / "T09_PRAGMATIC_RETRY3_DISPOSITION.json"
+    disposition = load_json(disposition_path)
+    state = load_yaml(ROOT / "docs/PROJECT_STATE.yaml")["t09_pragmatic_retry3_checkpoint"]
+    results = load_json(EXP_ROOT / "results-summary.json")
+    compute = {
+        entry["id"]: entry for entry in load_yaml(ROOT / "manifests/compute.yaml")["entries"]
+    }
+
+    assert disposition["record_id"] == "T09-PRAGMATIC-RETRY3-DISPOSITION-0001"
+    assert disposition["plan_id"] == state["plan_id"] == "PLAN-EXP0001-PILOT-V5"
+    assert (
+        disposition["terminal_state"]
+        == state["terminal_state"]
+        == ("t09-pilot-blocked-material-risk")
+    )
+    assert disposition["empirical_entry"] is False
+    assert disposition["scientific_result_claimed"] is False
+    assert disposition["experiment_outcome_assigned"] is False
+    assert disposition["experiment_evidence_status"] == "not-evaluated"
+    assert disposition["single_use_authority_exhausted"] is True
+    assert disposition["launch_slots_exhausted"] is True
+
+    regression = disposition["real_evidence_regression"]
+    assert regression["receipt_sha256"] == (
+        "e19c7ccfb0ec9244e97a2601910b312282de8daed2b3c9d30edc807173f029d6"
+    )
+    assert regression["two_run_semantic_projection_equal"] is True
+    assert regression["additional_model_requests"] == 0
+    assert regression["additional_browser_actions"] == 0
+    assert regression["included_in_v5_paired_results"] is False
+
+    runtime = disposition["replacement_runtime"]
+    assert runtime["candidate_build_attempt_count"] == 1
+    assert runtime["additional_build_count_on_slot2"] == 0
+    assert runtime["loadable_image_archive_preserved"] is True
+    assert runtime["slot2_image_import_started"] is False
+    assert runtime["slot2_functional_qualification_started"] is False
+    assert runtime["replacement_image_qualified_for_v5"] is False
+    assert runtime["frozen_run_manifest_written"] is False
+    assert runtime["frozen_run_manifest_sha256"] is None
+
+    attempts = disposition["attempts"]
+    assert attempts["empirical_attempts_entered"] == []
+    assert attempts["raw_attempts_complete"] == []
+    assert attempts["attempts_completed"] == []
+    assert attempts["condition_retries"] == 0
+    for key in ("task_a_reactive", "task_a_simulative", "task_b_simulative", "task_b_reactive"):
+        assert attempts[key]["state"] == "not-run"
+        assert attempts[key]["empirical_entry"] is False
+    assert attempts["first_pair_checkpoint"] == "not-reached-no-empirical-attempt-started"
+    assert attempts["realized_task_a_pair"] is False
+    assert attempts["realized_task_b_pair"] is False
+
+    assert disposition["usage"] == {
+        "model_metadata_requests": 0,
+        "task_model_calls": 0,
+        "input_tokens": 0,
+        "cached_input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "browser_actions": 0,
+        "condition_attempts": 0,
+        "condition_retries": 0,
+        "openai_cost_usd": 0.0,
+    }
+
+    provider = disposition["provider"]
+    assert provider["launch_count"] == provider["maximum_launch_count"] == 2
+    assert provider["persistent_filesystems"] == 0
+    assert provider["termination_request_count"] == 2
+    assert provider["terminal_or_absent"] is True
+    assert provider["zero_t09_instances"] is True
+    assert provider["security_restored"] is True
+    assert provider["campaign_wall_exception"] == "none"
+    assert provider["active_lambda_duration_seconds"] == (
+        provider["slot1"]["owned_lambda_duration_seconds"]
+        + provider["slot2"]["owned_lambda_duration_seconds"]
+    )
+    assert provider["list_cost_usd"] == (
+        provider["slot1"]["list_cost_usd"] + provider["slot2"]["list_cost_usd"]
+    )
+    for slot, compute_id in (("slot1", "CMP-0006"), ("slot2", "CMP-0007")):
+        assert provider[slot]["termination_request_count"] == 1
+        assert provider[slot]["terminal_or_absent"] is True
+        assert provider[slot]["zero_t09_instances"] is True
+        assert provider[slot]["security_restored"] is True
+        assert compute[compute_id]["accelerator_hours"] == provider[slot]["accelerator_hours"]
+        assert compute[compute_id]["cost_usd"] == provider[slot]["list_cost_usd"]
+
+    costs = disposition["cost_reconciliation"]
+    assert costs["new_openai_cost_usd"] == state["openai_cost_usd"] == 0.0
+    assert costs["new_lambda_cost_usd"] == state["lambda_cost_usd"]
+    assert costs["new_campaign_total_cost_usd"] == state["new_campaign_total_cost_usd"]
+    assert costs["cumulative_t09_cost_usd"] == state["cumulative_t09_cost_usd"]
+    assert costs["all_cost_caps_respected"] is True
+    assert disposition["cleanup"]["provider_terminal_or_absent"] is True
+    assert disposition["cleanup"]["zero_t09_instances"] is True
+    assert disposition["cleanup"]["security_restored"] is True
+    assert disposition["pair_matching"]["task_a_realized_pair_available"] is False
+    assert disposition["pair_matching"]["task_b_realized_pair_available"] is False
+    assert disposition["pair_matching"]["paired_or_comparative_interpretation_permitted"] is False
+
+    assert len(results["measurements"]) == 1
+    assert results["measurements"][0]["run_id"] == "RUN-T09-TASK-A-REACTIVE-0002"
+    assert disposition_path.relative_to(ROOT).as_posix() in results["artifacts"]
+    evidence = disposition["evidence"]
+    assert evidence["archive_id"] == state["evidence_archive_id"]
+    assert evidence["archive_file_count"] == 224
+    assert evidence["archive_payload_bytes"] == 2792322
+    for key, value in evidence.items():
+        if key.endswith("_sha256"):
+            assert re.fullmatch(r"[0-9a-f]{64}", value)
+
+    public_text = disposition_path.read_text(encoding="utf-8")
+    assert not re.search(r"\b(?:\d{1,3}\.){3}\d{1,3}\b", public_text)
+    assert "/Volumes/" not in public_text
+    assert "/Users/" not in public_text
     assert "JUPYTER_TOKEN" not in public_text
     assert "OPENAI_API_KEY" not in public_text
     assert "LAMBDA_API_KEY" not in public_text

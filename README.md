@@ -11,10 +11,14 @@ and its authority is exhausted. The later `PLAN-EXP0001-PILOT-V3` single-use hos
 campaign stopped at exact runtime preflight before any pilot condition, evaluator, or
 score. Retry 2 then qualified a replacement runtime and produced one completed,
 evaluator-valid Task A reactive calibration attempt with descriptive score 0.0, but
-two frozen finalizer defects forced a stop before its paired simulative attempt. No
-pair, checkpoint, condition comparison, or EXP-0001 outcome exists. Both hosts were
-terminated, zero T09 instances and restored security are verified, and all T09
-single-use authority is exhausted. EXP-0001 remains unevaluated. A protocol,
+two frozen finalizer defects forced a stop before its paired simulative attempt.
+Retry 3 repaired and verified those downstream controls, then used both authorized
+pre-empirical launches without starting a V5 condition: the first stopped on a private
+archive path error, and provider activation on the second consumed the remaining
+admission margin. Both Retry 3 hosts are terminal or absent, zero T09 instances and
+restored security are verified, and all Retry 3 authority is exhausted. No pair,
+checkpoint, condition comparison, or EXP-0001 outcome exists. EXP-0001 remains
+unevaluated. A protocol,
 readiness record, or proposed budget is not authorization.
 
 - [Public research notebook](https://abbudjoe.github.io/gic-lab/)

@@ -132,5 +132,61 @@ t09_pragmatic_retry2_checkpoint:
   publication_release_blocked: true
   scientific_result_claimed: false
   experiment_outcome_assigned: false
+t09_pragmatic_retry3_checkpoint:
+  task: T09-PRAGMATIC-RETRY3
+  terminal_state: t09-pilot-blocked-material-risk
+  lifecycle_state: stopped-preempirically-after-two-authorized-launches-campaign-admission-window-exhausted
+  plan_id: PLAN-EXP0001-PILOT-V5
+  source_authorization_sha256: 5731b3ccdad25f5d656272841d47f93418ae1535802602a9856c97552ac0b8b8
+  calibration_only: true
+  current_turn_execution_authorized: false
+  repository_plan_authorized: false
+  single_use_authority_exhausted: true
+  launch_slots_exhausted: true
+  pilot_execution_authorized: false
+  frozen_package_commit: 4a4ecc1e8aa0a00d43301161a90425ae439a2cfd
+  reviewed_implementation_ancestor: a36c3c9720611cdf730ef1ce7f83224eacd72851
+  replacement_image_id: sha256:abe8ed38f5c5b5a0a63fa726a74034dc5c192a12c0fccfe1319f97c27ceaf0a3
+  replacement_image_archive_preserved: true
+  replacement_image_qualified: false
+  dynamic_preflight_passed: false
+  frozen_run_manifest_written: false
+  provider_launch_count: 2
+  maximum_launch_count: 2
+  empirical_attempts_entered: 0
+  attempts_completed: 0
+  condition_retries: 0
+  model_metadata_requests: 0
+  task_model_calls: 0
+  total_tokens: 0
+  browser_actions: 0
+  task_a_reactive: not-run
+  task_a_simulative: not-run
+  task_b_simulative: not-run
+  task_b_reactive: not-run
+  first_pair_checkpoint: not-reached-no-empirical-attempt-started
+  realized_pairs: 0
+  prior_t09_cost_usd: 2.5308164556905757
+  openai_cost_usd: 0.0
+  lambda_cost_usd: 1.5106036795496942
+  new_campaign_total_cost_usd: 1.5106036795496942
+  cumulative_t09_cost_usd: 4.04142013524027
+  new_campaign_cost_cap_usd: 45.16
+  cumulative_t09_cost_cap_usd: 48.0
+  current_execution_and_analysis_blockers:
+    - authorized-two-launch-capability-exhausted
+    - nonreset-campaign-admission-window-exhausted
+    - dynamic-image-qualification-and-frozen-run-manifest-not-produced
+    - no-v5-empirical-attempt-or-realized-task-pair
+  future_execution_requires_fresh_plan_identities_campaign_clock_review_authorization: true
+  cleanup_verified: true
+  provider_terminal_or_absent: true
+  zero_t09_instances: true
+  security_restored: true
+  evidence_archive_id: ARCHIVE-EXP0001-PILOT-V5-PREEMPIRICAL-0003
+  evidence_record: experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY3_DISPOSITION.json
+  publication_release_blocked: true
+  scientific_result_claimed: false
+  experiment_outcome_assigned: false
 authoritative_plan: docs/exec-plans/active/PHASE_1_ARTIFACT_EXECUTION.md
-last_updated: "2026-08-13"
+last_updated: "2026-08-14"

@@ -36,7 +36,9 @@ def test_exp0001_is_registered_with_incomplete_calibration_and_no_scientific_res
         "authorization_reference": None,
     }
     results = load_json(EXP_ROOT / "results-summary.json")
-    assert results["run_status"] == "calibration-pilot-incomplete-one-valid-scored-attempt"
+    assert results["run_status"] == (
+        "calibration-pilot-incomplete-one-historical-unpaired-measurement-retry3-zero-attempts"
+    )
     assert results["measurements"] == [
         {
             "measurement_id": "MEAS-EXP0001-T09-V4-TASK-A-REACTIVE-0001",
@@ -66,6 +68,11 @@ def test_exp0001_is_registered_with_incomplete_calibration_and_no_scientific_res
         ),
         ("experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY2_SUPERSESSION.json"),
         ("experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY2_DISPOSITION.json"),
+        (
+            "experiments/EXP-0001-sira-simulative-vs-reactive/"
+            "T09_PRAGMATIC_RETRY3_FINALIZER_REGRESSION.json"
+        ),
+        ("experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY3_DISPOSITION.json"),
     ]
     assert results["infrastructure_terminal_state"] == "t09-pilot-blocked-material-risk"
 
@@ -304,7 +311,7 @@ def _rebind_condition_profile_hashes(exp_root: Path) -> None:
 
 def test_profile_validation_rejects_swapped_order_and_model_drift(tmp_path: Path) -> None:
     exp_root = _copy_exp0001_contract(tmp_path)
-    condition_path = exp_root / "run-plans/conditions/pilot-v4-task-0000-reactive.yaml"
+    condition_path = exp_root / "run-plans/conditions/pilot-v5-task-0000-reactive.yaml"
     condition = load_yaml(condition_path)
     condition["pairing"]["order_index"] = 2
     condition["sources"]["model_revision"] = "wrong-revision"
@@ -320,7 +327,7 @@ def test_exp0001_validation_rejects_duplicate_task_and_wrong_slice(tmp_path: Pat
     profile = load_yaml(profile_path)
     profile["sampling"]["counterbalancing"][1]["task_id"] = "7dcbbbdc7f1120cd"
     _write_yaml(profile_path, profile)
-    for name in ("pilot-v4-task-0000-reactive.yaml", "pilot-v4-task-0000-simulative.yaml"):
+    for name in ("pilot-v5-task-0000-reactive.yaml", "pilot-v5-task-0000-simulative.yaml"):
         condition_path = exp_root / "run-plans/conditions" / name
         condition = load_yaml(condition_path)
         condition["task"]["start_idx"] = 9
@@ -345,6 +352,19 @@ def test_exp0001_validation_rejects_retry2_pair_overclaim(tmp_path: Path) -> Non
     assert any("one-attempt/no-pair disposition drifted" in error for error in errors)
 
 
+def test_exp0001_validation_rejects_retry3_empirical_overclaim(tmp_path: Path) -> None:
+    exp_root = _copy_exp0001_contract(tmp_path)
+    disposition_path = exp_root / "T09_PRAGMATIC_RETRY3_DISPOSITION.json"
+    disposition = load_json(disposition_path)
+    disposition["attempts"]["empirical_attempts_entered"] = ["RUN-T09-TASK-A-REACTIVE-0003"]
+    disposition_path.write_text(
+        json.dumps(disposition, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    errors = validate_exp0001_contract(tmp_path)
+    assert any("zero-attempt disposition drifted" in error for error in errors)
+
+
 def test_profile_validation_rejects_task_source_and_dataset_revision_drift(
     tmp_path: Path,
 ) -> None:
@@ -353,7 +373,7 @@ def test_profile_validation_rejects_task_source_and_dataset_revision_drift(
     profile = load_yaml(profile_path)
     profile["sampling"]["counterbalancing"][0]["task_source"] = "DATA-SIRA-FANOUTQA-DEV[8:9]"
     _write_yaml(profile_path, profile)
-    condition_path = exp_root / "run-plans/conditions/pilot-v4-task-0000-reactive.yaml"
+    condition_path = exp_root / "run-plans/conditions/pilot-v5-task-0000-reactive.yaml"
     condition = load_yaml(condition_path)
     condition["task"]["dataset_revision"] = "wrong-dataset-revision"
     _write_yaml(condition_path, condition)

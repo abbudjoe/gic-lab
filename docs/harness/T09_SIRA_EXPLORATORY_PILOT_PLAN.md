@@ -1,8 +1,8 @@
 # T09 SiRA two-task pragmatic calibration pilot plan
 
-Status: **V4 single-use authority exhausted; stopped before pair completion**
+Status: **V5 two-launch authority exhausted; stopped before empirical entry**
 
-Plan ID: `PLAN-EXP0001-PILOT-V4`
+Plan ID: `PLAN-EXP0001-PILOT-V5`
 
 Frozen planning terminal state: `ready-for-t09-pilot-authorization`
 
@@ -23,10 +23,22 @@ simulative and both Task B attempts did not run. No pair/checkpoint or scientifi
 outcome exists. Cleanup and exact provider termination are verified; the V4 authority
 is exhausted and cannot be replayed.
 
+The separately authorized Retry3 successor repaired and twice reproduced the
+downstream finalizer over the immutable V4 archive, then consumed both permitted
+pre-empirical launches without starting a V5 attempt. Launch 1 built and retained
+candidate image `sha256:abe8ed38…` but stopped before metadata on a private archive
+path error. Launch 2 stopped before host access when provider activation exhausted the
+remaining admission margin for one full condition plus cleanup. Both resources are
+terminal or absent, zero T09 instances and restored security are verified, and all
+V5 metadata/model/browser/evaluator/condition counters remain zero. V5 has no frozen
+run manifest, pair, checkpoint, or result; its launch and campaign authority cannot be
+replayed.
+
 The V3 gap ledger below is retained as historical rationale. V4 resolved its image
-blocker by functional qualification; the current blockers are the frozen finalizer's
-incorrect output-root projection and its interpreter/dependency mismatch. Both require
-a fresh reviewed successor package and new authority before another paired campaign.
+blocker but exposed the two finalizer defects; V5 repaired those defects but exhausted
+its two-launch/nonreset-campaign envelope before empirical entry. Another paired
+campaign requires fresh identities, campaign clock, reviewed bindings, and new
+current-turn authority.
 
 ## Scope and interpretation
 

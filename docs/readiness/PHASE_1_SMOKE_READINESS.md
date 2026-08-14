@@ -1,10 +1,10 @@
 # Phase 1 SiRA Smoke Readiness
 
-Status: **T07 smoke closed; T09 Retry 2 stopped after one valid scored attempt and no pair**
+Status: **T07 smoke closed; T09 Retry 3 stopped pre-empirically after two launches**
 
 Prepared: 2026-08-08
 
-Updated: 2026-08-13
+Updated: 2026-08-14
 
 T08 update: 2026-08-12
 
@@ -66,6 +66,28 @@ restored security are verified. New campaign cost is USD 2.116752203373909 and
 cumulative T09 cost is USD 2.5308164556905757. Terminal state is
 `t09-pilot-blocked-material-risk`; future execution needs both finalizer repairs,
 fresh identities, independent review, and new current-turn authority.
+
+## Current T09 Retry 3 checkpoint
+
+`PLAN-EXP0001-PILOT-V5` repaired the raw/finalized evidence boundary and reproduced
+the corrected downstream finalizer twice over the immutable V4 archive with no new
+network, model, browser, or condition activity. The first authorized host built and
+preserved candidate image `sha256:abe8ed38…`, then stopped before the sole metadata
+GET and empirical entry because the private regression archive was mounted at the
+wrong host path. It terminated cleanly and yielded the source-bound eligibility for
+the second and final launch.
+
+The second launch passed the code-enforced pre-POST 4,500-second headroom gate, but
+provider activation and source-bound entry observation consumed the remaining margin.
+At active entry the nonreset campaign could no longer admit one 3,600-second condition
+plus its protected 900-second cleanup reserve. The run stopped immediately, before
+host access, image import, dynamic qualification, metadata GET, browser use, or a V5
+attempt. Both provider resources are terminal or absent; zero T09 instances, restored
+security, two exact termination requests, 4,215.638175 active Lambda seconds, USD
+1.5106036795496942 Retry3 Lambda cost, and USD 0 OpenAI cost are reconciled. The
+two-launch capability and campaign clock are exhausted. Terminal state is
+`t09-pilot-blocked-material-risk`; any future paired campaign requires fresh
+identities, a new clock, independent review, and new current-turn authority.
 
 ## Exact next run plan
 

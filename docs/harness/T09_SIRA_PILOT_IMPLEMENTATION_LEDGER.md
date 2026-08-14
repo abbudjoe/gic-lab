@@ -1,5 +1,30 @@
 # T09 SiRA Calibration Pilot Lock — Assembly Ledger
 
+## V5 pragmatic Retry 3 raw-first successor
+
+V5 assembly status: **closeout in progress at `t09-pilot-blocked-material-risk`**
+
+Current plan: `PLAN-EXP0001-PILOT-V5`.
+
+Retry 3 repaired the V4 raw/finalized evidence boundary and both downstream finalizer
+defects, then reproduced the corrected semantic projection twice over the exact V4
+archive with networking disabled and no new model or browser activity. Its first
+authorized host built and retained candidate image `sha256:abe8ed38…` but stopped
+before model metadata and empirical entry on a private archive path error. Its second
+and final launch stopped before host access when provider activation consumed the
+remaining margin required for one full condition plus protected cleanup.
+
+Both provider resources are terminal or absent; zero T09 instances and restored
+security are verified. Retry3 entered zero attempts and used zero metadata requests,
+model calls, tokens, browser actions, evaluators, and OpenAI cost. Its two hosts used
+USD 1.5106036795496942 Lambda and cumulative T09 cost is USD 4.04142013524027. No V5
+pair, checkpoint, comparison, measurement, or EXP-0001 outcome exists. The active
+DoD and evidence log are in `docs/harness/T09_PRAGMATIC_RETRY3_EXECUTION_PLAN.md`; the
+machine-readable terminal record is
+`experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY3_DISPOSITION.json`.
+
+---
+
 ## V4 pragmatic Retry 2 successor
 
 V4 assembly status: **blocked-user-action; campaign closed after one valid scored

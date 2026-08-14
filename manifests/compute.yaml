@@ -71,3 +71,27 @@ entries:
     cost_usd: 1.754109703373909
     authorization_reference: AUTH-T09-PRAGMATIC-RETRY2-2026-08-13
     status: failed
+  - id: CMP-0006
+    experiment_id: EXP-0001
+    provider: Lambda On-Demand Cloud
+    hardware: gpu_1x_a10
+    region: us-east-1
+    started_at: "2026-08-14T12:13:58.357649Z"
+    ended_at: "2026-08-14T13:18:41.588704Z"
+    wall_clock_hours: 1.0786752931276957
+    accelerator_hours: 1.0786752931276957
+    cost_usd: 1.3914911281347275
+    authorization_reference: AUTH-T09-PRAGMATIC-RETRY3-2026-08-13
+    status: failed
+  - id: CMP-0007
+    experiment_id: EXP-0001
+    provider: Lambda On-Demand Cloud
+    hardware: gpu_1x_a10
+    region: us-east-1
+    started_at: "2026-08-14T14:55:37.113076Z"
+    ended_at: "2026-08-14T15:01:09.520196Z"
+    wall_clock_hours: 0.0923353111743927
+    accelerator_hours: 0.0923353111743927
+    cost_usd: 0.11911255141496659
+    authorization_reference: AUTH-T09-PRAGMATIC-RETRY3-2026-08-13
+    status: failed

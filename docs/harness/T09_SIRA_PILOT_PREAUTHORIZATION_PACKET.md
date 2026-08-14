@@ -1,5 +1,28 @@
 # T09 pragmatic calibration pilot preauthorization packet
 
+## V5 Retry 3 terminal overlay
+
+Status: **two-launch V5 authority exhausted; stopped before empirical entry and not replayable**
+
+Tracked plan: `PLAN-EXP0001-PILOT-V5`, `authorized: false`.
+
+The user's Retry3 instruction authorized a raw-first finalizer repair and at most two
+pre-empirical provider launches. Both launch slots were consumed. The first built and
+retained the candidate runtime but failed before model metadata on a private archive
+path error. The source-bound second launch stopped before host access or dynamic
+preflight when provider activation left less than one condition hard wall plus the
+900-second cleanup reserve. No V5 metadata request, model call, token, browser action,
+evaluator, condition attempt, pair, checkpoint, score, or scientific outcome exists.
+
+Each resource received one exact termination request; terminal/absent, zero T09
+instances, restored security, USD 1.5106036795496942 Retry3 Lambda cost, USD 0 Retry3
+OpenAI cost, and USD 4.04142013524027 cumulative T09 cost are verified. This packet
+contains no reusable authorization block. Any successor needs fresh identities, a new
+campaign clock with provider-activation/preflight slack, clean review, and new
+current-turn user authorization.
+
+---
+
 ## V4 Retry 2 current-turn overlay
 
 Status: **single-use V4 authority exhausted; campaign stopped and not replayable**
