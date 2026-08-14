@@ -303,6 +303,8 @@ class RuntimeQualification:
     qualified_real_evidence_regression_sha256: str
     local_finalizer_qualification_sha256: str
     local_finalizer_interpreter_dependency_manifest_sha256: str
+    local_finalizer_interpreter_dependency_tree_sha256: str
+    local_finalizer_evaluator_dependency_tree_sha256: str
     model_metadata_request_count: int
     model_task_request_count: int
     task_browser_action_count: int
@@ -373,6 +375,14 @@ class RuntimeQualification:
                 document.get("local_finalizer_interpreter_dependency_manifest_sha256"),
                 context="local finalizer interpreter dependency-manifest hash",
             ),
+            local_finalizer_interpreter_dependency_tree_sha256=_required_string(
+                document.get("local_finalizer_interpreter_dependency_tree_sha256"),
+                context="local finalizer interpreter dependency-tree hash",
+            ),
+            local_finalizer_evaluator_dependency_tree_sha256=_required_string(
+                document.get("local_finalizer_evaluator_dependency_tree_sha256"),
+                context="local finalizer evaluator dependency-tree hash",
+            ),
             model_metadata_request_count=_required_int(
                 document.get("model_metadata_request_count"),
                 context="model metadata request count",
@@ -402,6 +412,8 @@ class RuntimeQualification:
             result.qualified_real_evidence_regression_sha256,
             result.local_finalizer_qualification_sha256,
             result.local_finalizer_interpreter_dependency_manifest_sha256,
+            result.local_finalizer_interpreter_dependency_tree_sha256,
+            result.local_finalizer_evaluator_dependency_tree_sha256,
         )
         if (
             document.get("schema_version") != "0.1.0"

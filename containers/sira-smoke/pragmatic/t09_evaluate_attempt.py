@@ -529,6 +529,7 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
     interpreter_path = Path(sys.executable)
     interpreter_sha256 = file_sha256(interpreter_path)
     runtime_qualification_path = args.finalizer_runtime_qualification.resolve(strict=True)
+    local_qualification: dict[str, Any] | None = None
     if file_sha256(runtime_qualification_path) != args.finalizer_runtime_qualification_sha256:
         raise T09PilotError("finalizer runtime qualification hash changed")
     if args.finalizer_execution_mode == "qualified-image":
@@ -544,6 +545,8 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
             label="qualified local finalizer runtime",
         )
         local_base_packages = local_qualification.get("interpreter_dependency_manifest")
+        local_base_tree = local_qualification.get("interpreter_dependency_tree")
+        local_evaluator_tree = local_qualification.get("dependency_tree")
         if (
             local_qualification.get("schema_version") != "0.1.0"
             or local_qualification.get("qualification_id")
@@ -564,6 +567,18 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
             or local_base_packages != sorted(local_base_packages)
             or local_qualification.get("interpreter_dependency_manifest_sha256")
             != canonical_sha256(local_base_packages)
+            or not isinstance(local_base_tree, dict)
+            or local_qualification.get("interpreter_dependency_tree_sha256")
+            != canonical_sha256(local_base_tree)
+            or not isinstance(local_evaluator_tree, dict)
+            or local_qualification.get("dependency_tree_sha256")
+            != canonical_sha256(local_evaluator_tree)
+            or frozen_manifest.get("local_finalizer_qualification_sha256")
+            != args.finalizer_runtime_qualification_sha256
+            or frozen_manifest.get("local_finalizer_interpreter_dependency_tree_sha256")
+            != local_qualification.get("interpreter_dependency_tree_sha256")
+            or frozen_manifest.get("local_finalizer_evaluator_dependency_tree_sha256")
+            != local_qualification.get("dependency_tree_sha256")
         ):
             raise T09PilotError("qualified local finalizer runtime drifted")
         _disable_local_network()
@@ -647,6 +662,21 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
     command_manifest = _manifest_for_run(command_document, attempt.run_id)
     if command_manifest.get("condition_plan_sha256") != attempt.condition_plan_sha256:
         raise T09PilotError("command/condition binding drifted")
+    if local_qualification is None:
+        interpreter_dependency_manifest_sha256 = frozen_manifest["package_manifest_sha256"]
+        analysis_evaluator_entries_sha256 = frozen_manifest["evaluator_overlay_entries_sha256"]
+        analysis_evaluator_packages_sha256 = frozen_manifest["evaluator_overlay_packages_sha256"]
+    else:
+        local_dependency_tree = local_qualification.get("dependency_tree")
+        if not isinstance(local_dependency_tree, dict):
+            raise T09PilotError("qualified local evaluator dependency tree is unavailable")
+        interpreter_dependency_manifest_sha256 = local_qualification.get(
+            "interpreter_dependency_tree_sha256"
+        )
+        analysis_evaluator_entries_sha256 = local_dependency_tree.get("entries_sha256")
+        analysis_evaluator_packages_sha256 = local_qualification.get(
+            "dependency_package_manifest_sha256"
+        )
     finalizer_closure = {
         "finalizer_execution_mode": args.finalizer_execution_mode,
         "finalizer_runtime_qualification_sha256": (args.finalizer_runtime_qualification_sha256),
@@ -657,6 +687,7 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
         "pilot_library_sha256": file_sha256(Path(pilot_contract.__file__).resolve(strict=True)),
         "interpreter": interpreter_path.as_posix(),
         "interpreter_sha256": interpreter_sha256,
+        "interpreter_dependency_manifest_sha256": interpreter_dependency_manifest_sha256,
         "replacement_image_id": args.replacement_image_id,
         "execution_contract_sha256": contract.sha256,
         "command_manifests_sha256": args.command_manifests_sha256,
@@ -664,8 +695,8 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
         "evaluator_contract_sha256": contract.evaluator_contract_sha256,
         "score_schema_sha256": file_sha256(args.score_schema.resolve(strict=True)),
         "evidence_schema_sha256": file_sha256(args.evidence_schema.resolve(strict=True)),
-        "evaluator_overlay_entries_sha256": frozen_manifest["evaluator_overlay_entries_sha256"],
-        "evaluator_overlay_packages_sha256": frozen_manifest["evaluator_overlay_packages_sha256"],
+        "evaluator_overlay_entries_sha256": analysis_evaluator_entries_sha256,
+        "evaluator_overlay_packages_sha256": analysis_evaluator_packages_sha256,
     }
     if canonical_sha256(finalizer_closure) != args.finalizer_dependency_manifest_sha256:
         raise T09PilotError("finalizer dependency closure drifted from the host binding")
@@ -777,14 +808,33 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
         label="evaluator-overlay-revalidation",
         failure_reasons=infrastructure_failure_reasons,
     )
+    if local_qualification is None:
+        expected_overlay_manifest_sha256 = frozen_manifest.get("evaluator_overlay_manifest_sha256")
+        expected_overlay_entries_sha256 = frozen_manifest.get("evaluator_overlay_entries_sha256")
+        expected_overlay_packages_sha256 = frozen_manifest.get("evaluator_overlay_packages_sha256")
+        expected_dependency_bytes_recomputed: object = None
+    else:
+        local_evaluator_tree = local_qualification["dependency_tree"]
+        assert isinstance(local_evaluator_tree, dict)
+        expected_overlay_manifest_sha256 = args.finalizer_runtime_qualification_sha256
+        expected_overlay_entries_sha256 = local_evaluator_tree.get("entries_sha256")
+        expected_overlay_packages_sha256 = local_qualification.get(
+            "dependency_package_manifest_sha256"
+        )
+        expected_dependency_bytes_recomputed = True
     if (
         evaluator_overlay_revalidation.get("overlay_manifest_sha256")
-        != frozen_manifest.get("evaluator_overlay_manifest_sha256")
+        != expected_overlay_manifest_sha256
         or evaluator_overlay_revalidation.get("overlay_entries_sha256")
-        != frozen_manifest.get("evaluator_overlay_entries_sha256")
+        != expected_overlay_entries_sha256
         or evaluator_overlay_revalidation.get("overlay_packages_sha256")
-        != frozen_manifest.get("evaluator_overlay_packages_sha256")
+        != expected_overlay_packages_sha256
         or evaluator_overlay_revalidation.get("packages_recomputed") is not True
+        or (
+            local_qualification is not None
+            and evaluator_overlay_revalidation.get("dependency_bytes_recomputed")
+            is not expected_dependency_bytes_recomputed
+        )
     ):
         infrastructure_failure_reasons.append("evaluator-overlay-revalidation-mismatch")
 
@@ -981,7 +1031,20 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
                 "interpreter": interpreter_path.as_posix(),
                 "interpreter_sha256": interpreter_sha256,
                 "qualification_sha256": args.finalizer_runtime_qualification_sha256,
-                "network": "none",
+                "interpreter_dependency_manifest_sha256": (
+                    finalizer_closure["interpreter_dependency_manifest_sha256"]
+                ),
+                "evaluator_dependency_entries_sha256": finalizer_closure[
+                    "evaluator_overlay_entries_sha256"
+                ],
+                "evaluator_dependency_packages_sha256": finalizer_closure[
+                    "evaluator_overlay_packages_sha256"
+                ],
+                "network": (
+                    "socket-construction-denied"
+                    if args.finalizer_execution_mode == "qualified-local"
+                    else "none"
+                ),
             },
         },
         "timing": {

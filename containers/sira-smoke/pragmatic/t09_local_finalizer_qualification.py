@@ -23,6 +23,9 @@ import sysconfig
 from pathlib import Path
 from typing import Any
 
+MAX_DEPENDENCY_TREE_ENTRIES = 100_000
+MAX_DEPENDENCY_TREE_BYTES = 1_073_741_824
+
 
 class LocalQualificationError(RuntimeError):
     """The prelaunch local finalizer qualification failed closed."""
@@ -96,6 +99,71 @@ def _realized_packages(site_packages: Path) -> list[str]:
     if len(normalized_result) != len(set(normalized_result)):
         raise LocalQualificationError("local evaluator has duplicate package identities")
     return normalized_result
+
+
+def _dependency_tree_inventory(root: Path, *, label: str) -> dict[str, object]:
+    """Hash every dependency directory and regular file without following links."""
+
+    resolved = root.resolve(strict=True)
+    root_metadata = resolved.stat(follow_symlinks=False)
+    if (
+        resolved.is_symlink()
+        or not stat.S_ISDIR(root_metadata.st_mode)
+        or root_metadata.st_uid != os.getuid()
+        or root_metadata.st_mode & 0o022
+    ):
+        raise LocalQualificationError(f"{label} root metadata is unsafe")
+    entries: list[dict[str, object]] = []
+    total_regular_bytes = 0
+    for current, raw_directories, raw_files in os.walk(
+        resolved,
+        topdown=True,
+        followlinks=False,
+    ):
+        current_path = Path(current)
+        raw_directories.sort()
+        raw_files.sort()
+        retained_directories: list[str] = []
+        for name in [*raw_directories, *raw_files]:
+            path = current_path / name
+            metadata = path.lstat()
+            relative = path.relative_to(resolved).as_posix()
+            record: dict[str, object] = {
+                "path": relative,
+                "mode": f"{stat.S_IMODE(metadata.st_mode):04o}",
+            }
+            if stat.S_ISDIR(metadata.st_mode):
+                if metadata.st_mode & 0o022:
+                    raise LocalQualificationError(f"{label} directory is writable")
+                record["type"] = "directory"
+                retained_directories.append(name)
+            elif stat.S_ISREG(metadata.st_mode):
+                if metadata.st_nlink != 1 or metadata.st_mode & 0o022:
+                    raise LocalQualificationError(f"{label} file metadata is unsafe")
+                record.update(
+                    {
+                        "type": "file",
+                        "bytes": metadata.st_size,
+                        "sha256": file_sha256(path),
+                    }
+                )
+                total_regular_bytes += metadata.st_size
+            else:
+                raise LocalQualificationError(f"{label} contains a link or special file")
+            entries.append(record)
+            if (
+                len(entries) > MAX_DEPENDENCY_TREE_ENTRIES
+                or total_regular_bytes > MAX_DEPENDENCY_TREE_BYTES
+            ):
+                raise LocalQualificationError(f"{label} exceeds its manifest bound")
+        raw_directories[:] = retained_directories
+    return {
+        "root_mode": f"{stat.S_IMODE(root_metadata.st_mode):04o}",
+        "entries": entries,
+        "entry_count": len(entries),
+        "total_regular_bytes": total_regular_bytes,
+        "entries_sha256": canonical_sha256(entries),
+    }
 
 
 def _local_base_packages(execution_contract: dict[str, Any]) -> tuple[Path, list[str]]:
@@ -177,6 +245,10 @@ def qualify(args: argparse.Namespace) -> dict[str, object]:
     if execution_contract.get("plan_id") != "PLAN-EXP0001-PILOT-V5":
         raise LocalQualificationError("local finalizer execution contract drifted")
     base_site_packages, base_packages = _local_base_packages(execution_contract)
+    base_dependency_tree = _dependency_tree_inventory(
+        base_site_packages,
+        label="local finalizer base dependency tree",
+    )
     evaluator_path = args.evaluator_contract.resolve(strict=True)
     evaluator = _object(evaluator_path, label="evaluator contract")
     evaluator_identity = evaluator.get("identity")
@@ -211,6 +283,10 @@ def qualify(args: argparse.Namespace) -> dict[str, object]:
     realized_packages = _realized_packages(args.dependency_site_packages)
     if realized_packages != expected_packages:
         raise LocalQualificationError("local evaluator package closure drifted")
+    evaluator_dependency_tree = _dependency_tree_inventory(
+        args.dependency_site_packages,
+        label="local evaluator dependency tree",
+    )
     dataset = args.dataset.resolve(strict=True)
     if (
         dataset.stat().st_size != 1_177_174
@@ -249,9 +325,13 @@ def qualify(args: argparse.Namespace) -> dict[str, object]:
         "interpreter_site_packages": base_site_packages.as_posix(),
         "interpreter_dependency_manifest": base_packages,
         "interpreter_dependency_manifest_sha256": canonical_sha256(base_packages),
+        "interpreter_dependency_tree": base_dependency_tree,
+        "interpreter_dependency_tree_sha256": canonical_sha256(base_dependency_tree),
         "dependency_site_packages": args.dependency_site_packages.resolve(strict=True).as_posix(),
         "dependency_package_manifest": expected_packages,
         "dependency_package_manifest_sha256": canonical_sha256(expected_packages),
+        "dependency_tree": evaluator_dependency_tree,
+        "dependency_tree_sha256": canonical_sha256(evaluator_dependency_tree),
         "evaluator_contract_sha256": file_sha256(evaluator_path),
         "evaluator_root": evaluator_root.as_posix(),
         "evaluator_files": evaluator_files,

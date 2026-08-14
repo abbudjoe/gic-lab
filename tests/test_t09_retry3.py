@@ -386,6 +386,158 @@ def test_retry3_local_finalizer_projection_is_explicit_and_provider_independent(
     assert "require_attempt_export_acknowledgement(" in host_source
 
 
+def test_retry3_provider_preflight_accepts_source_bound_offhost_runtime_paths(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    host = _load(HOST_SOURCE, "giclab_t09_retry3_offhost_qualification")
+    execution = tmp_path / "execution.json"
+    evaluator = tmp_path / "evaluator.json"
+    regression = tmp_path / "regression.json"
+    execution.write_text(
+        json.dumps({"runtime": {"local_finalizer_base_packages": ["base==1"]}}),
+        encoding="utf-8",
+    )
+    evaluator.write_text("{}\n", encoding="utf-8")
+    regression.write_text("{}\n", encoding="utf-8")
+    entry = {
+        "path": "package.py",
+        "mode": "0644",
+        "type": "file",
+        "bytes": 1,
+        "sha256": "a" * 64,
+    }
+    tree = {
+        "root_mode": "0755",
+        "entries": [entry],
+        "entry_count": 1,
+        "total_regular_bytes": 1,
+        "entries_sha256": host.canonical_sha256([entry]),
+    }
+    qualification_source = ROOT / (
+        "containers/sira-smoke/pragmatic/t09_local_finalizer_qualification.py"
+    )
+    receipt = {
+        "schema_version": "0.1.0",
+        "qualification_id": "QUAL-T09-PILOT-V5-LOCAL-FINALIZER-0001",
+        "plan_id": host.PLAN_ID,
+        "package_commit": "a" * 40,
+        "python_version": "3.11.14",
+        "execution_contract_sha256": host.file_sha256(execution),
+        "interpreter": "/control/offhost/python3.11",
+        "interpreter_sha256": "b" * 64,
+        "interpreter_site_packages": "/control/offhost/base-site-packages",
+        "interpreter_dependency_manifest": ["base==1"],
+        "interpreter_dependency_manifest_sha256": host.canonical_sha256(["base==1"]),
+        "interpreter_dependency_tree": tree,
+        "interpreter_dependency_tree_sha256": host.canonical_sha256(tree),
+        "dependency_site_packages": "/control/offhost/evaluator-site-packages",
+        "dependency_package_manifest": ["eval==1"],
+        "dependency_package_manifest_sha256": host.canonical_sha256(["eval==1"]),
+        "dependency_tree": tree,
+        "dependency_tree_sha256": host.canonical_sha256(tree),
+        "evaluator_contract_sha256": host.file_sha256(evaluator),
+        "evaluator_root": "/control/offhost/evaluator",
+        "dataset": "/control/offhost/fanout-final-dev.json",
+        "dataset_sha256": host.PINNED_DATASET_SHA256,
+        "real_evidence_regression_sha256": host.file_sha256(regression),
+        "real_evidence_regression_passed": True,
+        "network_policy": "socket-construction-denied",
+        "model_requests": 0,
+        "browser_actions": 0,
+        "source_sha256s": {
+            "finalizer": "c" * 64,
+            "projection": "d" * 64,
+            "qualification": host.file_sha256(qualification_source),
+        },
+    }
+    receipt_path = tmp_path / "offhost-qualification.json"
+    receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
+    receipt_path.chmod(0o600)
+    monkeypatch.setattr(
+        host,
+        "contract_paths",
+        lambda _repository: {
+            "execution": execution,
+            "evaluator": evaluator,
+            "real_regression": regression,
+        },
+    )
+    monkeypatch.setattr(host, "expected_evaluator_packages", lambda _repository: ["eval==1"])
+    monkeypatch.setattr(
+        host,
+        "git_file_sha256",
+        lambda _repository, _commit, relative: {
+            host.FINALIZER_RELATIVE_PATH: "c" * 64,
+            host.FINALIZER_PROJECTION_RELATIVE_PATH: "d" * 64,
+        }[relative],
+    )
+    accepted = host.validate_local_finalizer_qualification(
+        receipt_path,
+        repository=ROOT,
+        package_commit="a" * 40,
+        require_local_runtime=False,
+    )
+    assert accepted["interpreter"] == "/control/offhost/python3.11"
+    with pytest.raises((FileNotFoundError, host.T09HostError)):
+        host.validate_local_finalizer_qualification(
+            receipt_path,
+            repository=ROOT,
+            package_commit="a" * 40,
+            require_local_runtime=True,
+        )
+    preflight_source = (
+        HOST_SOURCE.read_text(encoding="utf-8")
+        .split("def preflight(", 1)[1]
+        .split("def container_create_argv", 1)[0]
+    )
+    assert "require_local_runtime=False" in preflight_source
+    assert "args.local_evaluator_root" not in preflight_source
+    assert "args.local_dataset" not in preflight_source
+
+
+def test_retry3_local_dependency_tree_detects_same_metadata_byte_drift(
+    tmp_path: Path,
+) -> None:
+    host = _load(HOST_SOURCE, "giclab_t09_retry3_dependency_bytes")
+    qualifier = _load(
+        LOCAL_QUALIFICATION_SOURCE,
+        "giclab_t09_retry3_dependency_bytes_qualifier",
+    )
+    site_packages = tmp_path / "site-packages"
+    metadata = site_packages / "fixture_pkg-1.0.dist-info" / "METADATA"
+    module = site_packages / "fixture_pkg" / "__init__.py"
+    metadata.parent.mkdir(parents=True)
+    module.parent.mkdir(parents=True)
+    metadata.write_text("Name: fixture-pkg\nVersion: 1.0\n", encoding="utf-8")
+    module.write_text("VALUE = 1\n", encoding="utf-8")
+    before = host.local_dependency_tree_inventory(
+        site_packages,
+        label="fixture evaluator dependency tree",
+    )
+    qualified_before = qualifier._dependency_tree_inventory(  # type: ignore[attr-defined]
+        site_packages,
+        label="fixture evaluator dependency tree",
+    )
+    retained_metadata = metadata.read_bytes()
+    module.write_text("VALUE = 2\n", encoding="utf-8")
+    after = host.local_dependency_tree_inventory(
+        site_packages,
+        label="fixture evaluator dependency tree",
+    )
+    qualified_after = qualifier._dependency_tree_inventory(  # type: ignore[attr-defined]
+        site_packages,
+        label="fixture evaluator dependency tree",
+    )
+    assert metadata.read_bytes() == retained_metadata
+    assert qualified_before == before
+    assert qualified_after == after
+    assert before["entry_count"] == after["entry_count"]
+    assert before["entries_sha256"] != after["entries_sha256"]
+    assert host._valid_retained_dependency_tree(before) is True
+    assert host._valid_retained_dependency_tree(after) is True
+
+
 def test_retry3_selected_local_completion_reconstructs_and_opens_checkpoint(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -439,6 +591,7 @@ def test_retry3_selected_local_completion_reconstructs_and_opens_checkpoint(
         "pilot_library_sha256": "3" * 64,
         "interpreter": "/qualified/python3.11",
         "interpreter_sha256": "4" * 64,
+        "interpreter_dependency_manifest_sha256": "a" * 64,
         "replacement_image_id": "sha256:" + "5" * 64,
         "execution_contract_sha256": "6" * 64,
         "command_manifests_sha256": "7" * 64,

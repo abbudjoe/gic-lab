@@ -26,8 +26,11 @@ writers, container, browser, and secret channel close, the frozen supervisor sea
 the condition-owned `raw/` directory and exports that seal for off-host verification.
 The downstream finalizer receives raw, contracts, code, and runtime bindings read-only,
 runs with networking disabled under either the exact qualified-image SiRA interpreter
-or one prequalified absolute local Python plus the same frozen evaluator overlay, and
-writes only one fresh versioned derived-output root. It cannot update empirical
+or one control-machine-qualified absolute local Python plus a byte-manifested evaluator
+dependency tree, and writes only one fresh versioned derived-output root. The Lambda
+preflight validates the source-bound receipt without requiring those control-machine
+paths; off-host use rehashes the interpreter, base dependencies, evaluator dependencies,
+evaluator sources, and dataset. It cannot update empirical
 sequencing or checkpoint state. The frozen supervisor validates a completion receipt
 written last and then selects that finalization.
 
@@ -52,8 +55,8 @@ uniformly before pair continuation or final analysis. A condition is never retri
 | R3-01 | Preserve every V4 identity, disposition, receipt, and archive byte; exclude the prior unpaired attempt from V5. | V4 disposition remains `ecc0e135…`; retained attempt archive remains `63ed19b3…`; V4 plan/conditions are preserved under proposals; V5 contracts classify the prior attempt as regression-only. | met |
 | R3-02 | Preserve the exact EXP-0001 science, two tasks/hashes, FanOutQA revision, SiRA commit, dated model, evaluator, counterbalance, zero retry, and calibration-only boundary. | Dataset/evaluator contracts are unchanged; V5 attempts retain A-reactive, A-simulative, checkpoint, B-simulative, B-reactive. | met |
 | R3-03 | Separate immutable raw evidence from derived output and make the finalizer pure/network-none with no sequencing authority. | `t09_remote_runner.py`, `t09_evaluate_attempt.py`, schemas, and focused raw/final state regressions. | met |
-| R3-04 | Bind the exact absolute interpreter, executable hash, image, package/import/distribution closure, evaluator assets, contracts, schemas, and finalizer bytes. | Source-derived image-interpreter hash and the prequalified local Python/base-package manifest are frozen; the exact 51-package evaluator overlay and full finalizer/projection closure are independently revalidated before selection. Dynamic image/local receipts remain pending. | partial |
-| R3-05 | Run the repaired semantic path on the actual retained V4 archive without network/model/browser activity and preserve the receipt. | `T09_PRAGMATIC_RETRY3_FINALIZER_REGRESSION.json` SHA-256 `2dd6a59e…`; full 1,177,174-byte dataset and 51 packages are bound; two distinct finalized roots agree; accepted task/evaluator fields match, 52 calls/121,900 tokens/13 actions/score 0.0, source bytes rehash, and additional activity is zero. | met |
+| R3-04 | Bind the exact absolute interpreter, executable hash, image, package/import/distribution closure, evaluator assets, contracts, schemas, and finalizer bytes. | Source-derived image-interpreter hash and the control-machine-qualified local Python are frozen; both local base and 51-package evaluator dependency trees are fully byte-manifested and rehashed off-host, while Lambda validates only the source-bound receipt. Dynamic image/local receipts remain pending. | partial |
+| R3-05 | Run the repaired semantic path on the actual retained V4 archive without network/model/browser activity and preserve the receipt. | `T09_PRAGMATIC_RETRY3_FINALIZER_REGRESSION.json` SHA-256 `bbbd79a9…`; full 1,177,174-byte dataset and 51 packages are bound; two distinct finalized roots agree; accepted task/evaluator fields match, 52 calls/121,900 tokens/13 actions/score 0.0, source bytes rehash, and additional activity is zero. | met |
 | R3-06 | Seal, export, independently verify, and acknowledge each consumed raw attempt before any later empirical entry; make seal/state reconciliation resumable. | O_EXCL mode-0600 raw manifest/receipt, exact-hash idempotent state adoption, authoritative raw export, source-bound control snapshot, off-host restore, and acknowledgement gates have focused crash/transfer tests. Live receipts pending. | partial |
 | R3-07 | Permit downstream-only repairs with immutable history and require one uniform complete closure for all selected results. | Versioned finalized roots, completion receipt written last, reselectable state/history, pair checkpoint and campaign-disposition uniformity checks. Live selections pending. | partial |
 | R3-08 | Treat structural/private fixture findings as a public-release limitation while actual credential matches remain a hard stop. | Raw receipt records structural findings; private export remains available; exact credential scan, removal, and cleanup remain mandatory. | met |
@@ -102,6 +105,10 @@ uniformly before pair continuation or final analysis. A condition is never retri
   first export. The verifier restores the archive and control bytes into a fresh local
   workspace without overwrite authority, revalidates the raw seal and acknowledgement,
   and thereby keeps downstream reconstruction available after Lambda termination.
+- 2026-08-14: local finalizer qualification moved fully to the off-host control machine.
+  Its receipt inventories all 281 base-environment entries and all 6,206 evaluator-tree
+  entries in the currently materialized reviewed environments; provider preflight does
+  not dereference those paths, while every local finalization rehashes their exact bytes.
 
 ## Next permitted phase
 

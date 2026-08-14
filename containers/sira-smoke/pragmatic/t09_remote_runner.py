@@ -2303,6 +2303,132 @@ def evaluator_overlay_inventory(overlay: Path) -> dict[str, object]:
     }
 
 
+def local_dependency_tree_inventory(root: Path, *, label: str) -> dict[str, object]:
+    """Hash a control-machine dependency tree without following links."""
+
+    resolved = root.resolve(strict=True)
+    root_metadata = resolved.stat(follow_symlinks=False)
+    if (
+        resolved.is_symlink()
+        or not stat.S_ISDIR(root_metadata.st_mode)
+        or root_metadata.st_uid != os.getuid()
+        or root_metadata.st_mode & 0o022
+    ):
+        raise T09HostError(f"{label} root metadata is unsafe")
+    entries: list[dict[str, object]] = []
+    total_regular_bytes = 0
+    for current, raw_directories, raw_files in os.walk(
+        resolved,
+        topdown=True,
+        followlinks=False,
+    ):
+        current_path = Path(current)
+        raw_directories.sort()
+        raw_files.sort()
+        retained_directories: list[str] = []
+        for name in [*raw_directories, *raw_files]:
+            path = current_path / name
+            metadata = path.lstat()
+            relative = path.relative_to(resolved).as_posix()
+            record: dict[str, object] = {
+                "path": relative,
+                "mode": f"{stat.S_IMODE(metadata.st_mode):04o}",
+            }
+            if stat.S_ISDIR(metadata.st_mode):
+                if metadata.st_mode & 0o022:
+                    raise T09HostError(f"{label} directory is writable")
+                record["type"] = "directory"
+                retained_directories.append(name)
+            elif stat.S_ISREG(metadata.st_mode):
+                if metadata.st_nlink != 1 or metadata.st_mode & 0o022:
+                    raise T09HostError(f"{label} file metadata is unsafe")
+                record.update(
+                    {
+                        "type": "file",
+                        "bytes": metadata.st_size,
+                        "sha256": file_sha256(path),
+                    }
+                )
+                total_regular_bytes += metadata.st_size
+            else:
+                raise T09HostError(f"{label} contains a link or special file")
+            entries.append(record)
+            if (
+                len(entries) > MAX_EVALUATOR_OVERLAY_ENTRIES
+                or total_regular_bytes > MAX_EVALUATOR_OVERLAY_BYTES
+            ):
+                raise T09HostError(f"{label} exceeds its manifest bound")
+        raw_directories[:] = retained_directories
+    return {
+        "root_mode": f"{stat.S_IMODE(root_metadata.st_mode):04o}",
+        "entries": entries,
+        "entry_count": len(entries),
+        "total_regular_bytes": total_regular_bytes,
+        "entries_sha256": canonical_sha256(entries),
+    }
+
+
+def _valid_retained_dependency_tree(value: object) -> bool:
+    """Return whether a retained local dependency-tree manifest is canonical."""
+
+    if not isinstance(value, dict) or set(value) != {
+        "root_mode",
+        "entries",
+        "entry_count",
+        "total_regular_bytes",
+        "entries_sha256",
+    }:
+        return False
+    entries = value.get("entries")
+    if (
+        not isinstance(entries, list)
+        or not 0 < len(entries) <= MAX_EVALUATOR_OVERLAY_ENTRIES
+        or value.get("entry_count") != len(entries)
+        or value.get("entries_sha256") != canonical_sha256(entries)
+        or not isinstance(value.get("root_mode"), str)
+        or re.fullmatch(r"0[0-7]{3}", cast(str, value["root_mode"])) is None
+    ):
+        return False
+    paths: set[str] = set()
+    total = 0
+    for raw in entries:
+        if not isinstance(raw, dict):
+            return False
+        relative = raw.get("path")
+        mode = raw.get("mode")
+        kind = raw.get("type")
+        if (
+            not isinstance(relative, str)
+            or not relative
+            or PurePosixPath(relative).is_absolute()
+            or ".." in PurePosixPath(relative).parts
+            or relative in paths
+            or not isinstance(mode, str)
+            or re.fullmatch(r"0[0-7]{3}", mode) is None
+            or kind not in {"directory", "file"}
+        ):
+            return False
+        paths.add(relative)
+        if kind == "directory":
+            if set(raw) != {"path", "mode", "type"}:
+                return False
+            continue
+        size = raw.get("bytes")
+        digest = raw.get("sha256")
+        if (
+            set(raw) != {"path", "mode", "type", "bytes", "sha256"}
+            or type(size) is not int
+            or size < 0
+            or not isinstance(digest, str)
+            or _HEX64.fullmatch(digest) is None
+        ):
+            return False
+        total += size
+        if total > MAX_EVALUATOR_OVERLAY_BYTES:
+            return False
+    return value.get("total_regular_bytes") == total
+
+
 def _validate_evaluator_overlay_inventory(
     *,
     overlay: Path,
@@ -3232,6 +3358,12 @@ def write_frozen_run_manifest(
         "local_finalizer_interpreter_dependency_manifest_sha256": (
             local_finalizer_qualification_receipt.get("interpreter_dependency_manifest_sha256")
         ),
+        "local_finalizer_interpreter_dependency_tree_sha256": (
+            local_finalizer_qualification_receipt.get("interpreter_dependency_tree_sha256")
+        ),
+        "local_finalizer_evaluator_dependency_tree_sha256": (
+            local_finalizer_qualification_receipt.get("dependency_tree_sha256")
+        ),
         "command_argv_sha256s": [item["argv_sha256"] for item in manifests(command_document)],
         "pair_diffs": command_document.get("pair_diffs"),
         "attempt_order": list(RUN_IDS),
@@ -3334,6 +3466,12 @@ def load_frozen_run_manifest(
         "local_finalizer_interpreter_dependency_manifest_sha256": (
             manifest.get("local_finalizer_interpreter_dependency_manifest_sha256")
         ),
+        "local_finalizer_interpreter_dependency_tree_sha256": (
+            manifest.get("local_finalizer_interpreter_dependency_tree_sha256")
+        ),
+        "local_finalizer_evaluator_dependency_tree_sha256": (
+            manifest.get("local_finalizer_evaluator_dependency_tree_sha256")
+        ),
         "attempt_order": list(RUN_IDS),
         "empirical_entry_crossed": False,
         "post_entry_code_science_image_freeze": True,
@@ -3381,6 +3519,10 @@ def load_frozen_run_manifest(
         != local_qualification.get("interpreter_sha256")
         or manifest.get("local_finalizer_interpreter_dependency_manifest_sha256")
         != local_qualification.get("interpreter_dependency_manifest_sha256")
+        or manifest.get("local_finalizer_interpreter_dependency_tree_sha256")
+        != local_qualification.get("interpreter_dependency_tree_sha256")
+        or manifest.get("local_finalizer_evaluator_dependency_tree_sha256")
+        != local_qualification.get("dependency_tree_sha256")
         or qualified_regression.get("semantic_projection")
         != static_regression.get("semantic_projection")
         or qualified_regression.get("receipt_id")
@@ -3452,9 +3594,7 @@ def preflight(args: argparse.Namespace) -> None:
         args.local_finalizer_qualification,
         repository=repository,
         package_commit=args.package_commit,
-        require_local_runtime=True,
-        evaluator_root=args.local_evaluator_root,
-        dataset=args.local_dataset,
+        require_local_runtime=False,
     )
     paths = contract_paths(repository)
     prefix = docker_prefix()
@@ -3638,6 +3778,12 @@ def preflight(args: argparse.Namespace) -> None:
                 "interpreter_sha256": local_finalizer_qualification["interpreter_sha256"],
                 "interpreter_dependency_manifest_sha256": local_finalizer_qualification[
                     "interpreter_dependency_manifest_sha256"
+                ],
+                "interpreter_dependency_tree_sha256": local_finalizer_qualification[
+                    "interpreter_dependency_tree_sha256"
+                ],
+                "evaluator_dependency_tree_sha256": local_finalizer_qualification[
+                    "dependency_tree_sha256"
                 ],
                 "network": "socket-construction-denied",
                 "provider_lifecycle_required": False,
@@ -3842,6 +3988,9 @@ def evaluator_argv(
         "pilot_library_sha256": file_sha256(repository / "src/giclab/harness/t09_sira_pilot.py"),
         "interpreter": "/opt/sira/.venv/bin/python",
         "interpreter_sha256": cast(str, frozen_manifest["python_interpreter_sha256"]),
+        "interpreter_dependency_manifest_sha256": cast(
+            str, frozen_manifest["package_manifest_sha256"]
+        ),
         "replacement_image_id": image_id,
         "execution_contract_sha256": file_sha256(paths["execution"]),
         "command_manifests_sha256": file_sha256(paths["commands"]),
@@ -4013,6 +4162,7 @@ def local_evaluator_invocation(
     interpreter = cast(str, local_qualification["interpreter"])
     interpreter_sha256 = cast(str, local_qualification["interpreter_sha256"])
     site_packages = cast(str, local_qualification["dependency_site_packages"])
+    local_dependency_tree = cast(dict[str, Any], local_qualification["dependency_tree"])
     closure = {
         "finalizer_execution_mode": "qualified-local",
         "finalizer_runtime_qualification_sha256": file_sha256(local_qualification_path),
@@ -4023,6 +4173,9 @@ def local_evaluator_invocation(
         "pilot_library_sha256": file_sha256(repository / "src/giclab/harness/t09_sira_pilot.py"),
         "interpreter": interpreter,
         "interpreter_sha256": interpreter_sha256,
+        "interpreter_dependency_manifest_sha256": cast(
+            str, local_qualification["interpreter_dependency_tree_sha256"]
+        ),
         "replacement_image_id": cast(str, frozen_manifest["replacement_image_id"]),
         "execution_contract_sha256": file_sha256(paths["execution"]),
         "command_manifests_sha256": file_sha256(paths["commands"]),
@@ -4032,11 +4185,9 @@ def local_evaluator_invocation(
         "evidence_schema_sha256": file_sha256(
             repository / "schemas/t09-sira-pilot-evidence.schema.json"
         ),
-        "evaluator_overlay_entries_sha256": cast(
-            str, frozen_manifest["evaluator_overlay_entries_sha256"]
-        ),
+        "evaluator_overlay_entries_sha256": cast(str, local_dependency_tree["entries_sha256"]),
         "evaluator_overlay_packages_sha256": cast(
-            str, frozen_manifest["evaluator_overlay_packages_sha256"]
+            str, local_qualification["dependency_package_manifest_sha256"]
         ),
     }
     dependency_manifest_sha256 = canonical_sha256(closure)
@@ -4960,6 +5111,8 @@ def validate_local_finalizer_qualification(
         runtime.get("local_finalizer_base_packages") if isinstance(runtime, dict) else None
     )
     packages = receipt.get("dependency_package_manifest")
+    base_dependency_tree = receipt.get("interpreter_dependency_tree")
+    evaluator_dependency_tree = receipt.get("dependency_tree")
     sources = receipt.get("source_sha256s")
     if (
         qualification_path.is_symlink()
@@ -4978,8 +5131,13 @@ def validate_local_finalizer_qualification(
         or len(base_packages) != len(set(base_packages))
         or receipt.get("interpreter_dependency_manifest") != base_packages
         or receipt.get("interpreter_dependency_manifest_sha256") != canonical_sha256(base_packages)
+        or not _valid_retained_dependency_tree(base_dependency_tree)
+        or receipt.get("interpreter_dependency_tree_sha256")
+        != canonical_sha256(base_dependency_tree)
         or packages != expected_evaluator_packages(repository)
         or receipt.get("dependency_package_manifest_sha256") != canonical_sha256(packages)
+        or not _valid_retained_dependency_tree(evaluator_dependency_tree)
+        or receipt.get("dependency_tree_sha256") != canonical_sha256(evaluator_dependency_tree)
         or receipt.get("evaluator_contract_sha256")
         != file_sha256(contract_paths(repository)["evaluator"])
         or receipt.get("dataset_sha256") != PINNED_DATASET_SHA256
@@ -5131,6 +5289,22 @@ def validate_local_finalizer_qualification(
             "packages": base_packages,
         }:
             raise T09HostError("qualified local finalizer base packages changed")
+        observed_base_tree = local_dependency_tree_inventory(
+            interpreter_site_packages,
+            label="qualified local finalizer base dependency tree",
+        )
+        observed_evaluator_tree = local_dependency_tree_inventory(
+            site_packages,
+            label="qualified local evaluator dependency tree",
+        )
+        if (
+            observed_base_tree != base_dependency_tree
+            or canonical_sha256(observed_base_tree)
+            != receipt.get("interpreter_dependency_tree_sha256")
+            or observed_evaluator_tree != evaluator_dependency_tree
+            or canonical_sha256(observed_evaluator_tree) != receipt.get("dependency_tree_sha256")
+        ):
+            raise T09HostError("qualified local dependency bytes changed")
     return receipt
 
 
@@ -5266,6 +5440,7 @@ def validate_selected_finalization(
         "pilot_library_sha256",
         "interpreter",
         "interpreter_sha256",
+        "interpreter_dependency_manifest_sha256",
         "replacement_image_id",
         "execution_contract_sha256",
         "command_manifests_sha256",
@@ -5412,11 +5587,17 @@ def finalize_attempt(args: argparse.Namespace) -> dict[str, object]:
             "local_finalizer_qualification_sha256"
         ):
             raise T09HostError("local finalizer qualification differs from the frozen run")
+        local_evaluator_tree = cast(dict[str, Any], local_qualification["dependency_tree"])
         overlay_revalidation = {
-            "overlay_manifest_sha256": frozen_manifest["evaluator_overlay_manifest_sha256"],
-            "overlay_entries_sha256": frozen_manifest["evaluator_overlay_entries_sha256"],
-            "overlay_packages_sha256": frozen_manifest["evaluator_overlay_packages_sha256"],
+            "overlay_manifest_sha256": file_sha256(args.local_finalizer_qualification),
+            "overlay_entries_sha256": local_evaluator_tree["entries_sha256"],
+            "overlay_packages_sha256": local_qualification["dependency_package_manifest_sha256"],
             "packages_recomputed": True,
+            "dependency_bytes_recomputed": True,
+            "interpreter_dependency_tree_sha256": local_qualification[
+                "interpreter_dependency_tree_sha256"
+            ],
+            "evaluator_dependency_tree_sha256": local_qualification["dependency_tree_sha256"],
             "local_runtime_qualification_sha256": file_sha256(args.local_finalizer_qualification),
         }
     else:
@@ -7534,8 +7715,6 @@ def parser() -> argparse.ArgumentParser:
     preflight_parser.add_argument("--dynamic-source-root", type=Path, required=True)
     preflight_parser.add_argument("--real-evidence-archive", type=Path, required=True)
     preflight_parser.add_argument("--local-finalizer-qualification", type=Path, required=True)
-    preflight_parser.add_argument("--local-evaluator-root", type=Path, required=True)
-    preflight_parser.add_argument("--local-dataset", type=Path, required=True)
     condition_export = operations.add_parser("condition-export")
     condition_export.add_argument("--run-id", choices=RUN_IDS, required=True)
     finalize_parser = operations.add_parser("finalize-attempt")

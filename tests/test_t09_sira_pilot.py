@@ -642,6 +642,8 @@ def test_runtime_qualification_is_typed_single_build_preentry_and_digest_agnosti
         "qualified_real_evidence_regression_sha256": "5" * 64,
         "local_finalizer_qualification_sha256": "6" * 64,
         "local_finalizer_interpreter_dependency_manifest_sha256": "7" * 64,
+        "local_finalizer_interpreter_dependency_tree_sha256": "8" * 64,
+        "local_finalizer_evaluator_dependency_tree_sha256": "9" * 64,
         "model_metadata_request_count": 1,
         "model_task_request_count": 0,
         "task_browser_action_count": 0,
