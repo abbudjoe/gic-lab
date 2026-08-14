@@ -59,7 +59,7 @@
     "approved_offline_fixture_execution_required": true
   },
   "repository_instrumentation": {
-    "reviewed_implementation_ancestor": "e4f9b4be6565b6402f0347e0257e35ebc619790a",
+    "reviewed_implementation_ancestor": "38f18bcf781972ac2ba92663ceacdafe0a830d97",
     "scope": [
       "replacement-image-build-context-and-functional-qualification",
       "pre-action-budget-count",
@@ -76,11 +76,11 @@
       {"path": "src/giclab/harness/sira_gate_a_runtime.py", "sha256": "5fde575a7b1bcfa2b7ebc3717548ddedff8fc77e3998ab40ffec56ec772ae4f1"},
       {"path": "src/giclab/harness/sira_gate_a.py", "sha256": "b9a3ae20dc07056bb16dbf3807c8f3912bda9cf31b04a47d80c7de453db971af"},
       {"path": "src/giclab/harness/safety.py", "sha256": "12529af51aea206e02a531abea4959d80976bd271567f05c75e903654527d34c"},
-      {"path": "src/giclab/harness/t09_sira_pilot.py", "sha256": "ad616677587b4437e0640aef2d19895c433be2acbfcd85a8852def4eec293627"},
+      {"path": "src/giclab/harness/t09_sira_pilot.py", "sha256": "2285c44114446ab08b62374a166bea3713fb25d6de745a8251ed2e8ab410d6e8"},
       {"path": "src/giclab/harness/lambda_campaign_lifecycle.py", "sha256": "a2ae10595dc270fef26a8136197d9127f0b24b8477ca0e9760743b8d5bd824dd"},
       {"path": "src/giclab/harness/lambda_l2m_observer.py", "sha256": "3ad5d56abd2b4d115b479c9cf7f0f5202e715d07c1b4842c82dc894fbe8bf6c9"},
-      {"path": "src/giclab/harness/t09_pragmatic_provider.py", "sha256": "650ab0f4f2b6b24d7b32b6029f492ebdf56c2fd180296e23dafcc667469e9eda"},
-      {"path": "containers/sira-smoke/pragmatic/t09_remote_runner.py", "sha256": "307ff291d22c45b1740b632968a709cbc9458bfe9d5ea21c3f5cb446a2eefa7d"},
+      {"path": "src/giclab/harness/t09_pragmatic_provider.py", "sha256": "a5562afb30e67da9920e22e57ce800b073e0909fd8d4d849bb0cff8cd89d3533"},
+      {"path": "containers/sira-smoke/pragmatic/t09_remote_runner.py", "sha256": "813ed67318de6edfb8129a1f3ffb7a18481fe20689c263b33db4c4e0727d13f2"},
       {"path": "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py", "sha256": "672282c901d0a7502a9198b71fcd2243240cb102b5a59232ad3b4eb13d0e0b21"},
       {"path": "containers/sira-smoke/pragmatic/t09_preflight.py", "sha256": "5c630ea2a8cda817952deb2b315c741ae530f6bc94af7033daef5b5f1f3b0155"},
       {"path": "containers/sira-smoke/pragmatic/t09_freeze_commands.py", "sha256": "fe19336d859e905d24af2bd7976e077b64c8c37f9abc8fe98313bd833bd403db"},
