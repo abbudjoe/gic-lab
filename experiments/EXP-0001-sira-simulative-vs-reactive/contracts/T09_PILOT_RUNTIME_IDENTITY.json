@@ -28,12 +28,15 @@
     "retained_image_expected_id": "sha256:abe8ed38f5c5b5a0a63fa726a74034dc5c192a12c0fccfe1319f97c27ceaf0a3",
     "preferred_import_count": 1,
     "fallback_build_count_maximum": 1,
+    "slot1_materialization_policy": "retained-import-or-one-fallback-build",
+    "slot2_materialization_policy": "retained-import-only",
+    "slot2_fallback_build_permitted": false,
     "qualification_count": 1,
     "empirical_entry_before_binding_allowed": false,
     "same_exact_image_all_attempts_required": true,
     "python_interpreter_identity": "source-derived-path-and-executable-sha256-in-frozen-run-manifest",
     "digest_inequality_alone_is_material": false,
-    "freeze_interpretation": "reviewed source and policy bytes are final before launch; a content-verified retained import or one fallback build is functionally qualified and bound before the empirical clock begins"
+    "freeze_interpretation": "reviewed source and policy bytes are final before launch; slot 1 may use a content-verified retained import or the one campaign fallback build, while slot 2 must import the exact retained image and fails closed before any build; the accepted image is functionally qualified and bound before the empirical clock begins"
   },
   "scientific_runtime": {
     "sira_commit": "93fb8d72de71f9a4a13419670adeb34d93cf7acd",
@@ -61,7 +64,7 @@
     "approved_offline_fixture_execution_required": true
   },
   "repository_instrumentation": {
-    "reviewed_implementation_ancestor": "009913ae5fc211a2ea8d842ec5b62b6319b52f5f",
+    "reviewed_implementation_ancestor": "c61975096e16f0957f674037154fc23e58abb4f7",
     "scope": [
     "content-addressed-no-follow-private-regression-archive-staging",
     "raw-attempt-root-typed-binding-before-empirical-entry",
@@ -94,7 +97,7 @@
       },
       {
         "path": "src/giclab/harness/t09_sira_pilot.py",
-        "sha256": "b257e5cb73dddda11d24be315e9a8b6bc002f0a6dbf7c50d6076c9005b51e390"
+        "sha256": "6de348dde4511a0456d109685e22523972256f7624b24b010432d32297553c1f"
       },
       {
         "path": "src/giclab/harness/lambda_campaign_lifecycle.py",
@@ -106,11 +109,11 @@
       },
       {
         "path": "src/giclab/harness/t09_pragmatic_provider.py",
-        "sha256": "9ca357f4ae45e672f63c66a40ed9e456ae2443e1eeabd721528731c166c3ce46"
+        "sha256": "5347a45d95ba5c0d073a9ad847a0c1bfb26bac585472edfe72e02331ec465e6b"
       },
       {
         "path": "containers/sira-smoke/pragmatic/t09_remote_runner.py",
-        "sha256": "e20b62778829c5286892dff436d0ea92dae9521ff0acc41c279176792e8b4ec9"
+        "sha256": "7a0ecb6210451f4a2e2e568bfe9dd0f9151dfecc5fdf75c3ce223355aa182b87"
       },
       {
         "path": "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py",

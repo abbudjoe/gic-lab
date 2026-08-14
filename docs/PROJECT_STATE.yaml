@@ -194,7 +194,7 @@ t09_pragmatic_retry3_checkpoint:
 t09_pragmatic_retry4_checkpoint:
   task: T09-PRAGMATIC-RETRY4
   terminal_state: current-turn-authorized-retry4-pending-dynamic-preflight
-  lifecycle_state: slot1-closed-preentry-focused-repair-and-slot2-package-binding
+  lifecycle_state: slot1-closed-preentry-slot2-import-only-package-rereview
   plan_id: PLAN-EXP0001-PILOT-V6
   plan_sha256: d0294b3a1535c4fe4ddfcc856a6b923731a7fb0c7840dd161c5784db61f35d8c
   source_authorization_sha256: e3222d38c9b21091a51839122d42594d691577716bc87fd3e09296c6b766df51
@@ -203,7 +203,7 @@ t09_pragmatic_retry4_checkpoint:
   repository_plan_authorized: false
   private_single_use_overlay_required: true
   pilot_execution_authorized: true
-  reviewed_implementation_ancestor: 009913ae5fc211a2ea8d842ec5b62b6319b52f5f
+  reviewed_implementation_ancestor: c61975096e16f0957f674037154fc23e58abb4f7
   slot1_frozen_package_commit: 4e8b71771a5e7baf9b104b6f3b5466091e4596f2
   replacement_image_preferred_id: sha256:abe8ed38f5c5b5a0a63fa726a74034dc5c192a12c0fccfe1319f97c27ceaf0a3
   retained_image_archive_verified: true
