@@ -289,8 +289,8 @@ def test_pilot_profile_has_explicit_unauthorized_sample_and_budget_contract() ->
         "max_browser_actions": 120,
         "max_wall_seconds": 14_400,
         "max_accelerator_hours": 4.0,
-        "prior_t09_cost_usd": 0.414064252316667,
-        "cumulative_t09_cost_cap_usd": 46.0,
+        "prior_t09_cost_usd": 2.5308164556905757,
+        "cumulative_t09_cost_cap_usd": 48.0,
         "condition_limits": {
             "SIRA-REACTIVE": {
                 "attempts": 2,
