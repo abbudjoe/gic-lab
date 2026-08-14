@@ -785,6 +785,21 @@ def image_id_if_present(prefix: list[str], reference: str) -> str | None:
     return observed
 
 
+def held_descriptor_docker_path(prefix: list[str], descriptor: int) -> str:
+    """Keep an already-validated archive descriptor visible across sudo Docker."""
+
+    if descriptor < 0:
+        raise T09HostError("held archive descriptor is invalid")
+    if prefix == ["docker"]:
+        return f"/proc/self/fd/{descriptor}"
+    if prefix == ["sudo", "-n", "docker"]:
+        # sudo closes inherited descriptors. Its root child can still open the
+        # live parent Python process descriptor without re-resolving the private
+        # operator-facing source path.
+        return f"/proc/{os.getpid()}/fd/{descriptor}"
+    raise T09HostError("Docker prefix cannot consume a held archive descriptor")
+
+
 def _safe_extract_git_archive(archive: Path, destination: Path) -> None:
     destination.mkdir(mode=0o700)
     with tarfile.open(archive, "r:") as handle:
@@ -1456,7 +1471,12 @@ def materialize_retained_or_build_image(
         try:
             try:
                 load = subprocess.run(
-                    [*prefix, "load", "--input", f"/proc/self/fd/{archive_descriptor}"],
+                    [
+                        *prefix,
+                        "load",
+                        "--input",
+                        held_descriptor_docker_path(prefix, archive_descriptor),
+                    ],
                     env=safe_environment(),
                     stdin=subprocess.DEVNULL,
                     capture_output=True,
@@ -4524,7 +4544,7 @@ def initialize_state(
         if owned_lambda_started_at_epoch is None
         else owned_lambda_started_at_epoch
     )
-    state = {
+    state: dict[str, object] = {
         "schema_version": "0.2.0",
         "plan_id": PLAN_ID,
         "execution_contract_sha256": execution_sha256,
@@ -5355,7 +5375,7 @@ def preflight(args: argparse.Namespace) -> None:
         owned_lambda_started_at_epoch=float(owned_lambda_started_raw),
         prior_lambda_duration_seconds=float(prior_lambda_duration_raw),
         prior_lambda_cost_usd=float(prior_lambda_cost_raw),
-        launch_slot=cast(int, launch_slot),
+        launch_slot=launch_slot,
         replacement_eligibility_sha256=cast(
             str | None, dynamic.get("replacement_eligibility_sha256")
         ),

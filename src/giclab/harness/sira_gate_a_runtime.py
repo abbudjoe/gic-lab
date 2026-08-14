@@ -55,6 +55,17 @@ from giclab.harness.t09_sira_pilot import (
 SIRA_MAX_OUTPUT_TOKENS_PER_CHOICE = 4_096
 
 
+def _attempt_root_matches_raw_binding(attempt_root: Path, raw_output_root: str) -> bool:
+    """Match the runtime-owned raw root, not its parent logical attempt root."""
+
+    expected_suffix = Path(raw_output_root).parts
+    return (
+        bool(expected_suffix)
+        and len(attempt_root.parts) >= len(expected_suffix)
+        and attempt_root.parts[-len(expected_suffix) :] == expected_suffix
+    )
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("--gate-upstream-runner", type=Path, required=True)
@@ -468,8 +479,7 @@ def run(argv: Sequence[str] | None = None) -> int:
             raise GateAContractError("pilot attempt mode does not match its frozen condition")
         if attempt.upstream_argv != tuple(args.upstream_argv[1:]):
             raise GateAContractError("pilot upstream argv drifted from the execution contract")
-        expected_suffix = Path(attempt.output_root).parts
-        if attempt_root.parts[-len(expected_suffix) :] != expected_suffix:
+        if not _attempt_root_matches_raw_binding(attempt_root, attempt.raw_output_root):
             raise GateAContractError("pilot attempt root drifted from the execution contract")
         pilot_state_path = args.gate_pilot_state.resolve(strict=True)
         aggregate_ledger_path = args.gate_aggregate_ledger.resolve(strict=False)

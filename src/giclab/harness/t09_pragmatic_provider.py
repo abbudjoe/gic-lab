@@ -111,6 +111,73 @@ SLOT2_TRANSITION_ALLOWED_PATHS: Final = frozenset(
         "tests/test_t09_sira_pilot.py",
     }
 )
+RETRY4_SLOT1_PACKAGE_COMMIT: Final = "4e8b71771a5e7baf9b104b6f3b5466091e4596f2"
+RETRY4_SLOT1_PLAN_SHA256: Final = "d0294b3a1535c4fe4ddfcc856a6b923731a7fb0c7840dd161c5784db61f35d8c"
+RETRY4_SLOT1_EXECUTION_SHA256: Final = (
+    "5502318816bd088add14adf6b32759c062141e490bca9ba743a60dc3cff46919"
+)
+RETRY4_SLOT1_RUNTIME_SHA256: Final = (
+    "e3bbb5bfeda2007ba918d365c01445f8f48c1bb37d4dd7571627cbd633aead90"
+)
+RETRY4_SLOT1_COMMANDS_SHA256: Final = (
+    "5d7533b437cd8a335da6feae12475e20e986d8a03635da3fb4dd166264bde2c8"
+)
+RETRY4_SLOT1_ENTRY_RECEIPT_SHA256: Final = (
+    "0c890a24b054ed3ddf0816c7e3c1d0da2601d03b3438d932e43a06e6df3a8335"
+)
+RETRY4_SLOT1_ENTRY_SOURCE_MANIFEST_SHA256: Final = (
+    "0e96f1d7465d798f69ecfb264a815af2987bb814f6677d6e64fbdaf0412b74cd"
+)
+RETRY4_SLOT1_CLOSEOUT_RECEIPT_SHA256: Final = (
+    "5dd82529791777519815a857cc83461568a6909889f4bbef57f3cd0ae743c953"
+)
+RETRY4_SLOT1_CLOSEOUT_SOURCE_MANIFEST_SHA256: Final = (
+    "219e246e22257b874caa0b9a3ae88afaa89684811b310c00dcb71ef4e1121aa2"
+)
+RETRY4_SLOT1_FAILURE_ARCHIVE_SHA256: Final = (
+    "18f6c7d6bcda6f6be4c53854dc89d1fd08fb286393fba187815184db8819134f"
+)
+RETRY4_SLOT1_FAILURE_ARCHIVE_BYTES: Final = 597_140
+RETRY4_SLOT1_FROZEN_MANIFEST_SHA256: Final = (
+    "4477f5313100422cb4415bf636e2cd476fc59a2bf1548fa3390ced7ecc306a57"
+)
+RETRY4_SLOT1_POSTFREEZE_SHA256: Final = (
+    "348f1d659a57f075513b828ee3a17592d3081d108cbe972c812db5f868888bf2"
+)
+RETRY4_SLOT1_PREFLIGHT_SHA256: Final = (
+    "aa333beb30db610223017b379074568c8a269a091405e7475b7f5e6fdfa8d39d"
+)
+RETRY4_SLOT1_BUILT_IMAGE_ID: Final = (
+    "sha256:4ce9c92a37458587355d7525bea2f61d381e160c4fa62fcb64e5bdbfac4dab05"
+)
+RETRY4_SLOT1_CONDITION_STDERR_SHA256: Final = (
+    "a9bc40f78d9f446abf5c3e97078f0dc01ae39679f4743943d782701dd2e4171e"
+)
+RETRY4_SLOT2_ELIGIBILITY_KIND: Final = "retry4-postfreeze-preentry-condition-failure"
+RETRY4_SLOT2_TRANSITION_ALLOWED_PATHS: Final = frozenset(
+    {
+        "containers/sira-smoke/pragmatic/t09_remote_runner.py",
+        "docs/PROJECT_STATE.yaml",
+        "docs/harness/T09_PRAGMATIC_RETRY4_EXECUTION_PLAN.md",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
+        "T09_PILOT_COMMAND_MANIFESTS.json",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
+        "T09_PILOT_EXECUTION_CONTRACT.json",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
+        "T09_PILOT_RUNTIME_IDENTITY.json",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/"
+        "pilot-v6-task-0000-reactive.yaml",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/"
+        "pilot-v6-task-0000-simulative.yaml",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/"
+        "pilot-v6-task-0001-reactive.yaml",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/"
+        "pilot-v6-task-0001-simulative.yaml",
+        "src/giclab/harness/sira_gate_a_runtime.py",
+        "src/giclab/harness/t09_pragmatic_provider.py",
+        "tests/test_t09_retry4.py",
+    }
+)
 SOURCE_OBSERVER: Final = "t09-retry4-pragmatic-mutations-plus-l2m-read-only-observer-v1"
 MAX_RESPONSE_BYTES: Final = 16_777_216
 MAX_REQUEST_BYTES: Final = 65_536
@@ -2211,7 +2278,12 @@ def _git_blob(repository: Path, commit: str, relative: str) -> bytes:
     return result.stdout
 
 
-def _slot2_science_projection(repository: Path, commit: str) -> dict[str, object]:
+def _slot2_science_projection(
+    repository: Path,
+    commit: str,
+    *,
+    expected_plan_sha256: str = SLOT1_PLAN_SHA256,
+) -> dict[str, object]:
     """Project only scientific execution fields across the slot-1→slot-2 repair."""
 
     immutable_paths = (
@@ -2230,8 +2302,8 @@ def _slot2_science_projection(repository: Path, commit: str) -> dict[str, object
         "T09_PILOT_COMMAND_MANIFESTS.json"
     )
     plan_bytes = _git_blob(repository, commit, plan_relative)
-    if hashlib.sha256(plan_bytes).hexdigest() != SLOT1_PLAN_SHA256:
-        raise T09ProviderError("slot-2 transition changed the locked V5 pilot plan")
+    if hashlib.sha256(plan_bytes).hexdigest() != expected_plan_sha256:
+        raise T09ProviderError("slot-2 transition changed the locked pilot plan")
     try:
         commands_raw: object = json.loads(_git_blob(repository, commit, commands_relative))
     except json.JSONDecodeError as exc:
@@ -2270,7 +2342,7 @@ def _slot2_science_projection(repository: Path, commit: str) -> dict[str, object
     ):
         raise T09ProviderError("slot-2 pair matching is not valid")
     return {
-        "plan_sha256": SLOT1_PLAN_SHA256,
+        "plan_sha256": expected_plan_sha256,
         "immutable_file_sha256s": {
             relative: hashlib.sha256(_git_blob(repository, commit, relative)).hexdigest()
             for relative in immutable_paths
@@ -2351,7 +2423,15 @@ def _slot2_runtime_control_projection(repository: Path, commit: str) -> dict[str
     }
 
 
-def _slot2_git_transition(repository: Path, package_commit: str) -> dict[str, object]:
+def _source_bound_slot2_git_transition(
+    repository: Path,
+    package_commit: str,
+    *,
+    from_package_commit: str,
+    plan_sha256: str,
+    allowed_paths: frozenset[str],
+    required_changed_paths: frozenset[str],
+) -> dict[str, object]:
     if _HEX40.fullmatch(package_commit) is None:
         raise T09ProviderError("slot-2 package commit is malformed")
     ancestry = subprocess.run(
@@ -2361,7 +2441,7 @@ def _slot2_git_transition(repository: Path, package_commit: str) -> dict[str, ob
             str(repository),
             "merge-base",
             "--is-ancestor",
-            SLOT1_PACKAGE_COMMIT,
+            from_package_commit,
             package_commit,
         ],
         env={"PATH": os.environ.get("PATH", "/usr/bin:/bin")},
@@ -2381,7 +2461,7 @@ def _slot2_git_transition(repository: Path, package_commit: str) -> dict[str, ob
             "diff",
             "--name-status",
             "--no-renames",
-            SLOT1_PACKAGE_COMMIT,
+            from_package_commit,
             package_commit,
         ],
         env={"PATH": os.environ.get("PATH", "/usr/bin:/bin")},
@@ -2397,19 +2477,26 @@ def _slot2_git_transition(repository: Path, package_commit: str) -> dict[str, ob
     changed_paths = sorted(path for _status, path in statuses_and_paths)
     if (
         any(status not in {"A", "M"} for status, _path in statuses_and_paths)
-        or not set(changed_paths).issubset(SLOT2_TRANSITION_ALLOWED_PATHS)
-        or "containers/sira-smoke/pragmatic/t09_remote_runner.py" not in changed_paths
-        or "src/giclab/harness/t09_pragmatic_provider.py" not in changed_paths
+        or not set(changed_paths).issubset(allowed_paths)
+        or not required_changed_paths.issubset(changed_paths)
     ):
         raise T09ProviderError("slot-2 package changed a non-allowlisted control surface")
-    previous_science = _slot2_science_projection(repository, SLOT1_PACKAGE_COMMIT)
-    current_science = _slot2_science_projection(repository, package_commit)
+    previous_science = _slot2_science_projection(
+        repository,
+        from_package_commit,
+        expected_plan_sha256=plan_sha256,
+    )
+    current_science = _slot2_science_projection(
+        repository,
+        package_commit,
+        expected_plan_sha256=plan_sha256,
+    )
     if previous_science != current_science:
         raise T09ProviderError("slot-2 package changed the scientific execution projection")
-    previous_runtime_control = _slot2_runtime_control_projection(repository, SLOT1_PACKAGE_COMMIT)
+    previous_runtime_control = _slot2_runtime_control_projection(repository, from_package_commit)
     current_runtime_control = _slot2_runtime_control_projection(repository, package_commit)
     binary_diff = subprocess.run(
-        ["git", "-C", str(repository), "diff", "--binary", SLOT1_PACKAGE_COMMIT, package_commit],
+        ["git", "-C", str(repository), "diff", "--binary", from_package_commit, package_commit],
         env={"PATH": os.environ.get("PATH", "/usr/bin:/bin")},
         stdin=subprocess.DEVNULL,
         capture_output=True,
@@ -2417,7 +2504,7 @@ def _slot2_git_transition(repository: Path, package_commit: str) -> dict[str, ob
         timeout=60,
     ).stdout
     return {
-        "from_package_commit": SLOT1_PACKAGE_COMMIT,
+        "from_package_commit": from_package_commit,
         "to_package_commit": package_commit,
         "from_package_is_ancestor": True,
         "to_package_tree": subprocess.run(
@@ -2448,6 +2535,43 @@ def _slot2_git_transition(repository: Path, package_commit: str) -> dict[str, ob
             )
         ),
     }
+
+
+def _slot2_git_transition(repository: Path, package_commit: str) -> dict[str, object]:
+    """Reconstruct the archived Retry 3 slot transition."""
+
+    return _source_bound_slot2_git_transition(
+        repository,
+        package_commit,
+        from_package_commit=SLOT1_PACKAGE_COMMIT,
+        plan_sha256=SLOT1_PLAN_SHA256,
+        allowed_paths=SLOT2_TRANSITION_ALLOWED_PATHS,
+        required_changed_paths=frozenset(
+            {
+                "containers/sira-smoke/pragmatic/t09_remote_runner.py",
+                "src/giclab/harness/t09_pragmatic_provider.py",
+            }
+        ),
+    )
+
+
+def _retry4_slot2_git_transition(repository: Path, package_commit: str) -> dict[str, object]:
+    """Bind the focused V6 pre-entry repair without changing frozen science."""
+
+    return _source_bound_slot2_git_transition(
+        repository,
+        package_commit,
+        from_package_commit=RETRY4_SLOT1_PACKAGE_COMMIT,
+        plan_sha256=RETRY4_SLOT1_PLAN_SHA256,
+        allowed_paths=RETRY4_SLOT2_TRANSITION_ALLOWED_PATHS,
+        required_changed_paths=frozenset(
+            {
+                "containers/sira-smoke/pragmatic/t09_remote_runner.py",
+                "src/giclab/harness/sira_gate_a_runtime.py",
+                "src/giclab/harness/t09_pragmatic_provider.py",
+            }
+        ),
+    )
 
 
 def _safe_regular_identity(path: Path, *, expected_bytes: int, expected_sha256: str) -> None:
@@ -2554,6 +2678,268 @@ def _slot1_failure_archive_projection(path: Path) -> dict[str, object]:
         "raw_attempts_complete": 0,
         "attempts_completed": 0,
         "credentials_removed": True,
+        "owned_containers_absent": True,
+    }
+
+
+def _retry4_slot1_failure_archive_projection(path: Path) -> dict[str, object]:
+    """Reconstruct the exact V6 post-freeze, pre-entry failure stage."""
+
+    _safe_regular_identity(
+        path,
+        expected_bytes=RETRY4_SLOT1_FAILURE_ARCHIVE_BYTES,
+        expected_sha256=RETRY4_SLOT1_FAILURE_ARCHIVE_SHA256,
+    )
+    manifest_name = "pilot-v6/evidence-stage-manifest.json"
+    document_names = {
+        "state": "pilot-v6/pilot-state.json",
+        "aggregate": "pilot-v6/aggregate-budget.json",
+        "frozen": "pilot-v6/frozen-run-manifest.json",
+        "postfreeze": "pilot-v6/postfreeze-validation.json",
+        "preflight": "pilot-v6/preflight.json",
+        "cleanup": "pilot-v6/host-cleanup.json",
+        "materialization": "pilot-v6/replacement-image-qualification/receipt.json",
+        "metadata_scan": "pilot-v6/model-metadata-credential-scan.json",
+        "failure": (
+            "artifacts/EXP-0001/pilot-v6/task-a/reactive/attempt-0004/"
+            "preentry-condition-failure.json"
+        ),
+    }
+    documents: dict[str, dict[str, object]] = {}
+    with tarfile.open(path, "r:gz") as archive:
+        members = archive.getmembers()
+        if not 1 <= len(members) <= 1_000:
+            raise T09ProviderError("Retry 4 slot-1 archive member count is unsafe")
+        names: set[str] = set()
+        member_by_name: dict[str, tarfile.TarInfo] = {}
+        expanded_bytes = 0
+        for member in members:
+            pure = Path(member.name)
+            if (
+                member.name in names
+                or pure.is_absolute()
+                or ".." in pure.parts
+                or not (member.isfile() or member.isdir())
+            ):
+                raise T09ProviderError("Retry 4 slot-1 archive contains an unsafe member")
+            names.add(member.name)
+            member_by_name[member.name] = member
+            if member.isfile():
+                expanded_bytes += member.size
+                if member.size > 16_777_216 or expanded_bytes > 33_554_432:
+                    raise T09ProviderError("Retry 4 slot-1 archive expands beyond its cap")
+        manifest_member = member_by_name.get(manifest_name)
+        if manifest_member is None or not manifest_member.isfile():
+            raise T09ProviderError("Retry 4 slot-1 archive lacks its stage manifest")
+        manifest_handle = archive.extractfile(manifest_member)
+        if manifest_handle is None:
+            raise T09ProviderError("Retry 4 slot-1 stage manifest is unavailable")
+        try:
+            manifest_raw: object = json.loads(manifest_handle.read())
+        except json.JSONDecodeError as exc:
+            raise T09ProviderError("Retry 4 slot-1 stage manifest is malformed") from exc
+        manifest = _mapping(manifest_raw, label="Retry 4 slot-1 stage manifest")
+        raw_files = _list(manifest.get("files"), label="Retry 4 slot-1 stage files")
+        expected_files: dict[str, tuple[int, str]] = {}
+        for raw in raw_files:
+            item = _mapping(raw, label="Retry 4 slot-1 staged file")
+            relative = _string(item.get("path"), label="Retry 4 staged path")
+            expected_bytes = _integer(item.get("bytes"), label="Retry 4 staged bytes")
+            expected_sha256 = _string(item.get("sha256"), label="Retry 4 staged SHA-256")
+            if (
+                relative in expected_files
+                or Path(relative).is_absolute()
+                or ".." in Path(relative).parts
+                or expected_bytes < 0
+                or _HEX64.fullmatch(expected_sha256) is None
+            ):
+                raise T09ProviderError("Retry 4 stage manifest has an unsafe file binding")
+            expected_files[relative] = (expected_bytes, expected_sha256)
+        archive_files = {name for name, member in member_by_name.items() if member.isfile()}
+        if archive_files != {*expected_files, manifest_name}:
+            raise T09ProviderError("Retry 4 stage manifest does not cover the exact archive")
+        actual_total = 0
+        wanted = {value: key for key, value in document_names.items()}
+        for relative, (expected_bytes, expected_sha256) in expected_files.items():
+            member = member_by_name[relative]
+            handle = archive.extractfile(member)
+            if handle is None:
+                raise T09ProviderError("Retry 4 staged evidence member is unavailable")
+            payload = handle.read()
+            actual_total += len(payload)
+            if (
+                len(payload) != expected_bytes
+                or hashlib.sha256(payload).hexdigest() != expected_sha256
+            ):
+                raise T09ProviderError("Retry 4 staged evidence member drifted")
+            label = wanted.get(relative)
+            if label is not None:
+                try:
+                    raw_document: object = json.loads(payload)
+                except json.JSONDecodeError as exc:
+                    raise T09ProviderError("Retry 4 staged control document is malformed") from exc
+                documents[label] = _mapping(
+                    raw_document,
+                    label=f"Retry 4 staged {label}",
+                )
+    if set(documents) != set(document_names):
+        raise T09ProviderError("Retry 4 slot-1 archive lacks its control closure")
+    if (
+        manifest.get("schema_version") != "0.1.0"
+        or manifest.get("archive_id") != "ARCHIVE-EXP0001-PILOT-V6-0004"
+        or manifest.get("stage_id") != "STAGE-EXP0001-PILOT-V6-0004"
+        or manifest.get("frozen_run_manifest_id") != "RUN-MANIFEST-EXP0001-PILOT-V6-0004"
+        or manifest.get("frozen_run_manifest_sha256") != RETRY4_SLOT1_FROZEN_MANIFEST_SHA256
+        or manifest.get("private_access_controlled") is not True
+        or manifest.get("provider_closeout_pending") is not True
+        or manifest.get("secret_scan_passed") is not True
+        or manifest.get("total_bytes") != actual_total
+    ):
+        raise T09ProviderError("Retry 4 slot-1 stage disposition drifted")
+    state = documents["state"]
+    aggregate = documents["aggregate"]
+    frozen = documents["frozen"]
+    postfreeze = documents["postfreeze"]
+    preflight = documents["preflight"]
+    cleanup = documents["cleanup"]
+    materialization = documents["materialization"]
+    metadata_scan = documents["metadata_scan"]
+    failure = documents["failure"]
+    usage = _mapping(aggregate.get("usage"), label="Retry 4 slot-1 aggregate usage")
+    raw_failure_entries = _list(
+        failure.get("failure_prefix_entries"),
+        label="Retry 4 pre-entry failure entries",
+    )
+    failure_entries = [
+        _mapping(item, label="Retry 4 pre-entry failure entry") for item in raw_failure_entries
+    ]
+    condition_stderr = [
+        item for item in failure_entries if item.get("path") == "raw/condition.stderr"
+    ]
+    pair_diffs = _list(frozen.get("pair_diffs"), label="Retry 4 frozen pair diffs")
+    if (
+        state.get("plan_id") != PLAN_ID
+        or state.get("execution_contract_sha256") != RETRY4_SLOT1_EXECUTION_SHA256
+        or state.get("launch_slot") != 1
+        or state.get("launch_count") != 1
+        or state.get("empirical_attempts_entered") != []
+        or state.get("raw_attempts_complete") != []
+        or state.get("attempts_completed") != []
+        or state.get("raw_attempt_bindings") != {}
+        or state.get("attempt_finalizations") != {}
+        or state.get("attempt_finalization_history") != {}
+        or state.get("first_pair_decision") is not None
+        or state.get("actual_credential_exposure_detected") is not False
+        or state.get("credential_safety_stop_detected") is not False
+        or aggregate.get("plan_id") != PLAN_ID
+        or aggregate.get("execution_contract_sha256") != RETRY4_SLOT1_EXECUTION_SHA256
+        or aggregate.get("unreconciled_provider_attempts") != 0
+        or any(value not in (0, 0.0) for value in usage.values())
+        or frozen.get("plan_id") != PLAN_ID
+        or frozen.get("host_run_id") != HOST_RUN_ID
+        or frozen.get("clean_package_commit") != RETRY4_SLOT1_PACKAGE_COMMIT
+        or frozen.get("plan_sha256") != RETRY4_SLOT1_PLAN_SHA256
+        or frozen.get("execution_contract_sha256") != RETRY4_SLOT1_EXECUTION_SHA256
+        or frozen.get("runtime_contract_sha256") != RETRY4_SLOT1_RUNTIME_SHA256
+        or frozen.get("command_manifests_sha256") != RETRY4_SLOT1_COMMANDS_SHA256
+        or frozen.get("provider_entry_receipt_sha256") != RETRY4_SLOT1_ENTRY_RECEIPT_SHA256
+        or frozen.get("source_contract_sha256") != AUTHORIZATION_SOURCE_SHA256
+        or frozen.get("launch_slot") != 1
+        or frozen.get("launch_count") != 1
+        or frozen.get("qualification_id") != "QUAL-T09-PILOT-V6-IMAGE-0001"
+        or frozen.get("replacement_image_id") != RETRY4_SLOT1_BUILT_IMAGE_ID
+        or frozen.get("build_count") != 1
+        or frozen.get("image_import_count") != 0
+        or frozen.get("additional_build_count") != 0
+        or frozen.get("empirical_entry_crossed") is not False
+        or frozen.get("model_metadata_request_count") != 1
+        or frozen.get("model_task_request_count") != 0
+        or frozen.get("task_browser_action_count") != 0
+        or frozen.get("actual_credential_exposure_detected") is not False
+        or frozen.get("credential_safety_stop_detected") is not False
+        or len(pair_diffs) != 2
+        or any(not isinstance(item, dict) or item.get("valid") is not True for item in pair_diffs)
+        or expected_files["pilot-v6/frozen-run-manifest.json"][1]
+        != RETRY4_SLOT1_FROZEN_MANIFEST_SHA256
+        or expected_files["pilot-v6/postfreeze-validation.json"][1]
+        != RETRY4_SLOT1_POSTFREEZE_SHA256
+        or expected_files["pilot-v6/preflight.json"][1] != RETRY4_SLOT1_PREFLIGHT_SHA256
+        or postfreeze.get("package_commit") != RETRY4_SLOT1_PACKAGE_COMMIT
+        or postfreeze.get("frozen_run_manifest_sha256") != RETRY4_SLOT1_FROZEN_MANIFEST_SHA256
+        or postfreeze.get("fresh_empirical_campaign_headroom_passed_before_metadata_get")
+        is not True
+        or postfreeze.get("model_metadata_request_count") != 1
+        or postfreeze.get("model_task_request_count") != 0
+        or postfreeze.get("task_browser_action_count") != 0
+        or postfreeze.get("actual_credential_exposure_detected") is not False
+        or preflight.get("clean_package_commit") != RETRY4_SLOT1_PACKAGE_COMMIT
+        or preflight.get("frozen_run_manifest_sha256") != RETRY4_SLOT1_FROZEN_MANIFEST_SHA256
+        or preflight.get("empirical_entry_crossed") is not False
+        or preflight.get("model_metadata_request_count") != 1
+        or preflight.get("model_task_request_count") != 0
+        or cleanup.get("actual_credential_exposure_detected") is not False
+        or cleanup.get("credential_safety_stop_detected") is not False
+        or cleanup.get("global_secret_scan_passed") is not True
+        or cleanup.get("global_secret_bearing_artifacts_removed") != []
+        or cleanup.get("global_secret_matching_paths") != []
+        or cleanup.get("remote_secret_removed") is not True
+        or cleanup.get("owned_container_residue") != []
+        or cleanup.get("qualified_runtime_image_removed") is not True
+        or materialization.get("qualification_id") != "QUAL-T09-PILOT-V6-IMAGE-0001"
+        or materialization.get("image_id") != RETRY4_SLOT1_BUILT_IMAGE_ID
+        or materialization.get("build_count") != 1
+        or materialization.get("image_import_count") != 0
+        or materialization.get("additional_build_count") != 0
+        or metadata_scan.get("actual_credential_exposure_detected") is not False
+        or metadata_scan.get("exact_secret_scan_passed") is not True
+        or metadata_scan.get("remaining_exact_secret_matches") != []
+        or metadata_scan.get("secret_bearing_artifacts_removed") != []
+        or failure.get("plan_id") != PLAN_ID
+        or failure.get("host_run_id") != HOST_RUN_ID
+        or failure.get("clean_package_commit") != RETRY4_SLOT1_PACKAGE_COMMIT
+        or failure.get("execution_contract_sha256") != RETRY4_SLOT1_EXECUTION_SHA256
+        or failure.get("run_id") != "RUN-T09-TASK-A-REACTIVE-0004"
+        or failure.get("frozen_run_manifest_sha256") != RETRY4_SLOT1_FROZEN_MANIFEST_SHA256
+        or failure.get("returncode") != 1
+        or failure.get("reason")
+        != "condition-runtime-ended-before-first-model-request-or-browser-action"
+        or failure.get("empirical_entry_crossed") is not False
+        or failure.get("attempt_identity_consumed") is not False
+        or failure.get("retry_same_frozen_condition_permitted") is not True
+        or failure.get("actual_credential_exposure_detected") is not False
+        or failure.get("credential_cleanup_integrity_failure") is not False
+        or failure.get("container_absent") is not True
+        or failure.get("remaining_exact_secret_matches") != []
+        or failure.get("secret_bearing_artifacts_removed") != []
+        or failure.get("structural_privacy_violations") != []
+        or len(condition_stderr) != 1
+        or condition_stderr[0].get("sha256") != RETRY4_SLOT1_CONDITION_STDERR_SHA256
+    ):
+        raise T09ProviderError("Retry 4 slot-1 evidence is not a zero-use pre-entry failure")
+    return {
+        "archive_sha256": RETRY4_SLOT1_FAILURE_ARCHIVE_SHA256,
+        "archive_bytes": RETRY4_SLOT1_FAILURE_ARCHIVE_BYTES,
+        "expanded_bytes": expanded_bytes,
+        "member_count": len(expected_files) + 1,
+        "stage_files_sha256": _sha256_bytes(_canonical_bytes(raw_files)),
+        "frozen_run_manifest_sha256": RETRY4_SLOT1_FROZEN_MANIFEST_SHA256,
+        "postfreeze_validation_sha256": RETRY4_SLOT1_POSTFREEZE_SHA256,
+        "preflight_sha256": RETRY4_SLOT1_PREFLIGHT_SHA256,
+        "qualification_id": "QUAL-T09-PILOT-V6-IMAGE-0001",
+        "slot1_built_image_id": RETRY4_SLOT1_BUILT_IMAGE_ID,
+        "candidate_build_attempt_count": 1,
+        "image_import_count": 0,
+        "model_metadata_requests": 1,
+        "task_model_requests": 0,
+        "task_browser_actions": 0,
+        "empirical_attempts_entered": 0,
+        "raw_attempts_complete": 0,
+        "attempts_completed": 0,
+        "failed_attempt_run_id": "RUN-T09-TASK-A-REACTIVE-0004",
+        "failed_attempt_identity_consumed": False,
+        "preentry_retry_permitted": True,
+        "condition_stderr_sha256": RETRY4_SLOT1_CONDITION_STDERR_SHA256,
+        "credentials_clean": True,
         "owned_containers_absent": True,
     }
 
@@ -2711,6 +3097,209 @@ def _slot2_eligibility_projection(
     }
 
 
+def _retry4_slot2_eligibility_projection(
+    *,
+    repository: Path,
+    package_commit: str,
+    source_root: Path,
+    image_archive: Path,
+) -> dict[str, object]:
+    transition = _retry4_slot2_git_transition(repository, package_commit)
+    entry_source = source_root / "slot1-entry-source"
+    closeout_source = source_root / "slot1-closeout-source"
+    entry_path = entry_source / "entry-receipt.json"
+    closeout_path = closeout_source / "closeout-receipt.json"
+    entry = validate_entry_receipt_source_bound(
+        entry_path,
+        entry_source,
+        package_commit=RETRY4_SLOT1_PACKAGE_COMMIT,
+        plan_sha256=RETRY4_SLOT1_PLAN_SHA256,
+    )
+    closeout = validate_closeout_receipt(
+        closeout_path,
+        closeout_source,
+        entry_receipt_path=entry_path,
+        entry_source_root=entry_source,
+        package_commit=RETRY4_SLOT1_PACKAGE_COMMIT,
+        plan_sha256=RETRY4_SLOT1_PLAN_SHA256,
+        lifecycle=load_campaign_lifecycle(repository),
+    )
+    if (
+        file_sha256(entry_path) != RETRY4_SLOT1_ENTRY_RECEIPT_SHA256
+        or file_sha256(entry_source / "source-manifest.json")
+        != RETRY4_SLOT1_ENTRY_SOURCE_MANIFEST_SHA256
+        or file_sha256(closeout_path) != RETRY4_SLOT1_CLOSEOUT_RECEIPT_SHA256
+        or file_sha256(closeout_source / "source-manifest.json")
+        != RETRY4_SLOT1_CLOSEOUT_SOURCE_MANIFEST_SHA256
+        or entry.get("launch_slot") != 1
+        or entry.get("launch_count") != 1
+        or entry.get("prior_campaign_lambda_duration_seconds") != 0.0
+        or entry.get("prior_campaign_lambda_cost_usd") != 0.0
+        or closeout.get("launch_slot") != 1
+        or closeout.get("launch_count") != 1
+        or closeout.get("terminal_or_absent") is not True
+        or closeout.get("zero_t09_instances") is not True
+        or closeout.get("security_restored") is not True
+        or closeout.get("campaign_wall_exception") != "none"
+    ):
+        raise T09ProviderError("Retry 4 slot-1 provider closure cannot authorize slot 2")
+    failure = _retry4_slot1_failure_archive_projection(source_root / "slot1-preentry-stage.tar.gz")
+    _safe_regular_identity(
+        image_archive,
+        expected_bytes=SLOT1_IMAGE_ARCHIVE_BYTES,
+        expected_sha256=SLOT1_IMAGE_ARCHIVE_SHA256,
+    )
+    prior_duration = _number(closeout.get("lambda_duration_seconds"), label="slot-1 duration")
+    prior_cost = _number(closeout.get("lambda_list_cost_usd"), label="slot-1 Lambda cost")
+    started = _number(entry.get("lambda_started_at_epoch"), label="slot-1 Lambda start")
+    if (
+        prior_duration <= 0
+        or prior_duration > Retry4LifecycleLimits().preflight_wall_seconds
+        or prior_cost <= 0
+        or abs(prior_cost - prior_duration * PRICE_CENTS_PER_HOUR / 100 / 3_600) > 1e-9
+        or prior_cost >= NEW_CAMPAIGN_LAMBDA_CAP_USD
+    ):
+        raise T09ProviderError("Retry 4 slot-1 active accounting cannot authorize slot 2")
+    return {
+        "schema_version": "0.3.0",
+        "eligibility_kind": RETRY4_SLOT2_ELIGIBILITY_KIND,
+        "plan_id": PLAN_ID,
+        "host_run_id": HOST_RUN_ID,
+        "closed_launch_slot": 1,
+        "next_launch_slot": 2,
+        "launch_count_before_next_send": 1,
+        "max_launch_count": 2,
+        "slot1_package_commit": RETRY4_SLOT1_PACKAGE_COMMIT,
+        "slot2_package_commit": package_commit,
+        "slot1_plan_sha256": RETRY4_SLOT1_PLAN_SHA256,
+        "slot2_plan_sha256": RETRY4_SLOT1_PLAN_SHA256,
+        "package_transition": transition,
+        "package_transition_sha256": _sha256_bytes(_canonical_bytes(transition)),
+        "slot1_entry_receipt_sha256": file_sha256(entry_path),
+        "slot1_entry_source_manifest_sha256": file_sha256(entry_source / "source-manifest.json"),
+        "slot1_closeout_receipt_sha256": file_sha256(closeout_path),
+        "slot1_closeout_source_manifest_sha256": file_sha256(
+            closeout_source / "source-manifest.json"
+        ),
+        "slot1_failure": failure,
+        "slot1_failure_sha256": _sha256_bytes(_canonical_bytes(failure)),
+        "slot1_candidate_build_count": 1,
+        "slot1_candidate_image_id": RETRY4_SLOT1_BUILT_IMAGE_ID,
+        "slot1_candidate_removed_before_termination": True,
+        "slot2_image_archive_sha256": SLOT1_IMAGE_ARCHIVE_SHA256,
+        "slot2_image_archive_bytes": SLOT1_IMAGE_ARCHIVE_BYTES,
+        "slot2_expected_image_id": SLOT1_REPLACEMENT_IMAGE_ID,
+        "slot2_image_import_required": True,
+        "slot2_additional_image_build_count": 0,
+        "qualification_id": "QUAL-T09-PILOT-V6-IMAGE-0001",
+        "slot1_lambda_started_at_epoch": started,
+        "prior_lambda_duration_seconds": prior_duration,
+        "prior_lambda_cost_usd": prior_cost,
+        "empirical_attempts_entered": 0,
+        "raw_attempts_complete": 0,
+        "attempts_completed": 0,
+        "slot1_model_metadata_requests": 1,
+        "task_model_requests": 0,
+        "task_browser_actions": 0,
+        "failed_attempt_identity_consumed": False,
+        "same_frozen_attempt_identity_permitted": True,
+        "terminal_or_absent": True,
+        "zero_t09_instances": True,
+        "security_restored": True,
+        "second_launch_permitted": True,
+    }
+
+
+def derive_retry4_preentry_replacement_eligibility(
+    *,
+    repository: Path,
+    package_commit: str,
+    prior_private_root: Path,
+    slot1_failure_archive: Path,
+    slot1_image_archive: Path,
+) -> Path:
+    """Seal slot 2 from the exact closed V6 pre-entry failure prefix."""
+
+    prior = prior_private_root.resolve(strict=True)
+    source_root = prior / "slot2-eligibility-source"
+    source_root.mkdir(mode=0o700, exist_ok=False)
+    _copy_slot2_authority_tree(prior / "entry-source", source_root / "slot1-entry-source")
+    _copy_slot2_authority_tree(prior / "closeout-source", source_root / "slot1-closeout-source")
+    target_failure = source_root / "slot1-preentry-stage.tar.gz"
+    with (
+        slot1_failure_archive.resolve(strict=True).open("rb") as source,
+        target_failure.open("xb") as target,
+    ):
+        shutil.copyfileobj(source, target, 1_048_576)
+        target.flush()
+        os.fsync(target.fileno())
+    target_failure.chmod(0o600)
+    projection = _retry4_slot2_eligibility_projection(
+        repository=repository.resolve(strict=True),
+        package_commit=package_commit,
+        source_root=source_root,
+        image_archive=slot1_image_archive.resolve(strict=True),
+    )
+    write_exclusive(source_root / "transition.json", projection["package_transition"])
+    manifest = _slot2_authority_tree_manifest(source_root)
+    write_exclusive(source_root / "source-manifest.json", manifest)
+    eligibility = {
+        **projection,
+        "source_manifest_sha256": file_sha256(source_root / "source-manifest.json"),
+        "source_files_sha256": manifest["files_sha256"],
+        "created_at_epoch": time.time(),
+    }
+    path = prior / "replacement-launch-eligibility.json"
+    write_exclusive(path, eligibility)
+    return path
+
+
+def validate_retry4_preentry_replacement_eligibility(
+    prior_private_root: Path,
+    *,
+    repository: Path,
+    package_commit: str,
+    slot1_image_archive: Path,
+) -> dict[str, object]:
+    prior = prior_private_root.resolve(strict=True)
+    source_root = prior / "slot2-eligibility-source"
+    manifest_path = source_root / "source-manifest.json"
+    observed_manifest = _load_json(manifest_path, maximum_bytes=1_048_576)
+    expected_manifest = _slot2_authority_tree_manifest(source_root)
+    if observed_manifest != expected_manifest:
+        raise T09ProviderError("Retry 4 slot-2 authority source manifest drifted")
+    expected = _retry4_slot2_eligibility_projection(
+        repository=repository.resolve(strict=True),
+        package_commit=package_commit,
+        source_root=source_root,
+        image_archive=slot1_image_archive.resolve(strict=True),
+    )
+    path = prior / "replacement-launch-eligibility.json"
+    observed = _load_json(path, maximum_bytes=262_144)
+    created = observed.pop("created_at_epoch", None)
+    required = {
+        **expected,
+        "source_manifest_sha256": file_sha256(manifest_path),
+        "source_files_sha256": expected_manifest["files_sha256"],
+    }
+    metadata = path.stat(follow_symlinks=False)
+    if (
+        observed != required
+        or not isinstance(created, (int, float))
+        or isinstance(created, bool)
+        or not _number(expected["slot1_lambda_started_at_epoch"], label="slot-1 start")
+        <= float(created)
+        <= time.time()
+        or path.is_symlink()
+        or not stat.S_ISREG(metadata.st_mode)
+        or metadata.st_uid != os.getuid()
+        or metadata.st_nlink != 1
+        or stat.S_IMODE(metadata.st_mode) != 0o600
+    ):
+        raise T09ProviderError("Retry 4 slot-2 eligibility is not source-bound")
+    return {**required, "created_at_epoch": created, "receipt_sha256": file_sha256(path)}
+
+
 def derive_built_image_replacement_eligibility(
     *,
     repository: Path,
@@ -2721,6 +3310,18 @@ def derive_built_image_replacement_eligibility(
 ) -> Path:
     """Seal the one authorized slot-2 capability from closed slot-1 evidence."""
 
+    failure_path = slot1_failure_archive.resolve(strict=True)
+    if (
+        failure_path.stat(follow_symlinks=False).st_size == RETRY4_SLOT1_FAILURE_ARCHIVE_BYTES
+        and file_sha256(failure_path) == RETRY4_SLOT1_FAILURE_ARCHIVE_SHA256
+    ):
+        return derive_retry4_preentry_replacement_eligibility(
+            repository=repository,
+            package_commit=package_commit,
+            prior_private_root=prior_private_root,
+            slot1_failure_archive=failure_path,
+            slot1_image_archive=slot1_image_archive,
+        )
     prior = prior_private_root.resolve(strict=True)
     source_root = prior / "slot2-eligibility-source"
     source_root.mkdir(mode=0o700, exist_ok=False)
@@ -2763,6 +3364,17 @@ def validate_built_image_replacement_eligibility(
     slot1_image_archive: Path,
 ) -> dict[str, object]:
     prior = prior_private_root.resolve(strict=True)
+    observed_kind = _load_json(
+        prior / "replacement-launch-eligibility.json",
+        maximum_bytes=262_144,
+    ).get("eligibility_kind")
+    if observed_kind == RETRY4_SLOT2_ELIGIBILITY_KIND:
+        return validate_retry4_preentry_replacement_eligibility(
+            prior,
+            repository=repository,
+            package_commit=package_commit,
+            slot1_image_archive=slot1_image_archive,
+        )
     source_root = prior / "slot2-eligibility-source"
     manifest_path = source_root / "source-manifest.json"
     observed_manifest = _load_json(manifest_path, maximum_bytes=1_048_576)
@@ -2864,6 +3476,25 @@ def _validate_replacement_launch_eligibility(
         raise T09ProviderError("replacement-launch eligibility metadata is unsafe")
     value = _load_json(path, maximum_bytes=262_144)
     first_capability = _load_json(launch_capability_path(1), maximum_bytes=65_536)
+    if value.get("eligibility_kind") == RETRY4_SLOT2_ELIGIBILITY_KIND:
+        if slot1_image_archive is None:
+            raise T09ProviderError("Retry 4 replacement requires the exact retained image archive")
+        if (
+            first_capability.get("plan_id") != PLAN_ID
+            or first_capability.get("host_run_id") != HOST_RUN_ID
+            or first_capability.get("package_commit") != RETRY4_SLOT1_PACKAGE_COMMIT
+            or first_capability.get("plan_sha256") != RETRY4_SLOT1_PLAN_SHA256
+            or first_capability.get("launch_slot") != 1
+            or first_capability.get("launch_capability_limit") != 2
+            or first_capability.get("replacement_eligibility_sha256") is not None
+        ):
+            raise T09ProviderError("Retry 4 slot-1 capability cannot authorize slot 2")
+        return validate_retry4_preentry_replacement_eligibility(
+            prior,
+            repository=repository,
+            package_commit=package_commit,
+            slot1_image_archive=slot1_image_archive,
+        )
     if value.get("eligibility_kind") == SLOT2_ELIGIBILITY_KIND:
         if slot1_image_archive is None:
             raise T09ProviderError("built-image replacement requires the exact image archive")
@@ -3366,7 +3997,7 @@ def launch_campaign(
             target.flush()
             os.fsync(target.fileno())
         retained_eligibility.chmod(0o600)
-        retained = validate_built_image_replacement_eligibility(
+        retained = _validate_replacement_launch_eligibility(
             private_root,
             repository=repository,
             package_commit=package_commit,

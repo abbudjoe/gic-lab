@@ -1,15 +1,18 @@
 from __future__ import annotations
 
 import importlib.util
+import io
 import json
 import os
 import subprocess
+import tarfile
 import time
 from pathlib import Path
 
 import pytest
 import yaml
 
+from giclab.harness import t09_pragmatic_provider as provider
 from giclab.harness.lambda_campaign_lifecycle import Retry4LifecycleLimits
 from giclab.harness.t09_pragmatic_provider import (
     CampaignLifecycle,
@@ -20,7 +23,13 @@ from giclab.validation import validate_instance
 
 ROOT = Path(__file__).resolve().parents[1]
 HOST_SOURCE = ROOT / "containers/sira-smoke/pragmatic/t09_remote_runner.py"
+RUNTIME_SOURCE = ROOT / "src/giclab/harness/sira_gate_a_runtime.py"
 EXPERIMENT_ROOT = ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive"
+SLOT1_PREENTRY_STAGE = Path(
+    "/Volumes/Macintosh HD - Data/GIC-Lab/t09/sealed-artifacts/"
+    ".ARCHIVE-EXP0001-PILOT-V6-0004.incoming/slot1-preentry/"
+    "t09-pilot-private-evidence-stage.tar.gz"
+)
 
 
 def test_retry4_preserves_retry3_terminal_and_frozen_package_bytes() -> None:
@@ -119,6 +128,27 @@ def _load_host(name: str) -> object:
     module = importlib.util.module_from_spec(specification)
     specification.loader.exec_module(module)
     return module
+
+
+def _load_runtime(name: str) -> object:
+    specification = importlib.util.spec_from_file_location(name, RUNTIME_SOURCE)
+    assert specification is not None and specification.loader is not None
+    module = importlib.util.module_from_spec(specification)
+    specification.loader.exec_module(module)
+    return module
+
+
+def test_retry4_runtime_matches_the_typed_raw_attempt_root() -> None:
+    runtime = _load_runtime("giclab_t09_retry4_raw_root")
+    raw = "artifacts/EXP-0001/pilot-v6/task-a/reactive/attempt-0004/raw"
+    assert runtime._attempt_root_matches_raw_binding(
+        Path("/opt/giclab-artifacts") / raw,
+        raw,
+    )
+    assert not runtime._attempt_root_matches_raw_binding(
+        Path("/opt/giclab-artifacts/artifacts/EXP-0001/pilot-v6/task-a/reactive/attempt-0004"),
+        raw,
+    )
 
 
 def test_retry4_archive_staging_is_content_addressed_and_source_path_independent(
@@ -325,6 +355,57 @@ def test_retry4_image_selection_loads_exact_verified_archive_without_build(
     assert result["build_count"] == 0
 
 
+def test_retry4_sudo_docker_uses_the_live_parent_descriptor() -> None:
+    host = _load_host("giclab_t09_retry4_sudo_descriptor")
+    assert host.held_descriptor_docker_path(["docker"], 17) == "/proc/self/fd/17"
+    assert (
+        host.held_descriptor_docker_path(["sudo", "-n", "docker"], 17)
+        == f"/proc/{os.getpid()}/fd/17"
+    )
+
+
+def test_retry4_exact_slot1_preentry_stage_is_source_reconstructable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    if not SLOT1_PREENTRY_STAGE.is_file():
+        pytest.skip("private source-bound slot-1 stage is not present in this checkout")
+    projection = provider._retry4_slot1_failure_archive_projection(SLOT1_PREENTRY_STAGE)
+    assert projection["frozen_run_manifest_sha256"] == (
+        "4477f5313100422cb4415bf636e2cd476fc59a2bf1548fa3390ced7ecc306a57"
+    )
+    assert projection["failed_attempt_run_id"] == "RUN-T09-TASK-A-REACTIVE-0004"
+    assert projection["failed_attempt_identity_consumed"] is False
+    assert projection["model_metadata_requests"] == 1
+    assert projection["task_model_requests"] == projection["task_browser_actions"] == 0
+
+    tampered = tmp_path / "tampered-stage.tar.gz"
+    with (
+        tarfile.open(SLOT1_PREENTRY_STAGE, "r:gz") as source,
+        tarfile.open(tampered, "w:gz") as target,
+    ):
+        for member in source.getmembers():
+            if member.isdir():
+                target.addfile(member)
+                continue
+            handle = source.extractfile(member)
+            assert handle is not None
+            payload = handle.read()
+            if member.name == "pilot-v6/aggregate-budget.json":
+                payload += b"\n"
+                member.size = len(payload)
+            target.addfile(member, io.BytesIO(payload))
+    tampered.chmod(0o600)
+    monkeypatch.setattr(provider, "RETRY4_SLOT1_FAILURE_ARCHIVE_BYTES", tampered.stat().st_size)
+    monkeypatch.setattr(
+        provider,
+        "RETRY4_SLOT1_FAILURE_ARCHIVE_SHA256",
+        host_hash(tampered),
+    )
+    with pytest.raises(provider.T09ProviderError, match="member drifted"):
+        provider._retry4_slot1_failure_archive_projection(tampered)
+
+
 def test_retry4_image_selection_uses_one_fallback_build_for_unavailable_archive(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -498,6 +579,21 @@ def test_retry4_static_package_hashes_commands_and_successor_control_close() -> 
         "path": control_path.relative_to(ROOT).as_posix(),
         "sha256": host_hash(control_path),
     }
+
+
+def test_retry4_slot2_control_repair_is_a_science_locked_descendant() -> None:
+    package_commit = subprocess.run(
+        ["git", "-C", str(ROOT), "rev-parse", "HEAD"],
+        capture_output=True,
+        check=True,
+        text=True,
+    ).stdout.strip()
+    transition = provider._retry4_slot2_git_transition(ROOT, package_commit)
+    assert transition["from_package_commit"] == provider.RETRY4_SLOT1_PACKAGE_COMMIT
+    assert transition["to_package_commit"] == package_commit
+    assert transition["scientific_contract_changed"] is False
+    assert transition["scientific_projection_sha256"]
+    assert set(transition["changed_paths"]).issubset(provider.RETRY4_SLOT2_TRANSITION_ALLOWED_PATHS)
 
 
 def test_retry4_generated_postfreeze_receipt_admits_first_condition() -> None:
