@@ -175,7 +175,9 @@ RETRY4_SLOT2_TRANSITION_ALLOWED_PATHS: Final = frozenset(
         "pilot-v6-task-0001-simulative.yaml",
         "src/giclab/harness/sira_gate_a_runtime.py",
         "src/giclab/harness/t09_pragmatic_provider.py",
+        "src/giclab/harness/t09_sira_pilot.py",
         "tests/test_t09_retry4.py",
+        "tests/test_t09_sira_pilot.py",
     }
 )
 SOURCE_OBSERVER: Final = "t09-retry4-pragmatic-mutations-plus-l2m-read-only-observer-v1"

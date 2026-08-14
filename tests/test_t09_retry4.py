@@ -347,6 +347,7 @@ def test_retry4_image_selection_loads_exact_verified_archive_without_build(
         artifact_root=artifact_root,
         image_archive=archive,
         prefix=["docker"],
+        materialization_policy=host.SLOT2_IMAGE_MATERIALIZATION_POLICY,
     )
     assert observed_pass_fds
     assert result["method"] == "exact-retained-image-archive-import"
@@ -434,11 +435,94 @@ def test_retry4_image_selection_uses_one_fallback_build_for_unavailable_archive(
         artifact_root=artifact_root,
         image_archive=tmp_path / "missing-image.tar",
         prefix=["docker"],
+        materialization_policy=host.SLOT1_IMAGE_MATERIALIZATION_POLICY,
     )
     assert calls == 1
     assert result["image_import_count"] == 0
     assert result["build_count"] == 1
     assert result["additional_build_count"] == 0
+
+
+def test_retry4_slot2_failed_image_import_never_builds(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    host = _load_host("giclab_t09_retry4_slot2_import_only")
+    artifact_root = tmp_path / "artifacts"
+    _initialize_host_clock(host, artifact_root)
+    monkeypatch.setattr(host, "image_id_if_present", lambda _prefix, _reference: None)
+    build_calls = 0
+
+    def forbidden_build(**_kwargs: object) -> dict[str, object]:
+        nonlocal build_calls
+        build_calls += 1
+        return {}
+
+    monkeypatch.setattr(host, "materialize_replacement_image", forbidden_build)
+    with pytest.raises(
+        host.T09HostError,
+        match="slot-2 retained image is unavailable; fallback build is forbidden",
+    ):
+        host.materialize_retained_or_build_image(
+            repository=ROOT,
+            package_commit="2" * 40,
+            artifact_root=artifact_root,
+            image_archive=tmp_path / "missing-image.tar",
+            prefix=["docker"],
+            materialization_policy=host.SLOT2_IMAGE_MATERIALIZATION_POLICY,
+        )
+    assert build_calls == 0
+
+
+def test_retry4_slot2_rejected_docker_load_never_builds(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    host = _load_host("giclab_t09_retry4_slot2_failed_load")
+    artifact_root = tmp_path / "artifacts"
+    _initialize_host_clock(host, artifact_root)
+    archive = tmp_path / "retained-image.tar"
+    payload = b"retained-image"
+    archive.write_bytes(payload)
+    archive.chmod(0o600)
+    monkeypatch.setattr(host, "RETAINED_IMAGE_ARCHIVE_BYTES", len(payload))
+    monkeypatch.setattr(
+        host,
+        "RETAINED_IMAGE_ARCHIVE_SHA256",
+        host.hashlib.sha256(payload).hexdigest(),
+    )
+    monkeypatch.setattr(host, "image_id_if_present", lambda _prefix, _reference: None)
+    monkeypatch.setattr(
+        host.subprocess,
+        "run",
+        lambda argv, **_kwargs: subprocess.CompletedProcess(
+            argv,
+            1,
+            stdout=b"",
+            stderr=b"load rejected",
+        ),
+    )
+    build_calls = 0
+
+    def forbidden_build(**_kwargs: object) -> dict[str, object]:
+        nonlocal build_calls
+        build_calls += 1
+        return {}
+
+    monkeypatch.setattr(host, "materialize_replacement_image", forbidden_build)
+    with pytest.raises(
+        host.T09HostError,
+        match="slot-2 retained image import failed; fallback build is forbidden",
+    ):
+        host.materialize_retained_or_build_image(
+            repository=ROOT,
+            package_commit="2" * 40,
+            artifact_root=artifact_root,
+            image_archive=archive,
+            prefix=["docker"],
+            materialization_policy=host.SLOT2_IMAGE_MATERIALIZATION_POLICY,
+        )
+    assert build_calls == 0
 
 
 def test_retry4_three_clock_boundaries_reproduce_retry3_and_repair_admission() -> None:
@@ -562,6 +646,13 @@ def test_retry4_static_package_hashes_commands_and_successor_control_close() -> 
         "size_bytes": plan_path.stat().st_size,
     }
     assert execution["contract_bindings"]["runtime"]["sha256"] == host_hash(runtime_path)
+    assert runtime["replacement_image_policy"]["slot2_materialization_policy"] == (
+        "retained-import-only"
+    )
+    assert runtime["replacement_image_policy"]["slot2_fallback_build_permitted"] is False
+    assert execution["runtime"]["slot2_container_image_policy"] == (
+        "retained-exact-archive-import-only-no-fallback-build-v1"
+    )
     assert commands["execution_contract_sha256"] == host_hash(execution_path)
     assert (
         commands["reviewed_implementation_ancestor"]
@@ -603,7 +694,10 @@ def test_retry4_generated_postfreeze_receipt_admits_first_condition() -> None:
     postfreeze_sha = "c" * 64
     credential_scan_sha = "d" * 64
     first_pair_started = 1234.5
-    frozen = {"first_pair_started_at_epoch": first_pair_started}
+    frozen = {
+        "first_pair_started_at_epoch": first_pair_started,
+        "image_materialization_policy": host.SLOT2_IMAGE_MATERIALIZATION_POLICY,
+    }
     preflight = {
         "frozen_run_manifest_sha256": frozen_sha,
         "replacement_image_id": image_id,
@@ -614,6 +708,7 @@ def test_retry4_generated_postfreeze_receipt_admits_first_condition() -> None:
     postfreeze = {
         "frozen_run_manifest_sha256": frozen_sha,
         "replacement_image_id": image_id,
+        "image_materialization_policy": host.SLOT2_IMAGE_MATERIALIZATION_POLICY,
         "model_metadata_request_count": 1,
         "model_metadata_credential_scan_sha256": credential_scan_sha,
         "actual_credential_exposure_detected": False,

@@ -219,6 +219,8 @@ MAX_EVALUATOR_OVERLAY_BYTES: Final = 1_073_741_824
 MAX_EVALUATOR_OVERLAY_ENTRIES: Final = 100_000
 MAX_PREENTRY_REPAIRS_PER_RUN: Final = 3
 POSTFREEZE_ADMISSION_FIELD: Final = "fresh_empirical_campaign_headroom_passed_before_metadata_get"
+SLOT1_IMAGE_MATERIALIZATION_POLICY: Final = "retained-import-or-one-fallback-build"
+SLOT2_IMAGE_MATERIALIZATION_POLICY: Final = "retained-import-only"
 PINNED_DATASET_SHA256: Final = "359300b029c6891567816f351bf8786e9b018d7af8a1a44b7da9ba5ef4651288"
 FINALIZER_RELATIVE_PATH: Final = "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py"
 FINALIZER_PROJECTION_RELATIVE_PATH: Final = (
@@ -1396,8 +1398,15 @@ def materialize_retained_or_build_image(
     artifact_root: Path,
     image_archive: Path,
     prefix: list[str],
+    materialization_policy: str,
 ) -> dict[str, object]:
-    """Prefer the exact retained image; fall back to one frozen-input build."""
+    """Materialize under the source-bound launch-slot policy."""
+
+    if materialization_policy not in {
+        SLOT1_IMAGE_MATERIALIZATION_POLICY,
+        SLOT2_IMAGE_MATERIALIZATION_POLICY,
+    }:
+        raise T09HostError("image materialization policy is invalid")
 
     if image_id_if_present(prefix, REPLACEMENT_IMAGE_TAG) is not None:
         raise T09HostError("V6 image tag already exists before materialization")
@@ -1457,6 +1466,7 @@ def materialize_retained_or_build_image(
                 "expected_sha256": RETAINED_IMAGE_ARCHIVE_SHA256,
                 "expected_image_id": RETAINED_IMAGE_ID,
                 "validation": archive_reason,
+                "materialization_policy": materialization_policy,
             },
         )
     except BaseException:
@@ -1568,6 +1578,7 @@ def materialize_retained_or_build_image(
                 "build_count": 0,
                 "additional_build_count": 0,
                 "image_import_count": 1,
+                "image_materialization_policy": materialization_policy,
             }
             write_exclusive(materialization / "receipt.json", result)
             return result
@@ -1584,10 +1595,14 @@ def materialize_retained_or_build_image(
                 check=False,
                 timeout=60,
             )
+        if materialization_policy == SLOT2_IMAGE_MATERIALIZATION_POLICY:
+            raise T09HostError("slot-2 retained image import failed; fallback build is forbidden")
     if archive_descriptor >= 0:
         os.close(archive_descriptor)
     if archive_parent_descriptor >= 0:
         os.close(archive_parent_descriptor)
+    if materialization_policy == SLOT2_IMAGE_MATERIALIZATION_POLICY:
+        raise T09HostError("slot-2 retained image is unavailable; fallback build is forbidden")
     built = materialize_replacement_image(
         repository=repository,
         artifact_root=artifact_root,
@@ -1596,6 +1611,7 @@ def materialize_retained_or_build_image(
     built["image_import_count"] = 0
     built["additional_build_count"] = 0
     built["retained_image_archive_validation"] = archive_reason
+    built["image_materialization_policy"] = materialization_policy
     receipt_path = artifact_root / "pilot-v6/replacement-image-qualification/receipt.json"
     receipt_path.unlink()
     write_exclusive(receipt_path, built)
@@ -4057,6 +4073,16 @@ def write_frozen_run_manifest(
     ):
         raise T09HostError("first-pair wall origin cannot be frozen")
     qualification_root = artifact_root / "pilot-v6/replacement-image-qualification"
+    launch_slot = dynamic.get("launch_slot")
+    expected_materialization_policy = (
+        SLOT1_IMAGE_MATERIALIZATION_POLICY
+        if launch_slot == 1
+        else SLOT2_IMAGE_MATERIALIZATION_POLICY
+        if launch_slot == 2
+        else None
+    )
+    if image_materialization.get("image_materialization_policy") != expected_materialization_policy:
+        raise T09HostError("image materialization policy drifted before freeze")
     if qualified_real_evidence_regression_receipt.get(
         "semantic_projection"
     ) != static_real_evidence_regression.get("semantic_projection"):
@@ -4101,6 +4127,7 @@ def write_frozen_run_manifest(
         "qualification_id": QUALIFICATION_ID,
         "qualification_count": 1,
         "build_count": image_materialization.get("build_count"),
+        "image_materialization_policy": expected_materialization_policy,
         "source_contract_sha256": AUTHORIZATION_SOURCE_SHA256,
         "clean_package_commit": package_commit,
         "plan_sha256": file_sha256(paths["plan"]),
@@ -4236,6 +4263,16 @@ def write_frozen_run_manifest(
         manifest["build_count"] not in {0, 1}
         or (manifest["build_count"] == 0 and manifest["image_import_count"] != 1)
         or (manifest["build_count"] == 1 and manifest["image_import_count"] != 0)
+        or (
+            launch_slot == 2
+            and (
+                manifest["image_materialization_policy"] != SLOT2_IMAGE_MATERIALIZATION_POLICY
+                or manifest["build_count"] != 0
+                or manifest["image_import_count"] != 1
+                or manifest["additional_build_count"] != 0
+                or manifest["replacement_image_id"] != RETAINED_IMAGE_ID
+            )
+        )
         or not isinstance(manifest["pair_diffs"], list)
         or any(
             not isinstance(item, dict) or item.get("valid") is not True
@@ -4316,6 +4353,11 @@ def load_frozen_run_manifest(
         "qualification_id": QUALIFICATION_ID,
         "qualification_count": 1,
         "build_count": manifest.get("build_count"),
+        "image_materialization_policy": (
+            SLOT1_IMAGE_MATERIALIZATION_POLICY
+            if provider_entry.get("launch_slot") == 1
+            else SLOT2_IMAGE_MATERIALIZATION_POLICY
+        ),
         "source_contract_sha256": AUTHORIZATION_SOURCE_SHA256,
         "clean_package_commit": package_commit,
         "plan_sha256": file_sha256(paths["plan"]),
@@ -4423,6 +4465,18 @@ def load_frozen_run_manifest(
         or materialization.get("build_count") != typed_qualification.build_count
         or materialization.get("image_import_count") != typed_qualification.image_import_count
         or materialization.get("additional_build_count") != 0
+        or materialization.get("image_materialization_policy")
+        != typed_qualification.image_materialization_policy
+        or (
+            typed_qualification.launch_slot == 2
+            and (
+                typed_qualification.image_materialization_policy
+                != SLOT2_IMAGE_MATERIALIZATION_POLICY
+                or typed_qualification.build_count != 0
+                or typed_qualification.image_import_count != 1
+                or typed_qualification.replacement_image_id != RETAINED_IMAGE_ID
+            )
+        )
         or (
             typed_qualification.build_count == 0
             and (
@@ -5343,6 +5397,11 @@ def preflight(args: argparse.Namespace) -> None:
         or not isinstance(dynamic.get("replacement_eligibility_source_manifest_sha256"), str)
     ):
         raise T09HostError("second Retry 4 launch lacks exact replacement authority")
+    image_materialization_policy = (
+        SLOT1_IMAGE_MATERIALIZATION_POLICY
+        if launch_slot == 1
+        else SLOT2_IMAGE_MATERIALIZATION_POLICY
+    )
     paths = contract_paths(repository)
     prefix = docker_prefix()
     if owned_containers(prefix):
@@ -5405,6 +5464,7 @@ def preflight(args: argparse.Namespace) -> None:
         artifact_root=artifact_root,
         image_archive=args.replacement_image_archive,
         prefix=prefix,
+        materialization_policy=image_materialization_policy,
     )
     image_id = image_materialization.get("image_id")
     if not isinstance(image_id, str):
@@ -5568,6 +5628,7 @@ def preflight(args: argparse.Namespace) -> None:
             "package_commit": args.package_commit,
             "frozen_run_manifest_sha256": loaded_manifest_sha256,
             "replacement_image_id": image_id,
+            "image_materialization_policy": frozen_manifest["image_materialization_policy"],
             "replacement_eligibility_sha256": dynamic.get("replacement_eligibility_sha256"),
             "first_pair_started_at_epoch": frozen_manifest["first_pair_started_at_epoch"],
             "empirical_campaign_started_at_epoch": empirical_start,
@@ -6728,6 +6789,13 @@ def validate_postfreeze_entry_receipts(
         or preflight_receipt.get("postfreeze_validation_sha256") != postfreeze_sha256
         or postfreeze.get("frozen_run_manifest_sha256") != frozen_manifest_sha256
         or postfreeze.get("replacement_image_id") != replacement_image_id
+        or frozen_manifest.get("image_materialization_policy")
+        not in {
+            SLOT1_IMAGE_MATERIALIZATION_POLICY,
+            SLOT2_IMAGE_MATERIALIZATION_POLICY,
+        }
+        or postfreeze.get("image_materialization_policy")
+        != frozen_manifest.get("image_materialization_policy")
         or postfreeze.get("model_metadata_request_count") != 1
         or postfreeze.get("model_metadata_credential_scan_sha256")
         != model_metadata_credential_scan_sha256

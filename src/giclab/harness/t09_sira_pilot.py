@@ -321,6 +321,10 @@ class RuntimeQualification:
     model_metadata_request_count: int
     model_task_request_count: int
     task_browser_action_count: int
+    image_materialization_policy: Literal[
+        "retained-import-or-one-fallback-build",
+        "retained-import-only",
+    ]
     build_count: int
     qualification_count: int
     empirical_entry_crossed: bool
@@ -438,6 +442,16 @@ class RuntimeQualification:
                 document.get("task_browser_action_count"),
                 context="task browser action count",
             ),
+            image_materialization_policy=cast(
+                Literal[
+                    "retained-import-or-one-fallback-build",
+                    "retained-import-only",
+                ],
+                _required_string(
+                    document.get("image_materialization_policy"),
+                    context="image materialization policy",
+                ),
+            ),
             build_count=_required_int(document.get("build_count"), context="build count"),
             qualification_count=_required_int(
                 document.get("qualification_count"), context="qualification count"
@@ -552,6 +566,11 @@ class RuntimeQualification:
             or result.model_metadata_request_count != 1
             or result.model_task_request_count != 0
             or result.task_browser_action_count != 0
+            or result.image_materialization_policy
+            not in {
+                "retained-import-or-one-fallback-build",
+                "retained-import-only",
+            }
             or result.build_count not in {0, 1}
             or result.qualification_count != 1
             or document.get("empirical_entry_crossed") is not False
@@ -581,6 +600,7 @@ class RuntimeQualification:
         if result.preflight_transition_mode == "fresh":
             if (
                 result.launch_slot != 1
+                or result.image_materialization_policy != "retained-import-or-one-fallback-build"
                 or result.prior_lambda_duration_seconds != 0
                 or result.prior_lambda_cost_usd != 0
                 or result.replacement_eligibility_sha256 is not None
@@ -597,6 +617,9 @@ class RuntimeQualification:
             if (
                 result.launch_slot != 2
                 or result.launch_count != 2
+                or result.image_materialization_policy != "retained-import-only"
+                or result.build_count != 0
+                or result.image_import_count != 1
                 or result.prior_lambda_duration_seconds <= 0
                 or result.prior_lambda_cost_usd <= 0
                 or result.preflight_prior_package_commit is not None

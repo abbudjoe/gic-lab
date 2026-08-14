@@ -651,9 +651,9 @@ def test_retry2_preserves_and_supersedes_the_zero_use_v3_failure() -> None:
 def test_runtime_qualification_is_typed_slot2_import_preentry_and_digest_agnostic() -> None:
     document = {
         "schema_version": "0.1.0",
-        "plan_id": "PLAN-EXP0001-PILOT-V5",
-        "manifest_id": "RUN-MANIFEST-EXP0001-PILOT-V5-0003",
-        "qualification_id": "QUAL-T09-PILOT-V5-IMAGE-0002",
+        "plan_id": "PLAN-EXP0001-PILOT-V6",
+        "manifest_id": "RUN-MANIFEST-EXP0001-PILOT-V6-0004",
+        "qualification_id": "QUAL-T09-PILOT-V6-IMAGE-0001",
         "clean_package_commit": "a" * 40,
         "replacement_image_id": "sha256:" + "e" * 64,
         "historical_image_id": (
@@ -668,6 +668,7 @@ def test_runtime_qualification_is_typed_slot2_import_preentry_and_digest_agnosti
         "evaluator_overlay_manifest_sha256": "1" * 64,
         "evaluator_overlay_entries_sha256": "2" * 64,
         "evaluator_overlay_packages_sha256": "3" * 64,
+        "regression_archive_staging_sha256": "0" * 64,
         "qualified_real_evidence_regression_sha256": "5" * 64,
         "local_finalizer_qualification_sha256": "6" * 64,
         "local_finalizer_interpreter_dependency_manifest_sha256": "7" * 64,
@@ -676,11 +677,12 @@ def test_runtime_qualification_is_typed_slot2_import_preentry_and_digest_agnosti
         "model_metadata_request_count": 1,
         "model_task_request_count": 0,
         "task_browser_action_count": 0,
-        "build_count": 1,
+        "image_materialization_policy": "retained-import-only",
+        "build_count": 0,
         "qualification_count": 1,
         "empirical_entry_crossed": False,
         "post_entry_code_science_image_freeze": True,
-        "preflight_transition_mode": "slot2-replacement",
+        "preflight_transition_mode": "replacement-launch",
         "preflight_resume_source_sha256": None,
         "preflight_resume_argv_sha256": None,
         "preflight_resume_transition_sha256": None,
@@ -695,7 +697,7 @@ def test_runtime_qualification_is_typed_slot2_import_preentry_and_digest_agnosti
         "launch_slot": 2,
         "launch_count": 2,
         "campaign_started_at_epoch": 1.0,
-        "owned_lambda_started_at_epoch": 2.0,
+        "owned_lambda_started_at_epoch": 1.0,
         "first_pair_started_at_epoch": 3.0,
         "prior_lambda_duration_seconds": 3.0,
         "prior_lambda_cost_usd": 0.1,
@@ -710,6 +712,7 @@ def test_runtime_qualification_is_typed_slot2_import_preentry_and_digest_agnosti
     }
     qualification = RuntimeQualification.from_document(document)
     assert qualification.replacement_image_id != qualification.historical_image_id
+    assert qualification.image_materialization_policy == "retained-import-only"
     for field, value in (
         ("build_count", 2),
         ("model_metadata_request_count", 0),
@@ -720,6 +723,13 @@ def test_runtime_qualification_is_typed_slot2_import_preentry_and_digest_agnosti
         drifted = {**document, field: value}
         with pytest.raises(ValueError, match="qualification contract drifted"):
             RuntimeQualification.from_document(drifted)
+    with pytest.raises(ValueError, match="qualification binding drifted"):
+        RuntimeQualification.from_document(
+            {
+                **document,
+                "image_materialization_policy": "retained-import-or-one-fallback-build",
+            }
+        )
     with pytest.raises(ValueError, match="qualification contract drifted"):
         RuntimeQualification.from_document(
             {**document, "preflight_transition_mode": "same-host-resume"}
