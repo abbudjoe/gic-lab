@@ -1671,20 +1671,24 @@ def _entry_projection(
     prior_lambda_cost = _number(
         campaign_binding.get("prior_lambda_cost_usd"), label="prior Lambda cost"
     )
+    campaign_binding_fields = {
+        "schema_version",
+        "plan_id",
+        "host_run_id",
+        "package_commit",
+        "launch_slot",
+        "campaign_started_at_epoch",
+        "owned_lambda_started_at_epoch",
+        "prior_lambda_duration_seconds",
+        "prior_lambda_cost_usd",
+        "replacement_eligibility_sha256",
+    }
+    binding_fields = set(campaign_binding)
     if (
-        set(campaign_binding)
-        != {
-            "schema_version",
-            "plan_id",
-            "host_run_id",
-            "package_commit",
-            "launch_slot",
-            "campaign_started_at_epoch",
-            "owned_lambda_started_at_epoch",
-            "prior_lambda_duration_seconds",
-            "prior_lambda_cost_usd",
-            "replacement_eligibility_sha256",
-            "replacement_eligibility_source_manifest_sha256",
+        binding_fields
+        not in {
+            frozenset(campaign_binding_fields),
+            frozenset(campaign_binding_fields | {"replacement_eligibility_source_manifest_sha256"}),
         }
         or campaign_binding.get("schema_version") != "0.1.0"
         or campaign_binding.get("plan_id") != PLAN_ID
@@ -1720,7 +1724,7 @@ def _entry_projection(
         )
     ):
         raise T09ProviderError("replacement launch lacks its eligibility source hash")
-    return {
+    result: dict[str, object] = {
         "schema_version": "0.1.0",
         "receipt_type": "t09-pragmatic-provider-entry",
         "plan_id": PLAN_ID,
@@ -1742,7 +1746,6 @@ def _entry_projection(
         "launch_count": launch_slot,
         "max_launch_count": 2,
         "replacement_eligibility_sha256": eligibility_sha256,
-        "replacement_eligibility_source_manifest_sha256": (eligibility_source_manifest_sha256),
         "max_instances": 1,
         "instance_type": INSTANCE_TYPE,
         "region": REGION,
@@ -1761,6 +1764,13 @@ def _entry_projection(
         "raw_provider_payload_retained": False,
         "structural_redaction_passed": True,
     }
+    # Slot 1 was sealed before the slot-2 source-manifest binding field existed.
+    # Preserve its exact historical projection; all new bindings carry the field.
+    if "replacement_eligibility_source_manifest_sha256" in campaign_binding:
+        result["replacement_eligibility_source_manifest_sha256"] = (
+            eligibility_source_manifest_sha256
+        )
+    return result
 
 
 def create_entry_receipt(
