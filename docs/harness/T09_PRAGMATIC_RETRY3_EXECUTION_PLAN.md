@@ -109,6 +109,10 @@ uniformly before pair continuation or final analysis. A condition is never retri
   Its receipt inventories all 281 base-environment entries and all 6,206 evaluator-tree
   entries in the currently materialized reviewed environments; provider preflight does
   not dereference those paths, while every local finalization rehashes their exact bytes.
+- 2026-08-14: the local Python identity preserves the absolute virtual-environment
+  launcher instead of collapsing it to the base executable. Qualification and every
+  invocation separately revalidate launcher metadata, link target, resolved executable
+  bytes, venv-derived `purelib`, and both complete dependency trees.
 
 ## Next permitted phase
 

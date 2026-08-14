@@ -65,7 +65,7 @@
     ],
     "local_finalizer_base_materialization": "uv-lock-bec09cf0d326c56af9f717782eef9160579e7720dff701083570df9aa712b34b-only-project-runtime-no-project-install",
     "local_finalizer_qualification_location": "offhost-control-machine-before-provider-launch",
-    "local_finalizer_dependency_byte_policy": "complete-base-and-evaluator-site-packages-tree-manifests-rehashed-before-every-qualified-local-finalization",
+    "local_finalizer_dependency_byte_policy": "absolute-venv-launcher-link-target-and-resolved-executable-plus-complete-base-and-evaluator-site-packages-tree-manifests-rehashed-before-every-qualified-local-finalization",
     "container_image_digest": null,
     "container_image_policy": "single-qualified-replacement-preentry-frozen-run-manifest-v1",
     "historical_container_image_digest": "sha256:035edf61718e84a8156f4f0f7817b134b0ce31488d3f0b50bbfba2b4a30cc61c",

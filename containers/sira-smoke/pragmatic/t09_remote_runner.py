@@ -2368,6 +2368,48 @@ def local_dependency_tree_inventory(root: Path, *, label: str) -> dict[str, obje
     }
 
 
+def local_interpreter_launcher_identity(path: Path) -> dict[str, object]:
+    """Recompute the qualified venv launcher and resolved executable identity."""
+
+    if not path.is_absolute():
+        raise T09HostError("qualified local interpreter launcher is not absolute")
+    launcher = Path(os.path.abspath(path))
+    launcher_metadata = launcher.lstat()
+    if launcher_metadata.st_uid != os.getuid() or launcher_metadata.st_nlink != 1:
+        raise T09HostError("qualified local interpreter launcher metadata is unsafe")
+    if stat.S_ISLNK(launcher_metadata.st_mode):
+        launcher_type = "symlink"
+        link_target: str | None = os.readlink(launcher)
+        if not link_target or len(os.fsencode(link_target)) > 4_096 or "\0" in link_target:
+            raise T09HostError("qualified local interpreter link target is unsafe")
+    elif stat.S_ISREG(launcher_metadata.st_mode):
+        launcher_type = "regular"
+        link_target = None
+        if launcher_metadata.st_mode & 0o022:
+            raise T09HostError("qualified local interpreter launcher is writable")
+    else:
+        raise T09HostError("qualified local interpreter launcher is unsafe")
+    resolved_target = launcher.resolve(strict=True)
+    target_metadata = resolved_target.stat(follow_symlinks=False)
+    if (
+        resolved_target.is_symlink()
+        or not stat.S_ISREG(target_metadata.st_mode)
+        or target_metadata.st_uid != os.getuid()
+        or target_metadata.st_nlink != 1
+        or target_metadata.st_mode & 0o022
+    ):
+        raise T09HostError("qualified local interpreter target metadata is unsafe")
+    return {
+        "interpreter": launcher.as_posix(),
+        "interpreter_sha256": file_sha256(launcher),
+        "interpreter_launcher_type": launcher_type,
+        "interpreter_launcher_mode": f"{stat.S_IMODE(launcher_metadata.st_mode):04o}",
+        "interpreter_launcher_link_target": link_target,
+        "interpreter_resolved_target": resolved_target.as_posix(),
+        "interpreter_resolved_target_sha256": file_sha256(resolved_target),
+    }
+
+
 def _valid_retained_dependency_tree(value: object) -> bool:
     """Return whether a retained local dependency-tree manifest is canonical."""
 
@@ -5162,6 +5204,11 @@ def validate_local_finalizer_qualification(
     evaluator_root_value = receipt.get("evaluator_root")
     dataset_value = receipt.get("dataset")
     interpreter_sha256 = receipt.get("interpreter_sha256")
+    launcher_type = receipt.get("interpreter_launcher_type")
+    launcher_mode = receipt.get("interpreter_launcher_mode")
+    launcher_link_target = receipt.get("interpreter_launcher_link_target")
+    resolved_target_value = receipt.get("interpreter_resolved_target")
+    resolved_target_sha256 = receipt.get("interpreter_resolved_target_sha256")
     if (
         not isinstance(interpreter_value, str)
         or not Path(interpreter_value).is_absolute()
@@ -5171,6 +5218,18 @@ def validate_local_finalizer_qualification(
         or not Path(site_value).is_absolute()
         or not isinstance(interpreter_sha256, str)
         or _HEX64.fullmatch(interpreter_sha256) is None
+        or launcher_type not in {"regular", "symlink"}
+        or not isinstance(launcher_mode, str)
+        or re.fullmatch(r"0[0-7]{3}", launcher_mode) is None
+        or (launcher_type == "regular" and launcher_link_target is not None)
+        or (
+            launcher_type == "symlink"
+            and (not isinstance(launcher_link_target, str) or not launcher_link_target)
+        )
+        or not isinstance(resolved_target_value, str)
+        or not Path(resolved_target_value).is_absolute()
+        or not isinstance(resolved_target_sha256, str)
+        or _HEX64.fullmatch(resolved_target_sha256) is None
         or not isinstance(evaluator_root_value, str)
         or not Path(evaluator_root_value).is_absolute()
         or not isinstance(dataset_value, str)
@@ -5178,22 +5237,29 @@ def validate_local_finalizer_qualification(
     ):
         raise T09HostError("local finalizer absolute runtime identity is malformed")
     if require_local_runtime:
-        interpreter = Path(interpreter_value).resolve(strict=True)
+        interpreter = Path(interpreter_value)
+        observed_interpreter_identity = local_interpreter_launcher_identity(interpreter)
         interpreter_site_packages = Path(interpreter_site_value).resolve(strict=True)
         site_packages = Path(site_value).resolve(strict=True)
         qualified_evaluator_root = Path(evaluator_root_value).resolve(strict=True)
         qualified_dataset = Path(dataset_value).resolve(strict=True)
         if (
-            interpreter.as_posix() != interpreter_value
+            observed_interpreter_identity
+            != {
+                "interpreter": interpreter_value,
+                "interpreter_sha256": interpreter_sha256,
+                "interpreter_launcher_type": launcher_type,
+                "interpreter_launcher_mode": launcher_mode,
+                "interpreter_launcher_link_target": launcher_link_target,
+                "interpreter_resolved_target": resolved_target_value,
+                "interpreter_resolved_target_sha256": resolved_target_sha256,
+            }
             or interpreter_site_packages.as_posix() != interpreter_site_value
             or site_packages.as_posix() != site_value
-            or interpreter.is_symlink()
-            or not interpreter.is_file()
             or interpreter_site_packages.is_symlink()
             or not interpreter_site_packages.is_dir()
             or site_packages.is_symlink()
             or not site_packages.is_dir()
-            or file_sha256(interpreter) != interpreter_sha256
             or evaluator_root is None
             or dataset is None
             or evaluator_root.resolve(strict=True) != qualified_evaluator_root

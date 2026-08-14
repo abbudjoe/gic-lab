@@ -50,6 +50,48 @@ def canonical_sha256(value: object) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
+def _interpreter_launcher_identity(path: Path) -> dict[str, object]:
+    """Bind a venv launcher separately from its resolved executable target."""
+
+    if not path.is_absolute():
+        raise LocalQualificationError("local finalizer interpreter must be absolute")
+    launcher = Path(os.path.abspath(path))
+    launcher_metadata = launcher.lstat()
+    if launcher_metadata.st_uid != os.getuid() or launcher_metadata.st_nlink != 1:
+        raise LocalQualificationError("local finalizer interpreter launcher metadata is unsafe")
+    if stat.S_ISLNK(launcher_metadata.st_mode):
+        launcher_type = "symlink"
+        link_target: str | None = os.readlink(launcher)
+        if not link_target or len(os.fsencode(link_target)) > 4_096 or "\0" in link_target:
+            raise LocalQualificationError("local finalizer interpreter link target is unsafe")
+    elif stat.S_ISREG(launcher_metadata.st_mode):
+        launcher_type = "regular"
+        link_target = None
+        if launcher_metadata.st_mode & 0o022:
+            raise LocalQualificationError("local finalizer interpreter launcher is writable")
+    else:
+        raise LocalQualificationError("local finalizer interpreter launcher is unsafe")
+    resolved_target = launcher.resolve(strict=True)
+    target_metadata = resolved_target.stat(follow_symlinks=False)
+    if (
+        resolved_target.is_symlink()
+        or not stat.S_ISREG(target_metadata.st_mode)
+        or target_metadata.st_uid != os.getuid()
+        or target_metadata.st_nlink != 1
+        or target_metadata.st_mode & 0o022
+    ):
+        raise LocalQualificationError("local finalizer interpreter target metadata is unsafe")
+    return {
+        "interpreter": launcher.as_posix(),
+        "interpreter_sha256": file_sha256(launcher),
+        "interpreter_launcher_type": launcher_type,
+        "interpreter_launcher_mode": f"{stat.S_IMODE(launcher_metadata.st_mode):04o}",
+        "interpreter_launcher_link_target": link_target,
+        "interpreter_resolved_target": resolved_target.as_posix(),
+        "interpreter_resolved_target_sha256": file_sha256(resolved_target),
+    }
+
+
 def _object(path: Path, *, label: str) -> dict[str, Any]:
     metadata = path.stat(follow_symlinks=False)
     if path.is_symlink() or not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
@@ -216,8 +258,12 @@ def _disable_network() -> None:
 
 def qualify(args: argparse.Namespace) -> dict[str, object]:
     repository = args.repository.resolve(strict=True)
-    interpreter = args.interpreter.resolve(strict=True)
-    if Path(sys.executable).resolve(strict=True) != interpreter:
+    interpreter_identity = _interpreter_launcher_identity(args.interpreter)
+    interpreter = Path(str(interpreter_identity["interpreter"]))
+    if (
+        not Path(sys.executable).is_absolute()
+        or Path(os.path.abspath(sys.executable)) != interpreter
+    ):
         raise LocalQualificationError("qualification did not use the declared absolute Python")
     if sys.version_info[:3] != (3, 11, 14):
         raise LocalQualificationError("local finalizer Python must be exactly 3.11.14")
@@ -318,8 +364,7 @@ def qualify(args: argparse.Namespace) -> dict[str, object]:
         "qualification_id": "QUAL-T09-PILOT-V5-LOCAL-FINALIZER-0001",
         "plan_id": "PLAN-EXP0001-PILOT-V5",
         "package_commit": args.package_commit,
-        "interpreter": interpreter.as_posix(),
-        "interpreter_sha256": file_sha256(interpreter),
+        **interpreter_identity,
         "python_version": "3.11.14",
         "execution_contract_sha256": file_sha256(execution_path),
         "interpreter_site_packages": base_site_packages.as_posix(),

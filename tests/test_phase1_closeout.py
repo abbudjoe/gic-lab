@@ -127,7 +127,7 @@ def test_smoke_and_pragmatic_pilot_are_locked_and_require_private_authorization(
     assert smoke["readiness"]["execution_eligibility"] == "eligible-after-authorization"
     assert smoke["readiness"]["unresolved_execution_blockers"] == []
     assert smoke["readiness"]["pre_execution_requirements"]
-    assert pilot["plan_id"] == "PLAN-EXP0001-PILOT-V4"
+    assert pilot["plan_id"] == "PLAN-EXP0001-PILOT-V5"
     assert pilot["execution"]["authorized"] is False
     assert pilot["readiness"]["execution_eligibility"] == "eligible-after-authorization"
     assert pilot["readiness"]["unresolved_execution_blockers"] == []

@@ -4,6 +4,8 @@ import importlib.util
 import json
 import shutil
 import stat
+import subprocess
+import venv
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -226,7 +228,8 @@ def test_retry3_finalizer_is_pure_and_host_mounts_only_one_derived_root_rw() -> 
     assert 'frozen_manifest["python_interpreter_sha256"]' in host_source
     assert "interpreter_path = Path(sys.executable)" in source
     assert 'interpreter_path.as_posix() != "/opt/sira/.venv/bin/python"' in source
-    assert 'local_qualification.get("interpreter_sha256") != interpreter_sha256' in source
+    assert "observed_interpreter_identity = _interpreter_launcher_identity" in source
+    assert "for field, value in observed_interpreter_identity.items()" in source
     completion_write = host_source.index("write_exclusive(completion_path, completion)")
     state_selection = host_source.index("mark_attempt_completed(", completion_write)
     assert completion_write < state_selection
@@ -426,6 +429,11 @@ def test_retry3_provider_preflight_accepts_source_bound_offhost_runtime_paths(
         "execution_contract_sha256": host.file_sha256(execution),
         "interpreter": "/control/offhost/python3.11",
         "interpreter_sha256": "b" * 64,
+        "interpreter_launcher_type": "regular",
+        "interpreter_launcher_mode": "0755",
+        "interpreter_launcher_link_target": None,
+        "interpreter_resolved_target": "/control/offhost/python3.11",
+        "interpreter_resolved_target_sha256": "b" * 64,
         "interpreter_site_packages": "/control/offhost/base-site-packages",
         "interpreter_dependency_manifest": ["base==1"],
         "interpreter_dependency_manifest_sha256": host.canonical_sha256(["base==1"]),
@@ -494,6 +502,62 @@ def test_retry3_provider_preflight_accepts_source_bound_offhost_runtime_paths(
     assert "require_local_runtime=False" in preflight_source
     assert "args.local_evaluator_root" not in preflight_source
     assert "args.local_dataset" not in preflight_source
+
+
+def test_retry3_local_qualification_preserves_the_venv_launcher(
+    tmp_path: Path,
+) -> None:
+    qualifier = _load(
+        LOCAL_QUALIFICATION_SOURCE,
+        "giclab_t09_retry3_launcher_qualifier",
+    )
+    host = _load(HOST_SOURCE, "giclab_t09_retry3_launcher_host")
+    finalizer = _load(FINALIZER_SOURCE, "giclab_t09_retry3_launcher_finalizer")
+    venv_root = tmp_path / "qualified-venv"
+    venv.EnvBuilder(with_pip=False, symlinks=True).create(venv_root)
+    launcher = venv_root / "bin/python"
+    assert launcher.is_symlink()
+    identities = [
+        qualifier._interpreter_launcher_identity(launcher),  # type: ignore[attr-defined]
+        host.local_interpreter_launcher_identity(launcher),
+        finalizer._interpreter_launcher_identity(launcher),  # type: ignore[attr-defined]
+    ]
+    assert identities[0] == identities[1] == identities[2]
+    identity = identities[0]
+    assert identity["interpreter"] == launcher.as_posix()
+    assert identity["interpreter_launcher_type"] == "symlink"
+    assert identity["interpreter_launcher_link_target"] == launcher.readlink().as_posix()
+    assert identity["interpreter_resolved_target"] == launcher.resolve(strict=True).as_posix()
+    assert identity["interpreter"] != identity["interpreter_resolved_target"]
+
+    probe_source = (
+        "import json,sys,sysconfig;"
+        "print(json.dumps({'executable':sys.executable,'prefix':sys.prefix,"
+        "'purelib':sysconfig.get_paths()['purelib']},sort_keys=True))"
+    )
+    launcher_probe = json.loads(
+        subprocess.run(
+            [launcher.as_posix(), "-I", "-c", probe_source],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        ).stdout
+    )
+    target_probe = json.loads(
+        subprocess.run(
+            [launcher.resolve(strict=True).as_posix(), "-I", "-c", probe_source],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        ).stdout
+    )
+    assert launcher_probe["executable"] == launcher.as_posix()
+    assert launcher_probe["prefix"] == venv_root.as_posix()
+    assert Path(launcher_probe["purelib"]).is_relative_to(venv_root)
+    assert target_probe["prefix"] != launcher_probe["prefix"]
+    assert target_probe["purelib"] != launcher_probe["purelib"]
 
 
 def test_retry3_local_dependency_tree_detects_same_metadata_byte_drift(
