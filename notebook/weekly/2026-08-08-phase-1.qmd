@@ -52,6 +52,16 @@ absent, zero T09 instances and restored security are verified, and Retry3 record
 zero metadata, model, browser, evaluator, or condition activity. It adds no scientific
 measurement; its two-launch authority is exhausted.
 
+Retry 4 subsequently repaired content-addressed archive staging and separated the
+cumulative provider, per-launch preflight, and post-freeze empirical clocks. Its
+second and final host imported and fully qualified the retained image, then Task A
+reactive entered exactly once. A 234,479,616-byte core file exceeded the 67,108,864-
+byte raw-output cap; the host stopped the container and the immutable raw seal failed
+closed. The attempt is infrastructure-invalid and unscored. No later condition,
+evaluator, pair, checkpoint, comparison, or EXP-0001 outcome exists. Both Retry 4
+hosts are terminal or absent, zero T09 instances and restored security are verified,
+and all V6 authority is exhausted.
+
 ## State transition
 
 Phase 0.75 completed its pinned upstream audits, evidence-preserving harness, SiRA
@@ -71,12 +81,13 @@ that infrastructure record cannot affect EXP-0001 validity, metrics, or outcome.
 
 Paid compute, prototype execution, benchmark execution, training, and cloud mutation
 remain false. No exact successor execution profile is currently eligible or
-authorized. The T07 smoke and T09 V3/V4/V5 authorities are consumed and nonreplayable.
+authorized. The T07 smoke and T09 V3/V4/V5/V6 authorities are consumed and
+nonreplayable.
 A future paired calibration requires fresh identities, a new campaign clock with
 provider-activation/preflight slack, independent review, and new current-turn user
 authorization.
 
-The current machine-readable gate is the terminal Retry 3 execution-control overlay,
+The current machine-readable gate is the terminal Retry 4 execution-control overlay,
 not the pre-run readiness strings retained inside the frozen historical profiles. It
 blocks both registered plan IDs and names no successor.
 

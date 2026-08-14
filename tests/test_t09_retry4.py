@@ -23,6 +23,7 @@ from giclab.validation import validate_instance
 
 ROOT = Path(__file__).resolve().parents[1]
 HOST_SOURCE = ROOT / "containers/sira-smoke/pragmatic/t09_remote_runner.py"
+POSTRUN_REPAIR_SOURCE = ROOT / "containers/sira-smoke/pragmatic/t09_postrun_evidence_repair.py"
 RUNTIME_SOURCE = ROOT / "src/giclab/harness/sira_gate_a_runtime.py"
 EXPERIMENT_ROOT = ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive"
 SLOT1_PREENTRY_STAGE = Path(
@@ -30,6 +31,7 @@ SLOT1_PREENTRY_STAGE = Path(
     ".ARCHIVE-EXP0001-PILOT-V6-0004.incoming/slot1-preentry/"
     "t09-pilot-private-evidence-stage.tar.gz"
 )
+PRIVATE_T09_ROOT = Path("/Volumes/Macintosh HD - Data/GIC-Lab/t09")
 
 
 def test_retry4_preserves_retry3_terminal_and_frozen_package_bytes() -> None:
@@ -136,6 +138,118 @@ def _load_runtime(name: str) -> object:
     module = importlib.util.module_from_spec(specification)
     specification.loader.exec_module(module)
     return module
+
+
+def _load_postrun_repair(name: str) -> object:
+    specification = importlib.util.spec_from_file_location(name, POSTRUN_REPAIR_SOURCE)
+    assert specification is not None and specification.loader is not None
+    module = importlib.util.module_from_spec(specification)
+    specification.loader.exec_module(module)
+    return module
+
+
+def test_retry4_postrun_source_bundle_rejects_an_undeclared_extra(
+    tmp_path: Path,
+) -> None:
+    repair = _load_postrun_repair("giclab_t09_retry4_postrun_source_bundle")
+    source = tmp_path / "source"
+    source.mkdir(mode=0o700)
+    payload = source / "payload.json"
+    payload.write_bytes(b"{}\n")
+    payload.chmod(0o600)
+    records = [
+        {
+            "path": "payload.json",
+            "bytes": payload.stat().st_size,
+            "sha256": host_hash(payload),
+        }
+    ]
+    manifest = source / "source-manifest.json"
+    manifest.write_bytes(
+        repair.canonical_bytes(  # type: ignore[attr-defined]
+            {
+                "schema_version": "0.1.0",
+                "files": records,
+                "total_bytes": payload.stat().st_size,
+            }
+        )
+    )
+    manifest.chmod(0o600)
+    expected = host_hash(manifest)
+    repair.validate_source_bundle(  # type: ignore[attr-defined]
+        source,
+        expected_manifest_sha256=expected,
+    )
+    extra = source / "undeclared.json"
+    extra.write_bytes(b"{}\n")
+    extra.chmod(0o600)
+    with pytest.raises(repair.EvidenceRepairError, match="member set"):  # type: ignore[attr-defined]
+        repair.validate_source_bundle(  # type: ignore[attr-defined]
+            source,
+            expected_manifest_sha256=expected,
+        )
+
+
+def test_retry4_private_postrun_union_reconstructs_the_frozen_runtime() -> None:
+    original = (
+        PRIVATE_T09_ROOT / "sealed-artifacts/ARCHIVE-EXP0001-PILOT-V6-0004/"
+        "t09-pilot-private-evidence-stage.tar.gz"
+    )
+    authority = PRIVATE_T09_ROOT / (
+        "provider-private-v6-0004-slot2/slot2-eligibility-source/slot1-preentry-stage.tar.gz"
+    )
+    if not original.is_file() or not authority.is_file():
+        pytest.skip("private Retry4 evidence is not present in this checkout")
+    repair = _load_postrun_repair("giclab_t09_retry4_postrun_private_union")
+    _stage, _authority, record_count = repair.audit_original_stage(original)  # type: ignore[attr-defined]
+    union = repair.verify_union_with_frozen_runtime(  # type: ignore[attr-defined]
+        repository=ROOT,
+        original_stage=original,
+        missing_source=authority,
+    )
+    assert record_count == 175
+    assert union == {
+        "frozen_run_manifest_sha256": (
+            "c633c835f8310180be8f9c7a9c05427acf6e5b6da1051f211d22c8f54e290ddc"
+        ),
+        "slot2_authority_binding_sha256": (
+            "21ffc161cded4d5d1011dbd8c3a367c5a871ca0f4b33ae0050ff939a9481f2dd"
+        ),
+        "load_frozen_run_manifest_passed": True,
+        "require_image": False,
+    }
+
+
+def test_retry4_private_clock_reconciliation_uses_the_frozen_empirical_origin() -> None:
+    original = (
+        PRIVATE_T09_ROOT / "sealed-artifacts/ARCHIVE-EXP0001-PILOT-V6-0004/"
+        "t09-pilot-private-evidence-stage.tar.gz"
+    )
+    entry = PRIVATE_T09_ROOT / "provider-private-v6-0004-slot2/entry-source"
+    closeout = PRIVATE_T09_ROOT / "provider-private-v6-0004-slot2/closeout-source"
+    if not original.is_file() or not entry.is_dir() or not closeout.is_dir():
+        pytest.skip("private Retry4 evidence is not present in this checkout")
+    repair = _load_postrun_repair("giclab_t09_retry4_postrun_clock")
+    receipt = repair.reconcile_clock(  # type: ignore[attr-defined]
+        original_stage=original,
+        entry_source_root=entry,
+        closeout_source_root=closeout,
+    )
+    assert receipt["timing"] == {
+        "slot2_owned_lambda_started_at_epoch": 1786739918.105897,
+        "empirical_campaign_started_at_epoch": 1786742271.222287,
+        "termination_started_at_epoch": 1786742847.94891,
+        "terminal_and_zero_observed_at_epoch": 1786742951.4776971,
+        "provider_preflight_seconds": 2353.116389989853,
+        "empirical_to_termination_dispatch_seconds": 576.7266230583191,
+        "empirical_to_terminal_and_zero_seconds": 680.255410194397,
+        "slot2_owned_active_seconds": 3033.37180018425,
+        "slot1_prior_active_seconds": 1385.7062721252441,
+        "retry4_cumulative_active_lambda_seconds": 4419.078072309494,
+    }
+    assert receipt["cost"]["retry4_cumulative_lambda_cost_usd"] == pytest.approx(  # type: ignore[index]
+        1.583502975910902
+    )
 
 
 def test_retry4_runtime_matches_the_typed_raw_attempt_root() -> None:
@@ -633,6 +747,7 @@ def test_retry4_static_package_hashes_commands_and_successor_control_close() -> 
     execution_path = contracts / "T09_PILOT_EXECUTION_CONTRACT.json"
     commands_path = contracts / "T09_PILOT_COMMAND_MANIFESTS.json"
     control_path = EXPERIMENT_ROOT / "T09_PRAGMATIC_RETRY4_EXECUTION_CONTROL.json"
+    terminal_path = EXPERIMENT_ROOT / "T09_PRAGMATIC_RETRY4_TERMINAL_CONTROL.json"
     registry = yaml.safe_load((ROOT / "experiments/registry.yaml").read_bytes())["experiments"][0]
     runtime = json.loads(runtime_path.read_text(encoding="utf-8"))
     execution = json.loads(execution_path.read_text(encoding="utf-8"))
@@ -667,9 +782,10 @@ def test_retry4_static_package_hashes_commands_and_successor_control_close() -> 
         "requirements": control["successor"]["requirements"],
     }
     assert registry["current_execution_control"] == {
-        "path": control_path.relative_to(ROOT).as_posix(),
-        "sha256": host_hash(control_path),
+        "path": terminal_path.relative_to(ROOT).as_posix(),
+        "sha256": host_hash(terminal_path),
     }
+    assert control_path.relative_to(ROOT).as_posix() in registry["evidence_records"]
 
 
 def test_retry4_slot2_control_repair_is_a_science_locked_descendant() -> None:

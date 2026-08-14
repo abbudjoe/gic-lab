@@ -1,6 +1,6 @@
 # Phase 1 SiRA Smoke Readiness
 
-Status: **T07 smoke closed; T09 Retry 3 stopped pre-empirically after two launches**
+Status: **T07 smoke closed; T09 Retry 4 stopped after one invalid unscored attempt**
 
 Prepared: 2026-08-08
 
@@ -94,6 +94,31 @@ Current machine authority comes from the registry/project-state-bound
 historical smoke/V5 profiles and V5 execution contract while superseding their
 embedded pre-run readiness strings; policy rejects both consumed plan IDs as
 nonreplayable. No registered successor profile exists.
+
+## Current T09 Retry 4 checkpoint
+
+`PLAN-EXP0001-PILOT-V6` repaired the Retry 3 archive-path and campaign-clock
+failures. On its second and final provider slot, clean package `2b40b8a8…` imported
+the exact retained image `sha256:abe8ed38…`, passed the pinned package, evaluator,
+real-evidence, browser, pair-diff, credential, and one-model-metadata gates, and froze
+run manifest `c633c835…` before a fresh empirical clock.
+
+Task A reactive crossed empirical entry once. Its evidence records 20 model calls,
+38,779 tokens, five requested browser actions, four post-action results, and USD
+0.1175275 OpenAI cost. A 234,479,616-byte core artifact expanded the raw attempt tree
+beyond the 67,108,864-byte hard cap. The host stopped the container with exit 143,
+then the immutable raw seal failed closed. Consequently task completion, answer,
+evaluator validity, and score are unavailable. Task A simulative and both Task B
+attempts are `not-run`; no condition retry, realized pair, first-pair checkpoint,
+comparison, or EXP-0001 outcome exists.
+
+The maximal private prefix was copied and verified before cleanup and termination.
+Both Retry 4 hosts are terminal or absent; zero T09 instances and restored security
+are verified. Retry4 used 4,419.078072 active Lambda seconds / USD 1.5835029759 plus
+USD 0.1175275 OpenAI, for USD 1.7010304759 new and USD 5.7424506112 cumulative T09
+cost. The two-launch/campaign authority is exhausted. Current machine authority is
+`T09_PRAGMATIC_RETRY4_TERMINAL_CONTROL.json`, which makes the smoke and V6 profiles
+historical, consumed, and nonreplayable and names no successor.
 
 ## Historical consumed smoke record
 

@@ -1,6 +1,6 @@
 # T09 Pragmatic Retry 4 Execution Plan
 
-Status: **in-progress**
+Status: **complete at `t09-pilot-blocked-material-risk`; V6 authority exhausted**
 
 Source contract: the 2026-08-14 Retry 4 user instruction at SHA-256
 `e3222d38c9b21091a51839122d42594d691577716bc87fd3e09296c6b766df51`.
@@ -35,17 +35,17 @@ comparative scientific conclusions.
 | R4-01 | Preserve all Retry 3 plans, identities, dispositions, provider journals, image records, and external evidence as zero-empirical historical records. | Immutable-path/hash regressions and no reused V5 identity. | met: V5 plan/runtime/execution/command bytes are archived at their exact historical hashes; disposition and terminal control remain byte-exact |
 | R4-02 | Stage the private regression archive by verified size/content into one exclusive canonical target without following links or mutating the source. | Focused pass/fail tests for alternate source path, bad bytes/size, symlink, special file, preexisting target, target rehash drift, source immutability, fsync, and cleanup. | met: one descriptor-based no-follow/O_EXCL/fsync primitive and focused adversarial tests pass |
 | R4-03 | Separate cumulative active Lambda accounting, a fresh 3,600-second clock for each provider preflight, and a 14,400-second empirical clock beginning only after durable frozen-manifest publication. | Typed state/contracts plus exact fake-clock boundary regressions. | met: three typed clocks, durable future-origin manifest publication, and exact Retry 3 failure/equality/overflow tests pass |
-| R4-04 | Enforce at most two sequential launches, one simultaneous instance, 3,600-second failed-preflight limit, 300-second termination dispatch, 21,600 cumulative active seconds, USD 8 Lambda, USD 48 new, and USD 55 cumulative T09 spend. | Source-bound provider receipts, equality/overflow tests, and cloud ledger. | in-progress: slot 1 is terminal/absent with security restored after 1,385.706272 active seconds and USD 0.4965447475; slot-2 source-bound eligibility and final campaign closeout remain |
-| R4-05 | Verify and prefer the retained 1,207,128,576-byte image archive at SHA-256 `623e717c…`; otherwise build exactly one replacement and qualify it. | Local archive verification and live image-load/build receipt. | in-progress: slot 1 verified the retained bytes but the privileged Docker invocation could not open its inherited descriptor, then built and fully qualified the one campaign fallback image before clean removal; slot 2 is now typed import-only and fails closed before any second build, while its live corrected import remains |
+| R4-04 | Enforce at most two sequential launches, one simultaneous instance, 3,600-second failed-preflight limit, 300-second termination dispatch, 21,600 cumulative active seconds, USD 8 Lambda, USD 48 new, and USD 55 cumulative T09 spend. | Source-bound provider receipts, equality/overflow tests, and cloud ledger. | met: exactly two sequential hosts used 4,419.078072 active seconds / USD 1.583502976 Lambda; one exact termination request per host proved terminal/absent, zero instances, restored security, and no wall exception |
+| R4-05 | Verify and prefer the retained 1,207,128,576-byte image archive at SHA-256 `623e717c…`; otherwise build exactly one replacement and qualify it. | Local archive verification and live image-load/build receipt. | met: slot 1 made the one permitted fallback build and retained image `sha256:abe8ed38…`; slot 2 imported that exact archive with import count one, additional build count zero, and passed full qualification |
 | R4-06 | Issue fresh V6 plan, host, qualification, attempt, evaluator, pair, stage, archive, and provider-slot identities while preserving every scientific field. | Machine science projection equality, four command manifests, and two valid pair diffs. | met: plan `d0294b3a…`, repaired runtime `7bf16e30…`, execution `17de56ba…`, four V6 condition plans, four exact commands at `51db96ed…`, and both pair diffs are bound and valid |
-| R4-07 | Freeze a clean static package and pass only focused staging/clock/provider/image/qualification/pair/budget/cleanup tests, `make validate`, diff hygiene, and focused spec-conformance review before launch. | Exact commit, commands, test output, reviewer verdict, and clean tree. | in-progress: active-slot-2 pre-entry transition ancestor is `c62f92a0…`; 23 focused Retry 4 tests, typed runtime qualification, Ruff, strict mypy, repository validation, and diff hygiene pass; rebound package commit and narrow focused rereview remain |
+| R4-07 | Freeze a clean static package and pass only focused staging/clock/provider/image/qualification/pair/budget/cleanup tests, `make validate`, diff hygiene, and focused spec-conformance review before launch. | Exact commit, commands, test output, reviewer verdict, and clean tree. | met: reviewed ancestor `c62f92a0…`, clean package `2b40b8a8…`, 23 focused tests, validation, Ruff, strict mypy, diff hygiene, exact package verification, and independent narrow PASS preceded empirical entry |
 | R4-08 | Bind least-privilege credentials, approved attached-volume retention, hardware/runtime identity, budget authority, and cleanup policy before the first cloud mutation. | Private authorization/volume records and cloud-run ledger `planned`/`launch_intent` events without secret values. | met: package-bound private authorization/volume records and cloud ledger preceded slot 1; only single-key secret material reached the host and was removed before termination |
-| R4-09 | Dynamically qualify the exact image, evaluator, real-evidence regression, browser lifecycle, model metadata, pair diffs, and frozen run manifest within one preflight wall. | Source-derived live receipts and frozen-manifest SHA-256; zero task requests/actions before entry. | in-progress: slot 1 passed every dynamic gate and froze manifest `4477f531…` with one metadata GET and zero task requests/actions, then the first condition stopped before empirical entry on the repaired raw-root primitive; fresh slot-2 qualification remains |
-| R4-10 | Execute A-reactive, A-simulative, B-simulative, and B-reactive once each, sealing/exporting/verifying raw evidence before later empirical entry. | Four empirical-entry records, raw seals, verified exports, usage receipts, cleanup receipts, and zero retry. | not-started |
-| R4-11 | Apply one uniform network-disabled finalizer and the predeclared first-pair continuation rule before Task B. | Selected finalization receipts, uniform closure proof, pair checkpoint, and matched-pair diffs. | not-started |
-| R4-12 | Prioritize cleanup, retain available evidence, terminate the exact instance, prove terminal/absent and restored security, remove secrets/containers/rulesets, and reconcile actual active time/cost. | Verified final archive and provider closeout receipts plus terminal cloud-ledger events. | in-progress: slot-1 stage SHA `18f6c7d6…` is verified off host and provider closeout `5dd82529…` proves terminal/absent, zero T09 instances, restored security, 1,385.706272 seconds, and USD 0.4965447475; slot-2/final closeout remains |
-| R4-13 | After termination, run broader repository/privacy/evidence gates, focused independent evidence review, and update registry/state/readiness/notebook/decision surfaces without overclaiming. | Full gate output, reviewer verdict, and converged public/machine state. | not-started |
-| R4-14 | Report descriptive outcomes and operational feasibility only, including all 17 requested handoff items. | Final response and terminal ledger state; no EXP-0001 pass/fail or superiority claim. | not-started |
+| R4-09 | Dynamically qualify the exact image, evaluator, real-evidence regression, browser lifecycle, model metadata, pair diffs, and frozen run manifest within one preflight wall. | Source-derived live receipts and frozen-manifest SHA-256; zero task requests/actions before entry. | met: slot 2 imported and qualified the exact retained image, passed every listed gate, made one metadata GET, and froze manifest `c633c835…` before a fresh empirical clock with zero prior task calls/actions |
+| R4-10 | Execute A-reactive, A-simulative, B-simulative, and B-reactive once each, sealing/exporting/verifying raw evidence before later empirical entry. | Four empirical-entry records, raw seals, verified exports, usage receipts, cleanup receipts, and zero retry. | partial: A-reactive entered exactly once and retained 20 calls / 38,779 tokens / 5 requested actions, but an oversized core made the raw seal fail after the output-byte stop; zero retry and the raw-ack gate correctly prohibited all later conditions |
+| R4-11 | Apply one uniform network-disabled finalizer and the predeclared first-pair continuation rule before Task B. | Selected finalization receipts, uniform closure proof, pair checkpoint, and matched-pair diffs. | blocked: the finalizer was qualified but could not run without an accepted immutable raw seal; no Task A pair or checkpoint exists |
+| R4-12 | Prioritize cleanup, retain available evidence, terminate the exact instance, prove terminal/absent and restored security, remove secrets/containers/rulesets, and reconcile actual active time/cost. | Verified final archive and provider closeout receipts plus terminal cloud-ledger events. | partial: cleanup/termination and the original stage are verified, but independent review found the stage omitted one manifest-owned nested authority archive and the closeout lacked an empirical-clock projection; an additive post-termination overlay/reconciliation is being completed without rewriting pre-termination evidence |
+| R4-13 | After termination, run broader repository/privacy/evidence gates, focused independent evidence review, and update registry/state/readiness/notebook/decision surfaces without overclaiming. | Full gate output, reviewer verdict, and converged public/machine state. | partial: terminal disposition/control and public/machine convergence are implemented; full gates and final independent evidence rereview are pending |
+| R4-14 | Report descriptive outcomes and operational feasibility only, including all 17 requested handoff items. | Final response and terminal ledger state; no EXP-0001 pass/fail or superiority claim. | partial: terminal ledger is sealed and the handoff becomes met only with the final response |
 
 ## Authorization and budgets
 
@@ -109,10 +109,28 @@ seconds and may not retain the host for review or archive perfection.
   secret matches and no gate or provider request ran. A pinned Python 3.11.14 control
   runtime was materialized, and the entry freshness gate was aligned from the obsolete
   1,800-second value to the authoritative 3,600-second per-launch preflight wall.
+- 2026-08-14: clean package `2b40b8a8…` received independent prelaunch PASS. Slot 2
+  then imported image `sha256:abe8ed38…` without a build, passed the real-evidence,
+  evaluator, browser, package, pair, credential, and one-metadata-GET gates, and froze
+  run manifest `c633c835…` before the fresh empirical clock.
+- 2026-08-14: Task A reactive crossed empirical entry once. After 20 calls, 38,779
+  tokens, five requested actions, and four retained post-action results, a 234,479,616-
+  byte core file pushed the raw tree beyond the 67,108,864-byte hard cap. The host
+  stopped the container with exit 143, then the raw seal failed closed with
+  `raw attempt exceeds its hard byte cap`. No evaluator or score was produced and the
+  no-retry/raw-ack boundary prohibited all later conditions.
+- 2026-08-14: host cleanup removed the container, image, private regression staging,
+  and temporary OpenAI secret. Aggregate private stage `8b647302…` was verified
+  off host, one exact provider termination request produced terminal/absent, zero-
+  instance, and restored-security evidence, and final archive manifest `4b7bc842…`
+  was sealed. Retry4 cost is USD 1.5835029759 Lambda plus USD 0.1175275 OpenAI.
 
 ## Next permitted phase
 
-Finish the narrow clean-package rereview, transfer the exact source-bound descendant
-to the already active slot-2 host, and run its one import-only preflight. No empirical
-entry is permitted until the retained authority, model-metadata scan, frozen manifest,
-and postfreeze admission receipt all revalidate under that exact package.
+No V6 execution remains permitted. First complete the additive private archive overlay
+and clock-reconciliation receipt without rewriting any pre-termination artifact. Then
+preserve this one consumed, infrastructure-invalid, unscored attempt. Before requesting
+fresh authority, disable or strictly bound core-dump creation and prove that an
+output-cap stop always produces a reconstructable privacy-safe raw failure seal. A
+future calibration must mint fresh plan, host, attempt, pair, stage, archive, and
+authorization identities; a larger pilot is not justified by this record.

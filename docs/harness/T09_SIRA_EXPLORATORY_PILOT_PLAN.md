@@ -1,8 +1,8 @@
 # T09 SiRA two-task pragmatic calibration pilot plan
 
-Status: **V5 two-launch authority exhausted; stopped before empirical entry**
+Status: **V6 authority exhausted; one infrastructure-invalid unscored attempt**
 
-Plan ID: `PLAN-EXP0001-PILOT-V5`
+Historical plan ID: `PLAN-EXP0001-PILOT-V6`
 
 Frozen planning terminal state: `ready-for-t09-pilot-authorization`
 
@@ -39,6 +39,14 @@ blocker but exposed the two finalizer defects; V5 repaired those defects but exh
 its two-launch/nonreset-campaign envelope before empirical entry. Another paired
 campaign requires fresh identities, campaign clock, reviewed bindings, and new
 current-turn authority.
+
+Retry 4 subsequently repaired archive staging and campaign clocks, fully qualified
+the retained runtime, and entered Task A reactive once. An oversized core artifact
+triggered the attempt-output cap and prevented an accepted raw seal, evaluator, or
+score. The remaining three attempts did not run; no realized pair or checkpoint
+exists. V6 is now historical, consumed, and nonreplayable. A fresh successor must
+first close the core-dump/raw-failure-seal primitive under new identities, review,
+and current-turn authority.
 
 ## Scope and interpretation
 

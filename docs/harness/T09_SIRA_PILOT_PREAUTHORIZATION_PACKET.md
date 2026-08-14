@@ -1,6 +1,21 @@
 # T09 pragmatic calibration pilot preauthorization packet
 
-## V5 Retry 3 terminal overlay
+## V6 Retry 4 terminal overlay
+
+Status: **V6 authority exhausted after one infrastructure-invalid unscored attempt**
+
+Tracked plan: `PLAN-EXP0001-PILOT-V6`, `authorized: false`.
+
+Retry 4 repaired private archive staging and campaign clocks, imported and fully
+qualified the retained image, and froze run manifest `c633c835…` before Task A
+reactive entered once. A core artifact exceeded the raw-output cap and the immutable
+raw seal failed closed; no evaluator, score, pair, checkpoint, or later attempt
+exists. Both hosts are terminal or absent, zero T09 instances and restored security
+are verified. `T09_PRAGMATIC_RETRY4_TERMINAL_CONTROL.json` makes V6 consumed and
+nonreplayable and names no successor. This document is historical and contains no
+ready-to-copy authorization block.
+
+## V5 Retry 3 historical terminal overlay
 
 Status: **two-launch V5 authority exhausted; stopped before empirical entry and not replayable**
 

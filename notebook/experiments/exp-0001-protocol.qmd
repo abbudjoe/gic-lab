@@ -14,7 +14,11 @@ calibration measurement: Task A reactive completed and the exact evaluator score
 realized pair, checkpoint, condition comparison, or EXP-0001 outcome exists. V3 and
 V4 single-use authority is exhausted and provider cleanup is verified. V5 repaired
 the downstream finalizer but stopped before any new empirical attempt, so the V4
-measurement remains the only descriptive calibration record.
+measurement remains the only descriptive calibration record. V6 later qualified the
+retained replacement image and consumed Task A reactive once, but a core artifact
+exceeded the raw-output cap and prevented an immutable raw seal. That attempt is
+infrastructure-invalid and unscored; the other three V6 attempts did not run. V6 adds
+no measurement, realized pair, checkpoint, comparison, or EXP-0001 outcome.
 
 ## Locked exploratory comparison
 
@@ -78,6 +82,17 @@ are terminal or absent, zero T09 instances and restored security are verified, a
 recorded zero metadata requests, task model calls, browser actions, conditions,
 evaluators, or scores. This is infrastructure/calibration-control evidence only; it
 adds no EXP-0001 measurement and cannot be replayed.
+
+V6 repaired content-addressed regression-archive staging and separated cumulative
+active-provider, per-launch preflight, and post-freeze empirical clocks. Its final
+host imported and fully qualified image `sha256:abe8ed38…` before the fresh empirical
+clock. Task A reactive entered once and retained 20 model calls, 38,779 tokens, five
+requested browser actions, and four post-action results. A 234,479,616-byte core file
+then exceeded the 67,108,864-byte attempt-output cap. The container stopped with exit
+143 and the raw-complete seal failed closed, so task completion, evaluator validity,
+and score are unavailable. No later condition ran. Both hosts are terminal/absent,
+zero T09 instances and restored security are verified. This is operational evidence
+only and cannot be replayed.
 
 The exact upstream evaluator is deliberately not repaired or renormalized. Offline
 fixtures show Task A's ordinary correct prose scoring 0.9 (with a normalization-edge

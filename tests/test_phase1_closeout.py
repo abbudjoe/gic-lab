@@ -9,7 +9,8 @@ from giclab.registry import load_json, load_yaml
 from giclab.validation import ROOT, validate_instance
 
 EXP_ROOT = ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive"
-TERMINAL_CONTROL_PATH = EXP_ROOT / "T09_PRAGMATIC_RETRY3_TERMINAL_CONTROL.json"
+TERMINAL_CONTROL_PATH = EXP_ROOT / "T09_PRAGMATIC_RETRY4_TERMINAL_CONTROL.json"
+RETRY3_TERMINAL_CONTROL_PATH = EXP_ROOT / "T09_PRAGMATIC_RETRY3_TERMINAL_CONTROL.json"
 PHASE_075_PLAN = (
     ROOT / "docs/exec-plans/completed/PHASE_0_75_UPSTREAM_AUDIT_HARNESS_PROTOCOL_LOCK.md"
 )
@@ -60,7 +61,7 @@ def test_phase_one_is_the_only_active_non_executable_control_plane() -> None:
     assert execution_state.planned_execution_substrate is None
     assert execution_state.terminal_execution_control is not None
     assert execution_state.terminal_execution_control.superseded_plan_ids == frozenset(
-        {"PLAN-EXP0001-SMOKE", "PLAN-EXP0001-PILOT-V5"}
+        {"PLAN-EXP0001-SMOKE", "PLAN-EXP0001-PILOT-V6"}
     )
     assert execution_state.terminal_execution_control.registered_successor is None
     checkpoint = state["t08_checkpoint"]
@@ -147,6 +148,35 @@ def test_phase_one_is_the_only_active_non_executable_control_plane() -> None:
     assert retry3["security_restored"] is True
     assert retry3["scientific_result_claimed"] is False
     assert retry3["experiment_outcome_assigned"] is False
+    retry4 = state["t09_pragmatic_retry4_checkpoint"]
+    assert retry4["plan_id"] == "PLAN-EXP0001-PILOT-V6"
+    assert retry4["terminal_state"] == "t09-pilot-blocked-material-risk"
+    assert retry4["current_turn_execution_authorized"] is False
+    assert retry4["repository_plan_authorized"] is False
+    assert retry4["single_use_authority_exhausted"] is True
+    assert retry4["launch_slots_exhausted"] is True
+    assert retry4["provider_launch_count"] == retry4["maximum_launch_count"] == 2
+    assert retry4["retained_image_archive_verified"] is True
+    assert retry4["dynamic_preflight_passed"] is True
+    assert retry4["frozen_run_manifest_written"] is True
+    assert retry4["empirical_attempts_entered"] == 1
+    assert retry4["raw_attempts_complete"] == 0
+    assert retry4["attempts_completed"] == 0
+    assert retry4["condition_retries"] == 0
+    assert retry4["model_metadata_requests"] == 2
+    assert retry4["task_model_calls"] == 20
+    assert retry4["total_tokens"] == 38_779
+    assert retry4["browser_actions"] == 5
+    assert retry4["realized_pairs"] == 0
+    assert retry4["openai_cost_usd"] == 0.11752750000000001
+    assert retry4["lambda_cost_usd"] == 1.583502975910902
+    assert retry4["cumulative_t09_cost_usd"] == 5.742450611151172
+    assert retry4["cleanup_verified"] is True
+    assert retry4["provider_terminal_or_absent"] is True
+    assert retry4["zero_t09_instances"] is True
+    assert retry4["security_restored"] is True
+    assert retry4["scientific_result_claimed"] is False
+    assert retry4["experiment_outcome_assigned"] is False
     assert {path.name for path in (ROOT / "docs/exec-plans/active").glob("*.md")} == {
         "PHASE_1_ARTIFACT_EXECUTION.md"
     }
@@ -168,7 +198,7 @@ def test_frozen_profiles_are_unauthorized_and_terminal_control_makes_them_nonrep
     assert smoke["readiness"]["execution_eligibility"] == "eligible-after-authorization"
     assert smoke["readiness"]["unresolved_execution_blockers"] == []
     assert smoke["readiness"]["pre_execution_requirements"]
-    assert pilot["plan_id"] == "PLAN-EXP0001-PILOT-V5"
+    assert pilot["plan_id"] == "PLAN-EXP0001-PILOT-V6"
     assert pilot["execution"]["authorized"] is False
     assert pilot["readiness"]["execution_eligibility"] == "eligible-after-authorization"
     assert pilot["readiness"]["unresolved_execution_blockers"] == []
@@ -181,7 +211,7 @@ def test_frozen_profiles_are_unauthorized_and_terminal_control_makes_them_nonrep
     assert terminal["successor"]["profile_sha256"] is None
     assert {item["plan_id"] for item in terminal["superseded_registered_profiles"]} == {
         "PLAN-EXP0001-SMOKE",
-        "PLAN-EXP0001-PILOT-V5",
+        "PLAN-EXP0001-PILOT-V6",
     }
     assert all(
         item["current_interpretation"] == "historical-consumed-nonreplayable"
@@ -268,7 +298,8 @@ def test_terminal_control_supersedes_frozen_profile_and_execution_contract_claim
     assert terminal["terminal_state"] == disposition["terminal_state"]
     assert disposition["single_use_authority_exhausted"] is True
     assert disposition["launch_slots_exhausted"] is True
-    assert disposition["empirical_entry"] is False
+    assert disposition["empirical_entry"] is True
+    assert terminal["empirical_entry"] is True
 
     for binding in terminal["superseded_registered_profiles"]:
         path = ROOT / binding["path"]
@@ -290,6 +321,16 @@ def test_terminal_control_supersedes_frozen_profile_and_execution_contract_claim
     assert contract["execution_eligibility"] == binding["historical_execution_eligibility"]
     assert contract["authorized"] is False
     assert contract["material_blockers"] == []
+
+    retry3_terminal = load_json(RETRY3_TERMINAL_CONTROL_PATH)
+    assert "empirical_entry" not in retry3_terminal
+    assert (
+        validate_instance(
+            retry3_terminal,
+            ROOT / "schemas/terminal-execution-control.schema.json",
+        )
+        == []
+    )
 
 
 def test_exp0001_readme_records_t07_materialization_and_current_pilot_boundary() -> None:
@@ -567,6 +608,34 @@ def test_closeout_retains_zero_scientific_interpretation_and_typed_compute() -> 
         "authorization_reference": "AUTH-T09-PRAGMATIC-RETRY3-2026-08-13",
         "status": "failed",
     }
+    assert entries["CMP-0008"] == {
+        "id": "CMP-0008",
+        "experiment_id": "EXP-0001",
+        "provider": "Lambda On-Demand Cloud",
+        "hardware": "gpu_1x_a10",
+        "region": "us-east-1",
+        "started_at": "2026-08-14T19:30:01.774393Z",
+        "ended_at": "2026-08-14T19:53:07.480665Z",
+        "wall_clock_hours": 0.3849184089236789,
+        "accelerator_hours": 0.3849184089236789,
+        "cost_usd": 0.49654474751154587,
+        "authorization_reference": "AUTH-T09-PRAGMATIC-RETRY4-2026-08-14",
+        "status": "failed",
+    }
+    assert entries["CMP-0009"] == {
+        "id": "CMP-0009",
+        "experiment_id": "EXP-0001",
+        "provider": "Lambda On-Demand Cloud",
+        "hardware": "gpu_1x_a10",
+        "region": "us-east-1",
+        "started_at": "2026-08-14T20:38:38.105897Z",
+        "ended_at": "2026-08-14T21:29:11.477697Z",
+        "wall_clock_hours": 0.8426032778289583,
+        "accelerator_hours": 0.8426032778289583,
+        "cost_usd": 1.0869582283993562,
+        "authorization_reference": "AUTH-T09-PRAGMATIC-RETRY4-2026-08-14",
+        "status": "failed",
+    }
     summary = compute["phase_zero_summary"]
     assert summary["period_end"] == "2026-08-08"
     assert summary["paid_compute_authorized"] is False
@@ -577,7 +646,8 @@ def test_closeout_retains_zero_scientific_interpretation_and_typed_compute() -> 
     assert summary["benchmark_runs"] == 0
     assert summary["training_runs"] == 0
     assert results["run_status"] == (
-        "calibration-pilot-incomplete-one-historical-unpaired-measurement-retry3-zero-attempts"
+        "calibration-pilot-incomplete-one-historical-unpaired-measurement-"
+        "retry4-one-invalid-unscored-attempt"
     )
     assert len(results["measurements"]) == 1
     assert results["measurements"][0]["paired_result_available"] is False
@@ -1059,6 +1129,102 @@ def test_t09_retry3_disposition_reconciles_two_launches_and_zero_attempts() -> N
         item for item in registry["experiments"] if item["experiment_id"] == "EXP-0001"
     )
     assert disposition_path.relative_to(ROOT).as_posix() in experiment["evidence_records"]
+
+
+def test_t09_retry4_disposition_reconciles_one_invalid_unscored_attempt() -> None:
+    disposition_path = EXP_ROOT / "T09_PRAGMATIC_RETRY4_DISPOSITION.json"
+    disposition = load_json(disposition_path)
+    state = load_yaml(ROOT / "docs/PROJECT_STATE.yaml")["t09_pragmatic_retry4_checkpoint"]
+    results = load_json(EXP_ROOT / "results-summary.json")
+    compute = {
+        entry["id"]: entry for entry in load_yaml(ROOT / "manifests/compute.yaml")["entries"]
+    }
+
+    assert disposition["record_id"] == "T09-PRAGMATIC-RETRY4-DISPOSITION-0001"
+    assert disposition["plan_id"] == state["plan_id"] == "PLAN-EXP0001-PILOT-V6"
+    assert (
+        disposition["terminal_state"]
+        == state["terminal_state"]
+        == ("t09-pilot-blocked-material-risk")
+    )
+    assert disposition["empirical_entry"] is True
+    assert disposition["scientific_result_claimed"] is False
+    assert disposition["experiment_outcome_assigned"] is False
+    assert disposition["experiment_evidence_status"] == "not-evaluated"
+    assert disposition["single_use_authority_exhausted"] is True
+    assert disposition["launch_slots_exhausted"] is True
+
+    attempts = disposition["attempts"]
+    assert attempts["empirical_attempts_entered"] == ["RUN-T09-TASK-A-REACTIVE-0004"]
+    assert attempts["raw_attempts_complete"] == []
+    assert attempts["attempts_completed"] == []
+    assert attempts["condition_retries"] == 0
+    reactive = attempts["task_a_reactive"]
+    assert reactive["state"] == "consumed-infrastructure-invalid-unscored"
+    assert reactive["process_exit_code"] == 143
+    assert reactive["stop_reason"] == "attempt_output_bytes"
+    assert reactive["task_score"] is None
+    assert reactive["raw_attempt_complete"] is False
+    for key in ("task_a_simulative", "task_b_simulative", "task_b_reactive"):
+        assert attempts[key]["state"] == "not-run"
+        assert attempts[key]["empirical_entry"] is False
+    assert attempts["realized_task_a_pair"] is False
+    assert attempts["realized_task_b_pair"] is False
+
+    usage = disposition["usage"]
+    assert usage["task_model_calls"] == 20
+    assert usage["total_tokens"] == 38_779
+    assert usage["browser_actions_requested"] == 5
+    assert usage["post_action_results"] == 4
+    assert usage["condition_attempts"] == 1
+    assert usage["condition_retries"] == 0
+    assert usage["openai_cost_usd"] == 0.11752750000000001
+
+    provider = disposition["provider"]
+    assert provider["launch_count"] == provider["maximum_launch_count"] == 2
+    assert provider["active_lambda_duration_seconds"] == (
+        provider["slot1"]["owned_lambda_duration_seconds"]
+        + provider["slot2"]["owned_lambda_duration_seconds"]
+    )
+    assert provider["list_cost_usd"] == (
+        provider["slot1"]["list_cost_usd"] + provider["slot2"]["list_cost_usd"]
+    )
+    for slot, compute_id in (("slot1", "CMP-0008"), ("slot2", "CMP-0009")):
+        assert provider[slot]["termination_request_count"] == 1
+        assert provider[slot]["terminal_or_absent"] is True
+        assert provider[slot]["zero_t09_instances"] is True
+        assert provider[slot]["security_restored"] is True
+        assert compute[compute_id]["accelerator_hours"] == provider[slot]["accelerator_hours"]
+        assert compute[compute_id]["cost_usd"] == provider[slot]["list_cost_usd"]
+
+    costs = disposition["cost_reconciliation"]
+    assert costs["new_openai_cost_usd"] == state["openai_cost_usd"]
+    assert costs["new_lambda_cost_usd"] == state["lambda_cost_usd"]
+    assert costs["new_campaign_total_cost_usd"] == state["new_campaign_total_cost_usd"]
+    assert costs["cumulative_t09_cost_usd"] == state["cumulative_t09_cost_usd"]
+    assert costs["all_cost_caps_respected"] is True
+    assert disposition["cleanup"]["provider_terminal_or_absent"] is True
+    assert disposition["cleanup"]["zero_t09_instances"] is True
+    assert disposition["cleanup"]["security_restored"] is True
+    assert disposition["pair_matching"]["task_a_realized_pair_available"] is False
+    assert disposition["pair_matching"]["task_b_realized_pair_available"] is False
+    assert disposition["pair_matching"]["paired_or_comparative_interpretation_permitted"] is False
+    assert len(results["measurements"]) == 1
+    assert results["measurements"][0]["run_id"] == "RUN-T09-TASK-A-REACTIVE-0002"
+    assert disposition_path.relative_to(ROOT).as_posix() in results["artifacts"]
+    assert (
+        disposition_path.relative_to(ROOT).as_posix()
+        in (load_yaml(ROOT / "experiments/registry.yaml")["experiments"][0]["evidence_records"])
+    )
+
+    public_text = disposition_path.read_text(encoding="utf-8")
+    assert not re.search(r"\b(?:\d{1,3}\.){3}\d{1,3}\b", public_text)
+    assert "/Volumes/" not in public_text
+    assert "/Users/" not in public_text
+    assert "JUPYTER_TOKEN" not in public_text
+    assert "OPENAI_API_KEY" not in public_text
+    assert "LAMBDA_API_KEY" not in public_text
+    assert 'provider_account_identifier"' not in public_text
 
 
 def test_public_surfaces_report_the_current_phase_and_unauthorized_next_gate() -> None:

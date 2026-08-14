@@ -1,5 +1,52 @@
 # T09 SiRA Calibration Pilot Lock — Assembly Ledger
 
+## V6 pragmatic Retry 4 archive/clock successor
+
+V6 assembly status: **complete at `t09-pilot-blocked-material-risk`; one consumed
+infrastructure-invalid attempt, no score or pair**
+
+Current historical plan: `PLAN-EXP0001-PILOT-V6`.
+
+Retry 4 implemented the two authorized infrastructure repairs without scientific
+drift: content-addressed private regression-archive staging and separate cumulative
+active-provider, per-launch preflight, and post-freeze empirical clocks. Clean package
+`2b40b8a8fc8379f7b803cc08af749849484b7986` received independent prelaunch PASS.
+On the second and final provider slot it imported exact retained image
+`sha256:abe8ed38…`, passed package/evaluator/real-evidence/browser/pair/credential and
+model-metadata qualification, and froze run manifest `c633c835…` before empirical
+entry.
+
+Task A reactive then entered exactly once. It retained 20 dated-model calls, 38,779
+tokens, five requested browser actions and four post-action results at USD 0.1175275.
+A 234,479,616-byte core artifact expanded the raw tree beyond the 67,108,864-byte
+attempt-output cap. The guard stopped the container with exit 143, but the resulting
+oversized prefix could not satisfy the immutable raw-complete seal, so no finalizer,
+evaluator, task completion, or score exists. Zero retry and the raw-export-
+acknowledgement gate correctly prohibited Task A simulative and both Task B attempts;
+no pair or checkpoint exists.
+
+The maximal private aggregate prefix is 9,623,449 bytes at SHA-256 `8b647302…`; final
+archive manifest SHA-256 is `4b7bc842…`. Independent review found that the aggregate
+stage omitted one 597,140-byte nested authority archive despite retaining the source
+manifest that declares it, so a one-file post-termination overlay and separate clock
+reconciliation are required before final archive closure. Exact-credential cleanup passed with no
+exposure, while public raw release remains blocked because the core contains private-
+network material and conservative fixture credential-pattern findings remain. Both
+hosts are terminal or absent, zero T09 instances and restored security are verified.
+Retry4 used 4,419.078072 active Lambda seconds / USD 1.5835029759 plus USD 0.1175275
+OpenAI; cumulative T09 cost is USD 5.7424506112, below all caps. The authoritative
+machine records are `T09_PRAGMATIC_RETRY4_DISPOSITION.json` and
+`T09_PRAGMATIC_RETRY4_TERMINAL_CONTROL.json`. EXP-0001 remains not evaluated.
+
+The complete R4 DoD and evidence log are in
+`docs/harness/T09_PRAGMATIC_RETRY4_EXECUTION_PLAN.md`. R4-10 is partial because only
+one attempt entered and its raw seal failed; R4-11 is blocked because no eligible
+raw attempt or pair reached finalization/checkpoint. R4-13 awaits the final broad gate
+and independent evidence rereview; R4-14 becomes met only with the 17-item final
+handoff.
+
+---
+
 ## V5 pragmatic Retry 3 raw-first successor
 
 V5 assembly status: **complete at `t09-pilot-blocked-material-risk`; execution remains

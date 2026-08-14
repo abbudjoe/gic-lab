@@ -30,6 +30,7 @@
     "effective_on": {"type": "string", "format": "date"},
     "terminal_record": {"$ref": "#/$defs/path_hash"},
     "terminal_state": {"const": "t09-pilot-blocked-material-risk"},
+    "empirical_entry": {"type": "boolean"},
     "execution_eligibility": {"const": "blocked-pending-prerequisites"},
     "authorized": {"const": false},
     "replayable": {"const": false},
@@ -85,10 +86,14 @@
           "path": {"$ref": "#/$defs/repository_path"},
           "sha256": {"$ref": "#/$defs/sha256"},
           "historical_terminal_state": {
-            "const": "current-turn-authorized-retry3-pending-dynamic-preflight"
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 160
           },
           "historical_execution_eligibility": {
-            "const": "current-turn-authorized-after-replacement-image-qualification"
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 160
           },
           "current_interpretation": {"const": "historical-consumed-nonreplayable"}
         }

@@ -318,6 +318,9 @@ def _load_terminal_execution_control(
         terminal_record = load_json(terminal_path)
     except (OSError, TypeError, ValueError) as exc:
         raise ExecutionDisallowed(f"cannot load terminal disposition: {exc}") from exc
+    expected_empirical_entry = document.get("empirical_entry", False)
+    if type(expected_empirical_entry) is not bool:
+        raise ExecutionDisallowed("terminal execution-control empirical_entry must be boolean")
     terminal_projection = {
         "experiment_id": terminal_record.get("experiment_id"),
         "terminal_state": terminal_record.get("terminal_state"),
@@ -330,7 +333,7 @@ def _load_terminal_execution_control(
         "terminal_state": document["terminal_state"],
         "single_use_authority_exhausted": True,
         "launch_slots_exhausted": True,
-        "empirical_entry": False,
+        "empirical_entry": expected_empirical_entry,
     }:
         raise ExecutionDisallowed(
             "terminal disposition does not prove exhausted zero-use authority"

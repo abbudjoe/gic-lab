@@ -12,7 +12,11 @@ runtime and produced one valid scored Task A reactive calibration attempt, but s
 before its paired simulative attempt because of frozen finalizer control defects. No
 pair or comparative result exists. T09 V5 repaired and offline-verified those
 downstream controls, but its two authorized launches both stopped before empirical
-entry and produced zero new attempts. EXP-0001 therefore remains unevaluated.
+entry and produced zero new attempts. T09 V6 repaired archive staging and campaign
+clocks, fully qualified the retained image, and entered Task A reactive once. A core
+artifact exceeded the raw-output cap and prevented an immutable raw seal, evaluator,
+or score; the other three attempts did not run. No V6 pair or checkpoint exists.
+EXP-0001 therefore remains unevaluated.
 
 ## Scientific question and scope
 
@@ -141,10 +145,12 @@ that a separately approved future study might consume.
 [`run-plans/smoke.yaml`](run-plans/smoke.yaml) is the historical one-step matched-pair
 control record. The starting effect-oriented pilot proposal is preserved at
 [`run-plans/proposals/PLAN-EXP0001-PILOT.json`](run-plans/proposals/PLAN-EXP0001-PILOT.json).
-[`run-plans/pilot.yaml`](run-plans/pilot.yaml) is the calibration-only
-`PLAN-EXP0001-PILOT-V5`; V2 through V4 remain preserved under
+[`run-plans/pilot.yaml`](run-plans/pilot.yaml) is the historical calibration-only
+`PLAN-EXP0001-PILOT-V6`; V2 through V5 remain preserved under
 `run-plans/proposals/`. Tracked authorization stays false and every condition plan
-requires a single-use private current-turn overlay.
+requires a single-use private current-turn overlay. The terminal Retry 4 control
+supersedes the frozen profile's historical readiness: V6 is consumed and
+nonreplayable, and no registered successor exists.
 
 The pragmatic V3 repair makes the 14,400-second provider campaign effective with a
 900-second cleanup reserve and 13,500-second normal termination cutoff. It admits
@@ -198,3 +204,16 @@ authorization; the retained image archive may be reused only through a new
 source-bound contract. The registry/project-state-bound Retry 3 terminal-control
 record is the current machine authority: it preserves the frozen profile and execution
 contract bytes as history while rejecting their consumed plan IDs as nonreplayable.
+
+Retry 4 implemented the content-addressed archive-stage and three-clock lifecycle
+repairs. Its second and final host imported and fully qualified retained image
+`sha256:abe8ed38…`, issued the sole Slot 2 metadata GET, and froze manifest
+`c633c835…` before empirical entry. Task A reactive entered exactly once and retained
+20 task calls, 38,779 tokens, five requested browser actions, and four post-action
+results. A 234,479,616-byte core file pushed the raw tree beyond the 67,108,864-byte
+hard cap. Exit 143 and the failed raw-complete seal make the attempt infrastructure-
+invalid and unscored; no later attempt, evaluator, pair, checkpoint, or comparison
+exists. Both hosts are terminal/absent, zero T09 instances and restored security are
+verified, and all V6 authority is exhausted. A future successor must first disable or
+strictly bound core dumps and prove a reconstructable privacy-safe raw failure seal,
+then use fresh identities, review, and current-turn authorization.

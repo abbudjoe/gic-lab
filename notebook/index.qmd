@@ -4,7 +4,7 @@ subtitle: "Open, controlled research on learned agent architecture"
 ---
 
 ::: {.callout-note}
-## Phase 1 is active; T09 Retry 3 stopped before empirical entry
+## Phase 1 is active; T09 Retry 4 stopped after one invalid unscored attempt
 
 Phase 0.75 is complete. Phase 1 is open for sequential artifact-execution work, but
 paid compute, prototype execution, benchmark execution, training, and cloud mutation
@@ -26,7 +26,13 @@ starting a V5 attempt. The first stopped on a private archive path error; the se
 stopped immediately after provider activation left less than one 3,600-second
 condition wall plus the 900-second cleanup reserve. Both resources are terminal or
 absent, zero T09 instances and restored security are verified, Retry3 model/browser/
-attempt usage is zero, and its authority is exhausted. EXP-0001 remains unevaluated.
+attempt usage is zero, and its authority is exhausted. Retry 4 then repaired archive
+staging and campaign clocks, imported and fully qualified the retained runtime, and
+froze V6 before Task A reactive entered once. A 234,479,616-byte core exceeded the
+67,108,864-byte raw-output cap; the raw seal failed closed, so no evaluator, score,
+pair, or checkpoint exists. The remaining attempts did not run. Both Retry 4 hosts
+are terminal or absent, zero T09 instances and restored security are verified, and
+its two-launch/single-campaign authority is exhausted. EXP-0001 remains unevaluated.
 :::
 
 GIC Lab studies a narrower and more falsifiable question than “can we build a GIC agent?”:
@@ -46,7 +52,7 @@ The program begins with the authors' released SiRA and SR²AM references, then i
 - Treat any planned/deferred RQ-H2K trace-sufficiency output as infrastructure evidence
   only; it adds no experiment, condition, training path, learned kernel, or later phase.
 - Keep reusable tracked pilot authority, SR²AM cloud runs, and training disabled;
-  neither T09 V3, V4, nor V5 grants replay authority. A future paired calibration
+  neither T09 V3, V4, V5, nor V6 grants replay authority. A future paired calibration
   requires fresh identities, campaign clock, review, and new authorization.
 - Treat the T07 smoke's usage and trajectories only as artifact-execution evidence;
   they are neither pilot observations nor representative full-task costs.
