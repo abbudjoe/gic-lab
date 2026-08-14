@@ -51,6 +51,23 @@ class AuthorizedRunProfile:
 
 
 @dataclass(frozen=True, slots=True)
+class RegisteredSuccessorProfile:
+    """Registry-bound successor that may replace consumed historical profiles."""
+
+    plan_id: str
+    profile_path: str
+    profile_sha256: str
+
+    def __post_init__(self) -> None:
+        if _PLAN_ID.fullmatch(self.plan_id) is None:
+            raise ValueError("registered successor plan_id must be canonical")
+        if not self.profile_path.strip():
+            raise ValueError("registered successor path must not be empty")
+        if _SHA256.fullmatch(self.profile_sha256) is None:
+            raise ValueError("registered successor hash must be SHA-256")
+
+
+@dataclass(frozen=True, slots=True)
 class TerminalExecutionControl:
     """Authoritative terminal overlay for consumed, immutable run profiles."""
 
@@ -59,6 +76,7 @@ class TerminalExecutionControl:
     terminal_state: str
     execution_eligibility: str
     superseded_plan_ids: frozenset[str]
+    registered_successor: RegisteredSuccessorProfile | None
     blockers: tuple[str, ...]
     source_path: str
     source_sha256: str
@@ -74,6 +92,11 @@ class TerminalExecutionControl:
             _PLAN_ID.fullmatch(plan_id) is None for plan_id in self.superseded_plan_ids
         ):
             raise ValueError("terminal execution control requires canonical superseded plan IDs")
+        if (
+            self.registered_successor is not None
+            and self.registered_successor.plan_id in self.superseded_plan_ids
+        ):
+            raise ValueError("registered successor cannot reuse a superseded plan ID")
         if not self.blockers or any(not blocker.strip() for blocker in self.blockers):
             raise ValueError("terminal execution control requires explicit blockers")
         if _SHA256.fullmatch(self.source_sha256) is None:
@@ -343,11 +366,58 @@ def _load_terminal_execution_control(
         ):
             raise ExecutionDisallowed("superseded profile projection contradicts frozen bytes")
     registered_profiles = registry_entries[0].get("run_profiles")
-    if not isinstance(registered_profiles, list) or set(registered_profiles) != (
-        superseded_profile_paths
+    if (
+        not isinstance(registered_profiles, list)
+        or any(not isinstance(item, str) for item in registered_profiles)
+        or len(registered_profiles) != len(set(registered_profiles))
     ):
-        raise ExecutionDisallowed(
-            "terminal control must supersede every currently registered run profile"
+        raise ExecutionDisallowed("registry run profiles must be unique paths")
+    registered_profile_paths = set(registered_profiles)
+    if not superseded_profile_paths.issubset(registered_profile_paths):
+        raise ExecutionDisallowed("registry dropped a terminal-control superseded profile")
+
+    successor = document["successor"]
+    successor_fields = (
+        successor["plan_id"],
+        successor["profile_path"],
+        successor["profile_sha256"],
+    )
+    registered_successor: RegisteredSuccessorProfile | None = None
+    if all(item is None for item in successor_fields):
+        if registered_profile_paths != superseded_profile_paths:
+            raise ExecutionDisallowed(
+                "registry declares a successor but terminal control names no successor"
+            )
+    else:
+        if not all(isinstance(item, str) for item in successor_fields):
+            raise ExecutionDisallowed("terminal successor bindings must be all strings or null")
+        successor_plan_id, successor_relative, successor_sha256 = successor_fields
+        assert isinstance(successor_plan_id, str)
+        assert isinstance(successor_relative, str)
+        assert isinstance(successor_sha256, str)
+        if registered_profile_paths != superseded_profile_paths | {successor_relative}:
+            raise ExecutionDisallowed(
+                "terminal successor must be the sole fresh registered profile"
+            )
+        successor_path = bound_path(successor_relative, "registered successor profile")
+        if (
+            not successor_path.is_file()
+            or hashlib.sha256(successor_path.read_bytes()).hexdigest() != successor_sha256
+        ):
+            raise ExecutionDisallowed("registered successor binding does not match profile bytes")
+        try:
+            successor_profile = load_yaml(successor_path)
+        except (OSError, TypeError, DuplicateKeyError, yaml.YAMLError) as exc:
+            raise ExecutionDisallowed(f"cannot load registered successor profile: {exc}") from exc
+        if (
+            successor_profile.get("plan_id") != successor_plan_id
+            or successor_profile.get("experiment_id") != document["experiment_id"]
+        ):
+            raise ExecutionDisallowed("registered successor identity contradicts terminal control")
+        registered_successor = RegisteredSuccessorProfile(
+            plan_id=successor_plan_id,
+            profile_path=successor_relative,
+            profile_sha256=successor_sha256,
         )
 
     for binding in document["superseded_execution_contracts"]:
@@ -386,6 +456,7 @@ def _load_terminal_execution_control(
         terminal_state=document["terminal_state"],
         execution_eligibility=document["execution_eligibility"],
         superseded_plan_ids=frozenset(superseded_plan_ids),
+        registered_successor=registered_successor,
         blockers=tuple(document["blockers"]),
         source_path=relative,
         source_sha256=recorded_sha256,
@@ -693,12 +764,24 @@ def _load_authorized_run_profile(
     assert isinstance(recorded_sha256, str)
     if _PLAN_ID.fullmatch(plan_id) is None:
         raise ExecutionDisallowed("authorized run profile plan_id is invalid")
-    if terminal_control is not None and plan_id in terminal_control.superseded_plan_ids:
-        raise ExecutionDisallowed(
-            "authorized run profile is consumed and nonreplayable under terminal control"
-        )
     if _SHA256.fullmatch(recorded_sha256) is None:
         raise ExecutionDisallowed("authorized run profile profile_sha256 is invalid")
+    if terminal_control is not None:
+        if plan_id in terminal_control.superseded_plan_ids:
+            raise ExecutionDisallowed(
+                "authorized run profile is consumed and nonreplayable under terminal control"
+            )
+        successor = terminal_control.registered_successor
+        if successor is None:
+            raise ExecutionDisallowed("terminal control names no registered successor profile")
+        if (
+            plan_id != successor.plan_id
+            or profile_relative != successor.profile_path
+            or recorded_sha256 != successor.profile_sha256
+        ):
+            raise ExecutionDisallowed(
+                "authorized run profile does not match the registered terminal successor"
+            )
     try:
         profile_path = resolve_repo_path(project_root, profile_relative)
     except ValueError as exc:
@@ -921,11 +1004,16 @@ def execution_blockers(plan: RunPlan, state: ProjectExecutionState) -> tuple[str
     if not plan.execution.authorization.authorized:
         blockers.append("run plan is not authorized")
     terminal_control = state.terminal_execution_control
-    if (
-        terminal_control is not None
-        and plan.profile_plan_id in terminal_control.superseded_plan_ids
-    ):
-        blockers.append("run plan parent profile is consumed and nonreplayable")
+    if terminal_control is not None:
+        if plan.profile_plan_id in terminal_control.superseded_plan_ids:
+            blockers.append("run plan parent profile is consumed and nonreplayable")
+        else:
+            successor = terminal_control.registered_successor
+            if successor is None or (
+                plan.profile_plan_id != successor.plan_id
+                or plan.profile_sha256 != successor.profile_sha256
+            ):
+                blockers.append("run plan parent profile is not the registered successor")
     profile = state.authorized_run_profile
     if profile is None:
         blockers.append("project state has no authorized run profile")

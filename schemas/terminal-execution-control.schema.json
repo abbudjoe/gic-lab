@@ -103,16 +103,49 @@
     "successor": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["plan_id", "requirements"],
+      "required": ["plan_id", "profile_path", "profile_sha256", "requirements"],
       "properties": {
-        "plan_id": {"type": "null"},
+        "plan_id": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "string", "pattern": "^PLAN-[A-Z0-9][A-Z0-9._-]{5,127}$"}
+          ]
+        },
+        "profile_path": {
+          "oneOf": [
+            {"type": "null"},
+            {"$ref": "#/$defs/repository_path"}
+          ]
+        },
+        "profile_sha256": {
+          "oneOf": [
+            {"type": "null"},
+            {"$ref": "#/$defs/sha256"}
+          ]
+        },
         "requirements": {
           "type": "array",
           "minItems": 1,
           "uniqueItems": true,
           "items": {"type": "string", "minLength": 8, "maxLength": 160}
         }
-      }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "plan_id": {"type": "null"},
+            "profile_path": {"type": "null"},
+            "profile_sha256": {"type": "null"}
+          }
+        },
+        {
+          "properties": {
+            "plan_id": {"type": "string"},
+            "profile_path": {"type": "string"},
+            "profile_sha256": {"type": "string"}
+          }
+        }
+      ]
     }
   },
   "$defs": {

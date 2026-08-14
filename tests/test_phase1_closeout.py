@@ -62,6 +62,7 @@ def test_phase_one_is_the_only_active_non_executable_control_plane() -> None:
     assert execution_state.terminal_execution_control.superseded_plan_ids == frozenset(
         {"PLAN-EXP0001-SMOKE", "PLAN-EXP0001-PILOT-V5"}
     )
+    assert execution_state.terminal_execution_control.registered_successor is None
     checkpoint = state["t08_checkpoint"]
     assert checkpoint["terminal_state"] == ("smoke_evidence_validated_pilot_planning_eligible")
     assert checkpoint["pilot_execution_authorized"] is False
@@ -175,6 +176,9 @@ def test_frozen_profiles_are_unauthorized_and_terminal_control_makes_them_nonrep
     assert terminal["execution_eligibility"] == "blocked-pending-prerequisites"
     assert terminal["authorized"] is terminal["replayable"] is False
     assert terminal["supersedes_registered_profile_readiness"] is True
+    assert terminal["successor"]["plan_id"] is None
+    assert terminal["successor"]["profile_path"] is None
+    assert terminal["successor"]["profile_sha256"] is None
     assert {item["plan_id"] for item in terminal["superseded_registered_profiles"]} == {
         "PLAN-EXP0001-SMOKE",
         "PLAN-EXP0001-PILOT-V5",

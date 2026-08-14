@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from dataclasses import replace
 from pathlib import Path
 from shutil import copytree
@@ -15,7 +16,7 @@ from giclab.harness.models import (
     ExecutionContract,
     RunProfile,
 )
-from giclab.harness.plan import load_run_plan
+from giclab.harness.plan import load_run_plan, run_plan_authorization_sha256
 from giclab.harness.policy import (
     ExecutionDisallowed,
     assert_execution_allowed,
@@ -177,6 +178,94 @@ def test_project_state_cannot_drop_a_registered_terminal_control(tmp_path: Path)
         yaml.safe_dump(state, sort_keys=False), encoding="utf-8"
     )
     with pytest.raises(ExecutionDisallowed, match="must bind the registry terminal"):
+        load_project_execution_state(tmp_path, schema_root=tmp_path)
+
+
+def test_unregistered_coherent_exp0001_successor_cannot_bypass_terminal_control(
+    tmp_path: Path,
+) -> None:
+    write_project_state(tmp_path, prototype=True)
+    copytree(ROOT / "experiments", tmp_path / "experiments")
+    copytree(ROOT / "schemas", tmp_path / "schemas")
+
+    profile_relative = "run-profiles/synthetic-smoke.yaml"
+    profile_path = tmp_path / profile_relative
+    profile = load_yaml(profile_path)
+    profile["experiment_id"] = "EXP-0001"
+    profile_text = yaml.safe_dump(profile, sort_keys=False)
+    profile_path.write_text(profile_text, encoding="utf-8")
+    profile_sha256 = hashlib.sha256(profile_text.encode()).hexdigest()
+
+    condition_sha256s: list[str] = []
+    for relative in profile["condition_plan_paths"]:
+        condition_path = tmp_path / relative
+        condition = json.loads(condition_path.read_text(encoding="utf-8"))
+        condition["experiment_id"] = "EXP-0001"
+        condition["profile_sha256"] = profile_sha256
+        condition_path.write_text(json.dumps(condition), encoding="utf-8")
+        condition_sha256s.append(
+            run_plan_authorization_sha256(load_run_plan(condition_path, schema_root=tmp_path))
+        )
+
+    state_path = tmp_path / "docs/PROJECT_STATE.yaml"
+    state = load_yaml(state_path)
+    state["current_execution_control"] = load_yaml(ROOT / "docs/PROJECT_STATE.yaml")[
+        "current_execution_control"
+    ]
+    state["authorized_run_profile"] = {
+        "plan_id": profile["plan_id"],
+        "profile_path": profile_relative,
+        "profile_sha256": profile_sha256,
+        "condition_plan_sha256s": condition_sha256s,
+    }
+    state_path.write_text(yaml.safe_dump(state, sort_keys=False), encoding="utf-8")
+
+    with pytest.raises(ExecutionDisallowed, match="names no registered successor"):
+        load_project_execution_state(tmp_path, schema_root=tmp_path)
+
+
+def test_registry_cannot_add_a_successor_without_terminal_control_update(tmp_path: Path) -> None:
+    copytree(ROOT / "experiments", tmp_path / "experiments")
+    copytree(ROOT / "schemas", tmp_path / "schemas")
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs/PROJECT_STATE.yaml").write_bytes(
+        (ROOT / "docs/PROJECT_STATE.yaml").read_bytes()
+    )
+    registry_path = tmp_path / "experiments/registry.yaml"
+    registry = load_yaml(registry_path)
+    registry["experiments"][0]["run_profiles"].append("run-profiles/unbound-successor.yaml")
+    registry_path.write_text(yaml.safe_dump(registry, sort_keys=False), encoding="utf-8")
+
+    with pytest.raises(ExecutionDisallowed, match="terminal control names no successor"):
+        load_project_execution_state(tmp_path, schema_root=tmp_path)
+
+
+def test_terminal_control_cannot_name_a_successor_absent_from_registry(tmp_path: Path) -> None:
+    copytree(ROOT / "experiments", tmp_path / "experiments")
+    copytree(ROOT / "schemas", tmp_path / "schemas")
+    (tmp_path / "docs").mkdir()
+    state_path = tmp_path / "docs/PROJECT_STATE.yaml"
+    state = load_yaml(ROOT / "docs/PROJECT_STATE.yaml")
+    control_relative = state["current_execution_control"]["path"]
+    control_path = tmp_path / control_relative
+    control = json.loads(control_path.read_text(encoding="utf-8"))
+    control["successor"].update(
+        {
+            "plan_id": "PLAN-EXP0001-PILOT-V6",
+            "profile_path": "run-profiles/unregistered-successor.yaml",
+            "profile_sha256": "0" * 64,
+        }
+    )
+    control_path.write_text(json.dumps(control, indent=2) + "\n", encoding="utf-8")
+    control_sha256 = hashlib.sha256(control_path.read_bytes()).hexdigest()
+    state["current_execution_control"]["sha256"] = control_sha256
+    state_path.write_text(yaml.safe_dump(state, sort_keys=False), encoding="utf-8")
+    registry_path = tmp_path / "experiments/registry.yaml"
+    registry = load_yaml(registry_path)
+    registry["experiments"][0]["current_execution_control"]["sha256"] = control_sha256
+    registry_path.write_text(yaml.safe_dump(registry, sort_keys=False), encoding="utf-8")
+
+    with pytest.raises(ExecutionDisallowed, match="sole fresh registered profile"):
         load_project_execution_state(tmp_path, schema_root=tmp_path)
 
 

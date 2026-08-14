@@ -47,6 +47,8 @@
   ],
   "successor": {
     "plan_id": null,
+    "profile_path": null,
+    "profile_sha256": null,
     "requirements": [
       "fresh-plan-host-attempt-evaluator-pair-and-archive-identities",
       "new-campaign-clock",
