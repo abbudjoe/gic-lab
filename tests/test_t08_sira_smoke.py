@@ -282,15 +282,15 @@ def test_pilot_profile_has_explicit_unauthorized_sample_and_budget_contract() ->
     assert pilot["budget"] == {
         "pricing_record": ("experiments/EXP-0001-sira-simulative-vs-reactive/pricing.yaml"),
         "max_cost_usd": 40.0,
-        "max_provider_compute_cost_usd": 5.16,
-        "max_total_cost_usd": 45.16,
+        "max_provider_compute_cost_usd": 8.0,
+        "max_total_cost_usd": 48.0,
         "max_model_calls": 4620,
         "max_model_tokens": 4_000_000,
         "max_browser_actions": 120,
         "max_wall_seconds": 14_400,
         "max_accelerator_hours": 4.0,
-        "prior_t09_cost_usd": 2.5308164556905757,
-        "cumulative_t09_cost_cap_usd": 48.0,
+        "prior_t09_cost_usd": 4.04142013524027,
+        "cumulative_t09_cost_cap_usd": 55.0,
         "condition_limits": {
             "SIRA-REACTIVE": {
                 "attempts": 2,

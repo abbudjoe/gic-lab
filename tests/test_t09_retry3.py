@@ -40,7 +40,7 @@ LOCAL_QUALIFICATION_SOURCE = (
 RUNTIME_ADAPTATION_SOURCE = ROOT / "src/giclab/harness/sira_gate_a_runtime.py"
 REAL_REGRESSION_RECEIPT = (
     ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive/"
-    "T09_PRAGMATIC_RETRY3_FINALIZER_REGRESSION.json"
+    "T09_PRAGMATIC_RETRY4_FINALIZER_REGRESSION.json"
 )
 RAW_FIXTURE = ROOT / "tests/fixtures/t09/finalizer-raw-shape"
 
@@ -50,7 +50,7 @@ def test_retry3_preflight_resume_transitions_only_exact_zero_use_state() -> None
     new_execution = "2" * 64
     state: dict[str, object] = {
         "schema_version": "0.2.0",
-        "plan_id": "PLAN-EXP0001-PILOT-V5",
+        "plan_id": pilot_state.PLAN_ID,
         "execution_contract_sha256": old_execution,
         "pilot_started_at_epoch": 100.0,
         "lambda_started_at_epoch": 100.0,
@@ -68,7 +68,7 @@ def test_retry3_preflight_resume_transitions_only_exact_zero_use_state() -> None
     }
     aggregate: dict[str, object] = {
         "schema_version": "0.1.0",
-        "plan_id": "PLAN-EXP0001-PILOT-V5",
+        "plan_id": pilot_state.PLAN_ID,
         "execution_contract_sha256": old_execution,
         "unreconciled_provider_attempts": 0,
         "usage": usage_to_document(pilot_state.ProviderBudgetUsage()),
@@ -109,34 +109,38 @@ def test_retry3_same_host_resume_is_disabled_and_slot2_is_source_bound() -> None
     assert 'operations.add_parser("resume-preflight")' not in parser_source
     prepare = source.split("def prepare_preflight_resume", 1)[1].split("def resume_preflight", 1)[0]
     assert "same-host preflight resume is permanently disabled" in prepare
-    preflight = source.split("def preflight", 1)[1].split("def container_create_argv", 1)[0]
-    assert "validate_built_image_replacement_eligibility(" in source
-    assert "import_slot1_replacement_image(" in preflight
+    preflight = source.split("def preflight(", 1)[1].split("def container_create_argv", 1)[0]
+    assert "retain_slot2_authority(" in preflight
+    assert "materialize_retained_or_build_image(" in preflight
     assert "qualified_real_evidence_regression(" in preflight
     assert preflight.index("qualified_real_evidence_regression(") < preflight.index(
         "browser_lifecycle_preflight("
     )
-    assert preflight.index("admit_next_attempt(") < preflight.index("model_metadata_preflight(")
+    assert preflight.index("preflight_seconds_remaining(") < preflight.index(
+        "model_metadata_preflight("
+    )
+    assert preflight.index("provider_seconds_remaining(") < preflight.index(
+        "model_metadata_preflight("
+    )
     assert preflight.index("model_metadata_preflight(") < preflight.index(
         "write_frozen_run_manifest("
     )
-    assert preflight.index("load_frozen_run_manifest(") < preflight.index(
-        "postfreeze-validation.json"
-    )
+    assert preflight.index("load_frozen_run_manifest(") < preflight.index("admit_next_attempt(")
+    assert preflight.index("admit_next_attempt(") < preflight.index("postfreeze-validation.json")
     assert preflight.index("postfreeze-validation.json") < preflight.index(
-        "pilot-v5/preflight.json"
+        "pilot-v6/preflight.json"
     )
     checkpoint = source.split("def first_pair_checkpoint", 1)[1].split(
         "def campaign_evidence_disposition", 1
     )[0]
     assert checkpoint.index("load_frozen_run_manifest(") < checkpoint.index(
-        "validate_live_slot2_state_binding(state, frozen_manifest)"
+        "validate_live_frozen_state_binding(state, frozen_manifest)"
     )
     disposition = source.split("def campaign_evidence_disposition", 1)[1].split(
         "def _received_export_ack_path", 1
     )[0]
     assert "require_image=False" in disposition
-    assert "validate_live_slot2_state_binding(state, frozen_manifest)" in disposition
+    assert "validate_live_frozen_state_binding(state, frozen_manifest)" in disposition
     runtime_source = RUNTIME_ADAPTATION_SOURCE.read_text(encoding="utf-8")
     assert "pilot_root = pilot_control_root.parent" in runtime_source
     assert "pilot_root=attempt_root.parents[2]" not in runtime_source
@@ -148,24 +152,24 @@ def test_retry3_slot2_uses_separate_campaign_and_active_lambda_clocks(
 ) -> None:
     host = _load(HOST_SOURCE, "giclab_t09_retry3_slot2_clocks")
     now = 20_000.0
-    state = tmp_path / "pilot-v5/pilot-state.json"
+    state = tmp_path / "pilot-v6/pilot-state.json"
     state.parent.mkdir(parents=True)
     state.write_text(
         json.dumps(
             {
                 "campaign_started_at_epoch": now - 5_000,
                 "owned_lambda_started_at_epoch": now - 100,
-                "prior_retry3_lambda_duration_seconds": 3_883.0,
-                "prior_retry3_lambda_cost_usd": 3_883.0 * 1.29 / 3_600,
+                "prior_campaign_lambda_duration_seconds": 3_883.0,
+                "prior_campaign_lambda_cost_usd": 3_883.0 * 1.29 / 3_600,
             }
         ),
         encoding="utf-8",
     )
     monkeypatch.setattr(host.time, "time", lambda: now)
     expected_active = 3_983.0
-    expected_cost_remaining_seconds = (5.16 - expected_active * 1.29 / 3_600) * 3_600 / 1.29
+    expected_cost_remaining_seconds = (8.0 - expected_active * 1.29 / 3_600) * 3_600 / 1.29
     assert host.provider_seconds_remaining(tmp_path) == pytest.approx(
-        min(14_400 - 5_000, 14_400 - expected_active, expected_cost_remaining_seconds)
+        min(21_600 - expected_active, expected_cost_remaining_seconds)
     )
 
 
@@ -195,21 +199,21 @@ def test_retry3_slot2_transition_and_launch_headroom_are_fail_closed() -> None:
     assert transition["control_runtime_transition_sha256"]
     lifecycle = provider.load_campaign_lifecycle(ROOT)
     eligibility = {
-        "campaign_started_at_epoch": 1_000.0,
-        "prior_lambda_duration_seconds": 3_883.0,
-        "prior_lambda_cost_usd": 3_883.0 * 1.29 / 3_600,
+        "prior_lambda_duration_seconds": 3_600.0,
+        "prior_lambda_cost_usd": 1.29,
     }
     exact = provider.validate_slot2_launch_headroom(
         eligibility,
         lifecycle=lifecycle,
-        now=1_000.0 + 14_400 - provider.SLOT2_MINIMUM_LAUNCH_REMAINING_SECONDS,
+        now=1_000.0,
     )
-    assert exact["campaign_remaining_seconds"] == 4_500
+    assert exact["projected_cumulative_active_seconds"] == 21_600
+    assert exact["projected_cumulative_lambda_cost_usd"] == pytest.approx(7.74)
     with pytest.raises(provider.T09ProviderError, match="headroom"):
         provider.validate_slot2_launch_headroom(
-            eligibility,
+            {**eligibility, "prior_lambda_duration_seconds": 3_600.001},
             lifecycle=lifecycle,
-            now=1_000.0 + 14_400 - provider.SLOT2_MINIMUM_LAUNCH_REMAINING_SECONDS + 0.001,
+            now=1_000.0,
         )
 
 
@@ -680,7 +684,7 @@ def test_retry3_provider_preflight_accepts_source_bound_offhost_runtime_paths(
     )
     receipt = {
         "schema_version": "0.1.0",
-        "qualification_id": "QUAL-T09-PILOT-V5-LOCAL-FINALIZER-0001",
+        "qualification_id": "QUAL-T09-PILOT-V6-LOCAL-FINALIZER-0001",
         "plan_id": host.PLAN_ID,
         "package_commit": "a" * 40,
         "python_version": "3.11.14",
@@ -1053,10 +1057,10 @@ def test_retry3_provider_has_two_distinct_single_use_slots_and_cumulative_caps(
     assert first != second
     assert first.name.endswith("launch-slot-01-consumed.json")
     assert second.name.endswith("launch-slot-02-consumed.json")
-    assert provider.PRIOR_T09_COST_USD == 2.5308164556905757
-    assert provider.NEW_CAMPAIGN_LAMBDA_CAP_USD == 5.16
-    assert provider.NEW_CAMPAIGN_AGGREGATE_CAP_USD == 45.16
-    assert provider.CUMULATIVE_T09_CAP_USD == 48.0
+    assert provider.PRIOR_T09_COST_USD == 4.04142013524027
+    assert provider.NEW_CAMPAIGN_LAMBDA_CAP_USD == 8.0
+    assert provider.NEW_CAMPAIGN_AGGREGATE_CAP_USD == 48.0
+    assert provider.CUMULATIVE_T09_CAP_USD == 55.0
     with pytest.raises(provider.T09ProviderError, match="outside"):
         provider.launch_capability_path(3)
 
@@ -1117,7 +1121,7 @@ def test_retry3_preentry_secret_match_is_a_monotonic_campaign_stop(
 ) -> None:
     host = _load(HOST_SOURCE, "giclab_t09_retry3_preentry_secret_stop")
     artifact_root = tmp_path / "artifacts"
-    state_path = artifact_root / "pilot-v5/pilot-state.json"
+    state_path = artifact_root / "pilot-v6/pilot-state.json"
     initialize_pilot_state(
         state_path,
         execution_contract_sha256="f" * 64,
@@ -1196,7 +1200,7 @@ def test_retry3_metadata_secret_scan_removes_value_and_permanently_stops_admissi
 ) -> None:
     host = _load(HOST_SOURCE, "giclab_t09_retry3_metadata_secret_scan")
     artifact_root = tmp_path / "artifacts"
-    state_path = artifact_root / "pilot-v5/pilot-state.json"
+    state_path = artifact_root / "pilot-v6/pilot-state.json"
     initialize_pilot_state(
         state_path,
         execution_contract_sha256="f" * 64,
@@ -1207,7 +1211,7 @@ def test_retry3_metadata_secret_scan_removes_value_and_permanently_stops_admissi
     credential_fixture = b"fixture-secret-that-must-never-be-retained"
     credential_file.write_bytes(credential_fixture)
     credential_file.chmod(0o600)
-    leaked = artifact_root / "pilot-v5/model-metadata-preflight/leaked.log"
+    leaked = artifact_root / "pilot-v6/model-metadata-preflight/leaked.log"
     leaked.parent.mkdir(parents=True)
     leaked.write_bytes(credential_fixture)
     with pytest.raises(host.T09HostError, match="exposed the exact credential"):
@@ -1218,7 +1222,7 @@ def test_retry3_metadata_secret_scan_removes_value_and_permanently_stops_admissi
         )
     assert not leaked.exists()
     receipt = json.loads(
-        (artifact_root / "pilot-v5/model-metadata-credential-scan.json").read_text(encoding="utf-8")
+        (artifact_root / "pilot-v6/model-metadata-credential-scan.json").read_text(encoding="utf-8")
     )
     assert receipt["actual_credential_exposure_detected"] is True
     assert "sha256" not in json.dumps(receipt)
@@ -1308,7 +1312,7 @@ def test_retry3_raw_seal_is_immediate_and_resumes_after_state_write_crash(
         ),
         encoding="utf-8",
     )
-    state = artifact_root / "pilot-v5/pilot-state.json"
+    state = artifact_root / "pilot-v6/pilot-state.json"
     initialize_pilot_state(
         state,
         execution_contract_sha256="b" * 64,

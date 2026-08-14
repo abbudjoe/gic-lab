@@ -17,7 +17,7 @@ from typing import cast
 import pytest
 
 from giclab.harness import t09_pragmatic_provider as provider
-from giclab.harness.lambda_campaign_lifecycle import ObserverLifecycleLimits
+from giclab.harness.lambda_campaign_lifecycle import Retry4LifecycleLimits
 from giclab.harness.lambda_l2m_observer import ObserverRequest
 from giclab.harness.sira_gate_a import (
     ImmutableModelRouting,
@@ -70,7 +70,7 @@ RUNTIME_IDENTITY = (
 )
 
 
-def _rendered_v5_manifests() -> list[dict[str, object]]:
+def _rendered_active_manifests() -> list[dict[str, object]]:
     """Render the active source contract without relying on generated package bytes."""
 
     contract = load_execution_contract(
@@ -87,8 +87,8 @@ def _rendered_v5_manifests() -> list[dict[str, object]]:
                 ROOT / "src/giclab/harness/sira_gate_a_runtime.py"
             ),
             pilot_library_sha256=file_sha256(ROOT / "src/giclab/harness/t09_sira_pilot.py"),
-            aggregate_ledger_path="/opt/giclab-artifacts/pilot-v5/aggregate-budget.json",
-            pilot_state_path="/opt/giclab-artifacts/pilot-v5/pilot-state.json",
+            aggregate_ledger_path="/opt/giclab-artifacts/pilot-v6/aggregate-budget.json",
+            pilot_state_path="/opt/giclab-artifacts/pilot-v6/pilot-state.json",
         )
         for attempt in contract.attempts
     ]
@@ -298,10 +298,10 @@ def _limits() -> RuntimeLimits:
         max_condition_wall_seconds=3_600,
         max_pair_wall_seconds=7_200,
         max_total_wall_seconds=14_400,
-        max_output_bytes_per_attempt=1_073_741_824,
-        max_disk_bytes=12_884_901_888,
-        max_lambda_duration_seconds=14_400,
-        max_lambda_cost_usd=5.16,
+        max_output_bytes_per_attempt=67_108_864,
+        max_disk_bytes=2_147_483_648,
+        max_lambda_duration_seconds=21_600,
+        max_lambda_cost_usd=8.0,
         max_attempts=4,
         max_retries_after_empirical_entry=0,
     )
@@ -348,7 +348,7 @@ def test_provider_boundary_enforces_prior_attempt_aggregate_before_send() -> Non
 
 
 def test_frozen_execution_contract_and_all_pair_command_diffs() -> None:
-    manifests = _rendered_v5_manifests()
+    manifests = _rendered_active_manifests()
     assert diff_pair_manifests(manifests[0], manifests[1])["valid"] is True
     assert diff_pair_manifests(manifests[2], manifests[3])["valid"] is True
     assert (
@@ -386,7 +386,9 @@ def test_resource_guard_stops_before_wall_output_disk_or_lambda_overrun(tmp_path
         guard.check()
 
 
-def test_resource_guard_separates_campaign_gap_from_active_lambda_cost(tmp_path: Path) -> None:
+def test_resource_guard_separates_empirical_wall_from_prior_active_lambda_cost(
+    tmp_path: Path,
+) -> None:
     now = 6_000.0
     prior_duration = 3_883.0
     prior_cost = prior_duration * 1.29 / 3_600
@@ -396,14 +398,14 @@ def test_resource_guard_separates_campaign_gap_from_active_lambda_cost(tmp_path:
         pilot_root=tmp_path,
         condition_started=now - 10,
         pair_started=now - 20,
-        campaign_started=now - 5_000,
+        campaign_started=now - 20,
         owned_lambda_started=now - 100,
         prior_lambda_duration_seconds=prior_duration,
         prior_lambda_cost_usd=prior_cost,
         monotonic=lambda: now,
     )
     snapshot = guard.check()
-    assert snapshot.total_elapsed_seconds == 5_000
+    assert snapshot.total_elapsed_seconds == 20
     assert snapshot.lambda_elapsed_seconds == 3_983
     assert snapshot.lambda_cost_usd == pytest.approx(3_983 * 1.29 / 3_600)
 
@@ -448,8 +450,8 @@ def test_first_pair_checkpoint_passes_only_strictly_below_every_threshold() -> N
     assert exact_time_decision["required_campaign_seconds_for_next_attempt"] == 4_500
     cumulative_overflow = replace(
         passing,
-        projected_aggregate_cost_usd=45.0,
-        prior_t09_cost_usd=3.01,
+        projected_aggregate_cost_usd=48.0,
+        prior_t09_cost_usd=7.01,
     )
     assert (
         "projected_cumulative_t09_cost_exceeds_hard_cap"
@@ -562,11 +564,11 @@ def test_execution_schema_and_all_static_file_bindings_resolve() -> None:
     document = load_json(EXECUTION_CONTRACT)
     assert document["authorized"] is False
     assert document["terminal_state"] == (
-        "current-turn-authorized-retry3-pending-dynamic-preflight"
+        "current-turn-authorized-retry4-pending-dynamic-preflight"
     )
     assert (
         document["execution_eligibility"]
-        == "current-turn-authorized-after-replacement-image-qualification"
+        == "current-turn-authorized-after-retained-image-or-fallback-qualification"
     )
     assert document["material_blockers"] == []
     hard = document["budget_calibration"]["hard"]
@@ -774,15 +776,16 @@ def test_retry2_excludes_only_the_exact_pinned_names_only_env_example(
         )
 
 
-def test_retry3_imports_the_exact_slot1_image_without_rebuild() -> None:
+def test_retry4_materialization_policy_is_explicit_and_bound() -> None:
     host = _load_host_runner()
-    assert host.PLAN_ID == "PLAN-EXP0001-PILOT-V5"
-    assert host.QUALIFICATION_ID == "QUAL-T09-PILOT-V5-IMAGE-0002"
-    assert host.REPLACEMENT_IMAGE_TAG.startswith("giclab/t09-pilot-v5:")
-    materializer = inspect.getsource(host.import_slot1_replacement_image)
-    assert '"additional_build_count": 0' in materializer
-    assert '"image_import_count": 1' in materializer
-    assert "docker-image-import" in materializer
+    assert host.PLAN_ID == "PLAN-EXP0001-PILOT-V6"
+    assert host.QUALIFICATION_ID == "QUAL-T09-PILOT-V6-IMAGE-0001"
+    assert host.REPLACEMENT_IMAGE_TAG.startswith("giclab/t09-pilot-v6:")
+    materializer = inspect.getsource(host.materialize_retained_or_build_image)
+    assert "SLOT2_IMAGE_MATERIALIZATION_POLICY" in materializer
+    assert "slot-2 retained image import failed; fallback build is forbidden" in materializer
+    assert "slot-2 retained image is unavailable; fallback build is forbidden" in materializer
+    assert "materialize_replacement_image(" in materializer
     offline = inspect.getsource(host.offline_runtime_preflight)
     assert "/opt/sira/.venv/bin/python" in offline
     assert "PYTHONPATH=/opt/evaluator/.venv/lib/python3.11/site-packages:/opt/giclab-src" in offline
@@ -932,7 +935,7 @@ def test_first_pair_gross_ceiling_stops_task_b() -> None:
 
 def test_preentry_condition_prefix_is_bound_preserved_and_retryable(tmp_path: Path) -> None:
     host = _load_host_runner()
-    manifest = _rendered_v5_manifests()[0]
+    manifest = _rendered_active_manifests()[0]
     artifact_root = tmp_path / "artifacts"
     attempt_root = artifact_root / manifest["permitted_condition_owned"]["output_root"]
     attempt_root.mkdir(parents=True, mode=0o700)
@@ -979,7 +982,7 @@ def test_preentry_condition_prefix_is_bound_preserved_and_retryable(tmp_path: Pa
         frozen_run_manifest_sha256=frozen_sha256,
     )
     preserved = (
-        artifact_root / "pilot-v5/preentry-condition-repairs" / manifest["run_id"] / "repair-01"
+        artifact_root / "pilot-v6/preentry-condition-repairs" / manifest["run_id"] / "repair-01"
     )
     assert fresh == attempt_root and fresh.is_dir() and list(fresh.iterdir()) == [raw]
     assert raw == fresh / "raw"
@@ -1164,7 +1167,7 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
             {
                 "schema_version": "0.1.0",
                 "authorization_source_sha256": provider.AUTHORIZATION_SOURCE_SHA256,
-                "authorization_reference": "AUTH-T09-PRAGMATIC-RETRY3-2026-08-13",
+                "authorization_reference": "AUTH-T09-PRAGMATIC-RETRY4-2026-08-14",
                 "authorized": True,
                 "single_use": True,
                 "clean_package_commit": package_commit,
@@ -1173,12 +1176,12 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
                 "max_lambda_instances": 1,
                 "max_launch_count": 2,
                 "persistent_filesystems": 0,
-                "lambda_cost_cap_usd": 5.16,
+                "lambda_cost_cap_usd": 8.0,
                 "openai_cost_cap_usd": 40.0,
-                "aggregate_cost_cap_usd": 45.16,
-                "prior_t09_cost_usd": 2.5308164556905757,
-                "cumulative_t09_cost_cap_usd": 48.0,
-                "replacement_image_policy": ("one-build-one-qualification-preentry-bound-v1"),
+                "aggregate_cost_cap_usd": 48.0,
+                "prior_t09_cost_usd": 4.04142013524027,
+                "cumulative_t09_cost_cap_usd": 55.0,
+                "replacement_image_policy": ("retained-exact-load-or-one-fallback-build-v1"),
                 "artifact_destination": (
                     "/Volumes/Macintosh HD - Data/GIC-Lab/t09/sealed-artifacts"
                 ),
@@ -1600,62 +1603,6 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
         global_firewall,
         {"data": []},
     ]
-    preempirical_source = tmp_path / "host-preempirical-source"
-    preempirical_source.mkdir(mode=0o700)
-    host.write_exclusive(
-        preempirical_source / "pilot-state.json",
-        {
-            "plan_id": provider.PLAN_ID,
-            "empirical_attempts_entered": [],
-            "raw_attempts_complete": [],
-            "attempts_completed": [],
-        },
-    )
-    host.write_exclusive(
-        preempirical_source / "host-cleanup.json",
-        {
-            "owned_container_residue": [],
-            "global_secret_scan_passed": True,
-            "remote_secret_removed": True,
-        },
-    )
-    host.write_exclusive(
-        preempirical_source / "preempirical-disposition.json",
-        {
-            "schema_version": "0.1.0",
-            "plan_id": provider.PLAN_ID,
-            "host_run_id": provider.HOST_RUN_ID,
-            "package_commit": package_commit,
-            "provider_entry_receipt_sha256": provider.file_sha256(entry_path),
-            "pilot_state_sha256": host.file_sha256(preempirical_source / "pilot-state.json"),
-            "host_cleanup_sha256": host.file_sha256(preempirical_source / "host-cleanup.json"),
-            "empirical_attempts_entered": 0,
-            "model_task_requests": 0,
-            "task_browser_actions": 0,
-            "replacement_image_build_count": 0,
-            "credentials_removed": True,
-            "owned_containers_absent": True,
-            "replacement_launch_evidence_only": True,
-        },
-    )
-    preempirical_files = [
-        {
-            "path": path.name,
-            "bytes": path.stat().st_size,
-            "sha256": host.file_sha256(path),
-        }
-        for path in sorted(preempirical_source.iterdir())
-    ]
-    host.write_exclusive(
-        preempirical_source / "source-manifest.json",
-        {
-            "schema_version": "0.1.0",
-            "plan_id": provider.PLAN_ID,
-            "host_run_id": provider.HOST_RUN_ID,
-            "files": preempirical_files,
-            "total_bytes": sum(int(item["bytes"]) for item in preempirical_files),
-        },
-    )
     closeout_path = provider.closeout_campaign(
         repository=ROOT,
         package_commit=package_commit,
@@ -1663,8 +1610,6 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
         dotenv=dotenv,
         private_root=private_root,
         transport=FakeTransport(closeout_responses),
-        preempirical_receipt=preempirical_source / "preempirical-disposition.json",
-        preempirical_source_root=preempirical_source,
         clock=clock,
         sleeper=sleeper,
     )
@@ -1693,82 +1638,7 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
     closeout_documents = provider._response_documents(private_root / "closeout-source")
     last_inventory = closeout_documents["termination-instances"][-1][1]
     assert last_inventory == {"data": []}
-    eligibility = load_json(private_root / "replacement-launch-eligibility.json")
-    assert eligibility["host_preempirical_receipt_sha256"] == provider.file_sha256(
-        private_root / "preempirical-source/preempirical-disposition.json"
-    )
-
-    tampered_prior = tmp_path / "provider-private-tampered-zero-use"
-    copytree(private_root, tampered_prior)
-    tampered_state = tampered_prior / "preempirical-source/pilot-state.json"
-    tampered_state.write_text('{"empirical_attempts_entered":["forged"]}\n', encoding="utf-8")
-    capability[2] = tmp_path / "launch-capabilities/slot-2-tampered.json"
-    tampered_transport = FakeTransport([])
-    with pytest.raises(provider.T09ProviderError, match="pre-empirical source manifest drifted"):
-        provider.launch_campaign(
-            repository=ROOT,
-            package_commit=package_commit,
-            authorization_ledger=authorization,
-            dotenv=dotenv,
-            private_root=tmp_path / "provider-slot-2-tampered",
-            public_ipv4_file=public_ip_path,
-            ssh_public_key_file=key_path,
-            transport=tampered_transport,
-            launch_slot=2,
-            prior_private_root=tampered_prior,
-            clock=clock,
-            sleeper=sleeper,
-        )
-    assert tampered_transport.calls == []
-
-    capability[2] = tmp_path / "launch-capabilities/slot-2-success.json"
-    slot_2_instance = {
-        **copy.deepcopy(instance),
-        "id": "instance-fixture-0002",
-        "ip": "198.51.100.10",
-    }
-    slot_2_root = tmp_path / "provider-private-slot-2"
-    slot_2_entry = provider.launch_campaign(
-        repository=ROOT,
-        package_commit=package_commit,
-        authorization_ledger=authorization,
-        dotenv=dotenv,
-        private_root=slot_2_root,
-        public_ipv4_file=public_ip_path,
-        ssh_public_key_file=key_path,
-        transport=FakeTransport(
-            [
-                *copy.deepcopy(launch_responses[:6]),
-                {"data": {"instance_ids": ["instance-fixture-0002"]}},
-                {"data": [slot_2_instance]},
-            ]
-        ),
-        launch_slot=2,
-        prior_private_root=private_root,
-        clock=clock,
-        sleeper=sleeper,
-    )
-    assert load_json(slot_2_entry)["launch_slot"] == 2
-    assert load_json(slot_2_entry)["prior_retry3_lambda_cost_usd"] == pytest.approx(
-        eligibility["prior_lambda_cost_usd"]
-    )
-    provider.closeout_campaign(
-        repository=ROOT,
-        package_commit=package_commit,
-        authorization_ledger=authorization,
-        dotenv=dotenv,
-        private_root=slot_2_root,
-        transport=FakeTransport(
-            [
-                RuntimeError("termination response fixture ambiguity"),
-                {"data": []},
-                global_firewall,
-                {"data": []},
-            ]
-        ),
-        clock=clock,
-        sleeper=sleeper,
-    )
+    assert not (private_root / "replacement-launch-eligibility.json").exists()
 
     forged = dict(load_json(entry_path))
     forged["launch_count"] = 2
@@ -1824,7 +1694,7 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
 
 def test_closeout_rejects_termination_after_campaign_cutoff() -> None:
     lifecycle = provider.CampaignLifecycle(
-        observer_limits=ObserverLifecycleLimits.t09_pragmatic_v5(),
+        retry4_limits=Retry4LifecycleLimits(),
         max_instances=1,
         max_launches=2,
         persistent_filesystems=0,
@@ -1833,15 +1703,15 @@ def test_closeout_rejects_termination_after_campaign_cutoff() -> None:
         started_at_epoch=100.0,
         now_epoch=13_600.0,
     )
-    observer = ObserverLifecycleLimits.t09_pragmatic_v5()
+    limits = Retry4LifecycleLimits()
     assert (
         lifecycle.wall_seconds,
         lifecycle.cleanup_reserve_seconds,
         lifecycle.termination_cutoff_seconds,
     ) == (
-        observer.campaign_provider_wall_seconds,
-        observer.cleanup_reserve_seconds,
-        observer.normal_termination_cutoff_seconds,
+        limits.empirical_campaign_wall_seconds,
+        limits.empirical_cleanup_reserve_seconds,
+        limits.empirical_termination_cutoff_seconds,
     )
 
 
@@ -2010,11 +1880,13 @@ def test_provider_projection_allowlists_selected_operational_fields() -> None:
 
 def test_campaign_lifecycle_uses_actual_elapsed_time_and_preserves_cleanup_reserve() -> None:
     campaign = CampaignLifecycleLimits(
-        campaign_provider_wall_seconds=14_400,
-        normal_cleanup_reserve_seconds=900,
-        provider_termination_cutoff_seconds=13_500,
-        post_condition_evaluator_evidence_seconds=600,
-        termination_dispatch_margin_seconds=60,
+        preflight_wall_seconds=3_600,
+        failed_preflight_termination_dispatch_seconds=300,
+        empirical_campaign_wall_seconds=14_400,
+        empirical_cleanup_reserve_seconds=900,
+        empirical_termination_cutoff_seconds=13_500,
+        maximum_successful_host_active_seconds=18_000,
+        maximum_cumulative_active_seconds=21_600,
         max_lambda_instances=1,
         max_launch_count=2,
         persistent_filesystems=0,
@@ -2045,19 +1917,24 @@ def test_host_campaign_admission_counts_setup_and_attempt_actual_time(
 ) -> None:
     host = _load_host_runner()
     now = time.time()
-    state = tmp_path / "pilot-v5/pilot-state.json"
+    state = tmp_path / "pilot-v6/pilot-state.json"
     state.parent.mkdir(parents=True)
     state.write_text(
         json.dumps(
             {
                 "pilot_started_at_epoch": now,
                 "lambda_started_at_epoch": now,
+                "campaign_started_at_epoch": now,
+                "owned_lambda_started_at_epoch": now,
+                "prior_campaign_lambda_duration_seconds": 0.0,
+                "prior_campaign_lambda_cost_usd": 0.0,
+                "provider_preflight_started_at_epoch": now,
             }
         ),
         encoding="utf-8",
     )
     assert host.provider_seconds_remaining(tmp_path, reserve_seconds=900) == pytest.approx(
-        13_500,
+        20_700,
         abs=1,
     )
     assert host.scientific_seconds_remaining(tmp_path) == pytest.approx(14_400, abs=1)
@@ -2070,7 +1947,7 @@ def test_host_campaign_admission_counts_setup_and_attempt_actual_time(
     with pytest.raises(host.T09HostError, match="next attempt hard wall"):
         host.admit_next_attempt(tmp_path)
     monkeypatch.setattr(host.time, "time", lambda: now + 13_500)
-    assert host.provider_seconds_remaining(tmp_path, reserve_seconds=900) == 0
+    assert host.scientific_seconds_remaining(tmp_path, reserve_seconds=900) == 0
     assert host.provider_termination_due(tmp_path) is True
 
 
@@ -2092,12 +1969,14 @@ def test_raw_attempt_streams_before_cutoff_without_aggregate_stage(
     replacement_image_id = "sha256:" + "e" * 64
     now = time.time()
     monkeypatch.setattr(host.time, "time", lambda: now)
-    manifest = next(item for item in _rendered_v5_manifests() if item["run_id"] == ATTEMPT_ORDER[0])
+    manifest = next(
+        item for item in _rendered_active_manifests() if item["run_id"] == ATTEMPT_ORDER[0]
+    )
     artifact_root = tmp_path / "artifacts"
     attempt_root = artifact_root / manifest["permitted_condition_owned"]["output_root"]
     raw_root = artifact_root / manifest["permitted_condition_owned"]["raw_output_root"]
     copytree(ROOT / "tests/fixtures/t09/finalizer-raw-shape", raw_root)
-    pilot_root = artifact_root / "pilot-v5"
+    pilot_root = artifact_root / "pilot-v6"
     pilot_root.mkdir(exist_ok=True)
     initialize_pilot_state(
         pilot_root / "pilot-state.json",
@@ -2134,15 +2013,15 @@ def test_raw_attempt_streams_before_cutoff_without_aggregate_stage(
     local_qualification.write_text(
         json.dumps(
             {
-                "qualification_id": "QUAL-T09-PILOT-V5-LOCAL-FINALIZER-0001",
+                "qualification_id": "QUAL-T09-PILOT-V6-LOCAL-FINALIZER-0001",
                 "package_commit": "a" * 40,
             }
         ),
         encoding="utf-8",
     )
     frozen_document = {
-        "manifest_id": "RUN-MANIFEST-EXP0001-PILOT-V5-0003",
-        "plan_id": "PLAN-EXP0001-PILOT-V5",
+        "manifest_id": "RUN-MANIFEST-EXP0001-PILOT-V6-0004",
+        "plan_id": "PLAN-EXP0001-PILOT-V6",
         "clean_package_commit": "a" * 40,
         "replacement_image_id": replacement_image_id,
         "local_finalizer_qualification_sha256": host.file_sha256(local_qualification),
@@ -2316,9 +2195,9 @@ def test_raw_attempt_streams_before_cutoff_without_aggregate_stage(
     assert (restored_attempt / "raw-attempt-manifest.json").is_file()
     assert (restored_attempt / "offhost-restore-complete.json").is_file()
     assert (
-        restored_root / "pilot-v5/attempt-exports" / f"{ATTEMPT_ORDER[0]}.tar.gz"
+        restored_root / "pilot-v6/attempt-exports" / f"{ATTEMPT_ORDER[0]}.tar.gz"
     ).read_bytes() == inbound_archive.read_bytes()
-    assert json.loads((restored_root / "pilot-v5/pilot-state.json").read_text(encoding="utf-8"))[
+    assert json.loads((restored_root / "pilot-v6/pilot-state.json").read_text(encoding="utf-8"))[
         "raw_attempts_complete"
     ] == [ATTEMPT_ORDER[0]]
     assert (
