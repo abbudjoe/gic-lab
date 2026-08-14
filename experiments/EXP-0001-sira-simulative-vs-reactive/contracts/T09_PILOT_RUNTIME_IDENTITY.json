@@ -64,13 +64,13 @@
     "approved_offline_fixture_execution_required": true
   },
   "repository_instrumentation": {
-    "reviewed_implementation_ancestor": "c61975096e16f0957f674037154fc23e58abb4f7",
+    "reviewed_implementation_ancestor": "afea34c1d796765c25bed320d3a8852ee23af380",
     "scope": [
-    "content-addressed-no-follow-private-regression-archive-staging",
-    "raw-attempt-root-typed-binding-before-empirical-entry",
-    "held-descriptor-privileged-docker-image-import",
-    "source-bound-postfreeze-preentry-slot2-eligibility",
-    "separate-cumulative-active-preflight-and-empirical-campaign-clocks",
+      "content-addressed-no-follow-private-regression-archive-staging",
+      "raw-attempt-root-typed-binding-before-empirical-entry",
+      "held-descriptor-privileged-docker-image-import",
+      "source-bound-postfreeze-preentry-slot2-eligibility",
+      "separate-cumulative-active-preflight-and-empirical-campaign-clocks",
       "retained-exact-image-import-or-one-fallback-build",
       "pre-action-budget-count",
       "post-action-result-and-screenshot-retention",
@@ -80,7 +80,9 @@
       "pure-repairable-finalizer-projection-and-append-only-selection",
       "qualified-provider-independent-local-finalizer-runtime",
       "resource-cap-and-cumulative-accounting-checks",
-      "cleanup-and-exact-provider-closeout-receipts"
+      "cleanup-and-exact-provider-closeout-receipts",
+      "source-bound-active-slot2-provider-package-transition",
+      "minimal-manifest-bound-slot2-authority-retention-and-export"
     ],
     "files": [
       {
@@ -97,7 +99,7 @@
       },
       {
         "path": "src/giclab/harness/t09_sira_pilot.py",
-        "sha256": "6de348dde4511a0456d109685e22523972256f7624b24b010432d32297553c1f"
+        "sha256": "c7e9fed7f648c4469d3f4a5892cdcf577532a0f63ff5e7fd66beb835bd9d0265"
       },
       {
         "path": "src/giclab/harness/lambda_campaign_lifecycle.py",
@@ -109,11 +111,11 @@
       },
       {
         "path": "src/giclab/harness/t09_pragmatic_provider.py",
-        "sha256": "5347a45d95ba5c0d073a9ad847a0c1bfb26bac585472edfe72e02331ec465e6b"
+        "sha256": "3ae88f848f9b20c8bb40f0bfa0eb0deb80e68e46fcc16845c511c461b05b5716"
       },
       {
         "path": "containers/sira-smoke/pragmatic/t09_remote_runner.py",
-        "sha256": "7a0ecb6210451f4a2e2e568bfe9dd0f9151dfecc5fdf75c3ce223355aa182b87"
+        "sha256": "7011add3c838f941da29e9fcaedf596c68709d9bb7faa020683bd0f9c362815a"
       },
       {
         "path": "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py",

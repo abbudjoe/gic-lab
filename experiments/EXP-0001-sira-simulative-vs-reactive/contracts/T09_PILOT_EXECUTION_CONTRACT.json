@@ -29,7 +29,7 @@
     },
     "runtime": {
       "path": "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/T09_PILOT_RUNTIME_IDENTITY.json",
-      "sha256": "0b0f0c099acf9c5fbd236086984481a3f23235a97b994743167c0b685380ba46"
+      "sha256": "85308979634572723d945a34395c9b618fae9de6b71c28457e7c2d81381d4cd5"
     },
     "real_evidence_regression": {
       "path": "experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY4_FINALIZER_REGRESSION.json",
@@ -103,7 +103,9 @@
     ],
     "preflight_repair_boundary": "repair-permitted-only-before-any-task-model-request-or-task-browser-action",
     "empirical_entry_boundary": "first-task-model-request-or-task-browser-action-whichever-occurs-first",
-    "post_entry_freeze": "scientific-execution-code-image-tasks-order-evaluator-scoring-budgets-and-instrumentation-frozen; downstream-only network-disabled finalizer descendants may reprocess immutable raw evidence uniformly without condition retry"
+    "post_entry_freeze": "scientific-execution-code-image-tasks-order-evaluator-scoring-budgets-and-instrumentation-frozen; downstream-only network-disabled finalizer descendants may reprocess immutable raw evidence uniformly without condition retry",
+    "active_slot2_provider_entry_package_transition": "source-bound-clean-descendant-science-invariant-v1",
+    "slot2_authority_retention": "exact-source-manifest-minimal-projection-v1"
   },
   "provider_lifecycle": {
     "cumulative_accounting_origin": "actual-active-lambda-seconds",
@@ -241,11 +243,11 @@
       "raw_output_root": "artifacts/EXP-0001/pilot-v6/task-a/reactive/attempt-0004/raw",
       "finalized_output_root": "artifacts/EXP-0001/pilot-v6/task-a/reactive/attempt-0004/finalized",
       "condition_plan_path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v6-task-0000-reactive.yaml",
-      "condition_plan_sha256": "2950e10b2cec539e16764cc360557adf19721f9279d630efad8dbcd29154f511",
+      "condition_plan_sha256": "7be1f75b39abcf157c9f29744e29c358e34196ce7e3eefdccba6d7b1eb0d6c85",
       "protocol_sha256": "5356fc8b3806f4135eb570f65b67da2f94463582db5e3e609320e23dbdb2a3f7",
       "config_sha256": "cf25acd90f9d73d9aef978a7d059cfbc74a1447d901f4e3d27e2b5d9f121d2ed",
-      "environment_sha256": "0b0f0c099acf9c5fbd236086984481a3f23235a97b994743167c0b685380ba46",
-      "giclab_commit": "c61975096e16f0957f674037154fc23e58abb4f7",
+      "environment_sha256": "85308979634572723d945a34395c9b618fae9de6b71c28457e7c2d81381d4cd5",
+      "giclab_commit": "afea34c1d796765c25bed320d3a8852ee23af380",
       "upstream_argv": [
         "EXP-0001-PILOT-V6-TASK-A-REACTIVE",
         "--dataset",
@@ -287,11 +289,11 @@
       "raw_output_root": "artifacts/EXP-0001/pilot-v6/task-a/simulative/attempt-0004/raw",
       "finalized_output_root": "artifacts/EXP-0001/pilot-v6/task-a/simulative/attempt-0004/finalized",
       "condition_plan_path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v6-task-0000-simulative.yaml",
-      "condition_plan_sha256": "7af54c766d8969732e0488f305d90958908a6ca7a866b0f80107695f033d86d2",
+      "condition_plan_sha256": "5a5ad0edab73ec7f9b0cdf61013dc2aceada9071eb07bc705dcb6a632f0c3ea4",
       "protocol_sha256": "5356fc8b3806f4135eb570f65b67da2f94463582db5e3e609320e23dbdb2a3f7",
       "config_sha256": "cf25acd90f9d73d9aef978a7d059cfbc74a1447d901f4e3d27e2b5d9f121d2ed",
-      "environment_sha256": "0b0f0c099acf9c5fbd236086984481a3f23235a97b994743167c0b685380ba46",
-      "giclab_commit": "c61975096e16f0957f674037154fc23e58abb4f7",
+      "environment_sha256": "85308979634572723d945a34395c9b618fae9de6b71c28457e7c2d81381d4cd5",
+      "giclab_commit": "afea34c1d796765c25bed320d3a8852ee23af380",
       "upstream_argv": [
         "EXP-0001-PILOT-V6-TASK-A-SIMULATIVE",
         "--dataset",
@@ -333,11 +335,11 @@
       "raw_output_root": "artifacts/EXP-0001/pilot-v6/task-b/simulative/attempt-0004/raw",
       "finalized_output_root": "artifacts/EXP-0001/pilot-v6/task-b/simulative/attempt-0004/finalized",
       "condition_plan_path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v6-task-0001-simulative.yaml",
-      "condition_plan_sha256": "e1326107d1458d75a87831ad8d1d44b899fe7355f9bbc64e8e3265a77bcc4758",
+      "condition_plan_sha256": "48afac4375d49dc970d7dbcd39168a263f2aebe64282fa93dba1a03b080f93bd",
       "protocol_sha256": "5356fc8b3806f4135eb570f65b67da2f94463582db5e3e609320e23dbdb2a3f7",
       "config_sha256": "cf25acd90f9d73d9aef978a7d059cfbc74a1447d901f4e3d27e2b5d9f121d2ed",
-      "environment_sha256": "0b0f0c099acf9c5fbd236086984481a3f23235a97b994743167c0b685380ba46",
-      "giclab_commit": "c61975096e16f0957f674037154fc23e58abb4f7",
+      "environment_sha256": "85308979634572723d945a34395c9b618fae9de6b71c28457e7c2d81381d4cd5",
+      "giclab_commit": "afea34c1d796765c25bed320d3a8852ee23af380",
       "upstream_argv": [
         "EXP-0001-PILOT-V6-TASK-B-SIMULATIVE",
         "--dataset",
@@ -379,11 +381,11 @@
       "raw_output_root": "artifacts/EXP-0001/pilot-v6/task-b/reactive/attempt-0004/raw",
       "finalized_output_root": "artifacts/EXP-0001/pilot-v6/task-b/reactive/attempt-0004/finalized",
       "condition_plan_path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v6-task-0001-reactive.yaml",
-      "condition_plan_sha256": "4ed795ce2e3930afb1d00cb6a64b0875c9768189e2c5ef14094fd7992c88d967",
+      "condition_plan_sha256": "9564723c29dd0e154c34dcae9fdda3f8b5f7ed6167f121bb3d9f18ebccf61aa9",
       "protocol_sha256": "5356fc8b3806f4135eb570f65b67da2f94463582db5e3e609320e23dbdb2a3f7",
       "config_sha256": "cf25acd90f9d73d9aef978a7d059cfbc74a1447d901f4e3d27e2b5d9f121d2ed",
-      "environment_sha256": "0b0f0c099acf9c5fbd236086984481a3f23235a97b994743167c0b685380ba46",
-      "giclab_commit": "c61975096e16f0957f674037154fc23e58abb4f7",
+      "environment_sha256": "85308979634572723d945a34395c9b618fae9de6b71c28457e7c2d81381d4cd5",
+      "giclab_commit": "afea34c1d796765c25bed320d3a8852ee23af380",
       "upstream_argv": [
         "EXP-0001-PILOT-V6-TASK-B-REACTIVE",
         "--dataset",
