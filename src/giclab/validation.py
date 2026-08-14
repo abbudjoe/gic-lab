@@ -1134,12 +1134,16 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
 
     pilot_lifecycle = profiles["pilot"].get("provider_lifecycle")
     expected_lifecycle = {
-        "campaign_clock_origin": "provider-launch-send-started-conservative",
-        "campaign_provider_wall_seconds": 14_400,
-        "normal_cleanup_reserve_seconds": 900,
-        "provider_termination_cutoff_seconds": 13_500,
-        "post_condition_evaluator_evidence_seconds": 600,
-        "termination_dispatch_margin_seconds": 60,
+        "cumulative_accounting_origin": "actual-active-lambda-seconds",
+        "preflight_clock_origin": "provider-launch-send-started",
+        "preflight_wall_seconds": 3_600,
+        "failed_preflight_termination_dispatch_seconds": 300,
+        "empirical_clock_origin": "after-durable-frozen-run-manifest-publication",
+        "empirical_campaign_wall_seconds": 14_400,
+        "empirical_cleanup_reserve_seconds": 900,
+        "empirical_termination_cutoff_seconds": 13_500,
+        "maximum_successful_host_active_seconds": 18_000,
+        "maximum_cumulative_active_seconds": 21_600,
         "max_lambda_instances": 1,
         "max_launch_count": 2,
         "persistent_filesystems": 0,

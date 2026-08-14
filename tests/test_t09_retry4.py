@@ -459,3 +459,42 @@ def test_retry4_slot2_launch_headroom_enforces_exact_active_caps() -> None:
             lifecycle=lifecycle,
             now=10_000.0,
         )
+
+
+def test_retry4_static_package_hashes_commands_and_successor_control_close() -> None:
+    contracts = EXPERIMENT_ROOT / "contracts"
+    plan_path = EXPERIMENT_ROOT / "run-plans/pilot.yaml"
+    runtime_path = contracts / "T09_PILOT_RUNTIME_IDENTITY.json"
+    execution_path = contracts / "T09_PILOT_EXECUTION_CONTRACT.json"
+    commands_path = contracts / "T09_PILOT_COMMAND_MANIFESTS.json"
+    control_path = EXPERIMENT_ROOT / "T09_PRAGMATIC_RETRY4_EXECUTION_CONTROL.json"
+    registry = yaml.safe_load((ROOT / "experiments/registry.yaml").read_bytes())["experiments"][0]
+    runtime = json.loads(runtime_path.read_text(encoding="utf-8"))
+    execution = json.loads(execution_path.read_text(encoding="utf-8"))
+    commands = json.loads(commands_path.read_text(encoding="utf-8"))
+    control = json.loads(control_path.read_text(encoding="utf-8"))
+
+    assert execution["plan_id"] == commands["plan_id"] == "PLAN-EXP0001-PILOT-V6"
+    assert execution["contract_bindings"]["plan"] == {
+        "path": plan_path.relative_to(ROOT).as_posix(),
+        "sha256": host_hash(plan_path),
+        "size_bytes": plan_path.stat().st_size,
+    }
+    assert execution["contract_bindings"]["runtime"]["sha256"] == host_hash(runtime_path)
+    assert commands["execution_contract_sha256"] == host_hash(execution_path)
+    assert (
+        commands["reviewed_implementation_ancestor"]
+        == (runtime["repository_instrumentation"]["reviewed_implementation_ancestor"])
+    )
+    assert len(commands["manifests"]) == 4
+    assert [item["valid"] for item in commands["pair_diffs"]] == [True, True]
+    assert control["successor"] == {
+        "plan_id": "PLAN-EXP0001-PILOT-V6",
+        "profile_path": plan_path.relative_to(ROOT).as_posix(),
+        "profile_sha256": host_hash(plan_path),
+        "requirements": control["successor"]["requirements"],
+    }
+    assert registry["current_execution_control"] == {
+        "path": control_path.relative_to(ROOT).as_posix(),
+        "sha256": host_hash(control_path),
+    }

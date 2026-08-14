@@ -1,0 +1,53 @@
+{
+  "schema_version": "0.1.0",
+  "control_id": "EXECUTION-CONTROL-EXP0001-RETRY4-SUCCESSOR-0001",
+  "experiment_id": "EXP-0001",
+  "effective_on": "2026-08-14",
+  "terminal_record": {
+    "path": "experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY3_DISPOSITION.json",
+    "sha256": "ac116f903701daf3a0497b663b125505c1097a96e38f308126a9df0adf6896db"
+  },
+  "terminal_state": "t09-pilot-blocked-material-risk",
+  "execution_eligibility": "blocked-pending-prerequisites",
+  "authorized": false,
+  "replayable": false,
+  "supersedes_registered_profile_readiness": true,
+  "superseded_registered_profiles": [
+    {
+      "plan_id": "PLAN-EXP0001-SMOKE",
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/smoke.yaml",
+      "sha256": "ab276b9e49256d49f143e252eddf6fe5c447d6f9c11300745b450fb7f1d0e425",
+      "historical_execution_eligibility": "eligible-after-authorization",
+      "current_interpretation": "historical-consumed-nonreplayable"
+    }
+  ],
+  "superseded_execution_contracts": [
+    {
+      "contract_id": "EXECUTION-CONTRACT-EXP0001-PILOT-V5",
+      "plan_id": "PLAN-EXP0001-PILOT-V5",
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/proposals/T09_PILOT_EXECUTION_CONTRACT_V5.json",
+      "sha256": "0e67e37cd3869be0d4226b134861fc174db2cec315bb86e0ea0a13a8675cc589",
+      "historical_terminal_state": "current-turn-authorized-retry3-pending-dynamic-preflight",
+      "historical_execution_eligibility": "current-turn-authorized-after-replacement-image-qualification",
+      "current_interpretation": "historical-consumed-nonreplayable"
+    }
+  ],
+  "blockers": [
+    "retry3-single-use-two-launch-authority-exhausted",
+    "retry3-nonreset-campaign-admission-window-exhausted",
+    "no-v5-dynamic-qualification-frozen-manifest-or-empirical-attempt",
+    "v5-identities-are-historical-consumed-and-nonreplayable"
+  ],
+  "successor": {
+    "plan_id": "PLAN-EXP0001-PILOT-V6",
+    "profile_path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml",
+    "profile_sha256": "d0294b3a1535c4fe4ddfcc856a6b923731a7fb0c7840dd161c5784db61f35d8c",
+    "requirements": [
+      "fresh-v6-plan-host-attempt-evaluator-pair-and-archive-identities",
+      "separate-cumulative-active-preflight-and-empirical-clocks",
+      "clean-reviewed-successor-package",
+      "content-verified-retained-image-import-or-one-qualified-fallback-build",
+      "fresh-current-turn-retry4-authorization"
+    ]
+  }
+}

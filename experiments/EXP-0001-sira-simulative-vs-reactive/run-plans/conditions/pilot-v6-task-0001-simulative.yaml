@@ -3,7 +3,7 @@ experiment_id: EXP-0001
 run_id: RUN-T09-TASK-B-SIMULATIVE-0004
 profile: pilot
 profile_plan_id: PLAN-EXP0001-PILOT-V6
-profile_sha256: e7e214500348c8b876beb034df7b592c84f5ab79788ab6f310ef187fd797613c
+profile_sha256: d0294b3a1535c4fe4ddfcc856a6b923731a7fb0c7840dd161c5784db61f35d8c
 condition: SIRA-SIMULATIVE
 attempt: 1
 seed: 42
@@ -16,14 +16,14 @@ execution:
     authorization_reference: null
     command_sha256: null
 sources:
-  giclab_commit: a36c3c9720611cdf730ef1ce7f83224eacd72851
+  giclab_commit: ecbe05f734feb5f49430ebca807cd3b628697fc2
   upstream_source_id: SRC-SIRA-REPOSITORY
   upstream_commit: 93fb8d72de71f9a4a13419670adeb34d93cf7acd
   protocol_sha256: 5356fc8b3806f4135eb570f65b67da2f94463582db5e3e609320e23dbdb2a3f7
   config_sha256: cf25acd90f9d73d9aef978a7d059cfbc74a1447d901f4e3d27e2b5d9f121d2ed
   model_revision: gpt-4o-2024-11-20
   dataset_revision: 76ad1feb689b754bfe4e5e24d3ea371b647efa67
-  environment_sha256: eb5e43590a7e375b9aaacf9af723c738371cd09ef1ea7be57901b815c93bf124
+  environment_sha256: d1e9b97cf68d4ffed73af87b4bc9c985ec698bffeb4f56e6726c93acba4a659a
 task:
   task_id: 2120afba8009bad3
   source_kind: dataset-slice
@@ -37,7 +37,7 @@ pairing:
   order_index: 1
 budget:
   max_wall_seconds: 3600
-  max_cost_usd: 10.00
+  max_cost_usd: 10.0
   max_gpu_hours: 1.0
   max_model_calls: 1155
   max_model_tokens: 1000000

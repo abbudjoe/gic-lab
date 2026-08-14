@@ -13,8 +13,8 @@ authorized_run_profile:
   profile_sha256: null
   condition_plan_sha256s: []
 current_execution_control:
-  path: experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY3_TERMINAL_CONTROL.json
-  sha256: aaebe8bd1bb536adc75b117529e0c4b5d88391eb17aab844c64092348bd239cf
+  path: experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY4_EXECUTION_CONTROL.json
+  sha256: 9575e7a622b9e3dff7ad1cce329f78b8c9808ee46897d71c08a13a8c5949f260
 planned_execution_substrate: null
 historical_execution_substrate:
   decision_state: bounded-smoke-v3-ready-unauthorized
@@ -188,6 +188,47 @@ t09_pragmatic_retry3_checkpoint:
   security_restored: true
   evidence_archive_id: ARCHIVE-EXP0001-PILOT-V5-PREEMPIRICAL-0003
   evidence_record: experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY3_DISPOSITION.json
+  publication_release_blocked: true
+  scientific_result_claimed: false
+  experiment_outcome_assigned: false
+t09_pragmatic_retry4_checkpoint:
+  task: T09-PRAGMATIC-RETRY4
+  terminal_state: current-turn-authorized-retry4-pending-dynamic-preflight
+  lifecycle_state: prelaunch-static-package-binding
+  plan_id: PLAN-EXP0001-PILOT-V6
+  plan_sha256: d0294b3a1535c4fe4ddfcc856a6b923731a7fb0c7840dd161c5784db61f35d8c
+  source_authorization_sha256: e3222d38c9b21091a51839122d42594d691577716bc87fd3e09296c6b766df51
+  calibration_only: true
+  current_turn_execution_authorized: true
+  repository_plan_authorized: false
+  private_single_use_overlay_required: true
+  pilot_execution_authorized: true
+  reviewed_implementation_ancestor: ecbe05f734feb5f49430ebca807cd3b628697fc2
+  replacement_image_preferred_id: sha256:abe8ed38f5c5b5a0a63fa726a74034dc5c192a12c0fccfe1319f97c27ceaf0a3
+  retained_image_archive_verified: true
+  retained_image_archive_sha256: 623e717c2182eca9cee2f471b7ecd9a57bead2f5263dee64aa5cd954eae5ddb0
+  content_addressed_regression_archive_staging_implemented: true
+  cumulative_active_preflight_and_empirical_clocks_separated: true
+  dynamic_preflight_passed: false
+  frozen_run_manifest_written: false
+  provider_launch_count: 0
+  maximum_launch_count: 2
+  empirical_attempts_entered: 0
+  attempts_completed: 0
+  condition_retries: 0
+  model_metadata_requests: 0
+  task_model_calls: 0
+  total_tokens: 0
+  browser_actions: 0
+  openai_cost_usd: 0.0
+  lambda_cost_usd: 0.0
+  prior_t09_cost_usd: 4.04142013524027
+  new_campaign_cost_cap_usd: 48.0
+  cumulative_t09_cost_cap_usd: 55.0
+  preflight_wall_seconds: 3600
+  empirical_campaign_wall_seconds: 14400
+  empirical_cleanup_reserve_seconds: 900
+  maximum_cumulative_active_seconds: 21600
   publication_release_blocked: true
   scientific_result_claimed: false
   experiment_outcome_assigned: false
