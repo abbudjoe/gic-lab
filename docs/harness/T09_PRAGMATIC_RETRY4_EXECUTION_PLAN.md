@@ -44,8 +44,8 @@ comparative scientific conclusions.
 | R4-10 | Execute A-reactive, A-simulative, B-simulative, and B-reactive once each, sealing/exporting/verifying raw evidence before later empirical entry. | Four empirical-entry records, raw seals, verified exports, usage receipts, cleanup receipts, and zero retry. | partial: A-reactive entered exactly once and retained 20 calls / 38,779 tokens / 5 requested actions, but an oversized core made the raw seal fail after the output-byte stop; zero retry and the raw-ack gate correctly prohibited all later conditions |
 | R4-11 | Apply one uniform network-disabled finalizer and the predeclared first-pair continuation rule before Task B. | Selected finalization receipts, uniform closure proof, pair checkpoint, and matched-pair diffs. | blocked: the finalizer was qualified but could not run without an accepted immutable raw seal; no Task A pair or checkpoint exists |
 | R4-12 | Prioritize cleanup, retain available evidence, terminate the exact instance, prove terminal/absent and restored security, remove secrets/containers/rulesets, and reconcile actual active time/cost. | Verified final archive and provider closeout receipts plus terminal cloud-ledger events. | met: cleanup/termination passed; the byte-exact original archive is supplemented by one independently reviewed 597,140-byte post-termination overlay at manifest `1eedf1d9…`, frozen-runtime reconstruction passes, and clock receipt `989d5625…` reconciles the preserved provider receipts without rewriting them |
-| R4-13 | After termination, run broader repository/privacy/evidence gates, focused independent evidence review, and update registry/state/readiness/notebook/decision surfaces without overclaiming. | Full gate output, reviewer verdict, and converged public/machine state. | partial: terminal disposition/control and public/machine convergence are implemented; full gates and final independent evidence rereview are pending |
-| R4-14 | Report descriptive outcomes and operational feasibility only, including all 17 requested handoff items. | Final response and terminal ledger state; no EXP-0001 pass/fail or superiority claim. | partial: terminal ledger is sealed and the handoff becomes met only with the final response |
+| R4-13 | After termination, run broader repository/privacy/evidence gates, focused independent evidence review, and update registry/state/readiness/notebook/decision surfaces without overclaiming. | Full gate output, reviewer verdict, and converged public/machine state. | met: independent evidence rereview found no material residual; terminal disposition/control, registry, project state, readiness, notebook, and decision surfaces converge; portable-Quarto `make check` passes Ruff, strict mypy, all 1,414 tests, repository validation, 16-page rendering, and site validation |
+| R4-14 | Report descriptive outcomes and operational feasibility only, including all 17 requested handoff items. | Final response and terminal ledger state; no EXP-0001 pass/fail or superiority claim. | met at final handoff: this ledger and the accompanying 17-item response preserve the infrastructure-invalid/unscored boundary and make no EXP-0001 or condition-comparison claim |
 
 ## Authorization and budgets
 
@@ -132,6 +132,12 @@ seconds and may not retain the host for review or archive perfection.
   `1eedf1d9…`, identity is `a07cee4c…`, and clock reconciliation is `989d5625…`.
   The one added member is 597,140 bytes at `18f6c7d6…`; reconstructed frozen loading
   passes at `c633c835…`, while all four original archive hashes remain unchanged.
+- 2026-08-14: independent postrun rereview of closure commit `a003a9b6…` found no
+  material residual across the original archive, additive overlay, clock arithmetic,
+  privacy boundary, terminal control, and public/machine state. Broad-gate alignment
+  commit `462fb3f9…` then removed stale V5-as-current test assumptions. The final
+  portable-Quarto 1.9.38 `make check` passes Ruff, strict mypy, all 1,414 tests,
+  repository validation, all 16 notebook pages, and site validation.
 
 ## Next permitted phase
 

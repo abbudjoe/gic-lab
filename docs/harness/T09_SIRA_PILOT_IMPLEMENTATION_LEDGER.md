@@ -47,9 +47,11 @@ The complete R4 DoD and evidence log are in
 `docs/harness/T09_PRAGMATIC_RETRY4_EXECUTION_PLAN.md`. R4-10 is partial because only
 one attempt entered and its raw seal failed; R4-11 is blocked because no eligible
 raw attempt or pair reached finalization/checkpoint. R4-12 is met by the verified
-original-plus-overlay evidence and source-derived clock reconciliation. R4-13 awaits
-the final broad gate and independent evidence rereview; R4-14 becomes met only with
-the 17-item final handoff.
+original-plus-overlay evidence and source-derived clock reconciliation. R4-13 is met:
+independent evidence rereview found no material residual and the
+portable-Quarto 1.9.38 full gate passes Ruff, strict mypy, all 1,414 tests, repository
+validation, all 16 notebook pages, and site validation. R4-14 is met by this ledger
+and the accompanying 17-item final handoff.
 
 ---
 
