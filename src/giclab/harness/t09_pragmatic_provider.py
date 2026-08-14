@@ -180,6 +180,7 @@ RETRY4_SLOT2_TRANSITION_ALLOWED_PATHS: Final = frozenset(
         "tests/test_t09_sira_pilot.py",
     }
 )
+RETRY4_ACTIVE_SLOT2_ENTRY_PACKAGE_COMMIT: Final = "9275bed0cce8bff5e033b94c9fcc8767af629fcd"
 SOURCE_OBSERVER: Final = "t09-retry4-pragmatic-mutations-plus-l2m-read-only-observer-v1"
 MAX_RESPONSE_BYTES: Final = 16_777_216
 MAX_REQUEST_BYTES: Final = 65_536
@@ -2571,6 +2572,33 @@ def _retry4_slot2_git_transition(repository: Path, package_commit: str) -> dict[
                 "containers/sira-smoke/pragmatic/t09_remote_runner.py",
                 "src/giclab/harness/sira_gate_a_runtime.py",
                 "src/giclab/harness/t09_pragmatic_provider.py",
+            }
+        ),
+    )
+
+
+def retry4_active_slot2_entry_transition(
+    repository: Path, package_commit: str
+) -> dict[str, object]:
+    """Bind a focused pre-entry repair after the already-consumed slot-2 POST.
+
+    The provider receipt remains validated under the exact package that issued
+    the POST.  This transition proves that the host package is a clean,
+    science-invariant descendant whose changes stay inside the previously
+    reviewed Retry 4 control surface.
+    """
+
+    return _source_bound_slot2_git_transition(
+        repository,
+        package_commit,
+        from_package_commit=RETRY4_ACTIVE_SLOT2_ENTRY_PACKAGE_COMMIT,
+        plan_sha256=RETRY4_SLOT1_PLAN_SHA256,
+        allowed_paths=RETRY4_SLOT2_TRANSITION_ALLOWED_PATHS,
+        required_changed_paths=frozenset(
+            {
+                "containers/sira-smoke/pragmatic/t09_remote_runner.py",
+                "src/giclab/harness/t09_pragmatic_provider.py",
+                "src/giclab/harness/t09_sira_pilot.py",
             }
         ),
     )

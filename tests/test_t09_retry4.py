@@ -687,6 +687,56 @@ def test_retry4_slot2_control_repair_is_a_science_locked_descendant() -> None:
     assert set(transition["changed_paths"]).issubset(provider.RETRY4_SLOT2_TRANSITION_ALLOWED_PATHS)
 
 
+def test_retry4_active_slot2_entry_transition_is_source_bound() -> None:
+    package_commit = subprocess.run(
+        ["git", "-C", str(ROOT), "rev-parse", "HEAD"],
+        capture_output=True,
+        check=True,
+        text=True,
+    ).stdout.strip()
+    transition = provider.retry4_active_slot2_entry_transition(ROOT, package_commit)
+    assert transition["from_package_commit"] == (provider.RETRY4_ACTIVE_SLOT2_ENTRY_PACKAGE_COMMIT)
+    assert transition["to_package_commit"] == package_commit
+    assert transition["scientific_contract_changed"] is False
+    assert set(transition["changed_paths"]).issubset(provider.RETRY4_SLOT2_TRANSITION_ALLOWED_PATHS)
+
+
+def test_retry4_slot2_authority_is_minimal_bound_and_export_mode_matches(
+    tmp_path: Path,
+) -> None:
+    host = _load_host("giclab_t09_retry4_slot2_authority")
+    source = tmp_path / "provider-private"
+    authority = source / "slot2-eligibility-source"
+    authority.mkdir(parents=True)
+    host.write_exclusive(source / "replacement-launch-eligibility.json", {"eligible": True})
+    host.write_exclusive(authority / "transition.json", {"transition": True})
+    nested = authority / "slot1-entry-source"
+    nested.mkdir()
+    host.write_exclusive(nested / "entry-receipt.json", {"entry": True})
+    host.write_exclusive(nested / "source-manifest.json", {"entry_source": True})
+    closeout = authority / "slot1-closeout-source"
+    closeout.mkdir()
+    host.write_exclusive(closeout / "closeout-receipt.json", {"closeout": True})
+    host.write_exclusive(closeout / "source-manifest.json", {"closeout_source": True})
+    host.write_exclusive(
+        authority / "source-manifest.json",
+        provider._slot2_authority_tree_manifest(authority),
+    )
+    host.write_exclusive(source / "unrelated-owned-state.json", {"private": True})
+
+    destination = tmp_path / "retained"
+    retained = host.retain_slot2_authority(source, destination)
+    binding = host.slot2_authority_binding(destination)
+    assert binding["relative_paths"] == list(retained)
+    assert binding["replacement_eligibility_sha256"] == host.file_sha256(
+        destination / "replacement-launch-eligibility.json"
+    )
+    assert not (destination / "unrelated-owned-state.json").exists()
+    source_text = HOST_SOURCE.read_text(encoding="utf-8")
+    assert 'transition_mode == "replacement-launch"' in source_text
+    assert 'transition_mode == "slot2-replacement"' not in source_text
+
+
 def test_retry4_generated_postfreeze_receipt_admits_first_condition() -> None:
     host = _load_host("giclab_t09_retry4_postfreeze_admission")
     frozen_sha = "a" * 64

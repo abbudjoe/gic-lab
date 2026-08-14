@@ -37,8 +37,10 @@ from jsonschema import Draft202012Validator, FormatChecker
 from giclab.harness.lambda_campaign_lifecycle import Retry4LifecycleLimits
 from giclab.harness.sira_gate_a import ProviderBudgetUsage
 from giclab.harness.t09_pragmatic_provider import (
+    RETRY4_ACTIVE_SLOT2_ENTRY_PACKAGE_COMMIT,
     T09ProviderError,
     load_campaign_lifecycle,
+    retry4_active_slot2_entry_transition,
     validate_entry_receipt_source_bound,
 )
 from giclab.harness.t09_pragmatic_provider import (
@@ -1049,6 +1051,30 @@ def retain_slot2_authority(source: Path, destination: Path) -> tuple[str, ...]:
     if _slot2_authority_relative_paths(destination) != relative_paths:
         raise T09HostError("slot-2 authority changed during minimal retention")
     return relative_paths
+
+
+def slot2_authority_binding(root: Path) -> dict[str, object]:
+    """Return the exact, content-addressed slot-2 authority projection."""
+
+    relative_paths = _slot2_authority_relative_paths(root)
+    records = [
+        {
+            "path": relative,
+            "bytes": (root / relative).stat().st_size,
+            "sha256": file_sha256(root / relative),
+        }
+        for relative in relative_paths
+    ]
+    return {
+        "relative_paths": list(relative_paths),
+        "relative_paths_sha256": canonical_sha256(list(relative_paths)),
+        "files": records,
+        "files_sha256": canonical_sha256(records),
+        "replacement_eligibility_sha256": file_sha256(root / "replacement-launch-eligibility.json"),
+        "replacement_eligibility_source_manifest_sha256": file_sha256(
+            root / "slot2-eligibility-source/source-manifest.json"
+        ),
+    }
 
 
 def retain_prior_qualification_failures(
@@ -2292,6 +2318,8 @@ def validate_dynamic_receipt(
     repository = repository_root.resolve(strict=True)
     source = source_root.resolve(strict=True)
     plan = contract_paths(repository)["plan"]
+    provider_entry_package_commit = expected_package_commit
+    package_transition: dict[str, object] | None = None
     try:
         value = validate_entry_receipt_source_bound(
             path.resolve(strict=True),
@@ -2299,8 +2327,30 @@ def validate_dynamic_receipt(
             package_commit=expected_package_commit,
             plan_sha256=file_sha256(plan),
         )
-    except T09ProviderError as exc:
-        raise T09HostError("provider entry receipt is not source-bound") from exc
+    except T09ProviderError as current_error:
+        try:
+            value = validate_entry_receipt_source_bound(
+                path.resolve(strict=True),
+                source,
+                package_commit=RETRY4_ACTIVE_SLOT2_ENTRY_PACKAGE_COMMIT,
+                plan_sha256=file_sha256(plan),
+            )
+            package_transition = retry4_active_slot2_entry_transition(
+                repository, expected_package_commit
+            )
+        except T09ProviderError:
+            raise T09HostError("provider entry receipt is not source-bound") from current_error
+        provider_entry_package_commit = RETRY4_ACTIVE_SLOT2_ENTRY_PACKAGE_COMMIT
+        if (
+            value.get("launch_slot") != 2
+            or value.get("launch_count") != 2
+            or package_transition.get("from_package_commit")
+            != RETRY4_ACTIVE_SLOT2_ENTRY_PACKAGE_COMMIT
+            or package_transition.get("to_package_commit") != expected_package_commit
+        ):
+            raise T09HostError(
+                "active slot-2 provider package transition drifted"
+            ) from current_error
     captured = value.get("captured_at_epoch")
     if (
         not isinstance(captured, (int, float))
@@ -2319,6 +2369,11 @@ def validate_dynamic_receipt(
     result = dict(value)
     result["provider_preflight_started_at_epoch"] = value.get("owned_lambda_started_at_epoch")
     result["receipt_sha256"] = file_sha256(path)
+    result["provider_entry_package_commit"] = provider_entry_package_commit
+    result["provider_package_transition"] = package_transition
+    result["provider_package_transition_sha256"] = (
+        canonical_sha256(package_transition) if package_transition is not None else None
+    )
     return result
 
 
@@ -4081,6 +4136,20 @@ def write_frozen_run_manifest(
         if launch_slot == 2
         else None
     )
+    if launch_slot == 1:
+        if slot2_authority is not None:
+            raise T09HostError("first launch retained slot-2 authority")
+        slot2_authority_sha256: str | None = None
+    else:
+        if (
+            slot2_authority is None
+            or slot2_authority.get("replacement_eligibility_sha256")
+            != dynamic.get("replacement_eligibility_sha256")
+            or slot2_authority.get("replacement_eligibility_source_manifest_sha256")
+            != dynamic.get("replacement_eligibility_source_manifest_sha256")
+        ):
+            raise T09HostError("slot-2 authority does not bind the provider entry")
+        slot2_authority_sha256 = canonical_sha256(slot2_authority)
     if image_materialization.get("image_materialization_policy") != expected_materialization_policy:
         raise T09HostError("image materialization policy drifted before freeze")
     if qualified_real_evidence_regression_receipt.get(
@@ -4149,6 +4218,9 @@ def write_frozen_run_manifest(
         "replacement_eligibility_source_manifest_sha256": dynamic.get(
             "replacement_eligibility_source_manifest_sha256"
         ),
+        "slot2_authority_sha256": slot2_authority_sha256,
+        "provider_entry_package_commit": dynamic.get("provider_entry_package_commit"),
+        "provider_package_transition_sha256": dynamic.get("provider_package_transition_sha256"),
         "slot1_failure_archive_sha256": None,
         "slot1_image_archive_sha256": None,
         "slot1_entry_receipt_sha256": None,
@@ -4257,6 +4329,8 @@ def write_frozen_run_manifest(
             "preflight_resume_transition": resume_fields["preflight_resume_transition_sha256"],
             "slot2_eligibility": dynamic.get("replacement_eligibility_sha256"),
             "slot2_authority_source": dynamic.get("replacement_eligibility_source_manifest_sha256"),
+            "slot2_authority": slot2_authority_sha256,
+            "provider_package_transition": dynamic.get("provider_package_transition_sha256"),
         },
     }
     if (
@@ -4383,6 +4457,11 @@ def load_frozen_run_manifest(
         "replacement_eligibility_source_manifest_sha256": provider_entry.get(
             "replacement_eligibility_source_manifest_sha256"
         ),
+        "slot2_authority_sha256": manifest.get("slot2_authority_sha256"),
+        "provider_entry_package_commit": provider_entry.get("provider_entry_package_commit"),
+        "provider_package_transition_sha256": provider_entry.get(
+            "provider_package_transition_sha256"
+        ),
         "slot1_failure_archive_sha256": None,
         "slot1_image_archive_sha256": None,
         "slot1_entry_receipt_sha256": None,
@@ -4453,8 +4532,26 @@ def load_frozen_run_manifest(
         != typed_qualification.replacement_eligibility_sha256
         or source_receipts_for_transition.get("slot2_authority_source")
         != typed_qualification.replacement_eligibility_source_manifest_sha256
+        or source_receipts_for_transition.get("slot2_authority")
+        != typed_qualification.slot2_authority_sha256
+        or source_receipts_for_transition.get("provider_package_transition")
+        != typed_qualification.provider_package_transition_sha256
     ):
         raise T09HostError("frozen launch transition authority drifted")
+    authority_root = artifact_root / "pilot-v6/slot2-authority"
+    if typed_qualification.launch_slot == 1:
+        if authority_root.exists() or authority_root.is_symlink():
+            raise T09HostError("fresh launch retained unexpected slot-2 authority")
+    else:
+        authority = slot2_authority_binding(authority_root)
+        if (
+            canonical_sha256(authority) != typed_qualification.slot2_authority_sha256
+            or authority.get("replacement_eligibility_sha256")
+            != typed_qualification.replacement_eligibility_sha256
+            or authority.get("replacement_eligibility_source_manifest_sha256")
+            != typed_qualification.replacement_eligibility_source_manifest_sha256
+        ):
+            raise T09HostError("retained slot-2 authority drifted")
     file_hash_receipt_path = artifact_root / "pilot-v6/final-image-file-hashes/receipt.json"
     file_hash_receipt = load_object(file_hash_receipt_path, label="final image file hashes")
     materialization_path = artifact_root / "pilot-v6/replacement-image-qualification/receipt.json"
@@ -5407,6 +5504,24 @@ def preflight(args: argparse.Namespace) -> None:
     if owned_containers(prefix):
         raise T09HostError("owned pilot containers already exist")
     artifact_root.mkdir(mode=0o700, parents=True)
+    slot2_authority: dict[str, object] | None = None
+    if launch_slot == 1:
+        if args.slot2_authority_root is not None:
+            raise T09HostError("first launch received slot-2 authority")
+    else:
+        if args.slot2_authority_root is None:
+            raise T09HostError("second launch lacks its retained authority root")
+        retained_authority_root = artifact_root / "pilot-v6/slot2-authority"
+        retain_slot2_authority(
+            args.slot2_authority_root.resolve(strict=True), retained_authority_root
+        )
+        slot2_authority = slot2_authority_binding(retained_authority_root)
+        if slot2_authority.get("replacement_eligibility_sha256") != dynamic.get(
+            "replacement_eligibility_sha256"
+        ) or slot2_authority.get("replacement_eligibility_source_manifest_sha256") != dynamic.get(
+            "replacement_eligibility_source_manifest_sha256"
+        ):
+            raise T09HostError("retained slot-2 authority does not match provider entry")
     lambda_started_raw = dynamic["provider_preflight_started_at_epoch"]
     if not isinstance(lambda_started_raw, (int, float)) or isinstance(lambda_started_raw, bool):
         raise T09HostError("provider entry receipt lacks the billable time origin")
@@ -5601,7 +5716,7 @@ def preflight(args: argparse.Namespace) -> None:
         qualified_real_evidence_regression_receipt=qualified_real_regression,
         regression_archive_staging_receipt=archive_staging,
         local_finalizer_qualification_receipt=local_finalizer_qualification,
-        slot2_authority=None,
+        slot2_authority=slot2_authority,
     )
     manifest_published_at = time.time()
     if manifest_published_at > empirical_start:
@@ -8491,7 +8606,7 @@ def _attempt_export_control_sources(
             label="attempt export frozen runtime",
         )
         transition_mode = frozen_for_export.get("preflight_transition_mode")
-        if transition_mode == "slot2-replacement":
+        if transition_mode == "replacement-launch":
             authority_root = artifact_root / "pilot-v6/slot2-authority"
             if authority_root.is_symlink() or not authority_root.is_dir():
                 raise T09HostError("slot-2 attempt export lacks its authority root")
@@ -8924,7 +9039,7 @@ def verify_attempt_export(args: argparse.Namespace) -> None:
         if not isinstance(frozen_transition_probe, dict):
             raise T09HostError("attempt export frozen control is not an object")
         transition_mode = frozen_transition_probe.get("preflight_transition_mode")
-        if transition_mode == "slot2-replacement":
+        if transition_mode == "replacement-launch":
             source_manifest_name = (
                 "control/pilot-v6/slot2-authority/slot2-eligibility-source/source-manifest.json"
             )
@@ -9788,13 +9903,26 @@ def package(args: argparse.Namespace) -> None:
     lambda_started = entry.get("lambda_started_at_epoch")
     owned_hash = entry.get("owned_instance_identity_sha256")
     entry_sha256 = file_sha256(entry_receipt_path)
+    provider_package_commit = entry.get("package_commit")
     if (
         not isinstance(lambda_started, (int, float))
         or isinstance(lambda_started, bool)
         or not isinstance(owned_hash, str)
         or _HEX64.fullmatch(owned_hash) is None
+        or not isinstance(provider_package_commit, str)
+        or re.fullmatch(r"[a-f0-9]{40}", provider_package_commit) is None
     ):
         raise T09HostError("source-bound provider entry identity is unavailable")
+    if provider_package_commit != args.package_commit:
+        transition = retry4_active_slot2_entry_transition(
+            args.repository.resolve(strict=True), args.package_commit
+        )
+        if (
+            provider_package_commit != RETRY4_ACTIVE_SLOT2_ENTRY_PACKAGE_COMMIT
+            or transition.get("from_package_commit") != provider_package_commit
+            or transition.get("to_package_commit") != args.package_commit
+        ):
+            raise T09HostError("provider closeout package transition drifted")
     source_archives: list[Path] = []
     frozen_manifest_sha256s: set[str] = set()
     replacement_image_ids: set[str] = set()
@@ -9871,7 +9999,7 @@ def package(args: argparse.Namespace) -> None:
         expected_lambda_started_at_epoch=float(lambda_started),
         expected_owned_instance_identity_sha256=owned_hash,
         expected_entry_receipt_sha256=entry_sha256,
-        expected_package_commit=args.package_commit,
+        expected_package_commit=provider_package_commit,
         repository_root=args.repository.resolve(strict=True),
         source_root=args.provider_closeout_source_root.resolve(strict=True),
         entry_receipt_path=entry_receipt_path,
@@ -10176,6 +10304,7 @@ def parser() -> argparse.ArgumentParser:
     preflight_parser.add_argument("--real-evidence-archive", type=Path, required=True)
     preflight_parser.add_argument("--local-finalizer-qualification", type=Path, required=True)
     preflight_parser.add_argument("--replacement-image-archive", type=Path, required=True)
+    preflight_parser.add_argument("--slot2-authority-root", type=Path)
     condition_export = operations.add_parser("condition-export")
     condition_export.add_argument("--run-id", choices=RUN_IDS, required=True)
     finalize_parser = operations.add_parser("finalize-attempt")

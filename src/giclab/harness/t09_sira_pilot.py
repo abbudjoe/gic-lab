@@ -349,6 +349,9 @@ class RuntimeQualification:
     prior_lambda_cost_usd: float
     replacement_eligibility_sha256: str | None
     replacement_eligibility_source_manifest_sha256: str | None
+    slot2_authority_sha256: str | None
+    provider_entry_package_commit: str
+    provider_package_transition_sha256: str | None
     slot1_failure_archive_sha256: str | None
     slot1_image_archive_sha256: str | None
     slot1_entry_receipt_sha256: str | None
@@ -522,6 +525,14 @@ class RuntimeQualification:
                 str | None,
                 document.get("replacement_eligibility_source_manifest_sha256"),
             ),
+            slot2_authority_sha256=cast(str | None, document.get("slot2_authority_sha256")),
+            provider_entry_package_commit=_required_string(
+                document.get("provider_entry_package_commit"),
+                context="provider entry package commit",
+            ),
+            provider_package_transition_sha256=cast(
+                str | None, document.get("provider_package_transition_sha256")
+            ),
             slot1_failure_archive_sha256=cast(
                 str | None, document.get("slot1_failure_archive_sha256")
             ),
@@ -578,6 +589,7 @@ class RuntimeQualification:
             or result.preflight_transition_mode not in {"fresh", "replacement-launch"}
             or result.launch_slot not in {1, 2}
             or result.launch_count != result.launch_slot
+            or re.fullmatch(r"[a-f0-9]{40}", result.provider_entry_package_commit) is None
             or result.campaign_started_at_epoch <= 0
             or result.owned_lambda_started_at_epoch > result.campaign_started_at_epoch
             or result.first_pair_started_at_epoch < result.campaign_started_at_epoch
@@ -605,6 +617,9 @@ class RuntimeQualification:
                 or result.prior_lambda_cost_usd != 0
                 or result.replacement_eligibility_sha256 is not None
                 or result.replacement_eligibility_source_manifest_sha256 is not None
+                or result.slot2_authority_sha256 is not None
+                or result.provider_entry_package_commit != result.clean_package_commit
+                or result.provider_package_transition_sha256 is not None
                 or result.preflight_prior_package_commit is not None
                 or any(item is not None for item in recovery_hashes)
             ):
@@ -627,6 +642,19 @@ class RuntimeQualification:
                 or any(
                     not isinstance(item, str) or _HEX64.fullmatch(item) is None
                     for item in replacement_hashes
+                )
+                or not isinstance(result.slot2_authority_sha256, str)
+                or _HEX64.fullmatch(result.slot2_authority_sha256) is None
+                or (
+                    result.provider_entry_package_commit != result.clean_package_commit
+                    and (
+                        not isinstance(result.provider_package_transition_sha256, str)
+                        or _HEX64.fullmatch(result.provider_package_transition_sha256) is None
+                    )
+                )
+                or (
+                    result.provider_entry_package_commit == result.clean_package_commit
+                    and result.provider_package_transition_sha256 is not None
                 )
             ):
                 raise T09PilotError("replacement-launch qualification binding drifted")
