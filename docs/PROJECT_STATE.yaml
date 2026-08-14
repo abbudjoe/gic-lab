@@ -203,7 +203,7 @@ t09_pragmatic_retry4_checkpoint:
   repository_plan_authorized: false
   private_single_use_overlay_required: true
   pilot_execution_authorized: true
-  reviewed_implementation_ancestor: ecbe05f734feb5f49430ebca807cd3b628697fc2
+  reviewed_implementation_ancestor: 4c9aa828d3054223125cc94c61d4ebeeabd3794b
   replacement_image_preferred_id: sha256:abe8ed38f5c5b5a0a63fa726a74034dc5c192a12c0fccfe1319f97c27ceaf0a3
   retained_image_archive_verified: true
   retained_image_archive_sha256: 623e717c2182eca9cee2f471b7ecd9a57bead2f5263dee64aa5cd954eae5ddb0

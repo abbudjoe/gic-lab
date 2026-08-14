@@ -37,8 +37,8 @@ comparative scientific conclusions.
 | R4-03 | Separate cumulative active Lambda accounting, a fresh 3,600-second clock for each provider preflight, and a 14,400-second empirical clock beginning only after durable frozen-manifest publication. | Typed state/contracts plus exact fake-clock boundary regressions. | met: three typed clocks, durable future-origin manifest publication, and exact Retry 3 failure/equality/overflow tests pass |
 | R4-04 | Enforce at most two sequential launches, one simultaneous instance, 3,600-second failed-preflight limit, 300-second termination dispatch, 21,600 cumulative active seconds, USD 8 Lambda, USD 48 new, and USD 55 cumulative T09 spend. | Source-bound provider receipts, equality/overflow tests, and cloud ledger. | in-progress: typed local/provider cap enforcement and boundary tests pass; live source-bound receipts and cloud ledger remain |
 | R4-05 | Verify and prefer the retained 1,207,128,576-byte image archive at SHA-256 `623e717c…`; otherwise build exactly one replacement and qualify it. | Local archive verification and live image-load/build receipt. | in-progress: local archive is mode 0600, nlink 1, exact size/hash on the approved volume; live load/build receipt remains |
-| R4-06 | Issue fresh V6 plan, host, qualification, attempt, evaluator, pair, stage, archive, and provider-slot identities while preserving every scientific field. | Machine science projection equality, four command manifests, and two valid pair diffs. | met: plan `d0294b3a…`, runtime `d1e9b97c…`, execution `f69f2ca9…`, four V6 condition plans, four exact commands, and both pair diffs are bound and valid |
-| R4-07 | Freeze a clean static package and pass only focused staging/clock/provider/image/qualification/pair/budget/cleanup tests, `make validate`, diff hygiene, and focused spec-conformance review before launch. | Exact commit, commands, test output, reviewer verdict, and clean tree. | in-progress: implementation ancestor is `ecbe05f7…`; 12 focused tests, `make validate`, and diff hygiene pass; final package commit and independent focused review remain |
+| R4-06 | Issue fresh V6 plan, host, qualification, attempt, evaluator, pair, stage, archive, and provider-slot identities while preserving every scientific field. | Machine science projection equality, four command manifests, and two valid pair diffs. | met: plan `d0294b3a…`, runtime `e3bbb5bf…`, execution `55023188…`, four V6 condition plans, four exact commands, and both pair diffs are bound and valid |
+| R4-07 | Freeze a clean static package and pass only focused staging/clock/provider/image/qualification/pair/budget/cleanup tests, `make validate`, diff hygiene, and focused spec-conformance review before launch. | Exact commit, commands, test output, reviewer verdict, and clean tree. | in-progress: implementation ancestor is `4c9aa828…`; 14 focused tests, `make validate`, and diff hygiene pass; final rebound package commit and focused rereview remain |
 | R4-08 | Bind least-privilege credentials, approved attached-volume retention, hardware/runtime identity, budget authority, and cleanup policy before the first cloud mutation. | Private authorization/volume records and cloud-run ledger `planned`/`launch_intent` events without secret values. | not-started |
 | R4-09 | Dynamically qualify the exact image, evaluator, real-evidence regression, browser lifecycle, model metadata, pair diffs, and frozen run manifest within one preflight wall. | Source-derived live receipts and frozen-manifest SHA-256; zero task requests/actions before entry. | not-started |
 | R4-10 | Execute A-reactive, A-simulative, B-simulative, and B-reactive once each, sealing/exporting/verifying raw evidence before later empirical entry. | Four empirical-entry records, raw seals, verified exports, usage receipts, cleanup receipts, and zero retry. | not-started |
@@ -74,8 +74,11 @@ seconds and may not retain the host for review or archive perfection.
   archive, full dataset, pinned evaluator, and 51-package overlay; the accepted
   semantic projection remains `7bdf21f2…` with zero added model/browser activity.
 - 2026-08-14: froze the V6 static plan/runtime/execution/condition/command hash
-  cascade from reviewed implementation ancestor `ecbe05f7…`; all four rendered
+  cascade from reviewed implementation ancestor `4c9aa828…`; all four rendered
   commands and both matched-pair diffs validate, and `make validate` passes.
+- 2026-08-14: focused review found and the implementation fixed one post-freeze
+  admission receipt key mismatch before launch; the writer and reader now share one
+  typed constant and a direct pass/fail receipt regression.
 
 ## Next permitted phase
 
