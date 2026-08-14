@@ -12,8 +12,10 @@ reactive entered once. A core artifact exceeded the raw-output cap and the immut
 raw seal failed closed; no evaluator, score, pair, checkpoint, or later attempt
 exists. Both hosts are terminal or absent, zero T09 instances and restored security
 are verified. `T09_PRAGMATIC_RETRY4_TERMINAL_CONTROL.json` makes V6 consumed and
-nonreplayable and names no successor. This document is historical and contains no
-ready-to-copy authorization block.
+nonreplayable and names no successor. The original private archive remains byte-exact;
+post-termination sidecar manifest `1eedf1d9…` restores its one omitted manifest-owned
+member and clock receipt `989d5625…` distinguishes provider preflight from empirical
+time. This document is historical and contains no ready-to-copy authorization block.
 
 ## V5 Retry 3 historical terminal overlay
 

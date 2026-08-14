@@ -27,12 +27,17 @@ no pair or checkpoint exists.
 
 The maximal private aggregate prefix is 9,623,449 bytes at SHA-256 `8b647302…`; final
 archive manifest SHA-256 is `4b7bc842…`. Independent review found that the aggregate
-stage omitted one 597,140-byte nested authority archive despite retaining the source
-manifest that declares it, so a one-file post-termination overlay and separate clock
-reconciliation are required before final archive closure. Exact-credential cleanup passed with no
-exposure, while public raw release remains blocked because the core contains private-
-network material and conservative fixture credential-pattern findings remain. Both
-hosts are terminal or absent, zero T09 instances and restored security are verified.
+stage omitted one manifest-owned 597,140-byte nested authority archive. Clean offline
+repair package `13cbf56e…` preserved all four original archive files byte-exact and
+created one private sidecar overlay: manifest `1eedf1d9…`, identity `a07cee4c…`, and
+clock reconciliation `989d5625…`. The exact one-file union reloads frozen manifest
+`c633c835…`; the clock receipt distinguishes 2,353.116390 seconds of slot-2 preflight,
+680.255410 seconds from empirical start through terminal/zero observation, and
+4,419.078072 cumulative active Lambda seconds without rewriting the raw closeout.
+Exact-credential cleanup passed with no exposure, while public raw release remains
+blocked because the core contains private-network material and conservative fixture
+credential-pattern findings remain. Both hosts are terminal or absent, zero T09
+instances and restored security are verified.
 Retry4 used 4,419.078072 active Lambda seconds / USD 1.5835029759 plus USD 0.1175275
 OpenAI; cumulative T09 cost is USD 5.7424506112, below all caps. The authoritative
 machine records are `T09_PRAGMATIC_RETRY4_DISPOSITION.json` and
@@ -41,9 +46,10 @@ machine records are `T09_PRAGMATIC_RETRY4_DISPOSITION.json` and
 The complete R4 DoD and evidence log are in
 `docs/harness/T09_PRAGMATIC_RETRY4_EXECUTION_PLAN.md`. R4-10 is partial because only
 one attempt entered and its raw seal failed; R4-11 is blocked because no eligible
-raw attempt or pair reached finalization/checkpoint. R4-13 awaits the final broad gate
-and independent evidence rereview; R4-14 becomes met only with the 17-item final
-handoff.
+raw attempt or pair reached finalization/checkpoint. R4-12 is met by the verified
+original-plus-overlay evidence and source-derived clock reconciliation. R4-13 awaits
+the final broad gate and independent evidence rereview; R4-14 becomes met only with
+the 17-item final handoff.
 
 ---
 

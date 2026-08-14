@@ -22,6 +22,15 @@
   "repairs": {
     "archive_staging": "The operator-supplied V4 regression archive is no-follow size/hash verified, exclusively copied and fsynced to one canonical private path, rehashed there, used read-only, and removed during cleanup without binding its upload pathname.",
     "clock_lifecycle": "Cumulative active Lambda accounting is separate from each launch's 3600-second preflight clock and the post-freeze 14400-second empirical campaign clock.",
+    "posttermination_evidence_repair": {
+      "overlay_id": "ARCHIVE-EXP0001-PILOT-V6-0004-POSTRUN-OVERLAY-0001",
+      "repair_commit": "13cbf56ee58a332de8535c3edafcab4348a0a476",
+      "original_archive_preserved_byte_exact": true,
+      "exact_one_member_added": true,
+      "frozen_runtime_reconstruction_passed": true,
+      "reconciliation_after_provider_termination": true,
+      "pretermination_verification_claimed_for_overlay": false
+    },
     "scientific_contract_changed": false
   },
   "qualification": {
@@ -145,12 +154,16 @@
       "owned_lambda_duration_seconds": 3033.37180018425,
       "accelerator_hours": 0.8426032778289583,
       "list_cost_usd": 1.0869582283993562,
+      "provider_preflight_seconds": 2353.116389989853,
+      "empirical_to_termination_dispatch_seconds": 576.7266230583191,
+      "empirical_to_terminal_and_zero_seconds": 680.255410194397,
       "model_metadata_requests": 1,
       "empirical_attempts_entered": 1,
       "termination_request_count": 1,
       "terminal_or_absent": true,
       "zero_t09_instances": true,
-      "security_restored": true
+      "security_restored": true,
+      "clock_reconciliation_after_termination": true
     },
     "active_lambda_duration_seconds": 4419.078072309494,
     "accelerator_hours": 1.2275216867526372,
@@ -219,8 +232,18 @@
     "slot2_stage_archive_bytes": 9623449,
     "slot2_stage_archive_sha256": "8b647302c6832ae42e38eb9535da18a20cba69c25891a6dfe1955f7aa66b1f95",
     "slot2_stage_manifest_sha256": "3a1004b0170fd506b43c9e6a3a0db5ea69f21fd28c08d118814d0ea878728283",
+    "slot2_stage_completeness": "reconstructable-with-posttermination-overlay",
     "final_archive_manifest_sha256": "4b7bc842064a94c856e3c5d55c027aacb497cf0006c223baac8a4abea451481b",
     "final_archive_identity_sha256": "1c0320b2ec4559223f29401e710ce22d8f7f655a7fd8fdf2de0582859c24dfb9",
+    "original_archive_preserved_byte_exact": true,
+    "posttermination_overlay_id": "ARCHIVE-EXP0001-PILOT-V6-0004-POSTRUN-OVERLAY-0001",
+    "posttermination_overlay_manifest_sha256": "1eedf1d9423f720ec15a74045799228127c59b341c097c4d160c93aa9e508ed2",
+    "posttermination_overlay_identity_sha256": "a07cee4c06733098fb1400df3e27af04dff59dac8aba333f6ff050c8777233c9",
+    "posttermination_reconstruction_receipt_sha256": "855fe6429816ecde1f69622b3b806055d472009b723b08d32ac4c5ab19d9d4e7",
+    "posttermination_clock_reconciliation_sha256": "989d5625c719d3b081cba9f1b254ee81c1e4f56aa6f6bf44bdb7ed5c8dd7884f",
+    "posttermination_overlay_member_bytes": 597140,
+    "posttermination_overlay_member_sha256": "18f6c7d6bcda6f6be4c53854dc89d1fd08fb286393fba187815184db8819134f",
+    "frozen_runtime_reconstructable_with_overlay": true,
     "slot1_stage_archive_sha256": "18f6c7d6bcda6f6be4c53854dc89d1fd08fb286393fba187815184db8819134f",
     "slot1_provider_entry_receipt_sha256": "0c890a24b054ed3ddf0816c7e3c1d0da2601d03b3438d932e43a06e6df3a8335",
     "slot1_provider_entry_source_manifest_sha256": "0e96f1d7465d798f69ecfb264a815af2987bb814f6677d6e64fbdaf0412b74cd",

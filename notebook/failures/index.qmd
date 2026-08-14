@@ -49,6 +49,25 @@ was transferred, temporary secrets and owned containers were removed, and the ex
 provider host is terminal/absent with zero T09 instances and restored security. This
 is a control-plane stop, not a negative result for either SiRA condition.
 
+## T09 V6 post-entry raw-seal stop
+
+On 2026-08-14, V6 imported and fully qualified the retained replacement image, then
+Task A reactive crossed empirical entry once. It retained 20 task-model calls, 38,779
+tokens, five requested browser actions, and four post-action results. A 234,479,616-
+byte core artifact expanded the attempt tree beyond its 67,108,864-byte hard cap. The
+host stopped the container with exit 143; the immutable raw-complete seal then failed
+closed. Task completion, answer, evaluator validity, and score are unavailable—not
+zero. The remaining three conditions did not run, so no pair or checkpoint exists.
+
+Both hosts are terminal or absent, zero T09 instances and restored security are
+verified. Post-termination review preserved all four original archive files byte-
+exact and added one private sidecar containing the single manifest-owned member that
+aggregate staging omitted. The reconstructed union reloads the frozen runtime; a
+separate source-bound receipt distinguishes provider preflight, empirical time, and
+cumulative billable time without changing the provider closeout. Public raw release
+remains blocked. This is an infrastructure-invalid unscored attempt, not scientific
+evidence against either condition.
+
 Future entries will distinguish:
 
 - infrastructure-invalid runs;

@@ -214,6 +214,9 @@ results. A 234,479,616-byte core file pushed the raw tree beyond the 67,108,864-
 hard cap. Exit 143 and the failed raw-complete seal make the attempt infrastructure-
 invalid and unscored; no later attempt, evaluator, pair, checkpoint, or comparison
 exists. Both hosts are terminal/absent, zero T09 instances and restored security are
-verified, and all V6 authority is exhausted. A future successor must first disable or
-strictly bound core dumps and prove a reconstructable privacy-safe raw failure seal,
-then use fresh identities, review, and current-turn authorization.
+verified, and all V6 authority is exhausted. The original private archive remains
+byte-exact; sidecar manifest `1eedf1d9…` restores one omitted authority member and
+clock receipt `989d5625…` corrects the preflight/empirical projection without
+rewriting provider evidence. A future successor must first disable or strictly bound
+core dumps and prove a reconstructable privacy-safe raw failure seal, then use fresh
+identities, review, and current-turn authorization.

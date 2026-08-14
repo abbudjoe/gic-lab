@@ -14,7 +14,7 @@ authorized_run_profile:
   condition_plan_sha256s: []
 current_execution_control:
   path: experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY4_TERMINAL_CONTROL.json
-  sha256: 146436a7320cca2c51505648b25c70da083469521855d0c866d81346bb7aba01
+  sha256: d50108f924e5b5aa2fdfd7cada80d3829a72a01002d91da79b1a2e5513313b78
 planned_execution_substrate: null
 historical_execution_substrate:
   decision_state: bounded-smoke-v3-ready-unauthorized
@@ -259,6 +259,12 @@ t09_pragmatic_retry4_checkpoint:
   zero_t09_instances: true
   security_restored: true
   evidence_archive_id: ARCHIVE-EXP0001-PILOT-V6-0004
+  evidence_archive_original_preserved_byte_exact: true
+  evidence_archive_posttermination_overlay_id: ARCHIVE-EXP0001-PILOT-V6-0004-POSTRUN-OVERLAY-0001
+  evidence_archive_posttermination_overlay_manifest_sha256: 1eedf1d9423f720ec15a74045799228127c59b341c097c4d160c93aa9e508ed2
+  evidence_archive_posttermination_overlay_identity_sha256: a07cee4c06733098fb1400df3e27af04dff59dac8aba333f6ff050c8777233c9
+  evidence_archive_frozen_runtime_reconstructable_with_overlay: true
+  posttermination_clock_reconciliation_sha256: 989d5625c719d3b081cba9f1b254ee81c1e4f56aa6f6bf44bdb7ed5c8dd7884f
   evidence_record: experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY4_DISPOSITION.json
   publication_release_blocked: true
   scientific_result_claimed: false

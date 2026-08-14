@@ -23,6 +23,8 @@ qualified the retained image, then entered Task A reactive once. An oversized co
 artifact exceeded the raw-output cap and prevented a raw seal, evaluator, or score;
 the other three attempts did not run. Both Retry 4 hosts are terminal or absent, zero
 T09 instances and restored security are verified, and all V6 authority is exhausted.
+A reviewed post-termination sidecar restores the original archive's one omitted
+manifest-owned member without changing the sealed archive or scientific record.
 A typed terminal execution-control overlay makes the frozen smoke and V6
 profile identities nonreplayable; no registered successor profile exists. A protocol,
 readiness record, or proposed budget is not authorization.

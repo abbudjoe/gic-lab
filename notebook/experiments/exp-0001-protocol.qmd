@@ -91,8 +91,10 @@ requested browser actions, and four post-action results. A 234,479,616-byte core
 then exceeded the 67,108,864-byte attempt-output cap. The container stopped with exit
 143 and the raw-complete seal failed closed, so task completion, evaluator validity,
 and score are unavailable. No later condition ran. Both hosts are terminal/absent,
-zero T09 instances and restored security are verified. This is operational evidence
-only and cannot be replayed.
+zero T09 instances and restored security are verified. A reviewed post-termination
+sidecar restores one omitted authority member without rewriting the original archive,
+and a separate receipt reconciles preflight and empirical clocks. This is operational
+evidence only and cannot be replayed.
 
 The exact upstream evaluator is deliberately not repaired or renormalized. Offline
 fixtures show Task A's ordinary correct prose scoring 0.9 (with a normalization-edge

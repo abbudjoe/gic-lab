@@ -116,7 +116,12 @@ The maximal private prefix was copied and verified before cleanup and terminatio
 Both Retry 4 hosts are terminal or absent; zero T09 instances and restored security
 are verified. Retry4 used 4,419.078072 active Lambda seconds / USD 1.5835029759 plus
 USD 0.1175275 OpenAI, for USD 1.7010304759 new and USD 5.7424506112 cumulative T09
-cost. The two-launch/campaign authority is exhausted. Current machine authority is
+cost. Post-termination review preserved the original archive byte-exact and added one
+private 597,140-byte sidecar member under overlay manifest `1eedf1d9…`; frozen-runtime
+reconstruction passes at `c633c835…`. Separate clock receipt `989d5625…` records
+2,353.116390 seconds of slot-2 preflight and 680.255410 seconds from empirical start
+through terminal/zero observation without rewriting the provider closeout. The two-
+launch/campaign authority is exhausted. Current machine authority is
 `T09_PRAGMATIC_RETRY4_TERMINAL_CONTROL.json`, which makes the smoke and V6 profiles
 historical, consumed, and nonreplayable and names no successor.
 

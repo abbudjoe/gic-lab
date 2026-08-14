@@ -46,7 +46,10 @@ triggered the attempt-output cap and prevented an accepted raw seal, evaluator, 
 score. The remaining three attempts did not run; no realized pair or checkpoint
 exists. V6 is now historical, consumed, and nonreplayable. A fresh successor must
 first close the core-dump/raw-failure-seal primitive under new identities, review,
-and current-turn authority.
+and current-turn authority. Post-termination overlay manifest `1eedf1d9…` restores
+the original aggregate's one omitted manifest-owned member without changing its four
+sealed files; clock receipt `989d5625…` separately reconciles preflight, empirical,
+and cumulative active-provider time.
 
 ## Scope and interpretation
 

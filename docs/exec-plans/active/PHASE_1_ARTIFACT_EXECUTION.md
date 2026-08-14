@@ -308,8 +308,11 @@ secret/container/image cleanup, 4,419.078072 active Lambda seconds / USD
 terminal control supersedes the frozen smoke/V6 readiness strings and names no
 successor. Public raw release remains blocked, and the aggregate evidence requires
 one additive post-termination authority-member overlay plus a separate empirical-
-clock reconciliation; neither repair changes the preserved provider receipts or
-scientific record.
+clock reconciliation. That repair is now complete: the 597,140-byte sidecar member
+rehashes at `18f6c7d6…`, overlay manifest `1eedf1d9…` reloads frozen runtime
+`c633c835…`, and clock receipt `989d5625…` reconciles active/preflight/empirical time.
+All original archive and provider-receipt bytes remain unchanged; neither repair
+changes the scientific record.
 
 ### Pragmatic execution reset — 2026-08-12
 

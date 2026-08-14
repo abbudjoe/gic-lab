@@ -60,7 +60,9 @@ byte raw-output cap; the host stopped the container and the immutable raw seal f
 closed. The attempt is infrastructure-invalid and unscored. No later condition,
 evaluator, pair, checkpoint, comparison, or EXP-0001 outcome exists. Both Retry 4
 hosts are terminal or absent, zero T09 instances and restored security are verified,
-and all V6 authority is exhausted.
+and all V6 authority is exhausted. A reviewed post-termination sidecar restores one
+manifest-owned archive member while leaving the original sealed archive unchanged;
+its separate receipt reconciles provider-preflight and empirical time.
 
 ## State transition
 

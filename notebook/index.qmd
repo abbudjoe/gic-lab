@@ -32,7 +32,9 @@ froze V6 before Task A reactive entered once. A 234,479,616-byte core exceeded t
 67,108,864-byte raw-output cap; the raw seal failed closed, so no evaluator, score,
 pair, or checkpoint exists. The remaining attempts did not run. Both Retry 4 hosts
 are terminal or absent, zero T09 instances and restored security are verified, and
-its two-launch/single-campaign authority is exhausted. EXP-0001 remains unevaluated.
+its two-launch/single-campaign authority is exhausted. A post-termination sidecar
+restores the one manifest-owned member omitted by aggregate staging without changing
+the original archive or scientific record. EXP-0001 remains unevaluated.
 :::
 
 GIC Lab studies a narrower and more falsifiable question than “can we build a GIC agent?”:

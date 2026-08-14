@@ -321,6 +321,53 @@ def test_retry4_private_clock_reconciliation_uses_the_frozen_empirical_origin() 
     )
 
 
+def test_retry4_private_postrun_overlay_is_exact_and_reconstructable() -> None:
+    original_root = PRIVATE_T09_ROOT / ("sealed-artifacts/ARCHIVE-EXP0001-PILOT-V6-0004")
+    overlay = PRIVATE_T09_ROOT / (
+        "sealed-artifacts/ARCHIVE-EXP0001-PILOT-V6-0004-POSTRUN-OVERLAY-0001"
+    )
+    if not original_root.is_dir() or not overlay.is_dir():
+        pytest.skip("private Retry4 postrun overlay is not present in this checkout")
+    repair = _load_postrun_repair("giclab_t09_retry4_postrun_seal")
+    assert overlay.stat().st_mode & 0o777 == 0o700
+    expected = {
+        "overlay-identity.json": (
+            345,
+            "a07cee4c06733098fb1400df3e27af04dff59dac8aba333f6ff050c8777233c9",
+        ),
+        "overlay-manifest.json": (
+            989,
+            "1eedf1d9423f720ec15a74045799228127c59b341c097c4d160c93aa9e508ed2",
+        ),
+        "posttermination-clock-reconciliation.json": (
+            1650,
+            "989d5625c719d3b081cba9f1b254ee81c1e4f56aa6f6bf44bdb7ed5c8dd7884f",
+        ),
+        "posttermination-reconstruction-receipt.json": (
+            2721,
+            "855fe6429816ecde1f69622b3b806055d472009b723b08d32ac4c5ab19d9d4e7",
+        ),
+        "slot1-preentry-stage.tar.gz": (
+            597_140,
+            "18f6c7d6bcda6f6be4c53854dc89d1fd08fb286393fba187815184db8819134f",
+        ),
+    }
+    assert {path.name for path in overlay.iterdir()} == set(expected)
+    for name, (size, digest) in expected.items():
+        path = overlay / name
+        assert path.stat().st_mode & 0o777 == 0o600
+        assert path.stat().st_nlink == 1
+        assert path.stat().st_size == size
+        assert host_hash(path) == digest
+    repair.validate_original_final_archive(original_root)  # type: ignore[attr-defined]
+    union = repair.verify_union_with_frozen_runtime(  # type: ignore[attr-defined]
+        repository=ROOT,
+        original_stage=original_root / "t09-pilot-private-evidence-stage.tar.gz",
+        missing_source=overlay / "slot1-preentry-stage.tar.gz",
+    )
+    assert union["frozen_run_manifest_sha256"] == repair.FROZEN_RUN_MANIFEST_SHA256  # type: ignore[attr-defined]
+
+
 def test_retry4_runtime_matches_the_typed_raw_attempt_root() -> None:
     runtime = _load_runtime("giclab_t09_retry4_raw_root")
     raw = "artifacts/EXP-0001/pilot-v6/task-a/reactive/attempt-0004/raw"

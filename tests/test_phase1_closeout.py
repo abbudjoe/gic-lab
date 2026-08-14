@@ -175,6 +175,11 @@ def test_phase_one_is_the_only_active_non_executable_control_plane() -> None:
     assert retry4["provider_terminal_or_absent"] is True
     assert retry4["zero_t09_instances"] is True
     assert retry4["security_restored"] is True
+    assert retry4["evidence_archive_original_preserved_byte_exact"] is True
+    assert retry4["evidence_archive_posttermination_overlay_id"] == (
+        "ARCHIVE-EXP0001-PILOT-V6-0004-POSTRUN-OVERLAY-0001"
+    )
+    assert retry4["evidence_archive_frozen_runtime_reconstructable_with_overlay"] is True
     assert retry4["scientific_result_claimed"] is False
     assert retry4["experiment_outcome_assigned"] is False
     assert {path.name for path in (ROOT / "docs/exec-plans/active").glob("*.md")} == {
@@ -1196,6 +1201,9 @@ def test_t09_retry4_disposition_reconciles_one_invalid_unscored_attempt() -> Non
         assert provider[slot]["security_restored"] is True
         assert compute[compute_id]["accelerator_hours"] == provider[slot]["accelerator_hours"]
         assert compute[compute_id]["cost_usd"] == provider[slot]["list_cost_usd"]
+    assert provider["slot2"]["provider_preflight_seconds"] == 2353.116389989853
+    assert provider["slot2"]["empirical_to_terminal_and_zero_seconds"] == (680.255410194397)
+    assert provider["slot2"]["clock_reconciliation_after_termination"] is True
 
     costs = disposition["cost_reconciliation"]
     assert costs["new_openai_cost_usd"] == state["openai_cost_usd"]
@@ -1209,6 +1217,20 @@ def test_t09_retry4_disposition_reconciles_one_invalid_unscored_attempt() -> Non
     assert disposition["pair_matching"]["task_a_realized_pair_available"] is False
     assert disposition["pair_matching"]["task_b_realized_pair_available"] is False
     assert disposition["pair_matching"]["paired_or_comparative_interpretation_permitted"] is False
+    evidence = disposition["evidence"]
+    assert evidence["original_archive_preserved_byte_exact"] is True
+    assert evidence["slot2_stage_completeness"] == ("reconstructable-with-posttermination-overlay")
+    assert evidence["posttermination_overlay_manifest_sha256"] == (
+        "1eedf1d9423f720ec15a74045799228127c59b341c097c4d160c93aa9e508ed2"
+    )
+    assert evidence["posttermination_overlay_identity_sha256"] == (
+        "a07cee4c06733098fb1400df3e27af04dff59dac8aba333f6ff050c8777233c9"
+    )
+    assert evidence["posttermination_clock_reconciliation_sha256"] == (
+        "989d5625c719d3b081cba9f1b254ee81c1e4f56aa6f6bf44bdb7ed5c8dd7884f"
+    )
+    assert evidence["posttermination_overlay_member_bytes"] == 597_140
+    assert evidence["frozen_runtime_reconstructable_with_overlay"] is True
     assert len(results["measurements"]) == 1
     assert results["measurements"][0]["run_id"] == "RUN-T09-TASK-A-REACTIVE-0002"
     assert disposition_path.relative_to(ROOT).as_posix() in results["artifacts"]

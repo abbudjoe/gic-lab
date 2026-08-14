@@ -43,7 +43,7 @@ comparative scientific conclusions.
 | R4-09 | Dynamically qualify the exact image, evaluator, real-evidence regression, browser lifecycle, model metadata, pair diffs, and frozen run manifest within one preflight wall. | Source-derived live receipts and frozen-manifest SHA-256; zero task requests/actions before entry. | met: slot 2 imported and qualified the exact retained image, passed every listed gate, made one metadata GET, and froze manifest `c633c835…` before a fresh empirical clock with zero prior task calls/actions |
 | R4-10 | Execute A-reactive, A-simulative, B-simulative, and B-reactive once each, sealing/exporting/verifying raw evidence before later empirical entry. | Four empirical-entry records, raw seals, verified exports, usage receipts, cleanup receipts, and zero retry. | partial: A-reactive entered exactly once and retained 20 calls / 38,779 tokens / 5 requested actions, but an oversized core made the raw seal fail after the output-byte stop; zero retry and the raw-ack gate correctly prohibited all later conditions |
 | R4-11 | Apply one uniform network-disabled finalizer and the predeclared first-pair continuation rule before Task B. | Selected finalization receipts, uniform closure proof, pair checkpoint, and matched-pair diffs. | blocked: the finalizer was qualified but could not run without an accepted immutable raw seal; no Task A pair or checkpoint exists |
-| R4-12 | Prioritize cleanup, retain available evidence, terminate the exact instance, prove terminal/absent and restored security, remove secrets/containers/rulesets, and reconcile actual active time/cost. | Verified final archive and provider closeout receipts plus terminal cloud-ledger events. | partial: cleanup/termination and the original stage are verified, but independent review found the stage omitted one manifest-owned nested authority archive and the closeout lacked an empirical-clock projection; an additive post-termination overlay/reconciliation is being completed without rewriting pre-termination evidence |
+| R4-12 | Prioritize cleanup, retain available evidence, terminate the exact instance, prove terminal/absent and restored security, remove secrets/containers/rulesets, and reconcile actual active time/cost. | Verified final archive and provider closeout receipts plus terminal cloud-ledger events. | met: cleanup/termination passed; the byte-exact original archive is supplemented by one independently reviewed 597,140-byte post-termination overlay at manifest `1eedf1d9…`, frozen-runtime reconstruction passes, and clock receipt `989d5625…` reconciles the preserved provider receipts without rewriting them |
 | R4-13 | After termination, run broader repository/privacy/evidence gates, focused independent evidence review, and update registry/state/readiness/notebook/decision surfaces without overclaiming. | Full gate output, reviewer verdict, and converged public/machine state. | partial: terminal disposition/control and public/machine convergence are implemented; full gates and final independent evidence rereview are pending |
 | R4-14 | Report descriptive outcomes and operational feasibility only, including all 17 requested handoff items. | Final response and terminal ledger state; no EXP-0001 pass/fail or superiority claim. | partial: terminal ledger is sealed and the handoff becomes met only with the final response |
 
@@ -124,13 +124,21 @@ seconds and may not retain the host for review or archive perfection.
   off host, one exact provider termination request produced terminal/absent, zero-
   instance, and restored-security evidence, and final archive manifest `4b7bc842…`
   was sealed. Retry4 cost is USD 1.5835029759 Lambda plus USD 0.1175275 OpenAI.
+- 2026-08-14: post-termination review found the aggregate producer had excluded one
+  manifest-owned nested archive and that the raw closeout's campaign-duration label
+  referred to slot-2 owned time, not empirical time. Clean repair package
+  `13cbf56e…` received independent PASS, then created exact sidecar overlay
+  `ARCHIVE-EXP0001-PILOT-V6-0004-POSTRUN-OVERLAY-0001`. Its manifest is
+  `1eedf1d9…`, identity is `a07cee4c…`, and clock reconciliation is `989d5625…`.
+  The one added member is 597,140 bytes at `18f6c7d6…`; reconstructed frozen loading
+  passes at `c633c835…`, while all four original archive hashes remain unchanged.
 
 ## Next permitted phase
 
-No V6 execution remains permitted. First complete the additive private archive overlay
-and clock-reconciliation receipt without rewriting any pre-termination artifact. Then
-preserve this one consumed, infrastructure-invalid, unscored attempt. Before requesting
-fresh authority, disable or strictly bound core-dump creation and prove that an
-output-cap stop always produces a reconstructable privacy-safe raw failure seal. A
-future calibration must mint fresh plan, host, attempt, pair, stage, archive, and
-authorization identities; a larger pilot is not justified by this record.
+No V6 execution remains permitted. Preserve the byte-exact original archive together
+with its post-termination sidecar overlay and this one consumed, infrastructure-invalid,
+unscored attempt. Before requesting fresh authority, disable or strictly bound core-
+dump creation and prove that an output-cap stop always produces a reconstructable
+privacy-safe raw failure seal. A future calibration must mint fresh plan, host,
+attempt, pair, stage, archive, and authorization identities; a larger pilot is not
+justified by this record.

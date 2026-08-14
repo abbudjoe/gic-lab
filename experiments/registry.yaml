@@ -1,5 +1,5 @@
 schema_version: 0.1.0
-registry_revision: 10
+registry_revision: 11
 template_path: experiments/EXP-0000-template
 experiments:
   - experiment_id: EXP-0001
@@ -9,7 +9,7 @@ experiments:
       - experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml
     current_execution_control:
       path: experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY4_TERMINAL_CONTROL.json
-      sha256: 146436a7320cca2c51505648b25c70da083469521855d0c866d81346bb7aba01
+      sha256: d50108f924e5b5aa2fdfd7cada80d3829a72a01002d91da79b1a2e5513313b78
     evidence_records:
       - experiments/EXP-0001-sira-simulative-vs-reactive/T08_SMOKE_ADJUDICATION.json
       - experiments/EXP-0001-sira-simulative-vs-reactive/T08_SMOKE_PAIR_DIFF.json
