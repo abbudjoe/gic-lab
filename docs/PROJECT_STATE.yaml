@@ -203,7 +203,7 @@ t09_pragmatic_retry4_checkpoint:
   repository_plan_authorized: false
   private_single_use_overlay_required: true
   pilot_execution_authorized: true
-  reviewed_implementation_ancestor: afea34c1d796765c25bed320d3a8852ee23af380
+  reviewed_implementation_ancestor: c62f92a0c6b5e77c4288ca2d317b2ad3b6a582bf
   slot1_frozen_package_commit: 4e8b71771a5e7baf9b104b6f3b5466091e4596f2
   replacement_image_preferred_id: sha256:abe8ed38f5c5b5a0a63fa726a74034dc5c192a12c0fccfe1319f97c27ceaf0a3
   retained_image_archive_verified: true

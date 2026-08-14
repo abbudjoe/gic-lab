@@ -64,7 +64,7 @@
     "approved_offline_fixture_execution_required": true
   },
   "repository_instrumentation": {
-    "reviewed_implementation_ancestor": "afea34c1d796765c25bed320d3a8852ee23af380",
+    "reviewed_implementation_ancestor": "c62f92a0c6b5e77c4288ca2d317b2ad3b6a582bf",
     "scope": [
       "content-addressed-no-follow-private-regression-archive-staging",
       "raw-attempt-root-typed-binding-before-empirical-entry",
@@ -115,7 +115,7 @@
       },
       {
         "path": "containers/sira-smoke/pragmatic/t09_remote_runner.py",
-        "sha256": "7011add3c838f941da29e9fcaedf596c68709d9bb7faa020683bd0f9c362815a"
+        "sha256": "8645dc236a206b70b90c650603ca135da3edd94006ed05a2734c2586e4e30385"
       },
       {
         "path": "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py",
