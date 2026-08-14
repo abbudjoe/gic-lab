@@ -61,10 +61,13 @@
     "approved_offline_fixture_execution_required": true
   },
   "repository_instrumentation": {
-    "reviewed_implementation_ancestor": "4c9aa828d3054223125cc94c61d4ebeeabd3794b",
+    "reviewed_implementation_ancestor": "009913ae5fc211a2ea8d842ec5b62b6319b52f5f",
     "scope": [
-      "content-addressed-no-follow-private-regression-archive-staging",
-      "separate-cumulative-active-preflight-and-empirical-campaign-clocks",
+    "content-addressed-no-follow-private-regression-archive-staging",
+    "raw-attempt-root-typed-binding-before-empirical-entry",
+    "held-descriptor-privileged-docker-image-import",
+    "source-bound-postfreeze-preentry-slot2-eligibility",
+    "separate-cumulative-active-preflight-and-empirical-campaign-clocks",
       "retained-exact-image-import-or-one-fallback-build",
       "pre-action-budget-count",
       "post-action-result-and-screenshot-retention",
@@ -79,7 +82,7 @@
     "files": [
       {
         "path": "src/giclab/harness/sira_gate_a_runtime.py",
-        "sha256": "f28c4d4f346e205dd38d25f31c76372acd08e00b7a6d75cd2bff34b634f0077b"
+        "sha256": "c08c1f199bab5a15478bcb132e76d0ac0ed1e4cc115f894c301a80c7936618a3"
       },
       {
         "path": "src/giclab/harness/sira_gate_a.py",
@@ -103,11 +106,11 @@
       },
       {
         "path": "src/giclab/harness/t09_pragmatic_provider.py",
-        "sha256": "1496bdf32bbe0cc7cc7a000b3e7cc973cb60d446fa03fc2a8be4d540a622ac70"
+        "sha256": "9ca357f4ae45e672f63c66a40ed9e456ae2443e1eeabd721528731c166c3ce46"
       },
       {
         "path": "containers/sira-smoke/pragmatic/t09_remote_runner.py",
-        "sha256": "6286e263ccb28f5ba13c557d6cd86735dbfaebb802c4e3156aaf0fb81a7ec8be"
+        "sha256": "e20b62778829c5286892dff436d0ea92dae9521ff0acc41c279176792e8b4ec9"
       },
       {
         "path": "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py",
