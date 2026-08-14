@@ -66,6 +66,10 @@ FROZEN_RUN_MANIFEST_ID: Final = "RUN-MANIFEST-EXP0001-PILOT-V5-0003"
 HISTORICAL_IMAGE_ID: Final = (
     "sha256:035edf61718e84a8156f4f0f7817b134b0ce31488d3f0b50bbfba2b4a30cc61c"
 )
+PREENTRY_RESUME_FROM_PACKAGE_COMMIT: Final = "3640f061ea6c0f0f3d24bf2a346d4beda1a400cf"
+PREENTRY_RESUME_FROM_PLAN_SHA256: Final = (
+    "e7e214500348c8b876beb034df7b592c84f5ab79788ab6f310ef187fd797613c"
+)
 
 _HEX64 = re.compile(r"^[a-f0-9]{64}$")
 _SAFE_EVENT_ID = re.compile(r"^[A-Z0-9][A-Z0-9._-]{2,127}$")
@@ -311,6 +315,18 @@ class RuntimeQualification:
     build_count: int
     qualification_count: int
     empirical_entry_crossed: bool
+    preflight_transition_mode: Literal["fresh", "same-host-resume"]
+    preflight_resume_source_sha256: str | None
+    preflight_resume_argv_sha256: str | None
+    preflight_resume_transition_sha256: str | None
+    preflight_failure_prefix_manifest_sha256: str | None
+    preflight_prior_package_commit: str | None
+    preflight_prior_plan_sha256: str | None
+    preflight_prior_state_sha256: str | None
+    preflight_transition_state_sha256: str | None
+    preflight_prior_aggregate_sha256: str | None
+    preflight_transition_aggregate_sha256: str | None
+    preflight_retained_materialization_sha256: str | None
 
     @classmethod
     def from_document(cls, value: object) -> RuntimeQualification:
@@ -399,6 +415,46 @@ class RuntimeQualification:
                 document.get("qualification_count"), context="qualification count"
             ),
             empirical_entry_crossed=document.get("empirical_entry_crossed") is True,
+            preflight_transition_mode=cast(
+                Literal["fresh", "same-host-resume"],
+                _required_string(
+                    document.get("preflight_transition_mode"),
+                    context="preflight transition mode",
+                ),
+            ),
+            preflight_resume_source_sha256=cast(
+                str | None, document.get("preflight_resume_source_sha256")
+            ),
+            preflight_resume_argv_sha256=cast(
+                str | None, document.get("preflight_resume_argv_sha256")
+            ),
+            preflight_resume_transition_sha256=cast(
+                str | None, document.get("preflight_resume_transition_sha256")
+            ),
+            preflight_failure_prefix_manifest_sha256=cast(
+                str | None, document.get("preflight_failure_prefix_manifest_sha256")
+            ),
+            preflight_prior_package_commit=cast(
+                str | None, document.get("preflight_prior_package_commit")
+            ),
+            preflight_prior_plan_sha256=cast(
+                str | None, document.get("preflight_prior_plan_sha256")
+            ),
+            preflight_prior_state_sha256=cast(
+                str | None, document.get("preflight_prior_state_sha256")
+            ),
+            preflight_transition_state_sha256=cast(
+                str | None, document.get("preflight_transition_state_sha256")
+            ),
+            preflight_prior_aggregate_sha256=cast(
+                str | None, document.get("preflight_prior_aggregate_sha256")
+            ),
+            preflight_transition_aggregate_sha256=cast(
+                str | None, document.get("preflight_transition_aggregate_sha256")
+            ),
+            preflight_retained_materialization_sha256=cast(
+                str | None, document.get("preflight_retained_materialization_sha256")
+            ),
         )
         hashes = (
             result.build_context_manifest_sha256,
@@ -432,8 +488,35 @@ class RuntimeQualification:
             or result.qualification_count != 1
             or document.get("empirical_entry_crossed") is not False
             or document.get("post_entry_code_science_image_freeze") is not True
+            or result.preflight_transition_mode not in {"fresh", "same-host-resume"}
         ):
             raise T09PilotError("frozen runtime qualification contract drifted")
+        recovery_hashes = (
+            result.preflight_resume_source_sha256,
+            result.preflight_resume_argv_sha256,
+            result.preflight_resume_transition_sha256,
+            result.preflight_failure_prefix_manifest_sha256,
+            result.preflight_prior_plan_sha256,
+            result.preflight_prior_state_sha256,
+            result.preflight_transition_state_sha256,
+            result.preflight_prior_aggregate_sha256,
+            result.preflight_transition_aggregate_sha256,
+            result.preflight_retained_materialization_sha256,
+        )
+        if result.preflight_transition_mode == "fresh":
+            if result.preflight_prior_package_commit is not None or any(
+                item is not None for item in recovery_hashes
+            ):
+                raise T09PilotError("fresh preflight retained resume authority")
+        elif (
+            result.preflight_prior_package_commit != PREENTRY_RESUME_FROM_PACKAGE_COMMIT
+            or result.preflight_prior_plan_sha256 != PREENTRY_RESUME_FROM_PLAN_SHA256
+            or any(
+                not isinstance(item, str) or _HEX64.fullmatch(item) is None
+                for item in recovery_hashes
+            )
+        ):
+            raise T09PilotError("same-host preflight resume binding drifted")
         return result
 
 
@@ -909,6 +992,77 @@ def initialize_pilot_state(
     }
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     _write_json_atomic(path, document)
+
+
+def transition_zero_usage_preflight_state(
+    state: object,
+    aggregate: object,
+    *,
+    prior_execution_contract_sha256: str,
+    next_execution_contract_sha256: str,
+) -> tuple[dict[str, object], dict[str, object]]:
+    """Rebind an exact zero-use preflight prefix without resetting its clocks."""
+
+    prior_state = _strict_object(state, context="prior preflight pilot state")
+    prior_aggregate = _strict_object(aggregate, context="prior aggregate ledger")
+    state_keys = {
+        "schema_version",
+        "plan_id",
+        "execution_contract_sha256",
+        "pilot_started_at_epoch",
+        "lambda_started_at_epoch",
+        "first_pair_started_at_epoch",
+        "second_pair_started_at_epoch",
+        "empirical_attempts_entered",
+        "raw_attempts_complete",
+        "raw_attempt_bindings",
+        "attempts_completed",
+        "attempt_finalizations",
+        "attempt_finalization_history",
+        "first_pair_decision",
+        "first_pair_checkpoint_binding",
+        "first_pair_selection_drift_detected",
+    }
+    started = prior_state.get("lambda_started_at_epoch")
+    pilot_started = prior_state.get("pilot_started_at_epoch")
+    if (
+        set(prior_state) != state_keys
+        or prior_state.get("schema_version") != "0.2.0"
+        or prior_state.get("plan_id") != PLAN_ID
+        or prior_state.get("execution_contract_sha256") != prior_execution_contract_sha256
+        or not isinstance(started, (int, float))
+        or isinstance(started, bool)
+        or not math.isfinite(float(started))
+        or not isinstance(pilot_started, (int, float))
+        or isinstance(pilot_started, bool)
+        or float(pilot_started) != float(started)
+        or prior_state.get("first_pair_started_at_epoch") is not None
+        or prior_state.get("second_pair_started_at_epoch") is not None
+        or prior_state.get("empirical_attempts_entered") != []
+        or prior_state.get("raw_attempts_complete") != []
+        or prior_state.get("raw_attempt_bindings") != {}
+        or prior_state.get("attempts_completed") != []
+        or prior_state.get("attempt_finalizations") != {}
+        or prior_state.get("attempt_finalization_history") != {}
+        or prior_state.get("first_pair_decision") is not None
+        or prior_state.get("first_pair_checkpoint_binding") is not None
+        or prior_state.get("first_pair_selection_drift_detected") is not False
+    ):
+        raise T09PilotError("prior preflight state is not an exact zero-use prefix")
+    zero_usage = usage_to_document(ProviderBudgetUsage())
+    if prior_aggregate != {
+        "schema_version": "0.1.0",
+        "plan_id": PLAN_ID,
+        "execution_contract_sha256": prior_execution_contract_sha256,
+        "unreconciled_provider_attempts": 0,
+        "usage": zero_usage,
+    }:
+        raise T09PilotError("prior aggregate ledger is not exact zero usage")
+    next_state = copy.deepcopy(prior_state)
+    next_state["execution_contract_sha256"] = next_execution_contract_sha256
+    next_aggregate = copy.deepcopy(prior_aggregate)
+    next_aggregate["execution_contract_sha256"] = next_execution_contract_sha256
+    return next_state, next_aggregate
 
 
 def _write_json_atomic(path: Path, document: Mapping[str, object]) -> None:

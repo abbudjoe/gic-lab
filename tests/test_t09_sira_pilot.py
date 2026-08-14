@@ -651,6 +651,18 @@ def test_runtime_qualification_is_typed_single_build_preentry_and_digest_agnosti
         "qualification_count": 1,
         "empirical_entry_crossed": False,
         "post_entry_code_science_image_freeze": True,
+        "preflight_transition_mode": "fresh",
+        "preflight_resume_source_sha256": None,
+        "preflight_resume_argv_sha256": None,
+        "preflight_resume_transition_sha256": None,
+        "preflight_failure_prefix_manifest_sha256": None,
+        "preflight_prior_package_commit": None,
+        "preflight_prior_plan_sha256": None,
+        "preflight_prior_state_sha256": None,
+        "preflight_transition_state_sha256": None,
+        "preflight_prior_aggregate_sha256": None,
+        "preflight_transition_aggregate_sha256": None,
+        "preflight_retained_materialization_sha256": None,
     }
     qualification = RuntimeQualification.from_document(document)
     assert qualification.replacement_image_id != qualification.historical_image_id
@@ -664,6 +676,30 @@ def test_runtime_qualification_is_typed_single_build_preentry_and_digest_agnosti
         drifted = {**document, field: value}
         with pytest.raises(ValueError, match="qualification contract drifted"):
             RuntimeQualification.from_document(drifted)
+    recovered = {
+        **document,
+        "preflight_transition_mode": "same-host-resume",
+        "preflight_resume_source_sha256": "a" * 64,
+        "preflight_resume_argv_sha256": "b" * 64,
+        "preflight_resume_transition_sha256": "c" * 64,
+        "preflight_failure_prefix_manifest_sha256": "d" * 64,
+        "preflight_prior_package_commit": "3640f061ea6c0f0f3d24bf2a346d4beda1a400cf",
+        "preflight_prior_plan_sha256": (
+            "e7e214500348c8b876beb034df7b592c84f5ab79788ab6f310ef187fd797613c"
+        ),
+        "preflight_prior_state_sha256": "e" * 64,
+        "preflight_transition_state_sha256": "f" * 64,
+        "preflight_prior_aggregate_sha256": "1" * 64,
+        "preflight_transition_aggregate_sha256": "2" * 64,
+        "preflight_retained_materialization_sha256": "3" * 64,
+    }
+    assert (
+        RuntimeQualification.from_document(recovered).preflight_transition_mode
+        == "same-host-resume"
+    )
+    recovered["preflight_resume_argv_sha256"] = None
+    with pytest.raises(ValueError, match="resume binding drifted"):
+        RuntimeQualification.from_document(recovered)
 
 
 def test_retry2_excludes_only_the_exact_pinned_names_only_env_example(

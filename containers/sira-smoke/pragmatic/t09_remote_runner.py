@@ -34,6 +34,7 @@ from typing import IO, Any, BinaryIO, Final, cast
 
 from jsonschema import Draft202012Validator, FormatChecker
 
+from giclab.harness.sira_gate_a import ProviderBudgetUsage
 from giclab.harness.t09_pragmatic_provider import (
     T09ProviderError,
     load_campaign_lifecycle,
@@ -44,6 +45,8 @@ from giclab.harness.t09_pragmatic_provider import (
 )
 from giclab.harness.t09_sira_pilot import (
     ATTEMPT_ORDER,
+    PREENTRY_RESUME_FROM_PACKAGE_COMMIT,
+    PREENTRY_RESUME_FROM_PLAN_SHA256,
     PairCheckpointInput,
     RuntimeQualification,
     T09PilotError,
@@ -54,6 +57,7 @@ from giclab.harness.t09_sira_pilot import (
     mark_raw_attempt_complete,
     record_first_pair_checkpoint,
     scientific_attempt_projection,
+    transition_zero_usage_preflight_state,
 )
 
 PLAN_ID: Final = "PLAN-EXP0001-PILOT-V5"
@@ -214,6 +218,37 @@ LOCAL_FINALIZER_QUALIFICATION_RELATIVE_PATH: Final = (
 IMAGE_ARCHIVE_PATH: Final = Path("/home/ubuntu/t09-pilot-v5-replacement-image-0001.tar")
 PRIVATE_REGRESSION_ARCHIVE_PATH: Final = Path(
     "/tmp/giclab-t09-private-v4-task-a-reactive-0002.tar.gz"
+)
+PREENTRY_RESUME_FROM_EXECUTION_SHA256: Final = (
+    "81dea470fecaef47a3f0139ed291b214fce1eae1bfcfb38e1fb20c32e5527791"
+)
+PREENTRY_RESUME_FROM_RUNNER_SHA256: Final = (
+    "307ff291d22c45b1740b632968a709cbc9458bfe9d5ea21c3f5cb446a2eefa7d"
+)
+PREENTRY_RESUME_FAILURE_CLASSIFICATION: Final = "preempirical_operator_archive_path_mismatch"
+PREENTRY_RESUME_ALLOWED_PATHS: Final = frozenset(
+    {
+        "containers/sira-smoke/pragmatic/t09_remote_runner.py",
+        "docs/harness/T09_PRAGMATIC_RETRY3_EXECUTION_PLAN.md",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
+        "T09_PILOT_COMMAND_MANIFESTS.json",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
+        "T09_PILOT_EXECUTION_CONTRACT.json",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
+        "T09_PILOT_RUNTIME_IDENTITY.json",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/"
+        "pilot-v5-task-0000-reactive.yaml",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/"
+        "pilot-v5-task-0000-simulative.yaml",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/"
+        "pilot-v5-task-0001-reactive.yaml",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/"
+        "pilot-v5-task-0001-simulative.yaml",
+        "src/giclab/harness/t09_sira_pilot.py",
+        "tests/test_t09_retry3.py",
+        "tests/test_t09_sira_pilot.py",
+    }
 )
 ATTEMPT_EXPORT_REQUIRED_CONTROL_PATHS: Final = (
     "pilot-v5/provider-entry.json",
@@ -3315,6 +3350,7 @@ def write_frozen_run_manifest(
     static_real_evidence_regression: dict[str, Any],
     qualified_real_evidence_regression_receipt: dict[str, Any],
     local_finalizer_qualification_receipt: dict[str, Any],
+    preflight_resume_transition: dict[str, Any] | None = None,
 ) -> tuple[Path, dict[str, object]]:
     paths = contract_paths(repository)
     image_id = image_materialization.get("image_id")
@@ -3337,6 +3373,53 @@ def write_frozen_run_manifest(
         "semantic_projection"
     ) != static_real_evidence_regression.get("semantic_projection"):
         raise T09HostError("static and qualified real-evidence regressions disagree")
+    if preflight_resume_transition is None:
+        resume_fields: dict[str, object] = {
+            "preflight_transition_mode": "fresh",
+            "preflight_resume_source_sha256": None,
+            "preflight_resume_argv_sha256": None,
+            "preflight_resume_transition_sha256": None,
+            "preflight_failure_prefix_manifest_sha256": None,
+            "preflight_prior_package_commit": None,
+            "preflight_prior_plan_sha256": None,
+            "preflight_prior_state_sha256": None,
+            "preflight_transition_state_sha256": None,
+            "preflight_prior_aggregate_sha256": None,
+            "preflight_transition_aggregate_sha256": None,
+            "preflight_retained_materialization_sha256": None,
+        }
+    else:
+        transition_path = artifact_root / "pilot-v5/preflight-resume/transition.json"
+        if preflight_resume_transition.get(
+            "receipt_type"
+        ) != "t09-preentry-same-host-preflight-resume" or file_sha256(
+            transition_path
+        ) != preflight_resume_transition.get("receipt_sha256"):
+            raise T09HostError("preflight resume transition is not source-bound")
+        resume_fields = {
+            "preflight_transition_mode": "same-host-resume",
+            "preflight_resume_source_sha256": preflight_resume_transition["recovery_source_sha256"],
+            "preflight_resume_argv_sha256": preflight_resume_transition["recovery_argv_sha256"],
+            "preflight_resume_transition_sha256": preflight_resume_transition["receipt_sha256"],
+            "preflight_failure_prefix_manifest_sha256": preflight_resume_transition[
+                "failure_prefix_manifest_sha256"
+            ],
+            "preflight_prior_package_commit": preflight_resume_transition["prior_package_commit"],
+            "preflight_prior_plan_sha256": preflight_resume_transition["prior_plan_sha256"],
+            "preflight_prior_state_sha256": preflight_resume_transition["prior_state_sha256"],
+            "preflight_transition_state_sha256": preflight_resume_transition[
+                "transition_state_sha256"
+            ],
+            "preflight_prior_aggregate_sha256": preflight_resume_transition[
+                "prior_aggregate_sha256"
+            ],
+            "preflight_transition_aggregate_sha256": preflight_resume_transition[
+                "transition_aggregate_sha256"
+            ],
+            "preflight_retained_materialization_sha256": preflight_resume_transition[
+                "retained_materialization_receipt_sha256"
+            ],
+        }
     manifest: dict[str, object] = {
         "schema_version": "0.1.0",
         "manifest_id": FROZEN_RUN_MANIFEST_ID,
@@ -3411,6 +3494,7 @@ def write_frozen_run_manifest(
         "attempt_order": list(RUN_IDS),
         "empirical_entry_crossed": False,
         "post_entry_code_science_image_freeze": True,
+        **resume_fields,
         "source_receipts": {
             "materialization": file_sha256(qualification_root / "receipt.json"),
             "build_context": file_sha256(qualification_root / "build-context-manifest.json"),
@@ -3431,6 +3515,7 @@ def write_frozen_run_manifest(
             "local_finalizer_qualification": file_sha256(
                 artifact_root / "pilot-v5/local-finalizer-qualification.json"
             ),
+            "preflight_resume_transition": resume_fields["preflight_resume_transition_sha256"],
         },
     }
     if (
@@ -3520,6 +3605,104 @@ def load_frozen_run_manifest(
     }
     if any(manifest.get(key) != value for key, value in expected.items()):
         raise T09HostError("frozen run manifest binding drifted")
+    resume_source_receipts = manifest.get("source_receipts")
+    if typed_qualification.preflight_transition_mode == "same-host-resume":
+        transition_path = artifact_root / "pilot-v5/preflight-resume/transition.json"
+        transition_metadata = transition_path.stat(follow_symlinks=False)
+        transition = load_object(transition_path, label="preflight resume transition")
+        transition_sha256 = file_sha256(transition_path)
+        failure_manifest_path = (
+            artifact_root / "pilot-v5/preflight-resume/failure-prefix-manifest.json"
+        )
+        failure_prefix = artifact_root / "pilot-v5/preflight-resume/failure-prefix"
+        failure_manifest = load_object(
+            failure_manifest_path,
+            label="preflight failure-prefix manifest",
+        )
+        transition_state_path = (
+            artifact_root / "pilot-v5/preflight-resume/transition-pilot-state.json"
+        )
+        transition_aggregate_path = (
+            artifact_root / "pilot-v5/preflight-resume/transition-aggregate-budget.json"
+        )
+        recovery_argv = transition.get("recovery_argv")
+        git_transition = _preflight_resume_git_transition(
+            repository,
+            package_commit=package_commit,
+        )
+        if (
+            transition_path.is_symlink()
+            or not stat.S_ISREG(transition_metadata.st_mode)
+            or transition_metadata.st_uid != os.getuid()
+            or transition_metadata.st_nlink != 1
+            or stat.S_IMODE(transition_metadata.st_mode) != 0o600
+            or transition.get("receipt_type") != "t09-preentry-same-host-preflight-resume"
+            or transition.get("package_commit") != package_commit
+            or transition.get("prior_package_commit") != PREENTRY_RESUME_FROM_PACKAGE_COMMIT
+            or transition.get("prior_plan_sha256") != PREENTRY_RESUME_FROM_PLAN_SHA256
+            or transition_sha256 != typed_qualification.preflight_resume_transition_sha256
+            or transition.get("recovery_source_sha256")
+            != typed_qualification.preflight_resume_source_sha256
+            or transition.get("recovery_argv_sha256")
+            != typed_qualification.preflight_resume_argv_sha256
+            or transition.get("failure_prefix_manifest_sha256")
+            != typed_qualification.preflight_failure_prefix_manifest_sha256
+            or transition.get("prior_state_sha256")
+            != typed_qualification.preflight_prior_state_sha256
+            or transition.get("transition_state_sha256")
+            != typed_qualification.preflight_transition_state_sha256
+            or transition.get("prior_aggregate_sha256")
+            != typed_qualification.preflight_prior_aggregate_sha256
+            or transition.get("transition_aggregate_sha256")
+            != typed_qualification.preflight_transition_aggregate_sha256
+            or transition.get("retained_materialization_receipt_sha256")
+            != typed_qualification.preflight_retained_materialization_sha256
+            or transition.get("recovery_source_sha256")
+            != file_sha256(Path(__file__).resolve(strict=True))
+            or not isinstance(recovery_argv, list)
+            or not all(isinstance(item, str) for item in recovery_argv)
+            or transition.get("recovery_argv_sha256") != canonical_sha256(recovery_argv)
+            or file_sha256(failure_manifest_path)
+            != typed_qualification.preflight_failure_prefix_manifest_sha256
+            or failure_manifest
+            != _retained_tree_manifest(
+                failure_prefix,
+                label="frozen failed preflight prefix",
+            )
+            or file_sha256(transition_state_path)
+            != typed_qualification.preflight_transition_state_sha256
+            or file_sha256(transition_aggregate_path)
+            != typed_qualification.preflight_transition_aggregate_sha256
+            or file_sha256(failure_prefix / "pilot-v5/pilot-state.json")
+            != typed_qualification.preflight_prior_state_sha256
+            or file_sha256(failure_prefix / "pilot-v5/aggregate-budget.json")
+            != typed_qualification.preflight_prior_aggregate_sha256
+            or transition.get("failure_receipt_sha256")
+            != file_sha256(artifact_root / "pilot-v5/preflight-resume/operator-failure.json")
+            or transition.get("failure_command_receipt_sha256")
+            != file_sha256(artifact_root / "pilot-v5/preflight-resume/operator-command.json")
+            or transition.get("retained_materialization_receipt_sha256")
+            != file_sha256(artifact_root / "pilot-v5/replacement-image-qualification/receipt.json")
+            or any(transition.get(key) != value for key, value in git_transition.items())
+            or transition.get("launch_count") != 1
+            or transition.get("build_count") != 1
+            or transition.get("additional_build_count") != 0
+            or transition.get("empirical_attempts_entered") != 0
+            or transition.get("raw_attempts_complete") != 0
+            or transition.get("attempts_completed") != 0
+            or transition.get("model_metadata_requests") != 0
+            or transition.get("task_model_requests") != 0
+            or transition.get("task_browser_actions") != 0
+            or transition.get("frozen_run_manifest_written") is not False
+            or not isinstance(resume_source_receipts, dict)
+            or resume_source_receipts.get("preflight_resume_transition") != transition_sha256
+        ):
+            raise T09HostError("frozen preflight resume authority drifted")
+    elif (
+        not isinstance(resume_source_receipts, dict)
+        or resume_source_receipts.get("preflight_resume_transition") is not None
+    ):
+        raise T09HostError("fresh preflight retained resume authority")
     file_hash_receipt_path = artifact_root / "pilot-v5/final-image-file-hashes/receipt.json"
     file_hash_receipt = load_object(file_hash_receipt_path, label="final image file hashes")
     source_receipts = manifest.get("source_receipts")
@@ -3616,6 +3799,688 @@ def initialize_state(root: Path, execution_sha256: str, *, lambda_started_at_epo
         "first_pair_selection_drift_detected": False,
     }
     write_exclusive(root / "pilot-v5/pilot-state.json", state)
+
+
+def _preflight_resume_argv() -> list[str]:
+    return [Path(__file__).resolve(strict=True).as_posix(), *sys.argv[1:]]
+
+
+def _preflight_resume_git_transition(
+    repository: Path,
+    *,
+    package_commit: str,
+) -> dict[str, object]:
+    if (
+        git_file_sha256(
+            repository,
+            PREENTRY_RESUME_FROM_PACKAGE_COMMIT,
+            "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml",
+        )
+        != PREENTRY_RESUME_FROM_PLAN_SHA256
+        or git_file_sha256(
+            repository,
+            PREENTRY_RESUME_FROM_PACKAGE_COMMIT,
+            "containers/sira-smoke/pragmatic/t09_remote_runner.py",
+        )
+        != PREENTRY_RESUME_FROM_RUNNER_SHA256
+    ):
+        raise T09HostError("prior package bytes do not match the failed preflight")
+    ancestry = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repository),
+            "merge-base",
+            "--is-ancestor",
+            PREENTRY_RESUME_FROM_PACKAGE_COMMIT,
+            package_commit,
+        ],
+        env=safe_environment(),
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+        timeout=30,
+    )
+    if ancestry.returncode != 0:
+        raise T09HostError("preflight recovery package is not a clean descendant")
+    changed = output(
+        [
+            "git",
+            "-C",
+            str(repository),
+            "diff",
+            "--name-only",
+            "--diff-filter=AM",
+            PREENTRY_RESUME_FROM_PACKAGE_COMMIT,
+            package_commit,
+        ]
+    ).splitlines()
+    all_changed = output(
+        [
+            "git",
+            "-C",
+            str(repository),
+            "diff",
+            "--name-only",
+            PREENTRY_RESUME_FROM_PACKAGE_COMMIT,
+            package_commit,
+        ]
+    ).splitlines()
+    if changed != all_changed or set(changed) != PREENTRY_RESUME_ALLOWED_PATHS:
+        raise T09HostError("preflight recovery package changed an unapproved path")
+    binary_diff = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repository),
+            "diff",
+            "--binary",
+            PREENTRY_RESUME_FROM_PACKAGE_COMMIT,
+            package_commit,
+        ],
+        env=safe_environment(),
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        check=True,
+        timeout=60,
+    ).stdout
+    return {
+        "prior_package_commit": PREENTRY_RESUME_FROM_PACKAGE_COMMIT,
+        "package_commit": package_commit,
+        "prior_package_tree": output(
+            [
+                "git",
+                "-C",
+                str(repository),
+                "rev-parse",
+                f"{PREENTRY_RESUME_FROM_PACKAGE_COMMIT}^{{tree}}",
+            ]
+        ),
+        "package_tree": output(
+            ["git", "-C", str(repository), "rev-parse", f"{package_commit}^{{tree}}"]
+        ),
+        "changed_paths": changed,
+        "changed_paths_sha256": canonical_sha256(changed),
+        "binary_diff_sha256": hashlib.sha256(binary_diff).hexdigest(),
+        "scientific_contract_changed": False,
+    }
+
+
+def _validate_preflight_failure_receipts(
+    *,
+    failure_receipt: Path,
+    failure_command_receipt: Path,
+) -> dict[str, object]:
+    receipts: dict[str, dict[str, Any]] = {}
+    for label, path in (
+        ("failure", failure_receipt.resolve(strict=True)),
+        ("command", failure_command_receipt.resolve(strict=True)),
+    ):
+        metadata = path.stat(follow_symlinks=False)
+        if (
+            path.is_symlink()
+            or not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_uid != os.getuid()
+            or metadata.st_nlink != 1
+            or stat.S_IMODE(metadata.st_mode) != 0o600
+        ):
+            raise T09HostError("preflight failure receipt metadata is unsafe")
+        receipts[label] = load_object(path, label=f"preflight {label} failure receipt")
+    failure = receipts["failure"]
+    command = receipts["command"]
+    command_argv = command.get("runner_argv")
+    if (
+        failure.get("classification") != PREENTRY_RESUME_FAILURE_CLASSIFICATION
+        or failure.get("package_commit") != PREENTRY_RESUME_FROM_PACKAGE_COMMIT
+        or failure.get("supplied_archive_sha256")
+        != "63ed19b35bcb4cb62c3796a80a48004937340eb3826f9657a1006e251772255d"
+        or failure.get("replacement_image_build_count") != 1
+        or failure.get("empirical_attempts_entered") != 0
+        or failure.get("task_model_requests") != 0
+        or failure.get("task_browser_actions") != 0
+        or failure.get("frozen_run_manifest_written") is not False
+        or failure.get("credential_exposure") is not False
+        or failure.get("condition_retry") is not False
+        or failure.get("provider_launch_retry") is not False
+        or not isinstance(command_argv, list)
+        or not all(isinstance(item, str) for item in command_argv)
+        or command.get("runner_argv_sha256") != canonical_sha256(command_argv)
+        or command.get("runner_source_sha256") != PREENTRY_RESUME_FROM_RUNNER_SHA256
+        or command.get("returncode") != 1
+        or command.get("error_category") != "private V4 regression archive identity drifted"
+        or command.get("empirical_entry_crossed") is not False
+        or command.get("model_metadata_requests") != 0
+        or command.get("task_browser_actions") != 0
+        or command.get("supplied_archive_path") == PRIVATE_REGRESSION_ARCHIVE_PATH.as_posix()
+        or "preflight" not in command_argv
+    ):
+        raise T09HostError("preflight failure evidence drifted")
+    return {
+        "failure_receipt_sha256": file_sha256(failure_receipt),
+        "failure_command_receipt_sha256": file_sha256(failure_command_receipt),
+        "original_failed_argv_sha256": command["runner_argv_sha256"],
+        "failure_classification": PREENTRY_RESUME_FAILURE_CLASSIFICATION,
+    }
+
+
+def _resume_evaluator_receipt(
+    *,
+    repository: Path,
+    artifact_root: Path,
+    overlay: Path,
+    prefix: list[str],
+    image_id: str,
+) -> dict[str, object]:
+    manifest_path = artifact_root / "pilot-v5/evaluator-overlay-manifest.json"
+    manifest = load_object(manifest_path, label="resumed evaluator overlay manifest")
+    expected = expected_evaluator_packages(repository)
+    if (
+        manifest.get("plan_id") != PLAN_ID
+        or manifest.get("qualification_id") != QUALIFICATION_ID
+        or manifest.get("replacement_image_id") != image_id
+        or manifest.get("lock_sha256") != file_sha256(repository / "uv.lock")
+        or manifest.get("packages") != expected
+        or manifest.get("packages_sha256") != canonical_sha256(expected)
+        or manifest.get("reviewed_expected_packages_sha256") != canonical_sha256(expected)
+    ):
+        raise T09HostError("retained evaluator overlay manifest drifted")
+    receipt = {
+        "materialized": True,
+        "network_mode": "bridge-dependency-materialization-only",
+        "provider_or_model_request": False,
+        "image_id": image_id,
+        "lock_sha256": file_sha256(repository / "uv.lock"),
+        "overlay_manifest_sha256": file_sha256(manifest_path),
+        "overlay_entries_sha256": manifest["entries_sha256"],
+        "overlay_package_manifest_sha256": manifest["packages_sha256"],
+        "overlay_entry_count": manifest["entry_count"],
+        "overlay_total_regular_bytes": manifest["total_regular_bytes"],
+    }
+    validate_evaluator_overlay_binding(
+        artifact_root=artifact_root,
+        repository=repository,
+        overlay=overlay,
+        prefix=prefix,
+        image_id=image_id,
+        frozen_manifest={
+            "evaluator_overlay_manifest_sha256": receipt["overlay_manifest_sha256"],
+            "evaluator_overlay_entries_sha256": receipt["overlay_entries_sha256"],
+            "evaluator_overlay_packages_sha256": receipt["overlay_package_manifest_sha256"],
+        },
+        verify_packages=True,
+    )
+    return receipt
+
+
+def prepare_preflight_resume(
+    args: argparse.Namespace,
+) -> tuple[
+    Path,
+    Path,
+    dict[str, object],
+    dict[str, Any],
+    dict[str, Any],
+    dict[str, Any],
+    dict[str, object],
+    dict[str, object],
+    dict[str, Any],
+]:
+    """Validate and materialize the one source-bound zero-use preflight transition."""
+
+    repository = args.repository.resolve(strict=True)
+    artifact_root = args.artifact_root.resolve(strict=False)
+    prior_root = args.prior_artifact_root.resolve(strict=True)
+    overlay = args.evaluator_overlay.resolve(strict=True)
+    if artifact_root.exists() or artifact_root == prior_root:
+        raise T09HostError("preflight resume requires a fresh distinct artifact root")
+    prior_metadata = prior_root.stat(follow_symlinks=False)
+    if (
+        prior_root.name != "t09-pilot-v5-preflight-failure-0001"
+        or prior_root.is_symlink()
+        or not stat.S_ISDIR(prior_metadata.st_mode)
+        or prior_metadata.st_uid != os.getuid()
+        or stat.S_IMODE(prior_metadata.st_mode) != 0o700
+    ):
+        raise T09HostError("preflight failure prefix root is unsafe")
+    validate_secret_metadata(args.secret_file.resolve(strict=True))
+    archive = args.real_evidence_archive.resolve(strict=True)
+    archive_metadata = archive.stat(follow_symlinks=False)
+    if (
+        archive != PRIVATE_REGRESSION_ARCHIVE_PATH
+        or archive.is_symlink()
+        or not stat.S_ISREG(archive_metadata.st_mode)
+        or archive_metadata.st_uid != os.getuid()
+        or archive_metadata.st_nlink != 1
+        or stat.S_IMODE(archive_metadata.st_mode) != 0o600
+        or file_sha256(archive)
+        != "63ed19b35bcb4cb62c3796a80a48004937340eb3826f9657a1006e251772255d"
+    ):
+        raise T09HostError("exact private regression archive is unavailable for resume")
+    command_document = verify_package(repository, args.package_commit)
+    git_transition = _preflight_resume_git_transition(
+        repository,
+        package_commit=args.package_commit,
+    )
+    try:
+        dynamic = validate_entry_receipt_source_bound(
+            args.dynamic_receipt.resolve(strict=True),
+            args.dynamic_source_root.resolve(strict=True),
+            package_commit=PREENTRY_RESUME_FROM_PACKAGE_COMMIT,
+            plan_sha256=PREENTRY_RESUME_FROM_PLAN_SHA256,
+        )
+    except T09ProviderError as exc:
+        raise T09HostError("prior provider entry is not source-bound") from exc
+    dynamic = {**dynamic, "receipt_sha256": file_sha256(args.dynamic_receipt)}
+    lambda_started = dynamic.get("lambda_started_at_epoch")
+    if (
+        not isinstance(lambda_started, (int, float))
+        or isinstance(lambda_started, bool)
+        or not 0 <= time.time() - float(lambda_started) < PROVIDER_TERMINATION_CUTOFF_SECONDS
+    ):
+        raise T09HostError("preflight resume is outside the original campaign clock")
+    pilot = prior_root / "pilot-v5"
+    state_path = pilot / "pilot-state.json"
+    aggregate_path = pilot / "aggregate-budget.json"
+    old_state = load_object(state_path, label="failed preflight state")
+    old_aggregate = load_object(aggregate_path, label="failed preflight aggregate")
+    paths = contract_paths(repository)
+    execution_sha256 = file_sha256(paths["execution"])
+    next_state, next_aggregate = transition_zero_usage_preflight_state(
+        old_state,
+        old_aggregate,
+        prior_execution_contract_sha256=PREENTRY_RESUME_FROM_EXECUTION_SHA256,
+        next_execution_contract_sha256=execution_sha256,
+    )
+    absent = (
+        "frozen-run-manifest.json",
+        "preflight.json",
+        "model-metadata-preflight.json",
+        "browser-lifecycle-preflight/host-browser-lifecycle.json",
+        "qualified-real-evidence-regression/receipt.json",
+        "image-equivalence-adjudication.json",
+    )
+    if any((pilot / relative).exists() for relative in absent) or owned_containers(docker_prefix()):
+        raise T09HostError("failed preflight prefix crossed a later gate")
+    failure_evidence = _validate_preflight_failure_receipts(
+        failure_receipt=args.failure_receipt,
+        failure_command_receipt=args.failure_command_receipt,
+    )
+    materialization_path = pilot / "replacement-image-qualification/receipt.json"
+    materialization = load_object(materialization_path, label="retained image materialization")
+    image_id = materialization.get("image_id")
+    if (
+        materialization.get("build_count") != 1
+        or materialization.get("repository_runtime_commit") != PREENTRY_RESUME_FROM_PACKAGE_COMMIT
+        or not isinstance(image_id, str)
+        or image_id_if_present(docker_prefix(), REPLACEMENT_IMAGE_TAG) != image_id
+        or image_id_if_present(docker_prefix(), image_id) != image_id
+        or materialization.get("image_inspect_sha256")
+        != file_sha256(pilot / "replacement-image-qualification/replacement-image-inspect.stdout")
+        or materialization.get("build_context_manifest_sha256")
+        != file_sha256(pilot / "replacement-image-qualification/build-context-manifest.json")
+        or materialization.get("build_context_exclusions_sha256")
+        != file_sha256(pilot / "replacement-image-qualification/build-context-exclusions.json")
+        or materialization.get("build_command_sha256")
+        != file_sha256(pilot / "replacement-image-qualification/build-command.json")
+    ):
+        raise T09HostError("retained replacement image is not the one built candidate")
+    static_regression = validate_real_evidence_regression(repository)
+    local_qualification = validate_local_finalizer_qualification(
+        args.local_finalizer_qualification,
+        repository=repository,
+        package_commit=args.package_commit,
+        require_local_runtime=False,
+    )
+    artifact_root.mkdir(mode=0o700, parents=True)
+    resume_root = artifact_root / "pilot-v5/preflight-resume"
+    resume_root.mkdir(parents=True, mode=0o700)
+    retained_prefix = _copy_retained_prefix(
+        prior_root,
+        resume_root / "failure-prefix",
+        label="failed zero-use preflight prefix",
+    )
+    write_exclusive(resume_root / "failure-prefix-manifest.json", retained_prefix)
+    for label, source in (
+        ("operator-failure.json", args.failure_receipt.resolve(strict=True)),
+        ("operator-command.json", args.failure_command_receipt.resolve(strict=True)),
+    ):
+        shutil.copy2(source, resume_root / label)
+    for relative in ("replacement-image-qualification",):
+        _copy_retained_prefix(
+            pilot / relative,
+            artifact_root / "pilot-v5" / relative,
+            label=f"retained {relative}",
+        )
+    shutil.copy2(
+        pilot / "evaluator-overlay-manifest.json",
+        artifact_root / "pilot-v5/evaluator-overlay-manifest.json",
+    )
+    write_exclusive(
+        artifact_root / "pilot-v5/provider-entry.json",
+        sanitized_dynamic_receipt(args.dynamic_receipt, dynamic),
+    )
+    shutil.copy2(
+        args.local_finalizer_qualification.resolve(strict=True),
+        artifact_root / "pilot-v5/local-finalizer-qualification.json",
+    )
+    transition_state_path = resume_root / "transition-pilot-state.json"
+    transition_aggregate_path = resume_root / "transition-aggregate-budget.json"
+    write_exclusive(transition_state_path, next_state)
+    write_exclusive(transition_aggregate_path, next_aggregate)
+    shutil.copy2(transition_state_path, artifact_root / "pilot-v5/pilot-state.json")
+    shutil.copy2(
+        transition_aggregate_path,
+        artifact_root / "pilot-v5/aggregate-budget.json",
+    )
+    evaluator = _resume_evaluator_receipt(
+        repository=repository,
+        artifact_root=artifact_root,
+        overlay=overlay,
+        prefix=docker_prefix(),
+        image_id=image_id,
+    )
+    recovery_argv = _preflight_resume_argv()
+    transition: dict[str, object] = {
+        "schema_version": "0.1.0",
+        "receipt_type": "t09-preentry-same-host-preflight-resume",
+        "plan_id": PLAN_ID,
+        "host_run_id": HOST_RUN_ID,
+        **git_transition,
+        "prior_plan_sha256": PREENTRY_RESUME_FROM_PLAN_SHA256,
+        "plan_sha256": file_sha256(paths["plan"]),
+        "provider_entry_receipt_sha256": file_sha256(args.dynamic_receipt),
+        "provider_entry_source_manifest_sha256": dynamic.get("source_manifest_sha256"),
+        "owned_instance_identity_sha256": dynamic.get("owned_instance_identity_sha256"),
+        "lambda_started_at_epoch": lambda_started,
+        "launch_count": 1,
+        "replacement_image_id": image_id,
+        "replacement_image_tag": REPLACEMENT_IMAGE_TAG,
+        "build_count": 1,
+        "additional_build_count": 0,
+        "empirical_attempts_entered": 0,
+        "raw_attempts_complete": 0,
+        "attempts_completed": 0,
+        "model_metadata_requests": 0,
+        "task_model_requests": 0,
+        "task_browser_actions": 0,
+        "frozen_run_manifest_written": False,
+        "failure_prefix_manifest_sha256": file_sha256(resume_root / "failure-prefix-manifest.json"),
+        **failure_evidence,
+        "corrected_archive_sha256": file_sha256(archive),
+        "corrected_archive_mode": "0600",
+        "prior_state_sha256": file_sha256(state_path),
+        "transition_state_sha256": file_sha256(transition_state_path),
+        "prior_aggregate_sha256": file_sha256(aggregate_path),
+        "transition_aggregate_sha256": file_sha256(transition_aggregate_path),
+        "retained_materialization_receipt_sha256": file_sha256(
+            artifact_root / "pilot-v5/replacement-image-qualification/receipt.json"
+        ),
+        "recovery_source_sha256": file_sha256(Path(__file__).resolve(strict=True)),
+        "recovery_argv": recovery_argv,
+        "recovery_argv_sha256": canonical_sha256(recovery_argv),
+        "provider_launch_reused": True,
+        "additional_provider_launches": 0,
+        "created_at_epoch": time.time(),
+    }
+    transition_path = resume_root / "transition.json"
+    write_exclusive(transition_path, transition)
+    transition["receipt_sha256"] = file_sha256(transition_path)
+    return (
+        repository,
+        artifact_root,
+        dynamic,
+        command_document,
+        static_regression,
+        local_qualification,
+        materialization,
+        evaluator,
+        transition,
+    )
+
+
+def resume_preflight(args: argparse.Namespace) -> None:
+    """Resume only the exact retained zero-use preflight after source-bound repair."""
+
+    (
+        repository,
+        artifact_root,
+        dynamic,
+        command_document,
+        real_evidence_regression,
+        local_finalizer_qualification,
+        image_materialization,
+        evaluator,
+        transition,
+    ) = prepare_preflight_resume(args)
+    paths = contract_paths(repository)
+    execution_sha256 = file_sha256(paths["execution"])
+    prefix = docker_prefix()
+    image_id = image_materialization.get("image_id")
+    if not isinstance(image_id, str):
+        raise T09HostError("resumed image materialization lacks its identity")
+    credential_channel = secret_channel_preflight(
+        repository=repository,
+        artifact_root=artifact_root,
+        secret_file=args.secret_file.resolve(strict=True),
+        prefix=prefix,
+        image_id=image_id,
+    )
+    image_files = final_image_file_hashes(
+        artifact_root=artifact_root,
+        prefix=prefix,
+        image_id=image_id,
+    )
+    final_runtime = final_image_runtime_preflight(
+        artifact_root=artifact_root,
+        prefix=prefix,
+        image_id=image_id,
+        command_document=command_document,
+    )
+    offline = offline_runtime_preflight(
+        repository=repository,
+        artifact_root=artifact_root,
+        overlay=args.evaluator_overlay.resolve(strict=True),
+        prefix=prefix,
+        image_id=image_id,
+    )
+    qualified_real_regression = qualified_real_evidence_regression(
+        repository=repository,
+        artifact_root=artifact_root,
+        archive=args.real_evidence_archive,
+        overlay=args.evaluator_overlay.resolve(strict=True),
+        prefix=prefix,
+        image_id=image_id,
+        image_files=image_files,
+        static_receipt=real_evidence_regression,
+    )
+    browser = browser_lifecycle_preflight(
+        artifact_root=artifact_root,
+        prefix=prefix,
+        image_id=image_id,
+    )
+    evaluator_overlay_verified = validate_evaluator_overlay_binding(
+        artifact_root=artifact_root,
+        repository=repository,
+        overlay=args.evaluator_overlay.resolve(strict=True),
+        prefix=prefix,
+        image_id=image_id,
+        frozen_manifest={
+            "evaluator_overlay_manifest_sha256": evaluator["overlay_manifest_sha256"],
+            "evaluator_overlay_entries_sha256": evaluator["overlay_entries_sha256"],
+            "evaluator_overlay_packages_sha256": evaluator["overlay_package_manifest_sha256"],
+        },
+        verify_packages=True,
+    )
+    adjudication = image_equivalence_adjudication(
+        repository=repository,
+        artifact_root=artifact_root,
+        image_id=image_id,
+    )
+    gpu = gpu_snapshot()
+    lambda_started = dynamic.get("lambda_started_at_epoch")
+    if not isinstance(lambda_started, (int, float)) or isinstance(lambda_started, bool):
+        raise T09HostError("provider entry lacks its original campaign clock")
+    lambda_elapsed = time.time() - float(lambda_started)
+    if (
+        lambda_elapsed >= MAX_LAMBDA_DURATION_SECONDS
+        or lambda_elapsed * LAMBDA_HOURLY_PRICE_USD / 3600.0 >= MAX_LAMBDA_COST_USD
+        or owned_containers(prefix)
+        or _runtime_budget_state(artifact_root).get("empirical_attempts_entered") != []
+        or load_aggregate_usage(
+            artifact_root / "pilot-v5/aggregate-budget.json",
+            contract_sha256=execution_sha256,
+        )
+        != ProviderBudgetUsage()
+    ):
+        raise T09HostError("resumed preflight lacks zero-use lifecycle headroom")
+    model_metadata = model_metadata_preflight(
+        artifact_root=artifact_root,
+        secret_file=args.secret_file.resolve(strict=True),
+        prefix=prefix,
+        image_id=image_id,
+    )
+    frozen_manifest_path, frozen_manifest = write_frozen_run_manifest(
+        repository=repository,
+        artifact_root=artifact_root,
+        package_commit=args.package_commit,
+        dynamic=dynamic,
+        image_materialization=image_materialization,
+        command_document=command_document,
+        runtime_receipt=final_runtime,
+        offline_receipt=offline,
+        browser_receipt=browser,
+        evaluator_receipt=evaluator,
+        file_hashes=image_files,
+        model_receipt=model_metadata,
+        adjudication=adjudication,
+        static_real_evidence_regression=real_evidence_regression,
+        qualified_real_evidence_regression_receipt=qualified_real_regression,
+        local_finalizer_qualification_receipt=local_finalizer_qualification,
+        preflight_resume_transition=transition,
+    )
+    state_path = artifact_root / "pilot-v5/pilot-state.json"
+    state = load_object(state_path, label="pilot state")
+    state["first_pair_started_at_epoch"] = time.time()
+    write_atomic(state_path, state)
+    admitted_seconds = admit_next_attempt(artifact_root)
+    preflight_path = artifact_root / "pilot-v5/preflight.json"
+    write_exclusive(
+        preflight_path,
+        {
+            "schema_version": "0.1.0",
+            "plan_id": PLAN_ID,
+            "host_run_id": HOST_RUN_ID,
+            "completed_at": utc_now(),
+            "clean_package_commit": args.package_commit,
+            "execution_contract_sha256": execution_sha256,
+            "command_manifests_sha256": file_sha256(paths["commands"]),
+            "command_argv_sha256s": [item["argv_sha256"] for item in manifests(command_document)],
+            "dynamic_receipt_sha256": file_sha256(args.dynamic_receipt),
+            "dynamic_receipt": sanitized_dynamic_receipt(args.dynamic_receipt, dynamic),
+            "preflight_transition_mode": "same-host-resume",
+            "preflight_resume_transition_sha256": transition["receipt_sha256"],
+            "preflight_failure_prefix_manifest_sha256": transition[
+                "failure_prefix_manifest_sha256"
+            ],
+            "image_materialization": image_materialization,
+            "replacement_image_id": image_id,
+            "frozen_run_manifest_sha256": file_sha256(frozen_manifest_path),
+            "frozen_run_manifest_id": frozen_manifest["manifest_id"],
+            "image_equivalence_adjudication": adjudication,
+            "final_image_file_hashes": image_files,
+            "final_image_runtime_preflight": final_runtime,
+            "runtime_imports": "passed-by-network-none-offline-runtime-preflight",
+            "evidence_write_fsync_readback": ("passed-by-network-none-offline-runtime-preflight"),
+            "budget_ledger": "passed-zero-state-by-network-none-offline-runtime-preflight",
+            "command_rendering": "passed-four-exact-by-network-none-offline-runtime-preflight",
+            "browser_startup_screenshot_cleanup": browser,
+            "evaluator_loading": "passed-exact-network-none-with-approved-fixtures",
+            "real_evidence_finalizer_regression": {
+                "static_receipt_sha256": file_sha256(paths["real_regression"]),
+                "qualified_receipt_sha256": file_sha256(
+                    artifact_root / "pilot-v5/qualified-real-evidence-regression/receipt.json"
+                ),
+                "semantic_projection_sha256": real_evidence_regression[
+                    "semantic_projection_sha256"
+                ],
+                "qualified_interpreter_sha256": qualified_real_regression["interpreter"][
+                    "executable_sha256"
+                ],
+                "accepted_scientific_and_evaluator_fields_equal": True,
+                "additional_model_requests": 0,
+                "additional_browser_actions": 0,
+            },
+            "local_post_termination_finalizer": {
+                "qualification_sha256": file_sha256(
+                    artifact_root / "pilot-v5/local-finalizer-qualification.json"
+                ),
+                "interpreter_sha256": local_finalizer_qualification["interpreter_sha256"],
+                "interpreter_dependency_manifest_sha256": local_finalizer_qualification[
+                    "interpreter_dependency_manifest_sha256"
+                ],
+                "interpreter_dependency_tree_sha256": local_finalizer_qualification[
+                    "interpreter_dependency_tree_sha256"
+                ],
+                "evaluator_dependency_tree_sha256": local_finalizer_qualification[
+                    "dependency_tree_sha256"
+                ],
+                "network": "socket-construction-denied",
+                "provider_lifecycle_required": False,
+            },
+            "evaluator_overlay_revalidation": evaluator_overlay_verified,
+            "task_loading": "passed-two-exact-rows-network-none",
+            "model_metadata": model_metadata,
+            "model_metadata_request_count": 1,
+            "model_task_request_count": 0,
+            "credential_channel": credential_channel,
+            "zero_prior_lambda_instances": True,
+            "gpu_accounting": gpu,
+            "empirical_entry_crossed": False,
+            "actual_campaign_seconds_consumed_by_setup": time.time() - float(lambda_started),
+            "seconds_available_after_cleanup_reserve": admitted_seconds,
+        },
+    )
+    load_frozen_run_manifest(
+        artifact_root,
+        repository=repository,
+        package_commit=args.package_commit,
+        require_image=True,
+    )
+    validate_evaluator_overlay_binding(
+        artifact_root=artifact_root,
+        repository=repository,
+        overlay=args.evaluator_overlay.resolve(strict=True),
+        prefix=prefix,
+        image_id=image_id,
+        frozen_manifest=frozen_manifest,
+        verify_packages=True,
+    )
+    post_state = _runtime_budget_state(artifact_root)
+    if (
+        post_state.get("empirical_attempts_entered") != []
+        or post_state.get("raw_attempts_complete") != []
+        or post_state.get("attempts_completed") != []
+        or owned_containers(prefix)
+    ):
+        raise T09HostError("post-resume preflight zero-use validation failed")
+    write_exclusive(
+        artifact_root / "pilot-v5/preflight-resume/postfreeze-validation.json",
+        {
+            "schema_version": "0.1.0",
+            "plan_id": PLAN_ID,
+            "package_commit": args.package_commit,
+            "frozen_run_manifest_sha256": file_sha256(frozen_manifest_path),
+            "preflight_sha256": file_sha256(preflight_path),
+            "evaluator_overlay_revalidated": True,
+            "replacement_image_revalidated": True,
+            "owned_containers_absent": True,
+            "empirical_attempts_entered": 0,
+            "model_metadata_request_count": 1,
+            "task_model_request_count": 0,
+            "task_browser_action_count": 0,
+        },
+    )
 
 
 def preflight(args: argparse.Namespace) -> None:
@@ -5462,7 +6327,8 @@ def validate_selected_finalization(
     relative = selection.get("finalized_output_root")
     if set(selection) != expected_keys or not isinstance(relative, str):
         raise T09HostError("selected finalization closure is malformed")
-    execution_mode = selection.get("finalizer_execution_mode")
+    execution_mode_value = selection.get("finalizer_execution_mode")
+    execution_mode = execution_mode_value if isinstance(execution_mode_value, str) else ""
     expected_network = {
         "qualified-image": "none",
         "qualified-local": "socket-construction-denied",
@@ -6957,31 +7823,31 @@ def restore_verified_attempt_export(
             name = record.get("path")
             size = record.get("bytes")
             digest = record.get("sha256")
-            member = members.get(name) if isinstance(name, str) else None
+            export_member = members.get(name) if isinstance(name, str) else None
             if (
                 not isinstance(name, str)
                 or type(size) is not int
                 or not isinstance(digest, str)
                 or _HEX64.fullmatch(digest) is None
-                or member is None
-                or member.size != size
+                or export_member is None
+                or export_member.size != size
             ):
                 raise T09HostError("offline restoration member identity drifted")
-            stream = handle.extractfile(member)
+            stream = handle.extractfile(export_member)
             if stream is None:
                 raise T09HostError("offline restoration member is unreadable")
             if name.startswith("raw/"):
                 destination = raw_root / name.removeprefix("raw/")
             elif name.startswith("control/"):
-                relative = name.removeprefix("control/")
-                if relative == "pilot-v5/pilot-state.json":
+                control_relative = name.removeprefix("control/")
+                if control_relative == "pilot-v5/pilot-state.json":
                     destination = (
                         restoration_root
                         / "pilot-v5/restored-control-snapshots"
                         / run_id
                         / "pilot-state.json"
                     )
-                elif relative == "pilot-v5/aggregate-budget.json":
+                elif control_relative == "pilot-v5/aggregate-budget.json":
                     destination = (
                         restoration_root
                         / "pilot-v5/restored-control-snapshots"
@@ -6989,7 +7855,7 @@ def restore_verified_attempt_export(
                         / "aggregate-budget.json"
                     )
                 else:
-                    destination = restoration_root / relative
+                    destination = restoration_root / control_relative
             else:
                 destination = attempt_root / name
             resolved_parent = destination.parent.resolve(strict=False)
@@ -7781,6 +8647,14 @@ def parser() -> argparse.ArgumentParser:
     preflight_parser.add_argument("--dynamic-source-root", type=Path, required=True)
     preflight_parser.add_argument("--real-evidence-archive", type=Path, required=True)
     preflight_parser.add_argument("--local-finalizer-qualification", type=Path, required=True)
+    resume_parser = operations.add_parser("resume-preflight")
+    resume_parser.add_argument("--dynamic-receipt", type=Path, required=True)
+    resume_parser.add_argument("--dynamic-source-root", type=Path, required=True)
+    resume_parser.add_argument("--real-evidence-archive", type=Path, required=True)
+    resume_parser.add_argument("--local-finalizer-qualification", type=Path, required=True)
+    resume_parser.add_argument("--prior-artifact-root", type=Path, required=True)
+    resume_parser.add_argument("--failure-receipt", type=Path, required=True)
+    resume_parser.add_argument("--failure-command-receipt", type=Path, required=True)
     condition_export = operations.add_parser("condition-export")
     condition_export.add_argument("--run-id", choices=RUN_IDS, required=True)
     finalize_parser = operations.add_parser("finalize-attempt")
@@ -7835,6 +8709,9 @@ def main() -> int:
     args = parser().parse_args()
     if args.operation == "preflight":
         preflight(args)
+        return 0
+    if args.operation == "resume-preflight":
+        resume_preflight(args)
         return 0
     if args.operation == "condition-export":
         execute_condition(args)

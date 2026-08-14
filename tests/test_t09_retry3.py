@@ -24,6 +24,8 @@ from giclab.harness.t09_sira_pilot import (
     mark_empirical_entry,
     mark_raw_attempt_complete,
     record_first_pair_checkpoint,
+    transition_zero_usage_preflight_state,
+    usage_to_document,
 )
 from giclab.validation import validate_instance
 
@@ -40,6 +42,84 @@ REAL_REGRESSION_RECEIPT = (
     "T09_PRAGMATIC_RETRY3_FINALIZER_REGRESSION.json"
 )
 RAW_FIXTURE = ROOT / "tests/fixtures/t09/finalizer-raw-shape"
+
+
+def test_retry3_preflight_resume_transitions_only_exact_zero_use_state() -> None:
+    old_execution = "1" * 64
+    new_execution = "2" * 64
+    state: dict[str, object] = {
+        "schema_version": "0.2.0",
+        "plan_id": "PLAN-EXP0001-PILOT-V5",
+        "execution_contract_sha256": old_execution,
+        "pilot_started_at_epoch": 100.0,
+        "lambda_started_at_epoch": 100.0,
+        "first_pair_started_at_epoch": None,
+        "second_pair_started_at_epoch": None,
+        "empirical_attempts_entered": [],
+        "raw_attempts_complete": [],
+        "raw_attempt_bindings": {},
+        "attempts_completed": [],
+        "attempt_finalizations": {},
+        "attempt_finalization_history": {},
+        "first_pair_decision": None,
+        "first_pair_checkpoint_binding": None,
+        "first_pair_selection_drift_detected": False,
+    }
+    aggregate: dict[str, object] = {
+        "schema_version": "0.1.0",
+        "plan_id": "PLAN-EXP0001-PILOT-V5",
+        "execution_contract_sha256": old_execution,
+        "unreconciled_provider_attempts": 0,
+        "usage": usage_to_document(pilot_state.ProviderBudgetUsage()),
+    }
+    transitioned_state, transitioned_aggregate = transition_zero_usage_preflight_state(
+        state,
+        aggregate,
+        prior_execution_contract_sha256=old_execution,
+        next_execution_contract_sha256=new_execution,
+    )
+    assert transitioned_state["execution_contract_sha256"] == new_execution
+    assert transitioned_state["pilot_started_at_epoch"] == 100.0
+    assert transitioned_state["lambda_started_at_epoch"] == 100.0
+    assert transitioned_state["first_pair_started_at_epoch"] is None
+    assert transitioned_aggregate["execution_contract_sha256"] == new_execution
+    assert state["execution_contract_sha256"] == old_execution
+    consumed = {**state, "empirical_attempts_entered": [ATTEMPT_ORDER[0]]}
+    with pytest.raises(T09PilotError, match="zero-use"):
+        transition_zero_usage_preflight_state(
+            consumed,
+            aggregate,
+            prior_execution_contract_sha256=old_execution,
+            next_execution_contract_sha256=new_execution,
+        )
+    unreconciled = {**aggregate, "unreconciled_provider_attempts": 1}
+    with pytest.raises(T09PilotError, match="zero usage"):
+        transition_zero_usage_preflight_state(
+            state,
+            unreconciled,
+            prior_execution_contract_sha256=old_execution,
+            next_execution_contract_sha256=new_execution,
+        )
+
+
+def test_retry3_preflight_resume_is_source_bound_and_precedes_empirical_entry() -> None:
+    source = HOST_SOURCE.read_text(encoding="utf-8")
+    prepare = source.split("def prepare_preflight_resume", 1)[1].split("def resume_preflight", 1)[0]
+    resume = source.split("def resume_preflight", 1)[1].split("def preflight", 1)[0]
+    assert "validate_entry_receipt_source_bound(" in prepare
+    assert "PREENTRY_RESUME_FROM_PACKAGE_COMMIT" in prepare
+    assert "transition_zero_usage_preflight_state(" in prepare
+    assert 'additional_build_count": 0' in prepare
+    assert "owned_containers(" in prepare
+    assert "qualified_real_evidence_regression(" in resume
+    assert resume.index("qualified_real_evidence_regression(") < resume.index(
+        "browser_lifecycle_preflight("
+    )
+    assert resume.index("browser_lifecycle_preflight(") < resume.index("model_metadata_preflight(")
+    assert resume.index("model_metadata_preflight(") < resume.index("write_frozen_run_manifest(")
+    assert resume.index("write_frozen_run_manifest(") < resume.index("admit_next_attempt(")
+    assert "load_frozen_run_manifest(" in resume
+    assert "postfreeze-validation.json" in resume
 
 
 def test_retry3_plan_has_a_typed_two_slot_raw_first_contract() -> None:
