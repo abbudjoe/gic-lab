@@ -172,28 +172,27 @@ def test_smoke_and_pragmatic_pilot_are_locked_and_require_private_authorization(
         assert condition["profile_plan_id"] == parent["plan_id"]
 
 
-def test_historical_status_surfaces_preserve_the_bounded_v3_plan() -> None:
+def test_historical_status_surfaces_preserve_without_reopening_bounded_v3() -> None:
     assert "Historical bounded plan: `PLAN-T07-BOUNDED-SIRA-SMOKE-V3`" in (
         PHASE_1_PLAN.read_text(encoding="utf-8")
     )
-    surfaces = (
-        ROOT / "docs/readiness/PHASE_1_SMOKE_READINESS.md",
-        ROOT / "docs/harness/T07_BOUNDED_SMOKE_GOVERNANCE.md",
+    readiness = (ROOT / "docs/readiness/PHASE_1_SMOKE_READINESS.md").read_text(encoding="utf-8")
+    assert "Historical consumed bounded plan: `PLAN-T07-BOUNDED-SIRA-SMOKE-V3`." in (readiness)
+    assert "Prospective bounded plan:" not in readiness
+    assert "Exact next run plan" not in readiness
+    assert "T07 has not run" not in readiness
+    assert "No exact SiRA successor profile is currently eligible or authorized" in readiness
+
+    governance = (ROOT / "docs/harness/T07_BOUNDED_SMOKE_GOVERNANCE.md").read_text(encoding="utf-8")
+    matches = re.findall(
+        r"^Prospective bounded plan: `([^`]+)`\.$",
+        governance,
+        flags=re.MULTILINE,
     )
-    prospective_ids: list[str] = []
-    for path in surfaces:
-        text = path.read_text(encoding="utf-8")
-        matches = re.findall(
-            r"^Prospective bounded plan: `([^`]+)`\.$",
-            text,
-            flags=re.MULTILINE,
-        )
-        assert matches == ["PLAN-T07-BOUNDED-SIRA-SMOKE-V3"], path
-        prospective_ids.extend(matches)
-        assert "bounded-smoke V1 is the reviewed prospective path" not in text
-        assert "bounded smoke V1 ready for separate authorization" not in text
-        assert "/home/ubuntu/t07-bounded-output-0001" not in text
-    assert set(prospective_ids) == {"PLAN-T07-BOUNDED-SIRA-SMOKE-V3"}
+    assert matches == ["PLAN-T07-BOUNDED-SIRA-SMOKE-V3"]
+    assert "bounded-smoke V1 is the reviewed prospective path" not in governance
+    assert "bounded smoke V1 ready for separate authorization" not in governance
+    assert "/home/ubuntu/t07-bounded-output-0001" not in governance
 
     for path in (
         ROOT / "docs/DECISIONS.md",
@@ -208,6 +207,21 @@ def test_historical_status_surfaces_preserve_the_bounded_v3_plan() -> None:
         ]
         assert "D-033" in rows[-2] and "PLAN-T07-BOUNDED-SIRA-SMOKE-V2" in rows[-2]
         assert "D-034" in rows[-1] and "PLAN-T07-BOUNDED-SIRA-SMOKE-V3" in rows[-1]
+
+
+def test_current_public_surfaces_define_no_replayable_successor_profile() -> None:
+    surfaces = (
+        ROOT / "docs/readiness/PHASE_1_SMOKE_READINESS.md",
+        ROOT / "notebook/weekly/2026-08-08-phase-1.qmd",
+    )
+    for path in surfaces:
+        text = path.read_text(encoding="utf-8")
+        assert "Exact next run plan" not in text
+        assert "only next eligible profile" not in text
+        assert "T07 has not run" not in text
+        assert "No exact successor execution profile is currently eligible" in text or (
+            "No exact SiRA successor profile is currently eligible" in text
+        )
 
 
 def test_exp0001_readme_records_t07_materialization_and_current_pilot_boundary() -> None:
@@ -234,8 +248,8 @@ def test_readiness_names_every_exact_decision_and_future_track_boundary() -> Non
         "USD 4.00",
         "regulation_decision",
         "source_kind: experiment_assignment",
-        "Rollback and cleanup",
-        "Remaining blockers and nonblocking questions",
+        "Historical bounded-smoke rollback and cleanup",
+        "Current publication limits and next-control boundary",
         "infrastructure evidence only",
     ):
         assert required in readiness

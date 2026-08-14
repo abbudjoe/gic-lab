@@ -89,7 +89,7 @@ two-launch capability and campaign clock are exhausted. Terminal state is
 `t09-pilot-blocked-material-risk`; any future paired campaign requires fresh
 identities, a new clock, independent review, and new current-turn authority.
 
-## Exact next run plan
+## Historical consumed smoke record
 
 - Experiment: `EXP-0001`
 - Profile plan ID: `PLAN-EXP0001-SMOKE`
@@ -100,10 +100,9 @@ identities, a new clock, independent review, and new current-turn authority.
 - Pair: `PAIR-EXP0001-SMOKE-0000`
 - Interpretation: prohibited (`interpretation_allowed: false`)
 
-The historical smoke profile and both condition plans remain unauthorized after their
-separate bounded authority was consumed. This readiness record and the historical
-proposed budget are not authorization. The pilot planning package is eligible, but
-pilot execution is not.
+The smoke profile and both condition plans are historical records whose separate
+bounded authority was consumed. They are neither eligible nor reusable. No exact
+successor run profile currently exists, and this readiness record is not authorization.
 
 T07's high-assurance infrastructure track is frozen at
 `high-assurance-infrastructure-frozen`. Gate L1/L1A evidence is complete, sealed and
@@ -123,20 +122,23 @@ names, types, counts and hashes.
 
 No executable high-assurance plan or authorization block remains active. Bounded-smoke
 V1 stopped before its first account request and is preserved as blocked historical
-provenance. The reviewed prospective replacement remains unauthorized.
+provenance. Its eventual bounded successor executed and is also closed and
+nonreplayable.
 
-Prospective bounded plan: `PLAN-T07-BOUNDED-SIRA-SMOKE-V3`.
+Historical consumed bounded plan: `PLAN-T07-BOUNDED-SIRA-SMOKE-V3`.
 
 Its host run is `RUN-T07-BOUNDED-HOST-0003`; the plan is at
 `containers/sira-smoke/bounded/bounded-smoke-plan-v3.json`, with the exact byte size
 and SHA-256 recorded in the V3 implementation ledger and authorization packet. Its
 governance, exact caps, user runbook, and future authorization packet are under
-`docs/harness/T07_BOUNDED_SMOKE_*`. Every execution permission remains false, T07 has
-not run, and Gate L2M/L3/L4 do not continue.
+`docs/harness/T07_BOUNDED_SMOKE_*`. Every execution permission remains false; the
+bounded T07 smoke ran under its now-exhausted separate authority, and Gate L2M/L3/L4
+do not continue.
 
-## Exact user decision fields
+## Historical bounded-smoke authorization fields
 
-A later current-turn authorization must state one value for every field below:
+The consumed bounded-smoke authorization bound one value for every field below. This
+table is historical audit context and is not a current authorization template:
 
 | Field | Locked or proposed value |
 |---|---|
@@ -149,28 +151,26 @@ A later current-turn authorization must state one value for every field below:
 | `maximum_wall_time_seconds` | `3,600` from authorization materialization for the complete provider-supervised window, with termination click by `3,300`; scientific workload is `240` total, at most `120` per condition |
 | `required_cleanup` | Stop/KILL each immutable container boundary, prove zero owned resources, preserve/copy/seal evidence, have the user terminate the exact Lambda instance through the provider console, and confirm terminal/nonbillable state through the read-only observer |
 
-The authorization reference must identify that current user instruction. The bounded
-control plane materializes it as a fresh mode-0600, Git-ignored single-run overlay
-bound to the final clean commit, plan, 3,600-second window, private resource binding,
-budgets, command hashes, and condition identities. Repository permission fields remain
-false and `CMP-0001` remains a planned record with zero actual time/cost; the overlay
-does not silently rewrite either authority plane. Benchmark and training permissions
-remain false. The frozen Gate L2M/L3/L4 contracts cannot be reauthorized, and no field
-may be inferred from this readiness document, public pricing, or an earlier gate.
+The historical control plane materialized those fields as a mode-0600, Git-ignored
+single-run overlay bound to its clean commit, plan, 3,600-second window, private
+resource binding, budgets, command hashes, and condition identities. That overlay is
+consumed. Repository permission fields, benchmark, and training permissions remain
+false. The frozen Gate L2M/L3/L4 and bounded-smoke contracts cannot be reauthorized,
+and no field may be inferred from this readiness document, public pricing, or an
+earlier gate.
 
-## Proposed API spend cap
+## Historical bounded-smoke API spend cap
 
-The proposed profile cap is **USD 4.00**: two condition attempts, each limited to
+The historical profile cap was **USD 4.00**: two condition attempts, each limited to
 200,000 model tokens and conservatively priced at the recorded USD 10.00 per million
 output-token rate. The dated price record is
-`experiments/EXP-0001-sira-simulative-vs-reactive/pricing.yaml` and must be reverified
-before authorization. A changed provider rate, unavailable model revision, or
-unbounded charge category stops preflight; it does not silently increase the cap.
+`experiments/EXP-0001-sira-simulative-vs-reactive/pricing.yaml`. It does not supply a
+current budget or authorization.
 
-## Required pre-execution materialization
+## Historical bounded-smoke pre-execution materialization
 
-T07 must complete these deterministic preflight obligations after authorization but
-before the first live model, API, or browser action:
+The consumed T07 bounded contract required these deterministic preflight obligations
+after authorization but before the first live model, API, or browser action:
 
 1. Bind the clean GIC Lab commit, pinned SiRA checkout, immutable model substitution,
    protocol hash, condition-owned configuration hashes, environment fingerprint, and
@@ -196,10 +196,10 @@ before the first live model, API, or browser action:
    separately authorized scientific attempt. No frozen Gate L2M/L3/L4 identity or
    authority may satisfy this obligation.
 
-Failure of any preflight obligation stops T07 before execution and preserves the
-authorization record as an unconsumed/blocked attempt; it does not relax the protocol.
+Failure of any preflight obligation would have stopped T07 before execution and
+preserved the authorization record; it did not relax the protocol.
 
-## Expected artifacts
+## Historical bounded-smoke evidence contract
 
 For each condition attempt and for the paired profile, retain and validate:
 
@@ -225,7 +225,7 @@ For each condition attempt and for the paired profile, retain and validate:
 These are artifact-execution and infrastructure records. The smoke may not classify
 the EXP-0001 hypothesis or any RQ-H2K outcome.
 
-## Rollback and cleanup
+## Historical bounded-smoke rollback and cleanup
 
 - Stop before launch on identity, command, configuration, secret, budget, or artifact-
   ownership drift.
@@ -241,16 +241,17 @@ the EXP-0001 hypothesis or any RQ-H2K outcome.
   ownership. Unrelated cloud resources, keys, firewall rules, tags, filesystems and
   instances are never rollback targets.
 
-## Remaining blockers and nonblocking questions
+## Current publication limits and next-control boundary
 
 - Dataset and trace public-release licensing/privacy rules remain unresolved; private,
   access-controlled smoke retention can proceed, but publication stays blocked.
 - The final repository software/content licenses and publication identity remain open.
-- T07's high-assurance path is terminally frozen and cannot be revived. The bounded
-  child has a concrete topology, exact caps, cleanup/evidence contract, and reviewed
-  unauthorized plan. It remains blocked on a fresh current-turn authorization and all
-  dynamic preflight checks. SR²AM T11/T12 remain scientifically and operationally
-  separate.
+- T07's high-assurance path and bounded successor are terminally frozen and cannot be
+  revived. SR²AM T11/T12 remain scientifically and operationally separate.
+- No exact SiRA successor profile is currently eligible or authorized. A future paired
+  calibration requires a fresh plan and identities, a new campaign clock with
+  provider-activation/preflight slack, independent review, and new current-turn user
+  authorization.
 - RQ-H2K external-versus-explicit-model comparison feasibility remains undetermined.
   Missing optional regulation fields do not invalidate EXP-0001 when its primary
   evidence contract is complete.

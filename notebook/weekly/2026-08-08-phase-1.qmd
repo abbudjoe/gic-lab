@@ -70,21 +70,19 @@ that infrastructure record cannot affect EXP-0001 validity, metrics, or outcome.
 ## Execution boundary
 
 Paid compute, prototype execution, benchmark execution, training, and cloud mutation
-remain false. The only next eligible profile is `PLAN-EXP0001-SMOKE`, a one-pair
-reactive/simulative infrastructure smoke with interpretation disabled. Its proposed
-USD 4.00 cap is not authorization.
+remain false. No exact successor execution profile is currently eligible or
+authorized. The T07 smoke and T09 V3/V4/V5 authorities are consumed and nonreplayable.
+A future paired calibration requires fresh identities, a new campaign clock with
+provider-activation/preflight slack, independent review, and new current-turn user
+authorization.
 
 ## Next gate
 
-The bounded Lambda Gate L1 read-only inventory has completed and its redacted evidence
-is externally sealed. Gate L2 cannot yet be authorized: the minimized inventory did
-not retain account public-key material needed to match an account key to a local public
-fingerprint. After that evidence gap and the separate host/workload qualification
-gates are resolved, a later live-pair authorization must name the exact smoke plan,
-Lambda host plan, OpenAI and the `gpt-4o-2024-11-20` substitution, provider and API
-cost caps, wall limits, and container/provider cleanup. T07 must pass identity,
-command-diff, finite-budget, artifact-ownership, secret, and cleanup preflight before
-any live action.
+There is no current SiRA execution gate. Historical T07 infrastructure and bounded
+smoke records remain preserved, but none supplies prospective authority. The next
+scientific execution proposal, if any, must be a newly identified and reviewed
+calibration contract; it may not reuse an old smoke, host, condition, provider, or
+authorization identity.
 
 ## T07 infrastructure update — design only
 
