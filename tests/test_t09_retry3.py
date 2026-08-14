@@ -37,6 +37,7 @@ PROJECTION_SOURCE = ROOT / "containers/sira-smoke/pragmatic/t09_finalizer_projec
 LOCAL_QUALIFICATION_SOURCE = (
     ROOT / "containers/sira-smoke/pragmatic/t09_local_finalizer_qualification.py"
 )
+RUNTIME_ADAPTATION_SOURCE = ROOT / "src/giclab/harness/sira_gate_a_runtime.py"
 REAL_REGRESSION_RECEIPT = (
     ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive/"
     "T09_PRAGMATIC_RETRY3_FINALIZER_REGRESSION.json"
@@ -125,6 +126,20 @@ def test_retry3_same_host_resume_is_disabled_and_slot2_is_source_bound() -> None
     assert preflight.index("postfreeze-validation.json") < preflight.index(
         "pilot-v5/preflight.json"
     )
+    checkpoint = source.split("def first_pair_checkpoint", 1)[1].split(
+        "def campaign_evidence_disposition", 1
+    )[0]
+    assert checkpoint.index("load_frozen_run_manifest(") < checkpoint.index(
+        "validate_live_slot2_state_binding(state, frozen_manifest)"
+    )
+    disposition = source.split("def campaign_evidence_disposition", 1)[1].split(
+        "def _received_export_ack_path", 1
+    )[0]
+    assert "require_image=False" in disposition
+    assert "validate_live_slot2_state_binding(state, frozen_manifest)" in disposition
+    runtime_source = RUNTIME_ADAPTATION_SOURCE.read_text(encoding="utf-8")
+    assert "pilot_root = pilot_control_root.parent" in runtime_source
+    assert "pilot_root=attempt_root.parents[2]" not in runtime_source
 
 
 def test_retry3_slot2_uses_separate_campaign_and_active_lambda_clocks(
@@ -166,6 +181,16 @@ def test_retry3_slot2_transition_and_launch_headroom_are_fail_closed() -> None:
     assert transition["to_package_commit"] == package_commit
     assert transition["scientific_contract_changed"] is False
     assert transition["scientific_projection_sha256"]
+    runtime_transition = transition["control_runtime_transition"]
+    assert (
+        runtime_transition["previous"]["runtime_identity_sha256"]
+        != (runtime_transition["current"]["runtime_identity_sha256"])
+    )
+    assert (
+        runtime_transition["current"]["reviewed_implementation_ancestor"]
+        == (runtime_transition["current"]["command_giclab_commit"])
+    )
+    assert transition["control_runtime_transition_sha256"]
     lifecycle = provider.load_campaign_lifecycle(ROOT)
     eligibility = {
         "campaign_started_at_epoch": 1_000.0,
@@ -297,7 +322,12 @@ def test_retry3_state_separates_raw_progress_from_reselectable_finalization(
         record_first_pair_checkpoint(
             state,
             execution_contract_sha256="f" * 64,
-            decision={"decision": "continue-to-task-b"},
+            decision={
+                "decision": "continue-to-task-b",
+                "first_pair_started_at_epoch": 1.0,
+                "second_pair_started_at_epoch": 2.0,
+                "decided_at_epoch": 2.0,
+            },
             decided_at_epoch=2.0,
         )
     # A repaired downstream version may be selected for an already finalized attempt.
@@ -305,9 +335,22 @@ def test_retry3_state_separates_raw_progress_from_reselectable_finalization(
     record_first_pair_checkpoint(
         state,
         execution_contract_sha256="f" * 64,
-        decision={"decision": "continue-to-task-b"},
+        decision={
+            "decision": "continue-to-task-b",
+            "first_pair_started_at_epoch": 1.0,
+            "second_pair_started_at_epoch": 2.0,
+            "decided_at_epoch": 2.0,
+        },
         decided_at_epoch=2.0,
     )
+    checkpoint_state_bytes = state.read_bytes()
+    for field in ("first_pair_started_at_epoch", "second_pair_started_at_epoch"):
+        tampered = json.loads(checkpoint_state_bytes)
+        tampered[field] = float(tampered[field]) + 0.5
+        state.write_text(json.dumps(tampered), encoding="utf-8")
+        with pytest.raises(T09PilotError, match="pair-wall origins"):
+            pilot_state._load_pilot_state(state, contract_sha256="f" * 64)
+        state.write_bytes(checkpoint_state_bytes)
     with pytest.raises(T09PilotError, match="semantic projection"):
         _select(state, ATTEMPT_ORDER[0], source="7" * 64, semantic="8" * 64)
     blocked = json.loads(state.read_text(encoding="utf-8"))
@@ -938,7 +981,12 @@ def test_retry3_selected_local_completion_reconstructs_and_opens_checkpoint(
     record_first_pair_checkpoint(
         state,
         execution_contract_sha256="f" * 64,
-        decision={"decision": "continue-to-task-b"},
+        decision={
+            "decision": "continue-to-task-b",
+            "first_pair_started_at_epoch": 1.0,
+            "second_pair_started_at_epoch": 2.0,
+            "decided_at_epoch": 2.0,
+        },
         decided_at_epoch=2.0,
     )
     mark_empirical_entry(
@@ -978,6 +1026,127 @@ def test_retry3_receipt_writer_is_private_exclusive(tmp_path: Path) -> None:
     )
 
 
+def test_retry3_slot2_authority_retention_is_manifest_complete_and_minimal(
+    tmp_path: Path,
+) -> None:
+    host = _load(HOST_SOURCE, "giclab_t09_retry3_authority_retention")
+    source = tmp_path / "provider-private"
+    authority = source / "slot2-eligibility-source"
+    authority.mkdir(parents=True)
+    host.write_exclusive(source / "replacement-launch-eligibility.json", {"eligible": True})
+    host.write_exclusive(authority / "transition.json", {"transition": True})
+    nested = authority / "slot1-entry-source"
+    nested.mkdir()
+    host.write_exclusive(nested / "entry-receipt.json", {"entry": True})
+    source_manifest = provider._slot2_authority_tree_manifest(authority)
+    host.write_exclusive(authority / "source-manifest.json", source_manifest)
+    host.write_exclusive(source / "unrelated-owned-state.json", {"private": True})
+
+    destination = tmp_path / "retained"
+    retained = host.retain_slot2_authority(source, destination)
+    assert set(retained) == {
+        "replacement-launch-eligibility.json",
+        "slot2-eligibility-source/source-manifest.json",
+        "slot2-eligibility-source/transition.json",
+        "slot2-eligibility-source/slot1-entry-source/entry-receipt.json",
+    }
+    assert not (destination / "unrelated-owned-state.json").exists()
+
+    host.write_exclusive(authority / "undeclared-extra.json", {"extra": True})
+    with pytest.raises(host.T09HostError, match="member set"):
+        host.retain_slot2_authority(source, tmp_path / "rejected")
+
+
+def test_retry3_private_regression_archive_requires_private_single_link_metadata(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    host = _load(HOST_SOURCE, "giclab_t09_retry3_private_archive")
+    archive = tmp_path / "private-v4.tar.gz"
+    archive.write_bytes(b"private-regression-fixture")
+    archive.chmod(0o600)
+    monkeypatch.setattr(host, "PRIVATE_REGRESSION_ARCHIVE_PATH", archive)
+    monkeypatch.setattr(host, "PRIVATE_REGRESSION_ARCHIVE_BYTES", archive.stat().st_size)
+    monkeypatch.setattr(host, "PRIVATE_REGRESSION_ARCHIVE_SHA256", host.file_sha256(archive))
+    assert host.validate_private_regression_archive(archive) == archive
+
+    archive.chmod(0o644)
+    with pytest.raises(host.T09HostError, match="identity drifted"):
+        host.validate_private_regression_archive(archive)
+    archive.chmod(0o600)
+    hardlink = tmp_path / "private-v4-hardlink.tar.gz"
+    hardlink.hardlink_to(archive)
+    with pytest.raises(host.T09HostError, match="identity drifted"):
+        host.validate_private_regression_archive(archive)
+
+
+def test_retry3_metadata_secret_scan_removes_value_and_permanently_stops_admission(
+    tmp_path: Path,
+) -> None:
+    host = _load(HOST_SOURCE, "giclab_t09_retry3_metadata_secret_scan")
+    artifact_root = tmp_path / "artifacts"
+    state_path = artifact_root / "pilot-v5/pilot-state.json"
+    initialize_pilot_state(
+        state_path,
+        execution_contract_sha256="f" * 64,
+        pilot_started_at_epoch=1.0,
+        lambda_started_at_epoch=1.0,
+    )
+    secret = tmp_path / "secret"
+    secret_value = b"fixture-secret-that-must-never-be-retained"
+    secret.write_bytes(secret_value)
+    secret.chmod(0o600)
+    leaked = artifact_root / "pilot-v5/model-metadata-preflight/leaked.log"
+    leaked.parent.mkdir(parents=True)
+    leaked.write_bytes(secret_value)
+    with pytest.raises(host.T09HostError, match="exposed the exact credential"):
+        host.record_preflight_credential_scan(
+            artifact_root=artifact_root,
+            secret_file=secret,
+            execution_contract_sha256="f" * 64,
+        )
+    assert not leaked.exists()
+    receipt = json.loads(
+        (artifact_root / "pilot-v5/model-metadata-credential-scan.json").read_text(encoding="utf-8")
+    )
+    assert receipt["actual_credential_exposure_detected"] is True
+    assert "sha256" not in json.dumps(receipt)
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    assert state["actual_credential_exposure_detected"] is True
+    assert state["credential_safety_stop_detected"] is True
+    with pytest.raises(T09BudgetExceeded, match="credential safety"):
+        mark_empirical_entry(
+            state_path,
+            execution_contract_sha256="f" * 64,
+            run_id=ATTEMPT_ORDER[0],
+        )
+
+
+def test_retry3_unreconstructable_credential_cleanup_stops_without_false_exposure(
+    tmp_path: Path,
+) -> None:
+    state_path = tmp_path / "pilot-state.json"
+    initialize_pilot_state(
+        state_path,
+        execution_contract_sha256="f" * 64,
+        pilot_started_at_epoch=1.0,
+        lambda_started_at_epoch=1.0,
+    )
+    pilot_state.mark_credential_cleanup_integrity_failure(
+        state_path,
+        execution_contract_sha256="f" * 64,
+    )
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    assert state["actual_credential_exposure_detected"] is False
+    assert state["credential_safety_stop_detected"] is True
+    with pytest.raises(T09BudgetExceeded, match="credential safety"):
+        mark_empirical_entry(
+            state_path,
+            execution_contract_sha256="f" * 64,
+            run_id=ATTEMPT_ORDER[0],
+        )
+
+
 def test_retry3_raw_seal_is_immediate_and_resumes_after_state_write_crash(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -992,6 +1161,8 @@ def test_retry3_raw_seal_is_immediate_and_resumes_after_state_write_crash(
     cleanup_path = raw_root / "host-cleanup-receipt.json"
     cleanup = json.loads(cleanup_path.read_text(encoding="utf-8"))
     cleanup["run_id"] = run_id
+    cleanup["actual_credential_exposure_detected"] = False
+    cleanup["runtime_secret_cleanup_malformed"] = False
     cleanup_path.write_text(json.dumps(cleanup), encoding="utf-8")
     for name, value in {
         "attempt-wall.json": {"run_id": run_id},

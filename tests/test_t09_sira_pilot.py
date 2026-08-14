@@ -375,13 +375,37 @@ def test_resource_guard_stops_before_wall_output_disk_or_lambda_overrun(tmp_path
         pilot_root=tmp_path,
         condition_started=0.0,
         pair_started=0.0,
-        pilot_started=0.0,
-        lambda_started=0.0,
+        campaign_started=0.0,
+        owned_lambda_started=0.0,
+        prior_lambda_duration_seconds=0.0,
+        prior_lambda_cost_usd=0.0,
         monotonic=lambda: next(clock),
     )
     assert guard.check().condition_elapsed_seconds == 1.0
     with pytest.raises(T09BudgetExceeded, match="hard resource cap exceeded"):
         guard.check()
+
+
+def test_resource_guard_separates_campaign_gap_from_active_lambda_cost(tmp_path: Path) -> None:
+    now = 6_000.0
+    prior_duration = 3_883.0
+    prior_cost = prior_duration * 1.29 / 3_600
+    guard = ResourceGuard(
+        _limits(),
+        attempt_root=tmp_path / "attempt",
+        pilot_root=tmp_path,
+        condition_started=now - 10,
+        pair_started=now - 20,
+        campaign_started=now - 5_000,
+        owned_lambda_started=now - 100,
+        prior_lambda_duration_seconds=prior_duration,
+        prior_lambda_cost_usd=prior_cost,
+        monotonic=lambda: now,
+    )
+    snapshot = guard.check()
+    assert snapshot.total_elapsed_seconds == 5_000
+    assert snapshot.lambda_elapsed_seconds == 3_983
+    assert snapshot.lambda_cost_usd == pytest.approx(3_983 * 1.29 / 3_600)
 
 
 def test_first_pair_checkpoint_passes_only_strictly_below_every_threshold() -> None:
@@ -475,7 +499,12 @@ def test_attempt_state_enforces_order_cap_checkpoint_and_zero_retry(tmp_path: Pa
     record_first_pair_checkpoint(
         path,
         execution_contract_sha256=digest,
-        decision={"decision": "continue-to-task-b"},
+        decision={
+            "decision": "continue-to-task-b",
+            "first_pair_started_at_epoch": 1.0,
+            "second_pair_started_at_epoch": 2.0,
+            "decided_at_epoch": 2.0,
+        },
         decided_at_epoch=2.0,
     )
     mark_empirical_entry(
@@ -667,6 +696,7 @@ def test_runtime_qualification_is_typed_slot2_import_preentry_and_digest_agnosti
         "launch_count": 2,
         "campaign_started_at_epoch": 1.0,
         "owned_lambda_started_at_epoch": 2.0,
+        "first_pair_started_at_epoch": 3.0,
         "prior_lambda_duration_seconds": 3.0,
         "prior_lambda_cost_usd": 0.1,
         "replacement_eligibility_sha256": "a" * 64,
@@ -912,6 +942,9 @@ def test_preentry_condition_prefix_is_bound_preserved_and_retryable(tmp_path: Pa
         "attempt_identity_consumed": False,
         "container_absent": True,
         "remaining_exact_secret_matches": [],
+        "secret_bearing_artifacts_removed": [],
+        "actual_credential_exposure_detected": False,
+        "credential_cleanup_integrity_failure": False,
         "structural_privacy_violations": [],
         "failure_prefix_entries": prefix_entries,
         "failure_prefix_entries_sha256": host.canonical_sha256(prefix_entries),
@@ -2106,6 +2139,7 @@ def test_raw_attempt_streams_before_cutoff_without_aggregate_stage(
     frozen_sha256 = host.file_sha256(frozen_path)
     for relative in (
         "postfreeze-validation.json",
+        "model-metadata-credential-scan.json",
         "final-image-file-hashes/receipt.json",
         "qualified-real-evidence-regression/receipt.json",
         "replacement-image-qualification/build-context-exclusions.json",
@@ -2128,6 +2162,8 @@ def test_raw_attempt_streams_before_cutoff_without_aggregate_stage(
     cleanup_path = raw_root / "host-cleanup-receipt.json"
     cleanup = json.loads(cleanup_path.read_text(encoding="utf-8"))
     cleanup["run_id"] = ATTEMPT_ORDER[0]
+    cleanup["actual_credential_exposure_detected"] = False
+    cleanup["runtime_secret_cleanup_malformed"] = False
     cleanup_path.write_text(json.dumps(cleanup), encoding="utf-8")
     for name, value in {
         "container-command.json": {"run_id": ATTEMPT_ORDER[0]},

@@ -43,6 +43,8 @@ from giclab.harness.t09_sira_pilot import (
     scientific_attempt_projection,
 )
 
+HISTORICAL_V4_REGRESSION_RUN_ID = "RUN-T09-TASK-A-REACTIVE-0002"
+
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
@@ -398,6 +400,19 @@ def _manifest_for_run(document: Mapping[str, object], run_id: str) -> dict[str, 
     return cast(dict[str, Any], matches[0])
 
 
+def _host_cleanup_proves_no_credential_exposure(cleanup: Mapping[str, object]) -> bool:
+    """Accept explicit V5 proof or the one exact retained V4 regression shape."""
+
+    if cleanup.get("actual_credential_exposure_detected") is False:
+        return True
+    return (
+        "actual_credential_exposure_detected" not in cleanup
+        and cleanup.get("run_id") == HISTORICAL_V4_REGRESSION_RUN_ID
+        and cleanup.get("secret_bearing_artifacts_removed") == []
+        and cleanup.get("secret_matching_paths") == []
+    )
+
+
 def reconstruct_semantic_projection(
     *,
     raw_root: Path,
@@ -490,6 +505,7 @@ def reconstruct_semantic_projection(
             and cleanup.get("owned_container_residue") == []
             and cleanup.get("secret_scan_passed") is True
             and cleanup.get("secret_matching_paths") == []
+            and _host_cleanup_proves_no_credential_exposure(cleanup)
         ),
     }
     usage = {
@@ -942,9 +958,11 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
             or (
                 credential_cleanup.get("credential_removed_from_environment") is True
                 and credential_cleanup.get("remaining_exact_credential_matches") == 0
+                and credential_cleanup.get("secret_bearing_artifacts_removed") == []
             )
         )
         and host_cleanup.get("secret_scan_passed") is True
+        and _host_cleanup_proves_no_credential_exposure(host_cleanup)
     )
     container_removed = (
         host_cleanup.get("container_removed") is True

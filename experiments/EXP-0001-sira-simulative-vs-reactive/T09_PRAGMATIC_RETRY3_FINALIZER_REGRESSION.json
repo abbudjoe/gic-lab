@@ -99,7 +99,7 @@
     "evaluator_lock_sha256": "bec09cf0d326c56af9f717782eef9160579e7720dff701083570df9aa712b34b",
     "evaluator_revision": "93fb8d72de71f9a4a13419670adeb34d93cf7acd"
   },
-  "finalizer_source_sha256": "672282c901d0a7502a9198b71fcd2243240cb102b5a59232ad3b4eb13d0e0b21",
+  "finalizer_source_sha256": "71e93127a163503d55267be92791a6989c91ebc20c27bac4d8a7f1d718f0e93e",
   "interpreter": {
     "executable_name": "python3.11",
     "executable_sha256": "8355d4af6cef1a0b42db3896ca3be9ff7cfd9d62f1d790042f42ed5749898b49",

@@ -518,19 +518,29 @@ def run(argv: Sequence[str] | None = None) -> int:
 
         aggregate_persist = persist_pilot_aggregate
         condition_started = time.monotonic()
-        pair_started, pilot_started, lambda_started = pilot_state_time_origins(
+        time_origins = pilot_state_time_origins(
             pilot_state_path,
             execution_contract_sha256=pilot_contract.sha256,
             run_id=args.gate_pilot_attempt_id,
         )
+        pilot_control_root = pilot_state_path.parent
+        pilot_root = pilot_control_root.parent
+        if (
+            pilot_control_root.name != "pilot-v5"
+            or aggregate_ledger_path.parent != pilot_control_root
+            or pilot_root not in attempt_root.parents
+        ):
+            raise GateAContractError("pilot state, aggregate ledger, and attempt roots disagree")
         resource_guard = ResourceGuard(
             pilot_contract.limits,
             attempt_root=attempt_root,
-            pilot_root=attempt_root.parents[2],
+            pilot_root=pilot_root,
             condition_started=condition_started,
-            pair_started=pair_started,
-            pilot_started=pilot_started,
-            lambda_started=lambda_started,
+            pair_started=time_origins.pair_started,
+            campaign_started=time_origins.campaign_started,
+            owned_lambda_started=time_origins.owned_lambda_started,
+            prior_lambda_duration_seconds=time_origins.prior_lambda_duration_seconds,
+            prior_lambda_cost_usd=time_origins.prior_lambda_cost_usd,
         )
         resource_guard.check()
         pilot_events = EventWriter(attempt_root / "normalized-events.jsonl")

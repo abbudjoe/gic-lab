@@ -83,6 +83,7 @@ SLOT2_ELIGIBILITY_KIND: Final = "post-closeout-built-image-slot1"
 SLOT2_MINIMUM_LAUNCH_REMAINING_SECONDS: Final = 4_500
 SLOT2_TRANSITION_ALLOWED_PATHS: Final = frozenset(
     {
+        "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py",
         "containers/sira-smoke/pragmatic/t09_remote_runner.py",
         "docs/harness/T09_PRAGMATIC_RETRY3_EXECUTION_PLAN.md",
         "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
@@ -91,6 +92,8 @@ SLOT2_TRANSITION_ALLOWED_PATHS: Final = frozenset(
         "T09_PILOT_EXECUTION_CONTRACT.json",
         "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
         "T09_PILOT_RUNTIME_IDENTITY.json",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/"
+        "T09_PRAGMATIC_RETRY3_FINALIZER_REGRESSION.json",
         "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/"
         "pilot-v5-task-0000-reactive.yaml",
         "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/"
@@ -101,6 +104,7 @@ SLOT2_TRANSITION_ALLOWED_PATHS: Final = frozenset(
         "pilot-v5-task-0001-simulative.yaml",
         "schemas/t09-sira-pilot-evidence.schema.json",
         "src/giclab/harness/t09_pragmatic_provider.py",
+        "src/giclab/harness/sira_gate_a_runtime.py",
         "src/giclab/harness/t09_sira_pilot.py",
         "tests/test_t09_retry3.py",
         "tests/test_t09_sira_pilot.py",
@@ -2117,7 +2121,6 @@ def _slot2_science_projection(repository: Path, commit: str) -> dict[str, object
         "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
         "T09_PILOT_EVALUATOR_CONTRACT.json",
         "src/giclab/harness/sira_gate_a.py",
-        "src/giclab/harness/sira_gate_a_runtime.py",
         "src/giclab/harness/safety.py",
     )
     plan_relative = "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml"
@@ -2145,7 +2148,9 @@ def _slot2_science_projection(repository: Path, commit: str) -> dict[str, object
         split = cast(list[str], argv).index("--")
         equality = _mapping(manifest.get("equality_surface"), label="slot-2 equality surface")
         equality_scientific = {
-            key: value for key, value in equality.items() if key != "giclab_commit"
+            key: value
+            for key, value in equality.items()
+            if key not in {"giclab_commit", "environment_sha256"}
         }
         scientific_commands.append(
             {
@@ -2170,6 +2175,78 @@ def _slot2_science_projection(repository: Path, commit: str) -> dict[str, object
             for relative in immutable_paths
         },
         "commands": scientific_commands,
+    }
+
+
+def _slot2_runtime_control_projection(repository: Path, commit: str) -> dict[str, object]:
+    """Bind the reviewed control-runtime rebase separately from frozen science."""
+
+    runtime_relative = (
+        "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/T09_PILOT_RUNTIME_IDENTITY.json"
+    )
+    commands_relative = (
+        "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
+        "T09_PILOT_COMMAND_MANIFESTS.json"
+    )
+    runtime_bytes = _git_blob(repository, commit, runtime_relative)
+    try:
+        runtime_raw: object = json.loads(runtime_bytes)
+        commands_raw: object = json.loads(_git_blob(repository, commit, commands_relative))
+    except json.JSONDecodeError as exc:
+        raise T09ProviderError("slot-2 runtime control projection is malformed") from exc
+    runtime = _mapping(runtime_raw, label="slot-2 runtime identity")
+    instrumentation = _mapping(
+        runtime.get("repository_instrumentation"),
+        label="slot-2 runtime instrumentation",
+    )
+    ancestor = _string(
+        instrumentation.get("reviewed_implementation_ancestor"),
+        label="slot-2 reviewed implementation ancestor",
+    )
+    raw_files = _list(
+        instrumentation.get("files"),
+        label="slot-2 runtime instrumentation files",
+    )
+    files: list[dict[str, str]] = []
+    for raw in raw_files:
+        item = _mapping(raw, label="slot-2 runtime instrumentation file")
+        relative = _string(item.get("path"), label="slot-2 instrumentation path")
+        expected_sha256 = _string(item.get("sha256"), label="slot-2 instrumentation SHA-256")
+        if (
+            Path(relative).is_absolute()
+            or ".." in Path(relative).parts
+            or _HEX64.fullmatch(expected_sha256) is None
+            or hashlib.sha256(_git_blob(repository, ancestor, relative)).hexdigest()
+            != expected_sha256
+        ):
+            raise T09ProviderError("slot-2 runtime instrumentation binding drifted")
+        files.append({"path": relative, "sha256": expected_sha256})
+    commands = _mapping(commands_raw, label="slot-2 command manifests")
+    raw_manifests = _list(commands.get("manifests"), label="slot-2 command manifests")
+    environment_hashes: set[str] = set()
+    giclab_commits: set[str] = set()
+    for raw in raw_manifests:
+        manifest = _mapping(raw, label="slot-2 command manifest")
+        equality = _mapping(manifest.get("equality_surface"), label="slot-2 equality surface")
+        environment_hashes.add(
+            _string(equality.get("environment_sha256"), label="slot-2 environment SHA-256")
+        )
+        giclab_commits.add(_string(equality.get("giclab_commit"), label="slot-2 GIC Lab commit"))
+    runtime_sha256 = hashlib.sha256(runtime_bytes).hexdigest()
+    if (
+        len(raw_manifests) != 4
+        or environment_hashes != {runtime_sha256}
+        or giclab_commits != {ancestor}
+        or commands.get("reviewed_implementation_ancestor") != ancestor
+    ):
+        raise T09ProviderError("slot-2 command/runtime control binding drifted")
+    return {
+        "runtime_identity_sha256": runtime_sha256,
+        "reviewed_implementation_ancestor": ancestor,
+        "instrumentation_files": files,
+        "instrumentation_files_sha256": _sha256_bytes(_canonical_bytes(files)),
+        "command_environment_sha256": runtime_sha256,
+        "command_giclab_commit": ancestor,
     }
 
 
@@ -2228,6 +2305,8 @@ def _slot2_git_transition(repository: Path, package_commit: str) -> dict[str, ob
     current_science = _slot2_science_projection(repository, package_commit)
     if previous_science != current_science:
         raise T09ProviderError("slot-2 package changed the scientific execution projection")
+    previous_runtime_control = _slot2_runtime_control_projection(repository, SLOT1_PACKAGE_COMMIT)
+    current_runtime_control = _slot2_runtime_control_projection(repository, package_commit)
     binary_diff = subprocess.run(
         ["git", "-C", str(repository), "diff", "--binary", SLOT1_PACKAGE_COMMIT, package_commit],
         env={"PATH": os.environ.get("PATH", "/usr/bin:/bin")},
@@ -2255,6 +2334,18 @@ def _slot2_git_transition(repository: Path, package_commit: str) -> dict[str, ob
         "binary_diff_sha256": hashlib.sha256(binary_diff).hexdigest(),
         "scientific_projection_sha256": _sha256_bytes(_canonical_bytes(current_science)),
         "scientific_contract_changed": False,
+        "control_runtime_transition": {
+            "previous": previous_runtime_control,
+            "current": current_runtime_control,
+        },
+        "control_runtime_transition_sha256": _sha256_bytes(
+            _canonical_bytes(
+                {
+                    "previous": previous_runtime_control,
+                    "current": current_runtime_control,
+                }
+            )
+        ),
     }
 
 
@@ -2370,7 +2461,7 @@ def _slot2_authority_tree_manifest(root: Path) -> dict[str, object]:
     files: list[dict[str, object]] = []
     total = 0
     for path in sorted(root.rglob("*")):
-        if path.name == "source-manifest.json" or path.is_dir():
+        if path == root / "source-manifest.json" or path.is_dir():
             continue
         metadata = path.stat(follow_symlinks=False)
         if path.is_symlink() or not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:

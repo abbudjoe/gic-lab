@@ -63,7 +63,9 @@ from giclab.harness.t09_sira_pilot import (
     first_pair_decision,
     load_aggregate_usage,
     load_execution_contract,
+    mark_actual_credential_exposure,
     mark_attempt_completed,
+    mark_credential_cleanup_integrity_failure,
     mark_raw_attempt_complete,
     record_first_pair_checkpoint,
     scientific_attempt_projection,
@@ -229,6 +231,10 @@ IMAGE_ARCHIVE_PATH: Final = Path("/home/ubuntu/t09-pilot-v5-replacement-image-00
 PRIVATE_REGRESSION_ARCHIVE_PATH: Final = Path(
     "/tmp/giclab-t09-private-v4-task-a-reactive-0002.tar.gz"
 )
+PRIVATE_REGRESSION_ARCHIVE_BYTES: Final = 3_439_137
+PRIVATE_REGRESSION_ARCHIVE_SHA256: Final = (
+    "63ed19b35bcb4cb62c3796a80a48004937340eb3826f9657a1006e251772255d"
+)
 PREENTRY_RESUME_FROM_EXECUTION_SHA256: Final = (
     "81dea470fecaef47a3f0139ed291b214fce1eae1bfcfb38e1fb20c32e5527791"
 )
@@ -264,19 +270,12 @@ ATTEMPT_EXPORT_REQUIRED_CONTROL_PATHS: Final = (
     "pilot-v5/provider-entry.json",
     "pilot-v5/frozen-run-manifest.json",
     "pilot-v5/postfreeze-validation.json",
+    "pilot-v5/model-metadata-credential-scan.json",
     "pilot-v5/final-image-file-hashes/receipt.json",
     "pilot-v5/qualified-real-evidence-regression/receipt.json",
     "pilot-v5/local-finalizer-qualification.json",
     "pilot-v5/replacement-image-qualification/build-context-exclusions.json",
     "pilot-v5/pilot-state.json",
-)
-ATTEMPT_EXPORT_SLOT2_REQUIRED_CONTROL_PATHS: Final = (
-    "pilot-v5/slot2-authority/replacement-launch-eligibility.json",
-    "pilot-v5/slot2-authority/slot2-eligibility-source/source-manifest.json",
-    "pilot-v5/slot2-authority/slot2-eligibility-source/transition.json",
-    "pilot-v5/slot2-authority/slot2-eligibility-source/slot1-zero-use.tar.gz",
-    "pilot-v5/slot2-authority/slot2-eligibility-source/slot1-entry-source/entry-receipt.json",
-    "pilot-v5/slot2-authority/slot2-eligibility-source/slot1-closeout-source/closeout-receipt.json",
 )
 
 
@@ -721,6 +720,118 @@ def _copy_retained_prefix(source: Path, destination: Path, *, label: str) -> dic
     if before != after:
         raise T09HostError(f"{label} changed during evidence retention")
     return before
+
+
+def _slot2_authority_relative_paths(root: Path) -> tuple[str, ...]:
+    """Return the exact manifest-bound slot-2 authority surface and reject extras."""
+
+    root = root.resolve(strict=True)
+    eligibility = root / "replacement-launch-eligibility.json"
+    source_root = root / "slot2-eligibility-source"
+    source_manifest_path = source_root / "source-manifest.json"
+    source_manifest = load_object(source_manifest_path, label="slot-2 authority manifest")
+    raw_files = source_manifest.get("files")
+    if (
+        source_manifest.get("schema_version") != "0.1.0"
+        or source_manifest.get("plan_id") != PLAN_ID
+        or source_manifest.get("host_run_id") != HOST_RUN_ID
+        or not isinstance(raw_files, list)
+        or source_manifest.get("file_count") != len(raw_files)
+        or source_manifest.get("files_sha256")
+        != hashlib.sha256(
+            (
+                json.dumps(
+                    raw_files,
+                    allow_nan=False,
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                    sort_keys=True,
+                )
+                + "\n"
+            ).encode()
+        ).hexdigest()
+    ):
+        raise T09HostError("slot-2 authority manifest contract drifted")
+    declared: list[str] = []
+    total = 0
+    for raw in raw_files:
+        if not isinstance(raw, dict):
+            raise T09HostError("slot-2 authority file record is malformed")
+        relative_raw = raw.get("path")
+        size = raw.get("bytes")
+        digest = raw.get("sha256")
+        if not isinstance(relative_raw, str):
+            raise T09HostError("slot-2 authority file path is malformed")
+        relative = PurePosixPath(relative_raw)
+        if relative.is_absolute() or not relative.parts or ".." in relative.parts:
+            raise T09HostError("slot-2 authority file escaped its source root")
+        path = source_root.joinpath(*relative.parts)
+        metadata = path.stat(follow_symlinks=False)
+        if (
+            path.is_symlink()
+            or not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_uid != os.getuid()
+            or metadata.st_nlink != 1
+            or stat.S_IMODE(metadata.st_mode) != 0o600
+            or type(size) is not int
+            or metadata.st_size != size
+            or not isinstance(digest, str)
+            or re.fullmatch(r"[a-f0-9]{64}", digest) is None
+            or file_sha256(path) != digest
+        ):
+            raise T09HostError("slot-2 authority file identity drifted")
+        declared.append(relative.as_posix())
+        total += metadata.st_size
+    observed: set[str] = set()
+    for path in source_root.rglob("*"):
+        metadata = path.lstat()
+        if stat.S_ISDIR(metadata.st_mode):
+            continue
+        if not stat.S_ISREG(metadata.st_mode) or path.is_symlink():
+            raise T09HostError("slot-2 authority source contains an unsafe extra member")
+        observed.add(path.relative_to(source_root).as_posix())
+    expected = {*declared, "source-manifest.json"}
+    if (
+        len(declared) != len(set(declared))
+        or observed != expected
+        or source_manifest.get("total_bytes") != total
+    ):
+        raise T09HostError("slot-2 authority source member set drifted")
+    for path in (eligibility, source_manifest_path):
+        metadata = path.stat(follow_symlinks=False)
+        if (
+            path.is_symlink()
+            or not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_uid != os.getuid()
+            or metadata.st_nlink != 1
+            or stat.S_IMODE(metadata.st_mode) != 0o600
+        ):
+            raise T09HostError("slot-2 authority control file is unsafe")
+    return (
+        "replacement-launch-eligibility.json",
+        "slot2-eligibility-source/source-manifest.json",
+        *(f"slot2-eligibility-source/{relative}" for relative in sorted(declared)),
+    )
+
+
+def retain_slot2_authority(source: Path, destination: Path) -> tuple[str, ...]:
+    """Project only the source-manifest-bound authority into the pilot root."""
+
+    source = source.resolve(strict=True)
+    relative_paths = _slot2_authority_relative_paths(source)
+    destination.mkdir(mode=0o700, parents=True, exist_ok=False)
+    for relative in relative_paths:
+        incoming = source / relative
+        outgoing = destination / relative
+        outgoing.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        with incoming.open("rb") as source_handle, outgoing.open("xb") as target_handle:
+            shutil.copyfileobj(source_handle, target_handle, 1_048_576)
+            target_handle.flush()
+            os.fsync(target_handle.fileno())
+        outgoing.chmod(0o600)
+    if _slot2_authority_relative_paths(destination) != relative_paths:
+        raise T09HostError("slot-2 authority changed during minimal retention")
+    return relative_paths
 
 
 def retain_prior_qualification_failures(
@@ -1313,6 +1424,58 @@ def secret_hits(root: Path, secret: bytes) -> list[str]:
                         break
                     overlap = combined[-(len(secret) - 1) :] if len(secret) > 1 else b""
     return hits
+
+
+def record_preflight_credential_scan(
+    *,
+    artifact_root: Path,
+    secret_file: Path,
+    execution_contract_sha256: str,
+) -> dict[str, object]:
+    """Scan after the sole metadata GET and permanently stop on any exact match."""
+
+    credential = validate_secret(secret_file)
+    hits = secret_hits(artifact_root, credential)
+    removed: list[dict[str, object]] = []
+    for relative in hits:
+        target = artifact_root / relative
+        if target.is_file() and not target.is_symlink():
+            removed.append(
+                {
+                    "path": relative,
+                    "bytes": target.stat().st_size,
+                    "classification": "exact-secret-bearing-artifact-removed",
+                }
+            )
+            target.unlink()
+    remaining = secret_hits(artifact_root, credential)
+    credential = b""
+    exposure_detected = bool(hits)
+    if exposure_detected:
+        mark_actual_credential_exposure(
+            artifact_root / "pilot-v5/pilot-state.json",
+            execution_contract_sha256=execution_contract_sha256,
+        )
+    receipt: dict[str, object] = {
+        "schema_version": "0.1.0",
+        "scan_point": "immediately-after-sole-model-metadata-get-before-freeze",
+        "actual_credential_exposure_detected": exposure_detected,
+        "secret_bearing_artifacts_removed": removed,
+        "remaining_exact_secret_matches": remaining,
+        "exact_secret_scan_passed": not exposure_detected and not remaining,
+        "empirical_entry_permitted": not exposure_detected and not remaining,
+        "recorded_at": utc_now(),
+    }
+    write_exclusive(
+        artifact_root / "pilot-v5/model-metadata-credential-scan.json",
+        receipt,
+    )
+    if exposure_detected or remaining:
+        raise T09HostError(
+            "model-metadata preflight exposed the exact credential; "
+            "cleanup and termination are required"
+        )
+    return receipt
 
 
 def contract_paths(repository: Path) -> dict[str, Path]:
@@ -3139,6 +3302,25 @@ def offline_runtime_preflight(
     return receipt
 
 
+def validate_private_regression_archive(archive: Path) -> Path:
+    """Validate the exact private V4 fixture without following or sharing its inode."""
+
+    resolved = archive.resolve(strict=True)
+    metadata = resolved.stat(follow_symlinks=False)
+    if (
+        resolved != PRIVATE_REGRESSION_ARCHIVE_PATH
+        or resolved.is_symlink()
+        or not stat.S_ISREG(metadata.st_mode)
+        or metadata.st_uid != os.getuid()
+        or metadata.st_nlink != 1
+        or stat.S_IMODE(metadata.st_mode) != 0o600
+        or metadata.st_size != PRIVATE_REGRESSION_ARCHIVE_BYTES
+        or file_sha256(resolved) != PRIVATE_REGRESSION_ARCHIVE_SHA256
+    ):
+        raise T09HostError("private V4 regression archive identity drifted")
+    return resolved
+
+
 def qualified_real_evidence_regression(
     *,
     repository: Path,
@@ -3152,15 +3334,7 @@ def qualified_real_evidence_regression(
 ) -> dict[str, Any]:
     """Reconstruct the retained V4 raw archive inside the exact accepted image."""
 
-    archive = archive.resolve(strict=True)
-    if (
-        archive != PRIVATE_REGRESSION_ARCHIVE_PATH
-        or archive.is_symlink()
-        or not archive.is_file()
-        or file_sha256(archive)
-        != "63ed19b35bcb4cb62c3796a80a48004937340eb3826f9657a1006e251772255d"
-    ):
-        raise T09HostError("private V4 regression archive identity drifted")
+    archive = validate_private_regression_archive(archive)
     paths = contract_paths(repository)
     attempt = artifact_root / "pilot-v5/qualified-real-evidence-regression"
     attempt.mkdir(parents=True, mode=0o700, exist_ok=False)
@@ -3532,6 +3706,7 @@ def write_frozen_run_manifest(
     evaluator_receipt: dict[str, object],
     file_hashes: dict[str, str],
     model_receipt: dict[str, Any],
+    model_credential_scan_receipt: dict[str, object],
     adjudication: dict[str, object],
     static_real_evidence_regression: dict[str, Any],
     qualified_real_evidence_regression_receipt: dict[str, Any],
@@ -3552,9 +3727,26 @@ def write_frozen_run_manifest(
         or re.fullmatch(r"[a-f0-9]{64}", python_interpreter_sha256) is None
     ):
         raise T09HostError("qualified Python interpreter identity is unavailable")
-    empirical = _runtime_budget_state(artifact_root).get("empirical_attempts_entered")
+    runtime_state = _runtime_budget_state(artifact_root)
+    empirical = runtime_state.get("empirical_attempts_entered")
+    first_pair_started = runtime_state.get("first_pair_started_at_epoch")
+    owned_lambda_started = dynamic.get("owned_lambda_started_at_epoch")
     if empirical != []:
         raise T09HostError("runtime cannot freeze after empirical entry")
+    if (
+        runtime_state.get("actual_credential_exposure_detected") is not False
+        or runtime_state.get("credential_safety_stop_detected") is not False
+    ):
+        raise T09HostError("runtime cannot freeze after a credential safety failure")
+    if (
+        not isinstance(first_pair_started, (int, float))
+        or isinstance(first_pair_started, bool)
+        or not isinstance(owned_lambda_started, (int, float))
+        or isinstance(owned_lambda_started, bool)
+        or first_pair_started < owned_lambda_started
+        or first_pair_started > time.time()
+    ):
+        raise T09HostError("first-pair wall origin cannot be frozen")
     qualification_root = artifact_root / "pilot-v5/replacement-image-qualification"
     if qualified_real_evidence_regression_receipt.get(
         "semantic_projection"
@@ -3611,6 +3803,7 @@ def write_frozen_run_manifest(
         "lambda_started_at_epoch": dynamic.get("lambda_started_at_epoch"),
         "campaign_started_at_epoch": dynamic.get("lambda_started_at_epoch"),
         "owned_lambda_started_at_epoch": dynamic.get("owned_lambda_started_at_epoch"),
+        "first_pair_started_at_epoch": float(first_pair_started),
         "prior_lambda_duration_seconds": dynamic.get("prior_retry3_lambda_duration_seconds"),
         "prior_lambda_cost_usd": dynamic.get("prior_retry3_lambda_cost_usd"),
         "launch_slot": dynamic.get("launch_slot"),
@@ -3620,7 +3813,7 @@ def write_frozen_run_manifest(
             "replacement_eligibility_source_manifest_sha256"
         ),
         "slot1_failure_archive_sha256": (
-            slot2_authority.get("slot1_failure", {}).get("archive_sha256")
+            cast(dict[str, object], slot2_authority["slot1_failure"]).get("archive_sha256")
             if isinstance(slot2_authority, dict)
             and isinstance(slot2_authority.get("slot1_failure"), dict)
             else None
@@ -3668,9 +3861,12 @@ def write_frozen_run_manifest(
         ),
         "final_image_file_hashes_sha256": canonical_sha256(file_hashes),
         "model_metadata_receipt_sha256": canonical_sha256(model_receipt),
+        "model_metadata_credential_scan_sha256": canonical_sha256(model_credential_scan_receipt),
         "model_metadata_request_count": 1,
         "model_task_request_count": 0,
         "task_browser_action_count": 0,
+        "actual_credential_exposure_detected": False,
+        "credential_safety_stop_detected": False,
         "image_adjudication_sha256": canonical_sha256(adjudication),
         "static_real_evidence_regression_sha256": file_sha256(paths["real_regression"]),
         "qualified_real_evidence_regression_sha256": file_sha256(
@@ -3712,6 +3908,9 @@ def write_frozen_run_manifest(
             ),
             "evaluator_overlay": file_sha256(
                 artifact_root / "pilot-v5/evaluator-overlay-manifest.json"
+            ),
+            "model_metadata_credential_scan": file_sha256(
+                artifact_root / "pilot-v5/model-metadata-credential-scan.json"
             ),
             "static_real_evidence_regression": file_sha256(paths["real_regression"]),
             "qualified_real_evidence_regression": file_sha256(
@@ -3771,6 +3970,20 @@ def load_frozen_run_manifest(
         artifact_root / "pilot-v5/provider-entry.json",
         label="provider entry summary",
     )
+    model_credential_scan_path = artifact_root / "pilot-v5/model-metadata-credential-scan.json"
+    model_credential_scan = load_object(
+        model_credential_scan_path,
+        label="model metadata credential scan",
+    )
+    if (
+        model_credential_scan.get("actual_credential_exposure_detected") is not False
+        or model_credential_scan.get("secret_bearing_artifacts_removed") != []
+        or model_credential_scan.get("remaining_exact_secret_matches") != []
+        or model_credential_scan.get("exact_secret_scan_passed") is not True
+        or model_credential_scan.get("empirical_entry_permitted") is not True
+    ):
+        raise T09HostError("model metadata credential scan did not pass cleanly")
+    runtime_state = _runtime_budget_state(artifact_root)
     expected = {
         "plan_id": PLAN_ID,
         "host_run_id": HOST_RUN_ID,
@@ -3788,6 +4001,7 @@ def load_frozen_run_manifest(
         "lambda_started_at_epoch": provider_entry.get("lambda_started_at_epoch"),
         "campaign_started_at_epoch": provider_entry.get("lambda_started_at_epoch"),
         "owned_lambda_started_at_epoch": provider_entry.get("owned_lambda_started_at_epoch"),
+        "first_pair_started_at_epoch": runtime_state.get("first_pair_started_at_epoch"),
         "prior_lambda_duration_seconds": provider_entry.get("prior_retry3_lambda_duration_seconds"),
         "prior_lambda_cost_usd": provider_entry.get("prior_retry3_lambda_cost_usd"),
         "launch_slot": 2,
@@ -3809,8 +4023,11 @@ def load_frozen_run_manifest(
         "evaluator_overlay_entries_sha256": manifest.get("evaluator_overlay_entries_sha256"),
         "evaluator_overlay_packages_sha256": manifest.get("evaluator_overlay_packages_sha256"),
         "model_metadata_request_count": 1,
+        "model_metadata_credential_scan_sha256": canonical_sha256(model_credential_scan),
         "model_task_request_count": 0,
         "task_browser_action_count": 0,
+        "actual_credential_exposure_detected": False,
+        "credential_safety_stop_detected": False,
         "static_real_evidence_regression_sha256": file_sha256(paths["real_regression"]),
         "qualified_real_evidence_regression_sha256": file_sha256(
             artifact_root / "pilot-v5/qualified-real-evidence-regression/receipt.json"
@@ -3833,6 +4050,13 @@ def load_frozen_run_manifest(
     }
     if any(manifest.get(key) != value for key, value in expected.items()):
         raise T09HostError("frozen run manifest binding drifted")
+    if (
+        not isinstance(manifest.get("first_pair_started_at_epoch"), (int, float))
+        or isinstance(manifest.get("first_pair_started_at_epoch"), bool)
+        or cast(float, manifest["first_pair_started_at_epoch"])
+        < cast(float, manifest["owned_lambda_started_at_epoch"])
+    ):
+        raise T09HostError("frozen first-pair wall origin drifted")
     source_receipts_for_transition = manifest.get("source_receipts")
     if typed_qualification.preflight_transition_mode != "slot2-replacement":
         raise T09HostError("selected Retry 3 package permits only the reviewed slot-2 path")
@@ -3900,6 +4124,8 @@ def load_frozen_run_manifest(
     if (
         not isinstance(source_receipts, dict)
         or source_receipts.get("final_image_file_hashes") != file_sha256(file_hash_receipt_path)
+        or source_receipts.get("model_metadata_credential_scan")
+        != file_sha256(model_credential_scan_path)
         or manifest.get("final_image_file_hashes_sha256") != canonical_sha256(file_hash_receipt)
         or file_hash_receipt.get(typed_qualification.python_interpreter_path)
         != typed_qualification.python_interpreter_sha256
@@ -3992,6 +4218,8 @@ def initialize_state(
         "first_pair_decision": None,
         "first_pair_checkpoint_binding": None,
         "first_pair_selection_drift_detected": False,
+        "actual_credential_exposure_detected": False,
+        "credential_safety_stop_detected": False,
     }
     write_exclusive(root / "pilot-v5/pilot-state.json", state)
 
@@ -4542,6 +4770,11 @@ def resume_preflight(args: argparse.Namespace) -> None:
         prefix=prefix,
         image_id=image_id,
     )
+    model_credential_scan = record_preflight_credential_scan(
+        artifact_root=artifact_root,
+        secret_file=args.secret_file.resolve(strict=True),
+        execution_contract_sha256=execution_sha256,
+    )
     frozen_manifest_path, frozen_manifest = write_frozen_run_manifest(
         repository=repository,
         artifact_root=artifact_root,
@@ -4555,6 +4788,7 @@ def resume_preflight(args: argparse.Namespace) -> None:
         evaluator_receipt=evaluator,
         file_hashes=image_files,
         model_receipt=model_metadata,
+        model_credential_scan_receipt=model_credential_scan,
         adjudication=adjudication,
         static_real_evidence_regression=real_evidence_regression,
         qualified_real_evidence_regression_receipt=qualified_real_regression,
@@ -4634,6 +4868,10 @@ def resume_preflight(args: argparse.Namespace) -> None:
             "task_loading": "passed-two-exact-rows-network-none",
             "model_metadata": model_metadata,
             "model_metadata_request_count": 1,
+            "model_metadata_credential_scan_sha256": file_sha256(
+                artifact_root / "pilot-v5/model-metadata-credential-scan.json"
+            ),
+            "actual_credential_exposure_detected": False,
             "model_task_request_count": 0,
             "credential_channel": credential_channel,
             "zero_prior_lambda_instances": True,
@@ -4759,10 +4997,9 @@ def preflight(args: argparse.Namespace) -> None:
         local_finalizer_qualification,
     )
     retained_authority_root = artifact_root / "pilot-v5/slot2-authority"
-    _copy_retained_prefix(
+    retain_slot2_authority(
         args.slot2_authority_root.resolve(strict=True),
         retained_authority_root,
-        label="slot-2 provider and failure authority",
     )
     image_materialization, slot2_authority = import_slot1_replacement_image(
         repository=repository,
@@ -4875,6 +5112,11 @@ def preflight(args: argparse.Namespace) -> None:
         prefix=prefix,
         image_id=image_id,
     )
+    model_credential_scan = record_preflight_credential_scan(
+        artifact_root=artifact_root,
+        secret_file=args.secret_file.resolve(strict=True),
+        execution_contract_sha256=execution_sha256,
+    )
     frozen_manifest_path, frozen_manifest = write_frozen_run_manifest(
         repository=repository,
         artifact_root=artifact_root,
@@ -4888,6 +5130,7 @@ def preflight(args: argparse.Namespace) -> None:
         evaluator_receipt=evaluator,
         file_hashes=image_files,
         model_receipt=model_metadata,
+        model_credential_scan_receipt=model_credential_scan,
         adjudication=adjudication,
         static_real_evidence_regression=real_evidence_regression,
         qualified_real_evidence_regression_receipt=qualified_real_regression,
@@ -4915,7 +5158,12 @@ def preflight(args: argparse.Namespace) -> None:
             "frozen_run_manifest_sha256": loaded_manifest_sha256,
             "replacement_image_id": image_id,
             "slot2_eligibility_sha256": slot2_authority["receipt_sha256"],
+            "first_pair_started_at_epoch": frozen_manifest["first_pair_started_at_epoch"],
             "model_metadata_request_count": 1,
+            "model_metadata_credential_scan_sha256": file_sha256(
+                artifact_root / "pilot-v5/model-metadata-credential-scan.json"
+            ),
+            "actual_credential_exposure_detected": False,
             "model_task_request_count": 0,
             "task_browser_action_count": 0,
             "next_attempt_admission_passed_before_metadata_get": True,
@@ -4942,6 +5190,7 @@ def preflight(args: argparse.Namespace) -> None:
             "postfreeze_validation_sha256": file_sha256(postfreeze_path),
             "slot2_eligibility_sha256": slot2_authority["receipt_sha256"],
             "slot2_eligibility_source_manifest_sha256": slot2_authority["source_manifest_sha256"],
+            "first_pair_started_at_epoch": frozen_manifest["first_pair_started_at_epoch"],
             "image_equivalence_adjudication": adjudication,
             "final_image_file_hashes": image_files,
             "final_image_runtime_preflight": final_runtime,
@@ -4986,6 +5235,7 @@ def preflight(args: argparse.Namespace) -> None:
             "evaluator_overlay_revalidation": evaluator_overlay_verified,
             "task_loading": "passed-two-exact-rows-network-none",
             "model_metadata": model_metadata,
+            "model_metadata_credential_scan": model_credential_scan,
             "model_metadata_request_count": 1,
             "model_task_request_count": 0,
             "credential_channel": credential_channel,
@@ -5559,6 +5809,9 @@ def prepare_condition_attempt_root(
             or retained.get("attempt_identity_consumed") is not False
             or retained.get("container_absent") is not True
             or retained.get("remaining_exact_secret_matches") != []
+            or retained.get("secret_bearing_artifacts_removed") != []
+            or retained.get("actual_credential_exposure_detected") is not False
+            or retained.get("credential_cleanup_integrity_failure") is not False
             or retained.get("structural_privacy_violations") != []
             or retained.get("retry_same_frozen_condition_permitted") is not True
             or retained.get("failure_prefix_entries") != observed_prefix
@@ -5603,6 +5856,8 @@ def record_preentry_condition_failure(
     frozen_run_manifest_sha256: str,
     condition_plan_sha256: str,
     condition_argv_sha256: str,
+    actual_credential_exposure_detected: bool = False,
+    credential_cleanup_integrity_failure: bool = False,
 ) -> None:
     """Seal a value-safe, non-consumed condition prefix for an autonomous retry."""
 
@@ -5618,6 +5873,7 @@ def record_preentry_condition_failure(
             removed.append(relative)
     remaining = secret_hits(attempt_root, credential)
     credential = b""
+    exposure_detected = actual_credential_exposure_detected or bool(matching)
     residue = [name for name in owned_containers(prefix) if name == container_name]
     privacy = privacy_violations(attempt_root)
     failure_prefix_entries = preentry_prefix_inventory(attempt_root)
@@ -5639,16 +5895,25 @@ def record_preentry_condition_failure(
             "returncode": returncode,
             "container_absent": not residue,
             "secret_bearing_artifacts_removed": removed,
+            "actual_credential_exposure_detected": exposure_detected,
+            "credential_cleanup_integrity_failure": credential_cleanup_integrity_failure,
             "remaining_exact_secret_matches": remaining,
             "structural_privacy_violations": privacy,
             "failure_prefix_entries": failure_prefix_entries,
             "failure_prefix_entries_sha256": canonical_sha256(failure_prefix_entries),
-            "retry_same_frozen_condition_permitted": not residue and not remaining,
+            "retry_same_frozen_condition_permitted": (
+                not exposure_detected
+                and not credential_cleanup_integrity_failure
+                and not residue
+                and not remaining
+            ),
             "recorded_at": utc_now(),
         },
     )
-    if residue or remaining:
-        raise T09HostError("pre-entry failure cleanup did not preserve a repairable prefix")
+    if exposure_detected or credential_cleanup_integrity_failure or residue or remaining:
+        raise T09HostError(
+            "pre-entry failure cleanup detected an actual credential exposure or residue"
+        )
 
 
 def _raw_attempt_files(raw_root: Path) -> tuple[list[dict[str, object]], int]:
@@ -5707,6 +5972,8 @@ def seal_raw_attempt(
     cleanup = load_object(raw_root / "host-cleanup-receipt.json", label="host cleanup")
     state = load_object(artifact_root / "pilot-v5/pilot-state.json", label="pilot state")
     entered = state.get("empirical_attempts_entered")
+    exposure_detected = cleanup.get("actual_credential_exposure_detected")
+    cleanup_integrity_failure = cleanup.get("runtime_secret_cleanup_malformed")
     events_path = raw_root / "normalized-events.jsonl"
     source_grounded_events = 0
     try:
@@ -5753,6 +6020,11 @@ def seal_raw_attempt(
         or cleanup.get("owned_container_residue") != []
         or cleanup.get("secret_scan_passed") is not True
         or cleanup.get("secret_matching_paths") != []
+        or not isinstance(exposure_detected, bool)
+        or not isinstance(cleanup_integrity_failure, bool)
+        or state.get("actual_credential_exposure_detected") is not exposure_detected
+        or state.get("credential_safety_stop_detected")
+        is not (exposure_detected or cleanup_integrity_failure)
         or budget.get("unreconciled_provider_attempts") != 0
         or evaluator_binding.get("run_id") != run_id
         or evaluator_binding.get("frozen_run_manifest_sha256") != frozen_run_manifest_sha256
@@ -5791,8 +6063,15 @@ def seal_raw_attempt(
         "source_grounded_empirical_event_count": source_grounded_events,
         "retained_session_count": len(session_paths),
         "reconstructable_disposition": reconstructable_disposition,
+        "actual_credential_exposure_detected": exposure_detected,
+        "credential_cleanup_integrity_failure": cleanup_integrity_failure,
+        "credential_cleanup_clean": not exposure_detected and not cleanup_integrity_failure,
         "structural_privacy_findings": structural_privacy_findings,
-        "public_release_clearance": not structural_privacy_findings,
+        "public_release_clearance": (
+            not structural_privacy_findings
+            and not exposure_detected
+            and not cleanup_integrity_failure
+        ),
         "private_access_controlled": True,
     }
     if raw_manifest_path.exists():
@@ -5811,7 +6090,9 @@ def seal_raw_attempt(
         "empirical_attempt_consumed": True,
         "condition_terminated": True,
         "container_and_browser_cleanup_clean": True,
-        "credential_cleanup_clean": True,
+        "credential_cleanup_clean": not exposure_detected and not cleanup_integrity_failure,
+        "actual_credential_exposure_detected": exposure_detected,
+        "credential_cleanup_integrity_failure": cleanup_integrity_failure,
         "raw_manifest_path": raw_manifest_path.name,
         "raw_manifest_sha256": file_sha256(raw_manifest_path),
         "raw_total_bytes": total,
@@ -5820,7 +6101,11 @@ def seal_raw_attempt(
         "retained_session_count": len(session_paths),
         "reconstructable_disposition": reconstructable_disposition,
         "structural_privacy_findings": structural_privacy_findings,
-        "public_release_clearance": not structural_privacy_findings,
+        "public_release_clearance": (
+            not structural_privacy_findings
+            and not exposure_detected
+            and not cleanup_integrity_failure
+        ),
         "finalizer_network_policy": "none",
         "condition_retry_permitted": False,
         "recorded_at": utc_now(),
@@ -5886,12 +6171,47 @@ def validate_raw_attempt_seal(
         != manifest.get("source_grounded_empirical_event_count")
         or receipt.get("retained_session_count") != manifest.get("retained_session_count")
         or receipt.get("reconstructable_disposition") != manifest.get("reconstructable_disposition")
+        or receipt.get("actual_credential_exposure_detected")
+        != manifest.get("actual_credential_exposure_detected")
+        or receipt.get("credential_cleanup_integrity_failure")
+        != manifest.get("credential_cleanup_integrity_failure")
+        or receipt.get("credential_cleanup_clean") != manifest.get("credential_cleanup_clean")
         or receipt.get("structural_privacy_findings") != manifest.get("structural_privacy_findings")
         or receipt.get("public_release_clearance") != manifest.get("public_release_clearance")
         or receipt.get("condition_retry_permitted") is not False
     ):
         raise T09HostError("raw attempt seal no longer reconstructs from exact bytes")
     return manifest, receipt
+
+
+def validate_live_slot2_state_binding(
+    state: dict[str, Any],
+    frozen_manifest: dict[str, Any],
+) -> None:
+    """Keep mutable scientific admission state bound to the immutable slot-2 freeze."""
+
+    expected = {
+        "execution_contract_sha256": frozen_manifest.get("execution_contract_sha256"),
+        "pilot_started_at_epoch": frozen_manifest.get("campaign_started_at_epoch"),
+        "campaign_started_at_epoch": frozen_manifest.get("campaign_started_at_epoch"),
+        "lambda_started_at_epoch": frozen_manifest.get("lambda_started_at_epoch"),
+        "owned_lambda_started_at_epoch": frozen_manifest.get("owned_lambda_started_at_epoch"),
+        "prior_retry3_lambda_duration_seconds": frozen_manifest.get(
+            "prior_lambda_duration_seconds"
+        ),
+        "prior_retry3_lambda_cost_usd": frozen_manifest.get("prior_lambda_cost_usd"),
+        "launch_slot": 2,
+        "launch_count": 2,
+        "replacement_eligibility_sha256": frozen_manifest.get("replacement_eligibility_sha256"),
+        "replacement_eligibility_source_manifest_sha256": frozen_manifest.get(
+            "replacement_eligibility_source_manifest_sha256"
+        ),
+        "first_pair_started_at_epoch": frozen_manifest.get("first_pair_started_at_epoch"),
+        "actual_credential_exposure_detected": False,
+        "credential_safety_stop_detected": False,
+    }
+    if any(state.get(key) != value for key, value in expected.items()):
+        raise T09HostError("live slot-2 state drifted from the frozen admission authority")
 
 
 def execute_condition(args: argparse.Namespace) -> int:
@@ -5931,13 +6251,20 @@ def execute_condition(args: argparse.Namespace) -> int:
     if (
         preflight_receipt.get("frozen_run_manifest_sha256") != frozen_manifest_sha256
         or preflight_receipt.get("replacement_image_id") != image_id
+        or preflight_receipt.get("first_pair_started_at_epoch")
+        != frozen_manifest.get("first_pair_started_at_epoch")
         or preflight_receipt.get("empirical_entry_crossed") is not False
         or preflight_receipt.get("postfreeze_validation_sha256") != file_sha256(postfreeze_path)
         or postfreeze.get("frozen_run_manifest_sha256") != frozen_manifest_sha256
         or postfreeze.get("replacement_image_id") != image_id
         or postfreeze.get("model_metadata_request_count") != 1
+        or postfreeze.get("model_metadata_credential_scan_sha256")
+        != file_sha256(artifact_root / "pilot-v5/model-metadata-credential-scan.json")
+        or postfreeze.get("actual_credential_exposure_detected") is not False
         or postfreeze.get("model_task_request_count") != 0
         or postfreeze.get("task_browser_action_count") != 0
+        or postfreeze.get("first_pair_started_at_epoch")
+        != frozen_manifest.get("first_pair_started_at_epoch")
         or postfreeze.get("next_attempt_admission_passed_before_metadata_get") is not True
     ):
         raise T09HostError("preflight and frozen runtime manifest drifted")
@@ -5946,34 +6273,27 @@ def execute_condition(args: argparse.Namespace) -> int:
     completed = state.get("attempts_completed")
     if not isinstance(entered, list) or not isinstance(completed, list):
         raise T09HostError("pilot attempt state is malformed")
-    if (
-        state.get("execution_contract_sha256") != frozen_manifest.get("execution_contract_sha256")
-        or state.get("campaign_started_at_epoch")
-        != frozen_manifest.get("campaign_started_at_epoch")
-        or state.get("owned_lambda_started_at_epoch")
-        != frozen_manifest.get("owned_lambda_started_at_epoch")
-        or state.get("prior_retry3_lambda_duration_seconds")
-        != frozen_manifest.get("prior_lambda_duration_seconds")
-        or state.get("prior_retry3_lambda_cost_usd") != frozen_manifest.get("prior_lambda_cost_usd")
-        or state.get("launch_slot") != 2
-        or state.get("launch_count") != 2
-        or state.get("replacement_eligibility_sha256")
-        != frozen_manifest.get("replacement_eligibility_sha256")
-        or state.get("replacement_eligibility_source_manifest_sha256")
-        != frozen_manifest.get("replacement_eligibility_source_manifest_sha256")
-    ):
-        raise T09HostError("live slot-2 state drifted from the frozen admission authority")
+    validate_live_slot2_state_binding(state, frozen_manifest)
     expected_index = len(entered)
     if expected_index >= len(RUN_IDS) or RUN_IDS[expected_index] != args.run_id:
         raise T09HostError("condition would violate frozen order or zero retry")
     if len(entered) == 2 and state.get("first_pair_decision") != "continue-to-task-b":
         raise T09HostError("Task B is blocked by the first-pair checkpoint")
+    checkpoint_binding = state.get("first_pair_checkpoint_binding")
+    if expected_index >= 2 and (
+        not isinstance(checkpoint_binding, dict)
+        or checkpoint_binding.get("first_pair_started_at_epoch")
+        != frozen_manifest.get("first_pair_started_at_epoch")
+        or checkpoint_binding.get("second_pair_started_at_epoch")
+        != state.get("second_pair_started_at_epoch")
+    ):
+        raise T09HostError("Task B pair-wall origin drifted from the checkpoint")
     require_prior_export_acknowledgements(
         artifact_root,
         next_attempt_index=expected_index,
         package_commit=args.package_commit,
     )
-    started_epoch = state.get("pilot_started_at_epoch")
+    started_epoch = state.get("campaign_started_at_epoch")
     owned_lambda_started_epoch = state.get("owned_lambda_started_at_epoch")
     prior_lambda_duration = state.get("prior_retry3_lambda_duration_seconds")
     prior_lambda_cost = state.get("prior_retry3_lambda_cost_usd")
@@ -6156,6 +6476,23 @@ def execute_condition(args: argparse.Namespace) -> int:
         },
     )
     credential_bytes = validate_secret(args.secret_file.resolve(strict=True))
+    runtime_cleanup_path = raw_root / "runtime-cleanup.json"
+    runtime_removed_secret_artifacts: list[str] = []
+    runtime_secret_cleanup_malformed = False
+    if runtime_cleanup_path.is_file() and not runtime_cleanup_path.is_symlink():
+        runtime_cleanup = load_object(runtime_cleanup_path, label="runtime cleanup")
+        runtime_secret_cleanup = runtime_cleanup.get("secret_cleanup")
+        runtime_removed_raw = (
+            runtime_secret_cleanup.get("secret_bearing_artifacts_removed")
+            if isinstance(runtime_secret_cleanup, dict)
+            else None
+        )
+        if isinstance(runtime_removed_raw, list) and all(
+            isinstance(item, str) for item in runtime_removed_raw
+        ):
+            runtime_removed_secret_artifacts = cast(list[str], runtime_removed_raw)
+        else:
+            runtime_secret_cleanup_malformed = True
     hits = secret_hits(raw_root, credential_bytes)
     removed_secret_artifacts: list[str] = []
     for relative in hits:
@@ -6165,6 +6502,17 @@ def execute_condition(args: argparse.Namespace) -> int:
             removed_secret_artifacts.append(relative)
     remaining_hits = secret_hits(raw_root, credential_bytes)
     credential_bytes = b""
+    actual_credential_exposure_detected = bool(hits or runtime_removed_secret_artifacts)
+    if actual_credential_exposure_detected:
+        mark_actual_credential_exposure(
+            artifact_root / "pilot-v5/pilot-state.json",
+            execution_contract_sha256=cast(str, state["execution_contract_sha256"]),
+        )
+    if runtime_secret_cleanup_malformed:
+        mark_credential_cleanup_integrity_failure(
+            artifact_root / "pilot-v5/pilot-state.json",
+            execution_contract_sha256=cast(str, state["execution_contract_sha256"]),
+        )
     residue = owned_containers(prefix)
     cleanup_receipt = raw_root / "host-cleanup-receipt.json"
     write_exclusive(
@@ -6178,7 +6526,16 @@ def execute_condition(args: argparse.Namespace) -> int:
             "container_state_receipt": "container-state.json",
             "secret_scan_passed": not remaining_hits,
             "secret_bearing_artifacts_removed": removed_secret_artifacts,
+            "runtime_secret_bearing_artifacts_removed": runtime_removed_secret_artifacts,
+            "runtime_secret_cleanup_malformed": runtime_secret_cleanup_malformed,
             "secret_matching_paths": remaining_hits,
+            "actual_credential_exposure_detected": actual_credential_exposure_detected,
+            "campaign_continuation_permitted": (
+                not actual_credential_exposure_detected
+                and not runtime_secret_cleanup_malformed
+                and not residue
+                and not remaining_hits
+            ),
             "stop_reason": stop_reason,
             "hard_cap_breached": hard_cap_breached,
             "runner_exception_type": (
@@ -6191,7 +6548,6 @@ def execute_condition(args: argparse.Namespace) -> int:
             },
         },
     )
-    runtime_cleanup_path = raw_root / "runtime-cleanup.json"
     write_exclusive(
         raw_root / "runtime-reconstruction-binding.json",
         {
@@ -6226,6 +6582,8 @@ def execute_condition(args: argparse.Namespace) -> int:
             frozen_run_manifest_sha256=frozen_manifest_sha256,
             condition_plan_sha256=cast(str, manifest["condition_plan_sha256"]),
             condition_argv_sha256=cast(str, manifest["argv_sha256"]),
+            actual_credential_exposure_detected=actual_credential_exposure_detected,
+            credential_cleanup_integrity_failure=runtime_secret_cleanup_malformed,
         )
         if runner_exception is not None:
             raise T09HostError(
@@ -6241,6 +6599,10 @@ def execute_condition(args: argparse.Namespace) -> int:
         frozen_run_manifest_sha256=frozen_manifest_sha256,
         execution_contract_sha256=cast(str, state["execution_contract_sha256"]),
     )
+    if actual_credential_exposure_detected or runtime_secret_cleanup_malformed:
+        raise T09HostError(
+            "credential cleanup was unsafe or unreconstructable; campaign continuation is forbidden"
+        )
     return returncode
 
 
@@ -7094,16 +7456,31 @@ def first_pair_checkpoint(args: argparse.Namespace) -> dict[str, object]:
     repository = args.repository.resolve(strict=True)
     artifact_root = args.artifact_root.resolve(strict=True)
     verify_package(repository, args.package_commit)
+    frozen_manifest, _frozen_manifest_sha256 = load_frozen_run_manifest(
+        artifact_root,
+        repository=repository,
+        package_commit=args.package_commit,
+    )
     paths = contract_paths(repository)
     contract = load_execution_contract(
         paths["execution"], expected_sha256=file_sha256(paths["execution"])
     )
     state_path = artifact_root / "pilot-v5/pilot-state.json"
     state = load_object(state_path, label="pilot state")
+    validate_live_slot2_state_binding(state, frozen_manifest)
     checkpoint_path = artifact_root / "pilot-v5/first-pair-checkpoint.json"
     if checkpoint_path.exists():
         decision = load_object(checkpoint_path, label="first-pair checkpoint")
-        if state.get("first_pair_decision_sha256") != canonical_sha256(decision):
+        checkpoint_binding = state.get("first_pair_checkpoint_binding")
+        if (
+            state.get("first_pair_decision_sha256") != canonical_sha256(decision)
+            or not isinstance(checkpoint_binding, dict)
+            or decision.get("first_pair_started_at_epoch")
+            != checkpoint_binding.get("first_pair_started_at_epoch")
+            or decision.get("second_pair_started_at_epoch")
+            != checkpoint_binding.get("second_pair_started_at_epoch")
+            or decision.get("decided_at_epoch") != checkpoint_binding.get("decided_at_epoch")
+        ):
             raise T09HostError("retained first-pair checkpoint drifted from frozen state")
         return cast(dict[str, object], decision)
     if state.get("attempts_completed") != list(RUN_IDS[:2]):
@@ -7215,6 +7592,14 @@ def first_pair_checkpoint(args: argparse.Namespace) -> dict[str, object]:
             next_attempt_hard_wall_seconds=contract.limits.max_condition_wall_seconds,
         )
     )
+    decision = {
+        **decision,
+        "first_pair_started_at_epoch": float(pair_started),
+        "second_pair_started_at_epoch": now
+        if decision.get("decision") == "continue-to-task-b"
+        else None,
+        "decided_at_epoch": now,
+    }
     write_exclusive(checkpoint_path, decision)
     record_first_pair_checkpoint(
         state_path,
@@ -7235,12 +7620,14 @@ def campaign_evidence_disposition(args: argparse.Namespace) -> dict[str, object]
         artifact_root,
         repository=repository,
         package_commit=args.package_commit,
+        require_image=False,
     )
     paths = contract_paths(repository)
     contract = load_execution_contract(
         paths["execution"], expected_sha256=file_sha256(paths["execution"])
     )
     state = _runtime_budget_state(artifact_root)
+    validate_live_slot2_state_binding(state, frozen_manifest)
     if (
         state.get("empirical_attempts_entered") != list(RUN_IDS)
         or state.get("raw_attempts_complete") != list(RUN_IDS)
@@ -7520,11 +7907,9 @@ def _attempt_export_control_sources(
             authority_root = artifact_root / "pilot-v5/slot2-authority"
             if authority_root.is_symlink() or not authority_root.is_dir():
                 raise T09HostError("slot-2 attempt export lacks its authority root")
-            relative_paths.extend(ATTEMPT_EXPORT_SLOT2_REQUIRED_CONTROL_PATHS)
             relative_paths.extend(
-                path.relative_to(artifact_root).as_posix()
-                for path in sorted(authority_root.rglob("*"))
-                if path.is_file()
+                f"pilot-v5/slot2-authority/{relative}"
+                for relative in _slot2_authority_relative_paths(authority_root)
             )
         elif transition_mode not in {None, "fresh"}:
             raise T09HostError("attempt export transition mode is unsupported")
@@ -7733,6 +8118,13 @@ def export_attempt(args: argparse.Namespace, destination: BinaryIO) -> dict[str,
         "files": files,
         "total_bytes": total,
         "actual_credential_scan_passed": True,
+        "actual_credential_exposure_detected": raw_receipt.get(
+            "actual_credential_exposure_detected"
+        ),
+        "credential_cleanup_integrity_failure": raw_receipt.get(
+            "credential_cleanup_integrity_failure"
+        ),
+        "campaign_continuation_permitted": raw_receipt.get("credential_cleanup_clean") is True,
         "structural_privacy_scan_passed": raw_receipt.get("public_release_clearance") is True,
         "structural_privacy_findings": raw_receipt.get("structural_privacy_findings"),
         "exported_before_provider_termination": True,
@@ -7870,6 +8262,9 @@ def verify_attempt_export(args: argparse.Namespace) -> None:
             or manifest.get("private_access_controlled") is not True
             or manifest.get("public_release") != "blocked-pending-review"
             or manifest.get("actual_credential_scan_passed") is not True
+            or not isinstance(manifest.get("actual_credential_exposure_detected"), bool)
+            or not isinstance(manifest.get("credential_cleanup_integrity_failure"), bool)
+            or not isinstance(manifest.get("campaign_continuation_permitted"), bool)
             or not isinstance(manifest.get("structural_privacy_scan_passed"), bool)
             or not isinstance(manifest.get("structural_privacy_findings"), list)
             or manifest.get("exported_before_provider_termination") is not True
@@ -7914,6 +8309,20 @@ def verify_attempt_export(args: argparse.Namespace) -> None:
         required_control_names = {
             f"control/{relative}" for relative in ATTEMPT_EXPORT_REQUIRED_CONTROL_PATHS
         }
+
+        def archive_json(name: str, *, label: str) -> dict[str, Any]:
+            member = by_name.get(name)
+            stream = handle.extractfile(member) if member is not None else None
+            if stream is None or member is None or member.size > MAX_PRIVACY_JSON_BYTES:
+                raise T09HostError(f"attempt export {label} is unavailable")
+            try:
+                value: object = json.loads(stream.read())
+            except json.JSONDecodeError as exc:
+                raise T09HostError(f"attempt export {label} is malformed") from exc
+            if not isinstance(value, dict):
+                raise T09HostError(f"attempt export {label} is not an object")
+            return value
+
         frozen_control_member = by_name.get("control/pilot-v5/frozen-run-manifest.json")
         frozen_control_stream = (
             handle.extractfile(frozen_control_member) if frozen_control_member is not None else None
@@ -7928,9 +8337,71 @@ def verify_attempt_export(args: argparse.Namespace) -> None:
             raise T09HostError("attempt export frozen control is not an object")
         transition_mode = frozen_transition_probe.get("preflight_transition_mode")
         if transition_mode == "slot2-replacement":
-            required_control_names.update(
-                f"control/{relative}" for relative in ATTEMPT_EXPORT_SLOT2_REQUIRED_CONTROL_PATHS
+            source_manifest_name = (
+                "control/pilot-v5/slot2-authority/slot2-eligibility-source/source-manifest.json"
             )
+            authority_manifest = archive_json(
+                source_manifest_name,
+                label="slot-2 authority source manifest",
+            )
+            raw_authority_files = authority_manifest.get("files")
+            if (
+                authority_manifest.get("schema_version") != "0.1.0"
+                or authority_manifest.get("plan_id") != PLAN_ID
+                or authority_manifest.get("host_run_id") != HOST_RUN_ID
+                or not isinstance(raw_authority_files, list)
+                or authority_manifest.get("file_count") != len(raw_authority_files)
+                or authority_manifest.get("files_sha256")
+                != hashlib.sha256(
+                    (
+                        json.dumps(
+                            raw_authority_files,
+                            allow_nan=False,
+                            ensure_ascii=False,
+                            separators=(",", ":"),
+                            sort_keys=True,
+                        )
+                        + "\n"
+                    ).encode()
+                ).hexdigest()
+            ):
+                raise T09HostError("attempt export slot-2 authority manifest drifted")
+            slot2_required = {
+                "control/pilot-v5/slot2-authority/replacement-launch-eligibility.json",
+                source_manifest_name,
+            }
+            authority_total = 0
+            control_records_by_path = {
+                cast(str, item["path"]): item
+                for item in cast(list[dict[str, object]], files)
+                if isinstance(item.get("path"), str)
+                and cast(str, item["path"]).startswith("control/")
+            }
+            for raw in raw_authority_files:
+                if not isinstance(raw, dict) or not isinstance(raw.get("path"), str):
+                    raise T09HostError("attempt export slot-2 authority record is malformed")
+                relative = PurePosixPath(cast(str, raw["path"]))
+                if relative.is_absolute() or not relative.parts or ".." in relative.parts:
+                    raise T09HostError("attempt export slot-2 authority path escaped")
+                archive_name = (
+                    "control/pilot-v5/slot2-authority/slot2-eligibility-source/"
+                    + relative.as_posix()
+                )
+                record = control_records_by_path.get(archive_name)
+                if (
+                    record is None
+                    or record.get("bytes") != raw.get("bytes")
+                    or record.get("sha256") != raw.get("sha256")
+                ):
+                    raise T09HostError("attempt export slot-2 authority bytes drifted")
+                slot2_required.add(archive_name)
+                size = raw.get("bytes")
+                if type(size) is not int:
+                    raise T09HostError("attempt export slot-2 authority size is malformed")
+                authority_total += size
+            if authority_manifest.get("total_bytes") != authority_total:
+                raise T09HostError("attempt export slot-2 authority total drifted")
+            required_control_names.update(slot2_required)
         elif transition_mode not in {None, "fresh"}:
             raise T09HostError("attempt export transition mode is unsupported")
         optional_control_names = {
@@ -7945,24 +8416,10 @@ def verify_attempt_export(args: argparse.Namespace) -> None:
                 and name not in optional_control_names
                 and not name.startswith("control/pilot-v5/received-export-acknowledgements/")
                 and not name.startswith("control/pilot-v5/finalization-selections/")
-                and not name.startswith("control/pilot-v5/slot2-authority/")
                 for name in control_names
             )
         ):
             raise T09HostError("attempt export control snapshot is incomplete or overbroad")
-
-        def archive_json(name: str, *, label: str) -> dict[str, Any]:
-            member = by_name.get(name)
-            stream = handle.extractfile(member) if member is not None else None
-            if stream is None or member is None or member.size > MAX_PRIVACY_JSON_BYTES:
-                raise T09HostError(f"attempt export {label} is unavailable")
-            try:
-                value: object = json.loads(stream.read())
-            except json.JSONDecodeError as exc:
-                raise T09HostError(f"attempt export {label} is malformed") from exc
-            if not isinstance(value, dict):
-                raise T09HostError(f"attempt export {label} is not an object")
-            return value
 
         frozen_control_name = "control/pilot-v5/frozen-run-manifest.json"
         provider_control_name = "control/pilot-v5/provider-entry.json"
@@ -8032,6 +8489,12 @@ def verify_attempt_export(args: argparse.Namespace) -> None:
             != manifest.get("structural_privacy_findings")
             or (raw_receipt.get("public_release_clearance") is True)
             != manifest.get("structural_privacy_scan_passed")
+            or raw_receipt.get("actual_credential_exposure_detected")
+            != manifest.get("actual_credential_exposure_detected")
+            or raw_receipt.get("credential_cleanup_integrity_failure")
+            != manifest.get("credential_cleanup_integrity_failure")
+            or (raw_receipt.get("credential_cleanup_clean") is True)
+            != manifest.get("campaign_continuation_permitted")
         ):
             raise T09HostError("attempt export privacy adjudication is not source-bound")
     entry = load_object(args.provider_entry_receipt.resolve(strict=True), label="provider entry")
@@ -8899,6 +9362,30 @@ def cleanup(args: argparse.Namespace) -> None:
             removed_secret_artifacts.append(relative)
     remaining_hits = secret_hits(root, credential_bytes)
     credential_bytes = b""
+    state_path = root / "pilot-v5/pilot-state.json"
+    credential_state_updated = False
+    retained_actual_exposure = False
+    retained_safety_stop = False
+    try:
+        retained_state = load_object(state_path, label="cleanup pilot state")
+        execution_sha256 = retained_state.get("execution_contract_sha256")
+        if not isinstance(execution_sha256, str):
+            raise T09HostError("cleanup state lacks its execution contract")
+        retained_actual_exposure = retained_state.get("actual_credential_exposure_detected") is True
+        retained_safety_stop = retained_state.get("credential_safety_stop_detected") is True
+        if hits:
+            mark_actual_credential_exposure(
+                state_path,
+                execution_contract_sha256=execution_sha256,
+            )
+            retained_actual_exposure = True
+            retained_safety_stop = True
+        credential_state_updated = True
+    except (OSError, T09HostError, T09PilotError):
+        credential_state_updated = False
+        retained_safety_stop = True
+    actual_credential_exposure_detected = retained_actual_exposure or bool(hits)
+    credential_safety_stop_detected = retained_safety_stop or bool(hits)
     secret_removed = destroy_secret(secret_path)
     image_archive_removed = False
     if IMAGE_ARCHIVE_PATH.exists() and not IMAGE_ARCHIVE_PATH.is_symlink():
@@ -8926,6 +9413,11 @@ def cleanup(args: argparse.Namespace) -> None:
             "global_secret_scan_passed": not remaining_hits,
             "global_secret_bearing_artifacts_removed": removed_secret_artifacts,
             "global_secret_matching_paths": remaining_hits,
+            "actual_credential_exposure_detected": actual_credential_exposure_detected,
+            "credential_safety_stop_detected": credential_safety_stop_detected,
+            "new_exact_credential_matches_detected_during_cleanup": bool(hits),
+            "credential_exposure_state_updated": credential_state_updated,
+            "campaign_continuation_permitted": not credential_safety_stop_detected,
             "remote_secret_removed": secret_removed,
             "replacement_image_archive_removed_after_copy_or_deferral": (
                 image_archive_removed or not IMAGE_ARCHIVE_PATH.exists()
@@ -8941,8 +9433,16 @@ def cleanup(args: argparse.Namespace) -> None:
             "lambda_seconds_remaining_for_provider_closeout": remaining_runtime,
         },
     )
-    if residue or remaining_hits or not secret_removed:
-        raise T09HostError("owned runtime or credential cleanup is incomplete")
+    if (
+        residue
+        or remaining_hits
+        or not secret_removed
+        or credential_safety_stop_detected
+        or not credential_state_updated
+    ):
+        raise T09HostError(
+            "owned runtime cleanup completed with credential residue or an actual exposure"
+        )
 
 
 def preempirical_replacement_disposition(args: argparse.Namespace) -> dict[str, object]:

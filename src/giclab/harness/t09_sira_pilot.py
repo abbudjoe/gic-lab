@@ -331,6 +331,7 @@ class RuntimeQualification:
     launch_count: int
     campaign_started_at_epoch: float
     owned_lambda_started_at_epoch: float
+    first_pair_started_at_epoch: float
     prior_lambda_duration_seconds: float
     prior_lambda_cost_usd: float
     replacement_eligibility_sha256: str | None
@@ -477,6 +478,9 @@ class RuntimeQualification:
             owned_lambda_started_at_epoch=_required_number(
                 document.get("owned_lambda_started_at_epoch"), context="owned Lambda start"
             ),
+            first_pair_started_at_epoch=_required_number(
+                document.get("first_pair_started_at_epoch"), context="first-pair start"
+            ),
             prior_lambda_duration_seconds=_required_number(
                 document.get("prior_lambda_duration_seconds"),
                 context="prior Lambda duration",
@@ -543,6 +547,7 @@ class RuntimeQualification:
             or result.launch_count != result.launch_slot
             or result.campaign_started_at_epoch <= 0
             or result.owned_lambda_started_at_epoch < result.campaign_started_at_epoch
+            or result.first_pair_started_at_epoch < result.owned_lambda_started_at_epoch
             or result.prior_lambda_duration_seconds < 0
             or result.prior_lambda_cost_usd < 0
         ):
@@ -1049,6 +1054,10 @@ def initialize_pilot_state(
         "execution_contract_sha256": execution_contract_sha256,
         "pilot_started_at_epoch": pilot_started_at_epoch,
         "lambda_started_at_epoch": lambda_started_at_epoch,
+        "campaign_started_at_epoch": pilot_started_at_epoch,
+        "owned_lambda_started_at_epoch": lambda_started_at_epoch,
+        "prior_retry3_lambda_duration_seconds": 0.0,
+        "prior_retry3_lambda_cost_usd": 0.0,
         "first_pair_started_at_epoch": pilot_started_at_epoch,
         "second_pair_started_at_epoch": None,
         "empirical_attempts_entered": [],
@@ -1060,6 +1069,8 @@ def initialize_pilot_state(
         "first_pair_decision": None,
         "first_pair_checkpoint_binding": None,
         "first_pair_selection_drift_detected": False,
+        "actual_credential_exposure_detected": False,
+        "credential_safety_stop_detected": False,
     }
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     _write_json_atomic(path, document)
@@ -1350,6 +1361,10 @@ def _load_pilot_state(
             raise T09PilotError("selected finalization is not receipt-backed")
     if not isinstance(state.get("first_pair_selection_drift_detected"), bool):
         raise T09PilotError("pilot checkpoint drift state is malformed")
+    if not isinstance(state.get("actual_credential_exposure_detected", False), bool):
+        raise T09PilotError("pilot credential-exposure state is malformed")
+    if not isinstance(state.get("credential_safety_stop_detected", False), bool):
+        raise T09PilotError("pilot credential-safety-stop state is malformed")
     checkpoint_binding = state.get("first_pair_checkpoint_binding")
     if checkpoint_binding is not None and not isinstance(checkpoint_binding, dict):
         raise T09PilotError("pilot checkpoint binding is malformed")
@@ -1360,6 +1375,9 @@ def _load_pilot_state(
             "semantic_projection_sha256s",
             "selected_closure_sha256",
             "decision_sha256",
+            "first_pair_started_at_epoch",
+            "second_pair_started_at_epoch",
+            "decided_at_epoch",
         }:
             raise T09PilotError("pilot checkpoint binding field set drifted")
         checkpoint_receipt_hashes = checkpoint_binding.get("selection_receipt_sha256s")
@@ -1396,6 +1414,40 @@ def _load_pilot_state(
             value = checkpoint_binding.get(field)
             if not isinstance(value, str) or _HEX64.fullmatch(value) is None:
                 raise T09PilotError("pilot checkpoint hash binding is malformed")
+        first_pair_started = state.get("first_pair_started_at_epoch")
+        second_pair_started = state.get("second_pair_started_at_epoch")
+        decided_at = checkpoint_binding.get("decided_at_epoch")
+        if (
+            not isinstance(first_pair_started, (int, float))
+            or isinstance(first_pair_started, bool)
+            or not isinstance(decided_at, (int, float))
+            or isinstance(decided_at, bool)
+            or checkpoint_binding.get("first_pair_started_at_epoch") != float(first_pair_started)
+            or checkpoint_binding.get("second_pair_started_at_epoch") != second_pair_started
+            or float(decided_at) < float(first_pair_started)
+            or (
+                state.get("first_pair_decision") == "continue-to-task-b"
+                and (
+                    not isinstance(second_pair_started, (int, float))
+                    or isinstance(second_pair_started, bool)
+                    or float(second_pair_started) != float(decided_at)
+                )
+            )
+            or (
+                state.get("first_pair_decision") == "stop-before-task-b"
+                and state.get("first_pair_selection_drift_detected") is False
+                and second_pair_started is not None
+            )
+            or (
+                state.get("first_pair_selection_drift_detected") is True
+                and (
+                    not isinstance(second_pair_started, (int, float))
+                    or isinstance(second_pair_started, bool)
+                    or float(second_pair_started) != float(decided_at)
+                )
+            )
+        ):
+            raise T09PilotError("pilot checkpoint pair-wall origins drifted")
     return state
 
 
@@ -1408,6 +1460,8 @@ def mark_empirical_entry(
     """Consume one immutable attempt identity before its first call or action."""
 
     state = _load_pilot_state(path, contract_sha256=execution_contract_sha256)
+    if state.get("credential_safety_stop_detected") is True:
+        raise T09BudgetExceeded("a credential safety failure permanently stops the campaign")
     entered = cast(list[str], state["empirical_attempts_entered"])
     raw_complete = cast(list[str], state["raw_attempts_complete"])
     if run_id in entered:
@@ -1428,6 +1482,10 @@ def mark_empirical_entry(
             or state.get("first_pair_selection_drift_detected") is not False
             or not isinstance(checkpoint_binding, dict)
             or not isinstance(finalizations, dict)
+            or checkpoint_binding.get("first_pair_started_at_epoch")
+            != state.get("first_pair_started_at_epoch")
+            or checkpoint_binding.get("second_pair_started_at_epoch")
+            != state.get("second_pair_started_at_epoch")
         ):
             raise T09BudgetExceeded("Task B is blocked until the first-pair checkpoint passes")
         bound_semantics = checkpoint_binding.get("semantic_projection_sha256s")
@@ -1448,6 +1506,38 @@ def mark_empirical_entry(
             )
     entered.append(run_id)
     state["empirical_attempts_entered"] = entered
+    _write_json_atomic(path, state)
+
+
+def mark_actual_credential_exposure(
+    path: Path,
+    *,
+    execution_contract_sha256: str,
+) -> None:
+    """Monotonically close campaign admission after an exact secret match."""
+
+    state = _load_pilot_state(path, contract_sha256=execution_contract_sha256)
+    if (
+        state.get("actual_credential_exposure_detected") is True
+        and state.get("credential_safety_stop_detected") is True
+    ):
+        return
+    state["actual_credential_exposure_detected"] = True
+    state["credential_safety_stop_detected"] = True
+    _write_json_atomic(path, state)
+
+
+def mark_credential_cleanup_integrity_failure(
+    path: Path,
+    *,
+    execution_contract_sha256: str,
+) -> None:
+    """Stop admission when credential cleanup cannot be reconstructed."""
+
+    state = _load_pilot_state(path, contract_sha256=execution_contract_sha256)
+    if state.get("credential_safety_stop_detected") is True:
+        return
+    state["credential_safety_stop_detected"] = True
     _write_json_atomic(path, state)
 
 
@@ -1635,6 +1725,19 @@ def record_first_pair_checkpoint(
     result = decision.get("decision")
     if result not in {"continue-to-task-b", "stop-before-task-b"}:
         raise T09PilotError("checkpoint decision is invalid")
+    first_pair_started = state.get("first_pair_started_at_epoch")
+    second_pair_started: float | None = decided_at_epoch if result == "continue-to-task-b" else None
+    if (
+        not isinstance(first_pair_started, (int, float))
+        or isinstance(first_pair_started, bool)
+        or not math.isfinite(float(first_pair_started))
+        or not math.isfinite(decided_at_epoch)
+        or decided_at_epoch < float(first_pair_started)
+        or decision.get("first_pair_started_at_epoch") != float(first_pair_started)
+        or decision.get("second_pair_started_at_epoch") != second_pair_started
+        or decision.get("decided_at_epoch") != decided_at_epoch
+    ):
+        raise T09PilotError("checkpoint pair-wall origin binding is invalid")
     state["first_pair_decision"] = result
     state["first_pair_decision_sha256"] = canonical_sha256(decision)
     state["first_pair_checkpoint_binding"] = {
@@ -1651,12 +1754,24 @@ def record_first_pair_checkpoint(
         },
         "selected_closure_sha256": next(iter(finalizer_closures)),
         "decision_sha256": canonical_sha256(decision),
+        "first_pair_started_at_epoch": float(first_pair_started),
+        "second_pair_started_at_epoch": second_pair_started,
+        "decided_at_epoch": decided_at_epoch,
     }
     if result == "continue-to-task-b":
-        if not math.isfinite(decided_at_epoch) or decided_at_epoch <= 0:
-            raise T09PilotError("second-pair epoch is invalid")
         state["second_pair_started_at_epoch"] = decided_at_epoch
     _write_json_atomic(path, state)
+
+
+@dataclass(frozen=True, slots=True)
+class PilotTimeOrigins:
+    """Monotonic wall origins plus prior active-Lambda accounting."""
+
+    pair_started: float
+    campaign_started: float
+    owned_lambda_started: float
+    prior_lambda_duration_seconds: float
+    prior_lambda_cost_usd: float
 
 
 def pilot_state_time_origins(
@@ -1666,8 +1781,8 @@ def pilot_state_time_origins(
     run_id: str,
     wall_time: Callable[[], float] = time.time,
     monotonic: Callable[[], float] = time.monotonic,
-) -> tuple[float, float, float]:
-    """Convert retained wall epochs to monotonic pair/pilot/Lambda origins."""
+) -> PilotTimeOrigins:
+    """Project distinct campaign, pair, and billable-Lambda timing authority."""
 
     state = _load_pilot_state(path, contract_sha256=execution_contract_sha256)
     attempt_index = ATTEMPT_ORDER.index(run_id)
@@ -1676,13 +1791,21 @@ def pilot_state_time_origins(
     )
     epoch_values = (
         state.get(pair_field),
-        state.get("pilot_started_at_epoch"),
-        state.get("lambda_started_at_epoch"),
+        state.get("campaign_started_at_epoch", state.get("pilot_started_at_epoch")),
+        state.get("owned_lambda_started_at_epoch"),
     )
+    prior_duration = state.get("prior_retry3_lambda_duration_seconds")
+    prior_cost = state.get("prior_retry3_lambda_cost_usd")
     valid_epoch_types = all(
         isinstance(value, (int, float)) and not isinstance(value, bool) for value in epoch_values
     )
-    if not valid_epoch_types:
+    if not valid_epoch_types or not all(
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and math.isfinite(float(value))
+        and float(value) >= 0
+        for value in (prior_duration, prior_cost)
+    ):
         raise T09PilotError("pilot state timing origins are incomplete")
     now_wall = wall_time()
     now_monotonic = monotonic()
@@ -1693,7 +1816,15 @@ def pilot_state_time_origins(
         if not math.isfinite(elapsed) or elapsed < 0:
             raise T09PilotError("pilot state timing origin is in the future")
         result.append(now_monotonic - elapsed)
-    return result[0], result[1], result[2]
+    assert isinstance(prior_duration, (int, float))
+    assert isinstance(prior_cost, (int, float))
+    return PilotTimeOrigins(
+        pair_started=result[0],
+        campaign_started=result[1],
+        owned_lambda_started=result[2],
+        prior_lambda_duration_seconds=float(prior_duration),
+        prior_lambda_cost_usd=float(prior_cost),
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -1720,8 +1851,10 @@ class ResourceGuard:
         pilot_root: Path,
         condition_started: float,
         pair_started: float,
-        pilot_started: float,
-        lambda_started: float,
+        campaign_started: float,
+        owned_lambda_started: float,
+        prior_lambda_duration_seconds: float,
+        prior_lambda_cost_usd: float,
         lambda_hourly_price_usd: float = 1.29,
         monotonic: Callable[[], float] = time.monotonic,
     ) -> None:
@@ -1730,10 +1863,34 @@ class ResourceGuard:
         self.pilot_root = pilot_root
         self.condition_started = condition_started
         self.pair_started = pair_started
-        self.pilot_started = pilot_started
-        self.lambda_started = lambda_started
+        self.campaign_started = campaign_started
+        self.owned_lambda_started = owned_lambda_started
+        self.prior_lambda_duration_seconds = prior_lambda_duration_seconds
+        self.prior_lambda_cost_usd = prior_lambda_cost_usd
         self.lambda_hourly_price_usd = lambda_hourly_price_usd
         self.monotonic = monotonic
+        if (
+            not all(
+                math.isfinite(value)
+                for value in (
+                    condition_started,
+                    pair_started,
+                    campaign_started,
+                    owned_lambda_started,
+                    prior_lambda_duration_seconds,
+                    prior_lambda_cost_usd,
+                    lambda_hourly_price_usd,
+                )
+            )
+            or not campaign_started <= owned_lambda_started <= pair_started <= condition_started
+            or min(
+                prior_lambda_duration_seconds,
+                prior_lambda_cost_usd,
+                lambda_hourly_price_usd,
+            )
+            < 0
+        ):
+            raise T09PilotError("resource guard timing or cost authority is invalid")
 
     @staticmethod
     def _tree_bytes(root: Path) -> int:
@@ -1752,15 +1909,19 @@ class ResourceGuard:
 
     def snapshot(self) -> ResourceSnapshot:
         now = self.monotonic()
-        lambda_elapsed = max(0.0, now - self.lambda_started)
+        owned_lambda_elapsed = max(0.0, now - self.owned_lambda_started)
+        lambda_elapsed = self.prior_lambda_duration_seconds + owned_lambda_elapsed
         return ResourceSnapshot(
             condition_elapsed_seconds=max(0.0, now - self.condition_started),
             pair_elapsed_seconds=max(0.0, now - self.pair_started),
-            total_elapsed_seconds=max(0.0, now - self.pilot_started),
+            total_elapsed_seconds=max(0.0, now - self.campaign_started),
             attempt_output_bytes=self._tree_bytes(self.attempt_root),
             pilot_disk_bytes=self._tree_bytes(self.pilot_root),
             lambda_elapsed_seconds=lambda_elapsed,
-            lambda_cost_usd=lambda_elapsed * self.lambda_hourly_price_usd / 3600.0,
+            lambda_cost_usd=(
+                self.prior_lambda_cost_usd
+                + owned_lambda_elapsed * self.lambda_hourly_price_usd / 3600.0
+            ),
         )
 
     def check(self) -> ResourceSnapshot:
