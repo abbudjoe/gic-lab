@@ -27,6 +27,12 @@ The authoritative current execution overlay is
 `experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY3_TERMINAL_CONTROL.json`;
 it preserves the frozen profile/contract bytes as historical evidence while runtime
 policy rejects both registered plan IDs as consumed and nonreplayable.
+Independent terminal-control rereview of clean commit `cd5ce3d3…` returned PASS with
+no material residual after reproducing the unregistered-successor and one-sided-update
+stops. Sixty-five focused and all 1,384 repository tests, validation, Ruff, strict
+mypy, diff hygiene, and the portable-Quarto 16-page/site gate pass. R3-04/06/07/11
+remain partial because no V5 attempt or dynamic qualification occurred; R3-14 remains
+blocked; R3-16 is met by this ledger and the final 16-item handoff.
 
 ---
 

@@ -67,7 +67,7 @@ uniformly before pair continuation or final analysis. A condition is never retri
 | R3-13 | Enforce calls, tokens, actions, attempts, zero retry, output/disk/wall, OpenAI/Lambda/new/cumulative cost, and checkpoint limits before billable actions. | The pre-POST 4,500-second gate admitted slot 2, the repeated admission gate then stopped before empirical entry when activation consumed the margin, and all usage/cost counters reconcile under their caps: zero attempt activity, USD 1.5106036795496942 new and USD 4.04142013524027 cumulative T09 cost. | met |
 | R3-14 | Execute all four fresh attempts in fixed order, apply one uniform finalizer closure, and make the predeclared first-pair floor/ceiling checkpoint. | Blocked before the first empirical attempt; all four V5 attempts are `not-run` and no checkpoint or pair exists. | blocked |
 | R3-15 | Preserve reconstructable success/failure prefixes, prioritize cleanup, transfer evidence, destroy secrets, remove containers, terminate the exact provider instance, verify zero instances/security, and reconcile usage. | Both maximal pre-empirical prefixes and provider lineages were copied and independently validated; private archive `ARCHIVE-EXP0001-PILOT-V5-PREEMPIRICAL-0003` has 224 files/2,792,322 payload bytes and manifest SHA-256 `e8af18d0…`; cleanup, exact termination, zero instances, security restoration, and costs reconcile. | met |
-| R3-16 | Pass focused tests, validation, privacy, diff, Ruff, strict mypy, independent prelaunch review, post-termination broad gates/evidence review, public reconciliation, clean commits, and the 16-item handoff. | Independent prelaunch/package/evidence reviews passed; sealed evidence and public reconciliation rehash; the portable-Quarto full gate passes Ruff, strict mypy, 1,381 tests, repository validation, all 16 pages, and site validation. The final terminal-control rereview and 16-item response are the only remaining handoff actions. | partial pending final handoff |
+| R3-16 | Pass focused tests, validation, privacy, diff, Ruff, strict mypy, independent prelaunch review, post-termination broad gates/evidence review, public reconciliation, clean commits, and the 16-item handoff. | Independent prelaunch/package/evidence and terminal-control reviews passed; sealed evidence and public reconciliation rehash; 65 focused and all 1,384 tests pass with Ruff, strict mypy, repository validation, diff hygiene, all 16 Quarto pages, and site validation. This ledger and the accompanying 16-item response complete the handoff. | met at final handoff |
 
 ## Planned execution evidence
 
@@ -143,6 +143,11 @@ uniformly before pair continuation or final analysis. A condition is never retri
   frozen smoke/V5 profile and V5 execution-contract hashes. Project state, registry,
   runtime policy, validation, and replay regressions treat both registered plan IDs
   as consumed and nonreplayable without rewriting the historical package bytes.
+- 2026-08-14: independent terminal-control rereview of clean commit `cd5ce3d3…`
+  returned PASS with no material residual. The reviewer reproduced the unregistered
+  successor rejection, one-sided registry/control failures, both consumed-ID stops,
+  65 focused and 1,384 full tests, validation, Ruff, strict mypy, diff hygiene, and
+  the portable-Quarto 16-page/site gate.
 
 ## Next permitted phase
 
