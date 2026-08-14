@@ -377,6 +377,51 @@ def test_retry3_state_separates_raw_progress_from_reselectable_finalization(
     )
 
 
+def test_retry3_task_b_requires_uniform_current_task_a_reselection(tmp_path: Path) -> None:
+    state = tmp_path / "pilot-state.json"
+    initialize_pilot_state(
+        state,
+        execution_contract_sha256="f" * 64,
+        pilot_started_at_epoch=1.0,
+        lambda_started_at_epoch=1.0,
+    )
+    for index, run_id in enumerate(ATTEMPT_ORDER[:2], start=1):
+        mark_empirical_entry(state, execution_contract_sha256="f" * 64, run_id=run_id)
+        mark_raw_attempt_complete(
+            state,
+            execution_contract_sha256="f" * 64,
+            run_id=run_id,
+            raw_manifest_sha256=f"{index}" * 64,
+            raw_receipt_sha256=f"{index + 2}" * 64,
+        )
+        _select(state, run_id)
+    record_first_pair_checkpoint(
+        state,
+        execution_contract_sha256="f" * 64,
+        decision={
+            "decision": "continue-to-task-b",
+            "first_pair_started_at_epoch": 1.0,
+            "second_pair_started_at_epoch": 2.0,
+            "decided_at_epoch": 2.0,
+        },
+        decided_at_epoch=2.0,
+    )
+
+    _select(state, ATTEMPT_ORDER[0], source="9" * 64)
+    with pytest.raises(T09BudgetExceeded, match="selections drifted"):
+        mark_empirical_entry(
+            state,
+            execution_contract_sha256="f" * 64,
+            run_id=ATTEMPT_ORDER[2],
+        )
+    _select(state, ATTEMPT_ORDER[1], source="9" * 64)
+    mark_empirical_entry(
+        state,
+        execution_contract_sha256="f" * 64,
+        run_id=ATTEMPT_ORDER[2],
+    )
+
+
 def test_retry3_selection_receipt_crash_is_reconciled_without_rewrite(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -1079,12 +1124,12 @@ def test_retry3_preentry_secret_match_is_a_monotonic_campaign_stop(
     )
     attempt_root = artifact_root / "attempt"
     attempt_root.mkdir(parents=True, mode=0o700)
-    secret = tmp_path / "secret"
-    secret_value = b"fixture-preentry-secret-that-must-not-survive"
-    secret.write_bytes(secret_value)
-    secret.chmod(0o600)
+    credential_file = tmp_path / "secret"
+    credential_fixture = b"fixture-secret-that-must-never-be-retained"
+    credential_file.write_bytes(credential_fixture)
+    credential_file.chmod(0o600)
     leaked = attempt_root / "condition.stderr"
-    leaked.write_bytes(secret_value)
+    leaked.write_bytes(credential_fixture)
     monkeypatch.setattr(host, "remove_container", lambda _prefix, _name: True)
     monkeypatch.setattr(host, "owned_containers", lambda _prefix: [])
 
@@ -1092,7 +1137,7 @@ def test_retry3_preentry_secret_match_is_a_monotonic_campaign_stop(
         host.record_preentry_condition_failure(
             pilot_state_path=state_path,
             attempt_root=attempt_root,
-            secret_file=secret,
+            secret_file=credential_file,
             prefix=["docker"],
             container_name="fixture-container",
             run_id=ATTEMPT_ORDER[0],
@@ -1156,17 +1201,17 @@ def test_retry3_metadata_secret_scan_removes_value_and_permanently_stops_admissi
         pilot_started_at_epoch=1.0,
         lambda_started_at_epoch=1.0,
     )
-    secret = tmp_path / "secret"
-    secret_value = b"fixture-secret-that-must-never-be-retained"
-    secret.write_bytes(secret_value)
-    secret.chmod(0o600)
+    credential_file = tmp_path / "secret"
+    credential_fixture = b"fixture-secret-that-must-never-be-retained"
+    credential_file.write_bytes(credential_fixture)
+    credential_file.chmod(0o600)
     leaked = artifact_root / "pilot-v5/model-metadata-preflight/leaked.log"
     leaked.parent.mkdir(parents=True)
-    leaked.write_bytes(secret_value)
+    leaked.write_bytes(credential_fixture)
     with pytest.raises(host.T09HostError, match="exposed the exact credential"):
         host.record_preflight_credential_scan(
             artifact_root=artifact_root,
-            secret_file=secret,
+            secret_file=credential_file,
             execution_contract_sha256="f" * 64,
         )
     assert not leaked.exists()
