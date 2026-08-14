@@ -186,6 +186,30 @@ def test_retry3_slot2_transition_and_launch_headroom_are_fail_closed() -> None:
         )
 
 
+def test_retry3_exact_clean_package_is_host_verifiable() -> None:
+    host = _load(HOST_SOURCE, "giclab_t09_retry3_package_verification")
+    package_commit = subprocess.run(
+        ["git", "-C", str(ROOT), "rev-parse", "HEAD"],
+        capture_output=True,
+        check=True,
+        text=True,
+    ).stdout.strip()
+    command_document = host.verify_package(ROOT, package_commit)
+    assert (
+        command_document["reviewed_implementation_ancestor"]
+        == (
+            json.loads(
+                (
+                    ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
+                    "T09_PILOT_RUNTIME_IDENTITY.json"
+                ).read_text(encoding="utf-8")
+            )["repository_instrumentation"]["reviewed_implementation_ancestor"]
+        )
+    )
+    assert len(command_document["manifests"]) == 4
+    assert all(item["valid"] is True for item in command_document["pair_diffs"])
+
+
 def test_retry3_plan_has_a_typed_two_slot_raw_first_contract() -> None:
     plan_path = ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml"
     plan = yaml.safe_load(plan_path.read_bytes())

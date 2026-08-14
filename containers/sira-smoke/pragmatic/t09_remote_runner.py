@@ -2176,7 +2176,10 @@ def verify_package(
         not isinstance(runtime, dict)
         or runtime.get("container_image_digest") is not None
         or runtime.get("container_image_policy")
-        != "single-qualified-replacement-preentry-frozen-run-manifest-v1"
+        != (
+            "slot1-built-once-slot2-exact-archive-import-zero-additional-builds-"
+            "preentry-frozen-run-manifest-v1"
+        )
         or runtime.get("historical_container_image_digest") != HISTORICAL_IMAGE_ID
     ):
         raise T09HostError("replacement image policy drifted")
