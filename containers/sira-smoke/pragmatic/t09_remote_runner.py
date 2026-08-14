@@ -218,6 +218,7 @@ MAX_IMAGE_ARCHIVE_BYTES: Final = 2_147_483_648
 MAX_EVALUATOR_OVERLAY_BYTES: Final = 1_073_741_824
 MAX_EVALUATOR_OVERLAY_ENTRIES: Final = 100_000
 MAX_PREENTRY_REPAIRS_PER_RUN: Final = 3
+POSTFREEZE_ADMISSION_FIELD: Final = "fresh_empirical_campaign_headroom_passed_before_metadata_get"
 PINNED_DATASET_SHA256: Final = "359300b029c6891567816f351bf8786e9b018d7af8a1a44b7da9ba5ef4651288"
 FINALIZER_RELATIVE_PATH: Final = "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py"
 FINALIZER_PROJECTION_RELATIVE_PATH: Final = (
@@ -5558,7 +5559,7 @@ def preflight(args: argparse.Namespace) -> None:
             "actual_credential_exposure_detected": False,
             "model_task_request_count": 0,
             "task_browser_action_count": 0,
-            "fresh_empirical_campaign_headroom_passed_before_metadata_get": True,
+            POSTFREEZE_ADMISSION_FIELD: True,
             "active_provider_seconds_available_before_metadata_get": (
                 active_headroom_before_metadata
             ),
@@ -6686,6 +6687,40 @@ def validate_live_frozen_state_binding(
         raise T09HostError("live state drifted from the frozen admission authority")
 
 
+def validate_postfreeze_entry_receipts(
+    *,
+    preflight_receipt: dict[str, Any],
+    postfreeze: dict[str, Any],
+    frozen_manifest: dict[str, Any],
+    frozen_manifest_sha256: str,
+    replacement_image_id: str,
+    postfreeze_sha256: str,
+    model_metadata_credential_scan_sha256: str,
+) -> None:
+    """Validate the one exact completion receipt that admits empirical entry."""
+
+    if (
+        preflight_receipt.get("frozen_run_manifest_sha256") != frozen_manifest_sha256
+        or preflight_receipt.get("replacement_image_id") != replacement_image_id
+        or preflight_receipt.get("first_pair_started_at_epoch")
+        != frozen_manifest.get("first_pair_started_at_epoch")
+        or preflight_receipt.get("empirical_entry_crossed") is not False
+        or preflight_receipt.get("postfreeze_validation_sha256") != postfreeze_sha256
+        or postfreeze.get("frozen_run_manifest_sha256") != frozen_manifest_sha256
+        or postfreeze.get("replacement_image_id") != replacement_image_id
+        or postfreeze.get("model_metadata_request_count") != 1
+        or postfreeze.get("model_metadata_credential_scan_sha256")
+        != model_metadata_credential_scan_sha256
+        or postfreeze.get("actual_credential_exposure_detected") is not False
+        or postfreeze.get("model_task_request_count") != 0
+        or postfreeze.get("task_browser_action_count") != 0
+        or postfreeze.get("first_pair_started_at_epoch")
+        != frozen_manifest.get("first_pair_started_at_epoch")
+        or postfreeze.get(POSTFREEZE_ADMISSION_FIELD) is not True
+    ):
+        raise T09HostError("preflight and frozen runtime manifest drifted")
+
+
 def execute_condition(args: argparse.Namespace) -> int:
     attempt_started = time.monotonic()
     attempt_started_epoch = time.time()
@@ -6720,26 +6755,17 @@ def execute_condition(args: argparse.Namespace) -> int:
     if not postfreeze_path.is_file():
         raise T09HostError("post-freeze validation did not publish its final completion receipt")
     postfreeze = load_object(postfreeze_path, label="post-freeze validation")
-    if (
-        preflight_receipt.get("frozen_run_manifest_sha256") != frozen_manifest_sha256
-        or preflight_receipt.get("replacement_image_id") != image_id
-        or preflight_receipt.get("first_pair_started_at_epoch")
-        != frozen_manifest.get("first_pair_started_at_epoch")
-        or preflight_receipt.get("empirical_entry_crossed") is not False
-        or preflight_receipt.get("postfreeze_validation_sha256") != file_sha256(postfreeze_path)
-        or postfreeze.get("frozen_run_manifest_sha256") != frozen_manifest_sha256
-        or postfreeze.get("replacement_image_id") != image_id
-        or postfreeze.get("model_metadata_request_count") != 1
-        or postfreeze.get("model_metadata_credential_scan_sha256")
-        != file_sha256(artifact_root / "pilot-v6/model-metadata-credential-scan.json")
-        or postfreeze.get("actual_credential_exposure_detected") is not False
-        or postfreeze.get("model_task_request_count") != 0
-        or postfreeze.get("task_browser_action_count") != 0
-        or postfreeze.get("first_pair_started_at_epoch")
-        != frozen_manifest.get("first_pair_started_at_epoch")
-        or postfreeze.get("next_attempt_admission_passed_before_metadata_get") is not True
-    ):
-        raise T09HostError("preflight and frozen runtime manifest drifted")
+    validate_postfreeze_entry_receipts(
+        preflight_receipt=preflight_receipt,
+        postfreeze=postfreeze,
+        frozen_manifest=frozen_manifest,
+        frozen_manifest_sha256=frozen_manifest_sha256,
+        replacement_image_id=image_id,
+        postfreeze_sha256=file_sha256(postfreeze_path),
+        model_metadata_credential_scan_sha256=file_sha256(
+            artifact_root / "pilot-v6/model-metadata-credential-scan.json"
+        ),
+    )
     state = load_object(artifact_root / "pilot-v6/pilot-state.json", label="pilot state")
     entered = state.get("empirical_attempts_entered")
     completed = state.get("attempts_completed")

@@ -498,3 +498,52 @@ def test_retry4_static_package_hashes_commands_and_successor_control_close() -> 
         "path": control_path.relative_to(ROOT).as_posix(),
         "sha256": host_hash(control_path),
     }
+
+
+def test_retry4_generated_postfreeze_receipt_admits_first_condition() -> None:
+    host = _load_host("giclab_t09_retry4_postfreeze_admission")
+    frozen_sha = "a" * 64
+    image_id = "sha256:" + "b" * 64
+    postfreeze_sha = "c" * 64
+    credential_scan_sha = "d" * 64
+    first_pair_started = 1234.5
+    frozen = {"first_pair_started_at_epoch": first_pair_started}
+    preflight = {
+        "frozen_run_manifest_sha256": frozen_sha,
+        "replacement_image_id": image_id,
+        "first_pair_started_at_epoch": first_pair_started,
+        "empirical_entry_crossed": False,
+        "postfreeze_validation_sha256": postfreeze_sha,
+    }
+    postfreeze = {
+        "frozen_run_manifest_sha256": frozen_sha,
+        "replacement_image_id": image_id,
+        "model_metadata_request_count": 1,
+        "model_metadata_credential_scan_sha256": credential_scan_sha,
+        "actual_credential_exposure_detected": False,
+        "model_task_request_count": 0,
+        "task_browser_action_count": 0,
+        "first_pair_started_at_epoch": first_pair_started,
+        host.POSTFREEZE_ADMISSION_FIELD: True,
+    }
+    host.validate_postfreeze_entry_receipts(
+        preflight_receipt=preflight,
+        postfreeze=postfreeze,
+        frozen_manifest=frozen,
+        frozen_manifest_sha256=frozen_sha,
+        replacement_image_id=image_id,
+        postfreeze_sha256=postfreeze_sha,
+        model_metadata_credential_scan_sha256=credential_scan_sha,
+    )
+
+    drifted = {**postfreeze, host.POSTFREEZE_ADMISSION_FIELD: False}
+    with pytest.raises(host.T09HostError, match="preflight and frozen runtime manifest drifted"):
+        host.validate_postfreeze_entry_receipts(
+            preflight_receipt=preflight,
+            postfreeze=drifted,
+            frozen_manifest=frozen,
+            frozen_manifest_sha256=frozen_sha,
+            replacement_image_id=image_id,
+            postfreeze_sha256=postfreeze_sha,
+            model_metadata_credential_scan_sha256=credential_scan_sha,
+        )
