@@ -190,6 +190,75 @@ def test_retry4_postrun_source_bundle_rejects_an_undeclared_extra(
         )
 
 
+def test_retry4_postrun_overlay_copy_rejects_and_removes_corruption(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repair = _load_postrun_repair("giclab_t09_retry4_postrun_copy")
+    payload = b"source-bound-private-evidence\n"
+    source = tmp_path / "source.bin"
+    destination = tmp_path / "overlay.bin"
+    source.write_bytes(payload)
+    source.chmod(0o600)
+
+    def corrupt_copy(_source: object, target: object, *, length: int) -> None:
+        assert length == 1_048_576
+        target.write(b"corrupt")  # type: ignore[attr-defined]
+
+    monkeypatch.setattr(repair.shutil, "copyfileobj", corrupt_copy)  # type: ignore[attr-defined]
+    with pytest.raises(repair.EvidenceRepairError, match="target revalidation"):  # type: ignore[attr-defined]
+        repair._copy_exclusive(  # type: ignore[attr-defined]
+            source,
+            destination,
+            expected_bytes=len(payload),
+            expected_sha256=host_hash(source),
+        )
+    assert not destination.exists()
+    assert source.read_bytes() == payload
+
+
+def test_retry4_postrun_overlay_rejects_nested_destination_without_mutation(
+    tmp_path: Path,
+) -> None:
+    repair = _load_postrun_repair("giclab_t09_retry4_postrun_destination")
+    sealed = tmp_path / "sealed-artifacts"
+    original = sealed / repair.ARCHIVE_ID  # type: ignore[attr-defined]
+    authority = tmp_path / "authority"
+    entry = tmp_path / "entry"
+    closeout = tmp_path / "closeout"
+    for directory in (sealed, original, authority, entry, closeout):
+        directory.mkdir(mode=0o700)
+        directory.chmod(0o700)
+    original_members = {
+        "archive-identity.json",
+        "evidence-archive-manifest.json",
+        "provider-closeout-summary.json",
+        "t09-pilot-private-evidence-stage.tar.gz",
+    }
+    for name in original_members:
+        path = original / name
+        path.write_bytes(b"preserved\n")
+        path.chmod(0o600)
+    inbound = tmp_path / "inbound.json"
+    inbound.write_bytes(b"{}\n")
+    inbound.chmod(0o600)
+    before = {path.name: path.read_bytes() for path in original.iterdir()}
+
+    args = repair.argparse.Namespace(  # type: ignore[attr-defined]
+        repository=ROOT,
+        repair_commit="0" * 40,
+        original_archive_root=original,
+        authority_source_root=authority,
+        slot1_inbound_verification=inbound,
+        slot2_entry_source_root=entry,
+        slot2_closeout_source_root=closeout,
+        output_root=original / repair.OVERLAY_ID,  # type: ignore[attr-defined]
+    )
+    with pytest.raises(repair.EvidenceRepairError, match="destination"):  # type: ignore[attr-defined]
+        repair.create_overlay(args)  # type: ignore[attr-defined]
+    assert {path.name: path.read_bytes() for path in original.iterdir()} == before
+
+
 def test_retry4_private_postrun_union_reconstructs_the_frozen_runtime() -> None:
     original = (
         PRIVATE_T09_ROOT / "sealed-artifacts/ARCHIVE-EXP0001-PILOT-V6-0004/"

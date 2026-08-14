@@ -120,6 +120,18 @@ def _safe_regular(path: Path, *, mode: int = 0o600, maximum: int | None = None) 
     return metadata
 
 
+def _safe_private_directory(path: Path) -> os.stat_result:
+    metadata = path.stat(follow_symlinks=False)
+    if (
+        path.is_symlink()
+        or not stat.S_ISDIR(metadata.st_mode)
+        or metadata.st_uid != os.getuid()
+        or stat.S_IMODE(metadata.st_mode) != 0o700
+    ):
+        raise EvidenceRepairError("unsafe private evidence directory")
+    return metadata
+
+
 def _load_json(path: Path, *, expected_sha256: str | None = None) -> dict[str, Any]:
     metadata = _safe_regular(path, maximum=MAX_JSON_BYTES)
     if expected_sha256 is not None and sha256_file(path) != expected_sha256:
@@ -150,7 +162,13 @@ def _write_exclusive(path: Path, value: object) -> None:
     os.chmod(path, 0o600)
 
 
-def _copy_exclusive(source: Path, destination: Path) -> None:
+def _copy_exclusive(
+    source: Path,
+    destination: Path,
+    *,
+    expected_bytes: int,
+    expected_sha256: str,
+) -> None:
     _safe_regular(source)
     descriptor = os.open(
         destination,
@@ -158,13 +176,26 @@ def _copy_exclusive(source: Path, destination: Path) -> None:
         0o600,
     )
     try:
-        with source.open("rb") as incoming, os.fdopen(descriptor, "wb", closefd=False) as outgoing:
-            shutil.copyfileobj(incoming, outgoing, length=1_048_576)
-            outgoing.flush()
-            os.fsync(outgoing.fileno())
-    finally:
-        os.close(descriptor)
+        try:
+            with (
+                source.open("rb") as incoming,
+                os.fdopen(descriptor, "wb", closefd=False) as outgoing,
+            ):
+                shutil.copyfileobj(incoming, outgoing, length=1_048_576)
+                outgoing.flush()
+                os.fsync(outgoing.fileno())
+        finally:
+            os.close(descriptor)
+    except BaseException:
+        destination.unlink(missing_ok=True)
+        _fsync_directory(destination.parent)
+        raise
     os.chmod(destination, 0o600)
+    metadata = _safe_regular(destination)
+    if metadata.st_size != expected_bytes or sha256_file(destination) != expected_sha256:
+        destination.unlink()
+        _fsync_directory(destination.parent)
+        raise EvidenceRepairError("exclusive evidence copy failed target revalidation")
 
 
 def _fsync_directory(path: Path) -> None:
@@ -479,7 +510,12 @@ def verify_union_with_frozen_runtime(
         root = Path(raw) / "artifacts"
         _safe_extract_stage(original_stage, root)
         destination = root.joinpath(*PurePosixPath(MISSING_ARCHIVE_RELATIVE).parts)
-        _copy_exclusive(missing_source, destination)
+        _copy_exclusive(
+            missing_source,
+            destination,
+            expected_bytes=MISSING_BYTES,
+            expected_sha256=MISSING_SHA256,
+        )
         host = _load_host_module(repository)
         authority = host.slot2_authority_binding(root / "pilot-v6/slot2-authority")
         frozen, frozen_sha256 = host.load_frozen_run_manifest(
@@ -628,7 +664,27 @@ def create_overlay(args: argparse.Namespace) -> dict[str, object]:
     entry_source_root = args.slot2_entry_source_root.resolve(strict=True)
     closeout_source_root = args.slot2_closeout_source_root.resolve(strict=True)
     output_root = args.output_root.resolve(strict=False)
-    if output_root.name != OVERLAY_ID or output_root.exists() or output_root.is_symlink():
+    _safe_private_directory(original_root.parent)
+    expected_output_root = original_root.parent / OVERLAY_ID
+    input_roots = (
+        repository,
+        original_root,
+        authority_source_root,
+        inbound_path,
+        entry_source_root,
+        closeout_source_root,
+    )
+    if (
+        output_root != expected_output_root
+        or output_root.exists()
+        or output_root.is_symlink()
+        or any(
+            output_root == source
+            or output_root.is_relative_to(source)
+            or source.is_relative_to(output_root)
+            for source in input_roots
+        )
+    ):
         raise EvidenceRepairError("postrun overlay destination is not fresh and exact")
     package = validate_repair_package(repository, args.repair_commit)
     original = validate_original_final_archive(original_root)
@@ -661,7 +717,12 @@ def create_overlay(args: argparse.Namespace) -> dict[str, object]:
     )
     output_root.mkdir(mode=0o700, parents=False, exist_ok=False)
     supplement = output_root / MISSING_SOURCE_RELATIVE
-    _copy_exclusive(missing_source, supplement)
+    _copy_exclusive(
+        missing_source,
+        supplement,
+        expected_bytes=MISSING_BYTES,
+        expected_sha256=MISSING_SHA256,
+    )
     _write_exclusive(output_root / "posttermination-clock-reconciliation.json", clock)
     repair: dict[str, object] = {
         "schema_version": "0.1.0",
@@ -688,7 +749,7 @@ def create_overlay(args: argparse.Namespace) -> dict[str, object]:
             "bytes": MISSING_BYTES,
             "sha256": MISSING_SHA256,
             "retained_source_metadata_valid": True,
-            "copy_rehash_verified": sha256_file(supplement) == MISSING_SHA256,
+            "copy_rehash_verified": True,
             "slot1_inbound_verification_sha256": SLOT1_INBOUND_VERIFICATION_SHA256,
             "slot1_inbound_verified_before_provider_termination": True,
         },
