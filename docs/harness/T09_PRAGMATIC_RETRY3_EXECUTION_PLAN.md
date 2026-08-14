@@ -62,8 +62,8 @@ uniformly before pair continuation or final analysis. A condition is never retri
 | R3-08 | Treat structural/private fixture findings as a public-release limitation while actual credential matches remain a hard stop. | Raw receipt records structural findings; private export remains available; exact credential scan, removal, and cleanup remain mandatory. | met |
 | R3-09 | Use fresh V5 host, attempt, evaluator, pair, qualification, stage, archive, and provider identities without collision. | Fresh IDs are bound in the generated package; independent package review remains pending. | partial |
 | R3-10 | Close the V5 plan/runtime/execution/schema/condition/command/provider hash graph and pair diffs against one reviewed ancestor. | The graph is rebound to reviewed source ancestor `e4f9b4be…`; four manifests, both pair diffs, focused package tests, and repository validation pass; independent package review remains pending. | partial |
-| R3-11 | Build and qualify exactly one replacement image, freeze its exact ID/receipts/commands before entry, and use it unchanged for all attempts. | Source gate is implemented; live image/manifest evidence is not started. | not-started |
-| R3-12 | Enforce one simultaneous instance, at most two launches only when launch 1 ends conclusively pre-empirical with zero image build/use, no overlap, one campaign clock/cost cap, and no replacement after entry. | Two O_EXCL launch capabilities and source-bound replacement eligibility are implemented and fake-transport tested; live provider evidence is not started. | not-started |
+| R3-11 | Build and qualify exactly one selected replacement image, freeze its exact ID/receipts/commands before entry, and use it unchanged for all attempts. | Slot 1 built candidate `sha256:abe8ed38…` once and stopped before metadata/empirical entry; its exact 1,207,128,576-byte Docker archive is retained at SHA-256 `623e717c…`. Slot 2 must import that image with zero additional builds and qualify it under fresh identity `QUAL-T09-PILOT-V5-IMAGE-0002`. | partial |
+| R3-12 | Enforce one simultaneous instance, at most two launches only when launch 1 ends conclusively pre-empirical, no overlap, one campaign wall plus actual active-Lambda accounting, and no replacement after entry. | Slot 1 is source-validated terminal/absent with security restored, zero empirical/model/browser use, one candidate build, 3,883.231055 seconds active, and USD 1.391491128 Lambda cost. A pure O_EXCL post-closeout eligibility derivation binds the old→new package transition, exact failure/archive/image hashes, and the sole slot-2 capability. | partial |
 | R3-13 | Enforce calls, tokens, actions, attempts, zero retry, output/disk/wall, OpenAI/Lambda/new/cumulative cost, and checkpoint limits before billable actions. | Typed runtime and provider counters use prior T09 cost `2.5308164556905757` and cumulative cap `48.0`; focused equality/overflow boundary tests pass; live receipts remain pending. | partial |
 | R3-14 | Execute all four fresh attempts in fixed order, apply one uniform finalizer closure, and make the predeclared first-pair floor/ceiling checkpoint. | No V5 empirical attempt has started. | not-started |
 | R3-15 | Preserve reconstructable success/failure prefixes, prioritize cleanup, transfer evidence, destroy secrets, remove containers, terminate the exact provider instance, verify zero instances/security, and reconcile usage. | Static failure/cleanup/export controls exist; live evidence is not started. | not-started |
@@ -113,10 +113,24 @@ uniformly before pair continuation or final analysis. A condition is never retri
   launcher instead of collapsing it to the base executable. Qualification and every
   invocation separately revalidate launcher metadata, link target, resolved executable
   bytes, venv-derived `purelib`, and both complete dependency trees.
+- 2026-08-14: launch slot 1 failed before the model-metadata gate because the private
+  V4 regression archive was supplied at the wrong host path. No empirical attempt,
+  task model request, task browser action, or metadata GET occurred. The exact built
+  candidate and a manifest-verified 56-file zero-use prefix were copied off host.
+  Cleanup removed containers and secrets; one exact termination POST produced a
+  source-derived closeout proving terminal/absent, zero T09 instances, restored
+  security, 3,883.231055 active seconds, and USD 1.391491128 Lambda cost.
+- 2026-08-14: independent review rejected an overlapping same-host resume control
+  plane. That parser route is now hard-disabled. The sole remaining path derives a
+  single-use slot-2 capability after closeout, preserves the nonreset campaign wall,
+  separates prior/current active Lambda accounting, imports the exact saved image
+  with zero new build, and carries both launch lineages into every raw export and the
+  final private evidence.
 
 ## Next permitted phase
 
-Finish the reviewed implementation commit and the generated V5 binding commit. Only
-after every prelaunch DoD gate and independent review passes may the authorized
-provider entry and image qualification begin. No empirical entry may occur until the
-one exact runtime manifest is frozen and revalidated.
+Finish and independently review the slot-2 implementation and generated binding
+commits. Only then may the already-authorized second and final provider launch be
+consumed. No empirical entry may occur until the imported image is freshly qualified,
+the sole metadata GET succeeds last, and the immutable runtime plus final post-freeze
+completion receipt are revalidated.

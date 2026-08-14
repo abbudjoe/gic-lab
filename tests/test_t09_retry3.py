@@ -102,24 +102,88 @@ def test_retry3_preflight_resume_transitions_only_exact_zero_use_state() -> None
         )
 
 
-def test_retry3_preflight_resume_is_source_bound_and_precedes_empirical_entry() -> None:
+def test_retry3_same_host_resume_is_disabled_and_slot2_is_source_bound() -> None:
     source = HOST_SOURCE.read_text(encoding="utf-8")
+    parser_source = source.split("def parser()", 1)[1]
+    assert 'operations.add_parser("resume-preflight")' not in parser_source
     prepare = source.split("def prepare_preflight_resume", 1)[1].split("def resume_preflight", 1)[0]
-    resume = source.split("def resume_preflight", 1)[1].split("def preflight", 1)[0]
-    assert "validate_entry_receipt_source_bound(" in prepare
-    assert "PREENTRY_RESUME_FROM_PACKAGE_COMMIT" in prepare
-    assert "transition_zero_usage_preflight_state(" in prepare
-    assert 'additional_build_count": 0' in prepare
-    assert "owned_containers(" in prepare
-    assert "qualified_real_evidence_regression(" in resume
-    assert resume.index("qualified_real_evidence_regression(") < resume.index(
+    assert "same-host preflight resume is permanently disabled" in prepare
+    preflight = source.split("def preflight", 1)[1].split("def container_create_argv", 1)[0]
+    assert "validate_built_image_replacement_eligibility(" in source
+    assert "import_slot1_replacement_image(" in preflight
+    assert "qualified_real_evidence_regression(" in preflight
+    assert preflight.index("qualified_real_evidence_regression(") < preflight.index(
         "browser_lifecycle_preflight("
     )
-    assert resume.index("browser_lifecycle_preflight(") < resume.index("model_metadata_preflight(")
-    assert resume.index("model_metadata_preflight(") < resume.index("write_frozen_run_manifest(")
-    assert resume.index("write_frozen_run_manifest(") < resume.index("admit_next_attempt(")
-    assert "load_frozen_run_manifest(" in resume
-    assert "postfreeze-validation.json" in resume
+    assert preflight.index("admit_next_attempt(") < preflight.index("model_metadata_preflight(")
+    assert preflight.index("model_metadata_preflight(") < preflight.index(
+        "write_frozen_run_manifest("
+    )
+    assert preflight.index("load_frozen_run_manifest(") < preflight.index(
+        "postfreeze-validation.json"
+    )
+    assert preflight.index("postfreeze-validation.json") < preflight.index(
+        "pilot-v5/preflight.json"
+    )
+
+
+def test_retry3_slot2_uses_separate_campaign_and_active_lambda_clocks(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    host = _load(HOST_SOURCE, "giclab_t09_retry3_slot2_clocks")
+    now = 20_000.0
+    state = tmp_path / "pilot-v5/pilot-state.json"
+    state.parent.mkdir(parents=True)
+    state.write_text(
+        json.dumps(
+            {
+                "campaign_started_at_epoch": now - 5_000,
+                "owned_lambda_started_at_epoch": now - 100,
+                "prior_retry3_lambda_duration_seconds": 3_883.0,
+                "prior_retry3_lambda_cost_usd": 3_883.0 * 1.29 / 3_600,
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(host.time, "time", lambda: now)
+    expected_active = 3_983.0
+    expected_cost_remaining_seconds = (5.16 - expected_active * 1.29 / 3_600) * 3_600 / 1.29
+    assert host.provider_seconds_remaining(tmp_path) == pytest.approx(
+        min(14_400 - 5_000, 14_400 - expected_active, expected_cost_remaining_seconds)
+    )
+
+
+def test_retry3_slot2_transition_and_launch_headroom_are_fail_closed() -> None:
+    package_commit = subprocess.run(
+        ["git", "-C", str(ROOT), "rev-parse", "HEAD"],
+        capture_output=True,
+        check=True,
+        text=True,
+    ).stdout.strip()
+    transition = provider._slot2_git_transition(ROOT, package_commit)
+    assert transition["from_package_commit"] == provider.SLOT1_PACKAGE_COMMIT
+    assert transition["to_package_commit"] == package_commit
+    assert transition["scientific_contract_changed"] is False
+    assert transition["scientific_projection_sha256"]
+    lifecycle = provider.load_campaign_lifecycle(ROOT)
+    eligibility = {
+        "campaign_started_at_epoch": 1_000.0,
+        "prior_lambda_duration_seconds": 3_883.0,
+        "prior_lambda_cost_usd": 3_883.0 * 1.29 / 3_600,
+    }
+    exact = provider.validate_slot2_launch_headroom(
+        eligibility,
+        lifecycle=lifecycle,
+        now=1_000.0 + 14_400 - provider.SLOT2_MINIMUM_LAUNCH_REMAINING_SECONDS,
+    )
+    assert exact["campaign_remaining_seconds"] == 4_500
+    with pytest.raises(provider.T09ProviderError, match="headroom"):
+        provider.validate_slot2_launch_headroom(
+            eligibility,
+            lifecycle=lifecycle,
+            now=1_000.0 + 14_400 - provider.SLOT2_MINIMUM_LAUNCH_REMAINING_SECONDS + 0.001,
+        )
 
 
 def test_retry3_plan_has_a_typed_two_slot_raw_first_contract() -> None:

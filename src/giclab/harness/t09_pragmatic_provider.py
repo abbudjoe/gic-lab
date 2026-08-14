@@ -18,9 +18,11 @@ import json
 import os
 import pwd
 import re
+import shutil
 import ssl
 import stat
 import subprocess
+import tarfile
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
@@ -56,6 +58,54 @@ NEW_CAMPAIGN_LAMBDA_CAP_USD: Final = 5.16
 NEW_CAMPAIGN_OPENAI_CAP_USD: Final = 40.0
 NEW_CAMPAIGN_AGGREGATE_CAP_USD: Final = 45.16
 CUMULATIVE_T09_CAP_USD: Final = 48.0
+SLOT1_PACKAGE_COMMIT: Final = "3640f061ea6c0f0f3d24bf2a346d4beda1a400cf"
+SLOT1_PLAN_SHA256: Final = "e7e214500348c8b876beb034df7b592c84f5ab79788ab6f310ef187fd797613c"
+SLOT1_CLOSEOUT_RECEIPT_SHA256: Final = (
+    "a162c3b2f3d068da365ecdb7450fa0c4be8656983c9b7a7697ec85d8993ef034"
+)
+SLOT1_CLOSEOUT_SOURCE_MANIFEST_SHA256: Final = (
+    "9b8b04b93697746feb65d016f97a7852d5ee0aae70c66a60750cde156e687ad9"
+)
+SLOT1_ZERO_USE_ARCHIVE_SHA256: Final = (
+    "a4e07e03a68816f1c59a27a90863b2db5ae8d36956c539c3ede6bdf80b43feb4"
+)
+SLOT1_ZERO_USE_ARCHIVE_BYTES: Final = 547_824
+SLOT1_IMAGE_ARCHIVE_SHA256: Final = (
+    "623e717c2182eca9cee2f471b7ecd9a57bead2f5263dee64aa5cd954eae5ddb0"
+)
+SLOT1_IMAGE_ARCHIVE_BYTES: Final = 1_207_128_576
+SLOT1_REPLACEMENT_IMAGE_ID: Final = (
+    "sha256:abe8ed38f5c5b5a0a63fa726a74034dc5c192a12c0fccfe1319f97c27ceaf0a3"
+)
+SLOT1_QUALIFICATION_ID: Final = "QUAL-T09-PILOT-V5-IMAGE-0001"
+SLOT2_QUALIFICATION_ID: Final = "QUAL-T09-PILOT-V5-IMAGE-0002"
+SLOT2_ELIGIBILITY_KIND: Final = "post-closeout-built-image-slot1"
+SLOT2_MINIMUM_LAUNCH_REMAINING_SECONDS: Final = 4_500
+SLOT2_TRANSITION_ALLOWED_PATHS: Final = frozenset(
+    {
+        "containers/sira-smoke/pragmatic/t09_remote_runner.py",
+        "docs/harness/T09_PRAGMATIC_RETRY3_EXECUTION_PLAN.md",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
+        "T09_PILOT_COMMAND_MANIFESTS.json",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
+        "T09_PILOT_EXECUTION_CONTRACT.json",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
+        "T09_PILOT_RUNTIME_IDENTITY.json",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/"
+        "pilot-v5-task-0000-reactive.yaml",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/"
+        "pilot-v5-task-0000-simulative.yaml",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/"
+        "pilot-v5-task-0001-reactive.yaml",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/"
+        "pilot-v5-task-0001-simulative.yaml",
+        "schemas/t09-sira-pilot-evidence.schema.json",
+        "src/giclab/harness/t09_pragmatic_provider.py",
+        "src/giclab/harness/t09_sira_pilot.py",
+        "tests/test_t09_retry3.py",
+        "tests/test_t09_sira_pilot.py",
+    }
+)
 SOURCE_OBSERVER: Final = "t07-pragmatic-mutations-plus-l2m-read-only-observer-v1"
 MAX_RESPONSE_BYTES: Final = 16_777_216
 MAX_REQUEST_BYTES: Final = 65_536
@@ -1630,6 +1680,7 @@ def _entry_projection(
             "prior_lambda_duration_seconds",
             "prior_lambda_cost_usd",
             "replacement_eligibility_sha256",
+            "replacement_eligibility_source_manifest_sha256",
         }
         or campaign_binding.get("schema_version") != "0.1.0"
         or campaign_binding.get("plan_id") != PLAN_ID
@@ -1645,12 +1696,26 @@ def _entry_projection(
     ):
         raise T09ProviderError("campaign launch chronology or cumulative binding drifted")
     eligibility_sha256 = campaign_binding.get("replacement_eligibility_sha256")
+    eligibility_source_manifest_sha256 = campaign_binding.get(
+        "replacement_eligibility_source_manifest_sha256"
+    )
     if launch_slot == 1 and eligibility_sha256 is not None:
         raise T09ProviderError("first launch unexpectedly has replacement eligibility")
+    if launch_slot == 1 and eligibility_source_manifest_sha256 is not None:
+        raise T09ProviderError("first launch unexpectedly has replacement source evidence")
     if launch_slot == 2 and (
         not isinstance(eligibility_sha256, str) or _HEX64.fullmatch(eligibility_sha256) is None
     ):
         raise T09ProviderError("replacement launch lacks its eligibility hash")
+    if (
+        launch_slot == 2
+        and eligibility_source_manifest_sha256 is not None
+        and (
+            not isinstance(eligibility_source_manifest_sha256, str)
+            or _HEX64.fullmatch(eligibility_source_manifest_sha256) is None
+        )
+    ):
+        raise T09ProviderError("replacement launch lacks its eligibility source hash")
     return {
         "schema_version": "0.1.0",
         "receipt_type": "t09-pragmatic-provider-entry",
@@ -1673,6 +1738,7 @@ def _entry_projection(
         "launch_count": launch_slot,
         "max_launch_count": 2,
         "replacement_eligibility_sha256": eligibility_sha256,
+        "replacement_eligibility_source_manifest_sha256": (eligibility_source_manifest_sha256),
         "max_instances": 1,
         "instance_type": INSTANCE_TYPE,
         "region": REGION,
@@ -2026,6 +2092,562 @@ def validate_closeout_receipt(
     return observed
 
 
+def _git_blob(repository: Path, commit: str, relative: str) -> bytes:
+    result = subprocess.run(
+        ["git", "-C", str(repository), "show", f"{commit}:{relative}"],
+        env={"PATH": os.environ.get("PATH", "/usr/bin:/bin")},
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        check=False,
+        timeout=60,
+    )
+    if result.returncode != 0:
+        raise T09ProviderError(f"slot-2 transition cannot read reviewed Git path: {relative}")
+    return result.stdout
+
+
+def _slot2_science_projection(repository: Path, commit: str) -> dict[str, object]:
+    """Project only scientific execution fields across the slot-1→slot-2 repair."""
+
+    immutable_paths = (
+        "experiments/EXP-0001-sira-simulative-vs-reactive/protocol.yaml",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/config.yaml",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
+        "T09_PILOT_DATASET_CONTRACT.json",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
+        "T09_PILOT_EVALUATOR_CONTRACT.json",
+        "src/giclab/harness/sira_gate_a.py",
+        "src/giclab/harness/sira_gate_a_runtime.py",
+        "src/giclab/harness/safety.py",
+    )
+    plan_relative = "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml"
+    commands_relative = (
+        "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
+        "T09_PILOT_COMMAND_MANIFESTS.json"
+    )
+    plan_bytes = _git_blob(repository, commit, plan_relative)
+    if hashlib.sha256(plan_bytes).hexdigest() != SLOT1_PLAN_SHA256:
+        raise T09ProviderError("slot-2 transition changed the locked V5 pilot plan")
+    try:
+        commands_raw: object = json.loads(_git_blob(repository, commit, commands_relative))
+    except json.JSONDecodeError as exc:
+        raise T09ProviderError("slot-2 command manifests are malformed") from exc
+    commands = _mapping(commands_raw, label="slot-2 command manifests")
+    raw_manifests = _list(commands.get("manifests"), label="slot-2 command manifests")
+    if len(raw_manifests) != 4:
+        raise T09ProviderError("slot-2 transition lacks four command manifests")
+    scientific_commands: list[dict[str, object]] = []
+    for raw in raw_manifests:
+        manifest = _mapping(raw, label="slot-2 command manifest")
+        argv = _list(manifest.get("argv"), label="slot-2 command argv")
+        if any(not isinstance(item, str) for item in argv) or "--" not in argv:
+            raise T09ProviderError("slot-2 command argv is malformed")
+        split = cast(list[str], argv).index("--")
+        equality = _mapping(manifest.get("equality_surface"), label="slot-2 equality surface")
+        equality_scientific = {
+            key: value for key, value in equality.items() if key != "giclab_commit"
+        }
+        scientific_commands.append(
+            {
+                "run_id": manifest.get("run_id"),
+                "task_id": manifest.get("task_id"),
+                "condition": manifest.get("condition"),
+                "pair_id": manifest.get("pair_id"),
+                "order_index": manifest.get("order_index"),
+                "upstream_argv": argv[split + 1 :],
+                "equality_surface": equality_scientific,
+            }
+        )
+    pair_diffs = _list(commands.get("pair_diffs"), label="slot-2 pair diffs")
+    if len(pair_diffs) != 2 or any(
+        not isinstance(item, dict) or item.get("valid") is not True for item in pair_diffs
+    ):
+        raise T09ProviderError("slot-2 pair matching is not valid")
+    return {
+        "plan_sha256": SLOT1_PLAN_SHA256,
+        "immutable_file_sha256s": {
+            relative: hashlib.sha256(_git_blob(repository, commit, relative)).hexdigest()
+            for relative in immutable_paths
+        },
+        "commands": scientific_commands,
+    }
+
+
+def _slot2_git_transition(repository: Path, package_commit: str) -> dict[str, object]:
+    if _HEX40.fullmatch(package_commit) is None:
+        raise T09ProviderError("slot-2 package commit is malformed")
+    ancestry = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repository),
+            "merge-base",
+            "--is-ancestor",
+            SLOT1_PACKAGE_COMMIT,
+            package_commit,
+        ],
+        env={"PATH": os.environ.get("PATH", "/usr/bin:/bin")},
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+        timeout=30,
+    )
+    if ancestry.returncode != 0:
+        raise T09ProviderError("slot-2 package is not a descendant of the launched package")
+    changed_result = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repository),
+            "diff",
+            "--name-status",
+            "--no-renames",
+            SLOT1_PACKAGE_COMMIT,
+            package_commit,
+        ],
+        env={"PATH": os.environ.get("PATH", "/usr/bin:/bin")},
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        check=True,
+        timeout=60,
+    )
+    changed_lines = [line for line in changed_result.stdout.decode().splitlines() if line]
+    if not changed_lines or any("\t" not in line for line in changed_lines):
+        raise T09ProviderError("slot-2 package transition is empty or malformed")
+    statuses_and_paths = [line.split("\t", 1) for line in changed_lines]
+    changed_paths = sorted(path for _status, path in statuses_and_paths)
+    if (
+        any(status not in {"A", "M"} for status, _path in statuses_and_paths)
+        or not set(changed_paths).issubset(SLOT2_TRANSITION_ALLOWED_PATHS)
+        or "containers/sira-smoke/pragmatic/t09_remote_runner.py" not in changed_paths
+        or "src/giclab/harness/t09_pragmatic_provider.py" not in changed_paths
+    ):
+        raise T09ProviderError("slot-2 package changed a non-allowlisted control surface")
+    previous_science = _slot2_science_projection(repository, SLOT1_PACKAGE_COMMIT)
+    current_science = _slot2_science_projection(repository, package_commit)
+    if previous_science != current_science:
+        raise T09ProviderError("slot-2 package changed the scientific execution projection")
+    binary_diff = subprocess.run(
+        ["git", "-C", str(repository), "diff", "--binary", SLOT1_PACKAGE_COMMIT, package_commit],
+        env={"PATH": os.environ.get("PATH", "/usr/bin:/bin")},
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        check=True,
+        timeout=60,
+    ).stdout
+    return {
+        "from_package_commit": SLOT1_PACKAGE_COMMIT,
+        "to_package_commit": package_commit,
+        "from_package_is_ancestor": True,
+        "to_package_tree": subprocess.run(
+            ["git", "-C", str(repository), "rev-parse", f"{package_commit}^{{tree}}"],
+            env={"PATH": os.environ.get("PATH", "/usr/bin:/bin")},
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            check=True,
+            timeout=30,
+        )
+        .stdout.decode()
+        .strip(),
+        "changed_paths": changed_paths,
+        "changed_paths_sha256": _sha256_bytes(_canonical_bytes(changed_paths)),
+        "binary_diff_sha256": hashlib.sha256(binary_diff).hexdigest(),
+        "scientific_projection_sha256": _sha256_bytes(_canonical_bytes(current_science)),
+        "scientific_contract_changed": False,
+    }
+
+
+def _safe_regular_identity(path: Path, *, expected_bytes: int, expected_sha256: str) -> None:
+    resolved = path.resolve(strict=True)
+    metadata = resolved.stat(follow_symlinks=False)
+    if (
+        path.is_symlink()
+        or not stat.S_ISREG(metadata.st_mode)
+        or metadata.st_uid != os.getuid()
+        or metadata.st_nlink != 1
+        or stat.S_IMODE(metadata.st_mode) != 0o600
+        or metadata.st_size != expected_bytes
+        or file_sha256(resolved) != expected_sha256
+    ):
+        raise T09ProviderError("slot-1 retained archive identity or metadata drifted")
+
+
+def _slot1_failure_archive_projection(path: Path) -> dict[str, object]:
+    _safe_regular_identity(
+        path,
+        expected_bytes=SLOT1_ZERO_USE_ARCHIVE_BYTES,
+        expected_sha256=SLOT1_ZERO_USE_ARCHIVE_SHA256,
+    )
+    prefix = "t09-pilot-v5/pilot-v5/"
+    required = {
+        "pilot-state.json",
+        "aggregate-budget.json",
+        "provider-entry.json",
+        "host-cleanup.json",
+        "replacement-image-qualification/receipt.json",
+        "preempirical-slot1-files-v2.sha256",
+    }
+    documents: dict[str, dict[str, object]] = {}
+    members_seen: set[str] = set()
+    total = 0
+    with tarfile.open(path, "r:gz") as archive:
+        members = archive.getmembers()
+        if not 1 <= len(members) <= 1_000:
+            raise T09ProviderError("slot-1 failure archive member count is unsafe")
+        for member in members:
+            pure = Path(member.name)
+            if pure.is_absolute() or ".." in pure.parts or not (member.isfile() or member.isdir()):
+                raise T09ProviderError("slot-1 failure archive contains an unsafe member")
+            if member.isfile():
+                total += member.size
+                if total > 67_108_864:
+                    raise T09ProviderError("slot-1 failure archive expands beyond its cap")
+            if member.name.startswith(prefix) and member.isfile():
+                relative = member.name[len(prefix) :]
+                members_seen.add(relative)
+                if relative in required - {"preempirical-slot1-files-v2.sha256"}:
+                    handle = archive.extractfile(member)
+                    if handle is None or member.size > 1_048_576:
+                        raise T09ProviderError("slot-1 failure document is unavailable")
+                    try:
+                        raw: object = json.loads(handle.read())
+                    except json.JSONDecodeError as exc:
+                        raise T09ProviderError("slot-1 failure document is malformed") from exc
+                    documents[relative] = _mapping(raw, label="slot-1 failure document")
+    if not required.issubset(members_seen):
+        raise T09ProviderError("slot-1 failure archive lacks its exact zero-use closure")
+    state = documents["pilot-state.json"]
+    aggregate = documents["aggregate-budget.json"]
+    cleanup = documents["host-cleanup.json"]
+    materialization = documents["replacement-image-qualification/receipt.json"]
+    provider_entry = documents["provider-entry.json"]
+    usage = _mapping(aggregate.get("usage"), label="slot-1 aggregate usage")
+    if (
+        state.get("plan_id") != PLAN_ID
+        or state.get("empirical_attempts_entered") != []
+        or state.get("raw_attempts_complete") != []
+        or state.get("attempts_completed") != []
+        or state.get("first_pair_decision") is not None
+        or aggregate.get("unreconciled_provider_attempts") != 0
+        or any(value not in (0, 0.0) for value in usage.values())
+        or cleanup.get("global_secret_scan_passed") is not True
+        or cleanup.get("remote_secret_removed") is not True
+        or cleanup.get("owned_container_residue") != []
+        or materialization.get("qualification_id") != SLOT1_QUALIFICATION_ID
+        or materialization.get("image_id") != SLOT1_REPLACEMENT_IMAGE_ID
+        or materialization.get("build_count") != 1
+        or provider_entry.get("package_commit") != SLOT1_PACKAGE_COMMIT
+        or provider_entry.get("receipt_sha256")
+        != "5f813865ff758f6e1ab31de2194cd3b94282d9a2eddfb9a21cf513880d41b272"
+        or "frozen-run-manifest.json" in members_seen
+        or "preflight.json" in members_seen
+        or any(name.startswith("model-metadata-preflight/") for name in members_seen)
+        or any(name.startswith("browser-preflight/") for name in members_seen)
+        or any(name.startswith("artifacts/") for name in members_seen)
+    ):
+        raise T09ProviderError("slot-1 failure archive is not source-grounded zero-use")
+    return {
+        "archive_sha256": SLOT1_ZERO_USE_ARCHIVE_SHA256,
+        "archive_bytes": SLOT1_ZERO_USE_ARCHIVE_BYTES,
+        "expanded_bytes": total,
+        "member_count": len(members_seen),
+        "qualification_id": SLOT1_QUALIFICATION_ID,
+        "replacement_image_id": SLOT1_REPLACEMENT_IMAGE_ID,
+        "candidate_build_attempt_count": 1,
+        "empirical_attempts_entered": 0,
+        "model_metadata_requests": 0,
+        "task_model_requests": 0,
+        "task_browser_actions": 0,
+        "raw_attempts_complete": 0,
+        "attempts_completed": 0,
+        "credentials_removed": True,
+        "owned_containers_absent": True,
+    }
+
+
+def _slot2_authority_tree_manifest(root: Path) -> dict[str, object]:
+    files: list[dict[str, object]] = []
+    total = 0
+    for path in sorted(root.rglob("*")):
+        if path.name == "source-manifest.json" or path.is_dir():
+            continue
+        metadata = path.stat(follow_symlinks=False)
+        if path.is_symlink() or not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
+            raise T09ProviderError("slot-2 authority source contains an unsafe member")
+        total += metadata.st_size
+        if total > 67_108_864:
+            raise T09ProviderError("slot-2 authority source exceeds its cap")
+        files.append(
+            {
+                "path": path.relative_to(root).as_posix(),
+                "bytes": metadata.st_size,
+                "sha256": file_sha256(path),
+            }
+        )
+    if not files:
+        raise T09ProviderError("slot-2 authority source is empty")
+    return {
+        "schema_version": "0.1.0",
+        "plan_id": PLAN_ID,
+        "host_run_id": HOST_RUN_ID,
+        "files": files,
+        "file_count": len(files),
+        "total_bytes": total,
+        "files_sha256": _sha256_bytes(_canonical_bytes(files)),
+    }
+
+
+def _copy_slot2_authority_tree(source: Path, destination: Path) -> None:
+    source = source.resolve(strict=True)
+    for path in sorted(source.rglob("*")):
+        relative = path.relative_to(source)
+        target = destination / relative
+        metadata = path.stat(follow_symlinks=False)
+        if path.is_symlink():
+            raise T09ProviderError("slot-1 provider source contains a symlink")
+        if path.is_dir():
+            target.mkdir(mode=0o700, parents=True, exist_ok=True)
+            continue
+        if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
+            raise T09ProviderError("slot-1 provider source contains an unsafe file")
+        target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        with path.open("rb") as source_handle, target.open("xb") as target_handle:
+            shutil.copyfileobj(source_handle, target_handle, 1_048_576)
+            target_handle.flush()
+            os.fsync(target_handle.fileno())
+        target.chmod(0o600)
+
+
+def _slot2_eligibility_projection(
+    *,
+    repository: Path,
+    package_commit: str,
+    source_root: Path,
+    image_archive: Path,
+) -> dict[str, object]:
+    transition = _slot2_git_transition(repository, package_commit)
+    entry_path = source_root / "slot1-entry-source/entry-receipt.json"
+    closeout_path = source_root / "slot1-closeout-source/closeout-receipt.json"
+    entry = validate_entry_receipt_source_bound(
+        entry_path,
+        source_root / "slot1-entry-source",
+        package_commit=SLOT1_PACKAGE_COMMIT,
+        plan_sha256=SLOT1_PLAN_SHA256,
+    )
+    closeout = validate_closeout_receipt(
+        closeout_path,
+        source_root / "slot1-closeout-source",
+        entry_receipt_path=entry_path,
+        entry_source_root=source_root / "slot1-entry-source",
+        package_commit=SLOT1_PACKAGE_COMMIT,
+        plan_sha256=SLOT1_PLAN_SHA256,
+        lifecycle=load_campaign_lifecycle(repository),
+    )
+    if (
+        file_sha256(closeout_path) != SLOT1_CLOSEOUT_RECEIPT_SHA256
+        or file_sha256(source_root / "slot1-closeout-source/source-manifest.json")
+        != SLOT1_CLOSEOUT_SOURCE_MANIFEST_SHA256
+        or entry.get("launch_slot") != 1
+        or entry.get("launch_count") != 1
+        or closeout.get("terminal_or_absent") is not True
+        or closeout.get("zero_t09_instances") is not True
+        or closeout.get("security_restored") is not True
+    ):
+        raise T09ProviderError("slot-1 provider closeout cannot authorize slot 2")
+    failure = _slot1_failure_archive_projection(source_root / "slot1-zero-use.tar.gz")
+    _safe_regular_identity(
+        image_archive,
+        expected_bytes=SLOT1_IMAGE_ARCHIVE_BYTES,
+        expected_sha256=SLOT1_IMAGE_ARCHIVE_SHA256,
+    )
+    prior_duration = _number(closeout.get("lambda_duration_seconds"), label="slot-1 duration")
+    prior_cost = _number(closeout.get("lambda_list_cost_usd"), label="slot-1 Lambda cost")
+    campaign_started = _number(entry.get("lambda_started_at_epoch"), label="campaign start")
+    if (
+        prior_duration <= 0
+        or prior_cost <= 0
+        or abs(prior_cost - prior_duration * PRICE_CENTS_PER_HOUR / 100 / 3600) > 1e-9
+        or prior_cost >= NEW_CAMPAIGN_LAMBDA_CAP_USD
+    ):
+        raise T09ProviderError("slot-1 active Lambda accounting cannot authorize slot 2")
+    return {
+        "schema_version": "0.2.0",
+        "eligibility_kind": SLOT2_ELIGIBILITY_KIND,
+        "plan_id": PLAN_ID,
+        "host_run_id": HOST_RUN_ID,
+        "closed_launch_slot": 1,
+        "next_launch_slot": 2,
+        "launch_count_before_next_send": 1,
+        "max_launch_count": 2,
+        "slot1_package_commit": SLOT1_PACKAGE_COMMIT,
+        "slot2_package_commit": package_commit,
+        "slot1_plan_sha256": SLOT1_PLAN_SHA256,
+        "slot2_plan_sha256": SLOT1_PLAN_SHA256,
+        "package_transition": transition,
+        "package_transition_sha256": _sha256_bytes(_canonical_bytes(transition)),
+        "slot1_entry_receipt_sha256": file_sha256(entry_path),
+        "slot1_entry_source_manifest_sha256": file_sha256(
+            source_root / "slot1-entry-source/source-manifest.json"
+        ),
+        "slot1_closeout_receipt_sha256": file_sha256(closeout_path),
+        "slot1_closeout_source_manifest_sha256": file_sha256(
+            source_root / "slot1-closeout-source/source-manifest.json"
+        ),
+        "slot1_failure": failure,
+        "slot1_failure_sha256": _sha256_bytes(_canonical_bytes(failure)),
+        "slot1_image_archive_sha256": SLOT1_IMAGE_ARCHIVE_SHA256,
+        "slot1_image_archive_bytes": SLOT1_IMAGE_ARCHIVE_BYTES,
+        "slot1_replacement_image_id": SLOT1_REPLACEMENT_IMAGE_ID,
+        "slot1_qualification_id": SLOT1_QUALIFICATION_ID,
+        "slot2_qualification_id": SLOT2_QUALIFICATION_ID,
+        "candidate_build_attempt_count": 1,
+        "selected_image_build_count": 1,
+        "additional_image_build_count": 0,
+        "slot2_image_import_required": True,
+        "campaign_started_at_epoch": campaign_started,
+        "prior_lambda_duration_seconds": prior_duration,
+        "prior_lambda_cost_usd": prior_cost,
+        "empirical_attempts_entered": 0,
+        "model_metadata_requests": 0,
+        "task_model_requests": 0,
+        "task_browser_actions": 0,
+        "terminal_or_absent": True,
+        "zero_t09_instances": True,
+        "security_restored": True,
+        "second_launch_permitted": True,
+    }
+
+
+def derive_built_image_replacement_eligibility(
+    *,
+    repository: Path,
+    package_commit: str,
+    prior_private_root: Path,
+    slot1_failure_archive: Path,
+    slot1_image_archive: Path,
+) -> Path:
+    """Seal the one authorized slot-2 capability from closed slot-1 evidence."""
+
+    prior = prior_private_root.resolve(strict=True)
+    source_root = prior / "slot2-eligibility-source"
+    source_root.mkdir(mode=0o700, exist_ok=False)
+    _copy_slot2_authority_tree(prior / "entry-source", source_root / "slot1-entry-source")
+    _copy_slot2_authority_tree(prior / "closeout-source", source_root / "slot1-closeout-source")
+    target_failure = source_root / "slot1-zero-use.tar.gz"
+    with (
+        slot1_failure_archive.resolve(strict=True).open("rb") as source,
+        target_failure.open("xb") as target,
+    ):
+        shutil.copyfileobj(source, target, 1_048_576)
+        target.flush()
+        os.fsync(target.fileno())
+    target_failure.chmod(0o600)
+    projection = _slot2_eligibility_projection(
+        repository=repository.resolve(strict=True),
+        package_commit=package_commit,
+        source_root=source_root,
+        image_archive=slot1_image_archive.resolve(strict=True),
+    )
+    write_exclusive(source_root / "transition.json", projection["package_transition"])
+    manifest = _slot2_authority_tree_manifest(source_root)
+    write_exclusive(source_root / "source-manifest.json", manifest)
+    eligibility = {
+        **projection,
+        "source_manifest_sha256": file_sha256(source_root / "source-manifest.json"),
+        "source_files_sha256": manifest["files_sha256"],
+        "created_at_epoch": time.time(),
+    }
+    path = prior / "replacement-launch-eligibility.json"
+    write_exclusive(path, eligibility)
+    return path
+
+
+def validate_built_image_replacement_eligibility(
+    prior_private_root: Path,
+    *,
+    repository: Path,
+    package_commit: str,
+    slot1_image_archive: Path,
+) -> dict[str, object]:
+    prior = prior_private_root.resolve(strict=True)
+    source_root = prior / "slot2-eligibility-source"
+    manifest_path = source_root / "source-manifest.json"
+    observed_manifest = _load_json(manifest_path, maximum_bytes=1_048_576)
+    expected_manifest = _slot2_authority_tree_manifest(source_root)
+    if observed_manifest != expected_manifest:
+        raise T09ProviderError("slot-2 authority source manifest drifted")
+    expected = _slot2_eligibility_projection(
+        repository=repository.resolve(strict=True),
+        package_commit=package_commit,
+        source_root=source_root,
+        image_archive=slot1_image_archive.resolve(strict=True),
+    )
+    path = prior / "replacement-launch-eligibility.json"
+    observed = _load_json(path, maximum_bytes=262_144)
+    created = observed.pop("created_at_epoch", None)
+    required = {
+        **expected,
+        "source_manifest_sha256": file_sha256(manifest_path),
+        "source_files_sha256": expected_manifest["files_sha256"],
+    }
+    metadata = path.stat(follow_symlinks=False)
+    if (
+        observed != required
+        or not isinstance(created, (int, float))
+        or isinstance(created, bool)
+        or not _number(expected["campaign_started_at_epoch"], label="campaign start")
+        <= float(created)
+        <= time.time()
+        or path.is_symlink()
+        or not stat.S_ISREG(metadata.st_mode)
+        or metadata.st_uid != os.getuid()
+        or metadata.st_nlink != 1
+        or stat.S_IMODE(metadata.st_mode) != 0o600
+    ):
+        raise T09ProviderError("slot-2 replacement eligibility is not source-bound")
+    return {**required, "created_at_epoch": created, "receipt_sha256": file_sha256(path)}
+
+
+def validate_slot2_launch_headroom(
+    eligibility: Mapping[str, object],
+    *,
+    lifecycle: CampaignLifecycle,
+    now: float,
+) -> dict[str, float]:
+    """Enforce the inherited campaign wall and active-cost gate at slot-2 send."""
+
+    campaign_started = _number(
+        eligibility.get("campaign_started_at_epoch"), label="slot-2 campaign start"
+    )
+    prior_duration = _number(
+        eligibility.get("prior_lambda_duration_seconds"), label="slot-1 Lambda duration"
+    )
+    prior_cost = _number(eligibility.get("prior_lambda_cost_usd"), label="slot-1 Lambda cost")
+    campaign_elapsed = now - campaign_started
+    minimum_projected_cost = prior_cost + (
+        SLOT2_MINIMUM_LAUNCH_REMAINING_SECONDS * PRICE_CENTS_PER_HOUR / 100 / 3600
+    )
+    if (
+        campaign_elapsed < 0
+        or campaign_elapsed + SLOT2_MINIMUM_LAUNCH_REMAINING_SECONDS > lifecycle.wall_seconds
+        or campaign_elapsed >= lifecycle.termination_cutoff_seconds
+        or prior_duration < 0
+        or minimum_projected_cost > NEW_CAMPAIGN_LAMBDA_CAP_USD
+        or PRIOR_T09_COST_USD + minimum_projected_cost > CUMULATIVE_T09_CAP_USD
+    ):
+        raise T09ProviderError(
+            "slot-2 launch lacks the inherited campaign wall, cleanup, or cost headroom"
+        )
+    return {
+        "campaign_elapsed_seconds": campaign_elapsed,
+        "campaign_remaining_seconds": lifecycle.wall_seconds - campaign_elapsed,
+        "prior_lambda_duration_seconds": prior_duration,
+        "prior_lambda_cost_usd": prior_cost,
+        "minimum_projected_lambda_cost_usd": minimum_projected_cost,
+    }
+
+
 def _read_public_file(path: Path, *, maximum_bytes: int) -> str:
     metadata = path.stat(follow_symlinks=False)
     if not stat.S_ISREG(metadata.st_mode) or not 1 <= metadata.st_size <= maximum_bytes:
@@ -2038,6 +2660,7 @@ def _validate_replacement_launch_eligibility(
     *,
     repository: Path,
     package_commit: str,
+    slot1_image_archive: Path | None,
 ) -> dict[str, object]:
     """Prove launch 1 closed pre-empirically before slot 2 can be consumed."""
 
@@ -2052,7 +2675,27 @@ def _validate_replacement_launch_eligibility(
         or stat.S_IMODE(metadata.st_mode) != 0o600
     ):
         raise T09ProviderError("replacement-launch eligibility metadata is unsafe")
+    value = _load_json(path, maximum_bytes=262_144)
     first_capability = _load_json(launch_capability_path(1), maximum_bytes=65_536)
+    if value.get("eligibility_kind") == SLOT2_ELIGIBILITY_KIND:
+        if slot1_image_archive is None:
+            raise T09ProviderError("built-image replacement requires the exact image archive")
+        if (
+            first_capability.get("plan_id") != PLAN_ID
+            or first_capability.get("host_run_id") != HOST_RUN_ID
+            or first_capability.get("package_commit") != SLOT1_PACKAGE_COMMIT
+            or first_capability.get("plan_sha256") != SLOT1_PLAN_SHA256
+            or first_capability.get("launch_slot") != 1
+            or first_capability.get("launch_capability_limit") != 2
+            or first_capability.get("replacement_eligibility_sha256") is not None
+        ):
+            raise T09ProviderError("slot-1 launch capability cannot authorize slot 2")
+        return validate_built_image_replacement_eligibility(
+            prior,
+            repository=repository,
+            package_commit=package_commit,
+            slot1_image_archive=slot1_image_archive,
+        )
     if (
         first_capability.get("plan_id") != PLAN_ID
         or first_capability.get("host_run_id") != HOST_RUN_ID
@@ -2062,7 +2705,6 @@ def _validate_replacement_launch_eligibility(
         or first_capability.get("replacement_eligibility_sha256") is not None
     ):
         raise T09ProviderError("first launch capability cannot authorize replacement")
-    value = _load_json(path, maximum_bytes=65_536)
     if value.get("eligibility_kind") == "provider-entry-failed-preempirical":
         provisional = _load_source_validated_provisional_owner(
             prior,
@@ -2432,6 +3074,7 @@ def launch_campaign(
     transport: ProviderTransport,
     launch_slot: int = 1,
     prior_private_root: Path | None = None,
+    slot1_image_archive: Path | None = None,
     clock: Callable[[], float] = time.time,
     sleeper: Callable[[float], None] = time.sleep,
 ) -> Path:
@@ -2440,7 +3083,7 @@ def launch_campaign(
         raise T09ProviderError("launch slot is outside the authorized Retry 3 bound")
     replacement_eligibility: dict[str, object] | None = None
     if launch_slot == 1:
-        if prior_private_root is not None:
+        if prior_private_root is not None or slot1_image_archive is not None:
             raise T09ProviderError("first launch cannot accept prior campaign state")
     else:
         if prior_private_root is None:
@@ -2449,6 +3092,7 @@ def launch_campaign(
             prior_private_root,
             repository=repository,
             package_commit=package_commit,
+            slot1_image_archive=slot1_image_archive,
         )
         if not launch_capability_path(1).is_file():
             raise T09ProviderError("second launch cannot precede consumption of launch slot 1")
@@ -2468,12 +3112,37 @@ def launch_campaign(
         package_commit=package_commit,
     )
     lifecycle = load_campaign_lifecycle(repository)
-    del lifecycle
     plan_path = repository / "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml"
     plan_sha256 = file_sha256(plan_path)
     if private_root.exists():
         raise T09ProviderError("provider private root already exists; launch slot is single use")
     private_root.mkdir(mode=0o700, parents=True, exist_ok=False)
+    if replacement_eligibility is not None and slot1_image_archive is not None:
+        assert prior_private_root is not None
+        retained_source = private_root / "slot2-eligibility-source"
+        _copy_slot2_authority_tree(
+            prior_private_root.resolve(strict=True) / "slot2-eligibility-source",
+            retained_source,
+        )
+        retained_eligibility = private_root / "replacement-launch-eligibility.json"
+        with (
+            (prior_private_root.resolve(strict=True) / "replacement-launch-eligibility.json").open(
+                "rb"
+            ) as source,
+            retained_eligibility.open("xb") as target,
+        ):
+            shutil.copyfileobj(source, target, 1_048_576)
+            target.flush()
+            os.fsync(target.fileno())
+        retained_eligibility.chmod(0o600)
+        retained = validate_built_image_replacement_eligibility(
+            private_root,
+            repository=repository,
+            package_commit=package_commit,
+            slot1_image_archive=slot1_image_archive,
+        )
+        if retained != replacement_eligibility:
+            raise T09ProviderError("retained slot-2 eligibility changed during copy")
     entry_root = private_root / "entry-source"
     entry_root.mkdir(mode=0o700)
     expected_public_ipv4 = _read_public_file(public_ipv4_file, maximum_bytes=64)
@@ -2508,6 +3177,12 @@ def launch_campaign(
             expected_public_key=expected_public_key,
             expected_public_ipv4=expected_public_ipv4,
         )
+        if replacement_eligibility is not None:
+            validate_slot2_launch_headroom(
+                replacement_eligibility,
+                lifecycle=lifecycle,
+                now=clock(),
+            )
         _consume_launch_capability(
             capability_path,
             authorization_ledger=authorization_ledger,
@@ -2715,6 +3390,11 @@ def launch_campaign(
                         else 0.0
                     ),
                     "replacement_eligibility_sha256": replacement_eligibility_sha256,
+                    "replacement_eligibility_source_manifest_sha256": (
+                        replacement_eligibility.get("source_manifest_sha256")
+                        if replacement_eligibility is not None
+                        else None
+                    ),
                 },
             )
             seal_source_bundle(entry_root)
@@ -3042,9 +3722,14 @@ def parser() -> argparse.ArgumentParser:
     launch.add_argument("--ssh-public-key-file", type=Path, required=True)
     launch.add_argument("--launch-slot", type=int, choices=(1, 2), default=1)
     launch.add_argument("--prior-private-root", type=Path)
+    launch.add_argument("--slot1-image-archive", type=Path)
     closeout = operations.add_parser("closeout")
     closeout.add_argument("--preempirical-receipt", type=Path)
     closeout.add_argument("--preempirical-source-root", type=Path)
+    eligibility = operations.add_parser("derive-replacement-eligibility")
+    eligibility.add_argument("--prior-private-root", type=Path, required=True)
+    eligibility.add_argument("--slot1-failure-archive", type=Path, required=True)
+    eligibility.add_argument("--slot1-image-archive", type=Path, required=True)
     return result
 
 
@@ -3063,6 +3748,7 @@ def main() -> int:
             transport=transport,
             launch_slot=args.launch_slot,
             prior_private_root=args.prior_private_root,
+            slot1_image_archive=args.slot1_image_archive,
         )
         return 0
     if args.operation == "closeout":
@@ -3075,6 +3761,15 @@ def main() -> int:
             transport=transport,
             preempirical_receipt=args.preempirical_receipt,
             preempirical_source_root=args.preempirical_source_root,
+        )
+        return 0
+    if args.operation == "derive-replacement-eligibility":
+        derive_built_image_replacement_eligibility(
+            repository=args.repository,
+            package_commit=args.package_commit,
+            prior_private_root=args.prior_private_root,
+            slot1_failure_archive=args.slot1_failure_archive,
+            slot1_image_archive=args.slot1_image_archive,
         )
         return 0
     raise T09ProviderError("unknown provider lifecycle operation")

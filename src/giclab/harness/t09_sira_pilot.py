@@ -61,7 +61,7 @@ EVALUATOR_RUN_IDS: Final = (
     "RUN-T09-EVAL-TASK-B-SIMULATIVE-0003",
     "RUN-T09-EVAL-TASK-B-REACTIVE-0003",
 )
-RUNTIME_QUALIFICATION_ID: Final = "QUAL-T09-PILOT-V5-IMAGE-0001"
+RUNTIME_QUALIFICATION_ID: Final = "QUAL-T09-PILOT-V5-IMAGE-0002"
 FROZEN_RUN_MANIFEST_ID: Final = "RUN-MANIFEST-EXP0001-PILOT-V5-0003"
 HISTORICAL_IMAGE_ID: Final = (
     "sha256:035edf61718e84a8156f4f0f7817b134b0ce31488d3f0b50bbfba2b4a30cc61c"
@@ -315,7 +315,7 @@ class RuntimeQualification:
     build_count: int
     qualification_count: int
     empirical_entry_crossed: bool
-    preflight_transition_mode: Literal["fresh", "same-host-resume"]
+    preflight_transition_mode: Literal["fresh", "slot2-replacement"]
     preflight_resume_source_sha256: str | None
     preflight_resume_argv_sha256: str | None
     preflight_resume_transition_sha256: str | None
@@ -327,6 +327,20 @@ class RuntimeQualification:
     preflight_prior_aggregate_sha256: str | None
     preflight_transition_aggregate_sha256: str | None
     preflight_retained_materialization_sha256: str | None
+    launch_slot: int
+    launch_count: int
+    campaign_started_at_epoch: float
+    owned_lambda_started_at_epoch: float
+    prior_lambda_duration_seconds: float
+    prior_lambda_cost_usd: float
+    replacement_eligibility_sha256: str | None
+    replacement_eligibility_source_manifest_sha256: str | None
+    slot1_failure_archive_sha256: str | None
+    slot1_image_archive_sha256: str | None
+    slot1_entry_receipt_sha256: str | None
+    slot1_closeout_receipt_sha256: str | None
+    image_import_count: int
+    additional_build_count: int
 
     @classmethod
     def from_document(cls, value: object) -> RuntimeQualification:
@@ -416,7 +430,7 @@ class RuntimeQualification:
             ),
             empirical_entry_crossed=document.get("empirical_entry_crossed") is True,
             preflight_transition_mode=cast(
-                Literal["fresh", "same-host-resume"],
+                Literal["fresh", "slot2-replacement"],
                 _required_string(
                     document.get("preflight_transition_mode"),
                     context="preflight transition mode",
@@ -455,6 +469,42 @@ class RuntimeQualification:
             preflight_retained_materialization_sha256=cast(
                 str | None, document.get("preflight_retained_materialization_sha256")
             ),
+            launch_slot=_required_int(document.get("launch_slot"), context="launch slot"),
+            launch_count=_required_int(document.get("launch_count"), context="launch count"),
+            campaign_started_at_epoch=_required_number(
+                document.get("campaign_started_at_epoch"), context="campaign start"
+            ),
+            owned_lambda_started_at_epoch=_required_number(
+                document.get("owned_lambda_started_at_epoch"), context="owned Lambda start"
+            ),
+            prior_lambda_duration_seconds=_required_number(
+                document.get("prior_lambda_duration_seconds"),
+                context="prior Lambda duration",
+            ),
+            prior_lambda_cost_usd=_required_number(
+                document.get("prior_lambda_cost_usd"), context="prior Lambda cost"
+            ),
+            replacement_eligibility_sha256=cast(
+                str | None, document.get("replacement_eligibility_sha256")
+            ),
+            replacement_eligibility_source_manifest_sha256=cast(
+                str | None,
+                document.get("replacement_eligibility_source_manifest_sha256"),
+            ),
+            slot1_failure_archive_sha256=cast(
+                str | None, document.get("slot1_failure_archive_sha256")
+            ),
+            slot1_image_archive_sha256=cast(str | None, document.get("slot1_image_archive_sha256")),
+            slot1_entry_receipt_sha256=cast(str | None, document.get("slot1_entry_receipt_sha256")),
+            slot1_closeout_receipt_sha256=cast(
+                str | None, document.get("slot1_closeout_receipt_sha256")
+            ),
+            image_import_count=_required_int(
+                document.get("image_import_count"), context="image import count"
+            ),
+            additional_build_count=_required_int(
+                document.get("additional_build_count"), context="additional build count"
+            ),
         )
         hashes = (
             result.build_context_manifest_sha256,
@@ -488,7 +538,13 @@ class RuntimeQualification:
             or result.qualification_count != 1
             or document.get("empirical_entry_crossed") is not False
             or document.get("post_entry_code_science_image_freeze") is not True
-            or result.preflight_transition_mode not in {"fresh", "same-host-resume"}
+            or result.preflight_transition_mode not in {"fresh", "slot2-replacement"}
+            or result.launch_slot not in {1, 2}
+            or result.launch_count != result.launch_slot
+            or result.campaign_started_at_epoch <= 0
+            or result.owned_lambda_started_at_epoch < result.campaign_started_at_epoch
+            or result.prior_lambda_duration_seconds < 0
+            or result.prior_lambda_cost_usd < 0
         ):
             raise T09PilotError("frozen runtime qualification contract drifted")
         recovery_hashes = (
@@ -508,15 +564,30 @@ class RuntimeQualification:
                 item is not None for item in recovery_hashes
             ):
                 raise T09PilotError("fresh preflight retained resume authority")
-        elif (
-            result.preflight_prior_package_commit != PREENTRY_RESUME_FROM_PACKAGE_COMMIT
-            or result.preflight_prior_plan_sha256 != PREENTRY_RESUME_FROM_PLAN_SHA256
-            or any(
-                not isinstance(item, str) or _HEX64.fullmatch(item) is None
-                for item in recovery_hashes
+        else:
+            slot2_hashes = (
+                result.replacement_eligibility_sha256,
+                result.replacement_eligibility_source_manifest_sha256,
+                result.slot1_failure_archive_sha256,
+                result.slot1_image_archive_sha256,
+                result.slot1_entry_receipt_sha256,
+                result.slot1_closeout_receipt_sha256,
             )
-        ):
-            raise T09PilotError("same-host preflight resume binding drifted")
+            if (
+                result.launch_slot != 2
+                or result.launch_count != 2
+                or result.prior_lambda_duration_seconds <= 0
+                or result.prior_lambda_cost_usd <= 0
+                or result.image_import_count != 1
+                or result.additional_build_count != 0
+                or result.preflight_prior_package_commit is not None
+                or any(item is not None for item in recovery_hashes)
+                or any(
+                    not isinstance(item, str) or _HEX64.fullmatch(item) is None
+                    for item in slot2_hashes
+                )
+            ):
+                raise T09PilotError("slot-2 replacement qualification binding drifted")
         return result
 
 

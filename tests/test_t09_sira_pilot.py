@@ -619,12 +619,12 @@ def test_retry2_preserves_and_supersedes_the_zero_use_v3_failure() -> None:
     assert supersession["successor_plan_id"] == "PLAN-EXP0001-PILOT-V4"
 
 
-def test_runtime_qualification_is_typed_single_build_preentry_and_digest_agnostic() -> None:
+def test_runtime_qualification_is_typed_slot2_import_preentry_and_digest_agnostic() -> None:
     document = {
         "schema_version": "0.1.0",
         "plan_id": "PLAN-EXP0001-PILOT-V5",
         "manifest_id": "RUN-MANIFEST-EXP0001-PILOT-V5-0003",
-        "qualification_id": "QUAL-T09-PILOT-V5-IMAGE-0001",
+        "qualification_id": "QUAL-T09-PILOT-V5-IMAGE-0002",
         "clean_package_commit": "a" * 40,
         "replacement_image_id": "sha256:" + "e" * 64,
         "historical_image_id": (
@@ -651,7 +651,7 @@ def test_runtime_qualification_is_typed_single_build_preentry_and_digest_agnosti
         "qualification_count": 1,
         "empirical_entry_crossed": False,
         "post_entry_code_science_image_freeze": True,
-        "preflight_transition_mode": "fresh",
+        "preflight_transition_mode": "slot2-replacement",
         "preflight_resume_source_sha256": None,
         "preflight_resume_argv_sha256": None,
         "preflight_resume_transition_sha256": None,
@@ -663,6 +663,20 @@ def test_runtime_qualification_is_typed_single_build_preentry_and_digest_agnosti
         "preflight_prior_aggregate_sha256": None,
         "preflight_transition_aggregate_sha256": None,
         "preflight_retained_materialization_sha256": None,
+        "launch_slot": 2,
+        "launch_count": 2,
+        "campaign_started_at_epoch": 1.0,
+        "owned_lambda_started_at_epoch": 2.0,
+        "prior_lambda_duration_seconds": 3.0,
+        "prior_lambda_cost_usd": 0.1,
+        "replacement_eligibility_sha256": "a" * 64,
+        "replacement_eligibility_source_manifest_sha256": "b" * 64,
+        "slot1_failure_archive_sha256": "c" * 64,
+        "slot1_image_archive_sha256": "d" * 64,
+        "slot1_entry_receipt_sha256": "e" * 64,
+        "slot1_closeout_receipt_sha256": "f" * 64,
+        "image_import_count": 1,
+        "additional_build_count": 0,
     }
     qualification = RuntimeQualification.from_document(document)
     assert qualification.replacement_image_id != qualification.historical_image_id
@@ -676,30 +690,10 @@ def test_runtime_qualification_is_typed_single_build_preentry_and_digest_agnosti
         drifted = {**document, field: value}
         with pytest.raises(ValueError, match="qualification contract drifted"):
             RuntimeQualification.from_document(drifted)
-    recovered = {
-        **document,
-        "preflight_transition_mode": "same-host-resume",
-        "preflight_resume_source_sha256": "a" * 64,
-        "preflight_resume_argv_sha256": "b" * 64,
-        "preflight_resume_transition_sha256": "c" * 64,
-        "preflight_failure_prefix_manifest_sha256": "d" * 64,
-        "preflight_prior_package_commit": "3640f061ea6c0f0f3d24bf2a346d4beda1a400cf",
-        "preflight_prior_plan_sha256": (
-            "e7e214500348c8b876beb034df7b592c84f5ab79788ab6f310ef187fd797613c"
-        ),
-        "preflight_prior_state_sha256": "e" * 64,
-        "preflight_transition_state_sha256": "f" * 64,
-        "preflight_prior_aggregate_sha256": "1" * 64,
-        "preflight_transition_aggregate_sha256": "2" * 64,
-        "preflight_retained_materialization_sha256": "3" * 64,
-    }
-    assert (
-        RuntimeQualification.from_document(recovered).preflight_transition_mode
-        == "same-host-resume"
-    )
-    recovered["preflight_resume_argv_sha256"] = None
-    with pytest.raises(ValueError, match="resume binding drifted"):
-        RuntimeQualification.from_document(recovered)
+    with pytest.raises(ValueError, match="qualification contract drifted"):
+        RuntimeQualification.from_document(
+            {**document, "preflight_transition_mode": "same-host-resume"}
+        )
 
 
 def test_retry2_excludes_only_the_exact_pinned_names_only_env_example(
@@ -737,15 +731,15 @@ def test_retry2_excludes_only_the_exact_pinned_names_only_env_example(
         )
 
 
-def test_retry3_builds_one_fresh_v5_image_and_uses_the_pinned_interpreter() -> None:
+def test_retry3_imports_the_exact_slot1_image_without_rebuild() -> None:
     host = _load_host_runner()
     assert host.PLAN_ID == "PLAN-EXP0001-PILOT-V5"
-    assert host.QUALIFICATION_ID == "QUAL-T09-PILOT-V5-IMAGE-0001"
+    assert host.QUALIFICATION_ID == "QUAL-T09-PILOT-V5-IMAGE-0002"
     assert host.REPLACEMENT_IMAGE_TAG.startswith("giclab/t09-pilot-v5:")
-    materializer = inspect.getsource(host.materialize_replacement_image)
-    assert "exactly one build is allowed" in materializer
-    assert '"build_count": 1' in materializer
-    assert "carry_forward_replacement_image" not in materializer
+    materializer = inspect.getsource(host.import_slot1_replacement_image)
+    assert '"additional_build_count": 0' in materializer
+    assert '"image_import_count": 1' in materializer
+    assert "docker-image-import" in materializer
     offline = inspect.getsource(host.offline_runtime_preflight)
     assert "/opt/sira/.venv/bin/python" in offline
     assert "PYTHONPATH=/opt/evaluator/.venv/lib/python3.11/site-packages:/opt/giclab-src" in offline
@@ -2111,6 +2105,7 @@ def test_raw_attempt_streams_before_cutoff_without_aggregate_stage(
     frozen_path.write_text(json.dumps(frozen_document), encoding="utf-8")
     frozen_sha256 = host.file_sha256(frozen_path)
     for relative in (
+        "postfreeze-validation.json",
         "final-image-file-hashes/receipt.json",
         "qualified-real-evidence-regression/receipt.json",
         "replacement-image-qualification/build-context-exclusions.json",

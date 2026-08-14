@@ -58,7 +58,7 @@
         "python_interpreter_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
         "container_image_digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
         "frozen_run_manifest_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
-        "qualification_id": {"const": "QUAL-T09-PILOT-V5-IMAGE-0001"},
+        "qualification_id": {"const": "QUAL-T09-PILOT-V5-IMAGE-0002"},
         "build_context_manifest_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
         "installed_package_manifest_sha256": {"const": "4ff2603fa5e0f7033ba773decdcb86abf648dcce22e469d26bc48214e390e104"},
         "chromium_executable_sha256": {"const": "0498f208c25339f386413ada7b3c35293b0b6250e67d85446ba9541d7fd636f7"},

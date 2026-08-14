@@ -67,9 +67,9 @@
     "local_finalizer_qualification_location": "offhost-control-machine-before-provider-launch",
     "local_finalizer_dependency_byte_policy": "absolute-venv-launcher-link-target-and-resolved-executable-plus-complete-base-and-evaluator-site-packages-tree-manifests-rehashed-before-every-qualified-local-finalization",
     "container_image_digest": null,
-    "container_image_policy": "single-qualified-replacement-preentry-frozen-run-manifest-v1",
+    "container_image_policy": "slot1-built-once-slot2-exact-archive-import-zero-additional-builds-preentry-frozen-run-manifest-v1",
     "historical_container_image_digest": "sha256:035edf61718e84a8156f4f0f7817b134b0ce31488d3f0b50bbfba2b4a30cc61c",
-    "runtime_qualification_id": "QUAL-T09-PILOT-V5-IMAGE-0001",
+    "runtime_qualification_id": "QUAL-T09-PILOT-V5-IMAGE-0002",
     "frozen_run_manifest_id": "RUN-MANIFEST-EXP0001-PILOT-V5-0003",
     "installed_package_manifest_sha256": "4ff2603fa5e0f7033ba773decdcb86abf648dcce22e469d26bc48214e390e104",
     "playwright_version": "1.39.0",
@@ -213,7 +213,7 @@
     ],
     "evidence_archive_id": "ARCHIVE-EXP0001-PILOT-V5-0003",
     "evidence_stage_id": "STAGE-EXP0001-PILOT-V5-0003",
-    "runtime_qualification_id": "QUAL-T09-PILOT-V5-IMAGE-0001",
+    "runtime_qualification_id": "QUAL-T09-PILOT-V5-IMAGE-0002",
     "frozen_run_manifest_id": "RUN-MANIFEST-EXP0001-PILOT-V5-0003"
   },
   "attempts": [
