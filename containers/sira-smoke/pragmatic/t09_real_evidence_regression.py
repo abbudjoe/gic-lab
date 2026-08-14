@@ -10,9 +10,11 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.metadata
 import importlib.util
 import json
 import os
+import re
 import socket
 import stat
 import sys
@@ -27,6 +29,9 @@ ARCHIVE_SHA256 = "63ed19b35bcb4cb62c3796a80a48004937340eb3826f9657a1006e25177225
 DISPOSITION_SHA256 = "ecc0e135695e16f68d52b7aa85b70d42b1f1e945f7dd119fb7c7ff0e42fc8231"
 PRIOR_RUN_ID = "RUN-T09-TASK-A-REACTIVE-0002"
 TASK_ID = "7dcbbbdc7f1120cd"
+DATASET_SHA256 = "359300b029c6891567816f351bf8786e9b018d7af8a1a44b7da9ba5ef4651288"
+DATASET_BYTES = 1_177_174
+EVALUATOR_CONTRACT_SHA256 = "c28a802a45fc8d1e719f8c1bcb22315c2841df831c4ae161f12ab0f2fd08b321"
 MAX_ARCHIVE_BYTES = 100_663_296
 MAX_MEMBER_BYTES = 67_108_864
 MAX_SELECTED_BYTES = 67_108_864
@@ -80,7 +85,17 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--finalizer-source", type=Path, required=True)
     parser.add_argument("--finalizer-source-sha256", required=True)
     parser.add_argument("--evaluator-root", type=Path, required=True)
+    parser.add_argument("--evaluator-contract", type=Path, required=True)
+    parser.add_argument("--dependency-site-packages", type=Path, required=True)
     parser.add_argument("--dataset", type=Path, required=True)
+    parser.add_argument(
+        "--receipt-id",
+        choices=(
+            "T09-PRAGMATIC-RETRY3-REAL-EVIDENCE-REGRESSION-0001",
+            "T09-PRAGMATIC-RETRY3-QUALIFIED-IMAGE-REGRESSION-0001",
+        ),
+        required=True,
+    )
     parser.add_argument("--output", type=Path, required=True)
     return parser
 
@@ -215,6 +230,86 @@ def _write_exclusive(path: Path, value: object) -> None:
         os.close(descriptor)
 
 
+def _evaluator_closure(
+    *,
+    evaluator_root: Path,
+    evaluator_contract: Path,
+    dependency_site_packages: Path,
+) -> dict[str, object]:
+    """Bind evaluator source and the exact realized reviewed package set."""
+
+    contract_path = evaluator_contract.resolve(strict=True)
+    if file_sha256(contract_path) != EVALUATOR_CONTRACT_SHA256:
+        raise RegressionError("evaluator contract identity drifted")
+    contract = _load_json_bytes(contract_path.read_bytes(), label="evaluator contract")
+    identity = contract.get("identity")
+    materialization = contract.get("materialization")
+    if not isinstance(identity, dict) or not isinstance(materialization, dict):
+        raise RegressionError("evaluator contract closure is malformed")
+    raw_files = identity.get("files")
+    inventory = materialization.get("dependency_license_inventory")
+    if not isinstance(raw_files, list) or not isinstance(inventory, list):
+        raise RegressionError("evaluator file or dependency inventory is unavailable")
+    root = evaluator_root.resolve(strict=True)
+    files: list[dict[str, object]] = []
+    for raw in raw_files:
+        if not isinstance(raw, dict):
+            raise RegressionError("evaluator file binding is malformed")
+        source_path = raw.get("path")
+        expected_sha256 = raw.get("sha256")
+        prefix = "evaluation/fanout/"
+        if (
+            not isinstance(source_path, str)
+            or not source_path.startswith(prefix)
+            or not isinstance(expected_sha256, str)
+        ):
+            raise RegressionError("evaluator file identity is malformed")
+        relative = source_path.removeprefix(prefix)
+        path = (root / relative).resolve(strict=True)
+        try:
+            path.relative_to(root)
+        except ValueError:
+            raise RegressionError("evaluator file escaped its root") from None
+        if path.is_symlink() or file_sha256(path) != expected_sha256:
+            raise RegressionError("evaluator source file identity drifted")
+        files.append({"path": source_path, "sha256": expected_sha256})
+    expected_packages: list[str] = []
+    for raw in inventory:
+        if not isinstance(raw, str) or raw.count("|") != 1:
+            raise RegressionError("evaluator dependency inventory is malformed")
+        package, license_identity = raw.split("|", 1)
+        if "==" not in package or not license_identity:
+            raise RegressionError("evaluator dependency identity is malformed")
+        name, version = package.split("==", 1)
+        expected_packages.append(f"{re.sub(r'[-_.]+', '-', name).lower()}=={version}")
+    site_packages = dependency_site_packages.resolve(strict=True)
+    if site_packages.is_symlink() or not site_packages.is_dir():
+        raise RegressionError("evaluator dependency root is unsafe")
+    realized_packages: list[str] = []
+    for distribution in importlib.metadata.distributions(path=[str(site_packages)]):
+        name = distribution.metadata["Name"]
+        version = distribution.version
+        if not isinstance(name, str) or not name or not version:
+            raise RegressionError("realized evaluator package identity is malformed")
+        realized_packages.append(f"{re.sub(r'[-_.]+', '-', name).lower()}=={version}")
+    expected_packages.sort()
+    realized_packages.sort()
+    if (
+        len(realized_packages) != len(set(realized_packages))
+        or realized_packages != expected_packages
+    ):
+        raise RegressionError("realized evaluator package set differs from the contract")
+    return {
+        "evaluator_contract_sha256": EVALUATOR_CONTRACT_SHA256,
+        "evaluator_revision": identity.get("revision"),
+        "evaluator_files": files,
+        "evaluator_files_sha256": canonical_sha256(files),
+        "dependency_package_records": realized_packages,
+        "dependency_package_manifest_sha256": canonical_sha256(realized_packages),
+        "evaluator_lock_sha256": materialization.get("lock_sha256"),
+    }
+
+
 def run(args: argparse.Namespace) -> dict[str, object]:
     archive = args.archive.resolve(strict=True)
     disposition = args.public_disposition.resolve(strict=True)
@@ -234,6 +329,18 @@ def run(args: argparse.Namespace) -> dict[str, object]:
     public_attempt = public.get("attempts", {}).get("task_a_reactive")
     if not isinstance(public_attempt, dict):
         raise RegressionError("public V4 accepted attempt projection is unavailable")
+    dataset = args.dataset.resolve(strict=True)
+    if (
+        dataset.is_symlink()
+        or dataset.stat().st_size != DATASET_BYTES
+        or file_sha256(dataset) != DATASET_SHA256
+    ):
+        raise RegressionError("full pinned FanOutQA dataset identity drifted")
+    evaluator_closure = _evaluator_closure(
+        evaluator_root=args.evaluator_root,
+        evaluator_contract=args.evaluator_contract,
+        dependency_site_packages=args.dependency_site_packages,
+    )
     with tempfile.TemporaryDirectory(prefix="giclab-t09-v4-regression-") as temporary:
         raw_root = Path(temporary) / "raw"
         raw_root.mkdir(mode=0o700)
@@ -253,14 +360,44 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             projection: object = reconstruct(
                 raw_root=raw_root,
                 evaluator_root=args.evaluator_root.resolve(strict=True),
-                dataset_path=args.dataset.resolve(strict=True),
+                dataset_path=dataset,
                 task_index=0,
                 task_id=TASK_ID,
                 condition="SIRA-REACTIVE",
-                evaluator_fixture_subset=True,
+                evaluator_fixture_subset=False,
+            )
+            repeated_projection: object = reconstruct(
+                raw_root=raw_root,
+                evaluator_root=args.evaluator_root.resolve(strict=True),
+                dataset_path=dataset,
+                task_index=0,
+                task_id=TASK_ID,
+                condition="SIRA-REACTIVE",
+                evaluator_fixture_subset=False,
             )
         if not isinstance(projection, dict):
             raise RegressionError("real-evidence semantic projection is not an object")
+        if repeated_projection != projection:
+            raise RegressionError("same raw evidence produced a different semantic projection")
+        repeat_files: list[dict[str, object]] = []
+        for ordinal, value in enumerate((projection, repeated_projection), start=1):
+            repeat_root = Path(temporary) / f"finalization-{ordinal:04d}"
+            repeat_root.mkdir(mode=0o700)
+            repeat_path = repeat_root / "semantic-projection.json"
+            _write_exclusive(repeat_path, value)
+            repeat_files.append(
+                {
+                    "root": repeat_root.name,
+                    "semantic_projection_file_sha256": file_sha256(repeat_path),
+                    "semantic_projection_sha256": canonical_sha256(value),
+                }
+            )
+        if (
+            repeat_files[0]["root"] == repeat_files[1]["root"]
+            or repeat_files[0]["semantic_projection_sha256"]
+            != repeat_files[1]["semantic_projection_sha256"]
+        ):
+            raise RegressionError("distinct finalization roots changed semantic output")
         expected = {
             "task_id": TASK_ID,
             "condition": "SIRA-REACTIVE",
@@ -322,12 +459,15 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             raise RegressionError("retained V4 source changed during reconstruction")
         receipt: dict[str, object] = {
             "schema_version": "0.1.0",
-            "receipt_id": "T09-PRAGMATIC-RETRY3-REAL-EVIDENCE-REGRESSION-0001",
+            "receipt_id": args.receipt_id,
             "source_plan_id": "PLAN-EXP0001-PILOT-V4",
             "source_run_id": PRIOR_RUN_ID,
             "source_archive_sha256": ARCHIVE_SHA256,
             "source_public_disposition_sha256": DISPOSITION_SHA256,
             "finalizer_source_sha256": args.finalizer_source_sha256,
+            "dataset_sha256": DATASET_SHA256,
+            "dataset_bytes": DATASET_BYTES,
+            "evaluator_closure": evaluator_closure,
             "interpreter": {
                 "implementation": sys.implementation.name,
                 "version": sys.version.split()[0],
@@ -338,6 +478,8 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             "selected_raw_members_sha256": canonical_sha256(selected_manifest),
             "semantic_projection": projection,
             "semantic_projection_sha256": canonical_sha256(projection),
+            "deterministic_repeat_projection_sha256": canonical_sha256(repeated_projection),
+            "deterministic_distinct_finalization_roots": repeat_files,
             "accepted_scientific_and_evaluator_fields_equal": True,
             "network_disabled": True,
             "additional_model_requests": 0,

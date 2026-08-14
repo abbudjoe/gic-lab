@@ -25,10 +25,19 @@ The condition owns only immutable raw evidence. Immediately after the condition
 writers, container, browser, and secret channel close, the frozen supervisor seals
 the condition-owned `raw/` directory and exports that seal for off-host verification.
 The downstream finalizer receives raw, contracts, code, and runtime bindings read-only,
-runs with networking disabled under the exact qualified SiRA interpreter plus the
-frozen evaluator overlay, and writes only one fresh versioned derived-output root.
-It cannot update empirical sequencing or checkpoint state. The frozen supervisor
-validates a completion receipt written last and then selects that finalization.
+runs with networking disabled under either the exact qualified-image SiRA interpreter
+or one prequalified absolute local Python plus the same frozen evaluator overlay, and
+writes only one fresh versioned derived-output root. It cannot update empirical
+sequencing or checkpoint state. The frozen supervisor validates a completion receipt
+written last and then selects that finalization.
+
+Each directly verified raw export carries an immutable control snapshot: the frozen
+run manifest and its source receipts, provider-entry projection, exact state projection,
+prior export acknowledgements, append-only selection receipts, checkpoint, and budget
+ledger when present. The off-host verifier can restore those hash-checked bytes without
+overwrite authority, revalidate the raw prefix, and run the prequalified local finalizer
+after provider termination. Aggregate staging and a loadable image archive are not
+dependencies of that path.
 
 A downstream-only descendant may repair and rerun this pure finalizer against already
 sealed raw evidence. The immutable selection history is retained, and one full
@@ -43,9 +52,9 @@ uniformly before pair continuation or final analysis. A condition is never retri
 | R3-01 | Preserve every V4 identity, disposition, receipt, and archive byte; exclude the prior unpaired attempt from V5. | V4 disposition remains `ecc0e135…`; retained attempt archive remains `63ed19b3…`; V4 plan/conditions are preserved under proposals; V5 contracts classify the prior attempt as regression-only. | met |
 | R3-02 | Preserve the exact EXP-0001 science, two tasks/hashes, FanOutQA revision, SiRA commit, dated model, evaluator, counterbalance, zero retry, and calibration-only boundary. | Dataset/evaluator contracts are unchanged; V5 attempts retain A-reactive, A-simulative, checkpoint, B-simulative, B-reactive. | met |
 | R3-03 | Separate immutable raw evidence from derived output and make the finalizer pure/network-none with no sequencing authority. | `t09_remote_runner.py`, `t09_evaluate_attempt.py`, schemas, and focused raw/final state regressions. | met |
-| R3-04 | Bind the exact absolute interpreter, executable hash, image, package/import/distribution closure, evaluator assets, contracts, schemas, and finalizer bytes. | Source-derived interpreter hash is frozen from final-image `sha256sum`; full finalizer closure is checked inside the image and by the selecting supervisor. Dynamic receipt remains pending. | partial |
-| R3-05 | Run the repaired semantic path on the actual retained V4 archive without network/model/browser activity and preserve the receipt. | `T09_PRAGMATIC_RETRY3_FINALIZER_REGRESSION.json`; accepted task/evaluator fields match, 52 calls/121,900 tokens/13 actions/score 0.0, source bytes rehash, and additional activity is zero. | met |
-| R3-06 | Seal, export, independently verify, and acknowledge each consumed raw attempt before any later empirical entry; make seal/state reconciliation resumable. | O_EXCL mode-0600 raw manifest/receipt, exact-hash idempotent state adoption, authoritative raw export, and acknowledgement gates have focused crash/transfer tests. Live receipts pending. | partial |
+| R3-04 | Bind the exact absolute interpreter, executable hash, image, package/import/distribution closure, evaluator assets, contracts, schemas, and finalizer bytes. | Source-derived image-interpreter hash and the prequalified local Python/base-package manifest are frozen; the exact 51-package evaluator overlay and full finalizer/projection closure are independently revalidated before selection. Dynamic image/local receipts remain pending. | partial |
+| R3-05 | Run the repaired semantic path on the actual retained V4 archive without network/model/browser activity and preserve the receipt. | `T09_PRAGMATIC_RETRY3_FINALIZER_REGRESSION.json` SHA-256 `2dd6a59e…`; full 1,177,174-byte dataset and 51 packages are bound; two distinct finalized roots agree; accepted task/evaluator fields match, 52 calls/121,900 tokens/13 actions/score 0.0, source bytes rehash, and additional activity is zero. | met |
+| R3-06 | Seal, export, independently verify, and acknowledge each consumed raw attempt before any later empirical entry; make seal/state reconciliation resumable. | O_EXCL mode-0600 raw manifest/receipt, exact-hash idempotent state adoption, authoritative raw export, source-bound control snapshot, off-host restore, and acknowledgement gates have focused crash/transfer tests. Live receipts pending. | partial |
 | R3-07 | Permit downstream-only repairs with immutable history and require one uniform complete closure for all selected results. | Versioned finalized roots, completion receipt written last, reselectable state/history, pair checkpoint and campaign-disposition uniformity checks. Live selections pending. | partial |
 | R3-08 | Treat structural/private fixture findings as a public-release limitation while actual credential matches remain a hard stop. | Raw receipt records structural findings; private export remains available; exact credential scan, removal, and cleanup remain mandatory. | met |
 | R3-09 | Use fresh V5 host, attempt, evaluator, pair, qualification, stage, archive, and provider identities without collision. | Fresh IDs are present in source/plan/schema/condition drafts; final package binding remains pending. | partial |
@@ -85,8 +94,14 @@ uniformly before pair continuation or final analysis. A condition is never retri
   unchanged source hashes. Missing and duplicate sessions now remain sealable and
   deterministically classify as invalid infrastructure rather than being lost.
 - 2026-08-13: the qualified-image binding now includes the SHA-256 of the exact
-  `/opt/sira/.venv/bin/python` executable. The finalizer recomputes it internally and
-  its full closure is recorded in the finalization-complete receipt written last.
+  `/opt/sira/.venv/bin/python` executable. The local path separately binds Python
+  3.11.14, its executable hash and seven-package base closure, the same 51-package
+  evaluator overlay, evaluator files, dataset, and real-evidence regression. The
+  finalization-complete receipt records the selected mode and full closure last.
+- 2026-08-13: each per-attempt archive now freezes a minimal control snapshot at its
+  first export. The verifier restores the archive and control bytes into a fresh local
+  workspace without overwrite authority, revalidates the raw seal and acknowledgement,
+  and thereby keeps downstream reconstruction available after Lambda termination.
 
 ## Next permitted phase
 

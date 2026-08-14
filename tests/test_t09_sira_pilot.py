@@ -6,6 +6,7 @@ import importlib.util
 import inspect
 import io
 import json
+import stat
 import time
 from dataclasses import replace
 from pathlib import Path
@@ -69,6 +70,30 @@ RUNTIME_IDENTITY = (
 )
 
 
+def _rendered_v5_manifests() -> list[dict[str, object]]:
+    """Render the active source contract without relying on generated package bytes."""
+
+    contract = load_execution_contract(
+        EXECUTION_CONTRACT,
+        expected_sha256=file_sha256(EXECUTION_CONTRACT),
+    )
+    return [
+        render_command_manifest(
+            contract,
+            attempt,
+            execution_contract_runtime_path="/opt/giclab-contracts/execution.json",
+            runtime_adaptation_path="/opt/giclab-src/giclab/harness/sira_gate_a_runtime.py",
+            runtime_adaptation_sha256=file_sha256(
+                ROOT / "src/giclab/harness/sira_gate_a_runtime.py"
+            ),
+            pilot_library_sha256=file_sha256(ROOT / "src/giclab/harness/t09_sira_pilot.py"),
+            aggregate_ledger_path="/opt/giclab-artifacts/pilot-v5/aggregate-budget.json",
+            pilot_state_path="/opt/giclab-artifacts/pilot-v5/pilot-state.json",
+        )
+        for attempt in contract.attempts
+    ]
+
+
 def _seal_and_finalize_state(path: Path, *, digest: str, run_id: str) -> None:
     """Supply one exact raw seal and one uniform downstream selection to state tests."""
 
@@ -84,12 +109,16 @@ def _seal_and_finalize_state(path: Path, *, digest: str, run_id: str) -> None:
         path,
         execution_contract_sha256=digest,
         run_id=run_id,
+        finalizer_execution_mode="qualified-image",
+        finalizer_runtime_qualification_sha256="0" * 64,
         finalizer_source_sha256="a" * 64,
+        finalizer_projection_source_sha256="9" * 64,
         finalizer_commit="b" * 40,
         finalizer_dependency_manifest_sha256="c" * 64,
         evaluator_contract_sha256="d" * 64,
         interpreter="/opt/sira/.venv/bin/python",
         interpreter_sha256="e" * 64,
+        semantic_projection_sha256="f" * 64,
         finalized_output_root=f"finalized/{run_id}/v1",
         finalization_complete_sha256=f"{index + 8:x}" * 64,
     )
@@ -319,23 +348,7 @@ def test_provider_boundary_enforces_prior_attempt_aggregate_before_send() -> Non
 
 
 def test_frozen_execution_contract_and_all_pair_command_diffs() -> None:
-    contract = load_execution_contract(
-        EXECUTION_CONTRACT,
-        expected_sha256=file_sha256(EXECUTION_CONTRACT),
-    )
-    manifests = [
-        render_command_manifest(
-            contract,
-            attempt,
-            execution_contract_runtime_path="/opt/giclab-contracts/execution.json",
-            runtime_adaptation_path="/opt/giclab-src/giclab/harness/sira_gate_a_runtime.py",
-            runtime_adaptation_sha256="a" * 64,
-            pilot_library_sha256="b" * 64,
-            aggregate_ledger_path="/opt/giclab-artifacts/pilot-v4/aggregate-budget.json",
-            pilot_state_path="/opt/giclab-artifacts/pilot-v4/pilot-state.json",
-        )
-        for attempt in contract.attempts
-    ]
+    manifests = _rendered_v5_manifests()
     assert diff_pair_manifests(manifests[0], manifests[1])["valid"] is True
     assert diff_pair_manifests(manifests[2], manifests[3])["valid"] is True
     assert (
@@ -401,14 +414,14 @@ def test_first_pair_checkpoint_passes_only_strictly_below_every_threshold() -> N
     reasons = decision["reasons"]
     assert isinstance(reasons, list)
     assert "cleanup_issue" in reasons
-    no_time = replace(passing, remaining_campaign_seconds=5_159.999)
+    no_time = replace(passing, remaining_campaign_seconds=4_499.999)
     no_time_decision = first_pair_decision(no_time)
     assert no_time_decision["decision"] == "stop-before-task-b"
     assert "insufficient_campaign_time_for_next_attempt_and_cleanup" in no_time_decision["reasons"]
-    exact_time = replace(passing, remaining_campaign_seconds=5_160.0)
+    exact_time = replace(passing, remaining_campaign_seconds=4_500.0)
     exact_time_decision = first_pair_decision(exact_time)
     assert exact_time_decision["decision"] == "continue-to-task-b"
-    assert exact_time_decision["required_campaign_seconds_for_next_attempt"] == 5_160
+    assert exact_time_decision["required_campaign_seconds_for_next_attempt"] == 4_500
     cumulative_overflow = replace(
         passing,
         projected_aggregate_cost_usd=45.0,
@@ -527,6 +540,11 @@ def test_execution_schema_and_all_static_file_bindings_resolve() -> None:
         == "current-turn-authorized-after-replacement-image-qualification"
     )
     assert document["material_blockers"] == []
+    hard = document["budget_calibration"]["hard"]
+    assert hard["maximum_new_cost_under_cumulative_cap_usd"] == pytest.approx(
+        hard["cumulative_t09_cost_cap_usd"] - hard["prior_t09_cost_usd"],
+        abs=1e-12,
+    )
     assert (
         validate_instance(
             document,
@@ -565,6 +583,8 @@ def test_runtime_identity_binds_every_selected_executable_file() -> None:
         "containers/sira-smoke/pragmatic/t09_secret_preflight.py",
         "containers/sira-smoke/pragmatic/materialize_openai_secret.py",
         "containers/sira-smoke/pragmatic/t09_real_evidence_regression.py",
+        "containers/sira-smoke/pragmatic/t09_finalizer_projection.py",
+        "containers/sira-smoke/pragmatic/t09_local_finalizer_qualification.py",
     }
     assert {item["path"] for item in files} == expected
     for item in files:
@@ -619,6 +639,9 @@ def test_runtime_qualification_is_typed_single_build_preentry_and_digest_agnosti
         "evaluator_overlay_manifest_sha256": "1" * 64,
         "evaluator_overlay_entries_sha256": "2" * 64,
         "evaluator_overlay_packages_sha256": "3" * 64,
+        "qualified_real_evidence_regression_sha256": "5" * 64,
+        "local_finalizer_qualification_sha256": "6" * 64,
+        "local_finalizer_interpreter_dependency_manifest_sha256": "7" * 64,
         "model_metadata_request_count": 1,
         "model_task_request_count": 0,
         "task_browser_action_count": 0,
@@ -834,11 +857,7 @@ def test_first_pair_gross_ceiling_stops_task_b() -> None:
 
 def test_preentry_condition_prefix_is_bound_preserved_and_retryable(tmp_path: Path) -> None:
     host = _load_host_runner()
-    command_document = load_json(
-        ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
-        "T09_PILOT_COMMAND_MANIFESTS.json"
-    )
-    manifest = command_document["manifests"][0]
+    manifest = _rendered_v5_manifests()[0]
     artifact_root = tmp_path / "artifacts"
     attempt_root = artifact_root / manifest["permitted_condition_owned"]["output_root"]
     attempt_root.mkdir(parents=True, mode=0o700)
@@ -1417,7 +1436,7 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
         private_root=private_root,
         public_ipv4_file=public_ip_path,
         ssh_public_key_file=key_path,
-        transport=FakeTransport(launch_responses),
+        transport=FakeTransport(copy.deepcopy(launch_responses)),
         clock=clock,
         sleeper=sleeper,
     )
@@ -1503,6 +1522,62 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
         global_firewall,
         {"data": []},
     ]
+    preempirical_source = tmp_path / "host-preempirical-source"
+    preempirical_source.mkdir(mode=0o700)
+    host.write_exclusive(
+        preempirical_source / "pilot-state.json",
+        {
+            "plan_id": provider.PLAN_ID,
+            "empirical_attempts_entered": [],
+            "raw_attempts_complete": [],
+            "attempts_completed": [],
+        },
+    )
+    host.write_exclusive(
+        preempirical_source / "host-cleanup.json",
+        {
+            "owned_container_residue": [],
+            "global_secret_scan_passed": True,
+            "remote_secret_removed": True,
+        },
+    )
+    host.write_exclusive(
+        preempirical_source / "preempirical-disposition.json",
+        {
+            "schema_version": "0.1.0",
+            "plan_id": provider.PLAN_ID,
+            "host_run_id": provider.HOST_RUN_ID,
+            "package_commit": package_commit,
+            "provider_entry_receipt_sha256": provider.file_sha256(entry_path),
+            "pilot_state_sha256": host.file_sha256(preempirical_source / "pilot-state.json"),
+            "host_cleanup_sha256": host.file_sha256(preempirical_source / "host-cleanup.json"),
+            "empirical_attempts_entered": 0,
+            "model_task_requests": 0,
+            "task_browser_actions": 0,
+            "replacement_image_build_count": 0,
+            "credentials_removed": True,
+            "owned_containers_absent": True,
+            "replacement_launch_evidence_only": True,
+        },
+    )
+    preempirical_files = [
+        {
+            "path": path.name,
+            "bytes": path.stat().st_size,
+            "sha256": host.file_sha256(path),
+        }
+        for path in sorted(preempirical_source.iterdir())
+    ]
+    host.write_exclusive(
+        preempirical_source / "source-manifest.json",
+        {
+            "schema_version": "0.1.0",
+            "plan_id": provider.PLAN_ID,
+            "host_run_id": provider.HOST_RUN_ID,
+            "files": preempirical_files,
+            "total_bytes": sum(int(item["bytes"]) for item in preempirical_files),
+        },
+    )
     closeout_path = provider.closeout_campaign(
         repository=ROOT,
         package_commit=package_commit,
@@ -1510,6 +1585,8 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
         dotenv=dotenv,
         private_root=private_root,
         transport=FakeTransport(closeout_responses),
+        preempirical_receipt=preempirical_source / "preempirical-disposition.json",
+        preempirical_source_root=preempirical_source,
         clock=clock,
         sleeper=sleeper,
     )
@@ -1538,6 +1615,82 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
     closeout_documents = provider._response_documents(private_root / "closeout-source")
     last_inventory = closeout_documents["termination-instances"][-1][1]
     assert last_inventory == {"data": []}
+    eligibility = load_json(private_root / "replacement-launch-eligibility.json")
+    assert eligibility["host_preempirical_receipt_sha256"] == provider.file_sha256(
+        private_root / "preempirical-source/preempirical-disposition.json"
+    )
+
+    tampered_prior = tmp_path / "provider-private-tampered-zero-use"
+    copytree(private_root, tampered_prior)
+    tampered_state = tampered_prior / "preempirical-source/pilot-state.json"
+    tampered_state.write_text('{"empirical_attempts_entered":["forged"]}\n', encoding="utf-8")
+    capability[2] = tmp_path / "launch-capabilities/slot-2-tampered.json"
+    tampered_transport = FakeTransport([])
+    with pytest.raises(provider.T09ProviderError, match="pre-empirical source manifest drifted"):
+        provider.launch_campaign(
+            repository=ROOT,
+            package_commit=package_commit,
+            authorization_ledger=authorization,
+            dotenv=dotenv,
+            private_root=tmp_path / "provider-slot-2-tampered",
+            public_ipv4_file=public_ip_path,
+            ssh_public_key_file=key_path,
+            transport=tampered_transport,
+            launch_slot=2,
+            prior_private_root=tampered_prior,
+            clock=clock,
+            sleeper=sleeper,
+        )
+    assert tampered_transport.calls == []
+
+    capability[2] = tmp_path / "launch-capabilities/slot-2-success.json"
+    slot_2_instance = {
+        **copy.deepcopy(instance),
+        "id": "instance-fixture-0002",
+        "ip": "198.51.100.10",
+    }
+    slot_2_root = tmp_path / "provider-private-slot-2"
+    slot_2_entry = provider.launch_campaign(
+        repository=ROOT,
+        package_commit=package_commit,
+        authorization_ledger=authorization,
+        dotenv=dotenv,
+        private_root=slot_2_root,
+        public_ipv4_file=public_ip_path,
+        ssh_public_key_file=key_path,
+        transport=FakeTransport(
+            [
+                *copy.deepcopy(launch_responses[:6]),
+                {"data": {"instance_ids": ["instance-fixture-0002"]}},
+                {"data": [slot_2_instance]},
+            ]
+        ),
+        launch_slot=2,
+        prior_private_root=private_root,
+        clock=clock,
+        sleeper=sleeper,
+    )
+    assert load_json(slot_2_entry)["launch_slot"] == 2
+    assert load_json(slot_2_entry)["prior_retry3_lambda_cost_usd"] == pytest.approx(
+        eligibility["prior_lambda_cost_usd"]
+    )
+    provider.closeout_campaign(
+        repository=ROOT,
+        package_commit=package_commit,
+        authorization_ledger=authorization,
+        dotenv=dotenv,
+        private_root=slot_2_root,
+        transport=FakeTransport(
+            [
+                RuntimeError("termination response fixture ambiguity"),
+                {"data": []},
+                global_firewall,
+                {"data": []},
+            ]
+        ),
+        clock=clock,
+        sleeper=sleeper,
+    )
 
     forged = dict(load_json(entry_path))
     forged["launch_count"] = 2
@@ -1792,7 +1945,7 @@ def test_campaign_lifecycle_uses_actual_elapsed_time_and_preserves_cleanup_reser
     assert (
         campaign.admit_attempt(
             billable_started_at=100.0,
-            now=9_340.0,
+            now=10_000.0,
             attempt_hard_wall_seconds=3_600,
         )
         is True
@@ -1800,7 +1953,7 @@ def test_campaign_lifecycle_uses_actual_elapsed_time_and_preserves_cleanup_reser
     assert (
         campaign.admit_attempt(
             billable_started_at=100.0,
-            now=9_340.1,
+            now=10_000.1,
             attempt_hard_wall_seconds=3_600,
         )
         is False
@@ -1830,11 +1983,12 @@ def test_host_campaign_admission_counts_setup_and_attempt_actual_time(
         abs=1,
     )
     assert host.scientific_seconds_remaining(tmp_path) == pytest.approx(14_400, abs=1)
-    # 3,600 condition + 600 evaluator/export + 60 termination handoff +
-    # 900 cleanup must all remain on the one actual campaign clock.
-    monkeypatch.setattr(host.time, "time", lambda: now + 9_240)
+    # Downstream finalization and evidence packaging cannot shorten condition
+    # execution.  Admission requires exactly one 3,600-second condition wall
+    # plus the 900-second billable-resource closeout reserve.
+    monkeypatch.setattr(host.time, "time", lambda: now + 9_900)
     assert host.admit_next_attempt(tmp_path) == pytest.approx(3_600)
-    monkeypatch.setattr(host.time, "time", lambda: now + 9_241)
+    monkeypatch.setattr(host.time, "time", lambda: now + 9_901)
     with pytest.raises(host.T09HostError, match="next attempt hard wall"):
         host.admit_next_attempt(tmp_path)
     monkeypatch.setattr(host.time, "time", lambda: now + 13_500)
@@ -1857,28 +2011,10 @@ def test_raw_attempt_streams_before_cutoff_without_aggregate_stage(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     host = _load_host_runner()
-    frozen_sha256 = "f" * 64
     replacement_image_id = "sha256:" + "e" * 64
-    monkeypatch.setattr(
-        host,
-        "load_frozen_run_manifest",
-        lambda *_args, **_kwargs: (
-            {
-                "manifest_id": "RUN-MANIFEST-EXP0001-PILOT-V5-0003",
-                "replacement_image_id": replacement_image_id,
-            },
-            frozen_sha256,
-        ),
-    )
     now = time.time()
     monkeypatch.setattr(host.time, "time", lambda: now)
-    command_document = load_json(
-        ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
-        "T09_PILOT_COMMAND_MANIFESTS.json"
-    )
-    manifest = next(
-        item for item in command_document["manifests"] if item["run_id"] == ATTEMPT_ORDER[0]
-    )
+    manifest = next(item for item in _rendered_v5_manifests() if item["run_id"] == ATTEMPT_ORDER[0])
     artifact_root = tmp_path / "artifacts"
     attempt_root = artifact_root / manifest["permitted_condition_owned"]["output_root"]
     raw_root = artifact_root / manifest["permitted_condition_owned"]["raw_output_root"]
@@ -1895,6 +2031,66 @@ def test_raw_attempt_streams_before_cutoff_without_aggregate_stage(
         pilot_root / "pilot-state.json",
         execution_contract_sha256="a" * 64,
         run_id=ATTEMPT_ORDER[0],
+    )
+    provider_entry = tmp_path / "provider-entry.json"
+    provider_entry.write_text(
+        json.dumps(
+            {
+                "owned_instance_identity_sha256": "b" * 64,
+                "lambda_started_at_epoch": now - 100,
+            }
+        ),
+        encoding="utf-8",
+    )
+    (pilot_root / "provider-entry.json").write_text(
+        json.dumps(
+            {
+                "receipt_sha256": host.file_sha256(provider_entry),
+                "owned_instance_identity_sha256": "b" * 64,
+                "lambda_started_at_epoch": now - 100,
+            }
+        ),
+        encoding="utf-8",
+    )
+    local_qualification = pilot_root / "local-finalizer-qualification.json"
+    local_qualification.write_text(
+        json.dumps(
+            {
+                "qualification_id": "QUAL-T09-PILOT-V5-LOCAL-FINALIZER-0001",
+                "package_commit": "a" * 40,
+            }
+        ),
+        encoding="utf-8",
+    )
+    frozen_document = {
+        "manifest_id": "RUN-MANIFEST-EXP0001-PILOT-V5-0003",
+        "plan_id": "PLAN-EXP0001-PILOT-V5",
+        "clean_package_commit": "a" * 40,
+        "replacement_image_id": replacement_image_id,
+        "local_finalizer_qualification_sha256": host.file_sha256(local_qualification),
+    }
+    frozen_path = pilot_root / "frozen-run-manifest.json"
+    frozen_path.write_text(json.dumps(frozen_document), encoding="utf-8")
+    frozen_sha256 = host.file_sha256(frozen_path)
+    for relative in (
+        "final-image-file-hashes/receipt.json",
+        "qualified-real-evidence-regression/receipt.json",
+        "replacement-image-qualification/build-context-exclusions.json",
+    ):
+        path = pilot_root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"fixture": relative}), encoding="utf-8")
+    monkeypatch.setattr(
+        host,
+        "load_frozen_run_manifest",
+        lambda *_args, **_kwargs: (frozen_document, frozen_sha256),
+    )
+    monkeypatch.setattr(
+        host,
+        "manifest_for_run",
+        lambda _document, run_id: (
+            manifest if run_id == ATTEMPT_ORDER[0] else (_ for _ in ()).throw(KeyError(run_id))
+        ),
     )
     cleanup_path = raw_root / "host-cleanup-receipt.json"
     cleanup = json.loads(cleanup_path.read_text(encoding="utf-8"))
@@ -1944,12 +2140,21 @@ def test_raw_attempt_streams_before_cutoff_without_aggregate_stage(
         frozen_run_manifest_sha256=frozen_sha256,
         execution_contract_sha256="a" * 64,
     )
+    with pytest.raises(host.T09HostError, match="off-host verification acknowledgement"):
+        host.require_attempt_export_acknowledgement(
+            artifact_root,
+            run_id=ATTEMPT_ORDER[0],
+            package_commit="a" * 40,
+        )
     arguments = SimpleNamespace(
         repository=ROOT,
         artifact_root=artifact_root,
         run_id=ATTEMPT_ORDER[0],
         package_commit="a" * 40,
+        secret_file=tmp_path / "fixture-openai-secret",
     )
+    arguments.secret_file.write_bytes(b"fixture-openai-secret-value")
+    arguments.secret_file.chmod(0o600)
     exports = pilot_root / "attempt-exports"
     exports.mkdir()
     archive = exports / f"{ATTEMPT_ORDER[0]}.tar.gz"
@@ -1985,16 +2190,6 @@ def test_raw_attempt_streams_before_cutoff_without_aggregate_stage(
     inbound.mkdir()
     inbound_archive = inbound / f"{ATTEMPT_ORDER[0]}.tar.gz"
     inbound_archive.write_bytes(destination.getvalue())
-    provider_entry = tmp_path / "provider-entry.json"
-    provider_entry.write_text(
-        json.dumps(
-            {
-                "owned_instance_identity_sha256": "b" * 64,
-                "lambda_started_at_epoch": now - 100,
-            }
-        ),
-        encoding="utf-8",
-    )
     host.verify_attempt_export(
         SimpleNamespace(
             inbound_root=inbound,
@@ -2002,19 +2197,50 @@ def test_raw_attempt_streams_before_cutoff_without_aggregate_stage(
             run_id=ATTEMPT_ORDER[0],
             package_commit="a" * 40,
             provider_entry_receipt=provider_entry,
+            restore_artifact_root=None,
         )
     )
     verification = inbound / f"{ATTEMPT_ORDER[0]}-export-verification.json"
     assert verification.is_file()
-    (pilot_root / "provider-entry.json").write_text(
-        json.dumps(
-            {
-                "receipt_sha256": host.file_sha256(provider_entry),
-                "owned_instance_identity_sha256": "b" * 64,
-                "lambda_started_at_epoch": now - 100,
-            }
+    attempt_binding = SimpleNamespace(
+        output_root=manifest["permitted_condition_owned"]["output_root"],
+        raw_output_root=manifest["permitted_condition_owned"]["raw_output_root"],
+    )
+    restored_contract = SimpleNamespace(
+        sha256="a" * 64,
+        attempt=lambda run_id: (
+            attempt_binding
+            if run_id == ATTEMPT_ORDER[0]
+            else (_ for _ in ()).throw(KeyError(run_id))
         ),
-        encoding="utf-8",
+    )
+    monkeypatch.setattr(host, "verify_package", lambda *_args, **_kwargs: {})
+    monkeypatch.setattr(
+        host,
+        "load_execution_contract",
+        lambda *_args, **_kwargs: restored_contract,
+    )
+    restored_root = tmp_path / "restored-offhost"
+    host.restore_verified_attempt_export(
+        repository=ROOT,
+        package_commit="a" * 40,
+        current_commit=None,
+        archive=inbound_archive,
+        verification_path=verification,
+        restoration_root=restored_root,
+        run_id=ATTEMPT_ORDER[0],
+    )
+    restored_attempt = restored_root / attempt_binding.output_root
+    assert (restored_attempt / "raw-attempt-manifest.json").is_file()
+    assert (restored_attempt / "offhost-restore-complete.json").is_file()
+    assert (
+        restored_root / "pilot-v5/attempt-exports" / f"{ATTEMPT_ORDER[0]}.tar.gz"
+    ).read_bytes() == inbound_archive.read_bytes()
+    assert json.loads((restored_root / "pilot-v5/pilot-state.json").read_text(encoding="utf-8"))[
+        "raw_attempts_complete"
+    ] == [ATTEMPT_ORDER[0]]
+    assert (
+        stat.S_IMODE((restored_attempt / "offhost-restore-complete.json").stat().st_mode) == 0o600
     )
     uploaded_ack = tmp_path / "uploaded-export-ack.json"
     uploaded_ack.write_bytes(verification.read_bytes())
@@ -2029,6 +2255,11 @@ def test_raw_attempt_streams_before_cutoff_without_aggregate_stage(
     host.require_prior_export_acknowledgements(
         artifact_root,
         next_attempt_index=1,
+        package_commit="a" * 40,
+    )
+    host.require_attempt_export_acknowledgement(
+        artifact_root,
+        run_id=ATTEMPT_ORDER[0],
         package_commit="a" * 40,
     )
     acknowledgement = host._received_export_ack_path(artifact_root, ATTEMPT_ORDER[0])

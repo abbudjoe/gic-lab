@@ -2,7 +2,104 @@
   "accepted_scientific_and_evaluator_fields_equal": true,
   "additional_browser_actions": 0,
   "additional_model_requests": 0,
-  "finalizer_source_sha256": "f690d281697e2f3c7625388fde190a32d3ddf8647dc11777a573d00db40bf6b0",
+  "dataset_bytes": 1177174,
+  "dataset_sha256": "359300b029c6891567816f351bf8786e9b018d7af8a1a44b7da9ba5ef4651288",
+  "deterministic_distinct_finalization_roots": [
+    {
+      "root": "finalization-0001",
+      "semantic_projection_file_sha256": "8173a8efd78d6a8c9c9cf8c1e36123b83bf8a4379734726aa79a2a41c74484b3",
+      "semantic_projection_sha256": "7bdf21f24f6ce201952aec805e583a8485c6eca032684fd45277ac5886397976"
+    },
+    {
+      "root": "finalization-0002",
+      "semantic_projection_file_sha256": "8173a8efd78d6a8c9c9cf8c1e36123b83bf8a4379734726aa79a2a41c74484b3",
+      "semantic_projection_sha256": "7bdf21f24f6ce201952aec805e583a8485c6eca032684fd45277ac5886397976"
+    }
+  ],
+  "deterministic_repeat_projection_sha256": "7bdf21f24f6ce201952aec805e583a8485c6eca032684fd45277ac5886397976",
+  "evaluator_closure": {
+    "dependency_package_manifest_sha256": "2bb90a5f017787b05834a1dcd3555756f8159787244ed4336809ab783d58fa3b",
+    "dependency_package_records": [
+      "absl-py==2.5.0",
+      "annotated-doc==0.0.5",
+      "annotated-types==0.8.0",
+      "blis==1.3.3",
+      "catalogue==2.0.10",
+      "certifi==2026.7.22",
+      "charset-normalizer==3.5.0",
+      "click==8.4.2",
+      "cloudpathlib==0.24.0",
+      "confection==0.1.5",
+      "cymem==2.0.13",
+      "defusedxml==0.7.1",
+      "en-core-web-sm==3.8.0",
+      "ftfy==6.3.1",
+      "idna==3.18",
+      "jinja2==3.1.6",
+      "joblib==1.5.3",
+      "markdown-it-py==4.2.0",
+      "markupsafe==3.0.3",
+      "mdurl==0.1.2",
+      "murmurhash==1.0.15",
+      "nltk==3.10.3",
+      "numpy==2.4.6",
+      "packaging==26.2",
+      "preshed==3.0.13",
+      "pydantic-core==2.46.4",
+      "pydantic==2.13.4",
+      "pygments==2.20.0",
+      "regex==2026.7.19",
+      "requests==2.34.2",
+      "rich==15.0.0",
+      "rouge-score==0.1.2",
+      "setuptools==84.0.0",
+      "shellingham==1.5.4",
+      "six==1.17.0",
+      "smart-open==7.7.1",
+      "spacy-legacy==3.0.12",
+      "spacy-loggers==1.0.5",
+      "spacy==3.8.11",
+      "srsly==2.5.3",
+      "thinc==8.3.11",
+      "tqdm==4.67.3",
+      "typer-slim==0.24.0",
+      "typer==0.27.1",
+      "typing-extensions==4.16.0",
+      "typing-inspection==0.4.4",
+      "urllib3==2.7.0",
+      "wasabi==1.1.3",
+      "wcwidth==0.8.2",
+      "weasel==0.4.3",
+      "wrapt==2.3.0"
+    ],
+    "evaluator_contract_sha256": "c28a802a45fc8d1e719f8c1bcb22315c2841df831c4ae161f12ab0f2fd08b321",
+    "evaluator_files": [
+      {
+        "path": "evaluation/fanout/evaluator.py",
+        "sha256": "2f99ec6ca40a5d5b49beea61c71d55a85652697b07f92a1c2aaefe85e727ab79"
+      },
+      {
+        "path": "evaluation/fanout/run.py",
+        "sha256": "e6741326a4b0d3a1fe542748d03c86f1e15f87c3de25b4937e17b3e2472afd17"
+      },
+      {
+        "path": "evaluation/fanout/utils/helpers.py",
+        "sha256": "e816bb09d232d820edfc090ff7b2f8f5a4674f27e30b87a9a8d876ffd82c681e"
+      },
+      {
+        "path": "evaluation/fanout/utils/models.py",
+        "sha256": "9638bc652ced674d3c6ff4b63148a913070cee01f350ca773dcbfa2ed1b01cd3"
+      },
+      {
+        "path": "evaluation/fanout/utils/norm.py",
+        "sha256": "c0a5da77ab7014bbb86e8310310b538881f01129d594afc537dd17d565b40eff"
+      }
+    ],
+    "evaluator_files_sha256": "a8f087cb1bd7958004f7b4e9a37671044a1d8b532a357916b3131f588c0fb9b1",
+    "evaluator_lock_sha256": "bec09cf0d326c56af9f717782eef9160579e7720dff701083570df9aa712b34b",
+    "evaluator_revision": "93fb8d72de71f9a4a13419670adeb34d93cf7acd"
+  },
+  "finalizer_source_sha256": "6da62bdba680c0c7ca365a361bdd6e0f2ef8723178d3a755faf584643c39fd3c",
   "interpreter": {
     "executable_name": "python3.11",
     "executable_sha256": "8355d4af6cef1a0b42db3896ca3be9ff7cfd9d62f1d790042f42ed5749898b49",

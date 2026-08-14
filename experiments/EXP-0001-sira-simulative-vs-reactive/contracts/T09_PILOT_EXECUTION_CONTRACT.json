@@ -31,6 +31,10 @@
       "path": "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/T09_PILOT_RUNTIME_IDENTITY.json",
       "sha256": "549f7e6afd0a33a8e42c8067542bff500fcedeb0be082c4310aa6ef8f08cd589"
     },
+    "real_evidence_regression": {
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY3_FINALIZER_REGRESSION.json",
+      "sha256": "2d975fef689cf1fdca6d4cca980d99cc8287ffd3acc798734f1224df692865c1"
+    },
     "execution_schema": {
       "path": "schemas/t09-sira-pilot-execution.schema.json",
       "sha256": "a4b46cf52369d61d2add379296db3a1979e826060f2cb330dce395b2e6efcfd0"
@@ -49,6 +53,17 @@
     "t07_frozen_execution_commit": "5698f04dfd08bc85a66d2355b0a4bd7d3ce24a23",
     "t07_post_run_commit": "27f66e6a82edffa57e497516bf3969a199675f06",
     "python_version": "3.11.14",
+    "local_finalizer_qualification_id": "QUAL-T09-PILOT-V5-LOCAL-FINALIZER-0001",
+    "local_finalizer_base_packages": [
+      "attrs==26.1.0",
+      "jsonschema-specifications==2025.9.1",
+      "jsonschema==4.26.0",
+      "pyyaml==6.0.3",
+      "referencing==0.37.0",
+      "rpds-py==2026.6.3",
+      "typing-extensions==4.16.0"
+    ],
+    "local_finalizer_base_materialization": "uv-lock-bec09cf0d326c56af9f717782eef9160579e7720dff701083570df9aa712b34b-only-project-runtime-no-project-install",
     "container_image_digest": null,
     "container_image_policy": "single-qualified-replacement-preentry-frozen-run-manifest-v1",
     "historical_container_image_digest": "sha256:035edf61718e84a8156f4f0f7817b134b0ce31488d3f0b50bbfba2b4a30cc61c",
@@ -93,7 +108,7 @@
     "max_lambda_instances": 1,
     "max_launch_count": 2,
     "persistent_filesystems": 0,
-    "admission_model": "actual-elapsed-next-condition-plus-evidence-handoff-plus-termination-margin-plus-cleanup-reserve",
+    "admission_model": "actual-elapsed-next-condition-hard-wall-plus-cleanup-reserve",
     "future_attempt_maxima_reserved_at_campaign_start": false,
     "provider_control_plane": "existing-t07-pragmatic-lambda-operations-with-source-derived-projections-no-persistent-framework-or-watchdog"
   },
@@ -178,7 +193,7 @@
       "aggregate_total_cost_usd": 45.16,
       "prior_t09_cost_usd": 2.5308164556905757,
       "cumulative_t09_cost_cap_usd": 48.0,
-      "maximum_new_cost_under_cumulative_cap_usd": 45.58593574768333,
+      "maximum_new_cost_under_cumulative_cap_usd": 45.469183544309424,
       "aggregate_model_calls": 4620,
       "aggregate_tokens": 4000000,
       "aggregate_browser_actions": 120,
@@ -402,8 +417,8 @@
       "first-pair-Lambda-cost-strictly-less-than-2.58-dollars",
       "first-pair-total-cost-strictly-less-than-22.58-dollars",
       "projected-aggregate-total-cost-no-more-than-45.16-dollars",
-      "prior-plus-projected-new-campaign-cost-no-more-than-46-dollars",
-      "actual-remaining-campaign-time-admits-next-5160-second-condition-evaluator-export-dispatch-cleanup-envelope",
+      "prior-plus-projected-new-campaign-cost-no-more-than-48-dollars",
+      "actual-remaining-campaign-time-admits-next-4500-second-condition-and-cleanup-envelope",
       "no-reference-leakage-contamination-two-valid-incomplete-zero-score-floor-or-two-valid-completed-one-score-ceiling-that-makes-Task-B-incapable-of-adding-calibration-value"
     ],
     "failure_action": "stop-before-Task-B-preserve-Task-A-evidence-cleanup-and-terminate-provider-resource",
@@ -439,6 +454,7 @@
     ],
     "raw_retention": "private-access-controlled-authoritative-per-attempt-export-before-next-entry",
     "raw_finalization_boundary": "raw-and-control-read-only-finalized-version-root-only-writeable-supervisor-selects-after-rehash",
+    "offhost_reconstruction": "verified-per-attempt-export-carries-hash-bound-control-snapshot-and-restores-exact-raw-prefix-for-prequalified-local-finalization-after-provider-termination",
     "downstream_repair_policy": "descendant-finalizer-only-network-none-no-condition-retry-uniform-selected-closure",
     "public_release": "blocked-pending-review"
   },

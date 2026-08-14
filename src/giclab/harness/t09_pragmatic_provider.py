@@ -656,12 +656,15 @@ def load_campaign_lifecycle(repository: Path) -> CampaignLifecycle:
         raw.get("post_condition_evaluator_evidence_seconds") != 600
         or raw.get("termination_dispatch_margin_seconds") != 60
         or raw.get("replacement_launch_rule")
-        != (
-            "launch 2 is permitted only after launch 1 is conclusively terminal and absent, "
-            "every launch-1 empirical counter is zero, no ownership outcome is unknown, and "
-            "cumulative Lambda cost still fits the same campaign cap; any empirical entry "
-            "permanently disables replacement"
-        )
+        != {
+            "allowed_only_before_empirical_entry": True,
+            "prior_instance_terminal_and_absent_required": True,
+            "prior_host_empirical_attempts_required": 0,
+            "prior_host_model_requests_required": 0,
+            "prior_host_browser_actions_required": 0,
+            "ownership_outcome_unknown_forbidden": True,
+            "cumulative_lambda_cap_required": True,
+        }
     ):
         raise T09ProviderError("provider evidence or termination handoff margin drifted")
     return CampaignLifecycle(
@@ -2133,6 +2136,13 @@ def _validate_replacement_launch_eligibility(
         plan_sha256=file_sha256(plan_path),
         lifecycle=lifecycle,
     )
+    retained_preempirical_source = prior / "preempirical-source"
+    host_disposition = _validate_host_preempirical_disposition(
+        retained_preempirical_source / "preempirical-disposition.json",
+        retained_preempirical_source,
+        package_commit=package_commit,
+        entry_receipt_sha256=file_sha256(entry_path),
+    )
     required = {
         "schema_version": "0.1.0",
         "plan_id": PLAN_ID,
@@ -2141,6 +2151,12 @@ def _validate_replacement_launch_eligibility(
         "closed_launch_slot": 1,
         "entry_receipt_sha256": file_sha256(entry_path),
         "closeout_receipt_sha256": file_sha256(closeout_path),
+        "host_preempirical_receipt_sha256": file_sha256(
+            retained_preempirical_source / "preempirical-disposition.json"
+        ),
+        "host_preempirical_source_manifest_sha256": file_sha256(
+            retained_preempirical_source / "source-manifest.json"
+        ),
         "campaign_started_at_epoch": entry["lambda_started_at_epoch"],
         "prior_lambda_duration_seconds": closeout["lambda_duration_seconds"],
         "prior_lambda_cost_usd": closeout["lambda_list_cost_usd"],
@@ -2153,7 +2169,7 @@ def _validate_replacement_launch_eligibility(
         "security_restored": True,
         "second_launch_permitted": True,
     }
-    if value != required:
+    if value != required or host_disposition.get("empirical_attempts_entered") != 0:
         raise T09ProviderError("replacement launch is not source-bound and pre-empirical")
     if (
         closeout.get("terminal_or_absent") is not True
@@ -2237,6 +2253,64 @@ def _validate_host_preempirical_disposition(
     ):
         raise T09ProviderError("host pre-empirical disposition is not source-grounded zero-use")
     return value
+
+
+def _retain_host_preempirical_source(source_root: Path, private_root: Path) -> Path:
+    """Copy the validated zero-use host bundle into launch-1 private evidence."""
+
+    source = source_root.resolve(strict=True)
+    destination = private_root / "preempirical-source"
+    destination.mkdir(mode=0o700, exist_ok=False)
+    total = 0
+    for source_path in sorted(source.iterdir()):
+        metadata = source_path.stat(follow_symlinks=False)
+        if (
+            source_path.is_symlink()
+            or not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_nlink != 1
+            or stat.S_IMODE(metadata.st_mode) != 0o600
+        ):
+            raise T09ProviderError("pre-empirical source cannot be retained safely")
+        total += metadata.st_size
+        if total > 1_048_576:
+            raise T09ProviderError("pre-empirical source exceeds its retention cap")
+        source_descriptor = os.open(
+            source_path,
+            os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0),
+        )
+        destination_path = destination / source_path.name
+        destination_descriptor = os.open(
+            destination_path,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
+            0o600,
+        )
+        try:
+            remaining = metadata.st_size
+            while remaining:
+                chunk = os.read(source_descriptor, min(65_536, remaining))
+                if not chunk:
+                    raise T09ProviderError("pre-empirical source copy ended early")
+                offset = 0
+                while offset < len(chunk):
+                    written = os.write(destination_descriptor, chunk[offset:])
+                    if written <= 0:
+                        raise T09ProviderError("pre-empirical source copy made no progress")
+                    offset += written
+                remaining -= len(chunk)
+            if os.read(source_descriptor, 1):
+                raise T09ProviderError("pre-empirical source changed during copy")
+            os.fsync(destination_descriptor)
+        finally:
+            os.close(destination_descriptor)
+            os.close(source_descriptor)
+        if file_sha256(destination_path) != file_sha256(source_path):
+            raise T09ProviderError("pre-empirical retained copy hash mismatch")
+    directory = os.open(destination, os.O_RDONLY)
+    try:
+        os.fsync(directory)
+    finally:
+        os.close(directory)
+    return destination
 
 
 def _load_source_validated_owned_state(
@@ -2708,16 +2782,31 @@ def closeout_campaign(
     if (preempirical_receipt is None) != (preempirical_source_root is None):
         raise T09ProviderError("pre-empirical replacement evidence is incomplete")
     replacement_evidence_validated = False
+    retained_preempirical_source: Path | None = None
     if preempirical_receipt is not None and preempirical_source_root is not None:
+        if preempirical_receipt.name != "preempirical-disposition.json":
+            raise T09ProviderError("pre-empirical receipt identity is unexpected")
         entry_for_replacement = _load_json(entry_receipt_path, maximum_bytes=65_536)
         if entry_for_replacement.get("launch_slot") != 1:
             raise T09ProviderError("only launch slot 1 can authorize one replacement")
-        _validate_host_preempirical_disposition(
+        validated_host_disposition = _validate_host_preempirical_disposition(
             preempirical_receipt,
             preempirical_source_root,
             package_commit=package_commit,
             entry_receipt_sha256=file_sha256(entry_receipt_path),
         )
+        retained_preempirical_source = _retain_host_preempirical_source(
+            preempirical_source_root,
+            private_root,
+        )
+        retained_host_disposition = _validate_host_preempirical_disposition(
+            retained_preempirical_source / preempirical_receipt.name,
+            retained_preempirical_source,
+            package_commit=package_commit,
+            entry_receipt_sha256=file_sha256(entry_receipt_path),
+        )
+        if retained_host_disposition != validated_host_disposition:
+            raise T09ProviderError("retained pre-empirical source changed during copy")
         replacement_evidence_validated = True
     provisional_path = private_root / "provisional-owned-state.json"
     if not entry_receipt_path.is_file() and provisional_path.is_file():
@@ -2871,6 +2960,8 @@ def closeout_campaign(
         )
         entry_document = _load_json(entry_path, maximum_bytes=65_536)
         if replacement_evidence_validated:
+            if retained_preempirical_source is None:
+                raise T09ProviderError("replacement source binding is unavailable")
             closeout_document = _load_json(receipt, maximum_bytes=65_536)
             if (
                 closeout_document.get("terminal_or_absent") is not True
@@ -2886,6 +2977,12 @@ def closeout_campaign(
                 "closed_launch_slot": 1,
                 "entry_receipt_sha256": file_sha256(entry_path),
                 "closeout_receipt_sha256": file_sha256(receipt),
+                "host_preempirical_receipt_sha256": file_sha256(
+                    retained_preempirical_source / "preempirical-disposition.json"
+                ),
+                "host_preempirical_source_manifest_sha256": file_sha256(
+                    retained_preempirical_source / "source-manifest.json"
+                ),
                 "campaign_started_at_epoch": entry_document["lambda_started_at_epoch"],
                 "prior_lambda_duration_seconds": closeout_document["lambda_duration_seconds"],
                 "prior_lambda_cost_usd": closeout_document["lambda_list_cost_usd"],

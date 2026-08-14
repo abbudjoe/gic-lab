@@ -42,11 +42,14 @@
     },
     "runtime": {
       "type": "object",
-      "required": ["giclab_commit", "finalizer_commit", "finalizer_source_sha256", "finalizer_dependency_manifest_sha256", "reviewed_implementation_ancestor", "sira_commit", "python_version", "python_interpreter_path", "python_interpreter_sha256", "container_image_digest", "frozen_run_manifest_sha256", "qualification_id", "build_context_manifest_sha256", "installed_package_manifest_sha256", "chromium_executable_sha256", "patched_upstream_runner_sha256", "evaluator_overlay_manifest_sha256", "evaluator_overlay_entries_sha256", "evaluator_overlay_packages_sha256", "model_revision", "requested_service_tier", "returned_service_tiers", "browser_identity", "gpu_accounting"],
+      "required": ["giclab_commit", "finalizer_commit", "finalizer_source_sha256", "finalizer_projection_source_sha256", "finalizer_execution_mode", "finalizer_runtime_qualification_sha256", "finalizer_dependency_manifest_sha256", "reviewed_implementation_ancestor", "sira_commit", "python_version", "python_interpreter_path", "python_interpreter_sha256", "container_image_digest", "frozen_run_manifest_sha256", "qualification_id", "build_context_manifest_sha256", "installed_package_manifest_sha256", "chromium_executable_sha256", "patched_upstream_runner_sha256", "evaluator_overlay_manifest_sha256", "evaluator_overlay_entries_sha256", "evaluator_overlay_packages_sha256", "model_revision", "requested_service_tier", "returned_service_tiers", "browser_identity", "gpu_accounting"],
       "properties": {
         "giclab_commit": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
         "finalizer_commit": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
         "finalizer_source_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "finalizer_projection_source_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "finalizer_execution_mode": {"enum": ["qualified-image", "qualified-local"]},
+        "finalizer_runtime_qualification_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
         "finalizer_dependency_manifest_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
         "reviewed_implementation_ancestor": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
         "sira_commit": {"const": "93fb8d72de71f9a4a13419670adeb34d93cf7acd"},

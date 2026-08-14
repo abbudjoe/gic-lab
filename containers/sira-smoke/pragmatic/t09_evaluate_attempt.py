@@ -13,6 +13,7 @@ import argparse
 import hashlib
 import json
 import os
+import socket
 import stat
 import sys
 from collections.abc import Mapping, Sequence
@@ -39,6 +40,7 @@ from giclab.harness.t09_sira_pilot import (
     file_sha256,
     load_execution_contract,
     outcome_contract,
+    scientific_attempt_projection,
 )
 
 
@@ -59,8 +61,16 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--package-commit", required=True)
     parser.add_argument("--finalizer-commit", required=True)
+    parser.add_argument(
+        "--finalizer-execution-mode",
+        choices=("qualified-image", "qualified-local"),
+        required=True,
+    )
     parser.add_argument("--finalizer-source-sha256", required=True)
+    parser.add_argument("--finalizer-projection-source-sha256", required=True)
     parser.add_argument("--finalizer-dependency-manifest-sha256", required=True)
+    parser.add_argument("--finalizer-runtime-qualification", type=Path, required=True)
+    parser.add_argument("--finalizer-runtime-qualification-sha256", required=True)
     parser.add_argument("--frozen-run-manifest", type=Path, required=True)
     parser.add_argument("--frozen-run-manifest-sha256", required=True)
     parser.add_argument("--replacement-image-id", required=True)
@@ -71,6 +81,16 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--score-schema", type=Path, required=True)
     parser.add_argument("--evidence-schema", type=Path, required=True)
     return parser
+
+
+def _disable_local_network() -> None:
+    """Deny every socket construction before local evaluator imports execute."""
+
+    def denied(*_args: object, **_kwargs: object) -> object:
+        raise T09PilotError("network is disabled for qualified local finalization")
+
+    socket.socket = denied  # type: ignore[misc,assignment]
+    socket.create_connection = denied  # type: ignore[assignment]
 
 
 def _validate_raw_attempt(
@@ -507,9 +527,46 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
         )
     )
     interpreter_path = Path(sys.executable)
-    if interpreter_path.as_posix() != "/opt/sira/.venv/bin/python":
-        raise T09PilotError("finalizer did not run under the frozen absolute interpreter")
     interpreter_sha256 = file_sha256(interpreter_path)
+    runtime_qualification_path = args.finalizer_runtime_qualification.resolve(strict=True)
+    if file_sha256(runtime_qualification_path) != args.finalizer_runtime_qualification_sha256:
+        raise T09PilotError("finalizer runtime qualification hash changed")
+    if args.finalizer_execution_mode == "qualified-image":
+        if (
+            runtime_qualification_path != frozen_manifest_path
+            or args.finalizer_runtime_qualification_sha256 != args.frozen_run_manifest_sha256
+            or interpreter_path.as_posix() != "/opt/sira/.venv/bin/python"
+        ):
+            raise T09PilotError("image finalizer did not use its frozen runtime qualification")
+    else:
+        local_qualification = _load_object(
+            runtime_qualification_path,
+            label="qualified local finalizer runtime",
+        )
+        local_base_packages = local_qualification.get("interpreter_dependency_manifest")
+        if (
+            local_qualification.get("schema_version") != "0.1.0"
+            or local_qualification.get("qualification_id")
+            != "QUAL-T09-PILOT-V5-LOCAL-FINALIZER-0001"
+            or local_qualification.get("package_commit") != args.package_commit
+            or local_qualification.get("execution_contract_sha256") != contract.sha256
+            or local_qualification.get("interpreter") != interpreter_path.as_posix()
+            or local_qualification.get("interpreter_sha256") != interpreter_sha256
+            or local_qualification.get("python_version") != "3.11.14"
+            or local_qualification.get("evaluator_contract_sha256")
+            != contract.evaluator_contract_sha256
+            or local_qualification.get("dataset_sha256")
+            != "359300b029c6891567816f351bf8786e9b018d7af8a1a44b7da9ba5ef4651288"
+            or local_qualification.get("network_policy") != "socket-construction-denied"
+            or local_qualification.get("real_evidence_regression_passed") is not True
+            or not isinstance(local_base_packages, list)
+            or not local_base_packages
+            or local_base_packages != sorted(local_base_packages)
+            or local_qualification.get("interpreter_dependency_manifest_sha256")
+            != canonical_sha256(local_base_packages)
+        ):
+            raise T09PilotError("qualified local finalizer runtime drifted")
+        _disable_local_network()
     if (
         frozen_manifest.get("plan_id") != PLAN_ID
         or frozen_manifest.get("clean_package_commit") != args.package_commit
@@ -521,8 +578,8 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
         != "0498f208c25339f386413ada7b3c35293b0b6250e67d85446ba9541d7fd636f7"
         or frozen_manifest.get("patched_upstream_runner_sha256")
         != "b06793ad1b366a934b798f9f3272fc80a7104a220cb3304ab3bda2eb2a78b331"
-        or frozen_manifest.get("python_interpreter_path") != interpreter_path.as_posix()
-        or frozen_manifest.get("python_interpreter_sha256") != interpreter_sha256
+        or frozen_manifest.get("python_interpreter_path") != "/opt/sira/.venv/bin/python"
+        or not isinstance(frozen_manifest.get("python_interpreter_sha256"), str)
         or any(
             not isinstance(value, str)
             or len(value) != 64
@@ -537,8 +594,9 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
     raw_root = args.raw_attempt_root.resolve(strict=True)
     finalized_root = args.finalized_attempt_root.resolve(strict=False)
     artifact_root = args.artifact_root.resolve(strict=True)
-    if raw_root.as_posix() != "/opt/giclab-raw" or finalized_root.as_posix() != (
-        "/opt/giclab-finalized"
+    if args.finalizer_execution_mode == "qualified-image" and (
+        raw_root.as_posix() != "/opt/giclab-raw"
+        or finalized_root.as_posix() != "/opt/giclab-finalized"
     ):
         raise T09PilotError("container raw/finalized mount points drifted")
     finalized_metadata = finalized_root.stat(follow_symlinks=False)
@@ -590,11 +648,14 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
     if command_manifest.get("condition_plan_sha256") != attempt.condition_plan_sha256:
         raise T09PilotError("command/condition binding drifted")
     finalizer_closure = {
+        "finalizer_execution_mode": args.finalizer_execution_mode,
+        "finalizer_runtime_qualification_sha256": (args.finalizer_runtime_qualification_sha256),
         "finalizer_commit": args.finalizer_commit,
         "finalizer_source_sha256": args.finalizer_source_sha256,
+        "finalizer_projection_source_sha256": args.finalizer_projection_source_sha256,
         "scientific_package_commit": args.package_commit,
         "pilot_library_sha256": file_sha256(Path(pilot_contract.__file__).resolve(strict=True)),
-        "interpreter": "/opt/sira/.venv/bin/python",
+        "interpreter": interpreter_path.as_posix(),
         "interpreter_sha256": interpreter_sha256,
         "replacement_image_id": args.replacement_image_id,
         "execution_contract_sha256": contract.sha256,
@@ -883,12 +944,15 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
             "giclab_commit": args.package_commit,
             "finalizer_commit": args.finalizer_commit,
             "finalizer_source_sha256": args.finalizer_source_sha256,
+            "finalizer_projection_source_sha256": args.finalizer_projection_source_sha256,
+            "finalizer_execution_mode": args.finalizer_execution_mode,
+            "finalizer_runtime_qualification_sha256": (args.finalizer_runtime_qualification_sha256),
             "finalizer_dependency_manifest_sha256": (args.finalizer_dependency_manifest_sha256),
             "reviewed_implementation_ancestor": attempt.giclab_commit,
             "sira_commit": SIRA_COMMIT,
             "python_version": runtime_environment.get("python_version"),
-            "python_interpreter_path": interpreter_path.as_posix(),
-            "python_interpreter_sha256": interpreter_sha256,
+            "python_interpreter_path": frozen_manifest.get("python_interpreter_path"),
+            "python_interpreter_sha256": frozen_manifest.get("python_interpreter_sha256"),
             "container_image_digest": args.replacement_image_id,
             "frozen_run_manifest_sha256": args.frozen_run_manifest_sha256,
             "qualification_id": frozen_manifest.get("qualification_id"),
@@ -912,6 +976,13 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
             ),
             "browser_identity": {"playwright": "1.39.0", "chromium_revision": "1084"},
             "gpu_accounting": gpu_accounting,
+            "analysis_runtime": {
+                "execution_mode": args.finalizer_execution_mode,
+                "interpreter": interpreter_path.as_posix(),
+                "interpreter_sha256": interpreter_sha256,
+                "qualification_sha256": args.finalizer_runtime_qualification_sha256,
+                "network": "none",
+            },
         },
         "timing": {
             "started_at": timing.get("started_at"),
@@ -982,6 +1053,9 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
     )
     _write_exclusive(outcome_path, outcome)
     _write_exclusive(evidence_path, evidence_index)
+    attempt_projection = scientific_attempt_projection(evidence_index)
+    semantic_projection_path = finalized_root / "semantic-projection.json"
+    _write_exclusive(semantic_projection_path, attempt_projection)
     retained_manifest, retained_receipt = _validate_raw_attempt(
         raw_root=raw_root,
         manifest_path=args.raw_attempt_manifest,
@@ -1007,6 +1081,7 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
         "finalizer_commit": args.finalizer_commit,
         "finalizer_dependency_manifest_sha256": args.finalizer_dependency_manifest_sha256,
         "finalized_output_root": finalized_relative.as_posix(),
+        "semantic_projection_sha256": canonical_sha256(attempt_projection),
         "raw_source_revalidated_after_finalization": True,
     }
 

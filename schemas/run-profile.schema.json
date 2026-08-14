@@ -196,6 +196,7 @@
         "max_lambda_instances",
         "max_launch_count",
         "persistent_filesystems",
+        "replacement_launch_rule",
         "admission_rule",
         "control_plane"
       ],
@@ -209,8 +210,30 @@
         "post_condition_evaluator_evidence_seconds": {"const": 600},
         "termination_dispatch_margin_seconds": {"const": 60},
         "max_lambda_instances": {"const": 1},
-        "max_launch_count": {"const": 1},
+        "max_launch_count": {"enum": [1, 2]},
         "persistent_filesystems": {"const": 0},
+        "replacement_launch_rule": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "allowed_only_before_empirical_entry",
+            "prior_instance_terminal_and_absent_required",
+            "prior_host_empirical_attempts_required",
+            "prior_host_model_requests_required",
+            "prior_host_browser_actions_required",
+            "ownership_outcome_unknown_forbidden",
+            "cumulative_lambda_cap_required"
+          ],
+          "properties": {
+            "allowed_only_before_empirical_entry": {"const": true},
+            "prior_instance_terminal_and_absent_required": {"const": true},
+            "prior_host_empirical_attempts_required": {"const": 0},
+            "prior_host_model_requests_required": {"const": 0},
+            "prior_host_browser_actions_required": {"const": 0},
+            "ownership_outcome_unknown_forbidden": {"const": true},
+            "cumulative_lambda_cap_required": {"const": true}
+          }
+        },
         "admission_rule": {"type": "string", "minLength": 8},
         "control_plane": {"type": "string", "minLength": 8}
       }
@@ -246,6 +269,50 @@
         },
         "all_attempts_same_image_required": {"const": true},
         "image_export": {"type": "string", "minLength": 8}
+      }
+    },
+    "raw_attempt_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "empirical_authority",
+        "next_attempt_gate",
+        "downstream_finalizer",
+        "offhost_reconstruction",
+        "repair_policy",
+        "uniform_analysis",
+        "aggregate_staging"
+      ],
+      "properties": {
+        "empirical_authority": {"type": "string", "minLength": 8},
+        "next_attempt_gate": {"type": "string", "minLength": 8},
+        "downstream_finalizer": {"type": "string", "minLength": 8},
+        "offhost_reconstruction": {"type": "string", "minLength": 8},
+        "repair_policy": {"type": "string", "minLength": 8},
+        "uniform_analysis": {"type": "string", "minLength": 8},
+        "aggregate_staging": {"type": "string", "minLength": 8}
+      }
+    },
+    "historical_fixture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_plan_id",
+        "attempt_run_id",
+        "archive_sha256",
+        "public_disposition_sha256",
+        "use"
+      ],
+      "properties": {
+        "source_plan_id": {"const": "PLAN-EXP0001-PILOT-V4"},
+        "attempt_run_id": {"const": "RUN-T09-TASK-A-REACTIVE-0002"},
+        "archive_sha256": {
+          "const": "63ed19b35bcb4cb62c3796a80a48004937340eb3826f9657a1006e251772255d"
+        },
+        "public_disposition_sha256": {
+          "const": "ecc0e135695e16f68d52b7aa85b70d42b1f1e945f7dd119fb7c7ff0e42fc8231"
+        },
+        "use": {"type": "string", "minLength": 8}
       }
     },
     "artifacts": {

@@ -57,13 +57,16 @@
     "approved_offline_fixture_execution_required": true
   },
   "repository_instrumentation": {
-    "reviewed_implementation_ancestor": "3303ceac79d6d725386de02298046365b9ae5855",
+    "reviewed_implementation_ancestor": "308cdd34caf7687ba732374a4f6a9f1eb5e38241",
     "scope": [
       "replacement-image-build-context-and-functional-qualification",
       "pre-action-budget-count",
       "post-action-result-and-screenshot-retention",
       "per-call-role-lineage-usage-and-service-tier-receipts",
       "condition-and-aggregate-budget-persistence",
+      "immutable-raw-attempt-seal-and-export-acknowledgement",
+      "pure-repairable-finalizer-projection-and-append-only-selection",
+      "qualified-provider-independent-local-finalizer-runtime",
       "resource-cap-and-cumulative-accounting-checks",
       "cleanup-and-exact-provider-closeout-receipts"
     ],
@@ -71,16 +74,19 @@
       {"path": "src/giclab/harness/sira_gate_a_runtime.py", "sha256": "5fde575a7b1bcfa2b7ebc3717548ddedff8fc77e3998ab40ffec56ec772ae4f1"},
       {"path": "src/giclab/harness/sira_gate_a.py", "sha256": "b9a3ae20dc07056bb16dbf3807c8f3912bda9cf31b04a47d80c7de453db971af"},
       {"path": "src/giclab/harness/safety.py", "sha256": "12529af51aea206e02a531abea4959d80976bd271567f05c75e903654527d34c"},
-      {"path": "src/giclab/harness/t09_sira_pilot.py", "sha256": "a4c116ddae67ddcf9a506a0c261dfc63da25a9e1a265eb6921276ac0349027de"},
-      {"path": "src/giclab/harness/lambda_campaign_lifecycle.py", "sha256": "b300f4ab18e201454e98f8fe4a0c044e0e6a258ac0bddecc08c631fd9071b97d"},
+      {"path": "src/giclab/harness/t09_sira_pilot.py", "sha256": "e2b7bb137c67bf195cd8fe3ac72b7d03a01e73ca9019eacaa6fd062c03e75b41"},
+      {"path": "src/giclab/harness/lambda_campaign_lifecycle.py", "sha256": "a2ae10595dc270fef26a8136197d9127f0b24b8477ca0e9760743b8d5bd824dd"},
       {"path": "src/giclab/harness/lambda_l2m_observer.py", "sha256": "3ad5d56abd2b4d115b479c9cf7f0f5202e715d07c1b4842c82dc894fbe8bf6c9"},
-      {"path": "src/giclab/harness/t09_pragmatic_provider.py", "sha256": "c35736d3c4bb60909e3fbeb871e21705eb641915f42752392e09a8c79b6a9d34"},
-      {"path": "containers/sira-smoke/pragmatic/t09_remote_runner.py", "sha256": "9b57c2ee3667f632b4ebfd55e90c669aa3daf98d5db99d63271bd78786f5e808"},
-      {"path": "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py", "sha256": "6dc889d2af5eb250594c421ebe15310547e24828eb8cf7455c66c76c2323e9ad"},
-      {"path": "containers/sira-smoke/pragmatic/t09_preflight.py", "sha256": "20066509bb8df0c0bcabcdfbc750e145f04c007920e71f86aeddf2533609c096"},
-      {"path": "containers/sira-smoke/pragmatic/t09_freeze_commands.py", "sha256": "af8897a04e1ab09f9c5784217a005c2e895e138dec9a19e0f0f59f98ac7233e7"},
+      {"path": "src/giclab/harness/t09_pragmatic_provider.py", "sha256": "650ab0f4f2b6b24d7b32b6029f492ebdf56c2fd180296e23dafcc667469e9eda"},
+      {"path": "containers/sira-smoke/pragmatic/t09_remote_runner.py", "sha256": "2e3eb2b176eb480b03cfd221d854447f0c3ebfdac92a1b51c16afb3f8225298c"},
+      {"path": "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py", "sha256": "fd08f27a0430473b0f5316deaf44c65e778cf143283303e885c9da37e94b43f8"},
+      {"path": "containers/sira-smoke/pragmatic/t09_preflight.py", "sha256": "5c630ea2a8cda817952deb2b315c741ae530f6bc94af7033daef5b5f1f3b0155"},
+      {"path": "containers/sira-smoke/pragmatic/t09_freeze_commands.py", "sha256": "fe19336d859e905d24af2bd7976e077b64c8c37f9abc8fe98313bd833bd403db"},
       {"path": "containers/sira-smoke/pragmatic/t09_secret_preflight.py", "sha256": "b4763ac8edc98b86c2f9f617f53cdb6be2ef9cb26d39aad660442e4c1a7506a4"},
-      {"path": "containers/sira-smoke/pragmatic/materialize_openai_secret.py", "sha256": "6cd57c1be7af02e61e0ed9bffc0e6c4e93a78b9b3567a4bfa26fe6cc030095b6"}
+      {"path": "containers/sira-smoke/pragmatic/materialize_openai_secret.py", "sha256": "6cd57c1be7af02e61e0ed9bffc0e6c4e93a78b9b3567a4bfa26fe6cc030095b6"},
+      {"path": "containers/sira-smoke/pragmatic/t09_real_evidence_regression.py", "sha256": "1243d896ee5355158eac6a5f70bce66bce0e5816043269c68193b1bdb3bd1bef"},
+      {"path": "containers/sira-smoke/pragmatic/t09_finalizer_projection.py", "sha256": "2d74402667c1dd9da56b38ce9b067a12a70aaf7dcfe789344a4d72b13f3f195b"},
+      {"path": "containers/sira-smoke/pragmatic/t09_local_finalizer_qualification.py", "sha256": "37956aa22c64d5a5156b0f0089a2163c1d0eed84351f8c61d7fc1cfc0f631275"}
     ]
   },
   "gpu": {

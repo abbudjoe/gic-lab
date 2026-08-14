@@ -86,8 +86,15 @@ provider_lifecycle:
   max_lambda_instances: 1
   max_launch_count: 2
   persistent_filesystems: 0
-  replacement_launch_rule: launch 2 is permitted only after launch 1 is conclusively terminal and absent, every launch-1 empirical counter is zero, no ownership outcome is unknown, and cumulative Lambda cost still fits the same campaign cap; any empirical entry permanently disables replacement
-  admission_rule: remaining campaign time must cover only the next 3600-second condition hard wall, a 600-second evaluator/evidence handoff, a positive 60-second provider-termination dispatch margin, and the 900-second cleanup reserve
+  replacement_launch_rule:
+    allowed_only_before_empirical_entry: true
+    prior_instance_terminal_and_absent_required: true
+    prior_host_empirical_attempts_required: 0
+    prior_host_model_requests_required: 0
+    prior_host_browser_actions_required: 0
+    ownership_outcome_unknown_forbidden: true
+    cumulative_lambda_cap_required: true
+  admission_rule: remaining campaign time must cover only the next 3600-second condition hard wall and the 900-second cleanup reserve; downstream evaluator, evidence, and dispatch phases remain bounded but are not empirical-admission blockers
   control_plane: existing T07 pragmatic Lambda operations with source-derived projections; no persistent framework or watchdog
 replacement_image_policy:
   historical_image_digest: sha256:035edf61718e84a8156f4f0f7817b134b0ce31488d3f0b50bbfba2b4a30cc61c
@@ -103,7 +110,8 @@ replacement_image_policy:
 raw_attempt_policy:
   empirical_authority: immutable condition-owned raw directory, SHA-256 manifest, raw-attempt-complete receipt, and independently verified per-attempt archive
   next_attempt_gate: prior condition terminated, raw evidence is reconstructable, raw manifest revalidates, exact credentials are absent, container and browser cleanup are clean, off-host archive acknowledgement exists, and remaining budgets admit the next attempt plus cleanup
-  downstream_finalizer: network-disabled, explicit /opt/sira/.venv/bin/python, exact frozen evaluator overlay, read-only raw and control mounts, fresh versioned finalized-output root
+  downstream_finalizer: network-disabled, explicit qualified-image or prequalified absolute local Python, exact frozen evaluator overlay, read-only raw and control inputs, fresh versioned finalized-output root
+  offhost_reconstruction: each verified raw export carries a hash-bound control snapshot sufficient to restore the exact raw prefix and run the prequalified local finalizer after provider termination
   repair_policy: downstream-only descendant commits may rerun the finalizer against immutable raw evidence; they may not rerun a condition, alter raw bytes, change scoring, or make a model or browser request
   uniform_analysis: the same full finalizer/interpreter/dependency/evaluator closure must be selected for both members of a pair and for every retained campaign attempt before final analysis
   aggregate_staging: per-attempt raw archives are authoritative; structural fixture or private-only findings are adjudicated and block public release but do not block private preservation or provider termination; an exact credential match remains a hard stop
@@ -133,5 +141,5 @@ readiness:
     - Bind the exact clean package commit, final plan SHA-256, fresh V5 identities, and current Retry 3 authority in a single-use private overlay.
     - Build once and pass the source-bound replacement-image, offline evaluator, local browser, exact model metadata, pair-diff, science-hash, cap, evidence, repository, and privacy gates before empirical entry.
     - Freeze the exact accepted image and all qualification receipt hashes in the source-derived mode-0600 frozen run manifest; every attempt must reload it and use the exact image ID.
-    - Start no attempt unless its 3,600-second condition wall, 600-second evaluator/evidence handoff, 60-second termination-dispatch margin, and 900-second cleanup reserve fit in actual remaining campaign time.
+    - Start no attempt unless its 3,600-second condition wall and 900-second cleanup reserve fit in actual remaining campaign time; keep downstream evaluator, evidence, and dispatch phases bounded without making them empirical-admission blockers.
     - Keep raw task, answer, trace, screenshot, and evaluator evidence private and access controlled; public release remains blocked pending review.

@@ -14,6 +14,7 @@ import json
 import math
 import os
 import re
+import stat
 import sys
 import time
 from collections.abc import Callable, Mapping, Sequence
@@ -141,16 +142,11 @@ class CampaignLifecycleLimits:
         )
 
     def required_attempt_seconds(self, *, attempt_hard_wall_seconds: int) -> int:
-        """Return the one source-of-truth admission envelope for an attempt."""
+        """Return the empirical admission envelope required by the Retry 3 contract."""
 
         if type(attempt_hard_wall_seconds) is not int or attempt_hard_wall_seconds <= 0:
             raise T09PilotError("attempt hard wall must be a positive integer")
-        return (
-            attempt_hard_wall_seconds
-            + self.post_condition_evaluator_evidence_seconds
-            + self.termination_dispatch_margin_seconds
-            + self.normal_cleanup_reserve_seconds
-        )
+        return attempt_hard_wall_seconds + self.normal_cleanup_reserve_seconds
 
     def admit_remaining(
         self,
@@ -213,6 +209,65 @@ def canonical_sha256(value: object) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
+def scientific_attempt_projection(evidence: Mapping[str, object]) -> dict[str, object]:
+    """Project only deterministic scientific/evaluator evidence, not packaging metadata."""
+
+    required = {
+        "identity",
+        "runtime",
+        "timing",
+        "command",
+        "provider_calls",
+        "browser_actions",
+        "outcome",
+        "evaluator",
+        "cleanup",
+        "h2k_optional_fields",
+        "redaction",
+    }
+    if not required.issubset(evidence):
+        raise T09PilotError("attempt evidence lacks its scientific projection surface")
+    runtime = _strict_object(evidence["runtime"], context="attempt runtime projection")
+    runtime_fields = (
+        "giclab_commit",
+        "reviewed_implementation_ancestor",
+        "sira_commit",
+        "python_version",
+        "python_interpreter_path",
+        "python_interpreter_sha256",
+        "container_image_digest",
+        "frozen_run_manifest_sha256",
+        "qualification_id",
+        "build_context_manifest_sha256",
+        "installed_package_manifest_sha256",
+        "chromium_executable_sha256",
+        "patched_upstream_runner_sha256",
+        "evaluator_overlay_manifest_sha256",
+        "evaluator_overlay_entries_sha256",
+        "evaluator_overlay_packages_sha256",
+        "model_revision",
+        "requested_service_tier",
+        "returned_service_tiers",
+        "browser_identity",
+        "gpu_accounting",
+    )
+    if any(field not in runtime for field in runtime_fields):
+        raise T09PilotError("attempt runtime projection is incomplete")
+    return {
+        "identity": evidence["identity"],
+        "runtime": {field: runtime[field] for field in runtime_fields},
+        "timing": evidence["timing"],
+        "command": evidence["command"],
+        "provider_calls": evidence["provider_calls"],
+        "browser_actions": evidence["browser_actions"],
+        "outcome": evidence["outcome"],
+        "evaluator": evidence["evaluator"],
+        "cleanup": evidence["cleanup"],
+        "h2k_optional_fields": evidence["h2k_optional_fields"],
+        "redaction": evidence["redaction"],
+    }
+
+
 def _strict_object(value: object, *, context: str) -> dict[str, object]:
     if not isinstance(value, dict) or not all(isinstance(key, str) for key in value):
         raise T09PilotError(f"{context} must be a string-keyed object")
@@ -245,6 +300,9 @@ class RuntimeQualification:
     evaluator_overlay_manifest_sha256: str
     evaluator_overlay_entries_sha256: str
     evaluator_overlay_packages_sha256: str
+    qualified_real_evidence_regression_sha256: str
+    local_finalizer_qualification_sha256: str
+    local_finalizer_interpreter_dependency_manifest_sha256: str
     model_metadata_request_count: int
     model_task_request_count: int
     task_browser_action_count: int
@@ -303,6 +361,18 @@ class RuntimeQualification:
                 document.get("evaluator_overlay_packages_sha256"),
                 context="evaluator overlay packages hash",
             ),
+            qualified_real_evidence_regression_sha256=_required_string(
+                document.get("qualified_real_evidence_regression_sha256"),
+                context="qualified real-evidence regression hash",
+            ),
+            local_finalizer_qualification_sha256=_required_string(
+                document.get("local_finalizer_qualification_sha256"),
+                context="local finalizer qualification hash",
+            ),
+            local_finalizer_interpreter_dependency_manifest_sha256=_required_string(
+                document.get("local_finalizer_interpreter_dependency_manifest_sha256"),
+                context="local finalizer interpreter dependency-manifest hash",
+            ),
             model_metadata_request_count=_required_int(
                 document.get("model_metadata_request_count"),
                 context="model metadata request count",
@@ -329,6 +399,9 @@ class RuntimeQualification:
             result.evaluator_overlay_manifest_sha256,
             result.evaluator_overlay_entries_sha256,
             result.evaluator_overlay_packages_sha256,
+            result.qualified_real_evidence_regression_sha256,
+            result.local_finalizer_qualification_sha256,
+            result.local_finalizer_interpreter_dependency_manifest_sha256,
         )
         if (
             document.get("schema_version") != "0.1.0"
@@ -819,6 +892,8 @@ def initialize_pilot_state(
         "attempt_finalizations": {},
         "attempt_finalization_history": {},
         "first_pair_decision": None,
+        "first_pair_checkpoint_binding": None,
+        "first_pair_selection_drift_detected": False,
     }
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     _write_json_atomic(path, document)
@@ -833,7 +908,132 @@ def _write_json_atomic(path: Path, document: Mapping[str, object]) -> None:
     os.replace(temporary, path)
 
 
-def _load_pilot_state(path: Path, *, contract_sha256: str) -> dict[str, object]:
+_FINALIZATION_SELECTION_FIELDS = {
+    "finalizer_execution_mode",
+    "finalizer_runtime_qualification_sha256",
+    "finalizer_source_sha256",
+    "finalizer_projection_source_sha256",
+    "finalizer_commit",
+    "finalizer_dependency_manifest_sha256",
+    "evaluator_contract_sha256",
+    "interpreter",
+    "interpreter_sha256",
+    "semantic_projection_sha256",
+    "finalized_output_root",
+    "finalization_complete_sha256",
+}
+
+_FINALIZER_UNIFORMITY_FIELDS = (
+    "finalizer_execution_mode",
+    "finalizer_runtime_qualification_sha256",
+    "finalizer_source_sha256",
+    "finalizer_projection_source_sha256",
+    "finalizer_commit",
+    "finalizer_dependency_manifest_sha256",
+    "evaluator_contract_sha256",
+    "interpreter",
+    "interpreter_sha256",
+)
+
+
+def _selection_receipt_directory(path: Path, run_id: str) -> Path:
+    if run_id not in ATTEMPT_ORDER:
+        raise T09PilotError("selection receipt run identity is unknown")
+    return path.parent / "finalization-selections" / run_id
+
+
+def _write_json_exclusive(path: Path, document: Mapping[str, object]) -> None:
+    encoded = (json.dumps(document, allow_nan=False, indent=2, sort_keys=True) + "\n").encode()
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    descriptor = os.open(
+        path,
+        os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
+        0o600,
+    )
+    try:
+        offset = 0
+        while offset < len(encoded):
+            written = os.write(descriptor, encoded[offset:])
+            if written <= 0:
+                raise T09PilotError("selection receipt write made no progress")
+            offset += written
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+    directory = os.open(path.parent, os.O_RDONLY)
+    try:
+        os.fsync(directory)
+    finally:
+        os.close(directory)
+
+
+def _selection_receipts(
+    path: Path,
+) -> dict[str, list[tuple[dict[str, object], str]]]:
+    result: dict[str, list[tuple[dict[str, object], str]]] = {}
+    for run_id in ATTEMPT_ORDER:
+        directory = _selection_receipt_directory(path, run_id)
+        if not directory.exists():
+            continue
+        if directory.is_symlink() or not directory.is_dir():
+            raise T09PilotError("selection receipt directory is unsafe")
+        receipts: list[tuple[dict[str, object], str]] = []
+        for ordinal, receipt_path in enumerate(sorted(directory.iterdir()), start=1):
+            metadata = receipt_path.stat(follow_symlinks=False)
+            if (
+                receipt_path.name != f"selection-{ordinal:04d}.json"
+                or receipt_path.is_symlink()
+                or not stat.S_ISREG(metadata.st_mode)
+                or metadata.st_uid != os.getuid()
+                or metadata.st_nlink != 1
+                or stat.S_IMODE(metadata.st_mode) != 0o600
+            ):
+                raise T09PilotError("selection receipt metadata or sequence is unsafe")
+            receipt = load_json_object(receipt_path, context="finalization selection receipt")
+            selection = receipt.get("selection")
+            if (
+                set(receipt) != {"schema_version", "plan_id", "run_id", "ordinal", "selection"}
+                or receipt.get("schema_version") != "0.1.0"
+                or receipt.get("plan_id") != PLAN_ID
+                or receipt.get("run_id") != run_id
+                or receipt.get("ordinal") != ordinal
+                or not isinstance(selection, dict)
+                or set(selection) != _FINALIZATION_SELECTION_FIELDS
+            ):
+                raise T09PilotError("selection receipt content is malformed")
+            receipts.append((receipt, file_sha256(receipt_path)))
+        if receipts:
+            result[run_id] = receipts
+    return result
+
+
+def _selection_closure_sha256(selection: Mapping[str, object]) -> str:
+    if any(field not in selection for field in _FINALIZER_UNIFORMITY_FIELDS):
+        raise T09PilotError("selected finalizer closure is incomplete")
+    return canonical_sha256({field: selection[field] for field in _FINALIZER_UNIFORMITY_FIELDS})
+
+
+def _current_selection_receipt_hashes(
+    path: Path,
+    *,
+    run_ids: Sequence[str],
+) -> dict[str, str]:
+    receipts = _selection_receipts(path)
+    result: dict[str, str] = {}
+    for run_id in run_ids:
+        retained = receipts.get(run_id)
+        if not retained:
+            raise T09PilotError("selected finalization lacks its append-only receipt")
+        result[run_id] = retained[-1][1]
+    return result
+
+
+def _load_pilot_state(
+    path: Path,
+    *,
+    contract_sha256: str,
+    allow_one_pending_selection_receipt: bool = False,
+) -> dict[str, object]:
     state = load_json_object(path, context="pilot attempt state")
     if (
         state.get("schema_version") != "0.2.0"
@@ -871,14 +1071,94 @@ def _load_pilot_state(path: Path, *, contract_sha256: str) -> dict[str, object]:
     completed = cast(list[str], state["attempts_completed"])
     if set(finalizations) != set(completed):
         raise T09PilotError("pilot selected finalizations do not match completed attempts")
+    if any(
+        set(selection) != _FINALIZATION_SELECTION_FIELDS for selection in finalizations.values()
+    ):
+        raise T09PilotError("pilot selected finalization closure is malformed")
     history = state.get("attempt_finalization_history")
     if not isinstance(history, dict) or not all(
         isinstance(key, str)
         and isinstance(value, list)
-        and all(isinstance(item, dict) for item in value)
+        and all(isinstance(item, str) and _HEX64.fullmatch(item) is not None for item in value)
         for key, value in history.items()
     ):
         raise T09PilotError("pilot state finalization history is malformed")
+    if set(history) != set(finalizations):
+        raise T09PilotError("pilot state is not the projection of its selection history")
+    receipts = _selection_receipts(path)
+    pending_count = 0
+    for run_id in set(history) | set(receipts):
+        state_hashes = history.get(run_id, [])
+        receipt_items = receipts.get(run_id, [])
+        receipt_hashes = [digest for _document, digest in receipt_items]
+        if receipt_hashes == state_hashes:
+            continue
+        if (
+            allow_one_pending_selection_receipt
+            and receipt_hashes[:-1] == state_hashes
+            and len(receipt_hashes) == len(state_hashes) + 1
+        ):
+            pending_count += 1
+            continue
+        raise T09PilotError("pilot finalization history drifted from append-only receipts")
+    if pending_count > 1:
+        raise T09PilotError("multiple unprojected selection receipts are not recoverable")
+    for run_id, selection in finalizations.items():
+        receipt_items = receipts.get(run_id, [])
+        projected_count = len(history.get(run_id, []))
+        if (
+            projected_count < 1
+            or receipt_items[projected_count - 1][0].get("selection") != selection
+        ):
+            raise T09PilotError("selected finalization is not receipt-backed")
+    if not isinstance(state.get("first_pair_selection_drift_detected"), bool):
+        raise T09PilotError("pilot checkpoint drift state is malformed")
+    checkpoint_binding = state.get("first_pair_checkpoint_binding")
+    if checkpoint_binding is not None and not isinstance(checkpoint_binding, dict):
+        raise T09PilotError("pilot checkpoint binding is malformed")
+    if checkpoint_binding is not None:
+        if set(checkpoint_binding) != {
+            "selection_receipt_sha256s",
+            "selection_complete_sha256s",
+            "semantic_projection_sha256s",
+            "selected_closure_sha256",
+            "decision_sha256",
+        }:
+            raise T09PilotError("pilot checkpoint binding field set drifted")
+        checkpoint_receipt_hashes = checkpoint_binding.get("selection_receipt_sha256s")
+        completion_hashes = checkpoint_binding.get("selection_complete_sha256s")
+        semantic_hashes = checkpoint_binding.get("semantic_projection_sha256s")
+        if not all(
+            isinstance(value, dict) and set(value) == set(ATTEMPT_ORDER[:2])
+            for value in (checkpoint_receipt_hashes, completion_hashes, semantic_hashes)
+        ):
+            raise T09PilotError("pilot checkpoint attempt binding is malformed")
+        assert isinstance(checkpoint_receipt_hashes, dict)
+        assert isinstance(completion_hashes, dict)
+        assert isinstance(semantic_hashes, dict)
+        for run_id in ATTEMPT_ORDER[:2]:
+            receipt_sha256 = checkpoint_receipt_hashes.get(run_id)
+            matching = [
+                document
+                for document, digest in receipts.get(run_id, [])
+                if digest == receipt_sha256
+            ]
+            matching_selection = matching[0].get("selection") if len(matching) == 1 else None
+            if (
+                not isinstance(receipt_sha256, str)
+                or _HEX64.fullmatch(receipt_sha256) is None
+                or len(matching) != 1
+                or not isinstance(matching_selection, dict)
+                or matching_selection.get("finalization_complete_sha256")
+                != completion_hashes.get(run_id)
+                or matching_selection.get("semantic_projection_sha256")
+                != semantic_hashes.get(run_id)
+            ):
+                raise T09PilotError("pilot checkpoint is not backed by exact selection receipts")
+        for field in ("selected_closure_sha256", "decision_sha256"):
+            value = checkpoint_binding.get(field)
+            if not isinstance(value, str) or _HEX64.fullmatch(value) is None:
+                raise T09PilotError("pilot checkpoint hash binding is malformed")
     return state
 
 
@@ -903,8 +1183,32 @@ def mark_empirical_entry(
         raise T09PilotError("pilot attempt history is not a valid prefix of the frozen order")
     if len(entered) >= len(ATTEMPT_ORDER) or run_id != ATTEMPT_ORDER[len(entered)]:
         raise T09BudgetExceeded("attempt count or frozen attempt order would be violated")
-    if len(entered) == 2 and state.get("first_pair_decision") != "continue-to-task-b":
-        raise T09BudgetExceeded("Task B is blocked until the first-pair checkpoint passes")
+    if len(entered) == 2:
+        checkpoint_binding = state.get("first_pair_checkpoint_binding")
+        finalizations = state.get("attempt_finalizations")
+        if (
+            state.get("first_pair_decision") != "continue-to-task-b"
+            or state.get("first_pair_selection_drift_detected") is not False
+            or not isinstance(checkpoint_binding, dict)
+            or not isinstance(finalizations, dict)
+        ):
+            raise T09BudgetExceeded("Task B is blocked until the first-pair checkpoint passes")
+        bound_semantics = checkpoint_binding.get("semantic_projection_sha256s")
+        selected = [finalizations.get(attempt) for attempt in ATTEMPT_ORDER[:2]]
+        if (
+            not isinstance(bound_semantics, dict)
+            or not all(isinstance(item, dict) for item in selected)
+            or any(
+                cast(dict[str, object], item).get("semantic_projection_sha256")
+                != bound_semantics.get(attempt)
+                for attempt, item in zip(ATTEMPT_ORDER[:2], selected, strict=True)
+            )
+            or len({_selection_closure_sha256(cast(dict[str, object], item)) for item in selected})
+            != 1
+        ):
+            raise T09BudgetExceeded(
+                "Task B is blocked because Task A selections drifted after the checkpoint"
+            )
     entered.append(run_id)
     state["empirical_attempts_entered"] = entered
     _write_json_atomic(path, state)
@@ -960,48 +1264,106 @@ def mark_attempt_completed(
     *,
     execution_contract_sha256: str,
     run_id: str,
+    finalizer_execution_mode: str,
+    finalizer_runtime_qualification_sha256: str,
     finalizer_source_sha256: str,
+    finalizer_projection_source_sha256: str,
     finalizer_commit: str,
     finalizer_dependency_manifest_sha256: str,
     evaluator_contract_sha256: str,
     interpreter: str,
     interpreter_sha256: str,
+    semantic_projection_sha256: str,
     finalized_output_root: str,
     finalization_complete_sha256: str,
 ) -> None:
     """Select one downstream finalization without reopening the condition attempt."""
 
     if (
-        _HEX64.fullmatch(finalizer_source_sha256) is None
+        finalizer_execution_mode not in {"qualified-image", "qualified-local"}
+        or _HEX64.fullmatch(finalizer_runtime_qualification_sha256) is None
+        or _HEX64.fullmatch(finalizer_source_sha256) is None
+        or _HEX64.fullmatch(finalizer_projection_source_sha256) is None
         or _HEX64.fullmatch(finalizer_dependency_manifest_sha256) is None
         or _HEX64.fullmatch(evaluator_contract_sha256) is None
         or _HEX64.fullmatch(interpreter_sha256) is None
+        or _HEX64.fullmatch(semantic_projection_sha256) is None
         or _HEX64.fullmatch(finalization_complete_sha256) is None
         or re.fullmatch(r"[a-f0-9]{40}", finalizer_commit) is None
-        or interpreter != "/opt/sira/.venv/bin/python"
+        or not Path(interpreter).is_absolute()
+        or (
+            finalizer_execution_mode == "qualified-image"
+            and interpreter != "/opt/sira/.venv/bin/python"
+        )
     ):
         raise T09PilotError("finalizer code identity is malformed")
 
-    state = _load_pilot_state(path, contract_sha256=execution_contract_sha256)
+    state = _load_pilot_state(
+        path,
+        contract_sha256=execution_contract_sha256,
+        allow_one_pending_selection_receipt=True,
+    )
     entered = cast(list[str], state["empirical_attempts_entered"])
     raw_complete = cast(list[str], state["raw_attempts_complete"])
     finalizations = cast(dict[str, dict[str, object]], state["attempt_finalizations"])
-    history = cast(dict[str, list[dict[str, object]]], state["attempt_finalization_history"])
+    history = cast(dict[str, list[str]], state["attempt_finalization_history"])
     if run_id not in entered or run_id not in raw_complete:
         raise T09PilotError("attempt completion is missing, duplicated, or out of order")
     selection: dict[str, object] = {
+        "finalizer_execution_mode": finalizer_execution_mode,
+        "finalizer_runtime_qualification_sha256": finalizer_runtime_qualification_sha256,
         "finalizer_source_sha256": finalizer_source_sha256,
+        "finalizer_projection_source_sha256": finalizer_projection_source_sha256,
         "finalizer_commit": finalizer_commit,
         "finalizer_dependency_manifest_sha256": finalizer_dependency_manifest_sha256,
         "evaluator_contract_sha256": evaluator_contract_sha256,
         "interpreter": interpreter,
         "interpreter_sha256": interpreter_sha256,
+        "semantic_projection_sha256": semantic_projection_sha256,
         "finalized_output_root": finalized_output_root,
         "finalization_complete_sha256": finalization_complete_sha256,
     }
     retained_history = history.setdefault(run_id, [])
-    if selection not in retained_history:
-        retained_history.append(selection)
+    checkpoint_binding = state.get("first_pair_checkpoint_binding")
+    if run_id in ATTEMPT_ORDER[:2] and isinstance(checkpoint_binding, dict):
+        bound_semantics = checkpoint_binding.get("semantic_projection_sha256s")
+        if (
+            not isinstance(bound_semantics, dict)
+            or bound_semantics.get(run_id) != semantic_projection_sha256
+        ):
+            state["first_pair_decision"] = "stop-before-task-b"
+            state["first_pair_selection_drift_detected"] = True
+            _write_json_atomic(path, state)
+            raise T09PilotError(
+                "post-checkpoint Task A finalization changed the bound semantic projection"
+            )
+    if finalizations.get(run_id) == selection:
+        return
+    receipts = _selection_receipts(path).get(run_id, [])
+    projected_count = len(retained_history)
+    if len(receipts) == projected_count + 1:
+        pending_receipt, pending_sha256 = receipts[-1]
+        if pending_receipt.get("selection") != selection:
+            raise T09PilotError("pending selection receipt disagrees with requested selection")
+        retained_history.append(pending_sha256)
+    elif len(receipts) == projected_count:
+        ordinal = projected_count + 1
+        receipt_path = _selection_receipt_directory(path, run_id) / (
+            f"selection-{ordinal:04d}.json"
+        )
+        _write_json_exclusive(
+            receipt_path,
+            {
+                "schema_version": "0.1.0",
+                "plan_id": PLAN_ID,
+                "run_id": run_id,
+                "ordinal": ordinal,
+                "selection": selection,
+            },
+        )
+        retained_history.append(file_sha256(receipt_path))
+    else:
+        raise T09PilotError("selection receipt history has an unrecoverable gap")
     finalizations[run_id] = selection
     state["attempts_completed"] = [
         attempt_run_id for attempt_run_id in ATTEMPT_ORDER if attempt_run_id in finalizations
@@ -1027,19 +1389,7 @@ def record_first_pair_checkpoint(
         raise T09PilotError("checkpoint requires both Task A attempts to be complete")
     finalizations = cast(dict[str, dict[str, object]], state["attempt_finalizations"])
     finalizer_closures = {
-        canonical_sha256(
-            {
-                key: item[key]
-                for key in (
-                    "finalizer_source_sha256",
-                    "finalizer_commit",
-                    "finalizer_dependency_manifest_sha256",
-                    "evaluator_contract_sha256",
-                    "interpreter",
-                    "interpreter_sha256",
-                )
-            }
-        )
+        _selection_closure_sha256(item)
         for run_id in ATTEMPT_ORDER[:2]
         if (item := finalizations.get(run_id)) is not None
     }
@@ -1050,6 +1400,21 @@ def record_first_pair_checkpoint(
         raise T09PilotError("checkpoint decision is invalid")
     state["first_pair_decision"] = result
     state["first_pair_decision_sha256"] = canonical_sha256(decision)
+    state["first_pair_checkpoint_binding"] = {
+        "selection_receipt_sha256s": _current_selection_receipt_hashes(
+            path, run_ids=ATTEMPT_ORDER[:2]
+        ),
+        "selection_complete_sha256s": {
+            run_id: finalizations[run_id]["finalization_complete_sha256"]
+            for run_id in ATTEMPT_ORDER[:2]
+        },
+        "semantic_projection_sha256s": {
+            run_id: finalizations[run_id]["semantic_projection_sha256"]
+            for run_id in ATTEMPT_ORDER[:2]
+        },
+        "selected_closure_sha256": next(iter(finalizer_closures)),
+        "decision_sha256": canonical_sha256(decision),
+    }
     if result == "continue-to-task-b":
         if not math.isfinite(decided_at_epoch) or decided_at_epoch <= 0:
             raise T09PilotError("second-pair epoch is invalid")

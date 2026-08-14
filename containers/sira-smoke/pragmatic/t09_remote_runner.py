@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import hashlib
+import importlib.util
 import ipaddress
 import json
 import os
@@ -29,7 +30,7 @@ import time
 from collections.abc import Iterator
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
-from typing import Any, BinaryIO, Final, cast
+from typing import IO, Any, BinaryIO, Final, cast
 
 from jsonschema import Draft202012Validator, FormatChecker
 
@@ -52,6 +53,7 @@ from giclab.harness.t09_sira_pilot import (
     mark_attempt_completed,
     mark_raw_attempt_complete,
     record_first_pair_checkpoint,
+    scientific_attempt_projection,
 )
 
 PLAN_ID: Final = "PLAN-EXP0001-PILOT-V5"
@@ -157,7 +159,7 @@ MAX_TOTAL_WALL_SECONDS: Final = 14_400
 MAX_LAMBDA_DURATION_SECONDS: Final = 14_400
 MAX_LAMBDA_COST_USD: Final = 5.16
 LAMBDA_HOURLY_PRICE_USD: Final = 1.29
-FINALIZATION_RESERVE_SECONDS: Final = 60
+FINALIZER_INVOCATION_TIMEOUT_SECONDS: Final = 600
 ATTEMPT_EVIDENCE_EXPORT_RESERVE_SECONDS: Final = 600
 PROVIDER_CLOSEOUT_RESERVE_SECONDS: Final = 900
 PROVIDER_TERMINATION_CUTOFF_SECONDS: Final = 13_500
@@ -201,9 +203,27 @@ MAX_IMAGE_ARCHIVE_BYTES: Final = 2_147_483_648
 MAX_EVALUATOR_OVERLAY_BYTES: Final = 1_073_741_824
 MAX_EVALUATOR_OVERLAY_ENTRIES: Final = 100_000
 MAX_PREENTRY_REPAIRS_PER_RUN: Final = 3
-MAX_FINALIZER_INVOCATIONS_PER_ATTEMPT: Final = 4
+PINNED_DATASET_SHA256: Final = "359300b029c6891567816f351bf8786e9b018d7af8a1a44b7da9ba5ef4651288"
 FINALIZER_RELATIVE_PATH: Final = "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py"
+FINALIZER_PROJECTION_RELATIVE_PATH: Final = (
+    "containers/sira-smoke/pragmatic/t09_finalizer_projection.py"
+)
+LOCAL_FINALIZER_QUALIFICATION_RELATIVE_PATH: Final = (
+    "containers/sira-smoke/pragmatic/t09_local_finalizer_qualification.py"
+)
 IMAGE_ARCHIVE_PATH: Final = Path("/home/ubuntu/t09-pilot-v5-replacement-image-0001.tar")
+PRIVATE_REGRESSION_ARCHIVE_PATH: Final = Path(
+    "/tmp/giclab-t09-private-v4-task-a-reactive-0002.tar.gz"
+)
+ATTEMPT_EXPORT_REQUIRED_CONTROL_PATHS: Final = (
+    "pilot-v5/provider-entry.json",
+    "pilot-v5/frozen-run-manifest.json",
+    "pilot-v5/final-image-file-hashes/receipt.json",
+    "pilot-v5/qualified-real-evidence-regression/receipt.json",
+    "pilot-v5/local-finalizer-qualification.json",
+    "pilot-v5/replacement-image-qualification/build-context-exclusions.json",
+    "pilot-v5/pilot-state.json",
+)
 
 
 class T09HostError(RuntimeError):
@@ -240,6 +260,18 @@ def file_sha256(path: Path) -> str:
         while chunk := handle.read(1_048_576):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def git_file_sha256(repository: Path, commit: str, relative: str) -> str:
+    retained = subprocess.run(
+        ["git", "-C", str(repository), "show", f"{commit}:{relative}"],
+        env=safe_environment(),
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        check=True,
+        timeout=30,
+    ).stdout
+    return hashlib.sha256(retained).hexdigest()
 
 
 def canonical_sha256(value: object) -> str:
@@ -1095,12 +1127,18 @@ def contract_paths(repository: Path) -> dict[str, Path]:
     }
 
 
-def validate_real_evidence_regression(repository: Path) -> dict[str, Any]:
+def validate_real_evidence_regression(
+    repository: Path,
+    *,
+    expected_finalizer_source_sha256: str | None = None,
+) -> dict[str, Any]:
     """Validate the sanitized prelaunch receipt from the immutable V4 archive."""
 
     paths = contract_paths(repository)
     receipt = load_object(paths["real_regression"], label="real-evidence finalizer regression")
     semantic = receipt.get("semantic_projection")
+    evaluator_closure = receipt.get("evaluator_closure")
+    repeat_roots = receipt.get("deterministic_distinct_finalization_roots")
     if (
         receipt.get("schema_version") != "0.1.0"
         or receipt.get("receipt_id") != "T09-PRAGMATIC-RETRY3-REAL-EVIDENCE-REGRESSION-0001"
@@ -1111,7 +1149,26 @@ def validate_real_evidence_regression(repository: Path) -> dict[str, Any]:
         or receipt.get("source_public_disposition_sha256")
         != "ecc0e135695e16f68d52b7aa85b70d42b1f1e945f7dd119fb7c7ff0e42fc8231"
         or receipt.get("finalizer_source_sha256")
-        != file_sha256(repository / FINALIZER_RELATIVE_PATH)
+        != (
+            expected_finalizer_source_sha256
+            if expected_finalizer_source_sha256 is not None
+            else file_sha256(repository / FINALIZER_RELATIVE_PATH)
+        )
+        or receipt.get("dataset_sha256")
+        != "359300b029c6891567816f351bf8786e9b018d7af8a1a44b7da9ba5ef4651288"
+        or receipt.get("dataset_bytes") != 1_177_174
+        or not isinstance(evaluator_closure, dict)
+        or evaluator_closure.get("evaluator_contract_sha256") != file_sha256(paths["evaluator"])
+        or evaluator_closure.get("dependency_package_manifest_sha256")
+        != canonical_sha256(expected_evaluator_packages(repository))
+        or not isinstance(repeat_roots, list)
+        or len(repeat_roots) != 2
+        or any(
+            not isinstance(item, dict)
+            or item.get("semantic_projection_sha256") != canonical_sha256(semantic)
+            for item in repeat_roots
+        )
+        or repeat_roots[0].get("root") == repeat_roots[1].get("root")
         or not isinstance(semantic, dict)
         or semantic.get("task_id") != "7dcbbbdc7f1120cd"
         or semantic.get("condition") != "SIRA-REACTIVE"
@@ -1752,6 +1809,25 @@ def require_prior_export_acknowledgements(
             )
 
 
+def require_attempt_export_acknowledgement(
+    root: Path,
+    *,
+    run_id: str,
+    package_commit: str,
+) -> None:
+    """Require the current immutable raw export before downstream finalization."""
+
+    try:
+        attempt_index = RUN_IDS.index(run_id)
+    except ValueError:
+        raise T09HostError("export acknowledgement run identity is unknown") from None
+    require_prior_export_acknowledgements(
+        root,
+        next_attempt_index=attempt_index + 1,
+        package_commit=package_commit,
+    )
+
+
 def provider_seconds_remaining(root: Path, *, reserve_seconds: float = 0.0) -> float:
     """Return provider time left while preserving an explicit cleanup reserve."""
 
@@ -1779,20 +1855,15 @@ def scientific_seconds_remaining(root: Path, *, reserve_seconds: float = 0.0) ->
 
 
 def admit_next_attempt(root: Path) -> float:
-    """Reserve one full condition, its evidence handoff, and provider cleanup."""
+    """Require only the next condition hard wall and the cleanup reserve."""
 
     usable = provider_seconds_remaining(
         root,
-        reserve_seconds=(
-            PROVIDER_CLOSEOUT_RESERVE_SECONDS
-            + ATTEMPT_EVIDENCE_EXPORT_RESERVE_SECONDS
-            + PROVIDER_TERMINATION_HANDOFF_SECONDS
-        ),
+        reserve_seconds=PROVIDER_CLOSEOUT_RESERVE_SECONDS,
     )
     if usable < MAX_CONDITION_WALL_SECONDS:
         raise T09HostError(
-            "remaining campaign time cannot cover the next attempt hard wall, evidence handoff, "
-            "termination dispatch, and cleanup reserve"
+            "remaining campaign time cannot cover the next attempt hard wall and cleanup reserve"
         )
     return usable
 
@@ -1867,8 +1938,14 @@ def manifest_output_root(manifest: dict[str, Any]) -> str:
     return output_root
 
 
-def verify_package(repository: Path, package_commit: str) -> dict[str, Any]:
-    if output(["git", "-C", str(repository), "rev-parse", "HEAD"]) != package_commit:
+def verify_package(
+    repository: Path,
+    package_commit: str,
+    *,
+    current_commit: str | None = None,
+) -> dict[str, Any]:
+    expected_head = package_commit if current_commit is None else current_commit
+    if output(["git", "-C", str(repository), "rev-parse", "HEAD"]) != expected_head:
         raise T09HostError("repository commit does not match the authorized clean package")
     if output(["git", "-C", str(repository), "status", "--porcelain=v1"]):
         raise T09HostError("repository worktree is not clean")
@@ -1936,8 +2013,15 @@ def verify_package(repository: Path, package_commit: str) -> dict[str, Any]:
             or not isinstance(expected_sha256, str)
             or Path(relative).is_absolute()
             or ".." in Path(relative).parts
-            or file_sha256(repository / relative) != expected_sha256
         ):
+            raise T09HostError("runtime instrumentation file binding drifted")
+        observed_sha256 = (
+            git_file_sha256(repository, package_commit, relative)
+            if current_commit is not None
+            and relative in {FINALIZER_RELATIVE_PATH, FINALIZER_PROJECTION_RELATIVE_PATH}
+            else file_sha256(repository / relative)
+        )
+        if observed_sha256 != expected_sha256:
             raise T09HostError("runtime instrumentation file binding drifted")
     evaluator_contract = load_object(paths["evaluator"], label="evaluator contract")
     materialization = evaluator_contract.get("materialization")
@@ -2666,6 +2750,121 @@ def offline_runtime_preflight(
     return receipt
 
 
+def qualified_real_evidence_regression(
+    *,
+    repository: Path,
+    artifact_root: Path,
+    archive: Path,
+    overlay: Path,
+    prefix: list[str],
+    image_id: str,
+    image_files: dict[str, str],
+    static_receipt: dict[str, Any],
+) -> dict[str, Any]:
+    """Reconstruct the retained V4 raw archive inside the exact accepted image."""
+
+    archive = archive.resolve(strict=True)
+    if (
+        archive != PRIVATE_REGRESSION_ARCHIVE_PATH
+        or archive.is_symlink()
+        or not archive.is_file()
+        or file_sha256(archive)
+        != "63ed19b35bcb4cb62c3796a80a48004937340eb3826f9657a1006e251772255d"
+    ):
+        raise T09HostError("private V4 regression archive identity drifted")
+    paths = contract_paths(repository)
+    attempt = artifact_root / "pilot-v5/qualified-real-evidence-regression"
+    attempt.mkdir(parents=True, mode=0o700, exist_ok=False)
+    regression_source = (
+        repository / "containers/sira-smoke/pragmatic/t09_real_evidence_regression.py"
+    )
+    finalizer_source = repository / FINALIZER_RELATIVE_PATH
+    disposition = (
+        repository / "experiments/EXP-0001-sira-simulative-vs-reactive/"
+        "T09_PRAGMATIC_RETRY2_DISPOSITION.json"
+    )
+    command = [
+        *prefix,
+        "run",
+        "--rm",
+        "--network",
+        "none",
+        "--read-only",
+        "--user",
+        "1000:1000",
+        "--env",
+        "PYTHONPATH=/opt/evaluator/.venv/lib/python3.11/site-packages:/opt/giclab-src",
+        "--env",
+        "CUDA_VISIBLE_DEVICES=",
+        "--tmpfs",
+        "/tmp:rw,noexec,nosuid,size=128m",
+        "--mount",
+        f"type=bind,src={repository / 'src/giclab'},dst=/opt/giclab-src/giclab,readonly",
+        "--mount",
+        f"type=bind,src={regression_source},dst=/opt/giclab/t09_real_evidence_regression.py,readonly",
+        "--mount",
+        f"type=bind,src={finalizer_source},dst=/opt/giclab/t09_evaluate_attempt.py,readonly",
+        "--mount",
+        f"type=bind,src={archive},dst=/opt/giclab-private/v4-attempt.tar.gz,readonly",
+        "--mount",
+        f"type=bind,src={disposition},dst=/opt/giclab-contracts/v4-disposition.json,readonly",
+        "--mount",
+        f"type=bind,src={paths['evaluator']},dst=/opt/giclab-contracts/evaluator.json,readonly",
+        "--mount",
+        f"type=bind,src={overlay},dst=/opt/evaluator,readonly",
+        "--mount",
+        f"type=bind,src={attempt},dst=/opt/giclab-output",
+        "--entrypoint",
+        "/opt/sira/.venv/bin/python",
+        image_id,
+        "/opt/giclab/t09_real_evidence_regression.py",
+        "--archive",
+        "/opt/giclab-private/v4-attempt.tar.gz",
+        "--public-disposition",
+        "/opt/giclab-contracts/v4-disposition.json",
+        "--finalizer-source",
+        "/opt/giclab/t09_evaluate_attempt.py",
+        "--finalizer-source-sha256",
+        file_sha256(finalizer_source),
+        "--evaluator-root",
+        "/opt/sira/evaluation/fanout",
+        "--evaluator-contract",
+        "/opt/giclab-contracts/evaluator.json",
+        "--dependency-site-packages",
+        "/opt/evaluator/.venv/lib/python3.11/site-packages",
+        "--dataset",
+        "/opt/sira/data/fanout-final-dev.json",
+        "--receipt-id",
+        "T09-PRAGMATIC-RETRY3-QUALIFIED-IMAGE-REGRESSION-0001",
+        "--output",
+        "/opt/giclab-output/receipt.json",
+    ]
+    run_logged(command, evidence_root=attempt, label="qualified-real-regression", timeout=300)
+    receipt_path = attempt / "receipt.json"
+    receipt = load_object(receipt_path, label="qualified real-evidence regression")
+    interpreter = receipt.get("interpreter")
+    closure = receipt.get("evaluator_closure")
+    static_projection = static_receipt.get("semantic_projection")
+    if (
+        receipt.get("receipt_id") != "T09-PRAGMATIC-RETRY3-QUALIFIED-IMAGE-REGRESSION-0001"
+        or receipt.get("source_archive_sha256")
+        != "63ed19b35bcb4cb62c3796a80a48004937340eb3826f9657a1006e251772255d"
+        or receipt.get("dataset_sha256")
+        != "359300b029c6891567816f351bf8786e9b018d7af8a1a44b7da9ba5ef4651288"
+        or receipt.get("semantic_projection") != static_projection
+        or receipt.get("accepted_scientific_and_evaluator_fields_equal") is not True
+        or receipt.get("network_disabled") is not True
+        or receipt.get("additional_model_requests") != 0
+        or receipt.get("additional_browser_actions") != 0
+        or not isinstance(interpreter, dict)
+        or interpreter.get("executable_sha256") != image_files.get("/opt/sira/.venv/bin/python")
+        or not isinstance(closure, dict)
+        or closure.get("evaluator_contract_sha256") != file_sha256(paths["evaluator"])
+    ):
+        raise T09HostError("qualified-image real-evidence regression drifted")
+    return receipt
+
+
 def final_image_runtime_preflight(
     *,
     artifact_root: Path,
@@ -2945,7 +3144,9 @@ def write_frozen_run_manifest(
     file_hashes: dict[str, str],
     model_receipt: dict[str, Any],
     adjudication: dict[str, object],
-    real_evidence_regression: dict[str, Any],
+    static_real_evidence_regression: dict[str, Any],
+    qualified_real_evidence_regression_receipt: dict[str, Any],
+    local_finalizer_qualification_receipt: dict[str, Any],
 ) -> tuple[Path, dict[str, object]]:
     paths = contract_paths(repository)
     image_id = image_materialization.get("image_id")
@@ -2964,6 +3165,10 @@ def write_frozen_run_manifest(
     if empirical != []:
         raise T09HostError("runtime cannot freeze after empirical entry")
     qualification_root = artifact_root / "pilot-v5/replacement-image-qualification"
+    if qualified_real_evidence_regression_receipt.get(
+        "semantic_projection"
+    ) != static_real_evidence_regression.get("semantic_projection"):
+        raise T09HostError("static and qualified real-evidence regressions disagree")
     manifest: dict[str, object] = {
         "schema_version": "0.1.0",
         "manifest_id": FROZEN_RUN_MANIFEST_ID,
@@ -3011,7 +3216,22 @@ def write_frozen_run_manifest(
         "model_task_request_count": 0,
         "task_browser_action_count": 0,
         "image_adjudication_sha256": canonical_sha256(adjudication),
-        "real_evidence_finalizer_regression_sha256": canonical_sha256(real_evidence_regression),
+        "static_real_evidence_regression_sha256": file_sha256(paths["real_regression"]),
+        "qualified_real_evidence_regression_sha256": file_sha256(
+            artifact_root / "pilot-v5/qualified-real-evidence-regression/receipt.json"
+        ),
+        "qualified_real_evidence_semantic_sha256": qualified_real_evidence_regression_receipt.get(
+            "semantic_projection_sha256"
+        ),
+        "local_finalizer_qualification_sha256": file_sha256(
+            artifact_root / "pilot-v5/local-finalizer-qualification.json"
+        ),
+        "local_finalizer_interpreter_sha256": local_finalizer_qualification_receipt.get(
+            "interpreter_sha256"
+        ),
+        "local_finalizer_interpreter_dependency_manifest_sha256": (
+            local_finalizer_qualification_receipt.get("interpreter_dependency_manifest_sha256")
+        ),
         "command_argv_sha256s": [item["argv_sha256"] for item in manifests(command_document)],
         "pair_diffs": command_document.get("pair_diffs"),
         "attempt_order": list(RUN_IDS),
@@ -3029,6 +3249,13 @@ def write_frozen_run_manifest(
             ),
             "evaluator_overlay": file_sha256(
                 artifact_root / "pilot-v5/evaluator-overlay-manifest.json"
+            ),
+            "static_real_evidence_regression": file_sha256(paths["real_regression"]),
+            "qualified_real_evidence_regression": file_sha256(
+                artifact_root / "pilot-v5/qualified-real-evidence-regression/receipt.json"
+            ),
+            "local_finalizer_qualification": file_sha256(
+                artifact_root / "pilot-v5/local-finalizer-qualification.json"
             ),
         },
     }
@@ -3051,6 +3278,7 @@ def load_frozen_run_manifest(
     *,
     repository: Path,
     package_commit: str,
+    require_image: bool = True,
 ) -> tuple[dict[str, Any], str]:
     path = artifact_root / "pilot-v5/frozen-run-manifest.json"
     metadata = path.stat(follow_symlinks=False)
@@ -3096,8 +3324,15 @@ def load_frozen_run_manifest(
         "model_metadata_request_count": 1,
         "model_task_request_count": 0,
         "task_browser_action_count": 0,
-        "real_evidence_finalizer_regression_sha256": canonical_sha256(
-            validate_real_evidence_regression(repository)
+        "static_real_evidence_regression_sha256": file_sha256(paths["real_regression"]),
+        "qualified_real_evidence_regression_sha256": file_sha256(
+            artifact_root / "pilot-v5/qualified-real-evidence-regression/receipt.json"
+        ),
+        "local_finalizer_qualification_sha256": file_sha256(
+            artifact_root / "pilot-v5/local-finalizer-qualification.json"
+        ),
+        "local_finalizer_interpreter_dependency_manifest_sha256": (
+            manifest.get("local_finalizer_interpreter_dependency_manifest_sha256")
         ),
         "attempt_order": list(RUN_IDS),
         "empirical_entry_crossed": False,
@@ -3108,12 +3343,51 @@ def load_frozen_run_manifest(
     file_hash_receipt_path = artifact_root / "pilot-v5/final-image-file-hashes/receipt.json"
     file_hash_receipt = load_object(file_hash_receipt_path, label="final image file hashes")
     source_receipts = manifest.get("source_receipts")
+    qualified_regression_path = (
+        artifact_root / "pilot-v5/qualified-real-evidence-regression/receipt.json"
+    )
+    qualified_regression = load_object(
+        qualified_regression_path,
+        label="qualified real-evidence regression",
+    )
+    static_regression = validate_real_evidence_regression(
+        repository,
+        expected_finalizer_source_sha256=git_file_sha256(
+            repository,
+            package_commit,
+            FINALIZER_RELATIVE_PATH,
+        ),
+    )
+    local_qualification_path = artifact_root / "pilot-v5/local-finalizer-qualification.json"
+    local_qualification = validate_local_finalizer_qualification(
+        local_qualification_path,
+        repository=repository,
+        package_commit=package_commit,
+        require_local_runtime=False,
+    )
     if (
         not isinstance(source_receipts, dict)
         or source_receipts.get("final_image_file_hashes") != file_sha256(file_hash_receipt_path)
         or manifest.get("final_image_file_hashes_sha256") != canonical_sha256(file_hash_receipt)
         or file_hash_receipt.get(typed_qualification.python_interpreter_path)
         != typed_qualification.python_interpreter_sha256
+        or source_receipts.get("static_real_evidence_regression")
+        != file_sha256(paths["real_regression"])
+        or source_receipts.get("qualified_real_evidence_regression")
+        != file_sha256(qualified_regression_path)
+        or source_receipts.get("local_finalizer_qualification")
+        != file_sha256(local_qualification_path)
+        or manifest.get("local_finalizer_interpreter_sha256")
+        != local_qualification.get("interpreter_sha256")
+        or manifest.get("local_finalizer_interpreter_dependency_manifest_sha256")
+        != local_qualification.get("interpreter_dependency_manifest_sha256")
+        or qualified_regression.get("semantic_projection")
+        != static_regression.get("semantic_projection")
+        or qualified_regression.get("receipt_id")
+        != "T09-PRAGMATIC-RETRY3-QUALIFIED-IMAGE-REGRESSION-0001"
+        or qualified_regression.get("network_disabled") is not True
+        or qualified_regression.get("additional_model_requests") != 0
+        or qualified_regression.get("additional_browser_actions") != 0
     ):
         raise T09HostError("frozen Python interpreter source receipt drifted")
     exclusion_path = (
@@ -3125,7 +3399,7 @@ def load_frozen_run_manifest(
     if (
         not isinstance(image_id, str)
         or re.fullmatch(r"sha256:[a-f0-9]{64}", image_id) is None
-        or image_id_if_present(docker_prefix(), image_id) != image_id
+        or (require_image and image_id_if_present(docker_prefix(), image_id) != image_id)
     ):
         raise T09HostError("frozen replacement image is unavailable or drifted")
     pair_diffs = manifest.get("pair_diffs")
@@ -3154,6 +3428,8 @@ def initialize_state(root: Path, execution_sha256: str, *, lambda_started_at_epo
         "attempt_finalizations": {},
         "attempt_finalization_history": {},
         "first_pair_decision": None,
+        "first_pair_checkpoint_binding": None,
+        "first_pair_selection_drift_detected": False,
     }
     write_exclusive(root / "pilot-v5/pilot-state.json", state)
 
@@ -3172,6 +3448,14 @@ def preflight(args: argparse.Namespace) -> None:
     )
     command_document = verify_package(repository, args.package_commit)
     real_evidence_regression = validate_real_evidence_regression(repository)
+    local_finalizer_qualification = validate_local_finalizer_qualification(
+        args.local_finalizer_qualification,
+        repository=repository,
+        package_commit=args.package_commit,
+        require_local_runtime=True,
+        evaluator_root=args.local_evaluator_root,
+        dataset=args.local_dataset,
+    )
     paths = contract_paths(repository)
     prefix = docker_prefix()
     if owned_containers(prefix):
@@ -3190,6 +3474,10 @@ def preflight(args: argparse.Namespace) -> None:
     write_exclusive(
         artifact_root / "pilot-v5/provider-entry.json",
         sanitized_dynamic_receipt(args.dynamic_receipt, dynamic),
+    )
+    write_exclusive(
+        artifact_root / "pilot-v5/local-finalizer-qualification.json",
+        local_finalizer_qualification,
     )
     image_materialization = materialize_replacement_image(
         repository=repository,
@@ -3230,6 +3518,16 @@ def preflight(args: argparse.Namespace) -> None:
         overlay=args.evaluator_overlay.resolve(strict=True),
         prefix=prefix,
         image_id=image_id,
+    )
+    qualified_real_regression = qualified_real_evidence_regression(
+        repository=repository,
+        artifact_root=artifact_root,
+        archive=args.real_evidence_archive,
+        overlay=args.evaluator_overlay.resolve(strict=True),
+        prefix=prefix,
+        image_id=image_id,
+        image_files=image_files,
+        static_receipt=real_evidence_regression,
     )
     browser = browser_lifecycle_preflight(
         artifact_root=artifact_root,
@@ -3283,7 +3581,9 @@ def preflight(args: argparse.Namespace) -> None:
         file_hashes=image_files,
         model_receipt=model_metadata,
         adjudication=adjudication,
-        real_evidence_regression=real_evidence_regression,
+        static_real_evidence_regression=real_evidence_regression,
+        qualified_real_evidence_regression_receipt=qualified_real_regression,
+        local_finalizer_qualification_receipt=local_finalizer_qualification,
     )
     state_path = artifact_root / "pilot-v5/pilot-state.json"
     state = load_object(state_path, label="pilot state")
@@ -3317,13 +3617,30 @@ def preflight(args: argparse.Namespace) -> None:
             "browser_startup_screenshot_cleanup": browser,
             "evaluator_loading": "passed-exact-network-none-with-approved-fixtures",
             "real_evidence_finalizer_regression": {
-                "receipt_sha256": file_sha256(paths["real_regression"]),
+                "static_receipt_sha256": file_sha256(paths["real_regression"]),
+                "qualified_receipt_sha256": file_sha256(
+                    artifact_root / "pilot-v5/qualified-real-evidence-regression/receipt.json"
+                ),
                 "semantic_projection_sha256": real_evidence_regression[
                     "semantic_projection_sha256"
+                ],
+                "qualified_interpreter_sha256": qualified_real_regression["interpreter"][
+                    "executable_sha256"
                 ],
                 "accepted_scientific_and_evaluator_fields_equal": True,
                 "additional_model_requests": 0,
                 "additional_browser_actions": 0,
+            },
+            "local_post_termination_finalizer": {
+                "qualification_sha256": file_sha256(
+                    artifact_root / "pilot-v5/local-finalizer-qualification.json"
+                ),
+                "interpreter_sha256": local_finalizer_qualification["interpreter_sha256"],
+                "interpreter_dependency_manifest_sha256": local_finalizer_qualification[
+                    "interpreter_dependency_manifest_sha256"
+                ],
+                "network": "socket-construction-denied",
+                "provider_lifecycle_required": False,
             },
             "evaluator_overlay_revalidation": evaluator_overlay_verified,
             "task_loading": "passed-two-exact-rows-network-none",
@@ -3447,15 +3764,9 @@ def run_attached_with_caps(
             lambda_elapsed = now_wall - lambda_started_at_epoch
             if elapsed > MAX_CONDITION_WALL_SECONDS:
                 stop_reason = "condition_wall_budget_stop"
-            elif (
-                now_wall - pair_started_at_epoch
-                > MAX_PAIR_WALL_SECONDS - FINALIZATION_RESERVE_SECONDS
-            ):
+            elif now_wall - pair_started_at_epoch > MAX_PAIR_WALL_SECONDS:
                 stop_reason = "pair_wall_budget_stop"
-            elif (
-                now_wall - pilot_started_at_epoch
-                > MAX_TOTAL_WALL_SECONDS - FINALIZATION_RESERVE_SECONDS
-            ):
+            elif now_wall - pilot_started_at_epoch > MAX_TOTAL_WALL_SECONDS:
                 stop_reason = "campaign_total_wall_budget_stop"
             elif lambda_elapsed > MAX_LAMBDA_DURATION_SECONDS - PROVIDER_CLOSEOUT_RESERVE_SECONDS:
                 stop_reason = "lambda_duration_budget_stop"
@@ -3505,6 +3816,9 @@ def evaluator_argv(
     frozen_run_manifest_sha256: str,
     finalizer_commit: str,
     finalizer_source: Path,
+    finalizer_source_sha256: str,
+    finalizer_projection_source_sha256: str,
+    finalizer_projection: Any,
     invocation: int,
     evaluator_revalidation_path: Path,
 ) -> tuple[list[str], Path, dict[str, str]]:
@@ -3513,12 +3827,17 @@ def evaluator_argv(
     artifact_root = args.artifact_root.resolve(strict=True)
     finalizer_source = finalizer_source.resolve(strict=True)
     finalizer_sha256 = file_sha256(finalizer_source)
+    if finalizer_sha256 != finalizer_source_sha256:
+        raise T09HostError("validated finalizer source changed before projection")
     frozen_manifest = load_object(
         artifact_root / "pilot-v5/frozen-run-manifest.json", label="frozen run manifest"
     )
     finalizer_closure = {
+        "finalizer_execution_mode": "qualified-image",
+        "finalizer_runtime_qualification_sha256": frozen_run_manifest_sha256,
         "finalizer_commit": finalizer_commit,
         "finalizer_source_sha256": finalizer_sha256,
+        "finalizer_projection_source_sha256": finalizer_projection_source_sha256,
         "scientific_package_commit": args.package_commit,
         "pilot_library_sha256": file_sha256(repository / "src/giclab/harness/t09_sira_pilot.py"),
         "interpreter": "/opt/sira/.venv/bin/python",
@@ -3547,104 +3866,250 @@ def evaluator_argv(
     raw_root = (artifact_root / raw_output_root).resolve(strict=True)
     finalized_base = (artifact_root / finalized_output_root).resolve(strict=False)
     finalized_base.mkdir(parents=True, mode=0o700, exist_ok=True)
-    invocation_name = f"{finalizer_sha256}-invocation-{invocation:02d}"
+    invocation_name = f"{finalizer_sha256}-invocation-{invocation:04d}"
     finalized_root = finalized_base / invocation_name
     finalized_root.mkdir(mode=0o700, exist_ok=False)
     control_root = (artifact_root / "pilot-v5").resolve(strict=True)
-    return (
-        [
-            *docker_prefix(),
-            "run",
-            "--rm",
-            "--network",
-            "none",
-            "--read-only",
-            "--user",
-            "1000:1000",
-            "--env",
-            "PYTHONPATH=/opt/evaluator/.venv/lib/python3.11/site-packages:/opt/giclab-src",
-            "--mount",
-            f"type=bind,src={artifact_root},dst=/opt/giclab-artifacts,readonly",
-            "--mount",
-            f"type=bind,src={raw_root},dst=/opt/giclab-raw,readonly",
-            "--mount",
-            f"type=bind,src={finalized_root},dst=/opt/giclab-finalized",
-            "--mount",
-            f"type=bind,src={control_root},dst=/opt/giclab-control,readonly",
-            "--mount",
-            f"type=bind,src={repository / 'src/giclab'},dst=/opt/giclab-src/giclab,readonly",
-            "--mount",
-            f"type=bind,src={finalizer_source},dst=/opt/giclab/t09_evaluate_attempt.py,readonly",
-            "--mount",
-            f"type=bind,src={args.evaluator_overlay.resolve(strict=True)},dst=/opt/evaluator,readonly",
-            "--mount",
-            f"type=bind,src={paths['execution']},dst=/opt/giclab-contracts/execution.json,readonly",
-            "--mount",
-            f"type=bind,src={paths['commands']},dst=/opt/giclab-contracts/T09_PILOT_COMMAND_MANIFESTS.json,readonly",
-            "--mount",
-            f"type=bind,src={paths['conditions']},dst=/opt/giclab-contracts/conditions,readonly",
-            "--mount",
-            f"type=bind,src={repository / 'schemas'},dst=/opt/giclab-schemas,readonly",
-            "--entrypoint",
-            "/opt/sira/.venv/bin/python",
-            image_id,
-            "/opt/giclab/t09_evaluate_attempt.py",
-            "--execution-contract",
-            "/opt/giclab-contracts/execution.json",
-            "--execution-contract-sha256",
-            file_sha256(paths["execution"]),
-            "--command-manifests",
-            "/opt/giclab-contracts/T09_PILOT_COMMAND_MANIFESTS.json",
-            "--command-manifests-sha256",
-            file_sha256(paths["commands"]),
-            "--condition-plan",
-            f"/opt/giclab-contracts/conditions/{Path(manifest['condition_plan_path']).name}",
-            "--raw-attempt-root",
-            "/opt/giclab-raw",
-            "--raw-output-relative",
-            raw_output_root,
-            "--finalized-attempt-root",
-            "/opt/giclab-finalized",
-            "--finalized-output-relative",
-            finalized_root.relative_to(artifact_root).as_posix(),
-            "--artifact-root",
-            "/opt/giclab-artifacts",
-            "--raw-attempt-manifest",
-            f"/opt/giclab-artifacts/{output_root}/raw-attempt-manifest.json",
-            "--raw-attempt-receipt",
-            f"/opt/giclab-artifacts/{output_root}/raw-attempt-complete.json",
-            "--run-id",
-            manifest["run_id"],
-            "--package-commit",
-            args.package_commit,
-            "--finalizer-commit",
-            finalizer_commit,
-            "--finalizer-source-sha256",
-            finalizer_sha256,
-            "--finalizer-dependency-manifest-sha256",
-            dependency_manifest_sha256,
-            "--frozen-run-manifest",
-            "/opt/giclab-control/frozen-run-manifest.json",
-            "--frozen-run-manifest-sha256",
-            frozen_run_manifest_sha256,
-            "--replacement-image-id",
-            image_id,
-            "--host-cleanup-receipt",
-            "/opt/giclab-raw/host-cleanup-receipt.json",
-            "--evaluator-root",
-            "/opt/sira/evaluation/fanout",
-            "--evaluator-overlay-revalidation",
-            f"/opt/giclab-artifacts/{evaluator_revalidation_path.relative_to(artifact_root).as_posix()}",
-            "--dataset",
-            "/opt/sira/data/fanout-final-dev.json",
-            "--score-schema",
-            "/opt/giclab-schemas/t09-sira-pilot-score.schema.json",
-            "--evidence-schema",
-            "/opt/giclab-schemas/t09-sira-pilot-evidence.schema.json",
-        ],
-        finalized_root,
-        finalizer_closure,
+    projected = finalizer_projection.build_finalizer_argv(
+        docker_prefix=docker_prefix(),
+        artifact_root=str(artifact_root),
+        raw_root=str(raw_root),
+        finalized_root=str(finalized_root),
+        control_root=str(control_root),
+        giclab_source_root=str(repository / "src/giclab"),
+        finalizer_source=str(finalizer_source),
+        evaluator_overlay=str(args.evaluator_overlay.resolve(strict=True)),
+        execution_contract=str(paths["execution"]),
+        command_manifests=str(paths["commands"]),
+        condition_plans=str(paths["conditions"]),
+        schemas_root=str(repository / "schemas"),
+        image_id=image_id,
+        condition_plan_name=Path(cast(str, manifest["condition_plan_path"])).name,
+        output_root=output_root,
+        raw_output_root=raw_output_root,
+        finalized_output_relative=finalized_root.relative_to(artifact_root).as_posix(),
+        run_id=cast(str, manifest["run_id"]),
+        package_commit=args.package_commit,
+        finalizer_commit=finalizer_commit,
+        finalizer_source_sha256=finalizer_sha256,
+        finalizer_projection_source_sha256=finalizer_projection_source_sha256,
+        finalizer_dependency_manifest_sha256=dependency_manifest_sha256,
+        frozen_run_manifest_sha256=frozen_run_manifest_sha256,
+        evaluator_revalidation_relative=evaluator_revalidation_path.relative_to(
+            artifact_root
+        ).as_posix(),
+        execution_contract_sha256=file_sha256(paths["execution"]),
+        command_manifests_sha256=file_sha256(paths["commands"]),
     )
+    _validate_projected_finalizer_argv(
+        projected,
+        docker_prefix_tokens=docker_prefix(),
+        image_id=image_id,
+        expected_mounts={
+            f"type=bind,src={artifact_root},dst=/opt/giclab-artifacts,readonly",
+            f"type=bind,src={raw_root},dst=/opt/giclab-raw,readonly",
+            f"type=bind,src={finalized_root},dst=/opt/giclab-finalized",
+            f"type=bind,src={control_root},dst=/opt/giclab-control,readonly",
+            f"type=bind,src={repository / 'src/giclab'},dst=/opt/giclab-src/giclab,readonly",
+            f"type=bind,src={finalizer_source},dst=/opt/giclab/t09_evaluate_attempt.py,readonly",
+            f"type=bind,src={args.evaluator_overlay.resolve(strict=True)},dst=/opt/evaluator,readonly",
+            f"type=bind,src={paths['execution']},dst=/opt/giclab-contracts/execution.json,readonly",
+            f"type=bind,src={paths['commands']},dst=/opt/giclab-contracts/T09_PILOT_COMMAND_MANIFESTS.json,readonly",
+            f"type=bind,src={paths['conditions']},dst=/opt/giclab-contracts/conditions,readonly",
+            f"type=bind,src={repository / 'schemas'},dst=/opt/giclab-schemas,readonly",
+        },
+        required_pairs={
+            "--run-id": cast(str, manifest["run_id"]),
+            "--package-commit": args.package_commit,
+            "--finalizer-commit": finalizer_commit,
+            "--finalizer-execution-mode": "qualified-image",
+            "--finalizer-source-sha256": finalizer_sha256,
+            "--finalizer-projection-source-sha256": finalizer_projection_source_sha256,
+            "--finalizer-dependency-manifest-sha256": dependency_manifest_sha256,
+            "--finalizer-runtime-qualification": "/opt/giclab-control/frozen-run-manifest.json",
+            "--finalizer-runtime-qualification-sha256": frozen_run_manifest_sha256,
+            "--raw-attempt-root": "/opt/giclab-raw",
+            "--finalized-attempt-root": "/opt/giclab-finalized",
+            "--replacement-image-id": image_id,
+        },
+    )
+    return projected, finalized_root, finalizer_closure
+
+
+def _validate_projected_finalizer_argv(
+    argv: object,
+    *,
+    docker_prefix_tokens: list[str],
+    image_id: str,
+    expected_mounts: set[str],
+    required_pairs: dict[str, str],
+) -> None:
+    """Keep empirical/provider authority frozen while invocation details are repairable."""
+
+    if not isinstance(argv, list) or not argv or not all(isinstance(item, str) for item in argv):
+        raise T09HostError("downstream finalizer projection did not return string argv")
+    projected = cast(list[str], argv)
+    if projected[: len(docker_prefix_tokens)] != docker_prefix_tokens:
+        raise T09HostError("downstream finalizer changed the exact container transport")
+    suffix = projected[len(docker_prefix_tokens) :]
+    if suffix[:2] != ["run", "--rm"] or suffix.count("--read-only") != 1:
+        raise T09HostError("downstream finalizer container is not ephemeral/read-only")
+    if suffix.count("--network") != 1 or suffix[suffix.index("--network") + 1] != "none":
+        raise T09HostError("downstream finalizer network must be exactly none")
+    if suffix.count("--entrypoint") != 1:
+        raise T09HostError("downstream finalizer entrypoint is ambiguous")
+    entrypoint_index = suffix.index("--entrypoint")
+    if suffix[entrypoint_index + 1 : entrypoint_index + 4] != [
+        "/opt/sira/.venv/bin/python",
+        image_id,
+        "/opt/giclab/t09_evaluate_attempt.py",
+    ]:
+        raise T09HostError("downstream finalizer interpreter/image/source drifted")
+    mounts = {suffix[index + 1] for index, value in enumerate(suffix[:-1]) if value == "--mount"}
+    if mounts != expected_mounts or sum(value == "--mount" for value in suffix) != len(
+        expected_mounts
+    ):
+        raise T09HostError("downstream finalizer mount ownership drifted")
+    writable = [mount for mount in mounts if not mount.endswith(",readonly")]
+    if len(writable) != 1 or "dst=/opt/giclab-finalized" not in writable[0]:
+        raise T09HostError("downstream finalizer has unexpected write authority")
+    for flag, expected in required_pairs.items():
+        if suffix.count(flag) != 1 or suffix[suffix.index(flag) + 1] != expected:
+            raise T09HostError(f"downstream finalizer {flag} binding drifted")
+
+
+def local_evaluator_invocation(
+    *,
+    args: argparse.Namespace,
+    manifest: dict[str, Any],
+    frozen_manifest: dict[str, Any],
+    frozen_run_manifest_sha256: str,
+    finalizer_commit: str,
+    finalizer_source: Path,
+    finalizer_source_sha256: str,
+    finalizer_projection_source_sha256: str,
+    finalizer_projection: Any,
+    invocation: int,
+    evaluator_revalidation_path: Path,
+    local_qualification_path: Path,
+    local_qualification: dict[str, Any],
+) -> tuple[list[str], dict[str, str], Path, dict[str, str]]:
+    """Project and validate one provider-independent local finalizer invocation."""
+
+    repository = args.repository.resolve(strict=True)
+    artifact_root = args.artifact_root.resolve(strict=True)
+    paths = contract_paths(repository)
+    finalizer_source = finalizer_source.resolve(strict=True)
+    output_root = manifest_output_root(manifest)
+    owned = cast(dict[str, Any], manifest["permitted_condition_owned"])
+    raw_output_root = cast(str, owned["raw_output_root"])
+    finalized_output_root = cast(str, owned["finalized_output_root"])
+    raw_root = (artifact_root / raw_output_root).resolve(strict=True)
+    finalized_base = (artifact_root / finalized_output_root).resolve(strict=False)
+    finalized_base.mkdir(parents=True, mode=0o700, exist_ok=True)
+    invocation_name = f"{finalizer_source_sha256}-invocation-{invocation:04d}"
+    finalized_root = finalized_base / invocation_name
+    finalized_root.mkdir(mode=0o700, exist_ok=False)
+    interpreter = cast(str, local_qualification["interpreter"])
+    interpreter_sha256 = cast(str, local_qualification["interpreter_sha256"])
+    site_packages = cast(str, local_qualification["dependency_site_packages"])
+    closure = {
+        "finalizer_execution_mode": "qualified-local",
+        "finalizer_runtime_qualification_sha256": file_sha256(local_qualification_path),
+        "finalizer_commit": finalizer_commit,
+        "finalizer_source_sha256": finalizer_source_sha256,
+        "finalizer_projection_source_sha256": finalizer_projection_source_sha256,
+        "scientific_package_commit": args.package_commit,
+        "pilot_library_sha256": file_sha256(repository / "src/giclab/harness/t09_sira_pilot.py"),
+        "interpreter": interpreter,
+        "interpreter_sha256": interpreter_sha256,
+        "replacement_image_id": cast(str, frozen_manifest["replacement_image_id"]),
+        "execution_contract_sha256": file_sha256(paths["execution"]),
+        "command_manifests_sha256": file_sha256(paths["commands"]),
+        "dataset_contract_sha256": file_sha256(paths["dataset"]),
+        "evaluator_contract_sha256": file_sha256(paths["evaluator"]),
+        "score_schema_sha256": file_sha256(repository / "schemas/t09-sira-pilot-score.schema.json"),
+        "evidence_schema_sha256": file_sha256(
+            repository / "schemas/t09-sira-pilot-evidence.schema.json"
+        ),
+        "evaluator_overlay_entries_sha256": cast(
+            str, frozen_manifest["evaluator_overlay_entries_sha256"]
+        ),
+        "evaluator_overlay_packages_sha256": cast(
+            str, frozen_manifest["evaluator_overlay_packages_sha256"]
+        ),
+    }
+    dependency_manifest_sha256 = canonical_sha256(closure)
+    projected = finalizer_projection.build_local_finalizer_invocation(
+        interpreter=interpreter,
+        dependency_site_packages=site_packages,
+        repository_source_root=str(repository / "src"),
+        finalizer_source=str(finalizer_source),
+        execution_contract=str(paths["execution"]),
+        execution_contract_sha256=file_sha256(paths["execution"]),
+        command_manifests=str(paths["commands"]),
+        command_manifests_sha256=file_sha256(paths["commands"]),
+        condition_plan=str(
+            paths["conditions"] / Path(cast(str, manifest["condition_plan_path"])).name
+        ),
+        raw_root=str(raw_root),
+        raw_output_relative=raw_output_root,
+        finalized_root=str(finalized_root),
+        finalized_output_relative=finalized_root.relative_to(artifact_root).as_posix(),
+        artifact_root=str(artifact_root),
+        raw_attempt_manifest=str(artifact_root / output_root / "raw-attempt-manifest.json"),
+        raw_attempt_receipt=str(artifact_root / output_root / "raw-attempt-complete.json"),
+        run_id=cast(str, manifest["run_id"]),
+        package_commit=args.package_commit,
+        finalizer_commit=finalizer_commit,
+        finalizer_source_sha256=finalizer_source_sha256,
+        finalizer_projection_source_sha256=finalizer_projection_source_sha256,
+        finalizer_dependency_manifest_sha256=dependency_manifest_sha256,
+        frozen_run_manifest=str(artifact_root / "pilot-v5/frozen-run-manifest.json"),
+        frozen_run_manifest_sha256=frozen_run_manifest_sha256,
+        replacement_image_id=cast(str, frozen_manifest["replacement_image_id"]),
+        host_cleanup_receipt=str(raw_root / "host-cleanup-receipt.json"),
+        evaluator_root=str(args.local_evaluator_root.resolve(strict=True)),
+        evaluator_overlay_revalidation=str(evaluator_revalidation_path),
+        dataset=str(args.local_dataset.resolve(strict=True)),
+        score_schema=str(repository / "schemas/t09-sira-pilot-score.schema.json"),
+        evidence_schema=str(repository / "schemas/t09-sira-pilot-evidence.schema.json"),
+        runtime_qualification=str(local_qualification_path),
+        runtime_qualification_sha256=file_sha256(local_qualification_path),
+    )
+    if not isinstance(projected, dict) or set(projected) != {"argv", "environment", "network"}:
+        raise T09HostError("local finalizer projection returned an invalid surface")
+    argv = projected.get("argv")
+    environment = projected.get("environment")
+    expected_environment = {
+        "PYTHONPATH": f"{site_packages}:{repository / 'src'}",
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "PYTHONNOUSERSITE": "1",
+        "CUDA_VISIBLE_DEVICES": "",
+    }
+    if (
+        not isinstance(argv, list)
+        or not all(isinstance(item, str) for item in argv)
+        or argv[:2] != [interpreter, str(finalizer_source)]
+        or environment != expected_environment
+        or projected.get("network") != "socket-construction-denied"
+    ):
+        raise T09HostError("local finalizer interpreter/environment projection drifted")
+    required_pairs = {
+        "--finalizer-execution-mode": "qualified-local",
+        "--finalizer-source-sha256": finalizer_source_sha256,
+        "--finalizer-projection-source-sha256": finalizer_projection_source_sha256,
+        "--finalizer-dependency-manifest-sha256": dependency_manifest_sha256,
+        "--finalizer-runtime-qualification-sha256": file_sha256(local_qualification_path),
+        "--run-id": cast(str, manifest["run_id"]),
+        "--raw-attempt-root": str(raw_root),
+        "--finalized-attempt-root": str(finalized_root),
+    }
+    typed_argv = cast(list[str], argv)
+    for flag, expected in required_pairs.items():
+        if typed_argv.count(flag) != 1 or typed_argv[typed_argv.index(flag) + 1] != expected:
+            raise T09HostError(f"local finalizer {flag} binding drifted")
+    return typed_argv, expected_environment, finalized_root, closure
 
 
 def preentry_prefix_inventory(attempt_root: Path) -> list[dict[str, object]]:
@@ -4381,21 +4846,26 @@ def validate_finalizer_source(
     package_commit: str,
     finalizer_commit: str,
     source: Path,
-) -> str:
+    projection_source: Path,
+) -> tuple[str, str, Any]:
     """Bind downstream-repairable bytes without changing the frozen worktree."""
 
     if re.fullmatch(r"[a-f0-9]{40}", finalizer_commit) is None:
         raise T09HostError("finalizer commit is malformed")
-    source = source.resolve(strict=True)
-    metadata = source.stat(follow_symlinks=False)
-    if (
-        source.is_symlink()
-        or not stat.S_ISREG(metadata.st_mode)
-        or metadata.st_nlink != 1
-        or metadata.st_mode & 0o022
-        or not 0 < metadata.st_size <= 1_048_576
-    ):
-        raise T09HostError("finalizer source metadata is unsafe")
+    sources = {
+        FINALIZER_RELATIVE_PATH: source.resolve(strict=True),
+        FINALIZER_PROJECTION_RELATIVE_PATH: projection_source.resolve(strict=True),
+    }
+    for path in sources.values():
+        metadata = path.stat(follow_symlinks=False)
+        if (
+            path.is_symlink()
+            or not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_nlink != 1
+            or metadata.st_mode & 0o022
+            or not 0 < metadata.st_size <= 1_048_576
+        ):
+            raise T09HostError("downstream finalizer source metadata is unsafe")
     environment = safe_environment()
     ancestry = subprocess.run(
         [
@@ -4430,22 +4900,238 @@ def validate_finalizer_source(
         ).splitlines()
         allowed = {
             FINALIZER_RELATIVE_PATH,
+            FINALIZER_PROJECTION_RELATIVE_PATH,
             "tests/test_t09_sira_pilot.py",
             "tests/test_t09_retry3.py",
         }
-        if FINALIZER_RELATIVE_PATH not in changed or not set(changed).issubset(allowed):
+        if not set(changed).intersection(
+            {FINALIZER_RELATIVE_PATH, FINALIZER_PROJECTION_RELATIVE_PATH}
+        ) or not set(changed).issubset(allowed):
             raise T09HostError("post-entry finalizer commit changed a non-downstream surface")
-    retained = subprocess.run(
-        ["git", "-C", str(repository), "show", f"{finalizer_commit}:{FINALIZER_RELATIVE_PATH}"],
-        env=environment,
-        stdin=subprocess.DEVNULL,
-        capture_output=True,
-        check=True,
-        timeout=30,
-    ).stdout
-    if retained != source.read_bytes():
-        raise T09HostError("finalizer bytes do not match their Git commit")
-    return file_sha256(source)
+    for relative, path in sources.items():
+        retained = subprocess.run(
+            ["git", "-C", str(repository), "show", f"{finalizer_commit}:{relative}"],
+            env=environment,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            check=True,
+            timeout=30,
+        ).stdout
+        if retained != path.read_bytes():
+            raise T09HostError("downstream finalizer bytes do not match their Git commit")
+    specification = importlib.util.spec_from_file_location(
+        "giclab_t09_finalizer_projection", sources[FINALIZER_PROJECTION_RELATIVE_PATH]
+    )
+    if specification is None or specification.loader is None:
+        raise T09HostError("downstream finalizer projection cannot be loaded")
+    module = importlib.util.module_from_spec(specification)
+    specification.loader.exec_module(module)
+    if (
+        not callable(getattr(module, "build_finalizer_argv", None))
+        or not callable(getattr(module, "build_local_finalizer_invocation", None))
+        or not callable(getattr(module, "build_completion_projection", None))
+    ):
+        raise T09HostError("downstream finalizer projection API is incomplete")
+    return (
+        file_sha256(sources[FINALIZER_RELATIVE_PATH]),
+        file_sha256(sources[FINALIZER_PROJECTION_RELATIVE_PATH]),
+        module,
+    )
+
+
+def validate_local_finalizer_qualification(
+    path: Path,
+    *,
+    repository: Path,
+    package_commit: str,
+    require_local_runtime: bool,
+    evaluator_root: Path | None = None,
+    dataset: Path | None = None,
+) -> dict[str, Any]:
+    """Validate the prelaunch absolute local analysis closure."""
+
+    qualification_path = path.resolve(strict=True)
+    metadata = qualification_path.stat(follow_symlinks=False)
+    receipt = load_object(qualification_path, label="local finalizer qualification")
+    execution_path = contract_paths(repository)["execution"]
+    execution = load_object(execution_path, label="local finalizer execution contract")
+    runtime = execution.get("runtime")
+    base_packages = (
+        runtime.get("local_finalizer_base_packages") if isinstance(runtime, dict) else None
+    )
+    packages = receipt.get("dependency_package_manifest")
+    sources = receipt.get("source_sha256s")
+    if (
+        qualification_path.is_symlink()
+        or not stat.S_ISREG(metadata.st_mode)
+        or metadata.st_nlink != 1
+        or stat.S_IMODE(metadata.st_mode) != 0o600
+        or receipt.get("schema_version") != "0.1.0"
+        or receipt.get("qualification_id") != "QUAL-T09-PILOT-V5-LOCAL-FINALIZER-0001"
+        or receipt.get("plan_id") != PLAN_ID
+        or receipt.get("package_commit") != package_commit
+        or receipt.get("python_version") != "3.11.14"
+        or receipt.get("execution_contract_sha256") != file_sha256(execution_path)
+        or not isinstance(base_packages, list)
+        or not base_packages
+        or base_packages != sorted(base_packages)
+        or len(base_packages) != len(set(base_packages))
+        or receipt.get("interpreter_dependency_manifest") != base_packages
+        or receipt.get("interpreter_dependency_manifest_sha256") != canonical_sha256(base_packages)
+        or packages != expected_evaluator_packages(repository)
+        or receipt.get("dependency_package_manifest_sha256") != canonical_sha256(packages)
+        or receipt.get("evaluator_contract_sha256")
+        != file_sha256(contract_paths(repository)["evaluator"])
+        or receipt.get("dataset_sha256") != PINNED_DATASET_SHA256
+        or receipt.get("real_evidence_regression_sha256")
+        != file_sha256(contract_paths(repository)["real_regression"])
+        or receipt.get("real_evidence_regression_passed") is not True
+        or receipt.get("network_policy") != "socket-construction-denied"
+        or receipt.get("model_requests") != 0
+        or receipt.get("browser_actions") != 0
+        or not isinstance(sources, dict)
+        or sources.get("finalizer")
+        != git_file_sha256(repository, package_commit, FINALIZER_RELATIVE_PATH)
+        or sources.get("projection")
+        != git_file_sha256(repository, package_commit, FINALIZER_PROJECTION_RELATIVE_PATH)
+        or sources.get("qualification")
+        != file_sha256(repository / LOCAL_FINALIZER_QUALIFICATION_RELATIVE_PATH)
+    ):
+        raise T09HostError("local finalizer qualification binding drifted")
+    interpreter_value = receipt.get("interpreter")
+    interpreter_site_value = receipt.get("interpreter_site_packages")
+    site_value = receipt.get("dependency_site_packages")
+    evaluator_root_value = receipt.get("evaluator_root")
+    dataset_value = receipt.get("dataset")
+    interpreter_sha256 = receipt.get("interpreter_sha256")
+    if (
+        not isinstance(interpreter_value, str)
+        or not Path(interpreter_value).is_absolute()
+        or not isinstance(interpreter_site_value, str)
+        or not Path(interpreter_site_value).is_absolute()
+        or not isinstance(site_value, str)
+        or not Path(site_value).is_absolute()
+        or not isinstance(interpreter_sha256, str)
+        or _HEX64.fullmatch(interpreter_sha256) is None
+        or not isinstance(evaluator_root_value, str)
+        or not Path(evaluator_root_value).is_absolute()
+        or not isinstance(dataset_value, str)
+        or not Path(dataset_value).is_absolute()
+    ):
+        raise T09HostError("local finalizer absolute runtime identity is malformed")
+    if require_local_runtime:
+        interpreter = Path(interpreter_value).resolve(strict=True)
+        interpreter_site_packages = Path(interpreter_site_value).resolve(strict=True)
+        site_packages = Path(site_value).resolve(strict=True)
+        qualified_evaluator_root = Path(evaluator_root_value).resolve(strict=True)
+        qualified_dataset = Path(dataset_value).resolve(strict=True)
+        if (
+            interpreter.as_posix() != interpreter_value
+            or interpreter_site_packages.as_posix() != interpreter_site_value
+            or site_packages.as_posix() != site_value
+            or interpreter.is_symlink()
+            or not interpreter.is_file()
+            or interpreter_site_packages.is_symlink()
+            or not interpreter_site_packages.is_dir()
+            or site_packages.is_symlink()
+            or not site_packages.is_dir()
+            or file_sha256(interpreter) != interpreter_sha256
+            or evaluator_root is None
+            or dataset is None
+            or evaluator_root.resolve(strict=True) != qualified_evaluator_root
+            or dataset.resolve(strict=True) != qualified_dataset
+            or file_sha256(qualified_dataset) != PINNED_DATASET_SHA256
+        ):
+            raise T09HostError("qualified local finalizer runtime is unavailable")
+        evaluator_contract = load_object(
+            contract_paths(repository)["evaluator"], label="evaluator contract"
+        )
+        identity = evaluator_contract.get("identity")
+        evaluator_files = identity.get("files") if isinstance(identity, dict) else None
+        observed_files: list[dict[str, str]] = []
+        if not isinstance(evaluator_files, list):
+            raise T09HostError("qualified local evaluator source inventory is unavailable")
+        for raw in evaluator_files:
+            if not isinstance(raw, dict):
+                raise T09HostError("qualified local evaluator source binding is malformed")
+            source_path = raw.get("path")
+            expected_sha256 = raw.get("sha256")
+            prefix = "evaluation/fanout/"
+            if (
+                not isinstance(source_path, str)
+                or not source_path.startswith(prefix)
+                or not isinstance(expected_sha256, str)
+            ):
+                raise T09HostError("qualified local evaluator source identity is malformed")
+            source = (qualified_evaluator_root / source_path.removeprefix(prefix)).resolve(
+                strict=True
+            )
+            try:
+                source.relative_to(qualified_evaluator_root)
+            except ValueError:
+                raise T09HostError("qualified local evaluator source escaped its root") from None
+            if source.is_symlink() or file_sha256(source) != expected_sha256:
+                raise T09HostError("qualified local evaluator source bytes changed")
+            observed_files.append({"path": source_path, "sha256": expected_sha256})
+        if receipt.get("evaluator_files") != observed_files or receipt.get(
+            "evaluator_files_sha256"
+        ) != canonical_sha256(observed_files):
+            raise T09HostError("qualified local evaluator source manifest changed")
+        probe = subprocess.run(
+            [
+                interpreter.as_posix(),
+                "-I",
+                "-c",
+                (
+                    "import importlib.metadata,json,re,sys;"
+                    "p=sys.argv[1];"
+                    "r=sorted((re.sub(r'[-_.]+','-',d.metadata['Name']).lower()+'=='+d.version) "
+                    "for d in importlib.metadata.distributions(path=[p]));"
+                    "print(json.dumps(r,separators=(',',':')))"
+                ),
+                site_packages.as_posix(),
+            ],
+            env=safe_environment(),
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            check=False,
+            timeout=60,
+        )
+        try:
+            realized: object = json.loads(probe.stdout)
+        except json.JSONDecodeError as exc:
+            raise T09HostError("local evaluator package probe is malformed") from exc
+        if probe.returncode != 0 or realized != packages:
+            raise T09HostError("qualified local evaluator packages changed")
+        base_probe = subprocess.run(
+            [
+                interpreter.as_posix(),
+                "-I",
+                "-c",
+                (
+                    "import importlib.metadata,json,re,sysconfig;"
+                    "p=sysconfig.get_paths()['purelib'];"
+                    "r=sorted((re.sub(r'[-_.]+','-',d.metadata['Name']).lower()+'=='+d.version) "
+                    "for d in importlib.metadata.distributions(path=[p]));"
+                    "print(json.dumps({'site_packages':p,'packages':r},separators=(',',':')))"
+                ),
+            ],
+            env=safe_environment(),
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            check=False,
+            timeout=60,
+        )
+        try:
+            realized_base: object = json.loads(base_probe.stdout)
+        except json.JSONDecodeError as exc:
+            raise T09HostError("local finalizer base-package probe is malformed") from exc
+        if base_probe.returncode != 0 or realized_base != {
+            "site_packages": interpreter_site_value,
+            "packages": base_packages,
+        }:
+            raise T09HostError("qualified local finalizer base packages changed")
+    return receipt
 
 
 def _schema_errors(document: object, schema: dict[str, Any]) -> list[str]:
@@ -4461,11 +5147,14 @@ def validate_finalized_attempt(
     repository: Path,
     finalized_root: Path,
     run_id: str,
-) -> tuple[dict[str, Any], dict[str, Any], list[dict[str, object]]]:
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, object], list[dict[str, object]]]:
     """Independently schema-check downstream output before frozen-state selection."""
 
     outcome = load_object(finalized_root / "attempt-outcome.json", label="attempt outcome")
     evidence = load_object(finalized_root / "evidence-index.json", label="evidence index")
+    semantic_projection = load_object(
+        finalized_root / "semantic-projection.json", label="attempt semantic projection"
+    )
     score_schema = load_object(
         repository / "schemas/t09-sira-pilot-score.schema.json", label="score schema"
     )
@@ -4481,6 +5170,7 @@ def validate_finalized_attempt(
     if (
         errors
         or evidence.get("outcome") != outcome
+        or semantic_projection != scientific_attempt_projection(evidence)
         or not isinstance(identity, dict)
         or identity.get("run_id") != run_id
     ):
@@ -4501,7 +5191,7 @@ def validate_finalized_attempt(
                 "sha256": file_sha256(path),
             }
         )
-    return outcome, evidence, files
+    return outcome, evidence, semantic_projection, files
 
 
 def validate_selected_finalization(
@@ -4516,12 +5206,16 @@ def validate_selected_finalization(
     """Reconstruct a selected derived result from immutable raw and output bytes."""
 
     expected_keys = {
+        "finalizer_execution_mode",
+        "finalizer_runtime_qualification_sha256",
         "finalizer_source_sha256",
+        "finalizer_projection_source_sha256",
         "finalizer_commit",
         "finalizer_dependency_manifest_sha256",
         "evaluator_contract_sha256",
         "interpreter",
         "interpreter_sha256",
+        "semantic_projection_sha256",
         "finalized_output_root",
         "finalization_complete_sha256",
     }
@@ -4546,7 +5240,7 @@ def validate_selected_finalization(
         run_id=run_id,
         package_commit=package_commit,
     )
-    outcome, evidence, output_files = validate_finalized_attempt(
+    outcome, evidence, semantic_projection, output_files = validate_finalized_attempt(
         repository=repository,
         finalized_root=finalized_root,
         run_id=run_id,
@@ -4556,8 +5250,11 @@ def validate_selected_finalization(
     completion = load_object(completion_path, label="selected finalization completion")
     closure = completion.get("finalizer_closure")
     expected_closure_fields = {
+        "finalizer_execution_mode",
+        "finalizer_runtime_qualification_sha256",
         "finalizer_commit",
         "finalizer_source_sha256",
+        "finalizer_projection_source_sha256",
         "scientific_package_commit",
         "pilot_library_sha256",
         "interpreter",
@@ -4595,16 +5292,25 @@ def validate_selected_finalization(
         or completion.get("outcome_sha256") != file_sha256(finalized_root / "attempt-outcome.json")
         or completion.get("evidence_index_sha256")
         != file_sha256(finalized_root / "evidence-index.json")
+        or completion.get("semantic_projection_file_sha256")
+        != file_sha256(finalized_root / "semantic-projection.json")
+        or completion.get("semantic_projection_sha256") != canonical_sha256(semantic_projection)
         or not isinstance(closure, dict)
         or set(closure) != expected_closure_fields
         or closure.get("scientific_package_commit") != package_commit
         or completion.get("finalizer_dependency_manifest_sha256") != canonical_sha256(closure)
         or selection.get("finalizer_dependency_manifest_sha256") != canonical_sha256(closure)
+        or selection.get("finalizer_execution_mode") != closure.get("finalizer_execution_mode")
+        or selection.get("finalizer_runtime_qualification_sha256")
+        != closure.get("finalizer_runtime_qualification_sha256")
         or selection.get("finalizer_source_sha256") != closure.get("finalizer_source_sha256")
+        or selection.get("finalizer_projection_source_sha256")
+        != closure.get("finalizer_projection_source_sha256")
         or selection.get("finalizer_commit") != closure.get("finalizer_commit")
         or selection.get("evaluator_contract_sha256") != closure.get("evaluator_contract_sha256")
         or selection.get("interpreter") != closure.get("interpreter")
         or selection.get("interpreter_sha256") != closure.get("interpreter_sha256")
+        or selection.get("semantic_projection_sha256") != canonical_sha256(semantic_projection)
         or completion.get("network") != "none"
         or completion.get("additional_model_calls") != 0
         or completion.get("additional_browser_actions") != 0
@@ -4620,17 +5326,30 @@ def finalize_attempt(args: argparse.Namespace) -> dict[str, object]:
 
     repository = args.repository.resolve(strict=True)
     artifact_root = args.artifact_root.resolve(strict=True)
-    verify_package(repository, args.package_commit)
-    source_sha256 = validate_finalizer_source(
+    source_sha256, projection_source_sha256, projection_module = validate_finalizer_source(
         repository=repository,
         package_commit=args.package_commit,
         finalizer_commit=args.finalizer_commit,
         source=args.finalizer_source,
+        projection_source=args.finalizer_projection_source,
     )
+    verify_package(
+        repository,
+        args.package_commit,
+        current_commit=args.finalizer_commit,
+    )
+    local_mode = args.finalizer_execution_mode == "qualified-local"
+    if local_mode != (
+        args.local_finalizer_qualification is not None
+        and args.local_evaluator_root is not None
+        and args.local_dataset is not None
+    ):
+        raise T09HostError("local finalizer arguments are incomplete or supplied to image mode")
     frozen_manifest, frozen_manifest_sha256 = load_frozen_run_manifest(
         artifact_root,
         repository=repository,
         package_commit=args.package_commit,
+        require_image=not local_mode,
     )
     image_id = cast(str, frozen_manifest["replacement_image_id"])
     paths = contract_paths(repository)
@@ -4654,37 +5373,92 @@ def finalize_attempt(args: argparse.Namespace) -> dict[str, object]:
     raw_complete = state.get("raw_attempts_complete")
     if not isinstance(raw_complete, list) or args.run_id not in raw_complete:
         raise T09HostError("frozen supervisor has not accepted the raw attempt seal")
+    require_attempt_export_acknowledgement(
+        artifact_root,
+        run_id=args.run_id,
+        package_commit=args.package_commit,
+    )
     finalization_log_base = attempt_root / "finalizer-invocations"
     finalization_log_base.mkdir(mode=0o700, exist_ok=True)
     existing = sorted(path for path in finalization_log_base.iterdir() if path.is_dir())
-    if len(existing) >= MAX_FINALIZER_INVOCATIONS_PER_ATTEMPT:
-        raise T09HostError("downstream finalizer invocation limit reached")
+    expected_names = [f"invocation-{index:04d}" for index in range(1, len(existing) + 1)]
+    if [path.name for path in existing] != expected_names:
+        raise T09HostError("downstream finalizer invocation history is not contiguous")
     invocation = len(existing) + 1
-    invocation_log = finalization_log_base / f"invocation-{invocation:02d}"
+    invocation_log = finalization_log_base / f"invocation-{invocation:04d}"
     invocation_log.mkdir(mode=0o700, exist_ok=False)
-    overlay_revalidation = validate_evaluator_overlay_binding(
-        artifact_root=artifact_root,
-        repository=repository,
-        overlay=args.evaluator_overlay.resolve(strict=True),
-        prefix=docker_prefix(),
-        image_id=image_id,
-        frozen_manifest=frozen_manifest,
-        verify_packages=True,
-    )
+    local_qualification: dict[str, Any] | None = None
+    if local_mode:
+        assert args.local_finalizer_qualification is not None
+        local_qualification = validate_local_finalizer_qualification(
+            args.local_finalizer_qualification,
+            repository=repository,
+            package_commit=args.package_commit,
+            require_local_runtime=True,
+            evaluator_root=args.local_evaluator_root,
+            dataset=args.local_dataset,
+        )
+        retained_qualification_path = artifact_root / "pilot-v5/local-finalizer-qualification.json"
+        if load_object(
+            retained_qualification_path, label="retained local qualification"
+        ) != local_qualification or file_sha256(retained_qualification_path) != frozen_manifest.get(
+            "local_finalizer_qualification_sha256"
+        ):
+            raise T09HostError("local finalizer qualification differs from the frozen run")
+        overlay_revalidation = {
+            "overlay_manifest_sha256": frozen_manifest["evaluator_overlay_manifest_sha256"],
+            "overlay_entries_sha256": frozen_manifest["evaluator_overlay_entries_sha256"],
+            "overlay_packages_sha256": frozen_manifest["evaluator_overlay_packages_sha256"],
+            "packages_recomputed": True,
+            "local_runtime_qualification_sha256": file_sha256(args.local_finalizer_qualification),
+        }
+    else:
+        overlay_revalidation = validate_evaluator_overlay_binding(
+            artifact_root=artifact_root,
+            repository=repository,
+            overlay=args.evaluator_overlay.resolve(strict=True),
+            prefix=docker_prefix(),
+            image_id=image_id,
+            frozen_manifest=frozen_manifest,
+            verify_packages=True,
+        )
     overlay_path = invocation_log / "evaluator-overlay-revalidation.json"
     write_exclusive(overlay_path, overlay_revalidation)
-    finalizer, finalized_root, closure = evaluator_argv(
-        args=args,
-        manifest=manifest,
-        attempt_root=attempt_root,
-        cleanup_receipt=raw_root / "host-cleanup-receipt.json",
-        image_id=image_id,
-        frozen_run_manifest_sha256=frozen_manifest_sha256,
-        finalizer_commit=args.finalizer_commit,
-        finalizer_source=args.finalizer_source,
-        invocation=invocation,
-        evaluator_revalidation_path=overlay_path,
-    )
+    projected_environment: dict[str, str] = {}
+    if local_mode:
+        assert local_qualification is not None
+        assert args.local_finalizer_qualification is not None
+        finalizer, projected_environment, finalized_root, closure = local_evaluator_invocation(
+            args=args,
+            manifest=manifest,
+            frozen_manifest=frozen_manifest,
+            frozen_run_manifest_sha256=frozen_manifest_sha256,
+            finalizer_commit=args.finalizer_commit,
+            finalizer_source=args.finalizer_source,
+            finalizer_source_sha256=source_sha256,
+            finalizer_projection_source_sha256=projection_source_sha256,
+            finalizer_projection=projection_module,
+            invocation=invocation,
+            evaluator_revalidation_path=overlay_path,
+            local_qualification_path=args.local_finalizer_qualification.resolve(strict=True),
+            local_qualification=local_qualification,
+        )
+    else:
+        finalizer, finalized_root, closure = evaluator_argv(
+            args=args,
+            manifest=manifest,
+            attempt_root=attempt_root,
+            cleanup_receipt=raw_root / "host-cleanup-receipt.json",
+            image_id=image_id,
+            frozen_run_manifest_sha256=frozen_manifest_sha256,
+            finalizer_commit=args.finalizer_commit,
+            finalizer_source=args.finalizer_source,
+            finalizer_source_sha256=source_sha256,
+            finalizer_projection_source_sha256=projection_source_sha256,
+            finalizer_projection=projection_module,
+            invocation=invocation,
+            evaluator_revalidation_path=overlay_path,
+        )
     write_exclusive(
         invocation_log / "command.json",
         {
@@ -4692,14 +5466,18 @@ def finalize_attempt(args: argparse.Namespace) -> dict[str, object]:
             "run_id": args.run_id,
             "argv": finalizer,
             "argv_sha256": canonical_sha256(finalizer),
-            "network": "none",
+            "network": "socket-construction-denied" if local_mode else "none",
             "raw_mount": "readonly",
             "finalizer_closure": closure,
             "finalizer_dependency_manifest_sha256": canonical_sha256(closure),
         },
     )
-    remaining = scientific_seconds_remaining(
-        artifact_root, reserve_seconds=PROVIDER_CLOSEOUT_RESERVE_SECONDS
+    remaining = (
+        float(FINALIZER_INVOCATION_TIMEOUT_SECONDS)
+        if local_mode
+        else scientific_seconds_remaining(
+            artifact_root, reserve_seconds=PROVIDER_CLOSEOUT_RESERVE_SECONDS
+        )
     )
     if remaining <= 1:
         raise T09HostError("campaign has no downstream finalization time before cleanup reserve")
@@ -4708,12 +5486,12 @@ def finalize_attempt(args: argparse.Namespace) -> dict[str, object]:
     with stdout_path.open("xb") as stdout, stderr_path.open("xb") as stderr:
         result = subprocess.run(
             finalizer,
-            env=safe_environment(),
+            env={**safe_environment(), **projected_environment},
             stdin=subprocess.DEVNULL,
             stdout=stdout,
             stderr=stderr,
             check=False,
-            timeout=min(FINALIZATION_RESERVE_SECONDS, max(1, int(remaining))),
+            timeout=min(FINALIZER_INVOCATION_TIMEOUT_SECONDS, max(1, int(remaining))),
         )
     if result.returncode != 0:
         write_exclusive(
@@ -4731,7 +5509,7 @@ def finalize_attempt(args: argparse.Namespace) -> dict[str, object]:
             },
         )
         raise T09HostError("downstream finalizer failed; immutable raw attempt remains accepted")
-    outcome, _evidence, output_files = validate_finalized_attempt(
+    outcome, _evidence, semantic_projection, output_files = validate_finalized_attempt(
         repository=repository,
         finalized_root=finalized_root,
         run_id=args.run_id,
@@ -4752,7 +5530,26 @@ def finalize_attempt(args: argparse.Namespace) -> dict[str, object]:
     ):
         raise T09HostError("immutable raw attempt changed during finalization")
     completion_path = finalized_root / "finalization-complete.json"
-    completion: dict[str, object] = {
+    completion = projection_module.build_completion_projection(
+        plan_id=PLAN_ID,
+        host_run_id=HOST_RUN_ID,
+        run_id=args.run_id,
+        raw_manifest_sha256_before=raw_manifest_sha256_before,
+        raw_manifest_sha256_after=raw_manifest_sha256_after,
+        raw_receipt_sha256=raw_receipt_sha256_after,
+        raw_manifest_payload_sha256=canonical_sha256(raw_manifest),
+        raw_receipt_payload_sha256=canonical_sha256(raw_receipt),
+        output_files=output_files,
+        output_files_sha256=canonical_sha256(output_files),
+        outcome_sha256=file_sha256(finalized_root / "attempt-outcome.json"),
+        evidence_index_sha256=file_sha256(finalized_root / "evidence-index.json"),
+        semantic_projection_file_sha256=file_sha256(finalized_root / "semantic-projection.json"),
+        semantic_projection_sha256=canonical_sha256(semantic_projection),
+        finalizer_closure=closure,
+        finalizer_dependency_manifest_sha256=canonical_sha256(closure),
+        network="socket-construction-denied" if local_mode else "none",
+    )
+    expected_completion = {
         "schema_version": "0.1.0",
         "plan_id": PLAN_ID,
         "host_run_id": HOST_RUN_ID,
@@ -4766,27 +5563,35 @@ def finalize_attempt(args: argparse.Namespace) -> dict[str, object]:
         "output_files_sha256": canonical_sha256(output_files),
         "outcome_sha256": file_sha256(finalized_root / "attempt-outcome.json"),
         "evidence_index_sha256": file_sha256(finalized_root / "evidence-index.json"),
+        "semantic_projection_file_sha256": file_sha256(finalized_root / "semantic-projection.json"),
+        "semantic_projection_sha256": canonical_sha256(semantic_projection),
         "finalizer_closure": closure,
         "finalizer_dependency_manifest_sha256": canonical_sha256(closure),
-        "interpreter": "/opt/sira/.venv/bin/python",
+        "interpreter": closure["interpreter"],
         "interpreter_sha256": closure["interpreter_sha256"],
-        "network": "none",
+        "network": "socket-construction-denied" if local_mode else "none",
         "additional_model_calls": 0,
         "additional_browser_actions": 0,
         "raw_source_mutated": False,
         "output_schema_valid": True,
     }
+    if completion != expected_completion:
+        raise T09HostError("downstream completion projection exceeded its pure contract")
     write_exclusive(completion_path, completion)
     mark_attempt_completed(
         artifact_root / "pilot-v5/pilot-state.json",
         execution_contract_sha256=contract.sha256,
         run_id=args.run_id,
+        finalizer_execution_mode=closure["finalizer_execution_mode"],
+        finalizer_runtime_qualification_sha256=closure["finalizer_runtime_qualification_sha256"],
         finalizer_source_sha256=source_sha256,
+        finalizer_projection_source_sha256=projection_source_sha256,
         finalizer_commit=args.finalizer_commit,
         finalizer_dependency_manifest_sha256=canonical_sha256(closure),
         evaluator_contract_sha256=contract.evaluator_contract_sha256,
-        interpreter="/opt/sira/.venv/bin/python",
-        interpreter_sha256=cast(str, closure["interpreter_sha256"]),
+        interpreter=closure["interpreter"],
+        interpreter_sha256=closure["interpreter_sha256"],
+        semantic_projection_sha256=canonical_sha256(semantic_projection),
         finalized_output_root=finalized_root.relative_to(artifact_root).as_posix(),
         finalization_complete_sha256=file_sha256(completion_path),
     )
@@ -4848,7 +5653,10 @@ def first_pair_checkpoint(args: argparse.Namespace) -> dict[str, object]:
             {
                 key: cast(dict[str, Any], item)[key]
                 for key in (
+                    "finalizer_execution_mode",
+                    "finalizer_runtime_qualification_sha256",
                     "finalizer_source_sha256",
+                    "finalizer_projection_source_sha256",
                     "finalizer_commit",
                     "finalizer_dependency_manifest_sha256",
                     "evaluator_contract_sha256",
@@ -4978,7 +5786,10 @@ def campaign_evidence_disposition(args: argparse.Namespace) -> dict[str, object]
     if not isinstance(selected, dict) or set(selected) != set(RUN_IDS):
         raise T09HostError("campaign disposition lacks four selected finalizations")
     closure_fields = (
+        "finalizer_execution_mode",
+        "finalizer_runtime_qualification_sha256",
         "finalizer_source_sha256",
+        "finalizer_projection_source_sha256",
         "finalizer_commit",
         "finalizer_dependency_manifest_sha256",
         "evaluator_contract_sha256",
@@ -5209,6 +6020,140 @@ class _BoundedArchiveWriter:
         self.raw.flush()
 
 
+def _attempt_export_control_sources(
+    artifact_root: Path,
+    *,
+    attempt_root: Path,
+    run_id: str,
+) -> dict[str, Path]:
+    """Return the bounded control snapshot needed for offline finalization.
+
+    The snapshot carries no condition-owned output into the control plane.  It
+    retains the exact frozen runtime, source receipts, mutable state projection,
+    prior off-host acknowledgements, and append-only selection/checkpoint records
+    that existed when this raw attempt was exported.
+    """
+
+    snapshot_root = attempt_root / "attempt-export-control"
+    snapshot_manifest_path = attempt_root / "attempt-export-control-manifest.json"
+    if not snapshot_manifest_path.exists():
+        if snapshot_root.exists() or snapshot_root.is_symlink():
+            raise T09HostError("attempt export control snapshot is partial")
+        relative_paths = list(ATTEMPT_EXPORT_REQUIRED_CONTROL_PATHS)
+        optional_roots = (
+            artifact_root / "pilot-v5/received-export-acknowledgements",
+            artifact_root / "pilot-v5/finalization-selections",
+        )
+        for root in optional_roots:
+            if not root.exists():
+                continue
+            if root.is_symlink() or not root.is_dir():
+                raise T09HostError("attempt export control root is unsafe")
+            relative_paths.extend(
+                path.relative_to(artifact_root).as_posix()
+                for path in sorted(root.rglob("*"))
+                if path.is_file()
+            )
+        checkpoint = artifact_root / "pilot-v5/first-pair-checkpoint.json"
+        if checkpoint.exists():
+            relative_paths.append(checkpoint.relative_to(artifact_root).as_posix())
+        aggregate = artifact_root / "pilot-v5/aggregate-budget.json"
+        if aggregate.exists():
+            relative_paths.append(aggregate.relative_to(artifact_root).as_posix())
+        snapshot_root.mkdir(mode=0o700, exist_ok=False)
+        entries: list[dict[str, object]] = []
+        for relative in sorted(set(relative_paths)):
+            source = artifact_root / relative
+            metadata = source.stat(follow_symlinks=False)
+            if (
+                source.is_symlink()
+                or not stat.S_ISREG(metadata.st_mode)
+                or metadata.st_nlink != 1
+                or metadata.st_size > MAX_PRIVACY_JSON_BYTES
+            ):
+                raise T09HostError("attempt export control file is unsafe or oversized")
+            try:
+                source.resolve(strict=True).relative_to(artifact_root)
+            except ValueError:
+                raise T09HostError(
+                    "attempt export control file escaped the artifact root"
+                ) from None
+            destination = snapshot_root / relative
+            destination.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+            with source.open("rb") as incoming, destination.open("xb") as outgoing:
+                shutil.copyfileobj(incoming, outgoing, length=1_048_576)
+                outgoing.flush()
+                os.fsync(outgoing.fileno())
+            os.chmod(destination, 0o600)
+            entries.append(
+                {
+                    "path": f"control/{relative}",
+                    "bytes": destination.stat().st_size,
+                    "sha256": file_sha256(destination),
+                }
+            )
+        write_exclusive(
+            snapshot_manifest_path,
+            {
+                "schema_version": "0.1.0",
+                "plan_id": PLAN_ID,
+                "host_run_id": HOST_RUN_ID,
+                "run_id": run_id,
+                "files": entries,
+                "files_sha256": canonical_sha256(entries),
+            },
+        )
+    snapshot_manifest = load_object(
+        snapshot_manifest_path,
+        label="attempt export control snapshot manifest",
+    )
+    raw_entries = snapshot_manifest.get("files")
+    if (
+        snapshot_manifest.get("schema_version") != "0.1.0"
+        or snapshot_manifest.get("plan_id") != PLAN_ID
+        or snapshot_manifest.get("host_run_id") != HOST_RUN_ID
+        or snapshot_manifest.get("run_id") != run_id
+        or not isinstance(raw_entries, list)
+        or snapshot_manifest.get("files_sha256") != canonical_sha256(raw_entries)
+    ):
+        raise T09HostError("attempt export control snapshot manifest drifted")
+    snapshot_entries = cast(list[object], raw_entries)
+    result: dict[str, Path] = {}
+    for raw in snapshot_entries:
+        if not isinstance(raw, dict):
+            raise T09HostError("attempt export control snapshot record is malformed")
+        archive_name = raw.get("path")
+        size = raw.get("bytes")
+        digest = raw.get("sha256")
+        if not isinstance(archive_name, str) or not archive_name.startswith("control/"):
+            raise T09HostError("attempt export control snapshot path is malformed")
+        relative = archive_name.removeprefix("control/")
+        source = snapshot_root / relative
+        metadata = source.stat(follow_symlinks=False)
+        if (
+            source.is_symlink()
+            or not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_nlink != 1
+            or metadata.st_size != size
+            or not isinstance(digest, str)
+            or file_sha256(source) != digest
+        ):
+            raise T09HostError("attempt export control snapshot bytes drifted")
+        result[archive_name] = source
+    state = load_object(
+        snapshot_root / "pilot-v5/pilot-state.json",
+        label="export pilot-state snapshot",
+    )
+    raw_complete = state.get("raw_attempts_complete")
+    expected_index = RUN_IDS.index(run_id)
+    if not isinstance(raw_complete, list) or raw_complete[: expected_index + 1] != list(
+        RUN_IDS[: expected_index + 1]
+    ):
+        raise T09HostError("attempt export control state lacks its exact raw prefix")
+    result["attempt-export-control-manifest.json"] = snapshot_manifest_path
+    return result
+
+
 def export_attempt(args: argparse.Namespace, destination: BinaryIO) -> dict[str, object]:
     """Stream the authoritative immutable raw attempt before downstream finalization."""
 
@@ -5248,6 +6193,7 @@ def export_attempt(args: argparse.Namespace, destination: BinaryIO) -> dict[str,
     ):
         raise T09HostError("attempt export lacks its evidence handoff deadline")
     files: list[dict[str, object]] = []
+    sources: dict[str, Path] = {}
     total = 0
     raw_files = raw_manifest.get("files")
     if not isinstance(raw_files, list):
@@ -5256,18 +6202,30 @@ def export_attempt(args: argparse.Namespace, destination: BinaryIO) -> dict[str,
         relative = cast(str, raw["path"])
         size = cast(int, raw["bytes"])
         total += size
-        files.append(
-            {
-                "path": f"raw/{relative}",
-                "bytes": size,
-                "sha256": raw["sha256"],
-            }
-        )
+        archive_name = f"raw/{relative}"
+        sources[archive_name] = raw_root / relative
+        files.append({"path": archive_name, "bytes": size, "sha256": raw["sha256"]})
     for name in ("raw-attempt-manifest.json", "raw-attempt-complete.json"):
         path = attempt_root / name
         size = path.stat().st_size
         total += size
+        sources[name] = path
         files.append({"path": name, "bytes": size, "sha256": file_sha256(path)})
+    control_sources = _attempt_export_control_sources(
+        artifact_root,
+        attempt_root=attempt_root,
+        run_id=args.run_id,
+    )
+    credential = validate_secret(args.secret_file.resolve(strict=True))
+    control_secret_hits = secret_hits(attempt_root / "attempt-export-control", credential)
+    credential = b""
+    if control_secret_hits:
+        raise T09HostError("attempt export control snapshot retained the exact credential")
+    for archive_name, path in control_sources.items():
+        size = path.stat().st_size
+        total += size
+        sources[archive_name] = path
+        files.append({"path": archive_name, "bytes": size, "sha256": file_sha256(path)})
     if total > MAX_ATTEMPT_EXPORT_BYTES:
         raise T09HostError("attempt export exceeds its raw byte cap")
     export_manifest_path = attempt_root / "attempt-export-manifest.json"
@@ -5338,10 +6296,7 @@ def export_attempt(args: argparse.Namespace, destination: BinaryIO) -> dict[str,
                 ) as handle:
                     for entry in files:
                         relative = str(entry["path"])
-                        source_path = raw_root / relative.removeprefix("raw/")
-                        if not relative.startswith("raw/"):
-                            source_path = attempt_root / relative
-                        handle.add(source_path, arcname=relative, recursive=False)
+                        handle.add(sources[relative], arcname=relative, recursive=False)
                     handle.add(
                         export_manifest_path,
                         arcname="attempt-export-manifest.json",
@@ -5466,6 +6421,93 @@ def verify_attempt_export(args: argparse.Namespace) -> None:
             total += size
         if set(by_name) != expected_members or total != manifest.get("total_bytes"):
             raise T09HostError("attempt export member set or aggregate bytes drifted")
+        control_names = {name for name in by_name if name.startswith("control/")}
+        control_snapshot_member = by_name.get("attempt-export-control-manifest.json")
+        required_control_names = {
+            f"control/{relative}" for relative in ATTEMPT_EXPORT_REQUIRED_CONTROL_PATHS
+        }
+        optional_control_names = {
+            "control/pilot-v5/first-pair-checkpoint.json",
+            "control/pilot-v5/aggregate-budget.json",
+        }
+        if (
+            control_snapshot_member is None
+            or not required_control_names.issubset(control_names)
+            or any(
+                name not in required_control_names
+                and name not in optional_control_names
+                and not name.startswith("control/pilot-v5/received-export-acknowledgements/")
+                and not name.startswith("control/pilot-v5/finalization-selections/")
+                for name in control_names
+            )
+        ):
+            raise T09HostError("attempt export control snapshot is incomplete or overbroad")
+
+        def archive_json(name: str, *, label: str) -> dict[str, Any]:
+            member = by_name.get(name)
+            stream = handle.extractfile(member) if member is not None else None
+            if stream is None or member is None or member.size > MAX_PRIVACY_JSON_BYTES:
+                raise T09HostError(f"attempt export {label} is unavailable")
+            try:
+                value: object = json.loads(stream.read())
+            except json.JSONDecodeError as exc:
+                raise T09HostError(f"attempt export {label} is malformed") from exc
+            if not isinstance(value, dict):
+                raise T09HostError(f"attempt export {label} is not an object")
+            return value
+
+        frozen_control_name = "control/pilot-v5/frozen-run-manifest.json"
+        provider_control_name = "control/pilot-v5/provider-entry.json"
+        local_qualification_name = "control/pilot-v5/local-finalizer-qualification.json"
+        frozen_control = archive_json(frozen_control_name, label="frozen run manifest")
+        provider_control = archive_json(provider_control_name, label="provider entry")
+        local_qualification = archive_json(
+            local_qualification_name,
+            label="local finalizer qualification",
+        )
+        control_snapshot = archive_json(
+            "attempt-export-control-manifest.json",
+            label="control snapshot manifest",
+        )
+        control_records = [
+            item
+            for item in cast(list[dict[str, object]], files)
+            if isinstance(item.get("path"), str) and cast(str, item["path"]).startswith("control/")
+        ]
+        if (
+            control_snapshot.get("schema_version") != "0.1.0"
+            or control_snapshot.get("plan_id") != PLAN_ID
+            or control_snapshot.get("host_run_id") != HOST_RUN_ID
+            or control_snapshot.get("run_id") != args.run_id
+            or control_snapshot.get("files") != control_records
+            or control_snapshot.get("files_sha256") != canonical_sha256(control_records)
+            or by_name[frozen_control_name].size
+            != next(
+                cast(int, item["bytes"])
+                for item in cast(list[dict[str, object]], files)
+                if item.get("path") == frozen_control_name
+            )
+            or cast(dict[str, object], manifest).get("frozen_run_manifest_sha256")
+            != next(
+                cast(str, item["sha256"])
+                for item in cast(list[dict[str, object]], files)
+                if item.get("path") == frozen_control_name
+            )
+            or frozen_control.get("manifest_id") != FROZEN_RUN_MANIFEST_ID
+            or frozen_control.get("plan_id") != PLAN_ID
+            or frozen_control.get("clean_package_commit") != args.package_commit
+            or frozen_control.get("replacement_image_id") != manifest.get("replacement_image_id")
+            or local_qualification.get("qualification_id")
+            != "QUAL-T09-PILOT-V5-LOCAL-FINALIZER-0001"
+            or local_qualification.get("package_commit") != args.package_commit
+            or frozen_control.get("local_finalizer_qualification_sha256")
+            != next(
+                cast(str, item["sha256"])
+                for item in cast(list[dict[str, object]], files)
+                if item.get("path") == local_qualification_name
+            )
+        ):
+            raise T09HostError("attempt export frozen/local control binding drifted")
         raw_receipt_member = by_name.get("raw-attempt-complete.json")
         raw_receipt_stream = (
             handle.extractfile(raw_receipt_member) if raw_receipt_member is not None else None
@@ -5494,27 +6536,345 @@ def verify_attempt_export(args: argparse.Namespace) -> None:
         or isinstance(lambda_started, bool)
     ):
         raise T09HostError("attempt export lacks the source-bound provider entry identity")
-    write_exclusive(
-        inbound / f"{args.run_id}-export-verification.json",
-        {
-            "schema_version": "0.1.0",
-            "plan_id": PLAN_ID,
-            "host_run_id": HOST_RUN_ID,
-            "run_id": args.run_id,
-            "package_commit": args.package_commit,
-            "archive_path": archive.name,
-            "archive_bytes": archive.stat().st_size,
-            "archive_sha256": file_sha256(archive),
-            "frozen_run_manifest_sha256": manifest["frozen_run_manifest_sha256"],
-            "replacement_image_id": manifest["replacement_image_id"],
-            "provider_entry_receipt_sha256": file_sha256(
-                args.provider_entry_receipt.resolve(strict=True)
-            ),
-            "owned_instance_identity_sha256": owned_hash,
-            "lambda_started_at_epoch": float(lambda_started),
-            "verified_before_provider_termination": True,
-        },
+    if (
+        provider_control.get("receipt_sha256")
+        != file_sha256(args.provider_entry_receipt.resolve(strict=True))
+        or provider_control.get("owned_instance_identity_sha256") != owned_hash
+        or provider_control.get("lambda_started_at_epoch") != float(lambda_started)
+    ):
+        raise T09HostError("attempt export provider control is not source-bound")
+    verification: dict[str, object] = {
+        "schema_version": "0.1.0",
+        "plan_id": PLAN_ID,
+        "host_run_id": HOST_RUN_ID,
+        "run_id": args.run_id,
+        "package_commit": args.package_commit,
+        "archive_path": archive.name,
+        "archive_bytes": archive.stat().st_size,
+        "archive_sha256": file_sha256(archive),
+        "frozen_run_manifest_sha256": manifest["frozen_run_manifest_sha256"],
+        "replacement_image_id": manifest["replacement_image_id"],
+        "provider_entry_receipt_sha256": file_sha256(
+            args.provider_entry_receipt.resolve(strict=True)
+        ),
+        "owned_instance_identity_sha256": owned_hash,
+        "lambda_started_at_epoch": float(lambda_started),
+        "verified_before_provider_termination": True,
+    }
+    verification_path = inbound / f"{args.run_id}-export-verification.json"
+    write_exclusive(verification_path, verification)
+    restore_artifact_root = getattr(args, "restore_artifact_root", None)
+    if restore_artifact_root is not None:
+        restore_verified_attempt_export(
+            repository=args.repository.resolve(strict=True),
+            package_commit=args.package_commit,
+            current_commit=args.restoration_commit,
+            archive=archive,
+            verification_path=verification_path,
+            restoration_root=restore_artifact_root.resolve(strict=False),
+            run_id=args.run_id,
+        )
+
+
+def _write_stream_exclusive_or_compare(
+    *,
+    stream: IO[bytes],
+    destination: Path,
+    expected_bytes: int,
+    expected_sha256: str,
+) -> None:
+    """Materialize one verified archive member without overwrite authority."""
+
+    destination.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if destination.exists() or destination.is_symlink():
+        if (
+            destination.is_symlink()
+            or not destination.is_file()
+            or destination.stat().st_size != expected_bytes
+            or file_sha256(destination) != expected_sha256
+        ):
+            raise T09HostError("offline restoration would overwrite different bytes")
+        return
+    observed = hashlib.sha256()
+    observed_bytes = 0
+    with destination.open("xb") as output:
+        while chunk := stream.read(1_048_576):
+            observed.update(chunk)
+            observed_bytes += len(chunk)
+            if observed_bytes > expected_bytes:
+                raise T09HostError("offline restoration member exceeded its bound")
+            output.write(chunk)
+        output.flush()
+        os.fsync(output.fileno())
+    os.chmod(destination, 0o600)
+    if observed_bytes != expected_bytes or observed.hexdigest() != expected_sha256:
+        destination.unlink(missing_ok=True)
+        raise T09HostError("offline restoration member hash mismatch")
+
+
+def _replace_restored_state(path: Path, document: dict[str, Any]) -> None:
+    """Atomically project one source-retained state snapshot into the local workspace."""
+
+    temporary = path.with_suffix(f".{os.getpid()}.restore.tmp")
+    encoded = (json.dumps(document, allow_nan=False, indent=2, sort_keys=True) + "\n").encode()
+    descriptor = os.open(
+        temporary,
+        os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
+        0o600,
     )
+    try:
+        offset = 0
+        while offset < len(encoded):
+            written = os.write(descriptor, encoded[offset:])
+            if written <= 0:
+                raise T09HostError("offline state restoration write made no progress")
+            offset += written
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+    os.replace(temporary, path)
+    directory = os.open(path.parent, os.O_RDONLY)
+    try:
+        os.fsync(directory)
+    finally:
+        os.close(directory)
+
+
+def restore_verified_attempt_export(
+    *,
+    repository: Path,
+    package_commit: str,
+    current_commit: str | None,
+    archive: Path,
+    verification_path: Path,
+    restoration_root: Path,
+    run_id: str,
+) -> None:
+    """Restore a verified raw export for qualified post-termination finalization."""
+
+    verify_package(repository, package_commit, current_commit=current_commit)
+    contract_path = contract_paths(repository)["execution"]
+    contract = load_execution_contract(
+        contract_path,
+        expected_sha256=file_sha256(contract_path),
+    )
+    attempt = contract.attempt(run_id)
+    attempt_root = restoration_root / attempt.output_root
+    raw_root = restoration_root / attempt.raw_output_root
+    restoration_root.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if restoration_root.is_symlink() or not restoration_root.is_dir():
+        raise T09HostError("offline restoration root is unsafe")
+    snapshot_state: dict[str, Any] | None = None
+    with tarfile.open(archive, "r:gz") as handle:
+        member_list = handle.getmembers()
+        if not 1 <= len(member_list) <= 2_048:
+            raise T09HostError("offline restoration archive member count is invalid")
+        members: dict[str, tarfile.TarInfo] = {}
+        for member in member_list:
+            relative = PurePosixPath(member.name)
+            if (
+                not member.isfile()
+                or relative.is_absolute()
+                or ".." in relative.parts
+                or member.name in members
+                or member.size < 0
+                or member.size > MAX_ATTEMPT_OUTPUT_BYTES
+            ):
+                raise T09HostError("offline restoration archive member is unsafe")
+            members[member.name] = member
+        manifest_member = members.get("attempt-export-manifest.json")
+        manifest_stream = (
+            handle.extractfile(manifest_member) if manifest_member is not None else None
+        )
+        if manifest_stream is None:
+            raise T09HostError("offline restoration lacks its export manifest")
+        try:
+            export_manifest: object = json.loads(manifest_stream.read())
+        except json.JSONDecodeError as exc:
+            raise T09HostError("offline restoration export manifest is malformed") from exc
+        if not isinstance(export_manifest, dict) or export_manifest.get("run_id") != run_id:
+            raise T09HostError("offline restoration export identity drifted")
+        file_records = export_manifest.get("files")
+        if not isinstance(file_records, list):
+            raise T09HostError("offline restoration export file set is malformed")
+        for record in file_records:
+            if not isinstance(record, dict):
+                raise T09HostError("offline restoration export record is malformed")
+            name = record.get("path")
+            size = record.get("bytes")
+            digest = record.get("sha256")
+            member = members.get(name) if isinstance(name, str) else None
+            if (
+                not isinstance(name, str)
+                or type(size) is not int
+                or not isinstance(digest, str)
+                or _HEX64.fullmatch(digest) is None
+                or member is None
+                or member.size != size
+            ):
+                raise T09HostError("offline restoration member identity drifted")
+            stream = handle.extractfile(member)
+            if stream is None:
+                raise T09HostError("offline restoration member is unreadable")
+            if name.startswith("raw/"):
+                destination = raw_root / name.removeprefix("raw/")
+            elif name.startswith("control/"):
+                relative = name.removeprefix("control/")
+                if relative == "pilot-v5/pilot-state.json":
+                    destination = (
+                        restoration_root
+                        / "pilot-v5/restored-control-snapshots"
+                        / run_id
+                        / "pilot-state.json"
+                    )
+                elif relative == "pilot-v5/aggregate-budget.json":
+                    destination = (
+                        restoration_root
+                        / "pilot-v5/restored-control-snapshots"
+                        / run_id
+                        / "aggregate-budget.json"
+                    )
+                else:
+                    destination = restoration_root / relative
+            else:
+                destination = attempt_root / name
+            resolved_parent = destination.parent.resolve(strict=False)
+            try:
+                resolved_parent.relative_to(restoration_root)
+            except ValueError:
+                raise T09HostError("offline restoration path escaped its root") from None
+            if destination.parent != resolved_parent:
+                raise T09HostError("offline restoration path traversed a symlink")
+            _write_stream_exclusive_or_compare(
+                stream=stream,
+                destination=destination,
+                expected_bytes=size,
+                expected_sha256=digest,
+            )
+            if name == "control/pilot-v5/pilot-state.json":
+                snapshot_state = load_object(destination, label="restored pilot-state snapshot")
+        manifest_record = next(
+            (
+                record
+                for record in cast(list[dict[str, object]], file_records)
+                if record.get("path") == "attempt-export-control-manifest.json"
+            ),
+            None,
+        )
+        if manifest_record is None:
+            raise T09HostError("offline restoration lacks its control-snapshot manifest")
+        assert manifest_member is not None
+        manifest_again = handle.extractfile(manifest_member)
+        if manifest_again is None:
+            raise T09HostError("offline restoration export manifest became unreadable")
+        _write_stream_exclusive_or_compare(
+            stream=manifest_again,
+            destination=attempt_root / "attempt-export-manifest.json",
+            expected_bytes=manifest_member.size,
+            expected_sha256=hashlib.sha256(
+                (
+                    json.dumps(export_manifest, allow_nan=False, indent=2, sort_keys=True) + "\n"
+                ).encode()
+            ).hexdigest(),
+        )
+    if snapshot_state is None:
+        raise T09HostError("offline restoration lacks its exact pilot-state snapshot")
+    expected_index = RUN_IDS.index(run_id)
+    entered = snapshot_state.get("empirical_attempts_entered")
+    raw_complete = snapshot_state.get("raw_attempts_complete")
+    if (
+        entered != list(RUN_IDS[: expected_index + 1])
+        or raw_complete != list(RUN_IDS[: expected_index + 1])
+        or snapshot_state.get("execution_contract_sha256") != contract.sha256
+    ):
+        raise T09HostError("offline restoration state is not the exact consumed raw prefix")
+    state_path = restoration_root / "pilot-v5/pilot-state.json"
+    if state_path.exists():
+        retained = load_object(state_path, label="existing restored pilot state")
+        retained_raw = retained.get("raw_attempts_complete")
+        retained_raw_tuple = tuple(retained_raw) if isinstance(retained_raw, list) else None
+        if retained_raw_tuple not in {
+            tuple(RUN_IDS[:expected_index]),
+            tuple(RUN_IDS[: expected_index + 1]),
+        }:
+            raise T09HostError("offline restoration archives were not applied in order")
+        if (
+            retained_raw_tuple == tuple(RUN_IDS[: expected_index + 1])
+            and retained != snapshot_state
+        ):
+            raise T09HostError("repeated offline restoration state snapshot drifted")
+    _replace_restored_state(state_path, snapshot_state)
+    aggregate_snapshot_path = (
+        restoration_root / "pilot-v5/restored-control-snapshots" / run_id / "aggregate-budget.json"
+    )
+    if aggregate_snapshot_path.exists():
+        aggregate_snapshot = load_object(
+            aggregate_snapshot_path,
+            label="restored aggregate-budget snapshot",
+        )
+        if aggregate_snapshot.get("execution_contract_sha256") != contract.sha256:
+            raise T09HostError("offline restoration aggregate budget binding drifted")
+        _replace_restored_state(
+            restoration_root / "pilot-v5/aggregate-budget.json",
+            aggregate_snapshot,
+        )
+    export_destination = restoration_root / "pilot-v5/attempt-exports" / archive.name
+    with archive.open("rb") as source:
+        _write_stream_exclusive_or_compare(
+            stream=source,
+            destination=export_destination,
+            expected_bytes=archive.stat().st_size,
+            expected_sha256=file_sha256(archive),
+        )
+    verification = load_object(verification_path, label="attempt export verification")
+    acknowledgement = _received_export_ack_path(restoration_root, run_id)
+    if acknowledgement.exists():
+        if load_object(acknowledgement, label="restored export acknowledgement") != verification:
+            raise T09HostError("repeated offline export acknowledgement drifted")
+    else:
+        write_exclusive(acknowledgement, verification)
+    load_frozen_run_manifest(
+        restoration_root,
+        repository=repository,
+        package_commit=package_commit,
+        require_image=False,
+    )
+    validate_raw_attempt_seal(
+        attempt_root=attempt_root,
+        raw_root=raw_root,
+        run_id=run_id,
+        package_commit=package_commit,
+    )
+    mark_raw_attempt_complete(
+        state_path,
+        execution_contract_sha256=contract.sha256,
+        run_id=run_id,
+        raw_manifest_sha256=file_sha256(attempt_root / "raw-attempt-manifest.json"),
+        raw_receipt_sha256=file_sha256(attempt_root / "raw-attempt-complete.json"),
+    )
+    require_attempt_export_acknowledgement(
+        restoration_root,
+        run_id=run_id,
+        package_commit=package_commit,
+    )
+    restore_receipt = {
+        "schema_version": "0.1.0",
+        "plan_id": PLAN_ID,
+        "host_run_id": HOST_RUN_ID,
+        "run_id": run_id,
+        "package_commit": package_commit,
+        "archive_sha256": file_sha256(archive),
+        "verification_sha256": file_sha256(verification_path),
+        "frozen_run_manifest_sha256": verification["frozen_run_manifest_sha256"],
+        "raw_source_mutated": False,
+        "qualified_local_finalization_ready": True,
+    }
+    restore_receipt_path = attempt_root / "offhost-restore-complete.json"
+    if restore_receipt_path.exists():
+        if load_object(restore_receipt_path, label="offhost restore receipt") != restore_receipt:
+            raise T09HostError("repeated offline restore receipt drifted")
+    else:
+        write_exclusive(restore_receipt_path, restore_receipt)
 
 
 def acknowledge_attempt_export(args: argparse.Namespace) -> None:
@@ -6036,6 +7396,13 @@ def cleanup(args: argparse.Namespace) -> None:
     if IMAGE_ARCHIVE_PATH.exists() and not IMAGE_ARCHIVE_PATH.is_symlink():
         IMAGE_ARCHIVE_PATH.unlink()
         image_archive_removed = True
+    regression_archive_removed = False
+    if (
+        PRIVATE_REGRESSION_ARCHIVE_PATH.exists()
+        and not PRIVATE_REGRESSION_ARCHIVE_PATH.is_symlink()
+    ):
+        PRIVATE_REGRESSION_ARCHIVE_PATH.unlink()
+        regression_archive_removed = True
     privacy_hits = privacy_violations(root)
     try:
         remaining_runtime = provider_seconds_remaining(root)
@@ -6054,6 +7421,9 @@ def cleanup(args: argparse.Namespace) -> None:
             "remote_secret_removed": secret_removed,
             "replacement_image_archive_removed_after_copy_or_deferral": (
                 image_archive_removed or not IMAGE_ARCHIVE_PATH.exists()
+            ),
+            "private_regression_archive_removed": (
+                regression_archive_removed or not PRIVATE_REGRESSION_ARCHIVE_PATH.exists()
             ),
             "structural_privacy_scan_passed": not privacy_hits,
             "structural_privacy_violations": privacy_hits,
@@ -6155,12 +7525,25 @@ def parser() -> argparse.ArgumentParser:
     preflight_parser = operations.add_parser("preflight")
     preflight_parser.add_argument("--dynamic-receipt", type=Path, required=True)
     preflight_parser.add_argument("--dynamic-source-root", type=Path, required=True)
+    preflight_parser.add_argument("--real-evidence-archive", type=Path, required=True)
+    preflight_parser.add_argument("--local-finalizer-qualification", type=Path, required=True)
+    preflight_parser.add_argument("--local-evaluator-root", type=Path, required=True)
+    preflight_parser.add_argument("--local-dataset", type=Path, required=True)
     condition_export = operations.add_parser("condition-export")
     condition_export.add_argument("--run-id", choices=RUN_IDS, required=True)
     finalize_parser = operations.add_parser("finalize-attempt")
     finalize_parser.add_argument("--run-id", choices=RUN_IDS, required=True)
     finalize_parser.add_argument("--finalizer-source", type=Path, required=True)
+    finalize_parser.add_argument("--finalizer-projection-source", type=Path, required=True)
     finalize_parser.add_argument("--finalizer-commit", required=True)
+    finalize_parser.add_argument(
+        "--finalizer-execution-mode",
+        choices=("qualified-image", "qualified-local"),
+        default="qualified-image",
+    )
+    finalize_parser.add_argument("--local-finalizer-qualification", type=Path)
+    finalize_parser.add_argument("--local-evaluator-root", type=Path)
+    finalize_parser.add_argument("--local-dataset", type=Path)
     operations.add_parser("first-pair-checkpoint")
     operations.add_parser("campaign-disposition")
     export_only = operations.add_parser("export-only")
@@ -6182,6 +7565,8 @@ def parser() -> argparse.ArgumentParser:
     attempt_export.add_argument("--inbound-root", type=Path, required=True)
     attempt_export.add_argument("--attempt-export", type=Path, required=True)
     attempt_export.add_argument("--provider-entry-receipt", type=Path, required=True)
+    attempt_export.add_argument("--restore-artifact-root", type=Path)
+    attempt_export.add_argument("--restoration-commit")
     package_parser = operations.add_parser("package")
     package_parser.add_argument("--inbound-root", type=Path, required=True)
     package_parser.add_argument("--provider-closeout-receipt", type=Path, required=True)

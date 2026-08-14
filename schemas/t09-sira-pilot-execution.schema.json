@@ -52,7 +52,7 @@
         "max_lambda_instances": {"const": 1},
         "max_launch_count": {"const": 2},
         "persistent_filesystems": {"const": 0},
-        "admission_model": {"const": "actual-elapsed-next-condition-plus-evidence-handoff-plus-termination-margin-plus-cleanup-reserve"},
+        "admission_model": {"const": "actual-elapsed-next-condition-hard-wall-plus-cleanup-reserve"},
         "future_attempt_maxima_reserved_at_campaign_start": {"const": false},
         "provider_control_plane": {"const": "existing-t07-pragmatic-lambda-operations-with-source-derived-projections-no-persistent-framework-or-watchdog"}
       },

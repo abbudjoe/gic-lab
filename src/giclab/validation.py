@@ -1140,12 +1140,21 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
         "post_condition_evaluator_evidence_seconds": 600,
         "termination_dispatch_margin_seconds": 60,
         "max_lambda_instances": 1,
-        "max_launch_count": 1,
+        "max_launch_count": 2,
         "persistent_filesystems": 0,
+        "replacement_launch_rule": {
+            "allowed_only_before_empirical_entry": True,
+            "prior_instance_terminal_and_absent_required": True,
+            "prior_host_empirical_attempts_required": 0,
+            "prior_host_model_requests_required": 0,
+            "prior_host_browser_actions_required": 0,
+            "ownership_outcome_unknown_forbidden": True,
+            "cumulative_lambda_cap_required": True,
+        },
         "admission_rule": (
-            "remaining campaign time must cover only the next 3600-second condition hard wall, "
-            "a 600-second evaluator/evidence handoff, a positive 60-second "
-            "provider-termination dispatch margin, and the 900-second cleanup reserve"
+            "remaining campaign time must cover only the next 3600-second condition hard wall "
+            "and the 900-second cleanup reserve; downstream evaluator, evidence, and dispatch "
+            "phases remain bounded but are not empirical-admission blockers"
         ),
         "control_plane": (
             "existing T07 pragmatic Lambda operations with source-derived projections; "
