@@ -31,6 +31,8 @@ from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any, BinaryIO, Final, cast
 
+from jsonschema import Draft202012Validator, FormatChecker
+
 from giclab.harness.t09_pragmatic_provider import (
     T09ProviderError,
     load_campaign_lifecycle,
@@ -39,15 +41,28 @@ from giclab.harness.t09_pragmatic_provider import (
 from giclab.harness.t09_pragmatic_provider import (
     validate_closeout_receipt as validate_source_bound_closeout,
 )
-from giclab.harness.t09_sira_pilot import RuntimeQualification, T09PilotError
+from giclab.harness.t09_sira_pilot import (
+    ATTEMPT_ORDER,
+    PairCheckpointInput,
+    RuntimeQualification,
+    T09PilotError,
+    first_pair_decision,
+    load_aggregate_usage,
+    load_execution_contract,
+    mark_attempt_completed,
+    mark_raw_attempt_complete,
+    record_first_pair_checkpoint,
+)
 
-PLAN_ID: Final = "PLAN-EXP0001-PILOT-V4"
-HOST_RUN_ID: Final = "RUN-T09-PILOT-HOST-0002"
-ARCHIVE_ID: Final = "ARCHIVE-EXP0001-PILOT-V4-0002"
-STAGE_ID: Final = "STAGE-EXP0001-PILOT-V4-0002"
-QUALIFICATION_ID: Final = "QUAL-T09-PILOT-V4-IMAGE-0004"
-CONTEXT_FAILURE_QUALIFICATION_ID: Final = "QUAL-T09-PILOT-V4-IMAGE-0002"
-FAILED_CANDIDATE_QUALIFICATION_ID: Final = "QUAL-T09-PILOT-V4-IMAGE-0003"
+PLAN_ID: Final = "PLAN-EXP0001-PILOT-V5"
+HOST_RUN_ID: Final = "RUN-T09-PILOT-HOST-0003"
+ARCHIVE_ID: Final = "ARCHIVE-EXP0001-PILOT-V5-0003"
+STAGE_ID: Final = "STAGE-EXP0001-PILOT-V5-0003"
+QUALIFICATION_ID: Final = "QUAL-T09-PILOT-V5-IMAGE-0001"
+FROZEN_RUN_MANIFEST_ID: Final = "RUN-MANIFEST-EXP0001-PILOT-V5-0003"
+AUTHORIZATION_SOURCE_SHA256: Final = (
+    "5731b3ccdad25f5d656272841d47f93418ae1535802602a9856c97552ac0b8b8"
+)
 MODEL: Final = "gpt-4o-2024-11-20"
 SERVICE_TIER: Final = "default"
 HISTORICAL_IMAGE_ID: Final = (
@@ -56,7 +71,11 @@ HISTORICAL_IMAGE_ID: Final = (
 T07_EXECUTION_COMMIT: Final = "5698f04dfd08bc85a66d2355b0a4bd7d3ce24a23"
 SIRA_COMMIT: Final = "93fb8d72de71f9a4a13419670adeb34d93cf7acd"
 SIRA_TREE: Final = "6a6d9068b94d7632d3533a3d6f013d4de6ff76e8"
-REPLACEMENT_IMAGE_TAG: Final = f"giclab/t09-pilot-v4:{SIRA_COMMIT[:12]}-0003"
+REPLACEMENT_IMAGE_TAG: Final = f"giclab/t09-pilot-v5:{SIRA_COMMIT[:12]}-0001"
+# Historical Retry 2 transition helpers remain importable for archived-receipt
+# verification only.  No Retry 3 parser route invokes them.
+CONTEXT_FAILURE_QUALIFICATION_ID: Final = "QUAL-T09-PILOT-V4-IMAGE-0002"
+FAILED_CANDIDATE_QUALIFICATION_ID: Final = "QUAL-T09-PILOT-V4-IMAGE-0003"
 PRIOR_REPLACEMENT_IMAGE_TAG: Final = f"giclab/t09-pilot-v4:{SIRA_COMMIT[:12]}-0002"
 PACKAGE_TRANSITION_FROM_COMMIT: Final = "eda1d15387efbc2c269a33176f5c0e04b177e70c"
 PREVIOUS_PACKAGE_TRANSITION_COMMIT: Final = "97358563139532b139a79028909671d8e76f79b7"
@@ -85,13 +104,13 @@ PACKAGE_TRANSITION_ALLOWED_PATHS: Final = frozenset(
         "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
         "T09_PILOT_RUNTIME_IDENTITY.json",
         "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/"
-        "pilot-v4-task-0000-reactive.yaml",
+        "pilot-v5-task-0000-reactive.yaml",
         "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/"
-        "pilot-v4-task-0000-simulative.yaml",
+        "pilot-v5-task-0000-simulative.yaml",
         "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/"
-        "pilot-v4-task-0001-reactive.yaml",
+        "pilot-v5-task-0001-reactive.yaml",
         "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/"
-        "pilot-v4-task-0001-simulative.yaml",
+        "pilot-v5-task-0001-simulative.yaml",
         "schemas/t09-sira-pilot-evidence.schema.json",
         "src/giclab/harness/t09_sira_pilot.py",
         "tests/test_t09_sira_pilot.py",
@@ -112,12 +131,12 @@ EVALUATOR_DIRECT_URL_RECORD: Final = (
     "en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl"
 )
 RUN_IDS: Final = (
-    "RUN-T09-TASK-A-REACTIVE-0002",
-    "RUN-T09-TASK-A-SIMULATIVE-0002",
-    "RUN-T09-TASK-B-SIMULATIVE-0002",
-    "RUN-T09-TASK-B-REACTIVE-0002",
+    "RUN-T09-TASK-A-REACTIVE-0003",
+    "RUN-T09-TASK-A-SIMULATIVE-0003",
+    "RUN-T09-TASK-B-SIMULATIVE-0003",
+    "RUN-T09-TASK-B-REACTIVE-0003",
 )
-CONTAINER_PREFIX: Final = "giclab-t09-pilot-v4-"
+CONTAINER_PREFIX: Final = "giclab-t09-pilot-v5-"
 EXPECTED_PACKAGE_MANIFEST_SHA256: Final = (
     "4ff2603fa5e0f7033ba773decdcb86abf648dcce22e469d26bc48214e390e104"
 )
@@ -144,7 +163,7 @@ PROVIDER_CLOSEOUT_RESERVE_SECONDS: Final = 900
 PROVIDER_TERMINATION_CUTOFF_SECONDS: Final = 13_500
 PROVIDER_TERMINATION_HANDOFF_SECONDS: Final = 60
 MAX_LAMBDA_INSTANCES: Final = 1
-MAX_LAMBDA_LAUNCHES: Final = 1
+MAX_LAMBDA_LAUNCHES: Final = 2
 MAX_PERSISTENT_FILESYSTEMS: Final = 0
 APPROVED_FINAL_ARCHIVE_ROOT: Final = Path(
     "/Volumes/Macintosh HD - Data/GIC-Lab/t09/sealed-artifacts"
@@ -182,7 +201,9 @@ MAX_IMAGE_ARCHIVE_BYTES: Final = 2_147_483_648
 MAX_EVALUATOR_OVERLAY_BYTES: Final = 1_073_741_824
 MAX_EVALUATOR_OVERLAY_ENTRIES: Final = 100_000
 MAX_PREENTRY_REPAIRS_PER_RUN: Final = 3
-IMAGE_ARCHIVE_PATH: Final = Path("/home/ubuntu/t09-pilot-v4-replacement-image-0002.tar")
+MAX_FINALIZER_INVOCATIONS_PER_ATTEMPT: Final = 4
+FINALIZER_RELATIVE_PATH: Final = "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py"
+IMAGE_ARCHIVE_PATH: Final = Path("/home/ubuntu/t09-pilot-v5-replacement-image-0001.tar")
 
 
 class T09HostError(RuntimeError):
@@ -527,7 +548,7 @@ def _build_context_manifest(context: Path) -> dict[str, object]:
     if not files or total > MAX_PILOT_DISK_BYTES:
         raise T09HostError("replacement build context is empty or exceeds the disk cap")
     return {
-        "schema_version": "0.1.0",
+        "schema_version": "0.2.0",
         "qualification_id": QUALIFICATION_ID,
         "source_date_epoch": SOURCE_DATE_EPOCH,
         "files": files,
@@ -624,7 +645,7 @@ def retain_prior_qualification_failures(
     previous_transition_receipt: Path,
     package_transition_receipt: Path,
 ) -> dict[str, object]:
-    destination = artifact_root / "pilot-v4/prior-qualification-failures"
+    destination = artifact_root / "pilot-v5/prior-qualification-failures"
     destination.mkdir(parents=True, mode=0o700)
     context_manifest = _copy_retained_prefix(
         prior_artifact_root,
@@ -684,8 +705,8 @@ def carry_forward_replacement_image(
     image_id = failed.get("replacement_image_id")
     if not isinstance(image_id, str) or image_id_if_present(prefix, image_id) != image_id:
         raise T09HostError("failed candidate image cannot be carried forward")
-    source = failed_candidate_root / "pilot-v4/replacement-image-qualification"
-    destination = artifact_root / "pilot-v4/replacement-image-qualification"
+    source = failed_candidate_root / "pilot-v5/replacement-image-qualification"
+    destination = artifact_root / "pilot-v5/replacement-image-qualification"
     _copy_retained_prefix(source, destination, label="failed candidate materialization")
     prior_receipt_path = destination / "receipt.json"
     prior_receipt = load_object(prior_receipt_path, label="carried candidate receipt")
@@ -718,18 +739,11 @@ def materialize_replacement_image(
     repository: Path,
     artifact_root: Path,
     prefix: list[str],
-    failed_candidate_root: Path | None = None,
 ) -> dict[str, object]:
-    if failed_candidate_root is not None:
-        return carry_forward_replacement_image(
-            artifact_root=artifact_root,
-            failed_candidate_root=failed_candidate_root.resolve(strict=True),
-            prefix=prefix,
-        )
     if image_id_if_present(prefix, REPLACEMENT_IMAGE_TAG) is not None:
         raise T09HostError("replacement image tag already exists; exactly one build is allowed")
 
-    materialization = artifact_root / "pilot-v4/replacement-image-qualification"
+    materialization = artifact_root / "pilot-v5/replacement-image-qualification"
     logs = materialization / "logs"
     work = materialization / "work"
     snapshot = work / "snapshot"
@@ -1077,7 +1091,48 @@ def contract_paths(repository: Path) -> dict[str, Path]:
         "dataset": experiment / "contracts/T09_PILOT_DATASET_CONTRACT.json",
         "evaluator": experiment / "contracts/T09_PILOT_EVALUATOR_CONTRACT.json",
         "runtime": experiment / "contracts/T09_PILOT_RUNTIME_IDENTITY.json",
+        "real_regression": experiment / "T09_PRAGMATIC_RETRY3_FINALIZER_REGRESSION.json",
     }
+
+
+def validate_real_evidence_regression(repository: Path) -> dict[str, Any]:
+    """Validate the sanitized prelaunch receipt from the immutable V4 archive."""
+
+    paths = contract_paths(repository)
+    receipt = load_object(paths["real_regression"], label="real-evidence finalizer regression")
+    semantic = receipt.get("semantic_projection")
+    if (
+        receipt.get("schema_version") != "0.1.0"
+        or receipt.get("receipt_id") != "T09-PRAGMATIC-RETRY3-REAL-EVIDENCE-REGRESSION-0001"
+        or receipt.get("source_plan_id") != "PLAN-EXP0001-PILOT-V4"
+        or receipt.get("source_run_id") != "RUN-T09-TASK-A-REACTIVE-0002"
+        or receipt.get("source_archive_sha256")
+        != "63ed19b35bcb4cb62c3796a80a48004937340eb3826f9657a1006e251772255d"
+        or receipt.get("source_public_disposition_sha256")
+        != "ecc0e135695e16f68d52b7aa85b70d42b1f1e945f7dd119fb7c7ff0e42fc8231"
+        or receipt.get("finalizer_source_sha256")
+        != file_sha256(repository / FINALIZER_RELATIVE_PATH)
+        or not isinstance(semantic, dict)
+        or semantic.get("task_id") != "7dcbbbdc7f1120cd"
+        or semantic.get("condition") != "SIRA-REACTIVE"
+        or semantic.get("model_revision") != "gpt-4o-2024-11-20"
+        or semantic.get("sira_commit") != SIRA_COMMIT
+        or semantic.get("task_completed") is not True
+        or semantic.get("answer_produced") is not True
+        or semantic.get("evaluator_valid") is not True
+        or semantic.get("score") != 0.0
+        or semantic.get("provider_call_count") != 52
+        or semantic.get("browser_action_count") != 13
+        or receipt.get("accepted_scientific_and_evaluator_fields_equal") is not True
+        or receipt.get("network_disabled") is not True
+        or receipt.get("additional_model_requests") != 0
+        or receipt.get("additional_browser_actions") != 0
+        or receipt.get("source_raw_mutated") is not False
+        or receipt.get("prior_attempt_excluded_from_v5_campaign") is not True
+        or receipt.get("private_source_path_retained") is not False
+    ):
+        raise T09HostError("real-evidence finalizer regression receipt drifted")
+    return receipt
 
 
 def _retained_tree_manifest(root: Path, *, label: str) -> dict[str, object]:
@@ -1112,12 +1167,12 @@ def _retained_tree_manifest(root: Path, *, label: str) -> dict[str, object]:
 
 
 def _prior_qualification_failure_manifest(root: Path) -> dict[str, object]:
-    if root.name != "t09-pilot-v4-output-0002":
+    if root.name != "t09-pilot-v5-output-0002":
         raise T09HostError("prior qualification root identity drifted")
-    state_path = root / "pilot-v4/pilot-state.json"
+    state_path = root / "pilot-v5/pilot-state.json"
     state = load_object(state_path, label="prior qualification state")
     env_example = (
-        root / "pilot-v4/replacement-image-qualification/work/build-context/upstream/.env.example"
+        root / "pilot-v5/replacement-image-qualification/work/build-context/upstream/.env.example"
     )
     if (
         state.get("plan_id") != PLAN_ID
@@ -1126,8 +1181,8 @@ def _prior_qualification_failure_manifest(root: Path) -> dict[str, object]:
         or not env_example.is_file()
         or env_example.stat(follow_symlinks=False).st_size != PINNED_ENV_EXAMPLE_BYTES
         or file_sha256(env_example) != PINNED_ENV_EXAMPLE_SHA256
-        or (root / "pilot-v4/frozen-run-manifest.json").exists()
-        or (root / "pilot-v4/replacement-image-qualification/build-context-manifest.json").exists()
+        or (root / "pilot-v5/frozen-run-manifest.json").exists()
+        or (root / "pilot-v5/replacement-image-qualification/build-context-manifest.json").exists()
     ):
         raise T09HostError("prior qualification failure prefix is not the exact safe prefix")
     retained = _retained_tree_manifest(root, label="prior qualification prefix")
@@ -1149,15 +1204,15 @@ def _failed_candidate_manifest(
     *,
     require_image_present: bool,
 ) -> dict[str, object]:
-    if root.name != "t09-pilot-v4-output-0003":
+    if root.name != "t09-pilot-v5-output-0003":
         raise T09HostError("failed candidate root identity drifted")
-    state = load_object(root / "pilot-v4/pilot-state.json", label="failed candidate state")
-    qualification_root = root / "pilot-v4/replacement-image-qualification"
+    state = load_object(root / "pilot-v5/pilot-state.json", label="failed candidate state")
+    qualification_root = root / "pilot-v5/replacement-image-qualification"
     receipt_path = qualification_root / "receipt.json"
     receipt = load_object(receipt_path, label="failed candidate materialization receipt")
-    stderr_path = root / "pilot-v4/offline-runtime-preflight/offline-preflight.stderr"
+    stderr_path = root / "pilot-v5/offline-runtime-preflight/offline-preflight.stderr"
     provider_entry = load_object(
-        root / "pilot-v4/provider-entry.json", label="prior provider entry"
+        root / "pilot-v5/provider-entry.json", label="prior provider entry"
     )
     image_id = receipt.get("image_id")
     if (
@@ -1173,10 +1228,10 @@ def _failed_candidate_manifest(
         or file_sha256(stderr_path) != FAILED_CANDIDATE_OFFLINE_STDERR_SHA256
         or "ModuleNotFoundError: No module named 'yaml'"
         not in stderr_path.read_text(encoding="utf-8")
-        or (root / "pilot-v4/frozen-run-manifest.json").exists()
-        or (root / "pilot-v4/preflight.json").exists()
-        or (root / "pilot-v4/model-metadata-preflight").exists()
-        or (root / "pilot-v4/browser-preflight").exists()
+        or (root / "pilot-v5/frozen-run-manifest.json").exists()
+        or (root / "pilot-v5/preflight.json").exists()
+        or (root / "pilot-v5/model-metadata-preflight").exists()
+        or (root / "pilot-v5/browser-preflight").exists()
     ):
         raise T09HostError("failed candidate prefix is not the exact safe offline failure")
     if require_image_present and (
@@ -1511,10 +1566,6 @@ def validate_dynamic_receipt(
     expected_package_commit: str,
     repository_root: Path | None = None,
     source_root: Path | None = None,
-    package_transition_receipt: Path | None = None,
-    prior_artifact_root: Path | None = None,
-    failed_candidate_root: Path | None = None,
-    previous_transition_receipt: Path | None = None,
 ) -> dict[str, object]:
     """Reconstruct the receipt from retained allowlisted provider projections."""
 
@@ -1523,41 +1574,11 @@ def validate_dynamic_receipt(
     repository = repository_root.resolve(strict=True)
     source = source_root.resolve(strict=True)
     plan = contract_paths(repository)["plan"]
-    entry_package_commit = expected_package_commit
-    transition: dict[str, object] | None = None
-    if expected_package_commit != PACKAGE_TRANSITION_FROM_COMMIT:
-        if any(
-            item is None
-            for item in (
-                package_transition_receipt,
-                prior_artifact_root,
-                failed_candidate_root,
-                previous_transition_receipt,
-            )
-        ):
-            raise T09HostError("a source-bound preentry package transition is required")
-        assert package_transition_receipt is not None
-        assert prior_artifact_root is not None
-        assert failed_candidate_root is not None
-        assert previous_transition_receipt is not None
-        transition = validate_package_transition_receipt(
-            package_transition_receipt,
-            repository=repository,
-            package_commit=expected_package_commit,
-            entry_receipt=path,
-            entry_source_root=source,
-            prior_artifact_root=prior_artifact_root,
-            failed_candidate_root=failed_candidate_root,
-            previous_transition_receipt=previous_transition_receipt,
-            require_fresh=True,
-            require_candidate_present=True,
-        )
-        entry_package_commit = PACKAGE_TRANSITION_FROM_COMMIT
     try:
         value = validate_entry_receipt_source_bound(
             path.resolve(strict=True),
             source,
-            package_commit=entry_package_commit,
+            package_commit=expected_package_commit,
             plan_sha256=file_sha256(plan),
         )
     except T09ProviderError as exc:
@@ -1566,9 +1587,7 @@ def validate_dynamic_receipt(
     if (
         not isinstance(captured, (int, float))
         or isinstance(captured, bool)
-        or not 0
-        <= time.time() - float(captured)
-        <= (MAX_TOTAL_WALL_SECONDS if transition is not None else 1_800)
+        or not 0 <= time.time() - float(captured) <= 1_800
     ):
         raise T09HostError("provider entry receipt is stale")
     encoded = json.dumps(value, sort_keys=True)
@@ -1581,17 +1600,6 @@ def validate_dynamic_receipt(
         raise T09HostError("provider entry receipt retained a prohibited value")
     result = dict(value)
     result["receipt_sha256"] = file_sha256(path)
-    if transition is not None:
-        result["entry_package_commit"] = entry_package_commit
-        result["active_package_commit"] = expected_package_commit
-        result["package_transition_receipt_sha256"] = transition["receipt_sha256"]
-        result["previous_package_transition_receipt_sha256"] = transition[
-            "previous_package_transition_receipt_sha256"
-        ]
-        result["package_transition_created_at_epoch"] = transition["created_at_epoch"]
-        result["context_failure_qualification_id"] = CONTEXT_FAILURE_QUALIFICATION_ID
-        result["prior_qualification_id"] = FAILED_CANDIDATE_QUALIFICATION_ID
-        result["qualification_id"] = QUALIFICATION_ID
     return result
 
 
@@ -1671,13 +1679,13 @@ def sanitized_dynamic_receipt(_path: Path, value: dict[str, object]) -> dict[str
 
 
 def _runtime_budget_state(root: Path) -> dict[str, Any]:
-    return load_object(root / "pilot-v4/pilot-state.json", label="pilot state")
+    return load_object(root / "pilot-v5/pilot-state.json", label="pilot state")
 
 
 def _received_export_ack_path(root: Path, run_id: str) -> Path:
     if run_id not in RUN_IDS:
         raise T09HostError("export acknowledgement run identity is unknown")
-    return root / "pilot-v4/received-export-acknowledgements" / f"{run_id}.json"
+    return root / "pilot-v5/received-export-acknowledgements" / f"{run_id}.json"
 
 
 def require_prior_export_acknowledgements(
@@ -1688,8 +1696,8 @@ def require_prior_export_acknowledgements(
 ) -> None:
     """Block empirical progression until every prior archive was verified off-host."""
 
-    entry = load_object(root / "pilot-v4/provider-entry.json", label="provider entry")
-    frozen_manifest_path = root / "pilot-v4/frozen-run-manifest.json"
+    entry = load_object(root / "pilot-v5/provider-entry.json", label="provider entry")
+    frozen_manifest_path = root / "pilot-v5/frozen-run-manifest.json"
     frozen_manifest = load_object(frozen_manifest_path, label="frozen run manifest")
     frozen_manifest_sha256 = file_sha256(frozen_manifest_path)
     for run_id in RUN_IDS[:next_attempt_index]:
@@ -1702,7 +1710,7 @@ def require_prior_export_acknowledgements(
             acknowledgement_path,
             label=f"{run_id} received export acknowledgement",
         )
-        archive = root / "pilot-v4/attempt-exports" / f"{run_id}.tar.gz"
+        archive = root / "pilot-v5/attempt-exports" / f"{run_id}.tar.gz"
         if (
             set(acknowledgement)
             != {
@@ -2305,7 +2313,7 @@ def evaluator_overlay(
         "network_materialization_only": True,
         "runtime_mount_read_only": True,
     }
-    manifest_path = artifact_root / "pilot-v4/evaluator-overlay-manifest.json"
+    manifest_path = artifact_root / "pilot-v5/evaluator-overlay-manifest.json"
     write_exclusive(manifest_path, manifest)
     return {
         "materialized": True,
@@ -2331,7 +2339,7 @@ def validate_evaluator_overlay_binding(
     frozen_manifest: dict[str, Any],
     verify_packages: bool,
 ) -> dict[str, object]:
-    manifest_path = artifact_root / "pilot-v4/evaluator-overlay-manifest.json"
+    manifest_path = artifact_root / "pilot-v5/evaluator-overlay-manifest.json"
     retained = load_object(manifest_path, label="evaluator overlay manifest")
     if (
         frozen_manifest.get("evaluator_overlay_manifest_sha256") != file_sha256(manifest_path)
@@ -2406,7 +2414,7 @@ def browser_lifecycle_preflight(
     prefix: list[str],
     image_id: str,
 ) -> dict[str, object]:
-    attempt = artifact_root / "pilot-v4/browser-preflight"
+    attempt = artifact_root / "pilot-v5/browser-preflight"
     attempt.mkdir(parents=True, mode=0o700)
     name = f"{CONTAINER_PREFIX}browser-preflight"
     create = [
@@ -2516,7 +2524,7 @@ def secret_channel_preflight(
     prefix: list[str],
     image_id: str,
 ) -> dict[str, Any]:
-    attempt = artifact_root / "pilot-v4/secret-channel-preflight"
+    attempt = artifact_root / "pilot-v5/secret-channel-preflight"
     attempt.mkdir(parents=True, mode=0o700)
     source = repository / "containers/sira-smoke/pragmatic/t09_secret_preflight.py"
     command = [
@@ -2568,9 +2576,11 @@ def offline_runtime_preflight(
     image_id: str,
 ) -> dict[str, Any]:
     paths = contract_paths(repository)
-    attempt = artifact_root / "pilot-v4/offline-runtime-preflight"
+    attempt = artifact_root / "pilot-v5/offline-runtime-preflight"
     attempt.mkdir(parents=True, mode=0o700)
     source = repository / "containers/sira-smoke/pragmatic/t09_preflight.py"
+    finalizer_source = repository / FINALIZER_RELATIVE_PATH
+    finalizer_fixture = repository / "tests/fixtures/t09/finalizer-raw-shape"
     runtime_sha256 = file_sha256(repository / "src/giclab/harness/sira_gate_a_runtime.py")
     library_sha256 = file_sha256(repository / "src/giclab/harness/t09_sira_pilot.py")
     command = [
@@ -2592,6 +2602,10 @@ def offline_runtime_preflight(
         f"type=bind,src={repository / 'src/giclab'},dst=/opt/giclab-src/giclab,readonly",
         "--mount",
         f"type=bind,src={source},dst=/opt/giclab/t09_preflight.py,readonly",
+        "--mount",
+        f"type=bind,src={finalizer_source},dst=/opt/giclab/t09_evaluate_attempt.py,readonly",
+        "--mount",
+        f"type=bind,src={finalizer_fixture},dst=/opt/giclab-finalizer-fixture,readonly",
         "--mount",
         f"type=bind,src={overlay},dst=/opt/evaluator,readonly",
         "--mount",
@@ -2615,15 +2629,21 @@ def offline_runtime_preflight(
         "--pilot-library-sha256",
         library_sha256,
         "--attempt-root",
-        "/opt/giclab-artifacts/pilot-v4/offline-runtime-preflight",
+        "/opt/giclab-artifacts/pilot-v5/offline-runtime-preflight",
         "--aggregate-ledger",
-        "/opt/giclab-artifacts/pilot-v4/aggregate-budget.json",
+        "/opt/giclab-artifacts/pilot-v5/aggregate-budget.json",
         "--pilot-state",
-        "/opt/giclab-artifacts/pilot-v4/pilot-state.json",
+        "/opt/giclab-artifacts/pilot-v5/pilot-state.json",
         "--evaluator-root",
         "/opt/sira/evaluation/fanout",
         "--dataset",
         "/opt/sira/data/fanout-final-dev.json",
+        "--finalizer-source",
+        "/opt/giclab/t09_evaluate_attempt.py",
+        "--finalizer-source-sha256",
+        file_sha256(finalizer_source),
+        "--finalizer-raw-fixture",
+        "/opt/giclab-finalizer-fixture",
     ]
     run_logged(command, evidence_root=attempt, label="offline-preflight", timeout=300)
     receipt = load_object(
@@ -2636,6 +2656,9 @@ def offline_runtime_preflight(
         or receipt.get("evaluator_loading") != "passed-exact-network-none"
         or receipt.get("task_loading") != "passed-two-exact-rows"
         or receipt.get("offline_evaluator_fixtures") != "passed-approved-exact-results"
+        or not isinstance(receipt.get("finalizer_raw_fixture"), dict)
+        or receipt["finalizer_raw_fixture"].get("evaluator_valid") is not True
+        or receipt["finalizer_raw_fixture"].get("score") != 0.0
         or receipt.get("provider_or_task_request") is not False
         or receipt.get("browser_action") is not False
     ):
@@ -2650,7 +2673,7 @@ def final_image_runtime_preflight(
     image_id: str,
     command_document: dict[str, Any],
 ) -> dict[str, Any]:
-    attempt = artifact_root / "pilot-v4/final-image-runtime-preflight"
+    attempt = artifact_root / "pilot-v5/final-image-runtime-preflight"
     attempt.mkdir(parents=True, mode=0o700)
     command_manifests = manifests(command_document)
     reactive = next(item for item in command_manifests if item["condition"] == "reactive")
@@ -2707,8 +2730,8 @@ def final_image_file_hashes(
     prefix: list[str],
     image_id: str,
 ) -> dict[str, str]:
-    evidence = artifact_root / "pilot-v4/final-image-file-hashes"
-    paths = {
+    evidence = artifact_root / "pilot-v5/final-image-file-hashes"
+    expected_paths = {
         "/opt/giclab/container_entrypoint.py": (
             "2696c3d9980a6d3c14dcb55fc5b540732a953fb388c8117af020b464dfacb4da"
         ),
@@ -2723,6 +2746,7 @@ def final_image_file_hashes(
         "/opt/sira/scripts/run_web_agent.py": EXPECTED_UPSTREAM_RUNNER_SHA256,
         "/opt/giclab/installed-packages.txt": EXPECTED_PACKAGE_MANIFEST_SHA256,
     }
+    interpreter_path = "/opt/sira/.venv/bin/python"
     run_logged(
         [
             *prefix,
@@ -2734,7 +2758,8 @@ def final_image_file_hashes(
             "--entrypoint",
             "/usr/bin/sha256sum",
             image_id,
-            *paths,
+            *expected_paths,
+            interpreter_path,
         ],
         evidence_root=evidence,
         label="sha256sum",
@@ -2746,7 +2771,11 @@ def final_image_file_hashes(
         if len(parts) != 2:
             raise T09HostError("final image file-hash output is malformed")
         observed[parts[1]] = parts[0]
-    if observed != paths:
+    if (
+        set(observed) != {*expected_paths, interpreter_path}
+        or any(observed.get(path) != digest for path, digest in expected_paths.items())
+        or re.fullmatch(r"[a-f0-9]{64}", observed.get(interpreter_path, "")) is None
+    ):
         raise T09HostError("final replacement image file identities drifted")
     write_exclusive(evidence / "receipt.json", observed)
     return observed
@@ -2759,7 +2788,7 @@ def model_metadata_preflight(
     prefix: list[str],
     image_id: str,
 ) -> dict[str, Any]:
-    attempt = artifact_root / "pilot-v4/model-metadata-preflight"
+    attempt = artifact_root / "pilot-v5/model-metadata-preflight"
     attempt.mkdir(parents=True, mode=0o700)
     command = [
         *prefix,
@@ -2809,7 +2838,7 @@ def _replacement_inspect(
     expected_image_id: str,
 ) -> dict[str, Any]:
     inspect_path = (
-        artifact_root / "pilot-v4/replacement-image-qualification/replacement-image-inspect.stdout"
+        artifact_root / "pilot-v5/replacement-image-qualification/replacement-image-inspect.stdout"
     )
     value: object = json.loads(inspect_path.read_text(encoding="utf-8"))
     if not isinstance(value, list) or len(value) != 1 or not isinstance(value[0], dict):
@@ -2897,7 +2926,7 @@ def image_equivalence_adjudication(
             "build-context bytes; the exact digest cause is not determinable"
         ),
     }
-    write_exclusive(artifact_root / "pilot-v4/image-equivalence-adjudication.json", adjudication)
+    write_exclusive(artifact_root / "pilot-v5/image-equivalence-adjudication.json", adjudication)
     return adjudication
 
 
@@ -2916,6 +2945,7 @@ def write_frozen_run_manifest(
     file_hashes: dict[str, str],
     model_receipt: dict[str, Any],
     adjudication: dict[str, object],
+    real_evidence_regression: dict[str, Any],
 ) -> tuple[Path, dict[str, object]]:
     paths = contract_paths(repository)
     image_id = image_materialization.get("image_id")
@@ -2923,31 +2953,32 @@ def write_frozen_run_manifest(
         raise T09HostError("qualified replacement image ID is unavailable")
     if image_id_if_present(docker_prefix(), image_id) != image_id:
         raise T09HostError("qualified replacement image is no longer loaded by exact ID")
+    python_interpreter_path = "/opt/sira/.venv/bin/python"
+    python_interpreter_sha256 = file_hashes.get(python_interpreter_path)
+    if (
+        not isinstance(python_interpreter_sha256, str)
+        or re.fullmatch(r"[a-f0-9]{64}", python_interpreter_sha256) is None
+    ):
+        raise T09HostError("qualified Python interpreter identity is unavailable")
     empirical = _runtime_budget_state(artifact_root).get("empirical_attempts_entered")
     if empirical != []:
         raise T09HostError("runtime cannot freeze after empirical entry")
-    qualification_root = artifact_root / "pilot-v4/replacement-image-qualification"
+    qualification_root = artifact_root / "pilot-v5/replacement-image-qualification"
     manifest: dict[str, object] = {
         "schema_version": "0.1.0",
-        "manifest_id": "RUN-MANIFEST-EXP0001-PILOT-V4-0002",
+        "manifest_id": FROZEN_RUN_MANIFEST_ID,
         "plan_id": PLAN_ID,
         "host_run_id": HOST_RUN_ID,
         "qualification_id": QUALIFICATION_ID,
         "qualification_count": 1,
         "build_count": image_materialization.get("build_count"),
-        "source_contract_sha256": (
-            "3852fe8dabb9ee6b10e40cbc6dc1ab964ea6fce11f71f81f0966e927cadddeb9"
-        ),
+        "source_contract_sha256": AUTHORIZATION_SOURCE_SHA256,
         "clean_package_commit": package_commit,
         "plan_sha256": file_sha256(paths["plan"]),
         "execution_contract_sha256": file_sha256(paths["execution"]),
         "runtime_contract_sha256": file_sha256(paths["runtime"]),
         "command_manifests_sha256": file_sha256(paths["commands"]),
         "provider_entry_receipt_sha256": dynamic.get("receipt_sha256"),
-        "package_transition_receipt_sha256": dynamic.get("package_transition_receipt_sha256"),
-        "previous_package_transition_receipt_sha256": dynamic.get(
-            "previous_package_transition_receipt_sha256"
-        ),
         "owned_instance_identity_sha256": dynamic.get("owned_instance_identity_sha256"),
         "lambda_started_at_epoch": dynamic.get("lambda_started_at_epoch"),
         "replacement_image_id": image_id,
@@ -2963,6 +2994,8 @@ def write_frozen_run_manifest(
         "package_manifest_sha256": EXPECTED_PACKAGE_MANIFEST_SHA256,
         "chromium_executable_sha256": EXPECTED_CHROMIUM_SHA256,
         "patched_upstream_runner_sha256": EXPECTED_UPSTREAM_RUNNER_SHA256,
+        "python_interpreter_path": python_interpreter_path,
+        "python_interpreter_sha256": python_interpreter_sha256,
         "runtime_preflight_sha256": canonical_sha256(runtime_receipt),
         "offline_preflight_sha256": canonical_sha256(offline_receipt),
         "browser_preflight_sha256": canonical_sha256(browser_receipt),
@@ -2978,6 +3011,7 @@ def write_frozen_run_manifest(
         "model_task_request_count": 0,
         "task_browser_action_count": 0,
         "image_adjudication_sha256": canonical_sha256(adjudication),
+        "real_evidence_finalizer_regression_sha256": canonical_sha256(real_evidence_regression),
         "command_argv_sha256s": [item["argv_sha256"] for item in manifests(command_document)],
         "pair_diffs": command_document.get("pair_diffs"),
         "attempt_order": list(RUN_IDS),
@@ -2990,18 +3024,16 @@ def write_frozen_run_manifest(
                 qualification_root / "build-context-exclusions.json"
             ),
             "image_inspect": file_sha256(qualification_root / "replacement-image-inspect.stdout"),
-            "evaluator_overlay": file_sha256(
-                artifact_root / "pilot-v4/evaluator-overlay-manifest.json"
+            "final_image_file_hashes": file_sha256(
+                artifact_root / "pilot-v5/final-image-file-hashes/receipt.json"
             ),
-            "prior_qualification_failures": file_sha256(
-                artifact_root / "pilot-v4/prior-qualification-failures/retention-receipt.json"
+            "evaluator_overlay": file_sha256(
+                artifact_root / "pilot-v5/evaluator-overlay-manifest.json"
             ),
         },
     }
     if (
         manifest["build_count"] != 1
-        or not isinstance(manifest["package_transition_receipt_sha256"], str)
-        or _HEX64.fullmatch(manifest["package_transition_receipt_sha256"]) is None
         or not isinstance(manifest["pair_diffs"], list)
         or any(
             not isinstance(item, dict) or item.get("valid") is not True
@@ -3009,7 +3041,7 @@ def write_frozen_run_manifest(
         )
     ):
         raise T09HostError("replacement runtime cannot be frozen")
-    path = artifact_root / "pilot-v4/frozen-run-manifest.json"
+    path = artifact_root / "pilot-v5/frozen-run-manifest.json"
     write_exclusive(path, manifest)
     return path, manifest
 
@@ -3020,7 +3052,7 @@ def load_frozen_run_manifest(
     repository: Path,
     package_commit: str,
 ) -> tuple[dict[str, Any], str]:
-    path = artifact_root / "pilot-v4/frozen-run-manifest.json"
+    path = artifact_root / "pilot-v5/frozen-run-manifest.json"
     metadata = path.stat(follow_symlinks=False)
     if (
         not stat.S_ISREG(metadata.st_mode)
@@ -3036,7 +3068,7 @@ def load_frozen_run_manifest(
         raise T09HostError(str(exc)) from exc
     paths = contract_paths(repository)
     provider_entry = load_object(
-        artifact_root / "pilot-v4/provider-entry.json",
+        artifact_root / "pilot-v5/provider-entry.json",
         label="provider entry summary",
     )
     expected = {
@@ -3045,37 +3077,47 @@ def load_frozen_run_manifest(
         "qualification_id": QUALIFICATION_ID,
         "qualification_count": 1,
         "build_count": 1,
-        "source_contract_sha256": (
-            "3852fe8dabb9ee6b10e40cbc6dc1ab964ea6fce11f71f81f0966e927cadddeb9"
-        ),
+        "source_contract_sha256": AUTHORIZATION_SOURCE_SHA256,
         "clean_package_commit": package_commit,
         "plan_sha256": file_sha256(paths["plan"]),
         "execution_contract_sha256": file_sha256(paths["execution"]),
         "runtime_contract_sha256": file_sha256(paths["runtime"]),
         "command_manifests_sha256": file_sha256(paths["commands"]),
-        "package_transition_receipt_sha256": provider_entry.get(
-            "package_transition_receipt_sha256"
-        ),
-        "previous_package_transition_receipt_sha256": provider_entry.get(
-            "previous_package_transition_receipt_sha256"
-        ),
+        "provider_entry_receipt_sha256": provider_entry.get("receipt_sha256"),
+        "owned_instance_identity_sha256": provider_entry.get("owned_instance_identity_sha256"),
+        "lambda_started_at_epoch": provider_entry.get("lambda_started_at_epoch"),
         "package_manifest_sha256": EXPECTED_PACKAGE_MANIFEST_SHA256,
         "chromium_executable_sha256": EXPECTED_CHROMIUM_SHA256,
         "patched_upstream_runner_sha256": EXPECTED_UPSTREAM_RUNNER_SHA256,
+        "python_interpreter_path": "/opt/sira/.venv/bin/python",
         "evaluator_overlay_manifest_sha256": manifest.get("evaluator_overlay_manifest_sha256"),
         "evaluator_overlay_entries_sha256": manifest.get("evaluator_overlay_entries_sha256"),
         "evaluator_overlay_packages_sha256": manifest.get("evaluator_overlay_packages_sha256"),
         "model_metadata_request_count": 1,
         "model_task_request_count": 0,
         "task_browser_action_count": 0,
+        "real_evidence_finalizer_regression_sha256": canonical_sha256(
+            validate_real_evidence_regression(repository)
+        ),
         "attempt_order": list(RUN_IDS),
         "empirical_entry_crossed": False,
         "post_entry_code_science_image_freeze": True,
     }
     if any(manifest.get(key) != value for key, value in expected.items()):
         raise T09HostError("frozen run manifest binding drifted")
+    file_hash_receipt_path = artifact_root / "pilot-v5/final-image-file-hashes/receipt.json"
+    file_hash_receipt = load_object(file_hash_receipt_path, label="final image file hashes")
+    source_receipts = manifest.get("source_receipts")
+    if (
+        not isinstance(source_receipts, dict)
+        or source_receipts.get("final_image_file_hashes") != file_sha256(file_hash_receipt_path)
+        or manifest.get("final_image_file_hashes_sha256") != canonical_sha256(file_hash_receipt)
+        or file_hash_receipt.get(typed_qualification.python_interpreter_path)
+        != typed_qualification.python_interpreter_sha256
+    ):
+        raise T09HostError("frozen Python interpreter source receipt drifted")
     exclusion_path = (
-        artifact_root / "pilot-v4/replacement-image-qualification/build-context-exclusions.json"
+        artifact_root / "pilot-v5/replacement-image-qualification/build-context-exclusions.json"
     )
     if manifest.get("build_context_exclusions_sha256") != file_sha256(exclusion_path):
         raise T09HostError("frozen build-context exclusion receipt drifted")
@@ -3098,7 +3140,7 @@ def load_frozen_run_manifest(
 
 def initialize_state(root: Path, execution_sha256: str, *, lambda_started_at_epoch: float) -> None:
     state = {
-        "schema_version": "0.1.0",
+        "schema_version": "0.2.0",
         "plan_id": PLAN_ID,
         "execution_contract_sha256": execution_sha256,
         "pilot_started_at_epoch": lambda_started_at_epoch,
@@ -3106,10 +3148,14 @@ def initialize_state(root: Path, execution_sha256: str, *, lambda_started_at_epo
         "first_pair_started_at_epoch": None,
         "second_pair_started_at_epoch": None,
         "empirical_attempts_entered": [],
+        "raw_attempts_complete": [],
+        "raw_attempt_bindings": {},
         "attempts_completed": [],
+        "attempt_finalizations": {},
+        "attempt_finalization_history": {},
         "first_pair_decision": None,
     }
-    write_exclusive(root / "pilot-v4/pilot-state.json", state)
+    write_exclusive(root / "pilot-v5/pilot-state.json", state)
 
 
 def preflight(args: argparse.Namespace) -> None:
@@ -3123,12 +3169,9 @@ def preflight(args: argparse.Namespace) -> None:
         expected_package_commit=args.package_commit,
         repository_root=repository,
         source_root=args.dynamic_source_root.resolve(strict=True),
-        package_transition_receipt=args.package_transition_receipt.resolve(strict=True),
-        prior_artifact_root=args.prior_artifact_root.resolve(strict=True),
-        failed_candidate_root=args.failed_candidate_root.resolve(strict=True),
-        previous_transition_receipt=args.previous_package_transition_receipt.resolve(strict=True),
     )
     command_document = verify_package(repository, args.package_commit)
+    real_evidence_regression = validate_real_evidence_regression(repository)
     paths = contract_paths(repository)
     prefix = docker_prefix()
     if owned_containers(prefix):
@@ -3145,21 +3188,13 @@ def preflight(args: argparse.Namespace) -> None:
         lambda_started_at_epoch=lambda_started,
     )
     write_exclusive(
-        artifact_root / "pilot-v4/provider-entry.json",
+        artifact_root / "pilot-v5/provider-entry.json",
         sanitized_dynamic_receipt(args.dynamic_receipt, dynamic),
-    )
-    retain_prior_qualification_failures(
-        artifact_root=artifact_root,
-        prior_artifact_root=args.prior_artifact_root.resolve(strict=True),
-        failed_candidate_root=args.failed_candidate_root.resolve(strict=True),
-        previous_transition_receipt=args.previous_package_transition_receipt.resolve(strict=True),
-        package_transition_receipt=args.package_transition_receipt.resolve(strict=True),
     )
     image_materialization = materialize_replacement_image(
         repository=repository,
         artifact_root=artifact_root,
         prefix=prefix,
-        failed_candidate_root=args.failed_candidate_root.resolve(strict=True),
     )
     image_id = image_materialization.get("image_id")
     if not isinstance(image_id, str):
@@ -3248,14 +3283,15 @@ def preflight(args: argparse.Namespace) -> None:
         file_hashes=image_files,
         model_receipt=model_metadata,
         adjudication=adjudication,
+        real_evidence_regression=real_evidence_regression,
     )
-    state_path = artifact_root / "pilot-v4/pilot-state.json"
+    state_path = artifact_root / "pilot-v5/pilot-state.json"
     state = load_object(state_path, label="pilot state")
     state["first_pair_started_at_epoch"] = time.time()
     write_atomic(state_path, state)
     admitted_seconds = admit_next_attempt(artifact_root)
     write_exclusive(
-        artifact_root / "pilot-v4/preflight.json",
+        artifact_root / "pilot-v5/preflight.json",
         {
             "schema_version": "0.1.0",
             "plan_id": PLAN_ID,
@@ -3266,7 +3302,6 @@ def preflight(args: argparse.Namespace) -> None:
             "command_manifests_sha256": file_sha256(paths["commands"]),
             "command_argv_sha256s": [item["argv_sha256"] for item in manifests(command_document)],
             "dynamic_receipt_sha256": file_sha256(args.dynamic_receipt),
-            "package_transition_receipt_sha256": file_sha256(args.package_transition_receipt),
             "dynamic_receipt": sanitized_dynamic_receipt(args.dynamic_receipt, dynamic),
             "image_materialization": image_materialization,
             "replacement_image_id": image_id,
@@ -3281,6 +3316,15 @@ def preflight(args: argparse.Namespace) -> None:
             "command_rendering": "passed-four-exact-by-network-none-offline-runtime-preflight",
             "browser_startup_screenshot_cleanup": browser,
             "evaluator_loading": "passed-exact-network-none-with-approved-fixtures",
+            "real_evidence_finalizer_regression": {
+                "receipt_sha256": file_sha256(paths["real_regression"]),
+                "semantic_projection_sha256": real_evidence_regression[
+                    "semantic_projection_sha256"
+                ],
+                "accepted_scientific_and_evaluator_fields_equal": True,
+                "additional_model_requests": 0,
+                "additional_browser_actions": 0,
+            },
             "evaluator_overlay_revalidation": evaluator_overlay_verified,
             "task_loading": "passed-two-exact-rows-network-none",
             "model_metadata": model_metadata,
@@ -3459,79 +3503,148 @@ def evaluator_argv(
     cleanup_receipt: Path,
     image_id: str,
     frozen_run_manifest_sha256: str,
-) -> list[str]:
+    finalizer_commit: str,
+    finalizer_source: Path,
+    invocation: int,
+    evaluator_revalidation_path: Path,
+) -> tuple[list[str], Path, dict[str, str]]:
     repository = args.repository.resolve(strict=True)
     paths = contract_paths(repository)
     artifact_root = args.artifact_root.resolve(strict=True)
-    finalizer_source = repository / "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py"
-    return [
-        *docker_prefix(),
-        "run",
-        "--rm",
-        "--network",
-        "none",
-        "--read-only",
-        "--user",
-        "1000:1000",
-        "--env",
-        "PYTHONPATH=/opt/giclab-src",
-        "--mount",
-        f"type=bind,src={artifact_root},dst=/opt/giclab-artifacts",
-        "--mount",
-        f"type=bind,src={repository / 'src/giclab'},dst=/opt/giclab-src/giclab,readonly",
-        "--mount",
-        f"type=bind,src={finalizer_source},dst=/opt/giclab/t09_evaluate_attempt.py,readonly",
-        "--mount",
-        f"type=bind,src={args.evaluator_overlay.resolve(strict=True)},dst=/opt/evaluator,readonly",
-        "--mount",
-        f"type=bind,src={paths['execution']},dst=/opt/giclab-contracts/execution.json,readonly",
-        "--mount",
-        f"type=bind,src={paths['commands']},dst=/opt/giclab-contracts/T09_PILOT_COMMAND_MANIFESTS.json,readonly",
-        "--mount",
-        f"type=bind,src={paths['conditions']},dst=/opt/giclab-contracts/conditions,readonly",
-        "--mount",
-        f"type=bind,src={repository / 'schemas'},dst=/opt/giclab-schemas,readonly",
-        "--entrypoint",
-        "/opt/evaluator/.venv/bin/python",
-        image_id,
-        "/opt/giclab/t09_evaluate_attempt.py",
-        "--execution-contract",
-        "/opt/giclab-contracts/execution.json",
-        "--execution-contract-sha256",
-        file_sha256(paths["execution"]),
-        "--command-manifests",
-        "/opt/giclab-contracts/T09_PILOT_COMMAND_MANIFESTS.json",
-        "--command-manifests-sha256",
-        file_sha256(paths["commands"]),
-        "--condition-plan",
-        f"/opt/giclab-contracts/conditions/{Path(manifest['condition_plan_path']).name}",
-        "--attempt-root",
-        f"/opt/giclab-artifacts/{manifest['output_root']}",
-        "--run-id",
-        manifest["run_id"],
-        "--package-commit",
-        args.package_commit,
-        "--frozen-run-manifest",
-        "/opt/giclab-artifacts/pilot-v4/frozen-run-manifest.json",
-        "--frozen-run-manifest-sha256",
-        frozen_run_manifest_sha256,
-        "--replacement-image-id",
-        image_id,
-        "--aggregate-ledger",
-        "/opt/giclab-artifacts/pilot-v4/aggregate-budget.json",
-        "--pilot-state",
-        "/opt/giclab-artifacts/pilot-v4/pilot-state.json",
-        "--host-cleanup-receipt",
-        f"/opt/giclab-artifacts/{cleanup_receipt.relative_to(artifact_root).as_posix()}",
-        "--evaluator-root",
-        "/opt/sira/evaluation/fanout",
-        "--dataset",
-        "/opt/sira/data/fanout-final-dev.json",
-        "--score-schema",
-        "/opt/giclab-schemas/t09-sira-pilot-score.schema.json",
-        "--evidence-schema",
-        "/opt/giclab-schemas/t09-sira-pilot-evidence.schema.json",
-    ]
+    finalizer_source = finalizer_source.resolve(strict=True)
+    finalizer_sha256 = file_sha256(finalizer_source)
+    frozen_manifest = load_object(
+        artifact_root / "pilot-v5/frozen-run-manifest.json", label="frozen run manifest"
+    )
+    finalizer_closure = {
+        "finalizer_commit": finalizer_commit,
+        "finalizer_source_sha256": finalizer_sha256,
+        "scientific_package_commit": args.package_commit,
+        "pilot_library_sha256": file_sha256(repository / "src/giclab/harness/t09_sira_pilot.py"),
+        "interpreter": "/opt/sira/.venv/bin/python",
+        "interpreter_sha256": cast(str, frozen_manifest["python_interpreter_sha256"]),
+        "replacement_image_id": image_id,
+        "execution_contract_sha256": file_sha256(paths["execution"]),
+        "command_manifests_sha256": file_sha256(paths["commands"]),
+        "dataset_contract_sha256": file_sha256(paths["dataset"]),
+        "evaluator_contract_sha256": file_sha256(paths["evaluator"]),
+        "score_schema_sha256": file_sha256(repository / "schemas/t09-sira-pilot-score.schema.json"),
+        "evidence_schema_sha256": file_sha256(
+            repository / "schemas/t09-sira-pilot-evidence.schema.json"
+        ),
+        "evaluator_overlay_entries_sha256": cast(
+            str, frozen_manifest["evaluator_overlay_entries_sha256"]
+        ),
+        "evaluator_overlay_packages_sha256": cast(
+            str, frozen_manifest["evaluator_overlay_packages_sha256"]
+        ),
+    }
+    dependency_manifest_sha256 = canonical_sha256(finalizer_closure)
+    output_root = manifest_output_root(manifest)
+    owned = cast(dict[str, Any], manifest["permitted_condition_owned"])
+    raw_output_root = cast(str, owned["raw_output_root"])
+    finalized_output_root = cast(str, owned["finalized_output_root"])
+    raw_root = (artifact_root / raw_output_root).resolve(strict=True)
+    finalized_base = (artifact_root / finalized_output_root).resolve(strict=False)
+    finalized_base.mkdir(parents=True, mode=0o700, exist_ok=True)
+    invocation_name = f"{finalizer_sha256}-invocation-{invocation:02d}"
+    finalized_root = finalized_base / invocation_name
+    finalized_root.mkdir(mode=0o700, exist_ok=False)
+    control_root = (artifact_root / "pilot-v5").resolve(strict=True)
+    return (
+        [
+            *docker_prefix(),
+            "run",
+            "--rm",
+            "--network",
+            "none",
+            "--read-only",
+            "--user",
+            "1000:1000",
+            "--env",
+            "PYTHONPATH=/opt/evaluator/.venv/lib/python3.11/site-packages:/opt/giclab-src",
+            "--mount",
+            f"type=bind,src={artifact_root},dst=/opt/giclab-artifacts,readonly",
+            "--mount",
+            f"type=bind,src={raw_root},dst=/opt/giclab-raw,readonly",
+            "--mount",
+            f"type=bind,src={finalized_root},dst=/opt/giclab-finalized",
+            "--mount",
+            f"type=bind,src={control_root},dst=/opt/giclab-control,readonly",
+            "--mount",
+            f"type=bind,src={repository / 'src/giclab'},dst=/opt/giclab-src/giclab,readonly",
+            "--mount",
+            f"type=bind,src={finalizer_source},dst=/opt/giclab/t09_evaluate_attempt.py,readonly",
+            "--mount",
+            f"type=bind,src={args.evaluator_overlay.resolve(strict=True)},dst=/opt/evaluator,readonly",
+            "--mount",
+            f"type=bind,src={paths['execution']},dst=/opt/giclab-contracts/execution.json,readonly",
+            "--mount",
+            f"type=bind,src={paths['commands']},dst=/opt/giclab-contracts/T09_PILOT_COMMAND_MANIFESTS.json,readonly",
+            "--mount",
+            f"type=bind,src={paths['conditions']},dst=/opt/giclab-contracts/conditions,readonly",
+            "--mount",
+            f"type=bind,src={repository / 'schemas'},dst=/opt/giclab-schemas,readonly",
+            "--entrypoint",
+            "/opt/sira/.venv/bin/python",
+            image_id,
+            "/opt/giclab/t09_evaluate_attempt.py",
+            "--execution-contract",
+            "/opt/giclab-contracts/execution.json",
+            "--execution-contract-sha256",
+            file_sha256(paths["execution"]),
+            "--command-manifests",
+            "/opt/giclab-contracts/T09_PILOT_COMMAND_MANIFESTS.json",
+            "--command-manifests-sha256",
+            file_sha256(paths["commands"]),
+            "--condition-plan",
+            f"/opt/giclab-contracts/conditions/{Path(manifest['condition_plan_path']).name}",
+            "--raw-attempt-root",
+            "/opt/giclab-raw",
+            "--raw-output-relative",
+            raw_output_root,
+            "--finalized-attempt-root",
+            "/opt/giclab-finalized",
+            "--finalized-output-relative",
+            finalized_root.relative_to(artifact_root).as_posix(),
+            "--artifact-root",
+            "/opt/giclab-artifacts",
+            "--raw-attempt-manifest",
+            f"/opt/giclab-artifacts/{output_root}/raw-attempt-manifest.json",
+            "--raw-attempt-receipt",
+            f"/opt/giclab-artifacts/{output_root}/raw-attempt-complete.json",
+            "--run-id",
+            manifest["run_id"],
+            "--package-commit",
+            args.package_commit,
+            "--finalizer-commit",
+            finalizer_commit,
+            "--finalizer-source-sha256",
+            finalizer_sha256,
+            "--finalizer-dependency-manifest-sha256",
+            dependency_manifest_sha256,
+            "--frozen-run-manifest",
+            "/opt/giclab-control/frozen-run-manifest.json",
+            "--frozen-run-manifest-sha256",
+            frozen_run_manifest_sha256,
+            "--replacement-image-id",
+            image_id,
+            "--host-cleanup-receipt",
+            "/opt/giclab-raw/host-cleanup-receipt.json",
+            "--evaluator-root",
+            "/opt/sira/evaluation/fanout",
+            "--evaluator-overlay-revalidation",
+            f"/opt/giclab-artifacts/{evaluator_revalidation_path.relative_to(artifact_root).as_posix()}",
+            "--dataset",
+            "/opt/sira/data/fanout-final-dev.json",
+            "--score-schema",
+            "/opt/giclab-schemas/t09-sira-pilot-score.schema.json",
+            "--evidence-schema",
+            "/opt/giclab-schemas/t09-sira-pilot-evidence.schema.json",
+        ],
+        finalized_root,
+        finalizer_closure,
+    )
 
 
 def preentry_prefix_inventory(attempt_root: Path) -> list[dict[str, object]]:
@@ -3579,7 +3692,7 @@ def prepare_condition_attempt_root(
     pilot_state: dict[str, Any],
     package_commit: str,
     frozen_run_manifest_sha256: str,
-) -> Path:
+) -> tuple[Path, Path]:
     """Open a fresh root, preserving only source-marked failures from before entry."""
 
     run_id = cast(str, manifest["run_id"])
@@ -3628,7 +3741,7 @@ def prepare_condition_attempt_root(
             or privacy_violations(attempt_root)
         ):
             raise T09HostError("existing attempt root is not a repairable pre-entry prefix")
-        repair_root = artifact_root / "pilot-v4/preentry-condition-repairs" / run_id
+        repair_root = artifact_root / "pilot-v5/preentry-condition-repairs" / run_id
         repair_root.mkdir(mode=0o700, parents=True, exist_ok=True)
         existing = sorted(path for path in repair_root.iterdir() if path.is_dir())
         if len(existing) >= MAX_PREENTRY_REPAIRS_PER_RUN:
@@ -3638,7 +3751,17 @@ def prepare_condition_attempt_root(
             raise T09HostError("pre-entry repair identity is not fresh")
         os.replace(attempt_root, destination)
     attempt_root.mkdir(parents=True, mode=0o700, exist_ok=False)
-    return attempt_root
+    owned = manifest.get("permitted_condition_owned")
+    if not isinstance(owned, dict):
+        raise T09HostError("command manifest lacks its condition-owned roots")
+    raw_relative = owned.get("raw_output_root")
+    if not isinstance(raw_relative, str):
+        raise T09HostError("command manifest lacks its raw output root")
+    raw_root = artifact_root / raw_relative
+    if raw_root.parent != attempt_root or raw_root.name != "raw":
+        raise T09HostError("raw condition root is not the exact owned child")
+    raw_root.mkdir(mode=0o700, exist_ok=False)
+    return attempt_root, raw_root
 
 
 def record_preentry_condition_failure(
@@ -3695,12 +3818,255 @@ def record_preentry_condition_failure(
             "structural_privacy_violations": privacy,
             "failure_prefix_entries": failure_prefix_entries,
             "failure_prefix_entries_sha256": canonical_sha256(failure_prefix_entries),
-            "retry_same_frozen_condition_permitted": not residue and not remaining and not privacy,
+            "retry_same_frozen_condition_permitted": not residue and not remaining,
             "recorded_at": utc_now(),
         },
     )
-    if residue or remaining or privacy:
+    if residue or remaining:
         raise T09HostError("pre-entry failure cleanup did not preserve a repairable prefix")
+
+
+def _raw_attempt_files(raw_root: Path) -> tuple[list[dict[str, object]], int]:
+    """Inventory every regular raw byte without following links or special files."""
+
+    files: list[dict[str, object]] = []
+    total = 0
+    for path in sorted(raw_root.rglob("*")):
+        metadata = path.lstat()
+        relative = path.relative_to(raw_root).as_posix()
+        if stat.S_ISDIR(metadata.st_mode):
+            continue
+        if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1 or path.is_symlink():
+            raise T09HostError(f"raw attempt contains an unsafe artifact category: {relative}")
+        total += metadata.st_size
+        if total > MAX_ATTEMPT_OUTPUT_BYTES:
+            raise T09HostError("raw attempt exceeds its hard byte cap")
+        files.append(
+            {
+                "path": relative,
+                "bytes": metadata.st_size,
+                "sha256": file_sha256(path),
+            }
+        )
+    return files, total
+
+
+def seal_raw_attempt(
+    *,
+    artifact_root: Path,
+    attempt_root: Path,
+    raw_root: Path,
+    manifest: dict[str, Any],
+    package_commit: str,
+    frozen_run_manifest_sha256: str,
+    execution_contract_sha256: str,
+) -> tuple[Path, Path]:
+    """Seal one consumed condition before any fallible evaluator invocation."""
+
+    run_id = cast(str, manifest["run_id"])
+    required = {
+        "attempt-wall.json",
+        "condition.stderr",
+        "condition.stdout",
+        "container-command.json",
+        "container-state.json",
+        "gpu-accounting.json",
+        "host-cleanup-receipt.json",
+        "evaluator-overlay-binding.json",
+        "normalized-events.jsonl",
+        "provider-budget.json",
+        "runtime-reconstruction-binding.json",
+        "runtime-environment.json",
+    }
+    missing = sorted(name for name in required if not (raw_root / name).is_file())
+    cleanup = load_object(raw_root / "host-cleanup-receipt.json", label="host cleanup")
+    state = load_object(artifact_root / "pilot-v5/pilot-state.json", label="pilot state")
+    entered = state.get("empirical_attempts_entered")
+    events_path = raw_root / "normalized-events.jsonl"
+    source_grounded_events = 0
+    try:
+        with events_path.open("r", encoding="utf-8") as handle:
+            for line in handle:
+                event: object = json.loads(line)
+                if not isinstance(event, dict):
+                    raise T09HostError("raw normalized event is not an object")
+                if event.get("kind") in {
+                    "provider-call-failed",
+                    "provider-call-receipt",
+                    "requested-browser-action",
+                    "post-action-result",
+                }:
+                    source_grounded_events += 1
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise T09HostError("raw normalized events are not reconstructable") from exc
+    budget = load_object(raw_root / "provider-budget.json", label="raw provider budget")
+    evaluator_binding = load_object(
+        raw_root / "evaluator-overlay-binding.json", label="raw evaluator overlay binding"
+    )
+    runtime_binding = load_object(
+        raw_root / "runtime-reconstruction-binding.json",
+        label="raw runtime reconstruction binding",
+    )
+    runtime_cleanup_path = raw_root / "runtime-cleanup.json"
+    session_paths = sorted(
+        path
+        for path in (raw_root / "sira-output").glob("*.json")
+        if path.name != "output.jsonl" and path.is_file() and not path.is_symlink()
+    )
+    if len(session_paths) == 1:
+        reconstructable_disposition = "one-session-evaluator-ready"
+    elif not session_paths:
+        reconstructable_disposition = "deterministic-invalid-infrastructure-missing-session"
+    else:
+        reconstructable_disposition = "deterministic-invalid-infrastructure-duplicate-session"
+    structural_privacy_findings = privacy_violations(raw_root)
+    if (
+        missing
+        or not isinstance(entered, list)
+        or run_id not in entered
+        or cleanup.get("container_removed") is not True
+        or cleanup.get("owned_container_residue") != []
+        or cleanup.get("secret_scan_passed") is not True
+        or cleanup.get("secret_matching_paths") != []
+        or budget.get("unreconciled_provider_attempts") != 0
+        or evaluator_binding.get("run_id") != run_id
+        or evaluator_binding.get("frozen_run_manifest_sha256") != frozen_run_manifest_sha256
+        or evaluator_binding.get("condition_mount_policy") != "read-only"
+        or runtime_binding.get("run_id") != run_id
+        or runtime_binding.get("runtime_cleanup_present") != runtime_cleanup_path.is_file()
+        or runtime_binding.get("runtime_cleanup_sha256")
+        != (file_sha256(runtime_cleanup_path) if runtime_cleanup_path.is_file() else None)
+        or runtime_binding.get("host_cleanup_receipt_sha256")
+        != file_sha256(raw_root / "host-cleanup-receipt.json")
+        or runtime_binding.get("container_state_sha256")
+        != file_sha256(raw_root / "container-state.json")
+        or runtime_binding.get("host_teardown_is_source_grounded_fallback") is not True
+        or source_grounded_events == 0
+    ):
+        category = "missing=" + ",".join(missing) if missing else "cleanup-or-reconciliation"
+        raise T09HostError(f"raw attempt is not reconstructable: {category}")
+    files, total = _raw_attempt_files(raw_root)
+    raw_manifest_path = attempt_root / "raw-attempt-manifest.json"
+    raw_receipt_path = attempt_root / "raw-attempt-complete.json"
+    raw_manifest: dict[str, object] = {
+        "schema_version": "0.1.0",
+        "plan_id": PLAN_ID,
+        "host_run_id": HOST_RUN_ID,
+        "run_id": run_id,
+        "package_commit": package_commit,
+        "execution_contract_sha256": execution_contract_sha256,
+        "frozen_run_manifest_sha256": frozen_run_manifest_sha256,
+        "condition_plan_sha256": manifest["condition_plan_sha256"],
+        "condition_argv_sha256": manifest["argv_sha256"],
+        "raw_attempt_root": "raw",
+        "files": files,
+        "total_bytes": total,
+        "condition_writers_closed": True,
+        "raw_source_mutable_by_finalizer": False,
+        "source_grounded_empirical_event_count": source_grounded_events,
+        "retained_session_count": len(session_paths),
+        "reconstructable_disposition": reconstructable_disposition,
+        "structural_privacy_findings": structural_privacy_findings,
+        "public_release_clearance": not structural_privacy_findings,
+        "private_access_controlled": True,
+    }
+    if raw_manifest_path.exists():
+        if load_object(raw_manifest_path, label="resumed raw manifest") != raw_manifest:
+            raise T09HostError("retained raw manifest drifted during seal resumption")
+    else:
+        if raw_receipt_path.exists():
+            raise T09HostError("raw receipt exists without its source manifest")
+        write_exclusive(raw_manifest_path, raw_manifest)
+    raw_receipt: dict[str, object] = {
+        "schema_version": "0.1.0",
+        "plan_id": PLAN_ID,
+        "host_run_id": HOST_RUN_ID,
+        "run_id": run_id,
+        "raw_attempt_complete": True,
+        "empirical_attempt_consumed": True,
+        "condition_terminated": True,
+        "container_and_browser_cleanup_clean": True,
+        "credential_cleanup_clean": True,
+        "raw_manifest_path": raw_manifest_path.name,
+        "raw_manifest_sha256": file_sha256(raw_manifest_path),
+        "raw_total_bytes": total,
+        "raw_file_count": len(files),
+        "source_grounded_empirical_event_count": source_grounded_events,
+        "retained_session_count": len(session_paths),
+        "reconstructable_disposition": reconstructable_disposition,
+        "structural_privacy_findings": structural_privacy_findings,
+        "public_release_clearance": not structural_privacy_findings,
+        "finalizer_network_policy": "none",
+        "condition_retry_permitted": False,
+        "recorded_at": utc_now(),
+    }
+    if raw_receipt_path.exists():
+        retained_receipt = load_object(raw_receipt_path, label="resumed raw receipt")
+        retained_recorded_at = retained_receipt.pop("recorded_at", None)
+        expected_without_time = dict(raw_receipt)
+        expected_without_time.pop("recorded_at")
+        if not isinstance(retained_recorded_at, str) or retained_receipt != expected_without_time:
+            raise T09HostError("retained raw receipt drifted during seal resumption")
+    else:
+        write_exclusive(raw_receipt_path, raw_receipt)
+    validate_raw_attempt_seal(
+        attempt_root=attempt_root,
+        raw_root=raw_root,
+        run_id=run_id,
+        package_commit=package_commit,
+    )
+    mark_raw_attempt_complete(
+        artifact_root / "pilot-v5/pilot-state.json",
+        execution_contract_sha256=execution_contract_sha256,
+        run_id=run_id,
+        raw_manifest_sha256=file_sha256(raw_manifest_path),
+        raw_receipt_sha256=file_sha256(raw_receipt_path),
+    )
+    return raw_manifest_path, raw_receipt_path
+
+
+def validate_raw_attempt_seal(
+    *,
+    attempt_root: Path,
+    raw_root: Path,
+    run_id: str,
+    package_commit: str,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Reconstruct a raw seal from current bytes before export or finalization."""
+
+    manifest_path = attempt_root / "raw-attempt-manifest.json"
+    receipt_path = attempt_root / "raw-attempt-complete.json"
+    manifest = load_object(manifest_path, label="raw attempt manifest")
+    receipt = load_object(receipt_path, label="raw attempt receipt")
+    observed_files, observed_total = _raw_attempt_files(raw_root)
+    if (
+        manifest.get("schema_version") != "0.1.0"
+        or manifest.get("plan_id") != PLAN_ID
+        or manifest.get("host_run_id") != HOST_RUN_ID
+        or manifest.get("run_id") != run_id
+        or manifest.get("package_commit") != package_commit
+        or manifest.get("raw_attempt_root") != "raw"
+        or manifest.get("files") != observed_files
+        or manifest.get("total_bytes") != observed_total
+        or receipt.get("schema_version") != "0.1.0"
+        or receipt.get("plan_id") != PLAN_ID
+        or receipt.get("host_run_id") != HOST_RUN_ID
+        or receipt.get("run_id") != run_id
+        or receipt.get("raw_attempt_complete") is not True
+        or receipt.get("empirical_attempt_consumed") is not True
+        or receipt.get("raw_manifest_sha256") != file_sha256(manifest_path)
+        or receipt.get("raw_total_bytes") != observed_total
+        or receipt.get("raw_file_count") != len(observed_files)
+        or receipt.get("source_grounded_empirical_event_count")
+        != manifest.get("source_grounded_empirical_event_count")
+        or receipt.get("retained_session_count") != manifest.get("retained_session_count")
+        or receipt.get("reconstructable_disposition") != manifest.get("reconstructable_disposition")
+        or receipt.get("structural_privacy_findings") != manifest.get("structural_privacy_findings")
+        or receipt.get("public_release_clearance") != manifest.get("public_release_clearance")
+        or receipt.get("condition_retry_permitted") is not False
+    ):
+        raise T09HostError("raw attempt seal no longer reconstructs from exact bytes")
+    return manifest, receipt
 
 
 def execute_condition(args: argparse.Namespace) -> int:
@@ -3729,7 +4095,7 @@ def execute_condition(args: argparse.Namespace) -> int:
     paths = contract_paths(repository)
     command_document = load_object(paths["commands"], label="command manifest set")
     manifest = manifest_for_run(command_document, args.run_id)
-    preflight_path = artifact_root / "pilot-v4/preflight.json"
+    preflight_path = artifact_root / "pilot-v5/preflight.json"
     if not preflight_path.is_file():
         raise T09HostError("exact preflight did not complete")
     preflight_receipt = load_object(preflight_path, label="exact preflight")
@@ -3739,7 +4105,7 @@ def execute_condition(args: argparse.Namespace) -> int:
         or preflight_receipt.get("empirical_entry_crossed") is not False
     ):
         raise T09HostError("preflight and frozen runtime manifest drifted")
-    state = load_object(artifact_root / "pilot-v4/pilot-state.json", label="pilot state")
+    state = load_object(artifact_root / "pilot-v5/pilot-state.json", label="pilot state")
     entered = state.get("empirical_attempts_entered")
     completed = state.get("attempts_completed")
     if not isinstance(entered, list) or not isinstance(completed, list):
@@ -3780,7 +4146,7 @@ def execute_condition(args: argparse.Namespace) -> int:
     if lambda_elapsed * LAMBDA_HOURLY_PRICE_USD / 3600.0 >= MAX_LAMBDA_COST_USD:
         raise T09HostError("Lambda cost cap reached")
 
-    attempt_root = prepare_condition_attempt_root(
+    attempt_root, raw_root = prepare_condition_attempt_root(
         artifact_root=artifact_root,
         manifest=manifest,
         pilot_state=state,
@@ -3792,12 +4158,12 @@ def execute_condition(args: argparse.Namespace) -> int:
     create_argv = container_create_argv(
         args=args,
         manifest=manifest,
-        attempt_root=attempt_root,
+        attempt_root=raw_root,
         container_name=name,
         image_id=image_id,
     )
     write_exclusive(
-        attempt_root / "container-command.json",
+        raw_root / "container-command.json",
         {
             "schema_version": "0.1.0",
             "run_id": args.run_id,
@@ -3809,7 +4175,20 @@ def execute_condition(args: argparse.Namespace) -> int:
         },
     )
     write_exclusive(
-        attempt_root / "attempt-wall.json",
+        raw_root / "evaluator-overlay-binding.json",
+        {
+            "schema_version": "0.1.0",
+            "run_id": args.run_id,
+            "frozen_run_manifest_sha256": frozen_manifest_sha256,
+            "evaluator_contract_sha256": file_sha256(paths["evaluator"]),
+            "overlay_manifest_sha256": frozen_manifest["evaluator_overlay_manifest_sha256"],
+            "overlay_entries_sha256": frozen_manifest["evaluator_overlay_entries_sha256"],
+            "overlay_packages_sha256": frozen_manifest["evaluator_overlay_packages_sha256"],
+            "condition_mount_policy": "read-only",
+        },
+    )
+    write_exclusive(
+        raw_root / "attempt-wall.json",
         {
             "schema_version": "0.1.0",
             "run_id": args.run_id,
@@ -3864,7 +4243,7 @@ def execute_condition(args: argparse.Namespace) -> int:
             returncode, wall, stop_reason, hard_cap_breached = run_attached_with_caps(
                 prefix=prefix,
                 name=name,
-                attempt_root=attempt_root,
+                attempt_root=raw_root,
                 pilot_root=artifact_root,
                 attempt_started=attempt_started,
                 pair_started_at_epoch=float(pair_started_epoch),
@@ -3887,11 +4266,11 @@ def execute_condition(args: argparse.Namespace) -> int:
                 "inspection_error_type": type(exc).__name__,
                 "private_network_fields_retained": False,
             }
-        write_exclusive(attempt_root / "container-state.json", container_state)
+        write_exclusive(raw_root / "container-state.json", container_state)
         container_removed = remove_container(prefix, name)
     gpu_after = gpu_snapshot()
     write_exclusive(
-        attempt_root / "gpu-accounting.json",
+        raw_root / "gpu-accounting.json",
         {
             "schema_version": "0.1.0",
             "run_id": args.run_id,
@@ -3908,17 +4287,17 @@ def execute_condition(args: argparse.Namespace) -> int:
         },
     )
     credential_bytes = validate_secret(args.secret_file.resolve(strict=True))
-    hits = secret_hits(attempt_root, credential_bytes)
+    hits = secret_hits(raw_root, credential_bytes)
     removed_secret_artifacts: list[str] = []
     for relative in hits:
-        target = attempt_root / relative
+        target = raw_root / relative
         if target.is_file() and not target.is_symlink():
             target.unlink()
             removed_secret_artifacts.append(relative)
-    remaining_hits = secret_hits(attempt_root, credential_bytes)
+    remaining_hits = secret_hits(raw_root, credential_bytes)
     credential_bytes = b""
     residue = owned_containers(prefix)
-    cleanup_receipt = attempt_root / "host-cleanup-receipt.json"
+    cleanup_receipt = raw_root / "host-cleanup-receipt.json"
     write_exclusive(
         cleanup_receipt,
         {
@@ -3943,8 +4322,23 @@ def execute_condition(args: argparse.Namespace) -> int:
             },
         },
     )
+    runtime_cleanup_path = raw_root / "runtime-cleanup.json"
+    write_exclusive(
+        raw_root / "runtime-reconstruction-binding.json",
+        {
+            "schema_version": "0.1.0",
+            "run_id": args.run_id,
+            "runtime_cleanup_present": runtime_cleanup_path.is_file(),
+            "runtime_cleanup_sha256": (
+                file_sha256(runtime_cleanup_path) if runtime_cleanup_path.is_file() else None
+            ),
+            "host_cleanup_receipt_sha256": file_sha256(cleanup_receipt),
+            "container_state_sha256": file_sha256(raw_root / "container-state.json"),
+            "host_teardown_is_source_grounded_fallback": True,
+        },
+    )
     state_after_condition = load_object(
-        artifact_root / "pilot-v4/pilot-state.json", label="post-condition pilot state"
+        artifact_root / "pilot-v5/pilot-state.json", label="post-condition pilot state"
     )
     entered_after_condition = state_after_condition.get("empirical_attempts_entered")
     if not isinstance(entered_after_condition, list):
@@ -3969,48 +4363,349 @@ def execute_condition(args: argparse.Namespace) -> int:
                 "condition host runner failed before empirical entry"
             ) from runner_exception
         raise T09HostError("condition ended before empirical entry; frozen retry remains permitted")
-    finalizer = evaluator_argv(
-        args=args,
-        manifest=manifest,
+    seal_raw_attempt(
+        artifact_root=artifact_root,
         attempt_root=attempt_root,
-        cleanup_receipt=cleanup_receipt,
-        image_id=image_id,
+        raw_root=raw_root,
+        manifest=manifest,
+        package_commit=args.package_commit,
         frozen_run_manifest_sha256=frozen_manifest_sha256,
+        execution_contract_sha256=cast(str, state["execution_contract_sha256"]),
     )
-    evaluator_overlay_revalidation = validate_evaluator_overlay_binding(
+    return returncode
+
+
+def validate_finalizer_source(
+    *,
+    repository: Path,
+    package_commit: str,
+    finalizer_commit: str,
+    source: Path,
+) -> str:
+    """Bind downstream-repairable bytes without changing the frozen worktree."""
+
+    if re.fullmatch(r"[a-f0-9]{40}", finalizer_commit) is None:
+        raise T09HostError("finalizer commit is malformed")
+    source = source.resolve(strict=True)
+    metadata = source.stat(follow_symlinks=False)
+    if (
+        source.is_symlink()
+        or not stat.S_ISREG(metadata.st_mode)
+        or metadata.st_nlink != 1
+        or metadata.st_mode & 0o022
+        or not 0 < metadata.st_size <= 1_048_576
+    ):
+        raise T09HostError("finalizer source metadata is unsafe")
+    environment = safe_environment()
+    ancestry = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repository),
+            "merge-base",
+            "--is-ancestor",
+            package_commit,
+            finalizer_commit,
+        ],
+        env=environment,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+        timeout=30,
+    )
+    if ancestry.returncode != 0:
+        raise T09HostError("finalizer commit is not a descendant of the frozen package")
+    if finalizer_commit != package_commit:
+        changed = output(
+            [
+                "git",
+                "-C",
+                str(repository),
+                "diff",
+                "--name-only",
+                package_commit,
+                finalizer_commit,
+            ]
+        ).splitlines()
+        allowed = {
+            FINALIZER_RELATIVE_PATH,
+            "tests/test_t09_sira_pilot.py",
+            "tests/test_t09_retry3.py",
+        }
+        if FINALIZER_RELATIVE_PATH not in changed or not set(changed).issubset(allowed):
+            raise T09HostError("post-entry finalizer commit changed a non-downstream surface")
+    retained = subprocess.run(
+        ["git", "-C", str(repository), "show", f"{finalizer_commit}:{FINALIZER_RELATIVE_PATH}"],
+        env=environment,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        check=True,
+        timeout=30,
+    ).stdout
+    if retained != source.read_bytes():
+        raise T09HostError("finalizer bytes do not match their Git commit")
+    return file_sha256(source)
+
+
+def _schema_errors(document: object, schema: dict[str, Any]) -> list[str]:
+    validator = Draft202012Validator(schema, format_checker=FormatChecker())
+    return sorted(
+        f"{'/'.join(str(part) for part in error.absolute_path) or '$'}: {error.message}"
+        for error in validator.iter_errors(document)
+    )
+
+
+def validate_finalized_attempt(
+    *,
+    repository: Path,
+    finalized_root: Path,
+    run_id: str,
+) -> tuple[dict[str, Any], dict[str, Any], list[dict[str, object]]]:
+    """Independently schema-check downstream output before frozen-state selection."""
+
+    outcome = load_object(finalized_root / "attempt-outcome.json", label="attempt outcome")
+    evidence = load_object(finalized_root / "evidence-index.json", label="evidence index")
+    score_schema = load_object(
+        repository / "schemas/t09-sira-pilot-score.schema.json", label="score schema"
+    )
+    evidence_schema = load_object(
+        repository / "schemas/t09-sira-pilot-evidence.schema.json", label="evidence schema"
+    )
+    properties = evidence_schema.get("properties")
+    if not isinstance(properties, dict):
+        raise T09HostError("evidence schema properties are unavailable")
+    properties["outcome"] = score_schema
+    errors = [*_schema_errors(outcome, score_schema), *_schema_errors(evidence, evidence_schema)]
+    identity = evidence.get("identity")
+    if (
+        errors
+        or evidence.get("outcome") != outcome
+        or not isinstance(identity, dict)
+        or identity.get("run_id") != run_id
+    ):
+        raise T09HostError("finalized attempt failed its independent schema/identity gate")
+    files: list[dict[str, object]] = []
+    total = 0
+    for path in sorted(finalized_root.rglob("*")):
+        if not path.is_file() or path.is_symlink() or path.name == "finalization-complete.json":
+            continue
+        size = path.stat().st_size
+        total += size
+        if total > MAX_ATTEMPT_OUTPUT_BYTES:
+            raise T09HostError("finalized attempt exceeds its bounded output surface")
+        files.append(
+            {
+                "path": path.relative_to(finalized_root).as_posix(),
+                "bytes": size,
+                "sha256": file_sha256(path),
+            }
+        )
+    return outcome, evidence, files
+
+
+def validate_selected_finalization(
+    *,
+    repository: Path,
+    artifact_root: Path,
+    contract: Any,
+    run_id: str,
+    package_commit: str,
+    selection: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Reconstruct a selected derived result from immutable raw and output bytes."""
+
+    expected_keys = {
+        "finalizer_source_sha256",
+        "finalizer_commit",
+        "finalizer_dependency_manifest_sha256",
+        "evaluator_contract_sha256",
+        "interpreter",
+        "interpreter_sha256",
+        "finalized_output_root",
+        "finalization_complete_sha256",
+    }
+    relative = selection.get("finalized_output_root")
+    if set(selection) != expected_keys or not isinstance(relative, str):
+        raise T09HostError("selected finalization closure is malformed")
+    finalized_root = (artifact_root / relative).resolve(strict=True)
+    try:
+        finalized_root.relative_to(artifact_root)
+    except ValueError:
+        raise T09HostError("selected finalization escaped the artifact root") from None
+    attempt = contract.attempt(run_id)
+    if finalized_root.parent != (artifact_root / attempt.finalized_output_root).resolve(
+        strict=True
+    ):
+        raise T09HostError("selected finalization is outside its condition-owned derived root")
+    attempt_root = (artifact_root / attempt.output_root).resolve(strict=True)
+    raw_root = (artifact_root / attempt.raw_output_root).resolve(strict=True)
+    raw_manifest, raw_receipt = validate_raw_attempt_seal(
+        attempt_root=attempt_root,
+        raw_root=raw_root,
+        run_id=run_id,
+        package_commit=package_commit,
+    )
+    outcome, evidence, output_files = validate_finalized_attempt(
+        repository=repository,
+        finalized_root=finalized_root,
+        run_id=run_id,
+    )
+    completion_path = finalized_root / "finalization-complete.json"
+    metadata = completion_path.stat(follow_symlinks=False)
+    completion = load_object(completion_path, label="selected finalization completion")
+    closure = completion.get("finalizer_closure")
+    expected_closure_fields = {
+        "finalizer_commit",
+        "finalizer_source_sha256",
+        "scientific_package_commit",
+        "pilot_library_sha256",
+        "interpreter",
+        "interpreter_sha256",
+        "replacement_image_id",
+        "execution_contract_sha256",
+        "command_manifests_sha256",
+        "dataset_contract_sha256",
+        "evaluator_contract_sha256",
+        "score_schema_sha256",
+        "evidence_schema_sha256",
+        "evaluator_overlay_entries_sha256",
+        "evaluator_overlay_packages_sha256",
+    }
+    if (
+        completion_path.is_symlink()
+        or not stat.S_ISREG(metadata.st_mode)
+        or metadata.st_nlink != 1
+        or stat.S_IMODE(metadata.st_mode) != 0o600
+        or selection.get("finalization_complete_sha256") != file_sha256(completion_path)
+        or completion.get("schema_version") != "0.1.0"
+        or completion.get("plan_id") != PLAN_ID
+        or completion.get("host_run_id") != HOST_RUN_ID
+        or completion.get("run_id") != run_id
+        or completion.get("raw_manifest_sha256_before")
+        != file_sha256(attempt_root / "raw-attempt-manifest.json")
+        or completion.get("raw_manifest_sha256_after")
+        != file_sha256(attempt_root / "raw-attempt-manifest.json")
+        or completion.get("raw_receipt_sha256")
+        != file_sha256(attempt_root / "raw-attempt-complete.json")
+        or completion.get("raw_manifest_payload_sha256") != canonical_sha256(raw_manifest)
+        or completion.get("raw_receipt_payload_sha256") != canonical_sha256(raw_receipt)
+        or completion.get("output_files") != output_files
+        or completion.get("output_files_sha256") != canonical_sha256(output_files)
+        or completion.get("outcome_sha256") != file_sha256(finalized_root / "attempt-outcome.json")
+        or completion.get("evidence_index_sha256")
+        != file_sha256(finalized_root / "evidence-index.json")
+        or not isinstance(closure, dict)
+        or set(closure) != expected_closure_fields
+        or closure.get("scientific_package_commit") != package_commit
+        or completion.get("finalizer_dependency_manifest_sha256") != canonical_sha256(closure)
+        or selection.get("finalizer_dependency_manifest_sha256") != canonical_sha256(closure)
+        or selection.get("finalizer_source_sha256") != closure.get("finalizer_source_sha256")
+        or selection.get("finalizer_commit") != closure.get("finalizer_commit")
+        or selection.get("evaluator_contract_sha256") != closure.get("evaluator_contract_sha256")
+        or selection.get("interpreter") != closure.get("interpreter")
+        or selection.get("interpreter_sha256") != closure.get("interpreter_sha256")
+        or completion.get("network") != "none"
+        or completion.get("additional_model_calls") != 0
+        or completion.get("additional_browser_actions") != 0
+        or completion.get("raw_source_mutated") is not False
+        or completion.get("output_schema_valid") is not True
+    ):
+        raise T09HostError("selected finalization no longer reconstructs from exact bytes")
+    return outcome, evidence
+
+
+def finalize_attempt(args: argparse.Namespace) -> dict[str, object]:
+    """Run one pure network-none finalizer, then select it from frozen supervisor code."""
+
+    repository = args.repository.resolve(strict=True)
+    artifact_root = args.artifact_root.resolve(strict=True)
+    verify_package(repository, args.package_commit)
+    source_sha256 = validate_finalizer_source(
+        repository=repository,
+        package_commit=args.package_commit,
+        finalizer_commit=args.finalizer_commit,
+        source=args.finalizer_source,
+    )
+    frozen_manifest, frozen_manifest_sha256 = load_frozen_run_manifest(
+        artifact_root,
+        repository=repository,
+        package_commit=args.package_commit,
+    )
+    image_id = cast(str, frozen_manifest["replacement_image_id"])
+    paths = contract_paths(repository)
+    contract = load_execution_contract(
+        paths["execution"], expected_sha256=file_sha256(paths["execution"])
+    )
+    command_document = load_object(paths["commands"], label="command manifest set")
+    manifest = manifest_for_run(command_document, args.run_id)
+    attempt = contract.attempt(args.run_id)
+    attempt_root = (artifact_root / manifest_output_root(manifest)).resolve(strict=True)
+    raw_root = (artifact_root / attempt.raw_output_root).resolve(strict=True)
+    raw_manifest, raw_receipt = validate_raw_attempt_seal(
+        attempt_root=attempt_root,
+        raw_root=raw_root,
+        run_id=args.run_id,
+        package_commit=args.package_commit,
+    )
+    raw_manifest_sha256_before = file_sha256(attempt_root / "raw-attempt-manifest.json")
+    raw_receipt_sha256_before = file_sha256(attempt_root / "raw-attempt-complete.json")
+    state = _runtime_budget_state(artifact_root)
+    raw_complete = state.get("raw_attempts_complete")
+    if not isinstance(raw_complete, list) or args.run_id not in raw_complete:
+        raise T09HostError("frozen supervisor has not accepted the raw attempt seal")
+    finalization_log_base = attempt_root / "finalizer-invocations"
+    finalization_log_base.mkdir(mode=0o700, exist_ok=True)
+    existing = sorted(path for path in finalization_log_base.iterdir() if path.is_dir())
+    if len(existing) >= MAX_FINALIZER_INVOCATIONS_PER_ATTEMPT:
+        raise T09HostError("downstream finalizer invocation limit reached")
+    invocation = len(existing) + 1
+    invocation_log = finalization_log_base / f"invocation-{invocation:02d}"
+    invocation_log.mkdir(mode=0o700, exist_ok=False)
+    overlay_revalidation = validate_evaluator_overlay_binding(
         artifact_root=artifact_root,
         repository=repository,
         overlay=args.evaluator_overlay.resolve(strict=True),
-        prefix=prefix,
+        prefix=docker_prefix(),
         image_id=image_id,
         frozen_manifest=frozen_manifest,
         verify_packages=True,
     )
+    overlay_path = invocation_log / "evaluator-overlay-revalidation.json"
+    write_exclusive(overlay_path, overlay_revalidation)
+    finalizer, finalized_root, closure = evaluator_argv(
+        args=args,
+        manifest=manifest,
+        attempt_root=attempt_root,
+        cleanup_receipt=raw_root / "host-cleanup-receipt.json",
+        image_id=image_id,
+        frozen_run_manifest_sha256=frozen_manifest_sha256,
+        finalizer_commit=args.finalizer_commit,
+        finalizer_source=args.finalizer_source,
+        invocation=invocation,
+        evaluator_revalidation_path=overlay_path,
+    )
     write_exclusive(
-        attempt_root / "evaluator-overlay-revalidation.json",
-        evaluator_overlay_revalidation,
+        invocation_log / "command.json",
+        {
+            "schema_version": "0.1.0",
+            "run_id": args.run_id,
+            "argv": finalizer,
+            "argv_sha256": canonical_sha256(finalizer),
+            "network": "none",
+            "raw_mount": "readonly",
+            "finalizer_closure": closure,
+            "finalizer_dependency_manifest_sha256": canonical_sha256(closure),
+        },
     )
-    remaining_evidence_seconds = (
-        MAX_CONDITION_WALL_SECONDS
-        + ATTEMPT_EVIDENCE_EXPORT_RESERVE_SECONDS
-        - (time.monotonic() - attempt_started)
+    remaining = scientific_seconds_remaining(
+        artifact_root, reserve_seconds=PROVIDER_CLOSEOUT_RESERVE_SECONDS
     )
-    remaining_pair_seconds = MAX_PAIR_WALL_SECONDS - (time.time() - float(pair_started_epoch))
-    remaining_runtime_seconds = scientific_seconds_remaining(
-        artifact_root,
-        reserve_seconds=PROVIDER_CLOSEOUT_RESERVE_SECONDS,
-    )
-    finalizer_seconds = min(
-        remaining_evidence_seconds,
-        remaining_pair_seconds,
-        remaining_runtime_seconds,
-    )
-    if finalizer_seconds <= 1:
-        raise T09HostError("post-condition evidence handoff left no time for the evaluator")
-    with (
-        (attempt_root / "evaluator-finalizer.stdout").open("xb") as stdout,
-        (attempt_root / "evaluator-finalizer.stderr").open("xb") as stderr,
-    ):
+    if remaining <= 1:
+        raise T09HostError("campaign has no downstream finalization time before cleanup reserve")
+    stdout_path = invocation_log / "stdout"
+    stderr_path = invocation_log / "stderr"
+    with stdout_path.open("xb") as stdout, stderr_path.open("xb") as stderr:
         result = subprocess.run(
             finalizer,
             env=safe_environment(),
@@ -4018,21 +4713,373 @@ def execute_condition(args: argparse.Namespace) -> int:
             stdout=stdout,
             stderr=stderr,
             check=False,
-            timeout=min(FINALIZATION_RESERVE_SECONDS, max(1, int(finalizer_seconds))),
+            timeout=min(FINALIZATION_RESERVE_SECONDS, max(1, int(remaining))),
         )
     if result.returncode != 0:
-        raise T09HostError("offline attempt evaluator/finalizer failed")
-    if tree_bytes(attempt_root) > MAX_ATTEMPT_OUTPUT_BYTES:
-        raise T09HostError("attempt output cap exceeded during finalization")
-    if tree_bytes(artifact_root) > MAX_PILOT_DISK_BYTES:
-        raise T09HostError("pilot disk cap exceeded during finalization")
-    if time.time() - float(pair_started_epoch) > MAX_PAIR_WALL_SECONDS:
-        raise T09HostError("pair wall cap exceeded during finalization")
-    scientific_seconds_remaining(
-        artifact_root,
-        reserve_seconds=PROVIDER_CLOSEOUT_RESERVE_SECONDS,
+        write_exclusive(
+            invocation_log / "failure.json",
+            {
+                "schema_version": "0.1.0",
+                "plan_id": PLAN_ID,
+                "run_id": args.run_id,
+                "failure_category": "downstream-finalizer-nonzero",
+                "returncode": result.returncode,
+                "raw_manifest_sha256": file_sha256(attempt_root / "raw-attempt-manifest.json"),
+                "raw_receipt_sha256": file_sha256(attempt_root / "raw-attempt-complete.json"),
+                "condition_retry_permitted": False,
+                "campaign_may_continue_after_verified-raw": True,
+            },
+        )
+        raise T09HostError("downstream finalizer failed; immutable raw attempt remains accepted")
+    outcome, _evidence, output_files = validate_finalized_attempt(
+        repository=repository,
+        finalized_root=finalized_root,
+        run_id=args.run_id,
     )
-    return returncode
+    retained_raw_manifest, retained_raw_receipt = validate_raw_attempt_seal(
+        attempt_root=attempt_root,
+        raw_root=raw_root,
+        run_id=args.run_id,
+        package_commit=args.package_commit,
+    )
+    raw_manifest_sha256_after = file_sha256(attempt_root / "raw-attempt-manifest.json")
+    raw_receipt_sha256_after = file_sha256(attempt_root / "raw-attempt-complete.json")
+    if (
+        retained_raw_manifest != raw_manifest
+        or retained_raw_receipt != raw_receipt
+        or raw_manifest_sha256_after != raw_manifest_sha256_before
+        or raw_receipt_sha256_after != raw_receipt_sha256_before
+    ):
+        raise T09HostError("immutable raw attempt changed during finalization")
+    completion_path = finalized_root / "finalization-complete.json"
+    completion: dict[str, object] = {
+        "schema_version": "0.1.0",
+        "plan_id": PLAN_ID,
+        "host_run_id": HOST_RUN_ID,
+        "run_id": args.run_id,
+        "raw_manifest_sha256_before": raw_manifest_sha256_before,
+        "raw_manifest_sha256_after": raw_manifest_sha256_after,
+        "raw_receipt_sha256": raw_receipt_sha256_after,
+        "raw_manifest_payload_sha256": canonical_sha256(raw_manifest),
+        "raw_receipt_payload_sha256": canonical_sha256(raw_receipt),
+        "output_files": output_files,
+        "output_files_sha256": canonical_sha256(output_files),
+        "outcome_sha256": file_sha256(finalized_root / "attempt-outcome.json"),
+        "evidence_index_sha256": file_sha256(finalized_root / "evidence-index.json"),
+        "finalizer_closure": closure,
+        "finalizer_dependency_manifest_sha256": canonical_sha256(closure),
+        "interpreter": "/opt/sira/.venv/bin/python",
+        "interpreter_sha256": closure["interpreter_sha256"],
+        "network": "none",
+        "additional_model_calls": 0,
+        "additional_browser_actions": 0,
+        "raw_source_mutated": False,
+        "output_schema_valid": True,
+    }
+    write_exclusive(completion_path, completion)
+    mark_attempt_completed(
+        artifact_root / "pilot-v5/pilot-state.json",
+        execution_contract_sha256=contract.sha256,
+        run_id=args.run_id,
+        finalizer_source_sha256=source_sha256,
+        finalizer_commit=args.finalizer_commit,
+        finalizer_dependency_manifest_sha256=canonical_sha256(closure),
+        evaluator_contract_sha256=contract.evaluator_contract_sha256,
+        interpreter="/opt/sira/.venv/bin/python",
+        interpreter_sha256=cast(str, closure["interpreter_sha256"]),
+        finalized_output_root=finalized_root.relative_to(artifact_root).as_posix(),
+        finalization_complete_sha256=file_sha256(completion_path),
+    )
+    return {
+        "run_id": args.run_id,
+        "finalized_output_root": finalized_root.relative_to(artifact_root).as_posix(),
+        "finalization_complete_sha256": file_sha256(completion_path),
+        "valid_scored_attempt": outcome.get("valid_scored_attempt"),
+        "evaluator_valid": outcome.get("evaluator_validity"),
+        "evidence_index_sha256": file_sha256(finalized_root / "evidence-index.json"),
+        "finalizer_closure_sha256": canonical_sha256(closure),
+    }
+
+
+def _severe_floor_or_ceiling(outcomes: list[dict[str, Any]]) -> bool:
+    severe_floor = all(
+        outcome.get("valid_scored_attempt") is True
+        and outcome.get("task_completion") == "incomplete"
+        and outcome.get("task_score") == 0.0
+        for outcome in outcomes
+    )
+    severe_ceiling = all(
+        outcome.get("valid_scored_attempt") is True
+        and outcome.get("task_completion") == "completed"
+        and outcome.get("task_score") == 1.0
+        for outcome in outcomes
+    )
+    return severe_floor or severe_ceiling
+
+
+def first_pair_checkpoint(args: argparse.Namespace) -> dict[str, object]:
+    """Let only the frozen supervisor select evidence and open Task B."""
+
+    repository = args.repository.resolve(strict=True)
+    artifact_root = args.artifact_root.resolve(strict=True)
+    verify_package(repository, args.package_commit)
+    paths = contract_paths(repository)
+    contract = load_execution_contract(
+        paths["execution"], expected_sha256=file_sha256(paths["execution"])
+    )
+    state_path = artifact_root / "pilot-v5/pilot-state.json"
+    state = load_object(state_path, label="pilot state")
+    checkpoint_path = artifact_root / "pilot-v5/first-pair-checkpoint.json"
+    if checkpoint_path.exists():
+        decision = load_object(checkpoint_path, label="first-pair checkpoint")
+        if state.get("first_pair_decision_sha256") != canonical_sha256(decision):
+            raise T09HostError("retained first-pair checkpoint drifted from frozen state")
+        return cast(dict[str, object], decision)
+    if state.get("attempts_completed") != list(RUN_IDS[:2]):
+        raise T09HostError("first-pair checkpoint requires both Task A finalizations")
+    finalizations = state.get("attempt_finalizations")
+    if not isinstance(finalizations, dict):
+        raise T09HostError("first-pair finalization selections are unavailable")
+    selected = [finalizations.get(run_id) for run_id in RUN_IDS[:2]]
+    if not all(isinstance(item, dict) for item in selected):
+        raise T09HostError("first-pair finalization selection is incomplete")
+    closures = {
+        canonical_sha256(
+            {
+                key: cast(dict[str, Any], item)[key]
+                for key in (
+                    "finalizer_source_sha256",
+                    "finalizer_commit",
+                    "finalizer_dependency_manifest_sha256",
+                    "evaluator_contract_sha256",
+                    "interpreter",
+                    "interpreter_sha256",
+                )
+            }
+        )
+        for item in selected
+    }
+    if len(closures) != 1:
+        raise T09HostError("Task A does not use one selected finalizer/interpreter closure")
+    command_document = load_object(paths["commands"], label="command manifest set")
+    pair_diffs = command_document.get("pair_diffs")
+    pair_match_valid = (
+        isinstance(pair_diffs, list)
+        and len(pair_diffs) == 2
+        and isinstance(pair_diffs[0], dict)
+        and pair_diffs[0].get("valid") is True
+    )
+    evidence: list[dict[str, Any]] = []
+    for run_id, selection in zip(RUN_IDS[:2], selected, strict=True):
+        typed = cast(dict[str, Any], selection)
+        _outcome, evidence_index = validate_selected_finalization(
+            repository=repository,
+            artifact_root=artifact_root,
+            contract=contract,
+            run_id=run_id,
+            package_commit=args.package_commit,
+            selection=typed,
+        )
+        evidence.append(evidence_index)
+    require_prior_export_acknowledgements(
+        artifact_root, next_attempt_index=2, package_commit=args.package_commit
+    )
+    outcomes = [cast(dict[str, Any], document["outcome"]) for document in evidence]
+    usage = load_aggregate_usage(
+        artifact_root / "pilot-v5/aggregate-budget.json", contract_sha256=contract.sha256
+    )
+    pair_started = state.get("first_pair_started_at_epoch")
+    lambda_started = state.get("lambda_started_at_epoch")
+    if not all(
+        isinstance(value, (int, float)) and not isinstance(value, bool)
+        for value in (pair_started, lambda_started)
+    ):
+        raise T09HostError("first-pair timing origins are unavailable")
+    assert isinstance(pair_started, (int, float))
+    assert isinstance(lambda_started, (int, float))
+    now = time.time()
+    pair_wall = now - float(pair_started)
+    lambda_wall = now - float(lambda_started)
+    if min(pair_wall, lambda_wall) < 0:
+        raise T09HostError("first-pair timing origin is in the future")
+    lambda_cost = lambda_wall * LAMBDA_HOURLY_PRICE_USD / 3600.0
+    actual_total = usage.cost_usd + lambda_cost
+    decision = first_pair_decision(
+        PairCheckpointInput(
+            attempt_run_ids=(ATTEMPT_ORDER[0], ATTEMPT_ORDER[1]),
+            valid_evidence=cast(
+                tuple[bool, bool],
+                tuple(outcome.get("valid_scored_attempt") is True for outcome in outcomes),
+            ),
+            evaluator_succeeded=cast(
+                tuple[bool, bool],
+                tuple(outcome.get("evaluator_validity") is True for outcome in outcomes),
+            ),
+            pair_match_valid=pair_match_valid,
+            credential_issue=any(
+                document.get("cleanup", {}).get("secret_removed") is not True
+                for document in evidence
+            ),
+            cleanup_issue=any(
+                document.get("cleanup", {}).get("browser_closed") is not True
+                or document.get("cleanup", {}).get("container_removed") is not True
+                for document in evidence
+            ),
+            severe_floor_or_ceiling_failure=_severe_floor_or_ceiling(outcomes),
+            actual_usage=usage,
+            actual_pair_wall_seconds=pair_wall,
+            projected_aggregate_cost_usd=actual_total * 2.0,
+            actual_lambda_cost_usd=lambda_cost,
+            remaining_campaign_seconds=contract.campaign.remaining_seconds(
+                billable_started_at=float(lambda_started), now=now
+            ),
+            next_attempt_hard_wall_seconds=contract.limits.max_condition_wall_seconds,
+        )
+    )
+    write_exclusive(checkpoint_path, decision)
+    record_first_pair_checkpoint(
+        state_path,
+        execution_contract_sha256=contract.sha256,
+        decision=decision,
+        decided_at_epoch=now,
+    )
+    return decision
+
+
+def campaign_evidence_disposition(args: argparse.Namespace) -> dict[str, object]:
+    """Seal the descriptive four-attempt result under one selected finalizer closure."""
+
+    repository = args.repository.resolve(strict=True)
+    artifact_root = args.artifact_root.resolve(strict=True)
+    verify_package(repository, args.package_commit)
+    frozen_manifest, frozen_manifest_sha256 = load_frozen_run_manifest(
+        artifact_root,
+        repository=repository,
+        package_commit=args.package_commit,
+    )
+    paths = contract_paths(repository)
+    contract = load_execution_contract(
+        paths["execution"], expected_sha256=file_sha256(paths["execution"])
+    )
+    state = _runtime_budget_state(artifact_root)
+    if (
+        state.get("empirical_attempts_entered") != list(RUN_IDS)
+        or state.get("raw_attempts_complete") != list(RUN_IDS)
+        or state.get("attempts_completed") != list(RUN_IDS)
+        or state.get("first_pair_decision") != "continue-to-task-b"
+    ):
+        raise T09HostError("campaign disposition requires the exact four-attempt prefix")
+    require_prior_export_acknowledgements(
+        artifact_root,
+        next_attempt_index=len(RUN_IDS),
+        package_commit=args.package_commit,
+    )
+    selected = state.get("attempt_finalizations")
+    if not isinstance(selected, dict) or set(selected) != set(RUN_IDS):
+        raise T09HostError("campaign disposition lacks four selected finalizations")
+    closure_fields = (
+        "finalizer_source_sha256",
+        "finalizer_commit",
+        "finalizer_dependency_manifest_sha256",
+        "evaluator_contract_sha256",
+        "interpreter",
+        "interpreter_sha256",
+    )
+    closures: dict[str, dict[str, object]] = {}
+    attempts: list[dict[str, object]] = []
+    for run_id in RUN_IDS:
+        raw_selection = selected.get(run_id)
+        if not isinstance(raw_selection, dict):
+            raise T09HostError("campaign selected finalization is malformed")
+        outcome, evidence = validate_selected_finalization(
+            repository=repository,
+            artifact_root=artifact_root,
+            contract=contract,
+            run_id=run_id,
+            package_commit=args.package_commit,
+            selection=raw_selection,
+        )
+        closure = {field: raw_selection.get(field) for field in closure_fields}
+        closures[canonical_sha256(closure)] = closure
+        identity = evidence.get("identity")
+        timing = evidence.get("timing")
+        attempt_binding = contract.attempt(run_id)
+        provider = load_object(
+            artifact_root / attempt_binding.raw_output_root / "provider-budget.json",
+            label="campaign attempt provider budget",
+        )
+        if not isinstance(identity, dict) or not isinstance(timing, dict):
+            raise T09HostError("campaign evidence identity or timing is malformed")
+        attempts.append(
+            {
+                "run_id": run_id,
+                "task_id": identity.get("task_id"),
+                "pair_id": identity.get("pair_id"),
+                "condition": identity.get("condition"),
+                "task_completion": outcome.get("task_completion"),
+                "answer_production": outcome.get("answer_production"),
+                "evaluator_validity": outcome.get("evaluator_validity"),
+                "valid_scored_attempt": outcome.get("valid_scored_attempt"),
+                "task_score": outcome.get("task_score"),
+                "invalid_infrastructure_attempt": outcome.get("invalid_infrastructure_attempt"),
+                "condition_failure": outcome.get("condition_failure"),
+                "timing": timing,
+                "provider_usage": provider,
+                "raw_manifest_sha256": file_sha256(
+                    artifact_root / attempt_binding.output_root / "raw-attempt-manifest.json"
+                ),
+                "raw_receipt_sha256": file_sha256(
+                    artifact_root / attempt_binding.output_root / "raw-attempt-complete.json"
+                ),
+                "finalization_complete_sha256": raw_selection.get("finalization_complete_sha256"),
+            }
+        )
+    if len(closures) != 1:
+        raise T09HostError("all four attempts must select one full finalizer closure")
+    aggregate = load_aggregate_usage(
+        artifact_root / "pilot-v5/aggregate-budget.json",
+        contract_sha256=contract.sha256,
+    )
+    document: dict[str, object] = {
+        "schema_version": "0.1.0",
+        "record_id": "T09-PRAGMATIC-RETRY3-CAMPAIGN-EVIDENCE-0001",
+        "plan_id": PLAN_ID,
+        "host_run_id": HOST_RUN_ID,
+        "experiment_id": "EXP-0001",
+        "calibration_only": True,
+        "scientific_result_claimed": False,
+        "experiment_outcome_assigned": False,
+        "frozen_run_manifest_sha256": frozen_manifest_sha256,
+        "replacement_image_id": frozen_manifest["replacement_image_id"],
+        "attempt_order": list(RUN_IDS),
+        "attempts": attempts,
+        "uniform_finalizer_closure": next(iter(closures.values())),
+        "uniform_finalizer_closure_sha256": next(iter(closures)),
+        "aggregate_provider_usage": {
+            "cost_usd": aggregate.cost_usd,
+            "input_tokens": aggregate.input_tokens,
+            "cached_input_tokens": aggregate.cached_input_tokens,
+            "output_tokens": aggregate.output_tokens,
+            "total_tokens": aggregate.total_tokens,
+            "model_call_attempts": aggregate.model_call_attempts,
+            "browser_actions": aggregate.browser_actions,
+        },
+        "first_pair_decision": state.get("first_pair_decision"),
+        "pair_matching": {"task_a": True, "task_b": True},
+        "prior_v4_unpaired_attempt_excluded": True,
+        "recorded_at": utc_now(),
+    }
+    destination = artifact_root / "pilot-v5/campaign-evidence-disposition.json"
+    if destination.exists():
+        retained = load_object(destination, label="campaign evidence disposition")
+        retained.pop("recorded_at", None)
+        expected = dict(document)
+        expected.pop("recorded_at")
+        if retained != expected:
+            raise T09HostError("retained campaign disposition drifted")
+    else:
+        write_exclusive(destination, document)
+    return document
 
 
 def _attempt_export_archive_matches(
@@ -4163,7 +5210,7 @@ class _BoundedArchiveWriter:
 
 
 def export_attempt(args: argparse.Namespace, destination: BinaryIO) -> dict[str, object]:
-    """Stream one finalized attempt to the operator inside its 3,600-second wall."""
+    """Stream the authoritative immutable raw attempt before downstream finalization."""
 
     repository = args.repository.resolve(strict=True)
     artifact_root = args.artifact_root.resolve(strict=True)
@@ -4182,39 +5229,47 @@ def export_attempt(args: argparse.Namespace, destination: BinaryIO) -> dict[str,
         attempt_root.relative_to(artifact_root)
     except ValueError:
         raise T09HostError("attempt export root escaped the pilot artifact root") from None
-    wall = load_object(attempt_root / "attempt-wall.json", label="attempt wall")
+    owned = manifest.get("permitted_condition_owned")
+    if not isinstance(owned, dict) or not isinstance(owned.get("raw_output_root"), str):
+        raise T09HostError("attempt export lacks its exact raw root")
+    raw_root = (artifact_root / cast(str, owned["raw_output_root"])).resolve(strict=True)
+    if raw_root.parent != attempt_root:
+        raise T09HostError("attempt raw export root drifted from the owned attempt")
+    raw_manifest, raw_receipt = validate_raw_attempt_seal(
+        attempt_root=attempt_root,
+        raw_root=raw_root,
+        run_id=args.run_id,
+        package_commit=args.package_commit,
+    )
+    wall = load_object(raw_root / "attempt-wall.json", label="attempt wall")
     evidence_deadline_epoch = wall.get("evidence_handoff_deadline_epoch")
     if not isinstance(evidence_deadline_epoch, (int, float)) or isinstance(
         evidence_deadline_epoch, bool
     ):
         raise T09HostError("attempt export lacks its evidence handoff deadline")
-    required = {
-        "attempt-outcome.json",
-        "evidence-index.json",
-        "host-cleanup-receipt.json",
-        "normalized-events.jsonl",
-    }
-    if any(not (attempt_root / name).is_file() for name in required):
-        raise T09HostError("attempt export lacks reconstructable finalized evidence")
-    privacy_hits = privacy_violations(attempt_root)
-    if privacy_hits:
-        raise T09HostError("attempt export failed structural privacy validation")
     files: list[dict[str, object]] = []
     total = 0
-    for path in sorted(attempt_root.rglob("*")):
-        if not path.is_file() or path.is_symlink() or path.name == "attempt-export-manifest.json":
-            continue
-        size = path.stat().st_size
+    raw_files = raw_manifest.get("files")
+    if not isinstance(raw_files, list):
+        raise T09HostError("raw attempt manifest file set is malformed")
+    for raw in cast(list[dict[str, object]], raw_files):
+        relative = cast(str, raw["path"])
+        size = cast(int, raw["bytes"])
         total += size
-        if total > MAX_ATTEMPT_OUTPUT_BYTES:
-            raise T09HostError("attempt export exceeds its raw byte cap")
         files.append(
             {
-                "path": path.relative_to(attempt_root).as_posix(),
+                "path": f"raw/{relative}",
                 "bytes": size,
-                "sha256": file_sha256(path),
+                "sha256": raw["sha256"],
             }
         )
+    for name in ("raw-attempt-manifest.json", "raw-attempt-complete.json"):
+        path = attempt_root / name
+        size = path.stat().st_size
+        total += size
+        files.append({"path": name, "bytes": size, "sha256": file_sha256(path)})
+    if total > MAX_ATTEMPT_EXPORT_BYTES:
+        raise T09HostError("attempt export exceeds its raw byte cap")
     export_manifest_path = attempt_root / "attempt-export-manifest.json"
     export_manifest: dict[str, object] = {
         "schema_version": "0.1.0",
@@ -4227,9 +5282,13 @@ def export_attempt(args: argparse.Namespace, destination: BinaryIO) -> dict[str,
         "replacement_image_id": frozen_manifest["replacement_image_id"],
         "private_access_controlled": True,
         "public_release": "blocked-pending-review",
+        "evidence_authority": "immutable-raw-attempt",
+        "downstream_finalization_required_for_analysis": True,
         "files": files,
         "total_bytes": total,
-        "structural_privacy_scan_passed": True,
+        "actual_credential_scan_passed": True,
+        "structural_privacy_scan_passed": raw_receipt.get("public_release_clearance") is True,
+        "structural_privacy_findings": raw_receipt.get("structural_privacy_findings"),
         "exported_before_provider_termination": True,
     }
     if export_manifest_path.exists():
@@ -4250,7 +5309,7 @@ def export_attempt(args: argparse.Namespace, destination: BinaryIO) -> dict[str,
     timeout = min(remaining_attempt, remaining_campaign_to_cutoff)
     if timeout <= 1:
         raise T09HostError("attempt evidence cannot export before provider termination cutoff")
-    exports = artifact_root / "pilot-v4/attempt-exports"
+    exports = artifact_root / "pilot-v5/attempt-exports"
     exports.mkdir(mode=0o700, exist_ok=True)
     archive = exports / f"{args.run_id}.tar.gz"
     with hard_deadline(timeout, message="attempt evidence export deadline exceeded"):
@@ -4279,7 +5338,10 @@ def export_attempt(args: argparse.Namespace, destination: BinaryIO) -> dict[str,
                 ) as handle:
                     for entry in files:
                         relative = str(entry["path"])
-                        handle.add(attempt_root / relative, arcname=relative, recursive=False)
+                        source_path = raw_root / relative.removeprefix("raw/")
+                        if not relative.startswith("raw/"):
+                            source_path = attempt_root / relative
+                        handle.add(source_path, arcname=relative, recursive=False)
                     handle.add(
                         export_manifest_path,
                         arcname="attempt-export-manifest.json",
@@ -4356,7 +5418,7 @@ def verify_attempt_export(args: argparse.Namespace) -> None:
             or manifest.get("host_run_id") != HOST_RUN_ID
             or manifest.get("run_id") != args.run_id
             or manifest.get("package_commit") != args.package_commit
-            or manifest.get("frozen_run_manifest_id") != "RUN-MANIFEST-EXP0001-PILOT-V4-0002"
+            or manifest.get("frozen_run_manifest_id") != "RUN-MANIFEST-EXP0001-PILOT-V5-0003"
             or not isinstance(manifest.get("frozen_run_manifest_sha256"), str)
             or _HEX64.fullmatch(cast(str, manifest["frozen_run_manifest_sha256"])) is None
             or not isinstance(manifest.get("replacement_image_id"), str)
@@ -4364,7 +5426,9 @@ def verify_attempt_export(args: argparse.Namespace) -> None:
             is None
             or manifest.get("private_access_controlled") is not True
             or manifest.get("public_release") != "blocked-pending-review"
-            or manifest.get("structural_privacy_scan_passed") is not True
+            or manifest.get("actual_credential_scan_passed") is not True
+            or not isinstance(manifest.get("structural_privacy_scan_passed"), bool)
+            or not isinstance(manifest.get("structural_privacy_findings"), list)
             or manifest.get("exported_before_provider_termination") is not True
             or not isinstance(files, list)
         ):
@@ -4402,6 +5466,24 @@ def verify_attempt_export(args: argparse.Namespace) -> None:
             total += size
         if set(by_name) != expected_members or total != manifest.get("total_bytes"):
             raise T09HostError("attempt export member set or aggregate bytes drifted")
+        raw_receipt_member = by_name.get("raw-attempt-complete.json")
+        raw_receipt_stream = (
+            handle.extractfile(raw_receipt_member) if raw_receipt_member is not None else None
+        )
+        try:
+            raw_receipt: object = (
+                json.loads(raw_receipt_stream.read()) if raw_receipt_stream is not None else None
+            )
+        except json.JSONDecodeError as exc:
+            raise T09HostError("attempt export raw receipt is malformed") from exc
+        if (
+            not isinstance(raw_receipt, dict)
+            or raw_receipt.get("structural_privacy_findings")
+            != manifest.get("structural_privacy_findings")
+            or (raw_receipt.get("public_release_clearance") is True)
+            != manifest.get("structural_privacy_scan_passed")
+        ):
+            raise T09HostError("attempt export privacy adjudication is not source-bound")
     entry = load_object(args.provider_entry_receipt.resolve(strict=True), label="provider entry")
     owned_hash = entry.get("owned_instance_identity_sha256")
     lambda_started = entry.get("lambda_started_at_epoch")
@@ -4442,11 +5524,11 @@ def acknowledge_attempt_export(args: argparse.Namespace) -> None:
     incoming = args.acknowledgement_file.resolve(strict=True)
     acknowledgement = load_object(incoming, label="off-host export acknowledgement")
     state = _runtime_budget_state(root)
-    completed = state.get("attempts_completed")
-    if not isinstance(completed, list) or args.run_id not in completed:
-        raise T09HostError("cannot acknowledge an attempt that is not finalized")
+    raw_complete = state.get("raw_attempts_complete")
+    if not isinstance(raw_complete, list) or args.run_id not in raw_complete:
+        raise T09HostError("cannot acknowledge an attempt whose raw seal is incomplete")
     expected_index = RUN_IDS.index(args.run_id)
-    if completed[: expected_index + 1] != list(RUN_IDS[: expected_index + 1]):
+    if raw_complete[: expected_index + 1] != list(RUN_IDS[: expected_index + 1]):
         raise T09HostError("export acknowledgement violates frozen attempt order")
     destination = _received_export_ack_path(root, args.run_id)
     destination.parent.mkdir(mode=0o700, exist_ok=True)
@@ -4469,15 +5551,25 @@ def _reconstructable_disposition(root: Path) -> dict[str, Any]:
 
     state = _runtime_budget_state(root)
     entered = state.get("empirical_attempts_entered")
+    raw_complete = state.get("raw_attempts_complete")
     completed = state.get("attempts_completed")
+    raw_bindings = state.get("raw_attempt_bindings")
+    finalizations = state.get("attempt_finalizations")
     checkpoint = state.get("first_pair_decision")
     if (
         not isinstance(entered, list)
+        or not isinstance(raw_complete, list)
         or not isinstance(completed, list)
+        or not isinstance(raw_bindings, dict)
+        or not isinstance(finalizations, dict)
         or entered != list(RUN_IDS[: len(entered)])
-        or completed != entered[: len(completed)]
+        or raw_complete != entered[: len(raw_complete)]
+        or completed != [run_id for run_id in RUN_IDS if run_id in completed]
+        or not set(completed).issubset(set(raw_complete))
+        or set(raw_bindings) != set(raw_complete)
+        or set(finalizations) != set(completed)
         or len(entered) > len(RUN_IDS)
-        or len(entered) - len(completed) > 1
+        or len(entered) - len(raw_complete) > 1
         or checkpoint not in {None, "continue-to-task-b", "stop-before-task-b"}
         or (len(entered) > 2 and checkpoint != "continue-to-task-b")
     ):
@@ -4543,7 +5635,7 @@ def export_image(args: argparse.Namespace) -> None:
         + PROVIDER_TERMINATION_HANDOFF_SECONDS
         + PROVIDER_CLOSEOUT_RESERVE_SECONDS
     )
-    receipt_path = root / "pilot-v4/replacement-image-export.json"
+    receipt_path = root / "pilot-v5/replacement-image-export.json"
     if remaining < required_next_attempt + MAX_IMAGE_EXPORT_SECONDS:
         write_exclusive(
             receipt_path,
@@ -4626,15 +5718,14 @@ def stage(args: argparse.Namespace) -> None:
     root = args.artifact_root.resolve(strict=True)
     if not staged_archive_headroom_ok():
         raise T09HostError("frozen evidence caps do not reserve staged-archive headroom")
-    cleanup_receipt = load_object(root / "pilot-v4/host-cleanup.json", label="cleanup")
+    cleanup_receipt = load_object(root / "pilot-v5/host-cleanup.json", label="cleanup")
     if (
         cleanup_receipt.get("global_secret_scan_passed") is not True
         or cleanup_receipt.get("remote_secret_removed") is not True
-        or cleanup_receipt.get("structural_privacy_scan_passed") is not True
     ):
         raise T09HostError("global credential cleanup is incomplete")
     state = _reconstructable_disposition(root)
-    frozen_manifest_path = root / "pilot-v4/frozen-run-manifest.json"
+    frozen_manifest_path = root / "pilot-v5/frozen-run-manifest.json"
     frozen_manifest = load_object(frozen_manifest_path, label="frozen run manifest")
     frozen_manifest_sha256 = file_sha256(frozen_manifest_path)
     runtime_state = _runtime_budget_state(root)
@@ -4652,12 +5743,8 @@ def stage(args: argparse.Namespace) -> None:
         )
     stage_timeout = min(MAX_STAGE_SECONDS, seconds_to_termination_cutoff)
     privacy_hits = privacy_violations(root)
-    if privacy_hits:
-        raise T09HostError(
-            "structural privacy scan failed before staging: " + ", ".join(privacy_hits)
-        )
     files, total = _evidence_file_manifest(root)
-    manifest_path = root / "pilot-v4/evidence-stage-manifest.json"
+    manifest_path = root / "pilot-v5/evidence-stage-manifest.json"
     write_exclusive(
         manifest_path,
         {
@@ -4672,11 +5759,12 @@ def stage(args: argparse.Namespace) -> None:
             "files": files,
             "total_bytes": total,
             "secret_scan_passed": True,
-            "structural_privacy_scan_passed": True,
+            "structural_privacy_scan_passed": not privacy_hits,
+            "structural_privacy_findings": privacy_hits,
             "provider_closeout_pending": True,
         },
     )
-    archive = root / "pilot-v4/t09-pilot-private-evidence-stage.tar.gz"
+    archive = root / "pilot-v5/t09-pilot-private-evidence-stage.tar.gz"
     with (
         hard_deadline(stage_timeout, message="aggregate evidence stage deadline exceeded"),
         tarfile.open(archive, "x:gz") as handle,
@@ -4697,7 +5785,7 @@ def stage(args: argparse.Namespace) -> None:
     lambda_started = state.get("lambda_started_at_epoch")
     if not isinstance(lambda_started, (int, float)) or isinstance(lambda_started, bool):
         raise T09HostError("Lambda start time is unavailable at staging")
-    provider_entry_path = root / "pilot-v4/provider-entry.json"
+    provider_entry_path = root / "pilot-v5/provider-entry.json"
     dynamic_summary = load_object(provider_entry_path, label="provider entry summary")
     owned_hash = dynamic_summary.get("owned_instance_identity_sha256")
     if not isinstance(owned_hash, str) or _HEX64.fullmatch(owned_hash) is None:
@@ -4717,9 +5805,9 @@ def stage(args: argparse.Namespace) -> None:
         "provider_closeout_pending": True,
         "download_then_verify_before_termination": True,
     }
-    write_exclusive(root / "pilot-v4/evidence-stage-identity.json", identity)
+    write_exclusive(root / "pilot-v5/evidence-stage-identity.json", identity)
     write_exclusive(
-        root / "pilot-v4/TERMINATE_REQUIRED.json",
+        root / "pilot-v5/TERMINATE_REQUIRED.json",
         {
             "schema_version": "0.1.0",
             "stage_id": STAGE_ID,
@@ -4781,18 +5869,6 @@ def package(args: argparse.Namespace) -> None:
     lambda_started = entry.get("lambda_started_at_epoch")
     owned_hash = entry.get("owned_instance_identity_sha256")
     entry_sha256 = file_sha256(entry_receipt_path)
-    transition = validate_package_transition_receipt(
-        args.package_transition_receipt.resolve(strict=True),
-        repository=args.repository.resolve(strict=True),
-        package_commit=args.package_commit,
-        entry_receipt=entry_receipt_path,
-        entry_source_root=args.provider_entry_source_root.resolve(strict=True),
-        prior_artifact_root=args.prior_artifact_root.resolve(strict=True),
-        failed_candidate_root=args.failed_candidate_root.resolve(strict=True),
-        previous_transition_receipt=args.previous_package_transition_receipt.resolve(strict=True),
-        require_fresh=False,
-        require_candidate_present=False,
-    )
     if (
         not isinstance(lambda_started, (int, float))
         or isinstance(lambda_started, bool)
@@ -4876,7 +5952,7 @@ def package(args: argparse.Namespace) -> None:
         expected_lambda_started_at_epoch=float(lambda_started),
         expected_owned_instance_identity_sha256=owned_hash,
         expected_entry_receipt_sha256=entry_sha256,
-        expected_package_commit=PACKAGE_TRANSITION_FROM_COMMIT,
+        expected_package_commit=args.package_commit,
         repository_root=args.repository.resolve(strict=True),
         source_root=args.provider_closeout_source_root.resolve(strict=True),
         entry_receipt_path=entry_receipt_path,
@@ -4906,8 +5982,6 @@ def package(args: argparse.Namespace) -> None:
         )
     closeout_summary = final_root / "provider-closeout-summary.json"
     write_exclusive(closeout_summary, closeout)
-    transition_summary = final_root / "package-transition-summary.json"
-    write_exclusive(transition_summary, transition)
     manifest_path = final_root / "evidence-archive-manifest.json"
     write_exclusive(
         manifest_path,
@@ -4923,7 +5997,6 @@ def package(args: argparse.Namespace) -> None:
                 "aggregate-stage" if aggregate_verification_path.is_file() else "direct-prefix"
             ),
             "provider_closeout_receipt_sha256": closeout["receipt_sha256"],
-            "package_transition_receipt_sha256": transition["receipt_sha256"],
             "provider_termination_confirmed": True,
             "zero_owned_instances_confirmed": True,
             "source_retained": True,
@@ -4969,7 +6042,7 @@ def cleanup(args: argparse.Namespace) -> None:
     except T09HostError:
         remaining_runtime = 0.0
     write_exclusive(
-        root / "pilot-v4/host-cleanup.json",
+        root / "pilot-v5/host-cleanup.json",
         {
             "schema_version": "0.1.0",
             "completed_at": utc_now(),
@@ -4990,8 +6063,85 @@ def cleanup(args: argparse.Namespace) -> None:
             "lambda_seconds_remaining_for_provider_closeout": remaining_runtime,
         },
     )
-    if residue or remaining_hits or not secret_removed or privacy_hits:
+    if residue or remaining_hits or not secret_removed:
         raise T09HostError("owned runtime or credential cleanup is incomplete")
+
+
+def preempirical_replacement_disposition(args: argparse.Namespace) -> dict[str, object]:
+    """Seal the narrow host proof that can authorize launch slot 2."""
+
+    repository = args.repository.resolve(strict=True)
+    root = args.artifact_root.resolve(strict=True)
+    verify_package(repository, args.package_commit)
+    state_path = root / "pilot-v5/pilot-state.json"
+    cleanup_path = root / "pilot-v5/host-cleanup.json"
+    provider_entry_path = root / "pilot-v5/provider-entry.json"
+    state = load_object(state_path, label="pre-empirical pilot state")
+    cleanup_receipt = load_object(cleanup_path, label="pre-empirical host cleanup")
+    provider_entry = load_object(provider_entry_path, label="provider entry summary")
+    qualification_root = root / "pilot-v5/replacement-image-qualification"
+    build_log = qualification_root / "work/docker-build.log"
+    build_receipt = qualification_root / "materialization-receipt.json"
+    prefix = docker_prefix()
+    if (
+        state.get("empirical_attempts_entered") != []
+        or state.get("raw_attempts_complete") != []
+        or state.get("attempts_completed") != []
+        or cleanup_receipt.get("owned_container_residue") != []
+        or cleanup_receipt.get("global_secret_scan_passed") is not True
+        or cleanup_receipt.get("remote_secret_removed") is not True
+        or build_log.exists()
+        or build_receipt.exists()
+        or image_id_if_present(prefix, REPLACEMENT_IMAGE_TAG) is not None
+    ):
+        raise T09HostError("launch slot 1 is not a zero-use zero-build replacement candidate")
+    entry_sha256 = provider_entry.get("receipt_sha256")
+    if not isinstance(entry_sha256, str) or _HEX64.fullmatch(entry_sha256) is None:
+        raise T09HostError("provider entry summary lacks its source receipt hash")
+    source = root / "pilot-v5/preempirical-replacement-source"
+    source.mkdir(mode=0o700, exist_ok=False)
+    write_exclusive(source / "pilot-state.json", state)
+    write_exclusive(source / "host-cleanup.json", cleanup_receipt)
+    receipt: dict[str, object] = {
+        "schema_version": "0.1.0",
+        "plan_id": PLAN_ID,
+        "host_run_id": HOST_RUN_ID,
+        "package_commit": args.package_commit,
+        "provider_entry_receipt_sha256": entry_sha256,
+        "pilot_state_sha256": file_sha256(source / "pilot-state.json"),
+        "host_cleanup_sha256": file_sha256(source / "host-cleanup.json"),
+        "empirical_attempts_entered": 0,
+        "model_task_requests": 0,
+        "task_browser_actions": 0,
+        "replacement_image_build_count": 0,
+        "credentials_removed": True,
+        "owned_containers_absent": True,
+        "replacement_launch_evidence_only": True,
+    }
+    write_exclusive(source / "preempirical-disposition.json", receipt)
+    files = [
+        {
+            "path": path.name,
+            "bytes": path.stat().st_size,
+            "sha256": file_sha256(path),
+        }
+        for path in sorted(source.iterdir())
+    ]
+    write_exclusive(
+        source / "source-manifest.json",
+        {
+            "schema_version": "0.1.0",
+            "plan_id": PLAN_ID,
+            "host_run_id": HOST_RUN_ID,
+            "files": files,
+            "total_bytes": sum(cast(int, item["bytes"]) for item in files),
+        },
+    )
+    return {
+        "source_root": source.as_posix(),
+        "receipt_sha256": file_sha256(source / "preempirical-disposition.json"),
+        "source_manifest_sha256": file_sha256(source / "source-manifest.json"),
+    }
 
 
 def parser() -> argparse.ArgumentParser:
@@ -5002,24 +6152,17 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--evaluator-overlay", type=Path, required=True)
     result.add_argument("--package-commit", required=True)
     operations = result.add_subparsers(dest="operation", required=True)
-    transition_parser = operations.add_parser("bind-package-transition")
-    transition_parser.add_argument("--dynamic-receipt", type=Path, required=True)
-    transition_parser.add_argument("--dynamic-source-root", type=Path, required=True)
-    transition_parser.add_argument("--prior-artifact-root", type=Path, required=True)
-    transition_parser.add_argument("--failed-candidate-root", type=Path, required=True)
-    transition_parser.add_argument(
-        "--previous-package-transition-receipt", type=Path, required=True
-    )
-    transition_parser.add_argument("--output", type=Path, required=True)
     preflight_parser = operations.add_parser("preflight")
     preflight_parser.add_argument("--dynamic-receipt", type=Path, required=True)
     preflight_parser.add_argument("--dynamic-source-root", type=Path, required=True)
-    preflight_parser.add_argument("--package-transition-receipt", type=Path, required=True)
-    preflight_parser.add_argument("--prior-artifact-root", type=Path, required=True)
-    preflight_parser.add_argument("--failed-candidate-root", type=Path, required=True)
-    preflight_parser.add_argument("--previous-package-transition-receipt", type=Path, required=True)
     condition_export = operations.add_parser("condition-export")
     condition_export.add_argument("--run-id", choices=RUN_IDS, required=True)
+    finalize_parser = operations.add_parser("finalize-attempt")
+    finalize_parser.add_argument("--run-id", choices=RUN_IDS, required=True)
+    finalize_parser.add_argument("--finalizer-source", type=Path, required=True)
+    finalize_parser.add_argument("--finalizer-commit", required=True)
+    operations.add_parser("first-pair-checkpoint")
+    operations.add_parser("campaign-disposition")
     export_only = operations.add_parser("export-only")
     export_only.add_argument("--run-id", choices=RUN_IDS, required=True)
     acknowledgement = operations.add_parser("acknowledge-attempt-export")
@@ -5045,26 +6188,29 @@ def parser() -> argparse.ArgumentParser:
     package_parser.add_argument("--provider-closeout-source-root", type=Path, required=True)
     package_parser.add_argument("--provider-entry-receipt", type=Path, required=True)
     package_parser.add_argument("--provider-entry-source-root", type=Path, required=True)
-    package_parser.add_argument("--package-transition-receipt", type=Path, required=True)
-    package_parser.add_argument("--prior-artifact-root", type=Path, required=True)
-    package_parser.add_argument("--failed-candidate-root", type=Path, required=True)
-    package_parser.add_argument("--previous-package-transition-receipt", type=Path, required=True)
     package_parser.add_argument("--final-archive-root", type=Path, required=True)
     operations.add_parser("cleanup")
+    operations.add_parser("preempirical-replacement-disposition")
     return result
 
 
 def main() -> int:
     args = parser().parse_args()
-    if args.operation == "bind-package-transition":
-        write_package_transition_receipt(args)
-        return 0
     if args.operation == "preflight":
         preflight(args)
         return 0
     if args.operation == "condition-export":
         execute_condition(args)
         export_attempt(args, sys.stdout.buffer)
+        return 0
+    if args.operation == "finalize-attempt":
+        print(json.dumps(finalize_attempt(args), sort_keys=True))
+        return 0
+    if args.operation == "first-pair-checkpoint":
+        print(json.dumps(first_pair_checkpoint(args), sort_keys=True))
+        return 0
+    if args.operation == "campaign-disposition":
+        print(json.dumps(campaign_evidence_disposition(args), sort_keys=True))
         return 0
     if args.operation == "export-only":
         export_attempt(args, sys.stdout.buffer)
@@ -5089,6 +6235,9 @@ def main() -> int:
         return 0
     if args.operation == "cleanup":
         cleanup(args)
+        return 0
+    if args.operation == "preempirical-replacement-disposition":
+        print(json.dumps(preempirical_replacement_disposition(args), sort_keys=True))
         return 0
     raise T09HostError("unknown operation")
 

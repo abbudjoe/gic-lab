@@ -1,0 +1,8 @@
+{
+  "architecture": "x86_64",
+  "os": "Linux",
+  "python_executable": "/opt/sira/.venv/bin/python",
+  "python_version": "3.11.14",
+  "schema_version": "0.1.0",
+  "upstream_runner": "/opt/sira/scripts/run_web_agent.py"
+}

@@ -45,6 +45,7 @@ from giclab.harness.t09_sira_pilot import (
     load_execution_contract,
     mark_attempt_completed,
     mark_empirical_entry,
+    mark_raw_attempt_complete,
     outcome_contract,
     record_first_pair_checkpoint,
     render_command_manifest,
@@ -66,6 +67,32 @@ RUNTIME_IDENTITY = (
     ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
     "T09_PILOT_RUNTIME_IDENTITY.json"
 )
+
+
+def _seal_and_finalize_state(path: Path, *, digest: str, run_id: str) -> None:
+    """Supply one exact raw seal and one uniform downstream selection to state tests."""
+
+    index = ATTEMPT_ORDER.index(run_id) + 1
+    mark_raw_attempt_complete(
+        path,
+        execution_contract_sha256=digest,
+        run_id=run_id,
+        raw_manifest_sha256=f"{index:x}" * 64,
+        raw_receipt_sha256=f"{index + 4:x}" * 64,
+    )
+    mark_attempt_completed(
+        path,
+        execution_contract_sha256=digest,
+        run_id=run_id,
+        finalizer_source_sha256="a" * 64,
+        finalizer_commit="b" * 40,
+        finalizer_dependency_manifest_sha256="c" * 64,
+        evaluator_contract_sha256="d" * 64,
+        interpreter="/opt/sira/.venv/bin/python",
+        interpreter_sha256="e" * 64,
+        finalized_output_root=f"finalized/{run_id}/v1",
+        finalization_complete_sha256=f"{index + 8:x}" * 64,
+    )
 
 
 def _session(
@@ -384,8 +411,8 @@ def test_first_pair_checkpoint_passes_only_strictly_below_every_threshold() -> N
     assert exact_time_decision["required_campaign_seconds_for_next_attempt"] == 5_160
     cumulative_overflow = replace(
         passing,
-        projected_aggregate_cost_usd=45.11,
-        prior_t09_cost_usd=0.9,
+        projected_aggregate_cost_usd=45.0,
+        prior_t09_cost_usd=3.01,
     )
     assert (
         "projected_cumulative_t09_cost_exceeds_hard_cap"
@@ -419,21 +446,13 @@ def test_attempt_state_enforces_order_cap_checkpoint_and_zero_retry(tmp_path: Pa
             execution_contract_sha256=digest,
             run_id=ATTEMPT_ORDER[0],
         )
-    mark_attempt_completed(
-        path,
-        execution_contract_sha256=digest,
-        run_id=ATTEMPT_ORDER[0],
-    )
+    _seal_and_finalize_state(path, digest=digest, run_id=ATTEMPT_ORDER[0])
     mark_empirical_entry(
         path,
         execution_contract_sha256=digest,
         run_id=ATTEMPT_ORDER[1],
     )
-    mark_attempt_completed(
-        path,
-        execution_contract_sha256=digest,
-        run_id=ATTEMPT_ORDER[1],
-    )
+    _seal_and_finalize_state(path, digest=digest, run_id=ATTEMPT_ORDER[1])
     with pytest.raises(T09BudgetExceeded, match="checkpoint"):
         mark_empirical_entry(
             path,
@@ -501,7 +520,7 @@ def test_execution_schema_and_all_static_file_bindings_resolve() -> None:
     document = load_json(EXECUTION_CONTRACT)
     assert document["authorized"] is False
     assert document["terminal_state"] == (
-        "current-turn-authorized-retry2-pending-dynamic-preflight"
+        "current-turn-authorized-retry3-pending-dynamic-preflight"
     )
     assert (
         document["execution_eligibility"]
@@ -545,6 +564,7 @@ def test_runtime_identity_binds_every_selected_executable_file() -> None:
         "containers/sira-smoke/pragmatic/t09_freeze_commands.py",
         "containers/sira-smoke/pragmatic/t09_secret_preflight.py",
         "containers/sira-smoke/pragmatic/materialize_openai_secret.py",
+        "containers/sira-smoke/pragmatic/t09_real_evidence_regression.py",
     }
     assert {item["path"] for item in files} == expected
     for item in files:
@@ -582,9 +602,9 @@ def test_retry2_preserves_and_supersedes_the_zero_use_v3_failure() -> None:
 def test_runtime_qualification_is_typed_single_build_preentry_and_digest_agnostic() -> None:
     document = {
         "schema_version": "0.1.0",
-        "plan_id": "PLAN-EXP0001-PILOT-V4",
-        "manifest_id": "RUN-MANIFEST-EXP0001-PILOT-V4-0002",
-        "qualification_id": "QUAL-T09-PILOT-V4-IMAGE-0004",
+        "plan_id": "PLAN-EXP0001-PILOT-V5",
+        "manifest_id": "RUN-MANIFEST-EXP0001-PILOT-V5-0003",
+        "qualification_id": "QUAL-T09-PILOT-V5-IMAGE-0001",
         "clean_package_commit": "a" * 40,
         "replacement_image_id": "sha256:" + "e" * 64,
         "historical_image_id": (
@@ -594,6 +614,8 @@ def test_runtime_qualification_is_typed_single_build_preentry_and_digest_agnosti
         "package_manifest_sha256": "c" * 64,
         "chromium_executable_sha256": "d" * 64,
         "patched_upstream_runner_sha256": "f" * 64,
+        "python_interpreter_path": "/opt/sira/.venv/bin/python",
+        "python_interpreter_sha256": "4" * 64,
         "evaluator_overlay_manifest_sha256": "1" * 64,
         "evaluator_overlay_entries_sha256": "2" * 64,
         "evaluator_overlay_packages_sha256": "3" * 64,
@@ -654,130 +676,25 @@ def test_retry2_excludes_only_the_exact_pinned_names_only_env_example(
         )
 
 
-def test_retry2_preentry_transition_preserves_zero_use_failure_and_narrows_diff(
-    tmp_path: Path,
-) -> None:
+def test_retry3_builds_one_fresh_v5_image_and_uses_the_pinned_interpreter() -> None:
     host = _load_host_runner()
-    failure_root = tmp_path / "t09-pilot-v4-output-0002"
-    state = failure_root / "pilot-v4/pilot-state.json"
-    state.parent.mkdir(parents=True)
-    state.write_text(
-        json.dumps(
-            {
-                "plan_id": host.PLAN_ID,
-                "empirical_attempts_entered": [],
-                "attempts_completed": [],
-            }
-        ),
-        encoding="utf-8",
-    )
-    env_example = (
-        failure_root
-        / "pilot-v4/replacement-image-qualification/work/build-context/upstream/.env.example"
-    )
-    env_example.parent.mkdir(parents=True)
-    env_example.write_bytes(host.PINNED_ENV_EXAMPLE_CONTENT)
-    failure = host._prior_qualification_failure_manifest(failure_root)
-    assert failure["qualification_id"] == "QUAL-T09-PILOT-V4-IMAGE-0002"
-    assert failure["empirical_entry_crossed"] is False
-    assert failure["replacement_image_built"] is False
-    assert host.FAILED_CANDIDATE_QUALIFICATION_ID == "QUAL-T09-PILOT-V4-IMAGE-0003"
-    assert host.QUALIFICATION_ID == "QUAL-T09-PILOT-V4-IMAGE-0004"
-    assert "protocol.yaml" not in "\n".join(host.PACKAGE_TRANSITION_ALLOWED_PATHS)
-    assert "config.yaml" not in "\n".join(host.PACKAGE_TRANSITION_ALLOWED_PATHS)
-
-    state.write_text(
-        json.dumps(
-            {
-                "plan_id": host.PLAN_ID,
-                "empirical_attempts_entered": [host.RUN_IDS[0]],
-                "attempts_completed": [],
-            }
-        ),
-        encoding="utf-8",
-    )
-    with pytest.raises(host.T09HostError, match="not the exact safe prefix"):
-        host._prior_qualification_failure_manifest(failure_root)
+    assert host.PLAN_ID == "PLAN-EXP0001-PILOT-V5"
+    assert host.QUALIFICATION_ID == "QUAL-T09-PILOT-V5-IMAGE-0001"
+    assert host.REPLACEMENT_IMAGE_TAG.startswith("giclab/t09-pilot-v5:")
+    materializer = inspect.getsource(host.materialize_replacement_image)
+    assert "exactly one build is allowed" in materializer
+    assert '"build_count": 1' in materializer
+    assert "carry_forward_replacement_image" not in materializer
+    offline = inspect.getsource(host.offline_runtime_preflight)
+    assert "/opt/sira/.venv/bin/python" in offline
+    assert "PYTHONPATH=/opt/evaluator/.venv/lib/python3.11/site-packages:/opt/giclab-src" in offline
+    assert '"/opt/evaluator/.venv/bin/python"' not in offline
+    finalizer = inspect.getsource(host.evaluator_argv)
+    assert '"interpreter_sha256"' in finalizer
+    assert 'frozen_manifest["python_interpreter_sha256"]' in finalizer
 
 
-def test_retry2_carries_one_built_candidate_and_uses_combined_pinned_interpreters(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    host = _load_host_runner()
-    image_id = "sha256:" + "e" * 64
-    failed_root = tmp_path / "t09-pilot-v4-output-0003"
-    pilot = failed_root / "pilot-v4"
-    qualification = pilot / "replacement-image-qualification"
-    offline = pilot / "offline-runtime-preflight"
-    qualification.mkdir(parents=True)
-    offline.mkdir()
-    (pilot / "pilot-state.json").write_text(
-        json.dumps(
-            {
-                "plan_id": host.PLAN_ID,
-                "empirical_attempts_entered": [],
-                "attempts_completed": [],
-            }
-        ),
-        encoding="utf-8",
-    )
-    exclusion = qualification / "build-context-exclusions.json"
-    exclusion.write_text('{"safe": true}\n', encoding="utf-8")
-    (qualification / "receipt.json").write_text(
-        json.dumps(
-            {
-                "qualification_id": host.FAILED_CANDIDATE_QUALIFICATION_ID,
-                "image_id": image_id,
-                "build_count": 1,
-                "build_context_exclusions_sha256": host.file_sha256(exclusion),
-            }
-        ),
-        encoding="utf-8",
-    )
-    stderr = offline / "offline-preflight.stderr"
-    stderr.write_text(
-        "Traceback (most recent call last):\nModuleNotFoundError: No module named 'yaml'\n",
-        encoding="utf-8",
-    )
-    (pilot / "provider-entry.json").write_text(
-        json.dumps({"package_transition_receipt_sha256": "a" * 64}),
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(
-        host,
-        "FAILED_CANDIDATE_OFFLINE_STDERR_SHA256",
-        host.file_sha256(stderr),
-    )
-    monkeypatch.setattr(host, "image_id_if_present", lambda _prefix, _image: image_id)
-    monkeypatch.setattr(host, "docker_prefix", lambda: ["docker"])
-    manifest = host._failed_candidate_manifest(
-        failed_root,
-        require_image_present=True,
-    )
-    assert manifest["replacement_image_built"] is True
-    assert manifest["model_metadata_requests"] == 0
-    assert manifest["empirical_entry_crossed"] is False
-
-    artifact_root = tmp_path / "accepted"
-    artifact_root.mkdir()
-    carried = host.carry_forward_replacement_image(
-        artifact_root=artifact_root,
-        failed_candidate_root=failed_root,
-        prefix=["docker"],
-    )
-    assert carried["image_id"] == image_id
-    assert carried["build_count"] == 1
-    assert carried["additional_build_count"] == 0
-    assert carried["qualification_id"] == "QUAL-T09-PILOT-V4-IMAGE-0004"
-
-    source = inspect.getsource(host.offline_runtime_preflight)
-    assert "/opt/sira/.venv/bin/python" in source
-    assert "PYTHONPATH=/opt/evaluator/.venv/lib/python3.11/site-packages:/opt/giclab-src" in source
-    assert '"/opt/evaluator/.venv/bin/python"' not in source
-
-
-def test_v4_runtime_corrects_historical_package_browser_and_patched_runner_identities() -> None:
+def test_v5_runtime_corrects_historical_package_browser_and_patched_runner_identities() -> None:
     runtime = load_json(RUNTIME_IDENTITY)
     execution = load_json(EXECUTION_CONTRACT)
     assert runtime["base_runtime"]["installed_package_manifest_sha256"] == (
@@ -897,7 +814,7 @@ def test_evaluator_overlay_inventory_detects_any_realized_byte_drift(tmp_path: P
 
 
 def test_first_pair_gross_ceiling_stops_task_b() -> None:
-    finalizer = _load_attempt_finalizer()
+    host = _load_host_runner()
     ceiling = [
         {
             "valid_scored_attempt": True,
@@ -910,9 +827,9 @@ def test_first_pair_gross_ceiling_stops_task_b() -> None:
             "task_score": 1.0,
         },
     ]
-    assert finalizer._severe_floor_or_ceiling(ceiling) is True
+    assert host._severe_floor_or_ceiling(ceiling) is True
     ceiling[1]["task_score"] = 0.5
-    assert finalizer._severe_floor_or_ceiling(ceiling) is False
+    assert host._severe_floor_or_ceiling(ceiling) is False
 
 
 def test_preentry_condition_prefix_is_bound_preserved_and_retryable(tmp_path: Path) -> None:
@@ -957,7 +874,7 @@ def test_preentry_condition_prefix_is_bound_preserved_and_retryable(tmp_path: Pa
         "empirical_attempts_entered": [],
         "attempts_completed": [],
     }
-    fresh = host.prepare_condition_attempt_root(
+    fresh, raw = host.prepare_condition_attempt_root(
         artifact_root=artifact_root,
         manifest=manifest,
         pilot_state=state,
@@ -965,9 +882,10 @@ def test_preentry_condition_prefix_is_bound_preserved_and_retryable(tmp_path: Pa
         frozen_run_manifest_sha256=frozen_sha256,
     )
     preserved = (
-        artifact_root / "pilot-v4/preentry-condition-repairs" / manifest["run_id"] / "repair-01"
+        artifact_root / "pilot-v5/preentry-condition-repairs" / manifest["run_id"] / "repair-01"
     )
-    assert fresh == attempt_root and fresh.is_dir() and not list(fresh.iterdir())
+    assert fresh == attempt_root and fresh.is_dir() and list(fresh.iterdir()) == [raw]
+    assert raw == fresh / "raw"
     assert (preserved / "preentry-condition-failure.json").is_file()
     assert (preserved / "container-command.json").is_file()
 
@@ -1142,7 +1060,6 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
     key_path = tmp_path / "key.pub"
     key_path.write_text(public_key, encoding="utf-8")
     package_commit = "a" * 40
-    monkeypatch.setattr(host, "PACKAGE_TRANSITION_FROM_COMMIT", package_commit)
     plan_path = ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml"
     authorization = tmp_path / "authorization.json"
     authorization.write_text(
@@ -1150,20 +1067,20 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
             {
                 "schema_version": "0.1.0",
                 "authorization_source_sha256": provider.AUTHORIZATION_SOURCE_SHA256,
-                "authorization_reference": "AUTH-T09-PRAGMATIC-RETRY2-2026-08-13",
+                "authorization_reference": "AUTH-T09-PRAGMATIC-RETRY3-2026-08-13",
                 "authorized": True,
                 "single_use": True,
                 "clean_package_commit": package_commit,
                 "plan_id": provider.PLAN_ID,
                 "plan_sha256": provider.file_sha256(plan_path),
                 "max_lambda_instances": 1,
-                "max_launch_count": 1,
+                "max_launch_count": 2,
                 "persistent_filesystems": 0,
                 "lambda_cost_cap_usd": 5.16,
                 "openai_cost_cap_usd": 40.0,
                 "aggregate_cost_cap_usd": 45.16,
-                "prior_t09_cost_usd": 0.414064252316667,
-                "cumulative_t09_cost_cap_usd": 46.0,
+                "prior_t09_cost_usd": 2.5308164556905757,
+                "cumulative_t09_cost_cap_usd": 48.0,
                 "replacement_image_policy": ("one-build-one-qualification-preentry-bound-v1"),
                 "artifact_destination": (
                     "/Volumes/Macintosh HD - Data/GIC-Lab/t09/sealed-artifacts"
@@ -1174,8 +1091,11 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
     )
     authorization.chmod(0o600)
     monkeypatch.setattr(provider, "_verify_clean_package", lambda *_args, **_kwargs: None)
-    capability = [tmp_path / "launch-capabilities/malformed.json"]
-    monkeypatch.setattr(provider, "launch_capability_path", lambda: capability[0])
+    capability = {
+        1: tmp_path / "launch-capabilities/malformed.json",
+        2: tmp_path / "launch-capabilities/slot-2.json",
+    }
+    monkeypatch.setattr(provider, "launch_capability_path", lambda slot: capability[slot])
 
     malformed_launch_root = tmp_path / "provider-malformed-launch"
     with pytest.raises(provider.T09ProviderError, match="launch outcome is unknown"):
@@ -1199,7 +1119,7 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
     # A one-ID launch owns billable compute before an entry receipt exists.  A
     # failed active poll must therefore close from the provisional source
     # binding; an ambiguous termination response is reconciled by fresh GET.
-    capability[0] = tmp_path / "launch-capabilities/active-poll-failure.json"
+    capability[1] = tmp_path / "launch-capabilities/active-poll-failure.json"
     active_failure_root = tmp_path / "provider-active-poll-failure"
     with pytest.raises(provider.T09ProviderError, match="exact launched instance was closed"):
         provider.launch_campaign(
@@ -1216,6 +1136,8 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
                     RuntimeError("active poll transport ambiguity"),
                     RuntimeError("termination response ambiguity"),
                     {"data": []},
+                    global_firewall,
+                    {"data": []},
                 ]
             ),
             clock=clock,
@@ -1227,7 +1149,9 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
     assert provider._HEX64.fullmatch(str(provisional["launch_journal_prefix_sha256"]))
     provisional_closed = load_json(active_failure_root / "PROVISIONAL_OWNER_CLOSED.json")
     assert provisional_closed["provider_disposition"] == "absent"
-    assert provisional_closed["second_launch_forbidden"] is True
+    assert provisional_closed["replacement_launch_eligibility_pending"] is True
+    assert provisional_closed["security_restored"] is True
+    assert (active_failure_root / "replacement-launch-eligibility.json").is_file()
     provider.validate_source_manifest(active_failure_root / "provisional-closeout-source")
     already_closed_transport = FakeTransport([])
     assert (
@@ -1247,7 +1171,7 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
 
     # A cleanup poll ambiguity cannot be converted into a false closeout.  It
     # preserves the exact private target and a no-relaunch console action.
-    capability[0] = tmp_path / "launch-capabilities/cleanup-poll-failure.json"
+    capability[1] = tmp_path / "launch-capabilities/cleanup-poll-failure.json"
     cleanup_failure_root = tmp_path / "provider-cleanup-poll-failure"
     with pytest.raises(provider.T09ProviderError, match="durable console action"):
         provider.launch_campaign(
@@ -1276,7 +1200,7 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
     assert provisional_console["second_launch_forbidden"] is True
 
     # Exhausting the bounded active window also enters provisional cleanup.
-    capability[0] = tmp_path / "launch-capabilities/active-timeout.json"
+    capability[1] = tmp_path / "launch-capabilities/active-timeout.json"
     timeout_root = tmp_path / "provider-active-timeout"
     booting = {**copy.deepcopy(instance), "status": "booting"}
     with pytest.raises(provider.T09ProviderError, match="exact launched instance was closed"):
@@ -1294,6 +1218,8 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
                     *({"data": [copy.deepcopy(booting)]} for _ in range(provider.MAX_ENTRY_POLLS)),
                     RuntimeError("termination response ambiguity"),
                     {"data": []},
+                    global_firewall,
+                    {"data": []},
                 ]
             ),
             clock=clock,
@@ -1305,13 +1231,16 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
     )
 
     original_seal = provider.seal_source_bundle
+    entry_seal_failures = 0
 
     def fail_entry_seal(root: Path) -> dict[str, object]:
-        if root.name == "entry-source":
+        nonlocal entry_seal_failures
+        if root.name == "entry-source" and entry_seal_failures == 0:
+            entry_seal_failures += 1
             raise provider.T09ProviderError("fixture entry seal failure")
         return original_seal(root)
 
-    capability[0] = tmp_path / "launch-capabilities/entry-seal-failure.json"
+    capability[1] = tmp_path / "launch-capabilities/entry-seal-failure.json"
     seal_failure_root = tmp_path / "provider-entry-seal-failure"
     monkeypatch.setattr(provider, "seal_source_bundle", fail_entry_seal)
     with pytest.raises(provider.T09ProviderError, match="exact launched instance was closed"):
@@ -1328,6 +1257,8 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
                     *copy.deepcopy(launch_responses),
                     RuntimeError("termination response ambiguity"),
                     {"data": []},
+                    global_firewall,
+                    {"data": []},
                 ]
             ),
             clock=clock,
@@ -1341,7 +1272,7 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
     def fail_entry_receipt(*_args: object, **_kwargs: object) -> Path:
         raise provider.T09ProviderError("fixture entry receipt failure")
 
-    capability[0] = tmp_path / "launch-capabilities/entry-receipt-failure.json"
+    capability[1] = tmp_path / "launch-capabilities/entry-receipt-failure.json"
     receipt_failure_root = tmp_path / "provider-entry-receipt-failure"
     monkeypatch.setattr(provider, "create_entry_receipt", fail_entry_receipt)
     with pytest.raises(provider.T09ProviderError, match="exact launched instance was closed"):
@@ -1357,6 +1288,8 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
                 [
                     *copy.deepcopy(launch_responses),
                     RuntimeError("termination response ambiguity"),
+                    {"data": []},
+                    global_firewall,
                     {"data": []},
                 ]
             ),
@@ -1378,7 +1311,7 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
             raise OSError("fixture provisional owner write failure")
         original_write(path, value, mode=mode)
 
-    capability[0] = tmp_path / "launch-capabilities/provisional-write-failure.json"
+    capability[1] = tmp_path / "launch-capabilities/provisional-write-failure.json"
     write_failure_root = tmp_path / "provider-provisional-write-failure"
     monkeypatch.setattr(provider, "write_exclusive", fail_provisional_owner_write)
     with pytest.raises(provider.T09ProviderError, match="exact launched instance was closed"):
@@ -1395,6 +1328,8 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
                     *copy.deepcopy(launch_responses[:7]),
                     RuntimeError("termination response ambiguity"),
                     {"data": []},
+                    global_firewall,
+                    {"data": []},
                 ]
             ),
             clock=clock,
@@ -1403,7 +1338,7 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
     assert (write_failure_root / "PROVISIONAL_OWNER_CLOSED.json").is_file()
     monkeypatch.setattr(provider, "write_exclusive", original_write)
 
-    capability[0] = tmp_path / "launch-capabilities/duplicate-cleanup-failure.json"
+    capability[1] = tmp_path / "launch-capabilities/duplicate-cleanup-failure.json"
     duplicate_root = tmp_path / "provider-duplicate-launch"
     duplicate_ids = [
         "instance-fixture-duplicate-1",
@@ -1445,7 +1380,7 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
         dict.fromkeys(duplicate_ids)
     )
 
-    capability[0] = tmp_path / "launch-capabilities/multi-cleanup.json"
+    capability[1] = tmp_path / "launch-capabilities/multi-cleanup.json"
     multi_root = tmp_path / "provider-multi-launch"
     multi_ids = ["instance-fixture-incident-1", "instance-fixture-incident-2"]
     with pytest.raises(provider.T09ProviderError, match="every returned identity was closed"):
@@ -1472,7 +1407,7 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
     assert incident["second_launch_forbidden"] is True
     assert len(incident["unique_instance_identity_sha256s"]) == 2
 
-    capability[0] = tmp_path / "launch-capabilities/success.json"
+    capability[1] = tmp_path / "launch-capabilities/success.json"
     private_root = tmp_path / "provider-private"
     entry_path = provider.launch_campaign(
         repository=ROOT,
@@ -1486,9 +1421,9 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
         clock=clock,
         sleeper=sleeper,
     )
-    consumed = load_json(capability[0])
+    consumed = load_json(capability[1])
     assert consumed["launch_capability_state"] == "consumed-cleanup-only-after-this-point"
-    assert consumed["launch_capability_limit"] == 1
+    assert consumed["launch_capability_limit"] == 2
     no_second_launch = FakeTransport([])
     with pytest.raises(provider.T09ProviderError, match="already consumed"):
         provider.launch_campaign(
@@ -1658,16 +1593,16 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
 
 def test_closeout_rejects_termination_after_campaign_cutoff() -> None:
     lifecycle = provider.CampaignLifecycle(
-        observer_limits=ObserverLifecycleLimits.t09_pragmatic_v3(),
+        observer_limits=ObserverLifecycleLimits.t09_pragmatic_v5(),
         max_instances=1,
-        max_launches=1,
+        max_launches=2,
         persistent_filesystems=0,
     )
     assert lifecycle.termination_due(
         started_at_epoch=100.0,
         now_epoch=13_600.0,
     )
-    observer = ObserverLifecycleLimits.t09_pragmatic_v3()
+    observer = ObserverLifecycleLimits.t09_pragmatic_v5()
     assert (
         lifecycle.wall_seconds,
         lifecycle.cleanup_reserve_seconds,
@@ -1850,7 +1785,7 @@ def test_campaign_lifecycle_uses_actual_elapsed_time_and_preserves_cleanup_reser
         post_condition_evaluator_evidence_seconds=600,
         termination_dispatch_margin_seconds=60,
         max_lambda_instances=1,
-        max_launch_count=1,
+        max_launch_count=2,
         persistent_filesystems=0,
     )
     assert campaign.elapsed_seconds(billable_started_at=100.0, now=700.0) == 600.0
@@ -1879,7 +1814,7 @@ def test_host_campaign_admission_counts_setup_and_attempt_actual_time(
 ) -> None:
     host = _load_host_runner()
     now = time.time()
-    state = tmp_path / "pilot-v4/pilot-state.json"
+    state = tmp_path / "pilot-v5/pilot-state.json"
     state.parent.mkdir(parents=True)
     state.write_text(
         json.dumps(
@@ -1917,19 +1852,19 @@ def test_condition_keeps_full_3600_seconds_and_separates_evidence_handoff() -> N
     assert "MAX_CONDITION_WALL_SECONDS - ATTEMPT_EVIDENCE_EXPORT_RESERVE_SECONDS" not in source
 
 
-def test_finalized_attempt_streams_before_cutoff_without_aggregate_stage(
+def test_raw_attempt_streams_before_cutoff_without_aggregate_stage(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     host = _load_host_runner()
-    frozen_sha256 = ""
+    frozen_sha256 = "f" * 64
     replacement_image_id = "sha256:" + "e" * 64
     monkeypatch.setattr(
         host,
         "load_frozen_run_manifest",
         lambda *_args, **_kwargs: (
             {
-                "manifest_id": "RUN-MANIFEST-EXP0001-PILOT-V4-0002",
+                "manifest_id": "RUN-MANIFEST-EXP0001-PILOT-V5-0003",
                 "replacement_image_id": replacement_image_id,
             },
             frozen_sha256,
@@ -1946,29 +1881,68 @@ def test_finalized_attempt_streams_before_cutoff_without_aggregate_stage(
     )
     artifact_root = tmp_path / "artifacts"
     attempt_root = artifact_root / manifest["permitted_condition_owned"]["output_root"]
-    attempt_root.mkdir(parents=True)
-    pilot_root = artifact_root / "pilot-v4"
+    raw_root = artifact_root / manifest["permitted_condition_owned"]["raw_output_root"]
+    copytree(ROOT / "tests/fixtures/t09/finalizer-raw-shape", raw_root)
+    pilot_root = artifact_root / "pilot-v5"
     pilot_root.mkdir(exist_ok=True)
-    (pilot_root / "frozen-run-manifest.json").write_text(
-        json.dumps({"replacement_image_id": replacement_image_id}),
+    initialize_pilot_state(
+        pilot_root / "pilot-state.json",
+        execution_contract_sha256="a" * 64,
+        pilot_started_at_epoch=now - 100,
+        lambda_started_at_epoch=now - 100,
+    )
+    mark_empirical_entry(
+        pilot_root / "pilot-state.json",
+        execution_contract_sha256="a" * 64,
+        run_id=ATTEMPT_ORDER[0],
+    )
+    cleanup_path = raw_root / "host-cleanup-receipt.json"
+    cleanup = json.loads(cleanup_path.read_text(encoding="utf-8"))
+    cleanup["run_id"] = ATTEMPT_ORDER[0]
+    cleanup_path.write_text(json.dumps(cleanup), encoding="utf-8")
+    for name, value in {
+        "container-command.json": {"run_id": ATTEMPT_ORDER[0]},
+        "container-state.json": {"running": False},
+        "gpu-accounting.json": {"run_id": ATTEMPT_ORDER[0]},
+    }.items():
+        (raw_root / name).write_text(json.dumps(value), encoding="utf-8")
+    (raw_root / "condition.stdout").write_text("", encoding="utf-8")
+    (raw_root / "condition.stderr").write_text("", encoding="utf-8")
+    (raw_root / "attempt-wall.json").write_text(
+        json.dumps({"evidence_handoff_deadline_epoch": now + 60}),
         encoding="utf-8",
     )
-    frozen_sha256 = host.file_sha256(pilot_root / "frozen-run-manifest.json")
-    (pilot_root / "pilot-state.json").write_text(
+    (raw_root / "evaluator-overlay-binding.json").write_text(
         json.dumps(
             {
-                "lambda_started_at_epoch": now - 100,
-                "attempts_completed": [ATTEMPT_ORDER[0]],
+                "run_id": ATTEMPT_ORDER[0],
+                "frozen_run_manifest_sha256": frozen_sha256,
+                "condition_mount_policy": "read-only",
             }
         ),
         encoding="utf-8",
     )
-    for name in ("attempt-outcome.json", "evidence-index.json", "host-cleanup-receipt.json"):
-        (attempt_root / name).write_text("{}\n", encoding="utf-8")
-    (attempt_root / "normalized-events.jsonl").write_text("{}\n", encoding="utf-8")
-    (attempt_root / "attempt-wall.json").write_text(
-        json.dumps({"evidence_handoff_deadline_epoch": now + 60}),
+    (raw_root / "runtime-reconstruction-binding.json").write_text(
+        json.dumps(
+            {
+                "run_id": ATTEMPT_ORDER[0],
+                "runtime_cleanup_present": False,
+                "runtime_cleanup_sha256": None,
+                "host_cleanup_receipt_sha256": host.file_sha256(cleanup_path),
+                "container_state_sha256": host.file_sha256(raw_root / "container-state.json"),
+                "host_teardown_is_source_grounded_fallback": True,
+            }
+        ),
         encoding="utf-8",
+    )
+    host.seal_raw_attempt(
+        artifact_root=artifact_root,
+        attempt_root=attempt_root,
+        raw_root=raw_root,
+        manifest=manifest,
+        package_commit="a" * 40,
+        frozen_run_manifest_sha256=frozen_sha256,
+        execution_contract_sha256="a" * 64,
     )
     arguments = SimpleNamespace(
         repository=ROOT,
@@ -2135,142 +2109,47 @@ def test_archive_privacy_scan_rejects_private_network_and_unredacted_account_fie
     assert host.privacy_violations(tmp_path) == []
 
 
-def test_entered_partial_attempt_emits_schema_valid_invalid_evidence_and_is_consumed(
+def test_entered_partial_attempt_is_deterministically_reconstructable_without_retry(
     tmp_path: Path,
 ) -> None:
     finalizer = _load_attempt_finalizer()
-    contract = load_execution_contract(
-        EXECUTION_CONTRACT,
-        expected_sha256=file_sha256(EXECUTION_CONTRACT),
+    missing_root = tmp_path / "missing-session"
+    copytree(ROOT / "tests/fixtures/t09/finalizer-raw-shape", missing_root)
+    session = next((missing_root / "sira-output").glob("*.json"))
+    session.unlink()
+    missing = finalizer.reconstruct_semantic_projection(
+        raw_root=missing_root,
+        evaluator_root=EVALUATOR_ROOT,
+        dataset_path=DATASET_FIXTURE,
+        task_index=0,
+        task_id="7dcbbbdc7f1120cd",
+        condition="SIRA-REACTIVE",
+        evaluator_fixture_subset=True,
     )
-    attempt = contract.attempt(ATTEMPT_ORDER[0])
-    attempt_root = tmp_path / "attempt"
-    attempt_root.mkdir()
-    state_path = tmp_path / "pilot-state.json"
-    initialize_pilot_state(
-        state_path,
-        execution_contract_sha256=contract.sha256,
-        pilot_started_at_epoch=time.time() - 10,
-        lambda_started_at_epoch=time.time() - 20,
+    assert missing["evaluator_valid"] is False
+    assert missing["score"] is None
+    assert missing["session_sha256"] is None
+    assert missing["session_sha256s"] == []
+    assert missing["raw_consistency"]["one_session"] is False
+
+    duplicate_root = tmp_path / "duplicate-session"
+    copytree(ROOT / "tests/fixtures/t09/finalizer-raw-shape", duplicate_root)
+    retained_session = next((duplicate_root / "sira-output").glob("*.json"))
+    duplicate = retained_session.with_name("duplicate.json")
+    duplicate.write_bytes(retained_session.read_bytes())
+    duplicated = finalizer.reconstruct_semantic_projection(
+        raw_root=duplicate_root,
+        evaluator_root=EVALUATOR_ROOT,
+        dataset_path=DATASET_FIXTURE,
+        task_index=0,
+        task_id="7dcbbbdc7f1120cd",
+        condition="SIRA-REACTIVE",
+        evaluator_fixture_subset=True,
     )
-    mark_empirical_entry(
-        state_path,
-        execution_contract_sha256=contract.sha256,
-        run_id=attempt.run_id,
-    )
-    (attempt_root / "normalized-events.jsonl").write_text(
-        json.dumps(
-            {
-                "schema_version": "0.1.0",
-                "event_id": "event-provider-failed",
-                "parent_event_id": None,
-                "kind": "provider-call-failed",
-                "payload": {"exception_type": "FixtureFailure"},
-            }
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-    (attempt_root / "condition.stdout").write_text("", encoding="utf-8")
-    (attempt_root / "condition.stderr").write_text("fixture failure\n", encoding="utf-8")
-    cleanup_path = attempt_root / "host-cleanup-receipt.json"
-    cleanup_path.write_text(
-        json.dumps(
-            {
-                "schema_version": "0.1.0",
-                "run_id": attempt.run_id,
-                "returncode": 1,
-                "container_removed": True,
-                "owned_container_residue": [],
-                "secret_scan_passed": True,
-                "cap_violation": None,
-                "timing": {
-                    "started_at": "2026-08-13T12:00:00Z",
-                    "stopped_at": "2026-08-13T12:00:01Z",
-                    "wall_seconds": 1.0,
-                },
-            }
-        ),
-        encoding="utf-8",
-    )
-    command_path = (
-        ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
-        "T09_PILOT_COMMAND_MANIFESTS.json"
-    )
-    replacement_image_id = "sha256:" + "e" * 64
-    frozen_manifest = tmp_path / "frozen-run-manifest.json"
-    overlay_manifest_sha256 = "1" * 64
-    overlay_entries_sha256 = "2" * 64
-    overlay_packages_sha256 = "3" * 64
-    frozen_manifest.write_text(
-        json.dumps(
-            {
-                "plan_id": "PLAN-EXP0001-PILOT-V4",
-                "clean_package_commit": "a" * 40,
-                "execution_contract_sha256": contract.sha256,
-                "replacement_image_id": replacement_image_id,
-                "qualification_id": "QUAL-T09-PILOT-V4-IMAGE-0004",
-                "build_context_manifest_sha256": "b" * 64,
-                "package_manifest_sha256": (
-                    "4ff2603fa5e0f7033ba773decdcb86abf648dcce22e469d26bc48214e390e104"
-                ),
-                "chromium_executable_sha256": (
-                    "0498f208c25339f386413ada7b3c35293b0b6250e67d85446ba9541d7fd636f7"
-                ),
-                "patched_upstream_runner_sha256": (
-                    "b06793ad1b366a934b798f9f3272fc80a7104a220cb3304ab3bda2eb2a78b331"
-                ),
-                "evaluator_overlay_manifest_sha256": overlay_manifest_sha256,
-                "evaluator_overlay_entries_sha256": overlay_entries_sha256,
-                "evaluator_overlay_packages_sha256": overlay_packages_sha256,
-                "empirical_entry_crossed": False,
-                "post_entry_code_science_image_freeze": True,
-            }
-        ),
-        encoding="utf-8",
-    )
-    (attempt_root / "evaluator-overlay-revalidation.json").write_text(
-        json.dumps(
-            {
-                "overlay_manifest_sha256": overlay_manifest_sha256,
-                "overlay_entries_sha256": overlay_entries_sha256,
-                "overlay_packages_sha256": overlay_packages_sha256,
-                "packages_recomputed": True,
-            }
-        ),
-        encoding="utf-8",
-    )
-    result = finalizer.finalize(
-        SimpleNamespace(
-            execution_contract=EXECUTION_CONTRACT,
-            execution_contract_sha256=contract.sha256,
-            command_manifests=command_path,
-            command_manifests_sha256=file_sha256(command_path),
-            condition_plan=ROOT / attempt.condition_plan_path,
-            attempt_root=attempt_root,
-            run_id=attempt.run_id,
-            package_commit="a" * 40,
-            frozen_run_manifest=frozen_manifest,
-            frozen_run_manifest_sha256=file_sha256(frozen_manifest),
-            replacement_image_id=replacement_image_id,
-            aggregate_ledger=tmp_path / "aggregate-budget.json",
-            pilot_state=state_path,
-            host_cleanup_receipt=cleanup_path,
-            evaluator_root=EVALUATOR_ROOT,
-            dataset=DATASET_FIXTURE,
-            score_schema=ROOT / "schemas/t09-sira-pilot-score.schema.json",
-            evidence_schema=ROOT / "schemas/t09-sira-pilot-evidence.schema.json",
-        )
-    )
-    outcome = json.loads((attempt_root / "attempt-outcome.json").read_text())
-    evidence = json.loads((attempt_root / "evidence-index.json").read_text())
-    assert result["valid_scored_attempt"] is False
-    assert outcome["artifact_execution"] is True
-    assert outcome["invalid_infrastructure_attempt"] is True
-    assert outcome["condition_failure"] is False
-    assert evidence["outcome"] == outcome
-    state = json.loads(state_path.read_text())
-    assert state["attempts_completed"] == [attempt.run_id]
+    assert duplicated["evaluator_valid"] is False
+    assert duplicated["score"] is None
+    assert len(duplicated["session_sha256s"]) == 2
+    assert duplicated["raw_consistency"]["one_session"] is False
 
 
 @pytest.mark.parametrize(

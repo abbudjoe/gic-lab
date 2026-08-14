@@ -1,0 +1,16 @@
+{
+  "browser_actions": 1,
+  "cached_input_tokens": 0,
+  "cost_usd": 0.0001,
+  "default_service_tier_response_count": 1,
+  "input_tokens": 10,
+  "model_call_attempts": 1,
+  "model_revision": "gpt-4o-2024-11-20",
+  "observed_response_service_tiers": ["default"],
+  "output_bytes": 1024,
+  "output_tokens": 2,
+  "request_service_tier": "default",
+  "schema_version": "0.1.0",
+  "total_tokens": 12,
+  "unreconciled_provider_attempts": 0
+}

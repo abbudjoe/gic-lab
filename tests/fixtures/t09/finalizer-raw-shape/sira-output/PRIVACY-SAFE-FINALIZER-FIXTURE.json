@@ -1,0 +1,13 @@
+{
+  "error": "",
+  "goal": "What is the batting hand of each of the first five picks in the 1998 MLB draft?",
+  "history": [
+    [
+      {"url": "about:blank"},
+      "send_msg_to_user('No relevant answer.')",
+      {"thought": "privacy-safe offline fixture"}
+    ]
+  ],
+  "instance_id": null,
+  "is_complete": true
+}

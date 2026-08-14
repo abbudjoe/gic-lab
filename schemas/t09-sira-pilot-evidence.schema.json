@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:gic-lab:schema:t09-sira-pilot-evidence:0.2.0",
+  "$id": "urn:gic-lab:schema:t09-sira-pilot-evidence:0.3.0",
   "title": "T09 SiRA calibration-pilot reconstructable attempt evidence",
   "type": "object",
   "additionalProperties": false,
@@ -22,19 +22,19 @@
     "redaction"
   ],
   "properties": {
-    "schema_version": {"const": "0.2.0"},
-    "plan_id": {"const": "PLAN-EXP0001-PILOT-V4"},
+    "schema_version": {"const": "0.3.0"},
+    "plan_id": {"const": "PLAN-EXP0001-PILOT-V5"},
     "execution_contract_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     "identity": {
       "type": "object",
       "additionalProperties": false,
       "required": ["run_id", "task_id", "task_text_sha256", "reference_sha256", "pair_id", "order_index", "condition", "attempt"],
       "properties": {
-        "run_id": {"type": "string", "pattern": "^RUN-T09-TASK-[AB]-(?:REACTIVE|SIMULATIVE)-0002$"},
+        "run_id": {"type": "string", "pattern": "^RUN-T09-TASK-[AB]-(?:REACTIVE|SIMULATIVE)-0003$"},
         "task_id": {"enum": ["7dcbbbdc7f1120cd", "2120afba8009bad3"]},
         "task_text_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
         "reference_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
-        "pair_id": {"enum": ["PAIR-EXP0001-PILOT-V4-TASK-A", "PAIR-EXP0001-PILOT-V4-TASK-B"]},
+        "pair_id": {"enum": ["PAIR-EXP0001-PILOT-V5-TASK-A", "PAIR-EXP0001-PILOT-V5-TASK-B"]},
         "order_index": {"enum": [1, 2]},
         "condition": {"enum": ["SIRA-REACTIVE", "SIRA-SIMULATIVE"]},
         "attempt": {"const": 1}
@@ -42,15 +42,20 @@
     },
     "runtime": {
       "type": "object",
-      "required": ["giclab_commit", "reviewed_implementation_ancestor", "sira_commit", "python_version", "container_image_digest", "frozen_run_manifest_sha256", "qualification_id", "build_context_manifest_sha256", "installed_package_manifest_sha256", "chromium_executable_sha256", "patched_upstream_runner_sha256", "evaluator_overlay_manifest_sha256", "evaluator_overlay_entries_sha256", "evaluator_overlay_packages_sha256", "model_revision", "requested_service_tier", "returned_service_tiers", "browser_identity", "gpu_accounting"],
+      "required": ["giclab_commit", "finalizer_commit", "finalizer_source_sha256", "finalizer_dependency_manifest_sha256", "reviewed_implementation_ancestor", "sira_commit", "python_version", "python_interpreter_path", "python_interpreter_sha256", "container_image_digest", "frozen_run_manifest_sha256", "qualification_id", "build_context_manifest_sha256", "installed_package_manifest_sha256", "chromium_executable_sha256", "patched_upstream_runner_sha256", "evaluator_overlay_manifest_sha256", "evaluator_overlay_entries_sha256", "evaluator_overlay_packages_sha256", "model_revision", "requested_service_tier", "returned_service_tiers", "browser_identity", "gpu_accounting"],
       "properties": {
         "giclab_commit": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
+        "finalizer_commit": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
+        "finalizer_source_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "finalizer_dependency_manifest_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
         "reviewed_implementation_ancestor": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
         "sira_commit": {"const": "93fb8d72de71f9a4a13419670adeb34d93cf7acd"},
         "python_version": {"enum": ["3.11.14", null]},
+        "python_interpreter_path": {"const": "/opt/sira/.venv/bin/python"},
+        "python_interpreter_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
         "container_image_digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
         "frozen_run_manifest_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
-        "qualification_id": {"const": "QUAL-T09-PILOT-V4-IMAGE-0004"},
+        "qualification_id": {"const": "QUAL-T09-PILOT-V5-IMAGE-0001"},
         "build_context_manifest_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
         "installed_package_manifest_sha256": {"const": "4ff2603fa5e0f7033ba773decdcb86abf648dcce22e469d26bc48214e390e104"},
         "chromium_executable_sha256": {"const": "0498f208c25339f386413ada7b3c35293b0b6250e67d85446ba9541d7fd636f7"},
@@ -124,7 +129,7 @@
     },
     "retained_artifacts": {
       "type": "object",
-      "required": ["session_json", "raw_answer", "stdout", "stderr", "screenshots", "normalized_events", "regulation_decisions", "provider_ledger", "evaluator_input", "evaluator_output"],
+      "required": ["session_json", "raw_answer", "stdout", "stderr", "screenshots", "normalized_events", "regulation_decisions", "provider_ledger", "raw_attempt_manifest", "raw_attempt_receipt", "evaluator_input", "evaluator_output"],
       "additionalProperties": true
     },
     "outcome": {"$ref": "t09-sira-pilot-score.schema.json"},

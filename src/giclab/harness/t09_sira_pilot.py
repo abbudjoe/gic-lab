@@ -27,7 +27,7 @@ from giclab.harness.sira_gate_a import (
     ProviderBudgetUsage,
 )
 
-PLAN_ID: Final = "PLAN-EXP0001-PILOT-V4"
+PLAN_ID: Final = "PLAN-EXP0001-PILOT-V5"
 EXPERIMENT_ID: Final = "EXP-0001"
 SIRA_COMMIT: Final = "93fb8d72de71f9a4a13419670adeb34d93cf7acd"
 MODEL_REVISION: Final = "gpt-4o-2024-11-20"
@@ -49,19 +49,19 @@ TASK_REFERENCE_SHA256S: Final = (
     "2ee9d892e24441d5f5bbf31b7616c1ade5977af26d22e4020f92a162fa23becb",
 )
 ATTEMPT_ORDER: Final = (
-    "RUN-T09-TASK-A-REACTIVE-0002",
-    "RUN-T09-TASK-A-SIMULATIVE-0002",
-    "RUN-T09-TASK-B-SIMULATIVE-0002",
-    "RUN-T09-TASK-B-REACTIVE-0002",
+    "RUN-T09-TASK-A-REACTIVE-0003",
+    "RUN-T09-TASK-A-SIMULATIVE-0003",
+    "RUN-T09-TASK-B-SIMULATIVE-0003",
+    "RUN-T09-TASK-B-REACTIVE-0003",
 )
 EVALUATOR_RUN_IDS: Final = (
-    "RUN-T09-EVAL-TASK-A-REACTIVE-0002",
-    "RUN-T09-EVAL-TASK-A-SIMULATIVE-0002",
-    "RUN-T09-EVAL-TASK-B-SIMULATIVE-0002",
-    "RUN-T09-EVAL-TASK-B-REACTIVE-0002",
+    "RUN-T09-EVAL-TASK-A-REACTIVE-0003",
+    "RUN-T09-EVAL-TASK-A-SIMULATIVE-0003",
+    "RUN-T09-EVAL-TASK-B-SIMULATIVE-0003",
+    "RUN-T09-EVAL-TASK-B-REACTIVE-0003",
 )
-RUNTIME_QUALIFICATION_ID: Final = "QUAL-T09-PILOT-V4-IMAGE-0004"
-FROZEN_RUN_MANIFEST_ID: Final = "RUN-MANIFEST-EXP0001-PILOT-V4-0002"
+RUNTIME_QUALIFICATION_ID: Final = "QUAL-T09-PILOT-V5-IMAGE-0001"
+FROZEN_RUN_MANIFEST_ID: Final = "RUN-MANIFEST-EXP0001-PILOT-V5-0003"
 HISTORICAL_IMAGE_ID: Final = (
     "sha256:035edf61718e84a8156f4f0f7817b134b0ce31488d3f0b50bbfba2b4a30cc61c"
 )
@@ -119,10 +119,13 @@ class CampaignLifecycleLimits:
             raise T09PilotError("provider termination cutoff must preserve the cleanup reserve")
         if (
             self.max_lambda_instances != 1
-            or self.max_launch_count != 1
+            or self.max_launch_count != 2
             or self.persistent_filesystems != 0
         ):
-            raise T09PilotError("campaign requires one instance, one launch, and no filesystem")
+            raise T09PilotError(
+                "campaign requires one simultaneous instance, at most two pre-empirical "
+                "launches, and no filesystem"
+            )
 
     def elapsed_seconds(self, *, billable_started_at: float, now: float) -> float:
         elapsed = now - billable_started_at
@@ -226,7 +229,7 @@ def load_json_object(path: Path, *, context: str) -> dict[str, object]:
 
 @dataclass(frozen=True, slots=True)
 class RuntimeQualification:
-    """The source-derived pre-entry binding for the one accepted V4 image."""
+    """The source-derived pre-entry binding for the one accepted V5 image."""
 
     manifest_id: str
     qualification_id: str
@@ -237,6 +240,8 @@ class RuntimeQualification:
     package_manifest_sha256: str
     chromium_executable_sha256: str
     patched_upstream_runner_sha256: str
+    python_interpreter_path: str
+    python_interpreter_sha256: str
     evaluator_overlay_manifest_sha256: str
     evaluator_overlay_entries_sha256: str
     evaluator_overlay_packages_sha256: str
@@ -278,6 +283,14 @@ class RuntimeQualification:
                 document.get("patched_upstream_runner_sha256"),
                 context="patched upstream runner hash",
             ),
+            python_interpreter_path=_required_string(
+                document.get("python_interpreter_path"),
+                context="Python interpreter path",
+            ),
+            python_interpreter_sha256=_required_string(
+                document.get("python_interpreter_sha256"),
+                context="Python interpreter hash",
+            ),
             evaluator_overlay_manifest_sha256=_required_string(
                 document.get("evaluator_overlay_manifest_sha256"),
                 context="evaluator overlay manifest hash",
@@ -312,6 +325,7 @@ class RuntimeQualification:
             result.package_manifest_sha256,
             result.chromium_executable_sha256,
             result.patched_upstream_runner_sha256,
+            result.python_interpreter_sha256,
             result.evaluator_overlay_manifest_sha256,
             result.evaluator_overlay_entries_sha256,
             result.evaluator_overlay_packages_sha256,
@@ -324,6 +338,7 @@ class RuntimeQualification:
             or re.fullmatch(r"[a-f0-9]{40}", result.clean_package_commit) is None
             or re.fullmatch(r"sha256:[a-f0-9]{64}", result.replacement_image_id) is None
             or result.historical_image_id != HISTORICAL_IMAGE_ID
+            or result.python_interpreter_path != "/opt/sira/.venv/bin/python"
             or any(_HEX64.fullmatch(item) is None for item in hashes)
             or result.model_metadata_request_count != 1
             or result.model_task_request_count != 0
@@ -348,6 +363,8 @@ class AttemptBinding:
     condition: Literal["reactive", "simulative"]
     order_index: int
     output_root: str
+    raw_output_root: str
+    finalized_output_root: str
     condition_plan_path: str
     condition_plan_sha256: str
     protocol_sha256: str
@@ -371,6 +388,11 @@ class AttemptBinding:
             or ".." in Path(self.output_root).parts
         ):
             raise T09PilotError("attempt output root must be repository relative")
+        if (
+            self.raw_output_root != f"{self.output_root}/raw"
+            or self.finalized_output_root != f"{self.output_root}/finalized"
+        ):
+            raise T09PilotError("attempt raw/finalized roots drifted from its owned root")
         if (
             not self.condition_plan_path
             or Path(self.condition_plan_path).is_absolute()
@@ -523,7 +545,7 @@ def load_execution_contract(path: Path, *, expected_sha256: str) -> PilotExecuti
         raise T09PilotError("execution contract hash does not match")
     document = load_json_object(path, context="T09 execution contract")
     expected_identity = {
-        "schema_version": "0.2.0",
+        "schema_version": "0.3.0",
         "plan_id": PLAN_ID,
         "experiment_id": EXPERIMENT_ID,
         "sira_commit": SIRA_COMMIT,
@@ -599,6 +621,12 @@ def load_execution_contract(path: Path, *, expected_sha256: str) -> PilotExecuti
                 condition=cast(Literal["reactive", "simulative"], condition),
                 order_index=_required_int(item.get("order_index"), context="attempt order"),
                 output_root=_required_string(item.get("output_root"), context="output root"),
+                raw_output_root=_required_string(
+                    item.get("raw_output_root"), context="raw output root"
+                ),
+                finalized_output_root=_required_string(
+                    item.get("finalized_output_root"), context="finalized output root"
+                ),
                 condition_plan_path=_required_string(
                     item.get("condition_plan_path"), context="condition plan path"
                 ),
@@ -777,7 +805,7 @@ def initialize_pilot_state(
         if not math.isfinite(value) or value <= 0:
             raise T09PilotError("pilot and Lambda start epochs must be positive and finite")
     document = {
-        "schema_version": "0.1.0",
+        "schema_version": "0.2.0",
         "plan_id": PLAN_ID,
         "execution_contract_sha256": execution_contract_sha256,
         "pilot_started_at_epoch": pilot_started_at_epoch,
@@ -785,7 +813,11 @@ def initialize_pilot_state(
         "first_pair_started_at_epoch": pilot_started_at_epoch,
         "second_pair_started_at_epoch": None,
         "empirical_attempts_entered": [],
+        "raw_attempts_complete": [],
+        "raw_attempt_bindings": {},
         "attempts_completed": [],
+        "attempt_finalizations": {},
+        "attempt_finalization_history": {},
         "first_pair_decision": None,
     }
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -804,15 +836,49 @@ def _write_json_atomic(path: Path, document: Mapping[str, object]) -> None:
 def _load_pilot_state(path: Path, *, contract_sha256: str) -> dict[str, object]:
     state = load_json_object(path, context="pilot attempt state")
     if (
-        state.get("schema_version") != "0.1.0"
+        state.get("schema_version") != "0.2.0"
         or state.get("plan_id") != PLAN_ID
         or state.get("execution_contract_sha256") != contract_sha256
     ):
         raise T09PilotError("pilot attempt-state identity drifted")
-    for field in ("empirical_attempts_entered", "attempts_completed"):
+    for field in ("empirical_attempts_entered", "raw_attempts_complete", "attempts_completed"):
         value = state.get(field)
         if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
             raise T09PilotError(f"pilot state {field} is malformed")
+        if len(value) != len(set(value)) or any(item not in ATTEMPT_ORDER for item in value):
+            raise T09PilotError(f"pilot state {field} is not a unique frozen-order subset")
+        if value != [item for item in ATTEMPT_ORDER if item in value]:
+            raise T09PilotError(f"pilot state {field} is not in frozen order")
+    raw_bindings = state.get("raw_attempt_bindings")
+    if not isinstance(raw_bindings, dict) or not all(
+        isinstance(key, str) and isinstance(value, dict) for key, value in raw_bindings.items()
+    ):
+        raise T09PilotError("pilot state raw attempt bindings are malformed")
+    raw_complete = cast(list[str], state["raw_attempts_complete"])
+    if set(raw_bindings) != set(raw_complete):
+        raise T09PilotError("pilot state raw attempt bindings do not match sealed attempts")
+    for binding in raw_bindings.values():
+        if set(binding) != {"manifest_sha256", "receipt_sha256"} or any(
+            not isinstance(value, str) or _HEX64.fullmatch(value) is None
+            for value in binding.values()
+        ):
+            raise T09PilotError("pilot state raw attempt binding is malformed")
+    finalizations = state.get("attempt_finalizations")
+    if not isinstance(finalizations, dict) or not all(
+        isinstance(key, str) and isinstance(value, dict) for key, value in finalizations.items()
+    ):
+        raise T09PilotError("pilot state attempt finalizations are malformed")
+    completed = cast(list[str], state["attempts_completed"])
+    if set(finalizations) != set(completed):
+        raise T09PilotError("pilot selected finalizations do not match completed attempts")
+    history = state.get("attempt_finalization_history")
+    if not isinstance(history, dict) or not all(
+        isinstance(key, str)
+        and isinstance(value, list)
+        and all(isinstance(item, dict) for item in value)
+        for key, value in history.items()
+    ):
+        raise T09PilotError("pilot state finalization history is malformed")
     return state
 
 
@@ -826,11 +892,15 @@ def mark_empirical_entry(
 
     state = _load_pilot_state(path, contract_sha256=execution_contract_sha256)
     entered = cast(list[str], state["empirical_attempts_entered"])
-    completed = cast(list[str], state["attempts_completed"])
-    if entered != list(ATTEMPT_ORDER[: len(entered)]) or completed != entered[: len(completed)]:
-        raise T09PilotError("pilot attempt history is not a valid prefix of the frozen order")
+    raw_complete = cast(list[str], state["raw_attempts_complete"])
     if run_id in entered:
         raise T09BudgetExceeded("zero-retry rule forbids re-entering an empirical attempt")
+    if (
+        entered != list(ATTEMPT_ORDER[: len(entered)])
+        or raw_complete != entered[: len(raw_complete)]
+        or len(raw_complete) != len(entered)
+    ):
+        raise T09PilotError("pilot attempt history is not a valid prefix of the frozen order")
     if len(entered) >= len(ATTEMPT_ORDER) or run_id != ATTEMPT_ORDER[len(entered)]:
         raise T09BudgetExceeded("attempt count or frozen attempt order would be violated")
     if len(entered) == 2 and state.get("first_pair_decision") != "continue-to-task-b":
@@ -840,21 +910,104 @@ def mark_empirical_entry(
     _write_json_atomic(path, state)
 
 
+def mark_raw_attempt_complete(
+    path: Path,
+    *,
+    execution_contract_sha256: str,
+    run_id: str,
+    raw_manifest_sha256: str,
+    raw_receipt_sha256: str,
+) -> None:
+    """Seal the consumed condition as reconstructable before downstream processing."""
+
+    if (
+        _HEX64.fullmatch(raw_manifest_sha256) is None
+        or _HEX64.fullmatch(raw_receipt_sha256) is None
+    ):
+        raise T09PilotError("raw attempt hashes must be SHA-256")
+    state = _load_pilot_state(path, contract_sha256=execution_contract_sha256)
+    entered = cast(list[str], state["empirical_attempts_entered"])
+    raw_complete = cast(list[str], state["raw_attempts_complete"])
+    raw_bindings = state.setdefault("raw_attempt_bindings", {})
+    if not isinstance(raw_bindings, dict):
+        raise T09PilotError("raw attempt binding state is malformed")
+    if run_id in raw_complete:
+        if raw_bindings.get(run_id) != {
+            "manifest_sha256": raw_manifest_sha256,
+            "receipt_sha256": raw_receipt_sha256,
+        }:
+            raise T09PilotError("existing raw attempt binding disagrees with retained bytes")
+        return
+    if (
+        run_id not in entered
+        or run_id != ATTEMPT_ORDER[len(raw_complete)]
+        or entered[: len(raw_complete) + 1] != list(ATTEMPT_ORDER[: len(raw_complete) + 1])
+    ):
+        raise T09PilotError("raw attempt completion is missing, duplicated, or out of order")
+    raw_complete.append(run_id)
+    state["raw_attempts_complete"] = raw_complete
+    if run_id in raw_bindings:
+        raise T09PilotError("raw attempt binding is malformed or duplicated")
+    raw_bindings[run_id] = {
+        "manifest_sha256": raw_manifest_sha256,
+        "receipt_sha256": raw_receipt_sha256,
+    }
+    _write_json_atomic(path, state)
+
+
 def mark_attempt_completed(
     path: Path,
     *,
     execution_contract_sha256: str,
     run_id: str,
+    finalizer_source_sha256: str,
+    finalizer_commit: str,
+    finalizer_dependency_manifest_sha256: str,
+    evaluator_contract_sha256: str,
+    interpreter: str,
+    interpreter_sha256: str,
+    finalized_output_root: str,
+    finalization_complete_sha256: str,
 ) -> None:
-    """Complete exactly the most recently entered attempt without enabling retry."""
+    """Select one downstream finalization without reopening the condition attempt."""
+
+    if (
+        _HEX64.fullmatch(finalizer_source_sha256) is None
+        or _HEX64.fullmatch(finalizer_dependency_manifest_sha256) is None
+        or _HEX64.fullmatch(evaluator_contract_sha256) is None
+        or _HEX64.fullmatch(interpreter_sha256) is None
+        or _HEX64.fullmatch(finalization_complete_sha256) is None
+        or re.fullmatch(r"[a-f0-9]{40}", finalizer_commit) is None
+        or interpreter != "/opt/sira/.venv/bin/python"
+    ):
+        raise T09PilotError("finalizer code identity is malformed")
 
     state = _load_pilot_state(path, contract_sha256=execution_contract_sha256)
     entered = cast(list[str], state["empirical_attempts_entered"])
-    completed = cast(list[str], state["attempts_completed"])
-    if not entered or entered[-1] != run_id or len(completed) + 1 != len(entered):
+    raw_complete = cast(list[str], state["raw_attempts_complete"])
+    finalizations = cast(dict[str, dict[str, object]], state["attempt_finalizations"])
+    history = cast(dict[str, list[dict[str, object]]], state["attempt_finalization_history"])
+    if run_id not in entered or run_id not in raw_complete:
         raise T09PilotError("attempt completion is missing, duplicated, or out of order")
-    completed.append(run_id)
-    state["attempts_completed"] = completed
+    selection: dict[str, object] = {
+        "finalizer_source_sha256": finalizer_source_sha256,
+        "finalizer_commit": finalizer_commit,
+        "finalizer_dependency_manifest_sha256": finalizer_dependency_manifest_sha256,
+        "evaluator_contract_sha256": evaluator_contract_sha256,
+        "interpreter": interpreter,
+        "interpreter_sha256": interpreter_sha256,
+        "finalized_output_root": finalized_output_root,
+        "finalization_complete_sha256": finalization_complete_sha256,
+    }
+    retained_history = history.setdefault(run_id, [])
+    if selection not in retained_history:
+        retained_history.append(selection)
+    finalizations[run_id] = selection
+    state["attempts_completed"] = [
+        attempt_run_id for attempt_run_id in ATTEMPT_ORDER if attempt_run_id in finalizations
+    ]
+    state["attempt_finalizations"] = finalizations
+    state["attempt_finalization_history"] = history
     _write_json_atomic(path, state)
 
 
@@ -872,6 +1025,26 @@ def record_first_pair_checkpoint(
         raise T09PilotError("the first-pair checkpoint cannot be repeated")
     if state["attempts_completed"] != list(ATTEMPT_ORDER[:2]):
         raise T09PilotError("checkpoint requires both Task A attempts to be complete")
+    finalizations = cast(dict[str, dict[str, object]], state["attempt_finalizations"])
+    finalizer_closures = {
+        canonical_sha256(
+            {
+                key: item[key]
+                for key in (
+                    "finalizer_source_sha256",
+                    "finalizer_commit",
+                    "finalizer_dependency_manifest_sha256",
+                    "evaluator_contract_sha256",
+                    "interpreter",
+                    "interpreter_sha256",
+                )
+            }
+        )
+        for run_id in ATTEMPT_ORDER[:2]
+        if (item := finalizations.get(run_id)) is not None
+    }
+    if len(finalizer_closures) != 1:
+        raise T09PilotError("checkpoint requires one uniform Task A finalizer closure")
     result = decision.get("decision")
     if result not in {"continue-to-task-b", "stop-before-task-b"}:
         raise T09PilotError("checkpoint decision is invalid")
@@ -1041,8 +1214,8 @@ class PairCheckpointInput:
     actual_lambda_cost_usd: float
     remaining_campaign_seconds: float
     next_attempt_hard_wall_seconds: int = 3_600
-    prior_t09_cost_usd: float = 0.414064252316667
-    cumulative_t09_cost_cap_usd: float = 46.0
+    prior_t09_cost_usd: float = 2.5308164556905757
+    cumulative_t09_cost_cap_usd: float = 48.0
 
 
 def first_pair_decision(value: PairCheckpointInput) -> dict[str, object]:
@@ -1107,7 +1280,7 @@ def first_pair_decision(value: PairCheckpointInput) -> dict[str, object]:
         post_condition_evaluator_evidence_seconds=600,
         termination_dispatch_margin_seconds=60,
         max_lambda_instances=1,
-        max_launch_count=1,
+        max_launch_count=2,
         persistent_filesystems=0,
     )
     required_campaign_seconds = lifecycle.required_attempt_seconds(
@@ -1393,7 +1566,7 @@ def outcome_contract(
         and not missing_required_evidence
     )
     return {
-        "schema_version": "0.2.0",
+        "schema_version": "0.3.0",
         "process_exit": {
             "observed": process_exit_code is not None,
             "code": process_exit_code,
@@ -1457,13 +1630,13 @@ def _validated_upstream_argv(
         "--timeout": str(contract.action_timeout_seconds),
         "--max_retry": "0",
         "--data_root": "/opt/sira/data",
-        "--output_dir": f"/opt/giclab-artifacts/{attempt.output_root}/sira-output",
+        "--output_dir": f"/opt/giclab-artifacts/{attempt.raw_output_root}/sira-output",
         "--start_idx": str(attempt.task_index),
         "--end_idx": str(attempt.task_index + 1),
         "--seed": "42",
     }
-    upstream_suffix = attempt.run_id.removeprefix("RUN-T09-").removesuffix("-0002")
-    upstream_run_id = f"EXP-0001-PILOT-V4-{upstream_suffix}"
+    upstream_suffix = attempt.run_id.removeprefix("RUN-T09-").removesuffix("-0003")
+    upstream_run_id = f"EXP-0001-PILOT-V5-{upstream_suffix}"
     if argv[0] != upstream_run_id or values != expected:
         raise T09PilotError("upstream argv drifted from the exact task/condition contract")
     return values
@@ -1498,7 +1671,7 @@ def render_command_manifest(
         "--gate-upstream-runner",
         "/opt/sira/scripts/run_web_agent.py",
         "--gate-attempt-root",
-        f"/opt/giclab-artifacts/{attempt.output_root}",
+        f"/opt/giclab-artifacts/{attempt.raw_output_root}",
         "--gate-mode",
         attempt.condition,
         "--gate-adaptation-sha256",
@@ -1523,7 +1696,7 @@ def render_command_manifest(
     equality_surface = {
         "task_id": attempt.task_id,
         "model": MODEL_REVISION,
-        "runtime": "T09-V4-python-3.11.14-preentry-bound-replacement-image",
+        "runtime": "T09-V5-python-3.11.14-preentry-bound-replacement-image",
         "giclab_commit": attempt.giclab_commit,
         "protocol_sha256": attempt.protocol_sha256,
         "config_sha256": attempt.config_sha256,
@@ -1534,7 +1707,9 @@ def render_command_manifest(
         "condition_wall_seconds": contract.limits.max_condition_wall_seconds,
         "evaluator_contract_sha256": contract.evaluator_contract_sha256,
         "instrumentation": "t09-post-action-provider-receipt-lineage-v1",
-        "evidence_handling": "private-access-controlled-raw-structurally-redacted-public",
+        "evidence_handling": (
+            "immutable-raw-attempt-before-network-none-versioned-downstream-finalization"
+        ),
         "budgets": {
             "max_model_calls": contract.limits.max_model_calls_per_attempt,
             "max_model_tokens": contract.limits.max_model_tokens_per_attempt,
@@ -1567,6 +1742,8 @@ def render_command_manifest(
             "run_id": attempt.run_id,
             "order_index": attempt.order_index,
             "output_root": attempt.output_root,
+            "raw_output_root": attempt.raw_output_root,
+            "finalized_output_root": attempt.finalized_output_root,
             "condition_plan_path": attempt.condition_plan_path,
             "condition_plan_sha256": attempt.condition_plan_sha256,
             "source_declared_treatment_config": (
@@ -1591,14 +1768,14 @@ def _normalized_actual_argv(manifest: Mapping[str, object]) -> tuple[str, ...] |
         or not isinstance(condition_owned, Mapping)
     ):
         return None
-    output_root = condition_owned.get("output_root")
-    if not isinstance(output_root, str) or raw_argv.count("--") != 1:
+    raw_output_root = condition_owned.get("raw_output_root")
+    if not isinstance(raw_output_root, str) or raw_argv.count("--") != 1:
         return None
     argv = cast(list[str], list(raw_argv))
     separator = argv.index("--")
     replacements = {
         "--gate-attempt-root": (
-            f"/opt/giclab-artifacts/{output_root}",
+            f"/opt/giclab-artifacts/{raw_output_root}",
             "<CONDITION-OWNED-ATTEMPT-ROOT>",
         ),
         "--gate-mode": (str(condition), "<SOURCE-DECLARED-TREATMENT>"),
@@ -1616,8 +1793,8 @@ def _normalized_actual_argv(manifest: Mapping[str, object]) -> tuple[str, ...] |
             return None
         argv[indexes[0] + 1] = replacement
     downstream = argv[separator + 1 :]
-    upstream_suffix = run_id.removeprefix("RUN-T09-").removesuffix("-0002")
-    expected_upstream_run_id = f"EXP-0001-PILOT-V4-{upstream_suffix}"
+    upstream_suffix = run_id.removeprefix("RUN-T09-").removesuffix("-0003")
+    expected_upstream_run_id = f"EXP-0001-PILOT-V5-{upstream_suffix}"
     if not downstream or downstream[0] != expected_upstream_run_id:
         return None
     downstream[0] = "<UPSTREAM-RUN-ID>"
@@ -1628,7 +1805,7 @@ def _normalized_actual_argv(manifest: Mapping[str, object]) -> tuple[str, ...] |
             "<SOURCE-DECLARED-TREATMENT-CONFIG>",
         ),
         "--output_dir": (
-            f"/opt/giclab-artifacts/{output_root}/sira-output",
+            f"/opt/giclab-artifacts/{raw_output_root}/sira-output",
             "<CONDITION-OWNED-OUTPUT>",
         ),
     }

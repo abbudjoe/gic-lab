@@ -1,0 +1,16 @@
+{
+  "container_removed": true,
+  "hard_cap_breached": false,
+  "owned_container_residue": [],
+  "returncode": 0,
+  "run_id": "PRIVACY-SAFE-FINALIZER-FIXTURE",
+  "schema_version": "0.1.0",
+  "secret_matching_paths": [],
+  "secret_scan_passed": true,
+  "stop_reason": null,
+  "timing": {
+    "started_at": "2000-01-01T00:00:00Z",
+    "stopped_at": "2000-01-01T00:00:01Z",
+    "wall_seconds": 1.0
+  }
+}

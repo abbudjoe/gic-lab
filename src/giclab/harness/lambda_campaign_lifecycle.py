@@ -61,6 +61,12 @@ class ObserverLifecycleLimits:
 
         return cls.t09_pragmatic_v3()
 
+    @classmethod
+    def t09_pragmatic_v5(cls) -> ObserverLifecycleLimits:
+        """Retry 3 keeps the complete reviewed four-hour campaign envelope."""
+
+        return cls.t09_pragmatic_v3()
+
     def observer_active_seconds(
         self,
         *,

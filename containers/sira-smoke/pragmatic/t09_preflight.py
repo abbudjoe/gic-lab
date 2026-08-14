@@ -4,8 +4,10 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib
 import importlib.metadata
+import importlib.util
 import json
 import os
 import platform
@@ -55,6 +57,9 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--pilot-state", type=Path, required=True)
     parser.add_argument("--evaluator-root", type=Path, required=True)
     parser.add_argument("--dataset", type=Path, required=True)
+    parser.add_argument("--finalizer-source", type=Path, required=True)
+    parser.add_argument("--finalizer-source-sha256", required=True)
+    parser.add_argument("--finalizer-raw-fixture", type=Path, required=True)
     return parser
 
 
@@ -282,6 +287,70 @@ def _run_evaluator_fixtures(
     return results
 
 
+def _run_finalizer_raw_fixture(
+    *,
+    source: Path,
+    expected_source_sha256: str,
+    raw_fixture: Path,
+    evaluator_root: Path,
+    dataset: Path,
+) -> dict[str, object]:
+    """Execute the same raw semantic primitive used by the live finalizer."""
+
+    resolved_source = source.resolve(strict=True)
+    if file_sha256(resolved_source) != expected_source_sha256:
+        raise PreflightError("finalizer source hash drifted")
+    specification = importlib.util.spec_from_file_location(
+        "giclab_t09_preflight_finalizer",
+        resolved_source,
+    )
+    if specification is None or specification.loader is None:
+        raise PreflightError("finalizer source cannot be loaded")
+    module = importlib.util.module_from_spec(specification)
+    specification.loader.exec_module(module)
+    reconstruct = getattr(module, "reconstruct_semantic_projection", None)
+    if not callable(reconstruct):
+        raise PreflightError("finalizer semantic projection is unavailable")
+    observed: object = reconstruct(
+        raw_root=raw_fixture.resolve(strict=True),
+        evaluator_root=evaluator_root.resolve(strict=True),
+        dataset_path=dataset.resolve(strict=True),
+        task_index=0,
+        task_id="7dcbbbdc7f1120cd",
+        condition="SIRA-REACTIVE",
+    )
+    if not isinstance(observed, dict):
+        raise PreflightError("finalizer semantic fixture returned a non-object")
+    expected = {
+        "task_completed": True,
+        "answer_produced": True,
+        "evaluator_valid": True,
+        "score": 0.0,
+        "provider_call_count": 1,
+        "browser_action_count": 1,
+    }
+    if any(observed.get(key) != value for key, value in expected.items()):
+        raise PreflightError("finalizer raw-shape fixture semantic result drifted")
+    return {
+        "finalizer_source_sha256": expected_source_sha256,
+        "raw_fixture_semantic_sha256": hashlib.sha256(
+            json.dumps(
+                observed,
+                allow_nan=False,
+                ensure_ascii=False,
+                separators=(",", ":"),
+                sort_keys=True,
+            ).encode()
+        ).hexdigest(),
+        "task_completed": True,
+        "answer_produced": True,
+        "evaluator_valid": True,
+        "score": 0.0,
+        "provider_or_task_request": False,
+        "browser_action": False,
+    }
+
+
 def run(args: argparse.Namespace) -> dict[str, object]:
     if platform.python_version() != EXPECTED_PYTHON:
         raise PreflightError(
@@ -396,6 +465,13 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         evaluator_root=evaluator.root,
         dataset=evaluator.dataset_path,
     )
+    finalizer_fixture = _run_finalizer_raw_fixture(
+        source=args.finalizer_source,
+        expected_source_sha256=args.finalizer_source_sha256,
+        raw_fixture=args.finalizer_raw_fixture,
+        evaluator_root=evaluator.root,
+        dataset=evaluator.dataset_path,
+    )
 
     result = {
         "schema_version": "0.1.0",
@@ -408,6 +484,10 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "evaluator_package_versions": observed_versions,
         "offline_evaluator_fixtures": "passed-approved-exact-results",
         "offline_evaluator_fixture_results": fixture_results,
+        "finalizer_raw_fixture": finalizer_fixture,
+        "finalizer_real_evidence_regression_contract": (
+            "same-semantic-primitive-prelaunch-real-archive-receipt-required"
+        ),
         "task_loading": "passed-two-exact-rows",
         "provider_or_task_request": False,
         "browser_action": False,

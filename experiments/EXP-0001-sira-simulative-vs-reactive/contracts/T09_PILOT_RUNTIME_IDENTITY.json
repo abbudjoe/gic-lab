@@ -1,10 +1,10 @@
 {
-  "schema_version": "0.2.0",
-  "identity_id": "RUNTIME-EXP0001-PILOT-V4-REPLACEMENT",
-  "plan_id": "PLAN-EXP0001-PILOT-V4",
+  "schema_version": "0.3.0",
+  "identity_id": "RUNTIME-EXP0001-PILOT-V5-REPLACEMENT",
+  "plan_id": "PLAN-EXP0001-PILOT-V5",
   "execution_status": "current-turn-authorized-pending-source-derived-dynamic-qualification",
   "base_runtime": {
-    "source_run": "RUN-T07-PRAGMATIC-HOST-0002",
+    "source_run": "RUN-T07-PRAGMATIC-HOST-0003",
     "frozen_execution_commit": "5698f04dfd08bc85a66d2355b0a4bd7d3ce24a23",
     "post_run_commit": "27f66e6a82edffa57e497516bf3969a199675f06",
     "base_image_identity": "mcr.microsoft.com/playwright/python:v1.39.0-jammy@sha256:96955ff5cc37e13f5f1b21f5171afb9fed7e028025aa9d81c690501cd7fa0c6c",
@@ -20,13 +20,14 @@
   "replacement_image_policy": {
     "historical_image_digest": "sha256:035edf61718e84a8156f4f0f7817b134b0ce31488d3f0b50bbfba2b4a30cc61c",
     "exact_historical_digest_equality_required": false,
-    "qualification_id": "QUAL-T09-PILOT-V4-IMAGE-0004",
-    "frozen_run_manifest_id": "RUN-MANIFEST-EXP0001-PILOT-V4-0002",
+    "qualification_id": "QUAL-T09-PILOT-V5-IMAGE-0001",
+    "frozen_run_manifest_id": "RUN-MANIFEST-EXP0001-PILOT-V5-0003",
     "runtime_binding": "source-derived-mode-0600-O_EXCL-frozen-run-manifest",
     "candidate_build_count": 1,
     "candidate_qualification_count": 1,
     "empirical_entry_before_binding_allowed": false,
     "same_exact_image_all_attempts_required": true,
+    "python_interpreter_identity": "source-derived-path-and-executable-sha256-in-frozen-run-manifest",
     "digest_inequality_alone_is_material": false,
     "freeze_interpretation": "reviewed-source-and-policy-bytes-are-final-before-launch; the post-gate immutable manifest instantiates the sole unresolved built-artifact identity without changing code or science"
   },

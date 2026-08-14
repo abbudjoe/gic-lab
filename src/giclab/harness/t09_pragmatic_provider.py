@@ -1,11 +1,11 @@
-"""Exact provider lifecycle for the one authorized T09 pragmatic campaign.
+"""Exact provider lifecycle for the authorized T09 Retry 3 campaign.
 
 This module is inert on import.  It reuses the provider request pattern retained by
 the successful T07 pragmatic run, but makes its previously implicit lifecycle
-contract explicit: one plan-derived campaign clock, one durable launch intent, one
-owned instance, bounded read-only polls, exact-target termination, and source-bound
-entry/closeout receipts.  It is deliberately a small linear lifecycle utility, not a
-general cloud platform or an independent watchdog.
+contract explicit: one plan-derived campaign clock, at most two pre-empirical launch
+slots, one simultaneous owned instance, bounded read-only polls, exact-target
+termination, and source-bound entry/closeout receipts.  It is deliberately a small
+linear lifecycle utility, not a general cloud platform or an independent watchdog.
 """
 
 from __future__ import annotations
@@ -38,10 +38,10 @@ from giclab.harness.lambda_l2m_observer import (
     observer_request,
 )
 
-PLAN_ID: Final = "PLAN-EXP0001-PILOT-V4"
-HOST_RUN_ID: Final = "RUN-T09-PILOT-HOST-0002"
+PLAN_ID: Final = "PLAN-EXP0001-PILOT-V5"
+HOST_RUN_ID: Final = "RUN-T09-PILOT-HOST-0003"
 AUTHORIZATION_SOURCE_SHA256: Final = (
-    "3852fe8dabb9ee6b10e40cbc6dc1ab964ea6fce11f71f81f0966e927cadddeb9"
+    "5731b3ccdad25f5d656272841d47f93418ae1535802602a9856c97552ac0b8b8"
 )
 API_HOST: Final = "cloud.lambda.ai"
 API_PORT: Final = 443
@@ -49,8 +49,13 @@ INSTANCE_TYPE: Final = "gpu_1x_a10"
 REGION: Final = "us-east-1"
 IMAGE_ID: Final = "44fab622-b98a-49fe-ac6d-e4ce5531532f"
 SSH_KEY_NAME: Final = "fractal-lambda-codex"
-INSTANCE_NAME: Final = "giclab-t09-pilot-v4-0002"
+INSTANCE_NAME: Final = "giclab-t09-pilot-v5-0003"
 PRICE_CENTS_PER_HOUR: Final = 129
+PRIOR_T09_COST_USD: Final = 2.5308164556905757
+NEW_CAMPAIGN_LAMBDA_CAP_USD: Final = 5.16
+NEW_CAMPAIGN_OPENAI_CAP_USD: Final = 40.0
+NEW_CAMPAIGN_AGGREGATE_CAP_USD: Final = 45.16
+CUMULATIVE_T09_CAP_USD: Final = 48.0
 SOURCE_OBSERVER: Final = "t07-pragmatic-mutations-plus-l2m-read-only-observer-v1"
 MAX_RESPONSE_BYTES: Final = 16_777_216
 MAX_REQUEST_BYTES: Final = 65_536
@@ -100,9 +105,9 @@ class CampaignLifecycle:
 
     def __post_init__(self) -> None:
         if (
-            self.observer_limits != ObserverLifecycleLimits.t09_pragmatic_v4()
+            self.observer_limits != ObserverLifecycleLimits.t09_pragmatic_v5()
             or self.max_instances != 1
-            or self.max_launches != 1
+            or self.max_launches != 2
             or self.persistent_filesystems != 0
         ):
             raise T09ProviderError("pilot provider lifecycle drifted")
@@ -328,23 +333,25 @@ def write_bytes_exclusive(path: Path, value: bytes) -> None:
     _fsync_parent(path)
 
 
-def launch_capability_path() -> Path:
-    """Return the fixed, non-CLI-selectable single-launch capability path."""
+def launch_capability_path(launch_slot: int = 1) -> Path:
+    """Return one fixed capability path for each authorized launch slot."""
+
+    if launch_slot not in (1, 2):
+        raise T09ProviderError("campaign launch slot is outside the authorized bound")
 
     return (
         Path(pwd.getpwuid(os.getuid()).pw_dir).resolve(strict=True)
         / ".gic-lab-t09-private"
-        / f"{PLAN_ID}-{HOST_RUN_ID}-launch-capability-consumed.json"
+        / f"{PLAN_ID}-{HOST_RUN_ID}-launch-slot-{launch_slot:02d}-consumed.json"
     )
 
 
 def _assert_launch_capability_unused(path: Path) -> None:
     if not path.is_absolute():
-        raise T09ProviderError("single-launch capability path is not absolute")
+        raise T09ProviderError("campaign launch capability path is not absolute")
     if os.path.lexists(path):
         raise T09ProviderError(
-            "the plan/package authorization launch capability is already consumed; "
-            "only cleanup is permitted"
+            "the selected campaign launch capability is already consumed; only cleanup is permitted"
         )
 
 
@@ -355,9 +362,23 @@ def _consume_launch_capability(
     package_commit: str,
     plan_sha256: str,
     private_root: Path,
+    launch_slot: int,
+    replacement_eligibility_sha256: str | None,
     clock: Callable[[], float],
 ) -> None:
-    """Atomically and durably burn the campaign's one mutation capability."""
+    """Atomically and durably burn exactly one authorized launch slot."""
+
+    if launch_slot not in (1, 2) or (
+        (launch_slot == 1 and replacement_eligibility_sha256 is not None)
+        or (
+            launch_slot == 2
+            and (
+                replacement_eligibility_sha256 is None
+                or _HEX64.fullmatch(replacement_eligibility_sha256) is None
+            )
+        )
+    ):
+        raise T09ProviderError("campaign launch-slot eligibility binding is invalid")
 
     parent = path.parent
     parent.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -367,7 +388,7 @@ def _consume_launch_capability(
         or metadata.st_uid != os.getuid()
         or stat.S_IMODE(metadata.st_mode) != 0o700
     ):
-        raise T09ProviderError("single-launch capability directory is unsafe")
+        raise T09ProviderError("campaign launch capability directory is unsafe")
     try:
         write_exclusive(
             path,
@@ -383,9 +404,11 @@ def _consume_launch_capability(
                 "private_root_identity_sha256": _sha256_bytes(
                     str(private_root.resolve(strict=True)).encode()
                 ),
-                "launch_capability_limit": 1,
+                "launch_slot": launch_slot,
+                "launch_capability_limit": 2,
                 "launch_capability_state": "consumed-cleanup-only-after-this-point",
-                "second_launch_forbidden": True,
+                "replacement_eligibility_sha256": replacement_eligibility_sha256,
+                "further_launch_forbidden": launch_slot == 2,
                 "consumed_at_epoch": clock(),
             },
         )
@@ -624,6 +647,7 @@ def load_campaign_lifecycle(repository: Path) -> CampaignLifecycle:
         "max_lambda_instances",
         "max_launch_count",
         "persistent_filesystems",
+        "replacement_launch_rule",
         "admission_rule",
         "control_plane",
     }:
@@ -631,6 +655,13 @@ def load_campaign_lifecycle(repository: Path) -> CampaignLifecycle:
     if (
         raw.get("post_condition_evaluator_evidence_seconds") != 600
         or raw.get("termination_dispatch_margin_seconds") != 60
+        or raw.get("replacement_launch_rule")
+        != (
+            "launch 2 is permitted only after launch 1 is conclusively terminal and absent, "
+            "every launch-1 empirical counter is zero, no ownership outcome is unknown, and "
+            "cumulative Lambda cost still fits the same campaign cap; any empirical entry "
+            "permanently disables replacement"
+        )
     ):
         raise T09ProviderError("provider evidence or termination handoff margin drifted")
     return CampaignLifecycle(
@@ -708,20 +739,20 @@ def validate_authorization_ledger(
     required = {
         "schema_version": "0.1.0",
         "authorization_source_sha256": AUTHORIZATION_SOURCE_SHA256,
-        "authorization_reference": "AUTH-T09-PRAGMATIC-RETRY2-2026-08-13",
+        "authorization_reference": "AUTH-T09-PRAGMATIC-RETRY3-2026-08-13",
         "authorized": True,
         "single_use": True,
         "clean_package_commit": package_commit,
         "plan_id": PLAN_ID,
         "plan_sha256": file_sha256(plan_path),
         "max_lambda_instances": 1,
-        "max_launch_count": 1,
+        "max_launch_count": 2,
         "persistent_filesystems": 0,
         "lambda_cost_cap_usd": 5.16,
         "openai_cost_cap_usd": 40.0,
         "aggregate_cost_cap_usd": 45.16,
-        "prior_t09_cost_usd": 0.414064252316667,
-        "cumulative_t09_cost_cap_usd": 46.0,
+        "prior_t09_cost_usd": 2.5308164556905757,
+        "cumulative_t09_cost_cap_usd": 48.0,
         "replacement_image_policy": "one-build-one-qualification-preentry-bound-v1",
         "artifact_destination": ("/Volumes/Macintosh HD - Data/GIC-Lab/t09/sealed-artifacts"),
     }
@@ -1117,6 +1148,8 @@ def _provisional_owner_binding(
     plan_sha256: str,
     private_root: Path,
     instance_id: str,
+    launch_slot: int,
+    replacement_eligibility_sha256: str | None,
 ) -> dict[str, object]:
     """Bind one returned private ID before any active-state or receipt work."""
 
@@ -1130,8 +1163,10 @@ def _provisional_owner_binding(
         or capability.get("plan_sha256") != plan_sha256
         or capability.get("launch_body_sha256") != _sha256_bytes(_canonical_bytes(_launch_body()))
         or capability.get("private_root_identity_sha256") != expected_private_root_identity
-        or capability.get("launch_capability_limit") != 1
-        or capability.get("second_launch_forbidden") is not True
+        or capability.get("launch_slot") != launch_slot
+        or capability.get("launch_capability_limit") != 2
+        or capability.get("replacement_eligibility_sha256") != replacement_eligibility_sha256
+        or capability.get("further_launch_forbidden") != (launch_slot == 2)
     ):
         raise T09ProviderError("consumed launch capability cannot bind provisional ownership")
     journal = _journal_events(entry_root)
@@ -1173,6 +1208,8 @@ def _provisional_owner_binding(
         "private_instance_id": instance_id,
         "owned_instance_identity_sha256": owned_identity,
         "instance_name": INSTANCE_NAME,
+        "launch_slot": launch_slot,
+        "replacement_eligibility_sha256": replacement_eligibility_sha256,
         "lambda_started_at_epoch": sent["send_started_at_epoch"],
         "launch_request_ordinal": sent["ordinal"],
         "launch_request_body_sha256": sent["request_body_sha256"],
@@ -1182,7 +1219,7 @@ def _provisional_owner_binding(
         "launch_journal_prefix_sha256": _sha256_bytes(_canonical_bytes(launch_journal_prefix)),
         "launch_capability_sha256": file_sha256(capability_path),
         "launch_capability_state": "consumed-cleanup-only-until-entry-receipt",
-        "second_launch_forbidden": True,
+        "further_launch_forbidden": launch_slot == 2,
         "private_operational_state_not_for_archive": True,
     }
 
@@ -1241,6 +1278,9 @@ def _cleanup_provisional_owner(
     )
     if _instance_identity_sha256(instance_id) != owned_identity:
         raise T09ProviderError("provisional private ID and identity binding disagree")
+    entry_source = private_root / "entry-source"
+    if not (entry_source / "source-manifest.json").is_file():
+        seal_source_bundle(entry_source)
     cleanup_root = private_root / "provisional-closeout-source"
     cleanup_root.mkdir(mode=0o700, exist_ok=False)
     write_exclusive(
@@ -1280,7 +1320,23 @@ def _cleanup_provisional_owner(
             raise T09ProviderError(
                 "provisional owner did not become terminal in the bounded window"
             )
+        recorder.request("post-global-firewall", "GET", "/api/v1/firewall-rulesets/global")
+        sleeper(1.0)
+        recorder.request("post-regional-rulesets", "GET", "/api/v1/firewall-rulesets")
+        documents = _response_documents(cleanup_root)
+        post_global = documents.get("post-global-firewall", [])
+        post_rulesets = documents.get("post-regional-rulesets", [])
+        if len(post_global) != 1 or len(post_rulesets) != 1:
+            raise T09ProviderError("provisional cleanup lacks final security observations")
+        security_restored = _security_projection(
+            _load_json(entry_source / "004-global-firewall.json")
+        ) == _security_projection(post_global[0][1]) and _rulesets_projection(
+            _load_json(entry_source / "005-regional-rulesets.json")
+        ) == _rulesets_projection(post_rulesets[0][1])
+        if not security_restored:
+            raise T09ProviderError("provisional cleanup did not restore provider security state")
         manifest = seal_source_bundle(cleanup_root)
+        closed_at = clock()
         write_exclusive(
             private_root / "PROVISIONAL_OWNER_CLOSED.json",
             {
@@ -1291,14 +1347,54 @@ def _cleanup_provisional_owner(
                 "owned_instance_identity_sha256": owned_identity,
                 "instance_name": INSTANCE_NAME,
                 "provider_disposition": disposition,
+                "zero_t09_instances": disposition == "absent",
+                "security_restored": security_restored,
                 "source_manifest_sha256": file_sha256(cleanup_root / "source-manifest.json"),
                 "source_bundle_bytes": manifest["total_bytes"],
-                "launch_capability_state": "consumed-closed-no-relaunch",
-                "second_launch_forbidden": True,
+                "launch_capability_state": "consumed-closed",
+                "replacement_launch_eligibility_pending": (
+                    provisional_binding.get("launch_slot") == 1
+                ),
                 "private_operational_state_not_for_archive": True,
-                "closed_at_epoch": clock(),
+                "closed_at_epoch": closed_at,
             },
         )
+        if provisional_binding.get("launch_slot") == 1:
+            started = _number(
+                provisional_binding.get("lambda_started_at_epoch"),
+                label="provisional Lambda start",
+            )
+            duration = closed_at - started
+            if duration < 0:
+                raise T09ProviderError("provisional closeout chronology moved backwards")
+            write_exclusive(
+                private_root / "replacement-launch-eligibility.json",
+                {
+                    "schema_version": "0.1.0",
+                    "eligibility_kind": "provider-entry-failed-preempirical",
+                    "plan_id": PLAN_ID,
+                    "host_run_id": HOST_RUN_ID,
+                    "package_commit": provisional_binding["package_commit"],
+                    "closed_launch_slot": 1,
+                    "entry_source_manifest_sha256": file_sha256(
+                        private_root / "entry-source/source-manifest.json"
+                    ),
+                    "provisional_closeout_manifest_sha256": file_sha256(
+                        cleanup_root / "source-manifest.json"
+                    ),
+                    "campaign_started_at_epoch": started,
+                    "prior_lambda_duration_seconds": duration,
+                    "prior_lambda_cost_usd": duration * 1.29 / 3600.0,
+                    "empirical_attempts_entered": 0,
+                    "model_task_requests": 0,
+                    "task_browser_actions": 0,
+                    "replacement_image_build_count": 0,
+                    "terminal_or_absent": True,
+                    "zero_t09_instances": disposition == "absent",
+                    "security_restored": True,
+                    "second_launch_permitted": True,
+                },
+            )
     except BaseException as exc:
         with contextlib.suppress(BaseException):
             _write_provisional_console_marker(
@@ -1468,6 +1564,7 @@ def _entry_projection(
     expected_source_cidr_sha256: str | None = None,
 ) -> dict[str, object]:
     manifest = validate_source_manifest(root)
+    campaign_binding = _load_json(root / "campaign-launch-binding.json", maximum_bytes=65_536)
     documents = _response_documents(root)
     _validate_prelaunch_documents(
         documents,
@@ -1507,6 +1604,50 @@ def _entry_projection(
         raise T09ProviderError("provider entry chronology is unavailable")
     if not 0 <= float(captured) - float(launch_started) <= 1_800:
         raise T09ProviderError("provider entry observation exceeded its bounded window")
+    launch_slot = _integer(campaign_binding.get("launch_slot"), label="campaign launch slot")
+    campaign_started = _number(
+        campaign_binding.get("campaign_started_at_epoch"), label="campaign start"
+    )
+    prior_lambda_duration = _number(
+        campaign_binding.get("prior_lambda_duration_seconds"), label="prior Lambda duration"
+    )
+    prior_lambda_cost = _number(
+        campaign_binding.get("prior_lambda_cost_usd"), label="prior Lambda cost"
+    )
+    if (
+        set(campaign_binding)
+        != {
+            "schema_version",
+            "plan_id",
+            "host_run_id",
+            "package_commit",
+            "launch_slot",
+            "campaign_started_at_epoch",
+            "owned_lambda_started_at_epoch",
+            "prior_lambda_duration_seconds",
+            "prior_lambda_cost_usd",
+            "replacement_eligibility_sha256",
+        }
+        or campaign_binding.get("schema_version") != "0.1.0"
+        or campaign_binding.get("plan_id") != PLAN_ID
+        or campaign_binding.get("host_run_id") != HOST_RUN_ID
+        or campaign_binding.get("package_commit") != package_commit
+        or launch_slot not in (1, 2)
+        or campaign_binding.get("owned_lambda_started_at_epoch") != float(launch_started)
+        or not 0 < campaign_started <= float(launch_started)
+        or prior_lambda_duration < 0
+        or prior_lambda_cost < 0
+        or (launch_slot == 1 and (prior_lambda_duration != 0 or prior_lambda_cost != 0))
+        or (launch_slot == 2 and campaign_started >= float(launch_started))
+    ):
+        raise T09ProviderError("campaign launch chronology or cumulative binding drifted")
+    eligibility_sha256 = campaign_binding.get("replacement_eligibility_sha256")
+    if launch_slot == 1 and eligibility_sha256 is not None:
+        raise T09ProviderError("first launch unexpectedly has replacement eligibility")
+    if launch_slot == 2 and (
+        not isinstance(eligibility_sha256, str) or _HEX64.fullmatch(eligibility_sha256) is None
+    ):
+        raise T09ProviderError("replacement launch lacks its eligibility hash")
     return {
         "schema_version": "0.1.0",
         "receipt_type": "t09-pragmatic-provider-entry",
@@ -1515,7 +1656,8 @@ def _entry_projection(
         "package_commit": package_commit,
         "plan_sha256": plan_sha256,
         "captured_at_epoch": float(captured),
-        "lambda_started_at_epoch": float(launch_started),
+        "lambda_started_at_epoch": campaign_started,
+        "owned_lambda_started_at_epoch": float(launch_started),
         "owned_instance_identity_sha256": instance_identity_sha256,
         "source_manifest_sha256": file_sha256(root / "source-manifest.json"),
         "source_bundle_bytes": manifest["total_bytes"],
@@ -1524,17 +1666,22 @@ def _entry_projection(
         "source_ipv4_cidr_sha256": expected_source_cidr_sha256
         or _network_identity_sha256(f"{expected_public_ipv4}/32"),
         "zero_prior_nonterminal_instances": True,
-        "launch_count": 1,
+        "launch_slot": launch_slot,
+        "launch_count": launch_slot,
+        "max_launch_count": 2,
+        "replacement_eligibility_sha256": eligibility_sha256,
         "max_instances": 1,
         "instance_type": INSTANCE_TYPE,
         "region": REGION,
         "persistent_filesystems": 0,
         "hourly_price_usd": 1.29,
-        "new_campaign_openai_cost_cap_usd": 40.0,
-        "new_campaign_lambda_cost_cap_usd": 5.16,
-        "new_campaign_aggregate_cost_cap_usd": 45.16,
-        "prior_t09_cost_usd": 0.414064252316667,
-        "cumulative_t09_cost_cap_usd": 46.0,
+        "new_campaign_openai_cost_cap_usd": NEW_CAMPAIGN_OPENAI_CAP_USD,
+        "new_campaign_lambda_cost_cap_usd": NEW_CAMPAIGN_LAMBDA_CAP_USD,
+        "new_campaign_aggregate_cost_cap_usd": NEW_CAMPAIGN_AGGREGATE_CAP_USD,
+        "prior_retry3_lambda_duration_seconds": prior_lambda_duration,
+        "prior_retry3_lambda_cost_usd": prior_lambda_cost,
+        "prior_t09_cost_usd": PRIOR_T09_COST_USD,
+        "cumulative_t09_cost_cap_usd": CUMULATIVE_T09_CAP_USD,
         "billable_clock_source": "provider-launch-send-started-conservative",
         "provider_projection_retained_private": True,
         "raw_response_identity_retained": True,
@@ -1672,7 +1819,17 @@ def _closeout_projection(
     owned_identity_sha256 = _string(
         owned_state.get("owned_instance_identity_sha256"), label="owned instance identity"
     )
-    started = _number(entry_receipt["lambda_started_at_epoch"], label="Lambda start")
+    started = _number(entry_receipt["lambda_started_at_epoch"], label="campaign start")
+    owned_started = _number(
+        entry_receipt["owned_lambda_started_at_epoch"], label="owned Lambda start"
+    )
+    prior_lambda_duration = _number(
+        entry_receipt["prior_retry3_lambda_duration_seconds"],
+        label="prior Retry 3 Lambda duration",
+    )
+    prior_lambda_cost = _number(
+        entry_receipt["prior_retry3_lambda_cost_usd"], label="prior Retry 3 Lambda cost"
+    )
     if owned_state.get("owned_instance_identity_sha256") != entry_receipt.get(
         "owned_instance_identity_sha256"
     ):
@@ -1747,7 +1904,17 @@ def _closeout_projection(
     )
     termination_elapsed = termination_started - started
     terminal_elapsed = max(terminal_at, zero_at) - started
-    lambda_list_cost_usd = terminal_elapsed * 1.29 / 3600.0
+    owned_lambda_duration = max(terminal_at, zero_at) - owned_started
+    lambda_duration = prior_lambda_duration + owned_lambda_duration
+    lambda_list_cost_usd = prior_lambda_cost + owned_lambda_duration * 1.29 / 3600.0
+    if (
+        owned_lambda_duration < 0
+        or lambda_duration < 0
+        or lambda_list_cost_usd < 0
+        or lambda_list_cost_usd > NEW_CAMPAIGN_LAMBDA_CAP_USD
+        or PRIOR_T09_COST_USD + lambda_list_cost_usd > CUMULATIVE_T09_CAP_USD
+    ):
+        raise T09ProviderError("Retry 3 Lambda duration or cumulative cost exceeded its cap")
     if termination_elapsed > lifecycle.termination_cutoff_seconds:
         campaign_exception = "termination-cutoff-violated"
     elif terminal_elapsed > lifecycle.wall_seconds:
@@ -1763,6 +1930,7 @@ def _closeout_projection(
         "plan_sha256": plan_sha256,
         "captured_at_epoch": captured,
         "lambda_started_at_epoch": started,
+        "owned_lambda_started_at_epoch": owned_started,
         "termination_started_at_epoch": termination_started,
         "terminal_observed_at_epoch": terminal_at,
         "zero_instance_observed_at_epoch": zero_at,
@@ -1772,6 +1940,9 @@ def _closeout_projection(
         "source_manifest_sha256": file_sha256(root / "source-manifest.json"),
         "source_bundle_bytes": manifest["total_bytes"],
         "source_observer": SOURCE_OBSERVER,
+        "launch_slot": entry_receipt["launch_slot"],
+        "launch_count": entry_receipt["launch_count"],
+        "max_launch_count": 2,
         "termination_request_count": len(termination_sends),
         "terminal_or_absent": True,
         "zero_t09_instances": True,
@@ -1781,12 +1952,15 @@ def _closeout_projection(
         "raw_provider_payload_retained": False,
         "structural_redaction_passed": True,
         "campaign_wall_exception": campaign_exception,
-        "lambda_duration_seconds": terminal_elapsed,
+        "campaign_elapsed_seconds": terminal_elapsed,
+        "owned_lambda_duration_seconds": owned_lambda_duration,
+        "prior_retry3_lambda_duration_seconds": prior_lambda_duration,
+        "lambda_duration_seconds": lambda_duration,
         "lambda_list_cost_usd": lambda_list_cost_usd,
-        "new_campaign_lambda_cost_cap_usd": 5.16,
-        "prior_t09_cost_usd": 0.414064252316667,
-        "cumulative_t09_cost_before_openai_usd": (0.414064252316667 + lambda_list_cost_usd),
-        "cumulative_t09_cost_cap_usd": 46.0,
+        "new_campaign_lambda_cost_cap_usd": NEW_CAMPAIGN_LAMBDA_CAP_USD,
+        "prior_t09_cost_usd": PRIOR_T09_COST_USD,
+        "cumulative_t09_cost_before_openai_usd": (PRIOR_T09_COST_USD + lambda_list_cost_usd),
+        "cumulative_t09_cost_cap_usd": CUMULATIVE_T09_CAP_USD,
     }
 
 
@@ -1856,6 +2030,215 @@ def _read_public_file(path: Path, *, maximum_bytes: int) -> str:
     return path.read_text(encoding="utf-8").strip()
 
 
+def _validate_replacement_launch_eligibility(
+    prior_private_root: Path,
+    *,
+    repository: Path,
+    package_commit: str,
+) -> dict[str, object]:
+    """Prove launch 1 closed pre-empirically before slot 2 can be consumed."""
+
+    prior = prior_private_root.resolve(strict=True)
+    path = prior / "replacement-launch-eligibility.json"
+    metadata = path.stat(follow_symlinks=False)
+    if (
+        path.is_symlink()
+        or not stat.S_ISREG(metadata.st_mode)
+        or metadata.st_uid != os.getuid()
+        or metadata.st_nlink != 1
+        or stat.S_IMODE(metadata.st_mode) != 0o600
+    ):
+        raise T09ProviderError("replacement-launch eligibility metadata is unsafe")
+    first_capability = _load_json(launch_capability_path(1), maximum_bytes=65_536)
+    if (
+        first_capability.get("plan_id") != PLAN_ID
+        or first_capability.get("host_run_id") != HOST_RUN_ID
+        or first_capability.get("package_commit") != package_commit
+        or first_capability.get("launch_slot") != 1
+        or first_capability.get("launch_capability_limit") != 2
+        or first_capability.get("replacement_eligibility_sha256") is not None
+    ):
+        raise T09ProviderError("first launch capability cannot authorize replacement")
+    value = _load_json(path, maximum_bytes=65_536)
+    if value.get("eligibility_kind") == "provider-entry-failed-preempirical":
+        provisional = _load_source_validated_provisional_owner(
+            prior,
+            repository=repository,
+            package_commit=package_commit,
+        )
+        entry_manifest = validate_source_manifest(prior / "entry-source")
+        closeout_manifest = validate_source_manifest(prior / "provisional-closeout-source")
+        closed = _load_json(prior / "PROVISIONAL_OWNER_CLOSED.json", maximum_bytes=65_536)
+        started = _number(
+            provisional.get("lambda_started_at_epoch"), label="provisional campaign start"
+        )
+        closed_at = _number(closed.get("closed_at_epoch"), label="provisional close time")
+        duration = closed_at - started
+        expected_provisional = {
+            "schema_version": "0.1.0",
+            "eligibility_kind": "provider-entry-failed-preempirical",
+            "plan_id": PLAN_ID,
+            "host_run_id": HOST_RUN_ID,
+            "package_commit": package_commit,
+            "closed_launch_slot": 1,
+            "entry_source_manifest_sha256": file_sha256(
+                prior / "entry-source/source-manifest.json"
+            ),
+            "provisional_closeout_manifest_sha256": file_sha256(
+                prior / "provisional-closeout-source/source-manifest.json"
+            ),
+            "campaign_started_at_epoch": started,
+            "prior_lambda_duration_seconds": duration,
+            "prior_lambda_cost_usd": duration * 1.29 / 3600.0,
+            "empirical_attempts_entered": 0,
+            "model_task_requests": 0,
+            "task_browser_actions": 0,
+            "replacement_image_build_count": 0,
+            "terminal_or_absent": True,
+            "zero_t09_instances": closed.get("zero_t09_instances") is True,
+            "security_restored": True,
+            "second_launch_permitted": True,
+        }
+        if (
+            value != expected_provisional
+            or not entry_manifest
+            or not closeout_manifest
+            or provisional.get("launch_slot") != 1
+            or closed.get("owned_instance_identity_sha256")
+            != provisional.get("owned_instance_identity_sha256")
+            or closed.get("provider_disposition") not in {"terminal", "absent"}
+            or closed.get("zero_t09_instances") != (closed.get("provider_disposition") == "absent")
+            or closed.get("security_restored") is not True
+            or duration < 0
+            or duration * 1.29 / 3600.0 >= NEW_CAMPAIGN_LAMBDA_CAP_USD
+        ):
+            raise T09ProviderError("provisional replacement eligibility drifted")
+        return value
+    entry_path = prior / "entry-source/entry-receipt.json"
+    closeout_path = prior / "closeout-source/closeout-receipt.json"
+    plan_path = repository / "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml"
+    lifecycle = load_campaign_lifecycle(repository)
+    entry = validate_entry_receipt_source_bound(
+        entry_path,
+        prior / "entry-source",
+        package_commit=package_commit,
+        plan_sha256=file_sha256(plan_path),
+    )
+    closeout = validate_closeout_receipt(
+        closeout_path,
+        prior / "closeout-source",
+        entry_receipt_path=entry_path,
+        entry_source_root=prior / "entry-source",
+        package_commit=package_commit,
+        plan_sha256=file_sha256(plan_path),
+        lifecycle=lifecycle,
+    )
+    required = {
+        "schema_version": "0.1.0",
+        "plan_id": PLAN_ID,
+        "host_run_id": HOST_RUN_ID,
+        "package_commit": package_commit,
+        "closed_launch_slot": 1,
+        "entry_receipt_sha256": file_sha256(entry_path),
+        "closeout_receipt_sha256": file_sha256(closeout_path),
+        "campaign_started_at_epoch": entry["lambda_started_at_epoch"],
+        "prior_lambda_duration_seconds": closeout["lambda_duration_seconds"],
+        "prior_lambda_cost_usd": closeout["lambda_list_cost_usd"],
+        "empirical_attempts_entered": 0,
+        "model_task_requests": 0,
+        "task_browser_actions": 0,
+        "replacement_image_build_count": 0,
+        "terminal_or_absent": True,
+        "zero_t09_instances": True,
+        "security_restored": True,
+        "second_launch_permitted": True,
+    }
+    if value != required:
+        raise T09ProviderError("replacement launch is not source-bound and pre-empirical")
+    if (
+        closeout.get("terminal_or_absent") is not True
+        or closeout.get("zero_t09_instances") is not True
+        or closeout.get("security_restored") is not True
+        or _number(value["prior_lambda_cost_usd"], label="prior Lambda cost")
+        >= NEW_CAMPAIGN_LAMBDA_CAP_USD
+    ):
+        raise T09ProviderError("replacement launch lacks terminal, security, or budget closure")
+    return value
+
+
+def _validate_host_preempirical_disposition(
+    receipt_path: Path,
+    source_root: Path,
+    *,
+    package_commit: str,
+    entry_receipt_sha256: str,
+) -> dict[str, object]:
+    """Validate the copied host prefix proving launch 1 never crossed entry."""
+
+    source = source_root.resolve(strict=True)
+    receipt = receipt_path.resolve(strict=True)
+    if receipt.parent != source:
+        raise T09ProviderError("pre-empirical receipt escaped its copied source root")
+    manifest_path = source / "source-manifest.json"
+    manifest = _load_json(manifest_path, maximum_bytes=1_048_576)
+    files: list[dict[str, object]] = []
+    total = 0
+    for path in sorted(source.iterdir()):
+        if path.name == "source-manifest.json":
+            continue
+        metadata = path.stat(follow_symlinks=False)
+        if (
+            path.is_symlink()
+            or not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_nlink != 1
+            or stat.S_IMODE(metadata.st_mode) != 0o600
+        ):
+            raise T09ProviderError("pre-empirical source contains an unsafe member")
+        total += metadata.st_size
+        files.append({"path": path.name, "bytes": metadata.st_size, "sha256": file_sha256(path)})
+    expected_manifest = {
+        "schema_version": "0.1.0",
+        "plan_id": PLAN_ID,
+        "host_run_id": HOST_RUN_ID,
+        "files": files,
+        "total_bytes": total,
+    }
+    if manifest != expected_manifest or not 0 < total <= 1_048_576:
+        raise T09ProviderError("pre-empirical source manifest drifted")
+    value = _load_json(receipt, maximum_bytes=65_536)
+    state_path = source / "pilot-state.json"
+    cleanup_path = source / "host-cleanup.json"
+    state = _load_json(state_path, maximum_bytes=65_536)
+    cleanup = _load_json(cleanup_path, maximum_bytes=65_536)
+    required = {
+        "schema_version": "0.1.0",
+        "plan_id": PLAN_ID,
+        "host_run_id": HOST_RUN_ID,
+        "package_commit": package_commit,
+        "provider_entry_receipt_sha256": entry_receipt_sha256,
+        "pilot_state_sha256": file_sha256(state_path),
+        "host_cleanup_sha256": file_sha256(cleanup_path),
+        "empirical_attempts_entered": 0,
+        "model_task_requests": 0,
+        "task_browser_actions": 0,
+        "replacement_image_build_count": 0,
+        "credentials_removed": True,
+        "owned_containers_absent": True,
+        "replacement_launch_evidence_only": True,
+    }
+    if (
+        value != required
+        or state.get("plan_id") != PLAN_ID
+        or state.get("empirical_attempts_entered") != []
+        or state.get("raw_attempts_complete") != []
+        or cleanup.get("owned_container_residue") != []
+        or cleanup.get("global_secret_scan_passed") is not True
+        or cleanup.get("remote_secret_removed") is not True
+    ):
+        raise T09ProviderError("host pre-empirical disposition is not source-grounded zero-use")
+    return value
+
+
 def _load_source_validated_owned_state(
     private_root: Path,
     *,
@@ -1888,6 +2271,8 @@ def _load_source_validated_owned_state(
                 "instance_id",
                 "owned_instance_identity_sha256",
                 "instance_name",
+                "launch_slot",
+                "replacement_eligibility_sha256",
                 "lambda_started_at_epoch",
             }
             if name == "owned-state-active.json":
@@ -1903,9 +2288,13 @@ def _load_source_validated_owned_state(
                 or state.get("package_commit") != package_commit
                 or state.get("plan_sha256") != plan_sha256
                 or state.get("instance_name") != INSTANCE_NAME
+                or state.get("launch_slot") != entry.get("launch_slot")
+                or state.get("replacement_eligibility_sha256")
+                != entry.get("replacement_eligibility_sha256")
                 or state.get("owned_instance_identity_sha256") != identity
                 or entry.get("owned_instance_identity_sha256") != identity
-                or state.get("lambda_started_at_epoch") != entry.get("lambda_started_at_epoch")
+                or state.get("lambda_started_at_epoch")
+                != entry.get("owned_lambda_started_at_epoch")
             ):
                 raise T09ProviderError("owned instance state is not source-bound")
             candidates.append(state)
@@ -1936,13 +2325,21 @@ def _load_source_validated_provisional_owner(
     instance_id = _string(
         observed.get("private_instance_id"), label="provisional private instance ID"
     )
+    launch_slot = _integer(observed.get("launch_slot"), label="provisional launch slot")
+    replacement_eligibility_sha256 = observed.get("replacement_eligibility_sha256")
+    if replacement_eligibility_sha256 is not None and not isinstance(
+        replacement_eligibility_sha256, str
+    ):
+        raise T09ProviderError("provisional replacement eligibility hash is malformed")
     expected = _provisional_owner_binding(
         entry_root=private_root / "entry-source",
-        capability_path=launch_capability_path(),
+        capability_path=launch_capability_path(launch_slot),
         package_commit=package_commit,
         plan_sha256=file_sha256(plan_path),
         private_root=private_root,
         instance_id=instance_id,
+        launch_slot=launch_slot,
+        replacement_eligibility_sha256=replacement_eligibility_sha256,
     )
     if observed != expected:
         raise T09ProviderError("provisional owner is not source-bound")
@@ -1959,11 +2356,34 @@ def launch_campaign(
     public_ipv4_file: Path,
     ssh_public_key_file: Path,
     transport: ProviderTransport,
+    launch_slot: int = 1,
+    prior_private_root: Path | None = None,
     clock: Callable[[], float] = time.time,
     sleeper: Callable[[float], None] = time.sleep,
 ) -> Path:
     repository = repository.resolve(strict=True)
-    capability_path = launch_capability_path()
+    if launch_slot not in (1, 2):
+        raise T09ProviderError("launch slot is outside the authorized Retry 3 bound")
+    replacement_eligibility: dict[str, object] | None = None
+    if launch_slot == 1:
+        if prior_private_root is not None:
+            raise T09ProviderError("first launch cannot accept prior campaign state")
+    else:
+        if prior_private_root is None:
+            raise T09ProviderError("second launch requires exact prior closeout evidence")
+        replacement_eligibility = _validate_replacement_launch_eligibility(
+            prior_private_root,
+            repository=repository,
+            package_commit=package_commit,
+        )
+        if not launch_capability_path(1).is_file():
+            raise T09ProviderError("second launch cannot precede consumption of launch slot 1")
+    replacement_eligibility_sha256 = (
+        file_sha256(prior_private_root.resolve(strict=True) / "replacement-launch-eligibility.json")
+        if prior_private_root is not None
+        else None
+    )
+    capability_path = launch_capability_path(launch_slot)
     # This check precedes credential loading and every provider request.  The
     # later O_EXCL consume is the concurrent, mutation-adjacent enforcement.
     _assert_launch_capability_unused(capability_path)
@@ -1978,7 +2398,7 @@ def launch_campaign(
     plan_path = repository / "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml"
     plan_sha256 = file_sha256(plan_path)
     if private_root.exists():
-        raise T09ProviderError("provider private root already exists; launch is single use")
+        raise T09ProviderError("provider private root already exists; launch slot is single use")
     private_root.mkdir(mode=0o700, parents=True, exist_ok=False)
     entry_root = private_root / "entry-source"
     entry_root.mkdir(mode=0o700)
@@ -2020,6 +2440,8 @@ def launch_campaign(
             package_commit=package_commit,
             plan_sha256=plan_sha256,
             private_root=private_root,
+            launch_slot=launch_slot,
+            replacement_eligibility_sha256=replacement_eligibility_sha256,
             clock=clock,
         )
         write_exclusive(
@@ -2030,8 +2452,10 @@ def launch_campaign(
                 "host_run_id": HOST_RUN_ID,
                 "package_commit": package_commit,
                 "launch_body_sha256": _sha256_bytes(_canonical_bytes(_launch_body())),
-                "launch_count_after_send": 1,
-                "max_launch_count": 1,
+                "launch_slot": launch_slot,
+                "launch_count_after_send": launch_slot,
+                "max_launch_count": 2,
+                "replacement_eligibility_sha256": replacement_eligibility_sha256,
                 "launch_capability_sha256": file_sha256(capability_path),
                 "launch_capability_state": "consumed-before-provider-post",
                 "created_at_epoch": clock(),
@@ -2114,7 +2538,9 @@ def launch_campaign(
             "private_instance_id": instance_id,
             "owned_instance_identity_sha256": owned_hash,
             "instance_name": INSTANCE_NAME,
-            "second_launch_forbidden": True,
+            "launch_slot": launch_slot,
+            "replacement_eligibility_sha256": replacement_eligibility_sha256,
+            "further_launch_forbidden": launch_slot == 2,
             "private_operational_state_not_for_archive": True,
         }
         try:
@@ -2125,6 +2551,8 @@ def launch_campaign(
                 plan_sha256=plan_sha256,
                 private_root=private_root,
                 instance_id=instance_id,
+                launch_slot=launch_slot,
+                replacement_eligibility_sha256=replacement_eligibility_sha256,
             )
             write_exclusive(
                 private_root / "provisional-owned-state.json",
@@ -2141,6 +2569,8 @@ def launch_campaign(
                     "instance_id": instance_id,
                     "owned_instance_identity_sha256": owned_hash,
                     "instance_name": INSTANCE_NAME,
+                    "launch_slot": launch_slot,
+                    "replacement_eligibility_sha256": replacement_eligibility_sha256,
                     "lambda_started_at_epoch": provisional_binding["lambda_started_at_epoch"],
                 },
             )
@@ -2183,6 +2613,36 @@ def launch_campaign(
                     break
             else:
                 raise T09ProviderError("owned instance did not become active in the bounded window")
+            owned_started = _number(
+                provisional_binding["lambda_started_at_epoch"], label="owned Lambda start"
+            )
+            write_exclusive(
+                entry_root / "campaign-launch-binding.json",
+                {
+                    "schema_version": "0.1.0",
+                    "plan_id": PLAN_ID,
+                    "host_run_id": HOST_RUN_ID,
+                    "package_commit": package_commit,
+                    "launch_slot": launch_slot,
+                    "campaign_started_at_epoch": (
+                        replacement_eligibility["campaign_started_at_epoch"]
+                        if replacement_eligibility is not None
+                        else owned_started
+                    ),
+                    "owned_lambda_started_at_epoch": owned_started,
+                    "prior_lambda_duration_seconds": (
+                        replacement_eligibility["prior_lambda_duration_seconds"]
+                        if replacement_eligibility is not None
+                        else 0.0
+                    ),
+                    "prior_lambda_cost_usd": (
+                        replacement_eligibility["prior_lambda_cost_usd"]
+                        if replacement_eligibility is not None
+                        else 0.0
+                    ),
+                    "replacement_eligibility_sha256": replacement_eligibility_sha256,
+                },
+            )
             seal_source_bundle(entry_root)
             entry_receipt = create_entry_receipt(
                 entry_root,
@@ -2216,7 +2676,8 @@ def launch_campaign(
                 ) from cleanup_exc
             raise T09ProviderError(
                 "post-launch entry failed; the exact launched instance was closed; "
-                "the campaign is permanently stopped"
+                "a replacement is permitted only when the retained source-bound "
+                "eligibility receipt validates launch slot 1 as zero-use"
             ) from entry_exc
         return entry_receipt
     finally:
@@ -2231,6 +2692,8 @@ def closeout_campaign(
     dotenv: Path,
     private_root: Path,
     transport: ProviderTransport,
+    preempirical_receipt: Path | None = None,
+    preempirical_source_root: Path | None = None,
     clock: Callable[[], float] = time.time,
     sleeper: Callable[[float], None] = time.sleep,
 ) -> Path:
@@ -2242,6 +2705,20 @@ def closeout_campaign(
     )
     lifecycle = load_campaign_lifecycle(repository)
     entry_receipt_path = private_root / "entry-source/entry-receipt.json"
+    if (preempirical_receipt is None) != (preempirical_source_root is None):
+        raise T09ProviderError("pre-empirical replacement evidence is incomplete")
+    replacement_evidence_validated = False
+    if preempirical_receipt is not None and preempirical_source_root is not None:
+        entry_for_replacement = _load_json(entry_receipt_path, maximum_bytes=65_536)
+        if entry_for_replacement.get("launch_slot") != 1:
+            raise T09ProviderError("only launch slot 1 can authorize one replacement")
+        _validate_host_preempirical_disposition(
+            preempirical_receipt,
+            preempirical_source_root,
+            package_commit=package_commit,
+            entry_receipt_sha256=file_sha256(entry_receipt_path),
+        )
+        replacement_evidence_validated = True
     provisional_path = private_root / "provisional-owned-state.json"
     if not entry_receipt_path.is_file() and provisional_path.is_file():
         provisional = _load_source_validated_provisional_owner(
@@ -2257,7 +2734,11 @@ def closeout_campaign(
                 or closed.get("owned_instance_identity_sha256")
                 != provisional.get("owned_instance_identity_sha256")
                 or closed.get("provider_disposition") not in {"terminal", "absent"}
-                or closed.get("second_launch_forbidden") is not True
+                or closed.get("zero_t09_instances")
+                != (closed.get("provider_disposition") == "absent")
+                or closed.get("security_restored") is not True
+                or closed.get("replacement_launch_eligibility_pending")
+                != (provisional.get("launch_slot") == 1)
             ):
                 raise T09ProviderError("provisional closeout marker drifted")
             return closed_path
@@ -2302,7 +2783,8 @@ def closeout_campaign(
     owned_identity = _string(
         state.get("owned_instance_identity_sha256"), label="owned instance identity"
     )
-    started = _number(state["lambda_started_at_epoch"], label="Lambda start")
+    entry_for_clock = _load_json(entry_receipt_path, maximum_bytes=65_536)
+    started = _number(entry_for_clock["lambda_started_at_epoch"], label="campaign start")
     closeout_root = private_root / "closeout-source"
     closeout_root.mkdir(mode=0o700, exist_ok=False)
     write_exclusive(
@@ -2387,6 +2869,36 @@ def closeout_campaign(
             plan_sha256=file_sha256(plan_path),
             lifecycle=lifecycle,
         )
+        entry_document = _load_json(entry_path, maximum_bytes=65_536)
+        if replacement_evidence_validated:
+            closeout_document = _load_json(receipt, maximum_bytes=65_536)
+            if (
+                closeout_document.get("terminal_or_absent") is not True
+                or closeout_document.get("zero_t09_instances") is not True
+                or closeout_document.get("security_restored") is not True
+            ):
+                raise T09ProviderError("closed host cannot authorize replacement launch")
+            eligibility = {
+                "schema_version": "0.1.0",
+                "plan_id": PLAN_ID,
+                "host_run_id": HOST_RUN_ID,
+                "package_commit": package_commit,
+                "closed_launch_slot": 1,
+                "entry_receipt_sha256": file_sha256(entry_path),
+                "closeout_receipt_sha256": file_sha256(receipt),
+                "campaign_started_at_epoch": entry_document["lambda_started_at_epoch"],
+                "prior_lambda_duration_seconds": closeout_document["lambda_duration_seconds"],
+                "prior_lambda_cost_usd": closeout_document["lambda_list_cost_usd"],
+                "empirical_attempts_entered": 0,
+                "model_task_requests": 0,
+                "task_browser_actions": 0,
+                "replacement_image_build_count": 0,
+                "terminal_or_absent": True,
+                "zero_t09_instances": True,
+                "security_restored": True,
+                "second_launch_permitted": True,
+            }
+            write_exclusive(private_root / "replacement-launch-eligibility.json", eligibility)
         for name in (
             "owned-state-active.json",
             "owned-state.json",
@@ -2431,7 +2943,11 @@ def parser() -> argparse.ArgumentParser:
     launch = operations.add_parser("launch")
     launch.add_argument("--public-ipv4-file", type=Path, required=True)
     launch.add_argument("--ssh-public-key-file", type=Path, required=True)
-    operations.add_parser("closeout")
+    launch.add_argument("--launch-slot", type=int, choices=(1, 2), default=1)
+    launch.add_argument("--prior-private-root", type=Path)
+    closeout = operations.add_parser("closeout")
+    closeout.add_argument("--preempirical-receipt", type=Path)
+    closeout.add_argument("--preempirical-source-root", type=Path)
     return result
 
 
@@ -2448,6 +2964,8 @@ def main() -> int:
             public_ipv4_file=args.public_ipv4_file,
             ssh_public_key_file=args.ssh_public_key_file,
             transport=transport,
+            launch_slot=args.launch_slot,
+            prior_private_root=args.prior_private_root,
         )
         return 0
     if args.operation == "closeout":
@@ -2458,6 +2976,8 @@ def main() -> int:
             dotenv=args.dotenv,
             private_root=args.private_root,
             transport=transport,
+            preempirical_receipt=args.preempirical_receipt,
+            preempirical_source_root=args.preempirical_source_root,
         )
         return 0
     raise T09ProviderError("unknown provider lifecycle operation")
