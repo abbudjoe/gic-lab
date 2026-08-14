@@ -2355,7 +2355,7 @@ def validate_dynamic_receipt(
     if (
         not isinstance(captured, (int, float))
         or isinstance(captured, bool)
-        or not 0 <= time.time() - float(captured) <= 1_800
+        or not 0 <= time.time() - float(captured) <= MAX_PREFLIGHT_WALL_SECONDS
     ):
         raise T09HostError("provider entry receipt is stale")
     encoded = json.dumps(value, sort_keys=True)

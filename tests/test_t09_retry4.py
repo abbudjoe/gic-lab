@@ -701,6 +701,62 @@ def test_retry4_active_slot2_entry_transition_is_source_bound() -> None:
     assert set(transition["changed_paths"]).issubset(provider.RETRY4_SLOT2_TRANSITION_ALLOWED_PATHS)
 
 
+def test_retry4_provider_entry_freshness_matches_the_full_preflight_wall(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    host = _load_host("giclab_t09_retry4_entry_freshness")
+    receipt = tmp_path / "entry.json"
+    source = tmp_path / "source"
+    source.mkdir()
+    receipt.write_text("{}\n", encoding="utf-8")
+    monkeypatch.setattr(host.time, "time", lambda: 10_000.0)
+    monkeypatch.setattr(
+        host,
+        "validate_entry_receipt_source_bound",
+        lambda *_args, **_kwargs: {
+            "captured_at_epoch": 6_401.0,
+            "owned_lambda_started_at_epoch": 6_401.0,
+            "launch_slot": 2,
+            "launch_count": 2,
+        },
+    )
+    accepted = host.validate_dynamic_receipt(
+        receipt,
+        expected_package_commit=subprocess.run(
+            ["git", "-C", str(ROOT), "rev-parse", "HEAD"],
+            capture_output=True,
+            check=True,
+            text=True,
+        ).stdout.strip(),
+        repository_root=ROOT,
+        source_root=source,
+    )
+    assert accepted["captured_at_epoch"] == 6_401.0
+
+    monkeypatch.setattr(
+        host,
+        "validate_entry_receipt_source_bound",
+        lambda *_args, **_kwargs: {
+            "captured_at_epoch": 6_399.0,
+            "owned_lambda_started_at_epoch": 6_399.0,
+            "launch_slot": 2,
+            "launch_count": 2,
+        },
+    )
+    with pytest.raises(host.T09HostError, match="stale"):
+        host.validate_dynamic_receipt(
+            receipt,
+            expected_package_commit=subprocess.run(
+                ["git", "-C", str(ROOT), "rev-parse", "HEAD"],
+                capture_output=True,
+                check=True,
+                text=True,
+            ).stdout.strip(),
+            repository_root=ROOT,
+            source_root=source,
+        )
+
+
 def test_retry4_slot2_authority_is_minimal_bound_and_export_mode_matches(
     tmp_path: Path,
 ) -> None:
