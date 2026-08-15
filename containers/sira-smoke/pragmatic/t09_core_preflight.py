@@ -8,14 +8,18 @@ import json
 import os
 import resource
 import signal
+import stat
 import subprocess
 import sys
 from collections.abc import Sequence
 from pathlib import Path
 
 ATTEMPT_ROOT = Path("/giclab/attempt")
+TMP_ROOT = Path("/tmp")
+SHM_ROOT = Path("/dev/shm")
 RECEIPT_PATH = ATTEMPT_ROOT / "core-suppression-preflight.json"
 MAX_CHILD_OUTPUT_BYTES = 16_384
+MAX_SCAN_ENTRIES = 100_000
 
 
 def enforce_zero_core_limit() -> tuple[int, int]:
@@ -91,6 +95,57 @@ def _abort_child() -> int:
     raise AssertionError("os.abort returned")
 
 
+def _elf_type(path: Path) -> str | None:
+    descriptor = os.open(
+        path,
+        os.O_RDONLY | os.O_NONBLOCK | getattr(os, "O_NOFOLLOW", 0),
+    )
+    try:
+        metadata = os.fstat(descriptor)
+        if not stat.S_ISREG(metadata.st_mode):
+            return None
+        header = os.read(descriptor, 18)
+    finally:
+        os.close(descriptor)
+    if len(header) < 18 or header[:4] != b"\x7fELF":
+        return None
+    byteorder = "little" if header[5] == 1 else "big" if header[5] == 2 else None
+    if byteorder is None:
+        return None
+    return "ET_CORE" if int.from_bytes(header[16:18], byteorder) == 4 else None
+
+
+def _core_scan() -> list[dict[str, object]]:
+    """Inspect every writable container root without retaining path or content values."""
+
+    records: list[dict[str, object]] = []
+    observed = 0
+    for root in (ATTEMPT_ROOT, TMP_ROOT, SHM_ROOT):
+        if not root.is_dir() or root.is_symlink():
+            raise RuntimeError("core-preflight writable root is unavailable or unsafe")
+        for path in sorted(root.rglob("*")):
+            observed += 1
+            if observed > MAX_SCAN_ENTRIES:
+                raise RuntimeError("core-preflight writable-root scan exceeded its entry cap")
+            metadata = path.lstat()
+            lowered_name = path.name.lower()
+            named = lowered_name == "core" or lowered_name.startswith("core.")
+            elf_core = stat.S_ISREG(metadata.st_mode) and _elf_type(path) == "ET_CORE"
+            if not named and not elf_core:
+                continue
+            records.append(
+                {
+                    "artifact": f"<core-preflight-artifact-{len(records) + 1:04d}>",
+                    "writable_root": str(root),
+                    "bytes": metadata.st_size,
+                    "known_core_filename": named,
+                    "elf_et_core": elf_core,
+                    "content_or_hash_retained": False,
+                }
+            )
+    return records
+
+
 def _run_suite() -> int:
     if not ATTEMPT_ROOT.is_dir() or ATTEMPT_ROOT.is_symlink():
         raise RuntimeError("core-preflight output root is unsafe")
@@ -122,6 +177,18 @@ def _run_suite() -> int:
     signal_number = -abort.returncode if abort.returncode < 0 else None
     if signal_number not in {signal.SIGABRT, None}:
         raise RuntimeError("synthetic abort returned an unexpected signal")
+    core_records = _core_scan()
+    scan_path = ATTEMPT_ROOT / "core-suppression-writable-root-core-scan.json"
+    _write_exclusive(
+        scan_path,
+        {
+            "schema_version": "0.1.0",
+            "scan_roots": [str(ATTEMPT_ROOT), str(TMP_ROOT), str(SHM_ROOT)],
+            "core_artifact_count": len(core_records),
+            "core_artifacts": core_records,
+            "core_content_or_hash_retained": False,
+        },
+    )
     _write_exclusive(
         RECEIPT_PATH,
         {
@@ -133,10 +200,14 @@ def _run_suite() -> int:
             "synthetic_abort_returncode": abort.returncode,
             "synthetic_abort_nonzero": True,
             "synthetic_abort_signal": "SIGABRT" if signal_number == signal.SIGABRT else None,
+            "writable_root_core_artifact_count": len(core_records),
+            "writable_root_core_scan": scan_path.name,
             "network_required": False,
             "credential_required": False,
         },
     )
+    if core_records:
+        raise RuntimeError("synthetic abort produced a prohibited core artifact")
     return 0
 
 

@@ -16,8 +16,8 @@
   "contract_bindings": {
     "plan": {
       "path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml",
-      "sha256": "1e673590c928e60c8fceeae605b939361f62b146afeab7de10095f6217ff31b6",
-      "size_bytes": 11706
+      "sha256": "c879dc138c20fe29e2e96c2bc5b8856039b44ce7f8d54110d6e0a69c8b025030",
+      "size_bytes": 12401
     },
     "dataset": {
       "path": "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/T09_PILOT_DATASET_CONTRACT.json",
@@ -29,7 +29,7 @@
     },
     "runtime": {
       "path": "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/T09_PILOT_RUNTIME_IDENTITY.json",
-      "sha256": "43e3306c4ee1345788e182358c1b7fa9524a18742dc52261b9a70eb8b109440c"
+      "sha256": "6430d6aaa3b767c2bf5c655fe260fedc1a46eb0096c43ccc0f6add970e370a5a"
     },
     "real_evidence_regression": {
       "path": "experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY4_FINALIZER_REGRESSION.json",
@@ -37,7 +37,7 @@
     },
     "execution_schema": {
       "path": "schemas/t09-sira-pilot-execution.schema.json",
-      "sha256": "481d05e006cc653ea5eefa52ec5dba58fa163764ab934e9995377804dd7f8fcb"
+      "sha256": "25af1ac208cb50e0bdc2003b5239bc8ac7b27870368fd9a55d99a348bea96c29"
     },
     "score_schema": {
       "path": "schemas/t09-sira-pilot-score.schema.json",
@@ -69,6 +69,7 @@
     "container_image_digest": null,
     "container_image_policy": "retained-exact-archive-load-or-one-fallback-build-preentry-frozen-run-manifest-v1",
     "slot2_container_image_policy": "retained-exact-archive-import-only-no-fallback-build-v1",
+    "slot1_fallback_build_replacement_launch_policy": "fallback-build-may-run-on-slot1-but-forfeits-slot2-after-any-later-preempirical-failure-because-pretermination-image-export-is-forbidden",
     "historical_container_image_digest": "sha256:035edf61718e84a8156f4f0f7817b134b0ce31488d3f0b50bbfba2b4a30cc61c",
     "runtime_qualification_id": "QUAL-T09-PILOT-V7-IMAGE-0001",
     "frozen_run_manifest_id": "RUN-MANIFEST-EXP0001-PILOT-V7-0005",
@@ -84,6 +85,8 @@
     "provider_lifecycle_status": "three-explicit-source-bound-clocks-enforced",
     "provider_observer_hard_wall_seconds": 21600,
     "provider_observer_normal_termination_target_seconds": 13500,
+    "supervised_release_wait_seconds": 300,
+    "supervised_release_gate_policy": "credential-free-entrypoint-waits-up-to-300-seconds-for-final-5160-second-admission-core-secret-and-exact-owned-container-rechecks",
     "preflight": [
       "python-version-and-runtime-imports",
       "content-addressed-no-follow-private-regression-archive-staging",
@@ -118,6 +121,8 @@
     "failed_preflight_termination_dispatch_seconds": 300,
     "empirical_clock_origin": "after-durable-frozen-run-manifest-publication",
     "empirical_campaign_wall_seconds": 14400,
+    "evidence_export_reserve_seconds": 600,
+    "provider_termination_handoff_seconds": 60,
     "empirical_cleanup_reserve_seconds": 900,
     "empirical_termination_cutoff_seconds": 13500,
     "maximum_successful_host_active_seconds": 18000,
@@ -125,7 +130,7 @@
     "max_lambda_instances": 1,
     "max_launch_count": 2,
     "persistent_filesystems": 0,
-    "admission_model": "actual-elapsed-next-condition-hard-wall-plus-cleanup-reserve",
+    "admission_model": "actual-elapsed-next-condition-hard-wall-plus-evidence-export-provider-handoff-and-cleanup-reserves",
     "future_attempt_maxima_reserved_at_campaign_start": false,
     "provider_control_plane": "existing-t07-pragmatic-lambda-operations-with-source-derived-projections-no-persistent-framework-or-watchdog"
   },
@@ -260,11 +265,11 @@
       "raw_output_root": "artifacts/EXP-0001/pilot-v7/task-a/reactive/attempt-0005/raw",
       "finalized_output_root": "artifacts/EXP-0001/pilot-v7/task-a/reactive/attempt-0005/finalized",
       "condition_plan_path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v7-task-0000-reactive.yaml",
-      "condition_plan_sha256": "328bfdf50e2ef5a5979db2014ee433078c5170fb647c6c00b973005c4967715d",
+      "condition_plan_sha256": "ff596a4e0daaf48a9a83d05baac38aa9c0fb598f122daf22390631da72432068",
       "protocol_sha256": "5356fc8b3806f4135eb570f65b67da2f94463582db5e3e609320e23dbdb2a3f7",
       "config_sha256": "cf25acd90f9d73d9aef978a7d059cfbc74a1447d901f4e3d27e2b5d9f121d2ed",
-      "environment_sha256": "43e3306c4ee1345788e182358c1b7fa9524a18742dc52261b9a70eb8b109440c",
-      "giclab_commit": "bb78c4d8afd006615e393c79fb6b62c2bb93f357",
+      "environment_sha256": "6430d6aaa3b767c2bf5c655fe260fedc1a46eb0096c43ccc0f6add970e370a5a",
+      "giclab_commit": "2d8ee6a3a2a1704d9a7f612c3dc3a3702ad8d7c6",
       "upstream_argv": [
         "EXP-0001-PILOT-V7-TASK-A-REACTIVE",
         "--dataset",
@@ -306,11 +311,11 @@
       "raw_output_root": "artifacts/EXP-0001/pilot-v7/task-a/simulative/attempt-0005/raw",
       "finalized_output_root": "artifacts/EXP-0001/pilot-v7/task-a/simulative/attempt-0005/finalized",
       "condition_plan_path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v7-task-0000-simulative.yaml",
-      "condition_plan_sha256": "a7ad00a542085e05ec9bff67aeb0b092cc74a7de7f54cf868a5f5d1e7f230a6a",
+      "condition_plan_sha256": "df51f7c20b241b58c718aebf49ef7077420951cbd7755e4246b8015738091bf7",
       "protocol_sha256": "5356fc8b3806f4135eb570f65b67da2f94463582db5e3e609320e23dbdb2a3f7",
       "config_sha256": "cf25acd90f9d73d9aef978a7d059cfbc74a1447d901f4e3d27e2b5d9f121d2ed",
-      "environment_sha256": "43e3306c4ee1345788e182358c1b7fa9524a18742dc52261b9a70eb8b109440c",
-      "giclab_commit": "bb78c4d8afd006615e393c79fb6b62c2bb93f357",
+      "environment_sha256": "6430d6aaa3b767c2bf5c655fe260fedc1a46eb0096c43ccc0f6add970e370a5a",
+      "giclab_commit": "2d8ee6a3a2a1704d9a7f612c3dc3a3702ad8d7c6",
       "upstream_argv": [
         "EXP-0001-PILOT-V7-TASK-A-SIMULATIVE",
         "--dataset",
@@ -352,11 +357,11 @@
       "raw_output_root": "artifacts/EXP-0001/pilot-v7/task-b/simulative/attempt-0005/raw",
       "finalized_output_root": "artifacts/EXP-0001/pilot-v7/task-b/simulative/attempt-0005/finalized",
       "condition_plan_path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v7-task-0001-simulative.yaml",
-      "condition_plan_sha256": "9742bb077d2b770dfdbee7a46a6aee086adc34d9905724ed9569dd29d32c16d8",
+      "condition_plan_sha256": "dc21507f169d8ab00f2529bee28bf947b66353209faca96356e735ff39092651",
       "protocol_sha256": "5356fc8b3806f4135eb570f65b67da2f94463582db5e3e609320e23dbdb2a3f7",
       "config_sha256": "cf25acd90f9d73d9aef978a7d059cfbc74a1447d901f4e3d27e2b5d9f121d2ed",
-      "environment_sha256": "43e3306c4ee1345788e182358c1b7fa9524a18742dc52261b9a70eb8b109440c",
-      "giclab_commit": "bb78c4d8afd006615e393c79fb6b62c2bb93f357",
+      "environment_sha256": "6430d6aaa3b767c2bf5c655fe260fedc1a46eb0096c43ccc0f6add970e370a5a",
+      "giclab_commit": "2d8ee6a3a2a1704d9a7f612c3dc3a3702ad8d7c6",
       "upstream_argv": [
         "EXP-0001-PILOT-V7-TASK-B-SIMULATIVE",
         "--dataset",
@@ -398,11 +403,11 @@
       "raw_output_root": "artifacts/EXP-0001/pilot-v7/task-b/reactive/attempt-0005/raw",
       "finalized_output_root": "artifacts/EXP-0001/pilot-v7/task-b/reactive/attempt-0005/finalized",
       "condition_plan_path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v7-task-0001-reactive.yaml",
-      "condition_plan_sha256": "445800c6d3297c400922120c2ac2c3655e513684854b8874351161401fab7a05",
+      "condition_plan_sha256": "b4d5db642f76958ca3f4a84514bbe9a26b9baab1a37ed1a68419e250e3e62d4f",
       "protocol_sha256": "5356fc8b3806f4135eb570f65b67da2f94463582db5e3e609320e23dbdb2a3f7",
       "config_sha256": "cf25acd90f9d73d9aef978a7d059cfbc74a1447d901f4e3d27e2b5d9f121d2ed",
-      "environment_sha256": "43e3306c4ee1345788e182358c1b7fa9524a18742dc52261b9a70eb8b109440c",
-      "giclab_commit": "bb78c4d8afd006615e393c79fb6b62c2bb93f357",
+      "environment_sha256": "6430d6aaa3b767c2bf5c655fe260fedc1a46eb0096c43ccc0f6add970e370a5a",
+      "giclab_commit": "2d8ee6a3a2a1704d9a7f612c3dc3a3702ad8d7c6",
       "upstream_argv": [
         "EXP-0001-PILOT-V7-TASK-B-REACTIVE",
         "--dataset",
@@ -453,7 +458,7 @@
       "first-pair-total-cost-strictly-less-than-22.58-dollars",
       "projected-new-campaign-total-cost-no-more-than-48-dollars",
       "prior-plus-projected-new-campaign-cost-no-more-than-60-dollars",
-      "actual-remaining-empirical-campaign-time-admits-next-4500-second-condition-and-cleanup-envelope",
+      "actual-remaining-empirical-campaign-time-admits-next-5160-second-condition-export-handoff-and-cleanup-envelope",
       "no-reference-leakage-contamination-two-valid-incomplete-zero-score-floor-or-two-valid-completed-one-score-ceiling-that-makes-Task-B-incapable-of-adding-calibration-value"
     ],
     "failure_action": "stop-before-Task-B-preserve-Task-A-evidence-cleanup-and-terminate-provider-resource",
@@ -490,7 +495,11 @@
       "private_cidr",
       "provider_account_identifier"
     ],
-    "raw_retention": "private-access-controlled-authoritative-per-attempt-export-before-next-entry",
+    "raw_retention": "private-access-controlled-authoritative-per-attempt-export-with-durable-host-completion-and-offhost-verification-timestamps-before-next-entry",
+    "pretermination_handoff_chronology": "final-packager-requires-the-source-bound-export-completion-and-offhost-verification-causal-chain-before-provider-termination-start-with-at-most-five-seconds-of-explicit-cross-host-clock-skew",
+    "maximum_cross_host_evidence_clock_skew_seconds": 5,
+    "aggregate_stage_policy": "optional-only-after-every-consumed-raw-or-essential-authority-has-a-direct-export-completion-and-offhost-acknowledgement; stage-and-final-package-revalidate-and-hash-bind-the-embedded-receipts",
+    "essential_failure_image_policy": "exclude-all-png-and-other-uninspectable-rendered-images-from-the-privacy-safe-essential-bundle-and-retain-bounded-metadata-only",
     "raw_finalization_boundary": "raw-and-control-read-only-finalized-version-root-only-writeable-supervisor-selects-after-rehash",
     "offhost_reconstruction": "verified-per-attempt-export-carries-hash-bound-control-snapshot-and-restores-exact-raw-prefix-for-prequalified-local-finalization-after-provider-termination",
     "downstream_repair_policy": "descendant-finalizer-only-network-none-no-condition-retry-uniform-selected-closure",

@@ -249,6 +249,10 @@
               "const": "after-durable-frozen-run-manifest-publication"
             },
             "empirical_campaign_wall_seconds": {"const": 14400},
+            "evidence_export_reserve_seconds": {"const": 600},
+            "provider_termination_handoff_seconds": {"const": 60},
+            "supervised_release_wait_seconds": {"const": 300},
+            "supervised_release_rule": {"type": "string", "minLength": 16},
             "empirical_cleanup_reserve_seconds": {"const": 900},
             "empirical_termination_cutoff_seconds": {"const": 13500},
             "maximum_successful_host_active_seconds": {"const": 18000},
@@ -293,7 +297,8 @@
           "const": "frozen-run-manifest replacement_image_id"
         },
         "all_attempts_same_image_required": {"const": true},
-        "image_export": {"type": "string", "minLength": 8}
+        "image_export": {"type": "string", "minLength": 8},
+        "fallback_build_second_launch_policy": {"type": "string", "minLength": 16}
       }
     },
     "raw_attempt_policy": {

@@ -1145,6 +1145,8 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
         "failed_preflight_termination_dispatch_seconds": 300,
         "empirical_clock_origin": "after-durable-frozen-run-manifest-publication",
         "empirical_campaign_wall_seconds": 14_400,
+        "evidence_export_reserve_seconds": 600,
+        "provider_termination_handoff_seconds": 60,
         "empirical_cleanup_reserve_seconds": 900,
         "empirical_termination_cutoff_seconds": 13_500,
         "maximum_successful_host_active_seconds": 18_000,
@@ -1162,9 +1164,16 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
             "cumulative_lambda_cap_required": True,
         },
         "admission_rule": (
-            "remaining campaign time must cover only the next 3600-second condition hard wall "
-            "and the 900-second cleanup reserve; downstream evaluator, evidence, and dispatch "
-            "phases remain bounded but are not empirical-admission blockers"
+            "remaining campaign time must cover the next 3600-second condition hard wall, "
+            "600-second direct evidence export, 60-second provider termination handoff, "
+            "and 900-second cleanup reserve"
+        ),
+        "supervised_release_wait_seconds": 300,
+        "supervised_release_rule": (
+            "the credential-free started entrypoint may wait up to 300 seconds for the final "
+            "source-bound state, budget, core, exact-secret, and owned-container checks; the "
+            "5160-second admission gate is rerun immediately before durable release and any "
+            "timeout consumes the started identity as infrastructure-invalid"
         ),
         "control_plane": (
             "existing T07 pragmatic Lambda operations with source-derived projections; "
@@ -1652,7 +1661,9 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
                 runtime_adaptation_path=("/opt/giclab-src/giclab/harness/sira_gate_a_runtime.py"),
                 runtime_adaptation_sha256=runtime_sha256,
                 pilot_library_sha256=library_sha256,
-                aggregate_ledger_path=("/opt/giclab-artifacts/pilot-v7/aggregate-budget.json"),
+                aggregate_ledger_path=(
+                    "/opt/giclab-artifacts/pilot-v7/runtime-budget/aggregate-budget.json"
+                ),
                 pilot_state_path="/opt/giclab-artifacts/pilot-v7/pilot-state.json",
             )
             for attempt in typed_contract.attempts

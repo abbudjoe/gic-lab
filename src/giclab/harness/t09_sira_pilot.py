@@ -7,6 +7,7 @@ frozen contract to the T07 pragmatic runtime adaptation.
 
 from __future__ import annotations
 
+import contextlib
 import copy
 import hashlib
 import importlib.util
@@ -90,6 +91,8 @@ class CampaignLifecycleLimits:
     preflight_wall_seconds: int
     failed_preflight_termination_dispatch_seconds: int
     empirical_campaign_wall_seconds: int
+    evidence_export_reserve_seconds: int
+    provider_termination_handoff_seconds: int
     empirical_cleanup_reserve_seconds: int
     empirical_termination_cutoff_seconds: int
     maximum_successful_host_active_seconds: int
@@ -103,6 +106,8 @@ class CampaignLifecycleLimits:
             self.preflight_wall_seconds,
             self.failed_preflight_termination_dispatch_seconds,
             self.empirical_campaign_wall_seconds,
+            self.evidence_export_reserve_seconds,
+            self.provider_termination_handoff_seconds,
             self.empirical_cleanup_reserve_seconds,
             self.empirical_termination_cutoff_seconds,
             self.maximum_successful_host_active_seconds,
@@ -119,6 +124,10 @@ class CampaignLifecycleLimits:
             raise T09PilotError("failed-preflight termination dispatch must remain 300 seconds")
         if self.empirical_campaign_wall_seconds != 14_400:
             raise T09PilotError("empirical campaign wall must remain 14,400 seconds")
+        if self.evidence_export_reserve_seconds != 600:
+            raise T09PilotError("evidence export reserve must remain 600 seconds")
+        if self.provider_termination_handoff_seconds != 60:
+            raise T09PilotError("provider termination handoff must remain 60 seconds")
         if self.empirical_cleanup_reserve_seconds != 900:
             raise T09PilotError("empirical cleanup reserve must remain 900 seconds")
         if (
@@ -158,7 +167,12 @@ class CampaignLifecycleLimits:
 
         if type(attempt_hard_wall_seconds) is not int or attempt_hard_wall_seconds <= 0:
             raise T09PilotError("attempt hard wall must be a positive integer")
-        return attempt_hard_wall_seconds + self.empirical_cleanup_reserve_seconds
+        return (
+            attempt_hard_wall_seconds
+            + self.evidence_export_reserve_seconds
+            + self.provider_termination_handoff_seconds
+            + self.empirical_cleanup_reserve_seconds
+        )
 
     def admit_remaining(
         self,
@@ -988,6 +1002,14 @@ def load_execution_contract(path: Path, *, expected_sha256: str) -> PilotExecuti
             raw_campaign.get("empirical_campaign_wall_seconds"),
             context="empirical campaign wall",
         ),
+        evidence_export_reserve_seconds=_required_int(
+            raw_campaign.get("evidence_export_reserve_seconds"),
+            context="evidence export reserve",
+        ),
+        provider_termination_handoff_seconds=_required_int(
+            raw_campaign.get("provider_termination_handoff_seconds"),
+            context="provider termination handoff",
+        ),
         empirical_cleanup_reserve_seconds=_required_int(
             raw_campaign.get("empirical_cleanup_reserve_seconds"),
             context="empirical cleanup reserve",
@@ -1104,12 +1126,7 @@ def write_aggregate_usage(
         "usage": usage_to_document(usage),
     }
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    temporary = path.with_suffix(f".{os.getpid()}.tmp")
-    with temporary.open("w", encoding="utf-8") as handle:
-        handle.write(json.dumps(document, indent=2, sort_keys=True) + "\n")
-        handle.flush()
-        os.fsync(handle.fileno())
-    os.replace(temporary, path)
+    _write_json_atomic(path, document)
 
 
 def initialize_pilot_state(
@@ -1139,6 +1156,9 @@ def initialize_pilot_state(
         "first_pair_started_at_epoch": pilot_started_at_epoch,
         "second_pair_started_at_epoch": None,
         "empirical_attempts_entered": [],
+        "supervised_release_bindings": {},
+        "unreleased_supervised_release_reclassifications": {},
+        "condition_start_reservation": None,
         "nonempirical_infrastructure_attempts_consumed": [],
         "raw_attempts_complete": [],
         "raw_attempt_bindings": {},
@@ -1229,12 +1249,38 @@ def transition_zero_usage_preflight_state(
 
 
 def _write_json_atomic(path: Path, document: Mapping[str, object]) -> None:
-    temporary = path.with_suffix(f".{os.getpid()}.tmp")
-    with temporary.open("w", encoding="utf-8") as handle:
-        handle.write(json.dumps(document, indent=2, sort_keys=True) + "\n")
-        handle.flush()
-        os.fsync(handle.fileno())
-    os.replace(temporary, path)
+    """Replace one mutable control document and durably commit its directory entry."""
+
+    encoded = (json.dumps(document, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    temporary = path.parent / f".{path.name}.{os.getpid()}.{time.time_ns()}.tmp"
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+    descriptor = os.open(temporary, flags, 0o600)
+    published = False
+    try:
+        offset = 0
+        while offset < len(encoded):
+            written = os.write(descriptor, encoded[offset:])
+            if written <= 0:
+                raise OSError("atomic control write made no progress")
+            offset += written
+        os.fsync(descriptor)
+        os.close(descriptor)
+        descriptor = -1
+        os.replace(temporary, path)
+        published = True
+        parent_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+        parent_descriptor = os.open(path.parent, parent_flags)
+        try:
+            os.fsync(parent_descriptor)
+        finally:
+            os.close(parent_descriptor)
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+        if not published:
+            with contextlib.suppress(FileNotFoundError):
+                temporary.unlink()
 
 
 _FINALIZATION_SELECTION_FIELDS = {
@@ -1378,6 +1424,69 @@ def _load_pilot_state(
             raise T09PilotError(f"pilot state {field} is not a unique frozen-order subset")
         if value != [item for item in ATTEMPT_ORDER if item in value]:
             raise T09PilotError(f"pilot state {field} is not in frozen order")
+    supervised_release_bindings = state.get("supervised_release_bindings")
+    entered_with_release = cast(list[str], state["empirical_attempts_entered"])
+    if (
+        not isinstance(supervised_release_bindings, dict)
+        or set(supervised_release_bindings) != set(entered_with_release)
+        or any(
+            run_id not in ATTEMPT_ORDER
+            or not isinstance(digest, str)
+            or _HEX64.fullmatch(digest) is None
+            for run_id, digest in supervised_release_bindings.items()
+        )
+    ):
+        raise T09PilotError("pilot supervised-release bindings are malformed")
+    unreleased_reclassifications = state.get("unreleased_supervised_release_reclassifications")
+    if not isinstance(unreleased_reclassifications, dict) or any(
+        run_id not in ATTEMPT_ORDER
+        or not isinstance(binding, dict)
+        or set(binding) != {"start_intent_sha256", "supervised_release_receipt_sha256"}
+        or any(
+            not isinstance(digest, str) or _HEX64.fullmatch(digest) is None
+            for digest in binding.values()
+        )
+        for run_id, binding in unreleased_reclassifications.items()
+    ):
+        raise T09PilotError("pilot unreleased-entry reclassification bindings are malformed")
+    start_reservation = state.get("condition_start_reservation")
+    if start_reservation is not None:
+        reserved_run_id = (
+            start_reservation.get("run_id") if isinstance(start_reservation, dict) else None
+        )
+        start_digest = (
+            start_reservation.get("start_intent_sha256")
+            if isinstance(start_reservation, dict)
+            else None
+        )
+        pending_empirical_commit = (
+            isinstance(start_reservation, dict)
+            and set(start_reservation)
+            == {
+                "run_id",
+                "start_intent_sha256",
+                "phase",
+                "supervised_release_receipt_sha256",
+            }
+            and start_reservation.get("phase") == "empirical-state-committed"
+            and entered_with_release
+            and reserved_run_id == entered_with_release[-1]
+            and start_reservation.get("supervised_release_receipt_sha256")
+            == supervised_release_bindings.get(reserved_run_id)
+        )
+        pending_start = (
+            isinstance(start_reservation, dict)
+            and set(start_reservation) == {"run_id", "start_intent_sha256"}
+            and len(entered_with_release) < len(ATTEMPT_ORDER)
+            and reserved_run_id == ATTEMPT_ORDER[len(entered_with_release)]
+            and reserved_run_id not in entered_with_release
+        )
+        if (
+            not (pending_start or pending_empirical_commit)
+            or not isinstance(start_digest, str)
+            or _HEX64.fullmatch(start_digest) is None
+        ):
+            raise T09PilotError("pilot condition-start reservation is malformed")
     nonempirical_consumed = state.get("nonempirical_infrastructure_attempts_consumed")
     if (
         not isinstance(nonempirical_consumed, list)
@@ -1394,6 +1503,8 @@ def _load_pilot_state(
         or nonempirical_consumed[0] in entered_for_failure
     ):
         raise T09PilotError("pilot non-empirical failure is not the next frozen attempt")
+    if set(unreleased_reclassifications) - set(nonempirical_consumed):
+        raise T09PilotError("unreleased-entry reclassification lacks consumed failure state")
     raw_bindings = state.get("raw_attempt_bindings")
     if not isinstance(raw_bindings, dict) or not all(
         isinstance(key, str) and isinstance(value, dict) for key, value in raw_bindings.items()
@@ -1595,10 +1706,13 @@ def mark_empirical_entry(
     *,
     execution_contract_sha256: str,
     run_id: str,
+    supervised_release_receipt_sha256: str,
 ) -> None:
-    """Consume one immutable attempt identity before its first call or action."""
+    """Consume one identity before releasing its credential-free entrypoint."""
 
     state = _load_pilot_state(path, contract_sha256=execution_contract_sha256)
+    if _HEX64.fullmatch(supervised_release_receipt_sha256) is None:
+        raise T09PilotError("supervised-release receipt hash is malformed")
     if state.get("credential_safety_stop_detected") is True:
         raise T09BudgetExceeded("a credential safety failure permanently stops the campaign")
     if state.get("core_safety_stop_detected") is True:
@@ -1617,6 +1731,9 @@ def mark_empirical_entry(
         raise T09PilotError("pilot attempt history is not a valid prefix of the frozen order")
     if len(entered) >= len(ATTEMPT_ORDER) or run_id != ATTEMPT_ORDER[len(entered)]:
         raise T09BudgetExceeded("attempt count or frozen attempt order would be violated")
+    reservation = state.get("condition_start_reservation")
+    if not isinstance(reservation, dict) or reservation.get("run_id") != run_id:
+        raise T09BudgetExceeded("empirical entry lacks its durable condition-start reservation")
     if len(entered) == 2:
         checkpoint_binding = state.get("first_pair_checkpoint_binding")
         finalizations = state.get("attempt_finalizations")
@@ -1649,7 +1766,100 @@ def mark_empirical_entry(
             )
     entered.append(run_id)
     state["empirical_attempts_entered"] = entered
+    bindings = cast(dict[str, str], state["supervised_release_bindings"])
+    bindings[run_id] = supervised_release_receipt_sha256
+    state["supervised_release_bindings"] = bindings
+    state["condition_start_reservation"] = {
+        "run_id": run_id,
+        "start_intent_sha256": cast(str, reservation["start_intent_sha256"]),
+        "phase": "empirical-state-committed",
+        "supervised_release_receipt_sha256": supervised_release_receipt_sha256,
+    }
     _write_json_atomic(path, state)
+
+
+def reserve_condition_start(
+    path: Path,
+    *,
+    execution_contract_sha256: str,
+    run_id: str,
+    start_intent_sha256: str,
+) -> None:
+    """Durably reserve one identity immediately before Docker start."""
+
+    if _HEX64.fullmatch(start_intent_sha256) is None:
+        raise T09PilotError("condition-start intent hash is malformed")
+    state = _load_pilot_state(path, contract_sha256=execution_contract_sha256)
+    entered = cast(list[str], state["empirical_attempts_entered"])
+    if state.get("condition_start_reservation") is not None:
+        raise T09BudgetExceeded("a condition-start reservation already exists")
+    if state.get("nonempirical_infrastructure_attempts_consumed"):
+        raise T09BudgetExceeded("a prior infrastructure failure closed condition admission")
+    if cast(list[str], state["raw_attempts_complete"]) != entered:
+        raise T09PilotError("prior empirical attempts are not all raw-sealed")
+    if len(entered) >= len(ATTEMPT_ORDER) or ATTEMPT_ORDER[len(entered)] != run_id:
+        raise T09BudgetExceeded("condition-start reservation violates frozen order")
+    state["condition_start_reservation"] = {
+        "run_id": run_id,
+        "start_intent_sha256": start_intent_sha256,
+    }
+    _write_json_atomic(path, state)
+
+
+def rollback_never_started_condition_reservation(
+    path: Path,
+    *,
+    execution_contract_sha256: str,
+    run_id: str,
+    start_intent_sha256: str,
+) -> None:
+    """Clear only an exact reservation after Docker absence and non-start are proven."""
+
+    state = _load_pilot_state(path, contract_sha256=execution_contract_sha256)
+    reservation = state.get("condition_start_reservation")
+    if reservation is None:
+        return
+    if (
+        reservation
+        != {
+            "run_id": run_id,
+            "start_intent_sha256": start_intent_sha256,
+        }
+        or run_id in cast(list[str], state["empirical_attempts_entered"])
+        or state.get("nonempirical_infrastructure_attempts_consumed") != []
+        or cast(dict[str, object], state["essential_failure_seals"])
+    ):
+        raise T09PilotError("never-started reservation rollback authority drifted")
+    state["condition_start_reservation"] = None
+    _write_json_atomic(path, state)
+
+
+def confirm_supervised_empirical_entry(
+    path: Path,
+    *,
+    execution_contract_sha256: str,
+    run_id: str,
+    supervised_release_receipt: Path,
+) -> None:
+    """Confirm the host committed this exact attempt before making a task request."""
+
+    state = _load_pilot_state(path, contract_sha256=execution_contract_sha256)
+    receipt = load_json_object(
+        supervised_release_receipt,
+        context="supervised empirical release receipt",
+    )
+    bindings = cast(dict[str, str], state["supervised_release_bindings"])
+    if (
+        run_id not in cast(list[str], state["empirical_attempts_entered"])
+        or bindings.get(run_id) != file_sha256(supervised_release_receipt)
+        or receipt.get("schema_version") != "0.1.0"
+        or receipt.get("plan_id") != PLAN_ID
+        or receipt.get("run_id") != run_id
+        or receipt.get("release_precedes_first_credential_read") is not True
+        or receipt.get("core_artifact_count") != 0
+        or receipt.get("exact_credential_match_count") != 0
+    ):
+        raise T09BudgetExceeded("empirical operation lacks its exact supervised release")
 
 
 def mark_nonempirical_infrastructure_attempt_consumed(
@@ -1665,17 +1875,116 @@ def mark_nonempirical_infrastructure_attempt_consumed(
     raw_complete = cast(list[str], state["raw_attempts_complete"])
     seals = cast(dict[str, dict[str, str]], state["essential_failure_seals"])
     consumed = cast(list[str], state["nonempirical_infrastructure_attempts_consumed"])
+    reservation = state.get("condition_start_reservation")
     if consumed:
         if consumed == [run_id]:
             return
         raise T09BudgetExceeded("a different pre-empirical failure already consumed the campaign")
     if run_id in entered or len(entered) >= len(ATTEMPT_ORDER):
         raise T09PilotError("non-empirical failure cannot consume an entered or unknown attempt")
+    if not isinstance(reservation, dict) or reservation.get("run_id") != run_id:
+        raise T09PilotError("non-empirical failure does not match the start reservation")
     if raw_complete != entered or seals:
         raise T09PilotError("prior attempts are not fully sealed before infrastructure failure")
     if run_id != ATTEMPT_ORDER[len(entered)]:
         raise T09BudgetExceeded("non-empirical failure would violate frozen attempt order")
     state["nonempirical_infrastructure_attempts_consumed"] = [run_id]
+    state["condition_start_reservation"] = None
+    _write_json_atomic(path, state)
+
+
+def reclassify_unreleased_empirical_entry(
+    path: Path,
+    *,
+    execution_contract_sha256: str,
+    run_id: str,
+    start_intent_sha256: str,
+    supervised_release_receipt_sha256: str,
+) -> None:
+    """Close the crash window where state committed but release never became visible."""
+
+    state = _load_pilot_state(path, contract_sha256=execution_contract_sha256)
+    entered = cast(list[str], state["empirical_attempts_entered"])
+    raw_complete = cast(list[str], state["raw_attempts_complete"])
+    bindings = cast(dict[str, str], state["supervised_release_bindings"])
+    reservation = state.get("condition_start_reservation")
+    if (
+        not entered
+        or entered[-1] != run_id
+        or run_id in raw_complete
+        or bindings.get(run_id) != supervised_release_receipt_sha256
+        or not isinstance(reservation, dict)
+        or reservation
+        != {
+            "run_id": run_id,
+            "start_intent_sha256": start_intent_sha256,
+            "phase": "empirical-state-committed",
+            "supervised_release_receipt_sha256": supervised_release_receipt_sha256,
+        }
+        or state.get("nonempirical_infrastructure_attempts_consumed") != []
+        or cast(dict[str, object], state["essential_failure_seals"]).get(run_id) is not None
+    ):
+        raise T09PilotError("unreleased empirical-entry transaction cannot be reclassified")
+    entered.pop()
+    bindings.pop(run_id)
+    state["empirical_attempts_entered"] = entered
+    state["supervised_release_bindings"] = bindings
+    state["condition_start_reservation"] = None
+    state["nonempirical_infrastructure_attempts_consumed"] = [run_id]
+    reclassifications = cast(
+        dict[str, dict[str, str]],
+        state["unreleased_supervised_release_reclassifications"],
+    )
+    if run_id in reclassifications:
+        raise T09PilotError("unreleased empirical-entry transaction was already reclassified")
+    reclassifications[run_id] = {
+        "start_intent_sha256": start_intent_sha256,
+        "supervised_release_receipt_sha256": supervised_release_receipt_sha256,
+    }
+    state["unreleased_supervised_release_reclassifications"] = reclassifications
+    _write_json_atomic(path, state)
+
+
+def consume_published_unreleased_condition(
+    path: Path,
+    *,
+    execution_contract_sha256: str,
+    run_id: str,
+    start_intent_sha256: str,
+    supervised_release_receipt_sha256: str,
+) -> None:
+    """Consume a started condition whose release receipt preceded a failed state commit."""
+
+    state = _load_pilot_state(path, contract_sha256=execution_contract_sha256)
+    entered = cast(list[str], state["empirical_attempts_entered"])
+    raw_complete = cast(list[str], state["raw_attempts_complete"])
+    reservation = state.get("condition_start_reservation")
+    if (
+        run_id in entered
+        or raw_complete != entered
+        or reservation
+        != {
+            "run_id": run_id,
+            "start_intent_sha256": start_intent_sha256,
+        }
+        or state.get("nonempirical_infrastructure_attempts_consumed") != []
+        or cast(dict[str, object], state["essential_failure_seals"]).get(run_id) is not None
+        or _HEX64.fullmatch(supervised_release_receipt_sha256) is None
+    ):
+        raise T09PilotError("published unreleased condition cannot be consumed")
+    state["condition_start_reservation"] = None
+    state["nonempirical_infrastructure_attempts_consumed"] = [run_id]
+    reclassifications = cast(
+        dict[str, dict[str, str]],
+        state["unreleased_supervised_release_reclassifications"],
+    )
+    if run_id in reclassifications:
+        raise T09PilotError("published unreleased condition was already consumed")
+    reclassifications[run_id] = {
+        "start_intent_sha256": start_intent_sha256,
+        "supervised_release_receipt_sha256": supervised_release_receipt_sha256,
+    }
+    state["unreleased_supervised_release_reclassifications"] = reclassifications
     _write_json_atomic(path, state)
 
 
@@ -1751,9 +2060,14 @@ def mark_essential_failure_sealed(
     if run_id in seals:
         if seals[run_id] != binding:
             raise T09PilotError("essential-failure seal binding changed")
-        return
-    seals[run_id] = binding
+    else:
+        seals[run_id] = binding
     state["essential_failure_seals"] = seals
+    release_transaction = state.get("condition_start_reservation")
+    if isinstance(release_transaction, dict) and release_transaction.get("run_id") == run_id:
+        if release_transaction.get("phase") != "empirical-state-committed":
+            raise T09PilotError("essential seal found an incomplete condition-start transaction")
+        state["condition_start_reservation"] = None
     _write_json_atomic(path, state)
 
 
@@ -1799,6 +2113,13 @@ def mark_raw_attempt_complete(
         "manifest_sha256": raw_manifest_sha256,
         "receipt_sha256": raw_receipt_sha256,
     }
+    release_transaction = state.get("condition_start_reservation")
+    if not isinstance(release_transaction, dict) or (
+        release_transaction.get("run_id") != run_id
+        or release_transaction.get("phase") != "empirical-state-committed"
+    ):
+        raise T09PilotError("raw completion lacks its empirical release transaction")
+    state["condition_start_reservation"] = None
     _write_json_atomic(path, state)
 
 
@@ -2256,6 +2577,8 @@ def first_pair_decision(value: PairCheckpointInput) -> dict[str, object]:
         preflight_wall_seconds=3_600,
         failed_preflight_termination_dispatch_seconds=300,
         empirical_campaign_wall_seconds=14_400,
+        evidence_export_reserve_seconds=600,
+        provider_termination_handoff_seconds=60,
         empirical_cleanup_reserve_seconds=900,
         empirical_termination_cutoff_seconds=13_500,
         maximum_successful_host_active_seconds=18_000,

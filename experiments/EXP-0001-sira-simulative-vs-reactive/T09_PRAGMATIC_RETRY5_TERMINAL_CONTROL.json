@@ -47,7 +47,7 @@
   "successor": {
     "plan_id": "PLAN-EXP0001-PILOT-V7",
     "profile_path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml",
-    "profile_sha256": "1e673590c928e60c8fceeae605b939361f62b146afeab7de10095f6217ff31b6",
+    "profile_sha256": "c879dc138c20fe29e2e96c2bc5b8856039b44ce7f8d54110d6e0a69c8b025030",
     "requirements": [
       "fresh-v7-plan-host-attempt-evaluator-pair-stage-and-archive-identities",
       "process-wide-core-dump-suppression-and-reconstructable-essential-failure-sealing",

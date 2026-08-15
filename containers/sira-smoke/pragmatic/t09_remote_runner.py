@@ -13,10 +13,12 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import gzip
 import hashlib
 import importlib.util
 import ipaddress
 import json
+import math
 import os
 import re
 import resource
@@ -27,8 +29,8 @@ import subprocess
 import sys
 import tarfile
 import time
-from collections.abc import Iterator
-from datetime import datetime, timezone
+from collections.abc import Callable, Iterable, Iterator
+from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from typing import IO, Any, BinaryIO, Final, NamedTuple, cast
 
@@ -56,6 +58,7 @@ from giclab.harness.t09_sira_pilot import (
     PairCheckpointInput,
     RuntimeQualification,
     T09PilotError,
+    consume_published_unreleased_condition,
     first_pair_decision,
     load_aggregate_usage,
     load_execution_contract,
@@ -64,10 +67,14 @@ from giclab.harness.t09_sira_pilot import (
     mark_attempt_completed,
     mark_core_safety_stop,
     mark_credential_cleanup_integrity_failure,
+    mark_empirical_entry,
     mark_essential_failure_sealed,
     mark_nonempirical_infrastructure_attempt_consumed,
     mark_raw_attempt_complete,
+    reclassify_unreleased_empirical_entry,
     record_first_pair_checkpoint,
+    reserve_condition_start,
+    rollback_never_started_condition_reservation,
     scientific_attempt_projection,
     transition_zero_usage_preflight_state,
 )
@@ -160,6 +167,9 @@ RUN_IDS: Final = (
     "RUN-T09-TASK-B-REACTIVE-0005",
 )
 CONTAINER_PREFIX: Final = "giclab-t09-pilot-v7-"
+CONDITION_SUPERVISOR_DIRNAME: Final = ".giclab-supervisor"
+DOCKER_PLAN_LABEL: Final = f"giclab.t09.plan={PLAN_ID}"
+DOCKER_HOST_RUN_LABEL: Final = f"giclab.t09.host_run={HOST_RUN_ID}"
 EXPECTED_PACKAGE_MANIFEST_SHA256: Final = (
     "4ff2603fa5e0f7033ba773decdcb86abf648dcce22e469d26bc48214e390e104"
 )
@@ -174,6 +184,18 @@ BASE_IMAGE_IDENTITY: Final = (
 SOURCE_DATE_EPOCH: Final = 1_786_570_934
 MAX_ATTEMPT_OUTPUT_BYTES: Final = 67_108_864
 MAX_ATTEMPT_STREAM_BYTES: Final = 67_108_864
+MAX_ATTEMPT_CONTROL_BYTES: Final = 4_194_304
+MAX_FINALIZED_DERIVED_BYTES: Final = 4_194_304
+MAX_ATTEMPT_SUPERVISOR_BYTES: Final = 1_048_576
+MAX_FINALIZER_LOG_BYTES_PER_STREAM: Final = 262_144
+MAX_RAW_SEAL_BYTES: Final = (
+    MAX_ATTEMPT_OUTPUT_BYTES
+    - MAX_ATTEMPT_CONTROL_BYTES
+    - MAX_FINALIZED_DERIVED_BYTES
+    - MAX_ATTEMPT_SUPERVISOR_BYTES
+)
+MAX_RAW_SEAL_FILES: Final = 1_024
+MAX_RAW_RELATIVE_PATH_BYTES: Final = 256
 MAX_PILOT_DISK_BYTES: Final = 2_147_483_648
 MAX_CONDITION_WALL_SECONDS: Final = 3_600
 MAX_PAIR_WALL_SECONDS: Final = 7_200
@@ -189,6 +211,15 @@ ATTEMPT_EVIDENCE_EXPORT_RESERVE_SECONDS: Final = 600
 PROVIDER_CLOSEOUT_RESERVE_SECONDS: Final = 900
 PROVIDER_TERMINATION_CUTOFF_SECONDS: Final = 13_500
 PROVIDER_TERMINATION_HANDOFF_SECONDS: Final = 60
+EVIDENCE_CHRONOLOGY_CLOCK_SKEW_SECONDS: Final = 5.0
+NEXT_ATTEMPT_POSTCONDITION_RESERVE_SECONDS: Final = (
+    ATTEMPT_EVIDENCE_EXPORT_RESERVE_SECONDS
+    + PROVIDER_TERMINATION_HANDOFF_SECONDS
+    + PROVIDER_CLOSEOUT_RESERVE_SECONDS
+)
+NEXT_ATTEMPT_ENVELOPE_SECONDS: Final = (
+    MAX_CONDITION_WALL_SECONDS + NEXT_ATTEMPT_POSTCONDITION_RESERVE_SECONDS
+)
 MAX_LAMBDA_INSTANCES: Final = 1
 MAX_LAMBDA_LAUNCHES: Final = 2
 MAX_PERSISTENT_FILESYSTEMS: Final = 0
@@ -222,6 +253,7 @@ MAX_PRIVACY_LINE_BYTES: Final = 8_388_608
 MAX_PRIVACY_SCAN_CHUNK_BYTES: Final = 1_048_576
 MAX_ATTEMPT_EXPORT_BYTES: Final = 100_663_296
 MAX_STAGED_EVIDENCE_BYTES: Final = 536_870_912
+MAX_STAGED_EVIDENCE_FILES: Final = 100_000
 MAX_STAGE_SECONDS: Final = 300
 MAX_IMAGE_EXPORT_SECONDS: Final = 300
 MAX_IMAGE_ARCHIVE_BYTES: Final = 2_147_483_648
@@ -233,6 +265,12 @@ CORE_LIMIT_CONTRACT: Final = "process-tree-rlimit-core-zero-v1"
 MAX_CORE_SCAN_ENTRIES: Final = 100_000
 MAX_ESSENTIAL_FAILURE_BYTES: Final = 16_777_216
 MAX_ESSENTIAL_FAILURE_FILE_BYTES: Final = 8_388_608
+MAX_ESSENTIAL_FAILURE_FILES: Final = 1_024
+MAX_ESSENTIAL_EXCLUSION_RECORDS: Final = 1_024
+MAX_ESSENTIAL_RELATIVE_PATH_BYTES: Final = 256
+MAX_ESSENTIAL_METADATA_BYTES: Final = 4_194_304
+MAX_ATTEMPT_EXPORT_MEMBERS: Final = 2_048
+MAX_ATTEMPT_EXPORT_MANIFEST_BYTES: Final = 2_097_152
 POSTFREEZE_ADMISSION_FIELD: Final = "fresh_empirical_campaign_headroom_passed_before_metadata_get"
 SLOT1_IMAGE_MATERIALIZATION_POLICY: Final = "retained-import-or-one-fallback-build"
 SLOT2_IMAGE_MATERIALIZATION_POLICY: Final = "retained-import-only"
@@ -322,10 +360,11 @@ def hard_deadline(seconds: float, *, message: str) -> Iterator[None]:
 
 
 def utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")  # noqa: UP017
+    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
 def file_sha256(path: Path) -> str:
+    _recover_atomic_publication(path)
     digest = hashlib.sha256()
     with path.open("rb") as handle:
         while chunk := handle.read(1_048_576):
@@ -514,6 +553,7 @@ def canonical_sha256(value: object) -> str:
 
 
 def load_object(path: Path, *, label: str) -> dict[str, Any]:
+    _recover_atomic_publication(path)
     value: object = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(value, dict) or not all(isinstance(key, str) for key in value):
         raise T09HostError(f"{label} must be a string-keyed JSON object")
@@ -577,11 +617,28 @@ def _sensitive_json_paths(value: object, *, prefix: str = "$") -> list[str]:
     return hits
 
 
-def privacy_violations(root: Path) -> list[str]:
+def privacy_violations(
+    root: Path,
+    *,
+    excluded_relative_paths: frozenset[str] = frozenset(),
+    excluded_relative_prefixes: frozenset[str] = frozenset(),
+) -> list[str]:
     """Reject retained text/JSON that still contains explicitly prohibited values."""
 
     violations: list[str] = []
     for path in sorted(root.rglob("*")):
+        relative = path.relative_to(root).as_posix()
+        if relative in excluded_relative_paths or any(
+            relative == prefix or relative.startswith(prefix + "/")
+            for prefix in excluded_relative_prefixes
+        ):
+            continue
+        if _JUPYTER_URL.search(relative):
+            violations.append(f"{relative}:jupyter-url-path")
+        if _CREDENTIAL_TEXT.search(relative):
+            violations.append(f"{relative}:credential-pattern-path")
+        if _private_network_values(relative):
+            violations.append(f"{relative}:private-network-path")
         if (
             not path.is_file()
             or path.is_symlink()
@@ -589,7 +646,6 @@ def privacy_violations(root: Path) -> list[str]:
             or path.stat().st_size > MAX_PILOT_DISK_BYTES
         ):
             continue
-        relative = path.relative_to(root).as_posix()
         for label in _stream_text_pattern_hits(path):
             violations.append(f"{relative}:{label}")
         if path.suffix == ".json" and path.stat().st_size <= MAX_PRIVACY_JSON_BYTES:
@@ -614,15 +670,89 @@ def privacy_violations(root: Path) -> list[str]:
     return sorted(set(violations))
 
 
-def write_exclusive(path: Path, value: object) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    encoded = (json.dumps(value, allow_nan=False, indent=2, sort_keys=True) + "\n").encode()
+def _atomic_publication_temporary(path: Path) -> Path:
+    return path.parent / f".{path.name}.giclab-publication.tmp"
+
+
+def _fsync_directory(path: Path) -> None:
     descriptor = os.open(
         path,
-        os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
-        0o600,
+        os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_CLOEXEC", 0),
     )
     try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def _recover_atomic_publication(path: Path) -> None:
+    """Close the only hardlink crash window of an already-fsynced publication."""
+
+    temporary = _atomic_publication_temporary(path)
+    if not os.path.lexists(temporary) or not os.path.lexists(path):
+        return
+    temporary_metadata = temporary.lstat()
+    published_metadata = path.lstat()
+    if (
+        stat.S_ISREG(temporary_metadata.st_mode)
+        and stat.S_ISREG(published_metadata.st_mode)
+        and temporary_metadata.st_dev == published_metadata.st_dev
+        and temporary_metadata.st_ino == published_metadata.st_ino
+        and temporary_metadata.st_nlink == 2
+        and published_metadata.st_nlink == 2
+    ):
+        temporary.unlink()
+        _fsync_directory(path.parent)
+
+
+def recover_atomic_publications(root: Path) -> None:
+    """Recover every completed supervisor publication after an abrupt exit."""
+
+    if not root.exists() or root.is_symlink() or not root.is_dir():
+        return
+    for temporary in sorted(root.rglob(".*.giclab-publication.tmp")):
+        name = temporary.name
+        prefix = "."
+        suffix = ".giclab-publication.tmp"
+        if not name.startswith(prefix) or not name.endswith(suffix):
+            continue
+        target_name = name[len(prefix) : -len(suffix)]
+        if target_name:
+            _recover_atomic_publication(temporary.parent / target_name)
+
+
+def _prepare_atomic_publication_temporary(path: Path) -> Path:
+    temporary = _atomic_publication_temporary(path)
+    _recover_atomic_publication(path)
+    if os.path.lexists(temporary):
+        if os.path.lexists(path):
+            raise FileExistsError(path)
+        metadata = temporary.lstat()
+        if (
+            not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_uid != os.getuid()
+            or metadata.st_nlink != 1
+            or stat.S_IMODE(metadata.st_mode) != 0o600
+        ):
+            raise T09HostError("incomplete atomic publication has unsafe metadata")
+        temporary.unlink()
+        _fsync_directory(path.parent)
+    return temporary
+
+
+def write_exclusive(path: Path, value: object) -> None:
+    """Atomically publish one immutable JSON object with O_EXCL semantics."""
+
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    encoded = (json.dumps(value, allow_nan=False, indent=2, sort_keys=True) + "\n").encode()
+    temporary = _prepare_atomic_publication_temporary(path)
+    descriptor = -1
+    try:
+        descriptor = os.open(
+            temporary,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
+            0o600,
+        )
         offset = 0
         while offset < len(encoded):
             written = os.write(descriptor, encoded[offset:])
@@ -630,26 +760,28 @@ def write_exclusive(path: Path, value: object) -> None:
                 raise T09HostError("evidence write made no progress")
             offset += written
         os.fsync(descriptor)
-    finally:
         os.close(descriptor)
-    parent_descriptor = os.open(
-        path.parent,
-        os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_CLOEXEC", 0),
-    )
-    try:
-        os.fsync(parent_descriptor)
+        descriptor = -1
+        os.link(temporary, path, follow_symlinks=False)
     finally:
-        os.close(parent_descriptor)
+        if descriptor >= 0:
+            os.close(descriptor)
+        temporary.unlink(missing_ok=True)
+        _fsync_directory(path.parent)
 
 
 def write_bytes_exclusive(path: Path, value: bytes) -> None:
+    """Atomically publish immutable binary evidence with O_EXCL semantics."""
+
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    descriptor = os.open(
-        path,
-        os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
-        0o600,
-    )
+    temporary = _prepare_atomic_publication_temporary(path)
+    descriptor = -1
     try:
+        descriptor = os.open(
+            temporary,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
+            0o600,
+        )
         offset = 0
         while offset < len(value):
             written = os.write(descriptor, value[offset:])
@@ -657,16 +789,26 @@ def write_bytes_exclusive(path: Path, value: bytes) -> None:
                 raise T09HostError("binary evidence write made no progress")
             offset += written
         os.fsync(descriptor)
-    finally:
         os.close(descriptor)
-    parent_descriptor = os.open(
-        path.parent,
-        os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_CLOEXEC", 0),
-    )
-    try:
-        os.fsync(parent_descriptor)
+        descriptor = -1
+        os.link(temporary, path, follow_symlinks=False)
     finally:
-        os.close(parent_descriptor)
+        if descriptor >= 0:
+            os.close(descriptor)
+        temporary.unlink(missing_ok=True)
+        _fsync_directory(path.parent)
+
+
+def write_exclusive_or_validate(path: Path, value: object, *, label: str) -> None:
+    """Publish one immutable JSON document or validate an identical prior publication."""
+
+    if path.is_file() and not path.is_symlink():
+        if load_object(path, label=label) != value:
+            raise T09HostError(f"{label} drifted during crash recovery")
+        return
+    if os.path.lexists(path):
+        raise T09HostError(f"{label} has an unsafe existing identity")
+    write_exclusive(path, value)
 
 
 def write_atomic(path: Path, value: object) -> None:
@@ -729,6 +871,19 @@ def safe_environment() -> dict[str, str]:
     return environment
 
 
+def enforce_host_core_limit() -> tuple[int, int]:
+    """Disable cores in the trusted supervisor and every local child it spawns."""
+
+    try:
+        resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+        observed = resource.getrlimit(resource.RLIMIT_CORE)
+    except (OSError, ValueError) as exc:
+        raise T09HostError("host supervisor could not disable core dumps") from exc
+    if observed != (0, 0):
+        raise T09HostError("host supervisor core limit verification failed")
+    return observed
+
+
 def output(argv: list[str], *, timeout: int = 30) -> str:
     result = subprocess.run(
         argv,
@@ -756,17 +911,258 @@ def run_logged(
         (evidence_root / f"{label}.stdout").open("xb") as stdout,
         (evidence_root / f"{label}.stderr").open("xb") as stderr,
     ):
+        docker_run = _docker_run_prefix(argv)
+        if docker_run is None:
+            result = subprocess.run(
+                argv,
+                env=safe_environment(),
+                stdin=subprocess.DEVNULL,
+                stdout=stdout,
+                stderr=stderr,
+                check=False,
+                timeout=timeout,
+            )
+        else:
+            prefix, _ = docker_run
+            result = run_owned_docker(
+                argv,
+                prefix=prefix,
+                label=label,
+                evidence_root=evidence_root,
+                stdout=stdout,
+                stderr=stderr,
+                timeout=timeout,
+            )
+    if result.returncode != 0:
+        raise T09HostError(f"command failed ({result.returncode}): {label}")
+
+
+def _docker_run_prefix(argv: list[str]) -> tuple[list[str], int] | None:
+    """Locate an exact Docker ``run`` transport without string heuristics."""
+
+    try:
+        docker_index = argv.index("docker")
+    except ValueError:
+        return None
+    run_index = docker_index + 1
+    if run_index >= len(argv) or argv[run_index] != "run":
+        return None
+    prefix = argv[:run_index]
+    if prefix not in (["docker"], ["sudo", "-n", "docker"]):
+        raise T09HostError("Docker run transport prefix is not allowlisted")
+    return list(prefix), run_index
+
+
+def _owned_docker_name(label: str) -> str:
+    normalized = re.sub(r"[^a-z0-9]+", "-", label.lower()).strip("-")
+    if not normalized or len(normalized) > 80:
+        raise T09HostError("owned Docker execution label is invalid")
+    return f"{CONTAINER_PREFIX}utility-{normalized}"
+
+
+def _owned_docker_role(label: str) -> str:
+    normalized = re.sub(r"[^a-z0-9]+", "-", label.lower()).strip("-")
+    if not normalized or len(normalized) > 80:
+        raise T09HostError("owned Docker execution label is invalid")
+    return f"utility-{normalized}"
+
+
+def _project_owned_docker_argv(
+    argv: list[str],
+    *,
+    prefix: list[str],
+    label: str,
+    owned_role: str,
+) -> tuple[list[str], str]:
+    """Name and label every Docker run so cleanup can always find it."""
+
+    if argv[: len(prefix) + 1] != [*prefix, "run"]:
+        raise T09HostError("owned Docker execution is not an exact run invocation")
+    suffix = list(argv[len(prefix) + 1 :])
+    name = _owned_docker_name(label)
+    existing_labels = [
+        suffix[index + 1] for index, token in enumerate(suffix[:-1]) if token == "--label"
+    ]
+    owned_label_keys = {
+        value.split("=", 1)[0]
+        for value in existing_labels
+        if value.startswith("giclab.t09.") and "=" in value
+    }
+    if (
+        any(
+            value.startswith("giclab.t09.plan=") and value != DOCKER_PLAN_LABEL
+            for value in existing_labels
+        )
+        or any(
+            value.startswith("giclab.t09.host_run=") and value != DOCKER_HOST_RUN_LABEL
+            for value in existing_labels
+        )
+        or sum(value.startswith("giclab.t09.plan=") for value in existing_labels) > 1
+        or sum(value.startswith("giclab.t09.host_run=") for value in existing_labels) > 1
+        or sum(value.startswith("giclab.t09.role=") for value in existing_labels) > 1
+    ):
+        raise T09HostError("owned Docker execution labels drifted")
+    required_labels = [
+        value
+        for key, value in (
+            ("giclab.t09.plan", DOCKER_PLAN_LABEL),
+            ("giclab.t09.host_run", DOCKER_HOST_RUN_LABEL),
+            ("giclab.t09.role", f"giclab.t09.role={owned_role}"),
+        )
+        if key not in owned_label_keys
+    ]
+    if any(
+        value.startswith("giclab.t09.role=") and value != f"giclab.t09.role={owned_role}"
+        for value in existing_labels
+    ):
+        raise T09HostError("owned Docker execution role label drifted")
+    injected_labels = [token for value in required_labels for token in ("--label", value)]
+    if "--log-driver" in suffix and (
+        suffix.count("--log-driver") != 1
+        or suffix.index("--log-driver") + 1 >= len(suffix)
+        or suffix[suffix.index("--log-driver") + 1] != "none"
+    ):
+        raise T09HostError("owned Docker execution log-retention policy drifted")
+    log_policy = [] if "--log-driver" in suffix else ["--log-driver", "none"]
+    if "--name" in suffix:
+        if suffix.count("--name") != 1 or suffix[suffix.index("--name") + 1] != name:
+            raise T09HostError("owned Docker execution name drifted")
+        projected = [*prefix, "run", *injected_labels, *log_policy, *suffix]
+    else:
+        projected = [
+            *prefix,
+            "run",
+            "--name",
+            name,
+            *injected_labels,
+            *log_policy,
+            *suffix,
+        ]
+    return projected, name
+
+
+def run_owned_docker(
+    argv: list[str],
+    *,
+    prefix: list[str],
+    label: str,
+    evidence_root: Path,
+    stdout: IO[bytes] | int,
+    stderr: IO[bytes] | int,
+    timeout: int,
+    environment: dict[str, str] | None = None,
+    preexec_fn: Callable[[], None] | None = None,
+    owned_role: str | None = None,
+) -> subprocess.CompletedProcess[bytes]:
+    """Run one named Docker container and prove daemon-side removal in ``finally``."""
+
+    role = _owned_docker_role(label) if owned_role is None else owned_role
+    if not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,95}", role):
+        raise T09HostError("owned Docker role is malformed")
+    projected, name = _project_owned_docker_argv(
+        argv,
+        prefix=prefix,
+        label=label,
+        owned_role=role,
+    )
+    if _container_id_by_exact_name(prefix, name) is not None:
+        # Never let a failed ``docker run`` make its cleanup path delete a
+        # pre-existing same-name object, even when it carries copied labels.
+        raise T09HostError("owned Docker execution name is already occupied")
+    cidfile = evidence_root / f"{label}.container-id"
+    if os.path.lexists(cidfile):
+        raise T09HostError("owned Docker container-ID file already exists")
+    run_index = len(prefix)
+    if projected[run_index] != "run":
+        raise T09HostError("owned Docker run projection lost its transport boundary")
+    projected = [
+        *projected[: run_index + 1],
+        "--cidfile",
+        str(cidfile),
+        *projected[run_index + 1 :],
+    ]
+    write_exclusive(
+        evidence_root / f"{label}.container-command.json",
+        {
+            "schema_version": "0.1.0",
+            "container_name": name,
+            "argv": projected,
+            "argv_sha256": canonical_sha256(projected),
+            "owned_by_plan": PLAN_ID,
+            "owned_by_host_run": HOST_RUN_ID,
+            "owned_role": role,
+        },
+    )
+    result: subprocess.CompletedProcess[bytes] | None = None
+    primary_error: BaseException | None = None
+    try:
         result = subprocess.run(
-            argv,
-            env=safe_environment(),
+            projected,
+            env=environment or safe_environment(),
             stdin=subprocess.DEVNULL,
             stdout=stdout,
             stderr=stderr,
             check=False,
             timeout=timeout,
+            preexec_fn=preexec_fn,
         )
-    if result.returncode != 0:
-        raise T09HostError(f"command failed ({result.returncode}): {label}")
+    except BaseException as exc:
+        primary_error = exc
+    finally:
+        removal_returned_success = False
+        removal_error_type: str | None = None
+        residue: list[str] = []
+        container_id: str | None = None
+        try:
+            if os.path.lexists(cidfile):
+                metadata = cidfile.lstat()
+                if (
+                    cidfile.is_symlink()
+                    or not stat.S_ISREG(metadata.st_mode)
+                    or metadata.st_uid != os.getuid()
+                    or metadata.st_nlink != 1
+                    or not 0 < metadata.st_size <= 65
+                ):
+                    raise T09HostError("owned Docker container-ID file is unsafe")
+                container_id = cidfile.read_text(encoding="ascii").strip()
+                if re.fullmatch(r"[a-f0-9]{64}", container_id) is None:
+                    raise T09HostError("owned Docker container-ID file is malformed")
+                removal_returned_success = remove_container(
+                    prefix,
+                    name,
+                    expected_container_id=container_id,
+                    expected_role=role,
+                )
+            else:
+                # No daemon-published ID means there is no authority to remove by
+                # name.  Only an exact absence proof is an acceptable outcome.
+                removal_returned_success = _container_id_by_exact_name(prefix, name) is None
+            residue = [] if removal_returned_success else [name]
+        except (OSError, subprocess.SubprocessError, T09HostError) as exc:
+            removal_error_type = type(exc).__name__
+            residue = [name]
+        write_exclusive(
+            evidence_root / f"{label}.container-cleanup.json",
+            {
+                "schema_version": "0.1.0",
+                "container_name": name,
+                "container_id": container_id,
+                "owned_role": role,
+                "remove_returned_success": removal_returned_success,
+                "container_absent_after_run": not residue,
+                "residue": residue,
+                "cleanup_error_type": removal_error_type,
+            },
+        )
+        if residue:
+            cleanup_error = T09HostError("owned Docker execution residue remains after cleanup")
+            if primary_error is not None:
+                raise cleanup_error from primary_error
+            raise cleanup_error
+    if primary_error is not None:
+        raise primary_error
+    assert result is not None
+    return result
 
 
 def docker_prefix() -> list[str]:
@@ -801,6 +1197,30 @@ def image_id_if_present(prefix: list[str], reference: str) -> str | None:
     if re.fullmatch(r"sha256:[a-f0-9]{64}", observed) is None:
         raise T09HostError("Docker returned a malformed image identity")
     return observed
+
+
+def _image_config_labels(prefix: list[str], reference: str) -> dict[str, str]:
+    raw = output([*prefix, "image", "inspect", "--format", "{{json .Config.Labels}}", reference])
+    try:
+        value: object = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise T09HostError("Docker returned malformed image labels") from exc
+    if not isinstance(value, dict) or not all(
+        isinstance(key, str) and isinstance(item, str) for key, item in value.items()
+    ):
+        raise T09HostError("Docker returned an unsafe image-label projection")
+    return cast(dict[str, str], value)
+
+
+def _fallback_image_labels(package_commit: str) -> dict[str, str]:
+    if re.fullmatch(r"[a-f0-9]{40}", package_commit) is None:
+        raise T09HostError("fallback image package commit is malformed")
+    return {
+        "giclab.t09.plan": PLAN_ID,
+        "giclab.t09.host_run": HOST_RUN_ID,
+        "giclab.t09.role": "fallback-runtime-image",
+        "giclab.t09.package_commit": package_commit,
+    }
 
 
 def held_descriptor_docker_path(prefix: list[str], descriptor: int) -> str:
@@ -1191,6 +1611,7 @@ def carry_forward_replacement_image(
 def materialize_replacement_image(
     *,
     repository: Path,
+    package_commit: str,
     artifact_root: Path,
     prefix: list[str],
 ) -> dict[str, object]:
@@ -1339,6 +1760,10 @@ def materialize_replacement_image(
         evidence_root=materialization,
         label="buildkit-version",
     )
+    repository_runtime_commit = output(["git", "-C", str(repository), "rev-parse", "HEAD"])
+    if repository_runtime_commit != package_commit:
+        raise T09HostError("fallback image build package commit drifted")
+    owned_image_labels = _fallback_image_labels(package_commit)
     build_argv = [
         *prefix,
         "build",
@@ -1350,6 +1775,11 @@ def materialize_replacement_image(
         "PYTHON_RUNTIME_VERSION=3.11.14",
         "--build-arg",
         f"SOURCE_DATE_EPOCH={SOURCE_DATE_EPOCH}",
+        *(
+            item
+            for key, value in sorted(owned_image_labels.items())
+            for item in ("--label", f"{key}={value}")
+        ),
         "--tag",
         REPLACEMENT_IMAGE_TAG,
         "--file",
@@ -1367,6 +1797,24 @@ def materialize_replacement_image(
                 "uv_wheel_url": UV_URL,
                 "uv_wheel_sha256": UV_SHA256,
             },
+        },
+    )
+    write_exclusive(
+        materialization / "fallback-build-intent.json",
+        {
+            "schema_version": "0.1.0",
+            "plan_id": PLAN_ID,
+            "host_run_id": HOST_RUN_ID,
+            "qualification_id": QUALIFICATION_ID,
+            "package_commit": package_commit,
+            "image_tag": REPLACEMENT_IMAGE_TAG,
+            "materialization_policy": SLOT1_IMAGE_MATERIALIZATION_POLICY,
+            "expected_tag_present_before_build": False,
+            "authorized_build_count": 1,
+            "resulting_image_id_known_before_build": False,
+            "owned_image_labels": owned_image_labels,
+            "build_argv_sha256": canonical_sha256(build_argv),
+            "build_command_sha256": file_sha256(materialization / "build-command.json"),
         },
     )
     run_logged(
@@ -1393,7 +1841,7 @@ def materialize_replacement_image(
         "image_digest_equality_required": False,
         "base_image_identity": BASE_IMAGE_IDENTITY,
         "historical_source_commit": T07_EXECUTION_COMMIT,
-        "repository_runtime_commit": output(["git", "-C", str(repository), "rev-parse", "HEAD"]),
+        "repository_runtime_commit": repository_runtime_commit,
         "sira_commit": SIRA_COMMIT,
         "sira_tree": SIRA_TREE,
         "python_version": "3.11.14",
@@ -1426,7 +1874,6 @@ def materialize_replacement_image(
         "buildkit_version_available": buildkit_version["returncode"] == 0,
         "build_count": 1,
     }
-    write_exclusive(materialization / "receipt.json", result)
     shutil.rmtree(work)
     return result
 
@@ -1448,8 +1895,11 @@ def materialize_retained_or_build_image(
     }:
         raise T09HostError("image materialization policy is invalid")
 
-    if image_id_if_present(prefix, REPLACEMENT_IMAGE_TAG) is not None:
-        raise T09HostError("V6 image tag already exists before materialization")
+    if (
+        image_id_if_present(prefix, REPLACEMENT_IMAGE_TAG) is not None
+        or image_id_if_present(prefix, RETAINED_IMAGE_ID) is not None
+    ):
+        raise T09HostError("V7 image identity already exists before materialization")
     materialization = artifact_root / "pilot-v7/replacement-image-qualification"
     logs = materialization / "logs"
     materialization.mkdir(parents=True, mode=0o700)
@@ -1505,6 +1955,7 @@ def materialize_retained_or_build_image(
                 "expected_bytes": RETAINED_IMAGE_ARCHIVE_BYTES,
                 "expected_sha256": RETAINED_IMAGE_ARCHIVE_SHA256,
                 "expected_image_id": RETAINED_IMAGE_ID,
+                "expected_image_id_present_before_materialization": False,
                 "validation": archive_reason,
                 "materialization_policy": materialization_policy,
             },
@@ -1622,12 +2073,15 @@ def materialize_retained_or_build_image(
             }
             write_exclusive(materialization / "receipt.json", result)
             return result
-        # A failed/incompatible load may have left the expected image behind.  It
-        # cannot silently become the accepted image; remove only the exact known
-        # candidate before the one authorized fallback build.
-        if imported is not None:
-            subprocess.run(
-                [*prefix, "image", "rm", "--force", imported],
+        # A failed/incompatible load may have made the expected image visible
+        # even when Docker returned a failure.  The pre-mutation intent gives us
+        # authority over that one exact ID; remove it and prove both the ID and
+        # the V7 tag absent before fallback or slot-2 rejection.
+        rejected_candidate_visible = image_id_if_present(prefix, RETAINED_IMAGE_ID)
+        rejected_tag_visible = image_id_if_present(prefix, REPLACEMENT_IMAGE_TAG)
+        if rejected_candidate_visible is not None:
+            removal = subprocess.run(
+                [*prefix, "image", "rm", "--force", RETAINED_IMAGE_ID],
                 env=safe_environment(),
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,
@@ -1635,6 +2089,15 @@ def materialize_retained_or_build_image(
                 check=False,
                 timeout=60,
             )
+            if removal.returncode != 0:
+                raise T09HostError("rejected retained-image load could not be removed")
+        if rejected_tag_visible is not None and rejected_tag_visible != RETAINED_IMAGE_ID:
+            raise T09HostError("failed retained-image load created an unexpected V7 tag")
+        if (
+            image_id_if_present(prefix, RETAINED_IMAGE_ID) is not None
+            or image_id_if_present(prefix, REPLACEMENT_IMAGE_TAG) is not None
+        ):
+            raise T09HostError("rejected retained-image load left Docker image residue")
         if materialization_policy == SLOT2_IMAGE_MATERIALIZATION_POLICY:
             raise T09HostError("slot-2 retained image import failed; fallback build is forbidden")
     if archive_descriptor >= 0:
@@ -1645,6 +2108,7 @@ def materialize_retained_or_build_image(
         raise T09HostError("slot-2 retained image is unavailable; fallback build is forbidden")
     built = materialize_replacement_image(
         repository=repository,
+        package_commit=package_commit,
         artifact_root=artifact_root,
         prefix=prefix,
     )
@@ -1653,14 +2117,290 @@ def materialize_retained_or_build_image(
     built["retained_image_archive_validation"] = archive_reason
     built["image_materialization_policy"] = materialization_policy
     receipt_path = artifact_root / "pilot-v7/replacement-image-qualification/receipt.json"
-    receipt_path.unlink()
     write_exclusive(receipt_path, built)
     return built
 
 
-def remove_container(prefix: list[str], name: str) -> bool:
+def _validated_fallback_build_intent(
+    materialization: Path,
+    *,
+    package_commit: str,
+) -> dict[str, Any] | None:
+    """Validate the pre-build mutation authority used by crash recovery."""
+
+    intent_path = materialization / "fallback-build-intent.json"
+    recovery_path = materialization / "fallback-build-cleanup-recovery.json"
+    if not intent_path.exists():
+        if os.path.lexists(intent_path) or os.path.lexists(recovery_path):
+            raise T09HostError("fallback image mutation authority is unsafe or orphaned")
+        return None
+    intent_metadata = intent_path.lstat()
+    command_path = materialization / "build-command.json"
+    if (
+        intent_path.is_symlink()
+        or not stat.S_ISREG(intent_metadata.st_mode)
+        or intent_metadata.st_nlink != 1
+        or not command_path.is_file()
+        or command_path.is_symlink()
+    ):
+        raise T09HostError("fallback image mutation authority is unsafe")
+    intent = load_object(intent_path, label="fallback image build intent")
+    command = load_object(command_path, label="fallback image build command")
+    argv = command.get("argv")
+    labels = _fallback_image_labels(package_commit)
+    if (
+        set(intent)
+        != {
+            "schema_version",
+            "plan_id",
+            "host_run_id",
+            "qualification_id",
+            "package_commit",
+            "image_tag",
+            "materialization_policy",
+            "expected_tag_present_before_build",
+            "authorized_build_count",
+            "resulting_image_id_known_before_build",
+            "owned_image_labels",
+            "build_argv_sha256",
+            "build_command_sha256",
+        }
+        or intent.get("schema_version") != "0.1.0"
+        or intent.get("plan_id") != PLAN_ID
+        or intent.get("host_run_id") != HOST_RUN_ID
+        or intent.get("qualification_id") != QUALIFICATION_ID
+        or intent.get("package_commit") != package_commit
+        or intent.get("image_tag") != REPLACEMENT_IMAGE_TAG
+        or intent.get("materialization_policy") != SLOT1_IMAGE_MATERIALIZATION_POLICY
+        or intent.get("expected_tag_present_before_build") is not False
+        or intent.get("authorized_build_count") != 1
+        or intent.get("resulting_image_id_known_before_build") is not False
+        or intent.get("owned_image_labels") != labels
+        or not isinstance(argv, list)
+        or not all(isinstance(item, str) for item in argv)
+        or command.get("argv_sha256") != canonical_sha256(argv)
+        or intent.get("build_argv_sha256") != canonical_sha256(argv)
+        or intent.get("build_command_sha256") != file_sha256(command_path)
+        or command.get("source_date_epoch") != SOURCE_DATE_EPOCH
+        or command.get("network_fetches")
+        != {
+            "sira_commit": SIRA_COMMIT,
+            "uv_wheel_url": UV_URL,
+            "uv_wheel_sha256": UV_SHA256,
+        }
+    ):
+        raise T09HostError("fallback image build intent drifted")
+    typed_argv = cast(list[str], argv)
+    for key, value in labels.items():
+        expected = f"{key}={value}"
+        if not any(
+            typed_argv[index : index + 2] == ["--label", expected]
+            for index in range(len(typed_argv) - 1)
+        ):
+            raise T09HostError("fallback image build lost its ownership label")
+    if not any(
+        typed_argv[index : index + 2] == ["--tag", REPLACEMENT_IMAGE_TAG]
+        for index in range(len(typed_argv) - 1)
+    ):
+        raise T09HostError("fallback image build lost its exact tag")
+    return intent
+
+
+def _fallback_build_cleanup_candidate(
+    *,
+    prefix: list[str],
+    materialization: Path,
+    package_commit: str,
+    final_receipt_present: bool,
+) -> str | None:
+    """Resolve one label-bound fallback image after build/receipt interruption."""
+
+    intent = _validated_fallback_build_intent(
+        materialization,
+        package_commit=package_commit,
+    )
+    recovery_path = materialization / "fallback-build-cleanup-recovery.json"
+    if intent is None:
+        return None
+    if final_receipt_present:
+        if os.path.lexists(recovery_path):
+            raise T09HostError("fallback image has conflicting final and recovery receipts")
+        return None
+    expected_labels = _fallback_image_labels(package_commit)
+    intent_path = materialization / "fallback-build-intent.json"
+    if recovery_path.is_file() and not recovery_path.is_symlink():
+        recovery = load_object(recovery_path, label="fallback image cleanup recovery")
+        candidate = recovery.get("image_id")
+        if (
+            set(recovery)
+            != {
+                "schema_version",
+                "plan_id",
+                "host_run_id",
+                "package_commit",
+                "image_tag",
+                "image_id",
+                "fallback_build_intent_sha256",
+                "owned_image_labels",
+                "final_materialization_receipt_absent",
+            }
+            or recovery.get("schema_version") != "0.1.0"
+            or recovery.get("plan_id") != PLAN_ID
+            or recovery.get("host_run_id") != HOST_RUN_ID
+            or recovery.get("package_commit") != package_commit
+            or recovery.get("image_tag") != REPLACEMENT_IMAGE_TAG
+            or not isinstance(candidate, str)
+            or re.fullmatch(r"sha256:[a-f0-9]{64}", candidate) is None
+            or recovery.get("fallback_build_intent_sha256") != file_sha256(intent_path)
+            or recovery.get("owned_image_labels") != expected_labels
+            or recovery.get("final_materialization_receipt_absent") is not True
+        ):
+            raise T09HostError("fallback image cleanup recovery drifted")
+        if image_id_if_present(prefix, candidate) is not None:
+            observed_labels = _image_config_labels(prefix, candidate)
+            if any(observed_labels.get(key) != value for key, value in expected_labels.items()):
+                raise T09HostError("fallback image cleanup candidate labels drifted")
+        return candidate
+    if os.path.lexists(recovery_path):
+        raise T09HostError("fallback image cleanup recovery is unsafe")
+    candidate = image_id_if_present(prefix, REPLACEMENT_IMAGE_TAG)
+    if candidate is None:
+        return None
+    observed_labels = _image_config_labels(prefix, candidate)
+    if any(observed_labels.get(key) != value for key, value in expected_labels.items()):
+        raise T09HostError("visible fallback image is not owned by this exact host run")
+    write_exclusive(
+        recovery_path,
+        {
+            "schema_version": "0.1.0",
+            "plan_id": PLAN_ID,
+            "host_run_id": HOST_RUN_ID,
+            "package_commit": package_commit,
+            "image_tag": REPLACEMENT_IMAGE_TAG,
+            "image_id": candidate,
+            "fallback_build_intent_sha256": file_sha256(intent_path),
+            "owned_image_labels": expected_labels,
+            "final_materialization_receipt_absent": True,
+        },
+    )
+    return candidate
+
+
+class OwnedContainerIdentity(NamedTuple):
+    container_id: str
+    name: str
+    labels: dict[str, str]
+
+
+def _container_id_by_exact_name(prefix: list[str], name: str) -> str | None:
+    if not name.startswith(CONTAINER_PREFIX) or re.fullmatch(r"[a-z0-9_.-]+", name) is None:
+        raise T09HostError("Docker container name is outside the owned namespace")
+    raw = output(
+        [
+            *prefix,
+            "ps",
+            "--all",
+            "--filter",
+            f"name=^/{name}$",
+            "--format",
+            "{{.ID}}",
+        ]
+    )
+    identifiers = [item for item in raw.splitlines() if item]
+    if not identifiers:
+        return None
+    if len(identifiers) != 1 or re.fullmatch(r"[a-f0-9]{12,64}", identifiers[0]) is None:
+        raise T09HostError("exact Docker name resolved to an ambiguous identity")
+    return identifiers[0]
+
+
+def inspect_owned_container(
+    prefix: list[str],
+    name: str,
+    *,
+    expected_container_id: str | None = None,
+    expected_role: str | None = None,
+) -> OwnedContainerIdentity | None:
+    if expected_container_id is not None:
+        if re.fullmatch(r"[a-f0-9]{64}", expected_container_id) is None:
+            raise T09HostError("expected Docker container identity is malformed")
+        raw = output(
+            [
+                *prefix,
+                "ps",
+                "--all",
+                "--filter",
+                f"id={expected_container_id}",
+                "--format",
+                "{{.ID}}",
+            ]
+        )
+        identifiers = [item for item in raw.splitlines() if item]
+        if not identifiers:
+            replacement = _container_id_by_exact_name(prefix, name)
+            if replacement is not None:
+                raise T09HostError("Docker name was reused before exact-ID cleanup")
+            return None
+        if (
+            len(identifiers) != 1
+            or re.fullmatch(r"[a-f0-9]{12,64}", identifiers[0]) is None
+            or not expected_container_id.startswith(identifiers[0])
+        ):
+            raise T09HostError("expected Docker identity resolved ambiguously")
+        inspect_target = expected_container_id
+    else:
+        short_id = _container_id_by_exact_name(prefix, name)
+        if short_id is None:
+            return None
+        inspect_target = short_id
+    container_id = output([*prefix, "inspect", "--format", "{{.Id}}", inspect_target])
+    retained_name = output(
+        [*prefix, "inspect", "--format", "{{.Name}}", inspect_target]
+    ).removeprefix("/")
+    raw_labels = output([*prefix, "inspect", "--format", "{{json .Config.Labels}}", inspect_target])
+    try:
+        labels_value: object = json.loads(raw_labels)
+    except json.JSONDecodeError as exc:
+        raise T09HostError("owned Docker labels are malformed") from exc
+    if (
+        re.fullmatch(r"[a-f0-9]{64}", container_id) is None
+        or retained_name != name
+        or not isinstance(labels_value, dict)
+        or not all(
+            isinstance(key, str) and isinstance(value, str) for key, value in labels_value.items()
+        )
+    ):
+        raise T09HostError("owned Docker identity drifted")
+    labels = cast(dict[str, str], labels_value)
+    if (
+        labels.get("giclab.t09.plan") != PLAN_ID
+        or labels.get("giclab.t09.host_run") != HOST_RUN_ID
+        or not isinstance(labels.get("giclab.t09.role"), str)
+        or (expected_role is not None and labels.get("giclab.t09.role") != expected_role)
+    ):
+        raise T09HostError("Docker name collision is not owned by this exact host run")
+    return OwnedContainerIdentity(container_id=container_id, name=name, labels=labels)
+
+
+def remove_container(
+    prefix: list[str],
+    name: str,
+    *,
+    expected_container_id: str,
+    expected_role: str | None = None,
+) -> bool:
+    identity = inspect_owned_container(
+        prefix,
+        name,
+        expected_container_id=expected_container_id,
+        expected_role=expected_role,
+    )
+    if identity is None:
+        return True
+    if expected_container_id is not None and identity.container_id != expected_container_id:
+        raise T09HostError("owned Docker identity changed before removal")
     result = subprocess.run(
-        [*prefix, "rm", "--force", name],
+        [*prefix, "rm", "--force", identity.container_id],
         env=safe_environment(),
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
@@ -1668,12 +2408,151 @@ def remove_container(prefix: list[str], name: str) -> bool:
         check=False,
         timeout=30,
     )
-    return result.returncode == 0
+    if result.returncode != 0:
+        return False
+    remaining = output(
+        [
+            *prefix,
+            "ps",
+            "--all",
+            "--filter",
+            f"id={identity.container_id}",
+            "--format",
+            "{{.ID}}",
+        ]
+    )
+    return remaining == ""
 
 
 def owned_containers(prefix: list[str]) -> list[str]:
-    raw = output([*prefix, "ps", "--all", "--format", "{{.Names}}"])
-    return sorted(name for name in raw.splitlines() if name.startswith(CONTAINER_PREFIX))
+    raw = output(
+        [
+            *prefix,
+            "ps",
+            "--all",
+            "--filter",
+            f"label={DOCKER_PLAN_LABEL}",
+            "--filter",
+            f"label={DOCKER_HOST_RUN_LABEL}",
+            "--format",
+            "{{.Names}}",
+        ]
+    )
+    names = sorted(name for name in raw.splitlines() if name)
+    if any(not name.startswith(CONTAINER_PREFIX) for name in names):
+        raise T09HostError("owned Docker labels resolved outside the frozen name namespace")
+    return names
+
+
+def _owned_container_name_matches_role(name: str, role: str) -> bool:
+    if role == "core-suppression-preflight":
+        return name == f"{CONTAINER_PREFIX}core-preflight"
+    if role == "browser-lifecycle-preflight":
+        return name == f"{CONTAINER_PREFIX}browser-preflight"
+    if role == "condition":
+        return re.fullmatch(rf"{re.escape(CONTAINER_PREFIX)}0[1-4]", name) is not None
+    if role == "attempt-finalizer":
+        return name.startswith(f"{CONTAINER_PREFIX}utility-finalizer-")
+    if role.startswith("utility-"):
+        return name == f"{CONTAINER_PREFIX}{role}"
+    return False
+
+
+def _validate_owned_container_command(path: Path) -> tuple[str, str]:
+    document = load_object(path, label="owned Docker mutation intent")
+    argv = document.get("argv", document.get("docker_create_argv"))
+    name = document.get("container_name")
+    role = document.get("owned_role")
+    if (
+        document.get("schema_version") != "0.1.0"
+        or document.get("owned_by_plan") != PLAN_ID
+        or document.get("owned_by_host_run") != HOST_RUN_ID
+        or not isinstance(name, str)
+        or not isinstance(role, str)
+        or not _owned_container_name_matches_role(name, role)
+        or not isinstance(argv, list)
+        or not argv
+        or not all(isinstance(token, str) for token in argv)
+        or "--name" not in argv
+        or argv.count("--name") != 1
+        or argv[argv.index("--name") + 1] != name
+    ):
+        raise T09HostError("owned Docker mutation intent is malformed")
+    labels = [argv[index + 1] for index, token in enumerate(argv[:-1]) if token == "--label"]
+    if (
+        labels.count(DOCKER_PLAN_LABEL) != 1
+        or labels.count(DOCKER_HOST_RUN_LABEL) != 1
+        or labels.count(f"giclab.t09.role={role}") != 1
+    ):
+        raise T09HostError("owned Docker mutation intent labels drifted")
+    return name, role
+
+
+def owned_container_intents(artifact_root: Path, *, repository: Path) -> dict[str, str]:
+    """Load the bounded, host-owned ledger of authorized Docker name/role mutations."""
+
+    candidates: list[Path] = []
+    pilot_root = artifact_root / "pilot-v7"
+    if pilot_root.is_dir() and not pilot_root.is_symlink():
+        for path in sorted(pilot_root.rglob("*container-command.json")):
+            relative = path.relative_to(pilot_root)
+            if relative.parts and relative.parts[0] not in {"runtime-budget", "slot2-authority"}:
+                candidates.append(path)
+    execution_path = contract_paths(repository)["execution"]
+    contract = load_execution_contract(
+        execution_path,
+        expected_sha256=file_sha256(execution_path),
+    )
+    for run_id in RUN_IDS:
+        attempt = contract.attempt(run_id)
+        attempt_root = artifact_root / attempt.output_root
+        raw_root = artifact_root / attempt.raw_output_root
+        candidates.append(raw_root / CONDITION_SUPERVISOR_DIRNAME / "container-command.json")
+        finalizer_root = attempt_root / "finalizer-invocations"
+        if finalizer_root.is_dir() and not finalizer_root.is_symlink():
+            invocations = sorted(finalizer_root.iterdir())
+            if len(invocations) > 64 or any(
+                path.is_symlink() or not path.is_dir() for path in invocations
+            ):
+                raise T09HostError("owned Docker finalizer ledger is malformed")
+            for invocation in invocations:
+                candidates.extend(sorted(invocation.glob("*container-command.json")))
+    existing = sorted({path for path in candidates if os.path.lexists(path)})
+    if len(existing) > 256:
+        raise T09HostError("owned Docker mutation ledger exceeds its bounded cardinality")
+    intents: dict[str, str] = {}
+    for path in existing:
+        metadata = path.lstat()
+        if (
+            path.is_symlink()
+            or not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_uid != os.getuid()
+            or metadata.st_nlink != 1
+            or not 0 < metadata.st_size <= MAX_PRIVACY_JSON_BYTES
+        ):
+            raise T09HostError("owned Docker mutation intent has unsafe metadata")
+        name, role = _validate_owned_container_command(path)
+        prior = intents.setdefault(name, role)
+        if prior != role:
+            raise T09HostError("owned Docker name has conflicting mutation intents")
+    return intents
+
+
+def owned_container_identities(
+    prefix: list[str],
+    *,
+    authorized_intents: dict[str, str],
+) -> list[OwnedContainerIdentity]:
+    identities: list[OwnedContainerIdentity] = []
+    for name in owned_containers(prefix):
+        role = authorized_intents.get(name)
+        if role is None:
+            raise T09HostError("labeled Docker object lacks a host-owned mutation intent")
+        identity = inspect_owned_container(prefix, name, expected_role=role)
+        if identity is None:
+            raise T09HostError("owned Docker object disappeared during identity binding")
+        identities.append(identity)
+    return identities
 
 
 def tree_bytes(root: Path) -> int:
@@ -1689,6 +2568,61 @@ def tree_bytes(root: Path) -> int:
                 except FileNotFoundError:
                     continue
     return total
+
+
+class AttemptTreeUsage(NamedTuple):
+    bytes: int
+    files: int
+
+
+def full_attempt_tree_usage(attempt_root: Path) -> AttemptTreeUsage:
+    """Measure one complete raw+derived attempt without following unsafe members."""
+
+    resolved = attempt_root.resolve(strict=True)
+    total = 0
+    files = 0
+    for path in sorted(resolved.rglob("*")):
+        metadata = path.lstat()
+        if stat.S_ISDIR(metadata.st_mode):
+            continue
+        if path.is_symlink() or not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
+            raise T09HostError("full attempt tree contains an unsafe retained member")
+        total += metadata.st_size
+        files += 1
+    return AttemptTreeUsage(bytes=total, files=files)
+
+
+def enforce_full_attempt_output_cap(attempt_root: Path) -> AttemptTreeUsage:
+    """Enforce the one declared cap across raw, derived, and supervisor evidence."""
+
+    usage = full_attempt_tree_usage(attempt_root)
+    if usage.bytes > MAX_ATTEMPT_OUTPUT_BYTES:
+        raise T09HostError("full raw-plus-derived attempt exceeds its exact output cap")
+    return usage
+
+
+def enforce_attempt_supervisor_cap(attempt_root: Path) -> AttemptTreeUsage:
+    """Bound seal/export bookkeeping outside raw, control, and derived roots."""
+
+    resolved = attempt_root.resolve(strict=True)
+    total = 0
+    files = 0
+    component_roots = {"raw", "finalized", "attempt-export-control", "essential-failure"}
+    for path in sorted(resolved.rglob("*")):
+        metadata = path.lstat()
+        if stat.S_ISDIR(metadata.st_mode):
+            continue
+        relative = path.relative_to(resolved)
+        if relative.parts and relative.parts[0] in component_roots:
+            continue
+        if path.is_symlink() or not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
+            raise T09HostError("attempt supervisor evidence contains an unsafe retained member")
+        total += metadata.st_size
+        files += 1
+    usage = AttemptTreeUsage(bytes=total, files=files)
+    if usage.bytes > MAX_ATTEMPT_SUPERVISOR_BYTES:
+        raise T09HostError("attempt supervisor evidence exceeds its reserved byte envelope")
+    return usage
 
 
 _CORE_FILENAME = re.compile(r"^core(?:\..+)?$", re.IGNORECASE)
@@ -1757,6 +2691,8 @@ def detect_core_artifacts(root: Path) -> list[dict[str, object]]:
             "mode": f"{stat.S_IMODE(metadata.st_mode):04o}",
             "owner_uid": metadata.st_uid,
             "owner_gid": metadata.st_gid,
+            "filesystem_device": metadata.st_dev if file_type == "regular" else None,
+            "filesystem_inode": metadata.st_ino if file_type == "regular" else None,
             "mtime_ns": metadata.st_mtime_ns,
             "file_type": file_type,
             "link_count": metadata.st_nlink,
@@ -1787,7 +2723,7 @@ def detect_core_artifacts(root: Path) -> list[dict[str, object]]:
             indicators.append("hardlink-alias-of-core-inode")
         if not indicators:
             continue
-        classified_links = in_root_link_counts.get(identity, 1)
+        classified_links = in_root_link_counts.get(identity, 1) if identity is not None else 1
         link_count = record["link_count"]
         record["classified_links_within_scan_root"] = classified_links
         record["destruction_verifiable"] = (
@@ -1827,6 +2763,13 @@ def remove_core_artifacts(root: Path, records: list[dict[str, object]]) -> bool:
             or f"{stat.S_IMODE(metadata.st_mode):04o}" != record.get("mode")
             or metadata.st_uid != record.get("owner_uid")
             or metadata.st_gid != record.get("owner_gid")
+            or (
+                file_type == "regular"
+                and (
+                    metadata.st_dev != record.get("filesystem_device")
+                    or metadata.st_ino != record.get("filesystem_inode")
+                )
+            )
             or metadata.st_mtime_ns != record.get("mtime_ns")
             or file_type != record.get("file_type")
             or metadata.st_nlink != record.get("link_count")
@@ -1854,6 +2797,220 @@ def remove_core_artifacts(root: Path, records: list[dict[str, object]]) -> bool:
     return all(record.get("destruction_verifiable") is True for record in records)
 
 
+class CoreCleanupOutcome(NamedTuple):
+    """Safe-metadata-only result of one best-effort owned-core destruction."""
+
+    destruction_verified: bool
+    error_type: str | None
+
+
+def cleanup_core_artifacts(
+    root: Path,
+    records: list[dict[str, object]],
+) -> CoreCleanupOutcome:
+    """Never lose the rotation decision when unlink/fsync/rescan fails."""
+
+    if not records:
+        return CoreCleanupOutcome(destruction_verified=True, error_type=None)
+    try:
+        verified = remove_core_artifacts(root, records)
+    except (OSError, T09HostError) as exc:
+        return CoreCleanupOutcome(destruction_verified=False, error_type=type(exc).__name__)
+    return CoreCleanupOutcome(destruction_verified=verified, error_type=None)
+
+
+def _value_safe_core_records(
+    records: list[dict[str, object]],
+    *,
+    credential_bytes: bytes = b"",
+) -> list[dict[str, object]]:
+    """Redact evidence-path values without weakening operational cleanup identity."""
+
+    projected: list[dict[str, object]] = []
+    for ordinal, raw in enumerate(records, start=1):
+        record = dict(raw)
+        relative = record.get("path")
+        if not isinstance(relative, str):
+            raise T09HostError("core evidence path is malformed")
+        encoded = relative.encode("utf-8", errors="surrogateescape")
+        if (
+            (credential_bytes and credential_bytes in encoded)
+            or _CREDENTIAL_TEXT.search(relative)
+            or _JUPYTER_URL.search(relative)
+            or _private_network_values(relative)
+        ):
+            record["path"] = f"<redacted-core-artifact-{ordinal:04d}>"
+            record["path_redacted"] = True
+            record["path_redaction_reason"] = "sensitive-evidence-path"
+        projected.append(record)
+    return projected
+
+
+def _core_record_recovery_identity(record: dict[str, object]) -> tuple[object, ...]:
+    """Return a content-free identity used only to reconcile repeated censuses."""
+
+    device = record.get("filesystem_device")
+    inode = record.get("filesystem_inode")
+    path = record.get("path")
+    if type(device) is int and type(inode) is int:
+        # Keep distinct in-root aliases when their paths are safe.  If a path
+        # had to be redacted, a counted multiset still prevents a surviving
+        # subset of the same inode from being counted twice on recovery.
+        return (
+            "regular",
+            device,
+            inode,
+            None if record.get("path_redacted") is True else path,
+        )
+    return (
+        "non-regular",
+        None if record.get("path_redacted") is True else path,
+        record.get("file_type"),
+        record.get("bytes"),
+        record.get("mode"),
+        record.get("owner_uid"),
+        record.get("owner_gid"),
+        record.get("mtime_ns"),
+    )
+
+
+def _new_core_records_since_historic_census(
+    *,
+    historic_safe_records: list[dict[str, object]],
+    current_records: list[dict[str, object]],
+    credential_bytes: bytes,
+) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
+    """Return only genuinely new current records and their safe projection."""
+
+    current_safe = _value_safe_core_records(
+        current_records,
+        credential_bytes=credential_bytes,
+    )
+    historic_counts: dict[tuple[object, ...], int] = {}
+    for record in historic_safe_records:
+        identity = _core_record_recovery_identity(record)
+        historic_counts[identity] = historic_counts.get(identity, 0) + 1
+    new_operational: list[dict[str, object]] = []
+    new_safe: list[dict[str, object]] = []
+    for operational, safe in zip(current_records, current_safe, strict=True):
+        identity = _core_record_recovery_identity(safe)
+        retained_count = historic_counts.get(identity, 0)
+        if retained_count:
+            historic_counts[identity] = retained_count - 1
+            continue
+        new_operational.append(operational)
+        new_safe.append(safe)
+    return new_operational, new_safe
+
+
+def _core_paths_within_subtree(
+    records: list[dict[str, object]],
+    *,
+    scan_root: Path,
+    subtree: Path,
+) -> frozenset[str]:
+    """Project operational scan-root paths into one narrower evidence root."""
+
+    prefix = subtree.resolve(strict=True).relative_to(scan_root.resolve(strict=True)).parts
+    projected: set[str] = set()
+    for record in records:
+        relative = record.get("path")
+        if not isinstance(relative, str):
+            raise T09HostError("core scan record path is malformed")
+        parts = PurePosixPath(relative).parts
+        if tuple(parts[: len(prefix)]) == tuple(prefix) and len(parts) > len(prefix):
+            projected.add(PurePosixPath(*parts[len(prefix) :]).as_posix())
+    return frozenset(projected)
+
+
+def _paths_within_subtree(
+    relative_paths: Iterable[str],
+    *,
+    scan_root: Path,
+    subtree: Path,
+) -> frozenset[str]:
+    """Project scan-root-relative paths into one exact child evidence root."""
+
+    prefix = subtree.resolve(strict=True).relative_to(scan_root.resolve(strict=True)).parts
+    projected: set[str] = set()
+    for relative in relative_paths:
+        parts = PurePosixPath(relative).parts
+        if tuple(parts[: len(prefix)]) == tuple(prefix) and len(parts) > len(prefix):
+            projected.add(PurePosixPath(*parts[len(prefix) :]).as_posix())
+    return frozenset(projected)
+
+
+def core_cleanup_projection(
+    records: list[dict[str, object]],
+    outcome: CoreCleanupOutcome,
+    *,
+    credential_bytes: bytes = b"",
+) -> dict[str, object]:
+    """Return the one typed evidence projection shared by every core producer."""
+
+    return {
+        "core_artifacts_detected": _value_safe_core_records(
+            records,
+            credential_bytes=credential_bytes,
+        ),
+        "core_artifact_count": len(records),
+        "core_content_or_hash_retained": False,
+        "core_transferred_outside_remote_host": False,
+        "destruction_verified": outcome.destruction_verified,
+        "cleanup_error_type": outcome.error_type,
+        "credential_rotation_required_due_to_core_handling": (
+            bool(records) and not outcome.destruction_verified
+        ),
+    }
+
+
+def persist_core_detection_before_cleanup(
+    *,
+    receipt_path: Path,
+    records: list[dict[str, object]],
+    scope: str,
+    credential_bytes: bytes = b"",
+    scan_integrity_failure: bool = False,
+) -> str:
+    """Durably retain safe core facts before any unlink or container-layer removal."""
+
+    document = {
+        "schema_version": "0.1.0",
+        "scope": scope,
+        "core_artifacts_detected": _value_safe_core_records(
+            records,
+            credential_bytes=credential_bytes,
+        ),
+        "core_artifact_count": len(records),
+        "core_scan_integrity_failure": scan_integrity_failure,
+        "all_detected_artifacts_destruction_verifiable": bool(records)
+        and all(record.get("destruction_verifiable") is True for record in records),
+        "core_content_or_hash_retained": False,
+        "core_transferred_outside_remote_host": False,
+        "destructive_cleanup_not_yet_claimed": True,
+    }
+    write_exclusive_or_validate(
+        receipt_path,
+        document,
+        label="pre-destruction core detection",
+    )
+    return file_sha256(receipt_path)
+
+
+def mark_artifact_root_core_safety_stop(artifact_root: Path) -> None:
+    """Monotonically bind any preflight/finalizer core incident to pilot state."""
+
+    state_path = artifact_root / "pilot-v7/pilot-state.json"
+    state = load_object(state_path, label="core safety pilot state")
+    execution_contract_sha256 = state.get("execution_contract_sha256")
+    if not isinstance(execution_contract_sha256, str):
+        raise T09HostError("core safety stop lacks its execution-contract binding")
+    mark_core_safety_stop(
+        state_path,
+        execution_contract_sha256=execution_contract_sha256,
+    )
+
+
 def _zero_inheritance_projection(value: object, *, expected_depth: int) -> bool:
     if not isinstance(value, dict):
         return False
@@ -1867,6 +3024,58 @@ def _zero_inheritance_projection(value: object, *, expected_depth: int) -> bool:
     if expected_depth == 2:
         return child is None
     return _zero_inheritance_projection(child, expected_depth=expected_depth + 1)
+
+
+def _validate_writable_root_core_scan(
+    value: object,
+    *,
+    expected_roots: list[str],
+    artifact_label_prefix: str,
+) -> list[dict[str, object]]:
+    """Validate a value-safe in-container census before its writable layer is removed."""
+
+    if not isinstance(value, dict):
+        raise T09HostError("in-container writable-root core scan is missing")
+    records = value.get("core_artifacts")
+    if (
+        set(value)
+        != {
+            "schema_version",
+            "scan_roots",
+            "core_artifact_count",
+            "core_artifacts",
+            "core_content_or_hash_retained",
+        }
+        or value.get("schema_version") != "0.1.0"
+        or value.get("scan_roots") != expected_roots
+        or not isinstance(records, list)
+        or value.get("core_artifact_count") != len(records)
+        or value.get("core_content_or_hash_retained") is not False
+    ):
+        raise T09HostError("in-container writable-root core scan is malformed")
+    for ordinal, raw in enumerate(records, start=1):
+        if (
+            not isinstance(raw, dict)
+            or set(raw)
+            != {
+                "artifact",
+                "writable_root",
+                "bytes",
+                "known_core_filename",
+                "elf_et_core",
+                "content_or_hash_retained",
+            }
+            or raw.get("artifact") != f"<{artifact_label_prefix}-artifact-{ordinal:04d}>"
+            or raw.get("writable_root") not in expected_roots
+            or type(raw.get("bytes")) is not int
+            or cast(int, raw["bytes"]) < 0
+            or not isinstance(raw.get("known_core_filename"), bool)
+            or not isinstance(raw.get("elf_et_core"), bool)
+            or not (raw["known_core_filename"] or raw["elf_et_core"])
+            or raw.get("content_or_hash_retained") is not False
+        ):
+            raise T09HostError("in-container writable-root core record is malformed")
+    return cast(list[dict[str, object]], records)
 
 
 def core_suppression_preflight(
@@ -1888,9 +3097,17 @@ def core_suppression_preflight(
         *CORE_ULIMIT_DOCKER_ARGS,
         "--name",
         name,
+        "--label",
+        DOCKER_PLAN_LABEL,
+        "--label",
+        DOCKER_HOST_RUN_LABEL,
+        "--label",
+        "giclab.t09.role=core-suppression-preflight",
         "--platform",
         "linux/amd64",
         "--network",
+        "none",
+        "--log-driver",
         "none",
         "--ipc",
         "private",
@@ -1937,24 +3154,146 @@ def core_suppression_preflight(
         "/opt/sira/.venv/bin/python",
         "/opt/giclab/t09_core_preflight.py",
     ]
-    run_logged(create, evidence_root=attempt, label="container-create", timeout=60)
     removed = False
+    create_mutation_attempted = False
+    created_identity: OwnedContainerIdentity | None = None
     container_state: dict[str, object] | None = None
+    lifecycle_error: BaseException | None = None
+    internal_scan_path = attempt / "core-suppression-writable-root-core-scan.json"
+    internal_scan: dict[str, Any] | None = None
+    internal_scan_records: list[dict[str, object]] = []
+    internal_scan_integrity_failure = False
     try:
+        if _container_id_by_exact_name(prefix, name) is not None:
+            raise T09HostError("core-preflight Docker name is already occupied")
+        write_exclusive(
+            attempt / "container-command.json",
+            {
+                "schema_version": "0.1.0",
+                "container_name": name,
+                "argv": create,
+                "argv_sha256": canonical_sha256(create),
+                "owned_by_plan": PLAN_ID,
+                "owned_by_host_run": HOST_RUN_ID,
+                "owned_role": "core-suppression-preflight",
+            },
+        )
+        create_mutation_attempted = True
+        run_logged(create, evidence_root=attempt, label="container-create", timeout=60)
+        created_identity = inspect_owned_container(
+            prefix,
+            name,
+            expected_role="core-suppression-preflight",
+        )
+        if created_identity is None:
+            raise T09HostError("core-preflight Docker identity disappeared after create")
+        write_exclusive(
+            attempt / "container-identity.json",
+            {
+                "schema_version": "0.1.0",
+                "container_name": name,
+                "container_id": created_identity.container_id,
+                "owned_by_plan": PLAN_ID,
+                "owned_by_host_run": HOST_RUN_ID,
+                "owned_role": "core-suppression-preflight",
+                "docker_create_argv_sha256": canonical_sha256(create),
+            },
+        )
+        start_identity = inspect_owned_container(
+            prefix,
+            name,
+            expected_container_id=created_identity.container_id,
+            expected_role="core-suppression-preflight",
+        )
+        if start_identity != created_identity:
+            raise T09HostError("core-preflight Docker identity changed before start")
         run_logged(
-            [*prefix, "start", "--attach", name],
+            [*prefix, "start", "--attach", created_identity.container_id],
             evidence_root=attempt,
             label="container-start",
             timeout=90,
         )
-        container_state = container_state_receipt(prefix, name)
+        container_state = container_state_receipt(prefix, created_identity.container_id)
+    except BaseException as exc:
+        lifecycle_error = exc
     finally:
-        removed = remove_container(prefix, name)
-    receipt = load_object(
-        attempt / "core-suppression-preflight.json", label="core suppression preflight"
+        if internal_scan_path.is_file() and not internal_scan_path.is_symlink():
+            try:
+                internal_scan = load_object(
+                    internal_scan_path,
+                    label="core-suppression writable-root core scan",
+                )
+                internal_scan_records = _validate_writable_root_core_scan(
+                    internal_scan,
+                    expected_roots=["/giclab/attempt", "/tmp", "/dev/shm"],
+                    artifact_label_prefix="core-preflight",
+                )
+            except (OSError, UnicodeError, json.JSONDecodeError, T09HostError):
+                internal_scan_integrity_failure = True
+            if internal_scan_records or internal_scan_integrity_failure:
+                mark_artifact_root_core_safety_stop(artifact_root)
+        if container_state is None and create_mutation_attempted:
+            try:
+                container_state = container_state_receipt(
+                    prefix,
+                    created_identity.container_id if created_identity is not None else name,
+                )
+            except (OSError, subprocess.SubprocessError, T09HostError) as exc:
+                container_state = {
+                    "status": "inspection-unavailable",
+                    "running": None,
+                    "inspection_error_type": type(exc).__name__,
+                    "private_network_fields_retained": False,
+                }
+        if create_mutation_attempted:
+            try:
+                cleanup_identity = created_identity or inspect_owned_container(
+                    prefix,
+                    name,
+                    expected_role="core-suppression-preflight",
+                )
+                removed = cleanup_identity is None or remove_container(
+                    prefix,
+                    name,
+                    expected_container_id=cleanup_identity.container_id,
+                    expected_role="core-suppression-preflight",
+                )
+            except (OSError, subprocess.SubprocessError, T09HostError) as exc:
+                if lifecycle_error is None:
+                    lifecycle_error = exc
+    receipt_path = attempt / "core-suppression-preflight.json"
+    receipt = (
+        load_object(receipt_path, label="core suppression preflight")
+        if receipt_path.is_file()
+        else {}
     )
     core_records = detect_core_artifacts(attempt)
-    residue = owned_containers(prefix)
+    try:
+        residue = owned_containers(prefix)
+    except (OSError, subprocess.SubprocessError, T09HostError) as exc:
+        residue = ["<owned-container-enumeration-unavailable>"]
+        if lifecycle_error is None:
+            lifecycle_error = exc
+    internal_destruction_verified = not internal_scan_integrity_failure and removed and not residue
+    if internal_scan_records or internal_scan_integrity_failure:
+        write_exclusive(
+            attempt / "core-suppression-internal-core-cleanup.json",
+            {
+                "schema_version": "0.1.0",
+                "core_suppression_writable_root_core_scan_sha256": (
+                    file_sha256(internal_scan_path) if internal_scan_path.is_file() else None
+                ),
+                "core_artifact_count": len(internal_scan_records),
+                "core_scan_integrity_failure": internal_scan_integrity_failure,
+                "container_removed": removed,
+                "owned_container_residue": residue,
+                "destruction_verified": internal_destruction_verified,
+                "credential_rotation_required_due_to_core_handling": (
+                    not internal_destruction_verified
+                ),
+                "core_content_or_hash_retained": False,
+            },
+        )
     if (
         receipt.get("core_limit_contract") != CORE_LIMIT_CONTRACT
         or receipt.get("core_soft_limit") != 0
@@ -1962,25 +3301,39 @@ def core_suppression_preflight(
         or not _zero_inheritance_projection(receipt.get("inheritance"), expected_depth=1)
         or receipt.get("synthetic_abort_nonzero") is not True
         or receipt.get("synthetic_abort_signal") != "SIGABRT"
+        or receipt.get("writable_root_core_artifact_count") != len(internal_scan_records)
+        or receipt.get("writable_root_core_scan") != internal_scan_path.name
+        or internal_scan is None
+        or internal_scan_integrity_failure
+        or internal_scan_records
         or core_records
         or not removed
         or residue
     ):
         if core_records:
-            destruction_verified = remove_core_artifacts(attempt, core_records)
+            mark_artifact_root_core_safety_stop(artifact_root)
+            detection_sha256 = persist_core_detection_before_cleanup(
+                receipt_path=attempt / "core-artifact-detection.json",
+                records=core_records,
+                scope="exact-container-core-suppression-preflight",
+            )
+            cleanup_outcome = cleanup_core_artifacts(attempt, core_records)
             write_exclusive(
                 attempt / "core-artifact-cleanup.json",
                 {
                     "schema_version": "0.1.0",
                     "scope": "exact-container-core-suppression-preflight",
-                    "core_artifacts_detected": core_records,
-                    "core_content_or_hash_retained": False,
-                    "core_transferred_outside_remote_host": False,
-                    "destruction_verified": destruction_verified,
+                    **core_cleanup_projection(core_records, cleanup_outcome),
+                    "core_detection_receipt_sha256": detection_sha256,
+                    "core_scan_integrity_failure": False,
                     "empirical_entry_permitted": False,
                 },
             )
         raise T09HostError("exact-container core suppression preflight failed")
+    if lifecycle_error is not None:
+        raise T09HostError("core suppression container lifecycle failed closed") from (
+            lifecycle_error
+        )
     result = {
         "schema_version": "0.1.0",
         "plan_id": PLAN_ID,
@@ -1993,6 +3346,7 @@ def core_suppression_preflight(
         "child_and_grandchild_inherited_zero": True,
         "synthetic_abort_nonzero": True,
         "synthetic_abort_signal": "SIGABRT",
+        "writable_root_core_scan_sha256": file_sha256(internal_scan_path),
         "core_filename_count": 0,
         "elf_et_core_count": 0,
         "container_removed": True,
@@ -2059,16 +3413,27 @@ def destroy_secret(path: Path) -> bool:
     return not path.exists()
 
 
-def secret_hits(root: Path, secret: bytes) -> list[str]:
+def secret_hits(
+    root: Path,
+    secret: bytes,
+    *,
+    excluded_relative_paths: frozenset[str] = frozenset(),
+) -> list[str]:
     hits: list[str] = []
     for path in sorted(root.rglob("*")):
+        relative = path.relative_to(root).as_posix()
+        if relative in excluded_relative_paths:
+            continue
+        if secret and secret in relative.encode("utf-8", errors="surrogateescape"):
+            hits.append(relative)
+            continue
         if path.is_file() and not path.is_symlink() and path.stat().st_size <= MAX_PILOT_DISK_BYTES:
             with path.open("rb") as handle:
                 overlap = b""
                 while chunk := handle.read(1_048_576):
                     combined = overlap + chunk
                     if secret in combined:
-                        hits.append(path.relative_to(root).as_posix())
+                        hits.append(relative)
                         break
                     overlap = combined[-(len(secret) - 1) :] if len(secret) > 1 else b""
     return hits
@@ -2084,26 +3449,33 @@ def record_preflight_credential_scan(
 
     credential = validate_secret(secret_file)
     hits = secret_hits(artifact_root, credential)
-    removed: list[dict[str, object]] = []
-    for relative in hits:
-        target = artifact_root / relative
-        if target.is_file() and not target.is_symlink():
-            removed.append(
-                {
-                    "path": relative,
-                    "bytes": target.stat().st_size,
-                    "classification": "exact-secret-bearing-artifact-removed",
-                }
-            )
-            target.unlink()
-    remaining = secret_hits(artifact_root, credential)
-    credential = b""
     exposure_detected = bool(hits)
     if exposure_detected:
+        # Commit the monotonic safety stop before destroying the only
+        # credential-bearing evidence.
         mark_actual_credential_exposure(
             artifact_root / "pilot-v7/pilot-state.json",
             execution_contract_sha256=execution_contract_sha256,
         )
+    removed: list[dict[str, object]] = []
+    for relative in hits:
+        target = artifact_root / relative
+        try:
+            metadata = target.lstat()
+        except FileNotFoundError:
+            continue
+        if not stat.S_ISDIR(metadata.st_mode):
+            removed.append(
+                {
+                    "path": "<redacted-exact-secret-bearing-artifact>",
+                    "bytes": metadata.st_size,
+                    "classification": "exact-secret-bearing-artifact-removed",
+                }
+            )
+            target.unlink()
+    remaining_raw = secret_hits(artifact_root, credential)
+    remaining = ["<redacted-exact-secret-bearing-artifact>"] if remaining_raw else []
+    credential = b""
     receipt: dict[str, object] = {
         "schema_version": "0.1.0",
         "scan_point": "immediately-after-sole-model-metadata-get-before-freeze",
@@ -2247,6 +3619,9 @@ def _prior_qualification_failure_manifest(root: Path) -> dict[str, object]:
     if (
         state.get("plan_id") != PLAN_ID
         or state.get("empirical_attempts_entered") != []
+        or state.get("supervised_release_bindings") != {}
+        or state.get("unreleased_supervised_release_reclassifications") != {}
+        or state.get("condition_start_reservation") is not None
         or state.get("attempts_completed") != []
         or not env_example.is_file()
         or env_example.stat(follow_symlinks=False).st_size != PINNED_ENV_EXAMPLE_BYTES
@@ -2788,19 +4163,272 @@ def _received_export_ack_path(root: Path, run_id: str) -> Path:
     return root / "pilot-v7/received-export-acknowledgements" / f"{run_id}.json"
 
 
+def _attempt_export_completion_path(root: Path, run_id: str) -> Path:
+    if run_id not in RUN_IDS:
+        raise T09HostError("attempt export completion run identity is unknown")
+    return root / "pilot-v7/attempt-export-completions" / f"{run_id}-export-completion.json"
+
+
+_ATTEMPT_EXPORT_COMPLETION_KEYS: Final = {
+    "schema_version",
+    "plan_id",
+    "host_run_id",
+    "run_id",
+    "package_commit",
+    "archive_bytes",
+    "archive_sha256",
+    "manifest_sha256",
+    "frozen_run_manifest_sha256",
+    "replacement_image_id",
+    "provider_entry_receipt_sha256",
+    "owned_instance_identity_sha256",
+    "lambda_started_at_epoch",
+    "export_completed_at_epoch",
+}
+
+_ATTEMPT_EXPORT_ACKNOWLEDGEMENT_KEYS: Final = {
+    "schema_version",
+    "plan_id",
+    "host_run_id",
+    "run_id",
+    "package_commit",
+    "archive_path",
+    "archive_bytes",
+    "archive_sha256",
+    "manifest_sha256",
+    "frozen_run_manifest_sha256",
+    "replacement_image_id",
+    "evidence_authority",
+    "empirical_entry_crossed",
+    "provider_entry_receipt_sha256",
+    "owned_instance_identity_sha256",
+    "lambda_started_at_epoch",
+    "export_completion_receipt_sha256",
+    "export_completed_at_epoch",
+    "verified_at_epoch",
+    "maximum_cross_host_clock_skew_seconds",
+}
+
+
+def _validate_attempt_export_completion(
+    value: dict[str, Any],
+    *,
+    run_id: str,
+    package_commit: str,
+    archive_bytes: int,
+    archive_sha256: str,
+    manifest_sha256: str,
+    frozen_run_manifest_sha256: str,
+    replacement_image_id: str,
+    provider_entry_receipt_sha256: str,
+    owned_instance_identity_sha256: str,
+    lambda_started_at_epoch: float,
+) -> float:
+    """Validate the durable host receipt written only after the export stream closes."""
+
+    completed = value.get("export_completed_at_epoch")
+    if (
+        set(value) != _ATTEMPT_EXPORT_COMPLETION_KEYS
+        or value.get("schema_version") != "0.1.0"
+        or value.get("plan_id") != PLAN_ID
+        or value.get("host_run_id") != HOST_RUN_ID
+        or value.get("run_id") != run_id
+        or value.get("package_commit") != package_commit
+        or value.get("archive_bytes") != archive_bytes
+        or value.get("archive_sha256") != archive_sha256
+        or value.get("manifest_sha256") != manifest_sha256
+        or value.get("frozen_run_manifest_sha256") != frozen_run_manifest_sha256
+        or value.get("replacement_image_id") != replacement_image_id
+        or value.get("provider_entry_receipt_sha256") != provider_entry_receipt_sha256
+        or value.get("owned_instance_identity_sha256") != owned_instance_identity_sha256
+        or value.get("lambda_started_at_epoch") != lambda_started_at_epoch
+        or not isinstance(completed, (int, float))
+        or isinstance(completed, bool)
+        or float(completed) < lambda_started_at_epoch
+        or float(completed) > time.time() + EVIDENCE_CHRONOLOGY_CLOCK_SKEW_SECONDS
+    ):
+        raise T09HostError("attempt export completion receipt drifted")
+    return float(completed)
+
+
+def _require_pretermination_evidence_chronology(
+    *,
+    lambda_started_at_epoch: float,
+    export_completed_at_epoch: float,
+    verified_at_epoch: float,
+    termination_started_at_epoch: float,
+    label: str,
+) -> None:
+    """Prove transfer completion and off-host verification preceded termination."""
+
+    timeline = (
+        lambda_started_at_epoch,
+        export_completed_at_epoch,
+        verified_at_epoch,
+        termination_started_at_epoch,
+    )
+    if (
+        not all(math.isfinite(value) for value in timeline)
+        or lambda_started_at_epoch
+        > export_completed_at_epoch + EVIDENCE_CHRONOLOGY_CLOCK_SKEW_SECONDS
+        or export_completed_at_epoch > verified_at_epoch + EVIDENCE_CHRONOLOGY_CLOCK_SKEW_SECONDS
+        or verified_at_epoch > termination_started_at_epoch
+    ):
+        raise T09HostError(f"{label} was not completed and verified before termination")
+
+
+def _validate_attempt_export_acknowledgement(
+    *,
+    acknowledgement: dict[str, Any],
+    acknowledgement_sha256: str,
+    completion: dict[str, Any],
+    completion_sha256: str,
+    run_id: str,
+    package_commit: str,
+    evidence_authority: str,
+    empirical_entry_crossed: bool,
+    frozen_run_manifest_sha256: str,
+    replacement_image_id: str,
+    provider_entry_receipt_sha256: str,
+    owned_instance_identity_sha256: str,
+    lambda_started_at_epoch: float,
+    archive: Path | None,
+) -> dict[str, object]:
+    """Validate one direct-export acknowledgement without inventing a remote copy.
+
+    Raw authorities retain their bounded archive on the host and rehash it here.
+    Essential authorities are intentionally stream-only; their exact archive
+    identity is instead bound by the durable completion receipt and the
+    independently generated verifier acknowledgement.
+    """
+
+    archive_bytes = acknowledgement.get("archive_bytes")
+    archive_sha256 = acknowledgement.get("archive_sha256")
+    manifest_sha256 = acknowledgement.get("manifest_sha256")
+    verified_at = acknowledgement.get("verified_at_epoch")
+    if (
+        set(acknowledgement) != _ATTEMPT_EXPORT_ACKNOWLEDGEMENT_KEYS
+        or acknowledgement.get("schema_version") != "0.1.0"
+        or acknowledgement.get("plan_id") != PLAN_ID
+        or acknowledgement.get("host_run_id") != HOST_RUN_ID
+        or acknowledgement.get("run_id") != run_id
+        or acknowledgement.get("package_commit") != package_commit
+        or acknowledgement.get("archive_path") != f"{run_id}.tar.gz"
+        or type(archive_bytes) is not int
+        or not 0 < archive_bytes <= MAX_ATTEMPT_EXPORT_BYTES
+        or not isinstance(archive_sha256, str)
+        or _HEX64.fullmatch(archive_sha256) is None
+        or not isinstance(manifest_sha256, str)
+        or _HEX64.fullmatch(manifest_sha256) is None
+        or acknowledgement.get("frozen_run_manifest_sha256") != frozen_run_manifest_sha256
+        or acknowledgement.get("replacement_image_id") != replacement_image_id
+        or acknowledgement.get("evidence_authority") != evidence_authority
+        or acknowledgement.get("empirical_entry_crossed") is not empirical_entry_crossed
+        or acknowledgement.get("provider_entry_receipt_sha256") != provider_entry_receipt_sha256
+        or acknowledgement.get("owned_instance_identity_sha256") != owned_instance_identity_sha256
+        or acknowledgement.get("lambda_started_at_epoch") != lambda_started_at_epoch
+        or acknowledgement.get("export_completion_receipt_sha256") != completion_sha256
+        or acknowledgement.get("maximum_cross_host_clock_skew_seconds")
+        != EVIDENCE_CHRONOLOGY_CLOCK_SKEW_SECONDS
+        or not isinstance(verified_at, (int, float))
+        or isinstance(verified_at, bool)
+        or not math.isfinite(float(verified_at))
+        or float(verified_at) > time.time() + EVIDENCE_CHRONOLOGY_CLOCK_SKEW_SECONDS
+    ):
+        raise T09HostError(
+            "prior attempt archive lacks its exact off-host verification acknowledgement"
+        )
+    if archive is not None and (
+        not archive.is_file()
+        or archive.is_symlink()
+        or archive.stat().st_size != archive_bytes
+        or file_sha256(archive) != archive_sha256
+    ):
+        raise T09HostError("retained raw attempt export archive drifted")
+    completed_at = _validate_attempt_export_completion(
+        completion,
+        run_id=run_id,
+        package_commit=package_commit,
+        archive_bytes=archive_bytes,
+        archive_sha256=archive_sha256,
+        manifest_sha256=manifest_sha256,
+        frozen_run_manifest_sha256=frozen_run_manifest_sha256,
+        replacement_image_id=replacement_image_id,
+        provider_entry_receipt_sha256=provider_entry_receipt_sha256,
+        owned_instance_identity_sha256=owned_instance_identity_sha256,
+        lambda_started_at_epoch=lambda_started_at_epoch,
+    )
+    if (
+        acknowledgement.get("export_completed_at_epoch") != completed_at
+        or completed_at > float(verified_at) + EVIDENCE_CHRONOLOGY_CLOCK_SKEW_SECONDS
+    ):
+        raise T09HostError("attempt export acknowledgement chronology drifted")
+    return {
+        "run_id": run_id,
+        "evidence_authority": evidence_authority,
+        "empirical_entry_crossed": empirical_entry_crossed,
+        "archive_bytes": archive_bytes,
+        "archive_sha256": archive_sha256,
+        "manifest_sha256": manifest_sha256,
+        "export_completion_receipt_sha256": completion_sha256,
+        "acknowledgement_receipt_sha256": acknowledgement_sha256,
+        "export_completed_at_epoch": completed_at,
+        "verified_at_epoch": float(verified_at),
+        "maximum_cross_host_clock_skew_seconds": EVIDENCE_CHRONOLOGY_CLOCK_SKEW_SECONDS,
+    }
+
+
 def require_prior_export_acknowledgements(
     root: Path,
     *,
     next_attempt_index: int,
     package_commit: str,
-) -> None:
+) -> list[dict[str, object]]:
     """Block empirical progression until every prior archive was verified off-host."""
 
     entry = load_object(root / "pilot-v7/provider-entry.json", label="provider entry")
     frozen_manifest_path = root / "pilot-v7/frozen-run-manifest.json"
     frozen_manifest = load_object(frozen_manifest_path, label="frozen run manifest")
     frozen_manifest_sha256 = file_sha256(frozen_manifest_path)
+    state = _runtime_budget_state(root)
+    raw_complete = state.get("raw_attempts_complete")
+    entered = state.get("empirical_attempts_entered")
+    essential_seals = state.get("essential_failure_seals")
+    if (
+        not isinstance(raw_complete, list)
+        or not isinstance(entered, list)
+        or not isinstance(essential_seals, dict)
+    ):
+        raise T09HostError("attempt export acknowledgement state is malformed")
+    if not 0 <= next_attempt_index <= len(RUN_IDS):
+        raise T09HostError("attempt export acknowledgement prefix is invalid")
+    lambda_started = entry.get("lambda_started_at_epoch")
+    replacement_image_id = frozen_manifest.get("replacement_image_id")
+    provider_entry_sha256 = entry.get("receipt_sha256")
+    owned_instance_sha256 = entry.get("owned_instance_identity_sha256")
+    if (
+        not isinstance(lambda_started, (int, float))
+        or isinstance(lambda_started, bool)
+        or not isinstance(replacement_image_id, str)
+        or re.fullmatch(r"sha256:[a-f0-9]{64}", replacement_image_id) is None
+        or not isinstance(provider_entry_sha256, str)
+        or _HEX64.fullmatch(provider_entry_sha256) is None
+        or not isinstance(owned_instance_sha256, str)
+        or _HEX64.fullmatch(owned_instance_sha256) is None
+    ):
+        raise T09HostError("attempt export acknowledgement runtime identity is malformed")
+    projections: list[dict[str, object]] = []
     for run_id in RUN_IDS[:next_attempt_index]:
+        raw_authority = run_id in raw_complete
+        essential_authority = isinstance(essential_seals.get(run_id), dict)
+        if raw_authority == essential_authority:
+            raise T09HostError("consumed attempt lacks one exact export evidence authority")
+        evidence_authority = (
+            "immutable-raw-attempt" if raw_authority else "essential-infrastructure-failure"
+        )
+        empirical_entry_crossed = run_id in entered
+        if raw_authority and not empirical_entry_crossed:
+            raise T09HostError("raw export authority lacks empirical entry")
         acknowledgement_path = _received_export_ack_path(root, run_id)
         if not acknowledgement_path.is_file():
             raise T09HostError(
@@ -2810,48 +4438,28 @@ def require_prior_export_acknowledgements(
             acknowledgement_path,
             label=f"{run_id} received export acknowledgement",
         )
-        archive = root / "pilot-v7/attempt-exports" / f"{run_id}.tar.gz"
-        if (
-            set(acknowledgement)
-            != {
-                "schema_version",
-                "plan_id",
-                "host_run_id",
-                "run_id",
-                "package_commit",
-                "archive_path",
-                "archive_bytes",
-                "archive_sha256",
-                "frozen_run_manifest_sha256",
-                "replacement_image_id",
-                "empirical_entry_crossed",
-                "provider_entry_receipt_sha256",
-                "owned_instance_identity_sha256",
-                "lambda_started_at_epoch",
-                "verified_before_provider_termination",
-            }
-            or acknowledgement.get("schema_version") != "0.1.0"
-            or acknowledgement.get("plan_id") != PLAN_ID
-            or acknowledgement.get("host_run_id") != HOST_RUN_ID
-            or acknowledgement.get("run_id") != run_id
-            or acknowledgement.get("package_commit") != package_commit
-            or acknowledgement.get("archive_path") != archive.name
-            or acknowledgement.get("archive_bytes") != archive.stat().st_size
-            or acknowledgement.get("archive_sha256") != file_sha256(archive)
-            or acknowledgement.get("frozen_run_manifest_sha256") != frozen_manifest_sha256
-            or acknowledgement.get("replacement_image_id")
-            != frozen_manifest.get("replacement_image_id")
-            or not isinstance(acknowledgement.get("empirical_entry_crossed"), bool)
-            or acknowledgement.get("provider_entry_receipt_sha256") != entry.get("receipt_sha256")
-            or acknowledgement.get("owned_instance_identity_sha256")
-            != entry.get("owned_instance_identity_sha256")
-            or acknowledgement.get("lambda_started_at_epoch")
-            != entry.get("lambda_started_at_epoch")
-            or acknowledgement.get("verified_before_provider_termination") is not True
-        ):
-            raise T09HostError(
-                "prior attempt archive lacks its exact off-host verification acknowledgement"
+        archive = root / "pilot-v7/attempt-exports" / f"{run_id}.tar.gz" if raw_authority else None
+        completion_path = _attempt_export_completion_path(root, run_id)
+        completion = load_object(completion_path, label=f"{run_id} export completion")
+        projections.append(
+            _validate_attempt_export_acknowledgement(
+                acknowledgement=acknowledgement,
+                acknowledgement_sha256=file_sha256(acknowledgement_path),
+                completion=completion,
+                completion_sha256=file_sha256(completion_path),
+                run_id=run_id,
+                package_commit=package_commit,
+                evidence_authority=evidence_authority,
+                empirical_entry_crossed=empirical_entry_crossed,
+                frozen_run_manifest_sha256=frozen_manifest_sha256,
+                replacement_image_id=replacement_image_id,
+                provider_entry_receipt_sha256=provider_entry_sha256,
+                owned_instance_identity_sha256=owned_instance_sha256,
+                lambda_started_at_epoch=float(lambda_started),
+                archive=archive,
             )
+        )
+    return projections
 
 
 def require_attempt_export_acknowledgement(
@@ -2943,7 +4551,7 @@ def scientific_seconds_remaining(root: Path, *, reserve_seconds: float = 0.0) ->
 
 
 def admit_next_attempt(root: Path) -> float:
-    """Require only the next condition hard wall and the cleanup reserve."""
+    """Reserve one full condition plus export, handoff, and cleanup headroom."""
 
     state = _runtime_budget_state(root)
     if state.get("nonempirical_infrastructure_attempts_consumed") or state.get(
@@ -2952,13 +4560,48 @@ def admit_next_attempt(root: Path) -> float:
         raise T09HostError("a consumed infrastructure failure permanently closes admission")
     usable = scientific_seconds_remaining(
         root,
-        reserve_seconds=PROVIDER_CLOSEOUT_RESERVE_SECONDS,
+        reserve_seconds=NEXT_ATTEMPT_POSTCONDITION_RESERVE_SECONDS,
     )
     if usable < MAX_CONDITION_WALL_SECONDS:
         raise T09HostError(
-            "remaining campaign time cannot cover the next attempt hard wall and cleanup reserve"
+            "remaining campaign time cannot cover the condition, evidence export, "
+            "provider handoff, and cleanup envelope"
         )
     return usable
+
+
+def admit_scheduled_first_attempt_before_empirical_origin(
+    root: Path,
+    *,
+    scheduled_empirical_start: float,
+) -> float:
+    """Validate first-attempt headroom while the frozen origin is still future.
+
+    The ordinary lifecycle helper intentionally rejects future origins.  Preflight
+    has to finish and durably validate every receipt before that origin, so this
+    projection treats the not-yet-started empirical wall as entirely available
+    while still charging the provider's already-active clock.
+    """
+
+    state = _runtime_budget_state(root)
+    now = time.time()
+    if (
+        state.get("campaign_started_at_epoch") != scheduled_empirical_start
+        or state.get("pilot_started_at_epoch") != scheduled_empirical_start
+        or state.get("first_pair_started_at_epoch") != scheduled_empirical_start
+        or now > scheduled_empirical_start
+        or state.get("nonempirical_infrastructure_attempts_consumed")
+        or state.get("essential_failure_seals")
+    ):
+        raise T09HostError("scheduled first-attempt admission authority drifted")
+    usable = min(MAX_TOTAL_WALL_SECONDS, provider_seconds_remaining(root))
+    usable_after_reserves = usable - NEXT_ATTEMPT_POSTCONDITION_RESERVE_SECONDS
+    if usable_after_reserves < MAX_CONDITION_WALL_SECONDS:
+        raise T09HostError(
+            "scheduled first attempt lacks its condition, evidence export, "
+            "provider handoff, and cleanup envelope"
+        )
+    return usable_after_reserves
 
 
 def provider_termination_due(root: Path) -> bool:
@@ -2974,8 +4617,8 @@ def provider_termination_due(root: Path) -> bool:
     return time.time() - float(started) >= PROVIDER_TERMINATION_CUTOFF_SECONDS
 
 
-def container_state_receipt(prefix: list[str], name: str) -> dict[str, object]:
-    raw = output([*prefix, "inspect", "--format", "{{json .State}}", name])
+def container_state_receipt(prefix: list[str], container_target: str) -> dict[str, object]:
+    raw = output([*prefix, "inspect", "--format", "{{json .State}}", container_target])
     try:
         value: object = json.loads(raw)
     except json.JSONDecodeError as exc:
@@ -3218,6 +4861,8 @@ def _evaluator_package_records(
     prefix: list[str],
     image_id: str,
     expected_packages: list[str],
+    evidence_root: Path,
+    label: str,
 ) -> list[str]:
     command = [
         *prefix,
@@ -3225,6 +4870,8 @@ def _evaluator_package_records(
         "--rm",
         *CORE_ULIMIT_DOCKER_ARGS,
         "--network",
+        "none",
+        "--log-driver",
         "none",
         "--read-only",
         "--cap-drop",
@@ -3249,13 +4896,13 @@ def _evaluator_package_records(
         "--python",
         "/opt/evaluator/.venv/bin/python",
     ]
-    result = subprocess.run(
+    result = run_owned_docker(
         command,
-        env=safe_environment(),
-        stdin=subprocess.DEVNULL,
+        prefix=prefix,
+        label=label,
+        evidence_root=evidence_root,
         stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL,
-        check=False,
         timeout=120,
     )
     if result.returncode != 0 or len(result.stdout) > 1_048_576:
@@ -3601,6 +5248,8 @@ def evaluator_overlay(
         *CORE_ULIMIT_DOCKER_ARGS,
         "--network",
         "bridge",
+        "--log-driver",
+        "none",
         "--user",
         "1000:1000",
         "--env",
@@ -3626,13 +5275,15 @@ def evaluator_overlay(
         "--python",
         "/opt/sira/.venv/bin/python",
     ]
-    result = subprocess.run(
+    materialization_evidence = artifact_root / "pilot-v7/evaluator-overlay-materialization"
+    materialization_evidence.mkdir(parents=True, mode=0o700, exist_ok=False)
+    result = run_owned_docker(
         command,
-        env=safe_environment(),
-        stdin=subprocess.DEVNULL,
+        prefix=prefix,
+        label="evaluator-overlay-sync",
+        evidence_root=materialization_evidence,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
-        check=False,
         timeout=1_800,
     )
     if result.returncode != 0:
@@ -3648,6 +5299,8 @@ def evaluator_overlay(
         prefix=prefix,
         image_id=image_id,
         expected_packages=expected_packages,
+        evidence_root=materialization_evidence,
+        label="evaluator-package-freeze",
     )
     inventory = evaluator_overlay_inventory(overlay)
     manifest: dict[str, object] = {
@@ -3707,11 +5360,21 @@ def validate_evaluator_overlay_binding(
         raise T09HostError("frozen evaluator overlay binding drifted")
     _validate_evaluator_overlay_inventory(overlay=overlay, retained=retained)
     if verify_packages:
+        revalidation_base = artifact_root / "pilot-v7/evaluator-overlay-revalidations"
+        revalidation_base.mkdir(mode=0o700, parents=True, exist_ok=True)
+        existing = sorted(path for path in revalidation_base.iterdir() if path.is_dir())
+        expected_names = [f"revalidation-{index:04d}" for index in range(1, len(existing) + 1)]
+        if [path.name for path in existing] != expected_names or len(existing) >= 64:
+            raise T09HostError("evaluator overlay revalidation history is malformed or full")
+        revalidation_root = revalidation_base / f"revalidation-{len(existing) + 1:04d}"
+        revalidation_root.mkdir(mode=0o700, exist_ok=False)
         packages = _evaluator_package_records(
             overlay=overlay,
             prefix=prefix,
             image_id=image_id,
             expected_packages=expected_evaluator_packages(repository),
+            evidence_root=revalidation_root,
+            label="evaluator-package-revalidation",
         )
         if packages != retained.get("packages") or canonical_sha256(packages) != retained.get(
             "packages_sha256"
@@ -3773,9 +5436,17 @@ def browser_lifecycle_preflight(
         *CORE_ULIMIT_DOCKER_ARGS,
         "--name",
         name,
+        "--label",
+        DOCKER_PLAN_LABEL,
+        "--label",
+        DOCKER_HOST_RUN_LABEL,
+        "--label",
+        "giclab.t09.role=browser-lifecycle-preflight",
         "--platform",
         "linux/amd64",
         "--network",
+        "none",
+        "--log-driver",
         "none",
         "--read-only",
         "--cap-drop",
@@ -3803,13 +5474,59 @@ def browser_lifecycle_preflight(
         image_id,
         "/opt/giclab/browser_preflight.py",
     ]
-    run_logged(create, evidence_root=attempt, label="container-create", timeout=60)
     started = False
     removed = False
+    create_mutation_attempted = False
+    created_identity: OwnedContainerIdentity | None = None
     state_receipt: dict[str, object] | None = None
+    record: dict[str, Any] | None = None
+    lifecycle_error: BaseException | None = None
     try:
+        if _container_id_by_exact_name(prefix, name) is not None:
+            raise T09HostError("browser-preflight Docker name is already occupied")
+        write_exclusive(
+            attempt / "container-command.json",
+            {
+                "schema_version": "0.1.0",
+                "container_name": name,
+                "argv": create,
+                "argv_sha256": canonical_sha256(create),
+                "owned_by_plan": PLAN_ID,
+                "owned_by_host_run": HOST_RUN_ID,
+                "owned_role": "browser-lifecycle-preflight",
+            },
+        )
+        create_mutation_attempted = True
+        run_logged(create, evidence_root=attempt, label="container-create", timeout=60)
+        created_identity = inspect_owned_container(
+            prefix,
+            name,
+            expected_role="browser-lifecycle-preflight",
+        )
+        if created_identity is None:
+            raise T09HostError("browser-preflight Docker identity disappeared after create")
+        write_exclusive(
+            attempt / "container-identity.json",
+            {
+                "schema_version": "0.1.0",
+                "container_name": name,
+                "container_id": created_identity.container_id,
+                "owned_by_plan": PLAN_ID,
+                "owned_by_host_run": HOST_RUN_ID,
+                "owned_role": "browser-lifecycle-preflight",
+                "docker_create_argv_sha256": canonical_sha256(create),
+            },
+        )
+        start_identity = inspect_owned_container(
+            prefix,
+            name,
+            expected_container_id=created_identity.container_id,
+            expected_role="browser-lifecycle-preflight",
+        )
+        if start_identity != created_identity:
+            raise T09HostError("browser-preflight Docker identity changed before start")
         run_logged(
-            [*prefix, "start", name],
+            [*prefix, "start", created_identity.container_id],
             evidence_root=attempt,
             label="container-start",
             timeout=60,
@@ -3822,6 +5539,33 @@ def browser_lifecycle_preflight(
         if not record_path.is_file():
             raise T09HostError("browser lifecycle preflight did not produce evidence")
         record = load_object(record_path, label="browser preflight")
+        browser_core_scan_path = attempt / "browser-writable-root-core-scan.json"
+        browser_core_scan = (
+            load_object(browser_core_scan_path, label="browser writable-root core scan")
+            if browser_core_scan_path.is_file()
+            else None
+        )
+        browser_core_count = (
+            browser_core_scan.get("core_artifact_count")
+            if isinstance(browser_core_scan, dict)
+            else None
+        )
+        if (
+            type(browser_core_count) is not int
+            or browser_core_count < 0
+            or record.get("writable_root_core_artifact_count") != browser_core_count
+        ):
+            mark_artifact_root_core_safety_stop(artifact_root)
+            raise T09HostError("browser writable-root core evidence is malformed")
+        if browser_core_count:
+            mark_artifact_root_core_safety_stop(artifact_root)
+            raise T09HostError("browser fixture detected a prohibited core artifact")
+        run_logged(
+            [*prefix, "wait", created_identity.container_id],
+            evidence_root=attempt,
+            label="container-wait",
+            timeout=30,
+        )
         if (
             record.get("network_mode") != "none"
             or record.get("source") != "local-static-file"
@@ -3832,44 +5576,132 @@ def browser_lifecycle_preflight(
             or record.get("installed_package_manifest_sha256") != EXPECTED_PACKAGE_MANIFEST_SHA256
             or record.get("core_soft_limit") != 0
             or record.get("core_hard_limit") != 0
+            or record.get("browser_running_before_container_stop") is not False
+            or record.get("browser_closed_by_fixture") is not True
+            or record.get("chromium_process_count_after_close") != 0
         ):
             raise T09HostError("browser lifecycle preflight identity drifted")
+    except BaseException as exc:
+        lifecycle_error = exc
     finally:
         if started:
-            subprocess.run(
-                [*prefix, "stop", "--time", "10", name],
-                env=safe_environment(),
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                check=False,
-                timeout=30,
+            with contextlib.suppress(OSError, subprocess.SubprocessError):
+                subprocess.run(
+                    [
+                        *prefix,
+                        "stop",
+                        "--time",
+                        "10",
+                        created_identity.container_id if created_identity is not None else name,
+                    ],
+                    env=safe_environment(),
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    check=False,
+                    timeout=30,
+                )
+        try:
+            state_receipt = container_state_receipt(
+                prefix,
+                created_identity.container_id if created_identity is not None else name,
             )
-        state_receipt = container_state_receipt(prefix, name)
-        removed = remove_container(prefix, name)
-    residue = owned_containers(prefix)
+        except (OSError, subprocess.SubprocessError, T09HostError) as exc:
+            state_receipt = {
+                "status": "inspection-unavailable",
+                "running": None,
+                "inspection_error_type": type(exc).__name__,
+                "private_network_fields_retained": False,
+            }
+            if lifecycle_error is None:
+                lifecycle_error = exc
+        if create_mutation_attempted:
+            try:
+                cleanup_identity = created_identity or inspect_owned_container(
+                    prefix,
+                    name,
+                    expected_role="browser-lifecycle-preflight",
+                )
+                removed = cleanup_identity is None or remove_container(
+                    prefix,
+                    name,
+                    expected_container_id=cleanup_identity.container_id,
+                    expected_role="browser-lifecycle-preflight",
+                )
+            except (OSError, subprocess.SubprocessError, T09HostError) as exc:
+                if lifecycle_error is None:
+                    lifecycle_error = exc
+    try:
+        residue = owned_containers(prefix)
+    except (OSError, subprocess.SubprocessError, T09HostError) as exc:
+        residue = ["<owned-container-enumeration-unavailable>"]
+        if lifecycle_error is None:
+            lifecycle_error = exc
+    browser_core_scan_path = attempt / "browser-writable-root-core-scan.json"
+    browser_core_scan = (
+        load_object(browser_core_scan_path, label="browser writable-root core scan")
+        if browser_core_scan_path.is_file()
+        else None
+    )
+    browser_core_count = (
+        browser_core_scan.get("core_artifact_count")
+        if isinstance(browser_core_scan, dict)
+        else None
+    )
+    if type(browser_core_count) is int and browser_core_count > 0:
+        mark_artifact_root_core_safety_stop(artifact_root)
+        browser_core_destruction_verified = removed and not residue
+        write_exclusive(
+            attempt / "browser-internal-core-cleanup.json",
+            {
+                "schema_version": "0.1.0",
+                "scope": "browser-container-writable-roots",
+                "browser_writable_root_core_scan_sha256": file_sha256(browser_core_scan_path),
+                "core_artifact_count": browser_core_count,
+                "container_removed": removed,
+                "owned_container_residue": residue,
+                "destruction_verified": browser_core_destruction_verified,
+                "credential_rotation_required_due_to_core_handling": (
+                    not browser_core_destruction_verified
+                ),
+                "core_content_or_hash_retained": False,
+                "campaign_continuation_permitted": False,
+            },
+        )
+        lifecycle_error = T09HostError("browser fixture detected a prohibited core artifact")
     core_records = detect_core_artifacts(attempt)
     if core_records:
-        destruction_verified = remove_core_artifacts(attempt, core_records)
+        mark_artifact_root_core_safety_stop(artifact_root)
+        detection_sha256 = persist_core_detection_before_cleanup(
+            receipt_path=attempt / "core-artifact-detection.json",
+            records=core_records,
+            scope="no-network-browser-teardown-preflight",
+        )
+        cleanup_outcome = cleanup_core_artifacts(attempt, core_records)
         write_exclusive(
             attempt / "core-artifact-cleanup.json",
             {
                 "schema_version": "0.1.0",
                 "scope": "no-network-browser-teardown-preflight",
-                "core_artifacts_detected": core_records,
-                "core_content_or_hash_retained": False,
-                "core_transferred_outside_remote_host": False,
-                "destruction_verified": destruction_verified,
+                **core_cleanup_projection(core_records, cleanup_outcome),
+                "core_detection_receipt_sha256": detection_sha256,
+                "core_scan_integrity_failure": False,
                 "empirical_entry_permitted": False,
             },
         )
         raise T09HostError("browser teardown created a prohibited core artifact")
+    if lifecycle_error is not None:
+        raise T09HostError("browser lifecycle preflight failed and cleanup was attempted") from (
+            lifecycle_error
+        )
+    assert record is not None
     result = {
         "started": started,
         "local_static_page": True,
         "network_mode": "none",
         "screenshot_captured": (attempt / "browser-preflight.png").is_file(),
-        "browser_cleanup_by_container_stop": True,
+        "browser_cleanup_by_fixture": True,
+        "browser_cleanup_by_container_stop": False,
         "container_removed": removed,
         "owned_container_residue": residue,
         "task_browser_action": False,
@@ -3883,17 +5715,104 @@ def browser_lifecycle_preflight(
         "installed_package_manifest_sha256": EXPECTED_PACKAGE_MANIFEST_SHA256,
         "container_state": state_receipt,
     }
-    if not all(
-        (
-            result["started"],
-            result["screenshot_captured"],
-            result["container_removed"],
-            not residue,
+    if (
+        not all(
+            (
+                result["started"],
+                result["screenshot_captured"],
+                result["container_removed"],
+                not residue,
+            )
         )
+        or state_receipt is None
+        or state_receipt.get("status") != "exited"
+        or state_receipt.get("running") is not False
+        or state_receipt.get("paused") is not False
+        or state_receipt.get("restarting") is not False
+        or state_receipt.get("oom_killed") is not False
+        or state_receipt.get("dead") is not False
+        or state_receipt.get("exit_code") != 0
+        or not isinstance(browser_core_scan, dict)
+        or browser_core_scan.get("scan_roots") != ["/giclab/attempt", "/tmp", "/dev/shm"]
+        or browser_core_scan.get("core_artifact_count") != 0
+        or browser_core_scan.get("core_artifacts") != []
+        or browser_core_scan.get("core_content_or_hash_retained") is not False
     ):
         raise T09HostError("browser startup or cleanup preflight failed")
     write_exclusive(attempt / "host-browser-lifecycle.json", result)
     return result
+
+
+def complete_preflight_core_gate(
+    *,
+    artifact_root: Path,
+    secret_file: Path,
+    scope: str,
+) -> dict[str, object]:
+    """Prove every preflight-owned output is core-free at one freeze boundary."""
+
+    if scope not in {"before-model-metadata", "after-model-metadata"}:
+        raise T09HostError("complete preflight core-gate scope is invalid")
+    destination = artifact_root / "pilot-v7/preflight-core-integrity" / f"{scope}.json"
+    try:
+        records = detect_core_artifacts(artifact_root)
+    except (OSError, T09HostError) as exc:
+        mark_artifact_root_core_safety_stop(artifact_root)
+        detection_sha256 = persist_core_detection_before_cleanup(
+            receipt_path=(
+                artifact_root / "pilot-v7/preflight-core-integrity" / f"{scope}-core-detection.json"
+            ),
+            records=[],
+            scope=f"complete-preflight-{scope}",
+            scan_integrity_failure=True,
+        )
+        receipt = {
+            "schema_version": "0.1.0",
+            "scope": scope,
+            "core_artifacts_detected": [],
+            "core_artifact_count": 0,
+            "core_content_or_hash_retained": False,
+            "core_transferred_outside_remote_host": False,
+            "core_scan_integrity_failure": True,
+            "core_detection_receipt_sha256": detection_sha256,
+            "destruction_verified": False,
+            "cleanup_error_type": type(exc).__name__,
+            "credential_rotation_required_due_to_core_handling": True,
+            "empirical_entry_permitted": False,
+        }
+        write_exclusive(destination, receipt)
+        raise T09HostError("complete preflight core scan was unreconstructable") from exc
+    if records:
+        # Detection is a permanent campaign stop even when destruction is
+        # verified. Persist it before unlinking the prohibited artifact.
+        mark_artifact_root_core_safety_stop(artifact_root)
+    credential_bytes = validate_secret(secret_file) if records else b""
+    detection_sha256 = persist_core_detection_before_cleanup(
+        receipt_path=(
+            artifact_root / "pilot-v7/preflight-core-integrity" / f"{scope}-core-detection.json"
+        ),
+        records=records,
+        scope=f"complete-preflight-{scope}",
+        credential_bytes=credential_bytes,
+    )
+    outcome = cleanup_core_artifacts(artifact_root, records)
+    receipt = {
+        "schema_version": "0.1.0",
+        "scope": scope,
+        **core_cleanup_projection(
+            records,
+            outcome,
+            credential_bytes=credential_bytes,
+        ),
+        "core_scan_integrity_failure": False,
+        "core_detection_receipt_sha256": detection_sha256,
+        "empirical_entry_permitted": not records,
+    }
+    credential_bytes = b""
+    write_exclusive(destination, receipt)
+    if records:
+        raise T09HostError("a preflight child produced a prohibited core artifact")
+    return receipt
 
 
 def secret_channel_preflight(
@@ -4013,7 +5932,7 @@ def offline_runtime_preflight(
         "--attempt-root",
         "/opt/giclab-artifacts/pilot-v7/offline-runtime-preflight",
         "--aggregate-ledger",
-        "/opt/giclab-artifacts/pilot-v7/aggregate-budget.json",
+        "/opt/giclab-artifacts/pilot-v7/runtime-budget/aggregate-budget.json",
         "--pilot-state",
         "/opt/giclab-artifacts/pilot-v7/pilot-state.json",
         "--evaluator-root",
@@ -4459,6 +6378,8 @@ def write_frozen_run_manifest(
     runtime_receipt: dict[str, Any],
     offline_receipt: dict[str, Any],
     core_receipt: dict[str, object],
+    pre_metadata_core_gate_receipt: dict[str, object],
+    post_metadata_core_gate_receipt: dict[str, object],
     browser_receipt: dict[str, object],
     evaluator_receipt: dict[str, object],
     file_hashes: dict[str, str],
@@ -4625,6 +6546,10 @@ def write_frozen_run_manifest(
         "runtime_preflight_sha256": canonical_sha256(runtime_receipt),
         "offline_preflight_sha256": canonical_sha256(offline_receipt),
         "core_suppression_preflight_sha256": canonical_sha256(core_receipt),
+        "pre_metadata_complete_core_gate_sha256": canonical_sha256(pre_metadata_core_gate_receipt),
+        "post_metadata_complete_core_gate_sha256": canonical_sha256(
+            post_metadata_core_gate_receipt
+        ),
         "core_limit_contract": CORE_LIMIT_CONTRACT,
         "core_soft_limit": 0,
         "core_hard_limit": 0,
@@ -4700,6 +6625,12 @@ def write_frozen_run_manifest(
             ),
             "core_suppression": file_sha256(
                 artifact_root / "pilot-v7/core-suppression-preflight/host-core-suppression.json"
+            ),
+            "pre_metadata_complete_core_gate": file_sha256(
+                artifact_root / "pilot-v7/preflight-core-integrity/before-model-metadata.json"
+            ),
+            "post_metadata_complete_core_gate": file_sha256(
+                artifact_root / "pilot-v7/preflight-core-integrity/after-model-metadata.json"
             ),
             "model_metadata_credential_scan": file_sha256(
                 artifact_root / "pilot-v7/model-metadata-credential-scan.json"
@@ -4996,6 +6927,20 @@ def load_frozen_run_manifest(
         artifact_root / "pilot-v7/core-suppression-preflight/host-core-suppression.json"
     )
     core_preflight = load_object(core_preflight_path, label="core suppression preflight")
+    pre_metadata_core_gate_path = (
+        artifact_root / "pilot-v7/preflight-core-integrity/before-model-metadata.json"
+    )
+    post_metadata_core_gate_path = (
+        artifact_root / "pilot-v7/preflight-core-integrity/after-model-metadata.json"
+    )
+    pre_metadata_core_gate = load_object(
+        pre_metadata_core_gate_path,
+        label="pre-metadata complete core gate",
+    )
+    post_metadata_core_gate = load_object(
+        post_metadata_core_gate_path,
+        label="post-metadata complete core gate",
+    )
     local_qualification = validate_local_finalizer_qualification(
         local_qualification_path,
         repository=repository,
@@ -5009,6 +6954,23 @@ def load_frozen_run_manifest(
         or source_receipts.get("model_metadata_credential_scan")
         != file_sha256(model_credential_scan_path)
         or source_receipts.get("core_suppression") != file_sha256(core_preflight_path)
+        or source_receipts.get("pre_metadata_complete_core_gate")
+        != file_sha256(pre_metadata_core_gate_path)
+        or source_receipts.get("post_metadata_complete_core_gate")
+        != file_sha256(post_metadata_core_gate_path)
+        or manifest.get("pre_metadata_complete_core_gate_sha256")
+        != canonical_sha256(pre_metadata_core_gate)
+        or manifest.get("post_metadata_complete_core_gate_sha256")
+        != canonical_sha256(post_metadata_core_gate)
+        or any(
+            gate.get("core_artifacts_detected") != []
+            or gate.get("core_artifact_count") != 0
+            or gate.get("core_scan_integrity_failure") is not False
+            or gate.get("destruction_verified") is not True
+            or gate.get("credential_rotation_required_due_to_core_handling") is not False
+            or gate.get("empirical_entry_permitted") is not True
+            for gate in (pre_metadata_core_gate, post_metadata_core_gate)
+        )
         or manifest.get("core_suppression_preflight_sha256") != canonical_sha256(core_preflight)
         or core_preflight.get("core_limit_contract") != CORE_LIMIT_CONTRACT
         or core_preflight.get("core_soft_limit") != 0
@@ -5117,6 +7079,9 @@ def initialize_state(
         "first_pair_started_at_epoch": None,
         "second_pair_started_at_epoch": None,
         "empirical_attempts_entered": [],
+        "supervised_release_bindings": {},
+        "unreleased_supervised_release_reclassifications": {},
+        "condition_start_reservation": None,
         "nonempirical_infrastructure_attempts_consumed": [],
         "raw_attempts_complete": [],
         "raw_attempt_bindings": {},
@@ -5138,11 +7103,11 @@ def schedule_empirical_campaign_start(
     root: Path,
     *,
     execution_contract_sha256: str,
-    delay_seconds: float = 5.0,
+    delay_seconds: float = 120.0,
 ) -> float:
     """Choose one near-future empirical origin before the manifest is serialized."""
 
-    if not 1.0 <= delay_seconds <= 30.0:
+    if not 5.0 <= delay_seconds <= 300.0:
         raise T09HostError("empirical clock publication delay is outside its narrow bound")
     state_path = root / "pilot-v7/pilot-state.json"
     state = load_object(state_path, label="pilot state")
@@ -5159,7 +7124,22 @@ def schedule_empirical_campaign_start(
         or state.get("essential_failure_seals") != {}
     ):
         raise T09HostError("empirical campaign clock cannot be scheduled from this state")
-    start = time.time() + delay_seconds
+    now = time.time()
+    start = now + delay_seconds
+    preflight_started = state.get("provider_preflight_started_at_epoch")
+    owned_started = state.get("owned_lambda_started_at_epoch")
+    if (
+        not isinstance(preflight_started, (int, float))
+        or isinstance(preflight_started, bool)
+        or not isinstance(owned_started, (int, float))
+        or isinstance(owned_started, bool)
+        or start > float(preflight_started) + MAX_PREFLIGHT_WALL_SECONDS
+        or start + MAX_TOTAL_WALL_SECONDS
+        > float(owned_started) + MAX_SUCCESSFUL_HOST_ACTIVE_SECONDS
+    ):
+        raise T09HostError(
+            "scheduled empirical origin cannot fit the preflight and successful-host active caps"
+        )
     state["pilot_started_at_epoch"] = start
     state["campaign_started_at_epoch"] = start
     state["first_pair_started_at_epoch"] = start
@@ -5451,7 +7431,7 @@ def prepare_preflight_resume(
         raise T09HostError("preflight resume is outside the original campaign clock")
     pilot = prior_root / "pilot-v7"
     state_path = pilot / "pilot-state.json"
-    aggregate_path = pilot / "aggregate-budget.json"
+    aggregate_path = pilot / "runtime-budget/aggregate-budget.json"
     old_state = load_object(state_path, label="failed preflight state")
     old_aggregate = load_object(aggregate_path, label="failed preflight aggregate")
     paths = contract_paths(repository)
@@ -5541,7 +7521,7 @@ def prepare_preflight_resume(
     shutil.copy2(transition_state_path, artifact_root / "pilot-v7/pilot-state.json")
     shutil.copy2(
         transition_aggregate_path,
-        artifact_root / "pilot-v7/aggregate-budget.json",
+        artifact_root / "pilot-v7/runtime-budget/aggregate-budget.json",
     )
     evaluator = _resume_evaluator_receipt(
         repository=repository,
@@ -5717,7 +7697,7 @@ def resume_preflight(args: argparse.Namespace) -> None:
         or owned_containers(prefix)
         or _runtime_budget_state(artifact_root).get("empirical_attempts_entered") != []
         or load_aggregate_usage(
-            artifact_root / "pilot-v7/aggregate-budget.json",
+            artifact_root / "pilot-v7/runtime-budget/aggregate-budget.json",
             contract_sha256=execution_sha256,
         )
         != ProviderBudgetUsage()
@@ -5838,8 +7818,14 @@ def resume_preflight(args: argparse.Namespace) -> None:
             "zero_prior_lambda_instances": True,
             "gpu_accounting": gpu,
             "empirical_entry_crossed": False,
-            "actual_campaign_seconds_consumed_by_setup": time.time() - float(lambda_started),
-            "seconds_available_after_cleanup_reserve": admitted_seconds,
+            "provider_preflight_seconds_consumed_by_setup": time.time() - float(lambda_started),
+            "empirical_campaign_seconds_consumed_by_setup": 0.0,
+            "seconds_available_after_attempt_reserves": admitted_seconds,
+            "required_condition_seconds": MAX_CONDITION_WALL_SECONDS,
+            "required_evidence_export_reserve_seconds": (ATTEMPT_EVIDENCE_EXPORT_RESERVE_SECONDS),
+            "required_provider_termination_handoff_seconds": (PROVIDER_TERMINATION_HANDOFF_SECONDS),
+            "required_cleanup_reserve_seconds": PROVIDER_CLOSEOUT_RESERVE_SECONDS,
+            "required_total_headroom_seconds": NEXT_ATTEMPT_ENVELOPE_SECONDS,
         },
     )
     load_frozen_run_manifest(
@@ -6095,12 +8081,19 @@ def preflight(args: argparse.Namespace) -> None:
         raise T09HostError("preflight consumed its wall or cumulative Lambda ceiling")
     remaining_before_metadata = preflight_seconds_remaining(artifact_root)
     active_headroom_before_metadata = provider_seconds_remaining(artifact_root)
-    if remaining_before_metadata <= 0:
-        raise T09HostError("provider preflight wall is exhausted before model metadata")
+    if remaining_before_metadata < 120.0:
+        raise T09HostError(
+            "provider preflight lacks the frozen empirical-origin publication reserve"
+        )
     if active_headroom_before_metadata < MAX_TOTAL_WALL_SECONDS:
         raise T09HostError(
             "cumulative active-provider headroom cannot cover the fresh empirical campaign"
         )
+    pre_metadata_core_gate = complete_preflight_core_gate(
+        artifact_root=artifact_root,
+        secret_file=args.secret_file.resolve(strict=True),
+        scope="before-model-metadata",
+    )
     # This is the one authorized provider metadata GET and is intentionally the last
     # fallible functional gate before the immutable run manifest is written.
     model_metadata = model_metadata_preflight(
@@ -6108,6 +8101,11 @@ def preflight(args: argparse.Namespace) -> None:
         secret_file=args.secret_file.resolve(strict=True),
         prefix=prefix,
         image_id=image_id,
+    )
+    post_metadata_core_gate = complete_preflight_core_gate(
+        artifact_root=artifact_root,
+        secret_file=args.secret_file.resolve(strict=True),
+        scope="after-model-metadata",
     )
     model_credential_scan = record_preflight_credential_scan(
         artifact_root=artifact_root,
@@ -6117,6 +8115,7 @@ def preflight(args: argparse.Namespace) -> None:
     empirical_start = schedule_empirical_campaign_start(
         artifact_root,
         execution_contract_sha256=execution_sha256,
+        delay_seconds=120.0,
     )
     frozen_manifest_path, frozen_manifest = write_frozen_run_manifest(
         repository=repository,
@@ -6128,6 +8127,8 @@ def preflight(args: argparse.Namespace) -> None:
         runtime_receipt=final_runtime,
         offline_receipt=offline,
         core_receipt=core_suppression,
+        pre_metadata_core_gate_receipt=pre_metadata_core_gate,
+        post_metadata_core_gate_receipt=post_metadata_core_gate,
         browser_receipt=browser,
         evaluator_receipt=evaluator,
         file_hashes=image_files,
@@ -6143,7 +8144,6 @@ def preflight(args: argparse.Namespace) -> None:
     manifest_published_at = time.time()
     if manifest_published_at > empirical_start:
         raise T09HostError("frozen manifest publication missed the empirical clock boundary")
-    time.sleep(max(0.0, empirical_start - manifest_published_at))
     loaded_manifest, loaded_manifest_sha256 = load_frozen_run_manifest(
         artifact_root,
         repository=repository,
@@ -6154,7 +8154,10 @@ def preflight(args: argparse.Namespace) -> None:
         frozen_manifest_path
     ):
         raise T09HostError("post-freeze manifest revalidation drifted")
-    admitted_seconds = admit_next_attempt(artifact_root)
+    admitted_seconds = admit_scheduled_first_attempt_before_empirical_origin(
+        artifact_root,
+        scheduled_empirical_start=empirical_start,
+    )
     postfreeze_path = artifact_root / "pilot-v7/postfreeze-validation.json"
     write_exclusive(
         postfreeze_path,
@@ -6170,6 +8173,7 @@ def preflight(args: argparse.Namespace) -> None:
             "first_pair_started_at_epoch": frozen_manifest["first_pair_started_at_epoch"],
             "empirical_campaign_started_at_epoch": empirical_start,
             "frozen_manifest_published_before_empirical_clock": True,
+            "frozen_manifest_published_at_epoch": manifest_published_at,
             "model_metadata_request_count": 1,
             "model_metadata_credential_scan_sha256": file_sha256(
                 artifact_root / "pilot-v7/model-metadata-credential-scan.json"
@@ -6195,6 +8199,7 @@ def preflight(args: argparse.Namespace) -> None:
             "plan_id": PLAN_ID,
             "host_run_id": HOST_RUN_ID,
             "completed_at": utc_now(),
+            "completed_at_epoch": time.time(),
             "clean_package_commit": args.package_commit,
             "execution_contract_sha256": execution_sha256,
             "command_manifests_sha256": file_sha256(paths["commands"]),
@@ -6263,13 +8268,50 @@ def preflight(args: argparse.Namespace) -> None:
             "zero_prior_lambda_instances": True,
             "gpu_accounting": gpu,
             "empirical_entry_crossed": False,
-            "actual_campaign_seconds_consumed_by_setup": time.time() - lambda_started,
+            "provider_preflight_seconds_consumed_by_setup": time.time() - lambda_started,
+            "empirical_campaign_seconds_consumed_by_setup": 0.0,
             "actual_active_lambda_seconds_before_attempt": (
                 float(prior_lambda_duration_raw) + time.time() - float(owned_lambda_started_raw)
             ),
-            "seconds_available_after_cleanup_reserve": admitted_seconds,
+            "seconds_available_after_attempt_reserves": admitted_seconds,
+            "required_condition_seconds": MAX_CONDITION_WALL_SECONDS,
+            "required_evidence_export_reserve_seconds": (ATTEMPT_EVIDENCE_EXPORT_RESERVE_SECONDS),
+            "required_provider_termination_handoff_seconds": (PROVIDER_TERMINATION_HANDOFF_SECONDS),
+            "required_cleanup_reserve_seconds": PROVIDER_CLOSEOUT_RESERVE_SECONDS,
+            "required_total_headroom_seconds": NEXT_ATTEMPT_ENVELOPE_SECONDS,
         },
     )
+    preflight_path = artifact_root / "pilot-v7/preflight.json"
+    preflight_published_at = time.time()
+    if preflight_published_at > empirical_start:
+        raise T09HostError("final preflight publication missed the empirical clock boundary")
+    retained_postfreeze = load_object(postfreeze_path, label="published post-freeze validation")
+    retained_preflight = load_object(preflight_path, label="published exact preflight")
+    validate_postfreeze_entry_receipts(
+        preflight_receipt=retained_preflight,
+        postfreeze=retained_postfreeze,
+        frozen_manifest=loaded_manifest,
+        frozen_manifest_sha256=loaded_manifest_sha256,
+        replacement_image_id=image_id,
+        postfreeze_sha256=file_sha256(postfreeze_path),
+        model_metadata_credential_scan_sha256=file_sha256(
+            artifact_root / "pilot-v7/model-metadata-credential-scan.json"
+        ),
+    )
+    admit_scheduled_first_attempt_before_empirical_origin(
+        artifact_root,
+        scheduled_empirical_start=empirical_start,
+    )
+    validation_completed_at = time.time()
+    if (
+        not isinstance(retained_postfreeze.get("completed_at_epoch"), (int, float))
+        or cast(float, retained_postfreeze["completed_at_epoch"]) > empirical_start
+        or not isinstance(retained_preflight.get("completed_at_epoch"), (int, float))
+        or cast(float, retained_preflight["completed_at_epoch"]) > empirical_start
+        or validation_completed_at > empirical_start
+    ):
+        raise T09HostError("preflight completion receipts crossed the empirical clock boundary")
+    time.sleep(max(0.0, empirical_start - validation_completed_at))
 
 
 def preflight_with_deadline(args: argparse.Namespace) -> None:
@@ -6313,6 +8355,14 @@ def preflight_with_deadline(args: argparse.Namespace) -> None:
             receipt = root / "pilot-v7/preflight-failure.json"
             if not receipt.exists():
                 failed_at = time.time()
+                if isinstance(exc, TimeoutError):
+                    failure_category = "preflight-deadline-expired"
+                elif isinstance(exc, (T09HostError, T09PilotError, T09ProviderError)):
+                    failure_category = "preflight-contract-rejected"
+                elif isinstance(exc, (OSError, subprocess.SubprocessError)):
+                    failure_category = "preflight-host-operation-failed"
+                else:
+                    failure_category = "preflight-unexpected-failure"
                 write_exclusive(
                     receipt,
                     {
@@ -6324,8 +8374,8 @@ def preflight_with_deadline(args: argparse.Namespace) -> None:
                         "provider_preflight_started_at_epoch": float(started),
                         "failed_at_epoch": failed_at,
                         "elapsed_seconds": failed_at - float(started),
-                        "failure_type": type(exc).__name__,
-                        "failure_message": str(exc)[:1024],
+                        "failure_category": failure_category,
+                        "exception_message_retained": False,
                         "empirical_attempts_entered": 0,
                         "termination_dispatch_required": True,
                         "termination_dispatch_deadline_epoch": (
@@ -6347,6 +8397,16 @@ def container_create_argv(
     repository = args.repository.resolve(strict=True)
     paths = contract_paths(repository)
     artifact_root = args.artifact_root.resolve(strict=True)
+    pilot_control_root = (artifact_root / "pilot-v7").resolve(strict=True)
+    runtime_budget_root = (pilot_control_root / "runtime-budget").resolve(strict=True)
+    if runtime_budget_root.parent != pilot_control_root:
+        raise T09HostError("condition runtime-budget root escaped pilot control")
+    raw_root = attempt_root.resolve(strict=True)
+    supervisor_root = condition_supervisor_root(raw_root)
+    try:
+        raw_relative = raw_root.relative_to(artifact_root)
+    except ValueError:
+        raise T09HostError("condition raw root escaped the owned artifact root") from None
     prefix = docker_prefix()
     return [
         *prefix,
@@ -6354,10 +8414,18 @@ def container_create_argv(
         *CORE_ULIMIT_DOCKER_ARGS,
         "--name",
         container_name,
+        "--label",
+        DOCKER_PLAN_LABEL,
+        "--label",
+        DOCKER_HOST_RUN_LABEL,
+        "--label",
+        "giclab.t09.role=condition",
         "--platform",
         "linux/amd64",
         "--network",
         "bridge",
+        "--log-driver",
+        "none",
         "--ipc",
         "private",
         "--cap-drop",
@@ -6385,7 +8453,24 @@ def container_create_argv(
         "--env",
         "CUDA_VISIBLE_DEVICES=",
         "--mount",
-        f"type=bind,src={artifact_root},dst=/opt/giclab-artifacts",
+        f"type=bind,src={artifact_root},dst=/opt/giclab-artifacts,readonly",
+        "--mount",
+        (f"type=bind,src={runtime_budget_root},dst=/opt/giclab-artifacts/pilot-v7/runtime-budget"),
+        "--mount",
+        f"type=bind,src={raw_root},dst=/opt/giclab-artifacts/{raw_relative.as_posix()}",
+        "--mount",
+        f"type=bind,src={raw_root},dst=/giclab/attempt",
+        "--mount",
+        (
+            f"type=bind,src={supervisor_root},"
+            f"dst=/opt/giclab-artifacts/{raw_relative.as_posix()}/"
+            f"{CONDITION_SUPERVISOR_DIRNAME},readonly"
+        ),
+        "--mount",
+        (
+            f"type=bind,src={supervisor_root},"
+            f"dst=/giclab/attempt/{CONDITION_SUPERVISOR_DIRNAME},readonly"
+        ),
         "--mount",
         f"type=bind,src={repository / 'src/giclab'},dst=/opt/giclab-src/giclab,readonly",
         "--mount",
@@ -6401,18 +8486,256 @@ def container_create_argv(
             "dst=/opt/giclab/container_entrypoint.py,readonly"
         ),
         "--label",
-        f"org.giclab.t09.plan={PLAN_ID}",
-        "--label",
-        f"org.giclab.t09.run={manifest['run_id']}",
+        f"giclab.t09.run={manifest['run_id']}",
         "--entrypoint",
         "/opt/sira/.venv/bin/python",
         image_id,
         "/opt/giclab/container_entrypoint.py",
+        "--supervised-release",
         "--runtime-assignment",
         "SIRA_API_KEY",
         "--",
         *cast(list[str], manifest["argv"]),
     ]
+
+
+def validate_runtime_budget_root(
+    artifact_root: Path,
+    *,
+    execution_contract_sha256: str,
+) -> ProviderBudgetUsage:
+    """Validate the condition's only writable control-plane directory."""
+
+    runtime_root = artifact_root / "pilot-v7/runtime-budget"
+    metadata = runtime_root.stat(follow_symlinks=False)
+    if (
+        runtime_root.is_symlink()
+        or not stat.S_ISDIR(metadata.st_mode)
+        or metadata.st_uid != os.getuid()
+        or stat.S_IMODE(metadata.st_mode) != 0o700
+    ):
+        raise T09HostError("condition runtime-budget directory is unsafe")
+    entries = sorted(runtime_root.iterdir())
+    if [path.name for path in entries] != ["aggregate-budget.json"]:
+        raise T09HostError("condition runtime-budget directory is overbroad or partial")
+    aggregate = entries[0]
+    aggregate_metadata = aggregate.stat(follow_symlinks=False)
+    if (
+        aggregate.is_symlink()
+        or not stat.S_ISREG(aggregate_metadata.st_mode)
+        or aggregate_metadata.st_uid != os.getuid()
+        or aggregate_metadata.st_nlink != 1
+        or stat.S_IMODE(aggregate_metadata.st_mode) != 0o600
+        or not 0 < aggregate_metadata.st_size <= MAX_PRIVACY_JSON_BYTES
+    ):
+        raise T09HostError("condition aggregate-budget ledger is unsafe")
+    return load_aggregate_usage(
+        aggregate,
+        contract_sha256=execution_contract_sha256,
+    )
+
+
+def condition_supervisor_root(raw_root: Path) -> Path:
+    """Return the host-owned control root that is read-only inside the condition."""
+
+    root = raw_root / CONDITION_SUPERVISOR_DIRNAME
+    resolved = root.resolve(strict=True)
+    metadata = resolved.stat(follow_symlinks=False)
+    if (
+        root.is_symlink()
+        or resolved.parent != raw_root.resolve(strict=True)
+        or not stat.S_ISDIR(metadata.st_mode)
+        or metadata.st_uid != os.getuid()
+        or stat.S_IMODE(metadata.st_mode) != 0o700
+    ):
+        raise T09HostError("condition supervisor control root is unsafe")
+    return resolved
+
+
+_CONDITION_START_INTENT_KEYS: Final = {
+    "schema_version",
+    "plan_id",
+    "run_id",
+    "container_name",
+    "container_id",
+    "docker_start_argv",
+    "docker_create_argv_sha256",
+    "frozen_run_manifest_sha256",
+    "condition_plan_sha256",
+    "condition_argv_sha256",
+    "start_reserved_at_epoch",
+    "create_outcome_ambiguous",
+    "condition_identity_consumed_if_start_outcome_is_unknown",
+}
+
+
+def validate_condition_start_intent(
+    intent: dict[str, Any],
+    *,
+    run_id: str,
+    frozen_run_manifest_sha256: str | None = None,
+) -> None:
+    """Validate the exact name-to-ID handoff before a condition can be recovered."""
+
+    container_name = intent.get("container_name")
+    container_id = intent.get("container_id")
+    expected_start_argv = (
+        [*docker_prefix(), "start", "--attach", container_id]
+        if isinstance(container_id, str)
+        else None
+    )
+    if (
+        set(intent) != _CONDITION_START_INTENT_KEYS
+        or intent.get("schema_version") != "0.1.0"
+        or intent.get("plan_id") != PLAN_ID
+        or intent.get("run_id") != run_id
+        or not isinstance(container_name, str)
+        or not container_name.startswith(CONTAINER_PREFIX)
+        or (
+            container_id is not None
+            and (
+                not isinstance(container_id, str)
+                or re.fullmatch(r"[a-f0-9]{64}", container_id) is None
+            )
+        )
+        or intent.get("docker_start_argv") != expected_start_argv
+        or any(
+            not isinstance(intent.get(key), str) or _HEX64.fullmatch(cast(str, intent[key])) is None
+            for key in (
+                "docker_create_argv_sha256",
+                "frozen_run_manifest_sha256",
+                "condition_plan_sha256",
+                "condition_argv_sha256",
+            )
+        )
+        or (
+            frozen_run_manifest_sha256 is not None
+            and intent.get("frozen_run_manifest_sha256") != frozen_run_manifest_sha256
+        )
+        or not isinstance(intent.get("start_reserved_at_epoch"), (int, float))
+        or isinstance(intent.get("start_reserved_at_epoch"), bool)
+        or not isinstance(intent.get("create_outcome_ambiguous"), bool)
+        or intent.get("condition_identity_consumed_if_start_outcome_is_unknown") is not True
+    ):
+        raise T09HostError("condition start intent is malformed or identity-drifted")
+
+
+def validate_condition_container_identity(
+    supervisor_root: Path,
+    *,
+    intent: dict[str, Any],
+    run_id: str,
+) -> str | None:
+    """Bind a condition's immutable create receipt to its exact Docker identity."""
+
+    path = supervisor_root / "container-identity.json"
+    expected_id = intent.get("container_id")
+    if expected_id is None:
+        if os.path.lexists(path):
+            raise T09HostError("condition identity exists without an ID-bound start intent")
+        return None
+    if not path.is_file() or path.is_symlink():
+        raise T09HostError("condition ID-bound start intent lacks its identity receipt")
+    identity = load_object(path, label="condition container identity")
+    if (
+        set(identity)
+        != {
+            "schema_version",
+            "plan_id",
+            "host_run_id",
+            "run_id",
+            "container_name",
+            "container_id",
+            "owned_role",
+            "docker_create_argv_sha256",
+        }
+        or identity.get("schema_version") != "0.1.0"
+        or identity.get("plan_id") != PLAN_ID
+        or identity.get("host_run_id") != HOST_RUN_ID
+        or identity.get("run_id") != run_id
+        or identity.get("container_name") != intent.get("container_name")
+        or identity.get("container_id") != expected_id
+        or identity.get("owned_role") != "condition"
+        or identity.get("docker_create_argv_sha256") != intent.get("docker_create_argv_sha256")
+    ):
+        raise T09HostError("condition container identity receipt drifted")
+    return cast(str, expected_id)
+
+
+def publish_condition_start_reservation(
+    *,
+    artifact_root: Path,
+    raw_root: Path,
+    run_id: str,
+    container_name: str,
+    container_id: str | None,
+    create_argv: list[str],
+    frozen_run_manifest_sha256: str,
+    condition_plan_sha256: str,
+    condition_argv_sha256: str,
+    execution_contract_sha256: str,
+    create_outcome_ambiguous: bool,
+) -> Path:
+    """Durably reserve one frozen identity before any possibly-started outcome."""
+
+    if container_id is not None and re.fullmatch(r"[a-f0-9]{64}", container_id) is None:
+        raise T09HostError("condition start reservation container identity is malformed")
+    path = condition_supervisor_root(raw_root) / "condition-start-intent.json"
+    write_exclusive(
+        path,
+        {
+            "schema_version": "0.1.0",
+            "plan_id": PLAN_ID,
+            "run_id": run_id,
+            "container_name": container_name,
+            "container_id": container_id,
+            "docker_start_argv": (
+                [*docker_prefix(), "start", "--attach", container_id]
+                if container_id is not None
+                else None
+            ),
+            "docker_create_argv_sha256": canonical_sha256(create_argv),
+            "frozen_run_manifest_sha256": frozen_run_manifest_sha256,
+            "condition_plan_sha256": condition_plan_sha256,
+            "condition_argv_sha256": condition_argv_sha256,
+            "start_reserved_at_epoch": time.time(),
+            "create_outcome_ambiguous": create_outcome_ambiguous,
+            "condition_identity_consumed_if_start_outcome_is_unknown": True,
+        },
+    )
+    validate_condition_start_intent(
+        load_object(path, label="published condition start intent"),
+        run_id=run_id,
+        frozen_run_manifest_sha256=frozen_run_manifest_sha256,
+    )
+    reserve_condition_start(
+        artifact_root / "pilot-v7/pilot-state.json",
+        execution_contract_sha256=execution_contract_sha256,
+        run_id=run_id,
+        start_intent_sha256=file_sha256(path),
+    )
+    return path
+
+
+def condition_container_proven_never_started(prefix: list[str], name: str) -> bool:
+    """Prove a failed Docker create left no started condition authority."""
+
+    try:
+        identity = inspect_owned_container(prefix, name, expected_role="condition")
+    except (OSError, subprocess.SubprocessError, T09HostError):
+        return False
+    if identity is None:
+        return True
+    try:
+        state = container_state_receipt(prefix, name)
+    except (OSError, subprocess.SubprocessError, T09HostError):
+        return False
+    started_at = state.get("started_at")
+    return (
+        state.get("status") == "created"
+        and state.get("running") is False
+        and started_at in {None, "", "0001-01-01T00:00:00Z"}
+    )
 
 
 def _limit_file_size() -> None:
@@ -6422,10 +8745,57 @@ def _limit_file_size() -> None:
     )
 
 
+def _limit_finalizer_log_file_size() -> None:
+    resource.setrlimit(
+        resource.RLIMIT_FSIZE,
+        (MAX_FINALIZER_LOG_BYTES_PER_STREAM, MAX_FINALIZER_LOG_BYTES_PER_STREAM),
+    )
+
+
+def wait_for_condition_entrypoint_ready(
+    raw_root: Path,
+    *,
+    timeout_seconds: float = 20.0,
+) -> dict[str, object]:
+    """Wait for and validate the credential-free entrypoint readiness marker."""
+
+    ready_path = raw_root / ".giclab-entrypoint-ready"
+    release_path = raw_root / ".giclab-release"
+    if os.path.lexists(release_path):
+        raise T09HostError("condition release authority already exists")
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline and not os.path.lexists(ready_path):
+        time.sleep(0.05)
+    if not os.path.lexists(ready_path):
+        raise T09HostError("condition entrypoint readiness marker was not published")
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    descriptor = os.open(ready_path, flags)
+    try:
+        metadata = os.fstat(descriptor)
+        encoded = os.read(descriptor, 7)
+    finally:
+        os.close(descriptor)
+    raw_metadata = raw_root.stat(follow_symlinks=False)
+    if (
+        not stat.S_ISREG(metadata.st_mode)
+        or metadata.st_nlink != 1
+        or metadata.st_uid != raw_metadata.st_uid
+        or stat.S_IMODE(metadata.st_mode) != 0o600
+        or encoded != b"ready\n"
+    ):
+        raise T09HostError("condition entrypoint readiness marker is malformed")
+    return {
+        "path": ready_path.name,
+        "bytes": metadata.st_size,
+        "sha256": file_sha256(ready_path),
+        "mode": "0600",
+    }
+
+
 def run_attached_with_caps(
     *,
     prefix: list[str],
-    name: str,
+    container_id: str,
     attempt_root: Path,
     pilot_root: Path,
     attempt_started: float,
@@ -6434,6 +8804,7 @@ def run_attached_with_caps(
     owned_lambda_started_at_epoch: float,
     prior_lambda_duration_seconds: float,
     prior_lambda_cost_usd: float,
+    release_condition: Callable[[], None],
 ) -> tuple[int, float, str | None, bool]:
     stdout_path = attempt_root / "condition.stdout"
     stderr_path = attempt_root / "condition.stderr"
@@ -6441,13 +8812,23 @@ def run_attached_with_caps(
     hard_cap_breached = False
     with stdout_path.open("xb") as stdout, stderr_path.open("xb") as stderr:
         process = subprocess.Popen(
-            [*prefix, "start", "--attach", name],
+            [*prefix, "start", "--attach", container_id],
             env=safe_environment(),
             stdin=subprocess.DEVNULL,
             stdout=stdout,
             stderr=stderr,
             preexec_fn=_limit_file_size,
         )
+        try:
+            release_condition()
+        except BaseException:
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=5)
+            raise
         while process.poll() is None:
             now_wall = time.time()
             elapsed = time.monotonic() - attempt_started
@@ -6492,15 +8873,31 @@ def run_attached_with_caps(
                 stop_reason = "pilot_disk_bytes"
                 hard_cap_breached = True
             if stop_reason is not None:
-                subprocess.run(
-                    [*prefix, "stop", "--time", "30", name],
-                    env=safe_environment(),
-                    stdin=subprocess.DEVNULL,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    check=False,
-                    timeout=60,
-                )
+                if hard_cap_breached:
+                    # Close both attach writers immediately, then force-stop the
+                    # exact owned producer.  A condition that keeps writing after
+                    # SIGTERM must not receive a grace period after the cap trips.
+                    process.kill()
+                    process.wait(timeout=5)
+                    subprocess.run(
+                        [*prefix, "kill", container_id],
+                        env=safe_environment(),
+                        stdin=subprocess.DEVNULL,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        check=False,
+                        timeout=30,
+                    )
+                else:
+                    subprocess.run(
+                        [*prefix, "stop", "--time", "30", container_id],
+                        env=safe_environment(),
+                        stdin=subprocess.DEVNULL,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        check=False,
+                        timeout=60,
+                    )
                 break
             time.sleep(0.25)
         try:
@@ -6592,8 +8989,13 @@ def evaluator_argv(
     finalized_root = finalized_base / invocation_name
     finalized_root.mkdir(mode=0o700, exist_ok=False)
     control_root = (artifact_root / "pilot-v7").resolve(strict=True)
+    finalizer_label = f"finalizer-{cast(str, manifest['run_id']).lower()}-{invocation:04d}"
+    finalizer_container_name = _owned_docker_name(finalizer_label)
     projected = finalizer_projection.build_finalizer_argv(
         docker_prefix=docker_prefix(),
+        container_name=finalizer_container_name,
+        plan_id=PLAN_ID,
+        host_run_id=HOST_RUN_ID,
         artifact_root=str(artifact_root),
         raw_root=str(raw_root),
         finalized_root=str(finalized_root),
@@ -6626,6 +9028,7 @@ def evaluator_argv(
     _validate_projected_finalizer_argv(
         projected,
         docker_prefix_tokens=docker_prefix(),
+        expected_container_name=finalizer_container_name,
         image_id=image_id,
         expected_mounts={
             f"type=bind,src={artifact_root},dst=/opt/giclab-artifacts,readonly",
@@ -6662,6 +9065,7 @@ def _validate_projected_finalizer_argv(
     argv: object,
     *,
     docker_prefix_tokens: list[str],
+    expected_container_name: str,
     image_id: str,
     expected_mounts: set[str],
     required_pairs: dict[str, str],
@@ -6674,7 +9078,21 @@ def _validate_projected_finalizer_argv(
     if projected[: len(docker_prefix_tokens)] != docker_prefix_tokens:
         raise T09HostError("downstream finalizer changed the exact container transport")
     suffix = projected[len(docker_prefix_tokens) :]
-    if suffix[:2] != ["run", "--rm"] or suffix.count("--read-only") != 1:
+    if (
+        suffix[:5]
+        != [
+            "run",
+            "--name",
+            expected_container_name,
+            "--label",
+            f"giclab.t09.plan={PLAN_ID}",
+        ]
+        or suffix[5:7] != ["--label", f"giclab.t09.host_run={HOST_RUN_ID}"]
+        or suffix[7:9] != ["--label", "giclab.t09.role=attempt-finalizer"]
+        or suffix[9:11] != ["--label", f"giclab.t09.run={required_pairs['--run-id']}"]
+        or suffix.count("--rm") != 1
+        or suffix.count("--read-only") != 1
+    ):
         raise T09HostError("downstream finalizer container is not ephemeral/read-only")
     if suffix.count("--ulimit") != 1 or suffix[suffix.index("--ulimit") + 1] != "core=0:0":
         raise T09HostError("downstream finalizer core limit must be exactly zero")
@@ -6794,7 +9212,9 @@ def local_evaluator_invocation(
         frozen_run_manifest=str(artifact_root / "pilot-v7/frozen-run-manifest.json"),
         frozen_run_manifest_sha256=frozen_run_manifest_sha256,
         replacement_image_id=cast(str, frozen_manifest["replacement_image_id"]),
-        host_cleanup_receipt=str(raw_root / "host-cleanup-receipt.json"),
+        host_cleanup_receipt=str(
+            raw_root / CONDITION_SUPERVISOR_DIRNAME / "host-cleanup-receipt.json"
+        ),
         evaluator_root=str(args.local_evaluator_root.resolve(strict=True)),
         evaluator_overlay_revalidation=str(evaluator_revalidation_path),
         dataset=str(args.local_dataset.resolve(strict=True)),
@@ -6956,6 +9376,7 @@ def prepare_condition_attempt_root(
     if raw_root.parent != attempt_root or raw_root.name != "raw":
         raise T09HostError("raw condition root is not the exact owned child")
     raw_root.mkdir(mode=0o700, exist_ok=False)
+    (raw_root / CONDITION_SUPERVISOR_DIRNAME).mkdir(mode=0o700, exist_ok=False)
     return attempt_root, raw_root
 
 
@@ -6980,24 +9401,34 @@ def record_preentry_condition_failure(
 ) -> None:
     """Seal a value-safe, non-consumed condition prefix for an autonomous retry."""
 
-    with contextlib.suppress(OSError, subprocess.SubprocessError, T09HostError):
-        remove_container(prefix, container_name)
+    container_absence_uncertain = False
+    try:
+        container_absence_uncertain = (
+            _container_id_by_exact_name(prefix, container_name) is not None
+        )
+    except (OSError, subprocess.SubprocessError, T09HostError):
+        container_absence_uncertain = True
     credential = validate_secret(secret_file)
     matching = secret_hits(attempt_root, credential)
-    removed: list[str] = []
-    for relative in matching:
-        target = attempt_root / relative
-        if target.is_file() and not target.is_symlink():
-            target.unlink()
-            removed.append(relative)
-    remaining = secret_hits(attempt_root, credential)
-    credential = b""
     exposure_detected = actual_credential_exposure_detected or bool(matching)
     if exposure_detected:
         mark_actual_credential_exposure(
             pilot_state_path,
             execution_contract_sha256=execution_contract_sha256,
         )
+    removed: list[str] = []
+    for relative in matching:
+        target = attempt_root / relative
+        try:
+            metadata = target.lstat()
+        except FileNotFoundError:
+            continue
+        if not stat.S_ISDIR(metadata.st_mode):
+            target.unlink()
+            removed.append("<redacted-exact-secret-bearing-artifact>")
+    remaining_raw = secret_hits(attempt_root, credential)
+    remaining = ["<redacted-exact-secret-bearing-artifact>"] if remaining_raw else []
+    credential = b""
     if credential_cleanup_integrity_failure:
         mark_credential_cleanup_integrity_failure(
             pilot_state_path,
@@ -7008,7 +9439,7 @@ def record_preentry_condition_failure(
             pilot_state_path,
             execution_contract_sha256=execution_contract_sha256,
         )
-    residue = [name for name in owned_containers(prefix) if name == container_name]
+    residue = [container_name] if container_absence_uncertain else []
     privacy = privacy_violations(attempt_root)
     failure_prefix_entries = preentry_prefix_inventory(attempt_root)
     write_exclusive(
@@ -7042,6 +9473,7 @@ def record_preentry_condition_failure(
                 and not core_safety_stop_detected
                 and not residue
                 and not remaining
+                and not privacy
             ),
             "recorded_at": utc_now(),
         },
@@ -7052,6 +9484,7 @@ def record_preentry_condition_failure(
         or core_safety_stop_detected
         or residue
         or remaining
+        or privacy
     ):
         raise T09HostError("pre-entry failure cleanup detected a security stop or residue")
 
@@ -7068,9 +9501,11 @@ def _raw_attempt_files(raw_root: Path) -> tuple[list[dict[str, object]], int]:
             continue
         if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1 or path.is_symlink():
             raise T09HostError(f"raw attempt contains an unsafe artifact category: {relative}")
+        if len(relative.encode()) > MAX_RAW_RELATIVE_PATH_BYTES:
+            raise T09HostError("raw attempt path exceeds its manifest-safe byte cap")
         total += metadata.st_size
-        if total > MAX_ATTEMPT_OUTPUT_BYTES:
-            raise T09HostError("raw attempt exceeds its hard byte cap")
+        if total > MAX_RAW_SEAL_BYTES:
+            raise T09HostError("raw attempt exhausts the frozen control-and-finalization headroom")
         files.append(
             {
                 "path": relative,
@@ -7078,27 +9513,43 @@ def _raw_attempt_files(raw_root: Path) -> tuple[list[dict[str, object]], int]:
                 "sha256": file_sha256(path),
             }
         )
+        if len(files) > MAX_RAW_SEAL_FILES:
+            raise T09HostError("raw attempt exceeds its manifest-safe file-count cap")
     return files, total
 
 
-_ESSENTIAL_FAILURE_EXACT_PATHS: Final = frozenset(
+_TRUSTED_CONDITION_SUPERVISOR_FILES: Final = frozenset(
     {
         "attempt-wall.json",
-        "condition.stderr",
-        "condition.stdout",
+        "condition-start-intent.json",
+        "container-removal-uncertain.json",
+        "container-removal-recovered.json",
         "container-command.json",
+        "container-identity.json",
         "container-state.json",
         "core-artifact-cleanup.json",
+        "core-artifact-detection.json",
+        "core-artifact-recovery-detection.json",
         "evaluator-overlay-binding.json",
         "gpu-accounting.json",
         "host-cleanup-receipt.json",
-        "normalized-events.jsonl",
         "output-cap-event.json",
-        "provider-budget.json",
         "raw-seal-validation-event.json",
-        "runtime-cleanup.json",
-        "runtime-environment.json",
         "runtime-reconstruction-binding.json",
+        "supervised-release.json",
+        "supervisor-interruption-terminal.json",
+    }
+)
+_ESSENTIAL_FAILURE_EXACT_PATHS: Final = frozenset(
+    {
+        "condition.stderr",
+        "condition.stdout",
+        "normalized-events.jsonl",
+        "provider-budget.json",
+        "runtime-cleanup.json",
+        "runtime-core-detection.json",
+        "runtime-environment.json",
+        *(f"{CONDITION_SUPERVISOR_DIRNAME}/{name}" for name in _TRUSTED_CONDITION_SUPERVISOR_FILES),
     }
 )
 
@@ -7111,6 +9562,140 @@ class ConditionRunnerExceptionDisposition(NamedTuple):
     hard_cap_breached: bool
     infrastructure_stop_requires_essential_seal: bool
     exception_type: str
+
+
+class ValidatedRuntimeCoreCleanupEvidence(NamedTuple):
+    """Typed core evidence captured before container-writable roots are destroyed."""
+
+    records: list[dict[str, object]]
+    destruction_verified: bool
+    scan_integrity_failure: bool
+    rotation_required: bool
+    detection_sha256: str
+
+
+def _validate_runtime_core_cleanup(
+    *,
+    raw_root: Path,
+    runtime_cleanup: dict[str, Any],
+) -> ValidatedRuntimeCoreCleanupEvidence:
+    cleanup = runtime_cleanup.get("core_cleanup")
+    detection_path = raw_root / "runtime-core-detection.json"
+    if not isinstance(cleanup, dict) or not detection_path.is_file():
+        raise T09HostError("runtime cleanup lacks its in-container core census")
+    records = cleanup.get("core_artifacts_detected")
+    artifact_count = cleanup.get("core_artifact_count")
+    scan_failed = cleanup.get("core_scan_integrity_failure")
+    destruction_verified = cleanup.get("destruction_verified")
+    rotation_required = cleanup.get("credential_rotation_required_due_to_core_handling")
+    detection_sha256 = cleanup.get("core_detection_receipt_sha256")
+    if (
+        set(cleanup)
+        != {
+            "core_artifacts_detected",
+            "core_artifact_count",
+            "core_scan_integrity_failure",
+            "destruction_verified",
+            "credential_rotation_required_due_to_core_handling",
+            "core_content_or_hash_retained",
+            "core_detection_receipt_sha256",
+        }
+        or not isinstance(records, list)
+        or artifact_count != len(records)
+        or not isinstance(scan_failed, bool)
+        or not isinstance(destruction_verified, bool)
+        or not isinstance(rotation_required, bool)
+        or not isinstance(detection_sha256, str)
+        or _HEX64.fullmatch(detection_sha256) is None
+        or file_sha256(detection_path) != detection_sha256
+        or cleanup.get("core_content_or_hash_retained") is not False
+        or rotation_required is not (scan_failed or (bool(records) and not destruction_verified))
+        or (scan_failed and destruction_verified)
+        or (not records and not scan_failed and not destruction_verified)
+    ):
+        raise T09HostError("runtime core cleanup is malformed")
+    record_keys = {
+        "artifact",
+        "writable_root",
+        "bytes",
+        "known_core_filename",
+        "elf_et_core",
+        "hardlink_alias_of_core_inode",
+        "file_type",
+        "filesystem_device",
+        "filesystem_inode",
+        "link_count",
+        "classified_links_within_writable_roots",
+        "destruction_verifiable",
+        "content_or_hash_retained",
+    }
+    for ordinal, raw in enumerate(records, start=1):
+        if (
+            not isinstance(raw, dict)
+            or set(raw) != record_keys
+            or raw.get("artifact") != f"<condition-core-artifact-{ordinal:04d}>"
+            or raw.get("writable_root")
+            not in {"attempt-root", "/tmp", "/dev/shm", "runtime-budget"}
+            or type(raw.get("bytes")) is not int
+            or cast(int, raw["bytes"]) < 0
+            or not isinstance(raw.get("known_core_filename"), bool)
+            or not isinstance(raw.get("elf_et_core"), bool)
+            or not isinstance(raw.get("hardlink_alias_of_core_inode"), bool)
+            or not (
+                raw["known_core_filename"]
+                or raw["elf_et_core"]
+                or raw["hardlink_alias_of_core_inode"]
+            )
+            or raw.get("file_type") not in {"regular", "non-regular"}
+            or not (
+                (
+                    raw.get("file_type") == "regular"
+                    and type(raw.get("filesystem_device")) is int
+                    and type(raw.get("filesystem_inode")) is int
+                )
+                or (
+                    raw.get("file_type") == "non-regular"
+                    and raw.get("filesystem_device") is None
+                    and raw.get("filesystem_inode") is None
+                )
+            )
+            or type(raw.get("link_count")) is not int
+            or cast(int, raw["link_count"]) < 1
+            or type(raw.get("classified_links_within_writable_roots")) is not int
+            or cast(int, raw["classified_links_within_writable_roots"]) < 0
+            or not isinstance(raw.get("destruction_verifiable"), bool)
+            or raw.get("content_or_hash_retained") is not False
+            or (destruction_verified and raw.get("destruction_verifiable") is not True)
+        ):
+            raise T09HostError("runtime core cleanup record is malformed")
+    detection = load_object(detection_path, label="runtime pre-destruction core census")
+    if (
+        set(detection)
+        != {
+            "schema_version",
+            "scope",
+            "core_artifacts_detected",
+            "core_artifact_count",
+            "core_scan_integrity_failure",
+            "core_content_or_hash_retained",
+            "destructive_cleanup_not_yet_claimed",
+        }
+        or detection.get("schema_version") != "0.1.0"
+        or detection.get("scope") != "condition-container-writable-roots-before-teardown"
+        or detection.get("core_artifacts_detected") != records
+        or detection.get("core_artifact_count") != len(records)
+        or detection.get("core_scan_integrity_failure") is not scan_failed
+        or detection.get("core_content_or_hash_retained") is not False
+        or detection.get("destructive_cleanup_not_yet_claimed") is not True
+    ):
+        raise T09HostError("runtime core cleanup lost its pre-destruction source")
+    return ValidatedRuntimeCoreCleanupEvidence(
+        records=cast(list[dict[str, object]], records),
+        destruction_verified=destruction_verified,
+        scan_integrity_failure=cast(bool, scan_failed),
+        rotation_required=rotation_required,
+        detection_sha256=detection_sha256,
+    )
 
 
 def condition_runner_exception_disposition(
@@ -7141,7 +9726,7 @@ def record_output_cap_event(
 
     if not hard_cap_breached:
         return None
-    path = raw_root / "output-cap-event.json"
+    path = raw_root / CONDITION_SUPERVISOR_DIRNAME / "output-cap-event.json"
     write_exclusive(
         path,
         {
@@ -7161,7 +9746,7 @@ def record_output_cap_event(
     return path
 
 
-_ESSENTIAL_FAILURE_NESTED_SUFFIXES: Final = frozenset({".json", ".jsonl", ".txt", ".png"})
+_ESSENTIAL_FAILURE_NESTED_SUFFIXES: Final = frozenset({".json", ".jsonl", ".txt"})
 
 
 def _is_essential_failure_candidate(relative: str) -> bool:
@@ -7234,7 +9819,522 @@ def _essential_failure_files(root: Path) -> tuple[list[dict[str, object]], int]:
         if total > MAX_ESSENTIAL_FAILURE_BYTES:
             raise T09HostError("essential-failure bundle exceeds its independent cap")
         files.append({"path": relative, "bytes": metadata.st_size, "sha256": file_sha256(path)})
+        if len(files) > MAX_ESSENTIAL_FAILURE_FILES:
+            raise T09HostError("essential-failure bundle exceeds its file-count cap")
     return files, total
+
+
+def _essential_terminal_source_projection(
+    *,
+    source_root: Path,
+    run_id: str,
+    recovery_control_root: Path | None = None,
+) -> dict[str, object]:
+    """Derive terminal failure facts from the retained supervisor receipts."""
+
+    supervisor_root = source_root / CONDITION_SUPERVISOR_DIRNAME
+    host_path = supervisor_root / "host-cleanup-receipt.json"
+    core_path = supervisor_root / "core-artifact-cleanup.json"
+    intent_path = supervisor_root / "condition-start-intent.json"
+    host = load_object(host_path, label="essential host cleanup source")
+    core = load_object(core_path, label="essential core cleanup source")
+    intent = load_object(intent_path, label="essential condition-start source")
+    validate_condition_start_intent(intent, run_id=run_id)
+    validate_condition_container_identity(
+        supervisor_root,
+        intent=intent,
+        run_id=run_id,
+    )
+    core_evidence = _validate_core_cleanup_receipt(core)
+    detection_hashes = [core.get("core_detection_receipt_sha256")]
+    supplemental_detection_sha256 = core.get("supplemental_core_detection_receipt_sha256")
+    if supplemental_detection_sha256 is not None:
+        detection_hashes.append(supplemental_detection_sha256)
+    elif os.path.lexists(supervisor_root / "core-artifact-recovery-detection.json"):
+        raise T09HostError("essential core cleanup omitted its supplemental detection")
+    detection_paths = [
+        supervisor_root / "core-artifact-detection.json",
+        supervisor_root / "core-artifact-recovery-detection.json",
+    ][: len(detection_hashes)]
+    detected_source_records: list[object] = []
+    detected_scan_failure = False
+    for detection_path, expected_digest in zip(detection_paths, detection_hashes, strict=True):
+        if (
+            not isinstance(expected_digest, str)
+            or _HEX64.fullmatch(expected_digest) is None
+            or not detection_path.is_file()
+            or detection_path.is_symlink()
+            or file_sha256(detection_path) != expected_digest
+        ):
+            raise T09HostError("essential core cleanup lost its pre-destruction source")
+        detection = load_object(detection_path, label="essential core detection source")
+        source_records = detection.get("core_artifacts_detected")
+        if (
+            detection.get("schema_version") != "0.1.0"
+            or not isinstance(source_records, list)
+            or detection.get("core_artifact_count") != len(source_records)
+            or not isinstance(detection.get("core_scan_integrity_failure"), bool)
+            or detection.get("core_content_or_hash_retained") is not False
+            or detection.get("core_transferred_outside_remote_host") is not False
+        ):
+            raise T09HostError("essential core detection source is malformed")
+        detected_source_records.extend(source_records)
+        detected_scan_failure = (
+            detected_scan_failure or detection.get("core_scan_integrity_failure") is True
+        )
+    if (
+        detected_source_records != core_evidence.records
+        or detected_scan_failure is not core_evidence.scan_integrity_failure
+    ):
+        raise T09HostError("essential core cleanup disagrees with durable detection")
+    runtime_cleanup_path = source_root / "runtime-cleanup.json"
+    runtime_cleanup_classified_as_core_artifact = host.get(
+        "runtime_cleanup_classified_as_core_artifact"
+    )
+    runtime_cleanup_content_read_permitted = host.get("runtime_cleanup_content_read_permitted")
+    runtime_core_evidence: ValidatedRuntimeCoreCleanupEvidence | None = None
+    if runtime_cleanup_content_read_permitted is True:
+        if not runtime_cleanup_path.is_file() or runtime_cleanup_path.is_symlink():
+            if host.get("runtime_secret_cleanup_malformed") is not True:
+                raise T09HostError("runtime cleanup is absent after a clean host projection")
+            runtime_core_evidence = None
+        else:
+            try:
+                runtime_cleanup = load_object(
+                    runtime_cleanup_path,
+                    label="essential runtime cleanup source",
+                )
+                runtime_core_evidence = _validate_runtime_core_cleanup(
+                    raw_root=source_root,
+                    runtime_cleanup=runtime_cleanup,
+                )
+            except (OSError, UnicodeError, json.JSONDecodeError, T09HostError):
+                if host.get("runtime_secret_cleanup_malformed") is not True:
+                    raise T09HostError(
+                        "runtime cleanup became malformed after a clean host projection"
+                    ) from None
+                runtime_core_evidence = None
+    elif host.get("runtime_secret_cleanup_malformed") is not True:
+        raise T09HostError("runtime cleanup was unreadable without a fail-closed host projection")
+    if runtime_core_evidence is not None and (
+        core.get("runtime_core_artifacts_detected") != runtime_core_evidence.records
+        or core.get("runtime_core_artifact_count") != len(runtime_core_evidence.records)
+        or core.get("runtime_core_scan_integrity_failure")
+        is not runtime_core_evidence.scan_integrity_failure
+        or core.get("runtime_core_destruction_verified")
+        is not runtime_core_evidence.destruction_verified
+        or core.get("runtime_core_detection_receipt_sha256")
+        != runtime_core_evidence.detection_sha256
+        or core.get("runtime_core_rotation_required") is not runtime_core_evidence.rotation_required
+    ):
+        raise T09HostError("host core cleanup drifted from its runtime source")
+    if runtime_core_evidence is None:
+        runtime_records = core.get("runtime_core_artifacts_detected", [])
+        runtime_scan_failed = core.get("runtime_core_scan_integrity_failure", False)
+        runtime_destruction = core.get("runtime_core_destruction_verified", True)
+        runtime_rotation = core.get("runtime_core_rotation_required", False)
+        runtime_detection_sha256 = core.get("runtime_core_detection_receipt_sha256")
+        if (
+            not isinstance(runtime_records, list)
+            or not isinstance(runtime_scan_failed, bool)
+            or not isinstance(runtime_destruction, bool)
+            or not isinstance(runtime_rotation, bool)
+            or not (
+                runtime_detection_sha256 is None
+                or (
+                    isinstance(runtime_detection_sha256, str)
+                    and _HEX64.fullmatch(runtime_detection_sha256) is not None
+                )
+            )
+            or runtime_records != []
+            or runtime_scan_failed is not True
+            or runtime_destruction is not False
+            or runtime_rotation is not True
+            or runtime_detection_sha256 is not None
+        ):
+            raise T09HostError("runtime-free terminal core projection is malformed")
+        runtime_record_keys = {
+            "artifact",
+            "writable_root",
+            "bytes",
+            "known_core_filename",
+            "elf_et_core",
+            "hardlink_alias_of_core_inode",
+            "file_type",
+            "filesystem_device",
+            "filesystem_inode",
+            "link_count",
+            "classified_links_within_writable_roots",
+            "destruction_verifiable",
+            "content_or_hash_retained",
+        }
+        for ordinal, raw in enumerate(runtime_records, start=1):
+            if (
+                not isinstance(raw, dict)
+                or set(raw) != runtime_record_keys
+                or raw.get("artifact") != f"<condition-core-artifact-{ordinal:04d}>"
+                or raw.get("writable_root")
+                not in {"attempt-root", "/tmp", "/dev/shm", "runtime-budget"}
+                or type(raw.get("bytes")) is not int
+                or cast(int, raw["bytes"]) < 0
+                or not isinstance(raw.get("known_core_filename"), bool)
+                or not isinstance(raw.get("elf_et_core"), bool)
+                or not isinstance(raw.get("hardlink_alias_of_core_inode"), bool)
+                or not (
+                    raw["known_core_filename"]
+                    or raw["elf_et_core"]
+                    or raw["hardlink_alias_of_core_inode"]
+                )
+                or raw.get("file_type") not in {"regular", "non-regular"}
+                or not (
+                    (
+                        raw.get("file_type") == "regular"
+                        and type(raw.get("filesystem_device")) is int
+                        and type(raw.get("filesystem_inode")) is int
+                    )
+                    or (
+                        raw.get("file_type") == "non-regular"
+                        and raw.get("filesystem_device") is None
+                        and raw.get("filesystem_inode") is None
+                    )
+                )
+                or type(raw.get("link_count")) is not int
+                or cast(int, raw["link_count"]) < 1
+                or type(raw.get("classified_links_within_writable_roots")) is not int
+                or cast(int, raw["classified_links_within_writable_roots"]) < 0
+                or not isinstance(raw.get("destruction_verifiable"), bool)
+                or raw.get("content_or_hash_retained") is not False
+                or (runtime_destruction and raw.get("destruction_verifiable") is not True)
+            ):
+                raise T09HostError("runtime-free terminal core record is malformed")
+        runtime_core_evidence = ValidatedRuntimeCoreCleanupEvidence(
+            records=[],
+            destruction_verified=False,
+            scan_integrity_failure=True,
+            rotation_required=True,
+            detection_sha256="",
+        )
+    recovery_root = (
+        recovery_control_root
+        if recovery_control_root is not None
+        else source_root / "recovery-control"
+    )
+    recovery_census_sha256: str | None = None
+    recovery_core_count = 0
+    recovery_core_scan_failure = False
+    recovery_core_destruction_verified = True
+    recovery_core_rotation_required = False
+    recovery_exposure_detected = False
+    recovery_credential_integrity_failure = False
+    if recovery_root.is_dir() and not recovery_root.is_symlink():
+        recovery_detection_path = recovery_root / "post-terminal-core-detection.json"
+        recovery_supplemental_path = recovery_root / "post-terminal-core-recovery-detection.json"
+        recovery_cleanup_path = recovery_root / "post-terminal-core-cleanup.json"
+        recovery_census_path = recovery_root / "recovery-security-census.json"
+        recovery_detection = load_object(
+            recovery_detection_path,
+            label="recovery pre-destruction core census",
+        )
+        recovery_cleanup = load_object(
+            recovery_cleanup_path,
+            label="recovery core cleanup",
+        )
+        recovery_census = load_object(
+            recovery_census_path,
+            label="recovery security census",
+        )
+        recovery_core_evidence = _validate_core_cleanup_receipt(recovery_cleanup)
+        recovery_detection_documents = [
+            (
+                recovery_detection_path,
+                recovery_detection,
+                "recover-attempt-seal-fresh-artifact-root-census",
+                recovery_cleanup.get("core_detection_receipt_sha256"),
+            )
+        ]
+        recovery_supplemental_sha256 = recovery_cleanup.get(
+            "supplemental_core_detection_receipt_sha256"
+        )
+        if recovery_supplemental_sha256 is not None:
+            recovery_detection_documents.append(
+                (
+                    recovery_supplemental_path,
+                    load_object(
+                        recovery_supplemental_path,
+                        label="recovery supplemental pre-destruction core census",
+                    ),
+                    "recover-attempt-seal-post-crash-supplemental-census",
+                    recovery_supplemental_sha256,
+                )
+            )
+        recovery_records: list[object] = []
+        recovery_detection_scan_failure = False
+        for (
+            retained_detection_path,
+            retained_detection,
+            expected_scope,
+            expected_sha256,
+        ) in recovery_detection_documents:
+            retained_records = retained_detection.get("core_artifacts_detected")
+            if (
+                not isinstance(expected_sha256, str)
+                or _HEX64.fullmatch(expected_sha256) is None
+                or not retained_detection_path.is_file()
+                or retained_detection_path.is_symlink()
+                or file_sha256(retained_detection_path) != expected_sha256
+                or retained_detection.get("schema_version") != "0.1.0"
+                or retained_detection.get("scope") != expected_scope
+                or not isinstance(retained_records, list)
+                or retained_detection.get("core_artifact_count") != len(retained_records)
+                or not isinstance(retained_detection.get("core_scan_integrity_failure"), bool)
+                or retained_detection.get("core_content_or_hash_retained") is not False
+                or retained_detection.get("core_transferred_outside_remote_host") is not False
+            ):
+                raise T09HostError("recovery core detection source is malformed")
+            recovery_records.extend(retained_records)
+            recovery_detection_scan_failure = (
+                recovery_detection_scan_failure
+                or retained_detection.get("core_scan_integrity_failure") is True
+            )
+        recovery_core_count = len(recovery_core_evidence.records)
+        recovery_core_scan_failure = recovery_core_evidence.scan_integrity_failure
+        recovery_core_destruction_verified = recovery_core_evidence.destruction_verified
+        recovery_core_rotation_required = recovery_core_evidence.rotation_required
+        recovery_exposure_detected = (
+            recovery_census.get("actual_credential_exposure_detected") is True
+        )
+        recovery_credential_integrity_failure = (
+            recovery_census.get("remaining_exact_secret_match_count") != 0
+            or recovery_census.get("recovery_content_copy_permitted") is not True
+        )
+        if (
+            recovery_records != recovery_core_evidence.records
+            or recovery_detection_scan_failure is not recovery_core_scan_failure
+            or (
+                recovery_supplemental_sha256 is None and os.path.lexists(recovery_supplemental_path)
+            )
+            or recovery_census.get("schema_version") != "0.1.0"
+            or recovery_census.get("run_id") != run_id
+            or recovery_census.get("scope") != "immediately-before-recovery-seal-content-read"
+            or recovery_census.get("core_cleanup_receipt_sha256")
+            != file_sha256(recovery_cleanup_path)
+            or recovery_census.get("core_artifact_count") != recovery_core_count
+            or recovery_census.get("core_scan_integrity_failure") is not recovery_core_scan_failure
+            or recovery_census.get("core_destruction_verified")
+            is not recovery_core_destruction_verified
+            or not isinstance(recovery_census.get("actual_credential_exposure_detected"), bool)
+            or type(recovery_census.get("new_exact_secret_match_count")) is not int
+            or cast(int, recovery_census["new_exact_secret_match_count"]) < 0
+            or type(recovery_census.get("remaining_exact_secret_match_count")) is not int
+            or cast(int, recovery_census["remaining_exact_secret_match_count"]) < 0
+            or recovery_census.get("secret_values_or_hashes_retained") is not False
+            or recovery_census.get("content_scan_permitted") is not (not recovery_core_scan_failure)
+            or recovery_census.get("recovery_content_copy_permitted")
+            is not (
+                not recovery_core_scan_failure
+                and recovery_census.get("remaining_exact_secret_match_count") == 0
+            )
+        ):
+            raise T09HostError("recovery security census is not source-bound")
+        recovery_census_sha256 = file_sha256(recovery_census_path)
+    elif os.path.lexists(recovery_root):
+        raise T09HostError("recovery security control root is unsafe")
+    runtime_core_incident = bool(runtime_core_evidence.records) or (
+        runtime_core_evidence.scan_integrity_failure
+    )
+    effective_core_incident = (
+        bool(core_evidence.records)
+        or (core_evidence.scan_integrity_failure)
+        or runtime_core_incident
+        or recovery_core_count > 0
+        or recovery_core_scan_failure
+    )
+    host_effective_core_rotation = (
+        core_evidence.rotation_required or runtime_core_evidence.rotation_required
+    )
+    effective_core_rotation = host_effective_core_rotation or recovery_core_rotation_required
+    timing = host.get("timing")
+    returncode = host.get("returncode")
+    stop_reason = host.get("stop_reason")
+    tree_bytes_before = host.get("tree_bytes_before_security_cleanup")
+    host_hard_cap = host.get("hard_cap_breached")
+    empirical_entry_crossed = host.get("supervised_release_completed")
+    actual_exposure = host.get("actual_credential_exposure_detected")
+    cleanup_integrity_failure = host.get("runtime_secret_cleanup_malformed")
+    credential_rotation_required = host.get("credential_rotation_required")
+    container_residue = host.get("owned_container_residue")
+    intent_sha256 = file_sha256(intent_path)
+    release_path = supervisor_root / "supervised-release.json"
+    release_sha256 = file_sha256(release_path) if release_path.is_file() else None
+    cap_path = supervisor_root / "output-cap-event.json"
+    cap_event = (
+        load_object(cap_path, label="essential output-cap source") if cap_path.is_file() else None
+    )
+    raw_validation_path = supervisor_root / "raw-seal-validation-event.json"
+    raw_validation = (
+        load_object(raw_validation_path, label="essential raw-seal failure source")
+        if raw_validation_path.is_file()
+        else None
+    )
+    if raw_validation is not None and (
+        raw_validation.get("schema_version") != "0.1.0"
+        or raw_validation.get("run_id") != run_id
+        or raw_validation.get("stop_reason") != "raw-seal-validation-failed"
+        or raw_validation.get("hard_cap_breached") is not False
+        or raw_validation.get("essential_failure_seal_required") is not True
+    ):
+        raise T09HostError("essential raw-seal failure source is internally inconsistent")
+    if raw_validation is not None and cap_event is not None:
+        raise T09HostError("essential failure has conflicting terminal source classes")
+    cap_stop_reason = cap_event.get("stop_reason") if cap_event is not None else None
+    cap_tree_bytes_after = (
+        cap_event.get("attempt_tree_bytes_after_core_cleanup") if cap_event is not None else None
+    )
+    effective_stop_reason = (
+        "raw-seal-validation-failed"
+        if raw_validation is not None
+        else (cap_stop_reason if cap_event is not None else stop_reason)
+    )
+    hard_cap_breached = cap_event is not None
+    if cap_event is not None and (
+        cap_event.get("schema_version") != "0.1.0"
+        or cap_event.get("run_id") != run_id
+        or cap_event.get("hard_cap_breached") is not True
+        or cap_event.get("essential_failure_seal_required") is not True
+        or cap_event.get("full_raw_seal_permitted") is not False
+        or not isinstance(cap_stop_reason, str)
+        or not cap_stop_reason
+        or cap_event.get("attempt_tree_bytes_before_security_cleanup") != tree_bytes_before
+        or cap_event.get("core_artifact_count") != len(core_evidence.records)
+        or type(cap_tree_bytes_after) is not int
+        or cap_tree_bytes_after < 0
+        or (
+            host_hard_cap is True
+            and (not isinstance(stop_reason, str) or cap_stop_reason != stop_reason)
+        )
+        or (host_hard_cap is False and cap_stop_reason != "post-stop-evidence-output-cap")
+    ):
+        raise T09HostError("essential output-cap source is internally inconsistent")
+    if (
+        host.get("schema_version") != "0.1.0"
+        or host.get("run_id") != run_id
+        or type(returncode) is not int
+        or not isinstance(effective_stop_reason, str)
+        or not effective_stop_reason
+        or type(tree_bytes_before) is not int
+        or tree_bytes_before < 0
+        or not isinstance(host_hard_cap, bool)
+        or (host_hard_cap and cap_event is None)
+        or not isinstance(empirical_entry_crossed, bool)
+        or not isinstance(actual_exposure, bool)
+        or not isinstance(cleanup_integrity_failure, bool)
+        or not isinstance(runtime_cleanup_classified_as_core_artifact, bool)
+        or not isinstance(runtime_cleanup_content_read_permitted, bool)
+        or runtime_cleanup_content_read_permitted
+        is not (
+            not core_evidence.scan_integrity_failure
+            and not runtime_cleanup_classified_as_core_artifact
+        )
+        or not isinstance(credential_rotation_required, bool)
+        or not isinstance(timing, dict)
+        or not isinstance(timing.get("stopped_at"), str)
+        or not isinstance(timing.get("wall_seconds"), (int, float))
+        or isinstance(timing.get("wall_seconds"), bool)
+        or not (
+            host.get("started_condition_container") is True
+            or (
+                host.get("started_condition_container") is None
+                and host.get("condition_start_outcome_unknown") is True
+            )
+        )
+        or host.get("condition_start_intent_sha256") != intent_sha256
+        or host.get("core_artifact_count") != len(core_evidence.records)
+        or host.get("core_scan_integrity_failure") is not core_evidence.scan_integrity_failure
+        or host.get("core_destruction_verified") is not core_evidence.destruction_verified
+        or host.get("core_artifacts_destroyed")
+        is not (bool(core_evidence.records) and core_evidence.destruction_verified)
+        or host.get("runtime_core_artifact_count") != len(runtime_core_evidence.records)
+        or host.get("runtime_core_scan_integrity_failure")
+        is not runtime_core_evidence.scan_integrity_failure
+        or host.get("runtime_core_destruction_verified")
+        is not runtime_core_evidence.destruction_verified
+        or host.get("runtime_core_detection_receipt_sha256")
+        != (runtime_core_evidence.detection_sha256 or None)
+        or host.get("core_safety_stop_detected")
+        is not (
+            bool(core_evidence.records)
+            or core_evidence.scan_integrity_failure
+            or runtime_core_incident
+        )
+        or credential_rotation_required is not (actual_exposure or host_effective_core_rotation)
+        or (
+            host.get("campaign_continuation_permitted") is not False
+            and cap_event is None
+            and raw_validation is None
+        )
+        or not isinstance(host.get("container_removed"), bool)
+        or not isinstance(container_residue, list)
+        or not all(isinstance(item, str) for item in container_residue)
+        or not isinstance(host.get("secret_matching_paths"), list)
+        or not all(isinstance(item, str) for item in host["secret_matching_paths"])
+        or (empirical_entry_crossed and release_sha256 is None)
+    ):
+        raise T09HostError("essential terminal source receipts are inconsistent")
+    effective_actual_exposure = actual_exposure or recovery_exposure_detected
+    effective_cleanup_integrity_failure = (
+        cleanup_integrity_failure or recovery_credential_integrity_failure
+    )
+    effective_credential_rotation = (
+        credential_rotation_required
+        or recovery_exposure_detected
+        or recovery_credential_integrity_failure
+        or effective_core_rotation
+    )
+    return {
+        "process_exit_code": returncode,
+        "terminal_signal": (
+            returncode - 128
+            if 128 < returncode < 256
+            else (-returncode if returncode < 0 else None)
+        ),
+        "stop_reason": effective_stop_reason,
+        "hard_cap_breached": hard_cap_breached,
+        "tree_bytes_before_security_cleanup": tree_bytes_before,
+        "output_cap_tree_bytes_after_core_cleanup": cap_tree_bytes_after,
+        "core_artifact_count": len(core_evidence.records),
+        "core_scan_integrity_failure": core_evidence.scan_integrity_failure,
+        "core_artifacts_destroyed": (
+            bool(core_evidence.records) and core_evidence.destruction_verified
+        ),
+        "core_destruction_verified": core_evidence.destruction_verified,
+        "credential_rotation_required_due_to_core_handling": core_evidence.rotation_required,
+        "runtime_core_artifact_count": len(runtime_core_evidence.records),
+        "runtime_core_scan_integrity_failure": (runtime_core_evidence.scan_integrity_failure),
+        "runtime_core_destruction_verified": (runtime_core_evidence.destruction_verified),
+        "runtime_core_detection_receipt_sha256": (runtime_core_evidence.detection_sha256 or None),
+        "runtime_core_rotation_required": runtime_core_evidence.rotation_required,
+        "effective_core_incident_detected": effective_core_incident,
+        "recovery_security_census_sha256": recovery_census_sha256,
+        "recovery_core_artifact_count": recovery_core_count,
+        "recovery_core_scan_integrity_failure": recovery_core_scan_failure,
+        "recovery_core_destruction_verified": (recovery_core_destruction_verified),
+        "recovery_core_rotation_required": recovery_core_rotation_required,
+        "recovery_actual_credential_exposure_detected": (recovery_exposure_detected),
+        "recovery_credential_cleanup_integrity_failure": (recovery_credential_integrity_failure),
+        "actual_credential_exposure_detected": effective_actual_exposure,
+        "credential_cleanup_integrity_failure": (effective_cleanup_integrity_failure),
+        "credential_rotation_required": effective_credential_rotation,
+        "empirical_entry_crossed": empirical_entry_crossed,
+        "recorded_at": timing["stopped_at"],
+        "condition_start_intent_sha256": intent_sha256,
+        "supervised_release_receipt_sha256": release_sha256,
+        "host_cleanup_receipt_sha256": file_sha256(host_path),
+        "core_cleanup_receipt_sha256": file_sha256(core_path),
+        "output_cap_event_sha256": file_sha256(cap_path) if cap_event is not None else None,
+        "raw_seal_validation_event_sha256": (
+            file_sha256(raw_validation_path) if raw_validation is not None else None
+        ),
+    }
 
 
 def seal_essential_failure(
@@ -7253,6 +10353,11 @@ def seal_essential_failure(
     core_records: list[dict[str, object]],
     core_destruction_verified: bool,
     empirical_entry_crossed: bool,
+    raw_tree_scan_safe: bool = True,
+    core_scan_integrity_failure: bool = False,
+    sensitive_relative_paths: frozenset[str] = frozenset(),
+    core_relative_paths: frozenset[str] | None = None,
+    recovery_control_root: Path | None = None,
 ) -> tuple[Path, Path]:
     """Seal a privacy-safe failure authority independently of an oversized tree."""
 
@@ -7271,42 +10376,239 @@ def seal_essential_failure(
         or (run_id in nonempirical) == empirical_entry_crossed
     ):
         raise T09HostError("essential-failure empirical boundary is not state-bound")
+    terminal_source = _essential_terminal_source_projection(
+        source_root=raw_root,
+        run_id=run_id,
+        recovery_control_root=recovery_control_root,
+    )
+    recorded_at = terminal_source["recorded_at"]
+    actual_credential_exposure_detected = terminal_source["actual_credential_exposure_detected"]
+    credential_cleanup_integrity_failure = terminal_source["credential_cleanup_integrity_failure"]
+    credential_rotation_required = terminal_source["credential_rotation_required"]
+    supervised_bindings = retained_state.get("supervised_release_bindings")
+    release_transaction = retained_state.get("condition_start_reservation")
+    unreleased_reclassifications = retained_state.get(
+        "unreleased_supervised_release_reclassifications"
+    )
+    expected_release_sha256 = terminal_source["supervised_release_receipt_sha256"]
+    expected_start_sha256 = terminal_source["condition_start_intent_sha256"]
+    if (
+        terminal_source["process_exit_code"] != returncode
+        or terminal_source["stop_reason"] != stop_reason
+        or terminal_source["hard_cap_breached"] is not hard_cap_breached
+        or terminal_source["tree_bytes_before_security_cleanup"]
+        != tree_bytes_before_security_cleanup
+        or terminal_source["core_artifact_count"] != len(core_records)
+        or terminal_source["core_scan_integrity_failure"] is not core_scan_integrity_failure
+        or terminal_source["core_destruction_verified"] is not core_destruction_verified
+        or terminal_source["empirical_entry_crossed"] is not empirical_entry_crossed
+        or retained_state.get("actual_credential_exposure_detected")
+        is not actual_credential_exposure_detected
+        or retained_state.get("credential_safety_stop_detected")
+        is not (actual_credential_exposure_detected or credential_cleanup_integrity_failure)
+        or retained_state.get("core_safety_stop_detected")
+        is not terminal_source["effective_core_incident_detected"]
+        or not isinstance(supervised_bindings, dict)
+        or not isinstance(unreleased_reclassifications, dict)
+        or (
+            empirical_entry_crossed
+            and (
+                supervised_bindings.get(run_id) != expected_release_sha256
+                or not isinstance(release_transaction, dict)
+                or release_transaction.get("run_id") != run_id
+                or release_transaction.get("phase") != "empirical-state-committed"
+                or release_transaction.get("start_intent_sha256") != expected_start_sha256
+                or release_transaction.get("supervised_release_receipt_sha256")
+                != expected_release_sha256
+            )
+        )
+        or (
+            not empirical_entry_crossed
+            and expected_release_sha256 is not None
+            and unreleased_reclassifications.get(run_id)
+            != {
+                "start_intent_sha256": expected_start_sha256,
+                "supervised_release_receipt_sha256": expected_release_sha256,
+            }
+        )
+    ):
+        raise T09HostError(
+            "essential-failure authority lacks source-bound terminal credential safety"
+        )
     bundle_root = attempt_root / "essential-failure"
+    manifest_path = attempt_root / "essential-failure-manifest.json"
+    receipt_path = attempt_root / "essential-failure-complete.json"
+    if bundle_root.is_dir() and manifest_path.is_file() and receipt_path.is_file():
+        validate_essential_failure_seal(
+            attempt_root=attempt_root,
+            run_id=run_id,
+            package_commit=package_commit,
+            condition_manifest=manifest,
+        )
+        mark_essential_failure_sealed(
+            artifact_root / "pilot-v7/pilot-state.json",
+            execution_contract_sha256=execution_contract_sha256,
+            run_id=run_id,
+            manifest_sha256=file_sha256(manifest_path),
+            receipt_sha256=file_sha256(receipt_path),
+        )
+        return manifest_path, receipt_path
+    if receipt_path.exists() and not manifest_path.exists():
+        raise T09HostError("essential-failure receipt exists without its source manifest")
+    staging_root = attempt_root / ".essential-failure.incomplete"
+    if staging_root.exists():
+        if staging_root.is_symlink() or not staging_root.is_dir():
+            raise T09HostError("essential-failure staging identity is unsafe")
+        shutil.rmtree(staging_root)
     if bundle_root.exists():
-        raise T09HostError("essential-failure bundle identity is already consumed")
-    bundle_root.mkdir(mode=0o700)
-    violations = privacy_violations(raw_root)
+        if bundle_root.is_symlink() or not bundle_root.is_dir():
+            raise T09HostError("essential-failure bundle identity is unsafe")
+        build_root = bundle_root
+        resume_published_bundle = True
+    else:
+        staging_root.mkdir(mode=0o700)
+        build_root = staging_root
+        resume_published_bundle = False
+    core_paths = (
+        frozenset(cast(str, record["path"]) for record in core_records)
+        if core_relative_paths is None
+        else core_relative_paths
+    )
+    violations = (
+        privacy_violations(
+            raw_root,
+            excluded_relative_paths=core_paths,
+        )
+        if raw_tree_scan_safe
+        else []
+    )
     private_paths = {item.rsplit(":", 1)[0] for item in violations}
     included: list[dict[str, object]] = []
-    excluded: list[dict[str, object]] = [
-        {
-            "path": cast(str, record["path"]),
-            "bytes": cast(int, record["bytes"]),
-            "category": (
-                "prohibited-core-artifact-destroyed"
-                if core_destruction_verified
-                else "prohibited-core-artifact-destruction-unverified"
-            ),
-            "sha256": None,
-        }
-        for record in core_records
-    ]
+    excluded_candidates: list[dict[str, object]] = []
+    exclusion_overflow: dict[str, dict[str, int]] = {}
+
+    def retain_exclusion(record: dict[str, object]) -> None:
+        if len(excluded_candidates) < MAX_ESSENTIAL_EXCLUSION_RECORDS:
+            path = cast(str, record["path"])
+            if len(path.encode()) > MAX_ESSENTIAL_RELATIVE_PATH_BYTES:
+                record = {
+                    **record,
+                    "path": path.encode()[:MAX_ESSENTIAL_RELATIVE_PATH_BYTES].decode(
+                        "utf-8", errors="ignore"
+                    ),
+                    "path_truncated": True,
+                    "path_sha256": hashlib.sha256(path.encode()).hexdigest(),
+                }
+            excluded_candidates.append(record)
+            return
+        category = cast(str, record["category"])
+        aggregate = exclusion_overflow.setdefault(category, {"files": 0, "bytes": 0})
+        aggregate["files"] += 1
+        aggregate["bytes"] += cast(int, record["bytes"])
+
+    for core_ordinal, core_record in enumerate(core_records, start=1):
+        retain_exclusion(
+            {
+                # Core paths are operational cleanup identities only.  An
+                # arbitrary core filename can itself contain a credential or
+                # private value, so the retained failure authority uses a
+                # stable role ordinal and never the source path or its hash.
+                "path": f"<prohibited-core-artifact-{core_ordinal:04d}>",
+                "bytes": cast(int, core_record["bytes"]),
+                "category": (
+                    "prohibited-core-artifact-destroyed"
+                    if core_destruction_verified
+                    else "prohibited-core-artifact-destruction-unverified"
+                ),
+                "sha256": None,
+            }
+        )
+
+    if not raw_tree_scan_safe:
+        retain_exclusion(
+            {
+                "path": "<condition-output-tree-unscanned>",
+                "bytes": tree_bytes_before_security_cleanup,
+                "category": "core-scan-integrity-failure-unscanned-tree",
+                "sha256": None,
+            }
+        )
+
     included_bytes = 0
-    for source in sorted(raw_root.rglob("*")):
+    if not raw_tree_scan_safe:
+        supervisor_source_root = condition_supervisor_root(raw_root)
+        observed_supervisor_names: set[str] = set()
+        for source in sorted(supervisor_source_root.iterdir()):
+            metadata = source.lstat()
+            if (
+                source.is_symlink()
+                or not stat.S_ISREG(metadata.st_mode)
+                or metadata.st_uid != os.getuid()
+                or metadata.st_nlink != 1
+            ):
+                raise T09HostError("condition supervisor control contains an unsafe member")
+            observed_supervisor_names.add(source.name)
+        unexpected_supervisor_names = (
+            observed_supervisor_names - _TRUSTED_CONDITION_SUPERVISOR_FILES
+        )
+        if unexpected_supervisor_names:
+            raise T09HostError("condition supervisor control contains an unbound member")
+        for name in sorted(observed_supervisor_names):
+            source = supervisor_source_root / name
+            relative = f"{CONDITION_SUPERVISOR_DIRNAME}/{name}"
+            metadata = source.lstat()
+            if (
+                metadata.st_size > MAX_ESSENTIAL_FAILURE_FILE_BYTES
+                or len(included) >= MAX_ESSENTIAL_FAILURE_FILES - 2
+                or included_bytes + metadata.st_size
+                > MAX_ESSENTIAL_FAILURE_BYTES - MAX_ESSENTIAL_METADATA_BYTES
+            ):
+                raise T09HostError("condition supervisor control exceeds the failure envelope")
+            if resume_published_bundle:
+                retained = build_root / relative
+                retained_metadata = retained.lstat()
+                if (
+                    retained.is_symlink()
+                    or not stat.S_ISREG(retained_metadata.st_mode)
+                    or retained_metadata.st_nlink != 1
+                    or retained_metadata.st_size != metadata.st_size
+                    or file_sha256(retained) != file_sha256(source)
+                ):
+                    raise T09HostError("published supervisor failure evidence drifted")
+                copied = {
+                    "bytes": retained_metadata.st_size,
+                    "sha256": file_sha256(retained),
+                }
+            else:
+                copied = _copy_failure_evidence_file(source, build_root / relative)
+            included_bytes += cast(int, copied["bytes"])
+            included.append({"path": relative, **copied})
+    for source in sorted(raw_root.rglob("*")) if raw_tree_scan_safe else ():
         metadata = source.lstat()
         if stat.S_ISDIR(metadata.st_mode):
             continue
         relative = source.relative_to(raw_root).as_posix()
+        if relative in core_paths:
+            continue
         category: str | None = None
-        if source.is_symlink() or not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
+        if relative in sensitive_relative_paths:
+            category = "exact-secret-artifact-exclusion"
+        elif source.is_symlink() or not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
             category = "unsafe-artifact-type"
         elif not _is_essential_failure_candidate(relative):
             category = "not-in-essential-failure-allowlist"
+        elif len(relative.encode()) > MAX_ESSENTIAL_RELATIVE_PATH_BYTES:
+            category = "essential-path-length-cap"
         elif relative in private_paths:
             category = "structural-privacy-exclusion"
         elif metadata.st_size > MAX_ESSENTIAL_FAILURE_FILE_BYTES:
             category = "essential-file-size-cap"
-        elif included_bytes + metadata.st_size > MAX_ESSENTIAL_FAILURE_BYTES - 1_048_576:
+        elif len(included) >= MAX_ESSENTIAL_FAILURE_FILES - 2:
+            category = "essential-member-count-cap"
+        elif (
+            included_bytes + metadata.st_size
+            > MAX_ESSENTIAL_FAILURE_BYTES - MAX_ESSENTIAL_METADATA_BYTES
+        ):
             category = "essential-bundle-byte-cap"
         if category is not None:
             safe_digest = (
@@ -7316,21 +10618,111 @@ def seal_essential_failure(
                 and relative not in private_paths
                 else None
             )
-            excluded.append(
+            retained_relative = (
+                "<redacted-sensitive-evidence-path>"
+                if category
+                in {
+                    "structural-privacy-exclusion",
+                    "exact-secret-artifact-exclusion",
+                }
+                else relative
+            )
+            retain_exclusion(
                 {
-                    "path": relative,
+                    "path": retained_relative,
                     "bytes": metadata.st_size,
                     "category": category,
                     "sha256": safe_digest,
                 }
             )
             continue
-        copied = _copy_failure_evidence_file(source, bundle_root / relative)
+        if resume_published_bundle:
+            retained = build_root / relative
+            retained_metadata = retained.lstat()
+            if (
+                retained.is_symlink()
+                or not stat.S_ISREG(retained_metadata.st_mode)
+                or retained_metadata.st_nlink != 1
+                or retained_metadata.st_size != metadata.st_size
+                or file_sha256(retained) != file_sha256(source)
+            ):
+                raise T09HostError("published essential-failure member drifted during resumption")
+            copied = {
+                "bytes": retained_metadata.st_size,
+                "sha256": file_sha256(retained),
+            }
+        else:
+            copied = _copy_failure_evidence_file(source, build_root / relative)
         included_bytes += cast(int, copied["bytes"])
         included.append({"path": relative, **copied})
-    terminal_signal = (
-        returncode - 128 if 128 < returncode < 256 else (-returncode if returncode < 0 else None)
-    )
+    if recovery_control_root is not None:
+        recovery_detection_path = recovery_control_root / "post-terminal-core-detection.json"
+        recovery_cleanup_path = recovery_control_root / "post-terminal-core-cleanup.json"
+        recovery_supplemental_path = (
+            recovery_control_root / "post-terminal-core-recovery-detection.json"
+        )
+        recovery_cleanup = load_object(
+            recovery_cleanup_path,
+            label="essential recovery core cleanup source",
+        )
+        supplemental_sha256 = recovery_cleanup.get("supplemental_core_detection_receipt_sha256")
+        expected_recovery_names = {
+            "post-terminal-core-detection.json",
+            "post-terminal-core-cleanup.json",
+            "recovery-security-census.json",
+        }
+        if supplemental_sha256 is not None:
+            if (
+                not isinstance(supplemental_sha256, str)
+                or _HEX64.fullmatch(supplemental_sha256) is None
+            ):
+                raise T09HostError("recovery supplemental core binding is malformed")
+            expected_recovery_names.add("post-terminal-core-recovery-detection.json")
+        _validate_core_cleanup_pair(
+            cleanup_path=recovery_cleanup_path,
+            detection_path=recovery_detection_path,
+            supplemental_detection_path=(
+                recovery_supplemental_path if supplemental_sha256 is not None else None
+            ),
+        )
+        recovery_entries = sorted(recovery_control_root.iterdir())
+        if any(path.is_symlink() or not path.is_file() for path in recovery_entries):
+            raise T09HostError("recovery control source contains an unsafe member")
+        observed_recovery_names = {path.name for path in recovery_entries}
+        if observed_recovery_names != expected_recovery_names:
+            raise T09HostError("recovery control source set drifted")
+        for name in sorted(expected_recovery_names):
+            source = recovery_control_root / name
+            relative = f"recovery-control/{name}"
+            metadata = source.lstat()
+            if (
+                not stat.S_ISREG(metadata.st_mode)
+                or metadata.st_nlink != 1
+                or metadata.st_size > MAX_ESSENTIAL_FAILURE_FILE_BYTES
+                or len(included) >= MAX_ESSENTIAL_FAILURE_FILES - 2
+                or included_bytes + metadata.st_size
+                > MAX_ESSENTIAL_FAILURE_BYTES - MAX_ESSENTIAL_METADATA_BYTES
+            ):
+                raise T09HostError("recovery control source exceeds the essential envelope")
+            if resume_published_bundle:
+                retained = build_root / relative
+                retained_metadata = retained.lstat()
+                if (
+                    retained.is_symlink()
+                    or not stat.S_ISREG(retained_metadata.st_mode)
+                    or retained_metadata.st_nlink != 1
+                    or retained_metadata.st_size != metadata.st_size
+                    or file_sha256(retained) != file_sha256(source)
+                ):
+                    raise T09HostError("published recovery control evidence drifted")
+                copied = {
+                    "bytes": retained_metadata.st_size,
+                    "sha256": file_sha256(retained),
+                }
+            else:
+                copied = _copy_failure_evidence_file(source, build_root / relative)
+            included_bytes += cast(int, copied["bytes"])
+            included.append({"path": relative, **copied})
     failure_summary = {
         "schema_version": "0.1.0",
         "plan_id": PLAN_ID,
@@ -7352,17 +10744,45 @@ def seal_essential_failure(
         "frozen_run_manifest_sha256": frozen_run_manifest_sha256,
         "condition_plan_sha256": manifest.get("condition_plan_sha256"),
         "condition_argv_sha256": manifest.get("argv_sha256"),
-        "process_exit_code": returncode,
-        "terminal_signal": terminal_signal,
-        "stop_reason": stop_reason,
-        "hard_cap_breached": hard_cap_breached,
-        "tree_bytes_before_security_cleanup": tree_bytes_before_security_cleanup,
-        "core_artifact_count": len(core_records),
-        "core_artifacts_destroyed": bool(core_records) and core_destruction_verified,
-        "core_destruction_verified": core_destruction_verified,
-        "credential_rotation_required_due_to_core_handling": (
-            bool(core_records) and not core_destruction_verified
-        ),
+        **{
+            key: terminal_source[key]
+            for key in (
+                "process_exit_code",
+                "terminal_signal",
+                "stop_reason",
+                "hard_cap_breached",
+                "tree_bytes_before_security_cleanup",
+                "output_cap_tree_bytes_after_core_cleanup",
+                "core_artifact_count",
+                "core_scan_integrity_failure",
+                "core_artifacts_destroyed",
+                "core_destruction_verified",
+                "credential_rotation_required_due_to_core_handling",
+                "runtime_core_artifact_count",
+                "runtime_core_scan_integrity_failure",
+                "runtime_core_destruction_verified",
+                "runtime_core_detection_receipt_sha256",
+                "runtime_core_rotation_required",
+                "effective_core_incident_detected",
+                "recovery_security_census_sha256",
+                "recovery_core_artifact_count",
+                "recovery_core_scan_integrity_failure",
+                "recovery_core_destruction_verified",
+                "recovery_core_rotation_required",
+                "recovery_actual_credential_exposure_detected",
+                "recovery_credential_cleanup_integrity_failure",
+                "actual_credential_exposure_detected",
+                "credential_cleanup_integrity_failure",
+                "credential_rotation_required",
+                "condition_start_intent_sha256",
+                "supervised_release_receipt_sha256",
+                "host_cleanup_receipt_sha256",
+                "core_cleanup_receipt_sha256",
+                "output_cap_event_sha256",
+                "raw_seal_validation_event_sha256",
+            )
+        },
+        "campaign_continuation_permitted": False,
         "attempt_state": "consumed-infrastructure-invalid-unscored",
         "empirical_entry_crossed": empirical_entry_crossed,
         "evaluator_status": "not-run-essential-failure-only",
@@ -7370,68 +10790,191 @@ def seal_essential_failure(
         "condition_retry_permitted": False,
         "scientific_pair_eligibility": False,
     }
-    write_exclusive(bundle_root / "failure-summary.json", failure_summary)
-    write_exclusive(
-        bundle_root / "excluded-artifacts.json",
-        {
-            "schema_version": "0.1.0",
-            "run_id": run_id,
-            "included": included,
-            "excluded": excluded,
-            "core_content_or_hash_retained": False,
-        },
+    summary_path = build_root / "failure-summary.json"
+    exclusions_path = build_root / "excluded-artifacts.json"
+    exclusions = {
+        "schema_version": "0.1.0",
+        "run_id": run_id,
+        "included": included,
+        "excluded": excluded_candidates,
+        "exclusion_overflow": exclusion_overflow,
+        "excluded_record_limit": MAX_ESSENTIAL_EXCLUSION_RECORDS,
+        "included_file_limit": MAX_ESSENTIAL_FAILURE_FILES,
+        "relative_path_byte_limit": MAX_ESSENTIAL_RELATIVE_PATH_BYTES,
+        "core_content_or_hash_retained": False,
+    }
+    metadata_bytes = sum(
+        len((json.dumps(value, allow_nan=False, indent=2, sort_keys=True) + "\n").encode())
+        for value in (failure_summary, exclusions)
     )
-    if privacy_violations(bundle_root):
+    if metadata_bytes > MAX_ESSENTIAL_METADATA_BYTES:
+        raise T09HostError("essential-failure metadata exceeds its reserved byte envelope")
+    if resume_published_bundle:
+        if (
+            load_object(summary_path, label="resumed essential-failure summary") != failure_summary
+            or load_object(exclusions_path, label="resumed essential-failure exclusions")
+            != exclusions
+        ):
+            raise T09HostError("published essential-failure bundle drifted during resumption")
+    else:
+        write_exclusive(summary_path, failure_summary)
+        write_exclusive(exclusions_path, exclusions)
+    if privacy_violations(build_root):
         raise T09HostError("essential-failure bundle retained a prohibited private value")
-    files, total = _essential_failure_files(bundle_root)
-    manifest_path = attempt_root / "essential-failure-manifest.json"
-    receipt_path = attempt_root / "essential-failure-complete.json"
-    write_exclusive(
-        manifest_path,
-        {
-            "schema_version": "0.1.0",
-            "plan_id": PLAN_ID,
-            "host_run_id": HOST_RUN_ID,
-            "run_id": run_id,
-            "package_commit": package_commit,
-            "execution_contract_sha256": execution_contract_sha256,
-            "frozen_run_manifest_sha256": frozen_run_manifest_sha256,
-            "evidence_root": "essential-failure",
-            "files": files,
-            "files_sha256": canonical_sha256(files),
-            "total_bytes": total,
-            "full_raw_tree_retained": False,
-            "failure_reconstructable": True,
-            "evaluator_eligible": False,
-            "private_access_controlled": True,
+    files, total = _essential_failure_files(build_root)
+    if not resume_published_bundle:
+        os.rename(staging_root, bundle_root)
+        parent_descriptor = os.open(attempt_root, os.O_RDONLY)
+        try:
+            os.fsync(parent_descriptor)
+        finally:
+            os.close(parent_descriptor)
+        summary_path = bundle_root / "failure-summary.json"
+        exclusions_path = bundle_root / "excluded-artifacts.json"
+    manifest_document = {
+        "schema_version": "0.1.0",
+        "plan_id": PLAN_ID,
+        "host_run_id": HOST_RUN_ID,
+        "run_id": run_id,
+        "package_commit": package_commit,
+        "execution_contract_sha256": execution_contract_sha256,
+        "frozen_run_manifest_sha256": frozen_run_manifest_sha256,
+        "condition_plan_sha256": manifest["condition_plan_sha256"],
+        "condition_argv_sha256": manifest["argv_sha256"],
+        "evidence_root": "essential-failure",
+        "files": files,
+        "files_sha256": canonical_sha256(files),
+        "total_bytes": total,
+        "failure_summary_sha256": file_sha256(summary_path),
+        "excluded_artifacts_sha256": file_sha256(exclusions_path),
+        "empirical_entry_crossed": empirical_entry_crossed,
+        "hard_cap_breached": hard_cap_breached,
+        "stop_reason": stop_reason,
+        "output_cap_tree_bytes_after_core_cleanup": terminal_source[
+            "output_cap_tree_bytes_after_core_cleanup"
+        ],
+        "core_artifact_count": len(core_records),
+        "core_scan_integrity_failure": core_scan_integrity_failure,
+        "core_destruction_verified": core_destruction_verified,
+        "runtime_core_artifact_count": terminal_source["runtime_core_artifact_count"],
+        "runtime_core_scan_integrity_failure": terminal_source[
+            "runtime_core_scan_integrity_failure"
+        ],
+        "runtime_core_destruction_verified": terminal_source["runtime_core_destruction_verified"],
+        "runtime_core_detection_receipt_sha256": terminal_source[
+            "runtime_core_detection_receipt_sha256"
+        ],
+        "runtime_core_rotation_required": terminal_source["runtime_core_rotation_required"],
+        "effective_core_incident_detected": terminal_source["effective_core_incident_detected"],
+        **{
+            key: terminal_source[key]
+            for key in (
+                "recovery_security_census_sha256",
+                "recovery_core_artifact_count",
+                "recovery_core_scan_integrity_failure",
+                "recovery_core_destruction_verified",
+                "recovery_core_rotation_required",
+                "recovery_actual_credential_exposure_detected",
+                "recovery_credential_cleanup_integrity_failure",
+            )
         },
-    )
-    write_exclusive(
-        receipt_path,
-        {
-            "schema_version": "0.1.0",
-            "plan_id": PLAN_ID,
-            "host_run_id": HOST_RUN_ID,
-            "run_id": run_id,
-            "essential_failure_seal_complete": True,
-            "attempt_identity_consumed": True,
-            "empirical_entry_crossed": empirical_entry_crossed,
-            "empirical_attempt_consumed": empirical_entry_crossed,
-            "infrastructure_invalid": True,
-            "unscored": True,
-            "failure_manifest_sha256": file_sha256(manifest_path),
-            "essential_total_bytes": total,
-            "essential_file_count": len(files),
-            "condition_retry_permitted": False,
-            "evaluator_permitted": False,
-            "core_destruction_verified": core_destruction_verified,
-            "recorded_at": utc_now(),
+        "actual_credential_exposure_detected": actual_credential_exposure_detected,
+        "credential_cleanup_integrity_failure": credential_cleanup_integrity_failure,
+        "credential_rotation_required": credential_rotation_required,
+        "condition_start_intent_sha256": terminal_source["condition_start_intent_sha256"],
+        "supervised_release_receipt_sha256": terminal_source["supervised_release_receipt_sha256"],
+        "host_cleanup_receipt_sha256": terminal_source["host_cleanup_receipt_sha256"],
+        "core_cleanup_receipt_sha256": terminal_source["core_cleanup_receipt_sha256"],
+        "output_cap_event_sha256": terminal_source["output_cap_event_sha256"],
+        "raw_seal_validation_event_sha256": terminal_source["raw_seal_validation_event_sha256"],
+        "campaign_continuation_permitted": False,
+        "full_raw_tree_retained": False,
+        "failure_reconstructable": True,
+        "evaluator_eligible": False,
+        "private_access_controlled": True,
+    }
+    if manifest_path.exists():
+        if (
+            load_object(manifest_path, label="resumed essential-failure manifest")
+            != manifest_document
+        ):
+            raise T09HostError("essential-failure manifest drifted during resumption")
+    else:
+        write_exclusive(manifest_path, manifest_document)
+    receipt_document = {
+        "schema_version": "0.1.0",
+        "plan_id": PLAN_ID,
+        "host_run_id": HOST_RUN_ID,
+        "run_id": run_id,
+        "essential_failure_seal_complete": True,
+        "attempt_identity_consumed": True,
+        "empirical_entry_crossed": empirical_entry_crossed,
+        "empirical_attempt_consumed": empirical_entry_crossed,
+        "infrastructure_invalid": True,
+        "unscored": True,
+        "execution_contract_sha256": execution_contract_sha256,
+        "frozen_run_manifest_sha256": frozen_run_manifest_sha256,
+        "condition_plan_sha256": manifest["condition_plan_sha256"],
+        "condition_argv_sha256": manifest["argv_sha256"],
+        "failure_manifest_sha256": file_sha256(manifest_path),
+        "failure_summary_sha256": file_sha256(summary_path),
+        "excluded_artifacts_sha256": file_sha256(exclusions_path),
+        "essential_total_bytes": total,
+        "essential_file_count": len(files),
+        "hard_cap_breached": hard_cap_breached,
+        "stop_reason": stop_reason,
+        "output_cap_tree_bytes_after_core_cleanup": terminal_source[
+            "output_cap_tree_bytes_after_core_cleanup"
+        ],
+        "core_artifact_count": len(core_records),
+        "core_scan_integrity_failure": core_scan_integrity_failure,
+        "core_destruction_verified": core_destruction_verified,
+        "runtime_core_artifact_count": terminal_source["runtime_core_artifact_count"],
+        "runtime_core_scan_integrity_failure": terminal_source[
+            "runtime_core_scan_integrity_failure"
+        ],
+        "runtime_core_destruction_verified": terminal_source["runtime_core_destruction_verified"],
+        "runtime_core_detection_receipt_sha256": terminal_source[
+            "runtime_core_detection_receipt_sha256"
+        ],
+        "runtime_core_rotation_required": terminal_source["runtime_core_rotation_required"],
+        "effective_core_incident_detected": terminal_source["effective_core_incident_detected"],
+        **{
+            key: terminal_source[key]
+            for key in (
+                "recovery_security_census_sha256",
+                "recovery_core_artifact_count",
+                "recovery_core_scan_integrity_failure",
+                "recovery_core_destruction_verified",
+                "recovery_core_rotation_required",
+                "recovery_actual_credential_exposure_detected",
+                "recovery_credential_cleanup_integrity_failure",
+            )
         },
-    )
+        "credential_rotation_required_due_to_core_handling": (
+            core_scan_integrity_failure or (bool(core_records) and not core_destruction_verified)
+        ),
+        "actual_credential_exposure_detected": actual_credential_exposure_detected,
+        "credential_cleanup_integrity_failure": credential_cleanup_integrity_failure,
+        "credential_rotation_required": credential_rotation_required,
+        "condition_start_intent_sha256": terminal_source["condition_start_intent_sha256"],
+        "supervised_release_receipt_sha256": terminal_source["supervised_release_receipt_sha256"],
+        "host_cleanup_receipt_sha256": terminal_source["host_cleanup_receipt_sha256"],
+        "core_cleanup_receipt_sha256": terminal_source["core_cleanup_receipt_sha256"],
+        "output_cap_event_sha256": terminal_source["output_cap_event_sha256"],
+        "raw_seal_validation_event_sha256": terminal_source["raw_seal_validation_event_sha256"],
+        "campaign_continuation_permitted": False,
+        "condition_retry_permitted": False,
+        "evaluator_permitted": False,
+        "recorded_at": recorded_at,
+    }
+    if not receipt_path.exists():
+        write_exclusive(receipt_path, receipt_document)
     validate_essential_failure_seal(
         attempt_root=attempt_root,
         run_id=run_id,
         package_commit=package_commit,
+        condition_manifest=manifest,
     )
     mark_essential_failure_sealed(
         artifact_root / "pilot-v7/pilot-state.json",
@@ -7444,26 +10987,415 @@ def seal_essential_failure(
 
 
 def validate_essential_failure_seal(
-    *, attempt_root: Path, run_id: str, package_commit: str
+    *,
+    attempt_root: Path,
+    run_id: str,
+    package_commit: str,
+    condition_manifest: dict[str, Any],
 ) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Reconstruct every semantic field of the bounded failure authority."""
+
     bundle_root = attempt_root / "essential-failure"
     manifest_path = attempt_root / "essential-failure-manifest.json"
     receipt_path = attempt_root / "essential-failure-complete.json"
     manifest = load_object(manifest_path, label="essential-failure manifest")
     receipt = load_object(receipt_path, label="essential-failure receipt")
-    summary = load_object(bundle_root / "failure-summary.json", label="essential-failure summary")
+    summary_path = bundle_root / "failure-summary.json"
+    exclusions_path = bundle_root / "excluded-artifacts.json"
+    summary = load_object(summary_path, label="essential-failure summary")
+    exclusions = load_object(exclusions_path, label="essential-failure exclusions")
     files, total = _essential_failure_files(bundle_root)
+    terminal_source = _essential_terminal_source_projection(
+        source_root=bundle_root,
+        run_id=run_id,
+    )
+    expected_task_index = RUN_IDS.index(run_id) // 2
+    expected_summary_keys = {
+        "schema_version",
+        "plan_id",
+        "host_run_id",
+        "run_id",
+        "pair_id",
+        "task_id",
+        "task_row_sha256",
+        "task_text_sha256",
+        "task_reference_sha256",
+        "condition",
+        "package_commit",
+        "sira_commit",
+        "replacement_image_id",
+        "model",
+        "execution_contract_sha256",
+        "frozen_run_manifest_sha256",
+        "condition_plan_sha256",
+        "condition_argv_sha256",
+        "process_exit_code",
+        "terminal_signal",
+        "stop_reason",
+        "hard_cap_breached",
+        "tree_bytes_before_security_cleanup",
+        "output_cap_tree_bytes_after_core_cleanup",
+        "core_artifact_count",
+        "core_scan_integrity_failure",
+        "core_artifacts_destroyed",
+        "core_destruction_verified",
+        "credential_rotation_required_due_to_core_handling",
+        "runtime_core_artifact_count",
+        "runtime_core_scan_integrity_failure",
+        "runtime_core_destruction_verified",
+        "runtime_core_detection_receipt_sha256",
+        "runtime_core_rotation_required",
+        "effective_core_incident_detected",
+        "recovery_security_census_sha256",
+        "recovery_core_artifact_count",
+        "recovery_core_scan_integrity_failure",
+        "recovery_core_destruction_verified",
+        "recovery_core_rotation_required",
+        "recovery_actual_credential_exposure_detected",
+        "recovery_credential_cleanup_integrity_failure",
+        "actual_credential_exposure_detected",
+        "credential_cleanup_integrity_failure",
+        "credential_rotation_required",
+        "condition_start_intent_sha256",
+        "supervised_release_receipt_sha256",
+        "host_cleanup_receipt_sha256",
+        "core_cleanup_receipt_sha256",
+        "output_cap_event_sha256",
+        "raw_seal_validation_event_sha256",
+        "campaign_continuation_permitted",
+        "attempt_state",
+        "empirical_entry_crossed",
+        "evaluator_status",
+        "task_score",
+        "condition_retry_permitted",
+        "scientific_pair_eligibility",
+    }
+    expected_manifest_keys = {
+        "schema_version",
+        "plan_id",
+        "host_run_id",
+        "run_id",
+        "package_commit",
+        "execution_contract_sha256",
+        "frozen_run_manifest_sha256",
+        "condition_plan_sha256",
+        "condition_argv_sha256",
+        "evidence_root",
+        "files",
+        "files_sha256",
+        "total_bytes",
+        "failure_summary_sha256",
+        "excluded_artifacts_sha256",
+        "empirical_entry_crossed",
+        "hard_cap_breached",
+        "stop_reason",
+        "output_cap_tree_bytes_after_core_cleanup",
+        "core_artifact_count",
+        "core_scan_integrity_failure",
+        "core_destruction_verified",
+        "runtime_core_artifact_count",
+        "runtime_core_scan_integrity_failure",
+        "runtime_core_destruction_verified",
+        "runtime_core_detection_receipt_sha256",
+        "runtime_core_rotation_required",
+        "effective_core_incident_detected",
+        "recovery_security_census_sha256",
+        "recovery_core_artifact_count",
+        "recovery_core_scan_integrity_failure",
+        "recovery_core_destruction_verified",
+        "recovery_core_rotation_required",
+        "recovery_actual_credential_exposure_detected",
+        "recovery_credential_cleanup_integrity_failure",
+        "actual_credential_exposure_detected",
+        "credential_cleanup_integrity_failure",
+        "credential_rotation_required",
+        "condition_start_intent_sha256",
+        "supervised_release_receipt_sha256",
+        "host_cleanup_receipt_sha256",
+        "core_cleanup_receipt_sha256",
+        "output_cap_event_sha256",
+        "raw_seal_validation_event_sha256",
+        "campaign_continuation_permitted",
+        "full_raw_tree_retained",
+        "failure_reconstructable",
+        "evaluator_eligible",
+        "private_access_controlled",
+    }
+    expected_receipt_keys = {
+        "schema_version",
+        "plan_id",
+        "host_run_id",
+        "run_id",
+        "essential_failure_seal_complete",
+        "attempt_identity_consumed",
+        "empirical_entry_crossed",
+        "empirical_attempt_consumed",
+        "infrastructure_invalid",
+        "unscored",
+        "execution_contract_sha256",
+        "frozen_run_manifest_sha256",
+        "condition_plan_sha256",
+        "condition_argv_sha256",
+        "failure_manifest_sha256",
+        "failure_summary_sha256",
+        "excluded_artifacts_sha256",
+        "essential_total_bytes",
+        "essential_file_count",
+        "hard_cap_breached",
+        "stop_reason",
+        "output_cap_tree_bytes_after_core_cleanup",
+        "core_artifact_count",
+        "core_scan_integrity_failure",
+        "core_destruction_verified",
+        "credential_rotation_required_due_to_core_handling",
+        "runtime_core_artifact_count",
+        "runtime_core_scan_integrity_failure",
+        "runtime_core_destruction_verified",
+        "runtime_core_detection_receipt_sha256",
+        "runtime_core_rotation_required",
+        "effective_core_incident_detected",
+        "recovery_security_census_sha256",
+        "recovery_core_artifact_count",
+        "recovery_core_scan_integrity_failure",
+        "recovery_core_destruction_verified",
+        "recovery_core_rotation_required",
+        "recovery_actual_credential_exposure_detected",
+        "recovery_credential_cleanup_integrity_failure",
+        "actual_credential_exposure_detected",
+        "credential_cleanup_integrity_failure",
+        "credential_rotation_required",
+        "condition_start_intent_sha256",
+        "supervised_release_receipt_sha256",
+        "host_cleanup_receipt_sha256",
+        "core_cleanup_receipt_sha256",
+        "output_cap_event_sha256",
+        "raw_seal_validation_event_sha256",
+        "campaign_continuation_permitted",
+        "condition_retry_permitted",
+        "evaluator_permitted",
+        "recorded_at",
+    }
+    expected_exclusion_keys = {
+        "schema_version",
+        "run_id",
+        "included",
+        "excluded",
+        "exclusion_overflow",
+        "excluded_record_limit",
+        "included_file_limit",
+        "relative_path_byte_limit",
+        "core_content_or_hash_retained",
+    }
+    included = exclusions.get("included")
+    excluded = exclusions.get("excluded")
+    overflow = exclusions.get("exclusion_overflow")
+    included_by_path = {
+        cast(str, item["path"]): item
+        for item in files
+        if isinstance(item, dict)
+        and item.get("path")
+        not in {
+            "failure-summary.json",
+            "excluded-artifacts.json",
+        }
+    }
+    exclusion_records_valid = (
+        isinstance(excluded, list) and len(excluded) <= MAX_ESSENTIAL_EXCLUSION_RECORDS
+    )
+    if exclusion_records_valid:
+        for raw in cast(list[object], excluded):
+            if not isinstance(raw, dict):
+                exclusion_records_valid = False
+                break
+            keys = set(raw)
+            path = raw.get("path")
+            digest = raw.get("sha256")
+            if (
+                keys
+                not in (
+                    {"path", "bytes", "category", "sha256"},
+                    {
+                        "path",
+                        "bytes",
+                        "category",
+                        "sha256",
+                        "path_truncated",
+                        "path_sha256",
+                    },
+                )
+                or not isinstance(path, str)
+                or len(path.encode()) > MAX_ESSENTIAL_RELATIVE_PATH_BYTES
+                or type(raw.get("bytes")) is not int
+                or cast(int, raw["bytes"]) < 0
+                or not isinstance(raw.get("category"), str)
+                or (
+                    digest is not None
+                    and (not isinstance(digest, str) or _HEX64.fullmatch(digest) is None)
+                )
+                or (
+                    "path_truncated" in raw
+                    and (
+                        raw.get("path_truncated") is not True
+                        or not isinstance(raw.get("path_sha256"), str)
+                        or _HEX64.fullmatch(cast(str, raw["path_sha256"])) is None
+                    )
+                )
+                or (
+                    (
+                        cast(str, raw.get("category", "")).startswith("prohibited-core-artifact")
+                        or raw.get("category") == "core-scan-integrity-failure-unscanned-tree"
+                    )
+                    and digest is not None
+                )
+            ):
+                exclusion_records_valid = False
+                break
+    overflow_valid = isinstance(overflow, dict)
+    if overflow_valid:
+        for category, aggregate in cast(dict[object, object], overflow).items():
+            if (
+                not isinstance(category, str)
+                or not isinstance(aggregate, dict)
+                or set(aggregate) != {"files", "bytes"}
+                or type(aggregate.get("files")) is not int
+                or type(aggregate.get("bytes")) is not int
+                or cast(int, aggregate["files"]) <= 0
+                or cast(int, aggregate["bytes"]) < 0
+            ):
+                overflow_valid = False
+                break
+    core_count = summary.get("core_artifact_count")
+    core_scan_integrity_failure = summary.get("core_scan_integrity_failure")
+    destruction_verified = summary.get("core_destruction_verified")
+    empirical_entry_crossed = summary.get("empirical_entry_crossed")
+    recovery_census_sha256 = summary.get("recovery_security_census_sha256")
+    recovery_core_count = summary.get("recovery_core_artifact_count")
+    recovery_core_scan_failure = summary.get("recovery_core_scan_integrity_failure")
+    recovery_core_destruction = summary.get("recovery_core_destruction_verified")
+    recovery_core_rotation = summary.get("recovery_core_rotation_required")
+    recovery_exposure = summary.get("recovery_actual_credential_exposure_detected")
+    recovery_credential_integrity = summary.get("recovery_credential_cleanup_integrity_failure")
     if (
-        manifest.get("plan_id") != PLAN_ID
+        set(summary) != expected_summary_keys
+        or set(manifest) != expected_manifest_keys
+        or set(receipt) != expected_receipt_keys
+        or set(exclusions) != expected_exclusion_keys
+        or manifest.get("plan_id") != PLAN_ID
         or manifest.get("host_run_id") != HOST_RUN_ID
         or manifest.get("run_id") != run_id
         or manifest.get("package_commit") != package_commit
+        or condition_manifest.get("run_id") != run_id
+        or summary.get("plan_id") != PLAN_ID
+        or summary.get("host_run_id") != HOST_RUN_ID
+        or summary.get("run_id") != run_id
+        or summary.get("package_commit") != package_commit
+        or summary.get("pair_id") != condition_manifest.get("pair_id")
+        or summary.get("task_id") != condition_manifest.get("task_id")
+        or summary.get("condition") != condition_manifest.get("condition")
+        or summary.get("task_row_sha256") != TASK_ROW_SHA256S[expected_task_index]
+        or summary.get("task_text_sha256") != TASK_TEXT_SHA256S[expected_task_index]
+        or summary.get("task_reference_sha256") != TASK_REFERENCE_SHA256S[expected_task_index]
+        or summary.get("sira_commit") != SIRA_COMMIT
+        or summary.get("model") != MODEL
+        or summary.get("condition_plan_sha256") != condition_manifest.get("condition_plan_sha256")
+        or summary.get("condition_argv_sha256") != condition_manifest.get("argv_sha256")
+        or any(
+            summary.get(key) != terminal_source.get(key)
+            for key in (
+                "process_exit_code",
+                "terminal_signal",
+                "stop_reason",
+                "hard_cap_breached",
+                "tree_bytes_before_security_cleanup",
+                "output_cap_tree_bytes_after_core_cleanup",
+                "core_artifact_count",
+                "core_scan_integrity_failure",
+                "core_artifacts_destroyed",
+                "core_destruction_verified",
+                "credential_rotation_required_due_to_core_handling",
+                "runtime_core_artifact_count",
+                "runtime_core_scan_integrity_failure",
+                "runtime_core_destruction_verified",
+                "runtime_core_detection_receipt_sha256",
+                "runtime_core_rotation_required",
+                "effective_core_incident_detected",
+                "recovery_security_census_sha256",
+                "recovery_core_artifact_count",
+                "recovery_core_scan_integrity_failure",
+                "recovery_core_destruction_verified",
+                "recovery_core_rotation_required",
+                "recovery_actual_credential_exposure_detected",
+                "recovery_credential_cleanup_integrity_failure",
+                "actual_credential_exposure_detected",
+                "credential_cleanup_integrity_failure",
+                "credential_rotation_required",
+                "empirical_entry_crossed",
+                "condition_start_intent_sha256",
+                "supervised_release_receipt_sha256",
+                "host_cleanup_receipt_sha256",
+                "core_cleanup_receipt_sha256",
+                "output_cap_event_sha256",
+                "raw_seal_validation_event_sha256",
+            )
+        )
+        or manifest.get("condition_plan_sha256") != summary.get("condition_plan_sha256")
+        or manifest.get("condition_argv_sha256") != summary.get("condition_argv_sha256")
+        or manifest.get("execution_contract_sha256") != summary.get("execution_contract_sha256")
+        or manifest.get("frozen_run_manifest_sha256") != summary.get("frozen_run_manifest_sha256")
         or manifest.get("evidence_root") != "essential-failure"
         or manifest.get("files") != files
         or manifest.get("files_sha256") != canonical_sha256(files)
         or manifest.get("total_bytes") != total
+        or manifest.get("failure_summary_sha256") != file_sha256(summary_path)
+        or manifest.get("excluded_artifacts_sha256") != file_sha256(exclusions_path)
+        or manifest.get("empirical_entry_crossed") is not empirical_entry_crossed
+        or manifest.get("hard_cap_breached") is not summary.get("hard_cap_breached")
+        or manifest.get("stop_reason") != summary.get("stop_reason")
+        or manifest.get("output_cap_tree_bytes_after_core_cleanup")
+        != summary.get("output_cap_tree_bytes_after_core_cleanup")
+        or manifest.get("core_artifact_count") != core_count
+        or manifest.get("core_scan_integrity_failure") is not core_scan_integrity_failure
+        or manifest.get("core_destruction_verified") is not destruction_verified
+        or any(
+            manifest.get(key) != summary.get(key)
+            for key in (
+                "runtime_core_artifact_count",
+                "runtime_core_scan_integrity_failure",
+                "runtime_core_destruction_verified",
+                "runtime_core_detection_receipt_sha256",
+                "runtime_core_rotation_required",
+                "effective_core_incident_detected",
+                "recovery_security_census_sha256",
+                "recovery_core_artifact_count",
+                "recovery_core_scan_integrity_failure",
+                "recovery_core_destruction_verified",
+                "recovery_core_rotation_required",
+                "recovery_actual_credential_exposure_detected",
+                "recovery_credential_cleanup_integrity_failure",
+            )
+        )
+        or manifest.get("actual_credential_exposure_detected")
+        is not summary.get("actual_credential_exposure_detected")
+        or manifest.get("credential_cleanup_integrity_failure")
+        is not summary.get("credential_cleanup_integrity_failure")
+        or manifest.get("credential_rotation_required")
+        is not summary.get("credential_rotation_required")
+        or any(
+            manifest.get(key) != terminal_source.get(key)
+            for key in (
+                "condition_start_intent_sha256",
+                "supervised_release_receipt_sha256",
+                "host_cleanup_receipt_sha256",
+                "core_cleanup_receipt_sha256",
+                "output_cap_event_sha256",
+                "raw_seal_validation_event_sha256",
+            )
+        )
+        or manifest.get("campaign_continuation_permitted") is not False
         or manifest.get("failure_reconstructable") is not True
         or manifest.get("evaluator_eligible") is not False
+        or manifest.get("full_raw_tree_retained") is not False
+        or manifest.get("private_access_controlled") is not True
         or receipt.get("plan_id") != PLAN_ID
         or receipt.get("host_run_id") != HOST_RUN_ID
         or receipt.get("run_id") != run_id
@@ -7471,15 +11403,179 @@ def validate_essential_failure_seal(
         or receipt.get("attempt_identity_consumed") is not True
         or not isinstance(receipt.get("empirical_entry_crossed"), bool)
         or receipt.get("empirical_attempt_consumed") != receipt.get("empirical_entry_crossed")
-        or summary.get("empirical_entry_crossed") != receipt.get("empirical_entry_crossed")
+        or empirical_entry_crossed != receipt.get("empirical_entry_crossed")
         or summary.get("attempt_state") != "consumed-infrastructure-invalid-unscored"
+        or summary.get("evaluator_status") != "not-run-essential-failure-only"
+        or summary.get("task_score") is not None
+        or summary.get("condition_retry_permitted") is not False
+        or summary.get("scientific_pair_eligibility") is not False
         or receipt.get("infrastructure_invalid") is not True
         or receipt.get("unscored") is not True
+        or receipt.get("execution_contract_sha256") != summary.get("execution_contract_sha256")
+        or receipt.get("frozen_run_manifest_sha256") != summary.get("frozen_run_manifest_sha256")
+        or receipt.get("condition_plan_sha256") != summary.get("condition_plan_sha256")
+        or receipt.get("condition_argv_sha256") != summary.get("condition_argv_sha256")
         or receipt.get("failure_manifest_sha256") != file_sha256(manifest_path)
+        or receipt.get("failure_summary_sha256") != file_sha256(summary_path)
+        or receipt.get("excluded_artifacts_sha256") != file_sha256(exclusions_path)
         or receipt.get("essential_total_bytes") != total
         or receipt.get("essential_file_count") != len(files)
+        or receipt.get("hard_cap_breached") is not summary.get("hard_cap_breached")
+        or receipt.get("stop_reason") != summary.get("stop_reason")
+        or receipt.get("output_cap_tree_bytes_after_core_cleanup")
+        != summary.get("output_cap_tree_bytes_after_core_cleanup")
+        or receipt.get("core_artifact_count") != core_count
+        or receipt.get("core_scan_integrity_failure") is not core_scan_integrity_failure
+        or receipt.get("core_destruction_verified") is not destruction_verified
+        or any(
+            receipt.get(key) != summary.get(key)
+            for key in (
+                "runtime_core_artifact_count",
+                "runtime_core_scan_integrity_failure",
+                "runtime_core_destruction_verified",
+                "runtime_core_detection_receipt_sha256",
+                "runtime_core_rotation_required",
+                "effective_core_incident_detected",
+                "recovery_security_census_sha256",
+                "recovery_core_artifact_count",
+                "recovery_core_scan_integrity_failure",
+                "recovery_core_destruction_verified",
+                "recovery_core_rotation_required",
+                "recovery_actual_credential_exposure_detected",
+                "recovery_credential_cleanup_integrity_failure",
+            )
+        )
+        or receipt.get("credential_rotation_required_due_to_core_handling")
+        is not summary.get("credential_rotation_required_due_to_core_handling")
+        or receipt.get("actual_credential_exposure_detected")
+        is not summary.get("actual_credential_exposure_detected")
+        or receipt.get("credential_cleanup_integrity_failure")
+        is not summary.get("credential_cleanup_integrity_failure")
+        or receipt.get("credential_rotation_required")
+        is not summary.get("credential_rotation_required")
+        or any(
+            receipt.get(key) != terminal_source.get(key)
+            for key in (
+                "condition_start_intent_sha256",
+                "supervised_release_receipt_sha256",
+                "host_cleanup_receipt_sha256",
+                "core_cleanup_receipt_sha256",
+                "output_cap_event_sha256",
+                "raw_seal_validation_event_sha256",
+            )
+        )
+        or receipt.get("campaign_continuation_permitted") is not False
         or receipt.get("condition_retry_permitted") is not False
         or receipt.get("evaluator_permitted") is not False
+        or not isinstance(receipt.get("recorded_at"), str)
+        or type(core_count) is not int
+        or core_count < 0
+        or not isinstance(core_scan_integrity_failure, bool)
+        or not isinstance(destruction_verified, bool)
+        or summary.get("core_artifacts_destroyed")
+        is not (core_count > 0 and destruction_verified and not core_scan_integrity_failure)
+        or summary.get("credential_rotation_required_due_to_core_handling")
+        is not (core_scan_integrity_failure or (core_count > 0 and not destruction_verified))
+        or type(summary.get("runtime_core_artifact_count")) is not int
+        or cast(int, summary["runtime_core_artifact_count"]) < 0
+        or not isinstance(summary.get("runtime_core_scan_integrity_failure"), bool)
+        or not isinstance(summary.get("runtime_core_destruction_verified"), bool)
+        or not (
+            summary.get("runtime_core_detection_receipt_sha256") is None
+            or (
+                isinstance(summary.get("runtime_core_detection_receipt_sha256"), str)
+                and _HEX64.fullmatch(cast(str, summary["runtime_core_detection_receipt_sha256"]))
+                is not None
+            )
+        )
+        or not isinstance(summary.get("runtime_core_rotation_required"), bool)
+        or summary.get("runtime_core_rotation_required")
+        is not (
+            (
+                cast(int, summary["runtime_core_artifact_count"]) > 0
+                or summary.get("runtime_core_scan_integrity_failure") is True
+            )
+            and summary.get("runtime_core_destruction_verified") is not True
+        )
+        or not (
+            recovery_census_sha256 is None
+            or (
+                isinstance(recovery_census_sha256, str)
+                and _HEX64.fullmatch(recovery_census_sha256) is not None
+            )
+        )
+        or type(recovery_core_count) is not int
+        or recovery_core_count < 0
+        or not isinstance(recovery_core_scan_failure, bool)
+        or not isinstance(recovery_core_destruction, bool)
+        or not isinstance(recovery_core_rotation, bool)
+        or not isinstance(recovery_exposure, bool)
+        or not isinstance(recovery_credential_integrity, bool)
+        or recovery_core_rotation
+        is not (
+            (recovery_core_count > 0 or recovery_core_scan_failure)
+            and not recovery_core_destruction
+        )
+        or (
+            recovery_census_sha256 is None
+            and (
+                recovery_core_count != 0
+                or recovery_core_scan_failure
+                or not recovery_core_destruction
+                or recovery_core_rotation
+                or recovery_exposure
+                or recovery_credential_integrity
+            )
+        )
+        or not isinstance(summary.get("effective_core_incident_detected"), bool)
+        or summary.get("effective_core_incident_detected")
+        is not (
+            core_count > 0
+            or core_scan_integrity_failure
+            or cast(int, summary["runtime_core_artifact_count"]) > 0
+            or summary.get("runtime_core_scan_integrity_failure") is True
+            or recovery_core_count > 0
+            or recovery_core_scan_failure
+        )
+        or not isinstance(summary.get("actual_credential_exposure_detected"), bool)
+        or not isinstance(summary.get("credential_cleanup_integrity_failure"), bool)
+        or not isinstance(summary.get("credential_rotation_required"), bool)
+        or summary.get("credential_rotation_required")
+        is not (
+            summary.get("actual_credential_exposure_detected") is True
+            or summary.get("credential_cleanup_integrity_failure") is True
+            or core_scan_integrity_failure
+            or (core_count > 0 and not destruction_verified)
+            or summary.get("runtime_core_rotation_required") is True
+            or recovery_core_rotation
+        )
+        or summary.get("campaign_continuation_permitted") is not False
+        or not isinstance(summary.get("hard_cap_breached"), bool)
+        or not (
+            summary.get("output_cap_tree_bytes_after_core_cleanup") is None
+            or type(summary.get("output_cap_tree_bytes_after_core_cleanup")) is int
+        )
+        or (
+            summary.get("hard_cap_breached") is True
+            and type(summary.get("output_cap_tree_bytes_after_core_cleanup")) is not int
+        )
+        or (
+            summary.get("hard_cap_breached") is False
+            and summary.get("output_cap_tree_bytes_after_core_cleanup") is not None
+        )
+        or not isinstance(summary.get("process_exit_code"), int)
+        or not isinstance(summary.get("tree_bytes_before_security_cleanup"), int)
+        or not isinstance(empirical_entry_crossed, bool)
+        or exclusions.get("schema_version") != "0.1.0"
+        or exclusions.get("run_id") != run_id
+        or not isinstance(included, list)
+        or cast(list[object], included) != list(included_by_path.values())
+        or not exclusion_records_valid
+        or not overflow_valid
+        or exclusions.get("excluded_record_limit") != MAX_ESSENTIAL_EXCLUSION_RECORDS
+        or exclusions.get("included_file_limit") != MAX_ESSENTIAL_FAILURE_FILES
+        or exclusions.get("relative_path_byte_limit") != MAX_ESSENTIAL_RELATIVE_PATH_BYTES
+        or exclusions.get("core_content_or_hash_retained") is not False
         or privacy_violations(bundle_root)
         or detect_core_artifacts(bundle_root)
     ):
@@ -7500,22 +11596,34 @@ def seal_raw_attempt(
     """Seal one consumed condition before any fallible evaluator invocation."""
 
     run_id = cast(str, manifest["run_id"])
-    required = {
-        "attempt-wall.json",
+    supervisor_root = condition_supervisor_root(raw_root)
+    condition_required = {
         "condition.stderr",
         "condition.stdout",
+        "normalized-events.jsonl",
+        "provider-budget.json",
+        "runtime-cleanup.json",
+        "runtime-core-detection.json",
+        "runtime-environment.json",
+    }
+    supervisor_required = {
+        "attempt-wall.json",
         "container-command.json",
         "container-state.json",
         "gpu-accounting.json",
         "host-cleanup-receipt.json",
         "evaluator-overlay-binding.json",
-        "normalized-events.jsonl",
-        "provider-budget.json",
         "runtime-reconstruction-binding.json",
-        "runtime-environment.json",
     }
-    missing = sorted(name for name in required if not (raw_root / name).is_file())
-    cleanup = load_object(raw_root / "host-cleanup-receipt.json", label="host cleanup")
+    missing = sorted(
+        [name for name in condition_required if not (raw_root / name).is_file()]
+        + [
+            f"{CONDITION_SUPERVISOR_DIRNAME}/{name}"
+            for name in supervisor_required
+            if not (supervisor_root / name).is_file()
+        ]
+    )
+    cleanup = load_object(supervisor_root / "host-cleanup-receipt.json", label="host cleanup")
     state = load_object(artifact_root / "pilot-v7/pilot-state.json", label="pilot state")
     entered = state.get("empirical_attempts_entered")
     exposure_detected = cleanup.get("actual_credential_exposure_detected")
@@ -7539,13 +11647,24 @@ def seal_raw_attempt(
         raise T09HostError("raw normalized events are not reconstructable") from exc
     budget = load_object(raw_root / "provider-budget.json", label="raw provider budget")
     evaluator_binding = load_object(
-        raw_root / "evaluator-overlay-binding.json", label="raw evaluator overlay binding"
+        supervisor_root / "evaluator-overlay-binding.json",
+        label="raw evaluator overlay binding",
     )
     runtime_binding = load_object(
-        raw_root / "runtime-reconstruction-binding.json",
+        supervisor_root / "runtime-reconstruction-binding.json",
         label="raw runtime reconstruction binding",
     )
     runtime_cleanup_path = raw_root / "runtime-cleanup.json"
+    runtime_cleanup = load_object(runtime_cleanup_path, label="raw runtime cleanup")
+    runtime_core_evidence = _validate_runtime_core_cleanup(
+        raw_root=raw_root,
+        runtime_cleanup=runtime_cleanup,
+    )
+    core_cleanup_path = supervisor_root / "core-artifact-cleanup.json"
+    core_cleanup = load_object(core_cleanup_path, label="raw host core cleanup")
+    host_core_evidence = _validate_core_cleanup_receipt(core_cleanup)
+    core_detection_path = supervisor_root / "core-artifact-detection.json"
+    core_detection = load_object(core_detection_path, label="raw pre-destruction core census")
     session_paths = sorted(
         path
         for path in (raw_root / "sira-output").glob("*.json")
@@ -7571,18 +11690,40 @@ def seal_raw_attempt(
         or state.get("actual_credential_exposure_detected") is not exposure_detected
         or state.get("credential_safety_stop_detected")
         is not (exposure_detected or cleanup_integrity_failure)
+        or state.get("core_safety_stop_detected") is not False
+        or host_core_evidence.records
+        or host_core_evidence.scan_integrity_failure
+        or not host_core_evidence.destruction_verified
+        or host_core_evidence.rotation_required
+        or core_cleanup.get("core_detection_receipt_sha256") != file_sha256(core_detection_path)
+        or core_detection.get("core_artifacts_detected") != host_core_evidence.records
+        or core_detection.get("core_artifact_count") != 0
+        or core_detection.get("core_scan_integrity_failure") is not False
+        or core_detection.get("core_content_or_hash_retained") is not False
+        or runtime_core_evidence.records
+        or runtime_core_evidence.scan_integrity_failure
+        or not runtime_core_evidence.destruction_verified
+        or runtime_core_evidence.rotation_required
+        or cleanup.get("core_artifact_count") != 0
+        or cleanup.get("runtime_core_artifact_count") != 0
+        or cleanup.get("core_scan_integrity_failure") is not False
+        or cleanup.get("runtime_core_scan_integrity_failure") is not False
+        or cleanup.get("core_safety_stop_detected") is not False
+        or cleanup.get("campaign_continuation_permitted") is not True
         or budget.get("unreconciled_provider_attempts") != 0
         or evaluator_binding.get("run_id") != run_id
         or evaluator_binding.get("frozen_run_manifest_sha256") != frozen_run_manifest_sha256
         or evaluator_binding.get("condition_mount_policy") != "read-only"
         or runtime_binding.get("run_id") != run_id
         or runtime_binding.get("runtime_cleanup_present") != runtime_cleanup_path.is_file()
+        or runtime_binding.get("runtime_cleanup_path_observed") is not True
+        or runtime_binding.get("runtime_cleanup_content_read_permitted") is not True
         or runtime_binding.get("runtime_cleanup_sha256")
         != (file_sha256(runtime_cleanup_path) if runtime_cleanup_path.is_file() else None)
         or runtime_binding.get("host_cleanup_receipt_sha256")
-        != file_sha256(raw_root / "host-cleanup-receipt.json")
+        != file_sha256(supervisor_root / "host-cleanup-receipt.json")
         or runtime_binding.get("container_state_sha256")
-        != file_sha256(raw_root / "container-state.json")
+        != file_sha256(supervisor_root / "container-state.json")
         or runtime_binding.get("host_teardown_is_source_grounded_fallback") is not True
         or source_grounded_events == 0
     ):
@@ -7665,6 +11806,19 @@ def seal_raw_attempt(
             raise T09HostError("retained raw receipt drifted during seal resumption")
     else:
         write_exclusive(raw_receipt_path, raw_receipt)
+    try:
+        enforce_attempt_supervisor_cap(attempt_root)
+        enforce_full_attempt_output_cap(attempt_root)
+    except T09HostError:
+        # Neither authority is immutable until the supervisor records it in state.
+        # Remove both freshly/resumably projected documents so the caller can
+        # publish the bounded essential-failure authority instead.
+        raw_complete_state = state.get("raw_attempts_complete")
+        if isinstance(raw_complete_state, list) and run_id in raw_complete_state:
+            raise T09HostError("accepted raw attempt exceeds the full-attempt cap") from None
+        raw_receipt_path.unlink(missing_ok=True)
+        raw_manifest_path.unlink(missing_ok=True)
+        raise
     validate_raw_attempt_seal(
         attempt_root=attempt_root,
         raw_root=raw_root,
@@ -7743,6 +11897,8 @@ def seal_consumed_raw_or_essential_failure(
     tree_bytes_before_security_cleanup: int,
     core_records: list[dict[str, object]],
     core_destruction_verified: bool,
+    sensitive_relative_paths: frozenset[str] = frozenset(),
+    core_relative_paths: frozenset[str] | None = None,
 ) -> tuple[Path, Path]:
     """Publish raw authority or a truthful non-cap reconstruction failure."""
 
@@ -7756,7 +11912,7 @@ def seal_consumed_raw_or_essential_failure(
             frozen_run_manifest_sha256=frozen_run_manifest_sha256,
             execution_contract_sha256=execution_contract_sha256,
         )
-    except T09HostError as exc:
+    except (OSError, UnicodeError, json.JSONDecodeError, T09HostError) as exc:
         # Validation failures happen before a fresh raw authority is published.
         # Never replace a partially published authority with a different one.
         if (attempt_root / "raw-attempt-manifest.json").exists() or (
@@ -7766,7 +11922,7 @@ def seal_consumed_raw_or_essential_failure(
                 "raw-attempt seal publication is partial and cannot be replaced"
             ) from exc
         write_exclusive(
-            raw_root / "raw-seal-validation-event.json",
+            condition_supervisor_root(raw_root) / "raw-seal-validation-event.json",
             {
                 "schema_version": "0.1.0",
                 "run_id": manifest["run_id"],
@@ -7792,6 +11948,8 @@ def seal_consumed_raw_or_essential_failure(
             core_records=core_records,
             core_destruction_verified=core_destruction_verified,
             empirical_entry_crossed=True,
+            sensitive_relative_paths=sensitive_relative_paths,
+            core_relative_paths=core_relative_paths,
         )
         raise T09HostError(
             "consumed attempt failed raw reconstruction and was sealed as an "
@@ -7799,13 +11957,1139 @@ def seal_consumed_raw_or_essential_failure(
         ) from exc
 
 
+def recover_condition_start_reservation(
+    *,
+    artifact_root: Path,
+    raw_root: Path,
+    run_id: str,
+    secret_file: Path,
+    execution_contract_sha256: str,
+    frozen_run_manifest_sha256: str,
+) -> None:
+    """Reconstruct one started condition's terminal receipts without replaying it."""
+
+    supervisor_root = condition_supervisor_root(raw_root)
+    state_path = artifact_root / "pilot-v7/pilot-state.json"
+    state = load_object(state_path, label="reserved condition pilot state")
+    reservation = state.get("condition_start_reservation")
+    entered = state.get("empirical_attempts_entered")
+    nonempirical = state.get("nonempirical_infrastructure_attempts_consumed")
+    reclassifications = state.get("unreleased_supervised_release_reclassifications")
+    if (
+        not isinstance(entered, list)
+        or not isinstance(nonempirical, list)
+        or not isinstance(reclassifications, dict)
+    ):
+        raise T09HostError("condition terminal recovery state is malformed")
+    empirical_entry_crossed = run_id in entered
+    already_nonempirical = run_id in nonempirical
+    if empirical_entry_crossed and already_nonempirical:
+        raise T09HostError("condition terminal recovery has conflicting consumption state")
+    intent_path = supervisor_root / "condition-start-intent.json"
+    intent = load_object(intent_path, label="condition start intent")
+    intent_sha256 = file_sha256(intent_path)
+    release_receipt_path = supervisor_root / "supervised-release.json"
+    release_marker_path = raw_root / ".giclab-release"
+    release_sha256 = file_sha256(release_receipt_path) if release_receipt_path.is_file() else None
+    validate_condition_start_intent(
+        intent,
+        run_id=run_id,
+        frozen_run_manifest_sha256=frozen_run_manifest_sha256,
+    )
+    if empirical_entry_crossed:
+        release_bindings = state.get("supervised_release_bindings")
+        if (
+            not isinstance(reservation, dict)
+            or reservation
+            != {
+                "run_id": run_id,
+                "start_intent_sha256": intent_sha256,
+                "phase": "empirical-state-committed",
+                "supervised_release_receipt_sha256": release_sha256,
+            }
+            or not isinstance(release_bindings, dict)
+            or release_bindings.get(run_id) != release_sha256
+            or not release_marker_path.is_file()
+            or release_marker_path.is_symlink()
+            or release_marker_path.read_bytes() != b"release\n"
+        ):
+            raise T09HostError("empirical terminal recovery lacks its exact release transaction")
+    elif already_nonempirical:
+        reclassified = reclassifications.get(run_id)
+        if reclassified is not None and reclassified != {
+            "start_intent_sha256": intent_sha256,
+            "supervised_release_receipt_sha256": release_sha256,
+        }:
+            raise T09HostError("nonempirical recovery release binding drifted")
+        if os.path.lexists(release_marker_path):
+            raise T09HostError("nonempirical recovery unexpectedly crossed release")
+    elif (
+        not isinstance(reservation, dict)
+        or reservation != {"run_id": run_id, "start_intent_sha256": intent_sha256}
+        or release_sha256 is not None
+        or os.path.lexists(release_marker_path)
+    ):
+        raise T09HostError("condition-start recovery lacks one durable reservation")
+
+    container_name = intent.get("container_name")
+    if not isinstance(container_name, str) or not container_name.startswith(CONTAINER_PREFIX):
+        raise T09HostError("condition-start recovery container identity is invalid")
+    expected_container_id = validate_condition_container_identity(
+        supervisor_root,
+        intent=intent,
+        run_id=run_id,
+    )
+    anchor_path = supervisor_root / "supervisor-interruption-terminal.json"
+    if anchor_path.is_file() and not anchor_path.is_symlink():
+        anchor = load_object(anchor_path, label="supervisor interruption terminal anchor")
+        if (
+            anchor.get("schema_version") != "0.1.0"
+            or anchor.get("run_id") != run_id
+            or anchor.get("condition_start_intent_sha256") != intent_sha256
+            or anchor.get("supervised_release_receipt_sha256") != release_sha256
+            or anchor.get("empirical_entry_crossed") is not empirical_entry_crossed
+            or not isinstance(anchor.get("container_state"), dict)
+            or not isinstance(anchor.get("core_cleanup_receipt"), dict)
+            or not isinstance(anchor.get("host_cleanup_receipt"), dict)
+        ):
+            raise T09HostError("supervisor interruption terminal anchor drifted")
+    else:
+        if os.path.lexists(anchor_path):
+            raise T09HostError("supervisor interruption terminal anchor is unsafe")
+        prefix = docker_prefix()
+        try:
+            container_state = container_state_receipt(
+                prefix,
+                expected_container_id if expected_container_id is not None else container_name,
+            )
+        except (OSError, subprocess.SubprocessError, T09HostError) as exc:
+            container_state = {
+                "status": "inspection-unavailable",
+                "running": None,
+                "inspection_error_type": type(exc).__name__,
+                "private_network_fields_retained": False,
+            }
+        removal_error_type: str | None = None
+        try:
+            if expected_container_id is None:
+                if _container_id_by_exact_name(prefix, container_name) is not None:
+                    raise T09HostError(
+                        "condition container lacks a source-bound identity for removal"
+                    )
+            else:
+                remove_container(
+                    prefix,
+                    container_name,
+                    expected_container_id=expected_container_id,
+                    expected_role="condition",
+                )
+        except (OSError, subprocess.SubprocessError, T09HostError) as exc:
+            removal_error_type = type(exc).__name__
+        try:
+            residue = [item for item in owned_containers(prefix) if item == container_name]
+        except (OSError, subprocess.SubprocessError, T09HostError) as exc:
+            residue = ["<owned-container-enumeration-unavailable>"]
+            removal_error_type = removal_error_type or type(exc).__name__
+
+        uncertainty_path = supervisor_root / "container-removal-uncertain.json"
+        if residue:
+            mark_core_safety_stop(
+                state_path,
+                execution_contract_sha256=execution_contract_sha256,
+            )
+            mark_credential_cleanup_integrity_failure(
+                state_path,
+                execution_contract_sha256=execution_contract_sha256,
+            )
+            uncertainty_recorded_at = utc_now()
+            if uncertainty_path.is_file() and not uncertainty_path.is_symlink():
+                retained_uncertainty = load_object(
+                    uncertainty_path,
+                    label="retained condition container-removal uncertainty",
+                )
+                if isinstance(retained_uncertainty.get("recorded_at"), str):
+                    uncertainty_recorded_at = cast(str, retained_uncertainty["recorded_at"])
+            write_exclusive_or_validate(
+                uncertainty_path,
+                {
+                    "schema_version": "0.1.0",
+                    "plan_id": PLAN_ID,
+                    "run_id": run_id,
+                    "container_name": container_name,
+                    "condition_identity_consumed": True,
+                    "owned_container_absence_proven": False,
+                    "owned_container_residue": residue,
+                    "enumeration_error_type": removal_error_type,
+                    "condition_tree_content_read_permitted": False,
+                    "recovery_after_provider_termination_required": True,
+                    "recorded_at": uncertainty_recorded_at,
+                },
+                label="condition container-removal uncertainty",
+            )
+            raise T09HostError(
+                "condition writer absence remains unproven; recovery cannot inspect output"
+            )
+        if uncertainty_path.is_file() and not uncertainty_path.is_symlink():
+            uncertainty = load_object(
+                uncertainty_path,
+                label="condition container-removal uncertainty",
+            )
+            if (
+                uncertainty.get("schema_version") != "0.1.0"
+                or uncertainty.get("plan_id") != PLAN_ID
+                or uncertainty.get("run_id") != run_id
+                or uncertainty.get("container_name") != container_name
+                or uncertainty.get("condition_identity_consumed") is not True
+                or uncertainty.get("owned_container_absence_proven") is not False
+                or uncertainty.get("condition_tree_content_read_permitted") is not False
+                or uncertainty.get("recovery_after_provider_termination_required") is not True
+            ):
+                raise T09HostError("condition container-removal uncertainty drifted")
+            recovered_path = supervisor_root / "container-removal-recovered.json"
+            recovered_at = utc_now()
+            if recovered_path.is_file() and not recovered_path.is_symlink():
+                retained_recovery = load_object(
+                    recovered_path,
+                    label="retained condition container-removal recovery",
+                )
+                if isinstance(retained_recovery.get("recovered_at"), str):
+                    recovered_at = cast(str, retained_recovery["recovered_at"])
+            write_exclusive_or_validate(
+                recovered_path,
+                {
+                    "schema_version": "0.1.0",
+                    "plan_id": PLAN_ID,
+                    "run_id": run_id,
+                    "container_name": container_name,
+                    "uncertainty_receipt_sha256": file_sha256(uncertainty_path),
+                    "owned_container_absence_proven": True,
+                    "condition_tree_content_read_permitted": True,
+                    "recovered_at": recovered_at,
+                },
+                label="condition container-removal recovery",
+            )
+
+        tree_bytes_before = tree_bytes(raw_root)
+        primary_detection_path = supervisor_root / "core-artifact-detection.json"
+        supplemental_detection_path = supervisor_root / "core-artifact-recovery-detection.json"
+        historic_detection: dict[str, Any] | None = None
+        historic_core_records: list[dict[str, object]] = []
+        historic_scan_failure = False
+        if primary_detection_path.is_file() and not primary_detection_path.is_symlink():
+            historic_detection = load_object(
+                primary_detection_path,
+                label="interrupted core detection intent",
+            )
+            raw_historic_records = historic_detection.get("core_artifacts_detected")
+            if (
+                historic_detection.get("schema_version") != "0.1.0"
+                or not isinstance(raw_historic_records, list)
+                or not all(isinstance(item, dict) for item in raw_historic_records)
+                or historic_detection.get("core_artifact_count") != len(raw_historic_records)
+                or not isinstance(historic_detection.get("core_scan_integrity_failure"), bool)
+                or historic_detection.get("core_content_or_hash_retained") is not False
+            ):
+                raise T09HostError("interrupted core detection intent is malformed")
+            historic_core_records = cast(list[dict[str, object]], raw_historic_records)
+            historic_scan_failure = historic_detection.get("core_scan_integrity_failure") is True
+        retained_supplemental_sha256: str | None = None
+        if supplemental_detection_path.is_file() and not supplemental_detection_path.is_symlink():
+            supplemental_detection = load_object(
+                supplemental_detection_path,
+                label="interrupted supplemental core detection intent",
+            )
+            supplemental_records = supplemental_detection.get("core_artifacts_detected")
+            if (
+                historic_detection is None
+                or supplemental_detection.get("schema_version") != "0.1.0"
+                or supplemental_detection.get("scope")
+                != "supervisor-interruption-recovery-fresh-census"
+                or not isinstance(supplemental_records, list)
+                or not all(isinstance(item, dict) for item in supplemental_records)
+                or supplemental_detection.get("core_artifact_count") != len(supplemental_records)
+                or not isinstance(supplemental_detection.get("core_scan_integrity_failure"), bool)
+                or supplemental_detection.get("core_content_or_hash_retained") is not False
+                or supplemental_detection.get("core_transferred_outside_remote_host") is not False
+            ):
+                raise T09HostError("interrupted supplemental core detection is malformed")
+            historic_core_records.extend(cast(list[dict[str, object]], supplemental_records))
+            historic_scan_failure = (
+                historic_scan_failure
+                or supplemental_detection.get("core_scan_integrity_failure") is True
+            )
+            retained_supplemental_sha256 = file_sha256(supplemental_detection_path)
+        elif os.path.lexists(supplemental_detection_path):
+            raise T09HostError("interrupted supplemental core detection is unsafe")
+        core_scan_integrity_failure = False
+        try:
+            core_records = detect_core_artifacts(artifact_root)
+        except (OSError, T09HostError):
+            core_records = []
+            core_scan_integrity_failure = True
+        if core_records or core_scan_integrity_failure:
+            mark_core_safety_stop(
+                state_path,
+                execution_contract_sha256=execution_contract_sha256,
+            )
+        credential = validate_secret(secret_file.resolve(strict=True))
+        supplemental_detection_sha256 = retained_supplemental_sha256
+        if historic_detection is None:
+            core_detection_sha256 = persist_core_detection_before_cleanup(
+                receipt_path=primary_detection_path,
+                records=core_records,
+                scope="supervisor-interruption-recovery-artifact-root",
+                credential_bytes=credential,
+                scan_integrity_failure=core_scan_integrity_failure,
+            )
+            combined_safe_core_records = _value_safe_core_records(
+                core_records,
+                credential_bytes=credential,
+            )
+        else:
+            core_detection_sha256 = file_sha256(primary_detection_path)
+            new_core_records, new_safe_core_records = _new_core_records_since_historic_census(
+                historic_safe_records=historic_core_records,
+                current_records=core_records,
+                credential_bytes=credential,
+            )
+            if (
+                new_core_records or core_scan_integrity_failure
+            ) and retained_supplemental_sha256 is None:
+                supplemental_detection_sha256 = persist_core_detection_before_cleanup(
+                    receipt_path=supplemental_detection_path,
+                    records=new_core_records,
+                    scope="supervisor-interruption-recovery-fresh-census",
+                    credential_bytes=credential,
+                    scan_integrity_failure=core_scan_integrity_failure,
+                )
+                combined_safe_core_records = [
+                    *historic_core_records,
+                    *new_safe_core_records,
+                ]
+            elif new_core_records or core_scan_integrity_failure:
+                mark_core_safety_stop(
+                    state_path,
+                    execution_contract_sha256=execution_contract_sha256,
+                )
+                mark_credential_cleanup_integrity_failure(
+                    state_path,
+                    execution_contract_sha256=execution_contract_sha256,
+                )
+                raise T09HostError(
+                    "a second supervisor recovery core census drifted after publication"
+                )
+            else:
+                combined_safe_core_records = historic_core_records
+        core_outcome = cleanup_core_artifacts(artifact_root, core_records)
+        historic_destruction_verifiable = not historic_scan_failure and all(
+            item.get("destruction_verifiable") is True for item in historic_core_records
+        )
+        effective_core_scan_failure = historic_scan_failure or core_scan_integrity_failure
+        effective_core_destruction = (
+            historic_destruction_verifiable
+            and core_outcome.destruction_verified
+            and not effective_core_scan_failure
+        )
+        core_paths = frozenset(
+            cast(str, record["path"])
+            for record in core_records
+            if isinstance(record.get("path"), str)
+        )
+        try:
+            hits = (
+                secret_hits(
+                    artifact_root,
+                    credential,
+                    excluded_relative_paths=core_paths,
+                )
+                if not core_scan_integrity_failure
+                else []
+            )
+            refreshed_state = load_object(state_path, label="recovery credential state")
+            prior_exposure = refreshed_state.get("actual_credential_exposure_detected") is True
+            if hits or prior_exposure:
+                mark_actual_credential_exposure(
+                    state_path,
+                    execution_contract_sha256=execution_contract_sha256,
+                )
+            for relative in hits:
+                target = artifact_root / relative
+                try:
+                    metadata = target.lstat()
+                except FileNotFoundError:
+                    continue
+                if not stat.S_ISDIR(metadata.st_mode):
+                    target.unlink()
+            remaining_hits = (
+                secret_hits(
+                    artifact_root,
+                    credential,
+                    excluded_relative_paths=core_paths,
+                )
+                if not core_scan_integrity_failure
+                else []
+            )
+        finally:
+            credential = b""
+        runtime_cleanup_path = raw_root / "runtime-cleanup.json"
+        runtime_cleanup_path_observed = (
+            runtime_cleanup_path.is_file() and not runtime_cleanup_path.is_symlink()
+        )
+        runtime_secret_cleanup_malformed = True
+        runtime_core_records: list[dict[str, object]] = []
+        runtime_core_scan_integrity_failure = True
+        runtime_core_destruction_verified = False
+        runtime_core_rotation_required = True
+        runtime_core_detection_sha256: str | None = None
+        runtime_cleanup_relative = runtime_cleanup_path.relative_to(artifact_root).as_posix()
+        runtime_cleanup_classified_as_core_artifact = any(
+            item.get("path") == runtime_cleanup_relative for item in combined_safe_core_records
+        )
+        runtime_cleanup_content_read_permitted = (
+            not effective_core_scan_failure and not runtime_cleanup_classified_as_core_artifact
+        )
+        runtime_cleanup_present = (
+            runtime_cleanup_path_observed and runtime_cleanup_content_read_permitted
+        )
+        if runtime_cleanup_present:
+            try:
+                runtime_cleanup = load_object(
+                    runtime_cleanup_path, label="recovery runtime cleanup"
+                )
+                secret_cleanup = runtime_cleanup.get("secret_cleanup")
+                runtime_secret_cleanup_malformed = not (
+                    isinstance(secret_cleanup, dict)
+                    and secret_cleanup.get("credential_observed") is True
+                    and secret_cleanup.get("credential_removed_from_environment") is True
+                    and secret_cleanup.get("content_scan_permitted") is True
+                    and isinstance(secret_cleanup.get("secret_bearing_artifacts_removed"), list)
+                    and secret_cleanup.get("remaining_exact_credential_matches") == 0
+                )
+                runtime_core_evidence = _validate_runtime_core_cleanup(
+                    raw_root=raw_root,
+                    runtime_cleanup=runtime_cleanup,
+                )
+                runtime_core_records = runtime_core_evidence.records
+                runtime_core_scan_integrity_failure = runtime_core_evidence.scan_integrity_failure
+                runtime_core_destruction_verified = runtime_core_evidence.destruction_verified
+                runtime_core_rotation_required = runtime_core_evidence.rotation_required
+                runtime_core_detection_sha256 = runtime_core_evidence.detection_sha256
+            except (OSError, T09HostError):
+                runtime_secret_cleanup_malformed = True
+                runtime_core_records = []
+                runtime_core_scan_integrity_failure = True
+                runtime_core_destruction_verified = False
+                runtime_core_rotation_required = True
+                runtime_core_detection_sha256 = None
+        if runtime_secret_cleanup_malformed:
+            mark_credential_cleanup_integrity_failure(
+                state_path,
+                execution_contract_sha256=execution_contract_sha256,
+            )
+        if runtime_core_records or runtime_core_scan_integrity_failure:
+            mark_core_safety_stop(
+                state_path,
+                execution_contract_sha256=execution_contract_sha256,
+            )
+        refreshed_state = load_object(state_path, label="recovery terminal state")
+        actual_exposure = refreshed_state.get(
+            "actual_credential_exposure_detected"
+        ) is True or bool(hits)
+        core_rotation_required = effective_core_scan_failure or (
+            bool(combined_safe_core_records) and not effective_core_destruction
+        )
+        core_document = {
+            "schema_version": "0.1.0",
+            "run_id": run_id,
+            "core_artifacts_detected": combined_safe_core_records,
+            "core_artifact_count": len(combined_safe_core_records),
+            "core_content_or_hash_retained": False,
+            "core_transferred_outside_remote_host": False,
+            "cleanup_error_type": core_outcome.error_type,
+            "core_scan_integrity_failure": effective_core_scan_failure,
+            "core_detection_receipt_sha256": core_detection_sha256,
+            "supplemental_core_detection_receipt_sha256": (supplemental_detection_sha256),
+            "destruction_verified": effective_core_destruction,
+            "credential_rotation_required_due_to_core_handling": core_rotation_required,
+            "runtime_core_artifacts_detected": runtime_core_records,
+            "runtime_core_artifact_count": len(runtime_core_records),
+            "runtime_core_scan_integrity_failure": runtime_core_scan_integrity_failure,
+            "runtime_core_destruction_verified": runtime_core_destruction_verified,
+            "runtime_core_detection_receipt_sha256": runtime_core_detection_sha256,
+            "runtime_core_rotation_required": runtime_core_rotation_required,
+        }
+        stopped_at = utc_now()
+        start_epoch = intent.get("start_reserved_at_epoch")
+        host_document = {
+            "schema_version": "0.1.0",
+            "run_id": run_id,
+            "returncode": 125,
+            "container_removed": not residue,
+            "owned_container_residue": residue,
+            "container_state_receipt": (f"{CONDITION_SUPERVISOR_DIRNAME}/container-state.json"),
+            "secret_scan_passed": not remaining_hits and not core_scan_integrity_failure,
+            "secret_bearing_artifacts_removed": (
+                ["<redacted-exact-secret-bearing-artifact>"] if hits else []
+            ),
+            "runtime_secret_bearing_artifacts_removed": [],
+            "runtime_secret_cleanup_malformed": runtime_secret_cleanup_malformed,
+            "runtime_cleanup_classified_as_core_artifact": (
+                runtime_cleanup_classified_as_core_artifact
+            ),
+            "runtime_cleanup_content_read_permitted": runtime_cleanup_content_read_permitted,
+            "secret_matching_paths": (
+                ["<redacted-exact-secret-bearing-artifact>"] if remaining_hits else []
+            ),
+            "actual_credential_exposure_detected": actual_exposure,
+            "core_artifact_count": len(combined_safe_core_records),
+            "runtime_core_artifact_count": len(runtime_core_records),
+            "core_scan_integrity_failure": effective_core_scan_failure,
+            "runtime_core_scan_integrity_failure": runtime_core_scan_integrity_failure,
+            "core_artifacts_destroyed": (
+                bool(combined_safe_core_records) and effective_core_destruction
+            ),
+            "core_destruction_verified": effective_core_destruction,
+            "runtime_core_destruction_verified": runtime_core_destruction_verified,
+            "runtime_core_detection_receipt_sha256": runtime_core_detection_sha256,
+            "core_safety_stop_detected": (
+                bool(combined_safe_core_records)
+                or effective_core_scan_failure
+                or bool(runtime_core_records)
+                or runtime_core_scan_integrity_failure
+            ),
+            "credential_rotation_required": (
+                actual_exposure or core_rotation_required or runtime_core_rotation_required
+            ),
+            "campaign_continuation_permitted": False,
+            "stop_reason": (
+                "supervisor-interruption-after-empirical-release"
+                if empirical_entry_crossed
+                else "condition-start-outcome-unknown-after-supervisor-interruption"
+            ),
+            "hard_cap_breached": False,
+            "tree_bytes_before_security_cleanup": tree_bytes_before,
+            "started_condition_container": True if empirical_entry_crossed else None,
+            "condition_start_outcome_unknown": not empirical_entry_crossed,
+            "condition_start_intent_sha256": intent_sha256,
+            "supervised_release_completed": empirical_entry_crossed,
+            "infrastructure_stop_requires_essential_seal": True,
+            "runner_exception_type": "SupervisorInterruption",
+            "container_removal_error_type": removal_error_type,
+            "timing": {
+                "started_at": (
+                    datetime.fromtimestamp(float(start_epoch), UTC).isoformat()
+                    if isinstance(start_epoch, (int, float)) and not isinstance(start_epoch, bool)
+                    else None
+                ),
+                "stopped_at": stopped_at,
+                "wall_seconds": (
+                    max(0.0, time.time() - float(start_epoch))
+                    if isinstance(start_epoch, (int, float)) and not isinstance(start_epoch, bool)
+                    else 0.0
+                ),
+            },
+        }
+        anchor = {
+            "schema_version": "0.1.0",
+            "run_id": run_id,
+            "condition_start_intent_sha256": intent_sha256,
+            "supervised_release_receipt_sha256": release_sha256,
+            "empirical_entry_crossed": empirical_entry_crossed,
+            "container_state": container_state,
+            "core_cleanup_receipt": core_document,
+            "host_cleanup_receipt": host_document,
+            "runtime_cleanup_present": runtime_cleanup_present,
+            "runtime_cleanup_path_observed": runtime_cleanup_path_observed,
+            "runtime_cleanup_content_read_permitted": runtime_cleanup_content_read_permitted,
+            "runtime_cleanup_sha256": (
+                file_sha256(runtime_cleanup_path) if runtime_cleanup_present else None
+            ),
+        }
+        write_exclusive(anchor_path, anchor)
+
+    container_document = cast(dict[str, object], anchor["container_state"])
+    core_document = cast(dict[str, object], anchor["core_cleanup_receipt"])
+    host_document = cast(dict[str, object], anchor["host_cleanup_receipt"])
+    write_exclusive_or_validate(
+        supervisor_root / "container-state.json",
+        container_document,
+        label="recovered container state",
+    )
+    write_exclusive_or_validate(
+        supervisor_root / "core-artifact-cleanup.json",
+        core_document,
+        label="recovered core cleanup",
+    )
+    write_exclusive_or_validate(
+        supervisor_root / "host-cleanup-receipt.json",
+        host_document,
+        label="recovered host cleanup",
+    )
+    runtime_binding = {
+        "schema_version": "0.1.0",
+        "run_id": run_id,
+        "runtime_cleanup_present": anchor["runtime_cleanup_present"],
+        "runtime_cleanup_path_observed": anchor["runtime_cleanup_path_observed"],
+        "runtime_cleanup_content_read_permitted": anchor["runtime_cleanup_content_read_permitted"],
+        "runtime_cleanup_sha256": anchor["runtime_cleanup_sha256"],
+        "host_cleanup_receipt_sha256": file_sha256(supervisor_root / "host-cleanup-receipt.json"),
+        "container_state_sha256": file_sha256(supervisor_root / "container-state.json"),
+        "host_teardown_is_source_grounded_fallback": True,
+    }
+    write_exclusive_or_validate(
+        supervisor_root / "runtime-reconstruction-binding.json",
+        runtime_binding,
+        label="recovered runtime reconstruction binding",
+    )
+    if not empirical_entry_crossed and not already_nonempirical:
+        mark_nonempirical_infrastructure_attempt_consumed(
+            state_path,
+            execution_contract_sha256=execution_contract_sha256,
+            run_id=run_id,
+        )
+
+
+def reclassify_unreleased_condition_transaction(
+    *,
+    artifact_root: Path,
+    raw_root: Path,
+    run_id: str,
+    execution_contract_sha256: str,
+) -> bool:
+    """Convert a durable state-before-release crash window to nonempirical failure."""
+
+    supervisor_root = condition_supervisor_root(raw_root)
+    state_path = artifact_root / "pilot-v7/pilot-state.json"
+    state = load_object(state_path, label="condition release transaction state")
+    transaction = state.get("condition_start_reservation")
+    if not isinstance(transaction, dict) or transaction.get("run_id") != run_id:
+        return False
+    if os.path.lexists(raw_root / ".giclab-release"):
+        return False
+    intent_path = supervisor_root / "condition-start-intent.json"
+    release_receipt_path = supervisor_root / "supervised-release.json"
+    simple_reservation = set(transaction) == {"run_id", "start_intent_sha256"}
+    if simple_reservation and not release_receipt_path.is_file():
+        return False
+    if (
+        not intent_path.is_file()
+        or intent_path.is_symlink()
+        or not release_receipt_path.is_file()
+        or release_receipt_path.is_symlink()
+        or transaction.get("start_intent_sha256") != file_sha256(intent_path)
+        or (
+            not simple_reservation
+            and transaction.get("supervised_release_receipt_sha256")
+            != file_sha256(release_receipt_path)
+        )
+    ):
+        raise T09HostError("unreleased condition transaction source bytes drifted")
+    if transaction.get("phase") == "empirical-state-committed":
+        reclassify_unreleased_empirical_entry(
+            state_path,
+            execution_contract_sha256=execution_contract_sha256,
+            run_id=run_id,
+            start_intent_sha256=file_sha256(intent_path),
+            supervised_release_receipt_sha256=file_sha256(release_receipt_path),
+        )
+    elif simple_reservation:
+        consume_published_unreleased_condition(
+            state_path,
+            execution_contract_sha256=execution_contract_sha256,
+            run_id=run_id,
+            start_intent_sha256=file_sha256(intent_path),
+            supervised_release_receipt_sha256=file_sha256(release_receipt_path),
+        )
+    else:
+        raise T09HostError("unreleased condition transaction phase is invalid")
+    return True
+
+
+def record_fresh_recovery_security_census(
+    *,
+    artifact_root: Path,
+    attempt_root: Path,
+    raw_root: Path,
+    run_id: str,
+    secret_file: Path,
+    execution_contract_sha256: str,
+) -> dict[str, object]:
+    """Recheck post-terminal bytes before recovery can copy or hash condition evidence."""
+
+    state_path = artifact_root / "pilot-v7/pilot-state.json"
+    recovery_root = attempt_root / "recovery-control"
+    recovery_root.mkdir(mode=0o700, exist_ok=True)
+    if recovery_root.is_symlink():
+        raise T09HostError("recovery security control root is unsafe")
+    primary_detection_path = recovery_root / "post-terminal-core-detection.json"
+    supplemental_detection_path = recovery_root / "post-terminal-core-recovery-detection.json"
+    historic_safe_records: list[dict[str, object]] = []
+    historic_scan_failure = False
+    if primary_detection_path.is_file() and not primary_detection_path.is_symlink():
+        historic_detection = load_object(
+            primary_detection_path,
+            label="retained post-terminal core detection",
+        )
+        raw_historic_records = historic_detection.get("core_artifacts_detected")
+        if (
+            historic_detection.get("schema_version") != "0.1.0"
+            or historic_detection.get("scope") != "recover-attempt-seal-fresh-artifact-root-census"
+            or not isinstance(raw_historic_records, list)
+            or not all(isinstance(item, dict) for item in raw_historic_records)
+            or historic_detection.get("core_artifact_count") != len(raw_historic_records)
+            or not isinstance(historic_detection.get("core_scan_integrity_failure"), bool)
+            or historic_detection.get("core_content_or_hash_retained") is not False
+            or historic_detection.get("core_transferred_outside_remote_host") is not False
+        ):
+            raise T09HostError("retained post-terminal core detection is malformed")
+        historic_safe_records = cast(list[dict[str, object]], raw_historic_records)
+        historic_scan_failure = historic_detection.get("core_scan_integrity_failure") is True
+    elif os.path.lexists(primary_detection_path):
+        raise T09HostError("retained post-terminal core detection is unsafe")
+    retained_supplemental_sha256: str | None = None
+    if supplemental_detection_path.is_file() and not supplemental_detection_path.is_symlink():
+        supplemental_detection = load_object(
+            supplemental_detection_path,
+            label="retained post-terminal supplemental core detection",
+        )
+        raw_supplemental_records = supplemental_detection.get("core_artifacts_detected")
+        if (
+            not primary_detection_path.is_file()
+            or supplemental_detection.get("schema_version") != "0.1.0"
+            or supplemental_detection.get("scope")
+            != "recover-attempt-seal-post-crash-supplemental-census"
+            or not isinstance(raw_supplemental_records, list)
+            or not all(isinstance(item, dict) for item in raw_supplemental_records)
+            or supplemental_detection.get("core_artifact_count") != len(raw_supplemental_records)
+            or not isinstance(supplemental_detection.get("core_scan_integrity_failure"), bool)
+            or supplemental_detection.get("core_content_or_hash_retained") is not False
+            or supplemental_detection.get("core_transferred_outside_remote_host") is not False
+        ):
+            raise T09HostError("retained supplemental core detection is malformed")
+        historic_safe_records.extend(cast(list[dict[str, object]], raw_supplemental_records))
+        historic_scan_failure = (
+            historic_scan_failure
+            or supplemental_detection.get("core_scan_integrity_failure") is True
+        )
+        retained_supplemental_sha256 = file_sha256(supplemental_detection_path)
+    elif os.path.lexists(supplemental_detection_path):
+        raise T09HostError("retained supplemental core detection is unsafe")
+    scan_integrity_failure = False
+    try:
+        core_records = detect_core_artifacts(artifact_root)
+    except (OSError, T09HostError):
+        core_records = []
+        scan_integrity_failure = True
+    credential = validate_secret(secret_file.resolve(strict=True))
+    supplemental_detection_sha256 = retained_supplemental_sha256
+    if historic_safe_records or primary_detection_path.is_file():
+        detection_sha256 = file_sha256(primary_detection_path)
+        new_core_records, new_safe_records = _new_core_records_since_historic_census(
+            historic_safe_records=historic_safe_records,
+            current_records=core_records,
+            credential_bytes=credential,
+        )
+        if (new_core_records or scan_integrity_failure) and retained_supplemental_sha256 is None:
+            supplemental_detection_sha256 = persist_core_detection_before_cleanup(
+                receipt_path=supplemental_detection_path,
+                records=new_core_records,
+                scope="recover-attempt-seal-post-crash-supplemental-census",
+                credential_bytes=credential,
+                scan_integrity_failure=scan_integrity_failure,
+            )
+        elif new_core_records or scan_integrity_failure:
+            mark_core_safety_stop(
+                state_path,
+                execution_contract_sha256=execution_contract_sha256,
+            )
+            mark_credential_cleanup_integrity_failure(
+                state_path,
+                execution_contract_sha256=execution_contract_sha256,
+            )
+            raise T09HostError(
+                "a second post-terminal core census drifted after supplemental publication"
+            )
+        combined_safe_records = [*historic_safe_records, *new_safe_records]
+    else:
+        detection_sha256 = persist_core_detection_before_cleanup(
+            receipt_path=primary_detection_path,
+            records=core_records,
+            scope="recover-attempt-seal-fresh-artifact-root-census",
+            credential_bytes=credential,
+            scan_integrity_failure=scan_integrity_failure,
+        )
+        combined_safe_records = _value_safe_core_records(
+            core_records,
+            credential_bytes=credential,
+        )
+    effective_scan_integrity_failure = historic_scan_failure or scan_integrity_failure
+    if combined_safe_records or effective_scan_integrity_failure:
+        mark_core_safety_stop(
+            state_path,
+            execution_contract_sha256=execution_contract_sha256,
+        )
+    core_outcome = cleanup_core_artifacts(artifact_root, core_records)
+    effective_destruction = (
+        core_outcome.destruction_verified
+        and not effective_scan_integrity_failure
+        and all(record.get("destruction_verifiable") is True for record in combined_safe_records)
+    )
+    core_paths = frozenset(
+        cast(str, record["path"]) for record in core_records if isinstance(record.get("path"), str)
+    )
+    try:
+        hits = (
+            secret_hits(
+                artifact_root,
+                credential,
+                excluded_relative_paths=core_paths,
+            )
+            if not effective_scan_integrity_failure
+            else []
+        )
+        retained_state = load_object(state_path, label="fresh recovery security state")
+        prior_exposure = retained_state.get("actual_credential_exposure_detected") is True
+        if hits or prior_exposure:
+            mark_actual_credential_exposure(
+                state_path,
+                execution_contract_sha256=execution_contract_sha256,
+            )
+        for relative in hits:
+            target = artifact_root / relative
+            try:
+                metadata = target.lstat()
+            except FileNotFoundError:
+                continue
+            if not stat.S_ISDIR(metadata.st_mode):
+                target.unlink()
+        remaining_hits = (
+            secret_hits(
+                artifact_root,
+                credential,
+                excluded_relative_paths=core_paths,
+            )
+            if not effective_scan_integrity_failure
+            else []
+        )
+        if remaining_hits or effective_scan_integrity_failure:
+            mark_credential_cleanup_integrity_failure(
+                state_path,
+                execution_contract_sha256=execution_contract_sha256,
+            )
+    finally:
+        credential = b""
+    recovery_core_receipt = {
+        "schema_version": "0.1.0",
+        "run_id": run_id,
+        "core_artifacts_detected": combined_safe_records,
+        "core_artifact_count": len(combined_safe_records),
+        "core_content_or_hash_retained": False,
+        "core_transferred_outside_remote_host": False,
+        "cleanup_error_type": core_outcome.error_type,
+        "core_scan_integrity_failure": effective_scan_integrity_failure,
+        "core_detection_receipt_sha256": detection_sha256,
+        "supplemental_core_detection_receipt_sha256": supplemental_detection_sha256,
+        "destruction_verified": effective_destruction,
+        "credential_rotation_required_due_to_core_handling": (
+            effective_scan_integrity_failure
+            or (bool(combined_safe_records) and not effective_destruction)
+        ),
+    }
+    recovery_core_path = recovery_root / "post-terminal-core-cleanup.json"
+    write_exclusive_or_validate(
+        recovery_core_path,
+        recovery_core_receipt,
+        label="post-terminal core cleanup",
+    )
+    census = {
+        "schema_version": "0.1.0",
+        "run_id": run_id,
+        "scope": "immediately-before-recovery-seal-content-read",
+        "core_cleanup_receipt_sha256": file_sha256(recovery_core_path),
+        "core_artifact_count": len(combined_safe_records),
+        "core_scan_integrity_failure": effective_scan_integrity_failure,
+        "core_destruction_verified": effective_destruction,
+        "actual_credential_exposure_detected": prior_exposure or bool(hits),
+        "new_exact_secret_match_count": len(hits),
+        "remaining_exact_secret_match_count": len(remaining_hits),
+        "secret_values_or_hashes_retained": False,
+        "content_scan_permitted": not effective_scan_integrity_failure,
+        "recovery_content_copy_permitted": (
+            not remaining_hits and not effective_scan_integrity_failure
+        ),
+    }
+    write_exclusive_or_validate(
+        recovery_root / "recovery-security-census.json",
+        census,
+        label="recovery security census",
+    )
+    return census
+
+
+def recover_attempt_seal(args: argparse.Namespace) -> dict[str, object]:
+    """Resume only the evidence authority of an already consumed condition."""
+
+    repository = args.repository.resolve(strict=True)
+    artifact_root = args.artifact_root.resolve(strict=True)
+    verify_package(repository, args.package_commit)
+    frozen_manifest, frozen_manifest_sha256 = load_frozen_run_manifest(
+        artifact_root,
+        repository=repository,
+        package_commit=args.package_commit,
+        require_image=False,
+    )
+    command_document = load_object(
+        contract_paths(repository)["commands"], label="command manifest set"
+    )
+    manifest = manifest_for_run(command_document, args.run_id)
+    attempt_root = (artifact_root / manifest_output_root(manifest)).resolve(strict=True)
+    owned = manifest.get("permitted_condition_owned")
+    if not isinstance(owned, dict) or not isinstance(owned.get("raw_output_root"), str):
+        raise T09HostError("seal recovery lacks its exact raw root")
+    raw_root = (artifact_root / cast(str, owned["raw_output_root"])).resolve(strict=True)
+    if raw_root.parent != attempt_root:
+        raise T09HostError("seal recovery raw root escaped its frozen attempt")
+    supervisor_root = condition_supervisor_root(raw_root)
+    state = load_object(artifact_root / "pilot-v7/pilot-state.json", label="pilot state")
+    execution_contract_sha256 = state.get("execution_contract_sha256")
+    if not isinstance(execution_contract_sha256, str):
+        raise T09HostError("seal recovery execution binding is unavailable")
+    if reclassify_unreleased_condition_transaction(
+        artifact_root=artifact_root,
+        raw_root=raw_root,
+        run_id=args.run_id,
+        execution_contract_sha256=execution_contract_sha256,
+    ):
+        state = load_object(artifact_root / "pilot-v7/pilot-state.json", label="pilot state")
+    reservation = state.get("condition_start_reservation")
+    entered_before_recovery = state.get("empirical_attempts_entered")
+    nonempirical_before_recovery = state.get("nonempirical_infrastructure_attempts_consumed")
+    terminal_receipts_complete = all(
+        (supervisor_root / name).is_file()
+        for name in (
+            "container-state.json",
+            "core-artifact-cleanup.json",
+            "host-cleanup-receipt.json",
+            "runtime-reconstruction-binding.json",
+        )
+    )
+    recoverable_consumption = (
+        (isinstance(reservation, dict) and reservation.get("run_id") == args.run_id)
+        or (isinstance(entered_before_recovery, list) and args.run_id in entered_before_recovery)
+        or (
+            isinstance(nonempirical_before_recovery, list)
+            and args.run_id in nonempirical_before_recovery
+        )
+    )
+    reservation_requires_consumption_commit = (
+        isinstance(reservation, dict)
+        and reservation.get("run_id") == args.run_id
+        and isinstance(entered_before_recovery, list)
+        and args.run_id not in entered_before_recovery
+        and isinstance(nonempirical_before_recovery, list)
+        and args.run_id not in nonempirical_before_recovery
+    )
+    if recoverable_consumption and (
+        not terminal_receipts_complete or reservation_requires_consumption_commit
+    ):
+        recover_condition_start_reservation(
+            artifact_root=artifact_root,
+            raw_root=raw_root,
+            run_id=args.run_id,
+            secret_file=args.secret_file,
+            execution_contract_sha256=execution_contract_sha256,
+            frozen_run_manifest_sha256=frozen_manifest_sha256,
+        )
+        state = load_object(artifact_root / "pilot-v7/pilot-state.json", label="pilot state")
+    entered = state.get("empirical_attempts_entered")
+    nonempirical = state.get("nonempirical_infrastructure_attempts_consumed")
+    if not isinstance(entered, list) or not isinstance(nonempirical, list):
+        raise T09HostError("seal recovery consumed state is malformed")
+    empirical_entry_crossed = args.run_id in entered
+    if empirical_entry_crossed == (args.run_id in nonempirical):
+        raise T09HostError("seal recovery requires exactly one consumed identity authority")
+    execution_contract_sha256 = state.get("execution_contract_sha256")
+    if execution_contract_sha256 != frozen_manifest.get("execution_contract_sha256"):
+        raise T09HostError("seal recovery execution binding drifted")
+    raw_manifest_path = attempt_root / "raw-attempt-manifest.json"
+    raw_receipt_path = attempt_root / "raw-attempt-complete.json"
+    if raw_receipt_path.is_file() and not raw_manifest_path.is_file():
+        raise T09HostError("raw receipt exists without its immutable source manifest")
+    if raw_manifest_path.is_file() and not raw_receipt_path.is_file():
+        # A manifest-only prefix is an interrupted publication of the raw
+        # authority, not permission to create a competing essential authority.
+        # Resume it before any recovery census can mutate the manifested tree.
+        seal_raw_attempt(
+            artifact_root=artifact_root,
+            attempt_root=attempt_root,
+            raw_root=raw_root,
+            manifest=manifest,
+            package_commit=args.package_commit,
+            frozen_run_manifest_sha256=frozen_manifest_sha256,
+            execution_contract_sha256=cast(str, execution_contract_sha256),
+        )
+    if raw_manifest_path.is_file() and raw_receipt_path.is_file():
+        validate_raw_attempt_seal(
+            attempt_root=attempt_root,
+            raw_root=raw_root,
+            run_id=args.run_id,
+            package_commit=args.package_commit,
+        )
+        mark_raw_attempt_complete(
+            artifact_root / "pilot-v7/pilot-state.json",
+            execution_contract_sha256=cast(str, execution_contract_sha256),
+            run_id=args.run_id,
+            raw_manifest_sha256=file_sha256(raw_manifest_path),
+            raw_receipt_sha256=file_sha256(raw_receipt_path),
+        )
+        return {
+            "run_id": args.run_id,
+            "evidence_authority": "immutable-raw-attempt",
+            "manifest_sha256": file_sha256(raw_manifest_path),
+            "receipt_sha256": file_sha256(raw_receipt_path),
+            "condition_reexecuted": False,
+            "model_requests": 0,
+            "browser_actions": 0,
+        }
+    recovery_census = record_fresh_recovery_security_census(
+        artifact_root=artifact_root,
+        attempt_root=attempt_root,
+        raw_root=raw_root,
+        run_id=args.run_id,
+        secret_file=args.secret_file,
+        execution_contract_sha256=cast(str, execution_contract_sha256),
+    )
+    cleanup = load_object(supervisor_root / "host-cleanup-receipt.json", label="host cleanup")
+    core_cleanup = load_object(supervisor_root / "core-artifact-cleanup.json", label="core cleanup")
+    core_evidence = _validate_core_cleanup_receipt(core_cleanup)
+    terminal_source = _essential_terminal_source_projection(
+        source_root=raw_root,
+        run_id=args.run_id,
+        recovery_control_root=attempt_root / "recovery-control",
+    )
+    runtime_core_artifact_count = terminal_source.get("runtime_core_artifact_count")
+    runtime_core_scan_integrity_failure = terminal_source.get("runtime_core_scan_integrity_failure")
+    runtime_core_rotation_required = terminal_source.get("runtime_core_rotation_required")
+    returncode = cleanup.get("returncode")
+    stop_reason = cleanup.get("stop_reason")
+    hard_cap_breached = cleanup.get("hard_cap_breached")
+    tree_bytes_before = cleanup.get("tree_bytes_before_security_cleanup")
+    actual_credential_exposure_detected = cleanup.get("actual_credential_exposure_detected")
+    credential_cleanup_integrity_failure = cleanup.get("runtime_secret_cleanup_malformed")
+    credential_rotation_required = cleanup.get("credential_rotation_required")
+    if (
+        type(returncode) is not int
+        or (stop_reason is not None and not isinstance(stop_reason, str))
+        or not isinstance(hard_cap_breached, bool)
+        or type(tree_bytes_before) is not int
+        or not isinstance(actual_credential_exposure_detected, bool)
+        or not isinstance(credential_cleanup_integrity_failure, bool)
+        or not isinstance(credential_rotation_required, bool)
+        or cleanup.get("core_artifact_count") != len(core_evidence.records)
+        or cleanup.get("core_scan_integrity_failure") is not core_evidence.scan_integrity_failure
+        or cleanup.get("core_destruction_verified") is not core_evidence.destruction_verified
+        or type(runtime_core_artifact_count) is not int
+        or not isinstance(runtime_core_scan_integrity_failure, bool)
+        or not isinstance(runtime_core_rotation_required, bool)
+        or cleanup.get("core_safety_stop_detected")
+        is not (
+            bool(core_evidence.records)
+            or core_evidence.scan_integrity_failure
+            or runtime_core_artifact_count > 0
+            or runtime_core_scan_integrity_failure
+        )
+        or credential_rotation_required
+        is not (
+            actual_credential_exposure_detected
+            or core_evidence.rotation_required
+            or runtime_core_rotation_required
+        )
+    ):
+        raise T09HostError("seal recovery terminal/core safety receipts disagree")
+    core_scan_integrity_failure = core_evidence.scan_integrity_failure
+    core_destruction_verified = core_evidence.destruction_verified
+    historic_core_records = core_evidence.records
+    residual_core_records: list[dict[str, object]] = []
+    if not core_destruction_verified and not core_scan_integrity_failure:
+        try:
+            residual_core_records = detect_core_artifacts(raw_root)
+        except (OSError, T09HostError):
+            core_scan_integrity_failure = True
+    residual_core_paths = frozenset(
+        cast(str, item["path"])
+        for item in residual_core_records
+        if isinstance(item.get("path"), str)
+    )
+    sensitive_relative_paths: frozenset[str] = frozenset()
+    if not core_scan_integrity_failure:
+        credential_bytes = validate_secret(args.secret_file.resolve(strict=True))
+        sensitive_relative_paths = frozenset(
+            secret_hits(
+                raw_root,
+                credential_bytes,
+                excluded_relative_paths=residual_core_paths,
+            )
+        )
+        credential_bytes = b""
+    essential_required = True
+    if essential_required:
+        stop_reason = stop_reason or "consumed-infrastructure-stop"
+        authority_paths = seal_essential_failure(
+            artifact_root=artifact_root,
+            attempt_root=attempt_root,
+            raw_root=raw_root,
+            manifest=manifest,
+            package_commit=args.package_commit,
+            frozen_run_manifest_sha256=frozen_manifest_sha256,
+            execution_contract_sha256=cast(str, execution_contract_sha256),
+            returncode=returncode,
+            stop_reason=stop_reason,
+            hard_cap_breached=hard_cap_breached,
+            tree_bytes_before_security_cleanup=tree_bytes_before,
+            core_records=historic_core_records or residual_core_records,
+            core_destruction_verified=core_destruction_verified,
+            empirical_entry_crossed=empirical_entry_crossed,
+            raw_tree_scan_safe=(
+                not core_scan_integrity_failure
+                and recovery_census.get("recovery_content_copy_permitted") is True
+            ),
+            core_scan_integrity_failure=core_scan_integrity_failure,
+            sensitive_relative_paths=sensitive_relative_paths,
+            core_relative_paths=residual_core_paths,
+            recovery_control_root=attempt_root / "recovery-control",
+        )
+        authority = "essential-infrastructure-failure"
+    else:
+        authority_paths = seal_raw_attempt(
+            artifact_root=artifact_root,
+            attempt_root=attempt_root,
+            raw_root=raw_root,
+            manifest=manifest,
+            package_commit=args.package_commit,
+            frozen_run_manifest_sha256=frozen_manifest_sha256,
+            execution_contract_sha256=cast(str, execution_contract_sha256),
+        )
+        authority = "immutable-raw-attempt"
+    return {
+        "run_id": args.run_id,
+        "evidence_authority": authority,
+        "manifest_sha256": file_sha256(authority_paths[0]),
+        "receipt_sha256": file_sha256(authority_paths[1]),
+        "condition_reexecuted": False,
+        "model_requests": 0,
+        "browser_actions": 0,
+    }
+
+
 def validate_live_frozen_state_binding(
     state: dict[str, Any],
     frozen_manifest: dict[str, Any],
+    *,
+    expected_condition_start_reservation: dict[str, str] | None = None,
 ) -> None:
     """Keep mutable scientific admission state bound to the immutable V6 freeze."""
 
-    expected = {
+    expected: dict[str, object] = {
         "execution_contract_sha256": frozen_manifest.get("execution_contract_sha256"),
         "pilot_started_at_epoch": frozen_manifest.get("campaign_started_at_epoch"),
         "campaign_started_at_epoch": frozen_manifest.get("campaign_started_at_epoch"),
@@ -7826,6 +13110,7 @@ def validate_live_frozen_state_binding(
         "credential_safety_stop_detected": False,
         "core_safety_stop_detected": False,
         "nonempirical_infrastructure_attempts_consumed": [],
+        "condition_start_reservation": expected_condition_start_reservation,
     }
     if any(state.get(key) != value for key, value in expected.items()):
         raise T09HostError("live state drifted from the frozen admission authority")
@@ -7843,8 +13128,26 @@ def validate_postfreeze_entry_receipts(
 ) -> None:
     """Validate the one exact completion receipt that admits empirical entry."""
 
+    empirical_start = frozen_manifest.get("campaign_started_at_epoch")
+    manifest_published = postfreeze.get("frozen_manifest_published_at_epoch")
+    postfreeze_completed = postfreeze.get("completed_at_epoch")
+    preflight_completed = preflight_receipt.get("completed_at_epoch")
+
     if (
-        preflight_receipt.get("frozen_run_manifest_sha256") != frozen_manifest_sha256
+        not isinstance(empirical_start, (int, float))
+        or isinstance(empirical_start, bool)
+        or not isinstance(manifest_published, (int, float))
+        or isinstance(manifest_published, bool)
+        or not isinstance(postfreeze_completed, (int, float))
+        or isinstance(postfreeze_completed, bool)
+        or not isinstance(preflight_completed, (int, float))
+        or isinstance(preflight_completed, bool)
+        or float(manifest_published) > float(empirical_start)
+        or float(postfreeze_completed) > float(empirical_start)
+        or float(preflight_completed) > float(empirical_start)
+        or postfreeze.get("empirical_campaign_started_at_epoch") != empirical_start
+        or postfreeze.get("frozen_manifest_published_before_empirical_clock") is not True
+        or preflight_receipt.get("frozen_run_manifest_sha256") != frozen_manifest_sha256
         or preflight_receipt.get("replacement_image_id") != replacement_image_id
         or preflight_receipt.get("first_pair_started_at_epoch")
         != frozen_manifest.get("first_pair_started_at_epoch")
@@ -7926,6 +13229,13 @@ def execute_condition(args: argparse.Namespace) -> int:
     if not isinstance(entered, list) or not isinstance(completed, list):
         raise T09HostError("pilot attempt state is malformed")
     validate_live_frozen_state_binding(state, frozen_manifest)
+    execution_contract_sha256 = state.get("execution_contract_sha256")
+    if not isinstance(execution_contract_sha256, str):
+        raise T09HostError("pilot state lacks its execution contract")
+    validate_runtime_budget_root(
+        artifact_root,
+        execution_contract_sha256=execution_contract_sha256,
+    )
     expected_index = len(entered)
     if expected_index >= len(RUN_IDS) or RUN_IDS[expected_index] != args.run_id:
         raise T09HostError("condition would violate frozen order or zero retry")
@@ -7985,6 +13295,9 @@ def execute_condition(args: argparse.Namespace) -> int:
     if lambda_cost >= MAX_LAMBDA_COST_USD:
         raise T09HostError("Lambda cost cap reached")
 
+    name = f"{CONTAINER_PREFIX}{expected_index + 1:02d}"
+    if _container_id_by_exact_name(prefix, name) is not None:
+        raise T09HostError("condition Docker name is already occupied before attempt setup")
     attempt_root, raw_root = prepare_condition_attempt_root(
         artifact_root=artifact_root,
         manifest=manifest,
@@ -7992,8 +13305,8 @@ def execute_condition(args: argparse.Namespace) -> int:
         package_commit=args.package_commit,
         frozen_run_manifest_sha256=frozen_manifest_sha256,
     )
+    supervisor_root = condition_supervisor_root(raw_root)
     gpu_before = gpu_snapshot()
-    name = f"{CONTAINER_PREFIX}{expected_index + 1:02d}"
     create_argv = container_create_argv(
         args=args,
         manifest=manifest,
@@ -8002,10 +13315,14 @@ def execute_condition(args: argparse.Namespace) -> int:
         image_id=image_id,
     )
     write_exclusive(
-        raw_root / "container-command.json",
+        supervisor_root / "container-command.json",
         {
             "schema_version": "0.1.0",
             "run_id": args.run_id,
+            "container_name": name,
+            "owned_by_plan": PLAN_ID,
+            "owned_by_host_run": HOST_RUN_ID,
+            "owned_role": "condition",
             "docker_create_argv": create_argv,
             "docker_create_argv_sha256": canonical_sha256(create_argv),
             "condition_argv_sha256": manifest["argv_sha256"],
@@ -8014,7 +13331,7 @@ def execute_condition(args: argparse.Namespace) -> int:
         },
     )
     write_exclusive(
-        raw_root / "evaluator-overlay-binding.json",
+        supervisor_root / "evaluator-overlay-binding.json",
         {
             "schema_version": "0.1.0",
             "run_id": args.run_id,
@@ -8027,7 +13344,7 @@ def execute_condition(args: argparse.Namespace) -> int:
         },
     )
     write_exclusive(
-        raw_root / "attempt-wall.json",
+        supervisor_root / "attempt-wall.json",
         {
             "schema_version": "0.1.0",
             "run_id": args.run_id,
@@ -8044,16 +13361,54 @@ def execute_condition(args: argparse.Namespace) -> int:
             ),
         },
     )
-    created = subprocess.run(
-        create_argv,
-        env=safe_environment(),
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        check=False,
-        timeout=60,
-    )
-    if created.returncode != 0:
+    create_exception: Exception | None = None
+    create_returncode: int | None = None
+    created_container_id: str | None = None
+    try:
+        created = subprocess.run(
+            create_argv,
+            env=safe_environment(),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+            timeout=60,
+        )
+        create_returncode = created.returncode
+    except (OSError, subprocess.SubprocessError) as exc:
+        create_exception = exc
+    if create_exception is not None or create_returncode != 0:
+        create_never_started = condition_container_proven_never_started(prefix, name)
+        if not create_never_started:
+            publish_condition_start_reservation(
+                artifact_root=artifact_root,
+                raw_root=raw_root,
+                run_id=args.run_id,
+                container_name=name,
+                container_id=None,
+                create_argv=create_argv,
+                frozen_run_manifest_sha256=frozen_manifest_sha256,
+                condition_plan_sha256=cast(str, manifest["condition_plan_sha256"]),
+                condition_argv_sha256=cast(str, manifest["argv_sha256"]),
+                execution_contract_sha256=cast(str, state["execution_contract_sha256"]),
+                create_outcome_ambiguous=True,
+            )
+            recover_condition_start_reservation(
+                artifact_root=artifact_root,
+                raw_root=raw_root,
+                run_id=args.run_id,
+                secret_file=args.secret_file.resolve(strict=True),
+                execution_contract_sha256=cast(str, state["execution_contract_sha256"]),
+                frozen_run_manifest_sha256=frozen_manifest_sha256,
+            )
+            recover_attempt_seal(args)
+            error = T09HostError(
+                "condition create outcome could not be proven unstarted; its identity was "
+                "consumed and sealed as infrastructure-invalid"
+            )
+            if create_exception is not None:
+                raise error from create_exception
+            raise error
         record_preentry_condition_failure(
             pilot_state_path=artifact_root / "pilot-v7/pilot-state.json",
             attempt_root=attempt_root,
@@ -8062,14 +13417,267 @@ def execute_condition(args: argparse.Namespace) -> int:
             container_name=name,
             run_id=args.run_id,
             reason="container-create-failed-before-empirical-entry",
-            returncode=created.returncode,
+            returncode=create_returncode,
             package_commit=args.package_commit,
             execution_contract_sha256=cast(str, state["execution_contract_sha256"]),
             frozen_run_manifest_sha256=frozen_manifest_sha256,
             condition_plan_sha256=cast(str, manifest["condition_plan_sha256"]),
             condition_argv_sha256=cast(str, manifest["argv_sha256"]),
         )
-        raise T09HostError("condition container creation failed before empirical entry")
+        error = T09HostError("condition container creation failed before empirical entry")
+        if create_exception is not None:
+            raise error from create_exception
+        raise error
+    try:
+        created_identity = inspect_owned_container(prefix, name, expected_role="condition")
+    except (OSError, subprocess.SubprocessError, T09HostError) as exc:
+        create_exception = exc
+        created_identity = None
+    if created_identity is None:
+        publish_condition_start_reservation(
+            artifact_root=artifact_root,
+            raw_root=raw_root,
+            run_id=args.run_id,
+            container_name=name,
+            container_id=None,
+            create_argv=create_argv,
+            frozen_run_manifest_sha256=frozen_manifest_sha256,
+            condition_plan_sha256=cast(str, manifest["condition_plan_sha256"]),
+            condition_argv_sha256=cast(str, manifest["argv_sha256"]),
+            execution_contract_sha256=cast(str, state["execution_contract_sha256"]),
+            create_outcome_ambiguous=True,
+        )
+        recover_condition_start_reservation(
+            artifact_root=artifact_root,
+            raw_root=raw_root,
+            run_id=args.run_id,
+            secret_file=args.secret_file.resolve(strict=True),
+            execution_contract_sha256=cast(str, state["execution_contract_sha256"]),
+            frozen_run_manifest_sha256=frozen_manifest_sha256,
+        )
+        recover_attempt_seal(args)
+        raise T09HostError(
+            "created condition container identity could not be source-bound; the attempt was "
+            "consumed and sealed"
+        ) from create_exception
+    created_container_id = created_identity.container_id
+    write_exclusive(
+        supervisor_root / "container-identity.json",
+        {
+            "schema_version": "0.1.0",
+            "plan_id": PLAN_ID,
+            "host_run_id": HOST_RUN_ID,
+            "run_id": args.run_id,
+            "container_name": name,
+            "container_id": created_container_id,
+            "owned_role": "condition",
+            "docker_create_argv_sha256": canonical_sha256(create_argv),
+        },
+    )
+    try:
+        start_intent_path = publish_condition_start_reservation(
+            artifact_root=artifact_root,
+            raw_root=raw_root,
+            run_id=args.run_id,
+            container_name=name,
+            container_id=created_container_id,
+            create_argv=create_argv,
+            frozen_run_manifest_sha256=frozen_manifest_sha256,
+            condition_plan_sha256=cast(str, manifest["condition_plan_sha256"]),
+            condition_argv_sha256=cast(str, manifest["argv_sha256"]),
+            execution_contract_sha256=cast(str, state["execution_contract_sha256"]),
+            create_outcome_ambiguous=False,
+        )
+    except BaseException as reservation_error:
+        with contextlib.suppress(OSError, subprocess.SubprocessError, T09HostError):
+            remove_container(
+                prefix,
+                name,
+                expected_container_id=created_container_id,
+                expected_role="condition",
+            )
+        intent_path = supervisor_root / "condition-start-intent.json"
+        never_started = condition_container_proven_never_started(prefix, name)
+        if never_started:
+            if intent_path.is_file() and not intent_path.is_symlink():
+                rollback_never_started_condition_reservation(
+                    artifact_root / "pilot-v7/pilot-state.json",
+                    execution_contract_sha256=cast(str, state["execution_contract_sha256"]),
+                    run_id=args.run_id,
+                    start_intent_sha256=file_sha256(intent_path),
+                )
+            record_preentry_condition_failure(
+                pilot_state_path=artifact_root / "pilot-v7/pilot-state.json",
+                attempt_root=attempt_root,
+                secret_file=args.secret_file.resolve(strict=True),
+                prefix=prefix,
+                container_name=name,
+                run_id=args.run_id,
+                reason="condition-start-reservation-publication-failed-never-started",
+                returncode=None,
+                package_commit=args.package_commit,
+                execution_contract_sha256=cast(str, state["execution_contract_sha256"]),
+                frozen_run_manifest_sha256=frozen_manifest_sha256,
+                condition_plan_sha256=cast(str, manifest["condition_plan_sha256"]),
+                condition_argv_sha256=cast(str, manifest["argv_sha256"]),
+            )
+            raise T09HostError(
+                "never-started condition reservation was rolled back and retained for retry"
+            ) from reservation_error
+        if not intent_path.is_file() or intent_path.is_symlink():
+            publish_condition_start_reservation(
+                artifact_root=artifact_root,
+                raw_root=raw_root,
+                run_id=args.run_id,
+                container_name=name,
+                container_id=created_container_id,
+                create_argv=create_argv,
+                frozen_run_manifest_sha256=frozen_manifest_sha256,
+                condition_plan_sha256=cast(str, manifest["condition_plan_sha256"]),
+                condition_argv_sha256=cast(str, manifest["argv_sha256"]),
+                execution_contract_sha256=cast(str, state["execution_contract_sha256"]),
+                create_outcome_ambiguous=True,
+            )
+        else:
+            reservation_state = load_object(
+                artifact_root / "pilot-v7/pilot-state.json",
+                label="failed condition-start reservation state",
+            )
+            if reservation_state.get("condition_start_reservation") is None:
+                reserve_condition_start(
+                    artifact_root / "pilot-v7/pilot-state.json",
+                    execution_contract_sha256=cast(str, state["execution_contract_sha256"]),
+                    run_id=args.run_id,
+                    start_intent_sha256=file_sha256(intent_path),
+                )
+        recover_condition_start_reservation(
+            artifact_root=artifact_root,
+            raw_root=raw_root,
+            run_id=args.run_id,
+            secret_file=args.secret_file.resolve(strict=True),
+            execution_contract_sha256=cast(str, state["execution_contract_sha256"]),
+            frozen_run_manifest_sha256=frozen_manifest_sha256,
+        )
+        recover_attempt_seal(args)
+        raise T09HostError(
+            "ambiguous condition start was consumed and sealed after reservation failure"
+        ) from reservation_error
+    start_reservation = {
+        "run_id": args.run_id,
+        "start_intent_sha256": file_sha256(start_intent_path),
+    }
+    release_gate_core_scan_integrity_failure = False
+    release_gate_credential_exposure_detected = False
+    release_gate_released = False
+
+    def release_condition() -> None:
+        """Release the credential-free entrypoint only after the final admission gate."""
+
+        nonlocal release_gate_core_scan_integrity_failure
+        nonlocal release_gate_credential_exposure_detected
+        nonlocal release_gate_released
+        ready = wait_for_condition_entrypoint_ready(raw_root)
+        current_state = load_object(
+            artifact_root / "pilot-v7/pilot-state.json",
+            label="pre-release pilot state",
+        )
+        validate_live_frozen_state_binding(
+            current_state,
+            frozen_manifest,
+            expected_condition_start_reservation=start_reservation,
+        )
+        validate_runtime_budget_root(
+            artifact_root,
+            execution_contract_sha256=execution_contract_sha256,
+        )
+        admitted_seconds = admit_next_attempt(artifact_root)
+        try:
+            pre_release_cores = detect_core_artifacts(artifact_root)
+        except (OSError, T09HostError):
+            release_gate_core_scan_integrity_failure = True
+            mark_core_safety_stop(
+                artifact_root / "pilot-v7/pilot-state.json",
+                execution_contract_sha256=cast(str, state["execution_contract_sha256"]),
+            )
+            raise T09HostError("pre-release core scan was not reconstructable") from None
+        if pre_release_cores:
+            mark_core_safety_stop(
+                artifact_root / "pilot-v7/pilot-state.json",
+                execution_contract_sha256=cast(str, state["execution_contract_sha256"]),
+            )
+            raise T09HostError("a prohibited core artifact blocked condition release")
+        credential = validate_secret(args.secret_file.resolve(strict=True))
+        try:
+            pre_release_hits = secret_hits(artifact_root, credential)
+        finally:
+            credential = b""
+        if pre_release_hits:
+            release_gate_credential_exposure_detected = True
+            mark_actual_credential_exposure(
+                artifact_root / "pilot-v7/pilot-state.json",
+                execution_contract_sha256=cast(str, state["execution_contract_sha256"]),
+            )
+            for relative in pre_release_hits:
+                target = artifact_root / relative
+                try:
+                    metadata = target.lstat()
+                except FileNotFoundError:
+                    continue
+                if not stat.S_ISDIR(metadata.st_mode):
+                    target.unlink()
+            raise T09HostError("an exact credential match blocked condition release")
+        residue = owned_containers(prefix)
+        if residue != [name]:
+            raise T09HostError("condition release requires exactly one owned container")
+        release_identity = inspect_owned_container(
+            prefix,
+            name,
+            expected_container_id=created_container_id,
+            expected_role="condition",
+        )
+        if release_identity is None or release_identity.container_id != created_container_id:
+            raise T09HostError("condition Docker identity changed before supervised release")
+        released_at_epoch = time.time()
+        write_exclusive(
+            supervisor_root / "supervised-release.json",
+            {
+                "schema_version": "0.1.0",
+                "plan_id": PLAN_ID,
+                "run_id": args.run_id,
+                "container_name": name,
+                "execution_contract_sha256": state["execution_contract_sha256"],
+                "frozen_run_manifest_sha256": frozen_manifest_sha256,
+                "condition_plan_sha256": manifest["condition_plan_sha256"],
+                "condition_argv_sha256": manifest["argv_sha256"],
+                "entrypoint_ready": ready,
+                "admitted_condition_seconds": admitted_seconds,
+                "required_condition_seconds": MAX_CONDITION_WALL_SECONDS,
+                "required_evidence_export_reserve_seconds": (
+                    ATTEMPT_EVIDENCE_EXPORT_RESERVE_SECONDS
+                ),
+                "required_provider_termination_handoff_seconds": (
+                    PROVIDER_TERMINATION_HANDOFF_SECONDS
+                ),
+                "required_cleanup_reserve_seconds": PROVIDER_CLOSEOUT_RESERVE_SECONDS,
+                "required_total_headroom_seconds": NEXT_ATTEMPT_ENVELOPE_SECONDS,
+                "core_artifact_count": 0,
+                "exact_credential_match_count": 0,
+                "owned_container_count": 1,
+                "released_at_epoch": released_at_epoch,
+                "release_precedes_first_credential_read": True,
+            },
+        )
+        mark_empirical_entry(
+            artifact_root / "pilot-v7/pilot-state.json",
+            execution_contract_sha256=cast(str, state["execution_contract_sha256"]),
+            run_id=args.run_id,
+            supervised_release_receipt_sha256=file_sha256(
+                supervisor_root / "supervised-release.json"
+            ),
+        )
+        write_bytes_exclusive(raw_root / ".giclab-release", b"release\n")
+        release_gate_released = True
+
     started_at = utc_now()
     returncode = 125
     wall = 0.0
@@ -8077,13 +13685,22 @@ def execute_condition(args: argparse.Namespace) -> int:
     hard_cap_breached = False
     infrastructure_stop_requires_essential_seal = False
     container_removed = False
+    container_removal_error_type: str | None = None
     container_state: dict[str, object] | None = None
     runner_exception: Exception | None = None
     try:
         try:
+            start_identity = inspect_owned_container(
+                prefix,
+                name,
+                expected_container_id=created_container_id,
+                expected_role="condition",
+            )
+            if start_identity is None or start_identity.container_id != created_container_id:
+                raise T09HostError("condition Docker identity changed before start")
             returncode, wall, stop_reason, hard_cap_breached = run_attached_with_caps(
                 prefix=prefix,
-                name=name,
+                container_id=created_container_id,
                 attempt_root=raw_root,
                 pilot_root=artifact_root,
                 attempt_started=attempt_started,
@@ -8092,6 +13709,7 @@ def execute_condition(args: argparse.Namespace) -> int:
                 owned_lambda_started_at_epoch=float(owned_lambda_started_epoch),
                 prior_lambda_duration_seconds=float(prior_lambda_duration),
                 prior_lambda_cost_usd=float(prior_lambda_cost),
+                release_condition=release_condition,
             )
         except Exception as exc:  # Preserve the exact pre-entry/empirical disposition.
             runner_exception = exc
@@ -8105,19 +13723,113 @@ def execute_condition(args: argparse.Namespace) -> int:
             )
     finally:
         try:
-            container_state = container_state_receipt(prefix, name)
-        except T09HostError as exc:
+            container_state = container_state_receipt(prefix, created_container_id)
+        except (OSError, subprocess.SubprocessError, T09HostError) as exc:
             container_state = {
                 "status": "inspection-unavailable",
                 "running": None,
                 "inspection_error_type": type(exc).__name__,
                 "private_network_fields_retained": False,
             }
-        write_exclusive(raw_root / "container-state.json", container_state)
-        container_removed = remove_container(prefix, name)
+        write_exclusive(supervisor_root / "container-state.json", container_state)
+        try:
+            container_removed = remove_container(
+                prefix,
+                name,
+                expected_container_id=created_container_id,
+                expected_role="condition",
+            )
+        except (OSError, subprocess.SubprocessError, T09HostError) as exc:
+            container_removal_error_type = type(exc).__name__
+            infrastructure_stop_requires_essential_seal = True
+            stop_reason = stop_reason or "condition-container-removal-failed"
+    post_attach_state = load_object(
+        artifact_root / "pilot-v7/pilot-state.json",
+        label="post-attach release transaction state",
+    )
+    post_attach_entered = post_attach_state.get("empirical_attempts_entered")
+    post_attach_release_bindings = post_attach_state.get("supervised_release_bindings")
+    release_receipt_path = supervisor_root / "supervised-release.json"
+    release_marker_path = raw_root / ".giclab-release"
+    durable_release_crossed = (
+        isinstance(post_attach_entered, list)
+        and args.run_id in post_attach_entered
+        and isinstance(post_attach_release_bindings, dict)
+        and release_receipt_path.is_file()
+        and not release_receipt_path.is_symlink()
+        and post_attach_release_bindings.get(args.run_id) == file_sha256(release_receipt_path)
+        and release_marker_path.is_file()
+        and not release_marker_path.is_symlink()
+        and release_marker_path.read_bytes() == b"release\n"
+    )
+    release_gate_released = durable_release_crossed
+    if not durable_release_crossed:
+        reclassify_unreleased_condition_transaction(
+            artifact_root=artifact_root,
+            raw_root=raw_root,
+            run_id=args.run_id,
+            execution_contract_sha256=cast(str, state["execution_contract_sha256"]),
+        )
+    try:
+        post_remove_residue = [item for item in owned_containers(prefix) if item == name]
+        post_remove_enumeration_error: str | None = None
+    except (OSError, subprocess.SubprocessError, T09HostError) as exc:
+        post_remove_residue = ["<owned-container-enumeration-unavailable>"]
+        post_remove_enumeration_error = type(exc).__name__
+    if post_remove_residue:
+        with contextlib.suppress(OSError, subprocess.SubprocessError, T09HostError):
+            remove_container(
+                prefix,
+                name,
+                expected_container_id=created_container_id,
+                expected_role="condition",
+            )
+        try:
+            post_remove_residue = [item for item in owned_containers(prefix) if item == name]
+            post_remove_enumeration_error = None
+        except (OSError, subprocess.SubprocessError, T09HostError) as exc:
+            post_remove_residue = ["<owned-container-enumeration-unavailable>"]
+            post_remove_enumeration_error = type(exc).__name__
+    if post_remove_residue:
+        mark_core_safety_stop(
+            artifact_root / "pilot-v7/pilot-state.json",
+            execution_contract_sha256=cast(str, state["execution_contract_sha256"]),
+        )
+        mark_credential_cleanup_integrity_failure(
+            artifact_root / "pilot-v7/pilot-state.json",
+            execution_contract_sha256=cast(str, state["execution_contract_sha256"]),
+        )
+        write_exclusive(
+            supervisor_root / "container-removal-uncertain.json",
+            {
+                "schema_version": "0.1.0",
+                "plan_id": PLAN_ID,
+                "run_id": args.run_id,
+                "container_name": name,
+                "condition_identity_consumed": True,
+                "owned_container_absence_proven": False,
+                "owned_container_residue": post_remove_residue,
+                "enumeration_error_type": post_remove_enumeration_error,
+                "condition_tree_content_read_permitted": False,
+                "recovery_after_provider_termination_required": True,
+                "recorded_at": utc_now(),
+            },
+        )
+        raise T09HostError(
+            "owned condition absence is unproven; content sealing requires "
+            "post-termination recovery"
+        )
+    try:
+        validate_runtime_budget_root(
+            artifact_root,
+            execution_contract_sha256=execution_contract_sha256,
+        )
+    except (OSError, T09HostError, T09PilotError):
+        infrastructure_stop_requires_essential_seal = True
+        stop_reason = stop_reason or "runtime-budget-control-drift"
     gpu_after = gpu_snapshot()
     write_exclusive(
-        raw_root / "gpu-accounting.json",
+        supervisor_root / "gpu-accounting.json",
         {
             "schema_version": "0.1.0",
             "run_id": args.run_id,
@@ -8134,30 +13846,209 @@ def execute_condition(args: argparse.Namespace) -> int:
         },
     )
     tree_bytes_before_security_cleanup = tree_bytes(raw_root)
-    core_records = detect_core_artifacts(raw_root)
-    core_destruction_verified = True
+    credential_bytes = validate_secret(args.secret_file.resolve(strict=True))
+    core_scan_integrity_failure = release_gate_core_scan_integrity_failure
+    try:
+        core_records = detect_core_artifacts(artifact_root)
+    except (OSError, T09HostError):
+        core_records = []
+        core_scan_integrity_failure = True
+        infrastructure_stop_requires_essential_seal = True
+        stop_reason = stop_reason or "core-scan-integrity-failure"
+        mark_core_safety_stop(
+            artifact_root / "pilot-v7/pilot-state.json",
+            execution_contract_sha256=cast(str, state["execution_contract_sha256"]),
+        )
+    core_destruction_verified = not core_scan_integrity_failure
+    core_cleanup_error_type: str | None = None
+    core_detection_sha256 = persist_core_detection_before_cleanup(
+        receipt_path=supervisor_root / "core-artifact-detection.json",
+        records=core_records,
+        scope="post-condition-complete-writable-root",
+        credential_bytes=credential_bytes,
+        scan_integrity_failure=core_scan_integrity_failure,
+    )
     if core_records:
         mark_core_safety_stop(
             artifact_root / "pilot-v7/pilot-state.json",
             execution_contract_sha256=cast(str, state["execution_contract_sha256"]),
         )
-        core_destruction_verified = remove_core_artifacts(raw_root, core_records)
+        core_cleanup_outcome = cleanup_core_artifacts(artifact_root, core_records)
+        core_destruction_verified = core_cleanup_outcome.destruction_verified
+        core_cleanup_error_type = core_cleanup_outcome.error_type
+    retained_core_paths = (
+        _core_paths_within_subtree(
+            core_records,
+            scan_root=artifact_root,
+            subtree=raw_root,
+        )
+        if core_records
+        else frozenset()
+    )
+    runtime_cleanup_path = raw_root / "runtime-cleanup.json"
+    runtime_removed_secret_artifacts: list[str] = []
+    runtime_secret_cleanup_malformed = False
+    runtime_core_records: list[dict[str, object]] = []
+    runtime_core_scan_integrity_failure = False
+    runtime_core_destruction_verified = True
+    runtime_core_rotation_required = False
+    runtime_core_detection_sha256: str | None = None
+    artifact_core_paths = frozenset(cast(str, record["path"]) for record in core_records)
+    runtime_cleanup_relative = runtime_cleanup_path.relative_to(artifact_root).as_posix()
+    runtime_cleanup_classified_as_core_artifact = runtime_cleanup_relative in artifact_core_paths
+    runtime_cleanup_content_read_permitted = (
+        not core_scan_integrity_failure and not runtime_cleanup_classified_as_core_artifact
+    )
+    if (
+        runtime_cleanup_content_read_permitted
+        and runtime_cleanup_path.is_file()
+        and not runtime_cleanup_path.is_symlink()
+    ):
+        try:
+            runtime_cleanup = load_object(runtime_cleanup_path, label="runtime cleanup")
+            runtime_secret_cleanup = runtime_cleanup.get("secret_cleanup")
+            runtime_removed_raw = (
+                runtime_secret_cleanup.get("secret_bearing_artifacts_removed")
+                if isinstance(runtime_secret_cleanup, dict)
+                else None
+            )
+            if (
+                isinstance(runtime_secret_cleanup, dict)
+                and runtime_secret_cleanup.get("credential_observed") is True
+                and runtime_secret_cleanup.get("credential_removed_from_environment") is True
+                and runtime_secret_cleanup.get("content_scan_permitted") is True
+                and isinstance(runtime_removed_raw, list)
+                and all(isinstance(item, str) for item in runtime_removed_raw)
+                and runtime_secret_cleanup.get("remaining_exact_credential_matches") == 0
+            ):
+                runtime_removed_secret_artifacts = (
+                    ["<redacted-runtime-secret-bearing-artifact>"] if runtime_removed_raw else []
+                )
+            else:
+                runtime_secret_cleanup_malformed = True
+            runtime_core_evidence = _validate_runtime_core_cleanup(
+                raw_root=raw_root,
+                runtime_cleanup=runtime_cleanup,
+            )
+            runtime_core_records = runtime_core_evidence.records
+            runtime_core_scan_integrity_failure = runtime_core_evidence.scan_integrity_failure
+            runtime_core_destruction_verified = runtime_core_evidence.destruction_verified
+            runtime_core_rotation_required = runtime_core_evidence.rotation_required
+            runtime_core_detection_sha256 = runtime_core_evidence.detection_sha256
+        except (OSError, UnicodeError, json.JSONDecodeError, T09HostError):
+            runtime_secret_cleanup_malformed = True
+            runtime_core_scan_integrity_failure = True
+            runtime_core_destruction_verified = False
+            runtime_core_rotation_required = True
+        if runtime_secret_cleanup_malformed:
+            infrastructure_stop_requires_essential_seal = True
+            stop_reason = stop_reason or "runtime-cleanup-malformed"
+    else:
+        runtime_secret_cleanup_malformed = True
+        runtime_core_scan_integrity_failure = True
+        runtime_core_destruction_verified = False
+        runtime_core_rotation_required = True
+        infrastructure_stop_requires_essential_seal = True
+        stop_reason = stop_reason or "runtime-cleanup-missing"
+    if runtime_core_records or runtime_core_scan_integrity_failure:
+        mark_core_safety_stop(
+            artifact_root / "pilot-v7/pilot-state.json",
+            execution_contract_sha256=cast(str, state["execution_contract_sha256"]),
+        )
+        infrastructure_stop_requires_essential_seal = True
+        stop_reason = stop_reason or "runtime-writable-root-core-incident"
+    hits = (
+        secret_hits(
+            artifact_root,
+            credential_bytes,
+            excluded_relative_paths=artifact_core_paths,
+        )
+        if not core_scan_integrity_failure
+        else []
+    )
+    if hits:
+        mark_actual_credential_exposure(
+            artifact_root / "pilot-v7/pilot-state.json",
+            execution_contract_sha256=cast(str, state["execution_contract_sha256"]),
+        )
+    removed_secret_artifacts: list[str] = []
+    for relative in hits:
+        target = artifact_root / relative
+        try:
+            metadata = target.lstat()
+        except FileNotFoundError:
+            continue
+        if not stat.S_ISDIR(metadata.st_mode):
+            target.unlink()
+            removed_secret_artifacts.append("<redacted-exact-secret-bearing-artifact>")
+    remaining_hits_raw = (
+        secret_hits(
+            artifact_root,
+            credential_bytes,
+            excluded_relative_paths=artifact_core_paths,
+        )
+        if not core_scan_integrity_failure
+        else []
+    )
+    remaining_hits = ["<redacted-exact-secret-bearing-artifact>"] if remaining_hits_raw else []
+    remaining_hits_within_raw = _paths_within_subtree(
+        remaining_hits_raw,
+        scan_root=artifact_root,
+        subtree=raw_root,
+    )
+    retained_state_after_security = load_object(
+        artifact_root / "pilot-v7/pilot-state.json",
+        label="post-condition credential safety state",
+    )
+    actual_credential_exposure_detected = bool(
+        hits
+        or runtime_removed_secret_artifacts
+        or release_gate_credential_exposure_detected
+        or retained_state_after_security.get("actual_credential_exposure_detected") is True
+    )
+    if actual_credential_exposure_detected:
+        mark_actual_credential_exposure(
+            artifact_root / "pilot-v7/pilot-state.json",
+            execution_contract_sha256=cast(str, state["execution_contract_sha256"]),
+        )
+    if runtime_secret_cleanup_malformed:
+        mark_credential_cleanup_integrity_failure(
+            artifact_root / "pilot-v7/pilot-state.json",
+            execution_contract_sha256=cast(str, state["execution_contract_sha256"]),
+        )
+    try:
+        residue = owned_containers(prefix)
+    except (OSError, subprocess.SubprocessError, T09HostError) as exc:
+        residue = ["<owned-container-enumeration-unavailable>"]
+        container_removal_error_type = container_removal_error_type or type(exc).__name__
+        infrastructure_stop_requires_essential_seal = True
+        stop_reason = stop_reason or "owned-container-enumeration-failed"
     write_exclusive(
-        raw_root / "core-artifact-cleanup.json",
+        supervisor_root / "core-artifact-cleanup.json",
         {
             "schema_version": "0.1.0",
             "run_id": args.run_id,
             "core_limit_contract": CORE_LIMIT_CONTRACT,
             "docker_ulimit": "core=0:0",
-            "core_artifacts_detected": core_records,
-            "core_artifact_count": len(core_records),
-            "core_content_or_hash_retained": False,
-            "core_transferred_outside_remote_host": False,
-            "destruction_verified": core_destruction_verified,
-            "producer": "producer_unavailable" if core_records else None,
-            "credential_rotation_required_due_to_core_handling": (
-                bool(core_records) and not core_destruction_verified
+            **core_cleanup_projection(
+                core_records,
+                CoreCleanupOutcome(core_destruction_verified, core_cleanup_error_type),
+                credential_bytes=credential_bytes,
             ),
+            "core_scan_integrity_failure": core_scan_integrity_failure,
+            "core_detection_receipt_sha256": core_detection_sha256,
+            "destruction_verified": (core_destruction_verified and not core_scan_integrity_failure),
+            "credential_rotation_required_due_to_core_handling": (
+                core_scan_integrity_failure
+                or (bool(core_records) and not core_destruction_verified)
+            ),
+            "producer": "producer_unavailable" if core_records else None,
+            "runtime_core_artifacts_detected": runtime_core_records,
+            "runtime_core_artifact_count": len(runtime_core_records),
+            "runtime_core_scan_integrity_failure": runtime_core_scan_integrity_failure,
+            "runtime_core_destruction_verified": runtime_core_destruction_verified,
+            "runtime_core_detection_receipt_sha256": runtime_core_detection_sha256,
+            "runtime_core_rotation_required": runtime_core_rotation_required,
         },
     )
     record_output_cap_event(
@@ -8169,46 +14060,8 @@ def execute_condition(args: argparse.Namespace) -> int:
         tree_bytes_after_core_cleanup=tree_bytes(raw_root),
         core_records=core_records,
     )
-    credential_bytes = validate_secret(args.secret_file.resolve(strict=True))
-    runtime_cleanup_path = raw_root / "runtime-cleanup.json"
-    runtime_removed_secret_artifacts: list[str] = []
-    runtime_secret_cleanup_malformed = False
-    if runtime_cleanup_path.is_file() and not runtime_cleanup_path.is_symlink():
-        runtime_cleanup = load_object(runtime_cleanup_path, label="runtime cleanup")
-        runtime_secret_cleanup = runtime_cleanup.get("secret_cleanup")
-        runtime_removed_raw = (
-            runtime_secret_cleanup.get("secret_bearing_artifacts_removed")
-            if isinstance(runtime_secret_cleanup, dict)
-            else None
-        )
-        if isinstance(runtime_removed_raw, list) and all(
-            isinstance(item, str) for item in runtime_removed_raw
-        ):
-            runtime_removed_secret_artifacts = cast(list[str], runtime_removed_raw)
-        else:
-            runtime_secret_cleanup_malformed = True
-    hits = secret_hits(raw_root, credential_bytes)
-    removed_secret_artifacts: list[str] = []
-    for relative in hits:
-        target = raw_root / relative
-        if target.is_file() and not target.is_symlink():
-            target.unlink()
-            removed_secret_artifacts.append(relative)
-    remaining_hits = secret_hits(raw_root, credential_bytes)
     credential_bytes = b""
-    actual_credential_exposure_detected = bool(hits or runtime_removed_secret_artifacts)
-    if actual_credential_exposure_detected:
-        mark_actual_credential_exposure(
-            artifact_root / "pilot-v7/pilot-state.json",
-            execution_contract_sha256=cast(str, state["execution_contract_sha256"]),
-        )
-    if runtime_secret_cleanup_malformed:
-        mark_credential_cleanup_integrity_failure(
-            artifact_root / "pilot-v7/pilot-state.json",
-            execution_contract_sha256=cast(str, state["execution_contract_sha256"]),
-        )
-    residue = owned_containers(prefix)
-    cleanup_receipt = raw_root / "host-cleanup-receipt.json"
+    cleanup_receipt = supervisor_root / "host-cleanup-receipt.json"
     write_exclusive(
         cleanup_receipt,
         {
@@ -8217,20 +14070,37 @@ def execute_condition(args: argparse.Namespace) -> int:
             "returncode": returncode,
             "container_removed": container_removed and not residue,
             "owned_container_residue": residue,
-            "container_state_receipt": "container-state.json",
-            "secret_scan_passed": not remaining_hits,
+            "container_state_receipt": (f"{CONDITION_SUPERVISOR_DIRNAME}/container-state.json"),
+            "secret_scan_passed": not core_scan_integrity_failure and not remaining_hits,
             "secret_bearing_artifacts_removed": removed_secret_artifacts,
             "runtime_secret_bearing_artifacts_removed": runtime_removed_secret_artifacts,
             "runtime_secret_cleanup_malformed": runtime_secret_cleanup_malformed,
+            "runtime_cleanup_classified_as_core_artifact": (
+                runtime_cleanup_classified_as_core_artifact
+            ),
+            "runtime_cleanup_content_read_permitted": runtime_cleanup_content_read_permitted,
             "secret_matching_paths": remaining_hits,
             "actual_credential_exposure_detected": actual_credential_exposure_detected,
             "core_artifact_count": len(core_records),
+            "runtime_core_artifact_count": len(runtime_core_records),
+            "core_scan_integrity_failure": core_scan_integrity_failure,
+            "runtime_core_scan_integrity_failure": (runtime_core_scan_integrity_failure),
             "core_artifacts_destroyed": bool(core_records) and core_destruction_verified,
             "core_destruction_verified": core_destruction_verified,
-            "core_safety_stop_detected": bool(core_records),
+            "runtime_core_destruction_verified": (runtime_core_destruction_verified),
+            "runtime_core_detection_receipt_sha256": (runtime_core_detection_sha256),
+            "core_safety_stop_detected": (
+                bool(core_records)
+                or core_scan_integrity_failure
+                or bool(runtime_core_records)
+                or runtime_core_scan_integrity_failure
+                or retained_state_after_security.get("core_safety_stop_detected") is True
+            ),
             "credential_rotation_required": (
                 actual_credential_exposure_detected
+                or core_scan_integrity_failure
                 or (bool(core_records) and not core_destruction_verified)
+                or runtime_core_rotation_required
             ),
             "campaign_continuation_permitted": (
                 not actual_credential_exposure_detected
@@ -8238,17 +14108,26 @@ def execute_condition(args: argparse.Namespace) -> int:
                 and not residue
                 and not remaining_hits
                 and not core_records
+                and not core_scan_integrity_failure
                 and core_destruction_verified
+                and not runtime_core_records
+                and not runtime_core_scan_integrity_failure
+                and runtime_core_destruction_verified
                 and not infrastructure_stop_requires_essential_seal
             ),
             "stop_reason": stop_reason,
             "hard_cap_breached": hard_cap_breached,
+            "tree_bytes_before_security_cleanup": tree_bytes_before_security_cleanup,
+            "started_condition_container": True,
+            "condition_start_intent_sha256": file_sha256(start_intent_path),
+            "supervised_release_completed": release_gate_released,
             "infrastructure_stop_requires_essential_seal": (
                 infrastructure_stop_requires_essential_seal
             ),
             "runner_exception_type": (
                 type(runner_exception).__name__ if runner_exception is not None else None
             ),
+            "container_removal_error_type": container_removal_error_type,
             "timing": {
                 "started_at": started_at,
                 "stopped_at": utc_now(),
@@ -8257,16 +14136,28 @@ def execute_condition(args: argparse.Namespace) -> int:
         },
     )
     write_exclusive(
-        raw_root / "runtime-reconstruction-binding.json",
+        supervisor_root / "runtime-reconstruction-binding.json",
         {
             "schema_version": "0.1.0",
             "run_id": args.run_id,
-            "runtime_cleanup_present": runtime_cleanup_path.is_file(),
+            "runtime_cleanup_present": (
+                runtime_cleanup_content_read_permitted
+                and runtime_cleanup_path.is_file()
+                and not runtime_cleanup_path.is_symlink()
+            ),
+            "runtime_cleanup_path_observed": os.path.lexists(runtime_cleanup_path),
+            "runtime_cleanup_content_read_permitted": (runtime_cleanup_content_read_permitted),
             "runtime_cleanup_sha256": (
-                file_sha256(runtime_cleanup_path) if runtime_cleanup_path.is_file() else None
+                file_sha256(runtime_cleanup_path)
+                if (
+                    runtime_cleanup_content_read_permitted
+                    and runtime_cleanup_path.is_file()
+                    and not runtime_cleanup_path.is_symlink()
+                )
+                else None
             ),
             "host_cleanup_receipt_sha256": file_sha256(cleanup_receipt),
-            "container_state_sha256": file_sha256(raw_root / "container-state.json"),
+            "container_state_sha256": file_sha256(supervisor_root / "container-state.json"),
             "host_teardown_is_source_grounded_fallback": True,
         },
     )
@@ -8277,75 +14168,62 @@ def execute_condition(args: argparse.Namespace) -> int:
     if not isinstance(entered_after_condition, list):
         raise T09HostError("post-condition empirical state is malformed")
     final_raw_bytes = tree_bytes(raw_root)
-    output_cap_event = raw_root / "output-cap-event.json"
+    output_cap_event = supervisor_root / "output-cap-event.json"
     if final_raw_bytes > MAX_ATTEMPT_OUTPUT_BYTES and not output_cap_event.exists():
         hard_cap_breached = True
-        stop_reason = stop_reason or "post-stop-evidence-output-cap"
+        post_stop_cap_reason = "post-stop-evidence-output-cap"
         record_output_cap_event(
             raw_root=raw_root,
             run_id=args.run_id,
-            stop_reason=stop_reason,
+            stop_reason=post_stop_cap_reason,
             hard_cap_breached=True,
             tree_bytes_before_security_cleanup=tree_bytes_before_security_cleanup,
             tree_bytes_after_core_cleanup=final_raw_bytes,
             core_records=core_records,
         )
+        # Preserve any earlier non-cap reason in the immutable host receipt;
+        # the terminal authority is the later, source-bound aggregate cap.
+        stop_reason = post_stop_cap_reason
         final_raw_bytes = tree_bytes(raw_root)
-    cap_or_infrastructure_stop = (
-        hard_cap_breached
-        or infrastructure_stop_requires_essential_seal
-        or final_raw_bytes > MAX_ATTEMPT_OUTPUT_BYTES
-    )
     if args.run_id not in entered_after_condition:
-        if cap_or_infrastructure_stop:
-            mark_nonempirical_infrastructure_attempt_consumed(
-                artifact_root / "pilot-v7/pilot-state.json",
-                execution_contract_sha256=cast(str, state["execution_contract_sha256"]),
-                run_id=args.run_id,
-            )
-            seal_essential_failure(
-                artifact_root=artifact_root,
-                attempt_root=attempt_root,
-                raw_root=raw_root,
-                manifest=manifest,
-                package_commit=args.package_commit,
-                frozen_run_manifest_sha256=frozen_manifest_sha256,
-                execution_contract_sha256=cast(str, state["execution_contract_sha256"]),
-                returncode=returncode,
-                stop_reason=stop_reason,
-                hard_cap_breached=hard_cap_breached,
-                tree_bytes_before_security_cleanup=tree_bytes_before_security_cleanup,
-                core_records=core_records,
-                core_destruction_verified=core_destruction_verified,
-                empirical_entry_crossed=False,
-            )
-            raise T09HostError(
-                "pre-empirical infrastructure-invalid attempt identity was consumed and sealed; "
-                "campaign continuation is forbidden"
-            )
-        record_preentry_condition_failure(
-            pilot_state_path=artifact_root / "pilot-v7/pilot-state.json",
-            attempt_root=attempt_root,
-            secret_file=args.secret_file.resolve(strict=True),
-            prefix=prefix,
-            container_name=name,
-            run_id=args.run_id,
-            reason="condition-runtime-ended-before-first-model-request-or-browser-action",
-            returncode=returncode,
-            package_commit=args.package_commit,
+        # Docker creation failures remain pre-condition infrastructure. Once the
+        # reviewed condition container has been started, however, its one frozen
+        # identity is consumed even if it exits before the first model or browser
+        # operation. This keeps zero-retry authority independent of when the
+        # in-container empirical marker happened to publish.
+        stop_reason = stop_reason or "condition-ended-before-empirical-entry"
+        mark_nonempirical_infrastructure_attempt_consumed(
+            artifact_root / "pilot-v7/pilot-state.json",
             execution_contract_sha256=cast(str, state["execution_contract_sha256"]),
+            run_id=args.run_id,
+        )
+        seal_essential_failure(
+            artifact_root=artifact_root,
+            attempt_root=attempt_root,
+            raw_root=raw_root,
+            manifest=manifest,
+            package_commit=args.package_commit,
             frozen_run_manifest_sha256=frozen_manifest_sha256,
-            condition_plan_sha256=cast(str, manifest["condition_plan_sha256"]),
-            condition_argv_sha256=cast(str, manifest["argv_sha256"]),
-            actual_credential_exposure_detected=actual_credential_exposure_detected,
-            credential_cleanup_integrity_failure=runtime_secret_cleanup_malformed,
-            core_safety_stop_detected=bool(core_records),
+            execution_contract_sha256=cast(str, state["execution_contract_sha256"]),
+            returncode=returncode,
+            stop_reason=stop_reason,
+            hard_cap_breached=hard_cap_breached,
+            tree_bytes_before_security_cleanup=tree_bytes_before_security_cleanup,
+            core_records=core_records,
+            core_destruction_verified=core_destruction_verified,
+            empirical_entry_crossed=False,
+            raw_tree_scan_safe=not core_scan_integrity_failure,
+            core_scan_integrity_failure=core_scan_integrity_failure,
+            sensitive_relative_paths=remaining_hits_within_raw,
+            core_relative_paths=retained_core_paths,
+        )
+        error = T09HostError(
+            "started condition ended before empirical entry; its identity was consumed and "
+            "sealed as infrastructure-invalid, and campaign continuation is forbidden"
         )
         if runner_exception is not None:
-            raise T09HostError(
-                "condition host runner failed before empirical entry"
-            ) from runner_exception
-        raise T09HostError("condition ended before empirical entry; frozen retry remains permitted")
+            raise error from runner_exception
+        raise error
     if (
         hard_cap_breached
         or infrastructure_stop_requires_essential_seal
@@ -8367,6 +14245,10 @@ def execute_condition(args: argparse.Namespace) -> int:
             core_records=core_records,
             core_destruction_verified=core_destruction_verified,
             empirical_entry_crossed=True,
+            raw_tree_scan_safe=not core_scan_integrity_failure,
+            core_scan_integrity_failure=core_scan_integrity_failure,
+            sensitive_relative_paths=remaining_hits_within_raw,
+            core_relative_paths=retained_core_paths,
         )
         raise T09HostError(
             "consumed infrastructure-invalid attempt sealed as essential failure; "
@@ -8384,6 +14266,8 @@ def execute_condition(args: argparse.Namespace) -> int:
         tree_bytes_before_security_cleanup=tree_bytes_before_security_cleanup,
         core_records=core_records,
         core_destruction_verified=core_destruction_verified,
+        sensitive_relative_paths=remaining_hits_within_raw,
+        core_relative_paths=retained_core_paths,
     )
     if actual_credential_exposure_detected or runtime_secret_cleanup_malformed:
         raise T09HostError(
@@ -8784,7 +14668,7 @@ def validate_finalized_attempt(
             continue
         size = path.stat().st_size
         total += size
-        if total > MAX_ATTEMPT_OUTPUT_BYTES:
+        if total > MAX_FINALIZED_DERIVED_BYTES:
             raise T09HostError("finalized attempt exceeds its bounded output surface")
         files.append(
             {
@@ -8807,14 +14691,53 @@ def reject_and_remove_finalized_core_artifacts(
 ) -> None:
     """Permanently stop selection when a finalizer descendant emits a core."""
 
-    records = detect_core_artifacts(finalized_root)
+    try:
+        records = detect_core_artifacts(finalized_root)
+    except (OSError, T09HostError) as exc:
+        mark_core_safety_stop(
+            artifact_root / "pilot-v7/pilot-state.json",
+            execution_contract_sha256=execution_contract_sha256,
+        )
+        receipt_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        detection_sha256 = persist_core_detection_before_cleanup(
+            receipt_path=receipt_path.with_name("core-artifact-detection.json"),
+            records=[],
+            scope=detection_stage,
+            scan_integrity_failure=True,
+        )
+        write_exclusive(
+            receipt_path,
+            {
+                "schema_version": "0.1.0",
+                "plan_id": PLAN_ID,
+                "host_run_id": HOST_RUN_ID,
+                "run_id": run_id,
+                "detection_stage": detection_stage,
+                "core_artifacts_detected": [],
+                "core_artifact_count": 0,
+                "core_content_or_hash_retained": False,
+                "core_transferred_outside_remote_host": False,
+                "core_scan_integrity_failure": True,
+                "core_detection_receipt_sha256": detection_sha256,
+                "destruction_verified": False,
+                "cleanup_error_type": type(exc).__name__,
+                "credential_rotation_required_due_to_core_handling": True,
+                "campaign_continuation_permitted": False,
+            },
+        )
+        raise T09HostError("finalizer core scan was unreconstructable; campaign stopped") from exc
     if not records:
         return
     mark_core_safety_stop(
         artifact_root / "pilot-v7/pilot-state.json",
         execution_contract_sha256=execution_contract_sha256,
     )
-    destruction_verified = remove_core_artifacts(finalized_root, records)
+    detection_sha256 = persist_core_detection_before_cleanup(
+        receipt_path=receipt_path.with_name("core-artifact-detection.json"),
+        records=records,
+        scope=detection_stage,
+    )
+    cleanup_outcome = cleanup_core_artifacts(finalized_root, records)
     receipt_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     write_exclusive(
         receipt_path,
@@ -8824,12 +14747,9 @@ def reject_and_remove_finalized_core_artifacts(
             "host_run_id": HOST_RUN_ID,
             "run_id": run_id,
             "detection_stage": detection_stage,
-            "core_artifacts_detected": records,
-            "core_artifact_count": len(records),
-            "core_content_or_hash_retained": False,
-            "core_transferred_outside_remote_host": False,
-            "destruction_verified": destruction_verified,
-            "credential_rotation_required_due_to_core_handling": (not destruction_verified),
+            **core_cleanup_projection(records, cleanup_outcome),
+            "core_detection_receipt_sha256": detection_sha256,
+            "core_scan_integrity_failure": False,
             "campaign_continuation_permitted": False,
         },
     )
@@ -8979,12 +14899,15 @@ def validate_selected_finalization(
         or completion.get("output_schema_valid") is not True
     ):
         raise T09HostError("selected finalization no longer reconstructs from exact bytes")
+    enforce_attempt_supervisor_cap(attempt_root)
+    enforce_full_attempt_output_cap(attempt_root)
     return outcome, evidence
 
 
 def finalize_attempt(args: argparse.Namespace) -> dict[str, object]:
     """Run one pure network-none finalizer, then select it from frozen supervisor code."""
 
+    enforce_host_core_limit()
     repository = args.repository.resolve(strict=True)
     artifact_root = args.artifact_root.resolve(strict=True)
     source_sha256, projection_source_sha256, projection_module = validate_finalizer_source(
@@ -9036,6 +14959,7 @@ def finalize_attempt(args: argparse.Namespace) -> dict[str, object]:
             attempt_root=attempt_root,
             run_id=args.run_id,
             package_commit=args.package_commit,
+            condition_manifest=manifest,
         )
         raise T09HostError(
             "essential infrastructure failures are reconstructable but never evaluator-eligible"
@@ -9044,6 +14968,8 @@ def finalize_attempt(args: argparse.Namespace) -> dict[str, object]:
         raise T09HostError("attempt has zero or conflicting evidence-seal authorities")
     raw_manifest_sha256_before = file_sha256(attempt_root / "raw-attempt-manifest.json")
     raw_receipt_sha256_before = file_sha256(attempt_root / "raw-attempt-complete.json")
+    enforce_attempt_supervisor_cap(attempt_root)
+    enforce_full_attempt_output_cap(attempt_root)
     state = _runtime_budget_state(artifact_root)
     raw_complete = state.get("raw_attempts_complete")
     if not isinstance(raw_complete, list) or args.run_id not in raw_complete:
@@ -9129,7 +15055,7 @@ def finalize_attempt(args: argparse.Namespace) -> dict[str, object]:
             args=args,
             manifest=manifest,
             attempt_root=attempt_root,
-            cleanup_receipt=raw_root / "host-cleanup-receipt.json",
+            cleanup_receipt=(raw_root / CONDITION_SUPERVISOR_DIRNAME / "host-cleanup-receipt.json"),
             image_id=image_id,
             frozen_run_manifest_sha256=frozen_manifest_sha256,
             finalizer_commit=args.finalizer_commit,
@@ -9164,24 +15090,95 @@ def finalize_attempt(args: argparse.Namespace) -> dict[str, object]:
         raise T09HostError("campaign has no downstream finalization time before cleanup reserve")
     stdout_path = invocation_log / "stdout"
     stderr_path = invocation_log / "stderr"
-    with stdout_path.open("xb") as stdout, stderr_path.open("xb") as stderr:
-        result = subprocess.run(
-            finalizer,
-            env={**safe_environment(), **projected_environment},
-            stdin=subprocess.DEVNULL,
-            stdout=stdout,
-            stderr=stderr,
-            check=False,
-            timeout=min(FINALIZER_INVOCATION_TIMEOUT_SECONDS, max(1, int(remaining))),
+    result: subprocess.CompletedProcess[bytes] | None = None
+    execution_error: BaseException | None = None
+    try:
+        with stdout_path.open("xb") as stdout, stderr_path.open("xb") as stderr:
+            if local_mode:
+                result = subprocess.run(
+                    finalizer,
+                    env={**safe_environment(), **projected_environment},
+                    stdin=subprocess.DEVNULL,
+                    stdout=stdout,
+                    stderr=stderr,
+                    check=False,
+                    timeout=min(FINALIZER_INVOCATION_TIMEOUT_SECONDS, max(1, int(remaining))),
+                    preexec_fn=_limit_finalizer_log_file_size,
+                )
+            else:
+                finalizer_label = f"finalizer-{args.run_id.lower()}-{invocation:04d}"
+                result = run_owned_docker(
+                    finalizer,
+                    prefix=docker_prefix(),
+                    label=finalizer_label,
+                    owned_role="attempt-finalizer",
+                    evidence_root=invocation_log,
+                    stdout=stdout,
+                    stderr=stderr,
+                    timeout=min(FINALIZER_INVOCATION_TIMEOUT_SECONDS, max(1, int(remaining))),
+                    environment={**safe_environment(), **projected_environment},
+                    preexec_fn=_limit_finalizer_log_file_size,
+                )
+    except (OSError, subprocess.SubprocessError, T09HostError) as exc:
+        execution_error = exc
+    finally:
+        reject_and_remove_finalized_core_artifacts(
+            artifact_root=artifact_root,
+            finalized_root=finalized_root,
+            run_id=args.run_id,
+            execution_contract_sha256=contract.sha256,
+            receipt_path=invocation_log / "core-artifact-cleanup.json",
+            detection_stage="finalizer-subprocess-complete",
         )
-    reject_and_remove_finalized_core_artifacts(
-        artifact_root=artifact_root,
-        finalized_root=finalized_root,
-        run_id=args.run_id,
-        execution_contract_sha256=contract.sha256,
-        receipt_path=invocation_log / "core-artifact-cleanup.json",
-        detection_stage="finalizer-subprocess-complete",
-    )
+    saturated_streams = [
+        path.name
+        for path in (stdout_path, stderr_path)
+        if path.is_file() and path.stat().st_size >= MAX_FINALIZER_LOG_BYTES_PER_STREAM
+    ]
+    if saturated_streams:
+        if finalized_root.exists() and not finalized_root.is_symlink():
+            shutil.rmtree(finalized_root)
+        write_exclusive(
+            invocation_log / "failure.json",
+            {
+                "schema_version": "0.1.0",
+                "plan_id": PLAN_ID,
+                "run_id": args.run_id,
+                "failure_category": "downstream-finalizer-stream-limit",
+                "saturated_streams": saturated_streams,
+                "per_stream_cap_bytes": MAX_FINALIZER_LOG_BYTES_PER_STREAM,
+                "raw_manifest_sha256": file_sha256(attempt_root / "raw-attempt-manifest.json"),
+                "raw_receipt_sha256": file_sha256(attempt_root / "raw-attempt-complete.json"),
+                "raw_source_mutated": False,
+                "condition_retry_permitted": False,
+                "campaign_may_continue_after_verified_raw": True,
+            },
+        )
+        enforce_attempt_supervisor_cap(attempt_root)
+        enforce_full_attempt_output_cap(attempt_root)
+        raise T09HostError(
+            "downstream finalizer stream limit reached; immutable raw attempt remains accepted"
+        )
+    if execution_error is not None:
+        write_exclusive(
+            invocation_log / "failure.json",
+            {
+                "schema_version": "0.1.0",
+                "plan_id": PLAN_ID,
+                "run_id": args.run_id,
+                "failure_category": "downstream-finalizer-execution-exception",
+                "exception_type": type(execution_error).__name__,
+                "exception_message_retained": False,
+                "raw_manifest_sha256": file_sha256(attempt_root / "raw-attempt-manifest.json"),
+                "raw_receipt_sha256": file_sha256(attempt_root / "raw-attempt-complete.json"),
+                "condition_retry_permitted": False,
+                "campaign_may_continue_after_verified-raw": True,
+            },
+        )
+        raise T09HostError(
+            "downstream finalizer execution failed; immutable raw attempt remains accepted"
+        ) from execution_error
+    assert result is not None
     if result.returncode != 0:
         write_exclusive(
             invocation_log / "failure.json",
@@ -9267,6 +15264,33 @@ def finalize_attempt(args: argparse.Namespace) -> dict[str, object]:
     if completion != expected_completion:
         raise T09HostError("downstream completion projection exceeded its pure contract")
     write_exclusive(completion_path, completion)
+    try:
+        enforce_attempt_supervisor_cap(attempt_root)
+        full_attempt_usage = enforce_full_attempt_output_cap(attempt_root)
+    except T09HostError as exc:
+        candidate_bytes = full_attempt_tree_usage(finalized_root).bytes
+        shutil.rmtree(finalized_root)
+        stdout_path.unlink(missing_ok=True)
+        stderr_path.unlink(missing_ok=True)
+        write_exclusive(
+            invocation_log / "failure.json",
+            {
+                "schema_version": "0.1.0",
+                "plan_id": PLAN_ID,
+                "run_id": args.run_id,
+                "failure_category": "downstream-finalization-full-attempt-cap",
+                "candidate_bytes_removed": candidate_bytes,
+                "full_attempt_cap_bytes": MAX_ATTEMPT_OUTPUT_BYTES,
+                "raw_source_mutated": False,
+                "condition_retry_permitted": False,
+                "campaign_may_continue_after_verified-raw": True,
+            },
+        )
+        enforce_attempt_supervisor_cap(attempt_root)
+        enforce_full_attempt_output_cap(attempt_root)
+        raise T09HostError(
+            "downstream finalization exceeded the full-attempt cap; immutable raw remains accepted"
+        ) from exc
     mark_attempt_completed(
         artifact_root / "pilot-v7/pilot-state.json",
         execution_contract_sha256=contract.sha256,
@@ -9292,6 +15316,8 @@ def finalize_attempt(args: argparse.Namespace) -> dict[str, object]:
         "evaluator_valid": outcome.get("evaluator_validity"),
         "evidence_index_sha256": file_sha256(finalized_root / "evidence-index.json"),
         "finalizer_closure_sha256": canonical_sha256(closure),
+        "full_attempt_bytes": full_attempt_usage.bytes,
+        "full_attempt_cap_bytes": MAX_ATTEMPT_OUTPUT_BYTES,
     }
 
 
@@ -9398,7 +15424,8 @@ def first_pair_checkpoint(args: argparse.Namespace) -> dict[str, object]:
     )
     outcomes = [cast(dict[str, Any], document["outcome"]) for document in evidence]
     usage = load_aggregate_usage(
-        artifact_root / "pilot-v7/aggregate-budget.json", contract_sha256=contract.sha256
+        artifact_root / "pilot-v7/runtime-budget/aggregate-budget.json",
+        contract_sha256=contract.sha256,
     )
     pair_started = state.get("first_pair_started_at_epoch")
     campaign_started = state.get("campaign_started_at_epoch", state.get("pilot_started_at_epoch"))
@@ -9567,7 +15594,7 @@ def campaign_evidence_disposition(args: argparse.Namespace) -> dict[str, object]
     if len(closures) != 1:
         raise T09HostError("all four attempts must select one full finalizer closure")
     aggregate = load_aggregate_usage(
-        artifact_root / "pilot-v7/aggregate-budget.json",
+        artifact_root / "pilot-v7/runtime-budget/aggregate-budget.json",
         contract_sha256=contract.sha256,
     )
     document: dict[str, object] = {
@@ -9627,7 +15654,7 @@ def _attempt_export_archive_matches(
             return False
         with tarfile.open(archive, "r:gz") as handle:
             members = handle.getmembers()
-            if not 1 <= len(members) <= 2_048:
+            if not 1 <= len(members) <= MAX_ATTEMPT_EXPORT_MEMBERS:
                 return False
             by_name: dict[str, tarfile.TarInfo] = {}
             for member in members:
@@ -9643,7 +15670,7 @@ def _attempt_export_archive_matches(
                 by_name[member.name] = member
             expected = {"attempt-export-manifest.json"}
             manifest_member = by_name.get("attempt-export-manifest.json")
-            if manifest_member is None or manifest_member.size > 2_097_152:
+            if manifest_member is None or manifest_member.size > MAX_ATTEMPT_EXPORT_MANIFEST_BYTES:
                 return False
             manifest_stream = handle.extractfile(manifest_member)
             if (
@@ -9739,6 +15766,95 @@ class _BoundedArchiveWriter:
         self.raw.flush()
 
 
+class _StreamingArchiveWriter:
+    """Bound and hash one direct off-host stream without retaining a local duplicate."""
+
+    def __init__(self, raw: BinaryIO) -> None:
+        self.raw = raw
+        self.position = 0
+        self.digest = hashlib.sha256()
+
+    def write(self, value: bytes) -> int:
+        if self.position > MAX_ATTEMPT_EXPORT_BYTES or len(value) > (
+            MAX_ATTEMPT_EXPORT_BYTES - self.position
+        ):
+            raise T09HostError("direct essential export exceeded its write-time byte cap")
+        offset = 0
+        while offset < len(value):
+            written = self.raw.write(value[offset:])
+            if written is None or written <= 0:
+                raise T09HostError("direct essential export stream made no progress")
+            self.digest.update(value[offset : offset + written])
+            self.position += written
+            offset += written
+        return len(value)
+
+    def tell(self) -> int:
+        return self.position
+
+    def flush(self) -> None:
+        self.raw.flush()
+
+
+def _deterministic_export_tarinfo(value: tarfile.TarInfo) -> tarfile.TarInfo:
+    """Normalize metadata so a direct essential export is exactly replayable."""
+
+    value.uid = 0
+    value.gid = 0
+    value.uname = ""
+    value.gname = ""
+    value.mtime = 0
+    value.mode = 0o600
+    value.pax_headers = {}
+    return value
+
+
+def _stream_deterministic_essential_archive(
+    *,
+    destination: BinaryIO,
+    files: list[dict[str, object]],
+    sources: dict[str, Path],
+    export_manifest_path: Path,
+) -> _StreamingArchiveWriter:
+    """Stream one bounded archive whose gzip and tar headers are reproducible."""
+
+    streamed = _StreamingArchiveWriter(destination)
+    # ``tarfile``'s ``w|gz`` mode uses the current wall clock in the gzip
+    # header.  An interrupted transfer must be resendable after its immutable
+    # completion receipt exists, so both compression and member metadata are
+    # normalized explicitly here.
+    with (
+        gzip.GzipFile(
+            filename="",
+            mode="wb",
+            compresslevel=9,
+            fileobj=cast(BinaryIO, streamed),
+            mtime=0,
+        ) as compressed,
+        tarfile.open(
+            fileobj=cast(BinaryIO, compressed),
+            mode="w|",
+            format=tarfile.PAX_FORMAT,
+        ) as handle,
+    ):
+        for entry in files:
+            relative = str(entry["path"])
+            handle.add(
+                sources[relative],
+                arcname=relative,
+                recursive=False,
+                filter=_deterministic_export_tarinfo,
+            )
+        handle.add(
+            export_manifest_path,
+            arcname="attempt-export-manifest.json",
+            recursive=False,
+            filter=_deterministic_export_tarinfo,
+        )
+    streamed.flush()
+    return streamed
+
+
 def _attempt_export_control_sources(
     artifact_root: Path,
     *,
@@ -9758,7 +15874,13 @@ def _attempt_export_control_sources(
     snapshot_manifest_path = attempt_root / "attempt-export-control-manifest.json"
     if not snapshot_manifest_path.exists():
         if snapshot_root.exists() or snapshot_root.is_symlink():
-            raise T09HostError("attempt export control snapshot is partial")
+            if snapshot_root.is_symlink() or not snapshot_root.is_dir():
+                raise T09HostError("attempt export control snapshot is unsafe")
+            # The control snapshot is a derived copy of independently retained
+            # source bytes.  A crash before its completion manifest is therefore
+            # safely recoverable by rebuilding the whole unpublished projection.
+            shutil.rmtree(snapshot_root)
+            _fsync_directory(attempt_root)
         relative_paths = list(ATTEMPT_EXPORT_REQUIRED_CONTROL_PATHS)
         frozen_for_export = load_object(
             artifact_root / "pilot-v7/frozen-run-manifest.json",
@@ -9777,6 +15899,7 @@ def _attempt_export_control_sources(
             raise T09HostError("attempt export transition mode is unsupported")
         optional_roots = (
             artifact_root / "pilot-v7/received-export-acknowledgements",
+            artifact_root / "pilot-v7/attempt-export-completions",
             artifact_root / "pilot-v7/finalization-selections",
         )
         for root in optional_roots:
@@ -9792,41 +15915,58 @@ def _attempt_export_control_sources(
         checkpoint = artifact_root / "pilot-v7/first-pair-checkpoint.json"
         if checkpoint.exists():
             relative_paths.append(checkpoint.relative_to(artifact_root).as_posix())
-        aggregate = artifact_root / "pilot-v7/aggregate-budget.json"
+        aggregate = artifact_root / "pilot-v7/runtime-budget/aggregate-budget.json"
         if aggregate.exists():
             relative_paths.append(aggregate.relative_to(artifact_root).as_posix())
-        snapshot_root.mkdir(mode=0o700, exist_ok=False)
+        staging_root = attempt_root / ".attempt-export-control.incomplete"
+        if staging_root.exists() or staging_root.is_symlink():
+            if staging_root.is_symlink() or not staging_root.is_dir():
+                raise T09HostError("attempt export control staging root is unsafe")
+            shutil.rmtree(staging_root)
+        staging_root.mkdir(mode=0o700, exist_ok=False)
         entries: list[dict[str, object]] = []
-        for relative in sorted(set(relative_paths)):
-            source = artifact_root / relative
-            metadata = source.stat(follow_symlinks=False)
-            if (
-                source.is_symlink()
-                or not stat.S_ISREG(metadata.st_mode)
-                or metadata.st_nlink != 1
-                or metadata.st_size > MAX_PRIVACY_JSON_BYTES
-            ):
-                raise T09HostError("attempt export control file is unsafe or oversized")
-            try:
-                source.resolve(strict=True).relative_to(artifact_root)
-            except ValueError:
-                raise T09HostError(
-                    "attempt export control file escaped the artifact root"
-                ) from None
-            destination = snapshot_root / relative
-            destination.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-            with source.open("rb") as incoming, destination.open("xb") as outgoing:
-                shutil.copyfileobj(incoming, outgoing, length=1_048_576)
-                outgoing.flush()
-                os.fsync(outgoing.fileno())
-            os.chmod(destination, 0o600)
-            entries.append(
-                {
-                    "path": f"control/{relative}",
-                    "bytes": destination.stat().st_size,
-                    "sha256": file_sha256(destination),
-                }
-            )
+        snapshot_bytes = 0
+        try:
+            for relative in sorted(set(relative_paths)):
+                source = artifact_root / relative
+                metadata = source.stat(follow_symlinks=False)
+                if (
+                    source.is_symlink()
+                    or not stat.S_ISREG(metadata.st_mode)
+                    or metadata.st_nlink != 1
+                    or metadata.st_size > MAX_PRIVACY_JSON_BYTES
+                ):
+                    raise T09HostError("attempt export control file is unsafe or oversized")
+                try:
+                    source.resolve(strict=True).relative_to(artifact_root)
+                except ValueError:
+                    raise T09HostError(
+                        "attempt export control file escaped the artifact root"
+                    ) from None
+                destination = staging_root / relative
+                destination.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+                with source.open("rb") as incoming, destination.open("xb") as outgoing:
+                    shutil.copyfileobj(incoming, outgoing, length=1_048_576)
+                    outgoing.flush()
+                    os.fsync(outgoing.fileno())
+                os.chmod(destination, 0o600)
+                snapshot_bytes += destination.stat().st_size
+                if snapshot_bytes > MAX_ATTEMPT_CONTROL_BYTES:
+                    raise T09HostError("attempt export control snapshot exceeds its byte cap")
+                entries.append(
+                    {
+                        "path": f"control/{relative}",
+                        "bytes": destination.stat().st_size,
+                        "sha256": file_sha256(destination),
+                    }
+                )
+            _fsync_directory(staging_root)
+            os.rename(staging_root, snapshot_root)
+            _fsync_directory(attempt_root)
+        finally:
+            if staging_root.exists() and not staging_root.is_symlink():
+                shutil.rmtree(staging_root)
+                _fsync_directory(attempt_root)
         write_exclusive(
             snapshot_manifest_path,
             {
@@ -9838,6 +15978,9 @@ def _attempt_export_control_sources(
                 "files_sha256": canonical_sha256(entries),
             },
         )
+        enforce_attempt_supervisor_cap(attempt_root)
+        if evidence_authority == "immutable-raw-attempt":
+            enforce_full_attempt_output_cap(attempt_root)
     snapshot_manifest = load_object(
         snapshot_manifest_path,
         label="attempt export control snapshot manifest",
@@ -9916,12 +16059,91 @@ def _attempt_export_control_sources(
     return result
 
 
+def _record_attempt_export_completion(
+    *,
+    artifact_root: Path,
+    run_id: str,
+    package_commit: str,
+    archive_bytes: int,
+    archive_sha256: str,
+    manifest_sha256: str,
+    frozen_run_manifest_sha256: str,
+    replacement_image_id: str,
+) -> dict[str, Any]:
+    """Publish the export timestamp only after the destination stream is complete."""
+
+    provider_entry = load_object(
+        artifact_root / "pilot-v7/provider-entry.json",
+        label="attempt export provider entry",
+    )
+    provider_entry_receipt_sha256 = provider_entry.get("receipt_sha256")
+    owned_instance_identity_sha256 = provider_entry.get("owned_instance_identity_sha256")
+    lambda_started = provider_entry.get("lambda_started_at_epoch")
+    if (
+        not isinstance(provider_entry_receipt_sha256, str)
+        or _HEX64.fullmatch(provider_entry_receipt_sha256) is None
+        or not isinstance(owned_instance_identity_sha256, str)
+        or _HEX64.fullmatch(owned_instance_identity_sha256) is None
+        or not isinstance(lambda_started, (int, float))
+        or isinstance(lambda_started, bool)
+    ):
+        raise T09HostError("attempt export lacks its source-bound provider identity")
+    completion_path = _attempt_export_completion_path(artifact_root, run_id)
+    completion_path.parent.mkdir(mode=0o700, exist_ok=True)
+    if completion_path.is_file():
+        retained = load_object(completion_path, label="retained attempt export completion")
+        _validate_attempt_export_completion(
+            retained,
+            run_id=run_id,
+            package_commit=package_commit,
+            archive_bytes=archive_bytes,
+            archive_sha256=archive_sha256,
+            manifest_sha256=manifest_sha256,
+            frozen_run_manifest_sha256=frozen_run_manifest_sha256,
+            replacement_image_id=replacement_image_id,
+            provider_entry_receipt_sha256=provider_entry_receipt_sha256,
+            owned_instance_identity_sha256=owned_instance_identity_sha256,
+            lambda_started_at_epoch=float(lambda_started),
+        )
+        return retained
+    completion: dict[str, Any] = {
+        "schema_version": "0.1.0",
+        "plan_id": PLAN_ID,
+        "host_run_id": HOST_RUN_ID,
+        "run_id": run_id,
+        "package_commit": package_commit,
+        "archive_bytes": archive_bytes,
+        "archive_sha256": archive_sha256,
+        "manifest_sha256": manifest_sha256,
+        "frozen_run_manifest_sha256": frozen_run_manifest_sha256,
+        "replacement_image_id": replacement_image_id,
+        "provider_entry_receipt_sha256": provider_entry_receipt_sha256,
+        "owned_instance_identity_sha256": owned_instance_identity_sha256,
+        "lambda_started_at_epoch": float(lambda_started),
+        "export_completed_at_epoch": time.time(),
+    }
+    write_exclusive(completion_path, completion)
+    _validate_attempt_export_completion(
+        load_object(completion_path, label="published attempt export completion"),
+        run_id=run_id,
+        package_commit=package_commit,
+        archive_bytes=archive_bytes,
+        archive_sha256=archive_sha256,
+        manifest_sha256=manifest_sha256,
+        frozen_run_manifest_sha256=frozen_run_manifest_sha256,
+        replacement_image_id=replacement_image_id,
+        provider_entry_receipt_sha256=provider_entry_receipt_sha256,
+        owned_instance_identity_sha256=owned_instance_identity_sha256,
+        lambda_started_at_epoch=float(lambda_started),
+    )
+    return completion
+
+
 def export_attempt(args: argparse.Namespace, destination: BinaryIO) -> dict[str, object]:
     """Stream the authoritative immutable raw attempt before downstream finalization."""
 
     repository = args.repository.resolve(strict=True)
     artifact_root = args.artifact_root.resolve(strict=True)
-    _require_pilot_disk_headroom(artifact_root, additional_bytes=0)
     command_document = load_object(
         contract_paths(repository)["commands"], label="command manifest set"
     )
@@ -9929,6 +16151,7 @@ def export_attempt(args: argparse.Namespace, destination: BinaryIO) -> dict[str,
         artifact_root,
         repository=repository,
         package_commit=args.package_commit,
+        require_image=False,
     )
     manifest = manifest_for_run(command_document, args.run_id)
     attempt_root = (artifact_root / manifest_output_root(manifest)).resolve(strict=True)
@@ -9961,6 +16184,7 @@ def export_attempt(args: argparse.Namespace, destination: BinaryIO) -> dict[str,
             attempt_root=attempt_root,
             run_id=args.run_id,
             package_commit=args.package_commit,
+            condition_manifest=manifest,
         )
         evidence_authority = "essential-infrastructure-failure"
         evidence_root = attempt_root / "essential-failure"
@@ -9969,12 +16193,22 @@ def export_attempt(args: argparse.Namespace, destination: BinaryIO) -> dict[str,
         downstream_finalization_required = False
     else:
         raise T09HostError("attempt has zero or conflicting evidence-seal authorities")
-    wall = load_object(raw_root / "attempt-wall.json", label="attempt wall")
-    evidence_deadline_epoch = wall.get("evidence_handoff_deadline_epoch")
-    if not isinstance(evidence_deadline_epoch, (int, float)) or isinstance(
-        evidence_deadline_epoch, bool
-    ):
-        raise T09HostError("attempt export lacks its evidence handoff deadline")
+    if evidence_authority == "immutable-raw-attempt":
+        _require_pilot_disk_headroom(artifact_root, additional_bytes=0)
+        wall = load_object(
+            raw_root / CONDITION_SUPERVISOR_DIRNAME / "attempt-wall.json",
+            label="attempt wall",
+        )
+        evidence_deadline_epoch = wall.get("evidence_handoff_deadline_epoch")
+        if not isinstance(evidence_deadline_epoch, (int, float)) or isinstance(
+            evidence_deadline_epoch, bool
+        ):
+            raise T09HostError("attempt export lacks its evidence handoff deadline")
+        remaining_attempt = float(evidence_deadline_epoch) - time.time()
+    else:
+        # Essential authority is already independently bounded; avoid reopening
+        # the oversized/unscannable condition tree merely to read its wall file.
+        remaining_attempt = float(ATTEMPT_EVIDENCE_EXPORT_RESERVE_SECONDS)
     files: list[dict[str, object]] = []
     sources: dict[str, Path] = {}
     total = 0
@@ -10000,11 +16234,43 @@ def export_attempt(args: argparse.Namespace, destination: BinaryIO) -> dict[str,
         run_id=args.run_id,
         evidence_authority=evidence_authority,
     )
-    credential = validate_secret(args.secret_file.resolve(strict=True))
-    control_secret_hits = secret_hits(attempt_root / "attempt-export-control", credential)
-    credential = b""
-    if control_secret_hits:
-        raise T09HostError("attempt export control snapshot retained the exact credential")
+    if evidence_authority == "immutable-raw-attempt":
+        enforce_attempt_supervisor_cap(attempt_root)
+        enforce_full_attempt_output_cap(attempt_root)
+    secret_argument = args.secret_file.resolve(strict=False)
+    if secret_argument.is_file() and not secret_argument.is_symlink():
+        credential = validate_secret(secret_argument.resolve(strict=True))
+        control_secret_hits = secret_hits(attempt_root / "attempt-export-control", credential)
+        credential = b""
+        if control_secret_hits:
+            raise T09HostError("attempt export control snapshot retained the exact credential")
+        credential_validation_mode = (
+            "live-exact-secret-scan"
+            if evidence_authority == "immutable-raw-attempt"
+            else "essential-seal-and-source-bound-control-projection"
+        )
+    elif evidence_authority == "essential-infrastructure-failure":
+        credential_ready_path = artifact_root / "pilot-v7/credential-destruction-ready.json"
+        cleanup_intent_path = artifact_root / "pilot-v7/global-cleanup-intent.json"
+        credential_ready = load_object(
+            credential_ready_path,
+            label="post-cleanup credential destruction readiness",
+        )
+        if (
+            credential_ready.get("schema_version") != "0.1.0"
+            or credential_ready.get("plan_id") != PLAN_ID
+            or credential_ready.get("host_run_id") != HOST_RUN_ID
+            or not cleanup_intent_path.is_file()
+            or credential_ready.get("cleanup_intent_sha256") != file_sha256(cleanup_intent_path)
+            or credential_ready.get("remaining_exact_credential_match_count") != 0
+            or credential_ready.get("secret_value_or_hash_retained") is not False
+            or credential_ready.get("destructive_secret_cleanup_authorized") is not True
+            or privacy_violations(attempt_root / "attempt-export-control")
+        ):
+            raise T09HostError("post-cleanup essential export credential authority drifted")
+        credential_validation_mode = "essential-seal-and-source-bound-control-projection"
+    else:
+        raise T09HostError("attempt export cannot validate credentials after secret destruction")
     for archive_name, path in control_sources.items():
         size = path.stat().st_size
         total += size
@@ -10012,6 +16278,8 @@ def export_attempt(args: argparse.Namespace, destination: BinaryIO) -> dict[str,
         files.append({"path": archive_name, "bytes": size, "sha256": file_sha256(path)})
     if total > MAX_ATTEMPT_EXPORT_BYTES:
         raise T09HostError("attempt export exceeds its raw byte cap")
+    if len(files) + 1 > MAX_ATTEMPT_EXPORT_MEMBERS:
+        raise T09HostError("attempt export exceeds its member-count cap")
     export_manifest_path = attempt_root / "attempt-export-manifest.json"
     export_manifest: dict[str, object] = {
         "schema_version": "0.1.0",
@@ -10034,11 +16302,12 @@ def export_attempt(args: argparse.Namespace, destination: BinaryIO) -> dict[str,
         "files": files,
         "total_bytes": total,
         "actual_credential_scan_passed": True,
+        "credential_validation_mode": credential_validation_mode,
         "actual_credential_exposure_detected": (
-            seal_receipt.get("actual_credential_exposure_detected", False)
+            seal_receipt.get("actual_credential_exposure_detected")
         ),
         "credential_cleanup_integrity_failure": (
-            seal_receipt.get("credential_cleanup_integrity_failure", False)
+            seal_receipt.get("credential_cleanup_integrity_failure")
         ),
         "campaign_continuation_permitted": (
             evidence_authority == "immutable-raw-attempt"
@@ -10050,18 +16319,24 @@ def export_attempt(args: argparse.Namespace, destination: BinaryIO) -> dict[str,
             else True
         ),
         "structural_privacy_findings": (seal_receipt.get("structural_privacy_findings", [])),
-        "exported_before_provider_termination": True,
+        "export_completion_receipt_required": True,
     }
+    encoded_export_manifest = (
+        json.dumps(export_manifest, allow_nan=False, indent=2, sort_keys=True) + "\n"
+    ).encode()
+    if len(encoded_export_manifest) > MAX_ATTEMPT_EXPORT_MANIFEST_BYTES:
+        raise T09HostError("attempt export manifest exceeds its verifier byte cap")
     if export_manifest_path.exists():
         if load_object(export_manifest_path, label="attempt export manifest") != export_manifest:
             raise T09HostError("retained attempt export manifest drifted")
     else:
-        manifest_bytes = len(
-            (json.dumps(export_manifest, allow_nan=False, indent=2, sort_keys=True) + "\n").encode()
-        )
-        _require_pilot_disk_headroom(artifact_root, additional_bytes=manifest_bytes)
+        manifest_bytes = len(encoded_export_manifest)
+        if evidence_authority == "immutable-raw-attempt":
+            _require_pilot_disk_headroom(artifact_root, additional_bytes=manifest_bytes)
         write_exclusive(export_manifest_path, export_manifest)
-    remaining_attempt = float(evidence_deadline_epoch) - time.time()
+    if evidence_authority == "immutable-raw-attempt":
+        enforce_attempt_supervisor_cap(attempt_root)
+        enforce_full_attempt_output_cap(attempt_root)
     campaign_started = _runtime_budget_state(artifact_root).get("campaign_started_at_epoch")
     if not isinstance(campaign_started, (int, float)) or isinstance(campaign_started, bool):
         raise T09HostError("attempt export lacks its empirical campaign clock")
@@ -10073,6 +16348,35 @@ def export_attempt(args: argparse.Namespace, destination: BinaryIO) -> dict[str,
     timeout = min(remaining_attempt, remaining_campaign_to_cutoff)
     if timeout <= 1:
         raise T09HostError("attempt evidence cannot export before provider termination cutoff")
+    if evidence_authority == "essential-infrastructure-failure":
+        with hard_deadline(timeout, message="essential evidence export deadline exceeded"):
+            streamed = _stream_deterministic_essential_archive(
+                destination=destination,
+                files=files,
+                sources=sources,
+                export_manifest_path=export_manifest_path,
+            )
+        result: dict[str, object] = {
+            "run_id": args.run_id,
+            "bytes": streamed.position,
+            "sha256": streamed.digest.hexdigest(),
+            "manifest_sha256": file_sha256(export_manifest_path),
+        }
+        completion = _record_attempt_export_completion(
+            artifact_root=artifact_root,
+            run_id=args.run_id,
+            package_commit=args.package_commit,
+            archive_bytes=streamed.position,
+            archive_sha256=streamed.digest.hexdigest(),
+            manifest_sha256=file_sha256(export_manifest_path),
+            frozen_run_manifest_sha256=frozen_manifest_sha256,
+            replacement_image_id=cast(str, frozen_manifest["replacement_image_id"]),
+        )
+        result["completion_receipt_sha256"] = file_sha256(
+            _attempt_export_completion_path(artifact_root, args.run_id)
+        )
+        result["export_completed_at_epoch"] = completion["export_completed_at_epoch"]
+        return result
     exports = artifact_root / "pilot-v7/attempt-exports"
     exports.mkdir(mode=0o700, exist_ok=True)
     archive = exports / f"{args.run_id}.tar.gz"
@@ -10126,12 +16430,27 @@ def export_attempt(args: argparse.Namespace, destination: BinaryIO) -> dict[str,
                         raise T09HostError("attempt evidence export stream made no progress")
                     offset += written
         destination.flush()
-    return {
+    result = {
         "run_id": args.run_id,
         "bytes": archive.stat().st_size,
         "sha256": file_sha256(archive),
         "manifest_sha256": file_sha256(export_manifest_path),
     }
+    completion = _record_attempt_export_completion(
+        artifact_root=artifact_root,
+        run_id=args.run_id,
+        package_commit=args.package_commit,
+        archive_bytes=archive.stat().st_size,
+        archive_sha256=file_sha256(archive),
+        manifest_sha256=file_sha256(export_manifest_path),
+        frozen_run_manifest_sha256=frozen_manifest_sha256,
+        replacement_image_id=cast(str, frozen_manifest["replacement_image_id"]),
+    )
+    result["completion_receipt_sha256"] = file_sha256(
+        _attempt_export_completion_path(artifact_root, args.run_id)
+    )
+    result["export_completed_at_epoch"] = completion["export_completed_at_epoch"]
+    return result
 
 
 def verify_attempt_export(args: argparse.Namespace) -> None:
@@ -10146,7 +16465,7 @@ def verify_attempt_export(args: argparse.Namespace) -> None:
         raise T09HostError("inbound attempt export exceeds its byte cap")
     with tarfile.open(archive, "r:gz") as handle:
         members = handle.getmembers()
-        if not 1 <= len(members) <= 2_048:
+        if not 1 <= len(members) <= MAX_ATTEMPT_EXPORT_MEMBERS:
             raise T09HostError("attempt export member count is invalid")
         by_name: dict[str, tarfile.TarInfo] = {}
         for member in members:
@@ -10164,10 +16483,12 @@ def verify_attempt_export(args: argparse.Namespace) -> None:
         if manifest_member is None:
             raise T09HostError("attempt export manifest is absent")
         manifest_stream = handle.extractfile(manifest_member)
-        if manifest_stream is None or manifest_member.size > 2_097_152:
+        if manifest_stream is None or manifest_member.size > MAX_ATTEMPT_EXPORT_MANIFEST_BYTES:
             raise T09HostError("attempt export manifest is unreadable")
+        manifest_bytes = manifest_stream.read()
+        manifest_sha256 = hashlib.sha256(manifest_bytes).hexdigest()
         try:
-            manifest: object = json.loads(manifest_stream.read())
+            manifest: object = json.loads(manifest_bytes)
         except json.JSONDecodeError as exc:
             raise T09HostError("attempt export manifest is malformed") from exc
         if not isinstance(manifest, dict):
@@ -10192,13 +16513,20 @@ def verify_attempt_export(args: argparse.Namespace) -> None:
             or not isinstance(manifest.get("empirical_entry_crossed"), bool)
             or not isinstance(manifest.get("downstream_finalization_required_for_analysis"), bool)
             or manifest.get("actual_credential_scan_passed") is not True
+            or manifest.get("credential_validation_mode")
+            not in {
+                "live-exact-secret-scan",
+                "essential-seal-and-source-bound-control-projection",
+            }
             or not isinstance(manifest.get("actual_credential_exposure_detected"), bool)
             or not isinstance(manifest.get("credential_cleanup_integrity_failure"), bool)
             or not isinstance(manifest.get("campaign_continuation_permitted"), bool)
             or not isinstance(manifest.get("structural_privacy_scan_passed"), bool)
             or not isinstance(manifest.get("structural_privacy_findings"), list)
-            or manifest.get("exported_before_provider_termination") is not True
+            or manifest.get("export_completion_receipt_required") is not True
             or not isinstance(files, list)
+            or type(manifest.get("total_bytes")) is not int
+            or not 0 <= cast(int, manifest["total_bytes"]) <= MAX_ATTEMPT_EXPORT_BYTES
         ):
             raise T09HostError("attempt export manifest contract drifted")
         expected_members = {"attempt-export-manifest.json"}
@@ -10232,6 +16560,8 @@ def verify_attempt_export(args: argparse.Namespace) -> None:
                 raise T09HostError("attempt export member hash mismatch")
             expected_members.add(name)
             total += size
+            if total > MAX_ATTEMPT_EXPORT_BYTES:
+                raise T09HostError("attempt export aggregate expansion exceeds its cap")
         if set(by_name) != expected_members or total != manifest.get("total_bytes"):
             raise T09HostError("attempt export member set or aggregate bytes drifted")
         control_names = {name for name in by_name if name.startswith("control/")}
@@ -10336,7 +16666,7 @@ def verify_attempt_export(args: argparse.Namespace) -> None:
             raise T09HostError("attempt export transition mode is unsupported")
         optional_control_names = {
             "control/pilot-v7/first-pair-checkpoint.json",
-            "control/pilot-v7/aggregate-budget.json",
+            "control/pilot-v7/runtime-budget/aggregate-budget.json",
         }
         if (
             control_snapshot_member is None
@@ -10345,6 +16675,7 @@ def verify_attempt_export(args: argparse.Namespace) -> None:
                 name not in required_control_names
                 and name not in optional_control_names
                 and not name.startswith("control/pilot-v7/received-export-acknowledgements/")
+                and not name.startswith("control/pilot-v7/attempt-export-completions/")
                 and not name.startswith("control/pilot-v7/finalization-selections/")
                 for name in control_names
             )
@@ -10452,6 +16783,16 @@ def verify_attempt_export(args: argparse.Namespace) -> None:
                 or failure_receipt.get("unscored") is not True
                 or failure_receipt.get("condition_retry_permitted") is not False
                 or failure_receipt.get("evaluator_permitted") is not False
+                or failure_receipt.get("actual_credential_exposure_detected")
+                != manifest.get("actual_credential_exposure_detected")
+                or failure_receipt.get("credential_cleanup_integrity_failure")
+                != manifest.get("credential_cleanup_integrity_failure")
+                or failure_receipt.get("campaign_continuation_permitted") is not False
+                or failure_summary.get("actual_credential_exposure_detected")
+                != manifest.get("actual_credential_exposure_detected")
+                or failure_summary.get("credential_cleanup_integrity_failure")
+                != manifest.get("credential_cleanup_integrity_failure")
+                or failure_summary.get("campaign_continuation_permitted") is not False
                 or failure_summary.get("attempt_state")
                 != "consumed-infrastructure-invalid-unscored"
                 or failure_summary.get("task_score") is not None
@@ -10477,6 +16818,27 @@ def verify_attempt_export(args: argparse.Namespace) -> None:
         or provider_control.get("lambda_started_at_epoch") != float(lambda_started)
     ):
         raise T09HostError("attempt export provider control is not source-bound")
+    completion_path = args.attempt_export_completion.resolve(strict=True)
+    expected_completion_name = f"{args.run_id}-export-completion.json"
+    if completion_path.parent != inbound or completion_path.name != expected_completion_name:
+        raise T09HostError("attempt export completion is not at its exact inbound path")
+    completion = load_object(completion_path, label="attempt export completion")
+    export_completed_at = _validate_attempt_export_completion(
+        completion,
+        run_id=args.run_id,
+        package_commit=args.package_commit,
+        archive_bytes=archive.stat().st_size,
+        archive_sha256=file_sha256(archive),
+        manifest_sha256=manifest_sha256,
+        frozen_run_manifest_sha256=cast(str, manifest["frozen_run_manifest_sha256"]),
+        replacement_image_id=cast(str, manifest["replacement_image_id"]),
+        provider_entry_receipt_sha256=file_sha256(args.provider_entry_receipt.resolve(strict=True)),
+        owned_instance_identity_sha256=owned_hash,
+        lambda_started_at_epoch=float(lambda_started),
+    )
+    verified_at = time.time()
+    if verified_at + 5.0 < export_completed_at:
+        raise T09HostError("attempt export verification preceded export completion")
     verification: dict[str, object] = {
         "schema_version": "0.1.0",
         "plan_id": PLAN_ID,
@@ -10486,15 +16848,20 @@ def verify_attempt_export(args: argparse.Namespace) -> None:
         "archive_path": archive.name,
         "archive_bytes": archive.stat().st_size,
         "archive_sha256": file_sha256(archive),
+        "manifest_sha256": manifest_sha256,
         "frozen_run_manifest_sha256": manifest["frozen_run_manifest_sha256"],
         "replacement_image_id": manifest["replacement_image_id"],
+        "evidence_authority": manifest["evidence_authority"],
         "empirical_entry_crossed": manifest["empirical_entry_crossed"],
         "provider_entry_receipt_sha256": file_sha256(
             args.provider_entry_receipt.resolve(strict=True)
         ),
         "owned_instance_identity_sha256": owned_hash,
         "lambda_started_at_epoch": float(lambda_started),
-        "verified_before_provider_termination": True,
+        "export_completion_receipt_sha256": file_sha256(completion_path),
+        "export_completed_at_epoch": export_completed_at,
+        "verified_at_epoch": verified_at,
+        "maximum_cross_host_clock_skew_seconds": EVIDENCE_CHRONOLOGY_CLOCK_SKEW_SECONDS,
     }
     verification_path = inbound / f"{args.run_id}-export-verification.json"
     write_exclusive(verification_path, verification)
@@ -10506,6 +16873,7 @@ def verify_attempt_export(args: argparse.Namespace) -> None:
             current_commit=args.restoration_commit,
             archive=archive,
             verification_path=verification_path,
+            export_completion_path=completion_path,
             restoration_root=restore_artifact_root.resolve(strict=False),
             run_id=args.run_id,
         )
@@ -10582,18 +16950,24 @@ def restore_verified_attempt_export(
     current_commit: str | None,
     archive: Path,
     verification_path: Path,
+    export_completion_path: Path,
     restoration_root: Path,
     run_id: str,
 ) -> None:
     """Restore a verified raw export for qualified post-termination finalization."""
 
-    verify_package(repository, package_commit, current_commit=current_commit)
+    command_document = verify_package(
+        repository,
+        package_commit,
+        current_commit=current_commit,
+    )
     contract_path = contract_paths(repository)["execution"]
     contract = load_execution_contract(
         contract_path,
         expected_sha256=file_sha256(contract_path),
     )
     attempt = contract.attempt(run_id)
+    condition_manifest = manifest_for_run(command_document, run_id)
     attempt_root = restoration_root / attempt.output_root
     raw_root = restoration_root / attempt.raw_output_root
     restoration_root.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -10602,7 +16976,7 @@ def restore_verified_attempt_export(
     snapshot_state: dict[str, Any] | None = None
     with tarfile.open(archive, "r:gz") as handle:
         member_list = handle.getmembers()
-        if not 1 <= len(member_list) <= 2_048:
+        if not 1 <= len(member_list) <= MAX_ATTEMPT_EXPORT_MEMBERS:
             raise T09HostError("offline restoration archive member count is invalid")
         members: dict[str, tarfile.TarInfo] = {}
         for member in member_list:
@@ -10621,13 +16995,22 @@ def restore_verified_attempt_export(
         manifest_stream = (
             handle.extractfile(manifest_member) if manifest_member is not None else None
         )
-        if manifest_stream is None:
+        if (
+            manifest_stream is None
+            or manifest_member is None
+            or manifest_member.size > MAX_ATTEMPT_EXPORT_MANIFEST_BYTES
+        ):
             raise T09HostError("offline restoration lacks its export manifest")
         try:
             export_manifest: object = json.loads(manifest_stream.read())
         except json.JSONDecodeError as exc:
             raise T09HostError("offline restoration export manifest is malformed") from exc
-        if not isinstance(export_manifest, dict) or export_manifest.get("run_id") != run_id:
+        if (
+            not isinstance(export_manifest, dict)
+            or export_manifest.get("run_id") != run_id
+            or type(export_manifest.get("total_bytes")) is not int
+            or not 0 <= cast(int, export_manifest["total_bytes"]) <= MAX_ATTEMPT_EXPORT_BYTES
+        ):
             raise T09HostError("offline restoration export identity drifted")
         evidence_authority = export_manifest.get("evidence_authority")
         empirical_entry_crossed = export_manifest.get("empirical_entry_crossed")
@@ -10643,6 +17026,7 @@ def restore_verified_attempt_export(
         file_records = export_manifest.get("files")
         if not isinstance(file_records, list):
             raise T09HostError("offline restoration export file set is malformed")
+        restored_total = 0
         for record in file_records:
             if not isinstance(record, dict):
                 raise T09HostError("offline restoration export record is malformed")
@@ -10659,6 +17043,9 @@ def restore_verified_attempt_export(
                 or export_member.size != size
             ):
                 raise T09HostError("offline restoration member identity drifted")
+            restored_total += size
+            if restored_total > MAX_ATTEMPT_EXPORT_BYTES:
+                raise T09HostError("offline restoration aggregate expansion exceeds its cap")
             stream = handle.extractfile(export_member)
             if stream is None:
                 raise T09HostError("offline restoration member is unreadable")
@@ -10675,7 +17062,7 @@ def restore_verified_attempt_export(
                         / run_id
                         / "pilot-state.json"
                     )
-                elif control_relative == "pilot-v7/aggregate-budget.json":
+                elif control_relative == "pilot-v7/runtime-budget/aggregate-budget.json":
                     destination = (
                         restoration_root
                         / "pilot-v7/restored-control-snapshots"
@@ -10701,6 +17088,8 @@ def restore_verified_attempt_export(
             )
             if name == "control/pilot-v7/pilot-state.json":
                 snapshot_state = load_object(destination, label="restored pilot-state snapshot")
+        if restored_total != export_manifest.get("total_bytes"):
+            raise T09HostError("offline restoration aggregate bytes drifted")
         manifest_record = next(
             (
                 record
@@ -10741,6 +17130,14 @@ def restore_verified_attempt_export(
     essential_seals = snapshot_state.get("essential_failure_seals")
     nonempirical_consumed = snapshot_state.get("nonempirical_infrastructure_attempts_consumed")
     essential_binding = essential_seals.get(run_id) if isinstance(essential_seals, dict) else None
+    restored_essential_binding = (
+        {
+            "manifest_sha256": file_sha256(attempt_root / "essential-failure-manifest.json"),
+            "receipt_sha256": file_sha256(attempt_root / "essential-failure-complete.json"),
+        }
+        if evidence_authority == "essential-infrastructure-failure"
+        else None
+    )
     if (
         entered != expected_entered
         or raw_complete != expected_raw
@@ -10748,7 +17145,7 @@ def restore_verified_attempt_export(
         or snapshot_state.get("execution_contract_sha256") != contract.sha256
         or (
             evidence_authority == "essential-infrastructure-failure"
-            and not isinstance(essential_binding, dict)
+            and essential_binding != restored_essential_binding
         )
     ):
         raise T09HostError("offline restoration state is not the exact consumed raw prefix")
@@ -10776,7 +17173,7 @@ def restore_verified_attempt_export(
         if aggregate_snapshot.get("execution_contract_sha256") != contract.sha256:
             raise T09HostError("offline restoration aggregate budget binding drifted")
         _replace_restored_state(
-            restoration_root / "pilot-v7/aggregate-budget.json",
+            restoration_root / "pilot-v7/runtime-budget/aggregate-budget.json",
             aggregate_snapshot,
         )
     export_destination = restoration_root / "pilot-v7/attempt-exports" / archive.name
@@ -10788,6 +17185,14 @@ def restore_verified_attempt_export(
             expected_sha256=file_sha256(archive),
         )
     verification = load_object(verification_path, label="attempt export verification")
+    restored_completion = _attempt_export_completion_path(restoration_root, run_id)
+    with export_completion_path.open("rb") as source:
+        _write_stream_exclusive_or_compare(
+            stream=source,
+            destination=restored_completion,
+            expected_bytes=export_completion_path.stat().st_size,
+            expected_sha256=file_sha256(export_completion_path),
+        )
     acknowledgement = _received_export_ack_path(restoration_root, run_id)
     if acknowledgement.exists():
         if load_object(acknowledgement, label="restored export acknowledgement") != verification:
@@ -10819,6 +17224,15 @@ def restore_verified_attempt_export(
             attempt_root=attempt_root,
             run_id=run_id,
             package_commit=package_commit,
+            condition_manifest=condition_manifest,
+        )
+        assert restored_essential_binding is not None
+        mark_essential_failure_sealed(
+            state_path,
+            execution_contract_sha256=contract.sha256,
+            run_id=run_id,
+            manifest_sha256=restored_essential_binding["manifest_sha256"],
+            receipt_sha256=restored_essential_binding["receipt_sha256"],
         )
     require_attempt_export_acknowledgement(
         restoration_root,
@@ -10833,6 +17247,7 @@ def restore_verified_attempt_export(
         "package_commit": package_commit,
         "archive_sha256": file_sha256(archive),
         "verification_sha256": file_sha256(verification_path),
+        "export_completion_sha256": file_sha256(export_completion_path),
         "frozen_run_manifest_sha256": verification["frozen_run_manifest_sha256"],
         "raw_source_mutated": False,
         "evidence_authority": evidence_authority,
@@ -10891,7 +17306,12 @@ def acknowledge_attempt_export(args: argparse.Namespace) -> None:
         incoming.unlink()
 
 
-def _reconstructable_disposition(root: Path) -> dict[str, Any]:
+def _reconstructable_disposition(
+    root: Path,
+    *,
+    command_document: dict[str, Any],
+    package_commit: str,
+) -> dict[str, Any]:
     """Accept every zero-retry prefix that can be preserved for adjudication."""
 
     untyped_state = _runtime_budget_state(root)
@@ -10985,14 +17405,414 @@ def _reconstructable_disposition(root: Path) -> dict[str, Any]:
             )
     elif essential_seals:
         raise T09HostError("essential-failure state exists without a consumed failed attempt")
+
+    if pending or nonempirical_consumed:
+        failed_run_id = pending[0] if pending else nonempirical_consumed[0]
+        failed_manifest = manifest_for_run(command_document, failed_run_id)
+        failed_attempt_root = root / manifest_output_root(failed_manifest)
+        seal_manifest_path = failed_attempt_root / "essential-failure-manifest.json"
+        seal_receipt_path = failed_attempt_root / "essential-failure-complete.json"
+        expected_binding = {
+            "manifest_sha256": file_sha256(seal_manifest_path),
+            "receipt_sha256": file_sha256(seal_receipt_path),
+        }
+        if essential_seals.get(failed_run_id) != expected_binding:
+            raise T09HostError(
+                "consumed failure state does not bind the retained essential authority"
+            )
+        validate_essential_failure_seal(
+            attempt_root=failed_attempt_root,
+            run_id=failed_run_id,
+            package_commit=package_commit,
+            condition_manifest=failed_manifest,
+        )
     return state
 
 
-def _evidence_file_manifest(root: Path) -> tuple[list[dict[str, object]], int]:
+def _essential_failure_raw_prefixes(
+    root: Path,
+    *,
+    state: dict[str, Any],
+    command_document: dict[str, Any],
+    package_commit: str,
+) -> frozenset[str]:
+    """Return raw roots superseded by an exact state-bound essential authority."""
+
+    prefixes: set[str] = set()
+    essential_seals = state.get("essential_failure_seals")
+    if not isinstance(essential_seals, dict):
+        raise T09HostError("pilot disposition lacks typed essential-failure bindings")
+    for run_id, binding in essential_seals.items():
+        if run_id not in RUN_IDS or not isinstance(binding, dict):
+            raise T09HostError("pilot disposition contains an unknown essential authority")
+        condition_manifest = manifest_for_run(command_document, run_id)
+        attempt_root = root / manifest_output_root(condition_manifest)
+        raw_root = attempt_root / "raw"
+        manifest_path = attempt_root / "essential-failure-manifest.json"
+        receipt_path = attempt_root / "essential-failure-complete.json"
+        if (
+            not raw_root.is_dir()
+            or raw_root.is_symlink()
+            or (attempt_root / "raw-attempt-manifest.json").exists()
+            or binding
+            != {
+                "manifest_sha256": file_sha256(manifest_path),
+                "receipt_sha256": file_sha256(receipt_path),
+            }
+        ):
+            raise T09HostError("essential authority cannot supersede its raw source tree")
+        validate_essential_failure_seal(
+            attempt_root=attempt_root,
+            run_id=run_id,
+            package_commit=package_commit,
+            condition_manifest=condition_manifest,
+        )
+        prefixes.add(raw_root.relative_to(root).as_posix())
+    return frozenset(prefixes)
+
+
+def _consumed_export_prefix_length(state: dict[str, Any]) -> int:
+    """Return the exact frozen prefix carrying a raw or essential authority."""
+
+    raw_complete = state.get("raw_attempts_complete")
+    essential_seals = state.get("essential_failure_seals")
+    if not isinstance(raw_complete, list) or not isinstance(essential_seals, dict):
+        raise T09HostError("pilot disposition lacks its typed export authorities")
+    prefix_length = len(raw_complete)
+    if essential_seals:
+        if (
+            len(essential_seals) != 1
+            or prefix_length >= len(RUN_IDS)
+            or set(essential_seals) != {RUN_IDS[prefix_length]}
+        ):
+            raise T09HostError("essential export authority is not the next frozen identity")
+        prefix_length += 1
+    return prefix_length
+
+
+_PENDING_ESSENTIAL_CLEANUP_EXPORT_KEYS: Final = {
+    "run_id",
+    "package_commit",
+    "evidence_authority",
+    "essential_manifest_sha256",
+    "essential_receipt_sha256",
+    "export_manifest_sha256",
+    "export_completion_status_at_cleanup_intent",
+    "export_completion_receipt_sha256",
+    "acknowledgement_status_at_cleanup_intent",
+    "security_cleanup_before_ack_required",
+    "deterministic_post_cleanup_replay_required",
+}
+
+
+def _validate_pending_essential_cleanup_export(
+    value: object,
+    *,
+    package_commit: str,
+) -> dict[str, object] | None:
+    """Validate the one terminal essential export cleanup may precede."""
+
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise T09HostError("pending essential cleanup export is malformed")
+    status = value.get("export_completion_status_at_cleanup_intent")
+    completion_sha256 = value.get("export_completion_receipt_sha256")
+    export_manifest_sha256 = value.get("export_manifest_sha256")
+    if (
+        set(value) != _PENDING_ESSENTIAL_CLEANUP_EXPORT_KEYS
+        or value.get("run_id") not in RUN_IDS
+        or value.get("package_commit") != package_commit
+        or value.get("evidence_authority") != "essential-infrastructure-failure"
+        or any(
+            not isinstance(value.get(key), str) or _HEX64.fullmatch(cast(str, value[key])) is None
+            for key in ("essential_manifest_sha256", "essential_receipt_sha256")
+        )
+        or not (
+            export_manifest_sha256 is None
+            or (
+                isinstance(export_manifest_sha256, str)
+                and _HEX64.fullmatch(export_manifest_sha256) is not None
+            )
+        )
+        or status not in {"absent", "published-unacknowledged"}
+        or (
+            (status == "absent" and completion_sha256 is not None)
+            or (
+                status == "published-unacknowledged"
+                and (
+                    not isinstance(completion_sha256, str)
+                    or _HEX64.fullmatch(completion_sha256) is None
+                    or export_manifest_sha256 is None
+                )
+            )
+        )
+        or value.get("acknowledgement_status_at_cleanup_intent") != "absent"
+        or value.get("security_cleanup_before_ack_required") is not True
+        or value.get("deterministic_post_cleanup_replay_required") is not True
+    ):
+        raise T09HostError("pending essential cleanup export is malformed")
+    return dict(value)
+
+
+def _cleanup_export_handoff(
+    root: Path,
+    *,
+    repository: Path,
+    state: dict[str, Any],
+    package_commit: str,
+    retained_chronology: object | None = None,
+    retained_pending: object | None = None,
+) -> tuple[list[dict[str, object]], dict[str, object] | None]:
+    """Gate destructive cleanup while allowing one sealed essential replay."""
+
+    prefix_length = _consumed_export_prefix_length(state)
+    raw_complete = state.get("raw_attempts_complete")
+    essential_seals = state.get("essential_failure_seals")
+    entered = state.get("empirical_attempts_entered")
+    nonempirical = state.get("nonempirical_infrastructure_attempts_consumed")
+    authority_lists_are_typed = all(
+        isinstance(value, list) for value in (raw_complete, entered, nonempirical)
+    )
+    if not authority_lists_are_typed or not isinstance(essential_seals, dict):
+        raise T09HostError("global cleanup consumed authority state is malformed")
+    consumed_ids = set(cast(list[str], entered)) | set(cast(list[str], nonempirical))
+    authority_ids = set(cast(list[str], raw_complete)) | set(essential_seals)
+    if consumed_ids != authority_ids or len(authority_ids) != prefix_length:
+        raise T09HostError("global cleanup requires every consumed condition to be sealed")
+    pending = _validate_pending_essential_cleanup_export(
+        retained_pending,
+        package_commit=package_commit,
+    )
+    if pending is not None:
+        run_id = cast(str, pending["run_id"])
+        if (
+            prefix_length == 0
+            or run_id != RUN_IDS[prefix_length - 1]
+            or set(essential_seals) != {run_id}
+        ):
+            raise T09HostError("retained pending essential export is not the terminal authority")
+        chronology = _validate_export_chronology_projection(
+            retained_chronology,
+            expected_prefix_length=prefix_length - 1,
+        )
+        if chronology != require_prior_export_acknowledgements(
+            root,
+            next_attempt_index=prefix_length - 1,
+            package_commit=package_commit,
+        ):
+            raise T09HostError("retained cleanup export chronology drifted")
+    elif retained_chronology is not None:
+        chronology = _validate_export_chronology_projection(
+            retained_chronology,
+            expected_prefix_length=prefix_length,
+        )
+        if chronology != require_prior_export_acknowledgements(
+            root,
+            next_attempt_index=prefix_length,
+            package_commit=package_commit,
+        ):
+            raise T09HostError("retained cleanup export chronology drifted")
+        return chronology, None
+    elif prefix_length == 0:
+        return [], None
+    else:
+        terminal_run_id = RUN_IDS[prefix_length - 1]
+        acknowledgement_path = _received_export_ack_path(root, terminal_run_id)
+        terminal_is_essential = set(essential_seals) == {terminal_run_id}
+        if not terminal_is_essential or acknowledgement_path.is_file():
+            return (
+                require_prior_export_acknowledgements(
+                    root,
+                    next_attempt_index=prefix_length,
+                    package_commit=package_commit,
+                ),
+                None,
+            )
+        if os.path.lexists(acknowledgement_path):
+            raise T09HostError("pending essential export acknowledgement is unsafe")
+        chronology = require_prior_export_acknowledgements(
+            root,
+            next_attempt_index=prefix_length - 1,
+            package_commit=package_commit,
+        )
+        command_document = load_object(
+            contract_paths(repository)["commands"],
+            label="cleanup command manifest set",
+        )
+        condition_manifest = manifest_for_run(command_document, terminal_run_id)
+        attempt_root = root / manifest_output_root(condition_manifest)
+        essential_manifest_path = attempt_root / "essential-failure-manifest.json"
+        essential_receipt_path = attempt_root / "essential-failure-complete.json"
+        validate_essential_failure_seal(
+            attempt_root=attempt_root,
+            run_id=terminal_run_id,
+            package_commit=package_commit,
+            condition_manifest=condition_manifest,
+        )
+        binding = essential_seals.get(terminal_run_id)
+        if binding != {
+            "manifest_sha256": file_sha256(essential_manifest_path),
+            "receipt_sha256": file_sha256(essential_receipt_path),
+        }:
+            raise T09HostError("pending essential export lost its exact state binding")
+        export_manifest_path = attempt_root / "attempt-export-manifest.json"
+        export_manifest_sha256: str | None = None
+        if export_manifest_path.is_file() and not export_manifest_path.is_symlink():
+            export_manifest_sha256 = file_sha256(export_manifest_path)
+        elif os.path.lexists(export_manifest_path):
+            raise T09HostError("pending essential export manifest is unsafe")
+        completion_path = _attempt_export_completion_path(root, terminal_run_id)
+        completion_status = "absent"
+        completion_sha256: str | None = None
+        if completion_path.is_file() and not completion_path.is_symlink():
+            completion = load_object(
+                completion_path,
+                label="pending essential export completion",
+            )
+            entry = load_object(root / "pilot-v7/provider-entry.json", label="provider entry")
+            frozen_path = root / "pilot-v7/frozen-run-manifest.json"
+            frozen = load_object(frozen_path, label="frozen run manifest")
+            archive_bytes = completion.get("archive_bytes")
+            archive_sha256 = completion.get("archive_sha256")
+            manifest_sha256 = completion.get("manifest_sha256")
+            lambda_started = entry.get("lambda_started_at_epoch")
+            if (
+                type(archive_bytes) is not int
+                or not isinstance(archive_sha256, str)
+                or not isinstance(manifest_sha256, str)
+                or export_manifest_sha256 != manifest_sha256
+                or not isinstance(lambda_started, (int, float))
+                or isinstance(lambda_started, bool)
+            ):
+                raise T09HostError("pending essential export completion is malformed")
+            _validate_attempt_export_completion(
+                completion,
+                run_id=terminal_run_id,
+                package_commit=package_commit,
+                archive_bytes=archive_bytes,
+                archive_sha256=archive_sha256,
+                manifest_sha256=manifest_sha256,
+                frozen_run_manifest_sha256=file_sha256(frozen_path),
+                replacement_image_id=cast(str, frozen.get("replacement_image_id")),
+                provider_entry_receipt_sha256=cast(str, entry.get("receipt_sha256")),
+                owned_instance_identity_sha256=cast(
+                    str, entry.get("owned_instance_identity_sha256")
+                ),
+                lambda_started_at_epoch=float(lambda_started),
+            )
+            completion_status = "published-unacknowledged"
+            completion_sha256 = file_sha256(completion_path)
+        elif os.path.lexists(completion_path):
+            raise T09HostError("pending essential export completion is unsafe")
+        pending = {
+            "run_id": terminal_run_id,
+            "package_commit": package_commit,
+            "evidence_authority": "essential-infrastructure-failure",
+            "essential_manifest_sha256": file_sha256(essential_manifest_path),
+            "essential_receipt_sha256": file_sha256(essential_receipt_path),
+            "export_manifest_sha256": export_manifest_sha256,
+            "export_completion_status_at_cleanup_intent": completion_status,
+            "export_completion_receipt_sha256": completion_sha256,
+            "acknowledgement_status_at_cleanup_intent": "absent",
+            "security_cleanup_before_ack_required": True,
+            "deterministic_post_cleanup_replay_required": True,
+        }
+    assert pending is not None
+    run_id = cast(str, pending["run_id"])
+    command_document = load_object(
+        contract_paths(repository)["commands"],
+        label="cleanup command manifest set",
+    )
+    condition_manifest = manifest_for_run(command_document, run_id)
+    attempt_root = root / manifest_output_root(condition_manifest)
+    if pending["essential_manifest_sha256"] != file_sha256(
+        attempt_root / "essential-failure-manifest.json"
+    ) or pending["essential_receipt_sha256"] != file_sha256(
+        attempt_root / "essential-failure-complete.json"
+    ):
+        raise T09HostError("pending essential export bytes drifted after cleanup intent")
+    return chronology, pending
+
+
+_EXPORT_CHRONOLOGY_PROJECTION_KEYS: Final = {
+    "run_id",
+    "evidence_authority",
+    "empirical_entry_crossed",
+    "archive_bytes",
+    "archive_sha256",
+    "manifest_sha256",
+    "export_completion_receipt_sha256",
+    "acknowledgement_receipt_sha256",
+    "export_completed_at_epoch",
+    "verified_at_epoch",
+    "maximum_cross_host_clock_skew_seconds",
+}
+
+
+def _validate_export_chronology_projection(
+    value: object,
+    *,
+    expected_prefix_length: int | None = None,
+) -> list[dict[str, object]]:
+    """Validate the compact direct-export chronology bound into aggregate handoff."""
+
+    if not isinstance(value, list) or len(value) > len(RUN_IDS):
+        raise T09HostError("per-attempt export chronology projection is malformed")
+    if expected_prefix_length is not None and len(value) != expected_prefix_length:
+        raise T09HostError("per-attempt export chronology prefix length drifted")
+    result: list[dict[str, object]] = []
+    for index, raw in enumerate(value):
+        if not isinstance(raw, dict):
+            raise T09HostError("per-attempt export chronology record is malformed")
+        completed = raw.get("export_completed_at_epoch")
+        verified = raw.get("verified_at_epoch")
+        if (
+            set(raw) != _EXPORT_CHRONOLOGY_PROJECTION_KEYS
+            or raw.get("run_id") != RUN_IDS[index]
+            or raw.get("evidence_authority")
+            not in {"immutable-raw-attempt", "essential-infrastructure-failure"}
+            or not isinstance(raw.get("empirical_entry_crossed"), bool)
+            or type(raw.get("archive_bytes")) is not int
+            or not 0 < cast(int, raw["archive_bytes"]) <= MAX_ATTEMPT_EXPORT_BYTES
+            or any(
+                not isinstance(raw.get(key), str) or _HEX64.fullmatch(cast(str, raw[key])) is None
+                for key in (
+                    "archive_sha256",
+                    "manifest_sha256",
+                    "export_completion_receipt_sha256",
+                    "acknowledgement_receipt_sha256",
+                )
+            )
+            or not isinstance(completed, (int, float))
+            or isinstance(completed, bool)
+            or not isinstance(verified, (int, float))
+            or isinstance(verified, bool)
+            or not math.isfinite(float(completed))
+            or not math.isfinite(float(verified))
+            or float(completed) > float(verified) + EVIDENCE_CHRONOLOGY_CLOCK_SKEW_SECONDS
+            or raw.get("maximum_cross_host_clock_skew_seconds")
+            != EVIDENCE_CHRONOLOGY_CLOCK_SKEW_SECONDS
+        ):
+            raise T09HostError("per-attempt export chronology record drifted")
+        result.append(dict(raw))
+    return result
+
+
+def _evidence_file_manifest(
+    root: Path,
+    *,
+    excluded_relative_prefixes: frozenset[str] = frozenset(),
+) -> tuple[list[dict[str, object]], int]:
     files: list[dict[str, object]] = []
     total = 0
     for path in sorted(root.rglob("*")):
         relative = path.relative_to(root).as_posix()
+        if any(
+            relative == prefix or relative.startswith(prefix + "/")
+            for prefix in excluded_relative_prefixes
+        ):
+            continue
         generated_attempt_export = relative.startswith(
             "pilot-v7/attempt-exports/"
         ) and relative.endswith(".tar.gz")
@@ -11015,6 +17835,8 @@ def _evidence_file_manifest(root: Path) -> tuple[list[dict[str, object]], int]:
                 "sha256": file_sha256(path),
             }
         )
+        if len(files) > MAX_STAGED_EVIDENCE_FILES:
+            raise T09HostError("staged evidence exceeds its exact member-count cap")
     return files, total
 
 
@@ -11132,15 +17954,49 @@ def stage(args: argparse.Namespace) -> None:
     """Seal one remote evidence archive for the T07-style user download checkpoint."""
 
     root = args.artifact_root.resolve(strict=True)
+    command_document = verify_package(
+        args.repository.resolve(strict=True),
+        args.package_commit,
+    )
     if not staged_archive_headroom_ok():
         raise T09HostError("frozen evidence caps do not reserve staged-archive headroom")
     cleanup_receipt = load_object(root / "pilot-v7/host-cleanup.json", label="cleanup")
     if (
         cleanup_receipt.get("global_secret_scan_passed") is not True
         or cleanup_receipt.get("remote_secret_removed") is not True
+        or cleanup_receipt.get("core_destruction_verified") is not True
+        or cleanup_receipt.get("core_safety_stop_detected") is not False
+        or cleanup_receipt.get("credential_rotation_required_due_to_core_handling") is not False
+        or cleanup_receipt.get("core_scan_integrity_failure") is not False
     ):
-        raise T09HostError("global credential cleanup is incomplete")
-    state = _reconstructable_disposition(root)
+        raise T09HostError("global credential/core cleanup is incomplete")
+    try:
+        staged_core_records = detect_core_artifacts(root)
+    except (OSError, T09HostError) as exc:
+        raise T09HostError("aggregate staging cannot prove the absence of core artifacts") from exc
+    if staged_core_records:
+        raise T09HostError("aggregate staging excludes every detected core artifact")
+    state = _reconstructable_disposition(
+        root,
+        command_document=command_document,
+        package_commit=args.package_commit,
+    )
+    export_chronology = require_prior_export_acknowledgements(
+        root,
+        next_attempt_index=_consumed_export_prefix_length(state),
+        package_commit=args.package_commit,
+    )
+    export_chronology = _validate_export_chronology_projection(
+        export_chronology,
+        expected_prefix_length=_consumed_export_prefix_length(state),
+    )
+    export_chronology_sha256 = canonical_sha256(export_chronology)
+    essential_raw_prefixes = _essential_failure_raw_prefixes(
+        root,
+        state=state,
+        command_document=command_document,
+        package_commit=args.package_commit,
+    )
     frozen_manifest_path = root / "pilot-v7/frozen-run-manifest.json"
     frozen_manifest = load_object(frozen_manifest_path, label="frozen run manifest")
     frozen_manifest_sha256 = file_sha256(frozen_manifest_path)
@@ -11158,8 +18014,28 @@ def stage(args: argparse.Namespace) -> None:
             "provider termination is due; use the direct attempt exports and terminate now"
         )
     stage_timeout = min(MAX_STAGE_SECONDS, seconds_to_termination_cutoff)
-    privacy_hits = privacy_violations(root)
-    files, total = _evidence_file_manifest(root)
+    privacy_hits = privacy_violations(
+        root,
+        excluded_relative_prefixes=essential_raw_prefixes,
+    )
+    files, total = _evidence_file_manifest(
+        root,
+        excluded_relative_prefixes=essential_raw_prefixes,
+    )
+    staged_files = {
+        cast(str, record["path"]): record for record in files if isinstance(record.get("path"), str)
+    }
+    for record in export_chronology:
+        run_id = cast(str, record["run_id"])
+        completion_relative = f"pilot-v7/attempt-export-completions/{run_id}-export-completion.json"
+        acknowledgement_relative = f"pilot-v7/received-export-acknowledgements/{run_id}.json"
+        if (
+            staged_files.get(completion_relative, {}).get("sha256")
+            != record["export_completion_receipt_sha256"]
+            or staged_files.get(acknowledgement_relative, {}).get("sha256")
+            != record["acknowledgement_receipt_sha256"]
+        ):
+            raise T09HostError("aggregate stage omitted a direct-export chronology receipt")
     manifest_path = root / "pilot-v7/evidence-stage-manifest.json"
     write_exclusive(
         manifest_path,
@@ -11172,6 +18048,8 @@ def stage(args: argparse.Namespace) -> None:
             "frozen_run_manifest_id": frozen_manifest.get("manifest_id"),
             "frozen_run_manifest_sha256": frozen_manifest_sha256,
             "replacement_image_id": frozen_manifest.get("replacement_image_id"),
+            "per_attempt_export_chronology": export_chronology,
+            "per_attempt_export_chronology_sha256": export_chronology_sha256,
             "files": files,
             "total_bytes": total,
             "secret_scan_passed": True,
@@ -11206,6 +18084,7 @@ def stage(args: argparse.Namespace) -> None:
     owned_hash = dynamic_summary.get("owned_instance_identity_sha256")
     if not isinstance(owned_hash, str) or _HEX64.fullmatch(owned_hash) is None:
         raise T09HostError("preflight lacks the owned provider identity hash")
+    stage_completed_at = time.time()
     identity = {
         "schema_version": "0.1.0",
         "stage_id": STAGE_ID,
@@ -11215,11 +18094,14 @@ def stage(args: argparse.Namespace) -> None:
         "manifest_sha256": file_sha256(manifest_path),
         "frozen_run_manifest_sha256": frozen_manifest_sha256,
         "replacement_image_id": frozen_manifest.get("replacement_image_id"),
+        "per_attempt_export_chronology": export_chronology,
+        "per_attempt_export_chronology_sha256": export_chronology_sha256,
         "lambda_started_at_epoch": lambda_started,
         "owned_instance_identity_sha256": owned_hash,
         "provider_entry_receipt_sha256": dynamic_summary.get("receipt_sha256"),
         "provider_closeout_pending": True,
-        "download_then_verify_before_termination": True,
+        "stage_completed_at_epoch": stage_completed_at,
+        "verification_before_provider_termination_required": True,
     }
     write_exclusive(root / "pilot-v7/evidence-stage-identity.json", identity)
     write_exclusive(
@@ -11228,6 +18110,7 @@ def stage(args: argparse.Namespace) -> None:
             "schema_version": "0.1.0",
             "stage_id": STAGE_ID,
             "archive_sha256": identity["sha256"],
+            "per_attempt_export_chronology_sha256": export_chronology_sha256,
             "owned_instance_identity_sha256": owned_hash,
             "action": (
                 "download-stage-archive-identity-and-marker; verify-inbound; "
@@ -11247,6 +18130,9 @@ def verify_inbound(args: argparse.Namespace) -> None:
     marker_path = inbound / "TERMINATE_REQUIRED.json"
     identity = load_object(identity_path, label="inbound stage identity")
     marker = load_object(marker_path, label="inbound termination marker")
+    chronology = _validate_export_chronology_projection(
+        identity.get("per_attempt_export_chronology")
+    )
     if (
         identity.get("stage_id") != STAGE_ID
         or identity.get("archive_id") != ARCHIVE_ID
@@ -11254,14 +18140,28 @@ def verify_inbound(args: argparse.Namespace) -> None:
         or identity.get("bytes") != archive.stat().st_size
         or marker.get("stage_id") != STAGE_ID
         or marker.get("archive_sha256") != identity.get("sha256")
+        or marker.get("per_attempt_export_chronology_sha256")
+        != identity.get("per_attempt_export_chronology_sha256")
+        or identity.get("per_attempt_export_chronology_sha256") != canonical_sha256(chronology)
         or marker.get("provider_closeout_required") is not True
         or not isinstance(identity.get("frozen_run_manifest_sha256"), str)
         or _HEX64.fullmatch(cast(str, identity["frozen_run_manifest_sha256"])) is None
         or not isinstance(identity.get("replacement_image_id"), str)
         or re.fullmatch(r"sha256:[a-f0-9]{64}", cast(str, identity["replacement_image_id"])) is None
         or archive.stat().st_size > MAX_STAGED_EVIDENCE_BYTES
+        or not isinstance(identity.get("lambda_started_at_epoch"), (int, float))
+        or isinstance(identity.get("lambda_started_at_epoch"), bool)
+        or not isinstance(identity.get("stage_completed_at_epoch"), (int, float))
+        or isinstance(identity.get("stage_completed_at_epoch"), bool)
+        or float(cast(int | float, identity["stage_completed_at_epoch"]))
+        < float(cast(int | float, identity["lambda_started_at_epoch"]))
+        or float(cast(int | float, identity["stage_completed_at_epoch"])) > time.time() + 5.0
+        or identity.get("verification_before_provider_termination_required") is not True
     ):
         raise T09HostError("inbound evidence-stage identity drifted")
+    verified_at = time.time()
+    if verified_at < float(cast(int | float, identity["stage_completed_at_epoch"])):
+        raise T09HostError("inbound verification preceded aggregate stage completion")
     write_exclusive(
         inbound / "inbound-verification.json",
         {
@@ -11270,10 +18170,147 @@ def verify_inbound(args: argparse.Namespace) -> None:
             "archive_sha256": identity["sha256"],
             "archive_bytes": identity["bytes"],
             "owned_instance_identity_sha256": identity["owned_instance_identity_sha256"],
-            "verified_before_provider_termination": True,
+            "per_attempt_export_chronology_sha256": identity[
+                "per_attempt_export_chronology_sha256"
+            ],
+            "stage_completed_at_epoch": identity["stage_completed_at_epoch"],
+            "verified_at_epoch": verified_at,
+            "maximum_cross_host_clock_skew_seconds": (EVIDENCE_CHRONOLOGY_CLOCK_SKEW_SECONDS),
             "provider_closeout_still_required": True,
         },
     )
+
+
+def _validate_aggregate_direct_export_chronology(
+    *,
+    stage_archive: Path,
+    stage_identity: dict[str, Any],
+    package_commit: str,
+    provider_entry_receipt_sha256: str,
+    owned_instance_identity_sha256: str,
+    lambda_started_at_epoch: float,
+) -> list[dict[str, object]]:
+    """Reconstruct every direct-export receipt embedded in an aggregate stage."""
+
+    chronology = _validate_export_chronology_projection(
+        stage_identity.get("per_attempt_export_chronology")
+    )
+    if stage_identity.get("per_attempt_export_chronology_sha256") != canonical_sha256(chronology):
+        raise T09HostError("aggregate direct-export chronology identity drifted")
+    required_names = {"pilot-v7/evidence-stage-manifest.json"}
+    for record in chronology:
+        run_id = cast(str, record["run_id"])
+        required_names.update(
+            {
+                f"pilot-v7/attempt-export-completions/{run_id}-export-completion.json",
+                f"pilot-v7/received-export-acknowledgements/{run_id}.json",
+            }
+        )
+    documents: dict[str, tuple[dict[str, Any], int, str]] = {}
+    member_count = 0
+    with tarfile.open(stage_archive, "r:gz") as handle:
+        for member in handle:
+            member_count += 1
+            relative = PurePosixPath(member.name)
+            if (
+                member_count > MAX_STAGED_EVIDENCE_FILES + 1
+                or not member.isfile()
+                or relative.is_absolute()
+                or ".." in relative.parts
+            ):
+                raise T09HostError("aggregate evidence stage contains an unsafe member")
+            if member.name not in required_names:
+                continue
+            if member.name in documents or member.size > MAX_PRIVACY_JSON_BYTES:
+                raise T09HostError("aggregate chronology receipt is duplicated or oversized")
+            stream = handle.extractfile(member)
+            if stream is None:
+                raise T09HostError("aggregate chronology receipt is unreadable")
+            encoded = stream.read(MAX_PRIVACY_JSON_BYTES + 1)
+            if len(encoded) != member.size or len(encoded) > MAX_PRIVACY_JSON_BYTES:
+                raise T09HostError("aggregate chronology receipt size drifted")
+            try:
+                value: object = json.loads(encoded)
+            except json.JSONDecodeError as exc:
+                raise T09HostError("aggregate chronology receipt is malformed") from exc
+            if not isinstance(value, dict):
+                raise T09HostError("aggregate chronology receipt is not an object")
+            documents[member.name] = (
+                value,
+                member.size,
+                hashlib.sha256(encoded).hexdigest(),
+            )
+    if set(documents) != required_names:
+        raise T09HostError("aggregate evidence stage omitted a direct-export receipt")
+    manifest, _, manifest_sha256 = documents["pilot-v7/evidence-stage-manifest.json"]
+    files = manifest.get("files")
+    if (
+        manifest_sha256 != stage_identity.get("manifest_sha256")
+        or manifest.get("per_attempt_export_chronology") != chronology
+        or manifest.get("per_attempt_export_chronology_sha256") != canonical_sha256(chronology)
+        or manifest.get("frozen_run_manifest_sha256")
+        != stage_identity.get("frozen_run_manifest_sha256")
+        or manifest.get("replacement_image_id") != stage_identity.get("replacement_image_id")
+        or manifest.get("provider_closeout_pending") is not True
+        or not isinstance(files, list)
+    ):
+        raise T09HostError("aggregate evidence-stage manifest chronology drifted")
+    file_records: dict[str, dict[str, object]] = {}
+    for raw in cast(list[object], files):
+        if not isinstance(raw, dict) or not isinstance(raw.get("path"), str):
+            raise T09HostError("aggregate evidence-stage file record is malformed")
+        path = cast(str, raw["path"])
+        if path in file_records:
+            raise T09HostError("aggregate evidence-stage file record is duplicated")
+        file_records[path] = raw
+    validated: list[dict[str, object]] = []
+    frozen_sha256 = stage_identity.get("frozen_run_manifest_sha256")
+    replacement_image_id = stage_identity.get("replacement_image_id")
+    if (
+        not isinstance(frozen_sha256, str)
+        or _HEX64.fullmatch(frozen_sha256) is None
+        or not isinstance(replacement_image_id, str)
+        or re.fullmatch(r"sha256:[a-f0-9]{64}", replacement_image_id) is None
+    ):
+        raise T09HostError("aggregate evidence stage lacks its frozen runtime identity")
+    for projection in chronology:
+        run_id = cast(str, projection["run_id"])
+        completion_name = f"pilot-v7/attempt-export-completions/{run_id}-export-completion.json"
+        acknowledgement_name = f"pilot-v7/received-export-acknowledgements/{run_id}.json"
+        completion, completion_bytes, completion_sha256 = documents[completion_name]
+        acknowledgement, acknowledgement_bytes, acknowledgement_sha256 = documents[
+            acknowledgement_name
+        ]
+        if file_records.get(completion_name) != {
+            "path": completion_name,
+            "bytes": completion_bytes,
+            "sha256": completion_sha256,
+        } or file_records.get(acknowledgement_name) != {
+            "path": acknowledgement_name,
+            "bytes": acknowledgement_bytes,
+            "sha256": acknowledgement_sha256,
+        }:
+            raise T09HostError("aggregate direct-export receipt manifest binding drifted")
+        observed = _validate_attempt_export_acknowledgement(
+            acknowledgement=acknowledgement,
+            acknowledgement_sha256=acknowledgement_sha256,
+            completion=completion,
+            completion_sha256=completion_sha256,
+            run_id=run_id,
+            package_commit=package_commit,
+            evidence_authority=cast(str, projection["evidence_authority"]),
+            empirical_entry_crossed=cast(bool, projection["empirical_entry_crossed"]),
+            frozen_run_manifest_sha256=frozen_sha256,
+            replacement_image_id=replacement_image_id,
+            provider_entry_receipt_sha256=provider_entry_receipt_sha256,
+            owned_instance_identity_sha256=owned_instance_identity_sha256,
+            lambda_started_at_epoch=lambda_started_at_epoch,
+            archive=None,
+        )
+        if observed != projection:
+            raise T09HostError("aggregate direct-export chronology projection drifted")
+        validated.append(observed)
+    return validated
 
 
 def package(args: argparse.Namespace) -> None:
@@ -11305,7 +18342,23 @@ def package(args: argparse.Namespace) -> None:
             or transition.get("to_package_commit") != args.package_commit
         ):
             raise T09HostError("provider closeout package transition drifted")
+    closeout = validate_provider_closeout_receipt(
+        args.provider_closeout_receipt.resolve(strict=True),
+        expected_lambda_started_at_epoch=float(lambda_started),
+        expected_owned_instance_identity_sha256=owned_hash,
+        expected_entry_receipt_sha256=entry_sha256,
+        expected_package_commit=provider_package_commit,
+        repository_root=args.repository.resolve(strict=True),
+        source_root=args.provider_closeout_source_root.resolve(strict=True),
+        entry_receipt_path=entry_receipt_path,
+        entry_source_root=args.provider_entry_source_root.resolve(strict=True),
+    )
+    termination_started = closeout.get("termination_started_at_epoch")
+    if not isinstance(termination_started, (int, float)) or isinstance(termination_started, bool):
+        raise T09HostError("provider closeout lacks its termination-start chronology")
     source_archives: list[Path] = []
+    chronology_receipts: list[Path] = []
+    direct_export_chronology: list[dict[str, object]] = []
     frozen_manifest_sha256s: set[str] = set()
     replacement_image_ids: set[str] = set()
     aggregate_verification_path = inbound / "inbound-verification.json"
@@ -11319,13 +18372,34 @@ def package(args: argparse.Namespace) -> None:
             inbound / "evidence-stage-identity.json", label="stage identity"
         )
         if (
-            verification.get("verified_before_provider_termination") is not True
-            or verification.get("archive_sha256") != file_sha256(stage_archive)
+            verification.get("archive_sha256") != file_sha256(stage_archive)
             or stage_identity.get("lambda_started_at_epoch") != lambda_started
             or stage_identity.get("owned_instance_identity_sha256") != owned_hash
             or stage_identity.get("provider_entry_receipt_sha256") != entry_sha256
+            or verification.get("stage_completed_at_epoch")
+            != stage_identity.get("stage_completed_at_epoch")
+            or verification.get("per_attempt_export_chronology_sha256")
+            != stage_identity.get("per_attempt_export_chronology_sha256")
+            or verification.get("maximum_cross_host_clock_skew_seconds")
+            != EVIDENCE_CHRONOLOGY_CLOCK_SKEW_SECONDS
         ):
             raise T09HostError("verified aggregate evidence stage drifted")
+        stage_completed = verification.get("stage_completed_at_epoch")
+        verified_at = verification.get("verified_at_epoch")
+        if (
+            not isinstance(stage_completed, (int, float))
+            or isinstance(stage_completed, bool)
+            or not isinstance(verified_at, (int, float))
+            or isinstance(verified_at, bool)
+        ):
+            raise T09HostError("aggregate evidence chronology is malformed")
+        _require_pretermination_evidence_chronology(
+            lambda_started_at_epoch=float(lambda_started),
+            export_completed_at_epoch=float(stage_completed),
+            verified_at_epoch=float(verified_at),
+            termination_started_at_epoch=float(termination_started),
+            label="aggregate evidence stage",
+        )
         frozen_sha = stage_identity.get("frozen_run_manifest_sha256")
         replacement_image = stage_identity.get("replacement_image_id")
         if (
@@ -11337,7 +18411,28 @@ def package(args: argparse.Namespace) -> None:
             raise T09HostError("aggregate evidence lacks the frozen runtime identity")
         frozen_manifest_sha256s.add(frozen_sha)
         replacement_image_ids.add(replacement_image)
+        direct_export_chronology = _validate_aggregate_direct_export_chronology(
+            stage_archive=stage_archive,
+            stage_identity=stage_identity,
+            package_commit=args.package_commit,
+            provider_entry_receipt_sha256=entry_sha256,
+            owned_instance_identity_sha256=owned_hash,
+            lambda_started_at_epoch=float(lambda_started),
+        )
+        for record in direct_export_chronology:
+            _require_pretermination_evidence_chronology(
+                lambda_started_at_epoch=float(lambda_started),
+                export_completed_at_epoch=float(
+                    cast(int | float, record["export_completed_at_epoch"])
+                ),
+                verified_at_epoch=float(cast(int | float, record["verified_at_epoch"])),
+                termination_started_at_epoch=float(termination_started),
+                label=f"{record['run_id']} direct attempt export embedded in aggregate stage",
+            )
         source_archives.append(stage_archive)
+        chronology_receipts.extend(
+            [inbound / "evidence-stage-identity.json", aggregate_verification_path]
+        )
     else:
         prefix_open = True
         for run_id in RUN_IDS:
@@ -11352,16 +18447,11 @@ def package(args: argparse.Namespace) -> None:
                 label="attempt export verification",
             )
             archive = inbound / f"{run_id}.tar.gz"
-            if (
-                verification.get("run_id") != run_id
-                or verification.get("verified_before_provider_termination") is not True
-                or verification.get("archive_sha256") != file_sha256(archive)
-                or verification.get("archive_bytes") != archive.stat().st_size
-                or verification.get("provider_entry_receipt_sha256") != entry_sha256
-                or verification.get("owned_instance_identity_sha256") != owned_hash
-                or verification.get("lambda_started_at_epoch") != lambda_started
-            ):
-                raise T09HostError("direct attempt export verification drifted")
+            completion_path = inbound / f"{run_id}-export-completion.json"
+            completion = load_object(
+                completion_path,
+                label="attempt export completion",
+            )
             frozen_sha = verification.get("frozen_run_manifest_sha256")
             replacement_image = verification.get("replacement_image_id")
             if (
@@ -11373,20 +18463,43 @@ def package(args: argparse.Namespace) -> None:
                 raise T09HostError("direct attempt export lacks the frozen runtime identity")
             frozen_manifest_sha256s.add(frozen_sha)
             replacement_image_ids.add(replacement_image)
+            evidence_authority = verification.get("evidence_authority")
+            empirical_entry_crossed = verification.get("empirical_entry_crossed")
+            if evidence_authority not in {
+                "immutable-raw-attempt",
+                "essential-infrastructure-failure",
+            } or not isinstance(empirical_entry_crossed, bool):
+                raise T09HostError("direct attempt export authority drifted")
+            projection = _validate_attempt_export_acknowledgement(
+                acknowledgement=verification,
+                acknowledgement_sha256=file_sha256(verification_path),
+                completion=completion,
+                completion_sha256=file_sha256(completion_path),
+                run_id=run_id,
+                package_commit=args.package_commit,
+                frozen_run_manifest_sha256=frozen_sha,
+                replacement_image_id=replacement_image,
+                provider_entry_receipt_sha256=entry_sha256,
+                owned_instance_identity_sha256=owned_hash,
+                lambda_started_at_epoch=float(lambda_started),
+                evidence_authority=evidence_authority,
+                empirical_entry_crossed=empirical_entry_crossed,
+                archive=archive,
+            )
+            _require_pretermination_evidence_chronology(
+                lambda_started_at_epoch=float(lambda_started),
+                export_completed_at_epoch=float(
+                    cast(int | float, projection["export_completed_at_epoch"])
+                ),
+                verified_at_epoch=float(cast(int | float, projection["verified_at_epoch"])),
+                termination_started_at_epoch=float(termination_started),
+                label=f"{run_id} direct attempt export",
+            )
+            direct_export_chronology.append(projection)
             source_archives.append(archive)
+            chronology_receipts.extend([completion_path, verification_path])
     if len(frozen_manifest_sha256s) != 1 or len(replacement_image_ids) != 1:
         raise T09HostError("evidence payloads do not bind one frozen replacement runtime")
-    closeout = validate_provider_closeout_receipt(
-        args.provider_closeout_receipt.resolve(strict=True),
-        expected_lambda_started_at_epoch=float(lambda_started),
-        expected_owned_instance_identity_sha256=owned_hash,
-        expected_entry_receipt_sha256=entry_sha256,
-        expected_package_commit=provider_package_commit,
-        repository_root=args.repository.resolve(strict=True),
-        source_root=args.provider_closeout_source_root.resolve(strict=True),
-        entry_receipt_path=entry_receipt_path,
-        entry_source_root=args.provider_entry_source_root.resolve(strict=True),
-    )
     output_root = args.final_archive_root.resolve(strict=True)
     if output_root != APPROVED_FINAL_ARCHIVE_ROOT:
         raise T09HostError("final archive root is not the approved T07-style APFS path")
@@ -11409,6 +18522,25 @@ def package(args: argparse.Namespace) -> None:
                 "sha256": file_sha256(source_copy),
             }
         )
+    handoff_root = final_root / "pretermination-handoff-receipts"
+    handoff_root.mkdir(mode=0o700)
+    copied_chronology: list[dict[str, object]] = []
+    for source_receipt in chronology_receipts:
+        destination = handoff_root / source_receipt.name
+        with source_receipt.open("rb") as source, destination.open("xb") as output:
+            shutil.copyfileobj(source, output, length=1_048_576)
+            output.flush()
+            os.fsync(output.fileno())
+        os.chmod(destination, 0o600)
+        if file_sha256(destination) != file_sha256(source_receipt):
+            raise T09HostError("pretermination chronology receipt copy verification failed")
+        copied_chronology.append(
+            {
+                "path": f"{handoff_root.name}/{destination.name}",
+                "bytes": destination.stat().st_size,
+                "sha256": file_sha256(destination),
+            }
+        )
     closeout_summary = final_root / "provider-closeout-summary.json"
     write_exclusive(closeout_summary, closeout)
     manifest_path = final_root / "evidence-archive-manifest.json"
@@ -11420,6 +18552,9 @@ def package(args: argparse.Namespace) -> None:
             "private_access_controlled": True,
             "public_release": "blocked-pending-review",
             "payload_archives": copied,
+            "pretermination_handoff_receipts": copied_chronology,
+            "direct_attempt_export_chronology": direct_export_chronology,
+            "direct_attempt_export_chronology_sha256": canonical_sha256(direct_export_chronology),
             "frozen_run_manifest_sha256": next(iter(frozen_manifest_sha256s)),
             "replacement_image_id": next(iter(replacement_image_ids)),
             "payload_mode": (
@@ -11444,45 +18579,1050 @@ def package(args: argparse.Namespace) -> None:
     )
 
 
-def _core_cleanup_receipt_destruction_unverified(receipt: dict[str, Any]) -> bool:
-    """Fail closed when retained core-cleanup evidence is malformed or incomplete."""
+class ValidatedCoreCleanupEvidence(NamedTuple):
+    records: list[dict[str, object]]
+    destruction_verified: bool
+    scan_integrity_failure: bool
+    rotation_required: bool
+
+
+def _validate_core_cleanup_receipt(
+    receipt: dict[str, Any],
+) -> ValidatedCoreCleanupEvidence:
+    """Return one typed, internally consistent core-cleanup projection."""
 
     detected = receipt.get("core_artifacts_detected")
     destruction_verified = receipt.get("destruction_verified")
     artifact_count = receipt.get("core_artifact_count")
     rotation_required = receipt.get("credential_rotation_required_due_to_core_handling")
+    scan_integrity_failure = receipt.get("core_scan_integrity_failure", False)
+    records_valid = isinstance(detected, list)
+    if records_valid:
+        base_keys = {
+            "path",
+            "bytes",
+            "mode",
+            "owner_uid",
+            "owner_gid",
+            "filesystem_device",
+            "filesystem_inode",
+            "mtime_ns",
+            "file_type",
+            "link_count",
+            "classified_links_within_scan_root",
+            "destruction_verifiable",
+            "elf_type",
+            "indicators",
+            "artifact_classification",
+            "scientific_raw_evidence",
+            "content_or_hash_retained",
+        }
+        for raw in cast(list[object], detected):
+            if not isinstance(raw, dict):
+                records_valid = False
+                break
+            keys = set(raw)
+            redacted = raw.get("path_redacted") is True
+            expected_keys = (
+                base_keys | {"path_redacted", "path_redaction_reason"} if redacted else base_keys
+            )
+            indicators = raw.get("indicators")
+            if (
+                keys != expected_keys
+                or not isinstance(raw.get("path"), str)
+                or type(raw.get("bytes")) is not int
+                or cast(int, raw["bytes"]) < 0
+                or not isinstance(raw.get("mode"), str)
+                or re.fullmatch(r"[0-7]{4}", cast(str, raw["mode"])) is None
+                or type(raw.get("owner_uid")) is not int
+                or type(raw.get("owner_gid")) is not int
+                or not (
+                    (
+                        raw.get("file_type") == "regular"
+                        and type(raw.get("filesystem_device")) is int
+                        and type(raw.get("filesystem_inode")) is int
+                    )
+                    or (
+                        raw.get("file_type") in {"symlink", "other"}
+                        and raw.get("filesystem_device") is None
+                        and raw.get("filesystem_inode") is None
+                    )
+                )
+                or type(raw.get("mtime_ns")) is not int
+                or raw.get("file_type") not in {"regular", "symlink", "other"}
+                or type(raw.get("link_count")) is not int
+                or cast(int, raw["link_count"]) < 1
+                or type(raw.get("classified_links_within_scan_root")) is not int
+                or cast(int, raw["classified_links_within_scan_root"]) < 0
+                or not isinstance(raw.get("destruction_verifiable"), bool)
+                or not (raw.get("elf_type") is None or isinstance(raw.get("elf_type"), str))
+                or not isinstance(indicators, list)
+                or not indicators
+                or not all(isinstance(item, str) for item in indicators)
+                or raw.get("artifact_classification") != "prohibited-transient-security-artifact"
+                or raw.get("scientific_raw_evidence") is not False
+                or raw.get("content_or_hash_retained") is not False
+                or (redacted and raw.get("path_redaction_reason") != "sensitive-evidence-path")
+            ):
+                records_valid = False
+                break
     if (
         not isinstance(detected, list)
+        or not records_valid
         or not isinstance(destruction_verified, bool)
         or type(artifact_count) is not int
         or artifact_count != len(detected)
         or receipt.get("core_content_or_hash_retained") is not False
         or receipt.get("core_transferred_outside_remote_host") is not False
         or not isinstance(rotation_required, bool)
-        or rotation_required != (bool(detected) and not destruction_verified)
+        or not isinstance(scan_integrity_failure, bool)
+        or rotation_required
+        != (scan_integrity_failure or (bool(detected) and not destruction_verified))
+        or (scan_integrity_failure and destruction_verified)
+        or (not detected and not scan_integrity_failure and not destruction_verified)
+        or (
+            destruction_verified
+            and any(
+                cast(dict[str, object], item).get("destruction_verifiable") is not True
+                for item in detected
+            )
+        )
+        or (destruction_verified and receipt.get("cleanup_error_type") is not None)
     ):
+        raise T09HostError("core-cleanup receipt is malformed or internally inconsistent")
+    assert isinstance(detected, list)
+    assert isinstance(destruction_verified, bool)
+    assert isinstance(scan_integrity_failure, bool)
+    assert isinstance(rotation_required, bool)
+    return ValidatedCoreCleanupEvidence(
+        records=cast(list[dict[str, object]], detected),
+        destruction_verified=destruction_verified,
+        scan_integrity_failure=scan_integrity_failure,
+        rotation_required=rotation_required,
+    )
+
+
+def _core_cleanup_receipt_destruction_unverified(receipt: dict[str, Any]) -> bool:
+    """Fail closed when retained core-cleanup evidence is malformed or incomplete."""
+
+    try:
+        evidence = _validate_core_cleanup_receipt(receipt)
+    except T09HostError:
         return True
-    return not destruction_verified
+    return evidence.scan_integrity_failure or not evidence.destruction_verified
+
+
+_GLOBAL_CLEANUP_COMPLETION_KEYS: Final = {
+    "schema_version",
+    "plan_id",
+    "host_run_id",
+    "cleanup_intent_sha256",
+    "credential_destruction_ready_sha256",
+    "direct_attempt_export_chronology",
+    "direct_attempt_export_chronology_sha256",
+    "pending_essential_export_after_cleanup",
+    "pending_essential_export_after_cleanup_sha256",
+    "completed_at",
+    "owned_containers_targeted",
+    "owned_containers_removed",
+    "owned_container_removal_errors",
+    "owned_container_enumeration_errors",
+    "owned_container_residue",
+    "global_secret_scan_passed",
+    "global_secret_bearing_artifacts_removed",
+    "global_secret_matching_paths",
+    "actual_credential_exposure_detected",
+    "credential_safety_stop_detected",
+    "new_exact_credential_matches_detected_during_cleanup",
+    "credential_exposure_state_updated",
+    "cleanup_terminal_state",
+    "campaign_continuation_permitted",
+    "core_artifacts_detected_during_cleanup",
+    "core_detection_receipt_sha256",
+    "supplemental_core_detection_receipt_sha256",
+    "core_scan_integrity_failure",
+    "prior_core_artifact_detected",
+    "core_cleanup_error_type",
+    "core_artifacts_destroyed",
+    "core_destruction_verified",
+    "core_safety_stop_detected",
+    "credential_rotation_required_due_to_core_handling",
+    "remote_secret_removed",
+    "replacement_image_archive_removed_after_copy_or_deferral",
+    "qualified_runtime_image_candidates_targeted",
+    "qualified_runtime_image_removed",
+    "qualified_runtime_image_cleanup_error_type",
+    "private_regression_archive_removed",
+    "structural_privacy_scan_passed",
+    "structural_privacy_violations",
+    "gpu_pretermination_accounting",
+    "evidence_stage_required_before_provider_termination",
+    "aggregate_stage_optional_after_verified_direct_exports",
+    "lambda_seconds_remaining_for_provider_closeout",
+}
+
+
+def _validate_global_cleanup_completion(
+    document: dict[str, Any],
+    *,
+    cleanup_intent_sha256: str,
+    credential_destruction_ready_sha256: str,
+    direct_attempt_export_chronology_sha256: str,
+    pending_essential_export_after_cleanup_sha256: str,
+    package_commit: str,
+) -> None:
+    """Accept only a complete, clean, terminal Retry 5 cleanup projection."""
+
+    string_lists = ("owned_containers_removed", "global_secret_bearing_artifacts_removed")
+    targeted = document.get("owned_containers_targeted")
+    detected_cores = document.get("core_artifacts_detected_during_cleanup")
+    continuation = document.get("campaign_continuation_permitted")
+    credential_stop = document.get("credential_safety_stop_detected")
+    core_stop = document.get("core_safety_stop_detected")
+    terminal_state = document.get("cleanup_terminal_state")
+    image_candidates = document.get("qualified_runtime_image_candidates_targeted")
+    export_chronology = _validate_export_chronology_projection(
+        document.get("direct_attempt_export_chronology")
+    )
+    pending_essential = _validate_pending_essential_cleanup_export(
+        document.get("pending_essential_export_after_cleanup"),
+        package_commit=package_commit,
+    )
+    if (
+        set(document) != _GLOBAL_CLEANUP_COMPLETION_KEYS
+        or document.get("schema_version") != "0.1.0"
+        or document.get("plan_id") != PLAN_ID
+        or document.get("host_run_id") != HOST_RUN_ID
+        or document.get("cleanup_intent_sha256") != cleanup_intent_sha256
+        or document.get("credential_destruction_ready_sha256")
+        != credential_destruction_ready_sha256
+        or document.get("direct_attempt_export_chronology_sha256")
+        != direct_attempt_export_chronology_sha256
+        or direct_attempt_export_chronology_sha256 != canonical_sha256(export_chronology)
+        or document.get("pending_essential_export_after_cleanup_sha256")
+        != pending_essential_export_after_cleanup_sha256
+        or pending_essential_export_after_cleanup_sha256 != canonical_sha256(pending_essential)
+        or not isinstance(document.get("completed_at"), str)
+        or any(
+            not isinstance(document.get(key), list)
+            or not all(isinstance(item, str) for item in cast(list[object], document[key]))
+            for key in string_lists
+        )
+        or not isinstance(targeted, list)
+        or any(
+            not isinstance(item, dict)
+            or set(item) != {"container_name", "container_id", "owned_role"}
+            or not isinstance(item.get("container_name"), str)
+            or not isinstance(item.get("container_id"), str)
+            or _HEX64.fullmatch(cast(str, item["container_id"])) is None
+            or not isinstance(item.get("owned_role"), str)
+            for item in cast(list[object], targeted)
+        )
+        or sorted(cast(list[str], document["owned_containers_removed"]))
+        != sorted(
+            cast(str, item["container_name"]) for item in cast(list[dict[str, object]], targeted)
+        )
+        or document.get("owned_container_removal_errors") != []
+        or document.get("owned_container_enumeration_errors") != []
+        or document.get("owned_container_residue") != []
+        or document.get("global_secret_scan_passed") is not True
+        or document.get("global_secret_matching_paths") != []
+        or not isinstance(document.get("actual_credential_exposure_detected"), bool)
+        or not isinstance(credential_stop, bool)
+        or not isinstance(
+            document.get("new_exact_credential_matches_detected_during_cleanup"), bool
+        )
+        or (
+            document.get("actual_credential_exposure_detected") is True
+            and credential_stop is not True
+        )
+        or (
+            document.get("new_exact_credential_matches_detected_during_cleanup") is True
+            and document.get("actual_credential_exposure_detected") is not True
+        )
+        or document.get("credential_exposure_state_updated") is not True
+        or not isinstance(continuation, bool)
+        or continuation is not (not credential_stop and not core_stop)
+        or terminal_state
+        != ("clean-continuable" if continuation else "security-restored-campaign-blocked")
+        or not isinstance(detected_cores, list)
+        or not all(isinstance(item, dict) for item in cast(list[object], detected_cores))
+        or not isinstance(document.get("core_detection_receipt_sha256"), str)
+        or _HEX64.fullmatch(cast(str, document["core_detection_receipt_sha256"])) is None
+        or (
+            document.get("supplemental_core_detection_receipt_sha256") is not None
+            and (
+                not isinstance(document.get("supplemental_core_detection_receipt_sha256"), str)
+                or _HEX64.fullmatch(
+                    cast(str, document["supplemental_core_detection_receipt_sha256"])
+                )
+                is None
+            )
+        )
+        or document.get("core_scan_integrity_failure") is not False
+        or not isinstance(document.get("prior_core_artifact_detected"), bool)
+        or document.get("core_cleanup_error_type") is not None
+        or document.get("core_artifacts_destroyed") is not bool(cast(list[object], detected_cores))
+        or document.get("core_destruction_verified") is not True
+        or not isinstance(core_stop, bool)
+        or core_stop
+        is not (
+            cast(bool, document["prior_core_artifact_detected"])
+            or bool(cast(list[object], detected_cores))
+        )
+        or document.get("credential_rotation_required_due_to_core_handling") is not False
+        or document.get("remote_secret_removed") is not True
+        or document.get("replacement_image_archive_removed_after_copy_or_deferral") is not True
+        or not isinstance(image_candidates, list)
+        or not all(
+            isinstance(item, str) and re.fullmatch(r"sha256:[a-f0-9]{64}", item) is not None
+            for item in cast(list[object], image_candidates)
+        )
+        or image_candidates != sorted(set(cast(list[str], image_candidates)))
+        or document.get("qualified_runtime_image_removed") is not True
+        or document.get("qualified_runtime_image_cleanup_error_type") is not None
+        or document.get("private_regression_archive_removed") is not True
+        or document.get("structural_privacy_scan_passed") is not True
+        or document.get("structural_privacy_violations") != []
+        or not isinstance(document.get("gpu_pretermination_accounting"), dict)
+        or document.get("evidence_stage_required_before_provider_termination") is not False
+        or document.get("aggregate_stage_optional_after_verified_direct_exports") is not True
+        or not isinstance(
+            document.get("lambda_seconds_remaining_for_provider_closeout"), (int, float)
+        )
+        or isinstance(document.get("lambda_seconds_remaining_for_provider_closeout"), bool)
+    ):
+        raise T09HostError("global cleanup completion is not a clean terminal projection")
+
+
+def _validated_persisted_core_detection(path: Path) -> dict[str, Any]:
+    document = load_object(path, label="typed pre-destruction core detection")
+    records = document.get("core_artifacts_detected")
+    if (
+        set(document)
+        != {
+            "schema_version",
+            "scope",
+            "core_artifacts_detected",
+            "core_artifact_count",
+            "core_scan_integrity_failure",
+            "all_detected_artifacts_destruction_verifiable",
+            "core_content_or_hash_retained",
+            "core_transferred_outside_remote_host",
+            "destructive_cleanup_not_yet_claimed",
+        }
+        or document.get("schema_version") != "0.1.0"
+        or not isinstance(document.get("scope"), str)
+        or not isinstance(records, list)
+        or not all(isinstance(item, dict) for item in records)
+        or document.get("core_artifact_count") != len(records)
+        or not isinstance(document.get("core_scan_integrity_failure"), bool)
+        or document.get("all_detected_artifacts_destruction_verifiable")
+        is not (
+            bool(records)
+            and all(
+                isinstance(item, dict) and item.get("destruction_verifiable") is True
+                for item in records
+            )
+        )
+        or document.get("core_content_or_hash_retained") is not False
+        or document.get("core_transferred_outside_remote_host") is not False
+        or document.get("destructive_cleanup_not_yet_claimed") is not True
+    ):
+        raise T09HostError("typed pre-destruction core detection is malformed")
+    return document
+
+
+def _validate_core_cleanup_pair(
+    *,
+    cleanup_path: Path,
+    detection_path: Path,
+    supplemental_detection_path: Path | None = None,
+) -> ValidatedCoreCleanupEvidence:
+    cleanup = load_object(cleanup_path, label="typed core cleanup")
+    evidence = _validate_core_cleanup_receipt(cleanup)
+    detection = _validated_persisted_core_detection(detection_path)
+    supplemental_sha = cleanup.get("supplemental_core_detection_receipt_sha256")
+    supplemental_records: list[dict[str, object]] = []
+    supplemental_scan_failure = False
+    if supplemental_sha is not None:
+        if (
+            supplemental_detection_path is None
+            or not supplemental_detection_path.is_file()
+            or supplemental_detection_path.is_symlink()
+            or not isinstance(supplemental_sha, str)
+            or _HEX64.fullmatch(supplemental_sha) is None
+            or file_sha256(supplemental_detection_path) != supplemental_sha
+        ):
+            raise T09HostError("supplemental core detection binding drifted")
+        supplemental = _validated_persisted_core_detection(supplemental_detection_path)
+        supplemental_records = cast(
+            list[dict[str, object]], supplemental["core_artifacts_detected"]
+        )
+        supplemental_scan_failure = supplemental["core_scan_integrity_failure"] is True
+    elif supplemental_detection_path is not None and os.path.lexists(supplemental_detection_path):
+        raise T09HostError("unbound supplemental core detection exists")
+    primary_records = cast(list[dict[str, object]], detection["core_artifacts_detected"])
+    if (
+        cleanup.get("core_detection_receipt_sha256") != file_sha256(detection_path)
+        or evidence.records != [*primary_records, *supplemental_records]
+        or evidence.scan_integrity_failure
+        is not (detection["core_scan_integrity_failure"] is True or supplemental_scan_failure)
+    ):
+        raise T09HostError("typed core cleanup lost its detection source")
+    return evidence
+
+
+def _internal_container_core_incident(
+    *,
+    scan_path: Path,
+    cleanup_path: Path,
+    scan_hash_field: str,
+    expected_roots: list[str],
+    artifact_label_prefix: str,
+) -> tuple[bool, bool]:
+    """Return detected/unverified for one exact in-container writable-layer census."""
+
+    if not os.path.lexists(scan_path) and not os.path.lexists(cleanup_path):
+        return False, False
+    try:
+        scan = load_object(scan_path, label="typed internal writable-root core scan")
+        records = _validate_writable_root_core_scan(
+            scan,
+            expected_roots=expected_roots,
+            artifact_label_prefix=artifact_label_prefix,
+        )
+    except (OSError, T09HostError):
+        return True, True
+    if not records:
+        return (True, True) if os.path.lexists(cleanup_path) else (False, False)
+    try:
+        cleanup = load_object(cleanup_path, label="typed internal core cleanup")
+    except (OSError, T09HostError):
+        return True, True
+    verified = (
+        cleanup.get("schema_version") == "0.1.0"
+        and cleanup.get(scan_hash_field) == file_sha256(scan_path)
+        and cleanup.get("core_artifact_count") == len(records)
+        and cleanup.get("container_removed") is True
+        and cleanup.get("owned_container_residue") == []
+        and cleanup.get("destruction_verified") is True
+        and cleanup.get("credential_rotation_required_due_to_core_handling") is False
+        and cleanup.get("core_content_or_hash_retained") is False
+    )
+    return True, not verified
+
+
+def _prior_typed_core_incidents(
+    *,
+    artifact_root: Path,
+    repository: Path,
+) -> tuple[bool, bool]:
+    """Reconcile only exact host-owned core producers; never trust arbitrary JSON."""
+
+    detected = False
+    destruction_unverified = False
+
+    def absorb_pair(
+        cleanup_path: Path,
+        detection_path: Path,
+        supplemental_path: Path | None = None,
+    ) -> None:
+        nonlocal detected, destruction_unverified
+        observed = any(
+            os.path.lexists(path)
+            for path in (cleanup_path, detection_path, supplemental_path)
+            if path is not None
+        )
+        if not observed:
+            return
+        if (
+            not cleanup_path.is_file()
+            or cleanup_path.is_symlink()
+            or not detection_path.is_file()
+            or detection_path.is_symlink()
+        ):
+            detected = True
+            destruction_unverified = True
+            return
+        try:
+            evidence = _validate_core_cleanup_pair(
+                cleanup_path=cleanup_path,
+                detection_path=detection_path,
+                supplemental_detection_path=supplemental_path,
+            )
+        except (OSError, T09HostError):
+            detected = True
+            destruction_unverified = True
+            return
+        incident = bool(evidence.records) or evidence.scan_integrity_failure
+        detected = detected or incident
+        destruction_unverified = destruction_unverified or (
+            incident and (not evidence.destruction_verified or evidence.rotation_required)
+        )
+
+    preflight_integrity = artifact_root / "pilot-v7/preflight-core-integrity"
+    for scope in ("before-model-metadata", "after-model-metadata"):
+        absorb_pair(
+            preflight_integrity / f"{scope}.json",
+            preflight_integrity / f"{scope}-core-detection.json",
+        )
+    for preflight_root in (
+        artifact_root / "pilot-v7/core-suppression-preflight",
+        artifact_root / "pilot-v7/browser-preflight",
+    ):
+        absorb_pair(
+            preflight_root / "core-artifact-cleanup.json",
+            preflight_root / "core-artifact-detection.json",
+        )
+    for result in (
+        _internal_container_core_incident(
+            scan_path=(
+                artifact_root / "pilot-v7/core-suppression-preflight/"
+                "core-suppression-writable-root-core-scan.json"
+            ),
+            cleanup_path=(
+                artifact_root / "pilot-v7/core-suppression-preflight/"
+                "core-suppression-internal-core-cleanup.json"
+            ),
+            scan_hash_field="core_suppression_writable_root_core_scan_sha256",
+            expected_roots=["/giclab/attempt", "/tmp", "/dev/shm"],
+            artifact_label_prefix="core-preflight",
+        ),
+        _internal_container_core_incident(
+            scan_path=(
+                artifact_root / "pilot-v7/browser-preflight/browser-writable-root-core-scan.json"
+            ),
+            cleanup_path=(
+                artifact_root / "pilot-v7/browser-preflight/browser-internal-core-cleanup.json"
+            ),
+            scan_hash_field="browser_writable_root_core_scan_sha256",
+            expected_roots=["/giclab/attempt", "/tmp", "/dev/shm"],
+            artifact_label_prefix="browser-core",
+        ),
+    ):
+        detected = detected or result[0]
+        destruction_unverified = destruction_unverified or result[1]
+
+    execution_path = contract_paths(repository)["execution"]
+    contract = load_execution_contract(
+        execution_path,
+        expected_sha256=file_sha256(execution_path),
+    )
+    for run_id in RUN_IDS:
+        attempt = contract.attempt(run_id)
+        attempt_root = artifact_root / attempt.output_root
+        raw_root = artifact_root / attempt.raw_output_root
+        supervisor_path = raw_root / CONDITION_SUPERVISOR_DIRNAME
+        attempt_paths_present = any(
+            os.path.lexists(path) for path in (attempt_root, raw_root, supervisor_path)
+        )
+        if attempt_paths_present:
+            try:
+                attempt_metadata = attempt_root.stat(follow_symlinks=False)
+                raw_metadata = raw_root.stat(follow_symlinks=False)
+                if (
+                    attempt_root.is_symlink()
+                    or raw_root.is_symlink()
+                    or not stat.S_ISDIR(attempt_metadata.st_mode)
+                    or not stat.S_ISDIR(raw_metadata.st_mode)
+                ):
+                    raise T09HostError("condition attempt tree is unsafe")
+                supervisor_root = condition_supervisor_root(raw_root)
+            except (FileNotFoundError, OSError, T09HostError):
+                # A partially published attempt tree is security-unknown.  A wholly
+                # absent future attempt, in contrast, is the ordinary clean prefix.
+                detected = True
+                destruction_unverified = True
+            else:
+                absorb_pair(
+                    supervisor_root / "core-artifact-cleanup.json",
+                    supervisor_root / "core-artifact-detection.json",
+                    supervisor_root / "core-artifact-recovery-detection.json",
+                )
+                runtime_cleanup_path = raw_root / "runtime-cleanup.json"
+                runtime_detection_path = raw_root / "runtime-core-detection.json"
+                if os.path.lexists(runtime_cleanup_path) or os.path.lexists(runtime_detection_path):
+                    try:
+                        runtime_cleanup = load_object(
+                            runtime_cleanup_path,
+                            label="typed runtime cleanup",
+                        )
+                        runtime_evidence = _validate_runtime_core_cleanup(
+                            raw_root=raw_root,
+                            runtime_cleanup=runtime_cleanup,
+                        )
+                    except (OSError, T09HostError):
+                        detected = True
+                        destruction_unverified = True
+                    else:
+                        runtime_incident = (
+                            bool(runtime_evidence.records)
+                            or runtime_evidence.scan_integrity_failure
+                        )
+                        detected = detected or runtime_incident
+                        destruction_unverified = destruction_unverified or (
+                            runtime_incident
+                            and (
+                                not runtime_evidence.destruction_verified
+                                or runtime_evidence.rotation_required
+                            )
+                        )
+                recovery_root = attempt_root / "recovery-control"
+                absorb_pair(
+                    recovery_root / "post-terminal-core-cleanup.json",
+                    recovery_root / "post-terminal-core-detection.json",
+                    recovery_root / "post-terminal-core-recovery-detection.json",
+                )
+                finalizer_root = attempt_root / "finalizer-invocations"
+                if finalizer_root.is_dir() and not finalizer_root.is_symlink():
+                    invocations = sorted(finalizer_root.iterdir())
+                    if len(invocations) > 64 or any(
+                        path.is_symlink() or not path.is_dir() for path in invocations
+                    ):
+                        detected = True
+                        destruction_unverified = True
+                    else:
+                        for invocation in invocations:
+                            absorb_pair(
+                                invocation / "core-artifact-cleanup.json",
+                                invocation / "core-artifact-detection.json",
+                            )
+        security_root = artifact_root / "pilot-v7/security-incidents" / run_id
+        absorb_pair(
+            security_root / "core-artifact-cleanup.json",
+            security_root / "core-artifact-detection.json",
+        )
+    return detected, destruction_unverified
 
 
 def cleanup(args: argparse.Namespace) -> None:
+    enforce_host_core_limit()
     root = args.artifact_root.resolve(strict=True)
-    prefix = docker_prefix()
-    removed = [name for name in owned_containers(prefix) if remove_container(prefix, name)]
-    residue = owned_containers(prefix)
-    state_path = root / "pilot-v7/pilot-state.json"
-    prior_core_destruction_unverified = False
-    for prior_receipt_path in sorted(root.rglob("core-artifact-cleanup.json")):
+    pilot_root = root / "pilot-v7"
+    intent_path = pilot_root / "global-cleanup-intent.json"
+    completion_path = pilot_root / "host-cleanup.json"
+    state_path = pilot_root / "pilot-state.json"
+    direct_export_chronology: list[dict[str, object]] = []
+    pending_essential_export_after_cleanup: dict[str, object] | None = None
+    retained_cleanup_intent: dict[str, Any] | None = None
+    if intent_path.is_file() and not intent_path.is_symlink():
+        retained_cleanup_intent = load_object(intent_path, label="global cleanup intent")
+    elif os.path.lexists(intent_path):
+        raise T09HostError("global cleanup intent is unsafe")
+    if state_path.is_file() and not state_path.is_symlink():
+        untyped_cleanup_state = _runtime_budget_state(root)
+        execution_contract_sha256 = untyped_cleanup_state.get("execution_contract_sha256")
+        if not isinstance(execution_contract_sha256, str):
+            raise T09HostError("global cleanup pilot state lacks its execution contract")
         try:
-            prior_receipt = load_object(prior_receipt_path, label="prior core-artifact cleanup")
-        except (OSError, T09HostError):
-            prior_core_destruction_unverified = True
-            continue
-        if _core_cleanup_receipt_destruction_unverified(prior_receipt):
-            prior_core_destruction_unverified = True
-    cleanup_core_records = detect_core_artifacts(root)
-    cleanup_core_destruction_verified = True
-    if cleanup_core_records:
+            cleanup_state = load_validated_pilot_state(
+                state_path,
+                execution_contract_sha256=execution_contract_sha256,
+            )
+        except T09PilotError as exc:
+            raise T09HostError("global cleanup pilot state is not receipt-backed") from exc
+        if cleanup_state.get("condition_start_reservation") is not None:
+            raise T09HostError(
+                "global cleanup requires recover-attempt-seal before a started reservation"
+            )
+        direct_export_chronology, pending_essential_export_after_cleanup = _cleanup_export_handoff(
+            root,
+            repository=args.repository.resolve(strict=True),
+            state=cleanup_state,
+            package_commit=args.package_commit,
+            retained_chronology=(
+                retained_cleanup_intent.get("direct_attempt_export_chronology")
+                if retained_cleanup_intent is not None
+                else None
+            ),
+            retained_pending=(
+                retained_cleanup_intent.get("pending_essential_export_after_cleanup")
+                if retained_cleanup_intent is not None
+                else None
+            ),
+        )
+    elif os.path.lexists(state_path):
+        raise T09HostError("global cleanup pilot state is unsafe")
+    direct_export_chronology = _validate_export_chronology_projection(direct_export_chronology)
+    direct_export_chronology_sha256 = canonical_sha256(direct_export_chronology)
+    pending_essential_export_after_cleanup_sha256 = canonical_sha256(
+        pending_essential_export_after_cleanup
+    )
+    docker_prefix_error_type: str | None = None
+    try:
+        prefix = docker_prefix()
+    except (OSError, subprocess.SubprocessError, T09HostError) as exc:
+        docker_prefix_error_type = type(exc).__name__
+        prefix = ["docker"] if shutil.which("docker") is not None else ["sudo", "-n", "docker"]
+    removed: list[str] = []
+    container_removal_errors: list[dict[str, str]] = []
+    container_enumeration_errors: list[dict[str, str]] = []
+    if docker_prefix_error_type is not None:
+        container_enumeration_errors.append(
+            {"phase": "docker-prefix", "error_type": docker_prefix_error_type}
+        )
+    try:
+        authorized_container_intents = owned_container_intents(
+            root,
+            repository=args.repository.resolve(strict=True),
+        )
+    except (OSError, T09HostError, T09PilotError) as exc:
+        authorized_container_intents = {}
+        container_enumeration_errors.append(
+            {"phase": "intent-validation", "error_type": type(exc).__name__}
+        )
+    try:
+        initially_owned_identities = owned_container_identities(
+            prefix,
+            authorized_intents=authorized_container_intents,
+        )
+    except (OSError, subprocess.SubprocessError, T09HostError) as exc:
+        initially_owned_identities = []
+        container_enumeration_errors.append(
+            {"phase": "before-removal", "error_type": type(exc).__name__}
+        )
+    secret_argument = args.secret_file.resolve(strict=False)
+    secret_parent = secret_argument.parent.resolve(strict=True)
+    secret_parent_metadata = secret_parent.stat(follow_symlinks=False)
+    materialization_intent_path = (
+        pilot_root / "replacement-image-qualification/retained-image-input.json"
+    )
+    fallback_build_intent_path = (
+        pilot_root / "replacement-image-qualification/fallback-build-intent.json"
+    )
+    archive_targets = (
+        ("replacement-image-archive", IMAGE_ARCHIVE_PATH),
+        ("private-regression-archive", PRIVATE_REGRESSION_ARCHIVE_PATH),
+    )
+
+    def cleanup_target_identity(role: str, path: Path) -> dict[str, object]:
+        parent = path.parent.resolve(strict=True)
+        parent_metadata = parent.stat(follow_symlinks=False)
+        common: dict[str, object] = {
+            "role": role,
+            "basename": path.name,
+            "parent_device": parent_metadata.st_dev,
+            "parent_inode": parent_metadata.st_ino,
+        }
+        if not os.path.lexists(path):
+            return {**common, "present": False}
+        metadata = path.lstat()
+        if path.is_symlink() or not stat.S_ISREG(metadata.st_mode):
+            raise T09HostError(f"cleanup target is unsafe: {role}")
+        return {
+            **common,
+            "present": True,
+            "device": metadata.st_dev,
+            "inode": metadata.st_ino,
+            "bytes": metadata.st_size,
+            "mode": f"{stat.S_IMODE(metadata.st_mode):04o}",
+            "owner_uid": metadata.st_uid,
+            "owner_gid": metadata.st_gid,
+            "link_count": metadata.st_nlink,
+        }
+
+    credential_bytes = b""
+    fallback_build_intent_sha256 = (
+        file_sha256(fallback_build_intent_path)
+        if fallback_build_intent_path.is_file() and not fallback_build_intent_path.is_symlink()
+        else None
+    )
+    if fallback_build_intent_sha256 is None and os.path.lexists(fallback_build_intent_path):
+        raise T09HostError("global cleanup fallback-build intent is unsafe")
+    if retained_cleanup_intent is not None:
+        cleanup_intent = retained_cleanup_intent
+        secret_identity = cleanup_intent.get("secret_file_identity")
+        if (
+            cleanup_intent.get("schema_version") != "0.1.0"
+            or cleanup_intent.get("plan_id") != PLAN_ID
+            or cleanup_intent.get("host_run_id") != HOST_RUN_ID
+            or not isinstance(cleanup_intent.get("started_at"), str)
+            or not isinstance(secret_identity, dict)
+            or secret_identity.get("basename") != secret_argument.name
+            or secret_identity.get("parent_device") != secret_parent_metadata.st_dev
+            or secret_identity.get("parent_inode") != secret_parent_metadata.st_ino
+            or cleanup_intent.get("secret_value_or_hash_retained") is not False
+            or cleanup_intent.get("direct_attempt_export_chronology") != direct_export_chronology
+            or cleanup_intent.get("direct_attempt_export_chronology_sha256")
+            != direct_export_chronology_sha256
+            or cleanup_intent.get("pending_essential_export_after_cleanup")
+            != pending_essential_export_after_cleanup
+            or cleanup_intent.get("pending_essential_export_after_cleanup_sha256")
+            != pending_essential_export_after_cleanup_sha256
+            or cleanup_intent.get("fallback_build_intent_sha256") != fallback_build_intent_sha256
+            or not isinstance(cleanup_intent.get("archive_targets"), list)
+            or not isinstance(cleanup_intent.get("owned_containers_observed"), list)
+        ):
+            raise T09HostError("global cleanup intent drifted")
+        if secret_argument.exists():
+            metadata = secret_argument.stat(follow_symlinks=False)
+            if (
+                secret_argument.is_symlink()
+                or not stat.S_ISREG(metadata.st_mode)
+                or metadata.st_dev != secret_identity.get("device")
+                or metadata.st_ino != secret_identity.get("inode")
+                or metadata.st_size != secret_identity.get("bytes")
+                or f"{stat.S_IMODE(metadata.st_mode):04o}" != secret_identity.get("mode")
+                or metadata.st_uid != secret_identity.get("owner_uid")
+                or metadata.st_gid != secret_identity.get("owner_gid")
+                or metadata.st_nlink != secret_identity.get("link_count")
+            ):
+                raise T09HostError("global cleanup secret identity drifted")
+            credential_bytes = validate_secret(secret_argument)
+        elif not (pilot_root / "credential-destruction-ready.json").is_file():
+            raise T09HostError(
+                "global cleanup secret is absent without its pre-destruction completion gate"
+            )
+    else:
+        secret_path_for_intent = secret_argument.resolve(strict=True)
+        credential_bytes = validate_secret(secret_path_for_intent)
+        secret_metadata = secret_path_for_intent.stat(follow_symlinks=False)
+        cleanup_intent = {
+            "schema_version": "0.1.0",
+            "plan_id": PLAN_ID,
+            "host_run_id": HOST_RUN_ID,
+            "started_at": utc_now(),
+            "secret_file_identity": {
+                "basename": secret_path_for_intent.name,
+                "parent_device": secret_parent_metadata.st_dev,
+                "parent_inode": secret_parent_metadata.st_ino,
+                "device": secret_metadata.st_dev,
+                "inode": secret_metadata.st_ino,
+                "bytes": secret_metadata.st_size,
+                "mode": f"{stat.S_IMODE(secret_metadata.st_mode):04o}",
+                "owner_uid": secret_metadata.st_uid,
+                "owner_gid": secret_metadata.st_gid,
+                "link_count": secret_metadata.st_nlink,
+            },
+            "direct_attempt_export_chronology": direct_export_chronology,
+            "direct_attempt_export_chronology_sha256": direct_export_chronology_sha256,
+            "pending_essential_export_after_cleanup": (pending_essential_export_after_cleanup),
+            "pending_essential_export_after_cleanup_sha256": (
+                pending_essential_export_after_cleanup_sha256
+            ),
+            "archive_targets": [
+                cleanup_target_identity(role, path) for role, path in archive_targets
+            ],
+            "image_materialization_intent_sha256": (
+                file_sha256(materialization_intent_path)
+                if materialization_intent_path.is_file()
+                else None
+            ),
+            "fallback_build_intent_sha256": fallback_build_intent_sha256,
+            "owned_containers_observed": [
+                {
+                    "container_name": identity.name,
+                    "container_id": identity.container_id,
+                    "owned_role": identity.labels["giclab.t09.role"],
+                }
+                for identity in initially_owned_identities
+            ],
+            "owned_container_enumeration_error_type": (
+                container_enumeration_errors[0]["error_type"]
+                if container_enumeration_errors
+                else None
+            ),
+            "secret_value_or_hash_retained": False,
+        }
+        write_exclusive(intent_path, cleanup_intent)
+    raw_owned_targets = cleanup_intent.get("owned_containers_observed")
+    if not isinstance(raw_owned_targets, list):
+        raise T09HostError("global cleanup owned-container intent is malformed")
+    owned_targets: list[tuple[str, str, str]] = []
+    for item in raw_owned_targets:
+        if (
+            not isinstance(item, dict)
+            or set(item) != {"container_name", "container_id", "owned_role"}
+            or not isinstance(item.get("container_name"), str)
+            or not isinstance(item.get("container_id"), str)
+            or re.fullmatch(r"[a-f0-9]{64}", cast(str, item["container_id"])) is None
+            or not isinstance(item.get("owned_role"), str)
+            or authorized_container_intents.get(cast(str, item["container_name"]))
+            != item.get("owned_role")
+        ):
+            raise T09HostError("global cleanup owned-container identity drifted")
+        owned_targets.append(
+            (
+                cast(str, item["container_name"]),
+                cast(str, item["container_id"]),
+                cast(str, item["owned_role"]),
+            )
+        )
+    retained_archive_targets_for_validation = cleanup_intent.get("archive_targets")
+    if not isinstance(retained_archive_targets_for_validation, list):
+        raise T09HostError("global cleanup archive intent is malformed")
+    expected_archive_roles = {role for role, _ in archive_targets}
+    observed_archive_roles = {
+        item.get("role")
+        for item in retained_archive_targets_for_validation
+        if isinstance(item, dict)
+    }
+    if (
+        len(retained_archive_targets_for_validation) != len(archive_targets)
+        or observed_archive_roles != expected_archive_roles
+    ):
+        raise T09HostError("global cleanup archive intent is overbroad or incomplete")
+    for role, path in archive_targets:
+        expected_items = [
+            item
+            for item in retained_archive_targets_for_validation
+            if isinstance(item, dict) and item.get("role") == role
+        ]
+        parent_metadata = path.parent.resolve(strict=True).stat(follow_symlinks=False)
+        if len(expected_items) != 1:
+            raise T09HostError(f"global cleanup archive role is not unique: {role}")
+        expected_item = expected_items[0]
+        present = expected_item.get("present")
+        expected_keys = {
+            "role",
+            "basename",
+            "parent_device",
+            "parent_inode",
+            "present",
+        } | (
+            {
+                "device",
+                "inode",
+                "bytes",
+                "mode",
+                "owner_uid",
+                "owner_gid",
+                "link_count",
+            }
+            if present is True
+            else set()
+        )
+        if (
+            present not in {True, False}
+            or set(expected_item) != expected_keys
+            or expected_item.get("basename") != path.name
+            or expected_item.get("parent_device") != parent_metadata.st_dev
+            or expected_item.get("parent_inode") != parent_metadata.st_ino
+        ):
+            raise T09HostError(f"global cleanup archive target drifted: {role}")
+    if completion_path.is_file() and not completion_path.is_symlink():
+        completed_cleanup = load_object(completion_path, label="completed global cleanup")
+        credential_ready_path = pilot_root / "credential-destruction-ready.json"
+        if not credential_ready_path.is_file() or credential_ready_path.is_symlink():
+            raise T09HostError("retained global cleanup lost its credential gate")
+        _validate_global_cleanup_completion(
+            completed_cleanup,
+            cleanup_intent_sha256=file_sha256(intent_path),
+            credential_destruction_ready_sha256=file_sha256(credential_ready_path),
+            direct_attempt_export_chronology_sha256=direct_export_chronology_sha256,
+            pending_essential_export_after_cleanup_sha256=(
+                pending_essential_export_after_cleanup_sha256
+            ),
+            package_commit=args.package_commit,
+        )
+        return
+    if os.path.lexists(completion_path):
+        raise T09HostError("global cleanup completion is unsafe")
+    for name, container_id, role in owned_targets:
+        try:
+            if remove_container(
+                prefix,
+                name,
+                expected_container_id=container_id,
+                expected_role=role,
+            ):
+                removed.append(name)
+        except (OSError, subprocess.SubprocessError, T09HostError) as exc:
+            container_removal_errors.append(
+                {"container_name": name, "error_type": type(exc).__name__}
+            )
+    try:
+        residue = owned_containers(prefix)
+    except (OSError, subprocess.SubprocessError, T09HostError) as exc:
+        residue = ["<owned-container-enumeration-unavailable>"]
+        container_enumeration_errors.append(
+            {"phase": "after-removal", "error_type": type(exc).__name__}
+        )
+    try:
+        prior_core_detected, prior_core_destruction_unverified = _prior_typed_core_incidents(
+            artifact_root=root,
+            repository=args.repository.resolve(strict=True),
+        )
+    except (OSError, T09HostError, T09PilotError):
+        prior_core_detected = True
+        prior_core_destruction_unverified = True
+    core_scan_integrity_failure = False
+    secret_path = secret_argument
+    global_detection_path = pilot_root / "global-core-artifact-detection.json"
+    global_supplemental_detection_path = pilot_root / "global-core-artifact-recovery-detection.json"
+    historic_global_records: list[dict[str, object]] = []
+    historic_global_scan_failure = False
+    if global_detection_path.is_file() and not global_detection_path.is_symlink():
+        historic_global_detection = load_object(
+            global_detection_path,
+            label="retained global core detection",
+        )
+        raw_historic_global_records = historic_global_detection.get("core_artifacts_detected")
+        if (
+            historic_global_detection.get("schema_version") != "0.1.0"
+            or historic_global_detection.get("scope") != "global-cleanup-artifact-root"
+            or not isinstance(raw_historic_global_records, list)
+            or not all(isinstance(item, dict) for item in raw_historic_global_records)
+            or historic_global_detection.get("core_artifact_count")
+            != len(raw_historic_global_records)
+            or not isinstance(historic_global_detection.get("core_scan_integrity_failure"), bool)
+            or historic_global_detection.get("core_content_or_hash_retained") is not False
+            or historic_global_detection.get("core_transferred_outside_remote_host") is not False
+        ):
+            raise T09HostError("retained global core detection is malformed")
+        historic_global_records = cast(list[dict[str, object]], raw_historic_global_records)
+        historic_global_scan_failure = (
+            historic_global_detection.get("core_scan_integrity_failure") is True
+        )
+    elif os.path.lexists(global_detection_path):
+        raise T09HostError("retained global core detection is unsafe")
+    retained_global_supplemental_sha256: str | None = None
+    if (
+        global_supplemental_detection_path.is_file()
+        and not global_supplemental_detection_path.is_symlink()
+    ):
+        global_supplemental_detection = load_object(
+            global_supplemental_detection_path,
+            label="retained global supplemental core detection",
+        )
+        raw_global_supplemental_records = global_supplemental_detection.get(
+            "core_artifacts_detected"
+        )
+        if (
+            not global_detection_path.is_file()
+            or global_supplemental_detection.get("schema_version") != "0.1.0"
+            or global_supplemental_detection.get("scope")
+            != "global-cleanup-post-crash-supplemental-census"
+            or not isinstance(raw_global_supplemental_records, list)
+            or not all(isinstance(item, dict) for item in raw_global_supplemental_records)
+            or global_supplemental_detection.get("core_artifact_count")
+            != len(raw_global_supplemental_records)
+            or not isinstance(
+                global_supplemental_detection.get("core_scan_integrity_failure"), bool
+            )
+            or global_supplemental_detection.get("core_content_or_hash_retained") is not False
+            or global_supplemental_detection.get("core_transferred_outside_remote_host")
+            is not False
+        ):
+            raise T09HostError("retained global supplemental core detection is malformed")
+        historic_global_records.extend(
+            cast(list[dict[str, object]], raw_global_supplemental_records)
+        )
+        historic_global_scan_failure = (
+            historic_global_scan_failure
+            or global_supplemental_detection.get("core_scan_integrity_failure") is True
+        )
+        retained_global_supplemental_sha256 = file_sha256(global_supplemental_detection_path)
+    elif os.path.lexists(global_supplemental_detection_path):
+        raise T09HostError("retained global supplemental core detection is unsafe")
+    try:
+        cleanup_core_records = detect_core_artifacts(root)
+    except (OSError, T09HostError):
+        cleanup_core_records = []
+        core_scan_integrity_failure = True
+    effective_global_scan_failure = historic_global_scan_failure or core_scan_integrity_failure
+    if cleanup_core_records or historic_global_records or effective_global_scan_failure:
         retained_for_core = load_object(state_path, label="cleanup pilot state")
         execution_for_core = retained_for_core.get("execution_contract_sha256")
         if not isinstance(execution_for_core, str):
@@ -11491,141 +19631,474 @@ def cleanup(args: argparse.Namespace) -> None:
             state_path,
             execution_contract_sha256=execution_for_core,
         )
-        cleanup_core_destruction_verified = remove_core_artifacts(root, cleanup_core_records)
-    image_removed = False
-    materialization_path = root / "pilot-v7/replacement-image-qualification/receipt.json"
-    if materialization_path.is_file():
-        materialization = load_object(materialization_path, label="image materialization")
-        image_id = materialization.get("image_id")
-        if isinstance(image_id, str) and image_id_if_present(prefix, image_id) == image_id:
-            removal = subprocess.run(
-                [*prefix, "image", "rm", "--force", image_id],
-                env=safe_environment(),
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                check=False,
-                timeout=60,
-            )
-            image_removed = removal.returncode == 0
-    secret_path = args.secret_file.resolve(strict=True)
-    credential_bytes = validate_secret(secret_path)
-    hits = secret_hits(root, credential_bytes)
-    removed_secret_artifacts: list[str] = []
-    for relative in hits:
-        target = root / relative
-        if target.is_file() and not target.is_symlink():
-            target.unlink()
-            removed_secret_artifacts.append(relative)
-    remaining_hits = secret_hits(root, credential_bytes)
-    credential_bytes = b""
-    credential_state_updated = False
-    retained_actual_exposure = False
-    retained_safety_stop = False
-    retained_core_safety_stop = bool(cleanup_core_records)
-    try:
-        retained_state = load_object(state_path, label="cleanup pilot state")
-        execution_sha256 = retained_state.get("execution_contract_sha256")
-        if not isinstance(execution_sha256, str):
-            raise T09HostError("cleanup state lacks its execution contract")
-        retained_actual_exposure = retained_state.get("actual_credential_exposure_detected") is True
-        retained_safety_stop = retained_state.get("credential_safety_stop_detected") is True
-        retained_core_safety_stop = (
-            retained_core_safety_stop or retained_state.get("core_safety_stop_detected") is True
+    global_supplemental_detection_sha256 = retained_global_supplemental_sha256
+    if global_detection_path.is_file():
+        global_core_detection_sha256 = file_sha256(global_detection_path)
+        new_global_records, new_safe_global_records = _new_core_records_since_historic_census(
+            historic_safe_records=historic_global_records,
+            current_records=cleanup_core_records,
+            credential_bytes=credential_bytes,
         )
-        if hits:
-            mark_actual_credential_exposure(
-                state_path,
-                execution_contract_sha256=execution_sha256,
+        if (
+            new_global_records or core_scan_integrity_failure
+        ) and retained_global_supplemental_sha256 is None:
+            global_supplemental_detection_sha256 = persist_core_detection_before_cleanup(
+                receipt_path=global_supplemental_detection_path,
+                records=new_global_records,
+                scope="global-cleanup-post-crash-supplemental-census",
+                credential_bytes=credential_bytes,
+                scan_integrity_failure=core_scan_integrity_failure,
             )
-            retained_actual_exposure = True
-            retained_safety_stop = True
-        credential_state_updated = True
-    except (OSError, T09HostError, T09PilotError):
+        elif new_global_records or core_scan_integrity_failure:
+            prior_core_detected = True
+            prior_core_destruction_unverified = True
+            new_safe_global_records = []
+        safe_cleanup_core_records = [
+            *historic_global_records,
+            *new_safe_global_records,
+        ]
+    else:
+        global_core_detection_sha256 = persist_core_detection_before_cleanup(
+            receipt_path=global_detection_path,
+            records=cleanup_core_records,
+            scope="global-cleanup-artifact-root",
+            credential_bytes=credential_bytes,
+            scan_integrity_failure=core_scan_integrity_failure,
+        )
+        safe_cleanup_core_records = _value_safe_core_records(
+            cleanup_core_records,
+            credential_bytes=credential_bytes,
+        )
+    cleanup_core_outcome = cleanup_core_artifacts(root, cleanup_core_records)
+    cleanup_core_destruction_verified = (
+        cleanup_core_outcome.destruction_verified
+        and not effective_global_scan_failure
+        and all(
+            record.get("destruction_verifiable") is True for record in safe_cleanup_core_records
+        )
+    )
+    if prior_core_detected or core_scan_integrity_failure:
+        retained_for_core = load_object(state_path, label="cleanup pilot state")
+        execution_for_core = retained_for_core.get("execution_contract_sha256")
+        if not isinstance(execution_for_core, str):
+            raise T09HostError("cleanup cannot bind its core safety stop to pilot state")
+        mark_core_safety_stop(
+            state_path,
+            execution_contract_sha256=execution_for_core,
+        )
+    image_removed = False
+    image_absent_after_cleanup = False
+    image_cleanup_error_type: str | None = None
+    qualified_image_candidates: set[str] = set()
+    materialization_path = root / "pilot-v7/replacement-image-qualification/receipt.json"
+    materialization_intent_path = (
+        root / "pilot-v7/replacement-image-qualification/retained-image-input.json"
+    )
+    try:
+        materialization_intent: dict[str, Any] | None = None
+        if materialization_intent_path.is_file() and not materialization_intent_path.is_symlink():
+            materialization_intent = load_object(
+                materialization_intent_path,
+                label="image materialization intent",
+            )
+            if (
+                materialization_intent.get("schema_version") != "0.1.0"
+                or materialization_intent.get("expected_image_id") != RETAINED_IMAGE_ID
+                or materialization_intent.get("expected_sha256") != RETAINED_IMAGE_ARCHIVE_SHA256
+                or materialization_intent.get("expected_image_id_present_before_materialization")
+                is not False
+                or materialization_intent.get("materialization_policy")
+                not in {SLOT1_IMAGE_MATERIALIZATION_POLICY, SLOT2_IMAGE_MATERIALIZATION_POLICY}
+                or cleanup_intent.get("image_materialization_intent_sha256")
+                != file_sha256(materialization_intent_path)
+            ):
+                raise T09HostError("image materialization intent drifted before cleanup")
+            qualified_image_candidates.add(RETAINED_IMAGE_ID)
+        elif os.path.lexists(materialization_intent_path):
+            raise T09HostError("image materialization intent is unsafe")
+
+        materialization: dict[str, Any] | None = None
+        if materialization_path.is_file() and not materialization_path.is_symlink():
+            materialization = load_object(materialization_path, label="image materialization")
+            materialized_id = materialization.get("image_id")
+            if (
+                materialization_intent is None
+                or not isinstance(materialized_id, str)
+                or re.fullmatch(r"sha256:[a-f0-9]{64}", materialized_id) is None
+            ):
+                raise T09HostError("image materialization receipt lacks its owned identity")
+            qualified_image_candidates.add(materialized_id)
+        elif os.path.lexists(materialization_path):
+            raise T09HostError("image materialization receipt is unsafe")
+
+        fallback_candidate = _fallback_build_cleanup_candidate(
+            prefix=prefix,
+            materialization=materialization_path.parent,
+            package_commit=args.package_commit,
+            final_receipt_present=materialization is not None,
+        )
+        if fallback_candidate is not None:
+            qualified_image_candidates.add(fallback_candidate)
+
+        visible_image_id = image_id_if_present(prefix, REPLACEMENT_IMAGE_TAG)
+        if visible_image_id is not None:
+            if materialization_intent is None:
+                raise T09HostError(
+                    "qualified image tag is visible without its pre-mutation materialization intent"
+                )
+            if visible_image_id not in qualified_image_candidates:
+                raise T09HostError("visible qualified image drifted from owned candidate IDs")
+        if not qualified_image_candidates:
+            # A clean pre-materialization failure has no image mutation authority.
+            if visible_image_id is not None:
+                raise T09HostError("unowned V7 image tag is visible during cleanup")
+            image_absent_after_cleanup = True
+        else:
+            for candidate_id in sorted(qualified_image_candidates):
+                if image_id_if_present(prefix, candidate_id) is None:
+                    continue
+                removal = subprocess.run(
+                    [*prefix, "image", "rm", "--force", candidate_id],
+                    env=safe_environment(),
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    check=False,
+                    timeout=60,
+                )
+                if removal.returncode != 0:
+                    raise T09HostError("owned qualified image candidate removal failed")
+                image_removed = True
+            image_absent_after_cleanup = image_id_if_present(
+                prefix, REPLACEMENT_IMAGE_TAG
+            ) is None and all(
+                image_id_if_present(prefix, candidate_id) is None
+                for candidate_id in qualified_image_candidates
+            )
+            if not image_absent_after_cleanup:
+                raise T09HostError("owned qualified image residue remains after cleanup")
+    except (OSError, subprocess.SubprocessError, T09HostError) as exc:
+        image_cleanup_error_type = type(exc).__name__
+    retained_core_paths = frozenset(
+        cast(str, record["path"])
+        for record in cleanup_core_records
+        if isinstance(record.get("path"), str)
+    )
+    content_scans_permitted = not effective_global_scan_failure
+    credential_ready_path = pilot_root / "credential-destruction-ready.json"
+    retained_core_safety_stop = (
+        prior_core_detected or bool(safe_cleanup_core_records) or effective_global_scan_failure
+    )
+    if credential_ready_path.is_file() and not credential_ready_path.is_symlink():
+        credential_ready = load_object(
+            credential_ready_path,
+            label="credential destruction readiness",
+        )
+        if (
+            credential_ready.get("schema_version") != "0.1.0"
+            or credential_ready.get("plan_id") != PLAN_ID
+            or credential_ready.get("host_run_id") != HOST_RUN_ID
+            or credential_ready.get("cleanup_intent_sha256") != file_sha256(intent_path)
+            or not isinstance(credential_ready.get("actual_credential_exposure_detected"), bool)
+            or not isinstance(credential_ready.get("credential_safety_stop_detected"), bool)
+            or not isinstance(credential_ready.get("credential_state_updated"), bool)
+            or type(credential_ready.get("new_exact_credential_match_count")) is not int
+            or type(credential_ready.get("removed_exact_credential_artifact_count")) is not int
+            or credential_ready.get("remaining_exact_credential_match_count") != 0
+            or credential_ready.get("secret_value_or_hash_retained") is not False
+            or credential_ready.get("destructive_secret_cleanup_authorized") is not True
+        ):
+            raise T09HostError("credential destruction readiness drifted")
+        if credential_bytes and secret_hits(
+            root,
+            credential_bytes,
+            excluded_relative_paths=retained_core_paths,
+        ):
+            raise T09HostError(
+                "new exact-secret artifact appeared after the destruction readiness gate"
+            )
+        hits = ["<redacted-exact-secret-bearing-artifact>"] * cast(
+            int, credential_ready["new_exact_credential_match_count"]
+        )
+        removed_secret_artifacts = ["<redacted-exact-secret-bearing-artifact>"] * cast(
+            int, credential_ready["removed_exact_credential_artifact_count"]
+        )
+        remaining_hits: list[str] = []
+        actual_credential_exposure_detected = (
+            credential_ready["actual_credential_exposure_detected"] is True
+        )
+        credential_safety_stop_detected = (
+            credential_ready["credential_safety_stop_detected"] is True
+        )
+        credential_state_updated = credential_ready["credential_state_updated"] is True
+    else:
+        if os.path.lexists(credential_ready_path):
+            raise T09HostError("credential destruction readiness is unsafe")
+        if not credential_bytes:
+            raise T09HostError("cleanup cannot establish its exact-secret destruction gate")
+        hits_raw = (
+            secret_hits(
+                root,
+                credential_bytes,
+                excluded_relative_paths=retained_core_paths,
+            )
+            if content_scans_permitted
+            else []
+        )
         credential_state_updated = False
-        retained_safety_stop = True
-    actual_credential_exposure_detected = retained_actual_exposure or bool(hits)
-    credential_safety_stop_detected = retained_safety_stop or bool(hits)
-    secret_removed = destroy_secret(secret_path)
-    image_archive_removed = False
-    if IMAGE_ARCHIVE_PATH.exists() and not IMAGE_ARCHIVE_PATH.is_symlink():
-        IMAGE_ARCHIVE_PATH.unlink()
-        image_archive_removed = True
-    regression_archive_removed = False
-    if (
-        PRIVATE_REGRESSION_ARCHIVE_PATH.exists()
-        and not PRIVATE_REGRESSION_ARCHIVE_PATH.is_symlink()
-    ):
-        PRIVATE_REGRESSION_ARCHIVE_PATH.unlink()
-        regression_archive_removed = True
-    privacy_hits = privacy_violations(root)
+        retained_actual_exposure = False
+        retained_safety_stop = False
+        try:
+            retained_state = load_object(state_path, label="cleanup pilot state")
+            execution_sha256 = retained_state.get("execution_contract_sha256")
+            if not isinstance(execution_sha256, str):
+                raise T09HostError("cleanup state lacks its execution contract")
+            retained_actual_exposure = (
+                retained_state.get("actual_credential_exposure_detected") is True
+            )
+            retained_safety_stop = retained_state.get("credential_safety_stop_detected") is True
+            retained_core_safety_stop = (
+                retained_core_safety_stop or retained_state.get("core_safety_stop_detected") is True
+            )
+            if hits_raw:
+                mark_actual_credential_exposure(
+                    state_path,
+                    execution_contract_sha256=execution_sha256,
+                )
+                retained_actual_exposure = True
+                retained_safety_stop = True
+            credential_state_updated = True
+        except (OSError, T09HostError, T09PilotError):
+            credential_state_updated = False
+            retained_safety_stop = True
+        removed_secret_artifacts = []
+        for relative in hits_raw:
+            target = root / relative
+            try:
+                metadata = target.lstat()
+            except FileNotFoundError:
+                continue
+            if not stat.S_ISDIR(metadata.st_mode):
+                target.unlink()
+                removed_secret_artifacts.append("<redacted-exact-secret-bearing-artifact>")
+        remaining_hits_raw = (
+            secret_hits(
+                root,
+                credential_bytes,
+                excluded_relative_paths=retained_core_paths,
+            )
+            if content_scans_permitted
+            else []
+        )
+        if remaining_hits_raw or not content_scans_permitted:
+            with contextlib.suppress(OSError, T09PilotError):
+                retained_state = load_object(state_path, label="cleanup pilot state")
+                execution_sha256 = retained_state.get("execution_contract_sha256")
+                if isinstance(execution_sha256, str):
+                    mark_credential_cleanup_integrity_failure(
+                        state_path,
+                        execution_contract_sha256=execution_sha256,
+                    )
+        remaining_hits = ["<redacted-exact-secret-bearing-artifact>"] if remaining_hits_raw else []
+        hits = ["<redacted-exact-secret-bearing-artifact>"] * len(hits_raw)
+        actual_credential_exposure_detected = retained_actual_exposure or bool(hits_raw)
+        credential_safety_stop_detected = retained_safety_stop or bool(hits_raw)
+        write_exclusive(
+            credential_ready_path,
+            {
+                "schema_version": "0.1.0",
+                "plan_id": PLAN_ID,
+                "host_run_id": HOST_RUN_ID,
+                "cleanup_intent_sha256": file_sha256(intent_path),
+                "content_scan_permitted": content_scans_permitted,
+                "new_exact_credential_match_count": len(hits_raw),
+                "removed_exact_credential_artifact_count": len(removed_secret_artifacts),
+                "remaining_exact_credential_match_count": len(remaining_hits_raw),
+                "actual_credential_exposure_detected": (actual_credential_exposure_detected),
+                "credential_safety_stop_detected": credential_safety_stop_detected,
+                "credential_state_updated": credential_state_updated,
+                "secret_value_or_hash_retained": False,
+                "destructive_secret_cleanup_authorized": True,
+                "recorded_at": utc_now(),
+            },
+        )
+    credential_bytes = b""
+    secret_removed = (
+        destroy_secret(secret_path) if secret_path.exists() else credential_ready_path.is_file()
+    )
+
+    retained_archive_targets = cleanup_intent.get("archive_targets")
+    assert isinstance(retained_archive_targets, list)
+
+    def remove_intent_bound_archive(role: str, path: Path) -> tuple[bool, bool]:
+        matching = [
+            item
+            for item in retained_archive_targets
+            if isinstance(item, dict) and item.get("role") == role
+        ]
+        if len(matching) != 1:
+            raise T09HostError(f"cleanup intent lacks one archive target: {role}")
+        expected = cast(dict[str, object], matching[0])
+        if not os.path.lexists(path):
+            return False, True
+        metadata = path.lstat()
+        if (
+            expected.get("present") is not True
+            or path.is_symlink()
+            or not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_dev != expected.get("device")
+            or metadata.st_ino != expected.get("inode")
+            or metadata.st_size != expected.get("bytes")
+            or f"{stat.S_IMODE(metadata.st_mode):04o}" != expected.get("mode")
+            or metadata.st_uid != expected.get("owner_uid")
+            or metadata.st_gid != expected.get("owner_gid")
+            or metadata.st_nlink != expected.get("link_count")
+        ):
+            raise T09HostError(f"cleanup archive identity drifted: {role}")
+        path.unlink()
+        directory = os.open(path.parent, os.O_RDONLY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+        return True, not os.path.lexists(path)
+
+    image_archive_removed, image_archive_absent = remove_intent_bound_archive(
+        "replacement-image-archive",
+        IMAGE_ARCHIVE_PATH,
+    )
+    regression_archive_removed, regression_archive_absent = remove_intent_bound_archive(
+        "private-regression-archive",
+        PRIVATE_REGRESSION_ARCHIVE_PATH,
+    )
+    privacy_hits = (
+        privacy_violations(root, excluded_relative_paths=retained_core_paths)
+        if content_scans_permitted
+        else ["privacy-scan-unavailable:core-scan-integrity-failure"]
+    )
     try:
         remaining_runtime = provider_seconds_remaining(root)
     except T09HostError:
         remaining_runtime = 0.0
-    write_exclusive(
-        root / "pilot-v7/host-cleanup.json",
-        {
-            "schema_version": "0.1.0",
-            "completed_at": utc_now(),
-            "owned_containers_removed": removed,
-            "owned_container_residue": residue,
-            "global_secret_scan_passed": not remaining_hits,
-            "global_secret_bearing_artifacts_removed": removed_secret_artifacts,
-            "global_secret_matching_paths": remaining_hits,
-            "actual_credential_exposure_detected": actual_credential_exposure_detected,
-            "credential_safety_stop_detected": credential_safety_stop_detected,
-            "new_exact_credential_matches_detected_during_cleanup": bool(hits),
-            "credential_exposure_state_updated": credential_state_updated,
-            "campaign_continuation_permitted": (
-                not credential_safety_stop_detected
-                and not retained_core_safety_stop
-                and not prior_core_destruction_unverified
+    completion_document: dict[str, object] = {
+        "schema_version": "0.1.0",
+        "plan_id": PLAN_ID,
+        "host_run_id": HOST_RUN_ID,
+        "cleanup_intent_sha256": file_sha256(intent_path),
+        "credential_destruction_ready_sha256": file_sha256(credential_ready_path),
+        "direct_attempt_export_chronology": direct_export_chronology,
+        "direct_attempt_export_chronology_sha256": direct_export_chronology_sha256,
+        "pending_essential_export_after_cleanup": pending_essential_export_after_cleanup,
+        "pending_essential_export_after_cleanup_sha256": (
+            pending_essential_export_after_cleanup_sha256
+        ),
+        "completed_at": utc_now(),
+        "owned_containers_targeted": cleanup_intent["owned_containers_observed"],
+        "owned_containers_removed": removed,
+        "owned_container_removal_errors": container_removal_errors,
+        "owned_container_enumeration_errors": container_enumeration_errors,
+        "owned_container_residue": residue,
+        "global_secret_scan_passed": content_scans_permitted and not remaining_hits,
+        "global_secret_bearing_artifacts_removed": removed_secret_artifacts,
+        "global_secret_matching_paths": remaining_hits,
+        "actual_credential_exposure_detected": actual_credential_exposure_detected,
+        "credential_safety_stop_detected": credential_safety_stop_detected,
+        "new_exact_credential_matches_detected_during_cleanup": bool(hits),
+        "credential_exposure_state_updated": credential_state_updated,
+        "cleanup_terminal_state": (
+            "clean-continuable"
+            if not credential_safety_stop_detected and not retained_core_safety_stop
+            else "security-restored-campaign-blocked"
+        ),
+        "campaign_continuation_permitted": (
+            not credential_safety_stop_detected
+            and not retained_core_safety_stop
+            and not prior_core_destruction_unverified
+        ),
+        "core_artifacts_detected_during_cleanup": safe_cleanup_core_records,
+        "core_detection_receipt_sha256": global_core_detection_sha256,
+        "supplemental_core_detection_receipt_sha256": (global_supplemental_detection_sha256),
+        "core_scan_integrity_failure": effective_global_scan_failure,
+        "prior_core_artifact_detected": prior_core_detected,
+        "core_cleanup_error_type": cleanup_core_outcome.error_type,
+        "core_artifacts_destroyed": (
+            bool(safe_cleanup_core_records)
+            and cleanup_core_destruction_verified
+            and not prior_core_destruction_unverified
+        ),
+        "core_destruction_verified": (
+            cleanup_core_destruction_verified
+            and not prior_core_destruction_unverified
+            and not effective_global_scan_failure
+        ),
+        "core_safety_stop_detected": retained_core_safety_stop,
+        "credential_rotation_required_due_to_core_handling": (
+            prior_core_destruction_unverified
+            or effective_global_scan_failure
+            or (bool(safe_cleanup_core_records) and not cleanup_core_destruction_verified)
+        ),
+        "remote_secret_removed": secret_removed,
+        "replacement_image_archive_removed_after_copy_or_deferral": (
+            image_archive_removed or image_archive_absent
+        ),
+        "qualified_runtime_image_candidates_targeted": sorted(qualified_image_candidates),
+        "qualified_runtime_image_removed": image_removed or image_absent_after_cleanup,
+        "qualified_runtime_image_cleanup_error_type": image_cleanup_error_type,
+        "private_regression_archive_removed": (
+            regression_archive_removed or regression_archive_absent
+        ),
+        "structural_privacy_scan_passed": not privacy_hits,
+        "structural_privacy_violations": privacy_hits,
+        "gpu_pretermination_accounting": gpu_snapshot(),
+        "evidence_stage_required_before_provider_termination": False,
+        "aggregate_stage_optional_after_verified_direct_exports": True,
+        "lambda_seconds_remaining_for_provider_closeout": remaining_runtime,
+    }
+    try:
+        _validate_global_cleanup_completion(
+            cast(dict[str, Any], completion_document),
+            cleanup_intent_sha256=file_sha256(intent_path),
+            credential_destruction_ready_sha256=file_sha256(credential_ready_path),
+            direct_attempt_export_chronology_sha256=direct_export_chronology_sha256,
+            pending_essential_export_after_cleanup_sha256=(
+                pending_essential_export_after_cleanup_sha256
             ),
-            "core_artifacts_detected_during_cleanup": cleanup_core_records,
-            "core_artifacts_destroyed": (
-                bool(cleanup_core_records)
-                and cleanup_core_destruction_verified
-                and not prior_core_destruction_unverified
-            ),
-            "core_destruction_verified": (
-                cleanup_core_destruction_verified and not prior_core_destruction_unverified
-            ),
-            "core_safety_stop_detected": retained_core_safety_stop,
-            "credential_rotation_required_due_to_core_handling": (
-                prior_core_destruction_unverified
-                or (bool(cleanup_core_records) and not cleanup_core_destruction_verified)
-            ),
-            "remote_secret_removed": secret_removed,
-            "replacement_image_archive_removed_after_copy_or_deferral": (
-                image_archive_removed or not IMAGE_ARCHIVE_PATH.exists()
-            ),
-            "qualified_runtime_image_removed": image_removed
-            or image_id_if_present(prefix, REPLACEMENT_IMAGE_TAG) is None,
-            "private_regression_archive_removed": (
-                regression_archive_removed or not PRIVATE_REGRESSION_ARCHIVE_PATH.exists()
-            ),
-            "structural_privacy_scan_passed": not privacy_hits,
-            "structural_privacy_violations": privacy_hits,
-            "gpu_pretermination_accounting": gpu_snapshot(),
-            "evidence_stage_required_before_provider_termination": False,
-            "aggregate_stage_optional_after_verified_direct_exports": True,
-            "lambda_seconds_remaining_for_provider_closeout": remaining_runtime,
-        },
-    )
-    if (
-        residue
-        or remaining_hits
-        or not secret_removed
-        or credential_safety_stop_detected
-        or retained_core_safety_stop
-        or not cleanup_core_destruction_verified
-        or prior_core_destruction_unverified
-        or not credential_state_updated
-    ):
-        raise T09HostError(
-            "owned runtime cleanup completed with credential residue or an actual exposure"
+            package_commit=args.package_commit,
         )
+    except T09HostError as exc:
+        failure_root = pilot_root / "global-cleanup-failures"
+        failure_root.mkdir(mode=0o700, parents=True, exist_ok=True)
+        existing_failures = sorted(failure_root.glob("failure-*.json"))
+        if len(existing_failures) >= 16:
+            raise T09HostError("global cleanup failure receipt cap reached") from exc
+        write_exclusive(
+            failure_root / f"failure-{len(existing_failures) + 1:02d}.json",
+            {
+                "schema_version": "0.1.0",
+                "plan_id": PLAN_ID,
+                "host_run_id": HOST_RUN_ID,
+                "cleanup_intent_sha256": file_sha256(intent_path),
+                "credential_destruction_ready_sha256": file_sha256(credential_ready_path),
+                "failure_code": "global-cleanup-not-terminal-clean",
+                "exception_message_retained": False,
+                "cleanup_projection": completion_document,
+                "recorded_at": utc_now(),
+            },
+        )
+        raise T09HostError(
+            "global cleanup remains incomplete; a value-safe failure receipt was retained"
+        ) from exc
+    write_exclusive(completion_path, completion_document)
+    _validate_global_cleanup_completion(
+        load_object(completion_path, label="published global cleanup completion"),
+        cleanup_intent_sha256=file_sha256(intent_path),
+        credential_destruction_ready_sha256=file_sha256(credential_ready_path),
+        direct_attempt_export_chronology_sha256=direct_export_chronology_sha256,
+        pending_essential_export_after_cleanup_sha256=(
+            pending_essential_export_after_cleanup_sha256
+        ),
+        package_commit=args.package_commit,
+    )
 
 
 _PREEMPIRICAL_LATE_GATE_PATHS: Final = (
@@ -11675,6 +20148,10 @@ def preempirical_replacement_disposition(args: argparse.Namespace) -> dict[str, 
     cleanup_receipt = load_object(cleanup_path, label="pre-empirical host cleanup")
     provider_entry = load_object(provider_entry_path, label="provider entry summary")
     failure = load_object(failure_path, label="preflight failure")
+    provider_preflight_started = provider_entry.get("provider_preflight_started_at_epoch")
+    failure_preflight_started = failure.get("provider_preflight_started_at_epoch")
+    preflight_failed_at = failure.get("failed_at_epoch")
+    preflight_elapsed = failure.get("elapsed_seconds")
     late_gate_absence = _preempirical_late_gate_absence(root)
     qualification_root = root / "pilot-v7/replacement-image-qualification"
     materialization_receipt = qualification_root / "receipt.json"
@@ -11695,10 +20172,17 @@ def preempirical_replacement_disposition(args: argparse.Namespace) -> dict[str, 
         or image_id_if_present(prefix, REPLACEMENT_IMAGE_TAG) is not None
         or failure.get("empirical_attempts_entered") != 0
         or failure.get("termination_dispatch_required") is not True
-        or not isinstance(failure.get("failed_at_epoch"), (int, float))
+        or not isinstance(provider_preflight_started, (int, float))
+        or isinstance(provider_preflight_started, bool)
+        or failure_preflight_started != provider_preflight_started
+        or not isinstance(preflight_failed_at, (int, float))
+        or isinstance(preflight_failed_at, bool)
+        or not isinstance(preflight_elapsed, (int, float))
+        or isinstance(preflight_elapsed, bool)
+        or preflight_elapsed != preflight_failed_at - provider_preflight_started
+        or not 0 <= preflight_elapsed <= MAX_PREFLIGHT_WALL_SECONDS
         or failure.get("termination_dispatch_deadline_epoch")
-        != cast(float, failure.get("failed_at_epoch"))
-        + FAILED_PREFLIGHT_TERMINATION_DISPATCH_SECONDS
+        != cast(float, preflight_failed_at) + FAILED_PREFLIGHT_TERMINATION_DISPATCH_SECONDS
     ):
         raise T09HostError("launch slot 1 is not a zero-use replacement candidate")
     if materialization_receipt.is_file():
@@ -11714,7 +20198,8 @@ def preempirical_replacement_disposition(args: argparse.Namespace) -> dict[str, 
             or materialization.get("retained_image_archive_sha256") != RETAINED_IMAGE_ARCHIVE_SHA256
         ):
             raise T09HostError(
-                "only the exact retained-image zero-build prefix can authorize slot 2"
+                "only the exact retained-image zero-build prefix can authorize slot 2; "
+                "a slot-1 fallback build deliberately forfeits replacement launch authority"
             )
         image_import_count = 1
         replacement_image_id: str | None = RETAINED_IMAGE_ID
@@ -11745,6 +20230,8 @@ def preempirical_replacement_disposition(args: argparse.Namespace) -> dict[str, 
             source / "late-preflight-gate-absence.json"
         ),
         "preflight_failed_at_epoch": failure["failed_at_epoch"],
+        "provider_preflight_started_at_epoch": provider_preflight_started,
+        "preflight_elapsed_seconds": preflight_elapsed,
         "termination_dispatch_deadline_epoch": failure["termination_dispatch_deadline_epoch"],
         "empirical_attempts_entered": 0,
         "model_metadata_requests": 0,
@@ -11804,6 +20291,8 @@ def parser() -> argparse.ArgumentParser:
     preflight_parser.add_argument("--slot2-authority-root", type=Path)
     condition_export = operations.add_parser("condition-export")
     condition_export.add_argument("--run-id", choices=RUN_IDS, required=True)
+    seal_recovery = operations.add_parser("recover-attempt-seal")
+    seal_recovery.add_argument("--run-id", choices=RUN_IDS, required=True)
     finalize_parser = operations.add_parser("finalize-attempt")
     finalize_parser.add_argument("--run-id", choices=RUN_IDS, required=True)
     finalize_parser.add_argument("--finalizer-source", type=Path, required=True)
@@ -11837,6 +20326,7 @@ def parser() -> argparse.ArgumentParser:
     attempt_export.add_argument("--run-id", choices=RUN_IDS, required=True)
     attempt_export.add_argument("--inbound-root", type=Path, required=True)
     attempt_export.add_argument("--attempt-export", type=Path, required=True)
+    attempt_export.add_argument("--attempt-export-completion", type=Path, required=True)
     attempt_export.add_argument("--provider-entry-receipt", type=Path, required=True)
     attempt_export.add_argument("--restore-artifact-root", type=Path)
     attempt_export.add_argument("--restoration-commit")
@@ -11853,13 +20343,35 @@ def parser() -> argparse.ArgumentParser:
 
 
 def main() -> int:
+    enforce_host_core_limit()
     args = parser().parse_args()
+    recover_atomic_publications(args.artifact_root)
     if args.operation == "preflight":
         preflight_with_deadline(args)
         return 0
     if args.operation == "condition-export":
-        execute_condition(args)
+        try:
+            execute_condition(args)
+        except T09HostError as exc:
+            command_document = load_object(
+                contract_paths(args.repository.resolve(strict=True))["commands"],
+                label="command manifest set",
+            )
+            condition_manifest = manifest_for_run(command_document, args.run_id)
+            attempt_root = args.artifact_root.resolve(strict=True) / manifest_output_root(
+                condition_manifest
+            )
+            if (attempt_root / "essential-failure-complete.json").is_file():
+                export_attempt(args, sys.stdout.buffer)
+                raise T09HostError(
+                    "condition ended infrastructure-invalid; its essential failure "
+                    "authority was exported and campaign continuation is forbidden"
+                ) from exc
+            raise
         export_attempt(args, sys.stdout.buffer)
+        return 0
+    if args.operation == "recover-attempt-seal":
+        print(json.dumps(recover_attempt_seal(args), sort_keys=True))
         return 0
     if args.operation == "finalize-attempt":
         print(json.dumps(finalize_attempt(args), sort_keys=True))

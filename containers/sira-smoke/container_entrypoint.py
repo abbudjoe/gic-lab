@@ -25,7 +25,7 @@ SECRET_VALUE_CONTRACT = "single-nonempty-ascii-token-[A-Za-z0-9._-]-no-line-term
 ATTEMPT_ROOT = Path("/giclab/attempt")
 READY_PATH = ATTEMPT_ROOT / ".giclab-entrypoint-ready"
 RELEASE_PATH = ATTEMPT_ROOT / ".giclab-release"
-RELEASE_WAIT_SECONDS = 30
+RELEASE_WAIT_SECONDS = 300
 CORE_LIMIT_CONTRACT = "process-tree-rlimit-core-zero-v1"
 
 
@@ -116,9 +116,32 @@ def wait_for_supervisor_release() -> None:
         os.fsync(descriptor)
     finally:
         os.close(descriptor)
+    directory_descriptor = os.open(
+        ATTEMPT_ROOT,
+        os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0),
+    )
+    try:
+        os.fsync(directory_descriptor)
+    finally:
+        os.close(directory_descriptor)
     deadline = time.monotonic() + RELEASE_WAIT_SECONDS
     while time.monotonic() < deadline:
-        if RELEASE_PATH.is_file() and not RELEASE_PATH.is_symlink():
+        if os.path.lexists(RELEASE_PATH):
+            flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+            release_descriptor = os.open(RELEASE_PATH, flags)
+            try:
+                metadata = os.fstat(release_descriptor)
+                encoded = os.read(release_descriptor, 9)
+            finally:
+                os.close(release_descriptor)
+            if (
+                not stat.S_ISREG(metadata.st_mode)
+                or metadata.st_nlink != 1
+                or metadata.st_uid != os.getuid()
+                or stat.S_IMODE(metadata.st_mode) != 0o600
+                or encoded != b"release\n"
+            ):
+                raise RuntimeError("the container supervisor release is malformed")
             return
         time.sleep(0.05)
     raise RuntimeError("the container supervisor release was not received")

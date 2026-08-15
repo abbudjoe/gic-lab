@@ -50,6 +50,7 @@ from giclab.harness.t09_sira_pilot import (
     outcome_contract,
     record_first_pair_checkpoint,
     render_command_manifest,
+    reserve_condition_start,
     structurally_redact,
 )
 from giclab.registry import load_json
@@ -87,7 +88,9 @@ def _rendered_active_manifests() -> list[dict[str, object]]:
                 ROOT / "src/giclab/harness/sira_gate_a_runtime.py"
             ),
             pilot_library_sha256=file_sha256(ROOT / "src/giclab/harness/t09_sira_pilot.py"),
-            aggregate_ledger_path="/opt/giclab-artifacts/pilot-v7/aggregate-budget.json",
+            aggregate_ledger_path=(
+                "/opt/giclab-artifacts/pilot-v7/runtime-budget/aggregate-budget.json"
+            ),
             pilot_state_path="/opt/giclab-artifacts/pilot-v7/pilot-state.json",
         )
         for attempt in contract.attempts
@@ -440,14 +443,14 @@ def test_first_pair_checkpoint_passes_only_strictly_below_every_threshold() -> N
     reasons = decision["reasons"]
     assert isinstance(reasons, list)
     assert "cleanup_issue" in reasons
-    no_time = replace(passing, remaining_campaign_seconds=4_499.999)
+    no_time = replace(passing, remaining_campaign_seconds=5_159.999)
     no_time_decision = first_pair_decision(no_time)
     assert no_time_decision["decision"] == "stop-before-task-b"
     assert "insufficient_campaign_time_for_next_attempt_and_cleanup" in no_time_decision["reasons"]
-    exact_time = replace(passing, remaining_campaign_seconds=4_500.0)
+    exact_time = replace(passing, remaining_campaign_seconds=5_160.0)
     exact_time_decision = first_pair_decision(exact_time)
     assert exact_time_decision["decision"] == "continue-to-task-b"
-    assert exact_time_decision["required_campaign_seconds_for_next_attempt"] == 4_500
+    assert exact_time_decision["required_campaign_seconds_for_next_attempt"] == 5_160
     cumulative_overflow = replace(
         passing,
         projected_aggregate_cost_usd=48.0,
@@ -469,34 +472,57 @@ def test_attempt_state_enforces_order_cap_checkpoint_and_zero_retry(tmp_path: Pa
         lambda_started_at_epoch=1.0,
     )
     with pytest.raises(T09BudgetExceeded, match="order"):
-        mark_empirical_entry(
+        reserve_condition_start(
             path,
             execution_contract_sha256=digest,
             run_id=ATTEMPT_ORDER[1],
+            start_intent_sha256="1" * 64,
         )
+    reserve_condition_start(
+        path,
+        execution_contract_sha256=digest,
+        run_id=ATTEMPT_ORDER[0],
+        start_intent_sha256="2" * 64,
+    )
     mark_empirical_entry(
         path,
         execution_contract_sha256=digest,
         run_id=ATTEMPT_ORDER[0],
+        supervised_release_receipt_sha256="3" * 64,
     )
     with pytest.raises(T09BudgetExceeded, match="zero-retry"):
         mark_empirical_entry(
             path,
             execution_contract_sha256=digest,
             run_id=ATTEMPT_ORDER[0],
+            supervised_release_receipt_sha256="3" * 64,
         )
     _seal_and_finalize_state(path, digest=digest, run_id=ATTEMPT_ORDER[0])
+    reserve_condition_start(
+        path,
+        execution_contract_sha256=digest,
+        run_id=ATTEMPT_ORDER[1],
+        start_intent_sha256="4" * 64,
+    )
     mark_empirical_entry(
         path,
         execution_contract_sha256=digest,
         run_id=ATTEMPT_ORDER[1],
+        supervised_release_receipt_sha256="5" * 64,
     )
     _seal_and_finalize_state(path, digest=digest, run_id=ATTEMPT_ORDER[1])
+    reserve_condition_start(
+        path,
+        execution_contract_sha256=digest,
+        run_id=ATTEMPT_ORDER[2],
+        start_intent_sha256="6" * 64,
+    )
     with pytest.raises(T09BudgetExceeded, match="checkpoint"):
         mark_empirical_entry(
             path,
             execution_contract_sha256=digest,
             run_id=ATTEMPT_ORDER[2],
+            supervised_release_receipt_sha256="8" * 64,
         )
     record_first_pair_checkpoint(
         path,
@@ -513,6 +539,7 @@ def test_attempt_state_enforces_order_cap_checkpoint_and_zero_retry(tmp_path: Pa
         path,
         execution_contract_sha256=digest,
         run_id=ATTEMPT_ORDER[2],
+        supervised_release_receipt_sha256="8" * 64,
     )
 
 
@@ -1891,6 +1918,8 @@ def test_campaign_lifecycle_uses_actual_elapsed_time_and_preserves_cleanup_reser
         preflight_wall_seconds=3_600,
         failed_preflight_termination_dispatch_seconds=300,
         empirical_campaign_wall_seconds=14_400,
+        evidence_export_reserve_seconds=600,
+        provider_termination_handoff_seconds=60,
         empirical_cleanup_reserve_seconds=900,
         empirical_termination_cutoff_seconds=13_500,
         maximum_successful_host_active_seconds=18_000,
@@ -1903,7 +1932,7 @@ def test_campaign_lifecycle_uses_actual_elapsed_time_and_preserves_cleanup_reser
     assert (
         campaign.admit_attempt(
             billable_started_at=100.0,
-            now=10_000.0,
+            now=9_340.0,
             attempt_hard_wall_seconds=3_600,
         )
         is True
@@ -1911,7 +1940,7 @@ def test_campaign_lifecycle_uses_actual_elapsed_time_and_preserves_cleanup_reser
     assert (
         campaign.admit_attempt(
             billable_started_at=100.0,
-            now=10_000.1,
+            now=9_340.1,
             attempt_hard_wall_seconds=3_600,
         )
         is False
@@ -1946,13 +1975,13 @@ def test_host_campaign_admission_counts_setup_and_attempt_actual_time(
         abs=1,
     )
     assert host.scientific_seconds_remaining(tmp_path) == pytest.approx(14_400, abs=1)
-    # Downstream finalization and evidence packaging cannot shorten condition
-    # execution.  Admission requires exactly one 3,600-second condition wall
-    # plus the 900-second billable-resource closeout reserve.
-    monkeypatch.setattr(host.time, "time", lambda: now + 9_900)
+    # Admission requires one 3,600-second condition wall, 600 seconds for its
+    # direct evidence export, 60 seconds for provider handoff, and 900 seconds
+    # for cleanup: 5,160 seconds in total.
+    monkeypatch.setattr(host.time, "time", lambda: now + 9_240)
     assert host.admit_next_attempt(tmp_path) == pytest.approx(3_600)
-    monkeypatch.setattr(host.time, "time", lambda: now + 9_901)
-    with pytest.raises(host.T09HostError, match="next attempt hard wall"):
+    monkeypatch.setattr(host.time, "time", lambda: now + 9_240.1)
+    with pytest.raises(host.T09HostError, match="evidence export"):
         host.admit_next_attempt(tmp_path)
     monkeypatch.setattr(host.time, "time", lambda: now + 13_500)
     assert host.scientific_seconds_remaining(tmp_path, reserve_seconds=900) == 0
@@ -1992,10 +2021,17 @@ def test_raw_attempt_streams_before_cutoff_without_aggregate_stage(
         pilot_started_at_epoch=now - 100,
         lambda_started_at_epoch=now - 100,
     )
+    reserve_condition_start(
+        pilot_root / "pilot-state.json",
+        execution_contract_sha256="a" * 64,
+        run_id=ATTEMPT_ORDER[0],
+        start_intent_sha256="c" * 64,
+    )
     mark_empirical_entry(
         pilot_root / "pilot-state.json",
         execution_contract_sha256="a" * 64,
         run_id=ATTEMPT_ORDER[0],
+        supervised_release_receipt_sha256="d" * 64,
     )
     provider_entry = tmp_path / "provider-entry.json"
     provider_entry.write_text(
@@ -2060,25 +2096,35 @@ def test_raw_attempt_streams_before_cutoff_without_aggregate_stage(
             manifest if run_id == ATTEMPT_ORDER[0] else (_ for _ in ()).throw(KeyError(run_id))
         ),
     )
-    cleanup_path = raw_root / "host-cleanup-receipt.json"
-    cleanup = json.loads(cleanup_path.read_text(encoding="utf-8"))
+    old_cleanup_path = raw_root / "host-cleanup-receipt.json"
+    cleanup = json.loads(old_cleanup_path.read_text(encoding="utf-8"))
+    old_cleanup_path.unlink()
+    supervisor_root = raw_root / host.CONDITION_SUPERVISOR_DIRNAME
+    supervisor_root.mkdir(mode=0o700)
+    cleanup_path = supervisor_root / "host-cleanup-receipt.json"
     cleanup["run_id"] = ATTEMPT_ORDER[0]
     cleanup["actual_credential_exposure_detected"] = False
     cleanup["runtime_secret_cleanup_malformed"] = False
+    cleanup["core_artifact_count"] = 0
+    cleanup["runtime_core_artifact_count"] = 0
+    cleanup["core_scan_integrity_failure"] = False
+    cleanup["runtime_core_scan_integrity_failure"] = False
+    cleanup["core_safety_stop_detected"] = False
+    cleanup["campaign_continuation_permitted"] = True
     cleanup_path.write_text(json.dumps(cleanup), encoding="utf-8")
     for name, value in {
         "container-command.json": {"run_id": ATTEMPT_ORDER[0]},
         "container-state.json": {"running": False},
         "gpu-accounting.json": {"run_id": ATTEMPT_ORDER[0]},
     }.items():
-        (raw_root / name).write_text(json.dumps(value), encoding="utf-8")
+        (supervisor_root / name).write_text(json.dumps(value), encoding="utf-8")
     (raw_root / "condition.stdout").write_text("", encoding="utf-8")
     (raw_root / "condition.stderr").write_text("", encoding="utf-8")
-    (raw_root / "attempt-wall.json").write_text(
+    (supervisor_root / "attempt-wall.json").write_text(
         json.dumps({"evidence_handoff_deadline_epoch": now + 60}),
         encoding="utf-8",
     )
-    (raw_root / "evaluator-overlay-binding.json").write_text(
+    (supervisor_root / "evaluator-overlay-binding.json").write_text(
         json.dumps(
             {
                 "run_id": ATTEMPT_ORDER[0],
@@ -2088,14 +2134,75 @@ def test_raw_attempt_streams_before_cutoff_without_aggregate_stage(
         ),
         encoding="utf-8",
     )
-    (raw_root / "runtime-reconstruction-binding.json").write_text(
+    runtime_detection_path = raw_root / "runtime-core-detection.json"
+    runtime_detection_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "0.1.0",
+                "scope": "condition-container-writable-roots-before-teardown",
+                "core_artifacts_detected": [],
+                "core_artifact_count": 0,
+                "core_scan_integrity_failure": False,
+                "core_content_or_hash_retained": False,
+                "destructive_cleanup_not_yet_claimed": True,
+            }
+        ),
+        encoding="utf-8",
+    )
+    runtime_cleanup_path = raw_root / "runtime-cleanup.json"
+    runtime_cleanup_path.write_text(
+        json.dumps(
+            {
+                "secret_cleanup": {
+                    "credential_observed": True,
+                    "credential_removed_from_environment": True,
+                    "content_scan_permitted": True,
+                    "secret_bearing_artifacts_removed": [],
+                    "remaining_exact_credential_matches": 0,
+                },
+                "core_cleanup": {
+                    "core_artifacts_detected": [],
+                    "core_artifact_count": 0,
+                    "core_scan_integrity_failure": False,
+                    "destruction_verified": True,
+                    "credential_rotation_required_due_to_core_handling": False,
+                    "core_content_or_hash_retained": False,
+                    "core_detection_receipt_sha256": host.file_sha256(runtime_detection_path),
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    host_detection_path = supervisor_root / "core-artifact-detection.json"
+    host.persist_core_detection_before_cleanup(
+        receipt_path=host_detection_path,
+        records=[],
+        scope="post-condition-complete-writable-root",
+    )
+    (supervisor_root / "core-artifact-cleanup.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "0.1.0",
+                "run_id": ATTEMPT_ORDER[0],
+                **host.core_cleanup_projection([], host.CoreCleanupOutcome(True, None)),
+                "core_scan_integrity_failure": False,
+                "core_detection_receipt_sha256": host.file_sha256(host_detection_path),
+            }
+        ),
+        encoding="utf-8",
+    )
+    (supervisor_root / "runtime-reconstruction-binding.json").write_text(
         json.dumps(
             {
                 "run_id": ATTEMPT_ORDER[0],
-                "runtime_cleanup_present": False,
-                "runtime_cleanup_sha256": None,
+                "runtime_cleanup_present": True,
+                "runtime_cleanup_path_observed": True,
+                "runtime_cleanup_content_read_permitted": True,
+                "runtime_cleanup_sha256": host.file_sha256(runtime_cleanup_path),
                 "host_cleanup_receipt_sha256": host.file_sha256(cleanup_path),
-                "container_state_sha256": host.file_sha256(raw_root / "container-state.json"),
+                "container_state_sha256": host.file_sha256(
+                    supervisor_root / "container-state.json"
+                ),
                 "host_teardown_is_source_grounded_fallback": True,
             }
         ),
@@ -2160,10 +2267,14 @@ def test_raw_attempt_streams_before_cutoff_without_aggregate_stage(
     inbound.mkdir()
     inbound_archive = inbound / f"{ATTEMPT_ORDER[0]}.tar.gz"
     inbound_archive.write_bytes(destination.getvalue())
+    remote_completion = host._attempt_export_completion_path(artifact_root, ATTEMPT_ORDER[0])
+    inbound_completion = inbound / f"{ATTEMPT_ORDER[0]}-export-completion.json"
+    inbound_completion.write_bytes(remote_completion.read_bytes())
     host.verify_attempt_export(
         SimpleNamespace(
             inbound_root=inbound,
             attempt_export=inbound_archive,
+            attempt_export_completion=inbound_completion,
             run_id=ATTEMPT_ORDER[0],
             package_commit="a" * 40,
             provider_entry_receipt=provider_entry,
@@ -2197,6 +2308,7 @@ def test_raw_attempt_streams_before_cutoff_without_aggregate_stage(
         current_commit=None,
         archive=inbound_archive,
         verification_path=verification,
+        export_completion_path=inbound_completion,
         restoration_root=restored_root,
         run_id=ATTEMPT_ORDER[0],
     )

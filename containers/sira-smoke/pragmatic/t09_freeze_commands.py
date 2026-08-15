@@ -49,7 +49,9 @@ def render(repository: Path) -> dict[str, object]:
             runtime_adaptation_path="/opt/giclab-src/giclab/harness/sira_gate_a_runtime.py",
             runtime_adaptation_sha256=runtime_sha256,
             pilot_library_sha256=library_sha256,
-            aggregate_ledger_path="/opt/giclab-artifacts/pilot-v7/aggregate-budget.json",
+            aggregate_ledger_path=(
+                "/opt/giclab-artifacts/pilot-v7/runtime-budget/aggregate-budget.json"
+            ),
             pilot_state_path="/opt/giclab-artifacts/pilot-v7/pilot-state.json",
         )
         for attempt in contract.attempts

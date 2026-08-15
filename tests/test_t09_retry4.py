@@ -653,8 +653,6 @@ def test_retry4_image_selection_uses_one_fallback_build_for_unavailable_archive(
     def fake_build(**_kwargs: object) -> dict[str, object]:
         nonlocal calls
         calls += 1
-        receipt = artifact_root / "pilot-v7/replacement-image-qualification/receipt.json"
-        host.write_exclusive(receipt, {"build_count": 1})
         return {
             "qualification_id": host.QUALIFICATION_ID,
             "image_id": "sha256:" + "b" * 64,
@@ -814,7 +812,7 @@ def test_retry4_fresh_launch_clock_cumulative_accounting_and_empirical_boundarie
         )
         == 14_400
     )
-    exact_admission = frozen_manifest_published + 14_400 - 4_500
+    exact_admission = frozen_manifest_published + 14_400 - 5_160
     assert lifecycle.admit_empirical_attempt(
         empirical_started_at_epoch=frozen_manifest_published,
         now_epoch=exact_admission,
@@ -1023,6 +1021,7 @@ def test_retry4_generated_postfreeze_receipt_admits_first_condition() -> None:
     credential_scan_sha = "d" * 64
     first_pair_started = 1234.5
     frozen = {
+        "campaign_started_at_epoch": first_pair_started,
         "first_pair_started_at_epoch": first_pair_started,
         "image_materialization_policy": host.SLOT2_IMAGE_MATERIALIZATION_POLICY,
         "source_receipts": {"core_suppression": "e" * 64},
@@ -1033,8 +1032,13 @@ def test_retry4_generated_postfreeze_receipt_admits_first_condition() -> None:
         "first_pair_started_at_epoch": first_pair_started,
         "empirical_entry_crossed": False,
         "postfreeze_validation_sha256": postfreeze_sha,
+        "completed_at_epoch": first_pair_started,
     }
     postfreeze = {
+        "frozen_manifest_published_at_epoch": first_pair_started,
+        "completed_at_epoch": first_pair_started,
+        "empirical_campaign_started_at_epoch": first_pair_started,
+        "frozen_manifest_published_before_empirical_clock": True,
         "frozen_run_manifest_sha256": frozen_sha,
         "replacement_image_id": image_id,
         "image_materialization_policy": host.SLOT2_IMAGE_MATERIALIZATION_POLICY,

@@ -85,6 +85,8 @@ class Retry4LifecycleLimits:
     preflight_wall_seconds: int = 3_600
     failed_preflight_termination_dispatch_seconds: int = 300
     empirical_campaign_wall_seconds: int = 14_400
+    evidence_export_reserve_seconds: int = 600
+    provider_termination_handoff_seconds: int = 60
     empirical_cleanup_reserve_seconds: int = 900
     empirical_termination_cutoff_seconds: int = 13_500
     maximum_successful_host_active_seconds: int = 18_000
@@ -100,6 +102,8 @@ class Retry4LifecycleLimits:
             self.preflight_wall_seconds != 3_600
             or self.failed_preflight_termination_dispatch_seconds != 300
             or self.empirical_campaign_wall_seconds != 14_400
+            or self.evidence_export_reserve_seconds != 600
+            or self.provider_termination_handoff_seconds != 60
             or self.empirical_cleanup_reserve_seconds != 900
             or self.empirical_termination_cutoff_seconds != 13_500
             or self.empirical_termination_cutoff_seconds + self.empirical_cleanup_reserve_seconds
@@ -189,7 +193,10 @@ class Retry4LifecycleLimits:
                 empirical_started_at_epoch=empirical_started_at_epoch,
                 now_epoch=now_epoch,
             )
-            >= attempt_hard_wall_seconds + self.empirical_cleanup_reserve_seconds
+            >= attempt_hard_wall_seconds
+            + self.evidence_export_reserve_seconds
+            + self.provider_termination_handoff_seconds
+            + self.empirical_cleanup_reserve_seconds
         )
 
     def empirical_termination_due(

@@ -83,6 +83,8 @@ provider_lifecycle:
   failed_preflight_termination_dispatch_seconds: 300
   empirical_clock_origin: after-durable-frozen-run-manifest-publication
   empirical_campaign_wall_seconds: 14400
+  evidence_export_reserve_seconds: 600
+  provider_termination_handoff_seconds: 60
   empirical_cleanup_reserve_seconds: 900
   empirical_termination_cutoff_seconds: 13500
   maximum_successful_host_active_seconds: 18000
@@ -98,7 +100,9 @@ provider_lifecycle:
     prior_host_browser_actions_required: 0
     ownership_outcome_unknown_forbidden: true
     cumulative_lambda_cap_required: true
-  admission_rule: remaining campaign time must cover only the next 3600-second condition hard wall and the 900-second cleanup reserve; downstream evaluator, evidence, and dispatch phases remain bounded but are not empirical-admission blockers
+  admission_rule: remaining campaign time must cover the next 3600-second condition hard wall, 600-second direct evidence export, 60-second provider termination handoff, and 900-second cleanup reserve
+  supervised_release_wait_seconds: 300
+  supervised_release_rule: the credential-free started entrypoint may wait up to 300 seconds for the final source-bound state, budget, core, exact-secret, and owned-container checks; the 5160-second admission gate is rerun immediately before durable release and any timeout consumes the started identity as infrastructure-invalid
   control_plane: existing T07 pragmatic Lambda operations with source-derived projections; no persistent framework or watchdog
 replacement_image_policy:
   historical_image_digest: sha256:035edf61718e84a8156f4f0f7817b134b0ce31488d3f0b50bbfba2b4a30cc61c
@@ -111,14 +115,15 @@ replacement_image_policy:
   authoritative_runtime_identity: frozen-run-manifest replacement_image_id
   all_attempts_same_image_required: true
   image_export: best effort only; abandon before cleanup reserve is threatened
+  fallback_build_second_launch_policy: a fallback-built image may run the campaign unchanged on slot 1, but any later pre-empirical slot-1 failure forfeits slot 2 because prompt termination takes priority and no pretermination image export is permitted; slot 2 can be authorized only before materialization or after exact retained-archive import
 raw_attempt_policy:
-  empirical_authority: immutable condition-owned raw directory, SHA-256 manifest, raw-attempt-complete receipt, and independently verified per-attempt archive
+  empirical_authority: immutable condition-owned raw directory, SHA-256 manifest, raw-attempt-complete receipt, independently verified per-attempt archive, and separate source-bound export-completion plus off-host-verification timestamps that final packaging compares with provider termination start
   next_attempt_gate: prior condition terminated, raw evidence is reconstructable, raw manifest revalidates, exact credentials are absent, container and browser cleanup are clean, off-host archive acknowledgement exists, and remaining budgets admit the next attempt plus cleanup
   downstream_finalizer: network-disabled, explicit qualified-image or prequalified absolute local Python, exact frozen evaluator overlay, read-only raw and control inputs, fresh versioned finalized-output root
   offhost_reconstruction: each verified raw export carries a hash-bound control snapshot sufficient to restore the exact raw prefix and run the prelaunch control-machine-qualified local finalizer after provider termination; Lambda validates the qualification receipt without dereferencing off-host paths and local use preserves and revalidates the absolute venv launcher, link target, resolved executable, venv purelib, and both dependency trees
   repair_policy: downstream-only descendant commits may rerun the finalizer against immutable raw evidence; they may not rerun a condition, alter raw bytes, change scoring, or make a model or browser request
   uniform_analysis: the same full finalizer/interpreter/dependency/evaluator closure must be selected for both members of a pair and for every retained campaign attempt before final analysis
-  aggregate_staging: per-attempt raw or essential-failure archives are authoritative; structural fixture or private-only findings are adjudicated and block public release but do not block private preservation or provider termination; an exact credential match remains a hard stop
+  aggregate_staging: per-attempt raw or essential-failure archives are authoritative and every consumed identity must have a durable export completion plus off-host verification acknowledgement before aggregate staging or ordinary global cleanup; the optional aggregate stage hash-binds and revalidates those embedded direct-export receipts before final packaging; structural fixture or private-only findings are adjudicated and block public release but do not block private preservation or provider termination; an exact credential match remains a hard stop
 core_dump_policy:
   docker_ulimit: core=0:0
   process_soft_limit: 0
@@ -126,7 +131,7 @@ core_dump_policy:
   scope: condition entrypoint and every Python, SiRA, Playwright, Chromium, evaluator, cleanup, child, and descendant process
   preentry_proof: exact-image synthetic SIGABRT plus child/grandchild inheritance and no-network browser teardown all produce zero core artifacts
   detection: known core filenames plus bounded ELF ET_CORE header inspection and full in-root inode-alias census; size alone never classifies a core
-  disposition: prohibited-transient-security-artifact; exclude every owned inode alias from every archive; retain only safe metadata; destroy remotely; require rotation when destruction is unverifiable; any detected core permanently stops campaign continuation and consumes the condition identity only when empirical entry occurred
+  disposition: prohibited-transient-security-artifact; exclude every owned inode alias from every archive; retain only safe metadata; destroy remotely; require rotation when destruction is unverifiable; any detected core permanently stops campaign continuation; a preflight core blocks launch without consuming a condition, while a core from any started condition consumes that condition identity even before its first task model request or browser action
 failure_evidence_policy:
   full_attempt_cap_bytes: 67108864
   stdout_stderr_per_stream_cap_bytes: 67108864
@@ -185,6 +190,7 @@ readiness:
   pre_execution_requirements:
     - Bind the exact clean package commit, final plan SHA-256, fresh V7 identities, and current Retry 5 authority in a single-use private overlay.
     - Load the retained image archive, or build once only if loading is unavailable, and pass the source-bound runtime, evaluator, core-suppression, browser, model-metadata, pair-diff, science-hash, cap, evidence, repository, and privacy gates before empirical entry.
+    - "Treat a slot-1 fallback build as a single-host path: if that launch later fails before empirical entry, stop after cleanup rather than exporting the image or authorizing slot 2. Slot 2 remains exact-retained-archive import-only."
     - Freeze the exact accepted image and all qualification and core-suppression receipt hashes in the source-derived mode-0600 frozen run manifest; every attempt must reload it and use the exact image ID.
-    - Start no attempt unless its 3,600-second condition wall and 900-second cleanup reserve fit in actual remaining campaign time; keep downstream evaluator, evidence, and dispatch phases bounded without making them empirical-admission blockers.
+    - "Start no attempt unless the full 5,160-second admission envelope fits in actual remaining campaign time: the 3,600-second condition wall, 600-second direct evidence export, 60-second provider-termination handoff, and 900-second cleanup reserve. Downstream finalization remains separately bounded and may run offline against immutable raw evidence."
     - Keep raw task, answer, trace, screenshot, and evaluator evidence private and access controlled; public release remains blocked pending review.

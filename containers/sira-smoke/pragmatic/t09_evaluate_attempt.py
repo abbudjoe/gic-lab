@@ -472,10 +472,13 @@ def reconstruct_semantic_projection(
         if budget_record is not None
         else _load_object(root / "provider-budget.json", label="provider budget")
     )
+    default_cleanup_path = root / ".giclab-supervisor/host-cleanup-receipt.json"
+    if not default_cleanup_path.is_file():
+        default_cleanup_path = root / "host-cleanup-receipt.json"
     cleanup = (
         dict(cleanup_record)
         if cleanup_record is not None
-        else _load_object(root / "host-cleanup-receipt.json", label="host cleanup")
+        else _load_object(default_cleanup_path, label="host cleanup")
     )
     runtime = (
         dict(runtime_record)
@@ -773,6 +776,7 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
 
     infrastructure_failure_reasons: list[str] = []
     host_cleanup_path = args.host_cleanup_receipt.resolve(strict=True)
+    supervisor_root = host_cleanup_path.parent
     host_cleanup = _dynamic_object(
         host_cleanup_path,
         label="host-cleanup-receipt",
@@ -942,7 +946,7 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
         infrastructure_failure_reasons.append("missing-source-grounded-empirical-event")
     credential_cleanup = runtime_cleanup.get("secret_cleanup", {})
     runtime_cleanup_present = runtime_cleanup_path.is_file()
-    host_state_path = raw_root / "container-state.json"
+    host_state_path = supervisor_root / "container-state.json"
     host_state = (
         _dynamic_object(
             host_state_path,
@@ -1035,7 +1039,7 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
     )
     outcome_path = finalized_root / "attempt-outcome.json"
 
-    gpu_accounting_path = raw_root / "gpu-accounting.json"
+    gpu_accounting_path = supervisor_root / "gpu-accounting.json"
     gpu_accounting = (
         _load_object(gpu_accounting_path, label="GPU accounting")
         if gpu_accounting_path.is_file()

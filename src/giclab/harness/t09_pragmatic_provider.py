@@ -776,6 +776,8 @@ def load_campaign_lifecycle(repository: Path) -> CampaignLifecycle:
         "failed_preflight_termination_dispatch_seconds",
         "empirical_clock_origin",
         "empirical_campaign_wall_seconds",
+        "evidence_export_reserve_seconds",
+        "provider_termination_handoff_seconds",
         "empirical_cleanup_reserve_seconds",
         "empirical_termination_cutoff_seconds",
         "maximum_successful_host_active_seconds",
@@ -785,6 +787,8 @@ def load_campaign_lifecycle(repository: Path) -> CampaignLifecycle:
         "persistent_filesystems",
         "replacement_launch_rule",
         "admission_rule",
+        "supervised_release_wait_seconds",
+        "supervised_release_rule",
         "control_plane",
     }:
         raise T09ProviderError("provider lifecycle plan surface drifted")
@@ -792,6 +796,14 @@ def load_campaign_lifecycle(repository: Path) -> CampaignLifecycle:
         raw.get("cumulative_accounting_origin") != "actual-active-lambda-seconds"
         or raw.get("preflight_clock_origin") != "provider-launch-send-started"
         or raw.get("empirical_clock_origin") != "after-durable-frozen-run-manifest-publication"
+        or raw.get("supervised_release_wait_seconds") != 300
+        or raw.get("supervised_release_rule")
+        != (
+            "the credential-free started entrypoint may wait up to 300 seconds for the final "
+            "source-bound state, budget, core, exact-secret, and owned-container checks; the "
+            "5160-second admission gate is rerun immediately before durable release and any "
+            "timeout consumes the started identity as infrastructure-invalid"
+        )
         or raw.get("replacement_launch_rule")
         != {
             "allowed_only_before_empirical_entry": True,
@@ -812,6 +824,12 @@ def load_campaign_lifecycle(repository: Path) -> CampaignLifecycle:
         ),
         empirical_campaign_wall_seconds=_integer(
             raw["empirical_campaign_wall_seconds"], label="empirical wall"
+        ),
+        evidence_export_reserve_seconds=_integer(
+            raw["evidence_export_reserve_seconds"], label="evidence export reserve"
+        ),
+        provider_termination_handoff_seconds=_integer(
+            raw["provider_termination_handoff_seconds"], label="provider handoff reserve"
         ),
         empirical_cleanup_reserve_seconds=_integer(
             raw["empirical_cleanup_reserve_seconds"], label="cleanup reserve"
@@ -1544,6 +1562,11 @@ def _cleanup_provisional_owner(
                     "model_task_requests": 0,
                     "task_browser_actions": 0,
                     "replacement_image_build_count": 0,
+                    "slot2_image_archive_sha256": SLOT1_IMAGE_ARCHIVE_SHA256,
+                    "slot2_image_archive_bytes": SLOT1_IMAGE_ARCHIVE_BYTES,
+                    "slot2_expected_image_id": SLOT1_REPLACEMENT_IMAGE_ID,
+                    "slot2_image_import_required": True,
+                    "slot2_additional_image_build_count": 0,
                     "terminal_or_absent": True,
                     "zero_t09_instances": disposition == "absent",
                     "security_restored": True,
@@ -2107,7 +2130,6 @@ def _closeout_projection(
         ):
             raise T09ProviderError("empirical clock manifest is not source-bound")
     clock_origin = empirical_started if empirical_started is not None else started
-    termination_elapsed = termination_started - clock_origin
     terminal_elapsed = max(terminal_at, zero_at) - clock_origin
     owned_lambda_duration = max(terminal_at, zero_at) - owned_started
     lambda_duration = prior_lambda_duration + owned_lambda_duration
@@ -2121,35 +2143,64 @@ def _closeout_projection(
     ):
         raise T09ProviderError("Retry 5 Lambda duration or cumulative cost exceeded its cap")
     preflight_failure_timing: dict[str, object] | None = None
+    failed_preflight_dispatch_deadline: float | None = None
+    failed_preflight_started: float | None = None
+    failed_preflight_failed_at: float | None = None
     if empirical_started is None and (root / "preflight-failure-timing.json").is_file():
         preflight_failure_timing = _load_json(
             root / "preflight-failure-timing.json", maximum_bytes=65_536
         )
-        dispatch_deadline = _number(
+        failed_preflight_dispatch_deadline = _number(
             preflight_failure_timing.get("termination_dispatch_deadline_epoch"),
             label="preflight dispatch deadline",
         )
+        failed_preflight_started = _number(
+            preflight_failure_timing.get("provider_preflight_started_at_epoch"),
+            label="failed preflight start",
+        )
+        failed_preflight_failed_at = _number(
+            preflight_failure_timing.get("failed_at_epoch"),
+            label="preflight failure time",
+        )
+        failed_preflight_elapsed = _number(
+            preflight_failure_timing.get("elapsed_seconds"),
+            label="failed preflight elapsed time",
+        )
         if (
-            preflight_failure_timing.get("plan_id") != PLAN_ID
+            set(preflight_failure_timing)
+            != {
+                "schema_version",
+                "plan_id",
+                "host_run_id",
+                "preflight_failure_sha256",
+                "provider_preflight_started_at_epoch",
+                "failed_at_epoch",
+                "elapsed_seconds",
+                "termination_dispatch_deadline_epoch",
+            }
+            or preflight_failure_timing.get("schema_version") != "0.1.0"
+            or preflight_failure_timing.get("plan_id") != PLAN_ID
             or preflight_failure_timing.get("host_run_id") != HOST_RUN_ID
-            or termination_started > dispatch_deadline
+            or failed_preflight_started != started
+            or failed_preflight_elapsed != failed_preflight_failed_at - failed_preflight_started
+            or failed_preflight_elapsed < 0
+            or failed_preflight_dispatch_deadline
+            != failed_preflight_failed_at
+            + lifecycle.retry4_limits.failed_preflight_termination_dispatch_seconds
         ):
-            campaign_exception = "failed-preflight-termination-dispatch-violated"
-        else:
-            campaign_exception = "none"
-    elif empirical_started is None and termination_elapsed > (
-        lifecycle.preflight_wall_seconds
-        + lifecycle.retry4_limits.failed_preflight_termination_dispatch_seconds
-    ):
-        campaign_exception = "failed-preflight-termination-dispatch-violated"
-    elif (
-        empirical_started is not None and termination_elapsed > lifecycle.termination_cutoff_seconds
-    ):
-        campaign_exception = "termination-cutoff-violated"
-    elif empirical_started is not None and terminal_elapsed > lifecycle.wall_seconds:
-        campaign_exception = "best-effort-termination-provider-control-plane-delay"
-    else:
-        campaign_exception = "none"
+            raise T09ProviderError("preflight failure timing receipt drifted")
+    campaign_exception = _classify_campaign_wall_exception(
+        lifecycle=lifecycle,
+        provider_started_at_epoch=started,
+        empirical_started_at_epoch=empirical_started,
+        termination_started_at_epoch=termination_started,
+        terminal_observed_at_epoch=max(terminal_at, zero_at),
+        owned_lambda_duration_seconds=owned_lambda_duration,
+        cumulative_lambda_duration_seconds=lambda_duration,
+        failed_preflight_dispatch_deadline_epoch=failed_preflight_dispatch_deadline,
+        failed_preflight_started_at_epoch=failed_preflight_started,
+        failed_preflight_failed_at_epoch=failed_preflight_failed_at,
+    )
     return {
         "schema_version": "0.1.0",
         "receipt_type": "t09-pragmatic-provider-closeout",
@@ -2191,6 +2242,11 @@ def _closeout_projection(
             if preflight_failure_timing is not None
             else None
         ),
+        "failed_preflight_duration_seconds": (
+            failed_preflight_failed_at - failed_preflight_started
+            if failed_preflight_failed_at is not None and failed_preflight_started is not None
+            else None
+        ),
         "owned_lambda_duration_seconds": owned_lambda_duration,
         "prior_campaign_lambda_duration_seconds": prior_lambda_duration,
         "lambda_duration_seconds": lambda_duration,
@@ -2200,6 +2256,69 @@ def _closeout_projection(
         "cumulative_t09_cost_before_openai_usd": (PRIOR_T09_COST_USD + lambda_list_cost_usd),
         "cumulative_t09_cost_cap_usd": CUMULATIVE_T09_CAP_USD,
     }
+
+
+HARD_CAMPAIGN_WALL_EXCEPTIONS: Final = frozenset(
+    {
+        "failed-preflight-termination-dispatch-violated",
+        "failed-preflight-wall-violated",
+        "successful-preflight-wall-violated",
+        "successful-host-active-cap-violated",
+        "cumulative-active-cap-violated",
+        "termination-cutoff-violated",
+    }
+)
+
+
+def _classify_campaign_wall_exception(
+    *,
+    lifecycle: CampaignLifecycle,
+    provider_started_at_epoch: float,
+    empirical_started_at_epoch: float | None,
+    termination_started_at_epoch: float,
+    terminal_observed_at_epoch: float,
+    owned_lambda_duration_seconds: float,
+    cumulative_lambda_duration_seconds: float,
+    failed_preflight_dispatch_deadline_epoch: float | None,
+    failed_preflight_started_at_epoch: float | None,
+    failed_preflight_failed_at_epoch: float | None,
+) -> str:
+    """Classify every hard provider-clock boundary from exact observed epochs."""
+
+    limits = lifecycle.retry4_limits
+    if cumulative_lambda_duration_seconds > limits.maximum_cumulative_active_seconds:
+        return "cumulative-active-cap-violated"
+    if empirical_started_at_epoch is None:
+        if (
+            failed_preflight_started_at_epoch is not None
+            and failed_preflight_failed_at_epoch is not None
+            and failed_preflight_failed_at_epoch - failed_preflight_started_at_epoch
+            > lifecycle.preflight_wall_seconds
+        ):
+            return "failed-preflight-wall-violated"
+        if failed_preflight_dispatch_deadline_epoch is not None:
+            return (
+                "failed-preflight-termination-dispatch-violated"
+                if termination_started_at_epoch > failed_preflight_dispatch_deadline_epoch
+                else "none"
+            )
+        if termination_started_at_epoch - provider_started_at_epoch > (
+            lifecycle.preflight_wall_seconds + limits.failed_preflight_termination_dispatch_seconds
+        ):
+            return "failed-preflight-termination-dispatch-violated"
+        return "none"
+    if empirical_started_at_epoch - provider_started_at_epoch > lifecycle.preflight_wall_seconds:
+        return "successful-preflight-wall-violated"
+    if owned_lambda_duration_seconds > limits.maximum_successful_host_active_seconds:
+        return "successful-host-active-cap-violated"
+    if (
+        termination_started_at_epoch - empirical_started_at_epoch
+        > lifecycle.termination_cutoff_seconds
+    ):
+        return "termination-cutoff-violated"
+    if terminal_observed_at_epoch - empirical_started_at_epoch > lifecycle.wall_seconds:
+        return "best-effort-termination-provider-control-plane-delay"
+    return "none"
 
 
 def create_closeout_receipt(
@@ -2262,10 +2381,7 @@ def validate_closeout_receipt(
     )
     if observed != expected:
         raise T09ProviderError("provider closeout receipt is not derived from its source bundle")
-    if observed.get("campaign_wall_exception") in {
-        "termination-cutoff-violated",
-        "failed-preflight-termination-dispatch-violated",
-    }:
+    if observed.get("campaign_wall_exception") in HARD_CAMPAIGN_WALL_EXCEPTIONS:
         raise T09ProviderError("provider termination missed its source-bound cutoff")
     if observed.get("security_restored") is not True:
         raise T09ProviderError("provider security state was not restored")
@@ -3512,6 +3628,13 @@ def _validate_replacement_launch_eligibility(
     """Prove launch 1 closed pre-empirically before slot 2 can be consumed."""
 
     prior = prior_private_root.resolve(strict=True)
+    if slot1_image_archive is None:
+        raise T09ProviderError("replacement launch requires the exact retained image archive")
+    _safe_regular_identity(
+        slot1_image_archive,
+        expected_bytes=SLOT1_IMAGE_ARCHIVE_BYTES,
+        expected_sha256=SLOT1_IMAGE_ARCHIVE_SHA256,
+    )
     path = prior / "replacement-launch-eligibility.json"
     metadata = path.stat(follow_symlinks=False)
     if (
@@ -3525,8 +3648,6 @@ def _validate_replacement_launch_eligibility(
     value = _load_json(path, maximum_bytes=262_144)
     first_capability = _load_json(launch_capability_path(1), maximum_bytes=65_536)
     if value.get("eligibility_kind") == RETRY4_SLOT2_ELIGIBILITY_KIND:
-        if slot1_image_archive is None:
-            raise T09ProviderError("Retry 4 replacement requires the exact retained image archive")
         if (
             first_capability.get("plan_id") != PLAN_ID
             or first_capability.get("host_run_id") != HOST_RUN_ID
@@ -3544,8 +3665,6 @@ def _validate_replacement_launch_eligibility(
             slot1_image_archive=slot1_image_archive,
         )
     if value.get("eligibility_kind") == SLOT2_ELIGIBILITY_KIND:
-        if slot1_image_archive is None:
-            raise T09ProviderError("built-image replacement requires the exact image archive")
         if (
             first_capability.get("plan_id") != PLAN_ID
             or first_capability.get("host_run_id") != HOST_RUN_ID
@@ -3605,6 +3724,11 @@ def _validate_replacement_launch_eligibility(
             "model_task_requests": 0,
             "task_browser_actions": 0,
             "replacement_image_build_count": 0,
+            "slot2_image_archive_sha256": SLOT1_IMAGE_ARCHIVE_SHA256,
+            "slot2_image_archive_bytes": SLOT1_IMAGE_ARCHIVE_BYTES,
+            "slot2_expected_image_id": SLOT1_REPLACEMENT_IMAGE_ID,
+            "slot2_image_import_required": True,
+            "slot2_additional_image_build_count": 0,
             "terminal_or_absent": True,
             "zero_t09_instances": closed.get("zero_t09_instances") is True,
             "security_restored": True,
@@ -3650,6 +3774,10 @@ def _validate_replacement_launch_eligibility(
         retained_preempirical_source,
         package_commit=package_commit,
         entry_receipt_sha256=file_sha256(entry_path),
+        provider_preflight_started_at_epoch=_number(
+            entry.get("provider_preflight_started_at_epoch"),
+            label="provider preflight start",
+        ),
     )
     required = {
         "schema_version": "0.1.0",
@@ -3678,6 +3806,11 @@ def _validate_replacement_launch_eligibility(
         "replacement_image_import_count": host_disposition["replacement_image_import_count"],
         "replacement_image_id": host_disposition["replacement_image_id"],
         "replacement_image_archive_sha256": host_disposition["replacement_image_archive_sha256"],
+        "slot2_image_archive_sha256": SLOT1_IMAGE_ARCHIVE_SHA256,
+        "slot2_image_archive_bytes": SLOT1_IMAGE_ARCHIVE_BYTES,
+        "slot2_expected_image_id": SLOT1_REPLACEMENT_IMAGE_ID,
+        "slot2_image_import_required": True,
+        "slot2_additional_image_build_count": 0,
         "terminal_or_absent": True,
         "zero_t09_instances": True,
         "security_restored": True,
@@ -3702,6 +3835,7 @@ def _validate_host_preempirical_disposition(
     *,
     package_commit: str,
     entry_receipt_sha256: str,
+    provider_preflight_started_at_epoch: float,
 ) -> dict[str, object]:
     """Validate the copied host prefix proving launch 1 never crossed entry."""
 
@@ -3745,6 +3879,14 @@ def _validate_host_preempirical_disposition(
     failure = _load_json(failure_path, maximum_bytes=65_536)
     late_gate = _load_json(late_gate_path, maximum_bytes=65_536)
     failed_at = _number(failure.get("failed_at_epoch"), label="preflight failure time")
+    failure_started = _number(
+        failure.get("provider_preflight_started_at_epoch"),
+        label="provider preflight start",
+    )
+    failure_elapsed = _number(
+        failure.get("elapsed_seconds"),
+        label="preflight elapsed time",
+    )
     dispatch_deadline = _number(
         failure.get("termination_dispatch_deadline_epoch"),
         label="preflight termination dispatch deadline",
@@ -3778,6 +3920,8 @@ def _validate_host_preempirical_disposition(
         "preflight_failure_sha256": file_sha256(failure_path),
         "late_preflight_gate_absence_sha256": file_sha256(late_gate_path),
         "preflight_failed_at_epoch": failed_at,
+        "provider_preflight_started_at_epoch": failure_started,
+        "preflight_elapsed_seconds": failure_elapsed,
         "termination_dispatch_deadline_epoch": dispatch_deadline,
         "empirical_attempts_entered": 0,
         "model_metadata_requests": 0,
@@ -3832,6 +3976,9 @@ def _validate_host_preempirical_disposition(
         or failure.get("package_commit") != package_commit
         or failure.get("empirical_attempts_entered") != 0
         or failure.get("termination_dispatch_required") is not True
+        or failure_started != provider_preflight_started_at_epoch
+        or failure_elapsed != failed_at - failure_started
+        or not 0 <= failure_elapsed <= Retry4LifecycleLimits().preflight_wall_seconds
         or dispatch_deadline
         != failed_at + Retry4LifecycleLimits().failed_preflight_termination_dispatch_seconds
     ):
@@ -4417,6 +4564,10 @@ def closeout_campaign(
             preempirical_source_root,
             package_commit=package_commit,
             entry_receipt_sha256=file_sha256(entry_receipt_path),
+            provider_preflight_started_at_epoch=_number(
+                entry_for_replacement.get("provider_preflight_started_at_epoch"),
+                label="provider preflight start",
+            ),
         )
         retained_preempirical_source = _retain_host_preempirical_source(
             preempirical_source_root,
@@ -4427,6 +4578,10 @@ def closeout_campaign(
             retained_preempirical_source,
             package_commit=package_commit,
             entry_receipt_sha256=file_sha256(entry_receipt_path),
+            provider_preflight_started_at_epoch=_number(
+                entry_for_replacement.get("provider_preflight_started_at_epoch"),
+                label="provider preflight start",
+            ),
         )
         if retained_host_disposition != validated_host_disposition:
             raise T09ProviderError("retained pre-empirical source changed during copy")
@@ -4507,7 +4662,11 @@ def closeout_campaign(
                 "plan_id": PLAN_ID,
                 "host_run_id": HOST_RUN_ID,
                 "preflight_failure_sha256": validated_host_disposition["preflight_failure_sha256"],
+                "provider_preflight_started_at_epoch": validated_host_disposition[
+                    "provider_preflight_started_at_epoch"
+                ],
                 "failed_at_epoch": validated_host_disposition["preflight_failed_at_epoch"],
+                "elapsed_seconds": validated_host_disposition["preflight_elapsed_seconds"],
                 "termination_dispatch_deadline_epoch": validated_host_disposition[
                     "termination_dispatch_deadline_epoch"
                 ],
@@ -4662,6 +4821,11 @@ def closeout_campaign(
                 "replacement_image_archive_sha256": retained_host_disposition[
                     "replacement_image_archive_sha256"
                 ],
+                "slot2_image_archive_sha256": SLOT1_IMAGE_ARCHIVE_SHA256,
+                "slot2_image_archive_bytes": SLOT1_IMAGE_ARCHIVE_BYTES,
+                "slot2_expected_image_id": SLOT1_REPLACEMENT_IMAGE_ID,
+                "slot2_image_import_required": True,
+                "slot2_additional_image_build_count": 0,
                 "terminal_or_absent": True,
                 "zero_t09_instances": True,
                 "security_restored": True,

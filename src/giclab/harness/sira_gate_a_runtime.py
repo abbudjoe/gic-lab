@@ -14,6 +14,7 @@ import json
 import os
 import platform
 import resource
+import stat
 import sys
 import threading
 import time
@@ -46,14 +47,15 @@ from giclab.harness.t09_sira_pilot import (
     PilotExecutionContract,
     ResourceGuard,
     T09PilotError,
+    confirm_supervised_empirical_entry,
     load_aggregate_usage,
     load_execution_contract,
-    mark_empirical_entry,
     pilot_state_time_origins,
     write_aggregate_usage,
 )
 
 SIRA_MAX_OUTPUT_TOKENS_PER_CHOICE = 4_096
+MAX_RUNTIME_CORE_SCAN_ENTRIES = 100_000
 
 
 def _attempt_root_matches_raw_binding(attempt_root: Path, raw_output_root: str) -> bool:
@@ -270,6 +272,198 @@ def _remove_secret_bearing_artifacts(
             removed.append(path.relative_to(root).as_posix())
             path.unlink()
     return removed
+
+
+def _privacy_safe_runtime_secret_cleanup(
+    *,
+    attempt_root: Path,
+    observed_credentials: Sequence[str],
+    core_scan_integrity_failure: bool,
+    core_destruction_verified: bool,
+) -> tuple[dict[str, object], list[str]]:
+    """Drop the credential without reading files unless core safety is proven."""
+
+    cleanup: dict[str, object] = {
+        "credential_observed": False,
+        "credential_removed_from_environment": False,
+        "content_scan_permitted": False,
+        "secret_bearing_artifacts_removed": [],
+        "remaining_exact_credential_matches": None,
+    }
+    errors: list[str] = []
+    os.environ.pop(SIRA_SECRET_VARIABLE, None)
+    cleanup["credential_removed_from_environment"] = True
+    if len(observed_credentials) != 1:
+        errors.append("CredentialObservationIncomplete")
+        return cleanup, errors
+    cleanup["credential_observed"] = True
+    if core_scan_integrity_failure or not core_destruction_verified:
+        errors.append("CredentialCleanupIntegrityUnknownDueToCoreSafety")
+        return cleanup, errors
+    cleanup["content_scan_permitted"] = True
+    scrubber = ExactCredentialScrubber(observed_credentials)
+    removed = _remove_secret_bearing_artifacts(attempt_root, scrubber)
+    cleanup["secret_bearing_artifacts_removed"] = removed
+    remaining_matches = 0
+    for retained_path in sorted(attempt_root.rglob("*")):
+        if retained_path.is_symlink() or not retained_path.is_file():
+            continue
+        try:
+            scrubber.assert_file(retained_path, label="retained pilot artifact")
+        except CredentialExposureError:
+            remaining_matches += 1
+    cleanup["remaining_exact_credential_matches"] = remaining_matches
+    if remaining_matches:
+        errors.append("CredentialExposureError")
+    return cleanup, errors
+
+
+def _elf_is_core(path: Path) -> bool:
+    descriptor = os.open(
+        path,
+        os.O_RDONLY | os.O_NONBLOCK | getattr(os, "O_NOFOLLOW", 0),
+    )
+    try:
+        metadata = os.fstat(descriptor)
+        if not stat.S_ISREG(metadata.st_mode):
+            return False
+        header = os.read(descriptor, 18)
+    finally:
+        os.close(descriptor)
+    if len(header) < 18 or header[:4] != b"\x7fELF":
+        return False
+    if header[5] == 1:
+        return int.from_bytes(header[16:18], "little") == 4
+    if header[5] == 2:
+        return int.from_bytes(header[16:18], "big") == 4
+    return False
+
+
+def _runtime_core_census_roots(
+    roots: Sequence[tuple[str, Path]],
+) -> tuple[list[dict[str, object]], list[Path]]:
+    """Census one explicit, validated set of condition-writable roots."""
+
+    observed_entries: list[tuple[str, Path, os.stat_result, bool, bool]] = []
+    core_inodes: set[tuple[int, int]] = set()
+    inode_counts: dict[tuple[int, int], int] = {}
+    observed = 0
+    for label, root in roots:
+        if not root.is_dir() or root.is_symlink():
+            raise GateAContractError("condition writable-root core census root is unsafe")
+        for path in sorted(root.rglob("*")):
+            observed += 1
+            if observed > MAX_RUNTIME_CORE_SCAN_ENTRIES:
+                raise GateAContractError("condition writable-root core census exceeded its cap")
+            metadata = path.lstat()
+            lowered_name = path.name.lower()
+            named = lowered_name == "core" or lowered_name.startswith("core.")
+            elf_core = stat.S_ISREG(metadata.st_mode) and _elf_is_core(path)
+            observed_entries.append((label, path, metadata, named, elf_core))
+            if stat.S_ISREG(metadata.st_mode):
+                identity = (metadata.st_dev, metadata.st_ino)
+                inode_counts[identity] = inode_counts.get(identity, 0) + 1
+                if named or elf_core:
+                    core_inodes.add(identity)
+    records: list[dict[str, object]] = []
+    operational_paths: list[Path] = []
+    for label, path, metadata, named, elf_core in observed_entries:
+        regular = stat.S_ISREG(metadata.st_mode)
+        record_identity = (metadata.st_dev, metadata.st_ino) if regular else None
+        alias = record_identity in core_inodes if record_identity is not None else False
+        if not named and not elf_core and not alias:
+            continue
+        operational_paths.append(path)
+        classified_links = (
+            inode_counts.get(record_identity, 0) if record_identity is not None else 0
+        )
+        records.append(
+            {
+                "artifact": f"<condition-core-artifact-{len(records) + 1:04d}>",
+                "writable_root": label,
+                "bytes": metadata.st_size,
+                "known_core_filename": named,
+                "elf_et_core": elf_core,
+                "hardlink_alias_of_core_inode": alias and not named and not elf_core,
+                "file_type": "regular" if regular else "non-regular",
+                "filesystem_device": metadata.st_dev if regular else None,
+                "filesystem_inode": metadata.st_ino if regular else None,
+                "link_count": metadata.st_nlink,
+                "classified_links_within_writable_roots": classified_links,
+                "destruction_verifiable": (regular and metadata.st_nlink == classified_links),
+                "content_or_hash_retained": False,
+            }
+        )
+    return records, operational_paths
+
+
+def _runtime_core_census(
+    attempt_root: Path,
+    *,
+    runtime_budget_root: Path | None = None,
+) -> tuple[list[dict[str, object]], list[Path]]:
+    """Census every condition-writable mount before container teardown."""
+
+    roots: list[tuple[str, Path]] = [
+        ("attempt-root", attempt_root),
+        ("/tmp", Path("/tmp")),
+        ("/dev/shm", Path("/dev/shm")),
+    ]
+    if runtime_budget_root is not None:
+        roots.append(("runtime-budget", runtime_budget_root))
+    return _runtime_core_census_roots(roots)
+
+
+def _remove_runtime_core_artifacts(
+    attempt_root: Path,
+    paths: Sequence[Path],
+    records: Sequence[Mapping[str, object]],
+    *,
+    runtime_budget_root: Path | None = None,
+) -> bool:
+    """Identity-check, unlink, and then recensus every condition-writable root."""
+
+    if len(paths) != len(records) or not all(
+        record.get("destruction_verifiable") is True for record in records
+    ):
+        return False
+    validated: list[tuple[Path, os.stat_result]] = []
+    for path, record in zip(paths, records, strict=True):
+        try:
+            metadata = path.lstat()
+        except FileNotFoundError:
+            return False
+        except OSError:
+            return False
+        if (
+            record.get("file_type") != "regular"
+            or not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_dev != record.get("filesystem_device")
+            or metadata.st_ino != record.get("filesystem_inode")
+            or metadata.st_nlink != record.get("link_count")
+        ):
+            return False
+        validated.append((path, metadata))
+    synced_parents: set[Path] = set()
+    try:
+        for path, _ in validated:
+            path.unlink()
+            synced_parents.add(path.parent)
+        for parent in sorted(synced_parents):
+            directory = os.open(parent, os.O_RDONLY)
+            try:
+                os.fsync(directory)
+            finally:
+                os.close(directory)
+        if any(os.path.lexists(path) for path, _ in validated):
+            return False
+        residual_records, _ = _runtime_core_census(
+            attempt_root,
+            runtime_budget_root=runtime_budget_root,
+        )
+    except (OSError, GateAContractError):
+        return False
+    return not residual_records
 
 
 def _reconcile_browser_actions(
@@ -541,7 +735,8 @@ def run(argv: Sequence[str] | None = None) -> int:
         pilot_root = pilot_control_root.parent
         if (
             pilot_control_root.name != "pilot-v7"
-            or aggregate_ledger_path.parent != pilot_control_root
+            or aggregate_ledger_path.parent.name != "runtime-budget"
+            or aggregate_ledger_path.parent.parent != pilot_control_root
             or pilot_root not in attempt_root.parents
         ):
             raise GateAContractError("pilot state, aggregate ledger, and attempt roots disagree")
@@ -576,10 +771,13 @@ def run(argv: Sequence[str] | None = None) -> int:
         assert resource_guard is not None
         resource_guard.check()
         if not empirical_entered:
-            mark_empirical_entry(
+            confirm_supervised_empirical_entry(
                 pilot_state_path,
                 execution_contract_sha256=pilot_contract.sha256,
                 run_id=args.gate_pilot_attempt_id,
+                supervised_release_receipt=(
+                    attempt_root / ".giclab-supervisor/supervised-release.json"
+                ),
             )
             empirical_entered = True
 
@@ -772,8 +970,18 @@ def run(argv: Sequence[str] | None = None) -> int:
     secret_cleanup = {
         "credential_observed": False,
         "credential_removed_from_environment": False,
+        "content_scan_permitted": False,
         "secret_bearing_artifacts_removed": [],
         "remaining_exact_credential_matches": None,
+    }
+    runtime_core_cleanup: dict[str, object] = {
+        "core_artifacts_detected": [],
+        "core_artifact_count": 0,
+        "core_scan_integrity_failure": False,
+        "destruction_verified": True,
+        "credential_rotation_required_due_to_core_handling": False,
+        "core_content_or_hash_retained": False,
+        "core_detection_receipt_sha256": None,
     }
     runner_succeeded = False
     try:
@@ -785,27 +993,67 @@ def run(argv: Sequence[str] | None = None) -> int:
                 environment.close()
             except Exception as exc:  # cleanup evidence must survive a source close failure
                 close_errors.append(type(exc).__name__)
+        runtime_core_records: list[dict[str, object]] = []
+        runtime_core_paths: list[Path] = []
+        runtime_core_scan_failure = False
+        try:
+            runtime_core_records, runtime_core_paths = _runtime_core_census(
+                attempt_root,
+                runtime_budget_root=(
+                    aggregate_ledger_path.parent if aggregate_ledger_path is not None else None
+                ),
+            )
+        except (OSError, GateAContractError):
+            runtime_core_scan_failure = True
+        core_detection_path = attempt_root / "runtime-core-detection.json"
+        _write_json_evidence(
+            core_detection_path,
+            {
+                "schema_version": "0.1.0",
+                "scope": "condition-container-writable-roots-before-teardown",
+                "core_artifacts_detected": runtime_core_records,
+                "core_artifact_count": len(runtime_core_records),
+                "core_scan_integrity_failure": runtime_core_scan_failure,
+                "core_content_or_hash_retained": False,
+                "destructive_cleanup_not_yet_claimed": True,
+            },
+        )
+        runtime_core_destruction_verified = (
+            _remove_runtime_core_artifacts(
+                attempt_root,
+                runtime_core_paths,
+                runtime_core_records,
+                runtime_budget_root=(
+                    aggregate_ledger_path.parent if aggregate_ledger_path is not None else None
+                ),
+            )
+            if not runtime_core_scan_failure
+            else False
+        )
+        if runtime_core_records:
+            close_errors.append("CoreArtifactDetected")
+        if runtime_core_scan_failure:
+            close_errors.append("CoreScanIntegrityFailure")
+        runtime_core_cleanup = {
+            "core_artifacts_detected": runtime_core_records,
+            "core_artifact_count": len(runtime_core_records),
+            "core_scan_integrity_failure": runtime_core_scan_failure,
+            "destruction_verified": runtime_core_destruction_verified,
+            "credential_rotation_required_due_to_core_handling": (
+                runtime_core_scan_failure
+                or (bool(runtime_core_records) and not runtime_core_destruction_verified)
+            ),
+            "core_content_or_hash_retained": False,
+            "core_detection_receipt_sha256": file_sha256(core_detection_path),
+        }
         if pilot_contract is not None:
-            if len(observed_credentials) != 1:
-                close_errors.append("CredentialObservationIncomplete")
-            else:
-                secret_cleanup["credential_observed"] = True
-                scrubber = ExactCredentialScrubber(observed_credentials)
-                os.environ.pop(SIRA_SECRET_VARIABLE, None)
-                secret_cleanup["credential_removed_from_environment"] = True
-                removed = _remove_secret_bearing_artifacts(attempt_root, scrubber)
-                secret_cleanup["secret_bearing_artifacts_removed"] = removed
-                remaining_matches = 0
-                for retained_path in sorted(attempt_root.rglob("*")):
-                    if retained_path.is_symlink() or not retained_path.is_file():
-                        continue
-                    try:
-                        scrubber.assert_file(retained_path, label="retained pilot artifact")
-                    except CredentialExposureError:
-                        remaining_matches += 1
-                secret_cleanup["remaining_exact_credential_matches"] = remaining_matches
-                if remaining_matches:
-                    close_errors.append("CredentialExposureError")
+            secret_cleanup, credential_cleanup_errors = _privacy_safe_runtime_secret_cleanup(
+                attempt_root=attempt_root,
+                observed_credentials=tuple(observed_credentials),
+                core_scan_integrity_failure=runtime_core_scan_failure,
+                core_destruction_verified=runtime_core_destruction_verified,
+            )
+            close_errors.extend(credential_cleanup_errors)
         _write_json_evidence(
             cleanup_path,
             {
@@ -816,6 +1064,7 @@ def run(argv: Sequence[str] | None = None) -> int:
                 "pilot_attempt_id": args.gate_pilot_attempt_id,
                 "empirical_entry_crossed": empirical_entered,
                 "secret_cleanup": secret_cleanup,
+                "core_cleanup": runtime_core_cleanup,
             },
         )
         try:

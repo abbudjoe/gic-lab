@@ -45,6 +45,32 @@ REAL_REGRESSION_RECEIPT = (
 RAW_FIXTURE = ROOT / "tests/fixtures/t09/finalizer-raw-shape"
 
 
+def _mark_empirical_entry(
+    path: Path,
+    *,
+    execution_contract_sha256: str,
+    run_id: str,
+) -> None:
+    """Advance legacy state fixtures through the current supervised-release contract."""
+
+    state = json.loads(path.read_text(encoding="utf-8"))
+    if state.get("condition_start_reservation") is None:
+        pilot_state.reserve_condition_start(
+            path,
+            execution_contract_sha256=execution_contract_sha256,
+            run_id=run_id,
+            start_intent_sha256=canonical_sha256({"fixture": "condition-start", "run_id": run_id}),
+        )
+    mark_empirical_entry(
+        path,
+        execution_contract_sha256=execution_contract_sha256,
+        run_id=run_id,
+        supervised_release_receipt_sha256=canonical_sha256(
+            {"fixture": "supervised-release", "run_id": run_id}
+        ),
+    )
+
+
 def test_retry3_preflight_resume_transitions_only_exact_zero_use_state() -> None:
     old_execution = "1" * 64
     new_execution = "2" * 64
@@ -125,8 +151,12 @@ def test_retry3_same_host_resume_is_disabled_and_slot2_is_source_bound() -> None
     assert preflight.index("model_metadata_preflight(") < preflight.index(
         "write_frozen_run_manifest("
     )
-    assert preflight.index("load_frozen_run_manifest(") < preflight.index("admit_next_attempt(")
-    assert preflight.index("admit_next_attempt(") < preflight.index("postfreeze-validation.json")
+    assert preflight.index("load_frozen_run_manifest(") < preflight.index(
+        "admit_scheduled_first_attempt_before_empirical_origin("
+    )
+    assert preflight.index(
+        "admit_scheduled_first_attempt_before_empirical_origin("
+    ) < preflight.index("postfreeze-validation.json")
     assert preflight.index("postfreeze-validation.json") < preflight.index(
         "pilot-v7/preflight.json"
     )
@@ -305,7 +335,7 @@ def test_retry3_state_separates_raw_progress_from_reselectable_finalization(
         pilot_started_at_epoch=1.0,
         lambda_started_at_epoch=1.0,
     )
-    mark_empirical_entry(state, execution_contract_sha256="f" * 64, run_id=ATTEMPT_ORDER[0])
+    _mark_empirical_entry(state, execution_contract_sha256="f" * 64, run_id=ATTEMPT_ORDER[0])
     mark_raw_attempt_complete(
         state,
         execution_contract_sha256="f" * 64,
@@ -314,7 +344,7 @@ def test_retry3_state_separates_raw_progress_from_reselectable_finalization(
         raw_receipt_sha256="6" * 64,
     )
     # Downstream finalization may lag without reopening the consumed condition.
-    mark_empirical_entry(state, execution_contract_sha256="f" * 64, run_id=ATTEMPT_ORDER[1])
+    _mark_empirical_entry(state, execution_contract_sha256="f" * 64, run_id=ATTEMPT_ORDER[1])
     mark_raw_attempt_complete(
         state,
         execution_contract_sha256="f" * 64,
@@ -363,7 +393,7 @@ def test_retry3_state_separates_raw_progress_from_reselectable_finalization(
     assert blocked["first_pair_selection_drift_detected"] is True
     assert blocked["first_pair_decision"] == "stop-before-task-b"
     with pytest.raises(T09BudgetExceeded, match="checkpoint"):
-        mark_empirical_entry(
+        _mark_empirical_entry(
             state,
             execution_contract_sha256="f" * 64,
             run_id=ATTEMPT_ORDER[2],
@@ -392,7 +422,7 @@ def test_retry3_task_b_requires_uniform_current_task_a_reselection(tmp_path: Pat
         lambda_started_at_epoch=1.0,
     )
     for index, run_id in enumerate(ATTEMPT_ORDER[:2], start=1):
-        mark_empirical_entry(state, execution_contract_sha256="f" * 64, run_id=run_id)
+        _mark_empirical_entry(state, execution_contract_sha256="f" * 64, run_id=run_id)
         mark_raw_attempt_complete(
             state,
             execution_contract_sha256="f" * 64,
@@ -415,13 +445,13 @@ def test_retry3_task_b_requires_uniform_current_task_a_reselection(tmp_path: Pat
 
     _select(state, ATTEMPT_ORDER[0], source="9" * 64)
     with pytest.raises(T09BudgetExceeded, match="selections drifted"):
-        mark_empirical_entry(
+        _mark_empirical_entry(
             state,
             execution_contract_sha256="f" * 64,
             run_id=ATTEMPT_ORDER[2],
         )
     _select(state, ATTEMPT_ORDER[1], source="9" * 64)
-    mark_empirical_entry(
+    _mark_empirical_entry(
         state,
         execution_contract_sha256="f" * 64,
         run_id=ATTEMPT_ORDER[2],
@@ -439,7 +469,7 @@ def test_retry3_selection_receipt_crash_is_reconciled_without_rewrite(
         pilot_started_at_epoch=1.0,
         lambda_started_at_epoch=1.0,
     )
-    mark_empirical_entry(state, execution_contract_sha256="f" * 64, run_id=ATTEMPT_ORDER[0])
+    _mark_empirical_entry(state, execution_contract_sha256="f" * 64, run_id=ATTEMPT_ORDER[0])
     mark_raw_attempt_complete(
         state,
         execution_contract_sha256="f" * 64,
@@ -987,7 +1017,7 @@ def test_retry3_selected_local_completion_reconstructs_and_opens_checkpoint(
     reconstructed = host.validate_selected_finalization(
         repository=ROOT,
         artifact_root=artifact_root,
-        contract=SimpleNamespace(attempt=lambda _run_id: attempt),
+        contract=SimpleNamespace(sha256="f" * 64, attempt=lambda _run_id: attempt),
         run_id=run_id,
         package_commit=package_commit,
         selection=selection,
@@ -1002,7 +1032,7 @@ def test_retry3_selected_local_completion_reconstructs_and_opens_checkpoint(
         lambda_started_at_epoch=1.0,
     )
     for index, task_a_run_id in enumerate(ATTEMPT_ORDER[:2], start=1):
-        mark_empirical_entry(
+        _mark_empirical_entry(
             state,
             execution_contract_sha256="f" * 64,
             run_id=task_a_run_id,
@@ -1042,7 +1072,7 @@ def test_retry3_selected_local_completion_reconstructs_and_opens_checkpoint(
         },
         decided_at_epoch=2.0,
     )
-    mark_empirical_entry(
+    _mark_empirical_entry(
         state,
         execution_contract_sha256="f" * 64,
         run_id=ATTEMPT_ORDER[2],
@@ -1167,7 +1197,7 @@ def test_retry3_preentry_secret_match_is_a_monotonic_campaign_stop(
     assert receipt["actual_credential_exposure_detected"] is True
     assert receipt["retry_same_frozen_condition_permitted"] is False
     with pytest.raises(T09BudgetExceeded, match="credential safety"):
-        mark_empirical_entry(
+        _mark_empirical_entry(
             state_path,
             execution_contract_sha256="f" * 64,
             run_id=ATTEMPT_ORDER[0],
@@ -1232,7 +1262,7 @@ def test_retry3_metadata_secret_scan_removes_value_and_permanently_stops_admissi
     assert state["actual_credential_exposure_detected"] is True
     assert state["credential_safety_stop_detected"] is True
     with pytest.raises(T09BudgetExceeded, match="credential safety"):
-        mark_empirical_entry(
+        _mark_empirical_entry(
             state_path,
             execution_contract_sha256="f" * 64,
             run_id=ATTEMPT_ORDER[0],
@@ -1257,7 +1287,7 @@ def test_retry3_unreconstructable_credential_cleanup_stops_without_false_exposur
     assert state["actual_credential_exposure_detected"] is False
     assert state["credential_safety_stop_detected"] is True
     with pytest.raises(T09BudgetExceeded, match="credential safety"):
-        mark_empirical_entry(
+        _mark_empirical_entry(
             state_path,
             execution_contract_sha256="f" * 64,
             run_id=ATTEMPT_ORDER[0],
@@ -1275,11 +1305,25 @@ def test_retry3_raw_seal_is_immediate_and_resumes_after_state_write_crash(
     retained_session = next((raw_root / "sira-output").glob("*.json"))
     (retained_session.parent / "duplicate.json").write_bytes(retained_session.read_bytes())
     run_id = ATTEMPT_ORDER[0]
-    cleanup_path = raw_root / "host-cleanup-receipt.json"
-    cleanup = json.loads(cleanup_path.read_text(encoding="utf-8"))
+    supervisor_root = raw_root / host.CONDITION_SUPERVISOR_DIRNAME
+    supervisor_root.mkdir(mode=0o700)
+    legacy_cleanup_path = raw_root / "host-cleanup-receipt.json"
+    cleanup = json.loads(legacy_cleanup_path.read_text(encoding="utf-8"))
+    legacy_cleanup_path.unlink()
     cleanup["run_id"] = run_id
     cleanup["actual_credential_exposure_detected"] = False
     cleanup["runtime_secret_cleanup_malformed"] = False
+    cleanup.update(
+        {
+            "core_artifact_count": 0,
+            "runtime_core_artifact_count": 0,
+            "core_scan_integrity_failure": False,
+            "runtime_core_scan_integrity_failure": False,
+            "core_safety_stop_detected": False,
+            "campaign_continuation_permitted": True,
+        }
+    )
+    cleanup_path = supervisor_root / "host-cleanup-receipt.json"
     cleanup_path.write_text(json.dumps(cleanup), encoding="utf-8")
     for name, value in {
         "attempt-wall.json": {"run_id": run_id},
@@ -1287,11 +1331,71 @@ def test_retry3_raw_seal_is_immediate_and_resumes_after_state_write_crash(
         "container-state.json": {"running": False},
         "gpu-accounting.json": {"run_id": run_id},
     }.items():
-        (raw_root / name).write_text(json.dumps(value), encoding="utf-8")
+        (supervisor_root / name).write_text(json.dumps(value), encoding="utf-8")
     (raw_root / "condition.stdout").write_text("", encoding="utf-8")
     (raw_root / "condition.stderr").write_text("", encoding="utf-8")
+    runtime_core_detection = raw_root / "runtime-core-detection.json"
+    runtime_core_detection.write_text(
+        json.dumps(
+            {
+                "schema_version": "0.1.0",
+                "scope": "condition-container-writable-roots-before-teardown",
+                "core_artifacts_detected": [],
+                "core_artifact_count": 0,
+                "core_scan_integrity_failure": False,
+                "core_content_or_hash_retained": False,
+                "destructive_cleanup_not_yet_claimed": True,
+            }
+        ),
+        encoding="utf-8",
+    )
+    runtime_cleanup = raw_root / "runtime-cleanup.json"
+    runtime_cleanup.write_text(
+        json.dumps(
+            {
+                "core_cleanup": {
+                    "core_artifacts_detected": [],
+                    "core_artifact_count": 0,
+                    "core_scan_integrity_failure": False,
+                    "destruction_verified": True,
+                    "credential_rotation_required_due_to_core_handling": False,
+                    "core_content_or_hash_retained": False,
+                    "core_detection_receipt_sha256": host.file_sha256(runtime_core_detection),
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    core_detection = supervisor_root / "core-artifact-detection.json"
+    core_detection.write_text(
+        json.dumps(
+            {
+                "core_artifacts_detected": [],
+                "core_artifact_count": 0,
+                "core_scan_integrity_failure": False,
+                "core_content_or_hash_retained": False,
+            }
+        ),
+        encoding="utf-8",
+    )
+    (supervisor_root / "core-artifact-cleanup.json").write_text(
+        json.dumps(
+            {
+                "core_artifacts_detected": [],
+                "core_artifact_count": 0,
+                "core_scan_integrity_failure": False,
+                "destruction_verified": True,
+                "credential_rotation_required_due_to_core_handling": False,
+                "core_content_or_hash_retained": False,
+                "core_transferred_outside_remote_host": False,
+                "cleanup_error_type": None,
+                "core_detection_receipt_sha256": host.file_sha256(core_detection),
+            }
+        ),
+        encoding="utf-8",
+    )
     frozen_sha256 = "a" * 64
-    (raw_root / "evaluator-overlay-binding.json").write_text(
+    (supervisor_root / "evaluator-overlay-binding.json").write_text(
         json.dumps(
             {
                 "run_id": run_id,
@@ -1301,14 +1405,18 @@ def test_retry3_raw_seal_is_immediate_and_resumes_after_state_write_crash(
         ),
         encoding="utf-8",
     )
-    (raw_root / "runtime-reconstruction-binding.json").write_text(
+    (supervisor_root / "runtime-reconstruction-binding.json").write_text(
         json.dumps(
             {
                 "run_id": run_id,
-                "runtime_cleanup_present": False,
-                "runtime_cleanup_sha256": None,
+                "runtime_cleanup_present": True,
+                "runtime_cleanup_path_observed": True,
+                "runtime_cleanup_content_read_permitted": True,
+                "runtime_cleanup_sha256": host.file_sha256(runtime_cleanup),
                 "host_cleanup_receipt_sha256": host.file_sha256(cleanup_path),
-                "container_state_sha256": host.file_sha256(raw_root / "container-state.json"),
+                "container_state_sha256": host.file_sha256(
+                    supervisor_root / "container-state.json"
+                ),
                 "host_teardown_is_source_grounded_fallback": True,
             }
         ),
@@ -1321,7 +1429,7 @@ def test_retry3_raw_seal_is_immediate_and_resumes_after_state_write_crash(
         pilot_started_at_epoch=1.0,
         lambda_started_at_epoch=1.0,
     )
-    mark_empirical_entry(state, execution_contract_sha256="b" * 64, run_id=run_id)
+    _mark_empirical_entry(state, execution_contract_sha256="b" * 64, run_id=run_id)
     manifest = {
         "run_id": run_id,
         "condition_plan_sha256": "c" * 64,
@@ -1373,5 +1481,5 @@ def test_retry3_raw_seal_is_immediate_and_resumes_after_state_write_crash(
     assert retained_state["raw_attempts_complete"] == [run_id]
     execute_source = HOST_SOURCE.read_text(encoding="utf-8").split("def execute_condition", 1)[1]
     execute_source = execute_source.split("def validate_finalizer_source", 1)[0]
-    assert "seal_raw_attempt(" in execute_source
+    assert "seal_consumed_raw_or_essential_failure(" in execute_source
     assert "verify_packages=True" not in execute_source

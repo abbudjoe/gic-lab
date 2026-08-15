@@ -64,7 +64,7 @@
     "approved_offline_fixture_execution_required": true
   },
   "repository_instrumentation": {
-    "reviewed_implementation_ancestor": "bb78c4d8afd006615e393c79fb6b62c2bb93f357",
+    "reviewed_implementation_ancestor": "2d8ee6a3a2a1704d9a7f612c3dc3a3702ad8d7c6",
     "scope": [
       "content-addressed-no-follow-private-regression-archive-staging",
       "raw-attempt-root-typed-binding-before-empirical-entry",
@@ -85,7 +85,10 @@
       "minimal-manifest-bound-slot2-authority-retention-and-export",
       "process-tree-core-limit-zero-at-docker-and-entrypoint-boundaries",
       "exact-image-SIGABRT-inheritance-and-browser-teardown-core-suppression",
-      "bounded-core-detection-destruction-and-essential-failure-sealing"
+      "bounded-core-inode-alias-detection-and-verifiable-destruction",
+      "explicit-per-stream-truncation-detection-and-truthful-non-cap-failure-authority",
+      "nonempirical-consumed-infrastructure-stop-and-zero-replay-admission",
+      "raw-seal-validation-fallback-to-essential-failure-authority"
     ],
     "files": [
       {
@@ -102,7 +105,7 @@
       },
       {
         "path": "src/giclab/harness/t09_sira_pilot.py",
-        "sha256": "7e1a401f3e6d08ce3a30f2a7faf97622e874bd34d6da286b6ab6e9abad26750c"
+        "sha256": "e52dffc0fdfdbafc272ccf7e61df217db5793a358180c6742785500a08403b07"
       },
       {
         "path": "src/giclab/harness/lambda_campaign_lifecycle.py",
@@ -114,11 +117,11 @@
       },
       {
         "path": "src/giclab/harness/t09_pragmatic_provider.py",
-        "sha256": "c101644e818038990c26591e2af4d4a50a43dbb7aba7e4212e5069fa3a967c9c"
+        "sha256": "654ebb5ba334ce33b123766c4820ef2afa6cacac7c736415fc6c8014f76cd8cb"
       },
       {
         "path": "containers/sira-smoke/pragmatic/t09_remote_runner.py",
-        "sha256": "94145d33b0ada2a0c54dbdd5cdc78a01c298529a2d09ef8754940a48baed4429"
+        "sha256": "c493a5b2536ebed4968ffba0d2f081d40dff686841b7dcfa352b62c3789ec494"
       },
       {
         "path": "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py",
