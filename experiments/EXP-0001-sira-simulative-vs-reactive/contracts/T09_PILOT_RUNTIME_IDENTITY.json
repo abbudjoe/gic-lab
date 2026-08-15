@@ -64,7 +64,7 @@
     "approved_offline_fixture_execution_required": true
   },
   "repository_instrumentation": {
-    "reviewed_implementation_ancestor": "3e1b33f47ab956dd009dd377cbda6e8350fba9d6",
+    "reviewed_implementation_ancestor": "465927b62904e3bde55724ea00c79502dd2ce5a6",
     "scope": [
       "content-addressed-no-follow-private-regression-archive-staging",
       "raw-attempt-root-typed-binding-before-empirical-entry",
@@ -88,7 +88,9 @@
       "bounded-core-inode-alias-detection-and-verifiable-destruction",
       "explicit-per-stream-truncation-detection-and-truthful-non-cap-failure-authority",
       "nonempirical-consumed-infrastructure-stop-and-zero-replay-admission",
-      "raw-seal-validation-fallback-to-essential-failure-authority"
+      "raw-seal-validation-fallback-to-essential-failure-authority",
+      "historical-real-evidence-finalizer-provenance-separated-from-current-finalizer-qualification",
+      "closed-slot1-package-transition-and-collision-free-slot2-authority-retention"
     ],
     "files": [
       {
@@ -117,11 +119,11 @@
       },
       {
         "path": "src/giclab/harness/t09_pragmatic_provider.py",
-        "sha256": "31ee3e8097d7c1bf6ddf3b0eea7d0b195311499bfc505b76a172dabe3bf0d158"
+        "sha256": "beac08cdd251bf7bb87ab971d4677e61364884d5ca1d78a704438b5a71bba392"
       },
       {
         "path": "containers/sira-smoke/pragmatic/t09_remote_runner.py",
-        "sha256": "b32996c08e48b452498f648ed43b5e3d0af289cb4a4f3b5bab86b0c79a8dda94"
+        "sha256": "9d292dbca6e242ca0c6d134d03f31e787ee7f3fbcd2a86b410aa6fa668f96f1f"
       },
       {
         "path": "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py",
