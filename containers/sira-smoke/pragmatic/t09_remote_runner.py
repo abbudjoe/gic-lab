@@ -3518,14 +3518,15 @@ def contract_paths(repository: Path) -> dict[str, Path]:
 def validate_real_evidence_regression(
     repository: Path,
     *,
-    expected_finalizer_source_sha256: str = HISTORICAL_REAL_EVIDENCE_FINALIZER_SHA256,
+    expected_finalizer_source_sha256: str | None = None,
 ) -> dict[str, Any]:
     """Validate the historical receipt without conflating it with the V7 finalizer.
 
     The receipt proves the immutable V4 archive and the exact finalizer that
-    originally produced its semantic projection.  The current V7 finalizer is
-    independently source-bound by the local qualification and is then executed
-    twice against that archive in ``qualified_real_evidence_regression``.
+    originally produced its semantic projection.  V7 historical-regression
+    callers pass that original identity explicitly.  The current V7 finalizer
+    is independently source-bound by the local qualification and is then
+    executed twice against that archive in ``qualified_real_evidence_regression``.
     """
 
     paths = contract_paths(repository)
@@ -3542,7 +3543,12 @@ def validate_real_evidence_regression(
         != "63ed19b35bcb4cb62c3796a80a48004937340eb3826f9657a1006e251772255d"
         or receipt.get("source_public_disposition_sha256")
         != "ecc0e135695e16f68d52b7aa85b70d42b1f1e945f7dd119fb7c7ff0e42fc8231"
-        or receipt.get("finalizer_source_sha256") != expected_finalizer_source_sha256
+        or receipt.get("finalizer_source_sha256")
+        != (
+            expected_finalizer_source_sha256
+            if expected_finalizer_source_sha256 is not None
+            else file_sha256(repository / FINALIZER_RELATIVE_PATH)
+        )
         or receipt.get("dataset_sha256")
         != "359300b029c6891567816f351bf8786e9b018d7af8a1a44b7da9ba5ef4651288"
         or receipt.get("dataset_bytes") != 1_177_174
@@ -6918,7 +6924,10 @@ def load_frozen_run_manifest(
         qualified_regression_path,
         label="qualified real-evidence regression",
     )
-    static_regression = validate_real_evidence_regression(repository)
+    static_regression = validate_real_evidence_regression(
+        repository,
+        expected_finalizer_source_sha256=HISTORICAL_REAL_EVIDENCE_FINALIZER_SHA256,
+    )
     local_qualification_path = artifact_root / "pilot-v7/local-finalizer-qualification.json"
     core_preflight_path = (
         artifact_root / "pilot-v7/core-suppression-preflight/host-core-suppression.json"
@@ -7472,7 +7481,10 @@ def prepare_preflight_resume(
         != file_sha256(pilot / "replacement-image-qualification/build-command.json")
     ):
         raise T09HostError("retained replacement image is not the one built candidate")
-    static_regression = validate_real_evidence_regression(repository)
+    static_regression = validate_real_evidence_regression(
+        repository,
+        expected_finalizer_source_sha256=HISTORICAL_REAL_EVIDENCE_FINALIZER_SHA256,
+    )
     local_qualification = validate_local_finalizer_qualification(
         args.local_finalizer_qualification,
         repository=repository,
@@ -7960,7 +7972,10 @@ def preflight(args: argparse.Namespace) -> None:
         sanitized_dynamic_receipt(args.dynamic_receipt, dynamic),
     )
     command_document = verify_package(repository, args.package_commit)
-    real_evidence_regression = validate_real_evidence_regression(repository)
+    real_evidence_regression = validate_real_evidence_regression(
+        repository,
+        expected_finalizer_source_sha256=HISTORICAL_REAL_EVIDENCE_FINALIZER_SHA256,
+    )
     local_finalizer_qualification = validate_local_finalizer_qualification(
         args.local_finalizer_qualification,
         repository=repository,

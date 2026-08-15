@@ -1823,16 +1823,16 @@ def test_retry5_slot2_requires_the_exact_retained_image_archive(tmp_path: Path) 
 def test_retry5_historical_regression_keeps_its_original_finalizer_identity() -> None:
     host = _host("giclab_t09_retry5_historical_regression_identity")
 
-    receipt = host.validate_real_evidence_regression(ROOT)
+    receipt = host.validate_real_evidence_regression(
+        ROOT,
+        expected_finalizer_source_sha256=host.HISTORICAL_REAL_EVIDENCE_FINALIZER_SHA256,
+    )
 
     assert receipt["finalizer_source_sha256"] == host.HISTORICAL_REAL_EVIDENCE_FINALIZER_SHA256
     current_finalizer_sha256 = host.file_sha256(ROOT / host.FINALIZER_RELATIVE_PATH)
     assert current_finalizer_sha256 != host.HISTORICAL_REAL_EVIDENCE_FINALIZER_SHA256
     with pytest.raises(Exception, match="real-evidence finalizer regression"):
-        host.validate_real_evidence_regression(
-            ROOT,
-            expected_finalizer_source_sha256=current_finalizer_sha256,
-        )
+        host.validate_real_evidence_regression(ROOT)
 
 
 def test_retry5_slot2_normalizes_direct_slot1_authority_without_name_collision(
