@@ -10128,11 +10128,16 @@ def _essential_terminal_source_projection(
             or type(recovery_census.get("remaining_exact_secret_match_count")) is not int
             or cast(int, recovery_census["remaining_exact_secret_match_count"]) < 0
             or recovery_census.get("secret_values_or_hashes_retained") is not False
-            or recovery_census.get("content_scan_permitted") is not (not recovery_core_scan_failure)
+            or recovery_census.get("content_scan_permitted")
+            is not (
+                not recovery_core_scan_failure
+                and recovery_cleanup.get("cleanup_error_type") is None
+            )
             or recovery_census.get("recovery_content_copy_permitted")
             is not (
                 not recovery_core_scan_failure
                 and recovery_census.get("remaining_exact_secret_match_count") == 0
+                and recovery_cleanup.get("cleanup_error_type") is None
             )
         ):
             raise T09HostError("recovery security census is not source-bound")
@@ -12737,6 +12742,7 @@ def record_fresh_recovery_security_census(
     core_paths = frozenset(
         cast(str, record["path"]) for record in core_records if isinstance(record.get("path"), str)
     )
+    content_scan_safe = not effective_scan_integrity_failure and core_outcome.error_type is None
     try:
         hits = (
             secret_hits(
@@ -12744,7 +12750,7 @@ def record_fresh_recovery_security_census(
                 credential,
                 excluded_relative_paths=core_paths,
             )
-            if not effective_scan_integrity_failure
+            if content_scan_safe
             else []
         )
         retained_state = load_object(state_path, label="fresh recovery security state")
@@ -12768,10 +12774,10 @@ def record_fresh_recovery_security_census(
                 credential,
                 excluded_relative_paths=core_paths,
             )
-            if not effective_scan_integrity_failure
+            if content_scan_safe
             else []
         )
-        if remaining_hits or effective_scan_integrity_failure:
+        if remaining_hits or not content_scan_safe:
             mark_credential_cleanup_integrity_failure(
                 state_path,
                 execution_contract_sha256=execution_contract_sha256,
@@ -12813,10 +12819,8 @@ def record_fresh_recovery_security_census(
         "new_exact_secret_match_count": len(hits),
         "remaining_exact_secret_match_count": len(remaining_hits),
         "secret_values_or_hashes_retained": False,
-        "content_scan_permitted": not effective_scan_integrity_failure,
-        "recovery_content_copy_permitted": (
-            not remaining_hits and not effective_scan_integrity_failure
-        ),
+        "content_scan_permitted": content_scan_safe,
+        "recovery_content_copy_permitted": not remaining_hits and content_scan_safe,
     }
     write_exclusive_or_validate(
         recovery_root / "recovery-security-census.json",
@@ -12824,6 +12828,27 @@ def record_fresh_recovery_security_census(
         label="recovery security census",
     )
     return census
+
+
+def recovery_security_census_permits_raw_authority_reads(
+    census: dict[str, object],
+) -> bool:
+    """Permit raw-seal reads only after a complete, incident-free fresh census."""
+
+    return (
+        type(census.get("core_artifact_count")) is int
+        and census.get("core_artifact_count") == 0
+        and census.get("core_scan_integrity_failure") is False
+        and census.get("core_destruction_verified") is True
+        and census.get("actual_credential_exposure_detected") is False
+        and type(census.get("new_exact_secret_match_count")) is int
+        and census.get("new_exact_secret_match_count") == 0
+        and type(census.get("remaining_exact_secret_match_count")) is int
+        and census.get("remaining_exact_secret_match_count") == 0
+        and census.get("secret_values_or_hashes_retained") is False
+        and census.get("content_scan_permitted") is True
+        and census.get("recovery_content_copy_permitted") is True
+    )
 
 
 def recover_attempt_seal(args: argparse.Namespace) -> dict[str, object]:
@@ -12913,12 +12938,27 @@ def recover_attempt_seal(args: argparse.Namespace) -> dict[str, object]:
         raise T09HostError("seal recovery execution binding drifted")
     raw_manifest_path = attempt_root / "raw-attempt-manifest.json"
     raw_receipt_path = attempt_root / "raw-attempt-complete.json"
+    recovery_census = record_fresh_recovery_security_census(
+        artifact_root=artifact_root,
+        attempt_root=attempt_root,
+        raw_root=raw_root,
+        run_id=args.run_id,
+        secret_file=args.secret_file,
+        execution_contract_sha256=cast(str, execution_contract_sha256),
+    )
+    if (
+        raw_manifest_path.is_file() or raw_receipt_path.is_file()
+    ) and not recovery_security_census_permits_raw_authority_reads(recovery_census):
+        raise T09HostError(
+            "a fresh recovery security incident blocks every raw-authority content read"
+        )
     if raw_receipt_path.is_file() and not raw_manifest_path.is_file():
         raise T09HostError("raw receipt exists without its immutable source manifest")
     if raw_manifest_path.is_file() and not raw_receipt_path.is_file():
         # A manifest-only prefix is an interrupted publication of the raw
         # authority, not permission to create a competing essential authority.
-        # Resume it before any recovery census can mutate the manifested tree.
+        # The fresh census above may write only to the supervisor-owned
+        # recovery-control sibling; it cannot mutate the manifested raw tree.
         seal_raw_attempt(
             artifact_root=artifact_root,
             attempt_root=attempt_root,
@@ -12951,14 +12991,6 @@ def recover_attempt_seal(args: argparse.Namespace) -> dict[str, object]:
             "model_requests": 0,
             "browser_actions": 0,
         }
-    recovery_census = record_fresh_recovery_security_census(
-        artifact_root=artifact_root,
-        attempt_root=attempt_root,
-        raw_root=raw_root,
-        run_id=args.run_id,
-        secret_file=args.secret_file,
-        execution_contract_sha256=cast(str, execution_contract_sha256),
-    )
     cleanup = load_object(supervisor_root / "host-cleanup-receipt.json", label="host cleanup")
     core_cleanup = load_object(supervisor_root / "core-artifact-cleanup.json", label="core cleanup")
     core_evidence = _validate_core_cleanup_receipt(core_cleanup)

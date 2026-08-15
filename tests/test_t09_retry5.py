@@ -63,6 +63,82 @@ def _write_json(path: Path, value: object) -> None:
     path.chmod(0o600)
 
 
+def _raw_seal_recovery_fixture(
+    host: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    complete_raw_prefix: bool,
+) -> tuple[Path, Path, Path, Path, argparse.Namespace]:
+    artifact_root = tmp_path / "artifacts"
+    attempt_root = artifact_root / "artifacts/EXP-0001/pilot-v7/task-a/reactive/attempt-0005"
+    raw_root = attempt_root / "raw"
+    supervisor_root = raw_root / host.CONDITION_SUPERVISOR_DIRNAME
+    supervisor_root.mkdir(parents=True, mode=0o700)
+    contract_sha256 = "1" * 64
+    state_path = artifact_root / "pilot-v7/pilot-state.json"
+    initialize_pilot_state(
+        state_path,
+        execution_contract_sha256=contract_sha256,
+        pilot_started_at_epoch=1.0,
+        lambda_started_at_epoch=1.0,
+    )
+    _reserve_and_mark_empirical(
+        state_path,
+        contract_sha256=contract_sha256,
+        run_id=ATTEMPT_ORDER[0],
+    )
+    for name in (
+        "container-state.json",
+        "core-artifact-cleanup.json",
+        "host-cleanup-receipt.json",
+        "runtime-reconstruction-binding.json",
+    ):
+        _write_json(supervisor_root / name, {})
+    raw_manifest_path = attempt_root / "raw-attempt-manifest.json"
+    _write_json(raw_manifest_path, {"fixture": "interrupted-raw-authority"})
+    if complete_raw_prefix:
+        _write_json(attempt_root / "raw-attempt-complete.json", {"fixture": "complete"})
+    manifest = {
+        "run_id": ATTEMPT_ORDER[0],
+        "pair_id": "PAIR-EXP0001-PILOT-V7-TASK-A",
+        "task_id": "7dcbbbdc7f1120cd",
+        "condition": "reactive",
+        "condition_plan_sha256": "2" * 64,
+        "argv_sha256": "3" * 64,
+        "permitted_condition_owned": {
+            "output_root": attempt_root.relative_to(artifact_root).as_posix(),
+            "raw_output_root": raw_root.relative_to(artifact_root).as_posix(),
+        },
+    }
+    monkeypatch.setattr(host, "verify_package", lambda *_args, **_kwargs: {})
+    monkeypatch.setattr(
+        host,
+        "load_frozen_run_manifest",
+        lambda *_args, **_kwargs: (
+            {"execution_contract_sha256": contract_sha256},
+            "4" * 64,
+        ),
+    )
+    monkeypatch.setattr(host, "manifest_for_run", lambda *_args, **_kwargs: manifest)
+    monkeypatch.setattr(
+        host,
+        "reclassify_unreleased_condition_transaction",
+        lambda **_kwargs: False,
+    )
+    secret = tmp_path / "single-secret"
+    secret.write_bytes(b"fixture-secret-not-present-in-artifacts")
+    secret.chmod(0o600)
+    args = argparse.Namespace(
+        repository=ROOT,
+        artifact_root=artifact_root,
+        package_commit="5" * 40,
+        run_id=ATTEMPT_ORDER[0],
+        secret_file=secret,
+    )
+    return artifact_root, attempt_root, raw_root, state_path, args
+
+
 def _reserve_and_mark_empirical(
     state_path: Path,
     *,
@@ -2401,6 +2477,137 @@ def test_retry5_reserved_condition_recovery_seals_runtime_core_truth_without_uns
         if path.is_file()
     )
     assert b"core-memory-canary-must-never-be-read" not in retained
+
+
+@pytest.mark.parametrize("complete_raw_prefix", (False, True))
+@pytest.mark.parametrize("core_kind", ("known-name", "elf-et-core", "external-hardlink"))
+def test_retry5_raw_recovery_censuses_core_before_any_raw_authority_read(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    complete_raw_prefix: bool,
+    core_kind: str,
+) -> None:
+    host = _host(
+        "giclab_t09_retry5_raw_recovery_core_gate_"
+        f"{core_kind.replace('-', '_')}_{int(complete_raw_prefix)}"
+    )
+    _artifact_root, attempt_root, raw_root, state_path, args = _raw_seal_recovery_fixture(
+        host,
+        tmp_path,
+        monkeypatch,
+        complete_raw_prefix=complete_raw_prefix,
+    )
+    core_canary = b"synthetic-core-memory-canary-must-never-be-retained"
+    if core_kind == "elf-et-core":
+        core_path = raw_root / "ordinary-evaluator-output.bin"
+        core_bytes = b"\x7fELF\x02\x01" + (b"\x00" * 10) + b"\x04\x00" + core_canary
+    else:
+        core_path = raw_root / "core.123"
+        core_bytes = core_canary
+    core_path.write_bytes(core_bytes)
+    core_path.chmod(0o600)
+    external_alias: Path | None = None
+    if core_kind == "external-hardlink":
+        external_alias = tmp_path / "external-core-alias"
+        os.link(core_path, external_alias)
+
+    raw_control_paths = {
+        attempt_root / "raw-attempt-manifest.json",
+        attempt_root / "raw-attempt-complete.json",
+    }
+    original_file_sha256 = host.file_sha256
+
+    def guarded_file_sha256(path: Path) -> str:
+        if path in raw_control_paths or path == core_path:
+            raise AssertionError("raw/core content was hashed before the fresh security gate")
+        return original_file_sha256(path)
+
+    def forbidden_raw_authority(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("raw authority was read after a fresh core incident")
+
+    monkeypatch.setattr(host, "file_sha256", guarded_file_sha256)
+    monkeypatch.setattr(host, "seal_raw_attempt", forbidden_raw_authority)
+    monkeypatch.setattr(host, "validate_raw_attempt_seal", forbidden_raw_authority)
+    with pytest.raises(
+        Exception,
+        match="fresh recovery security incident blocks every raw-authority content read",
+    ):
+        host.recover_attempt_seal(args)
+
+    assert not core_path.exists()
+    if external_alias is not None:
+        assert external_alias.is_file()
+        assert external_alias.stat().st_nlink == 1
+    recovery_root = attempt_root / "recovery-control"
+    detection = json.loads(
+        (recovery_root / "post-terminal-core-detection.json").read_text(encoding="utf-8")
+    )
+    cleanup = json.loads(
+        (recovery_root / "post-terminal-core-cleanup.json").read_text(encoding="utf-8")
+    )
+    census = json.loads(
+        (recovery_root / "recovery-security-census.json").read_text(encoding="utf-8")
+    )
+    assert detection["core_artifact_count"] == 1
+    assert cleanup["core_artifact_count"] == 1
+    assert census["core_artifact_count"] == 1
+    assert census["recovery_content_copy_permitted"] is True
+    assert cleanup["credential_rotation_required_due_to_core_handling"] is (
+        core_kind == "external-hardlink"
+    )
+    assert all(
+        record["content_or_hash_retained"] is False
+        for record in detection["core_artifacts_detected"]
+    )
+    retained_control = b"".join(
+        path.read_bytes() for path in recovery_root.rglob("*") if path.is_file()
+    )
+    assert core_canary not in retained_control
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    assert state["core_safety_stop_detected"] is True
+
+
+def test_retry5_clean_manifest_only_raw_recovery_censuses_then_resumes_exactly(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    host = _host("giclab_t09_retry5_clean_raw_recovery_order")
+    _artifact_root, attempt_root, _raw_root, _state_path, args = _raw_seal_recovery_fixture(
+        host,
+        tmp_path,
+        monkeypatch,
+        complete_raw_prefix=False,
+    )
+    raw_manifest_path = attempt_root / "raw-attempt-manifest.json"
+    raw_manifest_before = raw_manifest_path.read_bytes()
+    raw_receipt_path = attempt_root / "raw-attempt-complete.json"
+    events: list[str] = []
+
+    def resume_raw(**_kwargs: object) -> tuple[Path, Path]:
+        census = json.loads(
+            (attempt_root / "recovery-control/recovery-security-census.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        assert host.recovery_security_census_permits_raw_authority_reads(census) is True
+        events.append("seal")
+        _write_json(raw_receipt_path, {"fixture": "resumed"})
+        return raw_manifest_path, raw_receipt_path
+
+    def validate_raw(**_kwargs: object) -> None:
+        events.append("validate")
+
+    def mark_raw(*_args: object, **_kwargs: object) -> None:
+        events.append("mark")
+
+    monkeypatch.setattr(host, "seal_raw_attempt", resume_raw)
+    monkeypatch.setattr(host, "validate_raw_attempt_seal", validate_raw)
+    monkeypatch.setattr(host, "mark_raw_attempt_complete", mark_raw)
+    result = host.recover_attempt_seal(args)
+    assert result["evidence_authority"] == "immutable-raw-attempt"
+    assert result["condition_reexecuted"] is False
+    assert events == ["seal", "validate", "mark"]
+    assert raw_manifest_path.read_bytes() == raw_manifest_before
 
 
 def test_retry5_internal_core_hardlink_alias_is_removed_before_essential_seal(
