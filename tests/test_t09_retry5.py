@@ -1820,6 +1820,89 @@ def test_retry5_slot2_requires_the_exact_retained_image_archive(tmp_path: Path) 
         )
 
 
+def test_retry5_historical_regression_keeps_its_original_finalizer_identity() -> None:
+    host = _host("giclab_t09_retry5_historical_regression_identity")
+
+    receipt = host.validate_real_evidence_regression(ROOT)
+
+    assert receipt["finalizer_source_sha256"] == host.HISTORICAL_REAL_EVIDENCE_FINALIZER_SHA256
+    current_finalizer_sha256 = host.file_sha256(ROOT / host.FINALIZER_RELATIVE_PATH)
+    assert current_finalizer_sha256 != host.HISTORICAL_REAL_EVIDENCE_FINALIZER_SHA256
+    with pytest.raises(Exception, match="real-evidence finalizer regression"):
+        host.validate_real_evidence_regression(
+            ROOT,
+            expected_finalizer_source_sha256=current_finalizer_sha256,
+        )
+
+
+def test_retry5_slot2_normalizes_direct_slot1_authority_without_name_collision(
+    tmp_path: Path,
+) -> None:
+    provider = _provider("giclab_t09_retry5_slot2_authority_normalization")
+    source_root = tmp_path / "slot1"
+    for directory, filename in (
+        ("entry-source", "entry-receipt.json"),
+        ("closeout-source", "closeout-receipt.json"),
+        ("preempirical-source", "preempirical-disposition.json"),
+    ):
+        _write_json(source_root / directory / filename, {"source": directory})
+
+    retained_root = tmp_path / "slot2/slot2-eligibility-source"
+    retained_root.parent.mkdir(mode=0o700)
+    provider._retain_current_v7_slot2_authority(source_root, retained_root)
+    entry, closeout, preempirical = provider._current_v7_slot2_authority_paths(retained_root.parent)
+
+    assert entry == retained_root / "slot1-entry-source"
+    assert closeout == retained_root / "slot1-closeout-source"
+    assert preempirical == retained_root / "slot1-preempirical-source"
+    assert provider._load_json(
+        retained_root / "source-manifest.json", maximum_bytes=1_048_576
+    ) == provider._slot2_authority_tree_manifest(retained_root)
+    assert not (retained_root / "entry-source").exists()
+
+
+def test_retry5_slot2_package_transition_is_exact_and_science_invariant(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    provider = _provider("giclab_t09_retry5_slot2_package_transition")
+    observed: dict[str, object] = {}
+
+    def transition(
+        repository: Path,
+        package_commit: str,
+        **kwargs: object,
+    ) -> dict[str, object]:
+        observed.update(
+            {
+                "repository": repository,
+                "package_commit": package_commit,
+                **kwargs,
+            }
+        )
+        return {"scientific_contract_changed": False}
+
+    monkeypatch.setattr(provider, "_source_bound_slot2_git_transition", transition)
+    target_commit = "b" * 40
+
+    result = provider.retry5_closed_slot1_package_transition(tmp_path, target_commit)
+
+    assert result == {"scientific_contract_changed": False}
+    assert observed == {
+        "repository": tmp_path,
+        "package_commit": target_commit,
+        "from_package_commit": provider.RETRY5_ACTIVE_SLOT1_PACKAGE_COMMIT,
+        "plan_sha256": provider.RETRY5_ACTIVE_SLOT1_PLAN_SHA256,
+        "allowed_paths": provider.RETRY5_SLOT2_TRANSITION_ALLOWED_PATHS,
+        "required_changed_paths": frozenset(
+            {
+                "containers/sira-smoke/pragmatic/t09_remote_runner.py",
+                "src/giclab/harness/t09_pragmatic_provider.py",
+            }
+        ),
+    }
+
+
 def test_retry5_provider_classifies_every_hard_clock_boundary() -> None:
     provider = _provider("giclab_t09_retry5_provider_clock_boundaries")
     lifecycle = provider.CampaignLifecycle(

@@ -186,6 +186,36 @@ RETRY4_SLOT2_TRANSITION_ALLOWED_PATHS: Final = frozenset(
     }
 )
 RETRY4_ACTIVE_SLOT2_ENTRY_PACKAGE_COMMIT: Final = "9275bed0cce8bff5e033b94c9fcc8767af629fcd"
+RETRY5_ACTIVE_SLOT1_PACKAGE_COMMIT: Final = "02524c74bfefdae6f1237b9c211d579294214cb6"
+RETRY5_ACTIVE_SLOT1_PLAN_SHA256: Final = (
+    "9f66f8f6ee9e137d27e86c5362187fe46d94b26a322994e55222e34c0c4c004e"
+)
+RETRY5_SLOT2_TRANSITION_ALLOWED_PATHS: Final = frozenset(
+    {
+        "containers/sira-smoke/pragmatic/t09_remote_runner.py",
+        "docs/PROJECT_STATE.yaml",
+        "docs/harness/T09_PRAGMATIC_RETRY5_EXECUTION_PLAN.md",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/"
+        "T09_PRAGMATIC_RETRY5_TERMINAL_CONTROL.json",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
+        "T09_PILOT_COMMAND_MANIFESTS.json",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
+        "T09_PILOT_EXECUTION_CONTRACT.json",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
+        "T09_PILOT_RUNTIME_IDENTITY.json",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/"
+        "pilot-v7-task-0000-reactive.yaml",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/"
+        "pilot-v7-task-0000-simulative.yaml",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/"
+        "pilot-v7-task-0001-reactive.yaml",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/"
+        "pilot-v7-task-0001-simulative.yaml",
+        "experiments/registry.yaml",
+        "src/giclab/harness/t09_pragmatic_provider.py",
+        "tests/test_t09_retry5.py",
+    }
+)
 SOURCE_OBSERVER: Final = "t09-retry5-pragmatic-mutations-plus-l2m-read-only-observer-v1"
 MAX_RESPONSE_BYTES: Final = 16_777_216
 MAX_REQUEST_BYTES: Final = 65_536
@@ -2725,6 +2755,32 @@ def retry4_active_slot2_entry_transition(
     )
 
 
+def retry5_closed_slot1_package_transition(
+    repository: Path, package_commit: str
+) -> dict[str, object]:
+    """Bind the focused V7 preflight repair after launch slot 1 closed.
+
+    Slot 1 was issued by the immutable package named below and terminated with
+    zero empirical/model/browser use.  Slot 2 may use a clean descendant only
+    when the diff stays on this exact control surface and the projected science
+    is byte-equivalent.
+    """
+
+    return _source_bound_slot2_git_transition(
+        repository,
+        package_commit,
+        from_package_commit=RETRY5_ACTIVE_SLOT1_PACKAGE_COMMIT,
+        plan_sha256=RETRY5_ACTIVE_SLOT1_PLAN_SHA256,
+        allowed_paths=RETRY5_SLOT2_TRANSITION_ALLOWED_PATHS,
+        required_changed_paths=frozenset(
+            {
+                "containers/sira-smoke/pragmatic/t09_remote_runner.py",
+                "src/giclab/harness/t09_pragmatic_provider.py",
+            }
+        ),
+    )
+
+
 def _safe_regular_identity(path: Path, *, expected_bytes: int, expected_sha256: str) -> None:
     resolved = path.resolve(strict=True)
     metadata = resolved.stat(follow_symlinks=False)
@@ -3151,6 +3207,47 @@ def _copy_slot2_authority_tree(source: Path, destination: Path) -> None:
             target_handle.flush()
             os.fsync(target_handle.fileno())
         target.chmod(0o600)
+
+
+def _current_v7_slot2_authority_paths(
+    root: Path,
+) -> tuple[Path, Path, Path]:
+    """Resolve direct slot-1 evidence or its normalized retained copy."""
+
+    normalized = root / "slot2-eligibility-source"
+    if normalized.is_dir():
+        manifest_path = normalized / "source-manifest.json"
+        observed = _load_json(manifest_path, maximum_bytes=1_048_576)
+        expected = _slot2_authority_tree_manifest(normalized)
+        if observed != expected:
+            raise T09ProviderError("retained V7 slot-2 authority manifest drifted")
+        return (
+            normalized / "slot1-entry-source",
+            normalized / "slot1-closeout-source",
+            normalized / "slot1-preempirical-source",
+        )
+    return (
+        root / "entry-source",
+        root / "closeout-source",
+        root / "preempirical-source",
+    )
+
+
+def _retain_current_v7_slot2_authority(source_root: Path, destination_root: Path) -> None:
+    """Copy the closed slot-1 source without colliding with the new entry root."""
+
+    entry, closeout, preempirical = _current_v7_slot2_authority_paths(source_root)
+    destination_root.mkdir(mode=0o700, exist_ok=False)
+    for source, relative in (
+        (entry, "slot1-entry-source"),
+        (closeout, "slot1-closeout-source"),
+        (preempirical, "slot1-preempirical-source"),
+    ):
+        _copy_slot2_authority_tree(source, destination_root / relative)
+    write_exclusive(
+        destination_root / "source-manifest.json",
+        _slot2_authority_tree_manifest(destination_root),
+    )
 
 
 def _slot2_eligibility_projection(
@@ -3681,15 +3778,27 @@ def _validate_replacement_launch_eligibility(
             package_commit=package_commit,
             slot1_image_archive=slot1_image_archive,
         )
+    source_package_commit = value.get("package_commit")
     if (
-        first_capability.get("plan_id") != PLAN_ID
+        not isinstance(source_package_commit, str)
+        or _HEX40.fullmatch(source_package_commit) is None
+        or first_capability.get("plan_id") != PLAN_ID
         or first_capability.get("host_run_id") != HOST_RUN_ID
-        or first_capability.get("package_commit") != package_commit
+        or first_capability.get("package_commit") != source_package_commit
         or first_capability.get("launch_slot") != 1
         or first_capability.get("launch_capability_limit") != 2
         or first_capability.get("replacement_eligibility_sha256") is not None
     ):
         raise T09ProviderError("first launch capability cannot authorize replacement")
+    package_transition: dict[str, object] | None = None
+    if source_package_commit != package_commit:
+        if (
+            source_package_commit != RETRY5_ACTIVE_SLOT1_PACKAGE_COMMIT
+            or first_capability.get("plan_sha256") != RETRY5_ACTIVE_SLOT1_PLAN_SHA256
+            or value.get("eligibility_kind") is not None
+        ):
+            raise T09ProviderError("replacement package transition is not authorized")
+        package_transition = retry5_closed_slot1_package_transition(repository, package_commit)
     if value.get("eligibility_kind") == "provider-entry-failed-preempirical":
         provisional = _load_source_validated_provisional_owner(
             prior,
@@ -3749,30 +3858,38 @@ def _validate_replacement_launch_eligibility(
         ):
             raise T09ProviderError("provisional replacement eligibility drifted")
         return value
-    entry_path = prior / "entry-source/entry-receipt.json"
-    closeout_path = prior / "closeout-source/closeout-receipt.json"
-    plan_path = repository / "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml"
+    entry_source, closeout_source, retained_preempirical_source = _current_v7_slot2_authority_paths(
+        prior
+    )
+    entry_path = entry_source / "entry-receipt.json"
+    closeout_path = closeout_source / "closeout-receipt.json"
+    source_plan_sha256 = (
+        RETRY5_ACTIVE_SLOT1_PLAN_SHA256
+        if source_package_commit == RETRY5_ACTIVE_SLOT1_PACKAGE_COMMIT
+        else file_sha256(
+            repository / "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml"
+        )
+    )
     lifecycle = load_campaign_lifecycle(repository)
     entry = validate_entry_receipt_source_bound(
         entry_path,
-        prior / "entry-source",
-        package_commit=package_commit,
-        plan_sha256=file_sha256(plan_path),
+        entry_source,
+        package_commit=source_package_commit,
+        plan_sha256=source_plan_sha256,
     )
     closeout = validate_closeout_receipt(
         closeout_path,
-        prior / "closeout-source",
+        closeout_source,
         entry_receipt_path=entry_path,
-        entry_source_root=prior / "entry-source",
-        package_commit=package_commit,
-        plan_sha256=file_sha256(plan_path),
+        entry_source_root=entry_source,
+        package_commit=source_package_commit,
+        plan_sha256=source_plan_sha256,
         lifecycle=lifecycle,
     )
-    retained_preempirical_source = prior / "preempirical-source"
     host_disposition = _validate_host_preempirical_disposition(
         retained_preempirical_source / "preempirical-disposition.json",
         retained_preempirical_source,
-        package_commit=package_commit,
+        package_commit=source_package_commit,
         entry_receipt_sha256=file_sha256(entry_path),
         provider_preflight_started_at_epoch=_number(
             entry.get("provider_preflight_started_at_epoch"),
@@ -3783,7 +3900,7 @@ def _validate_replacement_launch_eligibility(
         "schema_version": "0.1.0",
         "plan_id": PLAN_ID,
         "host_run_id": HOST_RUN_ID,
-        "package_commit": package_commit,
+        "package_commit": source_package_commit,
         "closed_launch_slot": 1,
         "entry_receipt_sha256": file_sha256(entry_path),
         "closeout_receipt_sha256": file_sha256(closeout_path),
@@ -3826,7 +3943,15 @@ def _validate_replacement_launch_eligibility(
         >= NEW_CAMPAIGN_LAMBDA_CAP_USD
     ):
         raise T09ProviderError("replacement launch lacks terminal, security, or budget closure")
-    return value
+    return {
+        **value,
+        "package_transition": package_transition,
+        "package_transition_sha256": (
+            _sha256_bytes(_canonical_bytes(package_transition))
+            if package_transition is not None
+            else None
+        ),
+    }
 
 
 def _validate_host_preempirical_disposition(
@@ -4209,15 +4334,24 @@ def launch_campaign(
     if replacement_eligibility is not None and slot1_image_archive is not None:
         assert prior_private_root is not None
         retained_source = private_root / "slot2-eligibility-source"
-        _copy_slot2_authority_tree(
-            prior_private_root.resolve(strict=True) / "slot2-eligibility-source",
-            retained_source,
-        )
+        prior = prior_private_root.resolve(strict=True)
+        if replacement_eligibility.get("eligibility_kind") in {
+            RETRY4_SLOT2_ELIGIBILITY_KIND,
+            SLOT2_ELIGIBILITY_KIND,
+        }:
+            _copy_slot2_authority_tree(
+                prior / "slot2-eligibility-source",
+                retained_source,
+            )
+        elif replacement_eligibility.get("eligibility_kind") is None:
+            _retain_current_v7_slot2_authority(prior, retained_source)
+        else:
+            raise T09ProviderError(
+                "provider-entry replacement evidence cannot be normalized as a host closeout"
+            )
         retained_eligibility = private_root / "replacement-launch-eligibility.json"
         with (
-            (prior_private_root.resolve(strict=True) / "replacement-launch-eligibility.json").open(
-                "rb"
-            ) as source,
+            (prior / "replacement-launch-eligibility.json").open("rb") as source,
             retained_eligibility.open("xb") as target,
         ):
             shutil.copyfileobj(source, target, 1_048_576)

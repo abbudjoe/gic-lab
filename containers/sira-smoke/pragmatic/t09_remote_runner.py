@@ -275,6 +275,9 @@ POSTFREEZE_ADMISSION_FIELD: Final = "fresh_empirical_campaign_headroom_passed_be
 SLOT1_IMAGE_MATERIALIZATION_POLICY: Final = "retained-import-or-one-fallback-build"
 SLOT2_IMAGE_MATERIALIZATION_POLICY: Final = "retained-import-only"
 PINNED_DATASET_SHA256: Final = "359300b029c6891567816f351bf8786e9b018d7af8a1a44b7da9ba5ef4651288"
+HISTORICAL_REAL_EVIDENCE_FINALIZER_SHA256: Final = (
+    "32937302bddec910eb696c1c513b28e67b5a86b4e300171396504a926232bb5d"
+)
 FINALIZER_RELATIVE_PATH: Final = "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py"
 FINALIZER_PROJECTION_RELATIVE_PATH: Final = (
     "containers/sira-smoke/pragmatic/t09_finalizer_projection.py"
@@ -3515,9 +3518,15 @@ def contract_paths(repository: Path) -> dict[str, Path]:
 def validate_real_evidence_regression(
     repository: Path,
     *,
-    expected_finalizer_source_sha256: str | None = None,
+    expected_finalizer_source_sha256: str = HISTORICAL_REAL_EVIDENCE_FINALIZER_SHA256,
 ) -> dict[str, Any]:
-    """Validate the sanitized prelaunch receipt from the immutable V4 archive."""
+    """Validate the historical receipt without conflating it with the V7 finalizer.
+
+    The receipt proves the immutable V4 archive and the exact finalizer that
+    originally produced its semantic projection.  The current V7 finalizer is
+    independently source-bound by the local qualification and is then executed
+    twice against that archive in ``qualified_real_evidence_regression``.
+    """
 
     paths = contract_paths(repository)
     receipt = load_object(paths["real_regression"], label="real-evidence finalizer regression")
@@ -3533,12 +3542,7 @@ def validate_real_evidence_regression(
         != "63ed19b35bcb4cb62c3796a80a48004937340eb3826f9657a1006e251772255d"
         or receipt.get("source_public_disposition_sha256")
         != "ecc0e135695e16f68d52b7aa85b70d42b1f1e945f7dd119fb7c7ff0e42fc8231"
-        or receipt.get("finalizer_source_sha256")
-        != (
-            expected_finalizer_source_sha256
-            if expected_finalizer_source_sha256 is not None
-            else file_sha256(repository / FINALIZER_RELATIVE_PATH)
-        )
+        or receipt.get("finalizer_source_sha256") != expected_finalizer_source_sha256
         or receipt.get("dataset_sha256")
         != "359300b029c6891567816f351bf8786e9b018d7af8a1a44b7da9ba5ef4651288"
         or receipt.get("dataset_bytes") != 1_177_174
@@ -6914,14 +6918,7 @@ def load_frozen_run_manifest(
         qualified_regression_path,
         label="qualified real-evidence regression",
     )
-    static_regression = validate_real_evidence_regression(
-        repository,
-        expected_finalizer_source_sha256=git_file_sha256(
-            repository,
-            package_commit,
-            FINALIZER_RELATIVE_PATH,
-        ),
-    )
+    static_regression = validate_real_evidence_regression(repository)
     local_qualification_path = artifact_root / "pilot-v7/local-finalizer-qualification.json"
     core_preflight_path = (
         artifact_root / "pilot-v7/core-suppression-preflight/host-core-suppression.json"
