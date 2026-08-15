@@ -2015,16 +2015,16 @@ def test_retry5_science_and_zero_retry_identifiers_are_fresh() -> None:
     assert disposition["attempts"]["task_a_reactive"]["task_score"] is None
 
 
-def test_retry5_is_the_only_registered_fresh_successor_without_replaying_v6() -> None:
+def test_retry5_postrun_control_consumes_v7_without_registering_a_successor() -> None:
     state = load_project_execution_state(ROOT)
     terminal = state.terminal_execution_control
     assert terminal is not None
     assert terminal.superseded_plan_ids == {
         "PLAN-EXP0001-SMOKE",
         "PLAN-EXP0001-PILOT-V6",
+        "PLAN-EXP0001-PILOT-V7",
     }
-    assert terminal.registered_successor is not None
-    assert terminal.registered_successor.plan_id == "PLAN-EXP0001-PILOT-V7"
+    assert terminal.registered_successor is None
     assert state.authorized_run_profile is None
     assert hashlib.sha256(RETRY5_EXECUTION_CONTROL.read_bytes()).hexdigest() == (
         "97539fa4b65f627880b159e0f40c9a7efab26cd2a746c7c12ddbe15e44684346"

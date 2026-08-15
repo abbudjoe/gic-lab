@@ -1,6 +1,6 @@
 # T09 Pragmatic Retry 5 Execution Plan
 
-Status: **in-progress**
+Status: **complete — terminal pre-empirical infrastructure failure; no scientific run**
 
 Source contract: the 2026-08-14 current-turn user instruction, **T09 Pragmatic
 Retry 5 — Disable Core Dumps, Repair Failure Sealing, and Complete the
@@ -58,22 +58,22 @@ changes, training, a larger pilot, comparative claims, and an EXP-0001 outcome.
 | --- | --- | --- | --- |
 | R5-01 | Preserve all Retry 4 plans, manifests, provider receipts, archives, disposition, terminal control, and consumed identities. | Immutable hashes and explicit V6 attempt states; no V6 identity in V7. | met: exact V6 plan/runtime/execution/command bytes are archived; disposition and external evidence remain unchanged; V7 uses fresh identities |
 | R5-02 | Inspect only safe retained-core metadata and classify the producer when possible without disclosing memory content. | Private mode-0600 receipt with relative path, metadata, ELF class, safe producer family, and unavailable fields explicit. | met: private receipt `core-producer-metadata.json` is mode 0600, 697 bytes, SHA-256 `cdbe6918d94daa233ea76d6cb0bb07f23b8d00af4d7fab05051ab8ee5bf516d1`; bounded metadata identifies an x86-64 Chromium-family core and leaves the signal unavailable |
-| R5-03 | Enforce RLIMIT_CORE `(0, 0)` for every condition/browser/finalizer descendant without privilege or host-wide changes. | Exact Docker argv, entrypoint assertion, child/grandchild receipt, fail-before-entry behavior. | partial: Docker/entrypoint/runtime/finalizer enforcement and focused regressions pass; exact-image receipt remains dynamic |
-| R5-04 | Prove suppression in the exact final image/container path. | Synthetic SIGABRT nonzero exit with zero core, inherited zero limits, Chromium teardown with zero core/process residue. | partial: local inheritance/SIGABRT and browser-path regressions pass; exact accepted-image proof remains dynamic |
+| R5-03 | Enforce RLIMIT_CORE `(0, 0)` for every condition/browser/finalizer descendant without privilege or host-wide changes. | Exact Docker argv, entrypoint assertion, child/grandchild receipt, fail-before-entry behavior. | partial-terminal: Docker/entrypoint/runtime/finalizer enforcement and focused regressions pass; the live exact-image path was not reached |
+| R5-04 | Prove suppression in the exact final image/container path. | Synthetic SIGABRT nonzero exit with zero core, inherited zero limits, Chromium teardown with zero core/process residue. | partial-terminal: local inheritance/SIGABRT and browser-path regressions pass; slot 2 stopped before image import, so no live exact-image receipt exists |
 | R5-05 | Detect filename and ELF `ET_CORE` artifacts without misclassifying ordinary large files. | Bounded scanner fixtures and exact final-runtime use. | met: bounded filename/ELF fixtures, full inode-alias census, external-hardlink and symlink cases, and an 8 MiB ordinary-file negative regression pass |
-| R5-06 | Treat any core as prohibited transient security material: stop, record safe metadata, exclude, destroy, and gate continuation. | Core incident/cleanup receipt, archive exclusion, no scientific-raw classification. | partial: source and focused state/archive/cleanup regressions now remove every owned alias, report verified versus unverifiable destruction truthfully, require rotation on unverifiable destruction, reject malformed cleanup evidence, and close slot-2 admission; live receipts remain dynamic |
-| R5-07 | Seal a reconstructable essential failure bundle after an output-cap/infrastructure stop. | Allowlisted bundle, exclusion manifest, schemas, secret/privacy scans, source-grounded status, independent archive. | partial: both empirical and pre-empirical consumed-failure fixtures pass seal, export, independent verify, off-host restore, and reconstructable-disposition checks; neither is evaluator eligible and no V7 live attempt has exercised the path |
+| R5-06 | Treat any core as prohibited transient security material: stop, record safe metadata, exclude, destroy, and gate continuation. | Core incident/cleanup receipt, archive exclusion, no scientific-raw classification. | partial-terminal: source and focused state/archive/cleanup regressions pass; no live condition or browser container started and no V7 core incident occurred |
+| R5-07 | Seal a reconstructable essential failure bundle after an output-cap/infrastructure stop. | Allowlisted bundle, exclusion manifest, schemas, secret/privacy scans, source-grounded status, independent archive. | partial-terminal: empirical and non-empirical consumed-failure fixtures pass seal/export/verify/restore; no live condition identity was consumed, so the path was not exercised |
 | R5-08 | Retain a finite, equal evidence cap justified by expected scientific evidence rather than core size. | Retry4 non-core arithmetic plus projected screenshot/log/receipt/evaluator envelope. | met: 2,076,704 observed non-core bytes; 50,331,648-byte conservative full-attempt projection; 16,777,216-byte headroom within the unchanged 67,108,864-byte cap |
-| R5-09 | Reuse and qualify the retained 1,207,128,576-byte image archive at SHA-256 `623e717c…`; rebuild only if functionally necessary. | Source-bound archive verification, exact image ID, functional receipts, build/import count. | partial: the exact archive size/SHA and expected image ID were reverified locally and on launch slot 1; slot 1 stopped before image import, so exact slot-2 import and qualification remain dynamic |
-| R5-10 | Preserve the repaired preflight, empirical, cleanup, termination, launch, and cumulative-active clock contract. | Typed contracts, boundary tests, source-bound live receipts. | partial: typed V7 limits and source checks are implemented; launch slot 1 closed pre-empirically after 1,431.636539 active seconds at USD 0.5130030931, attempt export uses the empirical campaign origin, and slot-2 cumulative headroom remains source-bound; empirical receipts remain dynamic |
+| R5-09 | Reuse and qualify the retained 1,207,128,576-byte image archive at SHA-256 `623e717c…`; rebuild only if functionally necessary. | Source-bound archive verification, exact image ID, functional receipts, build/import count. | blocked-terminal: the archive was uploaded and rehashed exactly on slot 2, but the authority-binding gate stopped before its zero-build import |
+| R5-10 | Preserve the repaired preflight, empirical, cleanup, termination, launch, and cumulative-active clock contract. | Typed contracts, boundary tests, source-bound live receipts. | partial-terminal: both launches closed within their preflight/active caps and provider termination is source-bound; no empirical clock started |
 | R5-11 | Mint fresh V7 plan, host, qualification, attempt, evaluator, pair, stage, archive, and provider identities. | Identity registry/tests and no prior reuse. | met: V7/0005 identities are registered and V6 reuse is rejected |
-| R5-12 | Freeze a clean reviewed V7 package, one image, four commands/configs, two valid pair diffs, and one immutable run manifest before empirical entry. | Commit/hash closure, focused review PASS, dynamic qualification and freeze receipts. | partial: independently reviewed repair ancestor `df95199bfa897db78479828ae8d07f63b93afa09` received PASS and the static V7 runtime, condition, execution, command, and pair-diff bindings are regenerated; final package review and the dynamic accepted-image manifest remain pre-entry |
-| R5-13 | Execute the four fresh attempts in the locked order with zero retry and raw-or-essential evidence export after every consumed attempt. | Per-attempt entry, terminal, usage, seal, export acknowledgement, cleanup, evaluator, and score evidence. | not-started |
-| R5-14 | Apply the predeclared first-pair continuation rule before Task B. | Append-only checkpoint binding both Task A attempts, uniform finalizer, pair validity, safety, cost, and time headroom. | not-started |
-| R5-15 | Keep credentials structurally outside evidence and destroy temporary material; any actual exposure stops continuation. | Exact-secret scans, structural privacy receipts, cleanup, no core transfer. | partial: structural/exact-value controls and canary regressions pass; live cleanup receipts remain dynamic |
-| R5-16 | Enforce calls, tokens, actions, attempts, zero retries, OpenAI/Lambda/new/cumulative cost, wall, disk, and output limits at runtime. | Equality/overflow regressions plus live budget ledgers and provider accounting. | partial: runtime caps and static arithmetic are bound; stdout and stderr each use a declared 67,108,864-byte limit whose saturation is an explicit consumed infrastructure stop, and non-empirical cap consumption blocks replay before Docker; live ledgers/accounting remain dynamic |
-| R5-17 | Verify durable evidence, then remove containers/browser/core/secrets, terminate the exact instance, prove terminal/absent and zero T09 instances, and restore firewall state. | Local-volume verification, provider closeout bundle, security restoration, cloud-run ledger. | partial: launch slot 1 evidence was copied and verified off-host, its isolated secret was destroyed, the exact instance was terminated, and provider closeout proves zero T09 instances; slot 2/campaign cleanup remains dynamic |
-| R5-18 | Reconstruct results, run broader gates, obtain independent evidence review, and converge public/control surfaces without comparative inference. | Final disposition/control, repository ledger/docs/notebook, validation/test/lint/type/site results, 18-item handoff. | partial: prelaunch registry, decision, readiness, plan, ledger, experiment, and notebook surfaces identify V7; terminal evidence and final gates await execution |
+| R5-12 | Freeze a clean reviewed V7 package, one image, four commands/configs, two valid pair diffs, and one immutable run manifest before empirical entry. | Commit/hash closure, focused review PASS, dynamic qualification and freeze receipts. | partial-terminal: clean package `6776cffeb49c498e0d932e6f47178d6a74514dfb` and both static pair diffs received independent PASS; no image-qualified dynamic run manifest was created |
+| R5-13 | Execute the four fresh attempts in the locked order with zero retry and raw-or-essential evidence export after every consumed attempt. | Per-attempt entry, terminal, usage, seal, export acknowledgement, cleanup, evaluator, and score evidence. | blocked-terminal: all four V7 attempts are not run; no identity was consumed and no retry occurred |
+| R5-14 | Apply the predeclared first-pair continuation rule before Task B. | Append-only checkpoint binding both Task A attempts, uniform finalizer, pair validity, safety, cost, and time headroom. | blocked-terminal: preflight failed before Task A; no checkpoint or realized pair exists |
+| R5-15 | Keep credentials structurally outside evidence and destroy temporary material; any actual exposure stops continuation. | Exact-secret scans, structural privacy receipts, cleanup, no core transfer. | partial-terminal: the local filtered secret was securely destroyed and no credential exposure was observed; provider absence removes the remote ephemeral filesystem, but no host cleanup-completion receipt was retained |
+| R5-16 | Enforce calls, tokens, actions, attempts, zero retries, OpenAI/Lambda/new/cumulative cost, wall, disk, and output limits at runtime. | Equality/overflow regressions plus live budget ledgers and provider accounting. | partial-terminal: static/runtime cap regressions pass; realized usage was zero calls/tokens/actions/attempts and USD 1.0706881238 Lambda, with every cap respected |
+| R5-17 | Verify durable evidence, then remove containers/browser/core/secrets, terminate the exact instance, prove terminal/absent and zero T09 instances, and restore firewall state. | Local-volume verification, provider closeout bundle, security restoration, cloud-run ledger. | partial-terminal: both source-bound provider closeouts prove terminal/absent, zero T09 instances, restored security, and no wall exception; the slot-2 host cleanup-completion receipt was lost after a pre-state cleanup defect |
+| R5-18 | Reconstruct results, run broader gates, obtain independent evidence review, and converge public/control surfaces without comparative inference. | Final disposition/control, repository ledger/docs/notebook, validation/test/lint/type/site results, 18-item handoff. | met-terminal: `T09_PRAGMATIC_RETRY5_DISPOSITION.json` records the no-run outcome, costs, evidence hashes, two root causes, limitations, and non-comparative next step |
 
 ## Assembly evidence log
 
@@ -119,11 +119,36 @@ changes, training, a larger pilot, comparative claims, and an EXP-0001 outcome.
   finalizer remains independently qualified; closed slot-1 evidence normalizes
   under collision-free `slot1-*` paths, and the exact `02524c7` to repaired-package
   transition is ancestry/allowlist/runtime bound with unchanged science.
+- `2026-08-15`: final static package
+  `6776cffeb49c498e0d932e6f47178d6a74514dfb` received independent PASS. All
+  instrumentation, runtime/execution/condition/command hashes, both pair diffs,
+  the exact Slot-1 authority transition, 132 focused tests, repository validation,
+  Ruff, strict mypy, and clean-tree checks passed. The broader local suite passed
+  1,467 tests and the site rendered successfully.
+- `2026-08-15`: launch slot 2 rehashed the 1,207,128,576-byte retained image
+  archive and every uploaded control input before preflight. The first dynamic
+  gate stopped before image import because the provider entry bound the nested
+  `slot1-preempirical-source/source-manifest.json` while the host projected the
+  outer normalized authority-tree manifest under the same field name. The two
+  eligibility receipt hashes themselves matched exactly.
+- `2026-08-15`: the global cleanup command then exposed a second control-plane
+  defect: slot-2 authority was copied before `pilot-state.json` was initialized,
+  while late cleanup accounting required that state. Provider termination took
+  priority; one exact-target request closed the second instance, and the validated
+  closeout proves terminal/absent, zero T09 instances, restored security, and no
+  wall exception. No image, model, browser, evaluator, condition attempt, token,
+  action, score, or empirical clock was realized.
+- `2026-08-15`: the two launches consumed 2,987.966857 cumulative active seconds
+  and USD 1.0706881238 Lambda. New OpenAI cost was USD 0.00 and cumulative T09
+  cost is USD 6.8131387350, within every authorization ceiling.
 
 ## Next permitted phase
 
-Complete the repaired static V7 package closure and focused independent package
-review. The second and final cloud launch remains prohibited until that review,
-the external volume, private cloud ledger, source-bound slot-1 closeout, and all
-dynamic pre-entry qualification inputs are ready. After launch, cleanup and exact
-provider termination take priority over analysis or documentation.
+No further phase or cloud launch is permitted under the exhausted Retry 5
+authorization. Preserve V7 as a terminal pre-empirical infrastructure failure and
+make no treatment inference. Before seeking fresh authority, give the nested
+preempirical source manifest an unambiguous typed provider/host binding and make
+durable cleanup state the first artifact-root mutation; regression-test the exact
+retained provider tree through failure and terminal cleanup. Any later run must
+retain the unchanged scientific contract and four-attempt order and must not expand
+to a larger pilot.

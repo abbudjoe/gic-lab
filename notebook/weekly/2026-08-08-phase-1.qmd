@@ -64,14 +64,19 @@ and all V6 authority is exhausted. A reviewed post-termination sidecar restores 
 manifest-owned archive member while leaving the original sealed archive unchanged;
 its separate receipt reconciles provider-preflight and empirical time.
 
-Retry 5 registers fresh `PLAN-EXP0001-PILOT-V7` and preserves the V6 attempt as
-consumed, infrastructure-invalid, unscored, unpaired, and excluded from V7. The
-narrow prelaunch repair disables core dumps at both Docker and process-tree boundaries
-and adds a 16 MiB allowlisted essential-failure authority for reconstructable cap
-stops. The 64 MiB attempt cap is unchanged: V6 retained only 2,076,704 non-core bytes,
-and V7's conservative full-attempt projection is 50,331,648 bytes. V7 has fresh
-identities and current-turn private authority, but no V7 cloud, model, browser, SiRA,
-or empirical action has occurred at this prelaunch checkpoint.
+Retry 5 registered `PLAN-EXP0001-PILOT-V7`, preserved the V6 attempt as consumed and
+excluded, and delivered reviewed Docker/process-tree core suppression plus a 16 MiB
+privacy-safe essential-failure authority under the unchanged 64 MiB attempt cap.
+Static package `6776cff…`, all four commands, and both pair diffs passed independent
+review. Its first authorized host stopped before image import on a historical/current
+finalizer binding defect. The repaired second host rehashed the exact retained image
+archive, then stopped at the first dynamic gate because provider and host code bound
+different source-tree manifests under the same authority field. Cleanup exposed a
+separate missing pre-state control, so provider termination took priority. Both hosts
+are terminal or absent with zero T09 instances and restored security. No image import,
+metadata request, model call, browser action, evaluator, attempt, score, checkpoint,
+or realized pair occurred. Retry 5 used USD 1.0706881238 Lambda and USD 0 OpenAI;
+its two-launch authority is exhausted.
 
 ## State transition
 
@@ -91,21 +96,18 @@ that infrastructure record cannot affect EXP-0001 validity, metrics, or outcome.
 ## Execution boundary
 
 Reusable tracked paid-compute, prototype, benchmark, training, and cloud permissions
-remain false. The T07 smoke and T09 V3/V4/V5/V6 authorities are consumed and
-nonreplayable. V7 is the sole registered successor and has a current-turn single-use
-private authorization; it remains blocked before mutation and empirical entry until
-its exact clean package, review, retained-image qualification, core/browser/evaluator/
-model gates, pair diffs, budgets, privacy checks, and frozen manifest all pass.
+remain false. The T07 smoke and T09 V3/V4/V5/V6/V7 authorities are consumed and
+nonreplayable. There is no registered successor.
 
-The current machine-readable gate is the Retry 5 terminal execution-control overlay,
-not the pre-run readiness strings retained inside frozen historical profiles. It
-blocks the consumed smoke and V6 identities and names only V7 as successor.
+The current machine-readable gate is the Retry 5 post-run terminal execution-control
+overlay, not the pre-run readiness strings retained inside frozen historical profiles.
+It blocks the consumed smoke, V6, and V7 identities and names no successor.
 
 ## Next gate
 
-The current gate is the V7 clean-package and dynamic-preflight boundary. Historical
-T07 and V3–V6 records supply no authority. V7 may use only its fresh host, condition,
-provider, qualification, pair, stage, archive, and authorization identities.
+No execution gate is open. A future campaign requires an unambiguous typed nested
+provider/host authority binding, durable cleanup state before artifact-root mutation,
+fresh identities, review, and fresh current-turn authorization.
 
 ## T07 infrastructure update — design only
 

@@ -222,7 +222,7 @@ def test_unregistered_coherent_exp0001_successor_cannot_bypass_terminal_control(
 
     with pytest.raises(
         ExecutionDisallowed,
-        match="authorized run profile does not match the registered terminal successor",
+        match="terminal control names no registered successor profile",
     ):
         load_project_execution_state(tmp_path, schema_root=tmp_path)
 
@@ -239,7 +239,10 @@ def test_registry_cannot_add_a_successor_without_terminal_control_update(tmp_pat
     registry["experiments"][0]["run_profiles"].append("run-profiles/unbound-successor.yaml")
     registry_path.write_text(yaml.safe_dump(registry, sort_keys=False), encoding="utf-8")
 
-    with pytest.raises(ExecutionDisallowed, match="sole fresh registered profile"):
+    with pytest.raises(
+        ExecutionDisallowed,
+        match="registry declares a successor but terminal control names no successor",
+    ):
         load_project_execution_state(tmp_path, schema_root=tmp_path)
 
 

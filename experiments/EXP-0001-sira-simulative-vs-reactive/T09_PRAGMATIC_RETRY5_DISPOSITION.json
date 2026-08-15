@@ -1,0 +1,209 @@
+{
+  "schema_version": "0.1.0",
+  "record_id": "T09-PRAGMATIC-RETRY5-DISPOSITION-0001",
+  "recorded_at": "2026-08-15",
+  "experiment_id": "EXP-0001",
+  "plan_id": "PLAN-EXP0001-PILOT-V7",
+  "host_run_id": "RUN-T09-PILOT-HOST-0005",
+  "frozen_static_package_commit": "6776cffeb49c498e0d932e6f47178d6a74514dfb",
+  "reviewed_implementation_ancestor": "df95199bfa897db78479828ae8d07f63b93afa09",
+  "authorization_reference": "AUTH-T09-PRAGMATIC-RETRY5-2026-08-14",
+  "authorization_source_sha256": "97539fa4b65f627880b159e0f40c9a7efab26cd2a746c7c12ddbe15e44684346",
+  "terminal_state": "t09-pilot-blocked-material-risk",
+  "failure_state": "preempirical-control-binding-failure",
+  "lifecycle_state": "stopped-after-second-and-final-launch-with-zero-condition-attempts",
+  "calibration_only": true,
+  "empirical_entry": false,
+  "scientific_result_claimed": false,
+  "experiment_outcome_assigned": false,
+  "experiment_evidence_status": "not-evaluated",
+  "single_use_authority_exhausted": true,
+  "launch_slots_exhausted": true,
+  "condition_retry_count": 0,
+  "static_freeze": {
+    "package_commit": "6776cffeb49c498e0d932e6f47178d6a74514dfb",
+    "runtime_sha256": "6b4ffbb43f86518f964b35d57cecd9157cc5621e490c75b58763d44ebb52df76",
+    "execution_contract_sha256": "982e04db71caf50f7c99c5a5d7c5101f9990c987afba249375b70d613d78a0f8",
+    "command_manifests_sha256": "c45d87165009e892e313153ad75b1ea444c8765203f1ebf69bf71f2b2debde37",
+    "pair_diffs_valid": true,
+    "independent_package_review": "passed",
+    "dynamic_frozen_run_manifest_created": false,
+    "dynamic_frozen_run_manifest_sha256": null
+  },
+  "qualification": {
+    "retained_image_archive_bytes": 1207128576,
+    "retained_image_archive_sha256": "623e717c2182eca9cee2f471b7ecd9a57bead2f5263dee64aa5cd954eae5ddb0",
+    "expected_image_id": "sha256:abe8ed38f5c5b5a0a63fa726a74034dc5c192a12c0fccfe1319f97c27ceaf0a3",
+    "slot2_archive_uploaded_and_rehashed": true,
+    "slot2_image_import_count": 0,
+    "slot2_image_build_count": 0,
+    "exact_image_runtime_qualification_completed": false,
+    "synthetic_abort_exact_image_test_completed": false,
+    "chromium_exact_image_test_completed": false,
+    "model_metadata_requests": 0
+  },
+  "preflight_failure": {
+    "launch_slot": 2,
+    "classification": "retained-slot2-authority-source-manifest-binding-mismatch",
+    "error_type": "T09HostError",
+    "error_message_category": "retained slot-2 authority does not match provider entry",
+    "provider_entry_replacement_eligibility_sha256": "aeaac2cc3950c7b245c985feaa6467fb88c5e929c81528931d9f6d4ee8f60c97",
+    "retained_replacement_eligibility_sha256": "aeaac2cc3950c7b245c985feaa6467fb88c5e929c81528931d9f6d4ee8f60c97",
+    "provider_entry_replacement_source_manifest_sha256": "13033996d3bb8277e7ba52d5ebc368327db09d5ada6b64ac38ef44b3019d5767",
+    "retained_nested_preempirical_source_manifest_sha256": "13033996d3bb8277e7ba52d5ebc368327db09d5ada6b64ac38ef44b3019d5767",
+    "host_compared_outer_normalized_authority_manifest_sha256": "a3709fc6450e058db023925431c488855e73c800d106580f8029116c7b9ee7e7",
+    "root_cause": "The provider entry correctly bound the nested slot1-preempirical source manifest, while slot2_authority_binding projected the outer normalized authority-tree manifest under the same field name.",
+    "failure_before_image_import": true,
+    "failure_before_model_metadata": true,
+    "failure_before_browser_or_condition_container": true,
+    "failure_before_dynamic_freeze": true,
+    "host_preflight_failure_receipt_copied_off_host": false,
+    "reason_receipt_unavailable": "Provider termination correctly took priority after the host cleanup command encountered the separate pre-state cleanup defect."
+  },
+  "cleanup_control_failure": {
+    "classification": "preflight-failure-before-pilot-state-initialization",
+    "error_type": "FileNotFoundError",
+    "missing_control": "pilot-v7/pilot-state.json",
+    "root_cause": "The host created the artifact root and copied slot-2 authority before initializing pilot state; global cleanup later required that state to calculate provider headroom.",
+    "host_cleanup_completion_receipt_available": false,
+    "local_filtered_secret_destroyed_after_upload": true,
+    "remote_ephemeral_filesystem_absent_after_provider_termination": true,
+    "actual_credential_exposure_observed": false,
+    "core_artifact_observed": false,
+    "qualified_image_materialized": false,
+    "owned_condition_or_preflight_container_started": false
+  },
+  "attempts": {
+    "frozen_order": [
+      "RUN-T09-TASK-A-REACTIVE-0005",
+      "RUN-T09-TASK-A-SIMULATIVE-0005",
+      "RUN-T09-TASK-B-SIMULATIVE-0005",
+      "RUN-T09-TASK-B-REACTIVE-0005"
+    ],
+    "empirical_attempts_entered": [],
+    "nonempirical_condition_attempts_consumed": [],
+    "raw_attempts_complete": [],
+    "essential_failure_seals": [],
+    "attempts_completed": [],
+    "task_a_reactive": {
+      "run_id": "RUN-T09-TASK-A-REACTIVE-0005",
+      "state": "not-run",
+      "score": null
+    },
+    "task_a_simulative": {
+      "run_id": "RUN-T09-TASK-A-SIMULATIVE-0005",
+      "state": "not-run",
+      "score": null
+    },
+    "task_b_simulative": {
+      "run_id": "RUN-T09-TASK-B-SIMULATIVE-0005",
+      "state": "not-run",
+      "score": null
+    },
+    "task_b_reactive": {
+      "run_id": "RUN-T09-TASK-B-REACTIVE-0005",
+      "state": "not-run",
+      "score": null
+    },
+    "first_pair_checkpoint": "not-reached-preflight-failed",
+    "realized_task_a_pair": false,
+    "realized_task_b_pair": false
+  },
+  "usage": {
+    "model_metadata_requests": 0,
+    "task_model_calls": 0,
+    "input_tokens": 0,
+    "cached_input_tokens": 0,
+    "output_tokens": 0,
+    "total_tokens": 0,
+    "browser_actions": 0,
+    "condition_attempts": 0,
+    "condition_retries": 0,
+    "openai_cost_usd": 0.0
+  },
+  "provider": {
+    "provider": "Lambda On-Demand Cloud",
+    "instance_type": "gpu_1x_a10",
+    "launch_count": 2,
+    "maximum_launch_count": 2,
+    "persistent_filesystems": 0,
+    "slot1": {
+      "owned_lambda_duration_seconds": 1431.6365389823914,
+      "list_cost_usd": 0.513003093135357,
+      "empirical_attempts_entered": 0,
+      "terminal_or_absent": true,
+      "zero_t09_instances": true,
+      "security_restored": true
+    },
+    "slot2": {
+      "owned_lambda_duration_seconds": 1556.3303182125092,
+      "list_cost_usd": 0.5576850306928157,
+      "preflight_to_termination_dispatch_seconds": 1469.767592906952,
+      "active_to_zero_instances_seconds": 1556.3303182125092,
+      "empirical_attempts_entered": 0,
+      "termination_request_count": 1,
+      "terminal_or_absent": true,
+      "zero_t09_instances": true,
+      "security_restored": true
+    },
+    "active_lambda_duration_seconds": 2987.9668571949005,
+    "hourly_price_usd": 1.29,
+    "list_cost_usd": 1.0706881238281727,
+    "terminal_or_absent": true,
+    "zero_t09_instances": true,
+    "security_restored": true,
+    "campaign_wall_exception": "none"
+  },
+  "cost_reconciliation": {
+    "prior_t09_cost_usd": 5.7424506112,
+    "new_openai_cost_usd": 0.0,
+    "new_lambda_cost_usd": 1.0706881238281727,
+    "new_campaign_total_cost_usd": 1.0706881238281727,
+    "cumulative_t09_cost_usd": 6.813138735028173,
+    "new_openai_cap_usd": 40.0,
+    "new_lambda_cap_usd": 8.0,
+    "new_campaign_cap_usd": 48.0,
+    "cumulative_t09_cap_usd": 60.0,
+    "all_cost_caps_respected": true
+  },
+  "pair_matching": {
+    "task_a_static_pair_diff_valid": true,
+    "task_b_static_pair_diff_valid": true,
+    "task_a_realized_pair_available": false,
+    "task_b_realized_pair_available": false,
+    "paired_or_comparative_interpretation_permitted": false
+  },
+  "finalizer": {
+    "evaluator_contract_sha256": "c28a802a45fc8d1e719f8c1bcb22315c2841df831c4ae161f12ab0f2fd08b321",
+    "finalizer_source_sha256": "584e905d72ce7ce72efb6e47141c5ac3a588abf0035d05799f9fe87f439f42ce",
+    "finalizer_projection_source_sha256": "b6b0b16fc6fbed23c3731a7664481b4efc294d17cd6f3f3897d7171275344531",
+    "local_qualification_sha256": "56e98c3b44f182b2856599838d155d1e3a967a8415e7ace5b7d613c698aba5e2",
+    "qualified_before_launch": true,
+    "realized_finalizer_invocations": 0,
+    "uniform_realized_finalizer_available": false
+  },
+  "evidence": {
+    "retention": "private-access-controlled-external-plus-public-safe-disposition",
+    "public_release": "safe-summary-only",
+    "core_producer_metadata_sha256": "cdbe6918d94daa233ea76d6cb0bb07f23b8d00af4d7fab05051ab8ee5bf516d1",
+    "frozen_package_bundle_sha256": "7b91df3860a3e7c40dc9bf2349ba48c24b6e7c9945a950560f4cee9508eae9b5",
+    "slot1_provider_entry_receipt_sha256": "4809e8030f5c4bbdc9c6a3b577eed35a0d25ae2323a8f79d2c27ebab0d7fcd5c",
+    "slot1_provider_entry_source_manifest_sha256": "7de2d8a29b6d61e5fa5b7a4787e85d0c92677cee37085116fb6bb1a0b7b3a9d7",
+    "slot1_provider_closeout_receipt_sha256": "3d21fa96b5d6fb08be0c96a1726d4a11269e453916baa3026f80e61937263b4d",
+    "slot1_provider_closeout_source_manifest_sha256": "19dd68faad17f4342bfd4b1803391e3dc0d4f5dc5759a371b1faf0884121f6a1",
+    "slot2_provider_entry_receipt_sha256": "9c62ac0022601ebe4d5b9cf77dab6b7825306913c9ce6d2ddcb6e889d9aa2dd5",
+    "slot2_provider_entry_source_manifest_sha256": "239a416a5610484ec6bc83679f95f4233c54fcf633108b1a09ab411714cc1bba",
+    "slot2_provider_closeout_receipt_sha256": "644962a9ac93f0c21dacaeb0b874a548fe1fde4ade8f54e07f60a3358a8ef793",
+    "slot2_provider_closeout_source_manifest_sha256": "2cabc8e5e748618674696495812e38bb52fb1a855847bafc6a58acc0ac18c87e",
+    "host_preflight_failure_receipt_sha256": null,
+    "host_cleanup_receipt_sha256": null
+  },
+  "residual_limitations": [
+    "The exact-image synthetic abort, inheritance, Chromium, evaluator, and metadata gates were not reached on the live slot-2 host.",
+    "No dynamic frozen run manifest exists.",
+    "The host preflight-failure and cleanup-completion receipts were not copied off-host before cleanup-priority provider termination.",
+    "No V7 condition attempt, score, realized pair, or first-pair checkpoint exists.",
+    "Both authorized Lambda launch slots are exhausted and no relaunch is permitted."
+  ],
+  "recommended_next_step": "Preserve V7 as a terminal pre-empirical infrastructure failure. Do not infer any treatment result. Before seeking any fresh authority, bind the provider entry to the nested preempirical source manifest under an unambiguous typed field, initialize durable cleanup state before copying slot-2 authority, and regression-test that exact provider source through preflight failure and terminal cleanup. If a fresh run is later authorized, reuse the unchanged scientific contract and four-attempt order; do not expand to a larger pilot."
+}

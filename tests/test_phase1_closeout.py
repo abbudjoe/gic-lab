@@ -9,7 +9,7 @@ from giclab.registry import load_json, load_yaml
 from giclab.validation import ROOT, validate_instance
 
 EXP_ROOT = ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive"
-TERMINAL_CONTROL_PATH = EXP_ROOT / "T09_PRAGMATIC_RETRY5_TERMINAL_CONTROL.json"
+TERMINAL_CONTROL_PATH = EXP_ROOT / "T09_PRAGMATIC_RETRY5_POSTRUN_TERMINAL_CONTROL.json"
 RETRY3_TERMINAL_CONTROL_PATH = EXP_ROOT / "T09_PRAGMATIC_RETRY3_TERMINAL_CONTROL.json"
 PHASE_075_PLAN = (
     ROOT / "docs/exec-plans/completed/PHASE_0_75_UPSTREAM_AUDIT_HARNESS_PROTOCOL_LOCK.md"
@@ -61,13 +61,9 @@ def test_phase_one_is_the_only_active_non_executable_control_plane() -> None:
     assert execution_state.planned_execution_substrate is None
     assert execution_state.terminal_execution_control is not None
     assert execution_state.terminal_execution_control.superseded_plan_ids == frozenset(
-        {"PLAN-EXP0001-SMOKE", "PLAN-EXP0001-PILOT-V6"}
+        {"PLAN-EXP0001-SMOKE", "PLAN-EXP0001-PILOT-V6", "PLAN-EXP0001-PILOT-V7"}
     )
-    assert execution_state.terminal_execution_control.registered_successor is not None
-    assert (
-        execution_state.terminal_execution_control.registered_successor.plan_id
-        == "PLAN-EXP0001-PILOT-V7"
-    )
+    assert execution_state.terminal_execution_control.registered_successor is None
     checkpoint = state["t08_checkpoint"]
     assert checkpoint["terminal_state"] == ("smoke_evidence_validated_pilot_planning_eligible")
     assert checkpoint["pilot_execution_authorized"] is False
@@ -186,6 +182,36 @@ def test_phase_one_is_the_only_active_non_executable_control_plane() -> None:
     assert retry4["evidence_archive_frozen_runtime_reconstructable_with_overlay"] is True
     assert retry4["scientific_result_claimed"] is False
     assert retry4["experiment_outcome_assigned"] is False
+    retry5 = state["t09_pragmatic_retry5_checkpoint"]
+    assert retry5["plan_id"] == "PLAN-EXP0001-PILOT-V7"
+    assert retry5["terminal_state"] == "t09-pilot-blocked-material-risk"
+    assert retry5["failure_state"] == "preempirical-control-binding-failure"
+    assert retry5["current_turn_execution_authorized"] is False
+    assert retry5["repository_plan_authorized"] is False
+    assert retry5["single_use_authority_exhausted"] is True
+    assert retry5["launch_slots_exhausted"] is True
+    assert retry5["provider_launch_count"] == retry5["maximum_launch_count"] == 2
+    assert retry5["retained_image_archive_verified_on_slot2"] is True
+    assert retry5["replacement_image_imported"] is False
+    assert retry5["dynamic_preflight_passed"] is False
+    assert retry5["frozen_run_manifest_written"] is False
+    assert retry5["empirical_attempts_entered"] == 0
+    assert retry5["attempts_completed"] == 0
+    assert retry5["condition_retries"] == 0
+    assert retry5["model_metadata_requests"] == 0
+    assert retry5["task_model_calls"] == 0
+    assert retry5["total_tokens"] == 0
+    assert retry5["browser_actions"] == 0
+    assert retry5["realized_pairs"] == 0
+    assert retry5["openai_cost_usd"] == 0.0
+    assert retry5["lambda_cost_usd"] == 1.0706881238281727
+    assert retry5["cumulative_t09_cost_usd"] == 6.813138735028173
+    assert retry5["provider_terminal_or_absent"] is True
+    assert retry5["zero_t09_instances"] is True
+    assert retry5["security_restored"] is True
+    assert retry5["host_cleanup_completion_receipt_available"] is False
+    assert retry5["scientific_result_claimed"] is False
+    assert retry5["experiment_outcome_assigned"] is False
     assert {path.name for path in (ROOT / "docs/exec-plans/active").glob("*.md")} == {
         "PHASE_1_ARTIFACT_EXECUTION.md"
     }
@@ -194,7 +220,7 @@ def test_phase_one_is_the_only_active_non_executable_control_plane() -> None:
     assert "Status: **in-progress**" in PHASE_1_PLAN.read_text(encoding="utf-8")
 
 
-def test_frozen_profiles_are_unauthorized_and_terminal_control_makes_them_nonreplayable() -> None:
+def test_frozen_profiles_are_unauthorized_and_postrun_control_makes_them_nonreplayable() -> None:
     smoke = load_yaml(EXP_ROOT / "run-plans/smoke.yaml")
     pilot = load_yaml(EXP_ROOT / "run-plans/pilot.yaml")
     archived_v6 = load_yaml(EXP_ROOT / "run-plans/proposals/PLAN-EXP0001-PILOT-V6.yaml")
@@ -217,17 +243,13 @@ def test_frozen_profiles_are_unauthorized_and_terminal_control_makes_them_nonrep
     assert terminal["execution_eligibility"] == "blocked-pending-prerequisites"
     assert terminal["authorized"] is terminal["replayable"] is False
     assert terminal["supersedes_registered_profile_readiness"] is True
-    assert terminal["successor"]["plan_id"] == "PLAN-EXP0001-PILOT-V7"
-    assert terminal["successor"]["profile_path"] == (
-        "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml"
-    )
-    assert (
-        terminal["successor"]["profile_sha256"]
-        == hashlib.sha256((EXP_ROOT / "run-plans/pilot.yaml").read_bytes()).hexdigest()
-    )
+    assert terminal["successor"]["plan_id"] is None
+    assert terminal["successor"]["profile_path"] is None
+    assert terminal["successor"]["profile_sha256"] is None
     assert {item["plan_id"] for item in terminal["superseded_registered_profiles"]} == {
         "PLAN-EXP0001-SMOKE",
         "PLAN-EXP0001-PILOT-V6",
+        "PLAN-EXP0001-PILOT-V7",
     }
     assert all(
         item["current_interpretation"] == "historical-consumed-nonreplayable"
@@ -257,7 +279,7 @@ def test_historical_status_surfaces_preserve_without_reopening_bounded_v3() -> N
     assert "Prospective bounded plan:" not in readiness
     assert "Exact next run plan" not in readiness
     assert "T07 has not run" not in readiness
-    assert "V7 is the sole registered successor" in readiness
+    assert "V7 consumed" in readiness or "V7 closed" in readiness
 
     governance = (ROOT / "docs/harness/T07_BOUNDED_SMOKE_GOVERNANCE.md").read_text(encoding="utf-8")
     matches = re.findall(
@@ -285,7 +307,7 @@ def test_historical_status_surfaces_preserve_without_reopening_bounded_v3() -> N
         assert "D-034" in rows[-1] and "PLAN-T07-BOUNDED-SIRA-SMOKE-V3" in rows[-1]
 
 
-def test_current_public_surfaces_define_only_the_fresh_v7_successor() -> None:
+def test_current_public_surfaces_define_no_replayable_v7_successor() -> None:
     surfaces = (
         ROOT / "docs/readiness/PHASE_1_SMOKE_READINESS.md",
         ROOT / "notebook/weekly/2026-08-08-phase-1.qmd",
@@ -296,7 +318,7 @@ def test_current_public_surfaces_define_only_the_fresh_v7_successor() -> None:
         assert "only next eligible profile" not in text
         assert "T07 has not run" not in text
         assert "V7" in text
-        assert "sole registered successor" in text
+        assert "no successor" in text.lower()
 
 
 def test_terminal_control_supersedes_frozen_profile_and_execution_contract_claims() -> None:
@@ -313,8 +335,8 @@ def test_terminal_control_supersedes_frozen_profile_and_execution_contract_claim
     assert terminal["terminal_state"] == disposition["terminal_state"]
     assert disposition["single_use_authority_exhausted"] is True
     assert disposition["launch_slots_exhausted"] is True
-    assert disposition["empirical_entry"] is True
-    assert terminal["empirical_entry"] is True
+    assert disposition["empirical_entry"] is False
+    assert terminal["empirical_entry"] is False
 
     for binding in terminal["superseded_registered_profiles"]:
         path = ROOT / binding["path"]
@@ -327,15 +349,16 @@ def test_terminal_control_supersedes_frozen_profile_and_execution_contract_claim
         )
         assert profile["execution"]["authorized"] is False
 
-    [binding] = terminal["superseded_execution_contracts"]
-    contract_path = ROOT / binding["path"]
-    contract = load_json(contract_path)
-    assert hashlib.sha256(contract_path.read_bytes()).hexdigest() == binding["sha256"]
-    assert contract["contract_id"] == binding["contract_id"]
-    assert contract["terminal_state"] == binding["historical_terminal_state"]
-    assert contract["execution_eligibility"] == binding["historical_execution_eligibility"]
-    assert contract["authorized"] is False
-    assert contract["material_blockers"] == []
+    assert len(terminal["superseded_execution_contracts"]) == 2
+    for binding in terminal["superseded_execution_contracts"]:
+        contract_path = ROOT / binding["path"]
+        contract = load_json(contract_path)
+        assert hashlib.sha256(contract_path.read_bytes()).hexdigest() == binding["sha256"]
+        assert contract["contract_id"] == binding["contract_id"]
+        assert contract["terminal_state"] == binding["historical_terminal_state"]
+        assert contract["execution_eligibility"] == (binding["historical_execution_eligibility"])
+        assert contract["authorized"] is False
+        assert contract["material_blockers"] == []
 
     retry3_terminal = load_json(RETRY3_TERMINAL_CONTROL_PATH)
     assert "empirical_entry" not in retry3_terminal
@@ -651,6 +674,34 @@ def test_closeout_retains_zero_scientific_interpretation_and_typed_compute() -> 
         "authorization_reference": "AUTH-T09-PRAGMATIC-RETRY4-2026-08-14",
         "status": "failed",
     }
+    assert entries["CMP-0010"] == {
+        "id": "CMP-0010",
+        "experiment_id": "EXP-0001",
+        "provider": "Lambda On-Demand Cloud",
+        "hardware": "gpu_1x_a10",
+        "region": "us-east-1",
+        "started_at": "2026-08-15T07:35:19.316674Z",
+        "ended_at": "2026-08-15T07:59:10.953213Z",
+        "wall_clock_hours": 0.3976768163839976,
+        "accelerator_hours": 0.3976768163839976,
+        "cost_usd": 0.513003093135357,
+        "authorization_reference": "AUTH-T09-PRAGMATIC-RETRY5-2026-08-14",
+        "status": "failed",
+    }
+    assert entries["CMP-0011"] == {
+        "id": "CMP-0011",
+        "experiment_id": "EXP-0001",
+        "provider": "Lambda On-Demand Cloud",
+        "hardware": "gpu_1x_a10",
+        "region": "us-east-1",
+        "started_at": "2026-08-15T08:31:08.877246Z",
+        "ended_at": "2026-08-15T08:57:05.207564Z",
+        "wall_clock_hours": 0.43231397728125254,
+        "accelerator_hours": 0.43231397728125254,
+        "cost_usd": 0.5576850306928157,
+        "authorization_reference": "AUTH-T09-PRAGMATIC-RETRY5-2026-08-14",
+        "status": "failed",
+    }
     summary = compute["phase_zero_summary"]
     assert summary["period_end"] == "2026-08-08"
     assert summary["paid_compute_authorized"] is False
@@ -662,7 +713,7 @@ def test_closeout_retains_zero_scientific_interpretation_and_typed_compute() -> 
     assert summary["training_runs"] == 0
     assert results["run_status"] == (
         "calibration-pilot-incomplete-one-historical-unpaired-measurement-"
-        "retry4-one-invalid-unscored-attempt"
+        "retry4-one-invalid-unscored-attempt-retry5-no-run"
     )
     assert len(results["measurements"]) == 1
     assert results["measurements"][0]["paired_result_available"] is False

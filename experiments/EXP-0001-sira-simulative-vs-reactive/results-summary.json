@@ -1,7 +1,7 @@
 {
   "schema_version": "0.1.0",
   "experiment_id": "EXP-0001",
-  "run_status": "calibration-pilot-incomplete-one-historical-unpaired-measurement-retry4-one-invalid-unscored-attempt",
+  "run_status": "calibration-pilot-incomplete-one-historical-unpaired-measurement-retry4-one-invalid-unscored-attempt-retry5-no-run",
   "lifecycle_status": "planned",
   "evidence_status": "not-evaluated",
   "outcome_status": "pending",
@@ -36,8 +36,12 @@
     "experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY3_TERMINAL_CONTROL.json",
     "experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY4_FINALIZER_REGRESSION.json",
     "experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY4_DISPOSITION.json",
-    "experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY4_TERMINAL_CONTROL.json"
+    "experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY4_TERMINAL_CONTROL.json",
+    "experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY5_EXECUTION_CONTROL.json",
+    "experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY5_TERMINAL_CONTROL.json",
+    "experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY5_DISPOSITION.json",
+    "experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY5_POSTRUN_TERMINAL_CONTROL.json"
   ],
   "infrastructure_terminal_state": "t09-pilot-blocked-material-risk",
-  "note": "T09 Retry 2 remains the sole descriptive calibration measurement: one unpaired Task A reactive attempt completed and scored 0.0. Retry 4 repaired archive staging and campaign clocks, loaded and fully qualified the exact retained image, then entered Task A reactive once. The 67,108,864-byte attempt-output guard stopped that condition after a core artifact expanded the raw tree; process exit was 143, the immutable raw-complete seal was rejected, and no evaluator or score was produced. Task A simulative and Task B did not run, so no realized pair or checkpoint exists. Both Retry 4 hosts are terminal or absent, zero T09 instances and restored security are verified. A reviewed post-termination sidecar restores one omitted manifest-owned authority member while preserving the original archive and scientific record. Scientific evidence remains not evaluated, and no EXP-0001 outcome or condition comparison is assigned."
+  "note": "T09 Retry 2 remains the sole descriptive calibration measurement: one unpaired Task A reactive attempt completed and scored 0.0. Retry 4 repaired archive staging and campaign clocks, loaded and fully qualified the exact retained image, then entered Task A reactive once. The 67,108,864-byte attempt-output guard stopped that condition after a core artifact expanded the raw tree; process exit was 143, the immutable raw-complete seal was rejected, and no evaluator or score was produced. Task A simulative and Task B did not run, so no realized pair or checkpoint exists. Retry 5 added reviewed process-tree core suppression and bounded failure sealing, but both authorized launches stopped before empirical entry: the second and final host failed the first dynamic authority-binding gate before image import, model metadata, browser, evaluator, or condition activity. All four V7 attempts are not run. Every Retry 4 and Retry 5 host is terminal or absent, zero T09 instances and restored security are verified. Scientific evidence remains not evaluated, and no EXP-0001 outcome or condition comparison is assigned."
 }

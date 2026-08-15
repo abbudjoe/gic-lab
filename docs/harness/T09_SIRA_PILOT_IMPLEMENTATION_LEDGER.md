@@ -1,10 +1,11 @@
 # T09 SiRA Calibration Pilot Lock — Assembly Ledger
 
-## V7 pragmatic Retry 5 core-suppression successor
+## V7 pragmatic Retry 5 core-suppression execution
 
-V7 assembly status: **in progress; no V7 cloud or model action yet**.
+V7 assembly status: **complete at `t09-pilot-blocked-material-risk`; no empirical
+attempt, score, or pair**.
 
-Current successor plan: `PLAN-EXP0001-PILOT-V7`.
+Current historical plan: `PLAN-EXP0001-PILOT-V7`.
 
 Retry 5 preserves the consumed V6 package and one infrastructure-invalid,
 unscored, unpaired Task A reactive attempt. It makes only two pre-empirical
@@ -22,12 +23,20 @@ if it occurs before the first task model request or browser action, while retain
 that empirical-boundary fact separately. Both boundary cases produce the same
 privacy-safe essential seal and independently verified off-host archive.
 
-The exact current-turn authorization is recorded separately from the reusable public
-plan. Public plan and condition records remain `authorized: false`; the terminal
-execution-control overlay retains V6 and the smoke as consumed/nonreplayable and
-names V7 as the sole registered fresh successor. Definition-of-done status and
-execution evidence are maintained in
-`docs/harness/T09_PRAGMATIC_RETRY5_EXECUTION_PLAN.md`.
+Static package `6776cffeb49c498e0d932e6f47178d6a74514dfb` and its paired commands
+passed independent review. Launch 1 stopped before image import on a historical/current
+finalizer binding defect. Launch 2 rehashed the exact retained archive and stopped at
+the first dynamic gate because provider and host code assigned the nested and outer
+authority-tree manifests to one field. Cleanup then lacked durable pilot state at this
+preflight prefix, so provider termination took priority. Both hosts are terminal or
+absent with zero T09 instances and restored security. No image import, model metadata,
+model call, token, browser action, evaluator, condition attempt, score, checkpoint, or
+pair exists. Retry 5 used USD 1.0706881238 Lambda and USD 0 OpenAI; cumulative T09
+cost is USD 6.8131387350.
+
+The post-run execution-control overlay retains smoke, V6, and V7 as consumed and
+nonreplayable and names no successor. Full definition-of-done status and execution
+evidence are maintained in `docs/harness/T09_PRAGMATIC_RETRY5_EXECUTION_PLAN.md`.
 
 ## V6 pragmatic Retry 4 archive/clock successor
 

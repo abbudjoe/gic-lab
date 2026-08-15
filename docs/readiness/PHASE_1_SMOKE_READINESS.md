@@ -1,10 +1,10 @@
 # Phase 1 SiRA Smoke Readiness
 
-Status: **T07 smoke closed; T09 Retry 5 V7 successor in prelaunch repair and review**
+Status: **T07 smoke closed; T09 Retry 5 V7 closed pre-empirically with no successor**
 
 Prepared: 2026-08-08
 
-Updated: 2026-08-14
+Updated: 2026-08-15
 
 T08 update: 2026-08-12
 
@@ -124,34 +124,35 @@ through terminal/zero observation without rewriting the provider closeout. The t
 launch/campaign authority is exhausted. The historical Retry 4 terminal control makes
 the smoke and V6 profiles consumed and nonreplayable.
 
-## Current T09 Retry 5 prelaunch checkpoint
+## Current T09 Retry 5 terminal checkpoint
 
-Fresh successor `PLAN-EXP0001-PILOT-V7` preserves the exact two tasks, SiRA commit,
-dated model, evaluator, condition order, scoring, zero-retry rule, and descriptive-only
-interpretation. It excludes the consumed V6 attempt and uses fresh host,
-qualification, condition, pair, stage, and archive identities. The current-turn user
-instruction authorizes the narrow repair and live V7 campaign, but the tracked plan
-and condition records remain `authorized: false`; the private single-use execution
-control applies only after a clean hash-bound package passes focused review and every
-dynamic pre-entry gate.
+`PLAN-EXP0001-PILOT-V7` preserved the exact two tasks, SiRA commit, dated model,
+evaluator, condition order, scoring, zero-retry rule, and descriptive-only boundary.
+Its narrow reviewed repair enforces Docker/process-tree `RLIMIT_CORE == (0, 0)`,
+detects and destroys filename/ELF cores, and provides a 16,777,216-byte bounded
+privacy-safe essential-failure authority under the unchanged 67,108,864-byte attempt
+cap. Clean static package `6776cffeb49c498e0d932e6f47178d6a74514dfb`, four
+commands, and two pair diffs passed independent review.
 
-The repair sets Docker `core=0:0` and verifies `RLIMIT_CORE == (0, 0)` before any
-condition, browser, evaluator, or child process. Exact-image preflight must prove
-child/grandchild inheritance, a nonzero synthetic `SIGABRT` exit with no core file,
-and clean Chromium teardown. A bounded filename-plus-ELF scanner treats any core as a
-prohibited transient security artifact, excludes and destroys it, and permanently
-stops continuation. An independently capped 16,777,216-byte allowlisted essential
-failure seal makes an output-cap or infrastructure-invalid attempt reconstructable
-without assigning a score or allowing a retry. The ordinary per-attempt cap remains
-67,108,864 bytes: the V6 non-core tree was only 2,076,704 bytes, and V7 reserves
-16,777,216 bytes above a conservative 50,331,648-byte full-attempt projection.
+Both authorized Lambda slots are now exhausted. Slot 1 stopped before image import on
+a historical/current finalizer source-binding defect. Slot 2 rehashed the exact
+1,207,128,576-byte retained archive at `623e717c…`, then stopped before import because
+the provider bound the nested preempirical source manifest while the host compared the
+outer normalized authority-tree manifest under the same field name. Cleanup then
+failed to publish its host receipt because `pilot-state.json` did not yet exist.
+Provider termination took priority: both closeouts prove terminal/absent, zero T09
+instances, restored security, and no wall exception. No V7 image import, metadata
+request, model call, browser action, evaluator, condition attempt, score, checkpoint,
+or realized pair exists. Retry 5 cost USD 1.0706881238 Lambda and USD 0 OpenAI;
+cumulative T09 cost is USD 6.8131387350.
 
 The registry/project-state-bound
-`T09_PRAGMATIC_RETRY5_TERMINAL_CONTROL.json` preserves the smoke and archived V6
-profile as consumed/nonreplayable and names V7 as the sole fresh registered successor.
-V7 is the sole registered successor; this readiness record is not authorization.
-No cloud, OpenAI, browser, SiRA, or V7 empirical action has occurred at this prelaunch
-checkpoint.
+`T09_PRAGMATIC_RETRY5_POSTRUN_TERMINAL_CONTROL.json` makes smoke, V6, and V7 consumed
+and nonreplayable and names no successor. A future campaign requires typed nested
+provider/host authority binding, durable cleanup state before artifact-root mutation,
+fresh identities, independent review, and fresh current-turn authorization. This
+terminal no-run record is not authorization and is not scientific evidence for either
+condition.
 
 ## Historical consumed smoke record
 
@@ -165,8 +166,8 @@ checkpoint.
 - Interpretation: prohibited (`interpretation_allowed: false`)
 
 The smoke profile and both condition plans are historical records whose separate
-bounded authority was consumed. They are neither eligible nor reusable. V7 is the
-sole registered successor, but this readiness record is not its execution authority.
+bounded authority was consumed. They are neither eligible nor reusable. V7 is also
+consumed and nonreplayable; no successor is registered.
 
 T07's high-assurance infrastructure track is frozen at
 `high-assurance-infrastructure-frozen`. Gate L1/L1A evidence is complete, sealed and

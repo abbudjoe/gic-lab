@@ -27,7 +27,7 @@ def test_exp0001_is_registered_with_incomplete_calibration_and_no_scientific_res
     assert registry["experiments"][0]["experiment_id"] == "EXP-0001"
     assert registry["experiments"][0]["protocol"].endswith("/protocol.yaml")
     assert len(registry["experiments"][0]["run_profiles"]) == 3
-    terminal_control_path = EXP_ROOT / "T09_PRAGMATIC_RETRY5_TERMINAL_CONTROL.json"
+    terminal_control_path = EXP_ROOT / "T09_PRAGMATIC_RETRY5_POSTRUN_TERMINAL_CONTROL.json"
     assert registry["experiments"][0]["current_execution_control"] == {
         "path": terminal_control_path.relative_to(ROOT).as_posix(),
         "sha256": hashlib.sha256(terminal_control_path.read_bytes()).hexdigest(),
@@ -43,7 +43,7 @@ def test_exp0001_is_registered_with_incomplete_calibration_and_no_scientific_res
     results = load_json(EXP_ROOT / "results-summary.json")
     assert results["run_status"] == (
         "calibration-pilot-incomplete-one-historical-unpaired-measurement-"
-        "retry4-one-invalid-unscored-attempt"
+        "retry4-one-invalid-unscored-attempt-retry5-no-run"
     )
     assert results["measurements"] == [
         {
@@ -91,6 +91,19 @@ def test_exp0001_is_registered_with_incomplete_calibration_and_no_scientific_res
         (
             "experiments/EXP-0001-sira-simulative-vs-reactive/"
             "T09_PRAGMATIC_RETRY4_TERMINAL_CONTROL.json"
+        ),
+        (
+            "experiments/EXP-0001-sira-simulative-vs-reactive/"
+            "T09_PRAGMATIC_RETRY5_EXECUTION_CONTROL.json"
+        ),
+        (
+            "experiments/EXP-0001-sira-simulative-vs-reactive/"
+            "T09_PRAGMATIC_RETRY5_TERMINAL_CONTROL.json"
+        ),
+        ("experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY5_DISPOSITION.json"),
+        (
+            "experiments/EXP-0001-sira-simulative-vs-reactive/"
+            "T09_PRAGMATIC_RETRY5_POSTRUN_TERMINAL_CONTROL.json"
         ),
     ]
     assert results["infrastructure_terminal_state"] == "t09-pilot-blocked-material-risk"
@@ -154,14 +167,16 @@ def test_smoke_and_pilot_profiles_and_condition_plans_validate() -> None:
     assert smoke["readiness"]["pre_execution_requirements"]
     assert pilot["readiness"]["execution_eligibility"] == "eligible-after-authorization"
     assert pilot["readiness"]["unresolved_execution_blockers"] == []
-    terminal = load_json(EXP_ROOT / "T09_PRAGMATIC_RETRY5_TERMINAL_CONTROL.json")
+    terminal = load_json(EXP_ROOT / "T09_PRAGMATIC_RETRY5_POSTRUN_TERMINAL_CONTROL.json")
     assert terminal["execution_eligibility"] == "blocked-pending-prerequisites"
     assert terminal["authorized"] is terminal["replayable"] is False
     assert {item["plan_id"] for item in terminal["superseded_registered_profiles"]} == {
         smoke["plan_id"],
         "PLAN-EXP0001-PILOT-V6",
+        pilot["plan_id"],
     }
-    assert terminal["successor"]["plan_id"] == pilot["plan_id"] == ("PLAN-EXP0001-PILOT-V7")
+    assert pilot["plan_id"] == "PLAN-EXP0001-PILOT-V7"
+    assert terminal["successor"]["plan_id"] is None
     assert set(smoke["sampling"]["conditions"]) == CONDITIONS
     assert set(pilot["sampling"]["conditions"]) == CONDITIONS
 
