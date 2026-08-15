@@ -1,0 +1,52 @@
+{
+  "schema_version": "0.1.0",
+  "control_id": "CONTROL-T09-PRAGMATIC-RETRY5-2026-08-14",
+  "experiment_id": "EXP-0001",
+  "plan_id": "PLAN-EXP0001-PILOT-V7",
+  "authorization_reference": "current-user-turn-t09-pragmatic-retry5-2026-08-14",
+  "authorized": true,
+  "single_use": true,
+  "scope": {
+    "repair": [
+      "process-tree-core-dump-suppression",
+      "privacy-safe-essential-failure-sealing"
+    ],
+    "lambda_launches_maximum": 2,
+    "simultaneous_lambda_instances_maximum": 1,
+    "fresh_condition_attempts": 4,
+    "condition_retries_after_empirical_entry": 0,
+    "openai_cost_cap_usd": 40.0,
+    "lambda_cost_cap_usd": 8.0,
+    "new_campaign_aggregate_cost_cap_usd": 48.0,
+    "prior_t09_cost_usd": 5.7424506112,
+    "cumulative_t09_cost_cap_usd": 60.0
+  },
+  "scientific_locks": {
+    "sira_commit": "93fb8d72de71f9a4a13419670adeb34d93cf7acd",
+    "model": "gpt-4o-2024-11-20",
+    "dataset_commit": "989f4c40d9deea1ecb0897d7a17a9c0fe20d5c33",
+    "dataset_blob": "76ad1feb689b754bfe4e5e24d3ea371b647efa67",
+    "task_ids": [
+      "7dcbbbdc7f1120cd",
+      "2120afba8009bad3"
+    ],
+    "attempt_order": [
+      "RUN-T09-TASK-A-REACTIVE-0005",
+      "RUN-T09-TASK-A-SIMULATIVE-0005",
+      "RUN-T09-TASK-B-SIMULATIVE-0005",
+      "RUN-T09-TASK-B-REACTIVE-0005"
+    ],
+    "interpretation": "descriptive-calibration-only"
+  },
+  "prohibitions": [
+    "condition-retry",
+    "task-replacement",
+    "evaluator-replacement",
+    "model-change",
+    "scientific-runtime-change-after-empirical-entry",
+    "larger-pilot",
+    "training",
+    "comparative-scientific-conclusion"
+  ],
+  "execution_state": "authorized-pending-clean-v7-package-and-dynamic-preflight"
+}

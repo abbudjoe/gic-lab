@@ -1,0 +1,48 @@
+schema_version: 0.1.0
+experiment_id: EXP-0001
+run_id: RUN-T09-TASK-A-SIMULATIVE-0005
+profile: pilot
+profile_plan_id: PLAN-EXP0001-PILOT-V7
+profile_sha256: 1e673590c928e60c8fceeae605b939361f62b146afeab7de10095f6217ff31b6
+condition: SIRA-SIMULATIVE
+attempt: 1
+seed: 42
+interpretation_allowed: true
+execution:
+  backend: cloud
+  workload: benchmark
+  authorization:
+    authorized: false
+    authorization_reference: null
+    command_sha256: null
+sources:
+  giclab_commit: c62f92a0c6b5e77c4288ca2d317b2ad3b6a582bf
+  upstream_source_id: SRC-SIRA-REPOSITORY
+  upstream_commit: 93fb8d72de71f9a4a13419670adeb34d93cf7acd
+  protocol_sha256: 5356fc8b3806f4135eb570f65b67da2f94463582db5e3e609320e23dbdb2a3f7
+  config_sha256: cf25acd90f9d73d9aef978a7d059cfbc74a1447d901f4e3d27e2b5d9f121d2ed
+  model_revision: gpt-4o-2024-11-20
+  dataset_revision: 76ad1feb689b754bfe4e5e24d3ea371b647efa67
+  environment_sha256: 7bf16e303c3e3273c8927fae5a7eb4aa4fad40cbec9d6b1f4e69398b0e32df4f
+task:
+  task_id: 7dcbbbdc7f1120cd
+  source_kind: dataset-slice
+  query: null
+  dataset_id: DATA-SIRA-FANOUTQA-DEV
+  dataset_revision: 76ad1feb689b754bfe4e5e24d3ea371b647efa67
+  start_idx: 0
+  end_idx: 1
+pairing:
+  pair_id: PAIR-EXP0001-PILOT-V7-TASK-A
+  order_index: 2
+budget:
+  max_wall_seconds: 3600
+  max_cost_usd: 10.0
+  max_gpu_hours: 1.0
+  max_model_calls: 1155
+  max_model_tokens: 1000000
+  max_tool_calls: 30
+  max_output_bytes: 67108864
+artifacts:
+  root: artifacts/EXP-0001/pilot-v7/task-a/simulative/attempt-0005
+  retain_raw: true

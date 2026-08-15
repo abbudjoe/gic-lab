@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import importlib.util
 import json
 import os
 import shutil
@@ -489,15 +488,112 @@ def _safe_extract_stage(source: Path, destination: Path) -> None:
             os.chmod(target, 0o600)
 
 
-def _load_host_module(repository: Path) -> Any:
-    path = repository / HOST_SOURCE_RELATIVE
-    specification = importlib.util.spec_from_file_location("giclab_t09_retry4_repair_host", path)
-    if specification is None or specification.loader is None:
-        raise EvidenceRepairError("frozen host module cannot be loaded")
-    module = importlib.util.module_from_spec(specification)
-    sys.modules[specification.name] = module
-    specification.loader.exec_module(module)
-    return module
+def _verify_with_executed_package(
+    *,
+    repository: Path,
+    reconstructed_root: Path,
+) -> dict[str, object]:
+    """Run the historical verifier from its exact clean Git package.
+
+    Current campaigns are allowed to evolve their active plan and runner.  Historical
+    evidence must therefore execute against the byte-exact package that originally
+    defined it, not whatever runner happens to be at repository HEAD.
+    """
+
+    program = """
+import hashlib
+import importlib.util
+import json
+import sys
+from pathlib import Path
+
+repository = Path(sys.argv[1]).resolve(strict=True)
+root = Path(sys.argv[2]).resolve(strict=True)
+source = repository / "containers/sira-smoke/pragmatic/t09_remote_runner.py"
+specification = importlib.util.spec_from_file_location("giclab_t09_retry4_frozen_host", source)
+if specification is None or specification.loader is None:
+    raise RuntimeError("historical host module cannot be loaded")
+host = importlib.util.module_from_spec(specification)
+sys.modules[specification.name] = host
+specification.loader.exec_module(host)
+authority = host.slot2_authority_binding(root / "pilot-v6/slot2-authority")
+frozen, frozen_sha256 = host.load_frozen_run_manifest(
+    root,
+    repository=repository,
+    package_commit=sys.argv[3],
+    require_image=False,
+)
+print(json.dumps({
+    "frozen_run_manifest_sha256": frozen_sha256,
+    "frozen_run_manifest_id": frozen.get("manifest_id"),
+    "plan_id": frozen.get("plan_id"),
+    "slot2_authority_binding_sha256": host.canonical_sha256(authority),
+    "load_frozen_run_manifest_passed": True,
+    "require_image": False,
+}, sort_keys=True))
+"""
+    safe_environment = {
+        "PATH": os.defpath,
+        "LANG": "C.UTF-8",
+        "LC_ALL": "C.UTF-8",
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "PYTHONNOUSERSITE": "1",
+    }
+    with tempfile.TemporaryDirectory(prefix="giclab-t09-r4-package-") as raw:
+        frozen_repository = Path(raw) / "repository"
+        clone = subprocess.run(
+            [
+                "git",
+                "clone",
+                "--quiet",
+                "--no-checkout",
+                "--shared",
+                str(repository),
+                str(frozen_repository),
+            ],
+            env=safe_environment,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            check=False,
+            timeout=60,
+        )
+        checkout = subprocess.run(
+            ["git", "-C", str(frozen_repository), "checkout", "--quiet", EXECUTED_PACKAGE_COMMIT],
+            env=safe_environment,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            check=False,
+            timeout=60,
+        )
+        if clone.returncode != 0 or checkout.returncode != 0:
+            raise EvidenceRepairError("historical package could not be materialized")
+        safe_environment["PYTHONPATH"] = str(frozen_repository / "src")
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                program,
+                str(frozen_repository),
+                str(reconstructed_root),
+                EXECUTED_PACKAGE_COMMIT,
+            ],
+            env=safe_environment,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            check=False,
+            timeout=120,
+        )
+    if result.returncode != 0 or len(result.stdout) > MAX_JSON_BYTES:
+        raise EvidenceRepairError("historical frozen-runtime verification failed")
+    try:
+        value: object = json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise EvidenceRepairError("historical frozen-runtime receipt is malformed") from exc
+    if not isinstance(value, dict) or not all(isinstance(key, str) for key in value):
+        raise EvidenceRepairError("historical frozen-runtime receipt is not an object")
+    return cast(dict[str, object], value)
 
 
 def verify_union_with_frozen_runtime(
@@ -516,23 +612,19 @@ def verify_union_with_frozen_runtime(
             expected_bytes=MISSING_BYTES,
             expected_sha256=MISSING_SHA256,
         )
-        host = _load_host_module(repository)
-        authority = host.slot2_authority_binding(root / "pilot-v6/slot2-authority")
-        frozen, frozen_sha256 = host.load_frozen_run_manifest(
-            root,
+        verification = _verify_with_executed_package(
             repository=repository,
-            package_commit=EXECUTED_PACKAGE_COMMIT,
-            require_image=False,
+            reconstructed_root=root,
         )
         if (
-            frozen_sha256 != FROZEN_RUN_MANIFEST_SHA256
-            or frozen.get("manifest_id") != "RUN-MANIFEST-EXP0001-PILOT-V6-0004"
-            or frozen.get("plan_id") != PLAN_ID
+            verification.get("frozen_run_manifest_sha256") != FROZEN_RUN_MANIFEST_SHA256
+            or verification.get("frozen_run_manifest_id") != "RUN-MANIFEST-EXP0001-PILOT-V6-0004"
+            or verification.get("plan_id") != PLAN_ID
         ):
             raise EvidenceRepairError("reconstructed frozen runtime identity drifted")
         return {
-            "frozen_run_manifest_sha256": frozen_sha256,
-            "slot2_authority_binding_sha256": host.canonical_sha256(authority),
+            "frozen_run_manifest_sha256": verification["frozen_run_manifest_sha256"],
+            "slot2_authority_binding_sha256": verification["slot2_authority_binding_sha256"],
             "load_frozen_run_manifest_passed": True,
             "require_image": False,
         }

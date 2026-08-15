@@ -64,6 +64,15 @@ and all V6 authority is exhausted. A reviewed post-termination sidecar restores 
 manifest-owned archive member while leaving the original sealed archive unchanged;
 its separate receipt reconciles provider-preflight and empirical time.
 
+Retry 5 registers fresh `PLAN-EXP0001-PILOT-V7` and preserves the V6 attempt as
+consumed, infrastructure-invalid, unscored, unpaired, and excluded from V7. The
+narrow prelaunch repair disables core dumps at both Docker and process-tree boundaries
+and adds a 16 MiB allowlisted essential-failure authority for reconstructable cap
+stops. The 64 MiB attempt cap is unchanged: V6 retained only 2,076,704 non-core bytes,
+and V7's conservative full-attempt projection is 50,331,648 bytes. V7 has fresh
+identities and current-turn private authority, but no V7 cloud, model, browser, SiRA,
+or empirical action has occurred at this prelaunch checkpoint.
+
 ## State transition
 
 Phase 0.75 completed its pinned upstream audits, evidence-preserving harness, SiRA
@@ -81,25 +90,22 @@ that infrastructure record cannot affect EXP-0001 validity, metrics, or outcome.
 
 ## Execution boundary
 
-Paid compute, prototype execution, benchmark execution, training, and cloud mutation
-remain false. No exact successor execution profile is currently eligible or
-authorized. The T07 smoke and T09 V3/V4/V5/V6 authorities are consumed and
-nonreplayable.
-A future paired calibration requires fresh identities, a new campaign clock with
-provider-activation/preflight slack, independent review, and new current-turn user
-authorization.
+Reusable tracked paid-compute, prototype, benchmark, training, and cloud permissions
+remain false. The T07 smoke and T09 V3/V4/V5/V6 authorities are consumed and
+nonreplayable. V7 is the sole registered successor and has a current-turn single-use
+private authorization; it remains blocked before mutation and empirical entry until
+its exact clean package, review, retained-image qualification, core/browser/evaluator/
+model gates, pair diffs, budgets, privacy checks, and frozen manifest all pass.
 
-The current machine-readable gate is the terminal Retry 4 execution-control overlay,
-not the pre-run readiness strings retained inside the frozen historical profiles. It
-blocks both registered plan IDs and names no successor.
+The current machine-readable gate is the Retry 5 terminal execution-control overlay,
+not the pre-run readiness strings retained inside frozen historical profiles. It
+blocks the consumed smoke and V6 identities and names only V7 as successor.
 
 ## Next gate
 
-There is no current SiRA execution gate. Historical T07 infrastructure and bounded
-smoke records remain preserved, but none supplies prospective authority. The next
-scientific execution proposal, if any, must be a newly identified and reviewed
-calibration contract; it may not reuse an old smoke, host, condition, provider, or
-authorization identity.
+The current gate is the V7 clean-package and dynamic-preflight boundary. Historical
+T07 and V3–V6 records supply no authority. V7 may use only its fresh host, condition,
+provider, qualification, pair, stage, archive, and authorization identities.
 
 ## T07 infrastructure update — design only
 

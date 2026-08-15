@@ -1,6 +1,6 @@
 # Phase 1 SiRA Smoke Readiness
 
-Status: **T07 smoke closed; T09 Retry 4 stopped after one invalid unscored attempt**
+Status: **T07 smoke closed; T09 Retry 5 V7 successor in prelaunch repair and review**
 
 Prepared: 2026-08-08
 
@@ -89,11 +89,11 @@ two-launch capability and campaign clock are exhausted. Terminal state is
 `t09-pilot-blocked-material-risk`; any future paired campaign requires fresh
 identities, a new clock, independent review, and new current-turn authority.
 
-Current machine authority comes from the registry/project-state-bound
+The historical Retry 3 machine authority came from
 `T09_PRAGMATIC_RETRY3_TERMINAL_CONTROL.json`. It cryptographically preserves the
 historical smoke/V5 profiles and V5 execution contract while superseding their
 embedded pre-run readiness strings; policy rejects both consumed plan IDs as
-nonreplayable. No registered successor profile exists.
+nonreplayable. It is retained as superseded history.
 
 ## Current T09 Retry 4 checkpoint
 
@@ -121,9 +121,37 @@ private 597,140-byte sidecar member under overlay manifest `1eedf1d9…`; frozen
 reconstruction passes at `c633c835…`. Separate clock receipt `989d5625…` records
 2,353.116390 seconds of slot-2 preflight and 680.255410 seconds from empirical start
 through terminal/zero observation without rewriting the provider closeout. The two-
-launch/campaign authority is exhausted. Current machine authority is
-`T09_PRAGMATIC_RETRY4_TERMINAL_CONTROL.json`, which makes the smoke and V6 profiles
-historical, consumed, and nonreplayable and names no successor.
+launch/campaign authority is exhausted. The historical Retry 4 terminal control makes
+the smoke and V6 profiles consumed and nonreplayable.
+
+## Current T09 Retry 5 prelaunch checkpoint
+
+Fresh successor `PLAN-EXP0001-PILOT-V7` preserves the exact two tasks, SiRA commit,
+dated model, evaluator, condition order, scoring, zero-retry rule, and descriptive-only
+interpretation. It excludes the consumed V6 attempt and uses fresh host,
+qualification, condition, pair, stage, and archive identities. The current-turn user
+instruction authorizes the narrow repair and live V7 campaign, but the tracked plan
+and condition records remain `authorized: false`; the private single-use execution
+control applies only after a clean hash-bound package passes focused review and every
+dynamic pre-entry gate.
+
+The repair sets Docker `core=0:0` and verifies `RLIMIT_CORE == (0, 0)` before any
+condition, browser, evaluator, or child process. Exact-image preflight must prove
+child/grandchild inheritance, a nonzero synthetic `SIGABRT` exit with no core file,
+and clean Chromium teardown. A bounded filename-plus-ELF scanner treats any core as a
+prohibited transient security artifact, excludes and destroys it, and permanently
+stops continuation. An independently capped 16,777,216-byte allowlisted essential
+failure seal makes an output-cap or infrastructure-invalid attempt reconstructable
+without assigning a score or allowing a retry. The ordinary per-attempt cap remains
+67,108,864 bytes: the V6 non-core tree was only 2,076,704 bytes, and V7 reserves
+16,777,216 bytes above a conservative 50,331,648-byte full-attempt projection.
+
+The registry/project-state-bound
+`T09_PRAGMATIC_RETRY5_TERMINAL_CONTROL.json` preserves the smoke and archived V6
+profile as consumed/nonreplayable and names V7 as the sole fresh registered successor.
+V7 is the sole registered successor; this readiness record is not authorization.
+No cloud, OpenAI, browser, SiRA, or V7 empirical action has occurred at this prelaunch
+checkpoint.
 
 ## Historical consumed smoke record
 
@@ -137,8 +165,8 @@ historical, consumed, and nonreplayable and names no successor.
 - Interpretation: prohibited (`interpretation_allowed: false`)
 
 The smoke profile and both condition plans are historical records whose separate
-bounded authority was consumed. They are neither eligible nor reusable. No exact
-successor run profile currently exists, and this readiness record is not authorization.
+bounded authority was consumed. They are neither eligible nor reusable. V7 is the
+sole registered successor, but this readiness record is not its execution authority.
 
 T07's high-assurance infrastructure track is frozen at
 `high-assurance-infrastructure-frozen`. Gate L1/L1A evidence is complete, sealed and

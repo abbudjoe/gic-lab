@@ -46,6 +46,8 @@ def build_finalizer_argv(
         *docker_prefix,
         "run",
         "--rm",
+        "--ulimit",
+        "core=0:0",
         "--network",
         "none",
         "--read-only",

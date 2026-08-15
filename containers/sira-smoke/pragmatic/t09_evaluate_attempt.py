@@ -13,6 +13,7 @@ import argparse
 import hashlib
 import json
 import os
+import resource
 import socket
 import stat
 import sys
@@ -44,6 +45,14 @@ from giclab.harness.t09_sira_pilot import (
 )
 
 HISTORICAL_V4_REGRESSION_RUN_ID = "RUN-T09-TASK-A-REACTIVE-0002"
+
+
+def _enforce_zero_core_limit() -> tuple[int, int]:
+    resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+    limits = resource.getrlimit(resource.RLIMIT_CORE)
+    if limits != (0, 0):
+        raise T09PilotError("finalizer process-tree core limit is not exactly zero")
+    return limits
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -609,7 +618,7 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
         if (
             local_qualification.get("schema_version") != "0.1.0"
             or local_qualification.get("qualification_id")
-            != "QUAL-T09-PILOT-V6-LOCAL-FINALIZER-0001"
+            != "QUAL-T09-PILOT-V7-LOCAL-FINALIZER-0001"
             or local_qualification.get("package_commit") != args.package_commit
             or local_qualification.get("execution_contract_sha256") != contract.sha256
             or any(
@@ -1213,7 +1222,10 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
 
 
 def main() -> int:
+    core_limits = _enforce_zero_core_limit()
     result = finalize(_parser().parse_args())
+    result["core_soft_limit"] = core_limits[0]
+    result["core_hard_limit"] = core_limits[1]
     print(json.dumps(result, sort_keys=True))
     return 0
 

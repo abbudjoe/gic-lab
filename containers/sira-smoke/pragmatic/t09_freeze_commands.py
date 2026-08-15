@@ -49,8 +49,8 @@ def render(repository: Path) -> dict[str, object]:
             runtime_adaptation_path="/opt/giclab-src/giclab/harness/sira_gate_a_runtime.py",
             runtime_adaptation_sha256=runtime_sha256,
             pilot_library_sha256=library_sha256,
-            aggregate_ledger_path="/opt/giclab-artifacts/pilot-v6/aggregate-budget.json",
-            pilot_state_path="/opt/giclab-artifacts/pilot-v6/pilot-state.json",
+            aggregate_ledger_path="/opt/giclab-artifacts/pilot-v7/aggregate-budget.json",
+            pilot_state_path="/opt/giclab-artifacts/pilot-v7/pilot-state.json",
         )
         for attempt in contract.attempts
     ]
@@ -62,7 +62,7 @@ def render(repository: Path) -> dict[str, object]:
         raise ValueError("one or more T09 command pairs are not matched")
     return {
         "schema_version": "0.1.0",
-        "plan_id": "PLAN-EXP0001-PILOT-V6",
+        "plan_id": "PLAN-EXP0001-PILOT-V7",
         "reviewed_implementation_ancestor": next(iter(commits)),
         "plan_path": plan_path.relative_to(root).as_posix(),
         "plan_sha256": file_sha256(plan_path),

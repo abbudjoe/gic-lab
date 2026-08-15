@@ -1,8 +1,8 @@
 {
   "schema_version": "0.4.0",
-  "identity_id": "RUNTIME-EXP0001-PILOT-V7-RETAINED-OR-FALLBACK",
-  "plan_id": "PLAN-EXP0001-PILOT-V7",
-  "execution_status": "current-turn-authorized-pending-source-derived-v7-core-and-runtime-qualification",
+  "identity_id": "RUNTIME-EXP0001-PILOT-V6-RETAINED-OR-FALLBACK",
+  "plan_id": "PLAN-EXP0001-PILOT-V6",
+  "execution_status": "current-turn-authorized-pending-source-derived-dynamic-qualification",
   "base_runtime": {
     "source_run": "RUN-T07-PRAGMATIC-HOST-0003",
     "frozen_execution_commit": "5698f04dfd08bc85a66d2355b0a4bd7d3ce24a23",
@@ -20,8 +20,8 @@
   "replacement_image_policy": {
     "historical_image_digest": "sha256:035edf61718e84a8156f4f0f7817b134b0ce31488d3f0b50bbfba2b4a30cc61c",
     "exact_historical_digest_equality_required": false,
-    "qualification_id": "QUAL-T09-PILOT-V7-IMAGE-0001",
-    "frozen_run_manifest_id": "RUN-MANIFEST-EXP0001-PILOT-V7-0005",
+    "qualification_id": "QUAL-T09-PILOT-V6-IMAGE-0001",
+    "frozen_run_manifest_id": "RUN-MANIFEST-EXP0001-PILOT-V6-0004",
     "runtime_binding": "source-derived-mode-0600-O_EXCL-frozen-run-manifest",
     "retained_image_archive_sha256": "623e717c2182eca9cee2f471b7ecd9a57bead2f5263dee64aa5cd954eae5ddb0",
     "retained_image_archive_bytes": 1207128576,
@@ -82,10 +82,7 @@
       "resource-cap-and-cumulative-accounting-checks",
       "cleanup-and-exact-provider-closeout-receipts",
       "source-bound-active-slot2-provider-package-transition",
-      "minimal-manifest-bound-slot2-authority-retention-and-export",
-      "process-tree-core-limit-zero-at-docker-and-entrypoint-boundaries",
-      "exact-image-SIGABRT-inheritance-and-browser-teardown-core-suppression",
-      "bounded-core-detection-destruction-and-essential-failure-sealing"
+      "minimal-manifest-bound-slot2-authority-retention-and-export"
     ],
     "files": [
       {
@@ -151,18 +148,6 @@
       {
         "path": "containers/sira-smoke/pragmatic/t09_local_finalizer_qualification.py",
         "sha256": "2a70f1283b9e93f1afd9e7ecbf610acccd4721a716cab40fb84d16ecd1bb2bfc"
-      },
-      {
-        "path": "containers/sira-smoke/container_entrypoint.py",
-        "sha256": "pending-implementation-ancestor-binding"
-      },
-      {
-        "path": "containers/sira-smoke/bounded/browser_preflight.py",
-        "sha256": "pending-implementation-ancestor-binding"
-      },
-      {
-        "path": "containers/sira-smoke/pragmatic/t09_core_preflight.py",
-        "sha256": "pending-implementation-ancestor-binding"
       }
     ]
   },

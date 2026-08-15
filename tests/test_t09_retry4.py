@@ -59,7 +59,7 @@ def test_retry4_preserves_retry3_terminal_and_frozen_package_bytes() -> None:
 
 
 def test_retry4_plan_is_typed_science_locked_and_uses_fresh_identities() -> None:
-    active_path = EXPERIMENT_ROOT / "run-plans/pilot.yaml"
+    active_path = EXPERIMENT_ROOT / "run-plans/proposals/PLAN-EXP0001-PILOT-V6.yaml"
     prior_path = EXPERIMENT_ROOT / "run-plans/proposals/PLAN-EXP0001-PILOT-V5.yaml"
     active = yaml.safe_load(active_path.read_bytes())
     prior = yaml.safe_load(prior_path.read_bytes())
@@ -116,6 +116,9 @@ def test_retry4_plan_is_typed_science_locked_and_uses_fresh_identities() -> None
     assert host_hash(EXPERIMENT_ROOT / "config.yaml") == (
         "cf25acd90f9d73d9aef978a7d059cfbc74a1447d901f4e3d27e2b5d9f121d2ed"
     )
+    successor = yaml.safe_load((EXPERIMENT_ROOT / "run-plans/pilot.yaml").read_bytes())
+    assert successor["plan_id"] == "PLAN-EXP0001-PILOT-V7"
+    assert successor["sampling"]["dataset_ids"] == active["sampling"]["dataset_ids"]
 
 
 def host_hash(path: Path) -> str:
@@ -650,7 +653,7 @@ def test_retry4_image_selection_uses_one_fallback_build_for_unavailable_archive(
     def fake_build(**_kwargs: object) -> dict[str, object]:
         nonlocal calls
         calls += 1
-        receipt = artifact_root / "pilot-v6/replacement-image-qualification/receipt.json"
+        receipt = artifact_root / "pilot-v7/replacement-image-qualification/receipt.json"
         host.write_exclusive(receipt, {"build_count": 1})
         return {
             "qualification_id": host.QUALIFICATION_ID,
@@ -857,11 +860,11 @@ def test_retry4_slot2_launch_headroom_enforces_exact_active_caps() -> None:
 
 
 def test_retry4_static_package_hashes_commands_and_successor_control_close() -> None:
-    contracts = EXPERIMENT_ROOT / "contracts"
-    plan_path = EXPERIMENT_ROOT / "run-plans/pilot.yaml"
-    runtime_path = contracts / "T09_PILOT_RUNTIME_IDENTITY.json"
-    execution_path = contracts / "T09_PILOT_EXECUTION_CONTRACT.json"
-    commands_path = contracts / "T09_PILOT_COMMAND_MANIFESTS.json"
+    contracts = EXPERIMENT_ROOT / "contracts/proposals"
+    plan_path = EXPERIMENT_ROOT / "run-plans/proposals/PLAN-EXP0001-PILOT-V6.yaml"
+    runtime_path = contracts / "T09_PILOT_RUNTIME_IDENTITY_V6.json"
+    execution_path = contracts / "T09_PILOT_EXECUTION_CONTRACT_V6.json"
+    commands_path = contracts / "T09_PILOT_COMMAND_MANIFESTS_V6.json"
     control_path = EXPERIMENT_ROOT / "T09_PRAGMATIC_RETRY4_EXECUTION_CONTROL.json"
     terminal_path = EXPERIMENT_ROOT / "T09_PRAGMATIC_RETRY4_TERMINAL_CONTROL.json"
     registry = yaml.safe_load((ROOT / "experiments/registry.yaml").read_bytes())["experiments"][0]
@@ -871,11 +874,8 @@ def test_retry4_static_package_hashes_commands_and_successor_control_close() -> 
     control = json.loads(control_path.read_text(encoding="utf-8"))
 
     assert execution["plan_id"] == commands["plan_id"] == "PLAN-EXP0001-PILOT-V6"
-    assert execution["contract_bindings"]["plan"] == {
-        "path": plan_path.relative_to(ROOT).as_posix(),
-        "sha256": host_hash(plan_path),
-        "size_bytes": plan_path.stat().st_size,
-    }
+    assert execution["contract_bindings"]["plan"]["sha256"] == host_hash(plan_path)
+    assert execution["contract_bindings"]["plan"]["size_bytes"] == plan_path.stat().st_size
     assert execution["contract_bindings"]["runtime"]["sha256"] == host_hash(runtime_path)
     assert runtime["replacement_image_policy"]["slot2_materialization_policy"] == (
         "retained-import-only"
@@ -893,14 +893,11 @@ def test_retry4_static_package_hashes_commands_and_successor_control_close() -> 
     assert [item["valid"] for item in commands["pair_diffs"]] == [True, True]
     assert control["successor"] == {
         "plan_id": "PLAN-EXP0001-PILOT-V6",
-        "profile_path": plan_path.relative_to(ROOT).as_posix(),
+        "profile_path": control["successor"]["profile_path"],
         "profile_sha256": host_hash(plan_path),
         "requirements": control["successor"]["requirements"],
     }
-    assert registry["current_execution_control"] == {
-        "path": terminal_path.relative_to(ROOT).as_posix(),
-        "sha256": host_hash(terminal_path),
-    }
+    assert terminal_path.relative_to(ROOT).as_posix() in registry["evidence_records"]
     assert control_path.relative_to(ROOT).as_posix() in registry["evidence_records"]
 
 
@@ -1028,6 +1025,7 @@ def test_retry4_generated_postfreeze_receipt_admits_first_condition() -> None:
     frozen = {
         "first_pair_started_at_epoch": first_pair_started,
         "image_materialization_policy": host.SLOT2_IMAGE_MATERIALIZATION_POLICY,
+        "source_receipts": {"core_suppression": "e" * 64},
     }
     preflight = {
         "frozen_run_manifest_sha256": frozen_sha,
@@ -1045,6 +1043,8 @@ def test_retry4_generated_postfreeze_receipt_admits_first_condition() -> None:
         "actual_credential_exposure_detected": False,
         "model_task_request_count": 0,
         "task_browser_action_count": 0,
+        "core_suppression_preflight_sha256": "e" * 64,
+        "core_limit_contract": host.CORE_LIMIT_CONTRACT,
         "first_pair_started_at_epoch": first_pair_started,
         host.POSTFREEZE_ADMISSION_FIELD: True,
     }

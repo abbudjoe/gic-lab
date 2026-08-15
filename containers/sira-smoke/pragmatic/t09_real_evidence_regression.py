@@ -95,6 +95,7 @@ def _parser() -> argparse.ArgumentParser:
             "T09-PRAGMATIC-RETRY3-QUALIFIED-IMAGE-REGRESSION-0001",
             "T09-PRAGMATIC-RETRY4-REAL-EVIDENCE-REGRESSION-0001",
             "T09-PRAGMATIC-RETRY4-QUALIFIED-IMAGE-REGRESSION-0001",
+            "T09-PRAGMATIC-RETRY5-QUALIFIED-IMAGE-REGRESSION-0001",
         ),
         required=True,
     )
@@ -490,7 +491,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             "source_archive_rehashed_after": True,
             "source_public_disposition_rehashed_after": True,
             "prior_attempt_excluded_from_v5_campaign": True,
-            "prior_attempt_excluded_from_v6_campaign": True,
+            "prior_attempt_excluded_from_v7_campaign": True,
             "private_source_path_retained": False,
         }
     _write_exclusive(args.output.resolve(strict=False), receipt)

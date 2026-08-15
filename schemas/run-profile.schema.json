@@ -318,6 +318,117 @@
         "aggregate_staging": {"type": "string", "minLength": 8}
       }
     },
+    "core_dump_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "docker_ulimit",
+        "process_soft_limit",
+        "process_hard_limit",
+        "scope",
+        "preentry_proof",
+        "detection",
+        "disposition"
+      ],
+      "properties": {
+        "docker_ulimit": {"const": "core=0:0"},
+        "process_soft_limit": {"const": 0},
+        "process_hard_limit": {"const": 0},
+        "scope": {"type": "string", "minLength": 16},
+        "preentry_proof": {"type": "string", "minLength": 16},
+        "detection": {"type": "string", "minLength": 16},
+        "disposition": {"type": "string", "minLength": 16}
+      }
+    },
+    "failure_evidence_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "full_attempt_cap_bytes",
+        "essential_failure_cap_bytes",
+        "authority",
+        "scientific_status",
+        "exclusions"
+      ],
+      "properties": {
+        "full_attempt_cap_bytes": {"const": 67108864},
+        "essential_failure_cap_bytes": {"const": 16777216},
+        "authority": {"type": "string", "minLength": 16},
+        "scientific_status": {"type": "string", "minLength": 16},
+        "exclusions": {"type": "string", "minLength": 16}
+      }
+    },
+    "evidence_cap_calibration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "retry4_attempt_total_bytes",
+        "retry4_core_bytes",
+        "retry4_noncore_bytes",
+        "retained_attempt_cap_bytes",
+        "expected_full_attempt_evidence_bytes",
+        "expected_full_attempt_evidence_breakdown",
+        "remaining_cap_headroom_bytes",
+        "noncore_headroom_ratio",
+        "conclusion"
+      ],
+      "properties": {
+        "retry4_attempt_total_bytes": {"const": 236556320},
+        "retry4_core_bytes": {"const": 234479616},
+        "retry4_noncore_bytes": {"const": 2076704},
+        "retained_attempt_cap_bytes": {"const": 67108864},
+        "expected_full_attempt_evidence_bytes": {"const": 50331648},
+        "expected_full_attempt_evidence_breakdown": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "thirty_screenshots_bytes",
+            "session_events_actions_answers_bytes",
+            "stdout_stderr_bytes",
+            "provider_runtime_cleanup_receipts_bytes",
+            "evaluator_schemas_and_manifests_bytes"
+          ],
+          "properties": {
+            "thirty_screenshots_bytes": {"const": 31457280},
+            "session_events_actions_answers_bytes": {"const": 8388608},
+            "stdout_stderr_bytes": {"const": 4194304},
+            "provider_runtime_cleanup_receipts_bytes": {"const": 4194304},
+            "evaluator_schemas_and_manifests_bytes": {"const": 2097152}
+          }
+        },
+        "remaining_cap_headroom_bytes": {"const": 16777216},
+        "noncore_headroom_ratio": {
+          "type": "number",
+          "minimum": 32.315,
+          "maximum": 32.316
+        },
+        "conclusion": {"type": "string", "minLength": 16}
+      }
+    },
+    "prior_campaign_disposition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "plan_id",
+        "run_id",
+        "status",
+        "task_a_simulative",
+        "task_b_simulative",
+        "task_b_reactive",
+        "realized_pair",
+        "excluded_from_v7_pairing"
+      ],
+      "properties": {
+        "plan_id": {"const": "PLAN-EXP0001-PILOT-V6"},
+        "run_id": {"const": "RUN-T09-TASK-A-REACTIVE-0004"},
+        "status": {"const": "consumed-infrastructure-invalid-unscored"},
+        "task_a_simulative": {"const": "not-run"},
+        "task_b_simulative": {"const": "not-run"},
+        "task_b_reactive": {"const": "not-run"},
+        "realized_pair": {"const": "none"},
+        "excluded_from_v7_pairing": {"const": true}
+      }
+    },
     "historical_fixture": {
       "type": "object",
       "additionalProperties": false,

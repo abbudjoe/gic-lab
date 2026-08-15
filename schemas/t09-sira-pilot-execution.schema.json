@@ -6,13 +6,13 @@
   "required": ["schema_version", "contract_id", "plan_id", "experiment_id", "authorized", "terminal_state", "execution_eligibility", "material_blockers", "calibration_only", "sira_commit", "model_revision", "service_tier", "randomization_seed", "contract_bindings", "runtime", "provider_lifecycle", "runtime_limits", "budget_calibration", "identities", "attempts", "first_pair_checkpoint", "evidence", "gpu_accounting", "cleanup", "interpretation_boundary"],
   "properties": {
     "schema_version": {"const": "0.3.0"},
-    "contract_id": {"const": "EXECUTION-CONTRACT-EXP0001-PILOT-V6"},
-    "plan_id": {"const": "PLAN-EXP0001-PILOT-V6"},
+    "contract_id": {"const": "EXECUTION-CONTRACT-EXP0001-PILOT-V7"},
+    "plan_id": {"const": "PLAN-EXP0001-PILOT-V7"},
     "experiment_id": {"const": "EXP-0001"},
     "authorized": {"const": false},
     "authorization_reference": {"type": "null"},
-    "terminal_state": {"const": "current-turn-authorized-retry4-pending-dynamic-preflight"},
-    "execution_eligibility": {"const": "current-turn-authorized-after-retained-image-or-fallback-qualification"},
+    "terminal_state": {"const": "current-turn-authorized-retry5-pending-dynamic-preflight"},
+    "execution_eligibility": {"const": "current-turn-authorized-after-core-suppression-and-retained-image-qualification"},
     "material_blockers": {
       "type": "array",
       "maxItems": 0,
@@ -94,8 +94,8 @@
         "type": "object",
         "required": ["run_id", "pair_id", "task_id", "task_index", "condition", "order_index", "output_root", "raw_output_root", "finalized_output_root", "condition_plan_path", "condition_plan_sha256", "protocol_sha256", "config_sha256", "environment_sha256", "giclab_commit", "upstream_argv"],
         "properties": {
-          "run_id": {"type": "string", "pattern": "^RUN-T09-TASK-[AB]-(?:REACTIVE|SIMULATIVE)-0004$"},
-          "pair_id": {"enum": ["PAIR-EXP0001-PILOT-V6-TASK-A", "PAIR-EXP0001-PILOT-V6-TASK-B"]},
+          "run_id": {"type": "string", "pattern": "^RUN-T09-TASK-[AB]-(?:REACTIVE|SIMULATIVE)-0005$"},
+          "pair_id": {"enum": ["PAIR-EXP0001-PILOT-V7-TASK-A", "PAIR-EXP0001-PILOT-V7-TASK-B"]},
           "task_id": {"enum": ["7dcbbbdc7f1120cd", "2120afba8009bad3"]},
           "task_index": {"enum": [0, 1]},
           "condition": {"enum": ["reactive", "simulative"]},

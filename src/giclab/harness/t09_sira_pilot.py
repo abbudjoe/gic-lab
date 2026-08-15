@@ -28,7 +28,7 @@ from giclab.harness.sira_gate_a import (
     ProviderBudgetUsage,
 )
 
-PLAN_ID: Final = "PLAN-EXP0001-PILOT-V6"
+PLAN_ID: Final = "PLAN-EXP0001-PILOT-V7"
 EXPERIMENT_ID: Final = "EXP-0001"
 SIRA_COMMIT: Final = "93fb8d72de71f9a4a13419670adeb34d93cf7acd"
 MODEL_REVISION: Final = "gpt-4o-2024-11-20"
@@ -50,19 +50,19 @@ TASK_REFERENCE_SHA256S: Final = (
     "2ee9d892e24441d5f5bbf31b7616c1ade5977af26d22e4020f92a162fa23becb",
 )
 ATTEMPT_ORDER: Final = (
-    "RUN-T09-TASK-A-REACTIVE-0004",
-    "RUN-T09-TASK-A-SIMULATIVE-0004",
-    "RUN-T09-TASK-B-SIMULATIVE-0004",
-    "RUN-T09-TASK-B-REACTIVE-0004",
+    "RUN-T09-TASK-A-REACTIVE-0005",
+    "RUN-T09-TASK-A-SIMULATIVE-0005",
+    "RUN-T09-TASK-B-SIMULATIVE-0005",
+    "RUN-T09-TASK-B-REACTIVE-0005",
 )
 EVALUATOR_RUN_IDS: Final = (
-    "RUN-T09-EVAL-TASK-A-REACTIVE-0004",
-    "RUN-T09-EVAL-TASK-A-SIMULATIVE-0004",
-    "RUN-T09-EVAL-TASK-B-SIMULATIVE-0004",
-    "RUN-T09-EVAL-TASK-B-REACTIVE-0004",
+    "RUN-T09-EVAL-TASK-A-REACTIVE-0005",
+    "RUN-T09-EVAL-TASK-A-SIMULATIVE-0005",
+    "RUN-T09-EVAL-TASK-B-SIMULATIVE-0005",
+    "RUN-T09-EVAL-TASK-B-REACTIVE-0005",
 )
-RUNTIME_QUALIFICATION_ID: Final = "QUAL-T09-PILOT-V6-IMAGE-0001"
-FROZEN_RUN_MANIFEST_ID: Final = "RUN-MANIFEST-EXP0001-PILOT-V6-0004"
+RUNTIME_QUALIFICATION_ID: Final = "QUAL-T09-PILOT-V7-IMAGE-0001"
+FROZEN_RUN_MANIFEST_ID: Final = "RUN-MANIFEST-EXP0001-PILOT-V7-0005"
 HISTORICAL_IMAGE_ID: Final = (
     "sha256:035edf61718e84a8156f4f0f7817b134b0ce31488d3f0b50bbfba2b4a30cc61c"
 )
@@ -85,7 +85,7 @@ class T09BudgetExceeded(RuntimeError):
 
 @dataclass(frozen=True, slots=True)
 class CampaignLifecycleLimits:
-    """Three-clock Retry 4 lifecycle authority."""
+    """Three-clock Retry 5 lifecycle authority."""
 
     preflight_wall_seconds: int
     failed_preflight_termination_dispatch_seconds: int
@@ -154,7 +154,7 @@ class CampaignLifecycleLimits:
         )
 
     def required_attempt_seconds(self, *, attempt_hard_wall_seconds: int) -> int:
-        """Return the empirical admission envelope required by the Retry 4 contract."""
+        """Return the empirical admission envelope required by the Retry 5 contract."""
 
         if type(attempt_hard_wall_seconds) is not int or attempt_hard_wall_seconds <= 0:
             raise T09PilotError("attempt hard wall must be a positive integer")
@@ -296,7 +296,7 @@ def load_json_object(path: Path, *, context: str) -> dict[str, object]:
 
 @dataclass(frozen=True, slots=True)
 class RuntimeQualification:
-    """The source-derived pre-entry binding for the one accepted V6 image."""
+    """The source-derived pre-entry binding for the one accepted V7 runtime."""
 
     manifest_id: str
     qualification_id: str
@@ -663,7 +663,7 @@ class RuntimeQualification:
             or (result.build_count == 0 and result.image_import_count != 1)
             or (result.build_count == 1 and result.image_import_count != 0)
         ):
-            raise T09PilotError("V6 image load/build selection drifted")
+            raise T09PilotError("V7 image load/build selection drifted")
         return result
 
 
@@ -1149,6 +1149,8 @@ def initialize_pilot_state(
         "first_pair_selection_drift_detected": False,
         "actual_credential_exposure_detected": False,
         "credential_safety_stop_detected": False,
+        "core_safety_stop_detected": False,
+        "essential_failure_seals": {},
     }
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     _write_json_atomic(path, document)
@@ -1443,6 +1445,20 @@ def _load_pilot_state(
         raise T09PilotError("pilot credential-exposure state is malformed")
     if not isinstance(state.get("credential_safety_stop_detected", False), bool):
         raise T09PilotError("pilot credential-safety-stop state is malformed")
+    if not isinstance(state.get("core_safety_stop_detected", False), bool):
+        raise T09PilotError("pilot core-safety-stop state is malformed")
+    essential_failure_seals = state.get("essential_failure_seals", {})
+    if not isinstance(essential_failure_seals, dict) or any(
+        run_id not in ATTEMPT_ORDER
+        or not isinstance(binding, dict)
+        or set(binding) != {"manifest_sha256", "receipt_sha256"}
+        or any(
+            not isinstance(value, str) or _HEX64.fullmatch(value) is None
+            for value in binding.values()
+        )
+        for run_id, binding in essential_failure_seals.items()
+    ):
+        raise T09PilotError("pilot essential-failure seal state is malformed")
     checkpoint_binding = state.get("first_pair_checkpoint_binding")
     if checkpoint_binding is not None and not isinstance(checkpoint_binding, dict):
         raise T09PilotError("pilot checkpoint binding is malformed")
@@ -1540,6 +1556,8 @@ def mark_empirical_entry(
     state = _load_pilot_state(path, contract_sha256=execution_contract_sha256)
     if state.get("credential_safety_stop_detected") is True:
         raise T09BudgetExceeded("a credential safety failure permanently stops the campaign")
+    if state.get("core_safety_stop_detected") is True:
+        raise T09BudgetExceeded("a core artifact permanently stops the campaign")
     entered = cast(list[str], state["empirical_attempts_entered"])
     raw_complete = cast(list[str], state["raw_attempts_complete"])
     if run_id in entered:
@@ -1616,6 +1634,51 @@ def mark_credential_cleanup_integrity_failure(
     if state.get("credential_safety_stop_detected") is True:
         return
     state["credential_safety_stop_detected"] = True
+    _write_json_atomic(path, state)
+
+
+def mark_core_safety_stop(
+    path: Path,
+    *,
+    execution_contract_sha256: str,
+) -> None:
+    """Monotonically close campaign admission after any prohibited core artifact."""
+
+    state = _load_pilot_state(path, contract_sha256=execution_contract_sha256)
+    if state.get("core_safety_stop_detected") is True:
+        return
+    state["core_safety_stop_detected"] = True
+    _write_json_atomic(path, state)
+
+
+def mark_essential_failure_sealed(
+    path: Path,
+    *,
+    execution_contract_sha256: str,
+    run_id: str,
+    manifest_sha256: str,
+    receipt_sha256: str,
+) -> None:
+    """Bind one reconstructable failure seal without making it evaluator-valid."""
+
+    if (
+        run_id not in ATTEMPT_ORDER
+        or _HEX64.fullmatch(manifest_sha256) is None
+        or _HEX64.fullmatch(receipt_sha256) is None
+    ):
+        raise T09PilotError("essential-failure seal identity is malformed")
+    state = _load_pilot_state(path, contract_sha256=execution_contract_sha256)
+    entered = cast(list[str], state["empirical_attempts_entered"])
+    if run_id not in entered:
+        raise T09PilotError("an unconsumed attempt cannot receive an essential-failure seal")
+    seals = cast(dict[str, dict[str, str]], state["essential_failure_seals"])
+    binding = {"manifest_sha256": manifest_sha256, "receipt_sha256": receipt_sha256}
+    if run_id in seals:
+        if seals[run_id] != binding:
+            raise T09PilotError("essential-failure seal binding changed")
+        return
+    seals[run_id] = binding
+    state["essential_failure_seals"] = seals
     _write_json_atomic(path, state)
 
 
@@ -2055,8 +2118,8 @@ class PairCheckpointInput:
     actual_lambda_cost_usd: float
     remaining_campaign_seconds: float
     next_attempt_hard_wall_seconds: int = 3_600
-    prior_t09_cost_usd: float = 4.04142013524027
-    cumulative_t09_cost_cap_usd: float = 55.0
+    prior_t09_cost_usd: float = 5.7424506112
+    cumulative_t09_cost_cap_usd: float = 60.0
 
 
 def first_pair_decision(value: PairCheckpointInput) -> dict[str, object]:
@@ -2478,8 +2541,8 @@ def _validated_upstream_argv(
         "--end_idx": str(attempt.task_index + 1),
         "--seed": "42",
     }
-    upstream_suffix = attempt.run_id.removeprefix("RUN-T09-").removesuffix("-0004")
-    upstream_run_id = f"EXP-0001-PILOT-V6-{upstream_suffix}"
+    upstream_suffix = attempt.run_id.removeprefix("RUN-T09-").removesuffix("-0005")
+    upstream_run_id = f"EXP-0001-PILOT-V7-{upstream_suffix}"
     if argv[0] != upstream_run_id or values != expected:
         raise T09PilotError("upstream argv drifted from the exact task/condition contract")
     return values
@@ -2539,7 +2602,7 @@ def render_command_manifest(
     equality_surface = {
         "task_id": attempt.task_id,
         "model": MODEL_REVISION,
-        "runtime": "T09-V6-python-3.11.14-preentry-bound-replacement-image",
+        "runtime": "T09-V7-python-3.11.14-core-suppressed-preentry-bound-image",
         "giclab_commit": attempt.giclab_commit,
         "protocol_sha256": attempt.protocol_sha256,
         "config_sha256": attempt.config_sha256,
@@ -2636,8 +2699,8 @@ def _normalized_actual_argv(manifest: Mapping[str, object]) -> tuple[str, ...] |
             return None
         argv[indexes[0] + 1] = replacement
     downstream = argv[separator + 1 :]
-    upstream_suffix = run_id.removeprefix("RUN-T09-").removesuffix("-0004")
-    expected_upstream_run_id = f"EXP-0001-PILOT-V6-{upstream_suffix}"
+    upstream_suffix = run_id.removeprefix("RUN-T09-").removesuffix("-0005")
+    expected_upstream_run_id = f"EXP-0001-PILOT-V7-{upstream_suffix}"
     if not downstream or downstream[0] != expected_upstream_run_id:
         return None
     downstream[0] = "<UPSTREAM-RUN-ID>"

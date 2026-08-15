@@ -128,7 +128,7 @@ def test_retry3_same_host_resume_is_disabled_and_slot2_is_source_bound() -> None
     assert preflight.index("load_frozen_run_manifest(") < preflight.index("admit_next_attempt(")
     assert preflight.index("admit_next_attempt(") < preflight.index("postfreeze-validation.json")
     assert preflight.index("postfreeze-validation.json") < preflight.index(
-        "pilot-v6/preflight.json"
+        "pilot-v7/preflight.json"
     )
     checkpoint = source.split("def first_pair_checkpoint", 1)[1].split(
         "def campaign_evidence_disposition", 1
@@ -152,7 +152,7 @@ def test_retry3_slot2_uses_separate_campaign_and_active_lambda_clocks(
 ) -> None:
     host = _load(HOST_SOURCE, "giclab_t09_retry3_slot2_clocks")
     now = 20_000.0
-    state = tmp_path / "pilot-v6/pilot-state.json"
+    state = tmp_path / "pilot-v7/pilot-state.json"
     state.parent.mkdir(parents=True)
     state.write_text(
         json.dumps(
@@ -552,7 +552,9 @@ def test_retry3_real_regression_receipt_binds_full_evaluator_and_repeat() -> Non
         "359300b029c6891567816f351bf8786e9b018d7af8a1a44b7da9ba5ef4651288"
     )
     assert receipt["dataset_bytes"] == 1_177_174
-    assert receipt["finalizer_source_sha256"] == pilot_state.file_sha256(FINALIZER_SOURCE)
+    assert receipt["finalizer_source_sha256"] == (
+        "32937302bddec910eb696c1c513b28e67b5a86b4e300171396504a926232bb5d"
+    )
     closure = receipt["evaluator_closure"]
     assert closure["evaluator_contract_sha256"] == (
         "c28a802a45fc8d1e719f8c1bcb22315c2841df831c4ae161f12ab0f2fd08b321"
@@ -684,7 +686,7 @@ def test_retry3_provider_preflight_accepts_source_bound_offhost_runtime_paths(
     )
     receipt = {
         "schema_version": "0.1.0",
-        "qualification_id": "QUAL-T09-PILOT-V6-LOCAL-FINALIZER-0001",
+        "qualification_id": "QUAL-T09-PILOT-V7-LOCAL-FINALIZER-0001",
         "plan_id": host.PLAN_ID,
         "package_commit": "a" * 40,
         "python_version": "3.11.14",
@@ -1057,10 +1059,10 @@ def test_retry3_provider_has_two_distinct_single_use_slots_and_cumulative_caps(
     assert first != second
     assert first.name.endswith("launch-slot-01-consumed.json")
     assert second.name.endswith("launch-slot-02-consumed.json")
-    assert provider.PRIOR_T09_COST_USD == 4.04142013524027
+    assert provider.PRIOR_T09_COST_USD == 5.7424506112
     assert provider.NEW_CAMPAIGN_LAMBDA_CAP_USD == 8.0
     assert provider.NEW_CAMPAIGN_AGGREGATE_CAP_USD == 48.0
-    assert provider.CUMULATIVE_T09_CAP_USD == 55.0
+    assert provider.CUMULATIVE_T09_CAP_USD == 60.0
     with pytest.raises(provider.T09ProviderError, match="outside"):
         provider.launch_capability_path(3)
 
@@ -1121,7 +1123,7 @@ def test_retry3_preentry_secret_match_is_a_monotonic_campaign_stop(
 ) -> None:
     host = _load(HOST_SOURCE, "giclab_t09_retry3_preentry_secret_stop")
     artifact_root = tmp_path / "artifacts"
-    state_path = artifact_root / "pilot-v6/pilot-state.json"
+    state_path = artifact_root / "pilot-v7/pilot-state.json"
     initialize_pilot_state(
         state_path,
         execution_contract_sha256="f" * 64,
@@ -1139,7 +1141,7 @@ def test_retry3_preentry_secret_match_is_a_monotonic_campaign_stop(
     monkeypatch.setattr(host, "remove_container", lambda _prefix, _name: True)
     monkeypatch.setattr(host, "owned_containers", lambda _prefix: [])
 
-    with pytest.raises(host.T09HostError, match="actual credential exposure"):
+    with pytest.raises(host.T09HostError, match="security stop or residue"):
         host.record_preentry_condition_failure(
             pilot_state_path=state_path,
             attempt_root=attempt_root,
@@ -1200,7 +1202,7 @@ def test_retry3_metadata_secret_scan_removes_value_and_permanently_stops_admissi
 ) -> None:
     host = _load(HOST_SOURCE, "giclab_t09_retry3_metadata_secret_scan")
     artifact_root = tmp_path / "artifacts"
-    state_path = artifact_root / "pilot-v6/pilot-state.json"
+    state_path = artifact_root / "pilot-v7/pilot-state.json"
     initialize_pilot_state(
         state_path,
         execution_contract_sha256="f" * 64,
@@ -1211,7 +1213,7 @@ def test_retry3_metadata_secret_scan_removes_value_and_permanently_stops_admissi
     credential_fixture = b"fixture-secret-that-must-never-be-retained"
     credential_file.write_bytes(credential_fixture)
     credential_file.chmod(0o600)
-    leaked = artifact_root / "pilot-v6/model-metadata-preflight/leaked.log"
+    leaked = artifact_root / "pilot-v7/model-metadata-preflight/leaked.log"
     leaked.parent.mkdir(parents=True)
     leaked.write_bytes(credential_fixture)
     with pytest.raises(host.T09HostError, match="exposed the exact credential"):
@@ -1222,7 +1224,7 @@ def test_retry3_metadata_secret_scan_removes_value_and_permanently_stops_admissi
         )
     assert not leaked.exists()
     receipt = json.loads(
-        (artifact_root / "pilot-v6/model-metadata-credential-scan.json").read_text(encoding="utf-8")
+        (artifact_root / "pilot-v7/model-metadata-credential-scan.json").read_text(encoding="utf-8")
     )
     assert receipt["actual_credential_exposure_detected"] is True
     assert "sha256" not in json.dumps(receipt)
@@ -1312,7 +1314,7 @@ def test_retry3_raw_seal_is_immediate_and_resumes_after_state_write_crash(
         ),
         encoding="utf-8",
     )
-    state = artifact_root / "pilot-v6/pilot-state.json"
+    state = artifact_root / "pilot-v7/pilot-state.json"
     initialize_pilot_state(
         state,
         execution_contract_sha256="b" * 64,

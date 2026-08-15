@@ -9,7 +9,7 @@ from giclab.registry import load_json, load_yaml
 from giclab.validation import ROOT, validate_instance
 
 EXP_ROOT = ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive"
-TERMINAL_CONTROL_PATH = EXP_ROOT / "T09_PRAGMATIC_RETRY4_TERMINAL_CONTROL.json"
+TERMINAL_CONTROL_PATH = EXP_ROOT / "T09_PRAGMATIC_RETRY5_TERMINAL_CONTROL.json"
 RETRY3_TERMINAL_CONTROL_PATH = EXP_ROOT / "T09_PRAGMATIC_RETRY3_TERMINAL_CONTROL.json"
 PHASE_075_PLAN = (
     ROOT / "docs/exec-plans/completed/PHASE_0_75_UPSTREAM_AUDIT_HARNESS_PROTOCOL_LOCK.md"
@@ -63,7 +63,11 @@ def test_phase_one_is_the_only_active_non_executable_control_plane() -> None:
     assert execution_state.terminal_execution_control.superseded_plan_ids == frozenset(
         {"PLAN-EXP0001-SMOKE", "PLAN-EXP0001-PILOT-V6"}
     )
-    assert execution_state.terminal_execution_control.registered_successor is None
+    assert execution_state.terminal_execution_control.registered_successor is not None
+    assert (
+        execution_state.terminal_execution_control.registered_successor.plan_id
+        == "PLAN-EXP0001-PILOT-V7"
+    )
     checkpoint = state["t08_checkpoint"]
     assert checkpoint["terminal_state"] == ("smoke_evidence_validated_pilot_planning_eligible")
     assert checkpoint["pilot_execution_authorized"] is False
@@ -193,6 +197,7 @@ def test_phase_one_is_the_only_active_non_executable_control_plane() -> None:
 def test_frozen_profiles_are_unauthorized_and_terminal_control_makes_them_nonreplayable() -> None:
     smoke = load_yaml(EXP_ROOT / "run-plans/smoke.yaml")
     pilot = load_yaml(EXP_ROOT / "run-plans/pilot.yaml")
+    archived_v6 = load_yaml(EXP_ROOT / "run-plans/proposals/PLAN-EXP0001-PILOT-V6.yaml")
     terminal = load_json(TERMINAL_CONTROL_PATH)
     registry = load_yaml(ROOT / "experiments/registry.yaml")["experiments"][0]
     assert smoke["plan_id"] == "PLAN-EXP0001-SMOKE"
@@ -203,7 +208,8 @@ def test_frozen_profiles_are_unauthorized_and_terminal_control_makes_them_nonrep
     assert smoke["readiness"]["execution_eligibility"] == "eligible-after-authorization"
     assert smoke["readiness"]["unresolved_execution_blockers"] == []
     assert smoke["readiness"]["pre_execution_requirements"]
-    assert pilot["plan_id"] == "PLAN-EXP0001-PILOT-V6"
+    assert archived_v6["plan_id"] == "PLAN-EXP0001-PILOT-V6"
+    assert pilot["plan_id"] == "PLAN-EXP0001-PILOT-V7"
     assert pilot["execution"]["authorized"] is False
     assert pilot["readiness"]["execution_eligibility"] == "eligible-after-authorization"
     assert pilot["readiness"]["unresolved_execution_blockers"] == []
@@ -211,9 +217,14 @@ def test_frozen_profiles_are_unauthorized_and_terminal_control_makes_them_nonrep
     assert terminal["execution_eligibility"] == "blocked-pending-prerequisites"
     assert terminal["authorized"] is terminal["replayable"] is False
     assert terminal["supersedes_registered_profile_readiness"] is True
-    assert terminal["successor"]["plan_id"] is None
-    assert terminal["successor"]["profile_path"] is None
-    assert terminal["successor"]["profile_sha256"] is None
+    assert terminal["successor"]["plan_id"] == "PLAN-EXP0001-PILOT-V7"
+    assert terminal["successor"]["profile_path"] == (
+        "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml"
+    )
+    assert (
+        terminal["successor"]["profile_sha256"]
+        == hashlib.sha256((EXP_ROOT / "run-plans/pilot.yaml").read_bytes()).hexdigest()
+    )
     assert {item["plan_id"] for item in terminal["superseded_registered_profiles"]} == {
         "PLAN-EXP0001-SMOKE",
         "PLAN-EXP0001-PILOT-V6",
@@ -246,7 +257,7 @@ def test_historical_status_surfaces_preserve_without_reopening_bounded_v3() -> N
     assert "Prospective bounded plan:" not in readiness
     assert "Exact next run plan" not in readiness
     assert "T07 has not run" not in readiness
-    assert "No exact SiRA successor profile is currently eligible or authorized" in readiness
+    assert "V7 is the sole registered successor" in readiness
 
     governance = (ROOT / "docs/harness/T07_BOUNDED_SMOKE_GOVERNANCE.md").read_text(encoding="utf-8")
     matches = re.findall(
@@ -274,7 +285,7 @@ def test_historical_status_surfaces_preserve_without_reopening_bounded_v3() -> N
         assert "D-034" in rows[-1] and "PLAN-T07-BOUNDED-SIRA-SMOKE-V3" in rows[-1]
 
 
-def test_current_public_surfaces_define_no_replayable_successor_profile() -> None:
+def test_current_public_surfaces_define_only_the_fresh_v7_successor() -> None:
     surfaces = (
         ROOT / "docs/readiness/PHASE_1_SMOKE_READINESS.md",
         ROOT / "notebook/weekly/2026-08-08-phase-1.qmd",
@@ -284,9 +295,8 @@ def test_current_public_surfaces_define_no_replayable_successor_profile() -> Non
         assert "Exact next run plan" not in text
         assert "only next eligible profile" not in text
         assert "T07 has not run" not in text
-        assert "No exact successor execution profile is currently eligible" in text or (
-            "No exact SiRA successor profile is currently eligible" in text
-        )
+        assert "V7" in text
+        assert "sole registered successor" in text
 
 
 def test_terminal_control_supersedes_frozen_profile_and_execution_contract_claims() -> None:

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import resource
 import stat
 import time
 from collections.abc import Sequence
@@ -25,6 +26,17 @@ ATTEMPT_ROOT = Path("/giclab/attempt")
 READY_PATH = ATTEMPT_ROOT / ".giclab-entrypoint-ready"
 RELEASE_PATH = ATTEMPT_ROOT / ".giclab-release"
 RELEASE_WAIT_SECONDS = 30
+CORE_LIMIT_CONTRACT = "process-tree-rlimit-core-zero-v1"
+
+
+def enforce_zero_core_limit() -> tuple[int, int]:
+    """Disable core dumps before any credential or child-process work."""
+
+    resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+    limits = resource.getrlimit(resource.RLIMIT_CORE)
+    if limits != (0, 0):
+        raise RuntimeError("the process-tree core limit is not exactly zero")
+    return limits
 
 
 def _write_all(descriptor: int, encoded: bytes) -> None:
@@ -39,6 +51,11 @@ def _write_all(descriptor: int, encoded: bytes) -> None:
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument("--supervised-release", action="store_true")
+    parser.add_argument(
+        "--core-preflight",
+        action="store_true",
+        help="run one credential-free child solely to prove the inherited core limit",
+    )
     parser.add_argument(
         "--runtime-assignment",
         choices=tuple(sorted(ALLOWED_CHILD_ASSIGNMENTS)),
@@ -108,6 +125,7 @@ def wait_for_supervisor_release() -> None:
 
 
 def run(argv: Sequence[str] | None = None) -> int:
+    enforce_zero_core_limit()
     args = _parser().parse_args(argv)
     command = tuple(args.command)
     if command and command[0] == "--":
@@ -116,6 +134,13 @@ def run(argv: Sequence[str] | None = None) -> int:
         raise RuntimeError("a SiRA child argument array is required")
     if args.supervised_release:
         wait_for_supervisor_release()
+    if args.core_preflight:
+        environment = dict(os.environ)
+        environment.pop("LAMBDA_API_KEY", None)
+        environment.pop(SOURCE_ASSIGNMENT_NAME, None)
+        environment.pop(SIRA_CHANNEL_NAME, None)
+        os.execvpe(command[0], command, environment)
+        raise AssertionError("exec returned unexpectedly")
     channel_value = read_secret_file()
     environment = child_environment(
         channel_value,

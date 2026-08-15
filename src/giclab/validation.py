@@ -547,7 +547,9 @@ def validate_experiment_run_profiles(root: Path = ROOT) -> list[str]:
                 continue
             profile_path = resolve_repo_path(root, profile_relative)
             declared_profile_paths.add(profile_path)
-            if profile_path.parent.resolve() != profiles_root:
+            profile_parent = profile_path.parent.resolve()
+            historical_profile = profile_parent == (profiles_root / "proposals").resolve()
+            if profile_parent != profiles_root and not historical_profile:
                 errors.append(f"{experiment_id}: run profile must be inside its run-plans root")
                 continue
             if not profile_path.is_file():
@@ -571,7 +573,7 @@ def validate_experiment_run_profiles(root: Path = ROOT) -> list[str]:
             profile_name = profile.get("profile")
             if profile.get("experiment_id") != experiment_id:
                 errors.append(f"{label}: experiment ID mismatch")
-            if profile_name != profile_path.stem:
+            if not historical_profile and profile_name != profile_path.stem:
                 errors.append(f"{label}: profile/name mismatch")
             execution = profile.get("execution")
             if not isinstance(execution, dict) or execution.get("authorized") is not False:
@@ -961,7 +963,10 @@ def validate_experiment_run_profiles(root: Path = ROOT) -> list[str]:
                         ):
                             errors.append(f"{label}: pricing/model identity mismatch")
         actual_profile_paths = set(profiles_root.glob("*.yaml"))
-        if actual_profile_paths != declared_profile_paths:
+        declared_current_paths = {
+            path for path in declared_profile_paths if path.parent.resolve() == profiles_root
+        }
+        if actual_profile_paths != declared_current_paths:
             errors.append(f"{experiment_id}: registry/profile declaration mismatch")
         actual_conditions = set((profiles_root / "conditions").glob("*.yaml"))
         if actual_conditions != referenced_conditions:
@@ -1606,7 +1611,7 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
     plan_path = exp_root / "run-plans/pilot.yaml"
     if (
         command_document.get("schema_version") != "0.1.0"
-        or command_document.get("plan_id") != "PLAN-EXP0001-PILOT-V6"
+        or command_document.get("plan_id") != "PLAN-EXP0001-PILOT-V7"
         or command_document.get("execution_contract_sha256") != execution_sha256
         or command_document.get("plan_sha256") != hashlib.sha256(plan_path.read_bytes()).hexdigest()
     ):
@@ -1647,8 +1652,8 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
                 runtime_adaptation_path=("/opt/giclab-src/giclab/harness/sira_gate_a_runtime.py"),
                 runtime_adaptation_sha256=runtime_sha256,
                 pilot_library_sha256=library_sha256,
-                aggregate_ledger_path=("/opt/giclab-artifacts/pilot-v6/aggregate-budget.json"),
-                pilot_state_path="/opt/giclab-artifacts/pilot-v6/pilot-state.json",
+                aggregate_ledger_path=("/opt/giclab-artifacts/pilot-v7/aggregate-budget.json"),
+                pilot_state_path="/opt/giclab-artifacts/pilot-v7/pilot-state.json",
             )
             for attempt in typed_contract.attempts
         ]

@@ -16,7 +16,9 @@ entry and produced zero new attempts. T09 V6 repaired archive staging and campai
 clocks, fully qualified the retained image, and entered Task A reactive once. A core
 artifact exceeded the raw-output cap and prevented an immutable raw seal, evaluator,
 or score; the other three attempts did not run. No V6 pair or checkpoint exists.
-EXP-0001 therefore remains unevaluated.
+Fresh V7 is now the sole registered successor under a current-turn private execution
+control. It has not yet crossed preflight or empirical entry. EXP-0001 therefore
+remains unevaluated.
 
 ## Scientific question and scope
 
@@ -145,12 +147,14 @@ that a separately approved future study might consume.
 [`run-plans/smoke.yaml`](run-plans/smoke.yaml) is the historical one-step matched-pair
 control record. The starting effect-oriented pilot proposal is preserved at
 [`run-plans/proposals/PLAN-EXP0001-PILOT.json`](run-plans/proposals/PLAN-EXP0001-PILOT.json).
-[`run-plans/pilot.yaml`](run-plans/pilot.yaml) is the historical calibration-only
-`PLAN-EXP0001-PILOT-V6`; V2 through V5 remain preserved under
+[`run-plans/pilot.yaml`](run-plans/pilot.yaml) is the fresh calibration-only
+`PLAN-EXP0001-PILOT-V7`; the exact V6 profile and V2 through V5 remain preserved under
 `run-plans/proposals/`. Tracked authorization stays false and every condition plan
-requires a single-use private current-turn overlay. The terminal Retry 4 control
-supersedes the frozen profile's historical readiness: V6 is consumed and
-nonreplayable, and no registered successor exists.
+requires the current-turn single-use private execution control. The Retry 5 terminal
+overlay preserves the smoke and V6 as consumed/nonreplayable and makes V7 the sole
+registered successor. V7 may not enter empirically until the clean package, retained
+image, core-suppression, evaluator, browser, model-metadata, pair-diff, budget,
+privacy, and frozen-manifest gates pass.
 
 The pragmatic V3 repair makes the 14,400-second provider campaign effective with a
 900-second cleanup reserve and 13,500-second normal termination cutoff. It admits
@@ -217,6 +221,7 @@ exists. Both hosts are terminal/absent, zero T09 instances and restored security
 verified, and all V6 authority is exhausted. The original private archive remains
 byte-exact; sidecar manifest `1eedf1d9…` restores one omitted authority member and
 clock receipt `989d5625…` corrects the preflight/empirical projection without
-rewriting provider evidence. A future successor must first disable or strictly bound
-core dumps and prove a reconstructable privacy-safe raw failure seal, then use fresh
-identities, review, and current-turn authorization.
+rewriting provider evidence. V7 implements the required process-tree core suppression
+and privacy-safe essential failure seal under fresh identities, review, and
+current-turn authority; no V7 cloud or empirical action has occurred at this
+prelaunch checkpoint.

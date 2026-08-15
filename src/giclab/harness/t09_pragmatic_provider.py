@@ -1,4 +1,4 @@
-"""Exact provider lifecycle for the authorized T09 Retry 4 campaign.
+"""Exact provider lifecycle for the authorized T09 Retry 5 campaign.
 
 This module is inert on import.  It reuses the provider request pattern retained by
 the successful T07 pragmatic run, but makes its previously implicit lifecycle
@@ -41,10 +41,10 @@ from giclab.harness.lambda_l2m_observer import (
     observer_request,
 )
 
-PLAN_ID: Final = "PLAN-EXP0001-PILOT-V6"
-HOST_RUN_ID: Final = "RUN-T09-PILOT-HOST-0004"
+PLAN_ID: Final = "PLAN-EXP0001-PILOT-V7"
+HOST_RUN_ID: Final = "RUN-T09-PILOT-HOST-0005"
 AUTHORIZATION_SOURCE_SHA256: Final = (
-    "e3222d38c9b21091a51839122d42594d691577716bc87fd3e09296c6b766df51"
+    "97539fa4b65f627880b159e0f40c9a7efab26cd2a746c7c12ddbe15e44684346"
 )
 API_HOST: Final = "cloud.lambda.ai"
 API_PORT: Final = 443
@@ -52,13 +52,13 @@ INSTANCE_TYPE: Final = "gpu_1x_a10"
 REGION: Final = "us-east-1"
 IMAGE_ID: Final = "44fab622-b98a-49fe-ac6d-e4ce5531532f"
 SSH_KEY_NAME: Final = "fractal-lambda-codex"
-INSTANCE_NAME: Final = "giclab-t09-pilot-v6-0004"
+INSTANCE_NAME: Final = "giclab-t09-pilot-v7-0005"
 PRICE_CENTS_PER_HOUR: Final = 129
-PRIOR_T09_COST_USD: Final = 4.04142013524027
+PRIOR_T09_COST_USD: Final = 5.7424506112
 NEW_CAMPAIGN_LAMBDA_CAP_USD: Final = 8.0
 NEW_CAMPAIGN_OPENAI_CAP_USD: Final = 40.0
 NEW_CAMPAIGN_AGGREGATE_CAP_USD: Final = 48.0
-CUMULATIVE_T09_CAP_USD: Final = 55.0
+CUMULATIVE_T09_CAP_USD: Final = 60.0
 SLOT1_PACKAGE_COMMIT: Final = "3640f061ea6c0f0f3d24bf2a346d4beda1a400cf"
 SLOT1_PLAN_SHA256: Final = "e7e214500348c8b876beb034df7b592c84f5ab79788ab6f310ef187fd797613c"
 SLOT1_CLOSEOUT_RECEIPT_SHA256: Final = (
@@ -112,6 +112,11 @@ SLOT2_TRANSITION_ALLOWED_PATHS: Final = frozenset(
     }
 )
 RETRY4_SLOT1_PACKAGE_COMMIT: Final = "4e8b71771a5e7baf9b104b6f3b5466091e4596f2"
+RETRY4_PLAN_ID: Final = "PLAN-EXP0001-PILOT-V6"
+RETRY4_HOST_RUN_ID: Final = "RUN-T09-PILOT-HOST-0004"
+RETRY4_AUTHORIZATION_SOURCE_SHA256: Final = (
+    "e3222d38c9b21091a51839122d42594d691577716bc87fd3e09296c6b766df51"
+)
 RETRY4_SLOT1_PLAN_SHA256: Final = "d0294b3a1535c4fe4ddfcc856a6b923731a7fb0c7840dd161c5784db61f35d8c"
 RETRY4_SLOT1_EXECUTION_SHA256: Final = (
     "5502318816bd088add14adf6b32759c062141e490bca9ba743a60dc3cff46919"
@@ -181,7 +186,7 @@ RETRY4_SLOT2_TRANSITION_ALLOWED_PATHS: Final = frozenset(
     }
 )
 RETRY4_ACTIVE_SLOT2_ENTRY_PACKAGE_COMMIT: Final = "9275bed0cce8bff5e033b94c9fcc8767af629fcd"
-SOURCE_OBSERVER: Final = "t09-retry4-pragmatic-mutations-plus-l2m-read-only-observer-v1"
+SOURCE_OBSERVER: Final = "t09-retry5-pragmatic-mutations-plus-l2m-read-only-observer-v1"
 MAX_RESPONSE_BYTES: Final = 16_777_216
 MAX_REQUEST_BYTES: Final = 65_536
 MAX_ENTRY_POLLS: Final = 120
@@ -889,7 +894,7 @@ def validate_authorization_ledger(
     required = {
         "schema_version": "0.1.0",
         "authorization_source_sha256": AUTHORIZATION_SOURCE_SHA256,
-        "authorization_reference": "AUTH-T09-PRAGMATIC-RETRY4-2026-08-14",
+        "authorization_reference": "AUTH-T09-PRAGMATIC-RETRY5-2026-08-14",
         "authorized": True,
         "single_use": True,
         "clean_package_commit": package_commit,
@@ -901,8 +906,8 @@ def validate_authorization_ledger(
         "lambda_cost_cap_usd": 8.0,
         "openai_cost_cap_usd": 40.0,
         "aggregate_cost_cap_usd": 48.0,
-        "prior_t09_cost_usd": 4.04142013524027,
-        "cumulative_t09_cost_cap_usd": 55.0,
+        "prior_t09_cost_usd": 5.7424506112,
+        "cumulative_t09_cost_cap_usd": 60.0,
         "replacement_image_policy": "retained-exact-load-or-one-fallback-build-v1",
         "artifact_destination": ("/Volumes/Macintosh HD - Data/GIC-Lab/t09/sealed-artifacts"),
     }
@@ -2114,7 +2119,7 @@ def _closeout_projection(
         or lambda_list_cost_usd > NEW_CAMPAIGN_LAMBDA_CAP_USD
         or PRIOR_T09_COST_USD + lambda_list_cost_usd > CUMULATIVE_T09_CAP_USD
     ):
-        raise T09ProviderError("Retry 4 Lambda duration or cumulative cost exceeded its cap")
+        raise T09ProviderError("Retry 5 Lambda duration or cumulative cost exceeded its cap")
     preflight_failure_timing: dict[str, object] | None = None
     if empirical_started is None and (root / "preflight-failure-timing.json").is_file():
         preflight_failure_timing = _load_json(
@@ -2670,7 +2675,7 @@ def _slot1_failure_archive_projection(path: Path) -> dict[str, object]:
     provider_entry = documents["provider-entry.json"]
     usage = _mapping(aggregate.get("usage"), label="slot-1 aggregate usage")
     if (
-        state.get("plan_id") != PLAN_ID
+        state.get("plan_id") != RETRY4_PLAN_ID
         or state.get("empirical_attempts_entered") != []
         or state.get("raw_attempts_complete") != []
         or state.get("attempts_completed") != []
@@ -2848,7 +2853,7 @@ def _retry4_slot1_failure_archive_projection(path: Path) -> dict[str, object]:
     ]
     pair_diffs = _list(frozen.get("pair_diffs"), label="Retry 4 frozen pair diffs")
     if (
-        state.get("plan_id") != PLAN_ID
+        state.get("plan_id") != RETRY4_PLAN_ID
         or state.get("execution_contract_sha256") != RETRY4_SLOT1_EXECUTION_SHA256
         or state.get("launch_slot") != 1
         or state.get("launch_count") != 1
@@ -2861,19 +2866,19 @@ def _retry4_slot1_failure_archive_projection(path: Path) -> dict[str, object]:
         or state.get("first_pair_decision") is not None
         or state.get("actual_credential_exposure_detected") is not False
         or state.get("credential_safety_stop_detected") is not False
-        or aggregate.get("plan_id") != PLAN_ID
+        or aggregate.get("plan_id") != RETRY4_PLAN_ID
         or aggregate.get("execution_contract_sha256") != RETRY4_SLOT1_EXECUTION_SHA256
         or aggregate.get("unreconciled_provider_attempts") != 0
         or any(value not in (0, 0.0) for value in usage.values())
-        or frozen.get("plan_id") != PLAN_ID
-        or frozen.get("host_run_id") != HOST_RUN_ID
+        or frozen.get("plan_id") != RETRY4_PLAN_ID
+        or frozen.get("host_run_id") != RETRY4_HOST_RUN_ID
         or frozen.get("clean_package_commit") != RETRY4_SLOT1_PACKAGE_COMMIT
         or frozen.get("plan_sha256") != RETRY4_SLOT1_PLAN_SHA256
         or frozen.get("execution_contract_sha256") != RETRY4_SLOT1_EXECUTION_SHA256
         or frozen.get("runtime_contract_sha256") != RETRY4_SLOT1_RUNTIME_SHA256
         or frozen.get("command_manifests_sha256") != RETRY4_SLOT1_COMMANDS_SHA256
         or frozen.get("provider_entry_receipt_sha256") != RETRY4_SLOT1_ENTRY_RECEIPT_SHA256
-        or frozen.get("source_contract_sha256") != AUTHORIZATION_SOURCE_SHA256
+        or frozen.get("source_contract_sha256") != RETRY4_AUTHORIZATION_SOURCE_SHA256
         or frozen.get("launch_slot") != 1
         or frozen.get("launch_count") != 1
         or frozen.get("qualification_id") != "QUAL-T09-PILOT-V6-IMAGE-0001"
@@ -2924,8 +2929,8 @@ def _retry4_slot1_failure_archive_projection(path: Path) -> dict[str, object]:
         or metadata_scan.get("exact_secret_scan_passed") is not True
         or metadata_scan.get("remaining_exact_secret_matches") != []
         or metadata_scan.get("secret_bearing_artifacts_removed") != []
-        or failure.get("plan_id") != PLAN_ID
-        or failure.get("host_run_id") != HOST_RUN_ID
+        or failure.get("plan_id") != RETRY4_PLAN_ID
+        or failure.get("host_run_id") != RETRY4_HOST_RUN_ID
         or failure.get("clean_package_commit") != RETRY4_SLOT1_PACKAGE_COMMIT
         or failure.get("execution_contract_sha256") != RETRY4_SLOT1_EXECUTION_SHA256
         or failure.get("run_id") != "RUN-T09-TASK-A-REACTIVE-0004"
@@ -2974,7 +2979,12 @@ def _retry4_slot1_failure_archive_projection(path: Path) -> dict[str, object]:
     }
 
 
-def _slot2_authority_tree_manifest(root: Path) -> dict[str, object]:
+def _slot2_authority_tree_manifest(
+    root: Path,
+    *,
+    plan_id: str = PLAN_ID,
+    host_run_id: str = HOST_RUN_ID,
+) -> dict[str, object]:
     files: list[dict[str, object]] = []
     total = 0
     for path in sorted(root.rglob("*")):
@@ -2997,8 +3007,8 @@ def _slot2_authority_tree_manifest(root: Path) -> dict[str, object]:
         raise T09ProviderError("slot-2 authority source is empty")
     return {
         "schema_version": "0.1.0",
-        "plan_id": PLAN_ID,
-        "host_run_id": HOST_RUN_ID,
+        "plan_id": plan_id,
+        "host_run_id": host_run_id,
         "files": files,
         "file_count": len(files),
         "total_bytes": total,
@@ -3193,8 +3203,8 @@ def _retry4_slot2_eligibility_projection(
     return {
         "schema_version": "0.3.0",
         "eligibility_kind": RETRY4_SLOT2_ELIGIBILITY_KIND,
-        "plan_id": PLAN_ID,
-        "host_run_id": HOST_RUN_ID,
+        "plan_id": RETRY4_PLAN_ID,
+        "host_run_id": RETRY4_HOST_RUN_ID,
         "closed_launch_slot": 1,
         "next_launch_slot": 2,
         "launch_count_before_next_send": 1,
@@ -3271,7 +3281,11 @@ def derive_retry4_preentry_replacement_eligibility(
         image_archive=slot1_image_archive.resolve(strict=True),
     )
     write_exclusive(source_root / "transition.json", projection["package_transition"])
-    manifest = _slot2_authority_tree_manifest(source_root)
+    manifest = _slot2_authority_tree_manifest(
+        source_root,
+        plan_id=RETRY4_PLAN_ID,
+        host_run_id=RETRY4_HOST_RUN_ID,
+    )
     write_exclusive(source_root / "source-manifest.json", manifest)
     eligibility = {
         **projection,
@@ -3295,7 +3309,11 @@ def validate_retry4_preentry_replacement_eligibility(
     source_root = prior / "slot2-eligibility-source"
     manifest_path = source_root / "source-manifest.json"
     observed_manifest = _load_json(manifest_path, maximum_bytes=1_048_576)
-    expected_manifest = _slot2_authority_tree_manifest(source_root)
+    expected_manifest = _slot2_authority_tree_manifest(
+        source_root,
+        plan_id=RETRY4_PLAN_ID,
+        host_run_id=RETRY4_HOST_RUN_ID,
+    )
     if observed_manifest != expected_manifest:
         raise T09ProviderError("Retry 4 slot-2 authority source manifest drifted")
     expected = _retry4_slot2_eligibility_projection(
@@ -3972,7 +3990,7 @@ def launch_campaign(
 ) -> Path:
     repository = repository.resolve(strict=True)
     if launch_slot not in (1, 2):
-        raise T09ProviderError("launch slot is outside the authorized Retry 4 bound")
+        raise T09ProviderError("launch slot is outside the authorized Retry 5 bound")
     replacement_eligibility: dict[str, object] | None = None
     if launch_slot == 1:
         if prior_private_root is not None or slot1_image_archive is not None:
@@ -4265,7 +4283,7 @@ def launch_campaign(
                     "host_run_id": HOST_RUN_ID,
                     "package_commit": package_commit,
                     "launch_slot": launch_slot,
-                    # Retry 4 gives every launch its own infrastructure-preflight
+                    # Retry 5 gives every launch its own infrastructure-preflight
                     # origin.  Prior active time is carried separately below and
                     # offline gaps never consume a billable or empirical clock.
                     "campaign_started_at_epoch": owned_started,

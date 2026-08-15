@@ -13,6 +13,7 @@ import importlib.util
 import json
 import os
 import platform
+import resource
 import sys
 import threading
 import time
@@ -426,6 +427,9 @@ def _install_locked_llm_factory(
 
 
 def run(argv: Sequence[str] | None = None) -> int:
+    core_limits = resource.getrlimit(resource.RLIMIT_CORE)
+    if core_limits != (0, 0):
+        raise GateAContractError("condition process-tree core limit is not exactly zero")
     args = _parser().parse_args(argv)
     if not args.upstream_argv or args.upstream_argv[0] != "--":
         raise GateAContractError("upstream argv must follow a -- boundary")
@@ -536,7 +540,7 @@ def run(argv: Sequence[str] | None = None) -> int:
         pilot_control_root = pilot_state_path.parent
         pilot_root = pilot_control_root.parent
         if (
-            pilot_control_root.name != "pilot-v6"
+            pilot_control_root.name != "pilot-v7"
             or aggregate_ledger_path.parent != pilot_control_root
             or pilot_root not in attempt_root.parents
         ):
@@ -603,6 +607,8 @@ def run(argv: Sequence[str] | None = None) -> int:
                     pilot_contract.sha256 if pilot_contract is not None else None
                 ),
                 "pilot_attempt_id": args.gate_pilot_attempt_id,
+                "core_soft_limit": core_limits[0],
+                "core_hard_limit": core_limits[1],
                 "gpu_accounting": {
                     "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES"),
                     "gpu_use_claimed": False,

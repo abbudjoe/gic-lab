@@ -50,7 +50,7 @@ no mutation authority; one gate's authorization never carries into another.
 | P1-DOD-01 | Phase 0.75 is successful/completed; this is the one authoritative active plan; project execution/compute permissions remain false; only the disabled smoke profile is eligible for a later exact authorization. | Plan lifecycle/state/profile/readiness validation and public render. | met |
 | P1-DOD-02 | T07 executes at most the one authorized SiRA smoke pair with complete raw, normalized, regulation-decision, budget, scoring, and cleanup evidence and no interpretation. | Immutable run/authorization records, artifacts/hashes, accounting, cleanup proof, and validation. | met; T08 documents nonblocking fields that T07 did not retain directly |
 | P1-DOD-03 | T08 independently reproduces the smoke summary, separates infrastructure/protocol/upstream/future-track gaps, and leaves any pilot unauthorized. | Raw-to-summary checks, infrastructure-only trace-sufficiency report, review, and gate. | met |
-| P1-DOD-04 | T09 first locks an executable calibration-only SiRA pilot and later executes it only under a fresh exact authorization, without outcome-adaptive changes, while reconciling every entered attempt. | Frozen task/order/evaluator/runtime records, enforced budgets, immutable authorization packet, and later complete attempt dispositions. | incomplete and blocked: V4 reconciled one valid scored Task A reactive attempt but no pair; V6 later entered Task A reactive once, but an oversized core exceeded the raw-output cap and prevented a raw seal/evaluator/score; no V6 pair, checkpoint, comparison, or scientific result exists |
+| P1-DOD-04 | T09 first locks an executable calibration-only SiRA pilot and later executes it only under a fresh exact authorization, without outcome-adaptive changes, while reconciling every entered attempt. | Frozen task/order/evaluator/runtime records, enforced budgets, immutable authorization packet, and later complete attempt dispositions. | in progress: V4 reconciled one valid scored Task A reactive attempt but no pair; V6 later entered one infrastructure-invalid unscored attempt; fresh V7 is implementing core suppression and reconstructable cap-failure sealing under new identities and current-turn authority before execution |
 | P1-DOD-05 | T10 produces a reproducible exploratory EXP-0001 analysis with uncertainty, exact reproduction level, cost/deviation reporting, and no internalization or mechanism-attribution overclaim. | Validated result summary, registry/notebook/ledger updates, review, and gate. | not-started |
 | P1-DOD-06 | T11 produces a read-only, launch-ready SR²AM-v0.1-8B Lambda contract with current price, hard termination, source-grounded trace requirements, failure tests, and no mutation. | Audited runbook/contracts, dry-run/failure tests, authorization sentence, and gate. | not-started |
 | P1-DOD-07 | T12 launches only the exactly authorized SR²AM smoke, retains and transfers required evidence, reconciles cost, and verifies provider termination. | Immutable cloud attempt, raw artifacts/hashes, compute ledger, monitoring, and terminal-state proof. | not-started |
@@ -67,7 +67,7 @@ no mutation authority; one gate's authorization never carries into another.
 |---|---|---|---|
 | T07 | Execute one authorized contained SiRA smoke pair; capture regulation-decision evidence without interpretation. | P1-DOD-02, P1-DOD-11 through P1-DOD-13 | complete: Retry 2 matched pair executed and cleanup verified; execution authority exhausted; no pilot authority |
 | T08 | Analyze smoke infrastructure evidence and prepare an unauthorized pilot package. | P1-DOD-03, P1-DOD-11 through P1-DOD-13 | complete: evidence validated; pilot planning eligible but execution unauthorized |
-| T09 | Lock and execute the two-task pragmatic calibration pilot under the fresh current-turn authorization. | P1-DOD-04, P1-DOD-11 through P1-DOD-13 | blocked/closed: V6 qualified the retained runtime and entered Task A reactive once, but its core-dump/output-cap failure prevented a raw seal, evaluator, pair, or checkpoint; all two-launch/campaign authority is exhausted |
+| T09 | Lock and execute the two-task pragmatic calibration pilot under the fresh current-turn authorization. | P1-DOD-04, P1-DOD-11 through P1-DOD-13 | in progress: V6 is closed after its core-dump/output-cap failure; V7 is the sole fresh successor and is at the clean-package/core-suppression/dynamic-preflight boundary under separate current-turn authority |
 | T10 | Analyze and publish the exploratory SiRA pilot. | P1-DOD-05, P1-DOD-11 through P1-DOD-13 | blocked: T09 produced no complete pilot pair or checkpoint; the lone descriptive score supports no comparative analysis |
 | T11 | Build and validate the read-only SR²AM Lambda preflight. | P1-DOD-06, P1-DOD-11 through P1-DOD-13 | blocked until T10 succeeds |
 | T12 | Launch and monitor the separately authorized SR²AM Lambda smoke. | P1-DOD-07, P1-DOD-11 through P1-DOD-13 | blocked until T11 and authorization |
@@ -278,7 +278,7 @@ historical package evidence, so their embedded pre-run readiness strings are not
 current authority surface. The registry and project state instead bind
 `T09_PRAGMATIC_RETRY3_TERMINAL_CONTROL.json`; runtime policy validates its terminal
 disposition and frozen-file hashes and rejects both consumed plan IDs as
-nonreplayable. No registered successor profile exists.
+nonreplayable. That historical state is superseded by the fresh V7 registration below.
 
 ### T09 pragmatic Retry 4 archive/clock execution — 2026-08-14
 
@@ -313,6 +313,28 @@ rehashes at `18f6c7d6…`, overlay manifest `1eedf1d9…` reloads frozen runtime
 `c633c835…`, and clock receipt `989d5625…` reconciles active/preflight/empirical time.
 All original archive and provider-receipt bytes remain unchanged; neither repair
 changes the scientific record.
+
+### T09 pragmatic Retry 5 core-suppression execution — 2026-08-14
+
+Assembly status: **prelaunch implementation and review in progress; no V7 external or
+empirical action yet**.
+
+`PLAN-EXP0001-PILOT-V7` preserves every scientific field and excludes the consumed V6
+attempt under fresh host, qualification, condition, evaluator, pair, stage, archive,
+and provider identities. The narrow repair sets Docker and process-tree core limits to
+zero, proves inherited zero limits plus synthetic abort and browser teardown in the
+exact image, classifies cores by bounded filename/ELF evidence, excludes and destroys
+them, and permanently stops continuation if one appears. A separate 16 MiB allowlisted
+essential-failure seal makes an oversized or infrastructure-invalid consumed attempt
+reconstructable without assigning a score or retry authority. The 64 MiB attempt cap
+is unchanged and retains 16 MiB beyond a conservative 48 MiB full-evidence projection.
+
+The Retry 5 terminal overlay binds the smoke and archived V6 profile as consumed and
+nonreplayable and names only V7 as fresh successor. Reusable tracked permissions remain
+false; the user's private current-turn authorization is single-use and cannot cross
+mutation or empirical entry until a clean reviewed package and all source-bound
+runtime, core, browser, evaluator, model, pair, budget, privacy, and frozen-manifest
+gates pass.
 
 ### Pragmatic execution reset — 2026-08-12
 
@@ -625,11 +647,13 @@ scientific execution occurred.
 
 ## Authorization and mutation boundary
 
-Current project state keeps paid compute, prototype execution, benchmark execution,
-training, and cloud mutation false. T07 and every T09 V3–V6 authority are exhausted;
-no registered T09 successor exists. T12 and T14 separately require their exact cloud mutation, hardware,
-data, cost/time, artifact-transfer, and termination authority. Read-only inspection or
-preflight never supplies mutation authority.
+Current project state keeps reusable paid-compute, prototype, benchmark, training, and
+cloud permissions false. T07 and every T09 V3–V6 authority are exhausted. V7 is the
+sole registered T09 successor and has a separate current-turn private authorization
+that remains gated on its exact clean package and dynamic preflight. T12 and T14
+separately require their exact cloud mutation, hardware, data, cost/time,
+artifact-transfer, and termination authority. Read-only inspection or preflight never
+supplies mutation authority.
 
 The Gate L1/L1A account inspections and Gate L2M firewall capture are consumed,
 nonreplayable historical evidence. The high-assurance Gate L2M/L3/L4 path is frozen

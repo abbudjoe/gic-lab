@@ -6,6 +6,7 @@ import hashlib
 import importlib.metadata
 import json
 import os
+import resource
 import time
 from pathlib import Path
 
@@ -14,6 +15,14 @@ from playwright.sync_api import sync_playwright  # type: ignore[import-not-found
 ATTEMPT_ROOT = Path("/giclab/attempt")
 STATIC_PAGE = Path("/opt/giclab/fixtures/static.html")
 PACKAGE_MANIFEST = Path("/opt/giclab/installed-packages.txt")
+
+
+def _enforce_zero_core_limit() -> tuple[int, int]:
+    resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+    limits = resource.getrlimit(resource.RLIMIT_CORE)
+    if limits != (0, 0):
+        raise RuntimeError("browser process-tree core limit is not exactly zero")
+    return limits
 
 
 def _sha256(path: Path) -> str:
@@ -40,6 +49,7 @@ def _write_exclusive(path: Path, encoded: bytes) -> None:
 
 
 def main() -> None:
+    core_limits = _enforce_zero_core_limit()
     if "SIRA_API_KEY" in os.environ or "OPENAI_API_KEY" in os.environ:
         raise RuntimeError("browser preflight inherited a forbidden model credential")
     if not ATTEMPT_ROOT.is_dir() or ATTEMPT_ROOT.is_symlink():
@@ -74,6 +84,8 @@ def main() -> None:
             "chromium_browser_version": browser_version,
             "chromium_executable_sha256": _sha256(executable),
             "installed_package_manifest_sha256": hashlib.sha256(package_bytes).hexdigest(),
+            "core_soft_limit": core_limits[0],
+            "core_hard_limit": core_limits[1],
         }
         _write_exclusive(
             ATTEMPT_ROOT / "browser-preflight.json",

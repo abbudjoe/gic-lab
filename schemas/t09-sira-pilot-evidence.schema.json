@@ -23,18 +23,18 @@
   ],
   "properties": {
     "schema_version": {"const": "0.3.0"},
-    "plan_id": {"const": "PLAN-EXP0001-PILOT-V6"},
+    "plan_id": {"const": "PLAN-EXP0001-PILOT-V7"},
     "execution_contract_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     "identity": {
       "type": "object",
       "additionalProperties": false,
       "required": ["run_id", "task_id", "task_text_sha256", "reference_sha256", "pair_id", "order_index", "condition", "attempt"],
       "properties": {
-        "run_id": {"type": "string", "pattern": "^RUN-T09-TASK-[AB]-(?:REACTIVE|SIMULATIVE)-0004$"},
+        "run_id": {"type": "string", "pattern": "^RUN-T09-TASK-[AB]-(?:REACTIVE|SIMULATIVE)-0005$"},
         "task_id": {"enum": ["7dcbbbdc7f1120cd", "2120afba8009bad3"]},
         "task_text_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
         "reference_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
-        "pair_id": {"enum": ["PAIR-EXP0001-PILOT-V6-TASK-A", "PAIR-EXP0001-PILOT-V6-TASK-B"]},
+        "pair_id": {"enum": ["PAIR-EXP0001-PILOT-V7-TASK-A", "PAIR-EXP0001-PILOT-V7-TASK-B"]},
         "order_index": {"enum": [1, 2]},
         "condition": {"enum": ["SIRA-REACTIVE", "SIRA-SIMULATIVE"]},
         "attempt": {"const": 1}
@@ -58,7 +58,7 @@
         "python_interpreter_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
         "container_image_digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
         "frozen_run_manifest_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
-        "qualification_id": {"const": "QUAL-T09-PILOT-V6-IMAGE-0001"},
+        "qualification_id": {"const": "QUAL-T09-PILOT-V7-IMAGE-0001"},
         "build_context_manifest_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
         "installed_package_manifest_sha256": {"const": "4ff2603fa5e0f7033ba773decdcb86abf648dcce22e469d26bc48214e390e104"},
         "chromium_executable_sha256": {"const": "0498f208c25339f386413ada7b3c35293b0b6250e67d85446ba9541d7fd636f7"},

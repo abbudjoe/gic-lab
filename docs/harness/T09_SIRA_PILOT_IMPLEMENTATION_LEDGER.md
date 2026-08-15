@@ -1,5 +1,25 @@
 # T09 SiRA Calibration Pilot Lock — Assembly Ledger
 
+## V7 pragmatic Retry 5 core-suppression successor
+
+V7 assembly status: **in progress; no V7 cloud or model action yet**.
+
+Current successor plan: `PLAN-EXP0001-PILOT-V7`.
+
+Retry 5 preserves the consumed V6 package and one infrastructure-invalid,
+unscored, unpaired Task A reactive attempt. It makes only two pre-empirical
+infrastructure repairs: process-tree core suppression and an independently capped,
+privacy-safe essential failure seal. The 67,108,864-byte attempt cap is unchanged:
+the V6 attempt contained 2,076,704 non-core bytes and a prohibited 234,479,616-byte
+core, leaving more than 32 times the observed non-core headroom.
+
+The exact current-turn authorization is recorded separately from the reusable public
+plan. Public plan and condition records remain `authorized: false`; the terminal
+execution-control overlay retains V6 and the smoke as consumed/nonreplayable and
+names V7 as the sole registered fresh successor. Definition-of-done status and
+execution evidence are maintained in
+`docs/harness/T09_PRAGMATIC_RETRY5_EXECUTION_PLAN.md`.
+
 ## V6 pragmatic Retry 4 archive/clock successor
 
 V6 assembly status: **complete at `t09-pilot-blocked-material-risk`; one consumed
