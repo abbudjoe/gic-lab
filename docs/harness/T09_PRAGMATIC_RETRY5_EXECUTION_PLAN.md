@@ -64,15 +64,15 @@ changes, training, a larger pilot, comparative claims, and an EXP-0001 outcome.
 | R5-06 | Treat any core as prohibited transient security material: stop, record safe metadata, exclude, destroy, and gate continuation. | Core incident/cleanup receipt, archive exclusion, no scientific-raw classification. | partial: source and focused state/archive/cleanup regressions now remove every owned alias, report verified versus unverifiable destruction truthfully, require rotation on unverifiable destruction, reject malformed cleanup evidence, and close slot-2 admission; live receipts remain dynamic |
 | R5-07 | Seal a reconstructable essential failure bundle after an output-cap/infrastructure stop. | Allowlisted bundle, exclusion manifest, schemas, secret/privacy scans, source-grounded status, independent archive. | partial: both empirical and pre-empirical consumed-failure fixtures pass seal, export, independent verify, off-host restore, and reconstructable-disposition checks; neither is evaluator eligible and no V7 live attempt has exercised the path |
 | R5-08 | Retain a finite, equal evidence cap justified by expected scientific evidence rather than core size. | Retry4 non-core arithmetic plus projected screenshot/log/receipt/evaluator envelope. | met: 2,076,704 observed non-core bytes; 50,331,648-byte conservative full-attempt projection; 16,777,216-byte headroom within the unchanged 67,108,864-byte cap |
-| R5-09 | Reuse and qualify the retained 1,207,128,576-byte image archive at SHA-256 `623e717c…`; rebuild only if functionally necessary. | Source-bound archive verification, exact image ID, functional receipts, build/import count. | not-started |
-| R5-10 | Preserve the repaired preflight, empirical, cleanup, termination, launch, and cumulative-active clock contract. | Typed contracts, boundary tests, source-bound live receipts. | partial: typed V7 limits and source checks are implemented; attempt export uses the empirical campaign origin rather than the older provider/preflight origin, and a three-clock regression passes; live provider receipts remain dynamic |
+| R5-09 | Reuse and qualify the retained 1,207,128,576-byte image archive at SHA-256 `623e717c…`; rebuild only if functionally necessary. | Source-bound archive verification, exact image ID, functional receipts, build/import count. | partial: the exact archive size/SHA and expected image ID were reverified locally and on launch slot 1; slot 1 stopped before image import, so exact slot-2 import and qualification remain dynamic |
+| R5-10 | Preserve the repaired preflight, empirical, cleanup, termination, launch, and cumulative-active clock contract. | Typed contracts, boundary tests, source-bound live receipts. | partial: typed V7 limits and source checks are implemented; launch slot 1 closed pre-empirically after 1,431.636539 active seconds at USD 0.5130030931, attempt export uses the empirical campaign origin, and slot-2 cumulative headroom remains source-bound; empirical receipts remain dynamic |
 | R5-11 | Mint fresh V7 plan, host, qualification, attempt, evaluator, pair, stage, archive, and provider identities. | Identity registry/tests and no prior reuse. | met: V7/0005 identities are registered and V6 reuse is rejected |
-| R5-12 | Freeze a clean reviewed V7 package, one image, four commands/configs, two valid pair diffs, and one immutable run manifest before empirical entry. | Commit/hash closure, focused review PASS, dynamic qualification and freeze receipts. | partial: independently reviewed source commit `3e1b33f47ab956dd009dd377cbda6e8350fba9d6` received PASS and the static V7 runtime, condition, execution, command, pair-diff, and registry bindings are closed; dynamic accepted-image manifest remains pre-entry |
+| R5-12 | Freeze a clean reviewed V7 package, one image, four commands/configs, two valid pair diffs, and one immutable run manifest before empirical entry. | Commit/hash closure, focused review PASS, dynamic qualification and freeze receipts. | partial: independently reviewed repair ancestor `df95199bfa897db78479828ae8d07f63b93afa09` received PASS and the static V7 runtime, condition, execution, command, and pair-diff bindings are regenerated; final package review and the dynamic accepted-image manifest remain pre-entry |
 | R5-13 | Execute the four fresh attempts in the locked order with zero retry and raw-or-essential evidence export after every consumed attempt. | Per-attempt entry, terminal, usage, seal, export acknowledgement, cleanup, evaluator, and score evidence. | not-started |
 | R5-14 | Apply the predeclared first-pair continuation rule before Task B. | Append-only checkpoint binding both Task A attempts, uniform finalizer, pair validity, safety, cost, and time headroom. | not-started |
 | R5-15 | Keep credentials structurally outside evidence and destroy temporary material; any actual exposure stops continuation. | Exact-secret scans, structural privacy receipts, cleanup, no core transfer. | partial: structural/exact-value controls and canary regressions pass; live cleanup receipts remain dynamic |
 | R5-16 | Enforce calls, tokens, actions, attempts, zero retries, OpenAI/Lambda/new/cumulative cost, wall, disk, and output limits at runtime. | Equality/overflow regressions plus live budget ledgers and provider accounting. | partial: runtime caps and static arithmetic are bound; stdout and stderr each use a declared 67,108,864-byte limit whose saturation is an explicit consumed infrastructure stop, and non-empirical cap consumption blocks replay before Docker; live ledgers/accounting remain dynamic |
-| R5-17 | Verify durable evidence, then remove containers/browser/core/secrets, terminate the exact instance, prove terminal/absent and zero T09 instances, and restore firewall state. | Local-volume verification, provider closeout bundle, security restoration, cloud-run ledger. | not-started |
+| R5-17 | Verify durable evidence, then remove containers/browser/core/secrets, terminate the exact instance, prove terminal/absent and zero T09 instances, and restore firewall state. | Local-volume verification, provider closeout bundle, security restoration, cloud-run ledger. | partial: launch slot 1 evidence was copied and verified off-host, its isolated secret was destroyed, the exact instance was terminated, and provider closeout proves zero T09 instances; slot 2/campaign cleanup remains dynamic |
 | R5-18 | Reconstruct results, run broader gates, obtain independent evidence review, and converge public/control surfaces without comparative inference. | Final disposition/control, repository ledger/docs/notebook, validation/test/lint/type/site results, 18-item handoff. | partial: prelaunch registry, decision, readiness, plan, ledger, experiment, and notebook surfaces identify V7; terminal evidence and final gates await execution |
 
 ## Assembly evidence log
@@ -107,11 +107,23 @@ changes, training, a larger pilot, comparative claims, and an EXP-0001 outcome.
   contract, generated command manifests and pair diffs, terminal successor, and
   registry/project-state authority. Repository validation and 172 focused
   Retry5/pilot/protocol/control tests pass before the clean package commit.
+- `2026-08-15`: launch slot 1 crossed no empirical, model-task, browser, image-import,
+  or image-build boundary. A preflight-only historical/current finalizer hash
+  conflation stopped before image materialization. The isolated secret was
+  destroyed, all safe source evidence was copied off-host, the exact instance was
+  terminated, and provider closeout proves zero T09 instances. Active duration was
+  1,431.636539 seconds and Lambda list cost was USD 0.5130030931.
+- `2026-08-15`: focused repair ancestor
+  `df95199bfa897db78479828ae8d07f63b93afa09` received independent PASS. V4
+  historical evidence now binds its original finalizer explicitly while the V7
+  finalizer remains independently qualified; closed slot-1 evidence normalizes
+  under collision-free `slot1-*` paths, and the exact `02524c7` to repaired-package
+  transition is ancestry/allowlist/runtime bound with unchanged science.
 
 ## Next permitted phase
 
-Complete the static V7 hash/package closure and focused independent review. No cloud
-mutation or model request is permitted until that review passes and the external
-volume, private cloud ledger, source-bound provider entry, and all dynamic pre-entry
-qualification requirements are ready. After launch, cleanup and exact provider
-termination take priority over analysis or documentation.
+Complete the repaired static V7 package closure and focused independent package
+review. The second and final cloud launch remains prohibited until that review,
+the external volume, private cloud ledger, source-bound slot-1 closeout, and all
+dynamic pre-entry qualification inputs are ready. After launch, cleanup and exact
+provider termination take priority over analysis or documentation.
