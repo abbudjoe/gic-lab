@@ -64,7 +64,7 @@
     "approved_offline_fixture_execution_required": true
   },
   "repository_instrumentation": {
-    "reviewed_implementation_ancestor": "c62f92a0c6b5e77c4288ca2d317b2ad3b6a582bf",
+    "reviewed_implementation_ancestor": "bb78c4d8afd006615e393c79fb6b62c2bb93f357",
     "scope": [
       "content-addressed-no-follow-private-regression-archive-staging",
       "raw-attempt-root-typed-binding-before-empirical-entry",
@@ -90,7 +90,7 @@
     "files": [
       {
         "path": "src/giclab/harness/sira_gate_a_runtime.py",
-        "sha256": "c08c1f199bab5a15478bcb132e76d0ac0ed1e4cc115f894c301a80c7936618a3"
+        "sha256": "bd7aee0637e80845ec87fb5370878221ddb401da28969cc86a2a21f196b0d49a"
       },
       {
         "path": "src/giclab/harness/sira_gate_a.py",
@@ -102,7 +102,7 @@
       },
       {
         "path": "src/giclab/harness/t09_sira_pilot.py",
-        "sha256": "c7e9fed7f648c4469d3f4a5892cdcf577532a0f63ff5e7fd66beb835bd9d0265"
+        "sha256": "7e1a401f3e6d08ce3a30f2a7faf97622e874bd34d6da286b6ab6e9abad26750c"
       },
       {
         "path": "src/giclab/harness/lambda_campaign_lifecycle.py",
@@ -114,15 +114,15 @@
       },
       {
         "path": "src/giclab/harness/t09_pragmatic_provider.py",
-        "sha256": "3ae88f848f9b20c8bb40f0bfa0eb0deb80e68e46fcc16845c511c461b05b5716"
+        "sha256": "c101644e818038990c26591e2af4d4a50a43dbb7aba7e4212e5069fa3a967c9c"
       },
       {
         "path": "containers/sira-smoke/pragmatic/t09_remote_runner.py",
-        "sha256": "8645dc236a206b70b90c650603ca135da3edd94006ed05a2734c2586e4e30385"
+        "sha256": "94145d33b0ada2a0c54dbdd5cdc78a01c298529a2d09ef8754940a48baed4429"
       },
       {
         "path": "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py",
-        "sha256": "32937302bddec910eb696c1c513b28e67b5a86b4e300171396504a926232bb5d"
+        "sha256": "4e0f989eb70ac9ddc8e219db3d14b9fd7d5910f22610b7f6b1295bebe8862209"
       },
       {
         "path": "containers/sira-smoke/pragmatic/t09_preflight.py",
@@ -130,7 +130,7 @@
       },
       {
         "path": "containers/sira-smoke/pragmatic/t09_freeze_commands.py",
-        "sha256": "21cb9cfd6a032325c31aa70bf1ea5bd39478ef657032687ee054971d6a6e70f3"
+        "sha256": "2c3e3afb863389c942f5dc07a34b074617455d9345edffa386834d38d35ffc60"
       },
       {
         "path": "containers/sira-smoke/pragmatic/t09_secret_preflight.py",
@@ -142,27 +142,27 @@
       },
       {
         "path": "containers/sira-smoke/pragmatic/t09_real_evidence_regression.py",
-        "sha256": "4a583a33cb209d55fc15ef7e44fabd2061252d2441e5a9b250bbdfd5d2d30a55"
+        "sha256": "b6a8b571f275894473b81dc547bbacf44db5257cda00d81c22469af2ab31ca50"
       },
       {
         "path": "containers/sira-smoke/pragmatic/t09_finalizer_projection.py",
-        "sha256": "bda16a10a291129d93f4ba7081fea3b4c0415182751ec15a94b3bf0b9cdd9040"
+        "sha256": "cbcb7e7f4771502c68ca51a1a3216e65e09401834da56c70628578d878688684"
       },
       {
         "path": "containers/sira-smoke/pragmatic/t09_local_finalizer_qualification.py",
-        "sha256": "2a70f1283b9e93f1afd9e7ecbf610acccd4721a716cab40fb84d16ecd1bb2bfc"
+        "sha256": "1f11ff829622f7649907ffce3a3846f0e667e686160faf5047183cf3392c8927"
       },
       {
         "path": "containers/sira-smoke/container_entrypoint.py",
-        "sha256": "pending-implementation-ancestor-binding"
+        "sha256": "d75998f1f40877e2c6cb828823a04000a16f797e0fd3c7b47c67259413f1bf75"
       },
       {
         "path": "containers/sira-smoke/bounded/browser_preflight.py",
-        "sha256": "pending-implementation-ancestor-binding"
+        "sha256": "dd13fc9491081a8e34379e70b87a680e93493796cbcfec186f9d30210f8a3546"
       },
       {
         "path": "containers/sira-smoke/pragmatic/t09_core_preflight.py",
-        "sha256": "pending-implementation-ancestor-binding"
+        "sha256": "4b0324c43628116d3d593eef9f3ef75d7ad55ca2f9e6471d08809585f9342981"
       }
     ]
   },
