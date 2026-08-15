@@ -13,6 +13,15 @@ privacy-safe essential failure seal. The 67,108,864-byte attempt cap is unchange
 the V6 attempt contained 2,076,704 non-core bytes and a prohibited 234,479,616-byte
 core, leaving more than 32 times the observed non-core headroom.
 
+The repaired V7 boundary uses full inode-alias census for named/ELF core artifacts,
+truthful verified-versus-unverifiable destruction receipts, and a permanent safety
+stop when a core is found. Each captured stdout/stderr stream has a declared
+67,108,864-byte ceiling; reaching it is an explicit infrastructure stop, never silent
+truncation. An output-cap/host-runner stop consumes the frozen condition identity even
+if it occurs before the first task model request or browser action, while retaining
+that empirical-boundary fact separately. Both boundary cases produce the same
+privacy-safe essential seal and independently verified off-host archive.
+
 The exact current-turn authorization is recorded separately from the reusable public
 plan. Public plan and condition records remain `authorized: false`; the terminal
 execution-control overlay retains V6 and the smoke as consumed/nonreplayable and

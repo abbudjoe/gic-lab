@@ -64,7 +64,7 @@
     },
     "runtime_limits": {
       "type": "object",
-      "required": ["expected_browser_actions_per_attempt", "max_browser_actions_per_attempt", "action_timeout_seconds", "max_model_calls_per_attempt", "max_model_tokens_per_attempt", "max_openai_cost_usd_per_attempt", "max_condition_wall_seconds", "max_pair_wall_seconds", "max_total_wall_seconds", "max_output_bytes_per_attempt", "max_disk_bytes", "max_lambda_duration_seconds", "max_lambda_cost_usd", "max_attempts", "max_retries_after_empirical_entry"],
+      "required": ["expected_browser_actions_per_attempt", "max_browser_actions_per_attempt", "action_timeout_seconds", "max_model_calls_per_attempt", "max_model_tokens_per_attempt", "max_openai_cost_usd_per_attempt", "max_condition_wall_seconds", "max_pair_wall_seconds", "max_total_wall_seconds", "max_output_bytes_per_attempt", "max_stdout_stderr_bytes_per_stream", "max_disk_bytes", "max_lambda_duration_seconds", "max_lambda_cost_usd", "max_attempts", "max_retries_after_empirical_entry"],
       "properties": {
         "expected_browser_actions_per_attempt": {"const": 18},
         "max_browser_actions_per_attempt": {"const": 30},
@@ -76,6 +76,7 @@
         "max_pair_wall_seconds": {"const": 7200},
         "max_total_wall_seconds": {"const": 14400},
         "max_output_bytes_per_attempt": {"const": 67108864},
+        "max_stdout_stderr_bytes_per_stream": {"const": 67108864},
         "max_disk_bytes": {"const": 2147483648},
         "max_lambda_duration_seconds": {"const": 21600},
         "max_lambda_cost_usd": {"const": 8.0},

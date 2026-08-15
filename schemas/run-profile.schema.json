@@ -345,16 +345,22 @@
       "additionalProperties": false,
       "required": [
         "full_attempt_cap_bytes",
+        "stdout_stderr_per_stream_cap_bytes",
         "essential_failure_cap_bytes",
         "authority",
+        "stream_limit_disposition",
         "scientific_status",
+        "preempirical_cap_identity",
         "exclusions"
       ],
       "properties": {
         "full_attempt_cap_bytes": {"const": 67108864},
+        "stdout_stderr_per_stream_cap_bytes": {"const": 67108864},
         "essential_failure_cap_bytes": {"const": 16777216},
         "authority": {"type": "string", "minLength": 16},
+        "stream_limit_disposition": {"type": "string", "minLength": 16},
         "scientific_status": {"type": "string", "minLength": 16},
+        "preempirical_cap_identity": {"type": "string", "minLength": 16},
         "exclusions": {"type": "string", "minLength": 16}
       }
     },

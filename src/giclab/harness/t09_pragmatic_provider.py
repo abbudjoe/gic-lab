@@ -3739,9 +3739,11 @@ def _validate_host_preempirical_disposition(
     state_path = source / "pilot-state.json"
     cleanup_path = source / "host-cleanup.json"
     failure_path = source / "preflight-failure.json"
+    late_gate_path = source / "late-preflight-gate-absence.json"
     state = _load_json(state_path, maximum_bytes=65_536)
     cleanup = _load_json(cleanup_path, maximum_bytes=65_536)
     failure = _load_json(failure_path, maximum_bytes=65_536)
+    late_gate = _load_json(late_gate_path, maximum_bytes=65_536)
     failed_at = _number(failure.get("failed_at_epoch"), label="preflight failure time")
     dispatch_deadline = _number(
         failure.get("termination_dispatch_deadline_epoch"),
@@ -3774,9 +3776,11 @@ def _validate_host_preempirical_disposition(
         "pilot_state_sha256": file_sha256(state_path),
         "host_cleanup_sha256": file_sha256(cleanup_path),
         "preflight_failure_sha256": file_sha256(failure_path),
+        "late_preflight_gate_absence_sha256": file_sha256(late_gate_path),
         "preflight_failed_at_epoch": failed_at,
         "termination_dispatch_deadline_epoch": dispatch_deadline,
         "empirical_attempts_entered": 0,
+        "model_metadata_requests": 0,
         "model_task_requests": 0,
         "task_browser_actions": 0,
         "replacement_image_build_count": 0,
@@ -3785,16 +3789,44 @@ def _validate_host_preempirical_disposition(
         "replacement_image_archive_sha256": replacement_archive_sha256,
         "credentials_removed": True,
         "owned_containers_absent": True,
+        "core_safety_stop_detected": False,
+        "core_destruction_verified": True,
+        "credential_rotation_required_due_to_core_handling": False,
         "replacement_launch_evidence_only": True,
     }
     if (
         value != required
         or state.get("plan_id") != PLAN_ID
         or state.get("empirical_attempts_entered") != []
+        or state.get("nonempirical_infrastructure_attempts_consumed") != []
         or state.get("raw_attempts_complete") != []
+        or state.get("attempts_completed") != []
+        or state.get("essential_failure_seals") != {}
+        or state.get("core_safety_stop_detected") is not False
         or cleanup.get("owned_container_residue") != []
         or cleanup.get("global_secret_scan_passed") is not True
         or cleanup.get("remote_secret_removed") is not True
+        or cleanup.get("core_destruction_verified") is not True
+        or cleanup.get("core_safety_stop_detected") is not False
+        or cleanup.get("credential_rotation_required_due_to_core_handling") is not False
+        or late_gate
+        != {
+            "schema_version": "0.1.0",
+            "plan_id": PLAN_ID,
+            "host_run_id": HOST_RUN_ID,
+            "checked_relative_paths": [
+                "model-metadata-preflight",
+                "model-metadata-credential-scan.json",
+                "frozen-run-manifest.json",
+                "postfreeze-validation.json",
+                "preflight.json",
+            ],
+            "present_relative_paths": [],
+            "model_metadata_requests": 0,
+            "frozen_manifest_published": False,
+            "postfreeze_validation_published": False,
+            "preflight_completion_published": False,
+        }
         or failure.get("plan_id") != PLAN_ID
         or failure.get("host_run_id") != HOST_RUN_ID
         or failure.get("package_commit") != package_commit

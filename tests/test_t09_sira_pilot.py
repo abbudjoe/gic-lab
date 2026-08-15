@@ -87,8 +87,8 @@ def _rendered_active_manifests() -> list[dict[str, object]]:
                 ROOT / "src/giclab/harness/sira_gate_a_runtime.py"
             ),
             pilot_library_sha256=file_sha256(ROOT / "src/giclab/harness/t09_sira_pilot.py"),
-            aggregate_ledger_path="/opt/giclab-artifacts/pilot-v6/aggregate-budget.json",
-            pilot_state_path="/opt/giclab-artifacts/pilot-v6/pilot-state.json",
+            aggregate_ledger_path="/opt/giclab-artifacts/pilot-v7/aggregate-budget.json",
+            pilot_state_path="/opt/giclab-artifacts/pilot-v7/pilot-state.json",
         )
         for attempt in contract.attempts
     ]
@@ -451,7 +451,7 @@ def test_first_pair_checkpoint_passes_only_strictly_below_every_threshold() -> N
     cumulative_overflow = replace(
         passing,
         projected_aggregate_cost_usd=48.0,
-        prior_t09_cost_usd=7.01,
+        prior_t09_cost_usd=12.01,
     )
     assert (
         "projected_cumulative_t09_cost_exceeds_hard_cap"
@@ -564,11 +564,11 @@ def test_execution_schema_and_all_static_file_bindings_resolve() -> None:
     document = load_json(EXECUTION_CONTRACT)
     assert document["authorized"] is False
     assert document["terminal_state"] == (
-        "current-turn-authorized-retry4-pending-dynamic-preflight"
+        "current-turn-authorized-retry5-pending-dynamic-preflight"
     )
     assert (
         document["execution_eligibility"]
-        == "current-turn-authorized-after-retained-image-or-fallback-qualification"
+        == "current-turn-authorized-after-core-suppression-and-retained-image-qualification"
     )
     assert document["material_blockers"] == []
     hard = document["budget_calibration"]["hard"]
@@ -616,6 +616,9 @@ def test_runtime_identity_binds_every_selected_executable_file() -> None:
         "containers/sira-smoke/pragmatic/t09_real_evidence_regression.py",
         "containers/sira-smoke/pragmatic/t09_finalizer_projection.py",
         "containers/sira-smoke/pragmatic/t09_local_finalizer_qualification.py",
+        "containers/sira-smoke/container_entrypoint.py",
+        "containers/sira-smoke/bounded/browser_preflight.py",
+        "containers/sira-smoke/pragmatic/t09_core_preflight.py",
     }
     assert {item["path"] for item in files} == expected
     for item in files:
@@ -653,9 +656,9 @@ def test_retry2_preserves_and_supersedes_the_zero_use_v3_failure() -> None:
 def test_runtime_qualification_is_typed_slot2_import_preentry_and_digest_agnostic() -> None:
     document = {
         "schema_version": "0.1.0",
-        "plan_id": "PLAN-EXP0001-PILOT-V6",
-        "manifest_id": "RUN-MANIFEST-EXP0001-PILOT-V6-0004",
-        "qualification_id": "QUAL-T09-PILOT-V6-IMAGE-0001",
+        "plan_id": "PLAN-EXP0001-PILOT-V7",
+        "manifest_id": "RUN-MANIFEST-EXP0001-PILOT-V7-0005",
+        "qualification_id": "QUAL-T09-PILOT-V7-IMAGE-0001",
         "clean_package_commit": "a" * 40,
         "replacement_image_id": "sha256:" + "e" * 64,
         "historical_image_id": (
@@ -776,11 +779,11 @@ def test_retry2_excludes_only_the_exact_pinned_names_only_env_example(
         )
 
 
-def test_retry4_materialization_policy_is_explicit_and_bound() -> None:
+def test_retry5_materialization_policy_is_explicit_and_bound() -> None:
     host = _load_host_runner()
-    assert host.PLAN_ID == "PLAN-EXP0001-PILOT-V6"
-    assert host.QUALIFICATION_ID == "QUAL-T09-PILOT-V6-IMAGE-0001"
-    assert host.REPLACEMENT_IMAGE_TAG.startswith("giclab/t09-pilot-v6:")
+    assert host.PLAN_ID == "PLAN-EXP0001-PILOT-V7"
+    assert host.QUALIFICATION_ID == "QUAL-T09-PILOT-V7-IMAGE-0001"
+    assert host.REPLACEMENT_IMAGE_TAG.startswith("giclab/t09-pilot-v7:")
     materializer = inspect.getsource(host.materialize_retained_or_build_image)
     assert "SLOT2_IMAGE_MATERIALIZATION_POLICY" in materializer
     assert "slot-2 retained image import failed; fallback build is forbidden" in materializer
@@ -961,6 +964,7 @@ def test_preentry_condition_prefix_is_bound_preserved_and_retryable(tmp_path: Pa
         "secret_bearing_artifacts_removed": [],
         "actual_credential_exposure_detected": False,
         "credential_cleanup_integrity_failure": False,
+        "core_safety_stop_detected": False,
         "structural_privacy_violations": [],
         "failure_prefix_entries": prefix_entries,
         "failure_prefix_entries_sha256": host.canonical_sha256(prefix_entries),
@@ -982,7 +986,7 @@ def test_preentry_condition_prefix_is_bound_preserved_and_retryable(tmp_path: Pa
         frozen_run_manifest_sha256=frozen_sha256,
     )
     preserved = (
-        artifact_root / "pilot-v6/preentry-condition-repairs" / manifest["run_id"] / "repair-01"
+        artifact_root / "pilot-v7/preentry-condition-repairs" / manifest["run_id"] / "repair-01"
     )
     assert fresh == attempt_root and fresh.is_dir() and list(fresh.iterdir()) == [raw]
     assert raw == fresh / "raw"
@@ -1017,6 +1021,10 @@ def test_preentry_condition_prefix_tamper_cannot_authorize_retry(tmp_path: Path)
         "attempt_identity_consumed": False,
         "container_absent": True,
         "remaining_exact_secret_matches": [],
+        "secret_bearing_artifacts_removed": [],
+        "actual_credential_exposure_detected": False,
+        "credential_cleanup_integrity_failure": False,
+        "core_safety_stop_detected": False,
         "structural_privacy_violations": [],
         "failure_prefix_entries": prefix_entries,
         "failure_prefix_entries_sha256": host.canonical_sha256(prefix_entries),
@@ -1167,7 +1175,7 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
             {
                 "schema_version": "0.1.0",
                 "authorization_source_sha256": provider.AUTHORIZATION_SOURCE_SHA256,
-                "authorization_reference": "AUTH-T09-PRAGMATIC-RETRY4-2026-08-14",
+                "authorization_reference": "AUTH-T09-PRAGMATIC-RETRY5-2026-08-14",
                 "authorized": True,
                 "single_use": True,
                 "clean_package_commit": package_commit,
@@ -1179,8 +1187,8 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
                 "lambda_cost_cap_usd": 8.0,
                 "openai_cost_cap_usd": 40.0,
                 "aggregate_cost_cap_usd": 48.0,
-                "prior_t09_cost_usd": 4.04142013524027,
-                "cumulative_t09_cost_cap_usd": 55.0,
+                "prior_t09_cost_usd": 5.7424506112,
+                "cumulative_t09_cost_cap_usd": 60.0,
                 "replacement_image_policy": ("retained-exact-load-or-one-fallback-build-v1"),
                 "artifact_destination": (
                     "/Volumes/Macintosh HD - Data/GIC-Lab/t09/sealed-artifacts"
@@ -1917,7 +1925,7 @@ def test_host_campaign_admission_counts_setup_and_attempt_actual_time(
 ) -> None:
     host = _load_host_runner()
     now = time.time()
-    state = tmp_path / "pilot-v6/pilot-state.json"
+    state = tmp_path / "pilot-v7/pilot-state.json"
     state.parent.mkdir(parents=True)
     state.write_text(
         json.dumps(
@@ -1976,7 +1984,7 @@ def test_raw_attempt_streams_before_cutoff_without_aggregate_stage(
     attempt_root = artifact_root / manifest["permitted_condition_owned"]["output_root"]
     raw_root = artifact_root / manifest["permitted_condition_owned"]["raw_output_root"]
     copytree(ROOT / "tests/fixtures/t09/finalizer-raw-shape", raw_root)
-    pilot_root = artifact_root / "pilot-v6"
+    pilot_root = artifact_root / "pilot-v7"
     pilot_root.mkdir(exist_ok=True)
     initialize_pilot_state(
         pilot_root / "pilot-state.json",
@@ -2013,15 +2021,15 @@ def test_raw_attempt_streams_before_cutoff_without_aggregate_stage(
     local_qualification.write_text(
         json.dumps(
             {
-                "qualification_id": "QUAL-T09-PILOT-V6-LOCAL-FINALIZER-0001",
+                "qualification_id": "QUAL-T09-PILOT-V7-LOCAL-FINALIZER-0001",
                 "package_commit": "a" * 40,
             }
         ),
         encoding="utf-8",
     )
     frozen_document = {
-        "manifest_id": "RUN-MANIFEST-EXP0001-PILOT-V6-0004",
-        "plan_id": "PLAN-EXP0001-PILOT-V6",
+        "manifest_id": "RUN-MANIFEST-EXP0001-PILOT-V7-0005",
+        "plan_id": "PLAN-EXP0001-PILOT-V7",
         "clean_package_commit": "a" * 40,
         "replacement_image_id": replacement_image_id,
         "local_finalizer_qualification_sha256": host.file_sha256(local_qualification),
@@ -2032,6 +2040,7 @@ def test_raw_attempt_streams_before_cutoff_without_aggregate_stage(
     for relative in (
         "postfreeze-validation.json",
         "model-metadata-credential-scan.json",
+        "core-suppression-preflight/host-core-suppression.json",
         "final-image-file-hashes/receipt.json",
         "qualified-real-evidence-regression/receipt.json",
         "replacement-image-qualification/build-context-exclusions.json",
@@ -2195,9 +2204,9 @@ def test_raw_attempt_streams_before_cutoff_without_aggregate_stage(
     assert (restored_attempt / "raw-attempt-manifest.json").is_file()
     assert (restored_attempt / "offhost-restore-complete.json").is_file()
     assert (
-        restored_root / "pilot-v6/attempt-exports" / f"{ATTEMPT_ORDER[0]}.tar.gz"
+        restored_root / "pilot-v7/attempt-exports" / f"{ATTEMPT_ORDER[0]}.tar.gz"
     ).read_bytes() == inbound_archive.read_bytes()
-    assert json.loads((restored_root / "pilot-v6/pilot-state.json").read_text(encoding="utf-8"))[
+    assert json.loads((restored_root / "pilot-v7/pilot-state.json").read_text(encoding="utf-8"))[
         "raw_attempts_complete"
     ] == [ATTEMPT_ORDER[0]]
     assert (

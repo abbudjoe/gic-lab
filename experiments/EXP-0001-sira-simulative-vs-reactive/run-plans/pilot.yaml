@@ -125,13 +125,16 @@ core_dump_policy:
   process_hard_limit: 0
   scope: condition entrypoint and every Python, SiRA, Playwright, Chromium, evaluator, cleanup, child, and descendant process
   preentry_proof: exact-image synthetic SIGABRT plus child/grandchild inheritance and no-network browser teardown all produce zero core artifacts
-  detection: known core filenames plus bounded ELF ET_CORE header inspection; size alone never classifies a core
-  disposition: prohibited-transient-security-artifact; exclude from every archive; retain only safe metadata; destroy remotely; permanently stop campaign if detected after empirical entry
+  detection: known core filenames plus bounded ELF ET_CORE header inspection and full in-root inode-alias census; size alone never classifies a core
+  disposition: prohibited-transient-security-artifact; exclude every owned inode alias from every archive; retain only safe metadata; destroy remotely; require rotation when destruction is unverifiable; any detected core permanently stops campaign continuation and consumes the condition identity only when empirical entry occurred
 failure_evidence_policy:
   full_attempt_cap_bytes: 67108864
+  stdout_stderr_per_stream_cap_bytes: 67108864
   essential_failure_cap_bytes: 16777216
   authority: allowlisted privacy-safe reconstructable failure bundle with manifest and completion receipt
-  scientific_status: infrastructure-invalid, unscored, excluded from paired analysis, and never retryable after empirical entry
+  stream_limit_disposition: reaching either attach-stream limit is an explicit infrastructure stop, never silent truncation or a successful raw seal
+  scientific_status: infrastructure-invalid, unscored, excluded from paired analysis, and never retryable; whether empirical entry occurred is retained as a separate typed field
+  preempirical_cap_identity: a condition-container output-cap or host-runner infrastructure stop consumes the next frozen identity even before its first task model request or browser action; it receives the same essential seal and permanently closes campaign admission
   exclusions: core dumps, dotenv files, temporary secret files, Jupyter credentials, private account fields, unsafe file types, nonallowlisted output, and over-cap members
 evidence_cap_calibration:
   retry4_attempt_total_bytes: 236556320

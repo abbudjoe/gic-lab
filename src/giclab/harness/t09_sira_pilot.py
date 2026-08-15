@@ -1139,6 +1139,7 @@ def initialize_pilot_state(
         "first_pair_started_at_epoch": pilot_started_at_epoch,
         "second_pair_started_at_epoch": None,
         "empirical_attempts_entered": [],
+        "nonempirical_infrastructure_attempts_consumed": [],
         "raw_attempts_complete": [],
         "raw_attempt_bindings": {},
         "attempts_completed": [],
@@ -1377,6 +1378,22 @@ def _load_pilot_state(
             raise T09PilotError(f"pilot state {field} is not a unique frozen-order subset")
         if value != [item for item in ATTEMPT_ORDER if item in value]:
             raise T09PilotError(f"pilot state {field} is not in frozen order")
+    nonempirical_consumed = state.get("nonempirical_infrastructure_attempts_consumed")
+    if (
+        not isinstance(nonempirical_consumed, list)
+        or not all(
+            isinstance(item, str) and item in ATTEMPT_ORDER for item in nonempirical_consumed
+        )
+        or len(nonempirical_consumed) > 1
+        or len(nonempirical_consumed) != len(set(nonempirical_consumed))
+    ):
+        raise T09PilotError("pilot non-empirical consumed-attempt state is malformed")
+    entered_for_failure = cast(list[str], state["empirical_attempts_entered"])
+    if nonempirical_consumed and (
+        nonempirical_consumed[0] != ATTEMPT_ORDER[len(entered_for_failure)]
+        or nonempirical_consumed[0] in entered_for_failure
+    ):
+        raise T09PilotError("pilot non-empirical failure is not the next frozen attempt")
     raw_bindings = state.get("raw_attempt_bindings")
     if not isinstance(raw_bindings, dict) or not all(
         isinstance(key, str) and isinstance(value, dict) for key, value in raw_bindings.items()
@@ -1459,9 +1476,27 @@ def _load_pilot_state(
         for run_id, binding in essential_failure_seals.items()
     ):
         raise T09PilotError("pilot essential-failure seal state is malformed")
+    if not set(essential_failure_seals).issubset(
+        set(cast(list[str], state["empirical_attempts_entered"]))
+        | set(cast(list[str], nonempirical_consumed))
+    ):
+        raise T09PilotError("pilot essential-failure seal lacks a consumed attempt authority")
     checkpoint_binding = state.get("first_pair_checkpoint_binding")
     if checkpoint_binding is not None and not isinstance(checkpoint_binding, dict):
         raise T09PilotError("pilot checkpoint binding is malformed")
+    checkpoint_decision = state.get("first_pair_decision")
+    checkpoint_decision_sha256 = state.get("first_pair_decision_sha256")
+    if checkpoint_decision is None:
+        if checkpoint_binding is not None or checkpoint_decision_sha256 is not None:
+            raise T09PilotError("pilot checkpoint state exists without a decision")
+    elif (
+        checkpoint_decision not in {"continue-to-task-b", "stop-before-task-b"}
+        or not isinstance(checkpoint_binding, dict)
+        or not isinstance(checkpoint_decision_sha256, str)
+        or _HEX64.fullmatch(checkpoint_decision_sha256) is None
+        or cast(list[str], state["attempts_completed"])[:2] != list(ATTEMPT_ORDER[:2])
+    ):
+        raise T09PilotError("pilot checkpoint decision lacks its typed Task A binding")
     if checkpoint_binding is not None:
         if set(checkpoint_binding) != {
             "selection_receipt_sha256s",
@@ -1545,6 +1580,16 @@ def _load_pilot_state(
     return state
 
 
+def load_validated_pilot_state(
+    path: Path,
+    *,
+    execution_contract_sha256: str,
+) -> dict[str, object]:
+    """Return the receipt-backed typed state used by reconstruction gates."""
+
+    return _load_pilot_state(path, contract_sha256=execution_contract_sha256)
+
+
 def mark_empirical_entry(
     path: Path,
     *,
@@ -1558,6 +1603,8 @@ def mark_empirical_entry(
         raise T09BudgetExceeded("a credential safety failure permanently stops the campaign")
     if state.get("core_safety_stop_detected") is True:
         raise T09BudgetExceeded("a core artifact permanently stops the campaign")
+    if state.get("nonempirical_infrastructure_attempts_consumed"):
+        raise T09BudgetExceeded("a consumed pre-empirical infrastructure failure stops campaign")
     entered = cast(list[str], state["empirical_attempts_entered"])
     raw_complete = cast(list[str], state["raw_attempts_complete"])
     if run_id in entered:
@@ -1602,6 +1649,33 @@ def mark_empirical_entry(
             )
     entered.append(run_id)
     state["empirical_attempts_entered"] = entered
+    _write_json_atomic(path, state)
+
+
+def mark_nonempirical_infrastructure_attempt_consumed(
+    path: Path,
+    *,
+    execution_contract_sha256: str,
+    run_id: str,
+) -> None:
+    """Consume a started condition identity whose cap failed before a task action."""
+
+    state = _load_pilot_state(path, contract_sha256=execution_contract_sha256)
+    entered = cast(list[str], state["empirical_attempts_entered"])
+    raw_complete = cast(list[str], state["raw_attempts_complete"])
+    seals = cast(dict[str, dict[str, str]], state["essential_failure_seals"])
+    consumed = cast(list[str], state["nonempirical_infrastructure_attempts_consumed"])
+    if consumed:
+        if consumed == [run_id]:
+            return
+        raise T09BudgetExceeded("a different pre-empirical failure already consumed the campaign")
+    if run_id in entered or len(entered) >= len(ATTEMPT_ORDER):
+        raise T09PilotError("non-empirical failure cannot consume an entered or unknown attempt")
+    if raw_complete != entered or seals:
+        raise T09PilotError("prior attempts are not fully sealed before infrastructure failure")
+    if run_id != ATTEMPT_ORDER[len(entered)]:
+        raise T09BudgetExceeded("non-empirical failure would violate frozen attempt order")
+    state["nonempirical_infrastructure_attempts_consumed"] = [run_id]
     _write_json_atomic(path, state)
 
 
@@ -1669,7 +1743,8 @@ def mark_essential_failure_sealed(
         raise T09PilotError("essential-failure seal identity is malformed")
     state = _load_pilot_state(path, contract_sha256=execution_contract_sha256)
     entered = cast(list[str], state["empirical_attempts_entered"])
-    if run_id not in entered:
+    nonempirical = cast(list[str], state["nonempirical_infrastructure_attempts_consumed"])
+    if run_id not in entered and run_id not in nonempirical:
         raise T09PilotError("an unconsumed attempt cannot receive an essential-failure seal")
     seals = cast(dict[str, dict[str, str]], state["essential_failure_seals"])
     binding = {"manifest_sha256": manifest_sha256, "receipt_sha256": receipt_sha256}

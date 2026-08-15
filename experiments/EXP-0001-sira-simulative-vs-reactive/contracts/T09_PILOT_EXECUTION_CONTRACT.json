@@ -140,6 +140,7 @@
     "max_pair_wall_seconds": 7200,
     "max_total_wall_seconds": 14400,
     "max_output_bytes_per_attempt": 67108864,
+    "max_stdout_stderr_bytes_per_stream": 67108864,
     "max_essential_failure_bytes": 16777216,
     "core_soft_limit": 0,
     "core_hard_limit": 0,
@@ -475,8 +476,9 @@
       "artifact-execution-task-completion-answer-production-and-condition-failure",
       "browser-environment-container-secret-and-provider-cleanup-receipts"
     ],
-    "failure_authority": "when the full tree breaches 67108864 bytes or another infrastructure stop prevents a raw seal, retain one independently capped 16777216-byte allowlisted essential bundle; mark the consumed attempt infrastructure-invalid, unscored, nonretryable, and ineligible for paired analysis",
-    "core_artifact_policy": "core dumps are prohibited transient security artifacts; retain safe metadata only, never a content hash, exclude from every archive, destroy on the remote host, and permanently stop continuation if detected after empirical entry",
+    "failure_authority": "when the full tree breaches 67108864 bytes, either attach stream reaches its explicit 67108864-byte limit, or another host-runner infrastructure stop prevents a raw seal, retain one independently capped 16777216-byte allowlisted essential bundle; mark the condition identity consumed, record empirical-entry status separately, classify it infrastructure-invalid and unscored, prohibit retry, and exclude it from paired analysis",
+    "stream_capture_policy": "stdout and stderr each have an explicit 67108864-byte RLIMIT_FSIZE ceiling; reaching either bound or receiving unattributable SIGXFSZ is a consumed infrastructure stop and can never silently produce a valid raw seal",
+    "core_artifact_policy": "core dumps are prohibited transient security artifacts; census every in-root inode alias, retain safe metadata only, never a content hash, exclude every alias from every archive, destroy on the remote host, require credential rotation when destruction is unverifiable, and permanently stop continuation whenever detected",
     "causal_parent_event_ids": "required-when-naturally-available",
     "unsupported_h2k_fields": "explicit-null-unavailable-not-a-pilot-blocker",
     "structural_redaction_keys": [
