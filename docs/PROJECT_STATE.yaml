@@ -14,7 +14,7 @@ authorized_run_profile:
   condition_plan_sha256s: []
 current_execution_control:
   path: experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY5_TERMINAL_CONTROL.json
-  sha256: ccff80e86c1254d3c943d208d021622c28cf7d9f350732025be8eefaa6307beb
+  sha256: 3c52f65124b2687ea416744f0ddef08c47e9a4cce9cda8e7e197b2b9007826a7
 planned_execution_substrate: null
 historical_execution_substrate:
   decision_state: bounded-smoke-v3-ready-unauthorized

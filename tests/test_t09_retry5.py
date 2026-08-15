@@ -126,15 +126,15 @@ def _raw_seal_recovery_fixture(
         "reclassify_unreleased_condition_transaction",
         lambda **_kwargs: False,
     )
-    secret = tmp_path / "single-secret"
-    secret.write_bytes(b"fixture-secret-not-present-in-artifacts")
-    secret.chmod(0o600)
+    credential_file = tmp_path / "single-secret"
+    credential_file.write_bytes(b"fixture-secret-not-present-in-artifacts")
+    credential_file.chmod(0o600)
     args = argparse.Namespace(
         repository=ROOT,
         artifact_root=artifact_root,
         package_commit="5" * 40,
         run_id=ATTEMPT_ORDER[0],
-        secret_file=secret,
+        secret_file=credential_file,
     )
     return artifact_root, attempt_root, raw_root, state_path, args
 
@@ -1259,15 +1259,15 @@ def test_retry5_oversized_tree_gets_private_essential_failure_seal(
             manifest if run_id == manifest["run_id"] else (_ for _ in ()).throw(KeyError(run_id))
         ),
     )
-    secret = tmp_path / "single-secret"
-    secret.write_bytes(b"fixture-secret-value")
-    secret.chmod(0o600)
+    credential_file = tmp_path / "single-secret"
+    credential_file.write_bytes(b"fixture-secret-value")
+    credential_file.chmod(0o600)
     export_args = SimpleNamespace(
         repository=ROOT,
         artifact_root=artifact_root,
         run_id=run_id,
         package_commit="4" * 40,
-        secret_file=secret,
+        secret_file=credential_file,
     )
     interrupted_cleanup_replay = not empirical_entry_crossed and failed_index == 0
     interrupted_manifest_bytes: bytes | None = None
@@ -1312,7 +1312,7 @@ def test_retry5_oversized_tree_gets_private_essential_failure_seal(
                 "destructive_secret_cleanup_authorized": True,
             },
         )
-        secret.unlink()
+        credential_file.unlink()
     # Essential authority is the emergency bounded handoff after either the
     # per-attempt or aggregate pilot tree is already oversized.  Its direct
     # stream must not reopen the superseded tree through the pilot-disk gate.
@@ -2383,9 +2383,9 @@ def test_retry5_reserved_condition_recovery_seals_runtime_core_truth_without_uns
             records=runtime_records,
             destruction_verified=not runtime_core_unverified,
         )
-    secret = tmp_path / "single-secret"
-    secret.write_bytes(b"fixture-secret-not-present-in-artifacts")
-    secret.chmod(0o600)
+    credential_file = tmp_path / "single-secret"
+    credential_file.write_bytes(b"fixture-secret-not-present-in-artifacts")
+    credential_file.chmod(0o600)
     monkeypatch.setattr(host, "docker_prefix", lambda: ["docker"])
     monkeypatch.setattr(
         host,
@@ -2418,7 +2418,7 @@ def test_retry5_reserved_condition_recovery_seals_runtime_core_truth_without_uns
         artifact_root=artifact_root,
         raw_root=raw_root,
         run_id=ATTEMPT_ORDER[0],
-        secret_file=secret,
+        secret_file=credential_file,
         execution_contract_sha256=contract_sha256,
         frozen_run_manifest_sha256=frozen_sha256,
     )

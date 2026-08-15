@@ -67,7 +67,7 @@ changes, training, a larger pilot, comparative claims, and an EXP-0001 outcome.
 | R5-09 | Reuse and qualify the retained 1,207,128,576-byte image archive at SHA-256 `623e717c…`; rebuild only if functionally necessary. | Source-bound archive verification, exact image ID, functional receipts, build/import count. | not-started |
 | R5-10 | Preserve the repaired preflight, empirical, cleanup, termination, launch, and cumulative-active clock contract. | Typed contracts, boundary tests, source-bound live receipts. | partial: typed V7 limits and source checks are implemented; attempt export uses the empirical campaign origin rather than the older provider/preflight origin, and a three-clock regression passes; live provider receipts remain dynamic |
 | R5-11 | Mint fresh V7 plan, host, qualification, attempt, evaluator, pair, stage, archive, and provider identities. | Identity registry/tests and no prior reuse. | met: V7/0005 identities are registered and V6 reuse is rejected |
-| R5-12 | Freeze a clean reviewed V7 package, one image, four commands/configs, two valid pair diffs, and one immutable run manifest before empirical entry. | Commit/hash closure, focused review PASS, dynamic qualification and freeze receipts. | partial: static V7 package binding is in progress; dynamic accepted-image manifest remains pre-entry |
+| R5-12 | Freeze a clean reviewed V7 package, one image, four commands/configs, two valid pair diffs, and one immutable run manifest before empirical entry. | Commit/hash closure, focused review PASS, dynamic qualification and freeze receipts. | partial: independently reviewed source commit `3e1b33f47ab956dd009dd377cbda6e8350fba9d6` received PASS and the static V7 runtime, condition, execution, command, pair-diff, and registry bindings are closed; dynamic accepted-image manifest remains pre-entry |
 | R5-13 | Execute the four fresh attempts in the locked order with zero retry and raw-or-essential evidence export after every consumed attempt. | Per-attempt entry, terminal, usage, seal, export acknowledgement, cleanup, evaluator, and score evidence. | not-started |
 | R5-14 | Apply the predeclared first-pair continuation rule before Task B. | Append-only checkpoint binding both Task A attempts, uniform finalizer, pair validity, safety, cost, and time headroom. | not-started |
 | R5-15 | Keep credentials structurally outside evidence and destroy temporary material; any actual exposure stops continuation. | Exact-secret scans, structural privacy receipts, cleanup, no core transfer. | partial: structural/exact-value controls and canary regressions pass; live cleanup receipts remain dynamic |
@@ -97,6 +97,16 @@ changes, training, a larger pilot, comparative claims, and an EXP-0001 outcome.
   malformed cleanup receipts, explicit stdout/stderr saturation, empirical-clock
   export cutoff, exact metadata/freeze absence for slot-2 eligibility, and both
   empirical and non-empirical essential-seal export/verify/restore paths.
+- `2026-08-15`: immutable source commit
+  `3e1b33f47ab956dd009dd377cbda6e8350fba9d6` received independent PASS after
+  moving the full recovery core/security census ahead of every partial or complete
+  raw-authority read. Named, ELF `ET_CORE`, and external-hardlink fixtures cover
+  both raw-prefix states; clean manifest-only recovery remains resumable.
+- `2026-08-15`: static V7 bindings were regenerated in dependency order from the
+  reviewed source ancestor: runtime identity, four condition plans, execution
+  contract, generated command manifests and pair diffs, terminal successor, and
+  registry/project-state authority. Repository validation and 172 focused
+  Retry5/pilot/protocol/control tests pass before the clean package commit.
 
 ## Next permitted phase
 

@@ -10,7 +10,7 @@ experiments:
       - experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml
     current_execution_control:
       path: experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY5_TERMINAL_CONTROL.json
-      sha256: ccff80e86c1254d3c943d208d021622c28cf7d9f350732025be8eefaa6307beb
+      sha256: 3c52f65124b2687ea416744f0ddef08c47e9a4cce9cda8e7e197b2b9007826a7
     evidence_records:
       - experiments/EXP-0001-sira-simulative-vs-reactive/T08_SMOKE_ADJUDICATION.json
       - experiments/EXP-0001-sira-simulative-vs-reactive/T08_SMOKE_PAIR_DIFF.json
