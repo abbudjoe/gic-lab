@@ -437,7 +437,7 @@ def test_retry5_oversized_tree_gets_private_essential_failure_seal(
     )
     (raw_root / "condition.stdout").write_text("bounded failure output\n", encoding="utf-8")
     (raw_root / "condition.stdout").chmod(0o600)
-    secret_canary = "sk-" + "A" * 24
+    secret_canary = "fixture-exact-secret-canary-" + "A" * 24
     private = raw_root / "sira-output/private.json"
     _write_json(private, {"private_ip": "10.0.0.4", "value": secret_canary})
     oversized = raw_root / "unrelated-large.bin"
