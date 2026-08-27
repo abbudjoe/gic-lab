@@ -16,14 +16,14 @@ execution:
     authorization_reference: AUTH-T09-AUTONOMOUS-RETRY2-2026-08-27:sha256:aea63a42cf0270ad0a41a929b4b8eb19dd1c3af73abfe97163c1d90e6077d3da
     command_sha256: 2b3f51c1a2f46dc7f69b260a92e79628ed96d98520634609fd9afdbce651e55e
 sources:
-  giclab_commit: 70a45089be746dee5d5000708b8da00b94f97f93
+  giclab_commit: 736f1065804c2236ea1be9ad28216b829396d22a
   upstream_source_id: SRC-SIRA-REPOSITORY
   upstream_commit: 93fb8d72de71f9a4a13419670adeb34d93cf7acd
   protocol_sha256: 5356fc8b3806f4135eb570f65b67da2f94463582db5e3e609320e23dbdb2a3f7
   config_sha256: cf25acd90f9d73d9aef978a7d059cfbc74a1447d901f4e3d27e2b5d9f121d2ed
   model_revision: gpt-4o-2024-11-20
   dataset_revision: 76ad1feb689b754bfe4e5e24d3ea371b647efa67
-  environment_sha256: 8d8d1c62bffff3956f7a247f9785db59f5507ec1b4526538d8ea291ed21e62c8
+  environment_sha256: 991e72a9aae28b66b95fa80d752fa59036ee7612c9a708076c50d840a4200b45
 task:
   task_id: 7dcbbbdc7f1120cd
   source_kind: dataset-slice
