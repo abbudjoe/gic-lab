@@ -198,7 +198,9 @@ and production-readiness claims.
   Its downstream-only schema specialization now derives the exact V8 plan, run,
   pair, and qualification from the frozen execution contract before selection;
   the post-entry path allowlist includes this selector file only alongside an
-  actual finalizer change, with all non-identity constraints preserved.
+  actual finalizer change, and the package verifier compares its runtime binding
+  to the frozen package bytes while its changed selector bytes remain Git-bound;
+  all non-identity constraints are preserved.
 
 ## Budgets, blockers, and next phase
 

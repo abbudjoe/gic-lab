@@ -1324,6 +1324,8 @@ def test_independent_selector_specializes_from_frozen_contract() -> None:
     assert score["properties"]["score_provenance"] == load_json(
         ROOT / "schemas/t09-sira-pilot-score.schema.json"
     )["properties"]["score_provenance"]
+    package_source = inspect.getsource(host.verify_package)
+    assert '"containers/sira-smoke/pragmatic/t09_remote_runner.py"' in package_source
 
 
 def _load_openai_secret_materializer() -> ModuleType:
