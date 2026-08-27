@@ -199,7 +199,8 @@ and production-readiness claims.
   pair, and qualification from the frozen execution contract before selection;
   the post-entry path allowlist includes this selector file only alongside an
   actual finalizer change, and the package verifier compares its runtime binding
-  to the frozen package bytes while its changed selector bytes remain Git-bound;
+  to the frozen package bytes while a separate metadata-safe byte comparison binds
+  the actually executing selector to the exact downstream repair commit;
   all non-identity constraints are preserved.
 
 ## Budgets, blockers, and next phase

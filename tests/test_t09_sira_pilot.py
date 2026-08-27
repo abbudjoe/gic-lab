@@ -1328,6 +1328,44 @@ def test_independent_selector_specializes_from_frozen_contract() -> None:
     assert '"containers/sira-smoke/pragmatic/t09_remote_runner.py"' in package_source
 
 
+def test_downstream_selector_source_is_bound_to_its_commit(tmp_path: Path) -> None:
+    host = _load_host_runner()
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    subprocess.run(["git", "init", "-q", repository], check=True)
+    subprocess.run(["git", "-C", repository, "config", "user.name", "T09 Test"], check=True)
+    subprocess.run(
+        ["git", "-C", repository, "config", "user.email", "t09-test@example.invalid"],
+        check=True,
+    )
+    relative = "selector.py"
+    source = repository / relative
+    source.write_text("SELECTOR = 1\n", encoding="utf-8")
+    source.chmod(0o644)
+    subprocess.run(["git", "-C", repository, "add", relative], check=True)
+    subprocess.run(["git", "-C", repository, "commit", "-q", "-m", "selector"], check=True)
+    commit = subprocess.run(
+        ["git", "-C", repository, "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    host.validate_git_bound_downstream_source(
+        repository=repository,
+        commit=commit,
+        relative=relative,
+        source=source,
+    )
+    source.write_text("SELECTOR = 2\n", encoding="utf-8")
+    with pytest.raises(host.T09HostError, match="do not match their Git commit"):
+        host.validate_git_bound_downstream_source(
+            repository=repository,
+            commit=commit,
+            relative=relative,
+            source=source,
+        )
+
+
 def _load_openai_secret_materializer() -> ModuleType:
     path = ROOT / "containers/sira-smoke/pragmatic/materialize_openai_secret.py"
     spec = importlib.util.spec_from_file_location("giclab_t09_openai_secret_test", path)

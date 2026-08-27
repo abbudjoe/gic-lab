@@ -14952,6 +14952,37 @@ def execute_condition(args: argparse.Namespace) -> int:
     return returncode
 
 
+def validate_git_bound_downstream_source(
+    *,
+    repository: Path,
+    commit: str,
+    relative: str,
+    source: Path,
+) -> None:
+    """Require one executing downstream source to equal its committed bytes."""
+
+    path = source.resolve(strict=True)
+    metadata = path.stat(follow_symlinks=False)
+    if (
+        path.is_symlink()
+        or not stat.S_ISREG(metadata.st_mode)
+        or metadata.st_nlink != 1
+        or metadata.st_mode & 0o022
+        or not 0 < metadata.st_size <= 1_048_576
+    ):
+        raise T09HostError("downstream repair source metadata is unsafe")
+    retained = subprocess.run(
+        ["git", "-C", str(repository), "show", f"{commit}:{relative}"],
+        env=safe_environment(),
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        check=True,
+        timeout=30,
+    ).stdout
+    if retained != path.read_bytes():
+        raise T09HostError("downstream repair bytes do not match their Git commit")
+
+
 def validate_finalizer_source(
     *,
     repository: Path,
@@ -15021,6 +15052,14 @@ def validate_finalizer_source(
             {FINALIZER_RELATIVE_PATH, FINALIZER_PROJECTION_RELATIVE_PATH}
         ) or not set(changed).issubset(allowed):
             raise T09HostError("post-entry finalizer commit changed a non-downstream surface")
+        runner_relative = "containers/sira-smoke/pragmatic/t09_remote_runner.py"
+        if runner_relative in changed:
+            validate_git_bound_downstream_source(
+                repository=repository,
+                commit=finalizer_commit,
+                relative=runner_relative,
+                source=Path(__file__),
+            )
     for relative, path in sources.items():
         retained = subprocess.run(
             ["git", "-C", str(repository), "show", f"{finalizer_commit}:{relative}"],
