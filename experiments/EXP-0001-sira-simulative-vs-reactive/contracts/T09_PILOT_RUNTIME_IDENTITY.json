@@ -88,7 +88,7 @@
       },
       {
         "path": "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py",
-        "sha256": "6cb1c1d60a1370fb6ccdcbd219bbd7831c18290f8e195925e5fb6bfbe3295bc9"
+        "sha256": "e1705d6aa9246d61d92cbb79887cfa4770a317bf2dccc6840f26260ea7ad1ecb"
       },
       {
         "path": "containers/sira-smoke/pragmatic/t09_preflight.py",

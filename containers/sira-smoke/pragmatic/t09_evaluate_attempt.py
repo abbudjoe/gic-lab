@@ -18,6 +18,7 @@ import socket
 import stat
 import sys
 from collections.abc import Mapping, Sequence
+from enum import StrEnum
 from pathlib import Path
 from typing import Any, cast
 
@@ -46,6 +47,13 @@ from giclab.harness.t09_sira_pilot import (
 )
 
 HISTORICAL_V4_REGRESSION_RUN_ID = "RUN-T09-TASK-A-REACTIVE-0002"
+
+
+class ProviderReceiptContract(StrEnum):
+    """Select the explicit receipt schema accepted by one finalization surface."""
+
+    V9_LIFECYCLE = "v9-lifecycle"
+    HISTORICAL_V4_REGRESSION = "historical-v4-regression"
 
 
 def _enforce_zero_core_limit() -> tuple[int, int]:
@@ -380,7 +388,11 @@ def _screenshot_sha256(payload: Mapping[str, object]) -> str | None:
     return hashlib.sha256(screenshot.encode()).hexdigest()
 
 
-def _provider_records(events: list[dict[str, Any]]) -> list[dict[str, object]]:
+def _provider_records(
+    events: list[dict[str, Any]],
+    *,
+    contract: ProviderReceiptContract = ProviderReceiptContract.V9_LIFECYCLE,
+) -> list[dict[str, object]]:
     records: list[dict[str, object]] = []
     for event in events:
         if event.get("kind") != "provider-call-receipt":
@@ -389,28 +401,35 @@ def _provider_records(events: list[dict[str, Any]]) -> list[dict[str, object]]:
         if not isinstance(payload, dict) or not isinstance(payload.get("usage"), dict):
             raise T09PilotError("provider call receipt is malformed")
         call_id = payload.get("call_id")
-        if not isinstance(call_id, str) or not call_id:
-            raise T09PilotError("provider call receipt lacks a stable call identity")
-        if payload.get("terminal_accounting_state") != "sent_response_reconciled":
-            raise T09PilotError("provider response receipt lacks terminal accounting")
-        records.append(
-            {
-                "event_id": event.get("event_id"),
-                "parent_event_id": event.get("parent_event_id"),
-                "call_id": call_id,
-                "terminal_accounting_state": payload.get("terminal_accounting_state"),
-                "role": payload.get("role"),
-                "request_model": payload.get("model"),
-                "requested_service_tier": payload.get("requested_service_tier"),
-                "returned_service_tier": payload.get("returned_service_tier"),
-                "usage": payload["usage"],
-                "receipt": {
-                    "provider_response_id": payload.get("provider_response_id"),
-                    "system_fingerprint": payload.get("system_fingerprint"),
-                    "retry": payload.get("retry"),
-                },
-            }
-        )
+        terminal_state = payload.get("terminal_accounting_state")
+        if contract is ProviderReceiptContract.V9_LIFECYCLE:
+            if not isinstance(call_id, str) or not call_id:
+                raise T09PilotError("provider call receipt lacks a stable call identity")
+            if terminal_state != "sent_response_reconciled":
+                raise T09PilotError("provider response receipt lacks terminal accounting")
+        elif contract is ProviderReceiptContract.HISTORICAL_V4_REGRESSION:
+            if call_id is not None or terminal_state is not None:
+                raise T09PilotError("historical V4 receipt unexpectedly uses the V9 schema")
+        else:  # pragma: no cover - the enum makes this unreachable for typed callers
+            raise T09PilotError("provider receipt contract is unsupported")
+        record: dict[str, object] = {
+            "event_id": event.get("event_id"),
+            "parent_event_id": event.get("parent_event_id"),
+            "role": payload.get("role"),
+            "request_model": payload.get("model"),
+            "requested_service_tier": payload.get("requested_service_tier"),
+            "returned_service_tier": payload.get("returned_service_tier"),
+            "usage": payload["usage"],
+            "receipt": {
+                "provider_response_id": payload.get("provider_response_id"),
+                "system_fingerprint": payload.get("system_fingerprint"),
+                "retry": payload.get("retry"),
+            },
+        }
+        if contract is ProviderReceiptContract.V9_LIFECYCLE:
+            record["call_id"] = call_id
+            record["terminal_accounting_state"] = terminal_state
+        records.append(record)
     return records
 
 
@@ -511,10 +530,6 @@ def reconstruct_semantic_projection(
         else _events(root / "normalized-events.jsonl")
     )
     try:
-        provider_records = _provider_records(events)
-    except T09PilotError:
-        provider_records = []
-    try:
         browser_records = _browser_records(events)
     except T09PilotError:
         browser_records = []
@@ -536,6 +551,15 @@ def reconstruct_semantic_projection(
         if runtime_record is not None
         else _load_object(root / "runtime-environment.json", label="runtime environment")
     )
+    provider_contract = (
+        ProviderReceiptContract.HISTORICAL_V4_REGRESSION
+        if cleanup.get("run_id") == HISTORICAL_V4_REGRESSION_RUN_ID
+        else ProviderReceiptContract.V9_LIFECYCLE
+    )
+    try:
+        provider_records = _provider_records(events, contract=provider_contract)
+    except T09PilotError:
+        provider_records = []
     sessions = list(session_paths) if session_paths is not None else _session_paths(root)
     evaluator = (
         dict(evaluator_result)
@@ -855,7 +879,10 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
         failure_reasons=infrastructure_failure_reasons,
     )
     try:
-        provider_records = _provider_records(event_records)
+        provider_records = _provider_records(
+            event_records,
+            contract=ProviderReceiptContract.V9_LIFECYCLE,
+        )
     except T09PilotError:
         infrastructure_failure_reasons.append("malformed-provider-call-evidence")
         provider_records = []

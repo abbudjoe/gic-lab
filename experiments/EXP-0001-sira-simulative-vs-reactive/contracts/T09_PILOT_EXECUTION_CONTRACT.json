@@ -3,9 +3,9 @@
     {
       "condition": "reactive",
       "condition_plan_path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v9-task-0000-reactive.yaml",
-      "condition_plan_sha256": "6646b3ebd909962c794d85a165a9c4743cb5dba4316c4e60b79511250b5a02f5",
+      "condition_plan_sha256": "dbd4ad625bea0be5b51ee5ded73bc1ef852ca7ca8885e06f9d1936c5eda368c8",
       "config_sha256": "cf25acd90f9d73d9aef978a7d059cfbc74a1447d901f4e3d27e2b5d9f121d2ed",
-      "environment_sha256": "35cd352ad7b1db7f1d99475d8de025e4773bf9696f09cc55e01d56a43af7cd34",
+      "environment_sha256": "896744d91171c80fde4ec30e4b3315bbbc8abbd552763595a9eae67d28bd835c",
       "finalized_output_root": "artifacts/EXP-0001/pilot-v9/task-a/reactive/attempt-autonomous-0002/finalized",
       "giclab_commit": "cbbf96b048c9fbf314cb7497f440ac4ac1a04e61",
       "order_index": 1,
@@ -49,9 +49,9 @@
     {
       "condition": "simulative",
       "condition_plan_path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v9-task-0000-simulative.yaml",
-      "condition_plan_sha256": "86aad4aeea254e3692b8897fba4ff568a287fa22af93fbdfaf89e21c1c99a337",
+      "condition_plan_sha256": "1085ac08c7826fb2f182047f022450d42c1c90c2625808b66a853a820c572f90",
       "config_sha256": "cf25acd90f9d73d9aef978a7d059cfbc74a1447d901f4e3d27e2b5d9f121d2ed",
-      "environment_sha256": "35cd352ad7b1db7f1d99475d8de025e4773bf9696f09cc55e01d56a43af7cd34",
+      "environment_sha256": "896744d91171c80fde4ec30e4b3315bbbc8abbd552763595a9eae67d28bd835c",
       "finalized_output_root": "artifacts/EXP-0001/pilot-v9/task-a/simulative/attempt-autonomous-0002/finalized",
       "giclab_commit": "cbbf96b048c9fbf314cb7497f440ac4ac1a04e61",
       "order_index": 2,
@@ -95,9 +95,9 @@
     {
       "condition": "simulative",
       "condition_plan_path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v9-task-0001-simulative.yaml",
-      "condition_plan_sha256": "212bf9a8379ddfd4eace4b5164eac26438088e255bfc73fd43618fc58830025c",
+      "condition_plan_sha256": "65b168c63c4f7e2936ef8c2f0ef036373b812b0c22dcf309fa38fef71f49b280",
       "config_sha256": "cf25acd90f9d73d9aef978a7d059cfbc74a1447d901f4e3d27e2b5d9f121d2ed",
-      "environment_sha256": "35cd352ad7b1db7f1d99475d8de025e4773bf9696f09cc55e01d56a43af7cd34",
+      "environment_sha256": "896744d91171c80fde4ec30e4b3315bbbc8abbd552763595a9eae67d28bd835c",
       "finalized_output_root": "artifacts/EXP-0001/pilot-v9/task-b/simulative/attempt-autonomous-0002/finalized",
       "giclab_commit": "cbbf96b048c9fbf314cb7497f440ac4ac1a04e61",
       "order_index": 1,
@@ -141,9 +141,9 @@
     {
       "condition": "reactive",
       "condition_plan_path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v9-task-0001-reactive.yaml",
-      "condition_plan_sha256": "e8f3c0d75b8fd82dc9377dcdc630b8665f4ce544026363fd4083decef7ee2e84",
+      "condition_plan_sha256": "d1ef8df650f475226f05e8a307a2b1c93f6cba693ec3dae062bf5d47fc7cc323",
       "config_sha256": "cf25acd90f9d73d9aef978a7d059cfbc74a1447d901f4e3d27e2b5d9f121d2ed",
-      "environment_sha256": "35cd352ad7b1db7f1d99475d8de025e4773bf9696f09cc55e01d56a43af7cd34",
+      "environment_sha256": "896744d91171c80fde4ec30e4b3315bbbc8abbd552763595a9eae67d28bd835c",
       "finalized_output_root": "artifacts/EXP-0001/pilot-v9/task-b/reactive/attempt-autonomous-0002/finalized",
       "giclab_commit": "cbbf96b048c9fbf314cb7497f440ac4ac1a04e61",
       "order_index": 2,
@@ -298,7 +298,7 @@
     },
     "runtime": {
       "path": "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/T09_PILOT_RUNTIME_IDENTITY.json",
-      "sha256": "35cd352ad7b1db7f1d99475d8de025e4773bf9696f09cc55e01d56a43af7cd34"
+      "sha256": "896744d91171c80fde4ec30e4b3315bbbc8abbd552763595a9eae67d28bd835c"
     },
     "score_schema": {
       "path": "schemas/t09-sira-pilot-score.schema.json",

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import inspect
 import json
 import threading
@@ -354,3 +355,66 @@ def test_22_scientific_freeze_and_pair_commands_are_unchanged() -> None:
 def test_23_condition_retries_remain_zero() -> None:
     contract = load_json(EXP / "contracts/T09_PILOT_EXECUTION_CONTRACT.json")
     assert contract["runtime_limits"]["max_retries_after_empirical_entry"] == 0
+
+
+def test_24_finalizer_keeps_v9_and_historical_receipt_contracts_disjoint() -> None:
+    path = ROOT / "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py"
+    specification = importlib.util.spec_from_file_location("t09_accounting_finalizer", path)
+    assert specification is not None and specification.loader is not None
+    finalizer = importlib.util.module_from_spec(specification)
+    specification.loader.exec_module(finalizer)
+    base_payload = {
+        "usage": {
+            "input_tokens": 10,
+            "cached_input_tokens": 0,
+            "output_tokens": 5,
+            "total_tokens": 15,
+        },
+        "role": "critic",
+        "model": SIRA_MODEL_REVISION,
+        "requested_service_tier": "default",
+        "returned_service_tier": "default",
+        "provider_response_id": "redacted-test-id",
+        "system_fingerprint": None,
+        "retry": {"sdk": 0, "transport": 0},
+    }
+    historical = [
+        {
+            "kind": "provider-call-receipt",
+            "event_id": "event-1",
+            "parent_event_id": None,
+            "payload": base_payload,
+        }
+    ]
+    assert len(
+        finalizer._provider_records(
+            historical,
+            contract=finalizer.ProviderReceiptContract.HISTORICAL_V4_REGRESSION,
+        )
+    ) == 1
+    with pytest.raises(finalizer.T09PilotError, match="stable call identity"):
+        finalizer._provider_records(
+            historical,
+            contract=finalizer.ProviderReceiptContract.V9_LIFECYCLE,
+        )
+    v9 = [
+        {
+            **historical[0],
+            "payload": {
+                **base_payload,
+                "call_id": "CALL-0001",
+                "terminal_accounting_state": "sent_response_reconciled",
+            },
+        }
+    ]
+    assert len(
+        finalizer._provider_records(
+            v9,
+            contract=finalizer.ProviderReceiptContract.V9_LIFECYCLE,
+        )
+    ) == 1
+    with pytest.raises(finalizer.T09PilotError, match="unexpectedly uses the V9 schema"):
+        finalizer._provider_records(
+            v9,
+            contract=finalizer.ProviderReceiptContract.HISTORICAL_V4_REGRESSION,
+        )
