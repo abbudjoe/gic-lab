@@ -150,6 +150,7 @@ def _interpreter_launcher_identity(path: Path) -> dict[str, object]:
 def _validate_raw_attempt(
     *,
     raw_root: Path,
+    expected_raw_root_name: str,
     manifest_path: Path,
     receipt_path: Path,
     run_id: str,
@@ -165,7 +166,7 @@ def _validate_raw_attempt(
         or manifest.get("plan_id") != PLAN_ID
         or manifest.get("run_id") != run_id
         or manifest.get("package_commit") != package_commit
-        or manifest.get("raw_attempt_root") != raw_root.name
+        or manifest.get("raw_attempt_root") != expected_raw_root_name
         or not isinstance(files, list)
         or receipt.get("schema_version") != "0.1.0"
         or receipt.get("plan_id") != PLAN_ID
@@ -716,6 +717,7 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
         raise T09PilotError("raw seal paths drifted from the condition-owned contract")
     raw_manifest, raw_receipt = _validate_raw_attempt(
         raw_root=raw_root,
+        expected_raw_root_name=Path(attempt.raw_output_root).name,
         manifest_path=args.raw_attempt_manifest,
         receipt_path=args.raw_attempt_receipt,
         run_id=attempt.run_id,
@@ -1198,6 +1200,7 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
     _write_exclusive(semantic_projection_path, attempt_projection)
     retained_manifest, retained_receipt = _validate_raw_attempt(
         raw_root=raw_root,
+        expected_raw_root_name=Path(attempt.raw_output_root).name,
         manifest_path=args.raw_attempt_manifest,
         receipt_path=args.raw_attempt_receipt,
         run_id=attempt.run_id,

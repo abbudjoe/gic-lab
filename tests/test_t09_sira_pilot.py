@@ -1198,6 +1198,74 @@ def _load_attempt_finalizer() -> ModuleType:
     return module
 
 
+def test_finalizer_validates_canonical_raw_name_not_runtime_mount_alias(
+    tmp_path: Path,
+) -> None:
+    finalizer = _load_attempt_finalizer()
+    raw_root = tmp_path / "giclab-raw"
+    raw_root.mkdir()
+    payload = raw_root / "evidence.json"
+    payload.write_text('{"fixture": true}\n', encoding="utf-8")
+    manifest_path = tmp_path / "raw-attempt-manifest.json"
+    manifest = {
+        "schema_version": "0.1.0",
+        "plan_id": "PLAN-EXP0001-PILOT-V8",
+        "run_id": ATTEMPT_ORDER[0],
+        "package_commit": "a" * 40,
+        "raw_attempt_root": "raw",
+        "source_grounded_empirical_event_count": 1,
+        "retained_session_count": 1,
+        "reconstructable_disposition": "one-session-evaluator-ready",
+        "files": [
+            {
+                "path": payload.name,
+                "bytes": payload.stat().st_size,
+                "sha256": finalizer.file_sha256(payload),
+            }
+        ],
+        "total_bytes": payload.stat().st_size,
+    }
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    receipt_path = tmp_path / "raw-attempt-complete.json"
+    receipt_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "0.1.0",
+                "plan_id": "PLAN-EXP0001-PILOT-V8",
+                "run_id": ATTEMPT_ORDER[0],
+                "raw_manifest_sha256": finalizer.file_sha256(manifest_path),
+                "raw_attempt_complete": True,
+                "empirical_attempt_consumed": True,
+                "container_and_browser_cleanup_clean": True,
+                "credential_cleanup_clean": True,
+                "source_grounded_empirical_event_count": 1,
+                "retained_session_count": 1,
+                "reconstructable_disposition": "one-session-evaluator-ready",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    validated, _receipt = finalizer._validate_raw_attempt(
+        raw_root=raw_root,
+        expected_raw_root_name="raw",
+        manifest_path=manifest_path,
+        receipt_path=receipt_path,
+        run_id=ATTEMPT_ORDER[0],
+        package_commit="a" * 40,
+    )
+    assert validated["raw_attempt_root"] == "raw"
+    with pytest.raises(finalizer.T09PilotError, match="identity drifted"):
+        finalizer._validate_raw_attempt(
+            raw_root=raw_root,
+            expected_raw_root_name=raw_root.name,
+            manifest_path=manifest_path,
+            receipt_path=receipt_path,
+            run_id=ATTEMPT_ORDER[0],
+            package_commit="a" * 40,
+        )
+
+
 def _load_openai_secret_materializer() -> ModuleType:
     path = ROOT / "containers/sira-smoke/pragmatic/materialize_openai_secret.py"
     spec = importlib.util.spec_from_file_location("giclab_t09_openai_secret_test", path)

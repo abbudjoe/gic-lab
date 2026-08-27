@@ -183,6 +183,11 @@ and production-readiness claims.
   frozen scientific package, raw evidence, model, browser, condition, or evaluator.
   The regression exercises an early-completion wall with the full condition plus
   evidence reserve before export recovery is admitted.
+- `2026-08-27`: the first qualified-image finalizer then exposed an implicit
+  path-name contract: the image mount alias is `giclab-raw`, while the immutable
+  seal correctly records the condition-owned directory `raw`. The downstream-only
+  repair validates the seal against the canonical raw-output name from the frozen
+  execution contract, with a regression that uses a distinct runtime mount alias.
 
 ## Budgets, blockers, and next phase
 
