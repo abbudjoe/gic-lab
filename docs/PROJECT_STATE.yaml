@@ -14,7 +14,7 @@ authorized_run_profile:
   condition_plan_sha256s: []
 current_execution_control:
   path: experiments/EXP-0001-sira-simulative-vs-reactive/T09_AUTONOMOUS_PILOT_POSTRUN_TERMINAL_CONTROL.json
-  sha256: 901d390f1767a6cbeced2cc4006e4cc78d8553f41aed5684f21ba087b50ce130
+  sha256: 54ba0924efd0bd4cb46cf4cd47aae7124c5eed623ab41f8646ab1115b05cece6
 planned_execution_substrate: null
 historical_execution_substrate:
   decision_state: bounded-smoke-v3-ready-unauthorized

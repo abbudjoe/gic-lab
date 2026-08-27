@@ -5,7 +5,7 @@
   "effective_on": "2026-08-27",
   "terminal_record": {
     "path": "experiments/EXP-0001-sira-simulative-vs-reactive/T09_AUTONOMOUS_PILOT_DISPOSITION.json",
-    "sha256": "99ba1286ef927b07257feeaff66642eaee6ce177cfd88709d9a1a1234ac1d9f8"
+    "sha256": "af80ad17feac4f15dee690f9e6f3aa77de8d5d5ad533416603719e03f7700f7a"
   },
   "terminal_state": "t09-pilot-blocked-material-risk",
   "empirical_entry": true,
@@ -54,7 +54,7 @@
       "contract_id": "EXECUTION-CONTRACT-EXP0001-PILOT-V8",
       "plan_id": "PLAN-EXP0001-PILOT-V8",
       "path": "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/T09_PILOT_EXECUTION_CONTRACT.json",
-      "sha256": "611a3a7fb28b1b6a8197d911b8934e9307a87d41725abf58ff7b42ed654dc7df",
+      "sha256": "a36ee3b0b6ebf1d24083b38ddbe09709e3984546cbc88b2ed7521a5fb8ebc2e9",
       "historical_terminal_state": "current-turn-authorized-autonomous-pending-dynamic-preflight",
       "historical_execution_eligibility": "current-turn-authorized-after-dynamic-preflight",
       "historical_authorized": true,

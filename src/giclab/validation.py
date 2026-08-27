@@ -952,9 +952,7 @@ def validate_experiment_run_profiles(root: Path = ROOT) -> list[str]:
                         str(profile_budget.get("max_preflight_provider_compute_cost_usd", 0))
                     )
                     if (
-                        planned_openai_cost
-                        + provider_compute_cost
-                        + preflight_provider_cost
+                        planned_openai_cost + provider_compute_cost + preflight_provider_cost
                         != total_cost
                     ):
                         errors.append(f"{label}: total spend cap arithmetic disagrees")
@@ -1202,9 +1200,7 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
             "5160-second admission gate is rerun immediately before durable release and any "
             "timeout consumes the started identity as infrastructure-invalid"
         ),
-        "control_plane": (
-            "autonomous-v8-separated-preflight-engineering-and-empirical-authority"
-        ),
+        "control_plane": ("autonomous-v8-separated-preflight-engineering-and-empirical-authority"),
     }
     if pilot_lifecycle != expected_lifecycle:
         errors.append("EXP-0001 pilot: provider lifecycle contract drift")
@@ -1624,6 +1620,83 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
     if not isinstance(files, list) or not files:
         errors.append("EXP-0001 T09: runtime instrumentation file bindings are missing")
     else:
+        disposition_path = exp_root / "T09_AUTONOMOUS_PILOT_DISPOSITION.json"
+        disposition = load_json(disposition_path) if disposition_path.is_file() else {}
+        scientific_freeze = disposition.get("scientific_freeze")
+        finalizer = disposition.get("finalizer")
+        downstream_paths = {
+            "containers/sira-smoke/pragmatic/t09_remote_runner.py": "selector_source_sha256",
+            "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py": ("finalizer_source_sha256"),
+        }
+        downstream_commit = (
+            finalizer.get("downstream_finalizer_commit") if isinstance(finalizer, dict) else None
+        )
+        finalizer_frozen_package_commit = (
+            finalizer.get("frozen_scientific_package_commit")
+            if isinstance(finalizer, dict)
+            else None
+        )
+        frozen_package_commit = (
+            scientific_freeze.get("frozen_package_commit")
+            if isinstance(scientific_freeze, dict)
+            else None
+        )
+        frozen_package_bindings = {
+            "frozen_execution_contract_sha256": execution_path,
+            "frozen_command_manifests_sha256": command_path,
+            "frozen_runtime_identity_sha256": runtime_path,
+        }
+        if isinstance(scientific_freeze, dict):
+            for field, path in frozen_package_bindings.items():
+                observed_digest = hashlib.sha256(path.read_bytes()).hexdigest()
+                if scientific_freeze.get(field) != observed_digest:
+                    errors.append(f"EXP-0001 T09: disposition {field} drifted")
+                    continue
+                try:
+                    frozen_bytes = subprocess.run(
+                        [
+                            "git",
+                            "-C",
+                            str(root),
+                            "show",
+                            f"{frozen_package_commit}:{path.relative_to(root).as_posix()}",
+                        ],
+                        check=True,
+                        capture_output=True,
+                    ).stdout
+                except subprocess.CalledProcessError:
+                    errors.append(f"EXP-0001 T09: frozen package does not bind {field}")
+                    continue
+                if hashlib.sha256(frozen_bytes).hexdigest() != observed_digest:
+                    errors.append(f"EXP-0001 T09: frozen package source drifted for {field}")
+        if isinstance(downstream_commit, str) and isinstance(frozen_package_commit, str):
+            expected_downstream_diff = {
+                "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py",
+                "containers/sira-smoke/pragmatic/t09_remote_runner.py",
+                "tests/test_t09_sira_pilot.py",
+            }
+            try:
+                downstream_diff = set(
+                    subprocess.run(
+                        [
+                            "git",
+                            "-C",
+                            str(root),
+                            "diff",
+                            "--name-only",
+                            f"{frozen_package_commit}..{downstream_commit}",
+                        ],
+                        check=True,
+                        capture_output=True,
+                        text=True,
+                    ).stdout.splitlines()
+                )
+            except subprocess.CalledProcessError:
+                errors.append("EXP-0001 T09: downstream finalizer history is unavailable")
+            else:
+                if downstream_diff != expected_downstream_diff:
+                    errors.append("EXP-0001 T09: downstream finalizer change scope drifted")
+        downstream_mismatches: set[str] = set()
         for raw in files:
             if not isinstance(raw, dict):
                 errors.append("EXP-0001 T09: runtime instrumentation binding is malformed")
@@ -1638,8 +1711,45 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
                 errors.append("EXP-0001 T09: runtime instrumentation path is unsafe")
                 continue
             bound = root / relative_path
-            if not bound.is_file() or hashlib.sha256(bound.read_bytes()).hexdigest() != digest:
+            if not bound.is_file():
                 errors.append(f"EXP-0001 T09: runtime file binding drifted: {file_relative}")
+                continue
+            observed_digest = hashlib.sha256(bound.read_bytes()).hexdigest()
+            if observed_digest == digest:
+                continue
+            disposition_field = downstream_paths.get(file_relative)
+            disposition_digest = (
+                finalizer.get(disposition_field)
+                if isinstance(finalizer, dict) and disposition_field is not None
+                else None
+            )
+            if (
+                disposition_digest != observed_digest
+                or not isinstance(downstream_commit, str)
+                or not re.fullmatch(r"[0-9a-f]{40}", downstream_commit)
+                or finalizer_frozen_package_commit != frozen_package_commit
+            ):
+                errors.append(f"EXP-0001 T09: runtime file binding drifted: {file_relative}")
+                continue
+            try:
+                committed_bytes = subprocess.run(
+                    ["git", "-C", str(root), "show", f"{downstream_commit}:{file_relative}"],
+                    check=True,
+                    capture_output=True,
+                ).stdout
+            except subprocess.CalledProcessError:
+                errors.append(
+                    f"EXP-0001 T09: downstream finalizer commit does not bind: {file_relative}"
+                )
+                continue
+            if hashlib.sha256(committed_bytes).hexdigest() != observed_digest:
+                errors.append(f"EXP-0001 T09: downstream finalizer source drifted: {file_relative}")
+                continue
+            downstream_mismatches.add(file_relative)
+        if downstream_mismatches and downstream_mismatches != set(downstream_paths):
+            errors.append(
+                "EXP-0001 T09: downstream finalizer must bind both selector and evaluator"
+            )
 
     command_document = load_json(command_path)
     execution_sha256 = hashlib.sha256(execution_path.read_bytes()).hexdigest()

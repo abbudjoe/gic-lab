@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 import copy
+import hashlib
 import importlib.util
 import inspect
 import io
@@ -70,6 +71,10 @@ EXECUTION_CONTRACT = (
 RUNTIME_IDENTITY = (
     ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
     "T09_PILOT_RUNTIME_IDENTITY.json"
+)
+COMMAND_MANIFESTS = (
+    ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
+    "T09_PILOT_COMMAND_MANIFESTS.json"
 )
 
 
@@ -595,10 +600,7 @@ def test_execution_schema_and_all_static_file_bindings_resolve() -> None:
     assert document["terminal_state"] == (
         "current-turn-authorized-autonomous-pending-dynamic-preflight"
     )
-    assert (
-        document["execution_eligibility"]
-        == "current-turn-authorized-after-dynamic-preflight"
-    )
+    assert document["execution_eligibility"] == "current-turn-authorized-after-dynamic-preflight"
     assert document["material_blockers"] == []
     hard = document["budget_calibration"]["hard"]
     assert hard["maximum_new_cost_under_cumulative_cap_usd"] == pytest.approx(
@@ -625,8 +627,7 @@ def test_execution_schema_and_all_static_file_bindings_resolve() -> None:
 def test_v8_science_projection_preserves_complete_flag_value_argv() -> None:
     execution = load_json(EXECUTION_CONTRACT)
     projection = load_json(
-        ROOT
-        / "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
+        ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
         "T09_PILOT_V8_SCIENCE_PROJECTION.json"
     )
     assert len(execution["attempts"]) == len(projection["attempts"]) == 4
@@ -644,6 +645,10 @@ def test_v8_science_projection_preserves_complete_flag_value_argv() -> None:
 
 def test_runtime_identity_binds_every_selected_executable_file() -> None:
     document = load_json(RUNTIME_IDENTITY)
+    disposition = load_json(
+        ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive/"
+        "T09_AUTONOMOUS_PILOT_DISPOSITION.json"
+    )
     instrumentation = document["repository_instrumentation"]
     assert isinstance(instrumentation, dict)
     files = instrumentation["files"]
@@ -670,8 +675,66 @@ def test_runtime_identity_binds_every_selected_executable_file() -> None:
         "containers/sira-smoke/pragmatic/t09_core_preflight.py",
     }
     assert {item["path"] for item in files} == expected
+    downstream_fields = {
+        "containers/sira-smoke/pragmatic/t09_remote_runner.py": "selector_source_sha256",
+        "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py": "finalizer_source_sha256",
+    }
+    downstream_commit = disposition["finalizer"]["downstream_finalizer_commit"]
+    frozen_commit = disposition["scientific_freeze"]["frozen_package_commit"]
+    frozen_contracts = {
+        "frozen_execution_contract_sha256": EXECUTION_CONTRACT,
+        "frozen_command_manifests_sha256": COMMAND_MANIFESTS,
+        "frozen_runtime_identity_sha256": RUNTIME_IDENTITY,
+    }
+    for field, path in frozen_contracts.items():
+        observed = file_sha256(path)
+        assert disposition["scientific_freeze"][field] == observed
+        committed = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(ROOT),
+                "show",
+                f"{frozen_commit}:{path.relative_to(ROOT).as_posix()}",
+            ],
+            check=True,
+            capture_output=True,
+        ).stdout
+        assert hashlib.sha256(committed).hexdigest() == observed
+    changed_paths = set(
+        subprocess.run(
+            [
+                "git",
+                "-C",
+                str(ROOT),
+                "diff",
+                "--name-only",
+                f"{frozen_commit}..{downstream_commit}",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.splitlines()
+    )
+    assert changed_paths == {
+        "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py",
+        "containers/sira-smoke/pragmatic/t09_remote_runner.py",
+        "tests/test_t09_sira_pilot.py",
+    }
+    mismatches = set()
     for item in files:
-        assert file_sha256(ROOT / item["path"]) == item["sha256"]
+        observed = file_sha256(ROOT / item["path"])
+        if observed == item["sha256"]:
+            continue
+        mismatches.add(item["path"])
+        assert observed == disposition["finalizer"][downstream_fields[item["path"]]]
+        committed = subprocess.run(
+            ["git", "-C", str(ROOT), "show", f"{downstream_commit}:{item['path']}"],
+            check=True,
+            capture_output=True,
+        ).stdout
+        assert hashlib.sha256(committed).hexdigest() == observed
+    assert mismatches == set(downstream_fields)
 
 
 def test_runtime_and_execution_bind_the_same_current_evaluator_contract() -> None:
@@ -976,23 +1039,16 @@ def test_autonomous_clean_descendant_reuses_authority_and_entry_receipt(
         to_package_commit=descendant_commit,
     )
     assert transition["scientific_contract_changed"] is False
-    assert transition["changed_paths"] == [
-        "docs/harness/T09_AUTONOMOUS_LINEAGE_TEST.md"
-    ]
+    assert transition["changed_paths"] == ["docs/harness/T09_AUTONOMOUS_LINEAGE_TEST.md"]
 
-    plan_path = (
-        repository
-        / "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml"
-    )
+    plan_path = repository / "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml"
     authorization = tmp_path / "authorization.json"
     authorization.write_text(
         json.dumps(
             {
                 "schema_version": "0.1.0",
                 "authorization_source_sha256": provider.AUTHORIZATION_SOURCE_SHA256,
-                "authorization_reference": (
-                    "AUTH-T09-AUTONOMOUS-PREFLIGHT-TO-PILOT-2026-08-27"
-                ),
+                "authorization_reference": ("AUTH-T09-AUTONOMOUS-PREFLIGHT-TO-PILOT-2026-08-27"),
                 "authorized": True,
                 "single_use": True,
                 "clean_package_commit": base_commit,
@@ -1011,19 +1067,20 @@ def test_autonomous_clean_descendant_reuses_authority_and_entry_receipt(
                 "prior_t09_cost_usd": 6.8131387350,
                 "cumulative_t09_cost_cap_usd": 75.0,
                 "replacement_image_policy": "retained-exact-load-or-one-fallback-build-v1",
-                "artifact_destination": (
-                    "/Volumes/Macintosh HD - Data/GIC-Lab/t09/autonomous-v8"
-                ),
+                "artifact_destination": ("/Volumes/Macintosh HD - Data/GIC-Lab/t09/autonomous-v8"),
             }
         ),
         encoding="utf-8",
     )
     authorization.chmod(0o600)
-    assert provider.validate_authorization_ledger(
-        authorization,
-        repository=repository,
-        package_commit=descendant_commit,
-    )["clean_package_commit"] == base_commit
+    assert (
+        provider.validate_authorization_ledger(
+            authorization,
+            repository=repository,
+            package_commit=descendant_commit,
+        )["clean_package_commit"]
+        == base_commit
+    )
 
     host = _load_host_runner()
     source_root = tmp_path / "entry-source"
@@ -1061,8 +1118,7 @@ def test_autonomous_clean_descendant_reuses_authority_and_entry_receipt(
     assert dynamic["provider_package_transition"]["to_package_commit"] == descendant_commit
 
     execution_contract = (
-        repository
-        / "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
+        repository / "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
         "T09_PILOT_EXECUTION_CONTRACT.json"
     )
     changed_execution = json.loads(execution_contract.read_text(encoding="utf-8"))
@@ -1097,8 +1153,7 @@ def test_autonomous_clean_descendant_reuses_authority_and_entry_receipt(
         check=True,
     )
     command_package = (
-        repository
-        / "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
+        repository / "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
         "T09_PILOT_COMMAND_MANIFESTS.json"
     )
     changed_commands = json.loads(command_package.read_text(encoding="utf-8"))
@@ -1133,26 +1188,21 @@ def test_autonomous_clean_descendant_reuses_authority_and_entry_receipt(
         check=True,
     )
     condition_plan = (
-        repository
-        / "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/"
+        repository / "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/"
         "pilot-v8-task-0000-reactive.yaml"
     )
     changed_condition = yaml.safe_load(condition_plan.read_text(encoding="utf-8"))
     changed_condition["sources"]["model_revision"] = "scientific-drift-fixture"
     condition_plan.write_text(yaml.safe_dump(changed_condition, sort_keys=False), encoding="utf-8")
     changed_execution = json.loads(execution_contract.read_text(encoding="utf-8"))
-    changed_execution["attempts"][0]["condition_plan_sha256"] = provider.file_sha256(
-        condition_plan
-    )
+    changed_execution["attempts"][0]["condition_plan_sha256"] = provider.file_sha256(condition_plan)
     execution_contract.write_text(
         json.dumps(changed_execution, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
     changed_commands = json.loads(command_package.read_text(encoding="utf-8"))
     changed_commands["execution_contract_sha256"] = provider.file_sha256(execution_contract)
-    changed_commands["manifests"][0]["condition_plan_sha256"] = provider.file_sha256(
-        condition_plan
-    )
+    changed_commands["manifests"][0]["condition_plan_sha256"] = provider.file_sha256(condition_plan)
     for manifest in changed_commands["manifests"]:
         manifest["execution_contract_sha256"] = provider.file_sha256(execution_contract)
     command_package.write_text(
@@ -1280,24 +1330,21 @@ def test_finalizer_specializes_only_fresh_schema_identities() -> None:
     )
     assert score["properties"]["plan_id"] == {"const": "PLAN-EXP0001-PILOT-V8"}
     assert score["properties"]["run_id"] == {"const": ATTEMPT_ORDER[0]}
-    assert score["properties"]["pair_id"] == {
-        "const": "PAIR-EXP0001-PILOT-V8-TASK-A"
-    }
-    assert evidence["properties"]["plan_id"] == {
-        "const": "PLAN-EXP0001-PILOT-V8"
-    }
-    assert evidence["properties"]["identity"]["properties"]["run_id"] == {
-        "const": ATTEMPT_ORDER[0]
-    }
+    assert score["properties"]["pair_id"] == {"const": "PAIR-EXP0001-PILOT-V8-TASK-A"}
+    assert evidence["properties"]["plan_id"] == {"const": "PLAN-EXP0001-PILOT-V8"}
+    assert evidence["properties"]["identity"]["properties"]["run_id"] == {"const": ATTEMPT_ORDER[0]}
     assert evidence["properties"]["identity"]["properties"]["pair_id"] == {
         "const": "PAIR-EXP0001-PILOT-V8-TASK-A"
     }
     assert evidence["properties"]["runtime"]["properties"]["qualification_id"] == {
         "const": "QUAL-T09-PILOT-V8-IMAGE-AUTONOMOUS-0001"
     }
-    assert score["properties"]["score_provenance"] == load_json(
-        ROOT / "schemas/t09-sira-pilot-score.schema.json"
-    )["properties"]["score_provenance"]
+    assert (
+        score["properties"]["score_provenance"]
+        == load_json(ROOT / "schemas/t09-sira-pilot-score.schema.json")["properties"][
+            "score_provenance"
+        ]
+    )
 
 
 def test_independent_selector_specializes_from_frozen_contract() -> None:
@@ -1312,18 +1359,17 @@ def test_independent_selector_specializes_from_frozen_contract() -> None:
     )
     assert score["properties"]["plan_id"] == {"const": "PLAN-EXP0001-PILOT-V8"}
     assert score["properties"]["run_id"] == {"const": ATTEMPT_ORDER[0]}
-    assert score["properties"]["pair_id"] == {
-        "const": "PAIR-EXP0001-PILOT-V8-TASK-A"
-    }
-    assert evidence["properties"]["identity"]["properties"]["run_id"] == {
-        "const": ATTEMPT_ORDER[0]
-    }
+    assert score["properties"]["pair_id"] == {"const": "PAIR-EXP0001-PILOT-V8-TASK-A"}
+    assert evidence["properties"]["identity"]["properties"]["run_id"] == {"const": ATTEMPT_ORDER[0]}
     assert evidence["properties"]["runtime"]["properties"]["qualification_id"] == {
         "const": "QUAL-T09-PILOT-V8-IMAGE-AUTONOMOUS-0001"
     }
-    assert score["properties"]["score_provenance"] == load_json(
-        ROOT / "schemas/t09-sira-pilot-score.schema.json"
-    )["properties"]["score_provenance"]
+    assert (
+        score["properties"]["score_provenance"]
+        == load_json(ROOT / "schemas/t09-sira-pilot-score.schema.json")["properties"][
+            "score_provenance"
+        ]
+    )
     package_source = inspect.getsource(host.verify_package)
     assert '"containers/sira-smoke/pragmatic/t09_remote_runner.py"' in package_source
 
@@ -1397,8 +1443,7 @@ def test_v8_sealing_primitives_preflight_exercises_exact_production_sealers(
     artifact_root = tmp_path / "artifact"
     artifact_root.mkdir()
     command_document = load_json(
-        ROOT
-        / "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
+        ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
         "T09_PILOT_COMMAND_MANIFESTS.json"
     )
     receipt = host.sealing_primitives_preflight(
@@ -1753,9 +1798,7 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
             {
                 "schema_version": "0.1.0",
                 "authorization_source_sha256": provider.AUTHORIZATION_SOURCE_SHA256,
-                "authorization_reference": (
-                    "AUTH-T09-AUTONOMOUS-PREFLIGHT-TO-PILOT-2026-08-27"
-                ),
+                "authorization_reference": ("AUTH-T09-AUTONOMOUS-PREFLIGHT-TO-PILOT-2026-08-27"),
                 "authorized": True,
                 "single_use": True,
                 "clean_package_commit": package_commit,
@@ -1774,9 +1817,7 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
                 "prior_t09_cost_usd": 6.8131387350,
                 "cumulative_t09_cost_cap_usd": 75.0,
                 "replacement_image_policy": ("retained-exact-load-or-one-fallback-build-v1"),
-                "artifact_destination": (
-                    "/Volumes/Macintosh HD - Data/GIC-Lab/t09/autonomous-v8"
-                ),
+                "artifact_destination": ("/Volumes/Macintosh HD - Data/GIC-Lab/t09/autonomous-v8"),
             }
         ),
         encoding="utf-8",
@@ -1839,9 +1880,10 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
     early_cleanup = load_json(active_failure_root / "preflight-cleanup-state.json")
     assert early_cleanup["state_type"] == "t09-preflight-cleanup-authority"
     assert early_cleanup["private_instance_id"] == provisional["private_instance_id"]
-    assert early_cleanup["owned_instance_identity_sha256"] == provisional[
-        "owned_instance_identity_sha256"
-    ]
+    assert (
+        early_cleanup["owned_instance_identity_sha256"]
+        == provisional["owned_instance_identity_sha256"]
+    )
     assert early_cleanup["empirical_entry_crossed"] is False
     assert early_cleanup["pilot_state_required_for_cleanup"] is False
     assert early_cleanup["attempt_state_required_for_cleanup"] is False
@@ -2044,16 +2086,19 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
     assert (write_failure_root / "PROVISIONAL_OWNER_CLOSED.json").is_file()
     assert (write_failure_root / "preflight-cleanup-state.json").is_file()
     early_closed_transport = FakeTransport([])
-    assert provider.closeout_campaign(
-        repository=ROOT,
-        package_commit=package_commit,
-        authorization_ledger=authorization,
-        dotenv=dotenv,
-        private_root=write_failure_root,
-        transport=early_closed_transport,
-        clock=clock,
-        sleeper=sleeper,
-    ) == write_failure_root / "PROVISIONAL_OWNER_CLOSED.json"
+    assert (
+        provider.closeout_campaign(
+            repository=ROOT,
+            package_commit=package_commit,
+            authorization_ledger=authorization,
+            dotenv=dotenv,
+            private_root=write_failure_root,
+            transport=early_closed_transport,
+            clock=clock,
+            sleeper=sleeper,
+        )
+        == write_failure_root / "PROVISIONAL_OWNER_CLOSED.json"
+    )
     assert early_closed_transport.calls == []
     monkeypatch.setattr(provider, "write_exclusive", original_write)
 
@@ -2544,17 +2589,18 @@ def test_autonomous_preflight_and_empirical_lifecycle_boundaries_are_separate() 
     assert limits.maximum_empirical_launches == 1
     assert limits.empirical_campaign_wall_seconds == 14_400
     assert limits.maximum_empirical_provider_cost_cents == 800
-    assert limits.preflight_instance_remaining(
-        launched_at_epoch=100.0, now_epoch=21_700.0
-    ) == 0
+    assert limits.preflight_instance_remaining(launched_at_epoch=100.0, now_epoch=21_700.0) == 0
     assert limits.preflight_caps_available(cumulative_active_seconds=43_200) is True
     assert limits.preflight_caps_available(cumulative_active_seconds=43_200.1) is False
-    assert provider.CampaignLifecycle(
-        limits=limits,
-        max_instances=1,
-        max_launches=8,
-        persistent_filesystems=0,
-    ).max_launches == 8
+    assert (
+        provider.CampaignLifecycle(
+            limits=limits,
+            max_instances=1,
+            max_launches=8,
+            persistent_filesystems=0,
+        ).max_launches
+        == 8
+    )
     with pytest.raises(provider.T09ProviderError, match="lifecycle drifted"):
         provider.CampaignLifecycle(
             limits=limits,
@@ -2650,9 +2696,10 @@ def test_ordinary_preflight_defect_is_resumable_on_same_host_with_fresh_root(
     assert failure["termination_dispatch_deadline_epoch"] is None
     assert failure["provider_instance_elapsed_seconds"] >= 4_000.0
     assert 0 <= failure["preflight_iteration_elapsed_seconds"] < 5.0
-    assert failure["preflight_iteration_started_at_epoch"] > failure[
-        "provider_preflight_started_at_epoch"
-    ]
+    assert (
+        failure["preflight_iteration_started_at_epoch"]
+        > failure["provider_preflight_started_at_epoch"]
+    )
 
     second_root = tmp_path / "second"
     host.preflight_with_deadline(SimpleNamespace(**common, artifact_root=second_root))
@@ -2728,9 +2775,7 @@ def test_raw_attempt_streams_before_cutoff_without_aggregate_stage(
     local_qualification.write_text(
         json.dumps(
             {
-                "qualification_id": (
-                    "QUAL-T09-PILOT-V8-LOCAL-FINALIZER-AUTONOMOUS-0001"
-                ),
+                "qualification_id": ("QUAL-T09-PILOT-V8-LOCAL-FINALIZER-AUTONOMOUS-0001"),
                 "package_commit": "a" * 40,
             }
         ),

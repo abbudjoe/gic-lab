@@ -221,8 +221,10 @@ and production-readiness claims.
   No retry occurred. Task A simulative crossed entry once and sealed a
   reconstructable essential infrastructure-failure bundle after the typed
   `runtime-budget-control-drift` stop: 33 call attempts, 308,977 tokens, one
-  browser action, USD 2.7540625, and three unreconciled provider attempts. It is
-  unscored, not zero. No retry occurred.
+  browser action, and USD 2.7540625 across 30 provider response receipts, with
+  three provider attempts unreconciled. Those token and cost amounts are observed
+  reconciled lower bounds, not exact actual totals. It is unscored, not zero. No
+  retry occurred.
 - Decision: the first-pair checkpoint stops. There is no realized Task A pair, and
   Task B is not run. Static command matching for both planned pairs remains valid;
   no paired or comparative interpretation is permitted.
@@ -243,8 +245,9 @@ and production-readiness claims.
   authorization bytes must be rewritten to prove current non-replayability.
 - Offline gates: 93 focused V8/policy tests pass; repository validation, strict
   typing, Ruff checks for the terminal-control repair, and diff hygiene pass. The
-  complete suite has 1,465 passes and 21 failures, all assertions tied to V7 or
-  earlier active-profile/lifecycle expectations. The repository-wide format check
+  latest complete suite has 1,464 passes and 22 failures, all assertions tied to
+  V7-or-earlier historical expectations or bindings, including one stale absolute
+  worktree path. The repository-wide format check
   also reports ten pre-existing V8 control files; their executed finalizer/runner
   bytes were preserved rather than mechanically changed after the run.
 
@@ -257,7 +260,7 @@ preflight active hours, 6 hours per preflight instance, 4,620 calls, 4,000,000
 tokens, 120 browser actions, 4 empirical attempts, zero retries, one simultaneous
 instance, and zero persistent filesystems.
 
-The material blockers are exactly the ten conditions named by the source contract.
-Repairable preflight defects are not blockers. The next permitted phase is exact
-live preflight after AP-02 through AP-08 are met. Scientific freeze is permitted
-only after AP-09 is met, and empirical execution only after AP-10 is met.
+V8 is terminal and non-replayable. No live phase is currently permitted. A future
+campaign requires the budget-control reconciliation regression, fresh plan and run
+identities, a clean reviewed successor package, and fresh current-turn authorization;
+the scientific contract and zero-retry policy must remain unchanged.
