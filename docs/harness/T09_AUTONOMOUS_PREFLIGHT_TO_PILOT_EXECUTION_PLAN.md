@@ -243,9 +243,14 @@ and production-readiness claims.
   contract even though those immutable historical bytes correctly retain their
   then-authorized state. This removes the hidden assumption that historical
   authorization bytes must be rewritten to prove current non-replayability.
+- The V7 profile and execution-contract bytes previously addressed through mutable
+  active paths are archived byte-for-byte as `PLAN-EXP0001-PILOT-V7.yaml` and
+  `T09_PILOT_EXECUTION_CONTRACT_V7.json`. Their Retry 5 terminal bindings retain
+  the original SHA-256 values while the active paths continue to hold exact V8
+  frozen bytes; this preserves both historical terminal chains without conflation.
 - Offline gates: 94 focused V8/policy tests pass; repository validation, strict
   typing, Ruff checks for the terminal-control repair, and diff hygiene pass. The
-  latest complete suite has 1,465 passes and 22 failures, all assertions tied to
+  latest complete suite has 1,466 passes and 21 failures, all assertions tied to
   V7-or-earlier historical expectations or bindings, including one stale absolute
   worktree path. The repository-wide format check
   also reports ten pre-existing V8 control files; their executed finalizer/runner

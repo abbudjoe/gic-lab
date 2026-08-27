@@ -1,0 +1,196 @@
+schema_version: 0.1.0
+experiment_id: EXP-0001
+plan_id: PLAN-EXP0001-PILOT-V7
+profile: pilot
+study_stage: exploratory
+purpose: Calibrate full-task completion, exact upstream scoring, matched-pair execution, reconstruction, task-level resource use, and larger-pilot feasibility on two locked tasks.
+sample_rationale: Two counterbalanced pairs can expose pipeline, scoring, completion, gross floor or ceiling, and cost failures; they cannot estimate an effect, variance, significance, condition superiority, or EXP-0001 outcome.
+interpretation_allowed: true
+execution:
+  authorized: false
+  authorization_reference: null
+model:
+  provider: OpenAI
+  manifest_id: MODEL-OPENAI-GPT4O-2024-11-20
+  api: https://api.openai.com/v1/
+  upstream_alias: gpt-4o
+  proposed_immutable_revision: gpt-4o-2024-11-20
+  historical_revision_known: false
+  reproduction_level: directional-reproduction
+  substitution: Exact historical serving revision is unavailable; use a declared dated GPT-4o snapshot.
+sampling:
+  pair_count: 2
+  conditions:
+    - SIRA-SIMULATIVE
+    - SIRA-REACTIVE
+  task_family: FanOutQA
+  dataset_ids:
+    - DATA-SIRA-FANOUTQA-DEV
+  counterbalancing:
+    - pair_id: PAIR-EXP0001-PILOT-V7-TASK-A
+      task_id: 7dcbbbdc7f1120cd
+      task_source: DATA-SIRA-FANOUTQA-DEV[0:1]
+      first: SIRA-REACTIVE
+      second: SIRA-SIMULATIVE
+      plans:
+        - condition: SIRA-REACTIVE
+          path: experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v7-task-0000-reactive.yaml
+        - condition: SIRA-SIMULATIVE
+          path: experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v7-task-0000-simulative.yaml
+    - pair_id: PAIR-EXP0001-PILOT-V7-TASK-B
+      task_id: 2120afba8009bad3
+      task_source: DATA-SIRA-FANOUTQA-DEV[1:2]
+      first: SIRA-SIMULATIVE
+      second: SIRA-REACTIVE
+      plans:
+        - condition: SIRA-SIMULATIVE
+          path: experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v7-task-0001-simulative.yaml
+        - condition: SIRA-REACTIVE
+          path: experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v7-task-0001-reactive.yaml
+budget:
+  pricing_record: experiments/EXP-0001-sira-simulative-vs-reactive/pricing.yaml
+  max_cost_usd: 40.00
+  max_provider_compute_cost_usd: 8.00
+  max_total_cost_usd: 48.00
+  prior_t09_cost_usd: 5.7424506112
+  cumulative_t09_cost_cap_usd: 60.00
+  max_model_calls: 4620
+  max_model_tokens: 4000000
+  max_browser_actions: 120
+  max_wall_seconds: 14400
+  max_accelerator_hours: 4.0
+  condition_limits:
+    SIRA-REACTIVE:
+      attempts: 2
+      max_model_calls_per_attempt: 1155
+      max_model_tokens_per_attempt: 1000000
+      max_browser_actions_per_attempt: 30
+      max_wall_seconds_per_attempt: 3600
+      max_openai_cost_usd_per_attempt: 10.00
+      max_accelerator_hours_per_attempt: 1.0
+    SIRA-SIMULATIVE:
+      attempts: 2
+      max_model_calls_per_attempt: 1155
+      max_model_tokens_per_attempt: 1000000
+      max_browser_actions_per_attempt: 30
+      max_wall_seconds_per_attempt: 3600
+      max_openai_cost_usd_per_attempt: 10.00
+      max_accelerator_hours_per_attempt: 1.0
+provider_lifecycle:
+  cumulative_accounting_origin: actual-active-lambda-seconds
+  preflight_clock_origin: provider-launch-send-started
+  preflight_wall_seconds: 3600
+  failed_preflight_termination_dispatch_seconds: 300
+  empirical_clock_origin: after-durable-frozen-run-manifest-publication
+  empirical_campaign_wall_seconds: 14400
+  evidence_export_reserve_seconds: 600
+  provider_termination_handoff_seconds: 60
+  empirical_cleanup_reserve_seconds: 900
+  empirical_termination_cutoff_seconds: 13500
+  maximum_successful_host_active_seconds: 18000
+  maximum_cumulative_active_seconds: 21600
+  max_lambda_instances: 1
+  max_launch_count: 2
+  persistent_filesystems: 0
+  replacement_launch_rule:
+    allowed_only_before_empirical_entry: true
+    prior_instance_terminal_and_absent_required: true
+    prior_host_empirical_attempts_required: 0
+    prior_host_model_requests_required: 0
+    prior_host_browser_actions_required: 0
+    ownership_outcome_unknown_forbidden: true
+    cumulative_lambda_cap_required: true
+  admission_rule: remaining campaign time must cover the next 3600-second condition hard wall, 600-second direct evidence export, 60-second provider termination handoff, and 900-second cleanup reserve
+  supervised_release_wait_seconds: 300
+  supervised_release_rule: the credential-free started entrypoint may wait up to 300 seconds for the final source-bound state, budget, core, exact-secret, and owned-container checks; the 5160-second admission gate is rerun immediately before durable release and any timeout consumes the started identity as infrastructure-invalid
+  control_plane: existing T07 pragmatic Lambda operations with source-derived projections; no persistent framework or watchdog
+replacement_image_policy:
+  historical_image_digest: sha256:035edf61718e84a8156f4f0f7817b134b0ce31488d3f0b50bbfba2b4a30cc61c
+  exact_historical_digest_equality_required: false
+  candidate_builds_normally: 0
+  candidate_qualifications_normally: 1
+  source_inputs: exact reviewed T07 pragmatic runtime inputs plus the frozen V7 policy package and the retained verified Retry 3 image archive
+  acceptance: all functional identities and offline fixtures pass; digest inequality alone is not a scientific difference
+  freeze_sequence: clean V7 source-plan package first; then one source-derived mode-0600 O_EXCL frozen run manifest binds the exact loaded or fallback-built image and the core-suppression receipts before the empirical clock begins
+  authoritative_runtime_identity: frozen-run-manifest replacement_image_id
+  all_attempts_same_image_required: true
+  image_export: best effort only; abandon before cleanup reserve is threatened
+  fallback_build_second_launch_policy: a fallback-built image may run the campaign unchanged on slot 1, but any later pre-empirical slot-1 failure forfeits slot 2 because prompt termination takes priority and no pretermination image export is permitted; slot 2 can be authorized only before materialization or after exact retained-archive import
+raw_attempt_policy:
+  empirical_authority: immutable condition-owned raw directory, SHA-256 manifest, raw-attempt-complete receipt, independently verified per-attempt archive, and separate source-bound export-completion plus off-host-verification timestamps that final packaging compares with provider termination start
+  next_attempt_gate: prior condition terminated, raw evidence is reconstructable, raw manifest revalidates, exact credentials are absent, container and browser cleanup are clean, off-host archive acknowledgement exists, and remaining budgets admit the next attempt plus cleanup
+  downstream_finalizer: network-disabled, explicit qualified-image or prequalified absolute local Python, exact frozen evaluator overlay, read-only raw and control inputs, fresh versioned finalized-output root
+  offhost_reconstruction: each verified raw export carries a hash-bound control snapshot sufficient to restore the exact raw prefix and run the prelaunch control-machine-qualified local finalizer after provider termination; Lambda validates the qualification receipt without dereferencing off-host paths and local use preserves and revalidates the absolute venv launcher, link target, resolved executable, venv purelib, and both dependency trees
+  repair_policy: downstream-only descendant commits may rerun the finalizer against immutable raw evidence; they may not rerun a condition, alter raw bytes, change scoring, or make a model or browser request
+  uniform_analysis: the same full finalizer/interpreter/dependency/evaluator closure must be selected for both members of a pair and for every retained campaign attempt before final analysis
+  aggregate_staging: per-attempt raw or essential-failure archives are authoritative and every consumed identity must have a durable export completion plus off-host verification acknowledgement before aggregate staging or ordinary global cleanup; the optional aggregate stage hash-binds and revalidates those embedded direct-export receipts before final packaging; structural fixture or private-only findings are adjudicated and block public release but do not block private preservation or provider termination; an exact credential match remains a hard stop
+core_dump_policy:
+  docker_ulimit: core=0:0
+  process_soft_limit: 0
+  process_hard_limit: 0
+  scope: condition entrypoint and every Python, SiRA, Playwright, Chromium, evaluator, cleanup, child, and descendant process
+  preentry_proof: exact-image synthetic SIGABRT plus child/grandchild inheritance and no-network browser teardown all produce zero core artifacts
+  detection: known core filenames plus bounded ELF ET_CORE header inspection and full in-root inode-alias census; size alone never classifies a core
+  disposition: prohibited-transient-security-artifact; exclude every owned inode alias from every archive; retain only safe metadata; destroy remotely; require rotation when destruction is unverifiable; any detected core permanently stops campaign continuation; a preflight core blocks launch without consuming a condition, while a core from any started condition consumes that condition identity even before its first task model request or browser action
+failure_evidence_policy:
+  full_attempt_cap_bytes: 67108864
+  stdout_stderr_per_stream_cap_bytes: 67108864
+  essential_failure_cap_bytes: 16777216
+  authority: allowlisted privacy-safe reconstructable failure bundle with manifest and completion receipt
+  stream_limit_disposition: reaching either attach-stream limit is an explicit infrastructure stop, never silent truncation or a successful raw seal
+  scientific_status: infrastructure-invalid, unscored, excluded from paired analysis, and never retryable; whether empirical entry occurred is retained as a separate typed field
+  preempirical_cap_identity: a condition-container output-cap or host-runner infrastructure stop consumes the next frozen identity even before its first task model request or browser action; it receives the same essential seal and permanently closes campaign admission
+  exclusions: core dumps, dotenv files, temporary secret files, Jupyter credentials, private account fields, unsafe file types, nonallowlisted output, and over-cap members
+evidence_cap_calibration:
+  retry4_attempt_total_bytes: 236556320
+  retry4_core_bytes: 234479616
+  retry4_noncore_bytes: 2076704
+  retained_attempt_cap_bytes: 67108864
+  expected_full_attempt_evidence_bytes: 50331648
+  expected_full_attempt_evidence_breakdown:
+    thirty_screenshots_bytes: 31457280
+    session_events_actions_answers_bytes: 8388608
+    stdout_stderr_bytes: 4194304
+    provider_runtime_cleanup_receipts_bytes: 4194304
+    evaluator_schemas_and_manifests_bytes: 2097152
+  remaining_cap_headroom_bytes: 16777216
+  noncore_headroom_ratio: 32.3150839022
+  conclusion: the existing symmetric cap provides 16 MiB beyond a conservative 48 MiB full-attempt projection and more than 32x observed Retry 4 non-core headroom; no increase is made for a prohibited core dump
+prior_campaign_disposition:
+  plan_id: PLAN-EXP0001-PILOT-V6
+  run_id: RUN-T09-TASK-A-REACTIVE-0004
+  status: consumed-infrastructure-invalid-unscored
+  task_a_simulative: not-run
+  task_b_simulative: not-run
+  task_b_reactive: not-run
+  realized_pair: none
+  excluded_from_v7_pairing: true
+historical_fixture:
+  source_plan_id: PLAN-EXP0001-PILOT-V4
+  attempt_run_id: RUN-T09-TASK-A-REACTIVE-0002
+  archive_sha256: 63ed19b35bcb4cb62c3796a80a48004937340eb3826f9657a1006e251772255d
+  public_disposition_sha256: ecc0e135695e16f68d52b7aa85b70d42b1f1e945f7dd119fb7c7ff0e42fc8231
+  use: prelaunch network-disabled finalizer regression only; excluded from V7 pairs, usage, score aggregation, and scientific interpretation
+artifacts:
+  root: artifacts/EXP-0001/pilot-v7
+  retain_raw: true
+  public_release: blocked-pending-review
+condition_plan_paths:
+  - experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v7-task-0000-reactive.yaml
+  - experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v7-task-0000-simulative.yaml
+  - experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v7-task-0001-simulative.yaml
+  - experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v7-task-0001-reactive.yaml
+readiness:
+  execution_eligibility: eligible-after-authorization
+  approval_changes_required:
+    - execution.authorized
+    - execution.authorization_reference
+    - condition_plans[*].execution.authorization
+  unresolved_execution_blockers: []
+  pre_execution_requirements:
+    - Bind the exact clean package commit, final plan SHA-256, fresh V7 identities, and current Retry 5 authority in a single-use private overlay.
+    - Load the retained image archive, or build once only if loading is unavailable, and pass the source-bound runtime, evaluator, core-suppression, browser, model-metadata, pair-diff, science-hash, cap, evidence, repository, and privacy gates before empirical entry.
+    - "Treat a slot-1 fallback build as a single-host path: if that launch later fails before empirical entry, stop after cleanup rather than exporting the image or authorizing slot 2. Slot 2 remains exact-retained-archive import-only."
+    - Freeze the exact accepted image and all qualification and core-suppression receipt hashes in the source-derived mode-0600 frozen run manifest; every attempt must reload it and use the exact image ID.
+    - "Start no attempt unless the full 5,160-second admission envelope fits in actual remaining campaign time: the 3,600-second condition wall, 600-second direct evidence export, 60-second provider-termination handoff, and 900-second cleanup reserve. Downstream finalization remains separately bounded and may run offline against immutable raw evidence."
+    - Keep raw task, answer, trace, screenshot, and evaluator evidence private and access controlled; public release remains blocked pending review.

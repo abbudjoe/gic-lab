@@ -30,7 +30,7 @@
     },
     {
       "plan_id": "PLAN-EXP0001-PILOT-V7",
-      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml",
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/proposals/PLAN-EXP0001-PILOT-V7.yaml",
       "sha256": "9f66f8f6ee9e137d27e86c5362187fe46d94b26a322994e55222e34c0c4c004e",
       "historical_execution_eligibility": "eligible-after-authorization",
       "current_interpretation": "historical-consumed-nonreplayable"
@@ -49,7 +49,7 @@
     {
       "contract_id": "EXECUTION-CONTRACT-EXP0001-PILOT-V7",
       "plan_id": "PLAN-EXP0001-PILOT-V7",
-      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/T09_PILOT_EXECUTION_CONTRACT.json",
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/proposals/T09_PILOT_EXECUTION_CONTRACT_V7.json",
       "sha256": "982e04db71caf50f7c99c5a5d7c5101f9990c987afba249375b70d613d78a0f8",
       "historical_terminal_state": "current-turn-authorized-retry5-pending-dynamic-preflight",
       "historical_execution_eligibility": "current-turn-authorized-after-core-suppression-and-retained-image-qualification",
