@@ -42,7 +42,7 @@ and production-readiness claims.
 | AP-06 | Apply equal 536,870,912-byte per-attempt, 2,147,483,648-byte aggregate, and 67,108,864-byte essential-failure evidence caps. | Constants/contracts, equality/overflow tests, exclusions, and cap arithmetic. | met |
 | AP-07 | Pass focused local repair tests, `make validate`, diff hygiene, and one independent spec-conformance review before live mutation. | Commands, outputs, reviewer verdict, rereview if needed, and clean repair commit. | met |
 | AP-08 | Bind every preflight launch to current-turn authorization, fresh identity, one simultaneous A10, no persistent filesystem, 6-hour individual/12-hour cumulative active limits, and USD 20 preflight cap. | Private authorization/volume records, cloud ledger, provider receipts, and accounting. | met-prelaunch; live accounting continues |
-| AP-09 | Pass all 16 preflight qualification checks in the exact accepted image and final container path. | Machine-readable qualification receipts with zero task requests/actions. | not-started |
+| AP-09 | Pass all 16 preflight qualification checks in the exact accepted image and final container path. | Machine-readable qualification receipts with zero task requests/actions. | in-progress; iterations 1–2 retained, no empirical entry |
 | AP-10 | Freeze a clean V8 commit, one unchanged image, exact dependencies/model/tasks/evaluator/browser/configuration, four commands, two valid pair diffs, fresh identities, and one run manifest. | Commit/image/manifest hashes and clean-tree receipt. | not-started |
 | AP-11 | Execute Task A reactive and simulative once each with reconstructable raw evidence and uniform finalization. | Entry/raw-complete/usage/cleanup/evaluator/score receipts; zero retry. | not-started |
 | AP-12 | Apply the predeclared first-pair continuation checkpoint without result selection. | Append-only checkpoint binding pair validity, safety, budgets, informativeness, and time. | not-started |
@@ -122,6 +122,25 @@ and production-readiness claims.
   instances, zero requested persistent filesystems, and advertised capacity for
   the fixed A10/region at SHA-256
   `18997a5a7b8096c19dc7d5c885dcbf672ba994a71d6bc3b02857a249bedc4d5f`.
+- `2026-08-27`: preflight iteration 1 stopped before creating its artifact root
+  because Ubuntu's Python 3.10 cannot import `datetime.UTC`. Commit
+  `13224d2fdcfc069447ba2a2998209dbda2424cd0` uses the Python-3.10-compatible
+  `timezone.utc` host surface and adds a source regression. No image, container,
+  model, browser, or empirical action occurred.
+- `2026-08-27`: the live host control plane was materialized from attested uv
+  0.11.7 and the frozen project lock with exact Python 3.11.14. Its Linux Python
+  executable SHA-256 is `6ff97f602038740073dca96714310a30e303332326268e0f1bb2767edc820944`,
+  matching prior T09 qualification; Draft 2020-12 and PyYAML imports pass. The
+  private receipt SHA-256 is
+  `ae5b3177f4fa25b56c596cf60245a6157800b803660233dca7dd3e009cf2d7b1`.
+- `2026-08-27`: preflight iteration 2 imported the retained exact image and reached
+  the secret-channel utility container, then failed because Docker `--rm`
+  auto-removal raced the supervisor's exact-ID cleanup. The container was already
+  absent and no residue, model request, browser action, or empirical entry remained.
+  Commit `47cc2544602bf444e802e3317984d3291a708349` makes exact absence the
+  authoritative result after a bounded identity/name/label-verified convergence
+  window; persistent exact residue still fails closed. The regenerated V8 package
+  passes 119 focused tests, strict typing, lint, validation, and both pair diffs.
 
 ## Budgets, blockers, and next phase
 
