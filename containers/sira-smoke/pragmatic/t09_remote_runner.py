@@ -30,7 +30,7 @@ import sys
 import tarfile
 import time
 from collections.abc import Callable, Iterable, Iterator
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import IO, Any, BinaryIO, Final, NamedTuple, cast
 
@@ -82,6 +82,7 @@ from giclab.harness.t09_sira_pilot import (
     transition_zero_usage_preflight_state,
 )
 
+UTC: Final = timezone.utc  # noqa: UP017 - host control plane supports Python 3.10
 PLAN_ID: Final = "PLAN-EXP0001-PILOT-V8"
 HOST_RUN_ID: Final = "RUN-T09-PILOT-HOST-AUTONOMOUS-0001"
 ARCHIVE_ID: Final = "ARCHIVE-EXP0001-PILOT-V8-AUTONOMOUS-0001"

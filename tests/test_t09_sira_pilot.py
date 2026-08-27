@@ -2959,3 +2959,18 @@ def test_selected_t09_control_code_imports_no_provider_cloud_or_browser_client(
         elif isinstance(node, ast.ImportFrom) and node.module:
             imports.add(node.module.split(".")[0])
     assert imports.isdisjoint(forbidden)
+
+
+def test_remote_runner_uses_python310_compatible_utc_surface() -> None:
+    path = ROOT / "containers/sira-smoke/pragmatic/t09_remote_runner.py"
+    source = path.read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    datetime_imports = {
+        alias.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom) and node.module == "datetime"
+        for alias in node.names
+    }
+    assert "UTC" not in datetime_imports
+    assert {"datetime", "timezone"}.issubset(datetime_imports)
+    assert "UTC: Final = timezone.utc" in source
