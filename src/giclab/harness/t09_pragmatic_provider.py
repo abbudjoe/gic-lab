@@ -957,16 +957,37 @@ def validate_authorization_ledger(
     ):
         raise T09ProviderError("private authorization ledger metadata is unsafe")
     value = _load_json(path, maximum_bytes=65_536)
-    plan_path = repository / "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml"
+    authorized_package_commit = value.get("clean_package_commit")
+    if (
+        not isinstance(authorized_package_commit, str)
+        or _HEX40.fullmatch(authorized_package_commit) is None
+    ):
+        raise T09ProviderError("private authorization ledger package identity is malformed")
+    if authorized_package_commit != package_commit:
+        autonomous_preflight_package_transition(
+            repository,
+            from_package_commit=authorized_package_commit,
+            to_package_commit=package_commit,
+        )
+    plan_relative_path = (
+        "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml"
+    )
+    authorized_plan_sha256 = (
+        file_sha256(repository / plan_relative_path)
+        if authorized_package_commit == package_commit
+        else hashlib.sha256(
+            _git_blob(repository, authorized_package_commit, plan_relative_path)
+        ).hexdigest()
+    )
     required = {
         "schema_version": "0.1.0",
         "authorization_source_sha256": AUTHORIZATION_SOURCE_SHA256,
         "authorization_reference": "AUTH-T09-AUTONOMOUS-PREFLIGHT-TO-PILOT-2026-08-27",
         "authorized": True,
         "single_use": True,
-        "clean_package_commit": package_commit,
+        "clean_package_commit": authorized_package_commit,
         "plan_id": PLAN_ID,
-        "plan_sha256": file_sha256(plan_path),
+        "plan_sha256": authorized_plan_sha256,
         "max_lambda_instances": 1,
         "max_preflight_launch_count": 8,
         "max_empirical_launch_count": 1,
@@ -2375,6 +2396,7 @@ def _closeout_projection(
     preflight_failure_timing: dict[str, object] | None = None
     failed_preflight_dispatch_deadline: float | None = None
     failed_preflight_started: float | None = None
+    failed_preflight_iteration_started: float | None = None
     failed_preflight_failed_at: float | None = None
     if empirical_started is None and (root / "preflight-failure-timing.json").is_file():
         preflight_failure_timing = _load_json(
@@ -2396,9 +2418,17 @@ def _closeout_projection(
             preflight_failure_timing.get("failed_at_epoch"),
             label="preflight failure time",
         )
-        failed_preflight_elapsed = _number(
-            preflight_failure_timing.get("elapsed_seconds"),
-            label="failed preflight elapsed time",
+        failed_preflight_iteration_started = _number(
+            preflight_failure_timing.get("preflight_iteration_started_at_epoch"),
+            label="failed preflight iteration start",
+        )
+        failed_preflight_iteration_elapsed = _number(
+            preflight_failure_timing.get("preflight_iteration_elapsed_seconds"),
+            label="failed preflight iteration elapsed time",
+        )
+        failed_preflight_provider_elapsed = _number(
+            preflight_failure_timing.get("provider_instance_elapsed_seconds"),
+            label="failed preflight provider instance elapsed time",
         )
         if (
             set(preflight_failure_timing)
@@ -2408,8 +2438,10 @@ def _closeout_projection(
                 "host_run_id",
                 "preflight_failure_sha256",
                 "provider_preflight_started_at_epoch",
+                "preflight_iteration_started_at_epoch",
                 "failed_at_epoch",
-                "elapsed_seconds",
+                "preflight_iteration_elapsed_seconds",
+                "provider_instance_elapsed_seconds",
                 "termination_dispatch_deadline_epoch",
                 "preflight_engineering_state",
             }
@@ -2417,8 +2449,19 @@ def _closeout_projection(
             or preflight_failure_timing.get("plan_id") != PLAN_ID
             or preflight_failure_timing.get("host_run_id") != HOST_RUN_ID
             or failed_preflight_started != started
-            or failed_preflight_elapsed != failed_preflight_failed_at - failed_preflight_started
-            or failed_preflight_elapsed < 0
+            or not failed_preflight_started
+            <= failed_preflight_iteration_started
+            <= failed_preflight_failed_at
+            or failed_preflight_iteration_elapsed
+            != failed_preflight_failed_at - failed_preflight_iteration_started
+            or failed_preflight_provider_elapsed
+            != failed_preflight_failed_at - failed_preflight_started
+            or not 0
+            <= failed_preflight_iteration_elapsed
+            <= lifecycle.limits.preflight_iteration_wall_seconds + 5
+            or not 0
+            <= failed_preflight_provider_elapsed
+            <= lifecycle.limits.maximum_preflight_instance_active_seconds
             or preflight_failure_timing.get("preflight_engineering_state")
             != "resumable-same-host"
             or failed_preflight_dispatch_deadline is not None
@@ -2433,7 +2476,7 @@ def _closeout_projection(
         owned_lambda_duration_seconds=owned_lambda_duration,
         cumulative_lambda_duration_seconds=lambda_duration,
         failed_preflight_dispatch_deadline_epoch=failed_preflight_dispatch_deadline,
-        failed_preflight_started_at_epoch=failed_preflight_started,
+        failed_preflight_started_at_epoch=failed_preflight_iteration_started,
         failed_preflight_failed_at_epoch=failed_preflight_failed_at,
     )
     return {
@@ -2984,6 +3027,135 @@ def retry5_closed_slot1_package_transition(
             }
         ),
     )
+
+
+def autonomous_preflight_package_transition(
+    repository: Path,
+    *,
+    from_package_commit: str,
+    to_package_commit: str,
+) -> dict[str, object]:
+    """Bind one current-turn clean descendant without granting scientific drift.
+
+    The immutable authorization source governs the whole pre-empirical engineering
+    session.  Package commits may advance, but only along one Git ancestry and only
+    while the typed V8 science projection and its primary inputs remain identical.
+    """
+
+    if (
+        _HEX40.fullmatch(from_package_commit) is None
+        or _HEX40.fullmatch(to_package_commit) is None
+        or from_package_commit == to_package_commit
+    ):
+        raise T09ProviderError("autonomous package transition identity is invalid")
+    _verify_clean_package(repository, to_package_commit)
+    ancestry = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repository),
+            "merge-base",
+            "--is-ancestor",
+            from_package_commit,
+            to_package_commit,
+        ],
+        env={"PATH": os.environ.get("PATH", "/usr/bin:/bin")},
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+        timeout=30,
+    )
+    if ancestry.returncode != 0:
+        raise T09ProviderError("autonomous package is not a descendant of its launch package")
+    changed = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repository),
+            "diff",
+            "--name-status",
+            "--no-renames",
+            from_package_commit,
+            to_package_commit,
+        ],
+        env={"PATH": os.environ.get("PATH", "/usr/bin:/bin")},
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        check=True,
+        timeout=60,
+    )
+    lines = [line for line in changed.stdout.decode().splitlines() if line]
+    if not lines or any("\t" not in line for line in lines):
+        raise T09ProviderError("autonomous package transition is empty or malformed")
+    statuses_and_paths = [line.split("\t", 1) for line in lines]
+    changed_paths = sorted(path for _status, path in statuses_and_paths)
+    if any(status not in {"A", "M"} for status, _path in statuses_and_paths):
+        raise T09ProviderError("autonomous package transition deleted or renamed tracked state")
+
+    science_projection_path = (
+        "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
+        "T09_PILOT_V8_SCIENCE_PROJECTION.json"
+    )
+    immutable_paths = (
+        science_projection_path,
+        "experiments/EXP-0001-sira-simulative-vs-reactive/protocol.yaml",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/config.yaml",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
+        "T09_PILOT_DATASET_CONTRACT.json",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
+        "T09_PILOT_EVALUATOR_CONTRACT.json",
+        "src/giclab/harness/sira_gate_a.py",
+        "src/giclab/harness/safety.py",
+    )
+    previous = {
+        path: hashlib.sha256(_git_blob(repository, from_package_commit, path)).hexdigest()
+        for path in immutable_paths
+    }
+    current = {
+        path: hashlib.sha256(_git_blob(repository, to_package_commit, path)).hexdigest()
+        for path in immutable_paths
+    }
+    if previous != current:
+        raise T09ProviderError("autonomous package transition changed frozen science")
+    binary_diff = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repository),
+            "diff",
+            "--binary",
+            from_package_commit,
+            to_package_commit,
+        ],
+        env={"PATH": os.environ.get("PATH", "/usr/bin:/bin")},
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        check=True,
+        timeout=60,
+    ).stdout
+    return {
+        "transition_kind": "authorized-autonomous-preempirical-clean-descendant-v1",
+        "authorization_source_sha256": AUTHORIZATION_SOURCE_SHA256,
+        "from_package_commit": from_package_commit,
+        "to_package_commit": to_package_commit,
+        "from_package_is_ancestor": True,
+        "to_package_tree": subprocess.run(
+            ["git", "-C", str(repository), "rev-parse", f"{to_package_commit}^{{tree}}"],
+            env={"PATH": os.environ.get("PATH", "/usr/bin:/bin")},
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            check=True,
+            timeout=30,
+        )
+        .stdout.decode()
+        .strip(),
+        "changed_paths": changed_paths,
+        "changed_paths_sha256": _sha256_bytes(_canonical_bytes(changed_paths)),
+        "binary_diff_sha256": hashlib.sha256(binary_diff).hexdigest(),
+        "scientific_projection_sha256": previous[science_projection_path],
+        "scientific_contract_changed": False,
+    }
 
 
 def _safe_regular_identity(path: Path, *, expected_bytes: int, expected_sha256: str) -> None:
@@ -4014,12 +4186,17 @@ def _validate_replacement_launch_eligibility(
     package_transition: dict[str, object] | None = None
     if source_package_commit != package_commit:
         if (
-            source_package_commit != RETRY5_ACTIVE_SLOT1_PACKAGE_COMMIT
-            or prior_capability.get("plan_sha256") != RETRY5_ACTIVE_SLOT1_PLAN_SHA256
-            or value.get("eligibility_kind") is not None
+            source_package_commit == RETRY5_ACTIVE_SLOT1_PACKAGE_COMMIT
+            and prior_capability.get("plan_sha256") == RETRY5_ACTIVE_SLOT1_PLAN_SHA256
+            and value.get("eligibility_kind") is None
         ):
-            raise T09ProviderError("replacement package transition is not authorized")
-        package_transition = retry5_closed_slot1_package_transition(repository, package_commit)
+            package_transition = retry5_closed_slot1_package_transition(repository, package_commit)
+        else:
+            package_transition = autonomous_preflight_package_transition(
+                repository,
+                from_package_commit=source_package_commit,
+                to_package_commit=package_commit,
+            )
     if value.get("eligibility_kind") == "provider-entry-failed-preempirical":
         provisional = _load_source_validated_provisional_owner(
             prior,
@@ -4084,13 +4261,13 @@ def _validate_replacement_launch_eligibility(
     )
     entry_path = entry_source / "entry-receipt.json"
     closeout_path = closeout_source / "closeout-receipt.json"
-    source_plan_sha256 = (
-        RETRY5_ACTIVE_SLOT1_PLAN_SHA256
-        if source_package_commit == RETRY5_ACTIVE_SLOT1_PACKAGE_COMMIT
-        else file_sha256(
-            repository / "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml"
-        )
-    )
+    observed_entry = _load_json(entry_path, maximum_bytes=65_536)
+    source_plan_sha256 = observed_entry.get("plan_sha256")
+    if (
+        not isinstance(source_plan_sha256, str)
+        or _HEX64.fullmatch(source_plan_sha256) is None
+    ):
+        raise T09ProviderError("replacement source plan identity is malformed")
     lifecycle = load_campaign_lifecycle(repository)
     entry = validate_entry_receipt_source_bound(
         entry_path,
@@ -4231,9 +4408,17 @@ def _validate_host_preempirical_disposition(
         failure.get("provider_preflight_started_at_epoch"),
         label="provider preflight start",
     )
-    failure_elapsed = _number(
-        failure.get("elapsed_seconds"),
-        label="preflight elapsed time",
+    iteration_started = _number(
+        failure.get("preflight_iteration_started_at_epoch"),
+        label="preflight iteration start",
+    )
+    iteration_elapsed = _number(
+        failure.get("preflight_iteration_elapsed_seconds"),
+        label="preflight iteration elapsed time",
+    )
+    provider_instance_elapsed = _number(
+        failure.get("provider_instance_elapsed_seconds"),
+        label="provider instance elapsed time",
     )
     dispatch_deadline = failure.get("termination_dispatch_deadline_epoch")
     if dispatch_deadline is not None and (
@@ -4270,7 +4455,9 @@ def _validate_host_preempirical_disposition(
         "late_preflight_gate_absence_sha256": file_sha256(late_gate_path),
         "preflight_failed_at_epoch": failed_at,
         "provider_preflight_started_at_epoch": failure_started,
-        "preflight_elapsed_seconds": failure_elapsed,
+        "preflight_iteration_started_at_epoch": iteration_started,
+        "preflight_iteration_elapsed_seconds": iteration_elapsed,
+        "provider_instance_elapsed_seconds": provider_instance_elapsed,
         "termination_dispatch_deadline_epoch": dispatch_deadline,
         "preflight_engineering_state": failure.get("preflight_engineering_state"),
         "empirical_attempts_entered": 0,
@@ -4328,8 +4515,15 @@ def _validate_host_preempirical_disposition(
         or failure.get("preflight_engineering_state") != "resumable-same-host"
         or failure.get("termination_dispatch_required") is not False
         or failure_started != provider_preflight_started_at_epoch
-        or failure_elapsed != failed_at - failure_started
-        or not 0 <= failure_elapsed <= Retry4LifecycleLimits().preflight_wall_seconds
+        or not failure_started <= iteration_started <= failed_at
+        or iteration_elapsed != failed_at - iteration_started
+        or provider_instance_elapsed != failed_at - failure_started
+        or not 0
+        <= iteration_elapsed
+        <= AutonomousPilotLifecycleLimits().preflight_iteration_wall_seconds + 5
+        or not 0
+        <= provider_instance_elapsed
+        <= AutonomousPilotLifecycleLimits().maximum_preflight_instance_active_seconds
         or dispatch_deadline is not None
     ):
         raise T09ProviderError("host pre-empirical disposition is not source-grounded zero-use")
@@ -5128,8 +5322,16 @@ def closeout_campaign(
                 "provider_preflight_started_at_epoch": validated_host_disposition[
                     "provider_preflight_started_at_epoch"
                 ],
+                "preflight_iteration_started_at_epoch": validated_host_disposition[
+                    "preflight_iteration_started_at_epoch"
+                ],
                 "failed_at_epoch": validated_host_disposition["preflight_failed_at_epoch"],
-                "elapsed_seconds": validated_host_disposition["preflight_elapsed_seconds"],
+                "preflight_iteration_elapsed_seconds": validated_host_disposition[
+                    "preflight_iteration_elapsed_seconds"
+                ],
+                "provider_instance_elapsed_seconds": validated_host_disposition[
+                    "provider_instance_elapsed_seconds"
+                ],
                 "termination_dispatch_deadline_epoch": validated_host_disposition[
                     "termination_dispatch_deadline_epoch"
                 ],

@@ -2171,11 +2171,13 @@ def test_retry5_slot2_rejects_any_unverified_core_destruction(
         destruction_verified: bool,
         nonempirical_consumed: bool = False,
         failure_elapsed_seconds: float = 1000.0,
+        iteration_started_seconds: float = 0.0,
     ) -> tuple[Path, Path]:
         source = tmp_path / label
         source.mkdir(mode=0o700)
         preflight_started = 0.0
         failed_at = preflight_started + failure_elapsed_seconds
+        iteration_started = preflight_started + iteration_started_seconds
         state = {
             "plan_id": PLAN_ID,
             "empirical_attempts_entered": [],
@@ -2207,8 +2209,10 @@ def test_retry5_slot2_rejects_any_unverified_core_destruction(
             "preflight_engineering_state": "resumable-same-host",
             "termination_dispatch_required": False,
             "provider_preflight_started_at_epoch": preflight_started,
+            "preflight_iteration_started_at_epoch": iteration_started,
             "failed_at_epoch": failed_at,
-            "elapsed_seconds": failed_at - preflight_started,
+            "preflight_iteration_elapsed_seconds": failed_at - iteration_started,
+            "provider_instance_elapsed_seconds": failed_at - preflight_started,
             "termination_dispatch_deadline_epoch": None,
         }
         for name, value in {
@@ -2248,7 +2252,9 @@ def test_retry5_slot2_rejects_any_unverified_core_destruction(
             ),
             "preflight_failed_at_epoch": failed_at,
             "provider_preflight_started_at_epoch": preflight_started,
-            "preflight_elapsed_seconds": failed_at - preflight_started,
+            "preflight_iteration_started_at_epoch": iteration_started,
+            "preflight_iteration_elapsed_seconds": failed_at - iteration_started,
+            "provider_instance_elapsed_seconds": failed_at - preflight_started,
             "termination_dispatch_deadline_epoch": None,
             "preflight_engineering_state": "resumable-same-host",
             "empirical_attempts_entered": 0,
@@ -2301,7 +2307,7 @@ def test_retry5_slot2_rejects_any_unverified_core_destruction(
     late_receipt, late_source = write_source(
         label="late-preflight",
         destruction_verified=True,
-        failure_elapsed_seconds=3_600.0 + 1e-6,
+        failure_elapsed_seconds=3_605.0 + 1e-6,
     )
     with pytest.raises(Exception, match="source-grounded zero-use"):
         provider._validate_host_preempirical_disposition(
@@ -2311,6 +2317,22 @@ def test_retry5_slot2_rejects_any_unverified_core_destruction(
             entry_receipt_sha256=entry_sha256,
             provider_preflight_started_at_epoch=0.0,
         )
+    resumed_receipt, resumed_source = write_source(
+        label="second-iteration-after-one-hour",
+        destruction_verified=True,
+        failure_elapsed_seconds=5_000.0,
+        iteration_started_seconds=4_000.0,
+    )
+    assert (
+        provider._validate_host_preempirical_disposition(
+            resumed_receipt,
+            resumed_source,
+            package_commit=package_commit,
+            entry_receipt_sha256=entry_sha256,
+            provider_preflight_started_at_epoch=0.0,
+        )["preflight_iteration_elapsed_seconds"]
+        == 1_000.0
+    )
     unsafe_receipt, unsafe_source = write_source(label="unsafe", destruction_verified=False)
     with pytest.raises(Exception, match="source-grounded zero-use"):
         provider._validate_host_preempirical_disposition(

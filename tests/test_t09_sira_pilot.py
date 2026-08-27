@@ -7,10 +7,11 @@ import inspect
 import io
 import json
 import stat
+import subprocess
 import time
 from dataclasses import replace
 from pathlib import Path
-from shutil import copytree
+from shutil import copy2, copytree
 from types import ModuleType, SimpleNamespace
 from typing import cast
 
@@ -872,6 +873,185 @@ def _load_host_runner() -> ModuleType:
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def test_autonomous_clean_descendant_reuses_authority_and_entry_receipt(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    subprocess.run(["git", "-C", str(repository), "init", "--quiet"], check=True)
+    subprocess.run(
+        ["git", "-C", str(repository), "config", "user.email", "test@example.invalid"],
+        check=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(repository), "config", "user.name", "T09 Test"],
+        check=True,
+    )
+    source_paths = (
+        "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
+        "T09_PILOT_V8_SCIENCE_PROJECTION.json",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/protocol.yaml",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/config.yaml",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
+        "T09_PILOT_DATASET_CONTRACT.json",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
+        "T09_PILOT_EVALUATOR_CONTRACT.json",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml",
+        "src/giclab/harness/sira_gate_a.py",
+        "src/giclab/harness/safety.py",
+    )
+    for relative_path in source_paths:
+        destination = repository / relative_path
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        copy2(ROOT / relative_path, destination)
+    subprocess.run(["git", "-C", str(repository), "add", "."], check=True)
+    subprocess.run(
+        ["git", "-C", str(repository), "commit", "--quiet", "-m", "test base"],
+        check=True,
+    )
+    base_commit = subprocess.run(
+        ["git", "-C", str(repository), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    infrastructure_note = repository / "docs/harness/T09_AUTONOMOUS_LINEAGE_TEST.md"
+    infrastructure_note.parent.mkdir(parents=True)
+    infrastructure_note.write_text("typed infrastructure descendant\n", encoding="utf-8")
+    subprocess.run(
+        ["git", "-C", str(repository), "add", str(infrastructure_note)],
+        check=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(repository), "commit", "--quiet", "-m", "test descendant"],
+        check=True,
+    )
+    descendant_commit = subprocess.run(
+        ["git", "-C", str(repository), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+    transition = provider.autonomous_preflight_package_transition(
+        repository,
+        from_package_commit=base_commit,
+        to_package_commit=descendant_commit,
+    )
+    assert transition["scientific_contract_changed"] is False
+    assert transition["changed_paths"] == [
+        "docs/harness/T09_AUTONOMOUS_LINEAGE_TEST.md"
+    ]
+
+    plan_path = (
+        repository
+        / "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml"
+    )
+    authorization = tmp_path / "authorization.json"
+    authorization.write_text(
+        json.dumps(
+            {
+                "schema_version": "0.1.0",
+                "authorization_source_sha256": provider.AUTHORIZATION_SOURCE_SHA256,
+                "authorization_reference": (
+                    "AUTH-T09-AUTONOMOUS-PREFLIGHT-TO-PILOT-2026-08-27"
+                ),
+                "authorized": True,
+                "single_use": True,
+                "clean_package_commit": base_commit,
+                "plan_id": provider.PLAN_ID,
+                "plan_sha256": provider.file_sha256(plan_path),
+                "max_lambda_instances": 1,
+                "max_preflight_launch_count": 8,
+                "max_empirical_launch_count": 1,
+                "maximum_preflight_instance_active_seconds": 21_600,
+                "maximum_cumulative_preflight_active_seconds": 43_200,
+                "persistent_filesystems": 0,
+                "preflight_lambda_cost_cap_usd": 20.0,
+                "lambda_cost_cap_usd": 8.0,
+                "openai_cost_cap_usd": 40.0,
+                "aggregate_cost_cap_usd": 68.0,
+                "prior_t09_cost_usd": 6.8131387350,
+                "cumulative_t09_cost_cap_usd": 75.0,
+                "replacement_image_policy": "retained-exact-load-or-one-fallback-build-v1",
+                "artifact_destination": (
+                    "/Volumes/Macintosh HD - Data/GIC-Lab/t09/autonomous-v8"
+                ),
+            }
+        ),
+        encoding="utf-8",
+    )
+    authorization.chmod(0o600)
+    assert provider.validate_authorization_ledger(
+        authorization,
+        repository=repository,
+        package_commit=descendant_commit,
+    )["clean_package_commit"] == base_commit
+
+    host = _load_host_runner()
+    source_root = tmp_path / "entry-source"
+    source_root.mkdir()
+    receipt = tmp_path / "entry-receipt.json"
+    receipt_value = {
+        "package_commit": base_commit,
+        "plan_sha256": provider.file_sha256(plan_path),
+        "captured_at_epoch": time.time(),
+        "owned_lambda_started_at_epoch": time.time() - 1,
+        "launch_slot": 1,
+        "launch_count": 1,
+    }
+    receipt.write_text(json.dumps(receipt_value), encoding="utf-8")
+
+    def validate_entry(
+        _path: Path,
+        _source: Path,
+        *,
+        package_commit: str,
+        plan_sha256: str,
+    ) -> dict[str, object]:
+        if package_commit != base_commit or plan_sha256 != receipt_value["plan_sha256"]:
+            raise provider.T09ProviderError("fixture package mismatch")
+        return dict(receipt_value)
+
+    monkeypatch.setattr(host, "validate_entry_receipt_source_bound", validate_entry)
+    dynamic = host.validate_dynamic_receipt(
+        receipt,
+        expected_package_commit=descendant_commit,
+        repository_root=repository,
+        source_root=source_root,
+    )
+    assert dynamic["provider_entry_package_commit"] == base_commit
+    assert dynamic["provider_package_transition"]["to_package_commit"] == descendant_commit
+
+    science_projection = (
+        repository
+        / "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
+        "T09_PILOT_V8_SCIENCE_PROJECTION.json"
+    )
+    science_projection.write_text("{}\n", encoding="utf-8")
+    subprocess.run(
+        ["git", "-C", str(repository), "add", str(science_projection)],
+        check=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(repository), "commit", "--quiet", "-m", "test science drift"],
+        check=True,
+    )
+    drift_commit = subprocess.run(
+        ["git", "-C", str(repository), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    with pytest.raises(provider.T09ProviderError, match="changed frozen science"):
+        provider.autonomous_preflight_package_transition(
+            repository,
+            from_package_commit=descendant_commit,
+            to_package_commit=drift_commit,
+        )
 
 
 def _load_attempt_finalizer() -> ModuleType:
@@ -2122,7 +2302,7 @@ def test_ordinary_preflight_defect_is_resumable_on_same_host_with_fresh_root(
         host,
         "validate_dynamic_receipt",
         lambda *_args, **_kwargs: {
-            "provider_preflight_started_at_epoch": now - 10.0,
+            "provider_preflight_started_at_epoch": now - 4_000.0,
             "prior_campaign_lambda_duration_seconds": 0.0,
             "prior_campaign_lambda_cost_usd": 0.0,
             "launch_slot": 1,
@@ -2150,6 +2330,11 @@ def test_ordinary_preflight_defect_is_resumable_on_same_host_with_fresh_root(
     assert failure["preflight_engineering_state"] == "resumable-same-host"
     assert failure["termination_dispatch_required"] is False
     assert failure["termination_dispatch_deadline_epoch"] is None
+    assert failure["provider_instance_elapsed_seconds"] >= 4_000.0
+    assert 0 <= failure["preflight_iteration_elapsed_seconds"] < 5.0
+    assert failure["preflight_iteration_started_at_epoch"] > failure[
+        "provider_preflight_started_at_epoch"
+    ]
 
     second_root = tmp_path / "second"
     host.preflight_with_deadline(SimpleNamespace(**common, artifact_root=second_root))

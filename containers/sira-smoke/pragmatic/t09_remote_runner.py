@@ -41,6 +41,7 @@ from giclab.harness.sira_gate_a import ProviderBudgetUsage
 from giclab.harness.t09_pragmatic_provider import (
     RETRY4_ACTIVE_SLOT2_ENTRY_PACKAGE_COMMIT,
     T09ProviderError,
+    autonomous_preflight_package_transition,
     load_campaign_lifecycle,
     retry4_active_slot2_entry_transition,
     validate_entry_receipt_source_bound,
@@ -4053,29 +4054,58 @@ def validate_dynamic_receipt(
             plan_sha256=file_sha256(plan),
         )
     except T09ProviderError as current_error:
-        try:
-            value = validate_entry_receipt_source_bound(
-                path.resolve(strict=True),
-                source,
-                package_commit=RETRY4_ACTIVE_SLOT2_ENTRY_PACKAGE_COMMIT,
-                plan_sha256=file_sha256(plan),
-            )
-            package_transition = retry4_active_slot2_entry_transition(
-                repository, expected_package_commit
-            )
-        except T09ProviderError:
-            raise T09HostError("provider entry receipt is not source-bound") from current_error
-        provider_entry_package_commit = RETRY4_ACTIVE_SLOT2_ENTRY_PACKAGE_COMMIT
+        observed_entry = load_object(path.resolve(strict=True), label="provider entry receipt")
+        observed_package_commit = observed_entry.get("package_commit")
+        observed_plan_sha256 = observed_entry.get("plan_sha256")
+        generic_transition_valid = False
         if (
-            value.get("launch_slot") != 2
-            or value.get("launch_count") != 2
-            or package_transition.get("from_package_commit")
-            != RETRY4_ACTIVE_SLOT2_ENTRY_PACKAGE_COMMIT
-            or package_transition.get("to_package_commit") != expected_package_commit
+            isinstance(observed_package_commit, str)
+            and re.fullmatch(r"[a-f0-9]{40}", observed_package_commit) is not None
+            and observed_package_commit != RETRY4_ACTIVE_SLOT2_ENTRY_PACKAGE_COMMIT
+            and isinstance(observed_plan_sha256, str)
+            and _HEX64.fullmatch(observed_plan_sha256) is not None
         ):
-            raise T09HostError(
-                "active slot-2 provider package transition drifted"
-            ) from current_error
+            try:
+                value = validate_entry_receipt_source_bound(
+                    path.resolve(strict=True),
+                    source,
+                    package_commit=observed_package_commit,
+                    plan_sha256=observed_plan_sha256,
+                )
+                package_transition = autonomous_preflight_package_transition(
+                    repository,
+                    from_package_commit=observed_package_commit,
+                    to_package_commit=expected_package_commit,
+                )
+            except T09ProviderError:
+                pass
+            else:
+                provider_entry_package_commit = observed_package_commit
+                generic_transition_valid = True
+        if not generic_transition_valid:
+            try:
+                value = validate_entry_receipt_source_bound(
+                    path.resolve(strict=True),
+                    source,
+                    package_commit=RETRY4_ACTIVE_SLOT2_ENTRY_PACKAGE_COMMIT,
+                    plan_sha256=file_sha256(plan),
+                )
+                package_transition = retry4_active_slot2_entry_transition(
+                    repository, expected_package_commit
+                )
+            except T09ProviderError:
+                raise T09HostError("provider entry receipt is not source-bound") from current_error
+            provider_entry_package_commit = RETRY4_ACTIVE_SLOT2_ENTRY_PACKAGE_COMMIT
+            if (
+                value.get("launch_slot") != 2
+                or value.get("launch_count") != 2
+                or package_transition.get("from_package_commit")
+                != RETRY4_ACTIVE_SLOT2_ENTRY_PACKAGE_COMMIT
+                or package_transition.get("to_package_commit") != expected_package_commit
+            ):
+                raise T09HostError(
+                    "active slot-2 provider package transition drifted"
+                ) from current_error
     captured = value.get("captured_at_epoch")
     if (
         not isinstance(captured, (int, float))
@@ -8006,7 +8036,12 @@ def preflight(args: argparse.Namespace) -> None:
         source_root=args.dynamic_source_root.resolve(strict=True),
     )
     launch_slot = dynamic.get("launch_slot")
-    if launch_slot not in range(1, 9) or dynamic.get("launch_count") != launch_slot:
+    if (
+        not isinstance(launch_slot, int)
+        or isinstance(launch_slot, bool)
+        or launch_slot not in range(1, 9)
+        or dynamic.get("launch_count") != launch_slot
+    ):
         raise T09HostError("autonomous entry launch identity is invalid")
     if launch_slot == 1 and (
         dynamic.get("replacement_eligibility_sha256") is not None
@@ -8489,8 +8524,8 @@ def preflight_with_deadline(args: argparse.Namespace) -> None:
     assert isinstance(started, (int, float))
     assert isinstance(prior_duration, (int, float))
     assert isinstance(prior_cost, (int, float))
-    now = time.time()
-    current_elapsed = now - float(started)
+    iteration_started = time.time()
+    current_elapsed = iteration_started - float(started)
     active_elapsed = float(prior_duration) + current_elapsed
     active_cost = float(prior_cost) + current_elapsed * LAMBDA_HOURLY_PRICE_USD / 3600.0
     deadline = min(
@@ -8529,8 +8564,10 @@ def preflight_with_deadline(args: argparse.Namespace) -> None:
                         "package_commit": args.package_commit,
                         "launch_slot": dynamic.get("launch_slot"),
                         "provider_preflight_started_at_epoch": float(started),
+                        "preflight_iteration_started_at_epoch": iteration_started,
                         "failed_at_epoch": failed_at,
-                        "elapsed_seconds": failed_at - float(started),
+                        "preflight_iteration_elapsed_seconds": failed_at - iteration_started,
+                        "provider_instance_elapsed_seconds": failed_at - float(started),
                         "failure_category": failure_category,
                         "exception_message_retained": False,
                         "empirical_attempts_entered": 0,
@@ -20755,8 +20792,10 @@ def preempirical_replacement_disposition(args: argparse.Namespace) -> dict[str, 
     failure = load_object(failure_path, label="preflight failure")
     provider_preflight_started = provider_entry.get("provider_preflight_started_at_epoch")
     failure_preflight_started = failure.get("provider_preflight_started_at_epoch")
+    preflight_iteration_started = failure.get("preflight_iteration_started_at_epoch")
     preflight_failed_at = failure.get("failed_at_epoch")
-    preflight_elapsed = failure.get("elapsed_seconds")
+    preflight_iteration_elapsed = failure.get("preflight_iteration_elapsed_seconds")
+    provider_instance_elapsed = failure.get("provider_instance_elapsed_seconds")
     late_gate_absence = _preempirical_late_gate_absence(root)
     qualification_root = root / "pilot-v7/replacement-image-qualification"
     materialization_receipt = qualification_root / "receipt.json"
@@ -20783,10 +20822,17 @@ def preempirical_replacement_disposition(args: argparse.Namespace) -> dict[str, 
         or failure_preflight_started != provider_preflight_started
         or not isinstance(preflight_failed_at, (int, float))
         or isinstance(preflight_failed_at, bool)
-        or not isinstance(preflight_elapsed, (int, float))
-        or isinstance(preflight_elapsed, bool)
-        or preflight_elapsed != preflight_failed_at - provider_preflight_started
-        or not 0 <= preflight_elapsed <= MAX_PREFLIGHT_INSTANCE_ACTIVE_SECONDS
+        or not isinstance(preflight_iteration_started, (int, float))
+        or isinstance(preflight_iteration_started, bool)
+        or not isinstance(preflight_iteration_elapsed, (int, float))
+        or isinstance(preflight_iteration_elapsed, bool)
+        or not isinstance(provider_instance_elapsed, (int, float))
+        or isinstance(provider_instance_elapsed, bool)
+        or not provider_preflight_started <= preflight_iteration_started <= preflight_failed_at
+        or preflight_iteration_elapsed != preflight_failed_at - preflight_iteration_started
+        or provider_instance_elapsed != preflight_failed_at - provider_preflight_started
+        or not 0 <= preflight_iteration_elapsed <= MAX_PREFLIGHT_ITERATION_WALL_SECONDS + 5
+        or not 0 <= provider_instance_elapsed <= MAX_PREFLIGHT_INSTANCE_ACTIVE_SECONDS
         or failure.get("termination_dispatch_deadline_epoch") is not None
     ):
         raise T09HostError("launch slot 1 is not a zero-use replacement candidate")
@@ -20836,7 +20882,9 @@ def preempirical_replacement_disposition(args: argparse.Namespace) -> dict[str, 
         ),
         "preflight_failed_at_epoch": failure["failed_at_epoch"],
         "provider_preflight_started_at_epoch": provider_preflight_started,
-        "preflight_elapsed_seconds": preflight_elapsed,
+        "preflight_iteration_started_at_epoch": preflight_iteration_started,
+        "preflight_iteration_elapsed_seconds": preflight_iteration_elapsed,
+        "provider_instance_elapsed_seconds": provider_instance_elapsed,
         "termination_dispatch_deadline_epoch": failure["termination_dispatch_deadline_epoch"],
         "preflight_engineering_state": failure["preflight_engineering_state"],
         "empirical_attempts_entered": 0,
