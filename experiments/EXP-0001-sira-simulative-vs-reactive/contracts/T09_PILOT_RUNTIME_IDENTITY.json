@@ -80,7 +80,7 @@
       },
       {
         "path": "src/giclab/harness/t09_pragmatic_provider.py",
-        "sha256": "220f9b891c5175bb988909a742db14a64f75577d5d02faa0e3f76a8c6dbd8a1d"
+        "sha256": "4576a5f821eb3471b03b97ac0e87cf2009c132eea44653d1a01739df89bdc812"
       },
       {
         "path": "containers/sira-smoke/pragmatic/t09_remote_runner.py",
@@ -131,7 +131,7 @@
         "sha256": "c2221dd34c094003c47f07a1d1b0b3afae0201d02857e7f91907ed43ee60104e"
       }
     ],
-    "reviewed_implementation_ancestor": "aa094bf95ba68a6585b63b41ce14fabfe7055ecb",
+    "reviewed_implementation_ancestor": "1e5f1f9524fe57443d4a3ba5c0353290e0cfda5e",
     "scope": [
       "content-addressed-no-follow-private-regression-archive-staging",
       "raw-attempt-root-typed-binding-before-empirical-entry",
