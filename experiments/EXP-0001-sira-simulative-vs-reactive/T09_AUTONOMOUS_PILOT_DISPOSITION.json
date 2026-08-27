@@ -175,6 +175,11 @@
     "task_a_reactive_archive_sha256": "cc6935483aa61574823ab70e428dc4c75109b663addb0d2c0f299d59cb4c6aa3",
     "task_a_reactive_export_completion_sha256": "8d372588cb9b582e4d88c56bec075cd893059d67dd05662b0ddaad317ab7d322",
     "task_a_reactive_export_verification_sha256": "0bdd08d6218d7f2d46200e501709bcdedc2c5299a8ea4454f991b3457d381258",
+    "task_a_reactive_attempt_outcome_sha256": "4a48a79e2535c5ced5ed1a3cc018da2d5b974e243139160a5133933e8963c38e",
+    "task_a_reactive_evidence_index_sha256": "082b6ee7a5bfafcc305e401dcc8b011c13b3f7a98272dc7ccfefcb6c64ef7108",
+    "task_a_reactive_semantic_projection_sha256": "49cb4898faceea90853305c6d16fa6fac520480d9268223f0849caef76118e1d",
+    "task_a_reactive_finalization_complete_sha256": "8ca2e4144d6b914fc7c850ff6ee3320f173084edcd4451e042f1fdafb33afb8e",
+    "downstream_invalid_derived_cleanup_sha256": "01011efbb6221fa74ed1c61c6d5b7e25869432234bc9c237409941a19faee230",
     "task_a_simulative_archive_sha256": "c74145c108c579681afe0c79b625bfb180eddc61c488f29e3ec9914dd9e16853",
     "task_a_simulative_export_completion_sha256": "ac9319eab4a9d553a64945ee5557070802d50ea725f6a35fe9001ceeeea4a328",
     "task_a_simulative_export_verification_sha256": "94f97ced7e2a4c6ede812637c7cb1c360cafa4bf7e2546e6dac6c8678f983d0a",
@@ -188,6 +193,7 @@
     "Task A simulative is infrastructure-invalid and unscored because three provider attempts were unreconciled by the runtime budget control; its observed usage is retained for accounting, not scientific scoring.",
     "No realized Task A pair or Task B attempt exists, so no paired or comparative scientific inference is available.",
     "Only Task A reactive was evaluator-eligible; uniform paired finalizer identity therefore cannot be demonstrated on a realized pair.",
+    "Task A reactive finalized outputs were hash-verified on the live host but were not separately copied before cleanup-priority termination; the independently verified immutable raw archive remains sufficient for offline reconstruction.",
     "The host global-cleanup completion validator rejected privacy-safe structural matches in retained command/fixture metadata despite exact-secret cleanup passing; provider closeout independently proves terminal state and restored security."
   ],
   "recommended_next_step": "Preserve both V8 attempts and make no treatment comparison. Repair the runtime-budget-control-drift primitive with a synthetic regression that reconciles every provider attempt before admission, then seek fresh plan and run identities for another zero-retry calibration campaign using the unchanged scientific contract."
