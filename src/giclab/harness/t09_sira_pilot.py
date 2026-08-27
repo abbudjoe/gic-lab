@@ -3108,10 +3108,13 @@ def _normalized_actual_argv(manifest: Mapping[str, object]) -> tuple[str, ...] |
         argv[indexes[0] + 1] = replacement
     downstream = argv[separator + 1 :]
     task_id = manifest.get("task_id")
-    task_label = {
-        TASK_IDS[0]: "TASK-A",
-        TASK_IDS[1]: "TASK-B",
-    }.get(task_id)
+    task_label = (
+        "TASK-A"
+        if task_id == TASK_IDS[0]
+        else "TASK-B"
+        if task_id == TASK_IDS[1]
+        else None
+    )
     expected_upstream_run_id = (
         f"{EXPERIMENT_ID}-PILOT-V8-{task_label}-{str(condition).upper()}"
         if task_label is not None
