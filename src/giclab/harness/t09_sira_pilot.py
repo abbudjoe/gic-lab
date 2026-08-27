@@ -884,13 +884,13 @@ def load_execution_contract(path: Path, *, expected_sha256: str) -> PilotExecuti
         raise T09PilotError("execution contract hash does not match")
     document = load_json_object(path, context="T09 execution contract")
     expected_identity = {
-        "schema_version": "0.3.0",
+        "schema_version": "0.4.0",
         "plan_id": PLAN_ID,
         "experiment_id": EXPERIMENT_ID,
         "sira_commit": SIRA_COMMIT,
         "model_revision": MODEL_REVISION,
         "service_tier": SERVICE_TIER,
-        "authorized": False,
+        "authorized": True,
     }
     for field, expected in expected_identity.items():
         if document.get(field) != expected:
