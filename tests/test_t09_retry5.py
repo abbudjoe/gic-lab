@@ -864,9 +864,11 @@ def test_retry5_browser_teardown_scans_for_cores_after_container_removal(
 ) -> None:
     host = _host("giclab_t09_retry5_browser_teardown")
     events: list[str] = []
+    observed_argv: list[list[str]] = []
     monkeypatch.setattr(host, "docker_prefix", lambda: ["docker"])
 
     def run_logged(argv: list[str], **_: object) -> None:
+        observed_argv.append(argv)
         if "start" not in argv:
             return
         attempt = tmp_path / "pilot-v7/browser-preflight"
@@ -948,6 +950,8 @@ def test_retry5_browser_teardown_scans_for_cores_after_container_removal(
         prefix=["docker"],
         image_id="sha256:" + "a" * 64,
     )
+    create = next(argv for argv in observed_argv if "create" in argv)
+    assert "--init" in create
     assert result["core_filename_count"] == 0
     assert result["elf_et_core_count"] == 0
     assert events == ["remove", "scan"]

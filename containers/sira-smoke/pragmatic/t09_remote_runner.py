@@ -5558,6 +5558,7 @@ def browser_lifecycle_preflight(
         "--log-driver",
         "none",
         "--read-only",
+        "--init",
         "--cap-drop",
         "ALL",
         "--security-opt",
