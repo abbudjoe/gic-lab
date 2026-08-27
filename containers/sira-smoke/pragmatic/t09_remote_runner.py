@@ -189,7 +189,7 @@ SOURCE_DATE_EPOCH: Final = 1_786_570_934
 MAX_ATTEMPT_OUTPUT_BYTES: Final = 536_870_912
 MAX_ATTEMPT_STREAM_BYTES: Final = 536_870_912
 MAX_ATTEMPT_CONTROL_BYTES: Final = 4_194_304
-MAX_FINALIZED_DERIVED_BYTES: Final = 4_194_304
+MAX_FINALIZED_DERIVED_BYTES: Final = 134_217_728
 MAX_ATTEMPT_SUPERVISOR_BYTES: Final = 1_048_576
 MAX_FINALIZER_LOG_BYTES_PER_STREAM: Final = 262_144
 MAX_RAW_SEAL_BYTES: Final = (
@@ -15974,11 +15974,35 @@ def finalize_attempt(args: argparse.Namespace) -> dict[str, object]:
             },
         )
         raise T09HostError("downstream finalizer failed; immutable raw attempt remains accepted")
-    outcome, _evidence, semantic_projection, output_files = validate_finalized_attempt(
-        repository=repository,
-        finalized_root=finalized_root,
-        run_id=args.run_id,
-    )
+    try:
+        outcome, _evidence, semantic_projection, output_files = validate_finalized_attempt(
+            repository=repository,
+            finalized_root=finalized_root,
+            run_id=args.run_id,
+        )
+    except T09HostError as exc:
+        candidate_bytes = full_attempt_tree_usage(finalized_root).bytes
+        shutil.rmtree(finalized_root)
+        write_exclusive(
+            invocation_log / "failure.json",
+            {
+                "schema_version": "0.1.0",
+                "plan_id": PLAN_ID,
+                "run_id": args.run_id,
+                "failure_category": "downstream-finalized-validation",
+                "candidate_bytes_removed": candidate_bytes,
+                "derived_output_cap_bytes": MAX_FINALIZED_DERIVED_BYTES,
+                "full_attempt_cap_bytes": MAX_ATTEMPT_OUTPUT_BYTES,
+                "raw_source_mutated": False,
+                "condition_retry_permitted": False,
+                "campaign_may_continue_after_verified_raw": True,
+            },
+        )
+        enforce_attempt_supervisor_cap(attempt_root)
+        enforce_full_attempt_output_cap(attempt_root)
+        raise T09HostError(
+            "downstream finalized candidate failed validation; immutable raw remains accepted"
+        ) from exc
     retained_raw_manifest, retained_raw_receipt = validate_raw_attempt_seal(
         attempt_root=attempt_root,
         raw_root=raw_root,

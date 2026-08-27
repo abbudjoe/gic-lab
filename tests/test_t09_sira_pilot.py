@@ -1366,6 +1366,21 @@ def test_downstream_selector_source_is_bound_to_its_commit(tmp_path: Path) -> No
         )
 
 
+def test_downstream_derived_slice_stays_within_authorized_attempt_cap() -> None:
+    host = _load_host_runner()
+    assert host.MAX_ATTEMPT_OUTPUT_BYTES == 536_870_912
+    assert host.MAX_FINALIZED_DERIVED_BYTES == 134_217_728
+    assert host.MAX_RAW_SEAL_BYTES == (
+        host.MAX_ATTEMPT_OUTPUT_BYTES
+        - host.MAX_ATTEMPT_CONTROL_BYTES
+        - host.MAX_FINALIZED_DERIVED_BYTES
+        - host.MAX_ATTEMPT_SUPERVISOR_BYTES
+    )
+    source = inspect.getsource(host.finalize_attempt)
+    assert '"downstream-finalized-validation"' in source
+    assert "shutil.rmtree(finalized_root)" in source
+
+
 def _load_openai_secret_materializer() -> ModuleType:
     path = ROOT / "containers/sira-smoke/pragmatic/materialize_openai_secret.py"
     spec = importlib.util.spec_from_file_location("giclab_t09_openai_secret_test", path)

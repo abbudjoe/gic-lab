@@ -202,6 +202,12 @@ and production-readiness claims.
   to the frozen package bytes while a separate metadata-safe byte comparison binds
   the actually executing selector to the exact downstream repair commit;
   all non-identity constraints are preserved.
+- `2026-08-27`: valid finalized Task A evidence measured about 96.7 MB because
+  the evidence index and deterministic semantic projection each retain the
+  scientific call/action evidence. The 512 MiB authorized per-attempt cap is
+  unchanged; its internal downstream-derived slice is now 128 MiB, and invalid
+  derived candidates are removed after recording a bounded failure receipt so
+  repeated finalizer repairs cannot consume the raw-evidence budget.
 
 ## Budgets, blockers, and next phase
 
