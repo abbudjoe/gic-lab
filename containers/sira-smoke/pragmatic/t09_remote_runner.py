@@ -17017,7 +17017,15 @@ def export_attempt(args: argparse.Namespace, destination: BinaryIO) -> dict[str,
         - (time.time() - float(campaign_started))
         - PROVIDER_TERMINATION_HANDOFF_SECONDS
     )
-    timeout = min(remaining_attempt, remaining_campaign_to_cutoff)
+    # ``hard_deadline`` intentionally accepts at most one condition wall. An
+    # attempt that finishes early can retain the full condition wall plus its
+    # evidence reserve, so cap the selected interval to the primitive's typed
+    # domain instead of falsely classifying that extra headroom as expired.
+    timeout = min(
+        remaining_attempt,
+        remaining_campaign_to_cutoff,
+        float(MAX_CONDITION_WALL_SECONDS),
+    )
     if timeout <= 1:
         raise T09HostError("attempt evidence cannot export before provider termination cutoff")
     if evidence_authority == "essential-infrastructure-failure":

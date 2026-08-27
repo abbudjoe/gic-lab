@@ -2611,7 +2611,15 @@ def test_raw_attempt_streams_before_cutoff_without_aggregate_stage(
     (raw_root / "condition.stdout").write_text("", encoding="utf-8")
     (raw_root / "condition.stderr").write_text("", encoding="utf-8")
     (supervisor_root / "attempt-wall.json").write_text(
-        json.dumps({"evidence_handoff_deadline_epoch": now + 60}),
+        json.dumps(
+            {
+                "evidence_handoff_deadline_epoch": (
+                    now
+                    + host.MAX_CONDITION_WALL_SECONDS
+                    + host.ATTEMPT_EVIDENCE_EXPORT_RESERVE_SECONDS
+                )
+            }
+        ),
         encoding="utf-8",
     )
     (supervisor_root / "evaluator-overlay-binding.json").write_text(

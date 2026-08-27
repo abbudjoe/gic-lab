@@ -175,6 +175,14 @@ and production-readiness claims.
   `2d42885fec37d6501273de38a7c85b4553b5b95d` requires the exact validated
   provider-package-transition hash when those commits differ and requires no hash
   when they match; fresh slot/replacement/resume authority remains prohibited.
+- `2026-08-27`: iteration 10 passed all 16 preflight checks and Task A reactive
+  completed its immutable raw seal. The downstream exporter then rejected an
+  otherwise-valid 4,200-second evidence window because `hard_deadline` accepts
+  at most the 3,600-second condition wall. The downstream-only repair caps the
+  selected export interval to that typed deadline domain; it does not change the
+  frozen scientific package, raw evidence, model, browser, condition, or evaluator.
+  The regression exercises an early-completion wall with the full condition plus
+  evidence reserve before export recovery is admitted.
 
 ## Budgets, blockers, and next phase
 
