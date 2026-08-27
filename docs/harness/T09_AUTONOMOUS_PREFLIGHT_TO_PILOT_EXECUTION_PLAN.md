@@ -1,6 +1,6 @@
 # T09 Autonomous Preflight-to-Pilot Execution Plan
 
-Status: **in-progress**
+Status: **terminal evidence finalization in progress**
 
 Source contract: the current-turn user instruction, `T09 Autonomous
 Preflight-to-Pilot Reset`, SHA-256
@@ -38,18 +38,18 @@ and production-readiness claims.
 | AP-02 | Give normalized authority-tree and nested eligibility-source manifests distinct typed identities across provider and host. | Focused pass/fail binding tests on the exact retained Slot 2 tree. | met |
 | AP-03 | Initialize durable cleanup state immediately after one exact provider instance ID is returned and before staging or remote mutation. | Ordering test and private state receipt with exact owner, resource/secret locations, and empirical-entry bit. | met |
 | AP-04 | Make basic host cleanup and provider termination independent of pilot, attempt, artifact, or image state. | Early-abort cleanup regression with no `pilot-state.json`, terminal provider receipt, and safe cleanup summary. | met |
-| AP-05 | Preserve process-wide core suppression and prohibit core retention. | Exact Docker `--ulimit core=0:0`, entrypoint assertion, inheritance, abort, Chromium, and zero-core receipts. | met-local; exact-image receipts pending AP-09 |
+| AP-05 | Preserve process-wide core suppression and prohibit core retention. | Exact Docker `--ulimit core=0:0`, entrypoint assertion, inheritance, abort, Chromium, and zero-core receipts. | met |
 | AP-06 | Apply equal 536,870,912-byte per-attempt, 2,147,483,648-byte aggregate, and 67,108,864-byte essential-failure evidence caps. | Constants/contracts, equality/overflow tests, exclusions, and cap arithmetic. | met |
 | AP-07 | Pass focused local repair tests, `make validate`, diff hygiene, and one independent spec-conformance review before live mutation. | Commands, outputs, reviewer verdict, rereview if needed, and clean repair commit. | met |
-| AP-08 | Bind every preflight launch to current-turn authorization, fresh identity, one simultaneous A10, no persistent filesystem, 6-hour individual/12-hour cumulative active limits, and USD 20 preflight cap. | Private authorization/volume records, cloud ledger, provider receipts, and accounting. | met-prelaunch; live accounting continues |
-| AP-09 | Pass all 16 preflight qualification checks in the exact accepted image and final container path. | Machine-readable qualification receipts with zero task requests/actions. | in-progress; iterations 1–2 retained, no empirical entry |
-| AP-10 | Freeze a clean V8 commit, one unchanged image, exact dependencies/model/tasks/evaluator/browser/configuration, four commands, two valid pair diffs, fresh identities, and one run manifest. | Commit/image/manifest hashes and clean-tree receipt. | not-started |
-| AP-11 | Execute Task A reactive and simulative once each with reconstructable raw evidence and uniform finalization. | Entry/raw-complete/usage/cleanup/evaluator/score receipts; zero retry. | not-started |
-| AP-12 | Apply the predeclared first-pair continuation checkpoint without result selection. | Append-only checkpoint binding pair validity, safety, budgets, informativeness, and time. | not-started |
-| AP-13 | If the checkpoint passes, execute Task B simulative and reactive once each with the same runtime/finalizer/evaluator. | Equivalent per-attempt and pair-matching evidence; zero retry. | not-started |
-| AP-14 | Enforce calls, tokens, actions, attempts, empirical wall, cleanup reserve, OpenAI/Lambda/new/cumulative spend, and raw-storage limits. | Runtime budget ledgers and actual accounting. | not-started |
-| AP-15 | Retain verified safe evidence, remove containers/browser/core/secrets, terminate the exact instance, restore provider security, and prove zero T09 instances. | External manifests/hashes, provider closeout, and cloud-ledger terminal events. | not-started |
-| AP-16 | After provider termination, run full repository gates, independent evidence review, and publish a non-comparative 15-item handoff. | Full checks, review verdict, disposition/control records, and final report. | not-started |
+| AP-08 | Bind every preflight launch to current-turn authorization, fresh identity, one simultaneous A10, no persistent filesystem, 6-hour individual/12-hour cumulative active limits, and USD 20 preflight cap. | Private authorization/volume records, cloud ledger, provider receipts, and accounting. | met |
+| AP-09 | Pass all 16 preflight qualification checks in the exact accepted image and final container path. | Machine-readable qualification receipts with zero task requests/actions. | met; iteration 10 passed in 174 seconds |
+| AP-10 | Freeze a clean V8 commit, one unchanged image, exact dependencies/model/tasks/evaluator/browser/configuration, four commands, two valid pair diffs, fresh identities, and one run manifest. | Commit/image/manifest hashes and clean-tree receipt. | met |
+| AP-11 | Execute Task A reactive and simulative once each with reconstructable raw evidence and uniform finalization. | Entry/raw-complete/usage/cleanup/evaluator/score receipts; zero retry. | partial-terminal; reactive raw/finalization valid, simulative essential failure reconstructable and unscored |
+| AP-12 | Apply the predeclared first-pair continuation checkpoint without result selection. | Append-only checkpoint binding pair validity, safety, budgets, informativeness, and time. | met-stop; no realized pair because simulative was infrastructure-invalid |
+| AP-13 | If the checkpoint passes, execute Task B simulative and reactive once each with the same runtime/finalizer/evaluator. | Equivalent per-attempt and pair-matching evidence; zero retry. | not-run by contract because AP-12 stopped |
+| AP-14 | Enforce calls, tokens, actions, attempts, empirical wall, cleanup reserve, OpenAI/Lambda/new/cumulative spend, and raw-storage limits. | Runtime budget ledgers and actual accounting. | met-ceilings; simulative stopped on budget-control drift |
+| AP-15 | Retain verified safe evidence, remove containers/browser/core/secrets, terminate the exact instance, restore provider security, and prove zero T09 instances. | External manifests/hashes, provider closeout, and cloud-ledger terminal events. | partial-terminal; provider clean, host completion validator rejected safe structural matches |
+| AP-16 | After provider termination, run full repository gates, independent evidence review, and publish a non-comparative 15-item handoff. | Full checks, review verdict, disposition/control records, and final report. | in-progress |
 
 ## Implementation mapping and planned evidence
 
@@ -208,6 +208,32 @@ and production-readiness claims.
   unchanged; its internal downstream-derived slice is now 128 MiB, and invalid
   derived candidates are removed after recording a bounded failure receipt so
   repeated finalizer repairs cannot consume the raw-evidence budget.
+- `2026-08-27`: iteration 10 passed all 16 exact-runtime checks in 174 seconds
+  with one metadata GET, zero task requests/actions, zero core artifacts, and no
+  credential exposure. The clean V8 freeze is commit
+  `6d3005bb5ce915eabb801ef35e11855cd9420338`, image
+  `sha256:abe8ed38f5c5b5a0a63fa726a74034dc5c192a12c0fccfe1319f97c27ceaf0a3`,
+  and run-manifest SHA-256
+  `67fabda63de6c940e650db4e1934b83c999e7c3e1dc8d52c0cab111aeec1386b`.
+- `2026-08-27`: Task A reactive crossed empirical entry once, sealed immutable raw
+  evidence, and finalized as evaluator-valid, incomplete, condition-failure, score
+  `0.0`: 36 call attempts, 91,038 tokens, 9 browser actions, USD 0.2743825.
+  No retry occurred. Task A simulative crossed entry once and sealed a
+  reconstructable essential infrastructure-failure bundle after the typed
+  `runtime-budget-control-drift` stop: 33 call attempts, 308,977 tokens, one
+  browser action, USD 2.7540625, and three unreconciled provider attempts. It is
+  unscored, not zero. No retry occurred.
+- Decision: the first-pair checkpoint stops. There is no realized Task A pair, and
+  Task B is not run. Static command matching for both planned pairs remains valid;
+  no paired or comparative interpretation is permitted.
+- `2026-08-27`: both attempts were exported and independently verified off-host.
+  Cleanup removed the remote secret, qualified image, and owned containers and
+  found no core, credential exposure, or residue. Its terminal projection was
+  conservatively rejected by structural credential-pattern matches in retained
+  field names/fixtures plus one intent-validation enumeration warning. Provider
+  closeout nevertheless proves the exact instance terminal/absent, zero T09
+  instances, and restored firewall/ruleset security. One launch was active
+  7,080.448808 seconds and cost USD 2.537160823.
 
 ## Budgets, blockers, and next phase
 

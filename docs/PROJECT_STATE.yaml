@@ -12,10 +12,10 @@ authorized_run_profile:
   profile_path: experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml
   profile_sha256: 5b77e29e1005979128fa24dbe809bd8b7f92139aa9a49afd68d1daf3de256125
   condition_plan_sha256s:
-    - 2654c73155fa9d8b8c90a6bd5f41e1d018171d9ef50c210a9b232377e3e84927
-    - 3d544ca10827ceec4d82f23917a6997447eb9e61ec01a94ef68b1fca6dd833ee
-    - 4042eccb2f28e023966b23bbe420e2c978f45b965d5c327a58a64c97d35ad4cd
-    - 9d3ec613bb7b30131d4e1e0494120be18533af7ad4ff9b596b304a3abf481299
+    - c0c15ac8d5011e504ca254003a65840d7ba4ce2e4a1df5f0095be63e7ad1a1a7
+    - afefeadc33505095c62cd1694eb8abe91b6267cb849c02d0b40bb883a24a4aa9
+    - f3c45a692720e0b4ed30998f6a27a6d7343eddcf10f9d6a05ad607678653d0c1
+    - 28cfabd33d82381bfc4dd547f06b441180d352062a82052eab8acef5ccb14c1b
 current_execution_control: null
 planned_execution_substrate: null
 historical_execution_substrate:
@@ -331,5 +331,58 @@ t09_pragmatic_retry5_checkpoint:
   publication_release_blocked: true
   scientific_result_claimed: false
   experiment_outcome_assigned: false
+t09_autonomous_pilot_checkpoint:
+  task: T09-AUTONOMOUS-PILOT
+  terminal_state: stopped-after-task-a-simulative-infrastructure-invalid
+  failure_state: runtime-budget-control-drift
+  lifecycle_state: one-valid-scored-attempt-and-one-essential-failure-seal-no-realized-pair
+  plan_id: PLAN-EXP0001-PILOT-V8
+  calibration_only: true
+  current_turn_execution_authorized: false
+  pilot_execution_authorized: false
+  frozen_package_commit: 6d3005bb5ce915eabb801ef35e11855cd9420338
+  downstream_finalizer_commit: d6a080264c7d2ac83efc9806d2a2ae4c141a1113
+  replacement_image_id: sha256:abe8ed38f5c5b5a0a63fa726a74034dc5c192a12c0fccfe1319f97c27ceaf0a3
+  frozen_run_manifest_sha256: 67fabda63de6c940e650db4e1934b83c999e7c3e1dc8d52c0cab111aeec1386b
+  dynamic_preflight_passed: true
+  qualification_check_count: 16
+  static_pair_diffs_valid: true
+  provider_launch_count: 1
+  empirical_attempts_entered: 2
+  raw_attempts_complete: 1
+  essential_failure_seals: 1
+  attempts_completed: 1
+  condition_retries: 0
+  task_model_call_attempts: 69
+  total_tokens: 400015
+  browser_actions: 10
+  task_a_reactive:
+    state: valid-scored-condition-failure
+    task_completion: incomplete
+    evaluator_valid: true
+    score: 0.0
+  task_a_simulative:
+    state: consumed-infrastructure-invalid-unscored
+    stop_reason: runtime-budget-control-drift
+    unreconciled_provider_attempts: 3
+  task_b_simulative: not-run
+  task_b_reactive: not-run
+  first_pair_checkpoint: stop-no-realized-pair-task-a-simulative-infrastructure-invalid
+  realized_pairs: 0
+  prior_t09_cost_usd: 6.813138735
+  openai_cost_usd: 3.0284449999999996
+  lambda_cost_usd: 2.537160822935899
+  new_total_cost_usd: 5.565605822935899
+  cumulative_t09_cost_usd: 12.378744557935898
+  active_lambda_duration_seconds: 7080.448808193207
+  cleanup_completion_receipt_valid: false
+  cleanup_completion_limitation: conservative-structural-credential-pattern-false-positives-and-intent-validation-warning
+  provider_terminal_or_absent: true
+  zero_t09_instances: true
+  security_restored: true
+  evidence_record: experiments/EXP-0001-sira-simulative-vs-reactive/T09_AUTONOMOUS_PILOT_DISPOSITION.json
+  publication_release_blocked: true
+  scientific_result_claimed: false
+  experiment_outcome_assigned: false
 authoritative_plan: docs/exec-plans/active/PHASE_1_ARTIFACT_EXECUTION.md
-last_updated: "2026-08-15"
+last_updated: "2026-08-27"

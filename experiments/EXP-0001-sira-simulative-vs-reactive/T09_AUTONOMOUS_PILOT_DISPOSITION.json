@@ -1,0 +1,191 @@
+{
+  "schema_version": "0.1.0",
+  "record_id": "T09-AUTONOMOUS-PILOT-DISPOSITION-0001",
+  "recorded_at": "2026-08-27",
+  "experiment_id": "EXP-0001",
+  "plan_id": "PLAN-EXP0001-PILOT-V8",
+  "host_run_id": "RUN-T09-PILOT-HOST-AUTONOMOUS-0001",
+  "authorization_reference": "AUTH-T09-AUTONOMOUS-PREFLIGHT-TO-PILOT-2026-08-27",
+  "authorization_source_sha256": "80ded0e246b4f070c3992ae872111c19c64d1ef30115d65a8641709f06e1a484",
+  "terminal_state": "stopped-after-task-a-simulative-infrastructure-invalid",
+  "failure_state": "runtime-budget-control-drift",
+  "lifecycle_state": "one-valid-scored-attempt-and-one-essential-failure-seal-no-realized-pair",
+  "calibration_only": true,
+  "scientific_result_claimed": false,
+  "experiment_outcome_assigned": false,
+  "condition_retry_count": 0,
+  "retry5_root_causes": {
+    "slot1": "The finalizer validator conflated the immutable frozen finalizer hash with the downstream executing finalizer hash, so a permitted downstream-only finalizer repair could not be represented.",
+    "slot2": "The provider bound the nested pre-empirical source manifest 13033996d3bb8277e7ba52d5ebc368327db09d5ada6b64ac38ef44b3019d5767 while the host projected the outer normalized authority-tree manifest a3709fc6450e058db023925431c488855e73c800d106580f8029116c7b9ee7e7 under the same field; cleanup also depended on pilot-state.json before that state existed."
+  },
+  "preflight": {
+    "launch_count": 1,
+    "iteration_count": 10,
+    "accepted_iteration": 10,
+    "accepted_iteration_wall_seconds": 174,
+    "qualification_check_count": 16,
+    "qualification_passed": true,
+    "task_model_calls": 0,
+    "task_browser_actions": 0,
+    "model_metadata_requests": 1,
+    "empirical_entry_crossed": false,
+    "preflight_active_seconds_to_freeze": 4744.229497909546,
+    "preflight_prorated_lambda_list_cost_usd": 1.7000155700842539,
+    "receipt_sha256": "bd720308a656223004e0888905e26596169bad8bd017cbcdebd64245da41d092"
+  },
+  "scientific_freeze": {
+    "frozen_package_commit": "6d3005bb5ce915eabb801ef35e11855cd9420338",
+    "replacement_image_id": "sha256:abe8ed38f5c5b5a0a63fa726a74034dc5c192a12c0fccfe1319f97c27ceaf0a3",
+    "frozen_run_manifest_sha256": "67fabda63de6c940e650db4e1934b83c999e7c3e1dc8d52c0cab111aeec1386b",
+    "postfreeze_validation_sha256": "434bec6ed49f9a8188e8f48959a2cec3ee720984ba12c3a4f56a23c661a9bb9d",
+    "task_a_static_pair_diff_valid": true,
+    "task_b_static_pair_diff_valid": true,
+    "core_soft_limit": 0,
+    "core_hard_limit": 0
+  },
+  "attempts": {
+    "frozen_order": [
+      "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0001",
+      "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0001",
+      "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0001",
+      "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0001"
+    ],
+    "task_a_reactive": {
+      "state": "valid-scored-condition-failure",
+      "task_completion": "incomplete",
+      "evaluator_valid": true,
+      "score": 0.0,
+      "condition_failure": true,
+      "infrastructure_invalid": false,
+      "wall_seconds": 149,
+      "model_call_attempts": 36,
+      "input_tokens": 84565,
+      "cached_input_tokens": 1408,
+      "output_tokens": 6473,
+      "total_tokens": 91038,
+      "browser_actions": 9,
+      "openai_cost_usd": 0.2743825,
+      "raw_attempt_bytes": 135420808,
+      "raw_attempt_reconstructable": true,
+      "core_artifact_count": 0,
+      "actual_credential_exposure_detected": false
+    },
+    "task_a_simulative": {
+      "state": "consumed-infrastructure-invalid-unscored",
+      "stop_reason": "runtime-budget-control-drift",
+      "score": null,
+      "wall_seconds": 80,
+      "model_call_attempts": 33,
+      "input_tokens": 43929,
+      "cached_input_tokens": 4992,
+      "output_tokens": 265048,
+      "total_tokens": 308977,
+      "browser_actions": 1,
+      "openai_cost_usd": 2.7540625000000003,
+      "unreconciled_provider_attempts": 3,
+      "essential_failure_reconstructable": true,
+      "core_artifact_count": 0,
+      "actual_credential_exposure_detected": false
+    },
+    "task_b_simulative": {
+      "state": "not-run",
+      "score": null
+    },
+    "task_b_reactive": {
+      "state": "not-run",
+      "score": null
+    },
+    "first_pair_checkpoint": "stop-no-realized-pair-task-a-simulative-infrastructure-invalid",
+    "realized_task_a_pair": false,
+    "realized_task_b_pair": false
+  },
+  "finalizer": {
+    "frozen_scientific_package_commit": "6d3005bb5ce915eabb801ef35e11855cd9420338",
+    "downstream_finalizer_commit": "d6a080264c7d2ac83efc9806d2a2ae4c141a1113",
+    "finalizer_source_sha256": "99705a977e94e5c84eaffd412c96a8a8828f3dd90acb86f510cd9859632cc5c0",
+    "finalizer_projection_source_sha256": "b6b0b16fc6fbed23c3731a7664481b4efc294d17cd6f3f3897d7171275344531",
+    "local_finalizer_qualification_sha256": "1284f5b4ecf7a8cb864ef1c396d14e4aa3f691bd4a71dad39163d928d2de46fb",
+    "network_disabled": true,
+    "model_or_browser_replay": false,
+    "raw_attempt_bytes_mutated": false,
+    "scoring_or_evaluator_changed": false,
+    "eligible_attempts_finalized": 1,
+    "infrastructure_invalid_attempts_finalized": 0,
+    "uniform_realized_pair_finalizer_available": false
+  },
+  "pair_matching": {
+    "task_a_static_pair_diff_valid": true,
+    "task_b_static_pair_diff_valid": true,
+    "task_a_realized_pair_available": false,
+    "task_b_realized_pair_available": false,
+    "paired_or_comparative_interpretation_permitted": false
+  },
+  "usage": {
+    "task_model_call_attempts": 69,
+    "input_tokens": 128494,
+    "cached_input_tokens": 6400,
+    "output_tokens": 271521,
+    "total_tokens": 400015,
+    "browser_actions": 10,
+    "condition_attempts": 2,
+    "condition_retries": 0,
+    "condition_wall_seconds": 229,
+    "empirical_freeze_to_provider_terminal_seconds": 2336.219310283661,
+    "openai_cost_usd": 3.0284449999999996
+  },
+  "provider": {
+    "provider": "Lambda On-Demand Cloud",
+    "instance_type": "gpu_1x_a10",
+    "launch_count": 1,
+    "persistent_filesystems": 0,
+    "active_lambda_duration_seconds": 7080.448808193207,
+    "lambda_list_cost_usd": 2.537160822935899,
+    "termination_request_count": 1,
+    "terminal_or_absent": true,
+    "zero_t09_instances": true,
+    "security_restored": true,
+    "campaign_wall_exception": "none"
+  },
+  "cost_reconciliation": {
+    "prior_t09_cost_usd": 6.813138735,
+    "new_openai_cost_usd": 3.0284449999999996,
+    "new_lambda_cost_usd": 2.537160822935899,
+    "new_total_cost_usd": 5.565605822935899,
+    "cumulative_t09_cost_usd": 12.378744557935898,
+    "all_cost_caps_respected": true
+  },
+  "cleanup": {
+    "owned_container_residue": [],
+    "core_artifact_detected": false,
+    "core_destruction_verified": true,
+    "actual_credential_exposure_detected": false,
+    "remote_secret_removed": true,
+    "qualified_runtime_image_removed": true,
+    "provider_terminal_or_absent": true,
+    "zero_t09_instances": true,
+    "security_restored": true,
+    "host_cleanup_completion_valid": false,
+    "host_cleanup_limitation": "The terminal projection was rejected by conservative structural credential-pattern matches in retained field names/fixtures and one intent-validation enumeration warning; exact secret scanning passed and no residue, core, or exposure was observed."
+  },
+  "evidence": {
+    "retention": "private-access-controlled-external-plus-public-safe-disposition",
+    "task_a_reactive_archive_sha256": "cc6935483aa61574823ab70e428dc4c75109b663addb0d2c0f299d59cb4c6aa3",
+    "task_a_reactive_export_completion_sha256": "8d372588cb9b582e4d88c56bec075cd893059d67dd05662b0ddaad317ab7d322",
+    "task_a_reactive_export_verification_sha256": "0bdd08d6218d7f2d46200e501709bcdedc2c5299a8ea4454f991b3457d381258",
+    "task_a_simulative_archive_sha256": "c74145c108c579681afe0c79b625bfb180eddc61c488f29e3ec9914dd9e16853",
+    "task_a_simulative_export_completion_sha256": "ac9319eab4a9d553a64945ee5557070802d50ea725f6a35fe9001ceeeea4a328",
+    "task_a_simulative_export_verification_sha256": "94f97ced7e2a4c6ede812637c7cb1c360cafa4bf7e2546e6dac6c8678f983d0a",
+    "task_a_simulative_provider_budget_sha256": "76fe726344d1c8a0db7dadeb29e23d9103e22d4a06905ec6d8247500b15e9e84",
+    "provider_entry_receipt_sha256": "0f3bd1c16276ea9471e4cbc32a02f613de295aa33f2875c93e97a152b261b21d",
+    "provider_closeout_receipt_sha256": "df9caa7a83e3f3936ee089f9783a4dbdb1914ea2cbc843093531b113970c195a",
+    "provider_closeout_source_manifest_sha256": "393dfa7aa76b48f02dc02fc93d43ba9b4072f32f27eae625fba95a3feefac0e2",
+    "host_cleanup_failure_receipt_sha256": "a8f69156164bc0c9dc9fdcc68f8ff41d68a8b04a8db09731595fc34d92105d27"
+  },
+  "residual_limitations": [
+    "Task A simulative is infrastructure-invalid and unscored because three provider attempts were unreconciled by the runtime budget control; its observed usage is retained for accounting, not scientific scoring.",
+    "No realized Task A pair or Task B attempt exists, so no paired or comparative scientific inference is available.",
+    "Only Task A reactive was evaluator-eligible; uniform paired finalizer identity therefore cannot be demonstrated on a realized pair.",
+    "The host global-cleanup completion validator rejected privacy-safe structural matches in retained command/fixture metadata despite exact-secret cleanup passing; provider closeout independently proves terminal state and restored security."
+  ],
+  "recommended_next_step": "Preserve both V8 attempts and make no treatment comparison. Repair the runtime-budget-control-drift primitive with a synthetic regression that reconciles every provider attempt before admission, then seek fresh plan and run identities for another zero-retry calibration campaign using the unchanged scientific contract."
+}
