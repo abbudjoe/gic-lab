@@ -23,6 +23,8 @@ import sysconfig
 from pathlib import Path
 from typing import Any
 
+from giclab.harness.t09_sira_pilot import LOCAL_FINALIZER_QUALIFICATION_ID, PLAN_ID
+
 MAX_DEPENDENCY_TREE_ENTRIES = 100_000
 MAX_DEPENDENCY_TREE_BYTES = 1_073_741_824
 
@@ -288,7 +290,7 @@ def qualify(args: argparse.Namespace) -> dict[str, object]:
     _disable_network()
     execution_path = args.execution_contract.resolve(strict=True)
     execution_contract = _object(execution_path, label="execution contract")
-    if execution_contract.get("plan_id") != "PLAN-EXP0001-PILOT-V7":
+    if execution_contract.get("plan_id") != PLAN_ID:
         raise LocalQualificationError("local finalizer execution contract drifted")
     base_site_packages, base_packages = _local_base_packages(execution_contract)
     base_dependency_tree = _dependency_tree_inventory(
@@ -361,8 +363,8 @@ def qualify(args: argparse.Namespace) -> dict[str, object]:
     }
     receipt: dict[str, object] = {
         "schema_version": "0.1.0",
-        "qualification_id": "QUAL-T09-PILOT-V7-LOCAL-FINALIZER-0001",
-        "plan_id": "PLAN-EXP0001-PILOT-V7",
+        "qualification_id": LOCAL_FINALIZER_QUALIFICATION_ID,
+        "plan_id": PLAN_ID,
         "package_commit": args.package_commit,
         **interpreter_identity,
         "python_version": "3.11.14",

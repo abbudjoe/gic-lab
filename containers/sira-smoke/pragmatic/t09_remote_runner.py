@@ -14503,7 +14503,8 @@ def validate_local_finalizer_qualification(
         or metadata.st_nlink != 1
         or stat.S_IMODE(metadata.st_mode) != 0o600
         or receipt.get("schema_version") != "0.1.0"
-        or receipt.get("qualification_id") != "QUAL-T09-PILOT-V7-LOCAL-FINALIZER-0001"
+        or receipt.get("qualification_id")
+        != "QUAL-T09-PILOT-V8-LOCAL-FINALIZER-AUTONOMOUS-0001"
         or receipt.get("plan_id") != PLAN_ID
         or receipt.get("package_commit") != package_commit
         or receipt.get("python_version") != "3.11.14"
@@ -16822,7 +16823,7 @@ def verify_attempt_export(args: argparse.Namespace) -> None:
             or frozen_control.get("clean_package_commit") != args.package_commit
             or frozen_control.get("replacement_image_id") != manifest.get("replacement_image_id")
             or local_qualification.get("qualification_id")
-            != "QUAL-T09-PILOT-V7-LOCAL-FINALIZER-0001"
+            != "QUAL-T09-PILOT-V8-LOCAL-FINALIZER-AUTONOMOUS-0001"
             or local_qualification.get("package_commit") != args.package_commit
             or frozen_control.get("local_finalizer_qualification_sha256")
             != next(

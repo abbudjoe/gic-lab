@@ -29,6 +29,7 @@ from giclab.harness.t09_sira_pilot import (
     DATASET_REVISION,
     EVALUATOR_RUN_IDS,
     EVALUATOR_SHA256,
+    LOCAL_FINALIZER_QUALIFICATION_ID,
     MODEL_REVISION,
     PLAN_ID,
     SIRA_COMMIT,
@@ -621,7 +622,7 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
         if (
             local_qualification.get("schema_version") != "0.1.0"
             or local_qualification.get("qualification_id")
-            != "QUAL-T09-PILOT-V7-LOCAL-FINALIZER-0001"
+            != LOCAL_FINALIZER_QUALIFICATION_ID
             or local_qualification.get("package_commit") != args.package_commit
             or local_qualification.get("execution_contract_sha256") != contract.sha256
             or any(

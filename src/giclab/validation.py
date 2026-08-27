@@ -1620,7 +1620,7 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
     plan_path = exp_root / "run-plans/pilot.yaml"
     if (
         command_document.get("schema_version") != "0.1.0"
-        or command_document.get("plan_id") != "PLAN-EXP0001-PILOT-V7"
+        or command_document.get("plan_id") != "PLAN-EXP0001-PILOT-V8"
         or command_document.get("execution_contract_sha256") != execution_sha256
         or command_document.get("plan_sha256") != hashlib.sha256(plan_path.read_bytes()).hexdigest()
     ):

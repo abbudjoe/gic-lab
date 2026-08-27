@@ -63,6 +63,9 @@ EVALUATOR_RUN_IDS: Final = (
     "RUN-T09-EVAL-TASK-B-REACTIVE-AUTONOMOUS-0001",
 )
 RUNTIME_QUALIFICATION_ID: Final = "QUAL-T09-PILOT-V8-IMAGE-AUTONOMOUS-0001"
+LOCAL_FINALIZER_QUALIFICATION_ID: Final = (
+    "QUAL-T09-PILOT-V8-LOCAL-FINALIZER-AUTONOMOUS-0001"
+)
 FROZEN_RUN_MANIFEST_ID: Final = "RUN-MANIFEST-EXP0001-PILOT-V8-AUTONOMOUS-0001"
 HISTORICAL_IMAGE_ID: Final = (
     "sha256:035edf61718e84a8156f4f0f7817b134b0ce31488d3f0b50bbfba2b4a30cc61c"
@@ -2946,8 +2949,8 @@ def _validated_upstream_argv(
         "--end_idx": str(attempt.task_index + 1),
         "--seed": "42",
     }
-    upstream_suffix = attempt.run_id.removeprefix("RUN-T09-").removesuffix("-0005")
-    upstream_run_id = f"EXP-0001-PILOT-V7-{upstream_suffix}"
+    task_label = "TASK-A" if attempt.task_index == 0 else "TASK-B"
+    upstream_run_id = f"{EXPERIMENT_ID}-PILOT-V8-{task_label}-{attempt.condition.upper()}"
     if argv[0] != upstream_run_id or values != expected:
         raise T09PilotError("upstream argv drifted from the exact task/condition contract")
     return values
@@ -3007,7 +3010,7 @@ def render_command_manifest(
     equality_surface = {
         "task_id": attempt.task_id,
         "model": MODEL_REVISION,
-        "runtime": "T09-V7-python-3.11.14-core-suppressed-preentry-bound-image",
+        "runtime": "T09-V8-python-3.11.14-core-suppressed-preentry-bound-image",
         "giclab_commit": attempt.giclab_commit,
         "protocol_sha256": attempt.protocol_sha256,
         "config_sha256": attempt.config_sha256,
@@ -3104,8 +3107,16 @@ def _normalized_actual_argv(manifest: Mapping[str, object]) -> tuple[str, ...] |
             return None
         argv[indexes[0] + 1] = replacement
     downstream = argv[separator + 1 :]
-    upstream_suffix = run_id.removeprefix("RUN-T09-").removesuffix("-0005")
-    expected_upstream_run_id = f"EXP-0001-PILOT-V7-{upstream_suffix}"
+    task_id = manifest.get("task_id")
+    task_label = {
+        TASK_IDS[0]: "TASK-A",
+        TASK_IDS[1]: "TASK-B",
+    }.get(task_id)
+    expected_upstream_run_id = (
+        f"{EXPERIMENT_ID}-PILOT-V8-{task_label}-{str(condition).upper()}"
+        if task_label is not None
+        else None
+    )
     if not downstream or downstream[0] != expected_upstream_run_id:
         return None
     downstream[0] = "<UPSTREAM-RUN-ID>"
