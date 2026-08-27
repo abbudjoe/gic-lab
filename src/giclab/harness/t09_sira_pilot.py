@@ -655,8 +655,17 @@ class RuntimeQualification:
                 or result.replacement_eligibility_preempirical_source_manifest_sha256 is not None
                 or result.normalized_slot2_authority_tree_manifest_sha256 is not None
                 or result.slot2_authority_sha256 is not None
-                or result.provider_entry_package_commit != result.clean_package_commit
-                or result.provider_package_transition_sha256 is not None
+                or (
+                    result.provider_entry_package_commit != result.clean_package_commit
+                    and (
+                        not isinstance(result.provider_package_transition_sha256, str)
+                        or _HEX64.fullmatch(result.provider_package_transition_sha256) is None
+                    )
+                )
+                or (
+                    result.provider_entry_package_commit == result.clean_package_commit
+                    and result.provider_package_transition_sha256 is not None
+                )
                 or result.preflight_prior_package_commit is not None
                 or any(item is not None for item in recovery_hashes)
             ):

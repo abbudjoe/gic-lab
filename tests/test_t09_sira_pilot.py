@@ -771,6 +771,27 @@ def test_runtime_qualification_is_typed_slot2_import_preentry_and_digest_agnosti
     qualification = RuntimeQualification.from_document(document)
     assert qualification.replacement_image_id != qualification.historical_image_id
     assert qualification.image_materialization_policy == "retained-import-only"
+    fresh_descendant = {
+        **document,
+        "clean_package_commit": "b" * 40,
+        "image_materialization_policy": "retained-import-or-one-fallback-build",
+        "preflight_transition_mode": "fresh",
+        "launch_slot": 1,
+        "launch_count": 1,
+        "prior_lambda_duration_seconds": 0,
+        "prior_lambda_cost_usd": 0,
+        "replacement_eligibility_sha256": None,
+        "replacement_eligibility_preempirical_source_manifest_sha256": None,
+        "normalized_slot2_authority_tree_manifest_sha256": None,
+        "slot2_authority_sha256": None,
+        "provider_entry_package_commit": "a" * 40,
+        "provider_package_transition_sha256": "e" * 64,
+    }
+    assert RuntimeQualification.from_document(fresh_descendant).launch_slot == 1
+    with pytest.raises(ValueError, match="fresh preflight retained resume authority"):
+        RuntimeQualification.from_document(
+            {**fresh_descendant, "provider_package_transition_sha256": None}
+        )
     for field, value in (
         ("build_count", 2),
         ("model_metadata_request_count", 0),
