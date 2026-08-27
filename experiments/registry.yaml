@@ -1,5 +1,5 @@
 schema_version: 0.1.0
-registry_revision: 13
+registry_revision: 14
 template_path: experiments/EXP-0000-template
 experiments:
   - experiment_id: EXP-0001
@@ -25,6 +25,11 @@ experiments:
       - experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY5_TERMINAL_CONTROL.json
       - experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY5_DISPOSITION.json
       - experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY5_POSTRUN_TERMINAL_CONTROL.json
+      - experiments/EXP-0001-sira-simulative-vs-reactive/T09_AUTONOMOUS_PILOT_DISPOSITION.json
+      - experiments/EXP-0001-sira-simulative-vs-reactive/T09_AUTONOMOUS_PILOT_POSTRUN_TERMINAL_CONTROL.json
+    current_execution_control:
+      path: experiments/EXP-0001-sira-simulative-vs-reactive/T09_AUTONOMOUS_PILOT_POSTRUN_TERMINAL_CONTROL.json
+      sha256: 0f6daac60412eeac4be9f71b25e8035237c6165cc5fa98b3f0d65f08dc9d65d1
     planning_contracts:
       - experiments/EXP-0001-sira-simulative-vs-reactive/contracts/T09_PILOT_DATASET_CONTRACT.json
       - experiments/EXP-0001-sira-simulative-vs-reactive/contracts/T09_PILOT_EVALUATOR_CONTRACT.json

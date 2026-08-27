@@ -57,6 +57,7 @@
           "path": {"$ref": "#/$defs/repository_path"},
           "sha256": {"$ref": "#/$defs/sha256"},
           "historical_execution_eligibility": {"const": "eligible-after-authorization"},
+          "historical_authorized": {"type": "boolean"},
           "current_interpretation": {"const": "historical-consumed-nonreplayable"}
         }
       }
@@ -95,6 +96,7 @@
             "minLength": 8,
             "maxLength": 160
           },
+          "historical_authorized": {"type": "boolean"},
           "current_interpretation": {"const": "historical-consumed-nonreplayable"}
         }
       }

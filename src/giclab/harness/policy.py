@@ -360,12 +360,13 @@ def _load_terminal_execution_control(
             raise ExecutionDisallowed(f"cannot load superseded profile: {exc}") from exc
         readiness = profile.get("readiness")
         execution = profile.get("execution")
+        historical_authorized = binding.get("historical_authorized", False)
         if (
             profile.get("plan_id") != plan_id
             or not isinstance(readiness, dict)
             or readiness.get("execution_eligibility") != binding["historical_execution_eligibility"]
             or not isinstance(execution, dict)
-            or execution.get("authorized") is not False
+            or execution.get("authorized") is not historical_authorized
         ):
             raise ExecutionDisallowed("superseded profile projection contradicts frozen bytes")
     registered_profiles = registry_entries[0].get("run_profiles")
@@ -446,7 +447,7 @@ def _load_terminal_execution_control(
             "plan_id": binding["plan_id"],
             "terminal_state": binding["historical_terminal_state"],
             "execution_eligibility": binding["historical_execution_eligibility"],
-            "authorized": False,
+            "authorized": binding.get("historical_authorized", False),
             "material_blockers": [],
         }:
             raise ExecutionDisallowed(

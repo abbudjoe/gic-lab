@@ -7,13 +7,16 @@
   "host_run_id": "RUN-T09-PILOT-HOST-AUTONOMOUS-0001",
   "authorization_reference": "AUTH-T09-AUTONOMOUS-PREFLIGHT-TO-PILOT-2026-08-27",
   "authorization_source_sha256": "80ded0e246b4f070c3992ae872111c19c64d1ef30115d65a8641709f06e1a484",
-  "terminal_state": "stopped-after-task-a-simulative-infrastructure-invalid",
+  "terminal_state": "t09-pilot-blocked-material-risk",
   "failure_state": "runtime-budget-control-drift",
   "lifecycle_state": "one-valid-scored-attempt-and-one-essential-failure-seal-no-realized-pair",
   "calibration_only": true,
   "scientific_result_claimed": false,
   "experiment_outcome_assigned": false,
   "condition_retry_count": 0,
+  "empirical_entry": true,
+  "single_use_authority_exhausted": true,
+  "launch_slots_exhausted": true,
   "retry5_root_causes": {
     "slot1": "The finalizer validator conflated the immutable frozen finalizer hash with the downstream executing finalizer hash, so a permitted downstream-only finalizer repair could not be represented.",
     "slot2": "The provider bound the nested pre-empirical source manifest 13033996d3bb8277e7ba52d5ebc368327db09d5ada6b64ac38ef44b3019d5767 while the host projected the outer normalized authority-tree manifest a3709fc6450e058db023925431c488855e73c800d106580f8029116c7b9ee7e7 under the same field; cleanup also depended on pilot-state.json before that state existed."

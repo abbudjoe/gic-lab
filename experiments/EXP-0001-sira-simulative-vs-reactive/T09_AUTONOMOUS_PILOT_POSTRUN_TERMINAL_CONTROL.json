@@ -1,0 +1,81 @@
+{
+  "schema_version": "0.1.0",
+  "control_id": "EXECUTION-CONTROL-EXP0001-AUTONOMOUS-V8-TERMINAL-0001",
+  "experiment_id": "EXP-0001",
+  "effective_on": "2026-08-27",
+  "terminal_record": {
+    "path": "experiments/EXP-0001-sira-simulative-vs-reactive/T09_AUTONOMOUS_PILOT_DISPOSITION.json",
+    "sha256": "def49bd1074c47800f62f305ef12a35c4206e6d37605556f6acff1bdde1d68fa"
+  },
+  "terminal_state": "t09-pilot-blocked-material-risk",
+  "empirical_entry": true,
+  "execution_eligibility": "blocked-pending-prerequisites",
+  "authorized": false,
+  "replayable": false,
+  "supersedes_registered_profile_readiness": true,
+  "superseded_registered_profiles": [
+    {
+      "plan_id": "PLAN-EXP0001-SMOKE",
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/smoke.yaml",
+      "sha256": "ab276b9e49256d49f143e252eddf6fe5c447d6f9c11300745b450fb7f1d0e425",
+      "historical_execution_eligibility": "eligible-after-authorization",
+      "historical_authorized": false,
+      "current_interpretation": "historical-consumed-nonreplayable"
+    },
+    {
+      "plan_id": "PLAN-EXP0001-PILOT-V6",
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/proposals/PLAN-EXP0001-PILOT-V6.yaml",
+      "sha256": "d0294b3a1535c4fe4ddfcc856a6b923731a7fb0c7840dd161c5784db61f35d8c",
+      "historical_execution_eligibility": "eligible-after-authorization",
+      "historical_authorized": false,
+      "current_interpretation": "historical-consumed-nonreplayable"
+    },
+    {
+      "plan_id": "PLAN-EXP0001-PILOT-V8",
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml",
+      "sha256": "5b77e29e1005979128fa24dbe809bd8b7f92139aa9a49afd68d1daf3de256125",
+      "historical_execution_eligibility": "eligible-after-authorization",
+      "historical_authorized": true,
+      "current_interpretation": "historical-consumed-nonreplayable"
+    }
+  ],
+  "superseded_execution_contracts": [
+    {
+      "contract_id": "EXECUTION-CONTRACT-EXP0001-PILOT-V6",
+      "plan_id": "PLAN-EXP0001-PILOT-V6",
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/proposals/T09_PILOT_EXECUTION_CONTRACT_V6.json",
+      "sha256": "17de56ba7ca7e313dedb200a906fb08622d358f612af229a266ad8195bc38a81",
+      "historical_terminal_state": "current-turn-authorized-retry4-pending-dynamic-preflight",
+      "historical_execution_eligibility": "current-turn-authorized-after-retained-image-or-fallback-qualification",
+      "historical_authorized": false,
+      "current_interpretation": "historical-consumed-nonreplayable"
+    },
+    {
+      "contract_id": "EXECUTION-CONTRACT-EXP0001-PILOT-V8",
+      "plan_id": "PLAN-EXP0001-PILOT-V8",
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/T09_PILOT_EXECUTION_CONTRACT.json",
+      "sha256": "611a3a7fb28b1b6a8197d911b8934e9307a87d41725abf58ff7b42ed654dc7df",
+      "historical_terminal_state": "current-turn-authorized-autonomous-pending-dynamic-preflight",
+      "historical_execution_eligibility": "current-turn-authorized-after-dynamic-preflight",
+      "historical_authorized": true,
+      "current_interpretation": "historical-consumed-nonreplayable"
+    }
+  ],
+  "blockers": [
+    "autonomous-v8-single-use-authority-exhausted",
+    "task-a-simulative-runtime-budget-control-drift",
+    "no-realized-task-a-pair-or-task-b-attempt",
+    "fresh-plan-and-run-identities-required-before-any-successor-campaign"
+  ],
+  "successor": {
+    "plan_id": null,
+    "profile_path": null,
+    "profile_sha256": null,
+    "requirements": [
+      "synthetic-regression-for-complete-provider-attempt-reconciliation",
+      "fresh-plan-host-condition-pair-stage-archive-and-provider-identities",
+      "clean-reviewed-successor-package-and-fresh-current-turn-authorization",
+      "unchanged-scientific-contract-and-zero-condition-retry-policy"
+    ]
+  }
+}

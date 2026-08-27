@@ -181,6 +181,48 @@ def test_project_state_cannot_drop_a_registered_terminal_control(tmp_path: Path)
         load_project_execution_state(tmp_path, schema_root=tmp_path)
 
 
+def test_terminal_control_explicitly_supersedes_frozen_authorized_v8_bytes(
+    tmp_path: Path,
+) -> None:
+    copytree(ROOT / "experiments", tmp_path / "experiments")
+    copytree(ROOT / "schemas", tmp_path / "schemas")
+    (tmp_path / "docs").mkdir()
+    state = load_yaml(ROOT / "docs/PROJECT_STATE.yaml")
+    (tmp_path / "docs/PROJECT_STATE.yaml").write_text(
+        yaml.safe_dump(state, sort_keys=False), encoding="utf-8"
+    )
+    loaded = load_project_execution_state(tmp_path, schema_root=tmp_path)
+    assert loaded.authorized_run_profile is None
+    assert loaded.paid_compute_allowed is False
+    assert loaded.cloud_mutation_allowed is False
+
+    control_relative = state["current_execution_control"]["path"]
+    control_path = tmp_path / control_relative
+    control = json.loads(control_path.read_text(encoding="utf-8"))
+    v8_profile = next(
+        item
+        for item in control["superseded_registered_profiles"]
+        if item["plan_id"] == "PLAN-EXP0001-PILOT-V8"
+    )
+    v8_profile["historical_authorized"] = False
+    control_path.write_text(json.dumps(control, indent=2) + "\n", encoding="utf-8")
+    control_sha256 = hashlib.sha256(control_path.read_bytes()).hexdigest()
+    state["current_execution_control"]["sha256"] = control_sha256
+    (tmp_path / "docs/PROJECT_STATE.yaml").write_text(
+        yaml.safe_dump(state, sort_keys=False), encoding="utf-8"
+    )
+    registry_path = tmp_path / "experiments/registry.yaml"
+    registry = load_yaml(registry_path)
+    registry["experiments"][0]["current_execution_control"]["sha256"] = control_sha256
+    registry_path.write_text(yaml.safe_dump(registry, sort_keys=False), encoding="utf-8")
+
+    with pytest.raises(
+        ExecutionDisallowed,
+        match="superseded profile projection contradicts frozen bytes",
+    ):
+        load_project_execution_state(tmp_path, schema_root=tmp_path)
+
+
 def test_unregistered_coherent_exp0001_successor_cannot_bypass_terminal_control(
     tmp_path: Path,
 ) -> None:
