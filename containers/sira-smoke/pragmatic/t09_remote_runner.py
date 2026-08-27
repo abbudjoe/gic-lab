@@ -15008,6 +15008,7 @@ def validate_finalizer_source(
         allowed = {
             FINALIZER_RELATIVE_PATH,
             FINALIZER_PROJECTION_RELATIVE_PATH,
+            "containers/sira-smoke/pragmatic/t09_remote_runner.py",
             "tests/test_t09_sira_pilot.py",
             "tests/test_t09_retry3.py",
         }
@@ -15297,6 +15298,62 @@ def _schema_errors(document: object, schema: dict[str, Any]) -> list[str]:
     )
 
 
+def _specialize_finalized_identity_schemas(
+    *,
+    repository: Path,
+    score_schema: dict[str, Any],
+    evidence_schema: dict[str, Any],
+    run_id: str,
+) -> None:
+    """Bind the independent selector to exact frozen fresh identities."""
+
+    execution = load_object(
+        contract_paths(repository)["execution"], label="finalized execution contract"
+    )
+    attempts = execution.get("attempts")
+    runtime = execution.get("runtime")
+    matches = (
+        [item for item in attempts if isinstance(item, dict) and item.get("run_id") == run_id]
+        if isinstance(attempts, list)
+        else []
+    )
+    pair_id = matches[0].get("pair_id") if len(matches) == 1 else None
+    qualification_id = (
+        runtime.get("runtime_qualification_id") if isinstance(runtime, dict) else None
+    )
+    score_properties = score_schema.get("properties")
+    evidence_properties = evidence_schema.get("properties")
+    identity = (
+        evidence_properties.get("identity")
+        if isinstance(evidence_properties, dict)
+        else None
+    )
+    evidence_runtime = (
+        evidence_properties.get("runtime") if isinstance(evidence_properties, dict) else None
+    )
+    identity_properties = identity.get("properties") if isinstance(identity, dict) else None
+    runtime_properties = (
+        evidence_runtime.get("properties") if isinstance(evidence_runtime, dict) else None
+    )
+    if (
+        execution.get("plan_id") != PLAN_ID
+        or not isinstance(pair_id, str)
+        or not isinstance(qualification_id, str)
+        or not isinstance(score_properties, dict)
+        or not isinstance(evidence_properties, dict)
+        or not isinstance(identity_properties, dict)
+        or not isinstance(runtime_properties, dict)
+    ):
+        raise T09HostError("frozen finalized identity schema binding is unavailable")
+    score_properties["plan_id"] = {"const": PLAN_ID}
+    score_properties["run_id"] = {"const": run_id}
+    score_properties["pair_id"] = {"const": pair_id}
+    evidence_properties["plan_id"] = {"const": PLAN_ID}
+    identity_properties["run_id"] = {"const": run_id}
+    identity_properties["pair_id"] = {"const": pair_id}
+    runtime_properties["qualification_id"] = {"const": qualification_id}
+
+
 def validate_finalized_attempt(
     *,
     repository: Path,
@@ -15322,6 +15379,12 @@ def validate_finalized_attempt(
     properties = evidence_schema.get("properties")
     if not isinstance(properties, dict):
         raise T09HostError("evidence schema properties are unavailable")
+    _specialize_finalized_identity_schemas(
+        repository=repository,
+        score_schema=score_schema,
+        evidence_schema=evidence_schema,
+        run_id=run_id,
+    )
     properties["outcome"] = score_schema
     errors = [*_schema_errors(outcome, score_schema), *_schema_errors(evidence, evidence_schema)]
     identity = evidence.get("identity")

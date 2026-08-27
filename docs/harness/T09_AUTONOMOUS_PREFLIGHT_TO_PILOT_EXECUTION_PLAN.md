@@ -193,6 +193,12 @@ and production-readiness claims.
   downstream finalizer now specializes only those four identity constraints from
   the exact frozen V8 contract; evaluator provenance, scoring, evidence shape, and
   every non-identity schema constraint remain unchanged and regression-checked.
+- `2026-08-27`: the finalizer then produced valid documents, and the frozen
+  supervisor's independent selector exposed the same stale V7 identity constants.
+  Its downstream-only schema specialization now derives the exact V8 plan, run,
+  pair, and qualification from the frozen execution contract before selection;
+  the post-entry path allowlist includes this selector file only alongside an
+  actual finalizer change, with all non-identity constraints preserved.
 
 ## Budgets, blockers, and next phase
 

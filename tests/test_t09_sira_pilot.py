@@ -1300,6 +1300,32 @@ def test_finalizer_specializes_only_fresh_schema_identities() -> None:
     )["properties"]["score_provenance"]
 
 
+def test_independent_selector_specializes_from_frozen_contract() -> None:
+    host = _load_host_runner()
+    score = load_json(ROOT / "schemas/t09-sira-pilot-score.schema.json")
+    evidence = load_json(ROOT / "schemas/t09-sira-pilot-evidence.schema.json")
+    host._specialize_finalized_identity_schemas(
+        repository=ROOT,
+        score_schema=score,
+        evidence_schema=evidence,
+        run_id=ATTEMPT_ORDER[0],
+    )
+    assert score["properties"]["plan_id"] == {"const": "PLAN-EXP0001-PILOT-V8"}
+    assert score["properties"]["run_id"] == {"const": ATTEMPT_ORDER[0]}
+    assert score["properties"]["pair_id"] == {
+        "const": "PAIR-EXP0001-PILOT-V8-TASK-A"
+    }
+    assert evidence["properties"]["identity"]["properties"]["run_id"] == {
+        "const": ATTEMPT_ORDER[0]
+    }
+    assert evidence["properties"]["runtime"]["properties"]["qualification_id"] == {
+        "const": "QUAL-T09-PILOT-V8-IMAGE-AUTONOMOUS-0001"
+    }
+    assert score["properties"]["score_provenance"] == load_json(
+        ROOT / "schemas/t09-sira-pilot-score.schema.json"
+    )["properties"]["score_provenance"]
+
+
 def _load_openai_secret_materializer() -> ModuleType:
     path = ROOT / "containers/sira-smoke/pragmatic/materialize_openai_secret.py"
     spec = importlib.util.spec_from_file_location("giclab_t09_openai_secret_test", path)
