@@ -683,9 +683,9 @@ def test_retry2_preserves_and_supersedes_the_zero_use_v3_failure() -> None:
 def test_runtime_qualification_is_typed_slot2_import_preentry_and_digest_agnostic() -> None:
     document = {
         "schema_version": "0.1.0",
-        "plan_id": "PLAN-EXP0001-PILOT-V7",
-        "manifest_id": "RUN-MANIFEST-EXP0001-PILOT-V7-0005",
-        "qualification_id": "QUAL-T09-PILOT-V7-IMAGE-0001",
+        "plan_id": "PLAN-EXP0001-PILOT-V8",
+        "manifest_id": "RUN-MANIFEST-EXP0001-PILOT-V8-AUTONOMOUS-0001",
+        "qualification_id": "QUAL-T09-PILOT-V8-IMAGE-AUTONOMOUS-0001",
         "clean_package_commit": "a" * 40,
         "replacement_image_id": "sha256:" + "e" * 64,
         "historical_image_id": (
@@ -734,7 +734,8 @@ def test_runtime_qualification_is_typed_slot2_import_preentry_and_digest_agnosti
         "prior_lambda_duration_seconds": 3.0,
         "prior_lambda_cost_usd": 0.1,
         "replacement_eligibility_sha256": "a" * 64,
-        "replacement_eligibility_source_manifest_sha256": "b" * 64,
+        "replacement_eligibility_preempirical_source_manifest_sha256": "b" * 64,
+        "normalized_slot2_authority_tree_manifest_sha256": "1" * 64,
         "slot2_authority_sha256": "c" * 64,
         "provider_entry_package_commit": "a" * 40,
         "provider_package_transition_sha256": None,
@@ -1202,7 +1203,9 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
             {
                 "schema_version": "0.1.0",
                 "authorization_source_sha256": provider.AUTHORIZATION_SOURCE_SHA256,
-                "authorization_reference": "AUTH-T09-PRAGMATIC-RETRY5-2026-08-14",
+                "authorization_reference": (
+                    "AUTH-T09-AUTONOMOUS-PREFLIGHT-TO-PILOT-2026-08-27"
+                ),
                 "authorized": True,
                 "single_use": True,
                 "clean_package_commit": package_commit,
@@ -1210,15 +1213,17 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
                 "plan_sha256": provider.file_sha256(plan_path),
                 "max_lambda_instances": 1,
                 "max_launch_count": 2,
+                "authorized_max_preflight_launch_count": 8,
                 "persistent_filesystems": 0,
+                "preflight_lambda_cost_cap_usd": 20.0,
                 "lambda_cost_cap_usd": 8.0,
                 "openai_cost_cap_usd": 40.0,
-                "aggregate_cost_cap_usd": 48.0,
-                "prior_t09_cost_usd": 5.7424506112,
-                "cumulative_t09_cost_cap_usd": 60.0,
+                "aggregate_cost_cap_usd": 68.0,
+                "prior_t09_cost_usd": 6.8131387350,
+                "cumulative_t09_cost_cap_usd": 75.0,
                 "replacement_image_policy": ("retained-exact-load-or-one-fallback-build-v1"),
                 "artifact_destination": (
-                    "/Volumes/Macintosh HD - Data/GIC-Lab/t09/sealed-artifacts"
+                    "/Volumes/Macintosh HD - Data/GIC-Lab/t09/autonomous-v8"
                 ),
             }
         ),
@@ -1279,6 +1284,20 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
             sleeper=sleeper,
         )
     provisional = load_json(active_failure_root / "provisional-owned-state.json")
+    early_cleanup = load_json(active_failure_root / "preflight-cleanup-state.json")
+    assert early_cleanup["state_type"] == "t09-preflight-cleanup-authority"
+    assert early_cleanup["private_instance_id"] == provisional["private_instance_id"]
+    assert early_cleanup["owned_instance_identity_sha256"] == provisional[
+        "owned_instance_identity_sha256"
+    ]
+    assert early_cleanup["empirical_entry_crossed"] is False
+    assert early_cleanup["pilot_state_required_for_cleanup"] is False
+    assert early_cleanup["attempt_state_required_for_cleanup"] is False
+    assert early_cleanup["temporary_firewall_resource_ids"] == []
+    assert early_cleanup["temporary_ruleset_resource_ids"] == []
+    assert early_cleanup["temporary_remote_secret_locations"] == [
+        "/home/ubuntu/.config/giclab/sira_api_key"
+    ]
     assert provisional["private_instance_id"] == "instance-fixture-0001"
     assert provisional["launch_capability_state"] == ("consumed-cleanup-only-until-entry-receipt")
     assert provider._HEX64.fullmatch(str(provisional["launch_journal_prefix_sha256"]))
@@ -1471,6 +1490,19 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
             sleeper=sleeper,
         )
     assert (write_failure_root / "PROVISIONAL_OWNER_CLOSED.json").is_file()
+    assert (write_failure_root / "preflight-cleanup-state.json").is_file()
+    early_closed_transport = FakeTransport([])
+    assert provider.closeout_campaign(
+        repository=ROOT,
+        package_commit=package_commit,
+        authorization_ledger=authorization,
+        dotenv=dotenv,
+        private_root=write_failure_root,
+        transport=early_closed_transport,
+        clock=clock,
+        sleeper=sleeper,
+    ) == write_failure_root / "PROVISIONAL_OWNER_CLOSED.json"
+    assert early_closed_transport.calls == []
     monkeypatch.setattr(provider, "write_exclusive", original_write)
 
     capability[1] = tmp_path / "launch-capabilities/duplicate-cleanup-failure.json"

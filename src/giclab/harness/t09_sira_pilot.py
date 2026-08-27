@@ -29,7 +29,7 @@ from giclab.harness.sira_gate_a import (
     ProviderBudgetUsage,
 )
 
-PLAN_ID: Final = "PLAN-EXP0001-PILOT-V7"
+PLAN_ID: Final = "PLAN-EXP0001-PILOT-V8"
 EXPERIMENT_ID: Final = "EXP-0001"
 SIRA_COMMIT: Final = "93fb8d72de71f9a4a13419670adeb34d93cf7acd"
 MODEL_REVISION: Final = "gpt-4o-2024-11-20"
@@ -51,19 +51,19 @@ TASK_REFERENCE_SHA256S: Final = (
     "2ee9d892e24441d5f5bbf31b7616c1ade5977af26d22e4020f92a162fa23becb",
 )
 ATTEMPT_ORDER: Final = (
-    "RUN-T09-TASK-A-REACTIVE-0005",
-    "RUN-T09-TASK-A-SIMULATIVE-0005",
-    "RUN-T09-TASK-B-SIMULATIVE-0005",
-    "RUN-T09-TASK-B-REACTIVE-0005",
+    "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0001",
+    "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0001",
+    "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0001",
+    "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0001",
 )
 EVALUATOR_RUN_IDS: Final = (
-    "RUN-T09-EVAL-TASK-A-REACTIVE-0005",
-    "RUN-T09-EVAL-TASK-A-SIMULATIVE-0005",
-    "RUN-T09-EVAL-TASK-B-SIMULATIVE-0005",
-    "RUN-T09-EVAL-TASK-B-REACTIVE-0005",
+    "RUN-T09-EVAL-TASK-A-REACTIVE-AUTONOMOUS-0001",
+    "RUN-T09-EVAL-TASK-A-SIMULATIVE-AUTONOMOUS-0001",
+    "RUN-T09-EVAL-TASK-B-SIMULATIVE-AUTONOMOUS-0001",
+    "RUN-T09-EVAL-TASK-B-REACTIVE-AUTONOMOUS-0001",
 )
-RUNTIME_QUALIFICATION_ID: Final = "QUAL-T09-PILOT-V7-IMAGE-0001"
-FROZEN_RUN_MANIFEST_ID: Final = "RUN-MANIFEST-EXP0001-PILOT-V7-0005"
+RUNTIME_QUALIFICATION_ID: Final = "QUAL-T09-PILOT-V8-IMAGE-AUTONOMOUS-0001"
+FROZEN_RUN_MANIFEST_ID: Final = "RUN-MANIFEST-EXP0001-PILOT-V8-AUTONOMOUS-0001"
 HISTORICAL_IMAGE_ID: Final = (
     "sha256:035edf61718e84a8156f4f0f7817b134b0ce31488d3f0b50bbfba2b4a30cc61c"
 )
@@ -362,7 +362,8 @@ class RuntimeQualification:
     prior_lambda_duration_seconds: float
     prior_lambda_cost_usd: float
     replacement_eligibility_sha256: str | None
-    replacement_eligibility_source_manifest_sha256: str | None
+    replacement_eligibility_preempirical_source_manifest_sha256: str | None
+    normalized_slot2_authority_tree_manifest_sha256: str | None
     slot2_authority_sha256: str | None
     provider_entry_package_commit: str
     provider_package_transition_sha256: str | None
@@ -535,9 +536,13 @@ class RuntimeQualification:
             replacement_eligibility_sha256=cast(
                 str | None, document.get("replacement_eligibility_sha256")
             ),
-            replacement_eligibility_source_manifest_sha256=cast(
+            replacement_eligibility_preempirical_source_manifest_sha256=cast(
                 str | None,
-                document.get("replacement_eligibility_source_manifest_sha256"),
+                document.get("replacement_eligibility_preempirical_source_manifest_sha256"),
+            ),
+            normalized_slot2_authority_tree_manifest_sha256=cast(
+                str | None,
+                document.get("normalized_slot2_authority_tree_manifest_sha256"),
             ),
             slot2_authority_sha256=cast(str | None, document.get("slot2_authority_sha256")),
             provider_entry_package_commit=_required_string(
@@ -630,7 +635,8 @@ class RuntimeQualification:
                 or result.prior_lambda_duration_seconds != 0
                 or result.prior_lambda_cost_usd != 0
                 or result.replacement_eligibility_sha256 is not None
-                or result.replacement_eligibility_source_manifest_sha256 is not None
+                or result.replacement_eligibility_preempirical_source_manifest_sha256 is not None
+                or result.normalized_slot2_authority_tree_manifest_sha256 is not None
                 or result.slot2_authority_sha256 is not None
                 or result.provider_entry_package_commit != result.clean_package_commit
                 or result.provider_package_transition_sha256 is not None
@@ -641,7 +647,8 @@ class RuntimeQualification:
         else:
             replacement_hashes = (
                 result.replacement_eligibility_sha256,
-                result.replacement_eligibility_source_manifest_sha256,
+                result.replacement_eligibility_preempirical_source_manifest_sha256,
+                result.normalized_slot2_authority_tree_manifest_sha256,
             )
             if (
                 result.launch_slot != 2

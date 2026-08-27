@@ -64,7 +64,7 @@ def render(repository: Path) -> dict[str, object]:
         raise ValueError("one or more T09 command pairs are not matched")
     return {
         "schema_version": "0.1.0",
-        "plan_id": "PLAN-EXP0001-PILOT-V7",
+        "plan_id": "PLAN-EXP0001-PILOT-V8",
         "reviewed_implementation_ancestor": next(iter(commits)),
         "plan_path": plan_path.relative_to(root).as_posix(),
         "plan_sha256": file_sha256(plan_path),

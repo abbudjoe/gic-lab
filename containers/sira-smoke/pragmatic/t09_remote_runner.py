@@ -79,14 +79,14 @@ from giclab.harness.t09_sira_pilot import (
     transition_zero_usage_preflight_state,
 )
 
-PLAN_ID: Final = "PLAN-EXP0001-PILOT-V7"
-HOST_RUN_ID: Final = "RUN-T09-PILOT-HOST-0005"
-ARCHIVE_ID: Final = "ARCHIVE-EXP0001-PILOT-V7-0005"
-STAGE_ID: Final = "STAGE-EXP0001-PILOT-V7-0005"
-QUALIFICATION_ID: Final = "QUAL-T09-PILOT-V7-IMAGE-0001"
-FROZEN_RUN_MANIFEST_ID: Final = "RUN-MANIFEST-EXP0001-PILOT-V7-0005"
+PLAN_ID: Final = "PLAN-EXP0001-PILOT-V8"
+HOST_RUN_ID: Final = "RUN-T09-PILOT-HOST-AUTONOMOUS-0001"
+ARCHIVE_ID: Final = "ARCHIVE-EXP0001-PILOT-V8-AUTONOMOUS-0001"
+STAGE_ID: Final = "STAGE-EXP0001-PILOT-V8-AUTONOMOUS-0001"
+QUALIFICATION_ID: Final = "QUAL-T09-PILOT-V8-IMAGE-AUTONOMOUS-0001"
+FROZEN_RUN_MANIFEST_ID: Final = "RUN-MANIFEST-EXP0001-PILOT-V8-AUTONOMOUS-0001"
 AUTHORIZATION_SOURCE_SHA256: Final = (
-    "97539fa4b65f627880b159e0f40c9a7efab26cd2a746c7c12ddbe15e44684346"
+    "80ded0e246b4f070c3992ae872111c19c64d1ef30115d65a8641709f06e1a484"
 )
 MODEL: Final = "gpt-4o-2024-11-20"
 SERVICE_TIER: Final = "default"
@@ -96,7 +96,7 @@ HISTORICAL_IMAGE_ID: Final = (
 T07_EXECUTION_COMMIT: Final = "5698f04dfd08bc85a66d2355b0a4bd7d3ce24a23"
 SIRA_COMMIT: Final = "93fb8d72de71f9a4a13419670adeb34d93cf7acd"
 SIRA_TREE: Final = "6a6d9068b94d7632d3533a3d6f013d4de6ff76e8"
-REPLACEMENT_IMAGE_TAG: Final = f"giclab/t09-pilot-v7:{SIRA_COMMIT[:12]}-0001"
+REPLACEMENT_IMAGE_TAG: Final = f"giclab/t09-pilot-v8:{SIRA_COMMIT[:12]}-autonomous-0001"
 RETAINED_IMAGE_ARCHIVE_BYTES: Final = 1_207_128_576
 RETAINED_IMAGE_ARCHIVE_SHA256: Final = (
     "623e717c2182eca9cee2f471b7ecd9a57bead2f5263dee64aa5cd954eae5ddb0"
@@ -161,12 +161,12 @@ EVALUATOR_DIRECT_URL_RECORD: Final = (
     "en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl"
 )
 RUN_IDS: Final = (
-    "RUN-T09-TASK-A-REACTIVE-0005",
-    "RUN-T09-TASK-A-SIMULATIVE-0005",
-    "RUN-T09-TASK-B-SIMULATIVE-0005",
-    "RUN-T09-TASK-B-REACTIVE-0005",
+    "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0001",
+    "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0001",
+    "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0001",
+    "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0001",
 )
-CONTAINER_PREFIX: Final = "giclab-t09-pilot-v7-"
+CONTAINER_PREFIX: Final = "giclab-t09-pilot-v8-autonomous-"
 CONDITION_SUPERVISOR_DIRNAME: Final = ".giclab-supervisor"
 DOCKER_PLAN_LABEL: Final = f"giclab.t09.plan={PLAN_ID}"
 DOCKER_HOST_RUN_LABEL: Final = f"giclab.t09.host_run={HOST_RUN_ID}"
@@ -182,8 +182,8 @@ BASE_IMAGE_IDENTITY: Final = (
     "sha256:96955ff5cc37e13f5f1b21f5171afb9fed7e028025aa9d81c690501cd7fa0c6c"
 )
 SOURCE_DATE_EPOCH: Final = 1_786_570_934
-MAX_ATTEMPT_OUTPUT_BYTES: Final = 67_108_864
-MAX_ATTEMPT_STREAM_BYTES: Final = 67_108_864
+MAX_ATTEMPT_OUTPUT_BYTES: Final = 536_870_912
+MAX_ATTEMPT_STREAM_BYTES: Final = 536_870_912
 MAX_ATTEMPT_CONTROL_BYTES: Final = 4_194_304
 MAX_FINALIZED_DERIVED_BYTES: Final = 4_194_304
 MAX_ATTEMPT_SUPERVISOR_BYTES: Final = 1_048_576
@@ -251,7 +251,7 @@ _SENSITIVE_JSON_KEYS: Final = {
 MAX_PRIVACY_JSON_BYTES: Final = 16_777_216
 MAX_PRIVACY_LINE_BYTES: Final = 8_388_608
 MAX_PRIVACY_SCAN_CHUNK_BYTES: Final = 1_048_576
-MAX_ATTEMPT_EXPORT_BYTES: Final = 100_663_296
+MAX_ATTEMPT_EXPORT_BYTES: Final = 536_870_912
 MAX_STAGED_EVIDENCE_BYTES: Final = 536_870_912
 MAX_STAGED_EVIDENCE_FILES: Final = 100_000
 MAX_STAGE_SECONDS: Final = 300
@@ -263,8 +263,8 @@ MAX_PREENTRY_REPAIRS_PER_RUN: Final = 3
 CORE_ULIMIT_DOCKER_ARGS: Final = ("--ulimit", "core=0:0")
 CORE_LIMIT_CONTRACT: Final = "process-tree-rlimit-core-zero-v1"
 MAX_CORE_SCAN_ENTRIES: Final = 100_000
-MAX_ESSENTIAL_FAILURE_BYTES: Final = 16_777_216
-MAX_ESSENTIAL_FAILURE_FILE_BYTES: Final = 8_388_608
+MAX_ESSENTIAL_FAILURE_BYTES: Final = 67_108_864
+MAX_ESSENTIAL_FAILURE_FILE_BYTES: Final = 33_554_432
 MAX_ESSENTIAL_FAILURE_FILES: Final = 1_024
 MAX_ESSENTIAL_EXCLUSION_RECORDS: Final = 1_024
 MAX_ESSENTIAL_RELATIVE_PATH_BYTES: Final = 256
@@ -1491,7 +1491,13 @@ def retain_slot2_authority(source: Path, destination: Path) -> tuple[str, ...]:
 
 
 def slot2_authority_binding(root: Path) -> dict[str, object]:
-    """Return the exact, content-addressed slot-2 authority projection."""
+    """Return distinct bindings for the transfer tree and scientific authority.
+
+    The normalized transfer-tree manifest proves what crossed the provider/host
+    boundary.  The nested pre-empirical source manifest is the authority named by
+    the replacement-eligibility receipt.  They are deliberately separate types:
+    equality between them is neither expected nor meaningful.
+    """
 
     relative_paths = _slot2_authority_relative_paths(root)
     records = [
@@ -1508,7 +1514,11 @@ def slot2_authority_binding(root: Path) -> dict[str, object]:
         "files": records,
         "files_sha256": canonical_sha256(records),
         "replacement_eligibility_sha256": file_sha256(root / "replacement-launch-eligibility.json"),
-        "replacement_eligibility_source_manifest_sha256": file_sha256(
+        "replacement_eligibility_preempirical_source_manifest_sha256": file_sha256(
+            root
+            / "slot2-eligibility-source/slot1-preempirical-source/source-manifest.json"
+        ),
+        "normalized_slot2_authority_tree_manifest_sha256": file_sha256(
             root / "slot2-eligibility-source/source-manifest.json"
         ),
     }
@@ -6456,8 +6466,12 @@ def write_frozen_run_manifest(
             slot2_authority is None
             or slot2_authority.get("replacement_eligibility_sha256")
             != dynamic.get("replacement_eligibility_sha256")
-            or slot2_authority.get("replacement_eligibility_source_manifest_sha256")
-            != dynamic.get("replacement_eligibility_source_manifest_sha256")
+            or slot2_authority.get(
+                "replacement_eligibility_preempirical_source_manifest_sha256"
+            )
+            != dynamic.get("replacement_eligibility_preempirical_source_manifest_sha256")
+            or slot2_authority.get("normalized_slot2_authority_tree_manifest_sha256")
+            != dynamic.get("normalized_slot2_authority_tree_manifest_sha256")
         ):
             raise T09HostError("slot-2 authority does not bind the provider entry")
         slot2_authority_sha256 = canonical_sha256(slot2_authority)
@@ -6526,8 +6540,11 @@ def write_frozen_run_manifest(
         "launch_slot": dynamic.get("launch_slot"),
         "launch_count": dynamic.get("launch_count"),
         "replacement_eligibility_sha256": dynamic.get("replacement_eligibility_sha256"),
-        "replacement_eligibility_source_manifest_sha256": dynamic.get(
-            "replacement_eligibility_source_manifest_sha256"
+        "replacement_eligibility_preempirical_source_manifest_sha256": dynamic.get(
+            "replacement_eligibility_preempirical_source_manifest_sha256"
+        ),
+        "normalized_slot2_authority_tree_manifest_sha256": dynamic.get(
+            "normalized_slot2_authority_tree_manifest_sha256"
         ),
         "slot2_authority_sha256": slot2_authority_sha256,
         "provider_entry_package_commit": dynamic.get("provider_entry_package_commit"),
@@ -6657,7 +6674,12 @@ def write_frozen_run_manifest(
             ),
             "preflight_resume_transition": resume_fields["preflight_resume_transition_sha256"],
             "slot2_eligibility": dynamic.get("replacement_eligibility_sha256"),
-            "slot2_authority_source": dynamic.get("replacement_eligibility_source_manifest_sha256"),
+            "slot2_authority_source": dynamic.get(
+                "replacement_eligibility_preempirical_source_manifest_sha256"
+            ),
+            "slot2_authority_tree": dynamic.get(
+                "normalized_slot2_authority_tree_manifest_sha256"
+            ),
             "slot2_authority": slot2_authority_sha256,
             "provider_package_transition": dynamic.get("provider_package_transition_sha256"),
         },
@@ -6783,8 +6805,11 @@ def load_frozen_run_manifest(
         "launch_slot": provider_entry.get("launch_slot"),
         "launch_count": provider_entry.get("launch_count"),
         "replacement_eligibility_sha256": provider_entry.get("replacement_eligibility_sha256"),
-        "replacement_eligibility_source_manifest_sha256": provider_entry.get(
-            "replacement_eligibility_source_manifest_sha256"
+        "replacement_eligibility_preempirical_source_manifest_sha256": provider_entry.get(
+            "replacement_eligibility_preempirical_source_manifest_sha256"
+        ),
+        "normalized_slot2_authority_tree_manifest_sha256": provider_entry.get(
+            "normalized_slot2_authority_tree_manifest_sha256"
         ),
         "slot2_authority_sha256": manifest.get("slot2_authority_sha256"),
         "provider_entry_package_commit": provider_entry.get("provider_entry_package_commit"),
@@ -6860,7 +6885,7 @@ def load_frozen_run_manifest(
         or source_receipts_for_transition.get("slot2_eligibility")
         != typed_qualification.replacement_eligibility_sha256
         or source_receipts_for_transition.get("slot2_authority_source")
-        != typed_qualification.replacement_eligibility_source_manifest_sha256
+        != typed_qualification.replacement_eligibility_preempirical_source_manifest_sha256
         or source_receipts_for_transition.get("slot2_authority")
         != typed_qualification.slot2_authority_sha256
         or source_receipts_for_transition.get("provider_package_transition")
@@ -6877,8 +6902,12 @@ def load_frozen_run_manifest(
             canonical_sha256(authority) != typed_qualification.slot2_authority_sha256
             or authority.get("replacement_eligibility_sha256")
             != typed_qualification.replacement_eligibility_sha256
-            or authority.get("replacement_eligibility_source_manifest_sha256")
-            != typed_qualification.replacement_eligibility_source_manifest_sha256
+            or authority.get(
+                "replacement_eligibility_preempirical_source_manifest_sha256"
+            )
+            != typed_qualification.replacement_eligibility_preempirical_source_manifest_sha256
+            or authority.get("normalized_slot2_authority_tree_manifest_sha256")
+            != typed_qualification.normalized_slot2_authority_tree_manifest_sha256
         ):
             raise T09HostError("retained slot-2 authority drifted")
     file_hash_receipt_path = artifact_root / "pilot-v7/final-image-file-hashes/receipt.json"
@@ -7058,7 +7087,8 @@ def initialize_state(
     prior_lambda_cost_usd: float = 0.0,
     launch_slot: int = 1,
     replacement_eligibility_sha256: str | None = None,
-    replacement_eligibility_source_manifest_sha256: str | None = None,
+    replacement_eligibility_preempirical_source_manifest_sha256: str | None = None,
+    normalized_slot2_authority_tree_manifest_sha256: str | None = None,
 ) -> None:
     owned_started = (
         lambda_started_at_epoch
@@ -7079,8 +7109,11 @@ def initialize_state(
         "launch_slot": launch_slot,
         "launch_count": launch_slot,
         "replacement_eligibility_sha256": replacement_eligibility_sha256,
-        "replacement_eligibility_source_manifest_sha256": (
-            replacement_eligibility_source_manifest_sha256
+        "replacement_eligibility_preempirical_source_manifest_sha256": (
+            replacement_eligibility_preempirical_source_manifest_sha256
+        ),
+        "normalized_slot2_authority_tree_manifest_sha256": (
+            normalized_slot2_authority_tree_manifest_sha256
         ),
         "first_pair_started_at_epoch": None,
         "second_pair_started_at_epoch": None,
@@ -7896,12 +7929,16 @@ def preflight(args: argparse.Namespace) -> None:
         raise T09HostError("Retry 5 entry launch identity is invalid")
     if launch_slot == 1 and (
         dynamic.get("replacement_eligibility_sha256") is not None
-        or dynamic.get("replacement_eligibility_source_manifest_sha256") is not None
+        or dynamic.get("replacement_eligibility_preempirical_source_manifest_sha256") is not None
+        or dynamic.get("normalized_slot2_authority_tree_manifest_sha256") is not None
     ):
         raise T09HostError("first Retry 5 launch retained replacement authority")
     if launch_slot == 2 and (
         not isinstance(dynamic.get("replacement_eligibility_sha256"), str)
-        or not isinstance(dynamic.get("replacement_eligibility_source_manifest_sha256"), str)
+        or not isinstance(
+            dynamic.get("replacement_eligibility_preempirical_source_manifest_sha256"), str
+        )
+        or not isinstance(dynamic.get("normalized_slot2_authority_tree_manifest_sha256"), str)
     ):
         raise T09HostError("second Retry 5 launch lacks exact replacement authority")
     image_materialization_policy = (
@@ -7914,24 +7951,6 @@ def preflight(args: argparse.Namespace) -> None:
     if owned_containers(prefix):
         raise T09HostError("owned pilot containers already exist")
     artifact_root.mkdir(mode=0o700, parents=True)
-    slot2_authority: dict[str, object] | None = None
-    if launch_slot == 1:
-        if args.slot2_authority_root is not None:
-            raise T09HostError("first launch received slot-2 authority")
-    else:
-        if args.slot2_authority_root is None:
-            raise T09HostError("second launch lacks its retained authority root")
-        retained_authority_root = artifact_root / "pilot-v7/slot2-authority"
-        retain_slot2_authority(
-            args.slot2_authority_root.resolve(strict=True), retained_authority_root
-        )
-        slot2_authority = slot2_authority_binding(retained_authority_root)
-        if slot2_authority.get("replacement_eligibility_sha256") != dynamic.get(
-            "replacement_eligibility_sha256"
-        ) or slot2_authority.get("replacement_eligibility_source_manifest_sha256") != dynamic.get(
-            "replacement_eligibility_source_manifest_sha256"
-        ):
-            raise T09HostError("retained slot-2 authority does not match provider entry")
     lambda_started_raw = dynamic["provider_preflight_started_at_epoch"]
     if not isinstance(lambda_started_raw, (int, float)) or isinstance(lambda_started_raw, bool):
         raise T09HostError("provider entry receipt lacks the billable time origin")
@@ -7947,11 +7966,14 @@ def preflight(args: argparse.Namespace) -> None:
             prior_lambda_cost_raw,
         )
     ):
-        raise T09HostError("slot-2 entry lacks active Lambda accounting")
+        raise T09HostError("provider entry lacks active Lambda accounting")
     assert isinstance(owned_lambda_started_raw, (int, float))
     assert isinstance(prior_lambda_duration_raw, (int, float))
     assert isinstance(prior_lambda_cost_raw, (int, float))
     execution_sha256 = file_sha256(paths["execution"])
+    # This is deliberately the first artifact-root mutation.  Cleanup and
+    # provider-headroom accounting must survive every later authority, image,
+    # credential, container, browser, or evaluator failure.
     initialize_state(
         artifact_root,
         execution_sha256,
@@ -7963,14 +7985,40 @@ def preflight(args: argparse.Namespace) -> None:
         replacement_eligibility_sha256=cast(
             str | None, dynamic.get("replacement_eligibility_sha256")
         ),
-        replacement_eligibility_source_manifest_sha256=cast(
-            str | None, dynamic.get("replacement_eligibility_source_manifest_sha256")
+        replacement_eligibility_preempirical_source_manifest_sha256=cast(
+            str | None,
+            dynamic.get("replacement_eligibility_preempirical_source_manifest_sha256"),
+        ),
+        normalized_slot2_authority_tree_manifest_sha256=cast(
+            str | None, dynamic.get("normalized_slot2_authority_tree_manifest_sha256")
         ),
     )
     write_exclusive(
         artifact_root / "pilot-v7/provider-entry.json",
         sanitized_dynamic_receipt(args.dynamic_receipt, dynamic),
     )
+    slot2_authority: dict[str, object] | None = None
+    if launch_slot == 1:
+        if args.slot2_authority_root is not None:
+            raise T09HostError("first launch received slot-2 authority")
+    else:
+        if args.slot2_authority_root is None:
+            raise T09HostError("second launch lacks its retained authority root")
+        retained_authority_root = artifact_root / "pilot-v7/slot2-authority"
+        retain_slot2_authority(
+            args.slot2_authority_root.resolve(strict=True), retained_authority_root
+        )
+        slot2_authority = slot2_authority_binding(retained_authority_root)
+        if slot2_authority.get("replacement_eligibility_sha256") != dynamic.get(
+            "replacement_eligibility_sha256"
+        ) or slot2_authority.get(
+            "replacement_eligibility_preempirical_source_manifest_sha256"
+        ) != dynamic.get(
+            "replacement_eligibility_preempirical_source_manifest_sha256"
+        ) or slot2_authority.get("normalized_slot2_authority_tree_manifest_sha256") != dynamic.get(
+            "normalized_slot2_authority_tree_manifest_sha256"
+        ):
+            raise T09HostError("retained slot-2 authority does not match provider entry")
     command_document = verify_package(repository, args.package_commit)
     real_evidence_regression = validate_real_evidence_regression(
         repository,
@@ -8224,8 +8272,11 @@ def preflight(args: argparse.Namespace) -> None:
             "frozen_run_manifest_id": frozen_manifest["manifest_id"],
             "postfreeze_validation_sha256": file_sha256(postfreeze_path),
             "replacement_eligibility_sha256": dynamic.get("replacement_eligibility_sha256"),
-            "replacement_eligibility_source_manifest_sha256": dynamic.get(
-                "replacement_eligibility_source_manifest_sha256"
+            "replacement_eligibility_preempirical_source_manifest_sha256": dynamic.get(
+                "replacement_eligibility_preempirical_source_manifest_sha256"
+            ),
+            "normalized_slot2_authority_tree_manifest_sha256": dynamic.get(
+                "normalized_slot2_authority_tree_manifest_sha256"
             ),
             "first_pair_started_at_epoch": frozen_manifest["first_pair_started_at_epoch"],
             "image_equivalence_adjudication": adjudication,
@@ -13146,8 +13197,11 @@ def validate_live_frozen_state_binding(
         "launch_slot": frozen_manifest.get("launch_slot"),
         "launch_count": frozen_manifest.get("launch_count"),
         "replacement_eligibility_sha256": frozen_manifest.get("replacement_eligibility_sha256"),
-        "replacement_eligibility_source_manifest_sha256": frozen_manifest.get(
-            "replacement_eligibility_source_manifest_sha256"
+        "replacement_eligibility_preempirical_source_manifest_sha256": frozen_manifest.get(
+            "replacement_eligibility_preempirical_source_manifest_sha256"
+        ),
+        "normalized_slot2_authority_tree_manifest_sha256": frozen_manifest.get(
+            "normalized_slot2_authority_tree_manifest_sha256"
         ),
         "first_pair_started_at_epoch": frozen_manifest.get("first_pair_started_at_epoch"),
         "actual_credential_exposure_detected": False,
@@ -19242,8 +19296,15 @@ def _prior_typed_core_incidents(
 
 def cleanup(args: argparse.Namespace) -> None:
     enforce_host_core_limit()
-    root = args.artifact_root.resolve(strict=True)
+    root = args.artifact_root.resolve(strict=False)
+    if root.exists():
+        metadata = root.stat(follow_symlinks=False)
+        if root.is_symlink() or not stat.S_ISDIR(metadata.st_mode):
+            raise T09HostError("global cleanup artifact root is unsafe")
+    else:
+        root.mkdir(mode=0o700, parents=True, exist_ok=False)
     pilot_root = root / "pilot-v7"
+    pilot_root.mkdir(mode=0o700, parents=True, exist_ok=True)
     intent_path = pilot_root / "global-cleanup-intent.json"
     completion_path = pilot_root / "host-cleanup.json"
     state_path = pilot_root / "pilot-state.json"
@@ -20022,7 +20083,7 @@ def cleanup(args: argparse.Namespace) -> None:
     )
     try:
         remaining_runtime = provider_seconds_remaining(root)
-    except T09HostError:
+    except (OSError, T09HostError):
         remaining_runtime = 0.0
     completion_document: dict[str, object] = {
         "schema_version": "0.1.0",

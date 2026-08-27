@@ -994,6 +994,11 @@ def test_retry4_slot2_authority_is_minimal_bound_and_export_mode_matches(
     closeout.mkdir()
     host.write_exclusive(closeout / "closeout-receipt.json", {"closeout": True})
     host.write_exclusive(closeout / "source-manifest.json", {"closeout_source": True})
+    preempirical = authority / "slot1-preempirical-source"
+    preempirical.mkdir()
+    host.write_exclusive(
+        preempirical / "source-manifest.json", {"preempirical_source": True}
+    )
     host.write_exclusive(
         authority / "source-manifest.json",
         provider._slot2_authority_tree_manifest(authority),
@@ -1006,6 +1011,19 @@ def test_retry4_slot2_authority_is_minimal_bound_and_export_mode_matches(
     assert binding["relative_paths"] == list(retained)
     assert binding["replacement_eligibility_sha256"] == host.file_sha256(
         destination / "replacement-launch-eligibility.json"
+    )
+    assert binding["replacement_eligibility_preempirical_source_manifest_sha256"] == (
+        host.file_sha256(
+            destination
+            / "slot2-eligibility-source/slot1-preempirical-source/source-manifest.json"
+        )
+    )
+    assert binding["normalized_slot2_authority_tree_manifest_sha256"] == host.file_sha256(
+        destination / "slot2-eligibility-source/source-manifest.json"
+    )
+    assert (
+        binding["replacement_eligibility_preempirical_source_manifest_sha256"]
+        != binding["normalized_slot2_authority_tree_manifest_sha256"]
     )
     assert not (destination / "unrelated-owned-state.json").exists()
     source_text = HOST_SOURCE.read_text(encoding="utf-8")

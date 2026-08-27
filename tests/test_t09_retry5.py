@@ -1475,8 +1475,53 @@ def test_retry5_attempt_cap_and_core_stop_are_inviolable(
             run_id=ATTEMPT_ORDER[0],
             supervised_release_receipt_sha256="c" * 64,
         )
-    assert host.MAX_ATTEMPT_OUTPUT_BYTES == 67_108_864
-    assert host.MAX_ESSENTIAL_FAILURE_BYTES == 16_777_216
+    assert host.MAX_ATTEMPT_OUTPUT_BYTES == 536_870_912
+    assert host.MAX_PILOT_DISK_BYTES == 2_147_483_648
+    assert host.MAX_ESSENTIAL_FAILURE_BYTES == 67_108_864
+
+
+def test_autonomous_slot2_authority_uses_distinct_nested_and_tree_hashes(
+    tmp_path: Path,
+) -> None:
+    host = _host("giclab_t09_autonomous_slot2_authority")
+    source = Path(
+        "/Volumes/Macintosh HD - Data/GIC-Lab/t09/"
+        "provider-private-v7-0005-slot2"
+    )
+    if not source.is_dir():
+        pytest.skip("retained Retry 5 Slot 2 authority is unavailable")
+    destination = tmp_path / "retained-authority"
+    host.retain_slot2_authority(source, destination)
+    binding = host.slot2_authority_binding(destination)
+    nested = destination / (
+        "slot2-eligibility-source/slot1-preempirical-source/source-manifest.json"
+    )
+    outer = destination / "slot2-eligibility-source/source-manifest.json"
+    assert binding["replacement_eligibility_preempirical_source_manifest_sha256"] == (
+        host.file_sha256(nested)
+    )
+    assert binding["normalized_slot2_authority_tree_manifest_sha256"] == (
+        host.file_sha256(outer)
+    )
+    assert host.file_sha256(nested) == (
+        "13033996d3bb8277e7ba52d5ebc368327db09d5ada6b64ac38ef44b3019d5767"
+    )
+    assert host.file_sha256(outer) == (
+        "a3709fc6450e058db023925431c488855e73c800d106580f8029116c7b9ee7e7"
+    )
+    assert host.file_sha256(nested) != host.file_sha256(outer)
+
+
+def test_autonomous_preflight_initializes_cleanup_state_before_authority_copy() -> None:
+    source = HOST_SOURCE.read_text(encoding="utf-8")
+    preflight = source[
+        source.index("def preflight(args:") : source.index("def preflight_with_deadline")
+    ]
+    assert preflight.index("initialize_state(") < preflight.index("retain_slot2_authority(")
+    assert preflight.index("initialize_state(") < preflight.index(
+        "materialize_retained_or_build_image("
+    )
+    assert "except (OSError, T09HostError):" in source
 
 
 def test_retry5_nonempirical_consumption_blocks_replay_before_docker(

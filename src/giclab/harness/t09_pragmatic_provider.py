@@ -41,10 +41,10 @@ from giclab.harness.lambda_l2m_observer import (
     observer_request,
 )
 
-PLAN_ID: Final = "PLAN-EXP0001-PILOT-V7"
-HOST_RUN_ID: Final = "RUN-T09-PILOT-HOST-0005"
+PLAN_ID: Final = "PLAN-EXP0001-PILOT-V8"
+HOST_RUN_ID: Final = "RUN-T09-PILOT-HOST-AUTONOMOUS-0001"
 AUTHORIZATION_SOURCE_SHA256: Final = (
-    "97539fa4b65f627880b159e0f40c9a7efab26cd2a746c7c12ddbe15e44684346"
+    "80ded0e246b4f070c3992ae872111c19c64d1ef30115d65a8641709f06e1a484"
 )
 API_HOST: Final = "cloud.lambda.ai"
 API_PORT: Final = 443
@@ -52,13 +52,14 @@ INSTANCE_TYPE: Final = "gpu_1x_a10"
 REGION: Final = "us-east-1"
 IMAGE_ID: Final = "44fab622-b98a-49fe-ac6d-e4ce5531532f"
 SSH_KEY_NAME: Final = "fractal-lambda-codex"
-INSTANCE_NAME: Final = "giclab-t09-pilot-v7-0005"
+INSTANCE_NAME: Final = "giclab-t09-pilot-v8-autonomous-0001"
 PRICE_CENTS_PER_HOUR: Final = 129
-PRIOR_T09_COST_USD: Final = 5.7424506112
+PRIOR_T09_COST_USD: Final = 6.8131387350
+NEW_PREFLIGHT_LAMBDA_CAP_USD: Final = 20.0
 NEW_CAMPAIGN_LAMBDA_CAP_USD: Final = 8.0
 NEW_CAMPAIGN_OPENAI_CAP_USD: Final = 40.0
-NEW_CAMPAIGN_AGGREGATE_CAP_USD: Final = 48.0
-CUMULATIVE_T09_CAP_USD: Final = 60.0
+NEW_CAMPAIGN_AGGREGATE_CAP_USD: Final = 68.0
+CUMULATIVE_T09_CAP_USD: Final = 75.0
 SLOT1_PACKAGE_COMMIT: Final = "3640f061ea6c0f0f3d24bf2a346d4beda1a400cf"
 SLOT1_PLAN_SHA256: Final = "e7e214500348c8b876beb034df7b592c84f5ab79788ab6f310ef187fd797613c"
 SLOT1_CLOSEOUT_RECEIPT_SHA256: Final = (
@@ -942,7 +943,7 @@ def validate_authorization_ledger(
     required = {
         "schema_version": "0.1.0",
         "authorization_source_sha256": AUTHORIZATION_SOURCE_SHA256,
-        "authorization_reference": "AUTH-T09-PRAGMATIC-RETRY5-2026-08-14",
+        "authorization_reference": "AUTH-T09-AUTONOMOUS-PREFLIGHT-TO-PILOT-2026-08-27",
         "authorized": True,
         "single_use": True,
         "clean_package_commit": package_commit,
@@ -950,14 +951,18 @@ def validate_authorization_ledger(
         "plan_sha256": file_sha256(plan_path),
         "max_lambda_instances": 1,
         "max_launch_count": 2,
+        "authorized_max_preflight_launch_count": 8,
         "persistent_filesystems": 0,
+        "preflight_lambda_cost_cap_usd": 20.0,
         "lambda_cost_cap_usd": 8.0,
         "openai_cost_cap_usd": 40.0,
-        "aggregate_cost_cap_usd": 48.0,
-        "prior_t09_cost_usd": 5.7424506112,
-        "cumulative_t09_cost_cap_usd": 60.0,
+        "aggregate_cost_cap_usd": 68.0,
+        "prior_t09_cost_usd": 6.8131387350,
+        "cumulative_t09_cost_cap_usd": 75.0,
         "replacement_image_policy": "retained-exact-load-or-one-fallback-build-v1",
-        "artifact_destination": ("/Volumes/Macintosh HD - Data/GIC-Lab/t09/sealed-artifacts"),
+        "artifact_destination": (
+            "/Volumes/Macintosh HD - Data/GIC-Lab/t09/autonomous-v8"
+        ),
     }
     if value != required:
         raise T09ProviderError("private authorization ledger drifted")
@@ -1341,6 +1346,158 @@ def _terminate_body(instance_id: str) -> dict[str, object]:
 def _terminate_many_body(instance_ids: list[str]) -> dict[str, object]:
     _instance_set_identity_sha256(instance_ids)
     return {"instance_ids": list(instance_ids)}
+
+
+def _initial_preflight_cleanup_state(
+    *,
+    entry_root: Path,
+    private_root: Path,
+    package_commit: str,
+    plan_sha256: str,
+    instance_id: str,
+    launch_slot: int,
+    replacement_eligibility_sha256: str | None,
+    clock: Callable[[], float],
+) -> dict[str, object]:
+    """Create the first durable post-launch state, independent of pilot state."""
+
+    journal = _journal_events(entry_root)
+    sends = [
+        event
+        for event in journal
+        if event.get("event") == "send-started" and event.get("operation") == "launch"
+    ]
+    responses = [
+        event
+        for event in journal
+        if event.get("event") == "response-complete" and event.get("operation") == "launch"
+    ]
+    if len(sends) != 1 or len(responses) != 1:
+        raise T09ProviderError("initial cleanup state lacks one launch journal pair")
+    owned_identity = _instance_identity_sha256(instance_id)
+    local_upload_path = private_root / "openai-secret-upload"
+    return {
+        "schema_version": "0.1.0",
+        "state_type": "t09-preflight-cleanup-authority",
+        "plan_id": PLAN_ID,
+        "host_run_id": HOST_RUN_ID,
+        "package_commit": package_commit,
+        "plan_sha256": plan_sha256,
+        "private_instance_id": instance_id,
+        "owned_instance_identity_sha256": owned_identity,
+        "instance_name": INSTANCE_NAME,
+        "launch_slot": launch_slot,
+        "replacement_eligibility_sha256": replacement_eligibility_sha256,
+        "lambda_started_at_epoch": sends[0]["send_started_at_epoch"],
+        "provider_termination_path": "/api/v1/instance-operations/terminate",
+        "provider_termination_body_sha256": _sha256_bytes(
+            _canonical_bytes(_terminate_body(instance_id))
+        ),
+        "provider_security_baseline_sources": [
+            "entry-source/004-global-firewall.json",
+            "entry-source/005-regional-rulesets.json",
+        ],
+        "temporary_firewall_resource_ids": [],
+        "temporary_ruleset_resource_ids": [],
+        "temporary_local_secret_locations": [str(local_upload_path)],
+        "temporary_remote_secret_locations": [
+            "/home/ubuntu/.config/giclab/sira_api_key"
+        ],
+        "planned_remote_artifact_root": "/home/ubuntu/t09-artifacts-autonomous",
+        "source_staging_started": False,
+        "artifact_root_created": False,
+        "credential_materialized": False,
+        "container_created": False,
+        "browser_started": False,
+        "empirical_entry_crossed": False,
+        "pilot_state_required_for_cleanup": False,
+        "attempt_state_required_for_cleanup": False,
+        "private_operational_state_not_for_archive": True,
+        "created_at_epoch": clock(),
+    }
+
+
+def _validate_initial_preflight_cleanup_state(
+    path: Path,
+    *,
+    package_commit: str,
+    plan_sha256: str,
+) -> dict[str, object]:
+    value = _load_json(path, maximum_bytes=65_536)
+    instance_id = _string(value.get("private_instance_id"), label="cleanup instance ID")
+    owned_identity = _instance_identity_sha256(instance_id)
+    expected_keys = {
+        "schema_version",
+        "state_type",
+        "plan_id",
+        "host_run_id",
+        "package_commit",
+        "plan_sha256",
+        "private_instance_id",
+        "owned_instance_identity_sha256",
+        "instance_name",
+        "launch_slot",
+        "replacement_eligibility_sha256",
+        "lambda_started_at_epoch",
+        "provider_termination_path",
+        "provider_termination_body_sha256",
+        "provider_security_baseline_sources",
+        "temporary_firewall_resource_ids",
+        "temporary_ruleset_resource_ids",
+        "temporary_local_secret_locations",
+        "temporary_remote_secret_locations",
+        "planned_remote_artifact_root",
+        "source_staging_started",
+        "artifact_root_created",
+        "credential_materialized",
+        "container_created",
+        "browser_started",
+        "empirical_entry_crossed",
+        "pilot_state_required_for_cleanup",
+        "attempt_state_required_for_cleanup",
+        "private_operational_state_not_for_archive",
+        "created_at_epoch",
+    }
+    if (
+        set(value) != expected_keys
+        or value.get("schema_version") != "0.1.0"
+        or value.get("state_type") != "t09-preflight-cleanup-authority"
+        or value.get("plan_id") != PLAN_ID
+        or value.get("host_run_id") != HOST_RUN_ID
+        or value.get("package_commit") != package_commit
+        or value.get("plan_sha256") != plan_sha256
+        or value.get("owned_instance_identity_sha256") != owned_identity
+        or value.get("instance_name") != INSTANCE_NAME
+        or value.get("launch_slot") not in (1, 2)
+        or value.get("provider_termination_path")
+        != "/api/v1/instance-operations/terminate"
+        or value.get("provider_termination_body_sha256")
+        != _sha256_bytes(_canonical_bytes(_terminate_body(instance_id)))
+        or value.get("provider_security_baseline_sources")
+        != [
+            "entry-source/004-global-firewall.json",
+            "entry-source/005-regional-rulesets.json",
+        ]
+        or value.get("temporary_firewall_resource_ids") != []
+        or value.get("temporary_ruleset_resource_ids") != []
+        or value.get("temporary_remote_secret_locations")
+        != ["/home/ubuntu/.config/giclab/sira_api_key"]
+        or value.get("planned_remote_artifact_root")
+        != "/home/ubuntu/t09-artifacts-autonomous"
+        or any(value.get(field) is not False for field in (
+            "source_staging_started",
+            "artifact_root_created",
+            "credential_materialized",
+            "container_created",
+            "browser_started",
+            "empirical_entry_crossed",
+            "pilot_state_required_for_cleanup",
+            "attempt_state_required_for_cleanup",
+        ))
+        or value.get("private_operational_state_not_for_archive") is not True
+    ):
+        raise T09ProviderError("initial preflight cleanup state drifted")
+    return value
 
 
 def _provisional_owner_binding(
@@ -1839,7 +1996,13 @@ def _entry_projection(
         binding_fields
         not in {
             frozenset(campaign_binding_fields),
-            frozenset(campaign_binding_fields | {"replacement_eligibility_source_manifest_sha256"}),
+            frozenset(
+                campaign_binding_fields
+                | {
+                    "replacement_eligibility_preempirical_source_manifest_sha256",
+                    "normalized_slot2_authority_tree_manifest_sha256",
+                }
+            ),
         }
         or campaign_binding.get("schema_version") != "0.1.0"
         or campaign_binding.get("plan_id") != PLAN_ID
@@ -1856,25 +2019,31 @@ def _entry_projection(
         raise T09ProviderError("campaign launch chronology or cumulative binding drifted")
     eligibility_sha256 = campaign_binding.get("replacement_eligibility_sha256")
     eligibility_source_manifest_sha256 = campaign_binding.get(
-        "replacement_eligibility_source_manifest_sha256"
+        "replacement_eligibility_preempirical_source_manifest_sha256"
+    )
+    normalized_authority_tree_manifest_sha256 = campaign_binding.get(
+        "normalized_slot2_authority_tree_manifest_sha256"
     )
     if launch_slot == 1 and eligibility_sha256 is not None:
         raise T09ProviderError("first launch unexpectedly has replacement eligibility")
     if launch_slot == 1 and eligibility_source_manifest_sha256 is not None:
         raise T09ProviderError("first launch unexpectedly has replacement source evidence")
+    if launch_slot == 1 and normalized_authority_tree_manifest_sha256 is not None:
+        raise T09ProviderError("first launch unexpectedly has a normalized authority tree")
     if launch_slot == 2 and (
         not isinstance(eligibility_sha256, str) or _HEX64.fullmatch(eligibility_sha256) is None
     ):
         raise T09ProviderError("replacement launch lacks its eligibility hash")
     if (
         launch_slot == 2
-        and eligibility_source_manifest_sha256 is not None
         and (
             not isinstance(eligibility_source_manifest_sha256, str)
             or _HEX64.fullmatch(eligibility_source_manifest_sha256) is None
+            or not isinstance(normalized_authority_tree_manifest_sha256, str)
+            or _HEX64.fullmatch(normalized_authority_tree_manifest_sha256) is None
         )
     ):
-        raise T09ProviderError("replacement launch lacks its eligibility source hash")
+        raise T09ProviderError("replacement launch lacks its two typed authority hashes")
     result: dict[str, object] = {
         "schema_version": "0.1.0",
         "receipt_type": "t09-pragmatic-provider-entry",
@@ -1904,6 +2073,7 @@ def _entry_projection(
         "persistent_filesystems": 0,
         "hourly_price_usd": 1.29,
         "new_campaign_openai_cost_cap_usd": NEW_CAMPAIGN_OPENAI_CAP_USD,
+        "new_preflight_lambda_cost_cap_usd": NEW_PREFLIGHT_LAMBDA_CAP_USD,
         "new_campaign_lambda_cost_cap_usd": NEW_CAMPAIGN_LAMBDA_CAP_USD,
         "new_campaign_aggregate_cost_cap_usd": NEW_CAMPAIGN_AGGREGATE_CAP_USD,
         "prior_campaign_lambda_duration_seconds": prior_lambda_duration,
@@ -1916,11 +2086,12 @@ def _entry_projection(
         "raw_provider_payload_retained": False,
         "structural_redaction_passed": True,
     }
-    # Slot 1 was sealed before the slot-2 source-manifest binding field existed.
-    # Preserve its exact historical projection; all new bindings carry the field.
-    if "replacement_eligibility_source_manifest_sha256" in campaign_binding:
-        result["replacement_eligibility_source_manifest_sha256"] = (
+    if "replacement_eligibility_preempirical_source_manifest_sha256" in campaign_binding:
+        result["replacement_eligibility_preempirical_source_manifest_sha256"] = (
             eligibility_source_manifest_sha256
+        )
+        result["normalized_slot2_authority_tree_manifest_sha256"] = (
+            normalized_authority_tree_manifest_sha256
         )
     return result
 
@@ -4273,6 +4444,18 @@ def _load_source_validated_provisional_owner(
     )
     if observed != expected:
         raise T09ProviderError("provisional owner is not source-bound")
+    initial = _validate_initial_preflight_cleanup_state(
+        private_root / "preflight-cleanup-state.json",
+        package_commit=package_commit,
+        plan_sha256=file_sha256(plan_path),
+    )
+    if (
+        initial.get("private_instance_id") != observed.get("private_instance_id")
+        or initial.get("owned_instance_identity_sha256")
+        != observed.get("owned_instance_identity_sha256")
+        or initial.get("lambda_started_at_epoch") != observed.get("lambda_started_at_epoch")
+    ):
+        raise T09ProviderError("provisional owner drifted from initial cleanup authority")
     return observed
 
 
@@ -4501,6 +4684,24 @@ def launch_campaign(
             )
         instance_id = instance_ids[0]
         owned_hash = _instance_identity_sha256(instance_id)
+        # The exact owner and every basic cleanup target are durable before any
+        # source upload, image operation, artifact root, secret, container, or
+        # browser state can exist.  Provider closeout can consume this record
+        # even if no later entry or pilot state was published.
+        initial_cleanup_state = _initial_preflight_cleanup_state(
+            entry_root=entry_root,
+            private_root=private_root,
+            package_commit=package_commit,
+            plan_sha256=plan_sha256,
+            instance_id=instance_id,
+            launch_slot=launch_slot,
+            replacement_eligibility_sha256=replacement_eligibility_sha256,
+            clock=clock,
+        )
+        write_exclusive(
+            private_root / "preflight-cleanup-state.json",
+            initial_cleanup_state,
+        )
         provisional_binding: dict[str, object] = {
             "schema_version": "0.1.0",
             "plan_id": PLAN_ID,
@@ -4526,6 +4727,15 @@ def launch_campaign(
                 launch_slot=launch_slot,
                 replacement_eligibility_sha256=replacement_eligibility_sha256,
             )
+            if (
+                provisional_binding.get("private_instance_id")
+                != initial_cleanup_state.get("private_instance_id")
+                or provisional_binding.get("owned_instance_identity_sha256")
+                != initial_cleanup_state.get("owned_instance_identity_sha256")
+                or provisional_binding.get("lambda_started_at_epoch")
+                != initial_cleanup_state.get("lambda_started_at_epoch")
+            ):
+                raise T09ProviderError("provisional owner drifted from initial cleanup state")
             write_exclusive(
                 private_root / "provisional-owned-state.json",
                 provisional_binding,
@@ -4612,8 +4822,15 @@ def launch_campaign(
                         else 0.0
                     ),
                     "replacement_eligibility_sha256": replacement_eligibility_sha256,
-                    "replacement_eligibility_source_manifest_sha256": (
+                    "replacement_eligibility_preempirical_source_manifest_sha256": (
                         replacement_eligibility.get("source_manifest_sha256")
+                        if replacement_eligibility is not None
+                        else None
+                    ),
+                    "normalized_slot2_authority_tree_manifest_sha256": (
+                        file_sha256(
+                            private_root / "slot2-eligibility-source/source-manifest.json"
+                        )
                         if replacement_eligibility is not None
                         else None
                     ),
@@ -4721,6 +4938,64 @@ def closeout_campaign(
             raise T09ProviderError("retained pre-empirical source changed during copy")
         replacement_evidence_validated = True
     provisional_path = private_root / "provisional-owned-state.json"
+    initial_cleanup_path = private_root / "preflight-cleanup-state.json"
+    if (
+        not entry_receipt_path.is_file()
+        and not provisional_path.is_file()
+        and initial_cleanup_path.is_file()
+    ):
+        plan_path = (
+            repository
+            / "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml"
+        )
+        initial_cleanup = _validate_initial_preflight_cleanup_state(
+            initial_cleanup_path,
+            package_commit=package_commit,
+            plan_sha256=file_sha256(plan_path),
+        )
+        closed_path = private_root / "PROVISIONAL_OWNER_CLOSED.json"
+        if closed_path.is_file():
+            closed = _load_json(closed_path, maximum_bytes=65_536)
+            if (
+                closed.get("private_instance_id")
+                != initial_cleanup.get("private_instance_id")
+                or closed.get("owned_instance_identity_sha256")
+                != initial_cleanup.get("owned_instance_identity_sha256")
+                or closed.get("provider_disposition") not in {"terminal", "absent"}
+                or closed.get("security_restored") is not True
+            ):
+                raise T09ProviderError("initial cleanup closeout marker drifted")
+            return closed_path
+        instance_id = _string(
+            initial_cleanup.get("private_instance_id"), label="initial cleanup instance ID"
+        )
+        owned_identity = _string(
+            initial_cleanup.get("owned_instance_identity_sha256"),
+            label="initial cleanup owned identity",
+        )
+        credential = load_dotenv_assignment(dotenv, "LAMBDA_API_KEY")
+        try:
+            _cleanup_provisional_owner(
+                transport=transport,
+                credential=credential,
+                private_root=private_root,
+                provisional_binding=initial_cleanup,
+                clock=clock,
+                sleeper=sleeper,
+            )
+        except BaseException as exc:
+            with contextlib.suppress(BaseException):
+                _write_provisional_console_marker(
+                    private_root=private_root,
+                    instance_id=instance_id,
+                    owned_identity=owned_identity,
+                    reason=type(exc).__name__,
+                    clock=clock,
+                )
+            raise
+        finally:
+            _destroy_bytearray(credential)
+        return private_root / "PROVISIONAL_OWNER_CLOSED.json"
     if not entry_receipt_path.is_file() and provisional_path.is_file():
         provisional = _load_source_validated_provisional_owner(
             private_root,
