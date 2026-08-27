@@ -68,7 +68,7 @@
       },
       {
         "path": "src/giclab/harness/t09_sira_pilot.py",
-        "sha256": "d8e52972e5b378de3e6cd8fb52e2a3f24618167b7044fe44fa0bb938ca2ec96d"
+        "sha256": "4a56724443a1097e9b84e470896c232aacb4af8fb488eabf3062435ca3ef31b0"
       },
       {
         "path": "src/giclab/harness/lambda_campaign_lifecycle.py",
@@ -131,7 +131,7 @@
         "sha256": "c2221dd34c094003c47f07a1d1b0b3afae0201d02857e7f91907ed43ee60104e"
       }
     ],
-    "reviewed_implementation_ancestor": "4019dd90d41db5b716d99a30e5eb7466fcf00b99",
+    "reviewed_implementation_ancestor": "2d42885fec37d6501273de38a7c85b4553b5b95d",
     "scope": [
       "content-addressed-no-follow-private-regression-archive-staging",
       "raw-attempt-root-typed-binding-before-empirical-entry",

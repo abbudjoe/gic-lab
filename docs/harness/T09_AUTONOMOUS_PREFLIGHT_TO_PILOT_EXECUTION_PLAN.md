@@ -169,6 +169,12 @@ and production-readiness claims.
   Commit `4019dd90d41db5b716d99a30e5eb7466fcf00b99` makes scheduling and
   manifest validation share the existing bounded 300-second publication limit;
   starts before provider ownership or beyond that limit still fail closed.
+- `2026-08-27`: iteration 9 wrote the frozen manifest, then the typed loader
+  incorrectly rejected a fresh launch whose clean package was an approved same-host
+  repair descendant of the provider-entry package. Commit
+  `2d42885fec37d6501273de38a7c85b4553b5b95d` requires the exact validated
+  provider-package-transition hash when those commits differ and requires no hash
+  when they match; fresh slot/replacement/resume authority remains prohibited.
 
 ## Budgets, blockers, and next phase
 
