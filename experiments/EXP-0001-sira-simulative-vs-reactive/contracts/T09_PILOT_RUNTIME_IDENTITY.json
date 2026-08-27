@@ -88,7 +88,7 @@
       },
       {
         "path": "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py",
-        "sha256": "13e9bab599e0d0dfcc9276cd37132f7091fab64d93c1c442b77cd1f232a6c1ab"
+        "sha256": "c8eef59b5def00dd0373cdb53320a27f56dafa0f2aa55c9523df76bde6a53eaf"
       },
       {
         "path": "containers/sira-smoke/pragmatic/t09_preflight.py",
@@ -131,7 +131,7 @@
         "sha256": "c2221dd34c094003c47f07a1d1b0b3afae0201d02857e7f91907ed43ee60104e"
       }
     ],
-    "reviewed_implementation_ancestor": "1eb7d77ec91b6563a6e7a99cca592d586ddbc121",
+    "reviewed_implementation_ancestor": "f7279ca9ba12462a6cc1bc588254725211eaa3e4",
     "scope": [
       "content-addressed-no-follow-private-regression-archive-staging",
       "raw-attempt-root-typed-binding-before-empirical-entry",
