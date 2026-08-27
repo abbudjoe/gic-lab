@@ -137,6 +137,16 @@ def test_browser_process_accounting_waits_for_driver_teardown(
     assert delays == [0.05, 0.05]
 
 
+def test_frozen_first_pair_origin_matches_the_scheduling_window() -> None:
+    host = _host("giclab_t09_retry5_frozen_empirical_origin")
+
+    assert host.validate_frozen_first_pair_origin(1_120.0, 900.0, now=1_000.0) == 1_120.0
+    with pytest.raises(host.T09HostError, match="first-pair wall origin"):
+        host.validate_frozen_first_pair_origin(1_301.0, 900.0, now=1_000.0)
+    with pytest.raises(host.T09HostError, match="first-pair wall origin"):
+        host.validate_frozen_first_pair_origin(899.0, 900.0, now=1_000.0)
+
+
 def test_remove_container_rejects_persistent_exact_residue(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

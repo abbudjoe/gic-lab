@@ -207,6 +207,7 @@ MAX_TOTAL_WALL_SECONDS: Final = 14_400
 MAX_PREFLIGHT_ITERATION_WALL_SECONDS: Final = 3_600
 MAX_PREFLIGHT_INSTANCE_ACTIVE_SECONDS: Final = 21_600
 MAX_CUMULATIVE_PREFLIGHT_ACTIVE_SECONDS: Final = 43_200
+MAX_EMPIRICAL_START_PUBLICATION_DELAY_SECONDS: Final = 300.0
 MAX_PREFLIGHT_LAMBDA_COST_USD: Final = 20.0
 FAILED_PREFLIGHT_TERMINATION_DISPATCH_SECONDS: Final = 300
 MAX_EMPIRICAL_LAMBDA_DURATION_SECONDS: Final = 14_400
@@ -6477,6 +6478,26 @@ def image_equivalence_adjudication(
     return adjudication
 
 
+def validate_frozen_first_pair_origin(
+    first_pair_started: object,
+    owned_lambda_started: object,
+    *,
+    now: float,
+) -> float:
+    """Validate the scheduled empirical origin against the publication window."""
+
+    if (
+        not isinstance(first_pair_started, (int, float))
+        or isinstance(first_pair_started, bool)
+        or not isinstance(owned_lambda_started, (int, float))
+        or isinstance(owned_lambda_started, bool)
+        or first_pair_started < owned_lambda_started
+        or first_pair_started > now + MAX_EMPIRICAL_START_PUBLICATION_DELAY_SECONDS
+    ):
+        raise T09HostError("first-pair wall origin cannot be frozen")
+    return float(first_pair_started)
+
+
 def write_frozen_run_manifest(
     *,
     repository: Path,
@@ -6530,15 +6551,11 @@ def write_frozen_run_manifest(
         or runtime_state.get("essential_failure_seals") != {}
     ):
         raise T09HostError("runtime cannot freeze after a security or failure-seal event")
-    if (
-        not isinstance(first_pair_started, (int, float))
-        or isinstance(first_pair_started, bool)
-        or not isinstance(owned_lambda_started, (int, float))
-        or isinstance(owned_lambda_started, bool)
-        or first_pair_started < owned_lambda_started
-        or first_pair_started > time.time() + 30.0
-    ):
-        raise T09HostError("first-pair wall origin cannot be frozen")
+    first_pair_started = validate_frozen_first_pair_origin(
+        first_pair_started,
+        owned_lambda_started,
+        now=time.time(),
+    )
     qualification_root = artifact_root / "pilot-v7/replacement-image-qualification"
     launch_slot = dynamic.get("launch_slot")
     expected_materialization_policy = (
@@ -7264,7 +7281,7 @@ def schedule_empirical_campaign_start(
 ) -> float:
     """Choose one near-future empirical origin before the manifest is serialized."""
 
-    if not 5.0 <= delay_seconds <= 300.0:
+    if not 5.0 <= delay_seconds <= MAX_EMPIRICAL_START_PUBLICATION_DELAY_SECONDS:
         raise T09HostError("empirical clock publication delay is outside its narrow bound")
     state_path = root / "pilot-v7/pilot-state.json"
     state = load_object(state_path, label="pilot state")
