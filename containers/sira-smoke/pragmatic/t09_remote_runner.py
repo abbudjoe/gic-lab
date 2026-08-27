@@ -2418,7 +2418,7 @@ def remove_container(
         return True
     if expected_container_id is not None and identity.container_id != expected_container_id:
         raise T09HostError("owned Docker identity changed before removal")
-    result = subprocess.run(
+    subprocess.run(
         [*prefix, "rm", "--force", identity.container_id],
         env=safe_environment(),
         stdin=subprocess.DEVNULL,
@@ -2427,20 +2427,27 @@ def remove_container(
         check=False,
         timeout=30,
     )
-    if result.returncode != 0:
-        return False
-    remaining = output(
-        [
-            *prefix,
-            "ps",
-            "--all",
-            "--filter",
-            f"id={identity.container_id}",
-            "--format",
-            "{{.ID}}",
-        ]
-    )
-    return remaining == ""
+    # ``docker run --rm`` can start daemon-side auto-removal just before this
+    # exact-ID removal executes.  In that race ``docker rm --force`` reports a
+    # failure even though the owned container is already disappearing.  The
+    # authoritative cleanup result is exact absence, not the competing remove
+    # request's exit status.  Reuse the full identity/name/label verifier while
+    # boundedly waiting for the daemon to converge; a reused name or changed
+    # identity still fails closed inside ``inspect_owned_container``.
+    for delay_seconds in (0.0, 0.05, 0.1, 0.2, 0.4, 0.8):
+        if delay_seconds:
+            time.sleep(delay_seconds)
+        remaining = inspect_owned_container(
+            prefix,
+            name,
+            expected_container_id=expected_container_id,
+            expected_role=expected_role,
+        )
+        if remaining is None:
+            return True
+        if remaining.container_id != expected_container_id:
+            raise T09HostError("owned Docker identity changed during removal convergence")
+    return False
 
 
 def owned_containers(prefix: list[str]) -> list[str]:

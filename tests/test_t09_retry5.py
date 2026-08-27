@@ -63,6 +63,77 @@ def _write_json(path: Path, value: object) -> None:
     path.chmod(0o600)
 
 
+def test_remove_container_accepts_bounded_auto_remove_convergence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    host = _host("giclab_t09_retry5_auto_remove_convergence")
+    container_id = "a" * 64
+    name = f"{host.CONTAINER_PREFIX}utility-secret-channel-probe"
+    role = "utility-secret-channel-probe"
+    identity = host.OwnedContainerIdentity(
+        container_id,
+        name,
+        {
+            "giclab.t09.plan": PLAN_ID,
+            "giclab.t09.host_run": host.HOST_RUN_ID,
+            "giclab.t09.role": role,
+        },
+    )
+    observations = iter((identity, identity, None))
+    monkeypatch.setattr(
+        host,
+        "inspect_owned_container",
+        lambda *_args, **_kwargs: next(observations),
+    )
+    monkeypatch.setattr(
+        host.subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(returncode=1),
+    )
+    delays: list[float] = []
+    monkeypatch.setattr(host.time, "sleep", delays.append)
+
+    assert host.remove_container(
+        ["sudo", "-n", "docker"],
+        name,
+        expected_container_id=container_id,
+        expected_role=role,
+    )
+    assert delays == [0.05]
+
+
+def test_remove_container_rejects_persistent_exact_residue(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    host = _host("giclab_t09_retry5_persistent_remove_residue")
+    container_id = "b" * 64
+    name = f"{host.CONTAINER_PREFIX}utility-secret-channel-probe"
+    role = "utility-secret-channel-probe"
+    identity = host.OwnedContainerIdentity(
+        container_id,
+        name,
+        {
+            "giclab.t09.plan": PLAN_ID,
+            "giclab.t09.host_run": host.HOST_RUN_ID,
+            "giclab.t09.role": role,
+        },
+    )
+    monkeypatch.setattr(host, "inspect_owned_container", lambda *_args, **_kwargs: identity)
+    monkeypatch.setattr(
+        host.subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(returncode=1),
+    )
+    monkeypatch.setattr(host.time, "sleep", lambda _seconds: None)
+
+    assert not host.remove_container(
+        ["sudo", "-n", "docker"],
+        name,
+        expected_container_id=container_id,
+        expected_role=role,
+    )
+
+
 def _raw_seal_recovery_fixture(
     host: ModuleType,
     tmp_path: Path,
