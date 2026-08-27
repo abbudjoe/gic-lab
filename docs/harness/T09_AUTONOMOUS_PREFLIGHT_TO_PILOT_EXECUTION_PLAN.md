@@ -156,6 +156,12 @@ and production-readiness claims.
   `ebdd1f697a9f94983ce69eb6595d09c711f7ace4` moves process accounting after
   driver teardown and waits boundedly for zero descendants; any real residue still
   fails. No model request or empirical entry occurred.
+- `2026-08-27`: iteration 7 proved the two Chromium entries persist after the
+  bounded post-driver wait. The exact condition containers already use Docker
+  `--init`, but browser preflight uniquely omitted it. Commit
+  `dc4676af8b487b2d94e7ac6bfc84d91208e63df9` aligns the browser creation
+  path with the final condition lifecycle so orphaned Chromium helpers are reaped;
+  the fixture still requires zero processes before passing.
 
 ## Budgets, blockers, and next phase
 
