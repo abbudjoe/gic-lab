@@ -265,6 +265,58 @@
             "admission_rule": {"type": "string", "minLength": 8},
             "control_plane": {"type": "string", "minLength": 8}
           }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "cumulative_accounting_origin",
+            "preflight_clock_origin",
+            "preflight_iteration_wall_seconds",
+            "maximum_preflight_instance_active_seconds",
+            "maximum_cumulative_preflight_active_seconds",
+            "maximum_preflight_provider_cost_usd",
+            "max_preflight_launch_count",
+            "failed_preflight_termination_dispatch_seconds",
+            "empirical_clock_origin",
+            "empirical_campaign_wall_seconds",
+            "empirical_cleanup_reserve_seconds",
+            "empirical_termination_cutoff_seconds",
+            "maximum_empirical_provider_cost_usd",
+            "max_empirical_launch_count",
+            "max_lambda_instances",
+            "persistent_filesystems",
+            "replacement_launch_rule",
+            "admission_rule",
+            "control_plane"
+          ],
+          "properties": {
+            "cumulative_accounting_origin": {"const": "actual-active-lambda-seconds"},
+            "preflight_clock_origin": {"const": "provider-launch-send-started"},
+            "preflight_iteration_wall_seconds": {"const": 3600},
+            "maximum_preflight_instance_active_seconds": {"const": 21600},
+            "maximum_cumulative_preflight_active_seconds": {"const": 43200},
+            "maximum_preflight_provider_cost_usd": {"const": 20.0},
+            "max_preflight_launch_count": {"const": 8},
+            "failed_preflight_termination_dispatch_seconds": {"const": 300},
+            "empirical_clock_origin": {
+              "const": "after-durable-frozen-run-manifest-publication"
+            },
+            "empirical_campaign_wall_seconds": {"const": 14400},
+            "evidence_export_reserve_seconds": {"const": 600},
+            "provider_termination_handoff_seconds": {"const": 60},
+            "supervised_release_wait_seconds": {"const": 300},
+            "supervised_release_rule": {"type": "string", "minLength": 16},
+            "empirical_cleanup_reserve_seconds": {"const": 900},
+            "empirical_termination_cutoff_seconds": {"const": 13500},
+            "maximum_empirical_provider_cost_usd": {"const": 8.0},
+            "max_empirical_launch_count": {"const": 1},
+            "max_lambda_instances": {"const": 1},
+            "persistent_filesystems": {"const": 0},
+            "replacement_launch_rule": {"$ref": "#/$defs/replacement-launch-rule"},
+            "admission_rule": {"type": "string", "minLength": 8},
+            "control_plane": {"type": "string", "minLength": 8}
+          }
         }
       ]
     },

@@ -1956,17 +1956,17 @@ def test_retry5_slot2_package_transition_is_exact_and_science_invariant(
 def test_retry5_provider_classifies_every_hard_clock_boundary() -> None:
     provider = _provider("giclab_t09_retry5_provider_clock_boundaries")
     lifecycle = provider.CampaignLifecycle(
-        retry4_limits=provider.Retry4LifecycleLimits(),
+        limits=provider.AutonomousPilotLifecycleLimits(),
         max_instances=1,
-        max_launches=2,
+        max_launches=8,
         persistent_filesystems=0,
     )
 
     def classify(
         *,
         empirical_started: float = 3_600.0,
-        owned_duration: float = 18_000.0,
-        cumulative_duration: float = 21_600.0,
+        owned_duration: float = 21_600.0,
+        cumulative_duration: float = 43_200.0,
     ) -> str:
         return provider._classify_campaign_wall_exception(
             lifecycle=lifecycle,
@@ -1982,21 +1982,34 @@ def test_retry5_provider_classifies_every_hard_clock_boundary() -> None:
         )
 
     assert classify() == "none"
-    assert classify(empirical_started=3_600.0 + 1e-6) == ("successful-preflight-wall-violated")
-    assert classify(owned_duration=18_000.0 + 1e-6) == ("successful-host-active-cap-violated")
-    assert classify(cumulative_duration=21_600.0 + 1e-6) == ("cumulative-active-cap-violated")
+    assert classify(owned_duration=21_600.0 + 1e-6) == ("successful-host-active-cap-violated")
     assert (
         provider._classify_campaign_wall_exception(
             lifecycle=lifecycle,
             provider_started_at_epoch=0.0,
             empirical_started_at_epoch=None,
-            termination_started_at_epoch=3_900.0,
-            terminal_observed_at_epoch=3_900.0,
-            owned_lambda_duration_seconds=3_900.0,
-            cumulative_lambda_duration_seconds=3_900.0,
-            failed_preflight_dispatch_deadline_epoch=3_900.0,
+            termination_started_at_epoch=1.0,
+            terminal_observed_at_epoch=1.0,
+            owned_lambda_duration_seconds=1.0,
+            cumulative_lambda_duration_seconds=43_200.0 + 1e-6,
+            failed_preflight_dispatch_deadline_epoch=None,
+            failed_preflight_started_at_epoch=None,
+            failed_preflight_failed_at_epoch=None,
+        )
+        == "cumulative-active-cap-violated"
+    )
+    assert (
+        provider._classify_campaign_wall_exception(
+            lifecycle=lifecycle,
+            provider_started_at_epoch=0.0,
+            empirical_started_at_epoch=None,
+            termination_started_at_epoch=21_900.0,
+            terminal_observed_at_epoch=21_900.0,
+            owned_lambda_duration_seconds=21_900.0,
+            cumulative_lambda_duration_seconds=43_200.0,
+            failed_preflight_dispatch_deadline_epoch=21_900.0,
             failed_preflight_started_at_epoch=0.0,
-            failed_preflight_failed_at_epoch=3_600.0,
+            failed_preflight_failed_at_epoch=21_600.0,
         )
         == "none"
     )
@@ -2005,20 +2018,19 @@ def test_retry5_provider_classifies_every_hard_clock_boundary() -> None:
             lifecycle=lifecycle,
             provider_started_at_epoch=0.0,
             empirical_started_at_epoch=None,
-            termination_started_at_epoch=3_900.0,
-            terminal_observed_at_epoch=3_900.0,
-            owned_lambda_duration_seconds=3_900.0,
-            cumulative_lambda_duration_seconds=3_900.0,
-            failed_preflight_dispatch_deadline_epoch=3_900.0 + 1e-6,
+            termination_started_at_epoch=21_900.0,
+            terminal_observed_at_epoch=21_900.0,
+            owned_lambda_duration_seconds=21_900.0,
+            cumulative_lambda_duration_seconds=43_200.0,
+            failed_preflight_dispatch_deadline_epoch=21_900.0 + 1e-6,
             failed_preflight_started_at_epoch=0.0,
-            failed_preflight_failed_at_epoch=3_600.0 + 1e-6,
+            failed_preflight_failed_at_epoch=21_600.0 + 1e-6,
         )
         == "failed-preflight-wall-violated"
     )
     assert {
         "failed-preflight-termination-dispatch-violated",
         "failed-preflight-wall-violated",
-        "successful-preflight-wall-violated",
         "successful-host-active-cap-violated",
         "cumulative-active-cap-violated",
         "termination-cutoff-violated",
@@ -2192,11 +2204,12 @@ def test_retry5_slot2_rejects_any_unverified_core_destruction(
             "host_run_id": provider.HOST_RUN_ID,
             "package_commit": package_commit,
             "empirical_attempts_entered": 0,
-            "termination_dispatch_required": True,
+            "preflight_engineering_state": "resumable-same-host",
+            "termination_dispatch_required": False,
             "provider_preflight_started_at_epoch": preflight_started,
             "failed_at_epoch": failed_at,
             "elapsed_seconds": failed_at - preflight_started,
-            "termination_dispatch_deadline_epoch": failed_at + 300.0,
+            "termination_dispatch_deadline_epoch": None,
         }
         for name, value in {
             "pilot-state.json": state,
@@ -2236,7 +2249,8 @@ def test_retry5_slot2_rejects_any_unverified_core_destruction(
             "preflight_failed_at_epoch": failed_at,
             "provider_preflight_started_at_epoch": preflight_started,
             "preflight_elapsed_seconds": failed_at - preflight_started,
-            "termination_dispatch_deadline_epoch": failed_at + 300.0,
+            "termination_dispatch_deadline_epoch": None,
+            "preflight_engineering_state": "resumable-same-host",
             "empirical_attempts_entered": 0,
             "model_metadata_requests": 0,
             "model_task_requests": 0,

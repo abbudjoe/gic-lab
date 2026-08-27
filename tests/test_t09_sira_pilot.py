@@ -17,7 +17,7 @@ from typing import cast
 import pytest
 
 from giclab.harness import t09_pragmatic_provider as provider
-from giclab.harness.lambda_campaign_lifecycle import Retry4LifecycleLimits
+from giclab.harness.lambda_campaign_lifecycle import AutonomousPilotLifecycleLimits
 from giclab.harness.lambda_l2m_observer import ObserverRequest
 from giclab.harness.sira_gate_a import (
     ImmutableModelRouting,
@@ -303,7 +303,7 @@ def _limits() -> RuntimeLimits:
         max_total_wall_seconds=14_400,
         max_output_bytes_per_attempt=536_870_912,
         max_disk_bytes=2_147_483_648,
-        max_lambda_duration_seconds=21_600,
+        max_lambda_duration_seconds=14_400,
         max_lambda_cost_usd=8.0,
         max_attempts=4,
         max_retries_after_empirical_entry=0,
@@ -620,6 +620,26 @@ def test_execution_schema_and_all_static_file_bindings_resolve() -> None:
             assert path.stat().st_size == raw["size_bytes"]
 
 
+def test_v8_science_projection_preserves_complete_flag_value_argv() -> None:
+    execution = load_json(EXECUTION_CONTRACT)
+    projection = load_json(
+        ROOT
+        / "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
+        "T09_PILOT_V8_SCIENCE_PROJECTION.json"
+    )
+    assert len(execution["attempts"]) == len(projection["attempts"]) == 4
+    for source, frozen in zip(execution["attempts"], projection["attempts"], strict=True):
+        expected = list(source["upstream_argv"])
+        expected[0] = "<FRESH-UPSTREAM-RUN-ID>"
+        output_index = expected.index("--output_dir")
+        expected[output_index + 1] = "<FRESH-OUTPUT-ROOT>"
+        observed = frozen["upstream_argv"]
+        assert observed == expected
+        assert len(observed) % 2 == 1
+        assert all(observed[index].startswith("--") for index in range(1, len(observed), 2))
+        assert all(not observed[index].startswith("--") for index in range(2, len(observed), 2))
+
+
 def test_runtime_identity_binds_every_selected_executable_file() -> None:
     document = load_json(RUNTIME_IDENTITY)
     instrumentation = document["repository_instrumentation"]
@@ -870,6 +890,37 @@ def _load_openai_secret_materializer() -> ModuleType:
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def test_v8_sealing_primitives_preflight_exercises_exact_production_sealers(
+    tmp_path: Path,
+) -> None:
+    host = _load_host_runner()
+    artifact_root = tmp_path / "artifact"
+    artifact_root.mkdir()
+    command_document = load_json(
+        ROOT
+        / "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
+        "T09_PILOT_COMMAND_MANIFESTS.json"
+    )
+    receipt = host.sealing_primitives_preflight(
+        repository=ROOT,
+        artifact_root=artifact_root,
+        command_document=command_document,
+        package_commit="a" * 40,
+        execution_contract_sha256=file_sha256(EXECUTION_CONTRACT),
+    )
+    assert receipt["raw_reconstruction_passed"] is True
+    assert receipt["essential_reconstruction_passed"] is True
+    assert receipt["infrastructure_invalid"] is True
+    assert receipt["score"] is None
+    assert receipt["unscored"] is True
+    assert receipt["condition_retry_permitted"] is False
+    assert receipt["essential_failure_bytes"] <= 67_108_864
+    assert receipt["privacy_allowlist_and_exclusions_valid"] is True
+    assert receipt["core_artifact_count"] == 0
+    assert receipt["provider_or_task_request"] is False
+    assert receipt["browser_action"] is False
 
 
 def test_t09_openai_secret_materializer_is_exact_single_assignment_and_exclusive(
@@ -1213,8 +1264,10 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
                 "plan_id": provider.PLAN_ID,
                 "plan_sha256": provider.file_sha256(plan_path),
                 "max_lambda_instances": 1,
-                "max_launch_count": 2,
-                "authorized_max_preflight_launch_count": 8,
+                "max_preflight_launch_count": 8,
+                "max_empirical_launch_count": 1,
+                "maximum_preflight_instance_active_seconds": 21_600,
+                "maximum_cumulative_preflight_active_seconds": 43_200,
                 "persistent_filesystems": 0,
                 "preflight_lambda_cost_cap_usd": 20.0,
                 "lambda_cost_cap_usd": 8.0,
@@ -1591,7 +1644,7 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
     )
     consumed = load_json(capability[1])
     assert consumed["launch_capability_state"] == "consumed-cleanup-only-after-this-point"
-    assert consumed["launch_capability_limit"] == 2
+    assert consumed["launch_capability_limit"] == 8
     no_second_launch = FakeTransport([])
     with pytest.raises(provider.T09ProviderError, match="already consumed"):
         provider.launch_campaign(
@@ -1726,7 +1779,7 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
     (late_root / "closeout-receipt.json").unlink()
     journal_lines = (late_root / "request-journal.jsonl").read_text().splitlines()
     events = [json.loads(line) for line in journal_lines]
-    late_base = float(validated["lambda_started_at_epoch"]) + 14_000
+    late_base = float(validated["lambda_started_at_epoch"]) + 22_000
     for index, event in enumerate(events):
         event["send_started_at_epoch"] = late_base + index
         if "response_received_at_epoch" in event:
@@ -1762,16 +1815,16 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
 
 def test_closeout_rejects_termination_after_campaign_cutoff() -> None:
     lifecycle = provider.CampaignLifecycle(
-        retry4_limits=Retry4LifecycleLimits(),
+        limits=AutonomousPilotLifecycleLimits(),
         max_instances=1,
-        max_launches=2,
+        max_launches=8,
         persistent_filesystems=0,
     )
     assert lifecycle.termination_due(
         started_at_epoch=100.0,
         now_epoch=13_600.0,
     )
-    limits = Retry4LifecycleLimits()
+    limits = AutonomousPilotLifecycleLimits()
     assert (
         lifecycle.wall_seconds,
         lifecycle.cleanup_reserve_seconds,
@@ -1948,17 +2001,20 @@ def test_provider_projection_allowlists_selected_operational_fields() -> None:
 
 def test_campaign_lifecycle_uses_actual_elapsed_time_and_preserves_cleanup_reserve() -> None:
     campaign = CampaignLifecycleLimits(
-        preflight_wall_seconds=3_600,
+        preflight_iteration_wall_seconds=3_600,
+        maximum_preflight_instance_active_seconds=21_600,
+        maximum_cumulative_preflight_active_seconds=43_200,
+        maximum_preflight_provider_cost_usd=20.0,
+        max_preflight_launch_count=8,
         failed_preflight_termination_dispatch_seconds=300,
         empirical_campaign_wall_seconds=14_400,
         evidence_export_reserve_seconds=600,
         provider_termination_handoff_seconds=60,
         empirical_cleanup_reserve_seconds=900,
         empirical_termination_cutoff_seconds=13_500,
-        maximum_successful_host_active_seconds=18_000,
-        maximum_cumulative_active_seconds=21_600,
+        maximum_empirical_provider_cost_usd=8.0,
+        max_empirical_launch_count=1,
         max_lambda_instances=1,
-        max_launch_count=2,
         persistent_filesystems=0,
     )
     assert campaign.elapsed_seconds(billable_started_at=100.0, now=700.0) == 600.0
@@ -1979,6 +2035,37 @@ def test_campaign_lifecycle_uses_actual_elapsed_time_and_preserves_cleanup_reser
         is False
     )
     assert campaign.termination_due(billable_started_at=100.0, now=13_600.0) is True
+
+
+def test_autonomous_preflight_and_empirical_lifecycle_boundaries_are_separate() -> None:
+    limits = AutonomousPilotLifecycleLimits()
+    assert limits.maximum_preflight_launches == 8
+    assert limits.maximum_preflight_instance_active_seconds == 21_600
+    assert limits.maximum_cumulative_preflight_active_seconds == 43_200
+    assert limits.maximum_preflight_provider_cost_cents == 2_000
+    assert limits.maximum_empirical_launches == 1
+    assert limits.empirical_campaign_wall_seconds == 14_400
+    assert limits.maximum_empirical_provider_cost_cents == 800
+    assert limits.preflight_instance_remaining(
+        launched_at_epoch=100.0, now_epoch=21_700.0
+    ) == 0
+    assert limits.preflight_caps_available(cumulative_active_seconds=43_200) is True
+    assert limits.preflight_caps_available(cumulative_active_seconds=43_200.1) is False
+    assert provider.CampaignLifecycle(
+        limits=limits,
+        max_instances=1,
+        max_launches=8,
+        persistent_filesystems=0,
+    ).max_launches == 8
+    with pytest.raises(provider.T09ProviderError, match="lifecycle drifted"):
+        provider.CampaignLifecycle(
+            limits=limits,
+            max_instances=1,
+            max_launches=9,
+            persistent_filesystems=0,
+        )
+    with pytest.raises(provider.T09ProviderError, match="outside the authorized bound"):
+        provider.launch_capability_path(9)
 
 
 def test_host_campaign_admission_counts_setup_and_attempt_actual_time(
@@ -2004,7 +2091,7 @@ def test_host_campaign_admission_counts_setup_and_attempt_actual_time(
         encoding="utf-8",
     )
     assert host.provider_seconds_remaining(tmp_path, reserve_seconds=900) == pytest.approx(
-        20_700,
+        13_500,
         abs=1,
     )
     assert host.scientific_seconds_remaining(tmp_path) == pytest.approx(14_400, abs=1)
@@ -2019,6 +2106,54 @@ def test_host_campaign_admission_counts_setup_and_attempt_actual_time(
     monkeypatch.setattr(host.time, "time", lambda: now + 13_500)
     assert host.scientific_seconds_remaining(tmp_path, reserve_seconds=900) == 0
     assert host.provider_termination_due(tmp_path) is True
+
+
+def test_ordinary_preflight_defect_is_resumable_on_same_host_with_fresh_root(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    host = _load_host_runner()
+    now = time.time()
+    dynamic_source = tmp_path / "dynamic-source"
+    dynamic_source.mkdir()
+    dynamic_receipt = tmp_path / "dynamic.json"
+    dynamic_receipt.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(
+        host,
+        "validate_dynamic_receipt",
+        lambda *_args, **_kwargs: {
+            "provider_preflight_started_at_epoch": now - 10.0,
+            "prior_campaign_lambda_duration_seconds": 0.0,
+            "prior_campaign_lambda_cost_usd": 0.0,
+            "launch_slot": 1,
+        },
+    )
+    observed: list[Path] = []
+
+    def preflight_fixture(args: SimpleNamespace) -> None:
+        observed.append(args.artifact_root)
+        (args.artifact_root / "pilot-v7").mkdir(parents=True)
+        if len(observed) == 1:
+            raise host.T09HostError("synthetic ordinary engineering defect")
+
+    monkeypatch.setattr(host, "preflight", preflight_fixture)
+    common = {
+        "repository": ROOT,
+        "dynamic_receipt": dynamic_receipt,
+        "dynamic_source_root": dynamic_source,
+        "package_commit": "a" * 40,
+    }
+    first_root = tmp_path / "first"
+    with pytest.raises(host.T09HostError, match="ordinary engineering defect"):
+        host.preflight_with_deadline(SimpleNamespace(**common, artifact_root=first_root))
+    failure = load_json(first_root / "pilot-v7/preflight-failure.json")
+    assert failure["preflight_engineering_state"] == "resumable-same-host"
+    assert failure["termination_dispatch_required"] is False
+    assert failure["termination_dispatch_deadline_epoch"] is None
+
+    second_root = tmp_path / "second"
+    host.preflight_with_deadline(SimpleNamespace(**common, artifact_root=second_root))
+    assert observed == [first_root, second_root]
 
 
 def test_condition_keeps_full_3600_seconds_and_separates_evidence_handoff() -> None:

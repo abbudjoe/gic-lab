@@ -34,6 +34,10 @@ EXPERIMENT_ID: Final = "EXP-0001"
 SIRA_COMMIT: Final = "93fb8d72de71f9a4a13419670adeb34d93cf7acd"
 MODEL_REVISION: Final = "gpt-4o-2024-11-20"
 SERVICE_TIER: Final = "default"
+AUTHORIZATION_REFERENCE: Final = (
+    "AUTH-T09-AUTONOMOUS-PREFLIGHT-TO-PILOT-2026-08-27:sha256:"
+    "80ded0e246b4f070c3992ae872111c19c64d1ef30115d65a8641709f06e1a484"
+)
 DATASET_REVISION: Final = "76ad1feb689b754bfe4e5e24d3ea371b647efa67"
 DATASET_SHA256: Final = "359300b029c6891567816f351bf8786e9b018d7af8a1a44b7da9ba5ef4651288"
 EVALUATOR_SHA256: Final = "2f99ec6ca40a5d5b49beea61c71d55a85652697b07f92a1c2aaefe85e727ab79"
@@ -89,40 +93,52 @@ class T09BudgetExceeded(RuntimeError):
 
 @dataclass(frozen=True, slots=True)
 class CampaignLifecycleLimits:
-    """Three-clock Retry 5 lifecycle authority."""
+    """Separated autonomous preflight and empirical lifecycle authority."""
 
-    preflight_wall_seconds: int
+    preflight_iteration_wall_seconds: int
+    maximum_preflight_instance_active_seconds: int
+    maximum_cumulative_preflight_active_seconds: int
+    maximum_preflight_provider_cost_usd: float
+    max_preflight_launch_count: int
     failed_preflight_termination_dispatch_seconds: int
     empirical_campaign_wall_seconds: int
     evidence_export_reserve_seconds: int
     provider_termination_handoff_seconds: int
     empirical_cleanup_reserve_seconds: int
     empirical_termination_cutoff_seconds: int
-    maximum_successful_host_active_seconds: int
-    maximum_cumulative_active_seconds: int
+    maximum_empirical_provider_cost_usd: float
+    max_empirical_launch_count: int
     max_lambda_instances: int
-    max_launch_count: int
     persistent_filesystems: int
 
     def __post_init__(self) -> None:
         values = (
-            self.preflight_wall_seconds,
+            self.preflight_iteration_wall_seconds,
+            self.maximum_preflight_instance_active_seconds,
+            self.maximum_cumulative_preflight_active_seconds,
+            self.max_preflight_launch_count,
             self.failed_preflight_termination_dispatch_seconds,
             self.empirical_campaign_wall_seconds,
             self.evidence_export_reserve_seconds,
             self.provider_termination_handoff_seconds,
             self.empirical_cleanup_reserve_seconds,
             self.empirical_termination_cutoff_seconds,
-            self.maximum_successful_host_active_seconds,
-            self.maximum_cumulative_active_seconds,
+            self.max_empirical_launch_count,
             self.max_lambda_instances,
-            self.max_launch_count,
             self.persistent_filesystems,
         )
         if any(type(value) is not int or value < 0 for value in values):
             raise T09PilotError("campaign lifecycle limits must be non-negative integers")
-        if self.preflight_wall_seconds != 3_600:
-            raise T09PilotError("preflight wall must remain 3,600 seconds")
+        if self.preflight_iteration_wall_seconds != 3_600:
+            raise T09PilotError("preflight iteration wall must remain 3,600 seconds")
+        if self.maximum_preflight_instance_active_seconds != 21_600:
+            raise T09PilotError("preflight instance active cap must remain 21,600 seconds")
+        if self.maximum_cumulative_preflight_active_seconds != 43_200:
+            raise T09PilotError("cumulative preflight cap must remain 43,200 seconds")
+        if self.maximum_preflight_provider_cost_usd != 20.0:
+            raise T09PilotError("preflight provider cost cap must remain USD 20")
+        if self.max_preflight_launch_count != 8:
+            raise T09PilotError("preflight launch cap must remain eight")
         if self.failed_preflight_termination_dispatch_seconds != 300:
             raise T09PilotError("failed-preflight termination dispatch must remain 300 seconds")
         if self.empirical_campaign_wall_seconds != 14_400:
@@ -138,18 +154,16 @@ class CampaignLifecycleLimits:
             != self.empirical_campaign_wall_seconds - self.empirical_cleanup_reserve_seconds
         ):
             raise T09PilotError("provider termination cutoff must preserve the cleanup reserve")
-        if self.maximum_successful_host_active_seconds != 18_000:
-            raise T09PilotError("successful-host active cap must remain 18,000 seconds")
-        if self.maximum_cumulative_active_seconds != 21_600:
-            raise T09PilotError("cumulative active cap must remain 21,600 seconds")
+        if self.maximum_empirical_provider_cost_usd != 8.0:
+            raise T09PilotError("empirical provider cost cap must remain USD 8")
         if (
             self.max_lambda_instances != 1
-            or self.max_launch_count != 2
+            or self.max_empirical_launch_count != 1
             or self.persistent_filesystems != 0
         ):
             raise T09PilotError(
-                "campaign requires one simultaneous instance, at most two pre-empirical "
-                "launches, and no filesystem"
+                "campaign requires one simultaneous instance, one empirical launch, "
+                "and no filesystem"
             )
 
     def elapsed_seconds(self, *, billable_started_at: float, now: float) -> float:
@@ -609,7 +623,7 @@ class RuntimeQualification:
             or document.get("empirical_entry_crossed") is not False
             or document.get("post_entry_code_science_image_freeze") is not True
             or result.preflight_transition_mode not in {"fresh", "replacement-launch"}
-            or result.launch_slot not in {1, 2}
+            or result.launch_slot not in range(1, 9)
             or result.launch_count != result.launch_slot
             or re.fullmatch(r"[a-f0-9]{40}", result.provider_entry_package_commit) is None
             or result.campaign_started_at_epoch <= 0
@@ -654,8 +668,8 @@ class RuntimeQualification:
                 result.normalized_slot2_authority_tree_manifest_sha256,
             )
             if (
-                result.launch_slot != 2
-                or result.launch_count != 2
+                result.launch_slot not in range(2, 9)
+                or result.launch_count != result.launch_slot
                 or result.image_materialization_policy != "retained-import-only"
                 or result.build_count != 0
                 or result.image_import_count != 1
@@ -795,8 +809,8 @@ class RuntimeLimits:
             raise T09PilotError("pair wall cap must equal two condition caps")
         if self.max_total_wall_seconds != 2 * self.max_pair_wall_seconds:
             raise T09PilotError("total wall cap must equal two pair caps")
-        if self.max_lambda_duration_seconds != 21_600:
-            raise T09PilotError("cumulative Lambda active cap must remain 21,600 seconds")
+        if self.max_lambda_duration_seconds != 14_400:
+            raise T09PilotError("empirical Lambda wall must remain 14,400 seconds")
         if self.max_attempts != 4 or self.max_retries_after_empirical_entry != 0:
             raise T09PilotError("the calibration pilot requires four attempts and zero retry")
         for value in (self.max_openai_cost_usd_per_attempt, self.max_lambda_cost_usd):
@@ -891,6 +905,8 @@ def load_execution_contract(path: Path, *, expected_sha256: str) -> PilotExecuti
         "model_revision": MODEL_REVISION,
         "service_tier": SERVICE_TIER,
         "authorized": True,
+        "authorization_reference": AUTHORIZATION_REFERENCE,
+        "execution_eligibility": "current-turn-authorized-after-dynamic-preflight",
     }
     for field, expected in expected_identity.items():
         if document.get(field) != expected:
@@ -1001,8 +1017,25 @@ def load_execution_contract(path: Path, *, expected_sha256: str) -> PilotExecuti
         raise T09PilotError("first-pair checkpoint must be required")
     raw_campaign = _strict_object(document.get("provider_lifecycle"), context="provider lifecycle")
     campaign = CampaignLifecycleLimits(
-        preflight_wall_seconds=_required_int(
-            raw_campaign.get("preflight_wall_seconds"), context="preflight wall"
+        preflight_iteration_wall_seconds=_required_int(
+            raw_campaign.get("preflight_iteration_wall_seconds"),
+            context="preflight iteration wall",
+        ),
+        maximum_preflight_instance_active_seconds=_required_int(
+            raw_campaign.get("maximum_preflight_instance_active_seconds"),
+            context="preflight instance active cap",
+        ),
+        maximum_cumulative_preflight_active_seconds=_required_int(
+            raw_campaign.get("maximum_cumulative_preflight_active_seconds"),
+            context="cumulative preflight active cap",
+        ),
+        maximum_preflight_provider_cost_usd=_required_number(
+            raw_campaign.get("maximum_preflight_provider_cost_usd"),
+            context="preflight provider cost cap",
+        ),
+        max_preflight_launch_count=_required_int(
+            raw_campaign.get("max_preflight_launch_count"),
+            context="preflight launch cap",
         ),
         failed_preflight_termination_dispatch_seconds=_required_int(
             raw_campaign.get("failed_preflight_termination_dispatch_seconds"),
@@ -1028,28 +1061,21 @@ def load_execution_contract(path: Path, *, expected_sha256: str) -> PilotExecuti
             raw_campaign.get("empirical_termination_cutoff_seconds"),
             context="empirical termination cutoff",
         ),
-        maximum_successful_host_active_seconds=_required_int(
-            raw_campaign.get("maximum_successful_host_active_seconds"),
-            context="successful-host active cap",
+        maximum_empirical_provider_cost_usd=_required_number(
+            raw_campaign.get("maximum_empirical_provider_cost_usd"),
+            context="empirical provider cost cap",
         ),
-        maximum_cumulative_active_seconds=_required_int(
-            raw_campaign.get("maximum_cumulative_active_seconds"),
-            context="cumulative active cap",
+        max_empirical_launch_count=_required_int(
+            raw_campaign.get("max_empirical_launch_count"), context="empirical launch cap"
         ),
         max_lambda_instances=_required_int(
             raw_campaign.get("max_lambda_instances"), context="Lambda instance cap"
-        ),
-        max_launch_count=_required_int(
-            raw_campaign.get("max_launch_count"), context="Lambda launch cap"
         ),
         persistent_filesystems=_required_int(
             raw_campaign.get("persistent_filesystems"), context="persistent filesystem cap"
         ),
     )
-    if (
-        limits.max_total_wall_seconds != campaign.empirical_campaign_wall_seconds
-        or limits.max_lambda_duration_seconds != campaign.maximum_cumulative_active_seconds
-    ):
+    if limits.max_total_wall_seconds != campaign.empirical_campaign_wall_seconds:
         raise T09PilotError("runtime limits and three-clock lifecycle disagree")
     return PilotExecutionContract(
         path=path.resolve(strict=True),
@@ -2584,17 +2610,20 @@ def first_pair_decision(value: PairCheckpointInput) -> dict[str, object]:
     ):
         reasons.append("projected_cumulative_t09_cost_exceeds_hard_cap")
     lifecycle = CampaignLifecycleLimits(
-        preflight_wall_seconds=3_600,
+        preflight_iteration_wall_seconds=3_600,
+        maximum_preflight_instance_active_seconds=21_600,
+        maximum_cumulative_preflight_active_seconds=43_200,
+        maximum_preflight_provider_cost_usd=20.0,
+        max_preflight_launch_count=8,
         failed_preflight_termination_dispatch_seconds=300,
         empirical_campaign_wall_seconds=14_400,
         evidence_export_reserve_seconds=600,
         provider_termination_handoff_seconds=60,
         empirical_cleanup_reserve_seconds=900,
         empirical_termination_cutoff_seconds=13_500,
-        maximum_successful_host_active_seconds=18_000,
-        maximum_cumulative_active_seconds=21_600,
+        maximum_empirical_provider_cost_usd=8.0,
+        max_empirical_launch_count=1,
         max_lambda_instances=1,
-        max_launch_count=2,
         persistent_filesystems=0,
     )
     required_campaign_seconds = lifecycle.required_attempt_seconds(

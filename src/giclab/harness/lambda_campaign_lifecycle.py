@@ -238,3 +238,94 @@ class Retry4LifecycleLimits:
             and self.cumulative_cost_usd(cumulative_active_seconds=cumulative_active_seconds)
             <= self.maximum_provider_cost_cents / 100.0
         )
+
+
+@dataclass(frozen=True, slots=True)
+class AutonomousPilotLifecycleLimits:
+    """Separated preflight-engineering and empirical authority for T09 V8.
+
+    Preflight accounting ends at the durable scientific freeze.  Empirical time
+    and cost begin at that boundary and therefore cannot be consumed by setup.
+    """
+
+    preflight_iteration_wall_seconds: int = 3_600
+    maximum_preflight_instance_active_seconds: int = 21_600
+    maximum_cumulative_preflight_active_seconds: int = 43_200
+    maximum_preflight_provider_cost_cents: int = 2_000
+    maximum_preflight_launches: int = 8
+    empirical_campaign_wall_seconds: int = 14_400
+    empirical_cleanup_reserve_seconds: int = 900
+    empirical_termination_cutoff_seconds: int = 13_500
+    maximum_empirical_provider_cost_cents: int = 800
+    maximum_empirical_launches: int = 1
+    maximum_simultaneous_instances: int = 1
+    persistent_filesystems: int = 0
+    price_cents_per_hour: int = 129
+
+    def __post_init__(self) -> None:
+        if (
+            self.preflight_iteration_wall_seconds != 3_600
+            or self.maximum_preflight_instance_active_seconds != 21_600
+            or self.maximum_cumulative_preflight_active_seconds != 43_200
+            or self.maximum_preflight_provider_cost_cents != 2_000
+            or self.maximum_preflight_launches != 8
+            or self.empirical_campaign_wall_seconds != 14_400
+            or self.empirical_cleanup_reserve_seconds != 900
+            or self.empirical_termination_cutoff_seconds != 13_500
+            or self.empirical_termination_cutoff_seconds
+            + self.empirical_cleanup_reserve_seconds
+            != self.empirical_campaign_wall_seconds
+            or self.maximum_empirical_provider_cost_cents != 800
+            or self.maximum_empirical_launches != 1
+            or self.maximum_simultaneous_instances != 1
+            or self.persistent_filesystems != 0
+            or self.price_cents_per_hour != 129
+        ):
+            raise LambdaCampaignLifecycleError("autonomous pilot lifecycle limits drifted")
+
+    def preflight_elapsed(self, *, launched_at_epoch: float, now_epoch: float) -> float:
+        return Retry4LifecycleLimits._elapsed(
+            started_at_epoch=launched_at_epoch,
+            now_epoch=now_epoch,
+            label="provider preflight instance",
+        )
+
+    def preflight_instance_remaining(
+        self, *, launched_at_epoch: float, now_epoch: float
+    ) -> float:
+        return max(
+            0.0,
+            self.maximum_preflight_instance_active_seconds
+            - self.preflight_elapsed(launched_at_epoch=launched_at_epoch, now_epoch=now_epoch),
+        )
+
+    def preflight_cost_usd(self, *, cumulative_active_seconds: float) -> float:
+        if cumulative_active_seconds < 0:
+            raise LambdaCampaignLifecycleError("cumulative preflight time is negative")
+        return cumulative_active_seconds * self.price_cents_per_hour / 100.0 / 3_600.0
+
+    def preflight_caps_available(self, *, cumulative_active_seconds: float) -> bool:
+        return (
+            cumulative_active_seconds <= self.maximum_cumulative_preflight_active_seconds
+            and self.preflight_cost_usd(cumulative_active_seconds=cumulative_active_seconds)
+            <= self.maximum_preflight_provider_cost_cents / 100.0
+        )
+
+    def empirical_elapsed(self, *, empirical_started_at_epoch: float, now_epoch: float) -> float:
+        return Retry4LifecycleLimits._elapsed(
+            started_at_epoch=empirical_started_at_epoch,
+            now_epoch=now_epoch,
+            label="empirical campaign",
+        )
+
+    def empirical_remaining(
+        self, *, empirical_started_at_epoch: float, now_epoch: float
+    ) -> float:
+        return max(
+            0.0,
+            self.empirical_campaign_wall_seconds
+            - self.empirical_elapsed(
+                empirical_started_at_epoch=empirical_started_at_epoch,
+                now_epoch=now_epoch,
+            ),
+        )

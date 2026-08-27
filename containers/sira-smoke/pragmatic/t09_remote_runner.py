@@ -36,7 +36,7 @@ from typing import IO, Any, BinaryIO, Final, NamedTuple, cast
 
 from jsonschema import Draft202012Validator, FormatChecker
 
-from giclab.harness.lambda_campaign_lifecycle import Retry4LifecycleLimits
+from giclab.harness.lambda_campaign_lifecycle import AutonomousPilotLifecycleLimits
 from giclab.harness.sira_gate_a import ProviderBudgetUsage
 from giclab.harness.t09_pragmatic_provider import (
     RETRY4_ACTIVE_SLOT2_ENTRY_PACKAGE_COMMIT,
@@ -50,6 +50,7 @@ from giclab.harness.t09_pragmatic_provider import (
 )
 from giclab.harness.t09_sira_pilot import (
     ATTEMPT_ORDER,
+    AUTHORIZATION_REFERENCE,
     PREENTRY_RESUME_FROM_PACKAGE_COMMIT,
     PREENTRY_RESUME_FROM_PLAN_SHA256,
     TASK_REFERENCE_SHA256S,
@@ -60,6 +61,7 @@ from giclab.harness.t09_sira_pilot import (
     T09PilotError,
     consume_published_unreleased_condition,
     first_pair_decision,
+    initialize_pilot_state,
     load_aggregate_usage,
     load_execution_contract,
     load_validated_pilot_state,
@@ -200,11 +202,13 @@ MAX_PILOT_DISK_BYTES: Final = 2_147_483_648
 MAX_CONDITION_WALL_SECONDS: Final = 3_600
 MAX_PAIR_WALL_SECONDS: Final = 7_200
 MAX_TOTAL_WALL_SECONDS: Final = 14_400
-MAX_PREFLIGHT_WALL_SECONDS: Final = 3_600
+MAX_PREFLIGHT_ITERATION_WALL_SECONDS: Final = 3_600
+MAX_PREFLIGHT_INSTANCE_ACTIVE_SECONDS: Final = 21_600
+MAX_CUMULATIVE_PREFLIGHT_ACTIVE_SECONDS: Final = 43_200
+MAX_PREFLIGHT_LAMBDA_COST_USD: Final = 20.0
 FAILED_PREFLIGHT_TERMINATION_DISPATCH_SECONDS: Final = 300
-MAX_SUCCESSFUL_HOST_ACTIVE_SECONDS: Final = 18_000
-MAX_LAMBDA_DURATION_SECONDS: Final = 21_600
-MAX_LAMBDA_COST_USD: Final = 8.00
+MAX_EMPIRICAL_LAMBDA_DURATION_SECONDS: Final = 14_400
+MAX_EMPIRICAL_LAMBDA_COST_USD: Final = 8.00
 LAMBDA_HOURLY_PRICE_USD: Final = 1.29
 FINALIZER_INVOCATION_TIMEOUT_SECONDS: Final = 600
 ATTEMPT_EVIDENCE_EXPORT_RESERVE_SECONDS: Final = 600
@@ -4076,7 +4080,7 @@ def validate_dynamic_receipt(
     if (
         not isinstance(captured, (int, float))
         or isinstance(captured, bool)
-        or not 0 <= time.time() - float(captured) <= MAX_PREFLIGHT_WALL_SECONDS
+        or not 0 <= time.time() - float(captured) <= MAX_PREFLIGHT_INSTANCE_ACTIVE_SECONDS
     ):
         raise T09HostError("provider entry receipt is stale")
     encoded = json.dumps(value, sort_keys=True)
@@ -4522,13 +4526,39 @@ def _active_lambda_accounting(root: Path, *, now: float) -> tuple[dict[str, Any]
 
 
 def provider_seconds_remaining(root: Path, *, reserve_seconds: float = 0.0) -> float:
-    """Return cumulative active-provider headroom, independent of offline gaps."""
+    """Return phase-correct provider headroom without mixing cost envelopes."""
 
-    _, active_duration, active_cost = _active_lambda_accounting(root, now=time.time())
-    remaining = min(
-        MAX_LAMBDA_DURATION_SECONDS - active_duration,
-        (MAX_LAMBDA_COST_USD - active_cost) * 3600.0 / LAMBDA_HOURLY_PRICE_USD,
+    now = time.time()
+    state, preflight_active_duration, preflight_active_cost = _active_lambda_accounting(
+        root, now=now
     )
+    owned_started = float(cast(int | float, state["owned_lambda_started_at_epoch"]))
+    per_instance_remaining = MAX_PREFLIGHT_INSTANCE_ACTIVE_SECONDS - (now - owned_started)
+    empirical_started = state.get("campaign_started_at_epoch")
+    if (
+        isinstance(empirical_started, (int, float))
+        and not isinstance(empirical_started, bool)
+        and float(empirical_started) <= now
+    ):
+        empirical_elapsed = now - float(empirical_started)
+        remaining = min(
+            per_instance_remaining,
+            MAX_EMPIRICAL_LAMBDA_DURATION_SECONDS - empirical_elapsed,
+            (
+                MAX_EMPIRICAL_LAMBDA_COST_USD
+                - empirical_elapsed * LAMBDA_HOURLY_PRICE_USD / 3600.0
+            )
+            * 3600.0
+            / LAMBDA_HOURLY_PRICE_USD,
+        )
+    else:
+        remaining = min(
+            per_instance_remaining,
+            MAX_CUMULATIVE_PREFLIGHT_ACTIVE_SECONDS - preflight_active_duration,
+            (MAX_PREFLIGHT_LAMBDA_COST_USD - preflight_active_cost)
+            * 3600.0
+            / LAMBDA_HOURLY_PRICE_USD,
+        )
     if remaining + 1e-9 < reserve_seconds:
         raise T09HostError("provider duration or cost ceiling has no required reserve")
     return max(0.0, remaining - reserve_seconds)
@@ -4541,9 +4571,9 @@ def preflight_seconds_remaining(root: Path) -> float:
     started = state.get("provider_preflight_started_at_epoch")
     if not isinstance(started, (int, float)) or isinstance(started, bool):
         raise T09HostError("provider preflight time origin is unavailable")
-    lifecycle = Retry4LifecycleLimits()
+    lifecycle = AutonomousPilotLifecycleLimits()
     return min(
-        lifecycle.preflight_remaining(
+        lifecycle.preflight_instance_remaining(
             launched_at_epoch=float(started),
             now_epoch=time.time(),
         ),
@@ -4558,7 +4588,7 @@ def scientific_seconds_remaining(root: Path, *, reserve_seconds: float = 0.0) ->
     empirical_started = state.get("campaign_started_at_epoch")
     if not isinstance(empirical_started, (int, float)) or isinstance(empirical_started, bool):
         raise T09HostError("empirical campaign clock has not started")
-    lifecycle = Retry4LifecycleLimits()
+    lifecycle = AutonomousPilotLifecycleLimits()
     empirical_remaining = lifecycle.empirical_remaining(
         empirical_started_at_epoch=float(empirical_started),
         now_epoch=time.time(),
@@ -4633,7 +4663,7 @@ def provider_termination_due(root: Path) -> bool:
         preflight_started = state.get("provider_preflight_started_at_epoch")
         if not isinstance(preflight_started, (int, float)) or isinstance(preflight_started, bool):
             raise T09HostError("provider preflight time origin is unavailable")
-        return time.time() - float(preflight_started) >= MAX_PREFLIGHT_WALL_SECONDS
+        return time.time() - float(preflight_started) >= MAX_PREFLIGHT_INSTANCE_ACTIVE_SECONDS
     return time.time() - float(started) >= PROVIDER_TERMINATION_CUTOFF_SECONDS
 
 
@@ -4710,7 +4740,17 @@ def verify_package(
         raise T09HostError("repository worktree is not clean")
     paths = contract_paths(repository)
     execution = load_object(paths["execution"], label="execution contract")
-    if execution.get("authorized") is not False or execution.get("plan_id") != PLAN_ID:
+    load_execution_contract(
+        paths["execution"],
+        expected_sha256=file_sha256(paths["execution"]),
+    )
+    if (
+        execution.get("authorized") is not True
+        or execution.get("authorization_reference") != AUTHORIZATION_REFERENCE
+        or execution.get("execution_eligibility")
+        != "current-turn-authorized-after-dynamic-preflight"
+        or execution.get("plan_id") != PLAN_ID
+    ):
         raise T09HostError("execution contract identity or authorization drifted")
     runtime = execution.get("runtime")
     if (
@@ -6410,6 +6450,7 @@ def write_frozen_run_manifest(
     qualified_real_evidence_regression_receipt: dict[str, Any],
     regression_archive_staging_receipt: dict[str, object],
     local_finalizer_qualification_receipt: dict[str, Any],
+    sealing_primitives_receipt: dict[str, object],
     preflight_resume_transition: dict[str, Any] | None = None,
     slot2_authority: dict[str, object] | None = None,
 ) -> tuple[Path, dict[str, object]]:
@@ -6454,7 +6495,7 @@ def write_frozen_run_manifest(
         SLOT1_IMAGE_MATERIALIZATION_POLICY
         if launch_slot == 1
         else SLOT2_IMAGE_MATERIALIZATION_POLICY
-        if launch_slot == 2
+        if launch_slot in range(2, 9)
         else None
     )
     if launch_slot == 1:
@@ -6482,7 +6523,10 @@ def write_frozen_run_manifest(
     ) != static_real_evidence_regression.get("semantic_projection"):
         raise T09HostError("static and qualified real-evidence regressions disagree")
     if preflight_resume_transition is not None:
-        raise T09HostError("same-host preflight resume is permanently disabled")
+        raise T09HostError(
+            "legacy preflight-transition input is invalid; ordinary same-host repair "
+            "must rerun the preflight command with a fresh artifact root"
+        )
     if dynamic.get("launch_slot") == 1:
         resume_fields: dict[str, object] = {
             "preflight_transition_mode": "fresh",
@@ -6573,6 +6617,9 @@ def write_frozen_run_manifest(
         "runtime_preflight_sha256": canonical_sha256(runtime_receipt),
         "offline_preflight_sha256": canonical_sha256(offline_receipt),
         "core_suppression_preflight_sha256": canonical_sha256(core_receipt),
+        "sealing_primitives_preflight_sha256": canonical_sha256(
+            sealing_primitives_receipt
+        ),
         "pre_metadata_complete_core_gate_sha256": canonical_sha256(pre_metadata_core_gate_receipt),
         "post_metadata_complete_core_gate_sha256": canonical_sha256(
             post_metadata_core_gate_receipt
@@ -6653,6 +6700,9 @@ def write_frozen_run_manifest(
             "core_suppression": file_sha256(
                 artifact_root / "pilot-v7/core-suppression-preflight/host-core-suppression.json"
             ),
+            "sealing_primitives": file_sha256(
+                artifact_root / "pilot-v7/sealing-primitives-preflight/receipt.json"
+            ),
             "pre_metadata_complete_core_gate": file_sha256(
                 artifact_root / "pilot-v7/preflight-core-integrity/before-model-metadata.json"
             ),
@@ -6689,7 +6739,7 @@ def write_frozen_run_manifest(
         or (manifest["build_count"] == 0 and manifest["image_import_count"] != 1)
         or (manifest["build_count"] == 1 and manifest["image_import_count"] != 0)
         or (
-            launch_slot == 2
+            launch_slot in range(2, 9)
             and (
                 manifest["image_materialization_policy"] != SLOT2_IMAGE_MATERIALIZATION_POLICY
                 or manifest["build_count"] != 0
@@ -6923,7 +6973,7 @@ def load_frozen_run_manifest(
         or materialization.get("image_materialization_policy")
         != typed_qualification.image_materialization_policy
         or (
-            typed_qualification.launch_slot == 2
+            typed_qualification.launch_slot in range(2, 9)
             and (
                 typed_qualification.image_materialization_policy
                 != SLOT2_IMAGE_MATERIALIZATION_POLICY
@@ -6962,6 +7012,12 @@ def load_frozen_run_manifest(
         artifact_root / "pilot-v7/core-suppression-preflight/host-core-suppression.json"
     )
     core_preflight = load_object(core_preflight_path, label="core suppression preflight")
+    sealing_preflight_path = (
+        artifact_root / "pilot-v7/sealing-primitives-preflight/receipt.json"
+    )
+    sealing_preflight = load_object(
+        sealing_preflight_path, label="sealing primitives preflight"
+    )
     pre_metadata_core_gate_path = (
         artifact_root / "pilot-v7/preflight-core-integrity/before-model-metadata.json"
     )
@@ -6989,6 +7045,7 @@ def load_frozen_run_manifest(
         or source_receipts.get("model_metadata_credential_scan")
         != file_sha256(model_credential_scan_path)
         or source_receipts.get("core_suppression") != file_sha256(core_preflight_path)
+        or source_receipts.get("sealing_primitives") != file_sha256(sealing_preflight_path)
         or source_receipts.get("pre_metadata_complete_core_gate")
         != file_sha256(pre_metadata_core_gate_path)
         or source_receipts.get("post_metadata_complete_core_gate")
@@ -7007,6 +7064,17 @@ def load_frozen_run_manifest(
             for gate in (pre_metadata_core_gate, post_metadata_core_gate)
         )
         or manifest.get("core_suppression_preflight_sha256") != canonical_sha256(core_preflight)
+        or manifest.get("sealing_primitives_preflight_sha256")
+        != canonical_sha256(sealing_preflight)
+        or sealing_preflight.get("raw_reconstruction_passed") is not True
+        or sealing_preflight.get("essential_reconstruction_passed") is not True
+        or sealing_preflight.get("infrastructure_invalid") is not True
+        or sealing_preflight.get("score") is not None
+        or sealing_preflight.get("unscored") is not True
+        or sealing_preflight.get("condition_retry_permitted") is not False
+        or sealing_preflight.get("essential_failure_cap_bytes")
+        != MAX_ESSENTIAL_FAILURE_BYTES
+        or sealing_preflight.get("synthetic_state_isolated_from_campaign") is not True
         or core_preflight.get("core_limit_contract") != CORE_LIMIT_CONTRACT
         or core_preflight.get("core_soft_limit") != 0
         or core_preflight.get("core_hard_limit") != 0
@@ -7172,9 +7240,9 @@ def schedule_empirical_campaign_start(
         or isinstance(preflight_started, bool)
         or not isinstance(owned_started, (int, float))
         or isinstance(owned_started, bool)
-        or start > float(preflight_started) + MAX_PREFLIGHT_WALL_SECONDS
+        or start > float(preflight_started) + MAX_PREFLIGHT_INSTANCE_ACTIVE_SECONDS
         or start + MAX_TOTAL_WALL_SECONDS
-        > float(owned_started) + MAX_SUCCESSFUL_HOST_ACTIVE_SECONDS
+        > float(owned_started) + MAX_PREFLIGHT_INSTANCE_ACTIVE_SECONDS
     ):
         raise T09HostError(
             "scheduled empirical origin cannot fit the preflight and successful-host active caps"
@@ -7414,7 +7482,8 @@ def prepare_preflight_resume(
     """Validate and materialize the one source-bound zero-use preflight transition."""
 
     raise T09HostError(
-        "same-host preflight resume is permanently disabled; only source-bound slot 2 is valid"
+        "the historical transition-specific resume path is retired; rerun the ordinary "
+        "preflight command on this host with a fresh artifact root"
     )
 
     repository = args.repository.resolve(strict=True)
@@ -7633,7 +7702,8 @@ def prepare_preflight_resume(
 
 def resume_preflight(args: argparse.Namespace) -> None:
     raise T09HostError(
-        "same-host preflight resume is permanently disabled; only source-bound slot 2 is valid"
+        "the historical transition-specific resume path is retired; rerun the ordinary "
+        "preflight command on this host with a fresh artifact root"
     )
     """Resume only the exact retained zero-use preflight after source-bound repair."""
 
@@ -7710,6 +7780,13 @@ def resume_preflight(args: argparse.Namespace) -> None:
         prefix=prefix,
         image_id=image_id,
     )
+    sealing_primitives = sealing_primitives_preflight(
+        repository=repository,
+        artifact_root=artifact_root,
+        command_document=command_document,
+        package_commit=args.package_commit,
+        execution_contract_sha256=execution_sha256,
+    )
     evaluator_overlay_verified = validate_evaluator_overlay_binding(
         artifact_root=artifact_root,
         repository=repository,
@@ -7734,8 +7811,9 @@ def resume_preflight(args: argparse.Namespace) -> None:
         raise T09HostError("provider entry lacks its original campaign clock")
     lambda_elapsed = time.time() - float(lambda_started)
     if (
-        lambda_elapsed >= MAX_LAMBDA_DURATION_SECONDS
-        or lambda_elapsed * LAMBDA_HOURLY_PRICE_USD / 3600.0 >= MAX_LAMBDA_COST_USD
+        lambda_elapsed >= MAX_CUMULATIVE_PREFLIGHT_ACTIVE_SECONDS
+        or lambda_elapsed * LAMBDA_HOURLY_PRICE_USD / 3600.0
+        >= MAX_PREFLIGHT_LAMBDA_COST_USD
         or owned_containers(prefix)
         or _runtime_budget_state(artifact_root).get("empirical_attempts_entered") != []
         or load_aggregate_usage(
@@ -7776,6 +7854,7 @@ def resume_preflight(args: argparse.Namespace) -> None:
         qualified_real_evidence_regression_receipt=qualified_real_regression,
         regression_archive_staging_receipt=archive_staging,
         local_finalizer_qualification_receipt=local_finalizer_qualification,
+        sealing_primitives_receipt=sealing_primitives,
         preflight_resume_transition=transition,
     )
     state_path = artifact_root / "pilot-v7/pilot-state.json"
@@ -7812,6 +7891,8 @@ def resume_preflight(args: argparse.Namespace) -> None:
             "runtime_imports": "passed-by-network-none-offline-runtime-preflight",
             "evidence_write_fsync_readback": ("passed-by-network-none-offline-runtime-preflight"),
             "budget_ledger": "passed-zero-state-by-network-none-offline-runtime-preflight",
+            "raw_attempt_sealing": sealing_primitives,
+            "privacy_safe_essential_failure_sealing": sealing_primitives,
             "command_rendering": "passed-four-exact-by-network-none-offline-runtime-preflight",
             "browser_startup_screenshot_cleanup": browser,
             "evaluator_loading": "passed-exact-network-none-with-approved-fixtures",
@@ -7925,22 +8006,22 @@ def preflight(args: argparse.Namespace) -> None:
         source_root=args.dynamic_source_root.resolve(strict=True),
     )
     launch_slot = dynamic.get("launch_slot")
-    if launch_slot not in {1, 2} or dynamic.get("launch_count") != launch_slot:
-        raise T09HostError("Retry 5 entry launch identity is invalid")
+    if launch_slot not in range(1, 9) or dynamic.get("launch_count") != launch_slot:
+        raise T09HostError("autonomous entry launch identity is invalid")
     if launch_slot == 1 and (
         dynamic.get("replacement_eligibility_sha256") is not None
         or dynamic.get("replacement_eligibility_preempirical_source_manifest_sha256") is not None
         or dynamic.get("normalized_slot2_authority_tree_manifest_sha256") is not None
     ):
         raise T09HostError("first Retry 5 launch retained replacement authority")
-    if launch_slot == 2 and (
+    if launch_slot > 1 and (
         not isinstance(dynamic.get("replacement_eligibility_sha256"), str)
         or not isinstance(
             dynamic.get("replacement_eligibility_preempirical_source_manifest_sha256"), str
         )
         or not isinstance(dynamic.get("normalized_slot2_authority_tree_manifest_sha256"), str)
     ):
-        raise T09HostError("second Retry 5 launch lacks exact replacement authority")
+        raise T09HostError("replacement launch lacks exact replacement authority")
     image_materialization_policy = (
         SLOT1_IMAGE_MATERIALIZATION_POLICY
         if launch_slot == 1
@@ -8003,7 +8084,7 @@ def preflight(args: argparse.Namespace) -> None:
             raise T09HostError("first launch received slot-2 authority")
     else:
         if args.slot2_authority_root is None:
-            raise T09HostError("second launch lacks its retained authority root")
+            raise T09HostError("replacement launch lacks its retained authority root")
         retained_authority_root = artifact_root / "pilot-v7/slot2-authority"
         retain_slot2_authority(
             args.slot2_authority_root.resolve(strict=True), retained_authority_root
@@ -8108,6 +8189,13 @@ def preflight(args: argparse.Namespace) -> None:
         prefix=prefix,
         image_id=image_id,
     )
+    sealing_primitives = sealing_primitives_preflight(
+        repository=repository,
+        artifact_root=artifact_root,
+        command_document=command_document,
+        package_commit=args.package_commit,
+        execution_contract_sha256=execution_sha256,
+    )
     evaluator_overlay_verified = validate_evaluator_overlay_binding(
         artifact_root=artifact_root,
         repository=repository,
@@ -8134,9 +8222,9 @@ def preflight(args: argparse.Namespace) -> None:
         owned_lambda_elapsed * LAMBDA_HOURLY_PRICE_USD / 3600.0
     )
     if (
-        preflight_elapsed >= MAX_PREFLIGHT_WALL_SECONDS
-        or active_lambda_duration >= MAX_LAMBDA_DURATION_SECONDS
-        or active_lambda_cost >= MAX_LAMBDA_COST_USD
+        preflight_elapsed >= MAX_PREFLIGHT_INSTANCE_ACTIVE_SECONDS
+        or active_lambda_duration >= MAX_CUMULATIVE_PREFLIGHT_ACTIVE_SECONDS
+        or active_lambda_cost >= MAX_PREFLIGHT_LAMBDA_COST_USD
     ):
         raise T09HostError("preflight consumed its wall or cumulative Lambda ceiling")
     remaining_before_metadata = preflight_seconds_remaining(artifact_root)
@@ -8199,6 +8287,7 @@ def preflight(args: argparse.Namespace) -> None:
         qualified_real_evidence_regression_receipt=qualified_real_regression,
         regression_archive_staging_receipt=archive_staging,
         local_finalizer_qualification_receipt=local_finalizer_qualification,
+        sealing_primitives_receipt=sealing_primitives,
         slot2_authority=slot2_authority,
     )
     manifest_published_at = time.time()
@@ -8285,6 +8374,8 @@ def preflight(args: argparse.Namespace) -> None:
             "runtime_imports": "passed-by-network-none-offline-runtime-preflight",
             "evidence_write_fsync_readback": "passed-by-network-none-offline-runtime-preflight",
             "budget_ledger": "passed-zero-state-by-network-none-offline-runtime-preflight",
+            "raw_attempt_sealing": sealing_primitives,
+            "privacy_safe_essential_failure_sealing": sealing_primitives,
             "command_rendering": "passed-four-exact-by-network-none-offline-runtime-preflight",
             "core_suppression": core_suppression,
             "browser_startup_screenshot_cleanup": browser,
@@ -8403,9 +8494,12 @@ def preflight_with_deadline(args: argparse.Namespace) -> None:
     active_elapsed = float(prior_duration) + current_elapsed
     active_cost = float(prior_cost) + current_elapsed * LAMBDA_HOURLY_PRICE_USD / 3600.0
     deadline = min(
-        MAX_PREFLIGHT_WALL_SECONDS - current_elapsed,
-        MAX_LAMBDA_DURATION_SECONDS - active_elapsed,
-        (MAX_LAMBDA_COST_USD - active_cost) * 3600.0 / LAMBDA_HOURLY_PRICE_USD,
+        MAX_PREFLIGHT_ITERATION_WALL_SECONDS,
+        MAX_PREFLIGHT_INSTANCE_ACTIVE_SECONDS - current_elapsed,
+        MAX_CUMULATIVE_PREFLIGHT_ACTIVE_SECONDS - active_elapsed,
+        (MAX_PREFLIGHT_LAMBDA_COST_USD - active_cost)
+        * 3600.0
+        / LAMBDA_HOURLY_PRICE_USD,
     )
     if deadline <= 0:
         raise T09HostError("provider preflight or cumulative active cap is exhausted")
@@ -8440,10 +8534,9 @@ def preflight_with_deadline(args: argparse.Namespace) -> None:
                         "failure_category": failure_category,
                         "exception_message_retained": False,
                         "empirical_attempts_entered": 0,
-                        "termination_dispatch_required": True,
-                        "termination_dispatch_deadline_epoch": (
-                            failed_at + FAILED_PREFLIGHT_TERMINATION_DISPATCH_SECONDS
-                        ),
+                        "preflight_engineering_state": "resumable-same-host",
+                        "termination_dispatch_required": False,
+                        "termination_dispatch_deadline_epoch": None,
                     },
                 )
         raise
@@ -8897,18 +8990,14 @@ def run_attached_with_caps(
             elapsed = time.monotonic() - attempt_started
             campaign_elapsed = now_wall - pilot_started_at_epoch
             owned_lambda_elapsed = now_wall - owned_lambda_started_at_epoch
-            active_lambda_duration = prior_lambda_duration_seconds + owned_lambda_elapsed
-            active_lambda_cost = prior_lambda_cost_usd + (
-                owned_lambda_elapsed * LAMBDA_HOURLY_PRICE_USD / 3600.0
-            )
             if elapsed > MAX_CONDITION_WALL_SECONDS:
                 stop_reason = "condition_wall_budget_stop"
             elif now_wall - pair_started_at_epoch > MAX_PAIR_WALL_SECONDS:
                 stop_reason = "pair_wall_budget_stop"
             elif campaign_elapsed > MAX_TOTAL_WALL_SECONDS:
                 stop_reason = "campaign_total_wall_budget_stop"
-            elif active_lambda_duration > (
-                MAX_LAMBDA_DURATION_SECONDS - PROVIDER_CLOSEOUT_RESERVE_SECONDS
+            elif owned_lambda_elapsed > (
+                MAX_PREFLIGHT_INSTANCE_ACTIVE_SECONDS - PROVIDER_CLOSEOUT_RESERVE_SECONDS
             ):
                 stop_reason = "lambda_duration_budget_stop"
             elif campaign_elapsed > (
@@ -8918,9 +9007,9 @@ def run_attached_with_caps(
             ):
                 stop_reason = "provider_termination_handoff_budget_stop"
             elif (
-                active_lambda_cost
+                campaign_elapsed * LAMBDA_HOURLY_PRICE_USD / 3600.0
                 + (PROVIDER_CLOSEOUT_RESERVE_SECONDS * LAMBDA_HOURLY_PRICE_USD / 3600.0)
-                > MAX_LAMBDA_COST_USD
+                > MAX_EMPIRICAL_LAMBDA_COST_USD
             ):
                 stop_reason = "lambda_cost_budget_stop"
             elif os.fstat(stdout.fileno()).st_size >= MAX_ATTEMPT_STREAM_BYTES:
@@ -11952,6 +12041,407 @@ def validate_raw_attempt_seal(
     return manifest, receipt
 
 
+def _write_synthetic_runtime_cleanup(raw_root: Path) -> Path:
+    detection = raw_root / "runtime-core-detection.json"
+    write_exclusive(
+        detection,
+        {
+            "schema_version": "0.1.0",
+            "scope": "condition-container-writable-roots-before-teardown",
+            "core_artifacts_detected": [],
+            "core_artifact_count": 0,
+            "core_scan_integrity_failure": False,
+            "core_content_or_hash_retained": False,
+            "destructive_cleanup_not_yet_claimed": True,
+        },
+    )
+    cleanup = raw_root / "runtime-cleanup.json"
+    write_exclusive(
+        cleanup,
+        {
+            "secret_cleanup": {
+                "credential_observed": True,
+                "credential_removed_from_environment": True,
+                "content_scan_permitted": True,
+                "secret_bearing_artifacts_removed": [],
+                "remaining_exact_credential_matches": 0,
+            },
+            "core_cleanup": {
+                "core_artifacts_detected": [],
+                "core_artifact_count": 0,
+                "core_scan_integrity_failure": False,
+                "destruction_verified": True,
+                "credential_rotation_required_due_to_core_handling": False,
+                "core_content_or_hash_retained": False,
+                "core_detection_receipt_sha256": file_sha256(detection),
+            },
+        },
+    )
+    return cleanup
+
+
+def _synthetic_condition_manifest(
+    source: dict[str, Any], *, artifact_root: Path, attempt_root: Path, raw_root: Path
+) -> dict[str, Any]:
+    return {
+        **source,
+        "permitted_condition_owned": {
+            **cast(dict[str, Any], source["permitted_condition_owned"]),
+            "output_root": attempt_root.relative_to(artifact_root).as_posix(),
+            "raw_output_root": raw_root.relative_to(artifact_root).as_posix(),
+        },
+    }
+
+
+def sealing_primitives_preflight(
+    *,
+    repository: Path,
+    artifact_root: Path,
+    command_document: dict[str, Any],
+    package_commit: str,
+    execution_contract_sha256: str,
+) -> dict[str, object]:
+    """Exercise exact raw and essential sealing against isolated synthetic state."""
+
+    qualification_root = artifact_root / "pilot-v7/sealing-primitives-preflight"
+    if qualification_root.exists():
+        raise T09HostError("sealing-primitives preflight root must be fresh")
+    qualification_root.mkdir(mode=0o700, parents=True)
+    source_manifest = manifest_for_run(command_document, RUN_IDS[0])
+    frozen_sha256 = "f" * 64
+    now = time.time()
+
+    # Raw authority: use the approved privacy-safe finalizer fixture, then run
+    # the production seal and byte-for-byte reconstruction path.
+    raw_artifacts = qualification_root / "raw-primitive"
+    raw_attempt = raw_artifacts / "attempt"
+    raw_root = raw_attempt / "raw"
+    shutil.copytree(repository / "tests/fixtures/t09/finalizer-raw-shape", raw_root)
+    for stream_name in ("condition.stdout", "condition.stderr"):
+        stream = raw_root / stream_name
+        stream.write_text("synthetic privacy-safe finalizer fixture\n", encoding="utf-8")
+        stream.chmod(0o600)
+    initialize_pilot_state(
+        raw_artifacts / "pilot-v7/pilot-state.json",
+        execution_contract_sha256=execution_contract_sha256,
+        pilot_started_at_epoch=now - 1.0,
+        lambda_started_at_epoch=now - 1.0,
+    )
+    reserve_condition_start(
+        raw_artifacts / "pilot-v7/pilot-state.json",
+        execution_contract_sha256=execution_contract_sha256,
+        run_id=RUN_IDS[0],
+        start_intent_sha256="c" * 64,
+    )
+    mark_empirical_entry(
+        raw_artifacts / "pilot-v7/pilot-state.json",
+        execution_contract_sha256=execution_contract_sha256,
+        run_id=RUN_IDS[0],
+        supervised_release_receipt_sha256="d" * 64,
+    )
+    (raw_root / CONDITION_SUPERVISOR_DIRNAME).mkdir(mode=0o700)
+    supervisor = condition_supervisor_root(raw_root)
+    cleanup = load_object(raw_root / "host-cleanup-receipt.json", label="raw seal fixture")
+    (raw_root / "host-cleanup-receipt.json").unlink()
+    cleanup.update(
+        {
+            "run_id": RUN_IDS[0],
+            "actual_credential_exposure_detected": False,
+            "runtime_secret_cleanup_malformed": False,
+            "core_artifact_count": 0,
+            "runtime_core_artifact_count": 0,
+            "core_scan_integrity_failure": False,
+            "runtime_core_scan_integrity_failure": False,
+            "core_safety_stop_detected": False,
+            "campaign_continuation_permitted": True,
+        }
+    )
+    write_exclusive(supervisor / "host-cleanup-receipt.json", cleanup)
+    for name, value in {
+        "attempt-wall.json": {"evidence_handoff_deadline_epoch": now + 60.0},
+        "container-command.json": {"run_id": RUN_IDS[0]},
+        "container-state.json": {"running": False},
+        "gpu-accounting.json": {"run_id": RUN_IDS[0]},
+    }.items():
+        write_exclusive(supervisor / name, value)
+    write_exclusive(
+        supervisor / "evaluator-overlay-binding.json",
+        {
+            "run_id": RUN_IDS[0],
+            "frozen_run_manifest_sha256": frozen_sha256,
+            "condition_mount_policy": "read-only",
+        },
+    )
+    runtime_cleanup = _write_synthetic_runtime_cleanup(raw_root)
+    host_detection = supervisor / "core-artifact-detection.json"
+    persist_core_detection_before_cleanup(
+        receipt_path=host_detection,
+        records=[],
+        scope="post-condition-complete-writable-root",
+    )
+    write_exclusive(
+        supervisor / "core-artifact-cleanup.json",
+        {
+            "schema_version": "0.1.0",
+            "run_id": RUN_IDS[0],
+            **core_cleanup_projection([], CoreCleanupOutcome(True, None)),
+            "core_scan_integrity_failure": False,
+            "core_detection_receipt_sha256": file_sha256(host_detection),
+        },
+    )
+    write_exclusive(
+        supervisor / "runtime-reconstruction-binding.json",
+        {
+            "run_id": RUN_IDS[0],
+            "runtime_cleanup_present": True,
+            "runtime_cleanup_path_observed": True,
+            "runtime_cleanup_content_read_permitted": True,
+            "runtime_cleanup_sha256": file_sha256(runtime_cleanup),
+            "host_cleanup_receipt_sha256": file_sha256(
+                supervisor / "host-cleanup-receipt.json"
+            ),
+            "container_state_sha256": file_sha256(supervisor / "container-state.json"),
+            "host_teardown_is_source_grounded_fallback": True,
+        },
+    )
+    raw_manifest = _synthetic_condition_manifest(
+        source_manifest,
+        artifact_root=raw_artifacts,
+        attempt_root=raw_attempt,
+        raw_root=raw_root,
+    )
+    raw_manifest_path, raw_receipt_path = seal_raw_attempt(
+        artifact_root=raw_artifacts,
+        attempt_root=raw_attempt,
+        raw_root=raw_root,
+        manifest=raw_manifest,
+        package_commit=package_commit,
+        frozen_run_manifest_sha256=frozen_sha256,
+        execution_contract_sha256=execution_contract_sha256,
+    )
+    validate_raw_attempt_seal(
+        attempt_root=raw_attempt,
+        raw_root=raw_root,
+        run_id=RUN_IDS[0],
+        package_commit=package_commit,
+    )
+
+    # Essential authority: synthesize an output-cap stop, then require the
+    # production allowlist, null-score/infrastructure-invalid receipt, cap, and
+    # reconstruction checks.
+    failure_artifacts = qualification_root / "essential-primitive"
+    failure_attempt = failure_artifacts / "attempt"
+    failure_raw = failure_attempt / "raw"
+    failure_raw.mkdir(mode=0o700, parents=True)
+    (failure_raw / "condition.stdout").write_text(
+        "synthetic bounded infrastructure failure\n", encoding="utf-8"
+    )
+    (failure_raw / "condition.stdout").chmod(0o600)
+    initialize_pilot_state(
+        failure_artifacts / "pilot-v7/pilot-state.json",
+        execution_contract_sha256=execution_contract_sha256,
+        pilot_started_at_epoch=now - 1.0,
+        lambda_started_at_epoch=now - 1.0,
+    )
+    write_exclusive(
+        failure_artifacts / "pilot-v7/frozen-run-manifest.json",
+        {"replacement_image_id": "sha256:" + "f" * 64},
+    )
+    (failure_raw / CONDITION_SUPERVISOR_DIRNAME).mkdir(mode=0o700)
+    failure_supervisor = condition_supervisor_root(failure_raw)
+    container_id = "e" * 64
+    start_intent = {
+        "schema_version": "0.1.0",
+        "plan_id": PLAN_ID,
+        "run_id": RUN_IDS[0],
+        "container_name": f"{CONTAINER_PREFIX}sealing-preflight",
+        "container_id": container_id,
+        "docker_start_argv": [*docker_prefix(), "start", "--attach", container_id],
+        "docker_create_argv_sha256": "a" * 64,
+        "frozen_run_manifest_sha256": frozen_sha256,
+        "condition_plan_sha256": source_manifest["condition_plan_sha256"],
+        "condition_argv_sha256": source_manifest["argv_sha256"],
+        "start_reserved_at_epoch": 1.0,
+        "create_outcome_ambiguous": False,
+        "condition_identity_consumed_if_start_outcome_is_unknown": True,
+    }
+    write_exclusive(failure_supervisor / "condition-start-intent.json", start_intent)
+    write_exclusive(
+        failure_supervisor / "container-identity.json",
+        {
+            "schema_version": "0.1.0",
+            "plan_id": PLAN_ID,
+            "host_run_id": HOST_RUN_ID,
+            "run_id": RUN_IDS[0],
+            "container_name": start_intent["container_name"],
+            "container_id": container_id,
+            "owned_role": "condition",
+            "docker_create_argv_sha256": "a" * 64,
+        },
+    )
+    failure_state = failure_artifacts / "pilot-v7/pilot-state.json"
+    reserve_condition_start(
+        failure_state,
+        execution_contract_sha256=execution_contract_sha256,
+        run_id=RUN_IDS[0],
+        start_intent_sha256=file_sha256(failure_supervisor / "condition-start-intent.json"),
+    )
+    mark_nonempirical_infrastructure_attempt_consumed(
+        failure_state,
+        execution_contract_sha256=execution_contract_sha256,
+        run_id=RUN_IDS[0],
+    )
+    _write_synthetic_runtime_cleanup(failure_raw)
+    failure_detection = failure_supervisor / "core-artifact-detection.json"
+    detection_sha256 = persist_core_detection_before_cleanup(
+        receipt_path=failure_detection,
+        records=[],
+        scope="post-condition-complete-writable-root",
+    )
+    write_exclusive(
+        failure_supervisor / "core-artifact-cleanup.json",
+        {
+            "schema_version": "0.1.0",
+            "run_id": RUN_IDS[0],
+            "core_limit_contract": CORE_LIMIT_CONTRACT,
+            "docker_ulimit": "core=0:0",
+            **core_cleanup_projection([], CoreCleanupOutcome(True, None)),
+            "core_scan_integrity_failure": False,
+            "core_detection_receipt_sha256": detection_sha256,
+            "supplemental_core_detection_receipt_sha256": None,
+            "producer": None,
+            "runtime_core_artifacts_detected": [],
+            "runtime_core_artifact_count": 0,
+            "runtime_core_scan_integrity_failure": False,
+            "runtime_core_destruction_verified": True,
+            "runtime_core_detection_receipt_sha256": file_sha256(
+                failure_raw / "runtime-core-detection.json"
+            ),
+            "runtime_core_rotation_required": False,
+        },
+    )
+    record_output_cap_event(
+        raw_root=failure_raw,
+        run_id=RUN_IDS[0],
+        stop_reason="attempt_output_bytes",
+        hard_cap_breached=True,
+        tree_bytes_before_security_cleanup=MAX_ATTEMPT_OUTPUT_BYTES + 1,
+        tree_bytes_after_core_cleanup=1024,
+        core_records=[],
+    )
+    write_exclusive(
+        failure_supervisor / "host-cleanup-receipt.json",
+        {
+            "schema_version": "0.1.0",
+            "run_id": RUN_IDS[0],
+            "returncode": 143,
+            "container_removed": True,
+            "owned_container_residue": [],
+            "container_state_receipt": (
+                f"{CONDITION_SUPERVISOR_DIRNAME}/container-state.json"
+            ),
+            "secret_scan_passed": True,
+            "secret_bearing_artifacts_removed": [],
+            "runtime_secret_bearing_artifacts_removed": [],
+            "runtime_secret_cleanup_malformed": False,
+            "runtime_cleanup_classified_as_core_artifact": False,
+            "runtime_cleanup_content_read_permitted": True,
+            "secret_matching_paths": [],
+            "actual_credential_exposure_detected": False,
+            "core_artifact_count": 0,
+            "runtime_core_artifact_count": 0,
+            "core_scan_integrity_failure": False,
+            "runtime_core_scan_integrity_failure": False,
+            "core_artifacts_destroyed": False,
+            "core_destruction_verified": True,
+            "runtime_core_destruction_verified": True,
+            "runtime_core_detection_receipt_sha256": file_sha256(
+                failure_raw / "runtime-core-detection.json"
+            ),
+            "core_safety_stop_detected": False,
+            "credential_rotation_required": False,
+            "campaign_continuation_permitted": False,
+            "stop_reason": "attempt_output_bytes",
+            "hard_cap_breached": True,
+            "tree_bytes_before_security_cleanup": MAX_ATTEMPT_OUTPUT_BYTES + 1,
+            "started_condition_container": True,
+            "condition_start_intent_sha256": file_sha256(
+                failure_supervisor / "condition-start-intent.json"
+            ),
+            "supervised_release_completed": False,
+            "infrastructure_stop_requires_essential_seal": True,
+            "runner_exception_type": None,
+            "container_removal_error_type": None,
+            "timing": {
+                "started_at": "2026-08-27T00:00:00Z",
+                "stopped_at": "2026-08-27T00:00:01Z",
+                "wall_seconds": 1.0,
+            },
+        },
+    )
+    failure_manifest = _synthetic_condition_manifest(
+        source_manifest,
+        artifact_root=failure_artifacts,
+        attempt_root=failure_attempt,
+        raw_root=failure_raw,
+    )
+    essential_manifest_path, essential_receipt_path = seal_essential_failure(
+        artifact_root=failure_artifacts,
+        attempt_root=failure_attempt,
+        raw_root=failure_raw,
+        manifest=failure_manifest,
+        package_commit=package_commit,
+        frozen_run_manifest_sha256=frozen_sha256,
+        execution_contract_sha256=execution_contract_sha256,
+        returncode=143,
+        stop_reason="attempt_output_bytes",
+        hard_cap_breached=True,
+        tree_bytes_before_security_cleanup=MAX_ATTEMPT_OUTPUT_BYTES + 1,
+        core_records=[],
+        core_destruction_verified=True,
+        empirical_entry_crossed=False,
+    )
+    essential_manifest, essential_receipt = validate_essential_failure_seal(
+        attempt_root=failure_attempt,
+        run_id=RUN_IDS[0],
+        package_commit=package_commit,
+        condition_manifest=failure_manifest,
+    )
+    if (
+        essential_manifest.get("failure_reconstructable") is not True
+        or essential_receipt.get("infrastructure_invalid") is not True
+        or essential_receipt.get("unscored") is not True
+        or essential_receipt.get("condition_retry_permitted") is not False
+        or tree_bytes(failure_attempt / "essential-failure") > MAX_ESSENTIAL_FAILURE_BYTES
+        or detect_core_artifacts(qualification_root)
+        or privacy_violations(failure_attempt / "essential-failure")
+    ):
+        raise T09HostError("essential-failure preflight contract drifted")
+    result: dict[str, object] = {
+        "schema_version": "0.1.0",
+        "receipt_type": "t09-v8-sealing-primitives-preflight",
+        "raw_manifest_sha256": file_sha256(raw_manifest_path),
+        "raw_receipt_sha256": file_sha256(raw_receipt_path),
+        "raw_reconstruction_passed": True,
+        "essential_manifest_sha256": file_sha256(essential_manifest_path),
+        "essential_receipt_sha256": file_sha256(essential_receipt_path),
+        "essential_reconstruction_passed": True,
+        "essential_failure_cap_bytes": MAX_ESSENTIAL_FAILURE_BYTES,
+        "essential_failure_bytes": tree_bytes(failure_attempt / "essential-failure"),
+        "infrastructure_invalid": True,
+        "score": None,
+        "unscored": True,
+        "condition_retry_permitted": False,
+        "privacy_allowlist_and_exclusions_valid": True,
+        "core_artifact_count": 0,
+        "synthetic_state_isolated_from_campaign": True,
+        "provider_or_task_request": False,
+        "browser_action": False,
+    }
+    write_exclusive(qualification_root / "receipt.json", result)
+    return result
+
+
 def seal_consumed_raw_or_essential_failure(
     *,
     artifact_root: Path,
@@ -13268,6 +13758,18 @@ def validate_postfreeze_entry_receipts(
         or postfreeze.get("task_browser_action_count") != 0
         or postfreeze.get("core_suppression_preflight_sha256")
         != frozen_manifest.get("source_receipts", {}).get("core_suppression")
+        or preflight_receipt.get("raw_attempt_sealing")
+        != preflight_receipt.get("privacy_safe_essential_failure_sealing")
+        or not isinstance(preflight_receipt.get("raw_attempt_sealing"), dict)
+        or preflight_receipt.get("raw_attempt_sealing", {}).get(
+            "raw_reconstruction_passed"
+        )
+        is not True
+        or preflight_receipt.get("raw_attempt_sealing", {}).get(
+            "essential_reconstruction_passed"
+        )
+        is not True
+        or frozen_manifest.get("source_receipts", {}).get("sealing_primitives") is None
         or postfreeze.get("core_limit_contract") != CORE_LIMIT_CONTRACT
         or postfreeze.get("first_pair_started_at_epoch")
         != frozen_manifest.get("first_pair_started_at_epoch")
@@ -13382,16 +13884,13 @@ def execute_condition(args: argparse.Namespace) -> int:
         raise T09HostError("total pilot wall cap reached")
     pair_elapsed = time.time() - float(pair_started_epoch)
     owned_lambda_elapsed = time.time() - float(owned_lambda_started_epoch)
-    lambda_elapsed = float(prior_lambda_duration) + owned_lambda_elapsed
-    lambda_cost = float(prior_lambda_cost) + (
-        owned_lambda_elapsed * LAMBDA_HOURLY_PRICE_USD / 3600.0
-    )
     if pair_elapsed >= MAX_PAIR_WALL_SECONDS:
         raise T09HostError("pair wall cap reached")
-    if lambda_elapsed >= MAX_LAMBDA_DURATION_SECONDS:
-        raise T09HostError("Lambda duration cap reached")
-    if lambda_cost >= MAX_LAMBDA_COST_USD:
-        raise T09HostError("Lambda cost cap reached")
+    if owned_lambda_elapsed >= MAX_PREFLIGHT_INSTANCE_ACTIVE_SECONDS:
+        raise T09HostError("single Lambda instance active cap reached")
+    empirical_lambda_cost = total_elapsed * LAMBDA_HOURLY_PRICE_USD / 3600.0
+    if empirical_lambda_cost >= MAX_EMPIRICAL_LAMBDA_COST_USD:
+        raise T09HostError("empirical Lambda cost cap reached")
 
     name = f"{CONTAINER_PREFIX}{expected_index + 1:02d}"
     if _container_id_by_exact_name(prefix, name) is not None:
@@ -20277,7 +20776,8 @@ def preempirical_replacement_disposition(args: argparse.Namespace) -> dict[str, 
         or cleanup_receipt.get("credential_rotation_required_due_to_core_handling") is not False
         or image_id_if_present(prefix, REPLACEMENT_IMAGE_TAG) is not None
         or failure.get("empirical_attempts_entered") != 0
-        or failure.get("termination_dispatch_required") is not True
+        or failure.get("preflight_engineering_state") != "resumable-same-host"
+        or failure.get("termination_dispatch_required") is not False
         or not isinstance(provider_preflight_started, (int, float))
         or isinstance(provider_preflight_started, bool)
         or failure_preflight_started != provider_preflight_started
@@ -20286,9 +20786,8 @@ def preempirical_replacement_disposition(args: argparse.Namespace) -> dict[str, 
         or not isinstance(preflight_elapsed, (int, float))
         or isinstance(preflight_elapsed, bool)
         or preflight_elapsed != preflight_failed_at - provider_preflight_started
-        or not 0 <= preflight_elapsed <= MAX_PREFLIGHT_WALL_SECONDS
-        or failure.get("termination_dispatch_deadline_epoch")
-        != cast(float, preflight_failed_at) + FAILED_PREFLIGHT_TERMINATION_DISPATCH_SECONDS
+        or not 0 <= preflight_elapsed <= MAX_PREFLIGHT_INSTANCE_ACTIVE_SECONDS
+        or failure.get("termination_dispatch_deadline_epoch") is not None
     ):
         raise T09HostError("launch slot 1 is not a zero-use replacement candidate")
     if materialization_receipt.is_file():
@@ -20339,6 +20838,7 @@ def preempirical_replacement_disposition(args: argparse.Namespace) -> dict[str, 
         "provider_preflight_started_at_epoch": provider_preflight_started,
         "preflight_elapsed_seconds": preflight_elapsed,
         "termination_dispatch_deadline_epoch": failure["termination_dispatch_deadline_epoch"],
+        "preflight_engineering_state": failure["preflight_engineering_state"],
         "empirical_attempts_entered": 0,
         "model_metadata_requests": 0,
         "model_task_requests": 0,

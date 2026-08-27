@@ -85,7 +85,6 @@ budget:
 provider_lifecycle:
   cumulative_accounting_origin: actual-active-lambda-seconds
   preflight_clock_origin: provider-launch-send-started
-  preflight_wall_seconds: 3600
   failed_preflight_termination_dispatch_seconds: 300
   empirical_clock_origin: after-durable-frozen-run-manifest-publication
   empirical_campaign_wall_seconds: 14400
@@ -93,10 +92,7 @@ provider_lifecycle:
   provider_termination_handoff_seconds: 60
   empirical_cleanup_reserve_seconds: 900
   empirical_termination_cutoff_seconds: 13500
-  maximum_successful_host_active_seconds: 18000
-  maximum_cumulative_active_seconds: 21600
   max_lambda_instances: 1
-  max_launch_count: 2
   persistent_filesystems: 0
   replacement_launch_rule:
     allowed_only_before_empirical_entry: true
@@ -114,8 +110,14 @@ provider_lifecycle:
     seconds for the final source-bound state, budget, core, exact-secret, and owned-container
     checks; the 5160-second admission gate is rerun immediately before durable release
     and any timeout consumes the started identity as infrastructure-invalid
-  control_plane: existing T07 pragmatic Lambda operations with source-derived projections;
-    no persistent framework or watchdog
+  control_plane: autonomous-v8-separated-preflight-engineering-and-empirical-authority
+  preflight_iteration_wall_seconds: 3600
+  maximum_preflight_instance_active_seconds: 21600
+  maximum_cumulative_preflight_active_seconds: 43200
+  maximum_preflight_provider_cost_usd: 20.0
+  max_preflight_launch_count: 8
+  maximum_empirical_provider_cost_usd: 8.0
+  max_empirical_launch_count: 1
 replacement_image_policy:
   historical_image_digest: sha256:035edf61718e84a8156f4f0f7817b134b0ce31488d3f0b50bbfba2b4a30cc61c
   exact_historical_digest_equality_required: false

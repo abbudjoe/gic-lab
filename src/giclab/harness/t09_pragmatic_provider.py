@@ -32,7 +32,10 @@ from typing import Final, Protocol, cast
 
 import yaml
 
-from giclab.harness.lambda_campaign_lifecycle import Retry4LifecycleLimits
+from giclab.harness.lambda_campaign_lifecycle import (
+    AutonomousPilotLifecycleLimits,
+    Retry4LifecycleLimits,
+)
 from giclab.harness.lambda_l2m_observer import (
     MAX_RESPONSE_BYTES_PER_GET,
     LambdaHttpsL2MObserverTransport,
@@ -259,35 +262,35 @@ class ProviderOutcomeUnknown(T09ProviderError):
 
 @dataclass(frozen=True, slots=True)
 class CampaignLifecycle:
-    retry4_limits: Retry4LifecycleLimits
+    limits: AutonomousPilotLifecycleLimits
     max_instances: int
     max_launches: int
     persistent_filesystems: int
 
     def __post_init__(self) -> None:
         if (
-            self.retry4_limits != Retry4LifecycleLimits()
+            self.limits != AutonomousPilotLifecycleLimits()
             or self.max_instances != 1
-            or self.max_launches != 2
+            or self.max_launches != 8
             or self.persistent_filesystems != 0
         ):
             raise T09ProviderError("pilot provider lifecycle drifted")
 
     @property
     def wall_seconds(self) -> int:
-        return self.retry4_limits.empirical_campaign_wall_seconds
+        return self.limits.empirical_campaign_wall_seconds
 
     @property
     def preflight_wall_seconds(self) -> int:
-        return self.retry4_limits.preflight_wall_seconds
+        return self.limits.maximum_preflight_instance_active_seconds
 
     @property
     def cleanup_reserve_seconds(self) -> int:
-        return self.retry4_limits.empirical_cleanup_reserve_seconds
+        return self.limits.empirical_cleanup_reserve_seconds
 
     @property
     def termination_cutoff_seconds(self) -> int:
-        return self.retry4_limits.empirical_termination_cutoff_seconds
+        return self.limits.empirical_termination_cutoff_seconds
 
     def elapsed(self, *, started_at_epoch: float, now_epoch: float) -> float:
         if now_epoch < started_at_epoch:
@@ -501,7 +504,7 @@ def write_bytes_exclusive(path: Path, value: bytes) -> None:
 def launch_capability_path(launch_slot: int = 1) -> Path:
     """Return one fixed capability path for each authorized launch slot."""
 
-    if launch_slot not in (1, 2):
+    if launch_slot not in range(1, 9):
         raise T09ProviderError("campaign launch slot is outside the authorized bound")
 
     return (
@@ -533,10 +536,10 @@ def _consume_launch_capability(
 ) -> None:
     """Atomically and durably burn exactly one authorized launch slot."""
 
-    if launch_slot not in (1, 2) or (
+    if launch_slot not in range(1, 9) or (
         (launch_slot == 1 and replacement_eligibility_sha256 is not None)
         or (
-            launch_slot == 2
+            launch_slot > 1
             and (
                 replacement_eligibility_sha256 is None
                 or _HEX64.fullmatch(replacement_eligibility_sha256) is None
@@ -570,10 +573,10 @@ def _consume_launch_capability(
                     str(private_root.resolve(strict=True)).encode()
                 ),
                 "launch_slot": launch_slot,
-                "launch_capability_limit": 2,
+                "launch_capability_limit": 8,
                 "launch_capability_state": "consumed-cleanup-only-after-this-point",
                 "replacement_eligibility_sha256": replacement_eligibility_sha256,
-                "further_launch_forbidden": launch_slot == 2,
+                "further_launch_forbidden": launch_slot == 8,
                 "consumed_at_epoch": clock(),
             },
         )
@@ -803,7 +806,11 @@ def load_campaign_lifecycle(repository: Path) -> CampaignLifecycle:
     if set(raw) != {
         "cumulative_accounting_origin",
         "preflight_clock_origin",
-        "preflight_wall_seconds",
+        "preflight_iteration_wall_seconds",
+        "maximum_preflight_instance_active_seconds",
+        "maximum_cumulative_preflight_active_seconds",
+        "maximum_preflight_provider_cost_usd",
+        "max_preflight_launch_count",
         "failed_preflight_termination_dispatch_seconds",
         "empirical_clock_origin",
         "empirical_campaign_wall_seconds",
@@ -811,10 +818,9 @@ def load_campaign_lifecycle(repository: Path) -> CampaignLifecycle:
         "provider_termination_handoff_seconds",
         "empirical_cleanup_reserve_seconds",
         "empirical_termination_cutoff_seconds",
-        "maximum_successful_host_active_seconds",
-        "maximum_cumulative_active_seconds",
+        "maximum_empirical_provider_cost_usd",
+        "max_empirical_launch_count",
         "max_lambda_instances",
-        "max_launch_count",
         "persistent_filesystems",
         "replacement_launch_rule",
         "admission_rule",
@@ -847,20 +853,30 @@ def load_campaign_lifecycle(repository: Path) -> CampaignLifecycle:
         }
     ):
         raise T09ProviderError("provider clock or replacement-launch contract drifted")
-    limits = Retry4LifecycleLimits(
-        preflight_wall_seconds=_integer(raw["preflight_wall_seconds"], label="preflight wall"),
-        failed_preflight_termination_dispatch_seconds=_integer(
-            raw["failed_preflight_termination_dispatch_seconds"],
-            label="failed-preflight dispatch",
+    limits = AutonomousPilotLifecycleLimits(
+        preflight_iteration_wall_seconds=_integer(
+            raw["preflight_iteration_wall_seconds"], label="preflight iteration wall"
+        ),
+        maximum_preflight_instance_active_seconds=_integer(
+            raw["maximum_preflight_instance_active_seconds"],
+            label="preflight instance active cap",
+        ),
+        maximum_cumulative_preflight_active_seconds=_integer(
+            raw["maximum_cumulative_preflight_active_seconds"],
+            label="cumulative preflight active cap",
+        ),
+        maximum_preflight_provider_cost_cents=int(
+            _number(
+                raw["maximum_preflight_provider_cost_usd"],
+                label="preflight provider cost cap",
+            )
+            * 100
+        ),
+        maximum_preflight_launches=_integer(
+            raw["max_preflight_launch_count"], label="preflight launch cap"
         ),
         empirical_campaign_wall_seconds=_integer(
             raw["empirical_campaign_wall_seconds"], label="empirical wall"
-        ),
-        evidence_export_reserve_seconds=_integer(
-            raw["evidence_export_reserve_seconds"], label="evidence export reserve"
-        ),
-        provider_termination_handoff_seconds=_integer(
-            raw["provider_termination_handoff_seconds"], label="provider handoff reserve"
         ),
         empirical_cleanup_reserve_seconds=_integer(
             raw["empirical_cleanup_reserve_seconds"], label="cleanup reserve"
@@ -868,21 +884,23 @@ def load_campaign_lifecycle(repository: Path) -> CampaignLifecycle:
         empirical_termination_cutoff_seconds=_integer(
             raw["empirical_termination_cutoff_seconds"], label="termination cutoff"
         ),
-        maximum_successful_host_active_seconds=_integer(
-            raw["maximum_successful_host_active_seconds"], label="successful-host active cap"
+        maximum_empirical_provider_cost_cents=int(
+            _number(
+                raw["maximum_empirical_provider_cost_usd"],
+                label="empirical provider cost cap",
+            )
+            * 100
         ),
-        maximum_cumulative_active_seconds=_integer(
-            raw["maximum_cumulative_active_seconds"], label="cumulative active cap"
+        maximum_empirical_launches=_integer(
+            raw["max_empirical_launch_count"], label="empirical launch cap"
         ),
-        maximum_provider_cost_cents=800,
-        maximum_launches=_integer(raw["max_launch_count"], label="launch cap"),
         maximum_simultaneous_instances=_integer(raw["max_lambda_instances"], label="instance cap"),
         persistent_filesystems=_integer(raw["persistent_filesystems"], label="filesystem cap"),
     )
     return CampaignLifecycle(
-        retry4_limits=limits,
+        limits=limits,
         max_instances=_integer(raw["max_lambda_instances"], label="instance cap"),
-        max_launches=_integer(raw["max_launch_count"], label="launch cap"),
+        max_launches=_integer(raw["max_preflight_launch_count"], label="launch cap"),
         persistent_filesystems=_integer(raw["persistent_filesystems"], label="filesystem cap"),
     )
 
@@ -950,8 +968,10 @@ def validate_authorization_ledger(
         "plan_id": PLAN_ID,
         "plan_sha256": file_sha256(plan_path),
         "max_lambda_instances": 1,
-        "max_launch_count": 2,
-        "authorized_max_preflight_launch_count": 8,
+        "max_preflight_launch_count": 8,
+        "max_empirical_launch_count": 1,
+        "maximum_preflight_instance_active_seconds": 21_600,
+        "maximum_cumulative_preflight_active_seconds": 43_200,
         "persistent_filesystems": 0,
         "preflight_lambda_cost_cap_usd": 20.0,
         "lambda_cost_cap_usd": 8.0,
@@ -1468,7 +1488,7 @@ def _validate_initial_preflight_cleanup_state(
         or value.get("plan_sha256") != plan_sha256
         or value.get("owned_instance_identity_sha256") != owned_identity
         or value.get("instance_name") != INSTANCE_NAME
-        or value.get("launch_slot") not in (1, 2)
+        or value.get("launch_slot") not in range(1, 9)
         or value.get("provider_termination_path")
         != "/api/v1/instance-operations/terminate"
         or value.get("provider_termination_body_sha256")
@@ -1524,9 +1544,9 @@ def _provisional_owner_binding(
         or capability.get("launch_body_sha256") != _sha256_bytes(_canonical_bytes(_launch_body()))
         or capability.get("private_root_identity_sha256") != expected_private_root_identity
         or capability.get("launch_slot") != launch_slot
-        or capability.get("launch_capability_limit") != 2
+        or capability.get("launch_capability_limit") != 8
         or capability.get("replacement_eligibility_sha256") != replacement_eligibility_sha256
-        or capability.get("further_launch_forbidden") != (launch_slot == 2)
+        or capability.get("further_launch_forbidden") != (launch_slot == 8)
     ):
         raise T09ProviderError("consumed launch capability cannot bind provisional ownership")
     journal = _journal_events(entry_root)
@@ -1579,7 +1599,7 @@ def _provisional_owner_binding(
         "launch_journal_prefix_sha256": _sha256_bytes(_canonical_bytes(launch_journal_prefix)),
         "launch_capability_sha256": file_sha256(capability_path),
         "launch_capability_state": "consumed-cleanup-only-until-entry-receipt",
-        "further_launch_forbidden": launch_slot == 2,
+        "further_launch_forbidden": launch_slot == 8,
         "private_operational_state_not_for_archive": True,
     }
 
@@ -2008,7 +2028,7 @@ def _entry_projection(
         or campaign_binding.get("plan_id") != PLAN_ID
         or campaign_binding.get("host_run_id") != HOST_RUN_ID
         or campaign_binding.get("package_commit") != package_commit
-        or launch_slot not in (1, 2)
+        or launch_slot not in range(1, 9)
         or campaign_binding.get("owned_lambda_started_at_epoch") != float(launch_started)
         or not 0 < campaign_started <= float(launch_started)
         or prior_lambda_duration < 0
@@ -2030,12 +2050,12 @@ def _entry_projection(
         raise T09ProviderError("first launch unexpectedly has replacement source evidence")
     if launch_slot == 1 and normalized_authority_tree_manifest_sha256 is not None:
         raise T09ProviderError("first launch unexpectedly has a normalized authority tree")
-    if launch_slot == 2 and (
+    if launch_slot > 1 and (
         not isinstance(eligibility_sha256, str) or _HEX64.fullmatch(eligibility_sha256) is None
     ):
         raise T09ProviderError("replacement launch lacks its eligibility hash")
     if (
-        launch_slot == 2
+        launch_slot > 1
         and (
             not isinstance(eligibility_source_manifest_sha256, str)
             or _HEX64.fullmatch(eligibility_source_manifest_sha256) is None
@@ -2065,7 +2085,7 @@ def _entry_projection(
         "zero_prior_nonterminal_instances": True,
         "launch_slot": launch_slot,
         "launch_count": launch_slot,
-        "max_launch_count": 2,
+        "max_preflight_launch_count": 8,
         "replacement_eligibility_sha256": eligibility_sha256,
         "max_instances": 1,
         "instance_type": INSTANCE_TYPE,
@@ -2335,14 +2355,23 @@ def _closeout_projection(
     owned_lambda_duration = max(terminal_at, zero_at) - owned_started
     lambda_duration = prior_lambda_duration + owned_lambda_duration
     lambda_list_cost_usd = prior_lambda_cost + owned_lambda_duration * 1.29 / 3600.0
+    empirical_lambda_cost_usd = (
+        (max(terminal_at, zero_at) - empirical_started) * 1.29 / 3600.0
+        if empirical_started is not None
+        else 0.0
+    )
     if (
         owned_lambda_duration < 0
         or lambda_duration < 0
         or lambda_list_cost_usd < 0
-        or lambda_list_cost_usd > NEW_CAMPAIGN_LAMBDA_CAP_USD
+        or (
+            empirical_started is None
+            and lambda_list_cost_usd > NEW_PREFLIGHT_LAMBDA_CAP_USD
+        )
+        or empirical_lambda_cost_usd > NEW_CAMPAIGN_LAMBDA_CAP_USD
         or PRIOR_T09_COST_USD + lambda_list_cost_usd > CUMULATIVE_T09_CAP_USD
     ):
-        raise T09ProviderError("Retry 5 Lambda duration or cumulative cost exceeded its cap")
+        raise T09ProviderError("autonomous Lambda phase or cumulative cost exceeded its cap")
     preflight_failure_timing: dict[str, object] | None = None
     failed_preflight_dispatch_deadline: float | None = None
     failed_preflight_started: float | None = None
@@ -2351,9 +2380,13 @@ def _closeout_projection(
         preflight_failure_timing = _load_json(
             root / "preflight-failure-timing.json", maximum_bytes=65_536
         )
-        failed_preflight_dispatch_deadline = _number(
-            preflight_failure_timing.get("termination_dispatch_deadline_epoch"),
-            label="preflight dispatch deadline",
+        raw_dispatch_deadline = preflight_failure_timing.get(
+            "termination_dispatch_deadline_epoch"
+        )
+        failed_preflight_dispatch_deadline = (
+            _number(raw_dispatch_deadline, label="preflight dispatch deadline")
+            if raw_dispatch_deadline is not None
+            else None
         )
         failed_preflight_started = _number(
             preflight_failure_timing.get("provider_preflight_started_at_epoch"),
@@ -2378,6 +2411,7 @@ def _closeout_projection(
                 "failed_at_epoch",
                 "elapsed_seconds",
                 "termination_dispatch_deadline_epoch",
+                "preflight_engineering_state",
             }
             or preflight_failure_timing.get("schema_version") != "0.1.0"
             or preflight_failure_timing.get("plan_id") != PLAN_ID
@@ -2385,9 +2419,9 @@ def _closeout_projection(
             or failed_preflight_started != started
             or failed_preflight_elapsed != failed_preflight_failed_at - failed_preflight_started
             or failed_preflight_elapsed < 0
-            or failed_preflight_dispatch_deadline
-            != failed_preflight_failed_at
-            + lifecycle.retry4_limits.failed_preflight_termination_dispatch_seconds
+            or preflight_failure_timing.get("preflight_engineering_state")
+            != "resumable-same-host"
+            or failed_preflight_dispatch_deadline is not None
         ):
             raise T09ProviderError("preflight failure timing receipt drifted")
     campaign_exception = _classify_campaign_wall_exception(
@@ -2424,7 +2458,7 @@ def _closeout_projection(
         "source_observer": SOURCE_OBSERVER,
         "launch_slot": entry_receipt["launch_slot"],
         "launch_count": entry_receipt["launch_count"],
-        "max_launch_count": 2,
+        "max_preflight_launch_count": 8,
         "termination_request_count": len(termination_sends),
         "terminal_or_absent": True,
         "zero_t09_instances": True,
@@ -2463,7 +2497,6 @@ HARD_CAMPAIGN_WALL_EXCEPTIONS: Final = frozenset(
     {
         "failed-preflight-termination-dispatch-violated",
         "failed-preflight-wall-violated",
-        "successful-preflight-wall-violated",
         "successful-host-active-cap-violated",
         "cumulative-active-cap-violated",
         "termination-cutoff-violated",
@@ -2486,10 +2519,13 @@ def _classify_campaign_wall_exception(
 ) -> str:
     """Classify every hard provider-clock boundary from exact observed epochs."""
 
-    limits = lifecycle.retry4_limits
-    if cumulative_lambda_duration_seconds > limits.maximum_cumulative_active_seconds:
-        return "cumulative-active-cap-violated"
+    limits = lifecycle.limits
     if empirical_started_at_epoch is None:
+        if (
+            cumulative_lambda_duration_seconds
+            > limits.maximum_cumulative_preflight_active_seconds
+        ):
+            return "cumulative-active-cap-violated"
         if (
             failed_preflight_started_at_epoch is not None
             and failed_preflight_failed_at_epoch is not None
@@ -2504,13 +2540,11 @@ def _classify_campaign_wall_exception(
                 else "none"
             )
         if termination_started_at_epoch - provider_started_at_epoch > (
-            lifecycle.preflight_wall_seconds + limits.failed_preflight_termination_dispatch_seconds
+            lifecycle.preflight_wall_seconds + 300
         ):
             return "failed-preflight-termination-dispatch-violated"
         return "none"
-    if empirical_started_at_epoch - provider_started_at_epoch > lifecycle.preflight_wall_seconds:
-        return "successful-preflight-wall-violated"
-    if owned_lambda_duration_seconds > limits.maximum_successful_host_active_seconds:
+    if owned_lambda_duration_seconds > limits.maximum_preflight_instance_active_seconds:
         return "successful-host-active-cap-violated"
     if (
         termination_started_at_epoch - empirical_started_at_epoch
@@ -3857,17 +3891,19 @@ def validate_slot2_launch_headroom(
         eligibility.get("prior_lambda_duration_seconds"), label="slot-1 Lambda duration"
     )
     prior_cost = _number(eligibility.get("prior_lambda_cost_usd"), label="slot-1 Lambda cost")
-    limits = lifecycle.retry4_limits
-    projected_duration = prior_duration + limits.maximum_successful_host_active_seconds
-    projected_cost = prior_cost + (
-        limits.maximum_successful_host_active_seconds * PRICE_CENTS_PER_HOUR / 100 / 3600
-    )
+    limits = lifecycle.limits
+    # A replacement launch consumes only the time it actually runs.  Requiring
+    # six hours of unused headroom per launch would collapse the authorized
+    # eight-launch engineering model back into two artificial slots.
+    minimum_headroom = 300
+    projected_duration = prior_duration + minimum_headroom
+    projected_cost = prior_cost + minimum_headroom * PRICE_CENTS_PER_HOUR / 100 / 3600
     if (
         now <= 0
         or prior_duration < 0
-        or prior_duration > limits.preflight_wall_seconds
-        or projected_duration > limits.maximum_cumulative_active_seconds
-        or projected_cost > NEW_CAMPAIGN_LAMBDA_CAP_USD
+        or prior_duration > limits.maximum_cumulative_preflight_active_seconds
+        or projected_duration > limits.maximum_cumulative_preflight_active_seconds
+        or projected_cost > NEW_PREFLIGHT_LAMBDA_CAP_USD
         or PRIOR_T09_COST_USD + projected_cost > CUMULATIVE_T09_CAP_USD
     ):
         raise T09ProviderError("slot-2 launch lacks cumulative active-time or cost headroom")
@@ -3893,7 +3929,7 @@ def _validate_replacement_launch_eligibility(
     package_commit: str,
     slot1_image_archive: Path | None,
 ) -> dict[str, object]:
-    """Prove launch 1 closed pre-empirically before slot 2 can be consumed."""
+    """Prove the immediately preceding launch closed before a replacement."""
 
     prior = prior_private_root.resolve(strict=True)
     if slot1_image_archive is None:
@@ -3914,16 +3950,22 @@ def _validate_replacement_launch_eligibility(
     ):
         raise T09ProviderError("replacement-launch eligibility metadata is unsafe")
     value = _load_json(path, maximum_bytes=262_144)
-    first_capability = _load_json(launch_capability_path(1), maximum_bytes=65_536)
+    closed_slot = _integer(value.get("closed_launch_slot"), label="closed launch slot")
+    if closed_slot not in range(1, 8):
+        raise T09ProviderError("replacement eligibility closed slot is outside authority")
+    prior_capability = _load_json(
+        launch_capability_path(closed_slot), maximum_bytes=65_536
+    )
     if value.get("eligibility_kind") == RETRY4_SLOT2_ELIGIBILITY_KIND:
         if (
-            first_capability.get("plan_id") != PLAN_ID
-            or first_capability.get("host_run_id") != HOST_RUN_ID
-            or first_capability.get("package_commit") != RETRY4_SLOT1_PACKAGE_COMMIT
-            or first_capability.get("plan_sha256") != RETRY4_SLOT1_PLAN_SHA256
-            or first_capability.get("launch_slot") != 1
-            or first_capability.get("launch_capability_limit") != 2
-            or first_capability.get("replacement_eligibility_sha256") is not None
+            closed_slot != 1
+            or prior_capability.get("plan_id") != PLAN_ID
+            or prior_capability.get("host_run_id") != HOST_RUN_ID
+            or prior_capability.get("package_commit") != RETRY4_SLOT1_PACKAGE_COMMIT
+            or prior_capability.get("plan_sha256") != RETRY4_SLOT1_PLAN_SHA256
+            or prior_capability.get("launch_slot") != 1
+            or prior_capability.get("launch_capability_limit") != 2
+            or prior_capability.get("replacement_eligibility_sha256") is not None
         ):
             raise T09ProviderError("Retry 4 slot-1 capability cannot authorize slot 2")
         return validate_retry4_preentry_replacement_eligibility(
@@ -3934,13 +3976,14 @@ def _validate_replacement_launch_eligibility(
         )
     if value.get("eligibility_kind") == SLOT2_ELIGIBILITY_KIND:
         if (
-            first_capability.get("plan_id") != PLAN_ID
-            or first_capability.get("host_run_id") != HOST_RUN_ID
-            or first_capability.get("package_commit") != SLOT1_PACKAGE_COMMIT
-            or first_capability.get("plan_sha256") != SLOT1_PLAN_SHA256
-            or first_capability.get("launch_slot") != 1
-            or first_capability.get("launch_capability_limit") != 2
-            or first_capability.get("replacement_eligibility_sha256") is not None
+            closed_slot != 1
+            or prior_capability.get("plan_id") != PLAN_ID
+            or prior_capability.get("host_run_id") != HOST_RUN_ID
+            or prior_capability.get("package_commit") != SLOT1_PACKAGE_COMMIT
+            or prior_capability.get("plan_sha256") != SLOT1_PLAN_SHA256
+            or prior_capability.get("launch_slot") != 1
+            or prior_capability.get("launch_capability_limit") != 2
+            or prior_capability.get("replacement_eligibility_sha256") is not None
         ):
             raise T09ProviderError("slot-1 launch capability cannot authorize slot 2")
         return validate_built_image_replacement_eligibility(
@@ -3953,19 +3996,26 @@ def _validate_replacement_launch_eligibility(
     if (
         not isinstance(source_package_commit, str)
         or _HEX40.fullmatch(source_package_commit) is None
-        or first_capability.get("plan_id") != PLAN_ID
-        or first_capability.get("host_run_id") != HOST_RUN_ID
-        or first_capability.get("package_commit") != source_package_commit
-        or first_capability.get("launch_slot") != 1
-        or first_capability.get("launch_capability_limit") != 2
-        or first_capability.get("replacement_eligibility_sha256") is not None
+        or prior_capability.get("plan_id") != PLAN_ID
+        or prior_capability.get("host_run_id") != HOST_RUN_ID
+        or prior_capability.get("package_commit") != source_package_commit
+        or prior_capability.get("launch_slot") != closed_slot
+        or prior_capability.get("launch_capability_limit") != 8
+        or (
+            closed_slot == 1
+            and prior_capability.get("replacement_eligibility_sha256") is not None
+        )
+        or (
+            closed_slot > 1
+            and not isinstance(prior_capability.get("replacement_eligibility_sha256"), str)
+        )
     ):
         raise T09ProviderError("first launch capability cannot authorize replacement")
     package_transition: dict[str, object] | None = None
     if source_package_commit != package_commit:
         if (
             source_package_commit != RETRY5_ACTIVE_SLOT1_PACKAGE_COMMIT
-            or first_capability.get("plan_sha256") != RETRY5_ACTIVE_SLOT1_PLAN_SHA256
+            or prior_capability.get("plan_sha256") != RETRY5_ACTIVE_SLOT1_PLAN_SHA256
             or value.get("eligibility_kind") is not None
         ):
             raise T09ProviderError("replacement package transition is not authorized")
@@ -4072,7 +4122,7 @@ def _validate_replacement_launch_eligibility(
         "plan_id": PLAN_ID,
         "host_run_id": HOST_RUN_ID,
         "package_commit": source_package_commit,
-        "closed_launch_slot": 1,
+        "closed_launch_slot": entry["launch_slot"],
         "entry_receipt_sha256": file_sha256(entry_path),
         "closeout_receipt_sha256": file_sha256(closeout_path),
         "host_preempirical_receipt_sha256": file_sha256(
@@ -4102,7 +4152,9 @@ def _validate_replacement_launch_eligibility(
         "terminal_or_absent": True,
         "zero_t09_instances": True,
         "security_restored": True,
-        "second_launch_permitted": True,
+        "next_replacement_launch_permitted": (
+            _integer(entry["launch_slot"], label="closed launch slot") < 8
+        ),
     }
     if value != required or host_disposition.get("empirical_attempts_entered") != 0:
         raise T09ProviderError("replacement launch is not source-bound and pre-empirical")
@@ -4111,7 +4163,7 @@ def _validate_replacement_launch_eligibility(
         or closeout.get("zero_t09_instances") is not True
         or closeout.get("security_restored") is not True
         or _number(value["prior_lambda_cost_usd"], label="prior Lambda cost")
-        >= NEW_CAMPAIGN_LAMBDA_CAP_USD
+        >= NEW_PREFLIGHT_LAMBDA_CAP_USD
     ):
         raise T09ProviderError("replacement launch lacks terminal, security, or budget closure")
     return {
@@ -4183,10 +4235,11 @@ def _validate_host_preempirical_disposition(
         failure.get("elapsed_seconds"),
         label="preflight elapsed time",
     )
-    dispatch_deadline = _number(
-        failure.get("termination_dispatch_deadline_epoch"),
-        label="preflight termination dispatch deadline",
-    )
+    dispatch_deadline = failure.get("termination_dispatch_deadline_epoch")
+    if dispatch_deadline is not None and (
+        not isinstance(dispatch_deadline, (int, float)) or isinstance(dispatch_deadline, bool)
+    ):
+        raise T09ProviderError("preflight termination dispatch deadline is malformed")
     image_import_count = value.get("replacement_image_import_count")
     replacement_image_id = value.get("replacement_image_id")
     replacement_archive_sha256 = value.get("replacement_image_archive_sha256")
@@ -4219,6 +4272,7 @@ def _validate_host_preempirical_disposition(
         "provider_preflight_started_at_epoch": failure_started,
         "preflight_elapsed_seconds": failure_elapsed,
         "termination_dispatch_deadline_epoch": dispatch_deadline,
+        "preflight_engineering_state": failure.get("preflight_engineering_state"),
         "empirical_attempts_entered": 0,
         "model_metadata_requests": 0,
         "model_task_requests": 0,
@@ -4271,12 +4325,12 @@ def _validate_host_preempirical_disposition(
         or failure.get("host_run_id") != HOST_RUN_ID
         or failure.get("package_commit") != package_commit
         or failure.get("empirical_attempts_entered") != 0
-        or failure.get("termination_dispatch_required") is not True
+        or failure.get("preflight_engineering_state") != "resumable-same-host"
+        or failure.get("termination_dispatch_required") is not False
         or failure_started != provider_preflight_started_at_epoch
         or failure_elapsed != failed_at - failure_started
         or not 0 <= failure_elapsed <= Retry4LifecycleLimits().preflight_wall_seconds
-        or dispatch_deadline
-        != failed_at + Retry4LifecycleLimits().failed_preflight_termination_dispatch_seconds
+        or dispatch_deadline is not None
     ):
         raise T09ProviderError("host pre-empirical disposition is not source-grounded zero-use")
     return value
@@ -4476,23 +4530,23 @@ def launch_campaign(
     sleeper: Callable[[float], None] = time.sleep,
 ) -> Path:
     repository = repository.resolve(strict=True)
-    if launch_slot not in (1, 2):
-        raise T09ProviderError("launch slot is outside the authorized Retry 5 bound")
+    if launch_slot not in range(1, 9):
+        raise T09ProviderError("launch slot is outside the authorized autonomous bound")
     replacement_eligibility: dict[str, object] | None = None
     if launch_slot == 1:
         if prior_private_root is not None or slot1_image_archive is not None:
             raise T09ProviderError("first launch cannot accept prior campaign state")
     else:
         if prior_private_root is None:
-            raise T09ProviderError("second launch requires exact prior closeout evidence")
+            raise T09ProviderError("replacement launch requires exact prior closeout evidence")
         replacement_eligibility = _validate_replacement_launch_eligibility(
             prior_private_root,
             repository=repository,
             package_commit=package_commit,
             slot1_image_archive=slot1_image_archive,
         )
-        if not launch_capability_path(1).is_file():
-            raise T09ProviderError("second launch cannot precede consumption of launch slot 1")
+        if not launch_capability_path(launch_slot - 1).is_file():
+            raise T09ProviderError("replacement launch cannot skip its preceding launch slot")
     replacement_eligibility_sha256 = (
         file_sha256(prior_private_root.resolve(strict=True) / "replacement-launch-eligibility.json")
         if prior_private_root is not None
@@ -4609,7 +4663,7 @@ def launch_campaign(
                 "launch_body_sha256": _sha256_bytes(_canonical_bytes(_launch_body())),
                 "launch_slot": launch_slot,
                 "launch_count_after_send": launch_slot,
-                "max_launch_count": 2,
+                "max_preflight_launch_count": 8,
                 "replacement_eligibility_sha256": replacement_eligibility_sha256,
                 "launch_capability_sha256": file_sha256(capability_path),
                 "launch_capability_state": "consumed-before-provider-post",
@@ -4713,7 +4767,7 @@ def launch_campaign(
             "instance_name": INSTANCE_NAME,
             "launch_slot": launch_slot,
             "replacement_eligibility_sha256": replacement_eligibility_sha256,
-            "further_launch_forbidden": launch_slot == 2,
+            "further_launch_forbidden": launch_slot == 8,
             "private_operational_state_not_for_archive": True,
         }
         try:
@@ -4908,8 +4962,8 @@ def closeout_campaign(
         if preempirical_receipt.name != "preempirical-disposition.json":
             raise T09ProviderError("pre-empirical receipt identity is unexpected")
         entry_for_replacement = _load_json(entry_receipt_path, maximum_bytes=65_536)
-        if entry_for_replacement.get("launch_slot") != 1:
-            raise T09ProviderError("only launch slot 1 can authorize one replacement")
+        if entry_for_replacement.get("launch_slot") not in range(1, 8):
+            raise T09ProviderError("only a preflight launch below slot 8 can authorize replacement")
         validated_host_disposition = _validate_host_preempirical_disposition(
             preempirical_receipt,
             preempirical_source_root,
@@ -5079,6 +5133,9 @@ def closeout_campaign(
                 "termination_dispatch_deadline_epoch": validated_host_disposition[
                     "termination_dispatch_deadline_epoch"
                 ],
+                "preflight_engineering_state": validated_host_disposition[
+                    "preflight_engineering_state"
+                ],
             },
         )
     if empirical_clock_manifest is not None:
@@ -5204,7 +5261,7 @@ def closeout_campaign(
                 "plan_id": PLAN_ID,
                 "host_run_id": HOST_RUN_ID,
                 "package_commit": package_commit,
-                "closed_launch_slot": 1,
+                "closed_launch_slot": entry_document["launch_slot"],
                 "entry_receipt_sha256": file_sha256(entry_path),
                 "closeout_receipt_sha256": file_sha256(receipt),
                 "host_preempirical_receipt_sha256": file_sha256(
@@ -5238,7 +5295,9 @@ def closeout_campaign(
                 "terminal_or_absent": True,
                 "zero_t09_instances": True,
                 "security_restored": True,
-                "second_launch_permitted": True,
+                "next_replacement_launch_permitted": (
+                    _integer(entry_document["launch_slot"], label="closed launch slot") < 8
+                ),
             }
             write_exclusive(private_root / "replacement-launch-eligibility.json", eligibility)
         for name in (
@@ -5285,7 +5344,7 @@ def parser() -> argparse.ArgumentParser:
     launch = operations.add_parser("launch")
     launch.add_argument("--public-ipv4-file", type=Path, required=True)
     launch.add_argument("--ssh-public-key-file", type=Path, required=True)
-    launch.add_argument("--launch-slot", type=int, choices=(1, 2), default=1)
+    launch.add_argument("--launch-slot", type=int, choices=tuple(range(1, 9)), default=1)
     launch.add_argument("--prior-private-root", type=Path)
     launch.add_argument("--slot1-image-archive", type=Path)
     closeout = operations.add_parser("closeout")

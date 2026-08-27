@@ -41,11 +41,15 @@
     "runtime": {"type": "object"},
     "provider_lifecycle": {
       "type": "object",
-      "required": ["cumulative_accounting_origin", "preflight_clock_origin", "preflight_wall_seconds", "failed_preflight_termination_dispatch_seconds", "empirical_clock_origin", "empirical_campaign_wall_seconds", "evidence_export_reserve_seconds", "provider_termination_handoff_seconds", "empirical_cleanup_reserve_seconds", "empirical_termination_cutoff_seconds", "maximum_successful_host_active_seconds", "maximum_cumulative_active_seconds", "max_lambda_instances", "max_launch_count", "persistent_filesystems", "admission_model", "future_attempt_maxima_reserved_at_campaign_start", "provider_control_plane"],
+      "required": ["cumulative_accounting_origin", "preflight_clock_origin", "preflight_iteration_wall_seconds", "maximum_preflight_instance_active_seconds", "maximum_cumulative_preflight_active_seconds", "maximum_preflight_provider_cost_usd", "max_preflight_launch_count", "failed_preflight_termination_dispatch_seconds", "empirical_clock_origin", "empirical_campaign_wall_seconds", "evidence_export_reserve_seconds", "provider_termination_handoff_seconds", "empirical_cleanup_reserve_seconds", "empirical_termination_cutoff_seconds", "maximum_empirical_provider_cost_usd", "max_empirical_launch_count", "max_lambda_instances", "persistent_filesystems", "admission_model", "future_attempt_maxima_reserved_at_campaign_start", "provider_control_plane"],
       "properties": {
         "cumulative_accounting_origin": {"const": "actual-active-lambda-seconds"},
         "preflight_clock_origin": {"const": "provider-launch-send-started"},
-        "preflight_wall_seconds": {"const": 3600},
+        "preflight_iteration_wall_seconds": {"const": 3600},
+        "maximum_preflight_instance_active_seconds": {"const": 21600},
+        "maximum_cumulative_preflight_active_seconds": {"const": 43200},
+        "maximum_preflight_provider_cost_usd": {"const": 20.0},
+        "max_preflight_launch_count": {"const": 8},
         "failed_preflight_termination_dispatch_seconds": {"const": 300},
         "empirical_clock_origin": {"const": "after-durable-frozen-run-manifest-publication"},
         "empirical_campaign_wall_seconds": {"const": 14400},
@@ -53,14 +57,13 @@
         "provider_termination_handoff_seconds": {"const": 60},
         "empirical_cleanup_reserve_seconds": {"const": 900},
         "empirical_termination_cutoff_seconds": {"const": 13500},
-        "maximum_successful_host_active_seconds": {"const": 18000},
-        "maximum_cumulative_active_seconds": {"const": 21600},
+        "maximum_empirical_provider_cost_usd": {"const": 8.0},
+        "max_empirical_launch_count": {"const": 1},
         "max_lambda_instances": {"const": 1},
-        "max_launch_count": {"const": 2},
         "persistent_filesystems": {"const": 0},
         "admission_model": {"const": "actual-elapsed-next-condition-hard-wall-plus-evidence-export-provider-handoff-and-cleanup-reserves"},
         "future_attempt_maxima_reserved_at_campaign_start": {"const": false},
-        "provider_control_plane": {"const": "existing-t07-pragmatic-lambda-operations-with-source-derived-projections-no-persistent-framework-or-watchdog"}
+        "provider_control_plane": {"const": "autonomous-v8-separated-preflight-engineering-and-empirical-authority"}
       },
       "additionalProperties": false
     },
@@ -80,7 +83,7 @@
         "max_output_bytes_per_attempt": {"const": 536870912},
         "max_stdout_stderr_bytes_per_stream": {"const": 536870912},
         "max_disk_bytes": {"const": 2147483648},
-        "max_lambda_duration_seconds": {"const": 21600},
+        "max_lambda_duration_seconds": {"const": 14400},
         "max_lambda_cost_usd": {"const": 8.0},
         "max_attempts": {"const": 4},
         "max_retries_after_empirical_entry": {"const": 0}

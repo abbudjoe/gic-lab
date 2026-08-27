@@ -183,6 +183,28 @@ def prepare(root: Path, reviewed_ancestor: str) -> None:
         "authorized": True,
         "authorization_reference": AUTHORIZATION_REFERENCE,
     }
+    lifecycle = plan["provider_lifecycle"]
+    for stale in (
+        "preflight_wall_seconds",
+        "maximum_successful_host_active_seconds",
+        "maximum_cumulative_active_seconds",
+        "max_launch_count",
+    ):
+        lifecycle.pop(stale, None)
+    lifecycle.update(
+        {
+            "preflight_iteration_wall_seconds": 3_600,
+            "maximum_preflight_instance_active_seconds": 21_600,
+            "maximum_cumulative_preflight_active_seconds": 43_200,
+            "maximum_preflight_provider_cost_usd": 20.0,
+            "max_preflight_launch_count": 8,
+            "maximum_empirical_provider_cost_usd": 8.0,
+            "max_empirical_launch_count": 1,
+            "control_plane": (
+                "autonomous-v8-separated-preflight-engineering-and-empirical-authority"
+            ),
+        }
+    )
     plan["replacement_image_policy"]["fallback_build_second_launch_policy"] = (
         "prefer the retained verified archive; rebuild from frozen inputs when loading is "
         "unavailable, corrupt, or slower; keep one accepted image unchanged across all "
@@ -281,6 +303,29 @@ def prepare(root: Path, reviewed_ancestor: str) -> None:
             "max_stdout_stderr_bytes_per_stream": 536_870_912,
             "max_essential_failure_bytes": 67_108_864,
             "max_disk_bytes": 2_147_483_648,
+            "max_lambda_duration_seconds": 14_400,
+        }
+    )
+    execution_lifecycle = execution["provider_lifecycle"]
+    for stale in (
+        "preflight_wall_seconds",
+        "maximum_successful_host_active_seconds",
+        "maximum_cumulative_active_seconds",
+        "max_launch_count",
+    ):
+        execution_lifecycle.pop(stale, None)
+    execution_lifecycle.update(
+        {
+            "preflight_iteration_wall_seconds": 3_600,
+            "maximum_preflight_instance_active_seconds": 21_600,
+            "maximum_cumulative_preflight_active_seconds": 43_200,
+            "maximum_preflight_provider_cost_usd": 20.0,
+            "max_preflight_launch_count": 8,
+            "maximum_empirical_provider_cost_usd": 8.0,
+            "max_empirical_launch_count": 1,
+            "provider_control_plane": (
+                "autonomous-v8-separated-preflight-engineering-and-empirical-authority"
+            ),
         }
     )
     execution["runtime_limits"]["expected_full_attempt_evidence_basis"][
@@ -355,28 +400,10 @@ def prepare(root: Path, reviewed_ancestor: str) -> None:
     if commands_path.exists():
         commands_path.unlink()
 
-    scientific_projection = {
-        "experiment_id": execution["experiment_id"],
-        "sira_commit": execution["sira_commit"],
-        "model_revision": execution["model_revision"],
-        "service_tier": execution["service_tier"],
-        "randomization_seed": execution["randomization_seed"],
-        "attempts": [
-            {
-                "task_id": item["task_id"],
-                "task_index": item["task_index"],
-                "condition": item["condition"],
-                "order_index": item["order_index"],
-                "upstream_science_argv": [
-                    token
-                    for token in item["upstream_argv"]
-                    if not token.startswith("EXP-0001-PILOT-V8-")
-                    and "artifacts/EXP-0001/pilot-v8/" not in token
-                ],
-            }
-            for item in execution["attempts"]
-        ],
-    }
+    # Persist the same typed projection used for the science-invariance gate.
+    # Removing isolated argv tokens is unsafe because it can orphan a flag and
+    # silently change how every following token is parsed.
+    scientific_projection = scientific_contract(execution)
     write_json(experiment / "contracts/T09_PILOT_V8_SCIENCE_PROJECTION.json", scientific_projection)
 
 
