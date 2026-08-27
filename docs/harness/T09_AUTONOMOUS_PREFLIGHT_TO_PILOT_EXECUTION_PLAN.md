@@ -40,7 +40,7 @@ and production-readiness claims.
 | AP-04 | Make basic host cleanup and provider termination independent of pilot, attempt, artifact, or image state. | Early-abort cleanup regression with no `pilot-state.json`, terminal provider receipt, and safe cleanup summary. | met |
 | AP-05 | Preserve process-wide core suppression and prohibit core retention. | Exact Docker `--ulimit core=0:0`, entrypoint assertion, inheritance, abort, Chromium, and zero-core receipts. | met-local; exact-image receipts pending AP-09 |
 | AP-06 | Apply equal 536,870,912-byte per-attempt, 2,147,483,648-byte aggregate, and 67,108,864-byte essential-failure evidence caps. | Constants/contracts, equality/overflow tests, exclusions, and cap arithmetic. | met |
-| AP-07 | Pass focused local repair tests, `make validate`, diff hygiene, and one independent spec-conformance review before live mutation. | Commands, outputs, reviewer verdict, rereview if needed, and clean repair commit. | partial-review-and-clean-commit-pending |
+| AP-07 | Pass focused local repair tests, `make validate`, diff hygiene, and one independent spec-conformance review before live mutation. | Commands, outputs, reviewer verdict, rereview if needed, and clean repair commit. | met |
 | AP-08 | Bind every preflight launch to current-turn authorization, fresh identity, one simultaneous A10, no persistent filesystem, 6-hour individual/12-hour cumulative active limits, and USD 20 preflight cap. | Private authorization/volume records, cloud ledger, provider receipts, and accounting. | not-started |
 | AP-09 | Pass all 16 preflight qualification checks in the exact accepted image and final container path. | Machine-readable qualification receipts with zero task requests/actions. | not-started |
 | AP-10 | Freeze a clean V8 commit, one unchanged image, exact dependencies/model/tasks/evaluator/browser/configuration, four commands, two valid pair diffs, fresh identities, and one run manifest. | Commit/image/manifest hashes and clean-tree receipt. | not-started |
@@ -99,6 +99,18 @@ and production-readiness claims.
   projection, and 8/9 launch-boundary regressions; validation, strict typing, lint,
   and diff hygiene pass. Independent rereview and the final clean-package verifier
   remain required before live mutation.
+- `2026-08-27`: the rereview found that the first generic descendant gate trusted a
+  cached science projection. Commits `1e5f1f9524fe57443d4a3ba5c0353290e0cfda5e`
+  and `253cae2c9393bcf209757af083e1989185df8285` replace that trust with a
+  derived gate over the execution contract, all four complete argv vectors, bound
+  dataset/evaluator bytes, condition-plan science, command tails and hashes, and
+  independently recomputed pair equality. Regressions reject stale execution,
+  command, and coordinated condition drift. The real `cbc3321...` to `253cae2...`
+  package transition passes with derived science SHA-256
+  `78c429c4280a1f32739c501edc44f1cd4890dda18a47965180c70af3b8e2abc3`.
+  The independent final verdict is PASS with no material blocker: 116 focused
+  tests, `make validate`, strict typing, lint, exact `verify_package`, both pair
+  diffs, production sealer preflight, and normalized V7/V8 science all pass.
 
 ## Budgets, blockers, and next phase
 
