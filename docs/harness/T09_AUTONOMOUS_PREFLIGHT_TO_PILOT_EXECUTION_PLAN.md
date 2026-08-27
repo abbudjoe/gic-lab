@@ -41,7 +41,7 @@ and production-readiness claims.
 | AP-05 | Preserve process-wide core suppression and prohibit core retention. | Exact Docker `--ulimit core=0:0`, entrypoint assertion, inheritance, abort, Chromium, and zero-core receipts. | met-local; exact-image receipts pending AP-09 |
 | AP-06 | Apply equal 536,870,912-byte per-attempt, 2,147,483,648-byte aggregate, and 67,108,864-byte essential-failure evidence caps. | Constants/contracts, equality/overflow tests, exclusions, and cap arithmetic. | met |
 | AP-07 | Pass focused local repair tests, `make validate`, diff hygiene, and one independent spec-conformance review before live mutation. | Commands, outputs, reviewer verdict, rereview if needed, and clean repair commit. | met |
-| AP-08 | Bind every preflight launch to current-turn authorization, fresh identity, one simultaneous A10, no persistent filesystem, 6-hour individual/12-hour cumulative active limits, and USD 20 preflight cap. | Private authorization/volume records, cloud ledger, provider receipts, and accounting. | not-started |
+| AP-08 | Bind every preflight launch to current-turn authorization, fresh identity, one simultaneous A10, no persistent filesystem, 6-hour individual/12-hour cumulative active limits, and USD 20 preflight cap. | Private authorization/volume records, cloud ledger, provider receipts, and accounting. | met-prelaunch; live accounting continues |
 | AP-09 | Pass all 16 preflight qualification checks in the exact accepted image and final container path. | Machine-readable qualification receipts with zero task requests/actions. | not-started |
 | AP-10 | Freeze a clean V8 commit, one unchanged image, exact dependencies/model/tasks/evaluator/browser/configuration, four commands, two valid pair diffs, fresh identities, and one run manifest. | Commit/image/manifest hashes and clean-tree receipt. | not-started |
 | AP-11 | Execute Task A reactive and simulative once each with reconstructable raw evidence and uniform finalization. | Entry/raw-complete/usage/cleanup/evaluator/score receipts; zero retry. | not-started |
@@ -111,6 +111,17 @@ and production-readiness claims.
   The independent final verdict is PASS with no material blocker: 116 focused
   tests, `make validate`, strict typing, lint, exact `verify_package`, both pair
   diffs, production sealer preflight, and normalized V7/V8 science all pass.
+- `2026-08-27`: private mode-0600 authorization and zero-filesystem records bind
+  the current-turn source, 8/1 launch ceilings, 6-hour per-instance and 12-hour
+  cumulative preflight limits, USD 20/8/40/68/75 cost surfaces, exact retained
+  image archive, and one simultaneous instance. The authorization ledger SHA-256
+  is `3ab694e476711a2ba1acb7a3530e6df55fe3655d82c117a3cb5d414d0deca6e0`;
+  the volume-policy SHA-256 is
+  `70484cd7968a28a81f71e941125277261595f969afac0539323d905409cdbf4e`.
+  A credential-safe read-only provider inventory proves zero exact V8 T09
+  instances, zero requested persistent filesystems, and advertised capacity for
+  the fixed A10/region at SHA-256
+  `18997a5a7b8096c19dc7d5c885dcbf672ba994a71d6bc3b02857a249bedc4d5f`.
 
 ## Budgets, blockers, and next phase
 
