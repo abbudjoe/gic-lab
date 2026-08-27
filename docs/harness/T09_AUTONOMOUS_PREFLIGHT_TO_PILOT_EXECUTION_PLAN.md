@@ -148,6 +148,14 @@ and production-readiness claims.
   the allowlisted transport: direct Docker requires the invoking UID, sudo Docker
   requires root, and group/world-writable cidfiles remain forbidden. Both absence
   convergence and persistent-residue controls remain enforced.
+- `2026-08-27`: iteration 5 passed secret-channel, evaluator-overlay, final-image,
+  offline evaluator, real-evidence, core-suppression, and package gates, then the
+  no-network browser fixture reported two Chromium helpers while still inside the
+  `sync_playwright()` driver context. The page, screenshot, pinned browser identities,
+  zero core limits, and zero-core scan all passed. Commit
+  `ebdd1f697a9f94983ce69eb6595d09c711f7ace4` moves process accounting after
+  driver teardown and waits boundedly for zero descendants; any real residue still
+  fails. No model request or empirical entry occurred.
 
 ## Budgets, blockers, and next phase
 
