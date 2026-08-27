@@ -976,6 +976,16 @@ def _owned_docker_role(label: str) -> str:
     return f"utility-{normalized}"
 
 
+def _docker_cidfile_owner_uid(prefix: list[str]) -> int:
+    """Return the only valid cidfile owner for the selected Docker transport."""
+
+    if prefix == ["docker"]:
+        return os.getuid()
+    if prefix == ["sudo", "-n", "docker"]:
+        return 0
+    raise T09HostError("Docker cidfile transport prefix is not allowlisted")
+
+
 def _project_owned_docker_argv(
     argv: list[str],
     *,
@@ -1128,8 +1138,9 @@ def run_owned_docker(
                 if (
                     cidfile.is_symlink()
                     or not stat.S_ISREG(metadata.st_mode)
-                    or metadata.st_uid != os.getuid()
+                    or metadata.st_uid != _docker_cidfile_owner_uid(prefix)
                     or metadata.st_nlink != 1
+                    or stat.S_IMODE(metadata.st_mode) & 0o022
                     or not 0 < metadata.st_size <= 65
                 ):
                     raise T09HostError("owned Docker container-ID file is unsafe")

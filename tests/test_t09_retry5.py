@@ -102,6 +102,18 @@ def test_remove_container_accepts_bounded_auto_remove_convergence(
     assert delays == [0.05]
 
 
+def test_docker_cidfile_owner_tracks_the_exact_transport(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    host = _host("giclab_t09_retry5_docker_cidfile_owner")
+    monkeypatch.setattr(host.os, "getuid", lambda: 1000)
+
+    assert host._docker_cidfile_owner_uid(["docker"]) == 1000
+    assert host._docker_cidfile_owner_uid(["sudo", "-n", "docker"]) == 0
+    with pytest.raises(host.T09HostError, match="cidfile transport prefix"):
+        host._docker_cidfile_owner_uid(["sudo", "docker"])
+
+
 def test_remove_container_rejects_persistent_exact_residue(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
