@@ -46,6 +46,23 @@ from giclab.harness.lambda_l2m_observer import (
 
 PLAN_ID: Final = "PLAN-EXP0001-PILOT-V9"
 HOST_RUN_ID: Final = "RUN-T09-PILOT-HOST-AUTONOMOUS-0002"
+AUTONOMOUS_V9_LAUNCH_PACKAGE_COMMIT: Final = (
+    "807eab38d6dfec9aac0a154964c2997be994c9e9"
+)
+AUTONOMOUS_V9_STALE_COMMAND_AUTHORIZATION_SHA256S: Final = {
+    "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0002": (
+        "eb48b64981a0e887881ed84e866bd5c56d870fec922875843d1efee21f3b20e2"
+    ),
+    "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0002": (
+        "83bb878d45499946c235812b5f584ae6ffa78b0b884d62d00575649a4953fc5e"
+    ),
+    "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0002": (
+        "c278c925964a237f7d40cc8816ecebfb76ec7ed99d912307fb0147691b3870ae"
+    ),
+    "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0002": (
+        "13bccb6d8009bae1c5bebae54d0574d28faeed77452cf3a279c5044eb545c68b"
+    ),
+}
 AUTHORIZATION_SOURCE_SHA256: Final = (
     "aea63a42cf0270ad0a41a929b4b8eb19dd1c3af73abfe97163c1d90e6077d3da"
 )
@@ -3101,7 +3118,15 @@ def autonomous_preflight_package_transition(
     }
     if previous != current:
         raise T09ProviderError("autonomous package transition changed frozen science")
-    previous_science = _autonomous_package_science_state(repository, from_package_commit)
+    previous_science = _autonomous_package_science_state(
+        repository,
+        from_package_commit,
+        stale_command_authorization_sha256s=(
+            AUTONOMOUS_V9_STALE_COMMAND_AUTHORIZATION_SHA256S
+            if from_package_commit == AUTONOMOUS_V9_LAUNCH_PACKAGE_COMMIT
+            else None
+        ),
+    )
     current_science = _autonomous_package_science_state(repository, to_package_commit)
     if previous_science != current_science:
         raise T09ProviderError("autonomous package transition changed derived science")
@@ -3279,7 +3304,12 @@ def _normalized_pair_argv(argv: list[str]) -> dict[str, str]:
     return values
 
 
-def _autonomous_package_science_state(repository: Path, commit: str) -> dict[str, object]:
+def _autonomous_package_science_state(
+    repository: Path,
+    commit: str,
+    *,
+    stale_command_authorization_sha256s: Mapping[str, str] | None = None,
+) -> dict[str, object]:
     contract_root = "experiments/EXP-0001-sira-simulative-vs-reactive/contracts"
     execution_path = f"{contract_root}/T09_PILOT_EXECUTION_CONTRACT.json"
     projection_path = f"{contract_root}/T09_PILOT_V9_SCIENCE_PROJECTION.json"
@@ -3326,10 +3356,20 @@ def _autonomous_package_science_state(repository: Path, commit: str) -> dict[str
             raise T09ProviderError("autonomous condition plan is malformed")
         authorization = condition.get("execution", {}).get("authorization")
         argv = raw_attempt.get("upstream_argv")
+        run_id = raw_attempt.get("run_id")
+        retained_command_sha256 = (
+            authorization.get("command_sha256") if isinstance(authorization, dict) else None
+        )
+        command_authorization_valid = retained_command_sha256 == _json_value_sha256(argv)
+        exact_launch_package_exception = (
+            stale_command_authorization_sha256s is not None
+            and isinstance(run_id, str)
+            and stale_command_authorization_sha256s.get(run_id) == retained_command_sha256
+        )
         if (
             not isinstance(authorization, dict)
             or not isinstance(argv, list)
-            or authorization.get("command_sha256") != _json_value_sha256(argv)
+            or not (command_authorization_valid or exact_launch_package_exception)
             or condition.get("condition") != f"SIRA-{str(raw_attempt.get('condition')).upper()}"
             or condition.get("task", {}).get("task_id") != raw_attempt.get("task_id")
             or condition.get("pairing", {}).get("order_index") != raw_attempt.get("order_index")

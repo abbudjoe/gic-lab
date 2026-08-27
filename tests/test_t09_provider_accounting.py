@@ -27,6 +27,12 @@ from giclab.harness.sira_gate_a import (
     condition_caps,
 )
 from giclab.harness.sira_gate_a_runtime import _install_locked_llm_factory
+from giclab.harness.t09_pragmatic_provider import (
+    AUTONOMOUS_V9_LAUNCH_PACKAGE_COMMIT,
+    AUTONOMOUS_V9_STALE_COMMAND_AUTHORIZATION_SHA256S,
+    T09ProviderError,
+    _autonomous_package_science_state,
+)
 from giclab.registry import load_json
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -417,4 +423,25 @@ def test_24_finalizer_keeps_v9_and_historical_receipt_contracts_disjoint() -> No
         finalizer._provider_records(
             v9,
             contract=finalizer.ProviderReceiptContract.HISTORICAL_V4_REGRESSION,
+        )
+
+
+def test_25_launch_package_command_hash_exception_is_exact_and_source_bound() -> None:
+    with pytest.raises(T09ProviderError, match="condition does not match"):
+        _autonomous_package_science_state(ROOT, AUTONOMOUS_V9_LAUNCH_PACKAGE_COMMIT)
+    projection = _autonomous_package_science_state(
+        ROOT,
+        AUTONOMOUS_V9_LAUNCH_PACKAGE_COMMIT,
+        stale_command_authorization_sha256s=(
+            AUTONOMOUS_V9_STALE_COMMAND_AUTHORIZATION_SHA256S
+        ),
+    )
+    assert len(projection["condition_science_sha256s"]) == 4
+    altered = dict(AUTONOMOUS_V9_STALE_COMMAND_AUTHORIZATION_SHA256S)
+    altered["RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0002"] = "0" * 64
+    with pytest.raises(T09ProviderError, match="condition does not match"):
+        _autonomous_package_science_state(
+            ROOT,
+            AUTONOMOUS_V9_LAUNCH_PACKAGE_COMMIT,
+            stale_command_authorization_sha256s=altered,
         )
