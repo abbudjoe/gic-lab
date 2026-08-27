@@ -114,6 +114,29 @@ def test_docker_cidfile_owner_tracks_the_exact_transport(
         host._docker_cidfile_owner_uid(["sudo", "docker"])
 
 
+def test_browser_process_accounting_waits_for_driver_teardown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    playwright = ModuleType("playwright")
+    sync_api = ModuleType("playwright.sync_api")
+    sync_api.sync_playwright = lambda: None  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "playwright", playwright)
+    monkeypatch.setitem(sys.modules, "playwright.sync_api", sync_api)
+    browser = _load_module(
+        "giclab_t09_retry5_browser_teardown",
+        ROOT / "containers/sira-smoke/bounded/browser_preflight.py",
+    )
+    counts = iter((2, 1, 0))
+    monotonic = iter((0.0, 0.1, 0.2))
+    delays: list[float] = []
+    monkeypatch.setattr(browser, "_chromium_process_count", lambda: next(counts))
+    monkeypatch.setattr(browser.time, "monotonic", lambda: next(monotonic))
+    monkeypatch.setattr(browser.time, "sleep", delays.append)
+
+    assert browser._wait_for_chromium_exit() == 0
+    assert delays == [0.05, 0.05]
+
+
 def test_remove_container_rejects_persistent_exact_residue(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -8,7 +8,9 @@ import json
 import os
 import resource
 import stat
+import time
 from pathlib import Path
+from typing import Literal
 
 from playwright.sync_api import sync_playwright  # type: ignore[import-not-found]
 
@@ -57,8 +59,12 @@ def _elf_type(path: Path) -> str | None:
         header = handle.read(18)
     if len(header) < 18 or header[:4] != b"\x7fELF":
         return None
-    byteorder = "little" if header[5] == 1 else "big" if header[5] == 2 else None
-    if byteorder is None:
+    byteorder: Literal["little", "big"]
+    if header[5] == 1:
+        byteorder = "little"
+    elif header[5] == 2:
+        byteorder = "big"
+    else:
         return None
     return "ET_CORE" if int.from_bytes(header[16:18], byteorder) == 4 else None
 
@@ -109,6 +115,17 @@ def _chromium_process_count() -> int:
     return count
 
 
+def _wait_for_chromium_exit(timeout_seconds: float = 10.0) -> int:
+    """Wait boundedly for Chromium descendants to exit after Playwright teardown."""
+
+    deadline = time.monotonic() + timeout_seconds
+    while True:
+        count = _chromium_process_count()
+        if count == 0 or time.monotonic() >= deadline:
+            return count
+        time.sleep(0.05)
+
+
 def main() -> None:
     core_limits = _enforce_zero_core_limit()
     if "SIRA_API_KEY" in os.environ or "OPENAI_API_KEY" in os.environ:
@@ -131,52 +148,56 @@ def main() -> None:
         page.close()
         context.close()
         browser.close()
-        chromium_process_count = _chromium_process_count()
-        core_records = _core_scan()
-        _write_exclusive(
-            ATTEMPT_ROOT / "browser-writable-root-core-scan.json",
-            json.dumps(
-                {
-                    "schema_version": "0.1.0",
-                    "scan_roots": [str(root) for root in WRITABLE_CORE_SCAN_ROOTS],
-                    "core_artifact_count": len(core_records),
-                    "core_artifacts": core_records,
-                    "core_content_or_hash_retained": False,
-                },
-                allow_nan=False,
-                indent=2,
-                sort_keys=True,
-            ).encode()
-            + b"\n",
-        )
-        record = {
-            "schema_version": "0.1.0",
-            "source": "local-static-file",
-            "network_mode": "none",
-            "browser_actions": 1,
-            "screenshot_captures": 1,
-            "title": title,
-            "screenshot": screenshot.name,
-            "browser_running_before_container_stop": False,
-            "browser_closed_by_fixture": True,
-            "chromium_process_count_after_close": chromium_process_count,
-            "writable_root_core_artifact_count": len(core_records),
-            "runtime_uid": os.getuid(),
-            "runtime_gid": os.getgid(),
-            "playwright_version": importlib.metadata.version("playwright"),
-            "chromium_revision": executable.parent.parent.name.removeprefix("chromium-"),
-            "chromium_browser_version": browser_version,
-            "chromium_executable_sha256": _sha256(executable),
-            "installed_package_manifest_sha256": hashlib.sha256(package_bytes).hexdigest(),
-            "core_soft_limit": core_limits[0],
-            "core_hard_limit": core_limits[1],
-        }
-        _write_exclusive(
-            ATTEMPT_ROOT / "browser-preflight.json",
-            json.dumps(record, allow_nan=False, indent=2, sort_keys=True).encode() + b"\n",
-        )
-        if chromium_process_count or core_records:
-            raise RuntimeError("browser teardown left a process or prohibited core artifact")
+
+    # Count only after the Playwright driver and its process pipes have also
+    # closed. Browser.close() alone can briefly leave Chromium helper processes
+    # visible while the surrounding sync_playwright() context is still active.
+    chromium_process_count = _wait_for_chromium_exit()
+    core_records = _core_scan()
+    _write_exclusive(
+        ATTEMPT_ROOT / "browser-writable-root-core-scan.json",
+        json.dumps(
+            {
+                "schema_version": "0.1.0",
+                "scan_roots": [str(root) for root in WRITABLE_CORE_SCAN_ROOTS],
+                "core_artifact_count": len(core_records),
+                "core_artifacts": core_records,
+                "core_content_or_hash_retained": False,
+            },
+            allow_nan=False,
+            indent=2,
+            sort_keys=True,
+        ).encode()
+        + b"\n",
+    )
+    record = {
+        "schema_version": "0.1.0",
+        "source": "local-static-file",
+        "network_mode": "none",
+        "browser_actions": 1,
+        "screenshot_captures": 1,
+        "title": title,
+        "screenshot": screenshot.name,
+        "browser_running_before_container_stop": False,
+        "browser_closed_by_fixture": True,
+        "chromium_process_count_after_close": chromium_process_count,
+        "writable_root_core_artifact_count": len(core_records),
+        "runtime_uid": os.getuid(),
+        "runtime_gid": os.getgid(),
+        "playwright_version": importlib.metadata.version("playwright"),
+        "chromium_revision": executable.parent.parent.name.removeprefix("chromium-"),
+        "chromium_browser_version": browser_version,
+        "chromium_executable_sha256": _sha256(executable),
+        "installed_package_manifest_sha256": hashlib.sha256(package_bytes).hexdigest(),
+        "core_soft_limit": core_limits[0],
+        "core_hard_limit": core_limits[1],
+    }
+    _write_exclusive(
+        ATTEMPT_ROOT / "browser-preflight.json",
+        json.dumps(record, allow_nan=False, indent=2, sort_keys=True).encode() + b"\n",
+    )
+    if chromium_process_count or core_records:
+        raise RuntimeError("browser teardown left a process or prohibited core artifact")
 
 
 if __name__ == "__main__":
