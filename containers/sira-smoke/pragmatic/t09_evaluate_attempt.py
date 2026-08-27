@@ -293,12 +293,46 @@ def _schema_errors(document: object, schema: dict[str, Any]) -> list[str]:
     )
 
 
+def _specialize_identity_schemas(
+    *,
+    score_schema: dict[str, Any],
+    evidence_schema: dict[str, Any],
+    plan_id: str,
+    run_id: str,
+    pair_id: str,
+    qualification_id: str,
+) -> None:
+    """Bind reusable evidence schemas to this frozen attempt's fresh identity."""
+
+    score_properties = score_schema.get("properties")
+    evidence_properties = evidence_schema.get("properties")
+    if not isinstance(score_properties, dict) or not isinstance(evidence_properties, dict):
+        raise T09PilotError("attempt identity schema properties are unavailable")
+    identity = evidence_properties.get("identity")
+    runtime = evidence_properties.get("runtime")
+    identity_properties = identity.get("properties") if isinstance(identity, dict) else None
+    runtime_properties = runtime.get("properties") if isinstance(runtime, dict) else None
+    if not isinstance(identity_properties, dict) or not isinstance(runtime_properties, dict):
+        raise T09PilotError("evidence identity schema properties are unavailable")
+    score_properties["plan_id"] = {"const": plan_id}
+    score_properties["run_id"] = {"const": run_id}
+    score_properties["pair_id"] = {"const": pair_id}
+    evidence_properties["plan_id"] = {"const": plan_id}
+    identity_properties["run_id"] = {"const": run_id}
+    identity_properties["pair_id"] = {"const": pair_id}
+    runtime_properties["qualification_id"] = {"const": qualification_id}
+
+
 def _validate_output_documents(
     *,
     outcome: dict[str, object],
     evidence: dict[str, object],
     score_schema_path: Path,
     evidence_schema_path: Path,
+    plan_id: str,
+    run_id: str,
+    pair_id: str,
+    qualification_id: str,
 ) -> None:
     score_schema = _load_object(score_schema_path.resolve(strict=True), label="score schema")
     evidence_schema = _load_object(
@@ -307,6 +341,14 @@ def _validate_output_documents(
     properties = evidence_schema.get("properties")
     if not isinstance(properties, dict) or "outcome" not in properties:
         raise T09PilotError("evidence schema outcome reference is unavailable")
+    _specialize_identity_schemas(
+        score_schema=score_schema,
+        evidence_schema=evidence_schema,
+        plan_id=plan_id,
+        run_id=run_id,
+        pair_id=pair_id,
+        qualification_id=qualification_id,
+    )
     properties["outcome"] = score_schema
     score_errors = _schema_errors(outcome, score_schema)
     evidence_errors = _schema_errors(evidence, evidence_schema)
@@ -1192,6 +1234,10 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
         evidence=evidence_index,
         score_schema_path=args.score_schema,
         evidence_schema_path=args.evidence_schema,
+        plan_id=PLAN_ID,
+        run_id=attempt.run_id,
+        pair_id=attempt.pair_id,
+        qualification_id=str(frozen_manifest["qualification_id"]),
     )
     _write_exclusive(outcome_path, outcome)
     _write_exclusive(evidence_path, evidence_index)
@@ -1215,6 +1261,10 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
         evidence=cast(dict[str, object], retained_evidence),
         score_schema_path=args.score_schema,
         evidence_schema_path=args.evidence_schema,
+        plan_id=PLAN_ID,
+        run_id=attempt.run_id,
+        pair_id=attempt.pair_id,
+        qualification_id=str(frozen_manifest["qualification_id"]),
     )
     return {
         "run_id": attempt.run_id,

@@ -188,6 +188,11 @@ and production-readiness claims.
   seal correctly records the condition-owned directory `raw`. The downstream-only
   repair validates the seal against the canonical raw-output name from the frozen
   execution contract, with a regression that uses a distinct runtime mount alias.
+- `2026-08-27`: the next finalizer pass proved the reusable score/evidence schemas
+  still hard-coded V7 fresh plan, run, pair, and qualification identities. The
+  downstream finalizer now specializes only those four identity constraints from
+  the exact frozen V8 contract; evaluator provenance, scoring, evidence shape, and
+  every non-identity schema constraint remain unchanged and regression-checked.
 
 ## Budgets, blockers, and next phase
 
