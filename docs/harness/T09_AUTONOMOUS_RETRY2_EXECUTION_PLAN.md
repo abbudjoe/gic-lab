@@ -1,0 +1,100 @@
+# T09 Autonomous Retry 2 Execution Plan
+
+Status: **in-progress**
+
+Source contract: current-turn user instruction, `T09 Autonomous Retry 2 — Repair
+Provider-Call Accounting and Complete the Calibration Pilot`, SHA-256
+`aea63a42cf0270ad0a41a929b4b8eb19dd1c3af73abfe97163c1d90e6077d3da`.
+
+Starting commit: `f6d175f3464ceef11e3f6c02d6aba30fe4ceb9f6`.
+
+Target branch: `phase-1/sira-pilot-autonomous-r2`.
+
+Authorization identity: `AUTH-T09-AUTONOMOUS-RETRY2-2026-08-27`.
+
+Objective identity: `OBJ-T09-V9-CALIBRATION-0001`.
+
+## Workstream and scope
+
+This workstream reconstructs the 33 V8 simulative provider attempts, repairs the
+existing provider budget boundary so every send has durable atomic accounting,
+qualifies the exact runtime without a live task call, freezes a fresh V9 package,
+and executes at most four new zero-retry calibration attempts. The scientific
+contract remains EXP-0001, SiRA `93fb8d72...`, `gpt-4o-2024-11-20`, the pinned
+FanOutQA snapshot/tasks/evaluator, and the exact A-reactive, A-simulative,
+checkpoint, B-simulative, B-reactive order.
+
+In scope are the smallest evidence-grounded accounting repair, V8 adjudication,
+focused fake-transport tests, exact-container qualification, one simultaneous A10,
+local-volume evidence retention, cleanup, and terminal reconciliation. Out of scope
+are planner/treatment/prompt/tool/browser/evaluator/scoring changes, condition
+retries, a new task set, scientific comparison, training, and production claims.
+
+## Definition of done
+
+| ID | Contract | Required evidence | Status |
+| --- | --- | --- | --- |
+| AR2-01 | Preserve V8 bytes and reconstruct all 33 simulative attempts into closed typed categories. | Source-bound archive hashes and machine-readable per-call adjudication. | met |
+| AR2-02 | Establish the exact cause of the three unmatched attempts without treating them as zero usage or unknown by default. | Retained events/log structure and source-level causal trace. | met |
+| AR2-03 | Extend the existing provider budget boundary with stable call IDs and durable lifecycle states. | Code, typed ledger, and lifecycle transition tests. | not-started |
+| AR2-04 | Atomically reserve calls, input/output tokens, and cost before send under concurrency. | Call/token/cost cap race regressions. | not-started |
+| AR2-05 | Disable all automatic retries and reject a second send for one logical call. | Constructor/source assertions and duplicate-send regression. | not-started |
+| AR2-06 | Terminally reconcile responses, provider errors, known transport failures, and unknown outcomes while retaining unknown reservations. | 33/30/3, response-write, shutdown, and bound-accounting tests. | not-started |
+| AR2-07 | Flush in-flight writers for a bounded interval and type remaining sends unknown. | Flush-success and timeout regressions. | not-started |
+| AR2-08 | Preserve the complete privacy-safe call ledger in raw and essential-failure seals. | Seal/reconstruction regression and credential scan. | not-started |
+| AR2-09 | Pass all 23 focused offline regressions, repository validation, typing, and diff hygiene. | Command outputs and committed repair. | not-started |
+| AR2-10 | Pass exact-container accounting plus established runtime preflight with zero task model/browser activity. | Machine-readable qualification receipt. | not-started |
+| AR2-11 | Bind cloud work to one A10, no persistent filesystem, declared time/cost caps, fresh identities, verified local volume, and terminate-after-retention cleanup. | Cloud ledger, volume contract, provider receipts. | not-started |
+| AR2-12 | Freeze a clean V9 commit, exact image, four commands, two valid pair diffs, and fresh run manifest. | Commit/image/manifest hashes and clean-tree receipt. | not-started |
+| AR2-13 | Execute Task A reactive and simulative once each with complete terminal provider accounting and reconstructable raw evidence. | Attempt ledgers, manifests, evaluator records, usage, cleanup; zero retry. | not-started |
+| AR2-14 | Apply the predeclared first-pair checkpoint and continue only if every operational criterion passes. | Receipt-bound checkpoint decision. | not-started |
+| AR2-15 | If admitted, execute Task B simulative and reactive once each under the same frozen package. | Equivalent Task B evidence and pair matching; zero retry. | not-started |
+| AR2-16 | Retain and independently verify evidence, remove containers/browser/core/secrets, terminate the exact provider instance, and restore provider security. | Local-volume verification and terminal provider closeout. | not-started |
+| AR2-17 | Run post-termination broader gates, independent spec-conformance review, update the terminal ledger, and publish the non-comparative handoff. | Test results, reviewer verdict, disposition/control records, final report. | not-started |
+
+## Implementation mapping and planned evidence
+
+- AR2-01–AR2-02 map to the immutable V8 simulative archive and a new public-safe
+  accounting adjudication; the source archive is never rewritten.
+- AR2-03–AR2-07 map to `src/giclab/harness/sira_gate_a.py`,
+  `src/giclab/harness/sira_gate_a_runtime.py`, and focused accounting tests.
+- AR2-08 maps to the provider lifecycle ledger plus the existing raw and essential
+  sealing paths in `containers/sira-smoke/pragmatic/t09_remote_runner.py`.
+- AR2-09–AR2-12 map to focused tests, exact-container receipts, clean commits, V9
+  contracts/identities, and the frozen run manifest.
+- AR2-13–AR2-16 map to immutable attempt archives, lifecycle/budget ledgers,
+  uniform finalization, the checkpoint, verified local retention, and provider
+  closeout.
+- AR2-17 maps to this ledger, terminal control surfaces, post-cleanup gates,
+  independent review, and the final response.
+
+## Progress and decisions
+
+- `2026-08-27`: verified the exact clean starting commit and created the requested
+  branch. No cloud, model, or browser mutation occurred.
+- `2026-08-27`: extracted the retained V8 simulative archive into a private temporary
+  root. The immutable event stream contains 30 response receipts and three explicit
+  `RateLimitError` provider-failure events; detailed adjudication is in progress.
+- `2026-08-27`: adjudicated all 33 calls. All were confirmed sends: 30 successful
+  response receipts and three known provider errors, with zero unknown outcomes or
+  duplicate/internal retries. The three critic errors each recorded retry forbidden
+  and one provider attempt. The exact defect is the budget boundary exception branch,
+  which persisted open reservations and an unreconciled count but never terminally
+  classified known provider errors. The 30 receipts establish observed lower bounds
+  of 58,469 tokens and USD 0.2845925; the retained 308,977 tokens and USD 2.7540625
+  are reservation-inclusive upper bounds.
+- Decision: user instructions prohibit a new independent pre-live review checkpoint.
+  Independent assembly conformance review therefore occurs after provider cleanup,
+  while focused deterministic gates remain mandatory before live qualification.
+
+## Budgets, blockers, and next phase
+
+Authorized ceilings are USD 10 pre-empirical Lambda, USD 8 empirical Lambda, USD
+40 OpenAI, USD 58 new aggregate, and USD 90 cumulative reserved upper bound; 12
+preflight active hours, 6 hours per preflight instance, one simultaneous instance,
+one empirical launch, 4,620 model-call attempts, 4,000,000 tokens, 120 browser
+actions, four condition attempts, zero retries, and zero persistent filesystems.
+
+The next permitted transition is the focused accounting implementation and local
+regression gate. Cloud mutation remains forbidden until AR2-01–AR2-09 are met and
+the attached-local-volume and cloud-ledger prelaunch contracts are complete.

@@ -36,6 +36,7 @@ from giclab.harness.sira_gate_a import (
     ProviderBudgetBoundary,
     ProviderBudgetExceeded,
     ProviderRequest,
+    ProviderResponseReceiptError,
     ProviderResponseUsage,
     SiRAAttemptLayout,
     SiRAEnvironmentContract,
@@ -188,7 +189,8 @@ def test_provider_and_parser_retries_share_the_same_attempt_counter() -> None:
     failed_usage = boundary.condition_usage
     assert failed_usage.input_tokens == 10
     assert failed_usage.output_tokens == 10
-    assert boundary.unreconciled_provider_attempts == 1
+    assert boundary.unreconciled_provider_attempts == 0
+    assert boundary.unknown_outcomes == 1
     parser_retry = replace(request, retry_kind="parser")
     boundary.invoke(parser_retry, lambda _: ("ok", ProviderResponseUsage(10, 0, 1, "default")))
     assert boundary.condition_usage.model_call_attempts == 2
@@ -219,7 +221,7 @@ def test_worst_case_attempt_is_persisted_before_provider_send() -> None:
 
     with pytest.raises(TimeoutError, match="in-flight"):
         boundary.invoke(request, fail_after_persistence)
-    assert states[-1] == (1, 20, 1)
+    assert states[-1] == (1, 20, 0)
 
 
 def test_concurrent_provider_requests_reserve_capacity_before_send() -> None:
@@ -506,10 +508,11 @@ def test_runtime_rejects_nondefault_or_missing_response_service_tier(
 
     for tier in (None, "auto", "priority"):
         FakeUpstreamLLM.response_tier = tier
-        with pytest.raises(GateAContractError, match="response service_tier"):
+        with pytest.raises(ProviderResponseReceiptError, match="usage receipt"):
             role_llm.completion(messages=[{"role": "user", "content": "tier"}])
     assert boundary.condition_usage.default_service_tier_responses == 0
-    assert boundary.unreconciled_provider_attempts == 3
+    assert boundary.unreconciled_provider_attempts == 0
+    assert boundary.unknown_outcomes == 3
     failed_ledger = load_yaml(ledger)
     assert failed_ledger["observed_response_service_tiers"] == []
     assert failed_ledger["default_service_tier_response_count"] == 0

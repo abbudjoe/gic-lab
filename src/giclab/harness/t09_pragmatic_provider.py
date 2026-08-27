@@ -44,10 +44,10 @@ from giclab.harness.lambda_l2m_observer import (
     observer_request,
 )
 
-PLAN_ID: Final = "PLAN-EXP0001-PILOT-V8"
-HOST_RUN_ID: Final = "RUN-T09-PILOT-HOST-AUTONOMOUS-0001"
+PLAN_ID: Final = "PLAN-EXP0001-PILOT-V9"
+HOST_RUN_ID: Final = "RUN-T09-PILOT-HOST-AUTONOMOUS-0002"
 AUTHORIZATION_SOURCE_SHA256: Final = (
-    "80ded0e246b4f070c3992ae872111c19c64d1ef30115d65a8641709f06e1a484"
+    "aea63a42cf0270ad0a41a929b4b8eb19dd1c3af73abfe97163c1d90e6077d3da"
 )
 API_HOST: Final = "cloud.lambda.ai"
 API_PORT: Final = 443
@@ -55,14 +55,14 @@ INSTANCE_TYPE: Final = "gpu_1x_a10"
 REGION: Final = "us-east-1"
 IMAGE_ID: Final = "44fab622-b98a-49fe-ac6d-e4ce5531532f"
 SSH_KEY_NAME: Final = "fractal-lambda-codex"
-INSTANCE_NAME: Final = "giclab-t09-pilot-v8-autonomous-0001"
+INSTANCE_NAME: Final = "giclab-t09-pilot-v9-autonomous-0002"
 PRICE_CENTS_PER_HOUR: Final = 129
-PRIOR_T09_COST_USD: Final = 6.8131387350
-NEW_PREFLIGHT_LAMBDA_CAP_USD: Final = 20.0
+PRIOR_T09_COST_USD: Final = 29.3502995579
+NEW_PREFLIGHT_LAMBDA_CAP_USD: Final = 10.0
 NEW_CAMPAIGN_LAMBDA_CAP_USD: Final = 8.0
 NEW_CAMPAIGN_OPENAI_CAP_USD: Final = 40.0
-NEW_CAMPAIGN_AGGREGATE_CAP_USD: Final = 68.0
-CUMULATIVE_T09_CAP_USD: Final = 75.0
+NEW_CAMPAIGN_AGGREGATE_CAP_USD: Final = 58.0
+CUMULATIVE_T09_CAP_USD: Final = 90.0
 SLOT1_PACKAGE_COMMIT: Final = "3640f061ea6c0f0f3d24bf2a346d4beda1a400cf"
 SLOT1_PLAN_SHA256: Final = "e7e214500348c8b876beb034df7b592c84f5ab79788ab6f310ef187fd797613c"
 SLOT1_CLOSEOUT_RECEIPT_SHA256: Final = (
@@ -969,9 +969,7 @@ def validate_authorization_ledger(
             from_package_commit=authorized_package_commit,
             to_package_commit=package_commit,
         )
-    plan_relative_path = (
-        "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml"
-    )
+    plan_relative_path = "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml"
     authorized_plan_sha256 = (
         file_sha256(repository / plan_relative_path)
         if authorized_package_commit == package_commit
@@ -982,7 +980,7 @@ def validate_authorization_ledger(
     required = {
         "schema_version": "0.1.0",
         "authorization_source_sha256": AUTHORIZATION_SOURCE_SHA256,
-        "authorization_reference": "AUTH-T09-AUTONOMOUS-PREFLIGHT-TO-PILOT-2026-08-27",
+        "authorization_reference": "AUTH-T09-AUTONOMOUS-RETRY2-2026-08-27",
         "authorized": True,
         "single_use": True,
         "clean_package_commit": authorized_package_commit,
@@ -994,16 +992,14 @@ def validate_authorization_ledger(
         "maximum_preflight_instance_active_seconds": 21_600,
         "maximum_cumulative_preflight_active_seconds": 43_200,
         "persistent_filesystems": 0,
-        "preflight_lambda_cost_cap_usd": 20.0,
+        "preflight_lambda_cost_cap_usd": 10.0,
         "lambda_cost_cap_usd": 8.0,
         "openai_cost_cap_usd": 40.0,
-        "aggregate_cost_cap_usd": 68.0,
-        "prior_t09_cost_usd": 6.8131387350,
-        "cumulative_t09_cost_cap_usd": 75.0,
+        "aggregate_cost_cap_usd": 58.0,
+        "prior_t09_cost_usd": 29.3502995579,
+        "cumulative_t09_cost_cap_usd": 90.0,
         "replacement_image_policy": "retained-exact-load-or-one-fallback-build-v1",
-        "artifact_destination": (
-            "/Volumes/Macintosh HD - Data/GIC-Lab/t09/autonomous-v8"
-        ),
+        "artifact_destination": ("/Volumes/Macintosh HD - Data/GIC-Lab/t09/autonomous-r2-v9"),
     }
     if value != required:
         raise T09ProviderError("private authorization ledger drifted")
@@ -1441,9 +1437,7 @@ def _initial_preflight_cleanup_state(
         "temporary_firewall_resource_ids": [],
         "temporary_ruleset_resource_ids": [],
         "temporary_local_secret_locations": [str(local_upload_path)],
-        "temporary_remote_secret_locations": [
-            "/home/ubuntu/.config/giclab/sira_api_key"
-        ],
+        "temporary_remote_secret_locations": ["/home/ubuntu/.config/giclab/sira_api_key"],
         "planned_remote_artifact_root": "/home/ubuntu/t09-artifacts-autonomous",
         "source_staging_started": False,
         "artifact_root_created": False,
@@ -1510,8 +1504,7 @@ def _validate_initial_preflight_cleanup_state(
         or value.get("owned_instance_identity_sha256") != owned_identity
         or value.get("instance_name") != INSTANCE_NAME
         or value.get("launch_slot") not in range(1, 9)
-        or value.get("provider_termination_path")
-        != "/api/v1/instance-operations/terminate"
+        or value.get("provider_termination_path") != "/api/v1/instance-operations/terminate"
         or value.get("provider_termination_body_sha256")
         != _sha256_bytes(_canonical_bytes(_terminate_body(instance_id)))
         or value.get("provider_security_baseline_sources")
@@ -1523,18 +1516,20 @@ def _validate_initial_preflight_cleanup_state(
         or value.get("temporary_ruleset_resource_ids") != []
         or value.get("temporary_remote_secret_locations")
         != ["/home/ubuntu/.config/giclab/sira_api_key"]
-        or value.get("planned_remote_artifact_root")
-        != "/home/ubuntu/t09-artifacts-autonomous"
-        or any(value.get(field) is not False for field in (
-            "source_staging_started",
-            "artifact_root_created",
-            "credential_materialized",
-            "container_created",
-            "browser_started",
-            "empirical_entry_crossed",
-            "pilot_state_required_for_cleanup",
-            "attempt_state_required_for_cleanup",
-        ))
+        or value.get("planned_remote_artifact_root") != "/home/ubuntu/t09-artifacts-autonomous"
+        or any(
+            value.get(field) is not False
+            for field in (
+                "source_staging_started",
+                "artifact_root_created",
+                "credential_materialized",
+                "container_created",
+                "browser_started",
+                "empirical_entry_crossed",
+                "pilot_state_required_for_cleanup",
+                "attempt_state_required_for_cleanup",
+            )
+        )
         or value.get("private_operational_state_not_for_archive") is not True
     ):
         raise T09ProviderError("initial preflight cleanup state drifted")
@@ -2075,14 +2070,11 @@ def _entry_projection(
         not isinstance(eligibility_sha256, str) or _HEX64.fullmatch(eligibility_sha256) is None
     ):
         raise T09ProviderError("replacement launch lacks its eligibility hash")
-    if (
-        launch_slot > 1
-        and (
-            not isinstance(eligibility_source_manifest_sha256, str)
-            or _HEX64.fullmatch(eligibility_source_manifest_sha256) is None
-            or not isinstance(normalized_authority_tree_manifest_sha256, str)
-            or _HEX64.fullmatch(normalized_authority_tree_manifest_sha256) is None
-        )
+    if launch_slot > 1 and (
+        not isinstance(eligibility_source_manifest_sha256, str)
+        or _HEX64.fullmatch(eligibility_source_manifest_sha256) is None
+        or not isinstance(normalized_authority_tree_manifest_sha256, str)
+        or _HEX64.fullmatch(normalized_authority_tree_manifest_sha256) is None
     ):
         raise T09ProviderError("replacement launch lacks its two typed authority hashes")
     result: dict[str, object] = {
@@ -2385,10 +2377,7 @@ def _closeout_projection(
         owned_lambda_duration < 0
         or lambda_duration < 0
         or lambda_list_cost_usd < 0
-        or (
-            empirical_started is None
-            and lambda_list_cost_usd > NEW_PREFLIGHT_LAMBDA_CAP_USD
-        )
+        or (empirical_started is None and lambda_list_cost_usd > NEW_PREFLIGHT_LAMBDA_CAP_USD)
         or empirical_lambda_cost_usd > NEW_CAMPAIGN_LAMBDA_CAP_USD
         or PRIOR_T09_COST_USD + lambda_list_cost_usd > CUMULATIVE_T09_CAP_USD
     ):
@@ -2402,9 +2391,7 @@ def _closeout_projection(
         preflight_failure_timing = _load_json(
             root / "preflight-failure-timing.json", maximum_bytes=65_536
         )
-        raw_dispatch_deadline = preflight_failure_timing.get(
-            "termination_dispatch_deadline_epoch"
-        )
+        raw_dispatch_deadline = preflight_failure_timing.get("termination_dispatch_deadline_epoch")
         failed_preflight_dispatch_deadline = (
             _number(raw_dispatch_deadline, label="preflight dispatch deadline")
             if raw_dispatch_deadline is not None
@@ -2462,8 +2449,7 @@ def _closeout_projection(
             or not 0
             <= failed_preflight_provider_elapsed
             <= lifecycle.limits.maximum_preflight_instance_active_seconds
-            or preflight_failure_timing.get("preflight_engineering_state")
-            != "resumable-same-host"
+            or preflight_failure_timing.get("preflight_engineering_state") != "resumable-same-host"
             or failed_preflight_dispatch_deadline is not None
         ):
             raise T09ProviderError("preflight failure timing receipt drifted")
@@ -2564,10 +2550,7 @@ def _classify_campaign_wall_exception(
 
     limits = lifecycle.limits
     if empirical_started_at_epoch is None:
-        if (
-            cumulative_lambda_duration_seconds
-            > limits.maximum_cumulative_preflight_active_seconds
-        ):
+        if cumulative_lambda_duration_seconds > limits.maximum_cumulative_preflight_active_seconds:
             return "cumulative-active-cap-violated"
         if (
             failed_preflight_started_at_epoch is not None
@@ -3039,7 +3022,7 @@ def autonomous_preflight_package_transition(
 
     The immutable authorization source governs the whole pre-empirical engineering
     session.  Package commits may advance, but only along one Git ancestry and only
-    while the typed V8 science projection and its primary inputs remain identical.
+    while the typed V9 science projection and its primary inputs remain identical.
     """
 
     if (
@@ -3095,7 +3078,7 @@ def autonomous_preflight_package_transition(
 
     science_projection_path = (
         "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
-        "T09_PILOT_V8_SCIENCE_PROJECTION.json"
+        "T09_PILOT_V9_SCIENCE_PROJECTION.json"
     )
     immutable_paths = (
         science_projection_path,
@@ -3158,9 +3141,7 @@ def autonomous_preflight_package_transition(
         "changed_paths_sha256": _sha256_bytes(_canonical_bytes(changed_paths)),
         "binary_diff_sha256": hashlib.sha256(binary_diff).hexdigest(),
         "scientific_projection_sha256": previous[science_projection_path],
-        "derived_science_state_sha256": _sha256_bytes(
-            _canonical_bytes(previous_science)
-        ),
+        "derived_science_state_sha256": _sha256_bytes(_canonical_bytes(previous_science)),
         "scientific_contract_changed": False,
     }
 
@@ -3301,7 +3282,7 @@ def _normalized_pair_argv(argv: list[str]) -> dict[str, str]:
 def _autonomous_package_science_state(repository: Path, commit: str) -> dict[str, object]:
     contract_root = "experiments/EXP-0001-sira-simulative-vs-reactive/contracts"
     execution_path = f"{contract_root}/T09_PILOT_EXECUTION_CONTRACT.json"
-    projection_path = f"{contract_root}/T09_PILOT_V8_SCIENCE_PROJECTION.json"
+    projection_path = f"{contract_root}/T09_PILOT_V9_SCIENCE_PROJECTION.json"
     commands_path = f"{contract_root}/T09_PILOT_COMMAND_MANIFESTS.json"
     execution_blob = _git_blob(repository, commit, execution_path)
     execution = _git_json_object(repository, commit, execution_path)
@@ -3348,13 +3329,10 @@ def _autonomous_package_science_state(repository: Path, commit: str) -> dict[str
         if (
             not isinstance(authorization, dict)
             or not isinstance(argv, list)
-            or authorization.get("command_sha256")
-            != _json_value_sha256(argv)
-            or condition.get("condition")
-            != f"SIRA-{str(raw_attempt.get('condition')).upper()}"
+            or authorization.get("command_sha256") != _json_value_sha256(argv)
+            or condition.get("condition") != f"SIRA-{str(raw_attempt.get('condition')).upper()}"
             or condition.get("task", {}).get("task_id") != raw_attempt.get("task_id")
-            or condition.get("pairing", {}).get("order_index")
-            != raw_attempt.get("order_index")
+            or condition.get("pairing", {}).get("order_index") != raw_attempt.get("order_index")
         ):
             raise T09ProviderError("autonomous condition does not match its execution attempt")
         projected = _condition_science_projection(condition)
@@ -3393,10 +3371,8 @@ def _autonomous_package_science_state(repository: Path, commit: str) -> dict[str
             or manifest.get("condition") != raw_attempt.get("condition")
             or manifest.get("order_index") != raw_attempt.get("order_index")
             or manifest.get("pair_id") != raw_attempt.get("pair_id")
-            or manifest.get("condition_plan_path")
-            != raw_attempt.get("condition_plan_path")
-            or manifest.get("condition_plan_sha256")
-            != raw_attempt.get("condition_plan_sha256")
+            or manifest.get("condition_plan_path") != raw_attempt.get("condition_plan_path")
+            or manifest.get("condition_plan_sha256") != raw_attempt.get("condition_plan_sha256")
             or not isinstance(equality, dict)
         ):
             raise T09ProviderError("autonomous command manifest drifted from execution")
@@ -3419,9 +3395,7 @@ def _autonomous_package_science_state(repository: Path, commit: str) -> dict[str
     return {
         "derived_science_projection": derived_projection,
         "condition_science_sha256s": condition_digests,
-        "command_upstream_argv_sha256s": [
-            _json_value_sha256(argv) for argv in upstream_vectors
-        ],
+        "command_upstream_argv_sha256s": [_json_value_sha256(argv) for argv in upstream_vectors],
     }
 
 
@@ -4392,9 +4366,7 @@ def _validate_replacement_launch_eligibility(
     closed_slot = _integer(value.get("closed_launch_slot"), label="closed launch slot")
     if closed_slot not in range(1, 8):
         raise T09ProviderError("replacement eligibility closed slot is outside authority")
-    prior_capability = _load_json(
-        launch_capability_path(closed_slot), maximum_bytes=65_536
-    )
+    prior_capability = _load_json(launch_capability_path(closed_slot), maximum_bytes=65_536)
     if value.get("eligibility_kind") == RETRY4_SLOT2_ELIGIBILITY_KIND:
         if (
             closed_slot != 1
@@ -4440,10 +4412,7 @@ def _validate_replacement_launch_eligibility(
         or prior_capability.get("package_commit") != source_package_commit
         or prior_capability.get("launch_slot") != closed_slot
         or prior_capability.get("launch_capability_limit") != 8
-        or (
-            closed_slot == 1
-            and prior_capability.get("replacement_eligibility_sha256") is not None
-        )
+        or (closed_slot == 1 and prior_capability.get("replacement_eligibility_sha256") is not None)
         or (
             closed_slot > 1
             and not isinstance(prior_capability.get("replacement_eligibility_sha256"), str)
@@ -4530,10 +4499,7 @@ def _validate_replacement_launch_eligibility(
     closeout_path = closeout_source / "closeout-receipt.json"
     observed_entry = _load_json(entry_path, maximum_bytes=65_536)
     source_plan_sha256 = observed_entry.get("plan_sha256")
-    if (
-        not isinstance(source_plan_sha256, str)
-        or _HEX64.fullmatch(source_plan_sha256) is None
-    ):
+    if not isinstance(source_plan_sha256, str) or _HEX64.fullmatch(source_plan_sha256) is None:
         raise T09ProviderError("replacement source plan identity is malformed")
     lifecycle = load_campaign_lifecycle(repository)
     entry = validate_entry_receipt_source_bound(
@@ -5343,9 +5309,7 @@ def launch_campaign(
                         else None
                     ),
                     "normalized_slot2_authority_tree_manifest_sha256": (
-                        file_sha256(
-                            private_root / "slot2-eligibility-source/source-manifest.json"
-                        )
+                        file_sha256(private_root / "slot2-eligibility-source/source-manifest.json")
                         if replacement_eligibility is not None
                         else None
                     ),
@@ -5460,8 +5424,7 @@ def closeout_campaign(
         and initial_cleanup_path.is_file()
     ):
         plan_path = (
-            repository
-            / "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml"
+            repository / "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml"
         )
         initial_cleanup = _validate_initial_preflight_cleanup_state(
             initial_cleanup_path,
@@ -5472,8 +5435,7 @@ def closeout_campaign(
         if closed_path.is_file():
             closed = _load_json(closed_path, maximum_bytes=65_536)
             if (
-                closed.get("private_instance_id")
-                != initial_cleanup.get("private_instance_id")
+                closed.get("private_instance_id") != initial_cleanup.get("private_instance_id")
                 or closed.get("owned_instance_identity_sha256")
                 != initial_cleanup.get("owned_instance_identity_sha256")
                 or closed.get("provider_disposition") not in {"terminal", "absent"}

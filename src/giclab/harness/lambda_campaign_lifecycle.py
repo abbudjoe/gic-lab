@@ -242,7 +242,7 @@ class Retry4LifecycleLimits:
 
 @dataclass(frozen=True, slots=True)
 class AutonomousPilotLifecycleLimits:
-    """Separated preflight-engineering and empirical authority for T09 V8.
+    """Separated preflight-engineering and empirical authority for T09 V9.
 
     Preflight accounting ends at the durable scientific freeze.  Empirical time
     and cost begin at that boundary and therefore cannot be consumed by setup.
@@ -251,7 +251,7 @@ class AutonomousPilotLifecycleLimits:
     preflight_iteration_wall_seconds: int = 3_600
     maximum_preflight_instance_active_seconds: int = 21_600
     maximum_cumulative_preflight_active_seconds: int = 43_200
-    maximum_preflight_provider_cost_cents: int = 2_000
+    maximum_preflight_provider_cost_cents: int = 1_000
     maximum_preflight_launches: int = 8
     empirical_campaign_wall_seconds: int = 14_400
     empirical_cleanup_reserve_seconds: int = 900
@@ -267,13 +267,12 @@ class AutonomousPilotLifecycleLimits:
             self.preflight_iteration_wall_seconds != 3_600
             or self.maximum_preflight_instance_active_seconds != 21_600
             or self.maximum_cumulative_preflight_active_seconds != 43_200
-            or self.maximum_preflight_provider_cost_cents != 2_000
+            or self.maximum_preflight_provider_cost_cents != 1_000
             or self.maximum_preflight_launches != 8
             or self.empirical_campaign_wall_seconds != 14_400
             or self.empirical_cleanup_reserve_seconds != 900
             or self.empirical_termination_cutoff_seconds != 13_500
-            or self.empirical_termination_cutoff_seconds
-            + self.empirical_cleanup_reserve_seconds
+            or self.empirical_termination_cutoff_seconds + self.empirical_cleanup_reserve_seconds
             != self.empirical_campaign_wall_seconds
             or self.maximum_empirical_provider_cost_cents != 800
             or self.maximum_empirical_launches != 1
@@ -290,9 +289,7 @@ class AutonomousPilotLifecycleLimits:
             label="provider preflight instance",
         )
 
-    def preflight_instance_remaining(
-        self, *, launched_at_epoch: float, now_epoch: float
-    ) -> float:
+    def preflight_instance_remaining(self, *, launched_at_epoch: float, now_epoch: float) -> float:
         return max(
             0.0,
             self.maximum_preflight_instance_active_seconds
@@ -318,9 +315,7 @@ class AutonomousPilotLifecycleLimits:
             label="empirical campaign",
         )
 
-    def empirical_remaining(
-        self, *, empirical_started_at_epoch: float, now_epoch: float
-    ) -> float:
+    def empirical_remaining(self, *, empirical_started_at_epoch: float, now_epoch: float) -> float:
         return max(
             0.0,
             self.empirical_campaign_wall_seconds

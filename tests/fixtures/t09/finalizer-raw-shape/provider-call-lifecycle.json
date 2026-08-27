@@ -1,0 +1,95 @@
+{
+  "calls": [
+    {
+      "actual_usage": {
+        "cached_input_tokens": 0,
+        "input_tokens": 10,
+        "output_tokens": 2,
+        "service_tier": "default",
+        "total_tokens": 12
+      },
+      "call_id": "CALL-T09-FIXTURE-0001",
+      "exception_type": null,
+      "history": [
+        "call_admission_requested",
+        "budget_reserved",
+        "send_intent_committed",
+        "send_started",
+        "response_received",
+        "usage_reconciled",
+        "reservation_released",
+        "call_terminal"
+      ],
+      "logical_call_id": "CALL-T09-FIXTURE-0001",
+      "model": "gpt-4o-2024-11-20",
+      "phase": "call_terminal",
+      "reservation": {
+        "cost_usd": 0.000045,
+        "input_tokens": 10,
+        "output_tokens": 2,
+        "total_tokens": 12
+      },
+      "role": "actor",
+      "terminal_state": "sent_response_reconciled"
+    }
+  ],
+  "observed_lower_bound": {
+    "aggregate": {
+      "browser_actions": 1,
+      "cached_input_tokens": 0,
+      "cost_usd": 0.000045,
+      "default_service_tier_responses": 1,
+      "input_tokens": 10,
+      "model_call_attempts": 1,
+      "output_bytes": 1024,
+      "output_tokens": 2,
+      "total_tokens": 12
+    },
+    "condition": {
+      "browser_actions": 1,
+      "cached_input_tokens": 0,
+      "cost_usd": 0.000045,
+      "default_service_tier_responses": 1,
+      "input_tokens": 10,
+      "model_call_attempts": 1,
+      "output_bytes": 1024,
+      "output_tokens": 2,
+      "total_tokens": 12
+    }
+  },
+  "outstanding_reservations": 0,
+  "reserved_upper_bound": {
+    "aggregate": {
+      "browser_actions": 1,
+      "cached_input_tokens": 0,
+      "cost_usd": 0.000045,
+      "default_service_tier_responses": 1,
+      "input_tokens": 10,
+      "model_call_attempts": 1,
+      "output_bytes": 1024,
+      "output_tokens": 2,
+      "total_tokens": 12
+    },
+    "condition": {
+      "browser_actions": 1,
+      "cached_input_tokens": 0,
+      "cost_usd": 0.000045,
+      "default_service_tier_responses": 1,
+      "input_tokens": 10,
+      "model_call_attempts": 1,
+      "output_bytes": 1024,
+      "output_tokens": 2,
+      "total_tokens": 12
+    }
+  },
+  "schema_version": "0.2.0",
+  "terminal_counts": {
+    "admitted_not_sent": 0,
+    "sent_outcome_unknown": 0,
+    "sent_provider_error_reconciled": 0,
+    "sent_response_reconciled": 1,
+    "sent_transport_error_known": 0
+  },
+  "unknown_outcomes": 0,
+  "unreconciled_provider_attempts": 0
+}

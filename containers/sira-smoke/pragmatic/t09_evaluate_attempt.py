@@ -388,10 +388,17 @@ def _provider_records(events: list[dict[str, Any]]) -> list[dict[str, object]]:
         payload = event.get("payload")
         if not isinstance(payload, dict) or not isinstance(payload.get("usage"), dict):
             raise T09PilotError("provider call receipt is malformed")
+        call_id = payload.get("call_id")
+        if not isinstance(call_id, str) or not call_id:
+            raise T09PilotError("provider call receipt lacks a stable call identity")
+        if payload.get("terminal_accounting_state") != "sent_response_reconciled":
+            raise T09PilotError("provider response receipt lacks terminal accounting")
         records.append(
             {
                 "event_id": event.get("event_id"),
                 "parent_event_id": event.get("parent_event_id"),
+                "call_id": call_id,
+                "terminal_accounting_state": payload.get("terminal_accounting_state"),
                 "role": payload.get("role"),
                 "request_model": payload.get("model"),
                 "requested_service_tier": payload.get("requested_service_tier"),
@@ -664,8 +671,7 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
         observed_interpreter_identity = _interpreter_launcher_identity(interpreter_path)
         if (
             local_qualification.get("schema_version") != "0.1.0"
-            or local_qualification.get("qualification_id")
-            != LOCAL_FINALIZER_QUALIFICATION_ID
+            or local_qualification.get("qualification_id") != LOCAL_FINALIZER_QUALIFICATION_ID
             or local_qualification.get("package_commit") != args.package_commit
             or local_qualification.get("execution_contract_sha256") != contract.sha256
             or any(
@@ -864,12 +870,66 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
         label="provider-budget",
         failure_reasons=infrastructure_failure_reasons,
     )
+    lifecycle_path = raw_root / "provider-call-lifecycle.json"
+    lifecycle = _dynamic_object(
+        lifecycle_path,
+        label="provider-call-lifecycle",
+        failure_reasons=infrastructure_failure_reasons,
+    )
+    lifecycle_calls = lifecycle.get("calls") if lifecycle else None
+    terminal_counts = lifecycle.get("terminal_counts") if lifecycle else None
+    if lifecycle and (
+        lifecycle.get("schema_version") != "0.2.0"
+        or not isinstance(lifecycle_calls, list)
+        or not isinstance(terminal_counts, dict)
+        or any(
+            not isinstance(call, dict) or call.get("terminal_state") is None
+            for call in lifecycle_calls
+        )
+    ):
+        infrastructure_failure_reasons.append("malformed-provider-call-lifecycle")
+    if lifecycle and lifecycle.get("unknown_outcomes") != 0:
+        infrastructure_failure_reasons.append("unknown-provider-outcome")
+    sent_lifecycle_calls = (
+        [
+            call
+            for call in lifecycle_calls
+            if isinstance(call, dict)
+            and isinstance(call.get("history"), list)
+            and "send_started" in call["history"]
+        ]
+        if isinstance(lifecycle_calls, list)
+        else []
+    )
+    lifecycle_by_id = {
+        call.get("call_id"): call
+        for call in sent_lifecycle_calls
+        if isinstance(call.get("call_id"), str)
+    }
+    response_call_ids = {
+        call_id
+        for call_id, call in lifecycle_by_id.items()
+        if call.get("terminal_state") == "sent_response_reconciled"
+    }
+    receipt_call_ids = {record.get("call_id") for record in provider_records}
+    if (
+        len(lifecycle_by_id) != len(sent_lifecycle_calls)
+        or len(receipt_call_ids) != len(provider_records)
+        or receipt_call_ids != response_call_ids
+    ):
+        infrastructure_failure_reasons.append("provider-call-identity-mismatch")
     if budget and budget.get("unreconciled_provider_attempts") != 0:
         infrastructure_failure_reasons.append("unreconciled-provider-attempt")
     if budget and len(browser_records) != budget.get("browser_actions"):
         infrastructure_failure_reasons.append("browser-action-count-mismatch")
     if budget and len(provider_records) != budget.get("default_service_tier_response_count"):
         infrastructure_failure_reasons.append("provider-receipt-count-mismatch")
+    if (
+        budget
+        and isinstance(lifecycle_calls, list)
+        and len(sent_lifecycle_calls) != budget.get("model_call_attempts")
+    ):
+        infrastructure_failure_reasons.append("provider-lifecycle-count-mismatch")
 
     session_paths = _session_paths(raw_root)
     evaluator_run_id = EVALUATOR_RUN_IDS[ATTEMPT_ORDER.index(attempt.run_id)]
@@ -1189,6 +1249,7 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
             "normalized_events": "raw/normalized-events.jsonl",
             "regulation_decisions": "raw/normalized-events.jsonl#/regulation-decision-assignment",
             "provider_ledger": "raw/provider-budget.json",
+            "provider_call_lifecycle": "raw/provider-call-lifecycle.json",
             "raw_attempt_manifest": "raw-attempt-manifest.json",
             "raw_attempt_receipt": "raw-attempt-complete.json",
             "evaluator_input": "finalized/evaluator/input.json",

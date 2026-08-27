@@ -1,0 +1,369 @@
+from __future__ import annotations
+
+import hashlib
+import inspect
+import json
+import subprocess
+import threading
+from dataclasses import replace
+from pathlib import Path
+
+import pytest
+
+from giclab.harness.sira_gate_a import (
+    SIRA_MODEL_REVISION,
+    GateAContractError,
+    ImmutableModelRouting,
+    ModelRole,
+    ProviderBudgetBoundary,
+    ProviderBudgetExceeded,
+    ProviderCallPhase,
+    ProviderCallTerminalState,
+    ProviderFailureDisposition,
+    ProviderRequest,
+    ProviderResponseReceiptError,
+    ProviderResponseUsage,
+    aggregate_caps,
+    condition_caps,
+)
+from giclab.harness.sira_gate_a_runtime import _install_locked_llm_factory
+from giclab.registry import load_json
+
+ROOT = Path(__file__).resolve().parents[1]
+EXP = ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive"
+ADJUDICATION = EXP / "T09_AUTONOMOUS_V8_PROVIDER_CALL_ADJUDICATION.json"
+V8_DISPOSITION = EXP / "T09_AUTONOMOUS_PILOT_DISPOSITION.json"
+
+
+class RateLimitError(RuntimeError):
+    pass
+
+
+def _boundary(**condition_overrides: int | float) -> ProviderBudgetBoundary:
+    condition = replace(condition_caps("simulative"), **condition_overrides)
+    aggregate = replace(aggregate_caps(), **condition_overrides)
+    return ProviderBudgetBoundary(
+        routing=ImmutableModelRouting.locked(),
+        condition_caps=condition,
+        aggregate_caps=aggregate,
+    )
+
+
+def _request(*, input_tokens: int = 10, output_tokens: int = 20) -> ProviderRequest:
+    return ProviderRequest(
+        role=ModelRole.CRITIC,
+        model=SIRA_MODEL_REVISION,
+        input_tokens=input_tokens,
+        max_output_tokens=output_tokens,
+    )
+
+
+def _success(_: ProviderRequest) -> tuple[str, ProviderResponseUsage]:
+    return "ok", ProviderResponseUsage(10, 2, 4, "default")
+
+
+def _known_provider(_: BaseException) -> ProviderFailureDisposition:
+    return ProviderFailureDisposition.PROVIDER_ERROR
+
+
+def test_01_thirty_responses_and_three_provider_errors_are_terminal() -> None:
+    boundary = _boundary()
+    for index in range(30):
+        boundary.invoke(
+            _request(),
+            _success,
+            call_id=f"CALL-{index:04d}",
+            logical_call_id=f"LOGICAL-{index:04d}",
+        )
+    for index in range(30, 33):
+        with pytest.raises(RateLimitError):
+            boundary.invoke(
+                _request(),
+                lambda _: (_ for _ in ()).throw(RateLimitError("synthetic")),
+                call_id=f"CALL-{index:04d}",
+                logical_call_id=f"LOGICAL-{index:04d}",
+                classify_failure=_known_provider,
+            )
+    document = boundary.accounting_document()
+    assert document["unreconciled_provider_attempts"] == 0
+    assert document["unknown_outcomes"] == 0
+    assert document["terminal_counts"] == {
+        "admitted_not_sent": 0,
+        "sent_response_reconciled": 30,
+        "sent_provider_error_reconciled": 3,
+        "sent_transport_error_known": 0,
+        "sent_outcome_unknown": 0,
+    }
+
+
+def test_02_thirty_responses_and_three_unknowns_retain_upper_bounds() -> None:
+    boundary = _boundary()
+    for index in range(30):
+        boundary.invoke(_request(), _success, call_id=f"CALL-{index:04d}")
+    for index in range(30, 33):
+        with pytest.raises(TimeoutError):
+            boundary.invoke(
+                _request(),
+                lambda _: (_ for _ in ()).throw(TimeoutError("synthetic")),
+                call_id=f"CALL-{index:04d}",
+            )
+    document = boundary.accounting_document()
+    lower = document["observed_lower_bound"]["condition"]
+    upper = document["reserved_upper_bound"]["condition"]
+    assert document["unknown_outcomes"] == 3
+    assert lower["total_tokens"] == 420
+    assert upper["total_tokens"] == 510
+
+
+def test_03_received_response_with_usage_failure_is_typed_unknown() -> None:
+    boundary = _boundary()
+    error = ProviderResponseReceiptError("synthetic receipt failure")
+    with pytest.raises(ProviderResponseReceiptError):
+        boundary.invoke(_request(), lambda _: (_ for _ in ()).throw(error))
+    record = boundary.call_records[0]
+    assert ProviderCallPhase.RESPONSE_RECEIVED.value in record.history
+    assert record.terminal_state is ProviderCallTerminalState.OUTCOME_UNKNOWN
+
+
+def test_04_process_stop_terminalizes_in_flight_send() -> None:
+    boundary = _boundary()
+    entered = threading.Event()
+    release = threading.Event()
+    errors: list[BaseException] = []
+
+    def send(_: ProviderRequest) -> tuple[str, ProviderResponseUsage]:
+        entered.set()
+        release.wait(timeout=2)
+        return _success(_request())
+
+    def worker() -> None:
+        try:
+            boundary.invoke(_request(), send)
+        except BaseException as exc:
+            errors.append(exc)
+
+    thread = threading.Thread(target=worker)
+    thread.start()
+    assert entered.wait(timeout=2)
+    boundary.close_in_flight(grace_seconds=0)
+    assert boundary.call_records[0].terminal_state is ProviderCallTerminalState.OUTCOME_UNKNOWN
+    release.set()
+    thread.join(timeout=2)
+    assert not thread.is_alive()
+    assert len(errors) == 1
+
+
+def test_05_concurrent_reservations_are_atomic() -> None:
+    boundary = _boundary(max_total_tokens=50, max_input_tokens=25, max_output_tokens=25)
+    entered = threading.Event()
+    release = threading.Event()
+
+    def slow(_: ProviderRequest) -> tuple[str, ProviderResponseUsage]:
+        entered.set()
+        release.wait(timeout=2)
+        return "ok", ProviderResponseUsage(10, 0, 1, "default")
+
+    thread = threading.Thread(target=lambda: boundary.invoke(_request(), slow))
+    thread.start()
+    assert entered.wait(timeout=2)
+    with pytest.raises(ProviderBudgetExceeded):
+        boundary.invoke(_request(input_tokens=16, output_tokens=6), _success)
+    release.set()
+    thread.join(timeout=2)
+    assert not thread.is_alive()
+
+
+def test_06_call_cap_admission_is_atomic() -> None:
+    boundary = _boundary(max_model_call_attempts=1)
+    boundary.invoke(_request(), _success)
+    with pytest.raises(ProviderBudgetExceeded, match="model_call_attempts"):
+        boundary.invoke(_request(), _success)
+
+
+def test_07_token_cap_admission_counts_proposed_reservation() -> None:
+    boundary = _boundary(max_total_tokens=29, max_input_tokens=20, max_output_tokens=20)
+    with pytest.raises(ProviderBudgetExceeded, match="total_tokens"):
+        boundary.invoke(_request(), _success)
+    assert boundary.call_records == ()
+
+
+def test_08_cost_cap_admission_prices_full_reservation() -> None:
+    boundary = _boundary(max_cost_usd=0.00001)
+    with pytest.raises(ProviderBudgetExceeded, match="cost_usd"):
+        boundary.invoke(_request(), _success)
+
+
+def test_09_actual_usage_replaces_the_reservation() -> None:
+    boundary = _boundary()
+    boundary.invoke(_request(input_tokens=100, output_tokens=100), _success)
+    document = boundary.accounting_document()
+    assert document["outstanding_reservations"] == 0
+    assert document["observed_lower_bound"] == document["reserved_upper_bound"]
+    assert document["observed_lower_bound"]["condition"]["total_tokens"] == 14
+
+
+def test_10_unknown_outcome_retains_conservative_reservation() -> None:
+    boundary = _boundary()
+    with pytest.raises(TimeoutError):
+        boundary.invoke(
+            _request(),
+            lambda _: (_ for _ in ()).throw(TimeoutError("synthetic")),
+        )
+    document = boundary.accounting_document()
+    assert document["observed_lower_bound"]["condition"]["total_tokens"] == 0
+    assert document["reserved_upper_bound"]["condition"]["total_tokens"] == 30
+
+
+def test_11_presend_failure_releases_without_counting_a_send() -> None:
+    boundary = _boundary()
+    sent = False
+
+    def send(_: ProviderRequest) -> tuple[str, ProviderResponseUsage]:
+        nonlocal sent
+        sent = True
+        return _success(_request())
+
+    with pytest.raises(RuntimeError, match="presend"):
+        boundary.invoke(
+            _request(),
+            send,
+            before_send=lambda: (_ for _ in ()).throw(RuntimeError("presend")),
+        )
+    assert sent is False
+    assert boundary.condition_usage.model_call_attempts == 0
+    assert boundary.accounting_document()["outstanding_reservations"] == 0
+
+
+def test_12_reservations_never_become_negative() -> None:
+    boundary = _boundary()
+    boundary.invoke(_request(), _success)
+    document = boundary.accounting_document()
+    for scope in ("condition", "aggregate"):
+        assert all(value >= 0 for value in document["reserved_upper_bound"][scope].values())
+
+
+def test_13_terminal_closeout_cannot_double_release() -> None:
+    boundary = _boundary()
+    boundary.invoke(_request(), _success)
+    before = boundary.accounting_document()
+    boundary.close_in_flight(grace_seconds=0)
+    assert boundary.accounting_document() == before
+
+
+def test_14_runtime_constructor_disables_sdk_retries() -> None:
+    source = inspect.getsource(_install_locked_llm_factory)
+    assert "num_retries=0" in source
+    assert "implicit_transport_retries=0" in source
+
+
+def test_15_second_send_for_one_logical_call_is_rejected() -> None:
+    boundary = _boundary()
+    boundary.invoke(_request(), _success, call_id="CALL-1", logical_call_id="LOGICAL-1")
+    with pytest.raises(GateAContractError, match="second network send"):
+        boundary.invoke(_request(), _success, call_id="CALL-2", logical_call_id="LOGICAL-1")
+
+
+def test_16_bounded_flush_returns_after_completed_calls() -> None:
+    boundary = _boundary()
+    boundary.invoke(_request(), _success)
+    boundary.close_in_flight(grace_seconds=0.1)
+    assert boundary.unknown_outcomes == 0
+
+
+def test_17_flush_timeout_produces_typed_unknown_state() -> None:
+    boundary = _boundary()
+    entered = threading.Event()
+    release = threading.Event()
+
+    def blocked(_: ProviderRequest) -> tuple[str, ProviderResponseUsage]:
+        entered.set()
+        release.wait(timeout=2)
+        return _success(_request())
+
+    thread = threading.Thread(target=lambda: pytest.raises(GateAContractError).__enter__())
+    errors: list[BaseException] = []
+
+    def worker() -> None:
+        try:
+            boundary.invoke(_request(), blocked)
+        except BaseException as exc:
+            errors.append(exc)
+
+    thread = threading.Thread(target=worker)
+    thread.start()
+    assert entered.wait(timeout=2)
+    boundary.close_in_flight(grace_seconds=0)
+    assert boundary.call_records[0].terminal_state is ProviderCallTerminalState.OUTCOME_UNKNOWN
+    release.set()
+    thread.join(timeout=2)
+    assert errors
+
+
+def test_18_lower_and_upper_bounds_diverge_only_for_unknowns() -> None:
+    boundary = _boundary()
+    boundary.invoke(_request(), _success)
+    with pytest.raises(TimeoutError):
+        boundary.invoke(
+            _request(),
+            lambda _: (_ for _ in ()).throw(TimeoutError("synthetic")),
+        )
+    document = boundary.accounting_document()
+    lower = document["observed_lower_bound"]["condition"]
+    upper = document["reserved_upper_bound"]["condition"]
+    assert lower["model_call_attempts"] == upper["model_call_attempts"] == 2
+    assert lower["total_tokens"] == 14
+    assert upper["total_tokens"] == 44
+
+
+def test_19_essential_failure_allowlist_preserves_call_lifecycle() -> None:
+    source = (ROOT / "containers/sira-smoke/pragmatic/t09_remote_runner.py").read_text(
+        encoding="utf-8"
+    )
+    assert source.count('"provider-call-lifecycle.json"') >= 2
+
+
+def test_20_accounting_evidence_contains_no_exception_message_or_secret() -> None:
+    boundary = _boundary()
+    marker = "synthetic-private-marker"
+    with pytest.raises(TimeoutError):
+        boundary.invoke(
+            _request(),
+            lambda _: (_ for _ in ()).throw(TimeoutError(marker)),
+        )
+    encoded = json.dumps(boundary.accounting_document(), sort_keys=True)
+    assert marker not in encoded
+    assert "api_key" not in encoded.lower()
+
+
+def test_21_v8_evidence_remains_immutable_and_invalid() -> None:
+    assert hashlib.sha256(V8_DISPOSITION.read_bytes()).hexdigest() == (
+        "af80ad17feac4f15dee690f9e6f3aa77de8d5d5ad533416603719e03f7700f7a"
+    )
+    adjudication = load_json(ADJUDICATION)
+    assert adjudication["source_evidence"]["raw_evidence_mutated"] is False
+    assert adjudication["historical_classification"] == ("consumed-infrastructure-invalid-unscored")
+
+
+def test_22_scientific_freeze_and_pair_commands_are_unchanged() -> None:
+    frozen = "6d3005bb5ce915eabb801ef35e11855cd9420338"
+    paths = (
+        "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
+        "T09_PILOT_EXECUTION_CONTRACT.json",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
+        "T09_PILOT_COMMAND_MANIFESTS.json",
+    )
+    for relative in paths:
+        frozen_bytes = subprocess.run(
+            ["git", "-C", str(ROOT), "show", f"{frozen}:{relative}"],
+            check=True,
+            capture_output=True,
+        ).stdout
+        assert (
+            hashlib.sha256((ROOT / relative).read_bytes()).digest()
+            == hashlib.sha256(frozen_bytes).digest()
+        )
+
+
+def test_23_condition_retries_remain_zero() -> None:
+    contract = load_json(EXP / "contracts/T09_PILOT_EXECUTION_CONTRACT.json")
+    assert contract["runtime_limits"]["max_retries_after_empirical_entry"] == 0

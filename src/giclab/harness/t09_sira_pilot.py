@@ -29,14 +29,14 @@ from giclab.harness.sira_gate_a import (
     ProviderBudgetUsage,
 )
 
-PLAN_ID: Final = "PLAN-EXP0001-PILOT-V8"
+PLAN_ID: Final = "PLAN-EXP0001-PILOT-V9"
 EXPERIMENT_ID: Final = "EXP-0001"
 SIRA_COMMIT: Final = "93fb8d72de71f9a4a13419670adeb34d93cf7acd"
 MODEL_REVISION: Final = "gpt-4o-2024-11-20"
 SERVICE_TIER: Final = "default"
 AUTHORIZATION_REFERENCE: Final = (
-    "AUTH-T09-AUTONOMOUS-PREFLIGHT-TO-PILOT-2026-08-27:sha256:"
-    "80ded0e246b4f070c3992ae872111c19c64d1ef30115d65a8641709f06e1a484"
+    "AUTH-T09-AUTONOMOUS-RETRY2-2026-08-27:sha256:"
+    "aea63a42cf0270ad0a41a929b4b8eb19dd1c3af73abfe97163c1d90e6077d3da"
 )
 DATASET_REVISION: Final = "76ad1feb689b754bfe4e5e24d3ea371b647efa67"
 DATASET_SHA256: Final = "359300b029c6891567816f351bf8786e9b018d7af8a1a44b7da9ba5ef4651288"
@@ -55,22 +55,20 @@ TASK_REFERENCE_SHA256S: Final = (
     "2ee9d892e24441d5f5bbf31b7616c1ade5977af26d22e4020f92a162fa23becb",
 )
 ATTEMPT_ORDER: Final = (
-    "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0001",
-    "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0001",
-    "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0001",
-    "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0001",
+    "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0002",
+    "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0002",
+    "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0002",
+    "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0002",
 )
 EVALUATOR_RUN_IDS: Final = (
-    "RUN-T09-EVAL-TASK-A-REACTIVE-AUTONOMOUS-0001",
-    "RUN-T09-EVAL-TASK-A-SIMULATIVE-AUTONOMOUS-0001",
-    "RUN-T09-EVAL-TASK-B-SIMULATIVE-AUTONOMOUS-0001",
-    "RUN-T09-EVAL-TASK-B-REACTIVE-AUTONOMOUS-0001",
+    "RUN-T09-EVAL-TASK-A-REACTIVE-AUTONOMOUS-0002",
+    "RUN-T09-EVAL-TASK-A-SIMULATIVE-AUTONOMOUS-0002",
+    "RUN-T09-EVAL-TASK-B-SIMULATIVE-AUTONOMOUS-0002",
+    "RUN-T09-EVAL-TASK-B-REACTIVE-AUTONOMOUS-0002",
 )
-RUNTIME_QUALIFICATION_ID: Final = "QUAL-T09-PILOT-V8-IMAGE-AUTONOMOUS-0001"
-LOCAL_FINALIZER_QUALIFICATION_ID: Final = (
-    "QUAL-T09-PILOT-V8-LOCAL-FINALIZER-AUTONOMOUS-0001"
-)
-FROZEN_RUN_MANIFEST_ID: Final = "RUN-MANIFEST-EXP0001-PILOT-V8-AUTONOMOUS-0001"
+RUNTIME_QUALIFICATION_ID: Final = "QUAL-T09-PILOT-V9-IMAGE-AUTONOMOUS-0002"
+LOCAL_FINALIZER_QUALIFICATION_ID: Final = "QUAL-T09-PILOT-V9-LOCAL-FINALIZER-AUTONOMOUS-0002"
+FROZEN_RUN_MANIFEST_ID: Final = "RUN-MANIFEST-EXP0001-PILOT-V9-AUTONOMOUS-0002"
 HISTORICAL_IMAGE_ID: Final = (
     "sha256:035edf61718e84a8156f4f0f7817b134b0ce31488d3f0b50bbfba2b4a30cc61c"
 )
@@ -135,8 +133,8 @@ class CampaignLifecycleLimits:
             raise T09PilotError("preflight instance active cap must remain 21,600 seconds")
         if self.maximum_cumulative_preflight_active_seconds != 43_200:
             raise T09PilotError("cumulative preflight cap must remain 43,200 seconds")
-        if self.maximum_preflight_provider_cost_usd != 20.0:
-            raise T09PilotError("preflight provider cost cap must remain USD 20")
+        if self.maximum_preflight_provider_cost_usd != 10.0:
+            raise T09PilotError("preflight provider cost cap must remain USD 10")
         if self.max_preflight_launch_count != 8:
             raise T09PilotError("preflight launch cap must remain eight")
         if self.failed_preflight_termination_dispatch_seconds != 300:
@@ -1143,13 +1141,36 @@ def load_aggregate_usage(path: Path, *, contract_sha256: str) -> ProviderBudgetU
     if not path.exists():
         return ProviderBudgetUsage()
     document = load_json_object(path, context="aggregate budget ledger")
-    if document.get("schema_version") != "0.1.0" or document.get("plan_id") != PLAN_ID:
+    if (
+        document.get("schema_version") not in {"0.1.0", "0.2.0"}
+        or document.get("plan_id") != PLAN_ID
+    ):
         raise T09PilotError("aggregate budget ledger identity drifted")
     if document.get("execution_contract_sha256") != contract_sha256:
         raise T09PilotError("aggregate budget ledger contract binding drifted")
     if document.get("unreconciled_provider_attempts") != 0:
         raise T09PilotError("an unreconciled provider attempt forbids another condition")
+    if document.get("schema_version") == "0.2.0" and document.get("unknown_outcomes") != 0:
+        raise T09PilotError("an unknown provider outcome forbids another condition")
     return usage_from_document(document.get("usage"))
+
+
+def load_aggregate_observed_usage(path: Path, *, contract_sha256: str) -> ProviderBudgetUsage:
+    """Load the response-backed aggregate lower bound from the durable ledger."""
+
+    if not path.exists():
+        return ProviderBudgetUsage()
+    document = load_json_object(path, context="aggregate budget ledger")
+    if (
+        document.get("schema_version") not in {"0.1.0", "0.2.0"}
+        or document.get("plan_id") != PLAN_ID
+    ):
+        raise T09PilotError("aggregate budget ledger identity drifted")
+    if document.get("execution_contract_sha256") != contract_sha256:
+        raise T09PilotError("aggregate budget ledger contract binding drifted")
+    if document.get("schema_version") == "0.1.0":
+        return usage_from_document(document.get("usage"))
+    return usage_from_document(document.get("observed_lower_bound"))
 
 
 def write_aggregate_usage(
@@ -1158,17 +1179,26 @@ def write_aggregate_usage(
     contract_sha256: str,
     usage: ProviderBudgetUsage,
     unreconciled_provider_attempts: int,
+    observed_usage: ProviderBudgetUsage | None = None,
+    unknown_outcomes: int = 0,
 ) -> None:
     """Durably persist aggregate usage after every provider/action transition."""
 
-    if unreconciled_provider_attempts < 0:
-        raise T09PilotError("unreconciled attempt count cannot be negative")
+    if unreconciled_provider_attempts < 0 or unknown_outcomes < 0:
+        raise T09PilotError("provider outcome counts cannot be negative")
+    observed = observed_usage if observed_usage is not None else usage
     document = {
-        "schema_version": "0.1.0",
+        "schema_version": "0.2.0",
         "plan_id": PLAN_ID,
         "execution_contract_sha256": contract_sha256,
         "unreconciled_provider_attempts": unreconciled_provider_attempts,
+        "unknown_outcomes": unknown_outcomes,
+        "accounting_basis": {
+            "usage": "reservation-inclusive-charged-upper-bound",
+            "observed_lower_bound": "response-receipt-backed-lower-bound",
+        },
         "usage": usage_to_document(usage),
+        "observed_lower_bound": usage_to_document(observed),
     }
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     _write_json_atomic(path, document)
@@ -2559,8 +2589,8 @@ class PairCheckpointInput:
     actual_lambda_cost_usd: float
     remaining_campaign_seconds: float
     next_attempt_hard_wall_seconds: int = 3_600
-    prior_t09_cost_usd: float = 5.7424506112
-    cumulative_t09_cost_cap_usd: float = 60.0
+    prior_t09_cost_usd: float = 29.3502995579
+    cumulative_t09_cost_cap_usd: float = 90.0
 
 
 def first_pair_decision(value: PairCheckpointInput) -> dict[str, object]:
@@ -2610,7 +2640,7 @@ def first_pair_decision(value: PairCheckpointInput) -> dict[str, object]:
     if actual_total_cost >= strict_half_caps["total_cost_usd"]:
         reasons.append("first_pair_total_cost_threshold_reached")
     if not math.isfinite(value.projected_aggregate_cost_usd) or (
-        value.projected_aggregate_cost_usd > 48.0
+        value.projected_aggregate_cost_usd > 58.0
     ):
         reasons.append("projected_aggregate_cost_exceeds_hard_cap")
     projected_cumulative = value.prior_t09_cost_usd + value.projected_aggregate_cost_usd
@@ -2622,7 +2652,7 @@ def first_pair_decision(value: PairCheckpointInput) -> dict[str, object]:
         preflight_iteration_wall_seconds=3_600,
         maximum_preflight_instance_active_seconds=21_600,
         maximum_cumulative_preflight_active_seconds=43_200,
-        maximum_preflight_provider_cost_usd=20.0,
+        maximum_preflight_provider_cost_usd=10.0,
         max_preflight_launch_count=8,
         failed_preflight_termination_dispatch_seconds=300,
         empirical_campaign_wall_seconds=14_400,
@@ -2988,7 +3018,7 @@ def _validated_upstream_argv(
         "--seed": "42",
     }
     task_label = "TASK-A" if attempt.task_index == 0 else "TASK-B"
-    upstream_run_id = f"{EXPERIMENT_ID}-PILOT-V8-{task_label}-{attempt.condition.upper()}"
+    upstream_run_id = f"{EXPERIMENT_ID}-PILOT-V9-{task_label}-{attempt.condition.upper()}"
     if argv[0] != upstream_run_id or values != expected:
         raise T09PilotError("upstream argv drifted from the exact task/condition contract")
     return values
@@ -3048,7 +3078,7 @@ def render_command_manifest(
     equality_surface = {
         "task_id": attempt.task_id,
         "model": MODEL_REVISION,
-        "runtime": "T09-V8-python-3.11.14-core-suppressed-preentry-bound-image",
+        "runtime": "T09-V9-python-3.11.14-core-suppressed-preentry-bound-image",
         "giclab_commit": attempt.giclab_commit,
         "protocol_sha256": attempt.protocol_sha256,
         "config_sha256": attempt.config_sha256,
@@ -3147,14 +3177,10 @@ def _normalized_actual_argv(manifest: Mapping[str, object]) -> tuple[str, ...] |
     downstream = argv[separator + 1 :]
     task_id = manifest.get("task_id")
     task_label = (
-        "TASK-A"
-        if task_id == TASK_IDS[0]
-        else "TASK-B"
-        if task_id == TASK_IDS[1]
-        else None
+        "TASK-A" if task_id == TASK_IDS[0] else "TASK-B" if task_id == TASK_IDS[1] else None
     )
     expected_upstream_run_id = (
-        f"{EXPERIMENT_ID}-PILOT-V8-{task_label}-{str(condition).upper()}"
+        f"{EXPERIMENT_ID}-PILOT-V9-{task_label}-{str(condition).upper()}"
         if task_label is not None
         else None
     )

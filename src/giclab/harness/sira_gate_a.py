@@ -229,13 +229,99 @@ class ProviderResponseUsage:
 T = TypeVar("T")
 
 
-class ProviderBudgetBoundary:
-    """Single preflight/reconciliation boundary for every provider attempt.
+class ProviderFailureDisposition(StrEnum):
+    """Privacy-safe accounting outcome for one provider exception."""
 
-    Failed sends still consume a model-call attempt.  Parser and explicit provider
-    retries call :meth:`invoke` again and therefore share the same ledgers.  The class
-    has no retry loop and cannot silently retry a provider operation.
-    """
+    PROVIDER_ERROR = "sent_provider_error_reconciled"
+    TRANSPORT_ERROR_KNOWN = "sent_transport_error_known"
+    OUTCOME_UNKNOWN = "sent_outcome_unknown"
+
+
+class ProviderCallPhase(StrEnum):
+    """Durable lifecycle phases for one logical provider call."""
+
+    ADMISSION_REQUESTED = "call_admission_requested"
+    BUDGET_RESERVED = "budget_reserved"
+    SEND_INTENT_COMMITTED = "send_intent_committed"
+    SEND_STARTED = "send_started"
+    RESPONSE_RECEIVED = "response_received"
+    USAGE_RECONCILED = "usage_reconciled"
+    KNOWN_FAILURE_RECONCILED = "known_failure_reconciled"
+    OUTCOME_UNKNOWN_AFTER_SEND = "outcome_unknown_after_send"
+    RESERVATION_RELEASED = "reservation_released"
+    CALL_TERMINAL = "call_terminal"
+
+
+class ProviderCallTerminalState(StrEnum):
+    """Exactly one terminal accounting state for every admitted provider call."""
+
+    ADMITTED_NOT_SENT = "admitted_not_sent"
+    RESPONSE_RECONCILED = "sent_response_reconciled"
+    PROVIDER_ERROR_RECONCILED = "sent_provider_error_reconciled"
+    TRANSPORT_ERROR_KNOWN = "sent_transport_error_known"
+    OUTCOME_UNKNOWN = "sent_outcome_unknown"
+
+
+class ProviderResponseReceiptError(RuntimeError):
+    """A provider response arrived but its required usage could not be retained."""
+
+
+@dataclass(frozen=True, slots=True)
+class ProviderCallRecord:
+    """Privacy-safe durable state for one provider call."""
+
+    call_id: str
+    logical_call_id: str
+    role: ModelRole
+    model: str
+    request_input_tokens: int
+    request_max_output_tokens: int
+    reserved_cost_usd: float
+    phase: ProviderCallPhase
+    history: tuple[str, ...]
+    terminal_state: ProviderCallTerminalState | None = None
+    exception_type: str | None = None
+    actual_usage: ProviderResponseUsage | None = None
+
+    def document(self) -> dict[str, object]:
+        actual = self.actual_usage
+        return {
+            "call_id": self.call_id,
+            "logical_call_id": self.logical_call_id,
+            "role": self.role.value,
+            "model": self.model,
+            "request": {
+                "input_tokens": self.request_input_tokens,
+                "max_output_tokens": self.request_max_output_tokens,
+            },
+            "reservation": {
+                "input_tokens": self.request_input_tokens,
+                "output_tokens": self.request_max_output_tokens,
+                "total_tokens": self.request_input_tokens + self.request_max_output_tokens,
+                "cost_usd": self.reserved_cost_usd,
+            },
+            "phase": self.phase.value,
+            "history": list(self.history),
+            "terminal_state": (
+                self.terminal_state.value if self.terminal_state is not None else None
+            ),
+            "exception_type": self.exception_type,
+            "actual_usage": (
+                {
+                    "input_tokens": actual.input_tokens,
+                    "cached_input_tokens": actual.cached_input_tokens,
+                    "output_tokens": actual.output_tokens,
+                    "total_tokens": actual.input_tokens + actual.output_tokens,
+                    "service_tier": actual.service_tier,
+                }
+                if actual is not None
+                else None
+            ),
+        }
+
+
+class ProviderBudgetBoundary:
+    """Atomic durable accounting boundary for every provider network send."""
 
     INPUT_RATE_PER_MILLION = 2.50
     CACHED_INPUT_RATE_PER_MILLION = 1.25
@@ -250,32 +336,75 @@ class ProviderBudgetBoundary:
         monotonic: Callable[[], float] = time.monotonic,
         persist: Callable[[ProviderBudgetUsage, int], None] | None = None,
         initial_aggregate_usage: ProviderBudgetUsage | None = None,
+        initial_aggregate_observed_usage: ProviderBudgetUsage | None = None,
         persist_aggregate: Callable[[ProviderBudgetUsage, int], None] | None = None,
+        persist_accounting: Callable[[Mapping[str, object]], None] | None = None,
     ) -> None:
         self.routing = routing
         self.aggregate_caps = aggregate_caps
         self.condition_caps = condition_caps
         self.aggregate_usage = initial_aggregate_usage or ProviderBudgetUsage()
         self.condition_usage = ProviderBudgetUsage()
+        self.aggregate_observed_usage = (
+            initial_aggregate_observed_usage
+            if initial_aggregate_observed_usage is not None
+            else self.aggregate_usage
+        )
+        self.condition_observed_usage = ProviderBudgetUsage()
         self._aggregate_reserved = ProviderBudgetUsage()
         self._condition_reserved = ProviderBudgetUsage()
         self._lock = threading.RLock()
         self._monotonic = monotonic
         self._started = monotonic()
-        self.unreconciled_provider_attempts = 0
         self._persist = persist
         self._persist_aggregate = persist_aggregate
-        if initial_aggregate_usage is not None:
-            self._assert_usage(self.aggregate_usage, self.aggregate_caps, scope="aggregate")
+        self._persist_accounting = persist_accounting
+        self._calls: dict[str, ProviderCallRecord] = {}
+        self._reservations: dict[str, ProviderBudgetUsage] = {}
+        self._sent_logical_ids: set[str] = set()
+        self._next_call_sequence = 0
+        self._assert_usage(self.aggregate_usage, self.aggregate_caps, scope="aggregate")
+
+    @property
+    def unreconciled_provider_attempts(self) -> int:
+        return sum(
+            1
+            for record in self._calls.values()
+            if ProviderCallPhase.SEND_STARTED.value in record.history
+            and record.terminal_state is None
+        )
+
+    @property
+    def unknown_outcomes(self) -> int:
+        return sum(
+            record.terminal_state is ProviderCallTerminalState.OUTCOME_UNKNOWN
+            for record in self._calls.values()
+        )
+
+    @property
+    def call_records(self) -> tuple[ProviderCallRecord, ...]:
+        with self._lock:
+            return tuple(self._calls[key] for key in sorted(self._calls))
+
+    @staticmethod
+    def _valid_identity(value: str) -> bool:
+        return 1 <= len(value) <= 128 and all(
+            character.isalnum() or character in "._-" for character in value
+        )
+
+    def _new_call_id(self) -> str:
+        self._next_call_sequence += 1
+        return f"CALL-T09-{self._next_call_sequence:08d}"
 
     def _persist_state(self) -> None:
+        condition_upper = self._sum_usage(self.condition_usage, self._condition_reserved)
+        aggregate_upper = self._sum_usage(self.aggregate_usage, self._aggregate_reserved)
         if self._persist is not None:
-            self._persist(self.condition_usage, self.unreconciled_provider_attempts)
+            self._persist(condition_upper, self.unreconciled_provider_attempts)
         if self._persist_aggregate is not None:
-            self._persist_aggregate(
-                self.aggregate_usage,
-                self.unreconciled_provider_attempts,
-            )
+            self._persist_aggregate(aggregate_upper, self.unreconciled_provider_attempts)
+        if self._persist_accounting is not None:
+            self._persist_accounting(self.accounting_document())
 
     @staticmethod
     def _cost(input_tokens: int, cached_tokens: int, output_tokens: int) -> float:
@@ -340,125 +469,6 @@ class ProviderBudgetBoundary:
             output_bytes=usage.output_bytes + output_bytes,
         )
 
-    def invoke(
-        self,
-        request: ProviderRequest,
-        send: Callable[[ProviderRequest], tuple[T, ProviderResponseUsage]],
-        *,
-        before_send: Callable[[], None] | None = None,
-    ) -> T:
-        """Preflight one maximum envelope, send once, then reconcile actual usage."""
-
-        if self.routing.routes[request.role] != request.model:
-            raise GateAContractError("provider request does not match immutable role routing")
-        worst_cost = self._cost(request.input_tokens, 0, request.max_output_tokens)
-        reservation = ProviderBudgetUsage(
-            cost_usd=worst_cost,
-            input_tokens=request.input_tokens,
-            output_tokens=request.max_output_tokens,
-            total_tokens=request.input_tokens + request.max_output_tokens,
-        )
-        with self._lock:
-            for scope, current, reserved, caps in (
-                (
-                    "aggregate",
-                    self.aggregate_usage,
-                    self._aggregate_reserved,
-                    self.aggregate_caps,
-                ),
-                (
-                    "condition",
-                    self.condition_usage,
-                    self._condition_reserved,
-                    self.condition_caps,
-                ),
-            ):
-                projected = self._add_usage(
-                    self._sum_usage(current, reserved),
-                    cost_usd=reservation.cost_usd,
-                    input_tokens=reservation.input_tokens,
-                    output_tokens=reservation.output_tokens,
-                    model_call_attempts=1,
-                )
-                self._assert_usage(projected, caps, scope=scope)
-            if before_send is not None:
-                before_send()
-            object.__setattr__(
-                self,
-                "aggregate_usage",
-                self._add_usage(
-                    self.aggregate_usage,
-                    cost_usd=reservation.cost_usd,
-                    input_tokens=reservation.input_tokens,
-                    output_tokens=reservation.output_tokens,
-                    model_call_attempts=1,
-                ),
-            )
-            object.__setattr__(
-                self,
-                "condition_usage",
-                self._add_usage(
-                    self.condition_usage,
-                    cost_usd=reservation.cost_usd,
-                    input_tokens=reservation.input_tokens,
-                    output_tokens=reservation.output_tokens,
-                    model_call_attempts=1,
-                ),
-            )
-            self.unreconciled_provider_attempts += 1
-            self._persist_state()
-        try:
-            result, actual = send(request)
-        except Exception:
-            with self._lock:
-                self._persist_state()
-                self._assert_usage(self.aggregate_usage, self.aggregate_caps, scope="aggregate")
-                self._assert_usage(self.condition_usage, self.condition_caps, scope="condition")
-            raise
-        declared_maximum_exceeded = (
-            actual.input_tokens > request.input_tokens
-            or actual.output_tokens > request.max_output_tokens
-        )
-        actual_cost = self._cost(
-            actual.input_tokens, actual.cached_input_tokens, actual.output_tokens
-        )
-        with self._lock:
-            object.__setattr__(
-                self,
-                "aggregate_usage",
-                self._add_usage(
-                    self._subtract_usage(self.aggregate_usage, reservation),
-                    cost_usd=actual_cost,
-                    input_tokens=actual.input_tokens,
-                    cached_input_tokens=actual.cached_input_tokens,
-                    output_tokens=actual.output_tokens,
-                    default_service_tier_responses=1,
-                ),
-            )
-            object.__setattr__(
-                self,
-                "condition_usage",
-                self._add_usage(
-                    self._subtract_usage(self.condition_usage, reservation),
-                    cost_usd=actual_cost,
-                    input_tokens=actual.input_tokens,
-                    cached_input_tokens=actual.cached_input_tokens,
-                    output_tokens=actual.output_tokens,
-                    default_service_tier_responses=1,
-                ),
-            )
-            if self.unreconciled_provider_attempts <= 0:
-                raise GateAContractError("provider reconciliation state underflow")
-            self.unreconciled_provider_attempts -= 1
-            self._assert_usage(self.aggregate_usage, self.aggregate_caps, scope="aggregate")
-            self._assert_usage(self.condition_usage, self.condition_caps, scope="condition")
-            self._persist_state()
-        if declared_maximum_exceeded:
-            raise ProviderBudgetExceeded(
-                "provider usage exceeded its declared request maximum after reconciliation"
-            )
-        return result
-
     @staticmethod
     def _sum_usage(
         first: ProviderBudgetUsage,
@@ -495,7 +505,43 @@ class ProviderBudgetBoundary:
             output_bytes=current.output_bytes - decrement.output_bytes,
         )
 
-    def _release_reservation(self, reservation: ProviderBudgetUsage) -> None:
+    def _transition(
+        self,
+        call_id: str,
+        phase: ProviderCallPhase,
+        *,
+        terminal_state: ProviderCallTerminalState | None = None,
+        exception_type: str | None = None,
+        actual_usage: ProviderResponseUsage | None = None,
+    ) -> None:
+        current = self._calls[call_id]
+        history = (*current.history, phase.value)
+        self._calls[call_id] = replace(
+            current,
+            phase=phase,
+            history=history,
+            terminal_state=terminal_state,
+            exception_type=exception_type if exception_type is not None else current.exception_type,
+            actual_usage=actual_usage if actual_usage is not None else current.actual_usage,
+        )
+
+    def _reserve(self, call_id: str, reservation: ProviderBudgetUsage) -> None:
+        self._reservations[call_id] = reservation
+        object.__setattr__(
+            self,
+            "_aggregate_reserved",
+            self._sum_usage(self._aggregate_reserved, reservation),
+        )
+        object.__setattr__(
+            self,
+            "_condition_reserved",
+            self._sum_usage(self._condition_reserved, reservation),
+        )
+
+    def _release_reservation(self, call_id: str) -> ProviderBudgetUsage:
+        if call_id not in self._reservations:
+            raise GateAContractError("provider reservation was already released")
+        reservation = self._reservations.pop(call_id)
         object.__setattr__(
             self,
             "_aggregate_reserved",
@@ -506,6 +552,338 @@ class ProviderBudgetBoundary:
             "_condition_reserved",
             self._subtract_usage(self._condition_reserved, reservation),
         )
+        return reservation
+
+    def _record_send_started(self) -> None:
+        object.__setattr__(
+            self,
+            "aggregate_usage",
+            self._add_usage(self.aggregate_usage, model_call_attempts=1),
+        )
+        object.__setattr__(
+            self,
+            "condition_usage",
+            self._add_usage(self.condition_usage, model_call_attempts=1),
+        )
+        object.__setattr__(
+            self,
+            "aggregate_observed_usage",
+            self._add_usage(self.aggregate_observed_usage, model_call_attempts=1),
+        )
+        object.__setattr__(
+            self,
+            "condition_observed_usage",
+            self._add_usage(self.condition_observed_usage, model_call_attempts=1),
+        )
+
+    def _reconcile_success(
+        self,
+        call_id: str,
+        request: ProviderRequest,
+        actual: ProviderResponseUsage,
+    ) -> None:
+        actual_cost = self._cost(
+            actual.input_tokens, actual.cached_input_tokens, actual.output_tokens
+        )
+        self._release_reservation(call_id)
+
+        def add_actual(usage: ProviderBudgetUsage) -> ProviderBudgetUsage:
+            return self._add_usage(
+                usage,
+                cost_usd=actual_cost,
+                input_tokens=actual.input_tokens,
+                cached_input_tokens=actual.cached_input_tokens,
+                output_tokens=actual.output_tokens,
+                default_service_tier_responses=1,
+            )
+
+        object.__setattr__(
+            self,
+            "aggregate_usage",
+            add_actual(self.aggregate_usage),
+        )
+        object.__setattr__(
+            self,
+            "condition_usage",
+            add_actual(self.condition_usage),
+        )
+        object.__setattr__(
+            self,
+            "aggregate_observed_usage",
+            add_actual(self.aggregate_observed_usage),
+        )
+        object.__setattr__(
+            self,
+            "condition_observed_usage",
+            add_actual(self.condition_observed_usage),
+        )
+        self._transition(
+            call_id,
+            ProviderCallPhase.USAGE_RECONCILED,
+            actual_usage=actual,
+        )
+        self._persist_state()
+        self._transition(call_id, ProviderCallPhase.RESERVATION_RELEASED)
+        self._persist_state()
+        self._transition(
+            call_id,
+            ProviderCallPhase.CALL_TERMINAL,
+            terminal_state=ProviderCallTerminalState.RESPONSE_RECONCILED,
+        )
+        self._assert_usage(self.aggregate_usage, self.aggregate_caps, scope="aggregate")
+        self._assert_usage(self.condition_usage, self.condition_caps, scope="condition")
+        self._persist_state()
+        if (
+            actual.input_tokens > request.input_tokens
+            or actual.output_tokens > request.max_output_tokens
+        ):
+            raise ProviderBudgetExceeded(
+                "provider usage exceeded its declared request maximum after reconciliation"
+            )
+
+    def _terminalize_failure(
+        self,
+        call_id: str,
+        exc: BaseException,
+        disposition: ProviderFailureDisposition,
+    ) -> None:
+        exception_type = type(exc).__name__
+        if isinstance(exc, ProviderResponseReceiptError):
+            self._transition(
+                call_id,
+                ProviderCallPhase.RESPONSE_RECEIVED,
+                exception_type=exception_type,
+            )
+            self._persist_state()
+        if disposition is ProviderFailureDisposition.OUTCOME_UNKNOWN:
+            reservation = self._release_reservation(call_id)
+            for name in ("aggregate_usage", "condition_usage"):
+                object.__setattr__(
+                    self,
+                    name,
+                    self._sum_usage(getattr(self, name), reservation),
+                )
+            self._transition(
+                call_id,
+                ProviderCallPhase.OUTCOME_UNKNOWN_AFTER_SEND,
+                exception_type=exception_type,
+            )
+            terminal = ProviderCallTerminalState.OUTCOME_UNKNOWN
+        else:
+            self._transition(
+                call_id,
+                ProviderCallPhase.KNOWN_FAILURE_RECONCILED,
+                exception_type=exception_type,
+            )
+            self._persist_state()
+            self._release_reservation(call_id)
+            terminal = (
+                ProviderCallTerminalState.PROVIDER_ERROR_RECONCILED
+                if disposition is ProviderFailureDisposition.PROVIDER_ERROR
+                else ProviderCallTerminalState.TRANSPORT_ERROR_KNOWN
+            )
+        self._transition(call_id, ProviderCallPhase.RESERVATION_RELEASED)
+        self._persist_state()
+        self._transition(
+            call_id,
+            ProviderCallPhase.CALL_TERMINAL,
+            terminal_state=terminal,
+        )
+        self._persist_state()
+
+    def invoke(
+        self,
+        request: ProviderRequest,
+        send: Callable[[ProviderRequest], tuple[T, ProviderResponseUsage]],
+        *,
+        before_send: Callable[[], None] | None = None,
+        call_id: str | None = None,
+        logical_call_id: str | None = None,
+        classify_failure: (Callable[[BaseException], ProviderFailureDisposition] | None) = None,
+    ) -> T:
+        """Reserve durably, send exactly once, and close one typed call state."""
+
+        if self.routing.routes[request.role] != request.model:
+            raise GateAContractError("provider request does not match immutable role routing")
+        with self._lock:
+            resolved_call_id = call_id or self._new_call_id()
+            resolved_logical_id = logical_call_id or resolved_call_id
+            if not self._valid_identity(resolved_call_id) or not self._valid_identity(
+                resolved_logical_id
+            ):
+                raise GateAContractError("provider call identity is invalid")
+            if resolved_call_id in self._calls:
+                raise GateAContractError("provider call_id was reused")
+            if resolved_logical_id in self._sent_logical_ids:
+                raise GateAContractError("unexpected second network send for logical call")
+            worst_cost = self._cost(request.input_tokens, 0, request.max_output_tokens)
+            reservation = ProviderBudgetUsage(
+                cost_usd=worst_cost,
+                input_tokens=request.input_tokens,
+                output_tokens=request.max_output_tokens,
+                total_tokens=request.input_tokens + request.max_output_tokens,
+            )
+            for scope, current, reserved, caps in (
+                ("aggregate", self.aggregate_usage, self._aggregate_reserved, self.aggregate_caps),
+                ("condition", self.condition_usage, self._condition_reserved, self.condition_caps),
+            ):
+                projected = self._add_usage(
+                    self._sum_usage(self._sum_usage(current, reserved), reservation),
+                    model_call_attempts=1,
+                )
+                self._assert_usage(projected, caps, scope=scope)
+            self._calls[resolved_call_id] = ProviderCallRecord(
+                call_id=resolved_call_id,
+                logical_call_id=resolved_logical_id,
+                role=request.role,
+                model=request.model,
+                request_input_tokens=request.input_tokens,
+                request_max_output_tokens=request.max_output_tokens,
+                reserved_cost_usd=worst_cost,
+                phase=ProviderCallPhase.ADMISSION_REQUESTED,
+                history=(ProviderCallPhase.ADMISSION_REQUESTED.value,),
+            )
+            self._persist_state()
+            self._reserve(resolved_call_id, reservation)
+            self._transition(resolved_call_id, ProviderCallPhase.BUDGET_RESERVED)
+            self._persist_state()
+            try:
+                if before_send is not None:
+                    before_send()
+            except BaseException as exc:
+                self._release_reservation(resolved_call_id)
+                self._transition(
+                    resolved_call_id,
+                    ProviderCallPhase.RESERVATION_RELEASED,
+                    exception_type=type(exc).__name__,
+                )
+                self._transition(
+                    resolved_call_id,
+                    ProviderCallPhase.CALL_TERMINAL,
+                    terminal_state=ProviderCallTerminalState.ADMITTED_NOT_SENT,
+                )
+                self._persist_state()
+                raise
+            self._transition(resolved_call_id, ProviderCallPhase.SEND_INTENT_COMMITTED)
+            self._persist_state()
+            self._sent_logical_ids.add(resolved_logical_id)
+            self._record_send_started()
+            self._transition(resolved_call_id, ProviderCallPhase.SEND_STARTED)
+            self._persist_state()
+        try:
+            result, actual = send(request)
+        except BaseException as exc:
+            disposition = (
+                classify_failure(exc)
+                if classify_failure is not None
+                else ProviderFailureDisposition.OUTCOME_UNKNOWN
+            )
+            if not isinstance(disposition, ProviderFailureDisposition):
+                raise GateAContractError(
+                    "provider failure classifier returned an invalid state"
+                ) from exc
+            with self._lock:
+                if self._calls[resolved_call_id].terminal_state is None:
+                    self._terminalize_failure(resolved_call_id, exc, disposition)
+            raise
+        with self._lock:
+            if self._calls[resolved_call_id].terminal_state is not None:
+                raise GateAContractError("provider response arrived after terminal accounting")
+            self._transition(
+                resolved_call_id,
+                ProviderCallPhase.RESPONSE_RECEIVED,
+                actual_usage=actual,
+            )
+            self._persist_state()
+            self._reconcile_success(resolved_call_id, request, actual)
+        return result
+
+    def close_in_flight(
+        self,
+        *,
+        grace_seconds: float,
+        sleeper: Callable[[float], None] = time.sleep,
+    ) -> None:
+        """Boundedly wait, then terminally charge every remaining sent call unknown."""
+
+        if not math.isfinite(grace_seconds) or grace_seconds < 0:
+            raise GateAContractError("provider closeout grace must be finite and non-negative")
+        deadline = self._monotonic() + grace_seconds
+        while True:
+            with self._lock:
+                open_calls = [
+                    record.call_id
+                    for record in self._calls.values()
+                    if record.terminal_state is None
+                ]
+                if not open_calls:
+                    return
+                if self._monotonic() >= deadline:
+                    for call_id in open_calls:
+                        record = self._calls[call_id]
+                        if ProviderCallPhase.SEND_STARTED.value in record.history:
+                            self._terminalize_failure(
+                                call_id,
+                                TimeoutError("bounded provider closeout expired"),
+                                ProviderFailureDisposition.OUTCOME_UNKNOWN,
+                            )
+                        else:
+                            self._release_reservation(call_id)
+                            self._transition(
+                                call_id,
+                                ProviderCallPhase.RESERVATION_RELEASED,
+                            )
+                            self._transition(
+                                call_id,
+                                ProviderCallPhase.CALL_TERMINAL,
+                                terminal_state=ProviderCallTerminalState.ADMITTED_NOT_SENT,
+                            )
+                            self._persist_state()
+                    return
+            sleeper(min(0.01, max(0.0, deadline - self._monotonic())))
+
+    def accounting_document(self) -> dict[str, object]:
+        """Return the privacy-safe lower/upper accounting projection."""
+
+        with self._lock:
+            condition_upper = self._sum_usage(self.condition_usage, self._condition_reserved)
+            aggregate_upper = self._sum_usage(self.aggregate_usage, self._aggregate_reserved)
+            terminal_counts = {
+                terminal.value: sum(
+                    record.terminal_state is terminal for record in self._calls.values()
+                )
+                for terminal in ProviderCallTerminalState
+            }
+            return {
+                "schema_version": "0.2.0",
+                "observed_lower_bound": {
+                    "condition": self._usage_document(self.condition_observed_usage),
+                    "aggregate": self._usage_document(self.aggregate_observed_usage),
+                },
+                "reserved_upper_bound": {
+                    "condition": self._usage_document(condition_upper),
+                    "aggregate": self._usage_document(aggregate_upper),
+                },
+                "outstanding_reservations": len(self._reservations),
+                "unreconciled_provider_attempts": self.unreconciled_provider_attempts,
+                "unknown_outcomes": self.unknown_outcomes,
+                "terminal_counts": terminal_counts,
+                "calls": [record.document() for record in self.call_records],
+            }
+
+    @staticmethod
+    def _usage_document(usage: ProviderBudgetUsage) -> dict[str, int | float]:
+        return {
+            "cost_usd": usage.cost_usd,
+            "input_tokens": usage.input_tokens,
+            "cached_input_tokens": usage.cached_input_tokens,
+            "output_tokens": usage.output_tokens,
+            "total_tokens": usage.total_tokens,
+            "model_call_attempts": usage.model_call_attempts,
+            "default_service_tier_responses": usage.default_service_tier_responses,
+            "browser_actions": usage.browser_actions,
+            "output_bytes": usage.output_bytes,
+        }
 
     def record_browser_action(self, *, before_action: Callable[[], None] | None = None) -> None:
         self._record_nonprovider(before_operation=before_action, browser_actions=1)
@@ -524,12 +902,24 @@ class ProviderBudgetBoundary:
         with self._lock:
             aggregate = self._add_usage(self.aggregate_usage, **increments)
             condition = self._add_usage(self.condition_usage, **increments)
-            self._assert_usage(aggregate, self.aggregate_caps, scope="aggregate")
-            self._assert_usage(condition, self.condition_caps, scope="condition")
+            observed_aggregate = self._add_usage(self.aggregate_observed_usage, **increments)
+            observed_condition = self._add_usage(self.condition_observed_usage, **increments)
+            self._assert_usage(
+                self._sum_usage(aggregate, self._aggregate_reserved),
+                self.aggregate_caps,
+                scope="aggregate",
+            )
+            self._assert_usage(
+                self._sum_usage(condition, self._condition_reserved),
+                self.condition_caps,
+                scope="condition",
+            )
             if before_operation is not None:
                 before_operation()
             object.__setattr__(self, "aggregate_usage", aggregate)
             object.__setattr__(self, "condition_usage", condition)
+            object.__setattr__(self, "aggregate_observed_usage", observed_aggregate)
+            object.__setattr__(self, "condition_observed_usage", observed_condition)
             self._persist_state()
 
 

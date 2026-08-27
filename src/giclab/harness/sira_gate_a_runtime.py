@@ -35,7 +35,10 @@ from giclab.harness.sira_gate_a import (
     ModelRole,
     ProviderBudgetBoundary,
     ProviderBudgetUsage,
+    ProviderCallTerminalState,
+    ProviderFailureDisposition,
     ProviderRequest,
+    ProviderResponseReceiptError,
     ProviderResponseUsage,
     aggregate_caps,
     condition_caps,
@@ -48,9 +51,11 @@ from giclab.harness.t09_sira_pilot import (
     ResourceGuard,
     T09PilotError,
     confirm_supervised_empirical_entry,
+    load_aggregate_observed_usage,
     load_aggregate_usage,
     load_execution_contract,
     pilot_state_time_origins,
+    usage_from_document,
     write_aggregate_usage,
 )
 
@@ -133,6 +138,30 @@ def _usage(response: Any) -> ProviderResponseUsage:
         output_tokens=output_tokens,
         service_tier=service_tier,
     )
+
+
+_KNOWN_PROVIDER_ERROR_TYPES = frozenset(
+    {
+        "APIError",
+        "AuthenticationError",
+        "BadRequestError",
+        "ContentPolicyViolationError",
+        "ContextWindowExceededError",
+        "NotFoundError",
+        "PermissionDeniedError",
+        "RateLimitError",
+        "ServiceUnavailableError",
+        "UnprocessableEntityError",
+    }
+)
+
+
+def _classify_provider_failure(exc: BaseException) -> ProviderFailureDisposition:
+    """Classify only explicit provider responses; ambiguity remains charged unknown."""
+
+    if type(exc).__name__ in _KNOWN_PROVIDER_ERROR_TYPES:
+        return ProviderFailureDisposition.PROVIDER_ERROR
+    return ProviderFailureDisposition.OUTCOME_UNKNOWN
 
 
 _LEDGER_WRITE_LOCK = threading.Lock()
@@ -497,6 +526,14 @@ def _install_locked_llm_factory(
 ) -> None:
     upstream_llm_module = importlib.import_module("sira.web.utils.llm")
     upstream_llm = upstream_llm_module.LLM
+    call_identity_lock = threading.Lock()
+    call_identity_sequence = 0
+
+    def next_call_id() -> str:
+        nonlocal call_identity_sequence
+        with call_identity_lock:
+            call_identity_sequence += 1
+            return f"CALL-T09-{call_identity_sequence:08d}"
 
     class BudgetedLLM(upstream_llm):  # type: ignore[misc, valid-type]
         def __init__(self, *, role: ModelRole, credential: str) -> None:
@@ -544,40 +581,72 @@ def _install_locked_llm_factory(
                     service_tier=SIRA_SERVICE_TIER,
                     implicit_transport_retries=0,
                 )
+                call_id = next_call_id()
+                parent = pilot_lineage.parent_event_id if pilot_lineage is not None else None
 
                 def send(_: ProviderRequest) -> tuple[Any, ProviderResponseUsage]:
-                    parent = pilot_lineage.parent_event_id if pilot_lineage is not None else None
+                    response = unbudgeted_completion(*args, **kwargs)
                     try:
-                        response = unbudgeted_completion(*args, **kwargs)
                         observed_usage = _usage(response)
                     except Exception as exc:
-                        if pilot_events is not None:
-                            pilot_events.append(
-                                "provider-call-failed",
-                                {
-                                    "role": self._gate_role.value,
-                                    "model": self.model_name,
-                                    "requested_service_tier": SIRA_SERVICE_TIER,
-                                    "exception_type": type(exc).__name__,
-                                    "retry": "forbidden",
-                                },
-                                parent_event_id=parent,
-                            )
-                        raise
+                        raise ProviderResponseReceiptError(
+                            "provider response usage receipt was invalid"
+                        ) from exc
+                    return response, observed_usage
+
+                try:
+                    result = boundary.invoke(
+                        request,
+                        send,
+                        before_send=before_empirical_operation,
+                        call_id=call_id,
+                        logical_call_id=call_id,
+                        classify_failure=_classify_provider_failure,
+                    )
+                except Exception as exc:
+                    record = next(item for item in boundary.call_records if item.call_id == call_id)
                     if pilot_events is not None:
-                        response_id = (
-                            response.get("id")
-                            if isinstance(response, Mapping)
-                            else getattr(response, "id", None)
+                        pilot_events.append(
+                            "provider-call-failed",
+                            {
+                                "call_id": call_id,
+                                "role": self._gate_role.value,
+                                "model": self.model_name,
+                                "requested_service_tier": SIRA_SERVICE_TIER,
+                                "exception_type": type(exc).__name__,
+                                "terminal_accounting_state": (
+                                    record.terminal_state.value
+                                    if record.terminal_state is not None
+                                    else None
+                                ),
+                                "retry": "forbidden",
+                            },
+                            parent_event_id=parent,
                         )
-                        system_fingerprint = (
-                            response.get("system_fingerprint")
-                            if isinstance(response, Mapping)
-                            else getattr(response, "system_fingerprint", None)
-                        )
+                    raise
+                record = next(item for item in boundary.call_records if item.call_id == call_id)
+                observed_usage = record.actual_usage
+                if (
+                    observed_usage is None
+                    or record.terminal_state is not ProviderCallTerminalState.RESPONSE_RECONCILED
+                ):
+                    raise GateAContractError("provider response lacks terminal accounting")
+                if pilot_events is not None:
+                    response_id = (
+                        result.get("id")
+                        if isinstance(result, Mapping)
+                        else getattr(result, "id", None)
+                    )
+                    system_fingerprint = (
+                        result.get("system_fingerprint")
+                        if isinstance(result, Mapping)
+                        else getattr(result, "system_fingerprint", None)
+                    )
+                    try:
                         pilot_events.append(
                             "provider-call-receipt",
                             {
+                                "call_id": call_id,
                                 "role": self._gate_role.value,
                                 "model": self.model_name,
                                 "requested_service_tier": SIRA_SERVICE_TIER,
@@ -592,17 +661,15 @@ def _install_locked_llm_factory(
                                         observed_usage.input_tokens + observed_usage.output_tokens
                                     ),
                                 },
+                                "terminal_accounting_state": record.terminal_state.value,
                                 "retry": "none",
                             },
                             parent_event_id=parent,
                         )
-                    return response, observed_usage
-
-                result = boundary.invoke(
-                    request,
-                    send,
-                    before_send=before_empirical_operation,
-                )
+                    except Exception as exc:
+                        raise ProviderResponseReceiptError(
+                            "provider response was reconciled before event persistence failed"
+                        ) from exc
                 if resource_guard is not None:
                     resource_guard.check()
                 return result
@@ -699,8 +766,9 @@ def run(argv: Sequence[str] | None = None) -> int:
 
     routing = ImmutableModelRouting.locked()
     ledger_path = attempt_root / "provider-budget.json"
+    lifecycle_path = attempt_root / "provider-call-lifecycle.json"
     initial_aggregate_usage = ProviderBudgetUsage()
-    aggregate_persist: Callable[[ProviderBudgetUsage, int], None] | None = None
+    initial_aggregate_observed_usage = ProviderBudgetUsage()
     condition_budget_caps = condition_caps(args.gate_mode)
     aggregate_budget_caps = aggregate_caps()
     if pilot_contract is not None:
@@ -710,21 +778,13 @@ def run(argv: Sequence[str] | None = None) -> int:
             aggregate_ledger_path,
             contract_sha256=pilot_contract.sha256,
         )
+        initial_aggregate_observed_usage = load_aggregate_observed_usage(
+            aggregate_ledger_path,
+            contract_sha256=pilot_contract.sha256,
+        )
         condition_budget_caps = pilot_contract.limits.condition_provider_caps()
         aggregate_budget_caps = pilot_contract.limits.aggregate_provider_caps()
 
-        def persist_pilot_aggregate(
-            usage: ProviderBudgetUsage,
-            unreconciled: int,
-        ) -> None:
-            write_aggregate_usage(
-                aggregate_ledger_path,
-                contract_sha256=pilot_contract.sha256,
-                usage=usage,
-                unreconciled_provider_attempts=unreconciled,
-            )
-
-        aggregate_persist = persist_pilot_aggregate
         condition_started = time.monotonic()
         time_origins = pilot_state_time_origins(
             pilot_state_path,
@@ -781,15 +841,39 @@ def run(argv: Sequence[str] | None = None) -> int:
             )
             empirical_entered = True
 
+    def persist_complete_accounting(document: Mapping[str, object]) -> None:
+        _write_json_evidence(lifecycle_path, document)
+        if pilot_contract is None:
+            return
+        assert aggregate_ledger_path is not None
+        observed_bounds = document.get("observed_lower_bound")
+        reserved_bounds = document.get("reserved_upper_bound")
+        if not isinstance(observed_bounds, Mapping) or not isinstance(reserved_bounds, Mapping):
+            raise GateAContractError("provider accounting bounds are malformed")
+        unreconciled = document.get("unreconciled_provider_attempts")
+        unknown = document.get("unknown_outcomes")
+        if type(unreconciled) is not int or type(unknown) is not int:
+            raise GateAContractError("provider accounting outcome counts are malformed")
+        write_aggregate_usage(
+            aggregate_ledger_path,
+            contract_sha256=pilot_contract.sha256,
+            usage=usage_from_document(reserved_bounds.get("aggregate")),
+            observed_usage=usage_from_document(observed_bounds.get("aggregate")),
+            unreconciled_provider_attempts=unreconciled,
+            unknown_outcomes=unknown,
+        )
+
     boundary = ProviderBudgetBoundary(
         routing=routing,
         aggregate_caps=aggregate_budget_caps,
         condition_caps=condition_budget_caps,
         persist=lambda usage, unreconciled: _write_usage_ledger(ledger_path, usage, unreconciled),
         initial_aggregate_usage=initial_aggregate_usage,
-        persist_aggregate=aggregate_persist,
+        initial_aggregate_observed_usage=initial_aggregate_observed_usage,
+        persist_accounting=persist_complete_accounting,
     )
     _write_ledger(ledger_path, boundary)
+    _write_json_evidence(lifecycle_path, boundary.accounting_document())
     (attempt_root / "runtime-environment.json").write_text(
         json.dumps(
             {
@@ -988,6 +1072,10 @@ def run(argv: Sequence[str] | None = None) -> int:
         runner.main()
         runner_succeeded = True
     finally:
+        try:
+            boundary.close_in_flight(grace_seconds=5.0)
+        except Exception as exc:
+            close_errors.append(type(exc).__name__)
         for environment in opened_environments:
             try:
                 environment.close()

@@ -1,0 +1,951 @@
+{
+  "schema_version": "0.1.0",
+  "record_id": "T09-AUTONOMOUS-V8-PROVIDER-CALL-ADJUDICATION-0001",
+  "recorded_at": "2026-08-27",
+  "experiment_id": "EXP-0001",
+  "historical_plan_id": "PLAN-EXP0001-PILOT-V8",
+  "historical_run_id": "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0001",
+  "historical_classification": "consumed-infrastructure-invalid-unscored",
+  "scientific_comparison_permitted": false,
+  "source_evidence": {
+    "archive_sha256": "c74145c108c579681afe0c79b625bfb180eddc61c488f29e3ec9914dd9e16853",
+    "essential_failure_manifest_sha256": "97e237b1459c74c1fdec40bc9c788a30d829b59062f7b5a6636280f8aff7498f",
+    "essential_failure_complete_sha256": "a01afb981f86d76b3ec5355eab087ded5ae723e315e8c7cae1a41907d769a9b1",
+    "normalized_events_sha256": "c8d18a301fe3a71cdbf36723d38e43b984c2abde1204a97f9403037067f226fc",
+    "provider_budget_sha256": "76fe726344d1c8a0db7dadeb29e23d9103e22d4a06905ec6d8247500b15e9e84",
+    "raw_evidence_mutated": false
+  },
+  "summary": {
+    "recorded_logical_calls": 33,
+    "confirmed_sends": 33,
+    "reconciled_successful_responses": 30,
+    "reconciled_provider_errors": 3,
+    "known_transport_failures": 0,
+    "unknown_outcomes": 0,
+    "duplicate_or_internal_retries": 0,
+    "admitted_not_sent": 0,
+    "response_received_receipt_write_failed": 0,
+    "in_flight_at_process_stop": 0,
+    "ledger_or_counter_race": 0,
+    "observed_token_lower_bound": {
+      "input_tokens": 39181,
+      "cached_input_tokens": 4992,
+      "output_tokens": 19288,
+      "total_tokens": 58469
+    },
+    "observed_cost_lower_bound_usd": 0.2845925,
+    "reserved_token_upper_bound": {
+      "input_tokens": 43929,
+      "cached_input_tokens": 4992,
+      "output_tokens": 265048,
+      "total_tokens": 308977
+    },
+    "reserved_cost_upper_bound_usd": 2.7540625
+  },
+  "root_cause": {
+    "classification": "known-provider-errors-left-nonterminal-by-exception-branch",
+    "evidence": "The final three distinct critic calls each produced one fsynced provider-call-failed event with exception_type RateLimitError and retry forbidden. The retained source log reports Attempt #1 for each. No second-send, SDK retry, SiRA retry, duplicate counter, lost response receipt, transport ambiguity, or shutdown race is evidenced.",
+    "implementation_defect": "ProviderBudgetBoundary.invoke durably charged each reservation and incremented unreconciled_provider_attempts before send, but its exception branch only persisted that open state and re-raised. It did not classify known provider errors, release their reservations, or write a terminal accounting state.",
+    "prior_label_correction": "The historical 308977-token and USD 2.7540625 values include three retained conservative reservations. They are reserved upper bounds, not observed reconciled lower bounds. The 30 response receipts establish the 58469-token and USD 0.2845925 observed lower bounds."
+  },
+  "repair_contract": "Extend the existing ProviderBudgetBoundary with stable call IDs, durable send lifecycle, atomic outstanding reservations, explicit provider/transport/unknown terminal states, zero retries, duplicate-send detection, bounded flush, and separate observed-lower versus charged-upper accounting.",
+  "preserved_v8_disposition": {
+    "task_a_reactive": "unpaired-diagnostic-evidence",
+    "task_a_simulative": "consumed-infrastructure-invalid-unscored",
+    "task_b": "not-run",
+    "scientific_comparison": "prohibited"
+  },
+  "calls": [
+    {
+      "call_id": "V8-HISTORICAL-CALL-0001",
+      "source_event_id": "EVT-T09-00000003",
+      "source_sequence": 3,
+      "role_module": "encoder",
+      "logical_call_identity": "EVT-T09-00000002",
+      "local_admission_timestamp": "unavailable-in-retained-v8-schema",
+      "budget_reservation": {
+        "individual_reservation": "unavailable-in-retained-v8-schema",
+        "actual_usage": {
+          "cached_input_tokens": 0,
+          "input_tokens": 1075,
+          "output_tokens": 75,
+          "total_tokens": 1150
+        }
+      },
+      "send_intent": "confirmed-by-terminal-provider-event",
+      "network_send_state": "confirmed-sent",
+      "response_state": "response-received",
+      "http_provider_error_state": "none",
+      "usage_receipt_state": "provider-usage-present",
+      "receipt_persistence_state": "fsynced-normalized-event-retained-in-essential-seal",
+      "v8_runtime_terminal_accounting_state": "reconciled",
+      "adjudicated_terminal_accounting_state": "sent_response_reconciled",
+      "classification": "sent_response_reconciled",
+      "retry_state": "none"
+    },
+    {
+      "call_id": "V8-HISTORICAL-CALL-0002",
+      "source_event_id": "EVT-T09-00000004",
+      "source_sequence": 4,
+      "role_module": "policy",
+      "logical_call_identity": "EVT-T09-00000002",
+      "local_admission_timestamp": "unavailable-in-retained-v8-schema",
+      "budget_reservation": {
+        "individual_reservation": "unavailable-in-retained-v8-schema",
+        "actual_usage": {
+          "cached_input_tokens": 0,
+          "input_tokens": 1188,
+          "output_tokens": 1518,
+          "total_tokens": 2706
+        }
+      },
+      "send_intent": "confirmed-by-terminal-provider-event",
+      "network_send_state": "confirmed-sent",
+      "response_state": "response-received",
+      "http_provider_error_state": "none",
+      "usage_receipt_state": "provider-usage-present",
+      "receipt_persistence_state": "fsynced-normalized-event-retained-in-essential-seal",
+      "v8_runtime_terminal_accounting_state": "reconciled",
+      "adjudicated_terminal_accounting_state": "sent_response_reconciled",
+      "classification": "sent_response_reconciled",
+      "retry_state": "none"
+    },
+    {
+      "call_id": "V8-HISTORICAL-CALL-0003",
+      "source_event_id": "EVT-T09-00000005",
+      "source_sequence": 5,
+      "role_module": "policy",
+      "logical_call_identity": "EVT-T09-00000002",
+      "local_admission_timestamp": "unavailable-in-retained-v8-schema",
+      "budget_reservation": {
+        "individual_reservation": "unavailable-in-retained-v8-schema",
+        "actual_usage": {
+          "cached_input_tokens": 0,
+          "input_tokens": 1026,
+          "output_tokens": 279,
+          "total_tokens": 1305
+        }
+      },
+      "send_intent": "confirmed-by-terminal-provider-event",
+      "network_send_state": "confirmed-sent",
+      "response_state": "response-received",
+      "http_provider_error_state": "none",
+      "usage_receipt_state": "provider-usage-present",
+      "receipt_persistence_state": "fsynced-normalized-event-retained-in-essential-seal",
+      "v8_runtime_terminal_accounting_state": "reconciled",
+      "adjudicated_terminal_accounting_state": "sent_response_reconciled",
+      "classification": "sent_response_reconciled",
+      "retry_state": "none"
+    },
+    {
+      "call_id": "V8-HISTORICAL-CALL-0004",
+      "source_event_id": "EVT-T09-00000006",
+      "source_sequence": 6,
+      "role_module": "memory",
+      "logical_call_identity": "unavailable-in-retained-v8-schema",
+      "local_admission_timestamp": "unavailable-in-retained-v8-schema",
+      "budget_reservation": {
+        "individual_reservation": "unavailable-in-retained-v8-schema",
+        "actual_usage": {
+          "cached_input_tokens": 0,
+          "input_tokens": 1155,
+          "output_tokens": 61,
+          "total_tokens": 1216
+        }
+      },
+      "send_intent": "confirmed-by-terminal-provider-event",
+      "network_send_state": "confirmed-sent",
+      "response_state": "response-received",
+      "http_provider_error_state": "none",
+      "usage_receipt_state": "provider-usage-present",
+      "receipt_persistence_state": "fsynced-normalized-event-retained-in-essential-seal",
+      "v8_runtime_terminal_accounting_state": "reconciled",
+      "adjudicated_terminal_accounting_state": "sent_response_reconciled",
+      "classification": "sent_response_reconciled",
+      "retry_state": "none"
+    },
+    {
+      "call_id": "V8-HISTORICAL-CALL-0005",
+      "source_event_id": "EVT-T09-00000007",
+      "source_sequence": 7,
+      "role_module": "memory",
+      "logical_call_identity": "unavailable-in-retained-v8-schema",
+      "local_admission_timestamp": "unavailable-in-retained-v8-schema",
+      "budget_reservation": {
+        "individual_reservation": "unavailable-in-retained-v8-schema",
+        "actual_usage": {
+          "cached_input_tokens": 0,
+          "input_tokens": 1159,
+          "output_tokens": 63,
+          "total_tokens": 1222
+        }
+      },
+      "send_intent": "confirmed-by-terminal-provider-event",
+      "network_send_state": "confirmed-sent",
+      "response_state": "response-received",
+      "http_provider_error_state": "none",
+      "usage_receipt_state": "provider-usage-present",
+      "receipt_persistence_state": "fsynced-normalized-event-retained-in-essential-seal",
+      "v8_runtime_terminal_accounting_state": "reconciled",
+      "adjudicated_terminal_accounting_state": "sent_response_reconciled",
+      "classification": "sent_response_reconciled",
+      "retry_state": "none"
+    },
+    {
+      "call_id": "V8-HISTORICAL-CALL-0006",
+      "source_event_id": "EVT-T09-00000008",
+      "source_sequence": 8,
+      "role_module": "memory",
+      "logical_call_identity": "unavailable-in-retained-v8-schema",
+      "local_admission_timestamp": "unavailable-in-retained-v8-schema",
+      "budget_reservation": {
+        "individual_reservation": "unavailable-in-retained-v8-schema",
+        "actual_usage": {
+          "cached_input_tokens": 0,
+          "input_tokens": 1152,
+          "output_tokens": 55,
+          "total_tokens": 1207
+        }
+      },
+      "send_intent": "confirmed-by-terminal-provider-event",
+      "network_send_state": "confirmed-sent",
+      "response_state": "response-received",
+      "http_provider_error_state": "none",
+      "usage_receipt_state": "provider-usage-present",
+      "receipt_persistence_state": "fsynced-normalized-event-retained-in-essential-seal",
+      "v8_runtime_terminal_accounting_state": "reconciled",
+      "adjudicated_terminal_accounting_state": "sent_response_reconciled",
+      "classification": "sent_response_reconciled",
+      "retry_state": "none"
+    },
+    {
+      "call_id": "V8-HISTORICAL-CALL-0007",
+      "source_event_id": "EVT-T09-00000009",
+      "source_sequence": 9,
+      "role_module": "memory",
+      "logical_call_identity": "unavailable-in-retained-v8-schema",
+      "local_admission_timestamp": "unavailable-in-retained-v8-schema",
+      "budget_reservation": {
+        "individual_reservation": "unavailable-in-retained-v8-schema",
+        "actual_usage": {
+          "cached_input_tokens": 0,
+          "input_tokens": 1159,
+          "output_tokens": 59,
+          "total_tokens": 1218
+        }
+      },
+      "send_intent": "confirmed-by-terminal-provider-event",
+      "network_send_state": "confirmed-sent",
+      "response_state": "response-received",
+      "http_provider_error_state": "none",
+      "usage_receipt_state": "provider-usage-present",
+      "receipt_persistence_state": "fsynced-normalized-event-retained-in-essential-seal",
+      "v8_runtime_terminal_accounting_state": "reconciled",
+      "adjudicated_terminal_accounting_state": "sent_response_reconciled",
+      "classification": "sent_response_reconciled",
+      "retry_state": "none"
+    },
+    {
+      "call_id": "V8-HISTORICAL-CALL-0008",
+      "source_event_id": "EVT-T09-00000010",
+      "source_sequence": 10,
+      "role_module": "memory",
+      "logical_call_identity": "unavailable-in-retained-v8-schema",
+      "local_admission_timestamp": "unavailable-in-retained-v8-schema",
+      "budget_reservation": {
+        "individual_reservation": "unavailable-in-retained-v8-schema",
+        "actual_usage": {
+          "cached_input_tokens": 0,
+          "input_tokens": 1161,
+          "output_tokens": 72,
+          "total_tokens": 1233
+        }
+      },
+      "send_intent": "confirmed-by-terminal-provider-event",
+      "network_send_state": "confirmed-sent",
+      "response_state": "response-received",
+      "http_provider_error_state": "none",
+      "usage_receipt_state": "provider-usage-present",
+      "receipt_persistence_state": "fsynced-normalized-event-retained-in-essential-seal",
+      "v8_runtime_terminal_accounting_state": "reconciled",
+      "adjudicated_terminal_accounting_state": "sent_response_reconciled",
+      "classification": "sent_response_reconciled",
+      "retry_state": "none"
+    },
+    {
+      "call_id": "V8-HISTORICAL-CALL-0009",
+      "source_event_id": "EVT-T09-00000011",
+      "source_sequence": 11,
+      "role_module": "world_model",
+      "logical_call_identity": "unavailable-in-retained-v8-schema",
+      "local_admission_timestamp": "unavailable-in-retained-v8-schema",
+      "budget_reservation": {
+        "individual_reservation": "unavailable-in-retained-v8-schema",
+        "actual_usage": {
+          "cached_input_tokens": 0,
+          "input_tokens": 1251,
+          "output_tokens": 20,
+          "total_tokens": 1271
+        }
+      },
+      "send_intent": "confirmed-by-terminal-provider-event",
+      "network_send_state": "confirmed-sent",
+      "response_state": "response-received",
+      "http_provider_error_state": "none",
+      "usage_receipt_state": "provider-usage-present",
+      "receipt_persistence_state": "fsynced-normalized-event-retained-in-essential-seal",
+      "v8_runtime_terminal_accounting_state": "reconciled",
+      "adjudicated_terminal_accounting_state": "sent_response_reconciled",
+      "classification": "sent_response_reconciled",
+      "retry_state": "none"
+    },
+    {
+      "call_id": "V8-HISTORICAL-CALL-0010",
+      "source_event_id": "EVT-T09-00000012",
+      "source_sequence": 12,
+      "role_module": "world_model",
+      "logical_call_identity": "unavailable-in-retained-v8-schema",
+      "local_admission_timestamp": "unavailable-in-retained-v8-schema",
+      "budget_reservation": {
+        "individual_reservation": "unavailable-in-retained-v8-schema",
+        "actual_usage": {
+          "cached_input_tokens": 0,
+          "input_tokens": 1225,
+          "output_tokens": 154,
+          "total_tokens": 1379
+        }
+      },
+      "send_intent": "confirmed-by-terminal-provider-event",
+      "network_send_state": "confirmed-sent",
+      "response_state": "response-received",
+      "http_provider_error_state": "none",
+      "usage_receipt_state": "provider-usage-present",
+      "receipt_persistence_state": "fsynced-normalized-event-retained-in-essential-seal",
+      "v8_runtime_terminal_accounting_state": "reconciled",
+      "adjudicated_terminal_accounting_state": "sent_response_reconciled",
+      "classification": "sent_response_reconciled",
+      "retry_state": "none"
+    },
+    {
+      "call_id": "V8-HISTORICAL-CALL-0011",
+      "source_event_id": "EVT-T09-00000013",
+      "source_sequence": 13,
+      "role_module": "world_model",
+      "logical_call_identity": "unavailable-in-retained-v8-schema",
+      "local_admission_timestamp": "unavailable-in-retained-v8-schema",
+      "budget_reservation": {
+        "individual_reservation": "unavailable-in-retained-v8-schema",
+        "actual_usage": {
+          "cached_input_tokens": 0,
+          "input_tokens": 1234,
+          "output_tokens": 186,
+          "total_tokens": 1420
+        }
+      },
+      "send_intent": "confirmed-by-terminal-provider-event",
+      "network_send_state": "confirmed-sent",
+      "response_state": "response-received",
+      "http_provider_error_state": "none",
+      "usage_receipt_state": "provider-usage-present",
+      "receipt_persistence_state": "fsynced-normalized-event-retained-in-essential-seal",
+      "v8_runtime_terminal_accounting_state": "reconciled",
+      "adjudicated_terminal_accounting_state": "sent_response_reconciled",
+      "classification": "sent_response_reconciled",
+      "retry_state": "none"
+    },
+    {
+      "call_id": "V8-HISTORICAL-CALL-0012",
+      "source_event_id": "EVT-T09-00000014",
+      "source_sequence": 14,
+      "role_module": "world_model",
+      "logical_call_identity": "unavailable-in-retained-v8-schema",
+      "local_admission_timestamp": "unavailable-in-retained-v8-schema",
+      "budget_reservation": {
+        "individual_reservation": "unavailable-in-retained-v8-schema",
+        "actual_usage": {
+          "cached_input_tokens": 0,
+          "input_tokens": 1240,
+          "output_tokens": 183,
+          "total_tokens": 1423
+        }
+      },
+      "send_intent": "confirmed-by-terminal-provider-event",
+      "network_send_state": "confirmed-sent",
+      "response_state": "response-received",
+      "http_provider_error_state": "none",
+      "usage_receipt_state": "provider-usage-present",
+      "receipt_persistence_state": "fsynced-normalized-event-retained-in-essential-seal",
+      "v8_runtime_terminal_accounting_state": "reconciled",
+      "adjudicated_terminal_accounting_state": "sent_response_reconciled",
+      "classification": "sent_response_reconciled",
+      "retry_state": "none"
+    },
+    {
+      "call_id": "V8-HISTORICAL-CALL-0013",
+      "source_event_id": "EVT-T09-00000015",
+      "source_sequence": 15,
+      "role_module": "world_model",
+      "logical_call_identity": "unavailable-in-retained-v8-schema",
+      "local_admission_timestamp": "unavailable-in-retained-v8-schema",
+      "budget_reservation": {
+        "individual_reservation": "unavailable-in-retained-v8-schema",
+        "actual_usage": {
+          "cached_input_tokens": 0,
+          "input_tokens": 1236,
+          "output_tokens": 137,
+          "total_tokens": 1373
+        }
+      },
+      "send_intent": "confirmed-by-terminal-provider-event",
+      "network_send_state": "confirmed-sent",
+      "response_state": "response-received",
+      "http_provider_error_state": "none",
+      "usage_receipt_state": "provider-usage-present",
+      "receipt_persistence_state": "fsynced-normalized-event-retained-in-essential-seal",
+      "v8_runtime_terminal_accounting_state": "reconciled",
+      "adjudicated_terminal_accounting_state": "sent_response_reconciled",
+      "classification": "sent_response_reconciled",
+      "retry_state": "none"
+    },
+    {
+      "call_id": "V8-HISTORICAL-CALL-0014",
+      "source_event_id": "EVT-T09-00000016",
+      "source_sequence": 16,
+      "role_module": "world_model",
+      "logical_call_identity": "unavailable-in-retained-v8-schema",
+      "local_admission_timestamp": "unavailable-in-retained-v8-schema",
+      "budget_reservation": {
+        "individual_reservation": "unavailable-in-retained-v8-schema",
+        "actual_usage": {
+          "cached_input_tokens": 1152,
+          "input_tokens": 1290,
+          "output_tokens": 241,
+          "total_tokens": 1531
+        }
+      },
+      "send_intent": "confirmed-by-terminal-provider-event",
+      "network_send_state": "confirmed-sent",
+      "response_state": "response-received",
+      "http_provider_error_state": "none",
+      "usage_receipt_state": "provider-usage-present",
+      "receipt_persistence_state": "fsynced-normalized-event-retained-in-essential-seal",
+      "v8_runtime_terminal_accounting_state": "reconciled",
+      "adjudicated_terminal_accounting_state": "sent_response_reconciled",
+      "classification": "sent_response_reconciled",
+      "retry_state": "none"
+    },
+    {
+      "call_id": "V8-HISTORICAL-CALL-0015",
+      "source_event_id": "EVT-T09-00000017",
+      "source_sequence": 17,
+      "role_module": "critic",
+      "logical_call_identity": "unavailable-in-retained-v8-schema",
+      "local_admission_timestamp": "unavailable-in-retained-v8-schema",
+      "budget_reservation": {
+        "individual_reservation": "unavailable-in-retained-v8-schema",
+        "actual_usage": {
+          "cached_input_tokens": 0,
+          "input_tokens": 1333,
+          "output_tokens": 2483,
+          "total_tokens": 3816
+        }
+      },
+      "send_intent": "confirmed-by-terminal-provider-event",
+      "network_send_state": "confirmed-sent",
+      "response_state": "response-received",
+      "http_provider_error_state": "none",
+      "usage_receipt_state": "provider-usage-present",
+      "receipt_persistence_state": "fsynced-normalized-event-retained-in-essential-seal",
+      "v8_runtime_terminal_accounting_state": "reconciled",
+      "adjudicated_terminal_accounting_state": "sent_response_reconciled",
+      "classification": "sent_response_reconciled",
+      "retry_state": "none"
+    },
+    {
+      "call_id": "V8-HISTORICAL-CALL-0016",
+      "source_event_id": "EVT-T09-00000018",
+      "source_sequence": 18,
+      "role_module": "critic",
+      "logical_call_identity": "unavailable-in-retained-v8-schema",
+      "local_admission_timestamp": "unavailable-in-retained-v8-schema",
+      "budget_reservation": {
+        "individual_reservation": "unavailable-in-retained-v8-schema",
+        "actual_usage": {
+          "cached_input_tokens": 0,
+          "input_tokens": 1332,
+          "output_tokens": 2848,
+          "total_tokens": 4180
+        }
+      },
+      "send_intent": "confirmed-by-terminal-provider-event",
+      "network_send_state": "confirmed-sent",
+      "response_state": "response-received",
+      "http_provider_error_state": "none",
+      "usage_receipt_state": "provider-usage-present",
+      "receipt_persistence_state": "fsynced-normalized-event-retained-in-essential-seal",
+      "v8_runtime_terminal_accounting_state": "reconciled",
+      "adjudicated_terminal_accounting_state": "sent_response_reconciled",
+      "classification": "sent_response_reconciled",
+      "retry_state": "none"
+    },
+    {
+      "call_id": "V8-HISTORICAL-CALL-0017",
+      "source_event_id": "EVT-T09-00000019",
+      "source_sequence": 19,
+      "role_module": "critic",
+      "logical_call_identity": "unavailable-in-retained-v8-schema",
+      "local_admission_timestamp": "unavailable-in-retained-v8-schema",
+      "budget_reservation": {
+        "individual_reservation": "unavailable-in-retained-v8-schema",
+        "actual_usage": {
+          "cached_input_tokens": 0,
+          "input_tokens": 1286,
+          "output_tokens": 2155,
+          "total_tokens": 3441
+        }
+      },
+      "send_intent": "confirmed-by-terminal-provider-event",
+      "network_send_state": "confirmed-sent",
+      "response_state": "response-received",
+      "http_provider_error_state": "none",
+      "usage_receipt_state": "provider-usage-present",
+      "receipt_persistence_state": "fsynced-normalized-event-retained-in-essential-seal",
+      "v8_runtime_terminal_accounting_state": "reconciled",
+      "adjudicated_terminal_accounting_state": "sent_response_reconciled",
+      "classification": "sent_response_reconciled",
+      "retry_state": "none"
+    },
+    {
+      "call_id": "V8-HISTORICAL-CALL-0018",
+      "source_event_id": "EVT-T09-00000020",
+      "source_sequence": 20,
+      "role_module": "critic",
+      "logical_call_identity": "unavailable-in-retained-v8-schema",
+      "local_admission_timestamp": "unavailable-in-retained-v8-schema",
+      "budget_reservation": {
+        "individual_reservation": "unavailable-in-retained-v8-schema",
+        "actual_usage": {
+          "cached_input_tokens": 0,
+          "input_tokens": 1405,
+          "output_tokens": 2981,
+          "total_tokens": 4386
+        }
+      },
+      "send_intent": "confirmed-by-terminal-provider-event",
+      "network_send_state": "confirmed-sent",
+      "response_state": "response-received",
+      "http_provider_error_state": "none",
+      "usage_receipt_state": "provider-usage-present",
+      "receipt_persistence_state": "fsynced-normalized-event-retained-in-essential-seal",
+      "v8_runtime_terminal_accounting_state": "reconciled",
+      "adjudicated_terminal_accounting_state": "sent_response_reconciled",
+      "classification": "sent_response_reconciled",
+      "retry_state": "none"
+    },
+    {
+      "call_id": "V8-HISTORICAL-CALL-0019",
+      "source_event_id": "EVT-T09-00000021",
+      "source_sequence": 21,
+      "role_module": "critic",
+      "logical_call_identity": "unavailable-in-retained-v8-schema",
+      "local_admission_timestamp": "unavailable-in-retained-v8-schema",
+      "budget_reservation": {
+        "individual_reservation": "unavailable-in-retained-v8-schema",
+        "actual_usage": {
+          "cached_input_tokens": 0,
+          "input_tokens": 1288,
+          "output_tokens": 2169,
+          "total_tokens": 3457
+        }
+      },
+      "send_intent": "confirmed-by-terminal-provider-event",
+      "network_send_state": "confirmed-sent",
+      "response_state": "response-received",
+      "http_provider_error_state": "none",
+      "usage_receipt_state": "provider-usage-present",
+      "receipt_persistence_state": "fsynced-normalized-event-retained-in-essential-seal",
+      "v8_runtime_terminal_accounting_state": "reconciled",
+      "adjudicated_terminal_accounting_state": "sent_response_reconciled",
+      "classification": "sent_response_reconciled",
+      "retry_state": "none"
+    },
+    {
+      "call_id": "V8-HISTORICAL-CALL-0020",
+      "source_event_id": "EVT-T09-00000022",
+      "source_sequence": 22,
+      "role_module": "actor",
+      "logical_call_identity": "EVT-T09-00000002",
+      "local_admission_timestamp": "unavailable-in-retained-v8-schema",
+      "budget_reservation": {
+        "individual_reservation": "unavailable-in-retained-v8-schema",
+        "actual_usage": {
+          "cached_input_tokens": 0,
+          "input_tokens": 1181,
+          "output_tokens": 13,
+          "total_tokens": 1194
+        }
+      },
+      "send_intent": "confirmed-by-terminal-provider-event",
+      "network_send_state": "confirmed-sent",
+      "response_state": "response-received",
+      "http_provider_error_state": "none",
+      "usage_receipt_state": "provider-usage-present",
+      "receipt_persistence_state": "fsynced-normalized-event-retained-in-essential-seal",
+      "v8_runtime_terminal_accounting_state": "reconciled",
+      "adjudicated_terminal_accounting_state": "sent_response_reconciled",
+      "classification": "sent_response_reconciled",
+      "retry_state": "none"
+    },
+    {
+      "call_id": "V8-HISTORICAL-CALL-0021",
+      "source_event_id": "EVT-T09-00000023",
+      "source_sequence": 23,
+      "role_module": "memory",
+      "logical_call_identity": "EVT-T09-00000002",
+      "local_admission_timestamp": "unavailable-in-retained-v8-schema",
+      "budget_reservation": {
+        "individual_reservation": "unavailable-in-retained-v8-schema",
+        "actual_usage": {
+          "cached_input_tokens": 0,
+          "input_tokens": 1159,
+          "output_tokens": 59,
+          "total_tokens": 1218
+        }
+      },
+      "send_intent": "confirmed-by-terminal-provider-event",
+      "network_send_state": "confirmed-sent",
+      "response_state": "response-received",
+      "http_provider_error_state": "none",
+      "usage_receipt_state": "provider-usage-present",
+      "receipt_persistence_state": "fsynced-normalized-event-retained-in-essential-seal",
+      "v8_runtime_terminal_accounting_state": "reconciled",
+      "adjudicated_terminal_accounting_state": "sent_response_reconciled",
+      "classification": "sent_response_reconciled",
+      "retry_state": "none"
+    },
+    {
+      "call_id": "V8-HISTORICAL-CALL-0022",
+      "source_event_id": "EVT-T09-00000027",
+      "source_sequence": 27,
+      "role_module": "encoder",
+      "logical_call_identity": "EVT-T09-00000026",
+      "local_admission_timestamp": "unavailable-in-retained-v8-schema",
+      "budget_reservation": {
+        "individual_reservation": "unavailable-in-retained-v8-schema",
+        "actual_usage": {
+          "cached_input_tokens": 0,
+          "input_tokens": 1440,
+          "output_tokens": 396,
+          "total_tokens": 1836
+        }
+      },
+      "send_intent": "confirmed-by-terminal-provider-event",
+      "network_send_state": "confirmed-sent",
+      "response_state": "response-received",
+      "http_provider_error_state": "none",
+      "usage_receipt_state": "provider-usage-present",
+      "receipt_persistence_state": "fsynced-normalized-event-retained-in-essential-seal",
+      "v8_runtime_terminal_accounting_state": "reconciled",
+      "adjudicated_terminal_accounting_state": "sent_response_reconciled",
+      "classification": "sent_response_reconciled",
+      "retry_state": "none"
+    },
+    {
+      "call_id": "V8-HISTORICAL-CALL-0023",
+      "source_event_id": "EVT-T09-00000028",
+      "source_sequence": 28,
+      "role_module": "policy",
+      "logical_call_identity": "EVT-T09-00000026",
+      "local_admission_timestamp": "unavailable-in-retained-v8-schema",
+      "budget_reservation": {
+        "individual_reservation": "unavailable-in-retained-v8-schema",
+        "actual_usage": {
+          "cached_input_tokens": 0,
+          "input_tokens": 1580,
+          "output_tokens": 1688,
+          "total_tokens": 3268
+        }
+      },
+      "send_intent": "confirmed-by-terminal-provider-event",
+      "network_send_state": "confirmed-sent",
+      "response_state": "response-received",
+      "http_provider_error_state": "none",
+      "usage_receipt_state": "provider-usage-present",
+      "receipt_persistence_state": "fsynced-normalized-event-retained-in-essential-seal",
+      "v8_runtime_terminal_accounting_state": "reconciled",
+      "adjudicated_terminal_accounting_state": "sent_response_reconciled",
+      "classification": "sent_response_reconciled",
+      "retry_state": "none"
+    },
+    {
+      "call_id": "V8-HISTORICAL-CALL-0024",
+      "source_event_id": "EVT-T09-00000029",
+      "source_sequence": 29,
+      "role_module": "policy",
+      "logical_call_identity": "EVT-T09-00000026",
+      "local_admission_timestamp": "unavailable-in-retained-v8-schema",
+      "budget_reservation": {
+        "individual_reservation": "unavailable-in-retained-v8-schema",
+        "actual_usage": {
+          "cached_input_tokens": 0,
+          "input_tokens": 1050,
+          "output_tokens": 130,
+          "total_tokens": 1180
+        }
+      },
+      "send_intent": "confirmed-by-terminal-provider-event",
+      "network_send_state": "confirmed-sent",
+      "response_state": "response-received",
+      "http_provider_error_state": "none",
+      "usage_receipt_state": "provider-usage-present",
+      "receipt_persistence_state": "fsynced-normalized-event-retained-in-essential-seal",
+      "v8_runtime_terminal_accounting_state": "reconciled",
+      "adjudicated_terminal_accounting_state": "sent_response_reconciled",
+      "classification": "sent_response_reconciled",
+      "retry_state": "none"
+    },
+    {
+      "call_id": "V8-HISTORICAL-CALL-0025",
+      "source_event_id": "EVT-T09-00000030",
+      "source_sequence": 30,
+      "role_module": "memory",
+      "logical_call_identity": "unavailable-in-retained-v8-schema",
+      "local_admission_timestamp": "unavailable-in-retained-v8-schema",
+      "budget_reservation": {
+        "individual_reservation": "unavailable-in-retained-v8-schema",
+        "actual_usage": {
+          "cached_input_tokens": 1280,
+          "input_tokens": 1548,
+          "output_tokens": 73,
+          "total_tokens": 1621
+        }
+      },
+      "send_intent": "confirmed-by-terminal-provider-event",
+      "network_send_state": "confirmed-sent",
+      "response_state": "response-received",
+      "http_provider_error_state": "none",
+      "usage_receipt_state": "provider-usage-present",
+      "receipt_persistence_state": "fsynced-normalized-event-retained-in-essential-seal",
+      "v8_runtime_terminal_accounting_state": "reconciled",
+      "adjudicated_terminal_accounting_state": "sent_response_reconciled",
+      "classification": "sent_response_reconciled",
+      "retry_state": "none"
+    },
+    {
+      "call_id": "V8-HISTORICAL-CALL-0026",
+      "source_event_id": "EVT-T09-00000031",
+      "source_sequence": 31,
+      "role_module": "memory",
+      "logical_call_identity": "unavailable-in-retained-v8-schema",
+      "local_admission_timestamp": "unavailable-in-retained-v8-schema",
+      "budget_reservation": {
+        "individual_reservation": "unavailable-in-retained-v8-schema",
+        "actual_usage": {
+          "cached_input_tokens": 0,
+          "input_tokens": 1547,
+          "output_tokens": 93,
+          "total_tokens": 1640
+        }
+      },
+      "send_intent": "confirmed-by-terminal-provider-event",
+      "network_send_state": "confirmed-sent",
+      "response_state": "response-received",
+      "http_provider_error_state": "none",
+      "usage_receipt_state": "provider-usage-present",
+      "receipt_persistence_state": "fsynced-normalized-event-retained-in-essential-seal",
+      "v8_runtime_terminal_accounting_state": "reconciled",
+      "adjudicated_terminal_accounting_state": "sent_response_reconciled",
+      "classification": "sent_response_reconciled",
+      "retry_state": "none"
+    },
+    {
+      "call_id": "V8-HISTORICAL-CALL-0027",
+      "source_event_id": "EVT-T09-00000032",
+      "source_sequence": 32,
+      "role_module": "memory",
+      "logical_call_identity": "unavailable-in-retained-v8-schema",
+      "local_admission_timestamp": "unavailable-in-retained-v8-schema",
+      "budget_reservation": {
+        "individual_reservation": "unavailable-in-retained-v8-schema",
+        "actual_usage": {
+          "cached_input_tokens": 1280,
+          "input_tokens": 1548,
+          "output_tokens": 70,
+          "total_tokens": 1618
+        }
+      },
+      "send_intent": "confirmed-by-terminal-provider-event",
+      "network_send_state": "confirmed-sent",
+      "response_state": "response-received",
+      "http_provider_error_state": "none",
+      "usage_receipt_state": "provider-usage-present",
+      "receipt_persistence_state": "fsynced-normalized-event-retained-in-essential-seal",
+      "v8_runtime_terminal_accounting_state": "reconciled",
+      "adjudicated_terminal_accounting_state": "sent_response_reconciled",
+      "classification": "sent_response_reconciled",
+      "retry_state": "none"
+    },
+    {
+      "call_id": "V8-HISTORICAL-CALL-0028",
+      "source_event_id": "EVT-T09-00000033",
+      "source_sequence": 33,
+      "role_module": "world_model",
+      "logical_call_identity": "unavailable-in-retained-v8-schema",
+      "local_admission_timestamp": "unavailable-in-retained-v8-schema",
+      "budget_reservation": {
+        "individual_reservation": "unavailable-in-retained-v8-schema",
+        "actual_usage": {
+          "cached_input_tokens": 0,
+          "input_tokens": 1636,
+          "output_tokens": 123,
+          "total_tokens": 1759
+        }
+      },
+      "send_intent": "confirmed-by-terminal-provider-event",
+      "network_send_state": "confirmed-sent",
+      "response_state": "response-received",
+      "http_provider_error_state": "none",
+      "usage_receipt_state": "provider-usage-present",
+      "receipt_persistence_state": "fsynced-normalized-event-retained-in-essential-seal",
+      "v8_runtime_terminal_accounting_state": "reconciled",
+      "adjudicated_terminal_accounting_state": "sent_response_reconciled",
+      "classification": "sent_response_reconciled",
+      "retry_state": "none"
+    },
+    {
+      "call_id": "V8-HISTORICAL-CALL-0029",
+      "source_event_id": "EVT-T09-00000034",
+      "source_sequence": 34,
+      "role_module": "world_model",
+      "logical_call_identity": "unavailable-in-retained-v8-schema",
+      "local_admission_timestamp": "unavailable-in-retained-v8-schema",
+      "budget_reservation": {
+        "individual_reservation": "unavailable-in-retained-v8-schema",
+        "actual_usage": {
+          "cached_input_tokens": 0,
+          "input_tokens": 1639,
+          "output_tokens": 448,
+          "total_tokens": 2087
+        }
+      },
+      "send_intent": "confirmed-by-terminal-provider-event",
+      "network_send_state": "confirmed-sent",
+      "response_state": "response-received",
+      "http_provider_error_state": "none",
+      "usage_receipt_state": "provider-usage-present",
+      "receipt_persistence_state": "fsynced-normalized-event-retained-in-essential-seal",
+      "v8_runtime_terminal_accounting_state": "reconciled",
+      "adjudicated_terminal_accounting_state": "sent_response_reconciled",
+      "classification": "sent_response_reconciled",
+      "retry_state": "none"
+    },
+    {
+      "call_id": "V8-HISTORICAL-CALL-0030",
+      "source_event_id": "EVT-T09-00000035",
+      "source_sequence": 35,
+      "role_module": "world_model",
+      "logical_call_identity": "unavailable-in-retained-v8-schema",
+      "local_admission_timestamp": "unavailable-in-retained-v8-schema",
+      "budget_reservation": {
+        "individual_reservation": "unavailable-in-retained-v8-schema",
+        "actual_usage": {
+          "cached_input_tokens": 1280,
+          "input_tokens": 1658,
+          "output_tokens": 456,
+          "total_tokens": 2114
+        }
+      },
+      "send_intent": "confirmed-by-terminal-provider-event",
+      "network_send_state": "confirmed-sent",
+      "response_state": "response-received",
+      "http_provider_error_state": "none",
+      "usage_receipt_state": "provider-usage-present",
+      "receipt_persistence_state": "fsynced-normalized-event-retained-in-essential-seal",
+      "v8_runtime_terminal_accounting_state": "reconciled",
+      "adjudicated_terminal_accounting_state": "sent_response_reconciled",
+      "classification": "sent_response_reconciled",
+      "retry_state": "none"
+    },
+    {
+      "call_id": "V8-HISTORICAL-CALL-0031",
+      "source_event_id": "EVT-T09-00000036",
+      "source_sequence": 36,
+      "role_module": "critic",
+      "logical_call_identity": "unavailable-in-retained-v8-schema",
+      "local_admission_timestamp": "unavailable-in-retained-v8-schema",
+      "budget_reservation": {
+        "individual_reservation": "unavailable-in-retained-v8-schema",
+        "aggregate_three_error_reservation": {
+          "input_tokens": 4748,
+          "output_tokens": 245760,
+          "total_tokens": 250508,
+          "cost_usd": 2.46947
+        }
+      },
+      "send_intent": "confirmed-by-terminal-provider-event",
+      "network_send_state": "confirmed-sent",
+      "response_state": "provider-error-received",
+      "http_provider_error_state": "RateLimitError",
+      "usage_receipt_state": "provider-error-no-usage",
+      "receipt_persistence_state": "fsynced-normalized-event-retained-in-essential-seal",
+      "v8_runtime_terminal_accounting_state": "unreconciled-defect",
+      "adjudicated_terminal_accounting_state": "sent_provider_error_reconciled",
+      "classification": "sent_provider_error_reconciled",
+      "retry_state": "forbidden"
+    },
+    {
+      "call_id": "V8-HISTORICAL-CALL-0032",
+      "source_event_id": "EVT-T09-00000037",
+      "source_sequence": 37,
+      "role_module": "critic",
+      "logical_call_identity": "unavailable-in-retained-v8-schema",
+      "local_admission_timestamp": "unavailable-in-retained-v8-schema",
+      "budget_reservation": {
+        "individual_reservation": "unavailable-in-retained-v8-schema",
+        "aggregate_three_error_reservation": {
+          "input_tokens": 4748,
+          "output_tokens": 245760,
+          "total_tokens": 250508,
+          "cost_usd": 2.46947
+        }
+      },
+      "send_intent": "confirmed-by-terminal-provider-event",
+      "network_send_state": "confirmed-sent",
+      "response_state": "provider-error-received",
+      "http_provider_error_state": "RateLimitError",
+      "usage_receipt_state": "provider-error-no-usage",
+      "receipt_persistence_state": "fsynced-normalized-event-retained-in-essential-seal",
+      "v8_runtime_terminal_accounting_state": "unreconciled-defect",
+      "adjudicated_terminal_accounting_state": "sent_provider_error_reconciled",
+      "classification": "sent_provider_error_reconciled",
+      "retry_state": "forbidden"
+    },
+    {
+      "call_id": "V8-HISTORICAL-CALL-0033",
+      "source_event_id": "EVT-T09-00000038",
+      "source_sequence": 38,
+      "role_module": "critic",
+      "logical_call_identity": "unavailable-in-retained-v8-schema",
+      "local_admission_timestamp": "unavailable-in-retained-v8-schema",
+      "budget_reservation": {
+        "individual_reservation": "unavailable-in-retained-v8-schema",
+        "aggregate_three_error_reservation": {
+          "input_tokens": 4748,
+          "output_tokens": 245760,
+          "total_tokens": 250508,
+          "cost_usd": 2.46947
+        }
+      },
+      "send_intent": "confirmed-by-terminal-provider-event",
+      "network_send_state": "confirmed-sent",
+      "response_state": "provider-error-received",
+      "http_provider_error_state": "RateLimitError",
+      "usage_receipt_state": "provider-error-no-usage",
+      "receipt_persistence_state": "fsynced-normalized-event-retained-in-essential-seal",
+      "v8_runtime_terminal_accounting_state": "unreconciled-defect",
+      "adjudicated_terminal_accounting_state": "sent_provider_error_reconciled",
+      "classification": "sent_provider_error_reconciled",
+      "retry_state": "forbidden"
+    }
+  ]
+}
