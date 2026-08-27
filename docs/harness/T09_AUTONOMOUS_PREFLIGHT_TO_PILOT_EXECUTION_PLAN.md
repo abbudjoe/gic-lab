@@ -135,12 +135,19 @@ and production-readiness claims.
   `ae5b3177f4fa25b56c596cf60245a6157800b803660233dca7dd3e009cf2d7b1`.
 - `2026-08-27`: preflight iteration 2 imported the retained exact image and reached
   the secret-channel utility container, then failed because Docker `--rm`
-  auto-removal raced the supervisor's exact-ID cleanup. The container was already
-  absent and no residue, model request, browser action, or empirical entry remained.
-  Commit `47cc2544602bf444e802e3317984d3291a708349` makes exact absence the
-  authoritative result after a bounded identity/name/label-verified convergence
-  window; persistent exact residue still fails closed. The regenerated V8 package
-  passes 119 focused tests, strict typing, lint, validation, and both pair diffs.
+  auto-removal appeared to race the supervisor's exact-ID cleanup. The container was
+  already absent and no residue, model request, browser action, or empirical entry
+  remained. Commit `47cc2544602bf444e802e3317984d3291a708349` makes exact
+  absence authoritative after a bounded identity/name/label-verified convergence
+  window; persistent exact residue still fails closed.
+- `2026-08-27`: iteration 4 reproduced the same stop and a focused live diagnostic
+  established the earlier causal boundary: the exact `sudo -n docker` transport
+  creates its `--cidfile` as root, but the runner required the invoking Ubuntu UID
+  and therefore never reached exact-ID removal. Commit
+  `275c44f9d3fb1b4d146e410b1e2b6aa0e06cf7b7` aligns cidfile ownership with
+  the allowlisted transport: direct Docker requires the invoking UID, sudo Docker
+  requires root, and group/world-writable cidfiles remain forbidden. Both absence
+  convergence and persistent-residue controls remain enforced.
 
 ## Budgets, blockers, and next phase
 
