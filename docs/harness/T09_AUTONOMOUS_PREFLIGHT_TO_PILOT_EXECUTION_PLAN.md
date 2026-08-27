@@ -1,6 +1,6 @@
 # T09 Autonomous Preflight-to-Pilot Execution Plan
 
-Status: **terminal evidence finalization in progress**
+Status: **terminal disposition complete**
 
 Source contract: the current-turn user instruction, `T09 Autonomous
 Preflight-to-Pilot Reset`, SHA-256
@@ -49,7 +49,7 @@ and production-readiness claims.
 | AP-13 | If the checkpoint passes, execute Task B simulative and reactive once each with the same runtime/finalizer/evaluator. | Equivalent per-attempt and pair-matching evidence; zero retry. | not-run by contract because AP-12 stopped |
 | AP-14 | Enforce calls, tokens, actions, attempts, empirical wall, cleanup reserve, OpenAI/Lambda/new/cumulative spend, and raw-storage limits. | Runtime budget ledgers and actual accounting. | met-ceilings; simulative stopped on budget-control drift |
 | AP-15 | Retain verified safe evidence, remove containers/browser/core/secrets, terminate the exact instance, restore provider security, and prove zero T09 instances. | External manifests/hashes, provider closeout, and cloud-ledger terminal events. | partial-terminal; provider clean, host completion validator rejected safe structural matches |
-| AP-16 | After provider termination, run full repository gates, independent evidence review, and publish a non-comparative 15-item handoff. | Full checks, review verdict, disposition/control records, and final report. | in-progress |
+| AP-16 | After provider termination, run full repository gates, independent evidence review, and publish a non-comparative 15-item handoff. | Full checks, review verdict, disposition/control records, and final report. | partial-terminal; focused V8/policy gates pass, 21 historical-version assertions remain stale |
 
 ## Implementation mapping and planned evidence
 
@@ -234,6 +234,19 @@ and production-readiness claims.
   closeout nevertheless proves the exact instance terminal/absent, zero T09
   instances, and restored firewall/ruleset security. One launch was active
   7,080.448808 seconds and cost USD 2.537160823.
+- `2026-08-27`: post-run authority is closed by
+  `EXECUTION-CONTROL-EXP0001-AUTONOMOUS-V8-TERMINAL-0001`. All project compute
+  permissions are false, no authorized profile remains, and the terminal overlay
+  explicitly records that it supersedes the frozen V8 profile and execution
+  contract even though those immutable historical bytes correctly retain their
+  then-authorized state. This removes the hidden assumption that historical
+  authorization bytes must be rewritten to prove current non-replayability.
+- Offline gates: 93 focused V8/policy tests pass; repository validation, strict
+  typing, Ruff checks for the terminal-control repair, and diff hygiene pass. The
+  complete suite has 1,465 passes and 21 failures, all assertions tied to V7 or
+  earlier active-profile/lifecycle expectations. The repository-wide format check
+  also reports ten pre-existing V8 control files; their executed finalizer/runner
+  bytes were preserved rather than mechanically changed after the run.
 
 ## Budgets, blockers, and next phase
 
