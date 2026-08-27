@@ -3118,6 +3118,10 @@ def autonomous_preflight_package_transition(
     }
     if previous != current:
         raise T09ProviderError("autonomous package transition changed frozen science")
+    previous_science = _autonomous_package_science_state(repository, from_package_commit)
+    current_science = _autonomous_package_science_state(repository, to_package_commit)
+    if previous_science != current_science:
+        raise T09ProviderError("autonomous package transition changed derived science")
     binary_diff = subprocess.run(
         [
             "git",
@@ -3154,7 +3158,270 @@ def autonomous_preflight_package_transition(
         "changed_paths_sha256": _sha256_bytes(_canonical_bytes(changed_paths)),
         "binary_diff_sha256": hashlib.sha256(binary_diff).hexdigest(),
         "scientific_projection_sha256": previous[science_projection_path],
+        "derived_science_state_sha256": _sha256_bytes(
+            _canonical_bytes(previous_science)
+        ),
         "scientific_contract_changed": False,
+    }
+
+
+def _git_json_object(repository: Path, commit: str, path: str) -> dict[str, object]:
+    try:
+        value = json.loads(_git_blob(repository, commit, path))
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise T09ProviderError(f"autonomous package JSON is malformed: {path}") from exc
+    if not isinstance(value, dict):
+        raise T09ProviderError(f"autonomous package JSON is not an object: {path}")
+    return cast(dict[str, object], value)
+
+
+def _json_value_sha256(value: object) -> str:
+    encoded = json.dumps(
+        value,
+        allow_nan=False,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode()
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _derived_science_projection(execution: Mapping[str, object]) -> dict[str, object]:
+    raw_attempts = execution.get("attempts")
+    if not isinstance(raw_attempts, list) or len(raw_attempts) != 4:
+        raise T09ProviderError("autonomous execution contract must contain four attempts")
+    attempts: list[dict[str, object]] = []
+    for raw in raw_attempts:
+        if not isinstance(raw, dict):
+            raise T09ProviderError("autonomous execution attempt is malformed")
+        argv = raw.get("upstream_argv")
+        if (
+            not isinstance(argv, list)
+            or len(argv) != 27
+            or any(not isinstance(item, str) for item in argv)
+            or argv.count("--output_dir") != 1
+        ):
+            raise T09ProviderError("autonomous execution argv is incomplete")
+        normalized_argv = list(argv)
+        normalized_argv[0] = "<FRESH-UPSTREAM-RUN-ID>"
+        output_index = normalized_argv.index("--output_dir") + 1
+        if output_index >= len(normalized_argv):
+            raise T09ProviderError("autonomous execution output flag is orphaned")
+        normalized_argv[output_index] = "<FRESH-OUTPUT-ROOT>"
+        attempts.append(
+            {
+                "task_id": raw.get("task_id"),
+                "task_index": raw.get("task_index"),
+                "condition": raw.get("condition"),
+                "order_index": raw.get("order_index"),
+                "protocol_sha256": raw.get("protocol_sha256"),
+                "config_sha256": raw.get("config_sha256"),
+                "upstream_argv": normalized_argv,
+            }
+        )
+    bindings = execution.get("contract_bindings")
+    if not isinstance(bindings, dict):
+        raise T09ProviderError("autonomous execution bindings are malformed")
+    return {
+        "experiment_id": execution.get("experiment_id"),
+        "sira_commit": execution.get("sira_commit"),
+        "model_revision": execution.get("model_revision"),
+        "service_tier": execution.get("service_tier"),
+        "randomization_seed": execution.get("randomization_seed"),
+        "dataset_binding": bindings.get("dataset"),
+        "evaluator_binding": bindings.get("evaluator"),
+        "attempts": attempts,
+    }
+
+
+def _condition_science_projection(document: Mapping[str, object]) -> dict[str, object]:
+    sources = document.get("sources")
+    task = document.get("task")
+    pairing = document.get("pairing")
+    budget = document.get("budget")
+    execution = document.get("execution")
+    if not all(isinstance(item, dict) for item in (sources, task, pairing, budget, execution)):
+        raise T09ProviderError("autonomous condition science surface is malformed")
+    assert isinstance(sources, dict)
+    assert isinstance(task, dict)
+    assert isinstance(pairing, dict)
+    assert isinstance(budget, dict)
+    assert isinstance(execution, dict)
+    return {
+        "experiment_id": document.get("experiment_id"),
+        "condition": document.get("condition"),
+        "seed": document.get("seed"),
+        "interpretation_allowed": document.get("interpretation_allowed"),
+        "execution": {
+            "workload": execution.get("workload"),
+        },
+        "sources": {
+            key: sources.get(key)
+            for key in (
+                "upstream_source_id",
+                "upstream_commit",
+                "protocol_sha256",
+                "config_sha256",
+                "model_revision",
+                "dataset_revision",
+            )
+        },
+        "task": task,
+        "pairing": {
+            "order_index": pairing.get("order_index"),
+        },
+        "budget": {
+            key: budget.get(key)
+            for key in (
+                "max_wall_seconds",
+                "max_cost_usd",
+                "max_gpu_hours",
+                "max_model_calls",
+                "max_model_tokens",
+                "max_tool_calls",
+            )
+        },
+    }
+
+
+def _normalized_pair_argv(argv: list[str]) -> dict[str, str]:
+    if len(argv) != 27 or len(argv[1:]) % 2 != 0:
+        raise T09ProviderError("autonomous pair argv shape is malformed")
+    values: dict[str, str] = {}
+    for index in range(1, len(argv), 2):
+        flag = argv[index]
+        if not flag.startswith("--") or flag in values:
+            raise T09ProviderError("autonomous pair argv flags are malformed")
+        values[flag] = argv[index + 1]
+    for permitted in ("--mode", "--config_name", "--output_dir"):
+        values.pop(permitted, None)
+    return values
+
+
+def _autonomous_package_science_state(repository: Path, commit: str) -> dict[str, object]:
+    contract_root = "experiments/EXP-0001-sira-simulative-vs-reactive/contracts"
+    execution_path = f"{contract_root}/T09_PILOT_EXECUTION_CONTRACT.json"
+    projection_path = f"{contract_root}/T09_PILOT_V8_SCIENCE_PROJECTION.json"
+    commands_path = f"{contract_root}/T09_PILOT_COMMAND_MANIFESTS.json"
+    execution_blob = _git_blob(repository, commit, execution_path)
+    execution = _git_json_object(repository, commit, execution_path)
+    stored_projection = _git_json_object(repository, commit, projection_path)
+    derived_projection = _derived_science_projection(execution)
+    if stored_projection != derived_projection:
+        raise T09ProviderError(
+            "autonomous stored science projection is stale relative to execution"
+        )
+    bindings = execution.get("contract_bindings")
+    raw_attempts = execution.get("attempts")
+    if not isinstance(bindings, dict) or not isinstance(raw_attempts, list):
+        raise T09ProviderError("autonomous execution package is malformed")
+    for name in ("dataset", "evaluator"):
+        binding = bindings.get(name)
+        if not isinstance(binding, dict):
+            raise T09ProviderError(f"autonomous {name} binding is malformed")
+        path = binding.get("path")
+        digest = binding.get("sha256")
+        if (
+            not isinstance(path, str)
+            or not isinstance(digest, str)
+            or hashlib.sha256(_git_blob(repository, commit, path)).hexdigest() != digest
+        ):
+            raise T09ProviderError(f"autonomous {name} binding drifted")
+
+    condition_science: list[dict[str, object]] = []
+    condition_digests: list[str] = []
+    for raw_attempt in raw_attempts:
+        if not isinstance(raw_attempt, dict):
+            raise T09ProviderError("autonomous execution attempt is malformed")
+        condition_path = raw_attempt.get("condition_plan_path")
+        condition_sha256 = raw_attempt.get("condition_plan_sha256")
+        if not isinstance(condition_path, str) or not isinstance(condition_sha256, str):
+            raise T09ProviderError("autonomous condition binding is malformed")
+        condition_blob = _git_blob(repository, commit, condition_path)
+        if hashlib.sha256(condition_blob).hexdigest() != condition_sha256:
+            raise T09ProviderError("autonomous condition binding drifted")
+        condition = yaml.safe_load(condition_blob)
+        if not isinstance(condition, dict):
+            raise T09ProviderError("autonomous condition plan is malformed")
+        authorization = condition.get("execution", {}).get("authorization")
+        argv = raw_attempt.get("upstream_argv")
+        if (
+            not isinstance(authorization, dict)
+            or not isinstance(argv, list)
+            or authorization.get("command_sha256")
+            != _json_value_sha256(argv)
+            or condition.get("condition")
+            != f"SIRA-{str(raw_attempt.get('condition')).upper()}"
+            or condition.get("task", {}).get("task_id") != raw_attempt.get("task_id")
+            or condition.get("pairing", {}).get("order_index")
+            != raw_attempt.get("order_index")
+        ):
+            raise T09ProviderError("autonomous condition does not match its execution attempt")
+        projected = _condition_science_projection(condition)
+        condition_science.append(projected)
+        condition_digests.append(_sha256_bytes(_canonical_bytes(projected)))
+
+    commands = _git_json_object(repository, commit, commands_path)
+    raw_manifests = commands.get("manifests")
+    raw_pair_diffs = commands.get("pair_diffs")
+    execution_sha256 = hashlib.sha256(execution_blob).hexdigest()
+    if (
+        not isinstance(raw_manifests, list)
+        or len(raw_manifests) != 4
+        or not isinstance(raw_pair_diffs, list)
+        or len(raw_pair_diffs) != 2
+        or commands.get("execution_contract_sha256") != execution_sha256
+    ):
+        raise T09ProviderError("autonomous command package is malformed")
+    upstream_vectors: list[list[str]] = []
+    equality_surfaces: list[dict[str, object]] = []
+    for raw_attempt, manifest in zip(raw_attempts, raw_manifests, strict=True):
+        if not isinstance(raw_attempt, dict) or not isinstance(manifest, dict):
+            raise T09ProviderError("autonomous command manifest is malformed")
+        argv = manifest.get("argv")
+        upstream = raw_attempt.get("upstream_argv")
+        equality = manifest.get("equality_surface")
+        if (
+            not isinstance(argv, list)
+            or any(not isinstance(item, str) for item in argv)
+            or argv.count("--") != 1
+            or not isinstance(upstream, list)
+            or argv[argv.index("--") + 1 :] != upstream
+            or manifest.get("argv_sha256") != _json_value_sha256(argv)
+            or manifest.get("execution_contract_sha256") != execution_sha256
+            or manifest.get("task_id") != raw_attempt.get("task_id")
+            or manifest.get("condition") != raw_attempt.get("condition")
+            or manifest.get("order_index") != raw_attempt.get("order_index")
+            or manifest.get("pair_id") != raw_attempt.get("pair_id")
+            or manifest.get("condition_plan_path")
+            != raw_attempt.get("condition_plan_path")
+            or manifest.get("condition_plan_sha256")
+            != raw_attempt.get("condition_plan_sha256")
+            or not isinstance(equality, dict)
+        ):
+            raise T09ProviderError("autonomous command manifest drifted from execution")
+        upstream_vectors.append(cast(list[str], upstream))
+        equality_surfaces.append(cast(dict[str, object], equality))
+    for pair_index, (left, right) in enumerate(((0, 1), (2, 3))):
+        pair_diff = raw_pair_diffs[pair_index]
+        if (
+            equality_surfaces[left] != equality_surfaces[right]
+            or raw_attempts[left].get("task_id") != raw_attempts[right].get("task_id")
+            or _normalized_pair_argv(upstream_vectors[left])
+            != _normalized_pair_argv(upstream_vectors[right])
+            or not isinstance(pair_diff, dict)
+            or pair_diff.get("valid") is not True
+            or pair_diff.get("required_equality_surface_equal") is not True
+            or pair_diff.get("normalized_actual_argv_equal") is not True
+            or pair_diff.get("task_id_equal") is not True
+        ):
+            raise T09ProviderError("autonomous command pair diff is not independently valid")
+    return {
+        "derived_science_projection": derived_projection,
+        "condition_science_sha256s": condition_digests,
+        "command_upstream_argv_sha256s": [
+            _json_value_sha256(argv) for argv in upstream_vectors
+        ],
     }
 
 

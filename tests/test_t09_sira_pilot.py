@@ -16,6 +16,7 @@ from types import ModuleType, SimpleNamespace
 from typing import cast
 
 import pytest
+import yaml
 
 from giclab.harness import t09_pragmatic_provider as provider
 from giclab.harness.lambda_campaign_lifecycle import AutonomousPilotLifecycleLimits
@@ -899,7 +900,19 @@ def test_autonomous_clean_descendant_reuses_authority_and_entry_receipt(
         "T09_PILOT_DATASET_CONTRACT.json",
         "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
         "T09_PILOT_EVALUATOR_CONTRACT.json",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
+        "T09_PILOT_EXECUTION_CONTRACT.json",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
+        "T09_PILOT_COMMAND_MANIFESTS.json",
         "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/"
+        "pilot-v8-task-0000-reactive.yaml",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/"
+        "pilot-v8-task-0000-simulative.yaml",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/"
+        "pilot-v8-task-0001-simulative.yaml",
+        "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/"
+        "pilot-v8-task-0001-reactive.yaml",
         "src/giclab/harness/sira_gate_a.py",
         "src/giclab/harness/safety.py",
     )
@@ -1026,14 +1039,19 @@ def test_autonomous_clean_descendant_reuses_authority_and_entry_receipt(
     assert dynamic["provider_entry_package_commit"] == base_commit
     assert dynamic["provider_package_transition"]["to_package_commit"] == descendant_commit
 
-    science_projection = (
+    execution_contract = (
         repository
         / "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
-        "T09_PILOT_V8_SCIENCE_PROJECTION.json"
+        "T09_PILOT_EXECUTION_CONTRACT.json"
     )
-    science_projection.write_text("{}\n", encoding="utf-8")
+    changed_execution = json.loads(execution_contract.read_text(encoding="utf-8"))
+    changed_execution["model_revision"] = "scientific-drift-fixture"
+    execution_contract.write_text(
+        json.dumps(changed_execution, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
     subprocess.run(
-        ["git", "-C", str(repository), "add", str(science_projection)],
+        ["git", "-C", str(repository), "add", str(execution_contract)],
         check=True,
     )
     subprocess.run(
@@ -1046,11 +1064,107 @@ def test_autonomous_clean_descendant_reuses_authority_and_entry_receipt(
         capture_output=True,
         text=True,
     ).stdout.strip()
-    with pytest.raises(provider.T09ProviderError, match="changed frozen science"):
+    with pytest.raises(provider.T09ProviderError, match="stored science projection is stale"):
         provider.autonomous_preflight_package_transition(
             repository,
             from_package_commit=descendant_commit,
             to_package_commit=drift_commit,
+        )
+
+    subprocess.run(
+        ["git", "-C", str(repository), "switch", "--quiet", "--detach", descendant_commit],
+        check=True,
+    )
+    command_package = (
+        repository
+        / "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
+        "T09_PILOT_COMMAND_MANIFESTS.json"
+    )
+    changed_commands = json.loads(command_package.read_text(encoding="utf-8"))
+    changed_commands["manifests"][0]["argv"][-1] = "43"
+    changed_commands["manifests"][0]["argv_sha256"] = provider._json_value_sha256(
+        changed_commands["manifests"][0]["argv"]
+    )
+    command_package.write_text(
+        json.dumps(changed_commands, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    subprocess.run(["git", "-C", str(repository), "add", str(command_package)], check=True)
+    subprocess.run(
+        ["git", "-C", str(repository), "commit", "--quiet", "-m", "test command drift"],
+        check=True,
+    )
+    command_drift_commit = subprocess.run(
+        ["git", "-C", str(repository), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    with pytest.raises(provider.T09ProviderError, match="command manifest drifted"):
+        provider.autonomous_preflight_package_transition(
+            repository,
+            from_package_commit=descendant_commit,
+            to_package_commit=command_drift_commit,
+        )
+
+    subprocess.run(
+        ["git", "-C", str(repository), "switch", "--quiet", "--detach", descendant_commit],
+        check=True,
+    )
+    condition_plan = (
+        repository
+        / "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/"
+        "pilot-v8-task-0000-reactive.yaml"
+    )
+    changed_condition = yaml.safe_load(condition_plan.read_text(encoding="utf-8"))
+    changed_condition["sources"]["model_revision"] = "scientific-drift-fixture"
+    condition_plan.write_text(yaml.safe_dump(changed_condition, sort_keys=False), encoding="utf-8")
+    changed_execution = json.loads(execution_contract.read_text(encoding="utf-8"))
+    changed_execution["attempts"][0]["condition_plan_sha256"] = provider.file_sha256(
+        condition_plan
+    )
+    execution_contract.write_text(
+        json.dumps(changed_execution, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    changed_commands = json.loads(command_package.read_text(encoding="utf-8"))
+    changed_commands["execution_contract_sha256"] = provider.file_sha256(execution_contract)
+    changed_commands["manifests"][0]["condition_plan_sha256"] = provider.file_sha256(
+        condition_plan
+    )
+    for manifest in changed_commands["manifests"]:
+        manifest["execution_contract_sha256"] = provider.file_sha256(execution_contract)
+    command_package.write_text(
+        json.dumps(changed_commands, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repository),
+            "add",
+            str(condition_plan),
+            str(execution_contract),
+            str(command_package),
+        ],
+        check=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(repository), "commit", "--quiet", "-m", "test condition drift"],
+        check=True,
+    )
+    condition_drift_commit = subprocess.run(
+        ["git", "-C", str(repository), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    with pytest.raises(provider.T09ProviderError, match="changed derived science"):
+        provider.autonomous_preflight_package_transition(
+            repository,
+            from_package_commit=descendant_commit,
+            to_package_commit=condition_drift_commit,
         )
 
 
