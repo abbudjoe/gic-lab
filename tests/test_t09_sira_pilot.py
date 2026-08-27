@@ -56,7 +56,7 @@ from giclab.harness.t09_sira_pilot import (
     reserve_condition_start,
     structurally_redact,
 )
-from giclab.registry import load_json
+from giclab.registry import load_json, load_yaml
 from giclab.validation import validate_instance
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -735,6 +735,52 @@ def test_runtime_identity_binds_every_selected_executable_file() -> None:
         ).stdout
         assert hashlib.sha256(committed).hexdigest() == observed
     assert mismatches == set(downstream_fields)
+
+
+def test_autonomous_project_state_preserves_usage_uncertainty() -> None:
+    state = load_yaml(ROOT / "docs/PROJECT_STATE.yaml")["t09_autonomous_pilot_checkpoint"]
+    disposition = load_json(
+        ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive/"
+        "T09_AUTONOMOUS_PILOT_DISPOSITION.json"
+    )
+    for ambiguous in (
+        "total_tokens",
+        "openai_cost_usd",
+        "new_total_cost_usd",
+        "cumulative_t09_cost_usd",
+    ):
+        assert ambiguous not in state
+    assert state["task_model_call_attempts"] == 69
+    assert state["provider_response_receipts"] == 66
+    assert (
+        state["observed_reconciled_total_tokens"]
+        == disposition["usage"]["observed_reconciled_total_tokens"]
+    )
+    costs = disposition["cost_reconciliation"]
+    assert (
+        state["openai_cost_usd_observed_lower_bound"]
+        == costs["new_openai_cost_usd_observed_lower_bound"]
+    )
+    assert (
+        state["openai_cost_usd_reserved_upper_bound"]
+        == costs["new_openai_cost_usd_reserved_upper_bound"]
+    )
+    assert (
+        state["new_total_cost_usd_observed_lower_bound"]
+        == costs["new_total_cost_usd_observed_lower_bound"]
+    )
+    assert (
+        state["new_total_cost_usd_reserved_upper_bound"]
+        == costs["new_total_cost_usd_reserved_upper_bound"]
+    )
+    assert (
+        state["cumulative_t09_cost_usd_observed_lower_bound"]
+        == costs["cumulative_t09_cost_usd_observed_lower_bound"]
+    )
+    assert (
+        state["cumulative_t09_cost_usd_reserved_upper_bound"]
+        == costs["cumulative_t09_cost_usd_reserved_upper_bound"]
+    )
 
 
 def test_runtime_and_execution_bind_the_same_current_evaluator_contract() -> None:

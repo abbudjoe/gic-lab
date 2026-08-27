@@ -243,9 +243,9 @@ and production-readiness claims.
   contract even though those immutable historical bytes correctly retain their
   then-authorized state. This removes the hidden assumption that historical
   authorization bytes must be rewritten to prove current non-replayability.
-- Offline gates: 93 focused V8/policy tests pass; repository validation, strict
+- Offline gates: 94 focused V8/policy tests pass; repository validation, strict
   typing, Ruff checks for the terminal-control repair, and diff hygiene pass. The
-  latest complete suite has 1,464 passes and 22 failures, all assertions tied to
+  latest complete suite has 1,465 passes and 22 failures, all assertions tied to
   V7-or-earlier historical expectations or bindings, including one stale absolute
   worktree path. The repository-wide format check
   also reports ten pre-existing V8 control files; their executed finalizer/runner

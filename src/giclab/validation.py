@@ -365,6 +365,83 @@ def validate_project_state(root: Path = ROOT) -> list[str]:
             if state.get(key) is not False:
                 errors.append(f"docs/PROJECT_STATE.yaml: {key} must be false before Phase 1")
 
+    autonomous = state.get("t09_autonomous_pilot_checkpoint")
+    if isinstance(autonomous, dict):
+        ambiguous_usage_fields = {
+            "total_tokens",
+            "openai_cost_usd",
+            "new_total_cost_usd",
+            "cumulative_t09_cost_usd",
+        }
+        present_ambiguous = sorted(ambiguous_usage_fields.intersection(autonomous))
+        if present_ambiguous:
+            errors.append(
+                "docs/PROJECT_STATE.yaml: autonomous T09 lower-bound usage uses ambiguous "
+                "exact labels: " + ", ".join(present_ambiguous)
+            )
+        disposition_path = (
+            root / "experiments/EXP-0001-sira-simulative-vs-reactive/"
+            "T09_AUTONOMOUS_PILOT_DISPOSITION.json"
+        )
+        if disposition_path.is_file():
+            disposition = load_json(disposition_path)
+            usage = disposition.get("usage")
+            costs = disposition.get("cost_reconciliation")
+            expected = {
+                "task_model_call_attempts": (
+                    usage.get("task_model_call_attempts") if isinstance(usage, dict) else None
+                ),
+                "provider_response_receipts": (
+                    usage.get("task_model_call_attempts", 0)
+                    - usage.get("unreconciled_provider_attempts", 0)
+                    if isinstance(usage, dict)
+                    and isinstance(usage.get("task_model_call_attempts"), int)
+                    and isinstance(usage.get("unreconciled_provider_attempts"), int)
+                    else None
+                ),
+                "observed_reconciled_total_tokens": (
+                    usage.get("observed_reconciled_total_tokens")
+                    if isinstance(usage, dict)
+                    else None
+                ),
+                "openai_cost_usd_observed_lower_bound": (
+                    costs.get("new_openai_cost_usd_observed_lower_bound")
+                    if isinstance(costs, dict)
+                    else None
+                ),
+                "openai_cost_usd_reserved_upper_bound": (
+                    costs.get("new_openai_cost_usd_reserved_upper_bound")
+                    if isinstance(costs, dict)
+                    else None
+                ),
+                "new_total_cost_usd_observed_lower_bound": (
+                    costs.get("new_total_cost_usd_observed_lower_bound")
+                    if isinstance(costs, dict)
+                    else None
+                ),
+                "new_total_cost_usd_reserved_upper_bound": (
+                    costs.get("new_total_cost_usd_reserved_upper_bound")
+                    if isinstance(costs, dict)
+                    else None
+                ),
+                "cumulative_t09_cost_usd_observed_lower_bound": (
+                    costs.get("cumulative_t09_cost_usd_observed_lower_bound")
+                    if isinstance(costs, dict)
+                    else None
+                ),
+                "cumulative_t09_cost_usd_reserved_upper_bound": (
+                    costs.get("cumulative_t09_cost_usd_reserved_upper_bound")
+                    if isinstance(costs, dict)
+                    else None
+                ),
+            }
+            for field, value in expected.items():
+                if autonomous.get(field) != value:
+                    errors.append(
+                        "docs/PROJECT_STATE.yaml: autonomous T09 disposition binding "
+                        f"drifted for {field}"
+                    )
+
     plan = state.get("authoritative_plan")
     if not isinstance(plan, str):
         errors.append("docs/PROJECT_STATE.yaml: authoritative_plan must resolve to a file")
