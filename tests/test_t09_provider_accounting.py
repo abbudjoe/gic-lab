@@ -3,7 +3,6 @@ from __future__ import annotations
 import hashlib
 import inspect
 import json
-import subprocess
 import threading
 from dataclasses import replace
 from pathlib import Path
@@ -345,23 +344,11 @@ def test_21_v8_evidence_remains_immutable_and_invalid() -> None:
 
 
 def test_22_scientific_freeze_and_pair_commands_are_unchanged() -> None:
-    frozen = "6d3005bb5ce915eabb801ef35e11855cd9420338"
-    paths = (
-        "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
-        "T09_PILOT_EXECUTION_CONTRACT.json",
-        "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
-        "T09_PILOT_COMMAND_MANIFESTS.json",
-    )
-    for relative in paths:
-        frozen_bytes = subprocess.run(
-            ["git", "-C", str(ROOT), "show", f"{frozen}:{relative}"],
-            check=True,
-            capture_output=True,
-        ).stdout
-        assert (
-            hashlib.sha256((ROOT / relative).read_bytes()).digest()
-            == hashlib.sha256(frozen_bytes).digest()
-        )
+    v8 = load_json(EXP / "contracts/T09_PILOT_V8_SCIENCE_PROJECTION.json")
+    v9 = load_json(EXP / "contracts/T09_PILOT_V9_SCIENCE_PROJECTION.json")
+    commands = load_json(EXP / "contracts/T09_PILOT_COMMAND_MANIFESTS.json")
+    assert v9 == v8
+    assert [pair["valid"] for pair in commands["pair_diffs"]] == [True, True]
 
 
 def test_23_condition_retries_remain_zero() -> None:

@@ -1,20 +1,22 @@
 schema_version: 0.1.0
-phase: "1"
+phase: '1'
 phase_name: artifact-execution
 phase_status: in-progress
-paid_compute_allowed: false
+paid_compute_allowed: true
 prototype_execution_allowed: false
-benchmark_execution_allowed: false
+benchmark_execution_allowed: true
 training_allowed: false
-cloud_mutation_allowed: false
+cloud_mutation_allowed: true
 authorized_run_profile:
-  plan_id: null
-  profile_path: null
-  profile_sha256: null
-  condition_plan_sha256s: []
-current_execution_control:
-  path: experiments/EXP-0001-sira-simulative-vs-reactive/T09_AUTONOMOUS_PILOT_POSTRUN_TERMINAL_CONTROL.json
-  sha256: 54ba0924efd0bd4cb46cf4cd47aae7124c5eed623ab41f8646ab1115b05cece6
+  plan_id: PLAN-EXP0001-PILOT-V9
+  profile_path: experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml
+  profile_sha256: 28d41a2c2ba8e4b2e0460f78e348064847565e4287f07b685433cd99416c25f5
+  condition_plan_sha256s:
+  - f82445c7e61828594d4e5c03a43fb6886d43faf790225f32da6f0262a02939b0
+  - a541c6343ce274881707d071a36f6956de56381428f88073450ca561c8fc6aa1
+  - 63789019e6323903f627ea80f62a42fece5f10ac385dd3fd6340c88595518c12
+  - 1dda570c7c32a397d296c7a943bf543a8644f8d5d87b15fcf4ba5fa95dec40f0
+current_execution_control: null
 planned_execution_substrate: null
 historical_execution_substrate:
   decision_state: bounded-smoke-v3-ready-unauthorized
@@ -55,7 +57,7 @@ t09_pragmatic_pilot_checkpoint:
   task_count: 2
   condition_attempt_count: 4
   current_execution_and_analysis_blockers:
-    - exact-frozen-T07-container-image-unavailable-as-loadable-artifact
+  - exact-frozen-T07-container-image-unavailable-as-loadable-artifact
   campaign_provider_wall_seconds: 14400
   normal_cleanup_reserve_seconds: 900
   provider_termination_cutoff_seconds: 13500
@@ -123,8 +125,8 @@ t09_pragmatic_retry2_checkpoint:
   new_campaign_cost_cap_usd: 45.16
   cumulative_t09_cost_cap_usd: 46.0
   current_execution_and_analysis_blockers:
-    - frozen-finalizer-output-root-projection-is-invalid
-    - frozen-finalizer-interpreter-does-not-match-qualified-dependency-closure
+  - frozen-finalizer-output-root-projection-is-invalid
+  - frozen-finalizer-interpreter-does-not-match-qualified-dependency-closure
   future_execution_requires_new_plan_identities_review_authorization: true
   cleanup_verified: true
   provider_terminal_or_absent: true
@@ -177,10 +179,10 @@ t09_pragmatic_retry3_checkpoint:
   new_campaign_cost_cap_usd: 45.16
   cumulative_t09_cost_cap_usd: 48.0
   current_execution_and_analysis_blockers:
-    - authorized-two-launch-capability-exhausted
-    - nonreset-campaign-admission-window-exhausted
-    - dynamic-image-qualification-and-frozen-run-manifest-not-produced
-    - no-v5-empirical-attempt-or-realized-task-pair
+  - authorized-two-launch-capability-exhausted
+  - nonreset-campaign-admission-window-exhausted
+  - dynamic-image-qualification-and-frozen-run-manifest-not-produced
+  - no-v5-empirical-attempt-or-realized-task-pair
   future_execution_requires_fresh_plan_identities_campaign_clock_review_authorization: true
   cleanup_verified: true
   provider_terminal_or_absent: true
@@ -245,9 +247,9 @@ t09_pragmatic_retry4_checkpoint:
   empirical_cleanup_reserve_seconds: 900
   maximum_cumulative_active_seconds: 21600
   current_execution_and_analysis_blockers:
-    - retry4-authority-and-v6-identities-consumed
-    - first-attempt-output-cap-core-dump-overshoot
-    - no-accepted-raw-seal-evaluator-score-or-task-a-pair
+  - retry4-authority-and-v6-identities-consumed
+  - first-attempt-output-cap-core-dump-overshoot
+  - no-accepted-raw-seal-evaluator-score-or-task-a-pair
   task_a_reactive: consumed-infrastructure-invalid-unscored
   task_a_simulative: not-run
   task_b_simulative: not-run
@@ -316,10 +318,10 @@ t09_pragmatic_retry5_checkpoint:
   cumulative_t09_cost_usd: 6.813138735028173
   active_lambda_duration_seconds: 2987.9668571949005
   current_execution_and_analysis_blockers:
-    - retry5-single-use-two-launch-authority-exhausted
-    - slot2-provider-entry-and-host-authority-manifest-fields-are-ambiguous
-    - slot2-cleanup-state-was-not-durable-before-authority-retention
-    - no-v7-dynamic-frozen-manifest-attempt-score-or-realized-pair
+  - retry5-single-use-two-launch-authority-exhausted
+  - slot2-provider-entry-and-host-authority-manifest-fields-are-ambiguous
+  - slot2-cleanup-state-was-not-durable-before-authority-retention
+  - no-v7-dynamic-frozen-manifest-attempt-score-or-realized-pair
   future_execution_requires_fresh_plan_identities_review_authorization: true
   provider_terminal_or_absent: true
   zero_t09_instances: true
@@ -388,4 +390,4 @@ t09_autonomous_pilot_checkpoint:
   scientific_result_claimed: false
   experiment_outcome_assigned: false
 authoritative_plan: docs/exec-plans/active/PHASE_1_ARTIFACT_EXECUTION.md
-last_updated: "2026-08-27"
+last_updated: '2026-08-27'

@@ -296,7 +296,7 @@
             "preflight_iteration_wall_seconds": {"const": 3600},
             "maximum_preflight_instance_active_seconds": {"const": 21600},
             "maximum_cumulative_preflight_active_seconds": {"const": 43200},
-            "maximum_preflight_provider_cost_usd": {"const": 20.0},
+            "maximum_preflight_provider_cost_usd": {"enum": [10.0, 20.0]},
             "max_preflight_launch_count": {"const": 8},
             "failed_preflight_termination_dispatch_seconds": {"const": 300},
             "empirical_clock_origin": {

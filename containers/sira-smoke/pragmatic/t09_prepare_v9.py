@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import re
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +24,7 @@ HOST = "RUN-T09-PILOT-HOST-AUTONOMOUS-0002"
 QUALIFICATION = "QUAL-T09-PILOT-V9-IMAGE-AUTONOMOUS-0002"
 LOCAL_QUALIFICATION = "QUAL-T09-PILOT-V9-LOCAL-FINALIZER-AUTONOMOUS-0002"
 FROZEN_MANIFEST = "RUN-MANIFEST-EXP0001-PILOT-V9-AUTONOMOUS-0002"
+V8_SOURCE_COMMIT = "f6d175f3464ceef11e3f6c02d6aba30fe4ceb9f6"
 ATTEMPT_REPLACEMENTS = {
     "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0001": ("RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0002"),
     "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0001": ("RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0002"),
@@ -128,6 +130,14 @@ def write_json(path: Path, value: object) -> None:
     )
 
 
+def git_blob(root: Path, relative: str) -> bytes:
+    return subprocess.run(
+        ["git", "-C", str(root), "show", f"{V8_SOURCE_COMMIT}:{relative}"],
+        check=True,
+        capture_output=True,
+    ).stdout
+
+
 def prepare(root: Path, reviewed_ancestor: str) -> None:
     if re.fullmatch(r"[a-f0-9]{40}", reviewed_ancestor) is None:
         raise ValueError("reviewed ancestor must be a full commit")
@@ -137,9 +147,15 @@ def prepare(root: Path, reviewed_ancestor: str) -> None:
     execution_path = experiment / "contracts/T09_PILOT_EXECUTION_CONTRACT.json"
     commands_path = experiment / "contracts/T09_PILOT_COMMAND_MANIFESTS.json"
 
-    source_execution = json.loads(execution_path.read_text(encoding="utf-8"))
+    execution_relative = execution_path.relative_to(root).as_posix()
+    runtime_relative = runtime_path.relative_to(root).as_posix()
+    plan_relative = plan_path.relative_to(root).as_posix()
+    source_execution = json.loads(git_blob(root, execution_relative))
     source_science = scientific_projection(source_execution)
-    plan = transform(yaml.safe_load(plan_path.read_text(encoding="utf-8")))
+    source_plan_bytes = git_blob(root, plan_relative)
+    proposal_plan = experiment / "run-plans/proposals/PLAN-EXP0001-PILOT-V8.yaml"
+    proposal_plan.write_bytes(source_plan_bytes)
+    plan = transform(yaml.safe_load(source_plan_bytes))
     plan["plan_id"] = PLAN
     plan["execution"] = {"authorized": True, "authorization_reference": AUTHORIZATION}
     plan["budget"].update(
@@ -167,7 +183,7 @@ def prepare(root: Path, reviewed_ancestor: str) -> None:
     plan_path.write_text(yaml.safe_dump(plan, sort_keys=False), encoding="utf-8")
     plan_sha = sha256(plan_path)
 
-    runtime = transform(json.loads(runtime_path.read_text(encoding="utf-8")))
+    runtime = transform(json.loads(git_blob(root, runtime_relative)))
     runtime["plan_id"] = PLAN
     runtime["identity_id"] = "RUNTIME-EXP0001-PILOT-V9-AUTONOMOUS-0002"
     instrumentation = runtime["repository_instrumentation"]
@@ -223,14 +239,25 @@ def prepare(root: Path, reviewed_ancestor: str) -> None:
     )
     condition_root = experiment / "run-plans/conditions"
     condition_paths: dict[str, Path] = {}
-    for source in sorted(condition_root.glob("pilot-v8-task-*.yaml")):
-        document = transform(yaml.safe_load(source.read_text(encoding="utf-8")))
+    source_condition_names = (
+        "pilot-v8-task-0000-reactive.yaml",
+        "pilot-v8-task-0000-simulative.yaml",
+        "pilot-v8-task-0001-simulative.yaml",
+        "pilot-v8-task-0001-reactive.yaml",
+    )
+    proposal_condition_root = experiment / "run-plans/proposals/conditions"
+    for name in source_condition_names:
+        source_relative = (condition_root / name).relative_to(root).as_posix()
+        source_bytes = git_blob(root, source_relative)
+        (proposal_condition_root / name).write_bytes(source_bytes)
+        (condition_root / name).write_bytes(source_bytes)
+        document = transform(yaml.safe_load(source_bytes))
         document["profile_plan_id"] = PLAN
         document["profile_sha256"] = plan_sha
         document["sources"]["giclab_commit"] = reviewed_ancestor
         document["sources"]["environment_sha256"] = runtime_sha
         document["execution"]["authorization"]["authorization_reference"] = AUTHORIZATION
-        target = condition_root / source.name.replace("pilot-v8", "pilot-v9")
+        target = condition_root / name.replace("pilot-v8", "pilot-v9")
         target.write_text(yaml.safe_dump(document, sort_keys=False), encoding="utf-8")
         condition_paths[document["run_id"]] = target
     for attempt in execution["attempts"]:
@@ -290,6 +317,9 @@ def prepare(root: Path, reviewed_ancestor: str) -> None:
         item for item in registry["experiments"] if item["experiment_id"] == "EXP-0001"
     )
     experiment_entry.pop("current_execution_control", None)
+    proposal_relative = proposal_plan.relative_to(root).as_posix()
+    if proposal_relative not in experiment_entry["run_profiles"]:
+        experiment_entry["run_profiles"].append(proposal_relative)
     registry_path.write_text(yaml.safe_dump(registry, sort_keys=False), encoding="utf-8")
 
 

@@ -29,20 +29,20 @@
     "utilization_samples_when_practical": "host-nvidia-smi-without-unique-identifiers-at-preflight-attempt-boundaries-and-pretermination",
     "visibility": "host-visible; no Docker GPU device request; CUDA_VISIBLE_DEVICES empty inside every pilot/preflight/evaluator container"
   },
-  "identity_id": "RUNTIME-EXP0001-PILOT-V8-AUTONOMOUS-0001",
-  "plan_id": "PLAN-EXP0001-PILOT-V8",
+  "identity_id": "RUNTIME-EXP0001-PILOT-V9-AUTONOMOUS-0002",
+  "plan_id": "PLAN-EXP0001-PILOT-V9",
   "replacement_image_policy": {
     "digest_inequality_alone_is_material": false,
     "empirical_entry_before_binding_allowed": false,
     "exact_historical_digest_equality_required": false,
     "fallback_build_count_maximum": 1,
     "freeze_interpretation": "reviewed source and policy bytes are final before launch; slot 1 may use a content-verified retained import or the one campaign fallback build, while slot 2 must import the exact retained image and fails closed before any build; the accepted image is functionally qualified and bound before the empirical clock begins",
-    "frozen_run_manifest_id": "RUN-MANIFEST-EXP0001-PILOT-V8-AUTONOMOUS-0001",
+    "frozen_run_manifest_id": "RUN-MANIFEST-EXP0001-PILOT-V9-AUTONOMOUS-0002",
     "historical_image_digest": "sha256:035edf61718e84a8156f4f0f7817b134b0ce31488d3f0b50bbfba2b4a30cc61c",
     "preferred_import_count": 1,
     "python_interpreter_identity": "source-derived-path-and-executable-sha256-in-frozen-run-manifest",
     "qualification_count": 1,
-    "qualification_id": "QUAL-T09-PILOT-V8-IMAGE-AUTONOMOUS-0001",
+    "qualification_id": "QUAL-T09-PILOT-V9-IMAGE-AUTONOMOUS-0002",
     "retained_image_archive_bytes": 1207128576,
     "retained_image_archive_sha256": "623e717c2182eca9cee2f471b7ecd9a57bead2f5263dee64aa5cd954eae5ddb0",
     "retained_image_expected_id": "sha256:abe8ed38f5c5b5a0a63fa726a74034dc5c192a12c0fccfe1319f97c27ceaf0a3",
@@ -56,11 +56,11 @@
     "files": [
       {
         "path": "src/giclab/harness/sira_gate_a_runtime.py",
-        "sha256": "2ee65e44aaa0a2709a85b2b0d1c29e28b9229169ee4d4a43b009d4529b0a8b63"
+        "sha256": "ac004a4b8687b6a2138b6f4e15ff2bf91d9d4042d66c567374a02a78797a727c"
       },
       {
         "path": "src/giclab/harness/sira_gate_a.py",
-        "sha256": "b9a3ae20dc07056bb16dbf3807c8f3912bda9cf31b04a47d80c7de453db971af"
+        "sha256": "193217b9c018e9b33391715d379ba831d499d1aea4d626c0bdcb3e76d34b92b8"
       },
       {
         "path": "src/giclab/harness/safety.py",
@@ -68,11 +68,11 @@
       },
       {
         "path": "src/giclab/harness/t09_sira_pilot.py",
-        "sha256": "4a56724443a1097e9b84e470896c232aacb4af8fb488eabf3062435ca3ef31b0"
+        "sha256": "f4b302ba020d8357992306215e06ac390b2d45c672882ac5fb942cf5eb969bcb"
       },
       {
         "path": "src/giclab/harness/lambda_campaign_lifecycle.py",
-        "sha256": "bd0fa31d632c4a20431899f9039840704ffd1fd01c3305c7e2e86f181dd6a89b"
+        "sha256": "3c61de21c600960c75ca3531e77bbfe5c8c22dd01aa9220d6be8acf91a7fa0ab"
       },
       {
         "path": "src/giclab/harness/lambda_l2m_observer.py",
@@ -80,15 +80,15 @@
       },
       {
         "path": "src/giclab/harness/t09_pragmatic_provider.py",
-        "sha256": "4576a5f821eb3471b03b97ac0e87cf2009c132eea44653d1a01739df89bdc812"
+        "sha256": "022b667035fd1a5915482978e03c3cd87c39865714c0835fa87b29125fe32955"
       },
       {
         "path": "containers/sira-smoke/pragmatic/t09_remote_runner.py",
-        "sha256": "080314a80eb658104fcf7b42c8eb302f3d0961a57c08dcf4e9d8ecb352bd095c"
+        "sha256": "62fc2f333eaaa027a680c3b6e3b171bdee0b036523e2e546cc19006c01779e4f"
       },
       {
         "path": "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py",
-        "sha256": "13e9bab599e0d0dfcc9276cd37132f7091fab64d93c1c442b77cd1f232a6c1ab"
+        "sha256": "6cb1c1d60a1370fb6ccdcbd219bbd7831c18290f8e195925e5fb6bfbe3295bc9"
       },
       {
         "path": "containers/sira-smoke/pragmatic/t09_preflight.py",
@@ -96,7 +96,7 @@
       },
       {
         "path": "containers/sira-smoke/pragmatic/t09_freeze_commands.py",
-        "sha256": "23f5ba046f27014335ed5a97cae449c717829ae55c22756afe1042ad7975c346"
+        "sha256": "6e3629895025e0e9d8cfc29e86d42dd75b3643f5fd6e7910e5494181d4d9f3c6"
       },
       {
         "path": "containers/sira-smoke/pragmatic/t09_secret_preflight.py",
@@ -129,9 +129,13 @@
       {
         "path": "containers/sira-smoke/pragmatic/t09_core_preflight.py",
         "sha256": "c2221dd34c094003c47f07a1d1b0b3afae0201d02857e7f91907ed43ee60104e"
+      },
+      {
+        "path": "containers/sira-smoke/pragmatic/t09_provider_accounting_preflight.py",
+        "sha256": "e74bbb440880c76131af2eead96050334562f81d79a85836489504566bb9f415"
       }
     ],
-    "reviewed_implementation_ancestor": "2d42885fec37d6501273de38a7c85b4553b5b95d",
+    "reviewed_implementation_ancestor": "cbbf96b048c9fbf314cb7497f440ac4ac1a04e61",
     "scope": [
       "content-addressed-no-follow-private-regression-archive-staging",
       "raw-attempt-root-typed-binding-before-empirical-entry",

@@ -6,12 +6,12 @@
   "required": ["schema_version", "contract_id", "plan_id", "experiment_id", "authorized", "terminal_state", "execution_eligibility", "material_blockers", "calibration_only", "sira_commit", "model_revision", "service_tier", "randomization_seed", "contract_bindings", "runtime", "provider_lifecycle", "runtime_limits", "budget_calibration", "identities", "attempts", "first_pair_checkpoint", "evidence", "gpu_accounting", "cleanup", "interpretation_boundary"],
   "properties": {
     "schema_version": {"const": "0.4.0"},
-    "contract_id": {"const": "EXECUTION-CONTRACT-EXP0001-PILOT-V8"},
-    "plan_id": {"const": "PLAN-EXP0001-PILOT-V8"},
+    "contract_id": {"const": "EXECUTION-CONTRACT-EXP0001-PILOT-V9"},
+    "plan_id": {"const": "PLAN-EXP0001-PILOT-V9"},
     "experiment_id": {"const": "EXP-0001"},
     "authorized": {"const": true},
     "authorization_reference": {"type": "string", "minLength": 1},
-    "terminal_state": {"const": "current-turn-authorized-autonomous-pending-dynamic-preflight"},
+    "terminal_state": {"const": "current-turn-authorized-retry2-pending-dynamic-preflight"},
     "execution_eligibility": {"const": "current-turn-authorized-after-dynamic-preflight"},
     "material_blockers": {
       "type": "array",
@@ -48,7 +48,7 @@
         "preflight_iteration_wall_seconds": {"const": 3600},
         "maximum_preflight_instance_active_seconds": {"const": 21600},
         "maximum_cumulative_preflight_active_seconds": {"const": 43200},
-        "maximum_preflight_provider_cost_usd": {"const": 20.0},
+        "maximum_preflight_provider_cost_usd": {"const": 10.0},
         "max_preflight_launch_count": {"const": 8},
         "failed_preflight_termination_dispatch_seconds": {"const": 300},
         "empirical_clock_origin": {"const": "after-durable-frozen-run-manifest-publication"},
@@ -63,7 +63,7 @@
         "persistent_filesystems": {"const": 0},
         "admission_model": {"const": "actual-elapsed-next-condition-hard-wall-plus-evidence-export-provider-handoff-and-cleanup-reserves"},
         "future_attempt_maxima_reserved_at_campaign_start": {"const": false},
-        "provider_control_plane": {"const": "autonomous-v8-separated-preflight-engineering-and-empirical-authority"}
+        "provider_control_plane": {"const": "autonomous-v9-provider-call-accounting-repair"}
       },
       "additionalProperties": false
     },
@@ -100,8 +100,8 @@
         "type": "object",
         "required": ["run_id", "pair_id", "task_id", "task_index", "condition", "order_index", "output_root", "raw_output_root", "finalized_output_root", "condition_plan_path", "condition_plan_sha256", "protocol_sha256", "config_sha256", "environment_sha256", "giclab_commit", "upstream_argv"],
         "properties": {
-          "run_id": {"type": "string", "pattern": "^RUN-T09-TASK-[AB]-(?:REACTIVE|SIMULATIVE)-AUTONOMOUS-0001$"},
-          "pair_id": {"enum": ["PAIR-EXP0001-PILOT-V8-TASK-A", "PAIR-EXP0001-PILOT-V8-TASK-B"]},
+          "run_id": {"type": "string", "pattern": "^RUN-T09-TASK-[AB]-(?:REACTIVE|SIMULATIVE)-AUTONOMOUS-0002$"},
+          "pair_id": {"enum": ["PAIR-EXP0001-PILOT-V9-TASK-A", "PAIR-EXP0001-PILOT-V9-TASK-B"]},
           "task_id": {"enum": ["7dcbbbdc7f1120cd", "2120afba8009bad3"]},
           "task_index": {"enum": [0, 1]},
           "condition": {"enum": ["reactive", "simulative"]},

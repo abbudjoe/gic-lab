@@ -1100,8 +1100,8 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
             {
                 "authorized": True,
                 "authorization_reference": (
-                    "AUTH-T09-AUTONOMOUS-PREFLIGHT-TO-PILOT-2026-08-27:sha256:"
-                    "80ded0e246b4f070c3992ae872111c19c64d1ef30115d65a8641709f06e1a484"
+                    "AUTH-T09-AUTONOMOUS-RETRY2-2026-08-27:sha256:"
+                    "aea63a42cf0270ad0a41a929b4b8eb19dd1c3af73abfe97163c1d90e6077d3da"
                 ),
             }
             if name == "pilot"
@@ -1243,7 +1243,7 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
         "preflight_iteration_wall_seconds": 3_600,
         "maximum_preflight_instance_active_seconds": 21_600,
         "maximum_cumulative_preflight_active_seconds": 43_200,
-        "maximum_preflight_provider_cost_usd": 20.0,
+        "maximum_preflight_provider_cost_usd": 10.0,
         "max_preflight_launch_count": 8,
         "failed_preflight_termination_dispatch_seconds": 300,
         "empirical_clock_origin": "after-durable-frozen-run-manifest-publication",
@@ -1277,7 +1277,7 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
             "5160-second admission gate is rerun immediately before durable release and any "
             "timeout consumes the started identity as infrastructure-invalid"
         ),
-        "control_plane": ("autonomous-v8-separated-preflight-engineering-and-empirical-authority"),
+        "control_plane": "autonomous-v9-provider-call-accounting-repair",
     }
     if pilot_lifecycle != expected_lifecycle:
         errors.append("EXP-0001 pilot: provider lifecycle contract drift")
@@ -1723,7 +1723,9 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
             "frozen_command_manifests_sha256": command_path,
             "frozen_runtime_identity_sha256": runtime_path,
         }
-        if isinstance(scientific_freeze, dict):
+        if isinstance(scientific_freeze, dict) and execution.get("plan_id") == disposition.get(
+            "plan_id"
+        ):
             for field, path in frozen_package_bindings.items():
                 observed_digest = hashlib.sha256(path.read_bytes()).hexdigest()
                 if scientific_freeze.get(field) != observed_digest:
@@ -1833,7 +1835,7 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
     plan_path = exp_root / "run-plans/pilot.yaml"
     if (
         command_document.get("schema_version") != "0.1.0"
-        or command_document.get("plan_id") != "PLAN-EXP0001-PILOT-V8"
+        or command_document.get("plan_id") != "PLAN-EXP0001-PILOT-V9"
         or command_document.get("execution_contract_sha256") != execution_sha256
         or command_document.get("plan_sha256") != hashlib.sha256(plan_path.read_bytes()).hexdigest()
     ):

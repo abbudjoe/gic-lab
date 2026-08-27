@@ -10,6 +10,7 @@ from pathlib import Path
 from types import ModuleType
 
 import pytest
+import yaml
 from harness_test_support import valid_plan_data
 
 import giclab.harness.adapters.sira as sira_module
@@ -561,6 +562,26 @@ def _clean_contract_repository(tmp_path: Path) -> Path:
         target = repository / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(ROOT / relative, target)
+    project_state_path = repository / "docs/PROJECT_STATE.yaml"
+    project_state = yaml.safe_load(project_state_path.read_text(encoding="utf-8"))
+    for field in (
+        "paid_compute_allowed",
+        "prototype_execution_allowed",
+        "benchmark_execution_allowed",
+        "training_allowed",
+        "cloud_mutation_allowed",
+    ):
+        project_state[field] = False
+    project_state["authorized_run_profile"] = {
+        "plan_id": None,
+        "profile_path": None,
+        "profile_sha256": None,
+        "condition_plan_sha256s": [],
+    }
+    project_state["current_execution_control"] = None
+    project_state_path.write_text(
+        yaml.safe_dump(project_state, sort_keys=False), encoding="utf-8"
+    )
     subprocess.run(("git", "init", "-q", str(repository)), check=True)
     subprocess.run(("git", "-C", str(repository), "add", "."), check=True)
     subprocess.run(

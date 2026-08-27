@@ -2,22 +2,22 @@
   "attempts": [
     {
       "condition": "reactive",
-      "condition_plan_path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v8-task-0000-reactive.yaml",
-      "condition_plan_sha256": "36e7adf60486755c0de82c9bd9c36eaed0cec461cb14a51388ebab339703c2d4",
+      "condition_plan_path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v9-task-0000-reactive.yaml",
+      "condition_plan_sha256": "6646b3ebd909962c794d85a165a9c4743cb5dba4316c4e60b79511250b5a02f5",
       "config_sha256": "cf25acd90f9d73d9aef978a7d059cfbc74a1447d901f4e3d27e2b5d9f121d2ed",
-      "environment_sha256": "603ab76f5f7ced950431f0388ecbe4fc228df9ca1db81b16ef3e9166cfd7f7fd",
-      "finalized_output_root": "artifacts/EXP-0001/pilot-v8/task-a/reactive/attempt-autonomous-0001/finalized",
-      "giclab_commit": "2d42885fec37d6501273de38a7c85b4553b5b95d",
+      "environment_sha256": "35cd352ad7b1db7f1d99475d8de025e4773bf9696f09cc55e01d56a43af7cd34",
+      "finalized_output_root": "artifacts/EXP-0001/pilot-v9/task-a/reactive/attempt-autonomous-0002/finalized",
+      "giclab_commit": "cbbf96b048c9fbf314cb7497f440ac4ac1a04e61",
       "order_index": 1,
-      "output_root": "artifacts/EXP-0001/pilot-v8/task-a/reactive/attempt-autonomous-0001",
-      "pair_id": "PAIR-EXP0001-PILOT-V8-TASK-A",
+      "output_root": "artifacts/EXP-0001/pilot-v9/task-a/reactive/attempt-autonomous-0002",
+      "pair_id": "PAIR-EXP0001-PILOT-V9-TASK-A",
       "protocol_sha256": "5356fc8b3806f4135eb570f65b67da2f94463582db5e3e609320e23dbdb2a3f7",
-      "raw_output_root": "artifacts/EXP-0001/pilot-v8/task-a/reactive/attempt-autonomous-0001/raw",
-      "run_id": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0001",
+      "raw_output_root": "artifacts/EXP-0001/pilot-v9/task-a/reactive/attempt-autonomous-0002/raw",
+      "run_id": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0002",
       "task_id": "7dcbbbdc7f1120cd",
       "task_index": 0,
       "upstream_argv": [
-        "EXP-0001-PILOT-V8-TASK-A-REACTIVE",
+        "EXP-0001-PILOT-V9-TASK-A-REACTIVE",
         "--dataset",
         "fanout",
         "--mode",
@@ -37,7 +37,7 @@
         "--data_root",
         "/opt/sira/data",
         "--output_dir",
-        "/opt/giclab-artifacts/artifacts/EXP-0001/pilot-v8/task-a/reactive/attempt-autonomous-0001/raw/sira-output",
+        "/opt/giclab-artifacts/artifacts/EXP-0001/pilot-v9/task-a/reactive/attempt-autonomous-0002/raw/sira-output",
         "--start_idx",
         "0",
         "--end_idx",
@@ -48,22 +48,22 @@
     },
     {
       "condition": "simulative",
-      "condition_plan_path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v8-task-0000-simulative.yaml",
-      "condition_plan_sha256": "9096195dfba93d058cf60e8b0c1e0f85483733f642a3b35c8d9a445cad66fbdd",
+      "condition_plan_path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v9-task-0000-simulative.yaml",
+      "condition_plan_sha256": "86aad4aeea254e3692b8897fba4ff568a287fa22af93fbdfaf89e21c1c99a337",
       "config_sha256": "cf25acd90f9d73d9aef978a7d059cfbc74a1447d901f4e3d27e2b5d9f121d2ed",
-      "environment_sha256": "603ab76f5f7ced950431f0388ecbe4fc228df9ca1db81b16ef3e9166cfd7f7fd",
-      "finalized_output_root": "artifacts/EXP-0001/pilot-v8/task-a/simulative/attempt-autonomous-0001/finalized",
-      "giclab_commit": "2d42885fec37d6501273de38a7c85b4553b5b95d",
+      "environment_sha256": "35cd352ad7b1db7f1d99475d8de025e4773bf9696f09cc55e01d56a43af7cd34",
+      "finalized_output_root": "artifacts/EXP-0001/pilot-v9/task-a/simulative/attempt-autonomous-0002/finalized",
+      "giclab_commit": "cbbf96b048c9fbf314cb7497f440ac4ac1a04e61",
       "order_index": 2,
-      "output_root": "artifacts/EXP-0001/pilot-v8/task-a/simulative/attempt-autonomous-0001",
-      "pair_id": "PAIR-EXP0001-PILOT-V8-TASK-A",
+      "output_root": "artifacts/EXP-0001/pilot-v9/task-a/simulative/attempt-autonomous-0002",
+      "pair_id": "PAIR-EXP0001-PILOT-V9-TASK-A",
       "protocol_sha256": "5356fc8b3806f4135eb570f65b67da2f94463582db5e3e609320e23dbdb2a3f7",
-      "raw_output_root": "artifacts/EXP-0001/pilot-v8/task-a/simulative/attempt-autonomous-0001/raw",
-      "run_id": "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0001",
+      "raw_output_root": "artifacts/EXP-0001/pilot-v9/task-a/simulative/attempt-autonomous-0002/raw",
+      "run_id": "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0002",
       "task_id": "7dcbbbdc7f1120cd",
       "task_index": 0,
       "upstream_argv": [
-        "EXP-0001-PILOT-V8-TASK-A-SIMULATIVE",
+        "EXP-0001-PILOT-V9-TASK-A-SIMULATIVE",
         "--dataset",
         "fanout",
         "--mode",
@@ -83,7 +83,7 @@
         "--data_root",
         "/opt/sira/data",
         "--output_dir",
-        "/opt/giclab-artifacts/artifacts/EXP-0001/pilot-v8/task-a/simulative/attempt-autonomous-0001/raw/sira-output",
+        "/opt/giclab-artifacts/artifacts/EXP-0001/pilot-v9/task-a/simulative/attempt-autonomous-0002/raw/sira-output",
         "--start_idx",
         "0",
         "--end_idx",
@@ -94,22 +94,22 @@
     },
     {
       "condition": "simulative",
-      "condition_plan_path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v8-task-0001-simulative.yaml",
-      "condition_plan_sha256": "a4005f66ce314ddd19367b6ff13e9f257f5098773b135c3d34abdbf4ed45ce6b",
+      "condition_plan_path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v9-task-0001-simulative.yaml",
+      "condition_plan_sha256": "212bf9a8379ddfd4eace4b5164eac26438088e255bfc73fd43618fc58830025c",
       "config_sha256": "cf25acd90f9d73d9aef978a7d059cfbc74a1447d901f4e3d27e2b5d9f121d2ed",
-      "environment_sha256": "603ab76f5f7ced950431f0388ecbe4fc228df9ca1db81b16ef3e9166cfd7f7fd",
-      "finalized_output_root": "artifacts/EXP-0001/pilot-v8/task-b/simulative/attempt-autonomous-0001/finalized",
-      "giclab_commit": "2d42885fec37d6501273de38a7c85b4553b5b95d",
+      "environment_sha256": "35cd352ad7b1db7f1d99475d8de025e4773bf9696f09cc55e01d56a43af7cd34",
+      "finalized_output_root": "artifacts/EXP-0001/pilot-v9/task-b/simulative/attempt-autonomous-0002/finalized",
+      "giclab_commit": "cbbf96b048c9fbf314cb7497f440ac4ac1a04e61",
       "order_index": 1,
-      "output_root": "artifacts/EXP-0001/pilot-v8/task-b/simulative/attempt-autonomous-0001",
-      "pair_id": "PAIR-EXP0001-PILOT-V8-TASK-B",
+      "output_root": "artifacts/EXP-0001/pilot-v9/task-b/simulative/attempt-autonomous-0002",
+      "pair_id": "PAIR-EXP0001-PILOT-V9-TASK-B",
       "protocol_sha256": "5356fc8b3806f4135eb570f65b67da2f94463582db5e3e609320e23dbdb2a3f7",
-      "raw_output_root": "artifacts/EXP-0001/pilot-v8/task-b/simulative/attempt-autonomous-0001/raw",
-      "run_id": "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0001",
+      "raw_output_root": "artifacts/EXP-0001/pilot-v9/task-b/simulative/attempt-autonomous-0002/raw",
+      "run_id": "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0002",
       "task_id": "2120afba8009bad3",
       "task_index": 1,
       "upstream_argv": [
-        "EXP-0001-PILOT-V8-TASK-B-SIMULATIVE",
+        "EXP-0001-PILOT-V9-TASK-B-SIMULATIVE",
         "--dataset",
         "fanout",
         "--mode",
@@ -129,7 +129,7 @@
         "--data_root",
         "/opt/sira/data",
         "--output_dir",
-        "/opt/giclab-artifacts/artifacts/EXP-0001/pilot-v8/task-b/simulative/attempt-autonomous-0001/raw/sira-output",
+        "/opt/giclab-artifacts/artifacts/EXP-0001/pilot-v9/task-b/simulative/attempt-autonomous-0002/raw/sira-output",
         "--start_idx",
         "1",
         "--end_idx",
@@ -140,22 +140,22 @@
     },
     {
       "condition": "reactive",
-      "condition_plan_path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v8-task-0001-reactive.yaml",
-      "condition_plan_sha256": "0a57690cd9f7d452f6ed15d329f1717a12f1ddc354ea320bfb131e3319743265",
+      "condition_plan_path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v9-task-0001-reactive.yaml",
+      "condition_plan_sha256": "e8f3c0d75b8fd82dc9377dcdc630b8665f4ce544026363fd4083decef7ee2e84",
       "config_sha256": "cf25acd90f9d73d9aef978a7d059cfbc74a1447d901f4e3d27e2b5d9f121d2ed",
-      "environment_sha256": "603ab76f5f7ced950431f0388ecbe4fc228df9ca1db81b16ef3e9166cfd7f7fd",
-      "finalized_output_root": "artifacts/EXP-0001/pilot-v8/task-b/reactive/attempt-autonomous-0001/finalized",
-      "giclab_commit": "2d42885fec37d6501273de38a7c85b4553b5b95d",
+      "environment_sha256": "35cd352ad7b1db7f1d99475d8de025e4773bf9696f09cc55e01d56a43af7cd34",
+      "finalized_output_root": "artifacts/EXP-0001/pilot-v9/task-b/reactive/attempt-autonomous-0002/finalized",
+      "giclab_commit": "cbbf96b048c9fbf314cb7497f440ac4ac1a04e61",
       "order_index": 2,
-      "output_root": "artifacts/EXP-0001/pilot-v8/task-b/reactive/attempt-autonomous-0001",
-      "pair_id": "PAIR-EXP0001-PILOT-V8-TASK-B",
+      "output_root": "artifacts/EXP-0001/pilot-v9/task-b/reactive/attempt-autonomous-0002",
+      "pair_id": "PAIR-EXP0001-PILOT-V9-TASK-B",
       "protocol_sha256": "5356fc8b3806f4135eb570f65b67da2f94463582db5e3e609320e23dbdb2a3f7",
-      "raw_output_root": "artifacts/EXP-0001/pilot-v8/task-b/reactive/attempt-autonomous-0001/raw",
-      "run_id": "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0001",
+      "raw_output_root": "artifacts/EXP-0001/pilot-v9/task-b/reactive/attempt-autonomous-0002/raw",
+      "run_id": "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0002",
       "task_id": "2120afba8009bad3",
       "task_index": 1,
       "upstream_argv": [
-        "EXP-0001-PILOT-V8-TASK-B-REACTIVE",
+        "EXP-0001-PILOT-V9-TASK-B-REACTIVE",
         "--dataset",
         "fanout",
         "--mode",
@@ -175,7 +175,7 @@
         "--data_root",
         "/opt/sira/data",
         "--output_dir",
-        "/opt/giclab-artifacts/artifacts/EXP-0001/pilot-v8/task-b/reactive/attempt-autonomous-0001/raw/sira-output",
+        "/opt/giclab-artifacts/artifacts/EXP-0001/pilot-v9/task-b/reactive/attempt-autonomous-0002/raw/sira-output",
         "--start_idx",
         "1",
         "--end_idx",
@@ -185,7 +185,7 @@
       ]
     }
   ],
-  "authorization_reference": "AUTH-T09-AUTONOMOUS-PREFLIGHT-TO-PILOT-2026-08-27:sha256:80ded0e246b4f070c3992ae872111c19c64d1ef30115d65a8641709f06e1a484",
+  "authorization_reference": "AUTH-T09-AUTONOMOUS-RETRY2-2026-08-27:sha256:aea63a42cf0270ad0a41a929b4b8eb19dd1c3af73abfe97163c1d90e6077d3da",
   "authorized": true,
   "budget_calibration": {
     "basis": {
@@ -238,17 +238,17 @@
       "aggregate_model_calls": 4620,
       "aggregate_openai_cost_usd": 40.0,
       "aggregate_tokens": 4000000,
-      "aggregate_total_cost_usd": 68.0,
+      "aggregate_total_cost_usd": 58.0,
       "attempt_lambda_cost_usd": 1.29,
       "attempt_openai_cost_usd": 10.0,
       "attempt_total_cost_usd": 11.29,
       "candidate_ceiling_enforceable": true,
-      "cumulative_t09_cost_cap_usd": 75.0,
+      "cumulative_t09_cost_cap_usd": 90.0,
       "enforcement_basis": "cumulative actual active Lambda seconds plus per-launch 3600-second preflight and post-manifest 13500-second empirical termination cutoff with 900-second cleanup reserve",
-      "maximum_new_cost_under_cumulative_cap_usd": 68.186861265,
+      "maximum_new_cost_under_cumulative_cap_usd": 58.0,
       "pair_total_cost_usd": 22.58,
-      "preflight_lambda_cost_usd": 20.0,
-      "prior_t09_cost_usd": 6.813138735
+      "preflight_lambda_cost_usd": 10.0,
+      "prior_t09_cost_usd": 29.3502995579
     },
     "noncore_headroom_ratio": 258.5206712176,
     "pricing": {
@@ -285,12 +285,12 @@
     },
     "execution_schema": {
       "path": "schemas/t09-sira-pilot-execution.schema.json",
-      "sha256": "eeede9606b68637489c0c54417c95456e060d6ca785e56790a97242df0d43194"
+      "sha256": "55d5e4c80546f5af58ab707f847fc156cd9bd3da9ca76e6c7d5c19bcecf0a004"
     },
     "plan": {
       "path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml",
-      "sha256": "5b77e29e1005979128fa24dbe809bd8b7f92139aa9a49afd68d1daf3de256125",
-      "size_bytes": 13456
+      "sha256": "28d41a2c2ba8e4b2e0460f78e348064847565e4287f07b685433cd99416c25f5",
+      "size_bytes": 13478
     },
     "real_evidence_regression": {
       "path": "experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY4_FINALIZER_REGRESSION.json",
@@ -298,14 +298,14 @@
     },
     "runtime": {
       "path": "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/T09_PILOT_RUNTIME_IDENTITY.json",
-      "sha256": "603ab76f5f7ced950431f0388ecbe4fc228df9ca1db81b16ef3e9166cfd7f7fd"
+      "sha256": "35cd352ad7b1db7f1d99475d8de025e4773bf9696f09cc55e01d56a43af7cd34"
     },
     "score_schema": {
       "path": "schemas/t09-sira-pilot-score.schema.json",
       "sha256": "1f2e85eba21b2bce7a56448e44682e6c00155744ab9a2fa3308dffe3442e7746"
     }
   },
-  "contract_id": "EXECUTION-CONTRACT-EXP0001-PILOT-V8",
+  "contract_id": "EXECUTION-CONTRACT-EXP0001-PILOT-V9",
   "evidence": {
     "aggregate_stage_policy": "optional-only-after-every-consumed-raw-or-essential-authority-has-a-direct-export-completion-and-offhost-acknowledgement; stage-and-final-package-revalidate-and-hash-bind-the-embedded-receipts",
     "causal_parent_event_ids": "required-when-naturally-available",
@@ -384,17 +384,17 @@
   },
   "identities": {
     "evaluator_run_ids": [
-      "RUN-T09-EVAL-TASK-A-REACTIVE-AUTONOMOUS-0001",
-      "RUN-T09-EVAL-TASK-A-SIMULATIVE-AUTONOMOUS-0001",
-      "RUN-T09-EVAL-TASK-B-SIMULATIVE-AUTONOMOUS-0001",
-      "RUN-T09-EVAL-TASK-B-REACTIVE-AUTONOMOUS-0001"
+      "RUN-T09-EVAL-TASK-A-REACTIVE-AUTONOMOUS-0002",
+      "RUN-T09-EVAL-TASK-A-SIMULATIVE-AUTONOMOUS-0002",
+      "RUN-T09-EVAL-TASK-B-SIMULATIVE-AUTONOMOUS-0002",
+      "RUN-T09-EVAL-TASK-B-REACTIVE-AUTONOMOUS-0002"
     ],
-    "evidence_archive_id": "ARCHIVE-EXP0001-PILOT-V8-AUTONOMOUS-0001",
-    "evidence_stage_id": "STAGE-EXP0001-PILOT-V8-AUTONOMOUS-0001",
-    "frozen_run_manifest_id": "RUN-MANIFEST-EXP0001-PILOT-V8-AUTONOMOUS-0001",
-    "host_run_id": "RUN-T09-PILOT-HOST-AUTONOMOUS-0001",
-    "local_finalizer_qualification_id": "QUAL-T09-PILOT-V8-LOCAL-FINALIZER-AUTONOMOUS-0001",
-    "runtime_qualification_id": "QUAL-T09-PILOT-V8-IMAGE-AUTONOMOUS-0001"
+    "evidence_archive_id": "ARCHIVE-EXP0001-PILOT-V9-AUTONOMOUS-0002",
+    "evidence_stage_id": "STAGE-EXP0001-PILOT-V9-AUTONOMOUS-0002",
+    "frozen_run_manifest_id": "RUN-MANIFEST-EXP0001-PILOT-V9-AUTONOMOUS-0002",
+    "host_run_id": "RUN-T09-PILOT-HOST-AUTONOMOUS-0002",
+    "local_finalizer_qualification_id": "QUAL-T09-PILOT-V9-LOCAL-FINALIZER-AUTONOMOUS-0002",
+    "runtime_qualification_id": "QUAL-T09-PILOT-V9-IMAGE-AUTONOMOUS-0002"
   },
   "interpretation_boundary": {
     "allowed": [
@@ -416,7 +416,7 @@
   },
   "material_blockers": [],
   "model_revision": "gpt-4o-2024-11-20",
-  "plan_id": "PLAN-EXP0001-PILOT-V8",
+  "plan_id": "PLAN-EXP0001-PILOT-V9",
   "provider_lifecycle": {
     "admission_model": "actual-elapsed-next-condition-hard-wall-plus-evidence-export-provider-handoff-and-cleanup-reserves",
     "cumulative_accounting_origin": "actual-active-lambda-seconds",
@@ -433,11 +433,11 @@
     "maximum_cumulative_preflight_active_seconds": 43200,
     "maximum_empirical_provider_cost_usd": 8.0,
     "maximum_preflight_instance_active_seconds": 21600,
-    "maximum_preflight_provider_cost_usd": 20.0,
+    "maximum_preflight_provider_cost_usd": 10.0,
     "persistent_filesystems": 0,
     "preflight_clock_origin": "provider-launch-send-started",
     "preflight_iteration_wall_seconds": 3600,
-    "provider_control_plane": "autonomous-v8-separated-preflight-engineering-and-empirical-authority",
+    "provider_control_plane": "autonomous-v9-provider-call-accounting-repair",
     "provider_termination_handoff_seconds": 60
   },
   "randomization_seed": 42,
@@ -449,7 +449,7 @@
     "container_image_policy": "retained-exact-archive-load-or-one-fallback-build-preentry-frozen-run-manifest-v1",
     "credential_channel": "host-provisioned-SIRA_API_KEY-only-never-command-argv-log-or-public-artifact",
     "empirical_entry_boundary": "first-task-model-request-or-task-browser-action-whichever-occurs-first",
-    "frozen_run_manifest_id": "RUN-MANIFEST-EXP0001-PILOT-V8-AUTONOMOUS-0001",
+    "frozen_run_manifest_id": "RUN-MANIFEST-EXP0001-PILOT-V9-AUTONOMOUS-0002",
     "historical_container_image_digest": "sha256:035edf61718e84a8156f4f0f7817b134b0ce31488d3f0b50bbfba2b4a30cc61c",
     "installed_package_manifest_sha256": "4ff2603fa5e0f7033ba773decdcb86abf648dcce22e469d26bc48214e390e104",
     "local_finalizer_base_materialization": "uv-lock-bec09cf0d326c56af9f717782eef9160579e7720dff701083570df9aa712b34b-only-project-runtime-no-project-install",
@@ -463,7 +463,7 @@
       "typing-extensions==4.16.0"
     ],
     "local_finalizer_dependency_byte_policy": "absolute-venv-launcher-link-target-and-resolved-executable-plus-complete-base-and-evaluator-site-packages-tree-manifests-rehashed-before-every-qualified-local-finalization",
-    "local_finalizer_qualification_id": "QUAL-T09-PILOT-V8-LOCAL-FINALIZER-AUTONOMOUS-0001",
+    "local_finalizer_qualification_id": "QUAL-T09-PILOT-V9-LOCAL-FINALIZER-AUTONOMOUS-0002",
     "local_finalizer_qualification_location": "offhost-control-machine-before-provider-launch",
     "playwright_version": "1.39.0",
     "post_entry_freeze": "scientific-execution-code-image-tasks-order-evaluator-scoring-budgets-and-instrumentation-frozen; downstream-only network-disabled finalizer descendants may reprocess immutable raw evidence uniformly without condition retry",
@@ -493,7 +493,7 @@
     "provider_observer_hard_wall_seconds": 21600,
     "provider_observer_normal_termination_target_seconds": 13500,
     "python_version": "3.11.14",
-    "runtime_qualification_id": "QUAL-T09-PILOT-V8-IMAGE-AUTONOMOUS-0001",
+    "runtime_qualification_id": "QUAL-T09-PILOT-V9-IMAGE-AUTONOMOUS-0002",
     "sira_agent_configs_sha256": "3c3110b5b69d43e0492fba3cb60171be35ccb8cd652e72d07ffb1ecfd7947072",
     "sira_agent_sha256": "8ed6144a42e8fd18fe565f46c44c7855b15fbfb4817a689510e3b31e94952e51",
     "sira_llm_sha256": "ac01dbe0dae9bf839a45a9c0ddf03130e45177849419dd2edbad5b29b2216c23",
@@ -543,5 +543,5 @@
   "schema_version": "0.4.0",
   "service_tier": "default",
   "sira_commit": "93fb8d72de71f9a4a13419670adeb34d93cf7acd",
-  "terminal_state": "current-turn-authorized-autonomous-pending-dynamic-preflight"
+  "terminal_state": "current-turn-authorized-retry2-pending-dynamic-preflight"
 }
