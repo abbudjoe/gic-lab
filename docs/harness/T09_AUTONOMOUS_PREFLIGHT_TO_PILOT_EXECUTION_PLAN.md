@@ -89,6 +89,16 @@ and production-readiness claims.
   active condition-plan directory contains only the four fresh V8 children. The
   prior Retry 5 terminal control remains immutable evidence but no longer governs
   the current-turn V8 authorization.
+- `2026-08-27`: the first independent V8 conformance review found four blockers:
+  package authorization was rejected by the runtime verifier, provider authority
+  still encoded Retry 5's two-launch lifecycle, the exact raw/essential sealers
+  were not exercised in live preflight, and argv normalization orphaned an output
+  flag. Commit `a5b38abe5984d478d3317e04fbbcbdb27a36f34f` repairs all four
+  primitives. The focused suites now pass 115 tests, including exact production
+  raw/essential reconstruction, same-host preflight repair, complete flag/value
+  projection, and 8/9 launch-boundary regressions; validation, strict typing, lint,
+  and diff hygiene pass. Independent rereview and the final clean-package verifier
+  remain required before live mutation.
 
 ## Budgets, blockers, and next phase
 

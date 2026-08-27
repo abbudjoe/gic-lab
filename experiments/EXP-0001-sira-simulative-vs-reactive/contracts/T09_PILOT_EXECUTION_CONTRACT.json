@@ -3,11 +3,11 @@
     {
       "condition": "reactive",
       "condition_plan_path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v8-task-0000-reactive.yaml",
-      "condition_plan_sha256": "ac990769007356ab306e5b91dac1f2094e6e401db580cc436ec63675f117a553",
+      "condition_plan_sha256": "39c20942dcf0832c69b4d108f628b80563d5d8cd4426ec31e781cbe423e7f3b4",
       "config_sha256": "cf25acd90f9d73d9aef978a7d059cfbc74a1447d901f4e3d27e2b5d9f121d2ed",
-      "environment_sha256": "f93a84b4ab18e3dadbae42a8792f8cdcf1432a4e6f576938076fbdbdcc362904",
+      "environment_sha256": "7adf482a95e3927296bd68a4e5a78eca9d456173c4e7ba3d155c9bf0933ff50e",
       "finalized_output_root": "artifacts/EXP-0001/pilot-v8/task-a/reactive/attempt-autonomous-0001/finalized",
-      "giclab_commit": "20021ca0c5ea88726a8e2a406d8d7c19c83aa563",
+      "giclab_commit": "a5b38abe5984d478d3317e04fbbcbdb27a36f34f",
       "order_index": 1,
       "output_root": "artifacts/EXP-0001/pilot-v8/task-a/reactive/attempt-autonomous-0001",
       "pair_id": "PAIR-EXP0001-PILOT-V8-TASK-A",
@@ -49,11 +49,11 @@
     {
       "condition": "simulative",
       "condition_plan_path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v8-task-0000-simulative.yaml",
-      "condition_plan_sha256": "0e3374dc10af1fd3a5f120a5512162059a2122c1e45bed761cdd023a3b61c48b",
+      "condition_plan_sha256": "3bb966d9bef8c45ed117fed8674219f3a25b73947756bfc95cddf1307a005205",
       "config_sha256": "cf25acd90f9d73d9aef978a7d059cfbc74a1447d901f4e3d27e2b5d9f121d2ed",
-      "environment_sha256": "f93a84b4ab18e3dadbae42a8792f8cdcf1432a4e6f576938076fbdbdcc362904",
+      "environment_sha256": "7adf482a95e3927296bd68a4e5a78eca9d456173c4e7ba3d155c9bf0933ff50e",
       "finalized_output_root": "artifacts/EXP-0001/pilot-v8/task-a/simulative/attempt-autonomous-0001/finalized",
-      "giclab_commit": "20021ca0c5ea88726a8e2a406d8d7c19c83aa563",
+      "giclab_commit": "a5b38abe5984d478d3317e04fbbcbdb27a36f34f",
       "order_index": 2,
       "output_root": "artifacts/EXP-0001/pilot-v8/task-a/simulative/attempt-autonomous-0001",
       "pair_id": "PAIR-EXP0001-PILOT-V8-TASK-A",
@@ -95,11 +95,11 @@
     {
       "condition": "simulative",
       "condition_plan_path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v8-task-0001-simulative.yaml",
-      "condition_plan_sha256": "1ac2674cf33eeb5e3119f132eacbbe29d47be81baec4b1a23164bb80d4f89b68",
+      "condition_plan_sha256": "372efc4b3589a4d22b1f7c96a88e49a026349aa674271532a885394e9071b8c9",
       "config_sha256": "cf25acd90f9d73d9aef978a7d059cfbc74a1447d901f4e3d27e2b5d9f121d2ed",
-      "environment_sha256": "f93a84b4ab18e3dadbae42a8792f8cdcf1432a4e6f576938076fbdbdcc362904",
+      "environment_sha256": "7adf482a95e3927296bd68a4e5a78eca9d456173c4e7ba3d155c9bf0933ff50e",
       "finalized_output_root": "artifacts/EXP-0001/pilot-v8/task-b/simulative/attempt-autonomous-0001/finalized",
-      "giclab_commit": "20021ca0c5ea88726a8e2a406d8d7c19c83aa563",
+      "giclab_commit": "a5b38abe5984d478d3317e04fbbcbdb27a36f34f",
       "order_index": 1,
       "output_root": "artifacts/EXP-0001/pilot-v8/task-b/simulative/attempt-autonomous-0001",
       "pair_id": "PAIR-EXP0001-PILOT-V8-TASK-B",
@@ -141,11 +141,11 @@
     {
       "condition": "reactive",
       "condition_plan_path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v8-task-0001-reactive.yaml",
-      "condition_plan_sha256": "9298dac1b3b940a1c6e67cb185445390fdd325cf7c353c4c4ce91384e3e5ced9",
+      "condition_plan_sha256": "6de8d215a8df2525d3c04e7c56cbab3f521748fddc30f897e15c019d3c071f71",
       "config_sha256": "cf25acd90f9d73d9aef978a7d059cfbc74a1447d901f4e3d27e2b5d9f121d2ed",
-      "environment_sha256": "f93a84b4ab18e3dadbae42a8792f8cdcf1432a4e6f576938076fbdbdcc362904",
+      "environment_sha256": "7adf482a95e3927296bd68a4e5a78eca9d456173c4e7ba3d155c9bf0933ff50e",
       "finalized_output_root": "artifacts/EXP-0001/pilot-v8/task-b/reactive/attempt-autonomous-0001/finalized",
-      "giclab_commit": "20021ca0c5ea88726a8e2a406d8d7c19c83aa563",
+      "giclab_commit": "a5b38abe5984d478d3317e04fbbcbdb27a36f34f",
       "order_index": 2,
       "output_root": "artifacts/EXP-0001/pilot-v8/task-b/reactive/attempt-autonomous-0001",
       "pair_id": "PAIR-EXP0001-PILOT-V8-TASK-B",
@@ -298,7 +298,7 @@
     },
     "runtime": {
       "path": "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/T09_PILOT_RUNTIME_IDENTITY.json",
-      "sha256": "f93a84b4ab18e3dadbae42a8792f8cdcf1432a4e6f576938076fbdbdcc362904"
+      "sha256": "7adf482a95e3927296bd68a4e5a78eca9d456173c4e7ba3d155c9bf0933ff50e"
     },
     "score_schema": {
       "path": "schemas/t09-sira-pilot-score.schema.json",
