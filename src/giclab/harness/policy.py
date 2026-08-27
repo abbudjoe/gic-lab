@@ -711,7 +711,10 @@ def _assert_profile_children_coherent(
             raise ExecutionDisallowed("parent condition spend/time units do not reconcile")
         total_cost = Decimal(str(profile_budget.get("max_total_cost_usd")))
         provider_cost = Decimal(str(profile_budget.get("max_provider_compute_cost_usd")))
-        if planned_cost + provider_cost != total_cost:
+        preflight_provider_cost = Decimal(
+            str(profile_budget.get("max_preflight_provider_compute_cost_usd", 0))
+        )
+        if planned_cost + provider_cost + preflight_provider_cost != total_cost:
             raise ExecutionDisallowed("parent total spend cap does not reconcile")
 
 

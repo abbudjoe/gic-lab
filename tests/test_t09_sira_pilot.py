@@ -301,7 +301,7 @@ def _limits() -> RuntimeLimits:
         max_condition_wall_seconds=3_600,
         max_pair_wall_seconds=7_200,
         max_total_wall_seconds=14_400,
-        max_output_bytes_per_attempt=67_108_864,
+        max_output_bytes_per_attempt=536_870_912,
         max_disk_bytes=2_147_483_648,
         max_lambda_duration_seconds=21_600,
         max_lambda_cost_usd=8.0,
@@ -589,13 +589,13 @@ def test_evidence_redaction_is_structural_and_event_lineage_is_explicit(tmp_path
 
 def test_execution_schema_and_all_static_file_bindings_resolve() -> None:
     document = load_json(EXECUTION_CONTRACT)
-    assert document["authorized"] is False
+    assert document["authorized"] is True
     assert document["terminal_state"] == (
-        "current-turn-authorized-retry5-pending-dynamic-preflight"
+        "current-turn-authorized-autonomous-pending-dynamic-preflight"
     )
     assert (
         document["execution_eligibility"]
-        == "current-turn-authorized-after-core-suppression-and-retained-image-qualification"
+        == "current-turn-authorized-after-dynamic-preflight"
     )
     assert document["material_blockers"] == []
     hard = document["budget_calibration"]["hard"]
@@ -807,11 +807,12 @@ def test_retry2_excludes_only_the_exact_pinned_names_only_env_example(
         )
 
 
-def test_retry5_materialization_policy_is_explicit_and_bound() -> None:
+def test_autonomous_materialization_policy_is_explicit_and_bound() -> None:
     host = _load_host_runner()
-    assert host.PLAN_ID == "PLAN-EXP0001-PILOT-V7"
-    assert host.QUALIFICATION_ID == "QUAL-T09-PILOT-V7-IMAGE-0001"
-    assert host.REPLACEMENT_IMAGE_TAG.startswith("giclab/t09-pilot-v7:")
+    assert host.PLAN_ID == "PLAN-EXP0001-PILOT-V8"
+    assert host.QUALIFICATION_ID == "QUAL-T09-PILOT-V8-IMAGE-AUTONOMOUS-0001"
+    assert host.REPLACEMENT_IMAGE_TAG.startswith("giclab/t09-pilot-v8:")
+    assert host.REPLACEMENT_IMAGE_TAG.endswith("-autonomous-0001")
     materializer = inspect.getsource(host.materialize_retained_or_build_image)
     assert "SLOT2_IMAGE_MATERIALIZATION_POLICY" in materializer
     assert "slot-2 retained image import failed; fallback build is forbidden" in materializer
@@ -2089,15 +2090,17 @@ def test_raw_attempt_streams_before_cutoff_without_aggregate_stage(
     local_qualification.write_text(
         json.dumps(
             {
-                "qualification_id": "QUAL-T09-PILOT-V7-LOCAL-FINALIZER-0001",
+                "qualification_id": (
+                    "QUAL-T09-PILOT-V8-LOCAL-FINALIZER-AUTONOMOUS-0001"
+                ),
                 "package_commit": "a" * 40,
             }
         ),
         encoding="utf-8",
     )
     frozen_document = {
-        "manifest_id": "RUN-MANIFEST-EXP0001-PILOT-V7-0005",
-        "plan_id": "PLAN-EXP0001-PILOT-V7",
+        "manifest_id": "RUN-MANIFEST-EXP0001-PILOT-V8-AUTONOMOUS-0001",
+        "plan_id": "PLAN-EXP0001-PILOT-V8",
         "clean_package_commit": "a" * 40,
         "replacement_image_id": replacement_image_id,
         "local_finalizer_qualification_sha256": host.file_sha256(local_qualification),

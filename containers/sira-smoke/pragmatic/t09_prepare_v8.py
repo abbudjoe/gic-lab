@@ -102,6 +102,11 @@ def write_json(path: Path, value: object) -> None:
     )
 
 
+def canonical_sha256(value: object) -> str:
+    encoded = json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode()
+    return hashlib.sha256(encoded).hexdigest()
+
+
 def scientific_contract(document: dict[str, Any]) -> dict[str, Any]:
     """Project the immutable science while excluding fresh identity/output ownership."""
 
@@ -143,6 +148,7 @@ def prepare(root: Path, reviewed_ancestor: str) -> None:
     execution_path = experiment / "contracts/T09_PILOT_EXECUTION_CONTRACT.json"
     commands_path = experiment / "contracts/T09_PILOT_COMMAND_MANIFESTS.json"
     condition_root = experiment / "run-plans/conditions"
+    source_condition_root = experiment / "run-plans/proposals/conditions"
 
     plan = transform(yaml.safe_load(plan_path.read_text(encoding="utf-8")))
     plan["plan_id"] = PLAN_V8
@@ -183,7 +189,7 @@ def prepare(root: Path, reviewed_ancestor: str) -> None:
         "four empirical attempts and never delay provider cleanup for image export"
     )
     plan["readiness"] = {
-        "execution_eligibility": "authorized-pending-complete-dynamic-preflight",
+        "execution_eligibility": "eligible-after-authorization",
         "approval_changes_required": [],
         "unresolved_execution_blockers": [],
         "pre_execution_requirements": [
@@ -230,25 +236,37 @@ def prepare(root: Path, reviewed_ancestor: str) -> None:
         encoding="utf-8",
     )
     runtime_sha = sha256(runtime_path)
+    source_execution = json.loads(execution_path.read_text(encoding="utf-8"))
+    source_science = scientific_contract(source_execution)
+    transformed_attempts = {
+        transformed["run_id"]: transformed
+        for raw in source_execution["attempts"]
+        for transformed in (transform(raw),)
+    }
 
     condition_paths: dict[str, Path] = {}
     source_documents: list[tuple[str, dict[str, Any]]] = []
     for name in CONDITION_NAMES:
-        source = condition_root / name
+        source = source_condition_root / name
         document = transform(yaml.safe_load(source.read_text(encoding="utf-8")))
         document["profile_plan_id"] = PLAN_V8
         document["profile_sha256"] = plan_sha
         document["sources"]["giclab_commit"] = reviewed_ancestor
         document["sources"]["environment_sha256"] = runtime_sha
         document["budget"]["max_output_bytes"] = 536_870_912
+        document["execution"]["authorization"] = {
+            "authorized": True,
+            "authorization_reference": AUTHORIZATION_REFERENCE,
+            "command_sha256": canonical_sha256(
+                transformed_attempts[document["run_id"]]["upstream_argv"]
+            ),
+        }
         target_name = name.replace("pilot-v7", "pilot-v8")
         target = condition_root / target_name
         target.write_text(yaml.safe_dump(document, sort_keys=False), encoding="utf-8")
         condition_paths[document["run_id"]] = target
         source_documents.append((document["run_id"], document))
 
-    source_execution = json.loads(execution_path.read_text(encoding="utf-8"))
-    source_science = scientific_contract(source_execution)
     execution = transform(source_execution)
     execution["schema_version"] = "0.4.0"
     execution["plan_id"] = PLAN_V8
@@ -265,6 +283,9 @@ def prepare(root: Path, reviewed_ancestor: str) -> None:
             "max_disk_bytes": 2_147_483_648,
         }
     )
+    execution["runtime_limits"]["expected_full_attempt_evidence_basis"][
+        "remaining_cap_headroom_bytes"
+    ] = 486_539_264
     execution["evidence"]["failure_authority"] = (
         "when the full tree breaches 536870912 bytes, either attach stream reaches its "
         "explicit 536870912-byte limit, or another host-runner infrastructure stop prevents "

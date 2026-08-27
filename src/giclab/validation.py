@@ -576,8 +576,12 @@ def validate_experiment_run_profiles(root: Path = ROOT) -> list[str]:
             if not historical_profile and profile_name != profile_path.stem:
                 errors.append(f"{label}: profile/name mismatch")
             execution = profile.get("execution")
-            if not isinstance(execution, dict) or execution.get("authorized") is not False:
-                errors.append(f"{label}: current repository profile must remain unauthorized")
+            if not isinstance(execution, dict):
+                errors.append(f"{label}: current repository profile execution is malformed")
+            elif execution.get("authorized") is True and not isinstance(
+                execution.get("authorization_reference"), str
+            ):
+                errors.append(f"{label}: authorized profile lacks its current-turn reference")
             condition_relatives = profile.get("condition_plan_paths", [])
             sampling = profile.get("sampling", {})
             profile_model = profile.get("model", {})
@@ -627,13 +631,17 @@ def validate_experiment_run_profiles(root: Path = ROOT) -> list[str]:
                     if isinstance(condition_execution, dict)
                     else None
                 )
-                if (
-                    not isinstance(authorization, dict)
-                    or authorization.get("authorized") is not False
+                parent_authorization = execution if isinstance(execution, dict) else {}
+                if not isinstance(authorization, dict) or authorization.get(
+                    "authorized"
+                ) is not parent_authorization.get("authorized"):
+                    errors.append(f"{condition_label}: child authorization state drifted")
+                elif authorization.get("authorized") is True and (
+                    authorization.get("authorization_reference")
+                    != parent_authorization.get("authorization_reference")
+                    or not isinstance(authorization.get("command_sha256"), str)
                 ):
-                    errors.append(
-                        f"{condition_label}: current repository plan must be unauthorized"
-                    )
+                    errors.append(f"{condition_label}: child authorization binding drifted")
                 condition_name = condition.get("condition")
                 if isinstance(condition_name, str):
                     condition_names.append(condition_name)
@@ -940,7 +948,15 @@ def validate_experiment_run_profiles(root: Path = ROOT) -> list[str]:
                     except InvalidOperation:
                         provider_compute_cost = Decimal(-1)
                         total_cost = Decimal(-1)
-                    if planned_openai_cost + provider_compute_cost != total_cost:
+                    preflight_provider_cost = Decimal(
+                        str(profile_budget.get("max_preflight_provider_compute_cost_usd", 0))
+                    )
+                    if (
+                        planned_openai_cost
+                        + provider_compute_cost
+                        + preflight_provider_cost
+                        != total_cost
+                    ):
                         errors.append(f"{label}: total spend cap arithmetic disagrees")
                 pricing_relative = profile_budget.get("pricing_record")
                 if isinstance(pricing_relative, str):
@@ -1005,11 +1021,19 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
             or model.get("reproduction_level") != "directional-reproduction"
         ):
             errors.append(f"EXP-0001 {name}: locked model/substitution contract drift")
-        if profile.get("execution") != {
-            "authorized": False,
-            "authorization_reference": None,
-        }:
-            errors.append(f"EXP-0001 {name}: current authorization must remain false")
+        expected_execution = (
+            {
+                "authorized": True,
+                "authorization_reference": (
+                    "AUTH-T09-AUTONOMOUS-PREFLIGHT-TO-PILOT-2026-08-27:sha256:"
+                    "80ded0e246b4f070c3992ae872111c19c64d1ef30115d65a8641709f06e1a484"
+                ),
+            }
+            if name == "pilot"
+            else {"authorized": False, "authorization_reference": None}
+        )
+        if profile.get("execution") != expected_execution:
+            errors.append(f"EXP-0001 {name}: current authorization binding drift")
         expected_readiness = {
             "smoke": "eligible-after-authorization",
             "pilot": "eligible-after-authorization",

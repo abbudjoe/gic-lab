@@ -2,19 +2,21 @@ schema_version: 0.1.0
 phase: "1"
 phase_name: artifact-execution
 phase_status: in-progress
-paid_compute_allowed: false
+paid_compute_allowed: true
 prototype_execution_allowed: false
-benchmark_execution_allowed: false
+benchmark_execution_allowed: true
 training_allowed: false
-cloud_mutation_allowed: false
+cloud_mutation_allowed: true
 authorized_run_profile:
-  plan_id: null
-  profile_path: null
-  profile_sha256: null
-  condition_plan_sha256s: []
-current_execution_control:
-  path: experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY5_POSTRUN_TERMINAL_CONTROL.json
-  sha256: 43adc9b347b97a541489134f9376959148b53b7efeb1c2fb96f5be28ff858e5c
+  plan_id: PLAN-EXP0001-PILOT-V8
+  profile_path: experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml
+  profile_sha256: eaa96eca75b5a0941113b3267947833ff8f7a19b91080ebb6e5bb28732f34a69
+  condition_plan_sha256s:
+    - 49693f2430f2ad633ca1c344e3b111c4f587c2dac8ea89502aae4271bf4c14b0
+    - 55207fc9381811bf9d90a82251b3b3c439393d4d889bd9c3d20045bf3ea7f3f3
+    - 855c77fbd28f00994d0b29654fbde6b964e14382ae938da516cfaeb2eb33bcfd
+    - 82458fab98c71d3b566e38a89fe4a10f2b0a566ead61d64b815e2a5cb02d7b95
+current_execution_control: null
 planned_execution_substrate: null
 historical_execution_substrate:
   decision_state: bounded-smoke-v3-ready-unauthorized

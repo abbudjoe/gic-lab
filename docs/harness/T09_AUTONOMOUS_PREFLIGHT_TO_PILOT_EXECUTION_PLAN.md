@@ -35,12 +35,12 @@ and production-readiness claims.
 | ID | Contract | Required evidence | Status |
 | --- | --- | --- | --- |
 | AP-01 | Preserve Retry 5 and identify each slot's first causal failure from retained source-bound evidence. | Unchanged Retry 5 paths/hashes and source-grounded failure projection. | met |
-| AP-02 | Give normalized authority-tree and nested eligibility-source manifests distinct typed identities across provider and host. | Focused pass/fail binding tests on the exact retained Slot 2 tree. | not-started |
-| AP-03 | Initialize durable cleanup state immediately after one exact provider instance ID is returned and before staging or remote mutation. | Ordering test and private state receipt with exact owner, resource/secret locations, and empirical-entry bit. | not-started |
-| AP-04 | Make basic host cleanup and provider termination independent of pilot, attempt, artifact, or image state. | Early-abort cleanup regression with no `pilot-state.json`, terminal provider receipt, and safe cleanup summary. | not-started |
-| AP-05 | Preserve process-wide core suppression and prohibit core retention. | Exact Docker `--ulimit core=0:0`, entrypoint assertion, inheritance, abort, Chromium, and zero-core receipts. | not-started |
-| AP-06 | Apply equal 536,870,912-byte per-attempt, 2,147,483,648-byte aggregate, and 67,108,864-byte essential-failure evidence caps. | Constants/contracts, equality/overflow tests, exclusions, and cap arithmetic. | not-started |
-| AP-07 | Pass focused local repair tests, `make validate`, diff hygiene, and one independent spec-conformance review before live mutation. | Commands, outputs, reviewer verdict, rereview if needed, and clean repair commit. | not-started |
+| AP-02 | Give normalized authority-tree and nested eligibility-source manifests distinct typed identities across provider and host. | Focused pass/fail binding tests on the exact retained Slot 2 tree. | met |
+| AP-03 | Initialize durable cleanup state immediately after one exact provider instance ID is returned and before staging or remote mutation. | Ordering test and private state receipt with exact owner, resource/secret locations, and empirical-entry bit. | met |
+| AP-04 | Make basic host cleanup and provider termination independent of pilot, attempt, artifact, or image state. | Early-abort cleanup regression with no `pilot-state.json`, terminal provider receipt, and safe cleanup summary. | met |
+| AP-05 | Preserve process-wide core suppression and prohibit core retention. | Exact Docker `--ulimit core=0:0`, entrypoint assertion, inheritance, abort, Chromium, and zero-core receipts. | met-local; exact-image receipts pending AP-09 |
+| AP-06 | Apply equal 536,870,912-byte per-attempt, 2,147,483,648-byte aggregate, and 67,108,864-byte essential-failure evidence caps. | Constants/contracts, equality/overflow tests, exclusions, and cap arithmetic. | met |
+| AP-07 | Pass focused local repair tests, `make validate`, diff hygiene, and one independent spec-conformance review before live mutation. | Commands, outputs, reviewer verdict, rereview if needed, and clean repair commit. | partial-review-and-clean-commit-pending |
 | AP-08 | Bind every preflight launch to current-turn authorization, fresh identity, one simultaneous A10, no persistent filesystem, 6-hour individual/12-hour cumulative active limits, and USD 20 preflight cap. | Private authorization/volume records, cloud ledger, provider receipts, and accounting. | not-started |
 | AP-09 | Pass all 16 preflight qualification checks in the exact accepted image and final container path. | Machine-readable qualification receipts with zero task requests/actions. | not-started |
 | AP-10 | Freeze a clean V8 commit, one unchanged image, exact dependencies/model/tasks/evaluator/browser/configuration, four commands, two valid pair diffs, fresh identities, and one run manifest. | Commit/image/manifest hashes and clean-tree receipt. | not-started |
@@ -80,6 +80,15 @@ and production-readiness claims.
   exact end-to-end qualification.
 - Decision: cleanup authority is a first-class private provider/host state surface,
   not a derivative of later pilot state.
+- `2026-08-27`: typed authority, early cleanup, output-cap, authorization, fresh-ID,
+  and command-normalization regressions pass (`111` focused T09 tests). `make
+  validate`, strict type checking, lint, and diff hygiene pass. The four V8 command
+  manifests machine-diff valid for both task pairs, with only treatment, order,
+  identity, condition-plan, and output-root differences.
+- Decision: preserve the V7 condition plans as versioned proposal inputs while the
+  active condition-plan directory contains only the four fresh V8 children. The
+  prior Retry 5 terminal control remains immutable evidence but no longer governs
+  the current-turn V8 authorization.
 
 ## Budgets, blockers, and next phase
 

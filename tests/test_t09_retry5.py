@@ -1165,7 +1165,9 @@ def test_retry5_oversized_tree_gets_private_essential_failure_seal(
     _write_json(
         local_qualification,
         {
-            "qualification_id": "QUAL-T09-PILOT-V7-LOCAL-FINALIZER-0001",
+            "qualification_id": (
+                "QUAL-T09-PILOT-V8-LOCAL-FINALIZER-AUTONOMOUS-0001"
+            ),
             "package_commit": "4" * 40,
         },
     )
@@ -1482,8 +1484,11 @@ def test_retry5_attempt_cap_and_core_stop_are_inviolable(
 
 def test_autonomous_slot2_authority_uses_distinct_nested_and_tree_hashes(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     host = _host("giclab_t09_autonomous_slot2_authority")
+    monkeypatch.setattr(host, "PLAN_ID", "PLAN-EXP0001-PILOT-V7")
+    monkeypatch.setattr(host, "HOST_RUN_ID", "RUN-T09-PILOT-HOST-0005")
     source = Path(
         "/Volumes/Macintosh HD - Data/GIC-Lab/t09/"
         "provider-private-v7-0005-slot2"
@@ -2020,11 +2025,11 @@ def test_retry5_provider_classifies_every_hard_clock_boundary() -> None:
     } == provider.HARD_CAMPAIGN_WALL_EXCEPTIONS
 
 
-def test_retry5_science_and_zero_retry_identifiers_are_fresh() -> None:
+def test_autonomous_science_and_zero_retry_identifiers_are_fresh() -> None:
     execution = json.loads(
         (EXPERIMENT_ROOT / "contracts/T09_PILOT_EXECUTION_CONTRACT.json").read_text()
     )
-    assert PLAN_ID == "PLAN-EXP0001-PILOT-V7"
+    assert PLAN_ID == "PLAN-EXP0001-PILOT-V8"
     assert tuple(item["run_id"] for item in execution["attempts"]) == ATTEMPT_ORDER
     assert PRIOR_RETRY4_RUN_ID not in ATTEMPT_ORDER
     assert all(
@@ -2033,19 +2038,18 @@ def test_retry5_science_and_zero_retry_identifiers_are_fresh() -> None:
     )
     assert execution["sira_commit"] == "93fb8d72de71f9a4a13419670adeb34d93cf7acd"
     assert execution["model_revision"] == "gpt-4o-2024-11-20"
-    assert execution["runtime"]["slot1_fallback_build_replacement_launch_policy"] == (
-        "fallback-build-may-run-on-slot1-but-forfeits-slot2-after-any-later-preempirical-"
-        "failure-because-pretermination-image-export-is-forbidden"
+    assert execution["runtime"]["container_image_policy"] == (
+        "retained-exact-archive-load-or-one-fallback-build-preentry-frozen-run-manifest-v1"
     )
     evidence = execution["runtime_limits"]["expected_full_attempt_evidence_basis"]
     projected = sum(
         value for key, value in evidence.items() if key != "remaining_cap_headroom_bytes"
     )
     assert projected == execution["runtime_limits"]["expected_full_attempt_evidence_bytes"]
-    assert projected + evidence["remaining_cap_headroom_bytes"] == 67_108_864
+    assert projected + evidence["remaining_cap_headroom_bytes"] == 536_870_912
     assert execution["budget_calibration"]["hard"][
         "maximum_new_cost_under_cumulative_cap_usd"
-    ] == pytest.approx(60.0 - 5.7424506112)
+    ] == pytest.approx(75.0 - 6.813138735)
     command_contract = json.loads(
         (EXPERIMENT_ROOT / "contracts/T09_PILOT_COMMAND_MANIFESTS.json").read_text()
     )
@@ -2060,17 +2064,17 @@ def test_retry5_science_and_zero_retry_identifiers_are_fresh() -> None:
     assert disposition["attempts"]["task_a_reactive"]["task_score"] is None
 
 
-def test_retry5_postrun_control_consumes_v7_without_registering_a_successor() -> None:
+def test_retry5_postrun_control_is_archived_while_v8_is_current() -> None:
     state = load_project_execution_state(ROOT)
-    terminal = state.terminal_execution_control
-    assert terminal is not None
-    assert terminal.superseded_plan_ids == {
-        "PLAN-EXP0001-SMOKE",
-        "PLAN-EXP0001-PILOT-V6",
-        "PLAN-EXP0001-PILOT-V7",
-    }
-    assert terminal.registered_successor is None
-    assert state.authorized_run_profile is None
+    assert state.terminal_execution_control is None
+    assert state.authorized_run_profile is not None
+    assert state.authorized_run_profile.plan_id == "PLAN-EXP0001-PILOT-V8"
+    control = json.loads(RETRY5_EXECUTION_CONTROL.read_text())
+    assert control["authorized"] is True
+    assert control["single_use"] is True
+    assert control["execution_state"] == (
+        "authorized-pending-clean-v7-package-and-dynamic-preflight"
+    )
     assert hashlib.sha256(RETRY5_EXECUTION_CONTROL.read_bytes()).hexdigest() == (
         "97539fa4b65f627880b159e0f40c9a7efab26cd2a746c7c12ddbe15e44684346"
     )

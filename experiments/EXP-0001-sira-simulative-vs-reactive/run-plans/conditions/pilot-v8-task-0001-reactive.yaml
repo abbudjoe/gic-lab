@@ -1,0 +1,48 @@
+schema_version: 0.1.0
+experiment_id: EXP-0001
+run_id: RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0001
+profile: pilot
+profile_plan_id: PLAN-EXP0001-PILOT-V8
+profile_sha256: eaa96eca75b5a0941113b3267947833ff8f7a19b91080ebb6e5bb28732f34a69
+condition: SIRA-REACTIVE
+attempt: 1
+seed: 42
+interpretation_allowed: true
+execution:
+  backend: cloud
+  workload: benchmark
+  authorization:
+    authorized: true
+    authorization_reference: AUTH-T09-AUTONOMOUS-PREFLIGHT-TO-PILOT-2026-08-27:sha256:80ded0e246b4f070c3992ae872111c19c64d1ef30115d65a8641709f06e1a484
+    command_sha256: 13bccb6d8009bae1c5bebae54d0574d28faeed77452cf3a279c5044eb545c68b
+sources:
+  giclab_commit: 8531149ee91b439d920977ecf0f3415c2479b81a
+  upstream_source_id: SRC-SIRA-REPOSITORY
+  upstream_commit: 93fb8d72de71f9a4a13419670adeb34d93cf7acd
+  protocol_sha256: 5356fc8b3806f4135eb570f65b67da2f94463582db5e3e609320e23dbdb2a3f7
+  config_sha256: cf25acd90f9d73d9aef978a7d059cfbc74a1447d901f4e3d27e2b5d9f121d2ed
+  model_revision: gpt-4o-2024-11-20
+  dataset_revision: 76ad1feb689b754bfe4e5e24d3ea371b647efa67
+  environment_sha256: ab8b63697a00f4e1d5ffe1bbbdcb71bf337167bb5782617e28a29a642bd5522e
+task:
+  task_id: 2120afba8009bad3
+  source_kind: dataset-slice
+  query: null
+  dataset_id: DATA-SIRA-FANOUTQA-DEV
+  dataset_revision: 76ad1feb689b754bfe4e5e24d3ea371b647efa67
+  start_idx: 1
+  end_idx: 2
+pairing:
+  pair_id: PAIR-EXP0001-PILOT-V8-TASK-B
+  order_index: 2
+budget:
+  max_wall_seconds: 3600
+  max_cost_usd: 10.0
+  max_gpu_hours: 1.0
+  max_model_calls: 1155
+  max_model_tokens: 1000000
+  max_tool_calls: 30
+  max_output_bytes: 536870912
+artifacts:
+  root: artifacts/EXP-0001/pilot-v8/task-b/reactive/attempt-autonomous-0001
+  retain_raw: true

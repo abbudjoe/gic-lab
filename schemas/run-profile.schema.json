@@ -173,6 +173,7 @@
         "max_browser_actions": {"type": "integer", "minimum": 0},
         "max_accelerator_hours": {"type": "number", "minimum": 0},
         "max_provider_compute_cost_usd": {"type": "number", "minimum": 0},
+        "max_preflight_provider_compute_cost_usd": {"type": "number", "minimum": 0},
         "max_total_cost_usd": {"type": "number", "minimum": 0},
         "prior_t09_cost_usd": {"type": "number", "minimum": 0},
         "cumulative_t09_cost_cap_usd": {"type": "number", "minimum": 0},
@@ -359,9 +360,9 @@
         "exclusions"
       ],
       "properties": {
-        "full_attempt_cap_bytes": {"const": 67108864},
-        "stdout_stderr_per_stream_cap_bytes": {"const": 67108864},
-        "essential_failure_cap_bytes": {"const": 16777216},
+        "full_attempt_cap_bytes": {"const": 536870912},
+        "stdout_stderr_per_stream_cap_bytes": {"const": 536870912},
+        "essential_failure_cap_bytes": {"const": 67108864},
         "authority": {"type": "string", "minLength": 16},
         "stream_limit_disposition": {"type": "string", "minLength": 16},
         "scientific_status": {"type": "string", "minLength": 16},
@@ -387,7 +388,7 @@
         "retry4_attempt_total_bytes": {"const": 236556320},
         "retry4_core_bytes": {"const": 234479616},
         "retry4_noncore_bytes": {"const": 2076704},
-        "retained_attempt_cap_bytes": {"const": 67108864},
+        "retained_attempt_cap_bytes": {"const": 536870912},
         "expected_full_attempt_evidence_bytes": {"const": 50331648},
         "expected_full_attempt_evidence_breakdown": {
           "type": "object",
@@ -407,11 +408,11 @@
             "evaluator_schemas_and_manifests_bytes": {"const": 2097152}
           }
         },
-        "remaining_cap_headroom_bytes": {"const": 16777216},
+        "remaining_cap_headroom_bytes": {"const": 486539264},
         "noncore_headroom_ratio": {
           "type": "number",
-          "minimum": 32.315,
-          "maximum": 32.316
+          "minimum": 258.520,
+          "maximum": 258.521
         },
         "conclusion": {"type": "string", "minLength": 16}
       }
@@ -500,7 +501,7 @@
         },
         "approval_changes_required": {
           "type": "array",
-          "minItems": 1,
+          "minItems": 0,
           "uniqueItems": true,
           "items": {"type": "string", "minLength": 1}
         },
