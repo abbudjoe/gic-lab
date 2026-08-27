@@ -1,6 +1,6 @@
 {
   "execution_contract_path": "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/T09_PILOT_EXECUTION_CONTRACT.json",
-  "execution_contract_sha256": "f39495a9b5edfb7ce64492d84a4151569eab89a2c39058dacab6f3fb8298d5d3",
+  "execution_contract_sha256": "e68375010d1cbb4bd1f51c431f6f91370e95106e32550856866ee84c7642aaf9",
   "generator_path": "containers/sira-smoke/pragmatic/t09_freeze_commands.py",
   "generator_sha256": "23f5ba046f27014335ed5a97cae449c717829ae55c22756afe1042ad7975c346",
   "manifests": [
@@ -23,7 +23,7 @@
         "--gate-pilot-contract",
         "/opt/giclab-contracts/execution.json",
         "--gate-pilot-contract-sha256",
-        "f39495a9b5edfb7ce64492d84a4151569eab89a2c39058dacab6f3fb8298d5d3",
+        "e68375010d1cbb4bd1f51c431f6f91370e95106e32550856866ee84c7642aaf9",
         "--gate-pilot-library-sha256",
         "d8e52972e5b378de3e6cd8fb52e2a3f24618167b7044fe44fa0bb938ca2ec96d",
         "--gate-pilot-attempt-id",
@@ -63,10 +63,10 @@
         "--seed",
         "42"
       ],
-      "argv_sha256": "6e2fb79a9be70acf729a4e17e83a1928692f6dc7ac8e6c3a62828cc57da00d0a",
+      "argv_sha256": "5f4c1812aa1843fdee88dd15b589e567c47da2475aa9e17069fe4c212e81ebaf",
       "condition": "reactive",
       "condition_plan_path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v8-task-0000-reactive.yaml",
-      "condition_plan_sha256": "7bb2def32fcbc47facfb457fd3bda0fdd28800da3cb235e07f6a6c4dad8b592f",
+      "condition_plan_sha256": "da1757379b6b5e96366763b831af9750d015fe0f06e6fa7f0de166d1e239d63f",
       "equality_surface": {
         "action_timeout_seconds": 30,
         "actual_upstream_common_argv": {
@@ -90,10 +90,10 @@
         },
         "condition_wall_seconds": 3600,
         "config_sha256": "cf25acd90f9d73d9aef978a7d059cfbc74a1447d901f4e3d27e2b5d9f121d2ed",
-        "environment_sha256": "f9699268a120bec3997d01519e4012bf574ac160fb5e1de10888913580184905",
+        "environment_sha256": "0ab8c5caca2a4a661e261a77a6b0b29cb848f1539c8bc809cb95b46be027c04a",
         "evaluator_contract_sha256": "c28a802a45fc8d1e719f8c1bcb22315c2841df831c4ae161f12ab0f2fd08b321",
         "evidence_handling": "immutable-raw-attempt-before-network-none-versioned-downstream-finalization",
-        "giclab_commit": "dc4676af8b487b2d94e7ac6bfc84d91208e63df9",
+        "giclab_commit": "4019dd90d41db5b716d99a30e5eb7466fcf00b99",
         "instrumentation": "t09-post-action-provider-receipt-lineage-v1",
         "max_browser_steps": 30,
         "model": "gpt-4o-2024-11-20",
@@ -106,13 +106,13 @@
           "chromium-1084"
         ]
       },
-      "execution_contract_sha256": "f39495a9b5edfb7ce64492d84a4151569eab89a2c39058dacab6f3fb8298d5d3",
+      "execution_contract_sha256": "e68375010d1cbb4bd1f51c431f6f91370e95106e32550856866ee84c7642aaf9",
       "order_index": 1,
       "pair_id": "PAIR-EXP0001-PILOT-V8-TASK-A",
       "permitted_condition_owned": {
         "condition_mode": "reactive",
         "condition_plan_path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v8-task-0000-reactive.yaml",
-        "condition_plan_sha256": "7bb2def32fcbc47facfb457fd3bda0fdd28800da3cb235e07f6a6c4dad8b592f",
+        "condition_plan_sha256": "da1757379b6b5e96366763b831af9750d015fe0f06e6fa7f0de166d1e239d63f",
         "finalized_output_root": "artifacts/EXP-0001/pilot-v8/task-a/reactive/attempt-autonomous-0001/finalized",
         "order_index": 1,
         "output_root": "artifacts/EXP-0001/pilot-v8/task-a/reactive/attempt-autonomous-0001",
@@ -144,7 +144,7 @@
         "--gate-pilot-contract",
         "/opt/giclab-contracts/execution.json",
         "--gate-pilot-contract-sha256",
-        "f39495a9b5edfb7ce64492d84a4151569eab89a2c39058dacab6f3fb8298d5d3",
+        "e68375010d1cbb4bd1f51c431f6f91370e95106e32550856866ee84c7642aaf9",
         "--gate-pilot-library-sha256",
         "d8e52972e5b378de3e6cd8fb52e2a3f24618167b7044fe44fa0bb938ca2ec96d",
         "--gate-pilot-attempt-id",
@@ -184,10 +184,10 @@
         "--seed",
         "42"
       ],
-      "argv_sha256": "2860dd936fc664aaaffc41f1f11bf24682e82b52f8ccf8129e1d5e97127d4bc2",
+      "argv_sha256": "9fc10e1e702d334b05b80112aed2c14a38ffcafd42ee8289dc605ce082cf6f42",
       "condition": "simulative",
       "condition_plan_path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v8-task-0000-simulative.yaml",
-      "condition_plan_sha256": "d6470845c536976dea6af3b667010566ae5c8c64e8e8427a43c3b225eca4db8a",
+      "condition_plan_sha256": "a280910210b81a5d6812073c49c3b95dae2abce903c6c41d8ea5a9402452730d",
       "equality_surface": {
         "action_timeout_seconds": 30,
         "actual_upstream_common_argv": {
@@ -211,10 +211,10 @@
         },
         "condition_wall_seconds": 3600,
         "config_sha256": "cf25acd90f9d73d9aef978a7d059cfbc74a1447d901f4e3d27e2b5d9f121d2ed",
-        "environment_sha256": "f9699268a120bec3997d01519e4012bf574ac160fb5e1de10888913580184905",
+        "environment_sha256": "0ab8c5caca2a4a661e261a77a6b0b29cb848f1539c8bc809cb95b46be027c04a",
         "evaluator_contract_sha256": "c28a802a45fc8d1e719f8c1bcb22315c2841df831c4ae161f12ab0f2fd08b321",
         "evidence_handling": "immutable-raw-attempt-before-network-none-versioned-downstream-finalization",
-        "giclab_commit": "dc4676af8b487b2d94e7ac6bfc84d91208e63df9",
+        "giclab_commit": "4019dd90d41db5b716d99a30e5eb7466fcf00b99",
         "instrumentation": "t09-post-action-provider-receipt-lineage-v1",
         "max_browser_steps": 30,
         "model": "gpt-4o-2024-11-20",
@@ -227,13 +227,13 @@
           "chromium-1084"
         ]
       },
-      "execution_contract_sha256": "f39495a9b5edfb7ce64492d84a4151569eab89a2c39058dacab6f3fb8298d5d3",
+      "execution_contract_sha256": "e68375010d1cbb4bd1f51c431f6f91370e95106e32550856866ee84c7642aaf9",
       "order_index": 2,
       "pair_id": "PAIR-EXP0001-PILOT-V8-TASK-A",
       "permitted_condition_owned": {
         "condition_mode": "simulative",
         "condition_plan_path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v8-task-0000-simulative.yaml",
-        "condition_plan_sha256": "d6470845c536976dea6af3b667010566ae5c8c64e8e8427a43c3b225eca4db8a",
+        "condition_plan_sha256": "a280910210b81a5d6812073c49c3b95dae2abce903c6c41d8ea5a9402452730d",
         "finalized_output_root": "artifacts/EXP-0001/pilot-v8/task-a/simulative/attempt-autonomous-0001/finalized",
         "order_index": 2,
         "output_root": "artifacts/EXP-0001/pilot-v8/task-a/simulative/attempt-autonomous-0001",
@@ -265,7 +265,7 @@
         "--gate-pilot-contract",
         "/opt/giclab-contracts/execution.json",
         "--gate-pilot-contract-sha256",
-        "f39495a9b5edfb7ce64492d84a4151569eab89a2c39058dacab6f3fb8298d5d3",
+        "e68375010d1cbb4bd1f51c431f6f91370e95106e32550856866ee84c7642aaf9",
         "--gate-pilot-library-sha256",
         "d8e52972e5b378de3e6cd8fb52e2a3f24618167b7044fe44fa0bb938ca2ec96d",
         "--gate-pilot-attempt-id",
@@ -305,10 +305,10 @@
         "--seed",
         "42"
       ],
-      "argv_sha256": "a9e9b6a832b36020e1f537204b13f65de85c935d445047983d4a1a48ccb3d190",
+      "argv_sha256": "acb16a464feb2881494dfbcb6a322a3d1da041f7feae38eb78635038156970fb",
       "condition": "simulative",
       "condition_plan_path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v8-task-0001-simulative.yaml",
-      "condition_plan_sha256": "024a6c7874f3dcf86167ec41c4946d1b8bad00acb68847c0accd9700c5d8ba1f",
+      "condition_plan_sha256": "ea16462e629280d0fc7f0aa4f80a64f668c4a892c24707b45d4bd3aa93b1fa03",
       "equality_surface": {
         "action_timeout_seconds": 30,
         "actual_upstream_common_argv": {
@@ -332,10 +332,10 @@
         },
         "condition_wall_seconds": 3600,
         "config_sha256": "cf25acd90f9d73d9aef978a7d059cfbc74a1447d901f4e3d27e2b5d9f121d2ed",
-        "environment_sha256": "f9699268a120bec3997d01519e4012bf574ac160fb5e1de10888913580184905",
+        "environment_sha256": "0ab8c5caca2a4a661e261a77a6b0b29cb848f1539c8bc809cb95b46be027c04a",
         "evaluator_contract_sha256": "c28a802a45fc8d1e719f8c1bcb22315c2841df831c4ae161f12ab0f2fd08b321",
         "evidence_handling": "immutable-raw-attempt-before-network-none-versioned-downstream-finalization",
-        "giclab_commit": "dc4676af8b487b2d94e7ac6bfc84d91208e63df9",
+        "giclab_commit": "4019dd90d41db5b716d99a30e5eb7466fcf00b99",
         "instrumentation": "t09-post-action-provider-receipt-lineage-v1",
         "max_browser_steps": 30,
         "model": "gpt-4o-2024-11-20",
@@ -348,13 +348,13 @@
           "chromium-1084"
         ]
       },
-      "execution_contract_sha256": "f39495a9b5edfb7ce64492d84a4151569eab89a2c39058dacab6f3fb8298d5d3",
+      "execution_contract_sha256": "e68375010d1cbb4bd1f51c431f6f91370e95106e32550856866ee84c7642aaf9",
       "order_index": 1,
       "pair_id": "PAIR-EXP0001-PILOT-V8-TASK-B",
       "permitted_condition_owned": {
         "condition_mode": "simulative",
         "condition_plan_path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v8-task-0001-simulative.yaml",
-        "condition_plan_sha256": "024a6c7874f3dcf86167ec41c4946d1b8bad00acb68847c0accd9700c5d8ba1f",
+        "condition_plan_sha256": "ea16462e629280d0fc7f0aa4f80a64f668c4a892c24707b45d4bd3aa93b1fa03",
         "finalized_output_root": "artifacts/EXP-0001/pilot-v8/task-b/simulative/attempt-autonomous-0001/finalized",
         "order_index": 1,
         "output_root": "artifacts/EXP-0001/pilot-v8/task-b/simulative/attempt-autonomous-0001",
@@ -386,7 +386,7 @@
         "--gate-pilot-contract",
         "/opt/giclab-contracts/execution.json",
         "--gate-pilot-contract-sha256",
-        "f39495a9b5edfb7ce64492d84a4151569eab89a2c39058dacab6f3fb8298d5d3",
+        "e68375010d1cbb4bd1f51c431f6f91370e95106e32550856866ee84c7642aaf9",
         "--gate-pilot-library-sha256",
         "d8e52972e5b378de3e6cd8fb52e2a3f24618167b7044fe44fa0bb938ca2ec96d",
         "--gate-pilot-attempt-id",
@@ -426,10 +426,10 @@
         "--seed",
         "42"
       ],
-      "argv_sha256": "92985ce158bf18b3ac725d8d260bcfb84dd85add664fa95b2ed3f006734bbae6",
+      "argv_sha256": "8d93b8b48a25db6e166c16ed4e5f1c99b7ca09625a442dcc2c142a0e529fce4f",
       "condition": "reactive",
       "condition_plan_path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v8-task-0001-reactive.yaml",
-      "condition_plan_sha256": "beabb37da72503af8a8b1bbbc2e0fba56ae3d9cd6fde884701dd7e5e6b1ca39f",
+      "condition_plan_sha256": "c547eae1d85b84935edc38ed01a9c6ce0cc97e999066c3a9c01c8f17f408f328",
       "equality_surface": {
         "action_timeout_seconds": 30,
         "actual_upstream_common_argv": {
@@ -453,10 +453,10 @@
         },
         "condition_wall_seconds": 3600,
         "config_sha256": "cf25acd90f9d73d9aef978a7d059cfbc74a1447d901f4e3d27e2b5d9f121d2ed",
-        "environment_sha256": "f9699268a120bec3997d01519e4012bf574ac160fb5e1de10888913580184905",
+        "environment_sha256": "0ab8c5caca2a4a661e261a77a6b0b29cb848f1539c8bc809cb95b46be027c04a",
         "evaluator_contract_sha256": "c28a802a45fc8d1e719f8c1bcb22315c2841df831c4ae161f12ab0f2fd08b321",
         "evidence_handling": "immutable-raw-attempt-before-network-none-versioned-downstream-finalization",
-        "giclab_commit": "dc4676af8b487b2d94e7ac6bfc84d91208e63df9",
+        "giclab_commit": "4019dd90d41db5b716d99a30e5eb7466fcf00b99",
         "instrumentation": "t09-post-action-provider-receipt-lineage-v1",
         "max_browser_steps": 30,
         "model": "gpt-4o-2024-11-20",
@@ -469,13 +469,13 @@
           "chromium-1084"
         ]
       },
-      "execution_contract_sha256": "f39495a9b5edfb7ce64492d84a4151569eab89a2c39058dacab6f3fb8298d5d3",
+      "execution_contract_sha256": "e68375010d1cbb4bd1f51c431f6f91370e95106e32550856866ee84c7642aaf9",
       "order_index": 2,
       "pair_id": "PAIR-EXP0001-PILOT-V8-TASK-B",
       "permitted_condition_owned": {
         "condition_mode": "reactive",
         "condition_plan_path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v8-task-0001-reactive.yaml",
-        "condition_plan_sha256": "beabb37da72503af8a8b1bbbc2e0fba56ae3d9cd6fde884701dd7e5e6b1ca39f",
+        "condition_plan_sha256": "c547eae1d85b84935edc38ed01a9c6ce0cc97e999066c3a9c01c8f17f408f328",
         "finalized_output_root": "artifacts/EXP-0001/pilot-v8/task-b/reactive/attempt-autonomous-0001/finalized",
         "order_index": 2,
         "output_root": "artifacts/EXP-0001/pilot-v8/task-b/reactive/attempt-autonomous-0001",
@@ -528,7 +528,7 @@
   "plan_path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml",
   "plan_sha256": "5b77e29e1005979128fa24dbe809bd8b7f92139aa9a49afd68d1daf3de256125",
   "plan_size_bytes": 13456,
-  "reviewed_implementation_ancestor": "dc4676af8b487b2d94e7ac6bfc84d91208e63df9",
+  "reviewed_implementation_ancestor": "4019dd90d41db5b716d99a30e5eb7466fcf00b99",
   "runtime_adaptation_sha256": "2ee65e44aaa0a2709a85b2b0d1c29e28b9229169ee4d4a43b009d4529b0a8b63",
   "schema_version": "0.1.0"
 }

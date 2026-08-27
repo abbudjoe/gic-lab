@@ -162,6 +162,13 @@ and production-readiness claims.
   `dc4676af8b487b2d94e7ac6bfc84d91208e63df9` aligns the browser creation
   path with the final condition lifecycle so orphaned Chromium helpers are reaped;
   the fixture still requires zero processes before passing.
+- `2026-08-27`: iteration 8 passed the complete functional preflight, both core
+  gates, Chromium cleanup with zero descendants, and the single model-metadata GET.
+  It then exposed a clock-control contradiction: the scheduler publishes empirical
+  start 120 seconds ahead while manifest validation admitted only 30 seconds.
+  Commit `4019dd90d41db5b716d99a30e5eb7466fcf00b99` makes scheduling and
+  manifest validation share the existing bounded 300-second publication limit;
+  starts before provider ownership or beyond that limit still fail closed.
 
 ## Budgets, blockers, and next phase
 
