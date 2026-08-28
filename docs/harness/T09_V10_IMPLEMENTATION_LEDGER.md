@@ -336,12 +336,15 @@ tests/test_t07_bounded_supervisor.py::test_exact_local_supervisor_interpreter_lo
 - Formatting and Ruff: passed. Strict mypy: passed across 64 source files.
   `make validate`: passed. `git diff --check`: passed.
 - Portable Quarto 1.9.38 `make site`: passed, including site validation.
-- Raw post-fix pytest: **1,576 passed, 19 failed, 5 skipped**. The installed-package
-  `make check` reproduced the same counts in 905.17 seconds and stopped at pytest, as
+- Raw post-fix pytest on repaired implementation head
+  `8f0d075d56e6ef640397e59fd962e667c80c5ffe`: **1,578 passed, 19 failed, 5
+  skipped**. The installed-package `make check` reproduced the same counts in 38.64
+  seconds and stopped at pytest, as
   expected for the inherited raw failure set; it did not reach its later validation
   and site recipes. Those gates were run separately and passed.
-- Exact-base comparator at remediation closeout commit `7eb781c50ed63eaf856ddf443ba454971708cccd`:
-  base **1,452 passed / 56 failed**; head **1,576 passed / 19 failed**; **0 newly
+- Exact-base comparator at repaired implementation head
+  `8f0d075d56e6ef640397e59fd962e667c80c5ffe`: base **1,452 passed / 56
+  failed**; head **1,578 passed / 19 failed**; **0 newly
   failing**, **37 newly passing**, **19 unchanged failing**, **0 missing base
   failures**; `parity_passed: true`.
 
@@ -386,3 +389,25 @@ the historical object is locally available it additionally recomputes the tree, 
 and source hashes; when the object is absent it uses the same exact closure rather
 than skipping or weakening the check. The historical runtime test now exercises both
 forms, and a negative regression rejects any closure-byte mutation.
+
+### Final local closeout candidate
+
+The ref-independent history repair is committed at
+`532592ec764bf4b3fbc5ebede9aae8a757b8ac98`; its explicit unavailable-object
+regression is committed at `8f0d075d56e6ef640397e59fd962e667c80c5ffe` (tree
+`f7fc02350afdfdff87b87acfbd53432bf2e2f7f7`). On that exact repaired head:
+
+- focused unavailable-object/history/closure validation passed;
+- the full installed-package `make check` reached pytest with **1,578 passed, 19
+  failed, 5 skipped** after formatting, Ruff, and strict mypy passed;
+- the required `make ci-check` passed formatting, Ruff, strict mypy, repository
+  validation, portable Quarto 1.9.38 site rendering/validation, and exact pytest
+  parity;
+- exact parity was base **1,452 passed / 56 failed** versus head **1,578 passed / 19
+  failed**, with **0 newly failing**, **37 newly passing**, **19 unchanged failing**,
+  **0 missing base failures**, and `parity_passed: true`.
+
+The ledger closeout commit follows this repaired implementation head. The required
+post-closeout exact-head local rerun and GitHub Actions conclusion are reported in
+the PR body and final handoff, because recording either result in this tracked file
+afterward would itself create a different, untested head.
