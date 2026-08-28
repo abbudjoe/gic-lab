@@ -24,6 +24,7 @@ from giclab.harness.t09_provider_contracts import (
     V8_PROVIDER_CONTRACT,
     V9_PROVIDER_CONTRACT,
     V10_PROVIDER_CONTRACT,
+    T09ProviderContract,
 )
 from giclab.harness.t09_sira_pilot import (
     initialize_pilot_state,
@@ -80,13 +81,14 @@ def _early_cleanup_journal(
     host: ModuleType,
     *,
     package_commit: str,
+    provider_contract: T09ProviderContract = V8_PROVIDER_CONTRACT,
 ) -> EarlyCleanupJournal:
     """Build the exact early authority now required by production entry points."""
 
     return EarlyCleanupJournal.initialize(
         tmp_path / "early-cleanup-state",
-        plan_id=V8_PROVIDER_CONTRACT.plan_id,
-        host_run_id=V8_PROVIDER_CONTRACT.host_run_id,
+        plan_id=provider_contract.plan_id,
+        host_run_id=provider_contract.host_run_id,
         package_commit=package_commit,
         plan_sha256="a" * 64,
         provider_instance_id="public-dummy-instance",
@@ -2317,6 +2319,128 @@ def test_active_runner_rejects_retry5_started_state_before_any_destructive_actio
         package_commit="c" * 40,
     )
     with pytest.raises(Exception, match="requires its frozen provider runner"):
+        host.cleanup(
+            SimpleNamespace(
+                artifact_root=artifact_root,
+                repository=ROOT,
+                package_commit="c" * 40,
+                secret_file=tmp_path / "secret-never-read",
+                early_cleanup_journal=cleanup_journal.root,
+            )
+        )
+    assert not (artifact_root / "pilot-v7/global-cleanup-intent.json").exists()
+
+
+def test_retry5_cleanup_rejects_unacknowledged_raw_before_any_destructive_action(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Retain the base node while exercising the same gate under active V10 authority."""
+
+    host = _host("giclab_t09_v10_cleanup_requires_ack")
+    artifact_root = tmp_path / "artifacts"
+    pilot_root = artifact_root / "pilot-v7"
+    pilot_root.mkdir(parents=True, mode=0o700)
+    run_id = V10_PROVIDER_CONTRACT.run_ids[0]
+    state_path = pilot_root / "pilot-state.json"
+    initialize_pilot_state(
+        state_path,
+        provider_contract=V10_PROVIDER_CONTRACT,
+        execution_contract_sha256="e" * 64,
+        pilot_started_at_epoch=1.0,
+        lambda_started_at_epoch=1.0,
+    )
+    _reserve_and_mark_empirical(
+        state_path,
+        contract_sha256="e" * 64,
+        run_id=run_id,
+    )
+    mark_raw_attempt_complete(
+        state_path,
+        execution_contract_sha256="e" * 64,
+        run_id=run_id,
+        raw_manifest_sha256="f" * 64,
+        raw_receipt_sha256="1" * 64,
+    )
+    _write_json(
+        pilot_root / "provider-entry.json",
+        {
+            "plan_id": V10_PROVIDER_CONTRACT.plan_id,
+            "host_run_id": V10_PROVIDER_CONTRACT.host_run_id,
+            "receipt_sha256": "a" * 64,
+            "owned_instance_identity_sha256": "b" * 64,
+            "lambda_started_at_epoch": 1.0,
+        },
+    )
+    _write_json(
+        pilot_root / "frozen-run-manifest.json",
+        {
+            "manifest_id": V10_PROVIDER_CONTRACT.frozen_run_manifest_id,
+            "plan_id": V10_PROVIDER_CONTRACT.plan_id,
+            "host_run_id": V10_PROVIDER_CONTRACT.host_run_id,
+            "replacement_image_id": "sha256:" + "c" * 64,
+        },
+    )
+
+    def forbidden(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("cleanup crossed its direct-export gate")
+
+    monkeypatch.setattr(host, "docker_prefix", forbidden)
+    monkeypatch.setattr(host, "destroy_secret", forbidden)
+    cleanup_journal = _early_cleanup_journal(
+        tmp_path,
+        host,
+        package_commit="d" * 40,
+        provider_contract=V10_PROVIDER_CONTRACT,
+    )
+    with pytest.raises(Exception, match="lacks its off-host verification acknowledgement"):
+        host.cleanup(
+            SimpleNamespace(
+                artifact_root=artifact_root,
+                repository=ROOT,
+                package_commit="d" * 40,
+                secret_file=tmp_path / "secret-never-read",
+                early_cleanup_journal=cleanup_journal.root,
+            )
+        )
+    assert not (pilot_root / "global-cleanup-intent.json").exists()
+
+
+def test_retry5_cleanup_requires_started_reservation_recovery_before_destruction(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Retain the base node while exercising reservation recovery under V10 authority."""
+
+    host = _host("giclab_t09_v10_cleanup_requires_reservation_recovery")
+    artifact_root = tmp_path / "artifacts"
+    state_path = artifact_root / "pilot-v7/pilot-state.json"
+    initialize_pilot_state(
+        state_path,
+        provider_contract=V10_PROVIDER_CONTRACT,
+        execution_contract_sha256="a" * 64,
+        pilot_started_at_epoch=1.0,
+        lambda_started_at_epoch=1.0,
+    )
+    reserve_condition_start(
+        state_path,
+        execution_contract_sha256="a" * 64,
+        run_id=V10_PROVIDER_CONTRACT.run_ids[0],
+        start_intent_sha256="b" * 64,
+    )
+
+    def forbidden(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("cleanup crossed its started-reservation recovery gate")
+
+    monkeypatch.setattr(host, "docker_prefix", forbidden)
+    monkeypatch.setattr(host, "destroy_secret", forbidden)
+    cleanup_journal = _early_cleanup_journal(
+        tmp_path,
+        host,
+        package_commit="c" * 40,
+        provider_contract=V10_PROVIDER_CONTRACT,
+    )
+    with pytest.raises(Exception, match="requires recover-attempt-seal"):
         host.cleanup(
             SimpleNamespace(
                 artifact_root=artifact_root,

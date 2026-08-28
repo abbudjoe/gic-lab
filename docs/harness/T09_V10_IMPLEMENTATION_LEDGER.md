@@ -466,7 +466,8 @@ failure.
 ### Pre-commit verification
 
 - `PYTHONPATH=src uv run --no-sync pytest -q tests/test_ci_pytest_parity.py`:
-  **33 passed** after the independent review fixes.
+  **33 passed** after the independent review fixes. The post-discovery focused
+  matrix added the two restored cleanup nodes and passed **35 tests** total.
 - Independent source/spec review: **REVIEW-PASSED** after three passes. It checked the
   complete transition matrix, pinned JUnit teardown and strict-XPASS behavior,
   duplicate/count rejection, exact exclusions and environment, exact commit and clean
@@ -476,13 +477,31 @@ failure.
   **passed**.
 - Portable Quarto 1.9.38 `make site`: **passed**, including site validation.
 - Raw full pytest under Python 3.11.14 with the normal private-test policy, using a
-  local high-free-space temporary volume so the repository's prewrite-floor tests
-  were meaningful: **1,606 passed, 19 failed, 5 skipped in 45.61s**. `make check`
-  separately reproduced **1,606 passed, 19 failed, 5 skipped in 46.94s** after
+  local high-free-space scratch filesystem mounted under the normal macOS temp path
+  so both path and prewrite-floor semantics were preserved: **1,608 passed, 19
+  failed, 5 skipped in 58.97s**. `make check` separately reproduced **1,608
+  passed, 19 failed, 5 skipped in 58.64s** after
   lock, sync, formatting, Ruff, and mypy passed, then stopped at the inherited pytest
   failures as expected. Validation and site were run separately and passed.
 - Exact committed-base/head parity: pending the clean implementation commit required
   by the exact-head gate. No result is inferred from the dirty pre-commit tree.
+
+The first clean implementation check at
+`a67d54c2d487e0b2ad79213e9a6597ab881481c3` correctly returned
+`parity_passed: false` because these two passing base nodes had been renamed during
+the earlier version-contract repair:
+
+```text
+tests/test_t09_retry5.py::test_retry5_cleanup_rejects_unacknowledged_raw_before_any_destructive_action
+tests/test_t09_retry5.py::test_retry5_cleanup_requires_started_reservation_recovery_before_destruction
+```
+
+They were restored as executable active-V10 regressions, not aliases, skips, or
+exclusions. The first proves an unacknowledged raw attempt blocks cleanup before
+Docker or secret destruction; the second proves a started reservation requires
+recovery before destruction. Their shared helper now receives an explicit immutable
+provider contract and retains V8 as its default. Independent rereview found no
+provider/cleanup weakening and **REVIEW-PASSED** the restoration.
 
 The exact 19 raw inherited failures are:
 
@@ -508,8 +527,9 @@ tests/test_t09_retry5.py::test_autonomous_science_and_zero_retry_identifiers_are
 tests/test_t09_retry5.py::test_retry5_postrun_control_is_archived_while_v8_is_current
 ```
 
-The diff remains limited to this ledger, `src/giclab/ci_pytest_parity.py`, and
-`tests/test_ci_pytest_parity.py`. `PLAN-EXP0001-PILOT-V10` remains 13,426 bytes with
+The diff remains limited to this ledger, `src/giclab/ci_pytest_parity.py`,
+`tests/test_ci_pytest_parity.py`, and the necessarily restored nodes in
+`tests/test_t09_retry5.py`. `PLAN-EXP0001-PILOT-V10` remains 13,426 bytes with
 SHA-256 `17c6502c625e0a3fcabc99180b0a432a60b27557be6a88f3289e45720951b38b`.
 `authorized`, `execution_allowed`, `cloud_mutation_allowed`,
 `paid_compute_allowed`, `live_qualification_performed`, `pilot_executed`, and
