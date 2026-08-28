@@ -414,7 +414,7 @@ afterward would itself create a different, untested head.
 
 ## PR #3 outcome-aware pytest parity remediation
 
-Assembly status: **in-progress**
+Assembly status: **local-complete; final PR Actions pending**
 
 Reviewed head `1b22ed2aff9c6e3ced1c8a2a6968b5c47ab7d064` retained only collected and
 failed-node sets in `ci_pytest_parity.py`. That model could misclassify a base failure
@@ -428,8 +428,8 @@ weakened coverage even though its reported failure-set algebra appeared unchange
 | V10-PARITY-DOD-02 | Comparison admits only the specified improvements and fails closed on new failures, missing base nodes, and passed/failed base nodes weakened to skip or xfail. | Focused transition-table regressions and deterministic schema-versioned comparison output. | met |
 | V10-PARITY-DOD-03 | The five existing private/local node IDs are the only symmetric exclusions, applied identically to base and head with environment-based broadening disabled. | Command/environment helper regressions and exact-list assertion. | met |
 | V10-PARITY-DOD-04 | Provider/scientific/cleanup behavior and V10 authorization state remain unchanged. | Scope diff, existing focused controls, validation, and unchanged plan flags. | met |
-| V10-PARITY-DOD-05 | Focused smoke, independent source review, post-review smoke, raw suite, static gates, site gate, and exact detached-base/head parity all satisfy the repair contract. | Exact commands and counts recorded at closeout. | partial: exact committed-head parity pending |
-| V10-PARITY-DOD-06 | The existing draft PR and branch advance normally to one exact head with successful required Actions; no merge, auto-merge, rebase, or force-push occurs. | Remote/PR identities and final Actions run recorded outside the pre-CI commit. | partial: commit, push, and Actions pending |
+| V10-PARITY-DOD-05 | Focused smoke, independent source review, post-review smoke, raw suite, static gates, site gate, and exact detached-base/head parity all satisfy the repair contract. | Exact commands and counts recorded at closeout. | met |
+| V10-PARITY-DOD-06 | The existing draft PR and branch advance normally to one exact head with successful required Actions; no merge, auto-merge, rebase, or force-push occurs. | Remote/PR identities and final Actions run recorded outside the pre-CI commit. | partial: final closeout commit, push, and Actions pending |
 
 Implementation mapping is intentionally narrow: `ci_pytest_parity.py` and its
 focused tests satisfy V10-PARITY-DOD-01 through V10-PARITY-DOD-03; this ledger and
@@ -483,8 +483,14 @@ failure.
   passed, 19 failed, 5 skipped in 58.64s** after
   lock, sync, formatting, Ruff, and mypy passed, then stopped at the inherited pytest
   failures as expected. Validation and site were run separately and passed.
-- Exact committed-base/head parity: pending the clean implementation commit required
-  by the exact-head gate. No result is inferred from the dirty pre-commit tree.
+- Exact committed-base/head `make ci-check` at implementation head
+  `978449d3e625ed6a40c464a6c29edce21a8d2577`: **passed**. The exact base
+  `503def0519e36f04b62b16158c72e11213b3bf9f` produced **1,452 passed / 56
+  failed** across 1,508 collected nodes. The head produced **1,608 passed / 19
+  failed** across 1,627 collected nodes. There were **0 newly failing**, **37 newly
+  passing**, **19 unchanged failing**, **0 missing base-collected nodes**, **0
+  invalid/weakened transitions**, and **0 skip, xfail, xpass, or error outcomes** in
+  either parity run; `parity_passed: true`.
 
 The first clean implementation check at
 `a67d54c2d487e0b2ad79213e9a6597ab881481c3` correctly returned
@@ -536,3 +542,8 @@ SHA-256 `17c6502c625e0a3fcabc99180b0a432a60b27557be6a88f3289e45720951b38b`.
 `empirical_run_roots_materialized` all remain false. No Lambda, model/provider,
 secret, cloud, browser, Docker, SiRA, FanOutQA, evaluator, scientific-condition, or
 pilot execution occurred.
+
+This ledger closeout commit follows the verified implementation head. The required
+post-closeout exact-head local rerun and GitHub Actions identifiers are recorded in
+the PR body and final handoff rather than backfilled into a commit that predates
+those executions.
