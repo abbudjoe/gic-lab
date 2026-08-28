@@ -411,3 +411,108 @@ The ledger closeout commit follows this repaired implementation head. The requir
 post-closeout exact-head local rerun and GitHub Actions conclusion are reported in
 the PR body and final handoff, because recording either result in this tracked file
 afterward would itself create a different, untested head.
+
+## PR #3 outcome-aware pytest parity remediation
+
+Assembly status: **in-progress**
+
+Reviewed head `1b22ed2aff9c6e3ced1c8a2a6968b5c47ab7d064` retained only collected and
+failed-node sets in `ci_pytest_parity.py`. That model could misclassify a base failure
+that became skipped, xfailed, or missing as newly passing, and it checked collection
+preservation only for base failures. The permanent PR gate could therefore admit
+weakened coverage even though its reported failure-set algebra appeared unchanged.
+
+| ID | Required remediation outcome | Planned evidence | Status |
+|---|---|---|---|
+| V10-PARITY-DOD-01 | Every collected node has one exact, nonduplicated outcome that distinguishes pass, failure, error, ordinary skip, and xfail while retaining exact parameterized node IDs. | Pinned-pytest JUnit integration fixture plus parser identity/count/duplicate regressions. | met |
+| V10-PARITY-DOD-02 | Comparison admits only the specified improvements and fails closed on new failures, missing base nodes, and passed/failed base nodes weakened to skip or xfail. | Focused transition-table regressions and deterministic schema-versioned comparison output. | met |
+| V10-PARITY-DOD-03 | The five existing private/local node IDs are the only symmetric exclusions, applied identically to base and head with environment-based broadening disabled. | Command/environment helper regressions and exact-list assertion. | met |
+| V10-PARITY-DOD-04 | Provider/scientific/cleanup behavior and V10 authorization state remain unchanged. | Scope diff, existing focused controls, validation, and unchanged plan flags. | met |
+| V10-PARITY-DOD-05 | Focused smoke, independent source review, post-review smoke, raw suite, static gates, site gate, and exact detached-base/head parity all satisfy the repair contract. | Exact commands and counts recorded at closeout. | partial: exact committed-head parity pending |
+| V10-PARITY-DOD-06 | The existing draft PR and branch advance normally to one exact head with successful required Actions; no merge, auto-merge, rebase, or force-push occurs. | Remote/PR identities and final Actions run recorded outside the pre-CI commit. | partial: commit, push, and Actions pending |
+
+Implementation mapping is intentionally narrow: `ci_pytest_parity.py` and its
+focused tests satisfy V10-PARITY-DOD-01 through V10-PARITY-DOD-03; this ledger and
+the existing repository gates satisfy V10-PARITY-DOD-04 through
+V10-PARITY-DOD-06. Provider contracts are not reopened.
+
+### Repaired comparator contract
+
+Comparison schema `2.0.0` records one immutable `(node_id, status)` pair for every
+collected node. The statuses are `passed`, `failed`, `error`, `skipped`, `xfailed`,
+and exposed strict `xpassed`; exact class and parameterized IDs are reconstructed
+from pinned pytest 8.4.2 legacy JUnit. Missing identities, duplicate identities,
+contradictory children, unknown skip forms, and inconsistent suite counts fail
+closed. The parser also models pytest's valid pass-then-teardown-error phase count
+without mistaking the extra phase count for a second collected node.
+
+Only base `failed`/`error` to head `passed` is `newly_passing`. Base
+`failed`/`error` to head `failed`/`error` remains `unchanged_failing`; base
+`skipped`/`xfailed` to head `passed` is improved coverage. Any head failure not
+inherited from a failing base node is newly failing. Every missing base-collected
+node fails parity. Any executed base node weakened to head `skipped`/`xfailed`
+fails parity. Head-only pass, skip, or xfail does not masquerade as a repaired base
+failure.
+
+The exact five pre-existing private/local node IDs remain the only deselections and
+are passed literally and identically to both commands. `GICLAB_RUN_PRIVATE_T09_TESTS`,
+`PYTEST_ADDOPTS`, and `PYTEST_PLUGINS` are removed and plugin autoload is disabled in
+both parity environments. The gate resolves the exact base and expected-head commits,
+requires a clean head checkout including untracked files, and checks removal of its
+exact detached base worktree. Failed or interrupted materialization also removes any
+partial exact registration; cleanup failures are surfaced without masking the primary
+failure.
+
+### Pre-commit verification
+
+- `PYTHONPATH=src uv run --no-sync pytest -q tests/test_ci_pytest_parity.py`:
+  **33 passed** after the independent review fixes.
+- Independent source/spec review: **REVIEW-PASSED** after three passes. It checked the
+  complete transition matrix, pinned JUnit teardown and strict-XPASS behavior,
+  duplicate/count rejection, exact exclusions and environment, exact commit and clean
+  head selection, and successful, failed, and partially registered worktree cleanup.
+- Repository formatting: **159 files unchanged**. Ruff: **passed**. Strict mypy:
+  **passed across 64 source files**. `make validate`: **passed**. `git diff --check`:
+  **passed**.
+- Portable Quarto 1.9.38 `make site`: **passed**, including site validation.
+- Raw full pytest under Python 3.11.14 with the normal private-test policy, using a
+  local high-free-space temporary volume so the repository's prewrite-floor tests
+  were meaningful: **1,606 passed, 19 failed, 5 skipped in 45.61s**. `make check`
+  separately reproduced **1,606 passed, 19 failed, 5 skipped in 46.94s** after
+  lock, sync, formatting, Ruff, and mypy passed, then stopped at the inherited pytest
+  failures as expected. Validation and site were run separately and passed.
+- Exact committed-base/head parity: pending the clean implementation commit required
+  by the exact-head gate. No result is inferred from the dirty pre-commit tree.
+
+The exact 19 raw inherited failures are:
+
+```text
+tests/test_exp0001_protocol.py::test_exp0001_is_registered_with_incomplete_calibration_and_no_scientific_result
+tests/test_exp0001_protocol.py::test_smoke_and_pilot_profiles_and_condition_plans_validate
+tests/test_exp0001_protocol.py::test_profile_validation_rejects_swapped_order_and_model_drift
+tests/test_exp0001_protocol.py::test_exp0001_validation_rejects_duplicate_task_and_wrong_slice
+tests/test_exp0001_protocol.py::test_profile_validation_rejects_task_source_and_dataset_revision_drift
+tests/test_exp0001_protocol.py::test_generic_profile_validator_does_not_impose_sira_conditions
+tests/test_lambda_ssh_key_fingerprint.py::test_exact_plan_bound_wrapper_loads_hash_bound_source
+tests/test_phase1_closeout.py::test_phase_one_is_the_only_active_non_executable_control_plane
+tests/test_phase1_closeout.py::test_frozen_profiles_are_unauthorized_and_postrun_control_makes_them_nonreplayable
+tests/test_t08_sira_smoke.py::test_pilot_profile_has_explicit_unauthorized_sample_and_budget_contract
+tests/test_t09_retry3.py::test_retry3_same_host_resume_is_disabled_and_slot2_is_source_bound
+tests/test_t09_retry3.py::test_retry3_slot2_uses_separate_campaign_and_active_lambda_clocks
+tests/test_t09_retry3.py::test_retry3_exact_clean_package_is_host_verifiable
+tests/test_t09_retry3.py::test_retry3_plan_has_a_typed_two_slot_raw_first_contract
+tests/test_t09_retry3.py::test_retry3_provider_preflight_accepts_source_bound_offhost_runtime_paths
+tests/test_t09_retry4.py::test_retry4_plan_is_typed_science_locked_and_uses_fresh_identities
+tests/test_t09_retry4.py::test_retry4_generated_postfreeze_receipt_admits_first_condition
+tests/test_t09_retry5.py::test_autonomous_science_and_zero_retry_identifiers_are_fresh
+tests/test_t09_retry5.py::test_retry5_postrun_control_is_archived_while_v8_is_current
+```
+
+The diff remains limited to this ledger, `src/giclab/ci_pytest_parity.py`, and
+`tests/test_ci_pytest_parity.py`. `PLAN-EXP0001-PILOT-V10` remains 13,426 bytes with
+SHA-256 `17c6502c625e0a3fcabc99180b0a432a60b27557be6a88f3289e45720951b38b`.
+`authorized`, `execution_allowed`, `cloud_mutation_allowed`,
+`paid_compute_allowed`, `live_qualification_performed`, `pilot_executed`, and
+`empirical_run_roots_materialized` all remain false. No Lambda, model/provider,
+secret, cloud, browser, Docker, SiRA, FanOutQA, evaluator, scientific-condition, or
+pilot execution occurred.
