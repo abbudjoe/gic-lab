@@ -39,10 +39,40 @@
   "accounting_repair": {
     "preflight_repair": "Stable call identities, durable lifecycle states, atomic reservations, typed response/provider/transport/unknown terminals, zero retries, duplicate-send rejection, bounded closeout, and separate observed-lower/reserved-upper ledgers were added to the existing ProviderBudgetBoundary.",
     "postrun_root_cause": "Concurrent reservations were accumulated and subtracted as binary floating-point dollar values. After out-of-order reconciliation of eleven calls, releasing the final reservation produced a tiny negative residue, which the typed non-negative usage contract correctly rejected after response_received and before usage_reconciled.",
-    "required_successor_repair": "Recompute outstanding reservation projections from the owned per-call reservation records with exact-empty semantics and math.fsum (or an exact monetary representation), rather than subtracting binary floating-point totals. The exact twelve-call release order reproduced the failure and a local candidate passed before being removed to preserve the frozen scientific runtime bytes.",
+    "required_successor_repair": "The post-terminal repair now recomputes outstanding reservation projections from the owned per-call reservation records with exact-empty semantics and math.fsum rather than subtracting binary floating-point totals. It is retained in a distinct commit for a future successor package and was not applied to, or used to retry, the frozen V9 campaign.",
     "scientific_runtime_changed_after_empirical_entry": false,
     "campaign_retried": false,
     "successor_campaign_authorized": false
+  },
+  "post_terminal_repair": {
+    "status": "retained-post-terminal",
+    "repair_commit": "bb56edc68367e85b3a918f4b086c65cd578a231c",
+    "repair_parent_commit": "284c96c262eab87215c27b7d6cb74f026760a77b",
+    "frozen_scientific_package_commit": "630e6f9fcd22f6998d14e4fa48aee2224f6b2808",
+    "implementation": "Recompute aggregate and condition reservation projections from the ProviderBudgetBoundary-owned per-call reservation map with math.fsum and exact-empty semantics after every reserve and release.",
+    "commit_diff_paths": [
+      "src/giclab/harness/sira_gate_a.py",
+      "tests/test_t09_provider_accounting.py"
+    ],
+    "files": [
+      {
+        "path": "src/giclab/harness/sira_gate_a.py",
+        "frozen_sha256": "193217b9c018e9b33391715d379ba831d499d1aea4d626c0bdcb3e76d34b92b8",
+        "repaired_sha256": "ae0ce43e5385d3035f225c0dc462dadfce103c0191170fe5d99e6ce7441b322f"
+      },
+      {
+        "path": "tests/test_t09_provider_accounting.py",
+        "frozen_sha256": "cb2952c17f604b084fcd8bbb512425796001589afe9c18243dac60d557514aa7",
+        "repaired_sha256": "d2c350e934e1849a0b9a6f99c3c9752ff6fd19d1e18c470010dfbb1f17399f78"
+      }
+    ],
+    "exact_empirical_release_order": [0, 1, 2, 5, 4, 3, 7, 6, 8, 9, 10, 11],
+    "exact_regression_repetitions_passed": 3,
+    "focused_provider_accounting_tests_passed": 26,
+    "scientific_runtime_changed_after_empirical_entry": false,
+    "campaign_evidence_mutated": false,
+    "campaign_retried": false,
+    "network_model_browser_or_cloud_activity": false
   },
   "qualification_and_freeze": {
     "preflight_launch_count": 1,
@@ -235,7 +265,7 @@
   "post_termination_validation": {
     "repository_contract_validation": "passed",
     "type_check": "passed-61-source-files",
-    "focused_frozen_v9_accounting_tests": "passed-25",
+    "focused_frozen_v9_accounting_tests": "passed-26-plus-exact-regression-three-repetitions-post-terminal",
     "site_build_and_validation": "passed",
     "full_test_suite": "1473-passed-39-failed",
     "full_test_limitation": "Failures are concentrated in historical profile/runtime fixtures, stale V7/V8 expectations, one stale absolute worktree path, and legacy raw-export fixtures; they do not change the immutable V9 attempt evidence.",
@@ -271,8 +301,8 @@
     "Post-termination offline restoration recovered the raw archive but the frozen export omitted regression-archive-staging/receipt.json from its canonical control snapshot, so the strict qualified-local finalizer could not be re-invoked without reconstructing missing control bytes.",
     "The provider closeout had to use the immutable launch-package identity because the closeout loader could not represent the launch-package to frozen-package transition; empirical/preflight duration is therefore computed offline from retained exact timestamps.",
     "The global cleanup completion projection was rejected despite exact source checks showing zero containers and no remaining secret; provider terminal state is independently proven by the closeout receipt.",
-    "The root-cause-shaped successor candidate was not retained in the active V9 runtime because scientific execution code was frozen at empirical entry.",
+    "The root-cause repair is retained only in a distinct post-terminal commit for a future successor package; it was not part of the frozen V9 scientific runtime and did not alter or retry this campaign.",
     "The broader T09 pilot test module contains historical V8 assumptions that are stale under the frozen V9 package; focused frozen V9 accounting tests pass, while the disclosed broader failures require separate historical-fixture maintenance."
   ],
-  "recommended_next_step": "Preserve V9 and make no treatment comparison. Add the exact concurrent reservation-projection regression and root-cause repair to a successor package, repair the offline control-snapshot and package-transition closeout primitives with network-free tests, then request fresh identities and explicit authorization for one unchanged-science zero-retry paired calibration campaign."
+  "recommended_next_step": "Preserve V9 and make no treatment comparison. Review and qualify the retained concurrent reservation-projection repair together with the offline control-snapshot and package-transition closeout primitives in a fresh successor package, then request fresh identities and explicit authorization for one unchanged-science zero-retry paired calibration campaign."
 }

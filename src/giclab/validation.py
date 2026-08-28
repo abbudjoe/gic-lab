@@ -1776,6 +1776,129 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
                 if downstream_diff != expected_downstream_diff:
                     errors.append("EXP-0001 T09: downstream finalizer change scope drifted")
         downstream_mismatches: set[str] = set()
+        retry2_disposition_path = exp_root / "T09_AUTONOMOUS_RETRY2_V9_DISPOSITION.json"
+        retry2_disposition = (
+            load_json(retry2_disposition_path) if retry2_disposition_path.is_file() else {}
+        )
+        post_terminal_repair = retry2_disposition.get("post_terminal_repair")
+        validated_post_terminal_paths: set[str] = set()
+        if isinstance(post_terminal_repair, dict):
+            repair_commit = post_terminal_repair.get("repair_commit")
+            repair_parent_commit = post_terminal_repair.get("repair_parent_commit")
+            repair_frozen_commit = post_terminal_repair.get("frozen_scientific_package_commit")
+            repair_files = post_terminal_repair.get("files")
+            expected_repair_paths = {
+                "src/giclab/harness/sira_gate_a.py",
+                "tests/test_t09_provider_accounting.py",
+            }
+            repair_bindings: dict[str, dict[str, Any]] = {}
+            if isinstance(repair_files, list):
+                for item in repair_files:
+                    if not isinstance(item, dict):
+                        continue
+                    repair_path = item.get("path")
+                    if isinstance(repair_path, str):
+                        repair_bindings[repair_path] = item
+            repair_identity_valid = (
+                post_terminal_repair.get("status") == "retained-post-terminal"
+                and post_terminal_repair.get("scientific_runtime_changed_after_empirical_entry")
+                is False
+                and post_terminal_repair.get("campaign_evidence_mutated") is False
+                and post_terminal_repair.get("campaign_retried") is False
+                and isinstance(repair_commit, str)
+                and re.fullmatch(r"[0-9a-f]{40}", repair_commit) is not None
+                and isinstance(repair_parent_commit, str)
+                and re.fullmatch(r"[0-9a-f]{40}", repair_parent_commit) is not None
+                and isinstance(repair_frozen_commit, str)
+                and re.fullmatch(r"[0-9a-f]{40}", repair_frozen_commit) is not None
+                and retry2_disposition.get("qualification_and_freeze", {}).get(
+                    "frozen_package_commit"
+                )
+                == repair_frozen_commit
+                and set(repair_bindings) == expected_repair_paths
+            )
+            if repair_identity_valid:
+                try:
+                    observed_parent = subprocess.run(
+                        ["git", "-C", str(root), "rev-parse", f"{repair_commit}^"],
+                        check=True,
+                        capture_output=True,
+                        text=True,
+                    ).stdout.strip()
+                    repair_diff = set(
+                        subprocess.run(
+                            [
+                                "git",
+                                "-C",
+                                str(root),
+                                "diff",
+                                "--name-only",
+                                f"{repair_parent_commit}..{repair_commit}",
+                            ],
+                            check=True,
+                            capture_output=True,
+                            text=True,
+                        ).stdout.splitlines()
+                    )
+                except subprocess.CalledProcessError:
+                    repair_identity_valid = False
+                else:
+                    repair_identity_valid = (
+                        observed_parent == repair_parent_commit
+                        and repair_diff == expected_repair_paths
+                        and post_terminal_repair.get("commit_diff_paths")
+                        == sorted(expected_repair_paths)
+                    )
+            if repair_identity_valid:
+                instrumentation_digests = {
+                    item.get("path"): item.get("sha256") for item in files if isinstance(item, dict)
+                }
+                for repair_path, repair_binding in repair_bindings.items():
+                    current_path = root / repair_path
+                    frozen_digest = repair_binding.get("frozen_sha256")
+                    repaired_digest = repair_binding.get("repaired_sha256")
+                    try:
+                        frozen_bytes = subprocess.run(
+                            [
+                                "git",
+                                "-C",
+                                str(root),
+                                "show",
+                                f"{repair_frozen_commit}:{repair_path}",
+                            ],
+                            check=True,
+                            capture_output=True,
+                        ).stdout
+                        repaired_bytes = subprocess.run(
+                            [
+                                "git",
+                                "-C",
+                                str(root),
+                                "show",
+                                f"{repair_commit}:{repair_path}",
+                            ],
+                            check=True,
+                            capture_output=True,
+                        ).stdout
+                    except subprocess.CalledProcessError:
+                        repair_identity_valid = False
+                        break
+                    if (
+                        not current_path.is_file()
+                        or hashlib.sha256(current_path.read_bytes()).hexdigest() != repaired_digest
+                        or hashlib.sha256(repaired_bytes).hexdigest() != repaired_digest
+                        or hashlib.sha256(frozen_bytes).hexdigest() != frozen_digest
+                        or (
+                            repair_path == "src/giclab/harness/sira_gate_a.py"
+                            and instrumentation_digests.get(repair_path) != frozen_digest
+                        )
+                    ):
+                        repair_identity_valid = False
+                        break
+            if repair_identity_valid:
+                validated_post_terminal_paths = expected_repair_paths
+            else:
+                errors.append("EXP-0001 T09: post-terminal repair binding drifted")
         for raw in files:
             if not isinstance(raw, dict):
                 errors.append("EXP-0001 T09: runtime instrumentation binding is malformed")
@@ -1795,6 +1918,8 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
                 continue
             observed_digest = hashlib.sha256(bound.read_bytes()).hexdigest()
             if observed_digest == digest:
+                continue
+            if file_relative in validated_post_terminal_paths:
                 continue
             disposition_field = downstream_paths.get(file_relative)
             disposition_digest = (
