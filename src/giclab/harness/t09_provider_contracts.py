@@ -150,7 +150,7 @@ class T09ProviderContract:
             if path.is_absolute() or ".." in path.parts:
                 raise T09ProviderContractError("provider source path is unsafe")
         autonomous_paths = (self.execution_contract_path, self.command_manifest_path)
-        if self.version in {"V8", "V9", "V10"}:
+        if self.version in {"V8", "V9", "V10", "V11"}:
             if any(path is None for path in autonomous_paths):
                 raise T09ProviderContractError(
                     "autonomous provider contract lacks its scientific package paths"
@@ -616,6 +616,50 @@ V10_PROVIDER_CONTRACT: Final = _contract(
         f"{_EXPERIMENT_ROOT}/contracts/proposals/T09_PILOT_COMMAND_MANIFESTS_V10.json"
     ),
 )
+V11_PROVIDER_CONTRACT: Final = _contract(
+    version="V11",
+    source_commit="1c6b093699288f37aa23526fe1e1672e50280093",
+    host_run_id="RUN-T09-PILOT-HOST-AUTONOMOUS-0004",
+    authorization_id=None,
+    authorization_prefix="AUTH-T09-V11-",
+    authorization_source_sha256=None,
+    instance_name="giclab-t09-pilot-v11-autonomous-0004",
+    # The provider contract binds the executable runtime profile.  The broader
+    # preauthorization plan separately binds the reviewed implementation and
+    # pending merge, avoiding a circular source/plan identity.
+    plan_path=f"{_PROPOSAL_ROOT}/T09_PILOT_RUNTIME_PROFILE_V11.yaml",
+    plan_bytes=13_826,
+    plan_sha256="2c364eaa169f2cc4c26f27b51eabebc3bf57e25236bfcc2627757d86b0fd5985",
+    profile_path=f"{_PROPOSAL_ROOT}/T09_PILOT_RUNTIME_PROFILE_V11.yaml",
+    profile_bytes=13_826,
+    profile_sha256="2c364eaa169f2cc4c26f27b51eabebc3bf57e25236bfcc2627757d86b0fd5985",
+    run_ids=(
+        "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0004",
+        "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0004",
+        "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0004",
+        "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0004",
+    ),
+    image_qualification_ids=("QUAL-T09-PILOT-V11-IMAGE-AUTONOMOUS-0004",),
+    active_image_qualification_id="QUAL-T09-PILOT-V11-IMAGE-AUTONOMOUS-0004",
+    replacement_image_tag="giclab/t09-pilot-v11:93fb8d72de71-autonomous-0004",
+    container_prefix="giclab-t09-pilot-v11-autonomous-",
+    image_materialization_policy="retained-import-or-one-fallback-build",
+    max_launch_count=8,
+    prior_t09_cost_usd=31.07762283341842,
+    preflight_lambda_cost_cap_usd=10.0,
+    campaign_lambda_cost_cap_usd=8.0,
+    campaign_openai_cost_cap_usd=40.0,
+    campaign_aggregate_cost_cap_usd=58.0,
+    cumulative_t09_cost_cap_usd=90.0,
+    frozen_run_manifest_id="RUN-MANIFEST-EXP0001-PILOT-V11-AUTONOMOUS-0004",
+    local_finalizer_qualification_id=("QUAL-T09-PILOT-V11-LOCAL-FINALIZER-AUTONOMOUS-0004"),
+    execution_contract_path=(
+        f"{_EXPERIMENT_ROOT}/contracts/proposals/T09_PILOT_EXECUTION_CONTRACT_V11.json"
+    ),
+    command_manifest_path=(
+        f"{_EXPERIMENT_ROOT}/contracts/proposals/T09_PILOT_COMMAND_MANIFESTS_V11.json"
+    ),
+)
 
 
 PROVIDER_CONTRACTS: Final[Mapping[str, T09ProviderContract]] = MappingProxyType(
@@ -630,6 +674,7 @@ PROVIDER_CONTRACTS: Final[Mapping[str, T09ProviderContract]] = MappingProxyType(
             V8_PROVIDER_CONTRACT,
             V9_PROVIDER_CONTRACT,
             V10_PROVIDER_CONTRACT,
+            V11_PROVIDER_CONTRACT,
         )
     }
 )
