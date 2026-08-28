@@ -14,8 +14,11 @@ import yaml
 
 from giclab.harness import t09_pragmatic_provider as provider
 from giclab.harness import t09_sira_pilot as pilot_state
+from giclab.harness.t09_provider_contracts import (
+    V7_PROVIDER_CONTRACT,
+    load_provider_plan,
+)
 from giclab.harness.t09_sira_pilot import (
-    ATTEMPT_ORDER,
     T09BudgetExceeded,
     T09PilotError,
     canonical_sha256,
@@ -30,6 +33,7 @@ from giclab.harness.t09_sira_pilot import (
 from giclab.validation import validate_instance
 
 ROOT = Path(__file__).resolve().parents[1]
+ATTEMPT_ORDER = V7_PROVIDER_CONTRACT.run_ids
 HOST_SOURCE = ROOT / "containers/sira-smoke/pragmatic/t09_remote_runner.py"
 FINALIZER_SOURCE = ROOT / "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py"
 REGRESSION_SOURCE = ROOT / "containers/sira-smoke/pragmatic/t09_real_evidence_regression.py"
@@ -227,7 +231,7 @@ def test_retry3_slot2_transition_and_launch_headroom_are_fail_closed() -> None:
         == (runtime_transition["current"]["command_giclab_commit"])
     )
     assert transition["control_runtime_transition_sha256"]
-    lifecycle = provider.load_campaign_lifecycle(ROOT)
+    lifecycle = provider.load_campaign_lifecycle(ROOT, contract=V7_PROVIDER_CONTRACT)
     eligibility = {
         "prior_lambda_duration_seconds": 3_600.0,
         "prior_lambda_cost_usd": 1.29,
@@ -331,6 +335,7 @@ def test_retry3_state_separates_raw_progress_from_reselectable_finalization(
     state = tmp_path / "pilot-state.json"
     initialize_pilot_state(
         state,
+        provider_contract=V7_PROVIDER_CONTRACT,
         execution_contract_sha256="f" * 64,
         pilot_started_at_epoch=1.0,
         lambda_started_at_epoch=1.0,
@@ -417,6 +422,7 @@ def test_retry3_task_b_requires_uniform_current_task_a_reselection(tmp_path: Pat
     state = tmp_path / "pilot-state.json"
     initialize_pilot_state(
         state,
+        provider_contract=V7_PROVIDER_CONTRACT,
         execution_contract_sha256="f" * 64,
         pilot_started_at_epoch=1.0,
         lambda_started_at_epoch=1.0,
@@ -465,6 +471,7 @@ def test_retry3_selection_receipt_crash_is_reconciled_without_rewrite(
     state = tmp_path / "pilot-state.json"
     initialize_pilot_state(
         state,
+        provider_contract=V7_PROVIDER_CONTRACT,
         execution_contract_sha256="f" * 64,
         pilot_started_at_epoch=1.0,
         lambda_started_at_epoch=1.0,
@@ -1040,6 +1047,7 @@ def test_retry3_selected_local_completion_reconstructs_and_opens_checkpoint(
     state = tmp_path / "checkpoint" / "pilot-state.json"
     initialize_pilot_state(
         state,
+        provider_contract=V7_PROVIDER_CONTRACT,
         execution_contract_sha256="f" * 64,
         pilot_started_at_epoch=1.0,
         lambda_started_at_epoch=1.0,
@@ -1097,17 +1105,19 @@ def test_retry3_provider_has_two_distinct_single_use_slots_and_cumulative_caps(
 ) -> None:
     password_record = type("P", (), {"pw_dir": str(tmp_path)})()
     monkeypatch.setattr(provider.pwd, "getpwuid", lambda _uid: password_record)
-    first = provider.launch_capability_path(1)
-    second = provider.launch_capability_path(2)
+    first = provider.launch_capability_path(1, contract=V7_PROVIDER_CONTRACT)
+    second = provider.launch_capability_path(2, contract=V7_PROVIDER_CONTRACT)
     assert first != second
     assert first.name.endswith("launch-slot-01-consumed.json")
     assert second.name.endswith("launch-slot-02-consumed.json")
-    assert provider.PRIOR_T09_COST_USD == 5.7424506112
-    assert provider.NEW_CAMPAIGN_LAMBDA_CAP_USD == 8.0
-    assert provider.NEW_CAMPAIGN_AGGREGATE_CAP_USD == 48.0
-    assert provider.CUMULATIVE_T09_CAP_USD == 60.0
+    budget = load_provider_plan(ROOT, V7_PROVIDER_CONTRACT)["budget"]
+    assert isinstance(budget, dict)
+    assert budget["prior_t09_cost_usd"] == 5.7424506112
+    assert budget["max_provider_compute_cost_usd"] == 8.0
+    assert budget["max_total_cost_usd"] == 48.0
+    assert budget["cumulative_t09_cost_cap_usd"] == 60.0
     with pytest.raises(provider.T09ProviderError, match="outside"):
-        provider.launch_capability_path(3)
+        provider.launch_capability_path(3, contract=V7_PROVIDER_CONTRACT)
 
 
 def test_retry3_receipt_writer_is_private_exclusive(tmp_path: Path) -> None:
@@ -1139,7 +1149,9 @@ def test_retry3_slot2_authority_retention_is_manifest_complete_and_minimal(
     closeout.mkdir()
     host.write_exclusive(closeout / "closeout-receipt.json", {"closeout": True})
     host.write_exclusive(closeout / "source-manifest.json", {"closeout_source": True})
-    source_manifest = provider._slot2_authority_tree_manifest(authority)
+    source_manifest = provider._slot2_authority_tree_manifest(
+        authority, contract=V7_PROVIDER_CONTRACT
+    )
     host.write_exclusive(authority / "source-manifest.json", source_manifest)
     host.write_exclusive(source / "unrelated-owned-state.json", {"private": True})
 
@@ -1169,6 +1181,7 @@ def test_retry3_preentry_secret_match_is_a_monotonic_campaign_stop(
     state_path = artifact_root / "pilot-v7/pilot-state.json"
     initialize_pilot_state(
         state_path,
+        provider_contract=V7_PROVIDER_CONTRACT,
         execution_contract_sha256="f" * 64,
         pilot_started_at_epoch=1.0,
         lambda_started_at_epoch=1.0,
@@ -1248,6 +1261,7 @@ def test_retry3_metadata_secret_scan_removes_value_and_permanently_stops_admissi
     state_path = artifact_root / "pilot-v7/pilot-state.json"
     initialize_pilot_state(
         state_path,
+        provider_contract=V7_PROVIDER_CONTRACT,
         execution_contract_sha256="f" * 64,
         pilot_started_at_epoch=1.0,
         lambda_started_at_epoch=1.0,
@@ -1288,6 +1302,7 @@ def test_retry3_unreconstructable_credential_cleanup_stops_without_false_exposur
     state_path = tmp_path / "pilot-state.json"
     initialize_pilot_state(
         state_path,
+        provider_contract=V7_PROVIDER_CONTRACT,
         execution_contract_sha256="f" * 64,
         pilot_started_at_epoch=1.0,
         lambda_started_at_epoch=1.0,
@@ -1438,6 +1453,7 @@ def test_retry3_raw_seal_is_immediate_and_resumes_after_state_write_crash(
     state = artifact_root / "pilot-v7/pilot-state.json"
     initialize_pilot_state(
         state,
+        provider_contract=V7_PROVIDER_CONTRACT,
         execution_contract_sha256="b" * 64,
         pilot_started_at_epoch=1.0,
         lambda_started_at_epoch=1.0,

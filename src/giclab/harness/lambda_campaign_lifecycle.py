@@ -267,7 +267,11 @@ class AutonomousPilotLifecycleLimits:
             self.preflight_iteration_wall_seconds != 3_600
             or self.maximum_preflight_instance_active_seconds != 21_600
             or self.maximum_cumulative_preflight_active_seconds != 43_200
-            or self.maximum_preflight_provider_cost_cents != 1_000
+            # V8 froze a USD 20 preflight-engineering cap; V9 and V10 use USD
+            # 10.  The selected provider contract decides which exact value is
+            # valid for a campaign instead of this shared arithmetic primitive
+            # silently imposing the newest version.
+            or self.maximum_preflight_provider_cost_cents not in {1_000, 2_000}
             or self.maximum_preflight_launches != 8
             or self.empirical_campaign_wall_seconds != 14_400
             or self.empirical_cleanup_reserve_seconds != 900

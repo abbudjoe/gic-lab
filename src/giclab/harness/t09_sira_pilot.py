@@ -28,8 +28,15 @@ from giclab.harness.sira_gate_a import (
     ProviderBudgetCaps,
     ProviderBudgetUsage,
 )
+from giclab.harness.t09_provider_contracts import (
+    V10_PROVIDER_CONTRACT,
+    T09ProviderContract,
+    T09ProviderContractError,
+    provider_contract_for_plan_id,
+)
 
-PLAN_ID: Final = "PLAN-EXP0001-PILOT-V10"
+ACTIVE_PROVIDER_CONTRACT: Final = V10_PROVIDER_CONTRACT
+PLAN_ID: Final = ACTIVE_PROVIDER_CONTRACT.plan_id
 EXPERIMENT_ID: Final = "EXP-0001"
 SIRA_COMMIT: Final = "93fb8d72de71f9a4a13419670adeb34d93cf7acd"
 MODEL_REVISION: Final = "gpt-4o-2024-11-20"
@@ -51,12 +58,7 @@ TASK_REFERENCE_SHA256S: Final = (
     "fc40734fa183e839b56a7c89b16faa5900865cbee7a4210fcb251a99176f98de",
     "2ee9d892e24441d5f5bbf31b7616c1ade5977af26d22e4020f92a162fa23becb",
 )
-ATTEMPT_ORDER: Final = (
-    "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0003",
-    "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0003",
-    "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0003",
-    "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0003",
-)
+ATTEMPT_ORDER: Final = ACTIVE_PROVIDER_CONTRACT.run_ids
 EVALUATOR_RUN_IDS: Final = (
     "RUN-T09-EVAL-TASK-A-REACTIVE-AUTONOMOUS-0003",
     "RUN-T09-EVAL-TASK-A-SIMULATIVE-AUTONOMOUS-0003",
@@ -84,6 +86,18 @@ class T09PilotError(ValueError):
 
 class T09BudgetExceeded(RuntimeError):
     """Raised before the next empirical operation would exceed a hard cap."""
+
+
+def _state_provider_contract(state: Mapping[str, object]) -> T09ProviderContract:
+    """Resolve lifecycle authority from the durable state's exact plan identity."""
+
+    plan_id = state.get("plan_id")
+    if not isinstance(plan_id, str):
+        raise T09PilotError("pilot attempt-state plan identity is missing")
+    try:
+        return provider_contract_for_plan_id(plan_id)
+    except T09ProviderContractError as exc:
+        raise T09PilotError("pilot attempt-state plan identity is unsupported") from exc
 
 
 @dataclass(frozen=True, slots=True)
@@ -1204,12 +1218,19 @@ def write_aggregate_usage(
 def initialize_pilot_state(
     path: Path,
     *,
+    provider_contract: T09ProviderContract,
     execution_contract_sha256: str,
     pilot_started_at_epoch: float,
     lambda_started_at_epoch: float,
 ) -> None:
     """Create the one sequential attempt ledger during an authorized preflight."""
 
+    try:
+        retained_contract = provider_contract_for_plan_id(provider_contract.plan_id)
+    except T09ProviderContractError as exc:
+        raise T09PilotError("pilot initialization contract is unsupported") from exc
+    if retained_contract is not provider_contract:
+        raise T09PilotError("pilot initialization requires an exact retained contract")
     if path.exists():
         raise T09PilotError("pilot state already exists; it cannot be reset for a retry")
     for value in (pilot_started_at_epoch, lambda_started_at_epoch):
@@ -1217,7 +1238,7 @@ def initialize_pilot_state(
             raise T09PilotError("pilot and Lambda start epochs must be positive and finite")
     document = {
         "schema_version": "0.2.0",
-        "plan_id": PLAN_ID,
+        "plan_id": provider_contract.plan_id,
         "execution_contract_sha256": execution_contract_sha256,
         "pilot_started_at_epoch": pilot_started_at_epoch,
         "lambda_started_at_epoch": lambda_started_at_epoch,
@@ -1383,8 +1404,13 @@ _FINALIZER_UNIFORMITY_FIELDS = (
 )
 
 
-def _selection_receipt_directory(path: Path, run_id: str) -> Path:
-    if run_id not in ATTEMPT_ORDER:
+def _selection_receipt_directory(
+    path: Path,
+    run_id: str,
+    *,
+    contract: T09ProviderContract,
+) -> Path:
+    if run_id not in contract.run_ids:
         raise T09PilotError("selection receipt run identity is unknown")
     return path.parent / "finalization-selections" / run_id
 
@@ -1416,10 +1442,12 @@ def _write_json_exclusive(path: Path, document: Mapping[str, object]) -> None:
 
 def _selection_receipts(
     path: Path,
+    *,
+    contract: T09ProviderContract,
 ) -> dict[str, list[tuple[dict[str, object], str]]]:
     result: dict[str, list[tuple[dict[str, object], str]]] = {}
-    for run_id in ATTEMPT_ORDER:
-        directory = _selection_receipt_directory(path, run_id)
+    for run_id in contract.run_ids:
+        directory = _selection_receipt_directory(path, run_id, contract=contract)
         if not directory.exists():
             continue
         if directory.is_symlink() or not directory.is_dir():
@@ -1441,7 +1469,7 @@ def _selection_receipts(
             if (
                 set(receipt) != {"schema_version", "plan_id", "run_id", "ordinal", "selection"}
                 or receipt.get("schema_version") != "0.1.0"
-                or receipt.get("plan_id") != PLAN_ID
+                or receipt.get("plan_id") != contract.plan_id
                 or receipt.get("run_id") != run_id
                 or receipt.get("ordinal") != ordinal
                 or not isinstance(selection, dict)
@@ -1464,8 +1492,9 @@ def _current_selection_receipt_hashes(
     path: Path,
     *,
     run_ids: Sequence[str],
+    contract: T09ProviderContract,
 ) -> dict[str, str]:
-    receipts = _selection_receipts(path)
+    receipts = _selection_receipts(path, contract=contract)
     result: dict[str, str] = {}
     for run_id in run_ids:
         retained = receipts.get(run_id)
@@ -1482,9 +1511,11 @@ def _load_pilot_state(
     allow_one_pending_selection_receipt: bool = False,
 ) -> dict[str, object]:
     state = load_json_object(path, context="pilot attempt state")
+    contract = _state_provider_contract(state)
+    attempt_order = contract.run_ids
     if (
         state.get("schema_version") != "0.2.0"
-        or state.get("plan_id") != PLAN_ID
+        or state.get("plan_id") != contract.plan_id
         or state.get("execution_contract_sha256") != contract_sha256
     ):
         raise T09PilotError("pilot attempt-state identity drifted")
@@ -1492,9 +1523,9 @@ def _load_pilot_state(
         value = state.get(field)
         if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
             raise T09PilotError(f"pilot state {field} is malformed")
-        if len(value) != len(set(value)) or any(item not in ATTEMPT_ORDER for item in value):
+        if len(value) != len(set(value)) or any(item not in attempt_order for item in value):
             raise T09PilotError(f"pilot state {field} is not a unique frozen-order subset")
-        if value != [item for item in ATTEMPT_ORDER if item in value]:
+        if value != [item for item in attempt_order if item in value]:
             raise T09PilotError(f"pilot state {field} is not in frozen order")
     supervised_release_bindings = state.get("supervised_release_bindings")
     entered_with_release = cast(list[str], state["empirical_attempts_entered"])
@@ -1502,7 +1533,7 @@ def _load_pilot_state(
         not isinstance(supervised_release_bindings, dict)
         or set(supervised_release_bindings) != set(entered_with_release)
         or any(
-            run_id not in ATTEMPT_ORDER
+            run_id not in attempt_order
             or not isinstance(digest, str)
             or _HEX64.fullmatch(digest) is None
             for run_id, digest in supervised_release_bindings.items()
@@ -1511,7 +1542,7 @@ def _load_pilot_state(
         raise T09PilotError("pilot supervised-release bindings are malformed")
     unreleased_reclassifications = state.get("unreleased_supervised_release_reclassifications")
     if not isinstance(unreleased_reclassifications, dict) or any(
-        run_id not in ATTEMPT_ORDER
+        run_id not in attempt_order
         or not isinstance(binding, dict)
         or set(binding) != {"start_intent_sha256", "supervised_release_receipt_sha256"}
         or any(
@@ -1549,8 +1580,8 @@ def _load_pilot_state(
         pending_start = (
             isinstance(start_reservation, dict)
             and set(start_reservation) == {"run_id", "start_intent_sha256"}
-            and len(entered_with_release) < len(ATTEMPT_ORDER)
-            and reserved_run_id == ATTEMPT_ORDER[len(entered_with_release)]
+            and len(entered_with_release) < len(attempt_order)
+            and reserved_run_id == attempt_order[len(entered_with_release)]
             and reserved_run_id not in entered_with_release
         )
         if (
@@ -1563,7 +1594,7 @@ def _load_pilot_state(
     if (
         not isinstance(nonempirical_consumed, list)
         or not all(
-            isinstance(item, str) and item in ATTEMPT_ORDER for item in nonempirical_consumed
+            isinstance(item, str) and item in attempt_order for item in nonempirical_consumed
         )
         or len(nonempirical_consumed) > 1
         or len(nonempirical_consumed) != len(set(nonempirical_consumed))
@@ -1571,7 +1602,7 @@ def _load_pilot_state(
         raise T09PilotError("pilot non-empirical consumed-attempt state is malformed")
     entered_for_failure = cast(list[str], state["empirical_attempts_entered"])
     if nonempirical_consumed and (
-        nonempirical_consumed[0] != ATTEMPT_ORDER[len(entered_for_failure)]
+        nonempirical_consumed[0] != attempt_order[len(entered_for_failure)]
         or nonempirical_consumed[0] in entered_for_failure
     ):
         raise T09PilotError("pilot non-empirical failure is not the next frozen attempt")
@@ -1613,7 +1644,7 @@ def _load_pilot_state(
         raise T09PilotError("pilot state finalization history is malformed")
     if set(history) != set(finalizations):
         raise T09PilotError("pilot state is not the projection of its selection history")
-    receipts = _selection_receipts(path)
+    receipts = _selection_receipts(path, contract=contract)
     pending_count = 0
     for run_id in set(history) | set(receipts):
         state_hashes = history.get(run_id, [])
@@ -1649,7 +1680,7 @@ def _load_pilot_state(
         raise T09PilotError("pilot core-safety-stop state is malformed")
     essential_failure_seals = state.get("essential_failure_seals", {})
     if not isinstance(essential_failure_seals, dict) or any(
-        run_id not in ATTEMPT_ORDER
+        run_id not in attempt_order
         or not isinstance(binding, dict)
         or set(binding) != {"manifest_sha256", "receipt_sha256"}
         or any(
@@ -1677,7 +1708,7 @@ def _load_pilot_state(
         or not isinstance(checkpoint_binding, dict)
         or not isinstance(checkpoint_decision_sha256, str)
         or _HEX64.fullmatch(checkpoint_decision_sha256) is None
-        or cast(list[str], state["attempts_completed"])[:2] != list(ATTEMPT_ORDER[:2])
+        or cast(list[str], state["attempts_completed"])[:2] != list(attempt_order[:2])
     ):
         raise T09PilotError("pilot checkpoint decision lacks its typed Task A binding")
     if checkpoint_binding is not None:
@@ -1696,14 +1727,14 @@ def _load_pilot_state(
         completion_hashes = checkpoint_binding.get("selection_complete_sha256s")
         semantic_hashes = checkpoint_binding.get("semantic_projection_sha256s")
         if not all(
-            isinstance(value, dict) and set(value) == set(ATTEMPT_ORDER[:2])
+            isinstance(value, dict) and set(value) == set(attempt_order[:2])
             for value in (checkpoint_receipt_hashes, completion_hashes, semantic_hashes)
         ):
             raise T09PilotError("pilot checkpoint attempt binding is malformed")
         assert isinstance(checkpoint_receipt_hashes, dict)
         assert isinstance(completion_hashes, dict)
         assert isinstance(semantic_hashes, dict)
-        for run_id in ATTEMPT_ORDER[:2]:
+        for run_id in attempt_order[:2]:
             receipt_sha256 = checkpoint_receipt_hashes.get(run_id)
             matching = [
                 document
@@ -1783,6 +1814,7 @@ def mark_empirical_entry(
     """Consume one identity before releasing its credential-free entrypoint."""
 
     state = _load_pilot_state(path, contract_sha256=execution_contract_sha256)
+    attempt_order = _state_provider_contract(state).run_ids
     if _HEX64.fullmatch(supervised_release_receipt_sha256) is None:
         raise T09PilotError("supervised-release receipt hash is malformed")
     if state.get("credential_safety_stop_detected") is True:
@@ -1796,12 +1828,12 @@ def mark_empirical_entry(
     if run_id in entered:
         raise T09BudgetExceeded("zero-retry rule forbids re-entering an empirical attempt")
     if (
-        entered != list(ATTEMPT_ORDER[: len(entered)])
+        entered != list(attempt_order[: len(entered)])
         or raw_complete != entered[: len(raw_complete)]
         or len(raw_complete) != len(entered)
     ):
         raise T09PilotError("pilot attempt history is not a valid prefix of the frozen order")
-    if len(entered) >= len(ATTEMPT_ORDER) or run_id != ATTEMPT_ORDER[len(entered)]:
+    if len(entered) >= len(attempt_order) or run_id != attempt_order[len(entered)]:
         raise T09BudgetExceeded("attempt count or frozen attempt order would be violated")
     reservation = state.get("condition_start_reservation")
     if not isinstance(reservation, dict) or reservation.get("run_id") != run_id:
@@ -1821,14 +1853,14 @@ def mark_empirical_entry(
         ):
             raise T09BudgetExceeded("Task B is blocked until the first-pair checkpoint passes")
         bound_semantics = checkpoint_binding.get("semantic_projection_sha256s")
-        selected = [finalizations.get(attempt) for attempt in ATTEMPT_ORDER[:2]]
+        selected = [finalizations.get(attempt) for attempt in attempt_order[:2]]
         if (
             not isinstance(bound_semantics, dict)
             or not all(isinstance(item, dict) for item in selected)
             or any(
                 cast(dict[str, object], item).get("semantic_projection_sha256")
                 != bound_semantics.get(attempt)
-                for attempt, item in zip(ATTEMPT_ORDER[:2], selected, strict=True)
+                for attempt, item in zip(attempt_order[:2], selected, strict=True)
             )
             or len({_selection_closure_sha256(cast(dict[str, object], item)) for item in selected})
             != 1
@@ -1862,6 +1894,7 @@ def reserve_condition_start(
     if _HEX64.fullmatch(start_intent_sha256) is None:
         raise T09PilotError("condition-start intent hash is malformed")
     state = _load_pilot_state(path, contract_sha256=execution_contract_sha256)
+    attempt_order = _state_provider_contract(state).run_ids
     entered = cast(list[str], state["empirical_attempts_entered"])
     if state.get("condition_start_reservation") is not None:
         raise T09BudgetExceeded("a condition-start reservation already exists")
@@ -1869,7 +1902,7 @@ def reserve_condition_start(
         raise T09BudgetExceeded("a prior infrastructure failure closed condition admission")
     if cast(list[str], state["raw_attempts_complete"]) != entered:
         raise T09PilotError("prior empirical attempts are not all raw-sealed")
-    if len(entered) >= len(ATTEMPT_ORDER) or ATTEMPT_ORDER[len(entered)] != run_id:
+    if len(entered) >= len(attempt_order) or attempt_order[len(entered)] != run_id:
         raise T09BudgetExceeded("condition-start reservation violates frozen order")
     state["condition_start_reservation"] = {
         "run_id": run_id,
@@ -1916,6 +1949,7 @@ def confirm_supervised_empirical_entry(
     """Confirm the host committed this exact attempt before making a task request."""
 
     state = _load_pilot_state(path, contract_sha256=execution_contract_sha256)
+    contract = _state_provider_contract(state)
     receipt = load_json_object(
         supervised_release_receipt,
         context="supervised empirical release receipt",
@@ -1925,7 +1959,7 @@ def confirm_supervised_empirical_entry(
         run_id not in cast(list[str], state["empirical_attempts_entered"])
         or bindings.get(run_id) != file_sha256(supervised_release_receipt)
         or receipt.get("schema_version") != "0.1.0"
-        or receipt.get("plan_id") != PLAN_ID
+        or receipt.get("plan_id") != contract.plan_id
         or receipt.get("run_id") != run_id
         or receipt.get("release_precedes_first_credential_read") is not True
         or receipt.get("core_artifact_count") != 0
@@ -1943,6 +1977,7 @@ def mark_nonempirical_infrastructure_attempt_consumed(
     """Consume a started condition identity whose cap failed before a task action."""
 
     state = _load_pilot_state(path, contract_sha256=execution_contract_sha256)
+    attempt_order = _state_provider_contract(state).run_ids
     entered = cast(list[str], state["empirical_attempts_entered"])
     raw_complete = cast(list[str], state["raw_attempts_complete"])
     seals = cast(dict[str, dict[str, str]], state["essential_failure_seals"])
@@ -1952,13 +1987,13 @@ def mark_nonempirical_infrastructure_attempt_consumed(
         if consumed == [run_id]:
             return
         raise T09BudgetExceeded("a different pre-empirical failure already consumed the campaign")
-    if run_id in entered or len(entered) >= len(ATTEMPT_ORDER):
+    if run_id in entered or len(entered) >= len(attempt_order):
         raise T09PilotError("non-empirical failure cannot consume an entered or unknown attempt")
     if not isinstance(reservation, dict) or reservation.get("run_id") != run_id:
         raise T09PilotError("non-empirical failure does not match the start reservation")
     if raw_complete != entered or seals:
         raise T09PilotError("prior attempts are not fully sealed before infrastructure failure")
-    if run_id != ATTEMPT_ORDER[len(entered)]:
+    if run_id != attempt_order[len(entered)]:
         raise T09BudgetExceeded("non-empirical failure would violate frozen attempt order")
     state["nonempirical_infrastructure_attempts_consumed"] = [run_id]
     state["condition_start_reservation"] = None
@@ -2116,13 +2151,14 @@ def mark_essential_failure_sealed(
 ) -> None:
     """Bind one reconstructable failure seal without making it evaluator-valid."""
 
+    state = _load_pilot_state(path, contract_sha256=execution_contract_sha256)
+    attempt_order = _state_provider_contract(state).run_ids
     if (
-        run_id not in ATTEMPT_ORDER
+        run_id not in attempt_order
         or _HEX64.fullmatch(manifest_sha256) is None
         or _HEX64.fullmatch(receipt_sha256) is None
     ):
         raise T09PilotError("essential-failure seal identity is malformed")
-    state = _load_pilot_state(path, contract_sha256=execution_contract_sha256)
     entered = cast(list[str], state["empirical_attempts_entered"])
     nonempirical = cast(list[str], state["nonempirical_infrastructure_attempts_consumed"])
     if run_id not in entered and run_id not in nonempirical:
@@ -2159,6 +2195,7 @@ def mark_raw_attempt_complete(
     ):
         raise T09PilotError("raw attempt hashes must be SHA-256")
     state = _load_pilot_state(path, contract_sha256=execution_contract_sha256)
+    attempt_order = _state_provider_contract(state).run_ids
     entered = cast(list[str], state["empirical_attempts_entered"])
     raw_complete = cast(list[str], state["raw_attempts_complete"])
     raw_bindings = state.setdefault("raw_attempt_bindings", {})
@@ -2173,8 +2210,8 @@ def mark_raw_attempt_complete(
         return
     if (
         run_id not in entered
-        or run_id != ATTEMPT_ORDER[len(raw_complete)]
-        or entered[: len(raw_complete) + 1] != list(ATTEMPT_ORDER[: len(raw_complete) + 1])
+        or run_id != attempt_order[len(raw_complete)]
+        or entered[: len(raw_complete) + 1] != list(attempt_order[: len(raw_complete) + 1])
     ):
         raise T09PilotError("raw attempt completion is missing, duplicated, or out of order")
     raw_complete.append(run_id)
@@ -2239,6 +2276,8 @@ def mark_attempt_completed(
         contract_sha256=execution_contract_sha256,
         allow_one_pending_selection_receipt=True,
     )
+    contract = _state_provider_contract(state)
+    attempt_order = contract.run_ids
     entered = cast(list[str], state["empirical_attempts_entered"])
     raw_complete = cast(list[str], state["raw_attempts_complete"])
     finalizations = cast(dict[str, dict[str, object]], state["attempt_finalizations"])
@@ -2261,7 +2300,7 @@ def mark_attempt_completed(
     }
     retained_history = history.setdefault(run_id, [])
     checkpoint_binding = state.get("first_pair_checkpoint_binding")
-    if run_id in ATTEMPT_ORDER[:2] and isinstance(checkpoint_binding, dict):
+    if run_id in attempt_order[:2] and isinstance(checkpoint_binding, dict):
         bound_semantics = checkpoint_binding.get("semantic_projection_sha256s")
         if (
             not isinstance(bound_semantics, dict)
@@ -2275,7 +2314,7 @@ def mark_attempt_completed(
             )
     if finalizations.get(run_id) == selection:
         return
-    receipts = _selection_receipts(path).get(run_id, [])
+    receipts = _selection_receipts(path, contract=contract).get(run_id, [])
     projected_count = len(retained_history)
     if len(receipts) == projected_count + 1:
         pending_receipt, pending_sha256 = receipts[-1]
@@ -2284,14 +2323,14 @@ def mark_attempt_completed(
         retained_history.append(pending_sha256)
     elif len(receipts) == projected_count:
         ordinal = projected_count + 1
-        receipt_path = _selection_receipt_directory(path, run_id) / (
+        receipt_path = _selection_receipt_directory(path, run_id, contract=contract) / (
             f"selection-{ordinal:04d}.json"
         )
         _write_json_exclusive(
             receipt_path,
             {
                 "schema_version": "0.1.0",
-                "plan_id": PLAN_ID,
+                "plan_id": contract.plan_id,
                 "run_id": run_id,
                 "ordinal": ordinal,
                 "selection": selection,
@@ -2302,7 +2341,7 @@ def mark_attempt_completed(
         raise T09PilotError("selection receipt history has an unrecoverable gap")
     finalizations[run_id] = selection
     state["attempts_completed"] = [
-        attempt_run_id for attempt_run_id in ATTEMPT_ORDER if attempt_run_id in finalizations
+        attempt_run_id for attempt_run_id in attempt_order if attempt_run_id in finalizations
     ]
     state["attempt_finalizations"] = finalizations
     state["attempt_finalization_history"] = history
@@ -2319,14 +2358,16 @@ def record_first_pair_checkpoint(
     """Seal the one automatic checkpoint; only a passing decision opens Task B."""
 
     state = _load_pilot_state(path, contract_sha256=execution_contract_sha256)
+    contract = _state_provider_contract(state)
+    attempt_order = contract.run_ids
     if state.get("first_pair_decision") is not None:
         raise T09PilotError("the first-pair checkpoint cannot be repeated")
-    if state["attempts_completed"] != list(ATTEMPT_ORDER[:2]):
+    if state["attempts_completed"] != list(attempt_order[:2]):
         raise T09PilotError("checkpoint requires both Task A attempts to be complete")
     finalizations = cast(dict[str, dict[str, object]], state["attempt_finalizations"])
     finalizer_closures = {
         _selection_closure_sha256(item)
-        for run_id in ATTEMPT_ORDER[:2]
+        for run_id in attempt_order[:2]
         if (item := finalizations.get(run_id)) is not None
     }
     if len(finalizer_closures) != 1:
@@ -2351,15 +2392,17 @@ def record_first_pair_checkpoint(
     state["first_pair_decision_sha256"] = canonical_sha256(decision)
     state["first_pair_checkpoint_binding"] = {
         "selection_receipt_sha256s": _current_selection_receipt_hashes(
-            path, run_ids=ATTEMPT_ORDER[:2]
+            path,
+            run_ids=attempt_order[:2],
+            contract=contract,
         ),
         "selection_complete_sha256s": {
             run_id: finalizations[run_id]["finalization_complete_sha256"]
-            for run_id in ATTEMPT_ORDER[:2]
+            for run_id in attempt_order[:2]
         },
         "semantic_projection_sha256s": {
             run_id: finalizations[run_id]["semantic_projection_sha256"]
-            for run_id in ATTEMPT_ORDER[:2]
+            for run_id in attempt_order[:2]
         },
         "selected_closure_sha256": next(iter(finalizer_closures)),
         "decision_sha256": canonical_sha256(decision),
@@ -2394,7 +2437,7 @@ def pilot_state_time_origins(
     """Project distinct campaign, pair, and billable-Lambda timing authority."""
 
     state = _load_pilot_state(path, contract_sha256=execution_contract_sha256)
-    attempt_index = ATTEMPT_ORDER.index(run_id)
+    attempt_index = _state_provider_contract(state).run_ids.index(run_id)
     pair_field = (
         "first_pair_started_at_epoch" if attempt_index < 2 else "second_pair_started_at_epoch"
     )

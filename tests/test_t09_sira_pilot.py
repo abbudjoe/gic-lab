@@ -39,6 +39,12 @@ from giclab.harness.t09_cleanup_state import (
     TerminalCleanupDisposition,
     cleanup_locator_identity,
 )
+from giclab.harness.t09_provider_contracts import (
+    V8_PROVIDER_CONTRACT,
+    V9_PROVIDER_CONTRACT,
+    V10_PROVIDER_CONTRACT,
+    T09ProviderContract,
+)
 from giclab.harness.t09_sira_pilot import (
     ATTEMPT_ORDER,
     CampaignLifecycleLimits,
@@ -468,7 +474,7 @@ def test_first_pair_checkpoint_passes_only_strictly_below_every_threshold() -> N
     assert exact_time_decision["required_campaign_seconds_for_next_attempt"] == 5_160
     cumulative_overflow = replace(
         passing,
-        projected_aggregate_cost_usd=48.0,
+        projected_aggregate_cost_usd=78.0,
         prior_t09_cost_usd=12.01,
     )
     assert (
@@ -482,6 +488,7 @@ def test_attempt_state_enforces_order_cap_checkpoint_and_zero_retry(tmp_path: Pa
     digest = "a" * 64
     initialize_pilot_state(
         path,
+        provider_contract=V10_PROVIDER_CONTRACT,
         execution_contract_sha256=digest,
         pilot_started_at_epoch=1.0,
         lambda_started_at_epoch=1.0,
@@ -669,10 +676,23 @@ def test_runtime_identity_binds_every_selected_executable_file() -> None:
         ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
         "T09_PILOT_COMMAND_MANIFESTS.json"
     )
-    document = load_json(historical_runtime)
     disposition = load_json(
         ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive/"
         "T09_AUTONOMOUS_PILOT_DISPOSITION.json"
+    )
+    frozen_commit = disposition["scientific_freeze"]["frozen_package_commit"]
+    document = json.loads(
+        subprocess.run(
+            [
+                "git",
+                "-C",
+                str(ROOT),
+                "show",
+                f"{frozen_commit}:{historical_runtime.relative_to(ROOT).as_posix()}",
+            ],
+            check=True,
+            capture_output=True,
+        ).stdout
     )
     instrumentation = document["repository_instrumentation"]
     assert isinstance(instrumentation, dict)
@@ -705,15 +725,12 @@ def test_runtime_identity_binds_every_selected_executable_file() -> None:
         "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py": "finalizer_source_sha256",
     }
     downstream_commit = disposition["finalizer"]["downstream_finalizer_commit"]
-    frozen_commit = disposition["scientific_freeze"]["frozen_package_commit"]
     frozen_contracts = {
         "frozen_execution_contract_sha256": historical_execution,
         "frozen_command_manifests_sha256": historical_commands,
         "frozen_runtime_identity_sha256": historical_runtime,
     }
     for field, path in frozen_contracts.items():
-        observed = file_sha256(path)
-        assert disposition["scientific_freeze"][field] == observed
         committed = subprocess.run(
             [
                 "git",
@@ -725,7 +742,8 @@ def test_runtime_identity_binds_every_selected_executable_file() -> None:
             check=True,
             capture_output=True,
         ).stdout
-        assert hashlib.sha256(committed).hexdigest() == observed
+        observed = hashlib.sha256(committed).hexdigest()
+        assert disposition["scientific_freeze"][field] == observed
     changed_paths = set(
         subprocess.run(
             [
@@ -748,17 +766,16 @@ def test_runtime_identity_binds_every_selected_executable_file() -> None:
     }
     mismatches = set()
     for item in files:
-        observed = file_sha256(ROOT / item["path"])
-        if observed == item["sha256"]:
-            continue
-        mismatches.add(item["path"])
-        assert observed == disposition["finalizer"][downstream_fields[item["path"]]]
-        committed = subprocess.run(
+        observed_bytes = subprocess.run(
             ["git", "-C", str(ROOT), "show", f"{downstream_commit}:{item['path']}"],
             check=True,
             capture_output=True,
         ).stdout
-        assert hashlib.sha256(committed).hexdigest() == observed
+        observed = hashlib.sha256(observed_bytes).hexdigest()
+        if observed == item["sha256"]:
+            continue
+        mismatches.add(item["path"])
+        assert observed == disposition["finalizer"][downstream_fields[item["path"]]]
     assert mismatches == set(downstream_fields)
 
 
@@ -839,9 +856,9 @@ def test_retry2_preserves_and_supersedes_the_zero_use_v3_failure() -> None:
 def test_runtime_qualification_is_typed_slot2_import_preentry_and_digest_agnostic() -> None:
     document = {
         "schema_version": "0.1.0",
-        "plan_id": "PLAN-EXP0001-PILOT-V8",
-        "manifest_id": "RUN-MANIFEST-EXP0001-PILOT-V8-AUTONOMOUS-0001",
-        "qualification_id": "QUAL-T09-PILOT-V8-IMAGE-AUTONOMOUS-0001",
+        "plan_id": "PLAN-EXP0001-PILOT-V10",
+        "manifest_id": "RUN-MANIFEST-EXP0001-PILOT-V10-AUTONOMOUS-0003",
+        "qualification_id": "QUAL-T09-PILOT-V10-IMAGE-AUTONOMOUS-0003",
         "clean_package_commit": "a" * 40,
         "replacement_image_id": "sha256:" + "e" * 64,
         "historical_image_id": (
@@ -986,10 +1003,10 @@ def test_retry2_excludes_only_the_exact_pinned_names_only_env_example(
 
 def test_autonomous_materialization_policy_is_explicit_and_bound() -> None:
     host = _load_host_runner()
-    assert host.PLAN_ID == "PLAN-EXP0001-PILOT-V8"
-    assert host.QUALIFICATION_ID == "QUAL-T09-PILOT-V8-IMAGE-AUTONOMOUS-0001"
-    assert host.REPLACEMENT_IMAGE_TAG.startswith("giclab/t09-pilot-v8:")
-    assert host.REPLACEMENT_IMAGE_TAG.endswith("-autonomous-0001")
+    assert host.PLAN_ID == "PLAN-EXP0001-PILOT-V10"
+    assert host.QUALIFICATION_ID == "QUAL-T09-PILOT-V10-IMAGE-AUTONOMOUS-0003"
+    assert host.REPLACEMENT_IMAGE_TAG.startswith("giclab/t09-pilot-v10:")
+    assert host.REPLACEMENT_IMAGE_TAG.endswith("-autonomous-0003")
     materializer = inspect.getsource(host.materialize_retained_or_build_image)
     assert "SLOT2_IMAGE_MATERIALIZATION_POLICY" in materializer
     assert "slot-2 retained image import failed; fallback build is forbidden" in materializer
@@ -1145,6 +1162,135 @@ def test_global_cleanup_persists_partial_receipt_when_container_absence_is_unver
         is CleanupTargetState.FAILED
     )
     assert list(journal.root.glob("REMOTE_CLOSEOUT-*.json"))
+
+
+def test_exact_container_id_uses_plan_label_as_authority_not_name_prefix(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    host = _load_host_runner()
+    container_id = "5" * 64
+    historical_name = f"{V8_PROVIDER_CONTRACT.container_prefix}condition"
+
+    def fake_output(argv: list[str]) -> str:
+        if "ps" in argv:
+            return container_id[:12]
+        template = argv[argv.index("--format") + 1]
+        if template == "{{.Id}}":
+            return container_id
+        if template == "{{.Name}}":
+            return f"/{historical_name}"
+        if template == "{{json .Config.Labels}}":
+            return json.dumps(
+                {
+                    "giclab.t09.plan": V10_PROVIDER_CONTRACT.plan_id,
+                    "giclab.t09.host_run": V10_PROVIDER_CONTRACT.host_run_id,
+                    "giclab.t09.role": "condition",
+                }
+            )
+        raise AssertionError(f"unexpected Docker fixture command: {argv}")
+
+    monkeypatch.setattr(host, "output", fake_output)
+    with pytest.raises(host.T09HostError, match="plan authority, host ownership, and name"):
+        host.inspect_owned_container_by_id(["docker"], container_id)
+
+
+def test_condition_recovery_requires_one_historical_contract_across_state_and_intent() -> None:
+    host = _load_host_runner()
+    state = {"plan_id": V8_PROVIDER_CONTRACT.plan_id}
+    intent = {"plan_id": V8_PROVIDER_CONTRACT.plan_id}
+    assert (
+        host._condition_recovery_provider_contract(
+            state,
+            intent,
+            run_id=V8_PROVIDER_CONTRACT.run_ids[0],
+        )
+        is V8_PROVIDER_CONTRACT
+    )
+    with pytest.raises(host.T09HostError, match="cross campaign boundaries"):
+        host._condition_recovery_provider_contract(
+            state,
+            {"plan_id": V10_PROVIDER_CONTRACT.plan_id},
+            run_id=V8_PROVIDER_CONTRACT.run_ids[0],
+        )
+
+
+def test_retry4_transition_fallback_rejects_a_v10_receipt(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    host = _load_host_runner()
+    receipt = tmp_path / "entry.json"
+    receipt.write_text(
+        json.dumps(
+            {
+                "plan_id": V10_PROVIDER_CONTRACT.plan_id,
+                "package_commit": host.RETRY4_ACTIVE_SLOT2_ENTRY_PACKAGE_COMMIT,
+                "plan_sha256": "a" * 64,
+            }
+        ),
+        encoding="utf-8",
+    )
+    source = tmp_path / "source"
+    source.mkdir()
+    monkeypatch.setattr(
+        host,
+        "validate_entry_receipt_source_bound",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            provider.T09ProviderError("public dummy mismatch")
+        ),
+    )
+    monkeypatch.setattr(
+        host,
+        "retry4_active_slot2_entry_transition",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("cross-version transition must not run")
+        ),
+    )
+    with pytest.raises(host.T09HostError, match="no transition for its selected version"):
+        host.validate_dynamic_receipt(
+            receipt,
+            expected_package_commit="b" * 40,
+            repository_root=ROOT,
+            source_root=source,
+        )
+
+
+def test_active_preflight_rejects_historical_receipt_before_v10_budget_math(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    host = _load_host_runner()
+    dynamic_source = tmp_path / "source"
+    dynamic_source.mkdir()
+    dynamic_receipt = tmp_path / "entry.json"
+    dynamic_receipt.write_text("{}\n", encoding="utf-8")
+    monkeypatch.setattr(
+        host,
+        "validate_dynamic_receipt",
+        lambda *_args, **_kwargs: {
+            "plan_id": V8_PROVIDER_CONTRACT.plan_id,
+            "provider_preflight_started_at_epoch": 1.0,
+            "prior_campaign_lambda_duration_seconds": 0.0,
+            "prior_campaign_lambda_cost_usd": 0.0,
+        },
+    )
+    monkeypatch.setattr(
+        host,
+        "preflight",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("historical receipt must fail before preflight")
+        ),
+    )
+    with pytest.raises(host.T09HostError, match="exact V10 provider contract"):
+        host.preflight_with_deadline(
+            SimpleNamespace(
+                repository=ROOT,
+                dynamic_receipt=dynamic_receipt,
+                dynamic_source_root=dynamic_source,
+                package_commit="a" * 40,
+                artifact_root=tmp_path / "artifacts",
+            )
+        )
 
 
 def test_interrupted_utility_container_is_journaled_before_wait_and_closes_without_pilot(
@@ -1401,7 +1547,24 @@ def test_autonomous_clean_descendant_reuses_authority_and_entry_receipt(
     for relative_path in source_paths:
         destination = repository / relative_path
         destination.parent.mkdir(parents=True, exist_ok=True)
-        copy2(ROOT / relative_path, destination)
+        retained = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(ROOT),
+                "show",
+                f"{V8_PROVIDER_CONTRACT.source_commit}:{relative_path}",
+            ],
+            capture_output=True,
+            check=True,
+        ).stdout
+        destination.write_bytes(retained)
+    retained_profile = repository / V8_PROVIDER_CONTRACT.provider_profile_path
+    retained_profile.parent.mkdir(parents=True, exist_ok=True)
+    copy2(
+        repository / "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml",
+        retained_profile,
+    )
     subprocess.run(["git", "-C", str(repository), "add", "."], check=True)
     subprocess.run(
         ["git", "-C", str(repository), "commit", "--quiet", "-m", "test base"],
@@ -1433,24 +1596,25 @@ def test_autonomous_clean_descendant_reuses_authority_and_entry_receipt(
 
     transition = provider.autonomous_preflight_package_transition(
         repository,
+        contract=V8_PROVIDER_CONTRACT,
         from_package_commit=base_commit,
         to_package_commit=descendant_commit,
     )
     assert transition["scientific_contract_changed"] is False
     assert transition["changed_paths"] == ["docs/harness/T09_AUTONOMOUS_LINEAGE_TEST.md"]
 
-    plan_path = repository / "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml"
+    plan_path = repository / V8_PROVIDER_CONTRACT.provider_profile_path
     authorization = tmp_path / "authorization.json"
     authorization.write_text(
         json.dumps(
             {
                 "schema_version": "0.1.0",
-                "authorization_source_sha256": (provider.HISTORICAL_V9_AUTHORIZATION_SOURCE_SHA256),
-                "authorization_reference": ("AUTH-T09-AUTONOMOUS-PREFLIGHT-TO-PILOT-2026-08-27"),
+                "authorization_source_sha256": (V8_PROVIDER_CONTRACT.authorization_source_sha256),
+                "authorization_reference": V8_PROVIDER_CONTRACT.authorization_id,
                 "authorized": True,
                 "single_use": True,
                 "clean_package_commit": base_commit,
-                "plan_id": provider.PLAN_ID,
+                "plan_id": V8_PROVIDER_CONTRACT.plan_id,
                 "plan_sha256": provider.file_sha256(plan_path),
                 "max_lambda_instances": 1,
                 "max_preflight_launch_count": 8,
@@ -1471,20 +1635,24 @@ def test_autonomous_clean_descendant_reuses_authority_and_entry_receipt(
         encoding="utf-8",
     )
     authorization.chmod(0o600)
-    assert (
+    V8_PROVIDER_CONTRACT.validate_authority(
+        str(V8_PROVIDER_CONTRACT.authorization_id),
+        str(V8_PROVIDER_CONTRACT.authorization_source_sha256),
+    )
+    with pytest.raises(provider.T09ProviderError, match="frozen historical"):
         provider.validate_authorization_ledger(
             authorization,
+            contract=V8_PROVIDER_CONTRACT,
             repository=repository,
             package_commit=descendant_commit,
-        )["clean_package_commit"]
-        == base_commit
-    )
+        )
 
     host = _load_host_runner()
     source_root = tmp_path / "entry-source"
     source_root.mkdir()
     receipt = tmp_path / "entry-receipt.json"
     receipt_value = {
+        "plan_id": V8_PROVIDER_CONTRACT.plan_id,
         "package_commit": base_commit,
         "plan_sha256": provider.file_sha256(plan_path),
         "captured_at_epoch": time.time(),
@@ -1498,10 +1666,15 @@ def test_autonomous_clean_descendant_reuses_authority_and_entry_receipt(
         _path: Path,
         _source: Path,
         *,
+        contract: T09ProviderContract,
         package_commit: str,
         plan_sha256: str,
     ) -> dict[str, object]:
-        if package_commit != base_commit or plan_sha256 != receipt_value["plan_sha256"]:
+        if (
+            contract is not V8_PROVIDER_CONTRACT
+            or package_commit != base_commit
+            or plan_sha256 != receipt_value["plan_sha256"]
+        ):
             raise provider.T09ProviderError("fixture package mismatch")
         return dict(receipt_value)
 
@@ -1542,6 +1715,7 @@ def test_autonomous_clean_descendant_reuses_authority_and_entry_receipt(
     with pytest.raises(provider.T09ProviderError, match="stored science projection is stale"):
         provider.autonomous_preflight_package_transition(
             repository,
+            contract=V8_PROVIDER_CONTRACT,
             from_package_commit=descendant_commit,
             to_package_commit=drift_commit,
         )
@@ -1577,6 +1751,7 @@ def test_autonomous_clean_descendant_reuses_authority_and_entry_receipt(
     with pytest.raises(provider.T09ProviderError, match="command manifest drifted"):
         provider.autonomous_preflight_package_transition(
             repository,
+            contract=V8_PROVIDER_CONTRACT,
             from_package_commit=descendant_commit,
             to_package_commit=command_drift_commit,
         )
@@ -1632,6 +1807,7 @@ def test_autonomous_clean_descendant_reuses_authority_and_entry_receipt(
     with pytest.raises(provider.T09ProviderError, match="changed derived science"):
         provider.autonomous_preflight_package_transition(
             repository,
+            contract=V8_PROVIDER_CONTRACT,
             from_package_commit=descendant_commit,
             to_package_commit=condition_drift_commit,
         )
@@ -1657,7 +1833,7 @@ def test_finalizer_validates_canonical_raw_name_not_runtime_mount_alias(
     manifest_path = tmp_path / "raw-attempt-manifest.json"
     manifest = {
         "schema_version": "0.1.0",
-        "plan_id": "PLAN-EXP0001-PILOT-V8",
+        "plan_id": "PLAN-EXP0001-PILOT-V10",
         "run_id": ATTEMPT_ORDER[0],
         "package_commit": "a" * 40,
         "raw_attempt_root": "raw",
@@ -1679,7 +1855,7 @@ def test_finalizer_validates_canonical_raw_name_not_runtime_mount_alias(
         json.dumps(
             {
                 "schema_version": "0.1.0",
-                "plan_id": "PLAN-EXP0001-PILOT-V8",
+                "plan_id": "PLAN-EXP0001-PILOT-V10",
                 "run_id": ATTEMPT_ORDER[0],
                 "raw_manifest_sha256": finalizer.file_sha256(manifest_path),
                 "raw_attempt_complete": True,
@@ -1755,12 +1931,12 @@ def test_independent_selector_specializes_from_frozen_contract() -> None:
         evidence_schema=evidence,
         run_id=ATTEMPT_ORDER[0],
     )
-    assert score["properties"]["plan_id"] == {"const": "PLAN-EXP0001-PILOT-V8"}
+    assert score["properties"]["plan_id"] == {"const": "PLAN-EXP0001-PILOT-V10"}
     assert score["properties"]["run_id"] == {"const": ATTEMPT_ORDER[0]}
-    assert score["properties"]["pair_id"] == {"const": "PAIR-EXP0001-PILOT-V8-TASK-A"}
+    assert score["properties"]["pair_id"] == {"const": "PAIR-EXP0001-PILOT-V10-TASK-A"}
     assert evidence["properties"]["identity"]["properties"]["run_id"] == {"const": ATTEMPT_ORDER[0]}
     assert evidence["properties"]["runtime"]["properties"]["qualification_id"] == {
-        "const": "QUAL-T09-PILOT-V8-IMAGE-AUTONOMOUS-0001"
+        "const": "QUAL-T09-PILOT-V10-IMAGE-AUTONOMOUS-0003"
     }
     assert (
         score["properties"]["score_provenance"]
@@ -1850,6 +2026,7 @@ def test_v8_sealing_primitives_preflight_exercises_exact_production_sealers(
         command_document=command_document,
         package_commit="a" * 40,
         execution_contract_sha256=file_sha256(EXECUTION_CONTRACT),
+        provider_contract=V9_PROVIDER_CONTRACT,
         expected_run_ids=(
             "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0002",
             "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0002",
@@ -1868,6 +2045,61 @@ def test_v8_sealing_primitives_preflight_exercises_exact_production_sealers(
     assert receipt["core_artifact_count"] == 0
     assert receipt["provider_or_task_request"] is False
     assert receipt["browser_action"] is False
+
+
+def test_active_stage_and_package_reject_historical_contract_relabeling(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    host = _load_host_runner()
+    artifact_root = tmp_path / "artifact"
+    pilot_root = artifact_root / "pilot-v7"
+    pilot_root.mkdir(parents=True)
+    (pilot_root / "host-cleanup.json").write_text(
+        json.dumps(
+            {
+                "global_secret_scan_passed": True,
+                "remote_secret_removed": True,
+                "core_destruction_verified": True,
+                "core_safety_stop_detected": False,
+                "credential_rotation_required_due_to_core_handling": False,
+                "core_scan_integrity_failure": False,
+            }
+        ),
+        encoding="utf-8",
+    )
+    historical_state = {"plan_id": V8_PROVIDER_CONTRACT.plan_id}
+    monkeypatch.setattr(host, "verify_package", lambda *_args, **_kwargs: {})
+    monkeypatch.setattr(host, "staged_archive_headroom_ok", lambda: True)
+    monkeypatch.setattr(host, "detect_core_artifacts", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(
+        host,
+        "_reconstructable_disposition",
+        lambda *_args, **_kwargs: historical_state,
+    )
+    with pytest.raises(Exception, match="staging requires its frozen provider runner"):
+        host.stage(
+            SimpleNamespace(
+                artifact_root=artifact_root,
+                repository=ROOT,
+                package_commit="a" * 40,
+            )
+        )
+
+    inbound = tmp_path / "inbound"
+    inbound.mkdir()
+    provider_entry = tmp_path / "provider-entry.json"
+    provider_entry.write_text(
+        json.dumps({"plan_id": V8_PROVIDER_CONTRACT.plan_id}),
+        encoding="utf-8",
+    )
+    with pytest.raises(Exception, match="packaging requires its frozen provider runner"):
+        host.package(
+            SimpleNamespace(
+                inbound_root=inbound,
+                provider_entry_receipt=provider_entry,
+            )
+        )
 
 
 def test_t09_openai_secret_materializer_is_exact_single_assignment_and_exclusive(
@@ -2080,6 +2312,7 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     host = _load_host_runner()
+    contract = V10_PROVIDER_CONTRACT
     now = [2_000_000_000.0]
 
     def clock() -> float:
@@ -2143,8 +2376,8 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
     }
     instance = {
         "id": "instance-fixture-0001",
-        "name": provider.INSTANCE_NAME,
-        "hostname": provider.INSTANCE_NAME,
+        "name": contract.instance_name,
+        "hostname": contract.instance_name,
         "instance_type": {"name": provider.INSTANCE_TYPE},
         "region": {"name": provider.REGION},
         "status": "active",
@@ -2209,7 +2442,7 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
                 "authorized": True,
                 "single_use": True,
                 "clean_package_commit": package_commit,
-                "plan_id": provider.PLAN_ID,
+                "plan_id": contract.plan_id,
                 "plan_sha256": provider.file_sha256(plan_path),
                 "max_lambda_instances": 1,
                 "max_preflight_launch_count": 8,
@@ -2235,11 +2468,16 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
         1: tmp_path / "launch-capabilities/malformed.json",
         2: tmp_path / "launch-capabilities/slot-2.json",
     }
-    monkeypatch.setattr(provider, "launch_capability_path", lambda slot: capability[slot])
+    monkeypatch.setattr(
+        provider,
+        "launch_capability_path",
+        lambda slot, *, contract: capability[slot],
+    )
 
     malformed_launch_root = tmp_path / "provider-malformed-launch"
     with pytest.raises(provider.T09ProviderError, match="launch outcome is unknown"):
         provider.launch_campaign(
+            contract=contract,
             repository=ROOT,
             package_commit=package_commit,
             authorization_ledger=authorization,
@@ -2263,6 +2501,7 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
     active_failure_root = tmp_path / "provider-active-poll-failure"
     with pytest.raises(provider.T09ProviderError, match="exact launched instance was closed"):
         provider.launch_campaign(
+            contract=contract,
             repository=ROOT,
             package_commit=package_commit,
             authorization_ledger=authorization,
@@ -2275,6 +2514,7 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
                     *copy.deepcopy(launch_responses[:7]),
                     RuntimeError("active poll transport ambiguity"),
                     RuntimeError("termination response ambiguity"),
+                    {"data": [{**copy.deepcopy(instance), "status": "terminated"}]},
                     {"data": []},
                     global_firewall,
                     {"data": []},
@@ -2307,10 +2547,14 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
     assert provisional_closed["replacement_launch_eligibility_pending"] is True
     assert provisional_closed["security_restored"] is True
     assert (active_failure_root / "replacement-launch-eligibility.json").is_file()
-    provider.validate_source_manifest(active_failure_root / "provisional-closeout-source")
+    provider.validate_source_manifest(
+        active_failure_root / "provisional-closeout-source",
+        contract=contract,
+    )
     already_closed_transport = FakeTransport([])
     assert (
         provider.closeout_campaign(
+            contract=contract,
             repository=ROOT,
             package_commit=package_commit,
             authorization_ledger=authorization,
@@ -2337,6 +2581,7 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
         journal_patch.setattr(EarlyCleanupJournal, "initialize", fail_journal_initialize)
         with pytest.raises(provider.T09ProviderError, match="exact launched instance was closed"):
             provider.launch_campaign(
+                contract=contract,
                 repository=ROOT,
                 package_commit=package_commit,
                 authorization_ledger=authorization,
@@ -2368,6 +2613,7 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
     cleanup_failure_root = tmp_path / "provider-cleanup-poll-failure"
     with pytest.raises(provider.T09ProviderError, match="durable console action"):
         provider.launch_campaign(
+            contract=contract,
             repository=ROOT,
             package_commit=package_commit,
             authorization_ledger=authorization,
@@ -2398,6 +2644,7 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
     booting = {**copy.deepcopy(instance), "status": "booting"}
     with pytest.raises(provider.T09ProviderError, match="exact launched instance was closed"):
         provider.launch_campaign(
+            contract=contract,
             repository=ROOT,
             package_commit=package_commit,
             authorization_ledger=authorization,
@@ -2426,18 +2673,23 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
     original_seal = provider.seal_source_bundle
     entry_seal_failures = 0
 
-    def fail_entry_seal(root: Path) -> dict[str, object]:
+    def fail_entry_seal(
+        root: Path,
+        *,
+        contract: T09ProviderContract,
+    ) -> dict[str, object]:
         nonlocal entry_seal_failures
         if root.name == "entry-source" and entry_seal_failures == 0:
             entry_seal_failures += 1
             raise provider.T09ProviderError("fixture entry seal failure")
-        return original_seal(root)
+        return original_seal(root, contract=contract)
 
     capability[1] = tmp_path / "launch-capabilities/entry-seal-failure.json"
     seal_failure_root = tmp_path / "provider-entry-seal-failure"
     monkeypatch.setattr(provider, "seal_source_bundle", fail_entry_seal)
     with pytest.raises(provider.T09ProviderError, match="exact launched instance was closed"):
         provider.launch_campaign(
+            contract=contract,
             repository=ROOT,
             package_commit=package_commit,
             authorization_ledger=authorization,
@@ -2470,6 +2722,7 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
     monkeypatch.setattr(provider, "create_entry_receipt", fail_entry_receipt)
     with pytest.raises(provider.T09ProviderError, match="exact launched instance was closed"):
         provider.launch_campaign(
+            contract=contract,
             repository=ROOT,
             package_commit=package_commit,
             authorization_ledger=authorization,
@@ -2509,6 +2762,7 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
     monkeypatch.setattr(provider, "write_exclusive", fail_provisional_owner_write)
     with pytest.raises(provider.T09ProviderError, match="exact launched instance was closed"):
         provider.launch_campaign(
+            contract=contract,
             repository=ROOT,
             package_commit=package_commit,
             authorization_ledger=authorization,
@@ -2533,6 +2787,7 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
     early_closed_transport = FakeTransport([])
     assert (
         provider.closeout_campaign(
+            contract=contract,
             repository=ROOT,
             package_commit=package_commit,
             authorization_ledger=authorization,
@@ -2564,6 +2819,7 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
     )
     with pytest.raises(provider.T09ProviderError, match="lost fresh inventory"):
         provider.launch_campaign(
+            contract=contract,
             repository=ROOT,
             package_commit=package_commit,
             authorization_ledger=authorization,
@@ -2594,6 +2850,7 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
     multi_ids = ["instance-fixture-incident-1", "instance-fixture-incident-2"]
     with pytest.raises(provider.T09ProviderError, match="every returned identity was closed"):
         provider.launch_campaign(
+            contract=contract,
             repository=ROOT,
             package_commit=package_commit,
             authorization_ledger=authorization,
@@ -2619,6 +2876,7 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
     capability[1] = tmp_path / "launch-capabilities/success.json"
     private_root = tmp_path / "provider-private"
     entry_path = provider.launch_campaign(
+        contract=contract,
         repository=ROOT,
         package_commit=package_commit,
         authorization_ledger=authorization,
@@ -2636,6 +2894,7 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
     no_second_launch = FakeTransport([])
     with pytest.raises(provider.T09ProviderError, match="already consumed"):
         provider.launch_campaign(
+            contract=contract,
             repository=ROOT,
             package_commit=package_commit,
             authorization_ledger=authorization,
@@ -2669,6 +2928,7 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
     no_send = FakeTransport([])
     with pytest.raises(provider.T09ProviderError, match="not source-bound"):
         provider.closeout_campaign(
+            contract=contract,
             repository=ROOT,
             package_commit=package_commit,
             authorization_ledger=authorization,
@@ -2685,6 +2945,7 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
     copytree(private_root, failed_closeout_root)
     with pytest.raises(provider.ProviderOutcomeUnknown):
         provider.closeout_campaign(
+            contract=contract,
             repository=ROOT,
             package_commit=package_commit,
             authorization_ledger=authorization,
@@ -2722,6 +2983,7 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
         clock=clock,
     )
     closeout_path = provider.closeout_campaign(
+        contract=contract,
         repository=ROOT,
         package_commit=package_commit,
         authorization_ledger=authorization,
@@ -2800,14 +3062,15 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
         "".join(json.dumps(event, sort_keys=True) + "\n" for event in events),
         encoding="utf-8",
     )
-    provider.seal_source_bundle(late_root)
+    provider.seal_source_bundle(late_root, contract=contract)
     late_receipt = provider.create_closeout_receipt(
         late_root,
+        contract=contract,
         entry_receipt_path=entry_path,
         entry_source_root=private_root / "entry-source",
         package_commit=package_commit,
         plan_sha256=provider.file_sha256(plan_path),
-        lifecycle=provider.load_campaign_lifecycle(ROOT),
+        lifecycle=provider.load_campaign_lifecycle(ROOT, contract=contract),
     )
     with pytest.raises(host.T09HostError, match="not source-bound"):
         host.validate_provider_closeout_receipt(
@@ -2827,6 +3090,7 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
 
 def test_closeout_rejects_termination_after_campaign_cutoff() -> None:
     lifecycle = provider.CampaignLifecycle(
+        contract=V10_PROVIDER_CONTRACT,
         limits=AutonomousPilotLifecycleLimits(),
         max_instances=1,
         max_launches=8,
@@ -2878,7 +3142,7 @@ def test_provider_send_ambiguity_is_durably_unknown_and_never_retried(tmp_path: 
             "launch",
             "POST",
             "/api/v1/instance-operations/launch",
-            body=provider._launch_body(),
+            body=provider._launch_body(contract=V10_PROVIDER_CONTRACT),
         )
 
     events = [
@@ -2917,7 +3181,7 @@ def test_provider_send_ambiguity_is_durably_unknown_and_never_retried(tmp_path: 
             "launch",
             "POST",
             "/api/v1/instance-operations/launch",
-            body=provider._launch_body(),
+            body=provider._launch_body(contract=V10_PROVIDER_CONTRACT),
         )
     malformed_events = [
         json.loads(line)
@@ -2942,7 +3206,7 @@ def test_t09_provider_is_a_narrow_adapter_over_the_retained_t07_pragmatic_path()
     historical_launch = load_json(
         ROOT / "artifacts/t07/pragmatic/RUN-T07-PRAGMATIC-HOST-0001/launch-request.json"
     )
-    current_launch = provider._launch_body()
+    current_launch = provider._launch_body(contract=V10_PROVIDER_CONTRACT)
     assert set(current_launch) == set(historical_launch)
     for key in (
         "region_name",
@@ -2953,7 +3217,9 @@ def test_t09_provider_is_a_narrow_adapter_over_the_retained_t07_pragmatic_path()
         "image",
     ):
         assert current_launch[key] == historical_launch[key]
-    assert current_launch["name"] == current_launch["hostname"] == provider.INSTANCE_NAME
+    assert (
+        current_launch["name"] == current_launch["hostname"] == V10_PROVIDER_CONTRACT.instance_name
+    )
 
     calls: list[tuple[object, dict[str, object]]] = []
 
@@ -3016,7 +3282,7 @@ def test_campaign_lifecycle_uses_actual_elapsed_time_and_preserves_cleanup_reser
         preflight_iteration_wall_seconds=3_600,
         maximum_preflight_instance_active_seconds=21_600,
         maximum_cumulative_preflight_active_seconds=43_200,
-        maximum_preflight_provider_cost_usd=20.0,
+        maximum_preflight_provider_cost_usd=10.0,
         max_preflight_launch_count=8,
         failed_preflight_termination_dispatch_seconds=300,
         empirical_campaign_wall_seconds=14_400,
@@ -3054,15 +3320,16 @@ def test_autonomous_preflight_and_empirical_lifecycle_boundaries_are_separate() 
     assert limits.maximum_preflight_launches == 8
     assert limits.maximum_preflight_instance_active_seconds == 21_600
     assert limits.maximum_cumulative_preflight_active_seconds == 43_200
-    assert limits.maximum_preflight_provider_cost_cents == 2_000
+    assert limits.maximum_preflight_provider_cost_cents == 1_000
     assert limits.maximum_empirical_launches == 1
     assert limits.empirical_campaign_wall_seconds == 14_400
     assert limits.maximum_empirical_provider_cost_cents == 800
     assert limits.preflight_instance_remaining(launched_at_epoch=100.0, now_epoch=21_700.0) == 0
-    assert limits.preflight_caps_available(cumulative_active_seconds=43_200) is True
-    assert limits.preflight_caps_available(cumulative_active_seconds=43_200.1) is False
+    assert limits.preflight_caps_available(cumulative_active_seconds=27_906) is True
+    assert limits.preflight_caps_available(cumulative_active_seconds=27_907) is False
     assert (
         provider.CampaignLifecycle(
+            contract=V10_PROVIDER_CONTRACT,
             limits=limits,
             max_instances=1,
             max_launches=8,
@@ -3072,13 +3339,14 @@ def test_autonomous_preflight_and_empirical_lifecycle_boundaries_are_separate() 
     )
     with pytest.raises(provider.T09ProviderError, match="lifecycle drifted"):
         provider.CampaignLifecycle(
+            contract=V10_PROVIDER_CONTRACT,
             limits=limits,
             max_instances=1,
             max_launches=9,
             persistent_filesystems=0,
         )
     with pytest.raises(provider.T09ProviderError, match="outside the authorized bound"):
-        provider.launch_capability_path(9)
+        provider.launch_capability_path(9, contract=V10_PROVIDER_CONTRACT)
 
 
 def test_host_campaign_admission_counts_setup_and_attempt_actual_time(
@@ -3135,6 +3403,7 @@ def test_ordinary_preflight_defect_is_resumable_on_same_host_with_fresh_root(
         host,
         "validate_dynamic_receipt",
         lambda *_args, **_kwargs: {
+            "plan_id": V10_PROVIDER_CONTRACT.plan_id,
             "provider_preflight_started_at_epoch": now - 4_000.0,
             "prior_campaign_lambda_duration_seconds": 0.0,
             "prior_campaign_lambda_cost_usd": 0.0,
@@ -3204,6 +3473,7 @@ def test_raw_attempt_streams_before_cutoff_without_aggregate_stage(
     pilot_root.mkdir(exist_ok=True)
     initialize_pilot_state(
         pilot_root / "pilot-state.json",
+        provider_contract=V10_PROVIDER_CONTRACT,
         execution_contract_sha256="a" * 64,
         pilot_started_at_epoch=now - 100,
         lambda_started_at_epoch=now - 100,
@@ -3224,6 +3494,8 @@ def test_raw_attempt_streams_before_cutoff_without_aggregate_stage(
     provider_entry.write_text(
         json.dumps(
             {
+                "plan_id": V10_PROVIDER_CONTRACT.plan_id,
+                "host_run_id": V10_PROVIDER_CONTRACT.host_run_id,
                 "owned_instance_identity_sha256": "b" * 64,
                 "lambda_started_at_epoch": now - 100,
             }
@@ -3233,6 +3505,8 @@ def test_raw_attempt_streams_before_cutoff_without_aggregate_stage(
     (pilot_root / "provider-entry.json").write_text(
         json.dumps(
             {
+                "plan_id": V10_PROVIDER_CONTRACT.plan_id,
+                "host_run_id": V10_PROVIDER_CONTRACT.host_run_id,
                 "receipt_sha256": host.file_sha256(provider_entry),
                 "owned_instance_identity_sha256": "b" * 64,
                 "lambda_started_at_epoch": now - 100,
@@ -3244,15 +3518,16 @@ def test_raw_attempt_streams_before_cutoff_without_aggregate_stage(
     local_qualification.write_text(
         json.dumps(
             {
-                "qualification_id": ("QUAL-T09-PILOT-V8-LOCAL-FINALIZER-AUTONOMOUS-0001"),
+                "qualification_id": V10_PROVIDER_CONTRACT.local_finalizer_qualification_id,
                 "package_commit": "a" * 40,
             }
         ),
         encoding="utf-8",
     )
     frozen_document = {
-        "manifest_id": "RUN-MANIFEST-EXP0001-PILOT-V8-AUTONOMOUS-0001",
-        "plan_id": "PLAN-EXP0001-PILOT-V8",
+        "manifest_id": V10_PROVIDER_CONTRACT.frozen_run_manifest_id,
+        "plan_id": V10_PROVIDER_CONTRACT.plan_id,
+        "host_run_id": V10_PROVIDER_CONTRACT.host_run_id,
         "clean_package_commit": "a" * 40,
         "replacement_image_id": replacement_image_id,
         "local_finalizer_qualification_sha256": host.file_sha256(local_qualification),

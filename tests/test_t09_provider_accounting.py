@@ -35,6 +35,7 @@ from giclab.harness.t09_pragmatic_provider import (
     T09ProviderError,
     _autonomous_package_science_state,
 )
+from giclab.harness.t09_provider_contracts import V8_PROVIDER_CONTRACT, V9_PROVIDER_CONTRACT
 from giclab.registry import load_json
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -562,11 +563,23 @@ def test_25_finalizer_keeps_v9_and_historical_receipt_contracts_disjoint() -> No
 
 
 def test_26_launch_package_command_hash_exception_is_exact_and_source_bound() -> None:
+    with pytest.raises(T09ProviderError, match="execution package"):
+        _autonomous_package_science_state(
+            ROOT,
+            AUTONOMOUS_V9_LAUNCH_PACKAGE_COMMIT,
+            contract=V8_PROVIDER_CONTRACT,
+            stale_command_authorization_sha256s=(AUTONOMOUS_V9_STALE_COMMAND_AUTHORIZATION_SHA256S),
+        )
     with pytest.raises(T09ProviderError, match="condition does not match"):
-        _autonomous_package_science_state(ROOT, AUTONOMOUS_V9_LAUNCH_PACKAGE_COMMIT)
+        _autonomous_package_science_state(
+            ROOT,
+            AUTONOMOUS_V9_LAUNCH_PACKAGE_COMMIT,
+            contract=V9_PROVIDER_CONTRACT,
+        )
     projection = _autonomous_package_science_state(
         ROOT,
         AUTONOMOUS_V9_LAUNCH_PACKAGE_COMMIT,
+        contract=V9_PROVIDER_CONTRACT,
         stale_command_authorization_sha256s=(AUTONOMOUS_V9_STALE_COMMAND_AUTHORIZATION_SHA256S),
     )
     assert len(projection["condition_science_sha256s"]) == 4
@@ -576,5 +589,6 @@ def test_26_launch_package_command_hash_exception_is_exact_and_source_bound() ->
         _autonomous_package_science_state(
             ROOT,
             AUTONOMOUS_V9_LAUNCH_PACKAGE_COMMIT,
+            contract=V9_PROVIDER_CONTRACT,
             stale_command_authorization_sha256s=altered,
         )

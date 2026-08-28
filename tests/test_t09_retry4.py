@@ -19,6 +19,7 @@ from giclab.harness.t09_pragmatic_provider import (
     T09ProviderError,
     validate_slot2_launch_headroom,
 )
+from giclab.harness.t09_provider_contracts import V6_PROVIDER_CONTRACT
 from giclab.validation import validate_instance
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -32,6 +33,12 @@ SLOT1_PREENTRY_STAGE = Path(
     "t09-pilot-private-evidence-stage.tar.gz"
 )
 PRIVATE_T09_ROOT = Path("/Volumes/Macintosh HD - Data/GIC-Lab/t09")
+PRIVATE_LOCAL_OPT_IN = "GICLAB_RUN_PRIVATE_T09_TESTS"
+
+
+def _require_private_local_evidence() -> None:
+    if os.environ.get(PRIVATE_LOCAL_OPT_IN) != "1":
+        pytest.skip(f"set {PRIVATE_LOCAL_OPT_IN}=1 to inspect private historical evidence")
 
 
 def test_retry4_preserves_retry3_terminal_and_frozen_package_bytes() -> None:
@@ -262,7 +269,9 @@ def test_retry4_postrun_overlay_rejects_nested_destination_without_mutation(
     assert {path.name: path.read_bytes() for path in original.iterdir()} == before
 
 
+@pytest.mark.private_local
 def test_retry4_private_postrun_union_reconstructs_the_frozen_runtime() -> None:
+    _require_private_local_evidence()
     original = (
         PRIVATE_T09_ROOT / "sealed-artifacts/ARCHIVE-EXP0001-PILOT-V6-0004/"
         "t09-pilot-private-evidence-stage.tar.gz"
@@ -292,7 +301,9 @@ def test_retry4_private_postrun_union_reconstructs_the_frozen_runtime() -> None:
     }
 
 
+@pytest.mark.private_local
 def test_retry4_private_clock_reconciliation_uses_the_frozen_empirical_origin() -> None:
+    _require_private_local_evidence()
     original = (
         PRIVATE_T09_ROOT / "sealed-artifacts/ARCHIVE-EXP0001-PILOT-V6-0004/"
         "t09-pilot-private-evidence-stage.tar.gz"
@@ -324,7 +335,9 @@ def test_retry4_private_clock_reconciliation_uses_the_frozen_empirical_origin() 
     )
 
 
+@pytest.mark.private_local
 def test_retry4_private_postrun_overlay_is_exact_and_reconstructable() -> None:
+    _require_private_local_evidence()
     original_root = PRIVATE_T09_ROOT / ("sealed-artifacts/ARCHIVE-EXP0001-PILOT-V6-0004")
     overlay = PRIVATE_T09_ROOT / (
         "sealed-artifacts/ARCHIVE-EXP0001-PILOT-V6-0004-POSTRUN-OVERLAY-0001"
@@ -598,10 +611,12 @@ def test_retry4_sudo_docker_uses_the_live_parent_descriptor() -> None:
     )
 
 
+@pytest.mark.private_local
 def test_retry4_exact_slot1_preentry_stage_is_source_reconstructable(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    _require_private_local_evidence()
     if not SLOT1_PREENTRY_STAGE.is_file():
         pytest.skip("private source-bound slot-1 stage is not present in this checkout")
     projection = provider._retry4_slot1_failure_archive_projection(SLOT1_PREENTRY_STAGE)
@@ -834,7 +849,7 @@ def test_retry4_fresh_launch_clock_cumulative_accounting_and_empirical_boundarie
 
 
 def test_retry4_slot2_launch_headroom_enforces_exact_active_caps() -> None:
-    lifecycle = CampaignLifecycle(Retry4LifecycleLimits(), 1, 2, 0)
+    lifecycle = CampaignLifecycle(V6_PROVIDER_CONTRACT, Retry4LifecycleLimits(), 1, 2, 0)
     exact = {
         "prior_lambda_duration_seconds": 3_600.0,
         "prior_lambda_cost_usd": 1.29,
@@ -928,7 +943,16 @@ def test_retry4_provider_entry_freshness_matches_the_full_preflight_wall(
     receipt = tmp_path / "entry.json"
     source = tmp_path / "source"
     source.mkdir()
-    receipt.write_text("{}\n", encoding="utf-8")
+    receipt.write_text(
+        json.dumps(
+            {
+                "plan_id": V6_PROVIDER_CONTRACT.plan_id,
+                "host_run_id": V6_PROVIDER_CONTRACT.host_run_id,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
     monkeypatch.setattr(host.time, "time", lambda: 10_000.0)
     monkeypatch.setattr(
         host,
@@ -999,7 +1023,7 @@ def test_retry4_slot2_authority_is_minimal_bound_and_export_mode_matches(
     host.write_exclusive(preempirical / "source-manifest.json", {"preempirical_source": True})
     host.write_exclusive(
         authority / "source-manifest.json",
-        provider._slot2_authority_tree_manifest(authority),
+        provider._slot2_authority_tree_manifest(authority, contract=V6_PROVIDER_CONTRACT),
     )
     host.write_exclusive(source / "unrelated-owned-state.json", {"private": True})
 

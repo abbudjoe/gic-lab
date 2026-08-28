@@ -15,6 +15,7 @@ from jsonschema import Draft202012Validator
 
 from giclab.harness import t09_pragmatic_provider as provider
 from giclab.harness import t09_sira_pilot as pilot
+from giclab.harness.t09_provider_contracts import V10_PROVIDER_CONTRACT
 
 ROOT = Path(__file__).resolve().parents[1]
 EXP = ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive"
@@ -79,7 +80,9 @@ def test_v10_plan_binds_exact_repaired_control_sources() -> None:
         cleanup["provider_integration_path"]: cleanup["provider_integration_sha256"],
         cleanup["schema_path"]: cleanup["schema_sha256"],
         execution["pilot_library_path"]: execution["pilot_library_sha256"],
+        execution["campaign_lifecycle_path"]: execution["campaign_lifecycle_sha256"],
         execution["provider_path"]: execution["provider_sha256"],
+        execution["provider_contracts_path"]: execution["provider_contracts_sha256"],
         execution["remote_runner_path"]: execution["remote_runner_sha256"],
         execution["command_generator_path"]: execution["command_generator_sha256"],
         execution["runtime_profile_path"]: execution["runtime_profile_sha256"],
@@ -132,8 +135,8 @@ def test_v10_execution_plane_is_typed_renderable_and_statically_unauthorized(
         expected_sha256=str(execution["execution_contract_sha256"]),
     )
     assert tuple(attempt.run_id for attempt in loaded.attempts) == pilot.ATTEMPT_ORDER
-    assert provider.PLAN_ID == pilot.PLAN_ID == "PLAN-EXP0001-PILOT-V10"
-    assert provider.HOST_RUN_ID == "RUN-T09-PILOT-HOST-AUTONOMOUS-0003"
+    assert V10_PROVIDER_CONTRACT.plan_id == pilot.PLAN_ID == "PLAN-EXP0001-PILOT-V10"
+    assert V10_PROVIDER_CONTRACT.host_run_id == "RUN-T09-PILOT-HOST-AUTONOMOUS-0003"
     assert execution_document["authorized"] is False
     assert execution_document["authorization_reference"] is None
     assert execution_document["execution_eligibility"] == (
@@ -317,7 +320,8 @@ def test_v10_cleanup_authority_precedes_post_identity_package_transition() -> No
     provider_source = (ROOT / "src/giclab/harness/t09_pragmatic_provider.py").read_text()
     remote_source = (ROOT / "containers/sira-smoke/pragmatic/t09_remote_runner.py").read_text()
     assert 'closeout.add_argument("--remote-cleanup-journal", type=Path)' in provider_source
-    assert 'CONTAINER_PREFIX: Final = "giclab-t09-pilot-v10-autonomous-"' in remote_source
+    assert "CONTAINER_PREFIX: Final = ACTIVE_PROVIDER_CONTRACT.container_prefix" in remote_source
+    assert V10_PROVIDER_CONTRACT.container_prefix == "giclab-t09-pilot-v10-autonomous-"
     assert "import_continuation(remote)" in provider_source
 
 

@@ -9,6 +9,7 @@ import os
 import resource
 import stat
 import sys
+import tarfile
 import time
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
@@ -17,9 +18,14 @@ import pytest
 
 from giclab.harness.policy import load_project_execution_state
 from giclab.harness.t09_cleanup_state import EarlyCleanupJournal
+from giclab.harness.t09_provider_contracts import (
+    V4_PROVIDER_CONTRACT,
+    V7_PROVIDER_CONTRACT,
+    V8_PROVIDER_CONTRACT,
+    V9_PROVIDER_CONTRACT,
+    V10_PROVIDER_CONTRACT,
+)
 from giclab.harness.t09_sira_pilot import (
-    ATTEMPT_ORDER,
-    PLAN_ID,
     initialize_pilot_state,
     mark_attempt_completed,
     mark_empirical_entry,
@@ -28,6 +34,11 @@ from giclab.harness.t09_sira_pilot import (
     record_first_pair_checkpoint,
     reserve_condition_start,
 )
+
+# Retry 5's successor evidence is frozen to V8; it must not inherit V9/V10
+# identities from whichever control plane is currently active.
+PLAN_ID = V8_PROVIDER_CONTRACT.plan_id
+ATTEMPT_ORDER = V8_PROVIDER_CONTRACT.run_ids
 
 ROOT = Path(__file__).resolve().parents[1]
 HOST_SOURCE = ROOT / "containers/sira-smoke/pragmatic/t09_remote_runner.py"
@@ -74,8 +85,8 @@ def _early_cleanup_journal(
 
     return EarlyCleanupJournal.initialize(
         tmp_path / "early-cleanup-state",
-        plan_id=host.PLAN_ID,
-        host_run_id=host.HOST_RUN_ID,
+        plan_id=V8_PROVIDER_CONTRACT.plan_id,
+        host_run_id=V8_PROVIDER_CONTRACT.host_run_id,
         package_commit=package_commit,
         plan_sha256="a" * 64,
         provider_instance_id="public-dummy-instance",
@@ -87,19 +98,307 @@ def _early_cleanup_journal(
     )
 
 
+def test_attempt_export_rejects_mixed_v8_contract_and_v10_run(tmp_path: Path) -> None:
+    host = _host("giclab_t09_retry5_mixed_export_contract")
+    inbound = tmp_path / "inbound"
+    inbound.mkdir(mode=0o700)
+    run_id = V10_PROVIDER_CONTRACT.run_ids[0]
+    archive = inbound / f"{run_id}.tar.gz"
+    manifest_bytes = (
+        json.dumps(
+            {
+                "schema_version": "0.1.0",
+                "plan_id": V8_PROVIDER_CONTRACT.plan_id,
+                "host_run_id": V8_PROVIDER_CONTRACT.host_run_id,
+                "run_id": run_id,
+            },
+            sort_keys=True,
+        )
+        + "\n"
+    ).encode()
+    with tarfile.open(archive, "w:gz") as handle:
+        member = tarfile.TarInfo("attempt-export-manifest.json")
+        member.size = len(manifest_bytes)
+        handle.addfile(member, io.BytesIO(manifest_bytes))
+
+    with pytest.raises(Exception, match="manifest run belongs to another campaign"):
+        host.verify_attempt_export(
+            SimpleNamespace(
+                inbound_root=inbound,
+                attempt_export=archive,
+                run_id=run_id,
+                package_commit="a" * 40,
+            )
+        )
+
+
+def test_attempt_export_receipts_reject_mixed_contract_and_run() -> None:
+    host = _host("giclab_t09_retry5_mixed_export_receipts")
+    run_id = V10_PROVIDER_CONTRACT.run_ids[0]
+    shared = {
+        "run_id": run_id,
+        "package_commit": "a" * 40,
+        "frozen_run_manifest_sha256": "b" * 64,
+        "replacement_image_id": "sha256:" + "c" * 64,
+        "provider_entry_receipt_sha256": "d" * 64,
+        "owned_instance_identity_sha256": "e" * 64,
+        "lambda_started_at_epoch": 1.0,
+        "contract": V8_PROVIDER_CONTRACT,
+    }
+    with pytest.raises(Exception, match="completion run belongs to another campaign"):
+        host._validate_attempt_export_completion(
+            {},
+            archive_bytes=1,
+            archive_sha256="f" * 64,
+            manifest_sha256="0" * 64,
+            **shared,
+        )
+    with pytest.raises(Exception, match="acknowledgement run belongs to another campaign"):
+        host._validate_attempt_export_acknowledgement(
+            acknowledgement={},
+            acknowledgement_sha256="1" * 64,
+            completion={},
+            completion_sha256="2" * 64,
+            evidence_authority="immutable-raw-attempt",
+            empirical_entry_crossed=True,
+            archive=None,
+            **shared,
+        )
+
+
+def test_attempt_export_control_snapshot_rejects_v9_provider_entry_for_v10(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    host = _host("giclab_t09_export_snapshot_provider_contract")
+    artifact_root = tmp_path / "artifacts"
+    _write_json(
+        artifact_root / "pilot-v7/provider-entry.json",
+        {
+            "plan_id": V9_PROVIDER_CONTRACT.plan_id,
+            "host_run_id": V9_PROVIDER_CONTRACT.host_run_id,
+        },
+    )
+    attempt_root = artifact_root / "attempts/public-dummy-attempt"
+    attempt_root.mkdir(parents=True, mode=0o700)
+    monkeypatch.setattr(host, "_runtime_provider_contract", lambda _root: V10_PROVIDER_CONTRACT)
+
+    with pytest.raises(Exception, match="provider entry belongs to another provider contract"):
+        host._attempt_export_control_sources(
+            artifact_root,
+            attempt_root=attempt_root,
+            run_id=V10_PROVIDER_CONTRACT.run_ids[0],
+            evidence_authority="immutable-raw-attempt",
+        )
+
+
+def test_attempt_export_completion_rejects_v9_provider_entry_for_v10(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    host = _host("giclab_t09_export_completion_provider_contract")
+    artifact_root = tmp_path / "artifacts"
+    _write_json(
+        artifact_root / "pilot-v7/provider-entry.json",
+        {
+            "plan_id": V9_PROVIDER_CONTRACT.plan_id,
+            "host_run_id": V9_PROVIDER_CONTRACT.host_run_id,
+            "receipt_sha256": "a" * 64,
+            "owned_instance_identity_sha256": "b" * 64,
+            "lambda_started_at_epoch": 1.0,
+        },
+    )
+    monkeypatch.setattr(host, "_runtime_provider_contract", lambda _root: V10_PROVIDER_CONTRACT)
+
+    with pytest.raises(Exception, match="provider entry belongs to another provider contract"):
+        host._record_attempt_export_completion(
+            artifact_root=artifact_root,
+            run_id=V10_PROVIDER_CONTRACT.run_ids[0],
+            package_commit="c" * 40,
+            archive_bytes=1,
+            archive_sha256="d" * 64,
+            manifest_sha256="e" * 64,
+            frozen_run_manifest_sha256="f" * 64,
+            replacement_image_id="sha256:" + "0" * 64,
+        )
+
+
+@pytest.mark.parametrize(
+    "label",
+    (
+        "attempt export archived provider entry",
+        "attempt export provider entry receipt",
+    ),
+)
+def test_attempt_export_verifier_rejects_v9_provider_control_for_v10(
+    label: str,
+) -> None:
+    host = _host("giclab_t09_export_verifier_provider_contract_" + label.replace(" ", "_"))
+    with pytest.raises(Exception, match=f"{label} belongs to another provider contract"):
+        host._require_provider_contract(
+            {
+                "plan_id": V9_PROVIDER_CONTRACT.plan_id,
+                "host_run_id": V9_PROVIDER_CONTRACT.host_run_id,
+            },
+            expected=V10_PROVIDER_CONTRACT,
+            label=label,
+        )
+
+
+def test_attempt_export_provider_control_rejects_right_plan_wrong_host() -> None:
+    host = _host("giclab_t09_export_verifier_provider_host")
+    with pytest.raises(Exception, match="belongs to another provider contract"):
+        host._require_provider_contract(
+            {
+                "plan_id": V10_PROVIDER_CONTRACT.plan_id,
+                "host_run_id": V9_PROVIDER_CONTRACT.host_run_id,
+            },
+            expected=V10_PROVIDER_CONTRACT,
+            label="attempt export archived provider entry",
+        )
+
+
+def test_frozen_runtime_rejects_v10_state_with_v9_provider_entry(tmp_path: Path) -> None:
+    host = _host("giclab_t09_frozen_runtime_provider_contract")
+    artifact_root = tmp_path / "artifacts"
+    pilot_root = artifact_root / "pilot-v7"
+    _write_json(
+        pilot_root / "pilot-state.json",
+        {
+            "plan_id": V10_PROVIDER_CONTRACT.plan_id,
+            "host_run_id": V10_PROVIDER_CONTRACT.host_run_id,
+        },
+    )
+    _write_json(
+        pilot_root / "frozen-run-manifest.json",
+        {
+            "plan_id": V10_PROVIDER_CONTRACT.plan_id,
+            "host_run_id": V10_PROVIDER_CONTRACT.host_run_id,
+        },
+    )
+    _write_json(
+        pilot_root / "provider-entry.json",
+        {
+            "plan_id": V9_PROVIDER_CONTRACT.plan_id,
+            "host_run_id": V9_PROVIDER_CONTRACT.host_run_id,
+        },
+    )
+
+    with pytest.raises(Exception, match="provider entry summary belongs to another"):
+        host.load_frozen_run_manifest(
+            artifact_root,
+            repository=ROOT,
+            package_commit="a" * 40,
+        )
+
+
+def test_export_acknowledgement_rejects_v10_state_with_v9_provider_entry(
+    tmp_path: Path,
+) -> None:
+    host = _host("giclab_t09_export_ack_provider_contract")
+    artifact_root = tmp_path / "artifacts"
+    pilot_root = artifact_root / "pilot-v7"
+    _write_json(
+        pilot_root / "pilot-state.json",
+        {
+            "plan_id": V10_PROVIDER_CONTRACT.plan_id,
+            "host_run_id": V10_PROVIDER_CONTRACT.host_run_id,
+        },
+    )
+    _write_json(
+        pilot_root / "frozen-run-manifest.json",
+        {
+            "plan_id": V10_PROVIDER_CONTRACT.plan_id,
+            "host_run_id": V10_PROVIDER_CONTRACT.host_run_id,
+        },
+    )
+    _write_json(
+        pilot_root / "provider-entry.json",
+        {
+            "plan_id": V9_PROVIDER_CONTRACT.plan_id,
+            "host_run_id": V9_PROVIDER_CONTRACT.host_run_id,
+        },
+    )
+
+    with pytest.raises(Exception, match="provider entry belongs to another"):
+        host.require_prior_export_acknowledgements(
+            artifact_root,
+            next_attempt_index=0,
+            package_commit="a" * 40,
+        )
+
+
+def test_preempirical_disposition_rejects_v10_state_with_v9_provider_entry(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    host = _host("giclab_t09_preempirical_provider_contract")
+    artifact_root = tmp_path / "artifacts"
+    pilot_root = artifact_root / "pilot-v7"
+    _write_json(
+        pilot_root / "pilot-state.json",
+        {
+            "plan_id": V10_PROVIDER_CONTRACT.plan_id,
+            "host_run_id": V10_PROVIDER_CONTRACT.host_run_id,
+        },
+    )
+    _write_json(pilot_root / "host-cleanup.json", {})
+    _write_json(pilot_root / "preflight-failure.json", {})
+    _write_json(
+        pilot_root / "provider-entry.json",
+        {
+            "plan_id": V9_PROVIDER_CONTRACT.plan_id,
+            "host_run_id": V9_PROVIDER_CONTRACT.host_run_id,
+        },
+    )
+    monkeypatch.setattr(host, "verify_package", lambda *_args, **_kwargs: {})
+
+    with pytest.raises(Exception, match="provider entry belongs to another"):
+        host.preempirical_replacement_disposition(
+            SimpleNamespace(
+                repository=ROOT,
+                artifact_root=artifact_root,
+                package_commit="a" * 40,
+            )
+        )
+
+
+def test_historical_failed_candidate_rejects_v10_provider_entry(tmp_path: Path) -> None:
+    host = _host("giclab_t09_failed_candidate_provider_contract")
+    root = tmp_path / "t09-pilot-v7-output-0003"
+    _write_json(
+        root / "pilot-v7/pilot-state.json",
+        {
+            "plan_id": V4_PROVIDER_CONTRACT.plan_id,
+            "host_run_id": V4_PROVIDER_CONTRACT.host_run_id,
+        },
+    )
+    _write_json(root / "pilot-v7/replacement-image-qualification/receipt.json", {})
+    _write_json(
+        root / "pilot-v7/provider-entry.json",
+        {
+            "plan_id": V10_PROVIDER_CONTRACT.plan_id,
+            "host_run_id": V10_PROVIDER_CONTRACT.host_run_id,
+        },
+    )
+
+    with pytest.raises(Exception, match="provider entry belongs to another"):
+        host._failed_candidate_manifest(root, require_image_present=False)
+
+
 def test_remove_container_accepts_bounded_auto_remove_convergence(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     host = _host("giclab_t09_retry5_auto_remove_convergence")
     container_id = "a" * 64
-    name = f"{host.CONTAINER_PREFIX}utility-secret-channel-probe"
+    name = f"{V8_PROVIDER_CONTRACT.container_prefix}utility-secret-channel-probe"
     role = "utility-secret-channel-probe"
     identity = host.OwnedContainerIdentity(
         container_id,
         name,
         {
             "giclab.t09.plan": PLAN_ID,
-            "giclab.t09.host_run": host.HOST_RUN_ID,
+            "giclab.t09.host_run": V8_PROVIDER_CONTRACT.host_run_id,
             "giclab.t09.role": role,
         },
     )
@@ -176,14 +475,14 @@ def test_remove_container_rejects_persistent_exact_residue(
 ) -> None:
     host = _host("giclab_t09_retry5_persistent_remove_residue")
     container_id = "b" * 64
-    name = f"{host.CONTAINER_PREFIX}utility-secret-channel-probe"
+    name = f"{V8_PROVIDER_CONTRACT.container_prefix}utility-secret-channel-probe"
     role = "utility-secret-channel-probe"
     identity = host.OwnedContainerIdentity(
         container_id,
         name,
         {
             "giclab.t09.plan": PLAN_ID,
-            "giclab.t09.host_run": host.HOST_RUN_ID,
+            "giclab.t09.host_run": V8_PROVIDER_CONTRACT.host_run_id,
             "giclab.t09.role": role,
         },
     )
@@ -219,6 +518,7 @@ def _raw_seal_recovery_fixture(
     state_path = artifact_root / "pilot-v7/pilot-state.json"
     initialize_pilot_state(
         state_path,
+        provider_contract=V8_PROVIDER_CONTRACT,
         execution_contract_sha256=contract_sha256,
         pilot_started_at_epoch=1.0,
         lambda_started_at_epoch=1.0,
@@ -419,7 +719,7 @@ def _write_terminal_failure_sources(
         "schema_version": "0.1.0",
         "plan_id": PLAN_ID,
         "run_id": run_id,
-        "container_name": f"{host.CONTAINER_PREFIX}01",
+        "container_name": f"{V8_PROVIDER_CONTRACT.container_prefix}01",
         "container_id": container_id,
         "docker_start_argv": [*host.docker_prefix(), "start", "--attach", container_id],
         "docker_create_argv_sha256": create_argv_sha256,
@@ -437,7 +737,7 @@ def _write_terminal_failure_sources(
         {
             "schema_version": "0.1.0",
             "plan_id": PLAN_ID,
-            "host_run_id": host.HOST_RUN_ID,
+            "host_run_id": V8_PROVIDER_CONTRACT.host_run_id,
             "run_id": run_id,
             "container_name": start_intent["container_name"],
             "container_id": container_id,
@@ -639,6 +939,7 @@ def _essential_seal_fixture(
     state_path = artifact_root / "pilot-v7/pilot-state.json"
     initialize_pilot_state(
         state_path,
+        provider_contract=V8_PROVIDER_CONTRACT,
         execution_contract_sha256=contract_sha256,
         pilot_started_at_epoch=1.0,
         lambda_started_at_epoch=1.0,
@@ -941,10 +1242,10 @@ def test_retry5_browser_teardown_scans_for_cores_after_container_removal(
     monkeypatch.setattr(host, "_container_id_by_exact_name", lambda *_: None)
     identity = host.OwnedContainerIdentity(
         "a" * 64,
-        f"{host.CONTAINER_PREFIX}browser-preflight",
+        f"{V8_PROVIDER_CONTRACT.container_prefix}browser-preflight",
         {
             "giclab.t09.plan": PLAN_ID,
-            "giclab.t09.host_run": host.HOST_RUN_ID,
+            "giclab.t09.host_run": V8_PROVIDER_CONTRACT.host_run_id,
             "giclab.t09.role": "browser-lifecycle-preflight",
         },
     )
@@ -1141,6 +1442,7 @@ def test_retry5_oversized_tree_gets_private_essential_failure_seal(
     contract_sha = "1" * 64
     initialize_pilot_state(
         state_path,
+        provider_contract=V8_PROVIDER_CONTRACT,
         execution_contract_sha256=contract_sha,
         pilot_started_at_epoch=now - 100,
         # The provider/preflight clock can be much older than the empirical
@@ -1297,6 +1599,8 @@ def test_retry5_oversized_tree_gets_private_essential_failure_seal(
     _write_json(
         provider_entry,
         {
+            "plan_id": V8_PROVIDER_CONTRACT.plan_id,
+            "host_run_id": V8_PROVIDER_CONTRACT.host_run_id,
             "owned_instance_identity_sha256": "b" * 64,
             "lambda_started_at_epoch": now - 14_000,
         },
@@ -1305,6 +1609,8 @@ def test_retry5_oversized_tree_gets_private_essential_failure_seal(
     _write_json(
         pilot_root / "provider-entry.json",
         {
+            "plan_id": V8_PROVIDER_CONTRACT.plan_id,
+            "host_run_id": V8_PROVIDER_CONTRACT.host_run_id,
             "receipt_sha256": host.file_sha256(provider_entry),
             "owned_instance_identity_sha256": "b" * 64,
             "lambda_started_at_epoch": now - 14_000,
@@ -1319,8 +1625,9 @@ def test_retry5_oversized_tree_gets_private_essential_failure_seal(
         },
     )
     frozen_document = {
-        "manifest_id": host.FROZEN_RUN_MANIFEST_ID,
+        "manifest_id": V8_PROVIDER_CONTRACT.frozen_run_manifest_id,
         "plan_id": PLAN_ID,
+        "host_run_id": V8_PROVIDER_CONTRACT.host_run_id,
         "clean_package_commit": "4" * 40,
         "replacement_image_id": replacement_image_id,
         "local_finalizer_qualification_sha256": host.file_sha256(local_qualification),
@@ -1355,7 +1662,7 @@ def test_retry5_oversized_tree_gets_private_essential_failure_seal(
                 {
                     "schema_version": "0.1.0",
                     "plan_id": PLAN_ID,
-                    "host_run_id": host.HOST_RUN_ID,
+                    "host_run_id": V8_PROVIDER_CONTRACT.host_run_id,
                     "run_id": prior_run_id,
                     "package_commit": "4" * 40,
                     "archive_bytes": prior_archive.stat().st_size,
@@ -1374,7 +1681,7 @@ def test_retry5_oversized_tree_gets_private_essential_failure_seal(
                 {
                     "schema_version": "0.1.0",
                     "plan_id": PLAN_ID,
-                    "host_run_id": host.HOST_RUN_ID,
+                    "host_run_id": V8_PROVIDER_CONTRACT.host_run_id,
                     "run_id": prior_run_id,
                     "package_commit": "4" * 40,
                     "archive_path": prior_archive.name,
@@ -1454,7 +1761,7 @@ def test_retry5_oversized_tree_gets_private_essential_failure_seal(
             {
                 "schema_version": "0.1.0",
                 "plan_id": PLAN_ID,
-                "host_run_id": host.HOST_RUN_ID,
+                "host_run_id": V8_PROVIDER_CONTRACT.host_run_id,
                 "cleanup_intent_sha256": host.file_sha256(cleanup_intent),
                 "remaining_exact_credential_match_count": 0,
                 "secret_value_or_hash_retained": False,
@@ -1603,6 +1910,7 @@ def test_retry5_attempt_cap_and_core_stop_are_inviolable(
     digest = "a" * 64
     initialize_pilot_state(
         state,
+        provider_contract=V8_PROVIDER_CONTRACT,
         execution_contract_sha256=digest,
         pilot_started_at_epoch=1.0,
         lambda_started_at_epoch=1.0,
@@ -1629,10 +1937,13 @@ def test_retry5_attempt_cap_and_core_stop_are_inviolable(
     assert host.MAX_ESSENTIAL_FAILURE_BYTES == 67_108_864
 
 
+@pytest.mark.private_local
 def test_autonomous_slot2_authority_uses_distinct_nested_and_tree_hashes(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    if os.environ.get("GICLAB_RUN_PRIVATE_T09_TESTS") != "1":
+        pytest.skip("set GICLAB_RUN_PRIVATE_T09_TESTS=1 to inspect private historical evidence")
     host = _host("giclab_t09_autonomous_slot2_authority")
     monkeypatch.setattr(host, "PLAN_ID", "PLAN-EXP0001-PILOT-V7")
     monkeypatch.setattr(host, "HOST_RUN_ID", "RUN-T09-PILOT-HOST-0005")
@@ -1682,6 +1993,7 @@ def test_retry5_nonempirical_consumption_blocks_replay_before_docker(
     now = time.time()
     initialize_pilot_state(
         state_path,
+        provider_contract=V8_PROVIDER_CONTRACT,
         execution_contract_sha256=digest,
         pilot_started_at_epoch=now,
         lambda_started_at_epoch=now,
@@ -1738,6 +2050,7 @@ def test_retry5_preentry_core_incident_is_a_permanent_nonretryable_stop(
     digest = "a" * 64
     initialize_pilot_state(
         state_path,
+        provider_contract=V8_PROVIDER_CONTRACT,
         execution_contract_sha256=digest,
         pilot_started_at_epoch=1.0,
         lambda_started_at_epoch=1.0,
@@ -1784,6 +2097,7 @@ def test_retry5_preentry_structural_privacy_finding_is_not_retryable(
     digest = "a" * 64
     initialize_pilot_state(
         state_path,
+        provider_contract=V8_PROVIDER_CONTRACT,
         execution_contract_sha256=digest,
         pilot_started_at_epoch=1.0,
         lambda_started_at_epoch=1.0,
@@ -1848,8 +2162,10 @@ def test_retry5_aggregate_stage_rejects_a_consumed_prefix_without_direct_export_
     artifact_root = tmp_path / "artifacts"
     pilot_root = artifact_root / "pilot-v7"
     pilot_root.mkdir(parents=True, mode=0o700)
-    run_id = ATTEMPT_ORDER[0]
+    run_id = V10_PROVIDER_CONTRACT.run_ids[0]
     state = {
+        "plan_id": V10_PROVIDER_CONTRACT.plan_id,
+        "host_run_id": V10_PROVIDER_CONTRACT.host_run_id,
         "raw_attempts_complete": [run_id] if evidence_authority == "immutable-raw-attempt" else [],
         "empirical_attempts_entered": [run_id],
         "essential_failure_seals": (
@@ -1873,13 +2189,17 @@ def test_retry5_aggregate_stage_rejects_a_consumed_prefix_without_direct_export_
     _write_json(
         pilot_root / "frozen-run-manifest.json",
         {
-            "manifest_id": host.FROZEN_RUN_MANIFEST_ID,
+            "manifest_id": V10_PROVIDER_CONTRACT.frozen_run_manifest_id,
+            "plan_id": V10_PROVIDER_CONTRACT.plan_id,
+            "host_run_id": V10_PROVIDER_CONTRACT.host_run_id,
             "replacement_image_id": "sha256:" + "a" * 64,
         },
     )
     _write_json(
         pilot_root / "provider-entry.json",
         {
+            "plan_id": V10_PROVIDER_CONTRACT.plan_id,
+            "host_run_id": V10_PROVIDER_CONTRACT.host_run_id,
             "receipt_sha256": "b" * 64,
             "owned_instance_identity_sha256": "c" * 64,
             "lambda_started_at_epoch": state["lambda_started_at_epoch"],
@@ -1900,7 +2220,7 @@ def test_retry5_aggregate_stage_rejects_a_consumed_prefix_without_direct_export_
         )
 
 
-def test_retry5_cleanup_rejects_unacknowledged_raw_before_any_destructive_action(
+def test_active_runner_rejects_retry5_pilot_state_before_any_destructive_action(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1912,6 +2232,7 @@ def test_retry5_cleanup_rejects_unacknowledged_raw_before_any_destructive_action
     state_path = pilot_root / "pilot-state.json"
     initialize_pilot_state(
         state_path,
+        provider_contract=V8_PROVIDER_CONTRACT,
         execution_contract_sha256="e" * 64,
         pilot_started_at_epoch=1.0,
         lambda_started_at_epoch=1.0,
@@ -1951,7 +2272,7 @@ def test_retry5_cleanup_rejects_unacknowledged_raw_before_any_destructive_action
         host,
         package_commit="d" * 40,
     )
-    with pytest.raises(Exception, match="lacks its off-host verification acknowledgement"):
+    with pytest.raises(Exception, match="requires its frozen provider runner"):
         host.cleanup(
             SimpleNamespace(
                 artifact_root=artifact_root,
@@ -1964,7 +2285,7 @@ def test_retry5_cleanup_rejects_unacknowledged_raw_before_any_destructive_action
     assert not (pilot_root / "global-cleanup-intent.json").exists()
 
 
-def test_retry5_cleanup_requires_started_reservation_recovery_before_destruction(
+def test_active_runner_rejects_retry5_started_state_before_any_destructive_action(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1973,6 +2294,7 @@ def test_retry5_cleanup_requires_started_reservation_recovery_before_destruction
     state_path = artifact_root / "pilot-v7/pilot-state.json"
     initialize_pilot_state(
         state_path,
+        provider_contract=V8_PROVIDER_CONTRACT,
         execution_contract_sha256="a" * 64,
         pilot_started_at_epoch=1.0,
         lambda_started_at_epoch=1.0,
@@ -1994,7 +2316,7 @@ def test_retry5_cleanup_requires_started_reservation_recovery_before_destruction
         host,
         package_commit="c" * 40,
     )
-    with pytest.raises(Exception, match="requires recover-attempt-seal"):
+    with pytest.raises(Exception, match="requires its frozen provider runner"):
         host.cleanup(
             SimpleNamespace(
                 artifact_root=artifact_root,
@@ -2014,6 +2336,7 @@ def test_retry5_slot2_requires_the_exact_retained_image_archive(tmp_path: Path) 
     with pytest.raises(Exception, match="requires the exact retained image archive"):
         provider._validate_replacement_launch_eligibility(
             prior_root,
+            contract=V8_PROVIDER_CONTRACT,
             repository=ROOT,
             package_commit="d" * 40,
             slot1_image_archive=None,
@@ -2024,6 +2347,7 @@ def test_retry5_slot2_requires_the_exact_retained_image_archive(tmp_path: Path) 
     with pytest.raises(Exception, match="archive identity or metadata drifted"):
         provider._validate_replacement_launch_eligibility(
             prior_root,
+            contract=V8_PROVIDER_CONTRACT,
             repository=ROOT,
             package_commit="d" * 40,
             slot1_image_archive=wrong_archive,
@@ -2067,7 +2391,7 @@ def test_retry5_slot2_normalizes_direct_slot1_authority_without_name_collision(
     assert preempirical == retained_root / "slot1-preempirical-source"
     assert provider._load_json(
         retained_root / "source-manifest.json", maximum_bytes=1_048_576
-    ) == provider._slot2_authority_tree_manifest(retained_root)
+    ) == provider._slot2_authority_tree_manifest(retained_root, contract=V7_PROVIDER_CONTRACT)
     assert not (retained_root / "entry-source").exists()
 
 
@@ -2116,7 +2440,8 @@ def test_retry5_slot2_package_transition_is_exact_and_science_invariant(
 def test_retry5_provider_classifies_every_hard_clock_boundary() -> None:
     provider = _provider("giclab_t09_retry5_provider_clock_boundaries")
     lifecycle = provider.CampaignLifecycle(
-        limits=provider.AutonomousPilotLifecycleLimits(),
+        contract=V8_PROVIDER_CONTRACT,
+        limits=provider.AutonomousPilotLifecycleLimits(maximum_preflight_provider_cost_cents=2_000),
         max_instances=1,
         max_launches=8,
         persistent_filesystems=0,
@@ -2363,7 +2688,7 @@ def test_retry5_slot2_rejects_any_unverified_core_destruction(
         }
         failure = {
             "plan_id": PLAN_ID,
-            "host_run_id": provider.HOST_RUN_ID,
+            "host_run_id": V8_PROVIDER_CONTRACT.host_run_id,
             "package_commit": package_commit,
             "empirical_attempts_entered": 0,
             "preflight_engineering_state": "resumable-same-host",
@@ -2381,8 +2706,8 @@ def test_retry5_slot2_rejects_any_unverified_core_destruction(
             "preflight-failure.json": failure,
             "late-preflight-gate-absence.json": {
                 "schema_version": "0.1.0",
-                "plan_id": PLAN_ID,
-                "host_run_id": provider.HOST_RUN_ID,
+                "plan_id": V8_PROVIDER_CONTRACT.plan_id,
+                "host_run_id": V8_PROVIDER_CONTRACT.host_run_id,
                 "checked_relative_paths": [
                     "model-metadata-preflight",
                     "model-metadata-credential-scan.json",
@@ -2401,7 +2726,7 @@ def test_retry5_slot2_rejects_any_unverified_core_destruction(
         receipt = {
             "schema_version": "0.1.0",
             "plan_id": PLAN_ID,
-            "host_run_id": provider.HOST_RUN_ID,
+            "host_run_id": V8_PROVIDER_CONTRACT.host_run_id,
             "package_commit": package_commit,
             "provider_entry_receipt_sha256": entry_sha256,
             "pilot_state_sha256": provider.file_sha256(source / "pilot-state.json"),
@@ -2446,7 +2771,7 @@ def test_retry5_slot2_rejects_any_unverified_core_destruction(
             {
                 "schema_version": "0.1.0",
                 "plan_id": PLAN_ID,
-                "host_run_id": provider.HOST_RUN_ID,
+                "host_run_id": V8_PROVIDER_CONTRACT.host_run_id,
                 "files": files,
                 "total_bytes": sum(int(item["bytes"]) for item in files),
             },
@@ -2458,6 +2783,7 @@ def test_retry5_slot2_rejects_any_unverified_core_destruction(
         provider._validate_host_preempirical_disposition(
             safe_receipt,
             safe_source,
+            contract=V8_PROVIDER_CONTRACT,
             package_commit=package_commit,
             entry_receipt_sha256=entry_sha256,
             provider_preflight_started_at_epoch=0.0,
@@ -2473,6 +2799,7 @@ def test_retry5_slot2_rejects_any_unverified_core_destruction(
         provider._validate_host_preempirical_disposition(
             late_receipt,
             late_source,
+            contract=V8_PROVIDER_CONTRACT,
             package_commit=package_commit,
             entry_receipt_sha256=entry_sha256,
             provider_preflight_started_at_epoch=0.0,
@@ -2487,6 +2814,7 @@ def test_retry5_slot2_rejects_any_unverified_core_destruction(
         provider._validate_host_preempirical_disposition(
             resumed_receipt,
             resumed_source,
+            contract=V8_PROVIDER_CONTRACT,
             package_commit=package_commit,
             entry_receipt_sha256=entry_sha256,
             provider_preflight_started_at_epoch=0.0,
@@ -2498,6 +2826,7 @@ def test_retry5_slot2_rejects_any_unverified_core_destruction(
         provider._validate_host_preempirical_disposition(
             unsafe_receipt,
             unsafe_source,
+            contract=V8_PROVIDER_CONTRACT,
             package_commit=package_commit,
             entry_receipt_sha256=entry_sha256,
             provider_preflight_started_at_epoch=0.0,
@@ -2511,6 +2840,7 @@ def test_retry5_slot2_rejects_any_unverified_core_destruction(
         provider._validate_host_preempirical_disposition(
             consumed_receipt,
             consumed_source,
+            contract=V8_PROVIDER_CONTRACT,
             package_commit=package_commit,
             entry_receipt_sha256=entry_sha256,
             provider_preflight_started_at_epoch=0.0,
@@ -2521,7 +2851,10 @@ def test_retry5_slot2_rejects_any_post_metadata_or_freeze_prefix(tmp_path: Path)
     host = _host("giclab_t09_retry5_late_gate_absence")
     root = tmp_path / "artifacts"
     (root / "pilot-v7").mkdir(parents=True, mode=0o700)
-    absence = host._preempirical_late_gate_absence(root)
+    absence = host._preempirical_late_gate_absence(
+        root,
+        contract=V8_PROVIDER_CONTRACT,
+    )
     assert absence["model_metadata_requests"] == 0
     for relative in host._PREEMPIRICAL_LATE_GATE_PATHS:
         target = root / "pilot-v7" / relative
@@ -2530,7 +2863,10 @@ def test_retry5_slot2_rejects_any_post_metadata_or_freeze_prefix(tmp_path: Path)
         else:
             target.mkdir(mode=0o700)
         with pytest.raises(Exception, match="model-metadata/freeze boundary"):
-            host._preempirical_late_gate_absence(root)
+            host._preempirical_late_gate_absence(
+                root,
+                contract=V8_PROVIDER_CONTRACT,
+            )
         if target.is_dir():
             target.rmdir()
         else:
@@ -2545,11 +2881,17 @@ def test_retry5_fallback_build_crash_has_label_bound_cleanup_authority(
     package_commit = "a" * 40
     materialization = tmp_path / "pilot-v7/replacement-image-qualification"
     materialization.mkdir(parents=True, mode=0o700)
-    labels = host._fallback_image_labels(package_commit)
+    labels = host._fallback_image_labels(package_commit, contract=V8_PROVIDER_CONTRACT)
+    image_tag = V8_PROVIDER_CONTRACT.replacement_image_tag
+    qualification_id = V8_PROVIDER_CONTRACT.active_image_qualification_id
+    materialization_policy = V8_PROVIDER_CONTRACT.image_materialization_policy
+    assert image_tag is not None
+    assert qualification_id is not None
+    assert materialization_policy is not None
     build_argv = ["docker", "build"]
     for key, value in sorted(labels.items()):
         build_argv.extend(("--label", f"{key}={value}"))
-    build_argv.extend(("--tag", host.REPLACEMENT_IMAGE_TAG, "."))
+    build_argv.extend(("--tag", image_tag, "."))
     command_path = materialization / "build-command.json"
     _write_json(
         command_path,
@@ -2570,11 +2912,11 @@ def test_retry5_fallback_build_crash_has_label_bound_cleanup_authority(
         {
             "schema_version": "0.1.0",
             "plan_id": PLAN_ID,
-            "host_run_id": host.HOST_RUN_ID,
-            "qualification_id": host.QUALIFICATION_ID,
+            "host_run_id": V8_PROVIDER_CONTRACT.host_run_id,
+            "qualification_id": qualification_id,
             "package_commit": package_commit,
-            "image_tag": host.REPLACEMENT_IMAGE_TAG,
-            "materialization_policy": host.SLOT1_IMAGE_MATERIALIZATION_POLICY,
+            "image_tag": image_tag,
+            "materialization_policy": materialization_policy,
             "expected_tag_present_before_build": False,
             "authorized_build_count": 1,
             "resulting_image_id_known_before_build": False,
@@ -2584,7 +2926,7 @@ def test_retry5_fallback_build_crash_has_label_bound_cleanup_authority(
         },
     )
     candidate = "sha256:" + "b" * 64
-    visible = {host.REPLACEMENT_IMAGE_TAG: candidate, candidate: candidate}
+    visible = {image_tag: candidate, candidate: candidate}
     monkeypatch.setattr(host, "image_id_if_present", lambda _prefix, value: visible.get(value))
     monkeypatch.setattr(host, "_image_config_labels", lambda _prefix, _value: labels)
     assert (
@@ -2604,7 +2946,7 @@ def test_retry5_fallback_build_crash_has_label_bound_cleanup_authority(
 
     # A crash after resolving the ID and before removal resumes from the exact
     # recovery identity; a tag disappearing does not lose cleanup authority.
-    visible[host.REPLACEMENT_IMAGE_TAG] = None
+    visible[image_tag] = None
     assert (
         host._fallback_build_cleanup_candidate(
             prefix=["docker"],
@@ -2651,6 +2993,7 @@ def test_retry5_reserved_condition_recovery_seals_runtime_core_truth_without_uns
     state_path = artifact_root / "pilot-v7/pilot-state.json"
     initialize_pilot_state(
         state_path,
+        provider_contract=V8_PROVIDER_CONTRACT,
         execution_contract_sha256=contract_sha256,
         pilot_started_at_epoch=1.0,
         lambda_started_at_epoch=1.0,
@@ -2660,7 +3003,7 @@ def test_retry5_reserved_condition_recovery_seals_runtime_core_truth_without_uns
         {"replacement_image_id": "sha256:" + "a" * 64},
     )
     container_id = "d" * 64
-    container_name = f"{host.CONTAINER_PREFIX}01"
+    container_name = f"{V8_PROVIDER_CONTRACT.container_prefix}01"
     start_intent = {
         "schema_version": "0.1.0",
         "plan_id": PLAN_ID,
@@ -2683,7 +3026,7 @@ def test_retry5_reserved_condition_recovery_seals_runtime_core_truth_without_uns
         {
             "schema_version": "0.1.0",
             "plan_id": PLAN_ID,
-            "host_run_id": host.HOST_RUN_ID,
+            "host_run_id": V8_PROVIDER_CONTRACT.host_run_id,
             "run_id": ATTEMPT_ORDER[0],
             "container_name": container_name,
             "container_id": container_id,
@@ -2964,6 +3307,7 @@ def test_retry5_internal_core_hardlink_alias_is_removed_before_essential_seal(
     state = artifact_root / "pilot-v7/pilot-state.json"
     initialize_pilot_state(
         state,
+        provider_contract=V8_PROVIDER_CONTRACT,
         execution_contract_sha256=contract_sha,
         pilot_started_at_epoch=1.0,
         lambda_started_at_epoch=1.0,
@@ -3033,6 +3377,7 @@ def test_retry5_finalizer_core_is_removed_and_stops_selection(tmp_path: Path) ->
     contract_sha256 = "a" * 64
     initialize_pilot_state(
         state_path,
+        provider_contract=V8_PROVIDER_CONTRACT,
         execution_contract_sha256=contract_sha256,
         pilot_started_at_epoch=1.0,
         lambda_started_at_epoch=1.0,

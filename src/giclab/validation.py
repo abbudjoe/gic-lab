@@ -224,7 +224,17 @@ def _t09_v10_implementation_binding_map(plan: Mapping[str, Any]) -> dict[str, st
         ("early_cleanup", "provider_integration_path", "provider_integration_sha256"),
         ("early_cleanup", "schema_path", "schema_sha256"),
         ("execution_plane", "pilot_library_path", "pilot_library_sha256"),
+        (
+            "execution_plane",
+            "campaign_lifecycle_path",
+            "campaign_lifecycle_sha256",
+        ),
         ("execution_plane", "provider_path", "provider_sha256"),
+        (
+            "execution_plane",
+            "provider_contracts_path",
+            "provider_contracts_sha256",
+        ),
         ("execution_plane", "remote_runner_path", "remote_runner_sha256"),
         ("execution_plane", "command_generator_path", "command_generator_sha256"),
         ("execution_plane", "runtime_profile_path", "runtime_profile_sha256"),
