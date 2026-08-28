@@ -68,11 +68,11 @@
       },
       {
         "path": "src/giclab/harness/t09_sira_pilot.py",
-        "sha256": "ac9956ebea12ea23587aa6b731e6212eb14104f50aff45eb28f0a37f97fe8dc7"
+        "sha256": "c1f99bfe382aa28b181ddc10b7c7df3681651a2e183ee1226536fbb2b2a0b2ad"
       },
       {
         "path": "src/giclab/harness/lambda_campaign_lifecycle.py",
-        "sha256": "3c61de21c600960c75ca3531e77bbfe5c8c22dd01aa9220d6be8acf91a7fa0ab"
+        "sha256": "6f0f74354f15766466480c498b4ab5af6887e337c5197416bb9dedf3ff78200b"
       },
       {
         "path": "src/giclab/harness/lambda_l2m_observer.py",
@@ -80,11 +80,15 @@
       },
       {
         "path": "src/giclab/harness/t09_pragmatic_provider.py",
-        "sha256": "7c09223628500f5a2d41cc5c17f405747776f0da27517cd9a6dbe71b646ad05e"
+        "sha256": "78adab249c4f8a749b1e723ef4eb58cb72fc06644b929d396568387f86657240"
+      },
+      {
+        "path": "src/giclab/harness/t09_provider_contracts.py",
+        "sha256": "563cf1e453ccbc1142c77c8c78aeaa698ad0278c4ff0826322b7c6e1b022d0b5"
       },
       {
         "path": "containers/sira-smoke/pragmatic/t09_remote_runner.py",
-        "sha256": "e2e548519824e3ac84955b8492395d68bdf8128f8014523737f8345bb1d925f0"
+        "sha256": "2c12c7bc67aacc46bfb2008d38e0e808d955a28da04fa71ecdd3c6fd7e42d12c"
       },
       {
         "path": "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py",
@@ -139,7 +143,7 @@
         "sha256": "e9d6fd08eb5cef403e5e8fd6333bf0ea103b14872427b086ad6ab1bf6441e5c0"
       }
     ],
-    "reviewed_implementation_ancestor": "503def0519e36f04b62b16158c72e11213b3bf9f",
+    "reviewed_implementation_ancestor": "a5daa11db99229e347008a6110e9ca0a9b7b948d",
     "scope": [
       "content-addressed-no-follow-private-regression-archive-staging",
       "raw-attempt-root-typed-binding-before-empirical-entry",
@@ -168,6 +172,7 @@
       "closed-slot1-package-transition-and-collision-free-slot2-authority-retention",
       "typed-nested-preempirical-and-normalized-authority-tree-bindings",
       "provider-owned-preflight-cleanup-state-before-staging",
+      "explicit-immutable-v3-through-v10-provider-contract-selection",
       "pilot-state-before-retained-authority-copy",
       "512MiB-symmetric-attempt-and-64MiB-essential-failure-caps"
     ]
