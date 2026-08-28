@@ -1,8 +1,7 @@
 # T09 V10 provider accounting and closeout implementation ledger
 
-Assembly status: **successful — implementation, review, all local gates, commit,
-task-branch push, exact-base publication under explicit user authorization, and draft
-PR closeout are complete**
+Assembly status: **in progress — PR #3 exact-head remediation after review ID
+5050521792**
 
 Started: 2026-08-27
 
@@ -138,3 +137,29 @@ No Category 1 blocker remains. Draft PR #3 now requires exact-head review by Cha
 user approval of the reviewed SHA, and a separate Category 2 merge-only turn. No
 Category 3 action is permitted; V10 remains unauthorized and unexecuted until fresh
 Category 3 Luna authorization binds the exact merged commit and plan SHA-256.
+
+## PR #3 exact-head remediation
+
+Reviewed head `091fa6e690beeb628af54cec1e0a2849dd189e3b` (tree
+`6e9dc95faf38bac7631fb42e3d73e74b17bb20e2`) received `CHANGES REQUIRED` after
+GitHub Actions run `33164854474`. The Actions log is authoritative: its shallow
+Linux checkout under Python 3.11.16 collected 1,545 tests and finished with **1,461
+passed, 77 failed, 7 skipped**. The earlier 1,508/37 result came from an artifact-rich
+developer worktree and is not a reproducible exact-head CI result.
+
+An isolated, full-history, artifact-free checkout of the required base collected
+1,513 tests and finished with **1,459 passed, 54 failed**. The corresponding reviewed
+head collected 1,545 tests and finished with **1,492 passed, 53 failed**. Relative to
+that clean base, one test newly failed, two newly passed, and 52 failures were
+unchanged. The larger Actions failure set additionally exposes three implicit CI
+contracts: checkout history is required by frozen-blob tests, Python must be exactly
+3.11.14, and normal CI may not depend on untracked private/local material.
+
+| ID | Required remediation outcome | Planned evidence | Status |
+|---|---|---|---|
+| V10-R-DOD-01 | Provider entry, qualification, rendering, and exact-owner cleanup use an explicit immutable version contract; no module-global latest-version fallback exists. | Frozen V3/V4/V5/V6/V7/V8/V9/V10 contracts plus positive and cross-version negative tests. | in progress |
+| V10-R-DOD-02 | Every PR-introduced failure and every CI-only environment/private-fixture defect is classified and repaired without weakening historical authority, cleanup, privacy, or scientific locks. | Exact base/head node sets, privacy-safe fixtures, deterministic history/runtime controls, and regression tests. | in progress |
+| V10-R-DOD-03 | The intended V10 accounting, offline-refinalization, early-cleanup, and unauthorized-plan designs remain intact. | Existing focused suites plus scientific-hash and command-pair regressions. | in progress |
+| V10-R-DOD-04 | Independent spec review passes after fixes, and focused smoke passes before and after review. | Reviewer disposition and rerun results. | pending |
+| V10-R-DOD-05 | The final committed exact head passes formatting, Ruff, strict mypy, validation, privacy, full pytest, portable Quarto/site validation, `git diff --check`, and `make check`. | Exact commands and counts recorded below. | pending |
+| V10-R-DOD-06 | The same draft PR and branch are updated without rebase, force-push, merge, auto-merge, base mutation, or a new PR; required GitHub Actions passes on the pushed exact head. | Git/PR identities and final Actions run. | pending |
