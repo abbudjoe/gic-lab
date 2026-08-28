@@ -185,7 +185,7 @@ def test_historical_budget_contracts_do_not_inherit_v10_caps() -> None:
     assert V8_PROVIDER_CONTRACT.preflight_lambda_cost_cap_usd == 20.0
     assert V10_PROVIDER_CONTRACT.preflight_lambda_cost_cap_usd == 10.0
     assert V11_PROVIDER_CONTRACT.preflight_lambda_cost_cap_usd == 10.0
-    assert V11_PROVIDER_CONTRACT.prior_t09_cost_usd == 31.07762283341842
+    assert V11_PROVIDER_CONTRACT.prior_t09_cost_usd == 33.14878958732642
 
 
 def test_v3_renderer_cannot_emit_v10_identity() -> None:

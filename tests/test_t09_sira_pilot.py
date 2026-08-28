@@ -2491,7 +2491,7 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
                 "lambda_cost_cap_usd": 8.0,
                 "openai_cost_cap_usd": 40.0,
                 "aggregate_cost_cap_usd": 58.0,
-                "prior_t09_cost_usd": 31.07762283341842,
+                "prior_t09_cost_usd": 33.14878958732642,
                 "cumulative_t09_cost_cap_usd": 90.0,
                 "replacement_image_policy": ("retained-exact-load-or-one-fallback-build-v1"),
                 "artifact_destination": "/Volumes/Macintosh HD - Data/GIC-Lab/t09/v11",

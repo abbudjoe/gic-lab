@@ -629,10 +629,10 @@ V11_PROVIDER_CONTRACT: Final = _contract(
     # pending merge, avoiding a circular source/plan identity.
     plan_path=f"{_PROPOSAL_ROOT}/T09_PILOT_RUNTIME_PROFILE_V11.yaml",
     plan_bytes=13_826,
-    plan_sha256="2c364eaa169f2cc4c26f27b51eabebc3bf57e25236bfcc2627757d86b0fd5985",
+    plan_sha256="726eeef3be208ad22b3279f8192fa55cfba259d14bf85424716b4f3e71a4a850",
     profile_path=f"{_PROPOSAL_ROOT}/T09_PILOT_RUNTIME_PROFILE_V11.yaml",
     profile_bytes=13_826,
-    profile_sha256="2c364eaa169f2cc4c26f27b51eabebc3bf57e25236bfcc2627757d86b0fd5985",
+    profile_sha256="726eeef3be208ad22b3279f8192fa55cfba259d14bf85424716b4f3e71a4a850",
     run_ids=(
         "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0004",
         "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0004",
@@ -645,7 +645,7 @@ V11_PROVIDER_CONTRACT: Final = _contract(
     container_prefix="giclab-t09-pilot-v11-autonomous-",
     image_materialization_policy="retained-import-or-one-fallback-build",
     max_launch_count=8,
-    prior_t09_cost_usd=31.07762283341842,
+    prior_t09_cost_usd=33.14878958732642,
     preflight_lambda_cost_cap_usd=10.0,
     campaign_lambda_cost_cap_usd=8.0,
     campaign_openai_cost_cap_usd=40.0,

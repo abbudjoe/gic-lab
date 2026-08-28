@@ -57,7 +57,7 @@ budget:
   max_cost_usd: 40.0
   max_provider_compute_cost_usd: 8.0
   max_total_cost_usd: 58.0
-  prior_t09_cost_usd: 31.07762283341842
+  prior_t09_cost_usd: 33.14878958732642
   cumulative_t09_cost_cap_usd: 90.0
   max_model_calls: 4620
   max_model_tokens: 4000000
