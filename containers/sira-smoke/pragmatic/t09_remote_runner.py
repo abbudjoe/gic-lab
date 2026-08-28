@@ -38,6 +38,15 @@ from jsonschema import Draft202012Validator, FormatChecker
 
 from giclab.harness.lambda_campaign_lifecycle import AutonomousPilotLifecycleLimits
 from giclab.harness.sira_gate_a import ProviderBudgetUsage
+from giclab.harness.t09_cleanup_state import (
+    CleanupLifecycleStage,
+    CleanupTargetKind,
+    CleanupTargetState,
+    EarlyCleanupJournal,
+    EarlyCleanupStateError,
+    TerminalCleanupDisposition,
+    cleanup_locator_identity,
+)
 from giclab.harness.t09_pragmatic_provider import (
     RETRY4_ACTIVE_SLOT2_ENTRY_PACKAGE_COMMIT,
     T09ProviderError,
@@ -51,7 +60,6 @@ from giclab.harness.t09_pragmatic_provider import (
 )
 from giclab.harness.t09_sira_pilot import (
     ATTEMPT_ORDER,
-    AUTHORIZATION_REFERENCE,
     PREENTRY_RESUME_FROM_PACKAGE_COMMIT,
     PREENTRY_RESUME_FROM_PLAN_SHA256,
     TASK_REFERENCE_SHA256S,
@@ -83,15 +91,12 @@ from giclab.harness.t09_sira_pilot import (
 )
 
 UTC: Final = timezone.utc  # noqa: UP017 - host control plane supports Python 3.10
-PLAN_ID: Final = "PLAN-EXP0001-PILOT-V9"
-HOST_RUN_ID: Final = "RUN-T09-PILOT-HOST-AUTONOMOUS-0002"
-ARCHIVE_ID: Final = "ARCHIVE-EXP0001-PILOT-V9-AUTONOMOUS-0002"
-STAGE_ID: Final = "STAGE-EXP0001-PILOT-V9-AUTONOMOUS-0002"
-QUALIFICATION_ID: Final = "QUAL-T09-PILOT-V9-IMAGE-AUTONOMOUS-0002"
-FROZEN_RUN_MANIFEST_ID: Final = "RUN-MANIFEST-EXP0001-PILOT-V9-AUTONOMOUS-0002"
-AUTHORIZATION_SOURCE_SHA256: Final = (
-    "aea63a42cf0270ad0a41a929b4b8eb19dd1c3af73abfe97163c1d90e6077d3da"
-)
+PLAN_ID: Final = "PLAN-EXP0001-PILOT-V10"
+HOST_RUN_ID: Final = "RUN-T09-PILOT-HOST-AUTONOMOUS-0003"
+ARCHIVE_ID: Final = "ARCHIVE-EXP0001-PILOT-V10-AUTONOMOUS-0003"
+STAGE_ID: Final = "STAGE-EXP0001-PILOT-V10-AUTONOMOUS-0003"
+QUALIFICATION_ID: Final = "QUAL-T09-PILOT-V10-IMAGE-AUTONOMOUS-0003"
+FROZEN_RUN_MANIFEST_ID: Final = "RUN-MANIFEST-EXP0001-PILOT-V10-AUTONOMOUS-0003"
 MODEL: Final = "gpt-4o-2024-11-20"
 SERVICE_TIER: Final = "default"
 HISTORICAL_IMAGE_ID: Final = (
@@ -100,7 +105,7 @@ HISTORICAL_IMAGE_ID: Final = (
 T07_EXECUTION_COMMIT: Final = "5698f04dfd08bc85a66d2355b0a4bd7d3ce24a23"
 SIRA_COMMIT: Final = "93fb8d72de71f9a4a13419670adeb34d93cf7acd"
 SIRA_TREE: Final = "6a6d9068b94d7632d3533a3d6f013d4de6ff76e8"
-REPLACEMENT_IMAGE_TAG: Final = f"giclab/t09-pilot-v9:{SIRA_COMMIT[:12]}-autonomous-0002"
+REPLACEMENT_IMAGE_TAG: Final = f"giclab/t09-pilot-v10:{SIRA_COMMIT[:12]}-autonomous-0003"
 RETAINED_IMAGE_ARCHIVE_BYTES: Final = 1_207_128_576
 RETAINED_IMAGE_ARCHIVE_SHA256: Final = (
     "623e717c2182eca9cee2f471b7ecd9a57bead2f5263dee64aa5cd954eae5ddb0"
@@ -165,12 +170,12 @@ EVALUATOR_DIRECT_URL_RECORD: Final = (
     "en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl"
 )
 RUN_IDS: Final = (
-    "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0002",
-    "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0002",
-    "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0002",
-    "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0002",
+    "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0003",
+    "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0003",
+    "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0003",
+    "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0003",
 )
-CONTAINER_PREFIX: Final = "giclab-t09-pilot-v9-autonomous-"
+CONTAINER_PREFIX: Final = "giclab-t09-pilot-v10-autonomous-"
 CONDITION_SUPERVISOR_DIRNAME: Final = ".giclab-supervisor"
 DOCKER_PLAN_LABEL: Final = f"giclab.t09.plan={PLAN_ID}"
 DOCKER_HOST_RUN_LABEL: Final = f"giclab.t09.host_run={HOST_RUN_ID}"
@@ -288,6 +293,10 @@ HISTORICAL_REAL_EVIDENCE_FINALIZER_SHA256: Final = (
 FINALIZER_RELATIVE_PATH: Final = "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py"
 FINALIZER_PROJECTION_RELATIVE_PATH: Final = (
     "containers/sira-smoke/pragmatic/t09_finalizer_projection.py"
+)
+SELECTOR_RELATIVE_PATH: Final = "containers/sira-smoke/pragmatic/t09_remote_runner.py"
+REFINALIZATION_RECEIPT_SCHEMA_RELATIVE_PATH: Final = (
+    "schemas/t09-offline-refinalization-receipt.schema.json"
 )
 LOCAL_FINALIZER_QUALIFICATION_RELATIVE_PATH: Final = (
     "containers/sira-smoke/pragmatic/t09_local_finalizer_qualification.py"
@@ -915,6 +924,7 @@ def run_logged(
     evidence_root: Path,
     label: str,
     timeout: int,
+    cleanup_journal: EarlyCleanupJournal | None = None,
 ) -> None:
     evidence_root.mkdir(parents=True, exist_ok=True, mode=0o700)
     with (
@@ -933,6 +943,8 @@ def run_logged(
                 timeout=timeout,
             )
         else:
+            if cleanup_journal is None:
+                raise T09HostError("owned Docker execution lacks durable cleanup authority")
             prefix, _ = docker_run
             result = run_owned_docker(
                 argv,
@@ -942,6 +954,7 @@ def run_logged(
                 stdout=stdout,
                 stderr=stderr,
                 timeout=timeout,
+                cleanup_journal=cleanup_journal,
             )
     if result.returncode != 0:
         raise T09HostError(f"command failed ({result.returncode}): {label}")
@@ -1070,11 +1083,12 @@ def run_owned_docker(
     stdout: IO[bytes] | int,
     stderr: IO[bytes] | int,
     timeout: int,
+    cleanup_journal: EarlyCleanupJournal,
     environment: dict[str, str] | None = None,
     preexec_fn: Callable[[], None] | None = None,
     owned_role: str | None = None,
 ) -> subprocess.CompletedProcess[bytes]:
-    """Run one named Docker container and prove daemon-side removal in ``finally``."""
+    """Run one named Docker container with immediate durable ID ownership."""
 
     role = _owned_docker_role(label) if owned_role is None else owned_role
     if not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,95}", role):
@@ -1114,41 +1128,108 @@ def run_owned_docker(
         },
     )
     result: subprocess.CompletedProcess[bytes] | None = None
+    process: subprocess.Popen[bytes] | None = None
     primary_error: BaseException | None = None
+    container_id: str | None = None
+    owned_identity: OwnedContainerIdentity | None = None
+
+    def register_published_identity() -> None:
+        nonlocal container_id, owned_identity
+        observed = _read_owned_docker_cidfile(cidfile, prefix=prefix)
+        if observed is None:
+            return
+        if container_id is not None and container_id != observed:
+            raise T09HostError("owned Docker container-ID changed after publication")
+        container_id = observed
+        if owned_identity is None:
+            candidate = OwnedContainerIdentity(
+                container_id=observed,
+                name=name,
+                labels={
+                    "giclab.t09.plan": PLAN_ID,
+                    "giclab.t09.host_run": HOST_RUN_ID,
+                    "giclab.t09.role": role,
+                },
+            )
+            try:
+                register_owned_container_cleanup(
+                    cleanup_journal,
+                    candidate,
+                    role=role,
+                )
+            except EarlyCleanupStateError as exc:
+                raise T09HostError("durable utility-container registration failed") from exc
+            owned_identity = candidate
+
     try:
-        result = subprocess.run(
+        process = subprocess.Popen(
             projected,
             env=environment or safe_environment(),
             stdin=subprocess.DEVNULL,
             stdout=stdout,
             stderr=stderr,
-            check=False,
-            timeout=timeout,
             preexec_fn=preexec_fn,
+        )
+        deadline = time.monotonic() + timeout
+        captured_stdout: bytes | None = None
+        captured_stderr: bytes | None = None
+        while True:
+            register_published_identity()
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                process.kill()
+                captured_stdout, captured_stderr = process.communicate()
+                raise subprocess.TimeoutExpired(
+                    projected,
+                    timeout,
+                    output=captured_stdout,
+                    stderr=captured_stderr,
+                )
+            try:
+                captured_stdout, captured_stderr = process.communicate(timeout=min(0.05, remaining))
+                break
+            except subprocess.TimeoutExpired:
+                continue
+        register_published_identity()
+        result = cast(
+            subprocess.CompletedProcess[bytes],
+            subprocess.CompletedProcess(
+                projected,
+                process.returncode,
+                captured_stdout,
+                captured_stderr,
+            ),
         )
     except BaseException as exc:
         primary_error = exc
     finally:
         removal_returned_success = False
         removal_error_type: str | None = None
+        registration_error_type: str | None = None
         residue: list[str] = []
-        container_id: str | None = None
+        initially_absent = False
         try:
-            if os.path.lexists(cidfile):
-                metadata = cidfile.lstat()
-                if (
-                    cidfile.is_symlink()
-                    or not stat.S_ISREG(metadata.st_mode)
-                    or metadata.st_uid != _docker_cidfile_owner_uid(prefix)
-                    or metadata.st_nlink != 1
-                    or stat.S_IMODE(metadata.st_mode) & 0o022
-                    or not 0 < metadata.st_size <= 65
-                ):
-                    raise T09HostError("owned Docker container-ID file is unsafe")
-                container_id = cidfile.read_text(encoding="ascii").strip()
-                if re.fullmatch(r"[a-f0-9]{64}", container_id) is None:
-                    raise T09HostError("owned Docker container-ID file is malformed")
-                removal_returned_success = remove_container(
+            if process is not None and process.poll() is None:
+                process.kill()
+                process.communicate()
+        except (OSError, subprocess.SubprocessError) as exc:
+            removal_error_type = type(exc).__name__
+        try:
+            register_published_identity()
+        except (OSError, T09HostError) as exc:
+            registration_error_type = type(exc).__name__
+            if primary_error is None:
+                primary_error = T09HostError("durable utility-container registration failed")
+        try:
+            if container_id is not None:
+                retained = inspect_owned_container(
+                    prefix,
+                    name,
+                    expected_container_id=container_id,
+                    expected_role=role,
+                )
+                initially_absent = retained is None
+                removal_returned_success = initially_absent or remove_container(
                     prefix,
                     name,
                     expected_container_id=container_id,
@@ -1159,7 +1240,20 @@ def run_owned_docker(
                 # name.  Only an exact absence proof is an acceptable outcome.
                 removal_returned_success = _container_id_by_exact_name(prefix, name) is None
             residue = [] if removal_returned_success else [name]
-        except (OSError, subprocess.SubprocessError, T09HostError) as exc:
+            if owned_identity is not None:
+                cleanup_result, cleanup_detail = verified_owned_container_cleanup_result(
+                    initially_absent=initially_absent,
+                    removal_verified=removal_returned_success,
+                    removed_detail="utility-container-removed",
+                    absent_detail="utility-container-already-absent",
+                )
+                record_owned_container_cleanup_result(
+                    cleanup_journal,
+                    owned_identity,
+                    result=cleanup_result,
+                    detail_code=cleanup_detail,
+                )
+        except (OSError, subprocess.SubprocessError, T09HostError, EarlyCleanupStateError) as exc:
             removal_error_type = type(exc).__name__
             residue = [name]
         write_exclusive(
@@ -1173,6 +1267,8 @@ def run_owned_docker(
                 "container_absent_after_run": not residue,
                 "residue": residue,
                 "cleanup_error_type": removal_error_type,
+                "cleanup_authority_registered": owned_identity is not None,
+                "cleanup_authority_error_type": registration_error_type,
             },
         )
         if residue:
@@ -1184,6 +1280,27 @@ def run_owned_docker(
         raise primary_error
     assert result is not None
     return result
+
+
+def _read_owned_docker_cidfile(cidfile: Path, *, prefix: list[str]) -> str | None:
+    """Read one daemon-published exact ID without following mutable aliases."""
+
+    if not os.path.lexists(cidfile):
+        return None
+    metadata = cidfile.lstat()
+    if (
+        cidfile.is_symlink()
+        or not stat.S_ISREG(metadata.st_mode)
+        or metadata.st_uid != _docker_cidfile_owner_uid(prefix)
+        or metadata.st_nlink != 1
+        or stat.S_IMODE(metadata.st_mode) & 0o022
+        or not 0 < metadata.st_size <= 65
+    ):
+        raise T09HostError("owned Docker container-ID file is unsafe")
+    container_id = cidfile.read_text(encoding="ascii").strip()
+    if re.fullmatch(r"[a-f0-9]{64}", container_id) is None:
+        raise T09HostError("owned Docker container-ID file is malformed")
+    return container_id
 
 
 def docker_prefix() -> list[str]:
@@ -2412,6 +2529,67 @@ def inspect_owned_container(
     return OwnedContainerIdentity(container_id=container_id, name=name, labels=labels)
 
 
+def inspect_owned_container_by_id(
+    prefix: list[str],
+    expected_container_id: str,
+) -> OwnedContainerIdentity | None:
+    """Resolve one cleanup-authoritative ID and derive its typed owned identity."""
+
+    if re.fullmatch(r"[a-f0-9]{64}", expected_container_id) is None:
+        raise T09HostError("expected Docker container identity is malformed")
+    raw = output(
+        [
+            *prefix,
+            "ps",
+            "--all",
+            "--filter",
+            f"id={expected_container_id}",
+            "--format",
+            "{{.ID}}",
+        ]
+    )
+    identifiers = [item for item in raw.splitlines() if item]
+    if not identifiers:
+        return None
+    if (
+        len(identifiers) != 1
+        or re.fullmatch(r"[a-f0-9]{12,64}", identifiers[0]) is None
+        or not expected_container_id.startswith(identifiers[0])
+    ):
+        raise T09HostError("expected Docker identity resolved ambiguously")
+    container_id = output([*prefix, "inspect", "--format", "{{.Id}}", expected_container_id])
+    name = output(
+        [*prefix, "inspect", "--format", "{{.Name}}", expected_container_id]
+    ).removeprefix("/")
+    raw_labels = output(
+        [*prefix, "inspect", "--format", "{{json .Config.Labels}}", expected_container_id]
+    )
+    try:
+        labels_value: object = json.loads(raw_labels)
+    except json.JSONDecodeError as exc:
+        raise T09HostError("owned Docker labels are malformed") from exc
+    if (
+        container_id != expected_container_id
+        or not name.startswith(CONTAINER_PREFIX)
+        or re.fullmatch(r"[a-z0-9_.-]+", name) is None
+        or not isinstance(labels_value, dict)
+        or not all(
+            isinstance(key, str) and isinstance(value, str) for key, value in labels_value.items()
+        )
+    ):
+        raise T09HostError("owned Docker identity drifted")
+    labels = cast(dict[str, str], labels_value)
+    role = labels.get("giclab.t09.role")
+    if (
+        labels.get("giclab.t09.plan") != PLAN_ID
+        or labels.get("giclab.t09.host_run") != HOST_RUN_ID
+        or not isinstance(role, str)
+        or not role
+    ):
+        raise T09HostError("Docker ID is not owned by this exact host run")
+    return OwnedContainerIdentity(container_id=container_id, name=name, labels=labels)
+
+
 def remove_container(
     prefix: list[str],
     name: str,
@@ -3121,6 +3299,7 @@ def core_suppression_preflight(
     artifact_root: Path,
     prefix: list[str],
     image_id: str,
+    cleanup_journal: EarlyCleanupJournal,
 ) -> dict[str, object]:
     """Prove Docker, entrypoint-child, and abort behavior in the accepted image."""
 
@@ -3196,6 +3375,8 @@ def core_suppression_preflight(
     created_identity: OwnedContainerIdentity | None = None
     container_state: dict[str, object] | None = None
     lifecycle_error: BaseException | None = None
+    cleanup_result: CleanupTargetState | None = None
+    cleanup_detail: str | None = None
     internal_scan_path = attempt / "core-suppression-writable-root-core-scan.json"
     internal_scan: dict[str, Any] | None = None
     internal_scan_records: list[dict[str, object]] = []
@@ -3224,6 +3405,11 @@ def core_suppression_preflight(
         )
         if created_identity is None:
             raise T09HostError("core-preflight Docker identity disappeared after create")
+        register_owned_container_cleanup(
+            cleanup_journal,
+            created_identity,
+            role="core-suppression-preflight",
+        )
         write_exclusive(
             attempt / "container-identity.json",
             {
@@ -3289,13 +3475,49 @@ def core_suppression_preflight(
                     name,
                     expected_role="core-suppression-preflight",
                 )
-                removed = cleanup_identity is None or remove_container(
-                    prefix,
-                    name,
-                    expected_container_id=cleanup_identity.container_id,
-                    expected_role="core-suppression-preflight",
-                )
+                if cleanup_identity is None:
+                    removed = True
+                    cleanup_result, cleanup_detail = verified_owned_container_cleanup_result(
+                        initially_absent=True,
+                        removal_verified=True,
+                        removed_detail="core-preflight-container-removed",
+                        absent_detail="core-preflight-container-already-absent",
+                    )
+                else:
+                    removed = remove_container(
+                        prefix,
+                        name,
+                        expected_container_id=cleanup_identity.container_id,
+                        expected_role="core-suppression-preflight",
+                    )
+                    cleanup_result, cleanup_detail = verified_owned_container_cleanup_result(
+                        initially_absent=False,
+                        removal_verified=removed,
+                        removed_detail="core-preflight-container-removed",
+                        absent_detail="core-preflight-container-already-absent",
+                    )
+                    if cleanup_result is CleanupTargetState.FAILED and lifecycle_error is None:
+                        lifecycle_error = T09HostError(
+                            "core-preflight container absence could not be verified"
+                        )
             except (OSError, subprocess.SubprocessError, T09HostError) as exc:
+                cleanup_result = CleanupTargetState.FAILED
+                cleanup_detail = type(exc).__name__
+                if lifecycle_error is None:
+                    lifecycle_error = exc
+        if (
+            created_identity is not None
+            and cleanup_result is not None
+            and cleanup_detail is not None
+        ):
+            try:
+                record_owned_container_cleanup_result(
+                    cleanup_journal,
+                    created_identity,
+                    result=cleanup_result,
+                    detail_code=cleanup_detail,
+                )
+            except EarlyCleanupStateError as exc:
                 if lifecycle_error is None:
                     lifecycle_error = exc
     receipt_path = attempt / "core-suppression-preflight.json"
@@ -3538,15 +3760,118 @@ def record_preflight_credential_scan(
 def contract_paths(repository: Path) -> dict[str, Path]:
     experiment = repository / "experiments/EXP-0001-sira-simulative-vs-reactive"
     return {
-        "plan": experiment / "run-plans/pilot.yaml",
-        "execution": experiment / "contracts/T09_PILOT_EXECUTION_CONTRACT.json",
-        "commands": experiment / "contracts/T09_PILOT_COMMAND_MANIFESTS.json",
+        "plan": experiment / "run-plans/proposals/T09_PILOT_RUNTIME_PROFILE_V10.yaml",
+        "execution": experiment / "contracts/proposals/T09_PILOT_EXECUTION_CONTRACT_V10.json",
+        "commands": experiment / "contracts/proposals/T09_PILOT_COMMAND_MANIFESTS_V10.json",
         "conditions": experiment / "run-plans/conditions",
         "dataset": experiment / "contracts/T09_PILOT_DATASET_CONTRACT.json",
         "evaluator": experiment / "contracts/T09_PILOT_EVALUATOR_CONTRACT.json",
-        "runtime": experiment / "contracts/T09_PILOT_RUNTIME_IDENTITY.json",
+        "runtime": experiment / "contracts/proposals/T09_PILOT_RUNTIME_IDENTITY_V10.json",
         "real_regression": experiment / "T09_PRAGMATIC_RETRY4_FINALIZER_REGRESSION.json",
     }
+
+
+def early_cleanup_journal(args: argparse.Namespace) -> EarlyCleanupJournal:
+    """Load the exact transferred cleanup authority without pilot-state dependence."""
+
+    raw_path = getattr(args, "early_cleanup_journal", None)
+    if not isinstance(raw_path, Path):
+        raise T09HostError("early cleanup journal path is required")
+    journal = EarlyCleanupJournal(raw_path.resolve(strict=True))
+    try:
+        state = journal.load()
+    except EarlyCleanupStateError as exc:
+        raise T09HostError("early cleanup journal is not a valid durable authority") from exc
+    if state.plan_id != PLAN_ID or state.host_run_id != HOST_RUN_ID:
+        raise T09HostError("early cleanup journal belongs to another campaign")
+    return journal
+
+
+def register_owned_container_cleanup(
+    journal: EarlyCleanupJournal,
+    identity: OwnedContainerIdentity,
+    *,
+    role: str,
+) -> None:
+    """Persist one exact owned container immediately after Docker returns its ID."""
+
+    target_id = f"owned-container-{identity.container_id}"
+    journal.register_target(
+        target_id=target_id,
+        kind=CleanupTargetKind.OWNED_CONTAINER,
+        locator=identity.container_id,
+        ownership_sha256=cleanup_locator_identity(
+            CleanupTargetKind.OWNED_CONTAINER,
+            identity.container_id,
+        ),
+        public_alias=f"owned-container/{role}/{identity.name}",
+    )
+    journal.advance_lifecycle_at_least(CleanupLifecycleStage.CONTAINER_CREATION)
+
+
+def record_owned_container_cleanup_result(
+    journal: EarlyCleanupJournal,
+    identity: OwnedContainerIdentity,
+    *,
+    result: CleanupTargetState,
+    detail_code: str,
+) -> None:
+    """Persist normal exact-container terminalization without entering closeout."""
+
+    journal.record_result(
+        target_id=f"owned-container-{identity.container_id}",
+        result=result,
+        detail_code=detail_code,
+        during_cleanup=False,
+    )
+
+
+def verified_owned_container_cleanup_result(
+    *,
+    initially_absent: bool,
+    removal_verified: bool,
+    removed_detail: str,
+    absent_detail: str,
+) -> tuple[CleanupTargetState, str]:
+    """Project exact absence proof; a false removal result is never absence."""
+
+    if initially_absent:
+        return CleanupTargetState.ABSENT, absent_detail
+    if removal_verified:
+        return CleanupTargetState.REMOVED, removed_detail
+    return CleanupTargetState.FAILED, "owned-container-removal-unverified"
+
+
+_REMOTE_CLEANUP_TARGET_KINDS: Final = frozenset(
+    {
+        CleanupTargetKind.TEMPORARY_REMOTE_CREDENTIAL,
+        CleanupTargetKind.OWNED_CONTAINER,
+    }
+)
+_TERMINAL_CLEANUP_TARGET_STATES: Final = frozenset(
+    {
+        CleanupTargetState.ABSENT,
+        CleanupTargetState.TERMINAL,
+        CleanupTargetState.RESTORED,
+        CleanupTargetState.REMOVED,
+    }
+)
+
+
+def _unfinished_remote_cleanup_target_ids(journal: EarlyCleanupJournal) -> list[str]:
+    return [
+        target.target_id
+        for target in journal.load().targets
+        if target.kind in _REMOTE_CLEANUP_TARGET_KINDS
+        and target.state not in _TERMINAL_CLEANUP_TARGET_STATES
+    ]
+
+
+def _write_remote_early_closeout_receipt(journal: EarlyCleanupJournal) -> Path:
+    state = journal.load()
+    return journal.write_basic_closeout_receipt(
+        journal.root / f"REMOTE_CLOSEOUT-{state.sequence:08d}.json"
+    )
 
 
 def validate_real_evidence_regression(
@@ -4736,12 +5061,16 @@ def container_state_receipt(prefix: list[str], container_target: str) -> dict[st
     }
 
 
-def manifests(document: dict[str, Any]) -> list[dict[str, Any]]:
+def manifests(
+    document: dict[str, Any],
+    *,
+    expected_run_ids: tuple[str, ...] = RUN_IDS,
+) -> list[dict[str, Any]]:
     value = document.get("manifests")
     if not isinstance(value, list) or len(value) != 4:
         raise T09HostError("exactly four command manifests are required")
     result = [item for item in value if isinstance(item, dict)]
-    if len(result) != 4 or tuple(item.get("run_id") for item in result) != RUN_IDS:
+    if len(result) != 4 or tuple(item.get("run_id") for item in result) != expected_run_ids:
         raise T09HostError("command manifest order or identities drifted")
     pair_diffs = document.get("pair_diffs")
     if (
@@ -4753,8 +5082,17 @@ def manifests(document: dict[str, Any]) -> list[dict[str, Any]]:
     return cast(list[dict[str, Any]], result)
 
 
-def manifest_for_run(document: dict[str, Any], run_id: str) -> dict[str, Any]:
-    matches = [item for item in manifests(document) if item.get("run_id") == run_id]
+def manifest_for_run(
+    document: dict[str, Any],
+    run_id: str,
+    *,
+    expected_run_ids: tuple[str, ...] = RUN_IDS,
+) -> dict[str, Any]:
+    matches = [
+        item
+        for item in manifests(document, expected_run_ids=expected_run_ids)
+        if item.get("run_id") == run_id
+    ]
     if len(matches) != 1:
         raise T09HostError("run command manifest is missing or duplicated")
     return matches[0]
@@ -4791,10 +5129,9 @@ def verify_package(
         expected_sha256=file_sha256(paths["execution"]),
     )
     if (
-        execution.get("authorized") is not True
-        or execution.get("authorization_reference") != AUTHORIZATION_REFERENCE
-        or execution.get("execution_eligibility")
-        != "current-turn-authorized-after-dynamic-preflight"
+        execution.get("authorized") is not False
+        or execution.get("authorization_reference") is not None
+        or execution.get("execution_eligibility") != "blocked-until-fresh-category-3-authorization"
         or execution.get("plan_id") != PLAN_ID
     ):
         raise T09HostError("execution contract identity or authorization drifted")
@@ -4974,6 +5311,7 @@ def _evaluator_package_records(
     expected_packages: list[str],
     evidence_root: Path,
     label: str,
+    cleanup_journal: EarlyCleanupJournal,
 ) -> list[str]:
     command = [
         *prefix,
@@ -5015,6 +5353,7 @@ def _evaluator_package_records(
         stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL,
         timeout=120,
+        cleanup_journal=cleanup_journal,
     )
     if result.returncode != 0 or len(result.stdout) > 1_048_576:
         raise T09HostError("exact evaluator package manifest failed")
@@ -5350,6 +5689,7 @@ def evaluator_overlay(
     overlay: Path,
     prefix: list[str],
     image_id: str,
+    cleanup_journal: EarlyCleanupJournal,
 ) -> dict[str, object]:
     overlay.mkdir(mode=0o700, parents=True, exist_ok=False)
     command = [
@@ -5396,6 +5736,7 @@ def evaluator_overlay(
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         timeout=1_800,
+        cleanup_journal=cleanup_journal,
     )
     if result.returncode != 0:
         raise T09HostError("exact evaluator overlay materialization failed")
@@ -5412,6 +5753,7 @@ def evaluator_overlay(
         expected_packages=expected_packages,
         evidence_root=materialization_evidence,
         label="evaluator-package-freeze",
+        cleanup_journal=cleanup_journal,
     )
     inventory = evaluator_overlay_inventory(overlay)
     manifest: dict[str, object] = {
@@ -5452,6 +5794,7 @@ def validate_evaluator_overlay_binding(
     image_id: str,
     frozen_manifest: dict[str, Any],
     verify_packages: bool,
+    cleanup_journal: EarlyCleanupJournal,
 ) -> dict[str, object]:
     manifest_path = artifact_root / "pilot-v7/evaluator-overlay-manifest.json"
     retained = load_object(manifest_path, label="evaluator overlay manifest")
@@ -5486,6 +5829,7 @@ def validate_evaluator_overlay_binding(
             expected_packages=expected_evaluator_packages(repository),
             evidence_root=revalidation_root,
             label="evaluator-package-revalidation",
+            cleanup_journal=cleanup_journal,
         )
         if packages != retained.get("packages") or canonical_sha256(packages) != retained.get(
             "packages_sha256"
@@ -5537,6 +5881,7 @@ def browser_lifecycle_preflight(
     artifact_root: Path,
     prefix: list[str],
     image_id: str,
+    cleanup_journal: EarlyCleanupJournal,
 ) -> dict[str, object]:
     attempt = artifact_root / "pilot-v7/browser-preflight"
     attempt.mkdir(parents=True, mode=0o700)
@@ -5593,6 +5938,8 @@ def browser_lifecycle_preflight(
     state_receipt: dict[str, object] | None = None
     record: dict[str, Any] | None = None
     lifecycle_error: BaseException | None = None
+    cleanup_result: CleanupTargetState | None = None
+    cleanup_detail: str | None = None
     try:
         if _container_id_by_exact_name(prefix, name) is not None:
             raise T09HostError("browser-preflight Docker name is already occupied")
@@ -5617,6 +5964,11 @@ def browser_lifecycle_preflight(
         )
         if created_identity is None:
             raise T09HostError("browser-preflight Docker identity disappeared after create")
+        register_owned_container_cleanup(
+            cleanup_journal,
+            created_identity,
+            role="browser-lifecycle-preflight",
+        )
         write_exclusive(
             attempt / "container-identity.json",
             {
@@ -5734,13 +6086,49 @@ def browser_lifecycle_preflight(
                     name,
                     expected_role="browser-lifecycle-preflight",
                 )
-                removed = cleanup_identity is None or remove_container(
-                    prefix,
-                    name,
-                    expected_container_id=cleanup_identity.container_id,
-                    expected_role="browser-lifecycle-preflight",
-                )
+                if cleanup_identity is None:
+                    removed = True
+                    cleanup_result, cleanup_detail = verified_owned_container_cleanup_result(
+                        initially_absent=True,
+                        removal_verified=True,
+                        removed_detail="browser-preflight-container-removed",
+                        absent_detail="browser-preflight-container-already-absent",
+                    )
+                else:
+                    removed = remove_container(
+                        prefix,
+                        name,
+                        expected_container_id=cleanup_identity.container_id,
+                        expected_role="browser-lifecycle-preflight",
+                    )
+                    cleanup_result, cleanup_detail = verified_owned_container_cleanup_result(
+                        initially_absent=False,
+                        removal_verified=removed,
+                        removed_detail="browser-preflight-container-removed",
+                        absent_detail="browser-preflight-container-already-absent",
+                    )
+                    if cleanup_result is CleanupTargetState.FAILED and lifecycle_error is None:
+                        lifecycle_error = T09HostError(
+                            "browser-preflight container absence could not be verified"
+                        )
             except (OSError, subprocess.SubprocessError, T09HostError) as exc:
+                cleanup_result = CleanupTargetState.FAILED
+                cleanup_detail = type(exc).__name__
+                if lifecycle_error is None:
+                    lifecycle_error = exc
+        if (
+            created_identity is not None
+            and cleanup_result is not None
+            and cleanup_detail is not None
+        ):
+            try:
+                record_owned_container_cleanup_result(
+                    cleanup_journal,
+                    created_identity,
+                    result=cleanup_result,
+                    detail_code=cleanup_detail,
+                )
+            except EarlyCleanupStateError as exc:
                 if lifecycle_error is None:
                     lifecycle_error = exc
     try:
@@ -5934,6 +6322,7 @@ def secret_channel_preflight(
     secret_file: Path,
     prefix: list[str],
     image_id: str,
+    cleanup_journal: EarlyCleanupJournal,
 ) -> dict[str, Any]:
     attempt = artifact_root / "pilot-v7/secret-channel-preflight"
     attempt.mkdir(parents=True, mode=0o700)
@@ -5967,7 +6356,13 @@ def secret_channel_preflight(
         "--output",
         "/opt/giclab-evidence/receipt.json",
     ]
-    run_logged(command, evidence_root=attempt, label="secret-channel-probe", timeout=60)
+    run_logged(
+        command,
+        evidence_root=attempt,
+        label="secret-channel-probe",
+        timeout=60,
+        cleanup_journal=cleanup_journal,
+    )
     receipt = load_object(attempt / "receipt.json", label="secret-channel receipt")
     if (
         receipt.get("opened_read_only_without_value_read") is not True
@@ -5986,6 +6381,7 @@ def offline_runtime_preflight(
     overlay: Path,
     prefix: list[str],
     image_id: str,
+    cleanup_journal: EarlyCleanupJournal,
 ) -> dict[str, Any]:
     paths = contract_paths(repository)
     attempt = artifact_root / "pilot-v7/offline-runtime-preflight"
@@ -6058,7 +6454,13 @@ def offline_runtime_preflight(
         "--finalizer-raw-fixture",
         "/opt/giclab-finalizer-fixture",
     ]
-    run_logged(command, evidence_root=attempt, label="offline-preflight", timeout=300)
+    run_logged(
+        command,
+        evidence_root=attempt,
+        label="offline-preflight",
+        timeout=300,
+        cleanup_journal=cleanup_journal,
+    )
     receipt = load_object(
         attempt / "offline-runtime-preflight.json",
         label="offline runtime preflight",
@@ -6108,6 +6510,7 @@ def qualified_real_evidence_regression(
     image_id: str,
     image_files: dict[str, str],
     static_receipt: dict[str, Any],
+    cleanup_journal: EarlyCleanupJournal,
 ) -> dict[str, Any]:
     """Reconstruct the retained V4 raw archive inside the exact accepted image."""
 
@@ -6180,7 +6583,13 @@ def qualified_real_evidence_regression(
         "--output",
         "/opt/giclab-output/receipt.json",
     ]
-    run_logged(command, evidence_root=attempt, label="qualified-real-regression", timeout=300)
+    run_logged(
+        command,
+        evidence_root=attempt,
+        label="qualified-real-regression",
+        timeout=300,
+        cleanup_journal=cleanup_journal,
+    )
     receipt_path = attempt / "receipt.json"
     receipt = load_object(receipt_path, label="qualified real-evidence regression")
     interpreter = receipt.get("interpreter")
@@ -6212,6 +6621,7 @@ def final_image_runtime_preflight(
     prefix: list[str],
     image_id: str,
     command_document: dict[str, Any],
+    cleanup_journal: EarlyCleanupJournal,
 ) -> dict[str, Any]:
     attempt = artifact_root / "pilot-v7/final-image-runtime-preflight"
     attempt.mkdir(parents=True, mode=0o700)
@@ -6247,6 +6657,7 @@ def final_image_runtime_preflight(
         evidence_root=attempt,
         label="final-image-runtime-preflight",
         timeout=300,
+        cleanup_journal=cleanup_journal,
     )
     receipt = load_object(attempt / "runtime-preflight.json", label="image runtime preflight")
     upstream = receipt.get("upstream_runner_import")
@@ -6271,6 +6682,7 @@ def provider_accounting_container_preflight(
     artifact_root: Path,
     prefix: list[str],
     image_id: str,
+    cleanup_journal: EarlyCleanupJournal,
 ) -> dict[str, Any]:
     """Exercise the repaired lifecycle in the accepted image with no network."""
 
@@ -6330,6 +6742,7 @@ def provider_accounting_container_preflight(
         evidence_root=attempt,
         label="provider-accounting-preflight",
         timeout=300,
+        cleanup_journal=cleanup_journal,
     )
     receipt_path = attempt / "receipt.json"
     receipt = load_object(receipt_path, label="provider accounting exact-container preflight")
@@ -6364,6 +6777,7 @@ def final_image_file_hashes(
     artifact_root: Path,
     prefix: list[str],
     image_id: str,
+    cleanup_journal: EarlyCleanupJournal,
 ) -> dict[str, str]:
     evidence = artifact_root / "pilot-v7/final-image-file-hashes"
     expected_paths = {
@@ -6400,6 +6814,7 @@ def final_image_file_hashes(
         evidence_root=evidence,
         label="sha256sum",
         timeout=120,
+        cleanup_journal=cleanup_journal,
     )
     observed: dict[str, str] = {}
     for line in (evidence / "sha256sum.stdout").read_text(encoding="utf-8").splitlines():
@@ -6423,6 +6838,7 @@ def model_metadata_preflight(
     secret_file: Path,
     prefix: list[str],
     image_id: str,
+    cleanup_journal: EarlyCleanupJournal,
 ) -> dict[str, Any]:
     attempt = artifact_root / "pilot-v7/model-metadata-preflight"
     attempt.mkdir(parents=True, mode=0o700)
@@ -6460,7 +6876,13 @@ def model_metadata_preflight(
         "/opt/sira/.venv/bin/python",
         "/opt/giclab/model_preflight.py",
     ]
-    run_logged(command, evidence_root=attempt, label="model-metadata", timeout=60)
+    run_logged(
+        command,
+        evidence_root=attempt,
+        label="model-metadata",
+        timeout=60,
+        cleanup_journal=cleanup_journal,
+    )
     receipt = load_object(attempt / "model-availability.json", label="model availability")
     if (
         receipt.get("method") != "GET"
@@ -6726,7 +7148,7 @@ def write_frozen_run_manifest(
         "qualification_count": 1,
         "build_count": image_materialization.get("build_count"),
         "image_materialization_policy": expected_materialization_policy,
-        "source_contract_sha256": AUTHORIZATION_SOURCE_SHA256,
+        "source_contract_sha256": dynamic.get("authorization_source_sha256"),
         "clean_package_commit": package_commit,
         "plan_sha256": file_sha256(paths["plan"]),
         "execution_contract_sha256": file_sha256(paths["execution"]),
@@ -6989,7 +7411,7 @@ def load_frozen_run_manifest(
             if provider_entry.get("launch_slot") == 1
             else SLOT2_IMAGE_MATERIALIZATION_POLICY
         ),
-        "source_contract_sha256": AUTHORIZATION_SOURCE_SHA256,
+        "source_contract_sha256": provider_entry.get("authorization_source_sha256"),
         "clean_package_commit": package_commit,
         "plan_sha256": file_sha256(paths["plan"]),
         "execution_contract_sha256": file_sha256(paths["execution"]),
@@ -7573,6 +7995,7 @@ def _resume_evaluator_receipt(
     overlay: Path,
     prefix: list[str],
     image_id: str,
+    cleanup_journal: EarlyCleanupJournal,
 ) -> dict[str, object]:
     manifest_path = artifact_root / "pilot-v7/evaluator-overlay-manifest.json"
     manifest = load_object(manifest_path, label="resumed evaluator overlay manifest")
@@ -7611,6 +8034,7 @@ def _resume_evaluator_receipt(
             "evaluator_overlay_packages_sha256": receipt["overlay_package_manifest_sha256"],
         },
         verify_packages=True,
+        cleanup_journal=cleanup_journal,
     )
     return receipt
 
@@ -7783,12 +8207,14 @@ def prepare_preflight_resume(
         transition_aggregate_path,
         artifact_root / "pilot-v7/runtime-budget/aggregate-budget.json",
     )
+    cleanup_journal = early_cleanup_journal(args)
     evaluator = _resume_evaluator_receipt(
         repository=repository,
         artifact_root=artifact_root,
         overlay=overlay,
         prefix=docker_prefix(),
         image_id=image_id,
+        cleanup_journal=cleanup_journal,
     )
     recovery_argv = _preflight_resume_argv()
     transition: dict[str, object] = {
@@ -7870,6 +8296,7 @@ def resume_preflight(args: argparse.Namespace) -> None:
     paths = contract_paths(repository)
     execution_sha256 = file_sha256(paths["execution"])
     prefix = docker_prefix()
+    cleanup_journal = early_cleanup_journal(args)
     image_id = image_materialization.get("image_id")
     if not isinstance(image_id, str):
         raise T09HostError("resumed image materialization lacks its identity")
@@ -7879,23 +8306,27 @@ def resume_preflight(args: argparse.Namespace) -> None:
         secret_file=args.secret_file.resolve(strict=True),
         prefix=prefix,
         image_id=image_id,
+        cleanup_journal=cleanup_journal,
     )
     image_files = final_image_file_hashes(
         artifact_root=artifact_root,
         prefix=prefix,
         image_id=image_id,
+        cleanup_journal=cleanup_journal,
     )
     final_runtime = final_image_runtime_preflight(
         artifact_root=artifact_root,
         prefix=prefix,
         image_id=image_id,
         command_document=command_document,
+        cleanup_journal=cleanup_journal,
     )
     provider_accounting = provider_accounting_container_preflight(
         repository=repository,
         artifact_root=artifact_root,
         prefix=prefix,
         image_id=image_id,
+        cleanup_journal=cleanup_journal,
     )
     offline = offline_runtime_preflight(
         repository=repository,
@@ -7903,6 +8334,7 @@ def resume_preflight(args: argparse.Namespace) -> None:
         overlay=args.evaluator_overlay.resolve(strict=True),
         prefix=prefix,
         image_id=image_id,
+        cleanup_journal=cleanup_journal,
     )
     archive_staging = stage_verified_archive(
         args.real_evidence_archive,
@@ -7923,17 +8355,20 @@ def resume_preflight(args: argparse.Namespace) -> None:
         image_id=image_id,
         image_files=image_files,
         static_receipt=real_evidence_regression,
+        cleanup_journal=cleanup_journal,
     )
     core_suppression = core_suppression_preflight(
         repository=repository,
         artifact_root=artifact_root,
         prefix=prefix,
         image_id=image_id,
+        cleanup_journal=cleanup_journal,
     )
     browser = browser_lifecycle_preflight(
         artifact_root=artifact_root,
         prefix=prefix,
         image_id=image_id,
+        cleanup_journal=cleanup_journal,
     )
     sealing_primitives = sealing_primitives_preflight(
         repository=repository,
@@ -7954,6 +8389,7 @@ def resume_preflight(args: argparse.Namespace) -> None:
             "evaluator_overlay_packages_sha256": evaluator["overlay_package_manifest_sha256"],
         },
         verify_packages=True,
+        cleanup_journal=cleanup_journal,
     )
     adjudication = image_equivalence_adjudication(
         repository=repository,
@@ -7982,6 +8418,7 @@ def resume_preflight(args: argparse.Namespace) -> None:
         secret_file=args.secret_file.resolve(strict=True),
         prefix=prefix,
         image_id=image_id,
+        cleanup_journal=cleanup_journal,
     )
     model_credential_scan = record_preflight_credential_scan(
         artifact_root=artifact_root,
@@ -8151,6 +8588,7 @@ def resume_preflight(args: argparse.Namespace) -> None:
 def preflight(args: argparse.Namespace) -> None:
     repository = args.repository.resolve(strict=True)
     artifact_root = args.artifact_root.resolve(strict=False)
+    cleanup_journal = early_cleanup_journal(args)
     if artifact_root.exists():
         raise T09HostError("pilot artifact root must be fresh")
     validate_secret_metadata(args.secret_file.resolve(strict=True))
@@ -8160,6 +8598,29 @@ def preflight(args: argparse.Namespace) -> None:
         repository_root=repository,
         source_root=args.dynamic_source_root.resolve(strict=True),
     )
+    cleanup_state = cleanup_journal.load()
+    if (
+        cleanup_state.provider_instance_identity_sha256
+        != dynamic.get("owned_instance_identity_sha256")
+        or cleanup_state.journal_id != dynamic.get("early_cleanup_journal_id")
+        or cleanup_state.sequence != dynamic.get("early_cleanup_journal_sequence")
+        or cleanup_journal.latest_version_sha256()
+        != dynamic.get("early_cleanup_journal_version_sha256")
+    ):
+        raise T09HostError("early cleanup authority drifted from provider entry")
+    cleanup_journal.advance_lifecycle_at_least(CleanupLifecycleStage.SOURCE_STAGING)
+    remote_credential_path = args.secret_file.resolve(strict=True).as_posix()
+    cleanup_journal.register_target(
+        target_id="temporary-remote-secret",
+        kind=CleanupTargetKind.TEMPORARY_REMOTE_CREDENTIAL,
+        locator=remote_credential_path,
+        ownership_sha256=cleanup_locator_identity(
+            CleanupTargetKind.TEMPORARY_REMOTE_CREDENTIAL,
+            remote_credential_path,
+        ),
+        public_alias="temporary-remote-secret",
+    )
+    cleanup_journal.advance_lifecycle_at_least(CleanupLifecycleStage.SECRET_MATERIALIZATION)
     launch_slot = dynamic.get("launch_slot")
     if (
         not isinstance(launch_slot, int)
@@ -8191,6 +8652,7 @@ def preflight(args: argparse.Namespace) -> None:
     prefix = docker_prefix()
     if owned_containers(prefix):
         raise T09HostError("owned pilot containers already exist")
+    cleanup_journal.advance_lifecycle_at_least(CleanupLifecycleStage.ARTIFACT_ROOT_MUTATION)
     artifact_root.mkdir(mode=0o700, parents=True)
     lambda_started_raw = dynamic["provider_preflight_started_at_epoch"]
     if not isinstance(lambda_started_raw, (int, float)) or isinstance(lambda_started_raw, bool):
@@ -8215,6 +8677,7 @@ def preflight(args: argparse.Namespace) -> None:
     # This is deliberately the first artifact-root mutation.  Cleanup and
     # provider-headroom accounting must survive every later authority, image,
     # credential, container, browser, or evaluator failure.
+    cleanup_journal.advance_lifecycle_at_least(CleanupLifecycleStage.CAMPAIGN_INITIALIZATION)
     initialize_state(
         artifact_root,
         execution_sha256,
@@ -8274,6 +8737,8 @@ def preflight(args: argparse.Namespace) -> None:
         artifact_root / "pilot-v7/local-finalizer-qualification.json",
         local_finalizer_qualification,
     )
+    cleanup_journal.advance_lifecycle_at_least(CleanupLifecycleStage.IMAGE_TRANSFER)
+    cleanup_journal.advance_lifecycle_at_least(CleanupLifecycleStage.IMAGE_LOAD_OR_BUILD)
     image_materialization = materialize_retained_or_build_image(
         repository=repository,
         package_commit=args.package_commit,
@@ -8291,6 +8756,7 @@ def preflight(args: argparse.Namespace) -> None:
         secret_file=args.secret_file.resolve(strict=True),
         prefix=prefix,
         image_id=image_id,
+        cleanup_journal=cleanup_journal,
     )
     evaluator = evaluator_overlay(
         repository=repository,
@@ -8298,23 +8764,27 @@ def preflight(args: argparse.Namespace) -> None:
         overlay=args.evaluator_overlay.resolve(strict=False),
         prefix=prefix,
         image_id=image_id,
+        cleanup_journal=cleanup_journal,
     )
     image_files = final_image_file_hashes(
         artifact_root=artifact_root,
         prefix=prefix,
         image_id=image_id,
+        cleanup_journal=cleanup_journal,
     )
     final_runtime = final_image_runtime_preflight(
         artifact_root=artifact_root,
         prefix=prefix,
         image_id=image_id,
         command_document=command_document,
+        cleanup_journal=cleanup_journal,
     )
     provider_accounting = provider_accounting_container_preflight(
         repository=repository,
         artifact_root=artifact_root,
         prefix=prefix,
         image_id=image_id,
+        cleanup_journal=cleanup_journal,
     )
     offline = offline_runtime_preflight(
         repository=repository,
@@ -8322,6 +8792,7 @@ def preflight(args: argparse.Namespace) -> None:
         overlay=args.evaluator_overlay.resolve(strict=True),
         prefix=prefix,
         image_id=image_id,
+        cleanup_journal=cleanup_journal,
     )
     archive_staging = stage_verified_archive(
         args.real_evidence_archive,
@@ -8342,17 +8813,21 @@ def preflight(args: argparse.Namespace) -> None:
         image_id=image_id,
         image_files=image_files,
         static_receipt=real_evidence_regression,
+        cleanup_journal=cleanup_journal,
     )
     core_suppression = core_suppression_preflight(
         repository=repository,
         artifact_root=artifact_root,
         prefix=prefix,
         image_id=image_id,
+        cleanup_journal=cleanup_journal,
     )
+    cleanup_journal.advance_lifecycle_at_least(CleanupLifecycleStage.BROWSER_STARTUP)
     browser = browser_lifecycle_preflight(
         artifact_root=artifact_root,
         prefix=prefix,
         image_id=image_id,
+        cleanup_journal=cleanup_journal,
     )
     sealing_primitives = sealing_primitives_preflight(
         repository=repository,
@@ -8373,6 +8848,7 @@ def preflight(args: argparse.Namespace) -> None:
             "evaluator_overlay_packages_sha256": evaluator["overlay_package_manifest_sha256"],
         },
         verify_packages=True,
+        cleanup_journal=cleanup_journal,
     )
     adjudication = image_equivalence_adjudication(
         repository=repository,
@@ -8414,6 +8890,7 @@ def preflight(args: argparse.Namespace) -> None:
         secret_file=args.secret_file.resolve(strict=True),
         prefix=prefix,
         image_id=image_id,
+        cleanup_journal=cleanup_journal,
     )
     post_metadata_core_gate = complete_preflight_core_gate(
         artifact_root=artifact_root,
@@ -9252,6 +9729,8 @@ def evaluator_argv(
     finalizer_source: Path,
     finalizer_source_sha256: str,
     finalizer_projection_source_sha256: str,
+    selector_source_sha256: str,
+    refinalization_receipt_schema_sha256: str,
     finalizer_projection: Any,
     invocation: int,
     evaluator_revalidation_path: Path,
@@ -9272,10 +9751,12 @@ def evaluator_argv(
         "finalizer_commit": finalizer_commit,
         "finalizer_source_sha256": finalizer_sha256,
         "finalizer_projection_source_sha256": finalizer_projection_source_sha256,
+        "selector_source_sha256": selector_source_sha256,
         "scientific_package_commit": args.package_commit,
         "pilot_library_sha256": file_sha256(repository / "src/giclab/harness/t09_sira_pilot.py"),
         "interpreter": "/opt/sira/.venv/bin/python",
         "interpreter_sha256": cast(str, frozen_manifest["python_interpreter_sha256"]),
+        "python_version": "3.11.14",
         "interpreter_dependency_manifest_sha256": cast(
             str, frozen_manifest["package_manifest_sha256"]
         ),
@@ -9284,10 +9765,12 @@ def evaluator_argv(
         "command_manifests_sha256": file_sha256(paths["commands"]),
         "dataset_contract_sha256": file_sha256(paths["dataset"]),
         "evaluator_contract_sha256": file_sha256(paths["evaluator"]),
+        "evaluator_commit": SIRA_COMMIT,
         "score_schema_sha256": file_sha256(repository / "schemas/t09-sira-pilot-score.schema.json"),
         "evidence_schema_sha256": file_sha256(
             repository / "schemas/t09-sira-pilot-evidence.schema.json"
         ),
+        "refinalization_receipt_schema_sha256": (refinalization_receipt_schema_sha256),
         "evaluator_overlay_entries_sha256": cast(
             str, frozen_manifest["evaluator_overlay_entries_sha256"]
         ),
@@ -9335,7 +9818,9 @@ def evaluator_argv(
         finalizer_commit=finalizer_commit,
         finalizer_source_sha256=finalizer_sha256,
         finalizer_projection_source_sha256=finalizer_projection_source_sha256,
+        selector_source_sha256=selector_source_sha256,
         finalizer_dependency_manifest_sha256=dependency_manifest_sha256,
+        refinalization_receipt_schema_sha256=(refinalization_receipt_schema_sha256),
         frozen_run_manifest_sha256=frozen_run_manifest_sha256,
         evaluator_revalidation_relative=evaluator_revalidation_path.relative_to(
             artifact_root
@@ -9368,7 +9853,9 @@ def evaluator_argv(
             "--finalizer-execution-mode": "qualified-image",
             "--finalizer-source-sha256": finalizer_sha256,
             "--finalizer-projection-source-sha256": finalizer_projection_source_sha256,
+            "--selector-source-sha256": selector_source_sha256,
             "--finalizer-dependency-manifest-sha256": dependency_manifest_sha256,
+            "--refinalization-receipt-schema-sha256": (refinalization_receipt_schema_sha256),
             "--finalizer-runtime-qualification": "/opt/giclab-control/frozen-run-manifest.json",
             "--finalizer-runtime-qualification-sha256": frozen_run_manifest_sha256,
             "--raw-attempt-root": "/opt/giclab-raw",
@@ -9448,6 +9935,8 @@ def local_evaluator_invocation(
     finalizer_source: Path,
     finalizer_source_sha256: str,
     finalizer_projection_source_sha256: str,
+    selector_source_sha256: str,
+    refinalization_receipt_schema_sha256: str,
     finalizer_projection: Any,
     invocation: int,
     evaluator_revalidation_path: Path,
@@ -9480,10 +9969,12 @@ def local_evaluator_invocation(
         "finalizer_commit": finalizer_commit,
         "finalizer_source_sha256": finalizer_source_sha256,
         "finalizer_projection_source_sha256": finalizer_projection_source_sha256,
+        "selector_source_sha256": selector_source_sha256,
         "scientific_package_commit": args.package_commit,
         "pilot_library_sha256": file_sha256(repository / "src/giclab/harness/t09_sira_pilot.py"),
         "interpreter": interpreter,
         "interpreter_sha256": interpreter_sha256,
+        "python_version": "3.11.14",
         "interpreter_dependency_manifest_sha256": cast(
             str, local_qualification["interpreter_dependency_tree_sha256"]
         ),
@@ -9492,10 +9983,12 @@ def local_evaluator_invocation(
         "command_manifests_sha256": file_sha256(paths["commands"]),
         "dataset_contract_sha256": file_sha256(paths["dataset"]),
         "evaluator_contract_sha256": file_sha256(paths["evaluator"]),
+        "evaluator_commit": SIRA_COMMIT,
         "score_schema_sha256": file_sha256(repository / "schemas/t09-sira-pilot-score.schema.json"),
         "evidence_schema_sha256": file_sha256(
             repository / "schemas/t09-sira-pilot-evidence.schema.json"
         ),
+        "refinalization_receipt_schema_sha256": (refinalization_receipt_schema_sha256),
         "evaluator_overlay_entries_sha256": cast(str, local_dependency_tree["entries_sha256"]),
         "evaluator_overlay_packages_sha256": cast(
             str, local_qualification["dependency_package_manifest_sha256"]
@@ -9526,7 +10019,9 @@ def local_evaluator_invocation(
         finalizer_commit=finalizer_commit,
         finalizer_source_sha256=finalizer_source_sha256,
         finalizer_projection_source_sha256=finalizer_projection_source_sha256,
+        selector_source_sha256=selector_source_sha256,
         finalizer_dependency_manifest_sha256=dependency_manifest_sha256,
+        refinalization_receipt_schema_sha256=(refinalization_receipt_schema_sha256),
         frozen_run_manifest=str(artifact_root / "pilot-v7/frozen-run-manifest.json"),
         frozen_run_manifest_sha256=frozen_run_manifest_sha256,
         replacement_image_id=cast(str, frozen_manifest["replacement_image_id"]),
@@ -9563,7 +10058,9 @@ def local_evaluator_invocation(
         "--finalizer-execution-mode": "qualified-local",
         "--finalizer-source-sha256": finalizer_source_sha256,
         "--finalizer-projection-source-sha256": finalizer_projection_source_sha256,
+        "--selector-source-sha256": selector_source_sha256,
         "--finalizer-dependency-manifest-sha256": dependency_manifest_sha256,
+        "--refinalization-receipt-schema-sha256": (refinalization_receipt_schema_sha256),
         "--finalizer-runtime-qualification-sha256": file_sha256(local_qualification_path),
         "--run-id": cast(str, manifest["run_id"]),
         "--raw-attempt-root": str(raw_root),
@@ -12249,10 +12746,16 @@ def _write_synthetic_runtime_cleanup(raw_root: Path) -> Path:
 
 
 def _synthetic_condition_manifest(
-    source: dict[str, Any], *, artifact_root: Path, attempt_root: Path, raw_root: Path
+    source: dict[str, Any],
+    *,
+    run_id: str,
+    artifact_root: Path,
+    attempt_root: Path,
+    raw_root: Path,
 ) -> dict[str, Any]:
     return {
         **source,
+        "run_id": run_id,
         "permitted_condition_owned": {
             **cast(dict[str, Any], source["permitted_condition_owned"]),
             "output_root": attempt_root.relative_to(artifact_root).as_posix(),
@@ -12268,6 +12771,8 @@ def sealing_primitives_preflight(
     command_document: dict[str, Any],
     package_commit: str,
     execution_contract_sha256: str,
+    expected_run_ids: tuple[str, ...] = RUN_IDS,
+    qualification_run_id: str = RUN_IDS[0],
 ) -> dict[str, object]:
     """Exercise exact raw and essential sealing against isolated synthetic state."""
 
@@ -12275,7 +12780,13 @@ def sealing_primitives_preflight(
     if qualification_root.exists():
         raise T09HostError("sealing-primitives preflight root must be fresh")
     qualification_root.mkdir(mode=0o700, parents=True)
-    source_manifest = manifest_for_run(command_document, RUN_IDS[0])
+    if len(expected_run_ids) != 4:
+        raise T09HostError("sealing-primitives run identity set must contain four entries")
+    source_manifest = manifest_for_run(
+        command_document,
+        expected_run_ids[0],
+        expected_run_ids=expected_run_ids,
+    )
     frozen_sha256 = "f" * 64
     now = time.time()
 
@@ -12298,13 +12809,13 @@ def sealing_primitives_preflight(
     reserve_condition_start(
         raw_artifacts / "pilot-v7/pilot-state.json",
         execution_contract_sha256=execution_contract_sha256,
-        run_id=RUN_IDS[0],
+        run_id=qualification_run_id,
         start_intent_sha256="c" * 64,
     )
     mark_empirical_entry(
         raw_artifacts / "pilot-v7/pilot-state.json",
         execution_contract_sha256=execution_contract_sha256,
-        run_id=RUN_IDS[0],
+        run_id=qualification_run_id,
         supervised_release_receipt_sha256="d" * 64,
     )
     (raw_root / CONDITION_SUPERVISOR_DIRNAME).mkdir(mode=0o700)
@@ -12313,7 +12824,7 @@ def sealing_primitives_preflight(
     (raw_root / "host-cleanup-receipt.json").unlink()
     cleanup.update(
         {
-            "run_id": RUN_IDS[0],
+            "run_id": qualification_run_id,
             "actual_credential_exposure_detected": False,
             "runtime_secret_cleanup_malformed": False,
             "core_artifact_count": 0,
@@ -12327,15 +12838,15 @@ def sealing_primitives_preflight(
     write_exclusive(supervisor / "host-cleanup-receipt.json", cleanup)
     for name, value in {
         "attempt-wall.json": {"evidence_handoff_deadline_epoch": now + 60.0},
-        "container-command.json": {"run_id": RUN_IDS[0]},
+        "container-command.json": {"run_id": qualification_run_id},
         "container-state.json": {"running": False},
-        "gpu-accounting.json": {"run_id": RUN_IDS[0]},
+        "gpu-accounting.json": {"run_id": qualification_run_id},
     }.items():
         write_exclusive(supervisor / name, value)
     write_exclusive(
         supervisor / "evaluator-overlay-binding.json",
         {
-            "run_id": RUN_IDS[0],
+            "run_id": qualification_run_id,
             "frozen_run_manifest_sha256": frozen_sha256,
             "condition_mount_policy": "read-only",
         },
@@ -12351,7 +12862,7 @@ def sealing_primitives_preflight(
         supervisor / "core-artifact-cleanup.json",
         {
             "schema_version": "0.1.0",
-            "run_id": RUN_IDS[0],
+            "run_id": qualification_run_id,
             **core_cleanup_projection([], CoreCleanupOutcome(True, None)),
             "core_scan_integrity_failure": False,
             "core_detection_receipt_sha256": file_sha256(host_detection),
@@ -12360,7 +12871,7 @@ def sealing_primitives_preflight(
     write_exclusive(
         supervisor / "runtime-reconstruction-binding.json",
         {
-            "run_id": RUN_IDS[0],
+            "run_id": qualification_run_id,
             "runtime_cleanup_present": True,
             "runtime_cleanup_path_observed": True,
             "runtime_cleanup_content_read_permitted": True,
@@ -12372,6 +12883,7 @@ def sealing_primitives_preflight(
     )
     raw_manifest = _synthetic_condition_manifest(
         source_manifest,
+        run_id=qualification_run_id,
         artifact_root=raw_artifacts,
         attempt_root=raw_attempt,
         raw_root=raw_root,
@@ -12388,7 +12900,7 @@ def sealing_primitives_preflight(
     validate_raw_attempt_seal(
         attempt_root=raw_attempt,
         raw_root=raw_root,
-        run_id=RUN_IDS[0],
+        run_id=qualification_run_id,
         package_commit=package_commit,
     )
 
@@ -12419,7 +12931,7 @@ def sealing_primitives_preflight(
     start_intent = {
         "schema_version": "0.1.0",
         "plan_id": PLAN_ID,
-        "run_id": RUN_IDS[0],
+        "run_id": qualification_run_id,
         "container_name": f"{CONTAINER_PREFIX}sealing-preflight",
         "container_id": container_id,
         "docker_start_argv": [*docker_prefix(), "start", "--attach", container_id],
@@ -12438,7 +12950,7 @@ def sealing_primitives_preflight(
             "schema_version": "0.1.0",
             "plan_id": PLAN_ID,
             "host_run_id": HOST_RUN_ID,
-            "run_id": RUN_IDS[0],
+            "run_id": qualification_run_id,
             "container_name": start_intent["container_name"],
             "container_id": container_id,
             "owned_role": "condition",
@@ -12449,13 +12961,13 @@ def sealing_primitives_preflight(
     reserve_condition_start(
         failure_state,
         execution_contract_sha256=execution_contract_sha256,
-        run_id=RUN_IDS[0],
+        run_id=qualification_run_id,
         start_intent_sha256=file_sha256(failure_supervisor / "condition-start-intent.json"),
     )
     mark_nonempirical_infrastructure_attempt_consumed(
         failure_state,
         execution_contract_sha256=execution_contract_sha256,
-        run_id=RUN_IDS[0],
+        run_id=qualification_run_id,
     )
     _write_synthetic_runtime_cleanup(failure_raw)
     failure_detection = failure_supervisor / "core-artifact-detection.json"
@@ -12468,7 +12980,7 @@ def sealing_primitives_preflight(
         failure_supervisor / "core-artifact-cleanup.json",
         {
             "schema_version": "0.1.0",
-            "run_id": RUN_IDS[0],
+            "run_id": qualification_run_id,
             "core_limit_contract": CORE_LIMIT_CONTRACT,
             "docker_ulimit": "core=0:0",
             **core_cleanup_projection([], CoreCleanupOutcome(True, None)),
@@ -12488,7 +13000,7 @@ def sealing_primitives_preflight(
     )
     record_output_cap_event(
         raw_root=failure_raw,
-        run_id=RUN_IDS[0],
+        run_id=qualification_run_id,
         stop_reason="attempt_output_bytes",
         hard_cap_breached=True,
         tree_bytes_before_security_cleanup=MAX_ATTEMPT_OUTPUT_BYTES + 1,
@@ -12499,7 +13011,7 @@ def sealing_primitives_preflight(
         failure_supervisor / "host-cleanup-receipt.json",
         {
             "schema_version": "0.1.0",
-            "run_id": RUN_IDS[0],
+            "run_id": qualification_run_id,
             "returncode": 143,
             "container_removed": True,
             "owned_container_residue": [],
@@ -12545,6 +13057,7 @@ def sealing_primitives_preflight(
     )
     failure_manifest = _synthetic_condition_manifest(
         source_manifest,
+        run_id=qualification_run_id,
         artifact_root=failure_artifacts,
         attempt_root=failure_attempt,
         raw_root=failure_raw,
@@ -12567,7 +13080,7 @@ def sealing_primitives_preflight(
     )
     essential_manifest, essential_receipt = validate_essential_failure_seal(
         attempt_root=failure_attempt,
-        run_id=RUN_IDS[0],
+        run_id=qualification_run_id,
         package_commit=package_commit,
         condition_manifest=failure_manifest,
     )
@@ -13943,6 +14456,7 @@ def execute_condition(args: argparse.Namespace) -> int:
     attempt_started_epoch = time.time()
     repository = args.repository.resolve(strict=True)
     artifact_root = args.artifact_root.resolve(strict=True)
+    cleanup_journal = early_cleanup_journal(args)
     admit_next_attempt(artifact_root)
     verify_package(repository, args.package_commit)
     frozen_manifest, frozen_manifest_sha256 = load_frozen_run_manifest(
@@ -13960,6 +14474,7 @@ def execute_condition(args: argparse.Namespace) -> int:
         image_id=image_id,
         frozen_manifest=frozen_manifest,
         verify_packages=False,
+        cleanup_journal=cleanup_journal,
     )
     paths = contract_paths(repository)
     command_document = load_object(paths["commands"], label="command manifest set")
@@ -14218,6 +14733,11 @@ def execute_condition(args: argparse.Namespace) -> int:
             "consumed and sealed"
         ) from create_exception
     created_container_id = created_identity.container_id
+    register_owned_container_cleanup(
+        cleanup_journal,
+        created_identity,
+        role="condition",
+    )
     write_exclusive(
         supervisor_root / "container-identity.json",
         {
@@ -14246,13 +14766,38 @@ def execute_condition(args: argparse.Namespace) -> int:
             create_outcome_ambiguous=False,
         )
     except BaseException as reservation_error:
-        with contextlib.suppress(OSError, subprocess.SubprocessError, T09HostError):
-            remove_container(
+        reservation_cleanup_result = CleanupTargetState.FAILED
+        reservation_cleanup_detail = "owned-container-removal-unverified"
+        try:
+            reservation_container_removed = remove_container(
                 prefix,
                 name,
                 expected_container_id=created_container_id,
                 expected_role="condition",
             )
+            (
+                reservation_cleanup_result,
+                reservation_cleanup_detail,
+            ) = verified_owned_container_cleanup_result(
+                initially_absent=False,
+                removal_verified=reservation_container_removed,
+                removed_detail="condition-container-removed",
+                absent_detail="condition-container-already-absent",
+            )
+        except (OSError, subprocess.SubprocessError, T09HostError) as exc:
+            reservation_cleanup_result = CleanupTargetState.FAILED
+            reservation_cleanup_detail = type(exc).__name__
+        try:
+            record_owned_container_cleanup_result(
+                cleanup_journal,
+                created_identity,
+                result=reservation_cleanup_result,
+                detail_code=reservation_cleanup_detail,
+            )
+        except EarlyCleanupStateError as exc:
+            raise T09HostError(
+                "condition reservation failed and exact cleanup result was not durable"
+            ) from exc
         intent_path = supervisor_root / "condition-start-intent.json"
         never_started = condition_container_proven_never_started(prefix, name)
         if never_started:
@@ -14432,6 +14977,7 @@ def execute_condition(args: argparse.Namespace) -> int:
                 supervisor_root / "supervised-release.json"
             ),
         )
+        cleanup_journal.advance_lifecycle_at_least(CleanupLifecycleStage.EMPIRICAL_ENTRY)
         write_bytes_exclusive(raw_root / ".giclab-release", b"release\n")
         release_gate_released = True
 
@@ -14496,10 +15042,38 @@ def execute_condition(args: argparse.Namespace) -> int:
                 expected_container_id=created_container_id,
                 expected_role="condition",
             )
+            (
+                condition_cleanup_result,
+                condition_cleanup_detail,
+            ) = verified_owned_container_cleanup_result(
+                initially_absent=False,
+                removal_verified=container_removed,
+                removed_detail="condition-container-removed",
+                absent_detail="condition-container-already-absent",
+            )
+            if condition_cleanup_result is CleanupTargetState.FAILED:
+                container_removal_error_type = "ContainerRemovalUnverified"
+                infrastructure_stop_requires_essential_seal = True
+                stop_reason = stop_reason or "condition-container-removal-unverified"
         except (OSError, subprocess.SubprocessError, T09HostError) as exc:
             container_removal_error_type = type(exc).__name__
+            condition_cleanup_result = CleanupTargetState.FAILED
+            condition_cleanup_detail = container_removal_error_type
             infrastructure_stop_requires_essential_seal = True
             stop_reason = stop_reason or "condition-container-removal-failed"
+        try:
+            cleanup_journal.record_result(
+                target_id=f"owned-container-{created_container_id}",
+                result=condition_cleanup_result,
+                detail_code=condition_cleanup_detail,
+                during_cleanup=False,
+            )
+        except EarlyCleanupStateError as exc:
+            infrastructure_stop_requires_essential_seal = True
+            stop_reason = stop_reason or "early-cleanup-journal-update-failed"
+            if runner_exception is None:
+                runner_exception = T09HostError("condition cleanup result could not be persisted")
+                runner_exception.__cause__ = exc
     post_attach_state = load_object(
         artifact_root / "pilot-v7/pilot-state.json",
         label="post-attach release transaction state",
@@ -15071,7 +15645,7 @@ def validate_finalizer_source(
     finalizer_commit: str,
     source: Path,
     projection_source: Path,
-) -> tuple[str, str, Any]:
+) -> tuple[str, str, str, str, Any]:
     """Bind downstream-repairable bytes without changing the frozen worktree."""
 
     if re.fullmatch(r"[a-f0-9]{40}", finalizer_commit) is None:
@@ -15079,6 +15653,9 @@ def validate_finalizer_source(
     sources = {
         FINALIZER_RELATIVE_PATH: source.resolve(strict=True),
         FINALIZER_PROJECTION_RELATIVE_PATH: projection_source.resolve(strict=True),
+        REFINALIZATION_RECEIPT_SCHEMA_RELATIVE_PATH: (
+            repository / REFINALIZATION_RECEIPT_SCHEMA_RELATIVE_PATH
+        ).resolve(strict=True),
     }
     for path in sources.values():
         metadata = path.stat(follow_symlinks=False)
@@ -15125,22 +15702,22 @@ def validate_finalizer_source(
         allowed = {
             FINALIZER_RELATIVE_PATH,
             FINALIZER_PROJECTION_RELATIVE_PATH,
-            "containers/sira-smoke/pragmatic/t09_remote_runner.py",
+            SELECTOR_RELATIVE_PATH,
+            REFINALIZATION_RECEIPT_SCHEMA_RELATIVE_PATH,
             "tests/test_t09_sira_pilot.py",
             "tests/test_t09_retry3.py",
+            "tests/test_t09_refinalization_receipt.py",
         }
         if not set(changed).intersection(
             {FINALIZER_RELATIVE_PATH, FINALIZER_PROJECTION_RELATIVE_PATH}
         ) or not set(changed).issubset(allowed):
             raise T09HostError("post-entry finalizer commit changed a non-downstream surface")
-        runner_relative = "containers/sira-smoke/pragmatic/t09_remote_runner.py"
-        if runner_relative in changed:
-            validate_git_bound_downstream_source(
-                repository=repository,
-                commit=finalizer_commit,
-                relative=runner_relative,
-                source=Path(__file__),
-            )
+    validate_git_bound_downstream_source(
+        repository=repository,
+        commit=finalizer_commit,
+        relative=SELECTOR_RELATIVE_PATH,
+        source=Path(__file__),
+    )
     for relative, path in sources.items():
         retained = subprocess.run(
             ["git", "-C", str(repository), "show", f"{finalizer_commit}:{relative}"],
@@ -15163,11 +15740,14 @@ def validate_finalizer_source(
         not callable(getattr(module, "build_finalizer_argv", None))
         or not callable(getattr(module, "build_local_finalizer_invocation", None))
         or not callable(getattr(module, "build_completion_projection", None))
+        or not callable(getattr(module, "validate_completion_projection", None))
     ):
         raise T09HostError("downstream finalizer projection API is incomplete")
     return (
         file_sha256(sources[FINALIZER_RELATIVE_PATH]),
         file_sha256(sources[FINALIZER_PROJECTION_RELATIVE_PATH]),
+        file_sha256(Path(__file__).resolve(strict=True)),
+        file_sha256(sources[REFINALIZATION_RECEIPT_SCHEMA_RELATIVE_PATH]),
         module,
     )
 
@@ -15202,7 +15782,7 @@ def validate_local_finalizer_qualification(
         or metadata.st_nlink != 1
         or stat.S_IMODE(metadata.st_mode) != 0o600
         or receipt.get("schema_version") != "0.1.0"
-        or receipt.get("qualification_id") != "QUAL-T09-PILOT-V9-LOCAL-FINALIZER-AUTONOMOUS-0002"
+        or receipt.get("qualification_id") != "QUAL-T09-PILOT-V10-LOCAL-FINALIZER-AUTONOMOUS-0003"
         or receipt.get("plan_id") != PLAN_ID
         or receipt.get("package_commit") != package_commit
         or receipt.get("python_version") != "3.11.14"
@@ -15692,28 +16272,60 @@ def validate_selected_finalization(
         "finalizer_commit",
         "finalizer_source_sha256",
         "finalizer_projection_source_sha256",
+        "selector_source_sha256",
         "scientific_package_commit",
         "pilot_library_sha256",
         "interpreter",
         "interpreter_sha256",
+        "python_version",
         "interpreter_dependency_manifest_sha256",
         "replacement_image_id",
         "execution_contract_sha256",
         "command_manifests_sha256",
         "dataset_contract_sha256",
         "evaluator_contract_sha256",
+        "evaluator_commit",
         "score_schema_sha256",
         "evidence_schema_sha256",
+        "refinalization_receipt_schema_sha256",
         "evaluator_overlay_entries_sha256",
         "evaluator_overlay_packages_sha256",
     }
+    receipt_schema_path = repository / REFINALIZATION_RECEIPT_SCHEMA_RELATIVE_PATH
+    receipt_schema = load_object(receipt_schema_path, label="refinalization receipt schema")
+    receipt_schema_errors = _schema_errors(completion, receipt_schema)
+    control = completion.get("canonical_control")
+    frozen_run_manifest_path = artifact_root / "pilot-v7/frozen-run-manifest.json"
+    expected_raw_alias = f"{attempt.output_root}/raw-attempt-manifest.json"
+    expected_raw_identity = canonical_sha256(
+        {
+            "attempt_id": run_id,
+            "manifest_public_alias": expected_raw_alias,
+            "manifest_sha256": file_sha256(attempt_root / "raw-attempt-manifest.json"),
+            "manifest_payload_sha256": canonical_sha256(raw_manifest),
+            "raw_receipt_sha256": file_sha256(attempt_root / "raw-attempt-complete.json"),
+        }
+    )
+    expected_scoring_identity = (
+        canonical_sha256(
+            {
+                "evaluator_commit": closure.get("evaluator_commit"),
+                "evaluator_contract_sha256": closure.get("evaluator_contract_sha256"),
+                "score_schema_sha256": closure.get("score_schema_sha256"),
+            }
+        )
+        if isinstance(closure, dict)
+        else None
+    )
     if (
         completion_path.is_symlink()
         or not stat.S_ISREG(metadata.st_mode)
         or metadata.st_nlink != 1
         or stat.S_IMODE(metadata.st_mode) != 0o600
         or selection.get("finalization_complete_sha256") != file_sha256(completion_path)
-        or completion.get("schema_version") != "0.1.0"
+        or receipt_schema_errors
+        or completion.get("schema_version") != "0.2.0"
+        or completion.get("receipt_schema_sha256") != file_sha256(receipt_schema_path)
         or completion.get("plan_id") != PLAN_ID
         or completion.get("host_run_id") != HOST_RUN_ID
         or completion.get("run_id") != run_id
@@ -15735,7 +16347,14 @@ def validate_selected_finalization(
         or completion.get("semantic_projection_sha256") != canonical_sha256(semantic_projection)
         or not isinstance(closure, dict)
         or set(closure) != expected_closure_fields
+        or not isinstance(control, dict)
+        or completion.get("canonical_control_sha256") != canonical_sha256(control)
+        or completion.get("nonsemantic_fields") != []
         or closure.get("scientific_package_commit") != package_commit
+        or closure.get("selector_source_sha256") != file_sha256(Path(__file__))
+        or closure.get("python_version") != "3.11.14"
+        or closure.get("evaluator_commit") != SIRA_COMMIT
+        or closure.get("refinalization_receipt_schema_sha256") != file_sha256(receipt_schema_path)
         or completion.get("finalizer_dependency_manifest_sha256") != canonical_sha256(closure)
         or selection.get("finalizer_dependency_manifest_sha256") != canonical_sha256(closure)
         or selection.get("finalizer_execution_mode") != closure.get("finalizer_execution_mode")
@@ -15754,6 +16373,39 @@ def validate_selected_finalization(
         or completion.get("additional_browser_actions") != 0
         or completion.get("raw_source_mutated") is not False
         or completion.get("output_schema_valid") is not True
+        or control.get("receipt_schema_version") != "1.0.0"
+        or control.get("raw_attempt_identity") != expected_raw_identity
+        or control.get("raw_attempt_manifest_public_alias") != expected_raw_alias
+        or control.get("raw_attempt_manifest_sha256")
+        != file_sha256(attempt_root / "raw-attempt-manifest.json")
+        or control.get("raw_manifest_validation") != "validated-before-and-after-byte-identical"
+        or control.get("frozen_scientific_commit") != package_commit
+        or control.get("frozen_run_manifest_sha256") != file_sha256(frozen_run_manifest_path)
+        or control.get("attempt_id") != run_id
+        or control.get("task_id") != attempt.task_id
+        or control.get("task_sha256") != TASK_TEXT_SHA256S[attempt.task_index]
+        or control.get("condition") != attempt.condition
+        or control.get("finalizer_source_commit") != closure.get("finalizer_commit")
+        or control.get("finalizer_source_sha256") != closure.get("finalizer_source_sha256")
+        or control.get("selector_source_sha256") != closure.get("selector_source_sha256")
+        or control.get("projection_source_sha256")
+        != closure.get("finalizer_projection_source_sha256")
+        or control.get("absolute_interpreter_identity")
+        != {
+            "path": closure.get("interpreter"),
+            "sha256": closure.get("interpreter_sha256"),
+        }
+        or control.get("python_version") != "3.11.14"
+        or control.get("dependency_closure_identity") != canonical_sha256(closure)
+        or control.get("evaluator_commit") != SIRA_COMMIT
+        or control.get("scoring_contract_identity") != expected_scoring_identity
+        or control.get("network_disabled") is not True
+        or control.get("network_policy") != expected_network
+        or control.get("model_replay_count") != 0
+        or control.get("browser_replay_count") != 0
+        or control.get("raw_mutation") is not False
+        or control.get("output_semantic_projection_sha256") != canonical_sha256(semantic_projection)
+        or control.get("finalization_terminal_state") != "offline-refinalization-complete"
     ):
         raise T09HostError("selected finalization no longer reconstructs from exact bytes")
     enforce_attempt_supervisor_cap(attempt_root)
@@ -15767,7 +16419,13 @@ def finalize_attempt(args: argparse.Namespace) -> dict[str, object]:
     enforce_host_core_limit()
     repository = args.repository.resolve(strict=True)
     artifact_root = args.artifact_root.resolve(strict=True)
-    source_sha256, projection_source_sha256, projection_module = validate_finalizer_source(
+    (
+        source_sha256,
+        projection_source_sha256,
+        selector_source_sha256,
+        receipt_schema_sha256,
+        projection_module,
+    ) = validate_finalizer_source(
         repository=repository,
         package_commit=args.package_commit,
         finalizer_commit=args.finalizer_commit,
@@ -15780,6 +16438,7 @@ def finalize_attempt(args: argparse.Namespace) -> dict[str, object]:
         current_commit=args.finalizer_commit,
     )
     local_mode = args.finalizer_execution_mode == "qualified-local"
+    cleanup_journal = None if local_mode else early_cleanup_journal(args)
     if local_mode != (
         args.local_finalizer_qualification is not None
         and args.local_evaluator_root is not None
@@ -15877,6 +16536,7 @@ def finalize_attempt(args: argparse.Namespace) -> dict[str, object]:
             "local_runtime_qualification_sha256": file_sha256(args.local_finalizer_qualification),
         }
     else:
+        assert cleanup_journal is not None
         overlay_revalidation = validate_evaluator_overlay_binding(
             artifact_root=artifact_root,
             repository=repository,
@@ -15885,6 +16545,7 @@ def finalize_attempt(args: argparse.Namespace) -> dict[str, object]:
             image_id=image_id,
             frozen_manifest=frozen_manifest,
             verify_packages=True,
+            cleanup_journal=cleanup_journal,
         )
     overlay_path = invocation_log / "evaluator-overlay-revalidation.json"
     write_exclusive(overlay_path, overlay_revalidation)
@@ -15901,6 +16562,8 @@ def finalize_attempt(args: argparse.Namespace) -> dict[str, object]:
             finalizer_source=args.finalizer_source,
             finalizer_source_sha256=source_sha256,
             finalizer_projection_source_sha256=projection_source_sha256,
+            selector_source_sha256=selector_source_sha256,
+            refinalization_receipt_schema_sha256=receipt_schema_sha256,
             finalizer_projection=projection_module,
             invocation=invocation,
             evaluator_revalidation_path=overlay_path,
@@ -15919,6 +16582,8 @@ def finalize_attempt(args: argparse.Namespace) -> dict[str, object]:
             finalizer_source=args.finalizer_source,
             finalizer_source_sha256=source_sha256,
             finalizer_projection_source_sha256=projection_source_sha256,
+            selector_source_sha256=selector_source_sha256,
+            refinalization_receipt_schema_sha256=receipt_schema_sha256,
             finalizer_projection=projection_module,
             invocation=invocation,
             evaluator_revalidation_path=overlay_path,
@@ -15963,6 +16628,7 @@ def finalize_attempt(args: argparse.Namespace) -> dict[str, object]:
                     preexec_fn=_limit_finalizer_log_file_size,
                 )
             else:
+                assert cleanup_journal is not None
                 finalizer_label = f"finalizer-{args.run_id.lower()}-{invocation:04d}"
                 result = run_owned_docker(
                     finalizer,
@@ -15973,6 +16639,7 @@ def finalize_attempt(args: argparse.Namespace) -> dict[str, object]:
                     stdout=stdout,
                     stderr=stderr,
                     timeout=min(FINALIZER_INVOCATION_TIMEOUT_SECONDS, max(1, int(remaining))),
+                    cleanup_journal=cleanup_journal,
                     environment={**safe_environment(), **projected_environment},
                     preexec_fn=_limit_finalizer_log_file_size,
                 )
@@ -16115,35 +16782,23 @@ def finalize_attempt(args: argparse.Namespace) -> dict[str, object]:
         finalizer_closure=closure,
         finalizer_dependency_manifest_sha256=canonical_sha256(closure),
         network="socket-construction-denied" if local_mode else "none",
+        raw_attempt_manifest_public_alias=(f"{attempt.output_root}/raw-attempt-manifest.json"),
+        frozen_run_manifest_sha256=frozen_manifest_sha256,
+        task_id=attempt.task_id,
+        task_sha256=TASK_TEXT_SHA256S[attempt.task_index],
+        condition=attempt.condition,
+        receipt_schema_sha256=receipt_schema_sha256,
     )
-    expected_completion = {
-        "schema_version": "0.1.0",
-        "plan_id": PLAN_ID,
-        "host_run_id": HOST_RUN_ID,
-        "run_id": args.run_id,
-        "raw_manifest_sha256_before": raw_manifest_sha256_before,
-        "raw_manifest_sha256_after": raw_manifest_sha256_after,
-        "raw_receipt_sha256": raw_receipt_sha256_after,
-        "raw_manifest_payload_sha256": canonical_sha256(raw_manifest),
-        "raw_receipt_payload_sha256": canonical_sha256(raw_receipt),
-        "output_files": output_files,
-        "output_files_sha256": canonical_sha256(output_files),
-        "outcome_sha256": file_sha256(finalized_root / "attempt-outcome.json"),
-        "evidence_index_sha256": file_sha256(finalized_root / "evidence-index.json"),
-        "semantic_projection_file_sha256": file_sha256(finalized_root / "semantic-projection.json"),
-        "semantic_projection_sha256": canonical_sha256(semantic_projection),
-        "finalizer_closure": closure,
-        "finalizer_dependency_manifest_sha256": canonical_sha256(closure),
-        "interpreter": closure["interpreter"],
-        "interpreter_sha256": closure["interpreter_sha256"],
-        "network": "socket-construction-denied" if local_mode else "none",
-        "additional_model_calls": 0,
-        "additional_browser_actions": 0,
-        "raw_source_mutated": False,
-        "output_schema_valid": True,
-    }
-    if completion != expected_completion:
-        raise T09HostError("downstream completion projection exceeded its pure contract")
+    try:
+        projection_module.validate_completion_projection(completion)
+    except ValueError as exc:
+        raise T09HostError("downstream completion projection violated its pure contract") from exc
+    receipt_schema = load_object(
+        repository / REFINALIZATION_RECEIPT_SCHEMA_RELATIVE_PATH,
+        label="refinalization receipt schema",
+    )
+    if _schema_errors(completion, receipt_schema):
+        raise T09HostError("downstream completion projection failed its receipt schema")
     write_exclusive(completion_path, completion)
     try:
         enforce_attempt_supervisor_cap(attempt_root)
@@ -16172,6 +16827,28 @@ def finalize_attempt(args: argparse.Namespace) -> dict[str, object]:
         raise T09HostError(
             "downstream finalization exceeded the full-attempt cap; immutable raw remains accepted"
         ) from exc
+    candidate_selection = {
+        "finalizer_execution_mode": closure["finalizer_execution_mode"],
+        "finalizer_runtime_qualification_sha256": closure["finalizer_runtime_qualification_sha256"],
+        "finalizer_source_sha256": source_sha256,
+        "finalizer_projection_source_sha256": projection_source_sha256,
+        "finalizer_commit": args.finalizer_commit,
+        "finalizer_dependency_manifest_sha256": canonical_sha256(closure),
+        "evaluator_contract_sha256": contract.evaluator_contract_sha256,
+        "interpreter": closure["interpreter"],
+        "interpreter_sha256": closure["interpreter_sha256"],
+        "semantic_projection_sha256": canonical_sha256(semantic_projection),
+        "finalized_output_root": finalized_root.relative_to(artifact_root).as_posix(),
+        "finalization_complete_sha256": file_sha256(completion_path),
+    }
+    validate_selected_finalization(
+        repository=repository,
+        artifact_root=artifact_root,
+        contract=contract,
+        run_id=args.run_id,
+        package_commit=args.package_commit,
+        selection=candidate_selection,
+    )
     mark_attempt_completed(
         artifact_root / "pilot-v7/pilot-state.json",
         execution_contract_sha256=contract.sha256,
@@ -17613,7 +18290,7 @@ def verify_attempt_export(args: argparse.Namespace) -> None:
             or frozen_control.get("clean_package_commit") != args.package_commit
             or frozen_control.get("replacement_image_id") != manifest.get("replacement_image_id")
             or local_qualification.get("qualification_id")
-            != "QUAL-T09-PILOT-V9-LOCAL-FINALIZER-AUTONOMOUS-0002"
+            != "QUAL-T09-PILOT-V10-LOCAL-FINALIZER-AUTONOMOUS-0003"
             or local_qualification.get("package_commit") != args.package_commit
             or frozen_control.get("local_finalizer_qualification_sha256")
             != next(
@@ -20085,20 +20762,132 @@ def _prior_typed_core_incidents(
     return detected, destruction_unverified
 
 
+def _cleanup_without_optional_pilot_state(
+    cleanup_journal: EarlyCleanupJournal,
+    *,
+    state_path: Path,
+) -> bool:
+    """Close exact remote-owned targets when the optional pilot state never existed."""
+
+    if state_path.is_file() and not state_path.is_symlink():
+        return False
+    if os.path.lexists(state_path):
+        raise T09HostError("global cleanup pilot state is unsafe")
+
+    prefix: list[str] | None = None
+    prefix_error: BaseException | None = None
+    for target in cleanup_journal.load().targets:
+        if (
+            target.kind not in _REMOTE_CLEANUP_TARGET_KINDS
+            or target.state in _TERMINAL_CLEANUP_TARGET_STATES
+        ):
+            continue
+        result = CleanupTargetState.FAILED
+        detail_code = "remote-cleanup-not-attempted"
+        try:
+            if target.kind is CleanupTargetKind.TEMPORARY_REMOTE_CREDENTIAL:
+                secret_path = Path(target.locator)
+                if not os.path.lexists(secret_path):
+                    result = CleanupTargetState.ABSENT
+                    detail_code = "temporary-remote-secret-already-absent"
+                else:
+                    metadata = secret_path.lstat()
+                    if secret_path.is_symlink() or not stat.S_ISREG(metadata.st_mode):
+                        raise T09HostError("early cleanup remote secret target is unsafe")
+                    secret_path.unlink()
+                    parent_descriptor = os.open(
+                        secret_path.parent,
+                        os.O_RDONLY | getattr(os, "O_DIRECTORY", 0),
+                    )
+                    try:
+                        os.fsync(parent_descriptor)
+                    finally:
+                        os.close(parent_descriptor)
+                    result = CleanupTargetState.REMOVED
+                    detail_code = "temporary-remote-secret-removed"
+            else:
+                if re.fullmatch(
+                    r"[a-f0-9]{64}", target.locator
+                ) is None or target.ownership_sha256 != cleanup_locator_identity(
+                    CleanupTargetKind.OWNED_CONTAINER, target.locator
+                ):
+                    raise T09HostError("early cleanup container identity is malformed")
+                if prefix is None and prefix_error is None:
+                    try:
+                        prefix = docker_prefix()
+                    except (OSError, subprocess.SubprocessError, T09HostError) as exc:
+                        prefix_error = exc
+                if prefix is None:
+                    assert prefix_error is not None
+                    raise T09HostError("Docker is unavailable for exact early cleanup") from (
+                        prefix_error
+                    )
+                identity = inspect_owned_container_by_id(prefix, target.locator)
+                if identity is None:
+                    result, detail_code = verified_owned_container_cleanup_result(
+                        initially_absent=True,
+                        removal_verified=True,
+                        removed_detail="owned-container-removed",
+                        absent_detail="owned-container-already-absent",
+                    )
+                else:
+                    role = identity.labels["giclab.t09.role"]
+                    removal_verified = remove_container(
+                        prefix,
+                        identity.name,
+                        expected_container_id=identity.container_id,
+                        expected_role=role,
+                    )
+                    result, detail_code = verified_owned_container_cleanup_result(
+                        initially_absent=False,
+                        removal_verified=removal_verified,
+                        removed_detail="owned-container-removed",
+                        absent_detail="owned-container-already-absent",
+                    )
+        except (OSError, subprocess.SubprocessError, T09HostError) as exc:
+            result = CleanupTargetState.FAILED
+            detail_code = type(exc).__name__
+        cleanup_journal.record_result(
+            target_id=target.target_id,
+            result=result,
+            detail_code=detail_code,
+        )
+
+    _write_remote_early_closeout_receipt(cleanup_journal)
+    unfinished = _unfinished_remote_cleanup_target_ids(cleanup_journal)
+    if unfinished:
+        raise T09HostError(
+            "exact early cleanup remains incomplete for remote-owned targets: "
+            + ", ".join(unfinished)
+        )
+    return True
+
+
 def cleanup(args: argparse.Namespace) -> None:
     enforce_host_core_limit()
+    cleanup_journal = early_cleanup_journal(args)
+    if (
+        cleanup_journal.load().terminal_cleanup_disposition
+        is not TerminalCleanupDisposition.COMPLETE
+    ):
+        cleanup_journal.advance_lifecycle(CleanupLifecycleStage.CLEANUP_IN_PROGRESS)
     root = args.artifact_root.resolve(strict=False)
     if root.exists():
         metadata = root.stat(follow_symlinks=False)
         if root.is_symlink() or not stat.S_ISDIR(metadata.st_mode):
             raise T09HostError("global cleanup artifact root is unsafe")
-    else:
+    state_path = root / "pilot-v7/pilot-state.json"
+    if _cleanup_without_optional_pilot_state(
+        cleanup_journal,
+        state_path=state_path,
+    ):
+        return
+    if not root.exists():
         root.mkdir(mode=0o700, parents=True, exist_ok=False)
     pilot_root = root / "pilot-v7"
     pilot_root.mkdir(mode=0o700, parents=True, exist_ok=True)
     intent_path = pilot_root / "global-cleanup-intent.json"
     completion_path = pilot_root / "host-cleanup.json"
-    state_path = pilot_root / "pilot-state.json"
     direct_export_chronology: list[dict[str, object]] = []
     pending_essential_export_after_cleanup: dict[str, object] | None = None
     retained_cleanup_intent: dict[str, Any] | None = None
@@ -20345,6 +21134,19 @@ def cleanup(args: argparse.Namespace) -> None:
                 cast(str, item["owned_role"]),
             )
         )
+        container_id = cast(str, item["container_id"])
+        container_name = cast(str, item["container_name"])
+        container_role = cast(str, item["owned_role"])
+        cleanup_journal.register_target(
+            target_id=f"owned-container-{container_id}",
+            kind=CleanupTargetKind.OWNED_CONTAINER,
+            locator=container_id,
+            ownership_sha256=cleanup_locator_identity(
+                CleanupTargetKind.OWNED_CONTAINER,
+                container_id,
+            ),
+            public_alias=f"owned-container/{container_role}/{container_name}",
+        )
     retained_archive_targets_for_validation = cleanup_intent.get("archive_targets")
     if not isinstance(retained_archive_targets_for_validation, list):
         raise T09HostError("global cleanup archive intent is malformed")
@@ -20416,18 +21218,41 @@ def cleanup(args: argparse.Namespace) -> None:
     if os.path.lexists(completion_path):
         raise T09HostError("global cleanup completion is unsafe")
     for name, container_id, role in owned_targets:
+        removal_result = CleanupTargetState.FAILED
+        removal_detail = "owned-container-removal-unverified"
         try:
-            if remove_container(
+            removal_verified = remove_container(
                 prefix,
                 name,
                 expected_container_id=container_id,
                 expected_role=role,
-            ):
+            )
+            removal_result, removal_detail = verified_owned_container_cleanup_result(
+                initially_absent=False,
+                removal_verified=removal_verified,
+                removed_detail="owned-container-removed",
+                absent_detail="owned-container-already-absent",
+            )
+            if removal_verified:
                 removed.append(name)
+            else:
+                container_removal_errors.append(
+                    {
+                        "container_name": name,
+                        "error_type": "ContainerRemovalUnverified",
+                    }
+                )
         except (OSError, subprocess.SubprocessError, T09HostError) as exc:
+            removal_result = CleanupTargetState.FAILED
+            removal_detail = type(exc).__name__
             container_removal_errors.append(
                 {"container_name": name, "error_type": type(exc).__name__}
             )
+        cleanup_journal.record_result(
+            target_id=f"owned-container-{container_id}",
+            result=removal_result,
+            detail_code=removal_detail,
+        )
     try:
         residue = owned_containers(prefix)
     except (OSError, subprocess.SubprocessError, T09HostError) as exc:
@@ -20819,8 +21644,26 @@ def cleanup(args: argparse.Namespace) -> None:
             },
         )
     credential_bytes = b""
-    secret_removed = (
-        destroy_secret(secret_path) if secret_path.exists() else credential_ready_path.is_file()
+    if secret_path.exists():
+        secret_removed = destroy_secret(secret_path)
+        secret_cleanup_result = (
+            CleanupTargetState.REMOVED if secret_removed else CleanupTargetState.FAILED
+        )
+        secret_cleanup_detail = (
+            "temporary-remote-secret-removed" if secret_removed else "secret-removal-failed"
+        )
+    elif credential_ready_path.is_file():
+        secret_removed = True
+        secret_cleanup_result = CleanupTargetState.ABSENT
+        secret_cleanup_detail = "temporary-remote-secret-already-absent"
+    else:
+        secret_removed = False
+        secret_cleanup_result = CleanupTargetState.FAILED
+        secret_cleanup_detail = "secret-removal-failed"
+    cleanup_journal.record_result(
+        target_id="temporary-remote-secret",
+        result=secret_cleanup_result,
+        detail_code=secret_cleanup_detail,
     )
 
     retained_archive_targets = cleanup_intent.get("archive_targets")
@@ -20872,6 +21715,13 @@ def cleanup(args: argparse.Namespace) -> None:
         if content_scans_permitted
         else ["privacy-scan-unavailable:core-scan-integrity-failure"]
     )
+    _write_remote_early_closeout_receipt(cleanup_journal)
+    unfinished_remote_targets = _unfinished_remote_cleanup_target_ids(cleanup_journal)
+    if unfinished_remote_targets:
+        raise T09HostError(
+            "global cleanup retained unfinished exact remote targets: "
+            + ", ".join(unfinished_remote_targets)
+        )
     try:
         remaining_runtime = provider_seconds_remaining(root)
     except (OSError, T09HostError):
@@ -21186,6 +22036,7 @@ def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser()
     result.add_argument("--repository", type=Path, required=True)
     result.add_argument("--artifact-root", type=Path, required=True)
+    result.add_argument("--early-cleanup-journal", type=Path, required=True)
     result.add_argument("--secret-file", type=Path, required=True)
     result.add_argument("--evaluator-overlay", type=Path, required=True)
     result.add_argument("--package-commit", required=True)

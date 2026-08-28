@@ -29,15 +29,12 @@ from giclab.harness.sira_gate_a import (
     ProviderBudgetUsage,
 )
 
-PLAN_ID: Final = "PLAN-EXP0001-PILOT-V9"
+PLAN_ID: Final = "PLAN-EXP0001-PILOT-V10"
 EXPERIMENT_ID: Final = "EXP-0001"
 SIRA_COMMIT: Final = "93fb8d72de71f9a4a13419670adeb34d93cf7acd"
 MODEL_REVISION: Final = "gpt-4o-2024-11-20"
 SERVICE_TIER: Final = "default"
-AUTHORIZATION_REFERENCE: Final = (
-    "AUTH-T09-AUTONOMOUS-RETRY2-2026-08-27:sha256:"
-    "aea63a42cf0270ad0a41a929b4b8eb19dd1c3af73abfe97163c1d90e6077d3da"
-)
+AUTHORIZATION_REFERENCE: Final[None] = None
 DATASET_REVISION: Final = "76ad1feb689b754bfe4e5e24d3ea371b647efa67"
 DATASET_SHA256: Final = "359300b029c6891567816f351bf8786e9b018d7af8a1a44b7da9ba5ef4651288"
 EVALUATOR_SHA256: Final = "2f99ec6ca40a5d5b49beea61c71d55a85652697b07f92a1c2aaefe85e727ab79"
@@ -55,20 +52,20 @@ TASK_REFERENCE_SHA256S: Final = (
     "2ee9d892e24441d5f5bbf31b7616c1ade5977af26d22e4020f92a162fa23becb",
 )
 ATTEMPT_ORDER: Final = (
-    "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0002",
-    "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0002",
-    "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0002",
-    "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0002",
+    "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0003",
+    "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0003",
+    "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0003",
+    "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0003",
 )
 EVALUATOR_RUN_IDS: Final = (
-    "RUN-T09-EVAL-TASK-A-REACTIVE-AUTONOMOUS-0002",
-    "RUN-T09-EVAL-TASK-A-SIMULATIVE-AUTONOMOUS-0002",
-    "RUN-T09-EVAL-TASK-B-SIMULATIVE-AUTONOMOUS-0002",
-    "RUN-T09-EVAL-TASK-B-REACTIVE-AUTONOMOUS-0002",
+    "RUN-T09-EVAL-TASK-A-REACTIVE-AUTONOMOUS-0003",
+    "RUN-T09-EVAL-TASK-A-SIMULATIVE-AUTONOMOUS-0003",
+    "RUN-T09-EVAL-TASK-B-SIMULATIVE-AUTONOMOUS-0003",
+    "RUN-T09-EVAL-TASK-B-REACTIVE-AUTONOMOUS-0003",
 )
-RUNTIME_QUALIFICATION_ID: Final = "QUAL-T09-PILOT-V9-IMAGE-AUTONOMOUS-0002"
-LOCAL_FINALIZER_QUALIFICATION_ID: Final = "QUAL-T09-PILOT-V9-LOCAL-FINALIZER-AUTONOMOUS-0002"
-FROZEN_RUN_MANIFEST_ID: Final = "RUN-MANIFEST-EXP0001-PILOT-V9-AUTONOMOUS-0002"
+RUNTIME_QUALIFICATION_ID: Final = "QUAL-T09-PILOT-V10-IMAGE-AUTONOMOUS-0003"
+LOCAL_FINALIZER_QUALIFICATION_ID: Final = "QUAL-T09-PILOT-V10-LOCAL-FINALIZER-AUTONOMOUS-0003"
+FROZEN_RUN_MANIFEST_ID: Final = "RUN-MANIFEST-EXP0001-PILOT-V10-AUTONOMOUS-0003"
 HISTORICAL_IMAGE_ID: Final = (
     "sha256:035edf61718e84a8156f4f0f7817b134b0ce31488d3f0b50bbfba2b4a30cc61c"
 )
@@ -905,15 +902,15 @@ def load_execution_contract(path: Path, *, expected_sha256: str) -> PilotExecuti
         raise T09PilotError("execution contract hash does not match")
     document = load_json_object(path, context="T09 execution contract")
     expected_identity = {
-        "schema_version": "0.4.0",
+        "schema_version": "0.5.0",
         "plan_id": PLAN_ID,
         "experiment_id": EXPERIMENT_ID,
         "sira_commit": SIRA_COMMIT,
         "model_revision": MODEL_REVISION,
         "service_tier": SERVICE_TIER,
-        "authorized": True,
+        "authorized": False,
         "authorization_reference": AUTHORIZATION_REFERENCE,
-        "execution_eligibility": "current-turn-authorized-after-dynamic-preflight",
+        "execution_eligibility": "blocked-until-fresh-category-3-authorization",
     }
     for field, expected in expected_identity.items():
         if document.get(field) != expected:
@@ -3018,7 +3015,7 @@ def _validated_upstream_argv(
         "--seed": "42",
     }
     task_label = "TASK-A" if attempt.task_index == 0 else "TASK-B"
-    upstream_run_id = f"{EXPERIMENT_ID}-PILOT-V9-{task_label}-{attempt.condition.upper()}"
+    upstream_run_id = f"{EXPERIMENT_ID}-PILOT-V10-{task_label}-{attempt.condition.upper()}"
     if argv[0] != upstream_run_id or values != expected:
         raise T09PilotError("upstream argv drifted from the exact task/condition contract")
     return values
@@ -3078,7 +3075,7 @@ def render_command_manifest(
     equality_surface = {
         "task_id": attempt.task_id,
         "model": MODEL_REVISION,
-        "runtime": "T09-V9-python-3.11.14-core-suppressed-preentry-bound-image",
+        "runtime": "T09-V10-python-3.11.14-core-suppressed-preentry-bound-image",
         "giclab_commit": attempt.giclab_commit,
         "protocol_sha256": attempt.protocol_sha256,
         "config_sha256": attempt.config_sha256,
@@ -3180,7 +3177,7 @@ def _normalized_actual_argv(manifest: Mapping[str, object]) -> tuple[str, ...] |
         "TASK-A" if task_id == TASK_IDS[0] else "TASK-B" if task_id == TASK_IDS[1] else None
     )
     expected_upstream_run_id = (
-        f"{EXPERIMENT_ID}-PILOT-V9-{task_label}-{str(condition).upper()}"
+        f"{EXPERIMENT_ID}-PILOT-V10-{task_label}-{str(condition).upper()}"
         if task_label is not None
         else None
     )

@@ -16,6 +16,7 @@ from types import ModuleType, SimpleNamespace
 import pytest
 
 from giclab.harness.policy import load_project_execution_state
+from giclab.harness.t09_cleanup_state import EarlyCleanupJournal
 from giclab.harness.t09_sira_pilot import (
     ATTEMPT_ORDER,
     PLAN_ID,
@@ -61,6 +62,29 @@ def _write_json(path: Path, value: object) -> None:
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     path.write_text(json.dumps(value, sort_keys=True) + "\n", encoding="utf-8")
     path.chmod(0o600)
+
+
+def _early_cleanup_journal(
+    tmp_path: Path,
+    host: ModuleType,
+    *,
+    package_commit: str,
+) -> EarlyCleanupJournal:
+    """Build the exact early authority now required by production entry points."""
+
+    return EarlyCleanupJournal.initialize(
+        tmp_path / "early-cleanup-state",
+        plan_id=host.PLAN_ID,
+        host_run_id=host.HOST_RUN_ID,
+        package_commit=package_commit,
+        plan_sha256="a" * 64,
+        provider_instance_id="public-dummy-instance",
+        provider_instance_identity_sha256="b" * 64,
+        provider_started_at_epoch=1.0,
+        launch_slot=1,
+        replacement_eligibility_sha256=None,
+        firewall_baseline_identity_sha256="c" * 64,
+    )
 
 
 def test_remove_container_accepts_bounded_auto_remove_convergence(
@@ -959,6 +983,11 @@ def test_retry5_browser_teardown_scans_for_cores_after_container_removal(
         artifact_root=tmp_path,
         prefix=["docker"],
         image_id="sha256:" + "a" * 64,
+        cleanup_journal=_early_cleanup_journal(
+            tmp_path,
+            host,
+            package_commit="d" * 40,
+        ),
     )
     create = next(argv for argv in observed_argv if "create" in argv)
     assert "--init" in create
@@ -1285,9 +1314,7 @@ def test_retry5_oversized_tree_gets_private_essential_failure_seal(
     _write_json(
         local_qualification,
         {
-            "qualification_id": (
-                "QUAL-T09-PILOT-V8-LOCAL-FINALIZER-AUTONOMOUS-0001"
-            ),
+            "qualification_id": ("QUAL-T09-PILOT-V8-LOCAL-FINALIZER-AUTONOMOUS-0001"),
             "package_commit": "4" * 40,
         },
     )
@@ -1609,10 +1636,7 @@ def test_autonomous_slot2_authority_uses_distinct_nested_and_tree_hashes(
     host = _host("giclab_t09_autonomous_slot2_authority")
     monkeypatch.setattr(host, "PLAN_ID", "PLAN-EXP0001-PILOT-V7")
     monkeypatch.setattr(host, "HOST_RUN_ID", "RUN-T09-PILOT-HOST-0005")
-    source = Path(
-        "/Volumes/Macintosh HD - Data/GIC-Lab/t09/"
-        "provider-private-v7-0005-slot2"
-    )
+    source = Path("/Volumes/Macintosh HD - Data/GIC-Lab/t09/provider-private-v7-0005-slot2")
     if not source.is_dir():
         pytest.skip("retained Retry 5 Slot 2 authority is unavailable")
     destination = tmp_path / "retained-authority"
@@ -1625,9 +1649,7 @@ def test_autonomous_slot2_authority_uses_distinct_nested_and_tree_hashes(
     assert binding["replacement_eligibility_preempirical_source_manifest_sha256"] == (
         host.file_sha256(nested)
     )
-    assert binding["normalized_slot2_authority_tree_manifest_sha256"] == (
-        host.file_sha256(outer)
-    )
+    assert binding["normalized_slot2_authority_tree_manifest_sha256"] == (host.file_sha256(outer))
     assert host.file_sha256(nested) == (
         "13033996d3bb8277e7ba52d5ebc368327db09d5ada6b64ac38ef44b3019d5767"
     )
@@ -1685,12 +1707,18 @@ def test_retry5_nonempirical_consumption_blocks_replay_before_docker(
         package_checked = True
 
     monkeypatch.setattr(host, "verify_package", unexpected_package_check)
+    cleanup_journal = _early_cleanup_journal(
+        tmp_path,
+        host,
+        package_commit="a" * 40,
+    )
     with pytest.raises(Exception, match="consumed infrastructure failure"):
         host.execute_condition(
             SimpleNamespace(
                 repository=ROOT,
                 artifact_root=artifact_root,
                 run_id=ATTEMPT_ORDER[0],
+                early_cleanup_journal=cleanup_journal.root,
             )
         )
     assert package_checked is False
@@ -1918,6 +1946,11 @@ def test_retry5_cleanup_rejects_unacknowledged_raw_before_any_destructive_action
 
     monkeypatch.setattr(host, "docker_prefix", forbidden)
     monkeypatch.setattr(host, "destroy_secret", forbidden)
+    cleanup_journal = _early_cleanup_journal(
+        tmp_path,
+        host,
+        package_commit="d" * 40,
+    )
     with pytest.raises(Exception, match="lacks its off-host verification acknowledgement"):
         host.cleanup(
             SimpleNamespace(
@@ -1925,6 +1958,7 @@ def test_retry5_cleanup_rejects_unacknowledged_raw_before_any_destructive_action
                 repository=ROOT,
                 package_commit="d" * 40,
                 secret_file=tmp_path / "secret-never-read",
+                early_cleanup_journal=cleanup_journal.root,
             )
         )
     assert not (pilot_root / "global-cleanup-intent.json").exists()
@@ -1955,6 +1989,11 @@ def test_retry5_cleanup_requires_started_reservation_recovery_before_destruction
 
     monkeypatch.setattr(host, "docker_prefix", forbidden)
     monkeypatch.setattr(host, "destroy_secret", forbidden)
+    cleanup_journal = _early_cleanup_journal(
+        tmp_path,
+        host,
+        package_commit="c" * 40,
+    )
     with pytest.raises(Exception, match="requires recover-attempt-seal"):
         host.cleanup(
             SimpleNamespace(
@@ -1962,6 +2001,7 @@ def test_retry5_cleanup_requires_started_reservation_recovery_before_destruction
                 repository=ROOT,
                 package_commit="c" * 40,
                 secret_file=tmp_path / "secret-never-read",
+                early_cleanup_journal=cleanup_journal.root,
             )
         )
     assert not (artifact_root / "pilot-v7/global-cleanup-intent.json").exists()

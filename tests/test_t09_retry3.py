@@ -646,7 +646,9 @@ def test_retry3_local_finalizer_projection_is_explicit_and_provider_independent(
         finalizer_commit="b" * 40,
         finalizer_source_sha256="3" * 64,
         finalizer_projection_source_sha256="4" * 64,
+        selector_source_sha256="9" * 64,
         finalizer_dependency_manifest_sha256="5" * 64,
+        refinalization_receipt_schema_sha256="a" * 64,
         frozen_run_manifest="/verified/frozen-run-manifest.json",
         frozen_run_manifest_sha256="6" * 64,
         replacement_image_id="sha256:" + "7" * 64,
@@ -908,12 +910,17 @@ def test_retry3_selected_local_completion_reconstructs_and_opens_checkpoint(
         output_root="attempt",
         raw_output_root="attempt/raw",
         finalized_output_root="attempt/finalized",
+        task_id="7dcbbbdc7f1120cd",
+        task_index=0,
+        condition="reactive",
     )
     attempt_root = artifact_root / attempt.output_root
     raw_root = artifact_root / attempt.raw_output_root
     finalized_root = artifact_root / attempt.finalized_output_root / "local-invocation-0001"
     raw_root.mkdir(parents=True)
     finalized_root.mkdir(parents=True)
+    frozen_run_manifest_path = artifact_root / "pilot-v7/frozen-run-manifest.json"
+    host.write_exclusive(frozen_run_manifest_path, {"fixture": "frozen-run-manifest"})
     raw_manifest = {"raw": "manifest"}
     raw_receipt = {"raw": "receipt"}
     host.write_exclusive(attempt_root / "raw-attempt-manifest.json", raw_manifest)
@@ -945,49 +952,55 @@ def test_retry3_selected_local_completion_reconstructs_and_opens_checkpoint(
         "finalizer_commit": "b" * 40,
         "finalizer_source_sha256": "1" * 64,
         "finalizer_projection_source_sha256": "2" * 64,
+        "selector_source_sha256": host.file_sha256(HOST_SOURCE),
         "scientific_package_commit": package_commit,
         "pilot_library_sha256": "3" * 64,
         "interpreter": "/qualified/python3.11",
         "interpreter_sha256": "4" * 64,
+        "python_version": "3.11.14",
         "interpreter_dependency_manifest_sha256": "a" * 64,
         "replacement_image_id": "sha256:" + "5" * 64,
         "execution_contract_sha256": "6" * 64,
         "command_manifests_sha256": "7" * 64,
         "dataset_contract_sha256": "8" * 64,
         "evaluator_contract_sha256": "9" * 64,
+        "evaluator_commit": host.SIRA_COMMIT,
         "score_schema_sha256": "c" * 64,
         "evidence_schema_sha256": "d" * 64,
+        "refinalization_receipt_schema_sha256": host.file_sha256(
+            ROOT / "schemas/t09-offline-refinalization-receipt.schema.json"
+        ),
         "evaluator_overlay_entries_sha256": "e" * 64,
         "evaluator_overlay_packages_sha256": "f" * 64,
     }
-    completion = {
-        "schema_version": "0.1.0",
-        "plan_id": host.PLAN_ID,
-        "host_run_id": host.HOST_RUN_ID,
-        "run_id": run_id,
-        "raw_manifest_sha256_before": host.file_sha256(attempt_root / "raw-attempt-manifest.json"),
-        "raw_manifest_sha256_after": host.file_sha256(attempt_root / "raw-attempt-manifest.json"),
-        "raw_receipt_sha256": host.file_sha256(attempt_root / "raw-attempt-complete.json"),
-        "raw_manifest_payload_sha256": host.canonical_sha256(raw_manifest),
-        "raw_receipt_payload_sha256": host.canonical_sha256(raw_receipt),
-        "output_files": output_files,
-        "output_files_sha256": host.canonical_sha256(output_files),
-        "outcome_sha256": host.file_sha256(finalized_root / "attempt-outcome.json"),
-        "evidence_index_sha256": host.file_sha256(finalized_root / "evidence-index.json"),
-        "semantic_projection_file_sha256": host.file_sha256(
+    projection = _load(PROJECTION_SOURCE, "giclab_t09_retry3_completion_projection")
+    completion = projection.build_completion_projection(  # type: ignore[attr-defined]
+        plan_id=host.PLAN_ID,
+        host_run_id=host.HOST_RUN_ID,
+        run_id=run_id,
+        raw_manifest_sha256_before=host.file_sha256(attempt_root / "raw-attempt-manifest.json"),
+        raw_manifest_sha256_after=host.file_sha256(attempt_root / "raw-attempt-manifest.json"),
+        raw_receipt_sha256=host.file_sha256(attempt_root / "raw-attempt-complete.json"),
+        raw_manifest_payload_sha256=host.canonical_sha256(raw_manifest),
+        raw_receipt_payload_sha256=host.canonical_sha256(raw_receipt),
+        output_files=output_files,
+        output_files_sha256=host.canonical_sha256(output_files),
+        outcome_sha256=host.file_sha256(finalized_root / "attempt-outcome.json"),
+        evidence_index_sha256=host.file_sha256(finalized_root / "evidence-index.json"),
+        semantic_projection_file_sha256=host.file_sha256(
             finalized_root / "semantic-projection.json"
         ),
-        "semantic_projection_sha256": host.canonical_sha256(semantic),
-        "finalizer_closure": closure,
-        "finalizer_dependency_manifest_sha256": host.canonical_sha256(closure),
-        "interpreter": closure["interpreter"],
-        "interpreter_sha256": closure["interpreter_sha256"],
-        "network": "socket-construction-denied",
-        "additional_model_calls": 0,
-        "additional_browser_actions": 0,
-        "raw_source_mutated": False,
-        "output_schema_valid": True,
-    }
+        semantic_projection_sha256=host.canonical_sha256(semantic),
+        finalizer_closure=closure,
+        finalizer_dependency_manifest_sha256=host.canonical_sha256(closure),
+        network="socket-construction-denied",
+        raw_attempt_manifest_public_alias="attempt/raw-attempt-manifest.json",
+        frozen_run_manifest_sha256=host.file_sha256(frozen_run_manifest_path),
+        task_id=attempt.task_id,
+        task_sha256=pilot_state.TASK_TEXT_SHA256S[attempt.task_index],
+        condition=attempt.condition,
+        receipt_schema_sha256=closure["refinalization_receipt_schema_sha256"],
+    )
     completion_path = finalized_root / "finalization-complete.json"
     host.write_exclusive(completion_path, completion)
     selection = {

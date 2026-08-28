@@ -50,14 +50,14 @@ no mutation authority; one gate's authorization never carries into another.
 | P1-DOD-01 | Phase 0.75 is successful/completed; this is the one authoritative active plan; project execution/compute permissions remain false; only the disabled smoke profile is eligible for a later exact authorization. | Plan lifecycle/state/profile/readiness validation and public render. | met |
 | P1-DOD-02 | T07 executes at most the one authorized SiRA smoke pair with complete raw, normalized, regulation-decision, budget, scoring, and cleanup evidence and no interpretation. | Immutable run/authorization records, artifacts/hashes, accounting, cleanup proof, and validation. | met; T08 documents nonblocking fields that T07 did not retain directly |
 | P1-DOD-03 | T08 independently reproduces the smoke summary, separates infrastructure/protocol/upstream/future-track gaps, and leaves any pilot unauthorized. | Raw-to-summary checks, infrastructure-only trace-sufficiency report, review, and gate. | met |
-| P1-DOD-04 | T09 first locks an executable calibration-only SiRA pilot and later executes it only under a fresh exact authorization, without outcome-adaptive changes, while reconciling every entered attempt. | Frozen task/order/evaluator/runtime records, enforced budgets, immutable authorization packet, and later complete attempt dispositions. | blocked: V4 retained one valid unpaired score, V6 retained one infrastructure-invalid unscored attempt, and V7 exhausted both launches before empirical entry; no calibration pair or checkpoint exists and no successor is registered |
+| P1-DOD-04 | T09 first locks an executable calibration-only SiRA pilot and later executes it only under a fresh exact authorization, without outcome-adaptive changes, while reconciling every entered attempt. | Frozen task/order/evaluator/runtime records, enforced budgets, immutable authorization packet, and later complete attempt dispositions. | partial: V9 retained one valid incomplete reactive condition and one infrastructure-invalid unscored simulative condition; no realized pair or checkpoint exists. V10 is an executable-but-unauthorized repair proposal awaiting exact-head review and merge before any separate Category 3 authorization. |
 | P1-DOD-05 | T10 produces a reproducible exploratory EXP-0001 analysis with uncertainty, exact reproduction level, cost/deviation reporting, and no internalization or mechanism-attribution overclaim. | Validated result summary, registry/notebook/ledger updates, review, and gate. | not-started |
 | P1-DOD-06 | T11 produces a read-only, launch-ready SR²AM-v0.1-8B Lambda contract with current price, hard termination, source-grounded trace requirements, failure tests, and no mutation. | Audited runbook/contracts, dry-run/failure tests, authorization sentence, and gate. | not-started |
 | P1-DOD-07 | T12 launches only the exactly authorized SR²AM smoke, retains and transfers required evidence, reconciles cost, and verifies provider termination. | Immutable cloud attempt, raw artifacts/hashes, compute ledger, monitoring, and terminal-state proof. | not-started |
 | P1-DOD-08 | T13 validates SR²AM artifact fidelity, runbook safety/cost predictability, and infrastructure-only trace sufficiency before proposing an unauthorized pilot. | Recomputed evidence, source/adapter lineage, repaired tests, review, and gate. | not-started |
 | P1-DOD-09 | T14 executes only a freshly authorized locked SR²AM pilot and verifies artifact transfer, accounting, and termination without in-run design changes. | Immutable pilot records, artifacts/hashes, compute reconciliation, and terminal-state proof. | not-started |
 | P1-DOD-10 | T15 closes the current Phase 1 unit with validated SiRA/SR²AM evidence, precise reproduction levels, uncertainty/cost/deviation reporting, and one proposed next scientific workstream that is not begun. | Result summaries, registry/notebook/decision/risk updates, review, final gate, and plan disposition. | not-started |
-| P1-DOD-11 | Every executed attempt has explicit current-turn authorization, immutable identity, append-only raw evidence, version/hash lineage, finite budget enforcement, secret isolation, and verified cleanup; failed infrastructure is never a scientific negative. | Run/compute/artifact ledgers, policy checks, failure evidence, and cross-task review. | partial: V4 remains reconciled; V6's entered attempt has an exact maximal failure prefix but no accepted raw seal; V7 entered no attempt, both providers are terminal/absent with security restored, and its host cleanup receipt is unavailable after a pre-state cleanup defect; public release remains blocked |
+| P1-DOD-11 | Every executed attempt has explicit current-turn authorization, immutable identity, append-only raw evidence, version/hash lineage, finite budget enforcement, secret isolation, and verified cleanup; failed infrastructure is never a scientific negative. | Run/compute/artifact ledgers, policy checks, failure evidence, and cross-task review. | partial: historical attempts remain immutable. V9 simulative is infrastructure-invalid and unscored with 12 confirmed sends, 12 known responses, 11 terminal transitions, one response-known nonterminal call, and zero unknown outcomes. V10 repairs accounting and pre-campaign cleanup controls locally; live qualification remains required. |
 | P1-DOD-12 | Regulation/control evidence remains source classified; experiment assignment and ordinary prose are never called learned regulation; RQ-H2K outputs are infrastructure-only and do not affect EXP-0001 validity or interpretation. | Typed events, trace-sufficiency reports, negative boundary tests, and public wording. | not-started |
 | P1-DOD-13 | Every implementation/analysis task passes focused smoke, independent spec-conformance review, post-review smoke, and its required full gate before the next dependency begins. | Per-task assembly ledgers with exact commands, artifacts, reviewer verdicts, and status. | partial |
 
@@ -67,7 +67,7 @@ no mutation authority; one gate's authorization never carries into another.
 |---|---|---|---|
 | T07 | Execute one authorized contained SiRA smoke pair; capture regulation-decision evidence without interpretation. | P1-DOD-02, P1-DOD-11 through P1-DOD-13 | complete: Retry 2 matched pair executed and cleanup verified; execution authority exhausted; no pilot authority |
 | T08 | Analyze smoke infrastructure evidence and prepare an unauthorized pilot package. | P1-DOD-03, P1-DOD-11 through P1-DOD-13 | complete: evidence validated; pilot planning eligible but execution unauthorized |
-| T09 | Lock and execute the two-task pragmatic calibration pilot under the fresh current-turn authorization. | P1-DOD-04, P1-DOD-11 through P1-DOD-13 | blocked: V7 is closed pre-empirically after two launches; all attempts are not run, no pair/checkpoint exists, and no successor is registered |
+| T09 | Lock and execute the two-task pragmatic calibration pilot under the fresh current-turn authorization. | P1-DOD-04, P1-DOD-11 through P1-DOD-13 | partial: V9 is immutable and scientifically ineligible for pairing; V10 is registered with fresh identities but remains unauthorized and unexecuted pending review, merge, and a fresh Category 3 authorization. |
 | T10 | Analyze and publish the exploratory SiRA pilot. | P1-DOD-05, P1-DOD-11 through P1-DOD-13 | blocked: T09 produced no complete pilot pair or checkpoint; the lone descriptive score supports no comparative analysis |
 | T11 | Build and validate the read-only SR²AM Lambda preflight. | P1-DOD-06, P1-DOD-11 through P1-DOD-13 | blocked until T10 succeeds |
 | T12 | Launch and monitor the separately authorized SR²AM Lambda smoke. | P1-DOD-07, P1-DOD-11 through P1-DOD-13 | blocked until T11 and authorization |
@@ -656,12 +656,13 @@ scientific execution occurred.
 ## Authorization and mutation boundary
 
 Current project state keeps reusable paid-compute, prototype, benchmark, training, and
-cloud permissions false. T07 and every T09 V3–V6 authority are exhausted. V7 is the
-sole registered T09 successor and has a separate current-turn private authorization
-that remains gated on its exact clean package and dynamic preflight. T12 and T14
-separately require their exact cloud mutation, hardware, data, cost/time,
-artifact-transfer, and termination authority. Read-only inspection or preflight never
-supplies mutation authority.
+cloud permissions false. T07 and every T09 authority through V9 are exhausted. V10 is
+the sole registered T09 successor, is executable by design, and has no execution,
+cloud-mutation, or paid-compute authority. It requires exact-head review, a separate
+merge-only turn, and then a fresh Category 3 authorization against the reviewed merged
+commit and exact V10 plan digest. T12 and T14 separately require their exact cloud
+mutation, hardware, data, cost/time, artifact-transfer, and termination authority.
+Read-only inspection or preflight never supplies mutation authority.
 
 The Gate L1/L1A account inspections and Gate L2M firewall capture are consumed,
 nonreplayable historical evidence. The high-assurance Gate L2M/L3/L4 path is frozen
@@ -808,6 +809,11 @@ review, and current-turn authority; no earlier gate grants any part of that auth
   `high-assurance-infrastructure-frozen`. Preserve its controls and terminal negative
   results, create no replacement execution plan, and hand future bounded-smoke design
   to `phase-1/sira-smoke-bounded` under a new plan, review and authorization.
+- 2026-08-27: Preserve V9 and its raw artifacts as immutable historical evidence.
+  Register `PLAN-EXP0001-PILOT-V10` only as an unauthorized successor proposal with
+  fresh `AUTONOMOUS-0003` identities. Its Category 1 repair is tracked in
+  `docs/harness/T09_V10_IMPLEMENTATION_LEDGER.md`; no live qualification, provider or
+  model request, browser action, condition, or pilot execution is part of that work.
 
 ## Decision log
 
@@ -881,24 +887,23 @@ review, and current-turn authority; no earlier gate grants any part of that auth
   restoration semantics, and freeze rather than delete the high-assurance track. A
   separately governed bounded child may reuse validated controls but must apply the
   Occam admission rule and obtain fresh execution authority.
+- 2026-08-27: Keep V9 scientifically frozen and ineligible for future pairing. Repair
+  the provider reservation primitive, canonical offline refinalization receipt, and
+  early cleanup authority in V10 without changing any scientific field or granting
+  execution authority.
 
 ## Blockers and user actions
 
-T07's selected prospective bounded runtime is one manually supervised
-`gpu_1x_a10` Lambda/Jupyter host under `PLAN-T07-BOUNDED-SIRA-SMOKE-V3`; the plan is
-executable by design but remains unauthorized. Docker Desktop and Colima/Lima remain
-terminal rejected provenance, and the automated Lambda launch path remains rejected.
-Lambda inventory, key and firewall evidence is complete, sealed and nonreplayable.
-The high-assurance track is frozen, L2M/L3/L4 cannot be resumed, and the smoke remains
-unexecuted. The blocking user action is one fresh authorization against the exact
-clean bounded packet commit, followed by every dynamic fail-closed preflight.
+T09 V10 is blocked from execution, not from local review. Required user-facing gates
+are exact-head PR review, user approval of the reviewed SHA, a separate Category 2
+merge-only turn, and a fresh Category 3 Luna authorization. Historical Lambda,
+firewall, credential, container, image, browser, condition, and attempt identities are
+not reusable. No V10 run root may be materialized before that future authorization.
 
 ## Next permitted work
 
-There is no further local B1.x, automated Gate L2, or manual Gate L2M design loop. The
-bounded child has selected its topology and applies the Occam admission rule: a
-missing control blocks only when it could distort the comparison, expose a
-secret/private value, materially exceed spending, strand a billable resource, or
-prevent reconstruction. The next permitted step is a separately supplied exact
-current-turn authorization for the immutable bounded plan; absent that authorization,
-no live account, cloud, model, browser, container, or SiRA action is permitted.
+The next permitted T09 work is local Category 1 completion and exact-head review of
+the draft V10 repair PR, followed only by the separately authorized Category 2 merge.
+Category 3 remains unavailable until a fresh Luna authorization binds the reviewed
+merged commit and exact V10 plan SHA-256. Absent that authorization, no live account,
+cloud, model, browser, container, evaluator, FanOutQA, or SiRA action is permitted.

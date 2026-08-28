@@ -579,9 +579,7 @@ def _clean_contract_repository(tmp_path: Path) -> Path:
         "condition_plan_sha256s": [],
     }
     project_state["current_execution_control"] = None
-    project_state_path.write_text(
-        yaml.safe_dump(project_state, sort_keys=False), encoding="utf-8"
-    )
+    project_state_path.write_text(yaml.safe_dump(project_state, sort_keys=False), encoding="utf-8")
     subprocess.run(("git", "init", "-q", str(repository)), check=True)
     subprocess.run(("git", "-C", str(repository), "add", "."), check=True)
     subprocess.run(

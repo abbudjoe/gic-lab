@@ -4,6 +4,7 @@ import hashlib
 import importlib.util
 import inspect
 import json
+import math
 import threading
 from dataclasses import replace
 from pathlib import Path
@@ -17,6 +18,7 @@ from giclab.harness.sira_gate_a import (
     ModelRole,
     ProviderBudgetBoundary,
     ProviderBudgetExceeded,
+    ProviderBudgetUsage,
     ProviderCallPhase,
     ProviderCallTerminalState,
     ProviderFailureDisposition,
@@ -74,18 +76,29 @@ def _known_provider(_: BaseException) -> ProviderFailureDisposition:
 
 def test_01_thirty_responses_and_three_provider_errors_are_terminal() -> None:
     boundary = _boundary()
+    sends: list[str] = []
+
+    def successful_send(request: ProviderRequest) -> tuple[str, ProviderResponseUsage]:
+        sends.append("success")
+        return _success(request)
+
     for index in range(30):
         boundary.invoke(
             _request(),
-            _success,
+            successful_send,
             call_id=f"CALL-{index:04d}",
             logical_call_id=f"LOGICAL-{index:04d}",
         )
     for index in range(30, 33):
+
+        def rate_limited(_: ProviderRequest) -> tuple[str, ProviderResponseUsage]:
+            sends.append("provider-error")
+            raise RateLimitError("synthetic")
+
         with pytest.raises(RateLimitError):
             boundary.invoke(
                 _request(),
-                lambda _: (_ for _ in ()).throw(RateLimitError("synthetic")),
+                rate_limited,
                 call_id=f"CALL-{index:04d}",
                 logical_call_id=f"LOGICAL-{index:04d}",
                 classify_failure=_known_provider,
@@ -100,6 +113,23 @@ def test_01_thirty_responses_and_three_provider_errors_are_terminal() -> None:
         "sent_transport_error_known": 0,
         "sent_outcome_unknown": 0,
     }
+    assert sends == [*(["success"] * 30), *(["provider-error"] * 3)]
+    assert len(boundary.call_records) == 33
+    assert len({record.call_id for record in boundary.call_records}) == 33
+    assert len({record.logical_call_id for record in boundary.call_records}) == 33
+    assert all(record.terminal_state is not None for record in boundary.call_records)
+    assert all(
+        record.history.count(ProviderCallPhase.SEND_STARTED.value) == 1
+        for record in boundary.call_records
+    )
+    assert all(
+        record.history.count(ProviderCallPhase.RESERVATION_RELEASED.value) == 1
+        for record in boundary.call_records
+    )
+    assert all(
+        record.history.count(ProviderCallPhase.CALL_TERMINAL.value) == 1
+        for record in boundary.call_records
+    )
 
 
 def test_02_thirty_responses_and_three_unknowns_retain_upper_bounds() -> None:
@@ -353,17 +383,17 @@ def test_21_v8_evidence_remains_immutable_and_invalid() -> None:
 def test_22_scientific_freeze_and_pair_commands_are_unchanged() -> None:
     v8 = load_json(EXP / "contracts/T09_PILOT_V8_SCIENCE_PROJECTION.json")
     v9 = load_json(EXP / "contracts/T09_PILOT_V9_SCIENCE_PROJECTION.json")
-    commands = load_json(EXP / "contracts/T09_PILOT_COMMAND_MANIFESTS.json")
+    commands = load_json(EXP / "contracts/proposals/T09_PILOT_COMMAND_MANIFESTS_V10.json")
     assert v9 == v8
     assert [pair["valid"] for pair in commands["pair_diffs"]] == [True, True]
 
 
 def test_23_condition_retries_remain_zero() -> None:
-    contract = load_json(EXP / "contracts/T09_PILOT_EXECUTION_CONTRACT.json")
+    contract = load_json(EXP / "contracts/proposals/T09_PILOT_EXECUTION_CONTRACT_V10.json")
     assert contract["runtime_limits"]["max_retries_after_empirical_entry"] == 0
 
 
-def test_24_concurrent_reservation_release_recomputes_exact_empty_projection() -> None:
+def _run_v9_release_order_regression() -> dict[str, object]:
     requests = (
         (1_075, 4_096, 78),
         (1_191, 81_920, 1_393),
@@ -434,6 +464,32 @@ def test_24_concurrent_reservation_release_recomputes_exact_empty_projection() -
     assert document["unreconciled_provider_attempts"] == 0
     assert document["reserved_upper_bound"] == document["observed_lower_bound"]
     assert document["terminal_counts"]["sent_response_reconciled"] == 12
+    assert all(
+        record.terminal_state is ProviderCallTerminalState.RESPONSE_RECONCILED
+        for record in boundary.call_records
+    )
+    assert all(
+        record.history.count(ProviderCallPhase.SEND_STARTED.value) == 1
+        for record in boundary.call_records
+    )
+    assert all(
+        record.history.count(ProviderCallPhase.CALL_TERMINAL.value) == 1
+        for record in boundary.call_records
+    )
+    return document
+
+
+def test_24_concurrent_reservation_release_recomputes_exact_empty_projection() -> None:
+    zero_projection = ProviderBudgetBoundary._usage_document(ProviderBudgetUsage())
+    for _consecutive_run in range(3):
+        document = _run_v9_release_order_regression()
+        projections = document["outstanding_reservation_projection"]
+        assert projections == {
+            "condition": zero_projection,
+            "aggregate": zero_projection,
+        }
+        assert math.copysign(1.0, projections["condition"]["cost_usd"]) == 1.0
+        assert math.copysign(1.0, projections["aggregate"]["cost_usd"]) == 1.0
 
 
 def test_25_finalizer_keeps_v9_and_historical_receipt_contracts_disjoint() -> None:
@@ -465,12 +521,15 @@ def test_25_finalizer_keeps_v9_and_historical_receipt_contracts_disjoint() -> No
             "payload": base_payload,
         }
     ]
-    assert len(
-        finalizer._provider_records(
-            historical,
-            contract=finalizer.ProviderReceiptContract.HISTORICAL_V4_REGRESSION,
+    assert (
+        len(
+            finalizer._provider_records(
+                historical,
+                contract=finalizer.ProviderReceiptContract.HISTORICAL_V4_REGRESSION,
+            )
         )
-    ) == 1
+        == 1
+    )
     with pytest.raises(finalizer.T09PilotError, match="stable call identity"):
         finalizer._provider_records(
             historical,
@@ -486,12 +545,15 @@ def test_25_finalizer_keeps_v9_and_historical_receipt_contracts_disjoint() -> No
             },
         }
     ]
-    assert len(
-        finalizer._provider_records(
-            v9,
-            contract=finalizer.ProviderReceiptContract.V9_LIFECYCLE,
+    assert (
+        len(
+            finalizer._provider_records(
+                v9,
+                contract=finalizer.ProviderReceiptContract.V9_LIFECYCLE,
+            )
         )
-    ) == 1
+        == 1
+    )
     with pytest.raises(finalizer.T09PilotError, match="unexpectedly uses the V9 schema"):
         finalizer._provider_records(
             v9,
@@ -505,9 +567,7 @@ def test_26_launch_package_command_hash_exception_is_exact_and_source_bound() ->
     projection = _autonomous_package_science_state(
         ROOT,
         AUTONOMOUS_V9_LAUNCH_PACKAGE_COMMIT,
-        stale_command_authorization_sha256s=(
-            AUTONOMOUS_V9_STALE_COMMAND_AUTHORIZATION_SHA256S
-        ),
+        stale_command_authorization_sha256s=(AUTONOMOUS_V9_STALE_COMMAND_AUTHORIZATION_SHA256S),
     )
     assert len(projection["condition_science_sha256s"]) == 4
     altered = dict(AUTONOMOUS_V9_STALE_COMMAND_AUTHORIZATION_SHA256S)

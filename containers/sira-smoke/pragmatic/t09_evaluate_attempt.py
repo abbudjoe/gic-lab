@@ -13,6 +13,7 @@ import argparse
 import hashlib
 import json
 import os
+import platform
 import resource
 import socket
 import stat
@@ -88,7 +89,9 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--finalizer-source-sha256", required=True)
     parser.add_argument("--finalizer-projection-source-sha256", required=True)
+    parser.add_argument("--selector-source-sha256", required=True)
     parser.add_argument("--finalizer-dependency-manifest-sha256", required=True)
+    parser.add_argument("--refinalization-receipt-schema-sha256", required=True)
     parser.add_argument("--finalizer-runtime-qualification", type=Path, required=True)
     parser.add_argument("--finalizer-runtime-qualification-sha256", required=True)
     parser.add_argument("--frozen-run-manifest", type=Path, required=True)
@@ -655,6 +658,12 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
         for character in args.finalizer_dependency_manifest_sha256
     ):
         raise T09PilotError("finalizer dependency manifest binding is malformed")
+    for label, value in (
+        ("selector source", args.selector_source_sha256),
+        ("refinalization receipt schema", args.refinalization_receipt_schema_sha256),
+    ):
+        if len(value) != 64 or any(character not in "0123456789abcdef" for character in value):
+            raise T09PilotError(f"{label} binding is malformed")
     contract = load_execution_contract(
         args.execution_contract.resolve(strict=True),
         expected_sha256=args.execution_contract_sha256,
@@ -831,21 +840,34 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
         "finalizer_commit": args.finalizer_commit,
         "finalizer_source_sha256": args.finalizer_source_sha256,
         "finalizer_projection_source_sha256": args.finalizer_projection_source_sha256,
+        "selector_source_sha256": args.selector_source_sha256,
         "scientific_package_commit": args.package_commit,
         "pilot_library_sha256": file_sha256(Path(pilot_contract.__file__).resolve(strict=True)),
         "interpreter": interpreter_path.as_posix(),
         "interpreter_sha256": interpreter_sha256,
+        "python_version": platform.python_version(),
         "interpreter_dependency_manifest_sha256": interpreter_dependency_manifest_sha256,
         "replacement_image_id": args.replacement_image_id,
         "execution_contract_sha256": contract.sha256,
         "command_manifests_sha256": args.command_manifests_sha256,
         "dataset_contract_sha256": contract.dataset_contract_sha256,
         "evaluator_contract_sha256": contract.evaluator_contract_sha256,
+        "evaluator_commit": SIRA_COMMIT,
         "score_schema_sha256": file_sha256(args.score_schema.resolve(strict=True)),
         "evidence_schema_sha256": file_sha256(args.evidence_schema.resolve(strict=True)),
+        "refinalization_receipt_schema_sha256": file_sha256(
+            args.evidence_schema.resolve(strict=True).parent
+            / "t09-offline-refinalization-receipt.schema.json"
+        ),
         "evaluator_overlay_entries_sha256": analysis_evaluator_entries_sha256,
         "evaluator_overlay_packages_sha256": analysis_evaluator_packages_sha256,
     }
+    if (
+        finalizer_closure["python_version"] != "3.11.14"
+        or finalizer_closure["refinalization_receipt_schema_sha256"]
+        != args.refinalization_receipt_schema_sha256
+    ):
+        raise T09PilotError("finalizer runtime or refinalization receipt schema drifted")
     if canonical_sha256(finalizer_closure) != args.finalizer_dependency_manifest_sha256:
         raise T09PilotError("finalizer dependency closure drifted from the host binding")
 

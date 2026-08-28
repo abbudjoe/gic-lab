@@ -31,6 +31,14 @@ from giclab.harness.sira_gate_a import (
     ProviderRequest,
     ProviderResponseUsage,
 )
+from giclab.harness.t09_cleanup_state import (
+    CleanupTargetKind,
+    CleanupTargetState,
+    EarlyCleanupJournal,
+    EarlyCleanupStateError,
+    TerminalCleanupDisposition,
+    cleanup_locator_identity,
+)
 from giclab.harness.t09_sira_pilot import (
     ATTEMPT_ORDER,
     CampaignLifecycleLimits,
@@ -65,16 +73,16 @@ DATASET_FIXTURE = ROOT / "tests/fixtures/t09/fanout-two-task-fixture.json"
 TASK_A = "What is the batting hand of each of the first five picks in the 1998 MLB draft?"
 TASK_B = "What were box office values of the Star Wars films in the prequel and sequel trilogies?"
 EXECUTION_CONTRACT = (
-    ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
-    "T09_PILOT_EXECUTION_CONTRACT.json"
+    ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/proposals/"
+    "T09_PILOT_EXECUTION_CONTRACT_V10.json"
 )
 RUNTIME_IDENTITY = (
-    ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
-    "T09_PILOT_RUNTIME_IDENTITY.json"
+    ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/proposals/"
+    "T09_PILOT_RUNTIME_IDENTITY_V10.json"
 )
 COMMAND_MANIFESTS = (
-    ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
-    "T09_PILOT_COMMAND_MANIFESTS.json"
+    ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/proposals/"
+    "T09_PILOT_COMMAND_MANIFESTS_V10.json"
 )
 
 
@@ -596,12 +604,17 @@ def test_evidence_redaction_is_structural_and_event_lineage_is_explicit(tmp_path
 
 def test_execution_schema_and_all_static_file_bindings_resolve() -> None:
     document = load_json(EXECUTION_CONTRACT)
-    assert document["authorized"] is True
+    assert document["authorized"] is False
+    assert document["authorization_reference"] is None
     assert document["terminal_state"] == (
-        "current-turn-authorized-autonomous-pending-dynamic-preflight"
+        "unauthorized-pending-review-merge-and-category-3-authorization"
     )
-    assert document["execution_eligibility"] == "current-turn-authorized-after-dynamic-preflight"
-    assert document["material_blockers"] == []
+    assert document["execution_eligibility"] == ("blocked-until-fresh-category-3-authorization")
+    assert document["material_blockers"] == [
+        "exact-head-pr-review-required",
+        "category-2-merge-required",
+        "fresh-category-3-luna-authorization-required",
+    ]
     hard = document["budget_calibration"]["hard"]
     assert hard["maximum_new_cost_under_cumulative_cap_usd"] == pytest.approx(
         hard["cumulative_t09_cost_cap_usd"] - hard["prior_t09_cost_usd"],
@@ -610,7 +623,7 @@ def test_execution_schema_and_all_static_file_bindings_resolve() -> None:
     assert (
         validate_instance(
             document,
-            ROOT / "schemas/t09-sira-pilot-execution.schema.json",
+            ROOT / "schemas/t09-sira-pilot-v10-execution.schema.json",
         )
         == []
     )
@@ -644,7 +657,19 @@ def test_v8_science_projection_preserves_complete_flag_value_argv() -> None:
 
 
 def test_runtime_identity_binds_every_selected_executable_file() -> None:
-    document = load_json(RUNTIME_IDENTITY)
+    historical_runtime = (
+        ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
+        "T09_PILOT_RUNTIME_IDENTITY.json"
+    )
+    historical_execution = (
+        ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
+        "T09_PILOT_EXECUTION_CONTRACT.json"
+    )
+    historical_commands = (
+        ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
+        "T09_PILOT_COMMAND_MANIFESTS.json"
+    )
+    document = load_json(historical_runtime)
     disposition = load_json(
         ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive/"
         "T09_AUTONOMOUS_PILOT_DISPOSITION.json"
@@ -682,9 +707,9 @@ def test_runtime_identity_binds_every_selected_executable_file() -> None:
     downstream_commit = disposition["finalizer"]["downstream_finalizer_commit"]
     frozen_commit = disposition["scientific_freeze"]["frozen_package_commit"]
     frozen_contracts = {
-        "frozen_execution_contract_sha256": EXECUTION_CONTRACT,
-        "frozen_command_manifests_sha256": COMMAND_MANIFESTS,
-        "frozen_runtime_identity_sha256": RUNTIME_IDENTITY,
+        "frozen_execution_contract_sha256": historical_execution,
+        "frozen_command_manifests_sha256": historical_commands,
+        "frozen_runtime_identity_sha256": historical_runtime,
     }
     for field, path in frozen_contracts.items():
         observed = file_sha256(path)
@@ -1006,6 +1031,333 @@ def _load_host_runner() -> ModuleType:
     return module
 
 
+def _initialize_remote_early_cleanup_fixture(
+    tmp_path: Path,
+    *,
+    container_id: str,
+    create_remote_credential: bool = False,
+    register_container: bool = True,
+) -> tuple[EarlyCleanupJournal, Path]:
+    remote_credential = tmp_path / "remote-secret-never-created"
+    if create_remote_credential:
+        remote_credential.write_text("public-dummy-secret-fixture\n", encoding="utf-8")
+        remote_credential.chmod(0o600)
+    journal = EarlyCleanupJournal.initialize(
+        tmp_path / "early-cleanup-state",
+        plan_id="PLAN-EXP0001-PILOT-V10",
+        host_run_id="RUN-T09-PILOT-HOST-AUTONOMOUS-0003",
+        package_commit="a" * 40,
+        plan_sha256="b" * 64,
+        provider_instance_id="instance-owned-0003",
+        provider_instance_identity_sha256="c" * 64,
+        provider_started_at_epoch=1.0,
+        launch_slot=1,
+        replacement_eligibility_sha256=None,
+        firewall_baseline_identity_sha256="d" * 64,
+        temporary_remote_secret_locator=str(remote_credential),
+    )
+    if register_container:
+        journal.register_target(
+            target_id=f"owned-container-{container_id}",
+            kind=CleanupTargetKind.OWNED_CONTAINER,
+            locator=container_id,
+            ownership_sha256=cleanup_locator_identity(
+                CleanupTargetKind.OWNED_CONTAINER, container_id
+            ),
+            public_alias="display-only/container-alias",
+        )
+    return journal, remote_credential
+
+
+def test_global_cleanup_uses_only_early_authority_without_optional_pilot_state(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    host = _load_host_runner()
+    container_id = "1" * 64
+    journal, remote_credential = _initialize_remote_early_cleanup_fixture(
+        tmp_path,
+        container_id=container_id,
+        create_remote_credential=True,
+    )
+    artifact_root = tmp_path / "artifact-root-never-created"
+    args = SimpleNamespace(
+        artifact_root=artifact_root,
+        early_cleanup_journal=journal.root,
+    )
+    monkeypatch.setattr(host, "enforce_host_core_limit", lambda: None)
+    monkeypatch.setattr(host, "docker_prefix", lambda: ["docker"])
+    monkeypatch.setattr(host, "inspect_owned_container_by_id", lambda *_args: None)
+
+    host.cleanup(args)
+    first = journal.load()
+    first_sequence = first.sequence
+    host.cleanup(args)
+    second = journal.load()
+
+    assert not artifact_root.exists()
+    assert not remote_credential.exists()
+    assert second.sequence == first_sequence
+    assert second.terminal_cleanup_disposition is TerminalCleanupDisposition.PARTIAL
+    assert {target.target_id: target.state for target in second.targets} == {
+        "provider-instance": CleanupTargetState.OWNED,
+        "firewall-restoration": CleanupTargetState.OWNED,
+        "temporary-remote-secret": CleanupTargetState.REMOVED,
+        f"owned-container-{container_id}": CleanupTargetState.ABSENT,
+    }
+    assert list(journal.root.glob("REMOTE_CLOSEOUT-*.json"))
+
+
+def test_global_cleanup_persists_partial_receipt_when_container_absence_is_unverified(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    host = _load_host_runner()
+    container_id = "2" * 64
+    journal, _ = _initialize_remote_early_cleanup_fixture(
+        tmp_path,
+        container_id=container_id,
+    )
+    identity = host.OwnedContainerIdentity(
+        container_id,
+        f"{host.CONTAINER_PREFIX}01",
+        {
+            "giclab.t09.plan": host.PLAN_ID,
+            "giclab.t09.host_run": host.HOST_RUN_ID,
+            "giclab.t09.role": "condition",
+        },
+    )
+    args = SimpleNamespace(
+        artifact_root=tmp_path / "artifact-root-never-created",
+        early_cleanup_journal=journal.root,
+    )
+    monkeypatch.setattr(host, "enforce_host_core_limit", lambda: None)
+    monkeypatch.setattr(host, "docker_prefix", lambda: ["docker"])
+    monkeypatch.setattr(host, "inspect_owned_container_by_id", lambda *_args: identity)
+    monkeypatch.setattr(host, "remove_container", lambda *_args, **_kwargs: False)
+
+    with pytest.raises(host.T09HostError, match="remains incomplete"):
+        host.cleanup(args)
+
+    state = journal.load()
+    assert (
+        next(target.state for target in state.targets if target.target_id.endswith(container_id))
+        is CleanupTargetState.FAILED
+    )
+    assert list(journal.root.glob("REMOTE_CLOSEOUT-*.json"))
+
+
+def test_interrupted_utility_container_is_journaled_before_wait_and_closes_without_pilot(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    host = _load_host_runner()
+    container_id = "3" * 64
+    journal, _ = _initialize_remote_early_cleanup_fixture(
+        tmp_path,
+        container_id=container_id,
+        register_container=False,
+    )
+    evidence_root = tmp_path / "utility-evidence"
+    evidence_root.mkdir(mode=0o700)
+    role = "utility-interrupted-fixture"
+    name = f"{host.CONTAINER_PREFIX}{role}"
+    identity = host.OwnedContainerIdentity(
+        container_id,
+        name,
+        {
+            "giclab.t09.plan": host.PLAN_ID,
+            "giclab.t09.host_run": host.HOST_RUN_ID,
+            "giclab.t09.role": role,
+        },
+    )
+    observed_registered_while_running = False
+
+    class InterruptedPopen:
+        returncode: int | None = None
+
+        def __init__(self, argv: list[str], **_kwargs: object) -> None:
+            cidfile = Path(argv[argv.index("--cidfile") + 1])
+            cidfile.write_text(container_id, encoding="ascii")
+
+        def communicate(self, timeout: float | None = None) -> tuple[bytes, bytes]:
+            nonlocal observed_registered_while_running
+            if timeout is not None:
+                target = next(
+                    item
+                    for item in journal.load().targets
+                    if item.target_id == f"owned-container-{container_id}"
+                )
+                assert target.state is CleanupTargetState.OWNED
+                observed_registered_while_running = True
+                raise KeyboardInterrupt("public dummy interruption")
+            return b"", b""
+
+        def poll(self) -> int | None:
+            return self.returncode
+
+        def kill(self) -> None:
+            self.returncode = -9
+
+    removal_results = iter((False, True))
+    monkeypatch.setattr(host.subprocess, "Popen", InterruptedPopen)
+    monkeypatch.setattr(host, "_container_id_by_exact_name", lambda *_args: None)
+    monkeypatch.setattr(host, "inspect_owned_container", lambda *_args, **_kwargs: identity)
+    monkeypatch.setattr(
+        host,
+        "remove_container",
+        lambda *_args, **_kwargs: next(removal_results),
+    )
+
+    with pytest.raises(host.T09HostError, match="residue remains after cleanup"):
+        host.run_owned_docker(
+            ["docker", "run", "fixture-image"],
+            prefix=["docker"],
+            label="interrupted-fixture",
+            owned_role=role,
+            evidence_root=evidence_root,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=30,
+            cleanup_journal=journal,
+        )
+
+    interrupted = journal.load()
+    interrupted_target = next(
+        item for item in interrupted.targets if item.target_id == f"owned-container-{container_id}"
+    )
+    assert observed_registered_while_running is True
+    assert interrupted_target.state is CleanupTargetState.FAILED
+
+    monkeypatch.setattr(host, "enforce_host_core_limit", lambda: None)
+    monkeypatch.setattr(host, "docker_prefix", lambda: ["docker"])
+    monkeypatch.setattr(host, "inspect_owned_container_by_id", lambda *_args: identity)
+    host.cleanup(
+        SimpleNamespace(
+            artifact_root=tmp_path / "artifact-root-never-created",
+            early_cleanup_journal=journal.root,
+        )
+    )
+
+    closed = journal.load()
+    closed_target = next(
+        item for item in closed.targets if item.target_id == f"owned-container-{container_id}"
+    )
+    assert closed_target.state is CleanupTargetState.REMOVED
+    assert list(journal.root.glob("REMOTE_CLOSEOUT-*.json"))
+
+
+def test_utility_registration_failure_still_forces_exact_removal_and_truthful_receipt(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    host = _load_host_runner()
+    container_id = "4" * 64
+    journal, _ = _initialize_remote_early_cleanup_fixture(
+        tmp_path,
+        container_id=container_id,
+        register_container=False,
+    )
+    evidence_root = tmp_path / "registration-failure-evidence"
+    evidence_root.mkdir(mode=0o700)
+    role = "utility-registration-failure"
+    identity = host.OwnedContainerIdentity(
+        container_id,
+        f"{host.CONTAINER_PREFIX}{role}",
+        {
+            "giclab.t09.plan": host.PLAN_ID,
+            "giclab.t09.host_run": host.HOST_RUN_ID,
+            "giclab.t09.role": role,
+        },
+    )
+
+    class ImmediatePopen:
+        returncode = 0
+
+        def __init__(self, argv: list[str], **_kwargs: object) -> None:
+            cidfile = Path(argv[argv.index("--cidfile") + 1])
+            cidfile.write_text(container_id, encoding="ascii")
+
+        def communicate(self, timeout: float | None = None) -> tuple[bytes, bytes]:
+            return b"", b""
+
+        def poll(self) -> int:
+            return self.returncode
+
+        def kill(self) -> None:
+            raise AssertionError("completed fixture process must not be killed")
+
+    removals: list[str] = []
+    monkeypatch.setattr(host.subprocess, "Popen", ImmediatePopen)
+    monkeypatch.setattr(host, "_container_id_by_exact_name", lambda *_args: None)
+    monkeypatch.setattr(host, "inspect_owned_container", lambda *_args, **_kwargs: identity)
+    monkeypatch.setattr(
+        host,
+        "remove_container",
+        lambda *_args, **_kwargs: removals.append(container_id) is None,
+    )
+
+    def reject_registration(*_args: object, **_kwargs: object) -> None:
+        raise host.EarlyCleanupStateError("public dummy journal failure")
+
+    monkeypatch.setattr(host, "register_owned_container_cleanup", reject_registration)
+
+    with pytest.raises(host.T09HostError, match="durable utility-container registration failed"):
+        host.run_owned_docker(
+            ["docker", "run", "fixture-image"],
+            prefix=["docker"],
+            label="registration-failure",
+            owned_role=role,
+            evidence_root=evidence_root,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=30,
+            cleanup_journal=journal,
+        )
+
+    assert removals == [container_id]
+    receipt = json.loads(
+        (evidence_root / "registration-failure.container-cleanup.json").read_text(encoding="utf-8")
+    )
+    assert receipt["container_id"] == container_id
+    assert receipt["container_absent_after_run"] is True
+    assert receipt["cleanup_authority_registered"] is False
+    assert receipt["cleanup_authority_error_type"] == "T09HostError"
+    assert receipt["residue"] == []
+
+
+@pytest.mark.parametrize(
+    ("initially_absent", "removal_verified", "expected"),
+    [
+        (True, True, CleanupTargetState.ABSENT),
+        (False, True, CleanupTargetState.REMOVED),
+        (False, False, CleanupTargetState.FAILED),
+    ],
+)
+def test_every_container_cleanup_path_uses_positive_absence_proof(
+    initially_absent: bool,
+    removal_verified: bool,
+    expected: CleanupTargetState,
+) -> None:
+    host = _load_host_runner()
+    result, _ = host.verified_owned_container_cleanup_result(
+        initially_absent=initially_absent,
+        removal_verified=removal_verified,
+        removed_detail="fixture-container-removed",
+        absent_detail="fixture-container-absent",
+    )
+    assert result is expected
+    for implementation in (
+        host.run_owned_docker,
+        host.core_suppression_preflight,
+        host.browser_lifecycle_preflight,
+        host.execute_condition,
+        host._cleanup_without_optional_pilot_state,
+        host.cleanup,
+    ):
+        assert "verified_owned_container_cleanup_result(" in inspect.getsource(implementation)
+
+
 def test_autonomous_clean_descendant_reuses_authority_and_entry_receipt(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -1093,7 +1445,7 @@ def test_autonomous_clean_descendant_reuses_authority_and_entry_receipt(
         json.dumps(
             {
                 "schema_version": "0.1.0",
-                "authorization_source_sha256": provider.AUTHORIZATION_SOURCE_SHA256,
+                "authorization_source_sha256": (provider.HISTORICAL_V9_AUTHORIZATION_SOURCE_SHA256),
                 "authorization_reference": ("AUTH-T09-AUTONOMOUS-PREFLIGHT-TO-PILOT-2026-08-27"),
                 "authorized": True,
                 "single_use": True,
@@ -1498,6 +1850,12 @@ def test_v8_sealing_primitives_preflight_exercises_exact_production_sealers(
         command_document=command_document,
         package_commit="a" * 40,
         execution_contract_sha256=file_sha256(EXECUTION_CONTRACT),
+        expected_run_ids=(
+            "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0002",
+            "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0002",
+            "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0002",
+            "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0002",
+        ),
     )
     assert receipt["raw_reconstruction_passed"] is True
     assert receipt["essential_reconstruction_passed"] is True
@@ -1837,14 +2195,17 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
     key_path = tmp_path / "key.pub"
     key_path.write_text(public_key, encoding="utf-8")
     package_commit = "a" * 40
-    plan_path = ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml"
+    plan_path = (
+        ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/proposals/"
+        "T09_PILOT_RUNTIME_PROFILE_V10.yaml"
+    )
     authorization = tmp_path / "authorization.json"
     authorization.write_text(
         json.dumps(
             {
                 "schema_version": "0.1.0",
-                "authorization_source_sha256": provider.AUTHORIZATION_SOURCE_SHA256,
-                "authorization_reference": ("AUTH-T09-AUTONOMOUS-PREFLIGHT-TO-PILOT-2026-08-27"),
+                "authorization_source_sha256": "b" * 64,
+                "authorization_reference": "AUTH-T09-V10-TEST-CATEGORY3-0001",
                 "authorized": True,
                 "single_use": True,
                 "clean_package_commit": package_commit,
@@ -1856,14 +2217,14 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
                 "maximum_preflight_instance_active_seconds": 21_600,
                 "maximum_cumulative_preflight_active_seconds": 43_200,
                 "persistent_filesystems": 0,
-                "preflight_lambda_cost_cap_usd": 20.0,
+                "preflight_lambda_cost_cap_usd": 10.0,
                 "lambda_cost_cap_usd": 8.0,
                 "openai_cost_cap_usd": 40.0,
-                "aggregate_cost_cap_usd": 68.0,
-                "prior_t09_cost_usd": 6.8131387350,
-                "cumulative_t09_cost_cap_usd": 75.0,
+                "aggregate_cost_cap_usd": 58.0,
+                "prior_t09_cost_usd": 29.3502995579,
+                "cumulative_t09_cost_cap_usd": 90.0,
                 "replacement_image_policy": ("retained-exact-load-or-one-fallback-build-v1"),
-                "artifact_destination": ("/Volumes/Macintosh HD - Data/GIC-Lab/t09/autonomous-v8"),
+                "artifact_destination": "/Volumes/Macintosh HD - Data/GIC-Lab/t09/v10",
             }
         ),
         encoding="utf-8",
@@ -1923,21 +2284,21 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
             sleeper=sleeper,
         )
     provisional = load_json(active_failure_root / "provisional-owned-state.json")
-    early_cleanup = load_json(active_failure_root / "preflight-cleanup-state.json")
-    assert early_cleanup["state_type"] == "t09-preflight-cleanup-authority"
-    assert early_cleanup["private_instance_id"] == provisional["private_instance_id"]
+    early_cleanup = EarlyCleanupJournal(active_failure_root / "preflight-cleanup-state").load()
+    assert early_cleanup.provider_instance_id == provisional["private_instance_id"]
     assert (
-        early_cleanup["owned_instance_identity_sha256"]
+        early_cleanup.provider_instance_identity_sha256
         == provisional["owned_instance_identity_sha256"]
     )
-    assert early_cleanup["empirical_entry_crossed"] is False
-    assert early_cleanup["pilot_state_required_for_cleanup"] is False
-    assert early_cleanup["attempt_state_required_for_cleanup"] is False
-    assert early_cleanup["temporary_firewall_resource_ids"] == []
-    assert early_cleanup["temporary_ruleset_resource_ids"] == []
-    assert early_cleanup["temporary_remote_secret_locations"] == [
-        "/home/ubuntu/.config/giclab/sira_api_key"
-    ]
+    assert early_cleanup.empirical_entry_status.value == "not-entered"
+    assert early_cleanup.terminal_cleanup_disposition is TerminalCleanupDisposition.COMPLETE
+    assert {target.target_id: target.state for target in early_cleanup.targets} == {
+        "provider-instance": CleanupTargetState.ABSENT,
+        "firewall-restoration": CleanupTargetState.RESTORED,
+        "temporary-local-secret": CleanupTargetState.ABSENT,
+        "temporary-remote-secret": CleanupTargetState.ABSENT,
+    }
+    assert list(active_failure_root.glob("EARLY_CLEANUP_CLOSEOUT-*.json"))
     assert provisional["private_instance_id"] == "instance-fixture-0001"
     assert provisional["launch_capability_state"] == ("consumed-cleanup-only-until-entry-receipt")
     assert provider._HEX64.fullmatch(str(provisional["launch_journal_prefix_sha256"]))
@@ -1962,6 +2323,44 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
         == active_failure_root / "PROVISIONAL_OWNER_CLOSED.json"
     )
     assert already_closed_transport.calls == []
+
+    # Journal bootstrap is inside the same protective exact-owner boundary as
+    # package transition.  A durable-journal failure therefore cannot strand
+    # the one confirmed provider launch.
+    capability[1] = tmp_path / "launch-capabilities/journal-bootstrap-failure.json"
+    bootstrap_failure_root = tmp_path / "provider-journal-bootstrap-failure"
+
+    def fail_journal_initialize(*_args: object, **_kwargs: object) -> EarlyCleanupJournal:
+        raise EarlyCleanupStateError("fixture journal bootstrap failure")
+
+    with monkeypatch.context() as journal_patch:
+        journal_patch.setattr(EarlyCleanupJournal, "initialize", fail_journal_initialize)
+        with pytest.raises(provider.T09ProviderError, match="exact launched instance was closed"):
+            provider.launch_campaign(
+                repository=ROOT,
+                package_commit=package_commit,
+                authorization_ledger=authorization,
+                dotenv=dotenv,
+                private_root=bootstrap_failure_root,
+                public_ipv4_file=public_ip_path,
+                ssh_public_key_file=key_path,
+                transport=FakeTransport(
+                    [
+                        *copy.deepcopy(launch_responses[:7]),
+                        RuntimeError("termination response ambiguity"),
+                        {"data": []},
+                        global_firewall,
+                        {"data": []},
+                    ]
+                ),
+                clock=clock,
+                sleeper=sleeper,
+            )
+    bootstrap_receipt = load_json(bootstrap_failure_root / "EARLY_CLEANUP_BOOTSTRAP_CLOSEOUT.json")
+    assert bootstrap_receipt["provider_instance_id"] == "instance-fixture-0001"
+    assert bootstrap_receipt["provider_disposition"] == "absent"
+    assert bootstrap_receipt["firewall_restored"] is True
+    assert not (bootstrap_failure_root / "preflight-cleanup-state").exists()
 
     # A cleanup poll ambiguity cannot be converted into a false closeout.  It
     # preserves the exact private target and a no-relaunch console action.
@@ -2130,7 +2529,7 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
             sleeper=sleeper,
         )
     assert (write_failure_root / "PROVISIONAL_OWNER_CLOSED.json").is_file()
-    assert (write_failure_root / "preflight-cleanup-state.json").is_file()
+    assert (write_failure_root / "preflight-cleanup-state").is_dir()
     early_closed_transport = FakeTransport([])
     assert (
         provider.closeout_campaign(
@@ -2313,6 +2712,15 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
         global_firewall,
         {"data": []},
     ]
+    remote_cleanup_root = tmp_path / "remote-cleanup-continuation"
+    copytree(private_root / "preflight-cleanup-state", remote_cleanup_root)
+    remote_cleanup = EarlyCleanupJournal(remote_cleanup_root)
+    remote_cleanup.record_result(
+        target_id="temporary-remote-secret",
+        result=CleanupTargetState.ABSENT,
+        detail_code="temporary-remote-secret-already-absent",
+        clock=clock,
+    )
     closeout_path = provider.closeout_campaign(
         repository=ROOT,
         package_commit=package_commit,
@@ -2320,6 +2728,7 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
         dotenv=dotenv,
         private_root=private_root,
         transport=FakeTransport(closeout_responses),
+        remote_cleanup_journal=remote_cleanup_root,
         clock=clock,
         sleeper=sleeper,
     )
@@ -2349,6 +2758,20 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
     last_inventory = closeout_documents["termination-instances"][-1][1]
     assert last_inventory == {"data": []}
     assert not (private_root / "replacement-launch-eligibility.json").exists()
+    provider_cleanup = EarlyCleanupJournal(private_root / "preflight-cleanup-state")
+    durable_closeout = provider_cleanup.load()
+    remote_versions = sorted(remote_cleanup.versions.glob("*.json"))
+    provider_versions = sorted(provider_cleanup.versions.glob("*.json"))
+    assert [path.read_bytes() for path in provider_versions[: len(remote_versions)]] == [
+        path.read_bytes() for path in remote_versions
+    ]
+    assert durable_closeout.terminal_cleanup_disposition is TerminalCleanupDisposition.COMPLETE
+    assert {target.target_id: target.state for target in durable_closeout.targets} == {
+        "provider-instance": CleanupTargetState.ABSENT,
+        "firewall-restoration": CleanupTargetState.RESTORED,
+        "temporary-local-secret": CleanupTargetState.ABSENT,
+        "temporary-remote-secret": CleanupTargetState.ABSENT,
+    }
 
     forged = dict(load_json(entry_path))
     forged["launch_count"] = 2
