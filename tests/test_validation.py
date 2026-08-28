@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import subprocess
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
 import pytest
 
+import giclab.validation as validation
 from giclab.registry import load_json, load_yaml
 from giclab.validation import (
     ROOT,
@@ -13,6 +15,7 @@ from giclab.validation import (
     _load_t09_downstream_finalizer_history,
     run_all,
     validate_episode_order,
+    validate_exp0001_contract,
     validate_experiment_protocol,
     validate_instance,
     validate_plan_lifecycle,
@@ -553,6 +556,32 @@ def test_downstream_finalizer_history_closure_is_exact_and_tamper_evident(
         target.read_bytes().replace(b'"schema_version": "1.0.0"', b'"schema_version": "9.9.9"')
     )
     assert _load_t09_downstream_finalizer_history(tmp_path) is None
+
+
+def test_downstream_finalizer_history_closure_survives_unavailable_git_object(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original_run = subprocess.run
+
+    def unavailable_downstream_object(
+        *args: Any, **kwargs: Any
+    ) -> subprocess.CompletedProcess[Any]:
+        command = args[0] if args else kwargs.get("args")
+        if (
+            isinstance(command, list)
+            and "diff" in command
+            and any(
+                isinstance(part, str)
+                and "6d3005bb5ce915eabb801ef35e11855cd9420338" in part
+                and "d6a080264c7d2ac83efc9806d2a2ae4c141a1113" in part
+                for part in command
+            )
+        ):
+            raise subprocess.CalledProcessError(128, command)
+        return original_run(*args, **kwargs)
+
+    monkeypatch.setattr(validation.subprocess, "run", unavailable_downstream_object)
+    assert validate_exp0001_contract(ROOT) == []
 
 
 def test_rendered_site_validator_detects_broken_links(tmp_path: Path) -> None:
