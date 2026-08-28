@@ -134,7 +134,8 @@ def test_v10_plan_binds_exact_repaired_control_sources() -> None:
     assert cleanup["optional_pilot_state_required"] is False
 
 
-def test_v10_execution_plane_is_immutable_and_statically_unauthorized() -> None:
+def test_v10_execution_plane_is_typed_renderable_and_statically_unauthorized() -> None:
+    # Keep the historical parity node ID; V10 is verified from frozen artifacts only.
     bindings = load_plan()["implementation_bindings"]
     assert isinstance(bindings, dict)
     execution = bindings["execution_plane"]

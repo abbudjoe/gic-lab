@@ -1292,10 +1292,11 @@ def test_retry4_transition_fallback_rejects_a_v10_receipt(
         )
 
 
-def test_active_preflight_rejects_historical_receipt_before_v11_budget_math(
+def test_active_preflight_rejects_historical_receipt_before_v10_budget_math(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # Preserve the base-collected node ID while advancing its active gate to V11.
     host = _load_host_runner()
     dynamic_source = tmp_path / "source"
     dynamic_source.mkdir()
