@@ -1,7 +1,7 @@
 # T09 V10 provider accounting and closeout implementation ledger
 
-Assembly status: **in progress — PR #3 exact-head remediation after review ID
-5050521792**
+Assembly status: **PR #3 remediation implemented and locally parity-verified; final
+task-branch push and exact-head GitHub Actions verification remain**
 
 Started: 2026-08-27
 
@@ -147,19 +147,221 @@ Linux checkout under Python 3.11.16 collected 1,545 tests and finished with **1,
 passed, 77 failed, 7 skipped**. The earlier 1,508/37 result came from an artifact-rich
 developer worktree and is not a reproducible exact-head CI result.
 
-An isolated, full-history, artifact-free checkout of the required base collected
-1,513 tests and finished with **1,459 passed, 54 failed**. The corresponding reviewed
-head collected 1,545 tests and finished with **1,492 passed, 53 failed**. Relative to
-that clean base, one test newly failed, two newly passed, and 52 failures were
-unchanged. The larger Actions failure set additionally exposes three implicit CI
-contracts: checkout history is required by frozen-blob tests, Python must be exactly
-3.11.14, and normal CI may not depend on untracked private/local material.
+The reproducible comparison uses one Python 3.11.14 interpreter and dependency
+closure, full Git history, artifact-free detached worktrees, and symmetric deselection
+of five explicitly private-local tests. Under that contract the exact base collected
+1,508 tests and finished with **1,452 passed, 56 failed**. The reviewed head collected
+1,540 tests and finished with **1,487 passed, 53 failed**. All 53 reviewed-head
+failures were already failures on the exact base; three base failures had become
+passing. The version-binding defect was therefore a real PR-introduced specification
+regression hidden by a missing test surface, not a new failure in the old test set.
+The remediation adds that missing surface and fixes the contract directly.
 
 | ID | Required remediation outcome | Planned evidence | Status |
 |---|---|---|---|
-| V10-R-DOD-01 | Provider entry, qualification, rendering, and exact-owner cleanup use an explicit immutable version contract; no module-global latest-version fallback exists. | Frozen V3/V4/V5/V6/V7/V8/V9/V10 contracts plus positive and cross-version negative tests. | in progress |
-| V10-R-DOD-02 | Every PR-introduced failure and every CI-only environment/private-fixture defect is classified and repaired without weakening historical authority, cleanup, privacy, or scientific locks. | Exact base/head node sets, privacy-safe fixtures, deterministic history/runtime controls, and regression tests. | in progress |
-| V10-R-DOD-03 | The intended V10 accounting, offline-refinalization, early-cleanup, and unauthorized-plan designs remain intact. | Existing focused suites plus scientific-hash and command-pair regressions. | in progress |
-| V10-R-DOD-04 | Independent spec review passes after fixes, and focused smoke passes before and after review. | Reviewer disposition and rerun results. | pending |
-| V10-R-DOD-05 | The final committed exact head passes formatting, Ruff, strict mypy, validation, privacy, full pytest, portable Quarto/site validation, `git diff --check`, and `make check`. | Exact commands and counts recorded below. | pending |
-| V10-R-DOD-06 | The same draft PR and branch are updated without rebase, force-push, merge, auto-merge, base mutation, or a new PR; required GitHub Actions passes on the pushed exact head. | Git/PR identities and final Actions run. | pending |
+| V10-R-DOD-01 | Provider entry, qualification, rendering, and exact-owner cleanup use an explicit immutable version contract; no module-global latest-version fallback exists. | Frozen V3/V4/V5/V6/V7/V8/V9/V10 contracts plus positive and cross-version negative tests. | met |
+| V10-R-DOD-02 | Every PR-introduced defect and every CI-only environment/private-fixture defect is classified and repaired without weakening historical authority, cleanup, privacy, or scientific locks. | Exact base/head node sets, privacy-safe fixtures, deterministic history/runtime controls, and regression tests. | met |
+| V10-R-DOD-03 | The intended V10 accounting, offline-refinalization, early-cleanup, and unauthorized-plan designs remain intact. | Existing focused suites plus scientific-hash and command-pair regressions. | met |
+| V10-R-DOD-04 | Independent spec review passes after fixes, and focused smoke passes before and after review. | Reviewer dispositions and rerun results. | met |
+| V10-R-DOD-05 | Formatting, Ruff, strict mypy, validation, privacy, portable Quarto/site validation, and `git diff --check` pass; raw pytest is classified against the exact base and the deterministic PR parity check admits no new or missing-base failure. | Exact commands and counts recorded below. | met |
+| V10-R-DOD-06 | The same draft PR and branch are updated without rebase, force-push, merge, auto-merge, base mutation, or a new PR; required GitHub Actions passes on the pushed exact head. | Git/PR identities and final Actions run. | pending final push and Actions |
+
+### Root cause and repair
+
+The reviewed implementation promoted V10 identities into shared module globals.
+Historical provider entry, qualification, transition, rendering, and cleanup paths
+then read the active values instead of a selected historical contract. That could
+cause a V3-V9 flow to render a V10 plan/run identity or target resources under the
+wrong authority even when the call site was otherwise historical.
+
+`T09ProviderContract` is now a frozen, source-controlled contract with explicit
+instances for V3, V4, V5, V6, V7, V8, V9, and V10. Resolution requires an explicit
+version; there is no `latest` or default fallback. Provider rendering, loading,
+qualification, package transition, image controls, lifecycle budgets, container
+ownership, and cleanup consume and cross-bind the selected contract. Cleanup rejects
+cross-version ownership and waits for exact absence before replacement eligibility.
+V10 selects V10 explicitly. Negative tests prove V3 cannot render V10, V10 cannot
+accept V5 authority, cleanup rejects cross-version ownership, stale image contracts
+are rejected, and no implicit-current fallback exists.
+
+The CI contract now checks out the exact PR head with full history, selects Python
+3.11.14 from `.python-version`, leaves formatting/Ruff/mypy/validation/site strict,
+and compares pytest against a detached exact-base worktree under the same interpreter
+and dependency closure. Five tests that inspect real user-owned material are marked
+`private_local`, default-deny, and symmetrically deselected from base and head parity;
+their pure behavior remains covered with public dummy fixtures and privacy canaries.
+
+### Exact failure-set classification
+
+The sets below are exact and avoid duplicating node IDs. The exact base failure set
+is `unchanged failing` union `newly passing`. The clean reviewed-head failure set is
+the exact-base set minus `base failures already passing at the reviewed head`. The
+post-fix failure set is exactly `unchanged failing`.
+
+Unchanged failing (**19**, all category `historical repository failure reproduced on
+the exact base`):
+
+```text
+tests/test_exp0001_protocol.py::test_exp0001_is_registered_with_incomplete_calibration_and_no_scientific_result
+tests/test_exp0001_protocol.py::test_exp0001_validation_rejects_duplicate_task_and_wrong_slice
+tests/test_exp0001_protocol.py::test_generic_profile_validator_does_not_impose_sira_conditions
+tests/test_exp0001_protocol.py::test_profile_validation_rejects_swapped_order_and_model_drift
+tests/test_exp0001_protocol.py::test_profile_validation_rejects_task_source_and_dataset_revision_drift
+tests/test_exp0001_protocol.py::test_smoke_and_pilot_profiles_and_condition_plans_validate
+tests/test_lambda_ssh_key_fingerprint.py::test_exact_plan_bound_wrapper_loads_hash_bound_source
+tests/test_phase1_closeout.py::test_frozen_profiles_are_unauthorized_and_postrun_control_makes_them_nonreplayable
+tests/test_phase1_closeout.py::test_phase_one_is_the_only_active_non_executable_control_plane
+tests/test_t08_sira_smoke.py::test_pilot_profile_has_explicit_unauthorized_sample_and_budget_contract
+tests/test_t09_retry3.py::test_retry3_exact_clean_package_is_host_verifiable
+tests/test_t09_retry3.py::test_retry3_plan_has_a_typed_two_slot_raw_first_contract
+tests/test_t09_retry3.py::test_retry3_provider_preflight_accepts_source_bound_offhost_runtime_paths
+tests/test_t09_retry3.py::test_retry3_same_host_resume_is_disabled_and_slot2_is_source_bound
+tests/test_t09_retry3.py::test_retry3_slot2_uses_separate_campaign_and_active_lambda_clocks
+tests/test_t09_retry4.py::test_retry4_generated_postfreeze_receipt_admits_first_condition
+tests/test_t09_retry4.py::test_retry4_plan_is_typed_science_locked_and_uses_fresh_identities
+tests/test_t09_retry5.py::test_autonomous_science_and_zero_retry_identifiers_are_fresh
+tests/test_t09_retry5.py::test_retry5_postrun_control_is_archived_while_v8_is_current
+```
+
+Newly passing from exact base to repaired head (**37**, category `historical
+repository failure directly repaired by the explicit version/source/ownership or
+private-fixture contract`):
+
+```text
+tests/test_lambda_firewall_baseline.py::test_committed_historical_reports_match_private_structural_analysis
+tests/test_lambda_firewall_baseline.py::test_historical_plan_and_run_are_immutable_and_old_v3_fails_closed
+tests/test_lambda_firewall_baseline.py::test_historical_projection_is_preserved_but_not_lossless
+tests/test_lambda_firewall_baseline.py::test_incident_bundle_seals_without_changing_historical_bytes
+tests/test_lambda_inventory_v3.py::test_v1_v2_plans_and_run_0002_ledger_remain_byte_identical
+tests/test_lambda_l13_security.py::test_authoritative_l13_consumer_accepts_exact_real_sealed_run
+tests/test_lambda_l13_security.py::test_committed_postrun_evidence_is_schema_valid_and_stays_blocked
+tests/test_lambda_l23_manual_supervisor.py::test_isolated_bootstrap_loads_repository_source_and_stops_pending_authorization
+tests/test_phase1_closeout.py::test_closeout_retains_zero_scientific_interpretation_and_typed_compute
+tests/test_phase1_closeout.py::test_historical_status_surfaces_preserve_without_reopening_bounded_v3
+tests/test_phase1_closeout.py::test_t07_l1a_plan_is_preserved_and_its_consumed_run_is_sealed
+tests/test_sira_container.py::test_arbitrary_host_directories_are_rejected_even_as_read_only_configuration[host_directory1]
+tests/test_t07_bounded_supervisor.py::test_exact_local_supervisor_interpreter_loads_bound_modules
+tests/test_t07_high_assurance_closeout.py::test_burned_capture_and_scientific_inputs_remain_immutable
+tests/test_t07_high_assurance_closeout.py::test_real_private_firewall_scalars_do_not_enter_public_closeout_surfaces
+tests/test_t07_high_assurance_closeout.py::test_sealed_private_canonical_v1_remains_valid_under_its_unchanged_schema
+tests/test_t09_retry3.py::test_retry3_provider_has_two_distinct_single_use_slots_and_cumulative_caps
+tests/test_t09_retry3.py::test_retry3_slot2_transition_and_launch_headroom_are_fail_closed
+tests/test_t09_retry4.py::test_retry4_provider_entry_freshness_matches_the_full_preflight_wall
+tests/test_t09_retry4.py::test_retry4_slot2_launch_headroom_enforces_exact_active_caps
+tests/test_t09_retry5.py::test_retry5_oversized_tree_gets_private_essential_failure_seal[False-0]
+tests/test_t09_retry5.py::test_retry5_oversized_tree_gets_private_essential_failure_seal[False-2]
+tests/test_t09_retry5.py::test_retry5_oversized_tree_gets_private_essential_failure_seal[True-0]
+tests/test_t09_retry5.py::test_retry5_oversized_tree_gets_private_essential_failure_seal[True-2]
+tests/test_t09_sira_pilot.py::test_autonomous_clean_descendant_reuses_authority_and_entry_receipt
+tests/test_t09_sira_pilot.py::test_autonomous_materialization_policy_is_explicit_and_bound
+tests/test_t09_sira_pilot.py::test_autonomous_preflight_and_empirical_lifecycle_boundaries_are_separate
+tests/test_t09_sira_pilot.py::test_campaign_lifecycle_uses_actual_elapsed_time_and_preserves_cleanup_reserve
+tests/test_t09_sira_pilot.py::test_execution_schema_and_all_static_file_bindings_resolve
+tests/test_t09_sira_pilot.py::test_finalizer_validates_canonical_raw_name_not_runtime_mount_alias
+tests/test_t09_sira_pilot.py::test_first_pair_checkpoint_passes_only_strictly_below_every_threshold
+tests/test_t09_sira_pilot.py::test_independent_selector_specializes_from_frozen_contract
+tests/test_t09_sira_pilot.py::test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bound
+tests/test_t09_sira_pilot.py::test_raw_attempt_streams_before_cutoff_without_aggregate_stage
+tests/test_t09_sira_pilot.py::test_runtime_identity_binds_every_selected_executable_file
+tests/test_t09_sira_pilot.py::test_runtime_qualification_is_typed_slot2_import_preentry_and_digest_agnostic
+tests/test_t09_sira_pilot.py::test_t09_provider_is_a_narrow_adapter_over_the_retained_t07_pragmatic_path
+```
+
+Base failures already passing at reviewed head `091fa6e...` (**3**):
+
+```text
+tests/test_sira_container.py::test_arbitrary_host_directories_are_rejected_even_as_read_only_configuration[host_directory1]
+tests/test_t09_sira_pilot.py::test_execution_schema_and_all_static_file_bindings_resolve
+tests/test_t09_sira_pilot.py::test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bound
+```
+
+Run `33164854474` differed from the reproducible clean reviewed head by 27 CI-only
+failures, all category `environment/version incompatibility`: the old workflow used a
+shallow checkout and Python 3.11.16 instead of the frozen full-history Python 3.11.14
+closure. Those exact CI-only nodes were:
+
+```text
+tests/test_exp0001_protocol.py::test_price_caps_are_exact_conservative_arithmetic_and_unauthorized
+tests/test_lambda_inventory_v3.py::test_committed_v3_plan_loads_and_binds_the_frozen_implementation
+tests/test_lambda_l20_plan.py::test_scientific_locks_remain_exact
+tests/test_lambda_l2m_observer.py::test_locked_science_and_prior_evidence_hashes_remain_exact
+tests/test_lambda_ssh_key_archive.py::test_concrete_ssh_key_archive_postcopy_floor_failure_is_not_success
+tests/test_lambda_ssh_key_archive.py::test_concrete_ssh_key_archive_stages_finalizes_and_reverifies
+tests/test_lambda_ssh_key_executor.py::test_archive_finalize_failure_has_separate_durable_ineligible_disposition
+tests/test_lambda_ssh_key_executor.py::test_fake_end_to_end_executor_composes_one_request_ledger_match_and_archive
+tests/test_lambda_ssh_key_executor.py::test_response_schema_failure_preserves_completed_response_metadata
+tests/test_lambda_ssh_key_executor.py::test_typed_failure_after_send_remains_exact_and_stops
+tests/test_lambda_ssh_key_executor.py::test_untyped_failure_after_send_is_durably_unknown_and_stops
+tests/test_lambda_ssh_key_fingerprint.py::test_one_request_plan_is_exact_when_committed
+tests/test_phase1_closeout.py::test_t07_l13_preserves_all_five_historical_scientific_file_hashes
+tests/test_sira_container.py::test_arbitrary_host_directories_are_rejected_even_as_read_only_configuration[host_directory0]
+tests/test_sira_container.py::test_arbitrary_host_directories_are_rejected_even_as_read_only_configuration[host_directory1]
+tests/test_sira_storage.py::test_locked_exp_0001_scientific_files_did_not_drift
+tests/test_t07_bounded_openai_secret.py::test_main_abort_cleanup_survives_plan_bound_artifact_drift
+tests/test_t07_bounded_openai_secret.py::test_science_model_and_all_v2_limits_are_unchanged
+tests/test_t07_bounded_smoke.py::test_historical_plan_schema_is_valid_but_runtime_binding_is_stale
+tests/test_t07_bounded_smoke.py::test_locked_scientific_files_remain_exact
+tests/test_t07_bounded_smoke.py::test_valid_plan_is_exact_and_schema_valid
+tests/test_t07_pragmatic.py::test_runtime_preflight_executes_artifact_budget_command_and_cleanup_paths
+tests/test_t09_provider_accounting.py::test_26_launch_package_command_hash_exception_is_exact_and_source_bound
+tests/test_t09_retry3.py::test_retry3_local_qualification_preserves_the_venv_launcher
+tests/test_t09_retry4.py::test_retry4_active_slot2_entry_transition_is_source_bound
+tests/test_t09_retry4.py::test_retry4_slot2_control_repair_is_a_science_locked_descendant
+tests/test_validation.py::test_repository_contract_passes
+```
+
+Three artifact-free reviewed-head failures did not appear as Actions failures because
+the old workflow skipped or masked their local-runtime dependency. They are category
+`private/local-only test with an invalid CI contract`; they now use deterministic
+public fixtures or explicit opt-in local coverage:
+
+```text
+tests/test_lambda_l13_security.py::test_authoritative_l13_consumer_accepts_exact_real_sealed_run
+tests/test_lambda_l23_manual_supervisor.py::test_isolated_bootstrap_loads_repository_source_and_stops_pending_authorization
+tests/test_t07_bounded_supervisor.py::test_exact_local_supervisor_interpreter_loads_bound_modules
+```
+
+### Verification evidence
+
+- Provider/receipt/cleanup/V10-plan/CI-parity focused matrix: **111 passed**.
+- Exact V9 12-call release-order regression: passed three separate invocations; each
+  invocation itself executes three consecutive release-order runs and ends with 12
+  terminal reconciliations, an exactly empty reservation set, and positive exact
+  zero call/token/cost projections.
+- Dedicated privacy and secret-canary matrix: **10 passed**.
+- Independent source-level specification review: `SOURCE-LEVEL REVIEW-PASSED`.
+- Independent regenerated-closure review: `CLOSURE REVIEW-PASSED`; 15 focused closure
+  tests passed, all 22 source hashes resolve to implementation commit
+  `a5daa11db99229e347008a6110e9ca0a9b7b948d`, and both command pairs rerender exactly.
+- Formatting and Ruff: passed. Strict mypy: passed across 64 source files.
+  `make validate`: passed. `git diff --check`: passed.
+- Portable Quarto 1.9.38 `make site`: passed, including site validation.
+- Raw post-fix pytest: **1,576 passed, 19 failed, 5 skipped**. The installed-package
+  `make check` reproduced the same counts in 905.17 seconds and stopped at pytest, as
+  expected for the inherited raw failure set; it did not reach its later validation
+  and site recipes. Those gates were run separately and passed.
+- Exact-base comparator at remediation closeout commit `7eb781c50ed63eaf856ddf443ba454971708cccd`:
+  base **1,452 passed / 56 failed**; head **1,576 passed / 19 failed**; **0 newly
+  failing**, **37 newly passing**, **19 unchanged failing**, **0 missing base
+  failures**; `parity_passed: true`.
+
+### Rebound unauthorized V10 closure
+
+The repaired implementation is commit `a5daa11db99229e347008a6110e9ca0a9b7b948d`
+(tree `62be75facb8fe949a1e3f72b2f682b66a0cad37e`). The V10 closure was regenerated
+and committed separately at `1e38a9ad38455ed8e2d9529e2802183b3b2d387b`.
+
+- Runtime identity SHA-256:
+  `0f818aeaa7c0f2e309d0e04a8e5c365269442a0bd08969017fe6c6e9d15883eb`.
+- Execution-contract SHA-256:
+  `41810898f2a10a2d328a4d82d338a3a65634c9031e2304a082c1baa50c004e62`.
+- Command-manifest SHA-256:
+  `9217db4dda7bbf69911743da70e1aeef0507444a02c480ccc7484ec720383844`.
+- `PLAN-EXP0001-PILOT-V10`: **13,426 bytes**, SHA-256
+  `17c6502c625e0a3fcabc99180b0a432a60b27557be6a88f3289e45720951b38b`.
+
+The scientific commit, task hashes, dataset commit/blob, evaluator, model, SiRA
+revision, condition order, zero-retry policy, timing and budget boundaries, and
+descriptive-only interpretation remain unchanged. `authorized`, `execution_allowed`,
+`cloud_mutation_allowed`, and `paid_compute_allowed` all remain `false`; qualification,
+pilot, and run-root materialization are also false. No V10 identity was consumed.
