@@ -10,7 +10,7 @@ cloud_mutation_allowed: false
 authorized_run_profile: null
 current_execution_control:
   path: experiments/EXP-0001-sira-simulative-vs-reactive/T09_AUTONOMOUS_RETRY2_V9_TERMINAL_CONTROL.json
-  sha256: 870f5b06d12f057ebace48322f67a13d5595ecb6a4177e93cd92166819ff4438
+  sha256: fe163011a02094586ae97cc569331699cb57135be8fdd71d19d730d5f7afd068
 planned_execution_substrate: null
 historical_execution_substrate:
   decision_state: bounded-smoke-v3-ready-unauthorized

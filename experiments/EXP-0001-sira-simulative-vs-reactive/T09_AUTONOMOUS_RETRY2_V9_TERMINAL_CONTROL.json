@@ -5,7 +5,7 @@
   "effective_on": "2026-08-27",
   "terminal_record": {
     "path": "experiments/EXP-0001-sira-simulative-vs-reactive/T09_AUTONOMOUS_RETRY2_V9_DISPOSITION.json",
-    "sha256": "f3500b7e275841cc6d201eec1661b43c202ea466526445a7f0b0e91c42602aec"
+    "sha256": "fb7f87374cabc5ee381420049cff705406554b94e52c6d31f0d0fede96a6810c"
   },
   "terminal_state": "t09-pilot-blocked-material-risk",
   "empirical_entry": true,

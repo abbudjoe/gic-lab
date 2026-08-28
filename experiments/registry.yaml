@@ -6,7 +6,7 @@ experiments:
   protocol: experiments/EXP-0001-sira-simulative-vs-reactive/protocol.yaml
   current_execution_control:
     path: experiments/EXP-0001-sira-simulative-vs-reactive/T09_AUTONOMOUS_RETRY2_V9_TERMINAL_CONTROL.json
-    sha256: 870f5b06d12f057ebace48322f67a13d5595ecb6a4177e93cd92166819ff4438
+    sha256: fe163011a02094586ae97cc569331699cb57135be8fdd71d19d730d5f7afd068
   run_profiles:
   - experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/smoke.yaml
   - experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/proposals/PLAN-EXP0001-PILOT-V6.yaml

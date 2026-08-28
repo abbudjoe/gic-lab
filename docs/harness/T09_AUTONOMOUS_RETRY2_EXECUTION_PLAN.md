@@ -50,7 +50,7 @@ retries, a new task set, scientific comparison, training, and production claims.
 | AR2-14 | Apply the predeclared first-pair checkpoint and continue only if every operational criterion passes. | Receipt-bound checkpoint decision. | met; stop before Task B |
 | AR2-15 | If admitted, execute Task B simulative and reactive once each under the same frozen package. | Equivalent Task B evidence and pair matching; zero retry. | not applicable; continuation gate denied admission |
 | AR2-16 | Retain and independently verify evidence, remove containers/browser/core/secrets, terminate the exact provider instance, and restore provider security. | Local-volume verification and terminal provider closeout. | met; global cleanup projection validation remains a disclosed limitation |
-| AR2-17 | Run post-termination broader gates, independent spec-conformance review, update the terminal ledger, and publish the non-comparative handoff. | Test results, reviewer verdict, disposition/control records, final report. | in progress; post-terminal repair retained and review rerun pending; 39 broader historical-fixture tests and six frozen-format checks remain disclosed |
+| AR2-17 | Run post-termination broader gates, independent spec-conformance review, update the terminal ledger, and publish the non-comparative handoff. | Test results, reviewer verdict, disposition/control records, final report. | met terminal; independent rereview passed with no mandatory fixes; 39 broader historical-fixture tests and six frozen-format checks remain disclosed |
 
 ## Implementation mapping and planned evidence
 
@@ -119,6 +119,12 @@ retries, a new task set, scientific comparison, training, and production claims.
   aggregate check stops earlier on six pre-existing formatting drifts in frozen
   source/test files; changing those bytes would contradict the retained V9 runtime
   identity, so both broader limitations remain explicit rather than being rewritten.
+- `2026-08-27`: independent conformance rereview passed on commit
+  `0b11712ec7cedfa4da6ede258bc05330b743e718` with no mandatory fixes. The reviewer
+  independently verified the repair parent and two-file scope, reproduced the exact
+  twelve-call release-order regression three times, passed all 26 focused tests, and
+  confirmed frozen scientific bytes, attempt evidence, zero-retry state, terminal
+  provider state, and control-plane blocking remained unchanged.
 
 ## Budgets, blockers, and next phase
 
