@@ -1,6 +1,6 @@
 # T09 V11 Docker cidfile publication-race implementation ledger
 
-Assembly status: **in-progress**
+Assembly status: **implementation_complete_pr_open_review_required**
 
 Started: 2026-08-28
 
@@ -48,9 +48,9 @@ authorization overlay; merge or auto-merge.
 | V11-DOD-04 | The original transient-zero-length Category 3 sequence is reproduced against the old contract and passes under the repair without a live Docker daemon. | Focused regression fixture and exact failure-class assertion. | met: the old-reader fixture reproduces `unsafe`; the same sequence passes with the repaired reader |
 | V11-DOD-05 | Fresh `PLAN-EXP0001-PILOT-V11` and `AUTONOMOUS-0004` host/attempt identities bind the repaired package; model metadata is ordered before Lambda launch; all scientific fields and all authorization/execution flags remain unchanged and false. | Canonical renderers, schema/hash tests, science projection, pair diffs, and exact plan bytes/SHA-256. | met: closure is rebound to `e91eccc`, both pair diffs and 11 exact plan tests pass, and final package rereview is clean |
 | V11-DOD-06 | V8, V9, V10, and the stopped V10 Category 3 evidence remain immutable and V10 provider contracts remain version-addressable historical identities. | Start/end inventory equality, source diff, and historical contract regressions. | met: all historical regressions pass and fresh end inventories exactly equal all three baselines |
-| V11-DOD-07 | Focused smoke, formatting, Ruff, strict mypy, repository validation, privacy checks, raw suite classification, exact-base/head parity, diff check, and portable Quarto/site validation satisfy the task contract. | Exact commands, counts, and parity report recorded below. | partial: every local gate is complete; first parity found two renamed historical node IDs, now restored, and the exact rerun remains |
+| V11-DOD-07 | Focused smoke, formatting, Ruff, strict mypy, repository validation, privacy checks, raw suite classification, exact-base/head parity, diff check, and portable Quarto/site validation satisfy the task contract. | Exact commands, counts, and parity report recorded below. | met: exact rerun has zero newly failing, zero missing base nodes, zero invalid transitions, and `parity_passed: true` |
 | V11-DOD-08 | Independent review finds the implementation and successor package conformant, or every valid finding is repaired and rereviewed before closeout. | Reviewer findings, dispositions, and post-review reruns. | met: active-fixture, FIFO, and ledger findings were repaired; the independent final rereview returned CLEAN |
-| V11-DOD-09 | Scope-reviewed changes are committed and pushed only to the task branch, and one draft PR is opened against the exact base with auto-merge disabled and no merge. | Final commit/tree, remote head/base, and PR state. | not-started |
+| V11-DOD-09 | Scope-reviewed changes are committed and pushed only to the task branch, and one draft PR is opened against the exact base with auto-merge disabled and no merge. | Final commit/tree, remote head/base, and PR state. | met: one normal push and draft PR #4 target the exact branch/base; the PR is open, mergeable, unmerged, and has no auto-merge request |
 
 ## Implementation mapping
 
@@ -161,17 +161,26 @@ authorization overlay; merge or auto-merge.
   zero newly failing and zero invalid outcome transitions, but correctly failed for
   two missing base-collected nodes whose test functions had been renamed during V11
   promotion. Their exact historical node IDs are restored while retaining the V11
-  assertions; both focused nodes pass, no exclusion changed, and exact parity will be
+  assertions; both focused nodes pass, no exclusion changed, and exact parity was
   rerun against the resulting commit.
+- Exact parity rerun at `6069b57c61e6429cf9280d0d95a491374accaff1`
+  passes schema `2.0.0` with **zero newly failing**, **zero missing
+  base-collected nodes**, **zero invalid outcome transitions**, and
+  **`parity_passed: true`**. The same five private tests are symmetrically
+  deselected; no exclusion was added or broadened.
+- Branch `codex/t09-v11-cidfile-publication-race` was pushed normally without force.
+  Draft PR #4, `https://github.com/abbudjoe/gic-lab/pull/4`, is open against
+  `phase-1/sira-pilot-autonomous-r2` at
+  `1c6b093699288f37aa23526fe1e1672e50280093`. Its verified initial head is
+  `6069b57c61e6429cf9280d0d95a491374accaff1`; GitHub reports `MERGEABLE`, draft
+  `true`, state `OPEN`, merge state `UNSTABLE`, and no auto-merge request. It was not
+  merged.
 
 ## Blockers and user actions
 
-None at start. Any repository identity mismatch, unavoidable live-runtime
-dependency, or inability to preserve exact-ID cleanup authority is terminal under
-`blocked_exact_cidfile_or_successor_plan_repair`.
+None. No live-runtime or exact-identity blocker remains.
 
 ## Next permitted phase
 
-Commit the parity-node preservation, rerun exact-base/head parity, then push and open
-one draft PR. V11 remains unauthorized; no provider, secret, live runtime, or
-scientific action is permitted.
+Exact-head review of draft PR #4. V11 remains unauthorized; no provider, secret, live
+runtime, scientific action, merge, or auto-merge is permitted in this task.
