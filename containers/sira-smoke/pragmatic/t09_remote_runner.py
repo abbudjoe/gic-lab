@@ -29,7 +29,7 @@ import subprocess
 import sys
 import tarfile
 import time
-from collections.abc import Callable, Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import IO, Any, BinaryIO, Final, NamedTuple, cast
@@ -38,6 +38,15 @@ from jsonschema import Draft202012Validator, FormatChecker
 
 from giclab.harness.lambda_campaign_lifecycle import AutonomousPilotLifecycleLimits
 from giclab.harness.sira_gate_a import ProviderBudgetUsage
+from giclab.harness.t09_cleanup_state import (
+    CleanupLifecycleStage,
+    CleanupTargetKind,
+    CleanupTargetState,
+    EarlyCleanupJournal,
+    EarlyCleanupStateError,
+    TerminalCleanupDisposition,
+    cleanup_locator_identity,
+)
 from giclab.harness.t09_pragmatic_provider import (
     RETRY4_ACTIVE_SLOT2_ENTRY_PACKAGE_COMMIT,
     T09ProviderError,
@@ -49,9 +58,18 @@ from giclab.harness.t09_pragmatic_provider import (
 from giclab.harness.t09_pragmatic_provider import (
     validate_closeout_receipt as validate_source_bound_closeout,
 )
+from giclab.harness.t09_provider_contracts import (
+    PROVIDER_CONTRACTS,
+    V4_PROVIDER_CONTRACT,
+    V6_PROVIDER_CONTRACT,
+    V10_PROVIDER_CONTRACT,
+    T09ProviderContract,
+    T09ProviderContractError,
+    load_provider_plan,
+    provider_contract_for_plan_id,
+)
 from giclab.harness.t09_sira_pilot import (
     ATTEMPT_ORDER,
-    AUTHORIZATION_REFERENCE,
     PREENTRY_RESUME_FROM_PACKAGE_COMMIT,
     PREENTRY_RESUME_FROM_PLAN_SHA256,
     TASK_REFERENCE_SHA256S,
@@ -83,14 +101,16 @@ from giclab.harness.t09_sira_pilot import (
 )
 
 UTC: Final = timezone.utc  # noqa: UP017 - host control plane supports Python 3.10
-PLAN_ID: Final = "PLAN-EXP0001-PILOT-V9"
-HOST_RUN_ID: Final = "RUN-T09-PILOT-HOST-AUTONOMOUS-0002"
-ARCHIVE_ID: Final = "ARCHIVE-EXP0001-PILOT-V9-AUTONOMOUS-0002"
-STAGE_ID: Final = "STAGE-EXP0001-PILOT-V9-AUTONOMOUS-0002"
-QUALIFICATION_ID: Final = "QUAL-T09-PILOT-V9-IMAGE-AUTONOMOUS-0002"
-FROZEN_RUN_MANIFEST_ID: Final = "RUN-MANIFEST-EXP0001-PILOT-V9-AUTONOMOUS-0002"
-AUTHORIZATION_SOURCE_SHA256: Final = (
-    "aea63a42cf0270ad0a41a929b4b8eb19dd1c3af73abfe97163c1d90e6077d3da"
+ACTIVE_PROVIDER_CONTRACT: Final = V10_PROVIDER_CONTRACT
+PLAN_ID: Final = ACTIVE_PROVIDER_CONTRACT.plan_id
+HOST_RUN_ID: Final = ACTIVE_PROVIDER_CONTRACT.host_run_id
+ARCHIVE_ID: Final = "ARCHIVE-EXP0001-PILOT-V10-AUTONOMOUS-0003"
+STAGE_ID: Final = "STAGE-EXP0001-PILOT-V10-AUTONOMOUS-0003"
+QUALIFICATION_ID: Final = cast(str, ACTIVE_PROVIDER_CONTRACT.active_image_qualification_id)
+FROZEN_RUN_MANIFEST_ID: Final = cast(str, ACTIVE_PROVIDER_CONTRACT.frozen_run_manifest_id)
+LOCAL_FINALIZER_QUALIFICATION_ID: Final = cast(
+    str,
+    ACTIVE_PROVIDER_CONTRACT.local_finalizer_qualification_id,
 )
 MODEL: Final = "gpt-4o-2024-11-20"
 SERVICE_TIER: Final = "default"
@@ -100,7 +120,7 @@ HISTORICAL_IMAGE_ID: Final = (
 T07_EXECUTION_COMMIT: Final = "5698f04dfd08bc85a66d2355b0a4bd7d3ce24a23"
 SIRA_COMMIT: Final = "93fb8d72de71f9a4a13419670adeb34d93cf7acd"
 SIRA_TREE: Final = "6a6d9068b94d7632d3533a3d6f013d4de6ff76e8"
-REPLACEMENT_IMAGE_TAG: Final = f"giclab/t09-pilot-v9:{SIRA_COMMIT[:12]}-autonomous-0002"
+REPLACEMENT_IMAGE_TAG: Final = cast(str, ACTIVE_PROVIDER_CONTRACT.replacement_image_tag)
 RETAINED_IMAGE_ARCHIVE_BYTES: Final = 1_207_128_576
 RETAINED_IMAGE_ARCHIVE_SHA256: Final = (
     "623e717c2182eca9cee2f471b7ecd9a57bead2f5263dee64aa5cd954eae5ddb0"
@@ -108,9 +128,20 @@ RETAINED_IMAGE_ARCHIVE_SHA256: Final = (
 RETAINED_IMAGE_ID: Final = "sha256:abe8ed38f5c5b5a0a63fa726a74034dc5c192a12c0fccfe1319f97c27ceaf0a3"
 # Historical Retry 2 transition helpers remain importable for archived-receipt
 # verification only.  No Retry 3 parser route invokes them.
-CONTEXT_FAILURE_QUALIFICATION_ID: Final = "QUAL-T09-PILOT-V4-IMAGE-0002"
-FAILED_CANDIDATE_QUALIFICATION_ID: Final = "QUAL-T09-PILOT-V4-IMAGE-0003"
-PRIOR_REPLACEMENT_IMAGE_TAG: Final = f"giclab/t09-pilot-v4:{SIRA_COMMIT[:12]}-0002"
+PACKAGE_TRANSITION_PROVIDER_CONTRACT: Final = V4_PROVIDER_CONTRACT
+CONTEXT_FAILURE_QUALIFICATION_ID: Final = (
+    PACKAGE_TRANSITION_PROVIDER_CONTRACT.image_qualification_ids[0]
+)
+FAILED_CANDIDATE_QUALIFICATION_ID: Final = (
+    PACKAGE_TRANSITION_PROVIDER_CONTRACT.image_qualification_ids[1]
+)
+PACKAGE_TRANSITION_QUALIFICATION_ID: Final = (
+    PACKAGE_TRANSITION_PROVIDER_CONTRACT.image_qualification_ids[2]
+)
+PRIOR_REPLACEMENT_IMAGE_TAG: Final = cast(
+    str,
+    PACKAGE_TRANSITION_PROVIDER_CONTRACT.replacement_image_tag,
+)
 PACKAGE_TRANSITION_FROM_COMMIT: Final = "eda1d15387efbc2c269a33176f5c0e04b177e70c"
 PREVIOUS_PACKAGE_TRANSITION_COMMIT: Final = "97358563139532b139a79028909671d8e76f79b7"
 FAILED_CANDIDATE_OFFLINE_STDERR_SHA256: Final = (
@@ -164,13 +195,8 @@ EVALUATOR_DIRECT_URL_RECORD: Final = (
     "en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/"
     "en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl"
 )
-RUN_IDS: Final = (
-    "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0002",
-    "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0002",
-    "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0002",
-    "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0002",
-)
-CONTAINER_PREFIX: Final = "giclab-t09-pilot-v9-autonomous-"
+RUN_IDS: Final = ACTIVE_PROVIDER_CONTRACT.run_ids
+CONTAINER_PREFIX: Final = ACTIVE_PROVIDER_CONTRACT.container_prefix
 CONDITION_SUPERVISOR_DIRNAME: Final = ".giclab-supervisor"
 DOCKER_PLAN_LABEL: Final = f"giclab.t09.plan={PLAN_ID}"
 DOCKER_HOST_RUN_LABEL: Final = f"giclab.t09.host_run={HOST_RUN_ID}"
@@ -279,7 +305,9 @@ MAX_ESSENTIAL_METADATA_BYTES: Final = 4_194_304
 MAX_ATTEMPT_EXPORT_MEMBERS: Final = 2_048
 MAX_ATTEMPT_EXPORT_MANIFEST_BYTES: Final = 2_097_152
 POSTFREEZE_ADMISSION_FIELD: Final = "fresh_empirical_campaign_headroom_passed_before_metadata_get"
-SLOT1_IMAGE_MATERIALIZATION_POLICY: Final = "retained-import-or-one-fallback-build"
+SLOT1_IMAGE_MATERIALIZATION_POLICY: Final = cast(
+    str, ACTIVE_PROVIDER_CONTRACT.image_materialization_policy
+)
 SLOT2_IMAGE_MATERIALIZATION_POLICY: Final = "retained-import-only"
 PINNED_DATASET_SHA256: Final = "359300b029c6891567816f351bf8786e9b018d7af8a1a44b7da9ba5ef4651288"
 HISTORICAL_REAL_EVIDENCE_FINALIZER_SHA256: Final = (
@@ -288,6 +316,10 @@ HISTORICAL_REAL_EVIDENCE_FINALIZER_SHA256: Final = (
 FINALIZER_RELATIVE_PATH: Final = "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py"
 FINALIZER_PROJECTION_RELATIVE_PATH: Final = (
     "containers/sira-smoke/pragmatic/t09_finalizer_projection.py"
+)
+SELECTOR_RELATIVE_PATH: Final = "containers/sira-smoke/pragmatic/t09_remote_runner.py"
+REFINALIZATION_RECEIPT_SCHEMA_RELATIVE_PATH: Final = (
+    "schemas/t09-offline-refinalization-receipt.schema.json"
 )
 LOCAL_FINALIZER_QUALIFICATION_RELATIVE_PATH: Final = (
     "containers/sira-smoke/pragmatic/t09_local_finalizer_qualification.py"
@@ -568,6 +600,69 @@ def load_object(path: Path, *, label: str) -> dict[str, Any]:
     if not isinstance(value, dict) or not all(isinstance(key, str) for key in value):
         raise T09HostError(f"{label} must be a string-keyed JSON object")
     return cast(dict[str, Any], value)
+
+
+def _provider_contract_from_document(
+    document: dict[str, Any], *, label: str
+) -> T09ProviderContract:
+    """Resolve only the exact version named by one immutable control document."""
+
+    plan_id = document.get("plan_id")
+    if not isinstance(plan_id, str):
+        raise T09HostError(f"{label} has no provider plan identity")
+    try:
+        return provider_contract_for_plan_id(plan_id)
+    except T09ProviderContractError as exc:
+        raise T09HostError(f"{label} names an unsupported provider contract") from exc
+
+
+def _provider_contract_from_receipt(path: Path, *, label: str) -> T09ProviderContract:
+    """Resolve only the exact version named by a retained provider receipt."""
+
+    return _provider_contract_from_document(
+        load_object(path.resolve(strict=True), label=label),
+        label=label,
+    )
+
+
+def _require_provider_contract(
+    document: dict[str, Any],
+    *,
+    expected: T09ProviderContract,
+    label: str,
+) -> None:
+    """Reject a control document minted for any other provider version."""
+
+    if (
+        _provider_contract_from_document(document, label=label) is not expected
+        or document.get("host_run_id") != expected.host_run_id
+    ):
+        raise T09HostError(f"{label} belongs to another provider contract")
+
+
+def _require_contract_run_id(
+    contract: T09ProviderContract,
+    run_id: str,
+    *,
+    label: str,
+) -> None:
+    """Reject a cross-version condition identity at a typed receipt boundary."""
+
+    try:
+        contract.validate_run_id(run_id)
+    except T09ProviderContractError as exc:
+        raise T09HostError(f"{label} run belongs to another campaign") from exc
+
+
+def _require_active_provider_runner(
+    contract: T09ProviderContract,
+    *,
+    label: str,
+) -> None:
+    """Prevent current-runner packaging from relabeling historical evidence."""
+
+    if contract is not ACTIVE_PROVIDER_CONTRACT:
+        raise T09HostError(f"{label} requires its frozen provider runner")
 
 
 def _exact_keys(value: dict[str, Any], expected: set[str], *, label: str) -> None:
@@ -915,6 +1010,7 @@ def run_logged(
     evidence_root: Path,
     label: str,
     timeout: int,
+    cleanup_journal: EarlyCleanupJournal | None = None,
 ) -> None:
     evidence_root.mkdir(parents=True, exist_ok=True, mode=0o700)
     with (
@@ -933,6 +1029,8 @@ def run_logged(
                 timeout=timeout,
             )
         else:
+            if cleanup_journal is None:
+                raise T09HostError("owned Docker execution lacks durable cleanup authority")
             prefix, _ = docker_run
             result = run_owned_docker(
                 argv,
@@ -942,6 +1040,7 @@ def run_logged(
                 stdout=stdout,
                 stderr=stderr,
                 timeout=timeout,
+                cleanup_journal=cleanup_journal,
             )
     if result.returncode != 0:
         raise T09HostError(f"command failed ({result.returncode}): {label}")
@@ -1070,11 +1169,12 @@ def run_owned_docker(
     stdout: IO[bytes] | int,
     stderr: IO[bytes] | int,
     timeout: int,
+    cleanup_journal: EarlyCleanupJournal,
     environment: dict[str, str] | None = None,
     preexec_fn: Callable[[], None] | None = None,
     owned_role: str | None = None,
 ) -> subprocess.CompletedProcess[bytes]:
-    """Run one named Docker container and prove daemon-side removal in ``finally``."""
+    """Run one named Docker container with immediate durable ID ownership."""
 
     role = _owned_docker_role(label) if owned_role is None else owned_role
     if not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,95}", role):
@@ -1114,41 +1214,108 @@ def run_owned_docker(
         },
     )
     result: subprocess.CompletedProcess[bytes] | None = None
+    process: subprocess.Popen[bytes] | None = None
     primary_error: BaseException | None = None
+    container_id: str | None = None
+    owned_identity: OwnedContainerIdentity | None = None
+
+    def register_published_identity() -> None:
+        nonlocal container_id, owned_identity
+        observed = _read_owned_docker_cidfile(cidfile, prefix=prefix)
+        if observed is None:
+            return
+        if container_id is not None and container_id != observed:
+            raise T09HostError("owned Docker container-ID changed after publication")
+        container_id = observed
+        if owned_identity is None:
+            candidate = OwnedContainerIdentity(
+                container_id=observed,
+                name=name,
+                labels={
+                    "giclab.t09.plan": PLAN_ID,
+                    "giclab.t09.host_run": HOST_RUN_ID,
+                    "giclab.t09.role": role,
+                },
+            )
+            try:
+                register_owned_container_cleanup(
+                    cleanup_journal,
+                    candidate,
+                    role=role,
+                )
+            except EarlyCleanupStateError as exc:
+                raise T09HostError("durable utility-container registration failed") from exc
+            owned_identity = candidate
+
     try:
-        result = subprocess.run(
+        process = subprocess.Popen(
             projected,
             env=environment or safe_environment(),
             stdin=subprocess.DEVNULL,
             stdout=stdout,
             stderr=stderr,
-            check=False,
-            timeout=timeout,
             preexec_fn=preexec_fn,
+        )
+        deadline = time.monotonic() + timeout
+        captured_stdout: bytes | None = None
+        captured_stderr: bytes | None = None
+        while True:
+            register_published_identity()
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                process.kill()
+                captured_stdout, captured_stderr = process.communicate()
+                raise subprocess.TimeoutExpired(
+                    projected,
+                    timeout,
+                    output=captured_stdout,
+                    stderr=captured_stderr,
+                )
+            try:
+                captured_stdout, captured_stderr = process.communicate(timeout=min(0.05, remaining))
+                break
+            except subprocess.TimeoutExpired:
+                continue
+        register_published_identity()
+        result = cast(
+            subprocess.CompletedProcess[bytes],
+            subprocess.CompletedProcess(
+                projected,
+                process.returncode,
+                captured_stdout,
+                captured_stderr,
+            ),
         )
     except BaseException as exc:
         primary_error = exc
     finally:
         removal_returned_success = False
         removal_error_type: str | None = None
+        registration_error_type: str | None = None
         residue: list[str] = []
-        container_id: str | None = None
+        initially_absent = False
         try:
-            if os.path.lexists(cidfile):
-                metadata = cidfile.lstat()
-                if (
-                    cidfile.is_symlink()
-                    or not stat.S_ISREG(metadata.st_mode)
-                    or metadata.st_uid != _docker_cidfile_owner_uid(prefix)
-                    or metadata.st_nlink != 1
-                    or stat.S_IMODE(metadata.st_mode) & 0o022
-                    or not 0 < metadata.st_size <= 65
-                ):
-                    raise T09HostError("owned Docker container-ID file is unsafe")
-                container_id = cidfile.read_text(encoding="ascii").strip()
-                if re.fullmatch(r"[a-f0-9]{64}", container_id) is None:
-                    raise T09HostError("owned Docker container-ID file is malformed")
-                removal_returned_success = remove_container(
+            if process is not None and process.poll() is None:
+                process.kill()
+                process.communicate()
+        except (OSError, subprocess.SubprocessError) as exc:
+            removal_error_type = type(exc).__name__
+        try:
+            register_published_identity()
+        except (OSError, T09HostError) as exc:
+            registration_error_type = type(exc).__name__
+            if primary_error is None:
+                primary_error = T09HostError("durable utility-container registration failed")
+        try:
+            if container_id is not None:
+                retained = inspect_owned_container(
+                    prefix,
+                    name,
+                    expected_container_id=container_id,
+                    expected_role=role,
+                )
+                initially_absent = retained is None
+                removal_returned_success = initially_absent or remove_container(
                     prefix,
                     name,
                     expected_container_id=container_id,
@@ -1159,7 +1326,20 @@ def run_owned_docker(
                 # name.  Only an exact absence proof is an acceptable outcome.
                 removal_returned_success = _container_id_by_exact_name(prefix, name) is None
             residue = [] if removal_returned_success else [name]
-        except (OSError, subprocess.SubprocessError, T09HostError) as exc:
+            if owned_identity is not None:
+                cleanup_result, cleanup_detail = verified_owned_container_cleanup_result(
+                    initially_absent=initially_absent,
+                    removal_verified=removal_returned_success,
+                    removed_detail="utility-container-removed",
+                    absent_detail="utility-container-already-absent",
+                )
+                record_owned_container_cleanup_result(
+                    cleanup_journal,
+                    owned_identity,
+                    result=cleanup_result,
+                    detail_code=cleanup_detail,
+                )
+        except (OSError, subprocess.SubprocessError, T09HostError, EarlyCleanupStateError) as exc:
             removal_error_type = type(exc).__name__
             residue = [name]
         write_exclusive(
@@ -1173,6 +1353,8 @@ def run_owned_docker(
                 "container_absent_after_run": not residue,
                 "residue": residue,
                 "cleanup_error_type": removal_error_type,
+                "cleanup_authority_registered": owned_identity is not None,
+                "cleanup_authority_error_type": registration_error_type,
             },
         )
         if residue:
@@ -1184,6 +1366,27 @@ def run_owned_docker(
         raise primary_error
     assert result is not None
     return result
+
+
+def _read_owned_docker_cidfile(cidfile: Path, *, prefix: list[str]) -> str | None:
+    """Read one daemon-published exact ID without following mutable aliases."""
+
+    if not os.path.lexists(cidfile):
+        return None
+    metadata = cidfile.lstat()
+    if (
+        cidfile.is_symlink()
+        or not stat.S_ISREG(metadata.st_mode)
+        or metadata.st_uid != _docker_cidfile_owner_uid(prefix)
+        or metadata.st_nlink != 1
+        or stat.S_IMODE(metadata.st_mode) & 0o022
+        or not 0 < metadata.st_size <= 65
+    ):
+        raise T09HostError("owned Docker container-ID file is unsafe")
+    container_id = cidfile.read_text(encoding="ascii").strip()
+    if re.fullmatch(r"[a-f0-9]{64}", container_id) is None:
+        raise T09HostError("owned Docker container-ID file is malformed")
+    return container_id
 
 
 def docker_prefix() -> list[str]:
@@ -1233,12 +1436,12 @@ def _image_config_labels(prefix: list[str], reference: str) -> dict[str, str]:
     return cast(dict[str, str], value)
 
 
-def _fallback_image_labels(package_commit: str) -> dict[str, str]:
+def _fallback_image_labels(package_commit: str, *, contract: T09ProviderContract) -> dict[str, str]:
     if re.fullmatch(r"[a-f0-9]{40}", package_commit) is None:
         raise T09HostError("fallback image package commit is malformed")
     return {
-        "giclab.t09.plan": PLAN_ID,
-        "giclab.t09.host_run": HOST_RUN_ID,
+        "giclab.t09.plan": contract.plan_id,
+        "giclab.t09.host_run": contract.host_run_id,
         "giclab.t09.role": "fallback-runtime-image",
         "giclab.t09.package_commit": package_commit,
     }
@@ -1404,11 +1607,12 @@ def _slot2_authority_relative_paths(root: Path) -> tuple[str, ...]:
     source_root = root / "slot2-eligibility-source"
     source_manifest_path = source_root / "source-manifest.json"
     source_manifest = load_object(source_manifest_path, label="slot-2 authority manifest")
+    contract = _provider_contract_from_document(source_manifest, label="slot-2 authority manifest")
     raw_files = source_manifest.get("files")
     if (
         source_manifest.get("schema_version") != "0.1.0"
-        or source_manifest.get("plan_id") != PLAN_ID
-        or source_manifest.get("host_run_id") != HOST_RUN_ID
+        or source_manifest.get("plan_id") != contract.plan_id
+        or source_manifest.get("host_run_id") != contract.host_run_id
         or not isinstance(raw_files, list)
         or source_manifest.get("file_count") != len(raw_files)
         or source_manifest.get("files_sha256")
@@ -1793,7 +1997,7 @@ def materialize_replacement_image(
     repository_runtime_commit = output(["git", "-C", str(repository), "rev-parse", "HEAD"])
     if repository_runtime_commit != package_commit:
         raise T09HostError("fallback image build package commit drifted")
-    owned_image_labels = _fallback_image_labels(package_commit)
+    owned_image_labels = _fallback_image_labels(package_commit, contract=ACTIVE_PROVIDER_CONTRACT)
     build_argv = [
         *prefix,
         "build",
@@ -2177,7 +2381,11 @@ def _validated_fallback_build_intent(
     intent = load_object(intent_path, label="fallback image build intent")
     command = load_object(command_path, label="fallback image build command")
     argv = command.get("argv")
-    labels = _fallback_image_labels(package_commit)
+    contract = _provider_contract_from_document(intent, label="fallback image build intent")
+    labels = _fallback_image_labels(package_commit, contract=contract)
+    qualification_id = contract.active_image_qualification_id
+    image_tag = contract.replacement_image_tag
+    materialization_policy = contract.image_materialization_policy
     if (
         set(intent)
         != {
@@ -2196,12 +2404,15 @@ def _validated_fallback_build_intent(
             "build_command_sha256",
         }
         or intent.get("schema_version") != "0.1.0"
-        or intent.get("plan_id") != PLAN_ID
-        or intent.get("host_run_id") != HOST_RUN_ID
-        or intent.get("qualification_id") != QUALIFICATION_ID
+        or intent.get("plan_id") != contract.plan_id
+        or intent.get("host_run_id") != contract.host_run_id
+        or qualification_id is None
+        or intent.get("qualification_id") != qualification_id
         or intent.get("package_commit") != package_commit
-        or intent.get("image_tag") != REPLACEMENT_IMAGE_TAG
-        or intent.get("materialization_policy") != SLOT1_IMAGE_MATERIALIZATION_POLICY
+        or image_tag is None
+        or intent.get("image_tag") != image_tag
+        or materialization_policy is None
+        or intent.get("materialization_policy") != materialization_policy
         or intent.get("expected_tag_present_before_build") is not False
         or intent.get("authorized_build_count") != 1
         or intent.get("resulting_image_id_known_before_build") is not False
@@ -2229,7 +2440,7 @@ def _validated_fallback_build_intent(
         ):
             raise T09HostError("fallback image build lost its ownership label")
     if not any(
-        typed_argv[index : index + 2] == ["--tag", REPLACEMENT_IMAGE_TAG]
+        typed_argv[index : index + 2] == ["--tag", image_tag]
         for index in range(len(typed_argv) - 1)
     ):
         raise T09HostError("fallback image build lost its exact tag")
@@ -2256,7 +2467,11 @@ def _fallback_build_cleanup_candidate(
         if os.path.lexists(recovery_path):
             raise T09HostError("fallback image has conflicting final and recovery receipts")
         return None
-    expected_labels = _fallback_image_labels(package_commit)
+    contract = _provider_contract_from_document(intent, label="fallback image build intent")
+    image_tag = contract.replacement_image_tag
+    if image_tag is None:
+        raise T09HostError("fallback image contract has no image tag")
+    expected_labels = _fallback_image_labels(package_commit, contract=contract)
     intent_path = materialization / "fallback-build-intent.json"
     if recovery_path.is_file() and not recovery_path.is_symlink():
         recovery = load_object(recovery_path, label="fallback image cleanup recovery")
@@ -2275,10 +2490,10 @@ def _fallback_build_cleanup_candidate(
                 "final_materialization_receipt_absent",
             }
             or recovery.get("schema_version") != "0.1.0"
-            or recovery.get("plan_id") != PLAN_ID
-            or recovery.get("host_run_id") != HOST_RUN_ID
+            or recovery.get("plan_id") != contract.plan_id
+            or recovery.get("host_run_id") != contract.host_run_id
             or recovery.get("package_commit") != package_commit
-            or recovery.get("image_tag") != REPLACEMENT_IMAGE_TAG
+            or recovery.get("image_tag") != image_tag
             or not isinstance(candidate, str)
             or re.fullmatch(r"sha256:[a-f0-9]{64}", candidate) is None
             or recovery.get("fallback_build_intent_sha256") != file_sha256(intent_path)
@@ -2293,7 +2508,7 @@ def _fallback_build_cleanup_candidate(
         return candidate
     if os.path.lexists(recovery_path):
         raise T09HostError("fallback image cleanup recovery is unsafe")
-    candidate = image_id_if_present(prefix, REPLACEMENT_IMAGE_TAG)
+    candidate = image_id_if_present(prefix, image_tag)
     if candidate is None:
         return None
     observed_labels = _image_config_labels(prefix, candidate)
@@ -2303,10 +2518,10 @@ def _fallback_build_cleanup_candidate(
         recovery_path,
         {
             "schema_version": "0.1.0",
-            "plan_id": PLAN_ID,
-            "host_run_id": HOST_RUN_ID,
+            "plan_id": contract.plan_id,
+            "host_run_id": contract.host_run_id,
             "package_commit": package_commit,
-            "image_tag": REPLACEMENT_IMAGE_TAG,
+            "image_tag": image_tag,
             "image_id": candidate,
             "fallback_build_intent_sha256": file_sha256(intent_path),
             "owned_image_labels": expected_labels,
@@ -2322,9 +2537,43 @@ class OwnedContainerIdentity(NamedTuple):
     labels: dict[str, str]
 
 
+def _validate_retained_container_name(name: str) -> None:
+    """Validate a retained namespace without using its name as cleanup authority."""
+
+    if re.fullmatch(r"[a-z0-9_.-]+", name) is None:
+        raise T09HostError("Docker container name is malformed")
+    matching_prefixes = tuple(
+        contract
+        for contract in PROVIDER_CONTRACTS.values()
+        if name.startswith(contract.container_prefix)
+    )
+    if len(matching_prefixes) != 1:
+        raise T09HostError("Docker container name is outside one exact owned namespace")
+
+
+def _provider_contract_from_container_labels(
+    labels: Mapping[str, str],
+    *,
+    name: str,
+) -> T09ProviderContract:
+    """Resolve cleanup authority from the exact plan label, then validate its name."""
+
+    plan_id = labels.get("giclab.t09.plan")
+    if not isinstance(plan_id, str):
+        raise T09HostError("owned Docker labels lack an exact provider plan")
+    try:
+        contract = provider_contract_for_plan_id(plan_id)
+    except T09ProviderContractError as exc:
+        raise T09HostError("owned Docker plan label is unsupported") from exc
+    if labels.get("giclab.t09.host_run") != contract.host_run_id or not name.startswith(
+        contract.container_prefix
+    ):
+        raise T09HostError("Docker plan authority, host ownership, and name disagree")
+    return contract
+
+
 def _container_id_by_exact_name(prefix: list[str], name: str) -> str | None:
-    if not name.startswith(CONTAINER_PREFIX) or re.fullmatch(r"[a-z0-9_.-]+", name) is None:
-        raise T09HostError("Docker container name is outside the owned namespace")
+    _validate_retained_container_name(name)
     raw = output(
         [
             *prefix,
@@ -2351,6 +2600,7 @@ def inspect_owned_container(
     expected_container_id: str | None = None,
     expected_role: str | None = None,
 ) -> OwnedContainerIdentity | None:
+    _validate_retained_container_name(name)
     if expected_container_id is not None:
         if re.fullmatch(r"[a-f0-9]{64}", expected_container_id) is None:
             raise T09HostError("expected Docker container identity is malformed")
@@ -2402,13 +2652,67 @@ def inspect_owned_container(
     ):
         raise T09HostError("owned Docker identity drifted")
     labels = cast(dict[str, str], labels_value)
-    if (
-        labels.get("giclab.t09.plan") != PLAN_ID
-        or labels.get("giclab.t09.host_run") != HOST_RUN_ID
-        or not isinstance(labels.get("giclab.t09.role"), str)
-        or (expected_role is not None and labels.get("giclab.t09.role") != expected_role)
+    _provider_contract_from_container_labels(labels, name=name)
+    if not isinstance(labels.get("giclab.t09.role"), str) or (
+        expected_role is not None and labels.get("giclab.t09.role") != expected_role
     ):
         raise T09HostError("Docker name collision is not owned by this exact host run")
+    return OwnedContainerIdentity(container_id=container_id, name=name, labels=labels)
+
+
+def inspect_owned_container_by_id(
+    prefix: list[str],
+    expected_container_id: str,
+) -> OwnedContainerIdentity | None:
+    """Resolve one cleanup-authoritative ID and derive its typed owned identity."""
+
+    if re.fullmatch(r"[a-f0-9]{64}", expected_container_id) is None:
+        raise T09HostError("expected Docker container identity is malformed")
+    raw = output(
+        [
+            *prefix,
+            "ps",
+            "--all",
+            "--filter",
+            f"id={expected_container_id}",
+            "--format",
+            "{{.ID}}",
+        ]
+    )
+    identifiers = [item for item in raw.splitlines() if item]
+    if not identifiers:
+        return None
+    if (
+        len(identifiers) != 1
+        or re.fullmatch(r"[a-f0-9]{12,64}", identifiers[0]) is None
+        or not expected_container_id.startswith(identifiers[0])
+    ):
+        raise T09HostError("expected Docker identity resolved ambiguously")
+    container_id = output([*prefix, "inspect", "--format", "{{.Id}}", expected_container_id])
+    name = output(
+        [*prefix, "inspect", "--format", "{{.Name}}", expected_container_id]
+    ).removeprefix("/")
+    raw_labels = output(
+        [*prefix, "inspect", "--format", "{{json .Config.Labels}}", expected_container_id]
+    )
+    try:
+        labels_value: object = json.loads(raw_labels)
+    except json.JSONDecodeError as exc:
+        raise T09HostError("owned Docker labels are malformed") from exc
+    if (
+        container_id != expected_container_id
+        or re.fullmatch(r"[a-z0-9_.-]+", name) is None
+        or not isinstance(labels_value, dict)
+        or not all(
+            isinstance(key, str) and isinstance(value, str) for key, value in labels_value.items()
+        )
+    ):
+        raise T09HostError("owned Docker identity drifted")
+    labels = cast(dict[str, str], labels_value)
+    _provider_contract_from_container_labels(labels, name=name)
+    role = labels.get("giclab.t09.role")
+    if not isinstance(role, str) or not role:
+        raise T09HostError("Docker ID is not owned by this exact host run")
     return OwnedContainerIdentity(container_id=container_id, name=name, labels=labels)
 
 
@@ -3121,6 +3425,7 @@ def core_suppression_preflight(
     artifact_root: Path,
     prefix: list[str],
     image_id: str,
+    cleanup_journal: EarlyCleanupJournal,
 ) -> dict[str, object]:
     """Prove Docker, entrypoint-child, and abort behavior in the accepted image."""
 
@@ -3196,6 +3501,8 @@ def core_suppression_preflight(
     created_identity: OwnedContainerIdentity | None = None
     container_state: dict[str, object] | None = None
     lifecycle_error: BaseException | None = None
+    cleanup_result: CleanupTargetState | None = None
+    cleanup_detail: str | None = None
     internal_scan_path = attempt / "core-suppression-writable-root-core-scan.json"
     internal_scan: dict[str, Any] | None = None
     internal_scan_records: list[dict[str, object]] = []
@@ -3224,6 +3531,11 @@ def core_suppression_preflight(
         )
         if created_identity is None:
             raise T09HostError("core-preflight Docker identity disappeared after create")
+        register_owned_container_cleanup(
+            cleanup_journal,
+            created_identity,
+            role="core-suppression-preflight",
+        )
         write_exclusive(
             attempt / "container-identity.json",
             {
@@ -3289,13 +3601,49 @@ def core_suppression_preflight(
                     name,
                     expected_role="core-suppression-preflight",
                 )
-                removed = cleanup_identity is None or remove_container(
-                    prefix,
-                    name,
-                    expected_container_id=cleanup_identity.container_id,
-                    expected_role="core-suppression-preflight",
-                )
+                if cleanup_identity is None:
+                    removed = True
+                    cleanup_result, cleanup_detail = verified_owned_container_cleanup_result(
+                        initially_absent=True,
+                        removal_verified=True,
+                        removed_detail="core-preflight-container-removed",
+                        absent_detail="core-preflight-container-already-absent",
+                    )
+                else:
+                    removed = remove_container(
+                        prefix,
+                        name,
+                        expected_container_id=cleanup_identity.container_id,
+                        expected_role="core-suppression-preflight",
+                    )
+                    cleanup_result, cleanup_detail = verified_owned_container_cleanup_result(
+                        initially_absent=False,
+                        removal_verified=removed,
+                        removed_detail="core-preflight-container-removed",
+                        absent_detail="core-preflight-container-already-absent",
+                    )
+                    if cleanup_result is CleanupTargetState.FAILED and lifecycle_error is None:
+                        lifecycle_error = T09HostError(
+                            "core-preflight container absence could not be verified"
+                        )
             except (OSError, subprocess.SubprocessError, T09HostError) as exc:
+                cleanup_result = CleanupTargetState.FAILED
+                cleanup_detail = type(exc).__name__
+                if lifecycle_error is None:
+                    lifecycle_error = exc
+        if (
+            created_identity is not None
+            and cleanup_result is not None
+            and cleanup_detail is not None
+        ):
+            try:
+                record_owned_container_cleanup_result(
+                    cleanup_journal,
+                    created_identity,
+                    result=cleanup_result,
+                    detail_code=cleanup_detail,
+                )
+            except EarlyCleanupStateError as exc:
                 if lifecycle_error is None:
                     lifecycle_error = exc
     receipt_path = attempt / "core-suppression-preflight.json"
@@ -3538,15 +3886,133 @@ def record_preflight_credential_scan(
 def contract_paths(repository: Path) -> dict[str, Path]:
     experiment = repository / "experiments/EXP-0001-sira-simulative-vs-reactive"
     return {
-        "plan": experiment / "run-plans/pilot.yaml",
-        "execution": experiment / "contracts/T09_PILOT_EXECUTION_CONTRACT.json",
-        "commands": experiment / "contracts/T09_PILOT_COMMAND_MANIFESTS.json",
+        "plan": experiment / "run-plans/proposals/T09_PILOT_RUNTIME_PROFILE_V10.yaml",
+        "execution": experiment / "contracts/proposals/T09_PILOT_EXECUTION_CONTRACT_V10.json",
+        "commands": experiment / "contracts/proposals/T09_PILOT_COMMAND_MANIFESTS_V10.json",
         "conditions": experiment / "run-plans/conditions",
         "dataset": experiment / "contracts/T09_PILOT_DATASET_CONTRACT.json",
         "evaluator": experiment / "contracts/T09_PILOT_EVALUATOR_CONTRACT.json",
-        "runtime": experiment / "contracts/T09_PILOT_RUNTIME_IDENTITY.json",
+        "runtime": experiment / "contracts/proposals/T09_PILOT_RUNTIME_IDENTITY_V10.json",
         "real_regression": experiment / "T09_PRAGMATIC_RETRY4_FINALIZER_REGRESSION.json",
     }
+
+
+def early_cleanup_journal(args: argparse.Namespace) -> EarlyCleanupJournal:
+    """Load the exact transferred cleanup authority without pilot-state dependence."""
+
+    raw_path = getattr(args, "early_cleanup_journal", None)
+    if not isinstance(raw_path, Path):
+        raise T09HostError("early cleanup journal path is required")
+    journal = EarlyCleanupJournal(raw_path.resolve(strict=True))
+    try:
+        state = journal.load()
+    except EarlyCleanupStateError as exc:
+        raise T09HostError("early cleanup journal is not a valid durable authority") from exc
+    try:
+        contract = provider_contract_for_plan_id(state.plan_id)
+    except T09ProviderContractError as exc:
+        raise T09HostError("early cleanup journal names an unsupported campaign") from exc
+    if state.host_run_id != contract.host_run_id:
+        raise T09HostError("early cleanup journal belongs to another campaign")
+    return journal
+
+
+def register_owned_container_cleanup(
+    journal: EarlyCleanupJournal,
+    identity: OwnedContainerIdentity,
+    *,
+    role: str,
+) -> None:
+    """Persist one exact owned container immediately after Docker returns its ID."""
+
+    state = journal.load()
+    try:
+        contract = provider_contract_for_plan_id(state.plan_id)
+    except T09ProviderContractError as exc:
+        raise T09HostError("cleanup journal names an unsupported campaign") from exc
+    if (
+        state.host_run_id != contract.host_run_id
+        or identity.labels.get("giclab.t09.plan") != contract.plan_id
+        or identity.labels.get("giclab.t09.host_run") != contract.host_run_id
+    ):
+        raise T09HostError("owned container and cleanup journal cross campaign boundaries")
+    target_id = f"owned-container-{identity.container_id}"
+    journal.register_target(
+        target_id=target_id,
+        kind=CleanupTargetKind.OWNED_CONTAINER,
+        locator=identity.container_id,
+        ownership_sha256=cleanup_locator_identity(
+            CleanupTargetKind.OWNED_CONTAINER,
+            identity.container_id,
+        ),
+        public_alias=f"owned-container/{role}/{identity.name}",
+    )
+    journal.advance_lifecycle_at_least(CleanupLifecycleStage.CONTAINER_CREATION)
+
+
+def record_owned_container_cleanup_result(
+    journal: EarlyCleanupJournal,
+    identity: OwnedContainerIdentity,
+    *,
+    result: CleanupTargetState,
+    detail_code: str,
+) -> None:
+    """Persist normal exact-container terminalization without entering closeout."""
+
+    journal.record_result(
+        target_id=f"owned-container-{identity.container_id}",
+        result=result,
+        detail_code=detail_code,
+        during_cleanup=False,
+    )
+
+
+def verified_owned_container_cleanup_result(
+    *,
+    initially_absent: bool,
+    removal_verified: bool,
+    removed_detail: str,
+    absent_detail: str,
+) -> tuple[CleanupTargetState, str]:
+    """Project exact absence proof; a false removal result is never absence."""
+
+    if initially_absent:
+        return CleanupTargetState.ABSENT, absent_detail
+    if removal_verified:
+        return CleanupTargetState.REMOVED, removed_detail
+    return CleanupTargetState.FAILED, "owned-container-removal-unverified"
+
+
+_REMOTE_CLEANUP_TARGET_KINDS: Final = frozenset(
+    {
+        CleanupTargetKind.TEMPORARY_REMOTE_CREDENTIAL,
+        CleanupTargetKind.OWNED_CONTAINER,
+    }
+)
+_TERMINAL_CLEANUP_TARGET_STATES: Final = frozenset(
+    {
+        CleanupTargetState.ABSENT,
+        CleanupTargetState.TERMINAL,
+        CleanupTargetState.RESTORED,
+        CleanupTargetState.REMOVED,
+    }
+)
+
+
+def _unfinished_remote_cleanup_target_ids(journal: EarlyCleanupJournal) -> list[str]:
+    return [
+        target.target_id
+        for target in journal.load().targets
+        if target.kind in _REMOTE_CLEANUP_TARGET_KINDS
+        and target.state not in _TERMINAL_CLEANUP_TARGET_STATES
+    ]
+
+
+def _write_remote_early_closeout_receipt(journal: EarlyCleanupJournal) -> Path:
+    state = journal.load()
+    return journal.write_basic_closeout_receipt(
+        journal.root / f"REMOTE_CLOSEOUT-{state.sequence:08d}.json"
+    )
 
 
 def validate_real_evidence_regression(
@@ -3657,11 +4123,16 @@ def _prior_qualification_failure_manifest(root: Path) -> dict[str, object]:
         raise T09HostError("prior qualification root identity drifted")
     state_path = root / "pilot-v7/pilot-state.json"
     state = load_object(state_path, label="prior qualification state")
+    _require_provider_contract(
+        state,
+        expected=PACKAGE_TRANSITION_PROVIDER_CONTRACT,
+        label="prior qualification state",
+    )
     env_example = (
         root / "pilot-v7/replacement-image-qualification/work/build-context/upstream/.env.example"
     )
     if (
-        state.get("plan_id") != PLAN_ID
+        state.get("plan_id") != PACKAGE_TRANSITION_PROVIDER_CONTRACT.plan_id
         or state.get("empirical_attempts_entered") != []
         or state.get("supervised_release_bindings") != {}
         or state.get("unreleased_supervised_release_reclassifications") != {}
@@ -3703,9 +4174,19 @@ def _failed_candidate_manifest(
     provider_entry = load_object(
         root / "pilot-v7/provider-entry.json", label="prior provider entry"
     )
+    _require_provider_contract(
+        state,
+        expected=PACKAGE_TRANSITION_PROVIDER_CONTRACT,
+        label="failed candidate state",
+    )
+    _require_provider_contract(
+        provider_entry,
+        expected=PACKAGE_TRANSITION_PROVIDER_CONTRACT,
+        label="failed candidate provider entry",
+    )
     image_id = receipt.get("image_id")
     if (
-        state.get("plan_id") != PLAN_ID
+        state.get("plan_id") != PACKAGE_TRANSITION_PROVIDER_CONTRACT.plan_id
         or state.get("empirical_attempts_entered") != []
         or state.get("attempts_completed") != []
         or receipt.get("qualification_id") != FAILED_CANDIDATE_QUALIFICATION_ID
@@ -3724,7 +4205,11 @@ def _failed_candidate_manifest(
     ):
         raise T09HostError("failed candidate prefix is not the exact safe offline failure")
     if require_image_present and (
-        image_id_if_present(docker_prefix(), REPLACEMENT_IMAGE_TAG) != image_id
+        image_id_if_present(
+            docker_prefix(),
+            cast(str, PACKAGE_TRANSITION_PROVIDER_CONTRACT.replacement_image_tag),
+        )
+        != image_id
         or image_id_if_present(docker_prefix(), image_id) != image_id
     ):
         raise T09HostError("failed candidate image is unavailable or tag-drifted")
@@ -3843,12 +4328,22 @@ def _validate_previous_package_transition_receipt(
     entry_source_root: Path,
     prior_artifact_root: Path,
 ) -> dict[str, object]:
-    paths = contract_paths(repository)
-    plan_sha256 = file_sha256(paths["plan"])
+    provider_contract = _provider_contract_from_receipt(
+        entry_receipt,
+        label="previous provider entry receipt",
+    )
+    if provider_contract != PACKAGE_TRANSITION_PROVIDER_CONTRACT:
+        raise T09HostError("previous package transition belongs to another campaign")
+    try:
+        load_provider_plan(repository, provider_contract)
+    except T09ProviderContractError as exc:
+        raise T09HostError("previous package transition plan bytes drifted") from exc
+    plan_sha256 = provider_contract.expected_plan_sha256
     try:
         entry = validate_entry_receipt_source_bound(
             entry_receipt.resolve(strict=True),
             entry_source_root.resolve(strict=True),
+            contract=provider_contract,
             package_commit=PACKAGE_TRANSITION_FROM_COMMIT,
             plan_sha256=plan_sha256,
         )
@@ -3858,8 +4353,8 @@ def _validate_previous_package_transition_receipt(
     expected: dict[str, object] = {
         "schema_version": "0.1.0",
         "receipt_type": "t09-pragmatic-preentry-package-transition",
-        "plan_id": PLAN_ID,
-        "host_run_id": HOST_RUN_ID,
+        "plan_id": provider_contract.plan_id,
+        "host_run_id": provider_contract.host_run_id,
         **_git_transition_fields(
             repository,
             to_package_commit=PREVIOUS_PACKAGE_TRANSITION_COMMIT,
@@ -3911,12 +4406,22 @@ def _package_transition_projection(
     require_candidate_present: bool,
 ) -> dict[str, object]:
     verify_package(repository, package_commit)
-    paths = contract_paths(repository)
-    plan_sha256 = file_sha256(paths["plan"])
+    provider_contract = _provider_contract_from_receipt(
+        entry_receipt,
+        label="package transition provider entry receipt",
+    )
+    if provider_contract != PACKAGE_TRANSITION_PROVIDER_CONTRACT:
+        raise T09HostError("package transition belongs to another campaign")
+    try:
+        load_provider_plan(repository, provider_contract)
+    except T09ProviderContractError as exc:
+        raise T09HostError("package transition plan bytes drifted") from exc
+    plan_sha256 = provider_contract.expected_plan_sha256
     try:
         entry = validate_entry_receipt_source_bound(
             entry_receipt.resolve(strict=True),
             entry_source_root.resolve(strict=True),
+            contract=provider_contract,
             package_commit=PACKAGE_TRANSITION_FROM_COMMIT,
             plan_sha256=plan_sha256,
         )
@@ -3962,8 +4467,8 @@ def _package_transition_projection(
     return {
         "schema_version": "0.1.0",
         "receipt_type": "t09-pragmatic-preentry-package-transition",
-        "plan_id": PLAN_ID,
-        "host_run_id": HOST_RUN_ID,
+        "plan_id": provider_contract.plan_id,
+        "host_run_id": provider_contract.host_run_id,
         **_git_transition_fields(repository, to_package_commit=package_commit),
         "plan_sha256": plan_sha256,
         "provider_entry_receipt_sha256": file_sha256(entry_receipt),
@@ -3976,7 +4481,7 @@ def _package_transition_projection(
         "failed_candidate_sha256": canonical_sha256(failed_candidate),
         "previous_package_transition_receipt_sha256": previous_transition["receipt_sha256"],
         "prior_qualification_id": FAILED_CANDIDATE_QUALIFICATION_ID,
-        "next_qualification_id": QUALIFICATION_ID,
+        "next_qualification_id": PACKAGE_TRANSITION_QUALIFICATION_ID,
         "context_failure_replacement_image_absent": True,
         "failed_candidate_replacement_image_present": True,
         "replacement_image_id": failed_candidate["replacement_image_id"],
@@ -4062,13 +4567,18 @@ def validate_dynamic_receipt(
         raise T09HostError("provider entry source bundle is required")
     repository = repository_root.resolve(strict=True)
     source = source_root.resolve(strict=True)
-    plan = contract_paths(repository)["plan"]
+    provider_contract = _provider_contract_from_receipt(
+        path,
+        label="provider entry receipt",
+    )
+    plan = repository / provider_contract.provider_profile_path
     provider_entry_package_commit = expected_package_commit
     package_transition: dict[str, object] | None = None
     try:
         value = validate_entry_receipt_source_bound(
             path.resolve(strict=True),
             source,
+            contract=provider_contract,
             package_commit=expected_package_commit,
             plan_sha256=file_sha256(plan),
         )
@@ -4076,6 +4586,11 @@ def validate_dynamic_receipt(
         observed_entry = load_object(path.resolve(strict=True), label="provider entry receipt")
         observed_package_commit = observed_entry.get("package_commit")
         observed_plan_sha256 = observed_entry.get("plan_sha256")
+        if (
+            observed_package_commit == expected_package_commit
+            and observed_plan_sha256 == file_sha256(plan)
+        ):
+            raise T09HostError("provider entry receipt is not source-bound") from current_error
         generic_transition_valid = False
         if (
             isinstance(observed_package_commit, str)
@@ -4088,11 +4603,13 @@ def validate_dynamic_receipt(
                 value = validate_entry_receipt_source_bound(
                     path.resolve(strict=True),
                     source,
+                    contract=provider_contract,
                     package_commit=observed_package_commit,
                     plan_sha256=observed_plan_sha256,
                 )
                 package_transition = autonomous_preflight_package_transition(
                     repository,
+                    contract=provider_contract,
                     from_package_commit=observed_package_commit,
                     to_package_commit=expected_package_commit,
                 )
@@ -4102,10 +4619,15 @@ def validate_dynamic_receipt(
                 provider_entry_package_commit = observed_package_commit
                 generic_transition_valid = True
         if not generic_transition_valid:
+            if provider_contract is not V6_PROVIDER_CONTRACT:
+                raise T09HostError(
+                    "provider entry receipt has no transition for its selected version"
+                ) from current_error
             try:
                 value = validate_entry_receipt_source_bound(
                     path.resolve(strict=True),
                     source,
+                    contract=provider_contract,
                     package_commit=RETRY4_ACTIVE_SLOT2_ENTRY_PACKAGE_COMMIT,
                     plan_sha256=file_sha256(plan),
                 )
@@ -4126,10 +4648,14 @@ def validate_dynamic_receipt(
                     "active slot-2 provider package transition drifted"
                 ) from current_error
     captured = value.get("captured_at_epoch")
+    provider_lifecycle = load_campaign_lifecycle(repository, contract=provider_contract)
+    entry_freshness_seconds = (
+        provider_lifecycle.preflight_wall_seconds or provider_lifecycle.wall_seconds
+    )
     if (
         not isinstance(captured, (int, float))
         or isinstance(captured, bool)
-        or not 0 <= time.time() - float(captured) <= MAX_PREFLIGHT_INSTANCE_ACTIVE_SECONDS
+        or not 0 <= time.time() - float(captured) <= entry_freshness_seconds
     ):
         raise T09HostError("provider entry receipt is stale")
     encoded = json.dumps(value, sort_keys=True)
@@ -4175,15 +4701,20 @@ def validate_provider_closeout_receipt(
     assert entry_receipt_path is not None
     assert entry_source_root is not None
     repository = repository_root.resolve(strict=True)
+    provider_contract = _provider_contract_from_receipt(
+        entry_receipt_path,
+        label="provider entry receipt",
+    )
     try:
         value = validate_source_bound_closeout(
             path.resolve(strict=True),
             source_root.resolve(strict=True),
+            contract=provider_contract,
             entry_receipt_path=entry_receipt_path.resolve(strict=True),
             entry_source_root=entry_source_root.resolve(strict=True),
             package_commit=expected_package_commit,
-            plan_sha256=file_sha256(contract_paths(repository)["plan"]),
-            lifecycle=load_campaign_lifecycle(repository),
+            plan_sha256=file_sha256(repository / provider_contract.provider_profile_path),
+            lifecycle=load_campaign_lifecycle(repository, contract=provider_contract),
         )
     except T09ProviderError as exc:
         raise T09HostError("provider closeout receipt is not source-bound") from exc
@@ -4230,14 +4761,23 @@ def _runtime_budget_state(root: Path) -> dict[str, Any]:
     return load_object(root / "pilot-v7/pilot-state.json", label="pilot state")
 
 
+def _runtime_provider_contract(root: Path) -> T09ProviderContract:
+    """Resolve the exact lifecycle contract from durable pilot state."""
+
+    return _provider_contract_from_document(
+        _runtime_budget_state(root),
+        label="pilot state",
+    )
+
+
 def _received_export_ack_path(root: Path, run_id: str) -> Path:
-    if run_id not in RUN_IDS:
+    if run_id not in _runtime_provider_contract(root).run_ids:
         raise T09HostError("export acknowledgement run identity is unknown")
     return root / "pilot-v7/received-export-acknowledgements" / f"{run_id}.json"
 
 
 def _attempt_export_completion_path(root: Path, run_id: str) -> Path:
-    if run_id not in RUN_IDS:
+    if run_id not in _runtime_provider_contract(root).run_ids:
         raise T09HostError("attempt export completion run identity is unknown")
     return root / "pilot-v7/attempt-export-completions" / f"{run_id}-export-completion.json"
 
@@ -4296,15 +4836,17 @@ def _validate_attempt_export_completion(
     provider_entry_receipt_sha256: str,
     owned_instance_identity_sha256: str,
     lambda_started_at_epoch: float,
+    contract: T09ProviderContract,
 ) -> float:
     """Validate the durable host receipt written only after the export stream closes."""
 
+    _require_contract_run_id(contract, run_id, label="attempt export completion")
     completed = value.get("export_completed_at_epoch")
     if (
         set(value) != _ATTEMPT_EXPORT_COMPLETION_KEYS
         or value.get("schema_version") != "0.1.0"
-        or value.get("plan_id") != PLAN_ID
-        or value.get("host_run_id") != HOST_RUN_ID
+        or value.get("plan_id") != contract.plan_id
+        or value.get("host_run_id") != contract.host_run_id
         or value.get("run_id") != run_id
         or value.get("package_commit") != package_commit
         or value.get("archive_bytes") != archive_bytes
@@ -4366,6 +4908,7 @@ def _validate_attempt_export_acknowledgement(
     owned_instance_identity_sha256: str,
     lambda_started_at_epoch: float,
     archive: Path | None,
+    contract: T09ProviderContract,
 ) -> dict[str, object]:
     """Validate one direct-export acknowledgement without inventing a remote copy.
 
@@ -4375,6 +4918,7 @@ def _validate_attempt_export_acknowledgement(
     independently generated verifier acknowledgement.
     """
 
+    _require_contract_run_id(contract, run_id, label="attempt export acknowledgement")
     archive_bytes = acknowledgement.get("archive_bytes")
     archive_sha256 = acknowledgement.get("archive_sha256")
     manifest_sha256 = acknowledgement.get("manifest_sha256")
@@ -4382,8 +4926,8 @@ def _validate_attempt_export_acknowledgement(
     if (
         set(acknowledgement) != _ATTEMPT_EXPORT_ACKNOWLEDGEMENT_KEYS
         or acknowledgement.get("schema_version") != "0.1.0"
-        or acknowledgement.get("plan_id") != PLAN_ID
-        or acknowledgement.get("host_run_id") != HOST_RUN_ID
+        or acknowledgement.get("plan_id") != contract.plan_id
+        or acknowledgement.get("host_run_id") != contract.host_run_id
         or acknowledgement.get("run_id") != run_id
         or acknowledgement.get("package_commit") != package_commit
         or acknowledgement.get("archive_path") != f"{run_id}.tar.gz"
@@ -4430,6 +4974,7 @@ def _validate_attempt_export_acknowledgement(
         provider_entry_receipt_sha256=provider_entry_receipt_sha256,
         owned_instance_identity_sha256=owned_instance_identity_sha256,
         lambda_started_at_epoch=lambda_started_at_epoch,
+        contract=contract,
     )
     if (
         acknowledgement.get("export_completed_at_epoch") != completed_at
@@ -4464,6 +5009,18 @@ def require_prior_export_acknowledgements(
     frozen_manifest = load_object(frozen_manifest_path, label="frozen run manifest")
     frozen_manifest_sha256 = file_sha256(frozen_manifest_path)
     state = _runtime_budget_state(root)
+    contract = _provider_contract_from_document(state, label="pilot state")
+    _require_provider_contract(
+        entry,
+        expected=contract,
+        label="attempt export acknowledgement provider entry",
+    )
+    _require_provider_contract(
+        frozen_manifest,
+        expected=contract,
+        label="attempt export acknowledgement frozen manifest",
+    )
+    attempt_order = contract.run_ids
     raw_complete = state.get("raw_attempts_complete")
     entered = state.get("empirical_attempts_entered")
     essential_seals = state.get("essential_failure_seals")
@@ -4473,7 +5030,7 @@ def require_prior_export_acknowledgements(
         or not isinstance(essential_seals, dict)
     ):
         raise T09HostError("attempt export acknowledgement state is malformed")
-    if not 0 <= next_attempt_index <= len(RUN_IDS):
+    if not 0 <= next_attempt_index <= len(attempt_order):
         raise T09HostError("attempt export acknowledgement prefix is invalid")
     lambda_started = entry.get("lambda_started_at_epoch")
     replacement_image_id = frozen_manifest.get("replacement_image_id")
@@ -4491,7 +5048,7 @@ def require_prior_export_acknowledgements(
     ):
         raise T09HostError("attempt export acknowledgement runtime identity is malformed")
     projections: list[dict[str, object]] = []
-    for run_id in RUN_IDS[:next_attempt_index]:
+    for run_id in attempt_order[:next_attempt_index]:
         raw_authority = run_id in raw_complete
         essential_authority = isinstance(essential_seals.get(run_id), dict)
         if raw_authority == essential_authority:
@@ -4530,6 +5087,7 @@ def require_prior_export_acknowledgements(
                 owned_instance_identity_sha256=owned_instance_sha256,
                 lambda_started_at_epoch=float(lambda_started),
                 archive=archive,
+                contract=contract,
             )
         )
     return projections
@@ -4544,7 +5102,7 @@ def require_attempt_export_acknowledgement(
     """Require the current immutable raw export before downstream finalization."""
 
     try:
-        attempt_index = RUN_IDS.index(run_id)
+        attempt_index = _runtime_provider_contract(root).run_ids.index(run_id)
     except ValueError:
         raise T09HostError("export acknowledgement run identity is unknown") from None
     require_prior_export_acknowledgements(
@@ -4736,12 +5294,16 @@ def container_state_receipt(prefix: list[str], container_target: str) -> dict[st
     }
 
 
-def manifests(document: dict[str, Any]) -> list[dict[str, Any]]:
+def manifests(
+    document: dict[str, Any],
+    *,
+    expected_run_ids: tuple[str, ...] = RUN_IDS,
+) -> list[dict[str, Any]]:
     value = document.get("manifests")
     if not isinstance(value, list) or len(value) != 4:
         raise T09HostError("exactly four command manifests are required")
     result = [item for item in value if isinstance(item, dict)]
-    if len(result) != 4 or tuple(item.get("run_id") for item in result) != RUN_IDS:
+    if len(result) != 4 or tuple(item.get("run_id") for item in result) != expected_run_ids:
         raise T09HostError("command manifest order or identities drifted")
     pair_diffs = document.get("pair_diffs")
     if (
@@ -4753,8 +5315,17 @@ def manifests(document: dict[str, Any]) -> list[dict[str, Any]]:
     return cast(list[dict[str, Any]], result)
 
 
-def manifest_for_run(document: dict[str, Any], run_id: str) -> dict[str, Any]:
-    matches = [item for item in manifests(document) if item.get("run_id") == run_id]
+def manifest_for_run(
+    document: dict[str, Any],
+    run_id: str,
+    *,
+    expected_run_ids: tuple[str, ...] = RUN_IDS,
+) -> dict[str, Any]:
+    matches = [
+        item
+        for item in manifests(document, expected_run_ids=expected_run_ids)
+        if item.get("run_id") == run_id
+    ]
     if len(matches) != 1:
         raise T09HostError("run command manifest is missing or duplicated")
     return matches[0]
@@ -4791,10 +5362,9 @@ def verify_package(
         expected_sha256=file_sha256(paths["execution"]),
     )
     if (
-        execution.get("authorized") is not True
-        or execution.get("authorization_reference") != AUTHORIZATION_REFERENCE
-        or execution.get("execution_eligibility")
-        != "current-turn-authorized-after-dynamic-preflight"
+        execution.get("authorized") is not False
+        or execution.get("authorization_reference") is not None
+        or execution.get("execution_eligibility") != "blocked-until-fresh-category-3-authorization"
         or execution.get("plan_id") != PLAN_ID
     ):
         raise T09HostError("execution contract identity or authorization drifted")
@@ -4974,6 +5544,7 @@ def _evaluator_package_records(
     expected_packages: list[str],
     evidence_root: Path,
     label: str,
+    cleanup_journal: EarlyCleanupJournal,
 ) -> list[str]:
     command = [
         *prefix,
@@ -5015,6 +5586,7 @@ def _evaluator_package_records(
         stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL,
         timeout=120,
+        cleanup_journal=cleanup_journal,
     )
     if result.returncode != 0 or len(result.stdout) > 1_048_576:
         raise T09HostError("exact evaluator package manifest failed")
@@ -5350,6 +5922,7 @@ def evaluator_overlay(
     overlay: Path,
     prefix: list[str],
     image_id: str,
+    cleanup_journal: EarlyCleanupJournal,
 ) -> dict[str, object]:
     overlay.mkdir(mode=0o700, parents=True, exist_ok=False)
     command = [
@@ -5396,6 +5969,7 @@ def evaluator_overlay(
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         timeout=1_800,
+        cleanup_journal=cleanup_journal,
     )
     if result.returncode != 0:
         raise T09HostError("exact evaluator overlay materialization failed")
@@ -5412,6 +5986,7 @@ def evaluator_overlay(
         expected_packages=expected_packages,
         evidence_root=materialization_evidence,
         label="evaluator-package-freeze",
+        cleanup_journal=cleanup_journal,
     )
     inventory = evaluator_overlay_inventory(overlay)
     manifest: dict[str, object] = {
@@ -5452,6 +6027,7 @@ def validate_evaluator_overlay_binding(
     image_id: str,
     frozen_manifest: dict[str, Any],
     verify_packages: bool,
+    cleanup_journal: EarlyCleanupJournal,
 ) -> dict[str, object]:
     manifest_path = artifact_root / "pilot-v7/evaluator-overlay-manifest.json"
     retained = load_object(manifest_path, label="evaluator overlay manifest")
@@ -5486,6 +6062,7 @@ def validate_evaluator_overlay_binding(
             expected_packages=expected_evaluator_packages(repository),
             evidence_root=revalidation_root,
             label="evaluator-package-revalidation",
+            cleanup_journal=cleanup_journal,
         )
         if packages != retained.get("packages") or canonical_sha256(packages) != retained.get(
             "packages_sha256"
@@ -5537,6 +6114,7 @@ def browser_lifecycle_preflight(
     artifact_root: Path,
     prefix: list[str],
     image_id: str,
+    cleanup_journal: EarlyCleanupJournal,
 ) -> dict[str, object]:
     attempt = artifact_root / "pilot-v7/browser-preflight"
     attempt.mkdir(parents=True, mode=0o700)
@@ -5593,6 +6171,8 @@ def browser_lifecycle_preflight(
     state_receipt: dict[str, object] | None = None
     record: dict[str, Any] | None = None
     lifecycle_error: BaseException | None = None
+    cleanup_result: CleanupTargetState | None = None
+    cleanup_detail: str | None = None
     try:
         if _container_id_by_exact_name(prefix, name) is not None:
             raise T09HostError("browser-preflight Docker name is already occupied")
@@ -5617,6 +6197,11 @@ def browser_lifecycle_preflight(
         )
         if created_identity is None:
             raise T09HostError("browser-preflight Docker identity disappeared after create")
+        register_owned_container_cleanup(
+            cleanup_journal,
+            created_identity,
+            role="browser-lifecycle-preflight",
+        )
         write_exclusive(
             attempt / "container-identity.json",
             {
@@ -5734,13 +6319,49 @@ def browser_lifecycle_preflight(
                     name,
                     expected_role="browser-lifecycle-preflight",
                 )
-                removed = cleanup_identity is None or remove_container(
-                    prefix,
-                    name,
-                    expected_container_id=cleanup_identity.container_id,
-                    expected_role="browser-lifecycle-preflight",
-                )
+                if cleanup_identity is None:
+                    removed = True
+                    cleanup_result, cleanup_detail = verified_owned_container_cleanup_result(
+                        initially_absent=True,
+                        removal_verified=True,
+                        removed_detail="browser-preflight-container-removed",
+                        absent_detail="browser-preflight-container-already-absent",
+                    )
+                else:
+                    removed = remove_container(
+                        prefix,
+                        name,
+                        expected_container_id=cleanup_identity.container_id,
+                        expected_role="browser-lifecycle-preflight",
+                    )
+                    cleanup_result, cleanup_detail = verified_owned_container_cleanup_result(
+                        initially_absent=False,
+                        removal_verified=removed,
+                        removed_detail="browser-preflight-container-removed",
+                        absent_detail="browser-preflight-container-already-absent",
+                    )
+                    if cleanup_result is CleanupTargetState.FAILED and lifecycle_error is None:
+                        lifecycle_error = T09HostError(
+                            "browser-preflight container absence could not be verified"
+                        )
             except (OSError, subprocess.SubprocessError, T09HostError) as exc:
+                cleanup_result = CleanupTargetState.FAILED
+                cleanup_detail = type(exc).__name__
+                if lifecycle_error is None:
+                    lifecycle_error = exc
+        if (
+            created_identity is not None
+            and cleanup_result is not None
+            and cleanup_detail is not None
+        ):
+            try:
+                record_owned_container_cleanup_result(
+                    cleanup_journal,
+                    created_identity,
+                    result=cleanup_result,
+                    detail_code=cleanup_detail,
+                )
+            except EarlyCleanupStateError as exc:
                 if lifecycle_error is None:
                     lifecycle_error = exc
     try:
@@ -5934,6 +6555,7 @@ def secret_channel_preflight(
     secret_file: Path,
     prefix: list[str],
     image_id: str,
+    cleanup_journal: EarlyCleanupJournal,
 ) -> dict[str, Any]:
     attempt = artifact_root / "pilot-v7/secret-channel-preflight"
     attempt.mkdir(parents=True, mode=0o700)
@@ -5967,7 +6589,13 @@ def secret_channel_preflight(
         "--output",
         "/opt/giclab-evidence/receipt.json",
     ]
-    run_logged(command, evidence_root=attempt, label="secret-channel-probe", timeout=60)
+    run_logged(
+        command,
+        evidence_root=attempt,
+        label="secret-channel-probe",
+        timeout=60,
+        cleanup_journal=cleanup_journal,
+    )
     receipt = load_object(attempt / "receipt.json", label="secret-channel receipt")
     if (
         receipt.get("opened_read_only_without_value_read") is not True
@@ -5986,6 +6614,7 @@ def offline_runtime_preflight(
     overlay: Path,
     prefix: list[str],
     image_id: str,
+    cleanup_journal: EarlyCleanupJournal,
 ) -> dict[str, Any]:
     paths = contract_paths(repository)
     attempt = artifact_root / "pilot-v7/offline-runtime-preflight"
@@ -6058,7 +6687,13 @@ def offline_runtime_preflight(
         "--finalizer-raw-fixture",
         "/opt/giclab-finalizer-fixture",
     ]
-    run_logged(command, evidence_root=attempt, label="offline-preflight", timeout=300)
+    run_logged(
+        command,
+        evidence_root=attempt,
+        label="offline-preflight",
+        timeout=300,
+        cleanup_journal=cleanup_journal,
+    )
     receipt = load_object(
         attempt / "offline-runtime-preflight.json",
         label="offline runtime preflight",
@@ -6108,6 +6743,7 @@ def qualified_real_evidence_regression(
     image_id: str,
     image_files: dict[str, str],
     static_receipt: dict[str, Any],
+    cleanup_journal: EarlyCleanupJournal,
 ) -> dict[str, Any]:
     """Reconstruct the retained V4 raw archive inside the exact accepted image."""
 
@@ -6180,7 +6816,13 @@ def qualified_real_evidence_regression(
         "--output",
         "/opt/giclab-output/receipt.json",
     ]
-    run_logged(command, evidence_root=attempt, label="qualified-real-regression", timeout=300)
+    run_logged(
+        command,
+        evidence_root=attempt,
+        label="qualified-real-regression",
+        timeout=300,
+        cleanup_journal=cleanup_journal,
+    )
     receipt_path = attempt / "receipt.json"
     receipt = load_object(receipt_path, label="qualified real-evidence regression")
     interpreter = receipt.get("interpreter")
@@ -6212,6 +6854,7 @@ def final_image_runtime_preflight(
     prefix: list[str],
     image_id: str,
     command_document: dict[str, Any],
+    cleanup_journal: EarlyCleanupJournal,
 ) -> dict[str, Any]:
     attempt = artifact_root / "pilot-v7/final-image-runtime-preflight"
     attempt.mkdir(parents=True, mode=0o700)
@@ -6247,6 +6890,7 @@ def final_image_runtime_preflight(
         evidence_root=attempt,
         label="final-image-runtime-preflight",
         timeout=300,
+        cleanup_journal=cleanup_journal,
     )
     receipt = load_object(attempt / "runtime-preflight.json", label="image runtime preflight")
     upstream = receipt.get("upstream_runner_import")
@@ -6271,6 +6915,7 @@ def provider_accounting_container_preflight(
     artifact_root: Path,
     prefix: list[str],
     image_id: str,
+    cleanup_journal: EarlyCleanupJournal,
 ) -> dict[str, Any]:
     """Exercise the repaired lifecycle in the accepted image with no network."""
 
@@ -6330,6 +6975,7 @@ def provider_accounting_container_preflight(
         evidence_root=attempt,
         label="provider-accounting-preflight",
         timeout=300,
+        cleanup_journal=cleanup_journal,
     )
     receipt_path = attempt / "receipt.json"
     receipt = load_object(receipt_path, label="provider accounting exact-container preflight")
@@ -6364,6 +7010,7 @@ def final_image_file_hashes(
     artifact_root: Path,
     prefix: list[str],
     image_id: str,
+    cleanup_journal: EarlyCleanupJournal,
 ) -> dict[str, str]:
     evidence = artifact_root / "pilot-v7/final-image-file-hashes"
     expected_paths = {
@@ -6400,6 +7047,7 @@ def final_image_file_hashes(
         evidence_root=evidence,
         label="sha256sum",
         timeout=120,
+        cleanup_journal=cleanup_journal,
     )
     observed: dict[str, str] = {}
     for line in (evidence / "sha256sum.stdout").read_text(encoding="utf-8").splitlines():
@@ -6423,6 +7071,7 @@ def model_metadata_preflight(
     secret_file: Path,
     prefix: list[str],
     image_id: str,
+    cleanup_journal: EarlyCleanupJournal,
 ) -> dict[str, Any]:
     attempt = artifact_root / "pilot-v7/model-metadata-preflight"
     attempt.mkdir(parents=True, mode=0o700)
@@ -6460,7 +7109,13 @@ def model_metadata_preflight(
         "/opt/sira/.venv/bin/python",
         "/opt/giclab/model_preflight.py",
     ]
-    run_logged(command, evidence_root=attempt, label="model-metadata", timeout=60)
+    run_logged(
+        command,
+        evidence_root=attempt,
+        label="model-metadata",
+        timeout=60,
+        cleanup_journal=cleanup_journal,
+    )
     receipt = load_object(attempt / "model-availability.json", label="model availability")
     if (
         receipt.get("method") != "GET"
@@ -6726,7 +7381,7 @@ def write_frozen_run_manifest(
         "qualification_count": 1,
         "build_count": image_materialization.get("build_count"),
         "image_materialization_policy": expected_materialization_policy,
-        "source_contract_sha256": AUTHORIZATION_SOURCE_SHA256,
+        "source_contract_sha256": dynamic.get("authorization_source_sha256"),
         "clean_package_commit": package_commit,
         "plan_sha256": file_sha256(paths["plan"]),
         "execution_contract_sha256": file_sha256(paths["execution"]),
@@ -6933,15 +7588,28 @@ def load_frozen_run_manifest(
     ):
         raise T09HostError("frozen run manifest metadata is unsafe")
     manifest = load_object(path, label="frozen run manifest")
+    runtime_state = _runtime_budget_state(artifact_root)
+    runtime_contract = _provider_contract_from_document(runtime_state, label="pilot state")
+    _require_active_provider_runner(runtime_contract, label="frozen runtime validation")
+    _require_provider_contract(
+        manifest,
+        expected=runtime_contract,
+        label="frozen run manifest",
+    )
+    provider_entry = load_object(
+        artifact_root / "pilot-v7/provider-entry.json",
+        label="provider entry summary",
+    )
+    _require_provider_contract(
+        provider_entry,
+        expected=runtime_contract,
+        label="provider entry summary",
+    )
     try:
         typed_qualification = RuntimeQualification.from_document(manifest)
     except T09PilotError as exc:
         raise T09HostError(str(exc)) from exc
     paths = contract_paths(repository)
-    provider_entry = load_object(
-        artifact_root / "pilot-v7/provider-entry.json",
-        label="provider entry summary",
-    )
     model_credential_scan_path = artifact_root / "pilot-v7/model-metadata-credential-scan.json"
     model_credential_scan = load_object(
         model_credential_scan_path,
@@ -6977,11 +7645,10 @@ def load_frozen_run_manifest(
         or model_credential_scan.get("empirical_entry_permitted") is not True
     ):
         raise T09HostError("model metadata credential scan did not pass cleanly")
-    runtime_state = _runtime_budget_state(artifact_root)
     expected = {
-        "plan_id": PLAN_ID,
-        "host_run_id": HOST_RUN_ID,
-        "qualification_id": QUALIFICATION_ID,
+        "plan_id": runtime_contract.plan_id,
+        "host_run_id": runtime_contract.host_run_id,
+        "qualification_id": runtime_contract.active_image_qualification_id,
         "qualification_count": 1,
         "build_count": manifest.get("build_count"),
         "image_materialization_policy": (
@@ -6989,7 +7656,7 @@ def load_frozen_run_manifest(
             if provider_entry.get("launch_slot") == 1
             else SLOT2_IMAGE_MATERIALIZATION_POLICY
         ),
-        "source_contract_sha256": AUTHORIZATION_SOURCE_SHA256,
+        "source_contract_sha256": provider_entry.get("authorization_source_sha256"),
         "clean_package_commit": package_commit,
         "plan_sha256": file_sha256(paths["plan"]),
         "execution_contract_sha256": file_sha256(paths["execution"]),
@@ -7067,7 +7734,7 @@ def load_frozen_run_manifest(
         "local_finalizer_evaluator_dependency_tree_sha256": (
             manifest.get("local_finalizer_evaluator_dependency_tree_sha256")
         ),
-        "attempt_order": list(RUN_IDS),
+        "attempt_order": list(runtime_contract.run_ids),
         "empirical_entry_crossed": False,
         "post_entry_code_science_image_freeze": True,
     }
@@ -7573,6 +8240,7 @@ def _resume_evaluator_receipt(
     overlay: Path,
     prefix: list[str],
     image_id: str,
+    cleanup_journal: EarlyCleanupJournal,
 ) -> dict[str, object]:
     manifest_path = artifact_root / "pilot-v7/evaluator-overlay-manifest.json"
     manifest = load_object(manifest_path, label="resumed evaluator overlay manifest")
@@ -7611,6 +8279,7 @@ def _resume_evaluator_receipt(
             "evaluator_overlay_packages_sha256": receipt["overlay_package_manifest_sha256"],
         },
         verify_packages=True,
+        cleanup_journal=cleanup_journal,
     )
     return receipt
 
@@ -7670,9 +8339,14 @@ def prepare_preflight_resume(
         package_commit=args.package_commit,
     )
     try:
+        provider_contract = _provider_contract_from_receipt(
+            args.dynamic_receipt,
+            label="preflight resume provider entry receipt",
+        )
         dynamic = validate_entry_receipt_source_bound(
             args.dynamic_receipt.resolve(strict=True),
             args.dynamic_source_root.resolve(strict=True),
+            contract=provider_contract,
             package_commit=PREENTRY_RESUME_FROM_PACKAGE_COMMIT,
             plan_sha256=PREENTRY_RESUME_FROM_PLAN_SHA256,
         )
@@ -7783,12 +8457,14 @@ def prepare_preflight_resume(
         transition_aggregate_path,
         artifact_root / "pilot-v7/runtime-budget/aggregate-budget.json",
     )
+    cleanup_journal = early_cleanup_journal(args)
     evaluator = _resume_evaluator_receipt(
         repository=repository,
         artifact_root=artifact_root,
         overlay=overlay,
         prefix=docker_prefix(),
         image_id=image_id,
+        cleanup_journal=cleanup_journal,
     )
     recovery_argv = _preflight_resume_argv()
     transition: dict[str, object] = {
@@ -7870,6 +8546,7 @@ def resume_preflight(args: argparse.Namespace) -> None:
     paths = contract_paths(repository)
     execution_sha256 = file_sha256(paths["execution"])
     prefix = docker_prefix()
+    cleanup_journal = early_cleanup_journal(args)
     image_id = image_materialization.get("image_id")
     if not isinstance(image_id, str):
         raise T09HostError("resumed image materialization lacks its identity")
@@ -7879,23 +8556,27 @@ def resume_preflight(args: argparse.Namespace) -> None:
         secret_file=args.secret_file.resolve(strict=True),
         prefix=prefix,
         image_id=image_id,
+        cleanup_journal=cleanup_journal,
     )
     image_files = final_image_file_hashes(
         artifact_root=artifact_root,
         prefix=prefix,
         image_id=image_id,
+        cleanup_journal=cleanup_journal,
     )
     final_runtime = final_image_runtime_preflight(
         artifact_root=artifact_root,
         prefix=prefix,
         image_id=image_id,
         command_document=command_document,
+        cleanup_journal=cleanup_journal,
     )
     provider_accounting = provider_accounting_container_preflight(
         repository=repository,
         artifact_root=artifact_root,
         prefix=prefix,
         image_id=image_id,
+        cleanup_journal=cleanup_journal,
     )
     offline = offline_runtime_preflight(
         repository=repository,
@@ -7903,6 +8584,7 @@ def resume_preflight(args: argparse.Namespace) -> None:
         overlay=args.evaluator_overlay.resolve(strict=True),
         prefix=prefix,
         image_id=image_id,
+        cleanup_journal=cleanup_journal,
     )
     archive_staging = stage_verified_archive(
         args.real_evidence_archive,
@@ -7923,17 +8605,20 @@ def resume_preflight(args: argparse.Namespace) -> None:
         image_id=image_id,
         image_files=image_files,
         static_receipt=real_evidence_regression,
+        cleanup_journal=cleanup_journal,
     )
     core_suppression = core_suppression_preflight(
         repository=repository,
         artifact_root=artifact_root,
         prefix=prefix,
         image_id=image_id,
+        cleanup_journal=cleanup_journal,
     )
     browser = browser_lifecycle_preflight(
         artifact_root=artifact_root,
         prefix=prefix,
         image_id=image_id,
+        cleanup_journal=cleanup_journal,
     )
     sealing_primitives = sealing_primitives_preflight(
         repository=repository,
@@ -7941,6 +8626,14 @@ def resume_preflight(args: argparse.Namespace) -> None:
         command_document=command_document,
         package_commit=args.package_commit,
         execution_contract_sha256=execution_sha256,
+        provider_contract=_provider_contract_from_document(
+            dynamic,
+            label="provider entry receipt",
+        ),
+        expected_run_ids=_provider_contract_from_document(
+            dynamic,
+            label="provider entry receipt",
+        ).run_ids,
     )
     evaluator_overlay_verified = validate_evaluator_overlay_binding(
         artifact_root=artifact_root,
@@ -7954,6 +8647,7 @@ def resume_preflight(args: argparse.Namespace) -> None:
             "evaluator_overlay_packages_sha256": evaluator["overlay_package_manifest_sha256"],
         },
         verify_packages=True,
+        cleanup_journal=cleanup_journal,
     )
     adjudication = image_equivalence_adjudication(
         repository=repository,
@@ -7982,6 +8676,7 @@ def resume_preflight(args: argparse.Namespace) -> None:
         secret_file=args.secret_file.resolve(strict=True),
         prefix=prefix,
         image_id=image_id,
+        cleanup_journal=cleanup_journal,
     )
     model_credential_scan = record_preflight_credential_scan(
         artifact_root=artifact_root,
@@ -8151,6 +8846,7 @@ def resume_preflight(args: argparse.Namespace) -> None:
 def preflight(args: argparse.Namespace) -> None:
     repository = args.repository.resolve(strict=True)
     artifact_root = args.artifact_root.resolve(strict=False)
+    cleanup_journal = early_cleanup_journal(args)
     if artifact_root.exists():
         raise T09HostError("pilot artifact root must be fresh")
     validate_secret_metadata(args.secret_file.resolve(strict=True))
@@ -8160,6 +8856,33 @@ def preflight(args: argparse.Namespace) -> None:
         repository_root=repository,
         source_root=args.dynamic_source_root.resolve(strict=True),
     )
+    dynamic_contract = _provider_contract_from_document(dynamic, label="provider entry receipt")
+    cleanup_state = cleanup_journal.load()
+    if (
+        dynamic_contract is not ACTIVE_PROVIDER_CONTRACT
+        or cleanup_state.plan_id != ACTIVE_PROVIDER_CONTRACT.plan_id
+        or cleanup_state.host_run_id != ACTIVE_PROVIDER_CONTRACT.host_run_id
+        or cleanup_state.provider_instance_identity_sha256
+        != dynamic.get("owned_instance_identity_sha256")
+        or cleanup_state.journal_id != dynamic.get("early_cleanup_journal_id")
+        or cleanup_state.sequence != dynamic.get("early_cleanup_journal_sequence")
+        or cleanup_journal.latest_version_sha256()
+        != dynamic.get("early_cleanup_journal_version_sha256")
+    ):
+        raise T09HostError("early cleanup authority drifted from provider entry")
+    cleanup_journal.advance_lifecycle_at_least(CleanupLifecycleStage.SOURCE_STAGING)
+    remote_credential_path = args.secret_file.resolve(strict=True).as_posix()
+    cleanup_journal.register_target(
+        target_id="temporary-remote-secret",
+        kind=CleanupTargetKind.TEMPORARY_REMOTE_CREDENTIAL,
+        locator=remote_credential_path,
+        ownership_sha256=cleanup_locator_identity(
+            CleanupTargetKind.TEMPORARY_REMOTE_CREDENTIAL,
+            remote_credential_path,
+        ),
+        public_alias="temporary-remote-secret",
+    )
+    cleanup_journal.advance_lifecycle_at_least(CleanupLifecycleStage.SECRET_MATERIALIZATION)
     launch_slot = dynamic.get("launch_slot")
     if (
         not isinstance(launch_slot, int)
@@ -8191,6 +8914,7 @@ def preflight(args: argparse.Namespace) -> None:
     prefix = docker_prefix()
     if owned_containers(prefix):
         raise T09HostError("owned pilot containers already exist")
+    cleanup_journal.advance_lifecycle_at_least(CleanupLifecycleStage.ARTIFACT_ROOT_MUTATION)
     artifact_root.mkdir(mode=0o700, parents=True)
     lambda_started_raw = dynamic["provider_preflight_started_at_epoch"]
     if not isinstance(lambda_started_raw, (int, float)) or isinstance(lambda_started_raw, bool):
@@ -8215,6 +8939,7 @@ def preflight(args: argparse.Namespace) -> None:
     # This is deliberately the first artifact-root mutation.  Cleanup and
     # provider-headroom accounting must survive every later authority, image,
     # credential, container, browser, or evaluator failure.
+    cleanup_journal.advance_lifecycle_at_least(CleanupLifecycleStage.CAMPAIGN_INITIALIZATION)
     initialize_state(
         artifact_root,
         execution_sha256,
@@ -8274,6 +8999,8 @@ def preflight(args: argparse.Namespace) -> None:
         artifact_root / "pilot-v7/local-finalizer-qualification.json",
         local_finalizer_qualification,
     )
+    cleanup_journal.advance_lifecycle_at_least(CleanupLifecycleStage.IMAGE_TRANSFER)
+    cleanup_journal.advance_lifecycle_at_least(CleanupLifecycleStage.IMAGE_LOAD_OR_BUILD)
     image_materialization = materialize_retained_or_build_image(
         repository=repository,
         package_commit=args.package_commit,
@@ -8291,6 +9018,7 @@ def preflight(args: argparse.Namespace) -> None:
         secret_file=args.secret_file.resolve(strict=True),
         prefix=prefix,
         image_id=image_id,
+        cleanup_journal=cleanup_journal,
     )
     evaluator = evaluator_overlay(
         repository=repository,
@@ -8298,23 +9026,27 @@ def preflight(args: argparse.Namespace) -> None:
         overlay=args.evaluator_overlay.resolve(strict=False),
         prefix=prefix,
         image_id=image_id,
+        cleanup_journal=cleanup_journal,
     )
     image_files = final_image_file_hashes(
         artifact_root=artifact_root,
         prefix=prefix,
         image_id=image_id,
+        cleanup_journal=cleanup_journal,
     )
     final_runtime = final_image_runtime_preflight(
         artifact_root=artifact_root,
         prefix=prefix,
         image_id=image_id,
         command_document=command_document,
+        cleanup_journal=cleanup_journal,
     )
     provider_accounting = provider_accounting_container_preflight(
         repository=repository,
         artifact_root=artifact_root,
         prefix=prefix,
         image_id=image_id,
+        cleanup_journal=cleanup_journal,
     )
     offline = offline_runtime_preflight(
         repository=repository,
@@ -8322,6 +9054,7 @@ def preflight(args: argparse.Namespace) -> None:
         overlay=args.evaluator_overlay.resolve(strict=True),
         prefix=prefix,
         image_id=image_id,
+        cleanup_journal=cleanup_journal,
     )
     archive_staging = stage_verified_archive(
         args.real_evidence_archive,
@@ -8342,17 +9075,21 @@ def preflight(args: argparse.Namespace) -> None:
         image_id=image_id,
         image_files=image_files,
         static_receipt=real_evidence_regression,
+        cleanup_journal=cleanup_journal,
     )
     core_suppression = core_suppression_preflight(
         repository=repository,
         artifact_root=artifact_root,
         prefix=prefix,
         image_id=image_id,
+        cleanup_journal=cleanup_journal,
     )
+    cleanup_journal.advance_lifecycle_at_least(CleanupLifecycleStage.BROWSER_STARTUP)
     browser = browser_lifecycle_preflight(
         artifact_root=artifact_root,
         prefix=prefix,
         image_id=image_id,
+        cleanup_journal=cleanup_journal,
     )
     sealing_primitives = sealing_primitives_preflight(
         repository=repository,
@@ -8360,6 +9097,8 @@ def preflight(args: argparse.Namespace) -> None:
         command_document=command_document,
         package_commit=args.package_commit,
         execution_contract_sha256=execution_sha256,
+        provider_contract=dynamic_contract,
+        expected_run_ids=dynamic_contract.run_ids,
     )
     evaluator_overlay_verified = validate_evaluator_overlay_binding(
         artifact_root=artifact_root,
@@ -8373,6 +9112,7 @@ def preflight(args: argparse.Namespace) -> None:
             "evaluator_overlay_packages_sha256": evaluator["overlay_package_manifest_sha256"],
         },
         verify_packages=True,
+        cleanup_journal=cleanup_journal,
     )
     adjudication = image_equivalence_adjudication(
         repository=repository,
@@ -8414,6 +9154,7 @@ def preflight(args: argparse.Namespace) -> None:
         secret_file=args.secret_file.resolve(strict=True),
         prefix=prefix,
         image_id=image_id,
+        cleanup_journal=cleanup_journal,
     )
     post_metadata_core_gate = complete_preflight_core_gate(
         artifact_root=artifact_root,
@@ -8644,6 +9385,12 @@ def preflight_with_deadline(args: argparse.Namespace) -> None:
         repository_root=repository,
         source_root=args.dynamic_source_root.resolve(strict=True),
     )
+    dynamic_contract = _provider_contract_from_document(
+        dynamic,
+        label="provider preflight entry receipt",
+    )
+    if dynamic_contract is not ACTIVE_PROVIDER_CONTRACT:
+        raise T09HostError("active preflight requires the exact V10 provider contract")
     started = dynamic.get("provider_preflight_started_at_epoch")
     prior_duration = dynamic.get("prior_campaign_lambda_duration_seconds")
     prior_cost = dynamic.get("prior_campaign_lambda_cost_usd")
@@ -8899,6 +9646,11 @@ def validate_condition_start_intent(
 ) -> None:
     """Validate the exact name-to-ID handoff before a condition can be recovered."""
 
+    contract = _provider_contract_from_document(intent, label="condition start intent")
+    try:
+        contract.validate_run_id(run_id)
+    except T09ProviderContractError as exc:
+        raise T09HostError("condition start intent belongs to another campaign") from exc
     container_name = intent.get("container_name")
     container_id = intent.get("container_id")
     expected_start_argv = (
@@ -8909,10 +9661,10 @@ def validate_condition_start_intent(
     if (
         set(intent) != _CONDITION_START_INTENT_KEYS
         or intent.get("schema_version") != "0.1.0"
-        or intent.get("plan_id") != PLAN_ID
+        or intent.get("plan_id") != contract.plan_id
         or intent.get("run_id") != run_id
         or not isinstance(container_name, str)
-        or not container_name.startswith(CONTAINER_PREFIX)
+        or not container_name.startswith(contract.container_prefix)
         or (
             container_id is not None
             and (
@@ -8959,6 +9711,7 @@ def validate_condition_container_identity(
     if not path.is_file() or path.is_symlink():
         raise T09HostError("condition ID-bound start intent lacks its identity receipt")
     identity = load_object(path, label="condition container identity")
+    contract = _provider_contract_from_document(intent, label="condition start intent")
     if (
         set(identity)
         != {
@@ -8972,8 +9725,8 @@ def validate_condition_container_identity(
             "docker_create_argv_sha256",
         }
         or identity.get("schema_version") != "0.1.0"
-        or identity.get("plan_id") != PLAN_ID
-        or identity.get("host_run_id") != HOST_RUN_ID
+        or identity.get("plan_id") != contract.plan_id
+        or identity.get("host_run_id") != contract.host_run_id
         or identity.get("run_id") != run_id
         or identity.get("container_name") != intent.get("container_name")
         or identity.get("container_id") != expected_id
@@ -9252,6 +10005,8 @@ def evaluator_argv(
     finalizer_source: Path,
     finalizer_source_sha256: str,
     finalizer_projection_source_sha256: str,
+    selector_source_sha256: str,
+    refinalization_receipt_schema_sha256: str,
     finalizer_projection: Any,
     invocation: int,
     evaluator_revalidation_path: Path,
@@ -9272,10 +10027,12 @@ def evaluator_argv(
         "finalizer_commit": finalizer_commit,
         "finalizer_source_sha256": finalizer_sha256,
         "finalizer_projection_source_sha256": finalizer_projection_source_sha256,
+        "selector_source_sha256": selector_source_sha256,
         "scientific_package_commit": args.package_commit,
         "pilot_library_sha256": file_sha256(repository / "src/giclab/harness/t09_sira_pilot.py"),
         "interpreter": "/opt/sira/.venv/bin/python",
         "interpreter_sha256": cast(str, frozen_manifest["python_interpreter_sha256"]),
+        "python_version": "3.11.14",
         "interpreter_dependency_manifest_sha256": cast(
             str, frozen_manifest["package_manifest_sha256"]
         ),
@@ -9284,10 +10041,12 @@ def evaluator_argv(
         "command_manifests_sha256": file_sha256(paths["commands"]),
         "dataset_contract_sha256": file_sha256(paths["dataset"]),
         "evaluator_contract_sha256": file_sha256(paths["evaluator"]),
+        "evaluator_commit": SIRA_COMMIT,
         "score_schema_sha256": file_sha256(repository / "schemas/t09-sira-pilot-score.schema.json"),
         "evidence_schema_sha256": file_sha256(
             repository / "schemas/t09-sira-pilot-evidence.schema.json"
         ),
+        "refinalization_receipt_schema_sha256": (refinalization_receipt_schema_sha256),
         "evaluator_overlay_entries_sha256": cast(
             str, frozen_manifest["evaluator_overlay_entries_sha256"]
         ),
@@ -9335,7 +10094,9 @@ def evaluator_argv(
         finalizer_commit=finalizer_commit,
         finalizer_source_sha256=finalizer_sha256,
         finalizer_projection_source_sha256=finalizer_projection_source_sha256,
+        selector_source_sha256=selector_source_sha256,
         finalizer_dependency_manifest_sha256=dependency_manifest_sha256,
+        refinalization_receipt_schema_sha256=(refinalization_receipt_schema_sha256),
         frozen_run_manifest_sha256=frozen_run_manifest_sha256,
         evaluator_revalidation_relative=evaluator_revalidation_path.relative_to(
             artifact_root
@@ -9368,7 +10129,9 @@ def evaluator_argv(
             "--finalizer-execution-mode": "qualified-image",
             "--finalizer-source-sha256": finalizer_sha256,
             "--finalizer-projection-source-sha256": finalizer_projection_source_sha256,
+            "--selector-source-sha256": selector_source_sha256,
             "--finalizer-dependency-manifest-sha256": dependency_manifest_sha256,
+            "--refinalization-receipt-schema-sha256": (refinalization_receipt_schema_sha256),
             "--finalizer-runtime-qualification": "/opt/giclab-control/frozen-run-manifest.json",
             "--finalizer-runtime-qualification-sha256": frozen_run_manifest_sha256,
             "--raw-attempt-root": "/opt/giclab-raw",
@@ -9448,6 +10211,8 @@ def local_evaluator_invocation(
     finalizer_source: Path,
     finalizer_source_sha256: str,
     finalizer_projection_source_sha256: str,
+    selector_source_sha256: str,
+    refinalization_receipt_schema_sha256: str,
     finalizer_projection: Any,
     invocation: int,
     evaluator_revalidation_path: Path,
@@ -9480,10 +10245,12 @@ def local_evaluator_invocation(
         "finalizer_commit": finalizer_commit,
         "finalizer_source_sha256": finalizer_source_sha256,
         "finalizer_projection_source_sha256": finalizer_projection_source_sha256,
+        "selector_source_sha256": selector_source_sha256,
         "scientific_package_commit": args.package_commit,
         "pilot_library_sha256": file_sha256(repository / "src/giclab/harness/t09_sira_pilot.py"),
         "interpreter": interpreter,
         "interpreter_sha256": interpreter_sha256,
+        "python_version": "3.11.14",
         "interpreter_dependency_manifest_sha256": cast(
             str, local_qualification["interpreter_dependency_tree_sha256"]
         ),
@@ -9492,10 +10259,12 @@ def local_evaluator_invocation(
         "command_manifests_sha256": file_sha256(paths["commands"]),
         "dataset_contract_sha256": file_sha256(paths["dataset"]),
         "evaluator_contract_sha256": file_sha256(paths["evaluator"]),
+        "evaluator_commit": SIRA_COMMIT,
         "score_schema_sha256": file_sha256(repository / "schemas/t09-sira-pilot-score.schema.json"),
         "evidence_schema_sha256": file_sha256(
             repository / "schemas/t09-sira-pilot-evidence.schema.json"
         ),
+        "refinalization_receipt_schema_sha256": (refinalization_receipt_schema_sha256),
         "evaluator_overlay_entries_sha256": cast(str, local_dependency_tree["entries_sha256"]),
         "evaluator_overlay_packages_sha256": cast(
             str, local_qualification["dependency_package_manifest_sha256"]
@@ -9526,7 +10295,9 @@ def local_evaluator_invocation(
         finalizer_commit=finalizer_commit,
         finalizer_source_sha256=finalizer_source_sha256,
         finalizer_projection_source_sha256=finalizer_projection_source_sha256,
+        selector_source_sha256=selector_source_sha256,
         finalizer_dependency_manifest_sha256=dependency_manifest_sha256,
+        refinalization_receipt_schema_sha256=(refinalization_receipt_schema_sha256),
         frozen_run_manifest=str(artifact_root / "pilot-v7/frozen-run-manifest.json"),
         frozen_run_manifest_sha256=frozen_run_manifest_sha256,
         replacement_image_id=cast(str, frozen_manifest["replacement_image_id"]),
@@ -9563,7 +10334,9 @@ def local_evaluator_invocation(
         "--finalizer-execution-mode": "qualified-local",
         "--finalizer-source-sha256": finalizer_source_sha256,
         "--finalizer-projection-source-sha256": finalizer_projection_source_sha256,
+        "--selector-source-sha256": selector_source_sha256,
         "--finalizer-dependency-manifest-sha256": dependency_manifest_sha256,
+        "--refinalization-receipt-schema-sha256": (refinalization_receipt_schema_sha256),
         "--finalizer-runtime-qualification-sha256": file_sha256(local_qualification_path),
         "--run-id": cast(str, manifest["run_id"]),
         "--raw-attempt-root": str(raw_root),
@@ -10686,11 +11459,22 @@ def seal_essential_failure(
     """Seal a privacy-safe failure authority independently of an oversized tree."""
 
     run_id = cast(str, manifest["run_id"])
-    task_index = RUN_IDS.index(run_id) // 2
     retained_state = load_object(
         artifact_root / "pilot-v7/pilot-state.json",
         label="essential-failure pilot state",
     )
+    contract = _provider_contract_from_document(
+        retained_state,
+        label="essential-failure pilot state",
+    )
+    manifest_plan_id = manifest.get("plan_id")
+    if manifest_plan_id is not None and manifest_plan_id != contract.plan_id:
+        raise T09HostError("essential-failure manifest belongs to another campaign")
+    try:
+        contract.validate_run_id(run_id)
+        task_index = contract.run_ids.index(run_id) // 2
+    except (T09ProviderContractError, ValueError):
+        raise T09HostError("essential-failure run identity belongs to another campaign") from None
     entered = retained_state.get("empirical_attempts_entered")
     nonempirical = retained_state.get("nonempirical_infrastructure_attempts_consumed")
     if (
@@ -11049,8 +11833,8 @@ def seal_essential_failure(
             included.append({"path": relative, **copied})
     failure_summary = {
         "schema_version": "0.1.0",
-        "plan_id": PLAN_ID,
-        "host_run_id": HOST_RUN_ID,
+        "plan_id": contract.plan_id,
+        "host_run_id": contract.host_run_id,
         "run_id": run_id,
         "pair_id": manifest.get("pair_id"),
         "task_id": manifest.get("task_id"),
@@ -11157,8 +11941,8 @@ def seal_essential_failure(
         exclusions_path = bundle_root / "excluded-artifacts.json"
     manifest_document = {
         "schema_version": "0.1.0",
-        "plan_id": PLAN_ID,
-        "host_run_id": HOST_RUN_ID,
+        "plan_id": contract.plan_id,
+        "host_run_id": contract.host_run_id,
         "run_id": run_id,
         "package_commit": package_commit,
         "execution_contract_sha256": execution_contract_sha256,
@@ -11227,8 +12011,8 @@ def seal_essential_failure(
         write_exclusive(manifest_path, manifest_document)
     receipt_document = {
         "schema_version": "0.1.0",
-        "plan_id": PLAN_ID,
-        "host_run_id": HOST_RUN_ID,
+        "plan_id": contract.plan_id,
+        "host_run_id": contract.host_run_id,
         "run_id": run_id,
         "essential_failure_seal_complete": True,
         "attempt_identity_consumed": True,
@@ -11324,6 +12108,10 @@ def validate_essential_failure_seal(
     receipt_path = attempt_root / "essential-failure-complete.json"
     manifest = load_object(manifest_path, label="essential-failure manifest")
     receipt = load_object(receipt_path, label="essential-failure receipt")
+    contract = _provider_contract_from_document(
+        manifest,
+        label="essential-failure manifest",
+    )
     summary_path = bundle_root / "failure-summary.json"
     exclusions_path = bundle_root / "excluded-artifacts.json"
     summary = load_object(summary_path, label="essential-failure summary")
@@ -11333,7 +12121,10 @@ def validate_essential_failure_seal(
         source_root=bundle_root,
         run_id=run_id,
     )
-    expected_task_index = RUN_IDS.index(run_id) // 2
+    try:
+        expected_task_index = contract.run_ids.index(run_id) // 2
+    except ValueError:
+        raise T09HostError("essential-failure run identity belongs to another campaign") from None
     expected_summary_keys = {
         "schema_version",
         "plan_id",
@@ -11604,13 +12395,13 @@ def validate_essential_failure_seal(
         or set(manifest) != expected_manifest_keys
         or set(receipt) != expected_receipt_keys
         or set(exclusions) != expected_exclusion_keys
-        or manifest.get("plan_id") != PLAN_ID
-        or manifest.get("host_run_id") != HOST_RUN_ID
+        or manifest.get("plan_id") != contract.plan_id
+        or manifest.get("host_run_id") != contract.host_run_id
         or manifest.get("run_id") != run_id
         or manifest.get("package_commit") != package_commit
         or condition_manifest.get("run_id") != run_id
-        or summary.get("plan_id") != PLAN_ID
-        or summary.get("host_run_id") != HOST_RUN_ID
+        or summary.get("plan_id") != contract.plan_id
+        or summary.get("host_run_id") != contract.host_run_id
         or summary.get("run_id") != run_id
         or summary.get("package_commit") != package_commit
         or summary.get("pair_id") != condition_manifest.get("pair_id")
@@ -11720,8 +12511,8 @@ def validate_essential_failure_seal(
         or manifest.get("evaluator_eligible") is not False
         or manifest.get("full_raw_tree_retained") is not False
         or manifest.get("private_access_controlled") is not True
-        or receipt.get("plan_id") != PLAN_ID
-        or receipt.get("host_run_id") != HOST_RUN_ID
+        or receipt.get("plan_id") != contract.plan_id
+        or receipt.get("host_run_id") != contract.host_run_id
         or receipt.get("run_id") != run_id
         or receipt.get("essential_failure_seal_complete") is not True
         or receipt.get("attempt_identity_consumed") is not True
@@ -11950,6 +12741,10 @@ def seal_raw_attempt(
     )
     cleanup = load_object(supervisor_root / "host-cleanup-receipt.json", label="host cleanup")
     state = load_object(artifact_root / "pilot-v7/pilot-state.json", label="pilot state")
+    contract = _provider_contract_from_document(state, label="raw-attempt pilot state")
+    if manifest.get("plan_id") not in {None, contract.plan_id}:
+        raise T09HostError("raw-attempt manifest belongs to another campaign")
+    _require_contract_run_id(contract, run_id, label="raw-attempt manifest")
     entered = state.get("empirical_attempts_entered")
     exposure_detected = cleanup.get("actual_credential_exposure_detected")
     cleanup_integrity_failure = cleanup.get("runtime_secret_cleanup_malformed")
@@ -12059,8 +12854,8 @@ def seal_raw_attempt(
     raw_receipt_path = attempt_root / "raw-attempt-complete.json"
     raw_manifest: dict[str, object] = {
         "schema_version": "0.1.0",
-        "plan_id": PLAN_ID,
-        "host_run_id": HOST_RUN_ID,
+        "plan_id": contract.plan_id,
+        "host_run_id": contract.host_run_id,
         "run_id": run_id,
         "package_commit": package_commit,
         "execution_contract_sha256": execution_contract_sha256,
@@ -12095,8 +12890,8 @@ def seal_raw_attempt(
         write_exclusive(raw_manifest_path, raw_manifest)
     raw_receipt: dict[str, object] = {
         "schema_version": "0.1.0",
-        "plan_id": PLAN_ID,
-        "host_run_id": HOST_RUN_ID,
+        "plan_id": contract.plan_id,
+        "host_run_id": contract.host_run_id,
         "run_id": run_id,
         "raw_attempt_complete": True,
         "empirical_attempt_consumed": True,
@@ -12173,19 +12968,21 @@ def validate_raw_attempt_seal(
     receipt_path = attempt_root / "raw-attempt-complete.json"
     manifest = load_object(manifest_path, label="raw attempt manifest")
     receipt = load_object(receipt_path, label="raw attempt receipt")
+    contract = _provider_contract_from_document(manifest, label="raw attempt manifest")
+    _require_contract_run_id(contract, run_id, label="raw attempt manifest")
     observed_files, observed_total = _raw_attempt_files(raw_root)
     if (
         manifest.get("schema_version") != "0.1.0"
-        or manifest.get("plan_id") != PLAN_ID
-        or manifest.get("host_run_id") != HOST_RUN_ID
+        or manifest.get("plan_id") != contract.plan_id
+        or manifest.get("host_run_id") != contract.host_run_id
         or manifest.get("run_id") != run_id
         or manifest.get("package_commit") != package_commit
         or manifest.get("raw_attempt_root") != "raw"
         or manifest.get("files") != observed_files
         or manifest.get("total_bytes") != observed_total
         or receipt.get("schema_version") != "0.1.0"
-        or receipt.get("plan_id") != PLAN_ID
-        or receipt.get("host_run_id") != HOST_RUN_ID
+        or receipt.get("plan_id") != contract.plan_id
+        or receipt.get("host_run_id") != contract.host_run_id
         or receipt.get("run_id") != run_id
         or receipt.get("raw_attempt_complete") is not True
         or receipt.get("empirical_attempt_consumed") is not True
@@ -12249,10 +13046,16 @@ def _write_synthetic_runtime_cleanup(raw_root: Path) -> Path:
 
 
 def _synthetic_condition_manifest(
-    source: dict[str, Any], *, artifact_root: Path, attempt_root: Path, raw_root: Path
+    source: dict[str, Any],
+    *,
+    run_id: str,
+    artifact_root: Path,
+    attempt_root: Path,
+    raw_root: Path,
 ) -> dict[str, Any]:
     return {
         **source,
+        "run_id": run_id,
         "permitted_condition_owned": {
             **cast(dict[str, Any], source["permitted_condition_owned"]),
             "output_root": attempt_root.relative_to(artifact_root).as_posix(),
@@ -12268,6 +13071,9 @@ def sealing_primitives_preflight(
     command_document: dict[str, Any],
     package_commit: str,
     execution_contract_sha256: str,
+    provider_contract: T09ProviderContract,
+    expected_run_ids: tuple[str, ...],
+    qualification_run_id: str | None = None,
 ) -> dict[str, object]:
     """Exercise exact raw and essential sealing against isolated synthetic state."""
 
@@ -12275,7 +13081,20 @@ def sealing_primitives_preflight(
     if qualification_root.exists():
         raise T09HostError("sealing-primitives preflight root must be fresh")
     qualification_root.mkdir(mode=0o700, parents=True)
-    source_manifest = manifest_for_run(command_document, RUN_IDS[0])
+    if expected_run_ids != provider_contract.run_ids:
+        raise T09HostError("sealing-primitives run identities cross provider versions")
+    if qualification_run_id is None:
+        qualification_run_id = expected_run_ids[0]
+    _require_contract_run_id(
+        provider_contract,
+        qualification_run_id,
+        label="sealing-primitives qualification",
+    )
+    source_manifest = manifest_for_run(
+        command_document,
+        expected_run_ids[0],
+        expected_run_ids=expected_run_ids,
+    )
     frozen_sha256 = "f" * 64
     now = time.time()
 
@@ -12291,6 +13110,7 @@ def sealing_primitives_preflight(
         stream.chmod(0o600)
     initialize_pilot_state(
         raw_artifacts / "pilot-v7/pilot-state.json",
+        provider_contract=provider_contract,
         execution_contract_sha256=execution_contract_sha256,
         pilot_started_at_epoch=now - 1.0,
         lambda_started_at_epoch=now - 1.0,
@@ -12298,13 +13118,13 @@ def sealing_primitives_preflight(
     reserve_condition_start(
         raw_artifacts / "pilot-v7/pilot-state.json",
         execution_contract_sha256=execution_contract_sha256,
-        run_id=RUN_IDS[0],
+        run_id=qualification_run_id,
         start_intent_sha256="c" * 64,
     )
     mark_empirical_entry(
         raw_artifacts / "pilot-v7/pilot-state.json",
         execution_contract_sha256=execution_contract_sha256,
-        run_id=RUN_IDS[0],
+        run_id=qualification_run_id,
         supervised_release_receipt_sha256="d" * 64,
     )
     (raw_root / CONDITION_SUPERVISOR_DIRNAME).mkdir(mode=0o700)
@@ -12313,7 +13133,7 @@ def sealing_primitives_preflight(
     (raw_root / "host-cleanup-receipt.json").unlink()
     cleanup.update(
         {
-            "run_id": RUN_IDS[0],
+            "run_id": qualification_run_id,
             "actual_credential_exposure_detected": False,
             "runtime_secret_cleanup_malformed": False,
             "core_artifact_count": 0,
@@ -12327,15 +13147,15 @@ def sealing_primitives_preflight(
     write_exclusive(supervisor / "host-cleanup-receipt.json", cleanup)
     for name, value in {
         "attempt-wall.json": {"evidence_handoff_deadline_epoch": now + 60.0},
-        "container-command.json": {"run_id": RUN_IDS[0]},
+        "container-command.json": {"run_id": qualification_run_id},
         "container-state.json": {"running": False},
-        "gpu-accounting.json": {"run_id": RUN_IDS[0]},
+        "gpu-accounting.json": {"run_id": qualification_run_id},
     }.items():
         write_exclusive(supervisor / name, value)
     write_exclusive(
         supervisor / "evaluator-overlay-binding.json",
         {
-            "run_id": RUN_IDS[0],
+            "run_id": qualification_run_id,
             "frozen_run_manifest_sha256": frozen_sha256,
             "condition_mount_policy": "read-only",
         },
@@ -12351,7 +13171,7 @@ def sealing_primitives_preflight(
         supervisor / "core-artifact-cleanup.json",
         {
             "schema_version": "0.1.0",
-            "run_id": RUN_IDS[0],
+            "run_id": qualification_run_id,
             **core_cleanup_projection([], CoreCleanupOutcome(True, None)),
             "core_scan_integrity_failure": False,
             "core_detection_receipt_sha256": file_sha256(host_detection),
@@ -12360,7 +13180,7 @@ def sealing_primitives_preflight(
     write_exclusive(
         supervisor / "runtime-reconstruction-binding.json",
         {
-            "run_id": RUN_IDS[0],
+            "run_id": qualification_run_id,
             "runtime_cleanup_present": True,
             "runtime_cleanup_path_observed": True,
             "runtime_cleanup_content_read_permitted": True,
@@ -12372,6 +13192,7 @@ def sealing_primitives_preflight(
     )
     raw_manifest = _synthetic_condition_manifest(
         source_manifest,
+        run_id=qualification_run_id,
         artifact_root=raw_artifacts,
         attempt_root=raw_attempt,
         raw_root=raw_root,
@@ -12388,7 +13209,7 @@ def sealing_primitives_preflight(
     validate_raw_attempt_seal(
         attempt_root=raw_attempt,
         raw_root=raw_root,
-        run_id=RUN_IDS[0],
+        run_id=qualification_run_id,
         package_commit=package_commit,
     )
 
@@ -12405,6 +13226,7 @@ def sealing_primitives_preflight(
     (failure_raw / "condition.stdout").chmod(0o600)
     initialize_pilot_state(
         failure_artifacts / "pilot-v7/pilot-state.json",
+        provider_contract=provider_contract,
         execution_contract_sha256=execution_contract_sha256,
         pilot_started_at_epoch=now - 1.0,
         lambda_started_at_epoch=now - 1.0,
@@ -12418,9 +13240,9 @@ def sealing_primitives_preflight(
     container_id = "e" * 64
     start_intent = {
         "schema_version": "0.1.0",
-        "plan_id": PLAN_ID,
-        "run_id": RUN_IDS[0],
-        "container_name": f"{CONTAINER_PREFIX}sealing-preflight",
+        "plan_id": provider_contract.plan_id,
+        "run_id": qualification_run_id,
+        "container_name": f"{provider_contract.container_prefix}sealing-preflight",
         "container_id": container_id,
         "docker_start_argv": [*docker_prefix(), "start", "--attach", container_id],
         "docker_create_argv_sha256": "a" * 64,
@@ -12436,9 +13258,9 @@ def sealing_primitives_preflight(
         failure_supervisor / "container-identity.json",
         {
             "schema_version": "0.1.0",
-            "plan_id": PLAN_ID,
-            "host_run_id": HOST_RUN_ID,
-            "run_id": RUN_IDS[0],
+            "plan_id": provider_contract.plan_id,
+            "host_run_id": provider_contract.host_run_id,
+            "run_id": qualification_run_id,
             "container_name": start_intent["container_name"],
             "container_id": container_id,
             "owned_role": "condition",
@@ -12449,13 +13271,13 @@ def sealing_primitives_preflight(
     reserve_condition_start(
         failure_state,
         execution_contract_sha256=execution_contract_sha256,
-        run_id=RUN_IDS[0],
+        run_id=qualification_run_id,
         start_intent_sha256=file_sha256(failure_supervisor / "condition-start-intent.json"),
     )
     mark_nonempirical_infrastructure_attempt_consumed(
         failure_state,
         execution_contract_sha256=execution_contract_sha256,
-        run_id=RUN_IDS[0],
+        run_id=qualification_run_id,
     )
     _write_synthetic_runtime_cleanup(failure_raw)
     failure_detection = failure_supervisor / "core-artifact-detection.json"
@@ -12468,7 +13290,7 @@ def sealing_primitives_preflight(
         failure_supervisor / "core-artifact-cleanup.json",
         {
             "schema_version": "0.1.0",
-            "run_id": RUN_IDS[0],
+            "run_id": qualification_run_id,
             "core_limit_contract": CORE_LIMIT_CONTRACT,
             "docker_ulimit": "core=0:0",
             **core_cleanup_projection([], CoreCleanupOutcome(True, None)),
@@ -12488,7 +13310,7 @@ def sealing_primitives_preflight(
     )
     record_output_cap_event(
         raw_root=failure_raw,
-        run_id=RUN_IDS[0],
+        run_id=qualification_run_id,
         stop_reason="attempt_output_bytes",
         hard_cap_breached=True,
         tree_bytes_before_security_cleanup=MAX_ATTEMPT_OUTPUT_BYTES + 1,
@@ -12499,7 +13321,7 @@ def sealing_primitives_preflight(
         failure_supervisor / "host-cleanup-receipt.json",
         {
             "schema_version": "0.1.0",
-            "run_id": RUN_IDS[0],
+            "run_id": qualification_run_id,
             "returncode": 143,
             "container_removed": True,
             "owned_container_residue": [],
@@ -12545,6 +13367,7 @@ def sealing_primitives_preflight(
     )
     failure_manifest = _synthetic_condition_manifest(
         source_manifest,
+        run_id=qualification_run_id,
         artifact_root=failure_artifacts,
         attempt_root=failure_attempt,
         raw_root=failure_raw,
@@ -12567,7 +13390,7 @@ def sealing_primitives_preflight(
     )
     essential_manifest, essential_receipt = validate_essential_failure_seal(
         attempt_root=failure_attempt,
-        run_id=RUN_IDS[0],
+        run_id=qualification_run_id,
         package_commit=package_commit,
         condition_manifest=failure_manifest,
     )
@@ -12679,6 +13502,31 @@ def seal_consumed_raw_or_essential_failure(
         ) from exc
 
 
+def _condition_recovery_provider_contract(
+    state: dict[str, Any],
+    intent: dict[str, Any],
+    *,
+    run_id: str,
+) -> T09ProviderContract:
+    """Bind one recovery to the same explicit plan in state, intent, and run ID."""
+
+    state_contract = _provider_contract_from_document(
+        state,
+        label="reserved condition pilot state",
+    )
+    intent_contract = _provider_contract_from_document(
+        intent,
+        label="condition start intent",
+    )
+    if intent_contract is not state_contract:
+        raise T09HostError("condition recovery state and intent cross campaign boundaries")
+    try:
+        state_contract.validate_run_id(run_id)
+    except T09ProviderContractError as exc:
+        raise T09HostError("condition recovery run belongs to another campaign") from exc
+    return state_contract
+
+
 def recover_condition_start_reservation(
     *,
     artifact_root: Path,
@@ -12753,8 +13601,11 @@ def recover_condition_start_reservation(
     ):
         raise T09HostError("condition-start recovery lacks one durable reservation")
 
+    contract = _condition_recovery_provider_contract(state, intent, run_id=run_id)
     container_name = intent.get("container_name")
-    if not isinstance(container_name, str) or not container_name.startswith(CONTAINER_PREFIX):
+    if not isinstance(container_name, str) or not container_name.startswith(
+        contract.container_prefix
+    ):
         raise T09HostError("condition-start recovery container identity is invalid")
     expected_container_id = validate_condition_container_identity(
         supervisor_root,
@@ -12835,7 +13686,7 @@ def recover_condition_start_reservation(
                 uncertainty_path,
                 {
                     "schema_version": "0.1.0",
-                    "plan_id": PLAN_ID,
+                    "plan_id": contract.plan_id,
                     "run_id": run_id,
                     "container_name": container_name,
                     "condition_identity_consumed": True,
@@ -12858,7 +13709,7 @@ def recover_condition_start_reservation(
             )
             if (
                 uncertainty.get("schema_version") != "0.1.0"
-                or uncertainty.get("plan_id") != PLAN_ID
+                or uncertainty.get("plan_id") != contract.plan_id
                 or uncertainty.get("run_id") != run_id
                 or uncertainty.get("container_name") != container_name
                 or uncertainty.get("condition_identity_consumed") is not True
@@ -12880,7 +13731,7 @@ def recover_condition_start_reservation(
                 recovered_path,
                 {
                     "schema_version": "0.1.0",
-                    "plan_id": PLAN_ID,
+                    "plan_id": contract.plan_id,
                     "run_id": run_id,
                     "container_name": container_name,
                     "uncertainty_receipt_sha256": file_sha256(uncertainty_path),
@@ -13943,6 +14794,7 @@ def execute_condition(args: argparse.Namespace) -> int:
     attempt_started_epoch = time.time()
     repository = args.repository.resolve(strict=True)
     artifact_root = args.artifact_root.resolve(strict=True)
+    cleanup_journal = early_cleanup_journal(args)
     admit_next_attempt(artifact_root)
     verify_package(repository, args.package_commit)
     frozen_manifest, frozen_manifest_sha256 = load_frozen_run_manifest(
@@ -13960,6 +14812,7 @@ def execute_condition(args: argparse.Namespace) -> int:
         image_id=image_id,
         frozen_manifest=frozen_manifest,
         verify_packages=False,
+        cleanup_journal=cleanup_journal,
     )
     paths = contract_paths(repository)
     command_document = load_object(paths["commands"], label="command manifest set")
@@ -14218,6 +15071,11 @@ def execute_condition(args: argparse.Namespace) -> int:
             "consumed and sealed"
         ) from create_exception
     created_container_id = created_identity.container_id
+    register_owned_container_cleanup(
+        cleanup_journal,
+        created_identity,
+        role="condition",
+    )
     write_exclusive(
         supervisor_root / "container-identity.json",
         {
@@ -14246,13 +15104,38 @@ def execute_condition(args: argparse.Namespace) -> int:
             create_outcome_ambiguous=False,
         )
     except BaseException as reservation_error:
-        with contextlib.suppress(OSError, subprocess.SubprocessError, T09HostError):
-            remove_container(
+        reservation_cleanup_result = CleanupTargetState.FAILED
+        reservation_cleanup_detail = "owned-container-removal-unverified"
+        try:
+            reservation_container_removed = remove_container(
                 prefix,
                 name,
                 expected_container_id=created_container_id,
                 expected_role="condition",
             )
+            (
+                reservation_cleanup_result,
+                reservation_cleanup_detail,
+            ) = verified_owned_container_cleanup_result(
+                initially_absent=False,
+                removal_verified=reservation_container_removed,
+                removed_detail="condition-container-removed",
+                absent_detail="condition-container-already-absent",
+            )
+        except (OSError, subprocess.SubprocessError, T09HostError) as exc:
+            reservation_cleanup_result = CleanupTargetState.FAILED
+            reservation_cleanup_detail = type(exc).__name__
+        try:
+            record_owned_container_cleanup_result(
+                cleanup_journal,
+                created_identity,
+                result=reservation_cleanup_result,
+                detail_code=reservation_cleanup_detail,
+            )
+        except EarlyCleanupStateError as exc:
+            raise T09HostError(
+                "condition reservation failed and exact cleanup result was not durable"
+            ) from exc
         intent_path = supervisor_root / "condition-start-intent.json"
         never_started = condition_container_proven_never_started(prefix, name)
         if never_started:
@@ -14432,6 +15315,7 @@ def execute_condition(args: argparse.Namespace) -> int:
                 supervisor_root / "supervised-release.json"
             ),
         )
+        cleanup_journal.advance_lifecycle_at_least(CleanupLifecycleStage.EMPIRICAL_ENTRY)
         write_bytes_exclusive(raw_root / ".giclab-release", b"release\n")
         release_gate_released = True
 
@@ -14496,10 +15380,38 @@ def execute_condition(args: argparse.Namespace) -> int:
                 expected_container_id=created_container_id,
                 expected_role="condition",
             )
+            (
+                condition_cleanup_result,
+                condition_cleanup_detail,
+            ) = verified_owned_container_cleanup_result(
+                initially_absent=False,
+                removal_verified=container_removed,
+                removed_detail="condition-container-removed",
+                absent_detail="condition-container-already-absent",
+            )
+            if condition_cleanup_result is CleanupTargetState.FAILED:
+                container_removal_error_type = "ContainerRemovalUnverified"
+                infrastructure_stop_requires_essential_seal = True
+                stop_reason = stop_reason or "condition-container-removal-unverified"
         except (OSError, subprocess.SubprocessError, T09HostError) as exc:
             container_removal_error_type = type(exc).__name__
+            condition_cleanup_result = CleanupTargetState.FAILED
+            condition_cleanup_detail = container_removal_error_type
             infrastructure_stop_requires_essential_seal = True
             stop_reason = stop_reason or "condition-container-removal-failed"
+        try:
+            cleanup_journal.record_result(
+                target_id=f"owned-container-{created_container_id}",
+                result=condition_cleanup_result,
+                detail_code=condition_cleanup_detail,
+                during_cleanup=False,
+            )
+        except EarlyCleanupStateError as exc:
+            infrastructure_stop_requires_essential_seal = True
+            stop_reason = stop_reason or "early-cleanup-journal-update-failed"
+            if runner_exception is None:
+                runner_exception = T09HostError("condition cleanup result could not be persisted")
+                runner_exception.__cause__ = exc
     post_attach_state = load_object(
         artifact_root / "pilot-v7/pilot-state.json",
         label="post-attach release transaction state",
@@ -15071,7 +15983,7 @@ def validate_finalizer_source(
     finalizer_commit: str,
     source: Path,
     projection_source: Path,
-) -> tuple[str, str, Any]:
+) -> tuple[str, str, str, str, Any]:
     """Bind downstream-repairable bytes without changing the frozen worktree."""
 
     if re.fullmatch(r"[a-f0-9]{40}", finalizer_commit) is None:
@@ -15079,6 +15991,9 @@ def validate_finalizer_source(
     sources = {
         FINALIZER_RELATIVE_PATH: source.resolve(strict=True),
         FINALIZER_PROJECTION_RELATIVE_PATH: projection_source.resolve(strict=True),
+        REFINALIZATION_RECEIPT_SCHEMA_RELATIVE_PATH: (
+            repository / REFINALIZATION_RECEIPT_SCHEMA_RELATIVE_PATH
+        ).resolve(strict=True),
     }
     for path in sources.values():
         metadata = path.stat(follow_symlinks=False)
@@ -15125,22 +16040,22 @@ def validate_finalizer_source(
         allowed = {
             FINALIZER_RELATIVE_PATH,
             FINALIZER_PROJECTION_RELATIVE_PATH,
-            "containers/sira-smoke/pragmatic/t09_remote_runner.py",
+            SELECTOR_RELATIVE_PATH,
+            REFINALIZATION_RECEIPT_SCHEMA_RELATIVE_PATH,
             "tests/test_t09_sira_pilot.py",
             "tests/test_t09_retry3.py",
+            "tests/test_t09_refinalization_receipt.py",
         }
         if not set(changed).intersection(
             {FINALIZER_RELATIVE_PATH, FINALIZER_PROJECTION_RELATIVE_PATH}
         ) or not set(changed).issubset(allowed):
             raise T09HostError("post-entry finalizer commit changed a non-downstream surface")
-        runner_relative = "containers/sira-smoke/pragmatic/t09_remote_runner.py"
-        if runner_relative in changed:
-            validate_git_bound_downstream_source(
-                repository=repository,
-                commit=finalizer_commit,
-                relative=runner_relative,
-                source=Path(__file__),
-            )
+    validate_git_bound_downstream_source(
+        repository=repository,
+        commit=finalizer_commit,
+        relative=SELECTOR_RELATIVE_PATH,
+        source=Path(__file__),
+    )
     for relative, path in sources.items():
         retained = subprocess.run(
             ["git", "-C", str(repository), "show", f"{finalizer_commit}:{relative}"],
@@ -15163,11 +16078,14 @@ def validate_finalizer_source(
         not callable(getattr(module, "build_finalizer_argv", None))
         or not callable(getattr(module, "build_local_finalizer_invocation", None))
         or not callable(getattr(module, "build_completion_projection", None))
+        or not callable(getattr(module, "validate_completion_projection", None))
     ):
         raise T09HostError("downstream finalizer projection API is incomplete")
     return (
         file_sha256(sources[FINALIZER_RELATIVE_PATH]),
         file_sha256(sources[FINALIZER_PROJECTION_RELATIVE_PATH]),
+        file_sha256(Path(__file__).resolve(strict=True)),
+        file_sha256(sources[REFINALIZATION_RECEIPT_SCHEMA_RELATIVE_PATH]),
         module,
     )
 
@@ -15202,7 +16120,7 @@ def validate_local_finalizer_qualification(
         or metadata.st_nlink != 1
         or stat.S_IMODE(metadata.st_mode) != 0o600
         or receipt.get("schema_version") != "0.1.0"
-        or receipt.get("qualification_id") != "QUAL-T09-PILOT-V9-LOCAL-FINALIZER-AUTONOMOUS-0002"
+        or receipt.get("qualification_id") != LOCAL_FINALIZER_QUALIFICATION_ID
         or receipt.get("plan_id") != PLAN_ID
         or receipt.get("package_commit") != package_commit
         or receipt.get("python_version") != "3.11.14"
@@ -15692,28 +16610,60 @@ def validate_selected_finalization(
         "finalizer_commit",
         "finalizer_source_sha256",
         "finalizer_projection_source_sha256",
+        "selector_source_sha256",
         "scientific_package_commit",
         "pilot_library_sha256",
         "interpreter",
         "interpreter_sha256",
+        "python_version",
         "interpreter_dependency_manifest_sha256",
         "replacement_image_id",
         "execution_contract_sha256",
         "command_manifests_sha256",
         "dataset_contract_sha256",
         "evaluator_contract_sha256",
+        "evaluator_commit",
         "score_schema_sha256",
         "evidence_schema_sha256",
+        "refinalization_receipt_schema_sha256",
         "evaluator_overlay_entries_sha256",
         "evaluator_overlay_packages_sha256",
     }
+    receipt_schema_path = repository / REFINALIZATION_RECEIPT_SCHEMA_RELATIVE_PATH
+    receipt_schema = load_object(receipt_schema_path, label="refinalization receipt schema")
+    receipt_schema_errors = _schema_errors(completion, receipt_schema)
+    control = completion.get("canonical_control")
+    frozen_run_manifest_path = artifact_root / "pilot-v7/frozen-run-manifest.json"
+    expected_raw_alias = f"{attempt.output_root}/raw-attempt-manifest.json"
+    expected_raw_identity = canonical_sha256(
+        {
+            "attempt_id": run_id,
+            "manifest_public_alias": expected_raw_alias,
+            "manifest_sha256": file_sha256(attempt_root / "raw-attempt-manifest.json"),
+            "manifest_payload_sha256": canonical_sha256(raw_manifest),
+            "raw_receipt_sha256": file_sha256(attempt_root / "raw-attempt-complete.json"),
+        }
+    )
+    expected_scoring_identity = (
+        canonical_sha256(
+            {
+                "evaluator_commit": closure.get("evaluator_commit"),
+                "evaluator_contract_sha256": closure.get("evaluator_contract_sha256"),
+                "score_schema_sha256": closure.get("score_schema_sha256"),
+            }
+        )
+        if isinstance(closure, dict)
+        else None
+    )
     if (
         completion_path.is_symlink()
         or not stat.S_ISREG(metadata.st_mode)
         or metadata.st_nlink != 1
         or stat.S_IMODE(metadata.st_mode) != 0o600
         or selection.get("finalization_complete_sha256") != file_sha256(completion_path)
-        or completion.get("schema_version") != "0.1.0"
+        or receipt_schema_errors
+        or completion.get("schema_version") != "0.2.0"
+        or completion.get("receipt_schema_sha256") != file_sha256(receipt_schema_path)
         or completion.get("plan_id") != PLAN_ID
         or completion.get("host_run_id") != HOST_RUN_ID
         or completion.get("run_id") != run_id
@@ -15735,7 +16685,14 @@ def validate_selected_finalization(
         or completion.get("semantic_projection_sha256") != canonical_sha256(semantic_projection)
         or not isinstance(closure, dict)
         or set(closure) != expected_closure_fields
+        or not isinstance(control, dict)
+        or completion.get("canonical_control_sha256") != canonical_sha256(control)
+        or completion.get("nonsemantic_fields") != []
         or closure.get("scientific_package_commit") != package_commit
+        or closure.get("selector_source_sha256") != file_sha256(Path(__file__))
+        or closure.get("python_version") != "3.11.14"
+        or closure.get("evaluator_commit") != SIRA_COMMIT
+        or closure.get("refinalization_receipt_schema_sha256") != file_sha256(receipt_schema_path)
         or completion.get("finalizer_dependency_manifest_sha256") != canonical_sha256(closure)
         or selection.get("finalizer_dependency_manifest_sha256") != canonical_sha256(closure)
         or selection.get("finalizer_execution_mode") != closure.get("finalizer_execution_mode")
@@ -15754,6 +16711,39 @@ def validate_selected_finalization(
         or completion.get("additional_browser_actions") != 0
         or completion.get("raw_source_mutated") is not False
         or completion.get("output_schema_valid") is not True
+        or control.get("receipt_schema_version") != "1.0.0"
+        or control.get("raw_attempt_identity") != expected_raw_identity
+        or control.get("raw_attempt_manifest_public_alias") != expected_raw_alias
+        or control.get("raw_attempt_manifest_sha256")
+        != file_sha256(attempt_root / "raw-attempt-manifest.json")
+        or control.get("raw_manifest_validation") != "validated-before-and-after-byte-identical"
+        or control.get("frozen_scientific_commit") != package_commit
+        or control.get("frozen_run_manifest_sha256") != file_sha256(frozen_run_manifest_path)
+        or control.get("attempt_id") != run_id
+        or control.get("task_id") != attempt.task_id
+        or control.get("task_sha256") != TASK_TEXT_SHA256S[attempt.task_index]
+        or control.get("condition") != attempt.condition
+        or control.get("finalizer_source_commit") != closure.get("finalizer_commit")
+        or control.get("finalizer_source_sha256") != closure.get("finalizer_source_sha256")
+        or control.get("selector_source_sha256") != closure.get("selector_source_sha256")
+        or control.get("projection_source_sha256")
+        != closure.get("finalizer_projection_source_sha256")
+        or control.get("absolute_interpreter_identity")
+        != {
+            "path": closure.get("interpreter"),
+            "sha256": closure.get("interpreter_sha256"),
+        }
+        or control.get("python_version") != "3.11.14"
+        or control.get("dependency_closure_identity") != canonical_sha256(closure)
+        or control.get("evaluator_commit") != SIRA_COMMIT
+        or control.get("scoring_contract_identity") != expected_scoring_identity
+        or control.get("network_disabled") is not True
+        or control.get("network_policy") != expected_network
+        or control.get("model_replay_count") != 0
+        or control.get("browser_replay_count") != 0
+        or control.get("raw_mutation") is not False
+        or control.get("output_semantic_projection_sha256") != canonical_sha256(semantic_projection)
+        or control.get("finalization_terminal_state") != "offline-refinalization-complete"
     ):
         raise T09HostError("selected finalization no longer reconstructs from exact bytes")
     enforce_attempt_supervisor_cap(attempt_root)
@@ -15767,7 +16757,13 @@ def finalize_attempt(args: argparse.Namespace) -> dict[str, object]:
     enforce_host_core_limit()
     repository = args.repository.resolve(strict=True)
     artifact_root = args.artifact_root.resolve(strict=True)
-    source_sha256, projection_source_sha256, projection_module = validate_finalizer_source(
+    (
+        source_sha256,
+        projection_source_sha256,
+        selector_source_sha256,
+        receipt_schema_sha256,
+        projection_module,
+    ) = validate_finalizer_source(
         repository=repository,
         package_commit=args.package_commit,
         finalizer_commit=args.finalizer_commit,
@@ -15780,6 +16776,7 @@ def finalize_attempt(args: argparse.Namespace) -> dict[str, object]:
         current_commit=args.finalizer_commit,
     )
     local_mode = args.finalizer_execution_mode == "qualified-local"
+    cleanup_journal = None if local_mode else early_cleanup_journal(args)
     if local_mode != (
         args.local_finalizer_qualification is not None
         and args.local_evaluator_root is not None
@@ -15877,6 +16874,7 @@ def finalize_attempt(args: argparse.Namespace) -> dict[str, object]:
             "local_runtime_qualification_sha256": file_sha256(args.local_finalizer_qualification),
         }
     else:
+        assert cleanup_journal is not None
         overlay_revalidation = validate_evaluator_overlay_binding(
             artifact_root=artifact_root,
             repository=repository,
@@ -15885,6 +16883,7 @@ def finalize_attempt(args: argparse.Namespace) -> dict[str, object]:
             image_id=image_id,
             frozen_manifest=frozen_manifest,
             verify_packages=True,
+            cleanup_journal=cleanup_journal,
         )
     overlay_path = invocation_log / "evaluator-overlay-revalidation.json"
     write_exclusive(overlay_path, overlay_revalidation)
@@ -15901,6 +16900,8 @@ def finalize_attempt(args: argparse.Namespace) -> dict[str, object]:
             finalizer_source=args.finalizer_source,
             finalizer_source_sha256=source_sha256,
             finalizer_projection_source_sha256=projection_source_sha256,
+            selector_source_sha256=selector_source_sha256,
+            refinalization_receipt_schema_sha256=receipt_schema_sha256,
             finalizer_projection=projection_module,
             invocation=invocation,
             evaluator_revalidation_path=overlay_path,
@@ -15919,6 +16920,8 @@ def finalize_attempt(args: argparse.Namespace) -> dict[str, object]:
             finalizer_source=args.finalizer_source,
             finalizer_source_sha256=source_sha256,
             finalizer_projection_source_sha256=projection_source_sha256,
+            selector_source_sha256=selector_source_sha256,
+            refinalization_receipt_schema_sha256=receipt_schema_sha256,
             finalizer_projection=projection_module,
             invocation=invocation,
             evaluator_revalidation_path=overlay_path,
@@ -15963,6 +16966,7 @@ def finalize_attempt(args: argparse.Namespace) -> dict[str, object]:
                     preexec_fn=_limit_finalizer_log_file_size,
                 )
             else:
+                assert cleanup_journal is not None
                 finalizer_label = f"finalizer-{args.run_id.lower()}-{invocation:04d}"
                 result = run_owned_docker(
                     finalizer,
@@ -15973,6 +16977,7 @@ def finalize_attempt(args: argparse.Namespace) -> dict[str, object]:
                     stdout=stdout,
                     stderr=stderr,
                     timeout=min(FINALIZER_INVOCATION_TIMEOUT_SECONDS, max(1, int(remaining))),
+                    cleanup_journal=cleanup_journal,
                     environment={**safe_environment(), **projected_environment},
                     preexec_fn=_limit_finalizer_log_file_size,
                 )
@@ -16115,35 +17120,23 @@ def finalize_attempt(args: argparse.Namespace) -> dict[str, object]:
         finalizer_closure=closure,
         finalizer_dependency_manifest_sha256=canonical_sha256(closure),
         network="socket-construction-denied" if local_mode else "none",
+        raw_attempt_manifest_public_alias=(f"{attempt.output_root}/raw-attempt-manifest.json"),
+        frozen_run_manifest_sha256=frozen_manifest_sha256,
+        task_id=attempt.task_id,
+        task_sha256=TASK_TEXT_SHA256S[attempt.task_index],
+        condition=attempt.condition,
+        receipt_schema_sha256=receipt_schema_sha256,
     )
-    expected_completion = {
-        "schema_version": "0.1.0",
-        "plan_id": PLAN_ID,
-        "host_run_id": HOST_RUN_ID,
-        "run_id": args.run_id,
-        "raw_manifest_sha256_before": raw_manifest_sha256_before,
-        "raw_manifest_sha256_after": raw_manifest_sha256_after,
-        "raw_receipt_sha256": raw_receipt_sha256_after,
-        "raw_manifest_payload_sha256": canonical_sha256(raw_manifest),
-        "raw_receipt_payload_sha256": canonical_sha256(raw_receipt),
-        "output_files": output_files,
-        "output_files_sha256": canonical_sha256(output_files),
-        "outcome_sha256": file_sha256(finalized_root / "attempt-outcome.json"),
-        "evidence_index_sha256": file_sha256(finalized_root / "evidence-index.json"),
-        "semantic_projection_file_sha256": file_sha256(finalized_root / "semantic-projection.json"),
-        "semantic_projection_sha256": canonical_sha256(semantic_projection),
-        "finalizer_closure": closure,
-        "finalizer_dependency_manifest_sha256": canonical_sha256(closure),
-        "interpreter": closure["interpreter"],
-        "interpreter_sha256": closure["interpreter_sha256"],
-        "network": "socket-construction-denied" if local_mode else "none",
-        "additional_model_calls": 0,
-        "additional_browser_actions": 0,
-        "raw_source_mutated": False,
-        "output_schema_valid": True,
-    }
-    if completion != expected_completion:
-        raise T09HostError("downstream completion projection exceeded its pure contract")
+    try:
+        projection_module.validate_completion_projection(completion)
+    except ValueError as exc:
+        raise T09HostError("downstream completion projection violated its pure contract") from exc
+    receipt_schema = load_object(
+        repository / REFINALIZATION_RECEIPT_SCHEMA_RELATIVE_PATH,
+        label="refinalization receipt schema",
+    )
+    if _schema_errors(completion, receipt_schema):
+        raise T09HostError("downstream completion projection failed its receipt schema")
     write_exclusive(completion_path, completion)
     try:
         enforce_attempt_supervisor_cap(attempt_root)
@@ -16172,6 +17165,28 @@ def finalize_attempt(args: argparse.Namespace) -> dict[str, object]:
         raise T09HostError(
             "downstream finalization exceeded the full-attempt cap; immutable raw remains accepted"
         ) from exc
+    candidate_selection = {
+        "finalizer_execution_mode": closure["finalizer_execution_mode"],
+        "finalizer_runtime_qualification_sha256": closure["finalizer_runtime_qualification_sha256"],
+        "finalizer_source_sha256": source_sha256,
+        "finalizer_projection_source_sha256": projection_source_sha256,
+        "finalizer_commit": args.finalizer_commit,
+        "finalizer_dependency_manifest_sha256": canonical_sha256(closure),
+        "evaluator_contract_sha256": contract.evaluator_contract_sha256,
+        "interpreter": closure["interpreter"],
+        "interpreter_sha256": closure["interpreter_sha256"],
+        "semantic_projection_sha256": canonical_sha256(semantic_projection),
+        "finalized_output_root": finalized_root.relative_to(artifact_root).as_posix(),
+        "finalization_complete_sha256": file_sha256(completion_path),
+    }
+    validate_selected_finalization(
+        repository=repository,
+        artifact_root=artifact_root,
+        contract=contract,
+        run_id=args.run_id,
+        package_commit=args.package_commit,
+        selection=candidate_selection,
+    )
     mark_attempt_completed(
         artifact_root / "pilot-v7/pilot-state.json",
         execution_contract_sha256=contract.sha256,
@@ -16751,6 +17766,20 @@ def _attempt_export_control_sources(
     that existed when this raw attempt was exported.
     """
 
+    runtime_contract = _runtime_provider_contract(artifact_root)
+    try:
+        runtime_contract.validate_run_id(run_id)
+    except T09ProviderContractError as exc:
+        raise T09HostError("attempt export run belongs to another campaign") from exc
+    provider_entry = load_object(
+        artifact_root / "pilot-v7/provider-entry.json",
+        label="attempt export provider entry",
+    )
+    _require_provider_contract(
+        provider_entry,
+        expected=runtime_contract,
+        label="attempt export provider entry",
+    )
     snapshot_root = attempt_root / "attempt-export-control"
     snapshot_manifest_path = attempt_root / "attempt-export-control-manifest.json"
     if not snapshot_manifest_path.exists():
@@ -16852,8 +17881,8 @@ def _attempt_export_control_sources(
             snapshot_manifest_path,
             {
                 "schema_version": "0.1.0",
-                "plan_id": PLAN_ID,
-                "host_run_id": HOST_RUN_ID,
+                "plan_id": runtime_contract.plan_id,
+                "host_run_id": runtime_contract.host_run_id,
                 "run_id": run_id,
                 "files": entries,
                 "files_sha256": canonical_sha256(entries),
@@ -16869,8 +17898,8 @@ def _attempt_export_control_sources(
     raw_entries = snapshot_manifest.get("files")
     if (
         snapshot_manifest.get("schema_version") != "0.1.0"
-        or snapshot_manifest.get("plan_id") != PLAN_ID
-        or snapshot_manifest.get("host_run_id") != HOST_RUN_ID
+        or snapshot_manifest.get("plan_id") != runtime_contract.plan_id
+        or snapshot_manifest.get("host_run_id") != runtime_contract.host_run_id
         or snapshot_manifest.get("run_id") != run_id
         or not isinstance(raw_entries, list)
         or snapshot_manifest.get("files_sha256") != canonical_sha256(raw_entries)
@@ -16904,10 +17933,16 @@ def _attempt_export_control_sources(
         label="export pilot-state snapshot",
     )
     raw_complete = state.get("raw_attempts_complete")
-    expected_index = RUN_IDS.index(run_id)
+    snapshot_contract = _provider_contract_from_document(
+        state,
+        label="export pilot-state snapshot",
+    )
+    if snapshot_contract is not runtime_contract:
+        raise T09HostError("attempt export snapshot changed provider contracts")
+    expected_index = runtime_contract.run_ids.index(run_id)
     if evidence_authority == "immutable-raw-attempt":
         if not isinstance(raw_complete, list) or raw_complete[: expected_index + 1] != list(
-            RUN_IDS[: expected_index + 1]
+            runtime_contract.run_ids[: expected_index + 1]
         ):
             raise T09HostError("attempt export control state lacks its exact raw prefix")
     elif evidence_authority == "essential-infrastructure-failure":
@@ -16953,8 +17988,14 @@ def _record_attempt_export_completion(
 ) -> dict[str, Any]:
     """Publish the export timestamp only after the destination stream is complete."""
 
+    contract = _runtime_provider_contract(artifact_root)
     provider_entry = load_object(
         artifact_root / "pilot-v7/provider-entry.json",
+        label="attempt export provider entry",
+    )
+    _require_provider_contract(
+        provider_entry,
+        expected=contract,
         label="attempt export provider entry",
     )
     provider_entry_receipt_sha256 = provider_entry.get("receipt_sha256")
@@ -16985,12 +18026,13 @@ def _record_attempt_export_completion(
             provider_entry_receipt_sha256=provider_entry_receipt_sha256,
             owned_instance_identity_sha256=owned_instance_identity_sha256,
             lambda_started_at_epoch=float(lambda_started),
+            contract=contract,
         )
         return retained
     completion: dict[str, Any] = {
         "schema_version": "0.1.0",
-        "plan_id": PLAN_ID,
-        "host_run_id": HOST_RUN_ID,
+        "plan_id": contract.plan_id,
+        "host_run_id": contract.host_run_id,
         "run_id": run_id,
         "package_commit": package_commit,
         "archive_bytes": archive_bytes,
@@ -17016,6 +18058,7 @@ def _record_attempt_export_completion(
         provider_entry_receipt_sha256=provider_entry_receipt_sha256,
         owned_instance_identity_sha256=owned_instance_identity_sha256,
         lambda_started_at_epoch=float(lambda_started),
+        contract=contract,
     )
     return completion
 
@@ -17025,6 +18068,11 @@ def export_attempt(args: argparse.Namespace, destination: BinaryIO) -> dict[str,
 
     repository = args.repository.resolve(strict=True)
     artifact_root = args.artifact_root.resolve(strict=True)
+    runtime_contract = _runtime_provider_contract(artifact_root)
+    try:
+        runtime_contract.validate_run_id(args.run_id)
+    except T09ProviderContractError as exc:
+        raise T09HostError("attempt export run belongs to another campaign") from exc
     command_document = load_object(
         contract_paths(repository)["commands"], label="command manifest set"
     )
@@ -17139,8 +18187,8 @@ def export_attempt(args: argparse.Namespace, destination: BinaryIO) -> dict[str,
         )
         if (
             credential_ready.get("schema_version") != "0.1.0"
-            or credential_ready.get("plan_id") != PLAN_ID
-            or credential_ready.get("host_run_id") != HOST_RUN_ID
+            or credential_ready.get("plan_id") != runtime_contract.plan_id
+            or credential_ready.get("host_run_id") != runtime_contract.host_run_id
             or not cleanup_intent_path.is_file()
             or credential_ready.get("cleanup_intent_sha256") != file_sha256(cleanup_intent_path)
             or credential_ready.get("remaining_exact_credential_match_count") != 0
@@ -17164,8 +18212,8 @@ def export_attempt(args: argparse.Namespace, destination: BinaryIO) -> dict[str,
     export_manifest_path = attempt_root / "attempt-export-manifest.json"
     export_manifest: dict[str, object] = {
         "schema_version": "0.1.0",
-        "plan_id": PLAN_ID,
-        "host_run_id": HOST_RUN_ID,
+        "plan_id": runtime_contract.plan_id,
+        "host_run_id": runtime_contract.host_run_id,
         "run_id": args.run_id,
         "package_commit": args.package_commit,
         "frozen_run_manifest_id": frozen_manifest["manifest_id"],
@@ -17382,14 +18430,19 @@ def verify_attempt_export(args: argparse.Namespace) -> None:
             raise T09HostError("attempt export manifest is malformed") from exc
         if not isinstance(manifest, dict):
             raise T09HostError("attempt export manifest is not an object")
+        contract = _provider_contract_from_document(
+            manifest,
+            label="attempt export manifest",
+        )
+        _require_contract_run_id(contract, args.run_id, label="attempt export manifest")
         files = manifest.get("files")
         if (
             manifest.get("schema_version") != "0.1.0"
-            or manifest.get("plan_id") != PLAN_ID
-            or manifest.get("host_run_id") != HOST_RUN_ID
+            or manifest.get("plan_id") != contract.plan_id
+            or manifest.get("host_run_id") != contract.host_run_id
             or manifest.get("run_id") != args.run_id
             or manifest.get("package_commit") != args.package_commit
-            or manifest.get("frozen_run_manifest_id") != FROZEN_RUN_MANIFEST_ID
+            or manifest.get("frozen_run_manifest_id") != contract.frozen_run_manifest_id
             or not isinstance(manifest.get("frozen_run_manifest_sha256"), str)
             or _HEX64.fullmatch(cast(str, manifest["frozen_run_manifest_sha256"])) is None
             or not isinstance(manifest.get("replacement_image_id"), str)
@@ -17496,8 +18549,8 @@ def verify_attempt_export(args: argparse.Namespace) -> None:
             raw_authority_files = authority_manifest.get("files")
             if (
                 authority_manifest.get("schema_version") != "0.1.0"
-                or authority_manifest.get("plan_id") != PLAN_ID
-                or authority_manifest.get("host_run_id") != HOST_RUN_ID
+                or authority_manifest.get("plan_id") != contract.plan_id
+                or authority_manifest.get("host_run_id") != contract.host_run_id
                 or not isinstance(raw_authority_files, list)
                 or authority_manifest.get("file_count") != len(raw_authority_files)
                 or authority_manifest.get("files_sha256")
@@ -17576,6 +18629,11 @@ def verify_attempt_export(args: argparse.Namespace) -> None:
         local_qualification_name = "control/pilot-v7/local-finalizer-qualification.json"
         frozen_control = archive_json(frozen_control_name, label="frozen run manifest")
         provider_control = archive_json(provider_control_name, label="provider entry")
+        _require_provider_contract(
+            provider_control,
+            expected=contract,
+            label="attempt export archived provider entry",
+        )
         local_qualification = archive_json(
             local_qualification_name,
             label="local finalizer qualification",
@@ -17591,8 +18649,8 @@ def verify_attempt_export(args: argparse.Namespace) -> None:
         ]
         if (
             control_snapshot.get("schema_version") != "0.1.0"
-            or control_snapshot.get("plan_id") != PLAN_ID
-            or control_snapshot.get("host_run_id") != HOST_RUN_ID
+            or control_snapshot.get("plan_id") != contract.plan_id
+            or control_snapshot.get("host_run_id") != contract.host_run_id
             or control_snapshot.get("run_id") != args.run_id
             or control_snapshot.get("files") != control_records
             or control_snapshot.get("files_sha256") != canonical_sha256(control_records)
@@ -17608,12 +18666,12 @@ def verify_attempt_export(args: argparse.Namespace) -> None:
                 for item in cast(list[dict[str, object]], files)
                 if item.get("path") == frozen_control_name
             )
-            or frozen_control.get("manifest_id") != FROZEN_RUN_MANIFEST_ID
-            or frozen_control.get("plan_id") != PLAN_ID
+            or frozen_control.get("manifest_id") != contract.frozen_run_manifest_id
+            or frozen_control.get("plan_id") != contract.plan_id
             or frozen_control.get("clean_package_commit") != args.package_commit
             or frozen_control.get("replacement_image_id") != manifest.get("replacement_image_id")
             or local_qualification.get("qualification_id")
-            != "QUAL-T09-PILOT-V9-LOCAL-FINALIZER-AUTONOMOUS-0002"
+            != contract.local_finalizer_qualification_id
             or local_qualification.get("package_commit") != args.package_commit
             or frozen_control.get("local_finalizer_qualification_sha256")
             != next(
@@ -17691,6 +18749,11 @@ def verify_attempt_export(args: argparse.Namespace) -> None:
             ):
                 raise T09HostError("essential-failure export is not source-bound")
     entry = load_object(args.provider_entry_receipt.resolve(strict=True), label="provider entry")
+    _require_provider_contract(
+        entry,
+        expected=contract,
+        label="attempt export provider entry receipt",
+    )
     owned_hash = entry.get("owned_instance_identity_sha256")
     lambda_started = entry.get("lambda_started_at_epoch")
     if (
@@ -17724,14 +18787,15 @@ def verify_attempt_export(args: argparse.Namespace) -> None:
         provider_entry_receipt_sha256=file_sha256(args.provider_entry_receipt.resolve(strict=True)),
         owned_instance_identity_sha256=owned_hash,
         lambda_started_at_epoch=float(lambda_started),
+        contract=contract,
     )
     verified_at = time.time()
     if verified_at + 5.0 < export_completed_at:
         raise T09HostError("attempt export verification preceded export completion")
     verification: dict[str, object] = {
         "schema_version": "0.1.0",
-        "plan_id": PLAN_ID,
-        "host_run_id": HOST_RUN_ID,
+        "plan_id": contract.plan_id,
+        "host_run_id": contract.host_run_id,
         "run_id": args.run_id,
         "package_commit": args.package_commit,
         "archive_path": archive.name,
@@ -17851,11 +18915,11 @@ def restore_verified_attempt_export(
         current_commit=current_commit,
     )
     contract_path = contract_paths(repository)["execution"]
-    contract = load_execution_contract(
+    execution_contract = load_execution_contract(
         contract_path,
         expected_sha256=file_sha256(contract_path),
     )
-    attempt = contract.attempt(run_id)
+    attempt = execution_contract.attempt(run_id)
     condition_manifest = manifest_for_run(command_document, run_id)
     attempt_root = restoration_root / attempt.output_root
     raw_root = restoration_root / attempt.raw_output_root
@@ -17901,6 +18965,10 @@ def restore_verified_attempt_export(
             or not 0 <= cast(int, export_manifest["total_bytes"]) <= MAX_ATTEMPT_EXPORT_BYTES
         ):
             raise T09HostError("offline restoration export identity drifted")
+        provider_contract = _provider_contract_from_document(
+            export_manifest,
+            label="offline restoration export manifest",
+        )
         evidence_authority = export_manifest.get("evidence_authority")
         empirical_entry_crossed = export_manifest.get("empirical_entry_crossed")
         if (
@@ -18005,16 +19073,22 @@ def restore_verified_attempt_export(
         )
     if snapshot_state is None:
         raise T09HostError("offline restoration lacks its exact pilot-state snapshot")
-    expected_index = RUN_IDS.index(run_id)
+    try:
+        provider_contract.validate_run_id(run_id)
+        expected_index = provider_contract.run_ids.index(run_id)
+    except (T09ProviderContractError, ValueError):
+        raise T09HostError("offline restoration run belongs to another campaign") from None
     entered = snapshot_state.get("empirical_attempts_entered")
     raw_complete = snapshot_state.get("raw_attempts_complete")
     expected_entered = list(
-        RUN_IDS[: expected_index + 1] if empirical_entry_crossed else RUN_IDS[:expected_index]
+        provider_contract.run_ids[: expected_index + 1]
+        if empirical_entry_crossed
+        else provider_contract.run_ids[:expected_index]
     )
     expected_raw = (
         expected_entered
         if evidence_authority == "immutable-raw-attempt"
-        else list(RUN_IDS[:expected_index])
+        else list(provider_contract.run_ids[:expected_index])
     )
     essential_seals = snapshot_state.get("essential_failure_seals")
     nonempirical_consumed = snapshot_state.get("nonempirical_infrastructure_attempts_consumed")
@@ -18031,7 +19105,8 @@ def restore_verified_attempt_export(
         entered != expected_entered
         or raw_complete != expected_raw
         or nonempirical_consumed != ([] if empirical_entry_crossed else [run_id])
-        or snapshot_state.get("execution_contract_sha256") != contract.sha256
+        or snapshot_state.get("execution_contract_sha256") != execution_contract.sha256
+        or snapshot_state.get("plan_id") != provider_contract.plan_id
         or (
             evidence_authority == "essential-infrastructure-failure"
             and essential_binding != restored_essential_binding
@@ -18044,7 +19119,7 @@ def restore_verified_attempt_export(
         retained_raw = retained.get("raw_attempts_complete")
         retained_raw_tuple = tuple(retained_raw) if isinstance(retained_raw, list) else None
         if retained_raw_tuple not in {
-            tuple(RUN_IDS[:expected_index]),
+            tuple(provider_contract.run_ids[:expected_index]),
             tuple(expected_raw),
         }:
             raise T09HostError("offline restoration archives were not applied in order")
@@ -18059,7 +19134,7 @@ def restore_verified_attempt_export(
             aggregate_snapshot_path,
             label="restored aggregate-budget snapshot",
         )
-        if aggregate_snapshot.get("execution_contract_sha256") != contract.sha256:
+        if aggregate_snapshot.get("execution_contract_sha256") != execution_contract.sha256:
             raise T09HostError("offline restoration aggregate budget binding drifted")
         _replace_restored_state(
             restoration_root / "pilot-v7/runtime-budget/aggregate-budget.json",
@@ -18103,7 +19178,7 @@ def restore_verified_attempt_export(
         )
         mark_raw_attempt_complete(
             state_path,
-            execution_contract_sha256=contract.sha256,
+            execution_contract_sha256=execution_contract.sha256,
             run_id=run_id,
             raw_manifest_sha256=file_sha256(attempt_root / "raw-attempt-manifest.json"),
             raw_receipt_sha256=file_sha256(attempt_root / "raw-attempt-complete.json"),
@@ -18118,7 +19193,7 @@ def restore_verified_attempt_export(
         assert restored_essential_binding is not None
         mark_essential_failure_sealed(
             state_path,
-            execution_contract_sha256=contract.sha256,
+            execution_contract_sha256=execution_contract.sha256,
             run_id=run_id,
             manifest_sha256=restored_essential_binding["manifest_sha256"],
             receipt_sha256=restored_essential_binding["receipt_sha256"],
@@ -18130,8 +19205,8 @@ def restore_verified_attempt_export(
     )
     restore_receipt = {
         "schema_version": "0.1.0",
-        "plan_id": PLAN_ID,
-        "host_run_id": HOST_RUN_ID,
+        "plan_id": provider_contract.plan_id,
+        "host_run_id": provider_contract.host_run_id,
         "run_id": run_id,
         "package_commit": package_commit,
         "archive_sha256": file_sha256(archive),
@@ -18161,6 +19236,7 @@ def acknowledge_attempt_export(args: argparse.Namespace) -> None:
     incoming = args.acknowledgement_file.resolve(strict=True)
     acknowledgement = load_object(incoming, label="off-host export acknowledgement")
     state = _runtime_budget_state(root)
+    attempt_order = _provider_contract_from_document(state, label="pilot state").run_ids
     raw_complete = state.get("raw_attempts_complete")
     essential_seals = state.get("essential_failure_seals")
     raw_authority = isinstance(raw_complete, list) and args.run_id in raw_complete
@@ -18171,10 +19247,10 @@ def acknowledge_attempt_export(args: argparse.Namespace) -> None:
         raise T09HostError(
             "cannot acknowledge an attempt without one exact evidence-seal authority"
         )
-    expected_index = RUN_IDS.index(args.run_id)
+    expected_index = attempt_order.index(args.run_id)
     assert isinstance(raw_complete, list)
-    expected_prior_raw = list(RUN_IDS[:expected_index])
-    expected_with_current = list(RUN_IDS[: expected_index + 1])
+    expected_prior_raw = list(attempt_order[:expected_index])
+    expected_with_current = list(attempt_order[: expected_index + 1])
     if (raw_authority and raw_complete[: expected_index + 1] != expected_with_current) or (
         essential_authority and raw_complete != expected_prior_raw
     ):
@@ -18214,6 +19290,8 @@ def _reconstructable_disposition(
         )
     except T09PilotError as exc:
         raise T09HostError("pilot disposition state is not receipt-backed") from exc
+    contract = _provider_contract_from_document(state, label="pilot disposition")
+    attempt_order = contract.run_ids
     entered = state.get("empirical_attempts_entered")
     nonempirical_consumed = state.get("nonempirical_infrastructure_attempts_consumed")
     raw_complete = state.get("raw_attempts_complete")
@@ -18242,17 +19320,20 @@ def _reconstructable_disposition(
         or not isinstance(raw_bindings, dict)
         or not isinstance(essential_seals, dict)
         or not isinstance(finalizations, dict)
-        or entered != list(RUN_IDS[: len(entered)])
+        or entered != list(attempt_order[: len(entered)])
         or raw_complete != entered[: len(raw_complete)]
-        or completed != [run_id for run_id in RUN_IDS if run_id in completed]
+        or completed != [run_id for run_id in attempt_order if run_id in completed]
         or not set(completed).issubset(set(raw_complete))
         or set(raw_bindings) != set(raw_complete)
         or set(finalizations) != set(completed)
-        or len(entered) > len(RUN_IDS)
+        or len(entered) > len(attempt_order)
         or len(nonempirical_consumed) > 1
         or (
             bool(nonempirical_consumed)
-            and (len(entered) >= len(RUN_IDS) or nonempirical_consumed != [RUN_IDS[len(entered)]])
+            and (
+                len(entered) >= len(attempt_order)
+                or nonempirical_consumed != [attempt_order[len(entered)]]
+            )
         )
         or len(entered) - len(raw_complete) > 1
         or checkpoint not in {None, "continue-to-task-b", "stop-before-task-b"}
@@ -18264,7 +19345,7 @@ def _reconstructable_disposition(
         raise T09HostError("empirical and non-empirical failure authorities overlap")
     if pending:
         failed_run_id = pending[0]
-        failed_index = RUN_IDS.index(failed_run_id)
+        failed_index = attempt_order.index(failed_run_id)
         binding = essential_seals.get(failed_run_id)
         if (
             not isinstance(binding, dict)
@@ -18278,7 +19359,7 @@ def _reconstructable_disposition(
             )
     elif nonempirical_consumed:
         failed_run_id = nonempirical_consumed[0]
-        failed_index = RUN_IDS.index(failed_run_id)
+        failed_index = attempt_order.index(failed_run_id)
         binding = essential_seals.get(failed_run_id)
         if (
             not isinstance(binding, dict)
@@ -18327,12 +19408,13 @@ def _essential_failure_raw_prefixes(
 ) -> frozenset[str]:
     """Return raw roots superseded by an exact state-bound essential authority."""
 
+    contract = _provider_contract_from_document(state, label="pilot disposition")
     prefixes: set[str] = set()
     essential_seals = state.get("essential_failure_seals")
     if not isinstance(essential_seals, dict):
         raise T09HostError("pilot disposition lacks typed essential-failure bindings")
     for run_id, binding in essential_seals.items():
-        if run_id not in RUN_IDS or not isinstance(binding, dict):
+        if run_id not in contract.run_ids or not isinstance(binding, dict):
             raise T09HostError("pilot disposition contains an unknown essential authority")
         condition_manifest = manifest_for_run(command_document, run_id)
         attempt_root = root / manifest_output_root(condition_manifest)
@@ -18363,6 +19445,8 @@ def _essential_failure_raw_prefixes(
 def _consumed_export_prefix_length(state: dict[str, Any]) -> int:
     """Return the exact frozen prefix carrying a raw or essential authority."""
 
+    contract = _provider_contract_from_document(state, label="pilot disposition")
+    attempt_order = contract.run_ids
     raw_complete = state.get("raw_attempts_complete")
     essential_seals = state.get("essential_failure_seals")
     if not isinstance(raw_complete, list) or not isinstance(essential_seals, dict):
@@ -18371,8 +19455,8 @@ def _consumed_export_prefix_length(state: dict[str, Any]) -> int:
     if essential_seals:
         if (
             len(essential_seals) != 1
-            or prefix_length >= len(RUN_IDS)
-            or set(essential_seals) != {RUN_IDS[prefix_length]}
+            or prefix_length >= len(attempt_order)
+            or set(essential_seals) != {attempt_order[prefix_length]}
         ):
             raise T09HostError("essential export authority is not the next frozen identity")
         prefix_length += 1
@@ -18398,6 +19482,7 @@ def _validate_pending_essential_cleanup_export(
     value: object,
     *,
     package_commit: str,
+    contract: T09ProviderContract,
 ) -> dict[str, object] | None:
     """Validate the one terminal essential export cleanup may precede."""
 
@@ -18410,7 +19495,7 @@ def _validate_pending_essential_cleanup_export(
     export_manifest_sha256 = value.get("export_manifest_sha256")
     if (
         set(value) != _PENDING_ESSENTIAL_CLEANUP_EXPORT_KEYS
-        or value.get("run_id") not in RUN_IDS
+        or value.get("run_id") not in contract.run_ids
         or value.get("package_commit") != package_commit
         or value.get("evidence_authority") != "essential-infrastructure-failure"
         or any(
@@ -18456,6 +19541,8 @@ def _cleanup_export_handoff(
     """Gate destructive cleanup while allowing one sealed essential replay."""
 
     prefix_length = _consumed_export_prefix_length(state)
+    contract = _provider_contract_from_document(state, label="pilot disposition")
+    attempt_order = contract.run_ids
     raw_complete = state.get("raw_attempts_complete")
     essential_seals = state.get("essential_failure_seals")
     entered = state.get("empirical_attempts_entered")
@@ -18472,18 +19559,20 @@ def _cleanup_export_handoff(
     pending = _validate_pending_essential_cleanup_export(
         retained_pending,
         package_commit=package_commit,
+        contract=contract,
     )
     if pending is not None:
         run_id = cast(str, pending["run_id"])
         if (
             prefix_length == 0
-            or run_id != RUN_IDS[prefix_length - 1]
+            or run_id != attempt_order[prefix_length - 1]
             or set(essential_seals) != {run_id}
         ):
             raise T09HostError("retained pending essential export is not the terminal authority")
         chronology = _validate_export_chronology_projection(
             retained_chronology,
             expected_prefix_length=prefix_length - 1,
+            attempt_order=attempt_order,
         )
         if chronology != require_prior_export_acknowledgements(
             root,
@@ -18495,6 +19584,7 @@ def _cleanup_export_handoff(
         chronology = _validate_export_chronology_projection(
             retained_chronology,
             expected_prefix_length=prefix_length,
+            attempt_order=attempt_order,
         )
         if chronology != require_prior_export_acknowledgements(
             root,
@@ -18506,7 +19596,7 @@ def _cleanup_export_handoff(
     elif prefix_length == 0:
         return [], None
     else:
-        terminal_run_id = RUN_IDS[prefix_length - 1]
+        terminal_run_id = attempt_order[prefix_length - 1]
         acknowledgement_path = _received_export_ack_path(root, terminal_run_id)
         terminal_is_essential = set(essential_seals) == {terminal_run_id}
         if not terminal_is_essential or acknowledgement_path.is_file():
@@ -18562,6 +19652,16 @@ def _cleanup_export_handoff(
             entry = load_object(root / "pilot-v7/provider-entry.json", label="provider entry")
             frozen_path = root / "pilot-v7/frozen-run-manifest.json"
             frozen = load_object(frozen_path, label="frozen run manifest")
+            _require_provider_contract(
+                entry,
+                expected=contract,
+                label="pending export provider entry",
+            )
+            _require_provider_contract(
+                frozen,
+                expected=contract,
+                label="pending export frozen manifest",
+            )
             archive_bytes = completion.get("archive_bytes")
             archive_sha256 = completion.get("archive_sha256")
             manifest_sha256 = completion.get("manifest_sha256")
@@ -18589,6 +19689,7 @@ def _cleanup_export_handoff(
                     str, entry.get("owned_instance_identity_sha256")
                 ),
                 lambda_started_at_epoch=float(lambda_started),
+                contract=contract,
             )
             completion_status = "published-unacknowledged"
             completion_sha256 = file_sha256(completion_path)
@@ -18642,11 +19743,12 @@ _EXPORT_CHRONOLOGY_PROJECTION_KEYS: Final = {
 def _validate_export_chronology_projection(
     value: object,
     *,
+    attempt_order: tuple[str, ...],
     expected_prefix_length: int | None = None,
 ) -> list[dict[str, object]]:
     """Validate the compact direct-export chronology bound into aggregate handoff."""
 
-    if not isinstance(value, list) or len(value) > len(RUN_IDS):
+    if not isinstance(value, list) or len(value) > len(attempt_order):
         raise T09HostError("per-attempt export chronology projection is malformed")
     if expected_prefix_length is not None and len(value) != expected_prefix_length:
         raise T09HostError("per-attempt export chronology prefix length drifted")
@@ -18658,7 +19760,7 @@ def _validate_export_chronology_projection(
         verified = raw.get("verified_at_epoch")
         if (
             set(raw) != _EXPORT_CHRONOLOGY_PROJECTION_KEYS
-            or raw.get("run_id") != RUN_IDS[index]
+            or raw.get("run_id") != attempt_order[index]
             or raw.get("evidence_authority")
             not in {"immutable-raw-attempt", "essential-infrastructure-failure"}
             or not isinstance(raw.get("empirical_entry_crossed"), bool)
@@ -18870,6 +19972,8 @@ def stage(args: argparse.Namespace) -> None:
         command_document=command_document,
         package_commit=args.package_commit,
     )
+    stage_contract = _provider_contract_from_document(state, label="pilot disposition")
+    _require_active_provider_runner(stage_contract, label="historical evidence staging")
     export_chronology = require_prior_export_acknowledgements(
         root,
         next_attempt_index=_consumed_export_prefix_length(state),
@@ -18878,6 +19982,7 @@ def stage(args: argparse.Namespace) -> None:
     export_chronology = _validate_export_chronology_projection(
         export_chronology,
         expected_prefix_length=_consumed_export_prefix_length(state),
+        attempt_order=stage_contract.run_ids,
     )
     export_chronology_sha256 = canonical_sha256(export_chronology)
     essential_raw_prefixes = _essential_failure_raw_prefixes(
@@ -18888,6 +19993,11 @@ def stage(args: argparse.Namespace) -> None:
     )
     frozen_manifest_path = root / "pilot-v7/frozen-run-manifest.json"
     frozen_manifest = load_object(frozen_manifest_path, label="frozen run manifest")
+    _require_provider_contract(
+        frozen_manifest,
+        expected=stage_contract,
+        label="evidence stage frozen manifest",
+    )
     frozen_manifest_sha256 = file_sha256(frozen_manifest_path)
     runtime_state = _runtime_budget_state(root)
     empirical_started_for_stage = runtime_state.get("campaign_started_at_epoch")
@@ -18970,6 +20080,11 @@ def stage(args: argparse.Namespace) -> None:
         raise T09HostError("Lambda start time is unavailable at staging")
     provider_entry_path = root / "pilot-v7/provider-entry.json"
     dynamic_summary = load_object(provider_entry_path, label="provider entry summary")
+    _require_provider_contract(
+        dynamic_summary,
+        expected=stage_contract,
+        label="evidence stage provider entry",
+    )
     owned_hash = dynamic_summary.get("owned_instance_identity_sha256")
     if not isinstance(owned_hash, str) or _HEX64.fullmatch(owned_hash) is None:
         raise T09HostError("preflight lacks the owned provider identity hash")
@@ -19020,7 +20135,8 @@ def verify_inbound(args: argparse.Namespace) -> None:
     identity = load_object(identity_path, label="inbound stage identity")
     marker = load_object(marker_path, label="inbound termination marker")
     chronology = _validate_export_chronology_projection(
-        identity.get("per_attempt_export_chronology")
+        identity.get("per_attempt_export_chronology"),
+        attempt_order=RUN_IDS,
     )
     if (
         identity.get("stage_id") != STAGE_ID
@@ -19078,11 +20194,13 @@ def _validate_aggregate_direct_export_chronology(
     provider_entry_receipt_sha256: str,
     owned_instance_identity_sha256: str,
     lambda_started_at_epoch: float,
+    contract: T09ProviderContract,
 ) -> list[dict[str, object]]:
     """Reconstruct every direct-export receipt embedded in an aggregate stage."""
 
     chronology = _validate_export_chronology_projection(
-        stage_identity.get("per_attempt_export_chronology")
+        stage_identity.get("per_attempt_export_chronology"),
+        attempt_order=contract.run_ids,
     )
     if stage_identity.get("per_attempt_export_chronology_sha256") != canonical_sha256(chronology):
         raise T09HostError("aggregate direct-export chronology identity drifted")
@@ -19195,6 +20313,7 @@ def _validate_aggregate_direct_export_chronology(
             owned_instance_identity_sha256=owned_instance_identity_sha256,
             lambda_started_at_epoch=lambda_started_at_epoch,
             archive=None,
+            contract=contract,
         )
         if observed != projection:
             raise T09HostError("aggregate direct-export chronology projection drifted")
@@ -19208,6 +20327,9 @@ def package(args: argparse.Namespace) -> None:
     inbound = args.inbound_root.resolve(strict=True)
     entry_receipt_path = args.provider_entry_receipt.resolve(strict=True)
     entry = load_object(entry_receipt_path, label="provider entry receipt")
+    contract = _provider_contract_from_document(entry, label="provider entry receipt")
+    _require_active_provider_runner(contract, label="historical evidence packaging")
+    attempt_order = contract.run_ids
     lambda_started = entry.get("lambda_started_at_epoch")
     owned_hash = entry.get("owned_instance_identity_sha256")
     entry_sha256 = file_sha256(entry_receipt_path)
@@ -19307,6 +20429,7 @@ def package(args: argparse.Namespace) -> None:
             provider_entry_receipt_sha256=entry_sha256,
             owned_instance_identity_sha256=owned_hash,
             lambda_started_at_epoch=float(lambda_started),
+            contract=contract,
         )
         for record in direct_export_chronology:
             _require_pretermination_evidence_chronology(
@@ -19324,7 +20447,7 @@ def package(args: argparse.Namespace) -> None:
         )
     else:
         prefix_open = True
-        for run_id in RUN_IDS:
+        for run_id in attempt_order:
             verification_path = inbound / f"{run_id}-export-verification.json"
             if not verification_path.is_file():
                 prefix_open = False
@@ -19374,6 +20497,7 @@ def package(args: argparse.Namespace) -> None:
                 evidence_authority=evidence_authority,
                 empirical_entry_crossed=empirical_entry_crossed,
                 archive=archive,
+                contract=contract,
             )
             _require_pretermination_evidence_chronology(
                 lambda_started_at_epoch=float(lambda_started),
@@ -19671,11 +20795,16 @@ def _validate_global_cleanup_completion(
     terminal_state = document.get("cleanup_terminal_state")
     image_candidates = document.get("qualified_runtime_image_candidates_targeted")
     export_chronology = _validate_export_chronology_projection(
-        document.get("direct_attempt_export_chronology")
+        document.get("direct_attempt_export_chronology"),
+        attempt_order=_provider_contract_from_document(
+            document,
+            label="global cleanup completion",
+        ).run_ids,
     )
     pending_essential = _validate_pending_essential_cleanup_export(
         document.get("pending_essential_export_after_cleanup"),
         package_commit=package_commit,
+        contract=ACTIVE_PROVIDER_CONTRACT,
     )
     if (
         set(document) != _GLOBAL_CLEANUP_COMPLETION_KEYS
@@ -20085,20 +21214,154 @@ def _prior_typed_core_incidents(
     return detected, destruction_unverified
 
 
+def _cleanup_without_optional_pilot_state(
+    cleanup_journal: EarlyCleanupJournal,
+    *,
+    state_path: Path,
+) -> bool:
+    """Close exact remote-owned targets when the optional pilot state never existed."""
+
+    if state_path.is_file() and not state_path.is_symlink():
+        return False
+    if os.path.lexists(state_path):
+        raise T09HostError("global cleanup pilot state is unsafe")
+
+    journal_state = cleanup_journal.load()
+    try:
+        contract = provider_contract_for_plan_id(journal_state.plan_id)
+    except T09ProviderContractError as exc:
+        raise T09HostError("cleanup journal names an unsupported campaign") from exc
+    if journal_state.host_run_id != contract.host_run_id:
+        raise T09HostError("cleanup journal host ownership drifted")
+
+    prefix: list[str] | None = None
+    prefix_error: BaseException | None = None
+    for target in cleanup_journal.load().targets:
+        if (
+            target.kind not in _REMOTE_CLEANUP_TARGET_KINDS
+            or target.state in _TERMINAL_CLEANUP_TARGET_STATES
+        ):
+            continue
+        result = CleanupTargetState.FAILED
+        detail_code = "remote-cleanup-not-attempted"
+        try:
+            if target.kind is CleanupTargetKind.TEMPORARY_REMOTE_CREDENTIAL:
+                secret_path = Path(target.locator)
+                if not os.path.lexists(secret_path):
+                    result = CleanupTargetState.ABSENT
+                    detail_code = "temporary-remote-secret-already-absent"
+                else:
+                    metadata = secret_path.lstat()
+                    if secret_path.is_symlink() or not stat.S_ISREG(metadata.st_mode):
+                        raise T09HostError("early cleanup remote secret target is unsafe")
+                    secret_path.unlink()
+                    parent_descriptor = os.open(
+                        secret_path.parent,
+                        os.O_RDONLY | getattr(os, "O_DIRECTORY", 0),
+                    )
+                    try:
+                        os.fsync(parent_descriptor)
+                    finally:
+                        os.close(parent_descriptor)
+                    result = CleanupTargetState.REMOVED
+                    detail_code = "temporary-remote-secret-removed"
+            else:
+                if re.fullmatch(
+                    r"[a-f0-9]{64}", target.locator
+                ) is None or target.ownership_sha256 != cleanup_locator_identity(
+                    CleanupTargetKind.OWNED_CONTAINER, target.locator
+                ):
+                    raise T09HostError("early cleanup container identity is malformed")
+                if prefix is None and prefix_error is None:
+                    try:
+                        prefix = docker_prefix()
+                    except (OSError, subprocess.SubprocessError, T09HostError) as exc:
+                        prefix_error = exc
+                if prefix is None:
+                    assert prefix_error is not None
+                    raise T09HostError("Docker is unavailable for exact early cleanup") from (
+                        prefix_error
+                    )
+                identity = inspect_owned_container_by_id(prefix, target.locator)
+                if identity is None:
+                    result, detail_code = verified_owned_container_cleanup_result(
+                        initially_absent=True,
+                        removal_verified=True,
+                        removed_detail="owned-container-removed",
+                        absent_detail="owned-container-already-absent",
+                    )
+                else:
+                    if (
+                        identity.labels.get("giclab.t09.plan") != contract.plan_id
+                        or identity.labels.get("giclab.t09.host_run") != contract.host_run_id
+                    ):
+                        raise T09HostError(
+                            "owned container and cleanup journal cross campaign boundaries"
+                        )
+                    role = identity.labels["giclab.t09.role"]
+                    removal_verified = remove_container(
+                        prefix,
+                        identity.name,
+                        expected_container_id=identity.container_id,
+                        expected_role=role,
+                    )
+                    result, detail_code = verified_owned_container_cleanup_result(
+                        initially_absent=False,
+                        removal_verified=removal_verified,
+                        removed_detail="owned-container-removed",
+                        absent_detail="owned-container-already-absent",
+                    )
+        except (OSError, subprocess.SubprocessError, T09HostError) as exc:
+            result = CleanupTargetState.FAILED
+            detail_code = type(exc).__name__
+        cleanup_journal.record_result(
+            target_id=target.target_id,
+            result=result,
+            detail_code=detail_code,
+        )
+
+    _write_remote_early_closeout_receipt(cleanup_journal)
+    unfinished = _unfinished_remote_cleanup_target_ids(cleanup_journal)
+    if unfinished:
+        raise T09HostError(
+            "exact early cleanup remains incomplete for remote-owned targets: "
+            + ", ".join(unfinished)
+        )
+    return True
+
+
 def cleanup(args: argparse.Namespace) -> None:
     enforce_host_core_limit()
+    cleanup_journal = early_cleanup_journal(args)
+    cleanup_journal_state = cleanup_journal.load()
+    try:
+        cleanup_contract = provider_contract_for_plan_id(cleanup_journal_state.plan_id)
+    except T09ProviderContractError as exc:
+        raise T09HostError("cleanup journal names an unsupported campaign") from exc
+    if (
+        cleanup_journal.load().terminal_cleanup_disposition
+        is not TerminalCleanupDisposition.COMPLETE
+    ):
+        cleanup_journal.advance_lifecycle(CleanupLifecycleStage.CLEANUP_IN_PROGRESS)
     root = args.artifact_root.resolve(strict=False)
     if root.exists():
         metadata = root.stat(follow_symlinks=False)
         if root.is_symlink() or not stat.S_ISDIR(metadata.st_mode):
             raise T09HostError("global cleanup artifact root is unsafe")
-    else:
+    state_path = root / "pilot-v7/pilot-state.json"
+    if _cleanup_without_optional_pilot_state(
+        cleanup_journal,
+        state_path=state_path,
+    ):
+        return
+    if cleanup_contract is not ACTIVE_PROVIDER_CONTRACT:
+        raise T09HostError("historical pilot-state cleanup requires its frozen provider runner")
+    if not root.exists():
         root.mkdir(mode=0o700, parents=True, exist_ok=False)
     pilot_root = root / "pilot-v7"
     pilot_root.mkdir(mode=0o700, parents=True, exist_ok=True)
     intent_path = pilot_root / "global-cleanup-intent.json"
     completion_path = pilot_root / "host-cleanup.json"
-    state_path = pilot_root / "pilot-state.json"
     direct_export_chronology: list[dict[str, object]] = []
     pending_essential_export_after_cleanup: dict[str, object] | None = None
     retained_cleanup_intent: dict[str, Any] | None = None
@@ -20118,6 +21381,8 @@ def cleanup(args: argparse.Namespace) -> None:
             )
         except T09PilotError as exc:
             raise T09HostError("global cleanup pilot state is not receipt-backed") from exc
+        if cleanup_state.get("plan_id") != cleanup_contract.plan_id:
+            raise T09HostError("pilot state and cleanup journal cross campaign boundaries")
         if cleanup_state.get("condition_start_reservation") is not None:
             raise T09HostError(
                 "global cleanup requires recover-attempt-seal before a started reservation"
@@ -20140,7 +21405,10 @@ def cleanup(args: argparse.Namespace) -> None:
         )
     elif os.path.lexists(state_path):
         raise T09HostError("global cleanup pilot state is unsafe")
-    direct_export_chronology = _validate_export_chronology_projection(direct_export_chronology)
+    direct_export_chronology = _validate_export_chronology_projection(
+        direct_export_chronology,
+        attempt_order=cleanup_contract.run_ids,
+    )
     direct_export_chronology_sha256 = canonical_sha256(direct_export_chronology)
     pending_essential_export_after_cleanup_sha256 = canonical_sha256(
         pending_essential_export_after_cleanup
@@ -20345,6 +21613,19 @@ def cleanup(args: argparse.Namespace) -> None:
                 cast(str, item["owned_role"]),
             )
         )
+        container_id = cast(str, item["container_id"])
+        container_name = cast(str, item["container_name"])
+        container_role = cast(str, item["owned_role"])
+        cleanup_journal.register_target(
+            target_id=f"owned-container-{container_id}",
+            kind=CleanupTargetKind.OWNED_CONTAINER,
+            locator=container_id,
+            ownership_sha256=cleanup_locator_identity(
+                CleanupTargetKind.OWNED_CONTAINER,
+                container_id,
+            ),
+            public_alias=f"owned-container/{container_role}/{container_name}",
+        )
     retained_archive_targets_for_validation = cleanup_intent.get("archive_targets")
     if not isinstance(retained_archive_targets_for_validation, list):
         raise T09HostError("global cleanup archive intent is malformed")
@@ -20416,18 +21697,41 @@ def cleanup(args: argparse.Namespace) -> None:
     if os.path.lexists(completion_path):
         raise T09HostError("global cleanup completion is unsafe")
     for name, container_id, role in owned_targets:
+        removal_result = CleanupTargetState.FAILED
+        removal_detail = "owned-container-removal-unverified"
         try:
-            if remove_container(
+            removal_verified = remove_container(
                 prefix,
                 name,
                 expected_container_id=container_id,
                 expected_role=role,
-            ):
+            )
+            removal_result, removal_detail = verified_owned_container_cleanup_result(
+                initially_absent=False,
+                removal_verified=removal_verified,
+                removed_detail="owned-container-removed",
+                absent_detail="owned-container-already-absent",
+            )
+            if removal_verified:
                 removed.append(name)
+            else:
+                container_removal_errors.append(
+                    {
+                        "container_name": name,
+                        "error_type": "ContainerRemovalUnverified",
+                    }
+                )
         except (OSError, subprocess.SubprocessError, T09HostError) as exc:
+            removal_result = CleanupTargetState.FAILED
+            removal_detail = type(exc).__name__
             container_removal_errors.append(
                 {"container_name": name, "error_type": type(exc).__name__}
             )
+        cleanup_journal.record_result(
+            target_id=f"owned-container-{container_id}",
+            result=removal_result,
+            detail_code=removal_detail,
+        )
     try:
         residue = owned_containers(prefix)
     except (OSError, subprocess.SubprocessError, T09HostError) as exc:
@@ -20819,8 +22123,26 @@ def cleanup(args: argparse.Namespace) -> None:
             },
         )
     credential_bytes = b""
-    secret_removed = (
-        destroy_secret(secret_path) if secret_path.exists() else credential_ready_path.is_file()
+    if secret_path.exists():
+        secret_removed = destroy_secret(secret_path)
+        secret_cleanup_result = (
+            CleanupTargetState.REMOVED if secret_removed else CleanupTargetState.FAILED
+        )
+        secret_cleanup_detail = (
+            "temporary-remote-secret-removed" if secret_removed else "secret-removal-failed"
+        )
+    elif credential_ready_path.is_file():
+        secret_removed = True
+        secret_cleanup_result = CleanupTargetState.ABSENT
+        secret_cleanup_detail = "temporary-remote-secret-already-absent"
+    else:
+        secret_removed = False
+        secret_cleanup_result = CleanupTargetState.FAILED
+        secret_cleanup_detail = "secret-removal-failed"
+    cleanup_journal.record_result(
+        target_id="temporary-remote-secret",
+        result=secret_cleanup_result,
+        detail_code=secret_cleanup_detail,
     )
 
     retained_archive_targets = cleanup_intent.get("archive_targets")
@@ -20872,6 +22194,13 @@ def cleanup(args: argparse.Namespace) -> None:
         if content_scans_permitted
         else ["privacy-scan-unavailable:core-scan-integrity-failure"]
     )
+    _write_remote_early_closeout_receipt(cleanup_journal)
+    unfinished_remote_targets = _unfinished_remote_cleanup_target_ids(cleanup_journal)
+    if unfinished_remote_targets:
+        raise T09HostError(
+            "global cleanup retained unfinished exact remote targets: "
+            + ", ".join(unfinished_remote_targets)
+        )
     try:
         remaining_runtime = provider_seconds_remaining(root)
     except (OSError, T09HostError):
@@ -21006,7 +22335,11 @@ _PREEMPIRICAL_LATE_GATE_PATHS: Final = (
 )
 
 
-def _preempirical_late_gate_absence(root: Path) -> dict[str, object]:
+def _preempirical_late_gate_absence(
+    root: Path,
+    *,
+    contract: T09ProviderContract,
+) -> dict[str, object]:
     """Prove the exact-one metadata and final freeze boundary was never crossed."""
 
     pilot_root = root / "pilot-v7"
@@ -21019,8 +22352,8 @@ def _preempirical_late_gate_absence(root: Path) -> dict[str, object]:
         raise T09HostError("pre-empirical failure crossed the model-metadata/freeze boundary")
     return {
         "schema_version": "0.1.0",
-        "plan_id": PLAN_ID,
-        "host_run_id": HOST_RUN_ID,
+        "plan_id": contract.plan_id,
+        "host_run_id": contract.host_run_id,
         "checked_relative_paths": list(_PREEMPIRICAL_LATE_GATE_PATHS),
         "present_relative_paths": [],
         "model_metadata_requests": 0,
@@ -21044,13 +22377,20 @@ def preempirical_replacement_disposition(args: argparse.Namespace) -> dict[str, 
     cleanup_receipt = load_object(cleanup_path, label="pre-empirical host cleanup")
     provider_entry = load_object(provider_entry_path, label="provider entry summary")
     failure = load_object(failure_path, label="preflight failure")
+    contract = _provider_contract_from_document(state, label="pre-empirical pilot state")
+    _require_active_provider_runner(contract, label="historical pre-empirical disposition")
+    _require_provider_contract(
+        provider_entry,
+        expected=contract,
+        label="pre-empirical provider entry",
+    )
     provider_preflight_started = provider_entry.get("provider_preflight_started_at_epoch")
     failure_preflight_started = failure.get("provider_preflight_started_at_epoch")
     preflight_iteration_started = failure.get("preflight_iteration_started_at_epoch")
     preflight_failed_at = failure.get("failed_at_epoch")
     preflight_iteration_elapsed = failure.get("preflight_iteration_elapsed_seconds")
     provider_instance_elapsed = failure.get("provider_instance_elapsed_seconds")
-    late_gate_absence = _preempirical_late_gate_absence(root)
+    late_gate_absence = _preempirical_late_gate_absence(root, contract=contract)
     qualification_root = root / "pilot-v7/replacement-image-qualification"
     materialization_receipt = qualification_root / "receipt.json"
     prefix = docker_prefix()
@@ -21124,8 +22464,8 @@ def preempirical_replacement_disposition(args: argparse.Namespace) -> dict[str, 
     write_exclusive(source / "late-preflight-gate-absence.json", late_gate_absence)
     receipt: dict[str, object] = {
         "schema_version": "0.1.0",
-        "plan_id": PLAN_ID,
-        "host_run_id": HOST_RUN_ID,
+        "plan_id": contract.plan_id,
+        "host_run_id": contract.host_run_id,
         "package_commit": args.package_commit,
         "provider_entry_receipt_sha256": entry_sha256,
         "pilot_state_sha256": file_sha256(source / "pilot-state.json"),
@@ -21169,8 +22509,8 @@ def preempirical_replacement_disposition(args: argparse.Namespace) -> dict[str, 
         source / "source-manifest.json",
         {
             "schema_version": "0.1.0",
-            "plan_id": PLAN_ID,
-            "host_run_id": HOST_RUN_ID,
+            "plan_id": contract.plan_id,
+            "host_run_id": contract.host_run_id,
             "files": files,
             "total_bytes": sum(cast(int, item["bytes"]) for item in files),
         },
@@ -21186,6 +22526,7 @@ def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser()
     result.add_argument("--repository", type=Path, required=True)
     result.add_argument("--artifact-root", type=Path, required=True)
+    result.add_argument("--early-cleanup-journal", type=Path, required=True)
     result.add_argument("--secret-file", type=Path, required=True)
     result.add_argument("--evaluator-overlay", type=Path, required=True)
     result.add_argument("--package-commit", required=True)

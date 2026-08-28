@@ -520,19 +520,25 @@ class ProviderBudgetBoundary:
         """
 
         reservations = tuple(self._reservations.values())
-        projected = ProviderBudgetUsage(
-            cost_usd=math.fsum(item.cost_usd for item in reservations),
-            input_tokens=sum(item.input_tokens for item in reservations),
-            cached_input_tokens=sum(item.cached_input_tokens for item in reservations),
-            output_tokens=sum(item.output_tokens for item in reservations),
-            total_tokens=sum(item.total_tokens for item in reservations),
-            model_call_attempts=sum(item.model_call_attempts for item in reservations),
-            default_service_tier_responses=sum(
-                item.default_service_tier_responses for item in reservations
-            ),
-            browser_actions=sum(item.browser_actions for item in reservations),
-            output_bytes=sum(item.output_bytes for item in reservations),
-        )
+        if not reservations:
+            # Keep the empty-set projection canonical, including positive 0.0 for
+            # cost.  This is the terminal state that the V9 release-order failure
+            # could not reach with subtractive floating-point bookkeeping.
+            projected = ProviderBudgetUsage()
+        else:
+            projected = ProviderBudgetUsage(
+                cost_usd=math.fsum(item.cost_usd for item in reservations),
+                input_tokens=sum(item.input_tokens for item in reservations),
+                cached_input_tokens=sum(item.cached_input_tokens for item in reservations),
+                output_tokens=sum(item.output_tokens for item in reservations),
+                total_tokens=sum(item.total_tokens for item in reservations),
+                model_call_attempts=sum(item.model_call_attempts for item in reservations),
+                default_service_tier_responses=sum(
+                    item.default_service_tier_responses for item in reservations
+                ),
+                browser_actions=sum(item.browser_actions for item in reservations),
+                output_bytes=sum(item.output_bytes for item in reservations),
+            )
         object.__setattr__(self, "_aggregate_reserved", projected)
         object.__setattr__(self, "_condition_reserved", projected)
 
@@ -852,6 +858,10 @@ class ProviderBudgetBoundary:
                 "reserved_upper_bound": {
                     "condition": self._usage_document(condition_upper),
                     "aggregate": self._usage_document(aggregate_upper),
+                },
+                "outstanding_reservation_projection": {
+                    "condition": self._usage_document(self._condition_reserved),
+                    "aggregate": self._usage_document(self._aggregate_reserved),
                 },
                 "outstanding_reservations": len(self._reservations),
                 "unreconciled_provider_attempts": self.unreconciled_provider_attempts,

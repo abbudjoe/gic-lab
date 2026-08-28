@@ -33,6 +33,13 @@ from giclab.registry import (
 from giclab.sitegen import build_site_data
 
 ROOT = discover_repo_root()
+T09_DOWNSTREAM_FINALIZER_HISTORY_RELATIVE = Path(
+    "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
+    "T09_V8_DOWNSTREAM_FINALIZER_SOURCE_HISTORY.json"
+)
+T09_DOWNSTREAM_FINALIZER_HISTORY_SHA256 = (
+    "a40506c022d8e16669bf1a0b4c87ff91205677be4e446d00b7f8debef838445c"
+)
 SCHEMA_FILES = (
     "schemas/experiment.schema.json",
     "schemas/artifact.schema.json",
@@ -64,6 +71,10 @@ SCHEMA_FILES = (
     "schemas/t09-sira-pilot-score.schema.json",
     "schemas/t09-sira-pilot-evidence.schema.json",
     "schemas/t09-sira-pilot-execution.schema.json",
+    "schemas/t09-sira-pilot-v10-execution.schema.json",
+    "schemas/t09-offline-refinalization-receipt.schema.json",
+    "schemas/t09-early-cleanup-state.schema.json",
+    "schemas/t09-v10-plan.schema.json",
     "schemas/terminal-execution-control.schema.json",
 )
 REQUIRED_PATHS = (
@@ -197,6 +208,58 @@ def validate_instance(
 
         errors.extend(validate_host_qualification_incident_semantics(instance))
     return errors
+
+
+def _t09_v10_implementation_binding_map(plan: Mapping[str, Any]) -> dict[str, str]:
+    """Project the V10 successor's reviewed source and schema byte identities."""
+
+    bindings = plan.get("implementation_bindings")
+    if not isinstance(bindings, dict):
+        return {}
+    specifications = (
+        ("provider_accounting", "path", "sha256"),
+        ("provider_accounting", "regression_path", "regression_sha256"),
+        (
+            "offline_refinalization",
+            "finalizer_projection_path",
+            "finalizer_projection_sha256",
+        ),
+        ("offline_refinalization", "evaluator_driver_path", "evaluator_driver_sha256"),
+        ("offline_refinalization", "selector_path", "selector_sha256"),
+        ("offline_refinalization", "receipt_schema_path", "receipt_schema_sha256"),
+        ("early_cleanup", "implementation_path", "implementation_sha256"),
+        ("early_cleanup", "provider_integration_path", "provider_integration_sha256"),
+        ("early_cleanup", "schema_path", "schema_sha256"),
+        ("execution_plane", "pilot_library_path", "pilot_library_sha256"),
+        (
+            "execution_plane",
+            "campaign_lifecycle_path",
+            "campaign_lifecycle_sha256",
+        ),
+        ("execution_plane", "provider_path", "provider_sha256"),
+        (
+            "execution_plane",
+            "provider_contracts_path",
+            "provider_contracts_sha256",
+        ),
+        ("execution_plane", "remote_runner_path", "remote_runner_sha256"),
+        ("execution_plane", "command_generator_path", "command_generator_sha256"),
+        ("execution_plane", "runtime_profile_path", "runtime_profile_sha256"),
+        ("execution_plane", "execution_contract_path", "execution_contract_sha256"),
+        ("execution_plane", "command_manifests_path", "command_manifests_sha256"),
+        ("execution_plane", "runtime_identity_path", "runtime_identity_sha256"),
+        ("execution_plane", "execution_schema_path", "execution_schema_sha256"),
+    )
+    result: dict[str, str] = {}
+    for group_name, path_field, hash_field in specifications:
+        group = bindings.get(group_name)
+        if not isinstance(group, dict):
+            continue
+        path = group.get(path_field)
+        digest = group.get(hash_field)
+        if isinstance(path, str) and isinstance(digest, str):
+            result[path] = digest
+    return result
 
 
 def _validate_container_attempt_semantics(instance: Mapping[str, Any]) -> list[str]:
@@ -1060,9 +1123,61 @@ def validate_experiment_run_profiles(root: Path = ROOT) -> list[str]:
         if actual_profile_paths != declared_current_paths:
             errors.append(f"{experiment_id}: registry/profile declaration mismatch")
         actual_conditions = set((profiles_root / "conditions").glob("*.yaml"))
-        if actual_conditions != referenced_conditions:
+        proposal_conditions: set[Path] = set()
+        v10_proposal = profiles_root / "proposals/T09_PILOT_RUNTIME_PROFILE_V10.yaml"
+        if v10_proposal.is_file():
+            proposal = load_yaml(v10_proposal)
+            raw_proposal_conditions = proposal.get("condition_plan_paths")
+            if isinstance(raw_proposal_conditions, list):
+                for relative in raw_proposal_conditions:
+                    if isinstance(relative, str):
+                        proposal_conditions.add(resolve_repo_path(root, relative))
+        if actual_conditions != referenced_conditions | proposal_conditions:
             errors.append(f"{experiment_id}: condition-plan reference mismatch")
     return errors
+
+
+def _load_t09_downstream_finalizer_history(root: Path) -> dict[str, Any] | None:
+    """Load the exact source closure for a historical commit absent from public refs."""
+
+    path = root / T09_DOWNSTREAM_FINALIZER_HISTORY_RELATIVE
+    if not path.is_file():
+        return None
+    raw = path.read_bytes()
+    if hashlib.sha256(raw).hexdigest() != T09_DOWNSTREAM_FINALIZER_HISTORY_SHA256:
+        return None
+    document = load_json(path)
+    changed_paths = document.get("changed_paths")
+    changed_hashes = document.get("changed_source_sha256s")
+    if (
+        document.get("schema_version") != "1.0.0"
+        or document.get("record_type") != "t09-downstream-finalizer-source-history"
+        or document.get("public_ref_reachability") != "not-required-history-closure"
+        or document.get("frozen_scientific_package_commit")
+        != "6d3005bb5ce915eabb801ef35e11855cd9420338"
+        or document.get("downstream_finalizer_commit") != "d6a080264c7d2ac83efc9806d2a2ae4c141a1113"
+        or document.get("downstream_tree_sha1") != "24fac4555f5b855256a4bb0abf300b4339cf893b"
+        or changed_paths
+        != [
+            "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py",
+            "containers/sira-smoke/pragmatic/t09_remote_runner.py",
+            "tests/test_t09_sira_pilot.py",
+        ]
+        or changed_hashes
+        != {
+            "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py": (
+                "99705a977e94e5c84eaffd412c96a8a8828f3dd90acb86f510cd9859632cc5c0"
+            ),
+            "containers/sira-smoke/pragmatic/t09_remote_runner.py": (
+                "69c96acbecc588a2fa0dd0bfd1e4569fa4bc254c0fabc5802e9e62f5b2592b40"
+            ),
+            "tests/test_t09_sira_pilot.py": (
+                "18ea8e1347a7b0646418f027ab96f8ad851014aee6a106394a7f0cfc2d3e45be"
+            ),
+        }
+    ):
+        return None
+    return document
 
 
 def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
@@ -1694,6 +1809,12 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
         errors.append("EXP-0001 T09: replacement runtime semantic identity drifted")
     instrumentation = runtime_identity.get("repository_instrumentation")
     files = instrumentation.get("files") if isinstance(instrumentation, dict) else None
+    v10_plan_path = exp_root / "run-plans/proposals/PLAN-EXP0001-PILOT-V10.yaml"
+    v10_successor_bindings = (
+        _t09_v10_implementation_binding_map(load_yaml(v10_plan_path))
+        if v10_plan_path.is_file()
+        else {}
+    )
     if not isinstance(files, list) or not files:
         errors.append("EXP-0001 T09: runtime instrumentation file bindings are missing")
     else:
@@ -1749,11 +1870,32 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
                 if hashlib.sha256(frozen_bytes).hexdigest() != observed_digest:
                     errors.append(f"EXP-0001 T09: frozen package source drifted for {field}")
         if isinstance(downstream_commit, str) and isinstance(frozen_package_commit, str):
-            expected_downstream_diff = {
-                "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py",
-                "containers/sira-smoke/pragmatic/t09_remote_runner.py",
-                "tests/test_t09_sira_pilot.py",
-            }
+            history = _load_t09_downstream_finalizer_history(root)
+            expected_downstream_diff = (
+                set(history["changed_paths"])
+                if history is not None
+                else {
+                    "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py",
+                    "containers/sira-smoke/pragmatic/t09_remote_runner.py",
+                    "tests/test_t09_sira_pilot.py",
+                }
+            )
+            history_matches_disposition = (
+                history is not None
+                and history.get("frozen_scientific_package_commit") == frozen_package_commit
+                and history.get("downstream_finalizer_commit") == downstream_commit
+                and isinstance(finalizer, dict)
+                and history.get("changed_source_sha256s", {}).get(
+                    "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py"
+                )
+                == finalizer.get("finalizer_source_sha256")
+                and history.get("changed_source_sha256s", {}).get(
+                    "containers/sira-smoke/pragmatic/t09_remote_runner.py"
+                )
+                == finalizer.get("selector_source_sha256")
+            )
+            if not history_matches_disposition:
+                errors.append("EXP-0001 T09: downstream finalizer history closure drifted")
             try:
                 downstream_diff = set(
                     subprocess.run(
@@ -1771,10 +1913,50 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
                     ).stdout.splitlines()
                 )
             except subprocess.CalledProcessError:
-                errors.append("EXP-0001 T09: downstream finalizer history is unavailable")
+                if not history_matches_disposition:
+                    errors.append("EXP-0001 T09: downstream finalizer history is unavailable")
             else:
                 if downstream_diff != expected_downstream_diff:
                     errors.append("EXP-0001 T09: downstream finalizer change scope drifted")
+                if history is not None:
+                    try:
+                        downstream_tree = subprocess.run(
+                            [
+                                "git",
+                                "-C",
+                                str(root),
+                                "rev-parse",
+                                f"{downstream_commit}^{{tree}}",
+                            ],
+                            check=True,
+                            capture_output=True,
+                            text=True,
+                        ).stdout.strip()
+                        downstream_hashes = {
+                            path: hashlib.sha256(
+                                subprocess.run(
+                                    [
+                                        "git",
+                                        "-C",
+                                        str(root),
+                                        "show",
+                                        f"{downstream_commit}:{path}",
+                                    ],
+                                    check=True,
+                                    capture_output=True,
+                                ).stdout
+                            ).hexdigest()
+                            for path in expected_downstream_diff
+                        }
+                    except subprocess.CalledProcessError:
+                        errors.append("EXP-0001 T09: downstream finalizer history is incomplete")
+                    else:
+                        if downstream_tree != history.get(
+                            "downstream_tree_sha1"
+                        ) or downstream_hashes != history.get("changed_source_sha256s"):
+                            errors.append(
+                                "EXP-0001 T09: downstream finalizer source closure drifted"
+                            )
         downstream_mismatches: set[str] = set()
         retry2_disposition_path = exp_root / "T09_AUTONOMOUS_RETRY2_V9_DISPOSITION.json"
         retry2_disposition = (
@@ -1883,14 +2065,21 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
                     except subprocess.CalledProcessError:
                         repair_identity_valid = False
                         break
+                    current_digest = (
+                        hashlib.sha256(current_path.read_bytes()).hexdigest()
+                        if current_path.is_file()
+                        else None
+                    )
                     if (
-                        not current_path.is_file()
-                        or hashlib.sha256(current_path.read_bytes()).hexdigest() != repaired_digest
-                        or hashlib.sha256(repaired_bytes).hexdigest() != repaired_digest
+                        hashlib.sha256(repaired_bytes).hexdigest() != repaired_digest
                         or hashlib.sha256(frozen_bytes).hexdigest() != frozen_digest
                         or (
                             repair_path == "src/giclab/harness/sira_gate_a.py"
                             and instrumentation_digests.get(repair_path) != frozen_digest
+                        )
+                        or (
+                            current_digest != repaired_digest
+                            and v10_successor_bindings.get(repair_path) != current_digest
                         )
                     ):
                         repair_identity_valid = False
@@ -1920,6 +2109,8 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
             if observed_digest == digest:
                 continue
             if file_relative in validated_post_terminal_paths:
+                continue
+            if v10_successor_bindings.get(file_relative) == observed_digest:
                 continue
             disposition_field = downstream_paths.get(file_relative)
             disposition_digest = (
@@ -1967,15 +2158,42 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
         errors.append("EXP-0001 T09: command package identity or contract binding drifted")
     generator_relative = command_document.get("generator_path")
     generator_sha256 = command_document.get("generator_sha256")
+    generator_path = root / generator_relative if isinstance(generator_relative, str) else None
+    observed_generator_sha256 = (
+        hashlib.sha256(generator_path.read_bytes()).hexdigest()
+        if generator_path is not None and generator_path.is_file()
+        else None
+    )
     if (
         not isinstance(generator_relative, str)
         or Path(generator_relative).is_absolute()
         or ".." in Path(generator_relative).parts
         or not isinstance(generator_sha256, str)
-        or not (root / generator_relative).is_file()
-        or hashlib.sha256((root / generator_relative).read_bytes()).hexdigest() != generator_sha256
+        or observed_generator_sha256 is None
+        or (
+            observed_generator_sha256 != generator_sha256
+            and v10_successor_bindings.get(generator_relative) != observed_generator_sha256
+        )
     ):
         errors.append("EXP-0001 T09: command generator binding drifted")
+    from giclab.harness.t09_sira_pilot import PLAN_ID as active_plan_id
+
+    if execution.get("plan_id") != active_plan_id:
+        # The V9 package is immutable historical evidence.  Once the active
+        # typed loader advances to V10, do not reinterpret or rerender V9 with
+        # successor constants.  Its committed package/source bindings above
+        # remain authoritative; V10 gets an independent typed render gate in
+        # validate_t09_v10_plan and its focused tests.
+        pair_diffs = command_document.get("pair_diffs")
+        if (
+            not isinstance(pair_diffs, list)
+            or len(pair_diffs) != 2
+            or any(
+                not isinstance(pair, dict) or pair.get("valid") is not True for pair in pair_diffs
+            )
+        ):
+            errors.append("EXP-0001 T09: frozen historical command/config pair equality failed")
+        return errors
     try:
         from giclab.harness.t09_sira_pilot import (
             diff_pair_manifests,
@@ -2323,6 +2541,207 @@ def validate_markdown_links(root: Path = ROOT) -> list[str]:
     return errors
 
 
+def validate_t09_v10_plan(root: Path = ROOT) -> list[str]:
+    """Validate the fresh V10 proposal and each implementation byte binding."""
+
+    errors: list[str] = []
+    plan_path = (
+        root / "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/proposals/"
+        "PLAN-EXP0001-PILOT-V10.yaml"
+    )
+    schema_path = root / "schemas/t09-v10-plan.schema.json"
+    if not plan_path.is_file() or not schema_path.is_file():
+        return ["T09 V10 plan or schema is missing"]
+    plan = load_yaml(plan_path)
+    errors.extend(f"T09 V10 plan: {error}" for error in validate_instance(plan, schema_path))
+    bindings = plan.get("implementation_bindings")
+    if not isinstance(bindings, dict):
+        return [*errors, "T09 V10 implementation bindings are malformed"]
+    accounting = bindings.get("provider_accounting")
+    refinalization = bindings.get("offline_refinalization")
+    cleanup = bindings.get("early_cleanup")
+    execution = bindings.get("execution_plane")
+    if not all(
+        isinstance(value, dict) for value in (accounting, refinalization, cleanup, execution)
+    ):
+        return [*errors, "T09 V10 implementation binding groups are malformed"]
+    assert isinstance(accounting, dict)
+    assert isinstance(refinalization, dict)
+    assert isinstance(cleanup, dict)
+    assert isinstance(execution, dict)
+    path_and_hash_fields = (
+        (accounting, "path", "sha256"),
+        (accounting, "regression_path", "regression_sha256"),
+        (refinalization, "finalizer_projection_path", "finalizer_projection_sha256"),
+        (refinalization, "evaluator_driver_path", "evaluator_driver_sha256"),
+        (refinalization, "selector_path", "selector_sha256"),
+        (refinalization, "receipt_schema_path", "receipt_schema_sha256"),
+        (cleanup, "implementation_path", "implementation_sha256"),
+        (cleanup, "provider_integration_path", "provider_integration_sha256"),
+        (cleanup, "schema_path", "schema_sha256"),
+        (execution, "pilot_library_path", "pilot_library_sha256"),
+        (execution, "provider_path", "provider_sha256"),
+        (execution, "remote_runner_path", "remote_runner_sha256"),
+        (execution, "command_generator_path", "command_generator_sha256"),
+        (execution, "runtime_profile_path", "runtime_profile_sha256"),
+        (execution, "execution_contract_path", "execution_contract_sha256"),
+        (execution, "command_manifests_path", "command_manifests_sha256"),
+        (execution, "runtime_identity_path", "runtime_identity_sha256"),
+        (execution, "execution_schema_path", "execution_schema_sha256"),
+    )
+    for binding, path_field, hash_field in path_and_hash_fields:
+        relative = binding.get(path_field)
+        expected = binding.get(hash_field)
+        if not isinstance(relative, str) or not isinstance(expected, str):
+            errors.append(f"T09 V10 {path_field} binding is malformed")
+            continue
+        path = Path(relative)
+        if path.is_absolute() or ".." in path.parts:
+            errors.append(f"T09 V10 {path_field} binding is unsafe")
+            continue
+        target = root / path
+        if not target.is_file():
+            errors.append(f"T09 V10 {path_field} binding is missing")
+        elif hashlib.sha256(target.read_bytes()).hexdigest() != expected:
+            errors.append(f"T09 V10 {path_field} binding drifted")
+    condition_plans = execution.get("condition_plans")
+    if not isinstance(condition_plans, list) or len(condition_plans) != 4:
+        errors.append("T09 V10 condition plan bindings are malformed")
+    else:
+        for item in condition_plans:
+            if not isinstance(item, dict):
+                errors.append("T09 V10 condition plan binding is malformed")
+                continue
+            relative = item.get("path")
+            expected = item.get("sha256")
+            if not isinstance(relative, str) or not isinstance(expected, str):
+                errors.append("T09 V10 condition plan binding is malformed")
+                continue
+            path = Path(relative)
+            if path.is_absolute() or ".." in path.parts:
+                errors.append("T09 V10 condition plan binding is unsafe")
+                continue
+            target = root / path
+            if not target.is_file():
+                errors.append("T09 V10 condition plan binding is missing")
+            elif hashlib.sha256(target.read_bytes()).hexdigest() != expected:
+                errors.append("T09 V10 condition plan binding drifted")
+
+    runtime_profile_relative = execution.get("runtime_profile_path")
+    runtime_identity_relative = execution.get("runtime_identity_path")
+    if isinstance(runtime_profile_relative, str):
+        runtime_profile_target = root / runtime_profile_relative
+        if runtime_profile_target.is_file():
+            runtime_profile = load_yaml(runtime_profile_target)
+            errors.extend(
+                f"T09 V10 runtime profile: {error}"
+                for error in validate_instance(
+                    runtime_profile, root / "schemas/run-profile.schema.json"
+                )
+            )
+            errors.extend(
+                f"T09 V10 runtime profile: {error}"
+                for error in validate_run_profile_readiness(runtime_profile)
+            )
+            profile_sha256 = hashlib.sha256(runtime_profile_target.read_bytes()).hexdigest()
+            environment_sha256 = (
+                hashlib.sha256((root / runtime_identity_relative).read_bytes()).hexdigest()
+                if isinstance(runtime_identity_relative, str)
+                and (root / runtime_identity_relative).is_file()
+                else None
+            )
+            if isinstance(condition_plans, list):
+                for item in condition_plans:
+                    if not isinstance(item, dict) or not isinstance(item.get("path"), str):
+                        continue
+                    condition_target = root / item["path"]
+                    if not condition_target.is_file():
+                        continue
+                    condition = load_yaml(condition_target)
+                    errors.extend(
+                        f"T09 V10 condition plan: {error}"
+                        for error in validate_instance(
+                            condition, root / "schemas/run-plan.schema.json"
+                        )
+                    )
+                    sources = condition.get("sources")
+                    if (
+                        condition.get("profile_plan_id") != "PLAN-EXP0001-PILOT-V10"
+                        or condition.get("profile_sha256") != profile_sha256
+                        or not isinstance(sources, dict)
+                        or sources.get("environment_sha256") != environment_sha256
+                    ):
+                        errors.append("T09 V10 condition/profile identity binding drifted")
+
+    execution_contract_path = execution.get("execution_contract_path")
+    execution_schema_path = execution.get("execution_schema_path")
+    command_manifests_path = execution.get("command_manifests_path")
+    if all(
+        isinstance(value, str)
+        for value in (execution_contract_path, execution_schema_path, command_manifests_path)
+    ):
+        assert isinstance(execution_contract_path, str)
+        assert isinstance(execution_schema_path, str)
+        assert isinstance(command_manifests_path, str)
+        contract_target = root / execution_contract_path
+        schema_target = root / execution_schema_path
+        command_target = root / command_manifests_path
+        if contract_target.is_file() and schema_target.is_file():
+            contract = load_json(contract_target)
+            errors.extend(
+                f"T09 V10 execution contract: {error}"
+                for error in validate_instance(contract, schema_target)
+            )
+            if (
+                contract.get("authorized") is not False
+                or contract.get("authorization_reference") is not None
+                or contract.get("execution_eligibility")
+                != "blocked-until-fresh-category-3-authorization"
+            ):
+                errors.append("T09 V10 execution contract is not statically unauthorized")
+            identities = plan.get("identities")
+            attempts = contract.get("attempts")
+            if isinstance(identities, dict) and isinstance(attempts, list):
+                expected_order = identities.get("attempt_order")
+                observed_order = [
+                    attempt.get("run_id") for attempt in attempts if isinstance(attempt, dict)
+                ]
+                if observed_order != expected_order:
+                    errors.append("T09 V10 execution attempt order drifted from the plan")
+        if command_target.is_file():
+            commands = load_json(command_target)
+            if commands.get("execution_contract_sha256") != execution.get(
+                "execution_contract_sha256"
+            ):
+                errors.append("T09 V10 command manifest contract binding drifted")
+            pair_diffs = commands.get("pair_diffs")
+            if (
+                not isinstance(pair_diffs, list)
+                or len(pair_diffs) != 2
+                or any(
+                    not isinstance(pair, dict) or pair.get("valid") is not True
+                    for pair in pair_diffs
+                )
+            ):
+                errors.append("T09 V10 command pair diff is invalid")
+    else:
+        errors.append("T09 V10 execution control paths are malformed")
+    budget = plan.get("budget_contract")
+    if not isinstance(budget, dict):
+        errors.append("T09 V10 budget contract is malformed")
+    else:
+        try:
+            prior_upper = Decimal(str(budget.get("prior_t09_conservative_upper_bound_usd")))
+            new_total = Decimal(str(budget.get("maximum_new_total_cost_usd")))
+            cumulative_cap = Decimal(str(budget.get("cumulative_t09_cost_cap_usd")))
+        except InvalidOperation:
+            errors.append("T09 V10 budget values are malformed")
+        else:
+            if prior_upper + new_total > cumulative_cap:
+                errors.append("T09 V10 conservative budget exceeds the cumulative cap")
+    return errors
+
+
 def _load_workflow(path: Path) -> Mapping[str, Any]:
     data = load_yaml(path)
     return data
@@ -2426,6 +2845,7 @@ def run_all(root: Path = ROOT) -> list[str]:
         ("experiments", validate_experiment_registry),
         ("experiment run profiles", validate_experiment_run_profiles),
         ("EXP-0001 contract", validate_exp0001_contract),
+        ("T09 V10 plan", validate_t09_v10_plan),
         ("manifests", validate_manifests),
         ("workflows", validate_workflows),
         ("repository hygiene", validate_hygiene),

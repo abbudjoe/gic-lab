@@ -1,0 +1,159 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:gic-lab:schema:t09-early-cleanup-state:1.0.0",
+  "title": "T09 durable early cleanup state version",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "state_type",
+    "journal_id",
+    "sequence",
+    "previous_version_sha256",
+    "plan_id",
+    "host_run_id",
+    "package_commit",
+    "plan_sha256",
+    "provider_instance_id",
+    "provider_instance_identity_sha256",
+    "provider_started_at_epoch",
+    "launch_slot",
+    "replacement_eligibility_sha256",
+    "created_at_epoch",
+    "recorded_at_epoch",
+    "lifecycle_stage",
+    "empirical_entry_status",
+    "pilot_state_required_for_cleanup",
+    "campaign_state_required_for_cleanup",
+    "finalizer_state_required_for_cleanup",
+    "targets",
+    "cleanup_attempts",
+    "terminal_cleanup_disposition"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "state_type": {"const": "t09-early-cleanup-state"},
+    "journal_id": {"$ref": "#/$defs/sha256"},
+    "sequence": {"type": "integer", "minimum": 1},
+    "previous_version_sha256": {
+      "oneOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]
+    },
+    "plan_id": {"$ref": "#/$defs/safeIdentity"},
+    "host_run_id": {"$ref": "#/$defs/safeIdentity"},
+    "package_commit": {"$ref": "#/$defs/commit"},
+    "plan_sha256": {"$ref": "#/$defs/sha256"},
+    "provider_instance_id": {"$ref": "#/$defs/safeIdentity"},
+    "provider_instance_identity_sha256": {"$ref": "#/$defs/sha256"},
+    "provider_started_at_epoch": {"type": "number", "minimum": 0},
+    "launch_slot": {"type": "integer", "minimum": 1},
+    "replacement_eligibility_sha256": {
+      "oneOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]
+    },
+    "created_at_epoch": {"type": "number", "minimum": 0},
+    "recorded_at_epoch": {"type": "number", "minimum": 0},
+    "lifecycle_stage": {
+      "enum": [
+        "provider-identity-acquired",
+        "package-transition",
+        "source-staging",
+        "artifact-root-mutation",
+        "image-transfer",
+        "image-load-or-build",
+        "secret-materialization",
+        "container-creation",
+        "browser-startup",
+        "campaign-initialization",
+        "empirical-entry",
+        "cleanup-in-progress",
+        "cleanup-finished"
+      ]
+    },
+    "empirical_entry_status": {"enum": ["not-entered", "entered"]},
+    "pilot_state_required_for_cleanup": {"const": false},
+    "campaign_state_required_for_cleanup": {"const": false},
+    "finalizer_state_required_for_cleanup": {"const": false},
+    "targets": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 128,
+      "items": {"$ref": "#/$defs/cleanupTarget"}
+    },
+    "cleanup_attempts": {
+      "type": "array",
+      "maxItems": 1024,
+      "items": {"$ref": "#/$defs/cleanupAttempt"}
+    },
+    "terminal_cleanup_disposition": {"enum": ["pending", "partial", "complete"]}
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "commit": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
+    "safeIdentity": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$"
+    },
+    "publicAlias": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*$"
+    },
+    "cleanupTarget": {
+      "type": "object",
+      "required": [
+        "target_id",
+        "kind",
+        "locator",
+        "ownership_sha256",
+        "public_alias",
+        "state",
+        "registered_at_epoch",
+        "last_attempt_id"
+      ],
+      "properties": {
+        "target_id": {"$ref": "#/$defs/safeIdentity"},
+        "kind": {
+          "enum": [
+            "provider-instance",
+            "firewall-restoration",
+            "owned-ruleset",
+            "temporary-local-secret",
+            "temporary-remote-secret",
+            "owned-container"
+          ]
+        },
+        "locator": {"type": "string", "minLength": 1, "maxLength": 4096},
+        "ownership_sha256": {"$ref": "#/$defs/sha256"},
+        "public_alias": {"$ref": "#/$defs/publicAlias"},
+        "state": {"enum": ["owned", "failed", "absent", "terminal", "restored", "removed"]},
+        "registered_at_epoch": {"type": "number", "minimum": 0},
+        "last_attempt_id": {
+          "oneOf": [{"$ref": "#/$defs/safeIdentity"}, {"type": "null"}]
+        }
+      },
+      "additionalProperties": false
+    },
+    "cleanupAttempt": {
+      "type": "object",
+      "required": [
+        "attempt_id",
+        "target_id",
+        "result",
+        "detail_code",
+        "started_at_epoch",
+        "completed_at_epoch"
+      ],
+      "properties": {
+        "attempt_id": {"$ref": "#/$defs/safeIdentity"},
+        "target_id": {"$ref": "#/$defs/safeIdentity"},
+        "result": {"enum": ["failed", "absent", "terminal", "restored", "removed"]},
+        "detail_code": {"$ref": "#/$defs/safeIdentity"},
+        "started_at_epoch": {"type": "number", "minimum": 0},
+        "completed_at_epoch": {"type": "number", "minimum": 0}
+      },
+      "additionalProperties": false
+    }
+  }
+}

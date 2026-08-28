@@ -26,8 +26,8 @@ def _parser() -> argparse.ArgumentParser:
 def render(repository: Path) -> dict[str, object]:
     root = repository.resolve(strict=True)
     experiment = root / "experiments/EXP-0001-sira-simulative-vs-reactive"
-    execution_path = experiment / "contracts/T09_PILOT_EXECUTION_CONTRACT.json"
-    plan_path = experiment / "run-plans/pilot.yaml"
+    execution_path = experiment / "contracts/proposals/T09_PILOT_EXECUTION_CONTRACT_V10.json"
+    plan_path = experiment / "run-plans/proposals/T09_PILOT_RUNTIME_PROFILE_V10.yaml"
     runtime_path = root / "src/giclab/harness/sira_gate_a_runtime.py"
     library_path = root / "src/giclab/harness/t09_sira_pilot.py"
     generator_path = Path(__file__).resolve(strict=True)
@@ -64,7 +64,7 @@ def render(repository: Path) -> dict[str, object]:
         raise ValueError("one or more T09 command pairs are not matched")
     return {
         "schema_version": "0.1.0",
-        "plan_id": "PLAN-EXP0001-PILOT-V9",
+        "plan_id": "PLAN-EXP0001-PILOT-V10",
         "reviewed_implementation_ancestor": next(iter(commits)),
         "plan_path": plan_path.relative_to(root).as_posix(),
         "plan_sha256": file_sha256(plan_path),

@@ -1,7 +1,7 @@
 QUARTO ?= $(if $(wildcard .tools/quarto-1.9.38/bin/quarto),.tools/quarto-1.9.38/bin/quarto,quarto)
 UV_RUN := uv run --no-sync
 
-.PHONY: setup sync lock-check format lint typecheck test validate site check-python check
+.PHONY: setup sync lock-check format lint typecheck test validate site check-python check ci-check
 
 setup: sync
 
@@ -36,3 +36,8 @@ site:
 check-python: lock-check sync lint typecheck test validate
 
 check: check-python site
+
+ci-check: lock-check sync lint typecheck validate site
+	test -n "$(BASE_SHA)"
+	test -n "$(HEAD_SHA)"
+	$(UV_RUN) python -m giclab.ci_pytest_parity --repository . --base-sha "$(BASE_SHA)" --head-sha "$(HEAD_SHA)"

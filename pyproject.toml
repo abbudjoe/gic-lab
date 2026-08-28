@@ -40,6 +40,9 @@ packages = ["src/giclab"]
 [tool.pytest.ini_options]
 addopts = "-q"
 testpaths = ["tests"]
+markers = [
+  "private_local: opt-in assertions over private, user-owned historical evidence",
+]
 
 [tool.ruff]
 line-length = 100
