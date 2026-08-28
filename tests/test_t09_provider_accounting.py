@@ -363,7 +363,80 @@ def test_23_condition_retries_remain_zero() -> None:
     assert contract["runtime_limits"]["max_retries_after_empirical_entry"] == 0
 
 
-def test_24_finalizer_keeps_v9_and_historical_receipt_contracts_disjoint() -> None:
+def test_24_concurrent_reservation_release_recomputes_exact_empty_projection() -> None:
+    requests = (
+        (1_075, 4_096, 78),
+        (1_191, 81_920, 1_393),
+        (905, 4_096, 126),
+        (1_164, 4_096, 50),
+        (1_156, 4_096, 74),
+        (1_155, 4_096, 65),
+        (1_238, 4_096, 189),
+        (1_248, 4_096, 145),
+        (1_232, 4_096, 232),
+        (1_303, 81_920, 2_777),
+        (1_337, 81_920, 2_022),
+        (1_374, 81_920, 3_301),
+    )
+    caps = replace(
+        condition_caps("simulative"),
+        max_cost_usd=10.0,
+        max_input_tokens=1_000_000,
+        max_output_tokens=1_000_000,
+        max_total_tokens=1_000_000,
+        max_model_call_attempts=100,
+    )
+    boundary = ProviderBudgetBoundary(
+        routing=ImmutableModelRouting.locked(),
+        aggregate_caps=caps,
+        condition_caps=caps,
+    )
+    entered = [threading.Event() for _ in requests]
+    release = [threading.Event() for _ in requests]
+    errors: list[BaseException] = []
+
+    def invoke(index: int) -> None:
+        input_tokens, max_output_tokens, output_tokens = requests[index]
+
+        def send(_: ProviderRequest) -> tuple[str, ProviderResponseUsage]:
+            entered[index].set()
+            release[index].wait()
+            return "ok", ProviderResponseUsage(input_tokens, 0, output_tokens, "default")
+
+        try:
+            boundary.invoke(
+                _request(input_tokens=input_tokens, output_tokens=max_output_tokens),
+                send,
+                call_id=f"CALL-{index:02d}",
+            )
+        except BaseException as exc:
+            errors.append(exc)
+
+    threads: list[threading.Thread] = []
+    try:
+        for index in range(len(requests)):
+            thread = threading.Thread(target=invoke, args=(index,))
+            thread.start()
+            threads.append(thread)
+            assert entered[index].wait(timeout=2)
+        for index in (0, 1, 2, 5, 4, 3, 7, 6, 8, 9, 10, 11):
+            release[index].set()
+            threads[index].join(timeout=2)
+    finally:
+        for event in release:
+            event.set()
+        for thread in threads:
+            thread.join(timeout=2)
+
+    assert errors == []
+    document = boundary.accounting_document()
+    assert document["outstanding_reservations"] == 0
+    assert document["unreconciled_provider_attempts"] == 0
+    assert document["reserved_upper_bound"] == document["observed_lower_bound"]
+    assert document["terminal_counts"]["sent_response_reconciled"] == 12
+
+
+def test_25_finalizer_keeps_v9_and_historical_receipt_contracts_disjoint() -> None:
     path = ROOT / "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py"
     specification = importlib.util.spec_from_file_location("t09_accounting_finalizer", path)
     assert specification is not None and specification.loader is not None
@@ -426,7 +499,7 @@ def test_24_finalizer_keeps_v9_and_historical_receipt_contracts_disjoint() -> No
         )
 
 
-def test_25_launch_package_command_hash_exception_is_exact_and_source_bound() -> None:
+def test_26_launch_package_command_hash_exception_is_exact_and_source_bound() -> None:
     with pytest.raises(T09ProviderError, match="condition does not match"):
         _autonomous_package_science_state(ROOT, AUTONOMOUS_V9_LAUNCH_PACKAGE_COMMIT)
     projection = _autonomous_package_science_state(

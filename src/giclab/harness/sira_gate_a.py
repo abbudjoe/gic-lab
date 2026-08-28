@@ -486,25 +486,6 @@ class ProviderBudgetBoundary:
             output_bytes=second.output_bytes,
         )
 
-    @staticmethod
-    def _subtract_usage(
-        current: ProviderBudgetUsage,
-        decrement: ProviderBudgetUsage,
-    ) -> ProviderBudgetUsage:
-        return ProviderBudgetUsage(
-            cost_usd=current.cost_usd - decrement.cost_usd,
-            input_tokens=current.input_tokens - decrement.input_tokens,
-            cached_input_tokens=current.cached_input_tokens - decrement.cached_input_tokens,
-            output_tokens=current.output_tokens - decrement.output_tokens,
-            total_tokens=current.total_tokens - decrement.total_tokens,
-            model_call_attempts=current.model_call_attempts - decrement.model_call_attempts,
-            default_service_tier_responses=(
-                current.default_service_tier_responses - decrement.default_service_tier_responses
-            ),
-            browser_actions=current.browser_actions - decrement.browser_actions,
-            output_bytes=current.output_bytes - decrement.output_bytes,
-        )
-
     def _transition(
         self,
         call_id: str,
@@ -527,31 +508,39 @@ class ProviderBudgetBoundary:
 
     def _reserve(self, call_id: str, reservation: ProviderBudgetUsage) -> None:
         self._reservations[call_id] = reservation
-        object.__setattr__(
-            self,
-            "_aggregate_reserved",
-            self._sum_usage(self._aggregate_reserved, reservation),
+        self._refresh_reserved_usage()
+
+    def _refresh_reserved_usage(self) -> None:
+        """Project reservation totals from the owned per-call source of truth.
+
+        Repeatedly adding and subtracting binary floating-point dollar amounts can
+        leave a tiny negative residue when the final concurrent reservation is
+        released. Rebuilding the projection makes the empty state exactly zero and
+        keeps the durable aggregate derived from explicit call ownership.
+        """
+
+        reservations = tuple(self._reservations.values())
+        projected = ProviderBudgetUsage(
+            cost_usd=math.fsum(item.cost_usd for item in reservations),
+            input_tokens=sum(item.input_tokens for item in reservations),
+            cached_input_tokens=sum(item.cached_input_tokens for item in reservations),
+            output_tokens=sum(item.output_tokens for item in reservations),
+            total_tokens=sum(item.total_tokens for item in reservations),
+            model_call_attempts=sum(item.model_call_attempts for item in reservations),
+            default_service_tier_responses=sum(
+                item.default_service_tier_responses for item in reservations
+            ),
+            browser_actions=sum(item.browser_actions for item in reservations),
+            output_bytes=sum(item.output_bytes for item in reservations),
         )
-        object.__setattr__(
-            self,
-            "_condition_reserved",
-            self._sum_usage(self._condition_reserved, reservation),
-        )
+        object.__setattr__(self, "_aggregate_reserved", projected)
+        object.__setattr__(self, "_condition_reserved", projected)
 
     def _release_reservation(self, call_id: str) -> ProviderBudgetUsage:
         if call_id not in self._reservations:
             raise GateAContractError("provider reservation was already released")
         reservation = self._reservations.pop(call_id)
-        object.__setattr__(
-            self,
-            "_aggregate_reserved",
-            self._subtract_usage(self._aggregate_reserved, reservation),
-        )
-        object.__setattr__(
-            self,
-            "_condition_reserved",
-            self._subtract_usage(self._condition_reserved, reservation),
-        )
+        self._refresh_reserved_usage()
         return reservation
 
     def _record_send_started(self) -> None:
