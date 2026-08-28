@@ -1372,9 +1372,10 @@ def _read_owned_docker_cidfile(cidfile: Path, *, prefix: list[str]) -> str | Non
     """Read one daemon-published exact ID without following mutable aliases."""
 
     nofollow = getattr(os, "O_NOFOLLOW", None)
-    if nofollow is None:
-        raise T09HostError("owned Docker container-ID no-follow open is unavailable")
-    flags = os.O_RDONLY | nofollow | getattr(os, "O_CLOEXEC", 0)
+    nonblock = getattr(os, "O_NONBLOCK", None)
+    if nofollow is None or nonblock is None:
+        raise T09HostError("owned Docker container-ID no-follow nonblocking open is unavailable")
+    flags = os.O_RDONLY | nofollow | nonblock | getattr(os, "O_CLOEXEC", 0)
     try:
         descriptor = os.open(cidfile, flags)
     except FileNotFoundError:

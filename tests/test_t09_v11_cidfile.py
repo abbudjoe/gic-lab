@@ -116,6 +116,24 @@ def test_zero_length_nonregular_path_is_rejected(tmp_path: Path) -> None:
         host._read_owned_docker_cidfile(cidfile, prefix=["docker"])
 
 
+def test_zero_length_fifo_is_rejected_without_blocking(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    host = _load_host_runner()
+    cidfile = tmp_path / "container.cid"
+    os.mkfifo(cidfile, 0o600)
+    real_open = os.open
+
+    def guarded_open(path: Path, flags: int) -> int:
+        assert flags & os.O_NONBLOCK
+        return real_open(path, flags)
+
+    monkeypatch.setattr(host.os, "open", guarded_open)
+    with pytest.raises(host.T09HostError, match="container-ID file is unsafe"):
+        host._read_owned_docker_cidfile(cidfile, prefix=["docker"])
+
+
 def test_zero_length_wrong_owner_is_rejected(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
