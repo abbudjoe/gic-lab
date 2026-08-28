@@ -2,21 +2,15 @@ schema_version: 0.1.0
 phase: '1'
 phase_name: artifact-execution
 phase_status: in-progress
-paid_compute_allowed: true
+paid_compute_allowed: false
 prototype_execution_allowed: false
-benchmark_execution_allowed: true
+benchmark_execution_allowed: false
 training_allowed: false
-cloud_mutation_allowed: true
-authorized_run_profile:
-  plan_id: PLAN-EXP0001-PILOT-V9
-  profile_path: experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml
-  profile_sha256: 28d41a2c2ba8e4b2e0460f78e348064847565e4287f07b685433cd99416c25f5
-  condition_plan_sha256s:
-  - 2e5000d1152f5ec8b55bf67b3a71f3dc8899d011fbd740c93b33eba1d4d7795f
-  - 2ac8665826a3a1df58d0309354ae8e7dc8164052af59104113f4434e97d9d8bb
-  - 7b1f4ffdf7274c06978b8f54cdeeccc5b6b8eeca27e1970205f4f663ed4c301a
-  - 2fc0deee604579e4b8264fa21627a0b2373fbcefb94108b95b0fd01b374421c5
-current_execution_control: null
+cloud_mutation_allowed: false
+authorized_run_profile: null
+current_execution_control:
+  path: experiments/EXP-0001-sira-simulative-vs-reactive/T09_AUTONOMOUS_RETRY2_V9_TERMINAL_CONTROL.json
+  sha256: e61392a79e5066e7743f239b86a7bd978b4bec139898c39618f4ee419d510b06
 planned_execution_substrate: null
 historical_execution_substrate:
   decision_state: bounded-smoke-v3-ready-unauthorized
@@ -386,6 +380,65 @@ t09_autonomous_pilot_checkpoint:
   zero_t09_instances: true
   security_restored: true
   evidence_record: experiments/EXP-0001-sira-simulative-vs-reactive/T09_AUTONOMOUS_PILOT_DISPOSITION.json
+  publication_release_blocked: true
+  scientific_result_claimed: false
+  experiment_outcome_assigned: false
+t09_autonomous_retry2_v9_checkpoint:
+  task: T09-AUTONOMOUS-RETRY2-V9
+  terminal_state: stopped-after-task-a-simulative-infrastructure-invalid
+  failure_state: concurrent-reservation-floating-point-release-drift
+  lifecycle_state: one-valid-scored-attempt-and-one-essential-failure-seal-no-realized-pair
+  plan_id: PLAN-EXP0001-PILOT-V9
+  calibration_only: true
+  current_turn_execution_authorized: false
+  pilot_execution_authorized: false
+  frozen_package_commit: 630e6f9fcd22f6998d14e4fa48aee2224f6b2808
+  replacement_image_id: sha256:abe8ed38f5c5b5a0a63fa726a74034dc5c192a12c0fccfe1319f97c27ceaf0a3
+  frozen_run_manifest_sha256: 9f75c6d1fc22cbb0df713df8a40671165bffe0232b2254d7ad416d01a73c1378
+  dynamic_preflight_passed: true
+  static_pair_diffs_valid: true
+  provider_launch_count: 1
+  empirical_attempts_entered: 2
+  valid_scored_attempts: 1
+  essential_failure_seals: 1
+  condition_retries: 0
+  model_call_attempts: 32
+  terminal_reconciled_provider_responses: 31
+  response_receipts_known: 32
+  observed_reconciled_total_tokens_lower_bound: 60307
+  response_receipt_known_total_tokens: 64982
+  reserved_total_tokens_upper_bound: 143601
+  browser_actions: 5
+  task_a_reactive:
+    state: valid-scored-condition-failure
+    task_completion: incomplete
+    evaluator_valid: true
+    score: 0.0
+  task_a_simulative:
+    state: consumed-infrastructure-invalid-unscored
+    stop_reason: runtime-budget-control-drift
+    response_received_nonterminal: 1
+    score: null
+  task_b_simulative: not-run
+  task_b_reactive: not-run
+  first_pair_checkpoint: stop-no-realized-pair-task-a-simulative-infrastructure-invalid
+  realized_pairs: 0
+  prior_observed_cumulative_t09_lower_bound_usd: 12.3787445579
+  prior_reserved_cumulative_t09_upper_bound_usd: 29.3502995579
+  openai_cost_usd_observed_lower_bound: 0.2272525
+  openai_cost_usd_response_receipt_known: 0.2636975
+  openai_cost_usd_reserved_upper_bound: 1.0498875
+  lambda_cost_usd: 1.0212792539079985
+  cumulative_t09_cost_usd_observed_lower_bound: 13.6272763118079985
+  cumulative_t09_cost_usd_reserved_upper_bound: 31.4214663118079985
+  active_lambda_duration_seconds: 2850.081638813019
+  cleanup_completion_receipt_valid: false
+  cleanup_completion_limitation: global-projection-rejected-despite-zero-containers-and-secret-absent
+  provider_terminal_or_absent: true
+  zero_t09_instances: true
+  security_restored: true
+  evidence_record: experiments/EXP-0001-sira-simulative-vs-reactive/T09_AUTONOMOUS_RETRY2_V9_DISPOSITION.json
+  execution_control: experiments/EXP-0001-sira-simulative-vs-reactive/T09_AUTONOMOUS_RETRY2_V9_TERMINAL_CONTROL.json
   publication_release_blocked: true
   scientific_result_claimed: false
   experiment_outcome_assigned: false

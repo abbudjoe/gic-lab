@@ -1,6 +1,6 @@
 # T09 Autonomous Retry 2 Execution Plan
 
-Status: **in-progress**
+Status: **terminal — stopped at first-pair checkpoint**
 
 Source contract: current-turn user instruction, `T09 Autonomous Retry 2 — Repair
 Provider-Call Accounting and Complete the Calibration Pilot`, SHA-256
@@ -36,21 +36,21 @@ retries, a new task set, scientific comparison, training, and production claims.
 | --- | --- | --- | --- |
 | AR2-01 | Preserve V8 bytes and reconstruct all 33 simulative attempts into closed typed categories. | Source-bound archive hashes and machine-readable per-call adjudication. | met |
 | AR2-02 | Establish the exact cause of the three unmatched attempts without treating them as zero usage or unknown by default. | Retained events/log structure and source-level causal trace. | met |
-| AR2-03 | Extend the existing provider budget boundary with stable call IDs and durable lifecycle states. | Code, typed ledger, and lifecycle transition tests. | not-started |
-| AR2-04 | Atomically reserve calls, input/output tokens, and cost before send under concurrency. | Call/token/cost cap race regressions. | not-started |
-| AR2-05 | Disable all automatic retries and reject a second send for one logical call. | Constructor/source assertions and duplicate-send regression. | not-started |
-| AR2-06 | Terminally reconcile responses, provider errors, known transport failures, and unknown outcomes while retaining unknown reservations. | 33/30/3, response-write, shutdown, and bound-accounting tests. | not-started |
-| AR2-07 | Flush in-flight writers for a bounded interval and type remaining sends unknown. | Flush-success and timeout regressions. | not-started |
-| AR2-08 | Preserve the complete privacy-safe call ledger in raw and essential-failure seals. | Seal/reconstruction regression and credential scan. | not-started |
-| AR2-09 | Pass all 23 focused offline regressions, repository validation, typing, and diff hygiene. | Command outputs and committed repair. | not-started |
-| AR2-10 | Pass exact-container accounting plus established runtime preflight with zero task model/browser activity. | Machine-readable qualification receipt. | not-started |
-| AR2-11 | Bind cloud work to one A10, no persistent filesystem, declared time/cost caps, fresh identities, verified local volume, and terminate-after-retention cleanup. | Cloud ledger, volume contract, provider receipts. | not-started |
-| AR2-12 | Freeze a clean V9 commit, exact image, four commands, two valid pair diffs, and fresh run manifest. | Commit/image/manifest hashes and clean-tree receipt. | not-started |
-| AR2-13 | Execute Task A reactive and simulative once each with complete terminal provider accounting and reconstructable raw evidence. | Attempt ledgers, manifests, evaluator records, usage, cleanup; zero retry. | not-started |
-| AR2-14 | Apply the predeclared first-pair checkpoint and continue only if every operational criterion passes. | Receipt-bound checkpoint decision. | not-started |
-| AR2-15 | If admitted, execute Task B simulative and reactive once each under the same frozen package. | Equivalent Task B evidence and pair matching; zero retry. | not-started |
-| AR2-16 | Retain and independently verify evidence, remove containers/browser/core/secrets, terminate the exact provider instance, and restore provider security. | Local-volume verification and terminal provider closeout. | not-started |
-| AR2-17 | Run post-termination broader gates, independent spec-conformance review, update the terminal ledger, and publish the non-comparative handoff. | Test results, reviewer verdict, disposition/control records, final report. | not-started |
+| AR2-03 | Extend the existing provider budget boundary with stable call IDs and durable lifecycle states. | Code, typed ledger, and lifecycle transition tests. | met |
+| AR2-04 | Atomically reserve calls, input/output tokens, and cost before send under concurrency. | Call/token/cost cap race regressions. | partial; preflight regressions passed, postrun floating-release defect requires a successor repair |
+| AR2-05 | Disable all automatic retries and reject a second send for one logical call. | Constructor/source assertions and duplicate-send regression. | met |
+| AR2-06 | Terminally reconcile responses, provider errors, known transport failures, and unknown outcomes while retaining unknown reservations. | 33/30/3, response-write, shutdown, and bound-accounting tests. | partial; preflight passed, one empirical response remained nonterminal after reservation-release drift |
+| AR2-07 | Flush in-flight writers for a bounded interval and type remaining sends unknown. | Flush-success and timeout regressions. | met in focused and exact-container tests |
+| AR2-08 | Preserve the complete privacy-safe call ledger in raw and essential-failure seals. | Seal/reconstruction regression and credential scan. | met |
+| AR2-09 | Pass all 23 focused offline regressions, repository validation, typing, and diff hygiene. | Command outputs and committed repair. | met before empirical entry |
+| AR2-10 | Pass exact-container accounting plus established runtime preflight with zero task model/browser activity. | Machine-readable qualification receipt. | met after five retained repair iterations |
+| AR2-11 | Bind cloud work to one A10, no persistent filesystem, declared time/cost caps, fresh identities, verified local volume, and terminate-after-retention cleanup. | Cloud ledger, volume contract, provider receipts. | met |
+| AR2-12 | Freeze a clean V9 commit, exact image, four commands, two valid pair diffs, and fresh run manifest. | Commit/image/manifest hashes and clean-tree receipt. | met |
+| AR2-13 | Execute Task A reactive and simulative once each with complete terminal provider accounting and reconstructable raw evidence. | Attempt ledgers, manifests, evaluator records, usage, cleanup; zero retry. | partial; reactive valid-scored, simulative consumed infrastructure-invalid with reconstructable essential evidence |
+| AR2-14 | Apply the predeclared first-pair checkpoint and continue only if every operational criterion passes. | Receipt-bound checkpoint decision. | met; stop before Task B |
+| AR2-15 | If admitted, execute Task B simulative and reactive once each under the same frozen package. | Equivalent Task B evidence and pair matching; zero retry. | not applicable; continuation gate denied admission |
+| AR2-16 | Retain and independently verify evidence, remove containers/browser/core/secrets, terminate the exact provider instance, and restore provider security. | Local-volume verification and terminal provider closeout. | met; global cleanup projection validation remains a disclosed limitation |
+| AR2-17 | Run post-termination broader gates, independent spec-conformance review, update the terminal ledger, and publish the non-comparative handoff. | Test results, reviewer verdict, disposition/control records, final report. | partial-terminal; validation, typing, site, and focused accounting pass; 39 broader historical-fixture tests and six frozen-format checks remain disclosed |
 
 ## Implementation mapping and planned evidence
 
@@ -86,6 +86,38 @@ retries, a new task set, scientific comparison, training, and production claims.
 - Decision: user instructions prohibit a new independent pre-live review checkpoint.
   Independent assembly conformance review therefore occurs after provider cleanup,
   while focused deterministic gates remain mandatory before live qualification.
+- `2026-08-27`: passed exact-container accounting, core-suppression, Chromium,
+  immutable V4 finalizer, cleanup, and privacy-safe sealing qualifications with zero
+  task model calls and zero task browser actions. Frozen package commit is
+  `630e6f9fcd22f6998d14e4fa48aee2224f6b2808`; the retained image is
+  `sha256:abe8ed38...`; frozen-run-manifest SHA-256 is `9f75c6d1...`.
+- `2026-08-27`: Task A reactive entered once and produced a valid evaluator score
+  of `0.0` for an incomplete condition attempt: 20 calls, 40,152 tokens, five
+  browser actions, and USD 0.1232325. Its independently verified raw archive is
+  retained off-host.
+- `2026-08-27`: Task A simulative entered once and was consumed
+  infrastructure-invalid. Eleven calls terminally reconciled; the twelfth reached
+  `response_received` with a durable actual-usage receipt but not
+  `usage_reconciled`. The essential failure seal is independently verified. The
+  first-pair checkpoint therefore stopped the campaign and Task B was not run.
+- `2026-08-27`: post-termination reproduction established the precise primitive:
+  subtractive binary floating-point reservation bookkeeping produced a tiny
+  negative residue when the final of twelve concurrent reservations was released.
+  A candidate that derives reservation totals from the owned per-call map using
+  `math.fsum` passed the exact twelve-call release order locally, then was removed
+  so the frozen scientific runtime bytes remained unchanged. The repair and exact
+  regression are requirements for a successor package; this campaign was not
+  altered or rerun.
+- `2026-08-27`: removed the temporary local secret and host-key material. Provider
+  closeout proves one launch, 2,850.081638813019 active seconds, USD
+  1.0212792539079985 Lambda cost, terminal-or-absent state, zero T09 instances, and
+  restored security.
+- `2026-08-27`: post-termination `make validate`, mypy, the 25 focused frozen V9
+  accounting tests, and the public site build/validation passed. The full test run
+  completed with 1,473 passing and 39 failing historical/stale-fixture tests. The
+  aggregate check stops earlier on six pre-existing formatting drifts in frozen
+  source/test files; changing those bytes would contradict the retained V9 runtime
+  identity, so both broader limitations remain explicit rather than being rewritten.
 
 ## Budgets, blockers, and next phase
 
@@ -95,6 +127,8 @@ preflight active hours, 6 hours per preflight instance, one simultaneous instanc
 one empirical launch, 4,620 model-call attempts, 4,000,000 tokens, 120 browser
 actions, four condition attempts, zero retries, and zero persistent filesystems.
 
-The next permitted transition is the focused accounting implementation and local
-regression gate. Cloud mutation remains forbidden until AR2-01–AR2-09 are met and
-the attached-local-volume and cloud-ledger prelaunch contracts are complete.
+No further empirical transition is permitted under this campaign. A successor must
+first repair and qualify the postrun reservation projection plus the disclosed
+offline-control-snapshot and package-transition closeout gaps using network-free
+tests, then obtain fresh identities and explicit current-turn authorization while
+preserving the unchanged scientific contract and zero-retry policy.

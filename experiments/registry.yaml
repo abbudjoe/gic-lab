@@ -1,9 +1,12 @@
 schema_version: 0.1.0
-registry_revision: 14
+registry_revision: 15
 template_path: experiments/EXP-0000-template
 experiments:
 - experiment_id: EXP-0001
   protocol: experiments/EXP-0001-sira-simulative-vs-reactive/protocol.yaml
+  current_execution_control:
+    path: experiments/EXP-0001-sira-simulative-vs-reactive/T09_AUTONOMOUS_RETRY2_V9_TERMINAL_CONTROL.json
+    sha256: e61392a79e5066e7743f239b86a7bd978b4bec139898c39618f4ee419d510b06
   run_profiles:
   - experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/smoke.yaml
   - experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/proposals/PLAN-EXP0001-PILOT-V6.yaml
@@ -28,6 +31,8 @@ experiments:
   - experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY5_POSTRUN_TERMINAL_CONTROL.json
   - experiments/EXP-0001-sira-simulative-vs-reactive/T09_AUTONOMOUS_PILOT_DISPOSITION.json
   - experiments/EXP-0001-sira-simulative-vs-reactive/T09_AUTONOMOUS_PILOT_POSTRUN_TERMINAL_CONTROL.json
+  - experiments/EXP-0001-sira-simulative-vs-reactive/T09_AUTONOMOUS_RETRY2_V9_DISPOSITION.json
+  - experiments/EXP-0001-sira-simulative-vs-reactive/T09_AUTONOMOUS_RETRY2_V9_TERMINAL_CONTROL.json
   planning_contracts:
   - experiments/EXP-0001-sira-simulative-vs-reactive/contracts/T09_PILOT_DATASET_CONTRACT.json
   - experiments/EXP-0001-sira-simulative-vs-reactive/contracts/T09_PILOT_EVALUATOR_CONTRACT.json
