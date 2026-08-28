@@ -1,7 +1,9 @@
 # T09 V10 provider accounting and closeout implementation ledger
 
-Assembly status: **in-progress — implementation, review, and all local gates complete;
-commit, push, and draft PR remain**
+Assembly status: **blocked-user-action — external PR closeout cannot proceed because
+the required remote base branch is absent; implementation, review, all local gates,
+commit, and task-branch push are complete, and the base cannot be published without an
+unauthorized base-branch push**
 
 Started: 2026-08-27
 
@@ -41,7 +43,7 @@ Docker, browser, SiRA, FanOutQA, evaluator, or pilot execution; merge or auto-me
 | V10-DOD-05 | Fresh `PLAN-EXP0001-PILOT-V10` and `AUTONOMOUS-0003` identities bind the repaired controls while all execution and compute permissions remain false. | V10 plan/schema validation, exact bytes/SHA-256, typed command render, science-hash regression, and command/config pair diff. | met |
 | V10-DOD-06 | V8/V9 remain immutable historical evidence and every scientific field, timing bound, evidence cap, zero-retry rule, credential boundary, and interpretation limit is unchanged. | Historical hashes plus plan/contract regression tests and concise records. | met |
 | V10-DOD-07 | Focused smoke, spec-conformance review, post-review smoke, formatting, Ruff, strict mypy, validation, privacy, full suite, diff check, and portable site gate satisfy the baseline policy. | Exact commands and results in this ledger. | met |
-| V10-DOD-08 | Scope-reviewed changes are committed and pushed only to the task branch, and one draft PR is opened against the exact required base without auto-merge. | Final commit/tree, remote head/base, PR number/URL/state. | partial — branch is correct; commit, push, and draft PR remain |
+| V10-DOD-08 | Scope-reviewed changes are committed and pushed only to the task branch, and one draft PR is opened against the exact required base without auto-merge. | Final commit/tree, remote head/base, PR number/URL/state. | partial — task-branch commit and non-force push complete; draft PR blocked because `origin` has no required base ref, and publishing the base is prohibited |
 
 ## Implementation mapping
 
@@ -121,9 +123,19 @@ Docker, browser, SiRA, FanOutQA, evaluator, or pilot execution; merge or auto-me
   (durable cross-host cleanup continuation and closeout).
 - Current V10 plan: 13,083 bytes; SHA-256
   `c6f36ffb0e719c2152c00fdd3f92cb18aa10a89e4a4a2e0f1179b167d6cfb68a`.
-- Commit, push, and draft PR identities remain pending.
+- The implementation commit `873196050eaf2138529929e1dc823cfdebcdc4e9`
+  (tree `c30a7d9a6de9b3b299a87bf0ed3b2371b4e5ac0e`) was pushed without force to
+  `origin/codex/t09-v10-accounting-closeout-repair`. This ledger-only closeout update
+  advances the final task head; the exact final commit and tree are reported after the
+  final push verification.
 
 ## Blockers and next permitted phase
 
-No blocker is known. The only permitted next phase is local implementation and fake-only
-validation. Category 3 remains unauthorized even after this plan completes.
+`git ls-remote --heads origin refs/heads/phase-1/sira-pilot-autonomous-r2` returned no
+ref after the task branch was published. GitHub therefore cannot open the mandated PR
+against `phase-1/sira-pilot-autonomous-r2` at
+`503def0519e36f04b62b16158c72e11213b3bf9f`. Publishing or otherwise mutating that
+base branch is expressly prohibited in this task, so draft-PR closeout is blocked
+pending external publication of the exact base by an authorized actor.
+
+No Category 3 action is permitted. V10 remains unauthorized and unexecuted.
