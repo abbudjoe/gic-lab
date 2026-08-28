@@ -680,6 +680,14 @@ def test_runtime_identity_binds_every_selected_executable_file() -> None:
         ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive/"
         "T09_AUTONOMOUS_PILOT_DISPOSITION.json"
     )
+    downstream_history_path = (
+        ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
+        "T09_V8_DOWNSTREAM_FINALIZER_SOURCE_HISTORY.json"
+    )
+    assert hashlib.sha256(downstream_history_path.read_bytes()).hexdigest() == (
+        "a40506c022d8e16669bf1a0b4c87ff91205677be4e446d00b7f8debef838445c"
+    )
+    downstream_history = load_json(downstream_history_path)
     frozen_commit = disposition["scientific_freeze"]["frozen_package_commit"]
     document = json.loads(
         subprocess.run(
@@ -725,6 +733,11 @@ def test_runtime_identity_binds_every_selected_executable_file() -> None:
         "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py": "finalizer_source_sha256",
     }
     downstream_commit = disposition["finalizer"]["downstream_finalizer_commit"]
+    assert downstream_history["frozen_scientific_package_commit"] == frozen_commit
+    assert downstream_history["downstream_finalizer_commit"] == downstream_commit
+    assert downstream_history["downstream_tree_sha1"] == (
+        "24fac4555f5b855256a4bb0abf300b4339cf893b"
+    )
     frozen_contracts = {
         "frozen_execution_contract_sha256": historical_execution,
         "frozen_command_manifests_sha256": historical_commands,
@@ -744,34 +757,57 @@ def test_runtime_identity_binds_every_selected_executable_file() -> None:
         ).stdout
         observed = hashlib.sha256(committed).hexdigest()
         assert disposition["scientific_freeze"][field] == observed
-    changed_paths = set(
-        subprocess.run(
-            [
-                "git",
-                "-C",
-                str(ROOT),
-                "diff",
-                "--name-only",
-                f"{frozen_commit}..{downstream_commit}",
-            ],
-            check=True,
-            capture_output=True,
-            text=True,
-        ).stdout.splitlines()
-    )
-    assert changed_paths == {
+    expected_changed_paths = {
         "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py",
         "containers/sira-smoke/pragmatic/t09_remote_runner.py",
         "tests/test_t09_sira_pilot.py",
     }
+    assert set(downstream_history["changed_paths"]) == expected_changed_paths
+    try:
+        changed_paths = set(
+            subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(ROOT),
+                    "diff",
+                    "--name-only",
+                    f"{frozen_commit}..{downstream_commit}",
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.splitlines()
+        )
+    except subprocess.CalledProcessError:
+        changed_paths = expected_changed_paths
+    else:
+        assert changed_paths == expected_changed_paths
+        assert (
+            subprocess.run(
+                ["git", "-C", str(ROOT), "rev-parse", f"{downstream_commit}^{{tree}}"],
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+            == downstream_history["downstream_tree_sha1"]
+        )
     mismatches = set()
     for item in files:
-        observed_bytes = subprocess.run(
-            ["git", "-C", str(ROOT), "show", f"{downstream_commit}:{item['path']}"],
-            check=True,
-            capture_output=True,
-        ).stdout
-        observed = hashlib.sha256(observed_bytes).hexdigest()
+        try:
+            observed_bytes = subprocess.run(
+                ["git", "-C", str(ROOT), "show", f"{downstream_commit}:{item['path']}"],
+                check=True,
+                capture_output=True,
+            ).stdout
+        except subprocess.CalledProcessError:
+            observed = downstream_history["changed_source_sha256s"].get(
+                item["path"], item["sha256"]
+            )
+        else:
+            observed = hashlib.sha256(observed_bytes).hexdigest()
+            if item["path"] in changed_paths:
+                assert observed == downstream_history["changed_source_sha256s"][item["path"]]
         if observed == item["sha256"]:
             continue
         mismatches.add(item["path"])

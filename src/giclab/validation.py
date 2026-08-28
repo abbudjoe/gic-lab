@@ -33,6 +33,13 @@ from giclab.registry import (
 from giclab.sitegen import build_site_data
 
 ROOT = discover_repo_root()
+T09_DOWNSTREAM_FINALIZER_HISTORY_RELATIVE = Path(
+    "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
+    "T09_V8_DOWNSTREAM_FINALIZER_SOURCE_HISTORY.json"
+)
+T09_DOWNSTREAM_FINALIZER_HISTORY_SHA256 = (
+    "a40506c022d8e16669bf1a0b4c87ff91205677be4e446d00b7f8debef838445c"
+)
 SCHEMA_FILES = (
     "schemas/experiment.schema.json",
     "schemas/artifact.schema.json",
@@ -1130,6 +1137,49 @@ def validate_experiment_run_profiles(root: Path = ROOT) -> list[str]:
     return errors
 
 
+def _load_t09_downstream_finalizer_history(root: Path) -> dict[str, Any] | None:
+    """Load the exact source closure for a historical commit absent from public refs."""
+
+    path = root / T09_DOWNSTREAM_FINALIZER_HISTORY_RELATIVE
+    if not path.is_file():
+        return None
+    raw = path.read_bytes()
+    if hashlib.sha256(raw).hexdigest() != T09_DOWNSTREAM_FINALIZER_HISTORY_SHA256:
+        return None
+    document = load_json(path)
+    changed_paths = document.get("changed_paths")
+    changed_hashes = document.get("changed_source_sha256s")
+    if (
+        document.get("schema_version") != "1.0.0"
+        or document.get("record_type") != "t09-downstream-finalizer-source-history"
+        or document.get("public_ref_reachability") != "not-required-history-closure"
+        or document.get("frozen_scientific_package_commit")
+        != "6d3005bb5ce915eabb801ef35e11855cd9420338"
+        or document.get("downstream_finalizer_commit") != "d6a080264c7d2ac83efc9806d2a2ae4c141a1113"
+        or document.get("downstream_tree_sha1") != "24fac4555f5b855256a4bb0abf300b4339cf893b"
+        or changed_paths
+        != [
+            "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py",
+            "containers/sira-smoke/pragmatic/t09_remote_runner.py",
+            "tests/test_t09_sira_pilot.py",
+        ]
+        or changed_hashes
+        != {
+            "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py": (
+                "99705a977e94e5c84eaffd412c96a8a8828f3dd90acb86f510cd9859632cc5c0"
+            ),
+            "containers/sira-smoke/pragmatic/t09_remote_runner.py": (
+                "69c96acbecc588a2fa0dd0bfd1e4569fa4bc254c0fabc5802e9e62f5b2592b40"
+            ),
+            "tests/test_t09_sira_pilot.py": (
+                "18ea8e1347a7b0646418f027ab96f8ad851014aee6a106394a7f0cfc2d3e45be"
+            ),
+        }
+    ):
+        return None
+    return document
+
+
 def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
     """Enforce EXP-0001-specific science, task, identity, and price locks."""
 
@@ -1820,11 +1870,32 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
                 if hashlib.sha256(frozen_bytes).hexdigest() != observed_digest:
                     errors.append(f"EXP-0001 T09: frozen package source drifted for {field}")
         if isinstance(downstream_commit, str) and isinstance(frozen_package_commit, str):
-            expected_downstream_diff = {
-                "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py",
-                "containers/sira-smoke/pragmatic/t09_remote_runner.py",
-                "tests/test_t09_sira_pilot.py",
-            }
+            history = _load_t09_downstream_finalizer_history(root)
+            expected_downstream_diff = (
+                set(history["changed_paths"])
+                if history is not None
+                else {
+                    "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py",
+                    "containers/sira-smoke/pragmatic/t09_remote_runner.py",
+                    "tests/test_t09_sira_pilot.py",
+                }
+            )
+            history_matches_disposition = (
+                history is not None
+                and history.get("frozen_scientific_package_commit") == frozen_package_commit
+                and history.get("downstream_finalizer_commit") == downstream_commit
+                and isinstance(finalizer, dict)
+                and history.get("changed_source_sha256s", {}).get(
+                    "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py"
+                )
+                == finalizer.get("finalizer_source_sha256")
+                and history.get("changed_source_sha256s", {}).get(
+                    "containers/sira-smoke/pragmatic/t09_remote_runner.py"
+                )
+                == finalizer.get("selector_source_sha256")
+            )
+            if not history_matches_disposition:
+                errors.append("EXP-0001 T09: downstream finalizer history closure drifted")
             try:
                 downstream_diff = set(
                     subprocess.run(
@@ -1842,10 +1913,50 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
                     ).stdout.splitlines()
                 )
             except subprocess.CalledProcessError:
-                errors.append("EXP-0001 T09: downstream finalizer history is unavailable")
+                if not history_matches_disposition:
+                    errors.append("EXP-0001 T09: downstream finalizer history is unavailable")
             else:
                 if downstream_diff != expected_downstream_diff:
                     errors.append("EXP-0001 T09: downstream finalizer change scope drifted")
+                if history is not None:
+                    try:
+                        downstream_tree = subprocess.run(
+                            [
+                                "git",
+                                "-C",
+                                str(root),
+                                "rev-parse",
+                                f"{downstream_commit}^{{tree}}",
+                            ],
+                            check=True,
+                            capture_output=True,
+                            text=True,
+                        ).stdout.strip()
+                        downstream_hashes = {
+                            path: hashlib.sha256(
+                                subprocess.run(
+                                    [
+                                        "git",
+                                        "-C",
+                                        str(root),
+                                        "show",
+                                        f"{downstream_commit}:{path}",
+                                    ],
+                                    check=True,
+                                    capture_output=True,
+                                ).stdout
+                            ).hexdigest()
+                            for path in expected_downstream_diff
+                        }
+                    except subprocess.CalledProcessError:
+                        errors.append("EXP-0001 T09: downstream finalizer history is incomplete")
+                    else:
+                        if downstream_tree != history.get(
+                            "downstream_tree_sha1"
+                        ) or downstream_hashes != history.get("changed_source_sha256s"):
+                            errors.append(
+                                "EXP-0001 T09: downstream finalizer source closure drifted"
+                            )
         downstream_mismatches: set[str] = set()
         retry2_disposition_path = exp_root / "T09_AUTONOMOUS_RETRY2_V9_DISPOSITION.json"
         retry2_disposition = (

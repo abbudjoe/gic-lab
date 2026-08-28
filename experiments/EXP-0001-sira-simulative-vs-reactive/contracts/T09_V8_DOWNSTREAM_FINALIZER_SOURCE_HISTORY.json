@@ -1,0 +1,18 @@
+{
+  "changed_paths": [
+    "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py",
+    "containers/sira-smoke/pragmatic/t09_remote_runner.py",
+    "tests/test_t09_sira_pilot.py"
+  ],
+  "changed_source_sha256s": {
+    "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py": "99705a977e94e5c84eaffd412c96a8a8828f3dd90acb86f510cd9859632cc5c0",
+    "containers/sira-smoke/pragmatic/t09_remote_runner.py": "69c96acbecc588a2fa0dd0bfd1e4569fa4bc254c0fabc5802e9e62f5b2592b40",
+    "tests/test_t09_sira_pilot.py": "18ea8e1347a7b0646418f027ab96f8ad851014aee6a106394a7f0cfc2d3e45be"
+  },
+  "downstream_finalizer_commit": "d6a080264c7d2ac83efc9806d2a2ae4c141a1113",
+  "downstream_tree_sha1": "24fac4555f5b855256a4bb0abf300b4339cf893b",
+  "frozen_scientific_package_commit": "6d3005bb5ce915eabb801ef35e11855cd9420338",
+  "public_ref_reachability": "not-required-history-closure",
+  "record_type": "t09-downstream-finalizer-source-history",
+  "schema_version": "1.0.0"
+}

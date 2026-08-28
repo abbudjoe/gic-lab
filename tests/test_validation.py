@@ -9,6 +9,8 @@ import pytest
 from giclab.registry import load_json, load_yaml
 from giclab.validation import (
     ROOT,
+    T09_DOWNSTREAM_FINALIZER_HISTORY_RELATIVE,
+    _load_t09_downstream_finalizer_history,
     run_all,
     validate_episode_order,
     validate_experiment_protocol,
@@ -534,6 +536,23 @@ def test_project_state_rejects_authoritative_plan_path_escape(tmp_path: Path) ->
 
 def test_repository_contract_passes() -> None:
     assert run_all() == []
+
+
+def test_downstream_finalizer_history_closure_is_exact_and_tamper_evident(
+    tmp_path: Path,
+) -> None:
+    document = _load_t09_downstream_finalizer_history(ROOT)
+    assert document is not None
+    assert document["downstream_finalizer_commit"] == ("d6a080264c7d2ac83efc9806d2a2ae4c141a1113")
+    source = ROOT / T09_DOWNSTREAM_FINALIZER_HISTORY_RELATIVE
+    target = tmp_path / T09_DOWNSTREAM_FINALIZER_HISTORY_RELATIVE
+    target.parent.mkdir(parents=True)
+    target.write_bytes(source.read_bytes())
+    assert _load_t09_downstream_finalizer_history(tmp_path) == document
+    target.write_bytes(
+        target.read_bytes().replace(b'"schema_version": "1.0.0"', b'"schema_version": "9.9.9"')
+    )
+    assert _load_t09_downstream_finalizer_history(tmp_path) is None
 
 
 def test_rendered_site_validator_detects_broken_links(tmp_path: Path) -> None:

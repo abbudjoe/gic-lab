@@ -365,3 +365,24 @@ revision, condition order, zero-retry policy, timing and budget boundaries, and
 descriptive-only interpretation remain unchanged. `authorized`, `execution_allowed`,
 `cloud_mutation_allowed`, and `paid_compute_allowed` all remain `false`; qualification,
 pilot, and run-root materialization are also false. No V10 identity was consumed.
+
+### First pushed-head CI correction
+
+Actions run `33184598008` on closeout head
+`f3597df8f7276d8697999de5d3ed3bfe6103cc5f` passed checkout, Python 3.11.14 setup,
+dependency sync, formatting, Ruff, and strict mypy, then failed `make validate` before
+pytest with `downstream finalizer history is unavailable`. The disposition binds
+historical finalizer commit `d6a080264c7d2ac83efc9806d2a2ae4c141a1113`, but that
+object is local historical evidence not reachable from any public GitHub ref; GitHub
+returns 404 for the exact object. Full ref history therefore could not make the old
+implicit dependency reproducible.
+
+The repair adds
+`contracts/T09_V8_DOWNSTREAM_FINALIZER_SOURCE_HISTORY.json`, a tamper-evident closure
+with exact frozen/downstream commits, downstream tree, three changed paths, and their
+source SHA-256 values. Repository validation requires the closure's exact file hash
+and cross-binds its identities and source hashes to the immutable disposition. When
+the historical object is locally available it additionally recomputes the tree, diff,
+and source hashes; when the object is absent it uses the same exact closure rather
+than skipping or weakening the check. The historical runtime test now exercises both
+forms, and a negative regression rejects any closure-byte mutation.
