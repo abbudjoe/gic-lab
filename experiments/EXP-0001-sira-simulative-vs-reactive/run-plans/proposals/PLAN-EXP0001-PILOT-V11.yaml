@@ -1,0 +1,277 @@
+schema_version: 1.0.0
+plan_id: PLAN-EXP0001-PILOT-V11
+experiment_id: EXP-0001
+plan_kind: category-3-live-qualification-and-descriptive-calibration
+status:
+  authorized: false
+  execution_allowed: false
+  cloud_mutation_allowed: false
+  paid_compute_allowed: false
+  live_qualification_performed: false
+  pilot_executed: false
+  future_execution_category: 3
+  terminal_state: implementation-complete-pr-review-and-merge-required
+  authorization_rule: a fresh Category 3 Luna authorization must bind the exact reviewed
+    merged commit and this plan SHA-256 before any provider or model request
+identities:
+  host_run_id: RUN-T09-PILOT-HOST-AUTONOMOUS-0004
+  attempt_order:
+  - RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0004
+  - RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0004
+  - RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0004
+  - RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0004
+  empirical_run_roots_materialized: false
+scientific_contract:
+  interpretation: descriptive-calibration-only
+  scientific_result_claim_permitted: false
+  experiment_id: EXP-0001
+  sira_commit: 93fb8d72de71f9a4a13419670adeb34d93cf7acd
+  model_revision_for_every_role: gpt-4o-2024-11-20
+  model_roles:
+  - default
+  - encoder
+  - memory
+  - policy
+  - world_model
+  - critic
+  - actor
+  - fallback
+  provider_fallback_enabled: false
+  dataset:
+    name: FanOutQA November 2023 development snapshot
+    source_commit: 989f4c40d9deea1ecb0897d7a17a9c0fe20d5c33
+    sira_blob: 76ad1feb689b754bfe4e5e24d3ea371b647efa67
+    sha256: 359300b029c6891567816f351bf8786e9b018d7af8a1a44b7da9ba5ef4651288
+  evaluator:
+    identity: exact-pinned-sira-fanoutqa-evaluator
+    commit: 93fb8d72de71f9a4a13419670adeb34d93cf7acd
+    primary_score: acc_loose
+    judge_model: null
+    provider_request_required: false
+    contract_path: experiments/EXP-0001-sira-simulative-vs-reactive/contracts/T09_PILOT_EVALUATOR_CONTRACT.json
+    contract_sha256: c28a802a45fc8d1e719f8c1bcb22315c2841df831c4ae161f12ab0f2fd08b321
+  protocol_sha256: 5356fc8b3806f4135eb570f65b67da2f94463582db5e3e609320e23dbdb2a3f7
+  config_sha256: cf25acd90f9d73d9aef978a7d059cfbc74a1447d901f4e3d27e2b5d9f121d2ed
+  seed: 42
+  condition_retries_after_empirical_entry: 0
+implementation_bindings:
+  required_base_commit: 1c6b093699288f37aa23526fe1e1672e50280093
+  required_base_tree: 39501c69af3296ce271d38aa235c26d80175a4b1
+  required_base_parent_1: 503def0519e36f04b62b16158c72e11213b3bf9f
+  required_base_parent_2: a2b30012bdf09080da844451ad0d987dde5da646
+  required_accounting_repair_ancestor: bb56edc68367e85b3a918f4b086c65cd578a231c
+  reviewed_implementation_ancestor: e91eccc01fa8d479cdfff270a8032dfb6283f5b4
+  exact_reviewed_merged_commit: pending-category-2-merge
+  exact_reviewed_merged_commit_required_before_authorization: true
+  provider_accounting:
+    path: src/giclab/harness/sira_gate_a.py
+    sha256: edbda143d4a4271ad49d9b888a943192d4427395b79b14775312b27f10707c3d
+    regression_path: tests/test_t09_provider_accounting.py
+    regression_sha256: 0a2da8889b3d04313c05871862b16402289328b62e56e18dd0b5a8049a105c33
+    reservation_projection: authoritative-owned-per-call-records-math-fsum-exact-empty
+    repeated_subtractive_bookkeeping: false
+    automatic_retries: 0
+  offline_refinalization:
+    finalizer_projection_path: containers/sira-smoke/pragmatic/t09_finalizer_projection.py
+    finalizer_projection_sha256: 8a7eee55aca222a134b8f9075efb072fdeff86247c763245001c2efe3e3a3dc0
+    evaluator_driver_path: containers/sira-smoke/pragmatic/t09_evaluate_attempt.py
+    evaluator_driver_sha256: 38843f01f55c0631cc4a436f6e80b8dc985b752a75c0fd85ef87d5cb6a789842
+    selector_path: containers/sira-smoke/pragmatic/t09_remote_runner.py
+    selector_sha256: be836069d13289980d4f0217145d98ddba304995ec4e4d44c4d0ca1ed3f6a894
+    receipt_schema_path: schemas/t09-offline-refinalization-receipt.schema.json
+    receipt_schema_sha256: 4965287881472b0605678223173e15ac870eebe894f95cae2609b390daf801e9
+    network_disabled: true
+    model_replay_count: 0
+    browser_replay_count: 0
+    raw_mutation: false
+  early_cleanup:
+    implementation_path: src/giclab/harness/t09_cleanup_state.py
+    implementation_sha256: e9d6fd08eb5cef403e5e8fd6333bf0ea103b14872427b086ad6ab1bf6441e5c0
+    provider_integration_path: src/giclab/harness/t09_pragmatic_provider.py
+    provider_integration_sha256: 72fbe1f50a5efea8ea0b386974da478c4003cff5eb1c3ff728519e9eb69328dd
+    schema_path: schemas/t09-early-cleanup-state.schema.json
+    schema_sha256: 1e041fe3197ed7c53f80e782c727f1dfb9e6d27ec9476543466711948b018edf
+    initialize_after_exact_provider_id: true
+    initialize_before_package_transition: true
+    cross_host_journal_mode: one-hash-chain-provider-prefix-remote-continuation
+    provider_closeout_remote_journal_argument: --remote-cleanup-journal
+    provider_termination_requires_optional_state: false
+    public_alias_is_cleanup_authority: false
+    optional_pilot_state_required: false
+    optional_campaign_state_required: false
+    optional_finalizer_state_required: false
+  owned_container_publication:
+    reader_path: containers/sira-smoke/pragmatic/t09_remote_runner.py
+    reader_sha256: be836069d13289980d4f0217145d98ddba304995ec4e4d44c4d0ca1ed3f6a894
+    regression_path: tests/test_t09_v11_cidfile.py
+    regression_sha256: e89a207acc41087995463e2462f0e5b127b7588d20b8d3e46a08cc167ba86308
+    safe_zero_length_state: publication-pending
+    descriptor_no_follow_required: true
+    exact_daemon_published_id_required: true
+    exact_id_cleanup_only: true
+    name_based_cleanup_authority: false
+  execution_plane:
+    pilot_library_path: src/giclab/harness/t09_sira_pilot.py
+    pilot_library_sha256: 0ee68eba2f434002ba9310e390d5fcf30564c94bdc2da41b517d7e76a4ef206a
+    campaign_lifecycle_path: src/giclab/harness/lambda_campaign_lifecycle.py
+    campaign_lifecycle_sha256: 6f0f74354f15766466480c498b4ab5af6887e337c5197416bb9dedf3ff78200b
+    provider_path: src/giclab/harness/t09_pragmatic_provider.py
+    provider_sha256: 72fbe1f50a5efea8ea0b386974da478c4003cff5eb1c3ff728519e9eb69328dd
+    provider_contracts_path: src/giclab/harness/t09_provider_contracts.py
+    provider_contracts_sha256: 78bc1ccdcff8873bc3df32203fcd80d50c26002c01513316a3f8fb1644e0dc57
+    remote_runner_path: containers/sira-smoke/pragmatic/t09_remote_runner.py
+    remote_runner_sha256: be836069d13289980d4f0217145d98ddba304995ec4e4d44c4d0ca1ed3f6a894
+    command_generator_path: containers/sira-smoke/pragmatic/t09_freeze_commands.py
+    command_generator_sha256: 9e63567822ede0ce7dfbc2d49d7bf8c531885ef1b71c0d98e699b3feb3b622e5
+    runtime_profile_path: experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/proposals/T09_PILOT_RUNTIME_PROFILE_V11.yaml
+    runtime_profile_sha256: 726eeef3be208ad22b3279f8192fa55cfba259d14bf85424716b4f3e71a4a850
+    execution_contract_path: experiments/EXP-0001-sira-simulative-vs-reactive/contracts/proposals/T09_PILOT_EXECUTION_CONTRACT_V11.json
+    execution_contract_sha256: 97a1c22064284d0f812e6cac87dae836ad516a423c7ad9f4a0039c696c22b43d
+    command_manifests_path: experiments/EXP-0001-sira-simulative-vs-reactive/contracts/proposals/T09_PILOT_COMMAND_MANIFESTS_V11.json
+    command_manifests_sha256: c36e1417b4668f6a0ae99abd63e4f3c6344c2af6c0942e2ac036633b3817a4e1
+    runtime_identity_path: experiments/EXP-0001-sira-simulative-vs-reactive/contracts/proposals/T09_PILOT_RUNTIME_IDENTITY_V11.json
+    runtime_identity_sha256: ca1bacf58c869067f61b8d43ba54a7589b7f7077e1ee49e9ff6d8b30e0be33ae
+    execution_schema_path: schemas/t09-sira-pilot-v11-execution.schema.json
+    execution_schema_sha256: 096e0a589a102b5cbf270eb3f8a14d9b9dd6cf7a48fb9397b1f126b1af8b6525
+    condition_plans:
+    - path: experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v11-task-0000-reactive.yaml
+      sha256: e39f0c5179f61feac81c64c6cd187e378b7781dee3314010fb0317c616096d5f
+    - path: experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v11-task-0000-simulative.yaml
+      sha256: 24f858496a987c1cff850ab44b0e425a5b06cdf255a88bbe2aec8a740078ff90
+    - path: experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v11-task-0001-simulative.yaml
+      sha256: 80726b8dc3fe91e6586c1d7d9c3792ff58f6e08f747cd451284295f9475ca6b2
+    - path: experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v11-task-0001-reactive.yaml
+      sha256: 73a87309529ad686853e03393f866ab3ccdf5ab0043b5a8554c79d10a4ed2369
+    static_authorized: false
+    static_authorization_reference: null
+    execution_eligibility: blocked-until-fresh-category-3-authorization
+runtime_contract:
+  python_version: 3.11.14
+  core_soft_limit: 0
+  core_hard_limit: 0
+  max_lambda_instances: 1
+  persistent_filesystems: 0
+  empirical_campaign_wall_seconds: 14400
+  empirical_cleanup_reserve_seconds: 900
+  empirical_termination_cutoff_seconds: 13500
+  evidence_export_reserve_seconds: 600
+  provider_termination_handoff_seconds: 60
+  max_condition_wall_seconds: 3600
+  max_browser_actions_per_attempt: 30
+  max_model_calls_per_attempt: 1155
+  max_model_tokens_per_attempt: 1000000
+  max_openai_cost_usd_per_attempt: 10.0
+  first_pair_checkpoint:
+    after_run_id: RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0004
+    required_before_task_b: true
+    continue_only_if_both_task_a_conditions_are_valid_and_scored: true
+    realized_pair_requires_same_tasks_commands_evaluator_and_finalizer_closure: true
+budget_contract:
+  maximum_new_preflight_lambda_cost_usd: 10.0
+  maximum_new_empirical_lambda_cost_usd: 8.0
+  maximum_new_openai_cost_usd: 40.0
+  maximum_new_total_cost_usd: 58.0
+  prior_t09_observed_lower_bound_usd: 15.3545995873264159
+  prior_t09_conservative_upper_bound_usd: 33.1487895873264159
+  v10_stopped_lambda_cost_usd: 1.7273232755184174
+  effective_maximum_new_total_cost_under_cumulative_cap_usd: 56.8512104126735841
+  cumulative_t09_cost_cap_usd: 90.0
+  maximum_model_calls: 4620
+  maximum_model_tokens: 4000000
+  maximum_browser_actions: 120
+evidence_contract:
+  raw_attempt_first: true
+  immutable_raw_manifest_required_before_finalization: true
+  full_attempt_cap_bytes: 536870912
+  stdout_stderr_per_stream_cap_bytes: 536870912
+  essential_failure_cap_bytes: 67108864
+  credential_separation: strict
+  private_raw_release: blocked-pending-review
+  downstream_repair_policy: network-disabled-finalizer-only-no-condition-replay
+  v8_artifacts_are_immutable_historical_evidence: true
+  v9_artifacts_are_immutable_historical_evidence: true
+  v10_stopped_category_3_artifacts_are_immutable_operational_evidence: true
+  v8_conditions_eligible_for_v11_pairing: false
+  v9_conditions_eligible_for_v11_pairing: false
+  v10_conditions_eligible_for_v11_pairing: false
+cleanup_contract:
+  exact_owned_targets_only: true
+  broad_prune_allowed: false
+  provider_termination_required: true
+  provider_terminal_or_absent_verification_required: true
+  browser_cleanup_required: true
+  owned_container_cleanup_required: true
+  temporary_secret_cleanup_required: true
+  owned_ruleset_cleanup_required: true
+  firewall_restoration_required: true
+  cleanup_without_optional_pilot_state_required: true
+attempts:
+- run_id: RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0004
+  task_label: Task-A
+  task_id: 7dcbbbdc7f1120cd
+  task_sha256: 153a4f251fbeb29bee8e5ca4626e6db14426063728b0d5cfa7eed3a9a230992b
+  reference_sha256: fc40734fa183e839b56a7c89b16faa5900865cbee7a4210fcb251a99176f98de
+  record_sha256: cc5c3fdeea2c1f58b6160175bd3104dbea40c290ea8b390d29413e6410d97e15
+  condition: reactive
+  order_index: 1
+  dataset_start_index: 0
+  dataset_end_index: 1
+  output_root: not-materialized-until-category-3
+  upstream_argv: [--dataset, fanout, --mode, reactive, --agent, sira, --config_name,
+    web_reactive, --model, gpt-4o-2024-11-20, --max_steps, '30', --timeout, '30',
+    --max_retry, '0', --data_root, /opt/sira/data, --output_dir, '<FRESH-CONDITION-ROOT>',
+    --start_idx, '0', --end_idx, '1', --seed, '42']
+- run_id: RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0004
+  task_label: Task-A
+  task_id: 7dcbbbdc7f1120cd
+  task_sha256: 153a4f251fbeb29bee8e5ca4626e6db14426063728b0d5cfa7eed3a9a230992b
+  reference_sha256: fc40734fa183e839b56a7c89b16faa5900865cbee7a4210fcb251a99176f98de
+  record_sha256: cc5c3fdeea2c1f58b6160175bd3104dbea40c290ea8b390d29413e6410d97e15
+  condition: simulative
+  order_index: 2
+  dataset_start_index: 0
+  dataset_end_index: 1
+  output_root: not-materialized-until-category-3
+  upstream_argv: [--dataset, fanout, --mode, simulative, --agent, sira, --config_name,
+    web_simulative, --model, gpt-4o-2024-11-20, --max_steps, '30', --timeout, '30',
+    --max_retry, '0', --data_root, /opt/sira/data, --output_dir, '<FRESH-CONDITION-ROOT>',
+    --start_idx, '0', --end_idx, '1', --seed, '42']
+- run_id: RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0004
+  task_label: Task-B
+  task_id: 2120afba8009bad3
+  task_sha256: 9b2b443898959b28c7408ed1ff56ebd332c9e7f2142657c11c7d09aa507ba66e
+  reference_sha256: 2ee9d892e24441d5f5bbf31b7616c1ade5977af26d22e4020f92a162fa23becb
+  record_sha256: 5f5a8ad5353b839def2ffc968c36c4314bb830f11f10268f410faa37690bc129
+  condition: simulative
+  order_index: 1
+  dataset_start_index: 1
+  dataset_end_index: 2
+  output_root: not-materialized-until-category-3
+  upstream_argv: [--dataset, fanout, --mode, simulative, --agent, sira, --config_name,
+    web_simulative, --model, gpt-4o-2024-11-20, --max_steps, '30', --timeout, '30',
+    --max_retry, '0', --data_root, /opt/sira/data, --output_dir, '<FRESH-CONDITION-ROOT>',
+    --start_idx, '1', --end_idx, '2', --seed, '42']
+- run_id: RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0004
+  task_label: Task-B
+  task_id: 2120afba8009bad3
+  task_sha256: 9b2b443898959b28c7408ed1ff56ebd332c9e7f2142657c11c7d09aa507ba66e
+  reference_sha256: 2ee9d892e24441d5f5bbf31b7616c1ade5977af26d22e4020f92a162fa23becb
+  record_sha256: 5f5a8ad5353b839def2ffc968c36c4314bb830f11f10268f410faa37690bc129
+  condition: reactive
+  order_index: 2
+  dataset_start_index: 1
+  dataset_end_index: 2
+  output_root: not-materialized-until-category-3
+  upstream_argv: [--dataset, fanout, --mode, reactive, --agent, sira, --config_name,
+    web_reactive, --model, gpt-4o-2024-11-20, --max_steps, '30', --timeout, '30',
+    --max_retry, '0', --data_root, /opt/sira/data, --output_dir, '<FRESH-CONDITION-ROOT>',
+    --start_idx, '1', --end_idx, '2', --seed, '42']
+category_3_preconditions:
+- exact-head PR review by ChatGPT
+- user approval of the reviewed SHA
+- Category 2 merge-only turn
+- fresh Category 3 Luna authorization
+- exactly one authenticated gpt-4o-2024-11-20 model-metadata GET must succeed before
+  Lambda launch or any paid cloud mutation; otherwise stop with zero Lambda cost
+- exact merged commit, plan SHA-256, runtime interpreter, dependency closure, image,
+  evaluator, finalizer, selector, projection, and cleanup identities frozen before release

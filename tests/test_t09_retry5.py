@@ -8,6 +8,7 @@ import json
 import os
 import resource
 import stat
+import subprocess
 import sys
 import tarfile
 import time
@@ -15,8 +16,8 @@ from pathlib import Path
 from types import ModuleType, SimpleNamespace
 
 import pytest
+import yaml
 
-from giclab.harness.policy import load_project_execution_state
 from giclab.harness.t09_cleanup_state import EarlyCleanupJournal
 from giclab.harness.t09_provider_contracts import (
     V4_PROVIDER_CONTRACT,
@@ -24,6 +25,7 @@ from giclab.harness.t09_provider_contracts import (
     V8_PROVIDER_CONTRACT,
     V9_PROVIDER_CONTRACT,
     V10_PROVIDER_CONTRACT,
+    V11_PROVIDER_CONTRACT,
     T09ProviderContract,
 )
 from giclab.harness.t09_sira_pilot import (
@@ -74,6 +76,20 @@ def _write_json(path: Path, value: object) -> None:
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     path.write_text(json.dumps(value, sort_keys=True) + "\n", encoding="utf-8")
     path.chmod(0o600)
+
+
+def _git_blob_at(revision: str, relative: str) -> bytes:
+    return subprocess.run(
+        ["git", "-C", str(ROOT), "show", f"{revision}:{relative}"],
+        check=True,
+        capture_output=True,
+    ).stdout
+
+
+def _git_json_at(revision: str, relative: str) -> dict[str, object]:
+    value = json.loads(_git_blob_at(revision, relative))
+    assert isinstance(value, dict)
+    return value
 
 
 def _early_cleanup_journal(
@@ -286,7 +302,7 @@ def test_frozen_runtime_rejects_v10_state_with_v9_provider_entry(tmp_path: Path)
         },
     )
 
-    with pytest.raises(Exception, match="provider entry summary belongs to another"):
+    with pytest.raises(Exception, match="requires its frozen provider runner"):
         host.load_frozen_run_manifest(
             artifact_root,
             repository=ROOT,
@@ -322,7 +338,7 @@ def test_export_acknowledgement_rejects_v10_state_with_v9_provider_entry(
         },
     )
 
-    with pytest.raises(Exception, match="provider entry belongs to another"):
+    with pytest.raises(Exception, match="provider entry belongs to another provider contract"):
         host.require_prior_export_acknowledgements(
             artifact_root,
             next_attempt_index=0,
@@ -355,7 +371,7 @@ def test_preempirical_disposition_rejects_v10_state_with_v9_provider_entry(
     )
     monkeypatch.setattr(host, "verify_package", lambda *_args, **_kwargs: {})
 
-    with pytest.raises(Exception, match="provider entry belongs to another"):
+    with pytest.raises(Exception, match="requires its frozen provider runner"):
         host.preempirical_replacement_disposition(
             SimpleNamespace(
                 repository=ROOT,
@@ -2164,10 +2180,10 @@ def test_retry5_aggregate_stage_rejects_a_consumed_prefix_without_direct_export_
     artifact_root = tmp_path / "artifacts"
     pilot_root = artifact_root / "pilot-v7"
     pilot_root.mkdir(parents=True, mode=0o700)
-    run_id = V10_PROVIDER_CONTRACT.run_ids[0]
+    run_id = V11_PROVIDER_CONTRACT.run_ids[0]
     state = {
-        "plan_id": V10_PROVIDER_CONTRACT.plan_id,
-        "host_run_id": V10_PROVIDER_CONTRACT.host_run_id,
+        "plan_id": V11_PROVIDER_CONTRACT.plan_id,
+        "host_run_id": V11_PROVIDER_CONTRACT.host_run_id,
         "raw_attempts_complete": [run_id] if evidence_authority == "immutable-raw-attempt" else [],
         "empirical_attempts_entered": [run_id],
         "essential_failure_seals": (
@@ -2191,17 +2207,17 @@ def test_retry5_aggregate_stage_rejects_a_consumed_prefix_without_direct_export_
     _write_json(
         pilot_root / "frozen-run-manifest.json",
         {
-            "manifest_id": V10_PROVIDER_CONTRACT.frozen_run_manifest_id,
-            "plan_id": V10_PROVIDER_CONTRACT.plan_id,
-            "host_run_id": V10_PROVIDER_CONTRACT.host_run_id,
+            "manifest_id": V11_PROVIDER_CONTRACT.frozen_run_manifest_id,
+            "plan_id": V11_PROVIDER_CONTRACT.plan_id,
+            "host_run_id": V11_PROVIDER_CONTRACT.host_run_id,
             "replacement_image_id": "sha256:" + "a" * 64,
         },
     )
     _write_json(
         pilot_root / "provider-entry.json",
         {
-            "plan_id": V10_PROVIDER_CONTRACT.plan_id,
-            "host_run_id": V10_PROVIDER_CONTRACT.host_run_id,
+            "plan_id": V11_PROVIDER_CONTRACT.plan_id,
+            "host_run_id": V11_PROVIDER_CONTRACT.host_run_id,
             "receipt_sha256": "b" * 64,
             "owned_instance_identity_sha256": "c" * 64,
             "lambda_started_at_epoch": state["lambda_started_at_epoch"],
@@ -2335,17 +2351,17 @@ def test_retry5_cleanup_rejects_unacknowledged_raw_before_any_destructive_action
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Retain the base node while exercising the same gate under active V10 authority."""
+    """Retain the base node while exercising the same gate under active V11 authority."""
 
-    host = _host("giclab_t09_v10_cleanup_requires_ack")
+    host = _host("giclab_t09_v11_cleanup_requires_ack")
     artifact_root = tmp_path / "artifacts"
     pilot_root = artifact_root / "pilot-v7"
     pilot_root.mkdir(parents=True, mode=0o700)
-    run_id = V10_PROVIDER_CONTRACT.run_ids[0]
+    run_id = V11_PROVIDER_CONTRACT.run_ids[0]
     state_path = pilot_root / "pilot-state.json"
     initialize_pilot_state(
         state_path,
-        provider_contract=V10_PROVIDER_CONTRACT,
+        provider_contract=V11_PROVIDER_CONTRACT,
         execution_contract_sha256="e" * 64,
         pilot_started_at_epoch=1.0,
         lambda_started_at_epoch=1.0,
@@ -2365,8 +2381,8 @@ def test_retry5_cleanup_rejects_unacknowledged_raw_before_any_destructive_action
     _write_json(
         pilot_root / "provider-entry.json",
         {
-            "plan_id": V10_PROVIDER_CONTRACT.plan_id,
-            "host_run_id": V10_PROVIDER_CONTRACT.host_run_id,
+            "plan_id": V11_PROVIDER_CONTRACT.plan_id,
+            "host_run_id": V11_PROVIDER_CONTRACT.host_run_id,
             "receipt_sha256": "a" * 64,
             "owned_instance_identity_sha256": "b" * 64,
             "lambda_started_at_epoch": 1.0,
@@ -2375,9 +2391,9 @@ def test_retry5_cleanup_rejects_unacknowledged_raw_before_any_destructive_action
     _write_json(
         pilot_root / "frozen-run-manifest.json",
         {
-            "manifest_id": V10_PROVIDER_CONTRACT.frozen_run_manifest_id,
-            "plan_id": V10_PROVIDER_CONTRACT.plan_id,
-            "host_run_id": V10_PROVIDER_CONTRACT.host_run_id,
+            "manifest_id": V11_PROVIDER_CONTRACT.frozen_run_manifest_id,
+            "plan_id": V11_PROVIDER_CONTRACT.plan_id,
+            "host_run_id": V11_PROVIDER_CONTRACT.host_run_id,
             "replacement_image_id": "sha256:" + "c" * 64,
         },
     )
@@ -2391,7 +2407,7 @@ def test_retry5_cleanup_rejects_unacknowledged_raw_before_any_destructive_action
         tmp_path,
         host,
         package_commit="d" * 40,
-        provider_contract=V10_PROVIDER_CONTRACT,
+        provider_contract=V11_PROVIDER_CONTRACT,
     )
     with pytest.raises(Exception, match="lacks its off-host verification acknowledgement"):
         host.cleanup(
@@ -2410,14 +2426,14 @@ def test_retry5_cleanup_requires_started_reservation_recovery_before_destruction
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Retain the base node while exercising reservation recovery under V10 authority."""
+    """Retain the base node while exercising reservation recovery under V11 authority."""
 
-    host = _host("giclab_t09_v10_cleanup_requires_reservation_recovery")
+    host = _host("giclab_t09_v11_cleanup_requires_reservation_recovery")
     artifact_root = tmp_path / "artifacts"
     state_path = artifact_root / "pilot-v7/pilot-state.json"
     initialize_pilot_state(
         state_path,
-        provider_contract=V10_PROVIDER_CONTRACT,
+        provider_contract=V11_PROVIDER_CONTRACT,
         execution_contract_sha256="a" * 64,
         pilot_started_at_epoch=1.0,
         lambda_started_at_epoch=1.0,
@@ -2425,7 +2441,7 @@ def test_retry5_cleanup_requires_started_reservation_recovery_before_destruction
     reserve_condition_start(
         state_path,
         execution_contract_sha256="a" * 64,
-        run_id=V10_PROVIDER_CONTRACT.run_ids[0],
+        run_id=V11_PROVIDER_CONTRACT.run_ids[0],
         start_intent_sha256="b" * 64,
     )
 
@@ -2438,7 +2454,7 @@ def test_retry5_cleanup_requires_started_reservation_recovery_before_destruction
         tmp_path,
         host,
         package_commit="c" * 40,
-        provider_contract=V10_PROVIDER_CONTRACT,
+        provider_contract=V11_PROVIDER_CONTRACT,
     )
     with pytest.raises(Exception, match="requires recover-attempt-seal"):
         host.cleanup(
@@ -2647,8 +2663,10 @@ def test_retry5_provider_classifies_every_hard_clock_boundary() -> None:
 
 
 def test_autonomous_science_and_zero_retry_identifiers_are_fresh() -> None:
-    execution = json.loads(
-        (EXPERIMENT_ROOT / "contracts/T09_PILOT_EXECUTION_CONTRACT.json").read_text()
+    execution = _git_json_at(
+        V8_PROVIDER_CONTRACT.source_commit,
+        "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
+        "T09_PILOT_EXECUTION_CONTRACT.json",
     )
     assert PLAN_ID == "PLAN-EXP0001-PILOT-V8"
     assert tuple(item["run_id"] for item in execution["attempts"]) == ATTEMPT_ORDER
@@ -2671,8 +2689,10 @@ def test_autonomous_science_and_zero_retry_identifiers_are_fresh() -> None:
     assert execution["budget_calibration"]["hard"][
         "maximum_new_cost_under_cumulative_cap_usd"
     ] == pytest.approx(75.0 - 6.813138735)
-    command_contract = json.loads(
-        (EXPERIMENT_ROOT / "contracts/T09_PILOT_COMMAND_MANIFESTS.json").read_text()
+    command_contract = _git_json_at(
+        V8_PROVIDER_CONTRACT.source_commit,
+        "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
+        "T09_PILOT_COMMAND_MANIFESTS.json",
     )
     assert len(command_contract["pair_diffs"]) == 2
     assert all(item["valid"] is True for item in command_contract["pair_diffs"])
@@ -2686,10 +2706,12 @@ def test_autonomous_science_and_zero_retry_identifiers_are_fresh() -> None:
 
 
 def test_retry5_postrun_control_is_archived_while_v8_is_current() -> None:
-    state = load_project_execution_state(ROOT)
-    assert state.terminal_execution_control is None
-    assert state.authorized_run_profile is not None
-    assert state.authorized_run_profile.plan_id == "PLAN-EXP0001-PILOT-V8"
+    state = yaml.safe_load(
+        _git_blob_at(V8_PROVIDER_CONTRACT.source_commit, "docs/PROJECT_STATE.yaml")
+    )
+    assert isinstance(state, dict)
+    assert state["current_execution_control"] is None
+    assert state["authorized_run_profile"]["plan_id"] == "PLAN-EXP0001-PILOT-V8"
     control = json.loads(RETRY5_EXECUTION_CONTROL.read_text())
     assert control["authorized"] is True
     assert control["single_use"] is True

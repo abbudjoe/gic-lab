@@ -631,7 +631,7 @@ def test_execution_schema_and_all_static_file_bindings_resolve() -> None:
     assert (
         validate_instance(
             document,
-            ROOT / "schemas/t09-sira-pilot-v10-execution.schema.json",
+            ROOT / "schemas/t09-sira-pilot-v11-execution.schema.json",
         )
         == []
     )

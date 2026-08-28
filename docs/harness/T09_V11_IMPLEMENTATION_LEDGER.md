@@ -43,13 +43,13 @@ authorization overlay; merge or auto-merge.
 | ID | Required outcome | Planned evidence | Status |
 |---|---|---|---|
 | V11-DOD-01 | Exact repository, remote base, commit/tree/parents, clean start, retained zero-instance cleanup state, and immutable V8/V9/V10 evidence baselines are recorded before implementation. | Git identities, retained V10 closeout receipt, and deterministic evidence-root inventory hashes. | met |
-| V11-DOD-02 | `_read_owned_docker_cidfile()` opens the exact path with no-follow/CLOEXEC where supported, validates the opened descriptor's regular-file/owner/link/write metadata, treats only a safe zero-length file as pending, and accepts only the exact prior 64-lowercase-hex format with its optional single trailing newline. | Focused reader unit tests, path-replacement regression, source review, and post-review smoke. | partial: implementation and first smoke pass; independent review and post-review smoke remain |
-| V11-DOD-03 | Existing polling/deadline behavior remains bounded; durable authority begins only after a valid exact ID; changed IDs fail; timeout without publication never authorizes name-based removal; successful cleanup remains exact-ID-only. | Deterministic fake-process integration tests covering delayed publication, timeout, registration ordering, identity change, and cleanup. | partial: deterministic fake-process smoke passes; independent review and post-review smoke remain |
-| V11-DOD-04 | The original transient-zero-length Category 3 sequence is reproduced against the old contract and passes under the repair without a live Docker daemon. | Focused regression fixture and exact failure-class assertion. | partial: focused regression passes; independent review remains |
-| V11-DOD-05 | Fresh `PLAN-EXP0001-PILOT-V11` and `AUTONOMOUS-0004` host/attempt identities bind the repaired package; model metadata is ordered before Lambda launch; all scientific fields and all authorization/execution flags remain unchanged and false. | Canonical renderers, schema/hash tests, science projection, pair diffs, and exact plan bytes/SHA-256. | not-started |
-| V11-DOD-06 | V8, V9, V10, and the stopped V10 Category 3 evidence remain immutable and V10 provider contracts remain version-addressable historical identities. | Start/end inventory equality, source diff, and historical contract regressions. | not-started |
-| V11-DOD-07 | Focused smoke, formatting, Ruff, strict mypy, repository validation, privacy checks, raw suite classification, exact-base/head parity, diff check, and portable Quarto/site validation satisfy the task contract. | Exact commands, counts, and parity report recorded below. | not-started |
-| V11-DOD-08 | Independent review finds the implementation and successor package conformant, or every valid finding is repaired and rereviewed before closeout. | Reviewer findings, dispositions, and post-review reruns. | not-started |
+| V11-DOD-02 | `_read_owned_docker_cidfile()` opens the exact path with no-follow/nonblocking/CLOEXEC where supported, validates the opened descriptor's regular-file/owner/link/write metadata, treats only a safe zero-length file as pending, and accepts only the exact prior 64-lowercase-hex format with its optional single trailing newline. | Focused reader unit tests, real-FIFO and path-replacement regressions, source review, and post-review smoke. | met: 23 focused regressions pass, including a real FIFO, and final independent rereview is clean |
+| V11-DOD-03 | Existing polling/deadline behavior remains bounded; durable authority begins only after a valid exact ID; changed IDs fail; timeout without publication never authorizes name-based removal; successful cleanup remains exact-ID-only. | Deterministic fake-process integration tests covering delayed publication, timeout, registration ordering, identity change, and cleanup. | met: deterministic fake-process integration, cleanup-authority, changed-ID, and deadline tests pass; final rereview is clean |
+| V11-DOD-04 | The original transient-zero-length Category 3 sequence is reproduced against the old contract and passes under the repair without a live Docker daemon. | Focused regression fixture and exact failure-class assertion. | met: the old-reader fixture reproduces `unsafe`; the same sequence passes with the repaired reader |
+| V11-DOD-05 | Fresh `PLAN-EXP0001-PILOT-V11` and `AUTONOMOUS-0004` host/attempt identities bind the repaired package; model metadata is ordered before Lambda launch; all scientific fields and all authorization/execution flags remain unchanged and false. | Canonical renderers, schema/hash tests, science projection, pair diffs, and exact plan bytes/SHA-256. | met: closure is rebound to `e91eccc`, both pair diffs and 11 exact plan tests pass, and final package rereview is clean |
+| V11-DOD-06 | V8, V9, V10, and the stopped V10 Category 3 evidence remain immutable and V10 provider contracts remain version-addressable historical identities. | Start/end inventory equality, source diff, and historical contract regressions. | met: all historical regressions pass and fresh end inventories exactly equal all three baselines |
+| V11-DOD-07 | Focused smoke, formatting, Ruff, strict mypy, repository validation, privacy checks, raw suite classification, exact-base/head parity, diff check, and portable Quarto/site validation satisfy the task contract. | Exact commands, counts, and parity report recorded below. | partial: every local gate and truthful raw-suite classification is complete; exact-base/head parity remains |
+| V11-DOD-08 | Independent review finds the implementation and successor package conformant, or every valid finding is repaired and rereviewed before closeout. | Reviewer findings, dispositions, and post-review reruns. | met: active-fixture, FIFO, and ledger findings were repaired; the independent final rereview returned CLEAN |
 | V11-DOD-09 | Scope-reviewed changes are committed and pushed only to the task branch, and one draft PR is opened against the exact base with auto-merge disabled and no merge. | Final commit/tree, remote head/base, and PR state. | not-started |
 
 ## Implementation mapping
@@ -90,16 +90,72 @@ authorization overlay; merge or auto-merge.
 ## Evidence log
 
 - `PYTHONPATH=src uv run --no-sync pytest -q tests/test_t09_v11_cidfile.py`:
-  **22 passed**. This is fake-only local evidence; it made no Docker or provider
+  **23 passed**. This is fake-only local evidence; it made no Docker or provider
   request.
 - Focused source gate over the V11 cidfile and versioned-provider modules:
-  **57 passed**, Ruff format/check passed, and strict mypy passed for all 64 source
+  **58 passed**, Ruff format/check passed, and strict mypy passed for all 64 source
   files. These checks used only deterministic local fixtures.
 - Independent source review found the cidfile repair clean and identified one active
   fixture-promotion gap: three `test_t09_sira_pilot.py` fixtures still named V10.
   They were rebound to V11 while explicit historical V10 fixtures were retained; the
   reviewer's three exact regression selectors then passed (**3 passed**), and the
   independent rereview returned **CLEAN**.
+- Final package review found that opening with blocking `O_RDONLY` could hang on a
+  FIFO before descriptor metadata validation, and that ledger statuses overstated
+  review closure. Commit `e91eccc01fa8d479cdfff270a8032dfb6283f5b4` adds
+  `O_NONBLOCK` to the held-descriptor open and a deterministic real-FIFO regression;
+  the focused 23-test suite, Ruff, and strict source typing pass. This ledger now
+  records the remaining review and parity work as partial instead of met.
+- Independent final rereview returned **CLEAN**: the reviewer confirmed that
+  `O_NONBLOCK` precedes `os.open`, the real FIFO regression asserts the flag, the
+  regenerated closure is internally bound, and this ledger records 231 collected /
+  230 passed / 1 skipped with only parity and PR closeout pending.
+- Source-bound V11 package rendering produced runtime profile SHA-256
+  `726eeef3be208ad22b3279f8192fa55cfba259d14bf85424716b4f3e71a4a850`,
+  runtime identity SHA-256
+  `ca1bacf58c869067f61b8d43ba54a7589b7f7077e1ee49e9ff6d8b30e0be33ae`,
+  execution contract SHA-256
+  `97a1c22064284d0f812e6cac87dae836ad516a423c7ad9f4a0039c696c22b43d`,
+  and command-manifest SHA-256
+  `c36e1417b4668f6a0ae99abd63e4f3c6344c2af6c0942e2ac036633b3817a4e1`.
+  The execution schema remains SHA-256
+  `096e0a589a102b5cbf270eb3f8a14d9b9dd6cf7a48fb9397b1f126b1af8b6525`,
+  and the reviewed-ancestor-bound plan schema is SHA-256
+  `3291af39c50ce4f186008adc56d79fc1715adc539a1faea92c2fb3bff4988a7f`.
+  Both machine pair diffs are valid and all authorization/execution flags are false.
+- `PLAN-EXP0001-PILOT-V11.yaml` is 14,754 bytes with SHA-256
+  `34a405d06521bd3fb55379721dff9c5795954fcb099d641587e2169b37575411`;
+  its 11 exact plan/schema/hash/science/identity/metadata-order tests pass. The V10
+  plan remains exactly 13,426 bytes at SHA-256
+  `17c6502c625e0a3fcabc99180b0a432a60b27557be6a88f3289e45720951b38b`.
+- The combined active/historical runner suites
+  `tests/test_t09_v11_cidfile.py tests/test_t09_pragmatic_provider.py
+  tests/test_t09_retry5.py tests/test_t09_sira_pilot.py
+  tests/test_t09_v10_plan.py tests/test_t09_v11_plan.py` collect 231 nodes and pass
+  230 with one intentional skip. Historical V8/V10 expectations are now verified
+  from their exact frozen Git objects instead of being reinterpreted through the V11
+  runner.
+- `make validate` passes after registering V11 schemas, validating V10 Python source
+  bindings at its immutable reviewed ancestor, and restricting the run-profile prior
+  disposition to the two exact accepted historical shapes.
+- Global Ruff format/check and strict mypy pass over 161 formatted files and 64 source
+  files respectively; `git diff --check` and the V11 privacy/canary regression pass.
+- The final unfiltered raw suite truthfully records **1,586 passed, 5 skipped,
+  76 failed**. The failures are the same inherited historical control-plane
+  assertions and local ledger prewrite-floor failures with only 5.3 GiB free. No
+  exclusion was added or broadened; the required exact-base/head parity gate decides
+  whether any failure is new.
+- The repository-bundled portable Quarto 1.9.38 path rendered all 16 notebook inputs,
+  generated four public views, and passed site validation. Quarto emitted its known
+  nonfatal project/output-path warnings.
+- End-of-implementation inventories equal their baselines exactly: V8 168 files /
+  93,440,074 bytes /
+  `ac15202827352819570d89bc18253f78aafe58ee4206a4f1a3858b3847b96dab`;
+  V9 160 / 14,487,048 /
+  `65e7baf79841744d3eadd23131bea5287fd49839873a90dca5be60cd5e4212d6`;
+  V10 38 / 40,227,911 /
+  `d1d1d65eb3b2c68d9e08d59adf21fcff433d89071a6bb3352301ae0f94815357`.
+  No V11 run root or authorization overlay exists.
 
 ## Blockers and user actions
 
@@ -109,6 +165,6 @@ dependency, or inability to preserve exact-ID cleanup authority is terminal unde
 
 ## Next permitted phase
 
-Implement and smoke the descriptor-safe reader and deterministic publication
-regressions. V11 remains unauthorized; no provider, secret, live runtime, or
-scientific action is permitted.
+Commit the reviewed package, run exact-base/head parity, then push and open one draft
+PR. V11 remains unauthorized; no provider, secret, live runtime, or scientific action
+is permitted.

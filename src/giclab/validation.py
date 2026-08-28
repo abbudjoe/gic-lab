@@ -72,9 +72,11 @@ SCHEMA_FILES = (
     "schemas/t09-sira-pilot-evidence.schema.json",
     "schemas/t09-sira-pilot-execution.schema.json",
     "schemas/t09-sira-pilot-v10-execution.schema.json",
+    "schemas/t09-sira-pilot-v11-execution.schema.json",
     "schemas/t09-offline-refinalization-receipt.schema.json",
     "schemas/t09-early-cleanup-state.schema.json",
     "schemas/t09-v10-plan.schema.json",
+    "schemas/t09-v11-plan.schema.json",
     "schemas/terminal-execution-control.schema.json",
 )
 REQUIRED_PATHS = (
@@ -210,8 +212,8 @@ def validate_instance(
     return errors
 
 
-def _t09_v10_implementation_binding_map(plan: Mapping[str, Any]) -> dict[str, str]:
-    """Project the V10 successor's reviewed source and schema byte identities."""
+def _t09_successor_implementation_binding_map(plan: Mapping[str, Any]) -> dict[str, str]:
+    """Project the active successor's reviewed source and schema byte identities."""
 
     bindings = plan.get("implementation_bindings")
     if not isinstance(bindings, dict):
@@ -230,6 +232,8 @@ def _t09_v10_implementation_binding_map(plan: Mapping[str, Any]) -> dict[str, st
         ("early_cleanup", "implementation_path", "implementation_sha256"),
         ("early_cleanup", "provider_integration_path", "provider_integration_sha256"),
         ("early_cleanup", "schema_path", "schema_sha256"),
+        ("owned_container_publication", "reader_path", "reader_sha256"),
+        ("owned_container_publication", "regression_path", "regression_sha256"),
         ("execution_plane", "pilot_library_path", "pilot_library_sha256"),
         (
             "execution_plane",
@@ -1124,9 +1128,11 @@ def validate_experiment_run_profiles(root: Path = ROOT) -> list[str]:
             errors.append(f"{experiment_id}: registry/profile declaration mismatch")
         actual_conditions = set((profiles_root / "conditions").glob("*.yaml"))
         proposal_conditions: set[Path] = set()
-        v10_proposal = profiles_root / "proposals/T09_PILOT_RUNTIME_PROFILE_V10.yaml"
-        if v10_proposal.is_file():
-            proposal = load_yaml(v10_proposal)
+        proposal_paths = sorted(
+            (profiles_root / "proposals").glob("T09_PILOT_RUNTIME_PROFILE_V*.yaml")
+        )
+        for proposal_path in proposal_paths:
+            proposal = load_yaml(proposal_path)
             raw_proposal_conditions = proposal.get("condition_plan_paths")
             if isinstance(raw_proposal_conditions, list):
                 for relative in raw_proposal_conditions:
@@ -1809,10 +1815,10 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
         errors.append("EXP-0001 T09: replacement runtime semantic identity drifted")
     instrumentation = runtime_identity.get("repository_instrumentation")
     files = instrumentation.get("files") if isinstance(instrumentation, dict) else None
-    v10_plan_path = exp_root / "run-plans/proposals/PLAN-EXP0001-PILOT-V10.yaml"
-    v10_successor_bindings = (
-        _t09_v10_implementation_binding_map(load_yaml(v10_plan_path))
-        if v10_plan_path.is_file()
+    successor_plan_path = exp_root / "run-plans/proposals/PLAN-EXP0001-PILOT-V11.yaml"
+    successor_bindings = (
+        _t09_successor_implementation_binding_map(load_yaml(successor_plan_path))
+        if successor_plan_path.is_file()
         else {}
     )
     if not isinstance(files, list) or not files:
@@ -2079,7 +2085,7 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
                         )
                         or (
                             current_digest != repaired_digest
-                            and v10_successor_bindings.get(repair_path) != current_digest
+                            and successor_bindings.get(repair_path) != current_digest
                         )
                     ):
                         repair_identity_valid = False
@@ -2110,7 +2116,7 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
                 continue
             if file_relative in validated_post_terminal_paths:
                 continue
-            if v10_successor_bindings.get(file_relative) == observed_digest:
+            if successor_bindings.get(file_relative) == observed_digest:
                 continue
             disposition_field = downstream_paths.get(file_relative)
             disposition_digest = (
@@ -2172,7 +2178,7 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
         or observed_generator_sha256 is None
         or (
             observed_generator_sha256 != generator_sha256
-            and v10_successor_bindings.get(generator_relative) != observed_generator_sha256
+            and successor_bindings.get(generator_relative) != observed_generator_sha256
         )
     ):
         errors.append("EXP-0001 T09: command generator binding drifted")
@@ -2180,10 +2186,10 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
 
     if execution.get("plan_id") != active_plan_id:
         # The V9 package is immutable historical evidence.  Once the active
-        # typed loader advances to V10, do not reinterpret or rerender V9 with
-        # successor constants.  Its committed package/source bindings above
-        # remain authoritative; V10 gets an independent typed render gate in
-        # validate_t09_v10_plan and its focused tests.
+        # typed loader advances, do not reinterpret or rerender V9 with successor
+        # constants. Its committed package/source bindings above remain
+        # authoritative; the active successor gets an independent typed render
+        # gate in its versioned plan validator and focused tests.
         pair_diffs = command_document.get("pair_diffs")
         if (
             not isinstance(pair_diffs, list)
@@ -2541,35 +2547,87 @@ def validate_markdown_links(root: Path = ROOT) -> list[str]:
     return errors
 
 
-def validate_t09_v10_plan(root: Path = ROOT) -> list[str]:
-    """Validate the fresh V10 proposal and each implementation byte binding."""
+def _t09_git_blob_sha256(root: Path, revision: str, relative: str) -> str | None:
+    """Return a historical Git blob digest without changing the checkout."""
 
+    try:
+        raw = subprocess.run(
+            ["git", "-C", str(root), "show", f"{revision}:{relative}"],
+            check=True,
+            capture_output=True,
+        ).stdout
+    except subprocess.CalledProcessError:
+        return None
+    return hashlib.sha256(raw).hexdigest()
+
+
+def _validate_t09_successor_plan(
+    root: Path,
+    *,
+    version: str,
+    historical_source_bindings: bool,
+) -> list[str]:
+    """Validate one immutable T09 successor package and its byte closure."""
+
+    label = f"T09 {version}"
+    plan_id = f"PLAN-EXP0001-PILOT-{version}"
+    slug = version.lower()
     errors: list[str] = []
     plan_path = (
-        root / "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/proposals/"
-        "PLAN-EXP0001-PILOT-V10.yaml"
+        root
+        / "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/proposals"
+        / f"{plan_id}.yaml"
     )
-    schema_path = root / "schemas/t09-v10-plan.schema.json"
+    schema_path = root / f"schemas/t09-{slug}-plan.schema.json"
     if not plan_path.is_file() or not schema_path.is_file():
-        return ["T09 V10 plan or schema is missing"]
+        return [f"{label} plan or schema is missing"]
     plan = load_yaml(plan_path)
-    errors.extend(f"T09 V10 plan: {error}" for error in validate_instance(plan, schema_path))
+    errors.extend(f"{label} plan: {error}" for error in validate_instance(plan, schema_path))
     bindings = plan.get("implementation_bindings")
     if not isinstance(bindings, dict):
-        return [*errors, "T09 V10 implementation bindings are malformed"]
-    accounting = bindings.get("provider_accounting")
-    refinalization = bindings.get("offline_refinalization")
-    cleanup = bindings.get("early_cleanup")
-    execution = bindings.get("execution_plane")
-    if not all(
-        isinstance(value, dict) for value in (accounting, refinalization, cleanup, execution)
-    ):
-        return [*errors, "T09 V10 implementation binding groups are malformed"]
+        return [*errors, f"{label} implementation bindings are malformed"]
+
+    required_groups = [
+        "provider_accounting",
+        "offline_refinalization",
+        "early_cleanup",
+        "execution_plane",
+    ]
+    if version == "V11":
+        required_groups.insert(3, "owned_container_publication")
+    groups = {name: bindings.get(name) for name in required_groups}
+    if not all(isinstance(value, dict) for value in groups.values()):
+        return [*errors, f"{label} implementation binding groups are malformed"]
+
+    accounting = groups["provider_accounting"]
+    refinalization = groups["offline_refinalization"]
+    cleanup = groups["early_cleanup"]
+    execution = groups["execution_plane"]
     assert isinstance(accounting, dict)
     assert isinstance(refinalization, dict)
     assert isinstance(cleanup, dict)
     assert isinstance(execution, dict)
-    path_and_hash_fields = (
+
+    source_ancestor: str | None = None
+    runtime_identity_relative = execution.get("runtime_identity_path")
+    if historical_source_bindings and isinstance(runtime_identity_relative, str):
+        identity_path = Path(runtime_identity_relative)
+        if not identity_path.is_absolute() and ".." not in identity_path.parts:
+            identity_target = root / identity_path
+            if identity_target.is_file():
+                identity = load_json(identity_target)
+                instrumentation = identity.get("repository_instrumentation")
+                candidate = (
+                    instrumentation.get("reviewed_implementation_ancestor")
+                    if isinstance(instrumentation, dict)
+                    else None
+                )
+                if isinstance(candidate, str) and re.fullmatch(r"[0-9a-f]{40}", candidate):
+                    source_ancestor = candidate
+    if historical_source_bindings and source_ancestor is None:
+        errors.append(f"{label} historical source ancestor is malformed")
+
+    specifications: list[tuple[Mapping[str, Any], str, str]] = [
         (accounting, "path", "sha256"),
         (accounting, "regression_path", "regression_sha256"),
         (refinalization, "finalizer_projection_path", "finalizer_projection_sha256"),
@@ -2580,7 +2638,9 @@ def validate_t09_v10_plan(root: Path = ROOT) -> list[str]:
         (cleanup, "provider_integration_path", "provider_integration_sha256"),
         (cleanup, "schema_path", "schema_sha256"),
         (execution, "pilot_library_path", "pilot_library_sha256"),
+        (execution, "campaign_lifecycle_path", "campaign_lifecycle_sha256"),
         (execution, "provider_path", "provider_sha256"),
+        (execution, "provider_contracts_path", "provider_contracts_sha256"),
         (execution, "remote_runner_path", "remote_runner_sha256"),
         (execution, "command_generator_path", "command_generator_sha256"),
         (execution, "runtime_profile_path", "runtime_profile_sha256"),
@@ -2588,59 +2648,75 @@ def validate_t09_v10_plan(root: Path = ROOT) -> list[str]:
         (execution, "command_manifests_path", "command_manifests_sha256"),
         (execution, "runtime_identity_path", "runtime_identity_sha256"),
         (execution, "execution_schema_path", "execution_schema_sha256"),
-    )
-    for binding, path_field, hash_field in path_and_hash_fields:
+    ]
+    publication = groups.get("owned_container_publication")
+    if isinstance(publication, dict):
+        specifications.extend(
+            [
+                (publication, "reader_path", "reader_sha256"),
+                (publication, "regression_path", "regression_sha256"),
+            ]
+        )
+    for binding, path_field, hash_field in specifications:
         relative = binding.get(path_field)
         expected = binding.get(hash_field)
         if not isinstance(relative, str) or not isinstance(expected, str):
-            errors.append(f"T09 V10 {path_field} binding is malformed")
+            errors.append(f"{label} {path_field} binding is malformed")
             continue
         path = Path(relative)
         if path.is_absolute() or ".." in path.parts:
-            errors.append(f"T09 V10 {path_field} binding is unsafe")
+            errors.append(f"{label} {path_field} binding is unsafe")
             continue
         target = root / path
         if not target.is_file():
-            errors.append(f"T09 V10 {path_field} binding is missing")
-        elif hashlib.sha256(target.read_bytes()).hexdigest() != expected:
-            errors.append(f"T09 V10 {path_field} binding drifted")
+            errors.append(f"{label} {path_field} binding is missing")
+            continue
+        if hashlib.sha256(target.read_bytes()).hexdigest() == expected:
+            continue
+        historical_match = (
+            source_ancestor is not None
+            and path.suffix == ".py"
+            and _t09_git_blob_sha256(root, source_ancestor, relative) == expected
+        )
+        if not historical_match:
+            errors.append(f"{label} {path_field} binding drifted")
+
     condition_plans = execution.get("condition_plans")
     if not isinstance(condition_plans, list) or len(condition_plans) != 4:
-        errors.append("T09 V10 condition plan bindings are malformed")
+        errors.append(f"{label} condition plan bindings are malformed")
     else:
         for item in condition_plans:
             if not isinstance(item, dict):
-                errors.append("T09 V10 condition plan binding is malformed")
+                errors.append(f"{label} condition plan binding is malformed")
                 continue
             relative = item.get("path")
             expected = item.get("sha256")
             if not isinstance(relative, str) or not isinstance(expected, str):
-                errors.append("T09 V10 condition plan binding is malformed")
+                errors.append(f"{label} condition plan binding is malformed")
                 continue
             path = Path(relative)
             if path.is_absolute() or ".." in path.parts:
-                errors.append("T09 V10 condition plan binding is unsafe")
+                errors.append(f"{label} condition plan binding is unsafe")
                 continue
             target = root / path
             if not target.is_file():
-                errors.append("T09 V10 condition plan binding is missing")
+                errors.append(f"{label} condition plan binding is missing")
             elif hashlib.sha256(target.read_bytes()).hexdigest() != expected:
-                errors.append("T09 V10 condition plan binding drifted")
+                errors.append(f"{label} condition plan binding drifted")
 
     runtime_profile_relative = execution.get("runtime_profile_path")
-    runtime_identity_relative = execution.get("runtime_identity_path")
     if isinstance(runtime_profile_relative, str):
         runtime_profile_target = root / runtime_profile_relative
         if runtime_profile_target.is_file():
             runtime_profile = load_yaml(runtime_profile_target)
             errors.extend(
-                f"T09 V10 runtime profile: {error}"
+                f"{label} runtime profile: {error}"
                 for error in validate_instance(
                     runtime_profile, root / "schemas/run-profile.schema.json"
                 )
             )
             errors.extend(
-                f"T09 V10 runtime profile: {error}"
+                f"{label} runtime profile: {error}"
                 for error in validate_run_profile_readiness(runtime_profile)
             )
             profile_sha256 = hashlib.sha256(runtime_profile_target.read_bytes()).hexdigest()
@@ -2659,19 +2735,19 @@ def validate_t09_v10_plan(root: Path = ROOT) -> list[str]:
                         continue
                     condition = load_yaml(condition_target)
                     errors.extend(
-                        f"T09 V10 condition plan: {error}"
+                        f"{label} condition plan: {error}"
                         for error in validate_instance(
                             condition, root / "schemas/run-plan.schema.json"
                         )
                     )
                     sources = condition.get("sources")
                     if (
-                        condition.get("profile_plan_id") != "PLAN-EXP0001-PILOT-V10"
+                        condition.get("profile_plan_id") != plan_id
                         or condition.get("profile_sha256") != profile_sha256
                         or not isinstance(sources, dict)
                         or sources.get("environment_sha256") != environment_sha256
                     ):
-                        errors.append("T09 V10 condition/profile identity binding drifted")
+                        errors.append(f"{label} condition/profile identity binding drifted")
 
     execution_contract_path = execution.get("execution_contract_path")
     execution_schema_path = execution.get("execution_schema_path")
@@ -2689,16 +2765,17 @@ def validate_t09_v10_plan(root: Path = ROOT) -> list[str]:
         if contract_target.is_file() and schema_target.is_file():
             contract = load_json(contract_target)
             errors.extend(
-                f"T09 V10 execution contract: {error}"
+                f"{label} execution contract: {error}"
                 for error in validate_instance(contract, schema_target)
             )
             if (
-                contract.get("authorized") is not False
+                contract.get("plan_id") != plan_id
+                or contract.get("authorized") is not False
                 or contract.get("authorization_reference") is not None
                 or contract.get("execution_eligibility")
                 != "blocked-until-fresh-category-3-authorization"
             ):
-                errors.append("T09 V10 execution contract is not statically unauthorized")
+                errors.append(f"{label} execution contract is not statically unauthorized")
             identities = plan.get("identities")
             attempts = contract.get("attempts")
             if isinstance(identities, dict) and isinstance(attempts, list):
@@ -2707,13 +2784,24 @@ def validate_t09_v10_plan(root: Path = ROOT) -> list[str]:
                     attempt.get("run_id") for attempt in attempts if isinstance(attempt, dict)
                 ]
                 if observed_order != expected_order:
-                    errors.append("T09 V10 execution attempt order drifted from the plan")
+                    errors.append(f"{label} execution attempt order drifted from the plan")
+            if version == "V11":
+                lifecycle = contract.get("provider_lifecycle")
+                if not isinstance(lifecycle, dict) or (
+                    lifecycle.get("model_metadata_before_lambda_launch") is not True
+                    or lifecycle.get("model_metadata_request_count") != 1
+                    or lifecycle.get("model_metadata_snapshot") != "gpt-4o-2024-11-20"
+                    or lifecycle.get("model_substitution_allowed") is not False
+                    or lifecycle.get("immutable_model_unavailable_disposition")
+                    != "stop-before-lambda-launch-zero-lambda-cost"
+                ):
+                    errors.append(f"{label} metadata-before-Lambda contract drifted")
         if command_target.is_file():
             commands = load_json(command_target)
-            if commands.get("execution_contract_sha256") != execution.get(
+            if commands.get("plan_id") != plan_id or commands.get(
                 "execution_contract_sha256"
-            ):
-                errors.append("T09 V10 command manifest contract binding drifted")
+            ) != execution.get("execution_contract_sha256"):
+                errors.append(f"{label} command manifest contract binding drifted")
             pair_diffs = commands.get("pair_diffs")
             if (
                 not isinstance(pair_diffs, list)
@@ -2723,23 +2811,69 @@ def validate_t09_v10_plan(root: Path = ROOT) -> list[str]:
                     for pair in pair_diffs
                 )
             ):
-                errors.append("T09 V10 command pair diff is invalid")
+                errors.append(f"{label} command pair diff is invalid")
+            if version == "V11":
+                reviewed_ancestor = bindings.get("reviewed_implementation_ancestor")
+                if commands.get("reviewed_implementation_ancestor") != reviewed_ancestor:
+                    errors.append(f"{label} command manifest source ancestor drifted")
     else:
-        errors.append("T09 V10 execution control paths are malformed")
+        errors.append(f"{label} execution control paths are malformed")
+
+    if version == "V11" and isinstance(runtime_identity_relative, str):
+        identity_target = root / runtime_identity_relative
+        if identity_target.is_file():
+            identity = load_json(identity_target)
+            instrumentation = identity.get("repository_instrumentation")
+            reviewed_ancestor = bindings.get("reviewed_implementation_ancestor")
+            if (
+                not isinstance(instrumentation, dict)
+                or instrumentation.get("reviewed_implementation_ancestor") != reviewed_ancestor
+            ):
+                errors.append(f"{label} runtime identity source ancestor drifted")
+
     budget = plan.get("budget_contract")
     if not isinstance(budget, dict):
-        errors.append("T09 V10 budget contract is malformed")
+        errors.append(f"{label} budget contract is malformed")
     else:
         try:
             prior_upper = Decimal(str(budget.get("prior_t09_conservative_upper_bound_usd")))
-            new_total = Decimal(str(budget.get("maximum_new_total_cost_usd")))
+            nominal_new_total = Decimal(str(budget.get("maximum_new_total_cost_usd")))
             cumulative_cap = Decimal(str(budget.get("cumulative_t09_cost_cap_usd")))
+            effective_new_total = (
+                Decimal(
+                    str(budget.get("effective_maximum_new_total_cost_under_cumulative_cap_usd"))
+                )
+                if version == "V11"
+                else nominal_new_total
+            )
         except InvalidOperation:
-            errors.append("T09 V10 budget values are malformed")
+            errors.append(f"{label} budget values are malformed")
         else:
-            if prior_upper + new_total > cumulative_cap:
-                errors.append("T09 V10 conservative budget exceeds the cumulative cap")
+            if effective_new_total > nominal_new_total:
+                errors.append(f"{label} effective budget exceeds the nominal cap")
+            if prior_upper + effective_new_total > cumulative_cap:
+                errors.append(f"{label} conservative budget exceeds the cumulative cap")
     return errors
+
+
+def validate_t09_v10_plan(root: Path = ROOT) -> list[str]:
+    """Validate V10 as immutable historical operational evidence."""
+
+    return _validate_t09_successor_plan(
+        root,
+        version="V10",
+        historical_source_bindings=True,
+    )
+
+
+def validate_t09_v11_plan(root: Path = ROOT) -> list[str]:
+    """Validate the active V11 proposal and each implementation byte binding."""
+
+    return _validate_t09_successor_plan(
+        root,
+        version="V11",
+        historical_source_bindings=False,
+    )
 
 
 def _load_workflow(path: Path) -> Mapping[str, Any]:
@@ -2846,6 +2980,7 @@ def run_all(root: Path = ROOT) -> list[str]:
         ("experiment run profiles", validate_experiment_run_profiles),
         ("EXP-0001 contract", validate_exp0001_contract),
         ("T09 V10 plan", validate_t09_v10_plan),
+        ("T09 V11 plan", validate_t09_v11_plan),
         ("manifests", validate_manifests),
         ("workflows", validate_workflows),
         ("repository hygiene", validate_hygiene),
