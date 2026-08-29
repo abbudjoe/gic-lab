@@ -3,7 +3,7 @@ experiment_id: EXP-0001
 run_id: RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0005
 profile: pilot
 profile_plan_id: PLAN-EXP0001-PILOT-V12
-profile_sha256: 141194c1b129bb57c3d2afa8b6c2f94a3bfa837dbd402a0b5244209facbcef70
+profile_sha256: 0fd1ce4cd0fbeef41405ac4773d8d2a67b6c0414013b8c4fb4293c5d234446ba
 condition: SIRA-REACTIVE
 attempt: 1
 seed: 42
@@ -16,14 +16,14 @@ execution:
     authorization_reference: null
     command_sha256: null
 sources:
-  giclab_commit: 14927012373da3aa3ffecdb3a387d92dc8faecb1
+  giclab_commit: 80c940b1f2da03bee2cb277ce2ddd63e3a9f8d27
   upstream_source_id: SRC-SIRA-REPOSITORY
   upstream_commit: 93fb8d72de71f9a4a13419670adeb34d93cf7acd
   protocol_sha256: 5356fc8b3806f4135eb570f65b67da2f94463582db5e3e609320e23dbdb2a3f7
   config_sha256: cf25acd90f9d73d9aef978a7d059cfbc74a1447d901f4e3d27e2b5d9f121d2ed
   model_revision: gpt-4o-2024-11-20
   dataset_revision: 76ad1feb689b754bfe4e5e24d3ea371b647efa67
-  environment_sha256: a9ee281bffe0b58de4c8e14c12803d5290fa0e6f9bcd46f07476ae133e040612
+  environment_sha256: 872fe6c28c80be1b6a07adf00b73ea4d0b57bb5380404c3406edf6c5bec57f22
 task:
   task_id: 2120afba8009bad3
   source_kind: dataset-slice
