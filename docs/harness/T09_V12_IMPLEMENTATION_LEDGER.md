@@ -106,19 +106,21 @@ merge, auto-merge, Category 2, or Category 3.
 - Host decision: `DURABLE_OFFLINE` validates immutable bindings and provider-entry
   chronology, never current wall-clock expiry, and provides no network fallback.
 - Exact formatted Sol implementation ancestor:
-  `80c940b1f2da03bee2cb277ce2ddd63e3a9f8d27`. The static package binds
+  `9d63f48b5beef37d401b6df127ede8b92e7073bb`. The static package binds
   that commit without importing any PR #5 commit.
 - Final V12 plan: 16,293 bytes; SHA-256
-  `0cfa8f7a43f706ca7cdfaf4f100356dde38437909b583cce354275c4ea995b8c`.
-- Focused V12 receipt/provider/host matrix: 33 passed, zero skipped or xfailed.
+  `108a0e84e6eefcb05510215b0c705cafe34f09d3c443fa25e3ee86846271dfd0`.
+- Focused V12 receipt/provider/host matrix: 41 passed, zero skipped or xfailed.
   The full crossing-window `launch_campaign` regression crossed the freshness
   limit during Phase A, retained a nonreplayable capability and send intent, and
-  made zero fake Lambda POSTs.
+  made zero fake Lambda POSTs. Direct regressions also cover missing and V11
+  receipts, Phase A failure, post-launch timestamp rejection, credential-buffer
+  teardown, host count/file-metadata drift, and one-GET end-to-end ownership.
 - Strict Ruff and package mypy passed; repository contract validation passed
   after regenerating every exact V12 source, runtime, condition, execution, and
   command-manifest binding.
-- Raw full pytest against the actual worktree source classified 1,700 nodes as
-  1,664 passed, 31 failed, and 5 skipped. The failures are inherited historical
+- Raw full pytest against the actual worktree source classified 1,709 nodes as
+  1,673 passed, 31 failed, and 5 skipped. The failures are inherited historical
   fixture, stale historical expectation, local-path, or Docker availability
   failures; exact-base node and transition classification remains the parity gate.
 - The portable Quarto 1.9.38 render completed all 16 pages and site validation

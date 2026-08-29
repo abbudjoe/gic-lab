@@ -92,7 +92,7 @@
       },
       {
         "path": "src/giclab/harness/t09_model_metadata_receipt.py",
-        "sha256": "18606397ba8c6fecd178e7c4c71d831c07c10e2c442a0b25b46ac0368961e0b9"
+        "sha256": "c6f4c49e267b97971648bcf06bac3288611dc50e56bf4c18705dc25d224c8f5d"
       },
       {
         "path": "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py",
@@ -147,7 +147,7 @@
         "sha256": "e9d6fd08eb5cef403e5e8fd6333bf0ea103b14872427b086ad6ab1bf6441e5c0"
       }
     ],
-    "reviewed_implementation_ancestor": "80c940b1f2da03bee2cb277ce2ddd63e3a9f8d27",
+    "reviewed_implementation_ancestor": "9d63f48b5beef37d401b6df127ede8b92e7073bb",
     "scope": [
       "content-addressed-no-follow-private-regression-archive-staging",
       "raw-attempt-root-typed-binding-before-empirical-entry",

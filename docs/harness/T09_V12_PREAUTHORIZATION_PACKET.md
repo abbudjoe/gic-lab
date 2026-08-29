@@ -37,4 +37,3 @@ development commit `989f4c40d9deea1ecb0897d7a17a9c0fe20d5c33`, blob
 `7dcbbbdc7f1120cd` and `2120afba8009bad3`; the exact pinned evaluator;
 the frozen four-condition order; zero retries after empirical entry; and
 descriptive calibration only.
-

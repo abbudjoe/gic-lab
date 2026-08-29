@@ -43,4 +43,3 @@ not re-expire a provider-admitted receipt against current wall time.
 
 Total metadata ownership is one local GET, zero provider OpenAI requests, and
 zero host OpenAI requests. This Category 1 implementation makes no live request.
-

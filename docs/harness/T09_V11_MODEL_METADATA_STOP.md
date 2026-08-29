@@ -24,4 +24,3 @@ remains historical changes-required evidence: it identified an early freshness
 clock sample before local capability and intent writes. V12 is reimplemented
 from exact approved base `42a8ce6945c29f4221e03bb836f18421e50f3b1e`;
 no PR #5 commit is merged or cherry-picked.
-
