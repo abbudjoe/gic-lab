@@ -310,6 +310,70 @@ def test_provider_accepts_valid_bound_receipt_and_makes_no_openai_call(
     assert len(transport.calls) == 1
 
 
+def test_v12_lifecycle_and_cleanup_authority_use_typed_contract(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    output, overlay, _transport, _base, _plan_sha256 = _run_local_preflight(monkeypatch, tmp_path)
+    lifecycle = provider.load_campaign_lifecycle(ROOT, contract=V12_PROVIDER_CONTRACT)
+    assert lifecycle.max_instances == 1
+    assert lifecycle.max_launches == 8
+    validated = provider.validate_cleanup_authority_ledger(
+        overlay,
+        contract=V12_PROVIDER_CONTRACT,
+        repository=ROOT,
+        package_commit=BASE_COMMIT,
+    )
+    assert validated["model_metadata_receipt_sha256"] == metadata.model_metadata_receipt_sha256(
+        output
+    )
+
+
+def test_provider_launch_boundary_rejects_delayed_receipt_before_transport(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    output, overlay, _transport, base, _plan_sha256 = _run_local_preflight(
+        monkeypatch,
+        tmp_path,
+        base=1_700_000_000.0,
+    )
+    entry_root = tmp_path / "entry-source"
+    entry_root.mkdir(mode=0o700)
+    retained = entry_root / metadata.MODEL_METADATA_RECEIPT_FILENAME
+    expected_hash = metadata.copy_model_metadata_receipt(output, retained)
+    transport = _FakeProviderTransport()
+    recorder = provider.RequestRecorder(
+        entry_root,
+        transport,
+        bytearray(b"lambda-fixture-credential"),
+        clock=lambda: base + 1_800.1,
+    )
+
+    def validate_at_send(send_started_at_epoch: float) -> None:
+        validated = provider._validate_model_metadata_receipt_for_provider(
+            retained,
+            contract=V12_PROVIDER_CONTRACT,
+            repository=ROOT,
+            package_commit=BASE_COMMIT,
+            plan_sha256=_sha256(EXP / "run-plans/proposals/T09_PILOT_RUNTIME_PROFILE_V12.yaml"),
+            authorization_ledger=overlay,
+            launch_started_at=send_started_at_epoch,
+        )
+        assert metadata.semantic_projection_sha256(validated) == expected_hash
+
+    with pytest.raises(metadata.ModelMetadataReceiptError, match="stale"):
+        recorder.request(
+            "launch",
+            "POST",
+            "/api/v1/instance-operations/launch",
+            body={"fixture": True},
+            before_send=validate_at_send,
+        )
+    assert transport.calls == []
+    assert not (entry_root / "request-journal.jsonl").exists()
+
+
 def test_provider_owns_prelaunch_freshness_window(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

@@ -286,11 +286,6 @@
             "max_empirical_launch_count",
             "max_lambda_instances",
             "persistent_filesystems",
-            "model_metadata_prelaunch_freshness_seconds",
-            "model_metadata_freshness_owner",
-            "provider_launch_requires_current_freshness",
-            "host_runtime_requires_current_freshness",
-            "host_runtime_requires_prelaunch_timestamp_ordering",
             "replacement_launch_rule",
             "admission_rule",
             "control_plane"
@@ -690,6 +685,34 @@
               "max_provider_compute_cost_usd",
               "max_total_cost_usd",
               "condition_limits"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "plan_id": {"const": "PLAN-EXP0001-PILOT-V12"}
+        },
+        "required": ["plan_id"]
+      },
+      "then": {
+        "properties": {
+          "provider_lifecycle": {
+            "required": [
+              "immutable_model_unavailable_disposition",
+              "model_metadata_request_count_total",
+              "model_metadata_request_location",
+              "provider_launch_model_metadata_request_count",
+              "host_runtime_model_metadata_request_count",
+              "model_metadata_prelaunch_freshness_seconds",
+              "model_metadata_freshness_owner",
+              "provider_launch_requires_current_freshness",
+              "host_runtime_requires_current_freshness",
+              "host_runtime_requires_prelaunch_timestamp_ordering",
+              "model_metadata_receipt_required",
+              "model_metadata_receipt_replay_allowed"
             ]
           }
         }

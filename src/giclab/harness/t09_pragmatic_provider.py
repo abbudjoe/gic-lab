@@ -53,6 +53,7 @@ from giclab.harness.t09_cleanup_state import (
     EarlyCleanupStateError,
 )
 from giclab.harness.t09_model_metadata_receipt import (
+    MODEL_METADATA_PRELAUNCH_FRESHNESS_SECONDS,
     MODEL_METADATA_RECEIPT_FILENAME,
     ModelMetadataReceiptError,
     ModelMetadataReceiptValidationPolicy,
@@ -62,6 +63,7 @@ from giclab.harness.t09_model_metadata_receipt import (
     create_model_metadata_receipt,
     model_metadata_authorization_overlay_sha256,
     model_metadata_receipt_sha256,
+    semantic_projection_sha256,
     validate_model_metadata_authorization_overlay,
     validate_model_metadata_receipt,
 )
@@ -956,7 +958,7 @@ def load_campaign_lifecycle(
 
     if contract.version not in {"V8", "V9", "V10", "V11", "V12"}:
         raise T09ProviderError("provider lifecycle contract is unsupported")
-    if set(raw) != {
+    lifecycle_fields = {
         "cumulative_accounting_origin",
         "preflight_clock_origin",
         "preflight_iteration_wall_seconds",
@@ -980,7 +982,25 @@ def load_campaign_lifecycle(
         "supervised_release_wait_seconds",
         "supervised_release_rule",
         "control_plane",
-    }:
+    }
+    if contract.version == "V12":
+        lifecycle_fields.update(
+            {
+                "immutable_model_unavailable_disposition",
+                "model_metadata_request_count_total",
+                "model_metadata_request_location",
+                "provider_launch_model_metadata_request_count",
+                "host_runtime_model_metadata_request_count",
+                "model_metadata_prelaunch_freshness_seconds",
+                "model_metadata_freshness_owner",
+                "provider_launch_requires_current_freshness",
+                "host_runtime_requires_current_freshness",
+                "host_runtime_requires_prelaunch_timestamp_ordering",
+                "model_metadata_receipt_required",
+                "model_metadata_receipt_replay_allowed",
+            }
+        )
+    if set(raw) != lifecycle_fields:
         raise T09ProviderError("provider lifecycle plan surface drifted")
     if (
         raw.get("cumulative_accounting_origin") != "actual-active-lambda-seconds"
@@ -1006,6 +1026,23 @@ def load_campaign_lifecycle(
         }
     ):
         raise T09ProviderError("provider clock or replacement-launch contract drifted")
+    if contract.version == "V12" and (
+        raw.get("immutable_model_unavailable_disposition")
+        != "stop-before-lambda-launch-zero-lambda-cost"
+        or raw.get("model_metadata_request_count_total") != 1
+        or raw.get("model_metadata_request_location") != "local-control-plane-before-lambda-launch"
+        or raw.get("provider_launch_model_metadata_request_count") != 0
+        or raw.get("host_runtime_model_metadata_request_count") != 0
+        or raw.get("model_metadata_prelaunch_freshness_seconds")
+        != MODEL_METADATA_PRELAUNCH_FRESHNESS_SECONDS
+        or raw.get("model_metadata_freshness_owner") != "local-provider-launch-boundary"
+        or raw.get("provider_launch_requires_current_freshness") is not True
+        or raw.get("host_runtime_requires_current_freshness") is not False
+        or raw.get("host_runtime_requires_prelaunch_timestamp_ordering") is not True
+        or raw.get("model_metadata_receipt_required") is not True
+        or raw.get("model_metadata_receipt_replay_allowed") is not False
+    ):
+        raise T09ProviderError("V12 model metadata freshness ownership drifted")
     autonomous_limits = AutonomousPilotLifecycleLimits(
         preflight_iteration_wall_seconds=_integer(
             raw["preflight_iteration_wall_seconds"], label="preflight iteration wall"
@@ -1226,7 +1263,7 @@ def validate_cleanup_authority_ledger(
     resource.  This narrower validator intentionally omits all launch admission.
     """
 
-    if contract.version == "V11":
+    if contract.version in {"V11", "V12"}:
         return validate_authorization_ledger(
             path,
             contract=contract,
@@ -1413,9 +1450,13 @@ class RequestRecorder:
         *,
         body: Mapping[str, object] | None = None,
         target_identity_sha256: str | None = None,
+        before_send: Callable[[float], None] | None = None,
     ) -> ProviderResponse:
         if path not in ALLOWED_PATHS or method not in {"GET", "POST"}:
             raise T09ProviderError("recorded request escaped the allowlist")
+        send_started_at_epoch = self.clock()
+        if before_send is not None:
+            before_send(send_started_at_epoch)
         ordinal = self.next_ordinal
         self.next_ordinal += 1
         encoded = None if body is None else _canonical_bytes(body)
@@ -1428,7 +1469,7 @@ class RequestRecorder:
             "port": API_PORT,
             "path": path,
             "request_body_sha256": None if encoded is None else _sha256_bytes(encoded),
-            "send_started_at_epoch": self.clock(),
+            "send_started_at_epoch": send_started_at_epoch,
             "automatic_retry": False,
             "target_identity_sha256": target_identity_sha256,
         }
@@ -5999,7 +6040,7 @@ def launch_campaign(
             raise T09ProviderError("V12 provider launch requires the model metadata receipt")
         launch_validation_started_at = clock()
         try:
-            _validate_model_metadata_receipt_for_provider(
+            validated_receipt = _validate_model_metadata_receipt_for_provider(
                 model_metadata_receipt,
                 contract=contract,
                 repository=repository,
@@ -6008,9 +6049,7 @@ def launch_campaign(
                 authorization_ledger=authorization_ledger,
                 launch_started_at=launch_validation_started_at,
             )
-            model_metadata_receipt_sha256_value = model_metadata_receipt_sha256(
-                model_metadata_receipt
-            )
+            model_metadata_receipt_sha256_value = semantic_projection_sha256(validated_receipt)
         except (ModelMetadataReceiptError, OSError, subprocess.SubprocessError) as exc:
             raise T09ProviderError("V12 model metadata receipt validation failed") from exc
     elif model_metadata_receipt is not None:
@@ -6056,8 +6095,10 @@ def launch_campaign(
             raise T09ProviderError("retained slot-2 eligibility changed during copy")
     entry_root = private_root / "entry-source"
     entry_root.mkdir(mode=0o700)
+    retained_model_metadata_receipt: Path | None = None
     if model_metadata_receipt_sha256_value is not None:
         retained_receipt = entry_root / MODEL_METADATA_RECEIPT_FILENAME
+        retained_model_metadata_receipt = retained_receipt
         retained_receipt_sha256 = copy_model_metadata_receipt(
             cast(Path, model_metadata_receipt),
             retained_receipt,
@@ -6144,49 +6185,104 @@ def launch_campaign(
                 lifecycle=lifecycle,
                 now=clock(),
             )
-        _consume_launch_capability(
-            capability_path,
-            contract=contract,
-            authorization_ledger=authorization_ledger,
-            authorization=authorization,
-            package_commit=package_commit,
-            plan_sha256=plan_sha256,
-            private_root=private_root,
-            launch_slot=launch_slot,
-            replacement_eligibility_sha256=replacement_eligibility_sha256,
-            clock=clock,
-        )
-        write_exclusive(
-            private_root / "launch-intent.json",
-            {
-                "schema_version": "0.1.0",
-                "plan_id": contract.plan_id,
-                "host_run_id": contract.host_run_id,
-                "package_commit": package_commit,
-                "launch_body_sha256": _sha256_bytes(
-                    _canonical_bytes(_launch_body(contract=contract))
-                ),
-                "launch_slot": launch_slot,
-                "launch_count_after_send": launch_slot,
-                "max_preflight_launch_count": contract.max_launch_count,
-                "replacement_eligibility_sha256": replacement_eligibility_sha256,
-                "launch_capability_sha256": file_sha256(capability_path),
-                "launch_capability_state": "consumed-before-provider-post",
-                **(
-                    {"model_metadata_receipt_sha256": model_metadata_receipt_sha256_value}
-                    if model_metadata_receipt_sha256_value is not None
-                    else {}
-                ),
-                "created_at_epoch": clock(),
-            },
-        )
+        before_launch_send: Callable[[float], None] | None = None
+        if model_metadata_receipt_sha256_value is not None:
+            receipt_for_launch = retained_model_metadata_receipt
+            if receipt_for_launch is None:
+                raise T09ProviderError("V12 retained model metadata receipt is unavailable")
+
+            def admit_v12_launch(send_started_at_epoch: float) -> None:
+                validated = _validate_model_metadata_receipt_for_provider(
+                    receipt_for_launch,
+                    contract=contract,
+                    repository=repository,
+                    package_commit=package_commit,
+                    plan_sha256=plan_sha256,
+                    authorization_ledger=authorization_ledger,
+                    launch_started_at=send_started_at_epoch,
+                )
+                if semantic_projection_sha256(validated) != model_metadata_receipt_sha256_value:
+                    raise T09ProviderError(
+                        "V12 retained model metadata receipt changed before provider launch"
+                    )
+                _consume_launch_capability(
+                    capability_path,
+                    contract=contract,
+                    authorization_ledger=authorization_ledger,
+                    authorization=authorization,
+                    package_commit=package_commit,
+                    plan_sha256=plan_sha256,
+                    private_root=private_root,
+                    launch_slot=launch_slot,
+                    replacement_eligibility_sha256=replacement_eligibility_sha256,
+                    clock=lambda: send_started_at_epoch,
+                )
+                write_exclusive(
+                    private_root / "launch-intent.json",
+                    {
+                        "schema_version": "0.1.0",
+                        "plan_id": contract.plan_id,
+                        "host_run_id": contract.host_run_id,
+                        "package_commit": package_commit,
+                        "launch_body_sha256": _sha256_bytes(
+                            _canonical_bytes(_launch_body(contract=contract))
+                        ),
+                        "launch_slot": launch_slot,
+                        "launch_count_after_send": launch_slot,
+                        "max_preflight_launch_count": contract.max_launch_count,
+                        "replacement_eligibility_sha256": replacement_eligibility_sha256,
+                        "launch_capability_sha256": file_sha256(capability_path),
+                        "launch_capability_state": "consumed-before-provider-post",
+                        "model_metadata_receipt_sha256": model_metadata_receipt_sha256_value,
+                        "created_at_epoch": send_started_at_epoch,
+                    },
+                )
+
+            before_launch_send = admit_v12_launch
+        else:
+            _consume_launch_capability(
+                capability_path,
+                contract=contract,
+                authorization_ledger=authorization_ledger,
+                authorization=authorization,
+                package_commit=package_commit,
+                plan_sha256=plan_sha256,
+                private_root=private_root,
+                launch_slot=launch_slot,
+                replacement_eligibility_sha256=replacement_eligibility_sha256,
+                clock=clock,
+            )
+            write_exclusive(
+                private_root / "launch-intent.json",
+                {
+                    "schema_version": "0.1.0",
+                    "plan_id": contract.plan_id,
+                    "host_run_id": contract.host_run_id,
+                    "package_commit": package_commit,
+                    "launch_body_sha256": _sha256_bytes(
+                        _canonical_bytes(_launch_body(contract=contract))
+                    ),
+                    "launch_slot": launch_slot,
+                    "launch_count_after_send": launch_slot,
+                    "max_preflight_launch_count": contract.max_launch_count,
+                    "replacement_eligibility_sha256": replacement_eligibility_sha256,
+                    "launch_capability_sha256": file_sha256(capability_path),
+                    "launch_capability_state": "consumed-before-provider-post",
+                    "created_at_epoch": clock(),
+                },
+            )
         try:
             launch_response = recorder.request(
                 "launch",
                 "POST",
                 "/api/v1/instance-operations/launch",
                 body=_launch_body(contract=contract),
+                before_send=before_launch_send,
             )
+        except ModelMetadataReceiptError as exc:
+            raise T09ProviderError(
+                "V12 model metadata receipt failed at the provider launch boundary"
+            ) from exc
         except ProviderOutcomeUnknown:
             write_exclusive(
                 private_root / "LAUNCH_OUTCOME_UNKNOWN.json",
