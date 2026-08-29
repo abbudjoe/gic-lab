@@ -8,7 +8,7 @@ The repair is based on the exact reviewed base
 `4271fccaf870cfd6a7963ac43daba5b616a0104a`) on
 `codex/t09-v12-model-metadata-receipt-handoff`. The implementation commit
 before the documentation/closure record is
-`f87ac87dcc306cd177c0a5e1d7552fe1728bbc4f`.
+`e91a71b9a535060ecf30cb63a3e44632e20e7c82`.
 
 | Item | Status | Source / evidence |
 | --- | --- | --- |
@@ -63,7 +63,7 @@ PYTHONPATH=src .venv/bin/python -m pytest -q -s \
 ```
 
 At this closure point the tracked V12 plan is 15,966 bytes with SHA-256
-`867e37cb7d97f9259a18c61915dd17ee7f78bfa326a73fa76109872046989ef5`.
+`b58326cd8974eede6d89bc4c08aaa59f006fd04d051c96ea4aff6c3fe42d13ed`.
 
 The retained V11 conflict evidence remains private and immutable: 2,939 bytes,
 SHA-256 `03a3de457592b2d1e33e3c703d1ffd44abe13bcd8c99b597ac2822d1eef997be`.
