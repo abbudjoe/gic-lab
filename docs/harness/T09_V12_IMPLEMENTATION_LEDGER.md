@@ -1,17 +1,18 @@
 # T09 V12 single model-metadata receipt implementation ledger
 
-Status: **review-repair-in-progress**. This is Category 1R implementation repair only. V12 is
-unauthorized, no live metadata request or Lambda launch is permitted, and the next
-phase is exact-head ChatGPT review of one draft pull request.
+Status: **implementation-complete-review-required**. This is Category 1R implementation
+repair only. V12 is unauthorized, no live metadata request or Lambda launch is
+permitted, and the next phase is exact-head ChatGPT review of the existing draft pull
+request.
 
 ## Source contract and provenance
 
-The authoritative source contract is the current user instruction, **T09 V12 —
-Fresh Sol/Max Reimplementation from the Exact V11 Base**. It narrows T09 to one
-control-plane repair: one local model-metadata request produces one canonical
-receipt; provider launch admits that receipt at the final transport boundary; the
-host validates the admitted receipt durably and offline. Every V11 scientific,
-budget, evidence, accounting, image, cleanup, and zero-retry field remains frozen.
+The authoritative source contract is the current user instruction, **T09 V12 — PR #6
+exact-head review repair**. It narrows the already reviewed architecture to one repair:
+the sole local model-metadata preflight must accept the qualified mixed OpenAI/Lambda
+dotenv shape without weakening receipt, authorization, state-file, provider-boundary,
+or durable-host controls. Every V11/V12 scientific, budget, evidence, accounting,
+image, cleanup, freshness, and zero-retry field remains frozen.
 
 ```text
 requested_model: gpt-5.6-sol
@@ -44,7 +45,7 @@ merge, auto-merge, Category 2, or Category 3.
 | --- | --- | --- | --- |
 | V12-DOD-01 | Runtime provenance, exact repository/base/tree/parents, clean start, PR #5 identity, governing review, superseded branch, and fresh branch/worktree identities are verified; PR #5 is closed unmerged with the exact authorized comment and its branch is retained. | Runtime metadata, Git/GitHub identity checks, closure comment URL, post-closure checks. | met |
 | V12-DOD-02 | V11 plan, authorization, host/attempt identities, private overlay, stopped evidence, and exact base history remain immutable; the retained 2,939-byte conflict evidence and 14,754-byte V11 plan keep their recorded SHA-256 identities. | Start/end byte/hash checks, base diff, historical tests. | met |
-| V12-DOD-03 | A source-controlled local CLI strictly selects only `OPENAI_API_KEY` from the held approved mixed dotenv shape, permits at most one ignored `LAMBDA_API_KEY`, keeps generic private JSON at exact mode `0600`, consumes one-use authority after a send attempt, performs exactly one nonredirecting/nonretrying/nonpaginating model GET through an injectable transport, rejects replay/output reuse, and seals no secret material. | Fake-transport unit tests, filesystem and privacy regressions, source review. | partial — review repair validation pending |
+| V12-DOD-03 | A source-controlled local CLI strictly selects only `OPENAI_API_KEY` from the held approved mixed dotenv shape, permits at most one ignored `LAMBDA_API_KEY`, keeps generic private JSON at exact mode `0600`, consumes one-use authority after a send attempt, performs exactly one nonredirecting/nonretrying/nonpaginating model GET through an injectable transport, rejects replay/output reuse, and seals no secret material. | Fake-transport unit tests, filesystem and privacy regressions, source review. | met |
 | V12-DOD-04 | One canonical receipt schema and deterministic semantic projection bind every required authorization/package/plan/run/model/endpoint/status/count/timestamp/public-contract field and enforce safe absolute mode-0600 no-follow single-link held-file I/O, bounded bytes, duplicate-field rejection, replacement detection, and no secret extensions. | Schema validation, mutation matrix, unsafe-file tests, deterministic hash tests. | met |
 | V12-DOD-05 | Provider Phase A validates immutable bindings, safely retains the exact receipt/hash, consumes the single-use capability, fsyncs launch and send intent, and completes all local filesystem/subprocess preparation without a provider transport call; failure yields zero Lambda POSTs. | Fake preparation hooks and failure tests; durable state inspection. | met |
 | V12-DOD-06 | Provider Phase B re-reads the retained receipt, recomputes its semantic SHA, samples time only after Phase A, admits age `<= 1800.0` seconds and rejects age `> 1800.0`, checks response/creation-before-launch ordering and every binding, then calls `transport.send()` immediately with no intervening filesystem write, subprocess, or blocking mutation. | Exact-boundary and mandatory crossing-window fake-clock regressions with `transport.calls == []` on rejection. | met |
@@ -54,7 +55,7 @@ merge, auto-merge, Category 2, or Category 3.
 | V12-DOD-10 | The EXP-0001 scientific contract, model/service tier, SiRA/dataset/task/evaluator identities, order, retry count, interpretation, scientific projections, and both pair diffs are unchanged from V11. | Exact semantic projections, task hashes, pair-diff tests, base comparison. | met |
 | V12-DOD-11 | Concise records cover PR #5 supersession, V11 stopped conflict, one-request ownership, final transport freshness, durable host validation, implementation ledger, preauthorization packet, plan/profile, and active Phase 1 state without a new governance track. | Tracked documents and repository validation. | met |
 | V12-DOD-12 | Fake-only focused tests cover every required local/provider/host/invariant case, including the crossing-window regression; no active V12 test is skipped or xfailed and no real sleeps occur. | Focused pytest node/count record and test-source scan. | met |
-| V12-DOD-13 | Formatting, Ruff, strict mypy, repository validation, privacy checks, `git diff --check`, raw full pytest classification, exact-base parity, portable Quarto/site validation, and exact-head `make ci-check` pass with zero newly failing or missing base nodes and no weakened transition. | Exact commands and result counts at final head. | partial — review repair validation pending |
+| V12-DOD-13 | Formatting, Ruff, strict mypy, repository validation, privacy checks, `git diff --check`, raw full pytest classification, exact-base parity, portable Quarto/site validation, and exact-head `make ci-check` pass with zero newly failing or missing base nodes and no weakened transition. | Exact commands and result counts at final head. | met |
 | V12-DOD-14 | Sol/max self-review finds the implementation spec-conformant; normal commits are pushed only to the fresh branch; one draft PR targets the exact base, auto-merge remains disabled, exact-head Actions pass, and no merge or Category 3 work occurs. | Full diff review, commit/tree/PR/Actions identities, clean worktree. | partial — external ChatGPT exact-head review required |
 
 ## Implementation mapping
@@ -109,39 +110,58 @@ merge, auto-merge, Category 2, or Category 3.
   `764c6151f7e2202ef37c9e5b4d9b86584c0ef84e`. The static package binds
   that commit without importing any PR #5 commit.
 - Final V12 plan: 16,899 bytes; SHA-256
-  `18bffb2bfaaf8e0de731b7043f3cc0b0a0e30fc9b51047a0bfbab11a194baf33`.
-- Focused V12 receipt/provider/host matrix: 41 passed, zero skipped or xfailed.
+  `a7ff9367bf8d9e0fea35b02d968d4b03f78cfdc774beeeca85a93dde57e47484`.
+- Focused V12 metadata-receipt module: 67 passed, zero skipped or xfailed;
+  combined V12 receipt/provider/V11 regressions: 114 passed.
   The full crossing-window `launch_campaign` regression crossed the freshness
   limit during Phase A, retained a nonreplayable capability and send intent, and
   made zero fake Lambda POSTs. Direct regressions also cover missing and V11
   receipts, Phase A failure, post-launch timestamp rejection, credential-buffer
-  teardown, host count/file-metadata drift, and one-GET end-to-end ownership.
-- Strict Ruff and package mypy passed; repository contract validation passed
+  teardown, host count/file-metadata drift, both safe dotenv modes, every required
+  parser/file-mutation rejection, and one-GET end-to-end ownership.
+- Ruff formatting and lint passed; strict mypy passed for 65 source files; repository
+  contract validation passed
   after regenerating every exact V12 source, runtime, condition, execution, and
   command-manifest binding.
-- Raw full pytest against the actual worktree source classified 1,709 nodes as
-  1,673 passed, 31 failed, and 5 skipped. The failures are inherited historical
-  fixture, stale historical expectation, local-path, or Docker availability
-  failures; exact-base node and transition classification remains the parity gate.
+- Raw full pytest against the actual worktree source classified 1,735 nodes as
+  1,640 passed, 90 failed, and 5 skipped under the current 3.8-GiB-free local
+  environment. Exact-base parity classified every failure as inherited historical
+  fixture, free-space, local-path, or Docker availability behavior.
 - The portable Quarto 1.9.38 render completed all 16 pages and site validation
-  passed using the pinned runtime already retained in the original repository.
-- Exact-head `make ci-check` passed. Parity compared 1,662 base nodes (1,627
-  passed / 35 failed) with 1,704 head nodes (1,673 passed / 31 failed): all 42
+  passed using the pinned runtime retained in the original repository. An initial
+  macOS taskgated code-signature-cache rejection was diagnosed from crash reports;
+  strict signature verification and direct helper launches passed, and the unchanged
+  full site command then passed.
+- Exact-head `make ci-check` passed. Parity compared 1,662 base nodes (1,568
+  passed / 94 failed) with 1,730 head nodes (1,640 passed / 90 failed): all 68
   head-only nodes passed, four inherited failures became passing, and there were
   zero newly failing nodes, missing base nodes/failures, invalid transitions,
-  skips, xfails, or xpasses. `parity_passed` is true.
-- The Sol/max full-diff review repaired explicit credential-buffer teardown on
-  pre-send reservation failures and then found no unresolved receipt, launch,
-  offline-host, scientific, privacy, or lifecycle defect. The final added-line
-  scan found zero high-risk token, private-key, or non-fixture OpenAI-assignment
-  matches; no binary or oversized changed file exists; `git diff --check` passed.
+  skips, xfails, or xpasses. Five private-local nodes were symmetrically deselected;
+  `parity_passed` is true.
+- The Sol/max source/spec self-review found no production defect and strengthened the
+  primary regression so constructing a provider-launch transport fails the test.
+  Generic exact-mode-`0600` private JSON remains unchanged. The final repair/full-PR
+  added-line scans found zero high-risk token or private-key matches, four obviously
+  fake literal assignment values, and zero nonfixture literal assignment values. No
+  binary or oversized changed file exists; `git diff --check` passed.
 - 2026-08-29 Category 1R: verified PR #6 review `5059087650` at exact starting
   head `cd2c4e89fd490c3a2b9cbc865f7c3dc10fc75e2a`, then confirmed the reviewed
   mismatch: the OpenAI loader coupled a mode-`0600` private JSON policy to a
   one-assignment dotenv parser. The scoped repair leaves `_read_private_bytes`
   unchanged and introduces a dedicated held dotenv policy plus the strict
-  OpenAI-required/Lambda-optional allowlist. Focused repair evidence is pending
-  final source and package binding.
+  OpenAI-required/Lambda-optional allowlist. The repair implementation is SHA-256
+  `8d24dab9dadcf64930221aa8b783ae5228f58fac0207b7f9fa29356be7d1420f`; its
+  regression is `ea037c630c725414ebd25e578823676811d8393faa06e7a5a22075c07356fc0f`.
+- Regenerated closure: runtime identity
+  `09cbb94b75939f923a29e59dc75793008edb9640e34556df71e0dcf767c25181`;
+  condition plans `baef4a4e9f6b376748bb5794692b76ee53a9989dbee6fc9b774392fc73ef877b`,
+  `10fdc05bdf720977aa272b515230e869c909a22b9909862a223867c8acf94895`,
+  `9983c8ccce2c69764c8e2b69380c56211177b75c44e41989d626a6761e09f5bf`, and
+  `38617a1791a2b1f4e796fa8231d725f52120331431ed00ded7cf41f1f2626a76`;
+  execution contract
+  `3e5d932e0c5d76aa694376be702ce9fa2d681da110360ef21b5a1d23478b71d5`;
+  generated command manifests
+  `fbca4bced586375508e945cde23b60a62b491d306c7c3dd1405933360360a7d4`.
 
 ## Blockers and next permitted phase
 

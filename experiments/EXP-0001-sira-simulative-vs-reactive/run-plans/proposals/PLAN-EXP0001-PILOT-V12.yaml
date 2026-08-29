@@ -104,7 +104,7 @@ implementation_bindings:
     reader_path: containers/sira-smoke/pragmatic/t09_remote_runner.py
     reader_sha256: 86e4b6fe95781b8fc5ae2709654adab1f45b0a21133f4ee043c0d97f3167fc6a
     regression_path: tests/test_t09_v12_model_metadata_receipt.py
-    regression_sha256: 91a2cd46994b0536ec74738611e212a3a78d5f0ba24dd3c2f36dde85e54c5dff
+    regression_sha256: ea037c630c725414ebd25e578823676811d8393faa06e7a5a22075c07356fc0f
     safe_zero_length_state: publication-pending
     descriptor_no_follow_required: true
     exact_daemon_published_id_required: true

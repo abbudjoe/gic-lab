@@ -25,6 +25,14 @@ durable host ordering validation without current freshness, and
 `stop-before-lambda-launch-zero-lambda-cost` when the immutable model is
 unavailable.
 
+The sole local gate reads the already qualified repository-external mixed dotenv
+through a dedicated held-file policy. Safe modes `0600` and `0644` are eligible;
+group/world write bits, symlinks, multiple links, replacement, truncation, mutation,
+unknown assignments, shell syntax, and duplicate OpenAI or Lambda assignments fail
+closed. Only the required OpenAI assignment is selected; the optional Lambda value is
+ignored and destroyed. Generic receipt, authorization, state, and evidence JSON keeps
+its exact mode-`0600` private-file policy.
+
 The next permitted action is exact-head ChatGPT review of the draft V12 PR.
 Only a separately authorized Category 2 turn may merge it. Category 3, live
 metadata, Lambda launch, Docker/browser/SiRA/FanOutQA/evaluator work, pilot

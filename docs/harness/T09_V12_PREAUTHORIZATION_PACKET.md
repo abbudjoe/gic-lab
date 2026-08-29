@@ -37,7 +37,7 @@ the OpenAI value, and rejects all other assignments and shell syntax. No filtere
 dotenv, credential copy, chmod, or source-file mutation is part of this packet.
 
 The repaired `PLAN-EXP0001-PILOT-V12` is 16,899 bytes with SHA-256
-`18bffb2bfaaf8e0de731b7043f3cc0b0a0e30fc9b51047a0bfbab11a194baf33`.
+`a7ff9367bf8d9e0fea35b02d968d4b03f78cfdc774beeeca85a93dde57e47484`.
 It binds the exact Sol-authored implementation ancestor and the regenerated
 runtime, condition, execution, and command-manifest identities without granting
 authorization or execution.

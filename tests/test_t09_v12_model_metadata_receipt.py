@@ -280,6 +280,7 @@ def test_local_gate_owns_exactly_one_request_and_seals_no_secret(
     tmp_path: Path,
 ) -> None:
     default_transport_constructions = 0
+    lambda_transport_constructions = 0
 
     def forbid_default_transport(*args: object, **kwargs: object) -> None:
         nonlocal default_transport_constructions
@@ -287,7 +288,14 @@ def test_local_gate_owns_exactly_one_request_and_seals_no_secret(
         default_transport_constructions += 1
         raise AssertionError("network fallback was constructed")
 
+    def forbid_lambda_transport(*args: object, **kwargs: object) -> None:
+        nonlocal lambda_transport_constructions
+        del args, kwargs
+        lambda_transport_constructions += 1
+        raise AssertionError("provider launch transport was constructed")
+
     monkeypatch.setattr(metadata, "OpenAIModelMetadataTransport", forbid_default_transport)
+    monkeypatch.setattr(provider, "LambdaTransport", forbid_lambda_transport)
     overlay, dotenv, plan_sha256 = _authorization_files(tmp_path)
     source_before = dotenv.read_bytes()
     metadata_before = dotenv.stat()
@@ -304,14 +312,12 @@ def test_local_gate_owns_exactly_one_request_and_seals_no_secret(
         transport=transport,
         clock=FakeClock(1_700_000_000.0, 1_700_000_000.5),
     )
-    lambda_transport = FakeLambdaTransport()
-
     assert transport.calls == [metadata.MODEL_METADATA_MODEL_ID]
     assert transport.openai_credential_matches == [True]
     assert transport.lambda_credential_matches == [False]
     assert all(len(value) == 0 for value in transport.credential_references)
     assert default_transport_constructions == 0
-    assert lambda_transport.calls == []
+    assert lambda_transport_constructions == 0
     assert stat.S_IMODE(receipt.stat().st_mode) == 0o600
     assert receipt.stat().st_uid == os.getuid()
     assert receipt.stat().st_nlink == 1
