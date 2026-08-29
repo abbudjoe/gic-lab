@@ -1,6 +1,6 @@
 # T09 V12 single model-metadata receipt implementation ledger
 
-Status: **in-progress**. This is Category 1 implementation work only. V12 is
+Status: **implementation-complete-review-required**. This is Category 1 implementation work only. V12 is
 unauthorized, no live metadata request or Lambda launch is permitted, and the next
 phase is exact-head ChatGPT review of one draft pull request.
 
@@ -54,8 +54,8 @@ merge, auto-merge, Category 2, or Category 3.
 | V12-DOD-10 | The EXP-0001 scientific contract, model/service tier, SiRA/dataset/task/evaluator identities, order, retry count, interpretation, scientific projections, and both pair diffs are unchanged from V11. | Exact semantic projections, task hashes, pair-diff tests, base comparison. | met |
 | V12-DOD-11 | Concise records cover PR #5 supersession, V11 stopped conflict, one-request ownership, final transport freshness, durable host validation, implementation ledger, preauthorization packet, plan/profile, and active Phase 1 state without a new governance track. | Tracked documents and repository validation. | met |
 | V12-DOD-12 | Fake-only focused tests cover every required local/provider/host/invariant case, including the crossing-window regression; no active V12 test is skipped or xfailed and no real sleeps occur. | Focused pytest node/count record and test-source scan. | met |
-| V12-DOD-13 | Formatting, Ruff, strict mypy, repository validation, privacy checks, `git diff --check`, raw full pytest classification, exact-base parity, portable Quarto/site validation, and exact-head `make ci-check` pass with zero newly failing or missing base nodes and no weakened transition. | Exact commands and result counts at final head. | partial — exact-head parity and CI gate pending |
-| V12-DOD-14 | Sol/max self-review finds the implementation spec-conformant; normal commits are pushed only to the fresh branch; one draft PR targets the exact base, auto-merge remains disabled, exact-head Actions pass, and no merge or Category 3 work occurs. | Full diff review, commit/tree/PR/Actions identities, clean worktree. | partial — self-review and draft PR pending |
+| V12-DOD-13 | Formatting, Ruff, strict mypy, repository validation, privacy checks, `git diff --check`, raw full pytest classification, exact-base parity, portable Quarto/site validation, and exact-head `make ci-check` pass with zero newly failing or missing base nodes and no weakened transition. | Exact commands and result counts at final head. | met |
+| V12-DOD-14 | Sol/max self-review finds the implementation spec-conformant; normal commits are pushed only to the fresh branch; one draft PR targets the exact base, auto-merge remains disabled, exact-head Actions pass, and no merge or Category 3 work occurs. | Full diff review, commit/tree/PR/Actions identities, clean worktree. | partial — external ChatGPT exact-head review required |
 
 ## Implementation mapping
 
@@ -125,6 +125,16 @@ merge, auto-merge, Category 2, or Category 3.
   failures; exact-base node and transition classification remains the parity gate.
 - The portable Quarto 1.9.38 render completed all 16 pages and site validation
   passed using the pinned runtime already retained in the original repository.
+- Exact-head `make ci-check` passed. Parity compared 1,662 base nodes (1,627
+  passed / 35 failed) with 1,704 head nodes (1,673 passed / 31 failed): all 42
+  head-only nodes passed, four inherited failures became passing, and there were
+  zero newly failing nodes, missing base nodes/failures, invalid transitions,
+  skips, xfails, or xpasses. `parity_passed` is true.
+- The Sol/max full-diff review repaired explicit credential-buffer teardown on
+  pre-send reservation failures and then found no unresolved receipt, launch,
+  offline-host, scientific, privacy, or lifecycle defect. The final added-line
+  scan found zero high-risk token, private-key, or non-fixture OpenAI-assignment
+  matches; no binary or oversized changed file exists; `git diff --check` passed.
 
 ## Blockers and next permitted phase
 
