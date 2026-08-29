@@ -134,11 +134,12 @@ def _run_local_preflight(
     tmp_path: Path,
     *,
     response_id: str = metadata.MODEL_METADATA_MODEL_ID,
+    base: float | None = None,
 ) -> tuple[Path, Path, _FakeMetadataTransport, float, str]:
     overlay, dotenv, plan_sha256 = _authorization_fixture(tmp_path)
     transport = _FakeMetadataTransport(response_id)
-    base = time.time()
-    transport.response_completed_at = base - 0.5
+    preflight_base = time.time() if base is None else base
+    transport.response_completed_at = preflight_base - 0.5
     monkeypatch.setattr(provider, "_verify_clean_package", lambda repository, package: None)
     output = tmp_path / "model-metadata-receipt.json"
     provider.model_metadata_preflight(
@@ -149,9 +150,9 @@ def _run_local_preflight(
         openai_dotenv=dotenv,
         output=output,
         transport=transport,
-        clock=_Clock(base - 1.0, base),
+        clock=_Clock(preflight_base - 1.0, preflight_base),
     )
-    return output, overlay, transport, base, plan_sha256
+    return output, overlay, transport, preflight_base, plan_sha256
 
 
 def _provider_validate(
@@ -177,6 +178,26 @@ def _load_host() -> ModuleType:
     module = importlib.util.module_from_spec(specification)
     specification.loader.exec_module(module)
     return module
+
+
+def _host_provider_entry(
+    receipt_path: Path,
+    *,
+    provider_preflight_started_at_epoch: float,
+    model_metadata_receipt_sha256: str | None = None,
+    authorization_reference: str = "AUTH-T09-V12-CATEGORY3-FIXTURE-0001",
+    authorization_source_sha256: str = "1" * 64,
+) -> dict[str, object]:
+    return {
+        "model_metadata_receipt_sha256": (
+            _sha256(receipt_path)
+            if model_metadata_receipt_sha256 is None
+            else model_metadata_receipt_sha256
+        ),
+        "authorization_reference": authorization_reference,
+        "authorization_source_sha256": authorization_source_sha256,
+        "provider_preflight_started_at_epoch": provider_preflight_started_at_epoch,
+    }
 
 
 def test_v12_metadata_cli_has_no_lambda_authority_arguments() -> None:
@@ -287,6 +308,47 @@ def test_provider_accepts_valid_bound_receipt_and_makes_no_openai_call(
     assert validated["authorization_reference"] == "AUTH-T09-V12-CATEGORY3-FIXTURE-0001"
     assert validated["request_count"] == 1
     assert len(transport.calls) == 1
+
+
+def test_provider_owns_prelaunch_freshness_window(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    output, overlay, _transport, base, _plan_sha256 = _run_local_preflight(
+        monkeypatch,
+        tmp_path,
+        base=1_700_000_000.0,
+    )
+    assert (
+        _provider_validate(output, overlay, launch_started_at=base + 1_800.0)["terminal_state"]
+        == "model-metadata-verified"
+    )
+
+    with pytest.raises(metadata.ModelMetadataReceiptError, match="stale"):
+        _provider_validate(output, overlay, launch_started_at=base + 1_800.1)
+
+
+def test_provider_rejects_response_completion_after_launch_start(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    output, overlay, _transport, base, _plan_sha256 = _run_local_preflight(
+        monkeypatch,
+        tmp_path,
+        base=1_700_000_000.0,
+    )
+    document = json.loads(output.read_text())
+    document["response_completed_at"] = metadata._timestamp_text(
+        base + 0.5,
+        label="response completion",
+    )
+    document["receipt_created_at"] = metadata._timestamp_text(
+        base + 0.75,
+        label="receipt creation",
+    )
+    _private_json(output, document)
+    with pytest.raises(metadata.ModelMetadataReceiptError, match="after provider launch"):
+        _provider_validate(output, overlay, launch_started_at=base + 0.25)
 
 
 @pytest.mark.parametrize(
@@ -510,6 +572,197 @@ def test_host_accepts_bound_receipt_with_openai_transport_disabled(
     assert len(transport.calls) == 1
 
 
+@pytest.mark.parametrize("elapsed_since_receipt", (1_800.1, 3_600.0, 3_600.1))
+def test_host_durable_validation_accepts_delayed_receipt_without_current_clock(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    elapsed_since_receipt: float,
+) -> None:
+    output, overlay, transport, base, _plan_sha256 = _run_local_preflight(
+        monkeypatch,
+        tmp_path,
+        base=1_700_000_000.0,
+    )
+    _provider_validate(output, overlay, launch_started_at=base + 1.0)
+    host = _load_host()
+
+    current_clock_calls = 0
+
+    def delayed_current_clock() -> float:
+        nonlocal current_clock_calls
+        current_clock_calls += 1
+        return base + elapsed_since_receipt
+
+    monkeypatch.setattr(host.time, "time", delayed_current_clock)
+    artifact_root = tmp_path / "artifacts"
+    (artifact_root / "pilot-v12").mkdir(parents=True, mode=0o700)
+    acknowledgement = host.validate_model_metadata_receipt_offline(
+        receipt_path=output,
+        repository=ROOT,
+        package_commit=BASE_COMMIT,
+        provider_entry=_host_provider_entry(
+            output,
+            provider_preflight_started_at_epoch=base + 1.0,
+        ),
+        artifact_root=artifact_root,
+    )
+    assert elapsed_since_receipt > metadata.MODEL_METADATA_PRELAUNCH_FRESHNESS_SECONDS
+    assert acknowledgement["validation_mode"] == "offline-sealed-receipt"
+    assert acknowledgement["model_metadata_network_requests"] == 0
+    assert acknowledgement["prelaunch_timestamp_order_validated"] is True
+    assert current_clock_calls == 0
+    assert len(transport.calls) == 1
+
+
+@pytest.mark.parametrize(
+    ("entry_field", "value"),
+    (
+        ("model_metadata_receipt_sha256", "f" * 64),
+        ("authorization_reference", "AUTH-T09-V12-WRONG"),
+        ("authorization_source_sha256", "4" * 64),
+    ),
+)
+def test_host_rejects_provider_entry_binding_drift(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    entry_field: str,
+    value: object,
+) -> None:
+    output, _overlay, _transport, base, _plan_sha256 = _run_local_preflight(
+        monkeypatch,
+        tmp_path,
+        base=1_700_000_000.0,
+    )
+    provider_entry = _host_provider_entry(
+        output,
+        provider_preflight_started_at_epoch=base + 1.0,
+    )
+    provider_entry[entry_field] = value
+    host = _load_host()
+    artifact_root = tmp_path / "artifacts"
+    (artifact_root / "pilot-v12").mkdir(parents=True, mode=0o700)
+    with pytest.raises(host.T09HostError):
+        host.validate_model_metadata_receipt_offline(
+            receipt_path=output,
+            repository=ROOT,
+            package_commit=BASE_COMMIT,
+            provider_entry=provider_entry,
+            artifact_root=artifact_root,
+        )
+    assert not (artifact_root / "pilot-v12/model-metadata-receipt-acknowledgement.json").exists()
+
+
+@pytest.mark.parametrize(
+    "field",
+    (
+        "authorization_reference",
+        "authorization_source_sha256",
+        "repository_commit",
+        "repository_tree",
+        "plan_id",
+        "plan_sha256",
+        "host_run_id",
+        "requested_model_id",
+        "returned_model_id",
+        "model_endpoint",
+        "request_count",
+        "retry_count",
+        "redirect_count",
+        "pagination_count",
+        "response_completed_at",
+        "receipt_created_at",
+    ),
+)
+def test_host_rejects_mutated_receipt_bindings_counts_and_timestamps(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    field: str,
+) -> None:
+    output, _overlay, _transport, base, _plan_sha256 = _run_local_preflight(
+        monkeypatch,
+        tmp_path,
+        base=1_700_000_000.0,
+    )
+    document = json.loads(output.read_text())
+    replacements: dict[str, object] = {
+        "authorization_reference": "AUTH-T09-V12-WRONG",
+        "authorization_source_sha256": "4" * 64,
+        "repository_commit": "6d8757b8bdd5e0f2c688639d9b14360d6bc2eced",
+        "repository_tree": "6d8757b8bdd5e0f2c688639d9b14360d6bc2eced",
+        "plan_id": "PLAN-EXP0001-PILOT-V12-WRONG",
+        "plan_sha256": "a" * 64,
+        "host_run_id": "RUN-T09-PILOT-HOST-AUTONOMOUS-WRONG",
+        "requested_model_id": "gpt-4o-other",
+        "returned_model_id": "gpt-4o-other",
+        "model_endpoint": "https://api.openai.com/v1/models/gpt-4o-other",
+        "request_count": 0,
+        "retry_count": 1,
+        "redirect_count": 1,
+        "pagination_count": 1,
+        "response_completed_at": metadata._timestamp_text(
+            base + 0.5,
+            label="response completion",
+        ),
+        "receipt_created_at": metadata._timestamp_text(
+            base + 0.75,
+            label="receipt creation",
+        ),
+    }
+    document[field] = replacements[field]
+    _private_json(output, document)
+    host = _load_host()
+    artifact_root = tmp_path / "artifacts"
+    (artifact_root / "pilot-v12").mkdir(parents=True, mode=0o700)
+    with pytest.raises(host.T09HostError):
+        host.validate_model_metadata_receipt_offline(
+            receipt_path=output,
+            repository=ROOT,
+            package_commit=BASE_COMMIT,
+            provider_entry=_host_provider_entry(
+                output,
+                provider_preflight_started_at_epoch=base + 0.25,
+            ),
+            artifact_root=artifact_root,
+        )
+    assert not (artifact_root / "pilot-v12/model-metadata-receipt-acknowledgement.json").exists()
+
+
+@pytest.mark.parametrize("mutation", ("symlink", "unsafe-mode", "malformed"))
+def test_host_rejects_unsafe_or_malformed_receipt_file(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    mutation: str,
+) -> None:
+    output, _overlay, _transport, base, _plan_sha256 = _run_local_preflight(
+        monkeypatch,
+        tmp_path,
+        base=1_700_000_000.0,
+    )
+    receipt_path = output
+    if mutation == "symlink":
+        receipt_path = tmp_path / "receipt-link.json"
+        receipt_path.symlink_to(output)
+    elif mutation == "unsafe-mode":
+        output.chmod(0o640)
+    else:
+        _private_text(output, b"{")
+    host = _load_host()
+    artifact_root = tmp_path / "artifacts"
+    (artifact_root / "pilot-v12").mkdir(parents=True, mode=0o700)
+    with pytest.raises(host.T09HostError):
+        host.validate_model_metadata_receipt_offline(
+            receipt_path=receipt_path,
+            repository=ROOT,
+            package_commit=BASE_COMMIT,
+            provider_entry=_host_provider_entry(
+                output,
+                provider_preflight_started_at_epoch=base + 1.0,
+            ),
+            artifact_root=artifact_root,
+        )
+    assert not (artifact_root / "pilot-v12/model-metadata-receipt-acknowledgement.json").exists()
+
+
 def test_provider_receipt_copy_is_the_host_default_and_explicit_symlink_fails(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -602,6 +855,28 @@ def test_v12_pair_diffs_and_task_commands_remain_valid() -> None:
     } == {config_sha256}
 
 
+def test_v12_plan_profile_and_execution_contract_encode_freshness_ownership() -> None:
+    expected = {
+        "model_metadata_prelaunch_freshness_seconds": 1800,
+        "model_metadata_freshness_owner": "local-provider-launch-boundary",
+        "provider_launch_requires_current_freshness": True,
+        "host_runtime_requires_current_freshness": False,
+        "host_runtime_requires_prelaunch_timestamp_ordering": True,
+    }
+    plan = yaml.safe_load((EXP / "run-plans/proposals/PLAN-EXP0001-PILOT-V12.yaml").read_text())
+    profile = yaml.safe_load(
+        (EXP / "run-plans/proposals/T09_PILOT_RUNTIME_PROFILE_V12.yaml").read_text()
+    )
+    execution = json.loads(
+        (EXP / "contracts/proposals/T09_PILOT_EXECUTION_CONTRACT_V12.json").read_text()
+    )
+    assert {
+        key: plan["implementation_bindings"]["model_metadata_receipt"][key] for key in expected
+    } == expected
+    assert {key: profile["provider_lifecycle"][key] for key in expected} == expected
+    assert {key: execution["provider_lifecycle"][key] for key in expected} == expected
+
+
 def test_v12_unauthorized_flags_and_run_roots_are_frozen() -> None:
     plan_path = EXP / "run-plans/proposals/PLAN-EXP0001-PILOT-V12.yaml"
     plan = yaml.safe_load(plan_path.read_text())
@@ -649,23 +924,36 @@ def test_exact_gate_receipt_provider_host_integration_has_one_total_fake_openai_
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    output, _overlay, transport, _base, _plan_sha256 = _run_local_preflight(monkeypatch, tmp_path)
-    _provider_validate(output, _overlay)
+    output, _overlay, transport, base, _plan_sha256 = _run_local_preflight(
+        monkeypatch,
+        tmp_path,
+        base=1_700_000_000.0,
+    )
+    validated = _provider_validate(output, _overlay, launch_started_at=base + 1.0)
+    assert validated["request_count"] == 1
     host = _load_host()
+
+    delayed_clock_calls = 0
+
+    def delayed_clock() -> float:
+        nonlocal delayed_clock_calls
+        delayed_clock_calls += 1
+        return base + 1_800.1
+
+    monkeypatch.setattr(host.time, "time", delayed_clock)
     artifact_root = tmp_path / "artifacts"
     (artifact_root / "pilot-v12").mkdir(parents=True, mode=0o700)
     acknowledgement = host.validate_model_metadata_receipt_offline(
         receipt_path=output,
         repository=ROOT,
         package_commit=BASE_COMMIT,
-        provider_entry={
-            "model_metadata_receipt_sha256": metadata.model_metadata_receipt_sha256(output),
-            "authorization_reference": "AUTH-T09-V12-CATEGORY3-FIXTURE-0001",
-            "authorization_source_sha256": "1" * 64,
-            "provider_preflight_started_at_epoch": time.time() + 10,
-        },
+        provider_entry=_host_provider_entry(
+            output,
+            provider_preflight_started_at_epoch=base + 1.0,
+        ),
         artifact_root=artifact_root,
     )
     assert acknowledgement["receipt_request_count"] == 1
     assert acknowledgement["model_metadata_network_requests"] == 0
+    assert delayed_clock_calls == 0
     assert len(transport.calls) == 1

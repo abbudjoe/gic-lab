@@ -122,6 +122,11 @@ provider_lifecycle:
   model_metadata_request_location: local-control-plane-before-lambda-launch
   provider_launch_model_metadata_request_count: 0
   host_runtime_model_metadata_request_count: 0
+  model_metadata_prelaunch_freshness_seconds: 1800
+  model_metadata_freshness_owner: local-provider-launch-boundary
+  provider_launch_requires_current_freshness: true
+  host_runtime_requires_current_freshness: false
+  host_runtime_requires_prelaunch_timestamp_ordering: true
   model_metadata_receipt_required: true
   model_metadata_receipt_replay_allowed: false
   immutable_model_unavailable_disposition: stop-before-lambda-launch-zero-lambda-cost

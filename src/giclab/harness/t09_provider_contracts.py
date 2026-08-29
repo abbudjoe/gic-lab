@@ -671,11 +671,11 @@ V12_PROVIDER_CONTRACT: Final = _contract(
     # The executable profile is independently hashed here.  The private
     # Category 3 overlay and receipt bind the eventual reviewed merge commit.
     plan_path=f"{_PROPOSAL_ROOT}/T09_PILOT_RUNTIME_PROFILE_V12.yaml",
-    plan_bytes=14_212,
-    plan_sha256="89ce2fcae6f49a2fc6688341d2a66a3c5dbe494c714ed207652553665793f3c9",
+    plan_bytes=14_487,
+    plan_sha256="141194c1b129bb57c3d2afa8b6c2f94a3bfa837dbd402a0b5244209facbcef70",
     profile_path=f"{_PROPOSAL_ROOT}/T09_PILOT_RUNTIME_PROFILE_V12.yaml",
-    profile_bytes=14_212,
-    profile_sha256="89ce2fcae6f49a2fc6688341d2a66a3c5dbe494c714ed207652553665793f3c9",
+    profile_bytes=14_487,
+    profile_sha256="141194c1b129bb57c3d2afa8b6c2f94a3bfa837dbd402a0b5244209facbcef70",
     run_ids=(
         "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0005",
         "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0005",

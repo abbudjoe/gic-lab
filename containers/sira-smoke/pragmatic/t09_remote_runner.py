@@ -50,6 +50,7 @@ from giclab.harness.t09_cleanup_state import (
 from giclab.harness.t09_model_metadata_receipt import (
     MODEL_METADATA_RECEIPT_FILENAME,
     ModelMetadataReceiptError,
+    ModelMetadataReceiptValidationPolicy,
     model_metadata_receipt_sha256,
     validate_model_metadata_receipt,
 )
@@ -7431,8 +7432,7 @@ def validate_model_metadata_receipt_offline(
             expected_authorization_source_sha256=expected_source_sha256,
             expected_authorization_overlay_sha256=None,
             launch_started_at=float(started),
-            now=time.time(),
-            require_fresh=True,
+            validation_policy=ModelMetadataReceiptValidationPolicy.DURABLE_OFFLINE,
         )
         observed_receipt_sha256 = model_metadata_receipt_sha256(receipt_path)
     except (ModelMetadataReceiptError, OSError, subprocess.SubprocessError) as exc:

@@ -26,12 +26,20 @@ import stat
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
+from enum import StrEnum
 from pathlib import Path
 from typing import Final, Protocol, cast
 
 
 class ModelMetadataReceiptError(RuntimeError):
     """The model-metadata receipt contract failed closed."""
+
+
+class ModelMetadataReceiptValidationPolicy(StrEnum):
+    """Select the lifecycle boundary that owns receipt validation semantics."""
+
+    PRELAUNCH_FRESH = "prelaunch-fresh"
+    DURABLE_OFFLINE = "durable-offline"
 
 
 class ModelMetadataContract(Protocol):
@@ -81,7 +89,8 @@ MODEL_METADATA_RECEIPT_FILENAME: Final = "model-metadata-receipt.json"
 MODEL_METADATA_TERMINAL_STATE: Final = "model-metadata-verified"
 MODEL_METADATA_MAX_RESPONSE_BYTES: Final = 65_536
 MODEL_METADATA_MAX_DOTENV_BYTES: Final = 65_536
-MODEL_METADATA_MAX_AGE_SECONDS: Final = 1_800.0
+MODEL_METADATA_PRELAUNCH_FRESHNESS_SECONDS: Final = 1_800.0
+MODEL_METADATA_MAX_AGE_SECONDS: Final = MODEL_METADATA_PRELAUNCH_FRESHNESS_SECONDS
 
 
 @dataclass(frozen=True, slots=True)
@@ -747,7 +756,7 @@ def _validate_receipt_document(
     expected_authorization_overlay_sha256: str | None,
     launch_started_at: float | None,
     now: float | None,
-    require_fresh: bool,
+    validation_policy: ModelMetadataReceiptValidationPolicy,
 ) -> dict[str, object]:
     if set(document) != MODEL_METADATA_RECEIPT_FIELDS:
         raise ModelMetadataReceiptError("model metadata receipt fields drifted")
@@ -834,7 +843,7 @@ def _validate_receipt_document(
             raise ModelMetadataReceiptError(
                 "model metadata receipt was created after provider launch"
             )
-    if require_fresh:
+    if validation_policy is ModelMetadataReceiptValidationPolicy.PRELAUNCH_FRESH:
         current = time.time() if now is None else now
         if (
             not isinstance(current, (int, float))
@@ -842,8 +851,13 @@ def _validate_receipt_document(
             or not math.isfinite(float(current))
         ):
             raise ModelMetadataReceiptError("receipt freshness clock is malformed")
-        if created > float(current) or float(current) - created > MODEL_METADATA_MAX_AGE_SECONDS:
+        if (
+            created > float(current)
+            or float(current) - created > MODEL_METADATA_PRELAUNCH_FRESHNESS_SECONDS
+        ):
             raise ModelMetadataReceiptError("model metadata receipt is stale")
+    elif validation_policy is not ModelMetadataReceiptValidationPolicy.DURABLE_OFFLINE:
+        raise ModelMetadataReceiptError("model metadata receipt validation policy is unknown")
     return dict(document)
 
 
@@ -860,7 +874,7 @@ def validate_model_metadata_receipt(
     expected_authorization_overlay_sha256: str | None = None,
     launch_started_at: float | None = None,
     now: float | None = None,
-    require_fresh: bool = True,
+    validation_policy: ModelMetadataReceiptValidationPolicy,
 ) -> dict[str, object]:
     """Validate one receipt, optionally against the still-held auth overlay."""
 
@@ -885,7 +899,7 @@ def validate_model_metadata_receipt(
         expected_authorization_overlay_sha256=expected_authorization_overlay_sha256,
         launch_started_at=launch_started_at,
         now=now,
-        require_fresh=require_fresh,
+        validation_policy=validation_policy,
     )
     if authorization_overlay is not None:
         _safe_private_file_bytes(
@@ -1014,12 +1028,14 @@ __all__ = [
     "MODEL_METADATA_HOST_RUN_ID",
     "MODEL_METADATA_MODEL_ID",
     "MODEL_METADATA_PLAN_ID",
+    "MODEL_METADATA_PRELAUNCH_FRESHNESS_SECONDS",
     "MODEL_METADATA_RECEIPT_FIELDS",
     "MODEL_METADATA_RECEIPT_FILENAME",
     "MODEL_METADATA_RECEIPT_TYPE",
     "MODEL_METADATA_SCHEMA_VERSION",
     "MODEL_METADATA_TERMINAL_STATE",
     "ModelMetadataReceiptError",
+    "ModelMetadataReceiptValidationPolicy",
     "ModelMetadataResponse",
     "ModelMetadataTransport",
     "OpenAIModelMetadataTransport",

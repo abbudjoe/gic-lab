@@ -55,6 +55,7 @@ from giclab.harness.t09_cleanup_state import (
 from giclab.harness.t09_model_metadata_receipt import (
     MODEL_METADATA_RECEIPT_FILENAME,
     ModelMetadataReceiptError,
+    ModelMetadataReceiptValidationPolicy,
     ModelMetadataTransport,
     bind_model_metadata_receipt_to_authorization_overlay,
     copy_model_metadata_receipt,
@@ -5932,6 +5933,7 @@ def _validate_model_metadata_receipt_for_provider(
         authorization_overlay=authorization_ledger,
         launch_started_at=launch_started_at,
         now=launch_started_at,
+        validation_policy=ModelMetadataReceiptValidationPolicy.PRELAUNCH_FRESH,
     )
 
 

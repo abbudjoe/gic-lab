@@ -122,6 +122,12 @@ implementation_bindings:
     local_request_count: 1
     provider_launch_request_count: 0
     host_runtime_request_count: 0
+    model_metadata_prelaunch_freshness_seconds: 1800
+    model_metadata_freshness_owner: local-provider-launch-boundary
+    provider_launch_requires_current_freshness: true
+    host_runtime_requires_current_freshness: false
+    host_runtime_requires_prelaunch_timestamp_ordering: true
+    host_runtime_model_metadata_request_count: 0
     receipt_required: true
     replay_allowed: false
     immutable_model_unavailable_disposition: stop-before-lambda-launch-zero-lambda-cost
