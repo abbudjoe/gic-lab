@@ -113,6 +113,22 @@ implementation_bindings:
   model_metadata_receipt:
     implementation_path: src/giclab/harness/t09_model_metadata_receipt.py
     implementation_sha256: c6f4c49e267b97971648bcf06bac3288611dc50e56bf4c18705dc25d224c8f5d
+    dotenv_input:
+      source: existing-qualified-repository-external-file
+      parent_policy: current-user-owned-directory-not-group-or-world-writable
+      file_type: regular
+      current_user_owner_required: true
+      single_link_required: true
+      no_follow_required: true
+      eligible_mode_policy: no-group-or-world-write-bits
+      regression_covered_modes:
+      - '0600'
+      - '0644'
+      required_assignment: OPENAI_API_KEY
+      optional_assignment: LAMBDA_API_KEY
+      unknown_assignments_allowed: false
+      selected_assignment: OPENAI_API_KEY
+      source_mutation_allowed: false
     schema_path: schemas/t09-model-metadata-receipt.schema.json
     schema_sha256: 8b61a8f7e572abfd5ed6347998c2829af0f114c6b7ca457e81e8691c5574a70a
     public_price_contract_path: experiments/EXP-0001-sira-simulative-vs-reactive/pricing.yaml

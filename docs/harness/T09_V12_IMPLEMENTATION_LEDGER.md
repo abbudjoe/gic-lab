@@ -1,6 +1,6 @@
 # T09 V12 single model-metadata receipt implementation ledger
 
-Status: **implementation-complete-review-required**. This is Category 1 implementation work only. V12 is
+Status: **review-repair-in-progress**. This is Category 1R implementation repair only. V12 is
 unauthorized, no live metadata request or Lambda launch is permitted, and the next
 phase is exact-head ChatGPT review of one draft pull request.
 
@@ -44,7 +44,7 @@ merge, auto-merge, Category 2, or Category 3.
 | --- | --- | --- | --- |
 | V12-DOD-01 | Runtime provenance, exact repository/base/tree/parents, clean start, PR #5 identity, governing review, superseded branch, and fresh branch/worktree identities are verified; PR #5 is closed unmerged with the exact authorized comment and its branch is retained. | Runtime metadata, Git/GitHub identity checks, closure comment URL, post-closure checks. | met |
 | V12-DOD-02 | V11 plan, authorization, host/attempt identities, private overlay, stopped evidence, and exact base history remain immutable; the retained 2,939-byte conflict evidence and 14,754-byte V11 plan keep their recorded SHA-256 identities. | Start/end byte/hash checks, base diff, historical tests. | met |
-| V12-DOD-03 | A source-controlled local CLI strictly reads only `OPENAI_API_KEY` from one held safe dotenv file, consumes one-use authority after a send attempt, performs exactly one nonredirecting/nonretrying/nonpaginating model GET through an injectable transport, rejects replay/output reuse, and seals no secret material. | Fake-transport unit tests, filesystem and privacy regressions, source review. | met |
+| V12-DOD-03 | A source-controlled local CLI strictly selects only `OPENAI_API_KEY` from the held approved mixed dotenv shape, permits at most one ignored `LAMBDA_API_KEY`, keeps generic private JSON at exact mode `0600`, consumes one-use authority after a send attempt, performs exactly one nonredirecting/nonretrying/nonpaginating model GET through an injectable transport, rejects replay/output reuse, and seals no secret material. | Fake-transport unit tests, filesystem and privacy regressions, source review. | partial — review repair validation pending |
 | V12-DOD-04 | One canonical receipt schema and deterministic semantic projection bind every required authorization/package/plan/run/model/endpoint/status/count/timestamp/public-contract field and enforce safe absolute mode-0600 no-follow single-link held-file I/O, bounded bytes, duplicate-field rejection, replacement detection, and no secret extensions. | Schema validation, mutation matrix, unsafe-file tests, deterministic hash tests. | met |
 | V12-DOD-05 | Provider Phase A validates immutable bindings, safely retains the exact receipt/hash, consumes the single-use capability, fsyncs launch and send intent, and completes all local filesystem/subprocess preparation without a provider transport call; failure yields zero Lambda POSTs. | Fake preparation hooks and failure tests; durable state inspection. | met |
 | V12-DOD-06 | Provider Phase B re-reads the retained receipt, recomputes its semantic SHA, samples time only after Phase A, admits age `<= 1800.0` seconds and rejects age `> 1800.0`, checks response/creation-before-launch ordering and every binding, then calls `transport.send()` immediately with no intervening filesystem write, subprocess, or blocking mutation. | Exact-boundary and mandatory crossing-window fake-clock regressions with `transport.calls == []` on rejection. | met |
@@ -54,7 +54,7 @@ merge, auto-merge, Category 2, or Category 3.
 | V12-DOD-10 | The EXP-0001 scientific contract, model/service tier, SiRA/dataset/task/evaluator identities, order, retry count, interpretation, scientific projections, and both pair diffs are unchanged from V11. | Exact semantic projections, task hashes, pair-diff tests, base comparison. | met |
 | V12-DOD-11 | Concise records cover PR #5 supersession, V11 stopped conflict, one-request ownership, final transport freshness, durable host validation, implementation ledger, preauthorization packet, plan/profile, and active Phase 1 state without a new governance track. | Tracked documents and repository validation. | met |
 | V12-DOD-12 | Fake-only focused tests cover every required local/provider/host/invariant case, including the crossing-window regression; no active V12 test is skipped or xfailed and no real sleeps occur. | Focused pytest node/count record and test-source scan. | met |
-| V12-DOD-13 | Formatting, Ruff, strict mypy, repository validation, privacy checks, `git diff --check`, raw full pytest classification, exact-base parity, portable Quarto/site validation, and exact-head `make ci-check` pass with zero newly failing or missing base nodes and no weakened transition. | Exact commands and result counts at final head. | met |
+| V12-DOD-13 | Formatting, Ruff, strict mypy, repository validation, privacy checks, `git diff --check`, raw full pytest classification, exact-base parity, portable Quarto/site validation, and exact-head `make ci-check` pass with zero newly failing or missing base nodes and no weakened transition. | Exact commands and result counts at final head. | partial — review repair validation pending |
 | V12-DOD-14 | Sol/max self-review finds the implementation spec-conformant; normal commits are pushed only to the fresh branch; one draft PR targets the exact base, auto-merge remains disabled, exact-head Actions pass, and no merge or Category 3 work occurs. | Full diff review, commit/tree/PR/Actions identities, clean worktree. | partial — external ChatGPT exact-head review required |
 
 ## Implementation mapping
@@ -135,6 +135,13 @@ merge, auto-merge, Category 2, or Category 3.
   offline-host, scientific, privacy, or lifecycle defect. The final added-line
   scan found zero high-risk token, private-key, or non-fixture OpenAI-assignment
   matches; no binary or oversized changed file exists; `git diff --check` passed.
+- 2026-08-29 Category 1R: verified PR #6 review `5059087650` at exact starting
+  head `cd2c4e89fd490c3a2b9cbc865f7c3dc10fc75e2a`, then confirmed the reviewed
+  mismatch: the OpenAI loader coupled a mode-`0600` private JSON policy to a
+  one-assignment dotenv parser. The scoped repair leaves `_read_private_bytes`
+  unchanged and introduces a dedicated held dotenv policy plus the strict
+  OpenAI-required/Lambda-optional allowlist. Focused repair evidence is pending
+  final source and package binding.
 
 ## Blockers and next permitted phase
 

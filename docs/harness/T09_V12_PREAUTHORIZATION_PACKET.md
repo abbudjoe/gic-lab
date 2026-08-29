@@ -29,6 +29,13 @@ allowance. The resulting receipt must pass the provider's final transport
 boundary. No prior authorization, V11 request allowance, receipt, host, attempt,
 image, manifest, or private evidence may be reused.
 
+The later local metadata command may receive the existing qualified
+repository-external dotenv path directly. Its dedicated held-file policy permits
+safe non-group/world-writable modes including `0600` and `0644`, requires exactly
+one `OPENAI_API_KEY`, permits at most one allowlisted `LAMBDA_API_KEY`, returns only
+the OpenAI value, and rejects all other assignments and shell syntax. No filtered
+dotenv, credential copy, chmod, or source-file mutation is part of this packet.
+
 The frozen scientific contract remains EXP-0001; SiRA commit
 `93fb8d72de71f9a4a13419670adeb34d93cf7acd`; every role uses
 `gpt-4o-2024-11-20` at service tier `default`; FanOutQA November 2023

@@ -136,6 +136,8 @@ _HEX40: Final = re.compile(r"^[a-f0-9]{40}$")
 _HEX64: Final = re.compile(r"^[a-f0-9]{64}$")
 _SAFE_ID: Final = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$")
 _DOTENV_VALUE: Final = re.compile(rb"^[A-Za-z0-9._:/+\-=]{16,4096}$")
+_OPENAI_DOTENV_ASSIGNMENT: Final = b"OPENAI_API_KEY"
+_LAMBDA_DOTENV_ASSIGNMENT: Final = b"LAMBDA_API_KEY"
 _SENSITIVE_FIELD_FRAGMENTS: Final = (
     "api_key",
     "authorization_header",
@@ -235,6 +237,87 @@ def _read_private_bytes(path: Path, *, label: str) -> bytes:
         ):
             raise ModelMetadataReceiptError(f"{label} changed while held")
         return raw
+    finally:
+        os.close(descriptor)
+
+
+def _read_openai_dotenv_bytes(path: Path) -> bytearray:
+    """Read the approved external dotenv shape without relaxing private JSON.
+
+    Unlike receipts, authorization overlays, and state files, the qualified
+    repository-external dotenv may be mode 0644.  Its dedicated policy rejects
+    every group/world-writable mode while retaining the same held-descriptor,
+    no-follow, ownership, link-count, size, parent, and path-identity controls.
+    """
+
+    label = "OpenAI dotenv"
+    _validate_private_parent(path, label=label)
+    flags = (
+        os.O_RDONLY
+        | getattr(os, "O_NOFOLLOW", 0)
+        | getattr(os, "O_NONBLOCK", 0)
+        | getattr(os, "O_CLOEXEC", 0)
+    )
+    try:
+        descriptor = os.open(path, flags)
+    except OSError as exc:
+        raise ModelMetadataReceiptError(f"{label} is unavailable") from exc
+    raw = bytearray()
+    try:
+        before = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(before.st_mode)
+            or before.st_uid != os.getuid()
+            or before.st_nlink != 1
+            or stat.S_IMODE(before.st_mode) & 0o022
+            or not 0 < before.st_size <= MODEL_METADATA_MAX_PRIVATE_BYTES
+        ):
+            raise ModelMetadataReceiptError(f"{label} metadata is unsafe")
+
+        raw = bytearray(before.st_size + 1)
+        offset = 0
+        while offset < len(raw):
+            target = memoryview(raw)[offset:]
+            try:
+                count = os.readv(descriptor, [target])
+            finally:
+                target.release()
+            if count == 0:
+                break
+            offset += count
+
+        held_after = os.fstat(descriptor)
+        try:
+            path_after = path.stat(follow_symlinks=False)
+        except OSError as exc:
+            raise ModelMetadataReceiptError(f"{label} path changed while held") from exc
+        stable_fields = (
+            "st_mode",
+            "st_uid",
+            "st_nlink",
+            "st_size",
+            "st_mtime_ns",
+            "st_ctime_ns",
+        )
+        if (
+            offset != before.st_size
+            or not _same_identity(before, held_after)
+            or not _same_identity(before, path_after)
+            or not stat.S_ISREG(held_after.st_mode)
+            or not stat.S_ISREG(path_after.st_mode)
+            or any(getattr(before, name) != getattr(held_after, name) for name in stable_fields)
+            or any(getattr(before, name) != getattr(path_after, name) for name in stable_fields)
+            or stat.S_IMODE(path_after.st_mode) & 0o022
+        ):
+            raise ModelMetadataReceiptError(f"{label} changed while held")
+        del raw[offset:]
+        return raw
+    except OSError as exc:
+        _destroy_bytearray(raw)
+        raise ModelMetadataReceiptError(f"{label} changed while held") from exc
+    except BaseException:
+        _destroy_bytearray(raw)
+        raise
     finally:
         os.close(descriptor)
 
@@ -504,30 +587,59 @@ def _finish_authorization_attempt(
 
 
 def load_openai_dotenv_assignment(path: Path) -> bytearray:
-    """Read exactly one OPENAI_API_KEY assignment from a held private file."""
+    """Select one OpenAI value from the strict approved mixed dotenv shape."""
 
-    raw = _read_private_bytes(path, label="OpenAI dotenv")
+    raw = _read_openai_dotenv_bytes(path)
+    lines: list[bytearray] = []
     selected: bytearray | None = None
+    lambda_seen = False
     try:
-        for line in raw.splitlines():
+        lines = raw.split(b"\n")
+        for line in lines:
+            if line.endswith(b"\r"):
+                line.pop()
             stripped = line.strip()
-            if not stripped or stripped.startswith(b"#"):
-                continue
-            if b"=" not in stripped:
-                raise ModelMetadataReceiptError("OpenAI dotenv syntax is unsupported")
-            name, value = stripped.split(b"=", 1)
-            if name != b"OPENAI_API_KEY" or _DOTENV_VALUE.fullmatch(value) is None:
-                raise ModelMetadataReceiptError("OpenAI dotenv contains a non-OpenAI assignment")
-            if selected is not None:
-                raise ModelMetadataReceiptError("OPENAI_API_KEY assignment is ambiguous")
-            selected = bytearray(value)
+            name: bytearray | None = None
+            value: bytearray | None = None
+            try:
+                if not stripped or stripped.startswith(b"#"):
+                    continue
+                if stripped != line:
+                    raise ModelMetadataReceiptError("OpenAI dotenv syntax is unsupported")
+                separator = stripped.find(b"=")
+                if separator <= 0:
+                    raise ModelMetadataReceiptError("OpenAI dotenv syntax is unsupported")
+                name = stripped[:separator]
+                value = stripped[separator + 1 :]
+                if name != _OPENAI_DOTENV_ASSIGNMENT and name != _LAMBDA_DOTENV_ASSIGNMENT:
+                    raise ModelMetadataReceiptError("OpenAI dotenv assignment name is unsupported")
+                if _DOTENV_VALUE.fullmatch(value) is None:
+                    raise ModelMetadataReceiptError("OpenAI dotenv value syntax is unsupported")
+                if name == _OPENAI_DOTENV_ASSIGNMENT:
+                    if selected is not None:
+                        raise ModelMetadataReceiptError("OPENAI_API_KEY assignment is ambiguous")
+                    selected = bytearray(value)
+                else:
+                    if lambda_seen:
+                        raise ModelMetadataReceiptError("LAMBDA_API_KEY assignment is ambiguous")
+                    lambda_seen = True
+            finally:
+                if value is not None:
+                    _destroy_bytearray(value)
+                if name is not None:
+                    _destroy_bytearray(name)
+                _destroy_bytearray(stripped)
         if selected is None:
             raise ModelMetadataReceiptError("OPENAI_API_KEY assignment is missing")
-        return selected
-    except BaseException:
+        result = selected
+        selected = None
+        return result
+    finally:
         if selected is not None:
             _destroy_bytearray(selected)
-        raise
+        for line in lines:
+            _destroy_bytearray(line)
+        _destroy_bytearray(raw)
 
 
 def _destroy_bytearray(value: bytearray) -> None:

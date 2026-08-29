@@ -27,6 +27,11 @@ BASE_TREE = "4271fccaf870cfd6a7963ac43daba5b616a0104a"
 V11_PLAN_BYTES = 14_754
 V11_PLAN_SHA256 = "34a405d06521bd3fb55379721dff9c5795954fcb099d641587e2169b37575411"
 HOST_SOURCE = ROOT / "containers/sira-smoke/pragmatic/t09_remote_runner.py"
+OPENAI_FIXTURE_VALUE = b"fixture-openai-metadata-value-v12"
+LAMBDA_FIXTURE_VALUE = b"fixture-lambda-provider-value-v12"
+APPROVED_DOTENV_BYTES = (
+    b"OPENAI_API_KEY=" + OPENAI_FIXTURE_VALUE + b"\nLAMBDA_API_KEY=" + LAMBDA_FIXTURE_VALUE + b"\n"
+)
 
 
 def _canonical(value: object) -> bytes:
@@ -77,7 +82,10 @@ class FakeMetadataTransport:
         self.returned_model = returned_model
         self.status = status
         self.failure = failure
-        self.calls: list[tuple[str, bytes]] = []
+        self.calls: list[str] = []
+        self.openai_credential_matches: list[bool] = []
+        self.lambda_credential_matches: list[bool] = []
+        self.credential_references: list[bytearray] = []
 
     def get_model_metadata(
         self,
@@ -85,7 +93,10 @@ class FakeMetadataTransport:
         *,
         credential: bytearray,
     ) -> metadata.ModelMetadataResponse:
-        self.calls.append((model_id, bytes(credential)))
+        self.calls.append(model_id)
+        self.openai_credential_matches.append(credential == OPENAI_FIXTURE_VALUE)
+        self.lambda_credential_matches.append(credential == LAMBDA_FIXTURE_VALUE)
+        self.credential_references.append(credential)
         if self.failure is not None:
             raise self.failure
         return metadata.ModelMetadataResponse(
@@ -141,7 +152,8 @@ def _authorization_files(tmp_path: Path) -> tuple[Path, Path, str]:
         },
     )
     dotenv = tmp_path / "openai.env"
-    _private_bytes(dotenv, b"OPENAI_API_KEY=fixture-openai-key-123456\n")
+    _private_bytes(dotenv, APPROVED_DOTENV_BYTES)
+    dotenv.chmod(0o644)
     return overlay, dotenv, plan_sha256
 
 
@@ -267,13 +279,44 @@ def test_local_gate_owns_exactly_one_request_and_seals_no_secret(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    receipt, overlay, transport, _plan_sha256 = _create_receipt(monkeypatch, tmp_path)
-    assert transport.calls == [(metadata.MODEL_METADATA_MODEL_ID, b"fixture-openai-key-123456")]
+    default_transport_constructions = 0
+
+    def forbid_default_transport(*args: object, **kwargs: object) -> None:
+        nonlocal default_transport_constructions
+        del args, kwargs
+        default_transport_constructions += 1
+        raise AssertionError("network fallback was constructed")
+
+    monkeypatch.setattr(metadata, "OpenAIModelMetadataTransport", forbid_default_transport)
+    overlay, dotenv, plan_sha256 = _authorization_files(tmp_path)
+    source_before = dotenv.read_bytes()
+    metadata_before = dotenv.stat()
+    transport = FakeMetadataTransport(completed_at=1_700_000_000.25)
+    receipt = tmp_path / metadata.MODEL_METADATA_RECEIPT_FILENAME
+    monkeypatch.setattr(provider, "_verify_clean_package", lambda repository, commit: None)
+    provider.model_metadata_preflight(
+        contract=V12_PROVIDER_CONTRACT,
+        repository=ROOT,
+        package_commit=BASE_COMMIT,
+        authorization_overlay=overlay,
+        openai_dotenv=dotenv,
+        output=receipt,
+        transport=transport,
+        clock=FakeClock(1_700_000_000.0, 1_700_000_000.5),
+    )
+    lambda_transport = FakeLambdaTransport()
+
+    assert transport.calls == [metadata.MODEL_METADATA_MODEL_ID]
+    assert transport.openai_credential_matches == [True]
+    assert transport.lambda_credential_matches == [False]
+    assert all(len(value) == 0 for value in transport.credential_references)
+    assert default_transport_constructions == 0
+    assert lambda_transport.calls == []
     assert stat.S_IMODE(receipt.stat().st_mode) == 0o600
     assert receipt.stat().st_uid == os.getuid()
     assert receipt.stat().st_nlink == 1
     raw = receipt.read_bytes()
-    assert b"fixture-openai-key" not in raw
+    assert raw == _canonical(json.loads(raw))
     assert b"Authorization" not in raw
     assert b"account" not in raw
     document = json.loads(raw)
@@ -286,9 +329,27 @@ def test_local_gate_owns_exactly_one_request_and_seals_no_secret(
     assert json.loads(overlay.read_text())["model_metadata_receipt_sha256"] == (
         metadata.model_metadata_receipt_sha256(receipt)
     )
+    assert metadata.semantic_projection_sha256(
+        _validate_provider_immutable(receipt, overlay, plan_sha256)
+    ) == metadata.model_metadata_receipt_sha256(receipt)
     states = list(tmp_path.glob(".t09-model-metadata-*.state.json"))
     assert len(states) == 1
     assert json.loads(states[0].read_text())["state"] == "consumed-after-send-attempt"
+    source_after = dotenv.stat()
+    source_bytes_unchanged = dotenv.read_bytes() == source_before == APPROVED_DOTENV_BYTES
+    assert source_bytes_unchanged is True
+    assert stat.S_IMODE(source_after.st_mode) == stat.S_IMODE(metadata_before.st_mode) == 0o644
+    assert source_after.st_uid == metadata_before.st_uid == os.getuid()
+    assert source_after.st_ino == metadata_before.st_ino
+    assert source_after.st_nlink == metadata_before.st_nlink == 1
+    assert source_after.st_mtime_ns == metadata_before.st_mtime_ns
+    assert source_after.st_ctime_ns == metadata_before.st_ctime_ns
+    generated_contains_fixture = any(
+        OPENAI_FIXTURE_VALUE in path.read_bytes() or LAMBDA_FIXTURE_VALUE in path.read_bytes()
+        for path in tmp_path.rglob("*")
+        if path.is_file() and path != dotenv
+    )
+    assert generated_contains_fixture is False
 
 
 @pytest.mark.parametrize(
@@ -474,18 +535,242 @@ def test_authorization_output_and_unknown_outcome_are_nonreplayable(
     assert not (failure_root / "receipt.json").exists()
 
 
-def test_dotenv_is_exact_private_single_assignment(tmp_path: Path) -> None:
-    for index, raw in enumerate(
+@pytest.mark.parametrize(
+    ("mode", "raw"),
+    (
+        (0o600, b"\n  # fixture comment\nOPENAI_API_KEY=" + OPENAI_FIXTURE_VALUE + b"\n"),
         (
-            b"OTHER=value\n",
-            b"OPENAI_API_KEY=fixture-openai-key-123456\nOTHER=value\n",
-            b"OPENAI_API_KEY=fixture-openai-key-123456\nOPENAI_API_KEY=fixture-openai-key-654321\n",
-        )
-    ):
-        path = tmp_path / f"bad-{index}.env"
-        _private_bytes(path, raw)
-        with pytest.raises(metadata.ModelMetadataReceiptError):
-            metadata.load_openai_dotenv_assignment(path)
+            0o644,
+            b"LAMBDA_API_KEY="
+            + LAMBDA_FIXTURE_VALUE
+            + b"\n# fixture comment\nOPENAI_API_KEY="
+            + OPENAI_FIXTURE_VALUE,
+        ),
+    ),
+    ids=("mode-0600-openai-only", "mode-0644-approved-mixed"),
+)
+def test_dotenv_accepts_safe_0600_and_0644_with_order_independent_allowlist(
+    tmp_path: Path,
+    mode: int,
+    raw: bytes,
+) -> None:
+    path = tmp_path / f"approved-{mode:o}.env"
+    _private_bytes(path, raw)
+    path.chmod(mode)
+    before = path.stat()
+    selected = metadata.load_openai_dotenv_assignment(path)
+    matched = selected == OPENAI_FIXTURE_VALUE
+    metadata._destroy_bytearray(selected)
+    after = path.stat()
+    assert matched is True
+    assert (path.read_bytes() == raw) is True
+    assert stat.S_IMODE(after.st_mode) == mode
+    assert (after.st_uid, after.st_ino, after.st_nlink) == (
+        before.st_uid,
+        before.st_ino,
+        before.st_nlink,
+    )
+    assert (after.st_mtime_ns, after.st_ctime_ns) == (
+        before.st_mtime_ns,
+        before.st_ctime_ns,
+    )
+
+
+@pytest.mark.parametrize(
+    "raw",
+    (
+        b"LAMBDA_API_KEY=" + LAMBDA_FIXTURE_VALUE + b"\n",
+        b"OPENAI_API_KEY="
+        + OPENAI_FIXTURE_VALUE
+        + b"\nOPENAI_API_KEY=fixture-openai-second-value-v12\n",
+        APPROVED_DOTENV_BYTES + b"LAMBDA_API_KEY=fixture-lambda-second-value-v12\n",
+        APPROVED_DOTENV_BYTES + b"THIRD_API_KEY=fixture-third-assignment-v12\n",
+        b"OPENAI_API_KEY\n",
+        b"OPENAI-API-KEY=" + OPENAI_FIXTURE_VALUE + b"\n",
+        b"export OPENAI_API_KEY=" + OPENAI_FIXTURE_VALUE + b"\n",
+        b"OPENAI_API_KEY='fixture-openai-quoted-value-v12'\n",
+        b'OPENAI_API_KEY="fixture-openai-quoted-value-v12"\n',
+        b"OPENAI_API_KEY=${FIXTURE_OPENAI_VALUE}\n",
+        b"OPENAI_API_KEY=$(fixture-command)\n",
+        b"OPENAI_API_KEY=fixture-openai-continuation-v12\\\ncontinued-value\n",
+        b"OPENAI_API_KEY=fixture-openai\nmultiline-value\n",
+        b"OPENAI_API_KEY =" + OPENAI_FIXTURE_VALUE + b"\n",
+        b"OPENAI_API_KEY=too-short\n",
+        b"OPENAI_API_KEY=" + b"x" * 4097 + b"\n",
+    ),
+    ids=(
+        "missing-openai",
+        "duplicate-openai",
+        "duplicate-lambda",
+        "unknown-assignment",
+        "missing-separator",
+        "malformed-name",
+        "export-syntax",
+        "single-quoted-value",
+        "double-quoted-value",
+        "interpolation",
+        "command-substitution",
+        "line-continuation",
+        "multiline-value",
+        "ambiguous-whitespace",
+        "short-value",
+        "over-bound-value",
+    ),
+)
+def test_dotenv_rejects_missing_duplicates_unknown_or_shell_syntax(
+    tmp_path: Path,
+    raw: bytes,
+) -> None:
+    path = tmp_path / "rejected.env"
+    _private_bytes(path, raw)
+    with pytest.raises(metadata.ModelMetadataReceiptError) as raised:
+        metadata.load_openai_dotenv_assignment(path)
+    error_bytes = str(raised.value).encode()
+    error_contains_fixture = (
+        OPENAI_FIXTURE_VALUE in error_bytes or LAMBDA_FIXTURE_VALUE in error_bytes
+    )
+    assert error_contains_fixture is False
+
+
+def test_dotenv_zeroes_raw_ignored_and_exceptional_selected_buffers(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    actual_destroy = metadata._destroy_bytearray
+    destroyed_sizes: list[tuple[int, int]] = []
+
+    def observed_destroy(value: bytearray) -> None:
+        before = len(value)
+        actual_destroy(value)
+        destroyed_sizes.append((before, len(value)))
+
+    monkeypatch.setattr(metadata, "_destroy_bytearray", observed_destroy)
+    accepted = tmp_path / "accepted.env"
+    _private_bytes(accepted, APPROVED_DOTENV_BYTES)
+    accepted.chmod(0o644)
+    selected = metadata.load_openai_dotenv_assignment(accepted)
+    selected_matches = selected == OPENAI_FIXTURE_VALUE
+    metadata._destroy_bytearray(selected)
+    assert selected_matches is True
+    assert (len(LAMBDA_FIXTURE_VALUE), 0) in destroyed_sizes
+    assert (len(APPROVED_DOTENV_BYTES), 0) in destroyed_sizes
+    assert all(after == 0 for _before, after in destroyed_sizes)
+
+    destroyed_sizes.clear()
+    rejected = tmp_path / "duplicate.env"
+    _private_bytes(
+        rejected,
+        b"OPENAI_API_KEY="
+        + OPENAI_FIXTURE_VALUE
+        + b"\nOPENAI_API_KEY=fixture-openai-second-value-v12\n",
+    )
+    with pytest.raises(metadata.ModelMetadataReceiptError):
+        metadata.load_openai_dotenv_assignment(rejected)
+    assert (len(OPENAI_FIXTURE_VALUE), 0) in destroyed_sizes
+    assert all(after == 0 for _before, after in destroyed_sizes)
+
+
+@pytest.mark.parametrize("mode", (0o620, 0o602, 0o666))
+def test_dotenv_rejects_group_or_world_write_bits(tmp_path: Path, mode: int) -> None:
+    path = tmp_path / f"writable-{mode:o}.env"
+    _private_bytes(path, APPROVED_DOTENV_BYTES)
+    path.chmod(mode)
+    with pytest.raises(metadata.ModelMetadataReceiptError, match="metadata is unsafe"):
+        metadata.load_openai_dotenv_assignment(path)
+
+
+def test_dotenv_rejects_symlink_hardlink_nonregular_unsafe_parent_and_relative_path(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source.env"
+    _private_bytes(source, APPROVED_DOTENV_BYTES)
+
+    symlink = tmp_path / "symlink.env"
+    symlink.symlink_to(source)
+    with pytest.raises(metadata.ModelMetadataReceiptError):
+        metadata.load_openai_dotenv_assignment(symlink)
+
+    hardlink = tmp_path / "hardlink.env"
+    os.link(source, hardlink)
+    with pytest.raises(metadata.ModelMetadataReceiptError, match="metadata is unsafe"):
+        metadata.load_openai_dotenv_assignment(source)
+    hardlink.unlink()
+
+    nonregular = tmp_path / "directory.env"
+    nonregular.mkdir(mode=0o700)
+    with pytest.raises(metadata.ModelMetadataReceiptError, match="metadata is unsafe"):
+        metadata.load_openai_dotenv_assignment(nonregular)
+
+    unsafe_parent = tmp_path / "unsafe-parent"
+    unsafe_parent.mkdir(mode=0o700)
+    unsafe_path = unsafe_parent / "openai.env"
+    _private_bytes(unsafe_path, APPROVED_DOTENV_BYTES)
+    unsafe_parent.chmod(0o777)
+    with pytest.raises(metadata.ModelMetadataReceiptError, match="parent metadata is unsafe"):
+        metadata.load_openai_dotenv_assignment(unsafe_path)
+
+    with pytest.raises(metadata.ModelMetadataReceiptError, match="path must be absolute"):
+        metadata.load_openai_dotenv_assignment(Path("relative-openai.env"))
+
+
+def test_dotenv_rejects_path_replacement_while_descriptor_is_held(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "openai.env"
+    displaced = tmp_path / "displaced.env"
+    _private_bytes(path, APPROVED_DOTENV_BYTES)
+    actual_readv = os.readv
+    replaced = False
+
+    def replacing_readv(descriptor: int, buffers: list[memoryview]) -> int:
+        nonlocal replaced
+        count = actual_readv(descriptor, buffers)
+        if not replaced:
+            replaced = True
+            path.replace(displaced)
+            _private_bytes(path, APPROVED_DOTENV_BYTES)
+        return count
+
+    monkeypatch.setattr(metadata.os, "readv", replacing_readv)
+    with pytest.raises(metadata.ModelMetadataReceiptError, match="changed while held"):
+        metadata.load_openai_dotenv_assignment(path)
+
+
+@pytest.mark.parametrize("drift", ("truncate", "same-size-mutation"))
+def test_dotenv_rejects_mutation_or_truncation_while_descriptor_is_held(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    drift: str,
+) -> None:
+    path = tmp_path / "openai.env"
+    _private_bytes(path, APPROVED_DOTENV_BYTES)
+    actual_readv = os.readv
+    changed = False
+
+    def mutating_readv(descriptor: int, buffers: list[memoryview]) -> int:
+        nonlocal changed
+        count = actual_readv(descriptor, buffers)
+        if not changed:
+            changed = True
+            if drift == "truncate":
+                path.write_bytes(b"")
+            else:
+                path.write_bytes(b"z" * len(APPROVED_DOTENV_BYTES))
+        return count
+
+    monkeypatch.setattr(metadata.os, "readv", mutating_readv)
+    with pytest.raises(metadata.ModelMetadataReceiptError, match="changed while held"):
+        metadata.load_openai_dotenv_assignment(path)
+
+
+def test_dotenv_mode_policy_does_not_relax_private_json_controls(tmp_path: Path) -> None:
+    for name in ("receipt.json", "authorization-overlay.json", "state.json"):
+        path = tmp_path / name
+        _private_json(path, {"fixture": True})
+        path.chmod(0o644)
+        with pytest.raises(metadata.ModelMetadataReceiptError, match="metadata is unsafe"):
+            metadata._load_private_object(path, label=name)
 
 
 @pytest.mark.parametrize(
@@ -1129,6 +1414,26 @@ def test_frozen_science_flags_pair_diffs_and_v11_evidence_are_unchanged() -> Non
     assert lifecycle["provider_launch_requires_current_freshness"] is True
     assert lifecycle["host_runtime_requires_current_freshness"] is False
     assert lifecycle["model_metadata_receipt_replay_allowed"] is False
+
+    dotenv_input = cast(
+        Mapping[str, object],
+        cast(Mapping[str, object], plan["implementation_bindings"])["model_metadata_receipt"],
+    )["dotenv_input"]
+    assert dotenv_input == {
+        "source": "existing-qualified-repository-external-file",
+        "parent_policy": "current-user-owned-directory-not-group-or-world-writable",
+        "file_type": "regular",
+        "current_user_owner_required": True,
+        "single_link_required": True,
+        "no_follow_required": True,
+        "eligible_mode_policy": "no-group-or-world-write-bits",
+        "regression_covered_modes": ["0600", "0644"],
+        "required_assignment": "OPENAI_API_KEY",
+        "optional_assignment": "LAMBDA_API_KEY",
+        "unknown_assignments_allowed": False,
+        "selected_assignment": "OPENAI_API_KEY",
+        "source_mutation_allowed": False,
+    }
 
     proposal_root = EXPERIMENT / "contracts/proposals"
     assert _normalized_pair_diffs(

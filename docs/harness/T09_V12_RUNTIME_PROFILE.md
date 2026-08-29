@@ -11,9 +11,14 @@ one local authenticated metadata GET
 → source-bound host copy and durable offline validation
 ```
 
-The local CLI accepts only a current-user-owned, single-link, mode-0600,
-no-follow dotenv containing exactly one `OPENAI_API_KEY` assignment. It has one
-injectable GET transport for
+The local CLI accepts the existing qualified repository-external dotenv directly:
+a safe-parent, current-user-owned, single-link regular file opened no-follow and
+with no group or world write bits. Modes `0600` and `0644` are both covered. The
+strict non-shell parser requires exactly one `OPENAI_API_KEY`, permits zero or one
+allowlisted `LAMBDA_API_KEY`, rejects every other or duplicate assignment, selects
+only the OpenAI value, and promptly clears ignored and raw mutable buffers. It does
+not create or require an ad hoc filtered secret file and never mutates the source.
+The CLI has one injectable GET transport for
 `https://api.openai.com/v1/models/gpt-4o-2024-11-20`; it has no retry,
 redirect, pagination, completion, Lambda, browser, or scientific path.
 Authorization state is exclusively reserved before the send and durably marked

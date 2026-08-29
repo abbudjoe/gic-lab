@@ -364,6 +364,7 @@
       "required": [
         "implementation_path",
         "implementation_sha256",
+        "dotenv_input",
         "schema_path",
         "schema_sha256",
         "public_price_contract_path",
@@ -386,6 +387,7 @@
       "properties": {
         "implementation_path": {"const": "src/giclab/harness/t09_model_metadata_receipt.py"},
         "implementation_sha256": {"$ref": "#/$defs/sha256"},
+        "dotenv_input": {"$ref": "#/$defs/dotenvInputBinding"},
         "schema_path": {"const": "schemas/t09-model-metadata-receipt.schema.json"},
         "schema_sha256": {"$ref": "#/$defs/sha256"},
         "public_price_contract_path": {"const": "experiments/EXP-0001-sira-simulative-vs-reactive/pricing.yaml"},
@@ -404,6 +406,42 @@
         "receipt_required": {"const": true},
         "replay_allowed": {"const": false},
         "immutable_model_unavailable_disposition": {"const": "stop-before-lambda-launch-zero-lambda-cost"}
+      },
+      "additionalProperties": false
+    },
+    "dotenvInputBinding": {
+      "type": "object",
+      "required": [
+        "source",
+        "parent_policy",
+        "file_type",
+        "current_user_owner_required",
+        "single_link_required",
+        "no_follow_required",
+        "eligible_mode_policy",
+        "regression_covered_modes",
+        "required_assignment",
+        "optional_assignment",
+        "unknown_assignments_allowed",
+        "selected_assignment",
+        "source_mutation_allowed"
+      ],
+      "properties": {
+        "source": {"const": "existing-qualified-repository-external-file"},
+        "parent_policy": {"const": "current-user-owned-directory-not-group-or-world-writable"},
+        "file_type": {"const": "regular"},
+        "current_user_owner_required": {"const": true},
+        "single_link_required": {"const": true},
+        "no_follow_required": {"const": true},
+        "eligible_mode_policy": {"const": "no-group-or-world-write-bits"},
+        "regression_covered_modes": {
+          "const": ["0600", "0644"]
+        },
+        "required_assignment": {"const": "OPENAI_API_KEY"},
+        "optional_assignment": {"const": "LAMBDA_API_KEY"},
+        "unknown_assignments_allowed": {"const": false},
+        "selected_assignment": {"const": "OPENAI_API_KEY"},
+        "source_mutation_allowed": {"const": false}
       },
       "additionalProperties": false
     },
