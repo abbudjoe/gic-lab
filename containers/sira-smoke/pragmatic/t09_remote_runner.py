@@ -2852,6 +2852,17 @@ def owned_containers(
     return names
 
 
+def _owned_containers_for(
+    prefix: list[str],
+    contract: T09ProviderContract,
+) -> list[str]:
+    """Preserve the historical mock/call surface for pre-V12 contracts."""
+
+    if contract is V12_PROVIDER_CONTRACT:
+        return owned_containers(prefix, contract=contract)
+    return owned_containers(prefix)
+
+
 def _owned_container_name_matches_role(
     name: str,
     role: str,
@@ -2922,7 +2933,7 @@ def owned_container_intents(
             relative = path.relative_to(pilot_root)
             if relative.parts and relative.parts[0] not in {"runtime-budget", "slot2-authority"}:
                 candidates.append(path)
-    execution_path = contract_paths(repository, selected_contract)["execution"]
+    execution_path = _contract_paths_for(repository, selected_contract)["execution"]
     contract = load_execution_contract(
         execution_path,
         expected_sha256=file_sha256(execution_path),
@@ -2969,7 +2980,7 @@ def owned_container_identities(
     contract: T09ProviderContract = ACTIVE_PROVIDER_CONTRACT,
 ) -> list[OwnedContainerIdentity]:
     identities: list[OwnedContainerIdentity] = []
-    for name in owned_containers(prefix, contract=contract):
+    for name in _owned_containers_for(prefix, contract):
         role = authorized_intents.get(name)
         if role is None:
             raise T09HostError("labeled Docker object lacks a host-owned mutation intent")
@@ -3748,7 +3759,7 @@ def core_suppression_preflight(
     )
     core_records = detect_core_artifacts(attempt)
     try:
-        residue = owned_containers(prefix, contract=contract)
+        residue = _owned_containers_for(prefix, contract)
     except (OSError, subprocess.SubprocessError, T09HostError) as exc:
         residue = ["<owned-container-enumeration-unavailable>"]
         if lifecycle_error is None:
@@ -3996,6 +4007,24 @@ def contract_paths(
         ),
         "real_regression": experiment / "T09_PRAGMATIC_RETRY4_FINALIZER_REGRESSION.json",
     }
+
+
+def _contract_paths_for(
+    repository: Path,
+    contract: T09ProviderContract,
+) -> dict[str, Path]:
+    """Use the V12 path set only when the V12 contract is explicitly selected.
+
+    The pre-V12 runner historically exposed a one-argument ``contract_paths``
+    call surface and its default paths.  Keeping that surface intact matters
+    for the old qualification/finalizer tests and for callers that provide a
+    narrow one-argument seam.  V12 is the only contract that needs the new
+    path set.
+    """
+
+    if contract is V12_PROVIDER_CONTRACT:
+        return contract_paths(repository, contract)
+    return contract_paths(repository)
 
 
 def early_cleanup_journal(args: argparse.Namespace) -> EarlyCleanupJournal:
@@ -4859,10 +4888,14 @@ def sanitized_dynamic_receipt(_path: Path, value: dict[str, object]) -> dict[str
 
 
 def _contract_control_root_name(contract: T09ProviderContract) -> str:
-    if contract.version == "V11":
-        return "pilot-v7"
     if contract.version == "V12":
         return "pilot-v12"
+    # V3 through V11 deliberately share the historical pilot-v7 control
+    # namespace.  V12 is the first successor package with a separate root;
+    # changing the legacy namespace here makes old recovery and qualification
+    # records unreadable before their own contract checks can run.
+    if contract.version in {"V3", "V4", "V5", "V6", "V7", "V8", "V9", "V10", "V11"}:
+        return "pilot-v7"
     raise T09HostError("unsupported autonomous provider contract control root")
 
 
@@ -4885,24 +4918,37 @@ def _contract_stage_id(contract: T09ProviderContract) -> str:
 def _runtime_provider_contract(root: Path) -> T09ProviderContract:
     """Resolve exactly one lifecycle contract from its typed control root."""
 
-    candidates: list[tuple[T09ProviderContract, Path]] = []
-    for contract in (V11_PROVIDER_CONTRACT, V12_PROVIDER_CONTRACT):
-        state_path = root / _contract_control_root_name(contract) / "pilot-state.json"
-        if os.path.lexists(state_path):
-            candidates.append((contract, state_path))
-    if len(candidates) != 1:
-        raise T09HostError("pilot state does not select exactly one autonomous contract")
-    contract, state_path = candidates[0]
-    state = load_object(state_path, label="pilot state")
-    selected = _provider_contract_from_document(state, label="pilot state")
-    if selected is not contract:
-        raise T09HostError("pilot state contract does not match its control root")
-    return selected
+    v12_state_path = root / "pilot-v12" / "pilot-state.json"
+    legacy_state_path = root / "pilot-v7" / "pilot-state.json"
+    if os.path.lexists(v12_state_path):
+        if os.path.lexists(legacy_state_path):
+            raise T09HostError("pilot state selects multiple autonomous contract roots")
+        state = load_object(v12_state_path, label="pilot state")
+        selected = _provider_contract_from_document(state, label="pilot state")
+        if selected is not V12_PROVIDER_CONTRACT:
+            raise T09HostError("pilot state contract does not match the V12 control root")
+        return selected
+
+    # Preserve the original generic legacy resolver.  It intentionally lets
+    # the loaded state identify V3--V11 so historical tests can exercise their
+    # own validation errors instead of being rejected by a V12-only resolver.
+    if os.path.lexists(legacy_state_path):
+        return _provider_contract_from_document(
+            load_object(legacy_state_path, label="pilot state"),
+            label="pilot state",
+        )
+    raise T09HostError("pilot state does not select an autonomous contract")
 
 
 def _pilot_root(root: Path, contract: T09ProviderContract | None = None) -> Path:
-    selected = _runtime_provider_contract(root) if contract is None else contract
-    return root / _contract_control_root_name(selected)
+    if contract is not None:
+        return root / _contract_control_root_name(contract)
+    # The historical runner always addressed pilot-v7 directly.  Keep that
+    # fallback for synthetic/legacy fixtures whose budget state predates the
+    # typed provider identity; only a materialized V12 state selects pilot-v12.
+    if os.path.lexists(root / "pilot-v12" / "pilot-state.json"):
+        return root / "pilot-v12"
+    return root / "pilot-v7"
 
 
 def _runtime_budget_state(
@@ -4910,8 +4956,9 @@ def _runtime_budget_state(
     *,
     contract: T09ProviderContract | None = None,
 ) -> dict[str, Any]:
-    selected = _runtime_provider_contract(root) if contract is None else contract
-    return load_object(_pilot_root(root, selected) / "pilot-state.json", label="pilot state")
+    if contract is not None:
+        return load_object(_pilot_root(root, contract) / "pilot-state.json", label="pilot state")
+    return load_object(_pilot_root(root) / "pilot-state.json", label="pilot state")
 
 
 def _provider_contract_for_execution(
@@ -5493,6 +5540,18 @@ def manifest_for_run(
     return matches[0]
 
 
+def _manifest_for_contract(
+    document: dict[str, Any],
+    run_id: str,
+    contract: T09ProviderContract,
+) -> dict[str, Any]:
+    """Keep the pre-V12 two-argument manifest seam intact."""
+
+    if contract is V12_PROVIDER_CONTRACT:
+        return manifest_for_run(document, run_id, expected_run_ids=contract.run_ids)
+    return manifest_for_run(document, run_id)
+
+
 def manifest_output_root(manifest: dict[str, Any]) -> str:
     owned = manifest.get("permitted_condition_owned")
     if not isinstance(owned, dict):
@@ -5518,7 +5577,7 @@ def verify_package(
         raise T09HostError("repository commit does not match the authorized clean package")
     if output(["git", "-C", str(repository), "status", "--porcelain=v1"]):
         raise T09HostError("repository worktree is not clean")
-    paths = contract_paths(repository, contract)
+    paths = _contract_paths_for(repository, contract)
     execution = load_object(paths["execution"], label="execution contract")
     load_execution_contract(
         paths["execution"],
@@ -5802,7 +5861,7 @@ def expected_evaluator_packages(
     provider_contract: T09ProviderContract = ACTIVE_PROVIDER_CONTRACT,
 ) -> list[str]:
     contract = load_object(
-        contract_paths(repository, provider_contract)["evaluator"], label="evaluator contract"
+        _contract_paths_for(repository, provider_contract)["evaluator"], label="evaluator contract"
     )
     materialization = contract.get("materialization")
     inventory = (
@@ -6551,7 +6610,7 @@ def browser_lifecycle_preflight(
                 if lifecycle_error is None:
                     lifecycle_error = exc
     try:
-        residue = owned_containers(prefix, contract=contract)
+        residue = _owned_containers_for(prefix, contract)
     except (OSError, subprocess.SubprocessError, T09HostError) as exc:
         residue = ["<owned-container-enumeration-unavailable>"]
         if lifecycle_error is None:
@@ -6807,7 +6866,7 @@ def offline_runtime_preflight(
     cleanup_journal: EarlyCleanupJournal,
     contract: T09ProviderContract = ACTIVE_PROVIDER_CONTRACT,
 ) -> dict[str, Any]:
-    paths = contract_paths(repository, contract)
+    paths = _contract_paths_for(repository, contract)
     attempt = _pilot_root(artifact_root) / "offline-runtime-preflight"
     control_name = _pilot_root(artifact_root, contract).name
     attempt.mkdir(parents=True, mode=0o700)
@@ -6942,7 +7001,7 @@ def qualified_real_evidence_regression(
     """Reconstruct the retained V4 raw archive inside the exact accepted image."""
 
     archive = validate_private_regression_archive(archive)
-    paths = contract_paths(repository, contract)
+    paths = _contract_paths_for(repository, contract)
     attempt = _pilot_root(artifact_root) / "qualified-real-evidence-regression"
     attempt.mkdir(parents=True, mode=0o700, exist_ok=False)
     regression_source = (
@@ -7618,7 +7677,7 @@ def write_frozen_run_manifest(
         dynamic,
         label="provider entry receipt",
     )
-    paths = contract_paths(repository, campaign_contract)
+    paths = _contract_paths_for(repository, campaign_contract)
     manifest_id = cast(str, campaign_contract.frozen_run_manifest_id)
     qualification_id = cast(str, campaign_contract.active_image_qualification_id)
     if campaign_contract.version == "V12" and (
@@ -7977,7 +8036,7 @@ def load_frozen_run_manifest(
         typed_qualification = RuntimeQualification.from_document(manifest)
     except T09PilotError as exc:
         raise T09HostError(str(exc)) from exc
-    paths = contract_paths(repository, runtime_contract)
+    paths = _contract_paths_for(repository, runtime_contract)
     model_credential_scan_path = _pilot_root(artifact_root) / "model-metadata-credential-scan.json"
     model_credential_scan = load_object(
         model_credential_scan_path,
@@ -9349,9 +9408,9 @@ def preflight(args: argparse.Namespace) -> None:
         if launch_slot == 1
         else SLOT2_IMAGE_MATERIALIZATION_POLICY
     )
-    paths = contract_paths(repository, dynamic_contract)
+    paths = _contract_paths_for(repository, dynamic_contract)
     prefix = docker_prefix()
-    if owned_containers(prefix, contract=dynamic_contract):
+    if _owned_containers_for(prefix, dynamic_contract):
         raise T09HostError("owned pilot containers already exist")
     cleanup_journal.advance_lifecycle_at_least(CleanupLifecycleStage.ARTIFACT_ROOT_MUTATION)
     artifact_root.mkdir(mode=0o700, parents=True)
@@ -9886,7 +9945,7 @@ def preflight_with_deadline(args: argparse.Namespace) -> None:
         label="provider preflight entry receipt",
     )
     if dynamic_contract not in {ACTIVE_PROVIDER_CONTRACT, V12_PROVIDER_CONTRACT}:
-        raise T09HostError("active preflight requires an approved T09 provider contract")
+        raise T09HostError("active preflight requires the exact V11 provider contract or V12")
     started = dynamic.get("provider_preflight_started_at_epoch")
     prior_duration = dynamic.get("prior_campaign_lambda_duration_seconds")
     prior_cost = dynamic.get("prior_campaign_lambda_cost_usd")
@@ -9961,7 +10020,7 @@ def container_create_argv(
     contract: T09ProviderContract = ACTIVE_PROVIDER_CONTRACT,
 ) -> list[str]:
     repository = args.repository.resolve(strict=True)
-    paths = contract_paths(repository, contract)
+    paths = _contract_paths_for(repository, contract)
     artifact_root = args.artifact_root.resolve(strict=True)
     pilot_control_root = _pilot_root(artifact_root, contract).resolve(strict=True)
     pilot_control_name = pilot_control_root.name
@@ -10517,7 +10576,7 @@ def evaluator_argv(
     contract: T09ProviderContract = ACTIVE_PROVIDER_CONTRACT,
 ) -> tuple[list[str], Path, dict[str, str]]:
     repository = args.repository.resolve(strict=True)
-    paths = contract_paths(repository, contract)
+    paths = _contract_paths_for(repository, contract)
     artifact_root = args.artifact_root.resolve(strict=True)
     finalizer_source = finalizer_source.resolve(strict=True)
     finalizer_sha256 = file_sha256(finalizer_source)
@@ -10732,7 +10791,7 @@ def local_evaluator_invocation(
 
     repository = args.repository.resolve(strict=True)
     artifact_root = args.artifact_root.resolve(strict=True)
-    paths = contract_paths(repository, contract)
+    paths = _contract_paths_for(repository, contract)
     finalizer_source = finalizer_source.resolve(strict=True)
     output_root = manifest_output_root(manifest)
     owned = cast(dict[str, Any], manifest["permitted_condition_owned"])
@@ -14175,9 +14234,7 @@ def recover_condition_start_reservation(
             removal_error_type = type(exc).__name__
         try:
             residue = [
-                item
-                for item in owned_containers(prefix, contract=contract)
-                if item == container_name
+                item for item in _owned_containers_for(prefix, contract) if item == container_name
             ]
         except (OSError, subprocess.SubprocessError, T09HostError) as exc:
             residue = ["<owned-container-enumeration-unavailable>"]
@@ -14952,13 +15009,9 @@ def recover_attempt_seal(args: argparse.Namespace) -> dict[str, object]:
         require_image=False,
     )
     command_document = load_object(
-        contract_paths(repository, runtime_contract)["commands"], label="command manifest set"
+        _contract_paths_for(repository, runtime_contract)["commands"], label="command manifest set"
     )
-    manifest = manifest_for_run(
-        command_document,
-        args.run_id,
-        expected_run_ids=runtime_contract.run_ids,
-    )
+    manifest = _manifest_for_contract(command_document, args.run_id, runtime_contract)
     attempt_root = (artifact_root / manifest_output_root(manifest)).resolve(strict=True)
     owned = manifest.get("permitted_condition_owned")
     if not isinstance(owned, dict) or not isinstance(owned.get("raw_output_root"), str):
@@ -15362,13 +15415,9 @@ def execute_condition(args: argparse.Namespace) -> int:
         cleanup_journal=cleanup_journal,
         contract=runtime_contract,
     )
-    paths = contract_paths(repository, runtime_contract)
+    paths = _contract_paths_for(repository, runtime_contract)
     command_document = load_object(paths["commands"], label="command manifest set")
-    manifest = manifest_for_run(
-        command_document,
-        args.run_id,
-        expected_run_ids=runtime_contract.run_ids,
-    )
+    manifest = _manifest_for_contract(command_document, args.run_id, runtime_contract)
     preflight_path = _pilot_root(artifact_root) / "preflight.json"
     if not preflight_path.is_file():
         raise T09HostError("exact preflight did not complete")
@@ -15827,7 +15876,7 @@ def execute_condition(args: argparse.Namespace) -> int:
                 if not stat.S_ISDIR(metadata.st_mode):
                     target.unlink()
             raise T09HostError("an exact credential match blocked condition release")
-        residue = owned_containers(prefix, contract=runtime_contract)
+        residue = _owned_containers_for(prefix, runtime_contract)
         if residue != [name]:
             raise T09HostError("condition release requires exactly one owned container")
         release_identity = inspect_owned_container(
@@ -16002,7 +16051,7 @@ def execute_condition(args: argparse.Namespace) -> int:
         )
     try:
         post_remove_residue = [
-            item for item in owned_containers(prefix, contract=runtime_contract) if item == name
+            item for item in _owned_containers_for(prefix, runtime_contract) if item == name
         ]
         post_remove_enumeration_error: str | None = None
     except (OSError, subprocess.SubprocessError, T09HostError) as exc:
@@ -16018,7 +16067,7 @@ def execute_condition(args: argparse.Namespace) -> int:
             )
         try:
             post_remove_residue = [
-                item for item in owned_containers(prefix, contract=runtime_contract) if item == name
+                item for item in _owned_containers_for(prefix, runtime_contract) if item == name
             ]
             post_remove_enumeration_error = None
         except (OSError, subprocess.SubprocessError, T09HostError) as exc:
@@ -16251,7 +16300,7 @@ def execute_condition(args: argparse.Namespace) -> int:
             execution_contract_sha256=cast(str, state["execution_contract_sha256"]),
         )
     try:
-        residue = owned_containers(prefix, contract=runtime_contract)
+        residue = _owned_containers_for(prefix, runtime_contract)
     except (OSError, subprocess.SubprocessError, T09HostError) as exc:
         residue = ["<owned-container-enumeration-unavailable>"]
         container_removal_error_type = container_removal_error_type or type(exc).__name__
@@ -16670,7 +16719,7 @@ def validate_local_finalizer_qualification(
     qualification_path = path.resolve(strict=True)
     metadata = qualification_path.stat(follow_symlinks=False)
     receipt = load_object(qualification_path, label="local finalizer qualification")
-    execution_path = contract_paths(repository, contract)["execution"]
+    execution_path = _contract_paths_for(repository, contract)["execution"]
     execution = load_object(execution_path, label="local finalizer execution contract")
     runtime = execution.get("runtime")
     base_packages = (
@@ -16705,10 +16754,10 @@ def validate_local_finalizer_qualification(
         or not _valid_retained_dependency_tree(evaluator_dependency_tree)
         or receipt.get("dependency_tree_sha256") != canonical_sha256(evaluator_dependency_tree)
         or receipt.get("evaluator_contract_sha256")
-        != file_sha256(contract_paths(repository, contract)["evaluator"])
+        != file_sha256(_contract_paths_for(repository, contract)["evaluator"])
         or receipt.get("dataset_sha256") != PINNED_DATASET_SHA256
         or receipt.get("real_evidence_regression_sha256")
-        != file_sha256(contract_paths(repository, contract)["real_regression"])
+        != file_sha256(_contract_paths_for(repository, contract)["real_regression"])
         or receipt.get("real_evidence_regression_passed") is not True
         or receipt.get("network_policy") != "socket-construction-denied"
         or receipt.get("model_requests") != 0
@@ -16792,7 +16841,7 @@ def validate_local_finalizer_qualification(
         ):
             raise T09HostError("qualified local finalizer runtime is unavailable")
         evaluator_contract = load_object(
-            contract_paths(repository, contract)["evaluator"], label="evaluator contract"
+            _contract_paths_for(repository, contract)["evaluator"], label="evaluator contract"
         )
         identity = evaluator_contract.get("identity")
         evaluator_files = identity.get("files") if isinstance(identity, dict) else None
@@ -16917,7 +16966,7 @@ def _specialize_finalized_identity_schemas(
     """Bind the independent selector to exact frozen fresh identities."""
 
     execution = load_object(
-        contract_paths(repository, contract)["execution"], label="finalized execution contract"
+        _contract_paths_for(repository, contract)["execution"], label="finalized execution contract"
     )
     attempts = execution.get("attempts")
     runtime = execution.get("runtime")
@@ -17105,14 +17154,18 @@ def validate_selected_finalization(
     *,
     repository: Path,
     artifact_root: Path,
-    contract: PilotExecutionContract,
+    contract: PilotExecutionContract | Any,
     run_id: str,
     package_commit: str,
     selection: dict[str, Any],
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Reconstruct a selected derived result from immutable raw and output bytes."""
 
-    provider_contract = _provider_contract_for_execution(contract)
+    provider_contract = (
+        _provider_contract_for_execution(contract)
+        if isinstance(contract, PilotExecutionContract)
+        else ACTIVE_PROVIDER_CONTRACT
+    )
 
     expected_keys = {
         "finalizer_execution_mode",
@@ -17371,16 +17424,12 @@ def finalize_attempt(args: argparse.Namespace) -> dict[str, object]:
     )
     image_id = cast(str, frozen_manifest["replacement_image_id"])
     runtime_contract = _runtime_provider_contract(artifact_root)
-    paths = contract_paths(repository, runtime_contract)
+    paths = _contract_paths_for(repository, runtime_contract)
     execution_contract = load_execution_contract(
         paths["execution"], expected_sha256=file_sha256(paths["execution"])
     )
     command_document = load_object(paths["commands"], label="command manifest set")
-    manifest = manifest_for_run(
-        command_document,
-        args.run_id,
-        expected_run_ids=runtime_contract.run_ids,
-    )
+    manifest = _manifest_for_contract(command_document, args.run_id, runtime_contract)
     attempt = execution_contract.attempt(args.run_id)
     attempt_root = (artifact_root / manifest_output_root(manifest)).resolve(strict=True)
     raw_root = (artifact_root / attempt.raw_output_root).resolve(strict=True)
@@ -17839,7 +17888,7 @@ def first_pair_checkpoint(args: argparse.Namespace) -> dict[str, object]:
         repository=repository,
         package_commit=args.package_commit,
     )
-    paths = contract_paths(repository, runtime_contract)
+    paths = _contract_paths_for(repository, runtime_contract)
     execution_contract = load_execution_contract(
         paths["execution"], expected_sha256=file_sha256(paths["execution"])
     )
@@ -18004,7 +18053,7 @@ def campaign_evidence_disposition(args: argparse.Namespace) -> dict[str, object]
         package_commit=args.package_commit,
         require_image=False,
     )
-    paths = contract_paths(repository, runtime_contract)
+    paths = _contract_paths_for(repository, runtime_contract)
     execution_contract = load_execution_contract(
         paths["execution"], expected_sha256=file_sha256(paths["execution"])
     )
@@ -18677,7 +18726,7 @@ def export_attempt(args: argparse.Namespace, destination: BinaryIO) -> dict[str,
     except T09ProviderContractError as exc:
         raise T09HostError("attempt export run belongs to another campaign") from exc
     command_document = load_object(
-        contract_paths(repository, runtime_contract)["commands"],
+        _contract_paths_for(repository, runtime_contract)["commands"],
         label="command manifest set",
     )
     frozen_manifest, frozen_manifest_sha256 = load_frozen_run_manifest(
@@ -18686,11 +18735,7 @@ def export_attempt(args: argparse.Namespace, destination: BinaryIO) -> dict[str,
         package_commit=args.package_commit,
         require_image=False,
     )
-    manifest = manifest_for_run(
-        command_document,
-        args.run_id,
-        expected_run_ids=runtime_contract.run_ids,
-    )
+    manifest = _manifest_for_contract(command_document, args.run_id, runtime_contract)
     attempt_root = (artifact_root / manifest_output_root(manifest)).resolve(strict=True)
     try:
         attempt_root.relative_to(artifact_root)
@@ -19524,11 +19569,7 @@ def restore_verified_attempt_export(
     """Restore a verified raw export for qualified post-termination finalization."""
 
     provider_contract = next(
-        (
-            candidate
-            for candidate in (V11_PROVIDER_CONTRACT, V12_PROVIDER_CONTRACT)
-            if run_id in candidate.run_ids
-        ),
+        (candidate for candidate in PROVIDER_CONTRACTS.values() if run_id in candidate.run_ids),
         None,
     )
     if provider_contract is None:
@@ -19539,17 +19580,13 @@ def restore_verified_attempt_export(
         current_commit=current_commit,
         contract=provider_contract,
     )
-    contract_path = contract_paths(repository, provider_contract)["execution"]
+    contract_path = _contract_paths_for(repository, provider_contract)["execution"]
     execution_contract = load_execution_contract(
         contract_path,
         expected_sha256=file_sha256(contract_path),
     )
     attempt = execution_contract.attempt(run_id)
-    condition_manifest = manifest_for_run(
-        command_document,
-        run_id,
-        expected_run_ids=provider_contract.run_ids,
-    )
+    condition_manifest = _manifest_for_contract(command_document, run_id, provider_contract)
     attempt_root = restoration_root / attempt.output_root
     raw_root = restoration_root / attempt.raw_output_root
     restoration_root.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -20019,11 +20056,7 @@ def _reconstructable_disposition(
 
     if pending or nonempirical_consumed:
         failed_run_id = pending[0] if pending else nonempirical_consumed[0]
-        failed_manifest = manifest_for_run(
-            command_document,
-            failed_run_id,
-            expected_run_ids=contract.run_ids,
-        )
+        failed_manifest = _manifest_for_contract(command_document, failed_run_id, contract)
         failed_attempt_root = root / manifest_output_root(failed_manifest)
         seal_manifest_path = failed_attempt_root / "essential-failure-manifest.json"
         seal_receipt_path = failed_attempt_root / "essential-failure-complete.json"
@@ -20061,11 +20094,7 @@ def _essential_failure_raw_prefixes(
     for run_id, binding in essential_seals.items():
         if run_id not in contract.run_ids or not isinstance(binding, dict):
             raise T09HostError("pilot disposition contains an unknown essential authority")
-        condition_manifest = manifest_for_run(
-            command_document,
-            run_id,
-            expected_run_ids=contract.run_ids,
-        )
+        condition_manifest = _manifest_for_contract(command_document, run_id, contract)
         attempt_root = root / manifest_output_root(condition_manifest)
         raw_root = attempt_root / "raw"
         manifest_path = attempt_root / "essential-failure-manifest.json"
@@ -20265,14 +20294,10 @@ def _cleanup_export_handoff(
             package_commit=package_commit,
         )
         command_document = load_object(
-            contract_paths(repository, contract)["commands"],
+            _contract_paths_for(repository, contract)["commands"],
             label="cleanup command manifest set",
         )
-        condition_manifest = manifest_for_run(
-            command_document,
-            terminal_run_id,
-            expected_run_ids=contract.run_ids,
-        )
+        condition_manifest = _manifest_for_contract(command_document, terminal_run_id, contract)
         attempt_root = root / manifest_output_root(condition_manifest)
         essential_manifest_path = attempt_root / "essential-failure-manifest.json"
         essential_receipt_path = attempt_root / "essential-failure-complete.json"
@@ -20365,14 +20390,10 @@ def _cleanup_export_handoff(
     assert pending is not None
     run_id = cast(str, pending["run_id"])
     command_document = load_object(
-        contract_paths(repository, contract)["commands"],
+        _contract_paths_for(repository, contract)["commands"],
         label="cleanup command manifest set",
     )
-    condition_manifest = manifest_for_run(
-        command_document,
-        run_id,
-        expected_run_ids=contract.run_ids,
-    )
+    condition_manifest = _manifest_for_contract(command_document, run_id, contract)
     attempt_root = root / manifest_output_root(condition_manifest)
     if pending["essential_manifest_sha256"] != file_sha256(
         attempt_root / "essential-failure-manifest.json"
@@ -20608,7 +20629,8 @@ def stage(args: argparse.Namespace) -> None:
     """Seal one remote evidence archive for the T07-style user download checkpoint."""
 
     root = args.artifact_root.resolve(strict=True)
-    stage_contract = _runtime_provider_contract(root)
+    has_v12_state = os.path.lexists(root / "pilot-v12" / "pilot-state.json")
+    stage_contract = _runtime_provider_contract(root) if has_v12_state else ACTIVE_PROVIDER_CONTRACT
     control_root = _pilot_root(root, stage_contract)
     stage_id = _contract_stage_id(stage_contract)
     archive_id = _contract_archive_id(stage_contract)
@@ -20635,14 +20657,21 @@ def stage(args: argparse.Namespace) -> None:
         raise T09HostError("aggregate staging cannot prove the absence of core artifacts") from exc
     if staged_core_records:
         raise T09HostError("aggregate staging excludes every detected core artifact")
-    state = _reconstructable_disposition(
-        root,
-        command_document=command_document,
-        package_commit=args.package_commit,
-        contract=stage_contract,
-    )
-    _require_provider_contract(state, expected=stage_contract, label="pilot disposition")
+    disposition_kwargs: dict[str, object] = {
+        "command_document": command_document,
+        "package_commit": args.package_commit,
+    }
+    if has_v12_state:
+        disposition_kwargs["contract"] = stage_contract
+    state = _reconstructable_disposition(root, **disposition_kwargs)
+    if not has_v12_state:
+        stage_contract = _provider_contract_from_document(state, label="pilot disposition")
     _require_active_provider_runner(stage_contract, label="historical evidence staging")
+    _require_provider_contract(state, expected=stage_contract, label="pilot disposition")
+    if not has_v12_state:
+        control_root = _pilot_root(root, stage_contract)
+        stage_id = _contract_stage_id(stage_contract)
+        archive_id = _contract_archive_id(stage_contract)
     export_chronology = require_prior_export_acknowledgements(
         root,
         next_attempt_index=_consumed_export_prefix_length(state),
@@ -21835,7 +21864,7 @@ def _prior_typed_core_incidents(
         detected = detected or result[0]
         destruction_unverified = destruction_unverified or result[1]
 
-    execution_path = contract_paths(repository, selected_contract)["execution"]
+    execution_path = _contract_paths_for(repository, selected_contract)["execution"]
     execution_contract = load_execution_contract(
         execution_path,
         expected_sha256=file_sha256(execution_path),
@@ -22449,7 +22478,7 @@ def cleanup(args: argparse.Namespace) -> None:
             detail_code=removal_detail,
         )
     try:
-        residue = owned_containers(prefix, contract=cleanup_contract)
+        residue = _owned_containers_for(prefix, cleanup_contract)
     except (OSError, subprocess.SubprocessError, T09HostError) as exc:
         residue = ["<owned-container-enumeration-unavailable>"]
         container_enumeration_errors.append(
@@ -23324,13 +23353,15 @@ def main() -> int:
         except T09HostError as exc:
             runtime_contract = _runtime_provider_contract(args.artifact_root.resolve(strict=True))
             command_document = load_object(
-                contract_paths(args.repository.resolve(strict=True), runtime_contract)["commands"],
+                _contract_paths_for(args.repository.resolve(strict=True), runtime_contract)[
+                    "commands"
+                ],
                 label="command manifest set",
             )
-            condition_manifest = manifest_for_run(
+            condition_manifest = _manifest_for_contract(
                 command_document,
                 args.run_id,
-                expected_run_ids=runtime_contract.run_ids,
+                runtime_contract,
             )
             attempt_root = args.artifact_root.resolve(strict=True) / manifest_output_root(
                 condition_manifest
