@@ -204,9 +204,7 @@ def test_local_gate_owns_exactly_one_request_and_seals_no_secret(
     tmp_path: Path,
 ) -> None:
     receipt, overlay, transport, _plan_sha256 = _create_receipt(monkeypatch, tmp_path)
-    assert transport.calls == [
-        (metadata.MODEL_METADATA_MODEL_ID, b"fixture-openai-key-123456")
-    ]
+    assert transport.calls == [(metadata.MODEL_METADATA_MODEL_ID, b"fixture-openai-key-123456")]
     assert stat.S_IMODE(receipt.stat().st_mode) == 0o600
     assert receipt.stat().st_uid == os.getuid()
     assert receipt.stat().st_nlink == 1
@@ -325,8 +323,7 @@ def test_dotenv_is_exact_private_single_assignment(tmp_path: Path) -> None:
         (
             b"OTHER=value\n",
             b"OPENAI_API_KEY=fixture-openai-key-123456\nOTHER=value\n",
-            b"OPENAI_API_KEY=fixture-openai-key-123456\n"
-            b"OPENAI_API_KEY=fixture-openai-key-654321\n",
+            b"OPENAI_API_KEY=fixture-openai-key-123456\nOPENAI_API_KEY=fixture-openai-key-654321\n",
         )
     ):
         path = tmp_path / f"bad-{index}.env"
@@ -654,9 +651,7 @@ def test_host_accepts_provider_admitted_receipt_durably_offline(
         repository=ROOT,
         package_commit=BASE_COMMIT,
         provider_entry={
-            "model_metadata_receipt_sha256": metadata.model_metadata_receipt_sha256(
-                receipt
-            ),
+            "model_metadata_receipt_sha256": metadata.model_metadata_receipt_sha256(receipt),
             "authorization_reference": "AUTH-T09-V12-CATEGORY3-FIXTURE-0001",
             "authorization_source_sha256": "1" * 64,
             "provider_preflight_started_at_epoch": base + 1.0,
@@ -710,9 +705,7 @@ def test_host_binding_drift_fails_before_acknowledgement(
             provider_entry=entry,
             artifact_root=artifact_root,
         )
-    assert not (
-        artifact_root / "pilot-v12/model-metadata-receipt-acknowledgement.json"
-    ).exists()
+    assert not (artifact_root / "pilot-v12/model-metadata-receipt-acknowledgement.json").exists()
     assert not (artifact_root / "pilot-v12/frozen-run-manifest.json").exists()
 
 
@@ -721,9 +714,7 @@ def _normalized_pair_diffs(path: Path) -> list[dict[str, object]]:
     result: list[dict[str, object]] = []
     for raw in cast(list[dict[str, object]], document["pair_diffs"]):
         item = dict(raw)
-        item["pair_id"] = str(item["pair_id"]).replace("V11", "VERSION").replace(
-            "V12", "VERSION"
-        )
+        item["pair_id"] = str(item["pair_id"]).replace("V11", "VERSION").replace("V12", "VERSION")
         result.append(item)
     return result
 
@@ -759,9 +750,7 @@ def test_frozen_science_flags_pair_diffs_and_v11_evidence_are_unchanged() -> Non
     assert lifecycle["model_metadata_request_count_total"] == 1
     assert lifecycle["provider_launch_model_metadata_request_count"] == 0
     assert lifecycle["host_runtime_model_metadata_request_count"] == 0
-    assert lifecycle["model_metadata_freshness_owner"] == (
-        "provider-final-transport-boundary"
-    )
+    assert lifecycle["model_metadata_freshness_owner"] == ("provider-final-transport-boundary")
     assert lifecycle["provider_launch_requires_current_freshness"] is True
     assert lifecycle["host_runtime_requires_current_freshness"] is False
     assert lifecycle["model_metadata_receipt_replay_allowed"] is False
@@ -769,14 +758,10 @@ def test_frozen_science_flags_pair_diffs_and_v11_evidence_are_unchanged() -> Non
     proposal_root = EXPERIMENT / "contracts/proposals"
     assert _normalized_pair_diffs(
         proposal_root / "T09_PILOT_COMMAND_MANIFESTS_V11.json"
-    ) == _normalized_pair_diffs(
-        proposal_root / "T09_PILOT_COMMAND_MANIFESTS_V12.json"
-    )
+    ) == _normalized_pair_diffs(proposal_root / "T09_PILOT_COMMAND_MANIFESTS_V12.json")
     assert all(
         item["valid"] is True
-        for item in _normalized_pair_diffs(
-            proposal_root / "T09_PILOT_COMMAND_MANIFESTS_V12.json"
-        )
+        for item in _normalized_pair_diffs(proposal_root / "T09_PILOT_COMMAND_MANIFESTS_V12.json")
     )
     assert not (ROOT / "artifacts/EXP-0001/pilot-v12").exists()
 
@@ -786,8 +771,6 @@ def test_receipt_schema_accepts_exact_document_and_has_no_extensions(
     tmp_path: Path,
 ) -> None:
     receipt, _overlay, _transport, _plan_sha256 = _create_receipt(monkeypatch, tmp_path)
-    schema = json.loads(
-        (ROOT / "schemas/t09-model-metadata-receipt.schema.json").read_text()
-    )
+    schema = json.loads((ROOT / "schemas/t09-model-metadata-receipt.schema.json").read_text())
     Draft202012Validator(schema).validate(json.loads(receipt.read_text()))
     assert schema["additionalProperties"] is False

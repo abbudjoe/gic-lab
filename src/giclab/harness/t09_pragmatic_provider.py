@@ -1036,8 +1036,7 @@ def load_campaign_lifecycle(
         or raw.get("host_runtime_model_metadata_request_count") != 0
         or raw.get("model_metadata_prelaunch_freshness_seconds")
         != MODEL_METADATA_PRELAUNCH_FRESHNESS_SECONDS
-        or raw.get("model_metadata_freshness_owner")
-        != "provider-final-transport-boundary"
+        or raw.get("model_metadata_freshness_owner") != "provider-final-transport-boundary"
         or raw.get("provider_launch_requires_current_freshness") is not True
         or raw.get("host_runtime_requires_current_freshness") is not False
         or raw.get("host_runtime_requires_prelaunch_timestamp_ordering") is not True
@@ -1610,9 +1609,7 @@ class RequestRecorder:
                     "response_bytes": len(response.body),
                 },
             )
-            raise T09ProviderError(
-                f"provider operation {prepared.operation} returned non-2xx"
-            )
+            raise T09ProviderError(f"provider operation {prepared.operation} returned non-2xx")
         try:
             retained = _project_provider_response(prepared.operation, response.body)
         except (T09ProviderError, UnicodeDecodeError, ValueError):
@@ -6136,9 +6133,7 @@ def launch_campaign(
     plan_path = repository / contract.provider_profile_path
     plan_sha256 = file_sha256(plan_path)
     package_tree = (
-        _git_commit_tree(repository, package_commit)
-        if contract.version == "V12"
-        else None
+        _git_commit_tree(repository, package_commit) if contract.version == "V12" else None
     )
     model_metadata_receipt_sha256_value: str | None = None
     if contract.version == "V12":

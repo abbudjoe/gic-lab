@@ -450,9 +450,7 @@ def model_metadata_authorization_overlay_sha256(path: Path) -> str:
 
 
 def _authorization_state_path(overlay_path: Path, reference: str) -> Path:
-    digest = hashlib.sha256(
-        f"{MODEL_METADATA_RECEIPT_TYPE}:{reference}".encode()
-    ).hexdigest()
+    digest = hashlib.sha256(f"{MODEL_METADATA_RECEIPT_TYPE}:{reference}".encode()).hexdigest()
     return overlay_path.parent / f".t09-model-metadata-{digest}.state.json"
 
 
@@ -691,9 +689,7 @@ def create_model_metadata_receipt(
         package_tree=repository_tree,
         plan_sha256=plan_sha256,
     )
-    observed_overlay_sha = model_metadata_authorization_overlay_sha256(
-        authorization_overlay
-    )
+    observed_overlay_sha = model_metadata_authorization_overlay_sha256(authorization_overlay)
     if (
         overlay.get("model_metadata_receipt_sha256") is not None
         or observed_overlay_sha != authorization_overlay_sha256
@@ -776,9 +772,7 @@ def create_model_metadata_receipt(
             "receipt_created_at": _format_timestamp(receipt_created),
             "response_body_sha256": hashlib.sha256(response.body).hexdigest(),
             "public_price_contract_sha256": public_price_contract_sha256,
-            "public_deprecation_observation_sha256": (
-                public_deprecation_observation_sha256
-            ),
+            "public_deprecation_observation_sha256": (public_deprecation_observation_sha256),
             "terminal_state": MODEL_METADATA_TERMINAL_STATE,
         }
         _write_private_exclusive(output, receipt)
@@ -851,14 +845,12 @@ def _validate_receipt_document(
         raise ModelMetadataReceiptError("receipt authorization reference drifted")
     if (
         expected_authorization_source_sha256 is not None
-        and document.get("authorization_source_sha256")
-        != expected_authorization_source_sha256
+        and document.get("authorization_source_sha256") != expected_authorization_source_sha256
     ):
         raise ModelMetadataReceiptError("receipt authorization source drifted")
     if (
         expected_authorization_overlay_sha256 is not None
-        and document.get("authorization_overlay_sha256")
-        != expected_authorization_overlay_sha256
+        and document.get("authorization_overlay_sha256") != expected_authorization_overlay_sha256
     ):
         raise ModelMetadataReceiptError("receipt authorization overlay drifted")
     started = _parse_timestamp(document.get("request_started_at"), label="request start")
@@ -869,9 +861,13 @@ def _validate_receipt_document(
     created = _parse_timestamp(document.get("receipt_created_at"), label="receipt creation")
     if not started <= completed <= created:
         raise ModelMetadataReceiptError("receipt timestamp ordering drifted")
-    launch = None if launch_started_at is None else _finite_epoch(
-        launch_started_at,
-        label="provider launch boundary",
+    launch = (
+        None
+        if launch_started_at is None
+        else _finite_epoch(
+            launch_started_at,
+            label="provider launch boundary",
+        )
     )
     if launch is not None and (completed > launch or created > launch):
         raise ModelMetadataReceiptError("receipt was completed after provider launch")
@@ -880,9 +876,7 @@ def _validate_receipt_document(
             time.time() if now is None else now,
             label="freshness boundary",
         )
-        if created > boundary or boundary - created > (
-            MODEL_METADATA_PRELAUNCH_FRESHNESS_SECONDS
-        ):
+        if created > boundary or boundary - created > (MODEL_METADATA_PRELAUNCH_FRESHNESS_SECONDS):
             raise ModelMetadataReceiptError("receipt is stale at provider admission")
         if launch is not None and launch != boundary:
             raise ModelMetadataReceiptError("provider launch and freshness clocks differ")
@@ -956,16 +950,12 @@ def validate_model_metadata_receipt(
             plan_sha256=plan_sha256,
             require_receipt_binding=True,
         )
-        overlay_sha = model_metadata_authorization_overlay_sha256(
-            authorization_overlay
-        )
+        overlay_sha = model_metadata_authorization_overlay_sha256(authorization_overlay)
         if (
             validated["authorization_reference"] != overlay["authorization_reference"]
-            or validated["authorization_source_sha256"]
-            != overlay["authorization_source_sha256"]
+            or validated["authorization_source_sha256"] != overlay["authorization_source_sha256"]
             or validated["authorization_overlay_sha256"] != overlay_sha
-            or overlay["model_metadata_receipt_sha256"]
-            != semantic_projection_sha256(validated)
+            or overlay["model_metadata_receipt_sha256"] != semantic_projection_sha256(validated)
         ):
             raise ModelMetadataReceiptError("receipt disagrees with its authorization overlay")
     return validated
