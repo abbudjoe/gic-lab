@@ -150,7 +150,7 @@ class T09ProviderContract:
             if path.is_absolute() or ".." in path.parts:
                 raise T09ProviderContractError("provider source path is unsafe")
         autonomous_paths = (self.execution_contract_path, self.command_manifest_path)
-        if self.version in {"V8", "V9", "V10", "V11"}:
+        if self.version in {"V8", "V9", "V10", "V11", "V12"}:
             if any(path is None for path in autonomous_paths):
                 raise T09ProviderContractError(
                     "autonomous provider contract lacks its scientific package paths"
@@ -660,6 +660,49 @@ V11_PROVIDER_CONTRACT: Final = _contract(
         f"{_EXPERIMENT_ROOT}/contracts/proposals/T09_PILOT_COMMAND_MANIFESTS_V11.json"
     ),
 )
+V12_PROVIDER_CONTRACT: Final = _contract(
+    version="V12",
+    source_commit="42a8ce6945c29f4221e03bb836f18421e50f3b1e",
+    host_run_id="RUN-T09-PILOT-HOST-AUTONOMOUS-0005",
+    authorization_id=None,
+    authorization_prefix="AUTH-T09-V12-",
+    authorization_source_sha256=None,
+    instance_name="giclab-t09-pilot-v12-autonomous-0005",
+    # The executable profile is independently hashed here.  The private
+    # Category 3 overlay and receipt bind the eventual reviewed merge commit.
+    plan_path=f"{_PROPOSAL_ROOT}/T09_PILOT_RUNTIME_PROFILE_V12.yaml",
+    plan_bytes=14_485,
+    plan_sha256="0fd1ce4cd0fbeef41405ac4773d8d2a67b6c0414013b8c4fb4293c5d234446ba",
+    profile_path=f"{_PROPOSAL_ROOT}/T09_PILOT_RUNTIME_PROFILE_V12.yaml",
+    profile_bytes=14_485,
+    profile_sha256="0fd1ce4cd0fbeef41405ac4773d8d2a67b6c0414013b8c4fb4293c5d234446ba",
+    run_ids=(
+        "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0005",
+        "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0005",
+        "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0005",
+        "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0005",
+    ),
+    image_qualification_ids=("QUAL-T09-PILOT-V12-IMAGE-AUTONOMOUS-0005",),
+    active_image_qualification_id="QUAL-T09-PILOT-V12-IMAGE-AUTONOMOUS-0005",
+    replacement_image_tag="giclab/t09-pilot-v12:93fb8d72de71-autonomous-0005",
+    container_prefix="giclab-t09-pilot-v12-autonomous-",
+    image_materialization_policy="retained-import-or-one-fallback-build",
+    max_launch_count=8,
+    prior_t09_cost_usd=33.14878958732642,
+    preflight_lambda_cost_cap_usd=10.0,
+    campaign_lambda_cost_cap_usd=8.0,
+    campaign_openai_cost_cap_usd=40.0,
+    campaign_aggregate_cost_cap_usd=58.0,
+    cumulative_t09_cost_cap_usd=90.0,
+    frozen_run_manifest_id="RUN-MANIFEST-EXP0001-PILOT-V12-AUTONOMOUS-0005",
+    local_finalizer_qualification_id=("QUAL-T09-PILOT-V12-LOCAL-FINALIZER-AUTONOMOUS-0005"),
+    execution_contract_path=(
+        f"{_EXPERIMENT_ROOT}/contracts/proposals/T09_PILOT_EXECUTION_CONTRACT_V12.json"
+    ),
+    command_manifest_path=(
+        f"{_EXPERIMENT_ROOT}/contracts/proposals/T09_PILOT_COMMAND_MANIFESTS_V12.json"
+    ),
+)
 
 
 PROVIDER_CONTRACTS: Final[Mapping[str, T09ProviderContract]] = MappingProxyType(
@@ -675,6 +718,7 @@ PROVIDER_CONTRACTS: Final[Mapping[str, T09ProviderContract]] = MappingProxyType(
             V9_PROVIDER_CONTRACT,
             V10_PROVIDER_CONTRACT,
             V11_PROVIDER_CONTRACT,
+            V12_PROVIDER_CONTRACT,
         )
     }
 )
@@ -755,12 +799,13 @@ def render_provider_entry_command(
     public_ipv4_file: str,
     ssh_public_key_file: str,
     launch_slot: int,
+    model_metadata_receipt: str | None = None,
 ) -> tuple[str, ...]:
     """Render the historical provider CLI without consulting a latest-version global."""
 
     if launch_slot not in range(1, contract.max_launch_count + 1):
         raise T09ProviderContractError("launch slot exceeds the selected provider contract")
-    return (
+    command: tuple[str, ...] = (
         interpreter,
         "-m",
         "giclab.harness.t09_pragmatic_provider",
@@ -784,3 +829,14 @@ def render_provider_entry_command(
         "--launch-slot",
         str(launch_slot),
     )
+    if contract.version == "V12":
+        if model_metadata_receipt is None:
+            raise T09ProviderContractError(
+                "V12 provider entry command requires the model metadata receipt"
+            )
+        command += ("--model-metadata-receipt", model_metadata_receipt)
+    elif model_metadata_receipt is not None:
+        raise T09ProviderContractError(
+            "model metadata receipt is only valid for the V12 provider contract"
+        )
+    return command

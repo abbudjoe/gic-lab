@@ -52,10 +52,27 @@ from giclab.harness.t09_cleanup_state import (
     EarlyCleanupState,
     EarlyCleanupStateError,
 )
+from giclab.harness.t09_model_metadata_receipt import (
+    MODEL_METADATA_PRELAUNCH_FRESHNESS_SECONDS,
+    MODEL_METADATA_RECEIPT_FILENAME,
+    ModelMetadataReceiptError,
+    ModelMetadataReceiptValidationPolicy,
+    ModelMetadataTransport,
+    admit_model_metadata_receipt_at_prelaunch_boundary,
+    bind_model_metadata_receipt_to_authorization_overlay,
+    copy_model_metadata_receipt,
+    create_model_metadata_receipt,
+    model_metadata_authorization_overlay_sha256,
+    model_metadata_receipt_sha256,
+    semantic_projection_sha256,
+    validate_model_metadata_authorization_overlay,
+    validate_model_metadata_receipt,
+)
 from giclab.harness.t09_provider_contracts import (
     V5_PROVIDER_CONTRACT,
     V6_PROVIDER_CONTRACT,
     V7_PROVIDER_CONTRACT,
+    V12_PROVIDER_CONTRACT,
     T09ProviderContract,
     T09ProviderContractError,
     load_provider_profile,
@@ -302,7 +319,7 @@ class CampaignLifecycle:
             expected_limits = AutonomousPilotLifecycleLimits(
                 maximum_preflight_provider_cost_cents=2_000
             )
-        elif self.contract.version in {"V9", "V10", "V11"}:
+        elif self.contract.version in {"V9", "V10", "V11", "V12"}:
             expected_limits = AutonomousPilotLifecycleLimits()
         else:  # pragma: no cover - contracts validate supported versions before construction
             raise T09ProviderError("unsupported provider lifecycle contract")
@@ -940,9 +957,9 @@ def load_campaign_lifecycle(
             persistent_filesystems=retry_limits.persistent_filesystems,
         )
 
-    if contract.version not in {"V8", "V9", "V10", "V11"}:
+    if contract.version not in {"V8", "V9", "V10", "V11", "V12"}:
         raise T09ProviderError("provider lifecycle contract is unsupported")
-    if set(raw) != {
+    lifecycle_fields = {
         "cumulative_accounting_origin",
         "preflight_clock_origin",
         "preflight_iteration_wall_seconds",
@@ -966,7 +983,25 @@ def load_campaign_lifecycle(
         "supervised_release_wait_seconds",
         "supervised_release_rule",
         "control_plane",
-    }:
+    }
+    if contract.version == "V12":
+        lifecycle_fields.update(
+            {
+                "immutable_model_unavailable_disposition",
+                "model_metadata_request_count_total",
+                "model_metadata_request_location",
+                "provider_launch_model_metadata_request_count",
+                "host_runtime_model_metadata_request_count",
+                "model_metadata_prelaunch_freshness_seconds",
+                "model_metadata_freshness_owner",
+                "provider_launch_requires_current_freshness",
+                "host_runtime_requires_current_freshness",
+                "host_runtime_requires_prelaunch_timestamp_ordering",
+                "model_metadata_receipt_required",
+                "model_metadata_receipt_replay_allowed",
+            }
+        )
+    if set(raw) != lifecycle_fields:
         raise T09ProviderError("provider lifecycle plan surface drifted")
     if (
         raw.get("cumulative_accounting_origin") != "actual-active-lambda-seconds"
@@ -992,6 +1027,23 @@ def load_campaign_lifecycle(
         }
     ):
         raise T09ProviderError("provider clock or replacement-launch contract drifted")
+    if contract.version == "V12" and (
+        raw.get("immutable_model_unavailable_disposition")
+        != "stop-before-lambda-launch-zero-lambda-cost"
+        or raw.get("model_metadata_request_count_total") != 1
+        or raw.get("model_metadata_request_location") != "local-control-plane-before-lambda-launch"
+        or raw.get("provider_launch_model_metadata_request_count") != 0
+        or raw.get("host_runtime_model_metadata_request_count") != 0
+        or raw.get("model_metadata_prelaunch_freshness_seconds")
+        != MODEL_METADATA_PRELAUNCH_FRESHNESS_SECONDS
+        or raw.get("model_metadata_freshness_owner") != "provider-final-transport-boundary"
+        or raw.get("provider_launch_requires_current_freshness") is not True
+        or raw.get("host_runtime_requires_current_freshness") is not False
+        or raw.get("host_runtime_requires_prelaunch_timestamp_ordering") is not True
+        or raw.get("model_metadata_receipt_required") is not True
+        or raw.get("model_metadata_receipt_replay_allowed") is not False
+    ):
+        raise T09ProviderError("V12 model metadata freshness ownership drifted")
     autonomous_limits = AutonomousPilotLifecycleLimits(
         preflight_iteration_wall_seconds=_integer(
             raw["preflight_iteration_wall_seconds"], label="preflight iteration wall"
@@ -1082,6 +1134,25 @@ def _verify_clean_package(repository: Path, package_commit: str) -> None:
         raise T09ProviderError("provider mutation requires the exact clean package commit")
 
 
+def _git_commit_tree(repository: Path, commit: str) -> str:
+    if _HEX40.fullmatch(commit) is None:
+        raise T09ProviderError("package commit is malformed")
+    result = subprocess.run(
+        ["git", "-C", str(repository), "rev-parse", f"{commit}^{{tree}}"],
+        env={"PATH": os.environ.get("PATH", "/usr/bin:/bin")},
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        check=False,
+        timeout=30,
+    )
+    if result.returncode != 0:
+        raise T09ProviderError("package tree identity is unavailable")
+    tree = result.stdout.decode("ascii", "strict").strip()
+    if _HEX40.fullmatch(tree) is None:
+        raise T09ProviderError("package tree identity is malformed")
+    return tree
+
+
 def validate_authorization_ledger(
     path: Path,
     *,
@@ -1089,6 +1160,23 @@ def validate_authorization_ledger(
     repository: Path,
     package_commit: str,
 ) -> dict[str, object]:
+    if contract.version == "V12":
+        try:
+            package_tree = _git_commit_tree(repository, package_commit)
+            overlay = validate_model_metadata_authorization_overlay(
+                path,
+                contract=contract,
+                package_commit=package_commit,
+                package_tree=package_tree,
+                plan_sha256=file_sha256(repository / contract.provider_profile_path),
+                require_receipt_binding=True,
+            )
+            return {
+                **overlay,
+                "authorization_ledger_sha256": file_sha256(path),
+            }
+        except (ModelMetadataReceiptError, OSError, subprocess.SubprocessError) as exc:
+            raise T09ProviderError("V12 authorization overlay is invalid") from exc
     if contract.version != "V11":
         raise T09ProviderError(
             "frozen historical provider authority is inspectable but cannot be replayed"
@@ -1176,7 +1264,7 @@ def validate_cleanup_authority_ledger(
     resource.  This narrower validator intentionally omits all launch admission.
     """
 
-    if contract.version == "V11":
+    if contract.version in {"V11", "V12"}:
         return validate_authorization_ledger(
             path,
             contract=contract,
@@ -1258,6 +1346,64 @@ def load_dotenv_assignment(path: Path, name: str) -> bytearray:
     return selected
 
 
+def model_metadata_preflight(
+    *,
+    contract: T09ProviderContract,
+    repository: Path,
+    package_commit: str,
+    authorization_overlay: Path,
+    openai_dotenv: Path,
+    output: Path,
+    transport: ModelMetadataTransport | None = None,
+    clock: Callable[[], float] = time.time,
+) -> Path:
+    """Run the sole V12 model GET and hand its sealed receipt to later planes."""
+
+    if contract is not V12_PROVIDER_CONTRACT:
+        raise T09ProviderError("model metadata preflight requires the V12 provider contract")
+    repository = repository.resolve(strict=True)
+    _verify_clean_package(repository, package_commit)
+    package_tree = _git_commit_tree(repository, package_commit)
+    plan_sha256 = file_sha256(repository / contract.provider_profile_path)
+    try:
+        overlay = validate_model_metadata_authorization_overlay(
+            authorization_overlay,
+            contract=contract,
+            package_commit=package_commit,
+            package_tree=package_tree,
+            plan_sha256=plan_sha256,
+        )
+        receipt = create_model_metadata_receipt(
+            repository_commit=package_commit,
+            repository_tree=package_tree,
+            plan_id=contract.plan_id,
+            plan_sha256=plan_sha256,
+            provider_contract_version=contract.version,
+            host_run_id=contract.host_run_id,
+            authorization_reference=cast(str, overlay["authorization_reference"]),
+            authorization_source_sha256=cast(str, overlay["authorization_source_sha256"]),
+            authorization_overlay_sha256=model_metadata_authorization_overlay_sha256(
+                authorization_overlay
+            ),
+            public_price_contract_sha256=cast(str, overlay["public_price_contract_sha256"]),
+            public_deprecation_observation_sha256=cast(
+                str, overlay["public_deprecation_observation_sha256"]
+            ),
+            output=output,
+            dotenv=openai_dotenv,
+            authorization_overlay=authorization_overlay,
+            transport=transport,
+            clock=clock,
+        )
+        bind_model_metadata_receipt_to_authorization_overlay(
+            authorization_overlay,
+            receipt_sha256=model_metadata_receipt_sha256(receipt),
+        )
+        return receipt
+    except ModelMetadataReceiptError as exc:
+        raise T09ProviderError("V12 model metadata receipt was not sealed") from exc
+
+
 def _destroy_bytearray(value: bytearray) -> None:
     for index in range(len(value)):
         value[index] = 0
@@ -1290,12 +1436,66 @@ def _destroy_operational_file(path: Path) -> None:
 
 
 @dataclass(slots=True)
+class PreparedProviderRequest:
+    """A fully encoded request whose local preparation is already complete."""
+
+    ordinal: int
+    operation: str
+    method: str
+    path: str
+    body: bytes | None = field(repr=False)
+    target_identity_sha256: str | None
+    intent_without_timestamp: Mapping[str, object]
+
+
+@dataclass(slots=True)
 class RequestRecorder:
     root: Path
     transport: ProviderTransport
     credential: bytearray = field(repr=False)
     clock: Callable[[], float] = time.time
     next_ordinal: int = 1
+
+    def prepare(
+        self,
+        operation: str,
+        method: str,
+        path: str,
+        *,
+        body: Mapping[str, object] | None = None,
+        target_identity_sha256: str | None = None,
+    ) -> PreparedProviderRequest:
+        if path not in ALLOWED_PATHS or method not in {"GET", "POST"}:
+            raise T09ProviderError("recorded request escaped the allowlist")
+        ordinal = self.next_ordinal
+        self.next_ordinal += 1
+        encoded = None if body is None else _canonical_bytes(body)
+        intent_without_timestamp: dict[str, object] = {
+            "schema_version": "0.1.0",
+            "ordinal": ordinal,
+            "operation": operation,
+            "method": method,
+            "host": API_HOST,
+            "port": API_PORT,
+            "path": path,
+            "request_body_sha256": None if encoded is None else _sha256_bytes(encoded),
+            "automatic_retry": False,
+            "target_identity_sha256": target_identity_sha256,
+        }
+        if (operation == "terminate") != (
+            isinstance(target_identity_sha256, str)
+            and _HEX64.fullmatch(target_identity_sha256) is not None
+        ):
+            raise T09ProviderError("provider target identity binding drifted")
+        return PreparedProviderRequest(
+            ordinal=ordinal,
+            operation=operation,
+            method=method,
+            path=path,
+            body=encoded,
+            target_identity_sha256=target_identity_sha256,
+            intent_without_timestamp=intent_without_timestamp,
+        )
 
     def request(
         self,
@@ -1306,47 +1506,97 @@ class RequestRecorder:
         body: Mapping[str, object] | None = None,
         target_identity_sha256: str | None = None,
     ) -> ProviderResponse:
-        if path not in ALLOWED_PATHS or method not in {"GET", "POST"}:
-            raise T09ProviderError("recorded request escaped the allowlist")
-        ordinal = self.next_ordinal
-        self.next_ordinal += 1
-        encoded = None if body is None else _canonical_bytes(body)
-        intent = {
-            "schema_version": "0.1.0",
-            "ordinal": ordinal,
-            "operation": operation,
-            "method": method,
-            "host": API_HOST,
-            "port": API_PORT,
-            "path": path,
-            "request_body_sha256": None if encoded is None else _sha256_bytes(encoded),
-            "send_started_at_epoch": self.clock(),
-            "automatic_retry": False,
-            "target_identity_sha256": target_identity_sha256,
-        }
-        if (operation == "terminate") != (
-            isinstance(target_identity_sha256, str)
-            and _HEX64.fullmatch(target_identity_sha256) is not None
-        ):
-            raise T09ProviderError("provider target identity binding drifted")
-        _append_jsonl(self.root / "request-journal.jsonl", {**intent, "event": "send-started"})
-        try:
-            response = self.transport.send(
-                method,
-                path,
-                body=encoded,
-                credential=self.credential,
-            )
-        except BaseException:
+        prepared = self.prepare(
+            operation,
+            method,
+            path,
+            body=body,
+            target_identity_sha256=target_identity_sha256,
+        )
+        return self.send_prepared(prepared)
+
+    def send_prepared(
+        self,
+        prepared: PreparedProviderRequest,
+        *,
+        final_admission: Callable[[], float] | None = None,
+    ) -> ProviderResponse:
+        """Send one prepared request.
+
+        Ordinary historical requests retain their pre-send journal behavior.
+        A V12 launch supplies final_admission: after that callback returns, the
+        very next effect is transport.send. Its send-started journal is written
+        retrospectively after the attempt because Phase A already fsynced the
+        nonreplayable send intent.
+        """
+
+        retrospective_journal = final_admission is not None
+        if final_admission is None:
+            send_started_at_epoch = self.clock()
+            intent = {
+                **prepared.intent_without_timestamp,
+                "send_started_at_epoch": send_started_at_epoch,
+            }
             _append_jsonl(
                 self.root / "request-journal.jsonl",
-                {
-                    **intent,
-                    "event": "response-unknown",
-                    "outcome_observed_at_epoch": self.clock(),
-                },
+                {**intent, "event": "send-started"},
             )
-            raise ProviderOutcomeUnknown(operation) from None
+        else:
+            # Final admission re-reads the receipt and samples the fresh clock.
+            # Do not insert any write, subprocess, sleep, or other blocking
+            # local mutation between this return and the transport call.
+            send_started_at_epoch = final_admission()
+            try:
+                response = self.transport.send(
+                    prepared.method,
+                    prepared.path,
+                    body=prepared.body,
+                    credential=self.credential,
+                )
+            except BaseException:
+                intent = {
+                    **prepared.intent_without_timestamp,
+                    "send_started_at_epoch": send_started_at_epoch,
+                }
+                _append_jsonl(
+                    self.root / "request-journal.jsonl",
+                    {**intent, "event": "send-started"},
+                )
+                _append_jsonl(
+                    self.root / "request-journal.jsonl",
+                    {
+                        **intent,
+                        "event": "response-unknown",
+                        "outcome_observed_at_epoch": self.clock(),
+                    },
+                )
+                raise ProviderOutcomeUnknown(prepared.operation) from None
+            intent = {
+                **prepared.intent_without_timestamp,
+                "send_started_at_epoch": send_started_at_epoch,
+            }
+            _append_jsonl(
+                self.root / "request-journal.jsonl",
+                {**intent, "event": "send-started"},
+            )
+        if not retrospective_journal:
+            try:
+                response = self.transport.send(
+                    prepared.method,
+                    prepared.path,
+                    body=prepared.body,
+                    credential=self.credential,
+                )
+            except BaseException:
+                _append_jsonl(
+                    self.root / "request-journal.jsonl",
+                    {
+                        **intent,
+                        "event": "response-unknown",
+                        "outcome_observed_at_epoch": self.clock(),
+                    },
+                )
+                raise ProviderOutcomeUnknown(prepared.operation) from None
         if response.status < 200 or response.status >= 300:
             _append_jsonl(
                 self.root / "request-journal.jsonl",
@@ -1359,9 +1609,9 @@ class RequestRecorder:
                     "response_bytes": len(response.body),
                 },
             )
-            raise T09ProviderError(f"provider operation {operation} returned non-2xx")
+            raise T09ProviderError(f"provider operation {prepared.operation} returned non-2xx")
         try:
-            retained = _project_provider_response(operation, response.body)
+            retained = _project_provider_response(prepared.operation, response.body)
         except (T09ProviderError, UnicodeDecodeError, ValueError):
             # A response that crossed send-start but cannot be interpreted is no
             # safer than a transport ambiguity.  Persist a terminal journal event
@@ -1380,8 +1630,8 @@ class RequestRecorder:
                     "classification": "untrusted-response-semantics",
                 },
             )
-            raise ProviderOutcomeUnknown(operation) from None
-        filename = f"{ordinal:03d}-{operation}.json"
+            raise ProviderOutcomeUnknown(prepared.operation) from None
+        filename = f"{prepared.ordinal:03d}-{prepared.operation}.json"
         write_bytes_exclusive(self.root / filename, retained)
         _append_jsonl(
             self.root / "request-journal.jsonl",
@@ -2485,16 +2735,26 @@ def _entry_projection(
     authorization = _load_json(root / "authorization-binding.json", maximum_bytes=65_536)
     authorization_source_sha256 = authorization.get("authorization_source_sha256")
     authorization_reference = authorization.get("authorization_reference")
+    authorization_fields = {
+        "schema_version",
+        "plan_id",
+        "host_run_id",
+        "authorization_source_sha256",
+        "authorization_reference",
+        "authorization_ledger_sha256",
+    }
+    model_metadata_receipt_sha256_value: str | None = None
+    if contract.version == "V12":
+        authorization_fields.add("model_metadata_receipt_sha256")
+        candidate_receipt_sha256 = authorization.get("model_metadata_receipt_sha256")
+        if (
+            not isinstance(candidate_receipt_sha256, str)
+            or _HEX64.fullmatch(candidate_receipt_sha256) is None
+        ):
+            raise T09ProviderError("V12 provider authorization lacks the receipt binding")
+        model_metadata_receipt_sha256_value = candidate_receipt_sha256
     if (
-        set(authorization)
-        != {
-            "schema_version",
-            "plan_id",
-            "host_run_id",
-            "authorization_source_sha256",
-            "authorization_reference",
-            "authorization_ledger_sha256",
-        }
+        set(authorization) != authorization_fields
         or authorization.get("schema_version") != "0.1.0"
         or authorization.get("plan_id") != contract.plan_id
         or authorization.get("host_run_id") != contract.host_run_id
@@ -2509,6 +2769,42 @@ def _entry_projection(
         contract.validate_authority(authorization_reference, authorization_source_sha256)
     except T09ProviderContractError as exc:
         raise T09ProviderError("provider entry authorization binding drifted") from exc
+    if contract.version == "V12":
+        receipt_binding = _load_json(
+            root / "model-metadata-receipt-binding.json", maximum_bytes=65_536
+        )
+        if (
+            set(receipt_binding)
+            != {
+                "schema_version",
+                "receipt_sha256",
+                "receipt_filename",
+                "provider_contract_version",
+                "plan_id",
+                "host_run_id",
+                "prelaunch_required",
+            }
+            or receipt_binding.get("schema_version") != "1.0.0"
+            or receipt_binding.get("receipt_sha256") != model_metadata_receipt_sha256_value
+            or receipt_binding.get("receipt_filename") != MODEL_METADATA_RECEIPT_FILENAME
+            or receipt_binding.get("provider_contract_version") != contract.version
+            or receipt_binding.get("plan_id") != contract.plan_id
+            or receipt_binding.get("host_run_id") != contract.host_run_id
+            or receipt_binding.get("prelaunch_required") is not True
+        ):
+            raise T09ProviderError("provider model-metadata receipt binding drifted")
+        try:
+            retained_receipt_sha256 = model_metadata_receipt_sha256(
+                root / MODEL_METADATA_RECEIPT_FILENAME
+            )
+        except (ModelMetadataReceiptError, OSError) as exc:
+            raise T09ProviderError(
+                "provider source lacks a safe retained model metadata receipt"
+            ) from exc
+        if retained_receipt_sha256 != model_metadata_receipt_sha256_value:
+            raise T09ProviderError("provider source retained receipt hash drifted")
+    elif (root / "model-metadata-receipt-binding.json").exists():
+        raise T09ProviderError("historical provider entry unexpectedly retained a metadata receipt")
     cleanup_handoff = _load_json(root / "early-cleanup-handoff.json", maximum_bytes=65_536)
     if (
         set(cleanup_handoff)
@@ -2595,6 +2891,8 @@ def _entry_projection(
         "prior_lambda_cost_usd",
         "replacement_eligibility_sha256",
     }
+    if contract.version == "V12":
+        campaign_binding_fields.add("model_metadata_receipt_sha256")
     binding_fields = set(campaign_binding)
     if (
         binding_fields
@@ -2614,6 +2912,11 @@ def _entry_projection(
         or campaign_binding.get("package_commit") != package_commit
         or launch_slot not in range(1, contract.max_launch_count + 1)
         or campaign_binding.get("owned_lambda_started_at_epoch") != float(launch_started)
+        or (
+            contract.version == "V12"
+            and campaign_binding.get("model_metadata_receipt_sha256")
+            != model_metadata_receipt_sha256_value
+        )
         or not 0 < campaign_started <= float(launch_started)
         or prior_lambda_duration < 0
         or prior_lambda_cost < 0
@@ -2693,6 +2996,8 @@ def _entry_projection(
         "raw_provider_payload_retained": False,
         "structural_redaction_passed": True,
     }
+    if model_metadata_receipt_sha256_value is not None:
+        result["model_metadata_receipt_sha256"] = model_metadata_receipt_sha256_value
     if "replacement_eligibility_preempirical_source_manifest_sha256" in campaign_binding:
         result["replacement_eligibility_preempirical_source_manifest_sha256"] = (
             eligibility_source_manifest_sha256
@@ -2711,6 +3016,7 @@ def create_entry_receipt(
     plan_sha256: str,
     expected_public_key: str,
     expected_public_ipv4: str,
+    model_metadata_receipt_sha256: str | None = None,
 ) -> Path:
     receipt = _entry_projection(
         root,
@@ -2720,6 +3026,11 @@ def create_entry_receipt(
         expected_public_key=expected_public_key,
         expected_public_ipv4=expected_public_ipv4,
     )
+    if (
+        model_metadata_receipt_sha256 is not None
+        and receipt.get("model_metadata_receipt_sha256") != model_metadata_receipt_sha256
+    ):
+        raise T09ProviderError("provider entry receipt metadata binding drifted")
     path = root / "entry-receipt.json"
     write_exclusive(path, receipt)
     return path
@@ -5743,6 +6054,28 @@ def _load_source_validated_provisional_owner(
     return observed
 
 
+def _validate_model_metadata_receipt_for_provider(
+    receipt_path: Path,
+    *,
+    contract: T09ProviderContract,
+    package_commit: str,
+    package_tree: str,
+    plan_sha256: str,
+    authorization_ledger: Path,
+) -> dict[str, object]:
+    """Re-read and validate every immutable receipt binding without a clock."""
+
+    return validate_model_metadata_receipt(
+        receipt_path,
+        contract=contract,
+        package_commit=package_commit,
+        package_tree=package_tree,
+        plan_sha256=plan_sha256,
+        authorization_overlay=authorization_ledger,
+        validation_policy=ModelMetadataReceiptValidationPolicy.DURABLE_OFFLINE,
+    )
+
+
 def launch_campaign(
     *,
     contract: T09ProviderContract,
@@ -5757,6 +6090,7 @@ def launch_campaign(
     launch_slot: int = 1,
     prior_private_root: Path | None = None,
     slot1_image_archive: Path | None = None,
+    model_metadata_receipt: Path | None = None,
     clock: Callable[[], float] = time.time,
     sleeper: Callable[[float], None] = time.sleep,
 ) -> Path:
@@ -5798,6 +6132,30 @@ def launch_campaign(
     lifecycle = load_campaign_lifecycle(repository, contract=contract)
     plan_path = repository / contract.provider_profile_path
     plan_sha256 = file_sha256(plan_path)
+    package_tree = (
+        _git_commit_tree(repository, package_commit) if contract.version == "V12" else None
+    )
+    model_metadata_receipt_sha256_value: str | None = None
+    if contract.version == "V12":
+        if model_metadata_receipt is None:
+            raise T09ProviderError("V12 provider launch requires the model metadata receipt")
+        if package_tree is None:  # pragma: no cover - guarded by the typed contract
+            raise T09ProviderError("V12 package tree is unavailable")
+        v12_package_tree = package_tree
+        try:
+            validated_receipt = _validate_model_metadata_receipt_for_provider(
+                model_metadata_receipt,
+                contract=contract,
+                package_commit=package_commit,
+                package_tree=v12_package_tree,
+                plan_sha256=plan_sha256,
+                authorization_ledger=authorization_ledger,
+            )
+            model_metadata_receipt_sha256_value = semantic_projection_sha256(validated_receipt)
+        except (ModelMetadataReceiptError, OSError, subprocess.SubprocessError) as exc:
+            raise T09ProviderError("V12 model metadata receipt validation failed") from exc
+    elif model_metadata_receipt is not None:
+        raise T09ProviderError("model metadata receipt is only valid for V12")
     if private_root.exists():
         raise T09ProviderError("provider private root already exists; launch slot is single use")
     private_root.mkdir(mode=0o700, parents=True, exist_ok=False)
@@ -5839,17 +6197,55 @@ def launch_campaign(
             raise T09ProviderError("retained slot-2 eligibility changed during copy")
     entry_root = private_root / "entry-source"
     entry_root.mkdir(mode=0o700)
+    retained_model_metadata_receipt: Path | None = None
+    if model_metadata_receipt_sha256_value is not None:
+        retained_receipt = entry_root / MODEL_METADATA_RECEIPT_FILENAME
+        retained_model_metadata_receipt = retained_receipt
+        retained_receipt_sha256 = copy_model_metadata_receipt(
+            cast(Path, model_metadata_receipt),
+            retained_receipt,
+        )
+        if retained_receipt_sha256 != model_metadata_receipt_sha256_value:
+            raise T09ProviderError("retained model metadata receipt changed during copy")
+        write_exclusive(
+            private_root / "model-metadata-receipt-binding.json",
+            {
+                "schema_version": "1.0.0",
+                "receipt_sha256": model_metadata_receipt_sha256_value,
+                "receipt_filename": MODEL_METADATA_RECEIPT_FILENAME,
+                "provider_contract_version": contract.version,
+                "plan_id": contract.plan_id,
+                "host_run_id": contract.host_run_id,
+                "prelaunch_required": True,
+            },
+        )
+    authorization_binding: dict[str, object] = {
+        "schema_version": "0.1.0",
+        "plan_id": contract.plan_id,
+        "host_run_id": contract.host_run_id,
+        "authorization_source_sha256": authorization["authorization_source_sha256"],
+        "authorization_reference": authorization["authorization_reference"],
+        "authorization_ledger_sha256": file_sha256(authorization_ledger),
+    }
+    if model_metadata_receipt_sha256_value is not None:
+        authorization_binding["model_metadata_receipt_sha256"] = model_metadata_receipt_sha256_value
     write_exclusive(
         entry_root / "authorization-binding.json",
-        {
-            "schema_version": "0.1.0",
-            "plan_id": contract.plan_id,
-            "host_run_id": contract.host_run_id,
-            "authorization_source_sha256": authorization["authorization_source_sha256"],
-            "authorization_reference": authorization["authorization_reference"],
-            "authorization_ledger_sha256": file_sha256(authorization_ledger),
-        },
+        authorization_binding,
     )
+    if model_metadata_receipt_sha256_value is not None:
+        write_exclusive(
+            entry_root / "model-metadata-receipt-binding.json",
+            {
+                "schema_version": "1.0.0",
+                "receipt_sha256": model_metadata_receipt_sha256_value,
+                "receipt_filename": MODEL_METADATA_RECEIPT_FILENAME,
+                "provider_contract_version": contract.version,
+                "plan_id": contract.plan_id,
+                "host_run_id": contract.host_run_id,
+                "prelaunch_required": True,
+            },
+        )
     expected_public_ipv4 = _read_public_file(public_ipv4_file, maximum_bytes=64)
     expected_public_key = _read_public_file(ssh_public_key_file, maximum_bytes=16_384)
     credential = load_dotenv_assignment(dotenv, "LAMBDA_API_KEY")
@@ -5891,44 +6287,144 @@ def launch_campaign(
                 lifecycle=lifecycle,
                 now=clock(),
             )
-        _consume_launch_capability(
-            capability_path,
-            contract=contract,
-            authorization_ledger=authorization_ledger,
-            authorization=authorization,
-            package_commit=package_commit,
-            plan_sha256=plan_sha256,
-            private_root=private_root,
-            launch_slot=launch_slot,
-            replacement_eligibility_sha256=replacement_eligibility_sha256,
-            clock=clock,
+        prepared_launch = recorder.prepare(
+            "launch",
+            "POST",
+            "/api/v1/instance-operations/launch",
+            body=_launch_body(contract=contract),
         )
-        write_exclusive(
-            private_root / "launch-intent.json",
-            {
-                "schema_version": "0.1.0",
-                "plan_id": contract.plan_id,
-                "host_run_id": contract.host_run_id,
-                "package_commit": package_commit,
-                "launch_body_sha256": _sha256_bytes(
-                    _canonical_bytes(_launch_body(contract=contract))
-                ),
-                "launch_slot": launch_slot,
-                "launch_count_after_send": launch_slot,
-                "max_preflight_launch_count": contract.max_launch_count,
-                "replacement_eligibility_sha256": replacement_eligibility_sha256,
-                "launch_capability_sha256": file_sha256(capability_path),
-                "launch_capability_state": "consumed-before-provider-post",
-                "created_at_epoch": clock(),
-            },
-        )
-        try:
-            launch_response = recorder.request(
-                "launch",
-                "POST",
-                "/api/v1/instance-operations/launch",
-                body=_launch_body(contract=contract),
+        final_launch_admission: Callable[[], float] | None = None
+        if model_metadata_receipt_sha256_value is not None:
+            receipt_for_launch = retained_model_metadata_receipt
+            if receipt_for_launch is None:
+                raise T09ProviderError("V12 retained model metadata receipt is unavailable")
+
+            # Phase A: all possibly blocking local preparation is durable before
+            # the final freshness sample. The capability and send intent remain
+            # nonreplayable even when final admission later rejects the receipt.
+            _consume_launch_capability(
+                capability_path,
+                contract=contract,
+                authorization_ledger=authorization_ledger,
+                authorization=authorization,
+                package_commit=package_commit,
+                plan_sha256=plan_sha256,
+                private_root=private_root,
+                launch_slot=launch_slot,
+                replacement_eligibility_sha256=replacement_eligibility_sha256,
+                clock=clock,
             )
+            launch_body_sha256 = cast(
+                str,
+                prepared_launch.intent_without_timestamp["request_body_sha256"],
+            )
+            write_exclusive(
+                private_root / "launch-intent.json",
+                {
+                    "schema_version": "0.1.0",
+                    "plan_id": contract.plan_id,
+                    "host_run_id": contract.host_run_id,
+                    "package_commit": package_commit,
+                    "launch_body_sha256": launch_body_sha256,
+                    "launch_slot": launch_slot,
+                    "launch_count_after_send": launch_slot,
+                    "max_preflight_launch_count": contract.max_launch_count,
+                    "replacement_eligibility_sha256": replacement_eligibility_sha256,
+                    "launch_capability_sha256": file_sha256(capability_path),
+                    "launch_capability_state": "consumed-during-local-preparation",
+                    "model_metadata_receipt_sha256": model_metadata_receipt_sha256_value,
+                    "created_at_epoch": clock(),
+                },
+            )
+            write_exclusive(
+                private_root / "launch-send-intent.json",
+                {
+                    "schema_version": "1.0.0",
+                    "plan_id": contract.plan_id,
+                    "host_run_id": contract.host_run_id,
+                    "package_commit": package_commit,
+                    "package_tree": v12_package_tree,
+                    "launch_slot": launch_slot,
+                    "request_ordinal": prepared_launch.ordinal,
+                    "method": prepared_launch.method,
+                    "path": prepared_launch.path,
+                    "request_body_sha256": launch_body_sha256,
+                    "model_metadata_receipt_sha256": model_metadata_receipt_sha256_value,
+                    "send_intent_created_at_epoch": clock(),
+                    "send_started_at_epoch": None,
+                    "transport_calls_completed": 0,
+                    "automatic_retry": False,
+                    "replay_allowed": False,
+                    "state": "durable-before-final-admission",
+                },
+            )
+
+            def admit_v12_launch() -> float:
+                # Phase B step 1: re-read the exact retained bytes and overlay.
+                validated = _validate_model_metadata_receipt_for_provider(
+                    receipt_for_launch,
+                    contract=contract,
+                    package_commit=package_commit,
+                    package_tree=v12_package_tree,
+                    plan_sha256=plan_sha256,
+                    authorization_ledger=authorization_ledger,
+                )
+                if semantic_projection_sha256(validated) != model_metadata_receipt_sha256_value:
+                    raise T09ProviderError(
+                        "V12 retained model metadata receipt changed before provider launch"
+                    )
+                # Phase B steps 2-4: sample only after the re-read, then make a
+                # pure in-memory decision. RequestRecorder calls transport.send
+                # as its immediately following effect.
+                boundary_epoch = clock()
+                admit_model_metadata_receipt_at_prelaunch_boundary(
+                    validated,
+                    boundary_epoch=boundary_epoch,
+                )
+                return boundary_epoch
+
+            final_launch_admission = admit_v12_launch
+        else:
+            _consume_launch_capability(
+                capability_path,
+                contract=contract,
+                authorization_ledger=authorization_ledger,
+                authorization=authorization,
+                package_commit=package_commit,
+                plan_sha256=plan_sha256,
+                private_root=private_root,
+                launch_slot=launch_slot,
+                replacement_eligibility_sha256=replacement_eligibility_sha256,
+                clock=clock,
+            )
+            write_exclusive(
+                private_root / "launch-intent.json",
+                {
+                    "schema_version": "0.1.0",
+                    "plan_id": contract.plan_id,
+                    "host_run_id": contract.host_run_id,
+                    "package_commit": package_commit,
+                    "launch_body_sha256": _sha256_bytes(
+                        _canonical_bytes(_launch_body(contract=contract))
+                    ),
+                    "launch_slot": launch_slot,
+                    "launch_count_after_send": launch_slot,
+                    "max_preflight_launch_count": contract.max_launch_count,
+                    "replacement_eligibility_sha256": replacement_eligibility_sha256,
+                    "launch_capability_sha256": file_sha256(capability_path),
+                    "launch_capability_state": "consumed-before-provider-post",
+                    "created_at_epoch": clock(),
+                },
+            )
+        try:
+            launch_response = recorder.send_prepared(
+                prepared_launch,
+                final_admission=final_launch_admission,
+            )
+        except ModelMetadataReceiptError as exc:
+            raise T09ProviderError(
+                "V12 model metadata receipt failed at the provider launch boundary"
+            ) from exc
         except ProviderOutcomeUnknown:
             write_exclusive(
                 private_root / "LAUNCH_OUTCOME_UNKNOWN.json",
@@ -6155,6 +6651,11 @@ def launch_campaign(
                         else 0.0
                     ),
                     "replacement_eligibility_sha256": replacement_eligibility_sha256,
+                    **(
+                        {"model_metadata_receipt_sha256": (model_metadata_receipt_sha256_value)}
+                        if model_metadata_receipt_sha256_value is not None
+                        else {}
+                    ),
                     "replacement_eligibility_preempirical_source_manifest_sha256": (
                         replacement_eligibility.get("source_manifest_sha256")
                         if replacement_eligibility is not None
@@ -6189,6 +6690,7 @@ def launch_campaign(
                 plan_sha256=plan_sha256,
                 expected_public_key=expected_public_key,
                 expected_public_ipv4=expected_public_ipv4,
+                model_metadata_receipt_sha256=model_metadata_receipt_sha256_value,
             )
         except BaseException as entry_exc:
             try:
@@ -6685,14 +7187,19 @@ def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser()
     result.add_argument(
         "--provider-contract",
-        choices=("V3", "V4", "V5", "V6", "V7", "V8", "V9", "V10", "V11"),
+        choices=("V3", "V4", "V5", "V6", "V7", "V8", "V9", "V10", "V11", "V12"),
         required=True,
     )
     result.add_argument("--repository", type=Path, required=True)
     result.add_argument("--package-commit", required=True)
-    result.add_argument("--authorization-ledger", type=Path, required=True)
-    result.add_argument("--dotenv", type=Path, required=True)
-    result.add_argument("--private-root", type=Path, required=True)
+    # The local V12 metadata gate deliberately does not need Lambda authority,
+    # Lambda credentials, or a provider private root.  Keep those lifecycle
+    # paths optional at parse time and require them only on operations that use
+    # them, so the narrow preflight command cannot be accidentally coupled to
+    # the mutation path.
+    result.add_argument("--authorization-ledger", type=Path)
+    result.add_argument("--dotenv", type=Path)
+    result.add_argument("--private-root", type=Path)
     operations = result.add_subparsers(dest="operation", required=True)
     launch = operations.add_parser("launch")
     launch.add_argument("--public-ipv4-file", type=Path, required=True)
@@ -6700,6 +7207,11 @@ def parser() -> argparse.ArgumentParser:
     launch.add_argument("--launch-slot", type=int, choices=tuple(range(1, 9)), default=1)
     launch.add_argument("--prior-private-root", type=Path)
     launch.add_argument("--slot1-image-archive", type=Path)
+    launch.add_argument("--model-metadata-receipt", type=Path)
+    metadata = operations.add_parser("model-metadata-preflight")
+    metadata.add_argument("--openai-dotenv", type=Path, required=True)
+    metadata.add_argument("--authorization-overlay", type=Path, required=True)
+    metadata.add_argument("--output", type=Path, required=True)
     closeout = operations.add_parser("closeout")
     closeout.add_argument("--preempirical-receipt", type=Path)
     closeout.add_argument("--preempirical-source-root", type=Path)
@@ -6715,6 +7227,25 @@ def parser() -> argparse.ArgumentParser:
 def main() -> int:
     args = parser().parse_args()
     contract = provider_contract(args.provider_contract)
+    if args.operation == "model-metadata-preflight":
+        if contract is not V12_PROVIDER_CONTRACT:
+            raise T09ProviderError("model metadata preflight requires the V12 provider contract")
+        model_metadata_preflight(
+            contract=contract,
+            repository=args.repository,
+            package_commit=args.package_commit,
+            authorization_overlay=args.authorization_overlay,
+            openai_dotenv=args.openai_dotenv,
+            output=args.output,
+        )
+        return 0
+    if args.operation in {"launch", "closeout"} and not all(
+        isinstance(getattr(args, field_name, None), Path)
+        for field_name in ("authorization_ledger", "dotenv", "private_root")
+    ):
+        raise T09ProviderError(
+            f"{args.operation} requires --authorization-ledger, --dotenv, and --private-root"
+        )
     transport = LambdaTransport()
     if args.operation == "launch":
         launch_campaign(
@@ -6730,6 +7261,7 @@ def main() -> int:
             launch_slot=args.launch_slot,
             prior_private_root=args.prior_private_root,
             slot1_image_archive=args.slot1_image_archive,
+            model_metadata_receipt=args.model_metadata_receipt,
         )
         return 0
     if args.operation == "closeout":
