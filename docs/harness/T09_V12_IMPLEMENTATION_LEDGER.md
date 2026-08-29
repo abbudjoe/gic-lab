@@ -1,8 +1,8 @@
 # T09 V12 implementation ledger
 
-Status: Category 1R repair implementation is complete. The existing draft PR
-remains open for exact-head review; this record is not a Category 3
-authorization.
+Status: Category 1R repair implementation and source-head validation are
+complete. The existing draft PR remains open for exact-head review; this record
+is not a Category 3 authorization.
 
 The repair started from the exact reviewed head
 `b557ccc99a121e5347e649a0691a15563b6afdd5` (tree
@@ -25,9 +25,9 @@ commit records the final gates without amending either commit.
 | Fresh unauthorized V12 package | met | Plan/profile/identity/execution/command artifacts retain AUTONOMOUS-0005 identities and false authorization/execution flags. |
 | Scientific contract and pair semantics | met | V11 immutability, V12 scientific hashes, task order, and pair-diff regressions pass unchanged. |
 | Focused repair regressions | met | 108 focused V12/provider/V11 tests pass, including delayed fake-clock and launch-boundary tests. |
-| Independent source/spec rereview | pending final rereview | Initial rereview findings were repaired; a final rereview is required against the post-closure tree. |
-| Full/static/site/exact-head gates | pending final run | Must be rerun after the final closure commit and exact final head is known. |
-| Draft PR and auto-merge state | pending final inspection | The same PR #5 and branch must remain draft, unmerged, and auto-merge disabled. |
+| Independent source/spec rereview | met | The independent timing/ownership rereview was CLEAN after the implementation and hash closure; no files were edited by the reviewer. |
+| Full/static/site/exact-head gates | met for source head | Local formatting, Ruff, strict mypy, repository validation, and portable site validation passed. GitHub Actions run `33254982807`, job `99106994521`, tested source head `4a0bf0d98206554277f163f2c2c83a54358e2462`, passed the exact-base parity gate. A record-only documentation closure commit still requires its own exact-head CI run. |
+| Draft PR and auto-merge state | met | PR #5 remains open, draft, unmerged, mergeable, based on the exact base SHA, with auto-merge disabled. |
 
 ## Receipt handoff and timing ownership
 
@@ -97,11 +97,16 @@ The focused suite uses fake transports and clocks. Its delayed integration
 advances beyond 1,800 seconds and beyond the 3,600-second iteration wall while
 the host still accepts the exact provider-admitted receipt offline.
 
-The final `make format`, Ruff, strict mypy, `make validate`, full pytest,
-portable Quarto/site validation, `git diff --check`, and exact-base parity
-results will be recorded here after the final closure commit. Any baseline
-failures will be reported as observed; no exclusion or skip workaround is
-permitted.
+Final gate record for source head `4a0bf0d98206554277f163f2c2c83a54358e2462`:
+`make format`, Ruff, strict mypy, `make validate`, portable Quarto/site
+validation, and `git diff --check` passed locally. The direct full pytest
+invocation was interrupted after the raw observed `1,368 passed, 26 failed`.
+The required remote exact-base parity run completed with base `1,626 passed`,
+`34 failed`, `2 skipped` of `1,662`, and head `1,691 passed`, `31 failed`,
+`2 skipped` of `1,724`; `0` xfailed, `0` xpassed, `0` newly failing, `0`
+missing base-collected nodes, and `0` invalid/weakened transitions. The parity
+result was `parity_passed: true`; all failures were unchanged baseline nodes.
+No exclusion or skip workaround was added.
 
 The V12 preauthorization packet continues to state: implementation complete;
 local tests complete; PR review required; merge required; live metadata request

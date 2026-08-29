@@ -982,6 +982,11 @@ review, and current-turn authority; no earlier gate grants any part of that auth
   boundary; host validation is durable and offline, keeps prelaunch timestamp
   ordering, and does not re-expire the receipt against its current clock. The
   total remains one local metadata GET, with provider and host counts zero.
+- 2026-08-29: The independent timing/ownership rereview was CLEAN. GitHub Actions
+  run `33254982807` (job `99106994521`) tested source head
+  `4a0bf0d98206554277f163f2c2c83a54358e2462` and passed exact-base parity with no
+  newly failing or missing base-collected nodes. A documentation-only closure
+  commit remains subject to its own exact-head CI run.
 
 ## Blockers and user actions
 

@@ -1,7 +1,9 @@
 # Active Phase 1 execution state: T09 V12
 
-The active state is a Category 1R implementation-complete repair; the final
-source/spec rereview, exact-head gates, and merge are pending. The task branch is
+The active state is a Category 1R implementation-complete repair; the source/spec
+rereview is CLEAN and the source-head exact-base gate passed. The record-only
+closure commit and its exact-head CI run remain review evidence, and merge is
+pending. The task branch is
 `codex/t09-v12-model-metadata-receipt-handoff`, based on the exact merged
 commit `42a8ce6945c29f4221e03bb836f18421e50f3b1e`.
 
