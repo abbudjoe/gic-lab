@@ -106,10 +106,10 @@ merge, auto-merge, Category 2, or Category 3.
 - Host decision: `DURABLE_OFFLINE` validates immutable bindings and provider-entry
   chronology, never current wall-clock expiry, and provides no network fallback.
 - Exact formatted Sol implementation ancestor:
-  `9d63f48b5beef37d401b6df127ede8b92e7073bb`. The static package binds
+  `764c6151f7e2202ef37c9e5b4d9b86584c0ef84e`. The static package binds
   that commit without importing any PR #5 commit.
-- Final V12 plan: 16,293 bytes; SHA-256
-  `108a0e84e6eefcb05510215b0c705cafe34f09d3c443fa25e3ee86846271dfd0`.
+- Final V12 plan: 16,899 bytes; SHA-256
+  `18bffb2bfaaf8e0de731b7043f3cc0b0a0e30fc9b51047a0bfbab11a194baf33`.
 - Focused V12 receipt/provider/host matrix: 41 passed, zero skipped or xfailed.
   The full crossing-window `launch_campaign` regression crossed the freshness
   limit during Phase A, retained a nonreplayable capability and send intent, and

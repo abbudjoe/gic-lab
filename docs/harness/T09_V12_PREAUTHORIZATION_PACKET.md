@@ -36,6 +36,12 @@ one `OPENAI_API_KEY`, permits at most one allowlisted `LAMBDA_API_KEY`, returns 
 the OpenAI value, and rejects all other assignments and shell syntax. No filtered
 dotenv, credential copy, chmod, or source-file mutation is part of this packet.
 
+The repaired `PLAN-EXP0001-PILOT-V12` is 16,899 bytes with SHA-256
+`18bffb2bfaaf8e0de731b7043f3cc0b0a0e30fc9b51047a0bfbab11a194baf33`.
+It binds the exact Sol-authored implementation ancestor and the regenerated
+runtime, condition, execution, and command-manifest identities without granting
+authorization or execution.
+
 The frozen scientific contract remains EXP-0001; SiRA commit
 `93fb8d72de71f9a4a13419670adeb34d93cf7acd`; every role uses
 `gpt-4o-2024-11-20` at service tier `default`; FanOutQA November 2023
