@@ -56,7 +56,7 @@
     "files": [
       {
         "path": "src/giclab/harness/sira_gate_a_runtime.py",
-        "sha256": "fa3cc7b919ac34726cdc5b437ff62e356a32a05c70507f4aedc9774bbcb65442"
+        "sha256": "7ae0bfe80a221384388729c6f43b92270d414ce25f25476378b22334a082d79e"
       },
       {
         "path": "src/giclab/harness/sira_gate_a.py",
@@ -68,7 +68,7 @@
       },
       {
         "path": "src/giclab/harness/t09_sira_pilot.py",
-        "sha256": "d6b05586577816395586ef87e5f2f497d10dee032f59f1c596f4e4cdf23710ac"
+        "sha256": "0759d5b05dca12a2f695bcb4837c373d7f65f696873f7b1740a97ef82e44774b"
       },
       {
         "path": "src/giclab/harness/lambda_campaign_lifecycle.py",
@@ -80,19 +80,19 @@
       },
       {
         "path": "src/giclab/harness/t09_pragmatic_provider.py",
-        "sha256": "46a5cb189601e8d089849f96fa7afc51c94b1f2316c35d2896594230cfc165cb"
+        "sha256": "81c119b14bd2a5d7298f527f997ebdd633b0d09b567ea7d13f084f97c5945d0c"
       },
       {
         "path": "src/giclab/harness/t09_provider_contracts.py",
-        "sha256": "e12ae6fe92ff165b547a0d38b9e0b60bb0d8dc38845361df4e22b268d8001362"
+        "sha256": "1d6b420379996794adc340aef1d80441df75d589e2ade4eaedac390a9dae9376"
       },
       {
         "path": "containers/sira-smoke/pragmatic/t09_remote_runner.py",
-        "sha256": "6f5abdf75eabfcbd9e341a47b4b09a305ae02fd58c4aa77ed85a987baa413f41"
+        "sha256": "58de72db166b481de8df33c9418b45b54485954d4f538f3571657321935b2bc2"
       },
       {
         "path": "src/giclab/harness/t09_model_metadata_receipt.py",
-        "sha256": "73dc3c81bf83848aa648029f25842dfca681844aa2a8351b46e2aced15ea014b"
+        "sha256": "00b8d763cbe65de3cf0572ec2ccc780bb368817b0436d1ecd0cd23d2c8396b95"
       },
       {
         "path": "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py",
@@ -104,7 +104,7 @@
       },
       {
         "path": "containers/sira-smoke/pragmatic/t09_freeze_commands.py",
-        "sha256": "2629ac8f19c3168486afaf8f0f1fe4df6852af9b916df161f3be5a1f70bbd1bd"
+        "sha256": "9fe8296c72f6f4812f32b40038bfb03706cda67ea1c5255d040223da17a40938"
       },
       {
         "path": "containers/sira-smoke/pragmatic/t09_secret_preflight.py",
@@ -147,7 +147,7 @@
         "sha256": "e9d6fd08eb5cef403e5e8fd6333bf0ea103b14872427b086ad6ab1bf6441e5c0"
       }
     ],
-    "reviewed_implementation_ancestor": "42a8ce6945c29f4221e03bb836f18421e50f3b1e",
+    "reviewed_implementation_ancestor": "f87ac87dcc306cd177c0a5e1d7552fe1728bbc4f",
     "scope": [
       "content-addressed-no-follow-private-regression-archive-staging",
       "raw-attempt-root-typed-binding-before-empirical-entry",

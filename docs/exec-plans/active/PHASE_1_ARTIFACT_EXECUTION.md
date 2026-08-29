@@ -67,7 +67,7 @@ no mutation authority; one gate's authorization never carries into another.
 |---|---|---|---|
 | T07 | Execute one authorized contained SiRA smoke pair; capture regulation-decision evidence without interpretation. | P1-DOD-02, P1-DOD-11 through P1-DOD-13 | complete: Retry 2 matched pair executed and cleanup verified; execution authority exhausted; no pilot authority |
 | T08 | Analyze smoke infrastructure evidence and prepare an unauthorized pilot package. | P1-DOD-03, P1-DOD-11 through P1-DOD-13 | complete: evidence validated; pilot planning eligible but execution unauthorized |
-| T09 | Lock and execute the two-task pragmatic calibration pilot under the fresh current-turn authorization. | P1-DOD-04, P1-DOD-11 through P1-DOD-13 | partial: V9 and stopped V10 evidence are immutable and ineligible for V11 pairing. V11 has fresh `AUTONOMOUS-0004` identities but remains unauthorized and unexecuted pending review, merge, and fresh Category 3 authorization. |
+| T09 | Lock and execute the two-task pragmatic calibration pilot under the fresh current-turn authorization. | P1-DOD-04, P1-DOD-11 through P1-DOD-13 | partial: V9, stopped V10, and stopped V11 evidence are immutable and ineligible for V12 pairing. V12 has fresh `AUTONOMOUS-0005` identities, is unauthorized and unexecuted, and awaits exact-head review, merge, and fresh Category 3 authorization. |
 | T10 | Analyze and publish the exploratory SiRA pilot. | P1-DOD-05, P1-DOD-11 through P1-DOD-13 | blocked: T09 produced no complete pilot pair or checkpoint; the lone descriptive score supports no comparative analysis |
 | T11 | Build and validate the read-only SR²AM Lambda preflight. | P1-DOD-06, P1-DOD-11 through P1-DOD-13 | blocked until T10 succeeds |
 | T12 | Launch and monitor the separately authorized SR²AM Lambda smoke. | P1-DOD-07, P1-DOD-11 through P1-DOD-13 | blocked until T11 and authorization |
@@ -690,14 +690,38 @@ Lambda launch or paid mutation and must stop with zero new Lambda cost if the sn
 is unavailable. Category 1 performed no credential access, provider request, cloud
 mutation, live Docker/browser/SiRA/FanOutQA/evaluator action, or paid compute.
 
+### T09 V12 model-metadata receipt handoff repair — 2026-08-29
+
+Assembly status: **implementation complete; source/spec rereview passed; exact-head gates and merge required;
+V12 remains unauthorized and unexecuted**.
+
+V11's stopped transaction is preserved as immutable operational evidence. Its
+root cause was duplicated ownership of the frozen single authenticated metadata
+GET: the external local pre-Lambda control plane sent the request, while the
+host runtime would send a second request during qualification. V12 repairs the
+ownership boundary without changing the scientific contract. The local gate
+seals the sole canonical receipt; provider launch validates and retains its
+semantic SHA-256 before any Lambda POST; and the host validates the exact
+source-bound receipt copy offline with zero metadata network calls.
+
+The fresh V12 package is `PLAN-EXP0001-PILOT-V12`, with host and attempt
+identities recorded in `docs/harness/T09_V12_ACTIVE_PHASE1_STATE.md`. All V12
+authorization, execution, cloud-mutation, paid-compute, live-qualification,
+pilot, and run-root flags remain false. The tracked proposal keeps the future
+merged-commit placeholder; a fresh Category 3 overlay must bind the exact
+reviewed merge and plan hash. Category 1 made no provider, OpenAI, Lambda,
+browser, SiRA, evaluator, Docker, or scientific request or mutation. See
+`docs/harness/T09_V12_IMPLEMENTATION_LEDGER.md` and
+`docs/harness/T09_V12_PREAUTHORIZATION_PACKET.md`.
+
 ## Authorization and mutation boundary
 
 Current project state keeps reusable paid-compute, prototype, benchmark, training, and
-cloud permissions false. T07 and every T09 authority through V10 are exhausted. V11
-is the sole registered T09 successor, is executable by design, and has no execution,
-cloud-mutation, or paid-compute authority. It requires exact-head review, a separate
-merge-only turn, and then a fresh Category 3 authorization against the reviewed merged
-commit and exact V11 plan digest. T12 and T14 separately require their exact cloud
+cloud permissions false. T07 and every T09 authority through V11 are exhausted. V12
+is the sole current registered T09 successor, is executable by design, and has no
+execution, cloud-mutation, or paid-compute authority. It requires exact-head review,
+a separate merge-only turn, and then a fresh Category 3 authorization against the
+reviewed merged commit and exact V12 plan digest. T12 and T14 separately require their exact cloud
 mutation, hardware, data, cost/time, artifact-transfer, and termination authority.
 Read-only inspection or preflight never supplies mutation authority.
 
@@ -945,6 +969,11 @@ review, and current-turn authority; no earlier gate grants any part of that auth
   the sole metadata GET; provider launch validates its sealed receipt before mutation,
   and the host validates it offline with zero additional metadata requests. Category 1
   performs no live provider, cloud, browser, SiRA, evaluator, or scientific action.
+- 2026-08-29: Complete the V12 source-bound receipt handoff repair. Require the
+  provider to retain the canonical receipt in the entry-source bundle, require the
+  host to resolve that exact copy before offline validation, and reject arbitrary
+  receipt substitution or a network fallback. Preserve the exact scientific
+  contract and keep every V12 authorization/execution flag false.
 
 ## Blockers and user actions
 

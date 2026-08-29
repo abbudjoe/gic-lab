@@ -11,11 +11,15 @@ receipt required: true
 receipt replay allowed: false
 ```
 
-The host receives the provider-bound receipt and expected semantic SHA-256.
-It validates the exact V12 package, plan, host, authorization, model endpoint,
+The host receives the provider-bound receipt and expected semantic SHA-256. The
+provider retains the canonical receipt in the source-bound entry bundle as
+`model-metadata-receipt.json`; the host's default path is that retained copy,
+and an explicit path must resolve to the same safe regular file. The host
+validates the exact V12 package, plan, host, authorization, model endpoint,
 counts, and pre-launch timestamp ordering offline, then writes an
 acknowledgement containing only safe identity/count fields and the receipt
-hash. It has no fallback to the historical network preflight.
+hash. It has no fallback to the historical network preflight and does not
+reissue the metadata request.
 
 V12 remains `authorized: false`, `execution_allowed: false`,
 `cloud_mutation_allowed: false`, `paid_compute_allowed: false`,
