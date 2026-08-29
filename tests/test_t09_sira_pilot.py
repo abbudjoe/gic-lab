@@ -43,6 +43,7 @@ from giclab.harness.t09_provider_contracts import (
     V8_PROVIDER_CONTRACT,
     V9_PROVIDER_CONTRACT,
     V10_PROVIDER_CONTRACT,
+    V11_PROVIDER_CONTRACT,
     T09ProviderContract,
 )
 from giclab.harness.t09_sira_pilot import (
@@ -80,15 +81,15 @@ TASK_A = "What is the batting hand of each of the first five picks in the 1998 M
 TASK_B = "What were box office values of the Star Wars films in the prequel and sequel trilogies?"
 EXECUTION_CONTRACT = (
     ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/proposals/"
-    "T09_PILOT_EXECUTION_CONTRACT_V10.json"
+    "T09_PILOT_EXECUTION_CONTRACT_V11.json"
 )
 RUNTIME_IDENTITY = (
     ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/proposals/"
-    "T09_PILOT_RUNTIME_IDENTITY_V10.json"
+    "T09_PILOT_RUNTIME_IDENTITY_V11.json"
 )
 COMMAND_MANIFESTS = (
     ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/proposals/"
-    "T09_PILOT_COMMAND_MANIFESTS_V10.json"
+    "T09_PILOT_COMMAND_MANIFESTS_V11.json"
 )
 
 
@@ -488,7 +489,7 @@ def test_attempt_state_enforces_order_cap_checkpoint_and_zero_retry(tmp_path: Pa
     digest = "a" * 64
     initialize_pilot_state(
         path,
-        provider_contract=V10_PROVIDER_CONTRACT,
+        provider_contract=V11_PROVIDER_CONTRACT,
         execution_contract_sha256=digest,
         pilot_started_at_epoch=1.0,
         lambda_started_at_epoch=1.0,
@@ -630,7 +631,7 @@ def test_execution_schema_and_all_static_file_bindings_resolve() -> None:
     assert (
         validate_instance(
             document,
-            ROOT / "schemas/t09-sira-pilot-v10-execution.schema.json",
+            ROOT / "schemas/t09-sira-pilot-v11-execution.schema.json",
         )
         == []
     )
@@ -892,9 +893,9 @@ def test_retry2_preserves_and_supersedes_the_zero_use_v3_failure() -> None:
 def test_runtime_qualification_is_typed_slot2_import_preentry_and_digest_agnostic() -> None:
     document = {
         "schema_version": "0.1.0",
-        "plan_id": "PLAN-EXP0001-PILOT-V10",
-        "manifest_id": "RUN-MANIFEST-EXP0001-PILOT-V10-AUTONOMOUS-0003",
-        "qualification_id": "QUAL-T09-PILOT-V10-IMAGE-AUTONOMOUS-0003",
+        "plan_id": "PLAN-EXP0001-PILOT-V11",
+        "manifest_id": "RUN-MANIFEST-EXP0001-PILOT-V11-AUTONOMOUS-0004",
+        "qualification_id": "QUAL-T09-PILOT-V11-IMAGE-AUTONOMOUS-0004",
         "clean_package_commit": "a" * 40,
         "replacement_image_id": "sha256:" + "e" * 64,
         "historical_image_id": (
@@ -1039,10 +1040,10 @@ def test_retry2_excludes_only_the_exact_pinned_names_only_env_example(
 
 def test_autonomous_materialization_policy_is_explicit_and_bound() -> None:
     host = _load_host_runner()
-    assert host.PLAN_ID == "PLAN-EXP0001-PILOT-V10"
-    assert host.QUALIFICATION_ID == "QUAL-T09-PILOT-V10-IMAGE-AUTONOMOUS-0003"
-    assert host.REPLACEMENT_IMAGE_TAG.startswith("giclab/t09-pilot-v10:")
-    assert host.REPLACEMENT_IMAGE_TAG.endswith("-autonomous-0003")
+    assert host.PLAN_ID == "PLAN-EXP0001-PILOT-V11"
+    assert host.QUALIFICATION_ID == "QUAL-T09-PILOT-V11-IMAGE-AUTONOMOUS-0004"
+    assert host.REPLACEMENT_IMAGE_TAG.startswith("giclab/t09-pilot-v11:")
+    assert host.REPLACEMENT_IMAGE_TAG.endswith("-autonomous-0004")
     materializer = inspect.getsource(host.materialize_retained_or_build_image)
     assert "SLOT2_IMAGE_MATERIALIZATION_POLICY" in materializer
     assert "slot-2 retained image import failed; fallback build is forbidden" in materializer
@@ -1097,8 +1098,8 @@ def _initialize_remote_early_cleanup_fixture(
         remote_credential.chmod(0o600)
     journal = EarlyCleanupJournal.initialize(
         tmp_path / "early-cleanup-state",
-        plan_id="PLAN-EXP0001-PILOT-V10",
-        host_run_id="RUN-T09-PILOT-HOST-AUTONOMOUS-0003",
+        plan_id="PLAN-EXP0001-PILOT-V11",
+        host_run_id="RUN-T09-PILOT-HOST-AUTONOMOUS-0004",
         package_commit="a" * 40,
         plan_sha256="b" * 64,
         provider_instance_id="instance-owned-0003",
@@ -1295,6 +1296,7 @@ def test_active_preflight_rejects_historical_receipt_before_v10_budget_math(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # Preserve the base-collected node ID while advancing its active gate to V11.
     host = _load_host_runner()
     dynamic_source = tmp_path / "source"
     dynamic_source.mkdir()
@@ -1317,7 +1319,7 @@ def test_active_preflight_rejects_historical_receipt_before_v10_budget_math(
             AssertionError("historical receipt must fail before preflight")
         ),
     )
-    with pytest.raises(host.T09HostError, match="exact V10 provider contract"):
+    with pytest.raises(host.T09HostError, match="exact V11 provider contract"):
         host.preflight_with_deadline(
             SimpleNamespace(
                 repository=ROOT,
@@ -1869,7 +1871,7 @@ def test_finalizer_validates_canonical_raw_name_not_runtime_mount_alias(
     manifest_path = tmp_path / "raw-attempt-manifest.json"
     manifest = {
         "schema_version": "0.1.0",
-        "plan_id": "PLAN-EXP0001-PILOT-V10",
+        "plan_id": "PLAN-EXP0001-PILOT-V11",
         "run_id": ATTEMPT_ORDER[0],
         "package_commit": "a" * 40,
         "raw_attempt_root": "raw",
@@ -1891,7 +1893,7 @@ def test_finalizer_validates_canonical_raw_name_not_runtime_mount_alias(
         json.dumps(
             {
                 "schema_version": "0.1.0",
-                "plan_id": "PLAN-EXP0001-PILOT-V10",
+                "plan_id": "PLAN-EXP0001-PILOT-V11",
                 "run_id": ATTEMPT_ORDER[0],
                 "raw_manifest_sha256": finalizer.file_sha256(manifest_path),
                 "raw_attempt_complete": True,
@@ -1967,12 +1969,12 @@ def test_independent_selector_specializes_from_frozen_contract() -> None:
         evidence_schema=evidence,
         run_id=ATTEMPT_ORDER[0],
     )
-    assert score["properties"]["plan_id"] == {"const": "PLAN-EXP0001-PILOT-V10"}
+    assert score["properties"]["plan_id"] == {"const": "PLAN-EXP0001-PILOT-V11"}
     assert score["properties"]["run_id"] == {"const": ATTEMPT_ORDER[0]}
-    assert score["properties"]["pair_id"] == {"const": "PAIR-EXP0001-PILOT-V10-TASK-A"}
+    assert score["properties"]["pair_id"] == {"const": "PAIR-EXP0001-PILOT-V11-TASK-A"}
     assert evidence["properties"]["identity"]["properties"]["run_id"] == {"const": ATTEMPT_ORDER[0]}
     assert evidence["properties"]["runtime"]["properties"]["qualification_id"] == {
-        "const": "QUAL-T09-PILOT-V10-IMAGE-AUTONOMOUS-0003"
+        "const": "QUAL-T09-PILOT-V11-IMAGE-AUTONOMOUS-0004"
     }
     assert (
         score["properties"]["score_provenance"]
@@ -2348,7 +2350,7 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     host = _load_host_runner()
-    contract = V10_PROVIDER_CONTRACT
+    contract = V11_PROVIDER_CONTRACT
     now = [2_000_000_000.0]
 
     def clock() -> float:
@@ -2466,7 +2468,7 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
     package_commit = "a" * 40
     plan_path = (
         ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/proposals/"
-        "T09_PILOT_RUNTIME_PROFILE_V10.yaml"
+        "T09_PILOT_RUNTIME_PROFILE_V11.yaml"
     )
     authorization = tmp_path / "authorization.json"
     authorization.write_text(
@@ -2474,7 +2476,7 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
             {
                 "schema_version": "0.1.0",
                 "authorization_source_sha256": "b" * 64,
-                "authorization_reference": "AUTH-T09-V10-TEST-CATEGORY3-0001",
+                "authorization_reference": "AUTH-T09-V11-TEST-CATEGORY3-0001",
                 "authorized": True,
                 "single_use": True,
                 "clean_package_commit": package_commit,
@@ -2490,10 +2492,10 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
                 "lambda_cost_cap_usd": 8.0,
                 "openai_cost_cap_usd": 40.0,
                 "aggregate_cost_cap_usd": 58.0,
-                "prior_t09_cost_usd": 29.3502995579,
+                "prior_t09_cost_usd": 33.14878958732642,
                 "cumulative_t09_cost_cap_usd": 90.0,
                 "replacement_image_policy": ("retained-exact-load-or-one-fallback-build-v1"),
-                "artifact_destination": "/Volumes/Macintosh HD - Data/GIC-Lab/t09/v10",
+                "artifact_destination": "/Volumes/Macintosh HD - Data/GIC-Lab/t09/v11",
             }
         ),
         encoding="utf-8",
@@ -3126,7 +3128,7 @@ def test_pragmatic_provider_entry_and_closeout_receipts_are_exact_and_source_bou
 
 def test_closeout_rejects_termination_after_campaign_cutoff() -> None:
     lifecycle = provider.CampaignLifecycle(
-        contract=V10_PROVIDER_CONTRACT,
+        contract=V11_PROVIDER_CONTRACT,
         limits=AutonomousPilotLifecycleLimits(),
         max_instances=1,
         max_launches=8,
@@ -3178,7 +3180,7 @@ def test_provider_send_ambiguity_is_durably_unknown_and_never_retried(tmp_path: 
             "launch",
             "POST",
             "/api/v1/instance-operations/launch",
-            body=provider._launch_body(contract=V10_PROVIDER_CONTRACT),
+            body=provider._launch_body(contract=V11_PROVIDER_CONTRACT),
         )
 
     events = [
@@ -3217,7 +3219,7 @@ def test_provider_send_ambiguity_is_durably_unknown_and_never_retried(tmp_path: 
             "launch",
             "POST",
             "/api/v1/instance-operations/launch",
-            body=provider._launch_body(contract=V10_PROVIDER_CONTRACT),
+            body=provider._launch_body(contract=V11_PROVIDER_CONTRACT),
         )
     malformed_events = [
         json.loads(line)
@@ -3242,7 +3244,7 @@ def test_t09_provider_is_a_narrow_adapter_over_the_retained_t07_pragmatic_path()
     historical_launch = load_json(
         ROOT / "artifacts/t07/pragmatic/RUN-T07-PRAGMATIC-HOST-0001/launch-request.json"
     )
-    current_launch = provider._launch_body(contract=V10_PROVIDER_CONTRACT)
+    current_launch = provider._launch_body(contract=V11_PROVIDER_CONTRACT)
     assert set(current_launch) == set(historical_launch)
     for key in (
         "region_name",
@@ -3254,7 +3256,7 @@ def test_t09_provider_is_a_narrow_adapter_over_the_retained_t07_pragmatic_path()
     ):
         assert current_launch[key] == historical_launch[key]
     assert (
-        current_launch["name"] == current_launch["hostname"] == V10_PROVIDER_CONTRACT.instance_name
+        current_launch["name"] == current_launch["hostname"] == V11_PROVIDER_CONTRACT.instance_name
     )
 
     calls: list[tuple[object, dict[str, object]]] = []
@@ -3365,7 +3367,7 @@ def test_autonomous_preflight_and_empirical_lifecycle_boundaries_are_separate() 
     assert limits.preflight_caps_available(cumulative_active_seconds=27_907) is False
     assert (
         provider.CampaignLifecycle(
-            contract=V10_PROVIDER_CONTRACT,
+            contract=V11_PROVIDER_CONTRACT,
             limits=limits,
             max_instances=1,
             max_launches=8,
@@ -3375,14 +3377,14 @@ def test_autonomous_preflight_and_empirical_lifecycle_boundaries_are_separate() 
     )
     with pytest.raises(provider.T09ProviderError, match="lifecycle drifted"):
         provider.CampaignLifecycle(
-            contract=V10_PROVIDER_CONTRACT,
+            contract=V11_PROVIDER_CONTRACT,
             limits=limits,
             max_instances=1,
             max_launches=9,
             persistent_filesystems=0,
         )
     with pytest.raises(provider.T09ProviderError, match="outside the authorized bound"):
-        provider.launch_capability_path(9, contract=V10_PROVIDER_CONTRACT)
+        provider.launch_capability_path(9, contract=V11_PROVIDER_CONTRACT)
 
 
 def test_host_campaign_admission_counts_setup_and_attempt_actual_time(
@@ -3439,7 +3441,7 @@ def test_ordinary_preflight_defect_is_resumable_on_same_host_with_fresh_root(
         host,
         "validate_dynamic_receipt",
         lambda *_args, **_kwargs: {
-            "plan_id": V10_PROVIDER_CONTRACT.plan_id,
+            "plan_id": V11_PROVIDER_CONTRACT.plan_id,
             "provider_preflight_started_at_epoch": now - 4_000.0,
             "prior_campaign_lambda_duration_seconds": 0.0,
             "prior_campaign_lambda_cost_usd": 0.0,
@@ -3509,7 +3511,7 @@ def test_raw_attempt_streams_before_cutoff_without_aggregate_stage(
     pilot_root.mkdir(exist_ok=True)
     initialize_pilot_state(
         pilot_root / "pilot-state.json",
-        provider_contract=V10_PROVIDER_CONTRACT,
+        provider_contract=V11_PROVIDER_CONTRACT,
         execution_contract_sha256="a" * 64,
         pilot_started_at_epoch=now - 100,
         lambda_started_at_epoch=now - 100,
@@ -3530,8 +3532,8 @@ def test_raw_attempt_streams_before_cutoff_without_aggregate_stage(
     provider_entry.write_text(
         json.dumps(
             {
-                "plan_id": V10_PROVIDER_CONTRACT.plan_id,
-                "host_run_id": V10_PROVIDER_CONTRACT.host_run_id,
+                "plan_id": V11_PROVIDER_CONTRACT.plan_id,
+                "host_run_id": V11_PROVIDER_CONTRACT.host_run_id,
                 "owned_instance_identity_sha256": "b" * 64,
                 "lambda_started_at_epoch": now - 100,
             }
@@ -3541,8 +3543,8 @@ def test_raw_attempt_streams_before_cutoff_without_aggregate_stage(
     (pilot_root / "provider-entry.json").write_text(
         json.dumps(
             {
-                "plan_id": V10_PROVIDER_CONTRACT.plan_id,
-                "host_run_id": V10_PROVIDER_CONTRACT.host_run_id,
+                "plan_id": V11_PROVIDER_CONTRACT.plan_id,
+                "host_run_id": V11_PROVIDER_CONTRACT.host_run_id,
                 "receipt_sha256": host.file_sha256(provider_entry),
                 "owned_instance_identity_sha256": "b" * 64,
                 "lambda_started_at_epoch": now - 100,
@@ -3554,16 +3556,16 @@ def test_raw_attempt_streams_before_cutoff_without_aggregate_stage(
     local_qualification.write_text(
         json.dumps(
             {
-                "qualification_id": V10_PROVIDER_CONTRACT.local_finalizer_qualification_id,
+                "qualification_id": V11_PROVIDER_CONTRACT.local_finalizer_qualification_id,
                 "package_commit": "a" * 40,
             }
         ),
         encoding="utf-8",
     )
     frozen_document = {
-        "manifest_id": V10_PROVIDER_CONTRACT.frozen_run_manifest_id,
-        "plan_id": V10_PROVIDER_CONTRACT.plan_id,
-        "host_run_id": V10_PROVIDER_CONTRACT.host_run_id,
+        "manifest_id": V11_PROVIDER_CONTRACT.frozen_run_manifest_id,
+        "plan_id": V11_PROVIDER_CONTRACT.plan_id,
+        "host_run_id": V11_PROVIDER_CONTRACT.host_run_id,
         "clean_package_commit": "a" * 40,
         "replacement_image_id": replacement_image_id,
         "local_finalizer_qualification_sha256": host.file_sha256(local_qualification),

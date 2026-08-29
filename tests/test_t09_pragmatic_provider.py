@@ -19,6 +19,7 @@ from giclab.harness.t09_provider_contracts import (
     V8_PROVIDER_CONTRACT,
     V9_PROVIDER_CONTRACT,
     V10_PROVIDER_CONTRACT,
+    V11_PROVIDER_CONTRACT,
     T09ProviderContract,
     T09ProviderContractError,
     load_provider_plan,
@@ -47,10 +48,20 @@ def _entry_command(version: str, *, launch_slot: int = 1) -> tuple[str, ...]:
 
 
 def test_every_retained_provider_version_has_one_frozen_contract() -> None:
-    assert tuple(PROVIDER_CONTRACTS) == ("V3", "V4", "V5", "V6", "V7", "V8", "V9", "V10")
-    assert len({contract.plan_id for contract in PROVIDER_CONTRACTS.values()}) == 8
-    assert len({contract.host_run_id for contract in PROVIDER_CONTRACTS.values()}) == 8
-    assert len({contract.instance_name for contract in PROVIDER_CONTRACTS.values()}) == 8
+    assert tuple(PROVIDER_CONTRACTS) == (
+        "V3",
+        "V4",
+        "V5",
+        "V6",
+        "V7",
+        "V8",
+        "V9",
+        "V10",
+        "V11",
+    )
+    assert len({contract.plan_id for contract in PROVIDER_CONTRACTS.values()}) == 9
+    assert len({contract.host_run_id for contract in PROVIDER_CONTRACTS.values()}) == 9
+    assert len({contract.instance_name for contract in PROVIDER_CONTRACTS.values()}) == 9
 
 
 @pytest.mark.parametrize("contract", tuple(PROVIDER_CONTRACTS.values()))
@@ -147,17 +158,22 @@ def test_retained_autonomous_contracts_remain_distinct() -> None:
         V8_PROVIDER_CONTRACT.host_run_id,
         V9_PROVIDER_CONTRACT.host_run_id,
         V10_PROVIDER_CONTRACT.host_run_id,
+        V11_PROVIDER_CONTRACT.host_run_id,
     ) == (
         "RUN-T09-PILOT-HOST-0005",
         "RUN-T09-PILOT-HOST-AUTONOMOUS-0001",
         "RUN-T09-PILOT-HOST-AUTONOMOUS-0002",
         "RUN-T09-PILOT-HOST-AUTONOMOUS-0003",
+        "RUN-T09-PILOT-HOST-AUTONOMOUS-0004",
     )
     assert V8_PROVIDER_CONTRACT.frozen_run_manifest_id != (
         V10_PROVIDER_CONTRACT.frozen_run_manifest_id
     )
     assert V8_PROVIDER_CONTRACT.local_finalizer_qualification_id != (
         V10_PROVIDER_CONTRACT.local_finalizer_qualification_id
+    )
+    assert V10_PROVIDER_CONTRACT.frozen_run_manifest_id != (
+        V11_PROVIDER_CONTRACT.frozen_run_manifest_id
     )
 
 
@@ -168,6 +184,8 @@ def test_historical_budget_contracts_do_not_inherit_v10_caps() -> None:
     assert V6_PROVIDER_CONTRACT.preflight_lambda_cost_cap_usd == 8.0
     assert V8_PROVIDER_CONTRACT.preflight_lambda_cost_cap_usd == 20.0
     assert V10_PROVIDER_CONTRACT.preflight_lambda_cost_cap_usd == 10.0
+    assert V11_PROVIDER_CONTRACT.preflight_lambda_cost_cap_usd == 10.0
+    assert V11_PROVIDER_CONTRACT.prior_t09_cost_usd == 33.14878958732642
 
 
 def test_v3_renderer_cannot_emit_v10_identity() -> None:

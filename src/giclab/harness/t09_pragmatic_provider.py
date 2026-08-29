@@ -302,7 +302,7 @@ class CampaignLifecycle:
             expected_limits = AutonomousPilotLifecycleLimits(
                 maximum_preflight_provider_cost_cents=2_000
             )
-        elif self.contract.version in {"V9", "V10"}:
+        elif self.contract.version in {"V9", "V10", "V11"}:
             expected_limits = AutonomousPilotLifecycleLimits()
         else:  # pragma: no cover - contracts validate supported versions before construction
             raise T09ProviderError("unsupported provider lifecycle contract")
@@ -940,7 +940,7 @@ def load_campaign_lifecycle(
             persistent_filesystems=retry_limits.persistent_filesystems,
         )
 
-    if contract.version not in {"V8", "V9", "V10"}:
+    if contract.version not in {"V8", "V9", "V10", "V11"}:
         raise T09ProviderError("provider lifecycle contract is unsupported")
     if set(raw) != {
         "cumulative_accounting_origin",
@@ -1089,7 +1089,7 @@ def validate_authorization_ledger(
     repository: Path,
     package_commit: str,
 ) -> dict[str, object]:
-    if contract.version != "V10":
+    if contract.version != "V11":
         raise T09ProviderError(
             "frozen historical provider authority is inspectable but cannot be replayed"
         )
@@ -1128,11 +1128,11 @@ def validate_authorization_ledger(
     if not isinstance(authorization_source_sha256, str) or not isinstance(
         authorization_reference, str
     ):
-        raise T09ProviderError("V10 authorization identity is malformed or not fresh")
+        raise T09ProviderError("V11 authorization identity is malformed or not fresh")
     try:
         contract.validate_authority(authorization_reference, authorization_source_sha256)
     except T09ProviderContractError as exc:
-        raise T09ProviderError("V10 authorization identity is malformed or not fresh") from exc
+        raise T09ProviderError("V11 authorization identity is malformed or not fresh") from exc
     required = {
         "schema_version": "0.1.0",
         "authorization_source_sha256": authorization_source_sha256,
@@ -1152,10 +1152,10 @@ def validate_authorization_ledger(
         "lambda_cost_cap_usd": 8.0,
         "openai_cost_cap_usd": 40.0,
         "aggregate_cost_cap_usd": 58.0,
-        "prior_t09_cost_usd": 29.3502995579,
+        "prior_t09_cost_usd": contract.prior_t09_cost_usd,
         "cumulative_t09_cost_cap_usd": 90.0,
         "replacement_image_policy": "retained-exact-load-or-one-fallback-build-v1",
-        "artifact_destination": ("/Volumes/Macintosh HD - Data/GIC-Lab/t09/v10"),
+        "artifact_destination": ("/Volumes/Macintosh HD - Data/GIC-Lab/t09/v11"),
     }
     if value != required:
         raise T09ProviderError("private authorization ledger drifted")
@@ -1176,7 +1176,7 @@ def validate_cleanup_authority_ledger(
     resource.  This narrower validator intentionally omits all launch admission.
     """
 
-    if contract.version == "V10":
+    if contract.version == "V11":
         return validate_authorization_ledger(
             path,
             contract=contract,
@@ -3719,7 +3719,7 @@ def autonomous_preflight_package_transition(
     """
 
     if (
-        contract.version not in {"V8", "V9", "V10"}
+        contract.version not in {"V8", "V9", "V10", "V11"}
         or contract.execution_contract_path is None
         or contract.command_manifest_path is None
         or _HEX40.fullmatch(from_package_commit) is None
@@ -6685,7 +6685,7 @@ def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser()
     result.add_argument(
         "--provider-contract",
-        choices=("V3", "V4", "V5", "V6", "V7", "V8", "V9", "V10"),
+        choices=("V3", "V4", "V5", "V6", "V7", "V8", "V9", "V10", "V11"),
         required=True,
     )
     result.add_argument("--repository", type=Path, required=True)

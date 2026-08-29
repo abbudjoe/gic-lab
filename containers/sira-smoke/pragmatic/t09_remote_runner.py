@@ -62,7 +62,7 @@ from giclab.harness.t09_provider_contracts import (
     PROVIDER_CONTRACTS,
     V4_PROVIDER_CONTRACT,
     V6_PROVIDER_CONTRACT,
-    V10_PROVIDER_CONTRACT,
+    V11_PROVIDER_CONTRACT,
     T09ProviderContract,
     T09ProviderContractError,
     load_provider_plan,
@@ -101,11 +101,11 @@ from giclab.harness.t09_sira_pilot import (
 )
 
 UTC: Final = timezone.utc  # noqa: UP017 - host control plane supports Python 3.10
-ACTIVE_PROVIDER_CONTRACT: Final = V10_PROVIDER_CONTRACT
+ACTIVE_PROVIDER_CONTRACT: Final = V11_PROVIDER_CONTRACT
 PLAN_ID: Final = ACTIVE_PROVIDER_CONTRACT.plan_id
 HOST_RUN_ID: Final = ACTIVE_PROVIDER_CONTRACT.host_run_id
-ARCHIVE_ID: Final = "ARCHIVE-EXP0001-PILOT-V10-AUTONOMOUS-0003"
-STAGE_ID: Final = "STAGE-EXP0001-PILOT-V10-AUTONOMOUS-0003"
+ARCHIVE_ID: Final = "ARCHIVE-EXP0001-PILOT-V11-AUTONOMOUS-0004"
+STAGE_ID: Final = "STAGE-EXP0001-PILOT-V11-AUTONOMOUS-0004"
 QUALIFICATION_ID: Final = cast(str, ACTIVE_PROVIDER_CONTRACT.active_image_qualification_id)
 FROZEN_RUN_MANIFEST_ID: Final = cast(str, ACTIVE_PROVIDER_CONTRACT.frozen_run_manifest_id)
 LOCAL_FINALIZER_QUALIFICATION_ID: Final = cast(
@@ -1371,22 +1371,46 @@ def run_owned_docker(
 def _read_owned_docker_cidfile(cidfile: Path, *, prefix: list[str]) -> str | None:
     """Read one daemon-published exact ID without following mutable aliases."""
 
-    if not os.path.lexists(cidfile):
+    nofollow = getattr(os, "O_NOFOLLOW", None)
+    nonblock = getattr(os, "O_NONBLOCK", None)
+    if nofollow is None or nonblock is None:
+        raise T09HostError("owned Docker container-ID no-follow nonblocking open is unavailable")
+    flags = os.O_RDONLY | nofollow | nonblock | getattr(os, "O_CLOEXEC", 0)
+    try:
+        descriptor = os.open(cidfile, flags)
+    except FileNotFoundError:
         return None
-    metadata = cidfile.lstat()
-    if (
-        cidfile.is_symlink()
-        or not stat.S_ISREG(metadata.st_mode)
-        or metadata.st_uid != _docker_cidfile_owner_uid(prefix)
-        or metadata.st_nlink != 1
-        or stat.S_IMODE(metadata.st_mode) & 0o022
-        or not 0 < metadata.st_size <= 65
-    ):
-        raise T09HostError("owned Docker container-ID file is unsafe")
-    container_id = cidfile.read_text(encoding="ascii").strip()
-    if re.fullmatch(r"[a-f0-9]{64}", container_id) is None:
+    except OSError as exc:
+        raise T09HostError("owned Docker container-ID file is unsafe") from exc
+    try:
+        metadata = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_uid != _docker_cidfile_owner_uid(prefix)
+            or metadata.st_nlink != 1
+            or stat.S_IMODE(metadata.st_mode) & 0o022
+        ):
+            raise T09HostError("owned Docker container-ID file is unsafe")
+        if metadata.st_size == 0:
+            return None
+        if metadata.st_size not in (64, 65):
+            raise T09HostError("owned Docker container-ID file is malformed")
+        payload = bytearray()
+        while len(payload) <= 65:
+            chunk = os.read(descriptor, 66 - len(payload))
+            if not chunk:
+                break
+            payload.extend(chunk)
+        encoded = bytes(payload)
+    except OSError as exc:
+        raise T09HostError("owned Docker container-ID file is unsafe") from exc
+    finally:
+        os.close(descriptor)
+    if encoded.endswith(b"\n"):
+        encoded = encoded[:-1]
+    if re.fullmatch(rb"[a-f0-9]{64}", encoded) is None:
         raise T09HostError("owned Docker container-ID file is malformed")
-    return container_id
+    return encoded.decode("ascii")
 
 
 def docker_prefix() -> list[str]:
@@ -3886,13 +3910,13 @@ def record_preflight_credential_scan(
 def contract_paths(repository: Path) -> dict[str, Path]:
     experiment = repository / "experiments/EXP-0001-sira-simulative-vs-reactive"
     return {
-        "plan": experiment / "run-plans/proposals/T09_PILOT_RUNTIME_PROFILE_V10.yaml",
-        "execution": experiment / "contracts/proposals/T09_PILOT_EXECUTION_CONTRACT_V10.json",
-        "commands": experiment / "contracts/proposals/T09_PILOT_COMMAND_MANIFESTS_V10.json",
+        "plan": experiment / "run-plans/proposals/T09_PILOT_RUNTIME_PROFILE_V11.yaml",
+        "execution": experiment / "contracts/proposals/T09_PILOT_EXECUTION_CONTRACT_V11.json",
+        "commands": experiment / "contracts/proposals/T09_PILOT_COMMAND_MANIFESTS_V11.json",
         "conditions": experiment / "run-plans/conditions",
         "dataset": experiment / "contracts/T09_PILOT_DATASET_CONTRACT.json",
         "evaluator": experiment / "contracts/T09_PILOT_EVALUATOR_CONTRACT.json",
-        "runtime": experiment / "contracts/proposals/T09_PILOT_RUNTIME_IDENTITY_V10.json",
+        "runtime": experiment / "contracts/proposals/T09_PILOT_RUNTIME_IDENTITY_V11.json",
         "real_regression": experiment / "T09_PRAGMATIC_RETRY4_FINALIZER_REGRESSION.json",
     }
 
@@ -9390,7 +9414,7 @@ def preflight_with_deadline(args: argparse.Namespace) -> None:
         label="provider preflight entry receipt",
     )
     if dynamic_contract is not ACTIVE_PROVIDER_CONTRACT:
-        raise T09HostError("active preflight requires the exact V10 provider contract")
+        raise T09HostError("active preflight requires the exact V11 provider contract")
     started = dynamic.get("provider_preflight_started_at_epoch")
     prior_duration = dynamic.get("prior_campaign_lambda_duration_seconds")
     prior_cost = dynamic.get("prior_campaign_lambda_cost_usd")

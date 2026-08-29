@@ -2,40 +2,34 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import inspect
 import json
+import os
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 import yaml
 from jsonschema import Draft202012Validator
 
-from giclab.harness.t09_provider_contracts import V10_PROVIDER_CONTRACT
+from giclab.harness import t09_pragmatic_provider as provider
+from giclab.harness import t09_sira_pilot as pilot
+from giclab.harness.t09_provider_contracts import (
+    V10_PROVIDER_CONTRACT,
+    V11_PROVIDER_CONTRACT,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 EXP = ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive"
-PLAN_PATH = EXP / "run-plans/proposals/PLAN-EXP0001-PILOT-V10.yaml"
-SCHEMA_PATH = ROOT / "schemas/t09-v10-plan.schema.json"
+PLAN_PATH = EXP / "run-plans/proposals/PLAN-EXP0001-PILOT-V11.yaml"
+SCHEMA_PATH = ROOT / "schemas/t09-v11-plan.schema.json"
 V9_DISPOSITION_PATH = EXP / "T09_AUTONOMOUS_RETRY2_V9_DISPOSITION.json"
-V10_REVIEWED_IMPLEMENTATION_ANCESTOR = "a5daa11db99229e347008a6110e9ca0a9b7b948d"
+V10_PLAN_PATH = EXP / "run-plans/proposals/PLAN-EXP0001-PILOT-V10.yaml"
 
 
 def sha256_file(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
-def git_blob(relative: str) -> bytes:
-    return subprocess.run(
-        [
-            "git",
-            "-C",
-            str(ROOT),
-            "show",
-            f"{V10_REVIEWED_IMPLEMENTATION_ANCESTOR}:{relative}",
-        ],
-        check=True,
-        capture_output=True,
-    ).stdout
 
 
 def load_plan() -> dict[str, object]:
@@ -44,13 +38,17 @@ def load_plan() -> dict[str, object]:
     return value
 
 
-def test_v10_plan_is_schema_valid_complete_and_unauthorized() -> None:
+def test_v11_plan_is_schema_valid_complete_and_unauthorized() -> None:
     plan = load_plan()
     schema = json.loads(SCHEMA_PATH.read_text())
     Draft202012Validator.check_schema(schema)
     Draft202012Validator(schema).validate(plan)
+    assert PLAN_PATH.stat().st_size == 14_754
+    assert sha256_file(PLAN_PATH) == (
+        "34a405d06521bd3fb55379721dff9c5795954fcb099d641587e2169b37575411"
+    )
 
-    assert plan["plan_id"] == "PLAN-EXP0001-PILOT-V10"
+    assert plan["plan_id"] == "PLAN-EXP0001-PILOT-V11"
     assert plan["status"] == {
         "authorized": False,
         "execution_allowed": False,
@@ -67,16 +65,18 @@ def test_v10_plan_is_schema_valid_complete_and_unauthorized() -> None:
     }
 
 
-def test_v10_plan_binds_exact_repaired_control_sources() -> None:
+def test_v11_plan_binds_exact_repaired_control_sources() -> None:
     bindings = load_plan()["implementation_bindings"]
     assert isinstance(bindings, dict)
     accounting = bindings["provider_accounting"]
     refinalization = bindings["offline_refinalization"]
     cleanup = bindings["early_cleanup"]
+    publication = bindings["owned_container_publication"]
     execution = bindings["execution_plane"]
     assert isinstance(accounting, dict)
     assert isinstance(refinalization, dict)
     assert isinstance(cleanup, dict)
+    assert isinstance(publication, dict)
     assert isinstance(execution, dict)
 
     bound_paths = {
@@ -89,6 +89,8 @@ def test_v10_plan_binds_exact_repaired_control_sources() -> None:
         cleanup["implementation_path"]: cleanup["implementation_sha256"],
         cleanup["provider_integration_path"]: cleanup["provider_integration_sha256"],
         cleanup["schema_path"]: cleanup["schema_sha256"],
+        publication["reader_path"]: publication["reader_sha256"],
+        publication["regression_path"]: publication["regression_sha256"],
         execution["pilot_library_path"]: execution["pilot_library_sha256"],
         execution["campaign_lifecycle_path"]: execution["campaign_lifecycle_sha256"],
         execution["provider_path"]: execution["provider_sha256"],
@@ -103,12 +105,7 @@ def test_v10_plan_binds_exact_repaired_control_sources() -> None:
     }
     for relative, expected_sha256 in bound_paths.items():
         assert isinstance(relative, str)
-        observed = (
-            hashlib.sha256(git_blob(relative)).hexdigest()
-            if Path(relative).suffix == ".py"
-            else sha256_file(ROOT / relative)
-        )
-        assert observed == expected_sha256
+        assert sha256_file(ROOT / relative) == expected_sha256
     condition_plans = execution["condition_plans"]
     assert isinstance(condition_plans, list)
     for item in condition_plans:
@@ -132,10 +129,19 @@ def test_v10_plan_binds_exact_repaired_control_sources() -> None:
     assert cleanup["provider_termination_requires_optional_state"] is False
     assert cleanup["public_alias_is_cleanup_authority"] is False
     assert cleanup["optional_pilot_state_required"] is False
+    assert publication == {
+        **publication,
+        "safe_zero_length_state": "publication-pending",
+        "descriptor_no_follow_required": True,
+        "exact_daemon_published_id_required": True,
+        "exact_id_cleanup_only": True,
+        "name_based_cleanup_authority": False,
+    }
 
 
-def test_v10_execution_plane_is_typed_renderable_and_statically_unauthorized() -> None:
-    # Keep the historical parity node ID; V10 is verified from frozen artifacts only.
+def test_v11_execution_plane_is_typed_renderable_and_statically_unauthorized(
+    tmp_path: Path,
+) -> None:
     bindings = load_plan()["implementation_bindings"]
     assert isinstance(bindings, dict)
     execution = bindings["execution_plane"]
@@ -144,29 +150,48 @@ def test_v10_execution_plane_is_typed_renderable_and_statically_unauthorized() -
     execution_document = json.loads(execution_path.read_text())
     execution_schema = json.loads((ROOT / str(execution["execution_schema_path"])).read_text())
     Draft202012Validator(execution_schema).validate(execution_document)
-    plan = load_plan()
-    identities = plan["identities"]
-    assert isinstance(identities, dict)
-    assert [attempt["run_id"] for attempt in execution_document["attempts"]] == identities[
-        "attempt_order"
-    ]
-    assert V10_PROVIDER_CONTRACT.plan_id == "PLAN-EXP0001-PILOT-V10"
-    assert V10_PROVIDER_CONTRACT.host_run_id == "RUN-T09-PILOT-HOST-AUTONOMOUS-0003"
+    loaded = pilot.load_execution_contract(
+        execution_path,
+        expected_sha256=str(execution["execution_contract_sha256"]),
+    )
+    assert tuple(attempt.run_id for attempt in loaded.attempts) == pilot.ATTEMPT_ORDER
+    assert V11_PROVIDER_CONTRACT.plan_id == pilot.PLAN_ID == "PLAN-EXP0001-PILOT-V11"
+    assert V11_PROVIDER_CONTRACT.host_run_id == "RUN-T09-PILOT-HOST-AUTONOMOUS-0004"
     assert execution_document["authorized"] is False
     assert execution_document["authorization_reference"] is None
     assert execution_document["execution_eligibility"] == (
         "blocked-until-fresh-category-3-authorization"
     )
+    lifecycle = execution_document["provider_lifecycle"]
+    assert lifecycle["model_metadata_before_lambda_launch"] is True
+    assert lifecycle["model_metadata_request_count"] == 1
+    assert lifecycle["model_metadata_snapshot"] == "gpt-4o-2024-11-20"
+    assert lifecycle["model_substitution_allowed"] is False
+    assert lifecycle["immutable_model_unavailable_disposition"] == (
+        "stop-before-lambda-launch-zero-lambda-cost"
+    )
 
-    commands = json.loads((ROOT / str(execution["command_manifests_path"])).read_text())
-    assert commands["plan_id"] == "PLAN-EXP0001-PILOT-V10"
-    assert commands["execution_contract_sha256"] == execution["execution_contract_sha256"]
-    assert commands["reviewed_implementation_ancestor"] == V10_REVIEWED_IMPLEMENTATION_ANCESTOR
-    assert [manifest["run_id"] for manifest in commands["manifests"]] == identities["attempt_order"]
-    assert all(pair["valid"] is True for pair in commands["pair_diffs"])
+    rendered_path = tmp_path / "commands.json"
+    environment = dict(os.environ)
+    environment["PYTHONPATH"] = str(ROOT / "src")
+    subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / execution["command_generator_path"]),
+            "--repository",
+            str(ROOT),
+            "--output",
+            str(rendered_path),
+        ],
+        check=True,
+        env=environment,
+    )
+    assert json.loads(rendered_path.read_text()) == json.loads(
+        (ROOT / str(execution["command_manifests_path"])).read_text()
+    )
 
 
-def test_v10_scientific_hash_regression_is_unchanged() -> None:
+def test_v11_scientific_hash_regression_is_unchanged() -> None:
     plan = load_plan()
     science = plan["scientific_contract"]
     assert isinstance(science, dict)
@@ -261,7 +286,7 @@ def normalized_pair_command(attempt: dict[str, object]) -> list[str]:
     return argv
 
 
-def test_v10_pair_command_and_configuration_diff_is_exact() -> None:
+def test_v11_pair_command_and_configuration_diff_is_exact() -> None:
     attempts = load_plan()["attempts"]
     assert isinstance(attempts, list)
     typed_attempts = [attempt for attempt in attempts if isinstance(attempt, dict)]
@@ -283,7 +308,7 @@ def test_v10_pair_command_and_configuration_diff_is_exact() -> None:
         assert left["upstream_argv"][retry_index + 1] == "0"
 
 
-def test_v10_fresh_identities_checkpoint_and_no_run_root_consumption() -> None:
+def test_v11_fresh_identities_checkpoint_and_no_run_root_consumption() -> None:
     plan = load_plan()
     identities = plan["identities"]
     runtime = plan["runtime_contract"]
@@ -294,8 +319,9 @@ def test_v10_fresh_identities_checkpoint_and_no_run_root_consumption() -> None:
     run_ids = [attempt["run_id"] for attempt in attempts if isinstance(attempt, dict)]
     assert run_ids == identities["attempt_order"]
     assert len(run_ids) == len(set(run_ids)) == 4
-    assert all(str(run_id).endswith("AUTONOMOUS-0003") for run_id in run_ids)
+    assert all(str(run_id).endswith("AUTONOMOUS-0004") for run_id in run_ids)
     assert all("AUTONOMOUS-0002" not in str(run_id) for run_id in run_ids)
+    assert all("AUTONOMOUS-0003" not in str(run_id) for run_id in run_ids)
     checkpoint = runtime["first_pair_checkpoint"]
     assert isinstance(checkpoint, dict)
     assert checkpoint["after_run_id"] == run_ids[1]
@@ -307,26 +333,69 @@ def test_v10_fresh_identities_checkpoint_and_no_run_root_consumption() -> None:
     )
     artifact_root = ROOT / "artifacts"
     assert not any(
-        "autonomous-0003" in str(path).lower() for path in artifact_root.rglob("*") if path.is_dir()
+        "autonomous-0004" in str(path).lower() for path in artifact_root.rglob("*") if path.is_dir()
     )
 
 
-def test_v10_cleanup_authority_precedes_post_identity_package_transition() -> None:
-    source = git_blob("src/giclab/harness/t09_pragmatic_provider.py").decode()
-    launch_start = source.index("def launch_campaign(")
+def test_v11_source_identity_metadata_order_and_conservative_budget_are_exact() -> None:
+    plan = load_plan()
+    bindings = plan["implementation_bindings"]
+    budget = plan["budget_contract"]
+    preconditions = plan["category_3_preconditions"]
+    assert isinstance(bindings, dict)
+    assert isinstance(budget, dict)
+    assert isinstance(preconditions, list)
+    assert bindings["required_base_commit"] == "1c6b093699288f37aa23526fe1e1672e50280093"
+    assert bindings["required_base_tree"] == "39501c69af3296ce271d38aa235c26d80175a4b1"
+    assert bindings["required_base_parent_2"] == "a2b30012bdf09080da844451ad0d987dde5da646"
+    assert bindings["reviewed_implementation_ancestor"] == (
+        "e91eccc01fa8d479cdfff270a8032dfb6283f5b4"
+    )
+    assert budget["prior_t09_observed_lower_bound_usd"] == 15.3545995873264159
+    assert budget["prior_t09_conservative_upper_bound_usd"] == 33.1487895873264159
+    assert budget["maximum_new_total_cost_usd"] == 58.0
+    assert budget["effective_maximum_new_total_cost_under_cumulative_cap_usd"] == (
+        56.8512104126735841
+    )
+    assert (
+        budget["prior_t09_conservative_upper_bound_usd"]
+        + budget["effective_maximum_new_total_cost_under_cumulative_cap_usd"]
+        <= budget["cumulative_t09_cost_cap_usd"]
+    )
+    assert any(
+        "exactly one authenticated gpt-4o-2024-11-20 model-metadata GET" in item
+        and "zero Lambda cost" in item
+        for item in preconditions
+    )
+
+
+def test_v10_plan_remains_exact_immutable_historical_operational_evidence() -> None:
+    assert V10_PLAN_PATH.stat().st_size == 13_426
+    assert sha256_file(V10_PLAN_PATH) == (
+        "17c6502c625e0a3fcabc99180b0a432a60b27557be6a88f3289e45720951b38b"
+    )
+    assert V10_PROVIDER_CONTRACT.plan_id == "PLAN-EXP0001-PILOT-V10"
+    evidence = load_plan()["evidence_contract"]
+    assert isinstance(evidence, dict)
+    assert evidence["v10_stopped_category_3_artifacts_are_immutable_operational_evidence"] is True
+    assert evidence["v10_conditions_eligible_for_v11_pairing"] is False
+
+
+def test_v11_cleanup_authority_precedes_post_identity_package_transition() -> None:
+    source = inspect.getsource(provider.launch_campaign)
     exact_id = source.index("instance_id = instance_ids[0]")
     cleanup_initialize = source.index("_initial_preflight_cleanup_state(", exact_id)
     package_transition = source.index("CleanupLifecycleStage.PACKAGE_TRANSITION", exact_id)
     provisional_source = source.index("_provisional_owner_binding(", exact_id)
     source_staging = source.index("CleanupLifecycleStage.SOURCE_STAGING", exact_id)
-    assert launch_start < exact_id < cleanup_initialize < package_transition
-    assert package_transition < provisional_source < source_staging
+    assert exact_id < cleanup_initialize < package_transition < provisional_source < source_staging
 
-    remote_source = git_blob("containers/sira-smoke/pragmatic/t09_remote_runner.py").decode()
-    assert 'closeout.add_argument("--remote-cleanup-journal", type=Path)' in source
+    provider_source = (ROOT / "src/giclab/harness/t09_pragmatic_provider.py").read_text()
+    remote_source = (ROOT / "containers/sira-smoke/pragmatic/t09_remote_runner.py").read_text()
+    assert 'closeout.add_argument("--remote-cleanup-journal", type=Path)' in provider_source
     assert "CONTAINER_PREFIX: Final = ACTIVE_PROVIDER_CONTRACT.container_prefix" in remote_source
-    assert V10_PROVIDER_CONTRACT.container_prefix == "giclab-t09-pilot-v10-autonomous-"
-    assert "import_continuation(remote)" in source
+    assert V11_PROVIDER_CONTRACT.container_prefix == "giclab-t09-pilot-v11-autonomous-"
+    assert "import_continuation(remote)" in provider_source
 
 
 def contains_secret_or_private_ip(value: object) -> bool:
@@ -339,7 +408,7 @@ def contains_secret_or_private_ip(value: object) -> bool:
     return any(re.search(pattern, encoded) is not None for pattern in secret_patterns)
 
 
-def test_v10_plan_privacy_and_secret_canary_regression() -> None:
+def test_v11_plan_privacy_and_secret_canary_regression() -> None:
     plan = load_plan()
     assert not contains_secret_or_private_ip(plan)
     canary = copy.deepcopy(plan)

@@ -29,13 +29,13 @@ from giclab.harness.sira_gate_a import (
     ProviderBudgetUsage,
 )
 from giclab.harness.t09_provider_contracts import (
-    V10_PROVIDER_CONTRACT,
+    V11_PROVIDER_CONTRACT,
     T09ProviderContract,
     T09ProviderContractError,
     provider_contract_for_plan_id,
 )
 
-ACTIVE_PROVIDER_CONTRACT: Final = V10_PROVIDER_CONTRACT
+ACTIVE_PROVIDER_CONTRACT: Final = V11_PROVIDER_CONTRACT
 PLAN_ID: Final = ACTIVE_PROVIDER_CONTRACT.plan_id
 EXPERIMENT_ID: Final = "EXP-0001"
 SIRA_COMMIT: Final = "93fb8d72de71f9a4a13419670adeb34d93cf7acd"
@@ -60,14 +60,14 @@ TASK_REFERENCE_SHA256S: Final = (
 )
 ATTEMPT_ORDER: Final = ACTIVE_PROVIDER_CONTRACT.run_ids
 EVALUATOR_RUN_IDS: Final = (
-    "RUN-T09-EVAL-TASK-A-REACTIVE-AUTONOMOUS-0003",
-    "RUN-T09-EVAL-TASK-A-SIMULATIVE-AUTONOMOUS-0003",
-    "RUN-T09-EVAL-TASK-B-SIMULATIVE-AUTONOMOUS-0003",
-    "RUN-T09-EVAL-TASK-B-REACTIVE-AUTONOMOUS-0003",
+    "RUN-T09-EVAL-TASK-A-REACTIVE-AUTONOMOUS-0004",
+    "RUN-T09-EVAL-TASK-A-SIMULATIVE-AUTONOMOUS-0004",
+    "RUN-T09-EVAL-TASK-B-SIMULATIVE-AUTONOMOUS-0004",
+    "RUN-T09-EVAL-TASK-B-REACTIVE-AUTONOMOUS-0004",
 )
-RUNTIME_QUALIFICATION_ID: Final = "QUAL-T09-PILOT-V10-IMAGE-AUTONOMOUS-0003"
-LOCAL_FINALIZER_QUALIFICATION_ID: Final = "QUAL-T09-PILOT-V10-LOCAL-FINALIZER-AUTONOMOUS-0003"
-FROZEN_RUN_MANIFEST_ID: Final = "RUN-MANIFEST-EXP0001-PILOT-V10-AUTONOMOUS-0003"
+RUNTIME_QUALIFICATION_ID: Final = "QUAL-T09-PILOT-V11-IMAGE-AUTONOMOUS-0004"
+LOCAL_FINALIZER_QUALIFICATION_ID: Final = "QUAL-T09-PILOT-V11-LOCAL-FINALIZER-AUTONOMOUS-0004"
+FROZEN_RUN_MANIFEST_ID: Final = "RUN-MANIFEST-EXP0001-PILOT-V11-AUTONOMOUS-0004"
 HISTORICAL_IMAGE_ID: Final = (
     "sha256:035edf61718e84a8156f4f0f7817b134b0ce31488d3f0b50bbfba2b4a30cc61c"
 )
@@ -2629,8 +2629,8 @@ class PairCheckpointInput:
     actual_lambda_cost_usd: float
     remaining_campaign_seconds: float
     next_attempt_hard_wall_seconds: int = 3_600
-    prior_t09_cost_usd: float = 29.3502995579
-    cumulative_t09_cost_cap_usd: float = 90.0
+    prior_t09_cost_usd: float = ACTIVE_PROVIDER_CONTRACT.prior_t09_cost_usd
+    cumulative_t09_cost_cap_usd: float = ACTIVE_PROVIDER_CONTRACT.cumulative_t09_cost_cap_usd
 
 
 def first_pair_decision(value: PairCheckpointInput) -> dict[str, object]:
@@ -3058,7 +3058,7 @@ def _validated_upstream_argv(
         "--seed": "42",
     }
     task_label = "TASK-A" if attempt.task_index == 0 else "TASK-B"
-    upstream_run_id = f"{EXPERIMENT_ID}-PILOT-V10-{task_label}-{attempt.condition.upper()}"
+    upstream_run_id = f"{EXPERIMENT_ID}-PILOT-V11-{task_label}-{attempt.condition.upper()}"
     if argv[0] != upstream_run_id or values != expected:
         raise T09PilotError("upstream argv drifted from the exact task/condition contract")
     return values
@@ -3118,7 +3118,7 @@ def render_command_manifest(
     equality_surface = {
         "task_id": attempt.task_id,
         "model": MODEL_REVISION,
-        "runtime": "T09-V10-python-3.11.14-core-suppressed-preentry-bound-image",
+        "runtime": "T09-V11-python-3.11.14-core-suppressed-preentry-bound-image",
         "giclab_commit": attempt.giclab_commit,
         "protocol_sha256": attempt.protocol_sha256,
         "config_sha256": attempt.config_sha256,
@@ -3220,7 +3220,7 @@ def _normalized_actual_argv(manifest: Mapping[str, object]) -> tuple[str, ...] |
         "TASK-A" if task_id == TASK_IDS[0] else "TASK-B" if task_id == TASK_IDS[1] else None
     )
     expected_upstream_run_id = (
-        f"{EXPERIMENT_ID}-PILOT-V10-{task_label}-{str(condition).upper()}"
+        f"{EXPERIMENT_ID}-PILOT-V11-{task_label}-{str(condition).upper()}"
         if task_label is not None
         else None
     )
