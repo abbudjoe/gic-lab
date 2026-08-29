@@ -80,19 +80,19 @@
       },
       {
         "path": "src/giclab/harness/t09_pragmatic_provider.py",
-        "sha256": "81c119b14bd2a5d7298f527f997ebdd633b0d09b567ea7d13f084f97c5945d0c"
+        "sha256": "685a29ac8b175578e7ec819bb8bf478a256bbc3c5bbe4134508e65f6628ac41b"
       },
       {
         "path": "src/giclab/harness/t09_provider_contracts.py",
-        "sha256": "1d6b420379996794adc340aef1d80441df75d589e2ade4eaedac390a9dae9376"
+        "sha256": "e3145fa3baaad36a45e4a22a9c43ea84b48e93e903354fecc1706581d4d79cfd"
       },
       {
         "path": "containers/sira-smoke/pragmatic/t09_remote_runner.py",
-        "sha256": "8bcb4ec3ffc134bd51eded2d584a7d369aac9bb016e82054d18d2258f467a5c6"
+        "sha256": "86e4b6fe95781b8fc5ae2709654adab1f45b0a21133f4ee043c0d97f3167fc6a"
       },
       {
         "path": "src/giclab/harness/t09_model_metadata_receipt.py",
-        "sha256": "00b8d763cbe65de3cf0572ec2ccc780bb368817b0436d1ecd0cd23d2c8396b95"
+        "sha256": "0abdc84eaf9721ae3b0bcb894bd4b486fc8e2db37bb1446943f28d7a9a1e2c84"
       },
       {
         "path": "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py",
@@ -147,7 +147,7 @@
         "sha256": "e9d6fd08eb5cef403e5e8fd6333bf0ea103b14872427b086ad6ab1bf6441e5c0"
       }
     ],
-    "reviewed_implementation_ancestor": "e91a71b9a535060ecf30cb63a3e44632e20e7c82",
+    "reviewed_implementation_ancestor": "14927012373da3aa3ffecdb3a387d92dc8faecb1",
     "scope": [
       "content-addressed-no-follow-private-regression-archive-staging",
       "raw-attempt-root-typed-binding-before-empirical-entry",

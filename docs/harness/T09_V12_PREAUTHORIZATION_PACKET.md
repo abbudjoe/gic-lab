@@ -26,3 +26,10 @@ The package retains the scientific model, evaluator, dataset, task hashes,
 pair order, retry count, and descriptive-calibration interpretation. A future
 Category 3 authorization must bind the exact reviewed merged commit and final
 plan hash before any request or mutation.
+
+Receipt timing ownership is explicit: provider launch enforces the 1,800-second
+prelaunch freshness window at the launch-send boundary; host validation is
+durable and offline, disables current-time receipt expiry, and still requires
+response completion and receipt creation before provider launch. The contract
+therefore remains one total metadata GET, provider request count zero, and host
+request count zero. This packet is not Category 3 approval.

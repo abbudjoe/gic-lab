@@ -21,6 +21,15 @@ acknowledgement containing only safe identity/count fields and the receipt
 hash. It has no fallback to the historical network preflight and does not
 reissue the metadata request.
 
+Freshness ownership is separated from durable validation. Provider launch owns
+the 1,800-second prelaunch freshness window and checks it at the actual launch
+send boundary (`provider_launch_requires_current_freshness: true`). Host
+validation uses a durable offline policy (`host_runtime_requires_current_freshness:
+false`): it retains the response-completion/receipt-creation-before-launch
+ordering check, but does not expire a valid receipt against the current host
+clock. The 3,600-second per-iteration and longer cumulative preflight limits do
+not create a second metadata request or a host freshness gate.
+
 V12 remains `authorized: false`, `execution_allowed: false`,
 `cloud_mutation_allowed: false`, `paid_compute_allowed: false`,
 `live_qualification_performed: false`, and `pilot_executed: false`.

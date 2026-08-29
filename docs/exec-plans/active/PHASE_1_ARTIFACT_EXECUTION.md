@@ -692,20 +692,23 @@ mutation, live Docker/browser/SiRA/FanOutQA/evaluator action, or paid compute.
 
 ### T09 V12 model-metadata receipt handoff repair — 2026-08-29
 
-Assembly status: **implementation complete; source/spec rereview passed; exact-head gates and merge required;
-V12 remains unauthorized and unexecuted**.
+Assembly status: **Category 1R timing repair implementation complete; final source/spec rereview,
+exact-head gates, and merge required; V12 remains unauthorized and unexecuted**.
 
 V11's stopped transaction is preserved as immutable operational evidence. Its
 root cause was duplicated ownership of the frozen single authenticated metadata
 GET: the external local pre-Lambda control plane sent the request, while the
 host runtime would send a second request during qualification. V12 repairs the
 ownership boundary without changing the scientific contract. The local gate
-seals the sole canonical receipt; provider launch validates and retains its
-semantic SHA-256 before any Lambda POST; and the host validates the exact
-source-bound receipt copy offline with zero metadata network calls.
+seals the sole canonical receipt; provider launch validates its freshness at
+the actual launch-send boundary and retains its semantic SHA-256 before any
+Lambda POST; and the host validates the exact source-bound receipt copy offline
+with zero metadata network calls and no current-time expiry.
 
 The fresh V12 package is `PLAN-EXP0001-PILOT-V12`, with host and attempt
-identities recorded in `docs/harness/T09_V12_ACTIVE_PHASE1_STATE.md`. All V12
+identities recorded in `docs/harness/T09_V12_ACTIVE_PHASE1_STATE.md`. Provider
+freshness is 1,800 seconds and host current-time freshness is false; prelaunch
+timestamp ordering remains mandatory. All V12
 authorization, execution, cloud-mutation, paid-compute, live-qualification,
 pilot, and run-root flags remain false. The tracked proposal keeps the future
 merged-commit placeholder; a fresh Category 3 overlay must bind the exact
@@ -974,6 +977,11 @@ review, and current-turn authority; no earlier gate grants any part of that auth
   host to resolve that exact copy before offline validation, and reject arbitrary
   receipt substitution or a network fallback. Preserve the exact scientific
   contract and keep every V12 authorization/execution flag false.
+- 2026-08-29: Repair the V12 timing boundary identified in PR #5 review. Provider
+  launch now owns the 1,800-second freshness admission at the actual launch-send
+  boundary; host validation is durable and offline, keeps prelaunch timestamp
+  ordering, and does not re-expire the receipt against its current clock. The
+  total remains one local metadata GET, with provider and host counts zero.
 
 ## Blockers and user actions
 
