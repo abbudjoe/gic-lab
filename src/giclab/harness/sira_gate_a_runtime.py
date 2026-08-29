@@ -777,10 +777,12 @@ def run(argv: Sequence[str] | None = None) -> int:
         initial_aggregate_usage = load_aggregate_usage(
             aggregate_ledger_path,
             contract_sha256=pilot_contract.sha256,
+            plan_id=pilot_contract.plan_id,
         )
         initial_aggregate_observed_usage = load_aggregate_observed_usage(
             aggregate_ledger_path,
             contract_sha256=pilot_contract.sha256,
+            plan_id=pilot_contract.plan_id,
         )
         condition_budget_caps = pilot_contract.limits.condition_provider_caps()
         aggregate_budget_caps = pilot_contract.limits.aggregate_provider_caps()
@@ -793,8 +795,12 @@ def run(argv: Sequence[str] | None = None) -> int:
         )
         pilot_control_root = pilot_state_path.parent
         pilot_root = pilot_control_root.parent
+        expected_control_root = {
+            "V11": "pilot-v7",
+            "V12": "pilot-v12",
+        }.get(pilot_contract.provider_contract_version)
         if (
-            pilot_control_root.name != "pilot-v7"
+            pilot_control_root.name != expected_control_root
             or aggregate_ledger_path.parent.name != "runtime-budget"
             or aggregate_ledger_path.parent.parent != pilot_control_root
             or pilot_root not in attempt_root.parents
@@ -857,6 +863,7 @@ def run(argv: Sequence[str] | None = None) -> int:
         write_aggregate_usage(
             aggregate_ledger_path,
             contract_sha256=pilot_contract.sha256,
+            plan_id=pilot_contract.plan_id,
             usage=usage_from_document(reserved_bounds.get("aggregate")),
             observed_usage=usage_from_document(observed_bounds.get("aggregate")),
             unreconciled_provider_attempts=unreconciled,

@@ -73,10 +73,13 @@ SCHEMA_FILES = (
     "schemas/t09-sira-pilot-execution.schema.json",
     "schemas/t09-sira-pilot-v10-execution.schema.json",
     "schemas/t09-sira-pilot-v11-execution.schema.json",
+    "schemas/t09-sira-pilot-v12-execution.schema.json",
+    "schemas/t09-model-metadata-receipt.schema.json",
     "schemas/t09-offline-refinalization-receipt.schema.json",
     "schemas/t09-early-cleanup-state.schema.json",
     "schemas/t09-v10-plan.schema.json",
     "schemas/t09-v11-plan.schema.json",
+    "schemas/t09-v12-plan.schema.json",
     "schemas/terminal-execution-control.schema.json",
 )
 REQUIRED_PATHS = (
@@ -218,7 +221,7 @@ def _t09_successor_implementation_binding_map(plan: Mapping[str, Any]) -> dict[s
     bindings = plan.get("implementation_bindings")
     if not isinstance(bindings, dict):
         return {}
-    specifications = (
+    specifications: tuple[tuple[str, str, str], ...] = (
         ("provider_accounting", "path", "sha256"),
         ("provider_accounting", "regression_path", "regression_sha256"),
         (
@@ -254,6 +257,10 @@ def _t09_successor_implementation_binding_map(plan: Mapping[str, Any]) -> dict[s
         ("execution_plane", "runtime_identity_path", "runtime_identity_sha256"),
         ("execution_plane", "execution_schema_path", "execution_schema_sha256"),
     )
+    if plan.get("plan_id") == "PLAN-EXP0001-PILOT-V12":
+        specifications += (
+            ("execution_plane", "runtime_adaptation_path", "runtime_adaptation_sha256"),
+        )
     result: dict[str, str] = {}
     for group_name, path_field, hash_field in specifications:
         group = bindings.get(group_name)
@@ -1815,7 +1822,7 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
         errors.append("EXP-0001 T09: replacement runtime semantic identity drifted")
     instrumentation = runtime_identity.get("repository_instrumentation")
     files = instrumentation.get("files") if isinstance(instrumentation, dict) else None
-    successor_plan_path = exp_root / "run-plans/proposals/PLAN-EXP0001-PILOT-V11.yaml"
+    successor_plan_path = exp_root / "run-plans/proposals/PLAN-EXP0001-PILOT-V12.yaml"
     successor_bindings = (
         _t09_successor_implementation_binding_map(load_yaml(successor_plan_path))
         if successor_plan_path.is_file()
@@ -2593,8 +2600,10 @@ def _validate_t09_successor_plan(
         "early_cleanup",
         "execution_plane",
     ]
-    if version == "V11":
+    if version in {"V11", "V12"}:
         required_groups.insert(3, "owned_container_publication")
+    if version == "V12":
+        required_groups.insert(4, "model_metadata_receipt")
     groups = {name: bindings.get(name) for name in required_groups}
     if not all(isinstance(value, dict) for value in groups.values()):
         return [*errors, f"{label} implementation binding groups are malformed"]
@@ -2603,10 +2612,13 @@ def _validate_t09_successor_plan(
     refinalization = groups["offline_refinalization"]
     cleanup = groups["early_cleanup"]
     execution = groups["execution_plane"]
+    model_metadata = groups.get("model_metadata_receipt")
     assert isinstance(accounting, dict)
     assert isinstance(refinalization, dict)
     assert isinstance(cleanup, dict)
     assert isinstance(execution, dict)
+    if version == "V12":
+        assert isinstance(model_metadata, dict)
 
     source_ancestor: str | None = None
     runtime_identity_relative = execution.get("runtime_identity_path")
@@ -2649,6 +2661,25 @@ def _validate_t09_successor_plan(
         (execution, "runtime_identity_path", "runtime_identity_sha256"),
         (execution, "execution_schema_path", "execution_schema_sha256"),
     ]
+    if version == "V12":
+        assert isinstance(model_metadata, dict)
+        specifications.extend(
+            [
+                (execution, "runtime_adaptation_path", "runtime_adaptation_sha256"),
+                (model_metadata, "implementation_path", "implementation_sha256"),
+                (model_metadata, "schema_path", "schema_sha256"),
+                (
+                    model_metadata,
+                    "public_price_contract_path",
+                    "public_price_contract_sha256",
+                ),
+                (
+                    model_metadata,
+                    "public_deprecation_observation_path",
+                    "public_deprecation_observation_sha256",
+                ),
+            ]
+        )
     publication = groups.get("owned_container_publication")
     if isinstance(publication, dict):
         specifications.extend(
@@ -2719,6 +2750,24 @@ def _validate_t09_successor_plan(
                 f"{label} runtime profile: {error}"
                 for error in validate_run_profile_readiness(runtime_profile)
             )
+            if version == "V12":
+                lifecycle = runtime_profile.get("provider_lifecycle")
+                expected_metadata_lifecycle = {
+                    "model_metadata_request_count_total": 1,
+                    "model_metadata_request_location": ("local-control-plane-before-lambda-launch"),
+                    "provider_launch_model_metadata_request_count": 0,
+                    "host_runtime_model_metadata_request_count": 0,
+                    "model_metadata_receipt_required": True,
+                    "model_metadata_receipt_replay_allowed": False,
+                    "immutable_model_unavailable_disposition": (
+                        "stop-before-lambda-launch-zero-lambda-cost"
+                    ),
+                }
+                if not isinstance(lifecycle, dict) or any(
+                    lifecycle.get(field) != expected
+                    for field, expected in expected_metadata_lifecycle.items()
+                ):
+                    errors.append(f"{label} runtime profile metadata receipt lifecycle drifted")
             profile_sha256 = hashlib.sha256(runtime_profile_target.read_bytes()).hexdigest()
             environment_sha256 = (
                 hashlib.sha256((root / runtime_identity_relative).read_bytes()).hexdigest()
@@ -2785,7 +2834,7 @@ def _validate_t09_successor_plan(
                 ]
                 if observed_order != expected_order:
                     errors.append(f"{label} execution attempt order drifted from the plan")
-            if version == "V11":
+            if version in {"V11", "V12"}:
                 lifecycle = contract.get("provider_lifecycle")
                 if not isinstance(lifecycle, dict) or (
                     lifecycle.get("model_metadata_before_lambda_launch") is not True
@@ -2796,6 +2845,20 @@ def _validate_t09_successor_plan(
                     != "stop-before-lambda-launch-zero-lambda-cost"
                 ):
                     errors.append(f"{label} metadata-before-Lambda contract drifted")
+                if (
+                    version == "V12"
+                    and isinstance(lifecycle, dict)
+                    and (
+                        lifecycle.get("model_metadata_request_count_total") != 1
+                        or lifecycle.get("model_metadata_request_location")
+                        != "local-control-plane-before-lambda-launch"
+                        or lifecycle.get("provider_launch_model_metadata_request_count") != 0
+                        or lifecycle.get("host_runtime_model_metadata_request_count") != 0
+                        or lifecycle.get("model_metadata_receipt_required") is not True
+                        or lifecycle.get("model_metadata_receipt_replay_allowed") is not False
+                    )
+                ):
+                    errors.append(f"{label} receipt handoff contract drifted")
         if command_target.is_file():
             commands = load_json(command_target)
             if commands.get("plan_id") != plan_id or commands.get(
@@ -2812,14 +2875,14 @@ def _validate_t09_successor_plan(
                 )
             ):
                 errors.append(f"{label} command pair diff is invalid")
-            if version == "V11":
+            if version in {"V11", "V12"}:
                 reviewed_ancestor = bindings.get("reviewed_implementation_ancestor")
                 if commands.get("reviewed_implementation_ancestor") != reviewed_ancestor:
                     errors.append(f"{label} command manifest source ancestor drifted")
     else:
         errors.append(f"{label} execution control paths are malformed")
 
-    if version == "V11" and isinstance(runtime_identity_relative, str):
+    if version in {"V11", "V12"} and isinstance(runtime_identity_relative, str):
         identity_target = root / runtime_identity_relative
         if identity_target.is_file():
             identity = load_json(identity_target)
@@ -2843,7 +2906,7 @@ def _validate_t09_successor_plan(
                 Decimal(
                     str(budget.get("effective_maximum_new_total_cost_under_cumulative_cap_usd"))
                 )
-                if version == "V11"
+                if version in {"V11", "V12"}
                 else nominal_new_total
             )
         except InvalidOperation:
@@ -2867,11 +2930,21 @@ def validate_t09_v10_plan(root: Path = ROOT) -> list[str]:
 
 
 def validate_t09_v11_plan(root: Path = ROOT) -> list[str]:
-    """Validate the active V11 proposal and each implementation byte binding."""
+    """Validate the stopped V11 proposal against its reviewed source ancestor."""
 
     return _validate_t09_successor_plan(
         root,
         version="V11",
+        historical_source_bindings=True,
+    )
+
+
+def validate_t09_v12_plan(root: Path = ROOT) -> list[str]:
+    """Validate the unauthorized V12 receipt-handoff successor package."""
+
+    return _validate_t09_successor_plan(
+        root,
+        version="V12",
         historical_source_bindings=False,
     )
 
@@ -2981,6 +3054,7 @@ def run_all(root: Path = ROOT) -> list[str]:
         ("EXP-0001 contract", validate_exp0001_contract),
         ("T09 V10 plan", validate_t09_v10_plan),
         ("T09 V11 plan", validate_t09_v11_plan),
+        ("T09 V12 plan", validate_t09_v12_plan),
         ("manifests", validate_manifests),
         ("workflows", validate_workflows),
         ("repository hygiene", validate_hygiene),

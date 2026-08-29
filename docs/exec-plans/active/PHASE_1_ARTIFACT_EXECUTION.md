@@ -940,19 +940,24 @@ review, and current-turn authority; no earlier gate grants any part of that auth
   advance only a descriptor-safe V11 reader plus fresh unauthorized identities. Keep
   unsafe metadata, malformed nonzero content, exact-ID cleanup authority, deadlines,
   scientific fields, and zero condition retries unchanged.
+- 2026-08-28: Preserve V11's stopped one-request model-metadata conflict and advance
+  only the fresh unauthorized V12 receipt-handoff repair. The local control plane owns
+  the sole metadata GET; provider launch validates its sealed receipt before mutation,
+  and the host validates it offline with zero additional metadata requests. Category 1
+  performs no live provider, cloud, browser, SiRA, evaluator, or scientific action.
 
 ## Blockers and user actions
 
-T09 V11 is blocked from execution, not from local review. Required user-facing gates
+T09 V12 is blocked from execution, not from local review. Required user-facing gates
 are exact-head PR review, user approval of the reviewed SHA, a separate Category 2
-merge-only turn, and a fresh Category 3 Luna authorization. Historical Lambda,
+merge-only turn, and a fresh Category 3 Luna authorization. Historical V11 Lambda,
 firewall, credential, container, image, browser, condition, and attempt identities are
-not reusable. No V11 run root may be materialized before that future authorization.
+not reusable. No V12 run root may be materialized before that future authorization.
 
 ## Next permitted work
 
-The next permitted T09 work is local Category 1 completion and exact-head review of
-the draft V11 repair PR, followed only by the separately authorized Category 2 merge.
-Category 3 remains unavailable until a fresh Luna authorization binds the reviewed
-merged commit and exact V11 plan SHA-256. Absent that authorization, no live account,
-cloud, model, browser, container, evaluator, FanOutQA, or SiRA action is permitted.
+The next permitted T09 work is exact-head review of the draft V12 receipt-handoff PR,
+followed only by the separately authorized Category 2 merge. Category 3 remains
+unavailable until a fresh Luna authorization binds the reviewed merged commit and
+exact V12 plan SHA-256. Absent that authorization, no live account, cloud, model,
+browser, container, evaluator, FanOutQA, or SiRA action is permitted.

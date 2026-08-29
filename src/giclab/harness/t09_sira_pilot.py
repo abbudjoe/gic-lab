@@ -29,6 +29,7 @@ from giclab.harness.sira_gate_a import (
     ProviderBudgetUsage,
 )
 from giclab.harness.t09_provider_contracts import (
+    PROVIDER_CONTRACTS,
     V11_PROVIDER_CONTRACT,
     T09ProviderContract,
     T09ProviderContractError,
@@ -59,6 +60,12 @@ TASK_REFERENCE_SHA256S: Final = (
     "2ee9d892e24441d5f5bbf31b7616c1ade5977af26d22e4020f92a162fa23becb",
 )
 ATTEMPT_ORDER: Final = ACTIVE_PROVIDER_CONTRACT.run_ids
+_AUTONOMOUS_ATTEMPT_IDS: Final = frozenset(
+    run_id
+    for provider in PROVIDER_CONTRACTS.values()
+    if provider.execution_contract_path is not None
+    for run_id in provider.run_ids
+)
 EVALUATOR_RUN_IDS: Final = (
     "RUN-T09-EVAL-TASK-A-REACTIVE-AUTONOMOUS-0004",
     "RUN-T09-EVAL-TASK-A-SIMULATIVE-AUTONOMOUS-0004",
@@ -403,6 +410,15 @@ class RuntimeQualification:
     @classmethod
     def from_document(cls, value: object) -> RuntimeQualification:
         document = _strict_object(value, context="frozen runtime qualification")
+        raw_plan_id = document.get("plan_id")
+        if not isinstance(raw_plan_id, str):
+            raise T09PilotError("frozen runtime qualification plan identity is missing")
+        try:
+            selected_provider_contract = provider_contract_for_plan_id(raw_plan_id)
+        except T09ProviderContractError as exc:
+            raise T09PilotError(
+                "frozen runtime qualification plan identity is unsupported"
+            ) from exc
         result = cls(
             manifest_id=_required_string(document.get("manifest_id"), context="frozen manifest ID"),
             qualification_id=_required_string(
@@ -611,9 +627,9 @@ class RuntimeQualification:
         )
         if (
             document.get("schema_version") != "0.1.0"
-            or document.get("plan_id") != PLAN_ID
-            or result.manifest_id != FROZEN_RUN_MANIFEST_ID
-            or result.qualification_id != RUNTIME_QUALIFICATION_ID
+            or document.get("plan_id") != selected_provider_contract.plan_id
+            or result.manifest_id != selected_provider_contract.frozen_run_manifest_id
+            or result.qualification_id != selected_provider_contract.active_image_qualification_id
             or re.fullmatch(r"[a-f0-9]{40}", result.clean_package_commit) is None
             or re.fullmatch(r"sha256:[a-f0-9]{64}", result.replacement_image_id) is None
             or result.historical_image_id != HISTORICAL_IMAGE_ID
@@ -745,7 +761,7 @@ class AttemptBinding:
     upstream_argv: tuple[str, ...]
 
     def __post_init__(self) -> None:
-        if self.run_id not in ATTEMPT_ORDER:
+        if self.run_id not in _AUTONOMOUS_ATTEMPT_IDS:
             raise T09PilotError("attempt run ID is not in the frozen order")
         if self.task_id not in TASK_IDS or self.task_index not in (0, 1):
             raise T09PilotError("attempt task binding is not frozen")
@@ -871,6 +887,8 @@ class PilotExecutionContract:
 
     path: Path
     sha256: str
+    plan_id: str
+    provider_contract_version: str
     limits: RuntimeLimits
     attempts: tuple[AttemptBinding, ...]
     dataset_contract_path: str
@@ -915,9 +933,16 @@ def load_execution_contract(path: Path, *, expected_sha256: str) -> PilotExecuti
     if _HEX64.fullmatch(expected_sha256) is None or file_sha256(path) != expected_sha256:
         raise T09PilotError("execution contract hash does not match")
     document = load_json_object(path, context="T09 execution contract")
+    raw_plan_id = document.get("plan_id")
+    if not isinstance(raw_plan_id, str):
+        raise T09PilotError("execution contract plan identity is missing")
+    try:
+        selected_provider_contract = provider_contract_for_plan_id(raw_plan_id)
+    except T09ProviderContractError as exc:
+        raise T09PilotError("execution contract plan identity is unsupported") from exc
     expected_identity = {
         "schema_version": "0.5.0",
-        "plan_id": PLAN_ID,
+        "plan_id": selected_provider_contract.plan_id,
         "experiment_id": EXPERIMENT_ID,
         "sira_commit": SIRA_COMMIT,
         "model_revision": MODEL_REVISION,
@@ -1017,7 +1042,7 @@ def load_execution_contract(path: Path, *, expected_sha256: str) -> PilotExecuti
                 upstream_argv=tuple(cast(list[str], argv)),
             )
         )
-    if tuple(item.run_id for item in attempts) != ATTEMPT_ORDER:
+    if tuple(item.run_id for item in attempts) != selected_provider_contract.run_ids:
         raise T09PilotError("attempt order drifted")
     if len({(item.task_id, item.condition) for item in attempts}) != 4:
         raise T09PilotError("attempt task-condition bindings are not bijective")
@@ -1098,6 +1123,8 @@ def load_execution_contract(path: Path, *, expected_sha256: str) -> PilotExecuti
     return PilotExecutionContract(
         path=path.resolve(strict=True),
         sha256=expected_sha256,
+        plan_id=selected_provider_contract.plan_id,
+        provider_contract_version=selected_provider_contract.version,
         limits=limits,
         attempts=tuple(attempts),
         dataset_contract_path=_required_string(dataset.get("path"), context="dataset path"),
@@ -1146,7 +1173,12 @@ def usage_from_document(value: object) -> ProviderBudgetUsage:
     )
 
 
-def load_aggregate_usage(path: Path, *, contract_sha256: str) -> ProviderBudgetUsage:
+def load_aggregate_usage(
+    path: Path,
+    *,
+    contract_sha256: str,
+    plan_id: str = PLAN_ID,
+) -> ProviderBudgetUsage:
     """Load the prior sequential-attempt aggregate or return a typed zero state."""
 
     if not path.exists():
@@ -1154,7 +1186,7 @@ def load_aggregate_usage(path: Path, *, contract_sha256: str) -> ProviderBudgetU
     document = load_json_object(path, context="aggregate budget ledger")
     if (
         document.get("schema_version") not in {"0.1.0", "0.2.0"}
-        or document.get("plan_id") != PLAN_ID
+        or document.get("plan_id") != plan_id
     ):
         raise T09PilotError("aggregate budget ledger identity drifted")
     if document.get("execution_contract_sha256") != contract_sha256:
@@ -1166,7 +1198,12 @@ def load_aggregate_usage(path: Path, *, contract_sha256: str) -> ProviderBudgetU
     return usage_from_document(document.get("usage"))
 
 
-def load_aggregate_observed_usage(path: Path, *, contract_sha256: str) -> ProviderBudgetUsage:
+def load_aggregate_observed_usage(
+    path: Path,
+    *,
+    contract_sha256: str,
+    plan_id: str = PLAN_ID,
+) -> ProviderBudgetUsage:
     """Load the response-backed aggregate lower bound from the durable ledger."""
 
     if not path.exists():
@@ -1174,7 +1211,7 @@ def load_aggregate_observed_usage(path: Path, *, contract_sha256: str) -> Provid
     document = load_json_object(path, context="aggregate budget ledger")
     if (
         document.get("schema_version") not in {"0.1.0", "0.2.0"}
-        or document.get("plan_id") != PLAN_ID
+        or document.get("plan_id") != plan_id
     ):
         raise T09PilotError("aggregate budget ledger identity drifted")
     if document.get("execution_contract_sha256") != contract_sha256:
@@ -1188,6 +1225,7 @@ def write_aggregate_usage(
     path: Path,
     *,
     contract_sha256: str,
+    plan_id: str = PLAN_ID,
     usage: ProviderBudgetUsage,
     unreconciled_provider_attempts: int,
     observed_usage: ProviderBudgetUsage | None = None,
@@ -1200,7 +1238,7 @@ def write_aggregate_usage(
     observed = observed_usage if observed_usage is not None else usage
     document = {
         "schema_version": "0.2.0",
-        "plan_id": PLAN_ID,
+        "plan_id": plan_id,
         "execution_contract_sha256": contract_sha256,
         "unreconciled_provider_attempts": unreconciled_provider_attempts,
         "unknown_outcomes": unknown_outcomes,
@@ -3058,7 +3096,10 @@ def _validated_upstream_argv(
         "--seed": "42",
     }
     task_label = "TASK-A" if attempt.task_index == 0 else "TASK-B"
-    upstream_run_id = f"{EXPERIMENT_ID}-PILOT-V11-{task_label}-{attempt.condition.upper()}"
+    upstream_run_id = (
+        f"{EXPERIMENT_ID}-PILOT-{contract.provider_contract_version}-"
+        f"{task_label}-{attempt.condition.upper()}"
+    )
     if argv[0] != upstream_run_id or values != expected:
         raise T09PilotError("upstream argv drifted from the exact task/condition contract")
     return values
@@ -3118,7 +3159,10 @@ def render_command_manifest(
     equality_surface = {
         "task_id": attempt.task_id,
         "model": MODEL_REVISION,
-        "runtime": "T09-V11-python-3.11.14-core-suppressed-preentry-bound-image",
+        "runtime": (
+            f"T09-{contract.provider_contract_version}-python-3.11.14-"
+            "core-suppressed-preentry-bound-image"
+        ),
         "giclab_commit": attempt.giclab_commit,
         "protocol_sha256": attempt.protocol_sha256,
         "config_sha256": attempt.config_sha256,
@@ -3147,7 +3191,7 @@ def render_command_manifest(
     }
     return {
         "schema_version": "0.1.0",
-        "plan_id": PLAN_ID,
+        "plan_id": contract.plan_id,
         "run_id": attempt.run_id,
         "pair_id": attempt.pair_id,
         "task_id": attempt.task_id,
@@ -3219,9 +3263,11 @@ def _normalized_actual_argv(manifest: Mapping[str, object]) -> tuple[str, ...] |
     task_label = (
         "TASK-A" if task_id == TASK_IDS[0] else "TASK-B" if task_id == TASK_IDS[1] else None
     )
+    plan_id = manifest.get("plan_id")
+    version = plan_id.rsplit("-", 1)[-1] if isinstance(plan_id, str) else None
     expected_upstream_run_id = (
-        f"{EXPERIMENT_ID}-PILOT-V11-{task_label}-{str(condition).upper()}"
-        if task_label is not None
+        f"{EXPERIMENT_ID}-PILOT-{version}-{task_label}-{str(condition).upper()}"
+        if task_label is not None and version in {"V11", "V12"}
         else None
     )
     if not downstream or downstream[0] != expected_upstream_run_id:

@@ -313,6 +313,17 @@
             "max_empirical_launch_count": {"const": 1},
             "max_lambda_instances": {"const": 1},
             "persistent_filesystems": {"const": 0},
+            "immutable_model_unavailable_disposition": {
+              "const": "stop-before-lambda-launch-zero-lambda-cost"
+            },
+            "model_metadata_request_count_total": {"const": 1},
+            "model_metadata_request_location": {
+              "const": "local-control-plane-before-lambda-launch"
+            },
+            "provider_launch_model_metadata_request_count": {"const": 0},
+            "host_runtime_model_metadata_request_count": {"const": 0},
+            "model_metadata_receipt_required": {"const": true},
+            "model_metadata_receipt_replay_allowed": {"const": false},
             "replacement_launch_rule": {"$ref": "#/$defs/replacement-launch-rule"},
             "admission_rule": {"type": "string", "minLength": 8},
             "control_plane": {"type": "string", "minLength": 8}

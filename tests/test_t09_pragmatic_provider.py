@@ -44,6 +44,9 @@ def _entry_command(version: str, *, launch_slot: int = 1) -> tuple[str, ...]:
         public_ipv4_file="/private/public-ipv4.txt",
         ssh_public_key_file="/private/id_ed25519.pub",
         launch_slot=launch_slot,
+        model_metadata_receipt=(
+            "/private/model-metadata-receipt.json" if version == "V12" else None
+        ),
     )
 
 
@@ -58,10 +61,11 @@ def test_every_retained_provider_version_has_one_frozen_contract() -> None:
         "V9",
         "V10",
         "V11",
+        "V12",
     )
-    assert len({contract.plan_id for contract in PROVIDER_CONTRACTS.values()}) == 9
-    assert len({contract.host_run_id for contract in PROVIDER_CONTRACTS.values()}) == 9
-    assert len({contract.instance_name for contract in PROVIDER_CONTRACTS.values()}) == 9
+    assert len({contract.plan_id for contract in PROVIDER_CONTRACTS.values()}) == 10
+    assert len({contract.host_run_id for contract in PROVIDER_CONTRACTS.values()}) == 10
+    assert len({contract.instance_name for contract in PROVIDER_CONTRACTS.values()}) == 10
 
 
 @pytest.mark.parametrize("contract", tuple(PROVIDER_CONTRACTS.values()))
