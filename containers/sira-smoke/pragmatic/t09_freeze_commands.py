@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 
+from giclab.harness.t09_provider_contracts import provider_contract
 from giclab.harness.t09_sira_pilot import (
     diff_pair_manifests,
     file_sha256,
@@ -20,14 +21,22 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument("--repository", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument(
+        "--provider-contract",
+        choices=("V11", "V12"),
+        default="V11",
+        help="versioned T09 provider package to render (default: V11)",
+    )
     return parser
 
 
-def render(repository: Path) -> dict[str, object]:
+def render(repository: Path, *, provider_version: str = "V11") -> dict[str, object]:
     root = repository.resolve(strict=True)
-    experiment = root / "experiments/EXP-0001-sira-simulative-vs-reactive"
-    execution_path = experiment / "contracts/proposals/T09_PILOT_EXECUTION_CONTRACT_V11.json"
-    plan_path = experiment / "run-plans/proposals/T09_PILOT_RUNTIME_PROFILE_V11.yaml"
+    contract_identity = provider_contract(provider_version)
+    if contract_identity.execution_contract_path is None:
+        raise ValueError("selected T09 provider contract has no execution package")
+    execution_path = root / contract_identity.execution_contract_path
+    plan_path = root / contract_identity.provider_profile_path
     runtime_path = root / "src/giclab/harness/sira_gate_a_runtime.py"
     library_path = root / "src/giclab/harness/t09_sira_pilot.py"
     generator_path = Path(__file__).resolve(strict=True)
@@ -36,6 +45,7 @@ def render(repository: Path) -> dict[str, object]:
         execution_path,
         expected_sha256=execution_sha256,
     )
+    control_root = "pilot-v7" if contract_identity.version == "V11" else "pilot-v12"
     commits = {attempt.giclab_commit for attempt in contract.attempts}
     if len(commits) != 1 or "unknown" in commits:
         raise ValueError("one reviewed implementation ancestor must be bound before rendering")
@@ -50,9 +60,9 @@ def render(repository: Path) -> dict[str, object]:
             runtime_adaptation_sha256=runtime_sha256,
             pilot_library_sha256=library_sha256,
             aggregate_ledger_path=(
-                "/opt/giclab-artifacts/pilot-v7/runtime-budget/aggregate-budget.json"
+                f"/opt/giclab-artifacts/{control_root}/runtime-budget/aggregate-budget.json"
             ),
-            pilot_state_path="/opt/giclab-artifacts/pilot-v7/pilot-state.json",
+            pilot_state_path=f"/opt/giclab-artifacts/{control_root}/pilot-state.json",
         )
         for attempt in contract.attempts
     ]
@@ -63,8 +73,20 @@ def render(repository: Path) -> dict[str, object]:
     if any(item.get("valid") is not True for item in pair_diffs):
         raise ValueError("one or more T09 command pairs are not matched")
     return {
+        **(
+            {
+                "model_metadata_request_count_total": 1,
+                "model_metadata_request_location": "local-control-plane-before-lambda-launch",
+                "provider_launch_model_metadata_request_count": 0,
+                "host_runtime_model_metadata_request_count": 0,
+                "model_metadata_receipt_required": True,
+                "model_metadata_receipt_replay_allowed": False,
+            }
+            if contract.provider_contract_version == "V12"
+            else {}
+        ),
         "schema_version": "0.1.0",
-        "plan_id": "PLAN-EXP0001-PILOT-V11",
+        "plan_id": contract.plan_id,
         "reviewed_implementation_ancestor": next(iter(commits)),
         "plan_path": plan_path.relative_to(root).as_posix(),
         "plan_sha256": file_sha256(plan_path),
@@ -102,7 +124,10 @@ def write_exclusive(path: Path, document: object) -> None:
 
 def main() -> int:
     args = _parser().parse_args()
-    write_exclusive(args.output.resolve(strict=False), render(args.repository))
+    write_exclusive(
+        args.output.resolve(strict=False),
+        render(args.repository, provider_version=args.provider_contract),
+    )
     return 0
 
 

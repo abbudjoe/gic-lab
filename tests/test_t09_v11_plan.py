@@ -4,10 +4,8 @@ import copy
 import hashlib
 import inspect
 import json
-import os
 import re
 import subprocess
-import sys
 from pathlib import Path
 
 import yaml
@@ -30,6 +28,15 @@ V10_PLAN_PATH = EXP / "run-plans/proposals/PLAN-EXP0001-PILOT-V10.yaml"
 
 def sha256_file(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def sha256_git_blob(relative: str, revision: str) -> str:
+    raw = subprocess.run(
+        ["git", "-C", str(ROOT), "show", f"{revision}:{relative}"],
+        check=True,
+        capture_output=True,
+    ).stdout
+    return hashlib.sha256(raw).hexdigest()
 
 
 def load_plan() -> dict[str, object]:
@@ -103,9 +110,15 @@ def test_v11_plan_binds_exact_repaired_control_sources() -> None:
         execution["runtime_identity_path"]: execution["runtime_identity_sha256"],
         execution["execution_schema_path"]: execution["execution_schema_sha256"],
     }
+    reviewed_ancestor = str(bindings["reviewed_implementation_ancestor"])
     for relative, expected_sha256 in bound_paths.items():
         assert isinstance(relative, str)
-        assert sha256_file(ROOT / relative) == expected_sha256
+        observed = (
+            sha256_git_blob(relative, reviewed_ancestor)
+            if relative.endswith(".py")
+            else sha256_file(ROOT / relative)
+        )
+        assert observed == expected_sha256
     condition_plans = execution["condition_plans"]
     assert isinstance(condition_plans, list)
     for item in condition_plans:
@@ -139,9 +152,7 @@ def test_v11_plan_binds_exact_repaired_control_sources() -> None:
     }
 
 
-def test_v11_execution_plane_is_typed_renderable_and_statically_unauthorized(
-    tmp_path: Path,
-) -> None:
+def test_v11_execution_plane_is_typed_renderable_and_statically_unauthorized() -> None:
     bindings = load_plan()["implementation_bindings"]
     assert isinstance(bindings, dict)
     execution = bindings["execution_plane"]
@@ -171,24 +182,15 @@ def test_v11_execution_plane_is_typed_renderable_and_statically_unauthorized(
         "stop-before-lambda-launch-zero-lambda-cost"
     )
 
-    rendered_path = tmp_path / "commands.json"
-    environment = dict(os.environ)
-    environment["PYTHONPATH"] = str(ROOT / "src")
-    subprocess.run(
-        [
-            sys.executable,
-            str(ROOT / execution["command_generator_path"]),
-            "--repository",
-            str(ROOT),
-            "--output",
-            str(rendered_path),
-        ],
-        check=True,
-        env=environment,
+    # V11 is stopped operational evidence.  Its command manifest remains
+    # byte-identified at the reviewed ancestor; the mutable generator is
+    # exercised against the successor package in the V12 regressions.
+    commands = json.loads((ROOT / str(execution["command_manifests_path"])).read_text())
+    assert commands["plan_id"] == "PLAN-EXP0001-PILOT-V11"
+    assert commands["reviewed_implementation_ancestor"] == (
+        "e91eccc01fa8d479cdfff270a8032dfb6283f5b4"
     )
-    assert json.loads(rendered_path.read_text()) == json.loads(
-        (ROOT / str(execution["command_manifests_path"])).read_text()
-    )
+    assert all(pair["valid"] is True for pair in commands["pair_diffs"])
 
 
 def test_v11_scientific_hash_regression_is_unchanged() -> None:
