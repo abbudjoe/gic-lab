@@ -48,6 +48,7 @@ from giclab.harness.t09_cleanup_state import (
     cleanup_locator_identity,
 )
 from giclab.harness.t09_model_metadata_receipt import (
+    MODEL_METADATA_RECEIPT_FILENAME,
     ModelMetadataReceiptError,
     model_metadata_receipt_sha256,
     validate_model_metadata_receipt,
@@ -7405,6 +7406,64 @@ def validate_model_metadata_receipt_offline(
     }
 
 
+def _resolve_v12_model_metadata_receipt(
+    *,
+    explicit_path: Path | None,
+    source_root: Path,
+    provider_entry: Mapping[str, object],
+) -> Path:
+    """Resolve the retained source-bound receipt, never a new network gate."""
+
+    source = source_root.resolve(strict=True)
+    binding = load_object(
+        source / "model-metadata-receipt-binding.json",
+        label="V12 model metadata receipt binding",
+    )
+    if (
+        set(binding)
+        != {
+            "schema_version",
+            "receipt_sha256",
+            "receipt_filename",
+            "provider_contract_version",
+            "plan_id",
+            "host_run_id",
+            "prelaunch_required",
+        }
+        or binding.get("schema_version") != "1.0.0"
+        or binding.get("receipt_sha256") != provider_entry.get("model_metadata_receipt_sha256")
+        or binding.get("receipt_filename") != MODEL_METADATA_RECEIPT_FILENAME
+        or binding.get("provider_contract_version") != V12_PROVIDER_CONTRACT.version
+        or binding.get("plan_id") != V12_PROVIDER_CONTRACT.plan_id
+        or binding.get("host_run_id") != V12_PROVIDER_CONTRACT.host_run_id
+        or binding.get("prelaunch_required") is not True
+    ):
+        raise T09HostError("V12 model metadata receipt handoff binding drifted")
+    retained = source / MODEL_METADATA_RECEIPT_FILENAME
+    if explicit_path is not None:
+        if not explicit_path.is_absolute():
+            raise T09HostError("explicit V12 model metadata receipt must be absolute")
+        try:
+            explicit_metadata = explicit_path.stat(follow_symlinks=False)
+        except OSError as exc:
+            raise T09HostError("explicit V12 model metadata receipt is unavailable") from exc
+        if (
+            explicit_path.is_symlink()
+            or not stat.S_ISREG(explicit_metadata.st_mode)
+            or explicit_metadata.st_uid != os.getuid()
+            or explicit_metadata.st_nlink != 1
+            or stat.S_IMODE(explicit_metadata.st_mode) != 0o600
+        ):
+            raise T09HostError("explicit V12 model metadata receipt metadata is unsafe")
+        try:
+            explicit = explicit_path.resolve(strict=True)
+        except OSError as exc:
+            raise T09HostError("explicit V12 model metadata receipt is unavailable") from exc
+        if explicit != retained:
+            raise T09HostError("V12 model metadata receipt is not the source-bound copy")
+    return retained
+
+
 def _replacement_inspect(
     artifact_root: Path,
     *,
@@ -9551,9 +9610,14 @@ def preflight(args: argparse.Namespace) -> None:
     # provider's already sealed receipt at this boundary and cannot fall back to
     # that network path.
     if dynamic_contract is V12_PROVIDER_CONTRACT:
-        receipt_path = getattr(args, "model_metadata_receipt", None)
-        if not isinstance(receipt_path, Path):
-            raise T09HostError("V12 runtime requires the bound model metadata receipt")
+        explicit_receipt_path = getattr(args, "model_metadata_receipt", None)
+        if explicit_receipt_path is not None and not isinstance(explicit_receipt_path, Path):
+            raise T09HostError("V12 model metadata receipt argument is malformed")
+        receipt_path = _resolve_v12_model_metadata_receipt(
+            explicit_path=explicit_receipt_path,
+            source_root=args.dynamic_source_root,
+            provider_entry=dynamic,
+        )
         model_metadata = validate_model_metadata_receipt_offline(
             receipt_path=receipt_path,
             repository=repository,

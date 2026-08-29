@@ -510,6 +510,47 @@ def test_host_accepts_bound_receipt_with_openai_transport_disabled(
     assert len(transport.calls) == 1
 
 
+def test_provider_receipt_copy_is_the_host_default_and_explicit_symlink_fails(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    output, _overlay, _transport, _base, _plan_sha256 = _run_local_preflight(monkeypatch, tmp_path)
+    source_root = tmp_path / "entry-source"
+    source_root.mkdir(mode=0o700)
+    retained = source_root / metadata.MODEL_METADATA_RECEIPT_FILENAME
+    retained_hash = metadata.copy_model_metadata_receipt(output, retained)
+    _private_json(
+        source_root / "model-metadata-receipt-binding.json",
+        {
+            "schema_version": "1.0.0",
+            "receipt_sha256": retained_hash,
+            "receipt_filename": metadata.MODEL_METADATA_RECEIPT_FILENAME,
+            "provider_contract_version": "V12",
+            "plan_id": V12_PROVIDER_CONTRACT.plan_id,
+            "host_run_id": V12_PROVIDER_CONTRACT.host_run_id,
+            "prelaunch_required": True,
+        },
+    )
+    host = _load_host()
+    provider_entry = {"model_metadata_receipt_sha256": retained_hash}
+    assert (
+        host._resolve_v12_model_metadata_receipt(
+            explicit_path=None,
+            source_root=source_root,
+            provider_entry=provider_entry,
+        )
+        == retained
+    )
+    symlink = tmp_path / "receipt-link.json"
+    symlink.symlink_to(retained)
+    with pytest.raises(host.T09HostError, match="metadata is unsafe"):
+        host._resolve_v12_model_metadata_receipt(
+            explicit_path=symlink,
+            source_root=source_root,
+            provider_entry=provider_entry,
+        )
+
+
 def test_v12_runtime_has_no_metadata_network_fallback() -> None:
     source = HOST_SOURCE.read_text(encoding="utf-8")
     preflight = source.split("def preflight(", 1)[1]

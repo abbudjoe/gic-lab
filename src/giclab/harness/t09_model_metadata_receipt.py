@@ -77,6 +77,7 @@ MODEL_METADATA_HOST_RUN_ID: Final = "RUN-T09-PILOT-HOST-AUTONOMOUS-0005"
 MODEL_METADATA_ENDPOINT: Final = (
     f"https://{MODEL_METADATA_HOST}{MODEL_METADATA_PATH_PREFIX}{MODEL_METADATA_MODEL_ID}"
 )
+MODEL_METADATA_RECEIPT_FILENAME: Final = "model-metadata-receipt.json"
 MODEL_METADATA_TERMINAL_STATE: Final = "model-metadata-verified"
 MODEL_METADATA_MAX_RESPONSE_BYTES: Final = 65_536
 MODEL_METADATA_MAX_DOTENV_BYTES: Final = 65_536
@@ -979,6 +980,21 @@ def bind_model_metadata_receipt_to_authorization_overlay(
     _write_existing_private_json(path, updated)
 
 
+def copy_model_metadata_receipt(source: Path, output: Path) -> str:
+    """Retain one canonical receipt copy for the source-bound host handoff."""
+
+    raw = _safe_private_file_bytes(source, maximum_bytes=65_536, label="model metadata receipt")
+    try:
+        loaded: object = json.loads(raw.decode("utf-8"), object_pairs_hook=_reject_duplicate_pairs)
+    except (UnicodeDecodeError, json.JSONDecodeError, ModelMetadataReceiptError) as exc:
+        raise ModelMetadataReceiptError("model metadata receipt is malformed JSON") from exc
+    if not isinstance(loaded, dict) or raw != _canonical_bytes(loaded):
+        raise ModelMetadataReceiptError("model metadata receipt is not canonically sealed")
+    document = cast(dict[str, object], loaded)
+    _write_exclusive(output, document)
+    return semantic_projection_sha256(document)
+
+
 def model_metadata_receipt_sha256(path: Path) -> str:
     """Return the semantic hash of a validated canonical receipt file."""
 
@@ -999,6 +1015,7 @@ __all__ = [
     "MODEL_METADATA_MODEL_ID",
     "MODEL_METADATA_PLAN_ID",
     "MODEL_METADATA_RECEIPT_FIELDS",
+    "MODEL_METADATA_RECEIPT_FILENAME",
     "MODEL_METADATA_RECEIPT_TYPE",
     "MODEL_METADATA_SCHEMA_VERSION",
     "MODEL_METADATA_TERMINAL_STATE",
@@ -1007,6 +1024,7 @@ __all__ = [
     "ModelMetadataTransport",
     "OpenAIModelMetadataTransport",
     "bind_model_metadata_receipt_to_authorization_overlay",
+    "copy_model_metadata_receipt",
     "create_model_metadata_receipt",
     "load_openai_dotenv_assignment",
     "model_metadata_authorization_overlay_sha256",

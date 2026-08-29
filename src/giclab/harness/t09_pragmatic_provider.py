@@ -53,9 +53,11 @@ from giclab.harness.t09_cleanup_state import (
     EarlyCleanupStateError,
 )
 from giclab.harness.t09_model_metadata_receipt import (
+    MODEL_METADATA_RECEIPT_FILENAME,
     ModelMetadataReceiptError,
     ModelMetadataTransport,
     bind_model_metadata_receipt_to_authorization_overlay,
+    copy_model_metadata_receipt,
     create_model_metadata_receipt,
     model_metadata_authorization_overlay_sha256,
     model_metadata_receipt_sha256,
@@ -2633,7 +2635,7 @@ def _entry_projection(
             != {
                 "schema_version",
                 "receipt_sha256",
-                "receipt_path_not_retained",
+                "receipt_filename",
                 "provider_contract_version",
                 "plan_id",
                 "host_run_id",
@@ -2641,13 +2643,23 @@ def _entry_projection(
             }
             or receipt_binding.get("schema_version") != "1.0.0"
             or receipt_binding.get("receipt_sha256") != model_metadata_receipt_sha256_value
-            or receipt_binding.get("receipt_path_not_retained") is not True
+            or receipt_binding.get("receipt_filename") != MODEL_METADATA_RECEIPT_FILENAME
             or receipt_binding.get("provider_contract_version") != contract.version
             or receipt_binding.get("plan_id") != contract.plan_id
             or receipt_binding.get("host_run_id") != contract.host_run_id
             or receipt_binding.get("prelaunch_required") is not True
         ):
             raise T09ProviderError("provider model-metadata receipt binding drifted")
+        try:
+            retained_receipt_sha256 = model_metadata_receipt_sha256(
+                root / MODEL_METADATA_RECEIPT_FILENAME
+            )
+        except (ModelMetadataReceiptError, OSError) as exc:
+            raise T09ProviderError(
+                "provider source lacks a safe retained model metadata receipt"
+            ) from exc
+        if retained_receipt_sha256 != model_metadata_receipt_sha256_value:
+            raise T09ProviderError("provider source retained receipt hash drifted")
     elif (root / "model-metadata-receipt-binding.json").exists():
         raise T09ProviderError("historical provider entry unexpectedly retained a metadata receipt")
     cleanup_handoff = _load_json(root / "early-cleanup-handoff.json", maximum_bytes=65_536)
@@ -6043,12 +6055,19 @@ def launch_campaign(
     entry_root = private_root / "entry-source"
     entry_root.mkdir(mode=0o700)
     if model_metadata_receipt_sha256_value is not None:
+        retained_receipt = entry_root / MODEL_METADATA_RECEIPT_FILENAME
+        retained_receipt_sha256 = copy_model_metadata_receipt(
+            cast(Path, model_metadata_receipt),
+            retained_receipt,
+        )
+        if retained_receipt_sha256 != model_metadata_receipt_sha256_value:
+            raise T09ProviderError("retained model metadata receipt changed during copy")
         write_exclusive(
             private_root / "model-metadata-receipt-binding.json",
             {
                 "schema_version": "1.0.0",
                 "receipt_sha256": model_metadata_receipt_sha256_value,
-                "receipt_path_not_retained": True,
+                "receipt_filename": MODEL_METADATA_RECEIPT_FILENAME,
                 "provider_contract_version": contract.version,
                 "plan_id": contract.plan_id,
                 "host_run_id": contract.host_run_id,
@@ -6075,7 +6094,7 @@ def launch_campaign(
             {
                 "schema_version": "1.0.0",
                 "receipt_sha256": model_metadata_receipt_sha256_value,
-                "receipt_path_not_retained": True,
+                "receipt_filename": MODEL_METADATA_RECEIPT_FILENAME,
                 "provider_contract_version": contract.version,
                 "plan_id": contract.plan_id,
                 "host_run_id": contract.host_run_id,
