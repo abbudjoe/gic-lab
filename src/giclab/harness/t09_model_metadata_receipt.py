@@ -508,21 +508,26 @@ def load_openai_dotenv_assignment(path: Path) -> bytearray:
 
     raw = _read_private_bytes(path, label="OpenAI dotenv")
     selected: bytearray | None = None
-    for line in raw.splitlines():
-        stripped = line.strip()
-        if not stripped or stripped.startswith(b"#"):
-            continue
-        if b"=" not in stripped:
-            raise ModelMetadataReceiptError("OpenAI dotenv syntax is unsupported")
-        name, value = stripped.split(b"=", 1)
-        if name != b"OPENAI_API_KEY" or _DOTENV_VALUE.fullmatch(value) is None:
-            raise ModelMetadataReceiptError("OpenAI dotenv contains a non-OpenAI assignment")
+    try:
+        for line in raw.splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith(b"#"):
+                continue
+            if b"=" not in stripped:
+                raise ModelMetadataReceiptError("OpenAI dotenv syntax is unsupported")
+            name, value = stripped.split(b"=", 1)
+            if name != b"OPENAI_API_KEY" or _DOTENV_VALUE.fullmatch(value) is None:
+                raise ModelMetadataReceiptError("OpenAI dotenv contains a non-OpenAI assignment")
+            if selected is not None:
+                raise ModelMetadataReceiptError("OPENAI_API_KEY assignment is ambiguous")
+            selected = bytearray(value)
+        if selected is None:
+            raise ModelMetadataReceiptError("OPENAI_API_KEY assignment is missing")
+        return selected
+    except BaseException:
         if selected is not None:
-            raise ModelMetadataReceiptError("OPENAI_API_KEY assignment is ambiguous")
-        selected = bytearray(value)
-    if selected is None:
-        raise ModelMetadataReceiptError("OPENAI_API_KEY assignment is missing")
-    return selected
+            _destroy_bytearray(selected)
+        raise
 
 
 def _destroy_bytearray(value: bytearray) -> None:
@@ -702,13 +707,17 @@ def create_model_metadata_receipt(
         raise ModelMetadataReceiptError("receipt authority binding drifted")
 
     credential = load_openai_dotenv_assignment(dotenv)
-    request_started = _finite_epoch(clock(), label="request start")
-    state_path = _reserve_authorization(
-        authorization_overlay,
-        reference=authorization_reference,
-        overlay_sha256=observed_overlay_sha,
-        requested_at=request_started,
-    )
+    try:
+        request_started = _finite_epoch(clock(), label="request start")
+        state_path = _reserve_authorization(
+            authorization_overlay,
+            reference=authorization_reference,
+            overlay_sha256=observed_overlay_sha,
+            requested_at=request_started,
+        )
+    except BaseException:
+        _destroy_bytearray(credential)
+        raise
     response: ModelMetadataResponse | None = None
     attempt_error: BaseException | None = None
     try:

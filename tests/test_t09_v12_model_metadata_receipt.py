@@ -199,6 +199,70 @@ def _load_host() -> ModuleType:
     return module
 
 
+def _patch_launch_phase_a(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    *,
+    overlay: Path,
+    response_epoch: float,
+) -> tuple[Path, Path, Path, Path, Path]:
+    """Install fake-only provider preparation boundaries for launch tests."""
+
+    tmp_path.mkdir(mode=0o700, parents=True, exist_ok=True)
+    capability = tmp_path / "launch-capability.json"
+    private_root = tmp_path / "private"
+    public_ipv4 = tmp_path / "public-ipv4"
+    ssh_key = tmp_path / "id.pub"
+    lambda_dotenv = tmp_path / "lambda.env"
+    public_ipv4.write_text("203.0.113.9\n")
+    ssh_key.write_text("ssh-ed25519 AAAAFIXTURE t09-v12\n")
+    lambda_dotenv.write_text("not-read\n")
+
+    monkeypatch.setattr(provider, "_assert_launch_capability_unused", lambda path: None)
+    monkeypatch.setattr(provider, "_verify_clean_package", lambda repository, commit: None)
+    monkeypatch.setattr(
+        provider,
+        "validate_authorization_ledger",
+        lambda *args, **kwargs: {
+            **json.loads(overlay.read_text()),
+            "authorization_ledger_sha256": _sha256(overlay),
+        },
+    )
+    monkeypatch.setattr(provider, "load_campaign_lifecycle", lambda *args, **kwargs: object())
+    monkeypatch.setattr(provider, "launch_capability_path", lambda *args, **kwargs: capability)
+    monkeypatch.setattr(
+        provider,
+        "load_dotenv_assignment",
+        lambda path, name: bytearray(b"fixture-lambda-credential"),
+    )
+    monkeypatch.setattr(provider, "_response_documents", lambda root: {})
+    monkeypatch.setattr(provider, "_validate_prelaunch_documents", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        provider.RequestRecorder,
+        "request",
+        lambda self, *args, **kwargs: provider.ProviderResponse(
+            200,
+            "application/json",
+            b"{}",
+            response_epoch,
+        ),
+    )
+
+    def consume_capability(path: Path, **kwargs: object) -> None:
+        del kwargs
+        provider.write_exclusive(
+            path,
+            {
+                "schema_version": "1.0.0",
+                "state": "consumed-during-local-preparation",
+                "replay_allowed": False,
+            },
+        )
+
+    monkeypatch.setattr(provider, "_consume_launch_capability", consume_capability)
+    return capability, private_root, public_ipv4, ssh_key, lambda_dotenv
+
+
 def test_local_gate_owns_exactly_one_request_and_seals_no_secret(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -261,6 +325,98 @@ def test_local_gate_rejects_wrong_model_or_status_after_one_attempt(
     state = json.loads(next(tmp_path.glob(".t09-model-metadata-*.state.json")).read_text())
     assert state["state"] == "consumed-after-send-attempt"
     assert state["replay_allowed"] is False
+
+
+def test_failed_local_gate_and_missing_receipt_make_zero_lambda_posts(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    base = 1_700_000_000.0
+    source_root = tmp_path / "failed-local-gate"
+    overlay, dotenv, _plan_sha256 = _authorization_files(source_root)
+    metadata_transport = FakeMetadataTransport(
+        completed_at=base + 0.25,
+        returned_model="gpt-4o-other",
+    )
+    missing_receipt = source_root / metadata.MODEL_METADATA_RECEIPT_FILENAME
+    monkeypatch.setattr(provider, "_verify_clean_package", lambda repository, commit: None)
+    with pytest.raises(provider.T09ProviderError, match="receipt was not sealed"):
+        provider.model_metadata_preflight(
+            contract=V12_PROVIDER_CONTRACT,
+            repository=ROOT,
+            package_commit=BASE_COMMIT,
+            authorization_overlay=overlay,
+            openai_dotenv=dotenv,
+            output=missing_receipt,
+            transport=metadata_transport,
+            clock=FakeClock(base, base + 0.5),
+        )
+    assert len(metadata_transport.calls) == 1
+    assert not missing_receipt.exists()
+
+    _capability, private_root, public_ipv4, ssh_key, lambda_dotenv = _patch_launch_phase_a(
+        monkeypatch,
+        tmp_path / "launch",
+        overlay=overlay,
+        response_epoch=base + 1.0,
+    )
+    lambda_transport = FakeLambdaTransport()
+    with pytest.raises(provider.T09ProviderError, match="receipt validation failed"):
+        provider.launch_campaign(
+            contract=V12_PROVIDER_CONTRACT,
+            repository=ROOT,
+            package_commit=BASE_COMMIT,
+            authorization_ledger=overlay,
+            dotenv=lambda_dotenv,
+            private_root=private_root,
+            public_ipv4_file=public_ipv4,
+            ssh_public_key_file=ssh_key,
+            transport=lambda_transport,
+            model_metadata_receipt=missing_receipt,
+            clock=lambda: base + 1.0,
+            sleeper=lambda seconds: None,
+        )
+    assert lambda_transport.calls == []
+    assert not private_root.exists()
+
+
+def test_loaded_credential_is_zeroed_when_authorization_reservation_fails(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    overlay, dotenv, plan_sha256 = _authorization_files(tmp_path)
+    reference = "AUTH-T09-V12-CATEGORY3-FIXTURE-0001"
+    overlay_sha256 = metadata.model_metadata_authorization_overlay_sha256(overlay)
+    occupied_state = metadata._authorization_state_path(overlay, reference)
+    _private_json(occupied_state, {"fixture": "occupied"})
+    credential = bytearray(b"fixture-openai-key-123456")
+    monkeypatch.setattr(
+        metadata,
+        "load_openai_dotenv_assignment",
+        lambda path: credential,
+    )
+    transport = FakeMetadataTransport(completed_at=100.25)
+    with pytest.raises(metadata.ModelMetadataReceiptError, match="reserved or consumed"):
+        metadata.create_model_metadata_receipt(
+            repository_commit=BASE_COMMIT,
+            repository_tree=BASE_TREE,
+            plan_id=V12_PROVIDER_CONTRACT.plan_id,
+            plan_sha256=plan_sha256,
+            provider_contract_version=V12_PROVIDER_CONTRACT.version,
+            host_run_id=V12_PROVIDER_CONTRACT.host_run_id,
+            authorization_reference=reference,
+            authorization_source_sha256="1" * 64,
+            authorization_overlay_sha256=overlay_sha256,
+            public_price_contract_sha256="2" * 64,
+            public_deprecation_observation_sha256="3" * 64,
+            output=tmp_path / metadata.MODEL_METADATA_RECEIPT_FILENAME,
+            dotenv=dotenv,
+            authorization_overlay=overlay,
+            transport=transport,
+            clock=lambda: 100.0,
+        )
+    assert credential == bytearray()
+    assert transport.calls == []
 
 
 def test_authorization_output_and_unknown_outcome_are_nonreplayable(
@@ -365,6 +521,107 @@ def test_provider_rejects_every_wrong_immutable_binding(
     _private_json(receipt, document)
     with pytest.raises(metadata.ModelMetadataReceiptError):
         _validate_provider_immutable(receipt, overlay, plan_sha256)
+
+
+def test_v11_receipt_identity_is_rejected_by_v12_provider(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    receipt, overlay, _transport, plan_sha256 = _create_receipt(monkeypatch, tmp_path)
+    document = json.loads(receipt.read_text())
+    document.update(
+        {
+            "provider_contract_version": "V11",
+            "plan_id": "PLAN-EXP0001-PILOT-V11",
+            "host_run_id": "RUN-T09-PILOT-HOST-AUTONOMOUS-0004",
+            "authorization_reference": "AUTH-T09-V11-CATEGORY3-FIXTURE-0001",
+        }
+    )
+    _private_json(receipt, document)
+    with pytest.raises(metadata.ModelMetadataReceiptError, match="fixed semantics"):
+        _validate_provider_immutable(receipt, overlay, plan_sha256)
+
+
+def test_response_or_receipt_after_provider_launch_is_rejected_before_send(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    base = 1_700_000_000.0
+    receipt, overlay, _transport, plan_sha256 = _create_receipt(
+        monkeypatch,
+        tmp_path,
+        base=base,
+    )
+    validated = _validate_provider_immutable(receipt, overlay, plan_sha256)
+    lambda_transport = FakeLambdaTransport()
+    recorder_root = tmp_path / "provider"
+    recorder_root.mkdir(mode=0o700)
+    recorder = provider.RequestRecorder(
+        recorder_root,
+        lambda_transport,
+        bytearray(b"fixture-lambda-credential"),
+    )
+    prepared = recorder.prepare(
+        "launch",
+        "POST",
+        "/api/v1/instance-operations/launch",
+        body={"fixture": True},
+    )
+
+    def reject_after_launch() -> float:
+        boundary = base + 0.1
+        metadata.admit_model_metadata_receipt_at_prelaunch_boundary(
+            validated,
+            boundary_epoch=boundary,
+        )
+        return boundary
+
+    with pytest.raises(metadata.ModelMetadataReceiptError, match="after provider launch"):
+        recorder.send_prepared(prepared, final_admission=reject_after_launch)
+    assert lambda_transport.calls == []
+    assert not (recorder_root / "request-journal.jsonl").exists()
+
+
+def test_phase_a_failure_makes_zero_transport_calls(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    base = 1_700_000_000.0
+    receipt, overlay, _metadata_transport, _plan_sha256 = _create_receipt(
+        monkeypatch,
+        tmp_path / "receipt-source",
+        base=base,
+    )
+    _capability, private_root, public_ipv4, ssh_key, lambda_dotenv = _patch_launch_phase_a(
+        monkeypatch,
+        tmp_path / "launch",
+        overlay=overlay,
+        response_epoch=base + 10.0,
+    )
+
+    def fail_preparation(path: Path, **kwargs: object) -> None:
+        del path, kwargs
+        raise provider.T09ProviderError("fixture Phase A preparation failed")
+
+    monkeypatch.setattr(provider, "_consume_launch_capability", fail_preparation)
+    lambda_transport = FakeLambdaTransport()
+    with pytest.raises(provider.T09ProviderError, match="Phase A preparation failed"):
+        provider.launch_campaign(
+            contract=V12_PROVIDER_CONTRACT,
+            repository=ROOT,
+            package_commit=BASE_COMMIT,
+            authorization_ledger=overlay,
+            dotenv=lambda_dotenv,
+            private_root=private_root,
+            public_ipv4_file=public_ipv4,
+            ssh_public_key_file=ssh_key,
+            transport=lambda_transport,
+            model_metadata_receipt=receipt,
+            clock=lambda: base + 10.0,
+            sleeper=lambda seconds: None,
+        )
+    assert lambda_transport.calls == []
+    assert not (private_root / "launch-send-intent.json").exists()
 
 
 def test_receipt_security_duplicate_fields_and_path_replacement_fail_closed(
@@ -707,6 +964,124 @@ def test_host_binding_drift_fails_before_acknowledgement(
         )
     assert not (artifact_root / "pilot-v12/model-metadata-receipt-acknowledgement.json").exists()
     assert not (artifact_root / "pilot-v12/frozen-run-manifest.json").exists()
+
+
+@pytest.mark.parametrize("drift", ("request-count", "unsafe-hardlink"))
+def test_host_count_or_file_metadata_drift_fails_before_manifest(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    drift: str,
+) -> None:
+    base = 1_700_000_000.0
+    receipt, _overlay, _transport, _plan_sha256 = _create_receipt(
+        monkeypatch,
+        tmp_path / "receipt-source",
+        base=base,
+    )
+    expected_sha256 = metadata.model_metadata_receipt_sha256(receipt)
+    if drift == "request-count":
+        document = json.loads(receipt.read_text())
+        document["request_count"] = 2
+        _private_json(receipt, document)
+        expected_sha256 = metadata.model_metadata_receipt_sha256(receipt)
+    else:
+        os.link(receipt, tmp_path / "receipt-hardlink.json")
+    host = _load_host()
+    artifact_root = tmp_path / "artifacts"
+    (artifact_root / "pilot-v12").mkdir(mode=0o700, parents=True)
+    with pytest.raises(host.T09HostError):
+        host.validate_model_metadata_receipt_offline(
+            receipt_path=receipt,
+            repository=ROOT,
+            package_commit=BASE_COMMIT,
+            provider_entry={
+                "model_metadata_receipt_sha256": expected_sha256,
+                "authorization_reference": "AUTH-T09-V12-CATEGORY3-FIXTURE-0001",
+                "authorization_source_sha256": "1" * 64,
+                "provider_preflight_started_at_epoch": base + 1.0,
+            },
+            artifact_root=artifact_root,
+        )
+    assert not (artifact_root / "pilot-v12/model-metadata-receipt-acknowledgement.json").exists()
+    assert not (artifact_root / "pilot-v12/frozen-run-manifest.json").exists()
+
+
+def test_end_to_end_fake_handoff_owns_one_openai_get_and_no_provider_or_host_gets(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    base = 1_700_000_000.0
+    default_transport_constructions = 0
+
+    def forbid_default_transport(*args: object, **kwargs: object) -> None:
+        nonlocal default_transport_constructions
+        del args, kwargs
+        default_transport_constructions += 1
+        raise AssertionError("provider or host constructed an OpenAI transport")
+
+    monkeypatch.setattr(metadata, "OpenAIModelMetadataTransport", forbid_default_transport)
+    receipt, overlay, metadata_transport, plan_sha256 = _create_receipt(
+        monkeypatch,
+        tmp_path / "receipt-source",
+        base=base,
+    )
+    provider_root = tmp_path / "provider"
+    provider_root.mkdir(mode=0o700)
+    retained = provider_root / metadata.MODEL_METADATA_RECEIPT_FILENAME
+    expected_sha256 = metadata.copy_model_metadata_receipt(receipt, retained)
+    lambda_transport = FakeLambdaTransport(received_at=base + 100.6)
+    recorder = provider.RequestRecorder(
+        provider_root,
+        lambda_transport,
+        bytearray(b"fixture-lambda-credential"),
+        clock=lambda: base + 101.0,
+    )
+    prepared = recorder.prepare(
+        "launch",
+        "POST",
+        "/api/v1/instance-operations/launch",
+        body={"fixture": True},
+    )
+    boundary = base + 100.5
+    recorder.send_prepared(
+        prepared,
+        final_admission=_final_admission(
+            receipt=retained,
+            overlay=overlay,
+            plan_sha256=plan_sha256,
+            expected_sha256=expected_sha256,
+            boundary=lambda: boundary,
+        ),
+    )
+
+    host = _load_host()
+    monkeypatch.setattr(
+        host,
+        "model_metadata_preflight",
+        lambda **kwargs: (_ for _ in ()).throw(
+            AssertionError("offline host attempted metadata fallback")
+        ),
+    )
+    artifact_root = tmp_path / "host-artifacts"
+    (artifact_root / "pilot-v12").mkdir(mode=0o700, parents=True)
+    acknowledgement = host.validate_model_metadata_receipt_offline(
+        receipt_path=retained,
+        repository=ROOT,
+        package_commit=BASE_COMMIT,
+        provider_entry={
+            "model_metadata_receipt_sha256": expected_sha256,
+            "authorization_reference": "AUTH-T09-V12-CATEGORY3-FIXTURE-0001",
+            "authorization_source_sha256": "1" * 64,
+            "provider_preflight_started_at_epoch": boundary,
+        },
+        artifact_root=artifact_root,
+    )
+    assert len(metadata_transport.calls) == 1
+    assert lambda_transport.calls == [("POST", "/api/v1/instance-operations/launch")]
+    assert default_transport_constructions == 0
+    assert acknowledgement["provider_launch_model_metadata_request_count"] == 0
+    assert acknowledgement["host_runtime_model_metadata_request_count"] == 0
+    assert acknowledgement["openai_transport_used"] is False
 
 
 def _normalized_pair_diffs(path: Path) -> list[dict[str, object]]:
