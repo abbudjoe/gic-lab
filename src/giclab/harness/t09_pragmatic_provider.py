@@ -2072,34 +2072,44 @@ def _cleanup_journal_for_closeout(
         if remote_cleanup_journal is not None:
             remote = EarlyCleanupJournal(remote_cleanup_journal.resolve(strict=True))
             remote_state = remote.load()
-            local_targets = {target.target_id: target for target in local_state.targets}
-            remote_targets = {target.target_id: target for target in remote_state.targets}
-            for target_id, local_target in local_targets.items():
-                remote_target = remote_targets.get(target_id)
-                if remote_target is None:
-                    raise EarlyCleanupStateError("cleanup continuation lost a retained target")
-                if (
-                    local_target.kind not in _REMOTE_CONTINUATION_TARGET_KINDS
-                    and remote_target != local_target
+            if remote_state.sequence <= local_state.sequence:
+                local_versions = sorted(local.versions.glob("*.json"))
+                remote_versions = sorted(remote.versions.glob("*.json"))
+                if [path.read_bytes() for path in local_versions[: len(remote_versions)]] != [
+                    path.read_bytes() for path in remote_versions
+                ]:
+                    raise EarlyCleanupStateError(
+                        "remote cleanup continuation changed its retained prefix"
+                    )
+            else:
+                local_targets = {target.target_id: target for target in local_state.targets}
+                remote_targets = {target.target_id: target for target in remote_state.targets}
+                for target_id, local_target in local_targets.items():
+                    remote_target = remote_targets.get(target_id)
+                    if remote_target is None:
+                        raise EarlyCleanupStateError("cleanup continuation lost a retained target")
+                    if (
+                        local_target.kind not in _REMOTE_CONTINUATION_TARGET_KINDS
+                        and remote_target != local_target
+                    ):
+                        raise EarlyCleanupStateError(
+                            "remote cleanup continuation changed provider-owned authority"
+                        )
+                if any(
+                    target_id not in local_targets
+                    and target.kind is not CleanupTargetKind.OWNED_CONTAINER
+                    for target_id, target in remote_targets.items()
                 ):
                     raise EarlyCleanupStateError(
-                        "remote cleanup continuation changed provider-owned authority"
+                        "remote cleanup continuation added a non-container authority"
                     )
-            if any(
-                target_id not in local_targets
-                and target.kind is not CleanupTargetKind.OWNED_CONTAINER
-                for target_id, target in remote_targets.items()
-            ):
-                raise EarlyCleanupStateError(
-                    "remote cleanup continuation added a non-container authority"
-                )
-            for attempt in remote_state.cleanup_attempts[len(local_state.cleanup_attempts) :]:
-                target = remote_targets.get(attempt.target_id)
-                if target is None or target.kind not in _REMOTE_CONTINUATION_TARGET_KINDS:
-                    raise EarlyCleanupStateError(
-                        "remote cleanup continuation acted on provider-owned authority"
-                    )
-            local.import_continuation(remote)
+                for attempt in remote_state.cleanup_attempts[len(local_state.cleanup_attempts) :]:
+                    target = remote_targets.get(attempt.target_id)
+                    if target is None or target.kind not in _REMOTE_CONTINUATION_TARGET_KINDS:
+                        raise EarlyCleanupStateError(
+                            "remote cleanup continuation acted on provider-owned authority"
+                        )
+                local.import_continuation(remote)
         state = local.load()
     except (OSError, EarlyCleanupStateError) as exc:
         raise T09ProviderError("durable cleanup continuation is invalid") from exc
@@ -2359,6 +2369,120 @@ def _provisional_replacement_permitted(
     return launch_slot < contract.max_launch_count
 
 
+def _replacement_eligibility_history_paths(root: Path) -> tuple[Path, dict[int, Path]]:
+    """Return the unsuffixed receipt and an exact, ambiguity-free slot history."""
+
+    current = root / "replacement-launch-eligibility.json"
+    history: dict[int, Path] = {}
+    prefix = "replacement-launch-eligibility-slot-"
+    for candidate in root.iterdir():
+        if not candidate.name.startswith(prefix):
+            continue
+        match = re.fullmatch(
+            r"replacement-launch-eligibility-slot-([1-9][0-9]*)\.json",
+            candidate.name,
+        )
+        if match is None:
+            raise T09ProviderError("replacement eligibility history contains an unsafe name")
+        slot = int(match.group(1))
+        if slot in history:
+            raise T09ProviderError("replacement eligibility history duplicates a closed slot")
+        history[slot] = candidate
+    return current, history
+
+
+def _validate_replacement_eligibility_identity(
+    path: Path,
+    *,
+    value: Mapping[str, object],
+    contract: T09ProviderContract,
+    package_commit: str,
+    closed_launch_slot: int,
+    label: str,
+) -> None:
+    _require_private_file(path, label=label)
+    if (
+        value.get("schema_version") != "0.1.0"
+        or value.get("plan_id") != contract.plan_id
+        or value.get("host_run_id") != contract.host_run_id
+        or value.get("package_commit") != package_commit
+        or value.get("closed_launch_slot") != closed_launch_slot
+    ):
+        raise T09ProviderError(f"{label} crosses its exact plan, host, package, or slot")
+
+
+def _publish_replacement_launch_eligibility(
+    private_root: Path,
+    eligibility: Mapping[str, object],
+    *,
+    contract: T09ProviderContract,
+    package_commit: str,
+    closed_launch_slot: int,
+    prior_eligibility_sha256: object,
+) -> Path:
+    """Publish one immutable current receipt without rewriting its predecessor."""
+
+    if closed_launch_slot not in range(1, contract.max_launch_count):
+        raise T09ProviderError("replacement eligibility closed slot is outside authority")
+    current, history = _replacement_eligibility_history_paths(private_root)
+    if (
+        eligibility.get("schema_version") != "0.1.0"
+        or eligibility.get("plan_id") != contract.plan_id
+        or eligibility.get("host_run_id") != contract.host_run_id
+        or eligibility.get("package_commit") != package_commit
+        or eligibility.get("closed_launch_slot") != closed_launch_slot
+    ):
+        raise T09ProviderError("new replacement eligibility identity drifted")
+    encoded = _canonical_bytes(dict(eligibility))
+    if closed_launch_slot == 1:
+        if prior_eligibility_sha256 is not None or history:
+            raise T09ProviderError("first-slot replacement eligibility has prior history")
+        target = current
+    else:
+        if (
+            not isinstance(prior_eligibility_sha256, str)
+            or _HEX64.fullmatch(prior_eligibility_sha256) is None
+            or not os.path.lexists(current)
+        ):
+            raise T09ProviderError("replacement eligibility history lost its preceding receipt")
+        prior = _load_json(current, maximum_bytes=262_144)
+        _validate_replacement_eligibility_identity(
+            current,
+            value=prior,
+            contract=contract,
+            package_commit=package_commit,
+            closed_launch_slot=closed_launch_slot - 1,
+            label="prior replacement eligibility",
+        )
+        if file_sha256(current) != prior_eligibility_sha256:
+            raise T09ProviderError("prior replacement eligibility changed before closeout")
+        unexpected = set(history) - {closed_launch_slot}
+        if unexpected:
+            raise T09ProviderError("replacement eligibility history skipped or duplicated a slot")
+        target = private_root / f"replacement-launch-eligibility-slot-{closed_launch_slot}.json"
+    if os.path.lexists(target):
+        observed = _load_json(target, maximum_bytes=262_144)
+        _validate_replacement_eligibility_identity(
+            target,
+            value=observed,
+            contract=contract,
+            package_commit=package_commit,
+            closed_launch_slot=closed_launch_slot,
+            label="existing replacement eligibility",
+        )
+        if target.read_bytes() != encoded:
+            raise T09ProviderError("existing replacement eligibility receipt drifted")
+        descriptor = os.open(target, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+        _fsync_parent(target)
+        return target
+    write_exclusive(target, dict(eligibility))
+    return target
+
+
 def _cleanup_provisional_owner(
     *,
     contract: T09ProviderContract,
@@ -2426,6 +2550,7 @@ def _cleanup_provisional_owner(
         dict(provisional_binding),
     )
     recorder = RequestRecorder(cleanup_root, transport, credential, clock)
+    provider_security_closed = False
     try:
         with contextlib.suppress(T09ProviderError):
             recorder.request(
@@ -2549,6 +2674,7 @@ def _cleanup_provisional_owner(
                 "closed_at_epoch": closed_at,
             },
         )
+        provider_security_closed = True
         if replacement_permitted:
             started = _number(
                 provisional_binding.get("lambda_started_at_epoch"),
@@ -2557,26 +2683,8 @@ def _cleanup_provisional_owner(
             duration = closed_at - started
             if duration < 0:
                 raise T09ProviderError("provisional closeout chronology moved backwards")
-            eligibility_path = private_root / "replacement-launch-eligibility.json"
-            if os.path.lexists(eligibility_path):
-                prior_eligibility_sha256 = provisional_binding.get("replacement_eligibility_sha256")
-                _require_private_file(
-                    eligibility_path,
-                    label="prior replacement eligibility",
-                )
-                if (
-                    not isinstance(prior_eligibility_sha256, str)
-                    or _HEX64.fullmatch(prior_eligibility_sha256) is None
-                    or file_sha256(eligibility_path) != prior_eligibility_sha256
-                ):
-                    raise T09ProviderError(
-                        "prior replacement eligibility changed before provider closeout"
-                    )
-                eligibility_path = (
-                    private_root / f"replacement-launch-eligibility-slot-{launch_slot}.json"
-                )
-            write_exclusive(
-                eligibility_path,
+            _publish_replacement_launch_eligibility(
+                private_root,
                 {
                     "schema_version": "0.1.0",
                     "eligibility_kind": (PROVIDER_ENTRY_FAILED_PREEMPIRICAL_ELIGIBILITY_KIND),
@@ -2607,8 +2715,20 @@ def _cleanup_provisional_owner(
                     "security_restored": True,
                     "second_launch_permitted": replacement_permitted,
                 },
+                contract=contract,
+                package_commit=_string(
+                    provisional_binding.get("package_commit"),
+                    label="provisional package commit",
+                ),
+                closed_launch_slot=launch_slot,
+                prior_eligibility_sha256=provisional_binding.get("replacement_eligibility_sha256"),
             )
     except BaseException as exc:
+        if provider_security_closed:
+            raise T09ProviderError(
+                "provider-entry eligibility publication failed after verified provider/security "
+                "closeout; the next launch remains forbidden"
+            ) from exc
         with contextlib.suppress(BaseException):
             if cleanup_journal is not None:
                 partial_state = cleanup_journal.load()
@@ -5717,6 +5837,16 @@ def _current_v7_slot2_authority_paths(
 ) -> tuple[Path, Path, Path]:
     """Resolve direct slot-1 evidence or its normalized retained copy."""
 
+    direct = (
+        root / "entry-source",
+        root / "closeout-source",
+        root / "preempirical-source",
+    )
+    direct_presence = tuple(path.is_dir() for path in direct)
+    if all(direct_presence):
+        return direct
+    if any(direct_presence):
+        raise T09ProviderError("direct host-preflight replacement authority is partial")
     normalized = root / "slot2-eligibility-source"
     if normalized.is_dir():
         manifest_path = normalized / "source-manifest.json"
@@ -5729,11 +5859,7 @@ def _current_v7_slot2_authority_paths(
             normalized / "slot1-closeout-source",
             normalized / "slot1-preempirical-source",
         )
-    return (
-        root / "entry-source",
-        root / "closeout-source",
-        root / "preempirical-source",
-    )
+    return direct
 
 
 def _retain_current_v7_slot2_authority(source_root: Path, destination_root: Path) -> None:
@@ -5747,6 +5873,24 @@ def _retain_current_v7_slot2_authority(source_root: Path, destination_root: Path
         (preempirical, "slot1-preempirical-source"),
     ):
         _copy_slot2_authority_tree(source, destination_root / relative)
+    entry_document = _load_json(entry / "entry-receipt.json", maximum_bytes=65_536)
+    launch_slot_value = entry_document.get("launch_slot")
+    launch_slot = (
+        1 if launch_slot_value is None else _integer(launch_slot_value, label="closed launch slot")
+    )
+    if launch_slot > 1:
+        # A repeated-slot entry receipt binds the authority that admitted that
+        # launch. Retain that closure beside the copied entry source so its
+        # source-bound reconstruction remains exact at every later slot.
+        _copy_exact_private_file(
+            source_root / "replacement-launch-eligibility.json",
+            destination_root / "replacement-launch-eligibility.json",
+            label="preceding replacement eligibility",
+        )
+        _copy_slot2_authority_tree(
+            source_root / PROVIDER_ENTRY_AUTHORITY_ROOT_NAME,
+            destination_root / PROVIDER_ENTRY_AUTHORITY_ROOT_NAME,
+        )
     write_exclusive(
         destination_root / "source-manifest.json",
         _slot2_authority_tree_manifest(destination_root, contract=V7_PROVIDER_CONTRACT),
@@ -6236,21 +6380,108 @@ def _read_public_file(path: Path, *, maximum_bytes: int) -> str:
     return path.read_text(encoding="utf-8").strip()
 
 
-def _replacement_launch_eligibility_path(root: Path) -> Path:
-    """Select the current immutable receipt without overwriting prior-slot evidence."""
+def _replacement_launch_eligibility_path(
+    root: Path,
+    *,
+    contract: T09ProviderContract,
+    package_commit: str,
+    plan_sha256: str,
+) -> Path:
+    """Select the immediately preceding closed slot from exact launch evidence."""
 
-    current = root / "replacement-launch-eligibility.json"
-    slot_receipts = sorted(root.glob("replacement-launch-eligibility-slot-*.json"))
-    if not slot_receipts:
+    current, history = _replacement_eligibility_history_paths(root)
+    if not history:
         return current
-    provisional_path = root / "provisional-owned-state.json"
-    _require_private_file(provisional_path, label="provider-entry provisional owner")
-    provisional = _load_json(provisional_path, maximum_bytes=65_536)
-    launch_slot = _integer(provisional.get("launch_slot"), label="provisional launch slot")
+    entry_path = root / "entry-source/entry-receipt.json"
+    source_private_root_identity = _sha256_bytes(str(root.resolve(strict=True)).encode())
+    try:
+        if os.path.lexists(entry_path):
+            entry = validate_entry_receipt_source_bound(
+                entry_path,
+                root / "entry-source",
+                contract=contract,
+                package_commit=package_commit,
+                plan_sha256=plan_sha256,
+            )
+            launch_slot = _integer(entry.get("launch_slot"), label="entry launch slot")
+            bound_prior_sha256 = entry.get("replacement_eligibility_sha256")
+        elif os.path.lexists(root / "provisional-owned-state.json"):
+            provisional = _load_source_validated_provisional_owner(
+                root,
+                contract=contract,
+                package_commit=package_commit,
+                plan_sha256=plan_sha256,
+            )
+            launch_slot = _integer(provisional.get("launch_slot"), label="provisional launch slot")
+            bound_prior_sha256 = provisional.get("replacement_eligibility_sha256")
+        elif os.path.lexists(root / PROVIDER_ENTRY_AUTHORITY_ROOT_NAME):
+            authority, launch_slot = _validate_normalized_provider_entry_authority(
+                root / PROVIDER_ENTRY_AUTHORITY_ROOT_NAME,
+                contract=contract,
+                package_commit=package_commit,
+                plan_sha256=plan_sha256,
+            )
+            provisional = _load_source_validated_provisional_owner(
+                authority.authority_root,
+                contract=contract,
+                package_commit=package_commit,
+                plan_sha256=plan_sha256,
+                source_private_root_identity_sha256=(authority.source_private_root_identity_sha256),
+            )
+            if provisional.get("launch_slot") != launch_slot:
+                raise T09ProviderError("normalized eligibility slot disagrees with its authority")
+            bound_prior_sha256 = provisional.get("replacement_eligibility_sha256")
+            source_private_root_identity = authority.source_private_root_identity_sha256
+        else:
+            raise T09ProviderError("replacement eligibility history lacks launch-slot evidence")
+    except OSError as exc:
+        raise T09ProviderError(
+            "replacement eligibility launch-slot evidence is unavailable"
+        ) from exc
+    if launch_slot not in range(2, contract.max_launch_count):
+        raise T09ProviderError("replacement eligibility history has no bounded current slot")
     expected = root / f"replacement-launch-eligibility-slot-{launch_slot}.json"
-    if slot_receipts != [expected]:
-        raise T09ProviderError("provider-entry eligibility receipt history is ambiguous")
-    _require_private_file(expected, label="provider-entry replacement eligibility")
+    if set(history) != {launch_slot} or history[launch_slot] != expected:
+        raise T09ProviderError("replacement eligibility receipt history is ambiguous")
+    _require_private_file(current, label="preceding replacement eligibility")
+    prior = _load_json(current, maximum_bytes=262_144)
+    selected = _load_json(expected, maximum_bytes=262_144)
+    _validate_replacement_eligibility_identity(
+        current,
+        value=prior,
+        contract=contract,
+        package_commit=package_commit,
+        closed_launch_slot=launch_slot - 1,
+        label="preceding replacement eligibility",
+    )
+    _validate_replacement_eligibility_identity(
+        expected,
+        value=selected,
+        contract=contract,
+        package_commit=package_commit,
+        closed_launch_slot=launch_slot,
+        label="current replacement eligibility",
+    )
+    if (
+        not isinstance(bound_prior_sha256, str)
+        or _HEX64.fullmatch(bound_prior_sha256) is None
+        or file_sha256(current) != bound_prior_sha256
+    ):
+        raise T09ProviderError("replacement eligibility history link drifted")
+    capability_path = launch_capability_path(launch_slot, contract=contract)
+    _require_private_file(capability_path, label="preceding launch capability")
+    capability = _load_json(capability_path, maximum_bytes=65_536)
+    if (
+        capability.get("plan_id") != contract.plan_id
+        or capability.get("host_run_id") != contract.host_run_id
+        or capability.get("package_commit") != package_commit
+        or capability.get("plan_sha256") != plan_sha256
+        or capability.get("private_root_identity_sha256") != source_private_root_identity
+        or capability.get("launch_slot") != launch_slot
+        or capability.get("launch_capability_limit") != contract.max_launch_count
+        or capability.get("replacement_eligibility_sha256") != bound_prior_sha256
+    ):
+        raise T09ProviderError("replacement eligibility history lacks its exact launch capability")
     return expected
 
 
@@ -6272,7 +6503,13 @@ def _validate_replacement_launch_eligibility(
         expected_bytes=SLOT1_IMAGE_ARCHIVE_BYTES,
         expected_sha256=SLOT1_IMAGE_ARCHIVE_SHA256,
     )
-    path = _replacement_launch_eligibility_path(prior)
+    plan_sha256 = file_sha256(repository / contract.provider_profile_path)
+    path = _replacement_launch_eligibility_path(
+        prior,
+        contract=contract,
+        package_commit=package_commit,
+        plan_sha256=plan_sha256,
+    )
     metadata = path.stat(follow_symlinks=False)
     if (
         path.is_symlink()
@@ -6376,7 +6613,6 @@ def _validate_replacement_launch_eligibility(
     if value.get("eligibility_kind") == (PROVIDER_ENTRY_FAILED_PREEMPIRICAL_ELIGIBILITY_KIND):
         if source_package_commit != package_commit:
             raise T09ProviderError("provider-entry replacement cannot cross package commits")
-        plan_sha256 = file_sha256(repository / contract.provider_profile_path)
         authority = _resolve_provider_entry_replacement_authority(
             prior,
             contract=contract,
@@ -6674,6 +6910,21 @@ def _retain_host_preempirical_source(source_root: Path, private_root: Path) -> P
 
     source = source_root.resolve(strict=True)
     destination = private_root / "preempirical-source"
+    if os.path.lexists(destination):
+        _require_private_directory(destination, label="retained pre-empirical source")
+        source_names = {path.name for path in source.iterdir()}
+        retained_names = {path.name for path in destination.iterdir()}
+        if source_names != retained_names:
+            raise T09ProviderError("retained pre-empirical source member set drifted")
+        for source_path in source.iterdir():
+            destination_path = destination / source_path.name
+            _require_private_file(source_path, label="pre-empirical source member")
+            _require_private_file(destination_path, label="retained pre-empirical source member")
+            if source_path.stat().st_size != destination_path.stat().st_size or file_sha256(
+                source_path
+            ) != file_sha256(destination_path):
+                raise T09ProviderError("retained pre-empirical source changed after copy")
+        return destination
     destination.mkdir(mode=0o700, exist_ok=False)
     total = 0
     for source_path in sorted(source.iterdir()):
@@ -6725,6 +6976,133 @@ def _retain_host_preempirical_source(source_root: Path, private_root: Path) -> P
     finally:
         os.close(directory)
     return destination
+
+
+def _host_preempirical_replacement_eligibility(
+    *,
+    contract: T09ProviderContract,
+    package_commit: str,
+    entry_path: Path,
+    closeout_path: Path,
+    retained_preempirical_source: Path,
+    host_disposition: Mapping[str, object],
+) -> dict[str, object]:
+    """Project the deterministic eligibility for one closed zero-use host."""
+
+    entry = _load_json(entry_path, maximum_bytes=65_536)
+    closeout = _load_json(closeout_path, maximum_bytes=65_536)
+    if (
+        closeout.get("terminal_or_absent") is not True
+        or closeout.get("zero_t09_instances") is not True
+        or closeout.get("security_restored") is not True
+    ):
+        raise T09ProviderError("closed host cannot authorize replacement launch")
+    return {
+        "schema_version": "0.1.0",
+        "plan_id": contract.plan_id,
+        "host_run_id": contract.host_run_id,
+        "package_commit": package_commit,
+        "closed_launch_slot": entry["launch_slot"],
+        "entry_receipt_sha256": file_sha256(entry_path),
+        "closeout_receipt_sha256": file_sha256(closeout_path),
+        "host_preempirical_receipt_sha256": file_sha256(
+            retained_preempirical_source / "preempirical-disposition.json"
+        ),
+        "host_preempirical_source_manifest_sha256": file_sha256(
+            retained_preempirical_source / "source-manifest.json"
+        ),
+        "source_manifest_sha256": file_sha256(
+            retained_preempirical_source / "source-manifest.json"
+        ),
+        "campaign_started_at_epoch": entry["lambda_started_at_epoch"],
+        "prior_lambda_duration_seconds": closeout["lambda_duration_seconds"],
+        "prior_lambda_cost_usd": closeout["lambda_list_cost_usd"],
+        "empirical_attempts_entered": 0,
+        "model_task_requests": 0,
+        "task_browser_actions": 0,
+        "replacement_image_build_count": 0,
+        "replacement_image_import_count": host_disposition["replacement_image_import_count"],
+        "replacement_image_id": host_disposition["replacement_image_id"],
+        "replacement_image_archive_sha256": host_disposition["replacement_image_archive_sha256"],
+        "slot2_image_archive_sha256": SLOT1_IMAGE_ARCHIVE_SHA256,
+        "slot2_image_archive_bytes": SLOT1_IMAGE_ARCHIVE_BYTES,
+        "slot2_expected_image_id": SLOT1_REPLACEMENT_IMAGE_ID,
+        "slot2_image_import_required": True,
+        "slot2_additional_image_build_count": 0,
+        "terminal_or_absent": True,
+        "zero_t09_instances": True,
+        "security_restored": True,
+        "next_replacement_launch_permitted": (
+            _integer(entry["launch_slot"], label="closed launch slot") < contract.max_launch_count
+        ),
+    }
+
+
+def _resume_host_preempirical_closeout(
+    *,
+    contract: T09ProviderContract,
+    repository: Path,
+    package_commit: str,
+    private_root: Path,
+    lifecycle: CampaignLifecycle,
+    cleanup_journal: EarlyCleanupJournal,
+    retained_preempirical_source: Path,
+    host_disposition: Mapping[str, object],
+) -> Path:
+    """Validate and reuse a terminal closeout without repeating any mutation."""
+
+    plan_sha256 = file_sha256(repository / contract.provider_profile_path)
+    entry_path = private_root / "entry-source/entry-receipt.json"
+    closeout_root = private_root / "closeout-source"
+    closeout_path = closeout_root / "closeout-receipt.json"
+    _require_private_directory(closeout_root, label="provider closeout source")
+    _require_private_file(closeout_path, label="provider closeout receipt")
+    closeout = validate_closeout_receipt(
+        closeout_path,
+        closeout_root,
+        contract=contract,
+        entry_receipt_path=entry_path,
+        entry_source_root=private_root / "entry-source",
+        package_commit=package_commit,
+        plan_sha256=plan_sha256,
+        lifecycle=lifecycle,
+    )
+    cleanup = cleanup_journal.load()
+    targets = {target.target_id: target.state for target in cleanup.targets}
+    if (
+        closeout.get("terminal_or_absent") is not True
+        or closeout.get("zero_t09_instances") is not True
+        or closeout.get("security_restored") is not True
+        or targets.get("provider-instance") is not CleanupTargetState.ABSENT
+        or targets.get("firewall-restoration") is not CleanupTargetState.RESTORED
+        or targets.get("temporary-local-secret")
+        not in {CleanupTargetState.ABSENT, CleanupTargetState.REMOVED}
+    ):
+        raise T09ProviderError("terminal provider/security closeout evidence drifted")
+    entry = validate_entry_receipt_source_bound(
+        entry_path,
+        private_root / "entry-source",
+        contract=contract,
+        package_commit=package_commit,
+        plan_sha256=plan_sha256,
+    )
+    eligibility = _host_preempirical_replacement_eligibility(
+        contract=contract,
+        package_commit=package_commit,
+        entry_path=entry_path,
+        closeout_path=closeout_path,
+        retained_preempirical_source=retained_preempirical_source,
+        host_disposition=host_disposition,
+    )
+    _publish_replacement_launch_eligibility(
+        private_root,
+        eligibility,
+        contract=contract,
+        package_commit=package_commit,
+        closed_launch_slot=_integer(entry.get("launch_slot"), label="closed launch slot"),
+        prior_eligibility_sha256=entry.get("replacement_eligibility_sha256"),
+    )
+    return closeout_path
 
 
 def _load_source_validated_owned_state(
@@ -6893,6 +7271,8 @@ def launch_campaign(
     sleeper: Callable[[float], None] = time.sleep,
 ) -> Path:
     repository = repository.resolve(strict=True)
+    plan_path = repository / contract.provider_profile_path
+    plan_sha256 = file_sha256(plan_path)
     if launch_slot not in range(1, contract.max_launch_count + 1):
         raise T09ProviderError("launch slot is outside the authorized autonomous bound")
     replacement_eligibility: dict[str, object] | None = None
@@ -6914,7 +7294,12 @@ def launch_campaign(
         if not launch_capability_path(launch_slot - 1, contract=contract).is_file():
             raise T09ProviderError("replacement launch cannot skip its preceding launch slot")
     prior_eligibility_path = (
-        _replacement_launch_eligibility_path(prior_private_root.resolve(strict=True))
+        _replacement_launch_eligibility_path(
+            prior_private_root.resolve(strict=True),
+            contract=contract,
+            package_commit=package_commit,
+            plan_sha256=plan_sha256,
+        )
         if prior_private_root is not None
         else None
     )
@@ -6933,8 +7318,6 @@ def launch_campaign(
         package_commit=package_commit,
     )
     lifecycle = load_campaign_lifecycle(repository, contract=contract)
-    plan_path = repository / contract.provider_profile_path
-    plan_sha256 = file_sha256(plan_path)
     package_tree = (
         _git_commit_tree(repository, package_commit)
         if _uses_model_metadata_receipt(contract)
@@ -7598,6 +7981,27 @@ def closeout_campaign(
         )
     elif remote_cleanup_journal is not None:
         raise T09ProviderError("remote cleanup continuation has no provider journal prefix")
+    existing_closeout_root = private_root / "closeout-source"
+    if os.path.lexists(existing_closeout_root):
+        if (
+            campaign_cleanup_journal is None
+            or retained_preempirical_source is None
+            or validated_host_disposition is None
+            or not replacement_evidence_validated
+        ):
+            raise T09ProviderError("existing provider closeout lacks its exact resume authority")
+        if not (existing_closeout_root / "closeout-receipt.json").is_file():
+            raise T09ProviderError("provider closeout source is partial")
+        return _resume_host_preempirical_closeout(
+            contract=contract,
+            repository=repository,
+            package_commit=package_commit,
+            private_root=private_root,
+            lifecycle=lifecycle,
+            cleanup_journal=campaign_cleanup_journal,
+            retained_preempirical_source=retained_preempirical_source,
+            host_disposition=validated_host_disposition,
+        )
     if (
         not entry_receipt_path.is_file()
         and not provisional_path.is_file()
@@ -7791,6 +8195,7 @@ def closeout_campaign(
     )
     credential = load_dotenv_assignment(dotenv, "LAMBDA_API_KEY")
     recorder = RequestRecorder(closeout_root, transport, credential, clock)
+    provider_security_closed = False
     try:
         termination_sent = False
         for _post_index in range(MAX_TERMINATION_POSTS):
@@ -7875,61 +8280,30 @@ def closeout_campaign(
             closeout_receipt=closeout_document,
             clock=clock,
         )
+        provider_security_closed = True
         entry_document = _load_json(entry_path, maximum_bytes=65_536)
         if replacement_evidence_validated:
             if retained_preempirical_source is None:
                 raise T09ProviderError("replacement source binding is unavailable")
-            if (
-                closeout_document.get("terminal_or_absent") is not True
-                or closeout_document.get("zero_t09_instances") is not True
-                or closeout_document.get("security_restored") is not True
-            ):
-                raise T09ProviderError("closed host cannot authorize replacement launch")
-            eligibility = {
-                "schema_version": "0.1.0",
-                "plan_id": contract.plan_id,
-                "host_run_id": contract.host_run_id,
-                "package_commit": package_commit,
-                "closed_launch_slot": entry_document["launch_slot"],
-                "entry_receipt_sha256": file_sha256(entry_path),
-                "closeout_receipt_sha256": file_sha256(receipt),
-                "host_preempirical_receipt_sha256": file_sha256(
-                    retained_preempirical_source / "preempirical-disposition.json"
+            eligibility = _host_preempirical_replacement_eligibility(
+                contract=contract,
+                package_commit=package_commit,
+                entry_path=entry_path,
+                closeout_path=receipt,
+                retained_preempirical_source=retained_preempirical_source,
+                host_disposition=retained_host_disposition,
+            )
+            _publish_replacement_launch_eligibility(
+                private_root,
+                eligibility,
+                contract=contract,
+                package_commit=package_commit,
+                closed_launch_slot=_integer(
+                    entry_document.get("launch_slot"),
+                    label="closed launch slot",
                 ),
-                "host_preempirical_source_manifest_sha256": file_sha256(
-                    retained_preempirical_source / "source-manifest.json"
-                ),
-                "source_manifest_sha256": file_sha256(
-                    retained_preempirical_source / "source-manifest.json"
-                ),
-                "campaign_started_at_epoch": entry_document["lambda_started_at_epoch"],
-                "prior_lambda_duration_seconds": closeout_document["lambda_duration_seconds"],
-                "prior_lambda_cost_usd": closeout_document["lambda_list_cost_usd"],
-                "empirical_attempts_entered": 0,
-                "model_task_requests": 0,
-                "task_browser_actions": 0,
-                "replacement_image_build_count": 0,
-                "replacement_image_import_count": retained_host_disposition[
-                    "replacement_image_import_count"
-                ],
-                "replacement_image_id": retained_host_disposition["replacement_image_id"],
-                "replacement_image_archive_sha256": retained_host_disposition[
-                    "replacement_image_archive_sha256"
-                ],
-                "slot2_image_archive_sha256": SLOT1_IMAGE_ARCHIVE_SHA256,
-                "slot2_image_archive_bytes": SLOT1_IMAGE_ARCHIVE_BYTES,
-                "slot2_expected_image_id": SLOT1_REPLACEMENT_IMAGE_ID,
-                "slot2_image_import_required": True,
-                "slot2_additional_image_build_count": 0,
-                "terminal_or_absent": True,
-                "zero_t09_instances": True,
-                "security_restored": True,
-                "next_replacement_launch_permitted": (
-                    _integer(entry_document["launch_slot"], label="closed launch slot")
-                    < contract.max_launch_count
-                ),
-            }
-            write_exclusive(private_root / "replacement-launch-eligibility.json", eligibility)
+                prior_eligibility_sha256=entry_document.get("replacement_eligibility_sha256"),
+            )
         for name in (
             "owned-state-active.json",
             "owned-state.json",
@@ -7938,6 +8312,11 @@ def closeout_campaign(
             _destroy_operational_file(private_root / name)
         return receipt
     except BaseException as exc:
+        if provider_security_closed:
+            raise T09ProviderError(
+                "replacement eligibility publication failed after verified provider/security "
+                "closeout; the next launch remains forbidden"
+            ) from exc
         with contextlib.suppress(BaseException):
             _record_provider_closeout_failure(
                 campaign_cleanup_journal,

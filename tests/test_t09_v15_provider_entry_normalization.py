@@ -5,6 +5,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import shutil
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -13,6 +14,11 @@ from types import ModuleType
 import pytest
 
 from giclab.harness import t09_pragmatic_provider as provider
+from giclab.harness.t09_cleanup_state import (
+    CleanupTargetState,
+    EarlyCleanupJournal,
+    TerminalCleanupDisposition,
+)
 from giclab.harness.t09_provider_contracts import V11_PROVIDER_CONTRACT
 from giclab.registry import load_json
 
@@ -323,6 +329,201 @@ def _open_provider_entry_slot(
     return root, receipt, transport
 
 
+def _host_preempirical_source(
+    fixture: ProviderFixture,
+    *,
+    entry_receipt: Path,
+    label: str,
+) -> tuple[Path, Path]:
+    source = fixture.root / label
+    source.mkdir(mode=0o700)
+    entry = load_json(entry_receipt)
+    preflight_started = float(entry["provider_preflight_started_at_epoch"])
+    iteration_started = preflight_started + 1.0
+    failed_at = iteration_started + 1.0
+    documents: dict[str, dict[str, object]] = {
+        "pilot-state.json": {
+            "plan_id": fixture.contract.plan_id,
+            "empirical_attempts_entered": [],
+            "nonempirical_infrastructure_attempts_consumed": [],
+            "raw_attempts_complete": [],
+            "attempts_completed": [],
+            "essential_failure_seals": {},
+            "core_safety_stop_detected": False,
+        },
+        "host-cleanup.json": {
+            "owned_container_residue": [],
+            "global_secret_scan_passed": True,
+            "remote_secret_removed": True,
+            "core_destruction_verified": True,
+            "core_safety_stop_detected": False,
+            "credential_rotation_required_due_to_core_handling": False,
+        },
+        "preflight-failure.json": {
+            "plan_id": fixture.contract.plan_id,
+            "host_run_id": fixture.contract.host_run_id,
+            "package_commit": PACKAGE_COMMIT,
+            "empirical_attempts_entered": 0,
+            "preflight_engineering_state": "resumable-same-host",
+            "termination_dispatch_required": False,
+            "provider_preflight_started_at_epoch": preflight_started,
+            "preflight_iteration_started_at_epoch": iteration_started,
+            "failed_at_epoch": failed_at,
+            "preflight_iteration_elapsed_seconds": failed_at - iteration_started,
+            "provider_instance_elapsed_seconds": failed_at - preflight_started,
+            "termination_dispatch_deadline_epoch": None,
+        },
+        "late-preflight-gate-absence.json": {
+            "schema_version": "0.1.0",
+            "plan_id": fixture.contract.plan_id,
+            "host_run_id": fixture.contract.host_run_id,
+            "checked_relative_paths": [
+                "model-metadata-preflight",
+                "model-metadata-credential-scan.json",
+                "frozen-run-manifest.json",
+                "postfreeze-validation.json",
+                "preflight.json",
+            ],
+            "present_relative_paths": [],
+            "model_metadata_requests": 0,
+            "frozen_manifest_published": False,
+            "postfreeze_validation_published": False,
+            "preflight_completion_published": False,
+        },
+    }
+    for name, document in documents.items():
+        provider.write_exclusive(source / name, document)
+    disposition = {
+        "schema_version": "0.1.0",
+        "plan_id": fixture.contract.plan_id,
+        "host_run_id": fixture.contract.host_run_id,
+        "package_commit": PACKAGE_COMMIT,
+        "provider_entry_receipt_sha256": provider.file_sha256(entry_receipt),
+        "pilot_state_sha256": provider.file_sha256(source / "pilot-state.json"),
+        "host_cleanup_sha256": provider.file_sha256(source / "host-cleanup.json"),
+        "preflight_failure_sha256": provider.file_sha256(source / "preflight-failure.json"),
+        "late_preflight_gate_absence_sha256": provider.file_sha256(
+            source / "late-preflight-gate-absence.json"
+        ),
+        "preflight_failed_at_epoch": failed_at,
+        "provider_preflight_started_at_epoch": preflight_started,
+        "preflight_iteration_started_at_epoch": iteration_started,
+        "preflight_iteration_elapsed_seconds": failed_at - iteration_started,
+        "provider_instance_elapsed_seconds": failed_at - preflight_started,
+        "termination_dispatch_deadline_epoch": None,
+        "preflight_engineering_state": "resumable-same-host",
+        "empirical_attempts_entered": 0,
+        "model_metadata_requests": 0,
+        "model_task_requests": 0,
+        "task_browser_actions": 0,
+        "replacement_image_build_count": 0,
+        "replacement_image_import_count": 0,
+        "replacement_image_id": None,
+        "replacement_image_archive_sha256": None,
+        "credentials_removed": True,
+        "owned_containers_absent": True,
+        "core_safety_stop_detected": False,
+        "core_destruction_verified": True,
+        "credential_rotation_required_due_to_core_handling": False,
+        "replacement_launch_evidence_only": True,
+    }
+    provider.write_exclusive(source / "preempirical-disposition.json", disposition)
+    files = [
+        {
+            "path": path.name,
+            "bytes": path.stat().st_size,
+            "sha256": provider.file_sha256(path),
+        }
+        for path in sorted(source.iterdir())
+    ]
+    provider.write_exclusive(
+        source / "source-manifest.json",
+        {
+            "schema_version": "0.1.0",
+            "plan_id": fixture.contract.plan_id,
+            "host_run_id": fixture.contract.host_run_id,
+            "files": files,
+            "total_bytes": sum(path.stat().st_size for path in source.iterdir()),
+        },
+    )
+    return source / "preempirical-disposition.json", source
+
+
+def _remote_cleanup_continuation(
+    fixture: ProviderFixture,
+    *,
+    private_root: Path,
+    label: str,
+) -> Path:
+    destination = fixture.root / label
+    shutil.copytree(private_root / "preflight-cleanup-state", destination)
+    EarlyCleanupJournal(destination).record_result(
+        target_id="temporary-remote-secret",
+        result=CleanupTargetState.ABSENT,
+        detail_code="temporary-remote-secret-already-absent",
+        clock=fixture.clock,
+    )
+    return destination
+
+
+def _close_host_preflight_slot(
+    fixture: ProviderFixture,
+    *,
+    slot: int,
+    prior: Path | None,
+    label: str,
+) -> tuple[Path, Path, Path, Path, Path, FakeTransport]:
+    root = fixture.root / f"{label}-slot-{slot}"
+    launch_transport = FakeTransport(
+        [
+            *copy.deepcopy(_launch_prefix(fixture, slot)),
+            {"data": [_instance(fixture, slot, status="active")]},
+        ],
+        fixture.clock,
+    )
+    entry = _launch(
+        fixture,
+        root=root,
+        slot=slot,
+        prior=prior,
+        transport=launch_transport,
+    )
+    disposition, source = _host_preempirical_source(
+        fixture,
+        entry_receipt=entry,
+        label=f"{label}-source-slot-{slot}",
+    )
+    remote_cleanup = _remote_cleanup_continuation(
+        fixture,
+        private_root=root,
+        label=f"{label}-remote-cleanup-slot-{slot}",
+    )
+    closeout_transport = FakeTransport(
+        [
+            RuntimeError("termination response ambiguity"),
+            {"data": []},
+            copy.deepcopy(fixture.global_firewall),
+            {"data": []},
+        ],
+        fixture.clock,
+    )
+    provider.closeout_campaign(
+        contract=fixture.contract,
+        repository=ROOT,
+        package_commit=PACKAGE_COMMIT,
+        authorization_ledger=fixture.authorization,
+        dotenv=fixture.dotenv,
+        private_root=root,
+        transport=closeout_transport,
+        preempirical_receipt=disposition,
+        preempirical_source_root=source,
+        remote_cleanup_journal=remote_cleanup,
+        clock=fixture.clock,
+        sleeper=fixture.clock.sleep,
+    )
+    return root, entry, disposition, source, remote_cleanup, closeout_transport
+
+
 def _validate_eligibility(fixture: ProviderFixture, root: Path) -> dict[str, object]:
     return provider._validate_replacement_launch_eligibility(
         root,
@@ -341,7 +542,12 @@ def _normalized_copy(
 ) -> tuple[Path, provider.ProviderEntryReplacementNormalization]:
     target = fixture.root / name
     target.mkdir(mode=0o700)
-    eligibility_path = provider._replacement_launch_eligibility_path(source)
+    eligibility_path = provider._replacement_launch_eligibility_path(
+        source,
+        contract=fixture.contract,
+        package_commit=PACKAGE_COMMIT,
+        plan_sha256=fixture.plan_sha256,
+    )
     eligibility = _validate_eligibility(fixture, source)
     result = provider._normalize_provider_entry_replacement_authority(
         source,
@@ -529,7 +735,12 @@ def test_provider_entry_replacement_is_slot_generic_through_slot_three(
 ) -> None:
     slot1, _ = _close_provider_entry_slot(provider_fixture, slot=1)
     slot2, _ = _close_provider_entry_slot(provider_fixture, slot=2, prior=slot1)
-    current_receipt = provider._replacement_launch_eligibility_path(slot2)
+    current_receipt = provider._replacement_launch_eligibility_path(
+        slot2,
+        contract=provider_fixture.contract,
+        package_commit=PACKAGE_COMMIT,
+        plan_sha256=provider_fixture.plan_sha256,
+    )
     assert current_receipt.name == "replacement-launch-eligibility-slot-2.json"
     assert load_json(current_receipt)["closed_launch_slot"] == 2
     slot3, entry_path, _ = _open_provider_entry_slot(
@@ -543,6 +754,353 @@ def test_provider_entry_replacement_is_slot_generic_through_slot_three(
         load_json(slot3 / "slot2-eligibility-source/source-manifest.json")["closed_launch_slot"]
         == 2
     )
+
+
+def test_host_preflight_closeout_history_launches_slot_three(
+    provider_fixture: ProviderFixture,
+) -> None:
+    slot1, _ = _close_provider_entry_slot(provider_fixture, slot=1)
+    slot1_eligibility = slot1 / "replacement-launch-eligibility.json"
+    slot1_bytes = slot1_eligibility.read_bytes()
+    slot2, slot2_entry, _ = _open_provider_entry_slot(
+        provider_fixture,
+        slot=2,
+        prior=slot1,
+    )
+    receipt, source = _host_preempirical_source(
+        provider_fixture,
+        entry_receipt=slot2_entry,
+        label="slot-2-host-preempirical-source",
+    )
+    remote_cleanup = _remote_cleanup_continuation(
+        provider_fixture,
+        private_root=slot2,
+        label="slot-2-remote-cleanup",
+    )
+    closeout_transport = FakeTransport(
+        [
+            RuntimeError("termination response ambiguity"),
+            {"data": []},
+            copy.deepcopy(provider_fixture.global_firewall),
+            {"data": []},
+        ],
+        provider_fixture.clock,
+    )
+    closeout = provider.closeout_campaign(
+        contract=provider_fixture.contract,
+        repository=ROOT,
+        package_commit=PACKAGE_COMMIT,
+        authorization_ledger=provider_fixture.authorization,
+        dotenv=provider_fixture.dotenv,
+        private_root=slot2,
+        transport=closeout_transport,
+        preempirical_receipt=receipt,
+        preempirical_source_root=source,
+        remote_cleanup_journal=remote_cleanup,
+        clock=provider_fixture.clock,
+        sleeper=provider_fixture.clock.sleep,
+    )
+    slot2_eligibility = slot2 / "replacement-launch-eligibility-slot-2.json"
+    assert load_json(closeout)["zero_t09_instances"] is True
+    assert (slot2 / "replacement-launch-eligibility.json").read_bytes() == slot1_bytes
+    assert load_json(slot2_eligibility)["closed_launch_slot"] == 2
+    assert (
+        provider._replacement_launch_eligibility_path(
+            slot2,
+            contract=provider_fixture.contract,
+            package_commit=PACKAGE_COMMIT,
+            plan_sha256=provider_fixture.plan_sha256,
+        )
+        == slot2_eligibility
+    )
+    slot3, slot3_entry, _ = _open_provider_entry_slot(
+        provider_fixture,
+        slot=3,
+        prior=slot2,
+    )
+    assert load_json(slot3_entry)["launch_slot"] == 3
+    assert load_json(slot3 / "replacement-launch-eligibility.json")["closed_launch_slot"] == 2
+
+
+def test_host_preflight_closeout_resume_reuses_terminal_evidence_without_mutations(
+    provider_fixture: ProviderFixture,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    slot1, _ = _close_provider_entry_slot(provider_fixture, slot=1)
+    (
+        slot2,
+        _entry,
+        disposition,
+        source,
+        remote_cleanup,
+        first_transport,
+    ) = _close_host_preflight_slot(
+        provider_fixture,
+        slot=2,
+        prior=slot1,
+        label="resume-host-preflight",
+    )
+    assert (
+        len(
+            [
+                call
+                for call in first_transport.calls
+                if call[:2] == ("POST", "/api/v1/instance-operations/terminate")
+            ]
+        )
+        == 1
+    )
+    before = {
+        path.relative_to(slot2).as_posix(): path.read_bytes()
+        for path in slot2.rglob("*")
+        if path.is_file()
+    }
+    remote_before = {
+        path.relative_to(remote_cleanup).as_posix(): path.read_bytes()
+        for path in remote_cleanup.rglob("*")
+        if path.is_file()
+    }
+    credential_loads = 0
+
+    def count_credential_load(*_args: object, **_kwargs: object) -> bytearray:
+        nonlocal credential_loads
+        credential_loads += 1
+        return bytearray(b"unexpected-closeout-resume-credential")
+
+    monkeypatch.setattr(provider, "load_dotenv_assignment", count_credential_load)
+    resume_transport = FakeTransport([], provider_fixture.clock)
+    resumed = provider.closeout_campaign(
+        contract=provider_fixture.contract,
+        repository=ROOT,
+        package_commit=PACKAGE_COMMIT,
+        authorization_ledger=provider_fixture.authorization,
+        dotenv=provider_fixture.dotenv,
+        private_root=slot2,
+        transport=resume_transport,
+        preempirical_receipt=disposition,
+        preempirical_source_root=source,
+        remote_cleanup_journal=remote_cleanup,
+        clock=provider_fixture.clock,
+        sleeper=provider_fixture.clock.sleep,
+    )
+    assert resumed == slot2 / "closeout-source/closeout-receipt.json"
+    assert credential_loads == 0
+    assert resume_transport.calls == []
+    assert before == {
+        path.relative_to(slot2).as_posix(): path.read_bytes()
+        for path in slot2.rglob("*")
+        if path.is_file()
+    }
+    assert remote_before == {
+        path.relative_to(remote_cleanup).as_posix(): path.read_bytes()
+        for path in remote_cleanup.rglob("*")
+        if path.is_file()
+    }
+    selected = provider._replacement_launch_eligibility_path(
+        slot2,
+        contract=provider_fixture.contract,
+        package_commit=PACKAGE_COMMIT,
+        plan_sha256=provider_fixture.plan_sha256,
+    )
+    assert selected.name == "replacement-launch-eligibility-slot-2.json"
+
+
+def test_first_host_preflight_closeout_publishes_reuses_and_authorizes_slot_two(
+    provider_fixture: ProviderFixture,
+) -> None:
+    (
+        slot1,
+        _entry,
+        disposition,
+        source,
+        remote_cleanup,
+        _transport,
+    ) = _close_host_preflight_slot(
+        provider_fixture,
+        slot=1,
+        prior=None,
+        label="first-host-preflight",
+    )
+    eligibility = slot1 / "replacement-launch-eligibility.json"
+    eligibility_bytes = eligibility.read_bytes()
+    closeout = slot1 / "closeout-source/closeout-receipt.json"
+    closeout_bytes = closeout.read_bytes()
+    resumed = provider.closeout_campaign(
+        contract=provider_fixture.contract,
+        repository=ROOT,
+        package_commit=PACKAGE_COMMIT,
+        authorization_ledger=provider_fixture.authorization,
+        dotenv=provider_fixture.dotenv,
+        private_root=slot1,
+        transport=FakeTransport([], provider_fixture.clock),
+        preempirical_receipt=disposition,
+        preempirical_source_root=source,
+        remote_cleanup_journal=remote_cleanup,
+        clock=provider_fixture.clock,
+        sleeper=provider_fixture.clock.sleep,
+    )
+    assert resumed == closeout
+    assert eligibility.read_bytes() == eligibility_bytes
+    assert closeout.read_bytes() == closeout_bytes
+    slot2, slot2_entry, _ = _open_provider_entry_slot(
+        provider_fixture,
+        slot=2,
+        prior=slot1,
+    )
+    assert load_json(slot2_entry)["launch_slot"] == 2
+    assert load_json(slot2 / "replacement-launch-eligibility.json")["closed_launch_slot"] == 1
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "prior-hash",
+        "duplicate-slot",
+        "filename-slot",
+        "missing-preceding",
+        "two-current",
+        "cross-plan",
+        "cross-host",
+        "cross-package",
+        "missing-capability",
+    ],
+)
+def test_replacement_eligibility_history_contradictions_fail_closed(
+    provider_fixture: ProviderFixture,
+    mutation: str,
+) -> None:
+    slot1, _ = _close_provider_entry_slot(provider_fixture, slot=1)
+    slot2, _ = _close_provider_entry_slot(provider_fixture, slot=2, prior=slot1)
+    preceding = slot2 / "replacement-launch-eligibility.json"
+    current = slot2 / "replacement-launch-eligibility-slot-2.json"
+    if mutation == "prior-hash":
+        preceding.write_bytes(preceding.read_bytes() + b" ")
+    elif mutation == "duplicate-slot":
+        duplicate = slot2 / "replacement-launch-eligibility-slot-02.json"
+        duplicate.write_bytes(current.read_bytes())
+        duplicate.chmod(0o600)
+    elif mutation == "filename-slot":
+        document = load_json(current)
+        document["closed_launch_slot"] = 1
+        current.write_text(json.dumps(document), encoding="utf-8")
+        current.chmod(0o600)
+    elif mutation == "missing-preceding":
+        preceding.unlink()
+    elif mutation == "two-current":
+        duplicate = slot2 / "replacement-launch-eligibility-slot-3.json"
+        duplicate.write_bytes(current.read_bytes())
+        duplicate.chmod(0o600)
+    elif mutation in {"cross-plan", "cross-host", "cross-package"}:
+        document = load_json(current)
+        field = {
+            "cross-plan": "plan_id",
+            "cross-host": "host_run_id",
+            "cross-package": "package_commit",
+        }[mutation]
+        document[field] = "f" * 40 if field == "package_commit" else f"wrong-{field}"
+        current.write_text(json.dumps(document), encoding="utf-8")
+        current.chmod(0o600)
+    else:
+        provider_fixture.capabilities[2].unlink()
+    with pytest.raises(provider.T09ProviderError):
+        provider._replacement_launch_eligibility_path(
+            slot2,
+            contract=provider_fixture.contract,
+            package_commit=PACKAGE_COMMIT,
+            plan_sha256=provider_fixture.plan_sha256,
+        )
+    cleanup = EarlyCleanupJournal(slot2 / "preflight-cleanup-state").load()
+    assert cleanup.terminal_cleanup_disposition is TerminalCleanupDisposition.COMPLETE
+
+
+def test_terminal_host_closeout_rejects_partial_eligibility_without_regressing_cleanup(
+    provider_fixture: ProviderFixture,
+) -> None:
+    slot1, _ = _close_provider_entry_slot(provider_fixture, slot=1)
+    slot2, entry, _ = _open_provider_entry_slot(
+        provider_fixture,
+        slot=2,
+        prior=slot1,
+    )
+    disposition, source = _host_preempirical_source(
+        provider_fixture,
+        entry_receipt=entry,
+        label="partial-eligibility-host-source",
+    )
+    remote_cleanup = _remote_cleanup_continuation(
+        provider_fixture,
+        private_root=slot2,
+        label="partial-eligibility-remote-cleanup",
+    )
+    target = slot2 / "replacement-launch-eligibility-slot-2.json"
+    provider.write_exclusive(
+        target,
+        {
+            "schema_version": "0.1.0",
+            "plan_id": provider_fixture.contract.plan_id,
+            "host_run_id": provider_fixture.contract.host_run_id,
+            "package_commit": PACKAGE_COMMIT,
+            "closed_launch_slot": 2,
+            "partial": True,
+        },
+    )
+    partial_bytes = target.read_bytes()
+    closeout_transport = FakeTransport(
+        [
+            RuntimeError("termination response ambiguity"),
+            {"data": []},
+            copy.deepcopy(provider_fixture.global_firewall),
+            {"data": []},
+        ],
+        provider_fixture.clock,
+    )
+    with pytest.raises(provider.T09ProviderError, match="after verified provider/security"):
+        provider.closeout_campaign(
+            contract=provider_fixture.contract,
+            repository=ROOT,
+            package_commit=PACKAGE_COMMIT,
+            authorization_ledger=provider_fixture.authorization,
+            dotenv=provider_fixture.dotenv,
+            private_root=slot2,
+            transport=closeout_transport,
+            preempirical_receipt=disposition,
+            preempirical_source_root=source,
+            remote_cleanup_journal=remote_cleanup,
+            clock=provider_fixture.clock,
+            sleeper=provider_fixture.clock.sleep,
+        )
+    closeout_path = slot2 / "closeout-source/closeout-receipt.json"
+    closeout_bytes = closeout_path.read_bytes()
+    journal = EarlyCleanupJournal(slot2 / "preflight-cleanup-state")
+    cleanup = journal.load()
+    cleanup_versions = [path.read_bytes() for path in sorted(journal.versions.glob("*.json"))]
+    targets = {item.target_id: item.state for item in cleanup.targets}
+    assert targets["provider-instance"] is CleanupTargetState.ABSENT
+    assert targets["firewall-restoration"] is CleanupTargetState.RESTORED
+    assert not (slot2 / "CLOSEOUT_REQUIRES_CONSOLE.json").exists()
+    assert target.read_bytes() == partial_bytes
+    with pytest.raises(provider.T09ProviderError, match="receipt drifted"):
+        provider.closeout_campaign(
+            contract=provider_fixture.contract,
+            repository=ROOT,
+            package_commit=PACKAGE_COMMIT,
+            authorization_ledger=provider_fixture.authorization,
+            dotenv=provider_fixture.dotenv,
+            private_root=slot2,
+            transport=FakeTransport([], provider_fixture.clock),
+            preempirical_receipt=disposition,
+            preempirical_source_root=source,
+            remote_cleanup_journal=remote_cleanup,
+            clock=provider_fixture.clock,
+            sleeper=provider_fixture.clock.sleep,
+        )
+    assert closeout_path.read_bytes() == closeout_bytes
+    assert target.read_bytes() == partial_bytes
+    assert cleanup_versions == [
+        path.read_bytes() for path in sorted(journal.versions.glob("*.json"))
+    ]
+    with pytest.raises(provider.T09ProviderError):
+        _validate_eligibility(provider_fixture, slot2)
 
 
 def test_normalization_failure_precedes_credentials_provider_and_capability(
