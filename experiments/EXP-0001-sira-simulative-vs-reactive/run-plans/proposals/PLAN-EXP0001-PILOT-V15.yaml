@@ -167,9 +167,9 @@ implementation_bindings:
     runtime_profile_path: experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/proposals/T09_PILOT_RUNTIME_PROFILE_V15.yaml
     runtime_profile_sha256: 64075a67989522495145bf02c32544bd3a07f30c38d46daa4e9f5c16c65faa1d
     execution_contract_path: experiments/EXP-0001-sira-simulative-vs-reactive/contracts/proposals/T09_PILOT_EXECUTION_CONTRACT_V15.json
-    execution_contract_sha256: 2b183d81b7774089accadead17e70e006a3baacef5c1bf1f7f7338414f2c9ee3
+    execution_contract_sha256: 9f12ff18be7bd75e9b0c6ea367a327f5914e54d85fd739f7adfc62c9065c58f8
     command_manifests_path: experiments/EXP-0001-sira-simulative-vs-reactive/contracts/proposals/T09_PILOT_COMMAND_MANIFESTS_V15.json
-    command_manifests_sha256: 48e3f91f919d07175af16a7da1889a898d5c106510cd196f944bd798514e1c33
+    command_manifests_sha256: 6feacd571715237934c7cf816861b38a0c7740ea4b75b927443731d3717df16c
     runtime_identity_path: experiments/EXP-0001-sira-simulative-vs-reactive/contracts/proposals/T09_PILOT_RUNTIME_IDENTITY_V15.json
     runtime_identity_sha256: a475f126cd2c2cfc9578197c245ff43b2d45167a68b133d8f49abbf9527c0268
     runtime_adaptation_path: src/giclab/harness/sira_gate_a_runtime.py

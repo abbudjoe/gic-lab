@@ -89,7 +89,7 @@ def test_v15_plan_schema_package_and_false_flags_are_exact() -> None:
     Draft202012Validator.check_schema(schema)
     Draft202012Validator(schema).validate(plan)
     assert PLAN.stat().st_size == 20_292
-    assert _sha256(PLAN) == "d7e34dae38c7e28cf2ed595483c37b5f17d1bc2bae54f690244cce711c1b2c2d"
+    assert _sha256(PLAN) == "b7bd2832623789f968b9830ae10f074eb18c71dcd45575918ab134c42473b8b3"
     assert PROFILE.stat().st_size == 15_974
     assert _sha256(PROFILE) == "64075a67989522495145bf02c32544bd3a07f30c38d46daa4e9f5c16c65faa1d"
     assert validate_t09_v15_plan(ROOT) == []

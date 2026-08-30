@@ -28,7 +28,7 @@ decisions were not delegated. ChatGPT exact-head review remains external and req
 - V14 stopped disposition: 3,390 bytes, SHA-256
   `71d7a78dac976d131f5e45cb8a2ff1aabe657c2423535322a4a570a9f792947e`.
 - V15 plan: 20,292 bytes, SHA-256
-  `d7e34dae38c7e28cf2ed595483c37b5f17d1bc2bae54f690244cce711c1b2c2d`.
+  `b7bd2832623789f968b9830ae10f074eb18c71dcd45575918ab134c42473b8b3`.
 - V15 runtime profile: 15,974 bytes, SHA-256
   `64075a67989522495145bf02c32544bd3a07f30c38d46daa4e9f5c16c65faa1d`.
 
