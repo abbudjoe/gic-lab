@@ -1,0 +1,79 @@
+{
+  "authority_disposition": {
+    "authorization_consumed": true,
+    "condition_identities_consumed": true,
+    "frozen_manifest_identity_consumed": true,
+    "host_identity_consumed": true,
+    "image_qualification_identity_consumed": true,
+    "launch_slot_authority_consumed_under_changed_source": true,
+    "local_finalizer_qualification_identity_consumed": true,
+    "metadata_allowance_consumed": true,
+    "replay_allowed": false,
+    "slot_2_launch_capability_consumed": false,
+    "slot_2_launch_capability_replay_allowed": false,
+    "successor_must_use_fresh_source_bound_identities": true
+  },
+  "cleanup": {
+    "early_cleanup_closeout_bytes": 1601,
+    "early_cleanup_closeout_sha256": "8606f064d149738df9acf7562098b1ab12d0f19c8b7072f33c6bad8d49e2cdfb",
+    "provider_terminal_or_absent": true,
+    "remote_security_restored": true,
+    "terminal_cleanup_disposition": "complete",
+    "zero_running_t09_instances": true
+  },
+  "error": {
+    "class": "T09ProviderError",
+    "message": "provider-entry replacement evidence cannot be normalized as a host closeout",
+    "source_function": "launch_campaign",
+    "source_line_at_merged_package": 6187,
+    "source_path": "src/giclab/harness/t09_pragmatic_provider.py",
+    "trigger": "validated provider-entry-failed-preempirical eligibility reached a normalizer that accepted only historical host-closeout layouts",
+    "validation_function": "_validate_replacement_launch_eligibility"
+  },
+  "evidence": {
+    "authorization_overlay_bytes": 860,
+    "authorization_overlay_sha256": "11bab87a43cc5e5efdeee3a33e14c8fa0e04d3d93b569ad0be969ee8db5fae89",
+    "category_1_defect_handoff_bytes": 1649,
+    "category_1_defect_handoff_sha256": "8902d5d158f1d257f536010b00d31e74e48581b832f6f44720693ac63b0a2dde",
+    "category_3_stop_disposition_bytes": 3646,
+    "category_3_stop_disposition_sha256": "47453e25840572c92f5ee8cac9222cf4ca2e0441b878629cdb89966b5e339c64",
+    "model_metadata_receipt_bytes": 1401,
+    "model_metadata_receipt_sha256": "b0fbaf0fcb755e850abef629f3ab20b51fe4296e1505195c33bfcc19378817ba",
+    "provisional_owner_closed_receipt_bytes": 703,
+    "provisional_owner_closed_receipt_sha256": "65571e99d102de31b838d8c13384a563f6c83dbdc0ab496f2c8060ef9894d6ad"
+  },
+  "execution_boundary": {
+    "dynamic_frozen_manifests": 0,
+    "empirical_attempts_entered": 0,
+    "empirical_entry_crossed": false,
+    "provider_launch_crossed": true,
+    "replacement_launch_provider_invocations": 0,
+    "slot_1_provider_launches": 1,
+    "slot_2_provider_launches": 0
+  },
+  "host_run_id": "RUN-T09-PILOT-HOST-AUTONOMOUS-0007",
+  "merged_package_commit": "2db290530c36c92562fe6b25f7a4f6aafd77b548",
+  "plan": {
+    "bytes": 19232,
+    "plan_id": "PLAN-EXP0001-PILOT-V14",
+    "sha256": "62252dbbde6ff7e28268ed3f3d3b94255227cc3d4e1c435f5f0374f95167c0ea"
+  },
+  "provider_contract_version": "V14",
+  "request_accounting": {
+    "authenticated_openai_metadata_gets": 1,
+    "browser_actions": 0,
+    "lambda_launches": 1,
+    "lambda_read_only_gets_before_launch": 6,
+    "task_model_calls": 0
+  },
+  "runtime_profile": {
+    "bytes": 15176,
+    "sha256": "b1b5dc0e71954fdcbfe9c5a315f45dfcb09bd3e569fd817cf86efa381a869ee7"
+  },
+  "schema_version": "1.0.0",
+  "timing_and_cost": {
+    "lambda_cost_usd": "0.0821235525349776",
+    "openai_task_cost_usd": "0.00",
+    "slot_1_active_duration_seconds": "229.18200707435608"
+  }
+}

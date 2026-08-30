@@ -268,6 +268,7 @@ def _t09_successor_implementation_binding_map(plan: Mapping[str, Any]) -> dict[s
         "PLAN-EXP0001-PILOT-V12",
         "PLAN-EXP0001-PILOT-V13",
         "PLAN-EXP0001-PILOT-V14",
+        "PLAN-EXP0001-PILOT-V15",
     }:
         specifications += (
             ("execution_plane", "runtime_adaptation_path", "runtime_adaptation_sha256"),
@@ -275,6 +276,7 @@ def _t09_successor_implementation_binding_map(plan: Mapping[str, Any]) -> dict[s
     if plan.get("plan_id") in {
         "PLAN-EXP0001-PILOT-V13",
         "PLAN-EXP0001-PILOT-V14",
+        "PLAN-EXP0001-PILOT-V15",
     }:
         specifications += (
             ("execution_plane", "preflight_path", "preflight_sha256"),
@@ -1849,6 +1851,7 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
         (
             candidate
             for candidate in (
+                exp_root / "run-plans/proposals/PLAN-EXP0001-PILOT-V15.yaml",
                 exp_root / "run-plans/proposals/PLAN-EXP0001-PILOT-V14.yaml",
                 exp_root / "run-plans/proposals/PLAN-EXP0001-PILOT-V13.yaml",
                 exp_root / "run-plans/proposals/PLAN-EXP0001-PILOT-V12.yaml",
@@ -2642,13 +2645,14 @@ def _validate_t09_successor_plan(
         "early_cleanup",
         "execution_plane",
     ]
-    if version in {"V11", "V12", "V13", "V14"}:
+    if version in {"V11", "V12", "V13", "V14", "V15"}:
         required_groups.insert(3, "owned_container_publication")
-    if version in {"V12", "V13", "V14"}:
+    if version in {"V12", "V13", "V14", "V15"}:
         required_groups.insert(4, "model_metadata_receipt")
     stopped_disposition_group = {
         "V13": "v12_stopped_disposition",
         "V14": "v13_stopped_disposition",
+        "V15": "v14_stopped_disposition",
     }.get(version)
     if stopped_disposition_group is not None:
         required_groups.insert(5, stopped_disposition_group)
@@ -2668,7 +2672,7 @@ def _validate_t09_successor_plan(
     assert isinstance(refinalization, dict)
     assert isinstance(cleanup, dict)
     assert isinstance(execution, dict)
-    if version in {"V12", "V13", "V14"}:
+    if version in {"V12", "V13", "V14", "V15"}:
         assert isinstance(model_metadata, dict)
     if stopped_disposition_group is not None:
         assert isinstance(stopped_disposition, dict)
@@ -2724,7 +2728,7 @@ def _validate_t09_successor_plan(
         (execution, "runtime_identity_path", "runtime_identity_sha256"),
         (execution, "execution_schema_path", "execution_schema_sha256"),
     ]
-    if version in {"V12", "V13", "V14"}:
+    if version in {"V12", "V13", "V14", "V15"}:
         assert isinstance(model_metadata, dict)
         specifications.extend(
             [
@@ -2743,7 +2747,7 @@ def _validate_t09_successor_plan(
                 ),
             ]
         )
-    if version in {"V13", "V14"}:
+    if version in {"V13", "V14", "V15"}:
         specifications.extend(
             [
                 (execution, "preflight_path", "preflight_sha256"),
@@ -2754,7 +2758,7 @@ def _validate_t09_successor_plan(
                 ),
             ]
         )
-    if version == "V14":
+    if version in {"V14", "V15"}:
         specifications.append(
             (
                 cleanup,
@@ -2840,7 +2844,7 @@ def _validate_t09_successor_plan(
                 f"{label} runtime profile: {error}"
                 for error in validate_run_profile_readiness(runtime_profile)
             )
-            if version in {"V12", "V13", "V14"}:
+            if version in {"V12", "V13", "V14", "V15"}:
                 lifecycle = runtime_profile.get("provider_lifecycle")
                 expected_metadata_lifecycle = {
                     "model_metadata_request_count_total": 1,
@@ -2924,7 +2928,7 @@ def _validate_t09_successor_plan(
                 ]
                 if observed_order != expected_order:
                     errors.append(f"{label} execution attempt order drifted from the plan")
-            if version in {"V11", "V12", "V13", "V14"}:
+            if version in {"V11", "V12", "V13", "V14", "V15"}:
                 lifecycle = contract.get("provider_lifecycle")
                 if not isinstance(lifecycle, dict) or (
                     lifecycle.get("model_metadata_before_lambda_launch") is not True
@@ -2936,7 +2940,7 @@ def _validate_t09_successor_plan(
                 ):
                     errors.append(f"{label} metadata-before-Lambda contract drifted")
                 if (
-                    version in {"V12", "V13", "V14"}
+                    version in {"V12", "V13", "V14", "V15"}
                     and isinstance(lifecycle, dict)
                     and (
                         lifecycle.get("model_metadata_request_count_total") != 1
@@ -2965,14 +2969,16 @@ def _validate_t09_successor_plan(
                 )
             ):
                 errors.append(f"{label} command pair diff is invalid")
-            if version in {"V11", "V12", "V13", "V14"}:
+            if version in {"V11", "V12", "V13", "V14", "V15"}:
                 reviewed_ancestor = bindings.get("reviewed_implementation_ancestor")
                 if commands.get("reviewed_implementation_ancestor") != reviewed_ancestor:
                     errors.append(f"{label} command manifest source ancestor drifted")
     else:
         errors.append(f"{label} execution control paths are malformed")
 
-    if version in {"V11", "V12", "V13", "V14"} and isinstance(runtime_identity_relative, str):
+    if version in {"V11", "V12", "V13", "V14", "V15"} and isinstance(
+        runtime_identity_relative, str
+    ):
         identity_target = root / runtime_identity_relative
         if identity_target.is_file():
             identity = load_json(identity_target)
@@ -2996,7 +3002,7 @@ def _validate_t09_successor_plan(
                 Decimal(
                     str(budget.get("effective_maximum_new_total_cost_under_cumulative_cap_usd"))
                 )
-                if version in {"V11", "V12", "V13", "V14"}
+                if version in {"V11", "V12", "V13", "V14", "V15"}
                 else nominal_new_total
             )
         except InvalidOperation:
@@ -3050,11 +3056,21 @@ def validate_t09_v13_plan(root: Path = ROOT) -> list[str]:
 
 
 def validate_t09_v14_plan(root: Path = ROOT) -> list[str]:
-    """Validate the unauthorized V14 cleanup-repair successor package."""
+    """Validate stopped V14 against its immutable reviewed source ancestor."""
 
     return _validate_t09_successor_plan(
         root,
         version="V14",
+        historical_source_bindings=True,
+    )
+
+
+def validate_t09_v15_plan(root: Path = ROOT) -> list[str]:
+    """Validate the unauthorized V15 replacement-normalization package."""
+
+    return _validate_t09_successor_plan(
+        root,
+        version="V15",
         historical_source_bindings=False,
     )
 
@@ -3167,6 +3183,7 @@ def run_all(root: Path = ROOT) -> list[str]:
         ("T09 V12 plan", validate_t09_v12_plan),
         ("T09 V13 plan", validate_t09_v13_plan),
         ("T09 V14 plan", validate_t09_v14_plan),
+        ("T09 V15 plan", validate_t09_v15_plan),
         ("manifests", validate_manifests),
         ("workflows", validate_workflows),
         ("repository hygiene", validate_hygiene),

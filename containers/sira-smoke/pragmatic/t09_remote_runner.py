@@ -60,6 +60,10 @@ from giclab.harness.t09_model_metadata_receipt import (
     validate_model_metadata_receipt,
 )
 from giclab.harness.t09_pragmatic_provider import (
+    PROVIDER_ENTRY_AUTHORITY_MANIFEST_SCHEMA_VERSION,
+    PROVIDER_ENTRY_AUTHORITY_MAX_BYTES,
+    PROVIDER_ENTRY_AUTHORITY_MAX_FILES,
+    PROVIDER_ENTRY_FAILED_PREEMPIRICAL_ELIGIBILITY_KIND,
     RETRY4_ACTIVE_SLOT2_ENTRY_PACKAGE_COMMIT,
     T09ProviderError,
     autonomous_preflight_package_transition,
@@ -690,7 +694,7 @@ def _require_supported_provider_runner(
 ) -> None:
     """Prevent this runner from relabeling evidence from an unsupported package."""
 
-    if contract.version not in {"V11", "V12", "V13", "V14"}:
+    if contract.version not in {"V11", "V12", "V13", "V14", "V15"}:
         raise T09HostError(f"{label} requires its frozen provider runner")
 
 
@@ -1677,8 +1681,30 @@ def _slot2_authority_relative_paths(root: Path) -> tuple[str, ...]:
     source_manifest = load_object(source_manifest_path, label="slot-2 authority manifest")
     contract = _provider_contract_from_document(source_manifest, label="slot-2 authority manifest")
     raw_files = source_manifest.get("files")
+    base_manifest_fields = {
+        "schema_version",
+        "plan_id",
+        "host_run_id",
+        "files",
+        "file_count",
+        "total_bytes",
+        "files_sha256",
+    }
+    authority_type = source_manifest.get("authority_type")
+    provider_entry_fields = {
+        "authority_schema_version",
+        "authority_type",
+        "closed_launch_slot",
+        "source_private_root_identity_sha256",
+    }
     if (
-        source_manifest.get("schema_version") != "0.1.0"
+        set(source_manifest)
+        != (
+            base_manifest_fields | provider_entry_fields
+            if authority_type == PROVIDER_ENTRY_FAILED_PREEMPIRICAL_ELIGIBILITY_KIND
+            else base_manifest_fields
+        )
+        or source_manifest.get("schema_version") != "0.1.0"
         or source_manifest.get("plan_id") != contract.plan_id
         or source_manifest.get("host_run_id") != contract.host_run_id
         or not isinstance(raw_files, list)
@@ -1698,6 +1724,20 @@ def _slot2_authority_relative_paths(root: Path) -> tuple[str, ...]:
         ).hexdigest()
     ):
         raise T09HostError("slot-2 authority manifest contract drifted")
+    if authority_type == PROVIDER_ENTRY_FAILED_PREEMPIRICAL_ELIGIBILITY_KIND and (
+        source_manifest.get("authority_schema_version")
+        != PROVIDER_ENTRY_AUTHORITY_MANIFEST_SCHEMA_VERSION
+        or type(source_manifest.get("closed_launch_slot")) is not int
+        or cast(int, source_manifest.get("closed_launch_slot"))
+        not in range(1, contract.max_launch_count)
+        or not isinstance(source_manifest.get("source_private_root_identity_sha256"), str)
+        or re.fullmatch(
+            r"[a-f0-9]{64}",
+            cast(str, source_manifest.get("source_private_root_identity_sha256")),
+        )
+        is None
+    ):
+        raise T09HostError("provider-entry authority manifest is malformed")
     declared: list[str] = []
     total = 0
     for raw in raw_files:
@@ -1732,6 +1772,10 @@ def _slot2_authority_relative_paths(root: Path) -> tuple[str, ...]:
     for path in source_root.rglob("*"):
         metadata = path.lstat()
         if stat.S_ISDIR(metadata.st_mode):
+            if authority_type == PROVIDER_ENTRY_FAILED_PREEMPIRICAL_ELIGIBILITY_KIND and (
+                metadata.st_uid != os.getuid() or stat.S_IMODE(metadata.st_mode) != 0o700
+            ):
+                raise T09HostError("slot-2 authority source contains an unsafe directory")
             continue
         if not stat.S_ISREG(metadata.st_mode) or path.is_symlink():
             raise T09HostError("slot-2 authority source contains an unsafe extra member")
@@ -1743,6 +1787,23 @@ def _slot2_authority_relative_paths(root: Path) -> tuple[str, ...]:
         or source_manifest.get("total_bytes") != total
     ):
         raise T09HostError("slot-2 authority source member set drifted")
+    if authority_type == PROVIDER_ENTRY_FAILED_PREEMPIRICAL_ELIGIBILITY_KIND:
+        expected_provider_entry_members = {
+            "entry-source",
+            "provisional-closeout-source",
+            "provisional-owned-state.json",
+            "PROVISIONAL_OWNER_CLOSED.json",
+            "preflight-cleanup-state",
+        }
+        observed_provider_entry_members = {
+            PurePosixPath(relative).parts[0] for relative in declared
+        }
+        if (
+            observed_provider_entry_members != expected_provider_entry_members
+            or len(declared) > PROVIDER_ENTRY_AUTHORITY_MAX_FILES
+            or total > PROVIDER_ENTRY_AUTHORITY_MAX_BYTES
+        ):
+            raise T09HostError("provider-entry authority closure drifted")
     for path in (eligibility, source_manifest_path):
         metadata = path.stat(follow_symlinks=False)
         if (
@@ -1784,9 +1845,10 @@ def slot2_authority_binding(root: Path) -> dict[str, object]:
     """Return distinct bindings for the transfer tree and scientific authority.
 
     The normalized transfer-tree manifest proves what crossed the provider/host
-    boundary.  The nested pre-empirical source manifest is the authority named by
-    the replacement-eligibility receipt.  They are deliberately separate types:
-    equality between them is neither expected nor meaningful.
+    boundary. Historical host closeouts retain a distinct nested pre-empirical
+    source manifest. A provider-entry closure intentionally uses its typed outer
+    manifest for both bindings because that manifest is the complete normalized
+    source authority.
     """
 
     relative_paths = _slot2_authority_relative_paths(root)
@@ -1798,18 +1860,35 @@ def slot2_authority_binding(root: Path) -> dict[str, object]:
         }
         for relative in relative_paths
     ]
+    eligibility = load_object(
+        root / "replacement-launch-eligibility.json",
+        label="replacement eligibility",
+    )
+    normalized_manifest_path = root / "slot2-eligibility-source/source-manifest.json"
+    normalized_manifest = load_object(
+        normalized_manifest_path,
+        label="normalized slot-2 authority manifest",
+    )
+    if eligibility.get("eligibility_kind") == (PROVIDER_ENTRY_FAILED_PREEMPIRICAL_ELIGIBILITY_KIND):
+        if normalized_manifest.get(
+            "authority_type"
+        ) != PROVIDER_ENTRY_FAILED_PREEMPIRICAL_ELIGIBILITY_KIND or normalized_manifest.get(
+            "closed_launch_slot"
+        ) != eligibility.get("closed_launch_slot"):
+            raise T09HostError("provider-entry authority does not match its eligibility")
+        source_manifest_sha256 = file_sha256(normalized_manifest_path)
+    else:
+        source_manifest_sha256 = file_sha256(
+            root / "slot2-eligibility-source/slot1-preempirical-source/source-manifest.json"
+        )
     return {
         "relative_paths": list(relative_paths),
         "relative_paths_sha256": canonical_sha256(list(relative_paths)),
         "files": records,
         "files_sha256": canonical_sha256(records),
         "replacement_eligibility_sha256": file_sha256(root / "replacement-launch-eligibility.json"),
-        "replacement_eligibility_preempirical_source_manifest_sha256": file_sha256(
-            root / "slot2-eligibility-source/slot1-preempirical-source/source-manifest.json"
-        ),
-        "normalized_slot2_authority_tree_manifest_sha256": file_sha256(
-            root / "slot2-eligibility-source/source-manifest.json"
-        ),
+        "replacement_eligibility_preempirical_source_manifest_sha256": (source_manifest_sha256),
+        "normalized_slot2_authority_tree_manifest_sha256": file_sha256(normalized_manifest_path),
     }
 
 
@@ -7812,7 +7891,7 @@ def validate_model_metadata_receipt_offline(
     package_tree = output(["git", "-C", str(repository), "rev-parse", f"{package_commit}^{{tree}}"])
     if re.fullmatch(r"[a-f0-9]{40}", package_tree) is None:
         raise T09HostError("package tree identity is malformed")
-    if contract.version not in {"V12", "V13", "V14"}:
+    if contract.version not in {"V12", "V13", "V14", "V15"}:
         raise T09HostError("selected contract has no durable model metadata receipt")
     paths = contract_paths(repository, contract)
     expected_receipt_sha256 = provider_entry.get("model_metadata_receipt_sha256")
@@ -8087,7 +8166,7 @@ def write_frozen_run_manifest(
     paths = _contract_paths_for(repository, campaign_contract)
     manifest_id = cast(str, campaign_contract.frozen_run_manifest_id)
     qualification_id = cast(str, campaign_contract.active_image_qualification_id)
-    if campaign_contract.version in {"V12", "V13", "V14"} and (
+    if campaign_contract.version in {"V12", "V13", "V14", "V15"} and (
         not isinstance(model_receipt.get("receipt_sha256"), str)
         or _HEX64.fullmatch(cast(str, model_receipt["receipt_sha256"])) is None
         or model_receipt.get("model_metadata_network_requests") != 0
@@ -8267,14 +8346,14 @@ def write_frozen_run_manifest(
         "final_image_file_hashes_sha256": canonical_sha256(file_hashes),
         "model_metadata_receipt_sha256": (
             model_receipt.get("receipt_sha256")
-            if campaign_contract.version in {"V12", "V13", "V14"}
+            if campaign_contract.version in {"V12", "V13", "V14", "V15"}
             else canonical_sha256(model_receipt)
         ),
         "model_metadata_credential_scan_sha256": canonical_sha256(model_credential_scan_receipt),
         "model_metadata_request_count": 1,
         **(
             {"model_metadata_network_requests": 0}
-            if campaign_contract.version in {"V12", "V13", "V14"}
+            if campaign_contract.version in {"V12", "V13", "V14", "V15"}
             else {}
         ),
         "model_task_request_count": 0,
@@ -8360,7 +8439,7 @@ def write_frozen_run_manifest(
                         _pilot_root(artifact_root) / "model-metadata-receipt-acknowledgement.json"
                     )
                 }
-                if campaign_contract.version in {"V12", "V13", "V14"}
+                if campaign_contract.version in {"V12", "V13", "V14", "V15"}
                 else {}
             ),
             "static_real_evidence_regression": file_sha256(paths["real_regression"]),
@@ -8457,7 +8536,7 @@ def load_frozen_run_manifest(
         _pilot_root(artifact_root) / "model-metadata-receipt-acknowledgement.json"
     )
     model_metadata_ack: dict[str, Any] | None = None
-    if runtime_contract.version in {"V12", "V13", "V14"}:
+    if runtime_contract.version in {"V12", "V13", "V14", "V15"}:
         model_metadata_ack = load_object(
             model_metadata_ack_path,
             label="model metadata receipt acknowledgement",
@@ -8762,7 +8841,7 @@ def load_frozen_run_manifest(
         or source_receipts.get("post_metadata_complete_core_gate")
         != file_sha256(post_metadata_core_gate_path)
         or (
-            runtime_contract.version in {"V12", "V13", "V14"}
+            runtime_contract.version in {"V12", "V13", "V14", "V15"}
             and (
                 model_metadata_ack is None
                 or source_receipts.get("model_metadata_receipt_acknowledgement")
@@ -10109,7 +10188,7 @@ def preflight(args: argparse.Namespace) -> None:
     # V11 retains its historical one-request container gate. V12 consumes the
     # provider's already sealed receipt at this boundary and cannot fall back to
     # that network path.
-    if dynamic_contract.version in {"V12", "V13", "V14"}:
+    if dynamic_contract.version in {"V12", "V13", "V14", "V15"}:
         explicit_receipt_path = getattr(args, "model_metadata_receipt", None)
         if explicit_receipt_path is not None and not isinstance(explicit_receipt_path, Path):
             raise T09HostError("V12 model metadata receipt argument is malformed")
@@ -10215,7 +10294,7 @@ def preflight(args: argparse.Namespace) -> None:
                     "model_metadata_network_requests": 0,
                     "model_metadata_receipt_sha256": dynamic.get("model_metadata_receipt_sha256"),
                 }
-                if dynamic_contract.version in {"V12", "V13", "V14"}
+                if dynamic_contract.version in {"V12", "V13", "V14", "V15"}
                 else {}
             ),
             "model_metadata_credential_scan_sha256": file_sha256(
@@ -10320,7 +10399,7 @@ def preflight(args: argparse.Namespace) -> None:
                     "model_metadata_network_requests": 0,
                     "model_metadata_receipt_sha256": dynamic.get("model_metadata_receipt_sha256"),
                 }
-                if dynamic_contract.version in {"V12", "V13", "V14"}
+                if dynamic_contract.version in {"V12", "V13", "V14", "V15"}
                 else {}
             ),
             "model_task_request_count": 0,
@@ -15799,7 +15878,7 @@ def validate_postfreeze_entry_receipts(
         or postfreeze.get("model_metadata_request_count") != 1
         or (
             provider_contract_for_plan_id(cast(str, frozen_manifest.get("plan_id"))).version
-            in {"V12", "V13", "V14"}
+            in {"V12", "V13", "V14", "V15"}
             and (
                 preflight_receipt.get("model_metadata_network_requests") != 0
                 or postfreeze.get("model_metadata_network_requests") != 0
@@ -21520,7 +21599,7 @@ def verify_inbound(args: argparse.Namespace) -> None:
         identity.get("stage_id") != stage_id
         or identity.get("archive_id") != archive_id
         or (
-            inbound_contract.version in {"V12", "V13", "V14"}
+            inbound_contract.version in {"V12", "V13", "V14", "V15"}
             and (
                 identity.get("plan_id") != inbound_contract.plan_id
                 or identity.get("host_run_id") != inbound_contract.host_run_id

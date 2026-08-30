@@ -3203,7 +3203,7 @@ def render_command_manifest(
             if key not in {"--mode", "--config_name", "--output_dir"}
         },
     }
-    if contract.provider_contract_version in {"V13", "V14"}:
+    if contract.provider_contract_version in {"V13", "V14", "V15"}:
         equality_surface["provider_contract_selector"] = {
             "argument": "--provider-contract",
             "value": contract.provider_contract_version,
