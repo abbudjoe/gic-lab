@@ -39,11 +39,16 @@ from jsonschema import Draft202012Validator, FormatChecker
 from giclab.harness.lambda_campaign_lifecycle import AutonomousPilotLifecycleLimits
 from giclab.harness.sira_gate_a import ProviderBudgetUsage
 from giclab.harness.t09_cleanup_state import (
+    CLEANUP_EXPORT_HANDOFF_SCHEMA_VERSION,
+    CleanupExportLifecyclePhase,
+    CleanupExportPhaseEvidence,
     CleanupLifecycleStage,
     CleanupTargetKind,
     CleanupTargetState,
     EarlyCleanupJournal,
+    EarlyCleanupState,
     EarlyCleanupStateError,
+    EmpiricalEntryStatus,
     TerminalCleanupDisposition,
     cleanup_locator_identity,
 )
@@ -387,6 +392,10 @@ def _attempt_export_required_control_paths(
 
 class T09HostError(RuntimeError):
     """The authorized host would violate its exact T09 contract."""
+
+
+class CleanupExportEvidenceError(T09HostError):
+    """Cleanup export phase evidence is missing, contradictory, or unsafe."""
 
 
 @contextlib.contextmanager
@@ -5186,43 +5195,451 @@ def _validate_attempt_export_acknowledgement(
     }
 
 
+def _load_cleanup_evidence_object(path: Path, *, label: str) -> dict[str, Any]:
+    """Load one cleanup control object only through its immutable file identity."""
+
+    try:
+        metadata = path.lstat()
+    except FileNotFoundError as exc:
+        raise CleanupExportEvidenceError(f"{label} is absent") from exc
+    if (
+        path.is_symlink()
+        or not stat.S_ISREG(metadata.st_mode)
+        or metadata.st_uid != os.getuid()
+        or metadata.st_nlink != 1
+        or stat.S_IMODE(metadata.st_mode) != 0o600
+        or not 0 < metadata.st_size <= MAX_PRIVACY_JSON_BYTES
+    ):
+        raise CleanupExportEvidenceError(f"{label} metadata is unsafe")
+    try:
+        return load_object(path, label=label)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, T09HostError) as exc:
+        raise CleanupExportEvidenceError(f"{label} is malformed") from exc
+
+
+def _cleanup_evidence_members(
+    directory: Path,
+    *,
+    expected_names: frozenset[str],
+    label: str,
+) -> tuple[Path, ...]:
+    """Return exact immutable members from one optional cleanup evidence directory."""
+
+    if not os.path.lexists(directory):
+        return ()
+    metadata = directory.lstat()
+    if (
+        directory.is_symlink()
+        or not stat.S_ISDIR(metadata.st_mode)
+        or metadata.st_uid != os.getuid()
+        or stat.S_IMODE(metadata.st_mode) != 0o700
+    ):
+        raise CleanupExportEvidenceError(f"{label} directory is unsafe")
+    members = tuple(sorted(directory.iterdir(), key=lambda path: path.name))
+    if any(path.name not in expected_names for path in members):
+        raise CleanupExportEvidenceError(f"{label} contains an unknown member")
+    for path in members:
+        member = path.lstat()
+        if (
+            path.is_symlink()
+            or not stat.S_ISREG(member.st_mode)
+            or member.st_uid != os.getuid()
+            or member.st_nlink != 1
+            or stat.S_IMODE(member.st_mode) != 0o600
+        ):
+            raise CleanupExportEvidenceError(f"{label} member metadata is unsafe")
+    return members
+
+
+def _cleanup_attempt_specific_evidence(
+    root: Path,
+    *,
+    repository: Path,
+    contract: T09ProviderContract,
+) -> tuple[int, int]:
+    """Count exact condition-owned roots and start intents without inferring from prose."""
+
+    command_path = _contract_paths_for(repository, contract)["commands"]
+    command_metadata = command_path.stat(follow_symlinks=False)
+    if command_path.is_symlink() or not stat.S_ISREG(command_metadata.st_mode):
+        raise CleanupExportEvidenceError("cleanup command manifest set is unsafe")
+    command_document = load_object(command_path, label="cleanup command manifest set")
+    attempt_state_count = 0
+    start_intent_count = 0
+    resolved_root = root.resolve(strict=True)
+    for run_id in contract.run_ids:
+        condition_manifest = _manifest_for_contract(command_document, run_id, contract)
+        attempt_root = root / manifest_output_root(condition_manifest)
+        if not os.path.lexists(attempt_root):
+            continue
+        metadata = attempt_root.lstat()
+        if attempt_root.is_symlink() or not stat.S_ISDIR(metadata.st_mode):
+            raise CleanupExportEvidenceError("condition attempt root is unsafe")
+        try:
+            attempt_root.resolve(strict=True).relative_to(resolved_root)
+        except (FileNotFoundError, ValueError) as exc:
+            raise CleanupExportEvidenceError(
+                "condition attempt root escaped artifact authority"
+            ) from exc
+        attempt_state_count += 1
+        intent_path = (
+            attempt_root / "raw" / CONDITION_SUPERVISOR_DIRNAME / "condition-start-intent.json"
+        )
+        if os.path.lexists(intent_path):
+            _load_cleanup_evidence_object(intent_path, label="condition start intent")
+            start_intent_count += 1
+    return attempt_state_count, start_intent_count
+
+
+def derive_cleanup_export_phase(
+    root: Path,
+    *,
+    repository: Path,
+    state: dict[str, Any],
+    package_commit: str,
+    cleanup_journal_state: EarlyCleanupState,
+    retained_chronology: object | None,
+    retained_pending: object | None,
+) -> CleanupExportPhaseEvidence:
+    """Derive cleanup export obligations from durable evidence before manifest loading."""
+
+    contract = _provider_contract_from_document(state, label="cleanup pilot state")
+    _require_supported_provider_runner(contract, label="cleanup export phase")
+    control_root = _pilot_root(root, contract)
+    entry = _load_cleanup_evidence_object(
+        control_root / "provider-entry.json",
+        label="cleanup provider entry",
+    )
+    _require_provider_contract(entry, expected=contract, label="cleanup provider entry")
+    if (
+        cleanup_journal_state.plan_id != contract.plan_id
+        or cleanup_journal_state.host_run_id != contract.host_run_id
+        or cleanup_journal_state.package_commit != package_commit
+        or cleanup_journal_state.plan_sha256 != contract.expected_plan_sha256
+    ):
+        raise CleanupExportEvidenceError("cleanup journal and selected provider contract disagree")
+
+    typed_list_fields = (
+        "empirical_attempts_entered",
+        "raw_attempts_complete",
+        "attempts_completed",
+        "nonempirical_infrastructure_attempts_consumed",
+    )
+    values = [state.get(field) for field in typed_list_fields]
+    if not all(
+        isinstance(value, list) and all(isinstance(item, str) for item in value) for value in values
+    ):
+        raise CleanupExportEvidenceError("cleanup attempt phase state is malformed")
+    entered, raw_complete, completed, nonempirical = cast(
+        tuple[list[str], list[str], list[str], list[str]],
+        tuple(values),
+    )
+    reservation = state.get("condition_start_reservation")
+    essential_seals = state.get("essential_failure_seals")
+    raw_bindings = state.get("raw_attempt_bindings")
+    finalizations = state.get("attempt_finalizations")
+    finalization_history = state.get("attempt_finalization_history")
+    release_bindings = state.get("supervised_release_bindings")
+    reclassifications = state.get("unreleased_supervised_release_reclassifications")
+    if (reservation is not None and not isinstance(reservation, dict)) or not all(
+        isinstance(value, dict)
+        for value in (
+            essential_seals,
+            raw_bindings,
+            finalizations,
+            finalization_history,
+            release_bindings,
+            reclassifications,
+        )
+    ):
+        raise CleanupExportEvidenceError("cleanup attempt-specific state is malformed")
+    assert isinstance(essential_seals, dict)
+    assert isinstance(raw_bindings, dict)
+    assert isinstance(finalizations, dict)
+    assert isinstance(finalization_history, dict)
+    assert isinstance(release_bindings, dict)
+    assert isinstance(reclassifications, dict)
+
+    attempt_state_count, start_intent_count = _cleanup_attempt_specific_evidence(
+        root,
+        repository=repository,
+        contract=contract,
+    )
+    acknowledgement_names = frozenset(f"{run_id}.json" for run_id in contract.run_ids)
+    completion_names = frozenset(f"{run_id}-export-completion.json" for run_id in contract.run_ids)
+    archive_names = frozenset(f"{run_id}.tar.gz" for run_id in contract.run_ids)
+    acknowledgement_members = _cleanup_evidence_members(
+        control_root / "received-export-acknowledgements",
+        expected_names=acknowledgement_names,
+        label="received export acknowledgements",
+    )
+    completion_members = _cleanup_evidence_members(
+        control_root / "attempt-export-completions",
+        expected_names=completion_names,
+        label="attempt export completions",
+    )
+    archive_members = _cleanup_evidence_members(
+        control_root / "attempt-exports",
+        expected_names=archive_names,
+        label="attempt export archives",
+    )
+    if retained_chronology is None:
+        chronology_count = 0
+    else:
+        chronology_count = len(
+            _validate_export_chronology_projection(
+                retained_chronology,
+                attempt_order=contract.run_ids,
+            )
+        )
+
+    frozen_path = control_root / "frozen-run-manifest.json"
+    postfreeze_path = control_root / "postfreeze-validation.json"
+    preflight_path = control_root / "preflight.json"
+    manifest_present = os.path.lexists(frozen_path)
+    postfreeze_present = os.path.lexists(postfreeze_path)
+    preflight_present = os.path.lexists(preflight_path)
+    required_acknowledgements = _consumed_export_prefix_length(state)
+    attempt_specific_state_exists = bool(
+        entered
+        or raw_complete
+        or completed
+        or nonempirical
+        or reservation is not None
+        or essential_seals
+        or raw_bindings
+        or finalizations
+        or finalization_history
+        or release_bindings
+        or reclassifications
+        or attempt_state_count
+        or start_intent_count
+        or acknowledgement_members
+        or completion_members
+        or archive_members
+        or chronology_count
+        or retained_pending is not None
+    )
+    if postfreeze_present != manifest_present or (preflight_present and not postfreeze_present):
+        raise CleanupExportEvidenceError("frozen manifest publication evidence is partial")
+    if attempt_specific_state_exists and not manifest_present:
+        raise CleanupExportEvidenceError(
+            "attempt-specific cleanup evidence lacks a frozen manifest"
+        )
+
+    if not manifest_present:
+        if (
+            cleanup_journal_state.empirical_entry_status is not EmpiricalEntryStatus.NOT_ENTERED
+            or required_acknowledgements != 0
+        ):
+            raise CleanupExportEvidenceError("pre-freeze cleanup evidence is contradictory")
+        try:
+            return CleanupExportPhaseEvidence(
+                lifecycle_phase=CleanupExportLifecyclePhase.PREFREEZE_ZERO_ATTEMPT,
+                provider_contract_version=contract.version,
+                plan_id=contract.plan_id,
+                host_run_id=contract.host_run_id,
+                frozen_manifest_state="not-published-expected",
+                frozen_manifest_sha256=None,
+                empirical_attempt_count=len(entered),
+                raw_attempt_complete_count=len(raw_complete),
+                attempt_completed_count=len(completed),
+                condition_start_reservation_count=int(reservation is not None),
+                condition_start_intent_count=start_intent_count,
+                attempt_specific_state_count=attempt_state_count,
+                postfreeze_entry_receipt_count=0,
+                required_export_acknowledgement_count=required_acknowledgements,
+                observed_export_acknowledgement_count=len(acknowledgement_members),
+                retained_export_chronology_count=chronology_count,
+            )
+        except EarlyCleanupStateError as exc:
+            raise CleanupExportEvidenceError(
+                "pre-freeze cleanup evidence is contradictory"
+            ) from exc
+
+    # The lifecycle decision above is complete.  Only now may cleanup load the
+    # manifest and its publication receipt.
+    try:
+        frozen_manifest, frozen_sha256 = load_frozen_run_manifest(
+            root,
+            repository=repository,
+            package_commit=package_commit,
+            require_image=False,
+        )
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, T09HostError, T09PilotError) as exc:
+        raise CleanupExportEvidenceError("published frozen manifest is invalid") from exc
+    postfreeze = _load_cleanup_evidence_object(
+        postfreeze_path,
+        label="frozen manifest publication receipt",
+    )
+    _require_provider_contract(
+        postfreeze,
+        expected=contract,
+        label="frozen manifest publication receipt",
+    )
+    published_at = postfreeze.get("frozen_manifest_published_at_epoch")
+    if (
+        postfreeze.get("package_commit") != package_commit
+        or postfreeze.get("frozen_run_manifest_sha256") != frozen_sha256
+        or postfreeze.get("frozen_manifest_published_before_empirical_clock") is not True
+        or not isinstance(published_at, (int, float))
+        or isinstance(published_at, bool)
+        or not math.isfinite(float(published_at))
+        or _provider_contract_from_document(frozen_manifest, label="cleanup frozen manifest")
+        is not contract
+    ):
+        raise CleanupExportEvidenceError("frozen manifest publication receipt drifted")
+    if preflight_present:
+        preflight = _load_cleanup_evidence_object(
+            preflight_path,
+            label="post-freeze preflight receipt",
+        )
+        _require_provider_contract(preflight, expected=contract, label="post-freeze preflight")
+        if (
+            preflight.get("clean_package_commit") != package_commit
+            or preflight.get("frozen_run_manifest_sha256") != frozen_sha256
+            or preflight.get("postfreeze_validation_sha256") != file_sha256(postfreeze_path)
+        ):
+            raise CleanupExportEvidenceError("post-freeze preflight receipt drifted")
+    elif attempt_specific_state_exists:
+        raise CleanupExportEvidenceError("empirical cleanup lacks its post-freeze entry receipt")
+    if entered and cleanup_journal_state.empirical_entry_status is not EmpiricalEntryStatus.ENTERED:
+        raise CleanupExportEvidenceError("cleanup journal contradicts empirical entry")
+
+    phase = (
+        CleanupExportLifecyclePhase.EMPIRICAL_PREFIX
+        if attempt_specific_state_exists
+        else CleanupExportLifecyclePhase.POSTFREEZE_ZERO_ATTEMPT
+    )
+    try:
+        return CleanupExportPhaseEvidence(
+            lifecycle_phase=phase,
+            provider_contract_version=contract.version,
+            plan_id=contract.plan_id,
+            host_run_id=contract.host_run_id,
+            frozen_manifest_state="published-valid",
+            frozen_manifest_sha256=frozen_sha256,
+            empirical_attempt_count=len(entered),
+            raw_attempt_complete_count=len(raw_complete),
+            attempt_completed_count=len(completed),
+            condition_start_reservation_count=int(reservation is not None),
+            condition_start_intent_count=start_intent_count,
+            attempt_specific_state_count=attempt_state_count,
+            postfreeze_entry_receipt_count=1,
+            required_export_acknowledgement_count=required_acknowledgements,
+            observed_export_acknowledgement_count=len(acknowledgement_members),
+            retained_export_chronology_count=chronology_count,
+        )
+    except EarlyCleanupStateError as exc:
+        raise CleanupExportEvidenceError(
+            "cleanup export lifecycle evidence is contradictory"
+        ) from exc
+
+
 def require_prior_export_acknowledgements(
     root: Path,
     *,
     next_attempt_index: int,
     package_commit: str,
+    lifecycle_phase: CleanupExportPhaseEvidence | None = None,
 ) -> list[dict[str, object]]:
     """Block empirical progression until every prior archive was verified off-host."""
 
     control_root = _pilot_root(root)
-    entry = load_object(control_root / "provider-entry.json", label="provider entry")
-    frozen_manifest_path = control_root / "frozen-run-manifest.json"
-    frozen_manifest = load_object(frozen_manifest_path, label="frozen run manifest")
-    frozen_manifest_sha256 = file_sha256(frozen_manifest_path)
     state = _runtime_budget_state(root)
     contract = _provider_contract_from_document(state, label="pilot state")
+    entry = load_object(control_root / "provider-entry.json", label="provider entry")
     _require_provider_contract(
         entry,
         expected=contract,
         label="attempt export acknowledgement provider entry",
     )
-    _require_provider_contract(
-        frozen_manifest,
-        expected=contract,
-        label="attempt export acknowledgement frozen manifest",
-    )
     attempt_order = contract.run_ids
     raw_complete = state.get("raw_attempts_complete")
     entered = state.get("empirical_attempts_entered")
+    completed = state.get("attempts_completed", [])
+    nonempirical = state.get("nonempirical_infrastructure_attempts_consumed", [])
     essential_seals = state.get("essential_failure_seals")
     if (
         not isinstance(raw_complete, list)
         or not isinstance(entered, list)
+        or not isinstance(completed, list)
+        or not isinstance(nonempirical, list)
         or not isinstance(essential_seals, dict)
     ):
         raise T09HostError("attempt export acknowledgement state is malformed")
     if not 0 <= next_attempt_index <= len(attempt_order):
         raise T09HostError("attempt export acknowledgement prefix is invalid")
+    frozen_manifest_path = control_root / "frozen-run-manifest.json"
+    postfreeze_path = control_root / "postfreeze-validation.json"
+    preflight_path = control_root / "preflight.json"
+    publication_evidence_present = os.path.lexists(postfreeze_path) or os.path.lexists(
+        preflight_path
+    )
+    if publication_evidence_present and not os.path.lexists(frozen_manifest_path):
+        raise CleanupExportEvidenceError(
+            "frozen manifest publication evidence exists without its manifest"
+        )
+    has_attempt_specific_evidence = bool(
+        entered
+        or raw_complete
+        or completed
+        or nonempirical
+        or essential_seals
+        or state.get("condition_start_reservation") is not None
+        or next_attempt_index
+    )
+    if lifecycle_phase is not None:
+        if (
+            lifecycle_phase.provider_contract_version != contract.version
+            or lifecycle_phase.plan_id != contract.plan_id
+            or lifecycle_phase.host_run_id != contract.host_run_id
+            or lifecycle_phase.empirical_attempt_count != len(entered)
+            or lifecycle_phase.raw_attempt_complete_count != len(raw_complete)
+            or lifecycle_phase.attempt_completed_count != len(completed)
+        ):
+            raise CleanupExportEvidenceError("cleanup export phase differs from pilot state")
+        phase = lifecycle_phase.lifecycle_phase
+    elif (
+        not os.path.lexists(frozen_manifest_path)
+        and not publication_evidence_present
+        and not has_attempt_specific_evidence
+    ):
+        phase = CleanupExportLifecyclePhase.PREFREEZE_ZERO_ATTEMPT
+    elif has_attempt_specific_evidence:
+        phase = CleanupExportLifecyclePhase.EMPIRICAL_PREFIX
+    else:
+        phase = CleanupExportLifecyclePhase.POSTFREEZE_ZERO_ATTEMPT
+
+    if phase is CleanupExportLifecyclePhase.PREFREEZE_ZERO_ATTEMPT:
+        if (
+            next_attempt_index != 0
+            or has_attempt_specific_evidence
+            or os.path.lexists(frozen_manifest_path)
+        ):
+            raise CleanupExportEvidenceError("pre-freeze acknowledgement phase is contradictory")
+        return []
+    if not os.path.lexists(frozen_manifest_path):
+        raise CleanupExportEvidenceError("frozen manifest is mandatory for this export phase")
+    frozen_manifest = _load_cleanup_evidence_object(
+        frozen_manifest_path,
+        label="frozen run manifest",
+    )
+    frozen_manifest_sha256 = file_sha256(frozen_manifest_path)
+    _require_provider_contract(
+        frozen_manifest,
+        expected=contract,
+        label="attempt export acknowledgement frozen manifest",
+    )
+    if lifecycle_phase is not None and (
+        lifecycle_phase.frozen_manifest_state != "published-valid"
+        or lifecycle_phase.frozen_manifest_sha256 != frozen_manifest_sha256
+    ):
+        raise CleanupExportEvidenceError("cleanup export phase lost its frozen manifest binding")
+    if phase is CleanupExportLifecyclePhase.POSTFREEZE_ZERO_ATTEMPT:
+        if next_attempt_index != 0 or has_attempt_specific_evidence:
+            raise CleanupExportEvidenceError("post-freeze zero-attempt phase is contradictory")
+        return []
     lambda_started = entry.get("lambda_started_at_epoch")
     replacement_image_id = frozen_manifest.get("replacement_image_id")
     provider_entry_sha256 = entry.get("receipt_sha256")
@@ -20196,6 +20613,37 @@ _PENDING_ESSENTIAL_CLEANUP_EXPORT_KEYS: Final = {
     "deterministic_post_cleanup_replay_required",
 }
 
+_CLEANUP_EXPORT_HANDOFF_KEYS: Final = {
+    "schema_version",
+    "receipt_type",
+    "provider_contract_version",
+    "plan_id",
+    "host_run_id",
+    "package_commit",
+    "lifecycle_phase",
+    "frozen_manifest_state",
+    "frozen_manifest_sha256",
+    "empirical_attempt_count",
+    "raw_attempt_complete_count",
+    "attempt_completed_count",
+    "condition_start_reservation_count",
+    "condition_start_intent_count",
+    "attempt_specific_state_count",
+    "postfreeze_entry_receipt_count",
+    "required_export_acknowledgement_count",
+    "observed_export_acknowledgement_count",
+    "acknowledgement_receipt_sha256s",
+    "retained_export_chronology_sha256",
+    "pending_essential_export_sha256",
+    "phase_evidence_sha256",
+    "cleanup_journal_id",
+    "cleanup_journal_sequence",
+    "cleanup_journal_version_sha256",
+    "export_handoff_complete",
+    "cleanup_may_continue",
+    "created_at",
+}
+
 
 def _validate_pending_essential_cleanup_export(
     value: object,
@@ -20248,12 +20696,143 @@ def _validate_pending_essential_cleanup_export(
     return dict(value)
 
 
+def _publish_cleanup_export_handoff_receipt(
+    root: Path,
+    *,
+    contract: T09ProviderContract,
+    package_commit: str,
+    lifecycle_phase: CleanupExportPhaseEvidence,
+    chronology: list[dict[str, object]],
+    pending: dict[str, object] | None,
+    cleanup_journal: EarlyCleanupJournal,
+) -> None:
+    """Publish once, then validate and reuse the exact cleanup export handoff."""
+
+    chronology = _validate_export_chronology_projection(
+        chronology,
+        attempt_order=contract.run_ids,
+    )
+    observed_count = len(chronology)
+    if (
+        observed_count != lifecycle_phase.observed_export_acknowledgement_count
+        or (
+            pending is None
+            and observed_count != lifecycle_phase.required_export_acknowledgement_count
+        )
+        or (
+            pending is not None
+            and observed_count + 1 != lifecycle_phase.required_export_acknowledgement_count
+        )
+    ):
+        raise CleanupExportEvidenceError("cleanup export acknowledgement projection is incomplete")
+    acknowledgement_sha256s = [
+        cast(str, item["acknowledgement_receipt_sha256"]) for item in chronology
+    ]
+    phase_document = lifecycle_phase.to_document()
+    static_projection: dict[str, object] = {
+        "schema_version": CLEANUP_EXPORT_HANDOFF_SCHEMA_VERSION,
+        "receipt_type": "t09-cleanup-export-handoff",
+        "provider_contract_version": contract.version,
+        "plan_id": contract.plan_id,
+        "host_run_id": contract.host_run_id,
+        "package_commit": package_commit,
+        "lifecycle_phase": lifecycle_phase.lifecycle_phase.value,
+        "frozen_manifest_state": lifecycle_phase.frozen_manifest_state,
+        "frozen_manifest_sha256": lifecycle_phase.frozen_manifest_sha256,
+        "empirical_attempt_count": lifecycle_phase.empirical_attempt_count,
+        "raw_attempt_complete_count": lifecycle_phase.raw_attempt_complete_count,
+        "attempt_completed_count": lifecycle_phase.attempt_completed_count,
+        "condition_start_reservation_count": (lifecycle_phase.condition_start_reservation_count),
+        "condition_start_intent_count": lifecycle_phase.condition_start_intent_count,
+        "attempt_specific_state_count": lifecycle_phase.attempt_specific_state_count,
+        "postfreeze_entry_receipt_count": (lifecycle_phase.postfreeze_entry_receipt_count),
+        "required_export_acknowledgement_count": (
+            lifecycle_phase.required_export_acknowledgement_count
+        ),
+        "observed_export_acknowledgement_count": observed_count,
+        "acknowledgement_receipt_sha256s": acknowledgement_sha256s,
+        "retained_export_chronology_sha256": canonical_sha256(chronology),
+        "pending_essential_export_sha256": canonical_sha256(pending),
+        "phase_evidence_sha256": canonical_sha256(phase_document),
+        "export_handoff_complete": True,
+        "cleanup_may_continue": True,
+    }
+    receipt_path = _pilot_root(root, contract) / "cleanup-export-handoff.json"
+    current = cleanup_journal.load()
+    if (
+        current.plan_id != contract.plan_id
+        or current.host_run_id != contract.host_run_id
+        or current.package_commit != package_commit
+    ):
+        raise CleanupExportEvidenceError("cleanup export receipt journal identity drifted")
+    if receipt_path.is_file() and not receipt_path.is_symlink():
+        retained = _load_cleanup_evidence_object(
+            receipt_path,
+            label="cleanup export handoff receipt",
+        )
+        retained_sequence = retained.get("cleanup_journal_sequence")
+        retained_version_sha256 = retained.get("cleanup_journal_version_sha256")
+        if (
+            set(retained) != _CLEANUP_EXPORT_HANDOFF_KEYS
+            or type(retained_sequence) is not int
+            or retained_sequence > current.sequence
+            or not isinstance(retained_version_sha256, str)
+            or _HEX64.fullmatch(retained_version_sha256) is None
+            or not isinstance(retained.get("created_at"), str)
+        ):
+            raise CleanupExportEvidenceError("cleanup export handoff receipt is malformed")
+        try:
+            retained_state, observed_version_sha256 = cleanup_journal.version_state_and_sha256(
+                retained_sequence
+            )
+        except EarlyCleanupStateError as exc:
+            raise CleanupExportEvidenceError(
+                "cleanup export handoff lost its journal version"
+            ) from exc
+        expected = {
+            **static_projection,
+            "cleanup_journal_id": retained_state.journal_id,
+            "cleanup_journal_sequence": retained_sequence,
+            "cleanup_journal_version_sha256": observed_version_sha256,
+            "created_at": retained["created_at"],
+        }
+        if retained != expected or retained_version_sha256 != observed_version_sha256:
+            raise CleanupExportEvidenceError("cleanup export handoff receipt drifted")
+        return
+    if os.path.lexists(receipt_path):
+        raise CleanupExportEvidenceError("cleanup export handoff receipt identity is unsafe")
+    try:
+        journal_state, journal_version_sha256 = cleanup_journal.version_state_and_sha256(
+            current.sequence
+        )
+    except EarlyCleanupStateError as exc:
+        raise CleanupExportEvidenceError("cleanup export journal binding is unavailable") from exc
+    receipt = {
+        **static_projection,
+        "cleanup_journal_id": journal_state.journal_id,
+        "cleanup_journal_sequence": journal_state.sequence,
+        "cleanup_journal_version_sha256": journal_version_sha256,
+        "created_at": utc_now(),
+    }
+    write_exclusive(receipt_path, receipt)
+    if (
+        _load_cleanup_evidence_object(
+            receipt_path,
+            label="published cleanup export handoff receipt",
+        )
+        != receipt
+    ):
+        raise CleanupExportEvidenceError("published cleanup export handoff receipt drifted")
+
+
 def _cleanup_export_handoff(
     root: Path,
     *,
     repository: Path,
     state: dict[str, Any],
     package_commit: str,
+    lifecycle_phase: CleanupExportPhaseEvidence,
+    cleanup_journal: EarlyCleanupJournal,
     retained_chronology: object | None = None,
     retained_pending: object | None = None,
 ) -> tuple[list[dict[str, object]], dict[str, object] | None]:
@@ -20261,6 +20840,29 @@ def _cleanup_export_handoff(
 
     prefix_length = _consumed_export_prefix_length(state)
     contract = _provider_contract_from_document(state, label="pilot disposition")
+    if (
+        lifecycle_phase.provider_contract_version != contract.version
+        or lifecycle_phase.plan_id != contract.plan_id
+        or lifecycle_phase.host_run_id != contract.host_run_id
+        or lifecycle_phase.required_export_acknowledgement_count != prefix_length
+    ):
+        raise CleanupExportEvidenceError("cleanup export phase belongs to another disposition")
+
+    def finish(
+        chronology: list[dict[str, object]],
+        pending_export: dict[str, object] | None,
+    ) -> tuple[list[dict[str, object]], dict[str, object] | None]:
+        _publish_cleanup_export_handoff_receipt(
+            root,
+            contract=contract,
+            package_commit=package_commit,
+            lifecycle_phase=lifecycle_phase,
+            chronology=chronology,
+            pending=pending_export,
+            cleanup_journal=cleanup_journal,
+        )
+        return chronology, pending_export
+
     attempt_order = contract.run_ids
     raw_complete = state.get("raw_attempts_complete")
     essential_seals = state.get("essential_failure_seals")
@@ -20297,6 +20899,7 @@ def _cleanup_export_handoff(
             root,
             next_attempt_index=prefix_length - 1,
             package_commit=package_commit,
+            lifecycle_phase=lifecycle_phase,
         ):
             raise T09HostError("retained cleanup export chronology drifted")
     elif retained_chronology is not None:
@@ -20309,21 +20912,29 @@ def _cleanup_export_handoff(
             root,
             next_attempt_index=prefix_length,
             package_commit=package_commit,
+            lifecycle_phase=lifecycle_phase,
         ):
             raise T09HostError("retained cleanup export chronology drifted")
-        return chronology, None
+        return finish(chronology, None)
     elif prefix_length == 0:
-        return [], None
+        chronology = require_prior_export_acknowledgements(
+            root,
+            next_attempt_index=0,
+            package_commit=package_commit,
+            lifecycle_phase=lifecycle_phase,
+        )
+        return finish(chronology, None)
     else:
         terminal_run_id = attempt_order[prefix_length - 1]
         acknowledgement_path = _received_export_ack_path(root, terminal_run_id)
         terminal_is_essential = set(essential_seals) == {terminal_run_id}
         if not terminal_is_essential or acknowledgement_path.is_file():
-            return (
+            return finish(
                 require_prior_export_acknowledgements(
                     root,
                     next_attempt_index=prefix_length,
                     package_commit=package_commit,
+                    lifecycle_phase=lifecycle_phase,
                 ),
                 None,
             )
@@ -20333,6 +20944,7 @@ def _cleanup_export_handoff(
             root,
             next_attempt_index=prefix_length - 1,
             package_commit=package_commit,
+            lifecycle_phase=lifecycle_phase,
         )
         command_document = load_object(
             _contract_paths_for(repository, contract)["commands"],
@@ -20442,7 +21054,7 @@ def _cleanup_export_handoff(
         attempt_root / "essential-failure-complete.json"
     ):
         raise T09HostError("pending essential export bytes drifted after cleanup intent")
-    return chronology, pending
+    return finish(chronology, pending)
 
 
 _EXPORT_CHRONOLOGY_PROJECTION_KEYS: Final = {
@@ -21511,6 +22123,8 @@ _GLOBAL_CLEANUP_COMPLETION_KEYS: Final = {
     "credential_destruction_ready_sha256",
     "direct_attempt_export_chronology",
     "direct_attempt_export_chronology_sha256",
+    "cleanup_export_handoff_sha256",
+    "cleanup_export_phase_evidence_sha256",
     "pending_essential_export_after_cleanup",
     "pending_essential_export_after_cleanup_sha256",
     "completed_at",
@@ -21559,6 +22173,8 @@ def _validate_global_cleanup_completion(
     cleanup_intent_sha256: str,
     credential_destruction_ready_sha256: str,
     direct_attempt_export_chronology_sha256: str,
+    cleanup_export_handoff_sha256: str,
+    cleanup_export_phase_evidence_sha256: str,
     pending_essential_export_after_cleanup_sha256: str,
     package_commit: str,
 ) -> None:
@@ -21596,6 +22212,11 @@ def _validate_global_cleanup_completion(
         or document.get("direct_attempt_export_chronology_sha256")
         != direct_attempt_export_chronology_sha256
         or direct_attempt_export_chronology_sha256 != canonical_sha256(export_chronology)
+        or document.get("cleanup_export_handoff_sha256") != cleanup_export_handoff_sha256
+        or _HEX64.fullmatch(cleanup_export_handoff_sha256) is None
+        or document.get("cleanup_export_phase_evidence_sha256")
+        != cleanup_export_phase_evidence_sha256
+        or _HEX64.fullmatch(cleanup_export_phase_evidence_sha256) is None
         or document.get("pending_essential_export_after_cleanup_sha256")
         != pending_essential_export_after_cleanup_sha256
         or pending_essential_export_after_cleanup_sha256 != canonical_sha256(pending_essential)
@@ -22144,6 +22765,8 @@ def cleanup(args: argparse.Namespace) -> None:
     completion_path = pilot_root / "host-cleanup.json"
     direct_export_chronology: list[dict[str, object]] = []
     pending_essential_export_after_cleanup: dict[str, object] | None = None
+    cleanup_export_handoff_sha256: str | None = None
+    cleanup_export_phase_evidence_sha256: str | None = None
     retained_cleanup_intent: dict[str, Any] | None = None
     if intent_path.is_file() and not intent_path.is_symlink():
         retained_cleanup_intent = load_object(intent_path, label="global cleanup intent")
@@ -22167,22 +22790,37 @@ def cleanup(args: argparse.Namespace) -> None:
             raise T09HostError(
                 "global cleanup requires recover-attempt-seal before a started reservation"
             )
+        retained_chronology = (
+            retained_cleanup_intent.get("direct_attempt_export_chronology")
+            if retained_cleanup_intent is not None
+            else None
+        )
+        retained_pending = (
+            retained_cleanup_intent.get("pending_essential_export_after_cleanup")
+            if retained_cleanup_intent is not None
+            else None
+        )
+        cleanup_export_phase = derive_cleanup_export_phase(
+            root,
+            repository=args.repository.resolve(strict=True),
+            state=cleanup_state,
+            package_commit=args.package_commit,
+            cleanup_journal_state=cleanup_journal.load(),
+            retained_chronology=retained_chronology,
+            retained_pending=retained_pending,
+        )
         direct_export_chronology, pending_essential_export_after_cleanup = _cleanup_export_handoff(
             root,
             repository=args.repository.resolve(strict=True),
             state=cleanup_state,
             package_commit=args.package_commit,
-            retained_chronology=(
-                retained_cleanup_intent.get("direct_attempt_export_chronology")
-                if retained_cleanup_intent is not None
-                else None
-            ),
-            retained_pending=(
-                retained_cleanup_intent.get("pending_essential_export_after_cleanup")
-                if retained_cleanup_intent is not None
-                else None
-            ),
+            lifecycle_phase=cleanup_export_phase,
+            cleanup_journal=cleanup_journal,
+            retained_chronology=retained_chronology,
+            retained_pending=retained_pending,
         )
+        cleanup_export_handoff_sha256 = file_sha256(pilot_root / "cleanup-export-handoff.json")
+        cleanup_export_phase_evidence_sha256 = canonical_sha256(cleanup_export_phase.to_document())
     elif os.path.lexists(state_path):
         raise T09HostError("global cleanup pilot state is unsafe")
     direct_export_chronology = _validate_export_chronology_projection(
@@ -22193,6 +22831,8 @@ def cleanup(args: argparse.Namespace) -> None:
     pending_essential_export_after_cleanup_sha256 = canonical_sha256(
         pending_essential_export_after_cleanup
     )
+    if cleanup_export_handoff_sha256 is None or cleanup_export_phase_evidence_sha256 is None:
+        raise CleanupExportEvidenceError("cleanup export terminal handoff is unavailable")
     docker_prefix_error_type: str | None = None
     try:
         prefix = docker_prefix()
@@ -22292,6 +22932,9 @@ def cleanup(args: argparse.Namespace) -> None:
             or cleanup_intent.get("direct_attempt_export_chronology") != direct_export_chronology
             or cleanup_intent.get("direct_attempt_export_chronology_sha256")
             != direct_export_chronology_sha256
+            or cleanup_intent.get("cleanup_export_handoff_sha256") != cleanup_export_handoff_sha256
+            or cleanup_intent.get("cleanup_export_phase_evidence_sha256")
+            != cleanup_export_phase_evidence_sha256
             or cleanup_intent.get("pending_essential_export_after_cleanup")
             != pending_essential_export_after_cleanup
             or cleanup_intent.get("pending_essential_export_after_cleanup_sha256")
@@ -22343,6 +22986,8 @@ def cleanup(args: argparse.Namespace) -> None:
             },
             "direct_attempt_export_chronology": direct_export_chronology,
             "direct_attempt_export_chronology_sha256": direct_export_chronology_sha256,
+            "cleanup_export_handoff_sha256": cleanup_export_handoff_sha256,
+            "cleanup_export_phase_evidence_sha256": (cleanup_export_phase_evidence_sha256),
             "pending_essential_export_after_cleanup": (pending_essential_export_after_cleanup),
             "pending_essential_export_after_cleanup_sha256": (
                 pending_essential_export_after_cleanup_sha256
@@ -22470,6 +23115,8 @@ def cleanup(args: argparse.Namespace) -> None:
             cleanup_intent_sha256=file_sha256(intent_path),
             credential_destruction_ready_sha256=file_sha256(credential_ready_path),
             direct_attempt_export_chronology_sha256=direct_export_chronology_sha256,
+            cleanup_export_handoff_sha256=cleanup_export_handoff_sha256,
+            cleanup_export_phase_evidence_sha256=cleanup_export_phase_evidence_sha256,
             pending_essential_export_after_cleanup_sha256=(
                 pending_essential_export_after_cleanup_sha256
             ),
@@ -22996,6 +23643,8 @@ def cleanup(args: argparse.Namespace) -> None:
         "credential_destruction_ready_sha256": file_sha256(credential_ready_path),
         "direct_attempt_export_chronology": direct_export_chronology,
         "direct_attempt_export_chronology_sha256": direct_export_chronology_sha256,
+        "cleanup_export_handoff_sha256": cleanup_export_handoff_sha256,
+        "cleanup_export_phase_evidence_sha256": cleanup_export_phase_evidence_sha256,
         "pending_essential_export_after_cleanup": pending_essential_export_after_cleanup,
         "pending_essential_export_after_cleanup_sha256": (
             pending_essential_export_after_cleanup_sha256
@@ -23068,6 +23717,8 @@ def cleanup(args: argparse.Namespace) -> None:
             cleanup_intent_sha256=file_sha256(intent_path),
             credential_destruction_ready_sha256=file_sha256(credential_ready_path),
             direct_attempt_export_chronology_sha256=direct_export_chronology_sha256,
+            cleanup_export_handoff_sha256=cleanup_export_handoff_sha256,
+            cleanup_export_phase_evidence_sha256=cleanup_export_phase_evidence_sha256,
             pending_essential_export_after_cleanup_sha256=(
                 pending_essential_export_after_cleanup_sha256
             ),
@@ -23102,6 +23753,8 @@ def cleanup(args: argparse.Namespace) -> None:
         cleanup_intent_sha256=file_sha256(intent_path),
         credential_destruction_ready_sha256=file_sha256(credential_ready_path),
         direct_attempt_export_chronology_sha256=direct_export_chronology_sha256,
+        cleanup_export_handoff_sha256=cleanup_export_handoff_sha256,
+        cleanup_export_phase_evidence_sha256=cleanup_export_phase_evidence_sha256,
         pending_essential_export_after_cleanup_sha256=(
             pending_essential_export_after_cleanup_sha256
         ),

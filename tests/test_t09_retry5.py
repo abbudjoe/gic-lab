@@ -18,7 +18,12 @@ from types import ModuleType, SimpleNamespace
 import pytest
 import yaml
 
-from giclab.harness.t09_cleanup_state import EarlyCleanupJournal
+from giclab.harness.t09_cleanup_state import (
+    CleanupExportLifecyclePhase,
+    CleanupExportPhaseEvidence,
+    CleanupLifecycleStage,
+    EarlyCleanupJournal,
+)
 from giclab.harness.t09_provider_contracts import (
     V4_PROVIDER_CONTRACT,
     V7_PROVIDER_CONTRACT,
@@ -106,7 +111,7 @@ def _early_cleanup_journal(
         plan_id=provider_contract.plan_id,
         host_run_id=provider_contract.host_run_id,
         package_commit=package_commit,
-        plan_sha256="a" * 64,
+        plan_sha256=provider_contract.expected_plan_sha256,
         provider_instance_id="public-dummy-instance",
         provider_instance_identity_sha256="b" * 64,
         provider_started_at_epoch=1.0,
@@ -1758,11 +1763,37 @@ def test_retry5_oversized_tree_gets_private_essential_failure_seal(
         interrupted_manifest_path = attempt_root / "attempt-export-manifest.json"
         interrupted_manifest_bytes = interrupted_manifest_path.read_bytes()
         assert not host._attempt_export_completion_path(artifact_root, run_id).exists()
+        cleanup_journal = _early_cleanup_journal(
+            tmp_path,
+            host,
+            package_commit="4" * 40,
+            provider_contract=V8_PROVIDER_CONTRACT,
+        )
+        lifecycle_phase = CleanupExportPhaseEvidence(
+            lifecycle_phase=CleanupExportLifecyclePhase.EMPIRICAL_PREFIX,
+            provider_contract_version=V8_PROVIDER_CONTRACT.version,
+            plan_id=V8_PROVIDER_CONTRACT.plan_id,
+            host_run_id=V8_PROVIDER_CONTRACT.host_run_id,
+            frozen_manifest_state="published-valid",
+            frozen_manifest_sha256=frozen_sha256,
+            empirical_attempt_count=0,
+            raw_attempt_complete_count=0,
+            attempt_completed_count=0,
+            condition_start_reservation_count=0,
+            condition_start_intent_count=1,
+            attempt_specific_state_count=1,
+            postfreeze_entry_receipt_count=1,
+            required_export_acknowledgement_count=1,
+            observed_export_acknowledgement_count=0,
+            retained_export_chronology_count=0,
+        )
         cleanup_chronology, pending = host._cleanup_export_handoff(
             artifact_root,
             repository=ROOT,
             state=json.loads(state_path.read_text(encoding="utf-8")),
             package_commit="4" * 40,
+            lifecycle_phase=lifecycle_phase,
+            cleanup_journal=cleanup_journal,
         )
         assert cleanup_chronology == []
         assert pending is not None
@@ -2404,6 +2435,38 @@ def test_retry5_cleanup_rejects_unacknowledged_raw_before_any_destructive_action
             "replacement_image_id": "sha256:" + "c" * 64,
         },
     )
+    frozen_path = pilot_root / "frozen-run-manifest.json"
+    frozen_sha256 = host.file_sha256(frozen_path)
+    postfreeze_path = pilot_root / "postfreeze-validation.json"
+    _write_json(
+        postfreeze_path,
+        {
+            "plan_id": V11_PROVIDER_CONTRACT.plan_id,
+            "host_run_id": V11_PROVIDER_CONTRACT.host_run_id,
+            "package_commit": "d" * 40,
+            "frozen_run_manifest_sha256": frozen_sha256,
+            "frozen_manifest_published_before_empirical_clock": True,
+            "frozen_manifest_published_at_epoch": 2.0,
+        },
+    )
+    _write_json(
+        pilot_root / "preflight.json",
+        {
+            "plan_id": V11_PROVIDER_CONTRACT.plan_id,
+            "host_run_id": V11_PROVIDER_CONTRACT.host_run_id,
+            "clean_package_commit": "d" * 40,
+            "frozen_run_manifest_sha256": frozen_sha256,
+            "postfreeze_validation_sha256": host.file_sha256(postfreeze_path),
+        },
+    )
+    monkeypatch.setattr(
+        host,
+        "load_frozen_run_manifest",
+        lambda *_args, **_kwargs: (
+            json.loads(frozen_path.read_text(encoding="utf-8")),
+            frozen_sha256,
+        ),
+    )
 
     def forbidden(*_args: object, **_kwargs: object) -> object:
         raise AssertionError("cleanup crossed its direct-export gate")
@@ -2416,6 +2479,7 @@ def test_retry5_cleanup_rejects_unacknowledged_raw_before_any_destructive_action
         package_commit="d" * 40,
         provider_contract=V11_PROVIDER_CONTRACT,
     )
+    cleanup_journal.advance_lifecycle(CleanupLifecycleStage.EMPIRICAL_ENTRY)
     with pytest.raises(Exception, match="lacks its off-host verification acknowledgement"):
         host.cleanup(
             SimpleNamespace(
