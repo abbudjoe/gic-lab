@@ -37,7 +37,7 @@ materialization; merge or auto-merge.
 | V13-DOD-07 | V13 plan/profile/execution/commands/runtime/four conditions are byte-bound and statically unauthorized. | Repository validator and package tests. | met |
 | V13-DOD-08 | Both task pairs remain matched and include the equal explicit V13 selector. | Machine pair diffs. | met |
 | V13-DOD-09 | Scientific hashes, tasks, model, evaluator, scoring, order, retries, and interpretation are unchanged. | V12/V13 semantic projection regression. | met |
-| V13-DOD-10 | Focused, full, parity, static, privacy, and site gates have no newly failing or missing base nodes. | Final local and CI records. | partial — final gates pending |
+| V13-DOD-10 | Focused, full, parity, static, privacy, and site gates have no newly failing or missing base nodes. | Local exact-head gates and base/head parity. | met |
 | V13-DOD-11 | One draft PR targets the exact base, auto-merge is disabled, exact-head Actions complete, and no merge occurs. | PR and Actions receipts. | partial — PR pending |
 
 ## Implementation decisions
@@ -53,8 +53,24 @@ materialization; merge or auto-merge.
 - The one-line global swap was rejected because it would make the next successor
   inherit whichever version happened to be assigned globally.
 
+## Local validation
+
+- V13 package tests: 7 passed.
+- Focused T09 suite: all selected nodes passed except the inherited test requiring
+  the absent ignored T07 pragmatic launch artifact; five historical private-fixture
+  nodes remained inherited skips and no V13 test was skipped or xfailed.
+- Full pytest: 1,667 passed, 84 inherited/environmental failures, and 5 inherited
+  skips across 1,756 nodes.
+- Exact base/head parity (five symmetric private deselections): passed with zero
+  newly failing nodes, zero missing base nodes or failures, zero invalid transitions,
+  21 passing head-only nodes, and 10 newly passing inherited nodes.
+- Ruff formatting/lint, strict mypy, lock integrity, repository validation,
+  `git diff --check`, and portable Quarto 1.9.38 site rendering/validation: passed.
+- The inherited failures are explained by unavailable ignored historical T07
+  evidence, established historical profile assertions, and the local retained-free
+  disk floor; parity confirms that this repair introduces no regression.
+
 ## Remaining phase
 
-Complete final local gates and self-review, commit the generated package and records,
-push normally, open one draft PR, and monitor exact-head GitHub Actions. Review, merge,
-and any Category 3 authorization remain separate.
+Complete final self-review, push normally, open one draft PR, and monitor exact-head
+GitHub Actions. Review, merge, and any Category 3 authorization remain separate.
