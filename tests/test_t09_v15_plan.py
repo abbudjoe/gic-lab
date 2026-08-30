@@ -89,7 +89,7 @@ def test_v15_plan_schema_package_and_false_flags_are_exact() -> None:
     Draft202012Validator.check_schema(schema)
     Draft202012Validator(schema).validate(plan)
     assert PLAN.stat().st_size == 20_292
-    assert _sha256(PLAN) == "cf5c7473ca40c71f5b65b43a4bbf706282b1b879af229e4855d65c0b72a8b5f4"
+    assert _sha256(PLAN) == "a80d0f25046377fe7a9bae75f55099671f2179bd8ec2e45d665c33d492e97311"
     assert PROFILE.stat().st_size == 15_974
     assert _sha256(PROFILE) == "64075a67989522495145bf02c32544bd3a07f30c38d46daa4e9f5c16c65faa1d"
     assert validate_t09_v15_plan(ROOT) == []
@@ -130,9 +130,7 @@ def test_v15_plan_schema_package_and_false_flags_are_exact() -> None:
             "immediate-preceding-closed-slot-source-bound-launch-capability"
         ),
         "direct_layout": "exact-closed-launch-root",
-        "eligibility_history_publication": (
-            "shared-immutable-unsuffixed-first-then-slot-suffixed"
-        ),
+        "eligibility_history_publication": ("shared-immutable-unsuffixed-first-then-slot-suffixed"),
         "eligibility_kind": "provider-entry-failed-preempirical",
         "host_preflight_closeout_resume": "byte-identical-no-live-mutations",
         "normalization_before_credentials_provider_and_capability": True,

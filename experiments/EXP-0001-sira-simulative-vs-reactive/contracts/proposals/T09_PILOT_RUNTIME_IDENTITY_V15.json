@@ -84,7 +84,7 @@
       },
       {
         "path": "src/giclab/harness/t09_provider_contracts.py",
-        "sha256": "d0d554a495b631e4f0114090516cdcf03affcec0111f095f26c8c8fd4caa8896"
+        "sha256": "f46ce46c85c9081b35bda20b58a3f33a3699fc7a171b1dad1d6ba1d6f05dc7d0"
       },
       {
         "path": "containers/sira-smoke/pragmatic/t09_remote_runner.py",

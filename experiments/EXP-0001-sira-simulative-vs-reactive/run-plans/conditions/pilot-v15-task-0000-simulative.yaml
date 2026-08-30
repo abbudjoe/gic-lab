@@ -23,7 +23,7 @@ sources:
   config_sha256: cf25acd90f9d73d9aef978a7d059cfbc74a1447d901f4e3d27e2b5d9f121d2ed
   model_revision: gpt-4o-2024-11-20
   dataset_revision: 76ad1feb689b754bfe4e5e24d3ea371b647efa67
-  environment_sha256: fb994291f4133ffecb8b29a23c9156985b13db1c49c8cf9b11088f278ef4b6a3
+  environment_sha256: e1572233bd9bd528a16d5a296970fa3db98dc348ecdbec0d6eed92f6371a3d1d
 task:
   task_id: 7dcbbbdc7f1120cd
   source_kind: dataset-slice

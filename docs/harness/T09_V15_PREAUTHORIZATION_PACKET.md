@@ -33,7 +33,7 @@ host-preflight closeout resume reuses byte-identical evidence without credential
 provider traffic, or cleanup mutations.
 
 The V15 plan is 20,292 bytes with SHA-256
-`cf5c7473ca40c71f5b65b43a4bbf706282b1b879af229e4855d65c0b72a8b5f4`.
+`a80d0f25046377fe7a9bae75f55099671f2179bd8ec2e45d665c33d492e97311`.
 The runtime profile is 15,974 bytes with SHA-256
 `64075a67989522495145bf02c32544bd3a07f30c38d46daa4e9f5c16c65faa1d`.
 
