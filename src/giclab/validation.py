@@ -2661,7 +2661,11 @@ def _validate_t09_successor_plan(
     cleanup = groups["early_cleanup"]
     execution = groups["execution_plane"]
     model_metadata = groups.get("model_metadata_receipt")
-    stopped_disposition = groups.get(stopped_disposition_group)
+    stopped_disposition = (
+        groups.get(stopped_disposition_group)
+        if stopped_disposition_group is not None
+        else None
+    )
     assert isinstance(accounting, dict)
     assert isinstance(refinalization, dict)
     assert isinstance(cleanup, dict)

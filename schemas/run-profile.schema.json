@@ -176,6 +176,11 @@
         "max_preflight_provider_compute_cost_usd": {"type": "number", "minimum": 0},
         "max_total_cost_usd": {"type": "number", "minimum": 0},
         "prior_t09_cost_usd": {"type": "number", "minimum": 0},
+        "prior_t09_cost_usd_decimal": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+$"},
+        "prior_through_stopped_v12_cost_usd_decimal": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+$"},
+        "stopped_v13_lambda_cost_usd_decimal": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+$"},
+        "effective_max_total_cost_under_cumulative_cap_usd": {"type": "number", "minimum": 0},
+        "effective_max_total_cost_under_cumulative_cap_usd_decimal": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+$"},
         "cumulative_t09_cost_cap_usd": {"type": "number", "minimum": 0},
         "condition_limits": {
           "type": "object",
@@ -392,6 +397,30 @@
         "aggregate_staging": {"type": "string", "minLength": 8}
       }
     },
+    "cleanup_export_reconciliation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase_source",
+        "phases",
+        "prefreeze_zero_attempt_manifest_policy",
+        "handoff_policy"
+      ],
+      "properties": {
+        "phase_source": {"const": "durable-provider-journal-pilot-freeze-and-attempt-evidence"},
+        "phases": {
+          "const": [
+            "prefreeze-zero-attempt",
+            "postfreeze-zero-attempt",
+            "empirical-prefix"
+          ]
+        },
+        "prefreeze_zero_attempt_manifest_policy": {
+          "const": "absence-required-and-proven-no-synthetic-manifest"
+        },
+        "handoff_policy": {"const": "immutable-terminal-receipt-reused-on-resume"}
+      }
+    },
     "core_dump_policy": {
       "type": "object",
       "additionalProperties": false,
@@ -564,6 +593,34 @@
             "realized_pair": {"const": "none"},
             "excluded_from_v13_pairing": {"const": true}
           }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "plan_id",
+            "run_id",
+            "status",
+            "task_a_reactive",
+            "task_a_simulative",
+            "task_b_simulative",
+            "task_b_reactive",
+            "realized_pair",
+            "excluded_from_v14_pairing"
+          ],
+          "properties": {
+            "plan_id": {"const": "PLAN-EXP0001-PILOT-V13"},
+            "run_id": {"const": "RUN-T09-PILOT-HOST-AUTONOMOUS-0006"},
+            "status": {
+              "const": "category_3_v13_stopped_prefreeze_cleanup_projection_failure_provider_cleanup_verified"
+            },
+            "task_a_reactive": {"const": "not-run"},
+            "task_a_simulative": {"const": "not-run"},
+            "task_b_simulative": {"const": "not-run"},
+            "task_b_reactive": {"const": "not-run"},
+            "realized_pair": {"const": "none"},
+            "excluded_from_v14_pairing": {"const": true}
+          }
         }
       ]
     },
@@ -640,7 +697,10 @@
           "type": "array",
           "uniqueItems": true,
           "items": {"type": "string", "minLength": 8}
-        }
+        },
+        "v13_stopped_lambda_cost_usd": {"const": 1.2454567425131797},
+        "prior_t09_conservative_amount_usd": {"const": 34.7739318252479717},
+        "effective_maximum_new_total_usd": {"const": 55.2260681747520283}
       }
     }
   },
@@ -722,7 +782,11 @@
       "if": {
         "properties": {
           "plan_id": {
-            "enum": ["PLAN-EXP0001-PILOT-V12", "PLAN-EXP0001-PILOT-V13"]
+            "enum": [
+              "PLAN-EXP0001-PILOT-V12",
+              "PLAN-EXP0001-PILOT-V13",
+              "PLAN-EXP0001-PILOT-V14"
+            ]
           }
         },
         "required": ["plan_id"]
@@ -743,6 +807,30 @@
               "host_runtime_requires_prelaunch_timestamp_ordering",
               "model_metadata_receipt_required",
               "model_metadata_receipt_replay_allowed"
+            ]
+          }
+        }
+      }
+    }
+    ,
+    {
+      "if": {
+        "properties": {"plan_id": {"const": "PLAN-EXP0001-PILOT-V14"}},
+        "required": ["plan_id"]
+      },
+      "then": {
+        "required": ["cleanup_export_reconciliation", "prior_campaign_disposition"],
+        "properties": {
+          "budget": {
+            "required": [
+              "effective_max_total_cost_under_cumulative_cap_usd"
+            ]
+          },
+          "readiness": {
+            "required": [
+              "v13_stopped_lambda_cost_usd",
+              "prior_t09_conservative_amount_usd",
+              "effective_maximum_new_total_usd"
             ]
           }
         }

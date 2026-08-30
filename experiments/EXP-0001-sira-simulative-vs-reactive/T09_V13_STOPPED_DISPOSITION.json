@@ -1,0 +1,84 @@
+{
+  "authority_disposition": {
+    "authorization_consumed": true,
+    "condition_identities_consumed": true,
+    "frozen_manifest_identity_consumed": true,
+    "host_identity_consumed": true,
+    "image_qualification_identity_consumed": true,
+    "local_finalizer_qualification_identity_consumed": true,
+    "metadata_allowance_consumed": true,
+    "replay_allowed": false,
+    "successor_must_use_fresh_source_bound_identities": true
+  },
+  "cleanup": {
+    "early_cleanup_closeout_bytes": 4060,
+    "early_cleanup_closeout_sha256": "4b2266e4d81b1f00a27124671a181d63a40890f13bf8fc3f5beddb95b297faa2",
+    "early_cleanup_journal_sequence": 28,
+    "provider_closeout_bytes": 2000,
+    "provider_closeout_sha256": "35a9e82bab357db24d1ddbc49fe1f7764ce43d0ba1d0f8da7e6d4fb07e388959",
+    "provider_terminal_or_absent": true,
+    "remote_security_restored": true,
+    "terminal_cleanup_disposition": "complete",
+    "zero_running_t09_instances": true
+  },
+  "error": {
+    "class": "FileNotFoundError",
+    "errno": 2,
+    "message_retained": false,
+    "source_function": "require_prior_export_acknowledgements",
+    "source_line_at_merged_package": 5200,
+    "source_path": "containers/sira-smoke/pragmatic/t09_remote_runner.py",
+    "trigger": "unconditional frozen-run-manifest.json load during a pre-freeze zero-attempt cleanup retry"
+  },
+  "evidence": {
+    "accepted_image_id": "sha256:abe8ed38f5c5b5a0a63fa726a74034dc5c192a12c0fccfe1319f97c27ceaf0a3",
+    "authorization_overlay_bytes": 860,
+    "authorization_overlay_sha256": "5e5a18464c85153ba077e6e1a9612fbc1299cbac2187edae154648c2f797b328",
+    "image_qualification_receipt_bytes": 1183,
+    "image_qualification_receipt_sha256": "c24e843c685a96e486bb033e5edf37f9c901e7cf204e50e13bc5290da8bf36d8",
+    "local_finalizer_qualification_receipt_bytes": 1254356,
+    "local_finalizer_qualification_receipt_sha256": "cebc6c9f416550dde0438d57626730ebadd5858a4bf29d98376ef07687202d3a",
+    "model_metadata_receipt_bytes": 1401,
+    "model_metadata_receipt_sha256": "99d81a0f622fcc97438429f3ac949b4fc358894631d23ddbaf5d24c0b0021cf9",
+    "remote_preflight_failure_archive_bytes": 542928,
+    "remote_preflight_failure_archive_sha256": "7682adfb1fbb31178d4081b6f61f6ddcf5c968bc228b0151246b76a3ba581671"
+  },
+  "execution_boundary": {
+    "attempt_archives_or_export_acknowledgements": 0,
+    "attempts_completed": 0,
+    "condition_start_intents": 0,
+    "condition_start_reservations": 0,
+    "dynamic_frozen_manifests": 0,
+    "empirical_attempts_entered": 0,
+    "empirical_entry_crossed": false,
+    "postfreeze_entry_receipts": 0,
+    "provider_launch_crossed": true,
+    "raw_attempts_complete": 0,
+    "retained_export_chronology_entries": 0
+  },
+  "host_run_id": "RUN-T09-PILOT-HOST-AUTONOMOUS-0006",
+  "merged_package_commit": "12a6c4fba0972d3b6f9f16dcfae048dbb770d78a",
+  "plan": {
+    "bytes": 18102,
+    "plan_id": "PLAN-EXP0001-PILOT-V13",
+    "sha256": "87fbdfdb6375b4ba39f6eed2224768619ccee6b54090e43d9c84a568d2ea1957"
+  },
+  "provider_contract_version": "V13",
+  "request_accounting": {
+    "authenticated_openai_metadata_gets": 1,
+    "browser_actions": 0,
+    "lambda_launches": 1,
+    "lambda_read_only_gets": 6,
+    "task_model_calls": 0
+  },
+  "runtime_profile": {
+    "bytes": 14487,
+    "sha256": "58159df775f8e3a30debdc327e8be29574ec68a5c34167012866382a09b75ca4"
+  },
+  "schema_version": "1.0.0",
+  "timing_and_cost": {
+    "lambda_active_duration_seconds": "3475.6932349205017",
+    "lambda_cost_usd": "1.2454567425131797",
+    "openai_task_cost_usd": "0.00"
+  }
+}

@@ -401,7 +401,10 @@ def test_empirical_prefix_missing_acknowledgement_remains_strict(
     assert not (pilot_root / "cleanup-export-handoff.json").exists()
 
 
-@pytest.mark.parametrize("unsafe_kind", ("malformed", "symlink"))
+@pytest.mark.parametrize(
+    "unsafe_kind",
+    ("malformed", "symlink", "directory", "wrong-mode", "replaced"),
+)
 def test_published_manifest_with_unsafe_identity_fails_closed(
     tmp_path: Path,
     unsafe_kind: str,
@@ -412,17 +415,35 @@ def test_published_manifest_with_unsafe_identity_fails_closed(
     if unsafe_kind == "malformed":
         manifest_path.write_text("{", encoding="utf-8")
         manifest_path.chmod(0o600)
-    else:
+    elif unsafe_kind == "symlink":
         target = pilot_root / "manifest-target.json"
         _write_json(target, {"plan_id": V13_PROVIDER_CONTRACT.plan_id})
         os.symlink(target.name, manifest_path)
+    elif unsafe_kind == "directory":
+        manifest_path.mkdir(mode=0o700)
+    else:
+        _write_json(
+            manifest_path,
+            {
+                "manifest_id": V13_PROVIDER_CONTRACT.frozen_run_manifest_id,
+                "plan_id": V13_PROVIDER_CONTRACT.plan_id,
+                "host_run_id": V13_PROVIDER_CONTRACT.host_run_id,
+                "clean_package_commit": PACKAGE_COMMIT,
+                "replacement_image_id": "sha256:" + "5" * 64,
+            },
+        )
+        if unsafe_kind == "wrong-mode":
+            manifest_path.chmod(0o644)
+    receipt_sha256 = (
+        "d" * 64 if unsafe_kind in {"directory", "replaced"} else _sha256(manifest_path)
+    )
     _write_json(
         pilot_root / "postfreeze-validation.json",
         {
             "plan_id": V13_PROVIDER_CONTRACT.plan_id,
             "host_run_id": V13_PROVIDER_CONTRACT.host_run_id,
             "package_commit": PACKAGE_COMMIT,
-            "frozen_run_manifest_sha256": "d" * 64,
+            "frozen_run_manifest_sha256": receipt_sha256,
             "frozen_manifest_published_before_empirical_clock": True,
             "frozen_manifest_published_at_epoch": 1_900_000_010.0,
         },
@@ -449,3 +470,14 @@ def test_wrong_cleanup_journal_plan_identity_fails_closed(tmp_path: Path) -> Non
     )
     with pytest.raises(host.CleanupExportEvidenceError, match="selected provider contract"):
         _derive(host, artifact_root, state, wrong_journal)
+
+
+def test_wrong_provider_entry_host_identity_fails_closed(tmp_path: Path) -> None:
+    host = _host("giclab_t09_v14_wrong_cleanup_host")
+    artifact_root, pilot_root, state, journal = _v13_stopped_fixture(tmp_path)
+    entry_path = pilot_root / "provider-entry.json"
+    entry = json.loads(entry_path.read_text(encoding="utf-8"))
+    entry["host_run_id"] = "RUN-T09-PILOT-HOST-AUTONOMOUS-WRONG"
+    _write_json(entry_path, entry)
+    with pytest.raises(host.T09HostError, match="another provider contract"):
+        _derive(host, artifact_root, state, journal)
