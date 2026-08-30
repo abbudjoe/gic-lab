@@ -606,11 +606,11 @@ def test_empirical_full_cleanup_resume_does_not_repeat_exact_resource_mutations(
         operations["container_removal"] += 1
         return True
 
-    original_destroy_secret = host.destroy_secret
+    destroy_credential_file = host.destroy_secret
 
     def destroy_fixture_secret(path: Path) -> bool:
         operations["credential_destruction"] += 1
-        return bool(original_destroy_secret(path))
+        return bool(destroy_credential_file(path))
 
     def clean_fixture_cores(*_args: object, **_kwargs: object) -> object:
         operations["core_cleanup"] += 1
