@@ -740,7 +740,7 @@ V12_PROVIDER_CONTRACT: Final = _contract(
 )
 V13_PROVIDER_CONTRACT: Final = _contract(
     version="V13",
-    source_commit="1097d640a7d319ef14a5f4bc79392b46ea09091d",
+    source_commit="b8a85a35c721b9cadf753b9a32c3b38c6be60086",
     host_run_id="RUN-T09-PILOT-HOST-AUTONOMOUS-0006",
     authorization_id=None,
     authorization_prefix="AUTH-T09-V13-",
