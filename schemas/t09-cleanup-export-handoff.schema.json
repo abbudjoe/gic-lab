@@ -1,0 +1,151 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gic-lab.example/schemas/t09-cleanup-export-handoff.schema.json",
+  "title": "T09 cleanup export handoff receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "receipt_type",
+    "provider_contract_version",
+    "plan_id",
+    "host_run_id",
+    "package_commit",
+    "lifecycle_phase",
+    "frozen_manifest_state",
+    "frozen_manifest_sha256",
+    "empirical_attempt_count",
+    "raw_attempt_complete_count",
+    "attempt_completed_count",
+    "condition_start_reservation_count",
+    "condition_start_intent_count",
+    "attempt_specific_state_count",
+    "postfreeze_entry_receipt_count",
+    "required_export_acknowledgement_count",
+    "observed_export_acknowledgement_count",
+    "acknowledgement_receipt_sha256s",
+    "retained_export_chronology_sha256",
+    "pending_essential_export_sha256",
+    "phase_evidence_sha256",
+    "cleanup_journal_id",
+    "cleanup_journal_sequence",
+    "cleanup_journal_version_sha256",
+    "export_handoff_complete",
+    "cleanup_may_continue",
+    "created_at"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "receipt_type": {"const": "t09-cleanup-export-handoff"},
+    "provider_contract_version": {"type": "string", "pattern": "^V[0-9]+$"},
+    "plan_id": {"type": "string", "pattern": "^PLAN-EXP0001-PILOT-V[0-9]+$"},
+    "host_run_id": {"type": "string", "minLength": 1},
+    "package_commit": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
+    "lifecycle_phase": {
+      "enum": [
+        "prefreeze-zero-attempt",
+        "postfreeze-zero-attempt",
+        "empirical-prefix"
+      ]
+    },
+    "frozen_manifest_state": {
+      "enum": ["not-published-expected", "published-valid"]
+    },
+    "frozen_manifest_sha256": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+      ]
+    },
+    "empirical_attempt_count": {"type": "integer", "minimum": 0, "maximum": 4},
+    "raw_attempt_complete_count": {"type": "integer", "minimum": 0, "maximum": 4},
+    "attempt_completed_count": {"type": "integer", "minimum": 0, "maximum": 4},
+    "condition_start_reservation_count": {"type": "integer", "minimum": 0, "maximum": 1},
+    "condition_start_intent_count": {"type": "integer", "minimum": 0, "maximum": 4},
+    "attempt_specific_state_count": {"type": "integer", "minimum": 0, "maximum": 4},
+    "postfreeze_entry_receipt_count": {"type": "integer", "minimum": 0, "maximum": 1},
+    "required_export_acknowledgement_count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4
+    },
+    "observed_export_acknowledgement_count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4
+    },
+    "acknowledgement_receipt_sha256s": {
+      "type": "array",
+      "maxItems": 4,
+      "items": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+    },
+    "retained_export_chronology_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "pending_essential_export_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "phase_evidence_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "cleanup_journal_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "cleanup_journal_sequence": {"type": "integer", "minimum": 1},
+    "cleanup_journal_version_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "export_handoff_complete": {"const": true},
+    "cleanup_may_continue": {"const": true},
+    "created_at": {"type": "string", "format": "date-time"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"lifecycle_phase": {"const": "prefreeze-zero-attempt"}}},
+      "then": {
+        "properties": {
+          "frozen_manifest_state": {"const": "not-published-expected"},
+          "frozen_manifest_sha256": {"type": "null"},
+          "empirical_attempt_count": {"const": 0},
+          "raw_attempt_complete_count": {"const": 0},
+          "attempt_completed_count": {"const": 0},
+          "condition_start_reservation_count": {"const": 0},
+          "condition_start_intent_count": {"const": 0},
+          "attempt_specific_state_count": {"const": 0},
+          "postfreeze_entry_receipt_count": {"const": 0},
+          "required_export_acknowledgement_count": {"const": 0},
+          "observed_export_acknowledgement_count": {"const": 0},
+          "acknowledgement_receipt_sha256s": {"maxItems": 0}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"lifecycle_phase": {"const": "postfreeze-zero-attempt"}}},
+      "then": {
+        "properties": {
+          "frozen_manifest_state": {"const": "published-valid"},
+          "frozen_manifest_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "empirical_attempt_count": {"const": 0},
+          "raw_attempt_complete_count": {"const": 0},
+          "attempt_completed_count": {"const": 0},
+          "condition_start_reservation_count": {"const": 0},
+          "condition_start_intent_count": {"const": 0},
+          "attempt_specific_state_count": {"const": 0},
+          "postfreeze_entry_receipt_count": {"const": 1},
+          "required_export_acknowledgement_count": {"const": 0},
+          "observed_export_acknowledgement_count": {"const": 0},
+          "acknowledgement_receipt_sha256s": {"maxItems": 0}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"lifecycle_phase": {"const": "empirical-prefix"}}},
+      "then": {
+        "properties": {
+          "frozen_manifest_state": {"const": "published-valid"},
+          "frozen_manifest_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "postfreeze_entry_receipt_count": {"const": 1}
+        }
+      }
+    }
+  ]
+}

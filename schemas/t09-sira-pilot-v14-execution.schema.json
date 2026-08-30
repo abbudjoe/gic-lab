@@ -1,0 +1,170 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:gic-lab:schema:t09-sira-pilot-execution:0.5.0",
+  "title": "T09 V14 unauthorized two-task SiRA calibration execution contract",
+  "type": "object",
+  "required": ["schema_version", "contract_id", "plan_id", "experiment_id", "authorized", "terminal_state", "execution_eligibility", "material_blockers", "calibration_only", "sira_commit", "model_revision", "service_tier", "randomization_seed", "contract_bindings", "runtime", "provider_lifecycle", "runtime_limits", "budget_calibration", "identities", "attempts", "first_pair_checkpoint", "evidence", "gpu_accounting", "cleanup", "interpretation_boundary"],
+  "properties": {
+    "schema_version": {"const": "0.5.0"},
+    "contract_id": {"const": "EXECUTION-CONTRACT-EXP0001-PILOT-V14"},
+    "plan_id": {"const": "PLAN-EXP0001-PILOT-V14"},
+    "experiment_id": {"const": "EXP-0001"},
+    "authorized": {"const": false},
+    "authorization_reference": {"type": "null"},
+    "terminal_state": {"const": "unauthorized-pending-review-merge-and-category-3-authorization"},
+    "execution_eligibility": {"const": "blocked-until-fresh-category-3-authorization"},
+    "material_blockers": {
+      "const": [
+        "exact-head-pr-review-required",
+        "category-2-merge-required",
+        "fresh-category-3-authorization-required"
+      ]
+    },
+    "calibration_only": {"const": true},
+    "sira_commit": {"const": "93fb8d72de71f9a4a13419670adeb34d93cf7acd"},
+    "model_revision": {"const": "gpt-4o-2024-11-20"},
+    "service_tier": {"const": "default"},
+    "randomization_seed": {"const": 42},
+    "contract_bindings": {
+      "type": "object",
+      "required": ["plan", "dataset", "evaluator", "runtime", "real_evidence_regression", "execution_schema", "score_schema", "evidence_schema", "model_metadata_receipt"],
+      "properties": {
+        "plan": {"$ref": "#/$defs/fileBindingWithSize"},
+        "dataset": {"$ref": "#/$defs/fileBinding"},
+        "evaluator": {"$ref": "#/$defs/fileBinding"},
+        "runtime": {"$ref": "#/$defs/fileBinding"},
+        "real_evidence_regression": {"$ref": "#/$defs/fileBinding"},
+        "execution_schema": {"$ref": "#/$defs/fileBinding"},
+        "score_schema": {"$ref": "#/$defs/fileBinding"},
+        "evidence_schema": {"$ref": "#/$defs/fileBinding"},
+        "model_metadata_receipt": {"$ref": "#/$defs/fileBinding"}
+      },
+      "additionalProperties": false
+    },
+    "runtime": {"type": "object"},
+    "provider_lifecycle": {
+      "type": "object",
+      "required": ["cumulative_accounting_origin", "preflight_clock_origin", "preflight_iteration_wall_seconds", "maximum_preflight_instance_active_seconds", "maximum_cumulative_preflight_active_seconds", "maximum_preflight_provider_cost_usd", "max_preflight_launch_count", "failed_preflight_termination_dispatch_seconds", "empirical_clock_origin", "empirical_campaign_wall_seconds", "evidence_export_reserve_seconds", "provider_termination_handoff_seconds", "empirical_cleanup_reserve_seconds", "empirical_termination_cutoff_seconds", "maximum_empirical_provider_cost_usd", "max_empirical_launch_count", "max_lambda_instances", "persistent_filesystems", "admission_model", "future_attempt_maxima_reserved_at_campaign_start", "provider_control_plane", "model_metadata_before_lambda_launch", "model_metadata_request_count", "model_metadata_snapshot", "model_substitution_allowed", "immutable_model_unavailable_disposition", "model_metadata_request_count_total", "model_metadata_request_location", "provider_launch_model_metadata_request_count", "host_runtime_model_metadata_request_count", "model_metadata_prelaunch_freshness_seconds", "model_metadata_freshness_owner", "provider_launch_requires_current_freshness", "host_runtime_requires_current_freshness", "host_runtime_requires_prelaunch_timestamp_ordering", "model_metadata_receipt_required", "model_metadata_receipt_replay_allowed"],
+      "properties": {
+        "cumulative_accounting_origin": {"const": "actual-active-lambda-seconds"},
+        "preflight_clock_origin": {"const": "provider-launch-send-started"},
+        "preflight_iteration_wall_seconds": {"const": 3600},
+        "maximum_preflight_instance_active_seconds": {"const": 21600},
+        "maximum_cumulative_preflight_active_seconds": {"const": 43200},
+        "maximum_preflight_provider_cost_usd": {"const": 10.0},
+        "max_preflight_launch_count": {"const": 8},
+        "failed_preflight_termination_dispatch_seconds": {"const": 300},
+        "empirical_clock_origin": {"const": "after-durable-frozen-run-manifest-publication"},
+        "empirical_campaign_wall_seconds": {"const": 14400},
+        "evidence_export_reserve_seconds": {"const": 600},
+        "provider_termination_handoff_seconds": {"const": 60},
+        "empirical_cleanup_reserve_seconds": {"const": 900},
+        "empirical_termination_cutoff_seconds": {"const": 13500},
+        "maximum_empirical_provider_cost_usd": {"const": 8.0},
+        "max_empirical_launch_count": {"const": 1},
+        "max_lambda_instances": {"const": 1},
+        "persistent_filesystems": {"const": 0},
+        "admission_model": {"const": "actual-elapsed-next-condition-hard-wall-plus-evidence-export-provider-handoff-and-cleanup-reserves"},
+        "future_attempt_maxima_reserved_at_campaign_start": {"const": false},
+        "provider_control_plane": {"const": "autonomous-v14-explicit-pilot-contract-binding"},
+        "model_metadata_before_lambda_launch": {"const": true},
+        "model_metadata_request_count": {"const": 1},
+        "model_metadata_snapshot": {"const": "gpt-4o-2024-11-20"},
+        "model_substitution_allowed": {"const": false},
+        "immutable_model_unavailable_disposition": {"const": "stop-before-lambda-launch-zero-lambda-cost"},
+        "model_metadata_request_count_total": {"const": 1},
+        "model_metadata_request_location": {"const": "local-control-plane-before-lambda-launch"},
+        "provider_launch_model_metadata_request_count": {"const": 0},
+        "host_runtime_model_metadata_request_count": {"const": 0},
+        "model_metadata_prelaunch_freshness_seconds": {"const": 1800},
+        "model_metadata_freshness_owner": {"const": "provider-final-transport-boundary"},
+        "provider_launch_requires_current_freshness": {"const": true},
+        "host_runtime_requires_current_freshness": {"const": false},
+        "host_runtime_requires_prelaunch_timestamp_ordering": {"const": true},
+        "model_metadata_receipt_required": {"const": true},
+        "model_metadata_receipt_replay_allowed": {"const": false}
+      },
+      "additionalProperties": false
+    },
+    "runtime_limits": {
+      "type": "object",
+      "required": ["expected_browser_actions_per_attempt", "max_browser_actions_per_attempt", "action_timeout_seconds", "max_model_calls_per_attempt", "max_model_tokens_per_attempt", "max_openai_cost_usd_per_attempt", "max_condition_wall_seconds", "max_pair_wall_seconds", "max_total_wall_seconds", "max_output_bytes_per_attempt", "max_stdout_stderr_bytes_per_stream", "max_disk_bytes", "max_lambda_duration_seconds", "max_lambda_cost_usd", "max_attempts", "max_retries_after_empirical_entry"],
+      "properties": {
+        "expected_browser_actions_per_attempt": {"const": 18},
+        "max_browser_actions_per_attempt": {"const": 30},
+        "action_timeout_seconds": {"const": 30},
+        "max_model_calls_per_attempt": {"const": 1155},
+        "max_model_tokens_per_attempt": {"const": 1000000},
+        "max_openai_cost_usd_per_attempt": {"const": 10.0},
+        "max_condition_wall_seconds": {"const": 3600},
+        "max_pair_wall_seconds": {"const": 7200},
+        "max_total_wall_seconds": {"const": 14400},
+        "max_output_bytes_per_attempt": {"const": 536870912},
+        "max_stdout_stderr_bytes_per_stream": {"const": 536870912},
+        "max_disk_bytes": {"const": 2147483648},
+        "max_lambda_duration_seconds": {"const": 14400},
+        "max_lambda_cost_usd": {"const": 8.0},
+        "max_attempts": {"const": 4},
+        "max_retries_after_empirical_entry": {"const": 0}
+      },
+      "additionalProperties": true
+    },
+    "budget_calibration": {"type": "object"},
+    "identities": {"type": "object"},
+    "attempts": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "required": ["run_id", "pair_id", "task_id", "task_index", "condition", "order_index", "output_root", "raw_output_root", "finalized_output_root", "condition_plan_path", "condition_plan_sha256", "protocol_sha256", "config_sha256", "environment_sha256", "giclab_commit", "upstream_argv"],
+        "properties": {
+          "run_id": {"type": "string", "pattern": "^RUN-T09-TASK-[AB]-(?:REACTIVE|SIMULATIVE)-AUTONOMOUS-0007$"},
+          "pair_id": {"enum": ["PAIR-EXP0001-PILOT-V14-TASK-A", "PAIR-EXP0001-PILOT-V14-TASK-B"]},
+          "task_id": {"enum": ["7dcbbbdc7f1120cd", "2120afba8009bad3"]},
+          "task_index": {"enum": [0, 1]},
+          "condition": {"enum": ["reactive", "simulative"]},
+          "order_index": {"enum": [1, 2]},
+          "output_root": {"type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"},
+          "raw_output_root": {"type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+/raw$"},
+          "finalized_output_root": {"type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+/finalized$"},
+          "condition_plan_path": {"type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"},
+          "condition_plan_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "protocol_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "config_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "environment_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "giclab_commit": {"oneOf": [{"type": "string", "pattern": "^[a-f0-9]{40}$"}, {"const": "unknown"}]},
+          "upstream_argv": {"type": "array", "minItems": 20, "items": {"type": "string"}}
+        },
+        "additionalProperties": false
+      }
+    },
+    "first_pair_checkpoint": {"type": "object", "required": ["required", "continue_only_if", "failure_action", "sampling_claim"]},
+    "evidence": {"type": "object"},
+    "gpu_accounting": {"type": "object"},
+    "cleanup": {"type": "object"},
+    "interpretation_boundary": {"type": "object"}
+  },
+  "$defs": {
+    "fileBinding": {
+      "type": "object",
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"},
+        "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+      },
+      "additionalProperties": false
+    },
+    "fileBindingWithSize": {
+      "type": "object",
+      "required": ["path", "sha256", "size_bytes"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"},
+        "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "size_bytes": {"type": "integer", "minimum": 1}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

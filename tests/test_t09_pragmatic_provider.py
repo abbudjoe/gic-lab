@@ -21,6 +21,7 @@ from giclab.harness.t09_provider_contracts import (
     V10_PROVIDER_CONTRACT,
     V11_PROVIDER_CONTRACT,
     V13_PROVIDER_CONTRACT,
+    V14_PROVIDER_CONTRACT,
     T09ProviderContract,
     T09ProviderContractError,
     load_provider_plan,
@@ -46,7 +47,7 @@ def _entry_command(version: str, *, launch_slot: int = 1) -> tuple[str, ...]:
         ssh_public_key_file="/private/id_ed25519.pub",
         launch_slot=launch_slot,
         model_metadata_receipt=(
-            "/private/model-metadata-receipt.json" if version in {"V12", "V13"} else None
+            "/private/model-metadata-receipt.json" if version in {"V12", "V13", "V14"} else None
         ),
     )
 
@@ -64,10 +65,11 @@ def test_every_retained_provider_version_has_one_frozen_contract() -> None:
         "V11",
         "V12",
         "V13",
+        "V14",
     )
-    assert len({contract.plan_id for contract in PROVIDER_CONTRACTS.values()}) == 11
-    assert len({contract.host_run_id for contract in PROVIDER_CONTRACTS.values()}) == 11
-    assert len({contract.instance_name for contract in PROVIDER_CONTRACTS.values()}) == 11
+    assert len({contract.plan_id for contract in PROVIDER_CONTRACTS.values()}) == 12
+    assert len({contract.host_run_id for contract in PROVIDER_CONTRACTS.values()}) == 12
+    assert len({contract.instance_name for contract in PROVIDER_CONTRACTS.values()}) == 12
 
 
 def test_v13_contract_exposes_the_fresh_explicit_pilot_identity_bundle() -> None:
@@ -92,6 +94,32 @@ def test_v13_contract_exposes_the_fresh_explicit_pilot_identity_bundle() -> None
     assert V13_PROVIDER_CONTRACT.frozen_run_manifest_id == (
         "RUN-MANIFEST-EXP0001-PILOT-V13-AUTONOMOUS-0006"
     )
+
+
+def test_v14_contract_exposes_a_fresh_nonreplayable_identity_bundle() -> None:
+    assert V14_PROVIDER_CONTRACT.plan_id == "PLAN-EXP0001-PILOT-V14"
+    assert V14_PROVIDER_CONTRACT.host_run_id == "RUN-T09-PILOT-HOST-AUTONOMOUS-0007"
+    assert V14_PROVIDER_CONTRACT.authorization_prefix == "AUTH-T09-V14-"
+    assert V14_PROVIDER_CONTRACT.attempt_order == (
+        "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0007",
+        "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0007",
+        "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0007",
+        "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0007",
+    )
+    assert V14_PROVIDER_CONTRACT.evaluator_run_ids == tuple(
+        run_id.replace("RUN-T09-TASK-", "RUN-T09-EVAL-TASK-", 1)
+        for run_id in V14_PROVIDER_CONTRACT.attempt_order
+    )
+    assert V14_PROVIDER_CONTRACT.active_image_qualification_id == (
+        "QUAL-T09-PILOT-V14-IMAGE-AUTONOMOUS-0007"
+    )
+    assert V14_PROVIDER_CONTRACT.local_finalizer_qualification_id == (
+        "QUAL-T09-PILOT-V14-LOCAL-FINALIZER-AUTONOMOUS-0007"
+    )
+    assert V14_PROVIDER_CONTRACT.frozen_run_manifest_id == (
+        "RUN-MANIFEST-EXP0001-PILOT-V14-AUTONOMOUS-0007"
+    )
+    assert set(V14_PROVIDER_CONTRACT.attempt_order).isdisjoint(V13_PROVIDER_CONTRACT.attempt_order)
 
 
 @pytest.mark.parametrize("contract", tuple(PROVIDER_CONTRACTS.values()))

@@ -310,7 +310,9 @@ def _contract(
         run_id.replace("RUN-T09-TASK-", "RUN-T09-EVAL-TASK-", 1) for run_id in run_ids
     )
     host_family = host_run_id.removeprefix("RUN-T09-PILOT-HOST-")
-    control_root_name = f"pilot-{version.lower()}" if version in {"V12", "V13"} else "pilot-v7"
+    control_root_name = (
+        f"pilot-{version.lower()}" if version in {"V12", "V13", "V14"} else "pilot-v7"
+    )
     return T09ProviderContract(
         version=version,
         source_commit=source_commit,
@@ -779,6 +781,47 @@ V13_PROVIDER_CONTRACT: Final = _contract(
         f"{_EXPERIMENT_ROOT}/contracts/proposals/T09_PILOT_COMMAND_MANIFESTS_V13.json"
     ),
 )
+V14_PROVIDER_CONTRACT: Final = _contract(
+    version="V14",
+    source_commit="8d244cf12604596e06be850c4dbf65b00fcbb4fc",
+    host_run_id="RUN-T09-PILOT-HOST-AUTONOMOUS-0007",
+    authorization_id=None,
+    authorization_prefix="AUTH-T09-V14-",
+    authorization_source_sha256=None,
+    instance_name="giclab-t09-pilot-v14-autonomous-0007",
+    plan_path=f"{_PROPOSAL_ROOT}/T09_PILOT_RUNTIME_PROFILE_V14.yaml",
+    plan_bytes=15_176,
+    plan_sha256="b1b5dc0e71954fdcbfe9c5a315f45dfcb09bd3e569fd817cf86efa381a869ee7",
+    profile_path=f"{_PROPOSAL_ROOT}/T09_PILOT_RUNTIME_PROFILE_V14.yaml",
+    profile_bytes=15_176,
+    profile_sha256="b1b5dc0e71954fdcbfe9c5a315f45dfcb09bd3e569fd817cf86efa381a869ee7",
+    run_ids=(
+        "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0007",
+        "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0007",
+        "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0007",
+        "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0007",
+    ),
+    image_qualification_ids=("QUAL-T09-PILOT-V14-IMAGE-AUTONOMOUS-0007",),
+    active_image_qualification_id="QUAL-T09-PILOT-V14-IMAGE-AUTONOMOUS-0007",
+    replacement_image_tag="giclab/t09-pilot-v14:93fb8d72de71-autonomous-0007",
+    container_prefix="giclab-t09-pilot-v14-autonomous-",
+    image_materialization_policy="retained-import-or-one-fallback-build",
+    max_launch_count=8,
+    prior_t09_cost_usd=34.77393182524797,
+    preflight_lambda_cost_cap_usd=10.0,
+    campaign_lambda_cost_cap_usd=8.0,
+    campaign_openai_cost_cap_usd=40.0,
+    campaign_aggregate_cost_cap_usd=58.0,
+    cumulative_t09_cost_cap_usd=90.0,
+    frozen_run_manifest_id="RUN-MANIFEST-EXP0001-PILOT-V14-AUTONOMOUS-0007",
+    local_finalizer_qualification_id=("QUAL-T09-PILOT-V14-LOCAL-FINALIZER-AUTONOMOUS-0007"),
+    execution_contract_path=(
+        f"{_EXPERIMENT_ROOT}/contracts/proposals/T09_PILOT_EXECUTION_CONTRACT_V14.json"
+    ),
+    command_manifest_path=(
+        f"{_EXPERIMENT_ROOT}/contracts/proposals/T09_PILOT_COMMAND_MANIFESTS_V14.json"
+    ),
+)
 
 
 PROVIDER_CONTRACTS: Final[Mapping[str, T09ProviderContract]] = MappingProxyType(
@@ -796,6 +839,7 @@ PROVIDER_CONTRACTS: Final[Mapping[str, T09ProviderContract]] = MappingProxyType(
             V11_PROVIDER_CONTRACT,
             V12_PROVIDER_CONTRACT,
             V13_PROVIDER_CONTRACT,
+            V14_PROVIDER_CONTRACT,
         )
     }
 )
@@ -906,7 +950,7 @@ def render_provider_entry_command(
         "--launch-slot",
         str(launch_slot),
     )
-    if contract.version in {"V12", "V13"}:
+    if contract.version in {"V12", "V13", "V14"}:
         if model_metadata_receipt is None:
             raise T09ProviderContractError(
                 "selected provider entry command requires the model metadata receipt"

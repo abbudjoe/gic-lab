@@ -3602,6 +3602,7 @@ def test_raw_attempt_streams_before_cutoff_without_aggregate_stage(
     }
     frozen_path = pilot_root / "frozen-run-manifest.json"
     frozen_path.write_text(json.dumps(frozen_document), encoding="utf-8")
+    frozen_path.chmod(0o600)
     frozen_sha256 = host.file_sha256(frozen_path)
     for relative in (
         "postfreeze-validation.json",

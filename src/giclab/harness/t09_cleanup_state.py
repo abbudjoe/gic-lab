@@ -25,6 +25,7 @@ from typing import Final, cast
 
 EARLY_CLEANUP_SCHEMA_VERSION: Final = "1.0.0"
 EARLY_CLEANUP_RECEIPT_SCHEMA_VERSION: Final = "1.0.0"
+CLEANUP_EXPORT_HANDOFF_SCHEMA_VERSION: Final = "1.0.0"
 
 _HEX40 = re.compile(r"^[a-f0-9]{40}$")
 _HEX64 = re.compile(r"^[a-f0-9]{64}$")
@@ -60,6 +61,124 @@ _STAGE_ORDER: Final = {stage: index for index, stage in enumerate(CleanupLifecyc
 class EmpiricalEntryStatus(StrEnum):
     NOT_ENTERED = "not-entered"
     ENTERED = "entered"
+
+
+class CleanupExportLifecyclePhase(StrEnum):
+    """Evidence-derived export obligations at cleanup time."""
+
+    PREFREEZE_ZERO_ATTEMPT = "prefreeze-zero-attempt"
+    POSTFREEZE_ZERO_ATTEMPT = "postfreeze-zero-attempt"
+    EMPIRICAL_PREFIX = "empirical-prefix"
+
+
+@dataclass(frozen=True, slots=True)
+class CleanupExportPhaseEvidence:
+    """Typed projection of the durable facts that select cleanup export policy."""
+
+    lifecycle_phase: CleanupExportLifecyclePhase
+    provider_contract_version: str
+    plan_id: str
+    host_run_id: str
+    frozen_manifest_state: str
+    frozen_manifest_sha256: str | None
+    empirical_attempt_count: int
+    raw_attempt_complete_count: int
+    attempt_completed_count: int
+    condition_start_reservation_count: int
+    condition_start_intent_count: int
+    attempt_specific_state_count: int
+    postfreeze_entry_receipt_count: int
+    required_export_acknowledgement_count: int
+    observed_export_acknowledgement_count: int
+    # Historical field name retained for schema compatibility.  This is the
+    # count backed by durable acknowledgement members, never the transient
+    # global-cleanup-intent chronology supplied by a resume caller.
+    retained_export_chronology_count: int
+
+    def __post_init__(self) -> None:
+        if (
+            _SAFE_ID.fullmatch(self.provider_contract_version) is None
+            or _SAFE_ID.fullmatch(self.plan_id) is None
+            or _SAFE_ID.fullmatch(self.host_run_id) is None
+        ):
+            raise EarlyCleanupStateError("cleanup export phase identity is malformed")
+        counts = (
+            self.empirical_attempt_count,
+            self.raw_attempt_complete_count,
+            self.attempt_completed_count,
+            self.condition_start_reservation_count,
+            self.condition_start_intent_count,
+            self.attempt_specific_state_count,
+            self.postfreeze_entry_receipt_count,
+            self.required_export_acknowledgement_count,
+            self.observed_export_acknowledgement_count,
+            self.retained_export_chronology_count,
+        )
+        if any(type(value) is not int or value < 0 for value in counts):
+            raise EarlyCleanupStateError("cleanup export phase counts are malformed")
+        manifest_is_published = self.frozen_manifest_state == "published-valid"
+        if manifest_is_published != (
+            isinstance(self.frozen_manifest_sha256, str)
+            and _HEX64.fullmatch(self.frozen_manifest_sha256) is not None
+        ):
+            raise EarlyCleanupStateError("cleanup export manifest state is contradictory")
+        if self.observed_export_acknowledgement_count > self.required_export_acknowledgement_count:
+            raise EarlyCleanupStateError("cleanup export acknowledgement count is overbroad")
+        if self.retained_export_chronology_count != self.observed_export_acknowledgement_count:
+            raise EarlyCleanupStateError(
+                "cleanup export chronology count lacks durable acknowledgement evidence"
+            )
+        if self.lifecycle_phase is CleanupExportLifecyclePhase.PREFREEZE_ZERO_ATTEMPT:
+            if (
+                self.frozen_manifest_state != "not-published-expected"
+                or self.frozen_manifest_sha256 is not None
+                or any(counts)
+            ):
+                raise EarlyCleanupStateError("pre-freeze zero-attempt evidence is contradictory")
+        elif self.lifecycle_phase is CleanupExportLifecyclePhase.POSTFREEZE_ZERO_ATTEMPT:
+            if (
+                not manifest_is_published
+                or self.postfreeze_entry_receipt_count != 1
+                or any(
+                    (
+                        self.empirical_attempt_count,
+                        self.raw_attempt_complete_count,
+                        self.attempt_completed_count,
+                        self.condition_start_reservation_count,
+                        self.condition_start_intent_count,
+                        self.attempt_specific_state_count,
+                        self.required_export_acknowledgement_count,
+                        self.observed_export_acknowledgement_count,
+                        self.retained_export_chronology_count,
+                    )
+                )
+            ):
+                raise EarlyCleanupStateError("post-freeze zero-attempt evidence is contradictory")
+        elif self.lifecycle_phase is CleanupExportLifecyclePhase.EMPIRICAL_PREFIX:
+            if not manifest_is_published or self.postfreeze_entry_receipt_count != 1:
+                raise EarlyCleanupStateError("empirical cleanup lacks a published frozen manifest")
+        else:  # pragma: no cover - StrEnum construction excludes this branch.
+            raise EarlyCleanupStateError("cleanup export lifecycle phase is unknown")
+
+    def to_document(self) -> dict[str, object]:
+        return {
+            "lifecycle_phase": self.lifecycle_phase.value,
+            "provider_contract_version": self.provider_contract_version,
+            "plan_id": self.plan_id,
+            "host_run_id": self.host_run_id,
+            "frozen_manifest_state": self.frozen_manifest_state,
+            "frozen_manifest_sha256": self.frozen_manifest_sha256,
+            "empirical_attempt_count": self.empirical_attempt_count,
+            "raw_attempt_complete_count": self.raw_attempt_complete_count,
+            "attempt_completed_count": self.attempt_completed_count,
+            "condition_start_reservation_count": self.condition_start_reservation_count,
+            "condition_start_intent_count": self.condition_start_intent_count,
+            "attempt_specific_state_count": self.attempt_specific_state_count,
+            "postfreeze_entry_receipt_count": self.postfreeze_entry_receipt_count,
+            "required_export_acknowledgement_count": (self.required_export_acknowledgement_count),
+            "observed_export_acknowledgement_count": (self.observed_export_acknowledgement_count),
+            "retained_export_chronology_count": self.retained_export_chronology_count,
+        }
 
 
 class CleanupTargetKind(StrEnum):
@@ -816,6 +935,26 @@ class EarlyCleanupJournal:
     def latest_version_sha256(self) -> str:
         with self._lock():
             return self._load_unlocked()[1]
+
+    def version_state_and_sha256(self, sequence: int) -> tuple[EarlyCleanupState, str]:
+        """Return one immutable version after validating the complete journal chain."""
+
+        if type(sequence) is not int or sequence < 1:
+            raise EarlyCleanupStateError("early cleanup version sequence is invalid")
+        with self._lock():
+            latest, _latest_sha256 = self._load_unlocked()
+            if sequence > latest.sequence:
+                raise EarlyCleanupStateError("early cleanup version is not retained")
+            path = self.versions / f"{sequence:08d}.json"
+            raw = path.read_bytes()
+            try:
+                parsed = json.loads(raw)
+            except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+                raise EarlyCleanupStateError("early cleanup version is not valid JSON") from exc
+            state = EarlyCleanupState.from_document(parsed)
+            if state.sequence != sequence or state.journal_id != latest.journal_id:
+                raise EarlyCleanupStateError("early cleanup retained version identity drifted")
+            return state, _sha256_bytes(raw)
 
     def _next_state(
         self,

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import subprocess
 from collections.abc import Iterator
 from pathlib import Path
 from typing import cast
@@ -15,23 +14,23 @@ from giclab.harness import t09_model_metadata_receipt as metadata
 from giclab.harness import t09_pragmatic_provider as provider
 from giclab.harness import t09_sira_pilot as pilot
 from giclab.harness.t09_provider_contracts import (
-    V12_PROVIDER_CONTRACT,
     V13_PROVIDER_CONTRACT,
+    V14_PROVIDER_CONTRACT,
 )
-from giclab.validation import validate_t09_v13_plan
+from giclab.validation import validate_t09_v14_plan
 
 ROOT = Path(__file__).resolve().parents[1]
 EXP = ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive"
-PLAN = EXP / "run-plans/proposals/PLAN-EXP0001-PILOT-V13.yaml"
-V12_PLAN = EXP / "run-plans/proposals/PLAN-EXP0001-PILOT-V12.yaml"
-PROFILE = EXP / "run-plans/proposals/T09_PILOT_RUNTIME_PROFILE_V13.yaml"
-EXECUTION = EXP / "contracts/proposals/T09_PILOT_EXECUTION_CONTRACT_V13.json"
-COMMANDS = EXP / "contracts/proposals/T09_PILOT_COMMAND_MANIFESTS_V13.json"
-RUNTIME_IDENTITY = EXP / "contracts/proposals/T09_PILOT_RUNTIME_IDENTITY_V13.json"
-STOPPED = EXP / "T09_V12_STOPPED_DISPOSITION.json"
-RECEIPT_SCHEMA = ROOT / "schemas/t09-v13-model-metadata-receipt.schema.json"
-BASE_COMMIT = "5253b864a3a2b288ce5cf06cd60d054b4925e5cc"
-BASE_TREE = "2f5c6fca38196731efb204a9a9c4778a2edc7a7c"
+PLAN = EXP / "run-plans/proposals/PLAN-EXP0001-PILOT-V14.yaml"
+V13_PLAN = EXP / "run-plans/proposals/PLAN-EXP0001-PILOT-V13.yaml"
+PROFILE = EXP / "run-plans/proposals/T09_PILOT_RUNTIME_PROFILE_V14.yaml"
+EXECUTION = EXP / "contracts/proposals/T09_PILOT_EXECUTION_CONTRACT_V14.json"
+COMMANDS = EXP / "contracts/proposals/T09_PILOT_COMMAND_MANIFESTS_V14.json"
+RUNTIME_IDENTITY = EXP / "contracts/proposals/T09_PILOT_RUNTIME_IDENTITY_V14.json"
+STOPPED = EXP / "T09_V13_STOPPED_DISPOSITION.json"
+RECEIPT_SCHEMA = ROOT / "schemas/t09-v14-model-metadata-receipt.schema.json"
+BASE_COMMIT = "12a6c4fba0972d3b6f9f16dcfae048dbb770d78a"
+BASE_TREE = "c933d14fa32fac2b48c217fb65ebfbcfbaa2a08a"
 
 
 def _sha256(path: Path) -> str:
@@ -75,7 +74,7 @@ class _MetadataTransport:
         *,
         credential: bytearray,
     ) -> metadata.ModelMetadataResponse:
-        assert credential == bytearray(b"fixture-openai-metadata-value-v13")
+        assert credential == bytearray(b"fixture-openai-metadata-value-v14")
         self.calls.append(model_id)
         return metadata.ModelMetadataResponse(
             status=200,
@@ -84,15 +83,15 @@ class _MetadataTransport:
         )
 
 
-def test_v13_plan_schema_package_and_false_flags_are_exact() -> None:
+def test_v14_plan_schema_package_and_false_flags_are_exact() -> None:
     plan = _load_plan()
-    schema = json.loads((ROOT / "schemas/t09-v13-plan.schema.json").read_text())
+    schema = json.loads((ROOT / "schemas/t09-v14-plan.schema.json").read_text())
     Draft202012Validator.check_schema(schema)
     Draft202012Validator(schema).validate(plan)
-    assert PLAN.stat().st_size == 18_102
-    assert _sha256(PLAN) == "87fbdfdb6375b4ba39f6eed2224768619ccee6b54090e43d9c84a568d2ea1957"
-    assert validate_t09_v13_plan(ROOT) == []
-    assert plan["plan_id"] == V13_PROVIDER_CONTRACT.plan_id
+    assert PLAN.stat().st_size == 19_232
+    assert _sha256(PLAN) == "62252dbbde6ff7e28268ed3f3d3b94255227cc3d4e1c435f5f0374f95167c0ea"
+    assert validate_t09_v14_plan(ROOT) == []
+    assert plan["plan_id"] == V14_PROVIDER_CONTRACT.plan_id
     status = cast(dict[str, object], plan["status"])
     for field in (
         "authorized",
@@ -110,14 +109,25 @@ def test_v13_plan_schema_package_and_false_flags_are_exact() -> None:
         "authorized": False,
         "authorization_reference": None,
     }
-    assert not (ROOT / "artifacts/EXP-0001/pilot-v13").exists()
+    assert not (ROOT / "artifacts/EXP-0001/pilot-v14").exists()
+    budget = cast(dict[str, object], plan["budget_contract"])
+    assert budget["prior_through_stopped_v12_conservative_usd_decimal"] == ("33.5284750827347920")
+    assert budget["v13_stopped_lambda_cost_usd_decimal"] == "1.2454567425131797"
+    assert budget["prior_t09_conservative_upper_bound_usd_decimal"] == ("34.7739318252479717")
+    assert budget["effective_maximum_new_total_cost_under_cumulative_cap_usd_decimal"] == (
+        "55.2260681747520283"
+    )
+    execution = json.loads(EXECUTION.read_text())
+    assert execution["authorized"] is False
+    assert execution["authorization_reference"] is None
+    assert execution["execution_eligibility"] == ("blocked-until-fresh-category-3-authorization")
 
 
-def test_v13_science_is_semantically_unchanged_from_v12() -> None:
-    v13 = _load_plan()
-    v12 = _load_plan(V12_PLAN)
-    assert v13["scientific_contract"] == v12["scientific_contract"]
-    science = cast(dict[str, object], v13["scientific_contract"])
+def test_v14_science_is_semantically_unchanged_from_v13() -> None:
+    v14 = _load_plan()
+    v13 = _load_plan(V13_PLAN)
+    assert v14["scientific_contract"] == v13["scientific_contract"]
+    science = cast(dict[str, object], v14["scientific_contract"])
     assert science["sira_commit"] == "93fb8d72de71f9a4a13419670adeb34d93cf7acd"
     assert science["model_revision_for_every_role"] == "gpt-4o-2024-11-20"
     assert science["protocol_sha256"] == _sha256(EXP / "protocol.yaml")
@@ -125,37 +135,37 @@ def test_v13_science_is_semantically_unchanged_from_v12() -> None:
     assert science["condition_retries_after_empirical_entry"] == 0
 
 
-def test_v13_explicit_identity_bundle_and_cross_version_separation_are_exact() -> None:
+def test_v14_explicit_identity_bundle_and_cross_version_separation_are_exact() -> None:
     execution = json.loads(EXECUTION.read_text())
     loaded = pilot.load_execution_contract(EXECUTION, expected_sha256=_sha256(EXECUTION))
-    assert loaded.provider_contract_version == "V13"
+    assert loaded.provider_contract_version == "V14"
     assert tuple(attempt.run_id for attempt in loaded.attempts) == (
-        V13_PROVIDER_CONTRACT.attempt_order
+        V14_PROVIDER_CONTRACT.attempt_order
     )
     assert execution["identities"] == {
-        "evaluator_run_ids": list(V13_PROVIDER_CONTRACT.evaluator_run_ids),
-        "evidence_archive_id": V13_PROVIDER_CONTRACT.evidence_archive_id,
-        "evidence_stage_id": V13_PROVIDER_CONTRACT.evidence_stage_id,
-        "frozen_run_manifest_id": V13_PROVIDER_CONTRACT.frozen_run_manifest_id,
-        "host_run_id": V13_PROVIDER_CONTRACT.host_run_id,
+        "evaluator_run_ids": list(V14_PROVIDER_CONTRACT.evaluator_run_ids),
+        "evidence_archive_id": V14_PROVIDER_CONTRACT.evidence_archive_id,
+        "evidence_stage_id": V14_PROVIDER_CONTRACT.evidence_stage_id,
+        "frozen_run_manifest_id": V14_PROVIDER_CONTRACT.frozen_run_manifest_id,
+        "host_run_id": V14_PROVIDER_CONTRACT.host_run_id,
         "local_finalizer_qualification_id": (
-            V13_PROVIDER_CONTRACT.local_finalizer_qualification_id
+            V14_PROVIDER_CONTRACT.local_finalizer_qualification_id
         ),
-        "runtime_qualification_id": V13_PROVIDER_CONTRACT.active_image_qualification_id,
+        "runtime_qualification_id": V14_PROVIDER_CONTRACT.active_image_qualification_id,
     }
     assert execution["runtime"]["local_finalizer_qualification_selector"] == [
         "--provider-contract",
-        "V13",
+        "V14",
     ]
-    assert set(V13_PROVIDER_CONTRACT.attempt_order).isdisjoint(V12_PROVIDER_CONTRACT.attempt_order)
-    assert set(V13_PROVIDER_CONTRACT.evaluator_run_ids).isdisjoint(
-        V12_PROVIDER_CONTRACT.evaluator_run_ids
+    assert set(V14_PROVIDER_CONTRACT.attempt_order).isdisjoint(V13_PROVIDER_CONTRACT.attempt_order)
+    assert set(V14_PROVIDER_CONTRACT.evaluator_run_ids).isdisjoint(
+        V13_PROVIDER_CONTRACT.evaluator_run_ids
     )
 
 
-def test_v13_commands_bind_selector_and_both_pair_diffs_are_valid() -> None:
+def test_v14_commands_bind_selector_and_both_pair_diffs_are_valid() -> None:
     commands = json.loads(COMMANDS.read_text())
-    selector = {"argument": "--provider-contract", "value": "V13"}
+    selector = {"argument": "--provider-contract", "value": "V14"}
     assert commands["local_finalizer_qualification_selector"] == selector
     assert all(
         manifest["equality_surface"]["provider_contract_selector"] == selector
@@ -165,9 +175,8 @@ def test_v13_commands_bind_selector_and_both_pair_diffs_are_valid() -> None:
     assert all(pair["required_equality_surface_equal"] is True for pair in commands["pair_diffs"])
 
 
-def test_v13_plan_binds_current_sources_artifacts_and_stopped_v12_record() -> None:
+def test_v14_plan_binds_current_sources_artifacts_and_stopped_v13_record() -> None:
     bindings = cast(dict[str, object], _load_plan()["implementation_bindings"])
-    reviewed_ancestor = str(bindings["reviewed_implementation_ancestor"])
     specifications = {
         "provider_accounting": (("path", "sha256"), ("regression_path", "regression_sha256")),
         "offline_refinalization": (
@@ -180,6 +189,7 @@ def test_v13_plan_binds_current_sources_artifacts_and_stopped_v12_record() -> No
             ("implementation_path", "implementation_sha256"),
             ("provider_integration_path", "provider_integration_sha256"),
             ("schema_path", "schema_sha256"),
+            ("export_handoff_schema_path", "export_handoff_schema_sha256"),
         ),
         "owned_container_publication": (
             ("reader_path", "reader_sha256"),
@@ -215,43 +225,40 @@ def test_v13_plan_binds_current_sources_artifacts_and_stopped_v12_record() -> No
         group = cast(dict[str, object], bindings[group_name])
         for path_field, hash_field in fields:
             relative = str(group[path_field])
-            if relative.endswith(".py"):
-                encoded = subprocess.run(
-                    ["git", "show", f"{reviewed_ancestor}:{relative}"],
-                    cwd=ROOT,
-                    check=True,
-                    capture_output=True,
-                ).stdout
-                assert hashlib.sha256(encoded).hexdigest() == group[hash_field]
-            else:
-                assert _sha256(ROOT / relative) == group[hash_field]
-    stopped = cast(dict[str, object], bindings["v12_stopped_disposition"])
+            assert _sha256(ROOT / relative) == group[hash_field]
+    stopped = cast(dict[str, object], bindings["v13_stopped_disposition"])
     assert stopped == {
         "path": STOPPED.relative_to(ROOT).as_posix(),
-        "size_bytes": 2572,
-        "sha256": "75fb80602c5da059c9745271d67394d475653a3a0c10b72dc46dabd057dfa5f1",
+        "size_bytes": 3541,
+        "sha256": "5299095b595c3fa481f722e63091e3f8bef9fbc6a49b624b2066a78faa76eb66",
     }
 
 
-def test_v12_stopped_disposition_is_sanitized_exact_and_nonreplayable() -> None:
-    assert STOPPED.stat().st_size == 2572
-    assert _sha256(STOPPED) == "75fb80602c5da059c9745271d67394d475653a3a0c10b72dc46dabd057dfa5f1"
+def test_v13_stopped_disposition_is_sanitized_exact_and_nonreplayable() -> None:
+    assert STOPPED.stat().st_size == 3541
+    assert _sha256(STOPPED) == "5299095b595c3fa481f722e63091e3f8bef9fbc6a49b624b2066a78faa76eb66"
     stopped = json.loads(STOPPED.read_text())
-    assert stopped["execution_boundary"] == {
-        "empirical_entry_crossed": False,
-        "provider_launch_crossed": True,
-    }
+    assert stopped["provider_contract_version"] == "V13"
+    assert stopped["execution_boundary"]["empirical_entry_crossed"] is False
+    assert stopped["execution_boundary"]["empirical_attempts_entered"] == 0
+    assert stopped["execution_boundary"]["raw_attempts_complete"] == 0
+    assert stopped["execution_boundary"]["attempts_completed"] == 0
+    assert stopped["execution_boundary"]["dynamic_frozen_manifests"] == 0
+    assert stopped["execution_boundary"]["retained_export_chronology_entries"] == 0
     assert stopped["request_accounting"]["task_model_calls"] == 0
     assert stopped["request_accounting"]["browser_actions"] == 0
     assert stopped["authority_disposition"]["replay_allowed"] is False
-    assert stopped["cleanup"]["verified"] is True
+    assert stopped["cleanup"]["provider_terminal_or_absent"] is True
+    assert stopped["cleanup"]["zero_running_t09_instances"] is True
+    assert stopped["cleanup"]["remote_security_restored"] is True
+    assert stopped["timing_and_cost"]["lambda_cost_usd"] == "1.2454567425131797"
     encoded = STOPPED.read_text().casefold()
     assert "/users/" not in encoded
     assert "private_instance" not in encoded
     assert "api_key" not in encoded
 
 
-def test_v13_fake_metadata_receipt_is_fresh_and_rejects_v12_authority(
+def test_v14_fake_metadata_receipt_is_fresh_and_rejects_v13_authority(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -259,14 +266,14 @@ def test_v13_fake_metadata_receipt_is_fresh_and_rejects_v12_authority(
     overlay = tmp_path / "authorization-overlay.json"
     overlay_document = {
         "schema_version": metadata.MODEL_METADATA_SCHEMA_VERSION,
-        "authorization_reference": "AUTH-T09-V13-CATEGORY3-FIXTURE-0001",
+        "authorization_reference": "AUTH-T09-V14-CATEGORY3-FIXTURE-0001",
         "authorization_source_sha256": "1" * 64,
-        "provider_contract_version": "V13",
+        "provider_contract_version": "V14",
         "repository_commit": BASE_COMMIT,
         "repository_tree": BASE_TREE,
-        "plan_id": V13_PROVIDER_CONTRACT.plan_id,
+        "plan_id": V14_PROVIDER_CONTRACT.plan_id,
         "plan_sha256": plan_sha256,
-        "host_run_id": V13_PROVIDER_CONTRACT.host_run_id,
+        "host_run_id": V14_PROVIDER_CONTRACT.host_run_id,
         "public_price_contract_sha256": "2" * 64,
         "public_deprecation_observation_sha256": "3" * 64,
         "model_metadata_receipt_sha256": None,
@@ -276,15 +283,15 @@ def test_v13_fake_metadata_receipt_is_fresh_and_rejects_v12_authority(
     _private_json(overlay, overlay_document)
     dotenv = tmp_path / "mixed.env"
     dotenv.write_bytes(
-        b"OPENAI_API_KEY=fixture-openai-metadata-value-v13\n"
-        b"LAMBDA_API_KEY=fixture-lambda-provider-value-v13\n"
+        b"OPENAI_API_KEY=fixture-openai-metadata-value-v14\n"
+        b"LAMBDA_API_KEY=fixture-lambda-provider-value-v14\n"
     )
     dotenv.chmod(0o644)
     output = tmp_path / metadata.MODEL_METADATA_RECEIPT_FILENAME
     transport = _MetadataTransport(1_700_000_000.25)
     monkeypatch.setattr(provider, "_verify_clean_package", lambda repository, commit: None)
     provider.model_metadata_preflight(
-        contract=V13_PROVIDER_CONTRACT,
+        contract=V14_PROVIDER_CONTRACT,
         repository=ROOT,
         package_commit=BASE_COMMIT,
         authorization_overlay=overlay,
@@ -296,12 +303,12 @@ def test_v13_fake_metadata_receipt_is_fresh_and_rejects_v12_authority(
     receipt = json.loads(output.read_text())
     Draft202012Validator(json.loads(RECEIPT_SCHEMA.read_text())).validate(receipt)
     assert transport.calls == [metadata.MODEL_METADATA_MODEL_ID]
-    assert receipt["plan_id"] == V13_PROVIDER_CONTRACT.plan_id
-    assert receipt["provider_contract_version"] == "V13"
-    assert receipt["host_run_id"] == V13_PROVIDER_CONTRACT.host_run_id
+    assert receipt["plan_id"] == V14_PROVIDER_CONTRACT.plan_id
+    assert receipt["provider_contract_version"] == "V14"
+    assert receipt["host_run_id"] == V14_PROVIDER_CONTRACT.host_run_id
     metadata.validate_model_metadata_receipt(
         output,
-        contract=V13_PROVIDER_CONTRACT,
+        contract=V14_PROVIDER_CONTRACT,
         package_commit=BASE_COMMIT,
         package_tree=BASE_TREE,
         plan_sha256=plan_sha256,
@@ -311,7 +318,7 @@ def test_v13_fake_metadata_receipt_is_fresh_and_rejects_v12_authority(
     with pytest.raises(metadata.ModelMetadataReceiptError, match="fixed semantics"):
         metadata.validate_model_metadata_receipt(
             output,
-            contract=V12_PROVIDER_CONTRACT,
+            contract=V13_PROVIDER_CONTRACT,
             package_commit=BASE_COMMIT,
             package_tree=BASE_TREE,
             plan_sha256=plan_sha256,
@@ -323,13 +330,13 @@ def test_v13_fake_metadata_receipt_is_fresh_and_rejects_v12_authority(
         wrong_overlay,
         {
             **overlay_document,
-            "authorization_reference": "AUTH-T09-V12-CATEGORY3-FIXTURE-0001",
+            "authorization_reference": "AUTH-T09-V13-CATEGORY3-FIXTURE-0001",
         },
     )
     with pytest.raises(metadata.ModelMetadataReceiptError, match="selected-contract authority"):
         metadata.validate_model_metadata_authorization_overlay(
             wrong_overlay,
-            contract=V13_PROVIDER_CONTRACT,
+            contract=V14_PROVIDER_CONTRACT,
             package_commit=BASE_COMMIT,
             package_tree=BASE_TREE,
             plan_sha256=plan_sha256,
