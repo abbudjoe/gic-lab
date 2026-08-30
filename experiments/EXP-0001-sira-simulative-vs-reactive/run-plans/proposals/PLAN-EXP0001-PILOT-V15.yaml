@@ -60,7 +60,7 @@ implementation_bindings:
   required_base_parent_1: 12a6c4fba0972d3b6f9f16dcfae048dbb770d78a
   required_base_parent_2: e5d67d36bc84d6b1eaaf8b3bce0f8797d8bd3074
   required_accounting_repair_ancestor: 1c6b093699288f37aa23526fe1e1672e50280093
-  reviewed_implementation_ancestor: 9b1ea06da0530128add702575e72212016d5cc47
+  reviewed_implementation_ancestor: e434948d94f04e26d7efed94607860b1ec335bb6
   exact_reviewed_merged_commit: pending-category-2-merge
   exact_reviewed_merged_commit_required_before_authorization: true
   provider_accounting:
@@ -167,24 +167,24 @@ implementation_bindings:
     runtime_profile_path: experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/proposals/T09_PILOT_RUNTIME_PROFILE_V15.yaml
     runtime_profile_sha256: 64075a67989522495145bf02c32544bd3a07f30c38d46daa4e9f5c16c65faa1d
     execution_contract_path: experiments/EXP-0001-sira-simulative-vs-reactive/contracts/proposals/T09_PILOT_EXECUTION_CONTRACT_V15.json
-    execution_contract_sha256: 0430950784d1c2429d08a1f22cb59e87fe1db8dd6a6efd84fde27a3b481848ce
+    execution_contract_sha256: 2b183d81b7774089accadead17e70e006a3baacef5c1bf1f7f7338414f2c9ee3
     command_manifests_path: experiments/EXP-0001-sira-simulative-vs-reactive/contracts/proposals/T09_PILOT_COMMAND_MANIFESTS_V15.json
-    command_manifests_sha256: 4ff32b3f518c53f11505d79a70427caac050884355ac52c23d3b6de26b3c6921
+    command_manifests_sha256: 48e3f91f919d07175af16a7da1889a898d5c106510cd196f944bd798514e1c33
     runtime_identity_path: experiments/EXP-0001-sira-simulative-vs-reactive/contracts/proposals/T09_PILOT_RUNTIME_IDENTITY_V15.json
-    runtime_identity_sha256: e1572233bd9bd528a16d5a296970fa3db98dc348ecdbec0d6eed92f6371a3d1d
+    runtime_identity_sha256: a475f126cd2c2cfc9578197c245ff43b2d45167a68b133d8f49abbf9527c0268
     runtime_adaptation_path: src/giclab/harness/sira_gate_a_runtime.py
     runtime_adaptation_sha256: 0f1cd94fe048102704c9a4c461c6a3bf457ca53eb5586291441a675cd6b256a0
     execution_schema_path: schemas/t09-sira-pilot-v15-execution.schema.json
     execution_schema_sha256: e2c3008a0bd29390d65ad9f238a84b0e042cc84db0c7a1b31fe81f456ae22304
     condition_plans:
     - path: experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v15-task-0000-reactive.yaml
-      sha256: 8f47db7e478b388db4ab3edfe752d3e27effb9038a20a44efb1ae78cb989c160
+      sha256: b1ddb21d527bb20e81d8a54034f6d3d1a99703f9b7dbc77508f0ef8b152eb64a
     - path: experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v15-task-0000-simulative.yaml
-      sha256: 82be68b45ecf5dabb5fbf12cc29daa853f431c6be5f24c121e9265d802f1358b
+      sha256: 84ad96179639a4d3a1c499a8a575454e904080703ad37e16b9096be745f56f88
     - path: experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v15-task-0001-simulative.yaml
-      sha256: 4c917c597e45a31718b8e17ced321a9b3182cda9c5ed5302c508415299ff8f5d
+      sha256: bad21c293dfc26b317f8ac298716e77e9621169febb35679cb02478634c18493
     - path: experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v15-task-0001-reactive.yaml
-      sha256: 79cb74fadaf80c9e68de236b7a1aa4a7c120f666941e95c993e4bbf758c7e957
+      sha256: b62cbbe4b20dfb016dc8763ced0fc32205bf59b4581fdf9d3aa27279f059d075
     static_authorized: false
     static_authorization_reference: null
     execution_eligibility: blocked-until-fresh-category-3-authorization
