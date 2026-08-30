@@ -1,0 +1,209 @@
+{
+  "base_runtime": {
+    "architecture": "x86_64",
+    "base_image_identity": "mcr.microsoft.com/playwright/python:v1.39.0-jammy@sha256:96955ff5cc37e13f5f1b21f5171afb9fed7e028025aa9d81c690501cd7fa0c6c",
+    "chromium_revision": "1084",
+    "chromium_sha256": "0498f208c25339f386413ada7b3c35293b0b6250e67d85446ba9541d7fd636f7",
+    "container_image_digest": null,
+    "frozen_execution_commit": "5698f04dfd08bc85a66d2355b0a4bd7d3ce24a23",
+    "installed_package_manifest_sha256": "4ff2603fa5e0f7033ba773decdcb86abf648dcce22e469d26bc48214e390e104",
+    "os": "Linux",
+    "playwright_version": "1.39.0",
+    "post_run_commit": "27f66e6a82edffa57e497516bf3969a199675f06",
+    "python_version": "3.11.14",
+    "source_run": "RUN-T07-PRAGMATIC-HOST-0003"
+  },
+  "evaluator_overlay": {
+    "approved_offline_fixture_execution_required": true,
+    "contract_sha256": "c28a802a45fc8d1e719f8c1bcb22315c2841df831c4ae161f12ab0f2fd08b321",
+    "materialization": "read-only-package-overlay-on-source-bound-qualified-image",
+    "provider_or_model_access": false
+  },
+  "execution_status": "unauthorized-pending-review-merge-and-category-3-qualification",
+  "gpu": {
+    "acceleration_claim": false,
+    "cuda_identity_when_visible": "not-applicable-inside-pilot-process-because-visibility-is-disabled",
+    "expected_process_use": "none",
+    "hardware": "NVIDIA-A10-24GB",
+    "scientific_variable": false,
+    "utilization_samples_when_practical": "host-nvidia-smi-without-unique-identifiers-at-preflight-attempt-boundaries-and-pretermination",
+    "visibility": "host-visible; no Docker GPU device request; CUDA_VISIBLE_DEVICES empty inside every pilot/preflight/evaluator container"
+  },
+  "identity_id": "RUNTIME-EXP0001-PILOT-V15-AUTONOMOUS-0008",
+  "plan_id": "PLAN-EXP0001-PILOT-V15",
+  "replacement_image_policy": {
+    "digest_inequality_alone_is_material": false,
+    "empirical_entry_before_binding_allowed": false,
+    "exact_historical_digest_equality_required": false,
+    "fallback_build_count_maximum": 1,
+    "freeze_interpretation": "reviewed source and policy bytes are final before launch; slot 1 may use a content-verified retained import or the one campaign fallback build, while slot 2 must import the exact retained image and fails closed before any build; the accepted image is functionally qualified and bound before the empirical clock begins",
+    "frozen_run_manifest_id": "RUN-MANIFEST-EXP0001-PILOT-V15-AUTONOMOUS-0008",
+    "historical_image_digest": "sha256:035edf61718e84a8156f4f0f7817b134b0ce31488d3f0b50bbfba2b4a30cc61c",
+    "preferred_import_count": 1,
+    "python_interpreter_identity": "source-derived-path-and-executable-sha256-in-frozen-run-manifest",
+    "qualification_count": 1,
+    "qualification_id": "QUAL-T09-PILOT-V15-IMAGE-AUTONOMOUS-0008",
+    "retained_image_archive_bytes": 1207128576,
+    "retained_image_archive_sha256": "623e717c2182eca9cee2f471b7ecd9a57bead2f5263dee64aa5cd954eae5ddb0",
+    "retained_image_expected_id": "sha256:abe8ed38f5c5b5a0a63fa726a74034dc5c192a12c0fccfe1319f97c27ceaf0a3",
+    "runtime_binding": "source-derived-mode-0600-O_EXCL-frozen-run-manifest",
+    "same_exact_image_all_attempts_required": true,
+    "slot1_materialization_policy": "retained-import-or-one-fallback-build",
+    "slot2_fallback_build_permitted": false,
+    "slot2_materialization_policy": "retained-import-only"
+  },
+  "repository_instrumentation": {
+    "files": [
+      {
+        "path": "src/giclab/harness/sira_gate_a_runtime.py",
+        "sha256": "0f1cd94fe048102704c9a4c461c6a3bf457ca53eb5586291441a675cd6b256a0"
+      },
+      {
+        "path": "src/giclab/harness/sira_gate_a.py",
+        "sha256": "edbda143d4a4271ad49d9b888a943192d4427395b79b14775312b27f10707c3d"
+      },
+      {
+        "path": "src/giclab/harness/safety.py",
+        "sha256": "12529af51aea206e02a531abea4959d80976bd271567f05c75e903654527d34c"
+      },
+      {
+        "path": "src/giclab/harness/t09_sira_pilot.py",
+        "sha256": "6e49cd6134a19326f1888adbc4a84678189ec1cfd0f536dbc1874224b3306a64"
+      },
+      {
+        "path": "src/giclab/harness/lambda_campaign_lifecycle.py",
+        "sha256": "6f0f74354f15766466480c498b4ab5af6887e337c5197416bb9dedf3ff78200b"
+      },
+      {
+        "path": "src/giclab/harness/lambda_l2m_observer.py",
+        "sha256": "3ad5d56abd2b4d115b479c9cf7f0f5202e715d07c1b4842c82dc894fbe8bf6c9"
+      },
+      {
+        "path": "src/giclab/harness/t09_pragmatic_provider.py",
+        "sha256": "390f6f2571a0131d49fc1f0dee9b047168b725ca6bf662ec072a993201b6a779"
+      },
+      {
+        "path": "src/giclab/harness/t09_provider_contracts.py",
+        "sha256": "d0d554a495b631e4f0114090516cdcf03affcec0111f095f26c8c8fd4caa8896"
+      },
+      {
+        "path": "containers/sira-smoke/pragmatic/t09_remote_runner.py",
+        "sha256": "97a958e8b1f1ec7b3a1ac3660bdb4c00891e1d8ccbb33e86811035cacc8e8227"
+      },
+      {
+        "path": "src/giclab/harness/t09_model_metadata_receipt.py",
+        "sha256": "6f58cb0ecd6dc5973c60a652017ff82934b84f8381abfad47149dfd070b2e355"
+      },
+      {
+        "path": "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py",
+        "sha256": "e689a77997d2289a7621323f61d1283eaf45c3d6c887966360a692afea0f4662"
+      },
+      {
+        "path": "containers/sira-smoke/pragmatic/t09_preflight.py",
+        "sha256": "fd2378995092d6ccced6f043d92c47e17a1da25d05c19f4df281c57b0c4dbe6f"
+      },
+      {
+        "path": "containers/sira-smoke/pragmatic/t09_freeze_commands.py",
+        "sha256": "10edb0622b538b9851f0942c97ddf28b755fb2da70872fc23b419c93cb7d7a5a"
+      },
+      {
+        "path": "containers/sira-smoke/pragmatic/t09_secret_preflight.py",
+        "sha256": "b4763ac8edc98b86c2f9f617f53cdb6be2ef9cb26d39aad660442e4c1a7506a4"
+      },
+      {
+        "path": "containers/sira-smoke/pragmatic/materialize_openai_secret.py",
+        "sha256": "6cd57c1be7af02e61e0ed9bffc0e6c4e93a78b9b3567a4bfa26fe6cc030095b6"
+      },
+      {
+        "path": "containers/sira-smoke/pragmatic/t09_real_evidence_regression.py",
+        "sha256": "b6a8b571f275894473b81dc547bbacf44db5257cda00d81c22469af2ab31ca50"
+      },
+      {
+        "path": "containers/sira-smoke/pragmatic/t09_finalizer_projection.py",
+        "sha256": "8a7eee55aca222a134b8f9075efb072fdeff86247c763245001c2efe3e3a3dc0"
+      },
+      {
+        "path": "containers/sira-smoke/pragmatic/t09_local_finalizer_qualification.py",
+        "sha256": "a99b46bc73f7e2867e4b4a04771828840b5dda7908e0427a5a3495df3053fce0"
+      },
+      {
+        "path": "containers/sira-smoke/container_entrypoint.py",
+        "sha256": "7d7c8b79a120708caa597e503b570fe971b4816ea3fe5ab3453d7d4b26f967a9"
+      },
+      {
+        "path": "containers/sira-smoke/bounded/browser_preflight.py",
+        "sha256": "327ed96b46736d54e6c763a14733119bcd82e9fbfaa8a88c87c3ac163d17e77f"
+      },
+      {
+        "path": "containers/sira-smoke/pragmatic/t09_core_preflight.py",
+        "sha256": "c2221dd34c094003c47f07a1d1b0b3afae0201d02857e7f91907ed43ee60104e"
+      },
+      {
+        "path": "containers/sira-smoke/pragmatic/t09_provider_accounting_preflight.py",
+        "sha256": "e74bbb440880c76131af2eead96050334562f81d79a85836489504566bb9f415"
+      },
+      {
+        "path": "src/giclab/harness/t09_cleanup_state.py",
+        "sha256": "39a4d698b8184c4d6652294f32e07911b2998b1a6326ad280353ba5f505e387e"
+      }
+    ],
+    "reviewed_implementation_ancestor": "8e2f55beb617fdb05d2e01a72f91f7cf6958a9f5",
+    "scope": [
+      "content-addressed-no-follow-private-regression-archive-staging",
+      "raw-attempt-root-typed-binding-before-empirical-entry",
+      "held-descriptor-privileged-docker-image-import",
+      "source-bound-postfreeze-preentry-slot2-eligibility",
+      "separate-cumulative-active-preflight-and-empirical-campaign-clocks",
+      "retained-exact-image-import-or-one-fallback-build",
+      "pre-action-budget-count",
+      "post-action-result-and-screenshot-retention",
+      "per-call-role-lineage-usage-and-service-tier-receipts",
+      "condition-and-aggregate-budget-persistence",
+      "immutable-raw-attempt-seal-and-export-acknowledgement",
+      "pure-repairable-finalizer-projection-and-append-only-selection",
+      "qualified-provider-independent-local-finalizer-runtime",
+      "resource-cap-and-cumulative-accounting-checks",
+      "cleanup-and-exact-provider-closeout-receipts",
+      "source-bound-active-slot2-provider-package-transition",
+      "minimal-manifest-bound-slot2-authority-retention-and-export",
+      "process-tree-core-limit-zero-at-docker-and-entrypoint-boundaries",
+      "exact-image-SIGABRT-inheritance-and-browser-teardown-core-suppression",
+      "bounded-core-inode-alias-detection-and-verifiable-destruction",
+      "explicit-per-stream-truncation-detection-and-truthful-non-cap-failure-authority",
+      "nonempirical-consumed-infrastructure-stop-and-zero-replay-admission",
+      "raw-seal-validation-fallback-to-essential-failure-authority",
+      "historical-real-evidence-finalizer-provenance-separated-from-current-finalizer-qualification",
+      "closed-slot1-package-transition-and-collision-free-slot2-authority-retention",
+      "typed-nested-preempirical-and-normalized-authority-tree-bindings",
+      "typed-provider-entry-failed-preempirical-replacement-authority",
+      "collision-free-direct-to-retained-authority-normalization",
+      "retained-authority-manifest-and-semantic-eligibility-revalidation",
+      "normalization-before-credentials-provider-calls-and-launch-capability-consumption",
+      "bounded-repeated-preflight-slot-normalization",
+      "provider-owned-preflight-cleanup-state-before-staging",
+      "explicit-immutable-v3-through-v15-provider-contract-selection",
+      "pilot-state-before-retained-authority-copy",
+      "512MiB-symmetric-attempt-and-64MiB-essential-failure-caps"
+    ]
+  },
+  "schema_version": "0.4.0",
+  "scientific_runtime": {
+    "agent_configs_sha256": "3c3110b5b69d43e0492fba3cb60171be35ccb8cd652e72d07ffb1ecfd7947072",
+    "dataset_revision": "76ad1feb689b754bfe4e5e24d3ea371b647efa67",
+    "implicit_provider_retries": 0,
+    "model_revision_all_roles": "gpt-4o-2024-11-20",
+    "provider_fallback": false,
+    "reactive_config": "web_reactive",
+    "reactive_planner_type": "policy",
+    "runner_sha256": "b06793ad1b366a934b798f9f3272fc80a7104a220cb3304ab3bda2eb2a78b331",
+    "service_tier": "default",
+    "simulative_config": "web_simulative",
+    "simulative_planner_critic_num_samples": 20,
+    "simulative_planner_policy_num_samples": 20,
+    "simulative_planner_search_depth": 1,
+    "simulative_planner_search_num_actions": 5,
+    "simulative_planner_type": "world_model",
+    "sira_commit": "93fb8d72de71f9a4a13419670adeb34d93cf7acd",
+    "sira_tree": "6a6d9068b94d7632d3533a3d6f013d4de6ff76e8"
+  }
+}

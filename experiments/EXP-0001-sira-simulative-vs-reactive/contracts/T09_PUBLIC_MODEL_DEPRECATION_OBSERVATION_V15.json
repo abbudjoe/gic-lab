@@ -1,0 +1,9 @@
+{
+  "credential_free": true,
+  "interpretation": "This public placeholder is a required receipt binding; Category 1 performs no live provider request and makes no deprecation claim.",
+  "model_id": "gpt-4o-2024-11-20",
+  "observation_id": "T09-PUBLIC-MODEL-DEPRECATION-OBSERVATION-V15",
+  "observation_status": "not-live-queried-in-category-1",
+  "public_source_required_before-category-3": true,
+  "schema_version": "1.0.0"
+}

@@ -421,6 +421,30 @@
         "handoff_policy": {"const": "immutable-terminal-receipt-reused-on-resume"}
       }
     },
+    "replacement_authority_normalization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "eligibility_kind",
+        "direct_authority_layout",
+        "retained_authority_layout",
+        "normalized_manifest_required",
+        "retained_revalidation_required",
+        "normalization_before_credentials_provider_and_capability",
+        "closed_slots_supported",
+        "cleanup_authority_independent"
+      ],
+      "properties": {
+        "eligibility_kind": {"const": "provider-entry-failed-preempirical"},
+        "direct_authority_layout": {"const": "exact-closed-launch-root"},
+        "retained_authority_layout": {"const": "collision-free-slot2-eligibility-source"},
+        "normalized_manifest_required": {"const": true},
+        "retained_revalidation_required": {"const": true},
+        "normalization_before_credentials_provider_and_capability": {"const": true},
+        "closed_slots_supported": {"const": "any-bounded-preflight-slot"},
+        "cleanup_authority_independent": {"const": true}
+      }
+    },
     "core_dump_policy": {
       "type": "object",
       "additionalProperties": false,
@@ -621,6 +645,34 @@
             "realized_pair": {"const": "none"},
             "excluded_from_v14_pairing": {"const": true}
           }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "plan_id",
+            "run_id",
+            "status",
+            "task_a_reactive",
+            "task_a_simulative",
+            "task_b_simulative",
+            "task_b_reactive",
+            "realized_pair",
+            "excluded_from_v15_pairing"
+          ],
+          "properties": {
+            "plan_id": {"const": "PLAN-EXP0001-PILOT-V14"},
+            "run_id": {"const": "RUN-T09-PILOT-HOST-AUTONOMOUS-0007"},
+            "status": {
+              "const": "category_3_v14_stopped_provider_entry_replacement_normalization_failure_cleanup_verified"
+            },
+            "task_a_reactive": {"const": "not-run"},
+            "task_a_simulative": {"const": "not-run"},
+            "task_b_simulative": {"const": "not-run"},
+            "task_b_reactive": {"const": "not-run"},
+            "realized_pair": {"const": "none"},
+            "excluded_from_v15_pairing": {"const": true}
+          }
         }
       ]
     },
@@ -699,8 +751,13 @@
           "items": {"type": "string", "minLength": 8}
         },
         "v13_stopped_lambda_cost_usd": {"const": 1.2454567425131797},
-        "prior_t09_conservative_amount_usd": {"const": 34.7739318252479717},
-        "effective_maximum_new_total_usd": {"const": 55.2260681747520283}
+        "v14_stopped_lambda_cost_usd": {"const": 0.0821235525349776},
+        "prior_t09_conservative_amount_usd": {
+          "enum": [34.7739318252479717, 34.8560553777829493]
+        },
+        "effective_maximum_new_total_usd": {
+          "enum": [55.2260681747520283, 55.1439446222170507]
+        }
       }
     }
   },
@@ -785,7 +842,8 @@
             "enum": [
               "PLAN-EXP0001-PILOT-V12",
               "PLAN-EXP0001-PILOT-V13",
-              "PLAN-EXP0001-PILOT-V14"
+              "PLAN-EXP0001-PILOT-V14",
+              "PLAN-EXP0001-PILOT-V15"
             ]
           }
         },
@@ -832,6 +890,35 @@
               "prior_t09_conservative_amount_usd",
               "effective_maximum_new_total_usd"
             ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"plan_id": {"const": "PLAN-EXP0001-PILOT-V15"}},
+        "required": ["plan_id"]
+      },
+      "then": {
+        "required": [
+          "cleanup_export_reconciliation",
+          "replacement_authority_normalization",
+          "prior_campaign_disposition"
+        ],
+        "properties": {
+          "budget": {
+            "required": ["effective_max_total_cost_under_cumulative_cap_usd"]
+          },
+          "readiness": {
+            "required": [
+              "v14_stopped_lambda_cost_usd",
+              "prior_t09_conservative_amount_usd",
+              "effective_maximum_new_total_usd"
+            ],
+            "properties": {
+              "prior_t09_conservative_amount_usd": {"const": 34.8560553777829493},
+              "effective_maximum_new_total_usd": {"const": 55.1439446222170507}
+            }
           }
         }
       }
