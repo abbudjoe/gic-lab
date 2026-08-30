@@ -2662,9 +2662,7 @@ def _validate_t09_successor_plan(
     execution = groups["execution_plane"]
     model_metadata = groups.get("model_metadata_receipt")
     stopped_disposition = (
-        groups.get(stopped_disposition_group)
-        if stopped_disposition_group is not None
-        else None
+        groups.get(stopped_disposition_group) if stopped_disposition_group is not None else None
     )
     assert isinstance(accounting, dict)
     assert isinstance(refinalization, dict)

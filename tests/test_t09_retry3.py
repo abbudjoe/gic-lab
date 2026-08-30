@@ -17,7 +17,7 @@ from giclab.harness import t09_sira_pilot as pilot_state
 from giclab.harness.t09_provider_contracts import (
     V7_PROVIDER_CONTRACT,
     V11_PROVIDER_CONTRACT,
-    V13_PROVIDER_CONTRACT,
+    V14_PROVIDER_CONTRACT,
     load_provider_plan,
 )
 from giclab.harness.t09_sira_pilot import (
@@ -263,13 +263,13 @@ def test_retry3_exact_clean_package_is_host_verifiable() -> None:
     command_document = host.verify_package(
         ROOT,
         package_commit,
-        contract=V13_PROVIDER_CONTRACT,
+        contract=V14_PROVIDER_CONTRACT,
     )
     assert (
         command_document["reviewed_implementation_ancestor"]
         == (
             json.loads(
-                host.contract_paths(ROOT, V13_PROVIDER_CONTRACT)["runtime"].read_text(
+                host.contract_paths(ROOT, V14_PROVIDER_CONTRACT)["runtime"].read_text(
                     encoding="utf-8"
                 )
             )["repository_instrumentation"]["reviewed_implementation_ancestor"]
