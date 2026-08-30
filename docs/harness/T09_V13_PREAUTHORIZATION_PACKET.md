@@ -1,6 +1,6 @@
 # T09 V13 preauthorization packet
 
-Status: **implementation complete; local fake/offline review in progress; unauthorized**.
+Status: **implementation complete; local fake/offline tests complete; PR review required; unauthorized**.
 
 ```text
 implementation complete

@@ -1,6 +1,6 @@
 # T09 V13 explicit pilot-contract binding implementation ledger
 
-Status: **implementation-complete-review-required**. This is Category 1 repair only.
+Status: **implementation-complete-pr-open-review-required**. This is Category 1 repair only.
 
 ## Provenance and scope
 
@@ -38,7 +38,7 @@ materialization; merge or auto-merge.
 | V13-DOD-08 | Both task pairs remain matched and include the equal explicit V13 selector. | Machine pair diffs. | met |
 | V13-DOD-09 | Scientific hashes, tasks, model, evaluator, scoring, order, retries, and interpretation are unchanged. | V12/V13 semantic projection regression. | met |
 | V13-DOD-10 | Focused, full, parity, static, privacy, and site gates have no newly failing or missing base nodes. | Local exact-head gates and base/head parity. | met |
-| V13-DOD-11 | One draft PR targets the exact base, auto-merge is disabled, exact-head Actions complete, and no merge occurs. | PR and Actions receipts. | partial — PR pending |
+| V13-DOD-11 | One draft PR targets the exact base, auto-merge is disabled, exact-head Actions complete, and no merge occurs. | Draft PR #7 and exact-head GitHub Actions receipts. | met |
 
 ## Implementation decisions
 
@@ -66,11 +66,15 @@ materialization; merge or auto-merge.
   21 passing head-only nodes, and 10 newly passing inherited nodes.
 - Ruff formatting/lint, strict mypy, lock integrity, repository validation,
   `git diff --check`, and portable Quarto 1.9.38 site rendering/validation: passed.
+- Sol/max no-delegation self-review completed with no remaining contract, identity,
+  privacy, authorization, or scientific-invariance finding.
+- Draft PR #7 targets `phase-1/sira-pilot-autonomous-r2`, remains unmerged with
+  auto-merge disabled, and exact-head GitHub Actions passed before handoff.
 - The inherited failures are explained by unavailable ignored historical T07
   evidence, established historical profile assertions, and the local retained-free
   disk floor; parity confirms that this repair introduces no regression.
 
 ## Remaining phase
 
-Complete final self-review, push normally, open one draft PR, and monitor exact-head
-GitHub Actions. Review, merge, and any Category 3 authorization remain separate.
+External ChatGPT exact-head review, merge, and any Category 3 authorization remain
+separate. This task does not merge or enable auto-merge.
