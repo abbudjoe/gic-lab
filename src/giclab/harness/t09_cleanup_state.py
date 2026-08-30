@@ -90,6 +90,9 @@ class CleanupExportPhaseEvidence:
     postfreeze_entry_receipt_count: int
     required_export_acknowledgement_count: int
     observed_export_acknowledgement_count: int
+    # Historical field name retained for schema compatibility.  This is the
+    # count backed by durable acknowledgement members, never the transient
+    # global-cleanup-intent chronology supplied by a resume caller.
     retained_export_chronology_count: int
 
     def __post_init__(self) -> None:
@@ -121,6 +124,10 @@ class CleanupExportPhaseEvidence:
             raise EarlyCleanupStateError("cleanup export manifest state is contradictory")
         if self.observed_export_acknowledgement_count > self.required_export_acknowledgement_count:
             raise EarlyCleanupStateError("cleanup export acknowledgement count is overbroad")
+        if self.retained_export_chronology_count != self.observed_export_acknowledgement_count:
+            raise EarlyCleanupStateError(
+                "cleanup export chronology count lacks durable acknowledgement evidence"
+            )
         if self.lifecycle_phase is CleanupExportLifecyclePhase.PREFREEZE_ZERO_ATTEMPT:
             if (
                 self.frozen_manifest_state != "not-published-expected"

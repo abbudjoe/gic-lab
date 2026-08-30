@@ -5383,15 +5383,20 @@ def derive_cleanup_export_phase(
         expected_names=archive_names,
         label="attempt export archives",
     )
-    if retained_chronology is None:
-        chronology_count = 0
-    else:
-        chronology_count = len(
-            _validate_export_chronology_projection(
-                retained_chronology,
-                attempt_order=contract.run_ids,
-            )
+    retained_chronology_projection = (
+        None
+        if retained_chronology is None
+        else _validate_export_chronology_projection(
+            retained_chronology,
+            attempt_order=contract.run_ids,
         )
+    )
+    # The cleanup intent does not exist on the first call and is retained only
+    # after the handoff receipt is published.  Keep that resume input out of the
+    # immutable phase projection: the acknowledgement directory is durable on
+    # both calls and _cleanup_export_handoff separately validates exact retained
+    # chronology equality against those acknowledgements.
+    chronology_count = len(acknowledgement_members)
 
     frozen_path = control_root / "frozen-run-manifest.json"
     postfreeze_path = control_root / "postfreeze-validation.json"
@@ -5418,6 +5423,7 @@ def derive_cleanup_export_phase(
         or completion_members
         or archive_members
         or chronology_count
+        or bool(retained_chronology_projection)
         or retained_pending is not None
     )
     if postfreeze_present != manifest_present or (preflight_present and not postfreeze_present):
