@@ -268,13 +268,13 @@ def test_retry3_exact_clean_package_is_host_verifiable() -> None:
     assert (
         command_document["reviewed_implementation_ancestor"]
         == (
-                json.loads(
-                    host.contract_paths(ROOT, V13_PROVIDER_CONTRACT)["runtime"].read_text(
-                        encoding="utf-8"
-                    )
-                )["repository_instrumentation"]["reviewed_implementation_ancestor"]
-            )
+            json.loads(
+                host.contract_paths(ROOT, V13_PROVIDER_CONTRACT)["runtime"].read_text(
+                    encoding="utf-8"
+                )
+            )["repository_instrumentation"]["reviewed_implementation_ancestor"]
         )
+    )
     assert len(command_document["manifests"]) == 4
     assert all(item["valid"] is True for item in command_document["pair_diffs"])
 
