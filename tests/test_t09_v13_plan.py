@@ -89,7 +89,7 @@ def test_v13_plan_schema_package_and_false_flags_are_exact() -> None:
     Draft202012Validator.check_schema(schema)
     Draft202012Validator(schema).validate(plan)
     assert PLAN.stat().st_size == 18_102
-    assert _sha256(PLAN) == "46778e48f8ef691eec89d7f1195bd98534271311c11b59e7346849f72b36cea8"
+    assert _sha256(PLAN) == "87fbdfdb6375b4ba39f6eed2224768619ccee6b54090e43d9c84a568d2ea1957"
     assert validate_t09_v13_plan(ROOT) == []
     assert plan["plan_id"] == V13_PROVIDER_CONTRACT.plan_id
     status = cast(dict[str, object], plan["status"])
