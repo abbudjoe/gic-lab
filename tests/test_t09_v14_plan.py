@@ -176,7 +176,7 @@ def test_v14_commands_bind_selector_and_both_pair_diffs_are_valid() -> None:
     assert all(pair["required_equality_surface_equal"] is True for pair in commands["pair_diffs"])
 
 
-def test_v14_plan_binds_reviewed_sources_artifacts_and_stopped_v13_record() -> None:
+def test_v14_plan_binds_current_sources_artifacts_and_stopped_v13_record() -> None:
     bindings = cast(dict[str, object], _load_plan()["implementation_bindings"])
     reviewed_ancestor = str(bindings["reviewed_implementation_ancestor"])
     specifications = {
