@@ -690,7 +690,7 @@ def _require_supported_provider_runner(
 ) -> None:
     """Prevent this runner from relabeling evidence from an unsupported package."""
 
-    if contract.version not in {"V11", "V12", "V13"}:
+    if contract.version not in {"V11", "V12", "V13", "V14"}:
         raise T09HostError(f"{label} requires its frozen provider runner")
 
 
@@ -7806,7 +7806,7 @@ def validate_model_metadata_receipt_offline(
     package_tree = output(["git", "-C", str(repository), "rev-parse", f"{package_commit}^{{tree}}"])
     if re.fullmatch(r"[a-f0-9]{40}", package_tree) is None:
         raise T09HostError("package tree identity is malformed")
-    if contract.version not in {"V12", "V13"}:
+    if contract.version not in {"V12", "V13", "V14"}:
         raise T09HostError("selected contract has no durable model metadata receipt")
     paths = contract_paths(repository, contract)
     expected_receipt_sha256 = provider_entry.get("model_metadata_receipt_sha256")
@@ -8081,7 +8081,7 @@ def write_frozen_run_manifest(
     paths = _contract_paths_for(repository, campaign_contract)
     manifest_id = cast(str, campaign_contract.frozen_run_manifest_id)
     qualification_id = cast(str, campaign_contract.active_image_qualification_id)
-    if campaign_contract.version in {"V12", "V13"} and (
+    if campaign_contract.version in {"V12", "V13", "V14"} and (
         not isinstance(model_receipt.get("receipt_sha256"), str)
         or _HEX64.fullmatch(cast(str, model_receipt["receipt_sha256"])) is None
         or model_receipt.get("model_metadata_network_requests") != 0
@@ -8261,14 +8261,14 @@ def write_frozen_run_manifest(
         "final_image_file_hashes_sha256": canonical_sha256(file_hashes),
         "model_metadata_receipt_sha256": (
             model_receipt.get("receipt_sha256")
-            if campaign_contract.version in {"V12", "V13"}
+            if campaign_contract.version in {"V12", "V13", "V14"}
             else canonical_sha256(model_receipt)
         ),
         "model_metadata_credential_scan_sha256": canonical_sha256(model_credential_scan_receipt),
         "model_metadata_request_count": 1,
         **(
             {"model_metadata_network_requests": 0}
-            if campaign_contract.version in {"V12", "V13"}
+            if campaign_contract.version in {"V12", "V13", "V14"}
             else {}
         ),
         "model_task_request_count": 0,
@@ -8354,7 +8354,7 @@ def write_frozen_run_manifest(
                         _pilot_root(artifact_root) / "model-metadata-receipt-acknowledgement.json"
                     )
                 }
-                if campaign_contract.version in {"V12", "V13"}
+                if campaign_contract.version in {"V12", "V13", "V14"}
                 else {}
             ),
             "static_real_evidence_regression": file_sha256(paths["real_regression"]),
@@ -8451,7 +8451,7 @@ def load_frozen_run_manifest(
         _pilot_root(artifact_root) / "model-metadata-receipt-acknowledgement.json"
     )
     model_metadata_ack: dict[str, Any] | None = None
-    if runtime_contract.version in {"V12", "V13"}:
+    if runtime_contract.version in {"V12", "V13", "V14"}:
         model_metadata_ack = load_object(
             model_metadata_ack_path,
             label="model metadata receipt acknowledgement",
@@ -8756,7 +8756,7 @@ def load_frozen_run_manifest(
         or source_receipts.get("post_metadata_complete_core_gate")
         != file_sha256(post_metadata_core_gate_path)
         or (
-            runtime_contract.version in {"V12", "V13"}
+            runtime_contract.version in {"V12", "V13", "V14"}
             and (
                 model_metadata_ack is None
                 or source_receipts.get("model_metadata_receipt_acknowledgement")
@@ -10103,7 +10103,7 @@ def preflight(args: argparse.Namespace) -> None:
     # V11 retains its historical one-request container gate. V12 consumes the
     # provider's already sealed receipt at this boundary and cannot fall back to
     # that network path.
-    if dynamic_contract.version in {"V12", "V13"}:
+    if dynamic_contract.version in {"V12", "V13", "V14"}:
         explicit_receipt_path = getattr(args, "model_metadata_receipt", None)
         if explicit_receipt_path is not None and not isinstance(explicit_receipt_path, Path):
             raise T09HostError("V12 model metadata receipt argument is malformed")
@@ -10209,7 +10209,7 @@ def preflight(args: argparse.Namespace) -> None:
                     "model_metadata_network_requests": 0,
                     "model_metadata_receipt_sha256": dynamic.get("model_metadata_receipt_sha256"),
                 }
-                if dynamic_contract.version in {"V12", "V13"}
+                if dynamic_contract.version in {"V12", "V13", "V14"}
                 else {}
             ),
             "model_metadata_credential_scan_sha256": file_sha256(
@@ -10314,7 +10314,7 @@ def preflight(args: argparse.Namespace) -> None:
                     "model_metadata_network_requests": 0,
                     "model_metadata_receipt_sha256": dynamic.get("model_metadata_receipt_sha256"),
                 }
-                if dynamic_contract.version in {"V12", "V13"}
+                if dynamic_contract.version in {"V12", "V13", "V14"}
                 else {}
             ),
             "model_task_request_count": 0,
@@ -15793,7 +15793,7 @@ def validate_postfreeze_entry_receipts(
         or postfreeze.get("model_metadata_request_count") != 1
         or (
             provider_contract_for_plan_id(cast(str, frozen_manifest.get("plan_id"))).version
-            in {"V12", "V13"}
+            in {"V12", "V13", "V14"}
             and (
                 preflight_receipt.get("model_metadata_network_requests") != 0
                 or postfreeze.get("model_metadata_network_requests") != 0
@@ -21514,7 +21514,7 @@ def verify_inbound(args: argparse.Namespace) -> None:
         identity.get("stage_id") != stage_id
         or identity.get("archive_id") != archive_id
         or (
-            inbound_contract.version in {"V12", "V13"}
+            inbound_contract.version in {"V12", "V13", "V14"}
             and (
                 identity.get("plan_id") != inbound_contract.plan_id
                 or identity.get("host_run_id") != inbound_contract.host_run_id

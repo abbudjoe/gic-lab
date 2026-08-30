@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
 from collections.abc import Iterator
 from pathlib import Path
 from typing import cast
@@ -164,8 +165,9 @@ def test_v13_commands_bind_selector_and_both_pair_diffs_are_valid() -> None:
     assert all(pair["required_equality_surface_equal"] is True for pair in commands["pair_diffs"])
 
 
-def test_v13_plan_binds_current_sources_artifacts_and_stopped_v12_record() -> None:
+def test_v13_plan_binds_reviewed_sources_artifacts_and_stopped_v12_record() -> None:
     bindings = cast(dict[str, object], _load_plan()["implementation_bindings"])
+    reviewed_ancestor = str(bindings["reviewed_implementation_ancestor"])
     specifications = {
         "provider_accounting": (("path", "sha256"), ("regression_path", "regression_sha256")),
         "offline_refinalization": (
@@ -212,7 +214,17 @@ def test_v13_plan_binds_current_sources_artifacts_and_stopped_v12_record() -> No
     for group_name, fields in specifications.items():
         group = cast(dict[str, object], bindings[group_name])
         for path_field, hash_field in fields:
-            assert _sha256(ROOT / str(group[path_field])) == group[hash_field]
+            relative = str(group[path_field])
+            if relative.endswith(".py"):
+                encoded = subprocess.run(
+                    ["git", "show", f"{reviewed_ancestor}:{relative}"],
+                    cwd=ROOT,
+                    check=True,
+                    capture_output=True,
+                ).stdout
+                assert hashlib.sha256(encoded).hexdigest() == group[hash_field]
+            else:
+                assert _sha256(ROOT / relative) == group[hash_field]
     stopped = cast(dict[str, object], bindings["v12_stopped_disposition"])
     assert stopped == {
         "path": STOPPED.relative_to(ROOT).as_posix(),
