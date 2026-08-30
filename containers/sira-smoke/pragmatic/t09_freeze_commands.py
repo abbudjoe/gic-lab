@@ -81,7 +81,7 @@ def render(repository: Path, *, provider_version: str) -> dict[str, object]:
                 "model_metadata_receipt_required": True,
                 "model_metadata_receipt_replay_allowed": False,
             }
-            if contract.provider_contract_version in {"V12", "V13", "V14"}
+            if contract.provider_contract_version in {"V12", "V13", "V14", "V15"}
             else {}
         ),
         "schema_version": "0.1.0",
@@ -99,7 +99,7 @@ def render(repository: Path, *, provider_version: str) -> dict[str, object]:
         "manifests": manifests,
         "pair_diffs": pair_diffs,
     }
-    if contract_identity.version in {"V13", "V14"}:
+    if contract_identity.version in {"V13", "V14", "V15"}:
         rendered["local_finalizer_qualification_selector"] = {
             "argument": "--provider-contract",
             "value": contract_identity.version,

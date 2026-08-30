@@ -81,7 +81,7 @@ from giclab.harness.t09_provider_contracts import (
     provider_contract,
 )
 
-_MODEL_METADATA_RECEIPT_CONTRACT_VERSIONS: Final = frozenset({"V12", "V13", "V14"})
+_MODEL_METADATA_RECEIPT_CONTRACT_VERSIONS: Final = frozenset({"V12", "V13", "V14", "V15"})
 
 
 def _uses_model_metadata_receipt(contract: T09ProviderContract) -> bool:
@@ -342,7 +342,7 @@ class CampaignLifecycle:
             expected_limits = AutonomousPilotLifecycleLimits(
                 maximum_preflight_provider_cost_cents=2_000
             )
-        elif self.contract.version in {"V9", "V10", "V11", "V12", "V13", "V14"}:
+        elif self.contract.version in {"V9", "V10", "V11", "V12", "V13", "V14", "V15"}:
             expected_limits = AutonomousPilotLifecycleLimits()
         else:  # pragma: no cover - contracts validate supported versions before construction
             raise T09ProviderError("unsupported provider lifecycle contract")
@@ -1005,7 +1005,16 @@ def load_campaign_lifecycle(
             persistent_filesystems=retry_limits.persistent_filesystems,
         )
 
-    if contract.version not in {"V8", "V9", "V10", "V11", "V12", "V13", "V14"}:
+    if contract.version not in {
+        "V8",
+        "V9",
+        "V10",
+        "V11",
+        "V12",
+        "V13",
+        "V14",
+        "V15",
+    }:
         raise T09ProviderError("provider lifecycle contract is unsupported")
     lifecycle_fields = {
         "cumulative_accounting_origin",
@@ -1312,7 +1321,7 @@ def validate_cleanup_authority_ledger(
     resource.  This narrower validator intentionally omits all launch admission.
     """
 
-    if contract.version in {"V11", "V12", "V13", "V14"}:
+    if contract.version in {"V11", "V12", "V13", "V14", "V15"}:
         return validate_authorization_ledger(
             path,
             contract=contract,
