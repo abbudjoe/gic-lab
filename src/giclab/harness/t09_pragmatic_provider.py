@@ -51,6 +51,8 @@ from giclab.harness.t09_cleanup_state import (
     EarlyCleanupJournal,
     EarlyCleanupState,
     EarlyCleanupStateError,
+    EmpiricalEntryStatus,
+    TerminalCleanupDisposition,
 )
 from giclab.harness.t09_model_metadata_receipt import (
     MODEL_METADATA_PRELAUNCH_FRESHNESS_SECONDS,
@@ -133,6 +135,20 @@ SLOT1_REPLACEMENT_IMAGE_ID: Final = (
 SLOT1_QUALIFICATION_ID: Final = "QUAL-T09-PILOT-V5-IMAGE-0001"
 SLOT2_QUALIFICATION_ID: Final = "QUAL-T09-PILOT-V5-IMAGE-0002"
 SLOT2_ELIGIBILITY_KIND: Final = "post-closeout-built-image-slot1"
+PROVIDER_ENTRY_FAILED_PREEMPIRICAL_ELIGIBILITY_KIND: Final = "provider-entry-failed-preempirical"
+PROVIDER_ENTRY_AUTHORITY_ROOT_NAME: Final = "slot2-eligibility-source"
+PROVIDER_ENTRY_AUTHORITY_MANIFEST_SCHEMA_VERSION: Final = "1.0.0"
+PROVIDER_ENTRY_AUTHORITY_MAX_FILES: Final = 1_024
+PROVIDER_ENTRY_AUTHORITY_MAX_BYTES: Final = 67_108_864
+_PROVIDER_ENTRY_AUTHORITY_TOP_LEVEL_MEMBERS: Final = frozenset(
+    {
+        "entry-source",
+        "provisional-closeout-source",
+        "provisional-owned-state.json",
+        "PROVISIONAL_OWNER_CLOSED.json",
+        "preflight-cleanup-state",
+    }
+)
 SLOT2_MINIMUM_LAUNCH_REMAINING_SECONDS: Final = 4_500
 SLOT2_TRANSITION_ALLOWED_PATHS: Final = frozenset(
     {
@@ -381,6 +397,31 @@ class CampaignLifecycle:
         return self.elapsed(started_at_epoch=started_at_epoch, now_epoch=now_epoch) >= (
             self.termination_cutoff_seconds
         )
+
+
+@dataclass(frozen=True, slots=True)
+class ProviderEntryReplacementAuthority:
+    """Resolved direct or retained authority for one failed provider entry."""
+
+    authority_root: Path
+    entry_source: Path
+    provisional_closeout_source: Path
+    provisional_owned_state: Path
+    closed_owner_receipt: Path
+    early_cleanup_state: Path
+    source_private_root_identity_sha256: str
+    normalized_manifest_path: Path | None
+
+
+@dataclass(frozen=True, slots=True)
+class ProviderEntryReplacementNormalization:
+    """Exact hashes produced before a replacement may approach live authority."""
+
+    eligibility_kind: str
+    closed_launch_slot: int
+    normalized_authority_root: Path
+    normalized_manifest_sha256: str
+    source_evidence_manifest_sha256: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -2182,14 +2223,18 @@ def _provisional_owner_binding(
     instance_id: str,
     launch_slot: int,
     replacement_eligibility_sha256: str | None,
+    source_private_root_identity_sha256: str | None = None,
 ) -> dict[str, object]:
     """Bind one returned private ID before any active-state or receipt work."""
 
     owned_identity = _instance_identity_sha256(instance_id)
     capability = _load_json(capability_path, maximum_bytes=65_536)
-    expected_private_root_identity = _sha256_bytes(str(private_root.resolve(strict=True)).encode())
+    expected_private_root_identity = source_private_root_identity_sha256 or _sha256_bytes(
+        str(private_root.resolve(strict=True)).encode()
+    )
     if (
-        capability.get("plan_id") != contract.plan_id
+        _HEX64.fullmatch(expected_private_root_identity) is None
+        or capability.get("plan_id") != contract.plan_id
         or capability.get("host_run_id") != contract.host_run_id
         or capability.get("package_commit") != package_commit
         or capability.get("plan_sha256") != plan_sha256
@@ -2503,11 +2548,29 @@ def _cleanup_provisional_owner(
             duration = closed_at - started
             if duration < 0:
                 raise T09ProviderError("provisional closeout chronology moved backwards")
+            eligibility_path = private_root / "replacement-launch-eligibility.json"
+            if os.path.lexists(eligibility_path):
+                prior_eligibility_sha256 = provisional_binding.get("replacement_eligibility_sha256")
+                _require_private_file(
+                    eligibility_path,
+                    label="prior replacement eligibility",
+                )
+                if (
+                    not isinstance(prior_eligibility_sha256, str)
+                    or _HEX64.fullmatch(prior_eligibility_sha256) is None
+                    or file_sha256(eligibility_path) != prior_eligibility_sha256
+                ):
+                    raise T09ProviderError(
+                        "prior replacement eligibility changed before provider closeout"
+                    )
+                eligibility_path = (
+                    private_root / f"replacement-launch-eligibility-slot-{launch_slot}.json"
+                )
             write_exclusive(
-                private_root / "replacement-launch-eligibility.json",
+                eligibility_path,
                 {
                     "schema_version": "0.1.0",
-                    "eligibility_kind": "provider-entry-failed-preempirical",
+                    "eligibility_kind": (PROVIDER_ENTRY_FAILED_PREEMPIRICAL_ELIGIBILITY_KIND),
                     "plan_id": contract.plan_id,
                     "host_run_id": contract.host_run_id,
                     "package_commit": provisional_binding["package_commit"],
@@ -2955,6 +3018,42 @@ def _entry_projection(
         or _HEX64.fullmatch(normalized_authority_tree_manifest_sha256) is None
     ):
         raise T09ProviderError("replacement launch lacks its two typed authority hashes")
+    if launch_slot > 1:
+        retained_eligibility_path = root.parent / "replacement-launch-eligibility.json"
+        retained_authority_manifest_path = (
+            root.parent / PROVIDER_ENTRY_AUTHORITY_ROOT_NAME / "source-manifest.json"
+        )
+        _require_private_file(
+            retained_eligibility_path,
+            label="retained replacement eligibility",
+        )
+        _require_private_file(
+            retained_authority_manifest_path,
+            label="retained replacement authority manifest",
+        )
+        if (
+            file_sha256(retained_eligibility_path) != eligibility_sha256
+            or file_sha256(retained_authority_manifest_path)
+            != normalized_authority_tree_manifest_sha256
+        ):
+            raise T09ProviderError("replacement campaign hashes do not match retained evidence")
+        retained_eligibility = _load_json(
+            retained_eligibility_path,
+            maximum_bytes=262_144,
+        )
+        if retained_eligibility.get("eligibility_kind") == (
+            PROVIDER_ENTRY_FAILED_PREEMPIRICAL_ELIGIBILITY_KIND
+        ):
+            _validate_provider_entry_campaign_authority_binding(
+                root.parent,
+                contract=contract,
+                package_commit=package_commit,
+                plan_sha256=plan_sha256,
+                closed_launch_slot=launch_slot - 1,
+                eligibility_sha256=eligibility_sha256,
+                source_manifest_sha256=cast(str, eligibility_source_manifest_sha256),
+                normalized_manifest_sha256=normalized_authority_tree_manifest_sha256,
+            )
     result: dict[str, object] = {
         "schema_version": "0.1.0",
         "receipt_type": "t09-pragmatic-provider-entry",
@@ -4898,6 +4997,712 @@ def _copy_slot2_authority_tree(source: Path, destination: Path) -> None:
         target.chmod(0o600)
 
 
+def _require_private_directory(path: Path, *, label: str) -> None:
+    try:
+        metadata = path.stat(follow_symlinks=False)
+    except OSError as exc:
+        raise T09ProviderError(f"{label} is unavailable") from exc
+    if (
+        path.is_symlink()
+        or not stat.S_ISDIR(metadata.st_mode)
+        or metadata.st_uid != os.getuid()
+        or stat.S_IMODE(metadata.st_mode) != 0o700
+    ):
+        raise T09ProviderError(f"{label} is unsafe")
+
+
+def _require_private_file(path: Path, *, label: str) -> os.stat_result:
+    try:
+        metadata = path.stat(follow_symlinks=False)
+    except OSError as exc:
+        raise T09ProviderError(f"{label} is unavailable") from exc
+    if (
+        path.is_symlink()
+        or not stat.S_ISREG(metadata.st_mode)
+        or metadata.st_uid != os.getuid()
+        or metadata.st_nlink != 1
+        or stat.S_IMODE(metadata.st_mode) != 0o600
+    ):
+        raise T09ProviderError(f"{label} is unsafe")
+    return metadata
+
+
+def _source_bundle_authority_files(
+    root: Path,
+    *,
+    contract: T09ProviderContract,
+    label: str,
+) -> tuple[Path, ...]:
+    """Validate one flat provider source bundle and return its exact files."""
+
+    _require_private_directory(root, label=label)
+    manifest = validate_source_manifest(root, contract=contract)
+    raw_files = manifest.get("files")
+    if not isinstance(raw_files, list):  # pragma: no cover - produced by _manifest
+        raise T09ProviderError(f"{label} manifest is malformed")
+    declared: set[str] = set()
+    for raw in raw_files:
+        if not isinstance(raw, Mapping):
+            raise T09ProviderError(f"{label} manifest member is malformed")
+        relative = raw.get("path")
+        if (
+            not isinstance(relative, str)
+            or not relative
+            or Path(relative).name != relative
+            or relative in declared
+        ):
+            raise T09ProviderError(f"{label} manifest member path is unsafe")
+        declared.add(relative)
+    expected = declared | {"source-manifest.json"}
+    observed: set[str] = set()
+    files: list[Path] = []
+    for member in root.iterdir():
+        if member.is_dir():
+            raise T09ProviderError(f"{label} contains an unknown directory")
+        _require_private_file(member, label=f"{label} member")
+        observed.add(member.name)
+        files.append(member)
+    if observed != expected:
+        raise T09ProviderError(f"{label} member set drifted")
+    return tuple(sorted(files))
+
+
+def _early_cleanup_authority_files(
+    root: Path,
+    *,
+    contract: T09ProviderContract,
+    package_commit: str,
+    plan_sha256: str,
+    closed_launch_slot: int,
+) -> tuple[Path, ...]:
+    """Validate the complete immutable cleanup journal for one closed owner."""
+
+    _require_private_directory(root, label="provider-entry early cleanup authority")
+    lock = root / ".lock"
+    versions = root / "versions"
+    _require_private_file(lock, label="provider-entry cleanup lock")
+    _require_private_directory(versions, label="provider-entry cleanup versions")
+    try:
+        state = EarlyCleanupJournal(root).load()
+    except EarlyCleanupStateError as exc:
+        raise T09ProviderError("provider-entry cleanup authority is invalid") from exc
+    if (
+        state.plan_id != contract.plan_id
+        or state.host_run_id != contract.host_run_id
+        or state.package_commit != package_commit
+        or state.plan_sha256 != plan_sha256
+        or state.launch_slot != closed_launch_slot
+        or state.empirical_entry_status is not EmpiricalEntryStatus.NOT_ENTERED
+        or state.terminal_cleanup_disposition is not TerminalCleanupDisposition.COMPLETE
+        or state.provider_instance_identity_sha256
+        != _instance_identity_sha256(state.provider_instance_id)
+    ):
+        raise T09ProviderError("provider-entry cleanup authority identity drifted")
+    expected_versions = {f"{sequence:08d}.json" for sequence in range(1, state.sequence + 1)}
+    observed_versions: set[str] = set()
+    files: list[Path] = [lock]
+    for member in versions.iterdir():
+        if member.is_dir():
+            raise T09ProviderError("provider-entry cleanup versions contain a directory")
+        _require_private_file(member, label="provider-entry cleanup version")
+        observed_versions.add(member.name)
+        files.append(member)
+    if set(root.iterdir()) != {lock, versions} or observed_versions != expected_versions:
+        raise T09ProviderError("provider-entry cleanup authority member set drifted")
+    return tuple(sorted(files))
+
+
+def _provider_entry_authority_files(
+    authority: ProviderEntryReplacementAuthority,
+    *,
+    contract: T09ProviderContract,
+    package_commit: str,
+    plan_sha256: str,
+    closed_launch_slot: int,
+    require_exact_root_members: bool,
+) -> tuple[Path, ...]:
+    """Return the bounded exact provider-entry closure after full safety checks."""
+
+    root = authority.authority_root
+    _require_private_directory(root, label="provider-entry replacement authority root")
+    files = [
+        *_source_bundle_authority_files(
+            authority.entry_source,
+            contract=contract,
+            label="provider-entry source",
+        ),
+        *_source_bundle_authority_files(
+            authority.provisional_closeout_source,
+            contract=contract,
+            label="provider-entry provisional closeout source",
+        ),
+        *_early_cleanup_authority_files(
+            authority.early_cleanup_state,
+            contract=contract,
+            package_commit=package_commit,
+            plan_sha256=plan_sha256,
+            closed_launch_slot=closed_launch_slot,
+        ),
+    ]
+    for path, label in (
+        (authority.provisional_owned_state, "provider-entry provisional owner"),
+        (authority.closed_owner_receipt, "provider-entry closed-owner receipt"),
+    ):
+        _require_private_file(path, label=label)
+        files.append(path)
+    if require_exact_root_members:
+        expected = set(_PROVIDER_ENTRY_AUTHORITY_TOP_LEVEL_MEMBERS)
+        if authority.normalized_manifest_path is not None:
+            expected.add("source-manifest.json")
+        if {member.name for member in root.iterdir()} != expected:
+            raise T09ProviderError("normalized provider-entry authority member set drifted")
+    total = sum(path.stat(follow_symlinks=False).st_size for path in files)
+    if len(files) > PROVIDER_ENTRY_AUTHORITY_MAX_FILES:
+        raise T09ProviderError("provider-entry authority exceeds its file-count cap")
+    if total > PROVIDER_ENTRY_AUTHORITY_MAX_BYTES:
+        raise T09ProviderError("provider-entry authority exceeds its byte cap")
+    return tuple(sorted(files))
+
+
+def _provider_entry_authority_tree_manifest(
+    authority: ProviderEntryReplacementAuthority,
+    *,
+    contract: T09ProviderContract,
+    package_commit: str,
+    plan_sha256: str,
+    closed_launch_slot: int,
+) -> dict[str, object]:
+    _provider_entry_authority_files(
+        authority,
+        contract=contract,
+        package_commit=package_commit,
+        plan_sha256=plan_sha256,
+        closed_launch_slot=closed_launch_slot,
+        require_exact_root_members=True,
+    )
+    base = _slot2_authority_tree_manifest(authority.authority_root, contract=contract)
+    return {
+        **base,
+        "authority_schema_version": PROVIDER_ENTRY_AUTHORITY_MANIFEST_SCHEMA_VERSION,
+        "authority_type": PROVIDER_ENTRY_FAILED_PREEMPIRICAL_ELIGIBILITY_KIND,
+        "closed_launch_slot": closed_launch_slot,
+        "source_private_root_identity_sha256": (authority.source_private_root_identity_sha256),
+    }
+
+
+def _provider_entry_authority_for_root(
+    root: Path,
+    *,
+    source_private_root_identity_sha256: str,
+    normalized_manifest_path: Path | None,
+) -> ProviderEntryReplacementAuthority:
+    if _HEX64.fullmatch(source_private_root_identity_sha256) is None:
+        raise T09ProviderError("provider-entry source root identity is malformed")
+    return ProviderEntryReplacementAuthority(
+        authority_root=root,
+        entry_source=root / "entry-source",
+        provisional_closeout_source=root / "provisional-closeout-source",
+        provisional_owned_state=root / "provisional-owned-state.json",
+        closed_owner_receipt=root / "PROVISIONAL_OWNER_CLOSED.json",
+        early_cleanup_state=root / "preflight-cleanup-state",
+        source_private_root_identity_sha256=source_private_root_identity_sha256,
+        normalized_manifest_path=normalized_manifest_path,
+    )
+
+
+def _validate_normalized_provider_entry_authority(
+    root: Path,
+    *,
+    contract: T09ProviderContract,
+    package_commit: str,
+    plan_sha256: str,
+) -> tuple[ProviderEntryReplacementAuthority, int]:
+    _require_private_directory(root, label="normalized provider-entry authority root")
+    manifest_path = root / "source-manifest.json"
+    _require_private_file(manifest_path, label="normalized provider-entry authority manifest")
+    observed = _load_json(manifest_path, maximum_bytes=1_048_576)
+    closed_slot = _integer(observed.get("closed_launch_slot"), label="closed launch slot")
+    source_identity = observed.get("source_private_root_identity_sha256")
+    if (
+        observed.get("authority_schema_version") != PROVIDER_ENTRY_AUTHORITY_MANIFEST_SCHEMA_VERSION
+        or observed.get("authority_type") != PROVIDER_ENTRY_FAILED_PREEMPIRICAL_ELIGIBILITY_KIND
+        or closed_slot not in range(1, contract.max_launch_count)
+        or not isinstance(source_identity, str)
+        or _HEX64.fullmatch(source_identity) is None
+    ):
+        raise T09ProviderError("normalized provider-entry authority manifest is malformed")
+    authority = _provider_entry_authority_for_root(
+        root,
+        source_private_root_identity_sha256=source_identity,
+        normalized_manifest_path=manifest_path,
+    )
+    expected = _provider_entry_authority_tree_manifest(
+        authority,
+        contract=contract,
+        package_commit=package_commit,
+        plan_sha256=plan_sha256,
+        closed_launch_slot=closed_slot,
+    )
+    if observed != expected:
+        raise T09ProviderError("normalized provider-entry authority manifest drifted")
+    return authority, closed_slot
+
+
+def _resolve_provider_entry_replacement_authority(
+    root: Path,
+    *,
+    contract: T09ProviderContract,
+    package_commit: str,
+    plan_sha256: str,
+    closed_launch_slot: int,
+) -> ProviderEntryReplacementAuthority:
+    """Resolve the current direct closure or its exact normalized retained copy."""
+
+    direct = _provider_entry_authority_for_root(
+        root,
+        source_private_root_identity_sha256=_sha256_bytes(str(root.resolve(strict=True)).encode()),
+        normalized_manifest_path=None,
+    )
+    direct_presence = [
+        os.path.lexists(root / member) for member in _PROVIDER_ENTRY_AUTHORITY_TOP_LEVEL_MEMBERS
+    ]
+    direct_complete = all(direct_presence)
+    normalized_root = root / PROVIDER_ENTRY_AUTHORITY_ROOT_NAME
+    normalized: ProviderEntryReplacementAuthority | None = None
+    normalized_slot: int | None = None
+    if os.path.lexists(normalized_root):
+        normalized, normalized_slot = _validate_normalized_provider_entry_authority(
+            normalized_root,
+            contract=contract,
+            package_commit=package_commit,
+            plan_sha256=plan_sha256,
+        )
+    if direct_complete:
+        _provider_entry_authority_files(
+            direct,
+            contract=contract,
+            package_commit=package_commit,
+            plan_sha256=plan_sha256,
+            closed_launch_slot=closed_launch_slot,
+            require_exact_root_members=False,
+        )
+        if normalized_slot == closed_launch_slot:
+            raise T09ProviderError("provider-entry authority layout is ambiguous")
+        return direct
+    if normalized is not None and normalized_slot == closed_launch_slot:
+        return normalized
+    if any(direct_presence):
+        raise T09ProviderError("direct provider-entry authority is partial")
+    raise T09ProviderError("provider-entry replacement authority is unavailable")
+
+
+def _copy_exact_private_file(source: Path, destination: Path, *, label: str) -> None:
+    """Copy one held regular file, preserving exact bytes and private modes."""
+
+    source_descriptor = os.open(source, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    target_descriptor: int | None = None
+    source_digest = hashlib.sha256()
+    target_digest = hashlib.sha256()
+    try:
+        before = os.fstat(source_descriptor)
+        if (
+            not stat.S_ISREG(before.st_mode)
+            or before.st_uid != os.getuid()
+            or before.st_nlink != 1
+            or stat.S_IMODE(before.st_mode) != 0o600
+        ):
+            raise T09ProviderError(f"{label} source is unsafe")
+        target_descriptor = os.open(
+            destination,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
+            0o600,
+        )
+        os.fchmod(target_descriptor, 0o600)
+        copied = 0
+        while chunk := os.read(source_descriptor, 1_048_576):
+            source_digest.update(chunk)
+            offset = 0
+            while offset < len(chunk):
+                written = os.write(target_descriptor, chunk[offset:])
+                if written <= 0:
+                    raise OSError("short authority copy")
+                target_digest.update(chunk[offset : offset + written])
+                offset += written
+                copied += written
+        after = os.fstat(source_descriptor)
+        if (
+            copied != before.st_size
+            or (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns)
+            != (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns)
+            or source_digest.digest() != target_digest.digest()
+        ):
+            raise T09ProviderError(f"{label} changed during held copy")
+        os.fsync(target_descriptor)
+    finally:
+        if target_descriptor is not None:
+            os.close(target_descriptor)
+        os.close(source_descriptor)
+    _require_private_file(destination, label=f"{label} retained copy")
+    if file_sha256(destination) != source_digest.hexdigest():
+        raise T09ProviderError(f"{label} retained copy hash mismatch")
+    _fsync_parent(destination)
+
+
+def _normalize_provider_entry_replacement_authority(
+    source_root: Path,
+    destination_root: Path,
+    *,
+    eligibility: Mapping[str, object],
+    contract: T09ProviderContract,
+    package_commit: str,
+    plan_sha256: str,
+) -> ProviderEntryReplacementNormalization:
+    """Copy and seal a provider-entry closure without touching live authority."""
+
+    if eligibility.get("eligibility_kind") != PROVIDER_ENTRY_FAILED_PREEMPIRICAL_ELIGIBILITY_KIND:
+        raise T09ProviderError("provider-entry normalizer received another eligibility kind")
+    closed_slot = _integer(eligibility.get("closed_launch_slot"), label="closed launch slot")
+    authority = _resolve_provider_entry_replacement_authority(
+        source_root,
+        contract=contract,
+        package_commit=package_commit,
+        plan_sha256=plan_sha256,
+        closed_launch_slot=closed_slot,
+    )
+    source_files = _provider_entry_authority_files(
+        authority,
+        contract=contract,
+        package_commit=package_commit,
+        plan_sha256=plan_sha256,
+        closed_launch_slot=closed_slot,
+        require_exact_root_members=authority.normalized_manifest_path is not None,
+    )
+    destination_root.mkdir(mode=0o700, exist_ok=False)
+    os.chmod(destination_root, 0o700)
+    _fsync_parent(destination_root)
+    for source in source_files:
+        relative = source.relative_to(authority.authority_root)
+        target = destination_root / relative
+        missing_parents = []
+        parent = target.parent
+        while parent != destination_root and not parent.exists():
+            missing_parents.append(parent)
+            parent = parent.parent
+        for directory in reversed(missing_parents):
+            directory.mkdir(mode=0o700, exist_ok=False)
+            os.chmod(directory, 0o700)
+            _fsync_parent(directory)
+        _copy_exact_private_file(source, target, label="provider-entry authority member")
+    normalized = _provider_entry_authority_for_root(
+        destination_root,
+        source_private_root_identity_sha256=(authority.source_private_root_identity_sha256),
+        normalized_manifest_path=None,
+    )
+    manifest = _provider_entry_authority_tree_manifest(
+        normalized,
+        contract=contract,
+        package_commit=package_commit,
+        plan_sha256=plan_sha256,
+        closed_launch_slot=closed_slot,
+    )
+    write_exclusive(destination_root / "source-manifest.json", manifest)
+    retained, retained_slot = _validate_normalized_provider_entry_authority(
+        destination_root,
+        contract=contract,
+        package_commit=package_commit,
+        plan_sha256=plan_sha256,
+    )
+    if retained_slot != closed_slot or retained.authority_root != destination_root:
+        raise T09ProviderError("provider-entry normalized authority changed after sealing")
+    manifest_sha256 = file_sha256(destination_root / "source-manifest.json")
+    return ProviderEntryReplacementNormalization(
+        eligibility_kind=PROVIDER_ENTRY_FAILED_PREEMPIRICAL_ELIGIBILITY_KIND,
+        closed_launch_slot=closed_slot,
+        normalized_authority_root=destination_root,
+        normalized_manifest_sha256=manifest_sha256,
+        source_evidence_manifest_sha256=manifest_sha256,
+    )
+
+
+def _retain_replacement_launch_authority(
+    *,
+    prior: Path,
+    prior_eligibility_path: Path,
+    private_root: Path,
+    replacement_eligibility: Mapping[str, object],
+    contract: T09ProviderContract,
+    repository: Path,
+    package_commit: str,
+    plan_sha256: str,
+    launch_slot: int,
+    slot1_image_archive: Path,
+) -> tuple[
+    ProviderEntryReplacementNormalization | None,
+    str,
+    str,
+]:
+    """Normalize, copy, and revalidate before credentials or provider authority."""
+
+    retained_source = private_root / PROVIDER_ENTRY_AUTHORITY_ROOT_NAME
+    replacement_normalization: ProviderEntryReplacementNormalization | None = None
+    try:
+        eligibility_kind = replacement_eligibility.get("eligibility_kind")
+        if eligibility_kind in {
+            RETRY4_SLOT2_ELIGIBILITY_KIND,
+            SLOT2_ELIGIBILITY_KIND,
+        }:
+            _copy_slot2_authority_tree(
+                prior / PROVIDER_ENTRY_AUTHORITY_ROOT_NAME,
+                retained_source,
+            )
+        elif eligibility_kind is None:
+            _retain_current_v7_slot2_authority(prior, retained_source)
+        elif eligibility_kind == PROVIDER_ENTRY_FAILED_PREEMPIRICAL_ELIGIBILITY_KIND:
+            replacement_normalization = _normalize_provider_entry_replacement_authority(
+                prior,
+                retained_source,
+                eligibility=replacement_eligibility,
+                contract=contract,
+                package_commit=package_commit,
+                plan_sha256=plan_sha256,
+            )
+        else:
+            raise T09ProviderError("replacement eligibility kind is unsupported")
+        retained_eligibility = private_root / "replacement-launch-eligibility.json"
+        _copy_exact_private_file(
+            prior_eligibility_path,
+            retained_eligibility,
+            label="replacement eligibility receipt",
+        )
+        retained = _validate_replacement_launch_eligibility(
+            private_root,
+            contract=contract,
+            repository=repository,
+            package_commit=package_commit,
+            slot1_image_archive=slot1_image_archive,
+        )
+        if retained != dict(replacement_eligibility):
+            raise T09ProviderError("retained slot-2 eligibility changed during copy")
+        normalized_manifest_sha256 = file_sha256(retained_source / "source-manifest.json")
+        if replacement_normalization is not None:
+            if (
+                replacement_normalization.closed_launch_slot != launch_slot - 1
+                or replacement_normalization.normalized_authority_root != retained_source
+                or replacement_normalization.normalized_manifest_sha256
+                != normalized_manifest_sha256
+            ):
+                raise T09ProviderError("provider-entry normalization binding drifted")
+            source_manifest_sha256 = replacement_normalization.source_evidence_manifest_sha256
+        else:
+            candidate_source_manifest_sha256 = replacement_eligibility.get("source_manifest_sha256")
+            if (
+                not isinstance(candidate_source_manifest_sha256, str)
+                or _HEX64.fullmatch(candidate_source_manifest_sha256) is None
+            ):
+                raise T09ProviderError("replacement eligibility lacks its source manifest")
+            source_manifest_sha256 = candidate_source_manifest_sha256
+        if (
+            _HEX64.fullmatch(source_manifest_sha256) is None
+            or _HEX64.fullmatch(normalized_manifest_sha256) is None
+        ):
+            raise T09ProviderError("replacement authority normalization lacks exact hashes")
+        return (
+            replacement_normalization,
+            source_manifest_sha256,
+            normalized_manifest_sha256,
+        )
+    except BaseException as exc:
+        with contextlib.suppress(BaseException):
+            failure = private_root / "REPLACEMENT_AUTHORITY_NORMALIZATION_FAILED.json"
+            if not os.path.lexists(failure):
+                write_exclusive(
+                    failure,
+                    {
+                        "schema_version": "1.0.0",
+                        "receipt_type": "t09-replacement-authority-normalization-failure",
+                        "plan_id": contract.plan_id,
+                        "host_run_id": contract.host_run_id,
+                        "package_commit": package_commit,
+                        "launch_slot": launch_slot,
+                        "eligibility_kind": replacement_eligibility.get("eligibility_kind"),
+                        "error_class": type(exc).__name__,
+                        "credential_loads": 0,
+                        "provider_requests": 0,
+                        "next_launch_capability_consumed": False,
+                        "accepted_as_launch_authority": False,
+                    },
+                )
+        raise
+
+
+def _validate_provider_entry_replacement_document(
+    value: Mapping[str, object],
+    authority: ProviderEntryReplacementAuthority,
+    *,
+    contract: T09ProviderContract,
+    package_commit: str,
+    plan_sha256: str,
+    closed_launch_slot: int,
+) -> dict[str, object]:
+    """Reconstruct one semantic eligibility from either exact authority layout."""
+
+    provisional = _load_source_validated_provisional_owner(
+        authority.authority_root,
+        contract=contract,
+        package_commit=package_commit,
+        plan_sha256=plan_sha256,
+        source_private_root_identity_sha256=(authority.source_private_root_identity_sha256),
+    )
+    entry_manifest = validate_source_manifest(authority.entry_source, contract=contract)
+    closeout_manifest = validate_source_manifest(
+        authority.provisional_closeout_source,
+        contract=contract,
+    )
+    closed = _load_json(authority.closed_owner_receipt, maximum_bytes=65_536)
+    cleanup = EarlyCleanupJournal(authority.early_cleanup_state).load()
+    started = _number(
+        provisional.get("lambda_started_at_epoch"), label="provisional campaign start"
+    )
+    closed_at = _number(closed.get("closed_at_epoch"), label="provisional close time")
+    duration = closed_at - started
+    expected = {
+        "schema_version": "0.1.0",
+        "eligibility_kind": PROVIDER_ENTRY_FAILED_PREEMPIRICAL_ELIGIBILITY_KIND,
+        "plan_id": contract.plan_id,
+        "host_run_id": contract.host_run_id,
+        "package_commit": package_commit,
+        "closed_launch_slot": closed_launch_slot,
+        "entry_source_manifest_sha256": file_sha256(
+            authority.entry_source / "source-manifest.json"
+        ),
+        "provisional_closeout_manifest_sha256": file_sha256(
+            authority.provisional_closeout_source / "source-manifest.json"
+        ),
+        "campaign_started_at_epoch": started,
+        "prior_lambda_duration_seconds": duration,
+        "prior_lambda_cost_usd": duration * PRICE_CENTS_PER_HOUR / 100 / 3600.0,
+        "empirical_attempts_entered": 0,
+        "model_task_requests": 0,
+        "task_browser_actions": 0,
+        "replacement_image_build_count": 0,
+        "slot2_image_archive_sha256": SLOT1_IMAGE_ARCHIVE_SHA256,
+        "slot2_image_archive_bytes": SLOT1_IMAGE_ARCHIVE_BYTES,
+        "slot2_expected_image_id": SLOT1_REPLACEMENT_IMAGE_ID,
+        "slot2_image_import_required": True,
+        "slot2_additional_image_build_count": 0,
+        "terminal_or_absent": True,
+        "zero_t09_instances": True,
+        "security_restored": True,
+        "second_launch_permitted": True,
+    }
+    closed_fields = {
+        "schema_version",
+        "plan_id",
+        "host_run_id",
+        "private_instance_id",
+        "owned_instance_identity_sha256",
+        "instance_name",
+        "provider_disposition",
+        "zero_t09_instances",
+        "security_restored",
+        "source_manifest_sha256",
+        "source_bundle_bytes",
+        "launch_capability_state",
+        "replacement_launch_eligibility_pending",
+        "private_operational_state_not_for_archive",
+        "closed_at_epoch",
+    }
+    cleanup_targets = {target.target_id: target for target in cleanup.targets}
+    if (
+        dict(value) != expected
+        or not entry_manifest
+        or not closeout_manifest
+        or provisional.get("launch_slot") != closed_launch_slot
+        or not _provisional_replacement_permitted(
+            contract,
+            launch_slot=closed_launch_slot,
+        )
+        or set(closed) != closed_fields
+        or closed.get("schema_version") != "0.1.0"
+        or closed.get("plan_id") != contract.plan_id
+        or closed.get("host_run_id") != contract.host_run_id
+        or closed.get("private_instance_id") != provisional.get("private_instance_id")
+        or closed.get("owned_instance_identity_sha256")
+        != provisional.get("owned_instance_identity_sha256")
+        or closed.get("instance_name") != contract.instance_name
+        or closed.get("provider_disposition") != "absent"
+        or closed.get("zero_t09_instances") is not True
+        or closed.get("security_restored") is not True
+        or closed.get("source_manifest_sha256")
+        != file_sha256(authority.provisional_closeout_source / "source-manifest.json")
+        or closed.get("source_bundle_bytes") != closeout_manifest.get("total_bytes")
+        or closed.get("launch_capability_state") != "consumed-closed"
+        or closed.get("replacement_launch_eligibility_pending") is not True
+        or closed.get("private_operational_state_not_for_archive") is not True
+        or cleanup.provider_instance_id != provisional.get("private_instance_id")
+        or cleanup.provider_instance_identity_sha256
+        != provisional.get("owned_instance_identity_sha256")
+        or cleanup.empirical_entry_status is not EmpiricalEntryStatus.NOT_ENTERED
+        or cleanup.terminal_cleanup_disposition is not TerminalCleanupDisposition.COMPLETE
+        or cleanup_targets.get("provider-instance") is None
+        or cleanup_targets["provider-instance"].state is not CleanupTargetState.ABSENT
+        or cleanup_targets.get("firewall-restoration") is None
+        or cleanup_targets["firewall-restoration"].state is not CleanupTargetState.RESTORED
+        or duration < 0
+        or duration * PRICE_CENTS_PER_HOUR / 100 / 3600.0 >= contract.preflight_lambda_cost_cap_usd
+    ):
+        raise T09ProviderError("provisional replacement eligibility drifted")
+    return dict(value)
+
+
+def _validate_provider_entry_campaign_authority_binding(
+    private_root: Path,
+    *,
+    contract: T09ProviderContract,
+    package_commit: str,
+    plan_sha256: str,
+    closed_launch_slot: int,
+    eligibility_sha256: str,
+    source_manifest_sha256: str,
+    normalized_manifest_sha256: str,
+) -> None:
+    """Reconstruct the three provider-entry hashes from retained exact evidence."""
+
+    eligibility_path = private_root / "replacement-launch-eligibility.json"
+    _require_private_file(eligibility_path, label="retained replacement eligibility")
+    eligibility = _load_json(eligibility_path, maximum_bytes=262_144)
+    if (
+        eligibility.get("eligibility_kind") != PROVIDER_ENTRY_FAILED_PREEMPIRICAL_ELIGIBILITY_KIND
+        or eligibility.get("closed_launch_slot") != closed_launch_slot
+        or file_sha256(eligibility_path) != eligibility_sha256
+    ):
+        raise T09ProviderError("retained provider-entry eligibility binding drifted")
+    authority = _resolve_provider_entry_replacement_authority(
+        private_root,
+        contract=contract,
+        package_commit=package_commit,
+        plan_sha256=plan_sha256,
+        closed_launch_slot=closed_launch_slot,
+    )
+    _validate_provider_entry_replacement_document(
+        eligibility,
+        authority,
+        contract=contract,
+        package_commit=package_commit,
+        plan_sha256=plan_sha256,
+        closed_launch_slot=closed_launch_slot,
+    )
+    manifest_path = authority.normalized_manifest_path
+    if manifest_path is None:
+        raise T09ProviderError("campaign provider-entry authority is not normalized")
+    observed_manifest_sha256 = file_sha256(manifest_path)
+    if (
+        source_manifest_sha256 != observed_manifest_sha256
+        or normalized_manifest_sha256 != observed_manifest_sha256
+    ):
+        raise T09ProviderError("campaign provider-entry authority hashes drifted")
+
+
 def _current_v7_slot2_authority_paths(
     root: Path,
 ) -> tuple[Path, Path, Path]:
@@ -5422,6 +6227,24 @@ def _read_public_file(path: Path, *, maximum_bytes: int) -> str:
     return path.read_text(encoding="utf-8").strip()
 
 
+def _replacement_launch_eligibility_path(root: Path) -> Path:
+    """Select the current immutable receipt without overwriting prior-slot evidence."""
+
+    current = root / "replacement-launch-eligibility.json"
+    slot_receipts = sorted(root.glob("replacement-launch-eligibility-slot-*.json"))
+    if not slot_receipts:
+        return current
+    provisional_path = root / "provisional-owned-state.json"
+    _require_private_file(provisional_path, label="provider-entry provisional owner")
+    provisional = _load_json(provisional_path, maximum_bytes=65_536)
+    launch_slot = _integer(provisional.get("launch_slot"), label="provisional launch slot")
+    expected = root / f"replacement-launch-eligibility-slot-{launch_slot}.json"
+    if slot_receipts != [expected]:
+        raise T09ProviderError("provider-entry eligibility receipt history is ambiguous")
+    _require_private_file(expected, label="provider-entry replacement eligibility")
+    return expected
+
+
 def _validate_replacement_launch_eligibility(
     prior_private_root: Path,
     *,
@@ -5440,7 +6263,7 @@ def _validate_replacement_launch_eligibility(
         expected_bytes=SLOT1_IMAGE_ARCHIVE_BYTES,
         expected_sha256=SLOT1_IMAGE_ARCHIVE_SHA256,
     )
-    path = prior / "replacement-launch-eligibility.json"
+    path = _replacement_launch_eligibility_path(prior)
     metadata = path.stat(follow_symlinks=False)
     if (
         path.is_symlink()
@@ -5541,69 +6364,27 @@ def _validate_replacement_launch_eligibility(
                 from_package_commit=source_package_commit,
                 to_package_commit=package_commit,
             )
-    if value.get("eligibility_kind") == "provider-entry-failed-preempirical":
-        provisional = _load_source_validated_provisional_owner(
+    if value.get("eligibility_kind") == (PROVIDER_ENTRY_FAILED_PREEMPIRICAL_ELIGIBILITY_KIND):
+        if source_package_commit != package_commit:
+            raise T09ProviderError("provider-entry replacement cannot cross package commits")
+        plan_sha256 = file_sha256(repository / contract.provider_profile_path)
+        authority = _resolve_provider_entry_replacement_authority(
             prior,
             contract=contract,
-            repository=repository,
             package_commit=package_commit,
+            plan_sha256=plan_sha256,
+            closed_launch_slot=closed_slot,
         )
-        entry_manifest = validate_source_manifest(prior / "entry-source", contract=contract)
-        closeout_manifest = validate_source_manifest(
-            prior / "provisional-closeout-source", contract=contract
+        return _validate_provider_entry_replacement_document(
+            value,
+            authority,
+            contract=contract,
+            package_commit=package_commit,
+            plan_sha256=plan_sha256,
+            closed_launch_slot=closed_slot,
         )
-        closed = _load_json(prior / "PROVISIONAL_OWNER_CLOSED.json", maximum_bytes=65_536)
-        started = _number(
-            provisional.get("lambda_started_at_epoch"), label="provisional campaign start"
-        )
-        closed_at = _number(closed.get("closed_at_epoch"), label="provisional close time")
-        duration = closed_at - started
-        expected_provisional = {
-            "schema_version": "0.1.0",
-            "eligibility_kind": "provider-entry-failed-preempirical",
-            "plan_id": contract.plan_id,
-            "host_run_id": contract.host_run_id,
-            "package_commit": package_commit,
-            "closed_launch_slot": closed_slot,
-            "entry_source_manifest_sha256": file_sha256(
-                prior / "entry-source/source-manifest.json"
-            ),
-            "provisional_closeout_manifest_sha256": file_sha256(
-                prior / "provisional-closeout-source/source-manifest.json"
-            ),
-            "campaign_started_at_epoch": started,
-            "prior_lambda_duration_seconds": duration,
-            "prior_lambda_cost_usd": duration * 1.29 / 3600.0,
-            "empirical_attempts_entered": 0,
-            "model_task_requests": 0,
-            "task_browser_actions": 0,
-            "replacement_image_build_count": 0,
-            "slot2_image_archive_sha256": SLOT1_IMAGE_ARCHIVE_SHA256,
-            "slot2_image_archive_bytes": SLOT1_IMAGE_ARCHIVE_BYTES,
-            "slot2_expected_image_id": SLOT1_REPLACEMENT_IMAGE_ID,
-            "slot2_image_import_required": True,
-            "slot2_additional_image_build_count": 0,
-            "terminal_or_absent": True,
-            "zero_t09_instances": True,
-            "security_restored": True,
-            "second_launch_permitted": True,
-        }
-        if (
-            value != expected_provisional
-            or not entry_manifest
-            or not closeout_manifest
-            or provisional.get("launch_slot") != closed_slot
-            or not _provisional_replacement_permitted(contract, launch_slot=closed_slot)
-            or closed.get("owned_instance_identity_sha256")
-            != provisional.get("owned_instance_identity_sha256")
-            or closed.get("provider_disposition") != "absent"
-            or closed.get("zero_t09_instances") is not True
-            or closed.get("security_restored") is not True
-            or duration < 0
-            or duration * 1.29 / 3600.0 >= contract.preflight_lambda_cost_cap_usd
-        ):
-            raise T09ProviderError("provisional replacement eligibility drifted")
-        return value
+    if value.get("eligibility_kind") is not None:
+        raise T09ProviderError("replacement eligibility kind is unsupported")
     entry_source, closeout_source, retained_preempirical_source = _current_v7_slot2_authority_paths(
         prior
     )
@@ -6016,12 +6797,12 @@ def _load_source_validated_provisional_owner(
     private_root: Path,
     *,
     contract: T09ProviderContract,
-    repository: Path,
     package_commit: str,
+    plan_sha256: str,
+    source_private_root_identity_sha256: str | None = None,
 ) -> dict[str, object]:
     """Recover an exact pre-entry owner after an interrupted launch process."""
 
-    plan_path = repository / contract.provider_profile_path
     observed = _load_json(private_root / "provisional-owned-state.json", maximum_bytes=65_536)
     instance_id = _string(
         observed.get("private_instance_id"), label="provisional private instance ID"
@@ -6037,11 +6818,12 @@ def _load_source_validated_provisional_owner(
         entry_root=private_root / "entry-source",
         capability_path=launch_capability_path(launch_slot, contract=contract),
         package_commit=package_commit,
-        plan_sha256=file_sha256(plan_path),
+        plan_sha256=plan_sha256,
         private_root=private_root,
         instance_id=instance_id,
         launch_slot=launch_slot,
         replacement_eligibility_sha256=replacement_eligibility_sha256,
+        source_private_root_identity_sha256=source_private_root_identity_sha256,
     )
     if observed != expected:
         raise T09ProviderError("provisional owner is not source-bound")
@@ -6049,7 +6831,7 @@ def _load_source_validated_provisional_owner(
         private_root / "preflight-cleanup-state",
         contract=contract,
         package_commit=package_commit,
-        plan_sha256=file_sha256(plan_path),
+        plan_sha256=plan_sha256,
     )
     if (
         initial.get("private_instance_id") != observed.get("private_instance_id")
@@ -6118,12 +6900,17 @@ def launch_campaign(
             package_commit=package_commit,
             slot1_image_archive=slot1_image_archive,
         )
+        if replacement_eligibility.get("closed_launch_slot") != launch_slot - 1:
+            raise T09ProviderError("replacement launch skipped its exact preceding closed slot")
         if not launch_capability_path(launch_slot - 1, contract=contract).is_file():
             raise T09ProviderError("replacement launch cannot skip its preceding launch slot")
-    replacement_eligibility_sha256 = (
-        file_sha256(prior_private_root.resolve(strict=True) / "replacement-launch-eligibility.json")
+    prior_eligibility_path = (
+        _replacement_launch_eligibility_path(prior_private_root.resolve(strict=True))
         if prior_private_root is not None
         else None
+    )
+    replacement_eligibility_sha256 = (
+        file_sha256(prior_eligibility_path) if prior_eligibility_path is not None else None
     )
     capability_path = launch_capability_path(launch_slot, contract=contract)
     # This check precedes credential loading and every provider request.  The
@@ -6168,42 +6955,28 @@ def launch_campaign(
     if private_root.exists():
         raise T09ProviderError("provider private root already exists; launch slot is single use")
     private_root.mkdir(mode=0o700, parents=True, exist_ok=False)
+    replacement_source_manifest_sha256: str | None = None
+    normalized_authority_manifest_sha256: str | None = None
     if replacement_eligibility is not None and slot1_image_archive is not None:
         assert prior_private_root is not None
-        retained_source = private_root / "slot2-eligibility-source"
+        assert prior_eligibility_path is not None
         prior = prior_private_root.resolve(strict=True)
-        if replacement_eligibility.get("eligibility_kind") in {
-            RETRY4_SLOT2_ELIGIBILITY_KIND,
-            SLOT2_ELIGIBILITY_KIND,
-        }:
-            _copy_slot2_authority_tree(
-                prior / "slot2-eligibility-source",
-                retained_source,
-            )
-        elif replacement_eligibility.get("eligibility_kind") is None:
-            _retain_current_v7_slot2_authority(prior, retained_source)
-        else:
-            raise T09ProviderError(
-                "provider-entry replacement evidence cannot be normalized as a host closeout"
-            )
-        retained_eligibility = private_root / "replacement-launch-eligibility.json"
-        with (
-            (prior / "replacement-launch-eligibility.json").open("rb") as source,
-            retained_eligibility.open("xb") as target,
-        ):
-            shutil.copyfileobj(source, target, 1_048_576)
-            target.flush()
-            os.fsync(target.fileno())
-        retained_eligibility.chmod(0o600)
-        retained = _validate_replacement_launch_eligibility(
-            private_root,
+        (
+            _replacement_normalization,
+            replacement_source_manifest_sha256,
+            normalized_authority_manifest_sha256,
+        ) = _retain_replacement_launch_authority(
+            prior=prior,
+            prior_eligibility_path=prior_eligibility_path,
+            private_root=private_root,
+            replacement_eligibility=replacement_eligibility,
             contract=contract,
             repository=repository,
             package_commit=package_commit,
+            plan_sha256=plan_sha256,
+            launch_slot=launch_slot,
             slot1_image_archive=slot1_image_archive,
         )
-        if retained != replacement_eligibility:
-            raise T09ProviderError("retained slot-2 eligibility changed during copy")
     entry_root = private_root / "entry-source"
     entry_root.mkdir(mode=0o700)
     retained_model_metadata_receipt: Path | None = None
@@ -6666,14 +7439,10 @@ def launch_campaign(
                         else {}
                     ),
                     "replacement_eligibility_preempirical_source_manifest_sha256": (
-                        replacement_eligibility.get("source_manifest_sha256")
-                        if replacement_eligibility is not None
-                        else None
+                        replacement_source_manifest_sha256
                     ),
                     "normalized_slot2_authority_tree_manifest_sha256": (
-                        file_sha256(private_root / "slot2-eligibility-source/source-manifest.json")
-                        if replacement_eligibility is not None
-                        else None
+                        normalized_authority_manifest_sha256
                     ),
                 },
             )
@@ -6881,8 +7650,8 @@ def closeout_campaign(
         provisional = _load_source_validated_provisional_owner(
             private_root,
             contract=contract,
-            repository=repository,
             package_commit=package_commit,
+            plan_sha256=file_sha256(repository / contract.provider_profile_path),
         )
         closed_path = private_root / "PROVISIONAL_OWNER_CLOSED.json"
         if closed_path.is_file():
