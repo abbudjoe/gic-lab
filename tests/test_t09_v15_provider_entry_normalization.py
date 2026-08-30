@@ -19,7 +19,10 @@ from giclab.harness.t09_cleanup_state import (
     EarlyCleanupJournal,
     TerminalCleanupDisposition,
 )
-from giclab.harness.t09_provider_contracts import V11_PROVIDER_CONTRACT
+from giclab.harness.t09_provider_contracts import (
+    V11_PROVIDER_CONTRACT,
+    V12_PROVIDER_CONTRACT,
+)
 from giclab.registry import load_json
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -961,6 +964,7 @@ def test_first_host_preflight_closeout_publishes_reuses_and_authorizes_slot_two(
         "two-current",
         "cross-plan",
         "cross-host",
+        "cross-contract",
         "cross-package",
         "missing-capability",
     ],
@@ -971,6 +975,7 @@ def test_replacement_eligibility_history_contradictions_fail_closed(
 ) -> None:
     slot1, _ = _close_provider_entry_slot(provider_fixture, slot=1)
     slot2, _ = _close_provider_entry_slot(provider_fixture, slot=2, prior=slot1)
+    selected_contract = provider_fixture.contract
     preceding = slot2 / "replacement-launch-eligibility.json"
     current = slot2 / "replacement-launch-eligibility-slot-2.json"
     if mutation == "prior-hash":
@@ -990,6 +995,8 @@ def test_replacement_eligibility_history_contradictions_fail_closed(
         duplicate = slot2 / "replacement-launch-eligibility-slot-3.json"
         duplicate.write_bytes(current.read_bytes())
         duplicate.chmod(0o600)
+    elif mutation == "cross-contract":
+        selected_contract = V12_PROVIDER_CONTRACT
     elif mutation in {"cross-plan", "cross-host", "cross-package"}:
         document = load_json(current)
         field = {
@@ -1005,7 +1012,7 @@ def test_replacement_eligibility_history_contradictions_fail_closed(
     with pytest.raises(provider.T09ProviderError):
         provider._replacement_launch_eligibility_path(
             slot2,
-            contract=provider_fixture.contract,
+            contract=selected_contract,
             package_commit=PACKAGE_COMMIT,
             plan_sha256=provider_fixture.plan_sha256,
         )
