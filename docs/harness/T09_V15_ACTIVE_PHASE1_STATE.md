@@ -17,6 +17,14 @@ revalidated before credential selection, provider requests, or next-launch capab
 consumption. Failure to prepare a successor does not rewrite the preceding verified
 provider/security closeout.
 
+The PR review exposed a second repeated-slot defect: ordinary host-preflight closeout
+attempted to publish the newly closed slot at the occupied immutable unsuffixed
+eligibility path. V15 now uses one shared immutable-history publisher for both
+provider-entry and host-preflight closeout, selects the exact immediately preceding
+closed slot from launch evidence rather than lexical order, retains the authority that
+admitted each repeated-slot entry, and validates/reuses terminal closeout evidence on
+resume without repeating live or security mutations.
+
 V15 is the sole fresh successor proposal:
 
 - Plan: `PLAN-EXP0001-PILOT-V15`

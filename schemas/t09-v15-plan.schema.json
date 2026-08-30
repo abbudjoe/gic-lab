@@ -584,7 +584,7 @@
     },
     "cleanup": {
       "type": "object",
-      "required": ["exact_owned_targets_only", "broad_prune_allowed", "provider_termination_required", "provider_terminal_or_absent_verification_required", "browser_cleanup_required", "owned_container_cleanup_required", "temporary_secret_cleanup_required", "owned_ruleset_cleanup_required", "firewall_restoration_required", "cleanup_without_optional_pilot_state_required", "cleanup_export_phase_source", "prefreeze_zero_attempt_manifest_policy", "postfreeze_manifest_policy", "empirical_prefix_export_policy", "terminal_export_handoff_idempotent", "provider_entry_replacement_eligibility_kind", "provider_entry_direct_authority_layout", "provider_entry_retained_authority_layout", "provider_entry_normalized_manifest_required", "provider_entry_retained_revalidation_required", "provider_entry_normalization_precedes_credentials_provider_and_capability", "provider_entry_closed_slots_supported", "replacement_normalization_does_not_rewrite_verified_closeout"],
+      "required": ["exact_owned_targets_only", "broad_prune_allowed", "provider_termination_required", "provider_terminal_or_absent_verification_required", "browser_cleanup_required", "owned_container_cleanup_required", "temporary_secret_cleanup_required", "owned_ruleset_cleanup_required", "firewall_restoration_required", "cleanup_without_optional_pilot_state_required", "cleanup_export_phase_source", "prefreeze_zero_attempt_manifest_policy", "postfreeze_manifest_policy", "empirical_prefix_export_policy", "terminal_export_handoff_idempotent", "provider_entry_replacement_eligibility_kind", "provider_entry_direct_authority_layout", "provider_entry_retained_authority_layout", "provider_entry_eligibility_history_publication", "provider_entry_current_receipt_selection", "provider_entry_normalized_manifest_required", "provider_entry_retained_revalidation_required", "provider_entry_normalization_precedes_credentials_provider_and_capability", "provider_entry_closed_slots_supported", "provider_entry_repeated_slot_authority_retention", "host_preflight_closeout_idempotent", "replacement_normalization_does_not_rewrite_verified_closeout"],
       "properties": {
         "exact_owned_targets_only": {"const": true},
         "broad_prune_allowed": {"const": false},
@@ -604,10 +604,14 @@
         "provider_entry_replacement_eligibility_kind": {"const": "provider-entry-failed-preempirical"},
         "provider_entry_direct_authority_layout": {"const": "exact-closed-launch-root"},
         "provider_entry_retained_authority_layout": {"const": "collision-free-slot2-eligibility-source"},
+        "provider_entry_eligibility_history_publication": {"const": "shared-immutable-unsuffixed-first-then-slot-suffixed"},
+        "provider_entry_current_receipt_selection": {"const": "immediate-preceding-closed-slot-source-bound-launch-capability"},
         "provider_entry_normalized_manifest_required": {"const": true},
         "provider_entry_retained_revalidation_required": {"const": true},
         "provider_entry_normalization_precedes_credentials_provider_and_capability": {"const": true},
         "provider_entry_closed_slots_supported": {"const": "one-through-max-launch-count-minus-one"},
+        "provider_entry_repeated_slot_authority_retention": {"const": "exact-admitting-authority-copied-with-current-host-closeout"},
+        "host_preflight_closeout_idempotent": {"const": true},
         "replacement_normalization_does_not_rewrite_verified_closeout": {"const": true}
       },
       "additionalProperties": false

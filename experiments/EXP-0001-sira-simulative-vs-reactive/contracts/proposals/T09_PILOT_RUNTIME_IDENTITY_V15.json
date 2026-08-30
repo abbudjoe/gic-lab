@@ -80,7 +80,7 @@
       },
       {
         "path": "src/giclab/harness/t09_pragmatic_provider.py",
-        "sha256": "390f6f2571a0131d49fc1f0dee9b047168b725ca6bf662ec072a993201b6a779"
+        "sha256": "9e565bfcbb55ba4ad2023b8e30cba03f1df21d41df454f71310cd1afb34e1133"
       },
       {
         "path": "src/giclab/harness/t09_provider_contracts.py",
@@ -147,7 +147,7 @@
         "sha256": "39a4d698b8184c4d6652294f32e07911b2998b1a6326ad280353ba5f505e387e"
       }
     ],
-    "reviewed_implementation_ancestor": "8e2f55beb617fdb05d2e01a72f91f7cf6958a9f5",
+    "reviewed_implementation_ancestor": "9b1ea06da0530128add702575e72212016d5cc47",
     "scope": [
       "content-addressed-no-follow-private-regression-archive-staging",
       "raw-attempt-root-typed-binding-before-empirical-entry",
@@ -180,6 +180,10 @@
       "retained-authority-manifest-and-semantic-eligibility-revalidation",
       "normalization-before-credentials-provider-calls-and-launch-capability-consumption",
       "bounded-repeated-preflight-slot-normalization",
+      "shared-immutable-replacement-eligibility-history-publication",
+      "source-grounded-immediately-preceding-closed-slot-selection",
+      "byte-identical-host-preflight-closeout-resume-without-live-mutations",
+      "repeated-slot-entry-authority-retained-for-next-launch-reconstruction",
       "provider-owned-preflight-cleanup-state-before-staging",
       "explicit-immutable-v3-through-v15-provider-contract-selection",
       "pilot-state-before-retained-authority-copy",

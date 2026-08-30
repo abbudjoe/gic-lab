@@ -3,7 +3,7 @@ experiment_id: EXP-0001
 run_id: RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0008
 profile: pilot
 profile_plan_id: PLAN-EXP0001-PILOT-V15
-profile_sha256: db25a49105d1075c42fe58114a0c35dd099e7b6a67b33ff1f979220168154676
+profile_sha256: 64075a67989522495145bf02c32544bd3a07f30c38d46daa4e9f5c16c65faa1d
 condition: SIRA-SIMULATIVE
 attempt: 1
 seed: 42
@@ -23,7 +23,7 @@ sources:
   config_sha256: cf25acd90f9d73d9aef978a7d059cfbc74a1447d901f4e3d27e2b5d9f121d2ed
   model_revision: gpt-4o-2024-11-20
   dataset_revision: 76ad1feb689b754bfe4e5e24d3ea371b647efa67
-  environment_sha256: 394fd1ead07efedb4925809a59190d4eb3bf7e00674832c1da9f48e1e17e324f
+  environment_sha256: fb994291f4133ffecb8b29a23c9156985b13db1c49c8cf9b11088f278ef4b6a3
 task:
   task_id: 2120afba8009bad3
   source_kind: dataset-slice

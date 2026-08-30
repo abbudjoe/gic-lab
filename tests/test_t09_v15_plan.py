@@ -88,10 +88,10 @@ def test_v15_plan_schema_package_and_false_flags_are_exact() -> None:
     schema = json.loads((ROOT / "schemas/t09-v15-plan.schema.json").read_text())
     Draft202012Validator.check_schema(schema)
     Draft202012Validator(schema).validate(plan)
-    assert PLAN.stat().st_size == 19_927
-    assert _sha256(PLAN) == "b597b610a65dcaa733eb02e184a4ae5af5846ff5d22b0e09d04a30044d86c921"
-    assert PROFILE.stat().st_size == 15_624
-    assert _sha256(PROFILE) == "db25a49105d1075c42fe58114a0c35dd099e7b6a67b33ff1f979220168154676"
+    assert PLAN.stat().st_size == 20_292
+    assert _sha256(PLAN) == "cf5c7473ca40c71f5b65b43a4bbf706282b1b879af229e4855d65c0b72a8b5f4"
+    assert PROFILE.stat().st_size == 15_974
+    assert _sha256(PROFILE) == "64075a67989522495145bf02c32544bd3a07f30c38d46daa4e9f5c16c65faa1d"
     assert validate_t09_v15_plan(ROOT) == []
     assert plan["plan_id"] == V15_PROVIDER_CONTRACT.plan_id
     status = cast(dict[str, object], plan["status"])
@@ -126,9 +126,19 @@ def test_v15_plan_schema_package_and_false_flags_are_exact() -> None:
     assert execution["provider_lifecycle"]["provider_entry_replacement_authority"] == {
         "cleanup_authority_independent": True,
         "closed_slots_supported": "one-through-max-launch-count-minus-one",
+        "current_receipt_selection": (
+            "immediate-preceding-closed-slot-source-bound-launch-capability"
+        ),
         "direct_layout": "exact-closed-launch-root",
+        "eligibility_history_publication": (
+            "shared-immutable-unsuffixed-first-then-slot-suffixed"
+        ),
         "eligibility_kind": "provider-entry-failed-preempirical",
+        "host_preflight_closeout_resume": "byte-identical-no-live-mutations",
         "normalization_before_credentials_provider_and_capability": True,
+        "repeated_slot_entry_authority_retention": (
+            "exact-admitting-authority-copied-with-current-host-closeout"
+        ),
         "retained_layout": "collision-free-slot2-eligibility-source",
         "retained_manifest_required": True,
         "retained_revalidation_required": True,

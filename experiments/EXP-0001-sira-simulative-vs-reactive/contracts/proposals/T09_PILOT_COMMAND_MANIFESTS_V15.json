@@ -1,6 +1,6 @@
 {
   "execution_contract_path": "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/proposals/T09_PILOT_EXECUTION_CONTRACT_V15.json",
-  "execution_contract_sha256": "bb8577628cf280582d097114d4f41d322221f2352993262ee5fcab2c9e80fd7d",
+  "execution_contract_sha256": "8035f537d9713ed11208ee76a6f18d50bc59e28de1d5ad5b86debcd3c48f1e06",
   "generator_path": "containers/sira-smoke/pragmatic/t09_freeze_commands.py",
   "generator_sha256": "10edb0622b538b9851f0942c97ddf28b755fb2da70872fc23b419c93cb7d7a5a",
   "host_runtime_model_metadata_request_count": 0,
@@ -28,7 +28,7 @@
         "--gate-pilot-contract",
         "/opt/giclab-contracts/execution.json",
         "--gate-pilot-contract-sha256",
-        "bb8577628cf280582d097114d4f41d322221f2352993262ee5fcab2c9e80fd7d",
+        "8035f537d9713ed11208ee76a6f18d50bc59e28de1d5ad5b86debcd3c48f1e06",
         "--gate-pilot-library-sha256",
         "6e49cd6134a19326f1888adbc4a84678189ec1cfd0f536dbc1874224b3306a64",
         "--gate-pilot-attempt-id",
@@ -95,10 +95,10 @@
         },
         "condition_wall_seconds": 3600,
         "config_sha256": "cf25acd90f9d73d9aef978a7d059cfbc74a1447d901f4e3d27e2b5d9f121d2ed",
-        "environment_sha256": "394fd1ead07efedb4925809a59190d4eb3bf7e00674832c1da9f48e1e17e324f",
+        "environment_sha256": "fb994291f4133ffecb8b29a23c9156985b13db1c49c8cf9b11088f278ef4b6a3",
         "evaluator_contract_sha256": "c28a802a45fc8d1e719f8c1bcb22315c2841df831c4ae161f12ab0f2fd08b321",
         "evidence_handling": "immutable-raw-attempt-before-network-none-versioned-downstream-finalization",
-        "giclab_commit": "8e2f55beb617fdb05d2e01a72f91f7cf6958a9f5",
+        "giclab_commit": "9b1ea06da0530128add702575e72212016d5cc47",
         "instrumentation": "t09-post-action-provider-receipt-lineage-v1",
         "max_browser_steps": 30,
         "model": "gpt-4o-2024-11-20",
@@ -115,7 +115,7 @@
           "chromium-1084"
         ]
       },
-      "execution_contract_sha256": "bb8577628cf280582d097114d4f41d322221f2352993262ee5fcab2c9e80fd7d",
+      "execution_contract_sha256": "8035f537d9713ed11208ee76a6f18d50bc59e28de1d5ad5b86debcd3c48f1e06",
       "order_index": 1,
       "pair_id": "PAIR-EXP0001-PILOT-V15-TASK-A",
       "permitted_condition_owned": {
@@ -153,7 +153,7 @@
         "--gate-pilot-contract",
         "/opt/giclab-contracts/execution.json",
         "--gate-pilot-contract-sha256",
-        "bb8577628cf280582d097114d4f41d322221f2352993262ee5fcab2c9e80fd7d",
+        "8035f537d9713ed11208ee76a6f18d50bc59e28de1d5ad5b86debcd3c48f1e06",
         "--gate-pilot-library-sha256",
         "6e49cd6134a19326f1888adbc4a84678189ec1cfd0f536dbc1874224b3306a64",
         "--gate-pilot-attempt-id",
@@ -220,10 +220,10 @@
         },
         "condition_wall_seconds": 3600,
         "config_sha256": "cf25acd90f9d73d9aef978a7d059cfbc74a1447d901f4e3d27e2b5d9f121d2ed",
-        "environment_sha256": "394fd1ead07efedb4925809a59190d4eb3bf7e00674832c1da9f48e1e17e324f",
+        "environment_sha256": "fb994291f4133ffecb8b29a23c9156985b13db1c49c8cf9b11088f278ef4b6a3",
         "evaluator_contract_sha256": "c28a802a45fc8d1e719f8c1bcb22315c2841df831c4ae161f12ab0f2fd08b321",
         "evidence_handling": "immutable-raw-attempt-before-network-none-versioned-downstream-finalization",
-        "giclab_commit": "8e2f55beb617fdb05d2e01a72f91f7cf6958a9f5",
+        "giclab_commit": "9b1ea06da0530128add702575e72212016d5cc47",
         "instrumentation": "t09-post-action-provider-receipt-lineage-v1",
         "max_browser_steps": 30,
         "model": "gpt-4o-2024-11-20",
@@ -240,7 +240,7 @@
           "chromium-1084"
         ]
       },
-      "execution_contract_sha256": "bb8577628cf280582d097114d4f41d322221f2352993262ee5fcab2c9e80fd7d",
+      "execution_contract_sha256": "8035f537d9713ed11208ee76a6f18d50bc59e28de1d5ad5b86debcd3c48f1e06",
       "order_index": 2,
       "pair_id": "PAIR-EXP0001-PILOT-V15-TASK-A",
       "permitted_condition_owned": {
@@ -278,7 +278,7 @@
         "--gate-pilot-contract",
         "/opt/giclab-contracts/execution.json",
         "--gate-pilot-contract-sha256",
-        "bb8577628cf280582d097114d4f41d322221f2352993262ee5fcab2c9e80fd7d",
+        "8035f537d9713ed11208ee76a6f18d50bc59e28de1d5ad5b86debcd3c48f1e06",
         "--gate-pilot-library-sha256",
         "6e49cd6134a19326f1888adbc4a84678189ec1cfd0f536dbc1874224b3306a64",
         "--gate-pilot-attempt-id",
@@ -345,10 +345,10 @@
         },
         "condition_wall_seconds": 3600,
         "config_sha256": "cf25acd90f9d73d9aef978a7d059cfbc74a1447d901f4e3d27e2b5d9f121d2ed",
-        "environment_sha256": "394fd1ead07efedb4925809a59190d4eb3bf7e00674832c1da9f48e1e17e324f",
+        "environment_sha256": "fb994291f4133ffecb8b29a23c9156985b13db1c49c8cf9b11088f278ef4b6a3",
         "evaluator_contract_sha256": "c28a802a45fc8d1e719f8c1bcb22315c2841df831c4ae161f12ab0f2fd08b321",
         "evidence_handling": "immutable-raw-attempt-before-network-none-versioned-downstream-finalization",
-        "giclab_commit": "8e2f55beb617fdb05d2e01a72f91f7cf6958a9f5",
+        "giclab_commit": "9b1ea06da0530128add702575e72212016d5cc47",
         "instrumentation": "t09-post-action-provider-receipt-lineage-v1",
         "max_browser_steps": 30,
         "model": "gpt-4o-2024-11-20",
@@ -365,7 +365,7 @@
           "chromium-1084"
         ]
       },
-      "execution_contract_sha256": "bb8577628cf280582d097114d4f41d322221f2352993262ee5fcab2c9e80fd7d",
+      "execution_contract_sha256": "8035f537d9713ed11208ee76a6f18d50bc59e28de1d5ad5b86debcd3c48f1e06",
       "order_index": 1,
       "pair_id": "PAIR-EXP0001-PILOT-V15-TASK-B",
       "permitted_condition_owned": {
@@ -403,7 +403,7 @@
         "--gate-pilot-contract",
         "/opt/giclab-contracts/execution.json",
         "--gate-pilot-contract-sha256",
-        "bb8577628cf280582d097114d4f41d322221f2352993262ee5fcab2c9e80fd7d",
+        "8035f537d9713ed11208ee76a6f18d50bc59e28de1d5ad5b86debcd3c48f1e06",
         "--gate-pilot-library-sha256",
         "6e49cd6134a19326f1888adbc4a84678189ec1cfd0f536dbc1874224b3306a64",
         "--gate-pilot-attempt-id",
@@ -470,10 +470,10 @@
         },
         "condition_wall_seconds": 3600,
         "config_sha256": "cf25acd90f9d73d9aef978a7d059cfbc74a1447d901f4e3d27e2b5d9f121d2ed",
-        "environment_sha256": "394fd1ead07efedb4925809a59190d4eb3bf7e00674832c1da9f48e1e17e324f",
+        "environment_sha256": "fb994291f4133ffecb8b29a23c9156985b13db1c49c8cf9b11088f278ef4b6a3",
         "evaluator_contract_sha256": "c28a802a45fc8d1e719f8c1bcb22315c2841df831c4ae161f12ab0f2fd08b321",
         "evidence_handling": "immutable-raw-attempt-before-network-none-versioned-downstream-finalization",
-        "giclab_commit": "8e2f55beb617fdb05d2e01a72f91f7cf6958a9f5",
+        "giclab_commit": "9b1ea06da0530128add702575e72212016d5cc47",
         "instrumentation": "t09-post-action-provider-receipt-lineage-v1",
         "max_browser_steps": 30,
         "model": "gpt-4o-2024-11-20",
@@ -490,7 +490,7 @@
           "chromium-1084"
         ]
       },
-      "execution_contract_sha256": "bb8577628cf280582d097114d4f41d322221f2352993262ee5fcab2c9e80fd7d",
+      "execution_contract_sha256": "8035f537d9713ed11208ee76a6f18d50bc59e28de1d5ad5b86debcd3c48f1e06",
       "order_index": 2,
       "pair_id": "PAIR-EXP0001-PILOT-V15-TASK-B",
       "permitted_condition_owned": {
@@ -551,10 +551,10 @@
   "pilot_library_sha256": "6e49cd6134a19326f1888adbc4a84678189ec1cfd0f536dbc1874224b3306a64",
   "plan_id": "PLAN-EXP0001-PILOT-V15",
   "plan_path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/proposals/T09_PILOT_RUNTIME_PROFILE_V15.yaml",
-  "plan_sha256": "db25a49105d1075c42fe58114a0c35dd099e7b6a67b33ff1f979220168154676",
-  "plan_size_bytes": 15624,
+  "plan_sha256": "64075a67989522495145bf02c32544bd3a07f30c38d46daa4e9f5c16c65faa1d",
+  "plan_size_bytes": 15974,
   "provider_launch_model_metadata_request_count": 0,
-  "reviewed_implementation_ancestor": "8e2f55beb617fdb05d2e01a72f91f7cf6958a9f5",
+  "reviewed_implementation_ancestor": "9b1ea06da0530128add702575e72212016d5cc47",
   "runtime_adaptation_sha256": "0f1cd94fe048102704c9a4c461c6a3bf457ca53eb5586291441a675cd6b256a0",
   "schema_version": "0.1.0"
 }

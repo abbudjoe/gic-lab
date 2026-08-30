@@ -143,10 +143,14 @@ replacement_authority_normalization:
   eligibility_kind: provider-entry-failed-preempirical
   direct_authority_layout: exact-closed-launch-root
   retained_authority_layout: collision-free-slot2-eligibility-source
+  eligibility_history_publication: shared-immutable-unsuffixed-first-then-slot-suffixed
+  current_receipt_selection: immediate-preceding-closed-slot-source-bound-launch-capability
   normalized_manifest_required: true
   retained_revalidation_required: true
   normalization_before_credentials_provider_and_capability: true
   closed_slots_supported: any-bounded-preflight-slot
+  repeated_slot_entry_authority_retention: exact-admitting-authority-copied-with-current-host-closeout
+  host_preflight_closeout_resume: byte-identical-no-live-mutations
   cleanup_authority_independent: true
 replacement_image_policy:
   historical_image_digest: sha256:035edf61718e84a8156f4f0f7817b134b0ce31488d3f0b50bbfba2b4a30cc61c

@@ -20,6 +20,21 @@ launch-capability consumption. This applies to every closed slot below the bound
 eight-launch ceiling. Partial, unsafe, cross-version, cross-slot, changed, or
 over-budget evidence fails closed.
 
+Eligibility history is immutable and typed. A first closed slot publishes the
+unsuffixed receipt. When that receipt is already bound into a replacement launch, the
+newly closed slot publishes `replacement-launch-eligibility-slot-<N>.json` after
+verifying the predecessor hash and exact launch capability. Current-receipt selection
+uses the source-grounded entry or provisional slot and rejects duplicates, gaps,
+cross-identity evidence, and filename/document disagreement. Repeated-slot host
+closeout retains the authority that admitted its entry so the next launch can
+reconstruct the complete source chain.
+
+A terminal host-preflight closeout may be called again. The resume path revalidates the
+retained host source, closeout receipt, cleanup-journal prefix, and exact eligibility;
+it loads no credential, sends no provider request, repeats no cleanup mutation, and
+rewrites no immutable evidence. Eligibility publication failure blocks replacement
+without regressing verified provider absence or restored security.
+
 V15 preserves the V14 cleanup lifecycle classifier and byte-identical handoff resume,
 the sole local metadata GET and 1,800-second final-transport freshness boundary,
 mixed-dotenv selection, zero automatic retries, exact launch ordering, delayed cidfile

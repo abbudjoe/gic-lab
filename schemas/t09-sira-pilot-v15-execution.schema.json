@@ -72,10 +72,14 @@
             "eligibility_kind": "provider-entry-failed-preempirical",
             "direct_layout": "exact-closed-launch-root",
             "retained_layout": "collision-free-slot2-eligibility-source",
+            "eligibility_history_publication": "shared-immutable-unsuffixed-first-then-slot-suffixed",
+            "current_receipt_selection": "immediate-preceding-closed-slot-source-bound-launch-capability",
             "retained_manifest_required": true,
             "retained_revalidation_required": true,
             "normalization_before_credentials_provider_and_capability": true,
             "closed_slots_supported": "one-through-max-launch-count-minus-one",
+            "repeated_slot_entry_authority_retention": "exact-admitting-authority-copied-with-current-host-closeout",
+            "host_preflight_closeout_resume": "byte-identical-no-live-mutations",
             "cleanup_authority_independent": true
           }
         },

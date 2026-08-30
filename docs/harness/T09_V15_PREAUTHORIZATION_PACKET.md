@@ -25,10 +25,17 @@ manifest-bound retained authority tree and revalidates it before any live author
 loaded or consumed. Simple string allowlisting is insufficient because campaign and
 entry reconstruction require exact non-null evidence hashes.
 
-The V15 plan is 19,927 bytes with SHA-256
-`b597b610a65dcaa733eb02e184a4ae5af5846ff5d22b0e09d04a30044d86c921`.
-The runtime profile is 15,624 bytes with SHA-256
-`db25a49105d1075c42fe58114a0c35dd099e7b6a67b33ff1f979220168154676`.
+The repeated-slot review repair also gives provider-entry and host-preflight closeout
+one immutable eligibility-history publisher. The first receipt remains unsuffixed;
+later current receipts use their exact closed-slot name. Selection is bound to the
+immediately preceding launch capability and retained source evidence, and terminal
+host-preflight closeout resume reuses byte-identical evidence without credentials,
+provider traffic, or cleanup mutations.
+
+The V15 plan is 20,292 bytes with SHA-256
+`cf5c7473ca40c71f5b65b43a4bbf706282b1b879af229e4855d65c0b72a8b5f4`.
+The runtime profile is 15,974 bytes with SHA-256
+`64075a67989522495145bf02c32544bd3a07f30c38d46daa4e9f5c16c65faa1d`.
 
 The conservative prior is USD `34.8560553777829493`: USD
 `34.7739318252479717` through stopped V13 plus stopped V14 Lambda cost USD

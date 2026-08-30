@@ -60,7 +60,7 @@ implementation_bindings:
   required_base_parent_1: 12a6c4fba0972d3b6f9f16dcfae048dbb770d78a
   required_base_parent_2: e5d67d36bc84d6b1eaaf8b3bce0f8797d8bd3074
   required_accounting_repair_ancestor: 1c6b093699288f37aa23526fe1e1672e50280093
-  reviewed_implementation_ancestor: 8e2f55beb617fdb05d2e01a72f91f7cf6958a9f5
+  reviewed_implementation_ancestor: 9b1ea06da0530128add702575e72212016d5cc47
   exact_reviewed_merged_commit: pending-category-2-merge
   exact_reviewed_merged_commit_required_before_authorization: true
   provider_accounting:
@@ -88,7 +88,7 @@ implementation_bindings:
     implementation_path: src/giclab/harness/t09_cleanup_state.py
     implementation_sha256: 39a4d698b8184c4d6652294f32e07911b2998b1a6326ad280353ba5f505e387e
     provider_integration_path: src/giclab/harness/t09_pragmatic_provider.py
-    provider_integration_sha256: 390f6f2571a0131d49fc1f0dee9b047168b725ca6bf662ec072a993201b6a779
+    provider_integration_sha256: 9e565bfcbb55ba4ad2023b8e30cba03f1df21d41df454f71310cd1afb34e1133
     schema_path: schemas/t09-early-cleanup-state.schema.json
     schema_sha256: 1e041fe3197ed7c53f80e782c727f1dfb9e6d27ec9476543466711948b018edf
     export_handoff_schema_path: schemas/t09-cleanup-export-handoff.schema.json
@@ -157,7 +157,7 @@ implementation_bindings:
     campaign_lifecycle_path: src/giclab/harness/lambda_campaign_lifecycle.py
     campaign_lifecycle_sha256: 6f0f74354f15766466480c498b4ab5af6887e337c5197416bb9dedf3ff78200b
     provider_path: src/giclab/harness/t09_pragmatic_provider.py
-    provider_sha256: 390f6f2571a0131d49fc1f0dee9b047168b725ca6bf662ec072a993201b6a779
+    provider_sha256: 9e565bfcbb55ba4ad2023b8e30cba03f1df21d41df454f71310cd1afb34e1133
     provider_contracts_path: src/giclab/harness/t09_provider_contracts.py
     provider_contracts_sha256: d0d554a495b631e4f0114090516cdcf03affcec0111f095f26c8c8fd4caa8896
     remote_runner_path: containers/sira-smoke/pragmatic/t09_remote_runner.py
@@ -165,26 +165,26 @@ implementation_bindings:
     command_generator_path: containers/sira-smoke/pragmatic/t09_freeze_commands.py
     command_generator_sha256: 10edb0622b538b9851f0942c97ddf28b755fb2da70872fc23b419c93cb7d7a5a
     runtime_profile_path: experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/proposals/T09_PILOT_RUNTIME_PROFILE_V15.yaml
-    runtime_profile_sha256: db25a49105d1075c42fe58114a0c35dd099e7b6a67b33ff1f979220168154676
+    runtime_profile_sha256: 64075a67989522495145bf02c32544bd3a07f30c38d46daa4e9f5c16c65faa1d
     execution_contract_path: experiments/EXP-0001-sira-simulative-vs-reactive/contracts/proposals/T09_PILOT_EXECUTION_CONTRACT_V15.json
-    execution_contract_sha256: bb8577628cf280582d097114d4f41d322221f2352993262ee5fcab2c9e80fd7d
+    execution_contract_sha256: 8035f537d9713ed11208ee76a6f18d50bc59e28de1d5ad5b86debcd3c48f1e06
     command_manifests_path: experiments/EXP-0001-sira-simulative-vs-reactive/contracts/proposals/T09_PILOT_COMMAND_MANIFESTS_V15.json
-    command_manifests_sha256: 52b3d9de139efebb529982173bf7c5e1fa31ef1355df88dafec500dd525c7446
+    command_manifests_sha256: 9103bcb70ee5eda5e4d305fff902c5a06814cc2f1719a5361dbe25f6ccb2bcb6
     runtime_identity_path: experiments/EXP-0001-sira-simulative-vs-reactive/contracts/proposals/T09_PILOT_RUNTIME_IDENTITY_V15.json
-    runtime_identity_sha256: 394fd1ead07efedb4925809a59190d4eb3bf7e00674832c1da9f48e1e17e324f
+    runtime_identity_sha256: fb994291f4133ffecb8b29a23c9156985b13db1c49c8cf9b11088f278ef4b6a3
     runtime_adaptation_path: src/giclab/harness/sira_gate_a_runtime.py
     runtime_adaptation_sha256: 0f1cd94fe048102704c9a4c461c6a3bf457ca53eb5586291441a675cd6b256a0
     execution_schema_path: schemas/t09-sira-pilot-v15-execution.schema.json
-    execution_schema_sha256: 38439ce94613dd93179368184d3e99dbc1b61e319b8c6d83732675f1a22a9ba6
+    execution_schema_sha256: e2c3008a0bd29390d65ad9f238a84b0e042cc84db0c7a1b31fe81f456ae22304
     condition_plans:
     - path: experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v15-task-0000-reactive.yaml
-      sha256: d60103522d940dfaf916fa3f13db08dd036a479ecd4f6cf5016ca88e3fecaeb8
+      sha256: e54d9246e63273a30e56446f386832a3a823efd6220ab13334b425a45f58f226
     - path: experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v15-task-0000-simulative.yaml
-      sha256: 00c228a58fe28d4e389abc946ce120baa2c7277058a2bc9a06bc83df3afa221f
+      sha256: cf01fde591ad1d79b6b7a88a40e31e2539f70180e18e0b8a9582efe53b9fbdb8
     - path: experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v15-task-0001-simulative.yaml
-      sha256: 146ce422ee306d97ca5a77606df68b25ce5095b8515b6600bc4544c314e78bb4
+      sha256: dc5fb43907e0cdd412461b3ac149720e81ad7efa94d3b090d6fbced5c23b892c
     - path: experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v15-task-0001-reactive.yaml
-      sha256: 01d5629b5e180603437b3981aac1499cf79fbf70eb200809f4bf4c13f6eb4aa9
+      sha256: 8fe2a67a08ef9b8c95cbdcf896e0fdb45691507a9271fa2b6db4da4c79f9a079
     static_authorized: false
     static_authorization_reference: null
     execution_eligibility: blocked-until-fresh-category-3-authorization
@@ -279,10 +279,14 @@ cleanup_contract:
   provider_entry_replacement_eligibility_kind: provider-entry-failed-preempirical
   provider_entry_direct_authority_layout: exact-closed-launch-root
   provider_entry_retained_authority_layout: collision-free-slot2-eligibility-source
+  provider_entry_eligibility_history_publication: shared-immutable-unsuffixed-first-then-slot-suffixed
+  provider_entry_current_receipt_selection: immediate-preceding-closed-slot-source-bound-launch-capability
   provider_entry_normalized_manifest_required: true
   provider_entry_retained_revalidation_required: true
   provider_entry_normalization_precedes_credentials_provider_and_capability: true
   provider_entry_closed_slots_supported: one-through-max-launch-count-minus-one
+  provider_entry_repeated_slot_authority_retention: exact-admitting-authority-copied-with-current-host-closeout
+  host_preflight_closeout_idempotent: true
   replacement_normalization_does_not_rewrite_verified_closeout: true
 attempts:
 - run_id: RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0008
