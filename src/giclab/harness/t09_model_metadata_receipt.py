@@ -1,9 +1,10 @@
-"""One local model-metadata request, one durable secret-free receipt.
+"""One local model-metadata request, one durable version-bound receipt.
 
-This module owns the only OpenAI request allowed by the V12 handoff.  The
-provider and host consume the canonical receipt without constructing a network
-transport.  Private-file helpers intentionally hold descriptors while checking
-ownership, link count, mode, content bounds, and path identity.
+The provider and host consume the canonical secret-free receipt without
+constructing a network transport. Private-file helpers intentionally hold
+descriptors while checking ownership, link count, mode, content bounds, and path
+identity. Every active call names one exact provider contract; there is no
+current/latest metadata identity.
 """
 
 from __future__ import annotations
@@ -24,6 +25,11 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 from typing import Final, Protocol, cast
+
+from giclab.harness.t09_provider_contracts import (
+    T09ProviderContractError,
+    provider_contract,
+)
 
 
 class ModelMetadataReceiptError(RuntimeError):
@@ -46,6 +52,9 @@ class ModelMetadataContract(Protocol):
 
     @property
     def host_run_id(self) -> str: ...
+
+    @property
+    def authorization_prefix(self) -> str | None: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,13 +83,12 @@ MODEL_METADATA_HOST: Final = "api.openai.com"
 MODEL_METADATA_MODEL_ID: Final = "gpt-4o-2024-11-20"
 MODEL_METADATA_PATH: Final = f"/v1/models/{MODEL_METADATA_MODEL_ID}"
 MODEL_METADATA_ENDPOINT: Final = f"https://{MODEL_METADATA_HOST}{MODEL_METADATA_PATH}"
-MODEL_METADATA_PLAN_ID: Final = "PLAN-EXP0001-PILOT-V12"
-MODEL_METADATA_HOST_RUN_ID: Final = "RUN-T09-PILOT-HOST-AUTONOMOUS-0005"
 MODEL_METADATA_RECEIPT_FILENAME: Final = "model-metadata-receipt.json"
 MODEL_METADATA_TERMINAL_STATE: Final = "model-metadata-verified"
 MODEL_METADATA_PRELAUNCH_FRESHNESS_SECONDS: Final = 1_800.0
 MODEL_METADATA_MAX_AGE_SECONDS: Final = MODEL_METADATA_PRELAUNCH_FRESHNESS_SECONDS
 MODEL_METADATA_MAX_PRIVATE_BYTES: Final = 65_536
+MODEL_METADATA_CONTRACT_VERSIONS: Final = frozenset({"V12", "V13"})
 
 MODEL_METADATA_RECEIPT_FIELDS: Final = frozenset(
     {
@@ -148,13 +156,6 @@ _SENSITIVE_FIELD_FRAGMENTS: Final = (
     "cookie",
     "secret",
 )
-
-
-@dataclass(frozen=True, slots=True)
-class _V12Identity:
-    version: str = "V12"
-    plan_id: str = MODEL_METADATA_PLAN_ID
-    host_run_id: str = MODEL_METADATA_HOST_RUN_ID
 
 
 def _canonical_bytes(value: object) -> bytes:
@@ -475,7 +476,7 @@ def _validate_overlay(
     _reject_sensitive_fields(overlay)
     if (
         overlay.get("schema_version") != MODEL_METADATA_SCHEMA_VERSION
-        or contract.version != "V12"
+        or contract.version not in MODEL_METADATA_CONTRACT_VERSIONS
         or overlay.get("provider_contract_version") != contract.version
         or overlay.get("repository_commit") != package_commit
         or overlay.get("repository_tree") != package_tree
@@ -490,8 +491,9 @@ def _validate_overlay(
         overlay.get("authorization_reference"),
         label="authorization reference",
     )
-    if not reference.startswith("AUTH-T09-V12-") or reference.startswith("AUTH-T09-V11-"):
-        raise ModelMetadataReceiptError("authorization is not fresh V12 authority")
+    prefix = contract.authorization_prefix
+    if not isinstance(prefix, str) or not reference.startswith(prefix):
+        raise ModelMetadataReceiptError("authorization is not fresh selected-contract authority")
     for field_name in (
         "authorization_source_sha256",
         "public_price_contract_sha256",
@@ -789,19 +791,24 @@ def create_model_metadata_receipt(
         ("public deprecation SHA-256", public_deprecation_observation_sha256),
     ):
         _require_hex(value, length=64, label=label)
+    try:
+        contract = provider_contract(provider_contract_version)
+    except T09ProviderContractError as exc:
+        raise ModelMetadataReceiptError("receipt provider contract is unsupported") from exc
     if (
-        provider_contract_version != "V12"
-        or plan_id != MODEL_METADATA_PLAN_ID
-        or host_run_id != MODEL_METADATA_HOST_RUN_ID
-        or not authorization_reference.startswith("AUTH-T09-V12-")
+        contract.version not in MODEL_METADATA_CONTRACT_VERSIONS
+        or plan_id != contract.plan_id
+        or host_run_id != contract.host_run_id
+        or not isinstance(contract.authorization_prefix, str)
+        or not authorization_reference.startswith(contract.authorization_prefix)
     ):
-        raise ModelMetadataReceiptError("receipt identity is not exact V12")
+        raise ModelMetadataReceiptError("receipt identity is not exact selected contract")
     _validate_private_parent(output, label="receipt output")
     if os.path.lexists(output):
         raise ModelMetadataReceiptError("receipt output is not fresh")
     overlay = validate_model_metadata_authorization_overlay(
         authorization_overlay,
-        contract=_V12Identity(),
+        contract=contract,
         package_commit=repository_commit,
         package_tree=repository_tree,
         plan_sha256=plan_sha256,
@@ -922,7 +929,7 @@ def _validate_receipt_document(
     fixed: Mapping[str, object] = {
         "schema_version": MODEL_METADATA_SCHEMA_VERSION,
         "receipt_type": MODEL_METADATA_RECEIPT_TYPE,
-        "provider_contract_version": "V12",
+        "provider_contract_version": contract.version,
         "plan_id": contract.plan_id,
         "host_run_id": contract.host_run_id,
         "model_endpoint": MODEL_METADATA_ENDPOINT,
@@ -935,7 +942,9 @@ def _validate_receipt_document(
         "pagination_count": 0,
         "terminal_state": MODEL_METADATA_TERMINAL_STATE,
     }
-    if contract.version != "V12" or any(document.get(key) != value for key, value in fixed.items()):
+    if contract.version not in MODEL_METADATA_CONTRACT_VERSIONS or any(
+        document.get(key) != value for key, value in fixed.items()
+    ):
         raise ModelMetadataReceiptError("receipt fixed semantics drifted")
     if (
         document.get("repository_commit") != package_commit
@@ -958,8 +967,9 @@ def _validate_receipt_document(
         document.get("authorization_reference"),
         label="authorization reference",
     )
-    if not reference.startswith("AUTH-T09-V12-"):
-        raise ModelMetadataReceiptError("receipt authorization is not V12")
+    prefix = contract.authorization_prefix
+    if not isinstance(prefix, str) or not reference.startswith(prefix):
+        raise ModelMetadataReceiptError("receipt authorization is not selected-contract authority")
     if expected_authorization_reference is not None and reference != (
         expected_authorization_reference
     ):

@@ -26,14 +26,11 @@ from typing import Any, cast
 from jsonschema import Draft202012Validator, FormatChecker
 
 from giclab.harness import t09_sira_pilot as pilot_contract
+from giclab.harness.t09_provider_contracts import provider_contract_for_plan_id
 from giclab.harness.t09_sira_pilot import (
-    ATTEMPT_ORDER,
     DATASET_REVISION,
-    EVALUATOR_RUN_IDS,
     EVALUATOR_SHA256,
-    LOCAL_FINALIZER_QUALIFICATION_ID,
     MODEL_REVISION,
-    PLAN_ID,
     SIRA_COMMIT,
     TASK_REFERENCE_SHA256S,
     TASK_TEXT_SHA256S,
@@ -165,6 +162,7 @@ def _validate_raw_attempt(
     manifest_path: Path,
     receipt_path: Path,
     run_id: str,
+    plan_id: str,
     package_commit: str,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Re-hash the complete immutable condition source before downstream work."""
@@ -174,13 +172,13 @@ def _validate_raw_attempt(
     files = manifest.get("files")
     if (
         manifest.get("schema_version") != "0.1.0"
-        or manifest.get("plan_id") != PLAN_ID
+        or manifest.get("plan_id") != plan_id
         or manifest.get("run_id") != run_id
         or manifest.get("package_commit") != package_commit
         or manifest.get("raw_attempt_root") != expected_raw_root_name
         or not isinstance(files, list)
         or receipt.get("schema_version") != "0.1.0"
-        or receipt.get("plan_id") != PLAN_ID
+        or receipt.get("plan_id") != plan_id
         or receipt.get("run_id") != run_id
         or receipt.get("raw_manifest_sha256") != file_sha256(manifest_path)
         or receipt.get("raw_attempt_complete") is not True
@@ -668,6 +666,7 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
         args.execution_contract.resolve(strict=True),
         expected_sha256=args.execution_contract_sha256,
     )
+    provider_identity = provider_contract_for_plan_id(contract.plan_id)
     frozen_manifest_path = args.frozen_run_manifest.resolve(strict=True)
     if file_sha256(frozen_manifest_path) != args.frozen_run_manifest_sha256:
         raise T09PilotError("frozen run manifest hash changed")
@@ -704,7 +703,14 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
         observed_interpreter_identity = _interpreter_launcher_identity(interpreter_path)
         if (
             local_qualification.get("schema_version") != "0.1.0"
-            or local_qualification.get("qualification_id") != LOCAL_FINALIZER_QUALIFICATION_ID
+            or local_qualification.get("provider_contract_version") != provider_identity.version
+            or local_qualification.get("qualification_id")
+            != provider_identity.local_finalizer_qualification_id
+            or local_qualification.get("plan_id") != provider_identity.plan_id
+            or local_qualification.get("host_run_id") != provider_identity.host_run_id
+            or local_qualification.get("attempt_order") != list(provider_identity.attempt_order)
+            or local_qualification.get("evaluator_run_ids")
+            != list(provider_identity.evaluator_run_ids)
             or local_qualification.get("package_commit") != args.package_commit
             or local_qualification.get("execution_contract_sha256") != contract.sha256
             or any(
@@ -739,7 +745,7 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
             raise T09PilotError("qualified local finalizer runtime drifted")
         _disable_local_network()
     if (
-        frozen_manifest.get("plan_id") != PLAN_ID
+        frozen_manifest.get("plan_id") != provider_identity.plan_id
         or frozen_manifest.get("clean_package_commit") != args.package_commit
         or frozen_manifest.get("execution_contract_sha256") != contract.sha256
         or frozen_manifest.get("replacement_image_id") != args.replacement_image_id
@@ -802,6 +808,7 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
         manifest_path=args.raw_attempt_manifest,
         receipt_path=args.raw_attempt_receipt,
         run_id=attempt.run_id,
+        plan_id=provider_identity.plan_id,
         package_commit=args.package_commit,
     )
     condition_plan_path = args.condition_plan.resolve(strict=True)
@@ -981,7 +988,9 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
         infrastructure_failure_reasons.append("provider-lifecycle-count-mismatch")
 
     session_paths = _session_paths(raw_root)
-    evaluator_run_id = EVALUATOR_RUN_IDS[ATTEMPT_ORDER.index(attempt.run_id)]
+    evaluator_run_id = provider_identity.evaluator_run_ids[
+        provider_identity.attempt_order.index(attempt.run_id)
+    ]
     evaluator_input = {
         "schema_version": "0.2.0",
         "evaluator_run_id": evaluator_run_id,
@@ -1177,7 +1186,7 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
     )
     outcome.update(
         {
-            "plan_id": PLAN_ID,
+            "plan_id": provider_identity.plan_id,
             "run_id": attempt.run_id,
             "task_id": attempt.task_id,
             "pair_id": attempt.pair_id,
@@ -1208,7 +1217,7 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
     )
     evidence_index: dict[str, object] = {
         "schema_version": "0.3.0",
-        "plan_id": PLAN_ID,
+        "plan_id": provider_identity.plan_id,
         "execution_contract_sha256": contract.sha256,
         "identity": {
             "run_id": attempt.run_id,
@@ -1344,7 +1353,7 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
         evidence=evidence_index,
         score_schema_path=args.score_schema,
         evidence_schema_path=args.evidence_schema,
-        plan_id=PLAN_ID,
+        plan_id=provider_identity.plan_id,
         run_id=attempt.run_id,
         pair_id=attempt.pair_id,
         qualification_id=str(frozen_manifest["qualification_id"]),
@@ -1360,6 +1369,7 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
         manifest_path=args.raw_attempt_manifest,
         receipt_path=args.raw_attempt_receipt,
         run_id=attempt.run_id,
+        plan_id=provider_identity.plan_id,
         package_commit=args.package_commit,
     )
     if retained_manifest != raw_manifest or retained_receipt != raw_receipt:
@@ -1371,7 +1381,7 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
         evidence=cast(dict[str, object], retained_evidence),
         score_schema_path=args.score_schema,
         evidence_schema_path=args.evidence_schema,
-        plan_id=PLAN_ID,
+        plan_id=provider_identity.plan_id,
         run_id=attempt.run_id,
         pair_id=attempt.pair_id,
         qualification_id=str(frozen_manifest["qualification_id"]),

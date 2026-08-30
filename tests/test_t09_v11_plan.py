@@ -165,8 +165,10 @@ def test_v11_execution_plane_is_typed_renderable_and_statically_unauthorized() -
         execution_path,
         expected_sha256=str(execution["execution_contract_sha256"]),
     )
-    assert tuple(attempt.run_id for attempt in loaded.attempts) == pilot.ATTEMPT_ORDER
-    assert V11_PROVIDER_CONTRACT.plan_id == pilot.PLAN_ID == "PLAN-EXP0001-PILOT-V11"
+    assert tuple(attempt.run_id for attempt in loaded.attempts) == (
+        V11_PROVIDER_CONTRACT.attempt_order
+    )
+    assert V11_PROVIDER_CONTRACT.plan_id == "PLAN-EXP0001-PILOT-V11"
     assert V11_PROVIDER_CONTRACT.host_run_id == "RUN-T09-PILOT-HOST-AUTONOMOUS-0004"
     assert execution_document["authorized"] is False
     assert execution_document["authorization_reference"] is None
@@ -395,7 +397,8 @@ def test_v11_cleanup_authority_precedes_post_identity_package_transition() -> No
     provider_source = (ROOT / "src/giclab/harness/t09_pragmatic_provider.py").read_text()
     remote_source = (ROOT / "containers/sira-smoke/pragmatic/t09_remote_runner.py").read_text()
     assert 'closeout.add_argument("--remote-cleanup-journal", type=Path)' in provider_source
-    assert "CONTAINER_PREFIX: Final = ACTIVE_PROVIDER_CONTRACT.container_prefix" in remote_source
+    assert "ACTIVE_PROVIDER_CONTRACT" not in remote_source
+    assert "contract.container_prefix" in remote_source
     assert V11_PROVIDER_CONTRACT.container_prefix == "giclab-t09-pilot-v11-autonomous-"
     assert "import_continuation(remote)" in provider_source
 

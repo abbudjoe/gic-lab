@@ -1033,6 +1033,7 @@ def test_retry5_condition_and_finalizer_docker_invocations_disable_cores(
         attempt_root=raw_root,
         container_name="retry5-condition",
         image_id="sha256:" + "a" * 64,
+        contract=V8_PROVIDER_CONTRACT,
     )
     assert argv.count("--ulimit") == 1
     assert argv[argv.index("--ulimit") + 1] == "core=0:0"
@@ -1292,7 +1293,7 @@ def test_retry5_browser_teardown_scans_for_cores_after_container_removal(
 
     monkeypatch.setattr(host, "remove_container", remove_container)
     monkeypatch.setattr(host, "detect_core_artifacts", detect_core_artifacts)
-    monkeypatch.setattr(host, "owned_containers", lambda *_: [])
+    monkeypatch.setattr(host, "owned_containers", lambda *_, **_kwargs: [])
     monkeypatch.setattr(
         host.subprocess,
         "run",
@@ -1302,6 +1303,7 @@ def test_retry5_browser_teardown_scans_for_cores_after_container_removal(
         artifact_root=tmp_path,
         prefix=["docker"],
         image_id="sha256:" + "a" * 64,
+        contract=V8_PROVIDER_CONTRACT,
         cleanup_journal=_early_cleanup_journal(
             tmp_path,
             host,
@@ -1729,7 +1731,7 @@ def test_retry5_oversized_tree_gets_private_essential_failure_seal(
     monkeypatch.setattr(
         host,
         "manifest_for_run",
-        lambda _document, run_id: (
+        lambda _document, run_id, **_kwargs: (
             manifest if run_id == manifest["run_id"] else (_ for _ in ()).throw(KeyError(run_id))
         ),
     )
@@ -2074,7 +2076,7 @@ def test_retry5_preentry_core_incident_is_a_permanent_nonretryable_stop(
         lambda_started_at_epoch=1.0,
     )
     monkeypatch.setattr(host, "remove_container", lambda *_: True)
-    monkeypatch.setattr(host, "owned_containers", lambda *_: [])
+    monkeypatch.setattr(host, "owned_containers", lambda *_, **_kwargs: [])
 
     with pytest.raises(Exception, match="security stop or residue"):
         host.record_preentry_condition_failure(
@@ -2084,6 +2086,7 @@ def test_retry5_preentry_core_incident_is_a_permanent_nonretryable_stop(
             prefix=["docker"],
             container_name="giclab-t09-pilot-v7-preentry",
             run_id=ATTEMPT_ORDER[0],
+            contract=V8_PROVIDER_CONTRACT,
             reason="synthetic-preentry-core-incident",
             returncode=134,
             package_commit="b" * 40,
@@ -2130,6 +2133,7 @@ def test_retry5_preentry_structural_privacy_finding_is_not_retryable(
             prefix=["docker"],
             container_name="giclab-t09-pilot-v7-preentry",
             run_id=ATTEMPT_ORDER[0],
+            contract=V8_PROVIDER_CONTRACT,
             reason="synthetic-preentry-private-path",
             returncode=1,
             package_commit="b" * 40,
@@ -2231,6 +2235,7 @@ def test_retry5_aggregate_stage_rejects_a_consumed_prefix_without_direct_export_
     with pytest.raises(Exception, match="lacks its off-host verification acknowledgement"):
         host.stage(
             SimpleNamespace(
+                provider_contract="V11",
                 artifact_root=artifact_root,
                 repository=ROOT,
                 package_commit="d" * 40,
@@ -2293,6 +2298,7 @@ def test_active_runner_rejects_retry5_pilot_state_before_any_destructive_action(
     with pytest.raises(Exception, match="requires its frozen provider runner"):
         host.cleanup(
             SimpleNamespace(
+                provider_contract="V8",
                 artifact_root=artifact_root,
                 repository=ROOT,
                 package_commit="d" * 40,
@@ -2337,6 +2343,7 @@ def test_active_runner_rejects_retry5_started_state_before_any_destructive_actio
     with pytest.raises(Exception, match="requires its frozen provider runner"):
         host.cleanup(
             SimpleNamespace(
+                provider_contract="V8",
                 artifact_root=artifact_root,
                 repository=ROOT,
                 package_commit="c" * 40,
@@ -2412,6 +2419,7 @@ def test_retry5_cleanup_rejects_unacknowledged_raw_before_any_destructive_action
     with pytest.raises(Exception, match="lacks its off-host verification acknowledgement"):
         host.cleanup(
             SimpleNamespace(
+                provider_contract="V11",
                 artifact_root=artifact_root,
                 repository=ROOT,
                 package_commit="d" * 40,
@@ -2459,6 +2467,7 @@ def test_retry5_cleanup_requires_started_reservation_recovery_before_destruction
     with pytest.raises(Exception, match="requires recover-attempt-seal"):
         host.cleanup(
             SimpleNamespace(
+                provider_contract="V11",
                 artifact_root=artifact_root,
                 repository=ROOT,
                 package_commit="c" * 40,
@@ -2499,6 +2508,7 @@ def test_retry5_historical_regression_keeps_its_original_finalizer_identity() ->
 
     receipt = host.validate_real_evidence_regression(
         ROOT,
+        contract=V8_PROVIDER_CONTRACT,
         expected_finalizer_source_sha256=host.HISTORICAL_REAL_EVIDENCE_FINALIZER_SHA256,
     )
 
@@ -2506,7 +2516,7 @@ def test_retry5_historical_regression_keeps_its_original_finalizer_identity() ->
     current_finalizer_sha256 = host.file_sha256(ROOT / host.FINALIZER_RELATIVE_PATH)
     assert current_finalizer_sha256 != host.HISTORICAL_REAL_EVIDENCE_FINALIZER_SHA256
     with pytest.raises(Exception, match="real-evidence finalizer regression"):
-        host.validate_real_evidence_regression(ROOT)
+        host.validate_real_evidence_regression(ROOT, contract=V8_PROVIDER_CONTRACT)
 
 
 def test_retry5_slot2_normalizes_direct_slot1_authority_without_name_collision(
@@ -3210,7 +3220,7 @@ def test_retry5_reserved_condition_recovery_seals_runtime_core_truth_without_uns
         lambda *_args, **_kwargs: {"status": "exited", "running": False},
     )
     monkeypatch.setattr(host, "remove_container", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(host, "owned_containers", lambda _prefix: [])
+    monkeypatch.setattr(host, "owned_containers", lambda _prefix, **_kwargs: [])
     if host_scan_failure:
         monkeypatch.setattr(
             host,
@@ -3539,6 +3549,7 @@ def test_retry5_finalizer_core_is_removed_and_stops_selection(tmp_path: Path) ->
             artifact_root=artifact_root,
             finalized_root=finalized_root,
             run_id=ATTEMPT_ORDER[0],
+            contract=V8_PROVIDER_CONTRACT,
             execution_contract_sha256=contract_sha256,
             receipt_path=receipt,
             detection_stage="synthetic-finalizer-regression",

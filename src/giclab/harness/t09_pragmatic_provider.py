@@ -69,15 +69,22 @@ from giclab.harness.t09_model_metadata_receipt import (
     validate_model_metadata_receipt,
 )
 from giclab.harness.t09_provider_contracts import (
+    PROVIDER_CONTRACTS,
     V5_PROVIDER_CONTRACT,
     V6_PROVIDER_CONTRACT,
     V7_PROVIDER_CONTRACT,
-    V12_PROVIDER_CONTRACT,
     T09ProviderContract,
     T09ProviderContractError,
     load_provider_profile,
     provider_contract,
 )
+
+_MODEL_METADATA_RECEIPT_CONTRACT_VERSIONS: Final = frozenset({"V12", "V13"})
+
+
+def _uses_model_metadata_receipt(contract: T09ProviderContract) -> bool:
+    return contract.version in _MODEL_METADATA_RECEIPT_CONTRACT_VERSIONS
+
 
 AUTONOMOUS_V9_LAUNCH_PACKAGE_COMMIT: Final = "807eab38d6dfec9aac0a154964c2997be994c9e9"
 AUTONOMOUS_V9_STALE_COMMAND_AUTHORIZATION_SHA256S: Final = {
@@ -319,7 +326,7 @@ class CampaignLifecycle:
             expected_limits = AutonomousPilotLifecycleLimits(
                 maximum_preflight_provider_cost_cents=2_000
             )
-        elif self.contract.version in {"V9", "V10", "V11", "V12"}:
+        elif self.contract.version in {"V9", "V10", "V11", "V12", "V13"}:
             expected_limits = AutonomousPilotLifecycleLimits()
         else:  # pragma: no cover - contracts validate supported versions before construction
             raise T09ProviderError("unsupported provider lifecycle contract")
@@ -957,7 +964,7 @@ def load_campaign_lifecycle(
             persistent_filesystems=retry_limits.persistent_filesystems,
         )
 
-    if contract.version not in {"V8", "V9", "V10", "V11", "V12"}:
+    if contract.version not in {"V8", "V9", "V10", "V11", "V12", "V13"}:
         raise T09ProviderError("provider lifecycle contract is unsupported")
     lifecycle_fields = {
         "cumulative_accounting_origin",
@@ -984,7 +991,7 @@ def load_campaign_lifecycle(
         "supervised_release_rule",
         "control_plane",
     }
-    if contract.version == "V12":
+    if _uses_model_metadata_receipt(contract):
         lifecycle_fields.update(
             {
                 "immutable_model_unavailable_disposition",
@@ -1027,7 +1034,7 @@ def load_campaign_lifecycle(
         }
     ):
         raise T09ProviderError("provider clock or replacement-launch contract drifted")
-    if contract.version == "V12" and (
+    if _uses_model_metadata_receipt(contract) and (
         raw.get("immutable_model_unavailable_disposition")
         != "stop-before-lambda-launch-zero-lambda-cost"
         or raw.get("model_metadata_request_count_total") != 1
@@ -1043,7 +1050,7 @@ def load_campaign_lifecycle(
         or raw.get("model_metadata_receipt_required") is not True
         or raw.get("model_metadata_receipt_replay_allowed") is not False
     ):
-        raise T09ProviderError("V12 model metadata freshness ownership drifted")
+        raise T09ProviderError("model metadata freshness ownership drifted")
     autonomous_limits = AutonomousPilotLifecycleLimits(
         preflight_iteration_wall_seconds=_integer(
             raw["preflight_iteration_wall_seconds"], label="preflight iteration wall"
@@ -1160,7 +1167,7 @@ def validate_authorization_ledger(
     repository: Path,
     package_commit: str,
 ) -> dict[str, object]:
-    if contract.version == "V12":
+    if _uses_model_metadata_receipt(contract):
         try:
             package_tree = _git_commit_tree(repository, package_commit)
             overlay = validate_model_metadata_authorization_overlay(
@@ -1176,7 +1183,7 @@ def validate_authorization_ledger(
                 "authorization_ledger_sha256": file_sha256(path),
             }
         except (ModelMetadataReceiptError, OSError, subprocess.SubprocessError) as exc:
-            raise T09ProviderError("V12 authorization overlay is invalid") from exc
+            raise T09ProviderError("model metadata authorization overlay is invalid") from exc
     if contract.version != "V11":
         raise T09ProviderError(
             "frozen historical provider authority is inspectable but cannot be replayed"
@@ -1264,7 +1271,7 @@ def validate_cleanup_authority_ledger(
     resource.  This narrower validator intentionally omits all launch admission.
     """
 
-    if contract.version in {"V11", "V12"}:
+    if contract.version in {"V11", "V12", "V13"}:
         return validate_authorization_ledger(
             path,
             contract=contract,
@@ -1357,10 +1364,10 @@ def model_metadata_preflight(
     transport: ModelMetadataTransport | None = None,
     clock: Callable[[], float] = time.time,
 ) -> Path:
-    """Run the sole V12 model GET and hand its sealed receipt to later planes."""
+    """Run the sole selected-contract model GET and seal its receipt for later planes."""
 
-    if contract is not V12_PROVIDER_CONTRACT:
-        raise T09ProviderError("model metadata preflight requires the V12 provider contract")
+    if not _uses_model_metadata_receipt(contract):
+        raise T09ProviderError("selected provider contract has no model metadata preflight")
     repository = repository.resolve(strict=True)
     _verify_clean_package(repository, package_commit)
     package_tree = _git_commit_tree(repository, package_commit)
@@ -1401,7 +1408,7 @@ def model_metadata_preflight(
         )
         return receipt
     except ModelMetadataReceiptError as exc:
-        raise T09ProviderError("V12 model metadata receipt was not sealed") from exc
+        raise T09ProviderError("model metadata receipt was not sealed") from exc
 
 
 def _destroy_bytearray(value: bytearray) -> None:
@@ -2744,14 +2751,14 @@ def _entry_projection(
         "authorization_ledger_sha256",
     }
     model_metadata_receipt_sha256_value: str | None = None
-    if contract.version == "V12":
+    if _uses_model_metadata_receipt(contract):
         authorization_fields.add("model_metadata_receipt_sha256")
         candidate_receipt_sha256 = authorization.get("model_metadata_receipt_sha256")
         if (
             not isinstance(candidate_receipt_sha256, str)
             or _HEX64.fullmatch(candidate_receipt_sha256) is None
         ):
-            raise T09ProviderError("V12 provider authorization lacks the receipt binding")
+            raise T09ProviderError("provider authorization lacks the receipt binding")
         model_metadata_receipt_sha256_value = candidate_receipt_sha256
     if (
         set(authorization) != authorization_fields
@@ -2769,7 +2776,7 @@ def _entry_projection(
         contract.validate_authority(authorization_reference, authorization_source_sha256)
     except T09ProviderContractError as exc:
         raise T09ProviderError("provider entry authorization binding drifted") from exc
-    if contract.version == "V12":
+    if _uses_model_metadata_receipt(contract):
         receipt_binding = _load_json(
             root / "model-metadata-receipt-binding.json", maximum_bytes=65_536
         )
@@ -2891,7 +2898,7 @@ def _entry_projection(
         "prior_lambda_cost_usd",
         "replacement_eligibility_sha256",
     }
-    if contract.version == "V12":
+    if _uses_model_metadata_receipt(contract):
         campaign_binding_fields.add("model_metadata_receipt_sha256")
     binding_fields = set(campaign_binding)
     if (
@@ -2913,7 +2920,7 @@ def _entry_projection(
         or launch_slot not in range(1, contract.max_launch_count + 1)
         or campaign_binding.get("owned_lambda_started_at_epoch") != float(launch_started)
         or (
-            contract.version == "V12"
+            _uses_model_metadata_receipt(contract)
             and campaign_binding.get("model_metadata_receipt_sha256")
             != model_metadata_receipt_sha256_value
         )
@@ -6133,14 +6140,16 @@ def launch_campaign(
     plan_path = repository / contract.provider_profile_path
     plan_sha256 = file_sha256(plan_path)
     package_tree = (
-        _git_commit_tree(repository, package_commit) if contract.version == "V12" else None
+        _git_commit_tree(repository, package_commit)
+        if _uses_model_metadata_receipt(contract)
+        else None
     )
     model_metadata_receipt_sha256_value: str | None = None
-    if contract.version == "V12":
+    if _uses_model_metadata_receipt(contract):
         if model_metadata_receipt is None:
-            raise T09ProviderError("V12 provider launch requires the model metadata receipt")
+            raise T09ProviderError("provider launch requires the model metadata receipt")
         if package_tree is None:  # pragma: no cover - guarded by the typed contract
-            raise T09ProviderError("V12 package tree is unavailable")
+            raise T09ProviderError("package tree is unavailable")
         v12_package_tree = package_tree
         try:
             validated_receipt = _validate_model_metadata_receipt_for_provider(
@@ -6153,9 +6162,9 @@ def launch_campaign(
             )
             model_metadata_receipt_sha256_value = semantic_projection_sha256(validated_receipt)
         except (ModelMetadataReceiptError, OSError, subprocess.SubprocessError) as exc:
-            raise T09ProviderError("V12 model metadata receipt validation failed") from exc
+            raise T09ProviderError("model metadata receipt validation failed") from exc
     elif model_metadata_receipt is not None:
-        raise T09ProviderError("model metadata receipt is only valid for V12")
+        raise T09ProviderError("model metadata receipt is not valid for the selected contract")
     if private_root.exists():
         raise T09ProviderError("provider private root already exists; launch slot is single use")
     private_root.mkdir(mode=0o700, parents=True, exist_ok=False)
@@ -7187,7 +7196,7 @@ def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser()
     result.add_argument(
         "--provider-contract",
-        choices=("V3", "V4", "V5", "V6", "V7", "V8", "V9", "V10", "V11", "V12"),
+        choices=tuple(PROVIDER_CONTRACTS),
         required=True,
     )
     result.add_argument("--repository", type=Path, required=True)
@@ -7228,8 +7237,8 @@ def main() -> int:
     args = parser().parse_args()
     contract = provider_contract(args.provider_contract)
     if args.operation == "model-metadata-preflight":
-        if contract is not V12_PROVIDER_CONTRACT:
-            raise T09ProviderError("model metadata preflight requires the V12 provider contract")
+        if not _uses_model_metadata_receipt(contract):
+            raise T09ProviderError("selected provider contract has no model metadata preflight")
         model_metadata_preflight(
             contract=contract,
             repository=args.repository,

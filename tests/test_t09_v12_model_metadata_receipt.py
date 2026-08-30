@@ -1195,6 +1195,7 @@ def test_host_accepts_provider_admitted_receipt_durably_offline(
     artifact_root = tmp_path / "artifacts"
     (artifact_root / "pilot-v12").mkdir(mode=0o700, parents=True)
     acknowledgement = host.validate_model_metadata_receipt_offline(
+        contract=V12_PROVIDER_CONTRACT,
         receipt_path=receipt,
         repository=ROOT,
         package_commit=BASE_COMMIT,
@@ -1247,6 +1248,7 @@ def test_host_binding_drift_fails_before_acknowledgement(
     (artifact_root / "pilot-v12").mkdir(mode=0o700, parents=True)
     with pytest.raises(host.T09HostError):
         host.validate_model_metadata_receipt_offline(
+            contract=V12_PROVIDER_CONTRACT,
             receipt_path=receipt,
             repository=ROOT,
             package_commit=BASE_COMMIT,
@@ -1282,6 +1284,7 @@ def test_host_count_or_file_metadata_drift_fails_before_manifest(
     (artifact_root / "pilot-v12").mkdir(mode=0o700, parents=True)
     with pytest.raises(host.T09HostError):
         host.validate_model_metadata_receipt_offline(
+            contract=V12_PROVIDER_CONTRACT,
             receipt_path=receipt,
             repository=ROOT,
             package_commit=BASE_COMMIT,
@@ -1356,6 +1359,7 @@ def test_end_to_end_fake_handoff_owns_one_openai_get_and_no_provider_or_host_get
     artifact_root = tmp_path / "host-artifacts"
     (artifact_root / "pilot-v12").mkdir(mode=0o700, parents=True)
     acknowledgement = host.validate_model_metadata_receipt_offline(
+        contract=V12_PROVIDER_CONTRACT,
         receipt_path=retained,
         repository=ROOT,
         package_commit=BASE_COMMIT,
