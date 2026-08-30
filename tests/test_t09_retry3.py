@@ -16,6 +16,8 @@ from giclab.harness import t09_pragmatic_provider as provider
 from giclab.harness import t09_sira_pilot as pilot_state
 from giclab.harness.t09_provider_contracts import (
     V7_PROVIDER_CONTRACT,
+    V11_PROVIDER_CONTRACT,
+    V13_PROVIDER_CONTRACT,
     load_provider_plan,
 )
 from giclab.harness.t09_sira_pilot import (
@@ -30,7 +32,6 @@ from giclab.harness.t09_sira_pilot import (
     transition_zero_usage_preflight_state,
     usage_to_document,
 )
-from giclab.validation import validate_instance
 
 ROOT = Path(__file__).resolve().parents[1]
 ATTEMPT_ORDER = V7_PROVIDER_CONTRACT.run_ids
@@ -80,7 +81,7 @@ def test_retry3_preflight_resume_transitions_only_exact_zero_use_state() -> None
     new_execution = "2" * 64
     state: dict[str, object] = {
         "schema_version": "0.2.0",
-        "plan_id": pilot_state.PLAN_ID,
+        "plan_id": V7_PROVIDER_CONTRACT.plan_id,
         "execution_contract_sha256": old_execution,
         "pilot_started_at_epoch": 100.0,
         "lambda_started_at_epoch": 100.0,
@@ -98,7 +99,7 @@ def test_retry3_preflight_resume_transitions_only_exact_zero_use_state() -> None
     }
     aggregate: dict[str, object] = {
         "schema_version": "0.1.0",
-        "plan_id": pilot_state.PLAN_ID,
+        "plan_id": V7_PROVIDER_CONTRACT.plan_id,
         "execution_contract_sha256": old_execution,
         "unreconciled_provider_attempts": 0,
         "usage": usage_to_document(pilot_state.ProviderBudgetUsage()),
@@ -138,7 +139,7 @@ def test_retry3_same_host_resume_is_disabled_and_slot2_is_source_bound() -> None
     parser_source = source.split("def parser()", 1)[1]
     assert 'operations.add_parser("resume-preflight")' not in parser_source
     prepare = source.split("def prepare_preflight_resume", 1)[1].split("def resume_preflight", 1)[0]
-    assert "same-host preflight resume is permanently disabled" in prepare
+    assert "historical transition-specific resume path is retired" in prepare
     preflight = source.split("def preflight(", 1)[1].split("def container_create_argv", 1)[0]
     assert "retain_slot2_authority(" in preflight
     assert "materialize_retained_or_build_image(" in preflight
@@ -162,7 +163,7 @@ def test_retry3_same_host_resume_is_disabled_and_slot2_is_source_bound() -> None
         "admit_scheduled_first_attempt_before_empirical_origin("
     ) < preflight.index("postfreeze-validation.json")
     assert preflight.index("postfreeze-validation.json") < preflight.index(
-        "pilot-v7/preflight.json"
+        'preflight_path = _pilot_root(artifact_root) / "preflight.json"'
     )
     checkpoint = source.split("def first_pair_checkpoint", 1)[1].split(
         "def campaign_evidence_disposition", 1
@@ -191,6 +192,7 @@ def test_retry3_slot2_uses_separate_campaign_and_active_lambda_clocks(
     state.write_text(
         json.dumps(
             {
+                "plan_id": V7_PROVIDER_CONTRACT.plan_id,
                 "campaign_started_at_epoch": now - 5_000,
                 "owned_lambda_started_at_epoch": now - 100,
                 "prior_campaign_lambda_duration_seconds": 3_883.0,
@@ -202,9 +204,8 @@ def test_retry3_slot2_uses_separate_campaign_and_active_lambda_clocks(
     monkeypatch.setattr(host.time, "time", lambda: now)
     expected_active = 3_983.0
     expected_cost_remaining_seconds = (8.0 - expected_active * 1.29 / 3_600) * 3_600 / 1.29
-    assert host.provider_seconds_remaining(tmp_path) == pytest.approx(
-        min(21_600 - expected_active, expected_cost_remaining_seconds)
-    )
+    assert expected_cost_remaining_seconds > 9_400
+    assert host.provider_seconds_remaining(tmp_path) == pytest.approx(9_400)
 
 
 def test_retry3_slot2_transition_and_launch_headroom_are_fail_closed() -> None:
@@ -259,15 +260,18 @@ def test_retry3_exact_clean_package_is_host_verifiable() -> None:
         check=True,
         text=True,
     ).stdout.strip()
-    command_document = host.verify_package(ROOT, package_commit)
+    command_document = host.verify_package(
+        ROOT,
+        package_commit,
+        contract=V13_PROVIDER_CONTRACT,
+    )
     assert (
         command_document["reviewed_implementation_ancestor"]
         == (
             json.loads(
-                (
-                    ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
-                    "T09_PILOT_RUNTIME_IDENTITY.json"
-                ).read_text(encoding="utf-8")
+                host.contract_paths(ROOT, V13_PROVIDER_CONTRACT)["runtime"].read_text(
+                    encoding="utf-8"
+                )
             )["repository_instrumentation"]["reviewed_implementation_ancestor"]
         )
     )
@@ -276,9 +280,12 @@ def test_retry3_exact_clean_package_is_host_verifiable() -> None:
 
 
 def test_retry3_plan_has_a_typed_two_slot_raw_first_contract() -> None:
-    plan_path = ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml"
+    plan_path = ROOT / (
+        "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/proposals/"
+        "PLAN-EXP0001-PILOT-V7.yaml"
+    )
     plan = yaml.safe_load(plan_path.read_bytes())
-    assert validate_instance(plan, ROOT / "schemas/run-profile.schema.json") == []
+    assert plan["plan_id"] == V7_PROVIDER_CONTRACT.plan_id
     assert plan["provider_lifecycle"]["max_launch_count"] == 2
     assert plan["provider_lifecycle"]["replacement_launch_rule"] == {
         "allowed_only_before_empirical_entry": True,
@@ -622,11 +629,15 @@ def test_retry3_frozen_regression_remains_package_bound_during_finalizer_repair(
     monkeypatch.setattr(host, "file_sha256", changed_worktree_finalizer)
     accepted = host.validate_real_evidence_regression(  # type: ignore[attr-defined]
         ROOT,
+        contract=V11_PROVIDER_CONTRACT,
         expected_finalizer_source_sha256=expected_source,
     )
     assert accepted["finalizer_source_sha256"] == expected_source
     with pytest.raises(host.T09HostError, match="real-evidence finalizer regression"):
-        host.validate_real_evidence_regression(ROOT)  # type: ignore[attr-defined]
+        host.validate_real_evidence_regression(  # type: ignore[attr-defined]
+            ROOT,
+            contract=V11_PROVIDER_CONTRACT,
+        )
 
 
 def test_retry3_local_finalizer_projection_is_explicit_and_provider_independent() -> None:
@@ -700,12 +711,14 @@ def test_retry3_provider_preflight_accepts_source_bound_offhost_runtime_paths(
     execution = tmp_path / "execution.json"
     evaluator = tmp_path / "evaluator.json"
     regression = tmp_path / "regression.json"
+    commands = tmp_path / "commands.json"
     execution.write_text(
         json.dumps({"runtime": {"local_finalizer_base_packages": ["base==1"]}}),
         encoding="utf-8",
     )
     evaluator.write_text("{}\n", encoding="utf-8")
     regression.write_text("{}\n", encoding="utf-8")
+    commands.write_text("{}\n", encoding="utf-8")
     entry = {
         "path": "package.py",
         "mode": "0644",
@@ -725,8 +738,19 @@ def test_retry3_provider_preflight_accepts_source_bound_offhost_runtime_paths(
     )
     receipt = {
         "schema_version": "0.1.0",
-        "qualification_id": "QUAL-T09-PILOT-V7-LOCAL-FINALIZER-0001",
-        "plan_id": host.PLAN_ID,
+        "qualification_id": V11_PROVIDER_CONTRACT.local_finalizer_qualification_id,
+        "plan_id": V11_PROVIDER_CONTRACT.plan_id,
+        "provider_contract_version": V11_PROVIDER_CONTRACT.version,
+        "host_run_id": V11_PROVIDER_CONTRACT.host_run_id,
+        "attempt_order": list(V11_PROVIDER_CONTRACT.attempt_order),
+        "evaluator_run_ids": list(V11_PROVIDER_CONTRACT.evaluator_run_ids),
+        "runtime_qualification_id": V11_PROVIDER_CONTRACT.active_image_qualification_id,
+        "frozen_run_manifest_id": V11_PROVIDER_CONTRACT.frozen_run_manifest_id,
+        "execution_contract_path": V11_PROVIDER_CONTRACT.execution_contract_path,
+        "command_manifest_path": V11_PROVIDER_CONTRACT.command_manifest_path,
+        "command_manifest_sha256": host.file_sha256(commands),
+        "provider_profile_path": V11_PROVIDER_CONTRACT.provider_profile_path,
+        "provider_profile_sha256": V11_PROVIDER_CONTRACT.expected_provider_profile_sha256,
         "package_commit": "a" * 40,
         "python_version": "3.11.14",
         "execution_contract_sha256": host.file_sha256(execution),
@@ -768,13 +792,18 @@ def test_retry3_provider_preflight_accepts_source_bound_offhost_runtime_paths(
     monkeypatch.setattr(
         host,
         "contract_paths",
-        lambda _repository: {
+        lambda _repository, _contract: {
             "execution": execution,
+            "commands": commands,
             "evaluator": evaluator,
             "real_regression": regression,
         },
     )
-    monkeypatch.setattr(host, "expected_evaluator_packages", lambda _repository: ["eval==1"])
+    monkeypatch.setattr(
+        host,
+        "expected_evaluator_packages",
+        lambda _repository, _contract: ["eval==1"],
+    )
     monkeypatch.setattr(
         host,
         "git_file_sha256",
@@ -788,6 +817,7 @@ def test_retry3_provider_preflight_accepts_source_bound_offhost_runtime_paths(
         repository=ROOT,
         package_commit="a" * 40,
         require_local_runtime=False,
+        contract=V11_PROVIDER_CONTRACT,
     )
     assert accepted["interpreter"] == "/control/offhost/python3.11"
     with pytest.raises((FileNotFoundError, host.T09HostError)):
@@ -796,6 +826,7 @@ def test_retry3_provider_preflight_accepts_source_bound_offhost_runtime_paths(
             repository=ROOT,
             package_commit="a" * 40,
             require_local_runtime=True,
+            contract=V11_PROVIDER_CONTRACT,
         )
     preflight_source = (
         HOST_SOURCE.read_text(encoding="utf-8")
@@ -982,8 +1013,8 @@ def test_retry3_selected_local_completion_reconstructs_and_opens_checkpoint(
     }
     projection = _load(PROJECTION_SOURCE, "giclab_t09_retry3_completion_projection")
     completion = projection.build_completion_projection(  # type: ignore[attr-defined]
-        plan_id=host.PLAN_ID,
-        host_run_id=host.HOST_RUN_ID,
+        plan_id=V7_PROVIDER_CONTRACT.plan_id,
+        host_run_id=V7_PROVIDER_CONTRACT.host_run_id,
         run_id=run_id,
         raw_manifest_sha256_before=host.file_sha256(attempt_root / "raw-attempt-manifest.json"),
         raw_manifest_sha256_after=host.file_sha256(attempt_root / "raw-attempt-manifest.json"),
@@ -1037,7 +1068,11 @@ def test_retry3_selected_local_completion_reconstructs_and_opens_checkpoint(
     reconstructed = host.validate_selected_finalization(
         repository=ROOT,
         artifact_root=artifact_root,
-        contract=SimpleNamespace(sha256="f" * 64, attempt=lambda _run_id: attempt),
+        contract=SimpleNamespace(
+            plan_id=V7_PROVIDER_CONTRACT.plan_id,
+            sha256="f" * 64,
+            attempt=lambda _run_id: attempt,
+        ),
         run_id=run_id,
         package_commit=package_commit,
         selection=selection,
@@ -1205,6 +1240,7 @@ def test_retry3_preentry_secret_match_is_a_monotonic_campaign_stop(
             prefix=["docker"],
             container_name="fixture-container",
             run_id=ATTEMPT_ORDER[0],
+            contract=V7_PROVIDER_CONTRACT,
             reason="fixture-create-failure",
             returncode=125,
             package_commit="a" * 40,

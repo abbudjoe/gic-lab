@@ -18,7 +18,6 @@ import spacy
 
 from giclab.harness.sira_gate_a import ProviderBudgetUsage
 from giclab.harness.t09_sira_pilot import (
-    ATTEMPT_ORDER,
     EvaluatorIdentity,
     evaluate_retained_session,
     file_sha256,
@@ -396,7 +395,9 @@ def run(args: argparse.Namespace) -> dict[str, object]:
     ]
     if rendered != observed:
         raise PreflightError("stored commands do not equal a fresh exact render")
-    if [item.get("run_id") for item in observed if isinstance(item, dict)] != list(ATTEMPT_ORDER):
+    if [item.get("run_id") for item in observed if isinstance(item, dict)] != [
+        attempt.run_id for attempt in contract.attempts
+    ]:
         raise PreflightError("command order drifted")
     pair_diffs = command_document.get("pair_diffs")
     if (
@@ -429,10 +430,15 @@ def run(args: argparse.Namespace) -> dict[str, object]:
     write_aggregate_usage(
         aggregate_path,
         contract_sha256=contract.sha256,
+        plan_id=contract.plan_id,
         usage=ProviderBudgetUsage(),
         unreconciled_provider_attempts=0,
     )
-    observed_usage = load_aggregate_usage(aggregate_path, contract_sha256=contract.sha256)
+    observed_usage = load_aggregate_usage(
+        aggregate_path,
+        contract_sha256=contract.sha256,
+        plan_id=contract.plan_id,
+    )
     if observed_usage != ProviderBudgetUsage():
         raise PreflightError("zero aggregate budget ledger did not round-trip")
 

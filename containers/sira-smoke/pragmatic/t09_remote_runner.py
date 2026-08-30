@@ -70,10 +70,10 @@ from giclab.harness.t09_provider_contracts import (
     V4_PROVIDER_CONTRACT,
     V6_PROVIDER_CONTRACT,
     V11_PROVIDER_CONTRACT,
-    V12_PROVIDER_CONTRACT,
     T09ProviderContract,
     T09ProviderContractError,
     load_provider_plan,
+    provider_contract,
     provider_contract_for_plan_id,
 )
 from giclab.harness.t09_sira_pilot import (
@@ -109,19 +109,6 @@ from giclab.harness.t09_sira_pilot import (
 )
 
 UTC: Final = timezone.utc  # noqa: UP017 - host control plane supports Python 3.10
-ACTIVE_PROVIDER_CONTRACT: Final = V11_PROVIDER_CONTRACT
-PLAN_ID: Final = ACTIVE_PROVIDER_CONTRACT.plan_id
-HOST_RUN_ID: Final = ACTIVE_PROVIDER_CONTRACT.host_run_id
-ARCHIVE_ID: Final = "ARCHIVE-EXP0001-PILOT-V11-AUTONOMOUS-0004"
-STAGE_ID: Final = "STAGE-EXP0001-PILOT-V11-AUTONOMOUS-0004"
-V12_ARCHIVE_ID: Final = "ARCHIVE-EXP0001-PILOT-V12-AUTONOMOUS-0005"
-V12_STAGE_ID: Final = "STAGE-EXP0001-PILOT-V12-AUTONOMOUS-0005"
-QUALIFICATION_ID: Final = cast(str, ACTIVE_PROVIDER_CONTRACT.active_image_qualification_id)
-FROZEN_RUN_MANIFEST_ID: Final = cast(str, ACTIVE_PROVIDER_CONTRACT.frozen_run_manifest_id)
-LOCAL_FINALIZER_QUALIFICATION_ID: Final = cast(
-    str,
-    ACTIVE_PROVIDER_CONTRACT.local_finalizer_qualification_id,
-)
 MODEL: Final = "gpt-4o-2024-11-20"
 SERVICE_TIER: Final = "default"
 HISTORICAL_IMAGE_ID: Final = (
@@ -130,7 +117,6 @@ HISTORICAL_IMAGE_ID: Final = (
 T07_EXECUTION_COMMIT: Final = "5698f04dfd08bc85a66d2355b0a4bd7d3ce24a23"
 SIRA_COMMIT: Final = "93fb8d72de71f9a4a13419670adeb34d93cf7acd"
 SIRA_TREE: Final = "6a6d9068b94d7632d3533a3d6f013d4de6ff76e8"
-REPLACEMENT_IMAGE_TAG: Final = cast(str, ACTIVE_PROVIDER_CONTRACT.replacement_image_tag)
 RETAINED_IMAGE_ARCHIVE_BYTES: Final = 1_207_128_576
 RETAINED_IMAGE_ARCHIVE_SHA256: Final = (
     "623e717c2182eca9cee2f471b7ecd9a57bead2f5263dee64aa5cd954eae5ddb0"
@@ -205,12 +191,13 @@ EVALUATOR_DIRECT_URL_RECORD: Final = (
     "en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/"
     "en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl"
 )
-RUN_IDS: Final = ACTIVE_PROVIDER_CONTRACT.run_ids
-AUTONOMOUS_RUN_IDS: Final = V11_PROVIDER_CONTRACT.run_ids + V12_PROVIDER_CONTRACT.run_ids
-CONTAINER_PREFIX: Final = ACTIVE_PROVIDER_CONTRACT.container_prefix
+AUTONOMOUS_RUN_IDS: Final = tuple(
+    run_id
+    for retained_contract in PROVIDER_CONTRACTS.values()
+    if retained_contract.execution_contract_path is not None
+    for run_id in retained_contract.run_ids
+)
 CONDITION_SUPERVISOR_DIRNAME: Final = ".giclab-supervisor"
-DOCKER_PLAN_LABEL: Final = f"giclab.t09.plan={PLAN_ID}"
-DOCKER_HOST_RUN_LABEL: Final = f"giclab.t09.host_run={HOST_RUN_ID}"
 EXPECTED_PACKAGE_MANIFEST_SHA256: Final = (
     "4ff2603fa5e0f7033ba773decdcb86abf648dcce22e469d26bc48214e390e104"
 )
@@ -316,9 +303,7 @@ MAX_ESSENTIAL_METADATA_BYTES: Final = 4_194_304
 MAX_ATTEMPT_EXPORT_MEMBERS: Final = 2_048
 MAX_ATTEMPT_EXPORT_MANIFEST_BYTES: Final = 2_097_152
 POSTFREEZE_ADMISSION_FIELD: Final = "fresh_empirical_campaign_headroom_passed_before_metadata_get"
-SLOT1_IMAGE_MATERIALIZATION_POLICY: Final = cast(
-    str, ACTIVE_PROVIDER_CONTRACT.image_materialization_policy
-)
+SLOT1_IMAGE_MATERIALIZATION_POLICY: Final = "retained-import-or-one-fallback-build"
 SLOT2_IMAGE_MATERIALIZATION_POLICY: Final = "retained-import-only"
 PINNED_DATASET_SHA256: Final = "359300b029c6891567816f351bf8786e9b018d7af8a1a44b7da9ba5ef4651288"
 HISTORICAL_REAL_EVIDENCE_FINALIZER_SHA256: Final = (
@@ -648,6 +633,18 @@ def _provider_contract_from_receipt(path: Path, *, label: str) -> T09ProviderCon
     )
 
 
+def _argument_provider_contract(args: argparse.Namespace) -> T09ProviderContract:
+    """Resolve the CLI's required exact provider-contract selector."""
+
+    version = getattr(args, "provider_contract", None)
+    if not isinstance(version, str):
+        raise T09HostError("an explicit provider-contract selector is required")
+    try:
+        return provider_contract(version)
+    except T09ProviderContractError as exc:
+        raise T09HostError("provider-contract selector is unsupported") from exc
+
+
 def _require_provider_contract(
     document: dict[str, Any],
     *,
@@ -677,14 +674,14 @@ def _require_contract_run_id(
         raise T09HostError(f"{label} run belongs to another campaign") from exc
 
 
-def _require_active_provider_runner(
+def _require_supported_provider_runner(
     contract: T09ProviderContract,
     *,
     label: str,
 ) -> None:
-    """Prevent current-runner packaging from relabeling historical evidence."""
+    """Prevent this runner from relabeling evidence from an unsupported package."""
 
-    if contract not in {ACTIVE_PROVIDER_CONTRACT, V12_PROVIDER_CONTRACT}:
+    if contract.version not in {"V11", "V12", "V13"}:
         raise T09HostError(f"{label} requires its frozen provider runner")
 
 
@@ -1034,7 +1031,7 @@ def run_logged(
     label: str,
     timeout: int,
     cleanup_journal: EarlyCleanupJournal | None = None,
-    contract: T09ProviderContract = ACTIVE_PROVIDER_CONTRACT,
+    contract: T09ProviderContract,
 ) -> None:
     evidence_root.mkdir(parents=True, exist_ok=True, mode=0o700)
     with (
@@ -1090,7 +1087,7 @@ def _docker_run_prefix(argv: list[str]) -> tuple[list[str], int] | None:
 def _owned_docker_name(
     label: str,
     *,
-    contract: T09ProviderContract = ACTIVE_PROVIDER_CONTRACT,
+    contract: T09ProviderContract,
 ) -> str:
     normalized = re.sub(r"[^a-z0-9]+", "-", label.lower()).strip("-")
     if not normalized or len(normalized) > 80:
@@ -1121,7 +1118,7 @@ def _project_owned_docker_argv(
     prefix: list[str],
     label: str,
     owned_role: str,
-    contract: T09ProviderContract = ACTIVE_PROVIDER_CONTRACT,
+    contract: T09ProviderContract,
 ) -> tuple[list[str], str]:
     """Name and label every Docker run so cleanup can always find it."""
 
@@ -1204,7 +1201,7 @@ def run_owned_docker(
     environment: dict[str, str] | None = None,
     preexec_fn: Callable[[], None] | None = None,
     owned_role: str | None = None,
-    contract: T09ProviderContract = ACTIVE_PROVIDER_CONTRACT,
+    contract: T09ProviderContract,
 ) -> subprocess.CompletedProcess[bytes]:
     """Run one named Docker container with immediate durable ID ownership."""
 
@@ -1535,7 +1532,11 @@ def _safe_extract_git_archive(archive: Path, destination: Path) -> None:
         handle.extractall(destination, members=members)
 
 
-def _build_context_manifest(context: Path) -> dict[str, object]:
+def _build_context_manifest(
+    context: Path,
+    *,
+    contract: T09ProviderContract,
+) -> dict[str, object]:
     files: list[dict[str, object]] = []
     total = 0
     for path in sorted(context.rglob("*")):
@@ -1568,7 +1569,7 @@ def _build_context_manifest(context: Path) -> dict[str, object]:
         raise T09HostError("replacement build context is empty or exceeds the disk cap")
     return {
         "schema_version": "0.2.0",
-        "qualification_id": QUALIFICATION_ID,
+        "qualification_id": contract.active_image_qualification_id,
         "source_date_epoch": SOURCE_DATE_EPOCH,
         "files": files,
         "file_count": len(files),
@@ -1581,6 +1582,7 @@ def _exclude_pinned_nonruntime_env_example(
     upstream: Path,
     *,
     materialization: Path,
+    contract: T09ProviderContract,
 ) -> dict[str, object]:
     """Remove only the exact pinned names-only example before fail-closed scanning."""
 
@@ -1598,7 +1600,7 @@ def _exclude_pinned_nonruntime_env_example(
         raise T09HostError("pinned SiRA environment example identity or content drifted")
     receipt: dict[str, object] = {
         "schema_version": "0.1.0",
-        "qualification_id": QUALIFICATION_ID,
+        "qualification_id": contract.active_image_qualification_id,
         "source_commit": SIRA_COMMIT,
         "source_tree": SIRA_TREE,
         "path": ".env.example",
@@ -1809,8 +1811,9 @@ def retain_prior_qualification_failures(
     failed_candidate_root: Path,
     previous_transition_receipt: Path,
     package_transition_receipt: Path,
+    contract: T09ProviderContract,
 ) -> dict[str, object]:
-    destination = _pilot_root(artifact_root) / "prior-qualification-failures"
+    destination = _pilot_root(artifact_root, contract) / "prior-qualification-failures"
     destination.mkdir(parents=True, mode=0o700)
     context_manifest = _copy_retained_prefix(
         prior_artifact_root,
@@ -1841,9 +1844,9 @@ def retain_prior_qualification_failures(
         transition_copies[label] = file_sha256(target)
     receipt: dict[str, object] = {
         "schema_version": "0.1.0",
-        "plan_id": PLAN_ID,
-        "host_run_id": HOST_RUN_ID,
-        "accepted_qualification_id": QUALIFICATION_ID,
+        "plan_id": contract.plan_id,
+        "host_run_id": contract.host_run_id,
+        "accepted_qualification_id": contract.active_image_qualification_id,
         "context_failure_manifest": context_manifest,
         "failed_candidate_manifest": candidate_manifest,
         "package_transition_receipts": transition_copies,
@@ -1862,6 +1865,7 @@ def carry_forward_replacement_image(
     artifact_root: Path,
     failed_candidate_root: Path,
     prefix: list[str],
+    contract: T09ProviderContract,
 ) -> dict[str, object]:
     failed = _failed_candidate_manifest(
         failed_candidate_root,
@@ -1871,7 +1875,7 @@ def carry_forward_replacement_image(
     if not isinstance(image_id, str) or image_id_if_present(prefix, image_id) != image_id:
         raise T09HostError("failed candidate image cannot be carried forward")
     source = failed_candidate_root / "pilot-v7/replacement-image-qualification"
-    destination = _pilot_root(artifact_root) / "replacement-image-qualification"
+    destination = _pilot_root(artifact_root, contract) / "replacement-image-qualification"
     _copy_retained_prefix(source, destination, label="failed candidate materialization")
     prior_receipt_path = destination / "receipt.json"
     prior_receipt = load_object(prior_receipt_path, label="carried candidate receipt")
@@ -1884,10 +1888,10 @@ def carry_forward_replacement_image(
     prior_receipt_path.unlink()
     result: dict[str, object] = {
         **prior_receipt,
-        "qualification_id": QUALIFICATION_ID,
+        "qualification_id": contract.active_image_qualification_id,
         "method": "single-built-candidate-carried-forward-after-host-control-repair",
         "candidate_qualification_id": FAILED_CANDIDATE_QUALIFICATION_ID,
-        "accepted_qualification_id": QUALIFICATION_ID,
+        "accepted_qualification_id": contract.active_image_qualification_id,
         "candidate_materialization_receipt_sha256": failed["materialization_receipt_sha256"],
         "candidate_failure_manifest_sha256": canonical_sha256(failed),
         "build_count": 1,
@@ -1905,7 +1909,7 @@ def materialize_replacement_image(
     package_commit: str,
     artifact_root: Path,
     prefix: list[str],
-    contract: T09ProviderContract = ACTIVE_PROVIDER_CONTRACT,
+    contract: T09ProviderContract,
 ) -> dict[str, object]:
     replacement_image_tag = cast(str, contract.replacement_image_tag)
     if image_id_if_present(prefix, replacement_image_tag) is not None:
@@ -1943,6 +1947,7 @@ def materialize_replacement_image(
         evidence_root=logs,
         label="historical-source-archive",
         timeout=120,
+        contract=contract,
     )
     _safe_extract_git_archive(archive, snapshot)
     copies = {
@@ -1967,6 +1972,7 @@ def materialize_replacement_image(
         evidence_root=logs,
         label="sira-init",
         timeout=30,
+        contract=contract,
     )
     run_logged(
         [
@@ -1981,18 +1987,21 @@ def materialize_replacement_image(
         evidence_root=logs,
         label="sira-remote",
         timeout=30,
+        contract=contract,
     )
     run_logged(
         ["git", "-C", str(upstream), "fetch", "--depth", "1", "origin", SIRA_COMMIT],
         evidence_root=logs,
         label="sira-fetch",
         timeout=300,
+        contract=contract,
     )
     run_logged(
         ["git", "-C", str(upstream), "checkout", "--detach", "FETCH_HEAD"],
         evidence_root=logs,
         label="sira-checkout",
         timeout=60,
+        contract=contract,
     )
     if output(["git", "-C", str(upstream), "rev-parse", "HEAD"]) != SIRA_COMMIT:
         raise T09HostError("pinned SiRA commit did not materialize")
@@ -2005,6 +2014,7 @@ def materialize_replacement_image(
     exclusion = _exclude_pinned_nonruntime_env_example(
         upstream,
         materialization=materialization,
+        contract=contract,
     )
     wheel = vendor / "uv-0.11.7-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl"
     run_logged(
@@ -2025,6 +2035,7 @@ def materialize_replacement_image(
         evidence_root=logs,
         label="uv-download",
         timeout=330,
+        contract=contract,
     )
     exact_files = {
         wheel: UV_SHA256,
@@ -2040,7 +2051,7 @@ def materialize_replacement_image(
     for path in sorted(context.rglob("*"), reverse=True):
         os.utime(path, (SOURCE_DATE_EPOCH, SOURCE_DATE_EPOCH), follow_symlinks=False)
     os.utime(context, (SOURCE_DATE_EPOCH, SOURCE_DATE_EPOCH), follow_symlinks=False)
-    context_manifest = _build_context_manifest(context)
+    context_manifest = _build_context_manifest(context, contract=contract)
     context_manifest_path = materialization / "build-context-manifest.json"
     write_exclusive(context_manifest_path, context_manifest)
     docker_version = _capture_optional_command(
@@ -2115,6 +2126,7 @@ def materialize_replacement_image(
         evidence_root=logs,
         label="docker-build",
         timeout=3_600,
+        contract=contract,
     )
     built = image_id_if_present(prefix, replacement_image_tag)
     if built is None:
@@ -2124,6 +2136,7 @@ def materialize_replacement_image(
         evidence_root=materialization,
         label="replacement-image-inspect",
         timeout=60,
+        contract=contract,
     )
     result: dict[str, object] = {
         "schema_version": "0.1.0",
@@ -2179,7 +2192,7 @@ def materialize_retained_or_build_image(
     image_archive: Path,
     prefix: list[str],
     materialization_policy: str,
-    contract: T09ProviderContract = ACTIVE_PROVIDER_CONTRACT,
+    contract: T09ProviderContract,
 ) -> dict[str, object]:
     """Materialize under the source-bound launch-slot policy."""
 
@@ -2321,12 +2334,14 @@ def materialize_retained_or_build_image(
                 evidence_root=logs,
                 label="docker-image-retag",
                 timeout=60,
+                contract=contract,
             )
             run_logged(
                 [*prefix, "image", "inspect", imported],
                 evidence_root=materialization,
                 label="replacement-image-inspect",
                 timeout=60,
+                contract=contract,
             )
             context_receipt = {
                 "schema_version": "0.1.0",
@@ -2832,7 +2847,7 @@ def remove_container(
 def owned_containers(
     prefix: list[str],
     *,
-    contract: T09ProviderContract = ACTIVE_PROVIDER_CONTRACT,
+    contract: T09ProviderContract,
 ) -> list[str]:
     raw = output(
         [
@@ -2857,18 +2872,16 @@ def _owned_containers_for(
     prefix: list[str],
     contract: T09ProviderContract,
 ) -> list[str]:
-    """Preserve the historical mock/call surface for pre-V12 contracts."""
+    """Resolve owned containers only within the selected contract namespace."""
 
-    if contract is V12_PROVIDER_CONTRACT:
-        return owned_containers(prefix, contract=contract)
-    return owned_containers(prefix)
+    return owned_containers(prefix, contract=contract)
 
 
 def _owned_container_name_matches_role(
     name: str,
     role: str,
     *,
-    contract: T09ProviderContract = ACTIVE_PROVIDER_CONTRACT,
+    contract: T09ProviderContract,
 ) -> bool:
     container_prefix = contract.container_prefix
     if role == "core-suppression-preflight":
@@ -2887,7 +2900,7 @@ def _owned_container_name_matches_role(
 def _validate_owned_container_command(
     path: Path,
     *,
-    contract: T09ProviderContract = ACTIVE_PROVIDER_CONTRACT,
+    contract: T09ProviderContract,
 ) -> tuple[str, str]:
     document = load_object(path, label="owned Docker mutation intent")
     argv = document.get("argv", document.get("docker_create_argv"))
@@ -2978,7 +2991,7 @@ def owned_container_identities(
     prefix: list[str],
     *,
     authorized_intents: dict[str, str],
-    contract: T09ProviderContract = ACTIVE_PROVIDER_CONTRACT,
+    contract: T09ProviderContract,
 ) -> list[OwnedContainerIdentity]:
     identities: list[OwnedContainerIdentity] = []
     for name in _owned_containers_for(prefix, contract):
@@ -3522,7 +3535,7 @@ def core_suppression_preflight(
     prefix: list[str],
     image_id: str,
     cleanup_journal: EarlyCleanupJournal,
-    contract: T09ProviderContract = ACTIVE_PROVIDER_CONTRACT,
+    contract: T09ProviderContract,
 ) -> dict[str, object]:
     """Prove Docker, entrypoint-child, and abort behavior in the accepted image."""
 
@@ -3989,10 +4002,7 @@ def record_preflight_credential_scan(
     return receipt
 
 
-def contract_paths(
-    repository: Path,
-    contract: T09ProviderContract = ACTIVE_PROVIDER_CONTRACT,
-) -> dict[str, Path]:
+def contract_paths(repository: Path, contract: T09ProviderContract) -> dict[str, Path]:
     experiment = repository / "experiments/EXP-0001-sira-simulative-vs-reactive"
     return {
         "plan": repository / contract.provider_profile_path,
@@ -4014,18 +4024,9 @@ def _contract_paths_for(
     repository: Path,
     contract: T09ProviderContract,
 ) -> dict[str, Path]:
-    """Use the V12 path set only when the V12 contract is explicitly selected.
+    """Resolve package paths only from the explicitly selected contract."""
 
-    The pre-V12 runner historically exposed a one-argument ``contract_paths``
-    call surface and its default paths.  Keeping that surface intact matters
-    for the old qualification/finalizer tests and for callers that provide a
-    narrow one-argument seam.  V12 is the only contract that needs the new
-    path set.
-    """
-
-    if contract is V12_PROVIDER_CONTRACT:
-        return contract_paths(repository, contract)
-    return contract_paths(repository)
+    return contract_paths(repository, contract)
 
 
 def early_cleanup_journal(args: argparse.Namespace) -> EarlyCleanupJournal:
@@ -4149,6 +4150,7 @@ def _write_remote_early_closeout_receipt(journal: EarlyCleanupJournal) -> Path:
 def validate_real_evidence_regression(
     repository: Path,
     *,
+    contract: T09ProviderContract,
     expected_finalizer_source_sha256: str | None = None,
 ) -> dict[str, Any]:
     """Validate the historical receipt without conflating it with the V7 finalizer.
@@ -4160,7 +4162,7 @@ def validate_real_evidence_regression(
     executed twice against that archive in ``qualified_real_evidence_regression``.
     """
 
-    paths = contract_paths(repository)
+    paths = contract_paths(repository, contract)
     receipt = load_object(paths["real_regression"], label="real-evidence finalizer regression")
     semantic = receipt.get("semantic_projection")
     evaluator_closure = receipt.get("evaluator_closure")
@@ -4186,7 +4188,7 @@ def validate_real_evidence_regression(
         or not isinstance(evaluator_closure, dict)
         or evaluator_closure.get("evaluator_contract_sha256") != file_sha256(paths["evaluator"])
         or evaluator_closure.get("dependency_package_manifest_sha256")
-        != canonical_sha256(expected_evaluator_packages(repository))
+        != canonical_sha256(expected_evaluator_packages(repository, contract))
         or not isinstance(repeat_roots, list)
         or len(repeat_roots) != 2
         or any(
@@ -4536,7 +4538,11 @@ def _package_transition_projection(
     previous_transition_receipt: Path,
     require_candidate_present: bool,
 ) -> dict[str, object]:
-    verify_package(repository, package_commit)
+    verify_package(
+        repository,
+        package_commit,
+        contract=PACKAGE_TRANSITION_PROVIDER_CONTRACT,
+    )
     provider_contract = _provider_contract_from_receipt(
         entry_receipt,
         label="package transition provider entry receipt",
@@ -4889,67 +4895,42 @@ def sanitized_dynamic_receipt(_path: Path, value: dict[str, object]) -> dict[str
 
 
 def _contract_control_root_name(contract: T09ProviderContract) -> str:
-    if contract.version == "V12":
-        return "pilot-v12"
-    # V3 through V11 deliberately share the historical pilot-v7 control
-    # namespace.  V12 is the first successor package with a separate root;
-    # changing the legacy namespace here makes old recovery and qualification
-    # records unreadable before their own contract checks can run.
-    if contract.version in {"V3", "V4", "V5", "V6", "V7", "V8", "V9", "V10", "V11"}:
-        return "pilot-v7"
-    raise T09HostError("unsupported autonomous provider contract control root")
+    return contract.control_root_name
 
 
 def _contract_archive_id(contract: T09ProviderContract) -> str:
-    if contract.version == "V11":
-        return ARCHIVE_ID
-    if contract.version == "V12":
-        return V12_ARCHIVE_ID
-    raise T09HostError("unsupported autonomous provider contract archive")
+    return contract.evidence_archive_id
 
 
 def _contract_stage_id(contract: T09ProviderContract) -> str:
-    if contract.version == "V11":
-        return STAGE_ID
-    if contract.version == "V12":
-        return V12_STAGE_ID
-    raise T09HostError("unsupported autonomous provider contract stage")
+    return contract.evidence_stage_id
 
 
 def _runtime_provider_contract(root: Path) -> T09ProviderContract:
     """Resolve exactly one lifecycle contract from its typed control root."""
 
-    v12_state_path = root / "pilot-v12" / "pilot-state.json"
-    legacy_state_path = root / "pilot-v7" / "pilot-state.json"
-    if os.path.lexists(v12_state_path):
-        if os.path.lexists(legacy_state_path):
-            raise T09HostError("pilot state selects multiple autonomous contract roots")
-        state = load_object(v12_state_path, label="pilot state")
-        selected = _provider_contract_from_document(state, label="pilot state")
-        if selected is not V12_PROVIDER_CONTRACT:
-            raise T09HostError("pilot state contract does not match the V12 control root")
-        return selected
-
-    # Preserve the original generic legacy resolver.  It intentionally lets
-    # the loaded state identify V3--V11 so historical tests can exercise their
-    # own validation errors instead of being rejected by a V12-only resolver.
-    if os.path.lexists(legacy_state_path):
-        return _provider_contract_from_document(
-            load_object(legacy_state_path, label="pilot state"),
-            label="pilot state",
-        )
-    raise T09HostError("pilot state does not select an autonomous contract")
+    state_paths = sorted(
+        {
+            root / retained.control_root_name / "pilot-state.json"
+            for retained in PROVIDER_CONTRACTS.values()
+            if retained.execution_contract_path is not None
+        }
+    )
+    present = [path for path in state_paths if os.path.lexists(path)]
+    if len(present) != 1:
+        raise T09HostError("pilot state must select exactly one autonomous contract root")
+    selected = _provider_contract_from_document(
+        load_object(present[0], label="pilot state"),
+        label="pilot state",
+    )
+    if present[0].parent.name != selected.control_root_name:
+        raise T09HostError("pilot state contract does not match its control root")
+    return selected
 
 
 def _pilot_root(root: Path, contract: T09ProviderContract | None = None) -> Path:
-    if contract is not None:
-        return root / _contract_control_root_name(contract)
-    # The historical runner always addressed pilot-v7 directly.  Keep that
-    # fallback for synthetic/legacy fixtures whose budget state predates the
-    # typed provider identity; only a materialized V12 state selects pilot-v12.
-    if os.path.lexists(root / "pilot-v12" / "pilot-state.json"):
-        return root / "pilot-v12"
-    return root / "pilot-v7"
+    selected = _runtime_provider_contract(root) if contract is None else contract
+    return root / _contract_control_root_name(selected)
 
 
 def _runtime_budget_state(
@@ -5507,7 +5488,7 @@ def container_state_receipt(prefix: list[str], container_target: str) -> dict[st
 def manifests(
     document: dict[str, Any],
     *,
-    expected_run_ids: tuple[str, ...] = RUN_IDS,
+    expected_run_ids: tuple[str, ...],
 ) -> list[dict[str, Any]]:
     value = document.get("manifests")
     if not isinstance(value, list) or len(value) != 4:
@@ -5529,7 +5510,7 @@ def manifest_for_run(
     document: dict[str, Any],
     run_id: str,
     *,
-    expected_run_ids: tuple[str, ...] = RUN_IDS,
+    expected_run_ids: tuple[str, ...],
 ) -> dict[str, Any]:
     matches = [
         item
@@ -5546,11 +5527,9 @@ def _manifest_for_contract(
     run_id: str,
     contract: T09ProviderContract,
 ) -> dict[str, Any]:
-    """Keep the pre-V12 two-argument manifest seam intact."""
+    """Resolve one manifest from the explicitly selected attempt order."""
 
-    if contract is V12_PROVIDER_CONTRACT:
-        return manifest_for_run(document, run_id, expected_run_ids=contract.run_ids)
-    return manifest_for_run(document, run_id)
+    return manifest_for_run(document, run_id, expected_run_ids=contract.run_ids)
 
 
 def manifest_output_root(manifest: dict[str, Any]) -> str:
@@ -5571,7 +5550,7 @@ def verify_package(
     package_commit: str,
     *,
     current_commit: str | None = None,
-    contract: T09ProviderContract = ACTIVE_PROVIDER_CONTRACT,
+    contract: T09ProviderContract,
 ) -> dict[str, Any]:
     expected_head = package_commit if current_commit is None else current_commit
     if output(["git", "-C", str(repository), "rev-parse", "HEAD"]) != expected_head:
@@ -5768,7 +5747,7 @@ def _evaluator_package_records(
     evidence_root: Path,
     label: str,
     cleanup_journal: EarlyCleanupJournal,
-    contract: T09ProviderContract = ACTIVE_PROVIDER_CONTRACT,
+    contract: T09ProviderContract,
 ) -> list[str]:
     command = [
         *prefix,
@@ -5859,7 +5838,7 @@ def normalize_evaluator_package_records(
 
 def expected_evaluator_packages(
     repository: Path,
-    provider_contract: T09ProviderContract = ACTIVE_PROVIDER_CONTRACT,
+    provider_contract: T09ProviderContract,
 ) -> list[str]:
     contract = load_object(
         _contract_paths_for(repository, provider_contract)["evaluator"], label="evaluator contract"
@@ -6153,7 +6132,7 @@ def evaluator_overlay(
     prefix: list[str],
     image_id: str,
     cleanup_journal: EarlyCleanupJournal,
-    contract: T09ProviderContract = ACTIVE_PROVIDER_CONTRACT,
+    contract: T09ProviderContract,
 ) -> dict[str, object]:
     overlay.mkdir(mode=0o700, parents=True, exist_ok=False)
     command = [
@@ -6261,7 +6240,7 @@ def validate_evaluator_overlay_binding(
     frozen_manifest: dict[str, Any],
     verify_packages: bool,
     cleanup_journal: EarlyCleanupJournal,
-    contract: T09ProviderContract = ACTIVE_PROVIDER_CONTRACT,
+    contract: T09ProviderContract,
 ) -> dict[str, object]:
     manifest_path = _pilot_root(artifact_root) / "evaluator-overlay-manifest.json"
     retained = load_object(manifest_path, label="evaluator overlay manifest")
@@ -6350,7 +6329,7 @@ def browser_lifecycle_preflight(
     prefix: list[str],
     image_id: str,
     cleanup_journal: EarlyCleanupJournal,
-    contract: T09ProviderContract = ACTIVE_PROVIDER_CONTRACT,
+    contract: T09ProviderContract,
 ) -> dict[str, object]:
     attempt = _pilot_root(artifact_root, contract) / "browser-preflight"
     attempt.mkdir(parents=True, mode=0o700)
@@ -6804,7 +6783,7 @@ def secret_channel_preflight(
     prefix: list[str],
     image_id: str,
     cleanup_journal: EarlyCleanupJournal,
-    contract: T09ProviderContract = ACTIVE_PROVIDER_CONTRACT,
+    contract: T09ProviderContract,
 ) -> dict[str, Any]:
     attempt = _pilot_root(artifact_root) / "secret-channel-preflight"
     attempt.mkdir(parents=True, mode=0o700)
@@ -6865,7 +6844,7 @@ def offline_runtime_preflight(
     prefix: list[str],
     image_id: str,
     cleanup_journal: EarlyCleanupJournal,
-    contract: T09ProviderContract = ACTIVE_PROVIDER_CONTRACT,
+    contract: T09ProviderContract,
 ) -> dict[str, Any]:
     paths = _contract_paths_for(repository, contract)
     attempt = _pilot_root(artifact_root) / "offline-runtime-preflight"
@@ -6997,7 +6976,7 @@ def qualified_real_evidence_regression(
     image_files: dict[str, str],
     static_receipt: dict[str, Any],
     cleanup_journal: EarlyCleanupJournal,
-    contract: T09ProviderContract = ACTIVE_PROVIDER_CONTRACT,
+    contract: T09ProviderContract,
 ) -> dict[str, Any]:
     """Reconstruct the retained V4 raw archive inside the exact accepted image."""
 
@@ -7110,8 +7089,8 @@ def final_image_runtime_preflight(
     image_id: str,
     command_document: dict[str, Any],
     cleanup_journal: EarlyCleanupJournal,
-    expected_run_ids: tuple[str, ...] = RUN_IDS,
-    contract: T09ProviderContract = ACTIVE_PROVIDER_CONTRACT,
+    expected_run_ids: tuple[str, ...],
+    contract: T09ProviderContract,
 ) -> dict[str, Any]:
     attempt = _pilot_root(artifact_root) / "final-image-runtime-preflight"
     attempt.mkdir(parents=True, mode=0o700)
@@ -7174,7 +7153,7 @@ def provider_accounting_container_preflight(
     prefix: list[str],
     image_id: str,
     cleanup_journal: EarlyCleanupJournal,
-    contract: T09ProviderContract = ACTIVE_PROVIDER_CONTRACT,
+    contract: T09ProviderContract,
 ) -> dict[str, Any]:
     """Exercise the repaired lifecycle in the accepted image with no network."""
 
@@ -7271,7 +7250,7 @@ def final_image_file_hashes(
     prefix: list[str],
     image_id: str,
     cleanup_journal: EarlyCleanupJournal,
-    contract: T09ProviderContract = ACTIVE_PROVIDER_CONTRACT,
+    contract: T09ProviderContract,
 ) -> dict[str, str]:
     evidence = _pilot_root(artifact_root) / "final-image-file-hashes"
     expected_paths = {
@@ -7334,8 +7313,9 @@ def model_metadata_preflight(
     prefix: list[str],
     image_id: str,
     cleanup_journal: EarlyCleanupJournal,
+    contract: T09ProviderContract,
 ) -> dict[str, Any]:
-    attempt = _pilot_root(artifact_root) / "model-metadata-preflight"
+    attempt = _pilot_root(artifact_root, contract) / "model-metadata-preflight"
     attempt.mkdir(parents=True, mode=0o700)
     command = [
         *prefix,
@@ -7377,6 +7357,7 @@ def model_metadata_preflight(
         label="model-metadata",
         timeout=60,
         cleanup_journal=cleanup_journal,
+        contract=contract,
     )
     receipt = load_object(attempt / "model-availability.json", label="model availability")
     if (
@@ -7399,32 +7380,35 @@ def validate_model_metadata_receipt_offline(
     package_commit: str,
     provider_entry: Mapping[str, object],
     artifact_root: Path,
+    contract: T09ProviderContract,
 ) -> dict[str, Any]:
-    """Validate the V12 receipt without constructing any OpenAI transport."""
+    """Validate the selected durable receipt without constructing an OpenAI transport."""
 
     if not receipt_path.is_absolute():
-        raise T09HostError("V12 model metadata receipt path must be absolute")
+        raise T09HostError("model metadata receipt path must be absolute")
     package_tree = output(["git", "-C", str(repository), "rev-parse", f"{package_commit}^{{tree}}"])
     if re.fullmatch(r"[a-f0-9]{40}", package_tree) is None:
-        raise T09HostError("V12 package tree identity is malformed")
-    paths = contract_paths(repository, V12_PROVIDER_CONTRACT)
+        raise T09HostError("package tree identity is malformed")
+    if contract.version not in {"V12", "V13"}:
+        raise T09HostError("selected contract has no durable model metadata receipt")
+    paths = contract_paths(repository, contract)
     expected_receipt_sha256 = provider_entry.get("model_metadata_receipt_sha256")
     if (
         not isinstance(expected_receipt_sha256, str)
         or _HEX64.fullmatch(expected_receipt_sha256) is None
     ):
-        raise T09HostError("V12 provider entry lacks the model metadata receipt hash")
+        raise T09HostError("provider entry lacks the model metadata receipt hash")
     expected_reference = provider_entry.get("authorization_reference")
     expected_source_sha256 = provider_entry.get("authorization_source_sha256")
     started = provider_entry.get("provider_preflight_started_at_epoch")
     if not isinstance(expected_reference, str) or not isinstance(expected_source_sha256, str):
-        raise T09HostError("V12 provider entry lacks its authorization identity")
+        raise T09HostError("provider entry lacks its authorization identity")
     if not isinstance(started, (int, float)) or isinstance(started, bool):
-        raise T09HostError("V12 provider entry lacks its pre-launch timestamp")
+        raise T09HostError("provider entry lacks its pre-launch timestamp")
     try:
         validated = validate_model_metadata_receipt(
             receipt_path,
-            contract=V12_PROVIDER_CONTRACT,
+            contract=contract,
             package_commit=package_commit,
             package_tree=package_tree,
             plan_sha256=file_sha256(paths["plan"]),
@@ -7436,13 +7420,13 @@ def validate_model_metadata_receipt_offline(
         )
         observed_receipt_sha256 = model_metadata_receipt_sha256(receipt_path)
     except (ModelMetadataReceiptError, OSError, subprocess.SubprocessError) as exc:
-        raise T09HostError("V12 model metadata receipt failed offline validation") from exc
+        raise T09HostError("model metadata receipt failed offline validation") from exc
     if observed_receipt_sha256 != expected_receipt_sha256:
-        raise T09HostError("V12 model metadata receipt hash disagrees with provider entry")
+        raise T09HostError("model metadata receipt hash disagrees with provider entry")
     acknowledgement = {
         "schema_version": "1.0.0",
-        "plan_id": V12_PROVIDER_CONTRACT.plan_id,
-        "host_run_id": V12_PROVIDER_CONTRACT.host_run_id,
+        "plan_id": contract.plan_id,
+        "host_run_id": contract.host_run_id,
         "receipt_sha256": observed_receipt_sha256,
         "requested_model_id": validated["requested_model_id"],
         "returned_model_id": validated["returned_model_id"],
@@ -7455,8 +7439,7 @@ def validate_model_metadata_receipt_offline(
         "prelaunch_timestamp_order_validated": True,
     }
     acknowledgement_path = (
-        _pilot_root(artifact_root, V12_PROVIDER_CONTRACT)
-        / "model-metadata-receipt-acknowledgement.json"
+        _pilot_root(artifact_root, contract) / "model-metadata-receipt-acknowledgement.json"
     )
     write_exclusive(acknowledgement_path, acknowledgement)
     return {
@@ -7465,18 +7448,19 @@ def validate_model_metadata_receipt_offline(
     }
 
 
-def _resolve_v12_model_metadata_receipt(
+def _resolve_model_metadata_receipt(
     *,
     explicit_path: Path | None,
     source_root: Path,
     provider_entry: Mapping[str, object],
+    contract: T09ProviderContract,
 ) -> Path:
     """Resolve the retained source-bound receipt, never a new network gate."""
 
     source = source_root.resolve(strict=True)
     binding = load_object(
         source / "model-metadata-receipt-binding.json",
-        label="V12 model metadata receipt binding",
+        label="model metadata receipt binding",
     )
     if (
         set(binding)
@@ -7492,20 +7476,20 @@ def _resolve_v12_model_metadata_receipt(
         or binding.get("schema_version") != "1.0.0"
         or binding.get("receipt_sha256") != provider_entry.get("model_metadata_receipt_sha256")
         or binding.get("receipt_filename") != MODEL_METADATA_RECEIPT_FILENAME
-        or binding.get("provider_contract_version") != V12_PROVIDER_CONTRACT.version
-        or binding.get("plan_id") != V12_PROVIDER_CONTRACT.plan_id
-        or binding.get("host_run_id") != V12_PROVIDER_CONTRACT.host_run_id
+        or binding.get("provider_contract_version") != contract.version
+        or binding.get("plan_id") != contract.plan_id
+        or binding.get("host_run_id") != contract.host_run_id
         or binding.get("prelaunch_required") is not True
     ):
-        raise T09HostError("V12 model metadata receipt handoff binding drifted")
+        raise T09HostError("model metadata receipt handoff binding drifted")
     retained = source / MODEL_METADATA_RECEIPT_FILENAME
     if explicit_path is not None:
         if not explicit_path.is_absolute():
-            raise T09HostError("explicit V12 model metadata receipt must be absolute")
+            raise T09HostError("explicit model metadata receipt must be absolute")
         try:
             explicit_metadata = explicit_path.stat(follow_symlinks=False)
         except OSError as exc:
-            raise T09HostError("explicit V12 model metadata receipt is unavailable") from exc
+            raise T09HostError("explicit model metadata receipt is unavailable") from exc
         if (
             explicit_path.is_symlink()
             or not stat.S_ISREG(explicit_metadata.st_mode)
@@ -7513,13 +7497,13 @@ def _resolve_v12_model_metadata_receipt(
             or explicit_metadata.st_nlink != 1
             or stat.S_IMODE(explicit_metadata.st_mode) != 0o600
         ):
-            raise T09HostError("explicit V12 model metadata receipt metadata is unsafe")
+            raise T09HostError("explicit model metadata receipt metadata is unsafe")
         try:
             explicit = explicit_path.resolve(strict=True)
         except OSError as exc:
-            raise T09HostError("explicit V12 model metadata receipt is unavailable") from exc
+            raise T09HostError("explicit model metadata receipt is unavailable") from exc
         if explicit != retained:
-            raise T09HostError("V12 model metadata receipt is not the source-bound copy")
+            raise T09HostError("model metadata receipt is not the source-bound copy")
     return retained
 
 
@@ -7570,7 +7554,7 @@ def image_equivalence_adjudication(
     repository: Path,
     artifact_root: Path,
     image_id: str,
-    contract: T09ProviderContract = ACTIVE_PROVIDER_CONTRACT,
+    contract: T09ProviderContract,
 ) -> dict[str, object]:
     historical_path = (
         repository / "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/"
@@ -7680,12 +7664,12 @@ def write_frozen_run_manifest(
     paths = _contract_paths_for(repository, campaign_contract)
     manifest_id = cast(str, campaign_contract.frozen_run_manifest_id)
     qualification_id = cast(str, campaign_contract.active_image_qualification_id)
-    if campaign_contract.version == "V12" and (
+    if campaign_contract.version in {"V12", "V13"} and (
         not isinstance(model_receipt.get("receipt_sha256"), str)
         or _HEX64.fullmatch(cast(str, model_receipt["receipt_sha256"])) is None
         or model_receipt.get("model_metadata_network_requests") != 0
     ):
-        raise T09HostError("V12 frozen manifest lacks the offline metadata acknowledgement")
+        raise T09HostError("frozen manifest lacks the offline metadata acknowledgement")
     image_id = image_materialization.get("image_id")
     if not isinstance(image_id, str) or re.fullmatch(r"sha256:[a-f0-9]{64}", image_id) is None:
         raise T09HostError("qualified replacement image ID is unavailable")
@@ -7860,12 +7844,16 @@ def write_frozen_run_manifest(
         "final_image_file_hashes_sha256": canonical_sha256(file_hashes),
         "model_metadata_receipt_sha256": (
             model_receipt.get("receipt_sha256")
-            if campaign_contract.version == "V12"
+            if campaign_contract.version in {"V12", "V13"}
             else canonical_sha256(model_receipt)
         ),
         "model_metadata_credential_scan_sha256": canonical_sha256(model_credential_scan_receipt),
         "model_metadata_request_count": 1,
-        **({"model_metadata_network_requests": 0} if campaign_contract.version == "V12" else {}),
+        **(
+            {"model_metadata_network_requests": 0}
+            if campaign_contract.version in {"V12", "V13"}
+            else {}
+        ),
         "model_task_request_count": 0,
         "task_browser_action_count": 0,
         "actual_credential_exposure_detected": False,
@@ -7949,7 +7937,7 @@ def write_frozen_run_manifest(
                         _pilot_root(artifact_root) / "model-metadata-receipt-acknowledgement.json"
                     )
                 }
-                if campaign_contract.version == "V12"
+                if campaign_contract.version in {"V12", "V13"}
                 else {}
             ),
             "static_real_evidence_regression": file_sha256(paths["real_regression"]),
@@ -8017,7 +8005,7 @@ def load_frozen_run_manifest(
     manifest = load_object(path, label="frozen run manifest")
     runtime_state = _runtime_budget_state(artifact_root)
     runtime_contract = _provider_contract_from_document(runtime_state, label="pilot state")
-    _require_active_provider_runner(runtime_contract, label="frozen runtime validation")
+    _require_supported_provider_runner(runtime_contract, label="frozen runtime validation")
     _require_provider_contract(
         manifest,
         expected=runtime_contract,
@@ -8046,7 +8034,7 @@ def load_frozen_run_manifest(
         _pilot_root(artifact_root) / "model-metadata-receipt-acknowledgement.json"
     )
     model_metadata_ack: dict[str, Any] | None = None
-    if runtime_contract is V12_PROVIDER_CONTRACT:
+    if runtime_contract.version in {"V12", "V13"}:
         model_metadata_ack = load_object(
             model_metadata_ack_path,
             label="model metadata receipt acknowledgement",
@@ -8305,6 +8293,7 @@ def load_frozen_run_manifest(
     )
     static_regression = validate_real_evidence_regression(
         repository,
+        contract=runtime_contract,
         expected_finalizer_source_sha256=HISTORICAL_REAL_EVIDENCE_FINALIZER_SHA256,
     )
     local_qualification_path = _pilot_root(artifact_root) / "local-finalizer-qualification.json"
@@ -8350,7 +8339,7 @@ def load_frozen_run_manifest(
         or source_receipts.get("post_metadata_complete_core_gate")
         != file_sha256(post_metadata_core_gate_path)
         or (
-            runtime_contract is V12_PROVIDER_CONTRACT
+            runtime_contract.version in {"V12", "V13"}
             and (
                 model_metadata_ack is None
                 or source_receipts.get("model_metadata_receipt_acknowledgement")
@@ -8456,7 +8445,7 @@ def initialize_state(
     root: Path,
     execution_sha256: str,
     *,
-    contract: T09ProviderContract = ACTIVE_PROVIDER_CONTRACT,
+    contract: T09ProviderContract,
     lambda_started_at_epoch: float,
     owned_lambda_started_at_epoch: float | None = None,
     prior_lambda_duration_seconds: float = 0.0,
@@ -8736,10 +8725,10 @@ def _resume_evaluator_receipt(
 ) -> dict[str, object]:
     manifest_path = _pilot_root(artifact_root) / "evaluator-overlay-manifest.json"
     manifest = load_object(manifest_path, label="resumed evaluator overlay manifest")
-    expected = expected_evaluator_packages(repository)
+    expected = expected_evaluator_packages(repository, V11_PROVIDER_CONTRACT)
     if (
-        manifest.get("plan_id") != PLAN_ID
-        or manifest.get("qualification_id") != QUALIFICATION_ID
+        manifest.get("plan_id") != V11_PROVIDER_CONTRACT.plan_id
+        or manifest.get("qualification_id") != V11_PROVIDER_CONTRACT.active_image_qualification_id
         or manifest.get("replacement_image_id") != image_id
         or manifest.get("lock_sha256") != file_sha256(repository / "uv.lock")
         or manifest.get("packages") != expected
@@ -8772,6 +8761,7 @@ def _resume_evaluator_receipt(
         },
         verify_packages=True,
         cleanup_journal=cleanup_journal,
+        contract=V11_PROVIDER_CONTRACT,
     )
     return receipt
 
@@ -8825,7 +8815,11 @@ def prepare_preflight_resume(
         != "63ed19b35bcb4cb62c3796a80a48004937340eb3826f9657a1006e251772255d"
     ):
         raise T09HostError("exact private regression archive is unavailable for resume")
-    command_document = verify_package(repository, args.package_commit)
+    command_document = verify_package(
+        repository,
+        args.package_commit,
+        contract=V11_PROVIDER_CONTRACT,
+    )
     git_transition = _preflight_resume_git_transition(
         repository,
         package_commit=args.package_commit,
@@ -8857,7 +8851,7 @@ def prepare_preflight_resume(
     aggregate_path = pilot / "runtime-budget/aggregate-budget.json"
     old_state = load_object(state_path, label="failed preflight state")
     old_aggregate = load_object(aggregate_path, label="failed preflight aggregate")
-    paths = contract_paths(repository)
+    paths = contract_paths(repository, V11_PROVIDER_CONTRACT)
     execution_sha256 = file_sha256(paths["execution"])
     next_state, next_aggregate = transition_zero_usage_preflight_state(
         old_state,
@@ -8873,7 +8867,9 @@ def prepare_preflight_resume(
         "qualified-real-evidence-regression/receipt.json",
         "image-equivalence-adjudication.json",
     )
-    if any((pilot / relative).exists() for relative in absent) or owned_containers(docker_prefix()):
+    if any((pilot / relative).exists() for relative in absent) or owned_containers(
+        docker_prefix(), contract=V11_PROVIDER_CONTRACT
+    ):
         raise T09HostError("failed preflight prefix crossed a later gate")
     failure_evidence = _validate_preflight_failure_receipts(
         failure_receipt=args.failure_receipt,
@@ -8886,7 +8882,10 @@ def prepare_preflight_resume(
         materialization.get("build_count") != 1
         or materialization.get("repository_runtime_commit") != PREENTRY_RESUME_FROM_PACKAGE_COMMIT
         or not isinstance(image_id, str)
-        or image_id_if_present(docker_prefix(), REPLACEMENT_IMAGE_TAG) != image_id
+        or image_id_if_present(
+            docker_prefix(), cast(str, V11_PROVIDER_CONTRACT.replacement_image_tag)
+        )
+        != image_id
         or image_id_if_present(docker_prefix(), image_id) != image_id
         or materialization.get("image_inspect_sha256")
         != file_sha256(pilot / "replacement-image-qualification/replacement-image-inspect.stdout")
@@ -8900,6 +8899,7 @@ def prepare_preflight_resume(
         raise T09HostError("retained replacement image is not the one built candidate")
     static_regression = validate_real_evidence_regression(
         repository,
+        contract=V11_PROVIDER_CONTRACT,
         expected_finalizer_source_sha256=HISTORICAL_REAL_EVIDENCE_FINALIZER_SHA256,
     )
     local_qualification = validate_local_finalizer_qualification(
@@ -8907,6 +8907,7 @@ def prepare_preflight_resume(
         repository=repository,
         package_commit=args.package_commit,
         require_local_runtime=False,
+        contract=V11_PROVIDER_CONTRACT,
     )
     artifact_root.mkdir(mode=0o700, parents=True)
     resume_root = _pilot_root(artifact_root) / "preflight-resume"
@@ -8962,8 +8963,8 @@ def prepare_preflight_resume(
     transition: dict[str, object] = {
         "schema_version": "0.1.0",
         "receipt_type": "t09-preentry-same-host-preflight-resume",
-        "plan_id": PLAN_ID,
-        "host_run_id": HOST_RUN_ID,
+        "plan_id": V11_PROVIDER_CONTRACT.plan_id,
+        "host_run_id": V11_PROVIDER_CONTRACT.host_run_id,
         **git_transition,
         "prior_plan_sha256": PREENTRY_RESUME_FROM_PLAN_SHA256,
         "plan_sha256": file_sha256(paths["plan"]),
@@ -8973,7 +8974,7 @@ def prepare_preflight_resume(
         "lambda_started_at_epoch": lambda_started,
         "launch_count": 1,
         "replacement_image_id": image_id,
-        "replacement_image_tag": REPLACEMENT_IMAGE_TAG,
+        "replacement_image_tag": V11_PROVIDER_CONTRACT.replacement_image_tag,
         "build_count": 1,
         "additional_build_count": 0,
         "empirical_attempts_entered": 0,
@@ -9035,7 +9036,7 @@ def resume_preflight(args: argparse.Namespace) -> None:
         evaluator,
         transition,
     ) = prepare_preflight_resume(args)
-    paths = contract_paths(repository)
+    paths = contract_paths(repository, V11_PROVIDER_CONTRACT)
     execution_sha256 = file_sha256(paths["execution"])
     prefix = docker_prefix()
     cleanup_journal = early_cleanup_journal(args)
@@ -9049,12 +9050,14 @@ def resume_preflight(args: argparse.Namespace) -> None:
         prefix=prefix,
         image_id=image_id,
         cleanup_journal=cleanup_journal,
+        contract=V11_PROVIDER_CONTRACT,
     )
     image_files = final_image_file_hashes(
         artifact_root=artifact_root,
         prefix=prefix,
         image_id=image_id,
         cleanup_journal=cleanup_journal,
+        contract=V11_PROVIDER_CONTRACT,
     )
     final_runtime = final_image_runtime_preflight(
         artifact_root=artifact_root,
@@ -9062,7 +9065,8 @@ def resume_preflight(args: argparse.Namespace) -> None:
         image_id=image_id,
         command_document=command_document,
         cleanup_journal=cleanup_journal,
-        expected_run_ids=RUN_IDS,
+        expected_run_ids=V11_PROVIDER_CONTRACT.run_ids,
+        contract=V11_PROVIDER_CONTRACT,
     )
     provider_accounting = provider_accounting_container_preflight(
         repository=repository,
@@ -9070,6 +9074,7 @@ def resume_preflight(args: argparse.Namespace) -> None:
         prefix=prefix,
         image_id=image_id,
         cleanup_journal=cleanup_journal,
+        contract=V11_PROVIDER_CONTRACT,
     )
     offline = offline_runtime_preflight(
         repository=repository,
@@ -9078,6 +9083,7 @@ def resume_preflight(args: argparse.Namespace) -> None:
         prefix=prefix,
         image_id=image_id,
         cleanup_journal=cleanup_journal,
+        contract=V11_PROVIDER_CONTRACT,
     )
     archive_staging = stage_verified_archive(
         args.real_evidence_archive,
@@ -9099,6 +9105,7 @@ def resume_preflight(args: argparse.Namespace) -> None:
         image_files=image_files,
         static_receipt=real_evidence_regression,
         cleanup_journal=cleanup_journal,
+        contract=V11_PROVIDER_CONTRACT,
     )
     core_suppression = core_suppression_preflight(
         repository=repository,
@@ -9106,12 +9113,14 @@ def resume_preflight(args: argparse.Namespace) -> None:
         prefix=prefix,
         image_id=image_id,
         cleanup_journal=cleanup_journal,
+        contract=V11_PROVIDER_CONTRACT,
     )
     browser = browser_lifecycle_preflight(
         artifact_root=artifact_root,
         prefix=prefix,
         image_id=image_id,
         cleanup_journal=cleanup_journal,
+        contract=V11_PROVIDER_CONTRACT,
     )
     sealing_primitives = sealing_primitives_preflight(
         repository=repository,
@@ -9141,11 +9150,13 @@ def resume_preflight(args: argparse.Namespace) -> None:
         },
         verify_packages=True,
         cleanup_journal=cleanup_journal,
+        contract=V11_PROVIDER_CONTRACT,
     )
     adjudication = image_equivalence_adjudication(
         repository=repository,
         artifact_root=artifact_root,
         image_id=image_id,
+        contract=V11_PROVIDER_CONTRACT,
     )
     gpu = gpu_snapshot()
     lambda_started = dynamic.get("lambda_started_at_epoch")
@@ -9155,11 +9166,12 @@ def resume_preflight(args: argparse.Namespace) -> None:
     if (
         lambda_elapsed >= MAX_CUMULATIVE_PREFLIGHT_ACTIVE_SECONDS
         or lambda_elapsed * LAMBDA_HOURLY_PRICE_USD / 3600.0 >= MAX_PREFLIGHT_LAMBDA_COST_USD
-        or owned_containers(prefix)
+        or owned_containers(prefix, contract=V11_PROVIDER_CONTRACT)
         or _runtime_budget_state(artifact_root).get("empirical_attempts_entered") != []
         or load_aggregate_usage(
             _pilot_root(artifact_root) / "runtime-budget/aggregate-budget.json",
             contract_sha256=execution_sha256,
+            plan_id=V11_PROVIDER_CONTRACT.plan_id,
         )
         != ProviderBudgetUsage()
     ):
@@ -9170,6 +9182,7 @@ def resume_preflight(args: argparse.Namespace) -> None:
         prefix=prefix,
         image_id=image_id,
         cleanup_journal=cleanup_journal,
+        contract=V11_PROVIDER_CONTRACT,
     )
     model_credential_scan = record_preflight_credential_scan(
         artifact_root=artifact_root,
@@ -9209,15 +9222,18 @@ def resume_preflight(args: argparse.Namespace) -> None:
         preflight_path,
         {
             "schema_version": "0.1.0",
-            "plan_id": PLAN_ID,
-            "host_run_id": HOST_RUN_ID,
+            "plan_id": V11_PROVIDER_CONTRACT.plan_id,
+            "host_run_id": V11_PROVIDER_CONTRACT.host_run_id,
             "completed_at": utc_now(),
             "clean_package_commit": args.package_commit,
             "execution_contract_sha256": execution_sha256,
             "command_manifests_sha256": file_sha256(paths["commands"]),
             "command_argv_sha256s": [
                 item["argv_sha256"]
-                for item in manifests(command_document, expected_run_ids=RUN_IDS)
+                for item in manifests(
+                    command_document,
+                    expected_run_ids=V11_PROVIDER_CONTRACT.run_ids,
+                )
             ],
             "dynamic_receipt_sha256": file_sha256(args.dynamic_receipt),
             "dynamic_receipt": sanitized_dynamic_receipt(args.dynamic_receipt, dynamic),
@@ -9311,20 +9327,21 @@ def resume_preflight(args: argparse.Namespace) -> None:
         image_id=image_id,
         frozen_manifest=frozen_manifest,
         verify_packages=True,
+        contract=V11_PROVIDER_CONTRACT,
     )
     post_state = _runtime_budget_state(artifact_root)
     if (
         post_state.get("empirical_attempts_entered") != []
         or post_state.get("raw_attempts_complete") != []
         or post_state.get("attempts_completed") != []
-        or owned_containers(prefix)
+        or owned_containers(prefix, contract=V11_PROVIDER_CONTRACT)
     ):
         raise T09HostError("post-resume preflight zero-use validation failed")
     write_exclusive(
         _pilot_root(artifact_root) / "preflight-resume/postfreeze-validation.json",
         {
             "schema_version": "0.1.0",
-            "plan_id": PLAN_ID,
+            "plan_id": V11_PROVIDER_CONTRACT.plan_id,
             "package_commit": args.package_commit,
             "frozen_run_manifest_sha256": file_sha256(frozen_manifest_path),
             "preflight_sha256": file_sha256(preflight_path),
@@ -9353,11 +9370,11 @@ def preflight(args: argparse.Namespace) -> None:
         source_root=args.dynamic_source_root.resolve(strict=True),
     )
     dynamic_contract = _provider_contract_from_document(dynamic, label="provider entry receipt")
-    # Keep every receipt and cleanup label in this invocation on the selected
-    # typed contract; the module-level constants preserve V11 history only.
+    selected_contract = _argument_provider_contract(args)
+    _require_supported_provider_runner(dynamic_contract, label="provider preflight")
     cleanup_state = cleanup_journal.load()
     if (
-        dynamic_contract not in {ACTIVE_PROVIDER_CONTRACT, V12_PROVIDER_CONTRACT}
+        dynamic_contract is not selected_contract
         or cleanup_state.plan_id != dynamic_contract.plan_id
         or cleanup_state.host_run_id != dynamic_contract.host_run_id
         or cleanup_state.provider_instance_identity_sha256
@@ -9491,6 +9508,7 @@ def preflight(args: argparse.Namespace) -> None:
     )
     real_evidence_regression = validate_real_evidence_regression(
         repository,
+        contract=dynamic_contract,
         expected_finalizer_source_sha256=HISTORICAL_REAL_EVIDENCE_FINALIZER_SHA256,
     )
     local_finalizer_qualification = validate_local_finalizer_qualification(
@@ -9668,14 +9686,15 @@ def preflight(args: argparse.Namespace) -> None:
     # V11 retains its historical one-request container gate. V12 consumes the
     # provider's already sealed receipt at this boundary and cannot fall back to
     # that network path.
-    if dynamic_contract is V12_PROVIDER_CONTRACT:
+    if dynamic_contract.version in {"V12", "V13"}:
         explicit_receipt_path = getattr(args, "model_metadata_receipt", None)
         if explicit_receipt_path is not None and not isinstance(explicit_receipt_path, Path):
             raise T09HostError("V12 model metadata receipt argument is malformed")
-        receipt_path = _resolve_v12_model_metadata_receipt(
+        receipt_path = _resolve_model_metadata_receipt(
             explicit_path=explicit_receipt_path,
             source_root=args.dynamic_source_root,
             provider_entry=dynamic,
+            contract=dynamic_contract,
         )
         model_metadata = validate_model_metadata_receipt_offline(
             receipt_path=receipt_path,
@@ -9683,6 +9702,7 @@ def preflight(args: argparse.Namespace) -> None:
             package_commit=args.package_commit,
             provider_entry=dynamic,
             artifact_root=artifact_root,
+            contract=dynamic_contract,
         )
     else:
         model_metadata = model_metadata_preflight(
@@ -9691,6 +9711,7 @@ def preflight(args: argparse.Namespace) -> None:
             prefix=prefix,
             image_id=image_id,
             cleanup_journal=cleanup_journal,
+            contract=dynamic_contract,
         )
     post_metadata_core_gate = complete_preflight_core_gate(
         artifact_root=artifact_root,
@@ -9771,7 +9792,7 @@ def preflight(args: argparse.Namespace) -> None:
                     "model_metadata_network_requests": 0,
                     "model_metadata_receipt_sha256": dynamic.get("model_metadata_receipt_sha256"),
                 }
-                if dynamic_contract is V12_PROVIDER_CONTRACT
+                if dynamic_contract.version in {"V12", "V13"}
                 else {}
             ),
             "model_metadata_credential_scan_sha256": file_sha256(
@@ -9876,7 +9897,7 @@ def preflight(args: argparse.Namespace) -> None:
                     "model_metadata_network_requests": 0,
                     "model_metadata_receipt_sha256": dynamic.get("model_metadata_receipt_sha256"),
                 }
-                if dynamic_contract is V12_PROVIDER_CONTRACT
+                if dynamic_contract.version in {"V12", "V13"}
                 else {}
             ),
             "model_task_request_count": 0,
@@ -9944,8 +9965,9 @@ def preflight_with_deadline(args: argparse.Namespace) -> None:
         dynamic,
         label="provider preflight entry receipt",
     )
-    if dynamic_contract not in {ACTIVE_PROVIDER_CONTRACT, V12_PROVIDER_CONTRACT}:
-        raise T09HostError("active preflight requires the exact V11 provider contract or V12")
+    if dynamic_contract is not _argument_provider_contract(args):
+        raise T09HostError("preflight entry receipt differs from the explicit selector")
+    _require_supported_provider_runner(dynamic_contract, label="provider preflight")
     started = dynamic.get("provider_preflight_started_at_epoch")
     prior_duration = dynamic.get("prior_campaign_lambda_duration_seconds")
     prior_cost = dynamic.get("prior_campaign_lambda_cost_usd")
@@ -10017,7 +10039,7 @@ def container_create_argv(
     attempt_root: Path,
     container_name: str,
     image_id: str,
-    contract: T09ProviderContract = ACTIVE_PROVIDER_CONTRACT,
+    contract: T09ProviderContract,
 ) -> list[str]:
     repository = args.repository.resolve(strict=True)
     paths = _contract_paths_for(repository, contract)
@@ -10132,8 +10154,7 @@ def validate_runtime_budget_root(
     artifact_root: Path,
     *,
     execution_contract_sha256: str,
-    plan_id: str = PLAN_ID,
-    contract: T09ProviderContract | None = None,
+    contract: T09ProviderContract,
 ) -> ProviderBudgetUsage:
     """Validate the condition's only writable control-plane directory."""
 
@@ -10163,7 +10184,7 @@ def validate_runtime_budget_root(
     return load_aggregate_usage(
         aggregate,
         contract_sha256=execution_contract_sha256,
-        plan_id=plan_id,
+        plan_id=contract.plan_id,
     )
 
 
@@ -10313,6 +10334,7 @@ def publish_condition_start_reservation(
     condition_argv_sha256: str,
     execution_contract_sha256: str,
     create_outcome_ambiguous: bool,
+    contract: T09ProviderContract,
 ) -> Path:
     """Durably reserve one frozen identity before any possibly-started outcome."""
 
@@ -10323,7 +10345,7 @@ def publish_condition_start_reservation(
         path,
         {
             "schema_version": "0.1.0",
-            "plan_id": PLAN_ID,
+            "plan_id": contract.plan_id,
             "run_id": run_id,
             "container_name": container_name,
             "container_id": container_id,
@@ -10347,7 +10369,7 @@ def publish_condition_start_reservation(
         frozen_run_manifest_sha256=frozen_run_manifest_sha256,
     )
     reserve_condition_start(
-        _pilot_root(artifact_root) / "pilot-state.json",
+        _pilot_root(artifact_root, contract) / "pilot-state.json",
         execution_contract_sha256=execution_contract_sha256,
         run_id=run_id,
         start_intent_sha256=file_sha256(path),
@@ -10573,7 +10595,7 @@ def evaluator_argv(
     finalizer_projection: Any,
     invocation: int,
     evaluator_revalidation_path: Path,
-    contract: T09ProviderContract = ACTIVE_PROVIDER_CONTRACT,
+    contract: T09ProviderContract,
 ) -> tuple[list[str], Path, dict[str, str]]:
     repository = args.repository.resolve(strict=True)
     paths = _contract_paths_for(repository, contract)
@@ -10716,7 +10738,7 @@ def _validate_projected_finalizer_argv(
     image_id: str,
     expected_mounts: set[str],
     required_pairs: dict[str, str],
-    contract: T09ProviderContract = ACTIVE_PROVIDER_CONTRACT,
+    contract: T09ProviderContract,
 ) -> None:
     """Keep empirical/provider authority frozen while invocation details are repairable."""
 
@@ -10785,7 +10807,7 @@ def local_evaluator_invocation(
     evaluator_revalidation_path: Path,
     local_qualification_path: Path,
     local_qualification: dict[str, Any],
-    contract: T09ProviderContract = ACTIVE_PROVIDER_CONTRACT,
+    contract: T09ProviderContract,
 ) -> tuple[list[str], dict[str, str], Path, dict[str, str]]:
     """Project and validate one provider-independent local finalizer invocation."""
 
@@ -10962,7 +10984,7 @@ def prepare_condition_attempt_root(
     pilot_state: dict[str, Any],
     package_commit: str,
     frozen_run_manifest_sha256: str,
-    contract: T09ProviderContract = ACTIVE_PROVIDER_CONTRACT,
+    contract: T09ProviderContract,
 ) -> tuple[Path, Path]:
     """Open a fresh root, preserving only source-marked failures from before entry."""
 
@@ -11055,7 +11077,7 @@ def record_preentry_condition_failure(
     frozen_run_manifest_sha256: str,
     condition_plan_sha256: str,
     condition_argv_sha256: str,
-    contract: T09ProviderContract = ACTIVE_PROVIDER_CONTRACT,
+    contract: T09ProviderContract,
     actual_credential_exposure_detected: bool = False,
     credential_cleanup_integrity_failure: bool = False,
     core_safety_stop_detected: bool = False,
@@ -15353,7 +15375,8 @@ def validate_postfreeze_entry_receipts(
         != frozen_manifest.get("image_materialization_policy")
         or postfreeze.get("model_metadata_request_count") != 1
         or (
-            frozen_manifest.get("plan_id") == V12_PROVIDER_CONTRACT.plan_id
+            provider_contract_for_plan_id(cast(str, frozen_manifest.get("plan_id"))).version
+            in {"V12", "V13"}
             and (
                 preflight_receipt.get("model_metadata_network_requests") != 0
                 or postfreeze.get("model_metadata_network_requests") != 0
@@ -15393,8 +15416,7 @@ def execute_condition(args: argparse.Namespace) -> int:
     artifact_root = args.artifact_root.resolve(strict=True)
     cleanup_journal = early_cleanup_journal(args)
     runtime_contract = _runtime_provider_contract(artifact_root)
-    # Resolve the active names once from durable V12/V11 state.  Module-level
-    # constants are retained for historical compatibility, not runtime choice.
+    # Resolve every runtime identity from the durable state's exact plan ID.
     admit_next_attempt(artifact_root)
     verify_package(repository, args.package_commit, contract=runtime_contract)
     frozen_manifest, frozen_manifest_sha256 = load_frozen_run_manifest(
@@ -15449,7 +15471,7 @@ def execute_condition(args: argparse.Namespace) -> int:
     validate_runtime_budget_root(
         artifact_root,
         execution_contract_sha256=execution_contract_sha256,
-        plan_id=runtime_contract.plan_id,
+        contract=runtime_contract,
     )
     expected_index = len(entered)
     if (
@@ -15609,6 +15631,7 @@ def execute_condition(args: argparse.Namespace) -> int:
                 condition_argv_sha256=cast(str, manifest["argv_sha256"]),
                 execution_contract_sha256=cast(str, state["execution_contract_sha256"]),
                 create_outcome_ambiguous=True,
+                contract=runtime_contract,
             )
             recover_condition_start_reservation(
                 artifact_root=artifact_root,
@@ -15664,6 +15687,7 @@ def execute_condition(args: argparse.Namespace) -> int:
             condition_argv_sha256=cast(str, manifest["argv_sha256"]),
             execution_contract_sha256=cast(str, state["execution_contract_sha256"]),
             create_outcome_ambiguous=True,
+            contract=runtime_contract,
         )
         recover_condition_start_reservation(
             artifact_root=artifact_root,
@@ -15710,6 +15734,7 @@ def execute_condition(args: argparse.Namespace) -> int:
             condition_argv_sha256=cast(str, manifest["argv_sha256"]),
             execution_contract_sha256=cast(str, state["execution_contract_sha256"]),
             create_outcome_ambiguous=False,
+            contract=runtime_contract,
         )
     except BaseException as reservation_error:
         reservation_cleanup_result = CleanupTargetState.FAILED
@@ -15786,6 +15811,7 @@ def execute_condition(args: argparse.Namespace) -> int:
                 condition_argv_sha256=cast(str, manifest["argv_sha256"]),
                 execution_contract_sha256=cast(str, state["execution_contract_sha256"]),
                 create_outcome_ambiguous=True,
+                contract=runtime_contract,
             )
         else:
             reservation_state = load_object(
@@ -15838,7 +15864,7 @@ def execute_condition(args: argparse.Namespace) -> int:
         validate_runtime_budget_root(
             artifact_root,
             execution_contract_sha256=execution_contract_sha256,
-            plan_id=runtime_contract.plan_id,
+            contract=runtime_contract,
         )
         admitted_seconds = admit_next_attempt(artifact_root)
         try:
@@ -16106,6 +16132,7 @@ def execute_condition(args: argparse.Namespace) -> int:
         validate_runtime_budget_root(
             artifact_root,
             execution_contract_sha256=execution_contract_sha256,
+            contract=runtime_contract,
         )
     except (OSError, T09HostError, T09PilotError):
         infrastructure_stop_requires_essential_seal = True
@@ -16712,7 +16739,7 @@ def validate_local_finalizer_qualification(
     require_local_runtime: bool,
     evaluator_root: Path | None = None,
     dataset: Path | None = None,
-    contract: T09ProviderContract = ACTIVE_PROVIDER_CONTRACT,
+    contract: T09ProviderContract,
 ) -> dict[str, Any]:
     """Validate the prelaunch absolute local analysis closure."""
 
@@ -16737,6 +16764,18 @@ def validate_local_finalizer_qualification(
         or receipt.get("schema_version") != "0.1.0"
         or receipt.get("qualification_id") != contract.local_finalizer_qualification_id
         or receipt.get("plan_id") != contract.plan_id
+        or receipt.get("provider_contract_version") != contract.version
+        or receipt.get("host_run_id") != contract.host_run_id
+        or receipt.get("attempt_order") != list(contract.attempt_order)
+        or receipt.get("evaluator_run_ids") != list(contract.evaluator_run_ids)
+        or receipt.get("runtime_qualification_id") != contract.active_image_qualification_id
+        or receipt.get("frozen_run_manifest_id") != contract.frozen_run_manifest_id
+        or receipt.get("execution_contract_path") != contract.execution_contract_path
+        or receipt.get("command_manifest_path") != contract.command_manifest_path
+        or receipt.get("command_manifest_sha256")
+        != file_sha256(_contract_paths_for(repository, contract)["commands"])
+        or receipt.get("provider_profile_path") != contract.provider_profile_path
+        or receipt.get("provider_profile_sha256") != contract.expected_provider_profile_sha256
         or receipt.get("package_commit") != package_commit
         or receipt.get("python_version") != "3.11.14"
         or receipt.get("execution_contract_sha256") != file_sha256(execution_path)
@@ -16961,7 +17000,7 @@ def _specialize_finalized_identity_schemas(
     score_schema: dict[str, Any],
     evidence_schema: dict[str, Any],
     run_id: str,
-    contract: T09ProviderContract = ACTIVE_PROVIDER_CONTRACT,
+    contract: T09ProviderContract,
 ) -> None:
     """Bind the independent selector to exact frozen fresh identities."""
 
@@ -17015,7 +17054,7 @@ def validate_finalized_attempt(
     repository: Path,
     finalized_root: Path,
     run_id: str,
-    contract: T09ProviderContract = ACTIVE_PROVIDER_CONTRACT,
+    contract: T09ProviderContract,
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, object], list[dict[str, object]]]:
     """Independently schema-check downstream output before frozen-state selection."""
 
@@ -17081,7 +17120,7 @@ def reject_and_remove_finalized_core_artifacts(
     execution_contract_sha256: str,
     receipt_path: Path,
     detection_stage: str,
-    contract: T09ProviderContract = ACTIVE_PROVIDER_CONTRACT,
+    contract: T09ProviderContract,
 ) -> None:
     """Permanently stop selection when a finalizer descendant emits a core."""
 
@@ -17161,11 +17200,13 @@ def validate_selected_finalization(
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Reconstruct a selected derived result from immutable raw and output bytes."""
 
-    provider_contract = (
-        _provider_contract_for_execution(contract)
-        if isinstance(contract, PilotExecutionContract)
-        else ACTIVE_PROVIDER_CONTRACT
-    )
+    contract_plan_id = getattr(contract, "plan_id", None)
+    if not isinstance(contract_plan_id, str):
+        raise T09HostError("selected finalization lacks an explicit plan identity")
+    try:
+        provider_contract = provider_contract_for_plan_id(contract_plan_id)
+    except T09ProviderContractError as exc:
+        raise T09HostError("selected finalization plan identity is unsupported") from exc
 
     expected_keys = {
         "finalizer_execution_mode",
@@ -20473,7 +20514,7 @@ def _evidence_file_manifest(
     root: Path,
     *,
     excluded_relative_prefixes: frozenset[str] = frozenset(),
-    contract: T09ProviderContract = ACTIVE_PROVIDER_CONTRACT,
+    contract: T09ProviderContract,
 ) -> tuple[list[dict[str, object]], int]:
     files: list[dict[str, object]] = []
     total = 0
@@ -20629,8 +20670,9 @@ def stage(args: argparse.Namespace) -> None:
     """Seal one remote evidence archive for the T07-style user download checkpoint."""
 
     root = args.artifact_root.resolve(strict=True)
-    has_v12_state = os.path.lexists(root / "pilot-v12" / "pilot-state.json")
-    stage_contract = _runtime_provider_contract(root) if has_v12_state else ACTIVE_PROVIDER_CONTRACT
+    stage_contract = _argument_provider_contract(args)
+    if _runtime_provider_contract(root) is not stage_contract:
+        raise T09HostError("staging state differs from the explicit provider selector")
     control_root = _pilot_root(root, stage_contract)
     stage_id = _contract_stage_id(stage_contract)
     archive_id = _contract_archive_id(stage_contract)
@@ -20661,17 +20703,10 @@ def stage(args: argparse.Namespace) -> None:
         "command_document": command_document,
         "package_commit": args.package_commit,
     }
-    if has_v12_state:
-        disposition_kwargs["contract"] = stage_contract
+    disposition_kwargs["contract"] = stage_contract
     state = _reconstructable_disposition(root, **disposition_kwargs)
-    if not has_v12_state:
-        stage_contract = _provider_contract_from_document(state, label="pilot disposition")
-    _require_active_provider_runner(stage_contract, label="historical evidence staging")
+    _require_supported_provider_runner(stage_contract, label="historical evidence staging")
     _require_provider_contract(state, expected=stage_contract, label="pilot disposition")
-    if not has_v12_state:
-        control_root = _pilot_root(root, stage_contract)
-        stage_id = _contract_stage_id(stage_contract)
-        archive_id = _contract_archive_id(stage_contract)
     export_chronology = require_prior_export_acknowledgements(
         root,
         next_attempt_index=_consumed_export_prefix_length(state),
@@ -20834,6 +20869,7 @@ def stage(args: argparse.Namespace) -> None:
 def verify_inbound(args: argparse.Namespace) -> None:
     """Verify the three manually downloaded T07-style handoff files locally."""
 
+    selected_contract = _argument_provider_contract(args)
     inbound = args.inbound_root.resolve(strict=True)
     archive = inbound / "t09-pilot-private-evidence-stage.tar.gz"
     identity_path = inbound / "evidence-stage-identity.json"
@@ -20842,13 +20878,18 @@ def verify_inbound(args: argparse.Namespace) -> None:
     marker = load_object(marker_path, label="inbound termination marker")
     raw_plan_id = identity.get("plan_id")
     if raw_plan_id is None:
-        # V11 inbound packages predate the typed multi-version stage identity.
-        inbound_contract = V11_PROVIDER_CONTRACT
+        # V11 inbound packages predate the typed multi-version stage identity,
+        # so the operator must select V11 explicitly at this historical boundary.
+        if selected_contract is not V11_PROVIDER_CONTRACT:
+            raise T09HostError("historical inbound stage requires the explicit V11 contract")
+        inbound_contract = selected_contract
     elif isinstance(raw_plan_id, str):
         try:
             inbound_contract = provider_contract_for_plan_id(raw_plan_id)
         except T09ProviderContractError as exc:
             raise T09HostError("inbound stage names an unsupported provider contract") from exc
+        if inbound_contract is not selected_contract:
+            raise T09HostError("inbound stage differs from the explicit provider selector")
     else:
         raise T09HostError("inbound stage plan identity is malformed")
     stage_id = _contract_stage_id(inbound_contract)
@@ -20861,7 +20902,7 @@ def verify_inbound(args: argparse.Namespace) -> None:
         identity.get("stage_id") != stage_id
         or identity.get("archive_id") != archive_id
         or (
-            inbound_contract is V12_PROVIDER_CONTRACT
+            inbound_contract.version in {"V12", "V13"}
             and (
                 identity.get("plan_id") != inbound_contract.plan_id
                 or identity.get("host_run_id") != inbound_contract.host_run_id
@@ -21062,7 +21103,9 @@ def package(args: argparse.Namespace) -> None:
     entry_receipt_path = args.provider_entry_receipt.resolve(strict=True)
     entry = load_object(entry_receipt_path, label="provider entry receipt")
     contract = _provider_contract_from_document(entry, label="provider entry receipt")
-    _require_active_provider_runner(contract, label="historical evidence packaging")
+    if contract is not _argument_provider_contract(args):
+        raise T09HostError("provider entry differs from the explicit provider selector")
+    _require_supported_provider_runner(contract, label="historical evidence packaging")
     attempt_order = contract.run_ids
     archive_id = _contract_archive_id(contract)
     lambda_started = entry.get("lambda_started_at_epoch")
@@ -21775,14 +21818,7 @@ def _prior_typed_core_incidents(
 ) -> tuple[bool, bool]:
     """Reconcile only exact host-owned core producers; never trust arbitrary JSON."""
 
-    selected_contract = contract
-    if selected_contract is None:
-        execution_path = contract_paths(repository)["execution"]
-        execution_contract = load_execution_contract(
-            execution_path,
-            expected_sha256=file_sha256(execution_path),
-        )
-        selected_contract = _provider_contract_for_execution(execution_contract)
+    selected_contract = _runtime_provider_contract(artifact_root) if contract is None else contract
     pilot_root = _pilot_root(artifact_root, selected_contract)
     detected = False
     destruction_unverified = False
@@ -22096,8 +22132,9 @@ def cleanup(args: argparse.Namespace) -> None:
         state_path=state_path,
     ):
         return
-    if cleanup_contract not in {ACTIVE_PROVIDER_CONTRACT, V12_PROVIDER_CONTRACT}:
-        raise T09HostError("pilot-state cleanup requires its frozen provider runner")
+    if cleanup_contract is not _argument_provider_contract(args):
+        raise T09HostError("cleanup journal differs from the explicit provider selector")
+    _require_supported_provider_runner(cleanup_contract, label="pilot-state cleanup")
     replacement_image_tag = cast(str, cleanup_contract.replacement_image_tag)
     if not root.exists():
         root.mkdir(mode=0o700, parents=True, exist_ok=False)
@@ -23126,7 +23163,7 @@ def preempirical_replacement_disposition(args: argparse.Namespace) -> dict[str, 
     provider_entry = load_object(provider_entry_path, label="provider entry summary")
     failure = load_object(failure_path, label="preflight failure")
     contract = _provider_contract_from_document(state, label="pre-empirical pilot state")
-    _require_active_provider_runner(contract, label="historical pre-empirical disposition")
+    _require_supported_provider_runner(contract, label="historical pre-empirical disposition")
     _require_provider_contract(
         provider_entry,
         expected=contract,
@@ -23272,6 +23309,7 @@ def preempirical_replacement_disposition(args: argparse.Namespace) -> dict[str, 
 
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser()
+    result.add_argument("--provider-contract", required=True)
     result.add_argument("--repository", type=Path, required=True)
     result.add_argument("--artifact-root", type=Path, required=True)
     result.add_argument("--early-cleanup-journal", type=Path, required=True)
@@ -23343,6 +23381,7 @@ def parser() -> argparse.ArgumentParser:
 def main() -> int:
     enforce_host_core_limit()
     args = parser().parse_args()
+    _argument_provider_contract(args)
     recover_atomic_publications(args.artifact_root)
     if args.operation == "preflight":
         preflight_with_deadline(args)

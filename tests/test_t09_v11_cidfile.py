@@ -14,6 +14,7 @@ from giclab.harness.t09_cleanup_state import (
     CleanupTargetState,
     EarlyCleanupJournal,
 )
+from giclab.harness.t09_provider_contracts import V11_PROVIDER_CONTRACT
 
 ROOT = Path(__file__).resolve().parents[1]
 VALID_ID = "a" * 64
@@ -37,8 +38,8 @@ def _write_cidfile(path: Path, content: bytes = b"") -> None:
 def _journal(tmp_path: Path, host: ModuleType) -> EarlyCleanupJournal:
     return EarlyCleanupJournal.initialize(
         tmp_path / "early-cleanup-state",
-        plan_id=host.PLAN_ID,
-        host_run_id=host.HOST_RUN_ID,
+        plan_id=V11_PROVIDER_CONTRACT.plan_id,
+        host_run_id=V11_PROVIDER_CONTRACT.host_run_id,
         package_commit="a" * 40,
         plan_sha256="b" * 64,
         provider_instance_id="instance-owned-cidfile-fixture",
@@ -267,7 +268,7 @@ def test_delayed_publication_registers_exact_identity_before_completion_and_clea
     evidence_root = tmp_path / "evidence"
     evidence_root.mkdir(mode=0o700)
     role = "utility-cidfile-publication"
-    name = f"{host.CONTAINER_PREFIX}{role}"
+    name = f"{V11_PROVIDER_CONTRACT.container_prefix}{role}"
     registration_observations: list[tuple[str, str, dict[str, str]]] = []
     removal_ids: list[str] = []
     original_register = host.register_owned_container_cleanup
@@ -320,8 +321,8 @@ def test_delayed_publication_registers_exact_identity_before_completion_and_clea
         VALID_ID,
         name,
         {
-            "giclab.t09.plan": host.PLAN_ID,
-            "giclab.t09.host_run": host.HOST_RUN_ID,
+            "giclab.t09.plan": V11_PROVIDER_CONTRACT.plan_id,
+            "giclab.t09.host_run": V11_PROVIDER_CONTRACT.host_run_id,
             "giclab.t09.role": role,
         },
     )
@@ -339,6 +340,7 @@ def test_delayed_publication_registers_exact_identity_before_completion_and_clea
 
     result = host.run_owned_docker(
         ["docker", "run", "fixture-image"],
+        contract=V11_PROVIDER_CONTRACT,
         prefix=["docker"],
         label="cidfile-publication",
         owned_role=role,
@@ -355,8 +357,8 @@ def test_delayed_publication_registers_exact_identity_before_completion_and_clea
             VALID_ID,
             name,
             {
-                "giclab.t09.plan": host.PLAN_ID,
-                "giclab.t09.host_run": host.HOST_RUN_ID,
+                "giclab.t09.plan": V11_PROVIDER_CONTRACT.plan_id,
+                "giclab.t09.host_run": V11_PROVIDER_CONTRACT.host_run_id,
                 "giclab.t09.role": role,
             },
         )
@@ -377,7 +379,7 @@ def test_later_different_published_id_is_terminal_and_cleanup_keeps_original_aut
     evidence_root = tmp_path / "evidence"
     evidence_root.mkdir(mode=0o700)
     role = "utility-cidfile-change"
-    name = f"{host.CONTAINER_PREFIX}{role}"
+    name = f"{V11_PROVIDER_CONTRACT.container_prefix}{role}"
     removal_ids: list[str] = []
 
     class ChangedPopen:
@@ -406,8 +408,8 @@ def test_later_different_published_id_is_terminal_and_cleanup_keeps_original_aut
         VALID_ID,
         name,
         {
-            "giclab.t09.plan": host.PLAN_ID,
-            "giclab.t09.host_run": host.HOST_RUN_ID,
+            "giclab.t09.plan": V11_PROVIDER_CONTRACT.plan_id,
+            "giclab.t09.host_run": V11_PROVIDER_CONTRACT.host_run_id,
             "giclab.t09.role": role,
         },
     )
@@ -425,6 +427,7 @@ def test_later_different_published_id_is_terminal_and_cleanup_keeps_original_aut
     with pytest.raises(host.T09HostError, match="container-ID changed after publication"):
         host.run_owned_docker(
             ["docker", "run", "fixture-image"],
+            contract=V11_PROVIDER_CONTRACT,
             prefix=["docker"],
             label="cidfile-change",
             owned_role=role,
@@ -495,6 +498,7 @@ def test_zero_length_until_deadline_never_gains_cleanup_authority_or_name_remova
     with pytest.raises(subprocess.TimeoutExpired) as raised:
         host.run_owned_docker(
             ["docker", "run", "fixture-image"],
+            contract=V11_PROVIDER_CONTRACT,
             prefix=["docker"],
             label="cidfile-timeout",
             evidence_root=evidence_root,

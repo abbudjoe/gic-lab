@@ -1,0 +1,71 @@
+{
+  "authority_disposition": {
+    "authorization_overlay_consumed": true,
+    "condition_identities_retired_without_empirical_entry": true,
+    "frozen_run_manifest_identity_consumed": true,
+    "host_identity_consumed": true,
+    "image_qualification_identity_consumed": true,
+    "metadata_allowance_consumed": true,
+    "replay_allowed": false
+  },
+  "cleanup": {
+    "firewall_baseline_restored": true,
+    "provider_resource_absent": true,
+    "ruleset_state_restored": true,
+    "terminal_state": "category_3_v12_stopped_material_failure_cleanup_verified",
+    "verified": true,
+    "zero_t09_instances": true
+  },
+  "cost_accounting": {
+    "lambda_active_seconds": 1059.587429,
+    "lambda_cost_usd": 0.3796854954083761,
+    "openai_cost_usd": 0.0
+  },
+  "disposition_id": "T09-V12-STOPPED-DISPOSITION-AUTONOMOUS-0005",
+  "evidence_identities": {
+    "authorization_overlay_file_sha256": "a1d25a9d52f0e38720b933abab823b20c1b5880f204ebc9d595caf38c4438309",
+    "authorization_semantic_sha256": "52c5d24198ebe58167ce247b70dc8dfdd1922631311f58cf62bdf9b65ebcb8f4",
+    "category_1_defect_handoff": {
+      "bytes": 2678,
+      "sha256": "077cec8c55fa36a233fcc2005b9932060dbe23de168d6e2dc5c575fe9a3e370f"
+    },
+    "final_cleanup_receipt": {
+      "bytes": 1601,
+      "sha256": "3858f8ba4c754c117392955f57d8af93f4ccda54db2d89bcd353ec289b4fa86e"
+    },
+    "model_receipt": {
+      "bytes": 1401,
+      "sha256": "a2242817f48f1a921e2897ca0f281a011947060fc46d9768cb5b0fc26d7d50"
+    },
+    "provider_closeout_receipt": {
+      "bytes": 2005,
+      "sha256": "2bac317940f5d5b02c9fd6d322ed1c6118268e81f25f23e84190f87467f61ce3"
+    }
+  },
+  "execution_boundary": {
+    "empirical_entry_crossed": false,
+    "provider_launch_crossed": true
+  },
+  "failure": {
+    "error_class": "local-finalizer-execution-contract-drift",
+    "message_class": "local finalizer execution contract drifted",
+    "root_cause_class": "implicit-v11-pilot-identities-in-shared-active-qualifier-path"
+  },
+  "host_run_id": "RUN-T09-PILOT-HOST-AUTONOMOUS-0005",
+  "merged_package_commit": "5253b864a3a2b288ce5cf06cd60d054b4925e5cc",
+  "plan": {
+    "bytes": 16899,
+    "plan_id": "PLAN-EXP0001-PILOT-V12",
+    "sha256": "a7ff9367bf8d9e0fea35b02d968d4b03f78cfdc774beeeca85a93dde57e47484"
+  },
+  "request_accounting": {
+    "authenticated_openai_model_metadata_gets": 1,
+    "browser_actions": 0,
+    "empirical_condition_attempts": 0,
+    "lambda_launches": 1,
+    "lambda_read_only_gets": 6,
+    "returned_model": "gpt-4o-2024-11-20",
+    "task_model_calls": 0
+  },
+  "schema_version": "1.0.0"
+}

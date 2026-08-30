@@ -30,14 +30,11 @@ from giclab.harness.sira_gate_a import (
 )
 from giclab.harness.t09_provider_contracts import (
     PROVIDER_CONTRACTS,
-    V11_PROVIDER_CONTRACT,
     T09ProviderContract,
     T09ProviderContractError,
     provider_contract_for_plan_id,
 )
 
-ACTIVE_PROVIDER_CONTRACT: Final = V11_PROVIDER_CONTRACT
-PLAN_ID: Final = ACTIVE_PROVIDER_CONTRACT.plan_id
 EXPERIMENT_ID: Final = "EXP-0001"
 SIRA_COMMIT: Final = "93fb8d72de71f9a4a13419670adeb34d93cf7acd"
 MODEL_REVISION: Final = "gpt-4o-2024-11-20"
@@ -59,22 +56,12 @@ TASK_REFERENCE_SHA256S: Final = (
     "fc40734fa183e839b56a7c89b16faa5900865cbee7a4210fcb251a99176f98de",
     "2ee9d892e24441d5f5bbf31b7616c1ade5977af26d22e4020f92a162fa23becb",
 )
-ATTEMPT_ORDER: Final = ACTIVE_PROVIDER_CONTRACT.run_ids
 _AUTONOMOUS_ATTEMPT_IDS: Final = frozenset(
     run_id
     for provider in PROVIDER_CONTRACTS.values()
     if provider.execution_contract_path is not None
     for run_id in provider.run_ids
 )
-EVALUATOR_RUN_IDS: Final = (
-    "RUN-T09-EVAL-TASK-A-REACTIVE-AUTONOMOUS-0004",
-    "RUN-T09-EVAL-TASK-A-SIMULATIVE-AUTONOMOUS-0004",
-    "RUN-T09-EVAL-TASK-B-SIMULATIVE-AUTONOMOUS-0004",
-    "RUN-T09-EVAL-TASK-B-REACTIVE-AUTONOMOUS-0004",
-)
-RUNTIME_QUALIFICATION_ID: Final = "QUAL-T09-PILOT-V11-IMAGE-AUTONOMOUS-0004"
-LOCAL_FINALIZER_QUALIFICATION_ID: Final = "QUAL-T09-PILOT-V11-LOCAL-FINALIZER-AUTONOMOUS-0004"
-FROZEN_RUN_MANIFEST_ID: Final = "RUN-MANIFEST-EXP0001-PILOT-V11-AUTONOMOUS-0004"
 HISTORICAL_IMAGE_ID: Final = (
     "sha256:035edf61718e84a8156f4f0f7817b134b0ce31488d3f0b50bbfba2b4a30cc61c"
 )
@@ -955,6 +942,22 @@ def load_execution_contract(path: Path, *, expected_sha256: str) -> PilotExecuti
         if document.get(field) != expected:
             raise T09PilotError(f"execution contract {field} drifted")
 
+    identities = _strict_object(document.get("identities"), context="pilot identities")
+    expected_pilot_identities: dict[str, object] = {
+        "host_run_id": selected_provider_contract.host_run_id,
+        "evaluator_run_ids": list(selected_provider_contract.evaluator_run_ids),
+        "runtime_qualification_id": selected_provider_contract.active_image_qualification_id,
+        "local_finalizer_qualification_id": (
+            selected_provider_contract.local_finalizer_qualification_id
+        ),
+        "frozen_run_manifest_id": selected_provider_contract.frozen_run_manifest_id,
+        "evidence_archive_id": selected_provider_contract.evidence_archive_id,
+        "evidence_stage_id": selected_provider_contract.evidence_stage_id,
+    }
+    for field, expected in expected_pilot_identities.items():
+        if identities.get(field) != expected:
+            raise T09PilotError(f"execution contract {field} identity drifted")
+
     raw_limits = _strict_object(document.get("runtime_limits"), context="runtime limits")
     limits = RuntimeLimits(
         expected_browser_actions_per_attempt=_required_int(
@@ -1177,7 +1180,7 @@ def load_aggregate_usage(
     path: Path,
     *,
     contract_sha256: str,
-    plan_id: str = PLAN_ID,
+    plan_id: str,
 ) -> ProviderBudgetUsage:
     """Load the prior sequential-attempt aggregate or return a typed zero state."""
 
@@ -1202,7 +1205,7 @@ def load_aggregate_observed_usage(
     path: Path,
     *,
     contract_sha256: str,
-    plan_id: str = PLAN_ID,
+    plan_id: str,
 ) -> ProviderBudgetUsage:
     """Load the response-backed aggregate lower bound from the durable ledger."""
 
@@ -1225,7 +1228,7 @@ def write_aggregate_usage(
     path: Path,
     *,
     contract_sha256: str,
-    plan_id: str = PLAN_ID,
+    plan_id: str,
     usage: ProviderBudgetUsage,
     unreconciled_provider_attempts: int,
     observed_usage: ProviderBudgetUsage | None = None,
@@ -1319,6 +1322,7 @@ def transition_zero_usage_preflight_state(
 
     prior_state = _strict_object(state, context="prior preflight pilot state")
     prior_aggregate = _strict_object(aggregate, context="prior aggregate ledger")
+    selected_contract = _state_provider_contract(prior_state)
     state_keys = {
         "schema_version",
         "plan_id",
@@ -1342,7 +1346,7 @@ def transition_zero_usage_preflight_state(
     if (
         set(prior_state) != state_keys
         or prior_state.get("schema_version") != "0.2.0"
-        or prior_state.get("plan_id") != PLAN_ID
+        or prior_state.get("plan_id") != selected_contract.plan_id
         or prior_state.get("execution_contract_sha256") != prior_execution_contract_sha256
         or not isinstance(started, (int, float))
         or isinstance(started, bool)
@@ -1366,7 +1370,7 @@ def transition_zero_usage_preflight_state(
     zero_usage = usage_to_document(ProviderBudgetUsage())
     if prior_aggregate != {
         "schema_version": "0.1.0",
-        "plan_id": PLAN_ID,
+        "plan_id": selected_contract.plan_id,
         "execution_contract_sha256": prior_execution_contract_sha256,
         "unreconciled_provider_attempts": 0,
         "usage": zero_usage,
@@ -2654,6 +2658,7 @@ class ResourceGuard:
 class PairCheckpointInput:
     """Evidence required for the automatic post-Task-A calibration decision."""
 
+    plan_id: str
     attempt_run_ids: tuple[str, str]
     valid_evidence: tuple[bool, bool]
     evaluator_succeeded: tuple[bool, bool]
@@ -2666,17 +2671,26 @@ class PairCheckpointInput:
     projected_aggregate_cost_usd: float
     actual_lambda_cost_usd: float
     remaining_campaign_seconds: float
-    next_attempt_hard_wall_seconds: int = 3_600
-    prior_t09_cost_usd: float = ACTIVE_PROVIDER_CONTRACT.prior_t09_cost_usd
-    cumulative_t09_cost_cap_usd: float = ACTIVE_PROVIDER_CONTRACT.cumulative_t09_cost_cap_usd
+    next_attempt_hard_wall_seconds: int
+    prior_t09_cost_usd: float
+    cumulative_t09_cost_cap_usd: float
 
 
 def first_pair_decision(value: PairCheckpointInput) -> dict[str, object]:
     """Apply the predeclared pass/stop checkpoint without scientific inference."""
 
     reasons: list[str] = []
-    if value.attempt_run_ids != ATTEMPT_ORDER[:2]:
+    try:
+        selected_contract = provider_contract_for_plan_id(value.plan_id)
+    except T09ProviderContractError as exc:
+        raise T09PilotError("checkpoint plan identity is unsupported") from exc
+    if value.attempt_run_ids != selected_contract.attempt_order[:2]:
         reasons.append("task_a_attempt_identity_or_order_invalid")
+    if (
+        value.prior_t09_cost_usd != selected_contract.prior_t09_cost_usd
+        or value.cumulative_t09_cost_cap_usd != selected_contract.cumulative_t09_cost_cap_usd
+    ):
+        reasons.append("provider_cost_identity_invalid")
     if not all(value.valid_evidence):
         reasons.append("task_a_valid_evidence_missing")
     if not all(value.evaluator_succeeded):
@@ -2753,7 +2767,7 @@ def first_pair_decision(value: PairCheckpointInput) -> dict[str, object]:
         reasons.append("insufficient_campaign_time_for_next_attempt_and_cleanup")
     return {
         "schema_version": "0.1.0",
-        "plan_id": PLAN_ID,
+        "plan_id": selected_contract.plan_id,
         "decision": "continue-to-task-b" if not reasons else "stop-before-task-b",
         "scientific_sampling_claim": "none-calibration-checkpoint-only",
         "reasons": reasons,
@@ -3189,6 +3203,11 @@ def render_command_manifest(
             if key not in {"--mode", "--config_name", "--output_dir"}
         },
     }
+    if contract.provider_contract_version == "V13":
+        equality_surface["provider_contract_selector"] = {
+            "argument": "--provider-contract",
+            "value": contract.provider_contract_version,
+        }
     return {
         "schema_version": "0.1.0",
         "plan_id": contract.plan_id,
@@ -3264,10 +3283,15 @@ def _normalized_actual_argv(manifest: Mapping[str, object]) -> tuple[str, ...] |
         "TASK-A" if task_id == TASK_IDS[0] else "TASK-B" if task_id == TASK_IDS[1] else None
     )
     plan_id = manifest.get("plan_id")
-    version = plan_id.rsplit("-", 1)[-1] if isinstance(plan_id, str) else None
+    try:
+        version = (
+            provider_contract_for_plan_id(plan_id).version if isinstance(plan_id, str) else None
+        )
+    except T09ProviderContractError:
+        version = None
     expected_upstream_run_id = (
         f"{EXPERIMENT_ID}-PILOT-{version}-{task_label}-{str(condition).upper()}"
-        if task_label is not None and version in {"V11", "V12"}
+        if task_label is not None and version is not None
         else None
     )
     if not downstream or downstream[0] != expected_upstream_run_id:

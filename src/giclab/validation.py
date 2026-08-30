@@ -74,12 +74,15 @@ SCHEMA_FILES = (
     "schemas/t09-sira-pilot-v10-execution.schema.json",
     "schemas/t09-sira-pilot-v11-execution.schema.json",
     "schemas/t09-sira-pilot-v12-execution.schema.json",
+    "schemas/t09-sira-pilot-v13-execution.schema.json",
     "schemas/t09-model-metadata-receipt.schema.json",
+    "schemas/t09-v13-model-metadata-receipt.schema.json",
     "schemas/t09-offline-refinalization-receipt.schema.json",
     "schemas/t09-early-cleanup-state.schema.json",
     "schemas/t09-v10-plan.schema.json",
     "schemas/t09-v11-plan.schema.json",
     "schemas/t09-v12-plan.schema.json",
+    "schemas/t09-v13-plan.schema.json",
     "schemas/terminal-execution-control.schema.json",
 )
 REQUIRED_PATHS = (
@@ -257,9 +260,21 @@ def _t09_successor_implementation_binding_map(plan: Mapping[str, Any]) -> dict[s
         ("execution_plane", "runtime_identity_path", "runtime_identity_sha256"),
         ("execution_plane", "execution_schema_path", "execution_schema_sha256"),
     )
-    if plan.get("plan_id") == "PLAN-EXP0001-PILOT-V12":
+    if plan.get("plan_id") in {
+        "PLAN-EXP0001-PILOT-V12",
+        "PLAN-EXP0001-PILOT-V13",
+    }:
         specifications += (
             ("execution_plane", "runtime_adaptation_path", "runtime_adaptation_sha256"),
+        )
+    if plan.get("plan_id") == "PLAN-EXP0001-PILOT-V13":
+        specifications += (
+            ("execution_plane", "preflight_path", "preflight_sha256"),
+            (
+                "execution_plane",
+                "local_finalizer_qualification_path",
+                "local_finalizer_qualification_sha256",
+            ),
         )
     result: dict[str, str] = {}
     for group_name, path_field, hash_field in specifications:
@@ -1822,7 +1837,17 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
         errors.append("EXP-0001 T09: replacement runtime semantic identity drifted")
     instrumentation = runtime_identity.get("repository_instrumentation")
     files = instrumentation.get("files") if isinstance(instrumentation, dict) else None
-    successor_plan_path = exp_root / "run-plans/proposals/PLAN-EXP0001-PILOT-V12.yaml"
+    successor_plan_path = next(
+        (
+            candidate
+            for candidate in (
+                exp_root / "run-plans/proposals/PLAN-EXP0001-PILOT-V13.yaml",
+                exp_root / "run-plans/proposals/PLAN-EXP0001-PILOT-V12.yaml",
+            )
+            if candidate.is_file()
+        ),
+        exp_root / "run-plans/proposals/PLAN-EXP0001-PILOT-V12.yaml",
+    )
     successor_bindings = (
         _t09_successor_implementation_binding_map(load_yaml(successor_plan_path))
         if successor_plan_path.is_file()
@@ -2189,9 +2214,17 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
         )
     ):
         errors.append("EXP-0001 T09: command generator binding drifted")
-    from giclab.harness.t09_sira_pilot import PLAN_ID as active_plan_id
+    from giclab.harness.t09_provider_contracts import (
+        T09ProviderContractError,
+        provider_contract_for_plan_id,
+    )
 
-    if execution.get("plan_id") != active_plan_id:
+    try:
+        retained_package_contract = provider_contract_for_plan_id(str(execution.get("plan_id")))
+    except T09ProviderContractError:
+        errors.append("EXP-0001 T09: frozen package provider contract is unsupported")
+        return errors
+    if retained_package_contract.version == "V9":
         # The V9 package is immutable historical evidence.  Once the active
         # typed loader advances, do not reinterpret or rerender V9 with successor
         # constants. Its committed package/source bindings above remain
@@ -2600,10 +2633,12 @@ def _validate_t09_successor_plan(
         "early_cleanup",
         "execution_plane",
     ]
-    if version in {"V11", "V12"}:
+    if version in {"V11", "V12", "V13"}:
         required_groups.insert(3, "owned_container_publication")
-    if version == "V12":
+    if version in {"V12", "V13"}:
         required_groups.insert(4, "model_metadata_receipt")
+    if version == "V13":
+        required_groups.insert(5, "v12_stopped_disposition")
     groups = {name: bindings.get(name) for name in required_groups}
     if not all(isinstance(value, dict) for value in groups.values()):
         return [*errors, f"{label} implementation binding groups are malformed"]
@@ -2613,14 +2648,17 @@ def _validate_t09_successor_plan(
     cleanup = groups["early_cleanup"]
     execution = groups["execution_plane"]
     model_metadata = groups.get("model_metadata_receipt")
+    stopped_disposition = groups.get("v12_stopped_disposition")
     assert isinstance(accounting, dict)
     assert isinstance(refinalization, dict)
     assert isinstance(cleanup, dict)
     assert isinstance(execution, dict)
-    if version == "V12":
+    if version in {"V12", "V13"}:
         assert isinstance(model_metadata, dict)
+    if version == "V13":
+        assert isinstance(stopped_disposition, dict)
 
-    source_ancestor: str | None = None
+    source_ancestors: list[str] = []
     runtime_identity_relative = execution.get("runtime_identity_path")
     if historical_source_bindings and isinstance(runtime_identity_relative, str):
         identity_path = Path(runtime_identity_relative)
@@ -2635,8 +2673,18 @@ def _validate_t09_successor_plan(
                     else None
                 )
                 if isinstance(candidate, str) and re.fullmatch(r"[0-9a-f]{40}", candidate):
-                    source_ancestor = candidate
-    if historical_source_bindings and source_ancestor is None:
+                    source_ancestors.append(candidate)
+    if historical_source_bindings and version == "V12":
+        stopped_path = (
+            root / "experiments/EXP-0001-sira-simulative-vs-reactive/"
+            "T09_V12_STOPPED_DISPOSITION.json"
+        )
+        if stopped_path.is_file():
+            stopped = load_json(stopped_path)
+            merged_package = stopped.get("merged_package_commit")
+            if isinstance(merged_package, str) and re.fullmatch(r"[0-9a-f]{40}", merged_package):
+                source_ancestors.append(merged_package)
+    if historical_source_bindings and not source_ancestors:
         errors.append(f"{label} historical source ancestor is malformed")
 
     specifications: list[tuple[Mapping[str, Any], str, str]] = [
@@ -2661,7 +2709,7 @@ def _validate_t09_successor_plan(
         (execution, "runtime_identity_path", "runtime_identity_sha256"),
         (execution, "execution_schema_path", "execution_schema_sha256"),
     ]
-    if version == "V12":
+    if version in {"V12", "V13"}:
         assert isinstance(model_metadata, dict)
         specifications.extend(
             [
@@ -2680,6 +2728,19 @@ def _validate_t09_successor_plan(
                 ),
             ]
         )
+    if version == "V13":
+        specifications.extend(
+            [
+                (execution, "preflight_path", "preflight_sha256"),
+                (
+                    execution,
+                    "local_finalizer_qualification_path",
+                    "local_finalizer_qualification_sha256",
+                ),
+            ]
+        )
+    if isinstance(stopped_disposition, dict):
+        specifications.append((stopped_disposition, "path", "sha256"))
     publication = groups.get("owned_container_publication")
     if isinstance(publication, dict):
         specifications.extend(
@@ -2704,13 +2765,19 @@ def _validate_t09_successor_plan(
             continue
         if hashlib.sha256(target.read_bytes()).hexdigest() == expected:
             continue
-        historical_match = (
-            source_ancestor is not None
-            and path.suffix == ".py"
-            and _t09_git_blob_sha256(root, source_ancestor, relative) == expected
+        historical_match = path.suffix == ".py" and any(
+            _t09_git_blob_sha256(root, source_ancestor, relative) == expected
+            for source_ancestor in source_ancestors
         )
         if not historical_match:
             errors.append(f"{label} {path_field} binding drifted")
+    if isinstance(stopped_disposition, dict):
+        relative = stopped_disposition.get("path")
+        expected_size = stopped_disposition.get("size_bytes")
+        if isinstance(relative, str) and isinstance(expected_size, int):
+            stopped_target = root / relative
+            if stopped_target.is_file() and stopped_target.stat().st_size != expected_size:
+                errors.append(f"{label} stopped disposition byte size drifted")
 
     condition_plans = execution.get("condition_plans")
     if not isinstance(condition_plans, list) or len(condition_plans) != 4:
@@ -2750,7 +2817,7 @@ def _validate_t09_successor_plan(
                 f"{label} runtime profile: {error}"
                 for error in validate_run_profile_readiness(runtime_profile)
             )
-            if version == "V12":
+            if version in {"V12", "V13"}:
                 lifecycle = runtime_profile.get("provider_lifecycle")
                 expected_metadata_lifecycle = {
                     "model_metadata_request_count_total": 1,
@@ -2834,7 +2901,7 @@ def _validate_t09_successor_plan(
                 ]
                 if observed_order != expected_order:
                     errors.append(f"{label} execution attempt order drifted from the plan")
-            if version in {"V11", "V12"}:
+            if version in {"V11", "V12", "V13"}:
                 lifecycle = contract.get("provider_lifecycle")
                 if not isinstance(lifecycle, dict) or (
                     lifecycle.get("model_metadata_before_lambda_launch") is not True
@@ -2846,7 +2913,7 @@ def _validate_t09_successor_plan(
                 ):
                     errors.append(f"{label} metadata-before-Lambda contract drifted")
                 if (
-                    version == "V12"
+                    version in {"V12", "V13"}
                     and isinstance(lifecycle, dict)
                     and (
                         lifecycle.get("model_metadata_request_count_total") != 1
@@ -2875,14 +2942,14 @@ def _validate_t09_successor_plan(
                 )
             ):
                 errors.append(f"{label} command pair diff is invalid")
-            if version in {"V11", "V12"}:
+            if version in {"V11", "V12", "V13"}:
                 reviewed_ancestor = bindings.get("reviewed_implementation_ancestor")
                 if commands.get("reviewed_implementation_ancestor") != reviewed_ancestor:
                     errors.append(f"{label} command manifest source ancestor drifted")
     else:
         errors.append(f"{label} execution control paths are malformed")
 
-    if version in {"V11", "V12"} and isinstance(runtime_identity_relative, str):
+    if version in {"V11", "V12", "V13"} and isinstance(runtime_identity_relative, str):
         identity_target = root / runtime_identity_relative
         if identity_target.is_file():
             identity = load_json(identity_target)
@@ -2906,7 +2973,7 @@ def _validate_t09_successor_plan(
                 Decimal(
                     str(budget.get("effective_maximum_new_total_cost_under_cumulative_cap_usd"))
                 )
-                if version in {"V11", "V12"}
+                if version in {"V11", "V12", "V13"}
                 else nominal_new_total
             )
         except InvalidOperation:
@@ -2940,11 +3007,21 @@ def validate_t09_v11_plan(root: Path = ROOT) -> list[str]:
 
 
 def validate_t09_v12_plan(root: Path = ROOT) -> list[str]:
-    """Validate the unauthorized V12 receipt-handoff successor package."""
+    """Validate the stopped V12 package against its immutable source ancestor."""
 
     return _validate_t09_successor_plan(
         root,
         version="V12",
+        historical_source_bindings=True,
+    )
+
+
+def validate_t09_v13_plan(root: Path = ROOT) -> list[str]:
+    """Validate the unauthorized V13 explicit-contract successor package."""
+
+    return _validate_t09_successor_plan(
+        root,
+        version="V13",
         historical_source_bindings=False,
     )
 
@@ -3055,6 +3132,7 @@ def run_all(root: Path = ROOT) -> list[str]:
         ("T09 V10 plan", validate_t09_v10_plan),
         ("T09 V11 plan", validate_t09_v11_plan),
         ("T09 V12 plan", validate_t09_v12_plan),
+        ("T09 V13 plan", validate_t09_v13_plan),
         ("manifests", validate_manifests),
         ("workflows", validate_workflows),
         ("repository hygiene", validate_hygiene),

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Qualify one absolute local Retry 3 downstream-finalizer runtime.
+"""Qualify one explicitly selected T09 downstream-finalizer runtime.
 
-This is an offline, prelaunch control.  It binds the current clean package, the
+This is an offline, prelaunch control.  It binds the selected clean package, the
 absolute Python binary, the complete pinned evaluator overlay, and the accepted
 real-evidence regression.  It has no empirical, provider, budget, selection, or
 checkpoint authority.
@@ -23,7 +23,13 @@ import sysconfig
 from pathlib import Path
 from typing import Any
 
-from giclab.harness.t09_sira_pilot import LOCAL_FINALIZER_QUALIFICATION_ID, PLAN_ID
+from giclab.harness.t09_provider_contracts import (
+    T09ProviderContract,
+    T09ProviderContractError,
+    load_provider_profile,
+    provider_contract,
+    provider_contract_for_plan_id,
+)
 
 MAX_DEPENDENCY_TREE_ENTRIES = 100_000
 MAX_DEPENDENCY_TREE_BYTES = 1_073_741_824
@@ -258,8 +264,106 @@ def _disable_network() -> None:
     socket.create_connection = denied  # type: ignore[assignment]
 
 
+def _selected_contract(args: argparse.Namespace) -> T09ProviderContract:
+    """Resolve exactly one required selector without a current/latest fallback."""
+
+    version = getattr(args, "provider_contract", None)
+    plan_id = getattr(args, "plan_id", None)
+    if (isinstance(version, str)) == (isinstance(plan_id, str)):
+        raise LocalQualificationError(
+            "exactly one provider-contract version or plan identity is required"
+        )
+    try:
+        return (
+            provider_contract(version)
+            if isinstance(version, str)
+            else provider_contract_for_plan_id(plan_id)
+        )
+    except T09ProviderContractError as exc:
+        raise LocalQualificationError("local finalizer contract selector is unsupported") from exc
+
+
+def _validate_selected_package(
+    repository: Path,
+    contract: T09ProviderContract,
+    execution_path: Path,
+) -> tuple[dict[str, Any], Path, dict[str, Any]]:
+    """Bind the qualifier to the selected contract's exact package paths and plan."""
+
+    if contract.execution_contract_path is None or contract.command_manifest_path is None:
+        raise LocalQualificationError("selected provider contract has no qualification package")
+    expected_execution = (repository / contract.execution_contract_path).resolve(strict=True)
+    if execution_path != expected_execution:
+        raise LocalQualificationError("execution contract path crosses provider versions")
+    execution = _object(execution_path, label="execution contract")
+    if execution.get("plan_id") != contract.plan_id:
+        raise LocalQualificationError("local finalizer execution contract drifted")
+    identities = execution.get("identities")
+    if not isinstance(identities, dict) or any(
+        identities.get(field) != expected
+        for field, expected in {
+            "host_run_id": contract.host_run_id,
+            "evaluator_run_ids": list(contract.evaluator_run_ids),
+            "runtime_qualification_id": contract.active_image_qualification_id,
+            "local_finalizer_qualification_id": contract.local_finalizer_qualification_id,
+            "frozen_run_manifest_id": contract.frozen_run_manifest_id,
+            "evidence_archive_id": contract.evidence_archive_id,
+            "evidence_stage_id": contract.evidence_stage_id,
+        }.items()
+    ):
+        raise LocalQualificationError("execution contract pilot identities drifted")
+    profile = load_provider_profile(repository, contract)
+    bindings = execution.get("contract_bindings")
+    plan_binding = bindings.get("plan") if isinstance(bindings, dict) else None
+    if not isinstance(plan_binding, dict) or plan_binding != {
+        "path": contract.provider_profile_path,
+        "sha256": contract.expected_provider_profile_sha256,
+        "size_bytes": contract.expected_provider_profile_bytes,
+    }:
+        raise LocalQualificationError("execution contract plan binding drifted")
+    command_path = (repository / contract.command_manifest_path).resolve(strict=True)
+    commands = _object(command_path, label="command manifest set")
+    if (
+        commands.get("plan_id") != contract.plan_id
+        or commands.get("plan_path") != contract.provider_profile_path
+        or commands.get("plan_sha256") != contract.expected_provider_profile_sha256
+        or commands.get("plan_size_bytes") != contract.expected_provider_profile_bytes
+        or commands.get("execution_contract_path") != contract.execution_contract_path
+        or commands.get("execution_contract_sha256") != file_sha256(execution_path)
+    ):
+        raise LocalQualificationError("command manifest package binding drifted")
+    return execution, command_path, dict(profile)
+
+
+def _selected_identity_projection(
+    contract: T09ProviderContract,
+    *,
+    command_path: Path,
+    provider_profile: dict[str, Any],
+) -> dict[str, object]:
+    """Render only identities owned by the explicitly selected contract."""
+
+    return {
+        "qualification_id": contract.local_finalizer_qualification_id,
+        "plan_id": contract.plan_id,
+        "provider_contract_version": contract.version,
+        "host_run_id": contract.host_run_id,
+        "attempt_order": list(contract.attempt_order),
+        "evaluator_run_ids": list(contract.evaluator_run_ids),
+        "runtime_qualification_id": contract.active_image_qualification_id,
+        "frozen_run_manifest_id": contract.frozen_run_manifest_id,
+        "execution_contract_path": contract.execution_contract_path,
+        "command_manifest_path": contract.command_manifest_path,
+        "command_manifest_sha256": file_sha256(command_path),
+        "provider_profile_path": contract.provider_profile_path,
+        "provider_profile_sha256": contract.expected_provider_profile_sha256,
+        "provider_profile_semantic_sha256": canonical_sha256(provider_profile),
+    }
+
+
 def qualify(args: argparse.Namespace) -> dict[str, object]:
     repository = args.repository.resolve(strict=True)
+    contract = _selected_contract(args)
     interpreter_identity = _interpreter_launcher_identity(args.interpreter)
     interpreter = Path(str(interpreter_identity["interpreter"]))
     if (
@@ -289,9 +393,11 @@ def qualify(args: argparse.Namespace) -> dict[str, object]:
         raise LocalQualificationError("local qualification requires the exact clean package")
     _disable_network()
     execution_path = args.execution_contract.resolve(strict=True)
-    execution_contract = _object(execution_path, label="execution contract")
-    if execution_contract.get("plan_id") != PLAN_ID:
-        raise LocalQualificationError("local finalizer execution contract drifted")
+    execution_contract, command_path, provider_profile = _validate_selected_package(
+        repository,
+        contract,
+        execution_path,
+    )
     base_site_packages, base_packages = _local_base_packages(execution_contract)
     base_dependency_tree = _dependency_tree_inventory(
         base_site_packages,
@@ -363,8 +469,11 @@ def qualify(args: argparse.Namespace) -> dict[str, object]:
     }
     receipt: dict[str, object] = {
         "schema_version": "0.1.0",
-        "qualification_id": LOCAL_FINALIZER_QUALIFICATION_ID,
-        "plan_id": PLAN_ID,
+        **_selected_identity_projection(
+            contract,
+            command_path=command_path,
+            provider_profile=provider_profile,
+        ),
         "package_commit": args.package_commit,
         **interpreter_identity,
         "python_version": "3.11.14",
@@ -399,6 +508,9 @@ def qualify(args: argparse.Namespace) -> dict[str, object]:
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
+    selector = parser.add_mutually_exclusive_group(required=True)
+    selector.add_argument("--provider-contract")
+    selector.add_argument("--plan-id")
     parser.add_argument("--repository", type=Path, required=True)
     parser.add_argument("--package-commit", required=True)
     parser.add_argument("--interpreter", type=Path, required=True)

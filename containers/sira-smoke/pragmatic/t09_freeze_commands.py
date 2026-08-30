@@ -23,14 +23,13 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument(
         "--provider-contract",
-        choices=("V11", "V12"),
-        default="V11",
-        help="versioned T09 provider package to render (default: V11)",
+        required=True,
+        help="exact versioned T09 provider package to render",
     )
     return parser
 
 
-def render(repository: Path, *, provider_version: str = "V11") -> dict[str, object]:
+def render(repository: Path, *, provider_version: str) -> dict[str, object]:
     root = repository.resolve(strict=True)
     contract_identity = provider_contract(provider_version)
     if contract_identity.execution_contract_path is None:
@@ -45,7 +44,7 @@ def render(repository: Path, *, provider_version: str = "V11") -> dict[str, obje
         execution_path,
         expected_sha256=execution_sha256,
     )
-    control_root = "pilot-v7" if contract_identity.version == "V11" else "pilot-v12"
+    control_root = contract_identity.control_root_name
     commits = {attempt.giclab_commit for attempt in contract.attempts}
     if len(commits) != 1 or "unknown" in commits:
         raise ValueError("one reviewed implementation ancestor must be bound before rendering")
@@ -72,7 +71,7 @@ def render(repository: Path, *, provider_version: str = "V11") -> dict[str, obje
     ]
     if any(item.get("valid") is not True for item in pair_diffs):
         raise ValueError("one or more T09 command pairs are not matched")
-    return {
+    rendered: dict[str, object] = {
         **(
             {
                 "model_metadata_request_count_total": 1,
@@ -82,7 +81,7 @@ def render(repository: Path, *, provider_version: str = "V11") -> dict[str, obje
                 "model_metadata_receipt_required": True,
                 "model_metadata_receipt_replay_allowed": False,
             }
-            if contract.provider_contract_version == "V12"
+            if contract.provider_contract_version in {"V12", "V13"}
             else {}
         ),
         "schema_version": "0.1.0",
@@ -100,6 +99,12 @@ def render(repository: Path, *, provider_version: str = "V11") -> dict[str, obje
         "manifests": manifests,
         "pair_diffs": pair_diffs,
     }
+    if contract_identity.version == "V13":
+        rendered["local_finalizer_qualification_selector"] = {
+            "argument": "--provider-contract",
+            "value": contract_identity.version,
+        }
+    return rendered
 
 
 def write_exclusive(path: Path, document: object) -> None:

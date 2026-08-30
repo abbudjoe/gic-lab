@@ -45,6 +45,7 @@ from giclab.harness.sira_gate_a import (
     file_sha256,
     validate_sira_secret_names,
 )
+from giclab.harness.t09_provider_contracts import provider_contract
 from giclab.harness.t09_sira_pilot import (
     EventWriter,
     PilotExecutionContract,
@@ -795,10 +796,9 @@ def run(argv: Sequence[str] | None = None) -> int:
         )
         pilot_control_root = pilot_state_path.parent
         pilot_root = pilot_control_root.parent
-        expected_control_root = {
-            "V11": "pilot-v7",
-            "V12": "pilot-v12",
-        }.get(pilot_contract.provider_contract_version)
+        expected_control_root = provider_contract(
+            pilot_contract.provider_contract_version
+        ).control_root_name
         if (
             pilot_control_root.name != expected_control_root
             or aggregate_ledger_path.parent.name != "runtime-budget"

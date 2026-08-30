@@ -536,6 +536,34 @@
             "realized_pair": {"const": "none"},
             "excluded_from_v11_pairing": {"const": true}
           }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "plan_id",
+            "run_id",
+            "status",
+            "task_a_reactive",
+            "task_a_simulative",
+            "task_b_simulative",
+            "task_b_reactive",
+            "realized_pair",
+            "excluded_from_v13_pairing"
+          ],
+          "properties": {
+            "plan_id": {"const": "PLAN-EXP0001-PILOT-V12"},
+            "run_id": {"const": "RUN-T09-PILOT-HOST-AUTONOMOUS-0005"},
+            "status": {
+              "const": "category_3_v12_stopped_material_failure_cleanup_verified"
+            },
+            "task_a_reactive": {"const": "not-run"},
+            "task_a_simulative": {"const": "not-run"},
+            "task_b_simulative": {"const": "not-run"},
+            "task_b_reactive": {"const": "not-run"},
+            "realized_pair": {"const": "none"},
+            "excluded_from_v13_pairing": {"const": true}
+          }
         }
       ]
     },
@@ -693,7 +721,9 @@
     {
       "if": {
         "properties": {
-          "plan_id": {"const": "PLAN-EXP0001-PILOT-V12"}
+          "plan_id": {
+            "enum": ["PLAN-EXP0001-PILOT-V12", "PLAN-EXP0001-PILOT-V13"]
+          }
         },
         "required": ["plan_id"]
       },

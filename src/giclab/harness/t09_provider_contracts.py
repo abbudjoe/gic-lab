@@ -52,6 +52,10 @@ class T09ProviderContract:
     science_projection_path: str | None
     frozen_run_manifest_id: str | None
     local_finalizer_qualification_id: str | None
+    evaluator_run_ids: tuple[str, ...]
+    control_root_name: str
+    evidence_archive_id: str
+    evidence_stage_id: str
     remote_root: str
     run_ids: tuple[str, ...]
     image_qualification_ids: tuple[str, ...]
@@ -126,6 +130,18 @@ class T09ProviderContract:
         ):
             raise T09ProviderContractError("provider run identities are malformed")
         if (
+            len(self.evaluator_run_ids) != len(self.run_ids)
+            or len(set(self.evaluator_run_ids)) != len(self.evaluator_run_ids)
+            or any(_SAFE_ID.fullmatch(run_id) is None for run_id in self.evaluator_run_ids)
+        ):
+            raise T09ProviderContractError("provider evaluator identities are malformed")
+        if (
+            re.fullmatch(r"pilot-v[0-9]+", self.control_root_name) is None
+            or _SAFE_ID.fullmatch(self.evidence_archive_id) is None
+            or _SAFE_ID.fullmatch(self.evidence_stage_id) is None
+        ):
+            raise T09ProviderContractError("provider evidence identities are malformed")
+        if (
             not self.container_prefix.endswith("-")
             or re.fullmatch(r"[a-z0-9][a-z0-9.-]+-", self.container_prefix) is None
         ):
@@ -149,13 +165,11 @@ class T09ProviderContract:
             path = PurePosixPath(source_relative)
             if path.is_absolute() or ".." in path.parts:
                 raise T09ProviderContractError("provider source path is unsafe")
-        autonomous_paths = (self.execution_contract_path, self.command_manifest_path)
-        if self.version in {"V8", "V9", "V10", "V11", "V12"}:
-            if any(path is None for path in autonomous_paths):
-                raise T09ProviderContractError(
-                    "autonomous provider contract lacks its scientific package paths"
-                )
-        elif any(path is not None for path in (*autonomous_paths, self.science_projection_path)):
+        if (self.execution_contract_path is None) != (self.command_manifest_path is None):
+            raise T09ProviderContractError(
+                "provider contract has a partial scientific package identity"
+            )
+        if self.execution_contract_path is None and self.science_projection_path is not None:
             raise T09ProviderContractError(
                 "historical pragmatic contract unexpectedly has autonomous package paths"
             )
@@ -238,6 +252,18 @@ class T09ProviderContract:
         if run_id not in self.run_ids:
             raise T09ProviderContractError("condition run identity belongs to another version")
 
+    @property
+    def attempt_order(self) -> tuple[str, ...]:
+        """Expose the selected contract's immutable empirical attempt order."""
+
+        return self.run_ids
+
+    def validate_evaluator_run_id(self, evaluator_run_id: str) -> None:
+        """Reject an evaluator identity minted for a different campaign version."""
+
+        if evaluator_run_id not in self.evaluator_run_ids:
+            raise T09ProviderContractError("evaluator run identity belongs to another version")
+
 
 _EXPERIMENT_ROOT: Final = "experiments/EXP-0001-sira-simulative-vs-reactive"
 _PROPOSAL_ROOT: Final = f"{_EXPERIMENT_ROOT}/run-plans/proposals"
@@ -280,6 +306,11 @@ def _contract(
     science_projection_path: str | None = None,
 ) -> T09ProviderContract:
     plan_id = f"PLAN-EXP0001-PILOT-{version}"
+    evaluator_run_ids = tuple(
+        run_id.replace("RUN-T09-TASK-", "RUN-T09-EVAL-TASK-", 1) for run_id in run_ids
+    )
+    host_family = host_run_id.removeprefix("RUN-T09-PILOT-HOST-")
+    control_root_name = f"pilot-{version.lower()}" if version in {"V12", "V13"} else "pilot-v7"
     return T09ProviderContract(
         version=version,
         source_commit=source_commit,
@@ -301,6 +332,10 @@ def _contract(
         science_projection_path=science_projection_path,
         frozen_run_manifest_id=frozen_run_manifest_id,
         local_finalizer_qualification_id=local_finalizer_qualification_id,
+        evaluator_run_ids=evaluator_run_ids,
+        control_root_name=control_root_name,
+        evidence_archive_id=f"ARCHIVE-EXP0001-PILOT-{version}-{host_family}",
+        evidence_stage_id=f"STAGE-EXP0001-PILOT-{version}-{host_family}",
         remote_root=_AUTONOMOUS_REMOTE_ROOT,
         run_ids=run_ids,
         image_qualification_ids=image_qualification_ids,
@@ -703,6 +738,47 @@ V12_PROVIDER_CONTRACT: Final = _contract(
         f"{_EXPERIMENT_ROOT}/contracts/proposals/T09_PILOT_COMMAND_MANIFESTS_V12.json"
     ),
 )
+V13_PROVIDER_CONTRACT: Final = _contract(
+    version="V13",
+    source_commit="b8a85a35c721b9cadf753b9a32c3b38c6be60086",
+    host_run_id="RUN-T09-PILOT-HOST-AUTONOMOUS-0006",
+    authorization_id=None,
+    authorization_prefix="AUTH-T09-V13-",
+    authorization_source_sha256=None,
+    instance_name="giclab-t09-pilot-v13-autonomous-0006",
+    plan_path=f"{_PROPOSAL_ROOT}/T09_PILOT_RUNTIME_PROFILE_V13.yaml",
+    plan_bytes=14_487,
+    plan_sha256="58159df775f8e3a30debdc327e8be29574ec68a5c34167012866382a09b75ca4",
+    profile_path=f"{_PROPOSAL_ROOT}/T09_PILOT_RUNTIME_PROFILE_V13.yaml",
+    profile_bytes=14_487,
+    profile_sha256="58159df775f8e3a30debdc327e8be29574ec68a5c34167012866382a09b75ca4",
+    run_ids=(
+        "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0006",
+        "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0006",
+        "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0006",
+        "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0006",
+    ),
+    image_qualification_ids=("QUAL-T09-PILOT-V13-IMAGE-AUTONOMOUS-0006",),
+    active_image_qualification_id="QUAL-T09-PILOT-V13-IMAGE-AUTONOMOUS-0006",
+    replacement_image_tag="giclab/t09-pilot-v13:93fb8d72de71-autonomous-0006",
+    container_prefix="giclab-t09-pilot-v13-autonomous-",
+    image_materialization_policy="retained-import-or-one-fallback-build",
+    max_launch_count=8,
+    prior_t09_cost_usd=33.528475082734792,
+    preflight_lambda_cost_cap_usd=10.0,
+    campaign_lambda_cost_cap_usd=8.0,
+    campaign_openai_cost_cap_usd=40.0,
+    campaign_aggregate_cost_cap_usd=58.0,
+    cumulative_t09_cost_cap_usd=90.0,
+    frozen_run_manifest_id="RUN-MANIFEST-EXP0001-PILOT-V13-AUTONOMOUS-0006",
+    local_finalizer_qualification_id=("QUAL-T09-PILOT-V13-LOCAL-FINALIZER-AUTONOMOUS-0006"),
+    execution_contract_path=(
+        f"{_EXPERIMENT_ROOT}/contracts/proposals/T09_PILOT_EXECUTION_CONTRACT_V13.json"
+    ),
+    command_manifest_path=(
+        f"{_EXPERIMENT_ROOT}/contracts/proposals/T09_PILOT_COMMAND_MANIFESTS_V13.json"
+    ),
+)
 
 
 PROVIDER_CONTRACTS: Final[Mapping[str, T09ProviderContract]] = MappingProxyType(
@@ -719,6 +795,7 @@ PROVIDER_CONTRACTS: Final[Mapping[str, T09ProviderContract]] = MappingProxyType(
             V10_PROVIDER_CONTRACT,
             V11_PROVIDER_CONTRACT,
             V12_PROVIDER_CONTRACT,
+            V13_PROVIDER_CONTRACT,
         )
     }
 )
@@ -829,14 +906,14 @@ def render_provider_entry_command(
         "--launch-slot",
         str(launch_slot),
     )
-    if contract.version == "V12":
+    if contract.version in {"V12", "V13"}:
         if model_metadata_receipt is None:
             raise T09ProviderContractError(
-                "V12 provider entry command requires the model metadata receipt"
+                "selected provider entry command requires the model metadata receipt"
             )
         command += ("--model-metadata-receipt", model_metadata_receipt)
     elif model_metadata_receipt is not None:
         raise T09ProviderContractError(
-            "model metadata receipt is only valid for the V12 provider contract"
+            "model metadata receipt is only valid for a receipt-bound provider contract"
         )
     return command

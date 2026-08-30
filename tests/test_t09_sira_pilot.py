@@ -47,7 +47,6 @@ from giclab.harness.t09_provider_contracts import (
     T09ProviderContract,
 )
 from giclab.harness.t09_sira_pilot import (
-    ATTEMPT_ORDER,
     CampaignLifecycleLimits,
     EvaluatorIdentity,
     EventWriter,
@@ -91,6 +90,7 @@ COMMAND_MANIFESTS = (
     ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/proposals/"
     "T09_PILOT_COMMAND_MANIFESTS_V11.json"
 )
+ATTEMPT_ORDER = V11_PROVIDER_CONTRACT.attempt_order
 
 
 def _rendered_active_manifests() -> list[dict[str, object]]:
@@ -437,6 +437,7 @@ def test_resource_guard_separates_empirical_wall_from_prior_active_lambda_cost(
 
 def test_first_pair_checkpoint_passes_only_strictly_below_every_threshold() -> None:
     passing = PairCheckpointInput(
+        plan_id=V11_PROVIDER_CONTRACT.plan_id,
         attempt_run_ids=(ATTEMPT_ORDER[0], ATTEMPT_ORDER[1]),
         valid_evidence=(True, True),
         evaluator_succeeded=(True, True),
@@ -457,6 +458,9 @@ def test_first_pair_checkpoint_passes_only_strictly_below_every_threshold() -> N
         projected_aggregate_cost_usd=2.49,
         actual_lambda_cost_usd=0.52,
         remaining_campaign_seconds=10_000.0,
+        next_attempt_hard_wall_seconds=3_600,
+        prior_t09_cost_usd=V11_PROVIDER_CONTRACT.prior_t09_cost_usd,
+        cumulative_t09_cost_cap_usd=V11_PROVIDER_CONTRACT.cumulative_t09_cost_cap_usd,
     )
     assert first_pair_decision(passing)["decision"] == "continue-to-task-b"
     stopping = replace(passing, cleanup_issue=True)
@@ -475,8 +479,7 @@ def test_first_pair_checkpoint_passes_only_strictly_below_every_threshold() -> N
     assert exact_time_decision["required_campaign_seconds_for_next_attempt"] == 5_160
     cumulative_overflow = replace(
         passing,
-        projected_aggregate_cost_usd=78.0,
-        prior_t09_cost_usd=12.01,
+        projected_aggregate_cost_usd=57.0,
     )
     assert (
         "projected_cumulative_t09_cost_exceeds_hard_cap"
@@ -1016,6 +1019,7 @@ def test_retry2_excludes_only_the_exact_pinned_names_only_env_example(
     receipt = host._exclude_pinned_nonruntime_env_example(
         upstream,
         materialization=materialization,
+        contract=V11_PROVIDER_CONTRACT,
     )
     assert not example.exists()
     assert receipt["sha256"] == host.PINNED_ENV_EXAMPLE_SHA256
@@ -1035,15 +1039,19 @@ def test_retry2_excludes_only_the_exact_pinned_names_only_env_example(
         host._exclude_pinned_nonruntime_env_example(
             unsafe_upstream,
             materialization=unsafe_materialization,
+            contract=V11_PROVIDER_CONTRACT,
         )
 
 
 def test_autonomous_materialization_policy_is_explicit_and_bound() -> None:
     host = _load_host_runner()
-    assert host.PLAN_ID == "PLAN-EXP0001-PILOT-V11"
-    assert host.QUALIFICATION_ID == "QUAL-T09-PILOT-V11-IMAGE-AUTONOMOUS-0004"
-    assert host.REPLACEMENT_IMAGE_TAG.startswith("giclab/t09-pilot-v11:")
-    assert host.REPLACEMENT_IMAGE_TAG.endswith("-autonomous-0004")
+    assert V11_PROVIDER_CONTRACT.plan_id == "PLAN-EXP0001-PILOT-V11"
+    assert V11_PROVIDER_CONTRACT.active_image_qualification_id == (
+        "QUAL-T09-PILOT-V11-IMAGE-AUTONOMOUS-0004"
+    )
+    assert V11_PROVIDER_CONTRACT.replacement_image_tag is not None
+    assert V11_PROVIDER_CONTRACT.replacement_image_tag.startswith("giclab/t09-pilot-v11:")
+    assert V11_PROVIDER_CONTRACT.replacement_image_tag.endswith("-autonomous-0004")
     materializer = inspect.getsource(host.materialize_retained_or_build_image)
     assert "SLOT2_IMAGE_MATERIALIZATION_POLICY" in materializer
     assert "slot-2 retained image import failed; fallback build is forbidden" in materializer
@@ -1174,10 +1182,10 @@ def test_global_cleanup_persists_partial_receipt_when_container_absence_is_unver
     )
     identity = host.OwnedContainerIdentity(
         container_id,
-        f"{host.CONTAINER_PREFIX}01",
+        f"{V11_PROVIDER_CONTRACT.container_prefix}01",
         {
-            "giclab.t09.plan": host.PLAN_ID,
-            "giclab.t09.host_run": host.HOST_RUN_ID,
+            "giclab.t09.plan": V11_PROVIDER_CONTRACT.plan_id,
+            "giclab.t09.host_run": V11_PROVIDER_CONTRACT.host_run_id,
             "giclab.t09.role": "condition",
         },
     )
@@ -1296,7 +1304,7 @@ def test_active_preflight_rejects_historical_receipt_before_v10_budget_math(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # Preserve the base-collected node ID while advancing its active gate to V11.
+    # Preserve the base-collected node ID while selecting the retained V11 gate.
     host = _load_host_runner()
     dynamic_source = tmp_path / "source"
     dynamic_source.mkdir()
@@ -1319,9 +1327,10 @@ def test_active_preflight_rejects_historical_receipt_before_v10_budget_math(
             AssertionError("historical receipt must fail before preflight")
         ),
     )
-    with pytest.raises(host.T09HostError, match="exact V11 provider contract"):
+    with pytest.raises(host.T09HostError, match="differs from the explicit selector"):
         host.preflight_with_deadline(
             SimpleNamespace(
+                provider_contract="V11",
                 repository=ROOT,
                 dynamic_receipt=dynamic_receipt,
                 dynamic_source_root=dynamic_source,
@@ -1345,13 +1354,13 @@ def test_interrupted_utility_container_is_journaled_before_wait_and_closes_witho
     evidence_root = tmp_path / "utility-evidence"
     evidence_root.mkdir(mode=0o700)
     role = "utility-interrupted-fixture"
-    name = f"{host.CONTAINER_PREFIX}{role}"
+    name = f"{V11_PROVIDER_CONTRACT.container_prefix}{role}"
     identity = host.OwnedContainerIdentity(
         container_id,
         name,
         {
-            "giclab.t09.plan": host.PLAN_ID,
-            "giclab.t09.host_run": host.HOST_RUN_ID,
+            "giclab.t09.plan": V11_PROVIDER_CONTRACT.plan_id,
+            "giclab.t09.host_run": V11_PROVIDER_CONTRACT.host_run_id,
             "giclab.t09.role": role,
         },
     )
@@ -1396,6 +1405,7 @@ def test_interrupted_utility_container_is_journaled_before_wait_and_closes_witho
     with pytest.raises(host.T09HostError, match="residue remains after cleanup"):
         host.run_owned_docker(
             ["docker", "run", "fixture-image"],
+            contract=V11_PROVIDER_CONTRACT,
             prefix=["docker"],
             label="interrupted-fixture",
             owned_role=role,
@@ -1447,10 +1457,10 @@ def test_utility_registration_failure_still_forces_exact_removal_and_truthful_re
     role = "utility-registration-failure"
     identity = host.OwnedContainerIdentity(
         container_id,
-        f"{host.CONTAINER_PREFIX}{role}",
+        f"{V11_PROVIDER_CONTRACT.container_prefix}{role}",
         {
-            "giclab.t09.plan": host.PLAN_ID,
-            "giclab.t09.host_run": host.HOST_RUN_ID,
+            "giclab.t09.plan": V11_PROVIDER_CONTRACT.plan_id,
+            "giclab.t09.host_run": V11_PROVIDER_CONTRACT.host_run_id,
             "giclab.t09.role": role,
         },
     )
@@ -1489,6 +1499,7 @@ def test_utility_registration_failure_still_forces_exact_removal_and_truthful_re
     with pytest.raises(host.T09HostError, match="durable utility-container registration failed"):
         host.run_owned_docker(
             ["docker", "run", "fixture-image"],
+            contract=V11_PROVIDER_CONTRACT,
             prefix=["docker"],
             label="registration-failure",
             owned_role=role,
@@ -1913,6 +1924,7 @@ def test_finalizer_validates_canonical_raw_name_not_runtime_mount_alias(
         expected_raw_root_name="raw",
         manifest_path=manifest_path,
         receipt_path=receipt_path,
+        plan_id=V11_PROVIDER_CONTRACT.plan_id,
         run_id=ATTEMPT_ORDER[0],
         package_commit="a" * 40,
     )
@@ -1923,6 +1935,7 @@ def test_finalizer_validates_canonical_raw_name_not_runtime_mount_alias(
             expected_raw_root_name=raw_root.name,
             manifest_path=manifest_path,
             receipt_path=receipt_path,
+            plan_id=V11_PROVIDER_CONTRACT.plan_id,
             run_id=ATTEMPT_ORDER[0],
             package_commit="a" * 40,
         )
@@ -1968,6 +1981,7 @@ def test_independent_selector_specializes_from_frozen_contract() -> None:
         score_schema=score,
         evidence_schema=evidence,
         run_id=ATTEMPT_ORDER[0],
+        contract=V11_PROVIDER_CONTRACT,
     )
     assert score["properties"]["plan_id"] == {"const": "PLAN-EXP0001-PILOT-V11"}
     assert score["properties"]["run_id"] == {"const": ATTEMPT_ORDER[0]}
@@ -2050,8 +2064,10 @@ def _load_openai_secret_materializer() -> ModuleType:
 
 def test_v8_sealing_primitives_preflight_exercises_exact_production_sealers(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     host = _load_host_runner()
+    monkeypatch.setattr(host, "docker_prefix", lambda: ["docker"])
     artifact_root = tmp_path / "artifact"
     artifact_root.mkdir()
     command_document = load_json(
@@ -2107,6 +2123,10 @@ def test_active_stage_and_package_reject_historical_contract_relabeling(
         encoding="utf-8",
     )
     historical_state = {"plan_id": V8_PROVIDER_CONTRACT.plan_id}
+    (pilot_root / "pilot-state.json").write_text(
+        json.dumps(historical_state),
+        encoding="utf-8",
+    )
     monkeypatch.setattr(host, "verify_package", lambda *_args, **_kwargs: {})
     monkeypatch.setattr(host, "staged_archive_headroom_ok", lambda: True)
     monkeypatch.setattr(host, "detect_core_artifacts", lambda *_args, **_kwargs: [])
@@ -2115,9 +2135,13 @@ def test_active_stage_and_package_reject_historical_contract_relabeling(
         "_reconstructable_disposition",
         lambda *_args, **_kwargs: historical_state,
     )
-    with pytest.raises(Exception, match="staging requires its frozen provider runner"):
+    with pytest.raises(
+        Exception,
+        match="staging state differs from the explicit provider selector",
+    ):
         host.stage(
             SimpleNamespace(
+                provider_contract="V11",
                 artifact_root=artifact_root,
                 repository=ROOT,
                 package_commit="a" * 40,
@@ -2134,6 +2158,7 @@ def test_active_stage_and_package_reject_historical_contract_relabeling(
     with pytest.raises(Exception, match="packaging requires its frozen provider runner"):
         host.package(
             SimpleNamespace(
+                provider_contract="V8",
                 inbound_root=inbound,
                 provider_entry_receipt=provider_entry,
             )
@@ -2167,7 +2192,7 @@ def test_t09_openai_secret_materializer_is_exact_single_assignment_and_exclusive
 
 def test_evaluator_overlay_package_records_match_all_reviewed_versions() -> None:
     host = _load_host_runner()
-    expected = host.expected_evaluator_packages(ROOT)
+    expected = host.expected_evaluator_packages(ROOT, V11_PROVIDER_CONTRACT)
     assert len(expected) == 51
     assert "en-core-web-sm==3.8.0" in expected
     realized = "\n".join(
@@ -2246,8 +2271,8 @@ def test_preentry_condition_prefix_is_bound_preserved_and_retryable(tmp_path: Pa
     package_commit = "c" * 40
     receipt = {
         "schema_version": "0.1.0",
-        "plan_id": host.PLAN_ID,
-        "host_run_id": host.HOST_RUN_ID,
+        "plan_id": V11_PROVIDER_CONTRACT.plan_id,
+        "host_run_id": V11_PROVIDER_CONTRACT.host_run_id,
         "run_id": manifest["run_id"],
         "clean_package_commit": package_commit,
         "execution_contract_sha256": execution_sha256,
@@ -2279,6 +2304,7 @@ def test_preentry_condition_prefix_is_bound_preserved_and_retryable(tmp_path: Pa
         artifact_root=artifact_root,
         manifest=manifest,
         pilot_state=state,
+        contract=V11_PROVIDER_CONTRACT,
         package_commit=package_commit,
         frozen_run_manifest_sha256=frozen_sha256,
     )
@@ -2306,8 +2332,8 @@ def test_preentry_condition_prefix_tamper_cannot_authorize_retry(tmp_path: Path)
     prefix_entries = host.preentry_prefix_inventory(attempt_root)
     receipt = {
         "schema_version": "0.1.0",
-        "plan_id": host.PLAN_ID,
-        "host_run_id": host.HOST_RUN_ID,
+        "plan_id": V11_PROVIDER_CONTRACT.plan_id,
+        "host_run_id": V11_PROVIDER_CONTRACT.host_run_id,
         "run_id": manifest["run_id"],
         "clean_package_commit": "c" * 40,
         "execution_contract_sha256": "a" * 64,
@@ -2340,6 +2366,7 @@ def test_preentry_condition_prefix_tamper_cannot_authorize_retry(tmp_path: Path)
                 "empirical_attempts_entered": [],
                 "attempts_completed": [],
             },
+            contract=V11_PROVIDER_CONTRACT,
             package_commit="c" * 40,
             frozen_run_manifest_sha256="b" * 64,
         )
@@ -3398,6 +3425,8 @@ def test_host_campaign_admission_counts_setup_and_attempt_actual_time(
     state.write_text(
         json.dumps(
             {
+                "plan_id": V11_PROVIDER_CONTRACT.plan_id,
+                "host_run_id": V11_PROVIDER_CONTRACT.host_run_id,
                 "pilot_started_at_epoch": now,
                 "lambda_started_at_epoch": now,
                 "campaign_started_at_epoch": now,
@@ -3458,6 +3487,7 @@ def test_ordinary_preflight_defect_is_resumable_on_same_host_with_fresh_root(
 
     monkeypatch.setattr(host, "preflight", preflight_fixture)
     common = {
+        "provider_contract": "V11",
         "repository": ROOT,
         "dynamic_receipt": dynamic_receipt,
         "dynamic_source_root": dynamic_source,
@@ -3592,7 +3622,7 @@ def test_raw_attempt_streams_before_cutoff_without_aggregate_stage(
     monkeypatch.setattr(
         host,
         "manifest_for_run",
-        lambda _document, run_id: (
+        lambda _document, run_id, **_kwargs: (
             manifest if run_id == ATTEMPT_ORDER[0] else (_ for _ in ()).throw(KeyError(run_id))
         ),
     )

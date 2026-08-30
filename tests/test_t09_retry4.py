@@ -123,7 +123,9 @@ def test_retry4_plan_is_typed_science_locked_and_uses_fresh_identities() -> None
     assert host_hash(EXPERIMENT_ROOT / "config.yaml") == (
         "cf25acd90f9d73d9aef978a7d059cfbc74a1447d901f4e3d27e2b5d9f121d2ed"
     )
-    successor = yaml.safe_load((EXPERIMENT_ROOT / "run-plans/pilot.yaml").read_bytes())
+    successor = yaml.safe_load(
+        (EXPERIMENT_ROOT / "run-plans/proposals/PLAN-EXP0001-PILOT-V7.yaml").read_bytes()
+    )
     assert successor["plan_id"] == "PLAN-EXP0001-PILOT-V7"
     assert successor["sampling"]["dataset_ids"] == active["sampling"]["dataset_ids"]
 
@@ -521,6 +523,7 @@ def _initialize_host_clock(host: object, artifact_root: Path) -> None:
     host.initialize_state(
         artifact_root,
         "1" * 64,
+        contract=V6_PROVIDER_CONTRACT,
         lambda_started_at_epoch=time.time(),
     )
 
@@ -537,7 +540,8 @@ def test_retry4_image_selection_loads_exact_verified_archive_without_build(
     archive.write_bytes(payload)
     archive.chmod(0o600)
     image_id = "sha256:" + "a" * 64
-    tag = "giclab/test:retry4"
+    assert V6_PROVIDER_CONTRACT.replacement_image_tag is not None
+    tag = V6_PROVIDER_CONTRACT.replacement_image_tag
     monkeypatch.setattr(host, "RETAINED_IMAGE_ARCHIVE_BYTES", len(payload))
     monkeypatch.setattr(
         host,
@@ -545,7 +549,6 @@ def test_retry4_image_selection_loads_exact_verified_archive_without_build(
         host.hashlib.sha256(payload).hexdigest(),
     )
     monkeypatch.setattr(host, "RETAINED_IMAGE_ID", image_id)
-    monkeypatch.setattr(host, "REPLACEMENT_IMAGE_TAG", tag)
     loaded = False
     tagged = False
     observed_pass_fds: tuple[int, ...] = ()
@@ -567,7 +570,12 @@ def test_retry4_image_selection_loads_exact_verified_archive_without_build(
         return subprocess.CompletedProcess(argv, 0, stdout=b"loaded\n", stderr=b"")
 
     def fake_logged(
-        argv: list[str], *, evidence_root: Path, label: str, timeout: int
+        argv: list[str],
+        *,
+        evidence_root: Path,
+        label: str,
+        timeout: int,
+        **_kwargs: object,
     ) -> dict[str, object]:
         nonlocal tagged
         assert timeout == 60
@@ -594,6 +602,7 @@ def test_retry4_image_selection_loads_exact_verified_archive_without_build(
         image_archive=archive,
         prefix=["docker"],
         materialization_policy=host.SLOT2_IMAGE_MATERIALIZATION_POLICY,
+        contract=V6_PROVIDER_CONTRACT,
     )
     assert observed_pass_fds
     assert result["method"] == "exact-retained-image-archive-import"
@@ -669,7 +678,7 @@ def test_retry4_image_selection_uses_one_fallback_build_for_unavailable_archive(
         nonlocal calls
         calls += 1
         return {
-            "qualification_id": host.QUALIFICATION_ID,
+            "qualification_id": V6_PROVIDER_CONTRACT.active_image_qualification_id,
             "image_id": "sha256:" + "b" * 64,
             "build_count": 1,
         }
@@ -682,6 +691,7 @@ def test_retry4_image_selection_uses_one_fallback_build_for_unavailable_archive(
         image_archive=tmp_path / "missing-image.tar",
         prefix=["docker"],
         materialization_policy=host.SLOT1_IMAGE_MATERIALIZATION_POLICY,
+        contract=V6_PROVIDER_CONTRACT,
     )
     assert calls == 1
     assert result["image_import_count"] == 0
@@ -716,6 +726,7 @@ def test_retry4_slot2_failed_image_import_never_builds(
             image_archive=tmp_path / "missing-image.tar",
             prefix=["docker"],
             materialization_policy=host.SLOT2_IMAGE_MATERIALIZATION_POLICY,
+            contract=V6_PROVIDER_CONTRACT,
         )
     assert build_calls == 0
 
@@ -767,6 +778,7 @@ def test_retry4_slot2_rejected_docker_load_never_builds(
             image_archive=archive,
             prefix=["docker"],
             materialization_policy=host.SLOT2_IMAGE_MATERIALIZATION_POLICY,
+            contract=V6_PROVIDER_CONTRACT,
         )
     assert build_calls == 0
 
@@ -1059,11 +1071,19 @@ def test_retry4_generated_postfreeze_receipt_admits_first_condition() -> None:
     postfreeze_sha = "c" * 64
     credential_scan_sha = "d" * 64
     first_pair_started = 1234.5
+    sealing = {
+        "raw_reconstruction_passed": True,
+        "essential_reconstruction_passed": True,
+    }
     frozen = {
+        "plan_id": V6_PROVIDER_CONTRACT.plan_id,
         "campaign_started_at_epoch": first_pair_started,
         "first_pair_started_at_epoch": first_pair_started,
         "image_materialization_policy": host.SLOT2_IMAGE_MATERIALIZATION_POLICY,
-        "source_receipts": {"core_suppression": "e" * 64},
+        "source_receipts": {
+            "core_suppression": "e" * 64,
+            "sealing_primitives": "f" * 64,
+        },
     }
     preflight = {
         "frozen_run_manifest_sha256": frozen_sha,
@@ -1072,6 +1092,8 @@ def test_retry4_generated_postfreeze_receipt_admits_first_condition() -> None:
         "empirical_entry_crossed": False,
         "postfreeze_validation_sha256": postfreeze_sha,
         "completed_at_epoch": first_pair_started,
+        "raw_attempt_sealing": sealing,
+        "privacy_safe_essential_failure_sealing": sealing,
     }
     postfreeze = {
         "frozen_manifest_published_at_epoch": first_pair_started,
