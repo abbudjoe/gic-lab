@@ -355,8 +355,8 @@ def test_embedded_identifier_is_not_a_credential_pattern(
 def test_runtime_constructed_openai_token_boundaries_are_detected(
     tmp_path: Path, host: ModuleType, separator: str
 ) -> None:
-    token = "s" + "k-" + "runtime" + "Canary" + "0123456789"
-    (tmp_path / "candidate.txt").write_text(separator + token + "\n", encoding="utf-8")
+    canary = "".join(("s", "k-", "runtime", "Canary", "0123456789"))
+    (tmp_path / "candidate.txt").write_text(separator + canary + "\n", encoding="utf-8")
     assert host.privacy_violations(tmp_path) == ["candidate.txt:credential-pattern"]
 
 
@@ -367,9 +367,9 @@ def test_runtime_constructed_aws_bearer_and_chunk_spanning_tokens_are_detected(
     bearer = "Bear" + "er " + "runtime.canary/value=0123456789"
     (tmp_path / "aws.txt").write_text(aws, encoding="utf-8")
     (tmp_path / "bearer.txt").write_text(bearer, encoding="utf-8")
-    token = ("s" + "k-" + "chunkBoundary" + "0123456789").encode()
+    canary = "".join(("s", "k-", "chunkBoundary", "0123456789")).encode()
     (tmp_path / "chunk.txt").write_bytes(
-        b"x" * (host.MAX_PRIVACY_SCAN_CHUNK_BYTES - 3) + b" " + token
+        b"x" * (host.MAX_PRIVACY_SCAN_CHUNK_BYTES - 3) + b" " + canary
     )
     assert host.privacy_violations(tmp_path) == [
         "aws.txt:credential-pattern",
@@ -382,15 +382,15 @@ def test_path_and_content_scanning_share_boundaries_and_other_privacy_checks_rem
     tmp_path: Path, host: ModuleType
 ) -> None:
     (tmp_path / "task-b-normalization-edge.txt").write_text("public\n", encoding="utf-8")
-    token = "s" + "k-" + "pathCanary" + "0123456789"
-    (tmp_path / token).write_text("public\n", encoding="utf-8")
+    canary = "".join(("s", "k-", "pathCanary", "0123456789"))
+    (tmp_path / canary).write_text("public\n", encoding="utf-8")
     (tmp_path / "sensitive.json").write_text('{"api_key":"redacted"}', encoding="utf-8")
     (tmp_path / "jupyter.txt").write_text(
         "http://localhost:8888/lab?token=public-canary", encoding="utf-8"
     )
     (tmp_path / "network.txt").write_text("10.0.0.1", encoding="utf-8")
     hits = host.privacy_violations(tmp_path)
-    assert f"{token}:credential-pattern-path" in hits
+    assert f"{canary}:credential-pattern-path" in hits
     assert not any(item.startswith("task-b-normalization-edge.txt:") for item in hits)
     assert "sensitive.json:sensitive-json-field" in hits
     assert "jupyter.txt:jupyter-url" in hits
@@ -483,6 +483,6 @@ def test_production_preflight_receipt_is_structurally_clean(
     receipt = attempt_root / "offline-runtime-preflight.json"
     assert "task-b-normalization-edge" in receipt.read_text(encoding="utf-8")
     assert host.privacy_violations(attempt_root) == []
-    token = "s" + "k-" + "nearbyCanary" + "0123456789"
-    (attempt_root / "nearby.txt").write_text(token, encoding="utf-8")
+    canary = "".join(("s", "k-", "nearbyCanary", "0123456789"))
+    (attempt_root / "nearby.txt").write_text(canary, encoding="utf-8")
     assert "nearby.txt:credential-pattern" in host.privacy_violations(attempt_root)
