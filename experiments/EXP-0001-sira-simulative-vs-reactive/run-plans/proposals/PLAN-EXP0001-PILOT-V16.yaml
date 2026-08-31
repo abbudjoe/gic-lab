@@ -1,0 +1,457 @@
+schema_version: 1.0.0
+plan_id: PLAN-EXP0001-PILOT-V16
+experiment_id: EXP-0001
+plan_kind: category-3-live-qualification-and-descriptive-calibration
+status:
+  authorized: false
+  execution_allowed: false
+  cloud_mutation_allowed: false
+  paid_compute_allowed: false
+  live_qualification_performed: false
+  pilot_executed: false
+  future_execution_category: 3
+  terminal_state: implementation-complete-pr-review-and-merge-required
+  authorization_rule: a fresh Category 3 authorization must bind the exact reviewed merged commit and this plan SHA-256 before any provider or model request
+identities:
+  host_run_id: RUN-T09-PILOT-HOST-AUTONOMOUS-0009
+  attempt_order:
+  - RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009
+  - RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009
+  - RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009
+  - RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009
+  empirical_run_roots_materialized: false
+scientific_contract:
+  interpretation: descriptive-calibration-only
+  scientific_result_claim_permitted: false
+  experiment_id: EXP-0001
+  sira_commit: 93fb8d72de71f9a4a13419670adeb34d93cf7acd
+  model_revision_for_every_role: gpt-4o-2024-11-20
+  model_roles:
+  - default
+  - encoder
+  - memory
+  - policy
+  - world_model
+  - critic
+  - actor
+  - fallback
+  provider_fallback_enabled: false
+  dataset:
+    name: FanOutQA November 2023 development snapshot
+    source_commit: 989f4c40d9deea1ecb0897d7a17a9c0fe20d5c33
+    sira_blob: 76ad1feb689b754bfe4e5e24d3ea371b647efa67
+    sha256: 359300b029c6891567816f351bf8786e9b018d7af8a1a44b7da9ba5ef4651288
+  evaluator:
+    identity: exact-pinned-sira-fanoutqa-evaluator
+    commit: 93fb8d72de71f9a4a13419670adeb34d93cf7acd
+    primary_score: acc_loose
+    judge_model: null
+    provider_request_required: false
+    contract_path: experiments/EXP-0001-sira-simulative-vs-reactive/contracts/T09_PILOT_EVALUATOR_CONTRACT.json
+    contract_sha256: c28a802a45fc8d1e719f8c1bcb22315c2841df831c4ae161f12ab0f2fd08b321
+  protocol_sha256: 5356fc8b3806f4135eb570f65b67da2f94463582db5e3e609320e23dbdb2a3f7
+  config_sha256: cf25acd90f9d73d9aef978a7d059cfbc74a1447d901f4e3d27e2b5d9f121d2ed
+  seed: 42
+  condition_retries_after_empirical_entry: 0
+implementation_bindings:
+  required_base_commit: be09fe18dd46d0e5fe1aa65cfac29190edfa8aac
+  required_base_tree: ff6242c0e57f11e1b0ca158a5af3bb782865782b
+  required_base_parent_1: bce89afa79a120f7f5acb22fb20512ec9581f7a5
+  required_base_parent_2: c764c852597b7c7a8f67f91963cfb749386c6887
+  required_accounting_repair_ancestor: 1c6b093699288f37aa23526fe1e1672e50280093
+  reviewed_implementation_ancestor: 687a0d1ecd51d1f068558b637f9179765c398562
+  exact_reviewed_merged_commit: pending-category-2-merge
+  exact_reviewed_merged_commit_required_before_authorization: true
+  provider_accounting:
+    path: src/giclab/harness/sira_gate_a.py
+    sha256: edbda143d4a4271ad49d9b888a943192d4427395b79b14775312b27f10707c3d
+    regression_path: tests/test_t09_provider_accounting.py
+    regression_sha256: 0a2da8889b3d04313c05871862b16402289328b62e56e18dd0b5a8049a105c33
+    reservation_projection: authoritative-owned-per-call-records-math-fsum-exact-empty
+    repeated_subtractive_bookkeeping: false
+    automatic_retries: 0
+  offline_refinalization:
+    finalizer_projection_path: containers/sira-smoke/pragmatic/t09_finalizer_projection.py
+    finalizer_projection_sha256: 8a7eee55aca222a134b8f9075efb072fdeff86247c763245001c2efe3e3a3dc0
+    evaluator_driver_path: containers/sira-smoke/pragmatic/t09_evaluate_attempt.py
+    evaluator_driver_sha256: e689a77997d2289a7621323f61d1283eaf45c3d6c887966360a692afea0f4662
+    selector_path: containers/sira-smoke/pragmatic/t09_remote_runner.py
+    selector_sha256: ff7bbe48e2f790282a3cb012184653da237801433947391009b4df1f0225269e
+    receipt_schema_path: schemas/t09-offline-refinalization-receipt.schema.json
+    receipt_schema_sha256: 4965287881472b0605678223173e15ac870eebe894f95cae2609b390daf801e9
+    network_disabled: true
+    model_replay_count: 0
+    browser_replay_count: 0
+    raw_mutation: false
+  early_cleanup:
+    implementation_path: src/giclab/harness/t09_cleanup_state.py
+    implementation_sha256: 39a4d698b8184c4d6652294f32e07911b2998b1a6326ad280353ba5f505e387e
+    provider_integration_path: src/giclab/harness/t09_pragmatic_provider.py
+    provider_integration_sha256: 8ac3b563842ab994e86c96921e46e292195a8e8c9962165cfe22d8b0a5f1294f
+    schema_path: schemas/t09-early-cleanup-state.schema.json
+    schema_sha256: 1e041fe3197ed7c53f80e782c727f1dfb9e6d27ec9476543466711948b018edf
+    export_handoff_schema_path: schemas/t09-cleanup-export-handoff.schema.json
+    export_handoff_schema_sha256: fc5fd18d35239aabf1a02caa10c56ecce2a2ad073a94f0f0b282e77a75f801e9
+    lifecycle_phase_derivation: durable-evidence-derived-prefreeze-postfreeze-empirical
+    terminal_export_handoff_idempotent: true
+    initialize_after_exact_provider_id: true
+    initialize_before_package_transition: true
+    cross_host_journal_mode: one-hash-chain-provider-prefix-remote-continuation
+    provider_closeout_remote_journal_argument: --remote-cleanup-journal
+    provider_termination_requires_optional_state: false
+    public_alias_is_cleanup_authority: false
+    optional_pilot_state_required: false
+    optional_campaign_state_required: false
+    optional_finalizer_state_required: false
+  owned_container_publication:
+    reader_path: containers/sira-smoke/pragmatic/t09_remote_runner.py
+    reader_sha256: ff7bbe48e2f790282a3cb012184653da237801433947391009b4df1f0225269e
+    regression_path: tests/test_t09_v12_model_metadata_receipt.py
+    regression_sha256: 24d91336f0d0e023f4baa77515529480336fba8805311595b990b510dbec07c7
+    safe_zero_length_state: publication-pending
+    descriptor_no_follow_required: true
+    exact_daemon_published_id_required: true
+    exact_id_cleanup_only: true
+    name_based_cleanup_authority: false
+  model_metadata_receipt:
+    implementation_path: src/giclab/harness/t09_model_metadata_receipt.py
+    implementation_sha256: 88e39033963378454cfcb14f0d8d19dda1c72dc779e24696313f008e707363b5
+    dotenv_input:
+      source: existing-qualified-repository-external-file
+      parent_policy: current-user-owned-directory-not-group-or-world-writable
+      file_type: regular
+      current_user_owner_required: true
+      single_link_required: true
+      no_follow_required: true
+      eligible_mode_policy: no-group-or-world-write-bits
+      regression_covered_modes:
+      - '0600'
+      - '0644'
+      required_assignment: OPENAI_API_KEY
+      optional_assignment: LAMBDA_API_KEY
+      unknown_assignments_allowed: false
+      selected_assignment: OPENAI_API_KEY
+      source_mutation_allowed: false
+    schema_path: schemas/t09-v16-model-metadata-receipt.schema.json
+    schema_sha256: 4e135f5059a9d446499cb3972ce474b7f2cc78fb8b91df451bbb045e295c0ea3
+    public_price_contract_path: experiments/EXP-0001-sira-simulative-vs-reactive/pricing.yaml
+    public_price_contract_sha256: 19da507395c7ccc9341453a930bc980a7cb801fdec1ae6413d07c26cf0d50284
+    public_deprecation_observation_path: experiments/EXP-0001-sira-simulative-vs-reactive/contracts/T09_PUBLIC_MODEL_DEPRECATION_OBSERVATION_V16.json
+    public_deprecation_observation_sha256: 162c17a0cdb98899be39644a48250913b5bda2b476366ef8ac4201da92041bf2
+    local_request_count: 1
+    provider_launch_request_count: 0
+    host_runtime_request_count: 0
+    model_metadata_prelaunch_freshness_seconds: 1800
+    model_metadata_freshness_owner: provider-final-transport-boundary
+    provider_launch_requires_current_freshness: true
+    host_runtime_requires_current_freshness: false
+    host_runtime_requires_prelaunch_timestamp_ordering: true
+    host_runtime_model_metadata_request_count: 0
+    receipt_required: true
+    replay_allowed: false
+    immutable_model_unavailable_disposition: stop-before-lambda-launch-zero-lambda-cost
+  execution_plane:
+    pilot_library_path: src/giclab/harness/t09_sira_pilot.py
+    pilot_library_sha256: 6e0574bddbb1585399ed9c19531b9191b571c483621a3585abe3c40d38a6c017
+    campaign_lifecycle_path: src/giclab/harness/lambda_campaign_lifecycle.py
+    campaign_lifecycle_sha256: 6f0f74354f15766466480c498b4ab5af6887e337c5197416bb9dedf3ff78200b
+    provider_path: src/giclab/harness/t09_pragmatic_provider.py
+    provider_sha256: 8ac3b563842ab994e86c96921e46e292195a8e8c9962165cfe22d8b0a5f1294f
+    provider_contracts_path: src/giclab/harness/t09_provider_contracts.py
+    provider_contracts_sha256: 9c3ad548894c3ea52b151524d265cd158a10733d62183bd763aec33d116b615c
+    remote_runner_path: containers/sira-smoke/pragmatic/t09_remote_runner.py
+    remote_runner_sha256: ff7bbe48e2f790282a3cb012184653da237801433947391009b4df1f0225269e
+    command_generator_path: containers/sira-smoke/pragmatic/t09_freeze_commands.py
+    command_generator_sha256: 4b593f68a45eccbe8e78df6192508e689448b7d61a41faa622e2ab191e4656ff
+    runtime_profile_path: experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/proposals/T09_PILOT_RUNTIME_PROFILE_V16.yaml
+    runtime_profile_sha256: 80962bb30ed6aa879e4c1e8c7d7e25a119375c28e0897cd02e3ff1c0aa15b41a
+    execution_contract_path: experiments/EXP-0001-sira-simulative-vs-reactive/contracts/proposals/T09_PILOT_EXECUTION_CONTRACT_V16.json
+    execution_contract_sha256: 65f5e5d0562b7066742a21c7036a884009d86548b911920103ce92e4b2db2d42
+    command_manifests_path: experiments/EXP-0001-sira-simulative-vs-reactive/contracts/proposals/T09_PILOT_COMMAND_MANIFESTS_V16.json
+    command_manifests_sha256: a9f225276bf6bcf1a95f7f9edabe149f33aed4891962b69a389933482d11d297
+    runtime_identity_path: experiments/EXP-0001-sira-simulative-vs-reactive/contracts/proposals/T09_PILOT_RUNTIME_IDENTITY_V16.json
+    runtime_identity_sha256: 3d5b4e7622dc4f82189b6cfc33ed5a56bb5cf1607218b998f3e487491a5220b0
+    runtime_adaptation_path: src/giclab/harness/sira_gate_a_runtime.py
+    runtime_adaptation_sha256: 0f1cd94fe048102704c9a4c461c6a3bf457ca53eb5586291441a675cd6b256a0
+    execution_schema_path: schemas/t09-sira-pilot-v16-execution.schema.json
+    execution_schema_sha256: 22ff91eb1de34edc890c81eeb242b40418acf0671bbfcfab36fefc43df138a3d
+    condition_plans:
+    - path: experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v16-task-0000-reactive.yaml
+      sha256: 7a223a1b6b4b77959cf7d710472ae1cd0f4e950211169ae4945073cecd6e5265
+    - path: experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v16-task-0000-simulative.yaml
+      sha256: c4c87576f4444bf37f46165bff2ed7c8c457c14214031e27cf2897b4594e062d
+    - path: experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v16-task-0001-reactive.yaml
+      sha256: 14646d453f176154a71cf10c55310c99a6d44189e84ae15dc6ca0d0e52fb75b4
+    - path: experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v16-task-0001-simulative.yaml
+      sha256: 31e45b8d8d796743bd91cb074e40760baf64072989de55a9d9b840e272e91215
+    static_authorized: false
+    static_authorization_reference: null
+    execution_eligibility: blocked-until-fresh-category-3-authorization
+    preflight_path: containers/sira-smoke/pragmatic/t09_preflight.py
+    preflight_sha256: fdb2459617c0f7613b2f5149b53c00bf631a20a9c0cd639c774aa8d38e7fcea5
+    local_finalizer_qualification_path: containers/sira-smoke/pragmatic/t09_local_finalizer_qualification.py
+    local_finalizer_qualification_sha256: a99b46bc73f7e2867e4b4a04771828840b5dda7908e0427a5a3495df3053fce0
+  v15_empirical_prefix_stopped_disposition:
+    path: experiments/EXP-0001-sira-simulative-vs-reactive/T09_V15_EMPIRICAL_PREFIX_STOPPED_DISPOSITION.json
+    size_bytes: 3301
+    sha256: 7222144a6d46ecb3590163a0db48ddcb210a162472bdea6b87a14f10d8633d70
+runtime_contract:
+  python_version: 3.11.14
+  core_soft_limit: 0
+  core_hard_limit: 0
+  max_lambda_instances: 1
+  persistent_filesystems: 0
+  empirical_campaign_wall_seconds: 14400
+  empirical_cleanup_reserve_seconds: 900
+  empirical_termination_cutoff_seconds: 13500
+  evidence_export_reserve_seconds: 600
+  provider_termination_handoff_seconds: 60
+  max_condition_wall_seconds: 3600
+  max_browser_actions_per_attempt: 30
+  max_model_calls_per_attempt: 1155
+  max_model_tokens_per_attempt: 1000000
+  max_openai_cost_usd_per_attempt: 10.0
+  first_pair_checkpoint:
+    after_run_id: RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009
+    required_before_task_b: true
+    continue_only_if_both_task_a_conditions_are_valid_and_scored: true
+    realized_pair_requires_same_tasks_commands_evaluator_and_finalizer_closure: true
+budget_contract:
+  maximum_new_preflight_lambda_cost_usd: 10.0
+  maximum_new_empirical_lambda_cost_usd: 8.0
+  maximum_new_openai_cost_usd: 40.0
+  maximum_new_total_cost_usd: 58.0
+  prior_t09_observed_lower_bound_usd: 17.061865377782947
+  prior_t09_conservative_upper_bound_usd: 36.36170860803283
+  prior_t09_conservative_upper_bound_usd_decimal: '36.36170860803283125'
+  v10_stopped_lambda_cost_usd: 1.7273232755184174
+  effective_maximum_new_total_cost_under_cumulative_cap_usd: 53.63829139196717
+  effective_maximum_new_total_cost_under_cumulative_cap_usd_decimal: '53.63829139196716875'
+  cumulative_t09_cost_cap_usd: 90.0
+  maximum_model_calls: 4620
+  maximum_model_tokens: 4000000
+  maximum_browser_actions: 120
+  previous_t09_conservative_upper_bound_usd: 34.77393182524797
+  v12_stopped_lambda_cost_usd: 0.3796854954083761
+  prior_through_stopped_v13_conservative_usd_decimal: '34.7739318252479717'
+  v14_stopped_lambda_cost_usd: 0.0821235525349776
+  v14_stopped_lambda_cost_usd_decimal: '0.0821235525349776'
+  v15_lambda_cost_usd: 1.3536407302498819
+  v15_lambda_cost_usd_decimal: '1.3536407302498819'
+  v15_openai_task_cost_usd: 0.15201250000000005
+  v15_openai_task_cost_usd_decimal: '0.15201250000000005'
+  v15_new_total_usd: 1.505653230249882
+  v15_new_total_usd_decimal: '1.50565323024988195'
+evidence_contract:
+  raw_attempt_first: true
+  immutable_raw_manifest_required_before_finalization: true
+  full_attempt_cap_bytes: 536870912
+  stdout_stderr_per_stream_cap_bytes: 536870912
+  essential_failure_cap_bytes: 67108864
+  credential_separation: strict
+  private_raw_release: blocked-pending-review
+  downstream_repair_policy: network-disabled-finalizer-only-no-condition-replay
+  v8_artifacts_are_immutable_historical_evidence: true
+  v9_artifacts_are_immutable_historical_evidence: true
+  v10_stopped_category_3_artifacts_are_immutable_operational_evidence: true
+  v11_stopped_category_3_artifacts_are_immutable_operational_evidence: true
+  v12_stopped_category_3_artifacts_are_immutable_operational_evidence: true
+  v13_stopped_category_3_artifacts_are_immutable_operational_evidence: true
+  v14_stopped_category_3_artifacts_are_immutable_operational_evidence: true
+  v8_conditions_eligible_for_v16_pairing: false
+  v9_conditions_eligible_for_v16_pairing: false
+  v10_conditions_eligible_for_v16_pairing: false
+  v11_conditions_eligible_for_v16_pairing: false
+  v12_conditions_eligible_for_v16_pairing: false
+  v13_conditions_eligible_for_v16_pairing: false
+  v14_conditions_eligible_for_v16_pairing: false
+  v15_empirical_prefix_artifacts_are_immutable_historical_evidence: true
+  v15_conditions_eligible_for_v16_pairing: false
+cleanup_contract:
+  exact_owned_targets_only: true
+  broad_prune_allowed: false
+  provider_termination_required: true
+  provider_terminal_or_absent_verification_required: true
+  browser_cleanup_required: true
+  owned_container_cleanup_required: true
+  temporary_secret_cleanup_required: true
+  owned_ruleset_cleanup_required: true
+  firewall_restoration_required: true
+  cleanup_without_optional_pilot_state_required: true
+  cleanup_export_phase_source: durable-evidence-not-caller-boolean
+  prefreeze_zero_attempt_manifest_policy: absence-required-only-under-exact-zero-state
+  postfreeze_manifest_policy: published-valid-manifest-required
+  empirical_prefix_export_policy: contiguous-exact-acknowledgements-required
+  terminal_export_handoff_idempotent: true
+  provider_entry_replacement_eligibility_kind: provider-entry-failed-preempirical
+  provider_entry_direct_authority_layout: exact-closed-launch-root
+  provider_entry_retained_authority_layout: collision-free-slot2-eligibility-source
+  provider_entry_eligibility_history_publication: shared-immutable-unsuffixed-first-then-slot-suffixed
+  provider_entry_current_receipt_selection: immediate-preceding-closed-slot-source-bound-launch-capability
+  provider_entry_normalized_manifest_required: true
+  provider_entry_retained_revalidation_required: true
+  provider_entry_normalization_precedes_credentials_provider_and_capability: true
+  provider_entry_closed_slots_supported: one-through-max-launch-count-minus-one
+  provider_entry_repeated_slot_authority_retention: exact-admitting-authority-copied-with-current-host-closeout
+  host_preflight_closeout_idempotent: true
+  replacement_normalization_does_not_rewrite_verified_closeout: true
+attempts:
+- run_id: RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009
+  task_label: Task-A
+  task_id: 7dcbbbdc7f1120cd
+  task_sha256: 153a4f251fbeb29bee8e5ca4626e6db14426063728b0d5cfa7eed3a9a230992b
+  reference_sha256: fc40734fa183e839b56a7c89b16faa5900865cbee7a4210fcb251a99176f98de
+  record_sha256: cc5c3fdeea2c1f58b6160175bd3104dbea40c290ea8b390d29413e6410d97e15
+  condition: reactive
+  order_index: 1
+  dataset_start_index: 0
+  dataset_end_index: 1
+  output_root: not-materialized-until-category-3
+  upstream_argv:
+  - --dataset
+  - fanout
+  - --mode
+  - reactive
+  - --agent
+  - sira
+  - --config_name
+  - web_reactive
+  - --model
+  - gpt-4o-2024-11-20
+  - --max_steps
+  - '30'
+  - --timeout
+  - '30'
+  - --max_retry
+  - '0'
+  - --data_root
+  - /opt/sira/data
+  - --output_dir
+  - <FRESH-CONDITION-ROOT>
+  - --start_idx
+  - '0'
+  - --end_idx
+  - '1'
+  - --seed
+  - '42'
+- run_id: RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009
+  task_label: Task-A
+  task_id: 7dcbbbdc7f1120cd
+  task_sha256: 153a4f251fbeb29bee8e5ca4626e6db14426063728b0d5cfa7eed3a9a230992b
+  reference_sha256: fc40734fa183e839b56a7c89b16faa5900865cbee7a4210fcb251a99176f98de
+  record_sha256: cc5c3fdeea2c1f58b6160175bd3104dbea40c290ea8b390d29413e6410d97e15
+  condition: simulative
+  order_index: 2
+  dataset_start_index: 0
+  dataset_end_index: 1
+  output_root: not-materialized-until-category-3
+  upstream_argv:
+  - --dataset
+  - fanout
+  - --mode
+  - simulative
+  - --agent
+  - sira
+  - --config_name
+  - web_simulative
+  - --model
+  - gpt-4o-2024-11-20
+  - --max_steps
+  - '30'
+  - --timeout
+  - '30'
+  - --max_retry
+  - '0'
+  - --data_root
+  - /opt/sira/data
+  - --output_dir
+  - <FRESH-CONDITION-ROOT>
+  - --start_idx
+  - '0'
+  - --end_idx
+  - '1'
+  - --seed
+  - '42'
+- run_id: RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009
+  task_label: Task-B
+  task_id: 2120afba8009bad3
+  task_sha256: 9b2b443898959b28c7408ed1ff56ebd332c9e7f2142657c11c7d09aa507ba66e
+  reference_sha256: 2ee9d892e24441d5f5bbf31b7616c1ade5977af26d22e4020f92a162fa23becb
+  record_sha256: 5f5a8ad5353b839def2ffc968c36c4314bb830f11f10268f410faa37690bc129
+  condition: simulative
+  order_index: 1
+  dataset_start_index: 1
+  dataset_end_index: 2
+  output_root: not-materialized-until-category-3
+  upstream_argv:
+  - --dataset
+  - fanout
+  - --mode
+  - simulative
+  - --agent
+  - sira
+  - --config_name
+  - web_simulative
+  - --model
+  - gpt-4o-2024-11-20
+  - --max_steps
+  - '30'
+  - --timeout
+  - '30'
+  - --max_retry
+  - '0'
+  - --data_root
+  - /opt/sira/data
+  - --output_dir
+  - <FRESH-CONDITION-ROOT>
+  - --start_idx
+  - '1'
+  - --end_idx
+  - '2'
+  - --seed
+  - '42'
+- run_id: RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009
+  task_label: Task-B
+  task_id: 2120afba8009bad3
+  task_sha256: 9b2b443898959b28c7408ed1ff56ebd332c9e7f2142657c11c7d09aa507ba66e
+  reference_sha256: 2ee9d892e24441d5f5bbf31b7616c1ade5977af26d22e4020f92a162fa23becb
+  record_sha256: 5f5a8ad5353b839def2ffc968c36c4314bb830f11f10268f410faa37690bc129
+  condition: reactive
+  order_index: 2
+  dataset_start_index: 1
+  dataset_end_index: 2
+  output_root: not-materialized-until-category-3
+  upstream_argv:
+  - --dataset
+  - fanout
+  - --mode
+  - reactive
+  - --agent
+  - sira
+  - --config_name
+  - web_reactive
+  - --model
+  - gpt-4o-2024-11-20
+  - --max_steps
+  - '30'
+  - --timeout
+  - '30'
+  - --max_retry
+  - '0'
+  - --data_root
+  - /opt/sira/data
+  - --output_dir
+  - <FRESH-CONDITION-ROOT>
+  - --start_idx
+  - '1'
+  - --end_idx
+  - '2'
+  - --seed
+  - '42'
+category_3_preconditions:
+- exact-head PR review by ChatGPT
+- user approval of the reviewed SHA
+- Category 2 merge-only turn
+- fresh Category 3 authorization
+- exactly one authenticated gpt-4o-2024-11-20 model-metadata GET must succeed before Lambda launch or any paid cloud mutation; otherwise stop with zero Lambda cost
+- exact repaired merge and plan SHA-256 plus a newly recreated local-finalizer qualification, runtime interpreter, dependency closure, image, evaluator, selector, projection, and cleanup identities frozen before release; the stopped-turn authorization reference and old qualification are nonreusable
