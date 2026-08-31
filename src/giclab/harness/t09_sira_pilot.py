@@ -31,6 +31,7 @@ from giclab.harness.sira_gate_a import (
 )
 from giclab.harness.t09_provider_contracts import (
     PROVIDER_CONTRACTS,
+    ProviderSelectorPolicy,
     T09ProviderContract,
     T09ProviderContractError,
     provider_contract_for_plan_id,
@@ -3273,7 +3274,8 @@ def render_command_manifest(
             if key not in {"--mode", "--config_name", "--output_dir"}
         },
     }
-    if contract.provider_contract_version in {"V13", "V14", "V15", "V16"}:
+    provider_identity = provider_contract_for_plan_id(contract.plan_id)
+    if provider_identity.capabilities.provider_selector_policy is ProviderSelectorPolicy.EXPLICIT:
         equality_surface["provider_contract_selector"] = {
             "argument": "--provider-contract",
             "value": contract.provider_contract_version,

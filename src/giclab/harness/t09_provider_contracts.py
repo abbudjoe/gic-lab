@@ -13,6 +13,7 @@ import math
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path, PurePosixPath
 from types import MappingProxyType
 from typing import Final, cast
@@ -28,11 +29,131 @@ _HEX64: Final = re.compile(r"^[a-f0-9]{64}$")
 _SAFE_ID: Final = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$")
 
 
+class LifecycleFamily(StrEnum):
+    """Semantic provider lifecycle selected independently of package identity."""
+
+    HISTORICAL_OBSERVER = "historical-observer"
+    RETRY4 = "retry4"
+    AUTONOMOUS_CAMPAIGN = "autonomous-campaign"
+
+
+class MetadataPolicy(StrEnum):
+    """Whether local prelaunch model metadata is part of the control contract."""
+
+    NONE = "none"
+    LOCAL_PRELAUNCH_RECEIPT = "local-prelaunch-receipt"
+
+
+class ReplacementPolicy(StrEnum):
+    """Provider replacement capability, not a launch-count inference."""
+
+    NONE = "none"
+    BOUNDED_PREFLIGHT = "bounded-preflight"
+
+
+class CleanupFamily(StrEnum):
+    """The retained cleanup/evidence reconciliation semantics."""
+
+    HISTORICAL = "historical"
+    EARLY_JOURNAL = "early-journal"
+    EMPIRICAL_PREFIX = "empirical-prefix"
+
+
+class CommandPackageFamily(StrEnum):
+    """The command/science package surface consumed by a contract."""
+
+    HISTORICAL = "historical"
+    AUTONOMOUS = "autonomous"
+
+
+class ControlRootPolicy(StrEnum):
+    """How the host control-root identity is projected."""
+
+    LEGACY_SHARED = "legacy-shared"
+    VERSIONED = "versioned"
+
+
+class AuthorizationPolicy(StrEnum):
+    """The authority-ledger contract; repository state never grants authority."""
+
+    FROZEN_HISTORICAL = "frozen-historical"
+    LEGACY_LOCAL_SINGLE_USE = "legacy-local-single-use"
+    METADATA_BOUND_SINGLE_USE = "metadata-bound-single-use"
+
+
+class PackageTransitionPolicy(StrEnum):
+    """Whether a pre-empirical descendant package can be source-adjudicated."""
+
+    NONE = "none"
+    PREEMPIRICAL_DESCENDANT = "preempirical-descendant"
+
+
+class ProviderSelectorPolicy(StrEnum):
+    """Whether frozen condition commands carry an explicit provider selector."""
+
+    NONE = "none"
+    EXPLICIT = "explicit"
+
+
+class StageIdentityPolicy(StrEnum):
+    """The evidence-stage identity schema used by host/local handoff."""
+
+    LEGACY = "legacy"
+    TYPED_PROVIDER = "typed-provider"
+
+
+@dataclass(frozen=True, slots=True)
+class T09ContractCapabilities:
+    """One complete semantic behavior declaration for a provider contract."""
+
+    lifecycle_family: LifecycleFamily
+    metadata_policy: MetadataPolicy
+    replacement_policy: ReplacementPolicy
+    cleanup_family: CleanupFamily
+    command_package_family: CommandPackageFamily
+    control_root_policy: ControlRootPolicy
+    authorization_policy: AuthorizationPolicy
+    package_transition_policy: PackageTransitionPolicy
+    provider_selector_policy: ProviderSelectorPolicy
+    stage_identity_policy: StageIdentityPolicy
+    shadow_scenario: str
+
+    def __post_init__(self) -> None:
+        if _SAFE_ID.fullmatch(self.shadow_scenario) is None:
+            raise T09ProviderContractError("provider shadow scenario is malformed")
+        autonomous = self.lifecycle_family is LifecycleFamily.AUTONOMOUS_CAMPAIGN
+        if (self.command_package_family is CommandPackageFamily.AUTONOMOUS) != autonomous:
+            raise T09ProviderContractError("lifecycle and command-package capabilities conflict")
+        if self.metadata_policy is MetadataPolicy.LOCAL_PRELAUNCH_RECEIPT:
+            if (
+                not autonomous
+                or self.authorization_policy is not AuthorizationPolicy.METADATA_BOUND_SINGLE_USE
+                or self.stage_identity_policy is not StageIdentityPolicy.TYPED_PROVIDER
+            ):
+                raise T09ProviderContractError("metadata receipt capabilities conflict")
+        elif self.authorization_policy is AuthorizationPolicy.METADATA_BOUND_SINGLE_USE:
+            raise T09ProviderContractError("metadata-bound authority lacks metadata receipt")
+        if (
+            self.package_transition_policy is PackageTransitionPolicy.PREEMPIRICAL_DESCENDANT
+            and not autonomous
+        ):
+            raise T09ProviderContractError("historical lifecycle cannot transition packages")
+        if self.cleanup_family is CleanupFamily.EMPIRICAL_PREFIX and not autonomous:
+            raise T09ProviderContractError("empirical-prefix cleanup requires autonomous science")
+        if self.control_root_policy is ControlRootPolicy.VERSIONED and not autonomous:
+            raise T09ProviderContractError("versioned control root requires autonomous lifecycle")
+        if self.provider_selector_policy is ProviderSelectorPolicy.EXPLICIT and not autonomous:
+            raise T09ProviderContractError(
+                "explicit provider selector requires autonomous commands"
+            )
+
+
 @dataclass(frozen=True, slots=True)
 class T09ProviderContract:
     """One immutable provider/authority surface from a retained T09 version."""
 
     version: str
+    capabilities: T09ContractCapabilities
     source_commit: str
     plan_id: str
     host_run_id: str
@@ -107,6 +228,10 @@ class T09ProviderContract:
             raise T09ProviderContractError("provider source byte identity is invalid")
         if self.max_launch_count <= 0:
             raise T09ProviderContractError("provider launch count is invalid")
+        if (self.capabilities.replacement_policy is ReplacementPolicy.BOUNDED_PREFLIGHT) != (
+            self.max_launch_count > 1
+        ):
+            raise T09ProviderContractError("replacement capability conflicts with launch count")
         budget_values = (
             self.prior_t09_cost_usd,
             self.preflight_lambda_cost_cap_usd,
@@ -173,23 +298,18 @@ class T09ProviderContract:
             raise T09ProviderContractError(
                 "historical pragmatic contract unexpectedly has autonomous package paths"
             )
-        if self.version in {"V3", "V4"}:
-            if (
-                self.frozen_run_manifest_id is not None
-                or self.local_finalizer_qualification_id is not None
-            ):
-                raise T09ProviderContractError(
-                    "pre-freeze provider contract unexpectedly has finalizer identities"
-                )
-        elif (
-            self.frozen_run_manifest_id is None
-            or self.local_finalizer_qualification_id is None
-            or _SAFE_ID.fullmatch(self.frozen_run_manifest_id) is None
-            or _SAFE_ID.fullmatch(self.local_finalizer_qualification_id) is None
+        if (self.frozen_run_manifest_id is None) != (self.local_finalizer_qualification_id is None):
+            raise T09ProviderContractError("provider contract has partial finalizer identities")
+        if self.frozen_run_manifest_id is not None and (
+            _SAFE_ID.fullmatch(self.frozen_run_manifest_id) is None
+            or _SAFE_ID.fullmatch(cast(str, self.local_finalizer_qualification_id)) is None
         ):
-            raise T09ProviderContractError(
-                "provider contract lacks its frozen finalizer identities"
-            )
+            raise T09ProviderContractError("provider finalizer identities are malformed")
+        autonomous_package = (
+            self.capabilities.command_package_family is CommandPackageFamily.AUTONOMOUS
+        )
+        if autonomous_package != (self.execution_contract_path is not None):
+            raise T09ProviderContractError("command capability conflicts with package paths")
         for scientific_relative in (
             self.execution_contract_path,
             self.command_manifest_path,
@@ -274,6 +394,7 @@ _AUTONOMOUS_REMOTE_ROOT: Final = "/home/ubuntu/t09-artifacts-autonomous"
 def _contract(
     *,
     version: str,
+    capabilities: T09ContractCapabilities,
     source_commit: str,
     host_run_id: str,
     authorization_id: str | None,
@@ -311,10 +432,13 @@ def _contract(
     )
     host_family = host_run_id.removeprefix("RUN-T09-PILOT-HOST-")
     control_root_name = (
-        f"pilot-{version.lower()}" if version in {"V12", "V13", "V14", "V15", "V16"} else "pilot-v7"
+        f"pilot-{version.lower()}"
+        if capabilities.control_root_policy is ControlRootPolicy.VERSIONED
+        else "pilot-v7"
     )
     return T09ProviderContract(
         version=version,
+        capabilities=capabilities,
         source_commit=source_commit,
         plan_id=plan_id,
         host_run_id=host_run_id,
@@ -357,6 +481,19 @@ def _contract(
 
 V3_PROVIDER_CONTRACT: Final = _contract(
     version="V3",
+    capabilities=T09ContractCapabilities(
+        lifecycle_family=LifecycleFamily.HISTORICAL_OBSERVER,
+        metadata_policy=MetadataPolicy.NONE,
+        replacement_policy=ReplacementPolicy.NONE,
+        cleanup_family=CleanupFamily.HISTORICAL,
+        command_package_family=CommandPackageFamily.HISTORICAL,
+        control_root_policy=ControlRootPolicy.LEGACY_SHARED,
+        authorization_policy=AuthorizationPolicy.FROZEN_HISTORICAL,
+        package_transition_policy=PackageTransitionPolicy.NONE,
+        provider_selector_policy=ProviderSelectorPolicy.NONE,
+        stage_identity_policy=StageIdentityPolicy.LEGACY,
+        shadow_scenario="historical-observer",
+    ),
     source_commit="6f7c3112777a8b253f085d058972259fad30778f",
     host_run_id="RUN-T09-PILOT-HOST-0001",
     authorization_id="AUTH-T09-PRAGMATIC-PILOT-2026-08-13",
@@ -390,6 +527,19 @@ V3_PROVIDER_CONTRACT: Final = _contract(
 )
 V4_PROVIDER_CONTRACT: Final = _contract(
     version="V4",
+    capabilities=T09ContractCapabilities(
+        lifecycle_family=LifecycleFamily.HISTORICAL_OBSERVER,
+        metadata_policy=MetadataPolicy.NONE,
+        replacement_policy=ReplacementPolicy.NONE,
+        cleanup_family=CleanupFamily.HISTORICAL,
+        command_package_family=CommandPackageFamily.HISTORICAL,
+        control_root_policy=ControlRootPolicy.LEGACY_SHARED,
+        authorization_policy=AuthorizationPolicy.FROZEN_HISTORICAL,
+        package_transition_policy=PackageTransitionPolicy.NONE,
+        provider_selector_policy=ProviderSelectorPolicy.NONE,
+        stage_identity_policy=StageIdentityPolicy.LEGACY,
+        shadow_scenario="historical-observer",
+    ),
     source_commit="626860b77184db09da059e923a6c8b4803b8560a",
     host_run_id="RUN-T09-PILOT-HOST-0002",
     authorization_id="AUTH-T09-PRAGMATIC-RETRY2-2026-08-13",
@@ -427,6 +577,19 @@ V4_PROVIDER_CONTRACT: Final = _contract(
 )
 V5_PROVIDER_CONTRACT: Final = _contract(
     version="V5",
+    capabilities=T09ContractCapabilities(
+        lifecycle_family=LifecycleFamily.HISTORICAL_OBSERVER,
+        metadata_policy=MetadataPolicy.NONE,
+        replacement_policy=ReplacementPolicy.BOUNDED_PREFLIGHT,
+        cleanup_family=CleanupFamily.HISTORICAL,
+        command_package_family=CommandPackageFamily.HISTORICAL,
+        control_root_policy=ControlRootPolicy.LEGACY_SHARED,
+        authorization_policy=AuthorizationPolicy.FROZEN_HISTORICAL,
+        package_transition_policy=PackageTransitionPolicy.NONE,
+        provider_selector_policy=ProviderSelectorPolicy.NONE,
+        stage_identity_policy=StageIdentityPolicy.LEGACY,
+        shadow_scenario="historical-observer",
+    ),
     source_commit="a36c3c9720611cdf730ef1ce7f83224eacd72851",
     host_run_id="RUN-T09-PILOT-HOST-0003",
     authorization_id="AUTH-T09-PRAGMATIC-RETRY3-2026-08-13",
@@ -465,6 +628,19 @@ V5_PROVIDER_CONTRACT: Final = _contract(
 )
 V6_PROVIDER_CONTRACT: Final = _contract(
     version="V6",
+    capabilities=T09ContractCapabilities(
+        lifecycle_family=LifecycleFamily.RETRY4,
+        metadata_policy=MetadataPolicy.NONE,
+        replacement_policy=ReplacementPolicy.BOUNDED_PREFLIGHT,
+        cleanup_family=CleanupFamily.HISTORICAL,
+        command_package_family=CommandPackageFamily.HISTORICAL,
+        control_root_policy=ControlRootPolicy.LEGACY_SHARED,
+        authorization_policy=AuthorizationPolicy.FROZEN_HISTORICAL,
+        package_transition_policy=PackageTransitionPolicy.NONE,
+        provider_selector_policy=ProviderSelectorPolicy.NONE,
+        stage_identity_policy=StageIdentityPolicy.LEGACY,
+        shadow_scenario="retry4",
+    ),
     source_commit="afea34c1d796765c25bed320d3a8852ee23af380",
     host_run_id="RUN-T09-PILOT-HOST-0004",
     authorization_id="AUTH-T09-PRAGMATIC-RETRY4-2026-08-14",
@@ -500,6 +676,19 @@ V6_PROVIDER_CONTRACT: Final = _contract(
 )
 V7_PROVIDER_CONTRACT: Final = _contract(
     version="V7",
+    capabilities=T09ContractCapabilities(
+        lifecycle_family=LifecycleFamily.RETRY4,
+        metadata_policy=MetadataPolicy.NONE,
+        replacement_policy=ReplacementPolicy.BOUNDED_PREFLIGHT,
+        cleanup_family=CleanupFamily.HISTORICAL,
+        command_package_family=CommandPackageFamily.HISTORICAL,
+        control_root_policy=ControlRootPolicy.LEGACY_SHARED,
+        authorization_policy=AuthorizationPolicy.FROZEN_HISTORICAL,
+        package_transition_policy=PackageTransitionPolicy.NONE,
+        provider_selector_policy=ProviderSelectorPolicy.NONE,
+        stage_identity_policy=StageIdentityPolicy.LEGACY,
+        shadow_scenario="retry4",
+    ),
     source_commit="465927b62904e3bde55724ea00c79502dd2ce5a6",
     host_run_id="RUN-T09-PILOT-HOST-0005",
     authorization_id="AUTH-T09-PRAGMATIC-RETRY5-2026-08-14",
@@ -535,6 +724,19 @@ V7_PROVIDER_CONTRACT: Final = _contract(
 )
 V8_PROVIDER_CONTRACT: Final = _contract(
     version="V8",
+    capabilities=T09ContractCapabilities(
+        lifecycle_family=LifecycleFamily.AUTONOMOUS_CAMPAIGN,
+        metadata_policy=MetadataPolicy.NONE,
+        replacement_policy=ReplacementPolicy.BOUNDED_PREFLIGHT,
+        cleanup_family=CleanupFamily.HISTORICAL,
+        command_package_family=CommandPackageFamily.AUTONOMOUS,
+        control_root_policy=ControlRootPolicy.LEGACY_SHARED,
+        authorization_policy=AuthorizationPolicy.FROZEN_HISTORICAL,
+        package_transition_policy=PackageTransitionPolicy.PREEMPIRICAL_DESCENDANT,
+        provider_selector_policy=ProviderSelectorPolicy.NONE,
+        stage_identity_policy=StageIdentityPolicy.LEGACY,
+        shadow_scenario="category3",
+    ),
     source_commit="1e5f1f9524fe57443d4a3ba5c0353290e0cfda5e",
     host_run_id="RUN-T09-PILOT-HOST-AUTONOMOUS-0001",
     authorization_id="AUTH-T09-AUTONOMOUS-PREFLIGHT-TO-PILOT-2026-08-27",
@@ -573,6 +775,19 @@ V8_PROVIDER_CONTRACT: Final = _contract(
 )
 V9_PROVIDER_CONTRACT: Final = _contract(
     version="V9",
+    capabilities=T09ContractCapabilities(
+        lifecycle_family=LifecycleFamily.AUTONOMOUS_CAMPAIGN,
+        metadata_policy=MetadataPolicy.NONE,
+        replacement_policy=ReplacementPolicy.BOUNDED_PREFLIGHT,
+        cleanup_family=CleanupFamily.HISTORICAL,
+        command_package_family=CommandPackageFamily.AUTONOMOUS,
+        control_root_policy=ControlRootPolicy.LEGACY_SHARED,
+        authorization_policy=AuthorizationPolicy.FROZEN_HISTORICAL,
+        package_transition_policy=PackageTransitionPolicy.PREEMPIRICAL_DESCENDANT,
+        provider_selector_policy=ProviderSelectorPolicy.NONE,
+        stage_identity_policy=StageIdentityPolicy.LEGACY,
+        shadow_scenario="category3",
+    ),
     source_commit="736f1065804c2236ea1be9ad28216b829396d22a",
     host_run_id="RUN-T09-PILOT-HOST-AUTONOMOUS-0002",
     authorization_id="AUTH-T09-AUTONOMOUS-RETRY2-2026-08-27",
@@ -611,6 +826,19 @@ V9_PROVIDER_CONTRACT: Final = _contract(
 )
 V10_PROVIDER_CONTRACT: Final = _contract(
     version="V10",
+    capabilities=T09ContractCapabilities(
+        lifecycle_family=LifecycleFamily.AUTONOMOUS_CAMPAIGN,
+        metadata_policy=MetadataPolicy.NONE,
+        replacement_policy=ReplacementPolicy.BOUNDED_PREFLIGHT,
+        cleanup_family=CleanupFamily.EARLY_JOURNAL,
+        command_package_family=CommandPackageFamily.AUTONOMOUS,
+        control_root_policy=ControlRootPolicy.LEGACY_SHARED,
+        authorization_policy=AuthorizationPolicy.FROZEN_HISTORICAL,
+        package_transition_policy=PackageTransitionPolicy.PREEMPIRICAL_DESCENDANT,
+        provider_selector_policy=ProviderSelectorPolicy.NONE,
+        stage_identity_policy=StageIdentityPolicy.LEGACY,
+        shadow_scenario="category3",
+    ),
     source_commit="091fa6e690beeb628af54cec1e0a2849dd189e3b",
     host_run_id="RUN-T09-PILOT-HOST-AUTONOMOUS-0003",
     authorization_id=None,
@@ -655,6 +883,19 @@ V10_PROVIDER_CONTRACT: Final = _contract(
 )
 V11_PROVIDER_CONTRACT: Final = _contract(
     version="V11",
+    capabilities=T09ContractCapabilities(
+        lifecycle_family=LifecycleFamily.AUTONOMOUS_CAMPAIGN,
+        metadata_policy=MetadataPolicy.NONE,
+        replacement_policy=ReplacementPolicy.BOUNDED_PREFLIGHT,
+        cleanup_family=CleanupFamily.EARLY_JOURNAL,
+        command_package_family=CommandPackageFamily.AUTONOMOUS,
+        control_root_policy=ControlRootPolicy.LEGACY_SHARED,
+        authorization_policy=AuthorizationPolicy.LEGACY_LOCAL_SINGLE_USE,
+        package_transition_policy=PackageTransitionPolicy.PREEMPIRICAL_DESCENDANT,
+        provider_selector_policy=ProviderSelectorPolicy.NONE,
+        stage_identity_policy=StageIdentityPolicy.LEGACY,
+        shadow_scenario="category3",
+    ),
     source_commit="1c6b093699288f37aa23526fe1e1672e50280093",
     host_run_id="RUN-T09-PILOT-HOST-AUTONOMOUS-0004",
     authorization_id=None,
@@ -699,6 +940,19 @@ V11_PROVIDER_CONTRACT: Final = _contract(
 )
 V12_PROVIDER_CONTRACT: Final = _contract(
     version="V12",
+    capabilities=T09ContractCapabilities(
+        lifecycle_family=LifecycleFamily.AUTONOMOUS_CAMPAIGN,
+        metadata_policy=MetadataPolicy.LOCAL_PRELAUNCH_RECEIPT,
+        replacement_policy=ReplacementPolicy.BOUNDED_PREFLIGHT,
+        cleanup_family=CleanupFamily.EARLY_JOURNAL,
+        command_package_family=CommandPackageFamily.AUTONOMOUS,
+        control_root_policy=ControlRootPolicy.VERSIONED,
+        authorization_policy=AuthorizationPolicy.METADATA_BOUND_SINGLE_USE,
+        package_transition_policy=PackageTransitionPolicy.NONE,
+        provider_selector_policy=ProviderSelectorPolicy.NONE,
+        stage_identity_policy=StageIdentityPolicy.TYPED_PROVIDER,
+        shadow_scenario="category3",
+    ),
     source_commit="42a8ce6945c29f4221e03bb836f18421e50f3b1e",
     host_run_id="RUN-T09-PILOT-HOST-AUTONOMOUS-0005",
     authorization_id=None,
@@ -742,6 +996,19 @@ V12_PROVIDER_CONTRACT: Final = _contract(
 )
 V13_PROVIDER_CONTRACT: Final = _contract(
     version="V13",
+    capabilities=T09ContractCapabilities(
+        lifecycle_family=LifecycleFamily.AUTONOMOUS_CAMPAIGN,
+        metadata_policy=MetadataPolicy.LOCAL_PRELAUNCH_RECEIPT,
+        replacement_policy=ReplacementPolicy.BOUNDED_PREFLIGHT,
+        cleanup_family=CleanupFamily.EARLY_JOURNAL,
+        command_package_family=CommandPackageFamily.AUTONOMOUS,
+        control_root_policy=ControlRootPolicy.VERSIONED,
+        authorization_policy=AuthorizationPolicy.METADATA_BOUND_SINGLE_USE,
+        package_transition_policy=PackageTransitionPolicy.NONE,
+        provider_selector_policy=ProviderSelectorPolicy.EXPLICIT,
+        stage_identity_policy=StageIdentityPolicy.TYPED_PROVIDER,
+        shadow_scenario="category3",
+    ),
     source_commit="b8a85a35c721b9cadf753b9a32c3b38c6be60086",
     host_run_id="RUN-T09-PILOT-HOST-AUTONOMOUS-0006",
     authorization_id=None,
@@ -783,6 +1050,19 @@ V13_PROVIDER_CONTRACT: Final = _contract(
 )
 V14_PROVIDER_CONTRACT: Final = _contract(
     version="V14",
+    capabilities=T09ContractCapabilities(
+        lifecycle_family=LifecycleFamily.AUTONOMOUS_CAMPAIGN,
+        metadata_policy=MetadataPolicy.LOCAL_PRELAUNCH_RECEIPT,
+        replacement_policy=ReplacementPolicy.BOUNDED_PREFLIGHT,
+        cleanup_family=CleanupFamily.EMPIRICAL_PREFIX,
+        command_package_family=CommandPackageFamily.AUTONOMOUS,
+        control_root_policy=ControlRootPolicy.VERSIONED,
+        authorization_policy=AuthorizationPolicy.METADATA_BOUND_SINGLE_USE,
+        package_transition_policy=PackageTransitionPolicy.NONE,
+        provider_selector_policy=ProviderSelectorPolicy.EXPLICIT,
+        stage_identity_policy=StageIdentityPolicy.TYPED_PROVIDER,
+        shadow_scenario="category3",
+    ),
     source_commit="8d244cf12604596e06be850c4dbf65b00fcbb4fc",
     host_run_id="RUN-T09-PILOT-HOST-AUTONOMOUS-0007",
     authorization_id=None,
@@ -824,6 +1104,19 @@ V14_PROVIDER_CONTRACT: Final = _contract(
 )
 V15_PROVIDER_CONTRACT: Final = _contract(
     version="V15",
+    capabilities=T09ContractCapabilities(
+        lifecycle_family=LifecycleFamily.AUTONOMOUS_CAMPAIGN,
+        metadata_policy=MetadataPolicy.LOCAL_PRELAUNCH_RECEIPT,
+        replacement_policy=ReplacementPolicy.BOUNDED_PREFLIGHT,
+        cleanup_family=CleanupFamily.EMPIRICAL_PREFIX,
+        command_package_family=CommandPackageFamily.AUTONOMOUS,
+        control_root_policy=ControlRootPolicy.VERSIONED,
+        authorization_policy=AuthorizationPolicy.METADATA_BOUND_SINGLE_USE,
+        package_transition_policy=PackageTransitionPolicy.NONE,
+        provider_selector_policy=ProviderSelectorPolicy.EXPLICIT,
+        stage_identity_policy=StageIdentityPolicy.TYPED_PROVIDER,
+        shadow_scenario="category3",
+    ),
     source_commit="f5750d1d8e3fe5f03450210fe95f652d2e8f4288",
     host_run_id="RUN-T09-PILOT-HOST-AUTONOMOUS-0008",
     authorization_id=None,
@@ -865,6 +1158,19 @@ V15_PROVIDER_CONTRACT: Final = _contract(
 )
 V16_PROVIDER_CONTRACT: Final = _contract(
     version="V16",
+    capabilities=T09ContractCapabilities(
+        lifecycle_family=LifecycleFamily.AUTONOMOUS_CAMPAIGN,
+        metadata_policy=MetadataPolicy.LOCAL_PRELAUNCH_RECEIPT,
+        replacement_policy=ReplacementPolicy.BOUNDED_PREFLIGHT,
+        cleanup_family=CleanupFamily.EMPIRICAL_PREFIX,
+        command_package_family=CommandPackageFamily.AUTONOMOUS,
+        control_root_policy=ControlRootPolicy.VERSIONED,
+        authorization_policy=AuthorizationPolicy.METADATA_BOUND_SINGLE_USE,
+        package_transition_policy=PackageTransitionPolicy.NONE,
+        provider_selector_policy=ProviderSelectorPolicy.EXPLICIT,
+        stage_identity_policy=StageIdentityPolicy.TYPED_PROVIDER,
+        shadow_scenario="category3",
+    ),
     source_commit="faa064f2b3d677bce1cbaae659805ee4f8f4641c",
     host_run_id="RUN-T09-PILOT-HOST-AUTONOMOUS-0009",
     authorization_id=None,
@@ -1034,7 +1340,7 @@ def render_provider_entry_command(
         "--launch-slot",
         str(launch_slot),
     )
-    if contract.version in {"V12", "V13", "V14", "V15", "V16"}:
+    if contract.capabilities.metadata_policy is MetadataPolicy.LOCAL_PRELAUNCH_RECEIPT:
         if model_metadata_receipt is None:
             raise T09ProviderContractError(
                 "selected provider entry command requires the model metadata receipt"

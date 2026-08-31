@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gic-lab.invalid/schemas/t09-control-registry-receipt.schema.json",
+  "title": "T09 control registry completeness receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "repository_commit",
+    "repository_tree",
+    "registry_source_sha256",
+    "contract_count",
+    "contracts",
+    "errors",
+    "complete",
+    "semantic_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "repository_commit": {"type": "string", "pattern": "^(?:[a-f0-9]{40}|unknown)$"},
+    "repository_tree": {"type": "string", "pattern": "^(?:[a-f0-9]{40}|unknown)$"},
+    "registry_source_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "contract_count": {"type": "integer", "minimum": 1},
+    "contracts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "version",
+          "plan_id",
+          "declared_capabilities",
+          "consumers",
+          "errors",
+          "complete"
+        ],
+        "properties": {
+          "version": {"type": "string", "pattern": "^V[0-9]+$"},
+          "plan_id": {"type": "string"},
+          "declared_capabilities": {"type": "object"},
+          "consumers": {"type": "object"},
+          "errors": {"type": "array", "items": {"type": "string"}},
+          "complete": {"type": "boolean"}
+        }
+      }
+    },
+    "errors": {"type": "array", "items": {"type": "string"}},
+    "complete": {"type": "boolean"},
+    "semantic_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  }
+}

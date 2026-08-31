@@ -75,17 +75,19 @@ from giclab.harness.t09_provider_contracts import (
     V5_PROVIDER_CONTRACT,
     V6_PROVIDER_CONTRACT,
     V7_PROVIDER_CONTRACT,
+    AuthorizationPolicy,
+    LifecycleFamily,
+    MetadataPolicy,
+    PackageTransitionPolicy,
     T09ProviderContract,
     T09ProviderContractError,
     load_provider_profile,
     provider_contract,
 )
 
-_MODEL_METADATA_RECEIPT_CONTRACT_VERSIONS: Final = frozenset({"V12", "V13", "V14", "V15", "V16"})
-
 
 def _uses_model_metadata_receipt(contract: T09ProviderContract) -> bool:
-    return contract.version in _MODEL_METADATA_RECEIPT_CONTRACT_VERSIONS
+    return contract.capabilities.metadata_policy is MetadataPolicy.LOCAL_PRELAUNCH_RECEIPT
 
 
 AUTONOMOUS_V9_LAUNCH_PACKAGE_COMMIT: Final = "807eab38d6dfec9aac0a154964c2997be994c9e9"
@@ -334,16 +336,17 @@ class CampaignLifecycle:
 
     def __post_init__(self) -> None:
         expected_limits: object
-        if self.contract.version in {"V3", "V4", "V5"}:
+        lifecycle_family = self.contract.capabilities.lifecycle_family
+        if lifecycle_family is LifecycleFamily.HISTORICAL_OBSERVER:
             expected_limits = ObserverLifecycleLimits.t09_pragmatic_v3()
-        elif self.contract.version in {"V6", "V7"}:
+        elif lifecycle_family is LifecycleFamily.RETRY4:
             expected_limits = Retry4LifecycleLimits()
-        elif self.contract.version == "V8":
+        elif lifecycle_family is LifecycleFamily.AUTONOMOUS_CAMPAIGN:
             expected_limits = AutonomousPilotLifecycleLimits(
-                maximum_preflight_provider_cost_cents=2_000
+                maximum_preflight_provider_cost_cents=int(
+                    self.contract.preflight_lambda_cost_cap_usd * 100
+                )
             )
-        elif self.contract.version in {"V9", "V10", "V11", "V12", "V13", "V14", "V15", "V16"}:
-            expected_limits = AutonomousPilotLifecycleLimits()
         else:  # pragma: no cover - contracts validate supported versions before construction
             raise T09ProviderError("unsupported provider lifecycle contract")
         if (
@@ -936,7 +939,8 @@ def load_campaign_lifecycle(
         raise T09ProviderError("provider lifecycle profile identity drifted") from exc
     raw = _mapping(profile.get("provider_lifecycle"), label="provider lifecycle")
 
-    if contract.version in {"V3", "V4", "V5"}:
+    lifecycle_family = contract.capabilities.lifecycle_family
+    if lifecycle_family is LifecycleFamily.HISTORICAL_OBSERVER:
         observer_limits = ObserverLifecycleLimits.t09_pragmatic_v3()
         if (
             raw.get("campaign_provider_wall_seconds")
@@ -957,7 +961,7 @@ def load_campaign_lifecycle(
             persistent_filesystems=0,
         )
 
-    if contract.version in {"V6", "V7"}:
+    if lifecycle_family is LifecycleFamily.RETRY4:
         retry_limits = Retry4LifecycleLimits(
             preflight_wall_seconds=_integer(raw["preflight_wall_seconds"], label="preflight wall"),
             failed_preflight_termination_dispatch_seconds=_integer(
@@ -1005,16 +1009,7 @@ def load_campaign_lifecycle(
             persistent_filesystems=retry_limits.persistent_filesystems,
         )
 
-    if contract.version not in {
-        "V8",
-        "V9",
-        "V10",
-        "V11",
-        "V12",
-        "V13",
-        "V14",
-        "V15",
-    }:
+    if lifecycle_family is not LifecycleFamily.AUTONOMOUS_CAMPAIGN:
         raise T09ProviderError("provider lifecycle contract is unsupported")
     lifecycle_fields = {
         "cumulative_accounting_origin",
@@ -1234,7 +1229,10 @@ def validate_authorization_ledger(
             }
         except (ModelMetadataReceiptError, OSError, subprocess.SubprocessError) as exc:
             raise T09ProviderError("model metadata authorization overlay is invalid") from exc
-    if contract.version != "V11":
+    if (
+        contract.capabilities.authorization_policy
+        is not AuthorizationPolicy.LEGACY_LOCAL_SINGLE_USE
+    ):
         raise T09ProviderError(
             "frozen historical provider authority is inspectable but cannot be replayed"
         )
@@ -1321,7 +1319,10 @@ def validate_cleanup_authority_ledger(
     resource.  This narrower validator intentionally omits all launch admission.
     """
 
-    if contract.version in {"V11", "V12", "V13", "V14", "V15", "V16"}:
+    if contract.capabilities.authorization_policy in {
+        AuthorizationPolicy.LEGACY_LOCAL_SINGLE_USE,
+        AuthorizationPolicy.METADATA_BOUND_SINGLE_USE,
+    }:
         return validate_authorization_ledger(
             path,
             contract=contract,
@@ -4265,7 +4266,8 @@ def autonomous_preflight_package_transition(
     """
 
     if (
-        contract.version not in {"V8", "V9", "V10", "V11"}
+        contract.capabilities.package_transition_policy
+        is not PackageTransitionPolicy.PREEMPIRICAL_DESCENDANT
         or contract.execution_contract_path is None
         or contract.command_manifest_path is None
         or _HEX40.fullmatch(from_package_commit) is None
@@ -4349,7 +4351,7 @@ def autonomous_preflight_package_transition(
         contract=contract,
         stale_command_authorization_sha256s=(
             AUTONOMOUS_V9_STALE_COMMAND_AUTHORIZATION_SHA256S
-            if contract.version == "V9"
+            if contract.version == "V9"  # giclab-version-lint: historical-identity
             and from_package_commit == AUTONOMOUS_V9_LAUNCH_PACKAGE_COMMIT
             else None
         ),
@@ -6352,7 +6354,11 @@ def validate_slot2_launch_headroom(
     # V6/V7 froze two launches and admitted slot 2 only when the complete
     # 18,000-second successful-host envelope remained. Autonomous V8+ instead
     # admits one bounded 300-second engineering continuation at a time.
-    minimum_headroom = 18_000 if lifecycle.contract.version in {"V6", "V7"} else 300
+    minimum_headroom = (
+        18_000
+        if lifecycle.contract.capabilities.lifecycle_family is LifecycleFamily.RETRY4
+        else 300
+    )
     projected_duration = prior_duration + minimum_headroom
     projected_cost = prior_cost + minimum_headroom * PRICE_CENTS_PER_HOUR / 100 / 3600
     if (
