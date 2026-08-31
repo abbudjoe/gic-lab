@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gic-lab.invalid/schemas/t09-control-receipt-bindings.schema.json",
+  "title": "T09 future live-package control receipt bindings",
+  "description": "Required in both a future authorization overlay and frozen run manifest; this schema grants no authority.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "control_plane_revision_commit",
+    "control_plane_revision_tree",
+    "registry_receipt_sha256",
+    "active_version_lint_receipt_sha256",
+    "composition_receipt_sha256",
+    "state_capsule_sha256",
+    "shadow_happy_path_sha256",
+    "shadow_failure_matrix_sha256s",
+    "agent_check_receipt_sha256"
+  ],
+  "properties": {
+    "control_plane_revision_commit": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
+    "control_plane_revision_tree": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
+    "registry_receipt_sha256": {"$ref": "#/$defs/sha256"},
+    "active_version_lint_receipt_sha256": {"$ref": "#/$defs/sha256"},
+    "composition_receipt_sha256": {"$ref": "#/$defs/sha256"},
+    "state_capsule_sha256": {"$ref": "#/$defs/sha256"},
+    "shadow_happy_path_sha256": {"$ref": "#/$defs/sha256"},
+    "shadow_failure_matrix_sha256s": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "lifecycle-unsupported",
+        "metadata-expired",
+        "provider-entry-replacement",
+        "host-preflight-replacement",
+        "condition-failure",
+        "raw-export-failure",
+        "finalizer-failure",
+        "cleanup-interrupted-resumed",
+        "provider-termination-unavailable",
+        "structural-privacy-finding",
+        "ambiguous-provider-call-outcome"
+      ],
+      "properties": {
+        "lifecycle-unsupported": {"$ref": "#/$defs/sha256"},
+        "metadata-expired": {"$ref": "#/$defs/sha256"},
+        "provider-entry-replacement": {"$ref": "#/$defs/sha256"},
+        "host-preflight-replacement": {"$ref": "#/$defs/sha256"},
+        "condition-failure": {"$ref": "#/$defs/sha256"},
+        "raw-export-failure": {"$ref": "#/$defs/sha256"},
+        "finalizer-failure": {"$ref": "#/$defs/sha256"},
+        "cleanup-interrupted-resumed": {"$ref": "#/$defs/sha256"},
+        "provider-termination-unavailable": {"$ref": "#/$defs/sha256"},
+        "structural-privacy-finding": {"$ref": "#/$defs/sha256"},
+        "ambiguous-provider-call-outcome": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "agent_check_receipt_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  }
+}

@@ -1,0 +1,143 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gic-lab.invalid/schemas/agent-state-capsule.schema.json",
+  "title": "GIC Lab agent state capsule",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "generated_at_policy",
+    "generated_at",
+    "repository",
+    "terminal_goal",
+    "current_subgoal",
+    "science",
+    "control_plane",
+    "runtime_package",
+    "authority",
+    "resources",
+    "evidence",
+    "cost",
+    "blocking_incident",
+    "available_actions",
+    "recommended_action",
+    "provenance",
+    "uncertainties",
+    "machine_readable_flags",
+    "semantic_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "generated_at_policy": {"enum": ["deterministic-fixed", "caller-supplied-or-wall-clock"]},
+    "generated_at": {"type": "string", "minLength": 1},
+    "repository": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commit", "tree"],
+      "properties": {
+        "commit": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
+        "tree": {"type": "string", "pattern": "^[a-f0-9]{40}$"}
+      }
+    },
+    "terminal_goal": {"const": "evaluate simulative versus reactive SiRA"},
+    "current_subgoal": {"const": "stabilize the shared T09 control plane before V17 generation"},
+    "science": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scientific_contract_id", "status", "interpretation_allowed", "interpretation_boundary"],
+      "properties": {
+        "scientific_contract_id": {"const": "EXP-0001"},
+        "status": {"const": "unchanged"},
+        "interpretation_allowed": {"const": false},
+        "interpretation_boundary": {"type": "string", "minLength": 1}
+      }
+    },
+    "control_plane": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["revision", "status", "registry_complete", "composition_valid", "active_version_lint_valid", "shadow_happy_path", "failure_matrix_valid"],
+      "properties": {
+        "revision": {"const": "T09-control-plane-stabilization"},
+        "status": {"const": "candidate-stabilization-branch"},
+        "registry_complete": {"type": "boolean"},
+        "composition_valid": {"type": "boolean"},
+        "active_version_lint_valid": {"type": "boolean"},
+        "shadow_happy_path": {"type": "boolean"},
+        "failure_matrix_valid": {"type": "boolean"}
+      }
+    },
+    "runtime_package": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["historical_package", "historical_status", "next_package", "next_status"],
+      "properties": {
+        "historical_package": {"const": "V16"},
+        "historical_status": {"const": "consumed-prelaunch-failure"},
+        "next_package": {"const": "V17"},
+        "next_status": {"const": "not-created"}
+      }
+    },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository_permissions", "category_3", "current_turn_authority", "inferable_from_repository"],
+      "properties": {
+        "repository_permissions": {"const": false},
+        "category_3": {"const": false},
+        "current_turn_authority": {"const": "external-and-not-present"},
+        "inferable_from_repository": {"const": false}
+      }
+    },
+    "resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["active_provider_instances", "live_inspection_performed", "provider_absence_basis", "security_restored"],
+      "properties": {
+        "active_provider_instances": {"const": 0},
+        "live_inspection_performed": {"const": false},
+        "provider_absence_basis": {"const": "retained-sanitized-v16-evidence"},
+        "security_restored": {"const": true}
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "science_unchanged", "shadow_classification"],
+      "properties": {
+        "state": {"const": "control-plane-only"},
+        "science_unchanged": {"const": true},
+        "shadow_classification": {"const": "non-scientific-control-output"}
+      }
+    },
+    "cost": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cumulative_t09_usd", "stabilization_openai_usd", "stabilization_provider_usd"],
+      "properties": {
+        "cumulative_t09_usd": {"const": "36.36170860803283125"},
+        "stabilization_openai_usd": {"const": "0.00"},
+        "stabilization_provider_usd": {"const": "0.00"}
+      }
+    },
+    "blocking_incident": {"const": "INC-T09-V16-LIFECYCLE-REGISTRY"},
+    "available_actions": {"$ref": "#/$defs/stringArray"},
+    "recommended_action": {"type": "string", "minLength": 1},
+    "provenance": {"$ref": "#/$defs/stringArray"},
+    "uncertainties": {"$ref": "#/$defs/stringArray"},
+    "machine_readable_flags": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["live_authorization", "scientific_interpretation", "live_resources_observed_in_this_work"],
+      "properties": {
+        "live_authorization": {"const": false},
+        "scientific_interpretation": {"const": false},
+        "live_resources_observed_in_this_work": {"const": false}
+      }
+    },
+    "semantic_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "stringArray": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}, "uniqueItems": true}
+  }
+}

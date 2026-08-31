@@ -33,6 +33,7 @@ evaluator = [
 giclab-validate = "giclab.validation:main"
 giclab-build-site-data = "giclab.sitegen:main"
 giclab-harness = "giclab.harness.cli:main"
+giclab-control = "giclab.control.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/giclab"]
