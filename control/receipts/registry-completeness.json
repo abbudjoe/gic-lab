@@ -5,24 +5,33 @@
     {
       "complete": true,
       "consumers": {
+        "authorization_policy_resolver": {
+          "handler_id": "authority:frozen-historical-v1",
+          "policy": "frozen-historical",
+          "repository_grants_authority": false,
+          "status": "passed"
+        },
         "campaign_lifecycle_loading": {
           "family": "historical-observer",
           "status": "passed"
         },
-        "cleanup_family_resolution": {
+        "cleanup_handler": {
           "family": "historical",
+          "handler_id": "cleanup:historical-provider-owner-v1",
           "status": "passed"
         },
         "command_manifest_loading": {
           "reason": "capability not declared",
           "status": "not-applicable"
         },
-        "command_package_family_resolution": {
-          "family": "historical",
-          "status": "passed"
+        "command_package_loader": {
+          "reason": "capability not declared",
+          "status": "not-applicable"
         },
-        "control_root_identity": {
+        "control_root_resolver": {
           "control_root": "pilot-v7",
+          "handler_id": "control-root:legacy-shared",
+          "policy": "legacy-shared",
           "status": "passed"
         },
         "evidence_archive_stage_identity": {
@@ -38,11 +47,25 @@
           "reason": "capability not declared",
           "status": "not-applicable"
         },
+        "lifecycle_resolver": {
+          "family": "historical-observer",
+          "handler_id": "campaign-lifecycle:historical-observer",
+          "max_launches": 1,
+          "status": "passed"
+        },
         "local_finalizer_selector_resolution": {
           "reason": "capability not declared",
           "status": "not-applicable"
         },
-        "metadata_policy_resolution": {
+        "metadata_controller": {
+          "reason": "capability not declared",
+          "status": "not-applicable"
+        },
+        "package_transition_resolver": {
+          "reason": "capability not declared",
+          "status": "not-applicable"
+        },
+        "production_adapter_assembly": {
           "reason": "capability not declared",
           "status": "not-applicable"
         },
@@ -60,9 +83,21 @@
           "sha256": "0b17da814f9b20326a7220cec5f41e84c968a46c9d38e913f327afe267c26210",
           "status": "passed"
         },
-        "replacement_policy_resolution": {
+        "provider_selector_resolver": {
           "reason": "capability not declared",
           "status": "not-applicable"
+        },
+        "replacement_authority_handler": {
+          "reason": "capability not declared",
+          "status": "not-applicable"
+        },
+        "stage_identity_resolver": {
+          "archive_id": "ARCHIVE-EXP0001-PILOT-V3-0001",
+          "handler_id": "stage-identity:legacy-v1",
+          "owner_bound": true,
+          "policy": "legacy",
+          "stage_id": "STAGE-EXP0001-PILOT-V3-0001",
+          "status": "passed"
         },
         "state_capsule_projection": {
           "projection": {
@@ -105,24 +140,33 @@
     {
       "complete": true,
       "consumers": {
+        "authorization_policy_resolver": {
+          "handler_id": "authority:frozen-historical-v1",
+          "policy": "frozen-historical",
+          "repository_grants_authority": false,
+          "status": "passed"
+        },
         "campaign_lifecycle_loading": {
           "family": "historical-observer",
           "status": "passed"
         },
-        "cleanup_family_resolution": {
+        "cleanup_handler": {
           "family": "historical",
+          "handler_id": "cleanup:historical-provider-owner-v1",
           "status": "passed"
         },
         "command_manifest_loading": {
           "reason": "capability not declared",
           "status": "not-applicable"
         },
-        "command_package_family_resolution": {
-          "family": "historical",
-          "status": "passed"
+        "command_package_loader": {
+          "reason": "capability not declared",
+          "status": "not-applicable"
         },
-        "control_root_identity": {
+        "control_root_resolver": {
           "control_root": "pilot-v7",
+          "handler_id": "control-root:legacy-shared",
+          "policy": "legacy-shared",
           "status": "passed"
         },
         "evidence_archive_stage_identity": {
@@ -138,11 +182,25 @@
           "qualification_id": "QUAL-T09-PILOT-V4-IMAGE-0002",
           "status": "passed"
         },
+        "lifecycle_resolver": {
+          "family": "historical-observer",
+          "handler_id": "campaign-lifecycle:historical-observer",
+          "max_launches": 1,
+          "status": "passed"
+        },
         "local_finalizer_selector_resolution": {
           "reason": "capability not declared",
           "status": "not-applicable"
         },
-        "metadata_policy_resolution": {
+        "metadata_controller": {
+          "reason": "capability not declared",
+          "status": "not-applicable"
+        },
+        "package_transition_resolver": {
+          "reason": "capability not declared",
+          "status": "not-applicable"
+        },
+        "production_adapter_assembly": {
           "reason": "capability not declared",
           "status": "not-applicable"
         },
@@ -160,9 +218,21 @@
           "sha256": "1ebfbb645ce337d9e99afa5654cddff84a612508d21b70d54cf21dfb99604b77",
           "status": "passed"
         },
-        "replacement_policy_resolution": {
+        "provider_selector_resolver": {
           "reason": "capability not declared",
           "status": "not-applicable"
+        },
+        "replacement_authority_handler": {
+          "reason": "capability not declared",
+          "status": "not-applicable"
+        },
+        "stage_identity_resolver": {
+          "archive_id": "ARCHIVE-EXP0001-PILOT-V4-0002",
+          "handler_id": "stage-identity:legacy-v1",
+          "owner_bound": true,
+          "policy": "legacy",
+          "stage_id": "STAGE-EXP0001-PILOT-V4-0002",
+          "status": "passed"
         },
         "state_capsule_projection": {
           "projection": {
@@ -205,24 +275,33 @@
     {
       "complete": true,
       "consumers": {
+        "authorization_policy_resolver": {
+          "handler_id": "authority:frozen-historical-v1",
+          "policy": "frozen-historical",
+          "repository_grants_authority": false,
+          "status": "passed"
+        },
         "campaign_lifecycle_loading": {
           "family": "historical-observer",
           "status": "passed"
         },
-        "cleanup_family_resolution": {
+        "cleanup_handler": {
           "family": "historical",
+          "handler_id": "cleanup:historical-provider-owner-v1",
           "status": "passed"
         },
         "command_manifest_loading": {
           "reason": "capability not declared",
           "status": "not-applicable"
         },
-        "command_package_family_resolution": {
-          "family": "historical",
-          "status": "passed"
+        "command_package_loader": {
+          "reason": "capability not declared",
+          "status": "not-applicable"
         },
-        "control_root_identity": {
+        "control_root_resolver": {
           "control_root": "pilot-v7",
+          "handler_id": "control-root:legacy-shared",
+          "policy": "legacy-shared",
           "status": "passed"
         },
         "evidence_archive_stage_identity": {
@@ -238,12 +317,26 @@
           "qualification_id": "QUAL-T09-PILOT-V5-IMAGE-0002",
           "status": "passed"
         },
+        "lifecycle_resolver": {
+          "family": "historical-observer",
+          "handler_id": "campaign-lifecycle:historical-observer",
+          "max_launches": 2,
+          "status": "passed"
+        },
         "local_finalizer_selector_resolution": {
           "qualification_id": "QUAL-T09-PILOT-V5-LOCAL-FINALIZER-0001",
           "selector_policy": "none",
           "status": "passed"
         },
-        "metadata_policy_resolution": {
+        "metadata_controller": {
+          "reason": "capability not declared",
+          "status": "not-applicable"
+        },
+        "package_transition_resolver": {
+          "reason": "capability not declared",
+          "status": "not-applicable"
+        },
+        "production_adapter_assembly": {
           "reason": "capability not declared",
           "status": "not-applicable"
         },
@@ -261,8 +354,23 @@
           "sha256": "e7e214500348c8b876beb034df7b592c84f5ab79788ab6f310ef187fd797613c",
           "status": "passed"
         },
-        "replacement_policy_resolution": {
+        "provider_selector_resolver": {
+          "reason": "capability not declared",
+          "status": "not-applicable"
+        },
+        "replacement_authority_handler": {
+          "eligibility_validator": "_validate_replacement_launch_eligibility",
+          "handler_id": "provider-entry-authority:normalized-history-v1",
           "policy": "bounded-preflight",
+          "retention_handler": "_retain_replacement_launch_authority",
+          "status": "passed"
+        },
+        "stage_identity_resolver": {
+          "archive_id": "ARCHIVE-EXP0001-PILOT-V5-0003",
+          "handler_id": "stage-identity:legacy-v1",
+          "owner_bound": true,
+          "policy": "legacy",
+          "stage_id": "STAGE-EXP0001-PILOT-V5-0003",
           "status": "passed"
         },
         "state_capsule_projection": {
@@ -306,24 +414,33 @@
     {
       "complete": true,
       "consumers": {
+        "authorization_policy_resolver": {
+          "handler_id": "authority:frozen-historical-v1",
+          "policy": "frozen-historical",
+          "repository_grants_authority": false,
+          "status": "passed"
+        },
         "campaign_lifecycle_loading": {
           "family": "retry4",
           "status": "passed"
         },
-        "cleanup_family_resolution": {
+        "cleanup_handler": {
           "family": "historical",
+          "handler_id": "cleanup:historical-provider-owner-v1",
           "status": "passed"
         },
         "command_manifest_loading": {
           "reason": "capability not declared",
           "status": "not-applicable"
         },
-        "command_package_family_resolution": {
-          "family": "historical",
-          "status": "passed"
+        "command_package_loader": {
+          "reason": "capability not declared",
+          "status": "not-applicable"
         },
-        "control_root_identity": {
+        "control_root_resolver": {
           "control_root": "pilot-v7",
+          "handler_id": "control-root:legacy-shared",
+          "policy": "legacy-shared",
           "status": "passed"
         },
         "evidence_archive_stage_identity": {
@@ -339,12 +456,26 @@
           "qualification_id": "QUAL-T09-PILOT-V6-IMAGE-0001",
           "status": "passed"
         },
+        "lifecycle_resolver": {
+          "family": "retry4",
+          "handler_id": "campaign-lifecycle:retry4",
+          "max_launches": 2,
+          "status": "passed"
+        },
         "local_finalizer_selector_resolution": {
           "qualification_id": "QUAL-T09-PILOT-V6-LOCAL-FINALIZER-0001",
           "selector_policy": "none",
           "status": "passed"
         },
-        "metadata_policy_resolution": {
+        "metadata_controller": {
+          "reason": "capability not declared",
+          "status": "not-applicable"
+        },
+        "package_transition_resolver": {
+          "reason": "capability not declared",
+          "status": "not-applicable"
+        },
+        "production_adapter_assembly": {
           "reason": "capability not declared",
           "status": "not-applicable"
         },
@@ -362,8 +493,23 @@
           "sha256": "d0294b3a1535c4fe4ddfcc856a6b923731a7fb0c7840dd161c5784db61f35d8c",
           "status": "passed"
         },
-        "replacement_policy_resolution": {
+        "provider_selector_resolver": {
+          "reason": "capability not declared",
+          "status": "not-applicable"
+        },
+        "replacement_authority_handler": {
+          "eligibility_validator": "_validate_replacement_launch_eligibility",
+          "handler_id": "provider-entry-authority:normalized-history-v1",
           "policy": "bounded-preflight",
+          "retention_handler": "_retain_replacement_launch_authority",
+          "status": "passed"
+        },
+        "stage_identity_resolver": {
+          "archive_id": "ARCHIVE-EXP0001-PILOT-V6-0004",
+          "handler_id": "stage-identity:legacy-v1",
+          "owner_bound": true,
+          "policy": "legacy",
+          "stage_id": "STAGE-EXP0001-PILOT-V6-0004",
           "status": "passed"
         },
         "state_capsule_projection": {
@@ -407,24 +553,33 @@
     {
       "complete": true,
       "consumers": {
+        "authorization_policy_resolver": {
+          "handler_id": "authority:frozen-historical-v1",
+          "policy": "frozen-historical",
+          "repository_grants_authority": false,
+          "status": "passed"
+        },
         "campaign_lifecycle_loading": {
           "family": "retry4",
           "status": "passed"
         },
-        "cleanup_family_resolution": {
+        "cleanup_handler": {
           "family": "historical",
+          "handler_id": "cleanup:historical-provider-owner-v1",
           "status": "passed"
         },
         "command_manifest_loading": {
           "reason": "capability not declared",
           "status": "not-applicable"
         },
-        "command_package_family_resolution": {
-          "family": "historical",
-          "status": "passed"
+        "command_package_loader": {
+          "reason": "capability not declared",
+          "status": "not-applicable"
         },
-        "control_root_identity": {
+        "control_root_resolver": {
           "control_root": "pilot-v7",
+          "handler_id": "control-root:legacy-shared",
+          "policy": "legacy-shared",
           "status": "passed"
         },
         "evidence_archive_stage_identity": {
@@ -440,12 +595,26 @@
           "qualification_id": "QUAL-T09-PILOT-V7-IMAGE-0001",
           "status": "passed"
         },
+        "lifecycle_resolver": {
+          "family": "retry4",
+          "handler_id": "campaign-lifecycle:retry4",
+          "max_launches": 2,
+          "status": "passed"
+        },
         "local_finalizer_selector_resolution": {
           "qualification_id": "QUAL-T09-PILOT-V7-LOCAL-FINALIZER-0001",
           "selector_policy": "none",
           "status": "passed"
         },
-        "metadata_policy_resolution": {
+        "metadata_controller": {
+          "reason": "capability not declared",
+          "status": "not-applicable"
+        },
+        "package_transition_resolver": {
+          "reason": "capability not declared",
+          "status": "not-applicable"
+        },
+        "production_adapter_assembly": {
           "reason": "capability not declared",
           "status": "not-applicable"
         },
@@ -463,8 +632,23 @@
           "sha256": "9f66f8f6ee9e137d27e86c5362187fe46d94b26a322994e55222e34c0c4c004e",
           "status": "passed"
         },
-        "replacement_policy_resolution": {
+        "provider_selector_resolver": {
+          "reason": "capability not declared",
+          "status": "not-applicable"
+        },
+        "replacement_authority_handler": {
+          "eligibility_validator": "_validate_replacement_launch_eligibility",
+          "handler_id": "provider-entry-authority:normalized-history-v1",
           "policy": "bounded-preflight",
+          "retention_handler": "_retain_replacement_launch_authority",
+          "status": "passed"
+        },
+        "stage_identity_resolver": {
+          "archive_id": "ARCHIVE-EXP0001-PILOT-V7-0005",
+          "handler_id": "stage-identity:legacy-v1",
+          "owner_bound": true,
+          "policy": "legacy",
+          "stage_id": "STAGE-EXP0001-PILOT-V7-0005",
           "status": "passed"
         },
         "state_capsule_projection": {
@@ -508,12 +692,19 @@
     {
       "complete": true,
       "consumers": {
+        "authorization_policy_resolver": {
+          "handler_id": "authority:frozen-historical-v1",
+          "policy": "frozen-historical",
+          "repository_grants_authority": false,
+          "status": "passed"
+        },
         "campaign_lifecycle_loading": {
           "family": "autonomous-campaign",
           "status": "passed"
         },
-        "cleanup_family_resolution": {
+        "cleanup_handler": {
           "family": "historical",
+          "handler_id": "cleanup:historical-provider-owner-v1",
           "status": "passed"
         },
         "command_manifest_loading": {
@@ -522,12 +713,18 @@
           "source": "1e5f1f9524fe57443d4a3ba5c0353290e0cfda5e",
           "status": "passed"
         },
-        "command_package_family_resolution": {
+        "command_package_loader": {
+          "attempt_count": 4,
           "family": "autonomous",
+          "handler_id": "command-package:registered-autonomous-v1",
+          "sha256": "6d9184cf837a4e650c9715239bda46f188b4f97750340584de78e4310c04f50a",
+          "source": "1e5f1f9524fe57443d4a3ba5c0353290e0cfda5e",
           "status": "passed"
         },
-        "control_root_identity": {
+        "control_root_resolver": {
           "control_root": "pilot-v7",
+          "handler_id": "control-root:legacy-shared",
+          "policy": "legacy-shared",
           "status": "passed"
         },
         "evidence_archive_stage_identity": {
@@ -546,14 +743,63 @@
           "qualification_id": "QUAL-T09-PILOT-V8-IMAGE-AUTONOMOUS-0001",
           "status": "passed"
         },
+        "lifecycle_resolver": {
+          "family": "autonomous-campaign",
+          "handler_id": "campaign-lifecycle:autonomous-campaign",
+          "max_launches": 8,
+          "status": "passed"
+        },
         "local_finalizer_selector_resolution": {
           "qualification_id": "QUAL-T09-PILOT-V8-LOCAL-FINALIZER-AUTONOMOUS-0001",
           "selector_policy": "none",
           "status": "passed"
         },
-        "metadata_policy_resolution": {
+        "metadata_controller": {
           "reason": "capability not declared",
           "status": "not-applicable"
+        },
+        "package_transition_resolver": {
+          "handler_id": "package-transition:preempirical-descendant-v1",
+          "policy": "preempirical-descendant",
+          "status": "passed"
+        },
+        "production_adapter_assembly": {
+          "controller_bypass": false,
+          "controller_entrypoint": "giclab.control.category3:execute_category3_transaction",
+          "future_live_source_changes_required": false,
+          "handler_id": "category3-production-wrapper:v1",
+          "implementation_flavor": "production-wrapper",
+          "live_authority_factory_present": false,
+          "low_level_effects_injected": true,
+          "required_low_level_channels": [
+            "transaction_root",
+            "read_model_secret",
+            "read_provider_secret",
+            "public_ipv4",
+            "ssh_public_key",
+            "metadata_response",
+            "metadata_authorization_binding",
+            "provider_inventory",
+            "provider_launch",
+            "provider_entry",
+            "provider_terminate",
+            "campaign_transport",
+            "retained_image_archive",
+            "model_send",
+            "browser_action",
+            "offline_command"
+          ],
+          "resolved_consumers": [
+            "authorization_policy_resolver",
+            "cleanup_handler",
+            "command_package_loader",
+            "control_root_resolver",
+            "lifecycle_resolver",
+            "package_transition_resolver",
+            "replacement_authority_handler",
+            "stage_identity_resolver"
+          ],
+          "status": "passed"
         },
         "provider_owner_cleanup_identity": {
           "owner_bound": true,
@@ -569,8 +815,23 @@
           "sha256": "5b77e29e1005979128fa24dbe809bd8b7f92139aa9a49afd68d1daf3de256125",
           "status": "passed"
         },
-        "replacement_policy_resolution": {
+        "provider_selector_resolver": {
+          "reason": "capability not declared",
+          "status": "not-applicable"
+        },
+        "replacement_authority_handler": {
+          "eligibility_validator": "_validate_replacement_launch_eligibility",
+          "handler_id": "provider-entry-authority:normalized-history-v1",
           "policy": "bounded-preflight",
+          "retention_handler": "_retain_replacement_launch_authority",
+          "status": "passed"
+        },
+        "stage_identity_resolver": {
+          "archive_id": "ARCHIVE-EXP0001-PILOT-V8-AUTONOMOUS-0001",
+          "handler_id": "stage-identity:legacy-v1",
+          "owner_bound": true,
+          "policy": "legacy",
+          "stage_id": "STAGE-EXP0001-PILOT-V8-AUTONOMOUS-0001",
           "status": "passed"
         },
         "state_capsule_projection": {
@@ -614,12 +875,19 @@
     {
       "complete": true,
       "consumers": {
+        "authorization_policy_resolver": {
+          "handler_id": "authority:frozen-historical-v1",
+          "policy": "frozen-historical",
+          "repository_grants_authority": false,
+          "status": "passed"
+        },
         "campaign_lifecycle_loading": {
           "family": "autonomous-campaign",
           "status": "passed"
         },
-        "cleanup_family_resolution": {
+        "cleanup_handler": {
           "family": "historical",
+          "handler_id": "cleanup:historical-provider-owner-v1",
           "status": "passed"
         },
         "command_manifest_loading": {
@@ -628,12 +896,18 @@
           "source": "working-tree",
           "status": "passed"
         },
-        "command_package_family_resolution": {
+        "command_package_loader": {
+          "attempt_count": 4,
           "family": "autonomous",
+          "handler_id": "command-package:registered-autonomous-v1",
+          "sha256": "957605950c5fa07840ebf7c2e0829161c0171c9931f6ecaf97e78b3d5c7f0dac",
+          "source": "working-tree",
           "status": "passed"
         },
-        "control_root_identity": {
+        "control_root_resolver": {
           "control_root": "pilot-v7",
+          "handler_id": "control-root:legacy-shared",
+          "policy": "legacy-shared",
           "status": "passed"
         },
         "evidence_archive_stage_identity": {
@@ -652,14 +926,63 @@
           "qualification_id": "QUAL-T09-PILOT-V9-IMAGE-AUTONOMOUS-0002",
           "status": "passed"
         },
+        "lifecycle_resolver": {
+          "family": "autonomous-campaign",
+          "handler_id": "campaign-lifecycle:autonomous-campaign",
+          "max_launches": 8,
+          "status": "passed"
+        },
         "local_finalizer_selector_resolution": {
           "qualification_id": "QUAL-T09-PILOT-V9-LOCAL-FINALIZER-AUTONOMOUS-0002",
           "selector_policy": "none",
           "status": "passed"
         },
-        "metadata_policy_resolution": {
+        "metadata_controller": {
           "reason": "capability not declared",
           "status": "not-applicable"
+        },
+        "package_transition_resolver": {
+          "handler_id": "package-transition:preempirical-descendant-v1",
+          "policy": "preempirical-descendant",
+          "status": "passed"
+        },
+        "production_adapter_assembly": {
+          "controller_bypass": false,
+          "controller_entrypoint": "giclab.control.category3:execute_category3_transaction",
+          "future_live_source_changes_required": false,
+          "handler_id": "category3-production-wrapper:v1",
+          "implementation_flavor": "production-wrapper",
+          "live_authority_factory_present": false,
+          "low_level_effects_injected": true,
+          "required_low_level_channels": [
+            "transaction_root",
+            "read_model_secret",
+            "read_provider_secret",
+            "public_ipv4",
+            "ssh_public_key",
+            "metadata_response",
+            "metadata_authorization_binding",
+            "provider_inventory",
+            "provider_launch",
+            "provider_entry",
+            "provider_terminate",
+            "campaign_transport",
+            "retained_image_archive",
+            "model_send",
+            "browser_action",
+            "offline_command"
+          ],
+          "resolved_consumers": [
+            "authorization_policy_resolver",
+            "cleanup_handler",
+            "command_package_loader",
+            "control_root_resolver",
+            "lifecycle_resolver",
+            "package_transition_resolver",
+            "replacement_authority_handler",
+            "stage_identity_resolver"
+          ],
+          "status": "passed"
         },
         "provider_owner_cleanup_identity": {
           "owner_bound": true,
@@ -675,8 +998,23 @@
           "sha256": "28d41a2c2ba8e4b2e0460f78e348064847565e4287f07b685433cd99416c25f5",
           "status": "passed"
         },
-        "replacement_policy_resolution": {
+        "provider_selector_resolver": {
+          "reason": "capability not declared",
+          "status": "not-applicable"
+        },
+        "replacement_authority_handler": {
+          "eligibility_validator": "_validate_replacement_launch_eligibility",
+          "handler_id": "provider-entry-authority:normalized-history-v1",
           "policy": "bounded-preflight",
+          "retention_handler": "_retain_replacement_launch_authority",
+          "status": "passed"
+        },
+        "stage_identity_resolver": {
+          "archive_id": "ARCHIVE-EXP0001-PILOT-V9-AUTONOMOUS-0002",
+          "handler_id": "stage-identity:legacy-v1",
+          "owner_bound": true,
+          "policy": "legacy",
+          "stage_id": "STAGE-EXP0001-PILOT-V9-AUTONOMOUS-0002",
           "status": "passed"
         },
         "state_capsule_projection": {
@@ -720,12 +1058,19 @@
     {
       "complete": true,
       "consumers": {
+        "authorization_policy_resolver": {
+          "handler_id": "authority:frozen-historical-v1",
+          "policy": "frozen-historical",
+          "repository_grants_authority": false,
+          "status": "passed"
+        },
         "campaign_lifecycle_loading": {
           "family": "autonomous-campaign",
           "status": "passed"
         },
-        "cleanup_family_resolution": {
+        "cleanup_handler": {
           "family": "early-journal",
+          "handler_id": "cleanup:early-journal-v1",
           "status": "passed"
         },
         "command_manifest_loading": {
@@ -734,12 +1079,18 @@
           "source": "working-tree",
           "status": "passed"
         },
-        "command_package_family_resolution": {
+        "command_package_loader": {
+          "attempt_count": 4,
           "family": "autonomous",
+          "handler_id": "command-package:registered-autonomous-v1",
+          "sha256": "9217db4dda7bbf69911743da70e1aeef0507444a02c480ccc7484ec720383844",
+          "source": "working-tree",
           "status": "passed"
         },
-        "control_root_identity": {
+        "control_root_resolver": {
           "control_root": "pilot-v7",
+          "handler_id": "control-root:legacy-shared",
+          "policy": "legacy-shared",
           "status": "passed"
         },
         "evidence_archive_stage_identity": {
@@ -758,14 +1109,63 @@
           "qualification_id": "QUAL-T09-PILOT-V10-IMAGE-AUTONOMOUS-0003",
           "status": "passed"
         },
+        "lifecycle_resolver": {
+          "family": "autonomous-campaign",
+          "handler_id": "campaign-lifecycle:autonomous-campaign",
+          "max_launches": 8,
+          "status": "passed"
+        },
         "local_finalizer_selector_resolution": {
           "qualification_id": "QUAL-T09-PILOT-V10-LOCAL-FINALIZER-AUTONOMOUS-0003",
           "selector_policy": "none",
           "status": "passed"
         },
-        "metadata_policy_resolution": {
+        "metadata_controller": {
           "reason": "capability not declared",
           "status": "not-applicable"
+        },
+        "package_transition_resolver": {
+          "handler_id": "package-transition:preempirical-descendant-v1",
+          "policy": "preempirical-descendant",
+          "status": "passed"
+        },
+        "production_adapter_assembly": {
+          "controller_bypass": false,
+          "controller_entrypoint": "giclab.control.category3:execute_category3_transaction",
+          "future_live_source_changes_required": false,
+          "handler_id": "category3-production-wrapper:v1",
+          "implementation_flavor": "production-wrapper",
+          "live_authority_factory_present": false,
+          "low_level_effects_injected": true,
+          "required_low_level_channels": [
+            "transaction_root",
+            "read_model_secret",
+            "read_provider_secret",
+            "public_ipv4",
+            "ssh_public_key",
+            "metadata_response",
+            "metadata_authorization_binding",
+            "provider_inventory",
+            "provider_launch",
+            "provider_entry",
+            "provider_terminate",
+            "campaign_transport",
+            "retained_image_archive",
+            "model_send",
+            "browser_action",
+            "offline_command"
+          ],
+          "resolved_consumers": [
+            "authorization_policy_resolver",
+            "cleanup_handler",
+            "command_package_loader",
+            "control_root_resolver",
+            "lifecycle_resolver",
+            "package_transition_resolver",
+            "replacement_authority_handler",
+            "stage_identity_resolver"
+          ],
+          "status": "passed"
         },
         "provider_owner_cleanup_identity": {
           "owner_bound": true,
@@ -781,8 +1181,23 @@
           "sha256": "ef16e0d01227482cd5a99694dd71a0cec53ef28894d80f8665c3b5b1a5c30695",
           "status": "passed"
         },
-        "replacement_policy_resolution": {
+        "provider_selector_resolver": {
+          "reason": "capability not declared",
+          "status": "not-applicable"
+        },
+        "replacement_authority_handler": {
+          "eligibility_validator": "_validate_replacement_launch_eligibility",
+          "handler_id": "provider-entry-authority:normalized-history-v1",
           "policy": "bounded-preflight",
+          "retention_handler": "_retain_replacement_launch_authority",
+          "status": "passed"
+        },
+        "stage_identity_resolver": {
+          "archive_id": "ARCHIVE-EXP0001-PILOT-V10-AUTONOMOUS-0003",
+          "handler_id": "stage-identity:legacy-v1",
+          "owner_bound": true,
+          "policy": "legacy",
+          "stage_id": "STAGE-EXP0001-PILOT-V10-AUTONOMOUS-0003",
           "status": "passed"
         },
         "state_capsule_projection": {
@@ -826,12 +1241,19 @@
     {
       "complete": true,
       "consumers": {
+        "authorization_policy_resolver": {
+          "handler_id": "authority:local-single-use-v1",
+          "policy": "legacy-local-single-use",
+          "repository_grants_authority": false,
+          "status": "passed"
+        },
         "campaign_lifecycle_loading": {
           "family": "autonomous-campaign",
           "status": "passed"
         },
-        "cleanup_family_resolution": {
+        "cleanup_handler": {
           "family": "early-journal",
+          "handler_id": "cleanup:early-journal-v1",
           "status": "passed"
         },
         "command_manifest_loading": {
@@ -840,12 +1262,18 @@
           "source": "working-tree",
           "status": "passed"
         },
-        "command_package_family_resolution": {
+        "command_package_loader": {
+          "attempt_count": 4,
           "family": "autonomous",
+          "handler_id": "command-package:registered-autonomous-v1",
+          "sha256": "c36e1417b4668f6a0ae99abd63e4f3c6344c2af6c0942e2ac036633b3817a4e1",
+          "source": "working-tree",
           "status": "passed"
         },
-        "control_root_identity": {
+        "control_root_resolver": {
           "control_root": "pilot-v7",
+          "handler_id": "control-root:legacy-shared",
+          "policy": "legacy-shared",
           "status": "passed"
         },
         "evidence_archive_stage_identity": {
@@ -864,14 +1292,63 @@
           "qualification_id": "QUAL-T09-PILOT-V11-IMAGE-AUTONOMOUS-0004",
           "status": "passed"
         },
+        "lifecycle_resolver": {
+          "family": "autonomous-campaign",
+          "handler_id": "campaign-lifecycle:autonomous-campaign",
+          "max_launches": 8,
+          "status": "passed"
+        },
         "local_finalizer_selector_resolution": {
           "qualification_id": "QUAL-T09-PILOT-V11-LOCAL-FINALIZER-AUTONOMOUS-0004",
           "selector_policy": "none",
           "status": "passed"
         },
-        "metadata_policy_resolution": {
+        "metadata_controller": {
           "reason": "capability not declared",
           "status": "not-applicable"
+        },
+        "package_transition_resolver": {
+          "handler_id": "package-transition:preempirical-descendant-v1",
+          "policy": "preempirical-descendant",
+          "status": "passed"
+        },
+        "production_adapter_assembly": {
+          "controller_bypass": false,
+          "controller_entrypoint": "giclab.control.category3:execute_category3_transaction",
+          "future_live_source_changes_required": false,
+          "handler_id": "category3-production-wrapper:v1",
+          "implementation_flavor": "production-wrapper",
+          "live_authority_factory_present": false,
+          "low_level_effects_injected": true,
+          "required_low_level_channels": [
+            "transaction_root",
+            "read_model_secret",
+            "read_provider_secret",
+            "public_ipv4",
+            "ssh_public_key",
+            "metadata_response",
+            "metadata_authorization_binding",
+            "provider_inventory",
+            "provider_launch",
+            "provider_entry",
+            "provider_terminate",
+            "campaign_transport",
+            "retained_image_archive",
+            "model_send",
+            "browser_action",
+            "offline_command"
+          ],
+          "resolved_consumers": [
+            "authorization_policy_resolver",
+            "cleanup_handler",
+            "command_package_loader",
+            "control_root_resolver",
+            "lifecycle_resolver",
+            "package_transition_resolver",
+            "replacement_authority_handler",
+            "stage_identity_resolver"
+          ],
+          "status": "passed"
         },
         "provider_owner_cleanup_identity": {
           "owner_bound": true,
@@ -887,8 +1364,23 @@
           "sha256": "726eeef3be208ad22b3279f8192fa55cfba259d14bf85424716b4f3e71a4a850",
           "status": "passed"
         },
-        "replacement_policy_resolution": {
+        "provider_selector_resolver": {
+          "reason": "capability not declared",
+          "status": "not-applicable"
+        },
+        "replacement_authority_handler": {
+          "eligibility_validator": "_validate_replacement_launch_eligibility",
+          "handler_id": "provider-entry-authority:normalized-history-v1",
           "policy": "bounded-preflight",
+          "retention_handler": "_retain_replacement_launch_authority",
+          "status": "passed"
+        },
+        "stage_identity_resolver": {
+          "archive_id": "ARCHIVE-EXP0001-PILOT-V11-AUTONOMOUS-0004",
+          "handler_id": "stage-identity:legacy-v1",
+          "owner_bound": true,
+          "policy": "legacy",
+          "stage_id": "STAGE-EXP0001-PILOT-V11-AUTONOMOUS-0004",
           "status": "passed"
         },
         "state_capsule_projection": {
@@ -932,12 +1424,19 @@
     {
       "complete": true,
       "consumers": {
+        "authorization_policy_resolver": {
+          "handler_id": "authority:metadata-bound-single-use-v1",
+          "policy": "metadata-bound-single-use",
+          "repository_grants_authority": false,
+          "status": "passed"
+        },
         "campaign_lifecycle_loading": {
           "family": "autonomous-campaign",
           "status": "passed"
         },
-        "cleanup_family_resolution": {
+        "cleanup_handler": {
           "family": "early-journal",
+          "handler_id": "cleanup:early-journal-v1",
           "status": "passed"
         },
         "command_manifest_loading": {
@@ -946,12 +1445,18 @@
           "source": "working-tree",
           "status": "passed"
         },
-        "command_package_family_resolution": {
+        "command_package_loader": {
+          "attempt_count": 4,
           "family": "autonomous",
+          "handler_id": "command-package:registered-autonomous-v1",
+          "sha256": "fbca4bced586375508e945cde23b60a62b491d306c7c3dd1405933360360a7d4",
+          "source": "working-tree",
           "status": "passed"
         },
-        "control_root_identity": {
+        "control_root_resolver": {
           "control_root": "pilot-v12",
+          "handler_id": "control-root:versioned",
+          "policy": "versioned",
           "status": "passed"
         },
         "evidence_archive_stage_identity": {
@@ -970,13 +1475,64 @@
           "qualification_id": "QUAL-T09-PILOT-V12-IMAGE-AUTONOMOUS-0005",
           "status": "passed"
         },
+        "lifecycle_resolver": {
+          "family": "autonomous-campaign",
+          "handler_id": "campaign-lifecycle:autonomous-campaign",
+          "max_launches": 8,
+          "status": "passed"
+        },
         "local_finalizer_selector_resolution": {
           "qualification_id": "QUAL-T09-PILOT-V12-LOCAL-FINALIZER-AUTONOMOUS-0005",
           "selector_policy": "none",
           "status": "passed"
         },
-        "metadata_policy_resolution": {
+        "metadata_controller": {
+          "dotenv_selector": "load_openai_dotenv_assignment",
+          "final_boundary_handler": "admit_model_metadata_receipt_at_prelaunch_boundary",
+          "handler_id": "model-metadata-receipt:strict-local-prelaunch-v1",
           "policy": "local-prelaunch-receipt",
+          "status": "passed"
+        },
+        "package_transition_resolver": {
+          "reason": "capability not declared",
+          "status": "not-applicable"
+        },
+        "production_adapter_assembly": {
+          "controller_bypass": false,
+          "controller_entrypoint": "giclab.control.category3:execute_category3_transaction",
+          "future_live_source_changes_required": false,
+          "handler_id": "category3-production-wrapper:v1",
+          "implementation_flavor": "production-wrapper",
+          "live_authority_factory_present": false,
+          "low_level_effects_injected": true,
+          "required_low_level_channels": [
+            "transaction_root",
+            "read_model_secret",
+            "read_provider_secret",
+            "public_ipv4",
+            "ssh_public_key",
+            "metadata_response",
+            "metadata_authorization_binding",
+            "provider_inventory",
+            "provider_launch",
+            "provider_entry",
+            "provider_terminate",
+            "campaign_transport",
+            "retained_image_archive",
+            "model_send",
+            "browser_action",
+            "offline_command"
+          ],
+          "resolved_consumers": [
+            "authorization_policy_resolver",
+            "cleanup_handler",
+            "command_package_loader",
+            "control_root_resolver",
+            "lifecycle_resolver",
+            "metadata_controller",
+            "replacement_authority_handler",
+            "stage_identity_resolver"
+          ],
           "status": "passed"
         },
         "provider_owner_cleanup_identity": {
@@ -993,8 +1549,23 @@
           "sha256": "0fd1ce4cd0fbeef41405ac4773d8d2a67b6c0414013b8c4fb4293c5d234446ba",
           "status": "passed"
         },
-        "replacement_policy_resolution": {
+        "provider_selector_resolver": {
+          "reason": "capability not declared",
+          "status": "not-applicable"
+        },
+        "replacement_authority_handler": {
+          "eligibility_validator": "_validate_replacement_launch_eligibility",
+          "handler_id": "provider-entry-authority:normalized-history-v1",
           "policy": "bounded-preflight",
+          "retention_handler": "_retain_replacement_launch_authority",
+          "status": "passed"
+        },
+        "stage_identity_resolver": {
+          "archive_id": "ARCHIVE-EXP0001-PILOT-V12-AUTONOMOUS-0005",
+          "handler_id": "stage-identity:typed-provider-v1",
+          "owner_bound": true,
+          "policy": "typed-provider",
+          "stage_id": "STAGE-EXP0001-PILOT-V12-AUTONOMOUS-0005",
           "status": "passed"
         },
         "state_capsule_projection": {
@@ -1038,12 +1609,19 @@
     {
       "complete": true,
       "consumers": {
+        "authorization_policy_resolver": {
+          "handler_id": "authority:metadata-bound-single-use-v1",
+          "policy": "metadata-bound-single-use",
+          "repository_grants_authority": false,
+          "status": "passed"
+        },
         "campaign_lifecycle_loading": {
           "family": "autonomous-campaign",
           "status": "passed"
         },
-        "cleanup_family_resolution": {
+        "cleanup_handler": {
           "family": "early-journal",
+          "handler_id": "cleanup:early-journal-v1",
           "status": "passed"
         },
         "command_manifest_loading": {
@@ -1052,12 +1630,18 @@
           "source": "working-tree",
           "status": "passed"
         },
-        "command_package_family_resolution": {
+        "command_package_loader": {
+          "attempt_count": 4,
           "family": "autonomous",
+          "handler_id": "command-package:registered-autonomous-v1",
+          "sha256": "b83b6ba6704e30048b11f68f498fadef7b6da2dbc71d2ce02f71db66bc090c28",
+          "source": "working-tree",
           "status": "passed"
         },
-        "control_root_identity": {
+        "control_root_resolver": {
           "control_root": "pilot-v13",
+          "handler_id": "control-root:versioned",
+          "policy": "versioned",
           "status": "passed"
         },
         "evidence_archive_stage_identity": {
@@ -1076,13 +1660,65 @@
           "qualification_id": "QUAL-T09-PILOT-V13-IMAGE-AUTONOMOUS-0006",
           "status": "passed"
         },
+        "lifecycle_resolver": {
+          "family": "autonomous-campaign",
+          "handler_id": "campaign-lifecycle:autonomous-campaign",
+          "max_launches": 8,
+          "status": "passed"
+        },
         "local_finalizer_selector_resolution": {
           "qualification_id": "QUAL-T09-PILOT-V13-LOCAL-FINALIZER-AUTONOMOUS-0006",
           "selector_policy": "explicit",
           "status": "passed"
         },
-        "metadata_policy_resolution": {
+        "metadata_controller": {
+          "dotenv_selector": "load_openai_dotenv_assignment",
+          "final_boundary_handler": "admit_model_metadata_receipt_at_prelaunch_boundary",
+          "handler_id": "model-metadata-receipt:strict-local-prelaunch-v1",
           "policy": "local-prelaunch-receipt",
+          "status": "passed"
+        },
+        "package_transition_resolver": {
+          "reason": "capability not declared",
+          "status": "not-applicable"
+        },
+        "production_adapter_assembly": {
+          "controller_bypass": false,
+          "controller_entrypoint": "giclab.control.category3:execute_category3_transaction",
+          "future_live_source_changes_required": false,
+          "handler_id": "category3-production-wrapper:v1",
+          "implementation_flavor": "production-wrapper",
+          "live_authority_factory_present": false,
+          "low_level_effects_injected": true,
+          "required_low_level_channels": [
+            "transaction_root",
+            "read_model_secret",
+            "read_provider_secret",
+            "public_ipv4",
+            "ssh_public_key",
+            "metadata_response",
+            "metadata_authorization_binding",
+            "provider_inventory",
+            "provider_launch",
+            "provider_entry",
+            "provider_terminate",
+            "campaign_transport",
+            "retained_image_archive",
+            "model_send",
+            "browser_action",
+            "offline_command"
+          ],
+          "resolved_consumers": [
+            "authorization_policy_resolver",
+            "cleanup_handler",
+            "command_package_loader",
+            "control_root_resolver",
+            "lifecycle_resolver",
+            "metadata_controller",
+            "provider_selector_resolver",
+            "replacement_authority_handler",
+            "stage_identity_resolver"
+          ],
           "status": "passed"
         },
         "provider_owner_cleanup_identity": {
@@ -1099,8 +1735,26 @@
           "sha256": "58159df775f8e3a30debdc327e8be29574ec68a5c34167012866382a09b75ca4",
           "status": "passed"
         },
-        "replacement_policy_resolution": {
+        "provider_selector_resolver": {
+          "argument": "--provider-contract",
+          "handler_id": "provider-selector:explicit-contract-argument-v1",
+          "policy": "explicit",
+          "status": "passed",
+          "value": "V13"
+        },
+        "replacement_authority_handler": {
+          "eligibility_validator": "_validate_replacement_launch_eligibility",
+          "handler_id": "provider-entry-authority:normalized-history-v1",
           "policy": "bounded-preflight",
+          "retention_handler": "_retain_replacement_launch_authority",
+          "status": "passed"
+        },
+        "stage_identity_resolver": {
+          "archive_id": "ARCHIVE-EXP0001-PILOT-V13-AUTONOMOUS-0006",
+          "handler_id": "stage-identity:typed-provider-v1",
+          "owner_bound": true,
+          "policy": "typed-provider",
+          "stage_id": "STAGE-EXP0001-PILOT-V13-AUTONOMOUS-0006",
           "status": "passed"
         },
         "state_capsule_projection": {
@@ -1144,12 +1798,19 @@
     {
       "complete": true,
       "consumers": {
+        "authorization_policy_resolver": {
+          "handler_id": "authority:metadata-bound-single-use-v1",
+          "policy": "metadata-bound-single-use",
+          "repository_grants_authority": false,
+          "status": "passed"
+        },
         "campaign_lifecycle_loading": {
           "family": "autonomous-campaign",
           "status": "passed"
         },
-        "cleanup_family_resolution": {
+        "cleanup_handler": {
           "family": "empirical-prefix",
+          "handler_id": "cleanup:empirical-prefix-v1",
           "status": "passed"
         },
         "command_manifest_loading": {
@@ -1158,12 +1819,18 @@
           "source": "working-tree",
           "status": "passed"
         },
-        "command_package_family_resolution": {
+        "command_package_loader": {
+          "attempt_count": 4,
           "family": "autonomous",
+          "handler_id": "command-package:registered-autonomous-v1",
+          "sha256": "d8b8b46e04a59ceb49d333bc8a345055f60e8161ba0fea5ea4d260096fe5dddc",
+          "source": "working-tree",
           "status": "passed"
         },
-        "control_root_identity": {
+        "control_root_resolver": {
           "control_root": "pilot-v14",
+          "handler_id": "control-root:versioned",
+          "policy": "versioned",
           "status": "passed"
         },
         "evidence_archive_stage_identity": {
@@ -1182,13 +1849,65 @@
           "qualification_id": "QUAL-T09-PILOT-V14-IMAGE-AUTONOMOUS-0007",
           "status": "passed"
         },
+        "lifecycle_resolver": {
+          "family": "autonomous-campaign",
+          "handler_id": "campaign-lifecycle:autonomous-campaign",
+          "max_launches": 8,
+          "status": "passed"
+        },
         "local_finalizer_selector_resolution": {
           "qualification_id": "QUAL-T09-PILOT-V14-LOCAL-FINALIZER-AUTONOMOUS-0007",
           "selector_policy": "explicit",
           "status": "passed"
         },
-        "metadata_policy_resolution": {
+        "metadata_controller": {
+          "dotenv_selector": "load_openai_dotenv_assignment",
+          "final_boundary_handler": "admit_model_metadata_receipt_at_prelaunch_boundary",
+          "handler_id": "model-metadata-receipt:strict-local-prelaunch-v1",
           "policy": "local-prelaunch-receipt",
+          "status": "passed"
+        },
+        "package_transition_resolver": {
+          "reason": "capability not declared",
+          "status": "not-applicable"
+        },
+        "production_adapter_assembly": {
+          "controller_bypass": false,
+          "controller_entrypoint": "giclab.control.category3:execute_category3_transaction",
+          "future_live_source_changes_required": false,
+          "handler_id": "category3-production-wrapper:v1",
+          "implementation_flavor": "production-wrapper",
+          "live_authority_factory_present": false,
+          "low_level_effects_injected": true,
+          "required_low_level_channels": [
+            "transaction_root",
+            "read_model_secret",
+            "read_provider_secret",
+            "public_ipv4",
+            "ssh_public_key",
+            "metadata_response",
+            "metadata_authorization_binding",
+            "provider_inventory",
+            "provider_launch",
+            "provider_entry",
+            "provider_terminate",
+            "campaign_transport",
+            "retained_image_archive",
+            "model_send",
+            "browser_action",
+            "offline_command"
+          ],
+          "resolved_consumers": [
+            "authorization_policy_resolver",
+            "cleanup_handler",
+            "command_package_loader",
+            "control_root_resolver",
+            "lifecycle_resolver",
+            "metadata_controller",
+            "provider_selector_resolver",
+            "replacement_authority_handler",
+            "stage_identity_resolver"
+          ],
           "status": "passed"
         },
         "provider_owner_cleanup_identity": {
@@ -1205,8 +1924,26 @@
           "sha256": "b1b5dc0e71954fdcbfe9c5a315f45dfcb09bd3e569fd817cf86efa381a869ee7",
           "status": "passed"
         },
-        "replacement_policy_resolution": {
+        "provider_selector_resolver": {
+          "argument": "--provider-contract",
+          "handler_id": "provider-selector:explicit-contract-argument-v1",
+          "policy": "explicit",
+          "status": "passed",
+          "value": "V14"
+        },
+        "replacement_authority_handler": {
+          "eligibility_validator": "_validate_replacement_launch_eligibility",
+          "handler_id": "provider-entry-authority:normalized-history-v1",
           "policy": "bounded-preflight",
+          "retention_handler": "_retain_replacement_launch_authority",
+          "status": "passed"
+        },
+        "stage_identity_resolver": {
+          "archive_id": "ARCHIVE-EXP0001-PILOT-V14-AUTONOMOUS-0007",
+          "handler_id": "stage-identity:typed-provider-v1",
+          "owner_bound": true,
+          "policy": "typed-provider",
+          "stage_id": "STAGE-EXP0001-PILOT-V14-AUTONOMOUS-0007",
           "status": "passed"
         },
         "state_capsule_projection": {
@@ -1250,12 +1987,19 @@
     {
       "complete": true,
       "consumers": {
+        "authorization_policy_resolver": {
+          "handler_id": "authority:metadata-bound-single-use-v1",
+          "policy": "metadata-bound-single-use",
+          "repository_grants_authority": false,
+          "status": "passed"
+        },
         "campaign_lifecycle_loading": {
           "family": "autonomous-campaign",
           "status": "passed"
         },
-        "cleanup_family_resolution": {
+        "cleanup_handler": {
           "family": "empirical-prefix",
+          "handler_id": "cleanup:empirical-prefix-v1",
           "status": "passed"
         },
         "command_manifest_loading": {
@@ -1264,12 +2008,18 @@
           "source": "working-tree",
           "status": "passed"
         },
-        "command_package_family_resolution": {
+        "command_package_loader": {
+          "attempt_count": 4,
           "family": "autonomous",
+          "handler_id": "command-package:registered-autonomous-v1",
+          "sha256": "533721a1665c1826502ece26b025859c6fb21b6f3b791d085d2ea294e3f88b4f",
+          "source": "working-tree",
           "status": "passed"
         },
-        "control_root_identity": {
+        "control_root_resolver": {
           "control_root": "pilot-v15",
+          "handler_id": "control-root:versioned",
+          "policy": "versioned",
           "status": "passed"
         },
         "evidence_archive_stage_identity": {
@@ -1288,13 +2038,65 @@
           "qualification_id": "QUAL-T09-PILOT-V15-IMAGE-AUTONOMOUS-0008",
           "status": "passed"
         },
+        "lifecycle_resolver": {
+          "family": "autonomous-campaign",
+          "handler_id": "campaign-lifecycle:autonomous-campaign",
+          "max_launches": 8,
+          "status": "passed"
+        },
         "local_finalizer_selector_resolution": {
           "qualification_id": "QUAL-T09-PILOT-V15-LOCAL-FINALIZER-AUTONOMOUS-0008",
           "selector_policy": "explicit",
           "status": "passed"
         },
-        "metadata_policy_resolution": {
+        "metadata_controller": {
+          "dotenv_selector": "load_openai_dotenv_assignment",
+          "final_boundary_handler": "admit_model_metadata_receipt_at_prelaunch_boundary",
+          "handler_id": "model-metadata-receipt:strict-local-prelaunch-v1",
           "policy": "local-prelaunch-receipt",
+          "status": "passed"
+        },
+        "package_transition_resolver": {
+          "reason": "capability not declared",
+          "status": "not-applicable"
+        },
+        "production_adapter_assembly": {
+          "controller_bypass": false,
+          "controller_entrypoint": "giclab.control.category3:execute_category3_transaction",
+          "future_live_source_changes_required": false,
+          "handler_id": "category3-production-wrapper:v1",
+          "implementation_flavor": "production-wrapper",
+          "live_authority_factory_present": false,
+          "low_level_effects_injected": true,
+          "required_low_level_channels": [
+            "transaction_root",
+            "read_model_secret",
+            "read_provider_secret",
+            "public_ipv4",
+            "ssh_public_key",
+            "metadata_response",
+            "metadata_authorization_binding",
+            "provider_inventory",
+            "provider_launch",
+            "provider_entry",
+            "provider_terminate",
+            "campaign_transport",
+            "retained_image_archive",
+            "model_send",
+            "browser_action",
+            "offline_command"
+          ],
+          "resolved_consumers": [
+            "authorization_policy_resolver",
+            "cleanup_handler",
+            "command_package_loader",
+            "control_root_resolver",
+            "lifecycle_resolver",
+            "metadata_controller",
+            "provider_selector_resolver",
+            "replacement_authority_handler",
+            "stage_identity_resolver"
+          ],
           "status": "passed"
         },
         "provider_owner_cleanup_identity": {
@@ -1311,8 +2113,26 @@
           "sha256": "64075a67989522495145bf02c32544bd3a07f30c38d46daa4e9f5c16c65faa1d",
           "status": "passed"
         },
-        "replacement_policy_resolution": {
+        "provider_selector_resolver": {
+          "argument": "--provider-contract",
+          "handler_id": "provider-selector:explicit-contract-argument-v1",
+          "policy": "explicit",
+          "status": "passed",
+          "value": "V15"
+        },
+        "replacement_authority_handler": {
+          "eligibility_validator": "_validate_replacement_launch_eligibility",
+          "handler_id": "provider-entry-authority:normalized-history-v1",
           "policy": "bounded-preflight",
+          "retention_handler": "_retain_replacement_launch_authority",
+          "status": "passed"
+        },
+        "stage_identity_resolver": {
+          "archive_id": "ARCHIVE-EXP0001-PILOT-V15-AUTONOMOUS-0008",
+          "handler_id": "stage-identity:typed-provider-v1",
+          "owner_bound": true,
+          "policy": "typed-provider",
+          "stage_id": "STAGE-EXP0001-PILOT-V15-AUTONOMOUS-0008",
           "status": "passed"
         },
         "state_capsule_projection": {
@@ -1356,12 +2176,19 @@
     {
       "complete": true,
       "consumers": {
+        "authorization_policy_resolver": {
+          "handler_id": "authority:metadata-bound-single-use-v1",
+          "policy": "metadata-bound-single-use",
+          "repository_grants_authority": false,
+          "status": "passed"
+        },
         "campaign_lifecycle_loading": {
           "family": "autonomous-campaign",
           "status": "passed"
         },
-        "cleanup_family_resolution": {
+        "cleanup_handler": {
           "family": "empirical-prefix",
+          "handler_id": "cleanup:empirical-prefix-v1",
           "status": "passed"
         },
         "command_manifest_loading": {
@@ -1370,12 +2197,18 @@
           "source": "working-tree",
           "status": "passed"
         },
-        "command_package_family_resolution": {
+        "command_package_loader": {
+          "attempt_count": 4,
           "family": "autonomous",
+          "handler_id": "command-package:registered-autonomous-v1",
+          "sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
+          "source": "working-tree",
           "status": "passed"
         },
-        "control_root_identity": {
+        "control_root_resolver": {
           "control_root": "pilot-v16",
+          "handler_id": "control-root:versioned",
+          "policy": "versioned",
           "status": "passed"
         },
         "evidence_archive_stage_identity": {
@@ -1394,13 +2227,65 @@
           "qualification_id": "QUAL-T09-PILOT-V16-IMAGE-AUTONOMOUS-0009",
           "status": "passed"
         },
+        "lifecycle_resolver": {
+          "family": "autonomous-campaign",
+          "handler_id": "campaign-lifecycle:autonomous-campaign",
+          "max_launches": 8,
+          "status": "passed"
+        },
         "local_finalizer_selector_resolution": {
           "qualification_id": "QUAL-T09-PILOT-V16-LOCAL-FINALIZER-AUTONOMOUS-0009",
           "selector_policy": "explicit",
           "status": "passed"
         },
-        "metadata_policy_resolution": {
+        "metadata_controller": {
+          "dotenv_selector": "load_openai_dotenv_assignment",
+          "final_boundary_handler": "admit_model_metadata_receipt_at_prelaunch_boundary",
+          "handler_id": "model-metadata-receipt:strict-local-prelaunch-v1",
           "policy": "local-prelaunch-receipt",
+          "status": "passed"
+        },
+        "package_transition_resolver": {
+          "reason": "capability not declared",
+          "status": "not-applicable"
+        },
+        "production_adapter_assembly": {
+          "controller_bypass": false,
+          "controller_entrypoint": "giclab.control.category3:execute_category3_transaction",
+          "future_live_source_changes_required": false,
+          "handler_id": "category3-production-wrapper:v1",
+          "implementation_flavor": "production-wrapper",
+          "live_authority_factory_present": false,
+          "low_level_effects_injected": true,
+          "required_low_level_channels": [
+            "transaction_root",
+            "read_model_secret",
+            "read_provider_secret",
+            "public_ipv4",
+            "ssh_public_key",
+            "metadata_response",
+            "metadata_authorization_binding",
+            "provider_inventory",
+            "provider_launch",
+            "provider_entry",
+            "provider_terminate",
+            "campaign_transport",
+            "retained_image_archive",
+            "model_send",
+            "browser_action",
+            "offline_command"
+          ],
+          "resolved_consumers": [
+            "authorization_policy_resolver",
+            "cleanup_handler",
+            "command_package_loader",
+            "control_root_resolver",
+            "lifecycle_resolver",
+            "metadata_controller",
+            "provider_selector_resolver",
+            "replacement_authority_handler",
+            "stage_identity_resolver"
+          ],
           "status": "passed"
         },
         "provider_owner_cleanup_identity": {
@@ -1417,8 +2302,26 @@
           "sha256": "80962bb30ed6aa879e4c1e8c7d7e25a119375c28e0897cd02e3ff1c0aa15b41a",
           "status": "passed"
         },
-        "replacement_policy_resolution": {
+        "provider_selector_resolver": {
+          "argument": "--provider-contract",
+          "handler_id": "provider-selector:explicit-contract-argument-v1",
+          "policy": "explicit",
+          "status": "passed",
+          "value": "V16"
+        },
+        "replacement_authority_handler": {
+          "eligibility_validator": "_validate_replacement_launch_eligibility",
+          "handler_id": "provider-entry-authority:normalized-history-v1",
           "policy": "bounded-preflight",
+          "retention_handler": "_retain_replacement_launch_authority",
+          "status": "passed"
+        },
+        "stage_identity_resolver": {
+          "archive_id": "ARCHIVE-EXP0001-PILOT-V16-AUTONOMOUS-0009",
+          "handler_id": "stage-identity:typed-provider-v1",
+          "owner_bound": true,
+          "policy": "typed-provider",
+          "stage_id": "STAGE-EXP0001-PILOT-V16-AUTONOMOUS-0009",
           "status": "passed"
         },
         "state_capsule_projection": {
@@ -1462,8 +2365,8 @@
   ],
   "errors": [],
   "registry_source_sha256": "562f7ca25bd026af65e841054d1f4c962a7915061f0c79973c7edde048868071",
-  "repository_commit": "5efbe727648ae9e7077132aa9bf3033e4b35ec03",
-  "repository_tree": "5fab7020bf157c6c31a68b1b2024ca10203d3106",
+  "repository_commit": "9e93d7e0d76bc98f8b008f335147d5002aa96156",
+  "repository_tree": "4ebfa95173a15eb1e68228c516d715bbff30b8b5",
   "schema_version": "1.0.0",
-  "semantic_sha256": "e8a3bf42e9fcaf4a8354fd4c5103af33b992232c56b72601633319d340362490"
+  "semantic_sha256": "71c4935a20ee7273d122bc0515d1651e7ac996ceca659551b92e295bb496bd4b"
 }

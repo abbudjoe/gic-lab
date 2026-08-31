@@ -12,7 +12,7 @@
       "index": 2,
       "operation": "secret.read",
       "outcome": "passed",
-      "subject": "secret-channel"
+      "subject": "strict-mixed-dotenv"
     },
     {
       "adapter": "metadata",
@@ -33,7 +33,7 @@
       "index": 5,
       "operation": "metadata.is_fresh",
       "outcome": "passed",
-      "subject": "da56ea8d1b010091f5b938634dc8017474a2de626612e5009cf103177b9ad43a"
+      "subject": "64a7d5cf6696dd895d0c38006172758905a778a06b7c83a8d1e88d0b763480d9"
     },
     {
       "adapter": "provider",
@@ -95,7 +95,7 @@
       "adapter": "evidence",
       "index": 14,
       "operation": "evidence.record",
-      "outcome": "retained:e8e654b96997",
+      "outcome": "retained:1fbac2e6711f",
       "subject": "qualification"
     },
     {
@@ -109,7 +109,7 @@
       "adapter": "evidence",
       "index": 16,
       "operation": "evidence.record",
-      "outcome": "retained:fdf714cd9867",
+      "outcome": "retained:8f9a6784e0cd",
       "subject": "scientific-freeze"
     },
     {
@@ -144,7 +144,7 @@
       "adapter": "evidence",
       "index": 21,
       "operation": "evidence.record",
-      "outcome": "retained:57132ab48305",
+      "outcome": "retained:ea3e3825ad35",
       "subject": "raw"
     },
     {
@@ -158,7 +158,7 @@
       "adapter": "evidence",
       "index": 23,
       "operation": "evidence.record",
-      "outcome": "retained:30a7e80713c5",
+      "outcome": "retained:2369d051539a",
       "subject": "finalized"
     },
     {
@@ -172,7 +172,7 @@
       "adapter": "evidence",
       "index": 25,
       "operation": "evidence.record",
-      "outcome": "retained:bca49b4be814",
+      "outcome": "retained:163125058df4",
       "subject": "evaluator"
     },
     {
@@ -207,7 +207,7 @@
       "adapter": "evidence",
       "index": 30,
       "operation": "evidence.record",
-      "outcome": "retained:a0126d7f02a1",
+      "outcome": "retained:ca261ea150af",
       "subject": "raw"
     },
     {
@@ -221,7 +221,7 @@
       "adapter": "evidence",
       "index": 32,
       "operation": "evidence.record",
-      "outcome": "retained:df225d601ee3",
+      "outcome": "retained:bc3fc1b6d1ad",
       "subject": "finalized"
     },
     {
@@ -235,7 +235,7 @@
       "adapter": "evidence",
       "index": 34,
       "operation": "evidence.record",
-      "outcome": "retained:ec1d812de14e",
+      "outcome": "retained:163125058df4",
       "subject": "evaluator"
     },
     {
@@ -277,7 +277,7 @@
       "adapter": "evidence",
       "index": 40,
       "operation": "evidence.record",
-      "outcome": "retained:d0714e24e755",
+      "outcome": "retained:dd66fdedea78",
       "subject": "raw"
     },
     {
@@ -291,7 +291,7 @@
       "adapter": "evidence",
       "index": 42,
       "operation": "evidence.record",
-      "outcome": "retained:aa8c42dbb1c9",
+      "outcome": "retained:e9640aa7260c",
       "subject": "finalized"
     },
     {
@@ -305,7 +305,7 @@
       "adapter": "evidence",
       "index": 44,
       "operation": "evidence.record",
-      "outcome": "retained:9419c6a4ca4d",
+      "outcome": "retained:163125058df4",
       "subject": "evaluator"
     },
     {
@@ -340,7 +340,7 @@
       "adapter": "evidence",
       "index": 49,
       "operation": "evidence.record",
-      "outcome": "retained:4aee67b9feb8",
+      "outcome": "retained:0ae9ca2cef72",
       "subject": "raw"
     },
     {
@@ -354,7 +354,7 @@
       "adapter": "evidence",
       "index": 51,
       "operation": "evidence.record",
-      "outcome": "retained:60880d9cc0e0",
+      "outcome": "retained:d2ceefb34cb7",
       "subject": "finalized"
     },
     {
@@ -368,7 +368,7 @@
       "adapter": "evidence",
       "index": 53,
       "operation": "evidence.record",
-      "outcome": "retained:6dceaa5b20e9",
+      "outcome": "retained:163125058df4",
       "subject": "evaluator"
     },
     {
@@ -407,14 +407,17 @@
     "replacement_count": 1
   },
   "call_counts": {
+    "browser_actions": 4,
     "condition_entries": 4,
     "condition_reservations": 4,
     "launch_calls": 2,
     "metadata_requests": 1,
+    "model_call_attempts": 4,
     "provider_gets": 3,
     "provider_posts": 4,
     "secret_reads": 1,
-    "termination_calls": 2
+    "termination_calls": 2,
+    "unknown_model_outcomes": 0
   },
   "cleanup": {
     "privacy_clean": true,
@@ -424,7 +427,7 @@
     "state": "complete"
   },
   "command_package_sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
-  "composition_sha256": "11075a7d3178eb5e1c22f78988e266a29ef37b62c8a80da98901156369aabe1d",
+  "composition_sha256": "790694626e4b174138604c095daaefad63b308bff29f5bb05b079ed8ec4834a5",
   "condition_identities_consumed": [
     "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
     "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009",
@@ -438,6 +441,7 @@
     "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009"
   ],
   "earliest_stopping_phase": null,
+  "effect_authority": "shadow-only",
   "evidence_retained": {
     "classification": "shadow-control-plane-output",
     "evaluator": [
@@ -452,7 +456,7 @@
       "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009",
       "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009"
     ],
-    "pair_checkpoint_sha256": "1b798a0454b74c35cd74ea43bf6af37d207cd1563094ba0b4d0930cc53603c8f",
+    "pair_checkpoint_sha256": "77fa9d61c5e500bf94b46fa268f1dffa6c122203cd91bda9ca8b0b81d10e272c",
     "raw": [
       "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
       "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009",
@@ -464,76 +468,77 @@
     {
       "kind": "raw",
       "run_id": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
-      "sha256": "57132ab483058106df8816e7ea652113c37587b5e0979f4c8b2abcfe2d7d2d8d",
+      "sha256": "ea3e3825ad35aefb08d3d812b554bed3fb6a108225befa67ae116577a34a55c5",
       "shadow_only": true
     },
     {
       "kind": "finalized",
       "run_id": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
-      "sha256": "30a7e80713c5d09840a6795d2f90628a15ec23332b99ec80d5fc569c10de8ba8",
+      "sha256": "2369d051539a7c5ebb5123cf188db7b0b80c349d1da36a6f4bd3c31795537bd1",
       "shadow_only": true
     },
     {
       "kind": "evaluator-control-output",
       "run_id": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
-      "sha256": "bca49b4be8141bb4f57763706754d9d1bb0a627fc97ac3e16cdfad556db0c1ff",
+      "sha256": "163125058df4d2e32d45d7a95e2334559e8c49e8597ff2adec40fdeb25a5c4be",
       "shadow_only": true
     },
     {
       "kind": "raw",
       "run_id": "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009",
-      "sha256": "a0126d7f02a16931f07ad7127ee35322bd2b25366c7a13f9189f911502d8599d",
+      "sha256": "ca261ea150af5e14ba9f9124451ec421b00749ef3e787396ab5b9313be61ff16",
       "shadow_only": true
     },
     {
       "kind": "finalized",
       "run_id": "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009",
-      "sha256": "df225d601ee377ec91d7bc421e2c8e5e7fdc5e652a6a44eb2751f5c6c48456e4",
+      "sha256": "bc3fc1b6d1ad4744eb424179b9c9dabed0bb6eb739eb359957cf62644a389911",
       "shadow_only": true
     },
     {
       "kind": "evaluator-control-output",
       "run_id": "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009",
-      "sha256": "ec1d812de14ea4c1c3235ddbea4addd0e962d2fd7da259a9e7db7cf658d98318",
+      "sha256": "163125058df4d2e32d45d7a95e2334559e8c49e8597ff2adec40fdeb25a5c4be",
       "shadow_only": true
     },
     {
       "kind": "raw",
       "run_id": "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009",
-      "sha256": "d0714e24e7553f4d3931069b252921a3c1c77841ab67c5eb99d1166bbe8352f2",
+      "sha256": "dd66fdedea787ce9b4eb76540f6b7c594fbb51b5795f8c38d7dc95335f72dee5",
       "shadow_only": true
     },
     {
       "kind": "finalized",
       "run_id": "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009",
-      "sha256": "aa8c42dbb1c9a2574dedbaf675a7272a3803922e68cb9377a42f4ead453b2195",
+      "sha256": "e9640aa7260c46820c8990f828d622b34554d10d4e7486094000aceaf88a4c6c",
       "shadow_only": true
     },
     {
       "kind": "evaluator-control-output",
       "run_id": "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009",
-      "sha256": "9419c6a4ca4de5821a2d67523e2a074762ccc293c68b60a756362a4ea9ebfb01",
+      "sha256": "163125058df4d2e32d45d7a95e2334559e8c49e8597ff2adec40fdeb25a5c4be",
       "shadow_only": true
     },
     {
       "kind": "raw",
       "run_id": "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009",
-      "sha256": "4aee67b9feb8374b0a10aa44fb92bfdc63dc59f2ba8598c42a5aac8cc1cb5ea0",
+      "sha256": "0ae9ca2cef724cd0a20ff4fb2e1f6ef458ff672fb0aff0c2d0b89e621523524d",
       "shadow_only": true
     },
     {
       "kind": "finalized",
       "run_id": "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009",
-      "sha256": "60880d9cc0e0076f39d7d082f60698e67ff29884cba6bb2eb194a7e9286544f2",
+      "sha256": "d2ceefb34cb758bd920c0dcf39ce36a5feba0aea92fe3fced3ea87b6025ad28a",
       "shadow_only": true
     },
     {
       "kind": "evaluator-control-output",
       "run_id": "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009",
-      "sha256": "6dceaa5b20e977eeb948110e3a1d356cf6a13a6f6d3be06b03f3dd28a4f32eaa",
+      "sha256": "163125058df4d2e32d45d7a95e2334559e8c49e8597ff2adec40fdeb25a5c4be",
       "shadow_only": true
     }
   ],
+  "implementation_flavor": "production-wrapper",
   "ordered_state_transitions": [
     {
       "index": 1,
@@ -551,7 +556,7 @@
       "phase": "state-capsule-snapshot"
     },
     {
-      "detail": "self-rehearsal",
+      "detail": "validated-static-shadow-rehearsal",
       "index": 4,
       "outcome": "passed",
       "phase": "shadow-rehearsal-receipt-validation"
@@ -588,7 +593,7 @@
       "phase": "launch"
     },
     {
-      "detail": "fake provider entry failed",
+      "detail": "provider-entry-failed replacement eligibility",
       "index": 11,
       "outcome": "failed",
       "phase": "provider-entry"
@@ -784,10 +789,619 @@
       "phase": "terminal-provider-security-verification"
     }
   ],
+  "production_control_evidence": {
+    "accounting": {
+      "aggregate_charged_upper_cost_usd": 0.00044,
+      "aggregate_observed_cost_usd": 0.00044,
+      "conditions": {
+        "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": {
+          "calls": [
+            {
+              "actual_usage": {
+                "cached_input_tokens": 8,
+                "input_tokens": 24,
+                "output_tokens": 6,
+                "service_tier": "default",
+                "total_tokens": 30
+              },
+              "call_id": "CALL-SHADOW-0001",
+              "exception_type": null,
+              "history": [
+                "call_admission_requested",
+                "budget_reserved",
+                "send_intent_committed",
+                "send_started",
+                "response_received",
+                "usage_reconciled",
+                "reservation_released",
+                "call_terminal"
+              ],
+              "logical_call_id": "LOGICAL-RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
+              "model": "gpt-4o-2024-11-20",
+              "phase": "call_terminal",
+              "request": {
+                "input_tokens": 32,
+                "max_output_tokens": 16
+              },
+              "reservation": {
+                "cost_usd": 0.00024,
+                "input_tokens": 32,
+                "output_tokens": 16,
+                "total_tokens": 48
+              },
+              "role": "critic",
+              "terminal_state": "sent_response_reconciled"
+            }
+          ],
+          "observed_lower_bound": {
+            "aggregate": {
+              "browser_actions": 1,
+              "cached_input_tokens": 8,
+              "cost_usd": 0.00011,
+              "default_service_tier_responses": 1,
+              "input_tokens": 24,
+              "model_call_attempts": 1,
+              "output_bytes": 55,
+              "output_tokens": 6,
+              "total_tokens": 30
+            },
+            "condition": {
+              "browser_actions": 1,
+              "cached_input_tokens": 8,
+              "cost_usd": 0.00011,
+              "default_service_tier_responses": 1,
+              "input_tokens": 24,
+              "model_call_attempts": 1,
+              "output_bytes": 55,
+              "output_tokens": 6,
+              "total_tokens": 30
+            }
+          },
+          "outstanding_reservation_projection": {
+            "aggregate": {
+              "browser_actions": 0,
+              "cached_input_tokens": 0,
+              "cost_usd": 0.0,
+              "default_service_tier_responses": 0,
+              "input_tokens": 0,
+              "model_call_attempts": 0,
+              "output_bytes": 0,
+              "output_tokens": 0,
+              "total_tokens": 0
+            },
+            "condition": {
+              "browser_actions": 0,
+              "cached_input_tokens": 0,
+              "cost_usd": 0.0,
+              "default_service_tier_responses": 0,
+              "input_tokens": 0,
+              "model_call_attempts": 0,
+              "output_bytes": 0,
+              "output_tokens": 0,
+              "total_tokens": 0
+            }
+          },
+          "outstanding_reservations": 0,
+          "reserved_upper_bound": {
+            "aggregate": {
+              "browser_actions": 1,
+              "cached_input_tokens": 8,
+              "cost_usd": 0.00011,
+              "default_service_tier_responses": 1,
+              "input_tokens": 24,
+              "model_call_attempts": 1,
+              "output_bytes": 55,
+              "output_tokens": 6,
+              "total_tokens": 30
+            },
+            "condition": {
+              "browser_actions": 1,
+              "cached_input_tokens": 8,
+              "cost_usd": 0.00011,
+              "default_service_tier_responses": 1,
+              "input_tokens": 24,
+              "model_call_attempts": 1,
+              "output_bytes": 55,
+              "output_tokens": 6,
+              "total_tokens": 30
+            }
+          },
+          "schema_version": "0.2.0",
+          "terminal_counts": {
+            "admitted_not_sent": 0,
+            "sent_outcome_unknown": 0,
+            "sent_provider_error_reconciled": 0,
+            "sent_response_reconciled": 1,
+            "sent_transport_error_known": 0
+          },
+          "unknown_outcomes": 0,
+          "unreconciled_provider_attempts": 0
+        },
+        "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009": {
+          "calls": [
+            {
+              "actual_usage": {
+                "cached_input_tokens": 8,
+                "input_tokens": 24,
+                "output_tokens": 6,
+                "service_tier": "default",
+                "total_tokens": 30
+              },
+              "call_id": "CALL-SHADOW-0002",
+              "exception_type": null,
+              "history": [
+                "call_admission_requested",
+                "budget_reserved",
+                "send_intent_committed",
+                "send_started",
+                "response_received",
+                "usage_reconciled",
+                "reservation_released",
+                "call_terminal"
+              ],
+              "logical_call_id": "LOGICAL-RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009",
+              "model": "gpt-4o-2024-11-20",
+              "phase": "call_terminal",
+              "request": {
+                "input_tokens": 32,
+                "max_output_tokens": 16
+              },
+              "reservation": {
+                "cost_usd": 0.00024,
+                "input_tokens": 32,
+                "output_tokens": 16,
+                "total_tokens": 48
+              },
+              "role": "critic",
+              "terminal_state": "sent_response_reconciled"
+            }
+          ],
+          "observed_lower_bound": {
+            "aggregate": {
+              "browser_actions": 2,
+              "cached_input_tokens": 16,
+              "cost_usd": 0.00022,
+              "default_service_tier_responses": 2,
+              "input_tokens": 48,
+              "model_call_attempts": 2,
+              "output_bytes": 112,
+              "output_tokens": 12,
+              "total_tokens": 60
+            },
+            "condition": {
+              "browser_actions": 1,
+              "cached_input_tokens": 8,
+              "cost_usd": 0.00011,
+              "default_service_tier_responses": 1,
+              "input_tokens": 24,
+              "model_call_attempts": 1,
+              "output_bytes": 57,
+              "output_tokens": 6,
+              "total_tokens": 30
+            }
+          },
+          "outstanding_reservation_projection": {
+            "aggregate": {
+              "browser_actions": 0,
+              "cached_input_tokens": 0,
+              "cost_usd": 0.0,
+              "default_service_tier_responses": 0,
+              "input_tokens": 0,
+              "model_call_attempts": 0,
+              "output_bytes": 0,
+              "output_tokens": 0,
+              "total_tokens": 0
+            },
+            "condition": {
+              "browser_actions": 0,
+              "cached_input_tokens": 0,
+              "cost_usd": 0.0,
+              "default_service_tier_responses": 0,
+              "input_tokens": 0,
+              "model_call_attempts": 0,
+              "output_bytes": 0,
+              "output_tokens": 0,
+              "total_tokens": 0
+            }
+          },
+          "outstanding_reservations": 0,
+          "reserved_upper_bound": {
+            "aggregate": {
+              "browser_actions": 2,
+              "cached_input_tokens": 16,
+              "cost_usd": 0.00022,
+              "default_service_tier_responses": 2,
+              "input_tokens": 48,
+              "model_call_attempts": 2,
+              "output_bytes": 112,
+              "output_tokens": 12,
+              "total_tokens": 60
+            },
+            "condition": {
+              "browser_actions": 1,
+              "cached_input_tokens": 8,
+              "cost_usd": 0.00011,
+              "default_service_tier_responses": 1,
+              "input_tokens": 24,
+              "model_call_attempts": 1,
+              "output_bytes": 57,
+              "output_tokens": 6,
+              "total_tokens": 30
+            }
+          },
+          "schema_version": "0.2.0",
+          "terminal_counts": {
+            "admitted_not_sent": 0,
+            "sent_outcome_unknown": 0,
+            "sent_provider_error_reconciled": 0,
+            "sent_response_reconciled": 1,
+            "sent_transport_error_known": 0
+          },
+          "unknown_outcomes": 0,
+          "unreconciled_provider_attempts": 0
+        },
+        "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009": {
+          "calls": [
+            {
+              "actual_usage": {
+                "cached_input_tokens": 8,
+                "input_tokens": 24,
+                "output_tokens": 6,
+                "service_tier": "default",
+                "total_tokens": 30
+              },
+              "call_id": "CALL-SHADOW-0004",
+              "exception_type": null,
+              "history": [
+                "call_admission_requested",
+                "budget_reserved",
+                "send_intent_committed",
+                "send_started",
+                "response_received",
+                "usage_reconciled",
+                "reservation_released",
+                "call_terminal"
+              ],
+              "logical_call_id": "LOGICAL-RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009",
+              "model": "gpt-4o-2024-11-20",
+              "phase": "call_terminal",
+              "request": {
+                "input_tokens": 32,
+                "max_output_tokens": 16
+              },
+              "reservation": {
+                "cost_usd": 0.00024,
+                "input_tokens": 32,
+                "output_tokens": 16,
+                "total_tokens": 48
+              },
+              "role": "critic",
+              "terminal_state": "sent_response_reconciled"
+            }
+          ],
+          "observed_lower_bound": {
+            "aggregate": {
+              "browser_actions": 4,
+              "cached_input_tokens": 32,
+              "cost_usd": 0.00044,
+              "default_service_tier_responses": 4,
+              "input_tokens": 96,
+              "model_call_attempts": 4,
+              "output_bytes": 224,
+              "output_tokens": 24,
+              "total_tokens": 120
+            },
+            "condition": {
+              "browser_actions": 1,
+              "cached_input_tokens": 8,
+              "cost_usd": 0.00011,
+              "default_service_tier_responses": 1,
+              "input_tokens": 24,
+              "model_call_attempts": 1,
+              "output_bytes": 55,
+              "output_tokens": 6,
+              "total_tokens": 30
+            }
+          },
+          "outstanding_reservation_projection": {
+            "aggregate": {
+              "browser_actions": 0,
+              "cached_input_tokens": 0,
+              "cost_usd": 0.0,
+              "default_service_tier_responses": 0,
+              "input_tokens": 0,
+              "model_call_attempts": 0,
+              "output_bytes": 0,
+              "output_tokens": 0,
+              "total_tokens": 0
+            },
+            "condition": {
+              "browser_actions": 0,
+              "cached_input_tokens": 0,
+              "cost_usd": 0.0,
+              "default_service_tier_responses": 0,
+              "input_tokens": 0,
+              "model_call_attempts": 0,
+              "output_bytes": 0,
+              "output_tokens": 0,
+              "total_tokens": 0
+            }
+          },
+          "outstanding_reservations": 0,
+          "reserved_upper_bound": {
+            "aggregate": {
+              "browser_actions": 4,
+              "cached_input_tokens": 32,
+              "cost_usd": 0.00044,
+              "default_service_tier_responses": 4,
+              "input_tokens": 96,
+              "model_call_attempts": 4,
+              "output_bytes": 224,
+              "output_tokens": 24,
+              "total_tokens": 120
+            },
+            "condition": {
+              "browser_actions": 1,
+              "cached_input_tokens": 8,
+              "cost_usd": 0.00011,
+              "default_service_tier_responses": 1,
+              "input_tokens": 24,
+              "model_call_attempts": 1,
+              "output_bytes": 55,
+              "output_tokens": 6,
+              "total_tokens": 30
+            }
+          },
+          "schema_version": "0.2.0",
+          "terminal_counts": {
+            "admitted_not_sent": 0,
+            "sent_outcome_unknown": 0,
+            "sent_provider_error_reconciled": 0,
+            "sent_response_reconciled": 1,
+            "sent_transport_error_known": 0
+          },
+          "unknown_outcomes": 0,
+          "unreconciled_provider_attempts": 0
+        },
+        "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009": {
+          "calls": [
+            {
+              "actual_usage": {
+                "cached_input_tokens": 8,
+                "input_tokens": 24,
+                "output_tokens": 6,
+                "service_tier": "default",
+                "total_tokens": 30
+              },
+              "call_id": "CALL-SHADOW-0003",
+              "exception_type": null,
+              "history": [
+                "call_admission_requested",
+                "budget_reserved",
+                "send_intent_committed",
+                "send_started",
+                "response_received",
+                "usage_reconciled",
+                "reservation_released",
+                "call_terminal"
+              ],
+              "logical_call_id": "LOGICAL-RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009",
+              "model": "gpt-4o-2024-11-20",
+              "phase": "call_terminal",
+              "request": {
+                "input_tokens": 32,
+                "max_output_tokens": 16
+              },
+              "reservation": {
+                "cost_usd": 0.00024,
+                "input_tokens": 32,
+                "output_tokens": 16,
+                "total_tokens": 48
+              },
+              "role": "critic",
+              "terminal_state": "sent_response_reconciled"
+            }
+          ],
+          "observed_lower_bound": {
+            "aggregate": {
+              "browser_actions": 3,
+              "cached_input_tokens": 24,
+              "cost_usd": 0.00033,
+              "default_service_tier_responses": 3,
+              "input_tokens": 72,
+              "model_call_attempts": 3,
+              "output_bytes": 169,
+              "output_tokens": 18,
+              "total_tokens": 90
+            },
+            "condition": {
+              "browser_actions": 1,
+              "cached_input_tokens": 8,
+              "cost_usd": 0.00011,
+              "default_service_tier_responses": 1,
+              "input_tokens": 24,
+              "model_call_attempts": 1,
+              "output_bytes": 57,
+              "output_tokens": 6,
+              "total_tokens": 30
+            }
+          },
+          "outstanding_reservation_projection": {
+            "aggregate": {
+              "browser_actions": 0,
+              "cached_input_tokens": 0,
+              "cost_usd": 0.0,
+              "default_service_tier_responses": 0,
+              "input_tokens": 0,
+              "model_call_attempts": 0,
+              "output_bytes": 0,
+              "output_tokens": 0,
+              "total_tokens": 0
+            },
+            "condition": {
+              "browser_actions": 0,
+              "cached_input_tokens": 0,
+              "cost_usd": 0.0,
+              "default_service_tier_responses": 0,
+              "input_tokens": 0,
+              "model_call_attempts": 0,
+              "output_bytes": 0,
+              "output_tokens": 0,
+              "total_tokens": 0
+            }
+          },
+          "outstanding_reservations": 0,
+          "reserved_upper_bound": {
+            "aggregate": {
+              "browser_actions": 3,
+              "cached_input_tokens": 24,
+              "cost_usd": 0.00033,
+              "default_service_tier_responses": 3,
+              "input_tokens": 72,
+              "model_call_attempts": 3,
+              "output_bytes": 169,
+              "output_tokens": 18,
+              "total_tokens": 90
+            },
+            "condition": {
+              "browser_actions": 1,
+              "cached_input_tokens": 8,
+              "cost_usd": 0.00011,
+              "default_service_tier_responses": 1,
+              "input_tokens": 24,
+              "model_call_attempts": 1,
+              "output_bytes": 57,
+              "output_tokens": 6,
+              "total_tokens": 30
+            }
+          },
+          "schema_version": "0.2.0",
+          "terminal_counts": {
+            "admitted_not_sent": 0,
+            "sent_outcome_unknown": 0,
+            "sent_provider_error_reconciled": 0,
+            "sent_response_reconciled": 1,
+            "sent_transport_error_known": 0
+          },
+          "unknown_outcomes": 0,
+          "unreconciled_provider_attempts": 0
+        }
+      },
+      "fake_usage": true,
+      "projected_real_cost_usd": 0.0,
+      "zero_retries": true
+    },
+    "authority_source": "validated-production-shadow",
+    "cleanup_handoff_sha256": "8ccfeecc488867c0524ac728115c5084164100af32f8754d206b21aaebf5512d",
+    "cleanup_resume_byte_identical": true,
+    "deterministic_staging": {
+      "archive_bytes": 287,
+      "archive_sha256": "23d27d17bafb3e2cc1e1fe06f459ff10e197a9a4e07a8201dc395753f504d56d",
+      "command_package_sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
+      "execution_contract_sha256": "a2bb10017263b1d3aab09f22a35854d3d78362fec500fbcd49a3d5053336d72e",
+      "package_source": "working-tree",
+      "regular_no_follow": true,
+      "storage_roundtrip": true
+    },
+    "effect_authority": "shadow-only",
+    "evaluations": {
+      "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": {
+        "classification": "deterministic-fixture-control-output-not-science",
+        "evaluator_valid": false,
+        "fixture_score": null,
+        "task_completed": null,
+        "valid_scored_attempt": false
+      },
+      "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009": {
+        "classification": "deterministic-fixture-control-output-not-science",
+        "evaluator_valid": false,
+        "fixture_score": null,
+        "task_completed": null,
+        "valid_scored_attempt": false
+      },
+      "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009": {
+        "classification": "deterministic-fixture-control-output-not-science",
+        "evaluator_valid": false,
+        "fixture_score": null,
+        "task_completed": null,
+        "valid_scored_attempt": false
+      },
+      "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009": {
+        "classification": "deterministic-fixture-control-output-not-science",
+        "evaluator_valid": false,
+        "fixture_score": null,
+        "task_completed": null,
+        "valid_scored_attempt": false
+      }
+    },
+    "implementation_flavor": "production-wrapper",
+    "production_primitives": [
+      "EvaluatorIdentity.verify",
+      "ProviderBudgetBoundary.invoke",
+      "ProviderBudgetBoundary.record_browser_action",
+      "ProviderBudgetBoundary.record_output_bytes",
+      "T09ProviderContract.validate_owner",
+      "_cleanup_provisional_owner",
+      "_normalize_provider_entry_replacement_authority",
+      "_publish_replacement_launch_eligibility",
+      "_retain_replacement_launch_authority",
+      "admit_model_metadata_receipt_at_prelaunch_boundary",
+      "bind_model_metadata_receipt_to_authorization_overlay",
+      "create_model_metadata_receipt",
+      "evaluate_retained_session",
+      "exact_raw_export_acknowledgement",
+      "immutable_cleanup_export_handoff",
+      "initialize_pilot_state",
+      "launch_campaign",
+      "load_execution_contract",
+      "load_openai_dotenv_assignment",
+      "load_validated_pilot_state:cleanup",
+      "mark_attempt_completed",
+      "mark_empirical_entry",
+      "mark_raw_attempt_complete",
+      "outcome_contract",
+      "privacy_violations",
+      "record_first_pair_checkpoint",
+      "reserve_condition_start",
+      "resolve_registered_command_package",
+      "stage_verified_archive",
+      "validate_campaign_launch_projection",
+      "validate_entry_receipt_source_bound",
+      "validate_finalizer_source",
+      "validate_model_metadata_receipt:durable-offline",
+      "validate_model_metadata_receipt_offline"
+    ],
+    "raw_export_acknowledgements": {
+      "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": "4767b72b90a33e29b6e04cf82de76236c8ba02cb3a639aac6ff284af84afb513",
+      "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009": "0296ccc82f8f5d663c8affbe7837c93de042e7fa93ca9630558ee8117e6c5f6c",
+      "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009": "bd21f428e6ab85cec3e5f1d1abd7fd4c73f7f6868c4c16f56110a6d68d297409",
+      "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009": "16a0a738b9dfde9618ede779440709ca55bd8b6dcb150e87d4b3849df9b0c956"
+    },
+    "replacement_history": {
+      "closed_launch_slots": [
+        1,
+        2
+      ],
+      "normalization_handler": "_normalize_provider_entry_replacement_authority",
+      "termination_failures": 0
+    },
+    "resolved_consumers": {
+      "authorization_policy_resolver": "authority:metadata-bound-single-use-v1",
+      "cleanup_handler": "cleanup:empirical-prefix-v1",
+      "command_package_loader": "command-package:registered-autonomous-v1",
+      "control_root_resolver": "control-root:versioned",
+      "lifecycle_resolver": "campaign-lifecycle:autonomous-campaign",
+      "metadata_controller": "model-metadata-receipt:strict-local-prelaunch-v1",
+      "package_transition_resolver": "not-applicable",
+      "provider_selector_resolver": "provider-selector:explicit-contract-argument-v1",
+      "replacement_authority_handler": "provider-entry-authority:normalized-history-v1",
+      "stage_identity_resolver": "stage-identity:typed-provider-v1"
+    }
+  },
   "projected_cost_usd": "0.00",
   "provider_contract_version": "V16",
-  "repository_commit": "5efbe727648ae9e7077132aa9bf3033e4b35ec03",
-  "repository_tree": "5fab7020bf157c6c31a68b1b2024ca10203d3106",
+  "repository_commit": "9e93d7e0d76bc98f8b008f335147d5002aa96156",
+  "repository_tree": "4ebfa95173a15eb1e68228c516d715bbff30b8b5",
   "scenario": "provider-entry-replacement",
   "scenario_valid": true,
   "schema_version": "1.0.0",
@@ -801,7 +1415,7 @@
     ]
   },
   "scientific_interpretation_allowed": false,
-  "semantic_sha256": "64ca5f62bd0b86f6b2c4c84f04639a0eb7e825d9117dcacd83ccde84c7b318c0",
+  "semantic_sha256": "e83f07cae124d80d6d222794051cd1a9f6dce3c5c7dd3db6cf9306a257da7c72",
   "shadow_only": true,
   "stop_reason": null,
   "terminal_state": "category3-shadow-complete-clean",

@@ -7,14 +7,17 @@
     "replacement_count": 0
   },
   "call_counts": {
+    "browser_actions": 0,
     "condition_entries": 0,
     "condition_reservations": 0,
     "launch_calls": 0,
     "metadata_requests": 0,
+    "model_call_attempts": 0,
     "provider_gets": 0,
     "provider_posts": 0,
     "secret_reads": 0,
-    "termination_calls": 0
+    "termination_calls": 0,
+    "unknown_model_outcomes": 0
   },
   "cleanup": {
     "privacy_clean": true,
@@ -28,6 +31,7 @@
   "condition_identities_consumed": [],
   "condition_identities_reserved": [],
   "earliest_stopping_phase": "offline-composition",
+  "effect_authority": "shadow-only",
   "evidence_retained": {
     "classification": "shadow-control-plane-output",
     "evaluator": [],
@@ -36,6 +40,7 @@
     "raw": []
   },
   "fake_evidence_outputs": [],
+  "implementation_flavor": "production-wrapper",
   "ordered_state_transitions": [
     {
       "index": 1,
@@ -43,16 +48,52 @@
       "phase": "verify-exact-repository-package-identity"
     },
     {
-      "detail": "CompositionError: campaign lifecycle composition failed: registered contract lifecycle is unsupported",
+      "detail": "CompositionError: provider registry completeness failed",
       "index": 2,
       "outcome": "failed",
       "phase": "offline-composition"
     }
   ],
+  "production_control_evidence": {
+    "accounting": {
+      "aggregate_charged_upper_cost_usd": 0.0,
+      "aggregate_observed_cost_usd": 0.0,
+      "conditions": {},
+      "fake_usage": true,
+      "projected_real_cost_usd": 0.0,
+      "zero_retries": true
+    },
+    "authority_source": "validated-production-shadow",
+    "cleanup_handoff_sha256": null,
+    "cleanup_resume_byte_identical": true,
+    "deterministic_staging": null,
+    "effect_authority": "shadow-only",
+    "evaluations": {},
+    "implementation_flavor": "production-wrapper",
+    "production_primitives": [],
+    "raw_export_acknowledgements": {},
+    "replacement_history": {
+      "closed_launch_slots": [],
+      "normalization_handler": "_normalize_provider_entry_replacement_authority",
+      "termination_failures": 0
+    },
+    "resolved_consumers": {
+      "authorization_policy_resolver": "authority:metadata-bound-single-use-v1",
+      "cleanup_handler": "cleanup:empirical-prefix-v1",
+      "command_package_loader": "command-package:registered-autonomous-v1",
+      "control_root_resolver": "control-root:versioned",
+      "lifecycle_resolver": "campaign-lifecycle:autonomous-campaign",
+      "metadata_controller": "model-metadata-receipt:strict-local-prelaunch-v1",
+      "package_transition_resolver": "not-applicable",
+      "provider_selector_resolver": "provider-selector:explicit-contract-argument-v1",
+      "replacement_authority_handler": "provider-entry-authority:normalized-history-v1",
+      "stage_identity_resolver": "stage-identity:typed-provider-v1"
+    }
+  },
   "projected_cost_usd": "0.00",
   "provider_contract_version": "V16",
-  "repository_commit": "5efbe727648ae9e7077132aa9bf3033e4b35ec03",
-  "repository_tree": "5fab7020bf157c6c31a68b1b2024ca10203d3106",
+  "repository_commit": "9e93d7e0d76bc98f8b008f335147d5002aa96156",
+  "repository_tree": "4ebfa95173a15eb1e68228c516d715bbff30b8b5",
   "scenario": "lifecycle-unsupported",
   "scenario_valid": true,
   "schema_version": "1.0.0",
@@ -61,9 +102,9 @@
     "run_ids": []
   },
   "scientific_interpretation_allowed": false,
-  "semantic_sha256": "1a45c8928944b6ed6b8ae82063cc9888b2b9b0c249057991319fe738dd59c3d1",
+  "semantic_sha256": "090f8b1510fa5f3f00d455d05a3f3978e29c05ade1751bc8e37a35b3ca053262",
   "shadow_only": true,
-  "stop_reason": "offline composition failed: campaign lifecycle composition failed: registered contract lifecycle is unsupported",
+  "stop_reason": "offline composition failed: provider registry completeness failed",
   "terminal_state": "category3-shadow-stopped-cleanup-verified",
   "undeclared_adapter_calls": [],
   "zero_undeclared_calls": true

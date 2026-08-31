@@ -46,8 +46,8 @@
   ],
   "recommended_action": "after reviewed merge, generate a fresh V17 package in PR 2",
   "repository": {
-    "commit": "5efbe727648ae9e7077132aa9bf3033e4b35ec03",
-    "tree": "5fab7020bf157c6c31a68b1b2024ca10203d3106"
+    "commit": "9e93d7e0d76bc98f8b008f335147d5002aa96156",
+    "tree": "4ebfa95173a15eb1e68228c516d715bbff30b8b5"
   },
   "resources": {
     "active_provider_instances": 0,
@@ -68,7 +68,7 @@
     "scientific_contract_id": "EXP-0001",
     "status": "unchanged"
   },
-  "semantic_sha256": "30033e8e1549bd12ed6b19774f5fa121ca4441e4bdc18889b565e609ddc826b9",
+  "semantic_sha256": "958fa1192c4c0d928855bad44dcc56c3e9b6e47f5809465052e1b4b84849f8a2",
   "terminal_goal": "evaluate simulative versus reactive SiRA",
   "uncertainties": [
     "current-turn live authority must be supplied externally in a future turn",

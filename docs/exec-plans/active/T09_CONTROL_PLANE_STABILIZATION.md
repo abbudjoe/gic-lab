@@ -52,13 +52,13 @@ adjudication, merge, auto-merge, force-push, and delegated review or implementat
 | CP-02 | Semantic capabilities added to every contract | Registry audit and semantic-contract tests | met |
 | CP-03 | Active runtime dispatch no longer depends on version allowlists | Classified inventory, capability dispatch, repository lint | met |
 | CP-04 | Repository version lint passes | Focused validator tests and repository receipt | met |
-| CP-05 | Registry completeness passes for every contract | Per-contract real-consumer matrix and deterministic receipt | partial |
+| CP-05 | Registry completeness passes for every contract | Per-contract real-consumer matrix and deterministic receipt | met |
 | CP-06 | V16 lifecycle omission reproduced and prevented offline | Mutant regression and direct autonomous-contract lifecycle test | met |
 | CP-07 | Offline composition is complete and deterministic | Schema-valid per-contract composition receipts | met |
-| CP-08 | Shared Category 3 controller is the production transaction path | Production-wrapper assembly over retained primitives with fake low-level effects | partial |
-| CP-09 | Full production-coupled happy-path shadow transaction passes | Deterministic V16 production-wrapper receipt | partial |
+| CP-08 | Shared Category 3 controller is the production transaction path | Production-wrapper assembly over retained primitives with fake low-level effects | met |
+| CP-09 | Full production-coupled happy-path shadow transaction passes | Deterministic V16 production-wrapper receipt | met |
 | CP-10 | Required failure-matrix shadow scenarios pass | Per-scenario receipts and effect assertions | met |
-| CP-11 | Exact validated control proofs precede secret/metadata access | Opaque proof types, binding validation, deterministic staging, zero-call forgery tests | partial |
+| CP-11 | Exact validated control proofs precede secret/metadata access | Opaque proof types, binding validation, deterministic staging, zero-call forgery tests | met |
 | CP-12 | State capsule is valid, concise, and agent-legible | Schema validation, deterministic bytes, privacy tests | met |
 | CP-13 | V16 incident is linked to passing regressions | Incident validator and exact collected node IDs | met |
 | CP-14 | Stable CLI and Make targets exist | CLI tests and direct command runs | met |
@@ -66,7 +66,7 @@ adjudication, merge, auto-merge, force-push, and delegated review or implementat
 | CP-16 | AGENTS/PLANS/PROJECT_STATE/COMPUTE_POLICY updated coherently | Document validation and direct review | met |
 | CP-17 | No V17 package or live authority created | Repository searches and state checks | met |
 | CP-18 | Scientific contract unchanged | Base/head science hashes and preservation tests | met |
-| CP-19 | Full/parity/static/privacy/site gates pass | Required local validation contract | met |
+| CP-19 | Full/parity/static/privacy/site gates pass | Required local validation contract | partial |
 | CP-20 | Draft PR open, exact-head CI green, no merge | GitHub PR, rereview, and Actions metadata | partial |
 
 No item may be marked `met` without concrete evidence. The overall status cannot be
@@ -161,6 +161,16 @@ successful while any required item is partial, blocked, or not-started.
   model-call accounting. Focused production-coupling, registry-mutation, shadow,
   formatting, Ruff, and strict mypy checks pass; immutable receipt regeneration,
   proof-forgery coverage, full parity, exact-head CI, and rereview remain pending.
+- 2026-08-31: sealed repaired implementation ancestor
+  `9e93d7e0d76bc98f8b008f335147d5002aa96156`, tree
+  `4ebfa95173a15eb1e68228c516d715bbff30b8b5`, and regenerated 24 non-circular
+  receipts from it. Binding file SHA-256 is
+  `e96ce55e7cfb2f6d9f9e3565bf99da2c4a008a1921b062828560059712680076`.
+  All 20 requested forgery/bypass cases stop before staging and effects; all 30 exact
+  shared-source members validate; the full control suite, retained provider/accounting
+  focus, aggregate agent check, and repository validator pass. CP-05, CP-08, CP-09,
+  and CP-11 are therefore met. CP-19 and CP-20 remain partial pending the complete
+  final-head gate sequence and exact-head Actions/rereview.
 
 ## Decisions and blockers
 

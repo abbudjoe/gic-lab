@@ -102,40 +102,33 @@
       "adapter": "condition",
       "index": 15,
       "operation": "condition.run",
-      "outcome": "passed",
-      "subject": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009"
-    },
-    {
-      "adapter": "condition",
-      "index": 16,
-      "operation": "condition.export_raw",
-      "outcome": "failed",
+      "outcome": "unknown",
       "subject": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009"
     },
     {
       "adapter": "host",
-      "index": 17,
+      "index": 16,
       "operation": "host.cleanup",
       "outcome": "passed",
       "subject": "shadow-instance-1"
     },
     {
       "adapter": "evidence",
-      "index": 18,
+      "index": 17,
       "operation": "evidence.scan_privacy",
       "outcome": "passed",
       "subject": "shadow-evidence"
     },
     {
       "adapter": "provider",
-      "index": 19,
+      "index": 18,
       "operation": "provider.terminate",
       "outcome": "accepted",
       "subject": "shadow-instance-1"
     },
     {
       "adapter": "provider",
-      "index": 20,
+      "index": 19,
       "operation": "provider.inventory",
       "outcome": "zero",
       "subject": "owned-resources"
@@ -148,7 +141,7 @@
     "replacement_count": 0
   },
   "call_counts": {
-    "browser_actions": 1,
+    "browser_actions": 0,
     "condition_entries": 1,
     "condition_reservations": 1,
     "launch_calls": 1,
@@ -158,7 +151,7 @@
     "provider_posts": 2,
     "secret_reads": 1,
     "termination_calls": 1,
-    "unknown_model_outcomes": 0
+    "unknown_model_outcomes": 1
   },
   "cleanup": {
     "privacy_clean": true,
@@ -175,7 +168,7 @@
   "condition_identities_reserved": [
     "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009"
   ],
-  "earliest_stopping_phase": "raw-export",
+  "earliest_stopping_phase": "condition-execution",
   "effect_authority": "shadow-only",
   "evidence_retained": {
     "classification": "shadow-control-plane-output",
@@ -272,52 +265,39 @@
       "phase": "empirical-entry"
     },
     {
-      "detail": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
+      "detail": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009: model-call accounting stopped condition: TimeoutError",
       "index": 17,
-      "outcome": "passed",
+      "outcome": "failed",
       "phase": "condition-execution"
     },
     {
-      "detail": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009: raw export acknowledgement failed",
       "index": 18,
-      "outcome": "failed",
-      "phase": "raw-export"
-    },
-    {
-      "index": 19,
       "outcome": "passed",
       "phase": "cleanup"
     },
     {
-      "index": 20,
+      "index": 19,
       "outcome": "passed",
       "phase": "terminal-provider-security-verification"
     }
   ],
   "production_control_evidence": {
     "accounting": {
-      "aggregate_charged_upper_cost_usd": 0.00011,
-      "aggregate_observed_cost_usd": 0.00011,
+      "aggregate_charged_upper_cost_usd": 0.00024,
+      "aggregate_observed_cost_usd": 0.0,
       "conditions": {
         "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": {
           "calls": [
             {
-              "actual_usage": {
-                "cached_input_tokens": 8,
-                "input_tokens": 24,
-                "output_tokens": 6,
-                "service_tier": "default",
-                "total_tokens": 30
-              },
+              "actual_usage": null,
               "call_id": "CALL-SHADOW-0001",
-              "exception_type": null,
+              "exception_type": "TimeoutError",
               "history": [
                 "call_admission_requested",
                 "budget_reserved",
                 "send_intent_committed",
                 "send_started",
-                "response_received",
-                "usage_reconciled",
+                "outcome_unknown_after_send",
                 "reservation_released",
                 "call_terminal"
               ],
@@ -335,31 +315,31 @@
                 "total_tokens": 48
               },
               "role": "critic",
-              "terminal_state": "sent_response_reconciled"
+              "terminal_state": "sent_outcome_unknown"
             }
           ],
           "observed_lower_bound": {
             "aggregate": {
-              "browser_actions": 1,
-              "cached_input_tokens": 8,
-              "cost_usd": 0.00011,
-              "default_service_tier_responses": 1,
-              "input_tokens": 24,
+              "browser_actions": 0,
+              "cached_input_tokens": 0,
+              "cost_usd": 0.0,
+              "default_service_tier_responses": 0,
+              "input_tokens": 0,
               "model_call_attempts": 1,
-              "output_bytes": 55,
-              "output_tokens": 6,
-              "total_tokens": 30
+              "output_bytes": 0,
+              "output_tokens": 0,
+              "total_tokens": 0
             },
             "condition": {
-              "browser_actions": 1,
-              "cached_input_tokens": 8,
-              "cost_usd": 0.00011,
-              "default_service_tier_responses": 1,
-              "input_tokens": 24,
+              "browser_actions": 0,
+              "cached_input_tokens": 0,
+              "cost_usd": 0.0,
+              "default_service_tier_responses": 0,
+              "input_tokens": 0,
               "model_call_attempts": 1,
-              "output_bytes": 55,
-              "output_tokens": 6,
-              "total_tokens": 30
+              "output_bytes": 0,
+              "output_tokens": 0,
+              "total_tokens": 0
             }
           },
           "outstanding_reservation_projection": {
@@ -389,37 +369,37 @@
           "outstanding_reservations": 0,
           "reserved_upper_bound": {
             "aggregate": {
-              "browser_actions": 1,
-              "cached_input_tokens": 8,
-              "cost_usd": 0.00011,
-              "default_service_tier_responses": 1,
-              "input_tokens": 24,
+              "browser_actions": 0,
+              "cached_input_tokens": 0,
+              "cost_usd": 0.00024,
+              "default_service_tier_responses": 0,
+              "input_tokens": 32,
               "model_call_attempts": 1,
-              "output_bytes": 55,
-              "output_tokens": 6,
-              "total_tokens": 30
+              "output_bytes": 0,
+              "output_tokens": 16,
+              "total_tokens": 48
             },
             "condition": {
-              "browser_actions": 1,
-              "cached_input_tokens": 8,
-              "cost_usd": 0.00011,
-              "default_service_tier_responses": 1,
-              "input_tokens": 24,
+              "browser_actions": 0,
+              "cached_input_tokens": 0,
+              "cost_usd": 0.00024,
+              "default_service_tier_responses": 0,
+              "input_tokens": 32,
               "model_call_attempts": 1,
-              "output_bytes": 55,
-              "output_tokens": 6,
-              "total_tokens": 30
+              "output_bytes": 0,
+              "output_tokens": 16,
+              "total_tokens": 48
             }
           },
           "schema_version": "0.2.0",
           "terminal_counts": {
             "admitted_not_sent": 0,
-            "sent_outcome_unknown": 0,
+            "sent_outcome_unknown": 1,
             "sent_provider_error_reconciled": 0,
-            "sent_response_reconciled": 1,
+            "sent_response_reconciled": 0,
             "sent_transport_error_known": 0
           },
-          "unknown_outcomes": 0,
+          "unknown_outcomes": 1,
           "unreconciled_provider_attempts": 0
         }
       },
@@ -444,8 +424,6 @@
     "implementation_flavor": "production-wrapper",
     "production_primitives": [
       "ProviderBudgetBoundary.invoke",
-      "ProviderBudgetBoundary.record_browser_action",
-      "ProviderBudgetBoundary.record_output_bytes",
       "T09ProviderContract.validate_owner",
       "admit_model_metadata_receipt_at_prelaunch_boundary",
       "bind_model_metadata_receipt_to_authorization_overlay",
@@ -492,7 +470,7 @@
   "provider_contract_version": "V16",
   "repository_commit": "9e93d7e0d76bc98f8b008f335147d5002aa96156",
   "repository_tree": "4ebfa95173a15eb1e68228c516d715bbff30b8b5",
-  "scenario": "raw-export-failure",
+  "scenario": "ambiguous-task-model-send",
   "scenario_valid": true,
   "schema_version": "1.0.0",
   "scientific_attempt_consumption": {
@@ -502,9 +480,9 @@
     ]
   },
   "scientific_interpretation_allowed": false,
-  "semantic_sha256": "2bbdb9c5b73fb3c0446a64a3abecfb96c670b837dc08e9d97936e54cddfba6b6",
+  "semantic_sha256": "939642791896d7b66f24d787ab06341f0275e7796abfd4bf0ae63f3cd9edd504",
   "shadow_only": true,
-  "stop_reason": "raw export acknowledgement failed",
+  "stop_reason": "model-call accounting stopped condition: TimeoutError",
   "terminal_state": "category3-shadow-stopped-cleanup-verified",
   "undeclared_adapter_calls": [],
   "zero_undeclared_calls": true

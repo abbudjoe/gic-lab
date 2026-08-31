@@ -60,12 +60,12 @@ implementation_delegated: false
 
 | Repair item | Required evidence | Status |
 |---|---|---|
-| RR-01 | Opaque validated capsule, receipt-set, staging, and preparation types; no caller proof booleans/hash tuples | implemented; final evidence pending |
-| RR-02 | Exact binding-document, file, schema, semantic, commit/tree, contract/package, cross-binding, source, authority, and scenario validation | implemented; forgery matrix pending |
-| RR-03 | Production-wrapper adapter assembly over retained lifecycle, metadata, replacement, accounting, host/evidence, finalizer, and cleanup primitives | implemented; final evidence pending |
-| RR-04 | Tracked happy/failure receipts and agent-check use production wrappers with fake low-level effects | implemented; receipt regeneration pending |
-| RR-05 | One real-consumer registry shared by completeness and production assembly | implemented; final evidence pending |
-| RR-06 | Forgery, registry mutation, production-coupling, and accounting regressions with no skips/xfails | in-progress |
+| RR-01 | Opaque validated capsule, receipt-set, staging, and preparation types; no caller proof booleans/hash tuples | met |
+| RR-02 | Exact binding-document, file, schema, semantic, commit/tree, contract/package, cross-binding, source, authority, and scenario validation | met |
+| RR-03 | Production-wrapper adapter assembly over retained lifecycle, metadata, replacement, accounting, host/evidence, finalizer, and cleanup primitives | met |
+| RR-04 | Tracked happy/failure receipts and agent-check use production wrappers with fake low-level effects | met |
+| RR-05 | One real-consumer registry shared by completeness and production assembly | met |
+| RR-06 | Forgery, registry mutation, production-coupling, and accounting regressions with no skips/xfails | met |
 | RR-07 | Non-circular immutable receipts, incident/capsule/docs, and direct Sol/max self-review | in-progress |
 | RR-08 | Focused/full/static/privacy/site/parity and exact-head GitHub Actions; draft PR comment and rereview handoff | not-started |
 
@@ -155,14 +155,29 @@ runtime lint scan and directly exercise both prohibited and permitted examples.
 
 ## Immutable control receipts
 
-The reviewed-head receipt set is superseded because it was produced through the pure
-fake shortcut and did not validate transitive documents. After the repaired shared
-source is sealed in one clean implementation ancestor, `refresh-receipts` will
-regenerate active lint, real-consumer registry, composition, state capsule, one
-production-coupled happy receipt, fifteen production-coupled failure receipts,
-incident completeness, exact shared-source binding, aggregate agent check, and one
-binding document. The resulting identities will be recorded here; no receipt binds
-its own commit.
+Every repaired receipt binds clean implementation ancestor
+`9e93d7e0d76bc98f8b008f335147d5002aa96156`, tree
+`4ebfa95173a15eb1e68228c516d715bbff30b8b5`, rather than its own commit.
+
+| Receipt | Bytes | File SHA-256 |
+|---|---:|---|
+| `control/receipts/active-version-lint.json` | 5,091 | `03a85394ed98f8e71526ffd647384393c1aee6e41effba47ad52e4d93ef884fb` |
+| `control/receipts/registry-completeness.json` | 89,819 | `261b71c5a03246a94e9ae0d2ed5620baed8b62ae420971b62b1d31c6673b4d83` |
+| `control/receipts/v16-composition.json` | 2,166 | `aa3296ac1e1f6adbc9a40713f3c6392abe5cd93d11eca0fdda7c19e958466a4d` |
+| `control/receipts/state-capsule.json` | 2,750 | `b0e79967078cfeb9e47257a704120b69c94c7bc09a62d209a3fe2c77b71fb133` |
+| `control/receipts/category3-shadow/happy-path.json` | 42,287 | `b5cfeddab36ea3c4d6986c545f1729893793d65fb7e56bd1f1b5416f02a03d09` |
+| `control/receipts/incidents.json` | 1,053 | `eb4d022cb2dc546967b1c1bc9b18f0f791dd345de9cfd5857ed1dc3f2506b4ae` |
+| `control/receipts/t09-control-plane-source-binding.json` | 5,650 | `ee85fb42992aee5e1ca74c9d74ddd6e2e363aaffe4262b647914ace8885c913f` |
+| `control/receipts/agent-check.json` | 9,162 | `95a714ec8dd72521b103ae45505e8dbd06e48a4e85c173e8dad365067deadf4a` |
+| `control/receipts/t09-control-receipt-bindings.json` | 7,814 | `e96ce55e7cfb2f6d9f9e3565bf99da2c4a008a1921b062828560059712680076` |
+
+The binding document contains one happy path plus all fifteen exact failure artifact
+identities; their canonical binding-map SHA-256 is
+`8fa2dacb92a6abe0b4529275c03d4e6cf17943fb358d363ea7d12fa9b684a59f`.
+Its semantic SHA-256 is
+`2ee26cd5c1cec9163ba8ee53bd5a4bb9220e8118d5e494797e2afeeddfbd9c98`.
+`giclab-validate all` and the runtime validator reject byte, schema, semantic,
+identity, scenario, cross-binding, source-set, authority, and science drift.
 
 ## Control architecture evidence
 

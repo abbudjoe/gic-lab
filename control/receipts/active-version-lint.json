@@ -26,9 +26,13 @@
     "src/giclab/control/category3.py",
     "src/giclab/control/cli.py",
     "src/giclab/control/composition.py",
+    "src/giclab/control/consumers.py",
     "src/giclab/control/contracts.py",
     "src/giclab/control/incidents.py",
+    "src/giclab/control/production.py",
+    "src/giclab/control/proofs.py",
     "src/giclab/control/registry_validation.py",
+    "src/giclab/control/scenarios.py",
     "src/giclab/control/shadow.py",
     "src/giclab/control/state_capsule.py",
     "src/giclab/control/version_lint.py",
@@ -99,12 +103,12 @@
   "historical_module_allowlist": [
     "src/giclab/validation.py"
   ],
-  "repository_commit": "5efbe727648ae9e7077132aa9bf3033e4b35ec03",
-  "repository_tree": "5fab7020bf157c6c31a68b1b2024ca10203d3106",
+  "repository_commit": "9e93d7e0d76bc98f8b008f335147d5002aa96156",
+  "repository_tree": "4ebfa95173a15eb1e68228c516d715bbff30b8b5",
   "scan_roots": [
     "src/giclab",
     "containers/sira-smoke/pragmatic"
   ],
   "schema_version": "1.0.0",
-  "semantic_sha256": "0552141a0fd28fc0e53aa46278240297f67ed27f106d4e9779fd2be76546562b"
+  "semantic_sha256": "ae8f4182a09fd0b0172e454fd3de0f1603e47a4a9f8091991426e23fb816b05e"
 }

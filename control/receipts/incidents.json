@@ -8,8 +8,8 @@
       "incident_id": "INC-T09-V16-LIFECYCLE-REGISTRY",
       "path": "control/incidents/INC-T09-V16-LIFECYCLE-REGISTRY.json",
       "regression_nodes": [
+        "tests/control/test_production_coupling.py::test_registered_active_contract_reaches_production_adapter_assembly",
         "tests/control/test_composition.py::test_historical_v16_lifecycle_omission_fails_before_secret_access",
-        "tests/control/test_registry_validation.py::test_removing_v16_lifecycle_support_fails_registry_completeness",
         "tests/control/test_category3_shadow.py::test_lifecycle_omission_stops_before_every_external_boundary"
       ],
       "regression_output": "...                                                                      [100%]",
@@ -17,6 +17,8 @@
       "status": "resolved"
     }
   ],
+  "repository_commit": "9e93d7e0d76bc98f8b008f335147d5002aa96156",
+  "repository_tree": "4ebfa95173a15eb1e68228c516d715bbff30b8b5",
   "schema_version": "1.0.0",
-  "semantic_sha256": "2936fd9c9275d7970ddc5b25e779e21faed0fc2f79eba536ac80cd2599cfeac8"
+  "semantic_sha256": "6a07db768f7616e9e2f3ddbba089b1d4fa6a73b472ec5ed613f2d7f6f44f7bfd"
 }
