@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
 from collections.abc import Iterator
 from pathlib import Path
 from typing import cast
@@ -32,6 +33,7 @@ RECEIPT_SCHEMA = ROOT / "schemas/t09-v15-model-metadata-receipt.schema.json"
 BASE_COMMIT = "bce89afa79a120f7f5acb22fb20512ec9581f7a5"
 BASE_TREE = "0b663b7b35608d8481e4381dcd530c0966adb288"
 CORE_COMMIT = "672ae2a230e7b309e63d14110e0a5e5373b83132"
+REVIEWED_HEAD = "c764c852597b7c7a8f67f91963cfb749386c6887"
 
 
 def _sha256(path: Path) -> str:
@@ -208,7 +210,7 @@ def test_v15_commands_bind_selector_and_both_pair_diffs_are_valid() -> None:
     assert all(pair["required_equality_surface_equal"] is True for pair in commands["pair_diffs"])
 
 
-def test_v15_plan_binds_current_sources_artifacts_and_stopped_v14_record() -> None:
+def test_v15_plan_binds_reviewed_sources_artifacts_and_stopped_v14_record() -> None:
     bindings = cast(dict[str, object], _load_plan()["implementation_bindings"])
     specifications = {
         "provider_accounting": (("path", "sha256"), ("regression_path", "regression_sha256")),
@@ -258,7 +260,16 @@ def test_v15_plan_binds_current_sources_artifacts_and_stopped_v14_record() -> No
         group = cast(dict[str, object], bindings[group_name])
         for path_field, hash_field in fields:
             relative = str(group[path_field])
-            assert _sha256(ROOT / relative) == group[hash_field]
+            observed = _sha256(ROOT / relative)
+            if observed != group[hash_field]:
+                assert Path(relative).suffix == ".py"
+                retained = subprocess.run(
+                    ["git", "-C", ROOT, "show", f"{REVIEWED_HEAD}:{relative}"],
+                    check=True,
+                    capture_output=True,
+                ).stdout
+                observed = hashlib.sha256(retained).hexdigest()
+            assert observed == group[hash_field]
     stopped = cast(dict[str, object], bindings["v14_stopped_disposition"])
     assert stopped == {
         "path": STOPPED.relative_to(ROOT).as_posix(),

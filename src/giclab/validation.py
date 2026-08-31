@@ -3158,12 +3158,12 @@ def validate_t09_v14_plan(root: Path = ROOT) -> list[str]:
 
 
 def validate_t09_v15_plan(root: Path = ROOT) -> list[str]:
-    """Validate the unauthorized V15 replacement-normalization package."""
+    """Validate stopped V15 against its immutable reviewed source ancestor."""
 
     return _validate_t09_successor_plan(
         root,
         version="V15",
-        historical_source_bindings=False,
+        historical_source_bindings=True,
     )
 
 

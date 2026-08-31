@@ -2010,8 +2010,9 @@ def test_downstream_selector_source_is_bound_to_its_commit(tmp_path: Path) -> No
         ["git", "-C", repository, "config", "user.email", "t09-test@example.invalid"],
         check=True,
     )
-    relative = "selector.py"
+    relative = host.SELECTOR_RELATIVE_PATH
     source = repository / relative
+    source.parent.mkdir(parents=True)
     source.write_text("SELECTOR = 1\n", encoding="utf-8")
     source.chmod(0o644)
     subprocess.run(["git", "-C", repository, "add", relative], check=True)
@@ -2025,6 +2026,7 @@ def test_downstream_selector_source_is_bound_to_its_commit(tmp_path: Path) -> No
     host.validate_git_bound_downstream_source(
         repository=repository,
         commit=commit,
+        role=host.DownstreamSourceRole.SELECTOR,
         relative=relative,
         source=source,
     )
@@ -2033,6 +2035,7 @@ def test_downstream_selector_source_is_bound_to_its_commit(tmp_path: Path) -> No
         host.validate_git_bound_downstream_source(
             repository=repository,
             commit=commit,
+            role=host.DownstreamSourceRole.SELECTOR,
             relative=relative,
             source=source,
         )

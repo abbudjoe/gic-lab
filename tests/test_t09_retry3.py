@@ -807,7 +807,7 @@ def test_retry3_provider_preflight_accepts_source_bound_offhost_runtime_paths(
     monkeypatch.setattr(
         host,
         "git_file_sha256",
-        lambda _repository, _commit, relative: {
+        lambda _repository, _commit, relative, **_kwargs: {
             host.FINALIZER_RELATIVE_PATH: "c" * 64,
             host.FINALIZER_PROJECTION_RELATIVE_PATH: "d" * 64,
         }[relative],
