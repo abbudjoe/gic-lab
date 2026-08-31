@@ -532,11 +532,11 @@ def _shadow_campaign_control_scope(
 
     if controls._proof is not _SHADOW_CAMPAIGN_CONTROLS_PROOF:
         raise T09ProviderError("shadow campaign controls are invalid")
-    token = _SHADOW_CAMPAIGN_CONTROLS.set(controls)
+    context_handle = _SHADOW_CAMPAIGN_CONTROLS.set(controls)
     try:
         yield
     finally:
-        _SHADOW_CAMPAIGN_CONTROLS.reset(token)
+        _SHADOW_CAMPAIGN_CONTROLS.reset(context_handle)
 
 
 class LambdaTransport:

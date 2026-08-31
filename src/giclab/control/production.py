@@ -713,13 +713,13 @@ class ProductionCategory3World:
         if self._declared_failure(operation, occurrence):
             self._record(operation, "strict-mixed-dotenv", "failed")
             raise AdapterFailure("secret-channel qualification failed")
-        model_secret = self.low_level_effects.read_model_secret()
-        provider_secret = self.low_level_effects.read_provider_secret()
+        model_material = self.low_level_effects.read_model_secret()
+        provider_material = self.low_level_effects.read_provider_secret()
         raw = (
             b"OPENAI_API_KEY="
-            + bytes(model_secret)
+            + bytes(model_material)
             + b"\nLAMBDA_API_KEY="
-            + bytes(provider_secret)
+            + bytes(provider_material)
             + b"\n"
         )
         self._dotenv.write_bytes(raw)
@@ -728,10 +728,10 @@ class ProductionCategory3World:
         self._public_key.write_text(self.low_level_effects.ssh_public_key(), encoding="utf-8")
         selected = metadata.load_openai_dotenv_assignment(self._dotenv)
         self._primitive("load_openai_dotenv_assignment")
-        matched = selected == model_secret
+        matched = selected == model_material
         metadata._destroy_bytearray(selected)
-        metadata._destroy_bytearray(model_secret)
-        metadata._destroy_bytearray(provider_secret)
+        metadata._destroy_bytearray(model_material)
+        metadata._destroy_bytearray(provider_material)
         if not matched:
             raise AdapterFailure("strict dotenv selected another assignment")
         self._record(operation, "strict-mixed-dotenv", "passed")

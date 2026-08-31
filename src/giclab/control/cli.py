@@ -77,8 +77,18 @@ def _clean_git_identity(repository: Path) -> tuple[str, str]:
         check=True,
         text=True,
     )
-    if status.stdout:
-        raise ValueError("receipt refresh requires a clean immutable implementation ancestor")
+    dirty_paths = []
+    for line in status.stdout.splitlines():
+        relative = line[3:]
+        if " -> " in relative:
+            relative = relative.split(" -> ", maxsplit=1)[1]
+        if not relative.startswith("control/receipts/"):
+            dirty_paths.append(relative)
+    if dirty_paths:
+        raise ValueError(
+            "receipt refresh requires an immutable implementation ancestor; "
+            "non-receipt paths are dirty: " + ", ".join(dirty_paths)
+        )
     identity = subprocess.run(
         ["git", "-C", str(repository), "rev-parse", "HEAD", "HEAD^{tree}"],
         capture_output=True,
