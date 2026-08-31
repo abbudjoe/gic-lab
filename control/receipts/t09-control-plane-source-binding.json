@@ -7,9 +7,9 @@
       "sha256": "45460760c3ee12e834c995d62e2b368e3ba8c55947fc75758be4324b096b0795"
     },
     {
-      "bytes": 1093152,
+      "bytes": 1092951,
       "path": "containers/sira-smoke/pragmatic/t09_remote_runner.py",
-      "sha256": "99319b90c2426814f67bfb3c054a284bb1b6a2ce5ac5e35bd7c24674f2363b76"
+      "sha256": "f4d89a7d3e742c4b1806eabbd2984366231630824dbe308ce930d40227ccd4c3"
     },
     {
       "bytes": 43659,
@@ -37,7 +37,7 @@
   "schema_version": "1.0.0",
   "scope": "shared-control-plane-only",
   "scientific_contract_changed": false,
-  "semantic_sha256": "674617b4c135deec62463e8542fa28c33aaa41ce997ab39d893d4e641aaf7859",
-  "source_commit": "25a23e6952618c800cd9e5d0efaca493af612b49",
-  "source_tree": "65bac40c83bc1047e441c02810bbc20b9f45e0de"
+  "semantic_sha256": "72f7073e78372bf9a639c13e39b1f383f9e457fc98c1eee8083a5338228a2fdc",
+  "source_commit": "370a10c56e62f30eeec660c3b970c6ee2082eb7d",
+  "source_tree": "e222e58286ee0ea0ae86e3ef18f7f5a61ca081ad"
 }

@@ -109,6 +109,11 @@ successful while any required item is partial, blocked, or not-started.
   sources in a non-circular receipt. Repository validation now distinguishes this
   reviewed control evolution from immutable V16 package bytes and confirms the only
   experiment-tree change is the stopped disposition.
+- 2026-08-31: full raw pytest matched the exact-base failure count with **1,931
+  passed, 24 inherited failures, and 5 skipped**. One newly exposed historical
+  package-source verification path was repaired to read all frozen instrumentation
+  from the named package commit when the control checkout has advanced; the V16
+  package bytes remain unchanged.
 
 ## Decisions and blockers
 
