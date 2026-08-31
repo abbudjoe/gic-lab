@@ -156,26 +156,26 @@ runtime lint scan and directly exercise both prohibited and permitted examples.
 ## Immutable control receipts
 
 Every repaired receipt binds clean implementation ancestor
-`9e93d7e0d76bc98f8b008f335147d5002aa96156`, tree
-`4ebfa95173a15eb1e68228c516d715bbff30b8b5`, rather than its own commit.
+`bdbda9eff6bfb45c5478ab1a2bcd0f819ca58696`, tree
+`5e4a81fded2611eb32babcfcbc72f1f41432c037`, rather than its own commit.
 
 | Receipt | Bytes | File SHA-256 |
 |---|---:|---|
-| `control/receipts/active-version-lint.json` | 5,091 | `03a85394ed98f8e71526ffd647384393c1aee6e41effba47ad52e4d93ef884fb` |
-| `control/receipts/registry-completeness.json` | 89,819 | `261b71c5a03246a94e9ae0d2ed5620baed8b62ae420971b62b1d31c6673b4d83` |
-| `control/receipts/v16-composition.json` | 2,166 | `aa3296ac1e1f6adbc9a40713f3c6392abe5cd93d11eca0fdda7c19e958466a4d` |
-| `control/receipts/state-capsule.json` | 2,750 | `b0e79967078cfeb9e47257a704120b69c94c7bc09a62d209a3fe2c77b71fb133` |
-| `control/receipts/category3-shadow/happy-path.json` | 42,287 | `b5cfeddab36ea3c4d6986c545f1729893793d65fb7e56bd1f1b5416f02a03d09` |
-| `control/receipts/incidents.json` | 1,053 | `eb4d022cb2dc546967b1c1bc9b18f0f791dd345de9cfd5857ed1dc3f2506b4ae` |
-| `control/receipts/t09-control-plane-source-binding.json` | 5,650 | `ee85fb42992aee5e1ca74c9d74ddd6e2e363aaffe4262b647914ace8885c913f` |
-| `control/receipts/agent-check.json` | 9,162 | `95a714ec8dd72521b103ae45505e8dbd06e48a4e85c173e8dad365067deadf4a` |
-| `control/receipts/t09-control-receipt-bindings.json` | 7,814 | `e96ce55e7cfb2f6d9f9e3565bf99da2c4a008a1921b062828560059712680076` |
+| `control/receipts/active-version-lint.json` | 5,091 | `67569f877257a8a15ca4efdd4c6198408bd9bf54c5c86f09543f0899466be64d` |
+| `control/receipts/registry-completeness.json` | 89,819 | `dfa3c09b5c76c8f97c2576619b261168fdb27585996ab3876ff939b7b194b13b` |
+| `control/receipts/v16-composition.json` | 2,166 | `145e76ea37e327b5492ab90d7379aab3f416c8113c3323ccd5fbb3b32a7925e6` |
+| `control/receipts/state-capsule.json` | 2,750 | `c056d46a10a01d4c3f3e8803eb22756743b81607c46850317d8476abc5cbdf7b` |
+| `control/receipts/category3-shadow/happy-path.json` | 42,287 | `d43df6ecb8263b2dabab9d466b95e7c3e046cbdebb0b6a26f33621c985fe6511` |
+| `control/receipts/incidents.json` | 1,053 | `4a86a694feadd7da0931e46a65ff886d87b526df5ac472a8085864e70ae84e99` |
+| `control/receipts/t09-control-plane-source-binding.json` | 5,811 | `1e69f414cde9636b06dbe1cd401c0a14563c5506de51419d66ce692221b8cf0d` |
+| `control/receipts/agent-check.json` | 9,162 | `b8b3f9fa61fcc2378e485e8add70792e76991b95c807e2285da0bf1dfcddff80` |
+| `control/receipts/t09-control-receipt-bindings.json` | 7,814 | `d6e8ba677caccc0173b4325e7da24fbdcd41d63d7138366613f0e0eb1b7d7973` |
 
 The binding document contains one happy path plus all fifteen exact failure artifact
 identities; their canonical binding-map SHA-256 is
-`8fa2dacb92a6abe0b4529275c03d4e6cf17943fb358d363ea7d12fa9b684a59f`.
+`5b27309b72e6bfd793cc9e1e3b7e6a88bd5cff753d479cb9ac3e080cf805592e`.
 Its semantic SHA-256 is
-`2ee26cd5c1cec9163ba8ee53bd5a4bb9220e8118d5e494797e2afeeddfbd9c98`.
+`2f790271bd915b7dd1eb4533f6b66583216ae7d302c879040209e0d8b9146de8`.
 `giclab-validate all` and the runtime validator reject byte, schema, semantic,
 identity, scenario, cross-binding, source-set, authority, and science drift.
 

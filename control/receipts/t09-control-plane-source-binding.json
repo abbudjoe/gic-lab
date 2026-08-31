@@ -62,9 +62,9 @@
       "sha256": "83c76923367295c44068981f2e5bd63c206a71940d0eea4e900a3e05621aba06"
     },
     {
-      "bytes": 39137,
+      "bytes": 39173,
       "path": "src/giclab/control/proofs.py",
-      "sha256": "73edbfdaa3bd717ddb16a4258ce86d805e436a3efe13fb600c18483ac6601dcb"
+      "sha256": "30d40ec138512e338c457e0d82bcd50959af65785c9a2e44eb7f5633a01624fd"
     },
     {
       "bytes": 17362,
@@ -150,6 +150,11 @@
       "bytes": 4099,
       "path": "src/giclab/registry.py",
       "sha256": "b71b8c979529e8530e9157069b3e765f649ee0349d8c6233d4244b98e3f658ad"
+    },
+    {
+      "bytes": 187091,
+      "path": "src/giclab/validation.py",
+      "sha256": "21bd449909811265e54717d9767ec6138b53c7089e9dc5e9e1616a7aaf529b29"
     }
   ],
   "historical_package_changed": false,
@@ -157,7 +162,7 @@
   "schema_version": "1.0.0",
   "scientific_contract_changed": false,
   "scope": "shared-control-plane-only",
-  "semantic_sha256": "97827f86b553b4dd19ea9399720aee309df9c4007606bc779da69223f89d82b5",
-  "source_commit": "9e93d7e0d76bc98f8b008f335147d5002aa96156",
-  "source_tree": "4ebfa95173a15eb1e68228c516d715bbff30b8b5"
+  "semantic_sha256": "d73aa4fd5c553ecaafa13460716dc5bf850006c619fad145416ae82a0c099b48",
+  "source_commit": "bdbda9eff6bfb45c5478ab1a2bcd0f819ca58696",
+  "source_tree": "5e4a81fded2611eb32babcfcbc72f1f41432c037"
 }

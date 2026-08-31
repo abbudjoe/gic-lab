@@ -162,11 +162,11 @@ successful while any required item is partial, blocked, or not-started.
   formatting, Ruff, and strict mypy checks pass; immutable receipt regeneration,
   proof-forgery coverage, full parity, exact-head CI, and rereview remain pending.
 - 2026-08-31: sealed repaired implementation ancestor
-  `9e93d7e0d76bc98f8b008f335147d5002aa96156`, tree
-  `4ebfa95173a15eb1e68228c516d715bbff30b8b5`, and regenerated 24 non-circular
+  `bdbda9eff6bfb45c5478ab1a2bcd0f819ca58696`, tree
+  `5e4a81fded2611eb32babcfcbc72f1f41432c037`, and regenerated 24 non-circular
   receipts from it. Binding file SHA-256 is
-  `e96ce55e7cfb2f6d9f9e3565bf99da2c4a008a1921b062828560059712680076`.
-  All 20 requested forgery/bypass cases stop before staging and effects; all 30 exact
+  `d6e8ba677caccc0173b4325e7da24fbdcd41d63d7138366613f0e0eb1b7d7973`.
+  All 20 requested forgery/bypass cases stop before staging and effects; all 31 exact
   shared-source members validate; the full control suite, retained provider/accounting
   focus, aggregate agent check, and repository validator pass. CP-05, CP-08, CP-09,
   and CP-11 are therefore met. CP-19 and CP-20 remain partial pending the complete
