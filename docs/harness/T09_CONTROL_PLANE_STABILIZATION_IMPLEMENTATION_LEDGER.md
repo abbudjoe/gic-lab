@@ -92,9 +92,9 @@ runtime lint scan and directly exercise both prohibited and permitted examples.
   with three passing exact nodes, 12/12 shadow scenarios valid, and a schema-valid
   deterministic state capsule.
 - 2026-08-31 source binding: commit
-  `9d4fef32cbf2bd8859701b4b14410f77a0201543`, tree
-  `2ccd8eeb79030fa401e28f2c7edbdfa40da598ff`, six shared runtime sources, semantic
-  SHA-256 `3c0451b3a9fd528e36d3f505956adc7986d3b15f05dd481724466f6bf1042cbf`.
+  `9c8f65dcaf9f9e6960cc41e2f46ffa801d20d6b3`, tree
+  `2c6a3539dda1ca11475e5b1fdfa6be6f6d21a863`, six shared runtime sources, semantic
+  SHA-256 `bac2c3100b79a8262182c6f3da93f97a0c1932ceb0e0c89e25b59368cd151386`.
   `giclab-validate all` passes with unchanged scientific/package artifacts and no
   future package identity.
 
