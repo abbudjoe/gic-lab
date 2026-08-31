@@ -6213,11 +6213,11 @@ def verify_package(
             or ".." in Path(relative).parts
         ):
             raise T09HostError("runtime instrumentation file binding drifted")
-            observed_sha256 = (
-                git_file_sha256(repository, package_commit, relative)
-                if current_commit is not None
-                else file_sha256(repository / relative)
-            )
+        observed_sha256 = (
+            git_file_sha256(repository, package_commit, relative)
+            if current_commit is not None
+            else file_sha256(repository / relative)
+        )
         if observed_sha256 != expected_sha256:
             raise T09HostError("runtime instrumentation file binding drifted")
     evaluator_contract = load_object(paths["evaluator"], label="evaluator contract")
