@@ -13,6 +13,18 @@ implementation_delegated: false
 Implementation, review, tests, repository writes, Git operations, and scientific
 decisions were not delegated. ChatGPT exact-head review remains external and required.
 
+## Superseding package-consistency disposition
+
+The exact-head record below describes the provider-entry normalization implementation
+and remains historical evidence, but it is not an oracle for the later merged V15
+command package. A no-live-activity Category 3 preflight found that all four stored argv
+arrays matched a fresh render while their four stored hashes did not. Commit
+`b35b6f34b4915007b6ebab44994f97e41ff3c495` first changed an embedded final-argv
+binding without regenerating the hash; subsequent rebinds retained it. The exact
+preflight comparison correctly failed closed. The authoritative repair record is
+`docs/harness/T09_V15_COMMAND_MANIFEST_HASH_REPAIR_LEDGER.md`; the old package hashes
+listed below identify the stopped package and are intentionally retained as history.
+
 ## Immutable implementation record
 
 - Core repair commit: `f5750d1d8e3fe5f03450210fe95f652d2e8f4288`.

@@ -42,4 +42,26 @@ handling, core suppression, provider-call accounting, exact-resource cleanup, an
 offline host receipt validation. The prior verified closeout remains authoritative if
 replacement normalization fails.
 
+## Prelive command-manifest repair
+
+The merged V15 package reached a no-secret, no-provider offline preflight with four
+argv arrays that exactly matched a fresh render but four stale `argv_sha256` values.
+The first inconsistent descendant had rebound the embedded execution-contract digest
+without regenerating each manifest; later rebinds retained those hashes, and package
+tests trusted the stored values instead of recomputing them. Exact preflight correctly
+failed closed before live authority.
+
+The canonical digest is SHA-256 over the UTF-8 bytes of the exact final ordered JSON
+array of strings, serialized with `ensure_ascii=False`, no insignificant whitespace,
+and sorted keys (inert for an array of strings). Empty argv, non-string members, and
+embedded NUL bytes are invalid. The renderer freezes final argv before hashing; the
+generator stores only renderer output; and preflight plus repository validation
+independently recompute stored and fresh self-hashes before full equality.
+
+The machine runtime profile remains byte-identical because this consistency repair
+changes no runtime or scientific policy. Its old offline qualification receipt remains
+historical evidence for the stopped merged package and is nonreusable after source and
+package changes. A future Category 3 turn must recreate qualification under the
+repaired exact merge and bind a fresh authorization reference.
+
 All V15 flags are false. No live qualification or scientific execution has occurred.

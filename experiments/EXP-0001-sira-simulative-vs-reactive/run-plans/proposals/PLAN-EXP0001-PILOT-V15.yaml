@@ -55,12 +55,12 @@ scientific_contract:
   seed: 42
   condition_retries_after_empirical_entry: 0
 implementation_bindings:
-  required_base_commit: 2db290530c36c92562fe6b25f7a4f6aafd77b548
-  required_base_tree: 5e6d3c8890811147f136691354ddeb278c949976
-  required_base_parent_1: 12a6c4fba0972d3b6f9f16dcfae048dbb770d78a
-  required_base_parent_2: e5d67d36bc84d6b1eaaf8b3bce0f8797d8bd3074
+  required_base_commit: bce89afa79a120f7f5acb22fb20512ec9581f7a5
+  required_base_tree: 0b663b7b35608d8481e4381dcd530c0966adb288
+  required_base_parent_1: 2db290530c36c92562fe6b25f7a4f6aafd77b548
+  required_base_parent_2: 21385c10ec16d30fb73dd6ae6abf0df20fdc6a09
   required_accounting_repair_ancestor: 1c6b093699288f37aa23526fe1e1672e50280093
-  reviewed_implementation_ancestor: e434948d94f04e26d7efed94607860b1ec335bb6
+  reviewed_implementation_ancestor: 672ae2a230e7b309e63d14110e0a5e5373b83132
   exact_reviewed_merged_commit: pending-category-2-merge
   exact_reviewed_merged_commit_required_before_authorization: true
   provider_accounting:
@@ -153,7 +153,7 @@ implementation_bindings:
     immutable_model_unavailable_disposition: stop-before-lambda-launch-zero-lambda-cost
   execution_plane:
     pilot_library_path: src/giclab/harness/t09_sira_pilot.py
-    pilot_library_sha256: 6e49cd6134a19326f1888adbc4a84678189ec1cfd0f536dbc1874224b3306a64
+    pilot_library_sha256: 38b059c276b57b7dfe9455fb325b49afedcac9c401e82228441720874d388be2
     campaign_lifecycle_path: src/giclab/harness/lambda_campaign_lifecycle.py
     campaign_lifecycle_sha256: 6f0f74354f15766466480c498b4ab5af6887e337c5197416bb9dedf3ff78200b
     provider_path: src/giclab/harness/t09_pragmatic_provider.py
@@ -163,33 +163,33 @@ implementation_bindings:
     remote_runner_path: containers/sira-smoke/pragmatic/t09_remote_runner.py
     remote_runner_sha256: 97a958e8b1f1ec7b3a1ac3660bdb4c00891e1d8ccbb33e86811035cacc8e8227
     command_generator_path: containers/sira-smoke/pragmatic/t09_freeze_commands.py
-    command_generator_sha256: 10edb0622b538b9851f0942c97ddf28b755fb2da70872fc23b419c93cb7d7a5a
+    command_generator_sha256: 555d5506edeccccf595b720fb4169cd7cd1620fd870f2235689fef07f62e0613
     runtime_profile_path: experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/proposals/T09_PILOT_RUNTIME_PROFILE_V15.yaml
     runtime_profile_sha256: 64075a67989522495145bf02c32544bd3a07f30c38d46daa4e9f5c16c65faa1d
     execution_contract_path: experiments/EXP-0001-sira-simulative-vs-reactive/contracts/proposals/T09_PILOT_EXECUTION_CONTRACT_V15.json
-    execution_contract_sha256: 9f12ff18be7bd75e9b0c6ea367a327f5914e54d85fd739f7adfc62c9065c58f8
+    execution_contract_sha256: a658081b26e0812874fdb3f195896f642283b677b814b0da025bf65b55989629
     command_manifests_path: experiments/EXP-0001-sira-simulative-vs-reactive/contracts/proposals/T09_PILOT_COMMAND_MANIFESTS_V15.json
-    command_manifests_sha256: 6feacd571715237934c7cf816861b38a0c7740ea4b75b927443731d3717df16c
+    command_manifests_sha256: 533721a1665c1826502ece26b025859c6fb21b6f3b791d085d2ea294e3f88b4f
     runtime_identity_path: experiments/EXP-0001-sira-simulative-vs-reactive/contracts/proposals/T09_PILOT_RUNTIME_IDENTITY_V15.json
-    runtime_identity_sha256: a475f126cd2c2cfc9578197c245ff43b2d45167a68b133d8f49abbf9527c0268
+    runtime_identity_sha256: 84c500413c9eaab9c1f15c94b0015c5e0a721883b178e8b85b3e725df09091fb
     runtime_adaptation_path: src/giclab/harness/sira_gate_a_runtime.py
     runtime_adaptation_sha256: 0f1cd94fe048102704c9a4c461c6a3bf457ca53eb5586291441a675cd6b256a0
     execution_schema_path: schemas/t09-sira-pilot-v15-execution.schema.json
     execution_schema_sha256: e2c3008a0bd29390d65ad9f238a84b0e042cc84db0c7a1b31fe81f456ae22304
     condition_plans:
     - path: experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v15-task-0000-reactive.yaml
-      sha256: b1ddb21d527bb20e81d8a54034f6d3d1a99703f9b7dbc77508f0ef8b152eb64a
+      sha256: bfdddf828ed65d3a3f1b9fe94f5b18d174be9c401aef439eefd969ebeb6ace3f
     - path: experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v15-task-0000-simulative.yaml
-      sha256: 84ad96179639a4d3a1c499a8a575454e904080703ad37e16b9096be745f56f88
+      sha256: 4357dba66403c24193744f2a0827131f139d79f152492e12c59a62303f97c473
     - path: experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v15-task-0001-simulative.yaml
-      sha256: bad21c293dfc26b317f8ac298716e77e9621169febb35679cb02478634c18493
+      sha256: fe55b499fc95209644b3c6540f35136842b45fa0662a9f3f7da52dd4af1eee90
     - path: experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v15-task-0001-reactive.yaml
-      sha256: b62cbbe4b20dfb016dc8763ced0fc32205bf59b4581fdf9d3aa27279f059d075
+      sha256: 2a197b0225442ba9be7d6ca30f39ec335673ac388283e803f3924e5930c4118f
     static_authorized: false
     static_authorization_reference: null
     execution_eligibility: blocked-until-fresh-category-3-authorization
     preflight_path: containers/sira-smoke/pragmatic/t09_preflight.py
-    preflight_sha256: fd2378995092d6ccced6f043d92c47e17a1da25d05c19f4df281c57b0c4dbe6f
+    preflight_sha256: fdb2459617c0f7613b2f5149b53c00bf631a20a9c0cd639c774aa8d38e7fcea5
     local_finalizer_qualification_path: containers/sira-smoke/pragmatic/t09_local_finalizer_qualification.py
     local_finalizer_qualification_sha256: a99b46bc73f7e2867e4b4a04771828840b5dda7908e0427a5a3495df3053fce0
   v14_stopped_disposition:
@@ -448,5 +448,6 @@ category_3_preconditions:
 - fresh Category 3 authorization
 - exactly one authenticated gpt-4o-2024-11-20 model-metadata GET must succeed before Lambda launch or
   any paid cloud mutation; otherwise stop with zero Lambda cost
-- exact merged commit, plan SHA-256, runtime interpreter, dependency closure, image, evaluator, finalizer,
-  selector, projection, and cleanup identities frozen before release
+- exact repaired merge and plan SHA-256 plus a newly recreated local-finalizer qualification, runtime
+  interpreter, dependency closure, image, evaluator, selector, projection, and cleanup identities frozen
+  before release; the stopped-turn authorization reference and old qualification are nonreusable

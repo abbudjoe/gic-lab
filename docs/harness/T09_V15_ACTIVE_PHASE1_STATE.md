@@ -1,5 +1,22 @@
 # T09 V15 active Phase 1 state
 
+A later V15 Category 3 turn stopped during offline preflight, before authorization
+materialization, qualified dotenv access, authenticated metadata/model traffic,
+Lambda access, provider resource creation, frozen-manifest creation, empirical entry,
+or paid cost. All four stored argv arrays and equality surfaces matched the exact
+renderer, but their retained `argv_sha256` values described an earlier package bind.
+The exact full-document comparison failed closed. The sanitized stopped record is
+`experiments/EXP-0001-sira-simulative-vs-reactive/T09_V15_PRELIVE_COMMAND_MANIFEST_STOPPED_DISPOSITION.json`
+(3,797 bytes; SHA-256
+`911f33262efe2e760a4ed8aa98bd26beb5a9eded918d864fe2d04565182831ac`).
+
+The repair freezes final argv before hashing, gives renderer/generator/preflight and
+repository validation one explicit argv-only SHA-256 contract, and regenerates the
+V15 command package through that exact path. The prior current-turn authorization
+reference and old offline qualification are nonreusable. The V15 plan and
+`AUTONOMOUS-0008` identities remain fresh because no V15 live authority, resource,
+run root, frozen manifest, or attempt was materialized.
+
 V14 stopped before scientific freeze and empirical entry after using one model-metadata
 allowance and one provider launch. Slot 2 made zero provider invocations and its launch
 capability was not consumed, but all V14 authority and identities are nonreplayable
@@ -37,3 +54,5 @@ V15 is the sole fresh successor proposal:
 
 All V15 authorization and execution flags are false, no V15 run root or authorization
 overlay exists, the frozen science is unchanged, and Category 3 remains unauthorized.
+Fresh exact-head review, merge, qualification, and Category 3 authorization bound to
+the repaired merge and plan hash are required.

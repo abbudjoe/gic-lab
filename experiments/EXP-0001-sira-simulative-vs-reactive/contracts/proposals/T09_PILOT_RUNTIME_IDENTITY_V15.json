@@ -68,7 +68,7 @@
       },
       {
         "path": "src/giclab/harness/t09_sira_pilot.py",
-        "sha256": "6e49cd6134a19326f1888adbc4a84678189ec1cfd0f536dbc1874224b3306a64"
+        "sha256": "38b059c276b57b7dfe9455fb325b49afedcac9c401e82228441720874d388be2"
       },
       {
         "path": "src/giclab/harness/lambda_campaign_lifecycle.py",
@@ -100,11 +100,11 @@
       },
       {
         "path": "containers/sira-smoke/pragmatic/t09_preflight.py",
-        "sha256": "fd2378995092d6ccced6f043d92c47e17a1da25d05c19f4df281c57b0c4dbe6f"
+        "sha256": "fdb2459617c0f7613b2f5149b53c00bf631a20a9c0cd639c774aa8d38e7fcea5"
       },
       {
         "path": "containers/sira-smoke/pragmatic/t09_freeze_commands.py",
-        "sha256": "10edb0622b538b9851f0942c97ddf28b755fb2da70872fc23b419c93cb7d7a5a"
+        "sha256": "555d5506edeccccf595b720fb4169cd7cd1620fd870f2235689fef07f62e0613"
       },
       {
         "path": "containers/sira-smoke/pragmatic/t09_secret_preflight.py",
@@ -147,7 +147,7 @@
         "sha256": "39a4d698b8184c4d6652294f32e07911b2998b1a6326ad280353ba5f505e387e"
       }
     ],
-    "reviewed_implementation_ancestor": "e434948d94f04e26d7efed94607860b1ec335bb6",
+    "reviewed_implementation_ancestor": "672ae2a230e7b309e63d14110e0a5e5373b83132",
     "scope": [
       "content-addressed-no-follow-private-regression-archive-staging",
       "raw-attempt-root-typed-binding-before-empirical-entry",
@@ -186,6 +186,7 @@
       "repeated-slot-entry-authority-retained-for-next-launch-reconstruction",
       "provider-owned-preflight-cleanup-state-before-staging",
       "explicit-immutable-v3-through-v15-provider-contract-selection",
+      "canonical-final-argv-command-manifest-sha256-and-exact-stored-fresh-validation",
       "pilot-state-before-retained-authority-copy",
       "512MiB-symmetric-attempt-and-64MiB-essential-failure-caps"
     ]

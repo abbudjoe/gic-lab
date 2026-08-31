@@ -1,6 +1,7 @@
 # T09 V15 command-manifest hash consistency repair ledger
 
-Status: **in-progress**. Category 1 implementation/package-consistency repair only.
+Status: **package-repaired-validation-in-progress**. Category 1
+implementation/package-consistency repair only.
 
 ```text
 operator_attested_model: gpt-5.6-sol
@@ -83,24 +84,56 @@ Classification: **F = A + D + E**. B and C are false.
 7. V11-V14 all use the intended canonical list hash and all sixteen historical stored
    hashes are valid. Their source-controlled files must remain byte-identical.
 
+## Canonical contract and repaired package
+
+`command_argv_sha256(argv)` accepts one nonempty sequence containing only strings and
+rejects embedded NUL bytes. It freezes that sequence and hashes the UTF-8 bytes of
+`json.dumps(list(argv), ensure_ascii=False, separators=(",", ":"), sort_keys=True)`.
+This is an argv-only digest and exactly preserves the valid V11-V14 algorithm.
+
+Core implementation commit: `672ae2a230e7b309e63d14110e0a5e5373b83132`.
+The runtime profile is intentionally unchanged at 15,974 bytes and SHA-256
+`64075a67989522495145bf02c32544bd3a07f30c38d46daa4e9f5c16c65faa1d`
+because the defect changes no runtime or scientific policy. Repaired descendant
+identities are:
+
+- Plan: 20,420 bytes, SHA-256
+  `e678a44733916d2d437f5f739ad058243d49f566a3dd12f2c3431b9d6094d8b8`.
+- Runtime identity: 11,150 bytes, SHA-256
+  `84c500413c9eaab9c1f15c94b0015c5e0a721883b178e8b85b3e725df09091fb`.
+- Execution contract: 31,487 bytes, SHA-256
+  `a658081b26e0812874fdb3f195896f642283b677b814b0da025bf65b55989629`.
+- Generated command manifests: 23,521 bytes, SHA-256
+  `533721a1665c1826502ece26b025859c6fb21b6f3b791d085d2ea294e3f88b4f`.
+
+For each final argv, only element 17 (execution-contract digest) and element 19
+(pilot-library digest) change from the stopped merged package. Length remains 56 and
+the 26-element upstream scientific command is byte-equal. Equality and condition-owned
+surfaces change only through matching package/commit/environment/condition bindings;
+both pair diffs and every V15 selector remain valid. Repaired hashes in execution order
+are `fd69bb50bd1e0342f9283521f1f79a43c678c423bfc2db8f133c309cd7f1efa3`,
+`b2cb006155afea265d67c731d65f92575fdeeea879c927941046f8c00925a39a`,
+`ba161d393232b0cf3a58d586caaa399be3716fef225b1b767e0b787b7058d6af`, and
+`b4c0a4e29c8cf75e0ff32917a1890788327aa0d785fde8ee8b3d5f239fea6ee6`.
+
 ## Definition of done
 
 | ID | Required outcome | Planned evidence | Status |
 | --- | --- | --- | --- |
-| HASH-DOD-01 | Preserve the stopped prelive transaction as a sanitized public record with exact zero-live facts and public evidence identities. | JSON schema/shape, bytes/SHA, privacy scan. | not-started |
-| HASH-DOD-02 | Establish one canonical argv-only SHA-256 helper that rejects empty, non-string, and NUL-bearing argv. | Helper unit tests and independently computed vectors. | not-started |
-| HASH-DOD-03 | Freeze the complete final argv before hashing and prohibit post-hash mutation. | Renderer source review and mutation regressions. | not-started |
-| HASH-DOD-04 | Keep generator and renderer on one construction path and generate byte-identically twice. | Direct render/generator equality and byte comparison. | not-started |
-| HASH-DOD-05 | Independently validate stored and fresh self-hashes, argv equality, hash equality, and full manifest equality with typed failure classes. | Preflight unit/mutation tests. | not-started |
-| HASH-DOD-06 | Make repository/package validation reject argv/hash inconsistency. | `validate_t09_v15_plan` mutation regression and `make validate`. | not-started |
-| HASH-DOD-07 | Preserve the exact merged defect and prove arrays equal, four hashes differ, and exact preflight rejects it. | Historical structural fixture/record and regression. | not-started |
-| HASH-DOD-08 | Regenerate the source-controlled V15 package only from the canonical generator and rebind every affected descendant. | Generator output comparison and exact file bindings. | not-started |
-| HASH-DOD-09 | Preserve V11-V14 bytes and version-bound validation. | Base/head Git blob hashes and historical validators. | not-started |
-| HASH-DOD-10 | Preserve V15 science, pair diffs, provider selectors, flags, and `AUTONOMOUS-0008` identities. | Semantic projection, selector/pair tests, false-state/filesystem assertions. | not-started |
-| HASH-DOD-11 | Execute the exact privacy-safe offline V15 preflight with zero provider/model requests, browser actions, and secret reads. | Full `t09_preflight.run` fixture regression. | not-started |
-| HASH-DOD-12 | Pass focused, static, repository, full, parity, site, diff, and privacy gates with no new failures/skips/xfails. | Exact commands and result counts. | not-started |
-| HASH-DOD-13 | Complete direct Sol/max spec-conformance self-review without delegation. | Recorded checklist and findings disposition. | not-started |
-| HASH-DOD-14 | Commit core and package descendants separately, push normally, and open/monitor one draft PR without merge or auto-merge. | Commit/tree/remote/PR/Actions identities. | not-started |
+| HASH-DOD-01 | Preserve the stopped prelive transaction as a sanitized public record with exact zero-live facts and public evidence identities. | JSON shape, 3,797 bytes, SHA-256 `911f3326…`, privacy scan. | met |
+| HASH-DOD-02 | Establish one canonical argv-only SHA-256 helper that rejects empty, non-string, and NUL-bearing argv. | Helper unit tests and independently computed vectors. | met |
+| HASH-DOD-03 | Freeze the complete final argv before hashing and prohibit post-hash mutation. | Renderer source review and mutation regressions. | met |
+| HASH-DOD-04 | Keep generator and renderer on one construction path and generate byte-identically twice. | Direct render/generator equality and byte comparison. | met |
+| HASH-DOD-05 | Independently validate stored and fresh self-hashes, argv equality, hash equality, and full manifest equality with typed failure classes. | Preflight unit/mutation tests. | met |
+| HASH-DOD-06 | Make repository/package validation reject argv/hash inconsistency. | Stale-package rejection, mutation regression, repaired `validate_t09_v15_plan`. | met |
+| HASH-DOD-07 | Preserve the exact merged defect and prove arrays equal, four hashes differ, and exact preflight rejects it. | Exact render from merged-base Git blobs and stopped record. | met |
+| HASH-DOD-08 | Regenerate the source-controlled V15 package only from the canonical generator and rebind every affected descendant. | Two equal generator byte streams, direct-render equality, exact bindings. | met |
+| HASH-DOD-09 | Preserve V11-V14 bytes and version-bound validation. | Base/head Git blob hashes and historical validators. | met |
+| HASH-DOD-10 | Preserve V15 science, pair diffs, provider selectors, flags, and `AUTONOMOUS-0008` identities. | Semantic projection, selector/pair tests, false-state/filesystem assertions. | met |
+| HASH-DOD-11 | Execute the exact privacy-safe offline V15 preflight comparison with zero provider/model requests, browser actions, and secret reads. | Source-controlled package through `t09_preflight.validate_command_manifest_package`; pure no-client boundary. | met |
+| HASH-DOD-12 | Pass focused, static, repository, full, parity, site, diff, and privacy gates with no new failures/skips/xfails. | Exact commands and result counts. | partial |
+| HASH-DOD-13 | Complete direct Sol/max spec-conformance self-review without delegation. | Recorded checklist and findings disposition. | partial |
+| HASH-DOD-14 | Commit core and package descendants separately, push normally, and open/monitor one draft PR without merge or auto-merge. | Commit/tree/remote/PR/Actions identities. | partial |
 
 ## Implementation mapping
 
@@ -128,10 +161,15 @@ Classification: **F = A + D + E**. B and C are false.
   repository validator, historical reproduction, mutation matrix, and V11-V14 checks
   pass 27 network-free tests; Ruff, strict mypy, and diff checks pass. The stale V15
   package intentionally remains rejected until it is regenerated after the core commit.
+- 2026-08-30: core commit `672ae2a2…` freezes the helper/renderer/generator/preflight/
+  validator/test repair. The V15 runtime identity and four condition plans bind that
+  immutable commit, the execution contract binds their new hashes, and the command
+  artifact is replaced only with canonical generator output. Two renders are
+  byte-identical. All 37 command/package regression nodes pass and the complete V15
+  validator reports no errors.
 
 ## Next permitted phase
 
-Implement the canonical helper and validation boundary, run the smallest correctness
-smoke, perform direct self-review, then bind and regenerate V15 against the immutable
-core commit. No package descendant or PR step may claim success until every DoD item
-is met.
+Run the focused and full/static/parity/site/privacy gates, complete direct self-review,
+commit the package descendants without amending the core, then push and open/monitor
+one draft PR. No PR step may claim success until every non-review DoD item is met.
