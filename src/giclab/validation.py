@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import re
 import subprocess
 import sys
@@ -22,7 +23,7 @@ from giclab.harness.task_source import (
     dataset_slice_task_source,
     open_query_task_source_matches,
 )
-from giclab.plans import PlanContractError, discover_plan_paths, load_plan_header
+from giclab.plans import PlanContractError, PlanHeader, discover_plan_paths, load_plan_header
 from giclab.registry import (
     DuplicateKeyError,
     discover_repo_root,
@@ -40,6 +41,8 @@ T09_DOWNSTREAM_FINALIZER_HISTORY_RELATIVE = Path(
 T09_DOWNSTREAM_FINALIZER_HISTORY_SHA256 = (
     "a40506c022d8e16669bf1a0b4c87ff91205677be4e446d00b7f8debef838445c"
 )
+T09_CONTROL_SOURCE_BINDING_RELATIVE = Path("control/receipts/t09-control-plane-source-binding.json")
+T09_CONTROL_SOURCE_BASE_COMMIT = "450a10a51eda4c428f20b27d6b4aafc4f94d80f4"
 SCHEMA_FILES = (
     "schemas/experiment.schema.json",
     "schemas/artifact.schema.json",
@@ -79,6 +82,13 @@ SCHEMA_FILES = (
     "schemas/t09-model-metadata-receipt.schema.json",
     "schemas/t09-v13-model-metadata-receipt.schema.json",
     "schemas/t09-v14-model-metadata-receipt.schema.json",
+    "schemas/t09-control-registry-receipt.schema.json",
+    "schemas/t09-control-composition-receipt.schema.json",
+    "schemas/t09-control-receipt-bindings.schema.json",
+    "schemas/t09-control-plane-source-binding.schema.json",
+    "schemas/t09-category3-shadow-receipt.schema.json",
+    "schemas/agent-state-capsule.schema.json",
+    "schemas/agent-incident.schema.json",
     "schemas/t09-offline-refinalization-receipt.schema.json",
     "schemas/t09-early-cleanup-state.schema.json",
     "schemas/t09-cleanup-export-handoff.schema.json",
@@ -104,6 +114,15 @@ REQUIRED_PATHS = (
     "docs/SECURITY_AND_SECRETS.md",
     "docs/PLANS.md",
     "docs/PROJECT_STATE.yaml",
+    "docs/architecture/AGENT_OPERATING_MODEL.md",
+    "docs/decisions/ADR-048-agent-native-control-plane.md",
+    "docs/exec-plans/active/T09_CONTROL_PLANE_STABILIZATION.md",
+    "docs/harness/T09_CONTROL_PLANE_STABILIZATION_IMPLEMENTATION_LEDGER.md",
+    "docs/harness/T09_CONTROL_PLANE_STABILIZATION_PREAUTHORIZATION_PACKET.md",
+    "control/goals/EXP-0001.yaml",
+    "control/incidents/INC-T09-V16-LIFECYCLE-REGISTRY.json",
+    "control/receipts/t09-control-plane-source-binding.json",
+    "experiments/EXP-0001-sira-simulative-vs-reactive/T09_V16_PREFLIGHT_STOPPED_DISPOSITION.json",
     "docs/harness/T09_SIRA_EXPLORATORY_PILOT_PLAN.md",
     "docs/harness/T09_SIRA_PILOT_PREAUTHORIZATION_PACKET.md",
     "docs/harness/T09_SIRA_PILOT_IMPLEMENTATION_LEDGER.md",
@@ -129,6 +148,13 @@ REQUIRED_PATHS = (
     "notebook/_quarto.yml",
     ".github/workflows/ci.yml",
     ".github/workflows/publish-notebook.yml",
+)
+CONTROL_PROJECTION_PATHS = (
+    "docs/architecture/AGENT_OPERATING_MODEL.md",
+    "docs/decisions/ADR-048-agent-native-control-plane.md",
+    "docs/exec-plans/active/T09_CONTROL_PLANE_STABILIZATION.md",
+    "docs/harness/T09_CONTROL_PLANE_STABILIZATION_IMPLEMENTATION_LEDGER.md",
+    "docs/harness/T09_CONTROL_PLANE_STABILIZATION_PREAUTHORIZATION_PACKET.md",
 )
 MANIFEST_REQUIRED_FIELDS = frozenset(
     {
@@ -300,6 +326,103 @@ def _t09_successor_implementation_binding_map(plan: Mapping[str, Any]) -> dict[s
     return result
 
 
+def _t09_control_source_binding_map(root: Path) -> tuple[dict[str, str], list[str]]:
+    """Validate the post-V16 shared-control source receipt against its ancestor commit."""
+
+    path = root / T09_CONTROL_SOURCE_BINDING_RELATIVE
+    if not path.is_file():
+        return {}, []
+    document = load_json(path)
+    errors = [
+        f"T09 shared control-plane source binding: {error}"
+        for error in validate_instance(
+            document,
+            root / "schemas/t09-control-plane-source-binding.schema.json",
+        )
+    ]
+    semantic_document = dict(document)
+    semantic_sha256 = semantic_document.pop("semantic_sha256", None)
+    if (
+        semantic_sha256
+        != hashlib.sha256(
+            json.dumps(
+                semantic_document,
+                allow_nan=False,
+                separators=(",", ":"),
+                sort_keys=True,
+            ).encode()
+        ).hexdigest()
+    ):
+        errors.append("T09 shared control-plane source binding semantic hash drifted")
+    source_commit = document.get("source_commit")
+    source_tree = document.get("source_tree")
+    if isinstance(source_commit, str):
+        tree = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", f"{source_commit}^{{tree}}"],
+            capture_output=True,
+            check=False,
+            text=True,
+        )
+        if tree.returncode != 0 or tree.stdout.strip() != source_tree:
+            errors.append("T09 shared control-plane source commit/tree does not resolve")
+        ancestor = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(root),
+                "merge-base",
+                "--is-ancestor",
+                T09_CONTROL_SOURCE_BASE_COMMIT,
+                source_commit,
+            ],
+            capture_output=True,
+            check=False,
+        )
+        if ancestor.returncode != 0:
+            errors.append("T09 shared control-plane source commit is not based on the exact base")
+    required_paths = {
+        "src/giclab/harness/t09_provider_contracts.py",
+        "src/giclab/harness/t09_pragmatic_provider.py",
+        "src/giclab/harness/t09_model_metadata_receipt.py",
+        "src/giclab/harness/t09_sira_pilot.py",
+        "containers/sira-smoke/pragmatic/t09_remote_runner.py",
+        "containers/sira-smoke/pragmatic/t09_freeze_commands.py",
+    }
+    files = document.get("files")
+    bindings: dict[str, str] = {}
+    if not isinstance(files, list):
+        return {}, [*errors, "T09 shared control-plane source file matrix is malformed"]
+    for item in files:
+        if not isinstance(item, dict):
+            continue
+        relative = item.get("path")
+        digest = item.get("sha256")
+        size = item.get("bytes")
+        if not isinstance(relative, str) or not isinstance(digest, str):
+            continue
+        working = root / relative
+        if not working.is_file() or working.is_symlink():
+            errors.append(f"T09 shared control-plane source is unavailable: {relative}")
+            continue
+        encoded = working.read_bytes()
+        if hashlib.sha256(encoded).hexdigest() != digest or len(encoded) != size:
+            errors.append(f"T09 shared control-plane source bytes drifted: {relative}")
+            continue
+        if isinstance(source_commit, str):
+            committed = subprocess.run(
+                ["git", "-C", str(root), "show", f"{source_commit}:{relative}"],
+                capture_output=True,
+                check=False,
+            )
+            if committed.returncode != 0 or committed.stdout != encoded:
+                errors.append(f"T09 shared control-plane source commit drifted: {relative}")
+                continue
+        bindings[relative] = digest
+    if set(bindings) != required_paths:
+        errors.append("T09 shared control-plane source binding matrix is incomplete")
+    return bindings, errors
+
+
 def _validate_container_attempt_semantics(instance: Mapping[str, Any]) -> list[str]:
     """Enforce cross-field quota relations that standard JSON Schema cannot express."""
 
@@ -368,18 +491,24 @@ def validate_plan_lifecycle(root: Path = ROOT) -> list[str]:
     active_root = plans_root / "active"
     completed_root = plans_root / "completed"
     plan_paths = discover_plan_paths(root)
-    active_paths = tuple(path for path in plan_paths if path.parent == active_root)
-    if len(active_paths) != 1:
-        errors.append(
-            "docs/exec-plans/active: exactly one active execution plan is required; "
-            f"found {len(active_paths)}"
-        )
+    active_phase_paths: list[Path] = []
+    loaded_plans: dict[Path, PlanHeader] = {}
     for path in plan_paths:
         try:
             plan = load_plan_header(path)
         except (OSError, PlanContractError) as exc:
             errors.append(f"{path.relative_to(root)}: {exc}")
             continue
+        loaded_plans[path] = plan
+        if path.parent == active_root and plan.role == "phase":
+            active_phase_paths.append(path)
+    if len(active_phase_paths) != 1:
+        errors.append(
+            "docs/exec-plans/active: exactly one active execution plan with phase role "
+            "is required; "
+            f"found {len(active_phase_paths)}"
+        )
+    for path, plan in loaded_plans.items():
         if path.parent == active_root and plan.status == "successful":
             errors.append(f"{path.relative_to(root)}: active plan cannot be successful")
         elif plan.status == "successful" and path.parent != completed_root:
@@ -564,6 +693,8 @@ def validate_project_state(root: Path = ROOT) -> list[str]:
         errors.append("docs/PROJECT_STATE.yaml: phase must match authoritative plan heading")
     if plan_header.status != phase_status:
         errors.append("docs/PROJECT_STATE.yaml: phase_status must match authoritative plan")
+    if plan_header.role != "phase":
+        errors.append("docs/PROJECT_STATE.yaml: authoritative_plan must have phase role")
     expected_plan_root = (
         root / "docs/exec-plans/completed"
         if phase_status == "successful"
@@ -1868,6 +1999,9 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
         if successor_plan_path.is_file()
         else {}
     )
+    control_source_bindings, control_source_errors = _t09_control_source_binding_map(root)
+    errors.extend(control_source_errors)
+    successor_bindings.update(control_source_bindings)
     if not isinstance(files, list) or not files:
         errors.append("EXP-0001 T09: runtime instrumentation file bindings are missing")
     else:
@@ -3284,6 +3418,197 @@ def validate_site_output(root: Path = ROOT) -> list[str]:
     return errors
 
 
+def validate_active_version_dispatch_gate(root: Path = ROOT) -> list[str]:
+    """Reject version-driven active behavior through the dedicated AST gate."""
+
+    from giclab.control.version_lint import validate_active_version_dispatch
+
+    receipt = validate_active_version_dispatch(root)
+    findings = receipt.get("findings")
+    if not isinstance(findings, list):
+        return ["active-version dispatch receipt is malformed"]
+    return [
+        f"{finding.get('path', 'unknown')}:{finding.get('line', 0)}: "
+        f"{finding.get('message', 'prohibited dispatch')}"
+        for finding in findings
+        if isinstance(finding, dict)
+    ]
+
+
+def validate_control_projection_boundaries(root: Path = ROOT) -> list[str]:
+    """Keep reviewed prose subordinate to machine authority/science flags."""
+
+    errors: list[str] = []
+    goal = load_yaml(root / "control/goals/EXP-0001.yaml")
+    authority = goal.get("authority")
+    science = goal.get("science")
+    if not isinstance(authority, dict) or authority.get("category_3") is not False:
+        errors.append("goal record must keep Category 3 authority false")
+    if not isinstance(science, dict) or science.get("interpretation_allowed") is not False:
+        errors.append("goal record must keep scientific interpretation false")
+    for relative in CONTROL_PROJECTION_PATHS:
+        text = (root / relative).read_text(encoding="utf-8")
+        if "Live authorization: **false**" not in text:
+            errors.append(f"{relative}: missing false live-authorization projection")
+        if "Scientific interpretation allowed: **false**" not in text:
+            errors.append(f"{relative}: missing false scientific-interpretation projection")
+        if "Live authorization: **true**" in text:
+            errors.append(f"{relative}: contradicts machine live-authority state")
+        if "Scientific interpretation allowed: **true**" in text:
+            errors.append(f"{relative}: contradicts machine interpretation state")
+    state = load_yaml(root / "docs/PROJECT_STATE.yaml")
+    workstream = state.get("t09_control_plane_stabilization_workstream")
+    if not isinstance(workstream, dict):
+        errors.append("PROJECT_STATE lacks the control-plane stabilization workstream")
+    elif (
+        workstream.get("live_authorization") is not False
+        or workstream.get("scientific_interpretation_allowed") is not False
+    ):
+        errors.append("PROJECT_STATE projection contradicts machine authority/science flags")
+    return errors
+
+
+def validate_t09_control_foundation_boundaries(root: Path = ROOT) -> list[str]:
+    """Preserve the stopped V16 facts, unchanged science, and no-successor boundary."""
+
+    errors: list[str] = []
+    relative = (
+        "experiments/EXP-0001-sira-simulative-vs-reactive/"
+        "T09_V16_PREFLIGHT_STOPPED_DISPOSITION.json"
+    )
+    disposition = load_json(root / relative)
+    expected_top = {
+        "provider_absence": "verified",
+        "root_cause": (
+            "registered V16 autonomous contract rejected by a separate lifecycle version allowlist"
+        ),
+        "scientific_interpretation": "prohibited",
+        "security_state": "unchanged-restored",
+        "terminal_state": "category_3_v16_stopped_material_failure_cleanup_verified",
+    }
+    for key, expected in expected_top.items():
+        if disposition.get(key) != expected:
+            errors.append(f"V16 stopped disposition drifted: {key}")
+    package = disposition.get("package")
+    execution = disposition.get("execution_boundary")
+    authority = disposition.get("authority")
+    cost = disposition.get("cost")
+    if not isinstance(package, dict) or (
+        package.get("merged_package") != T09_CONTROL_SOURCE_BASE_COMMIT
+        or package.get("plan")
+        != {
+            "bytes": 20851,
+            "id": "PLAN-EXP0001-PILOT-V16",
+            "sha256": "5a71e77b1d6876be856012b3ca8ed1456cf31a9321aca9bfaca73b13c659a939",
+        }
+        or package.get("runtime_profile")
+        != {
+            "bytes": 15897,
+            "sha256": "80962bb30ed6aa879e4c1e8c7d7e25a119375c28e0897cd02e3ff1c0aa15b41a",
+        }
+        or package.get("command_manifest")
+        != {
+            "bytes": 23521,
+            "sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
+        }
+    ):
+        errors.append("V16 stopped disposition package identity drifted")
+    if not isinstance(execution, dict) or any(
+        execution.get(key) != value
+        for key, value in {
+            "authenticated_metadata_gets": 1,
+            "lambda_launch_posts": 0,
+            "lambda_termination_posts": 0,
+            "provider_resources_created": 0,
+            "empirical_attempts": 0,
+            "task_model_calls": 0,
+            "browser_actions": 0,
+        }.items()
+    ):
+        errors.append("V16 stopped disposition execution boundary drifted")
+    if not isinstance(execution, dict) or execution.get("lambda_read_only_gets") != {
+        "preflight": 6,
+        "final_absence_verification": "performed",
+        "total": "6-plus-final-absence-verification",
+    }:
+        errors.append("V16 stopped disposition read-only provider accounting drifted")
+    if authority != {
+        "authorization_reference_replayable": False,
+        "condition_identity_consumed": False,
+        "metadata_receipt_replayable": False,
+    }:
+        errors.append("V16 stopped disposition authority state drifted")
+    if cost != {
+        "cumulative_t09_usd": "36.36170860803283125",
+        "new_lambda_usd": "0.00",
+        "new_openai_usd": "0.00",
+    }:
+        errors.append("V16 stopped disposition cost state drifted")
+
+    experiment_root = root / "experiments/EXP-0001-sira-simulative-vs-reactive"
+    changed = set(
+        subprocess.run(
+            [
+                "git",
+                "-C",
+                str(root),
+                "diff",
+                "--name-only",
+                T09_CONTROL_SOURCE_BASE_COMMIT,
+                "--",
+                str(experiment_root.relative_to(root)),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.splitlines()
+    )
+    changed.update(
+        subprocess.run(
+            [
+                "git",
+                "-C",
+                str(root),
+                "ls-files",
+                "--others",
+                "--exclude-standard",
+                "--",
+                str(experiment_root.relative_to(root)),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.splitlines()
+    )
+    if changed != {relative}:
+        errors.append("T09 scientific/package artifacts changed outside the V16 disposition")
+    forbidden_paths = [
+        path.relative_to(root).as_posix()
+        for path in experiment_root.rglob("*")
+        if path.is_file() and "v17" in path.name.lower()
+    ]
+    if forbidden_paths:
+        errors.append("V17 experiment/package artifact exists: " + ", ".join(forbidden_paths))
+    for scan_root in (
+        experiment_root,
+        root / "src/giclab/harness",
+        root / "containers/sira-smoke/pragmatic",
+    ):
+        for path in scan_root.rglob("*"):
+            if not path.is_file() or path.is_symlink():
+                continue
+            try:
+                text = path.read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                continue
+            if "AUTONOMOUS-0010" in text or "PLAN-EXP0001-PILOT-V17" in text:
+                errors.append(
+                    f"future package identity exists outside its permitted PR: "
+                    f"{path.relative_to(root)}"
+                )
+    return errors
+
+
 def run_all(root: Path = ROOT) -> list[str]:
     validators: Iterable[tuple[str, Any]] = (
         ("required paths", validate_required_paths),
@@ -3302,6 +3627,9 @@ def run_all(root: Path = ROOT) -> list[str]:
         ("T09 V16 plan", validate_t09_v16_plan),
         ("manifests", validate_manifests),
         ("workflows", validate_workflows),
+        ("active-version dispatch", validate_active_version_dispatch_gate),
+        ("control projection boundaries", validate_control_projection_boundaries),
+        ("T09 control-foundation boundaries", validate_t09_control_foundation_boundaries),
         ("repository hygiene", validate_hygiene),
         ("documentation links", validate_markdown_links),
     )
@@ -3320,7 +3648,11 @@ def run_all(root: Path = ROOT) -> list[str]:
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("all", "site"), help="validation group to run")
+    parser.add_argument(
+        "command",
+        choices=("all", "site", "active-version-dispatch"),
+        help="validation group to run",
+    )
     parser.add_argument("--root", type=Path, default=ROOT, help="repository root")
     return parser
 
@@ -3328,7 +3660,12 @@ def _build_parser() -> argparse.ArgumentParser:
 def main() -> None:
     args = _build_parser().parse_args()
     root = args.root.resolve()
-    errors = run_all(root) if args.command == "all" else validate_site_output(root)
+    if args.command == "all":
+        errors = run_all(root)
+    elif args.command == "site":
+        errors = validate_site_output(root)
+    else:
+        errors = validate_active_version_dispatch_gate(root)
     if errors:
         print("GIC Lab validation failed:", file=sys.stderr)
         for error in errors:

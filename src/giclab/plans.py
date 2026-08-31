@@ -8,6 +8,7 @@ from pathlib import Path
 
 PLAN_HEADING = re.compile(r"\A# Phase (?P<phase>[0-9]+(?:\.[0-9]+)?)(?: — (?P<title>[^\n]+))?\n")
 PLAN_STATUS = re.compile(r"^Status: \*\*(?P<status>[^*]+)\*\*$", flags=re.MULTILINE)
+PLAN_ROLE = re.compile(r"^Plan role: \*\*(?P<role>phase|workstream)\*\*$", flags=re.MULTILINE)
 
 
 @dataclass(frozen=True)
@@ -17,6 +18,7 @@ class PlanHeader:
     phase: str
     title: str
     status: str
+    role: str
 
 
 class PlanContractError(ValueError):
@@ -42,6 +44,7 @@ def load_plan_header(path: Path) -> PlanHeader:
         phase=heading_match.group("phase"),
         title=heading_match.group("title") or "",
         status=status_match.group("status"),
+        role=(role_match.group("role") if (role_match := PLAN_ROLE.search(text)) else "phase"),
     )
 
 

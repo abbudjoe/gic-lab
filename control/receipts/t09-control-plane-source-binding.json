@@ -1,0 +1,43 @@
+{
+  "base_commit": "450a10a51eda4c428f20b27d6b4aafc4f94d80f4",
+  "files": [
+    {
+      "bytes": 6812,
+      "path": "containers/sira-smoke/pragmatic/t09_freeze_commands.py",
+      "sha256": "45460760c3ee12e834c995d62e2b368e3ba8c55947fc75758be4324b096b0795"
+    },
+    {
+      "bytes": 1093152,
+      "path": "containers/sira-smoke/pragmatic/t09_remote_runner.py",
+      "sha256": "99319b90c2426814f67bfb3c054a284bb1b6a2ce5ac5e35bd7c24674f2363b76"
+    },
+    {
+      "bytes": 43659,
+      "path": "src/giclab/harness/t09_model_metadata_receipt.py",
+      "sha256": "6ec6810ce5c0cad1d5a8fe7470c1f70d9d6449f56289f2e7edb8ff9813df404b"
+    },
+    {
+      "bytes": 372796,
+      "path": "src/giclab/harness/t09_pragmatic_provider.py",
+      "sha256": "5ff6977ec76d6d66394ce4ea033618b6f53fd65562c1e6b98b6cd6b2488075e3"
+    },
+    {
+      "bytes": 61813,
+      "path": "src/giclab/harness/t09_provider_contracts.py",
+      "sha256": "562f7ca25bd026af65e841054d1f4c962a7915061f0c79973c7edde048868071"
+    },
+    {
+      "bytes": 150214,
+      "path": "src/giclab/harness/t09_sira_pilot.py",
+      "sha256": "ddfb499a788650e56ad320dc464253aa5e12fa5767e90b76982ff8afa1c39e84"
+    }
+  ],
+  "historical_package_changed": false,
+  "live_execution_performed": false,
+  "schema_version": "1.0.0",
+  "scope": "shared-control-plane-only",
+  "scientific_contract_changed": false,
+  "semantic_sha256": "674617b4c135deec62463e8542fa28c33aaa41ce997ab39d893d4e641aaf7859",
+  "source_commit": "25a23e6952618c800cd9e5d0efaca493af612b49",
+  "source_tree": "65bac40c83bc1047e441c02810bbc20b9f45e0de"
+}

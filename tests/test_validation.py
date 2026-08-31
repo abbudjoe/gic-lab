@@ -237,6 +237,20 @@ def test_plan_lifecycle_requires_exactly_one_active_plan(tmp_path: Path) -> None
     assert any("exactly one active execution plan" in error for error in errors)
 
 
+def test_plan_lifecycle_allows_subordinate_active_workstream(tmp_path: Path) -> None:
+    active = tmp_path / "docs/exec-plans/active"
+    active.mkdir(parents=True)
+    (active / "PHASE.md").write_text(
+        "# Phase 1 — Authority\n\nStatus: **in-progress**\n",
+        encoding="utf-8",
+    )
+    (active / "WORKSTREAM.md").write_text(
+        "# Phase 1 — Bounded work\n\nStatus: **in-progress**\n\nPlan role: **workstream**\n",
+        encoding="utf-8",
+    )
+    assert validate_plan_lifecycle(tmp_path) == []
+
+
 def test_completed_plan_must_be_successful(tmp_path: Path) -> None:
     active = tmp_path / "docs/exec-plans/active/CURRENT.md"
     completed = tmp_path / "docs/exec-plans/completed/STALE.md"

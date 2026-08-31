@@ -12,6 +12,17 @@ Inspecting public metadata or existing cloud status/logs is read-only. Launching
 
 Before a paid run, its protocol and compute record must declare provider, hardware, region, expected wall time/GPU hours, spend cap, storage/network assumptions, data locations, checkpoints, stop conditions, evidence capture, and cleanup. Hardware must match the runner. Credentials must remain outside Git and logs.
 
+Before a qualified dotenv read, authenticated metadata request, provider mutation,
+or paid compute, the exact package must have valid registry-completeness,
+offline-composition, state-capsule, and required Category 3 shadow receipts. The
+future authorization overlay and frozen run manifest must both bind the receipt set
+defined by `schemas/t09-control-receipt-bindings.schema.json`. Those receipts prove
+preparation only and never grant current-turn authority.
+
+A deterministic blocker discovered after authenticated metadata access is a control
+failure and must become an incident with an offline composition or shadow regression.
+It must not be converted into scientific evidence or silently retried.
+
 ## Accounting
 
 Every allocation and run is recorded in `manifests/compute.yaml`, including aborted or idle allocations. Report both accelerator-hours and wall-clock time; GPU-hours from different hardware are not assumed fungible. External API cost is tracked separately from GPU compute.
