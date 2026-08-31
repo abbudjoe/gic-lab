@@ -1,0 +1,776 @@
+{
+  "adapter_call_ledger": [
+    {
+      "adapter": "host",
+      "index": 1,
+      "operation": "host.stage",
+      "outcome": "passed",
+      "subject": "local-package-and-archive"
+    },
+    {
+      "adapter": "secret",
+      "index": 2,
+      "operation": "secret.read",
+      "outcome": "passed",
+      "subject": "secret-channel"
+    },
+    {
+      "adapter": "metadata",
+      "index": 3,
+      "operation": "metadata.request",
+      "outcome": "passed",
+      "subject": "V16"
+    },
+    {
+      "adapter": "provider",
+      "index": 4,
+      "operation": "provider.inventory",
+      "outcome": "zero",
+      "subject": "owned-resources"
+    },
+    {
+      "adapter": "metadata",
+      "index": 5,
+      "operation": "metadata.is_fresh",
+      "outcome": "passed",
+      "subject": "0a5e509bff39283e30b730ceb518812e57b2f540b1fcdda681c3f108b4080461"
+    },
+    {
+      "adapter": "provider",
+      "index": 6,
+      "operation": "provider.launch",
+      "outcome": "accepted",
+      "subject": "shadow-instance-1"
+    },
+    {
+      "adapter": "provider",
+      "index": 7,
+      "operation": "provider.enter",
+      "outcome": "passed",
+      "subject": "shadow-instance-1"
+    },
+    {
+      "adapter": "host",
+      "index": 8,
+      "operation": "host.preflight",
+      "outcome": "passed",
+      "subject": "shadow-instance-1"
+    },
+    {
+      "adapter": "host",
+      "index": 9,
+      "operation": "host.qualify",
+      "outcome": "passed",
+      "subject": "shadow-instance-1"
+    },
+    {
+      "adapter": "evidence",
+      "index": 10,
+      "operation": "evidence.record",
+      "outcome": "retained:bb6d3614b329",
+      "subject": "qualification"
+    },
+    {
+      "adapter": "host",
+      "index": 11,
+      "operation": "host.freeze",
+      "outcome": "passed",
+      "subject": "shadow-instance-1"
+    },
+    {
+      "adapter": "evidence",
+      "index": 12,
+      "operation": "evidence.record",
+      "outcome": "retained:510320c89978",
+      "subject": "scientific-freeze"
+    },
+    {
+      "adapter": "condition",
+      "index": 13,
+      "operation": "condition.reserve",
+      "outcome": "passed",
+      "subject": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009"
+    },
+    {
+      "adapter": "condition",
+      "index": 14,
+      "operation": "condition.enter",
+      "outcome": "passed",
+      "subject": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009"
+    },
+    {
+      "adapter": "condition",
+      "index": 15,
+      "operation": "condition.run",
+      "outcome": "passed",
+      "subject": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009"
+    },
+    {
+      "adapter": "condition",
+      "index": 16,
+      "operation": "condition.export_raw",
+      "outcome": "passed",
+      "subject": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009"
+    },
+    {
+      "adapter": "evidence",
+      "index": 17,
+      "operation": "evidence.record",
+      "outcome": "retained:d74e2864fa47",
+      "subject": "raw"
+    },
+    {
+      "adapter": "condition",
+      "index": 18,
+      "operation": "condition.finalize",
+      "outcome": "passed",
+      "subject": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009"
+    },
+    {
+      "adapter": "evidence",
+      "index": 19,
+      "operation": "evidence.record",
+      "outcome": "retained:d61e781a270f",
+      "subject": "finalized"
+    },
+    {
+      "adapter": "condition",
+      "index": 20,
+      "operation": "condition.evaluate",
+      "outcome": "passed",
+      "subject": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009"
+    },
+    {
+      "adapter": "evidence",
+      "index": 21,
+      "operation": "evidence.record",
+      "outcome": "retained:1257ee51f110",
+      "subject": "evaluator"
+    },
+    {
+      "adapter": "condition",
+      "index": 22,
+      "operation": "condition.reserve",
+      "outcome": "passed",
+      "subject": "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009"
+    },
+    {
+      "adapter": "condition",
+      "index": 23,
+      "operation": "condition.enter",
+      "outcome": "passed",
+      "subject": "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009"
+    },
+    {
+      "adapter": "condition",
+      "index": 24,
+      "operation": "condition.run",
+      "outcome": "passed",
+      "subject": "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009"
+    },
+    {
+      "adapter": "condition",
+      "index": 25,
+      "operation": "condition.export_raw",
+      "outcome": "passed",
+      "subject": "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009"
+    },
+    {
+      "adapter": "evidence",
+      "index": 26,
+      "operation": "evidence.record",
+      "outcome": "retained:51a260fff500",
+      "subject": "raw"
+    },
+    {
+      "adapter": "condition",
+      "index": 27,
+      "operation": "condition.finalize",
+      "outcome": "passed",
+      "subject": "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009"
+    },
+    {
+      "adapter": "evidence",
+      "index": 28,
+      "operation": "evidence.record",
+      "outcome": "retained:eebaa5239f98",
+      "subject": "finalized"
+    },
+    {
+      "adapter": "condition",
+      "index": 29,
+      "operation": "condition.evaluate",
+      "outcome": "passed",
+      "subject": "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009"
+    },
+    {
+      "adapter": "evidence",
+      "index": 30,
+      "operation": "evidence.record",
+      "outcome": "retained:0b923d842d19",
+      "subject": "evaluator"
+    },
+    {
+      "adapter": "evidence",
+      "index": 31,
+      "operation": "evidence.checkpoint",
+      "outcome": "passed",
+      "subject": "task-a-pair"
+    },
+    {
+      "adapter": "condition",
+      "index": 32,
+      "operation": "condition.reserve",
+      "outcome": "passed",
+      "subject": "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009"
+    },
+    {
+      "adapter": "condition",
+      "index": 33,
+      "operation": "condition.enter",
+      "outcome": "passed",
+      "subject": "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009"
+    },
+    {
+      "adapter": "condition",
+      "index": 34,
+      "operation": "condition.run",
+      "outcome": "passed",
+      "subject": "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009"
+    },
+    {
+      "adapter": "condition",
+      "index": 35,
+      "operation": "condition.export_raw",
+      "outcome": "passed",
+      "subject": "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009"
+    },
+    {
+      "adapter": "evidence",
+      "index": 36,
+      "operation": "evidence.record",
+      "outcome": "retained:b0670a965bb4",
+      "subject": "raw"
+    },
+    {
+      "adapter": "condition",
+      "index": 37,
+      "operation": "condition.finalize",
+      "outcome": "passed",
+      "subject": "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009"
+    },
+    {
+      "adapter": "evidence",
+      "index": 38,
+      "operation": "evidence.record",
+      "outcome": "retained:143a6da16972",
+      "subject": "finalized"
+    },
+    {
+      "adapter": "condition",
+      "index": 39,
+      "operation": "condition.evaluate",
+      "outcome": "passed",
+      "subject": "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009"
+    },
+    {
+      "adapter": "evidence",
+      "index": 40,
+      "operation": "evidence.record",
+      "outcome": "retained:c7719980caee",
+      "subject": "evaluator"
+    },
+    {
+      "adapter": "condition",
+      "index": 41,
+      "operation": "condition.reserve",
+      "outcome": "passed",
+      "subject": "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009"
+    },
+    {
+      "adapter": "condition",
+      "index": 42,
+      "operation": "condition.enter",
+      "outcome": "passed",
+      "subject": "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009"
+    },
+    {
+      "adapter": "condition",
+      "index": 43,
+      "operation": "condition.run",
+      "outcome": "passed",
+      "subject": "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009"
+    },
+    {
+      "adapter": "condition",
+      "index": 44,
+      "operation": "condition.export_raw",
+      "outcome": "passed",
+      "subject": "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009"
+    },
+    {
+      "adapter": "evidence",
+      "index": 45,
+      "operation": "evidence.record",
+      "outcome": "retained:cb8e129f130c",
+      "subject": "raw"
+    },
+    {
+      "adapter": "condition",
+      "index": 46,
+      "operation": "condition.finalize",
+      "outcome": "passed",
+      "subject": "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009"
+    },
+    {
+      "adapter": "evidence",
+      "index": 47,
+      "operation": "evidence.record",
+      "outcome": "retained:0c2244048659",
+      "subject": "finalized"
+    },
+    {
+      "adapter": "condition",
+      "index": 48,
+      "operation": "condition.evaluate",
+      "outcome": "passed",
+      "subject": "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009"
+    },
+    {
+      "adapter": "evidence",
+      "index": 49,
+      "operation": "evidence.record",
+      "outcome": "retained:65c42c54f847",
+      "subject": "evaluator"
+    },
+    {
+      "adapter": "host",
+      "index": 50,
+      "operation": "host.cleanup",
+      "outcome": "passed",
+      "subject": "shadow-instance-1"
+    },
+    {
+      "adapter": "evidence",
+      "index": 51,
+      "operation": "evidence.scan_privacy",
+      "outcome": "finding",
+      "subject": "shadow-evidence"
+    },
+    {
+      "adapter": "provider",
+      "index": 52,
+      "operation": "provider.terminate",
+      "outcome": "accepted",
+      "subject": "shadow-instance-1"
+    },
+    {
+      "adapter": "provider",
+      "index": 53,
+      "operation": "provider.inventory",
+      "outcome": "zero",
+      "subject": "owned-resources"
+    }
+  ],
+  "authority_consumed": {
+    "launch_count": 1,
+    "model_metadata": true,
+    "provider_launch": "consumed",
+    "replacement_count": 0
+  },
+  "call_counts": {
+    "condition_entries": 4,
+    "condition_reservations": 4,
+    "launch_calls": 1,
+    "metadata_requests": 1,
+    "provider_gets": 2,
+    "provider_posts": 2,
+    "secret_reads": 1,
+    "termination_calls": 1
+  },
+  "cleanup": {
+    "privacy_clean": false,
+    "provider_resources_zero": true,
+    "resumed": false,
+    "security_restored": true,
+    "state": "complete"
+  },
+  "command_package_sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
+  "composition_sha256": "11075a7d3178eb5e1c22f78988e266a29ef37b62c8a80da98901156369aabe1d",
+  "condition_identities_consumed": [
+    "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
+    "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009",
+    "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009",
+    "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009"
+  ],
+  "condition_identities_reserved": [
+    "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
+    "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009",
+    "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009",
+    "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009"
+  ],
+  "earliest_stopping_phase": "cleanup",
+  "evidence_retained": {
+    "classification": "shadow-control-plane-output",
+    "evaluator": [
+      "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
+      "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009",
+      "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009",
+      "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009"
+    ],
+    "finalized": [
+      "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
+      "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009",
+      "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009",
+      "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009"
+    ],
+    "pair_checkpoint_sha256": "017b7ad7a00f1dc953f690784645b319f788ed3da0609fee6e4786a2df0a0d02",
+    "raw": [
+      "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
+      "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009",
+      "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009",
+      "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009"
+    ]
+  },
+  "fake_evidence_outputs": [
+    {
+      "kind": "raw",
+      "run_id": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
+      "sha256": "d74e2864fa477427917c0b8239fde473fdc68a4467eae84aa4d1acbf54f4ad5e",
+      "shadow_only": true
+    },
+    {
+      "kind": "finalized",
+      "run_id": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
+      "sha256": "d61e781a270f792668d4bfd7bc7de8f4413b699df5b13b46980c5227729b1acb",
+      "shadow_only": true
+    },
+    {
+      "kind": "evaluator-control-output",
+      "run_id": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
+      "sha256": "1257ee51f1109e129579b15010da933c61b64901c6a929cde04258d6528516a1",
+      "shadow_only": true
+    },
+    {
+      "kind": "raw",
+      "run_id": "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009",
+      "sha256": "51a260fff500863a02f57fd512a620019521c74a4352f9465ef9d6dc475c55e6",
+      "shadow_only": true
+    },
+    {
+      "kind": "finalized",
+      "run_id": "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009",
+      "sha256": "eebaa5239f9828cd5aaa579048d56aa0c4ab68dc90cbea3d5fcb717d547af376",
+      "shadow_only": true
+    },
+    {
+      "kind": "evaluator-control-output",
+      "run_id": "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009",
+      "sha256": "0b923d842d19d53521931123bd2821b8781076dd4b6834c29e086f8050a6efca",
+      "shadow_only": true
+    },
+    {
+      "kind": "raw",
+      "run_id": "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009",
+      "sha256": "b0670a965bb4c3c875d33864bc09bf20bc274fdef52d92e84174b002db99c455",
+      "shadow_only": true
+    },
+    {
+      "kind": "finalized",
+      "run_id": "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009",
+      "sha256": "143a6da16972427fa387e85df5e7913b757e1b5f7eaafd2da83583a5d1239c3f",
+      "shadow_only": true
+    },
+    {
+      "kind": "evaluator-control-output",
+      "run_id": "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009",
+      "sha256": "c7719980caee65f14a04667afb5562685e66a95940dbc24339d8c4348ab674c0",
+      "shadow_only": true
+    },
+    {
+      "kind": "raw",
+      "run_id": "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009",
+      "sha256": "cb8e129f130c626353d7bda7f166eac75052685026f1d00de3526b900c813b28",
+      "shadow_only": true
+    },
+    {
+      "kind": "finalized",
+      "run_id": "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009",
+      "sha256": "0c2244048659395c41fbdf566e1af4c20432993ea01b4b58fb7f942c57faa547",
+      "shadow_only": true
+    },
+    {
+      "kind": "evaluator-control-output",
+      "run_id": "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009",
+      "sha256": "65c42c54f84724d7b753ee884b95b9ab97286b27d47f9410e1af0982d5d87401",
+      "shadow_only": true
+    }
+  ],
+  "ordered_state_transitions": [
+    {
+      "index": 1,
+      "outcome": "passed",
+      "phase": "verify-exact-repository-package-identity"
+    },
+    {
+      "index": 2,
+      "outcome": "passed",
+      "phase": "offline-composition"
+    },
+    {
+      "index": 3,
+      "outcome": "passed",
+      "phase": "state-capsule-snapshot"
+    },
+    {
+      "detail": "self-rehearsal",
+      "index": 4,
+      "outcome": "passed",
+      "phase": "shadow-rehearsal-receipt-validation"
+    },
+    {
+      "index": 5,
+      "outcome": "passed",
+      "phase": "local-staging"
+    },
+    {
+      "index": 6,
+      "outcome": "passed",
+      "phase": "secret-channel-qualification"
+    },
+    {
+      "index": 7,
+      "outcome": "passed",
+      "phase": "metadata-receipt"
+    },
+    {
+      "index": 8,
+      "outcome": "passed",
+      "phase": "provider-read-only-preflight"
+    },
+    {
+      "index": 9,
+      "outcome": "passed",
+      "phase": "final-metadata-freshness"
+    },
+    {
+      "detail": "ordinal-1",
+      "index": 10,
+      "outcome": "passed",
+      "phase": "launch"
+    },
+    {
+      "index": 11,
+      "outcome": "passed",
+      "phase": "provider-entry"
+    },
+    {
+      "index": 12,
+      "outcome": "passed",
+      "phase": "host-preflight"
+    },
+    {
+      "index": 13,
+      "outcome": "passed",
+      "phase": "image-finalizer-qualification"
+    },
+    {
+      "index": 14,
+      "outcome": "passed",
+      "phase": "scientific-freeze"
+    },
+    {
+      "detail": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
+      "index": 15,
+      "outcome": "passed",
+      "phase": "condition-reservation"
+    },
+    {
+      "detail": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
+      "index": 16,
+      "outcome": "passed",
+      "phase": "empirical-entry"
+    },
+    {
+      "detail": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
+      "index": 17,
+      "outcome": "passed",
+      "phase": "condition-execution"
+    },
+    {
+      "detail": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
+      "index": 18,
+      "outcome": "passed",
+      "phase": "raw-export"
+    },
+    {
+      "detail": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
+      "index": 19,
+      "outcome": "passed",
+      "phase": "finalization"
+    },
+    {
+      "detail": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
+      "index": 20,
+      "outcome": "passed",
+      "phase": "evaluation"
+    },
+    {
+      "detail": "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009",
+      "index": 21,
+      "outcome": "passed",
+      "phase": "condition-reservation"
+    },
+    {
+      "detail": "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009",
+      "index": 22,
+      "outcome": "passed",
+      "phase": "empirical-entry"
+    },
+    {
+      "detail": "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009",
+      "index": 23,
+      "outcome": "passed",
+      "phase": "condition-execution"
+    },
+    {
+      "detail": "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009",
+      "index": 24,
+      "outcome": "passed",
+      "phase": "raw-export"
+    },
+    {
+      "detail": "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009",
+      "index": 25,
+      "outcome": "passed",
+      "phase": "finalization"
+    },
+    {
+      "detail": "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009",
+      "index": 26,
+      "outcome": "passed",
+      "phase": "evaluation"
+    },
+    {
+      "index": 27,
+      "outcome": "passed",
+      "phase": "first-pair-checkpoint"
+    },
+    {
+      "index": 28,
+      "outcome": "entered",
+      "phase": "remaining-conditions"
+    },
+    {
+      "detail": "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009",
+      "index": 29,
+      "outcome": "passed",
+      "phase": "condition-reservation"
+    },
+    {
+      "detail": "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009",
+      "index": 30,
+      "outcome": "passed",
+      "phase": "empirical-entry"
+    },
+    {
+      "detail": "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009",
+      "index": 31,
+      "outcome": "passed",
+      "phase": "condition-execution"
+    },
+    {
+      "detail": "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009",
+      "index": 32,
+      "outcome": "passed",
+      "phase": "raw-export"
+    },
+    {
+      "detail": "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009",
+      "index": 33,
+      "outcome": "passed",
+      "phase": "finalization"
+    },
+    {
+      "detail": "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009",
+      "index": 34,
+      "outcome": "passed",
+      "phase": "evaluation"
+    },
+    {
+      "detail": "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009",
+      "index": 35,
+      "outcome": "passed",
+      "phase": "condition-reservation"
+    },
+    {
+      "detail": "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009",
+      "index": 36,
+      "outcome": "passed",
+      "phase": "empirical-entry"
+    },
+    {
+      "detail": "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009",
+      "index": 37,
+      "outcome": "passed",
+      "phase": "condition-execution"
+    },
+    {
+      "detail": "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009",
+      "index": 38,
+      "outcome": "passed",
+      "phase": "raw-export"
+    },
+    {
+      "detail": "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009",
+      "index": 39,
+      "outcome": "passed",
+      "phase": "finalization"
+    },
+    {
+      "detail": "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009",
+      "index": 40,
+      "outcome": "passed",
+      "phase": "evaluation"
+    },
+    {
+      "index": 41,
+      "outcome": "passed",
+      "phase": "cleanup"
+    },
+    {
+      "detail": "fake structural privacy finding",
+      "index": 42,
+      "outcome": "privacy-blocked",
+      "phase": "cleanup"
+    },
+    {
+      "index": 43,
+      "outcome": "passed",
+      "phase": "terminal-provider-security-verification"
+    }
+  ],
+  "projected_cost_usd": "0.00",
+  "provider_contract_version": "V16",
+  "repository_commit": "5efbe727648ae9e7077132aa9bf3033e4b35ec03",
+  "repository_tree": "5fab7020bf157c6c31a68b1b2024ca10203d3106",
+  "scenario": "structural-privacy-finding",
+  "scenario_valid": true,
+  "schema_version": "1.0.0",
+  "scientific_attempt_consumption": {
+    "count": 4,
+    "run_ids": [
+      "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
+      "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009",
+      "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009",
+      "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009"
+    ]
+  },
+  "scientific_interpretation_allowed": false,
+  "semantic_sha256": "4fa58e15fbf90f403663f8c7f78620e67518d79cbcf83988ea5e64ee746f779c",
+  "shadow_only": true,
+  "stop_reason": "fake structural privacy finding",
+  "terminal_state": "category3-shadow-stopped-privacy-blocked",
+  "undeclared_adapter_calls": [],
+  "zero_undeclared_calls": true
+}

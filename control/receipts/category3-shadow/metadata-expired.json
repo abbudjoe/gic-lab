@@ -1,0 +1,172 @@
+{
+  "adapter_call_ledger": [
+    {
+      "adapter": "host",
+      "index": 1,
+      "operation": "host.stage",
+      "outcome": "passed",
+      "subject": "local-package-and-archive"
+    },
+    {
+      "adapter": "secret",
+      "index": 2,
+      "operation": "secret.read",
+      "outcome": "passed",
+      "subject": "secret-channel"
+    },
+    {
+      "adapter": "metadata",
+      "index": 3,
+      "operation": "metadata.request",
+      "outcome": "passed",
+      "subject": "V16"
+    },
+    {
+      "adapter": "provider",
+      "index": 4,
+      "operation": "provider.inventory",
+      "outcome": "zero",
+      "subject": "owned-resources"
+    },
+    {
+      "adapter": "metadata",
+      "index": 5,
+      "operation": "metadata.is_fresh",
+      "outcome": "expired",
+      "subject": "4d85d7ed82ac6e7d254e9431ffd3a0f2a2b0507c9b0fa0f0ee3101c6ff7a857c"
+    },
+    {
+      "adapter": "host",
+      "index": 6,
+      "operation": "host.cleanup",
+      "outcome": "passed",
+      "subject": "no-known-instance"
+    },
+    {
+      "adapter": "evidence",
+      "index": 7,
+      "operation": "evidence.scan_privacy",
+      "outcome": "passed",
+      "subject": "shadow-evidence"
+    },
+    {
+      "adapter": "provider",
+      "index": 8,
+      "operation": "provider.inventory",
+      "outcome": "zero",
+      "subject": "owned-resources"
+    }
+  ],
+  "authority_consumed": {
+    "launch_count": 0,
+    "model_metadata": true,
+    "provider_launch": "not-consumed",
+    "replacement_count": 0
+  },
+  "call_counts": {
+    "condition_entries": 0,
+    "condition_reservations": 0,
+    "launch_calls": 0,
+    "metadata_requests": 1,
+    "provider_gets": 2,
+    "provider_posts": 0,
+    "secret_reads": 1,
+    "termination_calls": 0
+  },
+  "cleanup": {
+    "privacy_clean": true,
+    "provider_resources_zero": true,
+    "resumed": false,
+    "security_restored": true,
+    "state": "complete"
+  },
+  "command_package_sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
+  "composition_sha256": "11075a7d3178eb5e1c22f78988e266a29ef37b62c8a80da98901156369aabe1d",
+  "condition_identities_consumed": [],
+  "condition_identities_reserved": [],
+  "earliest_stopping_phase": "final-metadata-freshness",
+  "evidence_retained": {
+    "classification": "shadow-control-plane-output",
+    "evaluator": [],
+    "finalized": [],
+    "pair_checkpoint_sha256": null,
+    "raw": []
+  },
+  "fake_evidence_outputs": [],
+  "ordered_state_transitions": [
+    {
+      "index": 1,
+      "outcome": "passed",
+      "phase": "verify-exact-repository-package-identity"
+    },
+    {
+      "index": 2,
+      "outcome": "passed",
+      "phase": "offline-composition"
+    },
+    {
+      "index": 3,
+      "outcome": "passed",
+      "phase": "state-capsule-snapshot"
+    },
+    {
+      "detail": "self-rehearsal",
+      "index": 4,
+      "outcome": "passed",
+      "phase": "shadow-rehearsal-receipt-validation"
+    },
+    {
+      "index": 5,
+      "outcome": "passed",
+      "phase": "local-staging"
+    },
+    {
+      "index": 6,
+      "outcome": "passed",
+      "phase": "secret-channel-qualification"
+    },
+    {
+      "index": 7,
+      "outcome": "passed",
+      "phase": "metadata-receipt"
+    },
+    {
+      "index": 8,
+      "outcome": "passed",
+      "phase": "provider-read-only-preflight"
+    },
+    {
+      "index": 9,
+      "outcome": "failed",
+      "phase": "final-metadata-freshness"
+    },
+    {
+      "index": 10,
+      "outcome": "passed",
+      "phase": "cleanup"
+    },
+    {
+      "index": 11,
+      "outcome": "passed",
+      "phase": "terminal-provider-security-verification"
+    }
+  ],
+  "projected_cost_usd": "0.00",
+  "provider_contract_version": "V16",
+  "repository_commit": "5efbe727648ae9e7077132aa9bf3033e4b35ec03",
+  "repository_tree": "5fab7020bf157c6c31a68b1b2024ca10203d3106",
+  "scenario": "metadata-expired",
+  "scenario_valid": true,
+  "schema_version": "1.0.0",
+  "scientific_attempt_consumption": {
+    "count": 0,
+    "run_ids": []
+  },
+  "scientific_interpretation_allowed": false,
+  "semantic_sha256": "52e887f30773281bf3fb525eed1914a09ca73db41bb6fd0dba0df32a1ef44ae0",
+  "shadow_only": true,
+  "stop_reason": "metadata receipt expired",
+  "terminal_state": "category3-shadow-stopped-cleanup-verified",
+  "undeclared_adapter_calls": [],
+  "zero_undeclared_calls": true
+}

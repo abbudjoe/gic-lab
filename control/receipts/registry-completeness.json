@@ -1,0 +1,1469 @@
+{
+  "complete": true,
+  "contract_count": 14,
+  "contracts": [
+    {
+      "complete": true,
+      "consumers": {
+        "campaign_lifecycle_loading": {
+          "family": "historical-observer",
+          "status": "passed"
+        },
+        "cleanup_family_resolution": {
+          "family": "historical",
+          "status": "passed"
+        },
+        "command_manifest_loading": {
+          "reason": "capability not declared",
+          "status": "not-applicable"
+        },
+        "command_package_family_resolution": {
+          "family": "historical",
+          "status": "passed"
+        },
+        "control_root_identity": {
+          "control_root": "pilot-v7",
+          "status": "passed"
+        },
+        "evidence_archive_stage_identity": {
+          "archive_id": "ARCHIVE-EXP0001-PILOT-V3-0001",
+          "stage_id": "STAGE-EXP0001-PILOT-V3-0001",
+          "status": "passed"
+        },
+        "execution_contract_loading": {
+          "reason": "capability not declared",
+          "status": "not-applicable"
+        },
+        "image_qualification_identity": {
+          "reason": "capability not declared",
+          "status": "not-applicable"
+        },
+        "local_finalizer_selector_resolution": {
+          "reason": "capability not declared",
+          "status": "not-applicable"
+        },
+        "metadata_policy_resolution": {
+          "reason": "capability not declared",
+          "status": "not-applicable"
+        },
+        "provider_owner_cleanup_identity": {
+          "owner_bound": true,
+          "status": "passed"
+        },
+        "provider_plan_loading": {
+          "plan_id": "PLAN-EXP0001-PILOT-V3",
+          "sha256": "0b17da814f9b20326a7220cec5f41e84c968a46c9d38e913f327afe267c26210",
+          "status": "passed"
+        },
+        "provider_profile_loading": {
+          "plan_id": "PLAN-EXP0001-PILOT-V3",
+          "sha256": "0b17da814f9b20326a7220cec5f41e84c968a46c9d38e913f327afe267c26210",
+          "status": "passed"
+        },
+        "replacement_policy_resolution": {
+          "reason": "capability not declared",
+          "status": "not-applicable"
+        },
+        "state_capsule_projection": {
+          "projection": {
+            "authorization_policy": "frozen-historical",
+            "cleanup_family": "historical",
+            "command_package_family": "historical",
+            "control_root_policy": "legacy-shared",
+            "lifecycle_family": "historical-observer",
+            "metadata_policy": "none",
+            "package_transition_policy": "none",
+            "plan_id": "PLAN-EXP0001-PILOT-V3",
+            "provider_selector_policy": "none",
+            "replacement_policy": "none",
+            "shadow_scenario": "historical-observer",
+            "stage_identity_policy": "legacy",
+            "version": "V3"
+          },
+          "status": "passed"
+        }
+      },
+      "declared_capabilities": {
+        "authorization_policy": "frozen-historical",
+        "cleanup_family": "historical",
+        "command_package_family": "historical",
+        "control_root_policy": "legacy-shared",
+        "lifecycle_family": "historical-observer",
+        "metadata_policy": "none",
+        "package_transition_policy": "none",
+        "plan_id": "PLAN-EXP0001-PILOT-V3",
+        "provider_selector_policy": "none",
+        "replacement_policy": "none",
+        "shadow_scenario": "historical-observer",
+        "stage_identity_policy": "legacy",
+        "version": "V3"
+      },
+      "errors": [],
+      "plan_id": "PLAN-EXP0001-PILOT-V3",
+      "version": "V3"
+    },
+    {
+      "complete": true,
+      "consumers": {
+        "campaign_lifecycle_loading": {
+          "family": "historical-observer",
+          "status": "passed"
+        },
+        "cleanup_family_resolution": {
+          "family": "historical",
+          "status": "passed"
+        },
+        "command_manifest_loading": {
+          "reason": "capability not declared",
+          "status": "not-applicable"
+        },
+        "command_package_family_resolution": {
+          "family": "historical",
+          "status": "passed"
+        },
+        "control_root_identity": {
+          "control_root": "pilot-v7",
+          "status": "passed"
+        },
+        "evidence_archive_stage_identity": {
+          "archive_id": "ARCHIVE-EXP0001-PILOT-V4-0002",
+          "stage_id": "STAGE-EXP0001-PILOT-V4-0002",
+          "status": "passed"
+        },
+        "execution_contract_loading": {
+          "reason": "capability not declared",
+          "status": "not-applicable"
+        },
+        "image_qualification_identity": {
+          "qualification_id": "QUAL-T09-PILOT-V4-IMAGE-0002",
+          "status": "passed"
+        },
+        "local_finalizer_selector_resolution": {
+          "reason": "capability not declared",
+          "status": "not-applicable"
+        },
+        "metadata_policy_resolution": {
+          "reason": "capability not declared",
+          "status": "not-applicable"
+        },
+        "provider_owner_cleanup_identity": {
+          "owner_bound": true,
+          "status": "passed"
+        },
+        "provider_plan_loading": {
+          "plan_id": "PLAN-EXP0001-PILOT-V4",
+          "sha256": "1ebfbb645ce337d9e99afa5654cddff84a612508d21b70d54cf21dfb99604b77",
+          "status": "passed"
+        },
+        "provider_profile_loading": {
+          "plan_id": "PLAN-EXP0001-PILOT-V4",
+          "sha256": "1ebfbb645ce337d9e99afa5654cddff84a612508d21b70d54cf21dfb99604b77",
+          "status": "passed"
+        },
+        "replacement_policy_resolution": {
+          "reason": "capability not declared",
+          "status": "not-applicable"
+        },
+        "state_capsule_projection": {
+          "projection": {
+            "authorization_policy": "frozen-historical",
+            "cleanup_family": "historical",
+            "command_package_family": "historical",
+            "control_root_policy": "legacy-shared",
+            "lifecycle_family": "historical-observer",
+            "metadata_policy": "none",
+            "package_transition_policy": "none",
+            "plan_id": "PLAN-EXP0001-PILOT-V4",
+            "provider_selector_policy": "none",
+            "replacement_policy": "none",
+            "shadow_scenario": "historical-observer",
+            "stage_identity_policy": "legacy",
+            "version": "V4"
+          },
+          "status": "passed"
+        }
+      },
+      "declared_capabilities": {
+        "authorization_policy": "frozen-historical",
+        "cleanup_family": "historical",
+        "command_package_family": "historical",
+        "control_root_policy": "legacy-shared",
+        "lifecycle_family": "historical-observer",
+        "metadata_policy": "none",
+        "package_transition_policy": "none",
+        "plan_id": "PLAN-EXP0001-PILOT-V4",
+        "provider_selector_policy": "none",
+        "replacement_policy": "none",
+        "shadow_scenario": "historical-observer",
+        "stage_identity_policy": "legacy",
+        "version": "V4"
+      },
+      "errors": [],
+      "plan_id": "PLAN-EXP0001-PILOT-V4",
+      "version": "V4"
+    },
+    {
+      "complete": true,
+      "consumers": {
+        "campaign_lifecycle_loading": {
+          "family": "historical-observer",
+          "status": "passed"
+        },
+        "cleanup_family_resolution": {
+          "family": "historical",
+          "status": "passed"
+        },
+        "command_manifest_loading": {
+          "reason": "capability not declared",
+          "status": "not-applicable"
+        },
+        "command_package_family_resolution": {
+          "family": "historical",
+          "status": "passed"
+        },
+        "control_root_identity": {
+          "control_root": "pilot-v7",
+          "status": "passed"
+        },
+        "evidence_archive_stage_identity": {
+          "archive_id": "ARCHIVE-EXP0001-PILOT-V5-0003",
+          "stage_id": "STAGE-EXP0001-PILOT-V5-0003",
+          "status": "passed"
+        },
+        "execution_contract_loading": {
+          "reason": "capability not declared",
+          "status": "not-applicable"
+        },
+        "image_qualification_identity": {
+          "qualification_id": "QUAL-T09-PILOT-V5-IMAGE-0002",
+          "status": "passed"
+        },
+        "local_finalizer_selector_resolution": {
+          "qualification_id": "QUAL-T09-PILOT-V5-LOCAL-FINALIZER-0001",
+          "selector_policy": "none",
+          "status": "passed"
+        },
+        "metadata_policy_resolution": {
+          "reason": "capability not declared",
+          "status": "not-applicable"
+        },
+        "provider_owner_cleanup_identity": {
+          "owner_bound": true,
+          "status": "passed"
+        },
+        "provider_plan_loading": {
+          "plan_id": "PLAN-EXP0001-PILOT-V5",
+          "sha256": "e7e214500348c8b876beb034df7b592c84f5ab79788ab6f310ef187fd797613c",
+          "status": "passed"
+        },
+        "provider_profile_loading": {
+          "plan_id": "PLAN-EXP0001-PILOT-V5",
+          "sha256": "e7e214500348c8b876beb034df7b592c84f5ab79788ab6f310ef187fd797613c",
+          "status": "passed"
+        },
+        "replacement_policy_resolution": {
+          "policy": "bounded-preflight",
+          "status": "passed"
+        },
+        "state_capsule_projection": {
+          "projection": {
+            "authorization_policy": "frozen-historical",
+            "cleanup_family": "historical",
+            "command_package_family": "historical",
+            "control_root_policy": "legacy-shared",
+            "lifecycle_family": "historical-observer",
+            "metadata_policy": "none",
+            "package_transition_policy": "none",
+            "plan_id": "PLAN-EXP0001-PILOT-V5",
+            "provider_selector_policy": "none",
+            "replacement_policy": "bounded-preflight",
+            "shadow_scenario": "historical-observer",
+            "stage_identity_policy": "legacy",
+            "version": "V5"
+          },
+          "status": "passed"
+        }
+      },
+      "declared_capabilities": {
+        "authorization_policy": "frozen-historical",
+        "cleanup_family": "historical",
+        "command_package_family": "historical",
+        "control_root_policy": "legacy-shared",
+        "lifecycle_family": "historical-observer",
+        "metadata_policy": "none",
+        "package_transition_policy": "none",
+        "plan_id": "PLAN-EXP0001-PILOT-V5",
+        "provider_selector_policy": "none",
+        "replacement_policy": "bounded-preflight",
+        "shadow_scenario": "historical-observer",
+        "stage_identity_policy": "legacy",
+        "version": "V5"
+      },
+      "errors": [],
+      "plan_id": "PLAN-EXP0001-PILOT-V5",
+      "version": "V5"
+    },
+    {
+      "complete": true,
+      "consumers": {
+        "campaign_lifecycle_loading": {
+          "family": "retry4",
+          "status": "passed"
+        },
+        "cleanup_family_resolution": {
+          "family": "historical",
+          "status": "passed"
+        },
+        "command_manifest_loading": {
+          "reason": "capability not declared",
+          "status": "not-applicable"
+        },
+        "command_package_family_resolution": {
+          "family": "historical",
+          "status": "passed"
+        },
+        "control_root_identity": {
+          "control_root": "pilot-v7",
+          "status": "passed"
+        },
+        "evidence_archive_stage_identity": {
+          "archive_id": "ARCHIVE-EXP0001-PILOT-V6-0004",
+          "stage_id": "STAGE-EXP0001-PILOT-V6-0004",
+          "status": "passed"
+        },
+        "execution_contract_loading": {
+          "reason": "capability not declared",
+          "status": "not-applicable"
+        },
+        "image_qualification_identity": {
+          "qualification_id": "QUAL-T09-PILOT-V6-IMAGE-0001",
+          "status": "passed"
+        },
+        "local_finalizer_selector_resolution": {
+          "qualification_id": "QUAL-T09-PILOT-V6-LOCAL-FINALIZER-0001",
+          "selector_policy": "none",
+          "status": "passed"
+        },
+        "metadata_policy_resolution": {
+          "reason": "capability not declared",
+          "status": "not-applicable"
+        },
+        "provider_owner_cleanup_identity": {
+          "owner_bound": true,
+          "status": "passed"
+        },
+        "provider_plan_loading": {
+          "plan_id": "PLAN-EXP0001-PILOT-V6",
+          "sha256": "d0294b3a1535c4fe4ddfcc856a6b923731a7fb0c7840dd161c5784db61f35d8c",
+          "status": "passed"
+        },
+        "provider_profile_loading": {
+          "plan_id": "PLAN-EXP0001-PILOT-V6",
+          "sha256": "d0294b3a1535c4fe4ddfcc856a6b923731a7fb0c7840dd161c5784db61f35d8c",
+          "status": "passed"
+        },
+        "replacement_policy_resolution": {
+          "policy": "bounded-preflight",
+          "status": "passed"
+        },
+        "state_capsule_projection": {
+          "projection": {
+            "authorization_policy": "frozen-historical",
+            "cleanup_family": "historical",
+            "command_package_family": "historical",
+            "control_root_policy": "legacy-shared",
+            "lifecycle_family": "retry4",
+            "metadata_policy": "none",
+            "package_transition_policy": "none",
+            "plan_id": "PLAN-EXP0001-PILOT-V6",
+            "provider_selector_policy": "none",
+            "replacement_policy": "bounded-preflight",
+            "shadow_scenario": "retry4",
+            "stage_identity_policy": "legacy",
+            "version": "V6"
+          },
+          "status": "passed"
+        }
+      },
+      "declared_capabilities": {
+        "authorization_policy": "frozen-historical",
+        "cleanup_family": "historical",
+        "command_package_family": "historical",
+        "control_root_policy": "legacy-shared",
+        "lifecycle_family": "retry4",
+        "metadata_policy": "none",
+        "package_transition_policy": "none",
+        "plan_id": "PLAN-EXP0001-PILOT-V6",
+        "provider_selector_policy": "none",
+        "replacement_policy": "bounded-preflight",
+        "shadow_scenario": "retry4",
+        "stage_identity_policy": "legacy",
+        "version": "V6"
+      },
+      "errors": [],
+      "plan_id": "PLAN-EXP0001-PILOT-V6",
+      "version": "V6"
+    },
+    {
+      "complete": true,
+      "consumers": {
+        "campaign_lifecycle_loading": {
+          "family": "retry4",
+          "status": "passed"
+        },
+        "cleanup_family_resolution": {
+          "family": "historical",
+          "status": "passed"
+        },
+        "command_manifest_loading": {
+          "reason": "capability not declared",
+          "status": "not-applicable"
+        },
+        "command_package_family_resolution": {
+          "family": "historical",
+          "status": "passed"
+        },
+        "control_root_identity": {
+          "control_root": "pilot-v7",
+          "status": "passed"
+        },
+        "evidence_archive_stage_identity": {
+          "archive_id": "ARCHIVE-EXP0001-PILOT-V7-0005",
+          "stage_id": "STAGE-EXP0001-PILOT-V7-0005",
+          "status": "passed"
+        },
+        "execution_contract_loading": {
+          "reason": "capability not declared",
+          "status": "not-applicable"
+        },
+        "image_qualification_identity": {
+          "qualification_id": "QUAL-T09-PILOT-V7-IMAGE-0001",
+          "status": "passed"
+        },
+        "local_finalizer_selector_resolution": {
+          "qualification_id": "QUAL-T09-PILOT-V7-LOCAL-FINALIZER-0001",
+          "selector_policy": "none",
+          "status": "passed"
+        },
+        "metadata_policy_resolution": {
+          "reason": "capability not declared",
+          "status": "not-applicable"
+        },
+        "provider_owner_cleanup_identity": {
+          "owner_bound": true,
+          "status": "passed"
+        },
+        "provider_plan_loading": {
+          "plan_id": "PLAN-EXP0001-PILOT-V7",
+          "sha256": "9f66f8f6ee9e137d27e86c5362187fe46d94b26a322994e55222e34c0c4c004e",
+          "status": "passed"
+        },
+        "provider_profile_loading": {
+          "plan_id": "PLAN-EXP0001-PILOT-V7",
+          "sha256": "9f66f8f6ee9e137d27e86c5362187fe46d94b26a322994e55222e34c0c4c004e",
+          "status": "passed"
+        },
+        "replacement_policy_resolution": {
+          "policy": "bounded-preflight",
+          "status": "passed"
+        },
+        "state_capsule_projection": {
+          "projection": {
+            "authorization_policy": "frozen-historical",
+            "cleanup_family": "historical",
+            "command_package_family": "historical",
+            "control_root_policy": "legacy-shared",
+            "lifecycle_family": "retry4",
+            "metadata_policy": "none",
+            "package_transition_policy": "none",
+            "plan_id": "PLAN-EXP0001-PILOT-V7",
+            "provider_selector_policy": "none",
+            "replacement_policy": "bounded-preflight",
+            "shadow_scenario": "retry4",
+            "stage_identity_policy": "legacy",
+            "version": "V7"
+          },
+          "status": "passed"
+        }
+      },
+      "declared_capabilities": {
+        "authorization_policy": "frozen-historical",
+        "cleanup_family": "historical",
+        "command_package_family": "historical",
+        "control_root_policy": "legacy-shared",
+        "lifecycle_family": "retry4",
+        "metadata_policy": "none",
+        "package_transition_policy": "none",
+        "plan_id": "PLAN-EXP0001-PILOT-V7",
+        "provider_selector_policy": "none",
+        "replacement_policy": "bounded-preflight",
+        "shadow_scenario": "retry4",
+        "stage_identity_policy": "legacy",
+        "version": "V7"
+      },
+      "errors": [],
+      "plan_id": "PLAN-EXP0001-PILOT-V7",
+      "version": "V7"
+    },
+    {
+      "complete": true,
+      "consumers": {
+        "campaign_lifecycle_loading": {
+          "family": "autonomous-campaign",
+          "status": "passed"
+        },
+        "cleanup_family_resolution": {
+          "family": "historical",
+          "status": "passed"
+        },
+        "command_manifest_loading": {
+          "attempt_count": 4,
+          "sha256": "6d9184cf837a4e650c9715239bda46f188b4f97750340584de78e4310c04f50a",
+          "source": "1e5f1f9524fe57443d4a3ba5c0353290e0cfda5e",
+          "status": "passed"
+        },
+        "command_package_family_resolution": {
+          "family": "autonomous",
+          "status": "passed"
+        },
+        "control_root_identity": {
+          "control_root": "pilot-v7",
+          "status": "passed"
+        },
+        "evidence_archive_stage_identity": {
+          "archive_id": "ARCHIVE-EXP0001-PILOT-V8-AUTONOMOUS-0001",
+          "stage_id": "STAGE-EXP0001-PILOT-V8-AUTONOMOUS-0001",
+          "status": "passed"
+        },
+        "execution_contract_loading": {
+          "attempt_count": 4,
+          "loader": "historical-0.4",
+          "sha256": "eb88d7581acce890ae9d0264aefbb2f088e3db574bf509395f17d3a982caff96",
+          "source": "1e5f1f9524fe57443d4a3ba5c0353290e0cfda5e",
+          "status": "passed"
+        },
+        "image_qualification_identity": {
+          "qualification_id": "QUAL-T09-PILOT-V8-IMAGE-AUTONOMOUS-0001",
+          "status": "passed"
+        },
+        "local_finalizer_selector_resolution": {
+          "qualification_id": "QUAL-T09-PILOT-V8-LOCAL-FINALIZER-AUTONOMOUS-0001",
+          "selector_policy": "none",
+          "status": "passed"
+        },
+        "metadata_policy_resolution": {
+          "reason": "capability not declared",
+          "status": "not-applicable"
+        },
+        "provider_owner_cleanup_identity": {
+          "owner_bound": true,
+          "status": "passed"
+        },
+        "provider_plan_loading": {
+          "plan_id": "PLAN-EXP0001-PILOT-V8",
+          "sha256": "5b77e29e1005979128fa24dbe809bd8b7f92139aa9a49afd68d1daf3de256125",
+          "status": "passed"
+        },
+        "provider_profile_loading": {
+          "plan_id": "PLAN-EXP0001-PILOT-V8",
+          "sha256": "5b77e29e1005979128fa24dbe809bd8b7f92139aa9a49afd68d1daf3de256125",
+          "status": "passed"
+        },
+        "replacement_policy_resolution": {
+          "policy": "bounded-preflight",
+          "status": "passed"
+        },
+        "state_capsule_projection": {
+          "projection": {
+            "authorization_policy": "frozen-historical",
+            "cleanup_family": "historical",
+            "command_package_family": "autonomous",
+            "control_root_policy": "legacy-shared",
+            "lifecycle_family": "autonomous-campaign",
+            "metadata_policy": "none",
+            "package_transition_policy": "preempirical-descendant",
+            "plan_id": "PLAN-EXP0001-PILOT-V8",
+            "provider_selector_policy": "none",
+            "replacement_policy": "bounded-preflight",
+            "shadow_scenario": "category3",
+            "stage_identity_policy": "legacy",
+            "version": "V8"
+          },
+          "status": "passed"
+        }
+      },
+      "declared_capabilities": {
+        "authorization_policy": "frozen-historical",
+        "cleanup_family": "historical",
+        "command_package_family": "autonomous",
+        "control_root_policy": "legacy-shared",
+        "lifecycle_family": "autonomous-campaign",
+        "metadata_policy": "none",
+        "package_transition_policy": "preempirical-descendant",
+        "plan_id": "PLAN-EXP0001-PILOT-V8",
+        "provider_selector_policy": "none",
+        "replacement_policy": "bounded-preflight",
+        "shadow_scenario": "category3",
+        "stage_identity_policy": "legacy",
+        "version": "V8"
+      },
+      "errors": [],
+      "plan_id": "PLAN-EXP0001-PILOT-V8",
+      "version": "V8"
+    },
+    {
+      "complete": true,
+      "consumers": {
+        "campaign_lifecycle_loading": {
+          "family": "autonomous-campaign",
+          "status": "passed"
+        },
+        "cleanup_family_resolution": {
+          "family": "historical",
+          "status": "passed"
+        },
+        "command_manifest_loading": {
+          "attempt_count": 4,
+          "sha256": "957605950c5fa07840ebf7c2e0829161c0171c9931f6ecaf97e78b3d5c7f0dac",
+          "source": "working-tree",
+          "status": "passed"
+        },
+        "command_package_family_resolution": {
+          "family": "autonomous",
+          "status": "passed"
+        },
+        "control_root_identity": {
+          "control_root": "pilot-v7",
+          "status": "passed"
+        },
+        "evidence_archive_stage_identity": {
+          "archive_id": "ARCHIVE-EXP0001-PILOT-V9-AUTONOMOUS-0002",
+          "stage_id": "STAGE-EXP0001-PILOT-V9-AUTONOMOUS-0002",
+          "status": "passed"
+        },
+        "execution_contract_loading": {
+          "attempt_count": 4,
+          "loader": "historical-0.4",
+          "sha256": "a06bfdc16d6a119474d51965ae2f3c40bf7355cb368313dc7380992c97d5ce36",
+          "source": "working-tree",
+          "status": "passed"
+        },
+        "image_qualification_identity": {
+          "qualification_id": "QUAL-T09-PILOT-V9-IMAGE-AUTONOMOUS-0002",
+          "status": "passed"
+        },
+        "local_finalizer_selector_resolution": {
+          "qualification_id": "QUAL-T09-PILOT-V9-LOCAL-FINALIZER-AUTONOMOUS-0002",
+          "selector_policy": "none",
+          "status": "passed"
+        },
+        "metadata_policy_resolution": {
+          "reason": "capability not declared",
+          "status": "not-applicable"
+        },
+        "provider_owner_cleanup_identity": {
+          "owner_bound": true,
+          "status": "passed"
+        },
+        "provider_plan_loading": {
+          "plan_id": "PLAN-EXP0001-PILOT-V9",
+          "sha256": "28d41a2c2ba8e4b2e0460f78e348064847565e4287f07b685433cd99416c25f5",
+          "status": "passed"
+        },
+        "provider_profile_loading": {
+          "plan_id": "PLAN-EXP0001-PILOT-V9",
+          "sha256": "28d41a2c2ba8e4b2e0460f78e348064847565e4287f07b685433cd99416c25f5",
+          "status": "passed"
+        },
+        "replacement_policy_resolution": {
+          "policy": "bounded-preflight",
+          "status": "passed"
+        },
+        "state_capsule_projection": {
+          "projection": {
+            "authorization_policy": "frozen-historical",
+            "cleanup_family": "historical",
+            "command_package_family": "autonomous",
+            "control_root_policy": "legacy-shared",
+            "lifecycle_family": "autonomous-campaign",
+            "metadata_policy": "none",
+            "package_transition_policy": "preempirical-descendant",
+            "plan_id": "PLAN-EXP0001-PILOT-V9",
+            "provider_selector_policy": "none",
+            "replacement_policy": "bounded-preflight",
+            "shadow_scenario": "category3",
+            "stage_identity_policy": "legacy",
+            "version": "V9"
+          },
+          "status": "passed"
+        }
+      },
+      "declared_capabilities": {
+        "authorization_policy": "frozen-historical",
+        "cleanup_family": "historical",
+        "command_package_family": "autonomous",
+        "control_root_policy": "legacy-shared",
+        "lifecycle_family": "autonomous-campaign",
+        "metadata_policy": "none",
+        "package_transition_policy": "preempirical-descendant",
+        "plan_id": "PLAN-EXP0001-PILOT-V9",
+        "provider_selector_policy": "none",
+        "replacement_policy": "bounded-preflight",
+        "shadow_scenario": "category3",
+        "stage_identity_policy": "legacy",
+        "version": "V9"
+      },
+      "errors": [],
+      "plan_id": "PLAN-EXP0001-PILOT-V9",
+      "version": "V9"
+    },
+    {
+      "complete": true,
+      "consumers": {
+        "campaign_lifecycle_loading": {
+          "family": "autonomous-campaign",
+          "status": "passed"
+        },
+        "cleanup_family_resolution": {
+          "family": "early-journal",
+          "status": "passed"
+        },
+        "command_manifest_loading": {
+          "attempt_count": 4,
+          "sha256": "9217db4dda7bbf69911743da70e1aeef0507444a02c480ccc7484ec720383844",
+          "source": "working-tree",
+          "status": "passed"
+        },
+        "command_package_family_resolution": {
+          "family": "autonomous",
+          "status": "passed"
+        },
+        "control_root_identity": {
+          "control_root": "pilot-v7",
+          "status": "passed"
+        },
+        "evidence_archive_stage_identity": {
+          "archive_id": "ARCHIVE-EXP0001-PILOT-V10-AUTONOMOUS-0003",
+          "stage_id": "STAGE-EXP0001-PILOT-V10-AUTONOMOUS-0003",
+          "status": "passed"
+        },
+        "execution_contract_loading": {
+          "attempt_count": 4,
+          "loader": "typed-current",
+          "sha256": "41810898f2a10a2d328a4d82d338a3a65634c9031e2304a082c1baa50c004e62",
+          "source": "working-tree",
+          "status": "passed"
+        },
+        "image_qualification_identity": {
+          "qualification_id": "QUAL-T09-PILOT-V10-IMAGE-AUTONOMOUS-0003",
+          "status": "passed"
+        },
+        "local_finalizer_selector_resolution": {
+          "qualification_id": "QUAL-T09-PILOT-V10-LOCAL-FINALIZER-AUTONOMOUS-0003",
+          "selector_policy": "none",
+          "status": "passed"
+        },
+        "metadata_policy_resolution": {
+          "reason": "capability not declared",
+          "status": "not-applicable"
+        },
+        "provider_owner_cleanup_identity": {
+          "owner_bound": true,
+          "status": "passed"
+        },
+        "provider_plan_loading": {
+          "plan_id": "PLAN-EXP0001-PILOT-V10",
+          "sha256": "ef16e0d01227482cd5a99694dd71a0cec53ef28894d80f8665c3b5b1a5c30695",
+          "status": "passed"
+        },
+        "provider_profile_loading": {
+          "plan_id": "PLAN-EXP0001-PILOT-V10",
+          "sha256": "ef16e0d01227482cd5a99694dd71a0cec53ef28894d80f8665c3b5b1a5c30695",
+          "status": "passed"
+        },
+        "replacement_policy_resolution": {
+          "policy": "bounded-preflight",
+          "status": "passed"
+        },
+        "state_capsule_projection": {
+          "projection": {
+            "authorization_policy": "frozen-historical",
+            "cleanup_family": "early-journal",
+            "command_package_family": "autonomous",
+            "control_root_policy": "legacy-shared",
+            "lifecycle_family": "autonomous-campaign",
+            "metadata_policy": "none",
+            "package_transition_policy": "preempirical-descendant",
+            "plan_id": "PLAN-EXP0001-PILOT-V10",
+            "provider_selector_policy": "none",
+            "replacement_policy": "bounded-preflight",
+            "shadow_scenario": "category3",
+            "stage_identity_policy": "legacy",
+            "version": "V10"
+          },
+          "status": "passed"
+        }
+      },
+      "declared_capabilities": {
+        "authorization_policy": "frozen-historical",
+        "cleanup_family": "early-journal",
+        "command_package_family": "autonomous",
+        "control_root_policy": "legacy-shared",
+        "lifecycle_family": "autonomous-campaign",
+        "metadata_policy": "none",
+        "package_transition_policy": "preempirical-descendant",
+        "plan_id": "PLAN-EXP0001-PILOT-V10",
+        "provider_selector_policy": "none",
+        "replacement_policy": "bounded-preflight",
+        "shadow_scenario": "category3",
+        "stage_identity_policy": "legacy",
+        "version": "V10"
+      },
+      "errors": [],
+      "plan_id": "PLAN-EXP0001-PILOT-V10",
+      "version": "V10"
+    },
+    {
+      "complete": true,
+      "consumers": {
+        "campaign_lifecycle_loading": {
+          "family": "autonomous-campaign",
+          "status": "passed"
+        },
+        "cleanup_family_resolution": {
+          "family": "early-journal",
+          "status": "passed"
+        },
+        "command_manifest_loading": {
+          "attempt_count": 4,
+          "sha256": "c36e1417b4668f6a0ae99abd63e4f3c6344c2af6c0942e2ac036633b3817a4e1",
+          "source": "working-tree",
+          "status": "passed"
+        },
+        "command_package_family_resolution": {
+          "family": "autonomous",
+          "status": "passed"
+        },
+        "control_root_identity": {
+          "control_root": "pilot-v7",
+          "status": "passed"
+        },
+        "evidence_archive_stage_identity": {
+          "archive_id": "ARCHIVE-EXP0001-PILOT-V11-AUTONOMOUS-0004",
+          "stage_id": "STAGE-EXP0001-PILOT-V11-AUTONOMOUS-0004",
+          "status": "passed"
+        },
+        "execution_contract_loading": {
+          "attempt_count": 4,
+          "loader": "typed-current",
+          "sha256": "97a1c22064284d0f812e6cac87dae836ad516a423c7ad9f4a0039c696c22b43d",
+          "source": "working-tree",
+          "status": "passed"
+        },
+        "image_qualification_identity": {
+          "qualification_id": "QUAL-T09-PILOT-V11-IMAGE-AUTONOMOUS-0004",
+          "status": "passed"
+        },
+        "local_finalizer_selector_resolution": {
+          "qualification_id": "QUAL-T09-PILOT-V11-LOCAL-FINALIZER-AUTONOMOUS-0004",
+          "selector_policy": "none",
+          "status": "passed"
+        },
+        "metadata_policy_resolution": {
+          "reason": "capability not declared",
+          "status": "not-applicable"
+        },
+        "provider_owner_cleanup_identity": {
+          "owner_bound": true,
+          "status": "passed"
+        },
+        "provider_plan_loading": {
+          "plan_id": "PLAN-EXP0001-PILOT-V11",
+          "sha256": "726eeef3be208ad22b3279f8192fa55cfba259d14bf85424716b4f3e71a4a850",
+          "status": "passed"
+        },
+        "provider_profile_loading": {
+          "plan_id": "PLAN-EXP0001-PILOT-V11",
+          "sha256": "726eeef3be208ad22b3279f8192fa55cfba259d14bf85424716b4f3e71a4a850",
+          "status": "passed"
+        },
+        "replacement_policy_resolution": {
+          "policy": "bounded-preflight",
+          "status": "passed"
+        },
+        "state_capsule_projection": {
+          "projection": {
+            "authorization_policy": "legacy-local-single-use",
+            "cleanup_family": "early-journal",
+            "command_package_family": "autonomous",
+            "control_root_policy": "legacy-shared",
+            "lifecycle_family": "autonomous-campaign",
+            "metadata_policy": "none",
+            "package_transition_policy": "preempirical-descendant",
+            "plan_id": "PLAN-EXP0001-PILOT-V11",
+            "provider_selector_policy": "none",
+            "replacement_policy": "bounded-preflight",
+            "shadow_scenario": "category3",
+            "stage_identity_policy": "legacy",
+            "version": "V11"
+          },
+          "status": "passed"
+        }
+      },
+      "declared_capabilities": {
+        "authorization_policy": "legacy-local-single-use",
+        "cleanup_family": "early-journal",
+        "command_package_family": "autonomous",
+        "control_root_policy": "legacy-shared",
+        "lifecycle_family": "autonomous-campaign",
+        "metadata_policy": "none",
+        "package_transition_policy": "preempirical-descendant",
+        "plan_id": "PLAN-EXP0001-PILOT-V11",
+        "provider_selector_policy": "none",
+        "replacement_policy": "bounded-preflight",
+        "shadow_scenario": "category3",
+        "stage_identity_policy": "legacy",
+        "version": "V11"
+      },
+      "errors": [],
+      "plan_id": "PLAN-EXP0001-PILOT-V11",
+      "version": "V11"
+    },
+    {
+      "complete": true,
+      "consumers": {
+        "campaign_lifecycle_loading": {
+          "family": "autonomous-campaign",
+          "status": "passed"
+        },
+        "cleanup_family_resolution": {
+          "family": "early-journal",
+          "status": "passed"
+        },
+        "command_manifest_loading": {
+          "attempt_count": 4,
+          "sha256": "fbca4bced586375508e945cde23b60a62b491d306c7c3dd1405933360360a7d4",
+          "source": "working-tree",
+          "status": "passed"
+        },
+        "command_package_family_resolution": {
+          "family": "autonomous",
+          "status": "passed"
+        },
+        "control_root_identity": {
+          "control_root": "pilot-v12",
+          "status": "passed"
+        },
+        "evidence_archive_stage_identity": {
+          "archive_id": "ARCHIVE-EXP0001-PILOT-V12-AUTONOMOUS-0005",
+          "stage_id": "STAGE-EXP0001-PILOT-V12-AUTONOMOUS-0005",
+          "status": "passed"
+        },
+        "execution_contract_loading": {
+          "attempt_count": 4,
+          "loader": "typed-current",
+          "sha256": "3e5d932e0c5d76aa694376be702ce9fa2d681da110360ef21b5a1d23478b71d5",
+          "source": "working-tree",
+          "status": "passed"
+        },
+        "image_qualification_identity": {
+          "qualification_id": "QUAL-T09-PILOT-V12-IMAGE-AUTONOMOUS-0005",
+          "status": "passed"
+        },
+        "local_finalizer_selector_resolution": {
+          "qualification_id": "QUAL-T09-PILOT-V12-LOCAL-FINALIZER-AUTONOMOUS-0005",
+          "selector_policy": "none",
+          "status": "passed"
+        },
+        "metadata_policy_resolution": {
+          "policy": "local-prelaunch-receipt",
+          "status": "passed"
+        },
+        "provider_owner_cleanup_identity": {
+          "owner_bound": true,
+          "status": "passed"
+        },
+        "provider_plan_loading": {
+          "plan_id": "PLAN-EXP0001-PILOT-V12",
+          "sha256": "0fd1ce4cd0fbeef41405ac4773d8d2a67b6c0414013b8c4fb4293c5d234446ba",
+          "status": "passed"
+        },
+        "provider_profile_loading": {
+          "plan_id": "PLAN-EXP0001-PILOT-V12",
+          "sha256": "0fd1ce4cd0fbeef41405ac4773d8d2a67b6c0414013b8c4fb4293c5d234446ba",
+          "status": "passed"
+        },
+        "replacement_policy_resolution": {
+          "policy": "bounded-preflight",
+          "status": "passed"
+        },
+        "state_capsule_projection": {
+          "projection": {
+            "authorization_policy": "metadata-bound-single-use",
+            "cleanup_family": "early-journal",
+            "command_package_family": "autonomous",
+            "control_root_policy": "versioned",
+            "lifecycle_family": "autonomous-campaign",
+            "metadata_policy": "local-prelaunch-receipt",
+            "package_transition_policy": "none",
+            "plan_id": "PLAN-EXP0001-PILOT-V12",
+            "provider_selector_policy": "none",
+            "replacement_policy": "bounded-preflight",
+            "shadow_scenario": "category3",
+            "stage_identity_policy": "typed-provider",
+            "version": "V12"
+          },
+          "status": "passed"
+        }
+      },
+      "declared_capabilities": {
+        "authorization_policy": "metadata-bound-single-use",
+        "cleanup_family": "early-journal",
+        "command_package_family": "autonomous",
+        "control_root_policy": "versioned",
+        "lifecycle_family": "autonomous-campaign",
+        "metadata_policy": "local-prelaunch-receipt",
+        "package_transition_policy": "none",
+        "plan_id": "PLAN-EXP0001-PILOT-V12",
+        "provider_selector_policy": "none",
+        "replacement_policy": "bounded-preflight",
+        "shadow_scenario": "category3",
+        "stage_identity_policy": "typed-provider",
+        "version": "V12"
+      },
+      "errors": [],
+      "plan_id": "PLAN-EXP0001-PILOT-V12",
+      "version": "V12"
+    },
+    {
+      "complete": true,
+      "consumers": {
+        "campaign_lifecycle_loading": {
+          "family": "autonomous-campaign",
+          "status": "passed"
+        },
+        "cleanup_family_resolution": {
+          "family": "early-journal",
+          "status": "passed"
+        },
+        "command_manifest_loading": {
+          "attempt_count": 4,
+          "sha256": "b83b6ba6704e30048b11f68f498fadef7b6da2dbc71d2ce02f71db66bc090c28",
+          "source": "working-tree",
+          "status": "passed"
+        },
+        "command_package_family_resolution": {
+          "family": "autonomous",
+          "status": "passed"
+        },
+        "control_root_identity": {
+          "control_root": "pilot-v13",
+          "status": "passed"
+        },
+        "evidence_archive_stage_identity": {
+          "archive_id": "ARCHIVE-EXP0001-PILOT-V13-AUTONOMOUS-0006",
+          "stage_id": "STAGE-EXP0001-PILOT-V13-AUTONOMOUS-0006",
+          "status": "passed"
+        },
+        "execution_contract_loading": {
+          "attempt_count": 4,
+          "loader": "typed-current",
+          "sha256": "08ef5ca21382c7cc5a407d79bb9f0d8c0ce61ac09c9d74e22b51ac64bd62b924",
+          "source": "working-tree",
+          "status": "passed"
+        },
+        "image_qualification_identity": {
+          "qualification_id": "QUAL-T09-PILOT-V13-IMAGE-AUTONOMOUS-0006",
+          "status": "passed"
+        },
+        "local_finalizer_selector_resolution": {
+          "qualification_id": "QUAL-T09-PILOT-V13-LOCAL-FINALIZER-AUTONOMOUS-0006",
+          "selector_policy": "explicit",
+          "status": "passed"
+        },
+        "metadata_policy_resolution": {
+          "policy": "local-prelaunch-receipt",
+          "status": "passed"
+        },
+        "provider_owner_cleanup_identity": {
+          "owner_bound": true,
+          "status": "passed"
+        },
+        "provider_plan_loading": {
+          "plan_id": "PLAN-EXP0001-PILOT-V13",
+          "sha256": "58159df775f8e3a30debdc327e8be29574ec68a5c34167012866382a09b75ca4",
+          "status": "passed"
+        },
+        "provider_profile_loading": {
+          "plan_id": "PLAN-EXP0001-PILOT-V13",
+          "sha256": "58159df775f8e3a30debdc327e8be29574ec68a5c34167012866382a09b75ca4",
+          "status": "passed"
+        },
+        "replacement_policy_resolution": {
+          "policy": "bounded-preflight",
+          "status": "passed"
+        },
+        "state_capsule_projection": {
+          "projection": {
+            "authorization_policy": "metadata-bound-single-use",
+            "cleanup_family": "early-journal",
+            "command_package_family": "autonomous",
+            "control_root_policy": "versioned",
+            "lifecycle_family": "autonomous-campaign",
+            "metadata_policy": "local-prelaunch-receipt",
+            "package_transition_policy": "none",
+            "plan_id": "PLAN-EXP0001-PILOT-V13",
+            "provider_selector_policy": "explicit",
+            "replacement_policy": "bounded-preflight",
+            "shadow_scenario": "category3",
+            "stage_identity_policy": "typed-provider",
+            "version": "V13"
+          },
+          "status": "passed"
+        }
+      },
+      "declared_capabilities": {
+        "authorization_policy": "metadata-bound-single-use",
+        "cleanup_family": "early-journal",
+        "command_package_family": "autonomous",
+        "control_root_policy": "versioned",
+        "lifecycle_family": "autonomous-campaign",
+        "metadata_policy": "local-prelaunch-receipt",
+        "package_transition_policy": "none",
+        "plan_id": "PLAN-EXP0001-PILOT-V13",
+        "provider_selector_policy": "explicit",
+        "replacement_policy": "bounded-preflight",
+        "shadow_scenario": "category3",
+        "stage_identity_policy": "typed-provider",
+        "version": "V13"
+      },
+      "errors": [],
+      "plan_id": "PLAN-EXP0001-PILOT-V13",
+      "version": "V13"
+    },
+    {
+      "complete": true,
+      "consumers": {
+        "campaign_lifecycle_loading": {
+          "family": "autonomous-campaign",
+          "status": "passed"
+        },
+        "cleanup_family_resolution": {
+          "family": "empirical-prefix",
+          "status": "passed"
+        },
+        "command_manifest_loading": {
+          "attempt_count": 4,
+          "sha256": "d8b8b46e04a59ceb49d333bc8a345055f60e8161ba0fea5ea4d260096fe5dddc",
+          "source": "working-tree",
+          "status": "passed"
+        },
+        "command_package_family_resolution": {
+          "family": "autonomous",
+          "status": "passed"
+        },
+        "control_root_identity": {
+          "control_root": "pilot-v14",
+          "status": "passed"
+        },
+        "evidence_archive_stage_identity": {
+          "archive_id": "ARCHIVE-EXP0001-PILOT-V14-AUTONOMOUS-0007",
+          "stage_id": "STAGE-EXP0001-PILOT-V14-AUTONOMOUS-0007",
+          "status": "passed"
+        },
+        "execution_contract_loading": {
+          "attempt_count": 4,
+          "loader": "typed-current",
+          "sha256": "c1cb61b2c6c912517184e493414e730784388dcdc969c31b898a11bf7922fec1",
+          "source": "working-tree",
+          "status": "passed"
+        },
+        "image_qualification_identity": {
+          "qualification_id": "QUAL-T09-PILOT-V14-IMAGE-AUTONOMOUS-0007",
+          "status": "passed"
+        },
+        "local_finalizer_selector_resolution": {
+          "qualification_id": "QUAL-T09-PILOT-V14-LOCAL-FINALIZER-AUTONOMOUS-0007",
+          "selector_policy": "explicit",
+          "status": "passed"
+        },
+        "metadata_policy_resolution": {
+          "policy": "local-prelaunch-receipt",
+          "status": "passed"
+        },
+        "provider_owner_cleanup_identity": {
+          "owner_bound": true,
+          "status": "passed"
+        },
+        "provider_plan_loading": {
+          "plan_id": "PLAN-EXP0001-PILOT-V14",
+          "sha256": "b1b5dc0e71954fdcbfe9c5a315f45dfcb09bd3e569fd817cf86efa381a869ee7",
+          "status": "passed"
+        },
+        "provider_profile_loading": {
+          "plan_id": "PLAN-EXP0001-PILOT-V14",
+          "sha256": "b1b5dc0e71954fdcbfe9c5a315f45dfcb09bd3e569fd817cf86efa381a869ee7",
+          "status": "passed"
+        },
+        "replacement_policy_resolution": {
+          "policy": "bounded-preflight",
+          "status": "passed"
+        },
+        "state_capsule_projection": {
+          "projection": {
+            "authorization_policy": "metadata-bound-single-use",
+            "cleanup_family": "empirical-prefix",
+            "command_package_family": "autonomous",
+            "control_root_policy": "versioned",
+            "lifecycle_family": "autonomous-campaign",
+            "metadata_policy": "local-prelaunch-receipt",
+            "package_transition_policy": "none",
+            "plan_id": "PLAN-EXP0001-PILOT-V14",
+            "provider_selector_policy": "explicit",
+            "replacement_policy": "bounded-preflight",
+            "shadow_scenario": "category3",
+            "stage_identity_policy": "typed-provider",
+            "version": "V14"
+          },
+          "status": "passed"
+        }
+      },
+      "declared_capabilities": {
+        "authorization_policy": "metadata-bound-single-use",
+        "cleanup_family": "empirical-prefix",
+        "command_package_family": "autonomous",
+        "control_root_policy": "versioned",
+        "lifecycle_family": "autonomous-campaign",
+        "metadata_policy": "local-prelaunch-receipt",
+        "package_transition_policy": "none",
+        "plan_id": "PLAN-EXP0001-PILOT-V14",
+        "provider_selector_policy": "explicit",
+        "replacement_policy": "bounded-preflight",
+        "shadow_scenario": "category3",
+        "stage_identity_policy": "typed-provider",
+        "version": "V14"
+      },
+      "errors": [],
+      "plan_id": "PLAN-EXP0001-PILOT-V14",
+      "version": "V14"
+    },
+    {
+      "complete": true,
+      "consumers": {
+        "campaign_lifecycle_loading": {
+          "family": "autonomous-campaign",
+          "status": "passed"
+        },
+        "cleanup_family_resolution": {
+          "family": "empirical-prefix",
+          "status": "passed"
+        },
+        "command_manifest_loading": {
+          "attempt_count": 4,
+          "sha256": "533721a1665c1826502ece26b025859c6fb21b6f3b791d085d2ea294e3f88b4f",
+          "source": "working-tree",
+          "status": "passed"
+        },
+        "command_package_family_resolution": {
+          "family": "autonomous",
+          "status": "passed"
+        },
+        "control_root_identity": {
+          "control_root": "pilot-v15",
+          "status": "passed"
+        },
+        "evidence_archive_stage_identity": {
+          "archive_id": "ARCHIVE-EXP0001-PILOT-V15-AUTONOMOUS-0008",
+          "stage_id": "STAGE-EXP0001-PILOT-V15-AUTONOMOUS-0008",
+          "status": "passed"
+        },
+        "execution_contract_loading": {
+          "attempt_count": 4,
+          "loader": "typed-current",
+          "sha256": "a658081b26e0812874fdb3f195896f642283b677b814b0da025bf65b55989629",
+          "source": "working-tree",
+          "status": "passed"
+        },
+        "image_qualification_identity": {
+          "qualification_id": "QUAL-T09-PILOT-V15-IMAGE-AUTONOMOUS-0008",
+          "status": "passed"
+        },
+        "local_finalizer_selector_resolution": {
+          "qualification_id": "QUAL-T09-PILOT-V15-LOCAL-FINALIZER-AUTONOMOUS-0008",
+          "selector_policy": "explicit",
+          "status": "passed"
+        },
+        "metadata_policy_resolution": {
+          "policy": "local-prelaunch-receipt",
+          "status": "passed"
+        },
+        "provider_owner_cleanup_identity": {
+          "owner_bound": true,
+          "status": "passed"
+        },
+        "provider_plan_loading": {
+          "plan_id": "PLAN-EXP0001-PILOT-V15",
+          "sha256": "64075a67989522495145bf02c32544bd3a07f30c38d46daa4e9f5c16c65faa1d",
+          "status": "passed"
+        },
+        "provider_profile_loading": {
+          "plan_id": "PLAN-EXP0001-PILOT-V15",
+          "sha256": "64075a67989522495145bf02c32544bd3a07f30c38d46daa4e9f5c16c65faa1d",
+          "status": "passed"
+        },
+        "replacement_policy_resolution": {
+          "policy": "bounded-preflight",
+          "status": "passed"
+        },
+        "state_capsule_projection": {
+          "projection": {
+            "authorization_policy": "metadata-bound-single-use",
+            "cleanup_family": "empirical-prefix",
+            "command_package_family": "autonomous",
+            "control_root_policy": "versioned",
+            "lifecycle_family": "autonomous-campaign",
+            "metadata_policy": "local-prelaunch-receipt",
+            "package_transition_policy": "none",
+            "plan_id": "PLAN-EXP0001-PILOT-V15",
+            "provider_selector_policy": "explicit",
+            "replacement_policy": "bounded-preflight",
+            "shadow_scenario": "category3",
+            "stage_identity_policy": "typed-provider",
+            "version": "V15"
+          },
+          "status": "passed"
+        }
+      },
+      "declared_capabilities": {
+        "authorization_policy": "metadata-bound-single-use",
+        "cleanup_family": "empirical-prefix",
+        "command_package_family": "autonomous",
+        "control_root_policy": "versioned",
+        "lifecycle_family": "autonomous-campaign",
+        "metadata_policy": "local-prelaunch-receipt",
+        "package_transition_policy": "none",
+        "plan_id": "PLAN-EXP0001-PILOT-V15",
+        "provider_selector_policy": "explicit",
+        "replacement_policy": "bounded-preflight",
+        "shadow_scenario": "category3",
+        "stage_identity_policy": "typed-provider",
+        "version": "V15"
+      },
+      "errors": [],
+      "plan_id": "PLAN-EXP0001-PILOT-V15",
+      "version": "V15"
+    },
+    {
+      "complete": true,
+      "consumers": {
+        "campaign_lifecycle_loading": {
+          "family": "autonomous-campaign",
+          "status": "passed"
+        },
+        "cleanup_family_resolution": {
+          "family": "empirical-prefix",
+          "status": "passed"
+        },
+        "command_manifest_loading": {
+          "attempt_count": 4,
+          "sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
+          "source": "working-tree",
+          "status": "passed"
+        },
+        "command_package_family_resolution": {
+          "family": "autonomous",
+          "status": "passed"
+        },
+        "control_root_identity": {
+          "control_root": "pilot-v16",
+          "status": "passed"
+        },
+        "evidence_archive_stage_identity": {
+          "archive_id": "ARCHIVE-EXP0001-PILOT-V16-AUTONOMOUS-0009",
+          "stage_id": "STAGE-EXP0001-PILOT-V16-AUTONOMOUS-0009",
+          "status": "passed"
+        },
+        "execution_contract_loading": {
+          "attempt_count": 4,
+          "loader": "typed-current",
+          "sha256": "a2bb10017263b1d3aab09f22a35854d3d78362fec500fbcd49a3d5053336d72e",
+          "source": "working-tree",
+          "status": "passed"
+        },
+        "image_qualification_identity": {
+          "qualification_id": "QUAL-T09-PILOT-V16-IMAGE-AUTONOMOUS-0009",
+          "status": "passed"
+        },
+        "local_finalizer_selector_resolution": {
+          "qualification_id": "QUAL-T09-PILOT-V16-LOCAL-FINALIZER-AUTONOMOUS-0009",
+          "selector_policy": "explicit",
+          "status": "passed"
+        },
+        "metadata_policy_resolution": {
+          "policy": "local-prelaunch-receipt",
+          "status": "passed"
+        },
+        "provider_owner_cleanup_identity": {
+          "owner_bound": true,
+          "status": "passed"
+        },
+        "provider_plan_loading": {
+          "plan_id": "PLAN-EXP0001-PILOT-V16",
+          "sha256": "80962bb30ed6aa879e4c1e8c7d7e25a119375c28e0897cd02e3ff1c0aa15b41a",
+          "status": "passed"
+        },
+        "provider_profile_loading": {
+          "plan_id": "PLAN-EXP0001-PILOT-V16",
+          "sha256": "80962bb30ed6aa879e4c1e8c7d7e25a119375c28e0897cd02e3ff1c0aa15b41a",
+          "status": "passed"
+        },
+        "replacement_policy_resolution": {
+          "policy": "bounded-preflight",
+          "status": "passed"
+        },
+        "state_capsule_projection": {
+          "projection": {
+            "authorization_policy": "metadata-bound-single-use",
+            "cleanup_family": "empirical-prefix",
+            "command_package_family": "autonomous",
+            "control_root_policy": "versioned",
+            "lifecycle_family": "autonomous-campaign",
+            "metadata_policy": "local-prelaunch-receipt",
+            "package_transition_policy": "none",
+            "plan_id": "PLAN-EXP0001-PILOT-V16",
+            "provider_selector_policy": "explicit",
+            "replacement_policy": "bounded-preflight",
+            "shadow_scenario": "category3",
+            "stage_identity_policy": "typed-provider",
+            "version": "V16"
+          },
+          "status": "passed"
+        }
+      },
+      "declared_capabilities": {
+        "authorization_policy": "metadata-bound-single-use",
+        "cleanup_family": "empirical-prefix",
+        "command_package_family": "autonomous",
+        "control_root_policy": "versioned",
+        "lifecycle_family": "autonomous-campaign",
+        "metadata_policy": "local-prelaunch-receipt",
+        "package_transition_policy": "none",
+        "plan_id": "PLAN-EXP0001-PILOT-V16",
+        "provider_selector_policy": "explicit",
+        "replacement_policy": "bounded-preflight",
+        "shadow_scenario": "category3",
+        "stage_identity_policy": "typed-provider",
+        "version": "V16"
+      },
+      "errors": [],
+      "plan_id": "PLAN-EXP0001-PILOT-V16",
+      "version": "V16"
+    }
+  ],
+  "errors": [],
+  "registry_source_sha256": "562f7ca25bd026af65e841054d1f4c962a7915061f0c79973c7edde048868071",
+  "repository_commit": "5efbe727648ae9e7077132aa9bf3033e4b35ec03",
+  "repository_tree": "5fab7020bf157c6c31a68b1b2024ca10203d3106",
+  "schema_version": "1.0.0",
+  "semantic_sha256": "e8a3bf42e9fcaf4a8354fd4c5103af33b992232c56b72601633319d340362490"
+}

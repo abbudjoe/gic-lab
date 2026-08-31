@@ -43,6 +43,35 @@ T09_DOWNSTREAM_FINALIZER_HISTORY_SHA256 = (
 )
 T09_CONTROL_SOURCE_BINDING_RELATIVE = Path("control/receipts/t09-control-plane-source-binding.json")
 T09_CONTROL_SOURCE_BASE_COMMIT = "450a10a51eda4c428f20b27d6b4aafc4f94d80f4"
+T09_CONTROL_SHADOW_SCENARIOS = (
+    "happy-path",
+    "lifecycle-unsupported",
+    "metadata-expired",
+    "provider-entry-replacement",
+    "host-preflight-replacement",
+    "condition-failure",
+    "raw-export-failure",
+    "finalizer-failure",
+    "cleanup-interrupted-resumed",
+    "provider-termination-unavailable",
+    "structural-privacy-finding",
+    "ambiguous-provider-call-outcome",
+)
+T09_CONTROL_RECEIPT_SCHEMAS = {
+    "control/receipts/registry-completeness.json": (
+        "schemas/t09-control-registry-receipt.schema.json"
+    ),
+    "control/receipts/v16-composition.json": (
+        "schemas/t09-control-composition-receipt.schema.json"
+    ),
+    "control/receipts/state-capsule.json": "schemas/agent-state-capsule.schema.json",
+    **{
+        f"control/receipts/category3-shadow/{scenario}.json": (
+            "schemas/t09-category3-shadow-receipt.schema.json"
+        )
+        for scenario in T09_CONTROL_SHADOW_SCENARIOS
+    },
+}
 SCHEMA_FILES = (
     "schemas/experiment.schema.json",
     "schemas/artifact.schema.json",
@@ -121,7 +150,17 @@ REQUIRED_PATHS = (
     "docs/harness/T09_CONTROL_PLANE_STABILIZATION_PREAUTHORIZATION_PACKET.md",
     "control/goals/EXP-0001.yaml",
     "control/incidents/INC-T09-V16-LIFECYCLE-REGISTRY.json",
+    "control/receipts/active-version-lint.json",
+    "control/receipts/agent-check.json",
+    "control/receipts/incidents.json",
+    "control/receipts/registry-completeness.json",
+    "control/receipts/state-capsule.json",
     "control/receipts/t09-control-plane-source-binding.json",
+    "control/receipts/v16-composition.json",
+    *(
+        f"control/receipts/category3-shadow/{scenario}.json"
+        for scenario in T09_CONTROL_SHADOW_SCENARIOS
+    ),
     "experiments/EXP-0001-sira-simulative-vs-reactive/T09_V16_PREFLIGHT_STOPPED_DISPOSITION.json",
     "docs/harness/T09_SIRA_EXPLORATORY_PILOT_PLAN.md",
     "docs/harness/T09_SIRA_PILOT_PREAUTHORIZATION_PACKET.md",
@@ -3435,6 +3474,181 @@ def validate_active_version_dispatch_gate(root: Path = ROOT) -> list[str]:
     ]
 
 
+def validate_tracked_control_receipts(root: Path = ROOT) -> list[str]:
+    """Validate the immutable-ancestor control receipt set and its cross-bindings."""
+
+    errors: list[str] = []
+    receipt_paths = {
+        "control/receipts/active-version-lint.json",
+        "control/receipts/agent-check.json",
+        "control/receipts/incidents.json",
+        *T09_CONTROL_RECEIPT_SCHEMAS,
+    }
+    receipts: dict[str, dict[str, Any]] = {}
+    identities: set[tuple[str, str]] = set()
+    for relative in sorted(receipt_paths):
+        path = root / relative
+        if not path.is_file() or path.is_symlink():
+            errors.append(f"tracked control receipt is unavailable: {relative}")
+            continue
+        try:
+            document = load_json(path)
+        except (OSError, UnicodeDecodeError, ValueError) as exc:
+            errors.append(f"tracked control receipt is invalid: {relative}: {exc}")
+            continue
+        receipts[relative] = document
+        schema_relative = T09_CONTROL_RECEIPT_SCHEMAS.get(relative)
+        if schema_relative is not None:
+            errors.extend(
+                f"{relative}: {error}"
+                for error in validate_instance(document, root / schema_relative)
+            )
+        semantic_document = dict(document)
+        expected_semantic = semantic_document.pop("semantic_sha256", None)
+        observed_semantic = hashlib.sha256(
+            json.dumps(
+                semantic_document,
+                allow_nan=False,
+                separators=(",", ":"),
+                sort_keys=True,
+            ).encode()
+        ).hexdigest()
+        if expected_semantic != observed_semantic:
+            errors.append(f"{relative}: semantic hash drifted")
+        repository_identity = document.get("repository")
+        if isinstance(repository_identity, dict):
+            commit = repository_identity.get("commit")
+            tree = repository_identity.get("tree")
+        else:
+            commit = document.get("repository_commit")
+            tree = document.get("repository_tree")
+        if isinstance(commit, str) and isinstance(tree, str):
+            identities.add((commit, tree))
+
+    if len(identities) != 1:
+        errors.append("tracked control receipts do not share one immutable ancestor identity")
+    else:
+        receipt_commit, receipt_tree = next(iter(identities))
+        resolved_tree = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", f"{receipt_commit}^{{tree}}"],
+            capture_output=True,
+            check=False,
+            text=True,
+        )
+        if resolved_tree.returncode != 0 or resolved_tree.stdout.strip() != receipt_tree:
+            errors.append("tracked control receipt commit/tree does not resolve")
+        for ancestor, descendant, label in (
+            (T09_CONTROL_SOURCE_BASE_COMMIT, receipt_commit, "exact base"),
+            (receipt_commit, "HEAD", "current head"),
+        ):
+            result = subprocess.run(
+                ["git", "-C", str(root), "merge-base", "--is-ancestor", ancestor, descendant],
+                capture_output=True,
+                check=False,
+            )
+            if result.returncode != 0:
+                errors.append(f"tracked control receipt identity is not an ancestor of {label}")
+
+    lint = receipts.get("control/receipts/active-version-lint.json", {})
+    registry = receipts.get("control/receipts/registry-completeness.json", {})
+    composition = receipts.get("control/receipts/v16-composition.json", {})
+    capsule = receipts.get("control/receipts/state-capsule.json", {})
+    incidents = receipts.get("control/receipts/incidents.json", {})
+    agent = receipts.get("control/receipts/agent-check.json", {})
+    if lint.get("complete") is not True or lint.get("findings") != []:
+        errors.append("tracked active-version receipt is incomplete")
+    registry_entries = registry.get("contracts")
+    if (
+        registry.get("complete") is not True
+        or registry.get("contract_count") != 14
+        or not isinstance(registry_entries, list)
+        or any(
+            not isinstance(entry, dict) or entry.get("complete") is not True
+            for entry in registry_entries
+        )
+    ):
+        errors.append("tracked registry-completeness receipt is incomplete")
+    if (
+        composition.get("provider_contract_version") != "V16"
+        or composition.get("static_composition_valid") is not True
+        or composition.get("ready_for_shadow") is not True
+        or composition.get("ready_for_authenticated_preflight") is not False
+    ):
+        errors.append("tracked V16 composition receipt is incomplete")
+    capsule_flags = capsule.get("machine_readable_flags")
+    if not isinstance(capsule_flags, dict) or capsule_flags != {
+        "live_authorization": False,
+        "live_resources_observed_in_this_work": False,
+        "scientific_interpretation": False,
+    }:
+        errors.append("tracked state capsule authority/science flags drifted")
+    if incidents.get("complete") is not True or incidents.get("incident_count") != 1:
+        errors.append("tracked incident receipt is incomplete")
+    if agent.get("complete") is not True:
+        errors.append("tracked aggregate agent-check receipt is incomplete")
+
+    shadow_receipts: dict[str, dict[str, Any]] = {}
+    for scenario in T09_CONTROL_SHADOW_SCENARIOS:
+        relative = f"control/receipts/category3-shadow/{scenario}.json"
+        document = receipts.get(relative, {})
+        shadow_receipts[scenario] = document
+        if (
+            document.get("scenario") != scenario
+            or document.get("scenario_valid") is not True
+            or document.get("shadow_only") is not True
+            or document.get("scientific_interpretation_allowed") is not False
+            or document.get("zero_undeclared_calls") is not True
+        ):
+            errors.append(f"tracked Category 3 shadow receipt is incomplete: {scenario}")
+
+    checks = agent.get("checks")
+    if isinstance(checks, dict):
+        expected_hashes = {
+            "active_version_lint": lint.get("semantic_sha256"),
+            "registry_completeness": registry.get("semantic_sha256"),
+            "incident_completeness": incidents.get("semantic_sha256"),
+            "state_capsule": capsule.get("semantic_sha256"),
+        }
+        for check_name, expected in expected_hashes.items():
+            check = checks.get(check_name)
+            if not isinstance(check, dict) or check.get("semantic_sha256") != expected:
+                errors.append(f"aggregate agent-check receipt does not bind {check_name}")
+        composition_check = checks.get("offline_composition")
+        composition_entries = (
+            composition_check.get("contracts") if isinstance(composition_check, dict) else None
+        )
+        v16_entries = (
+            [
+                entry
+                for entry in composition_entries
+                if isinstance(entry, dict) and entry.get("version") == "V16"
+            ]
+            if isinstance(composition_entries, list)
+            else []
+        )
+        if len(v16_entries) != 1 or v16_entries[0].get("semantic_sha256") != composition.get(
+            "semantic_sha256"
+        ):
+            errors.append("aggregate agent-check receipt does not bind V16 composition")
+        shadow_check = checks.get("category3_shadow")
+        shadow_entries = shadow_check.get("scenarios") if isinstance(shadow_check, dict) else None
+        observed_shadow_hashes = (
+            {
+                entry.get("scenario"): entry.get("semantic_sha256")
+                for entry in shadow_entries
+                if isinstance(entry, dict)
+            }
+            if isinstance(shadow_entries, list)
+            else {}
+        )
+        for scenario, document in shadow_receipts.items():
+            if observed_shadow_hashes.get(scenario) != document.get("semantic_sha256"):
+                errors.append(f"aggregate agent-check receipt does not bind shadow: {scenario}")
+    else:
+        errors.append("tracked aggregate agent-check matrix is malformed")
+    return errors
+
+
 def validate_control_projection_boundaries(root: Path = ROOT) -> list[str]:
     """Keep reviewed prose subordinate to machine authority/science flags."""
 
@@ -3628,6 +3842,7 @@ def run_all(root: Path = ROOT) -> list[str]:
         ("manifests", validate_manifests),
         ("workflows", validate_workflows),
         ("active-version dispatch", validate_active_version_dispatch_gate),
+        ("tracked control receipts", validate_tracked_control_receipts),
         ("control projection boundaries", validate_control_projection_boundaries),
         ("T09 control-foundation boundaries", validate_t09_control_foundation_boundaries),
         ("repository hygiene", validate_hygiene),
