@@ -867,6 +867,11 @@ def validate_control_receipt_set(
     ):
         raise ControlProofError("happy-path shadow accounting proof is incomplete")
     for scenario, document in failures.items():
+        command_package_matches = (
+            document.get("command_package_sha256") is None
+            if scenario == "lifecycle-unsupported"
+            else document.get("command_package_sha256") == reference.expected_command_package_sha256
+        )
         if (
             document.get("scenario") != scenario
             or document.get("scenario_valid") is not True
@@ -875,7 +880,7 @@ def validate_control_receipt_set(
             or document.get("scientific_interpretation_allowed") is not False
             or document.get("zero_undeclared_calls") is not True
             or document.get("provider_contract_version") != contract.version
-            or document.get("command_package_sha256") != reference.expected_command_package_sha256
+            or not command_package_matches
         ):
             raise ControlProofError(f"failure shadow receipt is incompatible: {scenario}")
 
