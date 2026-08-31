@@ -18,6 +18,7 @@ from giclab.harness.t09_provider_contracts import (
     V7_PROVIDER_CONTRACT,
     V11_PROVIDER_CONTRACT,
     V15_PROVIDER_CONTRACT,
+    V16_PROVIDER_CONTRACT,
     load_provider_plan,
 )
 from giclab.harness.t09_sira_pilot import (
@@ -263,7 +264,7 @@ def test_retry3_exact_clean_package_is_host_verifiable() -> None:
     command_document = host.verify_package(
         ROOT,
         package_commit,
-        contract=V15_PROVIDER_CONTRACT,
+        contract=V16_PROVIDER_CONTRACT,
     )
     assert (
         command_document["reviewed_implementation_ancestor"]

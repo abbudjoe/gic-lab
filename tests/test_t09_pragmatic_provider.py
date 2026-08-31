@@ -49,7 +49,7 @@ def _entry_command(version: str, *, launch_slot: int = 1) -> tuple[str, ...]:
         launch_slot=launch_slot,
         model_metadata_receipt=(
             "/private/model-metadata-receipt.json"
-            if version in {"V12", "V13", "V14", "V15"}
+            if version in {"V12", "V13", "V14", "V15", "V16"}
             else None
         ),
     )
@@ -70,10 +70,11 @@ def test_every_retained_provider_version_has_one_frozen_contract() -> None:
         "V13",
         "V14",
         "V15",
+        "V16",
     )
-    assert len({contract.plan_id for contract in PROVIDER_CONTRACTS.values()}) == 13
-    assert len({contract.host_run_id for contract in PROVIDER_CONTRACTS.values()}) == 13
-    assert len({contract.instance_name for contract in PROVIDER_CONTRACTS.values()}) == 13
+    assert len({contract.plan_id for contract in PROVIDER_CONTRACTS.values()}) == 14
+    assert len({contract.host_run_id for contract in PROVIDER_CONTRACTS.values()}) == 14
+    assert len({contract.instance_name for contract in PROVIDER_CONTRACTS.values()}) == 14
 
 
 def test_v13_contract_exposes_the_fresh_explicit_pilot_identity_bundle() -> None:

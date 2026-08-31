@@ -269,6 +269,7 @@ def _t09_successor_implementation_binding_map(plan: Mapping[str, Any]) -> dict[s
         "PLAN-EXP0001-PILOT-V13",
         "PLAN-EXP0001-PILOT-V14",
         "PLAN-EXP0001-PILOT-V15",
+        "PLAN-EXP0001-PILOT-V16",
     }:
         specifications += (
             ("execution_plane", "runtime_adaptation_path", "runtime_adaptation_sha256"),
@@ -277,6 +278,7 @@ def _t09_successor_implementation_binding_map(plan: Mapping[str, Any]) -> dict[s
         "PLAN-EXP0001-PILOT-V13",
         "PLAN-EXP0001-PILOT-V14",
         "PLAN-EXP0001-PILOT-V15",
+        "PLAN-EXP0001-PILOT-V16",
     }:
         specifications += (
             ("execution_plane", "preflight_path", "preflight_sha256"),
@@ -1851,6 +1853,7 @@ def validate_exp0001_contract(root: Path = ROOT) -> list[str]:
         (
             candidate
             for candidate in (
+                exp_root / "run-plans/proposals/PLAN-EXP0001-PILOT-V16.yaml",
                 exp_root / "run-plans/proposals/PLAN-EXP0001-PILOT-V15.yaml",
                 exp_root / "run-plans/proposals/PLAN-EXP0001-PILOT-V14.yaml",
                 exp_root / "run-plans/proposals/PLAN-EXP0001-PILOT-V13.yaml",
@@ -3037,6 +3040,8 @@ def _validate_t09_successor_plan(
                         reviewed_ancestor,
                         "src/giclab/harness/t09_sira_pilot.py",
                     )
+                    if not isinstance(runtime_sha256, str) or not isinstance(library_sha256, str):
+                        raise ValueError("reviewed command source blob is unavailable")
                     control_root = provider_identity.control_root_name
                     rendered = [
                         render_command_manifest(
