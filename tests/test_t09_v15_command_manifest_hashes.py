@@ -18,6 +18,7 @@ from giclab.harness.t09_sira_pilot import (
     T09PilotError,
     command_argv_sha256,
     file_sha256,
+    git_file_sha256,
     load_execution_contract,
     render_command_manifest,
 )
@@ -66,14 +67,20 @@ PREFLIGHT = _load_script(
 def _direct_manifests() -> list[dict[str, object]]:
     contract = load_execution_contract(EXECUTION, expected_sha256=file_sha256(EXECUTION))
     control_root = V15_PROVIDER_CONTRACT.control_root_name
+    runtime_sha256 = git_file_sha256(
+        ROOT, contract.attempts[0].giclab_commit, RUNTIME_ADAPTATION_RELATIVE
+    )
+    library_sha256 = git_file_sha256(
+        ROOT, contract.attempts[0].giclab_commit, PILOT_LIBRARY_RELATIVE
+    )
     return [
         render_command_manifest(
             contract,
             attempt,
             execution_contract_runtime_path="/opt/giclab-contracts/execution.json",
             runtime_adaptation_path="/opt/giclab-src/giclab/harness/sira_gate_a_runtime.py",
-            runtime_adaptation_sha256=file_sha256(RUNTIME_ADAPTATION),
-            pilot_library_sha256=file_sha256(PILOT_LIBRARY),
+            runtime_adaptation_sha256=runtime_sha256,
+            pilot_library_sha256=library_sha256,
             aggregate_ledger_path=(
                 f"/opt/giclab-artifacts/{control_root}/runtime-budget/aggregate-budget.json"
             ),
@@ -297,8 +304,12 @@ def test_source_controlled_v15_package_passes_exact_preflight_comparison() -> No
     rendered = PREFLIGHT.validate_command_manifest_package(
         contract=contract,
         command_document=document,
-        runtime_adaptation_sha256=file_sha256(RUNTIME_ADAPTATION),
-        pilot_library_sha256=file_sha256(PILOT_LIBRARY),
+        runtime_adaptation_sha256=git_file_sha256(
+            ROOT, contract.attempts[0].giclab_commit, RUNTIME_ADAPTATION_RELATIVE
+        ),
+        pilot_library_sha256=git_file_sha256(
+            ROOT, contract.attempts[0].giclab_commit, PILOT_LIBRARY_RELATIVE
+        ),
         aggregate_ledger_path=(
             f"/opt/giclab-artifacts/{control_root}/runtime-budget/aggregate-budget.json"
         ),

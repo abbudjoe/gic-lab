@@ -16,6 +16,7 @@ import math
 import os
 import re
 import stat
+import subprocess
 import sys
 import time
 from collections.abc import Callable, Mapping, Sequence
@@ -241,6 +242,49 @@ def file_sha256(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def git_file_sha256(
+    repository: Path,
+    commit: str,
+    relative_path: str,
+    *,
+    maximum_bytes: int = 4_194_304,
+) -> str:
+    """Hash one finite Git blob without consulting the mutable working tree."""
+
+    if re.fullmatch(r"[0-9a-f]{40}", commit) is None:
+        raise T09PilotError("Git source commit is malformed")
+    relative = Path(relative_path)
+    if relative.is_absolute() or ".." in relative.parts:
+        raise T09PilotError("Git source path is unsafe")
+    object_name = f"{commit}:{relative.as_posix()}"
+    try:
+        size_result = subprocess.run(
+            ["git", "cat-file", "-s", object_name],
+            cwd=repository,
+            check=True,
+            capture_output=True,
+            timeout=30,
+        )
+        size = int(size_result.stdout.decode("ascii").strip())
+    except (OSError, subprocess.SubprocessError, UnicodeError, ValueError) as exc:
+        raise T09PilotError("Git source blob size is unavailable") from exc
+    if size <= 0 or size > maximum_bytes:
+        raise T09PilotError("Git source blob exceeds its finite hash boundary")
+    try:
+        blob = subprocess.run(
+            ["git", "cat-file", "blob", object_name],
+            cwd=repository,
+            check=True,
+            capture_output=True,
+            timeout=30,
+        ).stdout
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise T09PilotError("Git source blob is unavailable") from exc
+    if len(blob) != size:
+        raise T09PilotError("Git source blob size changed during hashing")
+    return hashlib.sha256(blob).hexdigest()
 
 
 def canonical_sha256(value: object) -> str:
@@ -3229,7 +3273,7 @@ def render_command_manifest(
             if key not in {"--mode", "--config_name", "--output_dir"}
         },
     }
-    if contract.provider_contract_version in {"V13", "V14", "V15"}:
+    if contract.provider_contract_version in {"V13", "V14", "V15", "V16"}:
         equality_surface["provider_contract_selector"] = {
             "argument": "--provider-contract",
             "value": contract.provider_contract_version,

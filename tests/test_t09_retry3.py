@@ -17,7 +17,7 @@ from giclab.harness import t09_sira_pilot as pilot_state
 from giclab.harness.t09_provider_contracts import (
     V7_PROVIDER_CONTRACT,
     V11_PROVIDER_CONTRACT,
-    V15_PROVIDER_CONTRACT,
+    V16_PROVIDER_CONTRACT,
     load_provider_plan,
 )
 from giclab.harness.t09_sira_pilot import (
@@ -263,13 +263,13 @@ def test_retry3_exact_clean_package_is_host_verifiable() -> None:
     command_document = host.verify_package(
         ROOT,
         package_commit,
-        contract=V15_PROVIDER_CONTRACT,
+        contract=V16_PROVIDER_CONTRACT,
     )
     assert (
         command_document["reviewed_implementation_ancestor"]
         == (
             json.loads(
-                host.contract_paths(ROOT, V15_PROVIDER_CONTRACT)["runtime"].read_text(
+                host.contract_paths(ROOT, V16_PROVIDER_CONTRACT)["runtime"].read_text(
                     encoding="utf-8"
                 )
             )["repository_instrumentation"]["reviewed_implementation_ancestor"]
@@ -807,7 +807,7 @@ def test_retry3_provider_preflight_accepts_source_bound_offhost_runtime_paths(
     monkeypatch.setattr(
         host,
         "git_file_sha256",
-        lambda _repository, _commit, relative: {
+        lambda _repository, _commit, relative, **_kwargs: {
             host.FINALIZER_RELATIVE_PATH: "c" * 64,
             host.FINALIZER_PROJECTION_RELATIVE_PATH: "d" * 64,
         }[relative],

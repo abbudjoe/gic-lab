@@ -681,6 +681,44 @@
             "realized_pair": {"const": "none"},
             "excluded_from_v15_pairing": {"const": true}
           }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "plan_id",
+            "run_id",
+            "status",
+            "consumed_condition",
+            "task_completion",
+            "realized_pair",
+            "scientific_comparison_permitted",
+            "provider_terminal_or_absent_verified",
+            "zero_t09_instances_verified",
+            "firewall_and_rulesets_restored",
+            "actual_credential_exposure",
+            "core_artifacts",
+            "all_v15_authority_and_conditions_nonreplayable"
+          ],
+          "properties": {
+            "plan_id": {"const": "PLAN-EXP0001-PILOT-V15"},
+            "run_id": {"const": "RUN-T09-PILOT-HOST-AUTONOMOUS-0008"},
+            "status": {
+              "const": "category_3_v15_stopped_after_empirical_entry_cleanup_verified"
+            },
+            "consumed_condition": {
+              "const": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0008"
+            },
+            "task_completion": {"const": "incomplete"},
+            "realized_pair": {"const": null},
+            "scientific_comparison_permitted": {"const": false},
+            "provider_terminal_or_absent_verified": {"const": true},
+            "zero_t09_instances_verified": {"const": true},
+            "firewall_and_rulesets_restored": {"const": true},
+            "actual_credential_exposure": {"const": false},
+            "core_artifacts": {"const": 0},
+            "all_v15_authority_and_conditions_nonreplayable": {"const": true}
+          }
         }
       ]
     },

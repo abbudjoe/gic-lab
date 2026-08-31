@@ -1,0 +1,1417 @@
+{
+  "$defs": {
+    "attempt": {
+      "additionalProperties": false,
+      "properties": {
+        "condition": {
+          "enum": [
+            "reactive",
+            "simulative"
+          ]
+        },
+        "dataset_end_index": {
+          "enum": [
+            1,
+            2
+          ]
+        },
+        "dataset_start_index": {
+          "enum": [
+            0,
+            1
+          ]
+        },
+        "order_index": {
+          "enum": [
+            1,
+            2
+          ]
+        },
+        "output_root": {
+          "const": "not-materialized-until-category-3"
+        },
+        "record_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "reference_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "run_id": {
+          "pattern": "^RUN-T09-TASK-[AB]-(?:REACTIVE|SIMULATIVE)-AUTONOMOUS-0009$",
+          "type": "string"
+        },
+        "task_id": {
+          "enum": [
+            "7dcbbbdc7f1120cd",
+            "2120afba8009bad3"
+          ]
+        },
+        "task_label": {
+          "enum": [
+            "Task-A",
+            "Task-B"
+          ]
+        },
+        "task_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "upstream_argv": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 26,
+          "minItems": 26,
+          "type": "array"
+        }
+      },
+      "required": [
+        "run_id",
+        "task_label",
+        "task_id",
+        "task_sha256",
+        "reference_sha256",
+        "record_sha256",
+        "condition",
+        "order_index",
+        "dataset_start_index",
+        "dataset_end_index",
+        "output_root",
+        "upstream_argv"
+      ],
+      "type": "object"
+    },
+    "budget": {
+      "additionalProperties": false,
+      "properties": {
+        "cumulative_t09_cost_cap_usd": {
+          "const": 90.0
+        },
+        "effective_maximum_new_total_cost_under_cumulative_cap_usd": {
+          "const": 53.63829139196717
+        },
+        "effective_maximum_new_total_cost_under_cumulative_cap_usd_decimal": {
+          "const": "53.63829139196716875"
+        },
+        "maximum_browser_actions": {
+          "const": 120
+        },
+        "maximum_model_calls": {
+          "const": 4620
+        },
+        "maximum_model_tokens": {
+          "const": 4000000
+        },
+        "maximum_new_empirical_lambda_cost_usd": {
+          "const": 8.0
+        },
+        "maximum_new_openai_cost_usd": {
+          "const": 40.0
+        },
+        "maximum_new_preflight_lambda_cost_usd": {
+          "const": 10.0
+        },
+        "maximum_new_total_cost_usd": {
+          "const": 58.0
+        },
+        "previous_t09_conservative_upper_bound_usd": {
+          "const": 34.77393182524797
+        },
+        "prior_t09_conservative_upper_bound_usd": {
+          "const": 36.36170860803283
+        },
+        "prior_t09_conservative_upper_bound_usd_decimal": {
+          "const": "36.36170860803283125"
+        },
+        "prior_t09_observed_lower_bound_usd": {
+          "const": 17.061865377782947
+        },
+        "prior_through_stopped_v13_conservative_usd_decimal": {
+          "const": "34.7739318252479717"
+        },
+        "v10_stopped_lambda_cost_usd": {
+          "const": 1.7273232755184174
+        },
+        "v12_stopped_lambda_cost_usd": {
+          "const": 0.3796854954083761
+        },
+        "v14_stopped_lambda_cost_usd": {
+          "const": 0.0821235525349776
+        },
+        "v14_stopped_lambda_cost_usd_decimal": {
+          "const": "0.0821235525349776"
+        },
+        "v15_lambda_cost_usd": {
+          "const": 1.3536407302498819
+        },
+        "v15_lambda_cost_usd_decimal": {
+          "const": "1.3536407302498819"
+        },
+        "v15_new_total_usd": {
+          "const": 1.505653230249882
+        },
+        "v15_new_total_usd_decimal": {
+          "const": "1.50565323024988195"
+        },
+        "v15_openai_task_cost_usd": {
+          "const": 0.15201250000000005
+        },
+        "v15_openai_task_cost_usd_decimal": {
+          "const": "0.15201250000000005"
+        }
+      },
+      "required": [
+        "maximum_new_preflight_lambda_cost_usd",
+        "maximum_new_empirical_lambda_cost_usd",
+        "maximum_new_openai_cost_usd",
+        "maximum_new_total_cost_usd",
+        "prior_t09_observed_lower_bound_usd",
+        "previous_t09_conservative_upper_bound_usd",
+        "v12_stopped_lambda_cost_usd",
+        "prior_through_stopped_v13_conservative_usd_decimal",
+        "v14_stopped_lambda_cost_usd",
+        "v14_stopped_lambda_cost_usd_decimal",
+        "prior_t09_conservative_upper_bound_usd",
+        "prior_t09_conservative_upper_bound_usd_decimal",
+        "v10_stopped_lambda_cost_usd",
+        "effective_maximum_new_total_cost_under_cumulative_cap_usd",
+        "effective_maximum_new_total_cost_under_cumulative_cap_usd_decimal",
+        "cumulative_t09_cost_cap_usd",
+        "maximum_model_calls",
+        "maximum_model_tokens",
+        "maximum_browser_actions",
+        "v15_lambda_cost_usd",
+        "v15_lambda_cost_usd_decimal",
+        "v15_openai_task_cost_usd",
+        "v15_openai_task_cost_usd_decimal",
+        "v15_new_total_usd",
+        "v15_new_total_usd_decimal"
+      ],
+      "type": "object"
+    },
+    "checkpoint": {
+      "additionalProperties": false,
+      "properties": {
+        "after_run_id": {
+          "const": "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009"
+        },
+        "continue_only_if_both_task_a_conditions_are_valid_and_scored": {
+          "const": true
+        },
+        "realized_pair_requires_same_tasks_commands_evaluator_and_finalizer_closure": {
+          "const": true
+        },
+        "required_before_task_b": {
+          "const": true
+        }
+      },
+      "required": [
+        "after_run_id",
+        "required_before_task_b",
+        "continue_only_if_both_task_a_conditions_are_valid_and_scored",
+        "realized_pair_requires_same_tasks_commands_evaluator_and_finalizer_closure"
+      ],
+      "type": "object"
+    },
+    "cleanup": {
+      "additionalProperties": false,
+      "properties": {
+        "broad_prune_allowed": {
+          "const": false
+        },
+        "browser_cleanup_required": {
+          "const": true
+        },
+        "cleanup_export_phase_source": {
+          "const": "durable-evidence-not-caller-boolean"
+        },
+        "cleanup_without_optional_pilot_state_required": {
+          "const": true
+        },
+        "empirical_prefix_export_policy": {
+          "const": "contiguous-exact-acknowledgements-required"
+        },
+        "exact_owned_targets_only": {
+          "const": true
+        },
+        "firewall_restoration_required": {
+          "const": true
+        },
+        "host_preflight_closeout_idempotent": {
+          "const": true
+        },
+        "owned_container_cleanup_required": {
+          "const": true
+        },
+        "owned_ruleset_cleanup_required": {
+          "const": true
+        },
+        "postfreeze_manifest_policy": {
+          "const": "published-valid-manifest-required"
+        },
+        "prefreeze_zero_attempt_manifest_policy": {
+          "const": "absence-required-only-under-exact-zero-state"
+        },
+        "provider_entry_closed_slots_supported": {
+          "const": "one-through-max-launch-count-minus-one"
+        },
+        "provider_entry_current_receipt_selection": {
+          "const": "immediate-preceding-closed-slot-source-bound-launch-capability"
+        },
+        "provider_entry_direct_authority_layout": {
+          "const": "exact-closed-launch-root"
+        },
+        "provider_entry_eligibility_history_publication": {
+          "const": "shared-immutable-unsuffixed-first-then-slot-suffixed"
+        },
+        "provider_entry_normalization_precedes_credentials_provider_and_capability": {
+          "const": true
+        },
+        "provider_entry_normalized_manifest_required": {
+          "const": true
+        },
+        "provider_entry_repeated_slot_authority_retention": {
+          "const": "exact-admitting-authority-copied-with-current-host-closeout"
+        },
+        "provider_entry_replacement_eligibility_kind": {
+          "const": "provider-entry-failed-preempirical"
+        },
+        "provider_entry_retained_authority_layout": {
+          "const": "collision-free-slot2-eligibility-source"
+        },
+        "provider_entry_retained_revalidation_required": {
+          "const": true
+        },
+        "provider_terminal_or_absent_verification_required": {
+          "const": true
+        },
+        "provider_termination_required": {
+          "const": true
+        },
+        "replacement_normalization_does_not_rewrite_verified_closeout": {
+          "const": true
+        },
+        "temporary_secret_cleanup_required": {
+          "const": true
+        },
+        "terminal_export_handoff_idempotent": {
+          "const": true
+        }
+      },
+      "required": [
+        "exact_owned_targets_only",
+        "broad_prune_allowed",
+        "provider_termination_required",
+        "provider_terminal_or_absent_verification_required",
+        "browser_cleanup_required",
+        "owned_container_cleanup_required",
+        "temporary_secret_cleanup_required",
+        "owned_ruleset_cleanup_required",
+        "firewall_restoration_required",
+        "cleanup_without_optional_pilot_state_required",
+        "cleanup_export_phase_source",
+        "prefreeze_zero_attempt_manifest_policy",
+        "postfreeze_manifest_policy",
+        "empirical_prefix_export_policy",
+        "terminal_export_handoff_idempotent",
+        "provider_entry_replacement_eligibility_kind",
+        "provider_entry_direct_authority_layout",
+        "provider_entry_retained_authority_layout",
+        "provider_entry_eligibility_history_publication",
+        "provider_entry_current_receipt_selection",
+        "provider_entry_normalized_manifest_required",
+        "provider_entry_retained_revalidation_required",
+        "provider_entry_normalization_precedes_credentials_provider_and_capability",
+        "provider_entry_closed_slots_supported",
+        "provider_entry_repeated_slot_authority_retention",
+        "host_preflight_closeout_idempotent",
+        "replacement_normalization_does_not_rewrite_verified_closeout"
+      ],
+      "type": "object"
+    },
+    "commit": {
+      "pattern": "^[a-f0-9]{40}$",
+      "type": "string"
+    },
+    "dataset": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "const": "FanOutQA November 2023 development snapshot"
+        },
+        "sha256": {
+          "const": "359300b029c6891567816f351bf8786e9b018d7af8a1a44b7da9ba5ef4651288"
+        },
+        "sira_blob": {
+          "const": "76ad1feb689b754bfe4e5e24d3ea371b647efa67"
+        },
+        "source_commit": {
+          "const": "989f4c40d9deea1ecb0897d7a17a9c0fe20d5c33"
+        }
+      },
+      "required": [
+        "name",
+        "source_commit",
+        "sira_blob",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "dotenvInputBinding": {
+      "additionalProperties": false,
+      "properties": {
+        "current_user_owner_required": {
+          "const": true
+        },
+        "eligible_mode_policy": {
+          "const": "no-group-or-world-write-bits"
+        },
+        "file_type": {
+          "const": "regular"
+        },
+        "no_follow_required": {
+          "const": true
+        },
+        "optional_assignment": {
+          "const": "LAMBDA_API_KEY"
+        },
+        "parent_policy": {
+          "const": "current-user-owned-directory-not-group-or-world-writable"
+        },
+        "regression_covered_modes": {
+          "const": [
+            "0600",
+            "0644"
+          ]
+        },
+        "required_assignment": {
+          "const": "OPENAI_API_KEY"
+        },
+        "selected_assignment": {
+          "const": "OPENAI_API_KEY"
+        },
+        "single_link_required": {
+          "const": true
+        },
+        "source": {
+          "const": "existing-qualified-repository-external-file"
+        },
+        "source_mutation_allowed": {
+          "const": false
+        },
+        "unknown_assignments_allowed": {
+          "const": false
+        }
+      },
+      "required": [
+        "source",
+        "parent_policy",
+        "file_type",
+        "current_user_owner_required",
+        "single_link_required",
+        "no_follow_required",
+        "eligible_mode_policy",
+        "regression_covered_modes",
+        "required_assignment",
+        "optional_assignment",
+        "unknown_assignments_allowed",
+        "selected_assignment",
+        "source_mutation_allowed"
+      ],
+      "type": "object"
+    },
+    "earlyCleanupBinding": {
+      "additionalProperties": false,
+      "properties": {
+        "cross_host_journal_mode": {
+          "const": "one-hash-chain-provider-prefix-remote-continuation"
+        },
+        "export_handoff_schema_path": {
+          "const": "schemas/t09-cleanup-export-handoff.schema.json"
+        },
+        "export_handoff_schema_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "implementation_path": {
+          "const": "src/giclab/harness/t09_cleanup_state.py"
+        },
+        "implementation_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "initialize_after_exact_provider_id": {
+          "const": true
+        },
+        "initialize_before_package_transition": {
+          "const": true
+        },
+        "lifecycle_phase_derivation": {
+          "const": "durable-evidence-derived-prefreeze-postfreeze-empirical"
+        },
+        "optional_campaign_state_required": {
+          "const": false
+        },
+        "optional_finalizer_state_required": {
+          "const": false
+        },
+        "optional_pilot_state_required": {
+          "const": false
+        },
+        "provider_closeout_remote_journal_argument": {
+          "const": "--remote-cleanup-journal"
+        },
+        "provider_integration_path": {
+          "const": "src/giclab/harness/t09_pragmatic_provider.py"
+        },
+        "provider_integration_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "provider_termination_requires_optional_state": {
+          "const": false
+        },
+        "public_alias_is_cleanup_authority": {
+          "const": false
+        },
+        "schema_path": {
+          "const": "schemas/t09-early-cleanup-state.schema.json"
+        },
+        "schema_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "terminal_export_handoff_idempotent": {
+          "const": true
+        }
+      },
+      "required": [
+        "implementation_path",
+        "implementation_sha256",
+        "provider_integration_path",
+        "provider_integration_sha256",
+        "schema_path",
+        "schema_sha256",
+        "export_handoff_schema_path",
+        "export_handoff_schema_sha256",
+        "lifecycle_phase_derivation",
+        "terminal_export_handoff_idempotent",
+        "initialize_after_exact_provider_id",
+        "initialize_before_package_transition",
+        "cross_host_journal_mode",
+        "provider_closeout_remote_journal_argument",
+        "provider_termination_requires_optional_state",
+        "public_alias_is_cleanup_authority",
+        "optional_pilot_state_required",
+        "optional_campaign_state_required",
+        "optional_finalizer_state_required"
+      ],
+      "type": "object"
+    },
+    "evaluator": {
+      "additionalProperties": false,
+      "properties": {
+        "commit": {
+          "const": "93fb8d72de71f9a4a13419670adeb34d93cf7acd"
+        },
+        "contract_path": {
+          "pattern": "^(?!/).+\\.json$",
+          "type": "string"
+        },
+        "contract_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "identity": {
+          "const": "exact-pinned-sira-fanoutqa-evaluator"
+        },
+        "judge_model": {
+          "type": "null"
+        },
+        "primary_score": {
+          "const": "acc_loose"
+        },
+        "provider_request_required": {
+          "const": false
+        }
+      },
+      "required": [
+        "identity",
+        "commit",
+        "primary_score",
+        "judge_model",
+        "provider_request_required",
+        "contract_path",
+        "contract_sha256"
+      ],
+      "type": "object"
+    },
+    "evidence": {
+      "additionalProperties": false,
+      "properties": {
+        "credential_separation": {
+          "const": "strict"
+        },
+        "downstream_repair_policy": {
+          "const": "network-disabled-finalizer-only-no-condition-replay"
+        },
+        "essential_failure_cap_bytes": {
+          "const": 67108864
+        },
+        "full_attempt_cap_bytes": {
+          "const": 536870912
+        },
+        "immutable_raw_manifest_required_before_finalization": {
+          "const": true
+        },
+        "private_raw_release": {
+          "const": "blocked-pending-review"
+        },
+        "raw_attempt_first": {
+          "const": true
+        },
+        "stdout_stderr_per_stream_cap_bytes": {
+          "const": 536870912
+        },
+        "v10_conditions_eligible_for_v16_pairing": {
+          "const": false
+        },
+        "v10_stopped_category_3_artifacts_are_immutable_operational_evidence": {
+          "const": true
+        },
+        "v11_conditions_eligible_for_v16_pairing": {
+          "const": false
+        },
+        "v11_stopped_category_3_artifacts_are_immutable_operational_evidence": {
+          "const": true
+        },
+        "v12_conditions_eligible_for_v16_pairing": {
+          "const": false
+        },
+        "v12_stopped_category_3_artifacts_are_immutable_operational_evidence": {
+          "const": true
+        },
+        "v13_conditions_eligible_for_v16_pairing": {
+          "const": false
+        },
+        "v13_stopped_category_3_artifacts_are_immutable_operational_evidence": {
+          "const": true
+        },
+        "v14_conditions_eligible_for_v16_pairing": {
+          "const": false
+        },
+        "v14_stopped_category_3_artifacts_are_immutable_operational_evidence": {
+          "const": true
+        },
+        "v15_conditions_eligible_for_v16_pairing": {
+          "const": false
+        },
+        "v15_empirical_prefix_artifacts_are_immutable_historical_evidence": {
+          "const": true
+        },
+        "v8_artifacts_are_immutable_historical_evidence": {
+          "const": true
+        },
+        "v8_conditions_eligible_for_v16_pairing": {
+          "const": false
+        },
+        "v9_artifacts_are_immutable_historical_evidence": {
+          "const": true
+        },
+        "v9_conditions_eligible_for_v16_pairing": {
+          "const": false
+        }
+      },
+      "required": [
+        "raw_attempt_first",
+        "immutable_raw_manifest_required_before_finalization",
+        "full_attempt_cap_bytes",
+        "stdout_stderr_per_stream_cap_bytes",
+        "essential_failure_cap_bytes",
+        "credential_separation",
+        "private_raw_release",
+        "downstream_repair_policy",
+        "v8_artifacts_are_immutable_historical_evidence",
+        "v9_artifacts_are_immutable_historical_evidence",
+        "v10_stopped_category_3_artifacts_are_immutable_operational_evidence",
+        "v11_stopped_category_3_artifacts_are_immutable_operational_evidence",
+        "v12_stopped_category_3_artifacts_are_immutable_operational_evidence",
+        "v13_stopped_category_3_artifacts_are_immutable_operational_evidence",
+        "v14_stopped_category_3_artifacts_are_immutable_operational_evidence",
+        "v8_conditions_eligible_for_v16_pairing",
+        "v9_conditions_eligible_for_v16_pairing",
+        "v10_conditions_eligible_for_v16_pairing",
+        "v11_conditions_eligible_for_v16_pairing",
+        "v12_conditions_eligible_for_v16_pairing",
+        "v13_conditions_eligible_for_v16_pairing",
+        "v14_conditions_eligible_for_v16_pairing",
+        "v15_empirical_prefix_artifacts_are_immutable_historical_evidence",
+        "v15_conditions_eligible_for_v16_pairing"
+      ],
+      "type": "object"
+    },
+    "executionPlaneBinding": {
+      "additionalProperties": false,
+      "properties": {
+        "campaign_lifecycle_path": {
+          "const": "src/giclab/harness/lambda_campaign_lifecycle.py"
+        },
+        "campaign_lifecycle_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "command_generator_path": {
+          "const": "containers/sira-smoke/pragmatic/t09_freeze_commands.py"
+        },
+        "command_generator_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "command_manifests_path": {
+          "const": "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/proposals/T09_PILOT_COMMAND_MANIFESTS_V16.json"
+        },
+        "command_manifests_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "condition_plans": {
+          "items": {
+            "$ref": "#/$defs/fileBinding"
+          },
+          "maxItems": 4,
+          "minItems": 4,
+          "type": "array"
+        },
+        "execution_contract_path": {
+          "const": "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/proposals/T09_PILOT_EXECUTION_CONTRACT_V16.json"
+        },
+        "execution_contract_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "execution_eligibility": {
+          "const": "blocked-until-fresh-category-3-authorization"
+        },
+        "execution_schema_path": {
+          "const": "schemas/t09-sira-pilot-v16-execution.schema.json"
+        },
+        "execution_schema_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "local_finalizer_qualification_path": {
+          "const": "containers/sira-smoke/pragmatic/t09_local_finalizer_qualification.py"
+        },
+        "local_finalizer_qualification_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "pilot_library_path": {
+          "const": "src/giclab/harness/t09_sira_pilot.py"
+        },
+        "pilot_library_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "preflight_path": {
+          "const": "containers/sira-smoke/pragmatic/t09_preflight.py"
+        },
+        "preflight_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "provider_contracts_path": {
+          "const": "src/giclab/harness/t09_provider_contracts.py"
+        },
+        "provider_contracts_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "provider_path": {
+          "const": "src/giclab/harness/t09_pragmatic_provider.py"
+        },
+        "provider_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "remote_runner_path": {
+          "const": "containers/sira-smoke/pragmatic/t09_remote_runner.py"
+        },
+        "remote_runner_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "runtime_adaptation_path": {
+          "const": "src/giclab/harness/sira_gate_a_runtime.py"
+        },
+        "runtime_adaptation_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "runtime_identity_path": {
+          "const": "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/proposals/T09_PILOT_RUNTIME_IDENTITY_V16.json"
+        },
+        "runtime_identity_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "runtime_profile_path": {
+          "const": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/proposals/T09_PILOT_RUNTIME_PROFILE_V16.yaml"
+        },
+        "runtime_profile_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "static_authorization_reference": {
+          "type": "null"
+        },
+        "static_authorized": {
+          "const": false
+        }
+      },
+      "required": [
+        "pilot_library_path",
+        "pilot_library_sha256",
+        "campaign_lifecycle_path",
+        "campaign_lifecycle_sha256",
+        "provider_path",
+        "provider_sha256",
+        "provider_contracts_path",
+        "provider_contracts_sha256",
+        "remote_runner_path",
+        "remote_runner_sha256",
+        "preflight_path",
+        "preflight_sha256",
+        "local_finalizer_qualification_path",
+        "local_finalizer_qualification_sha256",
+        "command_generator_path",
+        "command_generator_sha256",
+        "runtime_profile_path",
+        "runtime_profile_sha256",
+        "execution_contract_path",
+        "execution_contract_sha256",
+        "command_manifests_path",
+        "command_manifests_sha256",
+        "runtime_identity_path",
+        "runtime_identity_sha256",
+        "runtime_adaptation_path",
+        "runtime_adaptation_sha256",
+        "execution_schema_path",
+        "execution_schema_sha256",
+        "condition_plans",
+        "static_authorized",
+        "static_authorization_reference",
+        "execution_eligibility"
+      ],
+      "type": "object"
+    },
+    "fileBinding": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$",
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      },
+      "required": [
+        "path",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "identities": {
+      "additionalProperties": false,
+      "properties": {
+        "attempt_order": {
+          "const": [
+            "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
+            "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009",
+            "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009",
+            "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009"
+          ]
+        },
+        "empirical_run_roots_materialized": {
+          "const": false
+        },
+        "host_run_id": {
+          "const": "RUN-T09-PILOT-HOST-AUTONOMOUS-0009"
+        }
+      },
+      "required": [
+        "host_run_id",
+        "attempt_order",
+        "empirical_run_roots_materialized"
+      ],
+      "type": "object"
+    },
+    "implementationBindings": {
+      "additionalProperties": false,
+      "properties": {
+        "early_cleanup": {
+          "$ref": "#/$defs/earlyCleanupBinding"
+        },
+        "exact_reviewed_merged_commit": {
+          "const": "pending-category-2-merge"
+        },
+        "exact_reviewed_merged_commit_required_before_authorization": {
+          "const": true
+        },
+        "execution_plane": {
+          "$ref": "#/$defs/executionPlaneBinding"
+        },
+        "model_metadata_receipt": {
+          "$ref": "#/$defs/modelMetadataReceiptBinding"
+        },
+        "offline_refinalization": {
+          "$ref": "#/$defs/offlineBinding"
+        },
+        "owned_container_publication": {
+          "$ref": "#/$defs/ownedContainerPublicationBinding"
+        },
+        "provider_accounting": {
+          "$ref": "#/$defs/providerAccountingBinding"
+        },
+        "required_accounting_repair_ancestor": {
+          "const": "1c6b093699288f37aa23526fe1e1672e50280093"
+        },
+        "required_base_commit": {
+          "const": "be09fe18dd46d0e5fe1aa65cfac29190edfa8aac"
+        },
+        "required_base_parent_1": {
+          "const": "bce89afa79a120f7f5acb22fb20512ec9581f7a5"
+        },
+        "required_base_parent_2": {
+          "const": "c764c852597b7c7a8f67f91963cfb749386c6887"
+        },
+        "required_base_tree": {
+          "const": "ff6242c0e57f11e1b0ca158a5af3bb782865782b"
+        },
+        "reviewed_implementation_ancestor": {
+          "const": "a235d1e6d287b5ea9daf5ca3787f9bbca278f3aa"
+        },
+        "v15_empirical_prefix_stopped_disposition": {
+          "$ref": "#/$defs/stoppedDispositionBinding"
+        }
+      },
+      "required": [
+        "required_base_commit",
+        "required_base_tree",
+        "required_base_parent_1",
+        "required_base_parent_2",
+        "required_accounting_repair_ancestor",
+        "reviewed_implementation_ancestor",
+        "exact_reviewed_merged_commit",
+        "exact_reviewed_merged_commit_required_before_authorization",
+        "provider_accounting",
+        "offline_refinalization",
+        "early_cleanup",
+        "owned_container_publication",
+        "model_metadata_receipt",
+        "v15_empirical_prefix_stopped_disposition",
+        "execution_plane"
+      ],
+      "type": "object"
+    },
+    "modelMetadataReceiptBinding": {
+      "additionalProperties": false,
+      "properties": {
+        "dotenv_input": {
+          "$ref": "#/$defs/dotenvInputBinding"
+        },
+        "host_runtime_model_metadata_request_count": {
+          "const": 0
+        },
+        "host_runtime_request_count": {
+          "const": 0
+        },
+        "host_runtime_requires_current_freshness": {
+          "const": false
+        },
+        "host_runtime_requires_prelaunch_timestamp_ordering": {
+          "const": true
+        },
+        "immutable_model_unavailable_disposition": {
+          "const": "stop-before-lambda-launch-zero-lambda-cost"
+        },
+        "implementation_path": {
+          "const": "src/giclab/harness/t09_model_metadata_receipt.py"
+        },
+        "implementation_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "local_request_count": {
+          "const": 1
+        },
+        "model_metadata_freshness_owner": {
+          "const": "provider-final-transport-boundary"
+        },
+        "model_metadata_prelaunch_freshness_seconds": {
+          "const": 1800
+        },
+        "provider_launch_request_count": {
+          "const": 0
+        },
+        "provider_launch_requires_current_freshness": {
+          "const": true
+        },
+        "public_deprecation_observation_path": {
+          "const": "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/T09_PUBLIC_MODEL_DEPRECATION_OBSERVATION_V16.json"
+        },
+        "public_deprecation_observation_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "public_price_contract_path": {
+          "const": "experiments/EXP-0001-sira-simulative-vs-reactive/pricing.yaml"
+        },
+        "public_price_contract_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "receipt_required": {
+          "const": true
+        },
+        "replay_allowed": {
+          "const": false
+        },
+        "schema_path": {
+          "const": "schemas/t09-v16-model-metadata-receipt.schema.json"
+        },
+        "schema_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      },
+      "required": [
+        "implementation_path",
+        "implementation_sha256",
+        "dotenv_input",
+        "schema_path",
+        "schema_sha256",
+        "public_price_contract_path",
+        "public_price_contract_sha256",
+        "public_deprecation_observation_path",
+        "public_deprecation_observation_sha256",
+        "local_request_count",
+        "provider_launch_request_count",
+        "host_runtime_request_count",
+        "model_metadata_prelaunch_freshness_seconds",
+        "model_metadata_freshness_owner",
+        "provider_launch_requires_current_freshness",
+        "host_runtime_requires_current_freshness",
+        "host_runtime_requires_prelaunch_timestamp_ordering",
+        "host_runtime_model_metadata_request_count",
+        "receipt_required",
+        "replay_allowed",
+        "immutable_model_unavailable_disposition"
+      ],
+      "type": "object"
+    },
+    "offlineBinding": {
+      "additionalProperties": false,
+      "properties": {
+        "browser_replay_count": {
+          "const": 0
+        },
+        "evaluator_driver_path": {
+          "pattern": "^(?!/).+\\.py$",
+          "type": "string"
+        },
+        "evaluator_driver_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "finalizer_projection_path": {
+          "pattern": "^(?!/).+\\.py$",
+          "type": "string"
+        },
+        "finalizer_projection_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "model_replay_count": {
+          "const": 0
+        },
+        "network_disabled": {
+          "const": true
+        },
+        "raw_mutation": {
+          "const": false
+        },
+        "receipt_schema_path": {
+          "pattern": "^(?!/).+\\.json$",
+          "type": "string"
+        },
+        "receipt_schema_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "selector_path": {
+          "pattern": "^(?!/).+\\.py$",
+          "type": "string"
+        },
+        "selector_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      },
+      "required": [
+        "finalizer_projection_path",
+        "finalizer_projection_sha256",
+        "evaluator_driver_path",
+        "evaluator_driver_sha256",
+        "selector_path",
+        "selector_sha256",
+        "receipt_schema_path",
+        "receipt_schema_sha256",
+        "network_disabled",
+        "model_replay_count",
+        "browser_replay_count",
+        "raw_mutation"
+      ],
+      "type": "object"
+    },
+    "ownedContainerPublicationBinding": {
+      "additionalProperties": false,
+      "properties": {
+        "descriptor_no_follow_required": {
+          "const": true
+        },
+        "exact_daemon_published_id_required": {
+          "const": true
+        },
+        "exact_id_cleanup_only": {
+          "const": true
+        },
+        "name_based_cleanup_authority": {
+          "const": false
+        },
+        "reader_path": {
+          "const": "containers/sira-smoke/pragmatic/t09_remote_runner.py"
+        },
+        "reader_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "regression_path": {
+          "const": "tests/test_t09_v12_model_metadata_receipt.py"
+        },
+        "regression_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "safe_zero_length_state": {
+          "const": "publication-pending"
+        }
+      },
+      "required": [
+        "reader_path",
+        "reader_sha256",
+        "regression_path",
+        "regression_sha256",
+        "safe_zero_length_state",
+        "descriptor_no_follow_required",
+        "exact_daemon_published_id_required",
+        "exact_id_cleanup_only",
+        "name_based_cleanup_authority"
+      ],
+      "type": "object"
+    },
+    "providerAccountingBinding": {
+      "additionalProperties": false,
+      "properties": {
+        "automatic_retries": {
+          "const": 0
+        },
+        "path": {
+          "const": "src/giclab/harness/sira_gate_a.py"
+        },
+        "regression_path": {
+          "const": "tests/test_t09_provider_accounting.py"
+        },
+        "regression_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "repeated_subtractive_bookkeeping": {
+          "const": false
+        },
+        "reservation_projection": {
+          "const": "authoritative-owned-per-call-records-math-fsum-exact-empty"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "regression_path",
+        "regression_sha256",
+        "reservation_projection",
+        "repeated_subtractive_bookkeeping",
+        "automatic_retries"
+      ],
+      "type": "object"
+    },
+    "runtime": {
+      "additionalProperties": false,
+      "properties": {
+        "core_hard_limit": {
+          "const": 0
+        },
+        "core_soft_limit": {
+          "const": 0
+        },
+        "empirical_campaign_wall_seconds": {
+          "const": 14400
+        },
+        "empirical_cleanup_reserve_seconds": {
+          "const": 900
+        },
+        "empirical_termination_cutoff_seconds": {
+          "const": 13500
+        },
+        "evidence_export_reserve_seconds": {
+          "const": 600
+        },
+        "first_pair_checkpoint": {
+          "$ref": "#/$defs/checkpoint"
+        },
+        "max_browser_actions_per_attempt": {
+          "const": 30
+        },
+        "max_condition_wall_seconds": {
+          "const": 3600
+        },
+        "max_lambda_instances": {
+          "const": 1
+        },
+        "max_model_calls_per_attempt": {
+          "const": 1155
+        },
+        "max_model_tokens_per_attempt": {
+          "const": 1000000
+        },
+        "max_openai_cost_usd_per_attempt": {
+          "const": 10.0
+        },
+        "persistent_filesystems": {
+          "const": 0
+        },
+        "provider_termination_handoff_seconds": {
+          "const": 60
+        },
+        "python_version": {
+          "const": "3.11.14"
+        }
+      },
+      "required": [
+        "python_version",
+        "core_soft_limit",
+        "core_hard_limit",
+        "max_lambda_instances",
+        "persistent_filesystems",
+        "empirical_campaign_wall_seconds",
+        "empirical_cleanup_reserve_seconds",
+        "empirical_termination_cutoff_seconds",
+        "evidence_export_reserve_seconds",
+        "provider_termination_handoff_seconds",
+        "max_condition_wall_seconds",
+        "max_browser_actions_per_attempt",
+        "max_model_calls_per_attempt",
+        "max_model_tokens_per_attempt",
+        "max_openai_cost_usd_per_attempt",
+        "first_pair_checkpoint"
+      ],
+      "type": "object"
+    },
+    "science": {
+      "additionalProperties": false,
+      "properties": {
+        "condition_retries_after_empirical_entry": {
+          "const": 0
+        },
+        "config_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "dataset": {
+          "$ref": "#/$defs/dataset"
+        },
+        "evaluator": {
+          "$ref": "#/$defs/evaluator"
+        },
+        "experiment_id": {
+          "const": "EXP-0001"
+        },
+        "interpretation": {
+          "const": "descriptive-calibration-only"
+        },
+        "model_revision_for_every_role": {
+          "const": "gpt-4o-2024-11-20"
+        },
+        "model_roles": {
+          "const": [
+            "default",
+            "encoder",
+            "memory",
+            "policy",
+            "world_model",
+            "critic",
+            "actor",
+            "fallback"
+          ]
+        },
+        "protocol_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "provider_fallback_enabled": {
+          "const": false
+        },
+        "scientific_result_claim_permitted": {
+          "const": false
+        },
+        "seed": {
+          "const": 42
+        },
+        "sira_commit": {
+          "const": "93fb8d72de71f9a4a13419670adeb34d93cf7acd"
+        }
+      },
+      "required": [
+        "interpretation",
+        "scientific_result_claim_permitted",
+        "experiment_id",
+        "sira_commit",
+        "model_revision_for_every_role",
+        "model_roles",
+        "provider_fallback_enabled",
+        "dataset",
+        "evaluator",
+        "protocol_sha256",
+        "config_sha256",
+        "seed",
+        "condition_retries_after_empirical_entry"
+      ],
+      "type": "object"
+    },
+    "sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "status": {
+      "additionalProperties": false,
+      "properties": {
+        "authorization_rule": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "authorized": {
+          "const": false
+        },
+        "cloud_mutation_allowed": {
+          "const": false
+        },
+        "execution_allowed": {
+          "const": false
+        },
+        "future_execution_category": {
+          "const": 3
+        },
+        "live_qualification_performed": {
+          "const": false
+        },
+        "paid_compute_allowed": {
+          "const": false
+        },
+        "pilot_executed": {
+          "const": false
+        },
+        "terminal_state": {
+          "const": "implementation-complete-pr-review-and-merge-required"
+        }
+      },
+      "required": [
+        "authorized",
+        "execution_allowed",
+        "cloud_mutation_allowed",
+        "paid_compute_allowed",
+        "live_qualification_performed",
+        "pilot_executed",
+        "future_execution_category",
+        "terminal_state",
+        "authorization_rule"
+      ],
+      "type": "object"
+    },
+    "stoppedDispositionBinding": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "const": "experiments/EXP-0001-sira-simulative-vs-reactive/T09_V15_EMPIRICAL_PREFIX_STOPPED_DISPOSITION.json"
+        },
+        "sha256": {
+          "const": "7222144a6d46ecb3590163a0db48ddcb210a162472bdea6b87a14f10d8633d70"
+        },
+        "size_bytes": {
+          "const": 3301
+        }
+      },
+      "required": [
+        "path",
+        "size_bytes",
+        "sha256"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "urn:gic-lab:schema:t09-v16-plan:1.0.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "attempts": {
+      "items": {
+        "$ref": "#/$defs/attempt"
+      },
+      "maxItems": 4,
+      "minItems": 4,
+      "type": "array"
+    },
+    "budget_contract": {
+      "$ref": "#/$defs/budget"
+    },
+    "category_3_preconditions": {
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "maxItems": 6,
+      "minItems": 6,
+      "type": "array"
+    },
+    "cleanup_contract": {
+      "$ref": "#/$defs/cleanup"
+    },
+    "evidence_contract": {
+      "$ref": "#/$defs/evidence"
+    },
+    "experiment_id": {
+      "const": "EXP-0001"
+    },
+    "identities": {
+      "$ref": "#/$defs/identities"
+    },
+    "implementation_bindings": {
+      "$ref": "#/$defs/implementationBindings"
+    },
+    "plan_id": {
+      "const": "PLAN-EXP0001-PILOT-V16"
+    },
+    "plan_kind": {
+      "const": "category-3-live-qualification-and-descriptive-calibration"
+    },
+    "runtime_contract": {
+      "$ref": "#/$defs/runtime"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "scientific_contract": {
+      "$ref": "#/$defs/science"
+    },
+    "status": {
+      "$ref": "#/$defs/status"
+    }
+  },
+  "required": [
+    "schema_version",
+    "plan_id",
+    "experiment_id",
+    "plan_kind",
+    "status",
+    "identities",
+    "scientific_contract",
+    "implementation_bindings",
+    "runtime_contract",
+    "budget_contract",
+    "evidence_contract",
+    "cleanup_contract",
+    "attempts",
+    "category_3_preconditions"
+  ],
+  "title": "T09 V16 unauthorized qualification and calibration plan",
+  "type": "object"
+}

@@ -507,6 +507,26 @@ def test_empirical_full_cleanup_resume_does_not_repeat_exact_resource_mutations(
         monkeypatch,
         include_preflight=True,
     )
+    _write_json(
+        pilot_root / "offline-runtime-preflight/offline-runtime-preflight.json",
+        {
+            "schema_version": "0.1.0",
+            "python_version": "3.11.14",
+            "offline_evaluator_fixture_results": [
+                {
+                    "name": "task-b-normalization-edge",
+                    "score": 1.0,
+                    "evaluator_valid": True,
+                    "session_sha256": "a" * 64,
+                }
+            ],
+            "provider_or_task_request": False,
+            "browser_action": False,
+            "provider_or_model_requests": 0,
+            "browser_actions": 0,
+            "secret_reads": 0,
+        },
+    )
     run_id = V13_PROVIDER_CONTRACT.run_ids[0]
     _publish_valid_raw_export_prefix(
         host,
@@ -636,7 +656,6 @@ def test_empirical_full_cleanup_resume_does_not_repeat_exact_resource_mutations(
     monkeypatch.setattr(host, "_fallback_build_cleanup_candidate", lambda **_kwargs: None)
     monkeypatch.setattr(host, "image_id_if_present", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(host, "secret_hits", lambda *_args, **_kwargs: [])
-    monkeypatch.setattr(host, "privacy_violations", lambda *_args, **_kwargs: [])
     monkeypatch.setattr(host, "destroy_secret", destroy_fixture_secret)
     monkeypatch.setattr(host, "provider_seconds_remaining", lambda *_args, **_kwargs: 120.0)
     monkeypatch.setattr(host, "gpu_snapshot", lambda: {})
@@ -706,6 +725,7 @@ def test_empirical_full_cleanup_resume_does_not_repeat_exact_resource_mutations(
         secret_file=secret_file,
         early_cleanup_journal=journal.root,
     )
+    assert host.privacy_violations(artifact_root) == []
     host.cleanup(arguments)
 
     receipt_paths = (
@@ -721,6 +741,9 @@ def test_empirical_full_cleanup_resume_does_not_repeat_exact_resource_mutations(
         if path.is_file()
     }
     first_journal_state = journal.load()
+    cleanup_projection = json.loads((pilot_root / "host-cleanup.json").read_text(encoding="utf-8"))
+    assert cleanup_projection["structural_privacy_scan_passed"] is True
+    assert cleanup_projection["structural_privacy_violations"] == []
     protected_target_projection = {
         target.target_id: (target.state, target.last_attempt_id)
         for target in first_journal_state.targets

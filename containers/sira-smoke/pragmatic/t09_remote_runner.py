@@ -22,6 +22,7 @@ import math
 import os
 import re
 import resource
+import select
 import shutil
 import signal
 import stat
@@ -31,6 +32,7 @@ import tarfile
 import time
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from datetime import datetime, timezone
+from enum import Enum
 from pathlib import Path, PurePosixPath
 from typing import IO, Any, BinaryIO, Final, NamedTuple, cast
 
@@ -272,7 +274,11 @@ _JUPYTER_URL: Final = re.compile(
     re.IGNORECASE,
 )
 _CREDENTIAL_TEXT: Final = re.compile(
-    r"(?:sk-[A-Za-z0-9_-]{16,}|AKIA[A-Z0-9]{16}|Bearer\s+[A-Za-z0-9._~+/=-]{16,})"
+    r"(?:"
+    r"(?<![A-Za-z0-9_])sk-[A-Za-z0-9_-]{16,}(?![A-Za-z0-9_])"
+    r"|(?<![A-Za-z0-9_])AKIA[A-Z0-9]{16}(?![A-Za-z0-9_])"
+    r"|(?<![A-Za-z0-9_])Bearer\s+[A-Za-z0-9._~+/=-]{16,}(?![A-Za-z0-9_])"
+    r")"
 )
 _IPV4_TEXT: Final = re.compile(r"(?<![A-Za-z0-9])(?:\d{1,3}\.){3}\d{1,3}(?:/\d{1,2})?")
 _SENSITIVE_JSON_KEYS: Final = {
@@ -309,6 +315,7 @@ MAX_ESSENTIAL_FAILURE_FILES: Final = 1_024
 MAX_ESSENTIAL_EXCLUSION_RECORDS: Final = 1_024
 MAX_ESSENTIAL_RELATIVE_PATH_BYTES: Final = 256
 MAX_ESSENTIAL_METADATA_BYTES: Final = 4_194_304
+MAX_GIT_BOUND_PACKAGE_FILE_BYTES: Final = 4_194_304
 MAX_ATTEMPT_EXPORT_MEMBERS: Final = 2_048
 MAX_ATTEMPT_EXPORT_MANIFEST_BYTES: Final = 2_097_152
 POSTFREEZE_ADMISSION_FIELD: Final = "fresh_empirical_campaign_headroom_passed_before_metadata_get"
@@ -326,6 +333,47 @@ SELECTOR_RELATIVE_PATH: Final = "containers/sira-smoke/pragmatic/t09_remote_runn
 REFINALIZATION_RECEIPT_SCHEMA_RELATIVE_PATH: Final = (
     "schemas/t09-offline-refinalization-receipt.schema.json"
 )
+
+
+class DownstreamSourceRole(str, Enum):  # noqa: UP042 - host runner supports Python 3.10
+    """Exact roles permitted in a post-entry downstream-only repair."""
+
+    SELECTOR = "selector"
+    FINALIZER = "finalizer"
+    FINALIZER_PROJECTION = "finalizer-projection"
+    REFINALIZATION_SCHEMA = "refinalization-schema"
+
+
+class DownstreamSourceContract(NamedTuple):
+    """Finite Git-bound contract for one executable downstream source role."""
+
+    relative_path: str
+    maximum_bytes: int
+    require_current_user: bool
+
+
+DOWNSTREAM_SOURCE_CONTRACTS: Final = {
+    DownstreamSourceRole.SELECTOR: DownstreamSourceContract(
+        relative_path=SELECTOR_RELATIVE_PATH,
+        maximum_bytes=4_194_304,
+        require_current_user=True,
+    ),
+    DownstreamSourceRole.FINALIZER: DownstreamSourceContract(
+        relative_path=FINALIZER_RELATIVE_PATH,
+        maximum_bytes=1_048_576,
+        require_current_user=True,
+    ),
+    DownstreamSourceRole.FINALIZER_PROJECTION: DownstreamSourceContract(
+        relative_path=FINALIZER_PROJECTION_RELATIVE_PATH,
+        maximum_bytes=1_048_576,
+        require_current_user=True,
+    ),
+    DownstreamSourceRole.REFINALIZATION_SCHEMA: DownstreamSourceContract(
+        relative_path=REFINALIZATION_RECEIPT_SCHEMA_RELATIVE_PATH,
+        maximum_bytes=1_048_576,
+        require_current_user=True,
+    ),
+}
 LOCAL_FINALIZER_QUALIFICATION_RELATIVE_PATH: Final = (
     "containers/sira-smoke/pragmatic/t09_local_finalizer_qualification.py"
 )
@@ -592,15 +640,37 @@ def stage_verified_archive(
                     os.close(descriptor)
 
 
-def git_file_sha256(repository: Path, commit: str, relative: str) -> str:
-    retained = subprocess.run(
-        ["git", "-C", str(repository), "show", f"{commit}:{relative}"],
-        env=safe_environment(),
-        stdin=subprocess.DEVNULL,
-        capture_output=True,
-        check=True,
-        timeout=30,
-    ).stdout
+def git_file_sha256(
+    repository: Path,
+    commit: str,
+    relative: str,
+    *,
+    maximum_bytes: int = MAX_GIT_BOUND_PACKAGE_FILE_BYTES,
+) -> str:
+    """Hash one finite Git blob without an unbounded ``git show`` capture."""
+
+    blob = (
+        _bounded_git_output(
+            ["git", "-C", str(repository), "rev-parse", "--verify", f"{commit}:{relative}"],
+            maximum_bytes=65,
+        )
+        .decode("ascii", errors="strict")
+        .strip()
+    )
+    size = (
+        _bounded_git_output(
+            ["git", "-C", str(repository), "cat-file", "-s", blob],
+            maximum_bytes=32,
+        )
+        .decode("ascii", errors="strict")
+        .strip()
+    )
+    if not size.isascii() or not size.isdecimal() or not 0 < int(size) <= maximum_bytes:
+        raise T09HostError("Git-bound package file violates its finite size cap")
+    retained = _bounded_git_output(
+        ["git", "-C", str(repository), "cat-file", "blob", blob],
+        maximum_bytes=maximum_bytes,
+    )
     return hashlib.sha256(retained).hexdigest()
 
 
@@ -694,7 +764,7 @@ def _require_supported_provider_runner(
 ) -> None:
     """Prevent this runner from relabeling evidence from an unsupported package."""
 
-    if contract.version not in {"V11", "V12", "V13", "V14", "V15"}:
+    if contract.version not in {"V11", "V12", "V13", "V14", "V15", "V16"}:
         raise T09HostError(f"{label} requires its frozen provider runner")
 
 
@@ -7891,7 +7961,7 @@ def validate_model_metadata_receipt_offline(
     package_tree = output(["git", "-C", str(repository), "rev-parse", f"{package_commit}^{{tree}}"])
     if re.fullmatch(r"[a-f0-9]{40}", package_tree) is None:
         raise T09HostError("package tree identity is malformed")
-    if contract.version not in {"V12", "V13", "V14", "V15"}:
+    if contract.version not in {"V12", "V13", "V14", "V15", "V16"}:
         raise T09HostError("selected contract has no durable model metadata receipt")
     paths = contract_paths(repository, contract)
     expected_receipt_sha256 = provider_entry.get("model_metadata_receipt_sha256")
@@ -8166,7 +8236,7 @@ def write_frozen_run_manifest(
     paths = _contract_paths_for(repository, campaign_contract)
     manifest_id = cast(str, campaign_contract.frozen_run_manifest_id)
     qualification_id = cast(str, campaign_contract.active_image_qualification_id)
-    if campaign_contract.version in {"V12", "V13", "V14", "V15"} and (
+    if campaign_contract.version in {"V12", "V13", "V14", "V15", "V16"} and (
         not isinstance(model_receipt.get("receipt_sha256"), str)
         or _HEX64.fullmatch(cast(str, model_receipt["receipt_sha256"])) is None
         or model_receipt.get("model_metadata_network_requests") != 0
@@ -8346,14 +8416,14 @@ def write_frozen_run_manifest(
         "final_image_file_hashes_sha256": canonical_sha256(file_hashes),
         "model_metadata_receipt_sha256": (
             model_receipt.get("receipt_sha256")
-            if campaign_contract.version in {"V12", "V13", "V14", "V15"}
+            if campaign_contract.version in {"V12", "V13", "V14", "V15", "V16"}
             else canonical_sha256(model_receipt)
         ),
         "model_metadata_credential_scan_sha256": canonical_sha256(model_credential_scan_receipt),
         "model_metadata_request_count": 1,
         **(
             {"model_metadata_network_requests": 0}
-            if campaign_contract.version in {"V12", "V13", "V14", "V15"}
+            if campaign_contract.version in {"V12", "V13", "V14", "V15", "V16"}
             else {}
         ),
         "model_task_request_count": 0,
@@ -8439,7 +8509,7 @@ def write_frozen_run_manifest(
                         _pilot_root(artifact_root) / "model-metadata-receipt-acknowledgement.json"
                     )
                 }
-                if campaign_contract.version in {"V12", "V13", "V14", "V15"}
+                if campaign_contract.version in {"V12", "V13", "V14", "V15", "V16"}
                 else {}
             ),
             "static_real_evidence_regression": file_sha256(paths["real_regression"]),
@@ -8536,7 +8606,7 @@ def load_frozen_run_manifest(
         _pilot_root(artifact_root) / "model-metadata-receipt-acknowledgement.json"
     )
     model_metadata_ack: dict[str, Any] | None = None
-    if runtime_contract.version in {"V12", "V13", "V14", "V15"}:
+    if runtime_contract.version in {"V12", "V13", "V14", "V15", "V16"}:
         model_metadata_ack = load_object(
             model_metadata_ack_path,
             label="model metadata receipt acknowledgement",
@@ -8841,7 +8911,7 @@ def load_frozen_run_manifest(
         or source_receipts.get("post_metadata_complete_core_gate")
         != file_sha256(post_metadata_core_gate_path)
         or (
-            runtime_contract.version in {"V12", "V13", "V14", "V15"}
+            runtime_contract.version in {"V12", "V13", "V14", "V15", "V16"}
             and (
                 model_metadata_ack is None
                 or source_receipts.get("model_metadata_receipt_acknowledgement")
@@ -10188,7 +10258,7 @@ def preflight(args: argparse.Namespace) -> None:
     # V11 retains its historical one-request container gate. V12 consumes the
     # provider's already sealed receipt at this boundary and cannot fall back to
     # that network path.
-    if dynamic_contract.version in {"V12", "V13", "V14", "V15"}:
+    if dynamic_contract.version in {"V12", "V13", "V14", "V15", "V16"}:
         explicit_receipt_path = getattr(args, "model_metadata_receipt", None)
         if explicit_receipt_path is not None and not isinstance(explicit_receipt_path, Path):
             raise T09HostError("V12 model metadata receipt argument is malformed")
@@ -10294,7 +10364,7 @@ def preflight(args: argparse.Namespace) -> None:
                     "model_metadata_network_requests": 0,
                     "model_metadata_receipt_sha256": dynamic.get("model_metadata_receipt_sha256"),
                 }
-                if dynamic_contract.version in {"V12", "V13", "V14", "V15"}
+                if dynamic_contract.version in {"V12", "V13", "V14", "V15", "V16"}
                 else {}
             ),
             "model_metadata_credential_scan_sha256": file_sha256(
@@ -10399,7 +10469,7 @@ def preflight(args: argparse.Namespace) -> None:
                     "model_metadata_network_requests": 0,
                     "model_metadata_receipt_sha256": dynamic.get("model_metadata_receipt_sha256"),
                 }
-                if dynamic_contract.version in {"V12", "V13", "V14", "V15"}
+                if dynamic_contract.version in {"V12", "V13", "V14", "V15", "V16"}
                 else {}
             ),
             "model_task_request_count": 0,
@@ -15878,7 +15948,7 @@ def validate_postfreeze_entry_receipts(
         or postfreeze.get("model_metadata_request_count") != 1
         or (
             provider_contract_for_plan_id(cast(str, frozen_manifest.get("plan_id"))).version
-            in {"V12", "V13", "V14", "V15"}
+            in {"V12", "V13", "V14", "V15", "V16"}
             and (
                 preflight_receipt.get("model_metadata_network_requests") != 0
                 or postfreeze.get("model_metadata_network_requests") != 0
@@ -17088,35 +17158,167 @@ def execute_condition(args: argparse.Namespace) -> int:
     return returncode
 
 
+def _bounded_git_output(
+    argv: list[str],
+    *,
+    maximum_bytes: int,
+    timeout: int = 30,
+) -> bytes:
+    """Capture one Git-plumbing result without permitting unbounded output."""
+
+    if maximum_bytes <= 0:
+        raise T09HostError("Git output cap must be positive")
+    process = subprocess.Popen(
+        argv,
+        env=safe_environment(),
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+    )
+    assert process.stdout is not None
+    deadline = time.monotonic() + timeout
+    retained = bytearray()
+    try:
+        while True:
+            remaining_seconds = deadline - time.monotonic()
+            if remaining_seconds <= 0:
+                raise subprocess.TimeoutExpired(argv, timeout)
+            ready, _, _ = select.select([process.stdout], [], [], remaining_seconds)
+            if not ready:
+                raise subprocess.TimeoutExpired(argv, timeout)
+            chunk = os.read(process.stdout.fileno(), maximum_bytes + 1 - len(retained))
+            if not chunk:
+                break
+            retained.extend(chunk)
+            if len(retained) > maximum_bytes:
+                process.kill()
+                process.wait(timeout=max(deadline - time.monotonic(), 0.001))
+                raise T09HostError("Git plumbing exceeded its bounded output cap")
+        process.wait(timeout=max(deadline - time.monotonic(), 0.001))
+    except subprocess.TimeoutExpired as exc:
+        process.kill()
+        process.wait()
+        raise T09HostError("Git plumbing timed out") from exc
+    finally:
+        process.stdout.close()
+    if process.returncode != 0:
+        raise T09HostError("Git plumbing failed")
+    return bytes(retained)
+
+
+def _same_source_metadata(before: os.stat_result, after: os.stat_result) -> bool:
+    """Compare every local-file identity used by the source admission decision."""
+
+    return all(
+        getattr(before, field) == getattr(after, field)
+        for field in (
+            "st_dev",
+            "st_ino",
+            "st_mode",
+            "st_nlink",
+            "st_uid",
+            "st_gid",
+            "st_size",
+            "st_mtime_ns",
+            "st_ctime_ns",
+        )
+    )
+
+
 def validate_git_bound_downstream_source(
     *,
     repository: Path,
     commit: str,
+    role: DownstreamSourceRole,
     relative: str,
     source: Path,
-) -> None:
-    """Require one executing downstream source to equal its committed bytes."""
+) -> dict[str, object]:
+    """Bind one no-follow local source to an exact finite Git blob."""
 
-    path = source.resolve(strict=True)
-    metadata = path.stat(follow_symlinks=False)
+    contract = DOWNSTREAM_SOURCE_CONTRACTS.get(role)
+    if contract is None or relative != contract.relative_path:
+        raise T09HostError("downstream source role and path disagree")
+    if re.fullmatch(r"[a-f0-9]{40}", commit) is None:
+        raise T09HostError("downstream source commit is malformed")
+    root = repository.resolve(strict=True)
+    path = source.absolute()
+    expected_path = root / contract.relative_path
+    if path != expected_path or source.is_symlink():
+        raise T09HostError("downstream source is not its exact repository path")
+    descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    try:
+        metadata = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_nlink != 1
+            or metadata.st_mode & 0o022
+            or (contract.require_current_user and metadata.st_uid != os.getuid())
+            or not 0 < metadata.st_size <= contract.maximum_bytes
+        ):
+            raise T09HostError("downstream repair source metadata is unsafe")
+        local_bytes = os.read(descriptor, contract.maximum_bytes + 1)
+        while len(local_bytes) <= contract.maximum_bytes:
+            chunk = os.read(descriptor, contract.maximum_bytes + 1 - len(local_bytes))
+            if not chunk:
+                break
+            local_bytes += chunk
+        if len(local_bytes) != metadata.st_size:
+            raise T09HostError("downstream source changed or exceeded its finite cap")
+        after_read = os.fstat(descriptor)
+    finally:
+        os.close(descriptor)
+    path_after = path.lstat()
     if (
-        path.is_symlink()
-        or not stat.S_ISREG(metadata.st_mode)
-        or metadata.st_nlink != 1
-        or metadata.st_mode & 0o022
-        or not 0 < metadata.st_size <= 1_048_576
+        not _same_source_metadata(metadata, after_read)
+        or not _same_source_metadata(metadata, path_after)
+        or path.resolve(strict=True) != expected_path
     ):
-        raise T09HostError("downstream repair source metadata is unsafe")
-    retained = subprocess.run(
-        ["git", "-C", str(repository), "show", f"{commit}:{relative}"],
-        env=safe_environment(),
-        stdin=subprocess.DEVNULL,
-        capture_output=True,
-        check=True,
-        timeout=30,
-    ).stdout
-    if retained != path.read_bytes():
+        raise T09HostError("downstream source changed during validation")
+    object_specification = f"{commit}:{relative}"
+    blob = (
+        _bounded_git_output(
+            ["git", "-C", str(root), "rev-parse", "--verify", object_specification],
+            maximum_bytes=65,
+        )
+        .decode("ascii", errors="strict")
+        .strip()
+    )
+    if re.fullmatch(r"[a-f0-9]{40,64}", blob) is None:
+        raise T09HostError("downstream Git blob identity is malformed")
+    object_type = (
+        _bounded_git_output(["git", "-C", str(root), "cat-file", "-t", blob], maximum_bytes=16)
+        .decode("ascii", errors="strict")
+        .strip()
+    )
+    if object_type != "blob":
+        raise T09HostError("downstream Git object is not a blob")
+    size_text = (
+        _bounded_git_output(["git", "-C", str(root), "cat-file", "-s", blob], maximum_bytes=32)
+        .decode("ascii", errors="strict")
+        .strip()
+    )
+    if not size_text.isascii() or not size_text.isdecimal():
+        raise T09HostError("downstream Git blob size is malformed")
+    blob_size = int(size_text)
+    if blob_size != metadata.st_size or not 0 < blob_size <= contract.maximum_bytes:
+        raise T09HostError("downstream Git blob violates its role-specific size contract")
+    retained = _bounded_git_output(
+        ["git", "-C", str(root), "cat-file", "blob", blob],
+        maximum_bytes=contract.maximum_bytes,
+    )
+    if retained != local_bytes:
         raise T09HostError("downstream repair bytes do not match their Git commit")
+    final_metadata = path.lstat()
+    if not _same_source_metadata(metadata, final_metadata):
+        raise T09HostError("downstream source changed during Git comparison")
+    return {
+        "role": role.value,
+        "path": relative,
+        "bytes": metadata.st_size,
+        "maximum_bytes": contract.maximum_bytes,
+        "git_blob": blob,
+        "sha256": hashlib.sha256(local_bytes).hexdigest(),
+    }
 
 
 def validate_finalizer_source(
@@ -17126,7 +17328,7 @@ def validate_finalizer_source(
     finalizer_commit: str,
     source: Path,
     projection_source: Path,
-) -> tuple[str, str, str, str, Any]:
+) -> tuple[str, str, str, str, Any, dict[str, dict[str, object]]]:
     """Bind downstream-repairable bytes without changing the frozen worktree."""
 
     if re.fullmatch(r"[a-f0-9]{40}", finalizer_commit) is None:
@@ -17138,16 +17340,6 @@ def validate_finalizer_source(
             repository / REFINALIZATION_RECEIPT_SCHEMA_RELATIVE_PATH
         ).resolve(strict=True),
     }
-    for path in sources.values():
-        metadata = path.stat(follow_symlinks=False)
-        if (
-            path.is_symlink()
-            or not stat.S_ISREG(metadata.st_mode)
-            or metadata.st_nlink != 1
-            or metadata.st_mode & 0o022
-            or not 0 < metadata.st_size <= 1_048_576
-        ):
-            raise T09HostError("downstream finalizer source metadata is unsafe")
     environment = safe_environment()
     ancestry = subprocess.run(
         [
@@ -17193,23 +17385,24 @@ def validate_finalizer_source(
             {FINALIZER_RELATIVE_PATH, FINALIZER_PROJECTION_RELATIVE_PATH}
         ) or not set(changed).issubset(allowed):
             raise T09HostError("post-entry finalizer commit changed a non-downstream surface")
-    validate_git_bound_downstream_source(
-        repository=repository,
-        commit=finalizer_commit,
-        relative=SELECTOR_RELATIVE_PATH,
-        source=Path(__file__),
-    )
-    for relative, path in sources.items():
-        retained = subprocess.run(
-            ["git", "-C", str(repository), "show", f"{finalizer_commit}:{relative}"],
-            env=environment,
-            stdin=subprocess.DEVNULL,
-            capture_output=True,
-            check=True,
-            timeout=30,
-        ).stdout
-        if retained != path.read_bytes():
-            raise T09HostError("downstream finalizer bytes do not match their Git commit")
+    role_sources = {
+        DownstreamSourceRole.SELECTOR: Path(__file__),
+        DownstreamSourceRole.FINALIZER: sources[FINALIZER_RELATIVE_PATH],
+        DownstreamSourceRole.FINALIZER_PROJECTION: sources[FINALIZER_PROJECTION_RELATIVE_PATH],
+        DownstreamSourceRole.REFINALIZATION_SCHEMA: sources[
+            REFINALIZATION_RECEIPT_SCHEMA_RELATIVE_PATH
+        ],
+    }
+    source_bindings = {
+        role.value: validate_git_bound_downstream_source(
+            repository=repository,
+            commit=finalizer_commit,
+            role=role,
+            relative=DOWNSTREAM_SOURCE_CONTRACTS[role].relative_path,
+            source=path,
+        )
+        for role, path in role_sources.items()
+    }
     specification = importlib.util.spec_from_file_location(
         "giclab_t09_finalizer_projection", sources[FINALIZER_PROJECTION_RELATIVE_PATH]
     )
@@ -17230,6 +17423,7 @@ def validate_finalizer_source(
         file_sha256(Path(__file__).resolve(strict=True)),
         file_sha256(sources[REFINALIZATION_RECEIPT_SCHEMA_RELATIVE_PATH]),
         module,
+        source_bindings,
     )
 
 
@@ -17305,9 +17499,21 @@ def validate_local_finalizer_qualification(
         or receipt.get("browser_actions") != 0
         or not isinstance(sources, dict)
         or sources.get("finalizer")
-        != git_file_sha256(repository, package_commit, FINALIZER_RELATIVE_PATH)
+        != git_file_sha256(
+            repository,
+            package_commit,
+            FINALIZER_RELATIVE_PATH,
+            maximum_bytes=DOWNSTREAM_SOURCE_CONTRACTS[DownstreamSourceRole.FINALIZER].maximum_bytes,
+        )
         or sources.get("projection")
-        != git_file_sha256(repository, package_commit, FINALIZER_PROJECTION_RELATIVE_PATH)
+        != git_file_sha256(
+            repository,
+            package_commit,
+            FINALIZER_PROJECTION_RELATIVE_PATH,
+            maximum_bytes=DOWNSTREAM_SOURCE_CONTRACTS[
+                DownstreamSourceRole.FINALIZER_PROJECTION
+            ].maximum_bytes,
+        )
         or sources.get("qualification")
         != file_sha256(repository / LOCAL_FINALIZER_QUALIFICATION_RELATIVE_PATH)
     ):
@@ -17938,6 +18144,7 @@ def finalize_attempt(args: argparse.Namespace) -> dict[str, object]:
         selector_source_sha256,
         receipt_schema_sha256,
         projection_module,
+        downstream_source_bindings,
     ) = validate_finalizer_source(
         repository=repository,
         package_commit=args.package_commit,
@@ -18019,6 +18226,15 @@ def finalize_attempt(args: argparse.Namespace) -> dict[str, object]:
     invocation = len(existing) + 1
     invocation_log = finalization_log_base / f"invocation-{invocation:04d}"
     invocation_log.mkdir(mode=0o700, exist_ok=False)
+    source_bindings_path = invocation_log / "downstream-source-bindings.json"
+    write_exclusive(
+        source_bindings_path,
+        {
+            "schema_version": "0.1.0",
+            "finalizer_commit": args.finalizer_commit,
+            "sources": downstream_source_bindings,
+        },
+    )
     local_qualification: dict[str, Any] | None = None
     if local_mode:
         assert args.local_finalizer_qualification is not None
@@ -21599,7 +21815,7 @@ def verify_inbound(args: argparse.Namespace) -> None:
         identity.get("stage_id") != stage_id
         or identity.get("archive_id") != archive_id
         or (
-            inbound_contract.version in {"V12", "V13", "V14", "V15"}
+            inbound_contract.version in {"V12", "V13", "V14", "V15", "V16"}
             and (
                 identity.get("plan_id") != inbound_contract.plan_id
                 or identity.get("host_run_id") != inbound_contract.host_run_id

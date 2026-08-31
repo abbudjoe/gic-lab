@@ -15,6 +15,7 @@ from giclab.harness.t09_sira_pilot import (
     command_argv_sha256,
     diff_pair_manifests,
     file_sha256,
+    git_file_sha256,
     load_execution_contract,
     render_command_manifest,
 )
@@ -51,8 +52,17 @@ def render(repository: Path, *, provider_version: str) -> dict[str, object]:
     commits = {attempt.giclab_commit for attempt in contract.attempts}
     if len(commits) != 1 or "unknown" in commits:
         raise ValueError("one reviewed implementation ancestor must be bound before rendering")
-    runtime_sha256 = file_sha256(runtime_path)
-    library_sha256 = file_sha256(library_path)
+    implementation_commit = next(iter(commits))
+    runtime_sha256 = git_file_sha256(
+        root,
+        implementation_commit,
+        runtime_path.relative_to(root).as_posix(),
+    )
+    library_sha256 = git_file_sha256(
+        root,
+        implementation_commit,
+        library_path.relative_to(root).as_posix(),
+    )
     manifests = [
         render_command_manifest(
             contract,
@@ -94,7 +104,7 @@ def render(repository: Path, *, provider_version: str) -> dict[str, object]:
                 "model_metadata_receipt_required": True,
                 "model_metadata_receipt_replay_allowed": False,
             }
-            if contract.provider_contract_version in {"V12", "V13", "V14", "V15"}
+            if contract.provider_contract_version in {"V12", "V13", "V14", "V15", "V16"}
             else {}
         ),
         "schema_version": "0.1.0",
@@ -108,11 +118,15 @@ def render(repository: Path, *, provider_version: str) -> dict[str, object]:
         "runtime_adaptation_sha256": runtime_sha256,
         "pilot_library_sha256": library_sha256,
         "generator_path": generator_path.relative_to(root).as_posix(),
-        "generator_sha256": file_sha256(generator_path),
+        "generator_sha256": git_file_sha256(
+            root,
+            implementation_commit,
+            generator_path.relative_to(root).as_posix(),
+        ),
         "manifests": manifests,
         "pair_diffs": pair_diffs,
     }
-    if contract_identity.version in {"V13", "V14", "V15"}:
+    if contract_identity.version in {"V13", "V14", "V15", "V16"}:
         rendered["local_finalizer_qualification_selector"] = {
             "argument": "--provider-contract",
             "value": contract_identity.version,

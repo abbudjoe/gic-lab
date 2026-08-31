@@ -1,0 +1,91 @@
+{
+  "actual_credential_exposure": false,
+  "attempt": {
+    "approximate_wall_seconds": 65.441,
+    "browser_actions": 6,
+    "completion": "incomplete",
+    "condition": "SIRA-REACTIVE",
+    "input_tokens": 45921,
+    "model_calls": 24,
+    "openai_cost_usd_decimal": "0.15201250000000005",
+    "output_tokens": 3721,
+    "provider_call_accounting": {
+      "outstanding_reservations": 0,
+      "sent_response_reconciled": 24,
+      "unknown": 0,
+      "unreconciled": 0
+    },
+    "run_id": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0008",
+    "scientific_identity_consumed": true,
+    "total_tokens": 49642
+  },
+  "cleanup": {
+    "core_artifacts": 0,
+    "firewall_and_rulesets_restored": true,
+    "provider_active_seconds": 3777.602038,
+    "provider_cost_usd_decimal": "1.3536407302498819",
+    "provider_terminal_or_absent_verified": true,
+    "provider_termination_requests": 1,
+    "zero_running_t09_instances_verified": true
+  },
+  "defects": [
+    {
+      "classification": "git-bound-downstream-source-cap",
+      "root_cause": "the exact committed selector was rejected solely because its 1084958-byte size exceeded an unrelated 1048576-byte ceiling"
+    },
+    {
+      "classification": "structural-privacy-lexical-false-positive",
+      "root_cause": "the OpenAI-style credential heuristic lacked a left lexical boundary and matched a suffix inside task-b-normalization-edge"
+    }
+  ],
+  "evidence": {
+    "archive": {
+      "bytes": 1250635,
+      "files": 46,
+      "raw_evidence_bytes": 4919573,
+      "sha256": "cde220dbf195433f7e7e1407d1fad62d53dd2f59025f32ae5064992adbc44b0e"
+    },
+    "export_completion_receipt": {
+      "bytes": 956,
+      "sha256": "4f54326f8889b7a0035feede2fe83b8bf01d8af6c1a56476a0543ba25a1e2592"
+    },
+    "off_host_verification_receipt": {
+      "bytes": 1304,
+      "sha256": "0744764bacd7b1f7bc9096b204012cd76156322d2a0260065ddde2147717882d"
+    },
+    "raw_completion_receipt": {
+      "bytes": 1001,
+      "sha256": "e058e5ec47a632c8975e282f7788fa3c0fd7dc2dd23df9f8dafac0868d622b42"
+    },
+    "raw_manifest": {
+      "bytes": 8956,
+      "sha256": "9e8749b4e9e29ef5a904c13517378b3695ac5393de400c1ca6c351ad5348eaaf"
+    }
+  },
+  "package": {
+    "command_manifest_bytes": 23521,
+    "command_manifest_sha256": "533721a1665c1826502ece26b025859c6fb21b6f3b791d085d2ea294e3f88b4f",
+    "merged_commit": "be09fe18dd46d0e5fe1aa65cfac29190edfa8aac",
+    "plan_bytes": 20420,
+    "plan_id": "PLAN-EXP0001-PILOT-V15",
+    "plan_sha256": "e678a44733916d2d437f5f739ad058243d49f566a3dd12f2c3431b9d6094d8b8",
+    "provider_contract_version": "V15",
+    "runtime_profile_bytes": 15974,
+    "runtime_profile_sha256": "64075a67989522495145bf02c32544bd3a07f30c38d46daa4e9f5c16c65faa1d"
+  },
+  "remaining_conditions": {
+    "scientifically_replayable_under_changed_source": false,
+    "task_a_simulative": "not-run",
+    "task_b_reactive": "not-run",
+    "task_b_simulative": "not-run"
+  },
+  "scientific_disposition": {
+    "comparison_permitted": false,
+    "realized_pair": null,
+    "result_assignment": "stopped-condition-not-a-scientific-result"
+  },
+  "schema_version": "1.0.0",
+  "status": "stopped-after-empirical-entry-cleanup-verified",
+  "total_new_cost_usd_decimal": "1.50565323024988195",
+  "v16_prior_cumulative_cost_usd_decimal": "36.36170860803283125"
+}
