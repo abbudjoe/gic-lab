@@ -61,11 +61,11 @@ adjudication, merge, auto-merge, force-push, and delegated review or implementat
 | CP-12 | State capsule is valid, concise, and agent-legible | Schema validation, deterministic bytes, privacy tests | met |
 | CP-13 | V16 incident is linked to passing regressions | Incident validator and exact collected node IDs | met |
 | CP-14 | Stable CLI and Make targets exist | CLI tests and direct command runs | met |
-| CP-15 | `agent-check` is part of CI before parity | Make/workflow inspection and exact gate run | partial |
+| CP-15 | `agent-check` is part of CI before parity | Make/workflow inspection and exact gate run | met |
 | CP-16 | AGENTS/PLANS/PROJECT_STATE/COMPUTE_POLICY updated coherently | Document validation and direct review | met |
 | CP-17 | No V17 package or live authority created | Repository searches and state checks | met |
 | CP-18 | Scientific contract unchanged | Base/head science hashes and preservation tests | met |
-| CP-19 | Full/parity/static/privacy/site gates pass | Required local validation contract | not-started |
+| CP-19 | Full/parity/static/privacy/site gates pass | Required local validation contract | partial |
 | CP-20 | Draft PR open, exact-head CI green, no merge | GitHub PR and Actions metadata | not-started |
 
 No item may be marked `met` without concrete evidence. The overall status cannot be
@@ -109,11 +109,21 @@ successful while any required item is partial, blocked, or not-started.
   sources in a non-circular receipt. Repository validation now distinguishes this
   reviewed control evolution from immutable V16 package bytes and confirms the only
   experiment-tree change is the stopped disposition.
-- 2026-08-31: full raw pytest matched the exact-base failure count with **1,931
-  passed, 24 inherited failures, and 5 skipped**. One newly exposed historical
-  package-source verification path was repaired to read all frozen instrumentation
-  from the named package commit when the control checkout has advanced; the V16
-  package bytes remain unchanged.
+- 2026-08-31: post-review focused T09/control validation reported **615 passed, 5
+  inherited skips, and 1 inherited private-artifact node deselected**. The new
+  control-foundation suite itself reports **61 passed** with no skip or xfail. Full
+  raw pytest improved the exact-base result to **1,932 passed, 23 inherited failures,
+  and 5 skipped** in 96.10 seconds; exact base-relative parity remains the
+  authoritative regression gate.
+- 2026-08-31: a historical package regression now proves the frozen V16
+  instrumentation directly from its named package commit and proves the evolved
+  control checkout fails closed when presented as that package. The V16 package
+  bytes remain unchanged.
+- 2026-08-31: direct review found one state-ownership gap: interpretation permission
+  was emitted as a constant instead of being owned by the typed transaction state.
+  Commit `ac99cabc31e06d3d96d6467f670511c11080bedd` repaired it; focused tests,
+  repository validation, agent-check, privacy/boundary scans, and the 16-page Quarto
+  render pass afterward.
 
 ## Decisions and blockers
 
@@ -127,5 +137,6 @@ successful while any required item is partial, blocked, or not-started.
 
 ## Next permitted phase
 
-Run complete repository validation and direct self-review, generate immutable-ancestor
-receipts, then open the required draft PR without merging.
+Seal the reviewed implementation in immutable-ancestor receipts, run exact-base
+parity and the complete final gate on the resulting head, then open the required
+draft PR without merging.

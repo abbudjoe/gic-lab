@@ -91,6 +91,16 @@ runtime lint scan and directly exercise both prohibited and permitted examples.
   matrices/compositions complete, active-version findings 0, one resolved incident
   with three passing exact nodes, 12/12 shadow scenarios valid, and a schema-valid
   deterministic state capsule.
+- 2026-08-31 post-review focused suite: **615 passed, 5 inherited skips, 1 inherited
+  private-artifact node deselected** in 66.22 seconds. The new control-foundation
+  suite reports **61 passed** with no skips or xfails.
+- 2026-08-31 post-review raw/full suite: **1,932 passed, 23 failed, 5 skipped** in
+  96.10 seconds. This is one fewer failing node than the exact base; the remaining
+  failures are the inherited stale historical projections and unavailable private
+  artifacts. Exact base-relative parity is still required for the final regression
+  decision.
+- 2026-08-31 public site: the pinned Quarto 1.9.38 tool rendered all 16 notebook
+  pages and `giclab-validate site` passed.
 - 2026-08-31 source binding: commit
   `9c8f65dcaf9f9e6960cc41e2f46ffa801d20d6b3`, tree
   `2c6a3539dda1ca11475e5b1fdfa6be6f6d21a863`, six shared runtime sources, semantic
@@ -113,7 +123,27 @@ runtime lint scan and directly exercise both prohibited and permitted examples.
 
 ## Direct review log
 
-Pending. Review will cover the single source of runtime behavior, identity versus
-capability, complete registry coverage, shared shadow/live control flow, effect
-isolation, pre-secret ordering, authority/science separation, capsule legibility,
-incident accretion, resource economy, and the future V17 package boundary.
+Direct review is complete with no remaining finding. It confirmed:
+
+- `PROVIDER_CONTRACTS` and its plan-ID projection are the sole active registry;
+  immutable version identity is separate from semantic capability dispatch;
+- the repository AST gate reports zero prohibited active-version dispatches, and all
+  14 registered contracts resolve their complete consumer/composition matrices;
+- shadow rehearsal uses the shared Category 3 controller, while the only available
+  adapters are strict local fakes and `PreparedCategory3.live_effects_permitted` is
+  false;
+- validated receipt mode blocks before staging/secret/metadata when its receipt set
+  is absent, and the lifecycle omission stops at composition with all external-call
+  counts zero;
+- metadata, provider capability, scientific-attempt prefix, evidence, cleanup, and
+  interpretation permission are separately owned transaction state. Review found
+  the interpretation field had originally been emitted as a constant; commit
+  `ac99cabc31e06d3d96d6467f670511c11080bedd` moved it into the typed state and the
+  post-repair control suite and agent check pass;
+- fake evaluator outputs remain shadow control evidence, ambiguous launch remains
+  non-zero/unknown, and infrastructure failures never produce scientific scores;
+- the capsule is concise, deterministic, public-safe, and never infers authority;
+  the incident is hash-bound to three passing regressions;
+- only the sanitized V16 disposition changed under the experiment tree, no V17 or
+  `AUTONOMOUS-0010` artifact exists, no live adapter or authority was created, and the
+  future package must bind the complete validated receipt set in a separate PR.
