@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import shutil
@@ -12,6 +13,7 @@ from types import SimpleNamespace
 import pytest
 import yaml
 
+from giclab.control.composition import compose_control_plane
 from giclab.harness import t09_pragmatic_provider as provider
 from giclab.harness import t09_sira_pilot as pilot_state
 from giclab.harness.t09_provider_contracts import (
@@ -253,7 +255,7 @@ def test_retry3_slot2_transition_and_launch_headroom_are_fail_closed() -> None:
         )
 
 
-def test_retry3_exact_clean_package_is_host_verifiable() -> None:
+def test_retry3_frozen_package_is_preserved_and_evolved_checkout_fails_closed() -> None:
     host = _load(HOST_SOURCE, "giclab_t09_retry3_package_verification")
     current_commit = subprocess.run(
         ["git", "-C", str(ROOT), "rev-parse", "HEAD"],
@@ -266,12 +268,24 @@ def test_retry3_exact_clean_package_is_host_verifiable() -> None:
         "T09_V16_PREFLIGHT_STOPPED_DISPOSITION.json"
     )
     package_commit = stopped["package"]["merged_package"]
-    command_document = host.verify_package(
-        ROOT,
-        package_commit,
-        current_commit=current_commit,
-        contract=V16_PROVIDER_CONTRACT,
-    )
+    runtime_identity = load_json(host.contract_paths(ROOT, V16_PROVIDER_CONTRACT)["runtime"])
+    for binding in runtime_identity["repository_instrumentation"]["files"]:
+        frozen = subprocess.run(
+            ["git", "-C", str(ROOT), "show", f"{package_commit}:{binding['path']}"],
+            capture_output=True,
+            check=True,
+        ).stdout
+        assert hashlib.sha256(frozen).hexdigest() == binding["sha256"]
+    composition = compose_control_plane(ROOT, contract=V16_PROVIDER_CONTRACT)
+    assert composition["static_composition_valid"] is True
+    assert "historical-v16-prelaunch-authority-is-consumed" in composition["blockers"]
+    with pytest.raises(host.T09HostError, match="runtime instrumentation file binding drifted"):
+        host.verify_package(
+            ROOT,
+            current_commit,
+            contract=V16_PROVIDER_CONTRACT,
+        )
+    command_document = load_json(host.contract_paths(ROOT, V16_PROVIDER_CONTRACT)["commands"])
     assert (
         command_document["reviewed_implementation_ancestor"]
         == (
