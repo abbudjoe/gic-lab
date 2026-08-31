@@ -1,6 +1,6 @@
 # Phase 1 — T09 control-plane stabilization
 
-Status: **in-progress**
+Status: **review-required**
 
 Plan role: **workstream**
 
@@ -66,7 +66,7 @@ adjudication, merge, auto-merge, force-push, and delegated review or implementat
 | CP-17 | No V17 package or live authority created | Repository searches and state checks | met |
 | CP-18 | Scientific contract unchanged | Base/head science hashes and preservation tests | met |
 | CP-19 | Full/parity/static/privacy/site gates pass | Required local validation contract | met |
-| CP-20 | Draft PR open, exact-head CI green, no merge | GitHub PR and Actions metadata | not-started |
+| CP-20 | Draft PR open, exact-head CI green, no merge | GitHub PR and Actions metadata | met |
 
 No item may be marked `met` without concrete evidence. The overall status cannot be
 successful while any required item is partial, blocked, or not-started.
@@ -134,6 +134,10 @@ successful while any required item is partial, blocked, or not-started.
   zero missing base nodes, and zero invalid transitions. It retained 23 inherited
   failures, symmetrically deselected five unavailable private nodes, and observed
   four inherited environment-sensitive nodes improve to passing.
+- 2026-08-31: draft PR #12 is open against the exact destination branch with
+  auto-merge disabled and no merge. GitHub Actions run `33432821217` passed on
+  predecessor head `63e8b94ed7b3898d88d5e3bc5f2454af68e0e6b7`; this review-state-only closeout
+  commit is subject to the same exact-head CI gate before handoff.
 
 ## Decisions and blockers
 
@@ -147,5 +151,6 @@ successful while any required item is partial, blocked, or not-started.
 
 ## Next permitted phase
 
-Run the complete gate on the documentation-final head, then push and open the
-required draft PR without merging.
+Independent ChatGPT review of draft PR #12. Keep the PR draft, keep auto-merge
+disabled, and do not merge. Any follow-on V17 package generation belongs in a
+separate PR after this control-plane foundation is reviewed.

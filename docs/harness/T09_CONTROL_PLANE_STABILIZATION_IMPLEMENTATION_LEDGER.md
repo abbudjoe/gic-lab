@@ -1,6 +1,6 @@
 # T09 control-plane stabilization implementation ledger
 
-Status: **in-progress**
+Status: **review-required**
 
 Live authorization: **false**
 
@@ -39,8 +39,9 @@ created. No target branch/worktree or V17/`AUTONOMOUS-0010` artifact existed.
 ## Assembly ledger
 
 The authoritative CP-01 through CP-20 checklist and implementation mapping are in
-`docs/exec-plans/active/T09_CONTROL_PLANE_STABILIZATION.md`. Every item begins
-`not-started`; evidence and final per-item states will be updated incrementally.
+`docs/exec-plans/active/T09_CONTROL_PLANE_STABILIZATION.md`. All required items are
+`met`; the branch remains review-required because draft PR #12 must be independently
+reviewed and must not be merged by this workstream.
 
 ## Active-version dispatch inventory
 
@@ -112,6 +113,11 @@ runtime lint scan and directly exercise both prohibited and permitted examples.
   SHA-256 `bac2c3100b79a8262182c6f3da93f97a0c1932ceb0e0c89e25b59368cd151386`.
   `giclab-validate all` passes with unchanged scientific/package artifacts and no
   future package identity.
+- 2026-08-31 review handoff: draft PR #12 is open against
+  `phase-1/sira-pilot-autonomous-r2`, with auto-merge disabled and no merge. GitHub
+  Actions run `33432821217` passed on predecessor head
+  `63e8b94ed7b3898d88d5e3bc5f2454af68e0e6b7`; this review-state-only closeout
+  commit must pass the same exact-head CI gate before the terminal handoff.
 
 ## Immutable control receipts
 
