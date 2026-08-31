@@ -1,6 +1,6 @@
 # T09 V15 preauthorization packet
 
-Status: **command-manifest repair implemented; exact-head validation and PR review required; unauthorized**.
+Status: **command-manifest repair and local offline validation complete; PR review required; unauthorized**.
 
 ```text
 implementation complete

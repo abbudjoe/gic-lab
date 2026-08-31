@@ -1,6 +1,6 @@
 # T09 V15 command-manifest hash consistency repair ledger
 
-Status: **package-repaired-validation-in-progress**. Category 1
+Status: **repair-complete-local-validation-complete-pr-review-required**. Category 1
 implementation/package-consistency repair only.
 
 ```text
@@ -131,8 +131,8 @@ are `fd69bb50bd1e0342f9283521f1f79a43c678c423bfc2db8f133c309cd7f1efa3`,
 | HASH-DOD-09 | Preserve V11-V14 bytes and version-bound validation. | Base/head Git blob hashes and historical validators. | met |
 | HASH-DOD-10 | Preserve V15 science, pair diffs, provider selectors, flags, and `AUTONOMOUS-0008` identities. | Semantic projection, selector/pair tests, false-state/filesystem assertions. | met |
 | HASH-DOD-11 | Execute the exact privacy-safe offline V15 preflight comparison with zero provider/model requests, browser actions, and secret reads. | Source-controlled package through `t09_preflight.validate_command_manifest_package`; pure no-client boundary. | met |
-| HASH-DOD-12 | Pass focused, static, repository, full, parity, site, diff, and privacy gates with no new failures/skips/xfails. | Exact commands and result counts. | partial |
-| HASH-DOD-13 | Complete direct Sol/max spec-conformance self-review without delegation. | Recorded checklist and findings disposition. | partial |
+| HASH-DOD-12 | Pass focused, static, repository, full, parity, site, diff, and privacy gates with no new failures/skips/xfails. | Exact commands and result counts. | met |
+| HASH-DOD-13 | Complete direct Sol/max spec-conformance self-review without delegation. | Recorded checklist and findings disposition. | met |
 | HASH-DOD-14 | Commit core and package descendants separately, push normally, and open/monitor one draft PR without merge or auto-merge. | Commit/tree/remote/PR/Actions identities. | partial |
 
 ## Implementation mapping
@@ -168,8 +168,41 @@ are `fd69bb50bd1e0342f9283521f1f79a43c678c423bfc2db8f133c309cd7f1efa3`,
   byte-identical. All 37 command/package regression nodes pass and the complete V15
   validator reports no errors.
 
+## Exact-head validation and direct review
+
+- Exact command/package plus clean-package verification: 38 passed.
+- Focused manifest, V15 plan, replacement/closeout, V14 cleanup, V11-V14 plan,
+  metadata/dotenv/freshness, cidfile, accounting, refinalization, evaluator, pair-diff,
+  privacy, and provider controls: 376 passed after deselecting only the inherited
+  untracked T07 launch-fixture node. No V15 node is skipped or xfailed.
+- Focused retry/finalizer/evaluator/privacy/freshness/cleanup matrix: 32 passed.
+- Five dedicated privacy/secret regressions pass. Added-line scanning finds zero
+  high-risk credential/private-key matches; no binary or oversized changed file exists.
+- Raw full pytest on the clean package commit: 1,836 passed, 23 inherited failures,
+  five inherited private-evidence skips, 1,864 collected nodes.
+- Deterministic base/head parity symmetrically deselects those five private nodes:
+  base 1,802 passed / 27 failed across 1,829 nodes; head 1,836 passed / 23 failed
+  across 1,859 nodes. All 30 head-only nodes pass, four inherited nodes become passing,
+  and there are zero newly failing nodes, missing base nodes/failures, invalid outcome
+  transitions, skips, xfails, or xpasses. `parity_passed` is true.
+- Ruff formatting and lint, strict mypy over 65 source files, lock/repository
+  validation, and `git diff --check` pass. Portable Quarto 1.9.38 renders and validates
+  all 16 notebook pages; the initial unqualified `make site` attempt only established
+  that a fresh worktree lacks `quarto` on `PATH`, after which the accepted pinned binary
+  passed.
+
+The direct Sol/max review rechecked root-cause history, the exact UTF-8 JSON encoding,
+final-argv-before-hash ordering, independent stored/fresh self-hashes, complete
+manifest equality, generator idempotence and source-artifact identity, V11-V14 byte
+preservation, binding-only argv changes, V15 identity retention, scientific equality,
+pair diffs/selectors, false authorization/execution flags, and overlay/run-root
+absence. It found no remaining defect. The old local-finalizer qualification and prior
+authorization reference remain historical and nonreusable. No review was delegated.
+No live secret, provider, metadata, cloud, Docker, browser, SiRA, FanOutQA condition,
+evaluator, or scientific execution occurred.
+
 ## Next permitted phase
 
-Run the focused and full/static/parity/site/privacy gates, complete direct self-review,
-commit the package descendants without amending the core, then push and open/monitor
-one draft PR. No PR step may claim success until every non-review DoD item is met.
+Commit this validation record without amending earlier commits, run the final-head
+`make ci-check`, then push and open/monitor one draft PR. Merge and auto-merge remain
+prohibited; independent exact-head review is the only remaining DoD item.
