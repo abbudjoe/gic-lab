@@ -1,6 +1,6 @@
 # Phase 1 — T09 V16 downstream-source and structural-privacy repair
 
-Status: **in-progress**
+Status: **successful — draft PR open for independent exact-head review**
 
 ## Source contract
 
@@ -64,9 +64,9 @@ Out of scope:
 | V16-DOD-14 | Every V16 authorization/execution/live flag is false and no overlay, run root, receipt, provider resource, or attempt exists. | Package assertions and filesystem checks. | met |
 | V16-DOD-15 | V11-V15 controls and frozen science remain unchanged; both V16 pair diffs are valid with equal explicit V16 selectors. | Historical package tests, science hashes, and fresh command rendering. | met |
 | V16-DOD-16 | Core code/tests are committed before package artifacts bind that immutable ancestor; no self-referential commit binding exists. | Commit topology and artifact fields. | met |
-| V16-DOD-17 | Focused, format, Ruff, strict mypy, validation, diff, full pytest, site/Quarto, parity, and CI-check gates have no new failures or missing nodes. | Exact command logs and parity reports. | pending |
-| V16-DOD-18 | Direct Sol/max self-review is clean for caps, Git plumbing, privacy boundaries, cleanup resume, V15 immutability, V16 freshness, and science. | Recorded review checklist and post-review reruns. | pending |
-| V16-DOD-19 | One draft PR targets the exact destination head, remains unmerged with auto-merge disabled, and exact-head Actions are monitored. | GitHub PR/check metadata. | pending |
+| V16-DOD-17 | Focused, format, Ruff, strict mypy, validation, diff, full pytest, site/Quarto, parity, and CI-check gates have no new failures or missing nodes. | Exact command logs and parity reports. | met |
+| V16-DOD-18 | Direct Sol/max self-review is clean for caps, Git plumbing, privacy boundaries, cleanup resume, V15 immutability, V16 freshness, and science. | Recorded review checklist and post-review reruns. | met |
+| V16-DOD-19 | One draft PR targets the exact destination head, remains unmerged with auto-merge disabled, and exact-head Actions are monitored. | GitHub PR/check metadata and terminal handoff. | met |
 
 ## Implementation mapping
 
@@ -88,6 +88,17 @@ Out of scope:
 - 2026-08-31: committed core repair `faa064f2b3d677bce1cbaae659805ee4f8f4641c`; focused source, privacy, and cleanup regressions pass.
 - 2026-08-31: verified the private V15 archive identity, ran network-disabled validation/projection, preserved 24-call and 49,642-token accounting, and rehashed the archive unchanged.
 - 2026-08-31: registered explicit V16 support at `687a0d1ecd51d1f068558b637f9179765c398562`; two renders are byte-identical with valid V16 selectors and pair diffs.
+- 2026-08-31: exact final-head local gates passed: format, Ruff, strict mypy,
+  repository validation, diff checks, focused regressions, portable Quarto/site,
+  full normalized parity, and `make ci-check`; parity reported zero newly failing
+  nodes, zero missing base nodes, zero invalid transitions, and four newly passing
+  nodes while preserving the 23 inherited base failures.
+- 2026-08-31: direct nondelegated review found finite role caps, bounded Git
+  plumbing, consistent lexical privacy boundaries, byte-identical cleanup resume,
+  immutable V15 evidence, fresh unauthorized V16 identities, and unchanged science.
+- 2026-08-31: opened draft PR #11 against
+  `phase-1/sira-pilot-autonomous-r2`; auto-merge is disabled and the final published
+  exact-head Actions outcome is recorded in the terminal handoff.
 
 ## Decisions and blockers
 
@@ -101,4 +112,5 @@ Out of scope:
 
 ## Next permitted phase
 
-Commit the package descendants, then run exact-final-head static, full, parity, site, privacy, and CI gates before opening the draft PR.
+Independent ChatGPT exact-head review of draft PR #11. No merge or Category 3 action
+is authorized by this Category 1 handoff.

@@ -1,6 +1,6 @@
 # T09 V16 downstream-source and privacy repair implementation ledger
 
-Status: **Category 1 repair and focused validation complete; final-head validation and independent review required**.
+Status: **Category 1 repair and final-head validation complete; draft PR open for independent review**.
 
 ```text
 operator_attested_model: gpt-5.6-sol
@@ -33,8 +33,8 @@ were not delegated. ChatGPT exact-head review remains external and required.
 | Exact generated preflight clean | met | Production `t09_preflight.run()` fixture has no privacy violations |
 | Empirical-prefix cleanup publish/resume | met | Clean receipt and byte-identical zero-mutation resume |
 | Fresh V16 package, unchanged science, false flags | met | Proposal/schema/identity/command validation |
-| Final static/full/parity/site/CI gates | pending | Recorded after package commit |
-| Draft PR and exact-head Actions | pending | Independent review handoff |
+| Final static/full/parity/site/CI gates | met | Zero new failures or missing base nodes; parity passed |
+| Draft PR and exact-head Actions | met | Draft PR #11; exact-head outcome recorded in terminal handoff |
 
 No live secret, OpenAI, Lambda, cloud, Docker, browser, SiRA, FanOutQA evaluator, or
 scientific execution occurred.
