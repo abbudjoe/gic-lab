@@ -71,6 +71,7 @@ REQUIRED_SHARED_SOURCES: Final = frozenset(
         "src/giclab/harness/t09_provider_contracts.py",
         "src/giclab/harness/t09_sira_pilot.py",
         "src/giclab/registry.py",
+        "src/giclab/validation.py",
     }
 )
 

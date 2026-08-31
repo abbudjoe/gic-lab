@@ -25,8 +25,8 @@ from giclab.control.proofs import (
     validate_control_receipt_set,
 )
 from giclab.control.scenarios import ALL_REQUIRED_SCENARIOS
-from giclab.harness.t09_provider_contracts import V16_PROVIDER_CONTRACT
 from giclab.harness.policy import ExecutionDisallowed, load_project_execution_state
+from giclab.harness.t09_provider_contracts import V16_PROVIDER_CONTRACT
 from giclab.harness.task_source import (
     dataset_slice_task_source,
     open_query_task_source_matches,
@@ -57,9 +57,7 @@ T09_CONTROL_RECEIPT_SCHEMAS = {
         "schemas/t09-active-version-lint-receipt.schema.json"
     ),
     "control/receipts/agent-check.json": "schemas/t09-agent-check-receipt.schema.json",
-    "control/receipts/incidents.json": (
-        "schemas/t09-incident-completeness-receipt.schema.json"
-    ),
+    "control/receipts/incidents.json": ("schemas/t09-incident-completeness-receipt.schema.json"),
     "control/receipts/registry-completeness.json": (
         "schemas/t09-control-registry-receipt.schema.json"
     ),
@@ -3670,13 +3668,9 @@ def validate_tracked_control_receipts(root: Path = ROOT) -> list[str]:
                 expected_control_commit=str(revision.get("commit")),
                 expected_control_tree=str(revision.get("tree")),
                 expected_repository_slug=str(binding.get("repository_slug")),
-                expected_provider_contract_version=str(
-                    selected.get("provider_contract_version")
-                ),
+                expected_provider_contract_version=str(selected.get("provider_contract_version")),
                 expected_plan_id=str(selected.get("plan_id")),
-                expected_command_package_sha256=str(
-                    selected.get("command_package_sha256")
-                ),
+                expected_command_package_sha256=str(selected.get("command_package_sha256")),
             )
             validate_control_receipt_set(root, V16_PROVIDER_CONTRACT, reference)
         except (ControlProofError, OSError, ValueError, TypeError) as exc:
