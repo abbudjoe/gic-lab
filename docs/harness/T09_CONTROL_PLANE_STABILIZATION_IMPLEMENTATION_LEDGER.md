@@ -101,12 +101,38 @@ runtime lint scan and directly exercise both prohibited and permitted examples.
   decision.
 - 2026-08-31 public site: the pinned Quarto 1.9.38 tool rendered all 16 notebook
   pages and `giclab-validate site` passed.
+- 2026-08-31 exact-base parity: **passed** on
+  `a54c126a699980892b7e986e2c447b046c904cd7` with zero newly failing nodes, zero
+  missing base nodes, and zero invalid outcome transitions. The comparator reports
+  23 unchanged inherited failures, five symmetrically deselected unavailable private
+  nodes, and four inherited environment-sensitive nodes newly passing.
 - 2026-08-31 source binding: commit
   `9c8f65dcaf9f9e6960cc41e2f46ffa801d20d6b3`, tree
   `2c6a3539dda1ca11475e5b1fdfa6be6f6d21a863`, six shared runtime sources, semantic
   SHA-256 `bac2c3100b79a8262182c6f3da93f97a0c1932ceb0e0c89e25b59368cd151386`.
   `giclab-validate all` passes with unchanged scientific/package artifacts and no
   future package identity.
+
+## Immutable control receipts
+
+Every receipt below binds clean implementation ancestor
+`5efbe727648ae9e7077132aa9bf3033e4b35ec03`, tree
+`5fab7020bf157c6c31a68b1b2024ca10203d3106`, rather than its own commit.
+
+| Receipt | Bytes | File SHA-256 |
+|---|---:|---|
+| `control/receipts/active-version-lint.json` | 4,937 | `223f8f11d910215f615145ffd972db62e7a602293f34a8a64bc37e7fbb05c612` |
+| `control/receipts/registry-completeness.json` | 53,387 | `f889ae9ae2ca7857dfcf08c86459cb0b953a24417ccbf34e91fe7e4af4b2a03a` |
+| `control/receipts/v16-composition.json` | 2,166 | `e85a6f11022cf7b8f0e855d6c3abd0d127dd3df7f5ca2756fc04ed0031a7abf4` |
+| `control/receipts/category3-shadow/happy-path.json` | 20,417 | `49fbdc2f68a3604274dc1e44e388ee00efa0fbb9151f70491254bc510698ec81` |
+| `control/receipts/state-capsule.json` | 2,750 | `5f529eddccf31cee3365937cd1d246fd6ae1daec5ee0d01ad7d13b66f0529a02` |
+| `control/receipts/incidents.json` | 917 | `16205084add2ef9d2cb50f3907c7c5a94bb056ab4e19c5d0f66e679e2e66f4ab` |
+| `control/receipts/agent-check.json` | 7,783 | `55f548bbfb206547bfd64bdef1fcc74b8627f0c9dca79707714d06595d531d77` |
+
+The complete 12-file shadow directory has a canonical file-identity matrix SHA-256
+of `1affe422c0b25ccf46fd717493ff9ccdd8c666877570ef1791ccdd788fa25904`.
+`giclab-validate all` rejects a missing receipt, semantic drift, schema failure,
+non-ancestor identity, incomplete scenario, or aggregate cross-binding mismatch.
 
 ## Control architecture evidence
 

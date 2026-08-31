@@ -65,7 +65,7 @@ adjudication, merge, auto-merge, force-push, and delegated review or implementat
 | CP-16 | AGENTS/PLANS/PROJECT_STATE/COMPUTE_POLICY updated coherently | Document validation and direct review | met |
 | CP-17 | No V17 package or live authority created | Repository searches and state checks | met |
 | CP-18 | Scientific contract unchanged | Base/head science hashes and preservation tests | met |
-| CP-19 | Full/parity/static/privacy/site gates pass | Required local validation contract | partial |
+| CP-19 | Full/parity/static/privacy/site gates pass | Required local validation contract | met |
 | CP-20 | Draft PR open, exact-head CI green, no merge | GitHub PR and Actions metadata | not-started |
 
 No item may be marked `met` without concrete evidence. The overall status cannot be
@@ -124,6 +124,16 @@ successful while any required item is partial, blocked, or not-started.
   Commit `ac99cabc31e06d3d96d6467f670511c11080bedd` repaired it; focused tests,
   repository validation, agent-check, privacy/boundary scans, and the 16-page Quarto
   render pass afterward.
+- 2026-08-31: immutable control receipts bind clean ancestor
+  `5efbe727648ae9e7077132aa9bf3033e4b35ec03`, tree
+  `5fab7020bf157c6c31a68b1b2024ca10203d3106`. Repository validation now requires
+  every receipt and checks schemas, semantic hashes, the common ancestor, all 12
+  scenarios, and aggregate cross-bindings.
+- 2026-08-31: exact-base parity on
+  `a54c126a699980892b7e986e2c447b046c904cd7` passed with zero newly failing nodes,
+  zero missing base nodes, and zero invalid transitions. It retained 23 inherited
+  failures, symmetrically deselected five unavailable private nodes, and observed
+  four inherited environment-sensitive nodes improve to passing.
 
 ## Decisions and blockers
 
@@ -137,6 +147,5 @@ successful while any required item is partial, blocked, or not-started.
 
 ## Next permitted phase
 
-Seal the reviewed implementation in immutable-ancestor receipts, run exact-base
-parity and the complete final gate on the resulting head, then open the required
-draft PR without merging.
+Run the complete gate on the documentation-final head, then push and open the
+required draft PR without merging.
