@@ -1,0 +1,208 @@
+# T09 V15 command-manifest hash consistency repair ledger
+
+Status: **repair-complete-local-validation-complete-pr-review-required**. Category 1
+implementation/package-consistency repair only.
+
+```text
+operator_attested_model: gpt-5.6-sol
+operator_attested_effort: max
+runtime_model_introspection_required: false
+implementation_delegated: false
+```
+
+Implementation, review, testing, repository writes, Git operations, and scientific
+decisions are performed directly. No subagent, model, thread, or task is delegated.
+ChatGPT exact-head review remains external and required.
+
+## Source and target contract
+
+The governing source is the operator's T09 V15 command-manifest consistency repair
+contract submitted on 2026-08-30. The immutable destination base is merge
+`bce89afa79a120f7f5acb22fb20512ec9581f7a5`, tree
+`0b663b7b35608d8481e4381dcd530c0966adb288`, with ordered parents
+`2db290530c36c92562fe6b25f7a4f6aafd77b548` and
+`21385c10ec16d30fb73dd6ae6abf0df20fdc6a09`.
+
+Target: one explicit UTF-8 JSON argv hash contract; immutable final argv construction
+before hashing; deterministic generator output; independent stored/fresh self-hash and
+full-document validation; an exact offline preflight regression; preserved V11-V14
+bytes; unchanged V15 science and `AUTONOMOUS-0008` identities; and one unmerged draft
+PR for independent exact-head review.
+
+In scope: renderer, argv hash helper, generator, preflight validation, repository
+validation, offline fixtures/regressions, deterministic V15 package regeneration,
+package bindings, the sanitized stopped disposition, and handoff documentation.
+
+Out of scope: V16, live dotenv or secret access, authenticated metadata/model requests,
+Lambda or other cloud requests/mutations, Docker, browser, SiRA/FanOutQA condition or
+scientific execution, authorization overlays, run roots, frozen manifests, task
+attempts, empirical interpretation, merge, and auto-merge.
+
+## Exact-base evidence
+
+- Original checkout: clean at the operator-specified repository checkout.
+- Repair worktree: the requested isolated T09 V15 repair worktree.
+- Starting branch: `codex/t09-v15-command-manifest-hash-consistency`.
+- Starting commit/tree: `bce89afa79a120f7f5acb22fb20512ec9581f7a5` /
+  `0b663b7b35608d8481e4381dcd530c0966adb288`.
+- Raw full pytest: 1,805 passed, 24 failed, five skipped across 1,834 nodes. Failures
+  are inherited baseline/environmental nodes, including ignored historical evidence.
+- Exact base-to-base parity: passed; base 1,802 passed / 27 failed and workspace head
+  1,806 passed / 23 failed across 1,829 compared nodes, five private nodes symmetrically
+  deselected, zero newly failing, zero missing, and zero invalid transitions.
+
+## Root cause and causal sequence
+
+Classification: **F = A + D + E**. B and C are false.
+
+1. Commit `19c768f318f7e57f5a9a33beca5311f0534dc1b9` generated V15 through
+   `t09_freeze_commands.render()` -> `render_command_manifest()` ->
+   `canonical_sha256(final argv list)`. All four stored hashes exactly matched their
+   stored argv arrays.
+2. Commit `b35b6f34b4915007b6ebab44994f97e41ff3c495` rebound the package by
+   replacing the execution-contract SHA-256 embedded after
+   `--gate-pilot-contract-sha256` in all four already-generated argv arrays. It retained
+   the four hashes from `19c768f3…`; this is the first inconsistent commit.
+3. Commits `e434948d94f04e26d7efed94607860b1ec335bb6`,
+   `ee1aa742298194fe8db05399f1b59eb911b75ae0`, and
+   `84666d5b821fc102182c8ff946b0715ce6ce25d4` performed further package/ancestor,
+   condition, environment, Task-B, and execution-contract rebindings. They updated the
+   stored argv contract digest when required but continued to preserve the four original
+   `argv_sha256` values.
+4. The merged arrays therefore equal a fresh render, and equality surfaces/selectors
+   and pair diffs remain valid, but the stored hashes describe the pre-rebind argv.
+5. The renderer is not pre-final hashing: it constructs the complete argv and hashes
+   that list immediately before returning it. The generator uses that renderer and the
+   same canonical JSON hashing function. No tracked rebind generator exists; the
+   inconsistent descendant edits bypassed regeneration.
+6. Versioned V15 tests checked schemas, byte bindings, selectors, pair-diff validity,
+   and false authorization flags, but did not recompute each stored argv hash or compare
+   the source-controlled V15 manifests to a fresh render. Other runtime tests propagated
+   the stored hash as fixture authority. Only `t09_preflight.py` performed the complete
+   stored/fresh manifest comparison, so the offline Category 3 preflight correctly
+   failed closed.
+7. V11-V14 all use the intended canonical list hash and all sixteen historical stored
+   hashes are valid. Their source-controlled files must remain byte-identical.
+
+## Canonical contract and repaired package
+
+`command_argv_sha256(argv)` accepts one nonempty sequence containing only strings and
+rejects embedded NUL bytes. It freezes that sequence and hashes the UTF-8 bytes of
+`json.dumps(list(argv), ensure_ascii=False, separators=(",", ":"), sort_keys=True)`.
+This is an argv-only digest and exactly preserves the valid V11-V14 algorithm.
+
+Core implementation commit: `672ae2a230e7b309e63d14110e0a5e5373b83132`.
+The runtime profile is intentionally unchanged at 15,974 bytes and SHA-256
+`64075a67989522495145bf02c32544bd3a07f30c38d46daa4e9f5c16c65faa1d`
+because the defect changes no runtime or scientific policy. Repaired descendant
+identities are:
+
+- Plan: 20,420 bytes, SHA-256
+  `e678a44733916d2d437f5f739ad058243d49f566a3dd12f2c3431b9d6094d8b8`.
+- Runtime identity: 11,150 bytes, SHA-256
+  `84c500413c9eaab9c1f15c94b0015c5e0a721883b178e8b85b3e725df09091fb`.
+- Execution contract: 31,487 bytes, SHA-256
+  `a658081b26e0812874fdb3f195896f642283b677b814b0da025bf65b55989629`.
+- Generated command manifests: 23,521 bytes, SHA-256
+  `533721a1665c1826502ece26b025859c6fb21b6f3b791d085d2ea294e3f88b4f`.
+
+For each final argv, only element 17 (execution-contract digest) and element 19
+(pilot-library digest) change from the stopped merged package. Length remains 56 and
+the 26-element upstream scientific command is byte-equal. Equality and condition-owned
+surfaces change only through matching package/commit/environment/condition bindings;
+both pair diffs and every V15 selector remain valid. Repaired hashes in execution order
+are `fd69bb50bd1e0342f9283521f1f79a43c678c423bfc2db8f133c309cd7f1efa3`,
+`b2cb006155afea265d67c731d65f92575fdeeea879c927941046f8c00925a39a`,
+`ba161d393232b0cf3a58d586caaa399be3716fef225b1b767e0b787b7058d6af`, and
+`b4c0a4e29c8cf75e0ff32917a1890788327aa0d785fde8ee8b3d5f239fea6ee6`.
+
+## Definition of done
+
+| ID | Required outcome | Planned evidence | Status |
+| --- | --- | --- | --- |
+| HASH-DOD-01 | Preserve the stopped prelive transaction as a sanitized public record with exact zero-live facts and public evidence identities. | JSON shape, 3,797 bytes, SHA-256 `911f3326…`, privacy scan. | met |
+| HASH-DOD-02 | Establish one canonical argv-only SHA-256 helper that rejects empty, non-string, and NUL-bearing argv. | Helper unit tests and independently computed vectors. | met |
+| HASH-DOD-03 | Freeze the complete final argv before hashing and prohibit post-hash mutation. | Renderer source review and mutation regressions. | met |
+| HASH-DOD-04 | Keep generator and renderer on one construction path and generate byte-identically twice. | Direct render/generator equality and byte comparison. | met |
+| HASH-DOD-05 | Independently validate stored and fresh self-hashes, argv equality, hash equality, and full manifest equality with typed failure classes. | Preflight unit/mutation tests. | met |
+| HASH-DOD-06 | Make repository/package validation reject argv/hash inconsistency. | Stale-package rejection, mutation regression, repaired `validate_t09_v15_plan`. | met |
+| HASH-DOD-07 | Preserve the exact merged defect and prove arrays equal, four hashes differ, and exact preflight rejects it. | Exact render from merged-base Git blobs and stopped record. | met |
+| HASH-DOD-08 | Regenerate the source-controlled V15 package only from the canonical generator and rebind every affected descendant. | Two equal generator byte streams, direct-render equality, exact bindings. | met |
+| HASH-DOD-09 | Preserve V11-V14 bytes and version-bound validation. | Base/head Git blob hashes and historical validators. | met |
+| HASH-DOD-10 | Preserve V15 science, pair diffs, provider selectors, flags, and `AUTONOMOUS-0008` identities. | Semantic projection, selector/pair tests, false-state/filesystem assertions. | met |
+| HASH-DOD-11 | Execute the exact privacy-safe offline V15 preflight comparison with zero provider/model requests, browser actions, and secret reads. | Source-controlled package through `t09_preflight.validate_command_manifest_package`; pure no-client boundary. | met |
+| HASH-DOD-12 | Pass focused, static, repository, full, parity, site, diff, and privacy gates with no new failures/skips/xfails. | Exact commands and result counts. | met |
+| HASH-DOD-13 | Complete direct Sol/max spec-conformance self-review without delegation. | Recorded checklist and findings disposition. | met |
+| HASH-DOD-14 | Commit core and package descendants separately, push normally, and open/monitor one draft PR without merge or auto-merge. | Commit/tree/remote/PR/Actions identities. | partial |
+
+## Implementation mapping
+
+- Canonical helper and atomic renderer: HASH-DOD-02, HASH-DOD-03.
+- Generator encoding/check surface: HASH-DOD-04, HASH-DOD-08.
+- Preflight and repository validators: HASH-DOD-05, HASH-DOD-06, HASH-DOD-11.
+- Historical and mutation regressions: HASH-DOD-07, HASH-DOD-09, HASH-DOD-10.
+- Stopped disposition and package/docs rebind: HASH-DOD-01, HASH-DOD-08,
+  HASH-DOD-10.
+- Validation, self-review, commits, draft PR, and Actions: HASH-DOD-12 through
+  HASH-DOD-14.
+
+## Progress and decisions
+
+- 2026-08-30: exact repository, base, tree, ordered parents, PR #9 merge/head, branch
+  absence, worktree absence, non-materialization, and destination stability checks pass.
+- 2026-08-30: exact-base full and parity evidence captured before repository edits.
+- 2026-08-30: source/history archaeology identifies the first inconsistent commit and
+  rules out renderer pre-final hashing and divergent generator canonicalization.
+- 2026-08-30: assembly item enters implementation with HASH-DOD-02 through
+  HASH-DOD-07 as the first correctness workstream.
+- 2026-08-30: direct core self-review replaces the initial record-derived historical
+  oracle with an exact render from the merged-base execution and source Git blobs.
+  The canonical helper, immutable renderer, generator guard, typed preflight boundary,
+  repository validator, historical reproduction, mutation matrix, and V11-V14 checks
+  pass 27 network-free tests; Ruff, strict mypy, and diff checks pass. The stale V15
+  package intentionally remains rejected until it is regenerated after the core commit.
+- 2026-08-30: core commit `672ae2a2…` freezes the helper/renderer/generator/preflight/
+  validator/test repair. The V15 runtime identity and four condition plans bind that
+  immutable commit, the execution contract binds their new hashes, and the command
+  artifact is replaced only with canonical generator output. Two renders are
+  byte-identical. All 37 command/package regression nodes pass and the complete V15
+  validator reports no errors.
+
+## Exact-head validation and direct review
+
+- Exact command/package plus clean-package verification: 38 passed.
+- Focused manifest, V15 plan, replacement/closeout, V14 cleanup, V11-V14 plan,
+  metadata/dotenv/freshness, cidfile, accounting, refinalization, evaluator, pair-diff,
+  privacy, and provider controls: 376 passed after deselecting only the inherited
+  untracked T07 launch-fixture node. No V15 node is skipped or xfailed.
+- Focused retry/finalizer/evaluator/privacy/freshness/cleanup matrix: 32 passed.
+- Five dedicated privacy/secret regressions pass. Added-line scanning finds zero
+  high-risk credential/private-key matches; no binary or oversized changed file exists.
+- Raw full pytest on the clean package commit: 1,836 passed, 23 inherited failures,
+  five inherited private-evidence skips, 1,864 collected nodes.
+- Deterministic base/head parity symmetrically deselects those five private nodes:
+  base 1,802 passed / 27 failed across 1,829 nodes; head 1,836 passed / 23 failed
+  across 1,859 nodes. All 30 head-only nodes pass, four inherited nodes become passing,
+  and there are zero newly failing nodes, missing base nodes/failures, invalid outcome
+  transitions, skips, xfails, or xpasses. `parity_passed` is true.
+- Ruff formatting and lint, strict mypy over 65 source files, lock/repository
+  validation, and `git diff --check` pass. Portable Quarto 1.9.38 renders and validates
+  all 16 notebook pages; the initial unqualified `make site` attempt only established
+  that a fresh worktree lacks `quarto` on `PATH`, after which the accepted pinned binary
+  passed.
+
+The direct Sol/max review rechecked root-cause history, the exact UTF-8 JSON encoding,
+final-argv-before-hash ordering, independent stored/fresh self-hashes, complete
+manifest equality, generator idempotence and source-artifact identity, V11-V14 byte
+preservation, binding-only argv changes, V15 identity retention, scientific equality,
+pair diffs/selectors, false authorization/execution flags, and overlay/run-root
+absence. It found no remaining defect. The old local-finalizer qualification and prior
+authorization reference remain historical and nonreusable. No review was delegated.
+No live secret, provider, metadata, cloud, Docker, browser, SiRA, FanOutQA condition,
+evaluator, or scientific execution occurred.
+
+## Next permitted phase
+
+Commit this validation record without amending earlier commits, run the final-head
+`make ci-check`, then push and open/monitor one draft PR. Merge and auto-merge remain
+prohibited; independent exact-head review is the only remaining DoD item.

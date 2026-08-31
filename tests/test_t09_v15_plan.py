@@ -29,8 +29,9 @@ COMMANDS = EXP / "contracts/proposals/T09_PILOT_COMMAND_MANIFESTS_V15.json"
 RUNTIME_IDENTITY = EXP / "contracts/proposals/T09_PILOT_RUNTIME_IDENTITY_V15.json"
 STOPPED = EXP / "T09_V14_STOPPED_DISPOSITION.json"
 RECEIPT_SCHEMA = ROOT / "schemas/t09-v15-model-metadata-receipt.schema.json"
-BASE_COMMIT = "2db290530c36c92562fe6b25f7a4f6aafd77b548"
-BASE_TREE = "5e6d3c8890811147f136691354ddeb278c949976"
+BASE_COMMIT = "bce89afa79a120f7f5acb22fb20512ec9581f7a5"
+BASE_TREE = "0b663b7b35608d8481e4381dcd530c0966adb288"
+CORE_COMMIT = "672ae2a230e7b309e63d14110e0a5e5373b83132"
 
 
 def _sha256(path: Path) -> str:
@@ -88,8 +89,8 @@ def test_v15_plan_schema_package_and_false_flags_are_exact() -> None:
     schema = json.loads((ROOT / "schemas/t09-v15-plan.schema.json").read_text())
     Draft202012Validator.check_schema(schema)
     Draft202012Validator(schema).validate(plan)
-    assert PLAN.stat().st_size == 20_292
-    assert _sha256(PLAN) == "b7bd2832623789f968b9830ae10f074eb18c71dcd45575918ab134c42473b8b3"
+    assert PLAN.stat().st_size == 20_420
+    assert _sha256(PLAN) == "e678a44733916d2d437f5f739ad058243d49f566a3dd12f2c3431b9d6094d8b8"
     assert PROFILE.stat().st_size == 15_974
     assert _sha256(PROFILE) == "64075a67989522495145bf02c32544bd3a07f30c38d46daa4e9f5c16c65faa1d"
     assert validate_t09_v15_plan(ROOT) == []
@@ -106,6 +107,12 @@ def test_v15_plan_schema_package_and_false_flags_are_exact() -> None:
         assert status[field] is False
     identities = cast(dict[str, object], plan["identities"])
     assert identities["empirical_run_roots_materialized"] is False
+    bindings = cast(dict[str, object], plan["implementation_bindings"])
+    assert bindings["required_base_commit"] == BASE_COMMIT
+    assert bindings["required_base_tree"] == BASE_TREE
+    assert bindings["required_base_parent_1"] == "2db290530c36c92562fe6b25f7a4f6aafd77b548"
+    assert bindings["required_base_parent_2"] == "21385c10ec16d30fb73dd6ae6abf0df20fdc6a09"
+    assert bindings["reviewed_implementation_ancestor"] == CORE_COMMIT
     profile = yaml.safe_load(PROFILE.read_text())
     assert profile["execution"] == {
         "authorized": False,

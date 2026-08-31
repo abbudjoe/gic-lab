@@ -1,0 +1,97 @@
+{
+  "error": {
+    "error_class": "PreflightError",
+    "message": "stored commands do not equal a fresh exact render",
+    "repair_classification": "category-1-command-manifest-argv-sha256-consistency"
+  },
+  "execution_boundary": {
+    "authenticated_metadata_requests": 0,
+    "authorization_overlay_materialized": false,
+    "browser_actions": 0,
+    "dynamic_frozen_manifests": 0,
+    "empirical_attempts": 0,
+    "lambda_launch_requests": 0,
+    "lambda_read_only_requests": 0,
+    "paid_cost_usd": "0.00",
+    "provider_resources": 0,
+    "qualified_external_dotenv_read": false,
+    "task_model_calls": 0
+  },
+  "hash_mismatches": [
+    {
+      "fresh_argv_sha256": "894a03e4ecc73fc0ba6d31e83aa59da6811bb64833b14d3c1c0afd2c6a1c7e7b",
+      "run_id": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0008",
+      "stored_argv_sha256": "f818eb823d8ab48f78115f8cfd2f0d83cb65734c24eccec8b7450af3ff58e540"
+    },
+    {
+      "fresh_argv_sha256": "7dba2283bf860b11d1e10ac5799f30ee23d99947a529a1e432ea601ee9c05ae0",
+      "run_id": "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0008",
+      "stored_argv_sha256": "1bb8297c601908eaf2ee4c8763c03705ec78f6ffebacbc95718f72abb24d3359"
+    },
+    {
+      "fresh_argv_sha256": "48d7823958ca6f740aaf580d495358a36741b6c78799c1beee3cfa79bb10d9c2",
+      "run_id": "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0008",
+      "stored_argv_sha256": "271839c45530dde7f335d030320244b3f97aabc76133810f3704b0e5540fb122"
+    },
+    {
+      "fresh_argv_sha256": "1736842f744d8f0bc6951bdd2bd7a982e626c2b7fbdfb30bcedd5a6cb37269d7",
+      "run_id": "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0008",
+      "stored_argv_sha256": "288e5a19323ca5e3b25c40af8128abd59920f0aa7955f67c611e49ae68489409"
+    }
+  ],
+  "identity_disposition": {
+    "attempt_and_provider_identities_materialized": false,
+    "fresh_category_3_authorization_required": true,
+    "fresh_reviewed_merge_required": true,
+    "prior_current_turn_authorization_reference_reusable": false,
+    "v15_plan_and_autonomous_0008_identities_retained": true
+  },
+  "old_package": {
+    "merge_commit": "bce89afa79a120f7f5acb22fb20512ec9581f7a5",
+    "plan_bytes": 20292,
+    "plan_id": "PLAN-EXP0001-PILOT-V15",
+    "plan_sha256": "b7bd2832623789f968b9830ae10f074eb18c71dcd45575918ab134c42473b8b3",
+    "runtime_profile_bytes": 15974,
+    "runtime_profile_sha256": "64075a67989522495145bf02c32544bd3a07f30c38d46daa4e9f5c16c65faa1d",
+    "tree": "0b663b7b35608d8481e4381dcd530c0966adb288"
+  },
+  "proof": {
+    "all_four_equality_surfaces_equal_fresh_render": true,
+    "all_four_stored_argv_equal_fresh_render": true,
+    "all_four_stored_hashes_differ_from_fresh_render": true,
+    "explicit_provider_contract_selector": "V15",
+    "pair_diffs_valid": [
+      true,
+      true
+    ]
+  },
+  "record_id": "T09-V15-PRELIVE-COMMAND-MANIFEST-STOPPED-DISPOSITION",
+  "retained_public_evidence": {
+    "category_1_defect_handoff": {
+      "bytes": 8253,
+      "sha256": "ffea88ddfe9fe76121778cea5fa927bfeab36426b1f553696eaad534f7189675"
+    },
+    "fresh_rendered_command_manifests": {
+      "bytes": 23521,
+      "sha256": "993d9826b60cbdbd3d77a077aaad2ce8afa6b280d3f1e10f94527e83dbf496a2"
+    },
+    "history_bundle": {
+      "bytes": 3989521,
+      "sha256": "ec8a520d42585b933c162373e4e910a0ef114c3fd5a4cfc2967d2b2f7e1b7ba1"
+    },
+    "local_finalizer_qualification": {
+      "bytes": 1389361,
+      "sha256": "7d34d07e3457ff6c3fd1a6ebcda0a4bc06fcc7e9bf37bf944d00bbb2e3936a74"
+    },
+    "real_evidence_regression": {
+      "bytes": 8107,
+      "sha256": "adc0a5b30474994e018d5b15a937969976cf025572f12b43b4950d8921fd8690"
+    },
+    "tracked_only_package_archive": {
+      "bytes": 2560413,
+      "sha256": "51fb0e2444bc5daa9f84ff9a8cb7cb8c5ea0fafd6d0bb92cbedfd8663e3fe3a2"
+    }
+  },
+  "schema_version": "0.1.0",
+  "scientific_result": "not-run"
+}

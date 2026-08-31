@@ -373,10 +373,10 @@
         "execution_plane"
       ],
       "properties": {
-        "required_base_commit": {"const": "2db290530c36c92562fe6b25f7a4f6aafd77b548"},
-        "required_base_tree": {"const": "5e6d3c8890811147f136691354ddeb278c949976"},
-        "required_base_parent_1": {"const": "12a6c4fba0972d3b6f9f16dcfae048dbb770d78a"},
-        "required_base_parent_2": {"const": "e5d67d36bc84d6b1eaaf8b3bce0f8797d8bd3074"},
+        "required_base_commit": {"const": "bce89afa79a120f7f5acb22fb20512ec9581f7a5"},
+        "required_base_tree": {"const": "0b663b7b35608d8481e4381dcd530c0966adb288"},
+        "required_base_parent_1": {"const": "2db290530c36c92562fe6b25f7a4f6aafd77b548"},
+        "required_base_parent_2": {"const": "21385c10ec16d30fb73dd6ae6abf0df20fdc6a09"},
         "required_accounting_repair_ancestor": {"const": "1c6b093699288f37aa23526fe1e1672e50280093"},
         "reviewed_implementation_ancestor": {"$ref": "#/$defs/commit"},
         "exact_reviewed_merged_commit": {"const": "pending-category-2-merge"},

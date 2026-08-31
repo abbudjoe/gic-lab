@@ -11,6 +11,7 @@ import importlib.util
 import json
 import os
 import platform
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, cast
 
@@ -19,6 +20,10 @@ import spacy
 from giclab.harness.sira_gate_a import ProviderBudgetUsage
 from giclab.harness.t09_sira_pilot import (
     EvaluatorIdentity,
+    PilotExecutionContract,
+    T09PilotError,
+    command_argv_sha256,
+    diff_pair_manifests,
     evaluate_retained_session,
     file_sha256,
     load_aggregate_usage,
@@ -86,6 +91,102 @@ def _load_object(path: Path) -> dict[str, Any]:
     if not isinstance(value, dict) or not all(isinstance(key, str) for key in value):
         raise PreflightError("command manifest document is malformed")
     return cast(dict[str, Any], value)
+
+
+def _validated_manifest_argv(
+    manifest: object,
+    *,
+    source: str,
+    index: int,
+) -> tuple[tuple[str, ...], str]:
+    if not isinstance(manifest, Mapping):
+        raise PreflightError(f"{source} argv self-hash invalid at manifest {index}")
+    raw_argv = manifest.get("argv")
+    stored_hash = manifest.get("argv_sha256")
+    try:
+        canonical_hash = command_argv_sha256(cast(Sequence[str], raw_argv))
+    except (T09PilotError, TypeError):
+        raise PreflightError(f"{source} argv self-hash invalid at manifest {index}") from None
+    if (
+        not isinstance(stored_hash, str)
+        or len(stored_hash) != 64
+        or any(character not in "0123456789abcdef" for character in stored_hash)
+        or stored_hash != canonical_hash
+    ):
+        raise PreflightError(f"{source} argv self-hash invalid at manifest {index}")
+    return tuple(cast(Sequence[str], raw_argv)), stored_hash
+
+
+def validate_command_manifest_documents(
+    stored_manifests: Sequence[object],
+    fresh_manifests: Sequence[object],
+) -> None:
+    """Validate exact stored/fresh command manifests before any live authority."""
+
+    if len(stored_manifests) != 4 or len(fresh_manifests) != 4:
+        raise PreflightError("exactly four command manifests are required")
+    for index, (stored, fresh) in enumerate(zip(stored_manifests, fresh_manifests, strict=True)):
+        stored_argv, stored_hash = _validated_manifest_argv(
+            stored,
+            source="stored",
+            index=index,
+        )
+        fresh_argv, fresh_hash = _validated_manifest_argv(
+            fresh,
+            source="fresh",
+            index=index,
+        )
+        if stored_argv != fresh_argv:
+            raise PreflightError(f"stored/fresh argv mismatch at manifest {index}")
+        if stored_hash != fresh_hash or stored != fresh:
+            raise PreflightError(f"stored/fresh manifest mismatch at manifest {index}")
+
+
+def validate_command_manifest_package(
+    *,
+    contract: PilotExecutionContract,
+    command_document: Mapping[str, Any],
+    runtime_adaptation_sha256: str,
+    pilot_library_sha256: str,
+    aggregate_ledger_path: str,
+    pilot_state_path: str,
+) -> list[dict[str, object]]:
+    """Run the exact stored/fresh command comparison used by offline preflight."""
+
+    observed = command_document.get("manifests")
+    if not isinstance(observed, list) or len(observed) != 4:
+        raise PreflightError("exactly four command manifests are required")
+    rendered = [
+        render_command_manifest(
+            contract,
+            attempt,
+            execution_contract_runtime_path="/opt/giclab-contracts/execution.json",
+            runtime_adaptation_path="/opt/giclab-src/giclab/harness/sira_gate_a_runtime.py",
+            runtime_adaptation_sha256=runtime_adaptation_sha256,
+            pilot_library_sha256=pilot_library_sha256,
+            aggregate_ledger_path=aggregate_ledger_path,
+            pilot_state_path=pilot_state_path,
+        )
+        for attempt in contract.attempts
+    ]
+    validate_command_manifest_documents(observed, rendered)
+    if [item.get("run_id") for item in observed if isinstance(item, dict)] != [
+        attempt.run_id for attempt in contract.attempts
+    ]:
+        raise PreflightError("command order drifted")
+    pair_diffs = command_document.get("pair_diffs")
+    expected_pair_diffs = [
+        diff_pair_manifests(rendered[0], rendered[1]),
+        diff_pair_manifests(rendered[2], rendered[3]),
+    ]
+    if (
+        not isinstance(pair_diffs, list)
+        or len(pair_diffs) != 2
+        or pair_diffs != expected_pair_diffs
+        or any(item.get("valid") is not True for item in expected_pair_diffs)
+    ):
+        raise PreflightError("command pair equality failed")
+    return rendered
 
 
 def _fixture_session(
@@ -377,35 +478,14 @@ def run(args: argparse.Namespace) -> dict[str, object]:
     if file_sha256(command_path) != args.command_manifests_sha256:
         raise PreflightError("command manifest set hash drifted")
     command_document = _load_object(command_path)
-    observed = command_document.get("manifests")
-    if not isinstance(observed, list) or len(observed) != 4:
-        raise PreflightError("exactly four command manifests are required")
-    rendered = [
-        render_command_manifest(
-            contract,
-            attempt,
-            execution_contract_runtime_path="/opt/giclab-contracts/execution.json",
-            runtime_adaptation_path="/opt/giclab-src/giclab/harness/sira_gate_a_runtime.py",
-            runtime_adaptation_sha256=args.runtime_adaptation_sha256,
-            pilot_library_sha256=args.pilot_library_sha256,
-            aggregate_ledger_path=str(args.aggregate_ledger),
-            pilot_state_path=str(args.pilot_state),
-        )
-        for attempt in contract.attempts
-    ]
-    if rendered != observed:
-        raise PreflightError("stored commands do not equal a fresh exact render")
-    if [item.get("run_id") for item in observed if isinstance(item, dict)] != [
-        attempt.run_id for attempt in contract.attempts
-    ]:
-        raise PreflightError("command order drifted")
-    pair_diffs = command_document.get("pair_diffs")
-    if (
-        not isinstance(pair_diffs, list)
-        or len(pair_diffs) != 2
-        or any(not isinstance(item, dict) or item.get("valid") is not True for item in pair_diffs)
-    ):
-        raise PreflightError("command pair equality failed")
+    validate_command_manifest_package(
+        contract=contract,
+        command_document=command_document,
+        runtime_adaptation_sha256=args.runtime_adaptation_sha256,
+        pilot_library_sha256=args.pilot_library_sha256,
+        aggregate_ledger_path=str(args.aggregate_ledger),
+        pilot_state_path=str(args.pilot_state),
+    )
 
     attempt_root = args.attempt_root.resolve(strict=True)
     probe = attempt_root / "evidence-write-probe.txt"
@@ -497,6 +577,9 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "task_loading": "passed-two-exact-rows",
         "provider_or_task_request": False,
         "browser_action": False,
+        "provider_or_model_requests": 0,
+        "browser_actions": 0,
+        "secret_reads": 0,
         "execution_contract_sha256": contract.sha256,
         "command_manifests_sha256": args.command_manifests_sha256,
     }

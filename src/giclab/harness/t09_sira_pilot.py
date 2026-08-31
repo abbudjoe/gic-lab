@@ -255,6 +255,31 @@ def canonical_sha256(value: object) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
+def command_argv_sha256(argv: Sequence[str]) -> str:
+    """Hash one exact ordered command argv using the frozen argv-only contract.
+
+    The digest input is the UTF-8 encoding of the argv JSON array rendered with
+    ``ensure_ascii=False``, no insignificant whitespace, and JSON key sorting enabled.
+    Key sorting is inert for the declared array-of-strings surface but is retained to
+    make this helper exactly reproduce the historical V11-V14 pilot canonicalizer.
+    """
+
+    if isinstance(argv, (str, bytes, bytearray)) or not isinstance(argv, Sequence):
+        raise T09PilotError("command argv must be a nonempty sequence of strings")
+    frozen_argv = tuple(argv)
+    if not frozen_argv or any(not isinstance(item, str) for item in frozen_argv):
+        raise T09PilotError("command argv must be a nonempty sequence of strings")
+    if any("\0" in item for item in frozen_argv):
+        raise T09PilotError("command argv members must not contain NUL bytes")
+    encoded = json.dumps(
+        list(frozen_argv),
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
 def scientific_attempt_projection(evidence: Mapping[str, object]) -> dict[str, object]:
     """Project only deterministic scientific/evaluator evidence, not packaging metadata."""
 
@@ -3138,7 +3163,7 @@ def render_command_manifest(
     ):
         raise T09PilotError("runtime and pilot-library hashes must be SHA-256")
     upstream_values = _validated_upstream_argv(contract, attempt)
-    argv = [
+    final_argv = (
         "/usr/bin/timeout",
         "--signal=TERM",
         "--kill-after=30s",
@@ -3169,7 +3194,8 @@ def render_command_manifest(
         pilot_state_path,
         "--",
         *attempt.upstream_argv,
-    ]
+    )
+    argv_sha256 = command_argv_sha256(final_argv)
     equality_surface = {
         "task_id": attempt.task_id,
         "model": MODEL_REVISION,
@@ -3219,8 +3245,8 @@ def render_command_manifest(
         "condition_plan_path": attempt.condition_plan_path,
         "condition_plan_sha256": attempt.condition_plan_sha256,
         "execution_contract_sha256": contract.sha256,
-        "argv": argv,
-        "argv_sha256": canonical_sha256(argv),
+        "argv": list(final_argv),
+        "argv_sha256": argv_sha256,
         "equality_surface": equality_surface,
         "permitted_condition_owned": {
             "condition_mode": attempt.condition,
