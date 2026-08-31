@@ -32,6 +32,7 @@ from giclab.harness.t09_sira_pilot import (
     transition_zero_usage_preflight_state,
     usage_to_document,
 )
+from giclab.registry import load_json
 
 ROOT = Path(__file__).resolve().parents[1]
 ATTEMPT_ORDER = V7_PROVIDER_CONTRACT.run_ids
@@ -254,15 +255,21 @@ def test_retry3_slot2_transition_and_launch_headroom_are_fail_closed() -> None:
 
 def test_retry3_exact_clean_package_is_host_verifiable() -> None:
     host = _load(HOST_SOURCE, "giclab_t09_retry3_package_verification")
-    package_commit = subprocess.run(
+    current_commit = subprocess.run(
         ["git", "-C", str(ROOT), "rev-parse", "HEAD"],
         capture_output=True,
         check=True,
         text=True,
     ).stdout.strip()
+    stopped = load_json(
+        ROOT / "experiments/EXP-0001-sira-simulative-vs-reactive/"
+        "T09_V16_PREFLIGHT_STOPPED_DISPOSITION.json"
+    )
+    package_commit = stopped["package"]["merged_package"]
     command_document = host.verify_package(
         ROOT,
         package_commit,
+        current_commit=current_commit,
         contract=V16_PROVIDER_CONTRACT,
     )
     assert (
