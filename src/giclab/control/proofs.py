@@ -325,6 +325,7 @@ def validate_state_capsule_document(
     *,
     expected_commit: str,
     expected_tree: str,
+    selected_provider_contract_version: str,
 ) -> ValidatedStateCapsule:
     """Validate the actual state capsule and mint an opaque proof."""
 
@@ -359,6 +360,24 @@ def validate_state_capsule_document(
         raise ControlProofError("state capsule machine authority/science flags drifted")
     if not isinstance(runtime_package, dict):
         raise ControlProofError("state capsule runtime package is malformed")
+    historical_package = runtime_package.get("historical_package")
+    next_package = runtime_package.get("next_package")
+    next_status = runtime_package.get("next_status")
+    if not isinstance(historical_package, str) or not isinstance(next_package, str):
+        raise ControlProofError("state capsule runtime package identities are malformed")
+    historical_match = re.fullmatch(r"V([0-9]+)", historical_package)
+    next_match = re.fullmatch(r"V([0-9]+)", next_package)
+    if (
+        historical_match is None
+        or next_match is None
+        or int(next_match.group(1)) != int(historical_match.group(1)) + 1
+    ):
+        raise ControlProofError("state capsule runtime package is not an exact successor")
+    selected_runtime = historical_package if next_status == "not-created" else next_package
+    if next_status not in {"not-created", "package-bound-not-authorized"} or (
+        selected_runtime != selected_provider_contract_version
+    ):
+        raise ControlProofError("state capsule runtime package does not bind the selected contract")
     if (
         not isinstance(provenance, list)
         or not provenance
@@ -493,6 +512,7 @@ def validate_shadow_rehearsal(
         state_capsule,
         expected_commit=commit,
         expected_tree=tree,
+        selected_provider_contract_version=contract.version,
     )
     staging = validate_deterministic_staging(
         root,
@@ -797,10 +817,24 @@ def validate_control_receipt_set(
         documents["state_capsule"],
         expected_commit=commit,
         expected_tree=tree,
+        selected_provider_contract_version=contract.version,
     )
+    capsule_control = documents["state_capsule"].get("control_plane")
+    if not isinstance(capsule_control, dict) or any(
+        capsule_control.get(field) is not True
+        for field in (
+            "registry_complete",
+            "composition_valid",
+            "active_version_lint_valid",
+            "shadow_happy_path",
+            "failure_matrix_valid",
+        )
+    ):
+        raise ControlProofError("state capsule does not claim the complete bound control proof")
     happy = documents["shadow_happy_path"]
     if (
         happy.get("scenario") != HAPPY_PATH
+        or happy.get("scenario_valid") is not True
         or happy.get("terminal_state") != "category3-shadow-complete-clean"
         or happy.get("implementation_flavor") != "production-wrapper"
         or happy.get("effect_authority") != "shadow-only"
@@ -808,8 +842,30 @@ def validate_control_receipt_set(
         or happy.get("scientific_interpretation_allowed") is not False
         or happy.get("zero_undeclared_calls") is not True
         or happy.get("provider_contract_version") != contract.version
+        or happy.get("command_package_sha256") != reference.expected_command_package_sha256
     ):
         raise ControlProofError("happy-path shadow receipt is not complete-clean production shadow")
+    happy_counts = happy.get("call_counts")
+    happy_production = happy.get("production_control_evidence")
+    happy_accounting = (
+        happy_production.get("accounting") if isinstance(happy_production, dict) else None
+    )
+    if (
+        not isinstance(happy_counts, dict)
+        or not isinstance(happy_accounting, dict)
+        or not isinstance(happy_counts.get("model_call_attempts"), int)
+        or happy_counts["model_call_attempts"] <= 0
+        or not isinstance(happy_counts.get("browser_actions"), int)
+        or happy_counts["browser_actions"] <= 0
+        or happy_accounting.get("fake_usage") is not True
+        or happy_accounting.get("zero_retries") is not True
+        or happy_accounting.get("projected_real_cost_usd") != 0.0
+        or not isinstance(happy_accounting.get("aggregate_observed_cost_usd"), (int, float))
+        or happy_accounting["aggregate_observed_cost_usd"] <= 0
+        or not isinstance(happy_accounting.get("aggregate_charged_upper_cost_usd"), (int, float))
+        or happy_accounting["aggregate_charged_upper_cost_usd"] <= 0
+    ):
+        raise ControlProofError("happy-path shadow accounting proof is incomplete")
     for scenario, document in failures.items():
         if (
             document.get("scenario") != scenario
@@ -819,6 +875,7 @@ def validate_control_receipt_set(
             or document.get("scientific_interpretation_allowed") is not False
             or document.get("zero_undeclared_calls") is not True
             or document.get("provider_contract_version") != contract.version
+            or document.get("command_package_sha256") != reference.expected_command_package_sha256
         ):
             raise ControlProofError(f"failure shadow receipt is incompatible: {scenario}")
 
@@ -866,6 +923,7 @@ def validate_control_receipt_set(
         source.get("source_commit") != commit
         or source.get("source_tree") != tree
         or source.get("scientific_contract_changed") is not False
+        or source.get("historical_package_changed") is not False
         or source.get("live_execution_performed") is not False
     ):
         raise ControlProofError("source-binding receipt identity or authority drifted")

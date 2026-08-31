@@ -18,6 +18,7 @@ from giclab.control.proofs import (
     ValidatedControlReceiptSet,
     ValidatedDeterministicStaging,
     ValidatedStateCapsule,
+    validate_state_capsule_document,
 )
 from giclab.harness.t09_provider_contracts import V16_PROVIDER_CONTRACT
 
@@ -376,6 +377,82 @@ def test_capsule_with_private_path_marker_is_rejected(tmp_path: Path) -> None:
         mutate=lambda document: document.__setitem__(
             "recommended_action", "/Users/example/private-control-root"
         ),
+    )
+    _execute_forgery(proof_root)
+
+
+def test_capsule_for_another_runtime_contract_is_rejected(tmp_path: Path) -> None:
+    proof_root = _copy_proofs(tmp_path)
+
+    def mutate(document: dict[str, Any]) -> None:
+        runtime = document["runtime_package"]
+        runtime["historical_package"] = "V15"
+        runtime["next_package"] = "V16"
+
+    _replace_artifact(
+        proof_root,
+        binding_key="state_capsule",
+        document_path=proof_root / "state-capsule.json",
+        mutate=mutate,
+    )
+    _execute_forgery(proof_root)
+
+
+def test_capsule_with_incomplete_control_proof_flags_is_rejected(tmp_path: Path) -> None:
+    proof_root = _copy_proofs(tmp_path)
+
+    def mutate(document: dict[str, Any]) -> None:
+        document["control_plane"]["failure_matrix_valid"] = False
+
+    _replace_artifact(
+        proof_root,
+        binding_key="state_capsule",
+        document_path=proof_root / "state-capsule.json",
+        mutate=mutate,
+    )
+    _execute_forgery(proof_root)
+
+
+def test_capsule_validator_accepts_exact_bound_successor_package() -> None:
+    capsule = _read(TRACKED_PROOFS / "state-capsule.json")
+    runtime = capsule["runtime_package"]
+    runtime["next_status"] = "package-bound-not-authorized"
+    capsule.pop("semantic_sha256")
+    capsule["semantic_sha256"] = _canonical_sha256(capsule)
+    identity = capsule["repository"]
+    proof = validate_state_capsule_document(
+        ROOT,
+        capsule,
+        expected_commit=identity["commit"],
+        expected_tree=identity["tree"],
+        selected_provider_contract_version="V17",
+    )
+    assert proof.runtime_package["next_package"] == "V17"
+
+
+def test_shadow_receipt_for_another_command_package_is_rejected(tmp_path: Path) -> None:
+    proof_root = _copy_proofs(tmp_path)
+    _replace_artifact(
+        proof_root,
+        binding_key="shadow_happy_path",
+        document_path=proof_root / "category3-shadow/happy-path.json",
+        mutate=lambda document: document.__setitem__("command_package_sha256", "d" * 64),
+    )
+    _execute_forgery(proof_root)
+
+
+def test_happy_shadow_without_fake_accounting_proof_is_rejected(tmp_path: Path) -> None:
+    proof_root = _copy_proofs(tmp_path)
+
+    def mutate(document: dict[str, Any]) -> None:
+        accounting = document["production_control_evidence"]["accounting"]
+        accounting["aggregate_observed_cost_usd"] = 0.0
+
+    _replace_artifact(
+        proof_root,
+        binding_key="shadow_happy_path",
+        document_path=proof_root / "category3-shadow/happy-path.json",
+        mutate=mutate,
     )
     _execute_forgery(proof_root)
 
