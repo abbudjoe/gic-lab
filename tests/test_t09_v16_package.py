@@ -25,7 +25,7 @@ PROFILE = EXP / "run-plans/proposals/T09_PILOT_RUNTIME_PROFILE_V16.yaml"
 EXECUTION = EXP / "contracts/proposals/T09_PILOT_EXECUTION_CONTRACT_V16.json"
 COMMANDS = EXP / "contracts/proposals/T09_PILOT_COMMAND_MANIFESTS_V16.json"
 DISPOSITION = EXP / "T09_V15_EMPIRICAL_PREFIX_STOPPED_DISPOSITION.json"
-CORE_COMMIT = "687a0d1ecd51d1f068558b637f9179765c398562"
+CORE_COMMIT = "a235d1e6d287b5ea9daf5ca3787f9bbca278f3aa"
 
 
 def _sha256(path: Path) -> str:
@@ -55,7 +55,7 @@ def test_v16_package_is_exact_unauthorized_and_valid() -> None:
     assert validate_t09_v16_plan(ROOT) == []
     assert (PLAN.stat().st_size, _sha256(PLAN)) == (
         20_851,
-        "dc93a5311982cc33d0b11b071cb2a2d56bd270ba33c06d800b36c907bad6027d",
+        "5a71e77b1d6876be856012b3ca8ed1456cf31a9321aca9bfaca73b13c659a939",
     )
     assert (PROFILE.stat().st_size, _sha256(PROFILE)) == (
         15_897,
@@ -63,7 +63,7 @@ def test_v16_package_is_exact_unauthorized_and_valid() -> None:
     )
     assert (COMMANDS.stat().st_size, _sha256(COMMANDS)) == (
         23_521,
-        "a9f225276bf6bcf1a95f7f9edabe149f33aed4891962b69a389933482d11d297",
+        "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
     )
     status = cast(dict[str, object], plan["status"])
     assert all(

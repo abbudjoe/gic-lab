@@ -870,7 +870,7 @@
           "const": "ff6242c0e57f11e1b0ca158a5af3bb782865782b"
         },
         "reviewed_implementation_ancestor": {
-          "const": "687a0d1ecd51d1f068558b637f9179765c398562"
+          "const": "a235d1e6d287b5ea9daf5ca3787f9bbca278f3aa"
         },
         "v15_empirical_prefix_stopped_disposition": {
           "$ref": "#/$defs/stoppedDispositionBinding"

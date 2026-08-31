@@ -147,7 +147,7 @@
         "sha256": "39a4d698b8184c4d6652294f32e07911b2998b1a6326ad280353ba5f505e387e"
       }
     ],
-    "reviewed_implementation_ancestor": "687a0d1ecd51d1f068558b637f9179765c398562",
+    "reviewed_implementation_ancestor": "a235d1e6d287b5ea9daf5ca3787f9bbca278f3aa",
     "scope": [
       "content-addressed-no-follow-private-regression-archive-staging",
       "raw-attempt-root-typed-binding-before-empirical-entry",

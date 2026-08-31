@@ -16,7 +16,7 @@ were not delegated. ChatGPT exact-head review remains external and required.
 
 - Base: `be09fe18dd46d0e5fe1aa65cfac29190edfa8aac`.
 - Core repair: `faa064f2b3d677bce1cbaae659805ee4f8f4641c`.
-- Explicit V16 package support: `687a0d1ecd51d1f068558b637f9179765c398562`.
+- Explicit V16 package support: `687a0d1ecd51d1f068558b637f9179765c398562`; final integration ancestor: `a235d1e6d287b5ea9daf5ca3787f9bbca278f3aa`.
 - V15 disposition: 3,301 bytes; SHA-256
   `7222144a6d46ecb3590163a0db48ddcb210a162472bdea6b87a14f10d8633d70`.
 - Private network-disabled regression receipt: 1,006 bytes; SHA-256
