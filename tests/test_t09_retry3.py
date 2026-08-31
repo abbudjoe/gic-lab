@@ -255,7 +255,9 @@ def test_retry3_slot2_transition_and_launch_headroom_are_fail_closed() -> None:
         )
 
 
-def test_retry3_frozen_package_is_preserved_and_evolved_checkout_fails_closed() -> None:
+def test_retry3_exact_clean_package_is_host_verifiable() -> None:
+    # Keep this historical node ID stable while proving both sides of the evolved
+    # contract: frozen package bytes remain verifiable and current bytes fail closed.
     host = _load(HOST_SOURCE, "giclab_t09_retry3_package_verification")
     current_commit = subprocess.run(
         ["git", "-C", str(ROOT), "rev-parse", "HEAD"],
