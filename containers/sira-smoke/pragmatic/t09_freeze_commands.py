@@ -7,9 +7,12 @@ import argparse
 import json
 import os
 from pathlib import Path
+from typing import cast
 
 from giclab.harness.t09_provider_contracts import provider_contract
 from giclab.harness.t09_sira_pilot import (
+    T09PilotError,
+    command_argv_sha256,
     diff_pair_manifests,
     file_sha256,
     load_execution_contract,
@@ -65,6 +68,16 @@ def render(repository: Path, *, provider_version: str) -> dict[str, object]:
         )
         for attempt in contract.attempts
     ]
+    for index, manifest in enumerate(manifests):
+        argv = manifest.get("argv")
+        if not isinstance(argv, list) or not all(isinstance(item, str) for item in argv):
+            raise ValueError(f"rendered command {index} has invalid argv")
+        try:
+            canonical_hash = command_argv_sha256(cast(list[str], argv))
+        except (T09PilotError, TypeError):
+            raise ValueError(f"rendered command {index} has invalid argv") from None
+        if manifest.get("argv_sha256") != canonical_hash:
+            raise ValueError(f"rendered command {index} has an inconsistent argv hash")
     pair_diffs = [
         diff_pair_manifests(manifests[0], manifests[1]),
         diff_pair_manifests(manifests[2], manifests[3]),
@@ -107,9 +120,15 @@ def render(repository: Path, *, provider_version: str) -> dict[str, object]:
     return rendered
 
 
+def encode_command_manifest_document(document: object) -> bytes:
+    """Encode a generated command-manifest document deterministically."""
+
+    return (json.dumps(document, allow_nan=False, indent=2, sort_keys=True) + "\n").encode("utf-8")
+
+
 def write_exclusive(path: Path, document: object) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    encoded = (json.dumps(document, allow_nan=False, indent=2, sort_keys=True) + "\n").encode()
+    encoded = encode_command_manifest_document(document)
     descriptor = os.open(
         path,
         os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),

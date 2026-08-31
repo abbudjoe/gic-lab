@@ -11,7 +11,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from decimal import Decimal, InvalidOperation
 from html.parser import HTMLParser
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from urllib.parse import unquote, urlparse
 
 import yaml
@@ -2613,6 +2613,39 @@ def _t09_git_blob_sha256(root: Path, revision: str, relative: str) -> str | None
     return hashlib.sha256(raw).hexdigest()
 
 
+def _validate_t09_command_manifest_hashes(
+    command_document: Mapping[str, Any],
+    *,
+    label: str,
+) -> list[str]:
+    """Recompute every stored command argv digest from the declared argv surface."""
+
+    from giclab.harness.t09_sira_pilot import T09PilotError, command_argv_sha256
+
+    errors: list[str] = []
+    manifests = command_document.get("manifests")
+    if not isinstance(manifests, list) or len(manifests) != 4:
+        return [f"{label} command manifests must contain exactly four entries"]
+    for index, manifest in enumerate(manifests):
+        if not isinstance(manifest, dict):
+            errors.append(f"{label} command manifest {index} is malformed")
+            continue
+        raw_argv = manifest.get("argv")
+        stored_hash = manifest.get("argv_sha256")
+        try:
+            canonical_hash = command_argv_sha256(cast(Sequence[str], raw_argv))
+        except (T09PilotError, TypeError):
+            errors.append(f"{label} command manifest {index} argv is invalid")
+            continue
+        if (
+            not isinstance(stored_hash, str)
+            or re.fullmatch(r"[0-9a-f]{64}", stored_hash) is None
+            or stored_hash != canonical_hash
+        ):
+            errors.append(f"{label} command manifest {index} argv self-hash is invalid")
+    return errors
+
+
 def _validate_t09_successor_plan(
     root: Path,
     *,
@@ -2955,6 +2988,7 @@ def _validate_t09_successor_plan(
                     errors.append(f"{label} receipt handoff contract drifted")
         if command_target.is_file():
             commands = load_json(command_target)
+            errors.extend(_validate_t09_command_manifest_hashes(commands, label=label))
             if commands.get("plan_id") != plan_id or commands.get(
                 "execution_contract_sha256"
             ) != execution.get("execution_contract_sha256"):
@@ -2973,6 +3007,64 @@ def _validate_t09_successor_plan(
                 reviewed_ancestor = bindings.get("reviewed_implementation_ancestor")
                 if commands.get("reviewed_implementation_ancestor") != reviewed_ancestor:
                     errors.append(f"{label} command manifest source ancestor drifted")
+            if version == "V15" and contract_target.is_file():
+                from giclab.harness.t09_provider_contracts import provider_contract
+                from giclab.harness.t09_sira_pilot import (
+                    T09PilotError,
+                    diff_pair_manifests,
+                    load_execution_contract,
+                    render_command_manifest,
+                )
+
+                try:
+                    execution_sha256 = hashlib.sha256(contract_target.read_bytes()).hexdigest()
+                    typed_contract = load_execution_contract(
+                        contract_target,
+                        expected_sha256=execution_sha256,
+                    )
+                    provider_identity = provider_contract(version)
+                    runtime_sha256 = hashlib.sha256(
+                        (root / "src/giclab/harness/sira_gate_a_runtime.py").read_bytes()
+                    ).hexdigest()
+                    library_sha256 = hashlib.sha256(
+                        (root / "src/giclab/harness/t09_sira_pilot.py").read_bytes()
+                    ).hexdigest()
+                    control_root = provider_identity.control_root_name
+                    rendered = [
+                        render_command_manifest(
+                            typed_contract,
+                            attempt,
+                            execution_contract_runtime_path=(
+                                "/opt/giclab-contracts/execution.json"
+                            ),
+                            runtime_adaptation_path=(
+                                "/opt/giclab-src/giclab/harness/sira_gate_a_runtime.py"
+                            ),
+                            runtime_adaptation_sha256=runtime_sha256,
+                            pilot_library_sha256=library_sha256,
+                            aggregate_ledger_path=(
+                                f"/opt/giclab-artifacts/{control_root}/runtime-budget/"
+                                "aggregate-budget.json"
+                            ),
+                            pilot_state_path=(
+                                f"/opt/giclab-artifacts/{control_root}/pilot-state.json"
+                            ),
+                        )
+                        for attempt in typed_contract.attempts
+                    ]
+                except (OSError, T09PilotError, ValueError) as exc:
+                    errors.append(f"{label} command manifest exact render failed: {exc}")
+                else:
+                    if commands.get("manifests") != rendered:
+                        errors.append(f"{label} command manifests differ from exact rerender")
+                    expected_pair_diffs = [
+                        diff_pair_manifests(rendered[0], rendered[1]),
+                        diff_pair_manifests(rendered[2], rendered[3]),
+                    ]
+                    if commands.get("pair_diffs") != expected_pair_diffs or any(
+                        item.get("valid") is not True for item in expected_pair_diffs
+                    ):
+                        errors.append(f"{label} command pair diffs differ from exact rerender")
     else:
         errors.append(f"{label} execution control paths are malformed")
 
