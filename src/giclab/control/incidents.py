@@ -13,6 +13,7 @@ from typing import Final
 
 from jsonschema import Draft202012Validator
 
+from giclab.control.category3 import repository_identity
 from giclab.registry import load_json
 
 INCIDENT_SCHEMA_VERSION: Final = "1.0.0"
@@ -137,8 +138,11 @@ def validate_incidents(
         )
     if not entries:
         all_complete = False
+    commit, tree = repository_identity(root)
     receipt: dict[str, object] = {
         "schema_version": INCIDENT_SCHEMA_VERSION,
+        "repository_commit": commit,
+        "repository_tree": tree,
         "incident_count": len(entries),
         "incidents": entries,
         "complete": all_complete,

@@ -7,6 +7,8 @@
   "required": [
     "schema_version",
     "scenario",
+    "implementation_flavor",
+    "effect_authority",
     "provider_contract_version",
     "repository_commit",
     "repository_tree",
@@ -30,12 +32,15 @@
     "zero_undeclared_calls",
     "shadow_only",
     "scientific_interpretation_allowed",
+    "production_control_evidence",
     "scenario_valid",
     "semantic_sha256"
   ],
   "properties": {
     "schema_version": {"const": "1.0.0"},
     "scenario": {"type": "string", "minLength": 1},
+    "implementation_flavor": {"const": "production-wrapper"},
+    "effect_authority": {"const": "shadow-only"},
     "provider_contract_version": {"type": "string", "pattern": "^V[0-9]+$"},
     "repository_commit": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
     "repository_tree": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
@@ -61,7 +66,10 @@
         "launch_calls",
         "termination_calls",
         "condition_reservations",
-        "condition_entries"
+        "condition_entries",
+        "model_call_attempts",
+        "browser_actions",
+        "unknown_model_outcomes"
       ],
       "properties": {
         "secret_reads": {"type": "integer", "minimum": 0},
@@ -71,7 +79,10 @@
         "launch_calls": {"type": "integer", "minimum": 0},
         "termination_calls": {"type": "integer", "minimum": 0},
         "condition_reservations": {"type": "integer", "minimum": 0},
-        "condition_entries": {"type": "integer", "minimum": 0}
+        "condition_entries": {"type": "integer", "minimum": 0},
+        "model_call_attempts": {"type": "integer", "minimum": 0},
+        "browser_actions": {"type": "integer", "minimum": 0},
+        "unknown_model_outcomes": {"type": "integer", "minimum": 0}
       }
     },
     "authority_consumed": {
@@ -149,6 +160,35 @@
     "zero_undeclared_calls": {"const": true},
     "shadow_only": {"const": true},
     "scientific_interpretation_allowed": {"const": false},
+    "production_control_evidence": {
+      "type": "object",
+      "required": [
+        "implementation_flavor",
+        "effect_authority",
+        "production_primitives",
+        "resolved_consumers",
+        "accounting",
+        "evaluations",
+        "deterministic_staging",
+        "replacement_history",
+        "raw_export_acknowledgements",
+        "cleanup_handoff_sha256",
+        "cleanup_resume_byte_identical"
+      ],
+      "properties": {
+        "implementation_flavor": {"const": "production-wrapper"},
+        "effect_authority": {"const": "shadow-only"},
+        "production_primitives": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "resolved_consumers": {"type": "object"},
+        "accounting": {"type": "object"},
+        "evaluations": {"type": "object"},
+        "deterministic_staging": {"type": ["object", "null"]},
+        "replacement_history": {"type": "object"},
+        "raw_export_acknowledgements": {"type": "object"},
+        "cleanup_handoff_sha256": {"oneOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
+        "cleanup_resume_byte_identical": {"type": "boolean"}
+      }
+    },
     "scenario_valid": {"const": true},
     "semantic_sha256": {"$ref": "#/$defs/sha256"}
   },

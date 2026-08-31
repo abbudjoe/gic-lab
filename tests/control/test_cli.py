@@ -21,6 +21,7 @@ def test_stable_control_subcommands_are_registered() -> None:
         "shadow",
         "incident-check",
         "agent-check",
+        "refresh-receipts",
     ):
         assert command in help_text
 

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import contextvars
 import hashlib
 import http.client
 import json
@@ -25,7 +26,7 @@ import stat
 import subprocess
 import tarfile
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Final, Protocol, cast
@@ -79,6 +80,7 @@ from giclab.harness.t09_provider_contracts import (
     LifecycleFamily,
     MetadataPolicy,
     PackageTransitionPolicy,
+    ReplacementPolicy,
     T09ProviderContract,
     T09ProviderContractError,
     load_provider_profile,
@@ -446,6 +448,97 @@ class ProviderTransport(Protocol):
     ) -> ProviderResponse: ...
 
 
+_SHADOW_CAMPAIGN_CONTROLS_PROOF = object()
+_SHADOW_CAMPAIGN_CONTROLS: contextvars.ContextVar[ShadowCampaignLowLevelControls | None] = (
+    contextvars.ContextVar("t09_shadow_campaign_controls", default=None)
+)
+
+
+@dataclass(frozen=True, slots=True, init=False)
+class ShadowCampaignLowLevelControls:
+    """Opaque fake-only seams beneath the retained campaign implementation.
+
+    Live calls cannot construct this value and continue to use the fixed home
+    capability paths, clean-package verifier, and retained image identity check.
+    """
+
+    capability_root: Path
+    expected_package_commit: str
+    image_fixture: Path
+    _proof: object = field(repr=False, compare=False)
+
+    def __init__(self, *_args: object, **_kwargs: object) -> None:
+        raise TypeError("shadow campaign controls are minted only by fake effects")
+
+    def capability_path(self, launch_slot: int, contract: T09ProviderContract) -> Path:
+        if self._proof is not _SHADOW_CAMPAIGN_CONTROLS_PROOF:
+            raise T09ProviderError("shadow campaign controls are invalid")
+        if launch_slot not in range(1, contract.max_launch_count + 1):
+            raise T09ProviderError("shadow launch slot escaped the selected contract")
+        return self.capability_root / f"launch-slot-{launch_slot:02d}.json"
+
+    def verify_package(self, repository: Path, package_commit: str) -> None:
+        if self._proof is not _SHADOW_CAMPAIGN_CONTROLS_PROOF:
+            raise T09ProviderError("shadow campaign controls are invalid")
+        if package_commit != self.expected_package_commit:
+            raise T09ProviderError("shadow campaign package identity drifted")
+        observed = subprocess.run(
+            ["git", "-C", str(repository), "rev-parse", "HEAD"],
+            capture_output=True,
+            check=False,
+            text=True,
+            timeout=10,
+        )
+        if observed.returncode != 0 or observed.stdout.strip() != package_commit:
+            raise T09ProviderError("shadow campaign package commit is not current")
+
+    def verify_image(self, path: Path, *, expected_bytes: int, expected_sha256: str) -> None:
+        if self._proof is not _SHADOW_CAMPAIGN_CONTROLS_PROOF:
+            raise T09ProviderError("shadow campaign controls are invalid")
+        if (
+            path.resolve(strict=True) != self.image_fixture.resolve(strict=True)
+            or expected_bytes != SLOT1_IMAGE_ARCHIVE_BYTES
+            or expected_sha256 != SLOT1_IMAGE_ARCHIVE_SHA256
+            or path.read_bytes() != b"production-shadow-retained-image-fixture"
+        ):
+            raise T09ProviderError("shadow retained image fixture drifted")
+
+
+def _mint_shadow_campaign_low_level_controls(
+    *,
+    capability_root: Path,
+    expected_package_commit: str,
+    image_fixture: Path,
+) -> ShadowCampaignLowLevelControls:
+    """Mint fake low-level campaign seams; no live-authorized mint exists here."""
+
+    if _HEX40.fullmatch(expected_package_commit) is None:
+        raise T09ProviderError("shadow campaign package commit is malformed")
+    root = capability_root.resolve(strict=True)
+    image = image_fixture.resolve(strict=True)
+    value = object.__new__(ShadowCampaignLowLevelControls)
+    object.__setattr__(value, "capability_root", root)
+    object.__setattr__(value, "expected_package_commit", expected_package_commit)
+    object.__setattr__(value, "image_fixture", image)
+    object.__setattr__(value, "_proof", _SHADOW_CAMPAIGN_CONTROLS_PROOF)
+    return value
+
+
+@contextlib.contextmanager
+def _shadow_campaign_control_scope(
+    controls: ShadowCampaignLowLevelControls,
+) -> Iterator[None]:
+    """Install opaque fake paths only for one retained provider call stack."""
+
+    if controls._proof is not _SHADOW_CAMPAIGN_CONTROLS_PROOF:
+        raise T09ProviderError("shadow campaign controls are invalid")
+    token = _SHADOW_CAMPAIGN_CONTROLS.set(controls)
+    try:
+        yield
+    finally:
+        _SHADOW_CAMPAIGN_CONTROLS.reset(token)
+
+
 class LambdaTransport:
     """Thin T09 adapter over the exact T07 pragmatic/observer request path.
 
@@ -635,6 +728,9 @@ def launch_capability_path(
     if launch_slot not in range(1, contract.max_launch_count + 1):
         raise T09ProviderError("campaign launch slot is outside the authorized bound")
 
+    shadow_controls = _SHADOW_CAMPAIGN_CONTROLS.get()
+    if shadow_controls is not None:
+        return shadow_controls.capability_path(launch_slot, contract)
     return (
         Path(pwd.getpwuid(os.getuid()).pw_dir).resolve(strict=True)
         / ".gic-lab-t09-private"
@@ -5567,6 +5663,7 @@ def _retain_replacement_launch_authority(
     plan_sha256: str,
     launch_slot: int,
     slot1_image_archive: Path,
+    shadow_controls: ShadowCampaignLowLevelControls | None = None,
 ) -> tuple[
     ProviderEntryReplacementNormalization | None,
     str,
@@ -5611,6 +5708,7 @@ def _retain_replacement_launch_authority(
             repository=repository,
             package_commit=package_commit,
             slot1_image_archive=slot1_image_archive,
+            shadow_controls=shadow_controls,
         )
         if retained != dict(replacement_eligibility):
             raise T09ProviderError("retained slot-2 eligibility changed during copy")
@@ -6498,17 +6596,25 @@ def _validate_replacement_launch_eligibility(
     repository: Path,
     package_commit: str,
     slot1_image_archive: Path | None,
+    shadow_controls: ShadowCampaignLowLevelControls | None = None,
 ) -> dict[str, object]:
     """Prove the immediately preceding launch closed before a replacement."""
 
     prior = prior_private_root.resolve(strict=True)
     if slot1_image_archive is None:
         raise T09ProviderError("replacement launch requires the exact retained image archive")
-    _safe_regular_identity(
-        slot1_image_archive,
-        expected_bytes=SLOT1_IMAGE_ARCHIVE_BYTES,
-        expected_sha256=SLOT1_IMAGE_ARCHIVE_SHA256,
-    )
+    if shadow_controls is None:
+        _safe_regular_identity(
+            slot1_image_archive,
+            expected_bytes=SLOT1_IMAGE_ARCHIVE_BYTES,
+            expected_sha256=SLOT1_IMAGE_ARCHIVE_SHA256,
+        )
+    else:
+        shadow_controls.verify_image(
+            slot1_image_archive,
+            expected_bytes=SLOT1_IMAGE_ARCHIVE_BYTES,
+            expected_sha256=SLOT1_IMAGE_ARCHIVE_SHA256,
+        )
     plan_sha256 = file_sha256(repository / contract.provider_profile_path)
     path = _replacement_launch_eligibility_path(
         prior,
@@ -6582,9 +6688,12 @@ def _validate_replacement_launch_eligibility(
             package_commit=package_commit,
             slot1_image_archive=slot1_image_archive,
         )
-    prior_capability = _load_json(
-        launch_capability_path(closed_slot, contract=contract), maximum_bytes=65_536
+    prior_capability_path = (
+        launch_capability_path(closed_slot, contract=contract)
+        if shadow_controls is None
+        else shadow_controls.capability_path(closed_slot, contract)
     )
+    prior_capability = _load_json(prior_capability_path, maximum_bytes=65_536)
     source_package_commit = value.get("package_commit")
     if (
         not isinstance(source_package_commit, str)
@@ -7258,6 +7367,63 @@ def _validate_model_metadata_receipt_for_provider(
     )
 
 
+def validate_campaign_launch_projection(
+    repository: Path,
+    *,
+    contract: T09ProviderContract,
+    launch_slot: int,
+    closed_launch_slots: tuple[int, ...],
+) -> dict[str, object]:
+    """Resolve the production launch/replacement state machine without effects.
+
+    ``launch_campaign`` and the production-coupled CI shadow both call this seam.
+    It is deliberately stricter than a capability projection: the retained profile,
+    lifecycle, owner identity, slot history, and normalization implementation must all
+    resolve before credentials or provider transport can be touched.
+    """
+
+    root = repository.resolve(strict=True)
+    retained = provider_contract(contract.version)
+    if retained is not contract:
+        raise T09ProviderError("campaign launch requires the exact retained contract")
+    profile = load_provider_profile(root, contract)
+    lifecycle = load_campaign_lifecycle(root, contract=contract)
+    contract.validate_owner(
+        plan_id=contract.plan_id,
+        host_run_id=contract.host_run_id,
+        instance_name=contract.instance_name,
+    )
+    if lifecycle.contract is not contract or profile.get("plan_id") != contract.plan_id:
+        raise T09ProviderError("campaign launch lifecycle/profile binding drifted")
+    if launch_slot not in range(1, contract.max_launch_count + 1):
+        raise T09ProviderError("launch slot is outside the retained lifecycle")
+    expected_closed = tuple(range(1, launch_slot))
+    if closed_launch_slots != expected_closed:
+        raise T09ProviderError("replacement launch history is not one exact prefix")
+    replacement = launch_slot > 1
+    if replacement and (
+        contract.capabilities.replacement_policy is not ReplacementPolicy.BOUNDED_PREFLIGHT
+        or not callable(_normalize_provider_entry_replacement_authority)
+        or not callable(_validate_replacement_launch_eligibility)
+        or not callable(_retain_replacement_launch_authority)
+    ):
+        raise T09ProviderError("replacement normalization/history machinery is unavailable")
+    if not replacement and closed_launch_slots:
+        raise T09ProviderError("first launch cannot inherit replacement history")
+    return {
+        "provider_contract_version": contract.version,
+        "plan_id": contract.plan_id,
+        "host_run_id": contract.host_run_id,
+        "launch_slot": launch_slot,
+        "closed_launch_slots": list(closed_launch_slots),
+        "replacement": replacement,
+        "replacement_policy": contract.capabilities.replacement_policy.value,
+        "normalization_handler": _normalize_provider_entry_replacement_authority.__name__,
+        "eligibility_handler": _validate_replacement_launch_eligibility.__name__,
+        "retention_handler": _retain_replacement_launch_authority.__name__,
+    }
+
+
 def launch_campaign(
     *,
     contract: T09ProviderContract,
@@ -7273,10 +7439,78 @@ def launch_campaign(
     prior_private_root: Path | None = None,
     slot1_image_archive: Path | None = None,
     model_metadata_receipt: Path | None = None,
+    shadow_controls: ShadowCampaignLowLevelControls | None = None,
+    clock: Callable[[], float] = time.time,
+    sleeper: Callable[[float], None] = time.sleep,
+) -> Path:
+    """Execute the retained campaign with production or opaque fake channels."""
+
+    if shadow_controls is None:
+        return _launch_campaign_impl(
+            contract=contract,
+            repository=repository,
+            package_commit=package_commit,
+            authorization_ledger=authorization_ledger,
+            dotenv=dotenv,
+            private_root=private_root,
+            public_ipv4_file=public_ipv4_file,
+            ssh_public_key_file=ssh_public_key_file,
+            transport=transport,
+            launch_slot=launch_slot,
+            prior_private_root=prior_private_root,
+            slot1_image_archive=slot1_image_archive,
+            model_metadata_receipt=model_metadata_receipt,
+            shadow_controls=None,
+            clock=clock,
+            sleeper=sleeper,
+        )
+    with _shadow_campaign_control_scope(shadow_controls):
+        return _launch_campaign_impl(
+            contract=contract,
+            repository=repository,
+            package_commit=package_commit,
+            authorization_ledger=authorization_ledger,
+            dotenv=dotenv,
+            private_root=private_root,
+            public_ipv4_file=public_ipv4_file,
+            ssh_public_key_file=ssh_public_key_file,
+            transport=transport,
+            launch_slot=launch_slot,
+            prior_private_root=prior_private_root,
+            slot1_image_archive=slot1_image_archive,
+            model_metadata_receipt=model_metadata_receipt,
+            shadow_controls=shadow_controls,
+            clock=clock,
+            sleeper=sleeper,
+        )
+
+
+def _launch_campaign_impl(
+    *,
+    contract: T09ProviderContract,
+    repository: Path,
+    package_commit: str,
+    authorization_ledger: Path,
+    dotenv: Path,
+    private_root: Path,
+    public_ipv4_file: Path,
+    ssh_public_key_file: Path,
+    transport: ProviderTransport,
+    launch_slot: int = 1,
+    prior_private_root: Path | None = None,
+    slot1_image_archive: Path | None = None,
+    model_metadata_receipt: Path | None = None,
+    shadow_controls: ShadowCampaignLowLevelControls | None = None,
     clock: Callable[[], float] = time.time,
     sleeper: Callable[[float], None] = time.sleep,
 ) -> Path:
     repository = repository.resolve(strict=True)
+    validate_campaign_launch_projection(
+        repository,
+        contract=contract,
+        launch_slot=launch_slot,
+        closed_launch_slots=tuple(range(1, launch_slot)),
+    )
     plan_path = repository / contract.provider_profile_path
     plan_sha256 = file_sha256(plan_path)
     if launch_slot not in range(1, contract.max_launch_count + 1):
@@ -7294,10 +7528,16 @@ def launch_campaign(
             repository=repository,
             package_commit=package_commit,
             slot1_image_archive=slot1_image_archive,
+            shadow_controls=shadow_controls,
         )
         if replacement_eligibility.get("closed_launch_slot") != launch_slot - 1:
             raise T09ProviderError("replacement launch skipped its exact preceding closed slot")
-        if not launch_capability_path(launch_slot - 1, contract=contract).is_file():
+        prior_capability_path = (
+            launch_capability_path(launch_slot - 1, contract=contract)
+            if shadow_controls is None
+            else shadow_controls.capability_path(launch_slot - 1, contract)
+        )
+        if not prior_capability_path.is_file():
             raise T09ProviderError("replacement launch cannot skip its preceding launch slot")
     prior_eligibility_path = (
         _replacement_launch_eligibility_path(
@@ -7312,11 +7552,18 @@ def launch_campaign(
     replacement_eligibility_sha256 = (
         file_sha256(prior_eligibility_path) if prior_eligibility_path is not None else None
     )
-    capability_path = launch_capability_path(launch_slot, contract=contract)
+    capability_path = (
+        launch_capability_path(launch_slot, contract=contract)
+        if shadow_controls is None
+        else shadow_controls.capability_path(launch_slot, contract)
+    )
     # This check precedes credential loading and every provider request.  The
     # later O_EXCL consume is the concurrent, mutation-adjacent enforcement.
     _assert_launch_capability_unused(capability_path)
-    _verify_clean_package(repository, package_commit)
+    if shadow_controls is None:
+        _verify_clean_package(repository, package_commit)
+    else:
+        shadow_controls.verify_package(repository, package_commit)
     authorization = validate_authorization_ledger(
         authorization_ledger,
         contract=contract,
@@ -7374,6 +7621,7 @@ def launch_campaign(
             plan_sha256=plan_sha256,
             launch_slot=launch_slot,
             slot1_image_archive=slot1_image_archive,
+            shadow_controls=shadow_controls,
         )
     entry_root = private_root / "entry-source"
     entry_root.mkdir(mode=0o700)

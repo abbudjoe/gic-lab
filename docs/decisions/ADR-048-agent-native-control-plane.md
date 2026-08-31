@@ -23,16 +23,26 @@ command package, control root, authorization, package transition, selector, and 
 identity from semantic capabilities.
 
 Before any external effect, require repository identity, active-version lint,
-registry completeness, offline composition, a valid state capsule, shadow evidence,
-and deterministic staging. Use one Category 3 state machine with injected adapters.
-Only fake local adapters exist in this change.
+real-consumer registry completeness, offline composition, an exact validated control
+binding, a validated state capsule and complete production-coupled shadow matrix, and
+deterministic staging. Caller booleans and hash-shaped strings are not proof.
+
+Use one Category 3 state machine and one production-wrapper adapter assembly. The
+assembly wraps the retained lifecycle, metadata, provider launch/replacement,
+provider-call accounting, browser accounting, raw evidence, downstream finalizer,
+pinned evaluator, and cleanup primitives. Public CI injects deterministic fake
+low-level effects under those wrappers. A pure fake world may support narrow unit
+tests, but it cannot produce tracked control evidence. This change mints only
+shadow-only authority and contains no live low-level implementation.
 
 ## Consequences
 
-Adding a contract without an applicable consumer fails locally and in CI. Adding an
-active literal version allowlist fails the AST gate. The complete orchestration can
-be rehearsed cheaply, including cleanup and ambiguous outcomes, without treating
-fake output as science.
+Adding a contract without an applicable executable consumer fails locally and in CI.
+Mutation tests disable, reject, and misresolve every applicable consumer. Adding an
+active literal version allowlist fails the AST gate. The complete production
+orchestration can be rehearsed cheaply, including replacement history, accounting,
+raw export, finalization, cleanup, and ambiguous outcomes, without treating fake
+output as science.
 
 The capability registry becomes intentionally explicit. Historical identity and
 schema compatibility checks may still name exact versions, but must be narrowly
@@ -41,6 +51,8 @@ remains external even when every deterministic check passes.
 
 ## Follow-up boundary
 
-A later reviewed PR may generate a fresh runtime package that consumes these receipt
-bindings. It must not introduce a second controller, infer authority from Git, or
-reuse the stopped V16 metadata/authorization reference.
+A later reviewed package-only PR may generate a fresh runtime package that consumes
+these receipt bindings, provides separately reviewed live low-level effects, and
+supplies fresh external authority to the existing production assembly. It must not
+modify shared control-plane Python, introduce a second controller, infer authority
+from Git, or reuse the stopped V16 metadata/authorization reference.

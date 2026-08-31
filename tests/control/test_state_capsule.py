@@ -7,6 +7,7 @@ import pytest
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import ValidationError
 
+from giclab.control.scenarios import REQUIRED_FAILURE_SCENARIOS
 from giclab.control.state_capsule import generate_state_capsule
 from giclab.registry import load_json
 
@@ -105,35 +106,48 @@ def test_state_capsule_timestamp_is_explicitly_isolated() -> None:
 
 def test_future_live_package_binding_requires_every_control_receipt() -> None:
     schema = load_json(ROOT / "schemas/t09-control-receipt-bindings.schema.json")
-    hashes = {
-        scenario: "a" * 64
-        for scenario in (
-            "lifecycle-unsupported",
-            "metadata-expired",
-            "provider-entry-replacement",
-            "host-preflight-replacement",
-            "condition-failure",
-            "raw-export-failure",
-            "finalizer-failure",
-            "cleanup-interrupted-resumed",
-            "provider-termination-unavailable",
-            "structural-privacy-finding",
-            "ambiguous-provider-call-outcome",
-        )
-    }
+
+    def artifact(path: str) -> dict[str, object]:
+        return {
+            "path": path,
+            "bytes": 2,
+            "file_sha256": "a" * 64,
+            "semantic_sha256": "b" * 64,
+        }
+
     binding = {
-        "control_plane_revision_commit": "b" * 40,
-        "control_plane_revision_tree": "c" * 40,
-        "registry_receipt_sha256": "d" * 64,
-        "active_version_lint_receipt_sha256": "e" * 64,
-        "composition_receipt_sha256": "f" * 64,
-        "state_capsule_sha256": "1" * 64,
-        "shadow_happy_path_sha256": "2" * 64,
-        "shadow_failure_matrix_sha256s": hashes,
-        "agent_check_receipt_sha256": "3" * 64,
+        "schema_version": "2.0.0",
+        "repository_slug": "abbudjoe/gic-lab",
+        "base_commit": "4" * 40,
+        "control_plane_revision": {"commit": "5" * 40, "tree": "6" * 40},
+        "selected_contract": {
+            "provider_contract_version": "V16",
+            "plan_id": "AUTONOMOUS-0009",
+            "command_package_sha256": "7" * 64,
+        },
+        "artifacts": {
+            "registry_receipt": artifact("registry.json"),
+            "active_version_lint_receipt": artifact("lint.json"),
+            "composition_receipt": artifact("composition.json"),
+            "state_capsule": artifact("capsule.json"),
+            "shadow_happy_path": artifact("category3-shadow/happy-path.json"),
+            "shadow_failures": {
+                scenario: artifact(f"category3-shadow/{scenario}.json")
+                for scenario in REQUIRED_FAILURE_SCENARIOS
+            },
+            "agent_check_receipt": artifact("agent.json"),
+            "source_binding_receipt": artifact("source.json"),
+            "incident_receipt": artifact("incidents.json"),
+        },
+        "authority": {
+            "live_authorization": False,
+            "scientific_interpretation_allowed": False,
+            "repository_state_grants_authority": False,
+        },
+        "semantic_sha256": "8" * 64,
     }
     validator = Draft202012Validator(schema)
     validator.validate(binding)
-    del binding["composition_receipt_sha256"]
+    del binding["artifacts"]["composition_receipt"]  # type: ignore[index]
     with pytest.raises(ValidationError):
         validator.validate(binding)

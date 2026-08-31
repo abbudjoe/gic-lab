@@ -1,62 +1,101 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://gic-lab.invalid/schemas/t09-control-receipt-bindings.schema.json",
-  "title": "T09 future live-package control receipt bindings",
-  "description": "Required in both a future authorization overlay and frozen run manifest; this schema grants no authority.",
+  "title": "T09 validated control-proof binding document",
+  "description": "Binds exact control evidence and package identity. This document never grants live authority.",
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "control_plane_revision_commit",
-    "control_plane_revision_tree",
-    "registry_receipt_sha256",
-    "active_version_lint_receipt_sha256",
-    "composition_receipt_sha256",
-    "state_capsule_sha256",
-    "shadow_happy_path_sha256",
-    "shadow_failure_matrix_sha256s",
-    "agent_check_receipt_sha256"
+    "schema_version",
+    "repository_slug",
+    "base_commit",
+    "control_plane_revision",
+    "selected_contract",
+    "artifacts",
+    "authority",
+    "semantic_sha256"
   ],
   "properties": {
-    "control_plane_revision_commit": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
-    "control_plane_revision_tree": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
-    "registry_receipt_sha256": {"$ref": "#/$defs/sha256"},
-    "active_version_lint_receipt_sha256": {"$ref": "#/$defs/sha256"},
-    "composition_receipt_sha256": {"$ref": "#/$defs/sha256"},
-    "state_capsule_sha256": {"$ref": "#/$defs/sha256"},
-    "shadow_happy_path_sha256": {"$ref": "#/$defs/sha256"},
-    "shadow_failure_matrix_sha256s": {
+    "schema_version": {"const": "2.0.0"},
+    "repository_slug": {"const": "abbudjoe/gic-lab"},
+    "base_commit": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
+    "control_plane_revision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commit", "tree"],
+      "properties": {
+        "commit": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
+        "tree": {"type": "string", "pattern": "^[a-f0-9]{40}$"}
+      }
+    },
+    "selected_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider_contract_version", "plan_id", "command_package_sha256"],
+      "properties": {
+        "provider_contract_version": {"type": "string", "pattern": "^V[0-9]+$"},
+        "plan_id": {"type": "string", "minLength": 1},
+        "command_package_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "artifacts": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "lifecycle-unsupported",
-        "metadata-expired",
-        "provider-entry-replacement",
-        "host-preflight-replacement",
-        "condition-failure",
-        "raw-export-failure",
-        "finalizer-failure",
-        "cleanup-interrupted-resumed",
-        "provider-termination-unavailable",
-        "structural-privacy-finding",
-        "ambiguous-provider-call-outcome"
+        "registry_receipt",
+        "active_version_lint_receipt",
+        "composition_receipt",
+        "state_capsule",
+        "shadow_happy_path",
+        "shadow_failures",
+        "agent_check_receipt",
+        "source_binding_receipt",
+        "incident_receipt"
       ],
       "properties": {
-        "lifecycle-unsupported": {"$ref": "#/$defs/sha256"},
-        "metadata-expired": {"$ref": "#/$defs/sha256"},
-        "provider-entry-replacement": {"$ref": "#/$defs/sha256"},
-        "host-preflight-replacement": {"$ref": "#/$defs/sha256"},
-        "condition-failure": {"$ref": "#/$defs/sha256"},
-        "raw-export-failure": {"$ref": "#/$defs/sha256"},
-        "finalizer-failure": {"$ref": "#/$defs/sha256"},
-        "cleanup-interrupted-resumed": {"$ref": "#/$defs/sha256"},
-        "provider-termination-unavailable": {"$ref": "#/$defs/sha256"},
-        "structural-privacy-finding": {"$ref": "#/$defs/sha256"},
-        "ambiguous-provider-call-outcome": {"$ref": "#/$defs/sha256"}
+        "registry_receipt": {"$ref": "#/$defs/artifact"},
+        "active_version_lint_receipt": {"$ref": "#/$defs/artifact"},
+        "composition_receipt": {"$ref": "#/$defs/artifact"},
+        "state_capsule": {"$ref": "#/$defs/artifact"},
+        "shadow_happy_path": {"$ref": "#/$defs/artifact"},
+        "shadow_failures": {
+          "type": "object",
+          "additionalProperties": {"$ref": "#/$defs/artifact"},
+          "minProperties": 1
+        },
+        "agent_check_receipt": {"$ref": "#/$defs/artifact"},
+        "source_binding_receipt": {"$ref": "#/$defs/artifact"},
+        "incident_receipt": {"$ref": "#/$defs/artifact"}
       }
     },
-    "agent_check_receipt_sha256": {"$ref": "#/$defs/sha256"}
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "live_authorization",
+        "scientific_interpretation_allowed",
+        "repository_state_grants_authority"
+      ],
+      "properties": {
+        "live_authorization": {"const": false},
+        "scientific_interpretation_allowed": {"const": false},
+        "repository_state_grants_authority": {"const": false}
+      }
+    },
+    "semantic_sha256": {"$ref": "#/$defs/sha256"}
   },
   "$defs": {
-    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "bytes", "file_sha256", "semantic_sha256"],
+      "properties": {
+        "path": {"type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+\\.json$"},
+        "bytes": {"type": "integer", "minimum": 2},
+        "file_sha256": {"$ref": "#/$defs/sha256"},
+        "semantic_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
   }
 }

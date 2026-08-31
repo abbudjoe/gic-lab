@@ -240,7 +240,6 @@ def _patch_launch_phase_a(
             "authorization_ledger_sha256": _sha256(overlay),
         },
     )
-    monkeypatch.setattr(provider, "load_campaign_lifecycle", lambda *args, **kwargs: object())
     monkeypatch.setattr(provider, "launch_capability_path", lambda *args, **kwargs: capability)
     monkeypatch.setattr(
         provider,
@@ -1097,7 +1096,6 @@ def test_crossing_window_during_phase_a_consumes_intent_but_posts_zero(
             "authorization_ledger_sha256": _sha256(overlay),
         },
     )
-    monkeypatch.setattr(provider, "load_campaign_lifecycle", lambda *args, **kwargs: object())
     monkeypatch.setattr(provider, "launch_capability_path", lambda *args, **kwargs: capability)
     monkeypatch.setattr(
         provider,

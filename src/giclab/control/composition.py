@@ -18,7 +18,7 @@ from giclab.control.registry_validation import (
     validate_registry_completeness,
 )
 from giclab.control.version_lint import validate_active_version_dispatch
-from giclab.harness.t09_pragmatic_provider import load_campaign_lifecycle
+from giclab.harness import t09_pragmatic_provider as pragmatic_provider
 from giclab.harness.t09_provider_contracts import (
     CleanupFamily,
     CommandPackageFamily,
@@ -212,11 +212,12 @@ def compose_control_plane(
     contract: T09ProviderContract,
     registry_receipt: Mapping[str, object] | None = None,
     version_lint_receipt: Mapping[str, object] | None = None,
-    lifecycle_loader: LifecycleLoader = load_campaign_lifecycle,
+    lifecycle_loader: LifecycleLoader | None = None,
 ) -> dict[str, object]:
     """Compose every deterministic dependency without accepting an effect adapter."""
 
     root = repository.resolve(strict=True)
+    selected_lifecycle_loader = lifecycle_loader or pragmatic_provider.load_campaign_lifecycle
     lint = (
         dict(version_lint_receipt)
         if version_lint_receipt is not None
@@ -227,14 +228,17 @@ def compose_control_plane(
     registry = (
         dict(registry_receipt)
         if registry_receipt is not None
-        else validate_registry_completeness(root)
+        else validate_registry_completeness(
+            root,
+            lifecycle_loader=selected_lifecycle_loader,
+        )
     )
     if registry.get("complete") is not True:
         raise CompositionError("provider registry completeness failed")
     _registry_entry(registry, version=contract.version)
     try:
         profile = load_provider_profile(root, contract)
-        lifecycle = lifecycle_loader(root, contract=contract)
+        lifecycle = selected_lifecycle_loader(root, contract=contract)
     except Exception as exc:
         raise CompositionError(f"campaign lifecycle composition failed: {exc}") from exc
     if lifecycle.contract != contract:

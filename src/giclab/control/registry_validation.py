@@ -11,13 +11,17 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Final
 
+from giclab.control.consumers import (
+    CONTROL_CONSUMERS,
+    ContractConsumer,
+    expected_consumer_handler_id,
+    resolve_control_consumers,
+)
 from giclab.control.contracts import project_contract_capabilities
 from giclab.harness.t09_pragmatic_provider import CampaignLifecycle, load_campaign_lifecycle
 from giclab.harness.t09_provider_contracts import (
     PROVIDER_CONTRACTS,
     CommandPackageFamily,
-    ControlRootPolicy,
-    MetadataPolicy,
     ProviderSelectorPolicy,
     T09ProviderContract,
     load_provider_plan,
@@ -178,6 +182,7 @@ def _validate_one_contract(
     *,
     lifecycle_loader: LifecycleLoader,
     disabled_consumers: frozenset[str],
+    control_consumers: Mapping[str, ContractConsumer],
 ) -> dict[str, object]:
     consumers: dict[str, dict[str, object]] = {}
     errors: list[str] = []
@@ -226,25 +231,6 @@ def _validate_one_contract(
         return _consumer_pass(family=contract.capabilities.lifecycle_family.value)
 
     run("campaign_lifecycle_loading", lifecycle)
-    run(
-        "metadata_policy_resolution",
-        lambda: _consumer_pass(policy=contract.capabilities.metadata_policy.value),
-        applicable=contract.capabilities.metadata_policy is not MetadataPolicy.NONE,
-    )
-    run(
-        "replacement_policy_resolution",
-        lambda: _consumer_pass(policy=contract.capabilities.replacement_policy.value),
-        applicable=contract.max_launch_count > 1,
-    )
-    run(
-        "cleanup_family_resolution",
-        lambda: _consumer_pass(family=contract.capabilities.cleanup_family.value),
-    )
-    run(
-        "command_package_family_resolution",
-        lambda: _consumer_pass(family=contract.capabilities.command_package_family.value),
-    )
-
     package: dict[str, object] | None = None
 
     def command_manifest() -> dict[str, object]:
@@ -376,17 +362,46 @@ def _validate_one_contract(
         ),
     )
 
-    def control_root() -> dict[str, object]:
-        expected = (
-            f"pilot-{contract.version.lower()}"
-            if contract.capabilities.control_root_policy is ControlRootPolicy.VERSIONED
-            else "pilot-v7"
+    try:
+        resolved_control_consumers = resolve_control_consumers(
+            repository,
+            contract,
+            consumers=control_consumers,
         )
-        if contract.control_root_name != expected:
-            raise ValueError("control-root projection drifted")
-        return _consumer_pass(control_root=expected)
+    except Exception as exc:
+        message = f"control_consumer_registry: {type(exc).__name__}: {exc}"
+        errors.append(message)
+        resolved_control_consumers = {}
+    for name in CONTROL_CONSUMERS:
+        expected_handler = expected_consumer_handler_id(name, contract)
+        applicable = expected_handler is not None
 
-    run("control_root_identity", control_root)
+        def resolved_consumer(
+            *,
+            consumer_name: str = name,
+            required_handler: str | None = expected_handler,
+        ) -> dict[str, object]:
+            if consumer_name not in control_consumers:
+                raise ValueError("applicable real consumer is not registered")
+            resolution = resolved_control_consumers.get(consumer_name)
+            if required_handler is None:
+                if resolution is not None:
+                    raise ValueError("not-applicable consumer unexpectedly resolved")
+                return _consumer_na(reason="capability not declared")
+            if resolution is None:
+                raise ValueError("applicable real consumer returned not-applicable")
+            if resolution.handler_id != required_handler:
+                raise ValueError(
+                    "real consumer returned a different handler: "
+                    f"{resolution.handler_id} != {required_handler}"
+                )
+            return resolution.receipt_document()
+
+        run(
+            name,
+            resolved_consumer,
+            applicable=applicable,
+        )
     run(
         "state_capsule_projection",
         lambda: _consumer_pass(projection=project_contract_capabilities(contract)),
@@ -407,6 +422,7 @@ def validate_registry_completeness(
     contracts: Mapping[str, T09ProviderContract] = PROVIDER_CONTRACTS,
     lifecycle_loader: LifecycleLoader = load_campaign_lifecycle,
     disabled_consumers: frozenset[str] = frozenset(),
+    control_consumers: Mapping[str, ContractConsumer] = CONTROL_CONSUMERS,
 ) -> dict[str, object]:
     """Return one deterministic, public-safe per-contract consumer matrix."""
 
@@ -417,6 +433,7 @@ def validate_registry_completeness(
             contract,
             lifecycle_loader=lifecycle_loader,
             disabled_consumers=disabled_consumers,
+            control_consumers=control_consumers,
         )
         for _version, contract in sorted(contracts.items(), key=lambda item: int(item[0][1:]))
     ]

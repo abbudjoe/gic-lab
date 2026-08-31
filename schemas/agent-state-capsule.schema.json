@@ -40,7 +40,7 @@
       }
     },
     "terminal_goal": {"const": "evaluate simulative versus reactive SiRA"},
-    "current_subgoal": {"const": "stabilize the shared T09 control plane before V17 generation"},
+    "current_subgoal": {"type": "string", "minLength": 1},
     "science": {
       "type": "object",
       "additionalProperties": false,
@@ -71,10 +71,16 @@
       "additionalProperties": false,
       "required": ["historical_package", "historical_status", "next_package", "next_status"],
       "properties": {
-        "historical_package": {"const": "V16"},
-        "historical_status": {"const": "consumed-prelaunch-failure"},
-        "next_package": {"const": "V17"},
-        "next_status": {"const": "not-created"}
+        "historical_package": {"type": "string", "pattern": "^V[0-9]+$"},
+        "historical_status": {"type": "string", "minLength": 1},
+        "next_package": {"type": "string", "pattern": "^V[0-9]+$"},
+        "next_status": {
+          "enum": [
+            "not-created",
+            "package-bound-not-authorized",
+            "externally-authorized-current-turn"
+          ]
+        }
       }
     },
     "authority": {

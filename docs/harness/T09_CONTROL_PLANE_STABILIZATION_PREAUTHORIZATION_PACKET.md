@@ -19,14 +19,19 @@ record is `experiments/EXP-0001-sira-simulative-vs-reactive/T09_V16_PREFLIGHT_ST
 
 Review should require:
 
-1. every contract passes the consumer-completeness matrix;
+1. every contract passes the real-consumer completeness matrix and its mutation
+   regressions;
 2. active runtime source passes the AST version-dispatch lint;
 3. offline composition passes for every registered contract;
-4. the exact V16 happy-path and required failure matrix pass through the shared
-   controller with fake adapters;
-5. deterministic failures precede fake secret/metadata access;
-6. the incident ledger links the V16 defect to passing regressions;
-7. full, parity, static, privacy, and site gates pass.
+4. the exact V16 happy path and all fifteen required failure scenarios pass through
+   the shared controller and production wrappers over fake low-level effects;
+5. proof-forgery failures precede staging, fake secret reads, metadata requests,
+   provider calls, and condition reservations;
+6. primitive-coupling mutations fail at metadata, launch/replacement, accounting,
+   raw export, finalization, and cleanup;
+7. the incident ledger links the V16 defect to production assembly, lifecycle
+   omission, and zero-effect shadow regressions;
+8. full, parity, static, privacy, and site gates pass.
 
 ## Future package boundary
 
@@ -34,9 +39,13 @@ Only after reviewed merge may a separate PR generate a fresh successor runtime
 package. Both its externally supplied authorization overlay and frozen run manifest
 must include the complete object defined by
 `schemas/t09-control-receipt-bindings.schema.json`: exact control-plane commit/tree,
-registry and lint receipts, composition, capsule, happy path, all eleven failure
-scenarios, and aggregate agent-check receipt.
+registry and lint receipts, composition, capsule, production-coupled happy path, all
+fifteen failure scenarios, aggregate agent-check receipt, exact shared-source binding,
+and incident receipt.
 
-Those bindings make preparation auditable but do not grant authority. A future live
-turn must still supply exact current-turn authorization and pass all existing safety,
-budget, freshness, cleanup, evidence, and scientific-freeze gates.
+Those validated documents make preparation auditable but do not grant authority. A
+future live turn must supply exact current-turn authorization and separately reviewed
+low-level effects to the existing production adapter assembly and shared controller.
+PR 2 remains package-only; it must not change shared control-plane Python. All
+existing safety, budget, freshness, cleanup, evidence, and scientific-freeze gates
+still apply.

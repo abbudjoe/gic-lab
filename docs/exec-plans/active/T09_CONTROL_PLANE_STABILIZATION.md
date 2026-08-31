@@ -1,6 +1,6 @@
 # Phase 1 — T09 control-plane stabilization
 
-Status: **review-required**
+Status: **in-progress**
 
 Plan role: **workstream**
 
@@ -14,8 +14,9 @@ This Category 1 workstream is governed by the operator-supplied
 `T09 Control-Plane Stabilization and Agent Operating Foundation` contract. It
 replaces version-selected runtime behavior with semantic capabilities, proves the
 registered control plane offline, and rehearses the shared Category 3 transaction
-with deterministic fake adapters before any secret, authenticated request,
-provider action, paid compute, or scientific execution.
+through production wrappers over deterministic fake low-level effects before any
+secret, authenticated request, provider action, paid compute, or scientific
+execution.
 
 ```text
 operator_attested_model: gpt-5.6-sol
@@ -35,8 +36,8 @@ The immutable base is commit
 In scope are CP-01 through CP-20 below. Implementation, testing, direct
 spec-conformance review, repository writes, Git operations, and architectural or
 scientific decisions remain in this task. The shared controller may expose future
-live-adapter interfaces, but this workstream supplies only local network-disabled
-fake adapters.
+live-effect interfaces, but this workstream supplies only local network-disabled fake
+low-level channels and can mint only shadow authority.
 
 Out of scope are V17 or `AUTONOMOUS-0010` artifacts, live authorization, dotenv or
 secret access, authenticated OpenAI or Lambda requests, cloud inspection or
@@ -51,13 +52,13 @@ adjudication, merge, auto-merge, force-push, and delegated review or implementat
 | CP-02 | Semantic capabilities added to every contract | Registry audit and semantic-contract tests | met |
 | CP-03 | Active runtime dispatch no longer depends on version allowlists | Classified inventory, capability dispatch, repository lint | met |
 | CP-04 | Repository version lint passes | Focused validator tests and repository receipt | met |
-| CP-05 | Registry completeness passes for every contract | Per-contract consumer matrix and deterministic receipt | met |
+| CP-05 | Registry completeness passes for every contract | Per-contract real-consumer matrix and deterministic receipt | partial |
 | CP-06 | V16 lifecycle omission reproduced and prevented offline | Mutant regression and direct autonomous-contract lifecycle test | met |
 | CP-07 | Offline composition is complete and deterministic | Schema-valid per-contract composition receipts | met |
-| CP-08 | Shared Category 3 controller exists with fake adapters | Typed controller/adapters and focused state-machine tests | met |
-| CP-09 | Full happy-path shadow transaction passes | Deterministic V16 happy-path receipt | met |
+| CP-08 | Shared Category 3 controller is the production transaction path | Production-wrapper assembly over retained primitives with fake low-level effects | partial |
+| CP-09 | Full production-coupled happy-path shadow transaction passes | Deterministic V16 production-wrapper receipt | partial |
 | CP-10 | Required failure-matrix shadow scenarios pass | Per-scenario receipts and effect assertions | met |
-| CP-11 | Deterministic checks precede secret/metadata access | Prepared request type and zero-call ordering tests | met |
+| CP-11 | Exact validated control proofs precede secret/metadata access | Opaque proof types, binding validation, deterministic staging, zero-call forgery tests | partial |
 | CP-12 | State capsule is valid, concise, and agent-legible | Schema validation, deterministic bytes, privacy tests | met |
 | CP-13 | V16 incident is linked to passing regressions | Incident validator and exact collected node IDs | met |
 | CP-14 | Stable CLI and Make targets exist | CLI tests and direct command runs | met |
@@ -66,7 +67,7 @@ adjudication, merge, auto-merge, force-push, and delegated review or implementat
 | CP-17 | No V17 package or live authority created | Repository searches and state checks | met |
 | CP-18 | Scientific contract unchanged | Base/head science hashes and preservation tests | met |
 | CP-19 | Full/parity/static/privacy/site gates pass | Required local validation contract | met |
-| CP-20 | Draft PR open, exact-head CI green, no merge | GitHub PR and Actions metadata | met |
+| CP-20 | Draft PR open, exact-head CI green, no merge | GitHub PR, rereview, and Actions metadata | partial |
 
 No item may be marked `met` without concrete evidence. The overall status cannot be
 successful while any required item is partial, blocked, or not-started.
@@ -75,7 +76,8 @@ successful while any required item is partial, blocked, or not-started.
 
 - Capability dispatch, version lint, and registry completeness map to CP-02 through
   CP-06.
-- Composition, controller, fake adapters, shadow scenarios, and ordering map to
+- Composition, validated proofs, the shared controller, production-wrapper assembly,
+  fake low-level effects, shadow scenarios, and ordering map to
   CP-07 through CP-11.
 - Capsule, incident ledger, CLI, Make/CI, and reviewed projections map to CP-12
   through CP-16.
@@ -138,6 +140,27 @@ successful while any required item is partial, blocked, or not-started.
   auto-merge disabled and no merge. GitHub Actions run `33432821217` passed on
   predecessor head `63e8b94ed7b3898d88d5e3bc5f2454af68e0e6b7`; this review-state-only closeout
   commit is subject to the same exact-head CI gate before handoff.
+- 2026-08-31: exact-head review `5071206789` on
+  `559d52c9339bf13fae6808178a5a65fe71706f74` required repair because tracked
+  shadow evidence used a parallel pure-fake adapter path, preparation trusted
+  caller booleans and hash-shaped strings, and several registry rows projected
+  capability values instead of invoking production resolvers. CP-05, CP-08,
+  CP-09, CP-11, and CP-20 were reopened as partial before repair mutation.
+- 2026-08-31: the repair replaced public proof assertions with opaque validator-minted
+  capsule, receipt-set, staging, and preparation types. One exact binding document now
+  transitively validates file bytes, schemas, semantic hashes, commit/tree,
+  contract/package identity, complete scenarios, aggregate bindings, source bindings,
+  and false authority/science fields before the staging or effect boundary.
+- 2026-08-31: one `CONTROL_CONSUMERS` registry now drives both completeness and the
+  production adapter assembly. The shared controller executes retained metadata,
+  launch/replacement, accounting, evidence, finalizer/evaluator, and cleanup logic over
+  injected fake network/model/browser/provider/filesystem/subprocess channels. No live
+  authority factory or live low-level implementation was added.
+- 2026-08-31: the repaired shadow matrix contains one happy path plus fifteen exact
+  failure scenarios, including known, incomplete, ambiguous, and admission-stopped
+  model-call accounting. Focused production-coupling, registry-mutation, shadow,
+  formatting, Ruff, and strict mypy checks pass; immutable receipt regeneration,
+  proof-forgery coverage, full parity, exact-head CI, and rereview remain pending.
 
 ## Decisions and blockers
 
@@ -151,6 +174,8 @@ successful while any required item is partial, blocked, or not-started.
 
 ## Next permitted phase
 
-Independent ChatGPT review of draft PR #12. Keep the PR draft, keep auto-merge
-disabled, and do not merge. Any follow-on V17 package generation belongs in a
-separate PR after this control-plane foundation is reviewed.
+Finish review repair `5071206789` on the existing branch and draft PR: seal one clean
+implementation ancestor, regenerate its non-circular control evidence, pass the
+proof-forgery and complete validation matrices, perform direct Sol/max review, update
+the PR, and obtain independent exact-head rereview. PR 2 remains package-only;
+auto-merge stays disabled, and no merge or V17 creation is permitted here.

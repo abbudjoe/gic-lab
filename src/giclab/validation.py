@@ -18,6 +18,14 @@ from urllib.parse import unquote, urlparse
 import yaml
 from jsonschema import Draft202012Validator, FormatChecker
 
+from giclab.control.proofs import (
+    REQUIRED_SHARED_SOURCES,
+    ControlProofError,
+    ControlProofReference,
+    validate_control_receipt_set,
+)
+from giclab.control.scenarios import ALL_REQUIRED_SCENARIOS
+from giclab.harness.t09_provider_contracts import V16_PROVIDER_CONTRACT
 from giclab.harness.policy import ExecutionDisallowed, load_project_execution_state
 from giclab.harness.task_source import (
     dataset_slice_task_source,
@@ -43,21 +51,15 @@ T09_DOWNSTREAM_FINALIZER_HISTORY_SHA256 = (
 )
 T09_CONTROL_SOURCE_BINDING_RELATIVE = Path("control/receipts/t09-control-plane-source-binding.json")
 T09_CONTROL_SOURCE_BASE_COMMIT = "450a10a51eda4c428f20b27d6b4aafc4f94d80f4"
-T09_CONTROL_SHADOW_SCENARIOS = (
-    "happy-path",
-    "lifecycle-unsupported",
-    "metadata-expired",
-    "provider-entry-replacement",
-    "host-preflight-replacement",
-    "condition-failure",
-    "raw-export-failure",
-    "finalizer-failure",
-    "cleanup-interrupted-resumed",
-    "provider-termination-unavailable",
-    "structural-privacy-finding",
-    "ambiguous-provider-call-outcome",
-)
+T09_CONTROL_SHADOW_SCENARIOS = ALL_REQUIRED_SCENARIOS
 T09_CONTROL_RECEIPT_SCHEMAS = {
+    "control/receipts/active-version-lint.json": (
+        "schemas/t09-active-version-lint-receipt.schema.json"
+    ),
+    "control/receipts/agent-check.json": "schemas/t09-agent-check-receipt.schema.json",
+    "control/receipts/incidents.json": (
+        "schemas/t09-incident-completeness-receipt.schema.json"
+    ),
     "control/receipts/registry-completeness.json": (
         "schemas/t09-control-registry-receipt.schema.json"
     ),
@@ -65,6 +67,12 @@ T09_CONTROL_RECEIPT_SCHEMAS = {
         "schemas/t09-control-composition-receipt.schema.json"
     ),
     "control/receipts/state-capsule.json": "schemas/agent-state-capsule.schema.json",
+    "control/receipts/t09-control-receipt-bindings.json": (
+        "schemas/t09-control-receipt-bindings.schema.json"
+    ),
+    "control/receipts/t09-control-plane-source-binding.json": (
+        "schemas/t09-control-plane-source-binding.schema.json"
+    ),
     **{
         f"control/receipts/category3-shadow/{scenario}.json": (
             "schemas/t09-category3-shadow-receipt.schema.json"
@@ -116,6 +124,9 @@ SCHEMA_FILES = (
     "schemas/t09-control-receipt-bindings.schema.json",
     "schemas/t09-control-plane-source-binding.schema.json",
     "schemas/t09-category3-shadow-receipt.schema.json",
+    "schemas/t09-active-version-lint-receipt.schema.json",
+    "schemas/t09-agent-check-receipt.schema.json",
+    "schemas/t09-incident-completeness-receipt.schema.json",
     "schemas/agent-state-capsule.schema.json",
     "schemas/agent-incident.schema.json",
     "schemas/t09-offline-refinalization-receipt.schema.json",
@@ -155,6 +166,7 @@ REQUIRED_PATHS = (
     "control/receipts/incidents.json",
     "control/receipts/registry-completeness.json",
     "control/receipts/state-capsule.json",
+    "control/receipts/t09-control-receipt-bindings.json",
     "control/receipts/t09-control-plane-source-binding.json",
     "control/receipts/v16-composition.json",
     *(
@@ -419,14 +431,7 @@ def _t09_control_source_binding_map(root: Path) -> tuple[dict[str, str], list[st
         )
         if ancestor.returncode != 0:
             errors.append("T09 shared control-plane source commit is not based on the exact base")
-    required_paths = {
-        "src/giclab/harness/t09_provider_contracts.py",
-        "src/giclab/harness/t09_pragmatic_provider.py",
-        "src/giclab/harness/t09_model_metadata_receipt.py",
-        "src/giclab/harness/t09_sira_pilot.py",
-        "containers/sira-smoke/pragmatic/t09_remote_runner.py",
-        "containers/sira-smoke/pragmatic/t09_freeze_commands.py",
-    }
+    required_paths = set(REQUIRED_SHARED_SOURCES)
     files = document.get("files")
     bindings: dict[str, str] = {}
     if not isinstance(files, list):
@@ -3608,6 +3613,10 @@ def validate_tracked_control_receipts(root: Path = ROOT) -> list[str]:
             "registry_completeness": registry.get("semantic_sha256"),
             "incident_completeness": incidents.get("semantic_sha256"),
             "state_capsule": capsule.get("semantic_sha256"),
+            "source_binding": receipts.get(
+                "control/receipts/t09-control-plane-source-binding.json",
+                {},
+            ).get("semantic_sha256"),
         }
         for check_name, expected in expected_hashes.items():
             check = checks.get(check_name)
@@ -3646,6 +3655,34 @@ def validate_tracked_control_receipts(root: Path = ROOT) -> list[str]:
                 errors.append(f"aggregate agent-check receipt does not bind shadow: {scenario}")
     else:
         errors.append("tracked aggregate agent-check matrix is malformed")
+    binding_path = root / "control/receipts/t09-control-receipt-bindings.json"
+    if binding_path.is_file():
+        try:
+            binding = load_json(binding_path)
+            revision = binding.get("control_plane_revision")
+            selected = binding.get("selected_contract")
+            if not isinstance(revision, dict) or not isinstance(selected, dict):
+                raise ControlProofError("tracked binding identity sections are malformed")
+            reference = ControlProofReference(
+                approved_root=binding_path.parent,
+                binding_path=binding_path,
+                expected_file_sha256=hashlib.sha256(binding_path.read_bytes()).hexdigest(),
+                expected_control_commit=str(revision.get("commit")),
+                expected_control_tree=str(revision.get("tree")),
+                expected_repository_slug=str(binding.get("repository_slug")),
+                expected_provider_contract_version=str(
+                    selected.get("provider_contract_version")
+                ),
+                expected_plan_id=str(selected.get("plan_id")),
+                expected_command_package_sha256=str(
+                    selected.get("command_package_sha256")
+                ),
+            )
+            validate_control_receipt_set(root, V16_PROVIDER_CONTRACT, reference)
+        except (ControlProofError, OSError, ValueError, TypeError) as exc:
+            errors.append(f"tracked control receipt binding is invalid: {exc}")
+    else:
+        errors.append("tracked control receipt binding is missing")
     return errors
 
 

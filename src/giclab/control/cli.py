@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import subprocess
 import sys
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -14,7 +15,15 @@ import yaml
 from giclab.control.agent_check import run_agent_check
 from giclab.control.composition import compose_control_plane
 from giclab.control.incidents import validate_incidents
+from giclab.control.proofs import (
+    REPOSITORY_SLUG,
+    ControlProofReference,
+    generate_control_binding_document,
+    generate_source_binding_receipt,
+    validate_control_receipt_set,
+)
 from giclab.control.registry_validation import validate_registry_completeness
+from giclab.control.scenarios import HAPPY_PATH, REQUIRED_FAILURE_SCENARIOS
 from giclab.control.shadow import run_required_shadow_matrix, run_shadow_scenario
 from giclab.control.state_capsule import generate_state_capsule
 from giclab.control.version_lint import validate_active_version_dispatch
@@ -46,6 +55,38 @@ def _write_receipts(output: Path, receipts: Mapping[str, object]) -> list[dict[s
             }
         )
     return identities
+
+
+def _write_json(path: Path, document: object) -> dict[str, object]:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    encoded = _json_bytes(document)
+    path.write_bytes(encoded)
+    semantic = document.get("semantic_sha256") if isinstance(document, dict) else None
+    return {
+        "path": path.as_posix(),
+        "bytes": len(encoded),
+        "file_sha256": hashlib.sha256(encoded).hexdigest(),
+        "semantic_sha256": semantic,
+    }
+
+
+def _clean_git_identity(repository: Path) -> tuple[str, str]:
+    status = subprocess.run(
+        ["git", "-C", str(repository), "status", "--porcelain=v1", "--untracked-files=all"],
+        capture_output=True,
+        check=True,
+        text=True,
+    )
+    if status.stdout:
+        raise ValueError("receipt refresh requires a clean immutable implementation ancestor")
+    identity = subprocess.run(
+        ["git", "-C", str(repository), "rev-parse", "HEAD", "HEAD^{tree}"],
+        capture_output=True,
+        check=True,
+        text=True,
+    )
+    commit, tree = identity.stdout.splitlines()
+    return commit, tree
 
 
 def _bootstrap_capsule(
@@ -84,7 +125,10 @@ def _verified_capsule(repository: Path, *, deterministic: bool) -> dict[str, obj
     shadows = run_required_shadow_matrix(
         repository,
         contract=provider_contract("V16"),  # giclab-version-lint: historical-identity
-        state_capsule_sha256=str(bootstrap["semantic_sha256"]),
+        state_capsule=bootstrap,
+        registry_receipt=registry,
+        version_lint_receipt=lint,
+        composition_receipt=composition,
     )
     shadow_valid = all(receipt.get("scenario_valid") is True for receipt in shadows.values())
     return generate_state_capsule(
@@ -165,7 +209,10 @@ def _command_shadow(args: argparse.Namespace) -> tuple[object, bool]:
         receipts = run_required_shadow_matrix(
             args.repository,
             contract=contract,
-            state_capsule_sha256=str(bootstrap["semantic_sha256"]),
+            state_capsule=bootstrap,
+            registry_receipt=registry,
+            version_lint_receipt=lint,
+            composition_receipt=composition,
             fixed_tick=args.fixed_tick,
         )
     else:
@@ -173,7 +220,7 @@ def _command_shadow(args: argparse.Namespace) -> tuple[object, bool]:
             args.repository,
             contract=contract,
             scenario=args.scenario,
-            state_capsule_sha256=str(bootstrap["semantic_sha256"]),
+            state_capsule=bootstrap,
             fixed_tick=args.fixed_tick,
         )
         receipts = {args.scenario: receipt}
@@ -199,6 +246,133 @@ def _command_incidents(args: argparse.Namespace) -> tuple[object, bool]:
 def _command_agent_check(args: argparse.Namespace) -> tuple[object, bool]:
     receipt = run_agent_check(args.repository, execute_incident_regressions=True)
     return receipt, receipt.get("complete") is True
+
+
+def _command_refresh_receipts(args: argparse.Namespace) -> tuple[object, bool]:
+    """Regenerate the complete non-circular control evidence from clean HEAD."""
+
+    repository = args.repository.resolve(strict=True)
+    output = repository / "control/receipts"
+    commit, tree = _clean_git_identity(repository)
+    contract = provider_contract("V16")  # giclab-version-lint: historical-identity
+
+    lint = validate_active_version_dispatch(repository)
+    registry = validate_registry_completeness(repository)
+    composition = compose_control_plane(
+        repository,
+        contract=contract,
+        registry_receipt=registry,
+        version_lint_receipt=lint,
+    )
+    bootstrap_capsule = _bootstrap_capsule(
+        repository,
+        registry_complete=registry.get("complete") is True,
+        composition_valid=composition.get("static_composition_valid") is True,
+        lint_valid=lint.get("complete") is True,
+    )
+    shadows = run_required_shadow_matrix(
+        repository,
+        contract=contract,
+        state_capsule=bootstrap_capsule,
+        registry_receipt=registry,
+        version_lint_receipt=lint,
+        composition_receipt=composition,
+    )
+    shadow_complete = all(receipt.get("scenario_valid") is True for receipt in shadows.values())
+    capsule = generate_state_capsule(
+        repository,
+        registry_complete=registry.get("complete") is True,
+        composition_valid=composition.get("static_composition_valid") is True,
+        version_lint_valid=lint.get("complete") is True,
+        shadow_happy_path=(
+            shadows[HAPPY_PATH].get("terminal_state") == "category3-shadow-complete-clean"
+        ),
+        failure_matrix_valid=shadow_complete,
+        deterministic=True,
+    )
+    incidents = validate_incidents(repository, execute_regressions=True)
+    source_binding = generate_source_binding_receipt(
+        repository,
+        source_commit=commit,
+        source_tree=tree,
+    )
+    agent_check = run_agent_check(repository, execute_incident_regressions=True)
+
+    written = [
+        _write_json(output / "active-version-lint.json", lint),
+        _write_json(output / "registry-completeness.json", registry),
+        _write_json(output / "v16-composition.json", composition),
+        _write_json(output / "state-capsule.json", capsule),
+        _write_json(output / "incidents.json", incidents),
+        _write_json(output / "t09-control-plane-source-binding.json", source_binding),
+    ]
+    shadow_root = output / "category3-shadow"
+    for scenario, receipt in shadows.items():
+        written.append(_write_json(shadow_root / f"{scenario}.json", receipt))
+    written.append(_write_json(output / "agent-check.json", agent_check))
+
+    command_sha = composition.get("command_package_sha256")
+    if not isinstance(command_sha, str):
+        raise ValueError("composition lacks the command package identity")
+    binding = generate_control_binding_document(
+        repository,
+        output,
+        control_commit=commit,
+        control_tree=tree,
+        contract=contract,
+        command_package_sha256=command_sha,
+        registry_receipt=output / "registry-completeness.json",
+        active_version_lint_receipt=output / "active-version-lint.json",
+        composition_receipt=output / "v16-composition.json",
+        state_capsule=output / "state-capsule.json",
+        shadow_happy_path=shadow_root / f"{HAPPY_PATH}.json",
+        shadow_failures={
+            scenario: shadow_root / f"{scenario}.json" for scenario in REQUIRED_FAILURE_SCENARIOS
+        },
+        agent_check_receipt=output / "agent-check.json",
+        source_binding_receipt=output / "t09-control-plane-source-binding.json",
+        incident_receipt=output / "incidents.json",
+    )
+    binding_identity = _write_json(output / "t09-control-receipt-bindings.json", binding)
+    binding_sha = binding_identity["file_sha256"]
+    assert isinstance(binding_sha, str)
+    validate_control_receipt_set(
+        repository,
+        contract,
+        ControlProofReference(
+            approved_root=output,
+            binding_path=output / "t09-control-receipt-bindings.json",
+            expected_file_sha256=binding_sha,
+            expected_control_commit=commit,
+            expected_control_tree=tree,
+            expected_repository_slug=REPOSITORY_SLUG,
+            expected_provider_contract_version=contract.version,
+            expected_plan_id=contract.plan_id,
+            expected_command_package_sha256=command_sha,
+        ),
+    )
+    written.append(binding_identity)
+    complete = all(
+        (
+            lint.get("complete") is True,
+            registry.get("complete") is True,
+            composition.get("static_composition_valid") is True,
+            shadow_complete,
+            incidents.get("complete") is True,
+            agent_check.get("complete") is True,
+        )
+    )
+    result: dict[str, object] = {
+        "schema_version": "1.0.0",
+        "control_commit": commit,
+        "control_tree": tree,
+        "binding_file_sha256": binding_sha,
+        "receipt_count": len(written),
+        "receipts": written,
+        "complete": complete,
+    }
+    result["semantic_sha256"] = _semantic_sha256(result)
+    return result, complete
 
 
 def _repository_argument(parser: argparse.ArgumentParser) -> None:
@@ -266,6 +440,10 @@ def build_parser() -> argparse.ArgumentParser:
     _repository_argument(agent)
     _output_file_argument(agent)
     agent.set_defaults(handler=_command_agent_check)
+
+    refresh = subcommands.add_parser("refresh-receipts")
+    _repository_argument(refresh)
+    refresh.set_defaults(handler=_command_refresh_receipts)
     return parser
 
 

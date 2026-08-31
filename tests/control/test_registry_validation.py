@@ -1,20 +1,36 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
+import pytest
 from jsonschema import Draft202012Validator
 
+from giclab.control.consumers import (
+    CONTROL_CONSUMERS,
+    ConsumerResolution,
+    ContractConsumer,
+    expected_consumer_handler_id,
+    resolve_control_consumers,
+)
 from giclab.control.registry_validation import validate_registry_completeness
 from giclab.harness.t09_pragmatic_provider import T09ProviderError, load_campaign_lifecycle
 from giclab.harness.t09_provider_contracts import (
     PROVIDER_CONTRACTS,
+    V16_PROVIDER_CONTRACT,
     LifecycleFamily,
-    MetadataPolicy,
-    ReplacementPolicy,
 )
 from giclab.registry import load_json
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def _first_applicable_contract(consumer_name: str):  # type: ignore[no-untyped-def]
+    return next(
+        contract
+        for contract in reversed(tuple(PROVIDER_CONTRACTS.values()))
+        if expected_consumer_handler_id(consumer_name, contract) is not None
+    )
 
 
 def test_every_registered_autonomous_contract_loads_campaign_lifecycle() -> None:
@@ -24,11 +40,17 @@ def test_every_registered_autonomous_contract_loads_campaign_lifecycle() -> None
             assert lifecycle.contract == contract
 
 
-def test_every_registered_contract_produces_a_complete_consumer_matrix() -> None:
+def test_every_registered_contract_produces_complete_real_consumer_matrix() -> None:
     receipt = validate_registry_completeness(ROOT)
     assert receipt["complete"] is True
     assert receipt["contract_count"] == len(PROVIDER_CONTRACTS)
     assert all(entry["complete"] is True for entry in receipt["contracts"])
+    v16 = next(entry for entry in receipt["contracts"] if entry["version"] == "V16")
+    consumers = v16["consumers"]
+    assert isinstance(consumers, dict)
+    assert consumers["production_adapter_assembly"]["handler_id"] == (  # type: ignore[index]
+        "category3-production-wrapper:v1"
+    )
 
 
 def test_removing_v16_lifecycle_support_fails_registry_completeness() -> None:
@@ -40,44 +62,93 @@ def test_removing_v16_lifecycle_support_fails_registry_completeness() -> None:
     receipt = validate_registry_completeness(ROOT, lifecycle_loader=mutant_loader)
     assert receipt["complete"] is False
     v16 = next(entry for entry in receipt["contracts"] if entry["version"] == "V16")
-    assert v16["consumers"]["campaign_lifecycle_loading"]["status"] == "failed"
+    assert v16["consumers"]["campaign_lifecycle_loading"]["status"] == "failed"  # type: ignore[index]
 
 
-def test_declared_metadata_capability_without_consumer_fails() -> None:
+@pytest.mark.parametrize("consumer_name", tuple(CONTROL_CONSUMERS))
+def test_disabling_each_applicable_real_consumer_fails_completeness(
+    consumer_name: str,
+) -> None:
+    contract = _first_applicable_contract(consumer_name)
     receipt = validate_registry_completeness(
         ROOT,
-        disabled_consumers=frozenset({"metadata_policy_resolution"}),
+        contracts={contract.version: contract},
+        disabled_consumers=frozenset({consumer_name}),
     )
     assert receipt["complete"] is False
-    affected = [
-        entry
-        for entry in receipt["contracts"]
-        if PROVIDER_CONTRACTS[entry["version"]].capabilities.metadata_policy
-        is MetadataPolicy.LOCAL_PRELAUNCH_RECEIPT
-    ]
-    assert affected
-    assert all(
-        entry["consumers"]["metadata_policy_resolution"]["status"] == "failed" for entry in affected
-    )
+    entry = receipt["contracts"][0]
+    assert entry["consumers"][consumer_name]["status"] == "failed"  # type: ignore[index]
 
 
-def test_declared_replacement_capability_without_consumer_fails() -> None:
+@pytest.mark.parametrize(
+    "consumer_name",
+    tuple(
+        name
+        for name in CONTROL_CONSUMERS
+        if expected_consumer_handler_id(name, V16_PROVIDER_CONTRACT) is not None
+    ),
+)
+def test_each_applicable_consumer_rejecting_v16_fails_completeness(
+    consumer_name: str,
+) -> None:
+    original = CONTROL_CONSUMERS[consumer_name]
+
+    def reject_v16(repository: Path, contract: object) -> ConsumerResolution | None:
+        if getattr(contract, "version", None) == "V16":
+            raise ValueError("mutant rejected V16")
+        return original.resolve(repository, contract)  # type: ignore[arg-type]
+
+    consumers = dict(CONTROL_CONSUMERS)
+    consumers[consumer_name] = ContractConsumer(consumer_name, reject_v16)  # type: ignore[arg-type]
     receipt = validate_registry_completeness(
         ROOT,
-        disabled_consumers=frozenset({"replacement_policy_resolution"}),
+        contracts={"V16": V16_PROVIDER_CONTRACT},
+        control_consumers=consumers,
     )
     assert receipt["complete"] is False
-    affected = [
-        entry
-        for entry in receipt["contracts"]
-        if PROVIDER_CONTRACTS[entry["version"]].capabilities.replacement_policy
-        is ReplacementPolicy.BOUNDED_PREFLIGHT
-    ]
-    assert affected
-    assert all(
-        entry["consumers"]["replacement_policy_resolution"]["status"] == "failed"
-        for entry in affected
+    assert receipt["contracts"][0]["consumers"][consumer_name]["status"] == "failed"  # type: ignore[index]
+
+
+@pytest.mark.parametrize("consumer_name", tuple(CONTROL_CONSUMERS))
+def test_each_applicable_consumer_returning_wrong_handler_fails_completeness(
+    consumer_name: str,
+) -> None:
+    contract = _first_applicable_contract(consumer_name)
+    original = CONTROL_CONSUMERS[consumer_name]
+
+    def wrong_handler(
+        repository: Path,
+        selected: object,
+    ) -> ConsumerResolution | None:
+        result = original.resolve(repository, selected)  # type: ignore[arg-type]
+        assert result is not None
+        return replace(result, handler_id="mutant:wrong-handler")
+
+    consumers = dict(CONTROL_CONSUMERS)
+    consumers[consumer_name] = ContractConsumer(consumer_name, wrong_handler)  # type: ignore[arg-type]
+    receipt = validate_registry_completeness(
+        ROOT,
+        contracts={contract.version: contract},
+        control_consumers=consumers,
     )
+    assert receipt["complete"] is False
+    assert receipt["contracts"][0]["consumers"][consumer_name]["status"] == "failed"  # type: ignore[index]
+
+
+def test_future_autonomous_contract_declaration_resolves_all_real_consumers() -> None:
+    future = replace(
+        V16_PROVIDER_CONTRACT,
+        version="V99",
+        control_root_name="pilot-v99",
+    )
+    resolutions = resolve_control_consumers(ROOT, future)
+    for name, resolution in resolutions.items():
+        expected = expected_consumer_handler_id(name, future)
+        if expected is None:
+            assert resolution is None
+        else:
+            assert resolution is not None
+            assert resolution.handler_id == expected
 
 
 def test_registry_receipt_is_deterministic_and_schema_valid() -> None:

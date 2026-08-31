@@ -1,6 +1,6 @@
 # T09 control-plane stabilization implementation ledger
 
-Status: **review-required**
+Status: **in-progress**
 
 Live authorization: **false**
 
@@ -39,9 +39,35 @@ created. No target branch/worktree or V17/`AUTONOMOUS-0010` artifact existed.
 ## Assembly ledger
 
 The authoritative CP-01 through CP-20 checklist and implementation mapping are in
-`docs/exec-plans/active/T09_CONTROL_PLANE_STABILIZATION.md`. All required items are
-`met`; the branch remains review-required because draft PR #12 must be independently
-reviewed and must not be merged by this workstream.
+`docs/exec-plans/active/T09_CONTROL_PLANE_STABILIZATION.md`. Review `5071206789`
+reopened CP-05, CP-08, CP-09, CP-11, and CP-20 as `partial`; they cannot return to
+`met` until production coupling, exact proof validation, real-consumer completeness,
+direct review, local parity, and exact-head GitHub Actions all pass.
+
+## Review repair assembly
+
+Exact reviewed identity:
+
+```text
+review_id: 5071206789
+reviewed_commit: 559d52c9339bf13fae6808178a5a65fe71706f74
+reviewed_tree: 93706e4cb3f02e7833b14e2f42c3ea757ce55316
+base_commit: 450a10a51eda4c428f20b27d6b4aafc4f94d80f4
+operator_attested_model: gpt-5.6-sol
+operator_attested_effort: max
+implementation_delegated: false
+```
+
+| Repair item | Required evidence | Status |
+|---|---|---|
+| RR-01 | Opaque validated capsule, receipt-set, staging, and preparation types; no caller proof booleans/hash tuples | implemented; final evidence pending |
+| RR-02 | Exact binding-document, file, schema, semantic, commit/tree, contract/package, cross-binding, source, authority, and scenario validation | implemented; forgery matrix pending |
+| RR-03 | Production-wrapper adapter assembly over retained lifecycle, metadata, replacement, accounting, host/evidence, finalizer, and cleanup primitives | implemented; final evidence pending |
+| RR-04 | Tracked happy/failure receipts and agent-check use production wrappers with fake low-level effects | implemented; receipt regeneration pending |
+| RR-05 | One real-consumer registry shared by completeness and production assembly | implemented; final evidence pending |
+| RR-06 | Forgery, registry mutation, production-coupling, and accounting regressions with no skips/xfails | in-progress |
+| RR-07 | Non-circular immutable receipts, incident/capsule/docs, and direct Sol/max self-review | in-progress |
+| RR-08 | Focused/full/static/privacy/site/parity and exact-head GitHub Actions; draft PR comment and rereview handoff | not-started |
 
 ## Active-version dispatch inventory
 
@@ -118,36 +144,38 @@ runtime lint scan and directly exercise both prohibited and permitted examples.
   Actions run `33432821217` passed on predecessor head
   `63e8b94ed7b3898d88d5e3bc5f2454af68e0e6b7`; this review-state-only closeout
   commit must pass the same exact-head CI gate before the terminal handoff.
+- 2026-08-31 review-repair implementation: added opaque document-backed control
+  proofs, exact transitive receipt validation, deterministic staging validation, one
+  real-consumer registry, one production-wrapper assembly, and one shared controller
+  accepting shadow-only fake channels or future separately reviewed live channels.
+  The production shadow exercises retained metadata, provider launch/replacement,
+  accounting, evidence, finalizer/evaluator, and cleanup primitives. Focused shadow,
+  coupling, registry-mutation, CLI, Ruff, and strict mypy checks pass; receipt
+  regeneration, proof-forgery coverage, full gates, direct review, and CI are pending.
 
 ## Immutable control receipts
 
-Every receipt below binds clean implementation ancestor
-`5efbe727648ae9e7077132aa9bf3033e4b35ec03`, tree
-`5fab7020bf157c6c31a68b1b2024ca10203d3106`, rather than its own commit.
-
-| Receipt | Bytes | File SHA-256 |
-|---|---:|---|
-| `control/receipts/active-version-lint.json` | 4,937 | `223f8f11d910215f615145ffd972db62e7a602293f34a8a64bc37e7fbb05c612` |
-| `control/receipts/registry-completeness.json` | 53,387 | `f889ae9ae2ca7857dfcf08c86459cb0b953a24417ccbf34e91fe7e4af4b2a03a` |
-| `control/receipts/v16-composition.json` | 2,166 | `e85a6f11022cf7b8f0e855d6c3abd0d127dd3df7f5ca2756fc04ed0031a7abf4` |
-| `control/receipts/category3-shadow/happy-path.json` | 20,417 | `49fbdc2f68a3604274dc1e44e388ee00efa0fbb9151f70491254bc510698ec81` |
-| `control/receipts/state-capsule.json` | 2,750 | `5f529eddccf31cee3365937cd1d246fd6ae1daec5ee0d01ad7d13b66f0529a02` |
-| `control/receipts/incidents.json` | 917 | `16205084add2ef9d2cb50f3907c7c5a94bb056ab4e19c5d0f66e679e2e66f4ab` |
-| `control/receipts/agent-check.json` | 7,783 | `55f548bbfb206547bfd64bdef1fcc74b8627f0c9dca79707714d06595d531d77` |
-
-The complete 12-file shadow directory has a canonical file-identity matrix SHA-256
-of `1affe422c0b25ccf46fd717493ff9ccdd8c666877570ef1791ccdd788fa25904`.
-`giclab-validate all` rejects a missing receipt, semantic drift, schema failure,
-non-ancestor identity, incomplete scenario, or aggregate cross-binding mismatch.
+The reviewed-head receipt set is superseded because it was produced through the pure
+fake shortcut and did not validate transitive documents. After the repaired shared
+source is sealed in one clean implementation ancestor, `refresh-receipts` will
+regenerate active lint, real-consumer registry, composition, state capsule, one
+production-coupled happy receipt, fifteen production-coupled failure receipts,
+incident completeness, exact shared-source binding, aggregate agent check, and one
+binding document. The resulting identities will be recorded here; no receipt binds
+its own commit.
 
 ## Control architecture evidence
 
 - Capability source: `src/giclab/harness/t09_provider_contracts.py`.
 - Version-dispatch lint: `src/giclab/control/version_lint.py`.
-- Consumer completeness: `src/giclab/control/registry_validation.py`.
+- Real-consumer definitions and completeness:
+  `src/giclab/control/consumers.py` and
+  `src/giclab/control/registry_validation.py`.
 - Effect-free composition: `src/giclab/control/composition.py`.
-- Shared transaction and strict fakes: `src/giclab/control/category3.py` and
+- Shared transaction, production wrappers, and fake low-level effects:
+  `src/giclab/control/category3.py`, `src/giclab/control/production.py`, and
   `src/giclab/control/adapters.py`.
+- Exact proof minting and binding validation: `src/giclab/control/proofs.py`.
 - Happy/failure matrix: `src/giclab/control/shadow.py`.
 - Agent orientation and incident accretion: `src/giclab/control/state_capsule.py` and
   `src/giclab/control/incidents.py`.
@@ -155,27 +183,11 @@ non-ancestor identity, incomplete scenario, or aggregate cross-binding mismatch.
 
 ## Direct review log
 
-Direct review is complete with no remaining finding. It confirmed:
-
-- `PROVIDER_CONTRACTS` and its plan-ID projection are the sole active registry;
-  immutable version identity is separate from semantic capability dispatch;
-- the repository AST gate reports zero prohibited active-version dispatches, and all
-  14 registered contracts resolve their complete consumer/composition matrices;
-- shadow rehearsal uses the shared Category 3 controller, while the only available
-  adapters are strict local fakes and `PreparedCategory3.live_effects_permitted` is
-  false;
-- validated receipt mode blocks before staging/secret/metadata when its receipt set
-  is absent, and the lifecycle omission stops at composition with all external-call
-  counts zero;
-- metadata, provider capability, scientific-attempt prefix, evidence, cleanup, and
-  interpretation permission are separately owned transaction state. Review found
-  the interpretation field had originally been emitted as a constant; commit
-  `ac99cabc31e06d3d96d6467f670511c11080bedd` moved it into the typed state and the
-  post-repair control suite and agent check pass;
-- fake evaluator outputs remain shadow control evidence, ambiguous launch remains
-  non-zero/unknown, and infrastructure failures never produce scientific scores;
-- the capsule is concise, deterministic, public-safe, and never infers authority;
-  the incident is hash-bound to three passing regressions;
-- only the sanitized V16 disposition changed under the experiment tree, no V17 or
-  `AUTONOMOUS-0010` artifact exists, no live adapter or authority was created, and the
-  future package must bind the complete validated receipt set in a separate PR.
+The earlier direct review is superseded by exact-head review `5071206789`. A new
+direct Sol/max review will be recorded only after proof-forgery coverage, immutable
+receipt validation, full local/parity/site gates, and the final source diff pass. It
+must answer with source and tests whether PR 2 remains package-only, future live
+effects use this same controller without shared-source changes, caller assertions
+cannot forge preparation, shadow invokes retained production primitives, registry
+completeness invokes every real consumer, and model-call accounting participates in
+shadow execution.

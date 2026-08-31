@@ -12,8 +12,10 @@ from jsonschema import Draft202012Validator
 from giclab.control.category3 import repository_identity
 from giclab.control.composition import compose_control_plane
 from giclab.control.incidents import validate_incidents
+from giclab.control.proofs import generate_source_binding_receipt
 from giclab.control.registry_validation import validate_registry_completeness
-from giclab.control.shadow import HAPPY_PATH, run_required_shadow_matrix
+from giclab.control.scenarios import HAPPY_PATH
+from giclab.control.shadow import run_required_shadow_matrix
 from giclab.control.state_capsule import generate_state_capsule
 from giclab.control.version_lint import validate_active_version_dispatch
 from giclab.harness.t09_provider_contracts import PROVIDER_CONTRACTS, V16_PROVIDER_CONTRACT
@@ -47,8 +49,17 @@ def run_agent_check(
         root,
         execute_regressions=execute_incident_regressions,
     )
+    source_binding = generate_source_binding_receipt(
+        root,
+        source_commit=commit,
+        source_tree=tree,
+    )
+    source_binding_files = source_binding.get("files")
+    if not isinstance(source_binding_files, list):
+        raise ValueError("source-binding receipt files must be a list")
     compositions: list[dict[str, object]] = []
     all_compositions_valid = True
+    v16_composition: dict[str, object] | None = None
     for contract in PROVIDER_CONTRACTS.values():
         try:
             receipt = compose_control_plane(
@@ -63,6 +74,8 @@ def run_agent_check(
                 receipt,
             )
             error = None
+            if contract is V16_PROVIDER_CONTRACT:
+                v16_composition = receipt
         except Exception as exc:
             receipt = {}
             valid = False
@@ -87,10 +100,15 @@ def run_agent_check(
         failure_matrix_valid=False,
         deterministic=True,
     )
+    if v16_composition is None:
+        raise ValueError("V16 production composition is unavailable")
     shadow_receipts = run_required_shadow_matrix(
         root,
         contract=V16_PROVIDER_CONTRACT,
-        state_capsule_sha256=str(bootstrap_capsule["semantic_sha256"]),
+        state_capsule=bootstrap_capsule,
+        registry_receipt=registry,
+        version_lint_receipt=lint,
+        composition_receipt=v16_composition,
     )
     shadow_schema_valid = all(
         _schema_valid(root, "schemas/t09-category3-shadow-receipt.schema.json", receipt)
@@ -123,6 +141,7 @@ def run_agent_check(
             happy_valid,
             failure_matrix_valid,
             capsule_valid,
+            source_binding.get("live_execution_performed") is False,
         )
     )
     aggregate: dict[str, object] = {
@@ -163,6 +182,11 @@ def run_agent_check(
             "state_capsule": {
                 "complete": capsule_valid,
                 "semantic_sha256": capsule["semantic_sha256"],
+            },
+            "source_binding": {
+                "complete": True,
+                "file_count": len(source_binding_files),
+                "semantic_sha256": source_binding["semantic_sha256"],
             },
         },
         "complete": complete,

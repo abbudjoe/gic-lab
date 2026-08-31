@@ -23,13 +23,22 @@ from giclab.control.adapters import (
     AmbiguousProviderOutcome,
     Category3Adapters,
     CleanupInterrupted,
-    EffectMode,
+    EffectAuthorityKind,
     MetadataEnvelope,
     ProviderHandle,
     StructuralPrivacyFinding,
     TerminationUnavailable,
 )
 from giclab.control.composition import CompositionError, compose_control_plane
+from giclab.control.proofs import (
+    ControlProofError,
+    ControlProofReference,
+    ValidatedControlReceiptSet,
+    ValidatedDeterministicStaging,
+    ValidatedShadowRehearsal,
+    validate_control_receipt_set,
+    validate_deterministic_staging,
+)
 from giclab.harness.t09_provider_contracts import (
     MetadataPolicy,
     ReplacementPolicy,
@@ -67,13 +76,6 @@ class Category3Phase(StrEnum):
     TERMINAL_VERIFICATION = "terminal-provider-security-verification"
 
 
-class ShadowPrerequisitePolicy(StrEnum):
-    """How prerequisite shadow evidence is satisfied before an effect boundary."""
-
-    SELF_REHEARSAL = "self-rehearsal"
-    VALIDATED_RECEIPTS = "validated-receipts"
-
-
 @dataclass(frozen=True, slots=True)
 class Category3Request:
     repository: Path
@@ -81,15 +83,10 @@ class Category3Request:
     scenario: str
     expected_repository_commit: str
     expected_repository_tree: str
-    state_capsule_sha256: str
-    state_capsule_valid: bool
-    shadow_prerequisite_policy: ShadowPrerequisitePolicy
-    required_shadow_receipt_sha256s: tuple[str, ...] = ()
-    deterministic_paths_valid: bool = True
-    deterministic_storage_valid: bool = True
+    control_proof: ControlProofReference | ValidatedShadowRehearsal
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, init=False)
 class PreparedCategory3:
     """Proof that every deterministic gate preceding fake effects has passed."""
 
@@ -99,9 +96,14 @@ class PreparedCategory3:
     stage_sha256: str
     shadow_prerequisite_policy: str
     shadow_receipt_sha256s: tuple[str, ...]
+    validated_receipts: ValidatedControlReceiptSet | None
+    validated_staging: ValidatedDeterministicStaging
     shadow_effects_permitted: bool
     live_effects_permitted: bool
     _proof: object = field(repr=False, compare=False)
+
+    def __init__(self, *_args: object, **_kwargs: object) -> None:
+        raise TypeError("PreparedCategory3 is minted only by exact validators")
 
 
 @dataclass(frozen=True, slots=True)
@@ -178,19 +180,25 @@ def prepare_category3(
     """Run every deterministic prerequisite and mint the sole effect token."""
 
     transitions: list[dict[str, object]] = []
-    if adapters.mode is not EffectMode.SHADOW_FAKE:
+    if adapters.authority.kind not in {
+        EffectAuthorityKind.SHADOW_ONLY,
+        EffectAuthorityKind.LIVE_AUTHORIZED,
+    } or not adapters.authority.authorizes(
+        contract_version=request.contract.version,
+        control_revision=request.expected_repository_commit,
+    ):
         _transition(
             transitions,
             Category3Phase.VERIFY_IDENTITY,
             "failed",
-            detail="live adapters are unavailable in the stabilization package",
+            detail="effect authority does not bind this transaction",
         )
         return PreparationOutcome(
             None,
             None,
             tuple(transitions),
             Category3Phase.VERIFY_IDENTITY.value,
-            "live adapters are unavailable",
+            "effect authority is unavailable",
         )
     commit, tree = repository_identity(request.repository)
     if (commit, tree) != (
@@ -239,52 +247,86 @@ def prepare_category3(
         )
     _transition(transitions, Category3Phase.OFFLINE_COMPOSITION, "passed")
 
-    if not request.state_capsule_valid or len(request.state_capsule_sha256) != 64:
-        _transition(transitions, Category3Phase.STATE_CAPSULE, "failed")
+    validated_receipts: ValidatedControlReceiptSet | None = None
+    proof = request.control_proof
+    try:
+        if isinstance(proof, ControlProofReference):
+            validated_receipts = validate_control_receipt_set(
+                request.repository,
+                request.contract,
+                proof,
+            )
+            state_capsule_sha256 = validated_receipts.state_capsule.semantic_sha256
+            receipt_hashes = tuple(
+                [
+                    validated_receipts.receipt_semantic_sha256s["shadow_happy_path"],
+                    *(
+                        validated_receipts.failure_semantic_sha256s[name]
+                        for name in sorted(validated_receipts.failure_semantic_sha256s)
+                    ),
+                ]
+            )
+            proof_policy = "validated-control-receipt-binding"
+            command_package_sha256 = validated_receipts.command_package_sha256
+        elif isinstance(proof, ValidatedShadowRehearsal):
+            if (
+                not proof.is_valid()
+                or proof.control_commit != request.expected_repository_commit
+                or proof.control_tree != request.expected_repository_tree
+                or proof.provider_contract_version != request.contract.version
+                or proof.composition_sha256 != composition.get("semantic_sha256")
+            ):
+                raise ControlProofError("shadow rehearsal proof identity drifted")
+            state_capsule_sha256 = proof.state_capsule.semantic_sha256
+            receipt_hashes = ()
+            proof_policy = "validated-static-shadow-rehearsal"
+            command_package_sha256 = proof.staging.command_package_sha256
+        else:  # pragma: no cover - typed request exhaustiveness guard
+            raise ControlProofError("control proof type is unsupported")
+    except (ControlProofError, OSError, ValueError) as exc:
+        _transition(
+            transitions,
+            Category3Phase.STATE_CAPSULE,
+            "failed",
+            detail=str(exc),
+        )
         return PreparationOutcome(
             None,
             composition,
             tuple(transitions),
             Category3Phase.STATE_CAPSULE.value,
-            "state capsule is invalid",
+            f"control proof validation failed: {exc}",
         )
     _transition(transitions, Category3Phase.STATE_CAPSULE, "passed")
-
-    if request.shadow_prerequisite_policy is ShadowPrerequisitePolicy.VALIDATED_RECEIPTS:
-        valid_receipts = bool(request.required_shadow_receipt_sha256s) and all(
-            len(value) == 64 for value in request.required_shadow_receipt_sha256s
-        )
-    else:
-        valid_receipts = request.scenario != ""
-    if not valid_receipts:
-        _transition(transitions, Category3Phase.SHADOW_RECEIPTS, "failed")
-        return PreparationOutcome(
-            None,
-            composition,
-            tuple(transitions),
-            Category3Phase.SHADOW_RECEIPTS.value,
-            "required shadow evidence is incomplete",
-        )
     _transition(
         transitions,
         Category3Phase.SHADOW_RECEIPTS,
         "passed",
-        detail=request.shadow_prerequisite_policy.value,
+        detail=proof_policy,
     )
 
-    if not request.deterministic_paths_valid or not request.deterministic_storage_valid:
+    try:
+        if isinstance(proof, ValidatedShadowRehearsal):
+            validated_staging = proof.staging
+        else:
+            validated_staging = validate_deterministic_staging(
+                request.repository,
+                request.contract,
+                command_package_sha256=command_package_sha256,
+            )
+    except (ControlProofError, OSError, ValueError) as exc:
         _transition(
             transitions,
             Category3Phase.LOCAL_STAGING,
             "failed",
-            detail="deterministic path or storage check failed",
+            detail=str(exc),
         )
         return PreparationOutcome(
             None,
             composition,
             tuple(transitions),
             Category3Phase.LOCAL_STAGING.value,
-            "deterministic staging gate failed",
+            f"deterministic staging validation failed: {exc}",
         )
     try:
         stage_sha256 = adapters.host_runtime.stage()
@@ -303,17 +345,26 @@ def prepare_category3(
             str(exc),
         )
     _transition(transitions, Category3Phase.LOCAL_STAGING, "passed")
-    prepared = PreparedCategory3(
-        contract_version=request.contract.version,
-        composition_sha256=str(composition["semantic_sha256"]),
-        state_capsule_sha256=request.state_capsule_sha256,
-        stage_sha256=stage_sha256,
-        shadow_prerequisite_policy=request.shadow_prerequisite_policy.value,
-        shadow_receipt_sha256s=request.required_shadow_receipt_sha256s,
-        shadow_effects_permitted=True,
-        live_effects_permitted=False,
-        _proof=_PREPARED_PROOF,
+    prepared = object.__new__(PreparedCategory3)
+    object.__setattr__(prepared, "contract_version", request.contract.version)
+    object.__setattr__(prepared, "composition_sha256", str(composition["semantic_sha256"]))
+    object.__setattr__(prepared, "state_capsule_sha256", state_capsule_sha256)
+    object.__setattr__(prepared, "stage_sha256", stage_sha256)
+    object.__setattr__(prepared, "shadow_prerequisite_policy", proof_policy)
+    object.__setattr__(prepared, "shadow_receipt_sha256s", receipt_hashes)
+    object.__setattr__(prepared, "validated_receipts", validated_receipts)
+    object.__setattr__(prepared, "validated_staging", validated_staging)
+    object.__setattr__(
+        prepared,
+        "shadow_effects_permitted",
+        adapters.authority.kind is EffectAuthorityKind.SHADOW_ONLY,
     )
+    object.__setattr__(
+        prepared,
+        "live_effects_permitted",
+        adapters.authority.kind is EffectAuthorityKind.LIVE_AUTHORIZED,
+    )
+    object.__setattr__(prepared, "_proof", _PREPARED_PROOF)
     return PreparationOutcome(prepared, composition, tuple(transitions), None, None)
 
 
@@ -329,7 +380,7 @@ class _TransactionState:
     handle: ProviderHandle | None = None
     condition_reserved: list[str] = field(default_factory=list)
     condition_consumed: list[str] = field(default_factory=list)
-    fake_evidence: list[dict[str, object]] = field(default_factory=list)
+    effect_evidence: list[dict[str, object]] = field(default_factory=list)
     raw_evidence: list[str] = field(default_factory=list)
     finalized_evidence: list[str] = field(default_factory=list)
     evaluator_outputs: list[str] = field(default_factory=list)
@@ -349,6 +400,25 @@ class _TransactionState:
 
 def _call_counts(adapters: Category3Adapters) -> dict[str, int]:
     counts = Counter(call.operation for call in adapters.audit.calls)
+    diagnostics = adapters.diagnostics.control_evidence()
+    accounting = diagnostics.get("accounting")
+    conditions = accounting.get("conditions") if isinstance(accounting, dict) else None
+    model_attempts = 0
+    browser_actions = 0
+    unknown_outcomes = 0
+    if isinstance(conditions, dict):
+        for document in conditions.values():
+            if not isinstance(document, dict):
+                continue
+            lower = document.get("observed_lower_bound")
+            condition = lower.get("condition") if isinstance(lower, dict) else None
+            if isinstance(condition, dict):
+                attempts = condition.get("model_call_attempts")
+                actions = condition.get("browser_actions")
+                model_attempts += attempts if type(attempts) is int else 0
+                browser_actions += actions if type(actions) is int else 0
+            unknown = document.get("unknown_outcomes")
+            unknown_outcomes += unknown if type(unknown) is int else 0
     return {
         "secret_reads": counts["secret.read"],
         "metadata_requests": counts["metadata.request"],
@@ -358,6 +428,9 @@ def _call_counts(adapters: Category3Adapters) -> dict[str, int]:
         "termination_calls": counts["provider.terminate"],
         "condition_reservations": counts["condition.reserve"],
         "condition_entries": counts["condition.enter"],
+        "model_call_attempts": model_attempts,
+        "browser_actions": browser_actions,
+        "unknown_model_outcomes": unknown_outcomes,
     }
 
 
@@ -368,18 +441,26 @@ def _result_document(
     state: _TransactionState,
 ) -> dict[str, object]:
     counts = _call_counts(adapters)
+    shadow_only = adapters.authority.kind is EffectAuthorityKind.SHADOW_ONLY
+    terminal_prefix = "category3-shadow" if shadow_only else "category3-live"
     if state.provider_resources_zero is not True or state.cleanup_state == "unresolved":
-        terminal_state = "category3-shadow-stopped-cleanup-unresolved"
+        terminal_state = f"{terminal_prefix}-stopped-cleanup-unresolved"
     elif not state.privacy_clean:
-        terminal_state = "category3-shadow-stopped-privacy-blocked"
+        terminal_state = f"{terminal_prefix}-stopped-privacy-blocked"
     elif state.stopping_phase is None:
-        terminal_state = "category3-shadow-complete-clean"
+        terminal_state = f"{terminal_prefix}-complete-clean"
     else:
-        terminal_state = "category3-shadow-stopped-cleanup-verified"
+        terminal_state = f"{terminal_prefix}-stopped-cleanup-verified"
     composition = preparation.composition or {}
+    production_evidence = dict(adapters.diagnostics.control_evidence())
+    accounting = production_evidence.get("accounting")
+    projected = accounting.get("projected_real_cost_usd") if isinstance(accounting, dict) else 0
+    projected_cost = f"{float(projected):.2f}" if isinstance(projected, (int, float)) else "unknown"
     document: dict[str, object] = {
         "schema_version": SHADOW_SCHEMA_VERSION,
         "scenario": request.scenario,
+        "implementation_flavor": adapters.implementation_flavor.value,
+        "effect_authority": adapters.authority.kind.value,
         "provider_contract_version": request.contract.version,
         "repository_commit": request.expected_repository_commit,
         "repository_tree": request.expected_repository_tree,
@@ -400,13 +481,14 @@ def _result_document(
             "count": len(state.condition_consumed),
             "run_ids": state.condition_consumed,
         },
-        "fake_evidence_outputs": state.fake_evidence,
         "evidence_retained": {
             "raw": state.raw_evidence,
             "finalized": state.finalized_evidence,
             "evaluator": state.evaluator_outputs,
             "pair_checkpoint_sha256": state.pair_checkpoint_sha256,
-            "classification": "shadow-control-plane-output",
+            "classification": (
+                "shadow-control-plane-output" if shadow_only else "live-control-plane-output"
+            ),
         },
         "cleanup": {
             "state": state.cleanup_state,
@@ -418,12 +500,16 @@ def _result_document(
         "earliest_stopping_phase": state.stopping_phase,
         "stop_reason": state.stop_reason,
         "terminal_state": terminal_state,
-        "projected_cost_usd": "0.00",
+        "projected_cost_usd": projected_cost,
         "undeclared_adapter_calls": list(adapters.audit.undeclared_calls),
         "zero_undeclared_calls": not adapters.audit.undeclared_calls,
-        "shadow_only": True,
+        "shadow_only": shadow_only,
         "scientific_interpretation_allowed": state.scientific_interpretation_allowed,
+        "production_control_evidence": production_evidence,
     }
+    document["fake_evidence_outputs" if shadow_only else "effect_evidence_outputs"] = (
+        state.effect_evidence
+    )
     document["semantic_sha256"] = _canonical_sha256(document)
     return document
 
@@ -467,6 +553,15 @@ def _establish_provider(
                 state.transitions,
                 Category3Phase.LAUNCH,
                 "ambiguous",
+                detail=str(exc),
+            )
+            state.stop(Category3Phase.LAUNCH, str(exc))
+            return
+        except AdapterFailure as exc:
+            _transition(
+                state.transitions,
+                Category3Phase.LAUNCH,
+                "failed",
                 detail=str(exc),
             )
             state.stop(Category3Phase.LAUNCH, str(exc))
@@ -564,8 +659,13 @@ def _run_conditions(
             )
             raw = adapters.condition_runtime.export_raw(run_id)
             state.raw_evidence.append(run_id)
-            state.fake_evidence.append(
-                {"run_id": run_id, "kind": "raw", "sha256": raw, "shadow_only": True}
+            state.effect_evidence.append(
+                {
+                    "run_id": run_id,
+                    "kind": "raw",
+                    "sha256": raw,
+                    "shadow_only": adapters.authority.kind is EffectAuthorityKind.SHADOW_ONLY,
+                }
             )
             adapters.evidence_store.record(kind="raw", identity=raw)
             _transition(
@@ -576,12 +676,12 @@ def _run_conditions(
             )
             finalized = adapters.condition_runtime.finalize(run_id)
             state.finalized_evidence.append(run_id)
-            state.fake_evidence.append(
+            state.effect_evidence.append(
                 {
                     "run_id": run_id,
                     "kind": "finalized",
                     "sha256": finalized,
-                    "shadow_only": True,
+                    "shadow_only": adapters.authority.kind is EffectAuthorityKind.SHADOW_ONLY,
                 }
             )
             adapters.evidence_store.record(kind="finalized", identity=finalized)
@@ -593,12 +693,12 @@ def _run_conditions(
             )
             evaluated = adapters.condition_runtime.evaluate(run_id)
             state.evaluator_outputs.append(run_id)
-            state.fake_evidence.append(
+            state.effect_evidence.append(
                 {
                     "run_id": run_id,
                     "kind": "evaluator-control-output",
                     "sha256": evaluated,
-                    "shadow_only": True,
+                    "shadow_only": adapters.authority.kind is EffectAuthorityKind.SHADOW_ONLY,
                 }
             )
             adapters.evidence_store.record(kind="evaluator", identity=evaluated)
@@ -727,7 +827,7 @@ def execute_category3_transaction(
     adapters: Category3Adapters,
     composition_builder: CompositionBuilder = _default_composition_builder,
 ) -> dict[str, object]:
-    """Execute the shared transaction with injected, fake-only effects."""
+    """Execute the shared transaction with a validated injected effect authority."""
 
     preparation = prepare_category3(
         request,
@@ -737,7 +837,16 @@ def execute_category3_transaction(
     if preparation.prepared is None:
         return _early_result(request, adapters, preparation)
     prepared = preparation.prepared
-    if prepared._proof is not _PREPARED_PROOF or not prepared.shadow_effects_permitted:
+    permission_valid = (
+        adapters.authority.kind is EffectAuthorityKind.SHADOW_ONLY
+        and prepared.shadow_effects_permitted
+        and not prepared.live_effects_permitted
+    ) or (
+        adapters.authority.kind is EffectAuthorityKind.LIVE_AUTHORIZED
+        and prepared.live_effects_permitted
+        and not prepared.shadow_effects_permitted
+    )
+    if prepared._proof is not _PREPARED_PROOF or not permission_valid:
         raise CompositionError("Category 3 preparation token is invalid")
     state = _TransactionState(transitions=list(preparation.transitions))
 

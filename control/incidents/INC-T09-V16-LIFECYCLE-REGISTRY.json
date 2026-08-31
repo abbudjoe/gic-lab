@@ -32,11 +32,11 @@
   "regressions": [
     {
       "kind": "test-node",
-      "reference": "tests/control/test_composition.py::test_historical_v16_lifecycle_omission_fails_before_secret_access"
+      "reference": "tests/control/test_production_coupling.py::test_registered_active_contract_reaches_production_adapter_assembly"
     },
     {
       "kind": "test-node",
-      "reference": "tests/control/test_registry_validation.py::test_removing_v16_lifecycle_support_fails_registry_completeness"
+      "reference": "tests/control/test_composition.py::test_historical_v16_lifecycle_omission_fails_before_secret_access"
     },
     {
       "kind": "test-node",

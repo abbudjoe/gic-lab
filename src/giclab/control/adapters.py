@@ -1,8 +1,9 @@
-"""Effect interfaces and deterministic, network-disabled Category 3 fakes.
+"""Typed effect surfaces for the shared Category 3 controller.
 
-Only the fake implementation is available in the stabilization package.  A later
-runtime package may implement these protocols, but it must use the shared controller
-and satisfy its preparation token before an effect can be requested.
+Implementation flavor and effect authority are intentionally separate. Public CI
+uses production wrappers over deterministic low-level fakes. A pure fake fixture is
+retained only for narrow controller tests. This package has no live-authority
+factory: constructing an enum value cannot mint effect authority.
 """
 
 from __future__ import annotations
@@ -11,15 +12,86 @@ import hashlib
 import json
 from collections import Counter
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Protocol
 
 
-class EffectMode(StrEnum):
-    """Effect modes intentionally available in this Category 1 package."""
+class ImplementationFlavor(StrEnum):
+    """Whether adapters wrap retained production primitives or a unit fixture."""
 
-    SHADOW_FAKE = "shadow-fake"
+    PRODUCTION_WRAPPER = "production-wrapper"
+    PURE_FAKE_FIXTURE = "pure-fake-fixture"
+
+
+class EffectAuthorityKind(StrEnum):
+    """Authority classification; this package can mint only shadow authority."""
+
+    SHADOW_ONLY = "shadow-only"
+    LIVE_AUTHORIZED = "live-authorized"
+
+
+_SHADOW_AUTHORITY_PROOF = object()
+
+
+@dataclass(frozen=True, slots=True, init=False)
+class EffectAuthority:
+    """Opaque effect grant whose public constructor is intentionally unavailable."""
+
+    kind: EffectAuthorityKind
+    source: str
+    _proof: object = field(repr=False, compare=False)
+
+    def __init__(self, *_args: object, **_kwargs: object) -> None:
+        raise TypeError("effect authority is minted only by reviewed validators")
+
+    @classmethod
+    def _mint_shadow(cls, *, source: str) -> EffectAuthority:
+        value = object.__new__(cls)
+        object.__setattr__(value, "kind", EffectAuthorityKind.SHADOW_ONLY)
+        object.__setattr__(value, "source", source)
+        object.__setattr__(value, "_proof", _SHADOW_AUTHORITY_PROOF)
+        return value
+
+    def is_valid_shadow(self) -> bool:
+        return self.kind is EffectAuthorityKind.SHADOW_ONLY and (
+            self._proof is _SHADOW_AUTHORITY_PROOF
+        )
+
+    def authorizes(
+        self,
+        *,
+        contract_version: str,
+        control_revision: str,
+    ) -> bool:
+        del contract_version, control_revision
+        return self.is_valid_shadow()
+
+
+def mint_shadow_effect_authority(*, source: str) -> EffectAuthority:
+    """Mint the only authority kind available in this package."""
+
+    return EffectAuthority._mint_shadow(source=source)
+
+
+class EffectAuthorityGrant(Protocol):
+    """Interface a separately reviewed package may implement for live authority."""
+
+    @property
+    def kind(self) -> EffectAuthorityKind:
+        """Return the typed authority kind."""
+
+    @property
+    def source(self) -> str:
+        """Return the exact externally reviewed authority source identity."""
+
+    def authorizes(
+        self,
+        *,
+        contract_version: str,
+        control_revision: str,
+    ) -> bool:
+        """Validate the external grant against exact package/control identity."""
 
 
 class AdapterFailure(RuntimeError):
@@ -167,11 +239,17 @@ class AdapterAudit(Protocol):
         """Return attempted calls outside the declared scenario envelope."""
 
 
+class AdapterDiagnostics(Protocol):
+    def control_evidence(self) -> Mapping[str, object]:
+        """Return public-safe coupling, accounting, and staging evidence."""
+
+
 @dataclass(frozen=True, slots=True)
 class Category3Adapters:
     """The complete injected effect surface used by the shared controller."""
 
-    mode: EffectMode
+    implementation_flavor: ImplementationFlavor
+    authority: EffectAuthorityGrant
     clock: Clock
     secret_channel: SecretChannel
     metadata_transport: MetadataTransport
@@ -180,6 +258,7 @@ class Category3Adapters:
     condition_runtime: ConditionRuntime
     evidence_store: EvidenceStore
     audit: AdapterAudit
+    diagnostics: AdapterDiagnostics
 
 
 @dataclass(frozen=True, slots=True)
@@ -246,7 +325,8 @@ class DeterministicFakeWorld:
 
     def adapters(self) -> Category3Adapters:
         return Category3Adapters(
-            mode=EffectMode.SHADOW_FAKE,
+            implementation_flavor=ImplementationFlavor.PURE_FAKE_FIXTURE,
+            authority=mint_shadow_effect_authority(source="deterministic-unit-fixture"),
             clock=self,
             secret_channel=self,
             metadata_transport=self,
@@ -255,7 +335,19 @@ class DeterministicFakeWorld:
             condition_runtime=self,
             evidence_store=self,
             audit=self,
+            diagnostics=self,
         )
+
+    def control_evidence(self) -> Mapping[str, object]:
+        """The pure fixture intentionally proves no production coupling."""
+
+        return {
+            "implementation_flavor": ImplementationFlavor.PURE_FAKE_FIXTURE.value,
+            "effect_authority": EffectAuthorityKind.SHADOW_ONLY.value,
+            "production_primitives": [],
+            "accounting": None,
+            "deterministic_staging": None,
+        }
 
     def tick(self) -> int:
         return self._tick

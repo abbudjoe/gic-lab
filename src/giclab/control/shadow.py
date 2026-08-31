@@ -6,36 +6,26 @@ import hashlib
 import json
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Final
 
-from giclab.control.adapters import DeterministicFakeWorld, FakeScenario
+from giclab.control.adapters import FakeScenario, ImplementationFlavor
 from giclab.control.category3 import (
     Category3Phase,
     Category3Request,
     CompositionBuilder,
-    ShadowPrerequisitePolicy,
     execute_category3_transaction,
     repository_identity,
 )
 from giclab.control.composition import compose_control_plane
+from giclab.control.production import build_production_shadow_assembly
+from giclab.control.proofs import ValidatedShadowRehearsal, validate_shadow_rehearsal
+from giclab.control.registry_validation import validate_registry_completeness
+from giclab.control.scenarios import (
+    ALL_REQUIRED_SCENARIOS,
+    HAPPY_PATH,
+)
+from giclab.control.version_lint import validate_active_version_dispatch
 from giclab.harness.t09_pragmatic_provider import T09ProviderError
 from giclab.harness.t09_provider_contracts import T09ProviderContract
-
-HAPPY_PATH: Final = "happy-path"
-REQUIRED_FAILURE_SCENARIOS: Final = (
-    "lifecycle-unsupported",
-    "metadata-expired",
-    "provider-entry-replacement",
-    "host-preflight-replacement",
-    "condition-failure",
-    "raw-export-failure",
-    "finalizer-failure",
-    "cleanup-interrupted-resumed",
-    "provider-termination-unavailable",
-    "structural-privacy-finding",
-    "ambiguous-provider-call-outcome",
-)
-ALL_REQUIRED_SCENARIOS: Final = (HAPPY_PATH, *REQUIRED_FAILURE_SCENARIOS)
 
 
 class ShadowValidationError(ValueError):
@@ -92,6 +82,10 @@ def _fake_scenario(name: str) -> FakeScenario:
             fail_operation="provider.launch",
             ambiguous_inventory_after_launch=True,
         ),
+        "known-provider-exception": FakeScenario("known-provider-exception"),
+        "response-accounting-incomplete": FakeScenario("response-accounting-incomplete"),
+        "ambiguous-task-model-send": FakeScenario("ambiguous-task-model-send"),
+        "cost-token-admission-stop": FakeScenario("cost-token-admission-stop"),
     }
     try:
         return scenarios[name]
@@ -134,6 +128,10 @@ def validate_shadow_receipt(receipt: Mapping[str, object]) -> None:
     scenario = receipt.get("scenario")
     _expect(isinstance(scenario, str) and scenario in ALL_REQUIRED_SCENARIOS, "bad scenario")
     _expect(receipt.get("shadow_only") is True, "shadow receipt is not shadow-only")
+    _expect(
+        receipt.get("implementation_flavor") == ImplementationFlavor.PRODUCTION_WRAPPER.value,
+        "tracked shadow did not use production wrappers",
+    )
     _expect(
         receipt.get("scientific_interpretation_allowed") is False,
         "shadow receipt permits scientific interpretation",
@@ -229,6 +227,44 @@ def validate_shadow_receipt(receipt: Mapping[str, object]) -> None:
             cleanup.get("provider_resources_zero") is None,
             "ambiguous launch was recorded as zero resources",
         )
+    elif scenario in {
+        "known-provider-exception",
+        "response-accounting-incomplete",
+        "ambiguous-task-model-send",
+        "cost-token-admission-stop",
+    }:
+        _expect(
+            receipt.get("earliest_stopping_phase") == Category3Phase.CONDITION_EXECUTION.value,
+            "model accounting scenario stopped at the wrong phase",
+        )
+        production = receipt.get("production_control_evidence")
+        accounting = production.get("accounting") if isinstance(production, dict) else None
+        conditions = accounting.get("conditions") if isinstance(accounting, dict) else None
+        _expect(isinstance(conditions, dict) and len(conditions) == 1, "accounting receipt missing")
+        assert isinstance(conditions, dict)
+        call_receipt = next(iter(conditions.values()))
+        _expect(isinstance(call_receipt, dict), "accounting receipt malformed")
+        assert isinstance(call_receipt, dict)
+        terminals = call_receipt.get("terminal_counts")
+        _expect(isinstance(terminals, dict), "terminal accounting is missing")
+        assert isinstance(terminals, dict)
+        if scenario == "known-provider-exception":
+            _expect(
+                terminals.get("sent_provider_error_reconciled") == 1,
+                "known provider exception was not terminally reconciled",
+            )
+            _expect(call_receipt.get("unknown_outcomes") == 0, "known error became ambiguous")
+        elif scenario in {"response-accounting-incomplete", "ambiguous-task-model-send"}:
+            _expect(
+                terminals.get("sent_outcome_unknown") == 1,
+                "ambiguous model call was not charged unknown",
+            )
+            _expect(call_receipt.get("unknown_outcomes") == 1, "unknown outcome count drifted")
+        else:
+            _expect(
+                counts.get("model_call_attempts") == 0,
+                "admission stop crossed the model send boundary",
+            )
     elif scenario == HAPPY_PATH:
         _expect(receipt.get("earliest_stopping_phase") is None, "happy path stopped")
         _expect(
@@ -236,6 +272,9 @@ def validate_shadow_receipt(receipt: Mapping[str, object]) -> None:
             "happy path did not close cleanly",
         )
         _expect(counts.get("condition_entries") == 4, "happy path attempt count drifted")
+        _expect(counts.get("model_call_attempts") == 4, "happy model-call count drifted")
+        _expect(counts.get("browser_actions") == 4, "happy browser-action count drifted")
+        _expect(counts.get("unknown_model_outcomes") == 0, "happy path has unknown calls")
         _expect(cleanup.get("provider_resources_zero") is True, "happy cleanup left resources")
 
 
@@ -244,23 +283,45 @@ def run_shadow_scenario(
     *,
     contract: T09ProviderContract,
     scenario: str,
-    state_capsule_sha256: str,
-    state_capsule_valid: bool = True,
+    state_capsule: Mapping[str, object] | None = None,
+    rehearsal: ValidatedShadowRehearsal | None = None,
     fixed_tick: int = 1000,
 ) -> dict[str, object]:
-    """Run and validate one strict fake scenario without network or secret access."""
+    """Run one production-wrapper scenario over deterministic low-level effects."""
 
     commit, tree = repository_identity(repository)
-    world = DeterministicFakeWorld(_fake_scenario(scenario), fixed_tick=fixed_tick)
+    if rehearsal is None:
+        if state_capsule is None:
+            raise ShadowValidationError("shadow rehearsal requires the actual state capsule")
+        lint = validate_active_version_dispatch(repository)
+        registry = validate_registry_completeness(repository)
+        composition = compose_control_plane(
+            repository,
+            contract=contract,
+            registry_receipt=registry,
+            version_lint_receipt=lint,
+        )
+        rehearsal = validate_shadow_rehearsal(
+            repository,
+            contract,
+            registry_receipt=registry,
+            version_lint_receipt=lint,
+            composition_receipt=composition,
+            state_capsule=state_capsule,
+        )
+    world = build_production_shadow_assembly(
+        repository,
+        contract,
+        _fake_scenario(scenario),
+        fixed_tick=fixed_tick,
+    )
     request = Category3Request(
         repository=repository,
         contract=contract,
         scenario=scenario,
         expected_repository_commit=commit,
         expected_repository_tree=tree,
-        state_capsule_sha256=state_capsule_sha256,
-        state_capsule_valid=state_capsule_valid,
-        shadow_prerequisite_policy=ShadowPrerequisitePolicy.SELF_REHEARSAL,
+        control_proof=rehearsal,
     )
     receipt = execute_category3_transaction(
         request,
@@ -278,19 +339,49 @@ def run_required_shadow_matrix(
     repository: Path,
     *,
     contract: T09ProviderContract,
-    state_capsule_sha256: str,
-    state_capsule_valid: bool = True,
+    state_capsule: Mapping[str, object],
+    registry_receipt: Mapping[str, object] | None = None,
+    version_lint_receipt: Mapping[str, object] | None = None,
+    composition_receipt: Mapping[str, object] | None = None,
     fixed_tick: int = 1000,
 ) -> dict[str, dict[str, object]]:
-    """Run the happy path and every mandatory failure scenario deterministically."""
+    """Run the production-coupled happy path and mandatory failure matrix."""
+
+    lint = (
+        dict(version_lint_receipt)
+        if version_lint_receipt is not None
+        else validate_active_version_dispatch(repository)
+    )
+    registry = (
+        dict(registry_receipt)
+        if registry_receipt is not None
+        else validate_registry_completeness(repository)
+    )
+    composition = (
+        dict(composition_receipt)
+        if composition_receipt is not None
+        else compose_control_plane(
+            repository,
+            contract=contract,
+            registry_receipt=registry,
+            version_lint_receipt=lint,
+        )
+    )
+    rehearsal = validate_shadow_rehearsal(
+        repository,
+        contract,
+        registry_receipt=registry,
+        version_lint_receipt=lint,
+        composition_receipt=composition,
+        state_capsule=state_capsule,
+    )
 
     return {
         scenario: run_shadow_scenario(
             repository,
             contract=contract,
             scenario=scenario,
-            state_capsule_sha256=state_capsule_sha256,
-            state_capsule_valid=state_capsule_valid,
+            rehearsal=rehearsal,
             fixed_tick=fixed_tick,
         )
         for scenario in ALL_REQUIRED_SCENARIOS
