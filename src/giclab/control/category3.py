@@ -339,6 +339,7 @@ class _TransactionState:
     provider_resources_zero: bool | None = None
     privacy_clean: bool = True
     security_restored: bool = False
+    scientific_interpretation_allowed: bool = False
 
     def stop(self, phase: Category3Phase, reason: str) -> None:
         if self.stopping_phase is None:
@@ -421,7 +422,7 @@ def _result_document(
         "undeclared_adapter_calls": list(adapters.audit.undeclared_calls),
         "zero_undeclared_calls": not adapters.audit.undeclared_calls,
         "shadow_only": True,
-        "scientific_interpretation_allowed": False,
+        "scientific_interpretation_allowed": state.scientific_interpretation_allowed,
     }
     document["semantic_sha256"] = _canonical_sha256(document)
     return document
