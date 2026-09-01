@@ -33,7 +33,7 @@
       "index": 5,
       "operation": "metadata.is_fresh",
       "outcome": "passed",
-      "subject": "d50c100fa790cb8e20117095bb9ae60ced86904b2d13e433a18166e34f968ef0"
+      "subject": "285ed79d1b903b5078a03d7dda55fe9384be8ea16f4fe2217aecfc12da6d2fc0"
     },
     {
       "adapter": "provider",
@@ -434,7 +434,7 @@
     "state": "complete"
   },
   "command_package_sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
-  "composition_sha256": "843b7ffe8cac1c3750ca60ea16bea035921c63c544a039d8b8d8c650af165941",
+  "composition_sha256": "4c432e5e11dac3fd98e7336de194be8634931899604f68c000408ff9bcfd4b08",
   "condition_identities_consumed": [
     "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
     "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009",
@@ -1412,8 +1412,8 @@
   },
   "projected_cost_usd": "0.00",
   "provider_contract_version": "V16",
-  "repository_commit": "bdbda9eff6bfb45c5478ab1a2bcd0f819ca58696",
-  "repository_tree": "5e4a81fded2611eb32babcfcbc72f1f41432c037",
+  "repository_commit": "efd34ee5e468e474b163e351b8bcd5be97d1f768",
+  "repository_tree": "7fda7a4f8c77aa24f207b860d819040e4680c290",
   "scenario": "host-preflight-replacement",
   "scenario_valid": true,
   "schema_version": "1.0.0",
@@ -1427,7 +1427,7 @@
     ]
   },
   "scientific_interpretation_allowed": false,
-  "semantic_sha256": "3b2710288b443153b26ff7d4bfd9e62a30f374a813c74347b06f7999c185d9f2",
+  "semantic_sha256": "e09fecc94d762071a22d3fc535843844e0989245fcb5ce49b0e27f7b0947695b",
   "shadow_only": true,
   "stop_reason": null,
   "terminal_state": "category3-shadow-complete-clean",

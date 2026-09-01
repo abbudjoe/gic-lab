@@ -103,12 +103,12 @@
   "historical_module_allowlist": [
     "src/giclab/validation.py"
   ],
-  "repository_commit": "bdbda9eff6bfb45c5478ab1a2bcd0f819ca58696",
-  "repository_tree": "5e4a81fded2611eb32babcfcbc72f1f41432c037",
+  "repository_commit": "efd34ee5e468e474b163e351b8bcd5be97d1f768",
+  "repository_tree": "7fda7a4f8c77aa24f207b860d819040e4680c290",
   "scan_roots": [
     "src/giclab",
     "containers/sira-smoke/pragmatic"
   ],
   "schema_version": "1.0.0",
-  "semantic_sha256": "5833877ff411d72a3cea2ee723d2e2fd2c645f9fc5566dd8a30d99149d1b1627"
+  "semantic_sha256": "23232f847f5848f5247988c4de74dbb5c6ae777fb66279d6d386d8d4d3c6a185"
 }
