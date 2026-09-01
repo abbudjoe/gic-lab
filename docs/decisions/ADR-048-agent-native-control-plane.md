@@ -25,7 +25,10 @@ identity from semantic capabilities.
 Before any external effect, require repository identity, active-version lint,
 real-consumer registry completeness, offline composition, an exact validated control
 binding, a validated state capsule and complete production-coupled shadow matrix, and
-deterministic staging. Caller booleans and hash-shaped strings are not proof.
+deterministic staging. Cross-bind the capsule's exact historical or package-bound
+successor runtime to the selected contract, and cross-bind every post-composition
+shadow receipt to the selected command package. Caller booleans and hash-shaped
+strings are not proof.
 
 Use one Category 3 state machine and one production-wrapper adapter assembly. The
 assembly wraps the retained lifecycle, metadata, provider launch/replacement,

@@ -1,6 +1,6 @@
 # T09 control-plane stabilization implementation ledger
 
-Status: **in-progress**
+Status: **local review repair complete; exact-head GitHub rereview pending**
 
 Live authorization: **false**
 
@@ -66,8 +66,8 @@ implementation_delegated: false
 | RR-04 | Tracked happy/failure receipts and agent-check use production wrappers with fake low-level effects | met |
 | RR-05 | One real-consumer registry shared by completeness and production assembly | met |
 | RR-06 | Forgery, registry mutation, production-coupling, and accounting regressions with no skips/xfails | met |
-| RR-07 | Non-circular immutable receipts, incident/capsule/docs, and direct Sol/max self-review | in-progress |
-| RR-08 | Focused/full/static/privacy/site/parity and exact-head GitHub Actions; draft PR comment and rereview handoff | not-started |
+| RR-07 | Non-circular immutable receipts, incident/capsule/docs, and direct Sol/max self-review | met |
+| RR-08 | Focused/full/static/privacy/site/parity and exact-head GitHub Actions; draft PR comment and rereview handoff | partial — local gates pass; exact-head Actions and independent rereview remain |
 
 ## Active-version dispatch inventory
 
@@ -150,32 +150,45 @@ runtime lint scan and directly exercise both prohibited and permitted examples.
   accepting shadow-only fake channels or future separately reviewed live channels.
   The production shadow exercises retained metadata, provider launch/replacement,
   accounting, evidence, finalizer/evaluator, and cleanup primitives. Focused shadow,
-  coupling, registry-mutation, CLI, Ruff, and strict mypy checks pass; receipt
-  regeneration, proof-forgery coverage, full gates, direct review, and CI are pending.
+  coupling, registry-mutation, CLI, Ruff, and strict mypy checks pass.
+- 2026-08-31 direct review found and repaired one remaining proof-binding gap: the
+  capsule runtime package now cross-binds the selected provider contract, the
+  successor-package state is typed, complete capsule control flags are mandatory,
+  and every shadow receipt that reaches package resolution cross-binds the selected
+  command package. Happy-path preparation also proves nonzero fake model/browser
+  accounting, zero retry, and zero projected real cost. Five additional forgery
+  regressions bring that focused file to **29 collected tests**.
+- 2026-08-31 final-source raw pytest: **2,002 passed, 23 inherited failures, 5
+  inherited private skips** in 204.61 seconds. Exact base/head parity compared base
+  **1,866 passed / 27 failed** across 1,893 collected nodes with head **2,002 passed /
+  23 failed** across 2,025 collected nodes. It reported zero newly failing nodes,
+  zero missing base nodes, zero invalid outcome transitions, four inherited failures
+  newly passing, and the unchanged five-node symmetric private deselection;
+  `parity_passed` is true.
 
 ## Immutable control receipts
 
 Every repaired receipt binds clean implementation ancestor
-`bdbda9eff6bfb45c5478ab1a2bcd0f819ca58696`, tree
-`5e4a81fded2611eb32babcfcbc72f1f41432c037`, rather than its own commit.
+`efd34ee5e468e474b163e351b8bcd5be97d1f768`, tree
+`7fda7a4f8c77aa24f207b860d819040e4680c290`, rather than its own commit.
 
 | Receipt | Bytes | File SHA-256 |
 |---|---:|---|
-| `control/receipts/active-version-lint.json` | 5,091 | `67569f877257a8a15ca4efdd4c6198408bd9bf54c5c86f09543f0899466be64d` |
-| `control/receipts/registry-completeness.json` | 89,819 | `dfa3c09b5c76c8f97c2576619b261168fdb27585996ab3876ff939b7b194b13b` |
-| `control/receipts/v16-composition.json` | 2,166 | `145e76ea37e327b5492ab90d7379aab3f416c8113c3323ccd5fbb3b32a7925e6` |
-| `control/receipts/state-capsule.json` | 2,750 | `c056d46a10a01d4c3f3e8803eb22756743b81607c46850317d8476abc5cbdf7b` |
-| `control/receipts/category3-shadow/happy-path.json` | 42,287 | `d43df6ecb8263b2dabab9d466b95e7c3e046cbdebb0b6a26f33621c985fe6511` |
-| `control/receipts/incidents.json` | 1,053 | `4a86a694feadd7da0931e46a65ff886d87b526df5ac472a8085864e70ae84e99` |
-| `control/receipts/t09-control-plane-source-binding.json` | 5,811 | `1e69f414cde9636b06dbe1cd401c0a14563c5506de51419d66ce692221b8cf0d` |
-| `control/receipts/agent-check.json` | 9,162 | `b8b3f9fa61fcc2378e485e8add70792e76991b95c807e2285da0bf1dfcddff80` |
-| `control/receipts/t09-control-receipt-bindings.json` | 7,814 | `d6e8ba677caccc0173b4325e7da24fbdcd41d63d7138366613f0e0eb1b7d7973` |
+| `control/receipts/active-version-lint.json` | 5,091 | `db1bdb7fbf820841d1804edc6ea30a9b69fd6beeb5a8b63fd4ea1339735611bb` |
+| `control/receipts/registry-completeness.json` | 89,819 | `5a278bfa744369d57a928d478dbaab0eebe1b61078104b31b22c6a5549c82a04` |
+| `control/receipts/v16-composition.json` | 2,166 | `a1fff974a89c3a13bfa2bfbff4ff2a0409d2196965373f18f0576605122d6706` |
+| `control/receipts/state-capsule.json` | 2,750 | `95a5214721394c4ab1631f5f9748a7fed00c08fe043b12aa8b4369e4b41f8176` |
+| `control/receipts/category3-shadow/happy-path.json` | 42,287 | `23642d2fc1e5b308b582ba15e58c7ceb8ffb1f205f697768cdb03323e74e0999` |
+| `control/receipts/incidents.json` | 1,053 | `44cfb1139e9686af2bc969d4b90ec44ef851c88506f499887410b0e3f6b4a180` |
+| `control/receipts/t09-control-plane-source-binding.json` | 5,811 | `1bb40634ff0611b4b7d9a94542da28c32f1fe6f41bd7a1c0d2dd48e336e016b8` |
+| `control/receipts/agent-check.json` | 9,162 | `4d35d1c0b0cb5a892163e4e0a283d31277fdbf246caefd4413dcf6b8c09bc3e1` |
+| `control/receipts/t09-control-receipt-bindings.json` | 7,814 | `7a675d7dd4d9e04005943e2a9bc53e4c3bdfacdb1f723a1f64fd36628b0a4add` |
 
 The binding document contains one happy path plus all fifteen exact failure artifact
 identities; their canonical binding-map SHA-256 is
-`5b27309b72e6bfd793cc9e1e3b7e6a88bd5cff753d479cb9ac3e080cf805592e`.
+`a45b536e9774aa99c1b1776eced7f5e4f23e0bc37c9f901057ffc719442d8969`.
 Its semantic SHA-256 is
-`2f790271bd915b7dd1eb4533f6b66583216ae7d302c879040209e0d8b9146de8`.
+`7bc690fa18fd4c6c24f461a4c317e2224c7bb8db7a4060e994333b8c6fdfcc8d`.
 `giclab-validate all` and the runtime validator reject byte, schema, semantic,
 identity, scenario, cross-binding, source-set, authority, and science drift.
 
@@ -198,11 +211,38 @@ identity, scenario, cross-binding, source-set, authority, and science drift.
 
 ## Direct review log
 
-The earlier direct review is superseded by exact-head review `5071206789`. A new
-direct Sol/max review will be recorded only after proof-forgery coverage, immutable
-receipt validation, full local/parity/site gates, and the final source diff pass. It
-must answer with source and tests whether PR 2 remains package-only, future live
-effects use this same controller without shared-source changes, caller assertions
-cannot forge preparation, shadow invokes retained production primitives, registry
-completeness invokes every real consumer, and model-call accounting participates in
-shadow execution.
+The required direct Sol/max, no-delegation source/spec review is complete. It found
+the runtime-package/package-hash cross-binding gap described above, repaired it in
+the final immutable source ancestor, and found no remaining spec-conformance defect.
+The six required determinations are:
+
+1. **Can PR 2 remain package-only? Yes.** `LowLevelEffects` and
+   `EffectAuthorityGrant` are the complete external seams; the production assembly
+   and controller are already shared source. The assembly probe and
+   `test_registered_active_contract_reaches_production_adapter_assembly` prove no
+   controller bypass or future shared-source change is required.
+2. **Can future live effects execute the same controller without shared source
+   changes? Yes.** `build_production_adapter_assembly()` accepts injected low-level
+   channels and external authority, while both modes enter
+   `execute_category3_transaction()`. This PR exposes no live-authority factory.
+3. **Can a caller forge preparation with booleans or arbitrary hashes? No.** The
+   request accepts one `ControlProofReference`; opaque proof/preparation types have
+   no public trust constructor. The 29-node forgery suite covers the 20 mandatory
+   bypasses plus runtime-contract, successor-package, complete-control, package-hash,
+   accounting, constructor, and valid-binding cases, with zero pre-secret effects.
+4. **Does shadow execute retained production primitives? Yes.** The happy receipt
+   records retained metadata, launch/replacement, accounting, raw export, finalizer,
+   evaluator, and cleanup calls. Seven primitive mutation tests fail at their exact
+   phase, and the scenario suite covers retained replacement, evidence, finalization,
+   privacy, termination, and byte-identical cleanup resume.
+5. **Does registry completeness call every real consumer? Yes.** The single
+   11-member `CONTROL_CONSUMERS` mapping drives both registry validation and
+   production assembly. Disable, active-contract rejection, and wrong-handler
+   parameterizations fail each applicable consumer; a declaration-only future
+   autonomous contract resolves without an active-runtime edit.
+6. **Does model-call accounting participate in shadow? Yes.** The happy path makes
+   four retained reservations/reconciliations and four browser actions, each using
+   24 input, 8 cached-input, 6 output, and 30 total fake tokens. Aggregate observed
+   and charged-upper cost is USD 0.00044, projected real cost is USD 0.00, retries
+   are zero, and known-error, response-incomplete, ambiguous-send, and admission-stop
+   scenarios retain typed lower/known/upper accounting.

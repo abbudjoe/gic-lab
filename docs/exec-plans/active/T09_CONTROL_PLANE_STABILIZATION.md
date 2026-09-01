@@ -66,7 +66,7 @@ adjudication, merge, auto-merge, force-push, and delegated review or implementat
 | CP-16 | AGENTS/PLANS/PROJECT_STATE/COMPUTE_POLICY updated coherently | Document validation and direct review | met |
 | CP-17 | No V17 package or live authority created | Repository searches and state checks | met |
 | CP-18 | Scientific contract unchanged | Base/head science hashes and preservation tests | met |
-| CP-19 | Full/parity/static/privacy/site gates pass | Required local validation contract | partial |
+| CP-19 | Full/parity/static/privacy/site gates pass | Required local validation contract | met |
 | CP-20 | Draft PR open, exact-head CI green, no merge | GitHub PR, rereview, and Actions metadata | partial |
 
 No item may be marked `met` without concrete evidence. The overall status cannot be
@@ -159,18 +159,24 @@ successful while any required item is partial, blocked, or not-started.
 - 2026-08-31: the repaired shadow matrix contains one happy path plus fifteen exact
   failure scenarios, including known, incomplete, ambiguous, and admission-stopped
   model-call accounting. Focused production-coupling, registry-mutation, shadow,
-  formatting, Ruff, and strict mypy checks pass; immutable receipt regeneration,
-  proof-forgery coverage, full parity, exact-head CI, and rereview remain pending.
+  formatting, Ruff, and strict mypy checks pass.
 - 2026-08-31: sealed repaired implementation ancestor
-  `bdbda9eff6bfb45c5478ab1a2bcd0f819ca58696`, tree
-  `5e4a81fded2611eb32babcfcbc72f1f41432c037`, and regenerated 24 non-circular
+  `efd34ee5e468e474b163e351b8bcd5be97d1f768`, tree
+  `7fda7a4f8c77aa24f207b860d819040e4680c290`, and regenerated 24 non-circular
   receipts from it. Binding file SHA-256 is
-  `d6e8ba677caccc0173b4325e7da24fbdcd41d63d7138366613f0e0eb1b7d7973`.
+  `7a675d7dd4d9e04005943e2a9bc53e4c3bdfacdb1f723a1f64fd36628b0a4add`.
   All 20 requested forgery/bypass cases stop before staging and effects; all 31 exact
   shared-source members validate; the full control suite, retained provider/accounting
   focus, aggregate agent check, and repository validator pass. CP-05, CP-08, CP-09,
-  and CP-11 are therefore met. CP-19 and CP-20 remain partial pending the complete
-  final-head gate sequence and exact-head Actions/rereview.
+  and CP-11 are therefore met.
+- 2026-08-31: direct Sol/max review added runtime-package, complete-capsule,
+  command-package, and nonzero fake-accounting binding checks plus five regressions.
+  Raw pytest reports **2,002 passed, 23 inherited failures, and 5 inherited private
+  skips**. Exact-base parity reports base **1,866 passed / 27 failed** and head
+  **2,002 passed / 23 failed**, with zero newly failing or missing nodes, zero invalid
+  transitions, four inherited nodes newly passing, five unchanged symmetric private
+  deselections, and `parity_passed: true`. CP-19 is met. CP-20 remains partial only
+  for the exact-head GitHub Actions result and independent rereview.
 
 ## Decisions and blockers
 
@@ -184,8 +190,7 @@ successful while any required item is partial, blocked, or not-started.
 
 ## Next permitted phase
 
-Finish review repair `5071206789` on the existing branch and draft PR: seal one clean
-implementation ancestor, regenerate its non-circular control evidence, pass the
-proof-forgery and complete validation matrices, perform direct Sol/max review, update
-the PR, and obtain independent exact-head rereview. PR 2 remains package-only;
-auto-merge stays disabled, and no merge or V17 creation is permitted here.
+Update existing draft PR #12 with the completed review repair, obtain exact-head
+GitHub Actions and independent ChatGPT rereview, and stop without merge. PR 2 remains
+package-only; auto-merge stays disabled, and no merge or V17 creation is permitted
+here.

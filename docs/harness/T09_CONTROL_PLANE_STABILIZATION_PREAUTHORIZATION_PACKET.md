@@ -43,6 +43,13 @@ registry and lint receipts, composition, capsule, production-coupled happy path,
 fifteen failure scenarios, aggregate agent-check receipt, exact shared-source binding,
 and incident receipt.
 
+Validation must additionally prove that the capsule's historical-or-successor
+runtime state selects the same provider contract, that every scenario reaching
+package resolution names the same command-package digest, and that the happy path
+contains nonzero reconciled fake model/browser accounting with zero projected real
+cost. A lifecycle-omission receipt is the sole package-identity exception because it
+must stop before package resolution.
+
 Those validated documents make preparation auditable but do not grant authority. A
 future live turn must supply exact current-turn authorization and separately reviewed
 low-level effects to the existing production adapter assembly and shared controller.

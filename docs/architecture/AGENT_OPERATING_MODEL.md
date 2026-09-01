@@ -64,7 +64,10 @@ identity → composition → validated capsule and receipt binding → local sta
 minted only by exact validators. Preparation loads one binding document, validates
 every referenced file byte and semantic hash, proves one commit/tree, contract,
 package, complete scenario set, aggregate cross-binding, exact shared-source set,
-and false authority/science flags, then performs deterministic staging checks. It
+and false authority/science flags, then performs deterministic staging checks. The
+capsule's historical-or-successor runtime state and every post-composition shadow
+receipt must agree with that selected contract and command package. The happy path
+must also carry nonzero reconciled fake accounting and zero projected real cost. It
 does not accept caller proof booleans or hash-shaped receipt tuples.
 
 The controller is the single control flow for the shadow and future live effect
