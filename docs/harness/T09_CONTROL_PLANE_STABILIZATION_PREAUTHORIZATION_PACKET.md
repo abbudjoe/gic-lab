@@ -56,3 +56,32 @@ low-level effects to the existing production adapter assembly and shared control
 PR 2 remains package-only; it must not change shared control-plane Python. All
 existing safety, budget, freshness, cleanup, evidence, and scientific-freeze gates
 still apply.
+
+Concretely, PR 2 may change only the central declarative V17 contract registration,
+the goal package state, V17 plans/profiles/contracts/conditions/schemas,
+package-specific live `LowLevelEffects`, a package-specific externally validated
+`EffectAuthorityGrant`, a V17 receipt root and binding, and V17 documents/tests. The
+effects and grant remain unauthorized until a separate Category 3 turn.
+
+PR 2 may not change:
+
+```text
+src/giclab/control/agent_check.py
+src/giclab/control/cli.py
+src/giclab/control/category3.py
+src/giclab/control/production.py
+src/giclab/control/proofs.py
+src/giclab/control/composition.py
+src/giclab/control/consumers.py
+src/giclab/control/registry_validation.py
+src/giclab/control/shadow.py
+src/giclab/control/state_capsule.py
+src/giclab/control/target.py
+the shared controller state machine
+the validated-proof architecture
+```
+
+If package preparation requires any prohibited change, it must stop and return to a
+separate Category 1 control-plane repair. The package boundary is proven with a
+temporary synthetic successor whose shared-source byte map remains unchanged; no
+tracked V17 plan, identity, run root, or receipt root is created here.

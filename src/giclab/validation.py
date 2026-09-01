@@ -19,14 +19,22 @@ import yaml
 from jsonschema import Draft202012Validator, FormatChecker
 
 from giclab.control.proofs import (
+    BASE_COMMIT as T09_CONTROL_RECEIPT_BASE_COMMIT,
+)
+from giclab.control.proofs import (
     REQUIRED_SHARED_SOURCES,
     ControlProofError,
     ControlProofReference,
     validate_control_receipt_set,
 )
 from giclab.control.scenarios import ALL_REQUIRED_SCENARIOS
+from giclab.control.target import (
+    TargetSelectionError,
+    resolve_selected_runtime_target,
+    selected_receipt_root,
+)
+from giclab.harness import t09_provider_contracts as provider_contracts
 from giclab.harness.policy import ExecutionDisallowed, load_project_execution_state
-from giclab.harness.t09_provider_contracts import V16_PROVIDER_CONTRACT
 from giclab.harness.task_source import (
     dataset_slice_task_source,
     open_query_task_source_matches,
@@ -49,35 +57,46 @@ T09_DOWNSTREAM_FINALIZER_HISTORY_RELATIVE = Path(
 T09_DOWNSTREAM_FINALIZER_HISTORY_SHA256 = (
     "a40506c022d8e16669bf1a0b4c87ff91205677be4e446d00b7f8debef838445c"
 )
-T09_CONTROL_SOURCE_BINDING_RELATIVE = Path("control/receipts/t09-control-plane-source-binding.json")
 T09_CONTROL_SOURCE_BASE_COMMIT = "450a10a51eda4c428f20b27d6b4aafc4f94d80f4"
 T09_CONTROL_SHADOW_SCENARIOS = ALL_REQUIRED_SCENARIOS
-T09_CONTROL_RECEIPT_SCHEMAS = {
-    "control/receipts/active-version-lint.json": (
-        "schemas/t09-active-version-lint-receipt.schema.json"
-    ),
-    "control/receipts/agent-check.json": "schemas/t09-agent-check-receipt.schema.json",
-    "control/receipts/incidents.json": ("schemas/t09-incident-completeness-receipt.schema.json"),
-    "control/receipts/registry-completeness.json": (
-        "schemas/t09-control-registry-receipt.schema.json"
-    ),
-    "control/receipts/v16-composition.json": (
-        "schemas/t09-control-composition-receipt.schema.json"
-    ),
-    "control/receipts/state-capsule.json": "schemas/agent-state-capsule.schema.json",
-    "control/receipts/t09-control-receipt-bindings.json": (
-        "schemas/t09-control-receipt-bindings.schema.json"
-    ),
-    "control/receipts/t09-control-plane-source-binding.json": (
-        "schemas/t09-control-plane-source-binding.schema.json"
-    ),
-    **{
-        f"control/receipts/category3-shadow/{scenario}.json": (
-            "schemas/t09-category3-shadow-receipt.schema.json"
-        )
-        for scenario in T09_CONTROL_SHADOW_SCENARIOS
-    },
-}
+
+
+def _t09_control_receipt_schemas(
+    receipt_root: Path,
+    *,
+    selected_version: str,
+) -> dict[str, str]:
+    """Project one selected package root into its exact receipt/schema matrix."""
+
+    prefix = receipt_root.as_posix()
+    return {
+        f"{prefix}/active-version-lint.json": (
+            "schemas/t09-active-version-lint-receipt.schema.json"
+        ),
+        f"{prefix}/agent-check.json": "schemas/t09-agent-check-receipt.schema.json",
+        f"{prefix}/incidents.json": "schemas/t09-incident-completeness-receipt.schema.json",
+        f"{prefix}/registry-completeness.json": (
+            "schemas/t09-control-registry-receipt.schema.json"
+        ),
+        f"{prefix}/{selected_version.lower()}-composition.json": (
+            "schemas/t09-control-composition-receipt.schema.json"
+        ),
+        f"{prefix}/state-capsule.json": "schemas/agent-state-capsule.schema.json",
+        f"{prefix}/t09-control-receipt-bindings.json": (
+            "schemas/t09-control-receipt-bindings.schema.json"
+        ),
+        f"{prefix}/t09-control-plane-source-binding.json": (
+            "schemas/t09-control-plane-source-binding.schema.json"
+        ),
+        **{
+            f"{prefix}/category3-shadow/{scenario}.json": (
+                "schemas/t09-category3-shadow-receipt.schema.json"
+            )
+            for scenario in T09_CONTROL_SHADOW_SCENARIOS
+        },
+    }
+
+
 SCHEMA_FILES = (
     "schemas/experiment.schema.json",
     "schemas/artifact.schema.json",
@@ -125,6 +144,7 @@ SCHEMA_FILES = (
     "schemas/t09-active-version-lint-receipt.schema.json",
     "schemas/t09-agent-check-receipt.schema.json",
     "schemas/t09-incident-completeness-receipt.schema.json",
+    "schemas/t09-control-target.schema.json",
     "schemas/agent-state-capsule.schema.json",
     "schemas/agent-incident.schema.json",
     "schemas/t09-offline-refinalization-receipt.schema.json",
@@ -159,6 +179,7 @@ REQUIRED_PATHS = (
     "docs/harness/T09_CONTROL_PLANE_STABILIZATION_PREAUTHORIZATION_PACKET.md",
     "control/goals/EXP-0001.yaml",
     "control/incidents/INC-T09-V16-LIFECYCLE-REGISTRY.json",
+    "control/incidents/INC-T09-CONTROL-FIXED-TARGET-SELECTION.json",
     "control/receipts/active-version-lint.json",
     "control/receipts/agent-check.json",
     "control/receipts/incidents.json",
@@ -378,7 +399,11 @@ def _t09_successor_implementation_binding_map(plan: Mapping[str, Any]) -> dict[s
 def _t09_control_source_binding_map(root: Path) -> tuple[dict[str, str], list[str]]:
     """Validate the post-V16 shared-control source receipt against its ancestor commit."""
 
-    path = root / T09_CONTROL_SOURCE_BINDING_RELATIVE
+    try:
+        target = resolve_selected_runtime_target(root)
+    except (OSError, TargetSelectionError) as exc:
+        return {}, [f"T09 selected-runtime target is invalid: {exc}"]
+    path = root / selected_receipt_root(target) / "t09-control-plane-source-binding.json"
     if not path.is_file():
         return {}, []
     document = load_json(path)
@@ -421,7 +446,7 @@ def _t09_control_source_binding_map(root: Path) -> tuple[dict[str, str], list[st
                 str(root),
                 "merge-base",
                 "--is-ancestor",
-                T09_CONTROL_SOURCE_BASE_COMMIT,
+                T09_CONTROL_RECEIPT_BASE_COMMIT,
                 source_commit,
             ],
             capture_output=True,
@@ -3481,12 +3506,17 @@ def validate_tracked_control_receipts(root: Path = ROOT) -> list[str]:
     """Validate the immutable-ancestor control receipt set and its cross-bindings."""
 
     errors: list[str] = []
-    receipt_paths = {
-        "control/receipts/active-version-lint.json",
-        "control/receipts/agent-check.json",
-        "control/receipts/incidents.json",
-        *T09_CONTROL_RECEIPT_SCHEMAS,
-    }
+    try:
+        target = resolve_selected_runtime_target(root)
+    except (OSError, TargetSelectionError) as exc:
+        return [f"tracked control target cannot be resolved: {exc}"]
+    receipt_root = selected_receipt_root(target)
+    receipt_prefix = receipt_root.as_posix()
+    receipt_schemas = _t09_control_receipt_schemas(
+        receipt_root,
+        selected_version=target.selected_contract.version,
+    )
+    receipt_paths = set(receipt_schemas)
     receipts: dict[str, dict[str, Any]] = {}
     identities: set[tuple[str, str]] = set()
     for relative in sorted(receipt_paths):
@@ -3500,7 +3530,7 @@ def validate_tracked_control_receipts(root: Path = ROOT) -> list[str]:
             errors.append(f"tracked control receipt is invalid: {relative}: {exc}")
             continue
         receipts[relative] = document
-        schema_relative = T09_CONTROL_RECEIPT_SCHEMAS.get(relative)
+        schema_relative = receipt_schemas.get(relative)
         if schema_relative is not None:
             errors.extend(
                 f"{relative}: {error}"
@@ -3541,7 +3571,7 @@ def validate_tracked_control_receipts(root: Path = ROOT) -> list[str]:
         if resolved_tree.returncode != 0 or resolved_tree.stdout.strip() != receipt_tree:
             errors.append("tracked control receipt commit/tree does not resolve")
         for ancestor, descendant, label in (
-            (T09_CONTROL_SOURCE_BASE_COMMIT, receipt_commit, "exact base"),
+            (T09_CONTROL_RECEIPT_BASE_COMMIT, receipt_commit, "exact base"),
             (receipt_commit, "HEAD", "current head"),
         ):
             result = subprocess.run(
@@ -3552,18 +3582,21 @@ def validate_tracked_control_receipts(root: Path = ROOT) -> list[str]:
             if result.returncode != 0:
                 errors.append(f"tracked control receipt identity is not an ancestor of {label}")
 
-    lint = receipts.get("control/receipts/active-version-lint.json", {})
-    registry = receipts.get("control/receipts/registry-completeness.json", {})
-    composition = receipts.get("control/receipts/v16-composition.json", {})
-    capsule = receipts.get("control/receipts/state-capsule.json", {})
-    incidents = receipts.get("control/receipts/incidents.json", {})
-    agent = receipts.get("control/receipts/agent-check.json", {})
+    lint = receipts.get(f"{receipt_prefix}/active-version-lint.json", {})
+    registry = receipts.get(f"{receipt_prefix}/registry-completeness.json", {})
+    composition = receipts.get(
+        f"{receipt_prefix}/{target.selected_contract.version.lower()}-composition.json",
+        {},
+    )
+    capsule = receipts.get(f"{receipt_prefix}/state-capsule.json", {})
+    incidents = receipts.get(f"{receipt_prefix}/incidents.json", {})
+    agent = receipts.get(f"{receipt_prefix}/agent-check.json", {})
     if lint.get("complete") is not True or lint.get("findings") != []:
         errors.append("tracked active-version receipt is incomplete")
     registry_entries = registry.get("contracts")
     if (
         registry.get("complete") is not True
-        or registry.get("contract_count") != 14
+        or registry.get("contract_count") != len(provider_contracts.PROVIDER_CONTRACTS)
         or not isinstance(registry_entries, list)
         or any(
             not isinstance(entry, dict) or entry.get("complete") is not True
@@ -3572,12 +3605,12 @@ def validate_tracked_control_receipts(root: Path = ROOT) -> list[str]:
     ):
         errors.append("tracked registry-completeness receipt is incomplete")
     if (
-        composition.get("provider_contract_version") != "V16"
+        composition.get("provider_contract_version") != target.selected_contract.version
         or composition.get("static_composition_valid") is not True
         or composition.get("ready_for_shadow") is not True
         or composition.get("ready_for_authenticated_preflight") is not False
     ):
-        errors.append("tracked V16 composition receipt is incomplete")
+        errors.append("tracked selected-target composition receipt is incomplete")
     capsule_flags = capsule.get("machine_readable_flags")
     if not isinstance(capsule_flags, dict) or capsule_flags != {
         "live_authorization": False,
@@ -3585,14 +3618,17 @@ def validate_tracked_control_receipts(root: Path = ROOT) -> list[str]:
         "scientific_interpretation": False,
     }:
         errors.append("tracked state capsule authority/science flags drifted")
-    if incidents.get("complete") is not True or incidents.get("incident_count") != 1:
+    incident_files = tuple(sorted((root / "control/incidents").glob("INC-*.json")))
+    if incidents.get("complete") is not True or incidents.get("incident_count") != len(
+        incident_files
+    ):
         errors.append("tracked incident receipt is incomplete")
     if agent.get("complete") is not True:
         errors.append("tracked aggregate agent-check receipt is incomplete")
 
     shadow_receipts: dict[str, dict[str, Any]] = {}
     for scenario in T09_CONTROL_SHADOW_SCENARIOS:
-        relative = f"control/receipts/category3-shadow/{scenario}.json"
+        relative = f"{receipt_prefix}/category3-shadow/{scenario}.json"
         document = receipts.get(relative, {})
         shadow_receipts[scenario] = document
         if (
@@ -3612,7 +3648,7 @@ def validate_tracked_control_receipts(root: Path = ROOT) -> list[str]:
             "incident_completeness": incidents.get("semantic_sha256"),
             "state_capsule": capsule.get("semantic_sha256"),
             "source_binding": receipts.get(
-                "control/receipts/t09-control-plane-source-binding.json",
+                f"{receipt_prefix}/t09-control-plane-source-binding.json",
                 {},
             ).get("semantic_sha256"),
         }
@@ -3624,19 +3660,20 @@ def validate_tracked_control_receipts(root: Path = ROOT) -> list[str]:
         composition_entries = (
             composition_check.get("contracts") if isinstance(composition_check, dict) else None
         )
-        v16_entries = (
+        selected_entries = (
             [
                 entry
                 for entry in composition_entries
-                if isinstance(entry, dict) and entry.get("version") == "V16"
+                if isinstance(entry, dict)
+                and entry.get("version") == target.selected_contract.version
             ]
             if isinstance(composition_entries, list)
             else []
         )
-        if len(v16_entries) != 1 or v16_entries[0].get("semantic_sha256") != composition.get(
+        if len(selected_entries) != 1 or selected_entries[0].get(
             "semantic_sha256"
-        ):
-            errors.append("aggregate agent-check receipt does not bind V16 composition")
+        ) != composition.get("semantic_sha256"):
+            errors.append("aggregate agent-check receipt does not bind selected composition")
         shadow_check = checks.get("category3_shadow")
         shadow_entries = shadow_check.get("scenarios") if isinstance(shadow_check, dict) else None
         observed_shadow_hashes = (
@@ -3653,12 +3690,12 @@ def validate_tracked_control_receipts(root: Path = ROOT) -> list[str]:
                 errors.append(f"aggregate agent-check receipt does not bind shadow: {scenario}")
     else:
         errors.append("tracked aggregate agent-check matrix is malformed")
-    binding_path = root / "control/receipts/t09-control-receipt-bindings.json"
+    binding_path = root / receipt_root / "t09-control-receipt-bindings.json"
     if binding_path.is_file():
         try:
             binding = load_json(binding_path)
             revision = binding.get("control_plane_revision")
-            selected = binding.get("selected_contract")
+            selected = binding.get("selected_runtime_target")
             if not isinstance(revision, dict) or not isinstance(selected, dict):
                 raise ControlProofError("tracked binding identity sections are malformed")
             reference = ControlProofReference(
@@ -3668,11 +3705,18 @@ def validate_tracked_control_receipts(root: Path = ROOT) -> list[str]:
                 expected_control_commit=str(revision.get("commit")),
                 expected_control_tree=str(revision.get("tree")),
                 expected_repository_slug=str(binding.get("repository_slug")),
-                expected_provider_contract_version=str(selected.get("provider_contract_version")),
-                expected_plan_id=str(selected.get("plan_id")),
-                expected_command_package_sha256=str(selected.get("command_package_sha256")),
+                expected_provider_contract_version=str(
+                    selected.get("selected_provider_contract_version")
+                ),
+                expected_plan_id=str(selected.get("selected_plan_id")),
+                expected_command_package_sha256=str(
+                    selected.get("selected_command_package_sha256")
+                ),
+                expected_target_source=str(selected.get("source")),
+                expected_goal_record_sha256=str(selected.get("goal_record_sha256")),
+                expected_target_semantic_sha256=str(selected.get("semantic_sha256")),
             )
-            validate_control_receipt_set(root, V16_PROVIDER_CONTRACT, reference)
+            validate_control_receipt_set(root, target.selected_contract, reference)
         except (ControlProofError, OSError, ValueError, TypeError) as exc:
             errors.append(f"tracked control receipt binding is invalid: {exc}")
     else:

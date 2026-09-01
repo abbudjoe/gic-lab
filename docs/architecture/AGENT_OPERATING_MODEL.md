@@ -50,6 +50,25 @@ replacement policy, source/privacy roles, budgets, evidence identities,
 authorization schema, and control-receipt binding schema. Neither phase accepts an
 effect adapter.
 
+Every aggregate control entry point first resolves one frozen
+`SelectedRuntimeTarget` from `control/goals/EXP-0001.yaml`. The goal must name a
+registered historical package, its exact numerical successor, and either
+`not-created` or `package-bound-not-authorized`. The first state selects the
+historical package and requires that the successor is absent from the registry; the
+second selects the exactly registered successor and validates its plan, profile,
+execution contract, and centrally declared command-package digest. An explicit
+`--provider-contract` is accepted only when it equals that goal-derived selection.
+There is no default/current/latest registry lookup, and neither selection path grants
+authority.
+
+State-capsule, selected composition, mandatory shadow, agent-check, and receipt
+generation consume that same typed target. The target projection binds its source,
+goal-record digest, historical and successor state, selected contract and plan, and
+command-package digest. Receipt generation writes one new package-specific root at
+`control/receipts/packages/<version-lower>/`, refuses symlinks, escape, partial roots,
+and sealed-root overwrite, and binds every artifact path relative to that one root.
+The retained V16 root remains immutable historical/current evidence.
+
 The shared Category 3 controller owns this sequence:
 
 ```text
@@ -93,5 +112,16 @@ registry matrix. A future live package must bind the exact document required by
 and frozen manifest. Binding valid control evidence does not create live authority.
 
 The next PR may mechanically generate a fresh package from these receipts after this
-foundation is reviewed and merged. It must not reuse consumed V16 authority, and the
-foundation itself creates no successor package identity.
+foundation is reviewed and merged. It may add one central declarative V17 contract,
+move the goal to `package-bound-not-authorized`, add V17 plan/profile/contracts/
+conditions/schemas, add package-specific live `LowLevelEffects` and an externally
+validated package-specific `EffectAuthorityGrant`, add a V17 receipt root and
+binding, and update V17 documents/tests. It must not reuse consumed V16 authority,
+and this foundation itself creates no successor package identity.
+
+That package-only PR must not change `agent_check.py`, `cli.py`, `category3.py`,
+`production.py`, `proofs.py`, `composition.py`, `consumers.py`,
+`registry_validation.py`, `shadow.py`, `state_capsule.py`, `target.py`, the shared
+controller state machine, or the validated-proof architecture. If a successor
+requires any such shared change, package generation stops and a separate Category 1
+control-plane repair is required.

@@ -42,6 +42,7 @@ _DOWNSTREAM_SOURCES: Final = (
 )
 _AUTHORIZATION_SCHEMA: Final = "schemas/t09-model-metadata-receipt.schema.json"
 _CONTROL_BINDING_SCHEMA: Final = "schemas/t09-control-receipt-bindings.schema.json"
+_TARGET_SCHEMA: Final = "schemas/t09-control-target.schema.json"
 
 
 class CompositionError(ValueError):
@@ -70,6 +71,7 @@ class CompositionReceipt:
     evidence_identity_sha256: str
     authorization_schema_sha256: str
     control_binding_schema_sha256: str
+    target_schema_sha256: str
     registry_receipt_sha256: str
     version_lint_receipt_sha256: str
     blockers: tuple[str, ...]
@@ -319,6 +321,7 @@ def compose_control_plane(
         evidence_identity_sha256=_canonical_sha256(evidence_document),
         authorization_schema_sha256=_file_sha256(root / _AUTHORIZATION_SCHEMA),
         control_binding_schema_sha256=_file_sha256(root / _CONTROL_BINDING_SCHEMA),
+        target_schema_sha256=_file_sha256(root / _TARGET_SCHEMA),
         registry_receipt_sha256=str(registry["semantic_sha256"]),
         version_lint_receipt_sha256=str(lint["semantic_sha256"]),
         blockers=tuple(blockers),

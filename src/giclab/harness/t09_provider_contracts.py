@@ -170,6 +170,7 @@ class T09ProviderContract:
     expected_provider_profile_sha256: str
     execution_contract_path: str | None
     command_manifest_path: str | None
+    expected_command_manifest_sha256: str | None
     science_projection_path: str | None
     frozen_run_manifest_id: str | None
     local_finalizer_qualification_id: str | None
@@ -294,6 +295,14 @@ class T09ProviderContract:
             raise T09ProviderContractError(
                 "provider contract has a partial scientific package identity"
             )
+        if (self.command_manifest_path is None) != (self.expected_command_manifest_sha256 is None):
+            raise T09ProviderContractError(
+                "provider contract has a partial command-package byte identity"
+            )
+        if self.expected_command_manifest_sha256 is not None and (
+            _HEX64.fullmatch(self.expected_command_manifest_sha256) is None
+        ):
+            raise T09ProviderContractError("provider command-package hash is malformed")
         if self.execution_contract_path is None and self.science_projection_path is not None:
             raise T09ProviderContractError(
                 "historical pragmatic contract unexpectedly has autonomous package paths"
@@ -424,6 +433,7 @@ def _contract(
     local_finalizer_qualification_id: str | None = None,
     execution_contract_path: str | None = None,
     command_manifest_path: str | None = None,
+    command_manifest_sha256: str | None = None,
     science_projection_path: str | None = None,
 ) -> T09ProviderContract:
     plan_id = f"PLAN-EXP0001-PILOT-{version}"
@@ -455,6 +465,7 @@ def _contract(
         expected_provider_profile_sha256=profile_sha256,
         execution_contract_path=execution_contract_path,
         command_manifest_path=command_manifest_path,
+        expected_command_manifest_sha256=command_manifest_sha256,
         science_projection_path=science_projection_path,
         frozen_run_manifest_id=frozen_run_manifest_id,
         local_finalizer_qualification_id=local_finalizer_qualification_id,
@@ -771,6 +782,7 @@ V8_PROVIDER_CONTRACT: Final = _contract(
     local_finalizer_qualification_id=("QUAL-T09-PILOT-V8-LOCAL-FINALIZER-AUTONOMOUS-0001"),
     execution_contract_path=f"{_EXPERIMENT_ROOT}/contracts/T09_PILOT_EXECUTION_CONTRACT.json",
     command_manifest_path=f"{_EXPERIMENT_ROOT}/contracts/T09_PILOT_COMMAND_MANIFESTS.json",
+    command_manifest_sha256="6d9184cf837a4e650c9715239bda46f188b4f97750340584de78e4310c04f50a",
     science_projection_path=f"{_EXPERIMENT_ROOT}/contracts/T09_PILOT_V8_SCIENCE_PROJECTION.json",
 )
 V9_PROVIDER_CONTRACT: Final = _contract(
@@ -822,6 +834,7 @@ V9_PROVIDER_CONTRACT: Final = _contract(
     local_finalizer_qualification_id=("QUAL-T09-PILOT-V9-LOCAL-FINALIZER-AUTONOMOUS-0002"),
     execution_contract_path=f"{_EXPERIMENT_ROOT}/contracts/T09_PILOT_EXECUTION_CONTRACT.json",
     command_manifest_path=f"{_EXPERIMENT_ROOT}/contracts/T09_PILOT_COMMAND_MANIFESTS.json",
+    command_manifest_sha256="957605950c5fa07840ebf7c2e0829161c0171c9931f6ecaf97e78b3d5c7f0dac",
     science_projection_path=f"{_EXPERIMENT_ROOT}/contracts/T09_PILOT_V9_SCIENCE_PROJECTION.json",
 )
 V10_PROVIDER_CONTRACT: Final = _contract(
@@ -880,6 +893,7 @@ V10_PROVIDER_CONTRACT: Final = _contract(
     command_manifest_path=(
         f"{_EXPERIMENT_ROOT}/contracts/proposals/T09_PILOT_COMMAND_MANIFESTS_V10.json"
     ),
+    command_manifest_sha256="9217db4dda7bbf69911743da70e1aeef0507444a02c480ccc7484ec720383844",
 )
 V11_PROVIDER_CONTRACT: Final = _contract(
     version="V11",
@@ -937,6 +951,7 @@ V11_PROVIDER_CONTRACT: Final = _contract(
     command_manifest_path=(
         f"{_EXPERIMENT_ROOT}/contracts/proposals/T09_PILOT_COMMAND_MANIFESTS_V11.json"
     ),
+    command_manifest_sha256="c36e1417b4668f6a0ae99abd63e4f3c6344c2af6c0942e2ac036633b3817a4e1",
 )
 V12_PROVIDER_CONTRACT: Final = _contract(
     version="V12",
@@ -993,6 +1008,7 @@ V12_PROVIDER_CONTRACT: Final = _contract(
     command_manifest_path=(
         f"{_EXPERIMENT_ROOT}/contracts/proposals/T09_PILOT_COMMAND_MANIFESTS_V12.json"
     ),
+    command_manifest_sha256="fbca4bced586375508e945cde23b60a62b491d306c7c3dd1405933360360a7d4",
 )
 V13_PROVIDER_CONTRACT: Final = _contract(
     version="V13",
@@ -1047,6 +1063,7 @@ V13_PROVIDER_CONTRACT: Final = _contract(
     command_manifest_path=(
         f"{_EXPERIMENT_ROOT}/contracts/proposals/T09_PILOT_COMMAND_MANIFESTS_V13.json"
     ),
+    command_manifest_sha256="b83b6ba6704e30048b11f68f498fadef7b6da2dbc71d2ce02f71db66bc090c28",
 )
 V14_PROVIDER_CONTRACT: Final = _contract(
     version="V14",
@@ -1101,6 +1118,7 @@ V14_PROVIDER_CONTRACT: Final = _contract(
     command_manifest_path=(
         f"{_EXPERIMENT_ROOT}/contracts/proposals/T09_PILOT_COMMAND_MANIFESTS_V14.json"
     ),
+    command_manifest_sha256="d8b8b46e04a59ceb49d333bc8a345055f60e8161ba0fea5ea4d260096fe5dddc",
 )
 V15_PROVIDER_CONTRACT: Final = _contract(
     version="V15",
@@ -1155,6 +1173,7 @@ V15_PROVIDER_CONTRACT: Final = _contract(
     command_manifest_path=(
         f"{_EXPERIMENT_ROOT}/contracts/proposals/T09_PILOT_COMMAND_MANIFESTS_V15.json"
     ),
+    command_manifest_sha256="533721a1665c1826502ece26b025859c6fb21b6f3b791d085d2ea294e3f88b4f",
 )
 V16_PROVIDER_CONTRACT: Final = _contract(
     version="V16",
@@ -1209,6 +1228,7 @@ V16_PROVIDER_CONTRACT: Final = _contract(
     command_manifest_path=(
         f"{_EXPERIMENT_ROOT}/contracts/proposals/T09_PILOT_COMMAND_MANIFESTS_V16.json"
     ),
+    command_manifest_sha256="377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
 )
 
 

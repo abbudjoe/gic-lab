@@ -20,6 +20,8 @@ SCAN_ROOTS: Final = (
 # This module validates immutable historical package/schema projections. It does
 # not select runtime behavior and is kept explicit rather than hiding all t09_*.
 HISTORICAL_MODULE_ALLOWLIST: Final = frozenset({"src/giclab/validation.py"})
+ACTIVE_SELECTION_TEXT_PATHS: Final = ("Makefile", ".github/workflows/ci.yml")
+_FIXED_SELECTOR: Final = re.compile(r"--provider-contract(?:=|\s+)[\"']?(V[0-9]+)\b")
 
 
 @dataclass(frozen=True, slots=True)
@@ -136,6 +138,37 @@ class _Visitor(ast.NodeVisitor):
             )
         self.generic_visit(node)
 
+    def visit_Call(self, node: ast.Call) -> None:
+        function_name = None
+        if isinstance(node.func, ast.Name):
+            function_name = node.func.id
+        elif isinstance(node.func, ast.Attribute):
+            function_name = node.func.attr
+        positional_selector = node.args[0] if node.args else None
+        keyword_selector = next(
+            (
+                keyword.value
+                for keyword in node.keywords
+                if keyword.arg in {"version", "provider_contract"}
+            ),
+            None,
+        )
+        selector = positional_selector or keyword_selector
+        if (
+            function_name == "provider_contract"
+            and selector is not None
+            and _literal_versions(selector)
+        ):
+            self._add(
+                node,
+                code="T09V004",
+                message=(
+                    "active code selects a literal provider contract; resolve the "
+                    "goal-compatible SelectedRuntimeTarget"
+                ),
+            )
+        self.generic_visit(node)
+
     def visit_Assign(self, node: ast.Assign) -> None:
         self._visit_assignment(node, node.value)
 
@@ -170,6 +203,32 @@ def lint_source(source: str, *, relative_path: str) -> tuple[VersionDispatchFind
     return tuple(visitor.findings)
 
 
+def lint_active_selection_text(
+    source: str,
+    *,
+    relative_path: str,
+) -> tuple[VersionDispatchFinding, ...]:
+    """Reject a literal provider selector in aggregate Make/CI command text."""
+
+    findings: list[VersionDispatchFinding] = []
+    for line_number, line in enumerate(source.splitlines(), start=1):
+        matched = _FIXED_SELECTOR.search(line)
+        if matched is not None:
+            findings.append(
+                VersionDispatchFinding(
+                    path=relative_path,
+                    line=line_number,
+                    column=matched.start() + 1,
+                    code="T09V005",
+                    message=(
+                        "aggregate command selects a literal provider contract; "
+                        "use goal-compatible target resolution"
+                    ),
+                )
+            )
+    return tuple(findings)
+
+
 def validate_active_version_dispatch(repository: Path) -> dict[str, object]:
     """Scan the complete active Python surface and return a deterministic receipt."""
 
@@ -190,6 +249,26 @@ def validate_active_version_dispatch(repository: Path) -> dict[str, object]:
         else:
             scanned.append(relative)
         findings.extend(lint_source(path.read_text(encoding="utf-8"), relative_path=relative))
+    for relative in ACTIVE_SELECTION_TEXT_PATHS:
+        path = root / relative
+        if not path.is_file() or path.is_symlink():
+            findings.append(
+                VersionDispatchFinding(
+                    path=relative,
+                    line=1,
+                    column=1,
+                    code="T09V006",
+                    message="aggregate selection surface is unavailable",
+                )
+            )
+            continue
+        scanned.append(relative)
+        findings.extend(
+            lint_active_selection_text(
+                path.read_text(encoding="utf-8"),
+                relative_path=relative,
+            )
+        )
     commit, tree = _git_identity(root)
     projection: dict[str, object] = {
         "schema_version": "1.0.0",

@@ -9,6 +9,7 @@ from jsonschema.exceptions import ValidationError
 
 from giclab.control.scenarios import REQUIRED_FAILURE_SCENARIOS
 from giclab.control.state_capsule import generate_state_capsule
+from giclab.control.target import resolve_selected_runtime_target
 from giclab.registry import load_json
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -36,6 +37,7 @@ def test_state_capsule_validates_and_contains_agent_orientation_surface() -> Non
         "science",
         "control_plane",
         "runtime_package",
+        "selected_runtime_target",
         "authority",
         "resources",
         "evidence",
@@ -71,12 +73,12 @@ def test_state_capsule_does_not_infer_current_turn_authority() -> None:
     assert flags["live_authorization"] is False
 
 
-def test_state_capsule_represents_v16_incident_and_v17_absence() -> None:
+def test_state_capsule_represents_fixed_target_incident_and_v17_absence() -> None:
     capsule = _capsule()
     runtime = capsule["runtime_package"]
     control = capsule["control_plane"]
     assert isinstance(runtime, dict) and isinstance(control, dict)
-    assert capsule["blocking_incident"] == "INC-T09-V16-LIFECYCLE-REGISTRY"
+    assert capsule["blocking_incident"] == "INC-T09-CONTROL-FIXED-TARGET-SELECTION"
     assert runtime == {
         "historical_package": "V16",
         "historical_status": "consumed-prelaunch-failure",
@@ -116,15 +118,11 @@ def test_future_live_package_binding_requires_every_control_receipt() -> None:
         }
 
     binding = {
-        "schema_version": "2.0.0",
+        "schema_version": "3.0.0",
         "repository_slug": "abbudjoe/gic-lab",
         "base_commit": "4" * 40,
         "control_plane_revision": {"commit": "5" * 40, "tree": "6" * 40},
-        "selected_contract": {
-            "provider_contract_version": "V16",
-            "plan_id": "AUTONOMOUS-0009",
-            "command_package_sha256": "7" * 64,
-        },
+        "selected_runtime_target": resolve_selected_runtime_target(ROOT).to_document(),
         "artifacts": {
             "registry_receipt": artifact("registry.json"),
             "active_version_lint_receipt": artifact("lint.json"),

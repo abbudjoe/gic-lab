@@ -246,3 +246,166 @@ The six required determinations are:
    and charged-upper cost is USD 0.00044, projected real cost is USD 0.00, retries
    are zero, and known-error, response-incomplete, ambiguous-send, and admission-stop
    scenarios retain typed lower/known/upper accounting.
+
+## PR 1.1 successor-target repair assembly
+
+Status: **in-progress**
+
+Target contract: one frozen `SelectedRuntimeTarget` resolved from
+`control/goals/EXP-0001.yaml` or an exact goal-compatible explicit selector before
+composition, staging, secret, metadata, provider, or condition effects. Adding one
+central successor declaration and its package data must not require changes to the
+shared aggregate-control files prohibited by the operator contract.
+
+```text
+repository: abbudjoe/gic-lab
+destination: phase-1/sira-pilot-autonomous-r2
+branch: codex/t09-control-target-selection
+worktree: /Users/joseph/.codex/worktrees/t09-control-target-selection
+commit: d0aff8a47e92013773d9d05b2cd90fb741658b03
+tree: a6801e99d8e6ed204bbfa49ca1f3f17ad8b793ec
+parent_1: 450a10a51eda4c428f20b27d6b4aafc4f94d80f4
+parent_2: ccab5f1255f5a397ce14f1ebec7d96068bda91bc
+operator_attests_model: gpt-5.6-sol
+operator_attests_effort: max
+runtime_model_introspection_required: false
+implementation_delegated: false
+live_authorization: false
+scientific_interpretation_allowed: false
+```
+
+PR #12 is merged at the exact base and its exact reviewed head is parent two. The
+original checkout and fresh worktree were clean. The requested branch and worktree
+did not exist. No V17 plan/profile/command package/identity/overlay/receipt root/run
+root or `AUTONOMOUS-0010` artifact existed, and the goal recorded zero active provider
+instances plus external-and-not-present current-turn authority.
+
+### Fixed-target occurrence inventory
+
+The complete pre-edit `V16|v16` scan covered `src/giclab/control/`, `Makefile`,
+`.github/workflows/`, `tests/control/`, `docs/`, and `control/`. Occurrences are
+classified by role rather than blindly removed:
+
+| Surface | Classification | Pre-edit disposition |
+|---|---|---|
+| `src/giclab/control/agent_check.py` import, selected-composition variable/identity check, error, and shadow contract | current target selection | replace with the one selected-runtime target |
+| `src/giclab/control/cli.py` `_verified_capsule` calls and receipt-refresh contract lookup | current target selection | replace with the shared resolver; remove historical annotations |
+| `src/giclab/control/cli.py` `v16-composition.json` write and binding reference | package filename/projection | derive `<selected-version-lower>-composition.json` |
+| `Makefile` `category3-shadow --provider-contract V16` | current target selection | remove fixed selector; default to goal resolution |
+| `.github/workflows/ci.yml` | no V16 occurrence | retain goal-selected Make path |
+| `src/giclab/control/composition.py` consumed V16 blocker | historical observed identity | retain as exact historical evidence logic |
+| `src/giclab/control/state_capsule.py`, `proofs.py`, `shadow.py`, `production.py` | no literal V16 selection | preserve; extend only typed target/capsule or root binding where required |
+| `control/goals/EXP-0001.yaml` historical package and V16 absence basis | historical observed identity / package projection | retain V16 history; update only current subgoal/action and selected projection |
+| `control/incidents/INC-T09-V16-LIFECYCLE-REGISTRY.json` | historical observed identity | retain immutable incident unchanged |
+| `control/receipts/category3-shadow/*.json`, `agent-check.json`, `registry-completeness.json`, `incidents.json`, `state-capsule.json` | historical evidence fixture | retain until non-circular current-V16 rebinding |
+| `control/receipts/v16-composition.json` and its binding entry | package filename/projection | retain current V16 filename; generation becomes target-derived |
+| `tests/control/test_category3_shadow.py`, `test_composition.py`, `test_control_proof_forgery.py`, `test_incidents.py`, `test_production_coupling.py`, and `test_registry_validation.py` | historical evidence fixture | retain exact V16 adjudication and mutation coverage |
+| `tests/control/test_cli.py`, `test_contract_capabilities.py`, `test_state_capsule.py`, and `test_version_lint.py` | test fixture | preserve useful V16 fixtures; add current/successor compatibility cases |
+| `docs/DECISIONS.md`, `docs/PROJECT_STATE.yaml`, architecture/ADR/active plan, stabilization ledger/packet, and V15/V16 historical ledgers/packets | documentation | retain historical facts; update active PR 1.1 and PR 2 boundary projections |
+
+The six active fixed selections are therefore the agent-check target, verified
+capsule target, receipt-refresh target, mandatory shadow target, composition receipt
+filename, and Make `category3-shadow` target. No active selection annotation is
+accepted as historical identity.
+
+### PR 1.1 DoD state
+
+The authoritative CT-01 through CT-22 table and mapping are in
+`docs/exec-plans/active/T09_CONTROL_PLANE_STABILIZATION.md`. CT-01 and CT-02 are met
+by the identity evidence and inventory above. CT-03 through CT-22 remain
+`not-started`; none may become `met` without the exact planned evidence.
+
+### Pre-edit evidence
+
+- `git fetch origin --prune` completed normally after one transient local ref-lock
+  race was resolved; local and remote destination both resolve to the exact base.
+- `make state-capsule` passed at the base and emitted V16/not-created V17, Category 3
+  false, scientific interpretation false, and semantic SHA-256
+  `1d0eed149c8869b5e5a69e7bc68b115bea6d59c6b9fb14f25ee30851bb7017c3`.
+- `make agent-check` passed at the base for 14 contracts and all 16 required shadow
+  scenarios; aggregate semantic SHA-256 is
+  `7905e9f5fac085c2d9e627265f23f3d582f69cb5bc3c600a357cd6c233d017af`.
+
+### PR 1.1 implementation evidence before receipt rebinding
+
+One frozen `SelectedRuntimeTarget` now owns aggregate selection. It binds source,
+goal-record SHA-256, historical and successor identities/status, selected provider
+contract and plan, selected command-package SHA-256, package status, and false
+authority/science flags. The same resolver is used by state-capsule, compose, shadow,
+agent-check, and receipt refresh. An exact explicit selector must equal the
+goal-derived target; no current/latest helper exists.
+
+The current goal-derived receipt is:
+
+```text
+source: goal-record
+historical_contract_version: V16
+successor_contract_version: V17
+successor_status: not-created
+selected_provider_contract_version: V16
+selected_plan_id: PLAN-EXP0001-PILOT-V16
+selected_command_package_sha256: 377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b
+goal_record_sha256: 59b8f4e2aacd795db5bda02a54786c6cf5bf3c5a0a95228827352af349f178e0
+semantic_sha256: 3ba8075fbb264d06a58830783d56b3ae91cfd85316c74ac7e52a8e56a2e48297
+live_authorization: false
+scientific_interpretation_allowed: false
+```
+
+A test-owned temporary package changes only the temporary goal/package data and one
+in-memory equivalent of the future central declaration. It resolves:
+
+```text
+source: goal-record
+historical_contract_version: V16
+successor_contract_version: V17
+successor_status: package-bound-not-authorized
+selected_provider_contract_version: V17
+selected_plan_id: PLAN-EXP0001-PILOT-V17
+selected_command_package_sha256: 8821992e34769c936c9f4fed7ab92934701db27c104c2df399acca0e5f11d789
+goal_record_sha256: 5a09e4e974a4d1024d569d8ef9ee36c1fd06297b98d6f3233a794c65c286222d
+semantic_sha256: 53e14adc49ac69f7ef43e3602af42db26557417522daad57a520ce6ec634cad7
+live_authorization: false
+scientific_interpretation_allowed: false
+```
+
+That temporary successor passed 15-contract real-consumer registry completeness,
+selected composition, the happy path plus all fifteen production-wrapper failures,
+state capsule, agent check, CLI state-capsule, CLI shadow, receipt refresh to
+`control/receipts/packages/v17`, and binding validation. Every scenario after package
+resolution named the synthetic V17 command digest; `lifecycle-unsupported` alone
+carried no command digest because it stopped during offline composition. Hashes of
+every `REQUIRED_SHARED_SOURCES` member were identical before and after package
+selection. Two equivalent temporary roots generated byte-identical JSON trees.
+
+All target/package selection failures occur inside the filesystem-only resolver
+before aggregate composition or an adapter boundary. Instrumented counts are:
+
+```text
+secret reads: 0
+metadata requests: 0
+provider calls: 0
+condition reservations: 0
+```
+
+The new incident is
+`control/incidents/INC-T09-CONTROL-FIXED-TARGET-SELECTION.json`, 2,028 bytes, file
+SHA-256 `3f3fd02630a79e63474812b92e8d7a63e6b4b43387dec26c93c90dfb79210334`,
+with immutable-facts SHA-256
+`8de67dfbe99733d6f0bf7322b7fcda7cc975619b713948d414d5ba0689743408`.
+Its exact target-selection and active-lint nodes pass alongside the retained V16
+incident regressions.
+
+Focused evidence so far:
+
+- current/lightweight target selection and package-failure suite: passed;
+- current capsule, incident, registry, CLI, composition, and version-lint suite:
+  passed;
+- full synthetic successor path plus equivalent-root byte determinism, rerun after
+  direct command-byte validation and no-overwrite publication hardening:
+  `2 passed in 330.61s`;
+- Ruff and strict mypy over changed source: passed.
+
+No V17 path exists in the working tree, no experiment artifact changed, no live
+secret/provider/cloud/scientific operation ran, and all authority/science flags
+remain false. CT-03 through CT-16 and CT-18 through CT-20 are met. CT-17 awaits the
+non-circular current-V16 rebind; CT-21 and CT-22 await final gates and the draft PR.

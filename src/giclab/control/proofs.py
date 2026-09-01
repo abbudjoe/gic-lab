@@ -17,13 +17,19 @@ from typing import Final
 from jsonschema import Draft202012Validator
 
 from giclab.control.scenarios import HAPPY_PATH, REQUIRED_FAILURE_SCENARIOS
+from giclab.control.target import (
+    SelectedRuntimeTarget,
+    TargetSelectionError,
+    validate_selected_runtime_target,
+    validate_selected_runtime_target_document,
+)
 from giclab.harness.t09_provider_contracts import T09ProviderContract
 from giclab.harness.t09_sira_pilot import load_execution_contract
 from giclab.registry import load_json, loads_json
 
 CONTROL_BINDING_SCHEMA: Final = "schemas/t09-control-receipt-bindings.schema.json"
 STATE_CAPSULE_SCHEMA: Final = "schemas/agent-state-capsule.schema.json"
-BASE_COMMIT: Final = "450a10a51eda4c428f20b27d6b4aafc4f94d80f4"
+BASE_COMMIT: Final = "d0aff8a47e92013773d9d05b2cd90fb741658b03"
 REPOSITORY_SLUG: Final = "abbudjoe/gic-lab"
 _HEX40: Final = re.compile(r"^[a-f0-9]{40}$")
 _HEX64: Final = re.compile(r"^[a-f0-9]{64}$")
@@ -58,6 +64,7 @@ REQUIRED_SHARED_SOURCES: Final = frozenset(
         "src/giclab/control/scenarios.py",
         "src/giclab/control/shadow.py",
         "src/giclab/control/state_capsule.py",
+        "src/giclab/control/target.py",
         "src/giclab/control/version_lint.py",
         "src/giclab/harness/lambda_campaign_lifecycle.py",
         "src/giclab/harness/lambda_l13_security.py",
@@ -93,6 +100,9 @@ class ControlProofReference:
     expected_provider_contract_version: str
     expected_plan_id: str
     expected_command_package_sha256: str
+    expected_target_source: str
+    expected_goal_record_sha256: str
+    expected_target_semantic_sha256: str
 
 
 _VALIDATED_CAPSULE = object()
@@ -107,6 +117,7 @@ class ValidatedStateCapsule:
     repository_commit: str
     repository_tree: str
     runtime_package: Mapping[str, object]
+    selected_runtime_target: Mapping[str, object]
     provenance: tuple[str, ...]
     _proof: object = field(repr=False, compare=False)
 
@@ -338,6 +349,7 @@ def validate_state_capsule_document(
     flags = document.get("machine_readable_flags")
     provenance = document.get("provenance")
     runtime_package = document.get("runtime_package")
+    selected_target_document = document.get("selected_runtime_target")
     if identity != {"commit": expected_commit, "tree": expected_tree}:
         raise ControlProofError("state capsule repository identity drifted")
     if not isinstance(science, dict) or (
@@ -358,26 +370,23 @@ def validate_state_capsule_document(
         or flags.get("live_resources_observed_in_this_work") is not False
     ):
         raise ControlProofError("state capsule machine authority/science flags drifted")
-    if not isinstance(runtime_package, dict):
-        raise ControlProofError("state capsule runtime package is malformed")
-    historical_package = runtime_package.get("historical_package")
-    next_package = runtime_package.get("next_package")
-    next_status = runtime_package.get("next_status")
-    if not isinstance(historical_package, str) or not isinstance(next_package, str):
-        raise ControlProofError("state capsule runtime package identities are malformed")
-    historical_match = re.fullmatch(r"V([0-9]+)", historical_package)
-    next_match = re.fullmatch(r"V([0-9]+)", next_package)
+    if not isinstance(runtime_package, dict) or not isinstance(selected_target_document, dict):
+        raise ControlProofError("state capsule runtime target is malformed")
+    try:
+        selected_target = validate_selected_runtime_target_document(
+            root,
+            selected_target_document,
+        )
+    except TargetSelectionError as exc:
+        raise ControlProofError(f"state capsule runtime target is invalid: {exc}") from exc
+    if selected_target.selected_contract.version != selected_provider_contract_version:
+        raise ControlProofError("state capsule runtime target selects another contract")
     if (
-        historical_match is None
-        or next_match is None
-        or int(next_match.group(1)) != int(historical_match.group(1)) + 1
+        runtime_package.get("historical_package") != selected_target.historical_contract_version
+        or runtime_package.get("next_package") != selected_target.successor_contract_version
+        or runtime_package.get("next_status") != selected_target.successor_status
     ):
-        raise ControlProofError("state capsule runtime package is not an exact successor")
-    selected_runtime = historical_package if next_status == "not-created" else next_package
-    if next_status not in {"not-created", "package-bound-not-authorized"} or (
-        selected_runtime != selected_provider_contract_version
-    ):
-        raise ControlProofError("state capsule runtime package does not bind the selected contract")
+        raise ControlProofError("state capsule runtime projection contradicts its target")
     if (
         not isinstance(provenance, list)
         or not provenance
@@ -401,6 +410,11 @@ def validate_state_capsule_document(
     object.__setattr__(value, "repository_commit", expected_commit)
     object.__setattr__(value, "repository_tree", expected_tree)
     object.__setattr__(value, "runtime_package", dict(runtime_package))
+    object.__setattr__(
+        value,
+        "selected_runtime_target",
+        dict(selected_target_document),
+    )
     object.__setattr__(value, "provenance", tuple(checked_provenance))
     object.__setattr__(value, "_proof", _VALIDATED_CAPSULE)
     return value
@@ -601,8 +615,7 @@ def generate_control_binding_document(
     *,
     control_commit: str,
     control_tree: str,
-    contract: T09ProviderContract,
-    command_package_sha256: str,
+    target: SelectedRuntimeTarget,
     registry_receipt: Path,
     active_version_lint_receipt: Path,
     composition_receipt: Path,
@@ -617,20 +630,17 @@ def generate_control_binding_document(
 
     root = repository.resolve(strict=True)
     approved = approved_root.resolve(strict=True)
+    selected_target = validate_selected_runtime_target(root, target)
     if _git_tree(root, control_commit) != control_tree:
         raise ControlProofError("control binding commit/tree does not resolve")
     if set(shadow_failures) != set(REQUIRED_FAILURE_SCENARIOS):
         raise ControlProofError("control binding failure matrix is incomplete")
     document: dict[str, object] = {
-        "schema_version": "2.0.0",
+        "schema_version": "3.0.0",
         "repository_slug": REPOSITORY_SLUG,
         "base_commit": BASE_COMMIT,
         "control_plane_revision": {"commit": control_commit, "tree": control_tree},
-        "selected_contract": {
-            "provider_contract_version": contract.version,
-            "plan_id": contract.plan_id,
-            "command_package_sha256": command_package_sha256,
-        },
+        "selected_runtime_target": selected_target.to_document(),
         "artifacts": {
             "registry_receipt": _artifact_binding(approved, registry_receipt),
             "active_version_lint_receipt": _artifact_binding(
@@ -688,7 +698,7 @@ def validate_control_receipt_set(
     ):
         raise ControlProofError("binding document repository identity drifted")
     revision = binding.get("control_plane_revision")
-    selected = binding.get("selected_contract")
+    selected = binding.get("selected_runtime_target")
     artifacts = binding.get("artifacts")
     authority = binding.get("authority")
     if not all(isinstance(value, dict) for value in (revision, selected, artifacts, authority)):
@@ -711,14 +721,24 @@ def validate_control_receipt_set(
         raise ControlProofError("binding control revision differs from the exact request")
     if _git_tree(root, commit) != tree:
         raise ControlProofError("binding control commit/tree does not resolve")
+    try:
+        selected_target = validate_selected_runtime_target_document(root, selected)
+    except TargetSelectionError as exc:
+        raise ControlProofError(f"binding selected-runtime target is invalid: {exc}") from exc
+    selected_document = selected_target.to_document()
     if (
-        selected.get("provider_contract_version") != reference.expected_provider_contract_version
-        or selected.get("plan_id") != reference.expected_plan_id
-        or selected.get("command_package_sha256") != reference.expected_command_package_sha256
+        selected_target.selected_contract.version != reference.expected_provider_contract_version
+        or selected_target.selected_plan_id != reference.expected_plan_id
+        or selected_target.selected_command_package_sha256
+        != reference.expected_command_package_sha256
+        or selected_target.source != reference.expected_target_source
+        or selected_target.goal_record_sha256 != reference.expected_goal_record_sha256
+        or selected_document.get("semantic_sha256") != reference.expected_target_semantic_sha256
+        or contract != selected_target.selected_contract
         or reference.expected_provider_contract_version != contract.version
         or reference.expected_plan_id != contract.plan_id
     ):
-        raise ControlProofError("binding selected another contract or command package")
+        raise ControlProofError("binding selected another runtime target")
     if authority != {
         "live_authorization": False,
         "scientific_interpretation_allowed": False,
@@ -801,6 +821,13 @@ def validate_control_receipt_set(
         isinstance(entry, dict) and entry.get("complete") is True for entry in registry_entries
     ):
         raise ControlProofError("registry receipt lacks a complete per-contract matrix")
+    if not any(
+        isinstance(entry, dict)
+        and entry.get("version") == contract.version
+        and entry.get("plan_id") == contract.plan_id
+        for entry in registry_entries
+    ):
+        raise ControlProofError("registry receipt lacks the selected runtime target")
     if (
         composition.get("provider_contract_version") != contract.version
         or composition.get("command_package_sha256") != reference.expected_command_package_sha256
@@ -809,6 +836,10 @@ def validate_control_receipt_set(
         or composition.get("registry_receipt_sha256") != semantics["registry_receipt"]
         or composition.get("version_lint_receipt_sha256")
         != semantics["active_version_lint_receipt"]
+        or composition.get("target_schema_sha256")
+        != hashlib.sha256(
+            (root / "schemas/t09-control-target.schema.json").read_bytes()
+        ).hexdigest()
     ):
         raise ControlProofError("composition receipt cross-binding drifted")
 
@@ -819,6 +850,8 @@ def validate_control_receipt_set(
         expected_tree=tree,
         selected_provider_contract_version=contract.version,
     )
+    if documents["state_capsule"].get("selected_runtime_target") != selected:
+        raise ControlProofError("state capsule does not bind the selected runtime target")
     capsule_control = documents["state_capsule"].get("control_plane")
     if not isinstance(capsule_control, dict) or any(
         capsule_control.get(field) is not True
@@ -886,7 +919,12 @@ def validate_control_receipt_set(
 
     agent = documents["agent_check_receipt"]
     checks = agent.get("checks")
-    if agent.get("complete") is not True or not isinstance(checks, dict):
+    if (
+        agent.get("complete") is not True
+        or not isinstance(checks, dict)
+        or agent.get("selected_runtime_target") != selected
+        or agent.get("selected_composition_semantic_sha256") != semantics["composition_receipt"]
+    ):
         raise ControlProofError("aggregate agent-check receipt is incomplete")
     scalar_bindings = {
         "active_version_lint": semantics["active_version_lint_receipt"],
@@ -901,15 +939,28 @@ def validate_control_receipt_set(
             raise ControlProofError(f"agent-check does not bind constituent: {check_name}")
     composition_check = checks.get("offline_composition")
     entries = composition_check.get("contracts") if isinstance(composition_check, dict) else None
-    if not isinstance(entries, list) or not any(
-        isinstance(entry, dict)
-        and entry.get("version") == contract.version
-        and entry.get("semantic_sha256") == semantics["composition_receipt"]
-        for entry in entries
+    if (
+        not isinstance(composition_check, dict)
+        or composition_check.get("selected_provider_contract_version") != contract.version
+        or composition_check.get("selected_semantic_sha256") != semantics["composition_receipt"]
+        or not isinstance(entries, list)
+        or not any(
+            isinstance(entry, dict)
+            and entry.get("version") == contract.version
+            and entry.get("semantic_sha256") == semantics["composition_receipt"]
+            for entry in entries
+        )
     ):
         raise ControlProofError("agent-check does not bind selected composition")
     shadow_check = checks.get("category3_shadow")
     shadow_entries = shadow_check.get("scenarios") if isinstance(shadow_check, dict) else None
+    if (
+        not isinstance(shadow_check, dict)
+        or shadow_check.get("selected_provider_contract_version") != contract.version
+        or shadow_check.get("selected_command_package_sha256")
+        != reference.expected_command_package_sha256
+    ):
+        raise ControlProofError("agent-check shadow target drifted")
     observed_shadow = (
         {
             entry.get("scenario"): entry.get("semantic_sha256")

@@ -27,43 +27,53 @@
   ],
   "properties": {
     "schema_version": {"const": "1.0.0"},
-    "incident_id": {"type": "string", "pattern": "^INC-[A-Z0-9-]+$"},
+    "incident_id": {
+      "enum": [
+        "INC-T09-V16-LIFECYCLE-REGISTRY",
+        "INC-T09-CONTROL-FIXED-TARGET-SELECTION"
+      ]
+    },
     "observed_package": {
       "type": "object",
       "additionalProperties": false,
       "required": ["version", "plan_id", "merged_package"],
       "properties": {
-        "version": {"const": "V16"},
-        "plan_id": {"const": "PLAN-EXP0001-PILOT-V16"},
-        "merged_package": {"const": "450a10a51eda4c428f20b27d6b4aafc4f94d80f4"}
+        "version": {"type": "string", "pattern": "^V[1-9][0-9]*$"},
+        "plan_id": {"type": "string", "pattern": "^PLAN-EXP0001-PILOT-V[1-9][0-9]*$"},
+        "merged_package": {"type": "string", "pattern": "^[a-f0-9]{40}$"}
       }
     },
-    "stage": {"const": "provider-preflight-before-secret-loading"},
+    "stage": {"type": "string", "minLength": 1},
     "failed_invariant": {"type": "string", "minLength": 1},
     "root_cause": {"type": "string", "minLength": 1},
     "live_environment_required": {"const": false},
-    "earliest_detectable_stage": {"const": "offline-composition"},
+    "earliest_detectable_stage": {"type": "string", "minLength": 1},
     "authority_consumed": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["metadata", "provider_launch"],
-      "properties": {
-        "metadata": {"const": true},
-        "provider_launch": {"const": false}
-      }
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["metadata", "provider_launch"],
+          "properties": {
+            "metadata": {"type": "boolean"},
+            "provider_launch": {"type": "boolean"}
+          }
+        },
+        {"const": "none"}
+      ]
     },
     "cost_usd": {"const": "0.00"},
     "affected_abstraction": {
       "type": "array",
-      "contains": {"const": "registry/lifecycle-dispatch"},
+      "minItems": 1,
       "items": {"type": "string"},
       "uniqueItems": true
     },
-    "repair": {"const": "semantic-capability-dispatch"},
+    "repair": {"type": "string", "minLength": 1},
     "coverage": {
       "type": "array",
-      "contains": {"enum": ["offline-composition", "shadow-execution"]},
-      "items": {"enum": ["offline-composition", "shadow-execution"]},
+      "contains": {"enum": ["offline-composition", "shadow-execution", "target-resolution"]},
+      "items": {"enum": ["offline-composition", "shadow-execution", "target-resolution"]},
       "uniqueItems": true
     },
     "regressions": {
@@ -85,6 +95,63 @@
     "immutable_facts": {"type": "object", "minProperties": 1},
     "immutable_facts_sha256": {"$ref": "#/$defs/sha256"}
   },
+  "allOf": [
+    {
+      "if": {"properties": {"incident_id": {"const": "INC-T09-V16-LIFECYCLE-REGISTRY"}}},
+      "then": {
+        "properties": {
+          "observed_package": {
+            "properties": {
+              "version": {"const": "V16"},
+              "plan_id": {"const": "PLAN-EXP0001-PILOT-V16"},
+              "merged_package": {"const": "450a10a51eda4c428f20b27d6b4aafc4f94d80f4"}
+            }
+          },
+          "stage": {"const": "provider-preflight-before-secret-loading"},
+          "earliest_detectable_stage": {"const": "offline-composition"},
+          "authority_consumed": {
+            "const": {"metadata": true, "provider_launch": false}
+          },
+          "affected_abstraction": {
+            "contains": {"const": "registry/lifecycle-dispatch"}
+          },
+          "repair": {"const": "semantic-capability-dispatch"},
+          "coverage": {
+            "contains": {"enum": ["offline-composition", "shadow-execution"]},
+            "items": {"enum": ["offline-composition", "shadow-execution"]}
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"incident_id": {"const": "INC-T09-CONTROL-FIXED-TARGET-SELECTION"}}},
+      "then": {
+        "properties": {
+          "observed_package": {
+            "properties": {
+              "version": {"const": "V16"},
+              "plan_id": {"const": "PLAN-EXP0001-PILOT-V16"},
+              "merged_package": {"const": "d0aff8a47e92013773d9d05b2cd90fb741658b03"}
+            }
+          },
+          "stage": {"const": "post-stabilization-package-boundary-review"},
+          "failed_invariant": {
+            "const": "a successor package must not require shared aggregate-control source edits"
+          },
+          "root_cause": {
+            "const": "agent-check, CLI, and Make targets selected V16 explicitly"
+          },
+          "earliest_detectable_stage": {"const": "package-only-boundary-audit"},
+          "authority_consumed": {"const": "none"},
+          "affected_abstraction": {
+            "const": ["aggregate-control/target-selection"]
+          },
+          "repair": {"const": "goal-compatible-selected-runtime-target-resolver"},
+          "coverage": {"const": ["target-resolution", "shadow-execution"]}
+        }
+      }
+    }
+  ],
   "$defs": {
     "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
   }

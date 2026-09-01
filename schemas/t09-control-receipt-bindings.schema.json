@@ -10,13 +10,13 @@
     "repository_slug",
     "base_commit",
     "control_plane_revision",
-    "selected_contract",
+    "selected_runtime_target",
     "artifacts",
     "authority",
     "semantic_sha256"
   ],
   "properties": {
-    "schema_version": {"const": "2.0.0"},
+    "schema_version": {"const": "3.0.0"},
     "repository_slug": {"const": "abbudjoe/gic-lab"},
     "base_commit": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
     "control_plane_revision": {
@@ -28,14 +28,47 @@
         "tree": {"type": "string", "pattern": "^[a-f0-9]{40}$"}
       }
     },
-    "selected_contract": {
+    "selected_runtime_target": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["provider_contract_version", "plan_id", "command_package_sha256"],
+      "required": [
+        "schema_version",
+        "source",
+        "goal_record_path",
+        "goal_record_sha256",
+        "historical_contract_version",
+        "successor_contract_version",
+        "successor_status",
+        "selected_provider_contract_version",
+        "selected_plan_id",
+        "selected_command_package_sha256",
+        "selected_package_status",
+        "authority",
+        "semantic_sha256"
+      ],
       "properties": {
-        "provider_contract_version": {"type": "string", "pattern": "^V[0-9]+$"},
-        "plan_id": {"type": "string", "minLength": 1},
-        "command_package_sha256": {"$ref": "#/$defs/sha256"}
+        "schema_version": {"const": "1.0.0"},
+        "source": {"enum": ["goal-record", "explicit-provider-contract"]},
+        "goal_record_path": {"const": "control/goals/EXP-0001.yaml"},
+        "goal_record_sha256": {"$ref": "#/$defs/sha256"},
+        "historical_contract_version": {"$ref": "#/$defs/version"},
+        "successor_contract_version": {"$ref": "#/$defs/version"},
+        "successor_status": {"enum": ["not-created", "package-bound-not-authorized"]},
+        "selected_provider_contract_version": {"$ref": "#/$defs/version"},
+        "selected_plan_id": {"type": "string", "pattern": "^PLAN-EXP0001-PILOT-V[1-9][0-9]*$"},
+        "selected_command_package_sha256": {"$ref": "#/$defs/sha256"},
+        "selected_package_status": {"type": "string", "minLength": 1},
+        "authority": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["live_authorization", "scientific_interpretation_allowed", "repository_state_grants_authority"],
+          "properties": {
+            "live_authorization": {"const": false},
+            "scientific_interpretation_allowed": {"const": false},
+            "repository_state_grants_authority": {"const": false}
+          }
+        },
+        "semantic_sha256": {"$ref": "#/$defs/sha256"}
       }
     },
     "artifacts": {
@@ -86,6 +119,7 @@
   },
   "$defs": {
     "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "version": {"type": "string", "pattern": "^V[1-9][0-9]*$"},
     "artifact": {
       "type": "object",
       "additionalProperties": false,

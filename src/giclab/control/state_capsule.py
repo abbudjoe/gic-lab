@@ -13,11 +13,16 @@ import yaml
 from jsonschema import Draft202012Validator
 
 from giclab.control.category3 import repository_identity
+from giclab.control.target import (
+    GOAL_RECORD,
+    SelectedRuntimeTarget,
+    resolve_selected_runtime_target,
+    validate_selected_runtime_target,
+)
 from giclab.registry import load_json
 
-STATE_CAPSULE_SCHEMA_VERSION: Final = "1.0.0"
+STATE_CAPSULE_SCHEMA_VERSION: Final = "2.0.0"
 DETERMINISTIC_GENERATED_AT: Final = "1970-01-01T00:00:00Z"
-GOAL_RECORD: Final = "control/goals/EXP-0001.yaml"
 STATE_CAPSULE_SCHEMA: Final = "schemas/agent-state-capsule.schema.json"
 
 
@@ -76,12 +81,18 @@ def generate_state_capsule(
     version_lint_valid: bool,
     shadow_happy_path: bool,
     failure_matrix_valid: bool,
+    target: SelectedRuntimeTarget | None = None,
     deterministic: bool = True,
     generated_at: str | None = None,
 ) -> dict[str, object]:
     """Project machine-readable goal state and current control evidence."""
 
     root = repository.resolve(strict=True)
+    selected_target = (
+        resolve_selected_runtime_target(root)
+        if target is None
+        else validate_selected_runtime_target(root, target)
+    )
     goal = _load_goal(root)
     commit, tree = repository_identity(root)
     if deterministic:
@@ -107,6 +118,7 @@ def generate_state_capsule(
             "failure_matrix_valid": failure_matrix_valid,
         },
         "runtime_package": _required_mapping(goal, "runtime_package"),
+        "selected_runtime_target": selected_target.to_document(),
         "authority": _required_mapping(goal, "authority"),
         "resources": _required_mapping(goal, "resources"),
         "evidence": _required_mapping(goal, "evidence"),

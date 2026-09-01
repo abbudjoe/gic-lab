@@ -17,11 +17,16 @@ from giclab.control.registry_validation import validate_registry_completeness
 from giclab.control.scenarios import HAPPY_PATH
 from giclab.control.shadow import run_required_shadow_matrix
 from giclab.control.state_capsule import generate_state_capsule
+from giclab.control.target import (
+    SelectedRuntimeTarget,
+    resolve_selected_runtime_target,
+    validate_selected_runtime_target,
+)
 from giclab.control.version_lint import validate_active_version_dispatch
-from giclab.harness.t09_provider_contracts import PROVIDER_CONTRACTS, V16_PROVIDER_CONTRACT
+from giclab.harness import t09_provider_contracts as provider_contracts
 from giclab.registry import load_json
 
-AGENT_CHECK_SCHEMA_VERSION: Final = "1.0.0"
+AGENT_CHECK_SCHEMA_VERSION: Final = "2.0.0"
 
 
 def _canonical_sha256(value: object) -> str:
@@ -37,11 +42,17 @@ def _schema_valid(repository: Path, schema_path: str, document: object) -> bool:
 def run_agent_check(
     repository: Path,
     *,
+    target: SelectedRuntimeTarget | None = None,
     execute_incident_regressions: bool = True,
 ) -> dict[str, object]:
     """Run all pre-authority checks without reading secrets or using a network."""
 
     root = repository.resolve(strict=True)
+    selected_target = (
+        resolve_selected_runtime_target(root)
+        if target is None
+        else validate_selected_runtime_target(root, target)
+    )
     commit, tree = repository_identity(root)
     lint = validate_active_version_dispatch(root)
     registry = validate_registry_completeness(root)
@@ -59,8 +70,8 @@ def run_agent_check(
         raise ValueError("source-binding receipt files must be a list")
     compositions: list[dict[str, object]] = []
     all_compositions_valid = True
-    v16_composition: dict[str, object] | None = None
-    for contract in PROVIDER_CONTRACTS.values():
+    selected_composition: dict[str, object] | None = None
+    for contract in provider_contracts.PROVIDER_CONTRACTS.values():
         try:
             receipt = compose_control_plane(
                 root,
@@ -74,8 +85,8 @@ def run_agent_check(
                 receipt,
             )
             error = None
-            if contract is V16_PROVIDER_CONTRACT:
-                v16_composition = receipt
+            if contract.version == selected_target.selected_contract.version:
+                selected_composition = receipt
         except Exception as exc:
             receipt = {}
             valid = False
@@ -98,17 +109,18 @@ def run_agent_check(
         version_lint_valid=lint.get("complete") is True,
         shadow_happy_path=False,
         failure_matrix_valid=False,
+        target=selected_target,
         deterministic=True,
     )
-    if v16_composition is None:
-        raise ValueError("V16 production composition is unavailable")
+    if selected_composition is None:
+        raise ValueError("selected production composition is unavailable")
     shadow_receipts = run_required_shadow_matrix(
         root,
-        contract=V16_PROVIDER_CONTRACT,
+        contract=selected_target.selected_contract,
         state_capsule=bootstrap_capsule,
         registry_receipt=registry,
         version_lint_receipt=lint,
-        composition_receipt=v16_composition,
+        composition_receipt=selected_composition,
     )
     shadow_schema_valid = all(
         _schema_valid(root, "schemas/t09-category3-shadow-receipt.schema.json", receipt)
@@ -128,6 +140,7 @@ def run_agent_check(
         version_lint_valid=lint.get("complete") is True,
         shadow_happy_path=happy_valid,
         failure_matrix_valid=failure_matrix_valid,
+        target=selected_target,
         deterministic=True,
     )
     capsule_valid = _schema_valid(root, "schemas/agent-state-capsule.schema.json", capsule)
@@ -148,6 +161,8 @@ def run_agent_check(
         "schema_version": AGENT_CHECK_SCHEMA_VERSION,
         "repository_commit": commit,
         "repository_tree": tree,
+        "selected_runtime_target": selected_target.to_document(),
+        "selected_composition_semantic_sha256": selected_composition.get("semantic_sha256"),
         "checks": {
             "active_version_lint": {
                 "complete": lint.get("complete") is True,
@@ -165,10 +180,16 @@ def run_agent_check(
             },
             "offline_composition": {
                 "complete": all_compositions_valid,
+                "selected_provider_contract_version": (selected_target.selected_contract.version),
+                "selected_semantic_sha256": selected_composition.get("semantic_sha256"),
                 "contracts": compositions,
             },
             "category3_shadow": {
                 "complete": failure_matrix_valid,
+                "selected_provider_contract_version": (selected_target.selected_contract.version),
+                "selected_command_package_sha256": (
+                    selected_target.selected_command_package_sha256
+                ),
                 "scenarios": [
                     {
                         "scenario": scenario,

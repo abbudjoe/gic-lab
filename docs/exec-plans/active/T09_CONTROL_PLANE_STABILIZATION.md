@@ -188,9 +188,79 @@ successful while any required item is partial, blocked, or not-started.
   contract violation rather than a fallback.
 - No blocker is currently known.
 
+## PR 1.1 successor-target repair
+
+Assembly status: **in-progress**
+
+The operator-supplied `T09 PR 1.1 — Make the Agent Control Target
+Successor-Driven` contract governs the post-merge Category 1 repair. The exact base
+is merge commit `d0aff8a47e92013773d9d05b2cd90fb741658b03`, tree
+`a6801e99d8e6ed204bbfa49ca1f3f17ad8b793ec`, with ordered parents
+`450a10a51eda4c428f20b27d6b4aafc4f94d80f4` and
+`ccab5f1255f5a397ce14f1ebec7d96068bda91bc`. The required control contract is one
+frozen, goal-compatible selected-runtime target used by every aggregate command.
+There is no current/latest/default contract and selection never grants authority.
+
+```text
+operator_attests_model: gpt-5.6-sol
+operator_attests_effort: max
+runtime_model_introspection_required: false
+implementation_delegated: false
+```
+
+### PR 1.1 scope and boundaries
+
+In scope are the target resolver, aggregate target plumbing, safe versioned receipt
+roots, active-selection lint, one control-design incident, synthetic successor
+fixtures, non-circular V16 receipt rebinding, reviewed projections, and CT-01 through
+CT-22 below.
+
+Out of scope are tracked V17 package artifacts, `AUTONOMOUS-0010`, live effects or
+authority, real secret/provider/cloud/scientific execution, V16 replay, merge,
+auto-merge, force-push, and delegation. Direct Sol/max self-review is the required
+review path because the governing operator contract prohibits subagents.
+
+### PR 1.1 definition of done
+
+| ID | Required outcome | Planned evidence | Status |
+|---|---|---|---|
+| CT-01 | Exact base and merged PR 1 history preserved | Git/GitHub identity and clean-worktree checks | met |
+| CT-02 | All active fixed V16 selections inventoried | Classified implementation-ledger inventory | met |
+| CT-03 | One typed goal-compatible target resolver exists | Target unit tests and source review | met |
+| CT-04 | Current goal resolves V16 | Target receipt and aggregate CLI tests | met |
+| CT-05 | Synthetic package-bound successor resolves V17 | Temporary-repository synthetic package test | met |
+| CT-06 | Agent check contains no fixed package target | Source lint and V16/V17 aggregate tests | met |
+| CT-07 | CLI aggregate commands contain no fixed package target | Parser/command integration tests | met |
+| CT-08 | Make/CI defaults contain no fixed package target | Make/workflow inspection and direct targets | met |
+| CT-09 | Receipt generation supports safe versioned roots | Output-root and generated-binding tests | met |
+| CT-10 | Existing sealed root cannot be overwritten | Sealed-root regression | met |
+| CT-11 | Binding validator accepts package-specific roots | Temporary-root binding validation | met |
+| CT-12 | Active-version lint catches fixed contract selection | AST lint regressions and zero-finding receipt | met |
+| CT-13 | Synthetic successor completes registry/composition/shadow/agent-check | Full synthetic successor path | met |
+| CT-14 | Synthetic successor requires no shared aggregate-control edits | Before/after shared-source byte map | met |
+| CT-15 | All target failures precede effect boundaries | Zero-call counters and ordering tests | met |
+| CT-16 | Incident linked to passing regressions | Incident validator and exact node IDs | met |
+| CT-17 | Current V16 receipts remain valid or are correctly rebound | Immutable ancestor and binding validation | not-started |
+| CT-18 | PR 2 boundary is explicit and enforceable | Architecture/packet/ledger text plus source-byte test | met |
+| CT-19 | No tracked V17 artifact exists | Git path scan | met |
+| CT-20 | Science and authority boundaries unchanged | Hash, capsule, proof, privacy, and false-flag tests | met |
+| CT-21 | Full/parity/static/privacy/site gates pass | Required final command set | not-started |
+| CT-22 | Draft PR open, exact-head CI green, no merge | GitHub PR/run metadata | not-started |
+
+### PR 1.1 implementation mapping
+
+- Target parsing, package validation, goal compatibility, and explicit selection map
+  to CT-03 through CT-05 and CT-15.
+- Agent-check, CLI, Make/CI, versioned receipt roots, binding validation, and lint map
+  to CT-06 through CT-12 and CT-17.
+- The synthetic successor fixture and unchanged-source proof map to CT-13, CT-14,
+  CT-18, and CT-19.
+- The incident, authority/science preservation, full gates, and draft PR handoff map
+  to CT-01, CT-02, CT-16, and CT-20 through CT-22.
+
 ## Next permitted phase
 
-Update existing draft PR #12 with the completed review repair, obtain exact-head
-GitHub Actions and independent ChatGPT rereview, and stop without merge. PR 2 remains
-package-only; auto-merge stays disabled, and no merge or V17 creation is permitted
-here.
+Complete this PR 1.1 assembly on `codex/t09-control-target-selection`, open one draft
+PR against `phase-1/sira-pilot-autonomous-r2`, obtain exact-head GitHub Actions, and
+stop without merge. A later PR 2 may be package-only within the explicit boundary;
+this work must not create V17 package artifacts or authority.
