@@ -73,7 +73,7 @@ def test_state_capsule_does_not_infer_current_turn_authority() -> None:
     assert flags["live_authorization"] is False
 
 
-def test_state_capsule_represents_fixed_target_incident_and_v17_absence() -> None:
+def test_state_capsule_represents_v16_incident_and_v17_absence() -> None:
     capsule = _capsule()
     runtime = capsule["runtime_package"]
     control = capsule["control_plane"]

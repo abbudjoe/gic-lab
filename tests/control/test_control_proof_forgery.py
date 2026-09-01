@@ -417,7 +417,7 @@ def test_capsule_with_incomplete_control_proof_flags_is_rejected(tmp_path: Path)
     _execute_forgery(proof_root)
 
 
-def test_capsule_validator_rejects_unregistered_bound_successor_package() -> None:
+def test_capsule_validator_accepts_exact_bound_successor_package() -> None:
     capsule = _read(TRACKED_PROOFS / "state-capsule.json")
     runtime = capsule["runtime_package"]
     runtime["next_status"] = "package-bound-not-authorized"
