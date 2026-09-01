@@ -7,7 +7,7 @@ import json
 from collections.abc import Mapping
 from pathlib import Path
 
-from giclab.control.adapters import FakeScenario, ImplementationFlavor
+from giclab.control.adapters import ImplementationFlavor
 from giclab.control.category3 import (
     Category3Phase,
     Category3Request,
@@ -16,12 +16,15 @@ from giclab.control.category3 import (
     repository_identity,
 )
 from giclab.control.composition import compose_control_plane
-from giclab.control.production import build_production_shadow_assembly
 from giclab.control.proofs import ValidatedShadowRehearsal, validate_shadow_rehearsal
 from giclab.control.registry_validation import validate_registry_completeness
 from giclab.control.scenarios import (
     ALL_REQUIRED_SCENARIOS,
     HAPPY_PATH,
+)
+from giclab.control.shadow_effects import (
+    ShadowFaultPlan,
+    build_production_shadow_assembly,
 )
 from giclab.control.version_lint import validate_active_version_dispatch
 from giclab.harness.t09_pragmatic_provider import T09ProviderError
@@ -37,55 +40,58 @@ def _canonical_sha256(value: object) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
-def _fake_scenario(name: str) -> FakeScenario:
+def _fault_plan(name: str) -> ShadowFaultPlan:
     scenarios = {
-        HAPPY_PATH: FakeScenario(HAPPY_PATH),
-        "lifecycle-unsupported": FakeScenario("lifecycle-unsupported"),
-        "metadata-expired": FakeScenario(
+        HAPPY_PATH: ShadowFaultPlan(HAPPY_PATH),
+        "lifecycle-unsupported": ShadowFaultPlan("lifecycle-unsupported"),
+        "metadata-expired": ShadowFaultPlan(
             "metadata-expired",
             metadata_expires_before_launch=True,
         ),
-        "provider-entry-replacement": FakeScenario(
+        "provider-entry-replacement": ShadowFaultPlan(
             "provider-entry-replacement",
             fail_operation="provider.enter",
         ),
-        "host-preflight-replacement": FakeScenario(
+        "host-preflight-replacement": ShadowFaultPlan(
             "host-preflight-replacement",
             fail_operation="host.preflight",
         ),
-        "condition-failure": FakeScenario(
+        "condition-failure": ShadowFaultPlan(
             "condition-failure",
             fail_operation="condition.run",
         ),
-        "raw-export-failure": FakeScenario(
+        "raw-export-failure": ShadowFaultPlan(
             "raw-export-failure",
             fail_operation="condition.export_raw",
         ),
-        "finalizer-failure": FakeScenario(
+        "finalizer-failure": ShadowFaultPlan(
             "finalizer-failure",
             fail_operation="condition.finalize",
         ),
-        "cleanup-interrupted-resumed": FakeScenario(
+        "cleanup-interrupted-resumed": ShadowFaultPlan(
             "cleanup-interrupted-resumed",
             cleanup_interruption_count=1,
         ),
-        "provider-termination-unavailable": FakeScenario(
+        "provider-termination-unavailable": ShadowFaultPlan(
             "provider-termination-unavailable",
             termination_failure_count=2,
         ),
-        "structural-privacy-finding": FakeScenario(
+        "structural-privacy-finding": ShadowFaultPlan(
             "structural-privacy-finding",
             fail_operation="evidence.scan_privacy",
         ),
-        "ambiguous-provider-call-outcome": FakeScenario(
+        "ambiguous-provider-call-outcome": ShadowFaultPlan(
             "ambiguous-provider-call-outcome",
             fail_operation="provider.launch",
             ambiguous_inventory_after_launch=True,
         ),
-        "known-provider-exception": FakeScenario("known-provider-exception"),
-        "response-accounting-incomplete": FakeScenario("response-accounting-incomplete"),
-        "ambiguous-task-model-send": FakeScenario("ambiguous-task-model-send"),
-        "cost-token-admission-stop": FakeScenario("cost-token-admission-stop"),
+        "known-provider-exception": ShadowFaultPlan("known-provider-exception"),
+        "response-accounting-incomplete": ShadowFaultPlan("response-accounting-incomplete"),
+        "ambiguous-task-model-send": ShadowFaultPlan("ambiguous-task-model-send"),
+        "cost-token-admission-stop": ShadowFaultPlan(
+            "cost-token-admission-stop",
+            model_input_tokens_over_cap=True,
+        ),
     }
     try:
         return scenarios[name]
@@ -272,8 +278,8 @@ def validate_shadow_receipt(receipt: Mapping[str, object]) -> None:
             "happy path did not close cleanly",
         )
         _expect(counts.get("condition_entries") == 4, "happy path attempt count drifted")
-        _expect(counts.get("model_call_attempts") == 4, "happy model-call count drifted")
-        _expect(counts.get("browser_actions") == 4, "happy browser-action count drifted")
+        _expect(counts.get("model_call_attempts") == 16, "happy model-call count drifted")
+        _expect(counts.get("browser_actions") == 8, "happy browser-action count drifted")
         _expect(counts.get("unknown_model_outcomes") == 0, "happy path has unknown calls")
         _expect(cleanup.get("provider_resources_zero") is True, "happy cleanup left resources")
 
@@ -312,7 +318,8 @@ def run_shadow_scenario(
     world = build_production_shadow_assembly(
         repository,
         contract,
-        _fake_scenario(scenario),
+        _fault_plan(scenario),
+        rehearsal=rehearsal,
         fixed_tick=fixed_tick,
     )
     request = Category3Request(

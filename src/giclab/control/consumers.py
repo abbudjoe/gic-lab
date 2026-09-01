@@ -303,6 +303,29 @@ def _production_assembly(
     )
 
 
+def _package_effect_loader(
+    repository: Path,
+    contract: T09ProviderContract,
+) -> ConsumerResolution | None:
+    if contract.effect_registration is None:
+        return None
+    from giclab.control.effects import (
+        load_registered_package_effects,
+        validate_package_effect_registration,
+    )
+
+    identity = validate_package_effect_registration(repository, contract)
+    if identity is None:  # pragma: no cover - guarded by the declaration above
+        raise ConsumerResolutionError("declared package effect identity is unavailable")
+    return _resolution(
+        "package_effect_loader",
+        "package-effects:exact-hash-bound-factory-v1",
+        load_registered_package_effects,
+        **identity.to_document(),
+        repository_grants_authority=False,
+    )
+
+
 CONTROL_CONSUMERS: Final[Mapping[str, ContractConsumer]] = MappingProxyType(
     {
         consumer.name: consumer
@@ -317,6 +340,7 @@ CONTROL_CONSUMERS: Final[Mapping[str, ContractConsumer]] = MappingProxyType(
             ContractConsumer("package_transition_resolver", _package_transition),
             ContractConsumer("provider_selector_resolver", _provider_selector),
             ContractConsumer("stage_identity_resolver", _stage_identity),
+            ContractConsumer("package_effect_loader", _package_effect_loader),
             ContractConsumer("production_adapter_assembly", _production_assembly),
         )
     }
@@ -400,5 +424,11 @@ def expected_consumer_handler_id(
             None
             if capabilities.command_package_family is CommandPackageFamily.HISTORICAL
             else "category3-production-wrapper:v1"
+        )
+    if name == "package_effect_loader":
+        return (
+            None
+            if contract.effect_registration is None
+            else "package-effects:exact-hash-bound-factory-v1"
         )
     raise ConsumerResolutionError(f"unknown control consumer: {name}")

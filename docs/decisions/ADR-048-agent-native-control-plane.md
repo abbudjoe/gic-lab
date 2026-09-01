@@ -38,6 +38,46 @@ low-level effects under those wrappers. A pure fake world may support narrow uni
 tests, but it cannot produce tracked control evidence. This change mints only
 shadow-only authority and contains no live low-level implementation.
 
+The post-merge package boundary audit showed that wrapping production primitives was
+not sufficient: shared production source still selected fake credentials, advanced a
+synthetic clock, built fixture stage/freeze data, forced one CRITIC call with fixed
+caps, synthesized raw/finalizer identities, replaced condition answers, branched on a
+fake scenario, and authorized only a contract version/revision pair. Those were
+shared control-plane defects because a package effect could not perform the real
+transaction without hiding work or changing shared source.
+
+Therefore the production assembly now depends on typed effect-neutral interfaces.
+One injected `RuntimeClock` supplies separate monotonic, wall-time, and sleep domains;
+one `ModelMetadataChannel` receives the exact mutable credential selected by the
+strict parser; exact package documents supply budgets and command/session identity;
+and typed stage, preflight, qualification, freeze, condition, raw, finalizer,
+evaluator, and cleanup receipts are validated against their requests. The
+authoritative condition accountant is Option A: the production wrapper's real-time
+event observer applies `ProviderBudgetBoundary` as calls and actions occur, then
+reconciles the file-backed effect outcome. An effect may not install a competing
+authoritative ledger.
+
+Replacement authority is equally explicit: only a validated retained pre-empirical
+closeout produces the typed replacement-eligible failure consumed by the controller.
+Generic transport, effect, and receipt-validation failures cannot spend the bounded
+replacement slot.
+
+Deterministic credentials, time, traces, answers, and failure plans live only in
+`shadow_effects.py`; public CI still drives the same controller and production
+assembly. The complete base assumption inventory and zero-finding shared-source scan
+are sealed in the anti-shadow receipt. A temporary no-network package module proves
+the exact loader, externally supplied test grant, multi-event sessions, raw-to-
+finalizer-to-evaluator chain, cleanup, zero real cost, and unchanged shared-source byte
+map. It creates no tracked V17 identity.
+
+Live authority is a full `EffectAuthorizationContext`, not a version switch. It binds
+control commit/tree, contract, plan and command package, control-proof semantic hash,
+exact effect implementation path/bytes/SHA/factory/protocol, transaction root, and
+external authorization reference/source hash. Shared code can mint only shadow
+authority. A live grant and live effects may exist only in the future package module,
+and the central loader imports its sole declared factory only after every byte and
+grant binding passes.
+
 Resolve one frozen `SelectedRuntimeTarget` before every aggregate control gate. The
 resolver reads the machine goal, enforces an exact consecutive successor and one of
 the two non-authorizing package states, validates the selected package's exact plan
@@ -78,10 +118,12 @@ A later reviewed package-only PR may add one declarative V17 provider contract,
 update the goal to `package-bound-not-authorized`, add V17 package data, provide
 package-specific reviewed live low-level effects, supply a package-specific
 externally validated authority grant, and seal V17 receipts. It must not change
-`agent_check.py`, `cli.py`, `category3.py`, `production.py`, `proofs.py`,
-`composition.py`, `consumers.py`, `registry_validation.py`, `shadow.py`,
-`state_capsule.py`, `target.py`, the shared controller, or validated-proof
-architecture. The package-only allowlist excludes `version_lint.py`, `Makefile`, and
-`.github/workflows/ci.yml` as well. It also must not introduce a second controller,
-infer authority from Git, or reuse the stopped V16 metadata/authorization reference.
-Needing a prohibited shared change returns the work to a separate Category 1 repair.
+`adapters.py`, `agent_check.py`, `anti_shadow_lint.py`, `category3.py`, `cli.py`,
+`composition.py`, `consumers.py`, `contracts.py`, `effects.py`,
+`live_conformance.py`, `production.py`, `proofs.py`, `registry_validation.py`,
+`shadow.py`, `shadow_effects.py`, `state_capsule.py`, `target.py`, the shared
+controller, effect protocol, or validated-proof architecture. The package-only
+allowlist excludes `version_lint.py`, `Makefile`, and `.github/workflows/ci.yml` as
+well. It also must not introduce a second controller, infer authority from Git, or
+reuse the stopped V16 metadata/authorization reference. Needing a prohibited shared
+change returns the work to a separate Category 1 repair.

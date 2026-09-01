@@ -30,7 +30,8 @@
     "incident_id": {
       "enum": [
         "INC-T09-V16-LIFECYCLE-REGISTRY",
-        "INC-T09-CONTROL-FIXED-TARGET-SELECTION"
+        "INC-T09-CONTROL-FIXED-TARGET-SELECTION",
+        "INC-T09-CONTROL-SHADOW-SHAPED-LIVE-BOUNDARY"
       ]
     },
     "observed_package": {
@@ -148,6 +149,54 @@
           },
           "repair": {"const": "goal-compatible-selected-runtime-target-resolver"},
           "coverage": {"const": ["target-resolution", "shadow-execution"]}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "incident_id": {
+            "const": "INC-T09-CONTROL-SHADOW-SHAPED-LIVE-BOUNDARY"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "observed_package": {
+            "properties": {
+              "version": {"const": "V16"},
+              "plan_id": {"const": "PLAN-EXP0001-PILOT-V16"},
+              "merged_package": {
+                "const": "f1d872d59c4952eb98467c2506850af7772f4454"
+              }
+            }
+          },
+          "stage": {"const": "post-merge package-only boundary audit"},
+          "failed_invariant": {
+            "const": "package-specific live effects must execute the same controller and production assembly without shared-source changes or shadow substitutions"
+          },
+          "root_cause": {
+            "const": "fake credential transport; synthetic clock and sleep; synthetic staging and freeze; one hardcoded model call; synthetic raw, finalizer, and evaluator outputs; fake-scenario production coupling; under-bound effect authority"
+          },
+          "earliest_detectable_stage": {
+            "const": "shared-production-effect-boundary-audit"
+          },
+          "authority_consumed": {"const": "none"},
+          "affected_abstraction": {
+            "const": [
+              "shared-control/production-effect-boundary",
+              "shared-control/effect-authority",
+              "shared-control/evidence-chain"
+            ]
+          },
+          "repair": {"const": "effect-neutral-live-capable-production-seams"},
+          "coverage": {
+            "const": [
+              "offline-composition",
+              "shadow-execution",
+              "target-resolution"
+            ]
+          }
         }
       }
     }

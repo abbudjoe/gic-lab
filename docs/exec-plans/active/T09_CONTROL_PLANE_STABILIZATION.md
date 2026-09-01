@@ -310,3 +310,111 @@ Complete this PR 1.1 assembly on `codex/t09-control-target-selection`, open one 
 PR against `phase-1/sira-pilot-autonomous-r2`, obtain exact-head GitHub Actions, and
 stop without merge. A later PR 2 may be package-only within the explicit boundary;
 this work must not create V17 package artifacts or authority.
+
+## PR 1.2 live-capable production-effects repair
+
+Assembly status: **implementation and focused conformance complete; immutable receipt,
+full-gate, and draft-PR handoff pending**
+
+The operator-supplied `T09 PR 1.2 — Make the Shared Production Controller
+Genuinely Live-Capable` contract governs this Category 1 repair. The exact base is
+merge commit `f1d872d59c4952eb98467c2506850af7772f4454`, tree
+`eb70e20024559d65b3fadd240f72d3522895ef04`, with ordered parents
+`d0aff8a47e92013773d9d05b2cd90fb741658b03` and
+`658a5f21cc24b914c6fc494f391cefe35d0fa334`. The target contract is one shared
+Category 3 state machine and one production assembly over effect-neutral typed seams,
+such that package-specific effects plus externally validated package-specific
+authority can execute the exact package transaction without editing shared control
+source or importing deterministic fixture assumptions into live behavior.
+
+```text
+operator_attests_model: gpt-5.6-sol
+operator_attests_effort: max
+runtime_model_introspection_required: false
+implementation_delegated: false
+live_authorization: false
+scientific_interpretation_allowed: false
+```
+
+### PR 1.2 scope and boundaries
+
+In scope are the shared runtime clock, metadata/credential seam, package-derived
+budgets, typed condition-session events and authoritative accounting, actual typed
+host/evidence/finalizer/evaluator receipts, shadow-only fault injection, fully bound
+effect authorization context, exact package-effect registration/loading, deterministic
+and live-shaped no-network conformance, anti-shadow lint, incident/capsule integration,
+and non-circular V16/conformance receipt regeneration.
+
+Out of scope are tracked V17 or `AUTONOMOUS-0010` artifacts, actual V17 package
+generation, live grants, dotenv or secret access, authenticated provider calls, cloud
+inspection or mutation, live SSH/Docker/browser/SiRA/FanOutQA/evaluator/condition
+execution, scientific adjudication, merge, auto-merge, force-push, history rewriting,
+and delegation. Direct Sol/max source/spec review replaces the assembly workflow's
+subagent review because the governing operator contract prohibits delegation.
+
+### PR 1.2 definition of done
+
+| ID | Required outcome | Planned evidence | Status |
+|---|---|---|---|
+| LE-01 | Exact base/history preserved | Git/GitHub identity, clean checkout/worktree, starting-tree checks | met |
+| LE-02 | Complete shadow-assumption inventory recorded | 12-item exact-base inventory plus classified current-source scan | met |
+| LE-03 | Runtime clock and sleeper injected | Fake/live-shaped clock conformance and invalid-time regressions | met |
+| LE-04 | Exact selected credential reaches effect-neutral metadata channel | Runtime canary, destruction, one-request, freshness tests | met |
+| LE-05 | Aggregate and condition caps are package-derived | Plan/condition parsing plus drift/substitution/overage tests | met |
+| LE-06 | Condition runtime executes an exact multi-event session | Reactive/simulative request-event-outcome tests | met |
+| LE-07 | Stable per-call accounting covers all calls/actions | Unique-ID, terminal-state, usage/cost/action reconciliation tests | met |
+| LE-08 | Host stage/preflight/qualification/freeze validate typed actual receipts | Archive/provider-entry/qualification/freeze receipt validation | met |
+| LE-09 | Raw evidence is file-backed and hash-validated | Exact raw-tree seal/export/acknowledgement and mutation tests | met |
+| LE-10 | Finalizer consumes exact raw evidence | Pre/post raw seal and source/runtime/dependency/root binding | met |
+| LE-11 | Evaluator consumes effect-produced output | Answer-propagation and canned-substitution regressions | met |
+| LE-12 | Fault injection is confined to deterministic effects | Scenario-free production assembly and retained 15-failure matrix | met |
+| LE-13 | Live authority binds complete control/package/effect context | Context mutation matrix; no shared live-grant factory | met |
+| LE-14 | Package-specific effect factory is exact and hash-bound | Path/hash/factory/protocol/symlink/escape tests | met |
+| LE-15 | Live-shaped no-network conformance passes | Temporary package-effect module and conformance receipt | met |
+| LE-16 | Anti-shadow lint passes | Narrow shared-production scan with zero findings | met |
+| LE-17 | Agent-check binds conformance receipt | Schema, receipt binding, aggregate validation tests | met |
+| LE-18 | Synthetic successor needs no shared-source edits | Before/after shared-source byte map and temporary successor | met |
+| LE-19 | Historical V16 proof remains valid | Legacy historical validation and temporary new-root regeneration suite | met |
+| LE-20 | No actual V17 package exists | Tracked path/identity/root scans | met |
+| LE-21 | Science and authority boundaries remain false/unchanged | Capsule/conformance/proof/privacy assertions | met |
+| LE-22 | Full/parity/static/privacy/site gates pass | Required exact-final-head local command set | pending |
+| LE-23 | Draft PR open, exact-head CI green, no merge | Draft PR metadata and exact-head Actions run/job | pending |
+
+No item may become `met` while its implementation or required evidence is partial,
+blocked, or not started. No shadow or conformance output is scientific evidence.
+
+### PR 1.2 implementation mapping
+
+- Clock and credential/metadata interfaces map to LE-03 and LE-04.
+- Package budget loading, condition sessions, and one authoritative event accountant
+  map to LE-05 through LE-07.
+- Typed stage/provider-entry/qualification/freeze, file-backed raw evidence, offline
+  finalization, and evaluator data flow map to LE-08 through LE-11.
+- Deterministic-effect fault plans, authorization context, and package-effect loader
+  map to LE-12 through LE-14.
+- Live-shaped conformance, anti-shadow lint, receipt/agent-check integration, and the
+  unchanged-source successor proof map to LE-15 through LE-18.
+- Non-circular proof regeneration, no-V17/science/authority preservation, complete
+  gates, and draft-PR handoff map to LE-01, LE-19 through LE-23.
+
+### PR 1.2 pre-edit evidence
+
+- 2026-09-01: verified clean original checkout, exact `abbudjoe/gic-lab` remote,
+  normal fetch, destination commit/tree/ordered parents, merged PR #13 exact reviewed
+  head as parent two, requested branch/worktree absence, and unchanged destination.
+- 2026-09-01: retained public state records no current live authority, zero active
+  provider instances, V17 `not-created`, and no tracked V17 or `AUTONOMOUS-0010`
+  package/root/identity artifact.
+- 2026-09-01: created clean worktree
+  `/Users/joseph/.codex/worktrees/t09-live-capable-production-effects` on
+  `codex/t09-live-capable-production-effects` at the exact base and starting tree.
+- 2026-09-01: base `make state-capsule` and `make agent-check` pass after prescribed
+  local setup. They select V16, validate all 14 registered contracts and all 16
+  production-wrapper shadow scenarios, and retain false live/science/authority flags.
+
+The implementation incident
+`INC-T09-CONTROL-SHADOW-SHAPED-LIVE-BOUNDARY` is resolved after LE-02 through LE-21
+received implementation and focused evidence. It is no longer `blocking_incident`.
+The immutable tracked V16 receipt refresh, full exact-head gates, independent review,
+draft PR, and merge authorization remain distinct nontechnical/external handoff gates;
+none grants live or scientific authority.

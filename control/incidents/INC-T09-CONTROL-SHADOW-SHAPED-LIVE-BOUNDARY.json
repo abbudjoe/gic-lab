@@ -1,0 +1,82 @@
+{
+  "affected_abstraction": [
+    "shared-control/production-effect-boundary",
+    "shared-control/effect-authority",
+    "shared-control/evidence-chain"
+  ],
+  "authority_consumed": "none",
+  "cost_usd": "0.00",
+  "coverage": [
+    "offline-composition",
+    "shadow-execution",
+    "target-resolution"
+  ],
+  "earliest_detectable_stage": "shared-production-effect-boundary-audit",
+  "failed_invariant": "package-specific live effects must execute the same controller and production assembly without shared-source changes or shadow substitutions",
+  "immutable_facts": {
+    "audit_stage": "post-merge package-only boundary audit",
+    "authority_consumed": "none",
+    "cost_usd": "0.00",
+    "failed_invariant": "package-specific live effects must execute the same controller and production assembly without shared-source changes or shadow substitutions",
+    "live_environment_required": false,
+    "repair": "effect-neutral live-capable production seams",
+    "root_causes": [
+      "fake credential transport",
+      "synthetic clock and sleep",
+      "synthetic staging and freeze",
+      "one hardcoded model call",
+      "synthetic raw, finalizer, and evaluator outputs",
+      "fake-scenario production coupling",
+      "under-bound effect authority"
+    ]
+  },
+  "immutable_facts_sha256": "77acccfd3017357271e2d1cda5b1ac9433899a3e9dcf4377d57662381f05d442",
+  "incident_id": "INC-T09-CONTROL-SHADOW-SHAPED-LIVE-BOUNDARY",
+  "live_environment_required": false,
+  "observed_package": {
+    "merged_package": "f1d872d59c4952eb98467c2506850af7772f4454",
+    "plan_id": "PLAN-EXP0001-PILOT-V16",
+    "version": "V16"
+  },
+  "regressions": [
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_live_effect_conformance.py::test_live_shaped_package_effect_conformance_is_schema_valid"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_live_effect_conformance.py::test_anti_shadow_lint_inventory_and_mutations"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_effect_runtime_seams.py::test_noncanonical_parser_credential_reaches_injected_channel_and_is_destroyed"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_effect_runtime_seams.py::test_plan_and_condition_budgets_reject_drift_and_cross_substitution"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_package_effect_loader.py::test_exact_package_effect_factory_loads_and_builds_production_assembly"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_package_effect_loader.py::test_live_grant_rejects_every_changed_authorization_binding"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_production_coupling.py::test_post_export_raw_mutation_stops_before_effect_finalizer"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_production_coupling.py::test_effect_produced_answer_changes_retained_evaluator_output"
+    }
+  ],
+  "repair": "effect-neutral-live-capable-production-seams",
+  "root_cause": "fake credential transport; synthetic clock and sleep; synthetic staging and freeze; one hardcoded model call; synthetic raw, finalizer, and evaluator outputs; fake-scenario production coupling; under-bound effect authority",
+  "schema_version": "1.0.0",
+  "scientific_interpretation_allowed": false,
+  "scientific_result": "not-run",
+  "stage": "post-merge package-only boundary audit",
+  "status": "resolved"
+}

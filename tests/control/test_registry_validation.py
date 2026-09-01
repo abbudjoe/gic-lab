@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from dataclasses import replace
 from pathlib import Path
 
@@ -19,10 +20,19 @@ from giclab.harness.t09_provider_contracts import (
     PROVIDER_CONTRACTS,
     V16_PROVIDER_CONTRACT,
     LifecycleFamily,
+    PackageEffectRegistration,
 )
 from giclab.registry import load_json
 
 ROOT = Path(__file__).resolve().parents[2]
+_CURRENTLY_APPLICABLE_CONSUMERS = tuple(
+    name
+    for name in CONTROL_CONSUMERS
+    if any(
+        expected_consumer_handler_id(name, contract) is not None
+        for contract in PROVIDER_CONTRACTS.values()
+    )
+)
 
 
 def _first_applicable_contract(consumer_name: str):  # type: ignore[no-untyped-def]
@@ -65,7 +75,7 @@ def test_removing_v16_lifecycle_support_fails_registry_completeness() -> None:
     assert v16["consumers"]["campaign_lifecycle_loading"]["status"] == "failed"  # type: ignore[index]
 
 
-@pytest.mark.parametrize("consumer_name", tuple(CONTROL_CONSUMERS))
+@pytest.mark.parametrize("consumer_name", _CURRENTLY_APPLICABLE_CONSUMERS)
 def test_disabling_each_applicable_real_consumer_fails_completeness(
     consumer_name: str,
 ) -> None:
@@ -109,7 +119,7 @@ def test_each_applicable_consumer_rejecting_v16_fails_completeness(
     assert receipt["contracts"][0]["consumers"][consumer_name]["status"] == "failed"  # type: ignore[index]
 
 
-@pytest.mark.parametrize("consumer_name", tuple(CONTROL_CONSUMERS))
+@pytest.mark.parametrize("consumer_name", _CURRENTLY_APPLICABLE_CONSUMERS)
 def test_each_applicable_consumer_returning_wrong_handler_fails_completeness(
     consumer_name: str,
 ) -> None:
@@ -149,6 +159,33 @@ def test_future_autonomous_contract_declaration_resolves_all_real_consumers() ->
         else:
             assert resolution is not None
             assert resolution.handler_id == expected
+
+
+def test_declared_package_effect_consumer_is_exact_and_required() -> None:
+    # This node proves registry completeness only. The package-loader suite covers
+    # exact factory import/instantiation with a committed temporary package module.
+    relative = "src/giclab/control/scenarios.py"
+    encoded = (ROOT / relative).read_bytes()
+    contract = replace(
+        V16_PROVIDER_CONTRACT,
+        effect_registration=PackageEffectRegistration(
+            implementation_path=relative,
+            implementation_bytes=len(encoded),
+            implementation_sha256=hashlib.sha256(encoded).hexdigest(),
+            factory_entry_point="build_deterministic_effects",
+            authority_grant_schema_version="1.0.0",
+            effect_protocol_version="1.0.0",
+        ),
+    )
+    resolution = resolve_control_consumers(ROOT, contract)["package_effect_loader"]
+    assert resolution is not None
+    assert resolution.handler_id == "package-effects:exact-hash-bound-factory-v1"
+    receipt = validate_registry_completeness(
+        ROOT,
+        contracts={contract.version: contract},
+        disabled_consumers=frozenset({"package_effect_loader"}),
+    )
+    assert receipt["complete"] is False
 
 
 def test_registry_receipt_is_deterministic_and_schema_valid() -> None:

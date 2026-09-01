@@ -23,7 +23,7 @@ from giclab.control.target import (
 )
 from giclab.registry import load_json
 
-STATE_CAPSULE_SCHEMA_VERSION: Final = "3.0.0"
+STATE_CAPSULE_SCHEMA_VERSION: Final = "4.0.0"
 DETERMINISTIC_GENERATED_AT: Final = "1970-01-01T00:00:00Z"
 STATE_CAPSULE_SCHEMA: Final = "schemas/agent-state-capsule.schema.json"
 
@@ -119,6 +119,8 @@ def generate_state_capsule(
     version_lint_valid: bool,
     shadow_happy_path: bool,
     failure_matrix_valid: bool,
+    anti_shadow_lint_valid: bool = False,
+    live_effect_conformance_valid: bool = False,
     target: SelectedRuntimeTarget | None = None,
     deterministic: bool = True,
     generated_at: str | None = None,
@@ -156,6 +158,8 @@ def generate_state_capsule(
             "active_version_lint_valid": version_lint_valid,
             "shadow_happy_path": shadow_happy_path,
             "failure_matrix_valid": failure_matrix_valid,
+            "anti_shadow_lint_valid": anti_shadow_lint_valid,
+            "live_effect_conformance_valid": live_effect_conformance_valid,
         },
         "runtime_package": _required_mapping(goal, "runtime_package"),
         "selected_runtime_target": selected_target.to_document(),

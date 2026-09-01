@@ -26,6 +26,7 @@ from giclab.control.adapters import (
     EffectAuthorityKind,
     MetadataEnvelope,
     ProviderHandle,
+    ReplacementEligibleFailure,
     StructuralPrivacyFinding,
     TerminationUnavailable,
 )
@@ -94,6 +95,7 @@ class PreparedCategory3:
     composition_sha256: str
     state_capsule_sha256: str
     stage_sha256: str
+    effect_authorization_context_sha256: str
     shadow_prerequisite_policy: str
     shadow_receipt_sha256s: tuple[str, ...]
     validated_receipts: ValidatedControlReceiptSet | None
@@ -180,12 +182,21 @@ def prepare_category3(
     """Run every deterministic prerequisite and mint the sole effect token."""
 
     transitions: list[dict[str, object]] = []
-    if adapters.authority.kind not in {
-        EffectAuthorityKind.SHADOW_ONLY,
-        EffectAuthorityKind.LIVE_AUTHORIZED,
-    } or not adapters.authority.authorizes(
-        contract_version=request.contract.version,
-        control_revision=request.expected_repository_commit,
+    context = adapters.authorization_context
+    if (
+        adapters.authority.kind
+        not in {
+            EffectAuthorityKind.SHADOW_ONLY,
+            EffectAuthorityKind.LIVE_AUTHORIZED,
+        }
+        or context.authority_kind is not adapters.authority.kind
+        or context.provider_contract_version != request.contract.version
+        or context.plan_id != request.contract.plan_id
+        or context.plan_sha256 != request.contract.expected_plan_sha256
+        or context.command_package_sha256 != request.contract.expected_command_manifest_sha256
+        or context.control_commit != request.expected_repository_commit
+        or context.control_tree != request.expected_repository_tree
+        or not adapters.authority.authorizes(context)
     ):
         _transition(
             transitions,
@@ -268,6 +279,7 @@ def prepare_category3(
             )
             proof_policy = "validated-control-receipt-binding"
             command_package_sha256 = validated_receipts.command_package_sha256
+            control_binding_semantic_sha256 = validated_receipts.binding_semantic_sha256
         elif isinstance(proof, ValidatedShadowRehearsal):
             if (
                 not proof.is_valid()
@@ -281,6 +293,7 @@ def prepare_category3(
             receipt_hashes = ()
             proof_policy = "validated-static-shadow-rehearsal"
             command_package_sha256 = proof.staging.command_package_sha256
+            control_binding_semantic_sha256 = proof.staging.semantic_sha256
         else:  # pragma: no cover - typed request exhaustiveness guard
             raise ControlProofError("control proof type is unsupported")
     except (ControlProofError, OSError, ValueError) as exc:
@@ -298,6 +311,23 @@ def prepare_category3(
             f"control proof validation failed: {exc}",
         )
     _transition(transitions, Category3Phase.STATE_CAPSULE, "passed")
+    if (
+        command_package_sha256 != context.command_package_sha256
+        or control_binding_semantic_sha256 != context.control_binding_semantic_sha256
+    ):
+        _transition(
+            transitions,
+            Category3Phase.SHADOW_RECEIPTS,
+            "failed",
+            detail="effect authority does not bind the validated control proof",
+        )
+        return PreparationOutcome(
+            None,
+            composition,
+            tuple(transitions),
+            Category3Phase.SHADOW_RECEIPTS.value,
+            "effect authorization context drifted from the validated proof",
+        )
     _transition(
         transitions,
         Category3Phase.SHADOW_RECEIPTS,
@@ -350,6 +380,11 @@ def prepare_category3(
     object.__setattr__(prepared, "composition_sha256", str(composition["semantic_sha256"]))
     object.__setattr__(prepared, "state_capsule_sha256", state_capsule_sha256)
     object.__setattr__(prepared, "stage_sha256", stage_sha256)
+    object.__setattr__(
+        prepared,
+        "effect_authorization_context_sha256",
+        context.semantic_sha256,
+    )
     object.__setattr__(prepared, "shadow_prerequisite_policy", proof_policy)
     object.__setattr__(prepared, "shadow_receipt_sha256s", receipt_hashes)
     object.__setattr__(prepared, "validated_receipts", validated_receipts)
@@ -461,6 +496,7 @@ def _result_document(
         "scenario": request.scenario,
         "implementation_flavor": adapters.implementation_flavor.value,
         "effect_authority": adapters.authority.kind.value,
+        "effect_authorization_context_sha256": (adapters.authorization_context.semantic_sha256),
         "provider_contract_version": request.contract.version,
         "repository_commit": request.expected_repository_commit,
         "repository_tree": request.expected_repository_tree,
@@ -577,9 +613,20 @@ def _establish_provider(
         )
         failed_phase: Category3Phase | None = None
         failed_reason = ""
+        replacement_eligible = False
         try:
             adapters.provider_transport.provider_entry(handle)
             _transition(state.transitions, Category3Phase.PROVIDER_ENTRY, "passed")
+        except ReplacementEligibleFailure as exc:
+            failed_phase = Category3Phase.PROVIDER_ENTRY
+            failed_reason = str(exc)
+            replacement_eligible = True
+            _transition(
+                state.transitions,
+                Category3Phase.PROVIDER_ENTRY,
+                "failed",
+                detail=failed_reason,
+            )
         except AdapterFailure as exc:
             failed_phase = Category3Phase.PROVIDER_ENTRY
             failed_reason = str(exc)
@@ -593,6 +640,16 @@ def _establish_provider(
             try:
                 adapters.host_runtime.preflight(handle)
                 _transition(state.transitions, Category3Phase.HOST_PREFLIGHT, "passed")
+            except ReplacementEligibleFailure as exc:
+                failed_phase = Category3Phase.HOST_PREFLIGHT
+                failed_reason = str(exc)
+                replacement_eligible = True
+                _transition(
+                    state.transitions,
+                    Category3Phase.HOST_PREFLIGHT,
+                    "failed",
+                    detail=failed_reason,
+                )
             except AdapterFailure as exc:
                 failed_phase = Category3Phase.HOST_PREFLIGHT
                 failed_reason = str(exc)
@@ -615,7 +672,9 @@ def _establish_provider(
             state.stop(failed_phase, f"{failed_reason}; replacement absence is unverified")
             return
         replacement_allowed = (
-            request.contract.capabilities.replacement_policy is ReplacementPolicy.BOUNDED_PREFLIGHT
+            replacement_eligible
+            and request.contract.capabilities.replacement_policy
+            is ReplacementPolicy.BOUNDED_PREFLIGHT
             and launch_ordinal < max_launches
         )
         if not replacement_allowed:

@@ -29,6 +29,8 @@ def _capsule() -> dict[str, object]:
         version_lint_valid=True,
         shadow_happy_path=True,
         failure_matrix_valid=True,
+        anti_shadow_lint_valid=True,
+        live_effect_conformance_valid=True,
         deterministic=True,
     )
 
@@ -93,9 +95,11 @@ def test_state_capsule_represents_v16_incident_and_v17_absence() -> None:
         "repository_state_grants_authority": False,
     }
     assert capsule["next_technical_subgoal"] == "generate-package-only-v17-after-governance"
-    assert capsule["current_subgoal"].startswith("advance the completed target-selection repair")
+    assert capsule["current_subgoal"].startswith(
+        "complete independent exact-head review and explicit merge authorization"
+    )
     assert "remove fixed target selection" not in str(capsule["recommended_action"])
-    assert "if merged" in str(capsule["recommended_action"])
+    assert "only after merge" in str(capsule["recommended_action"])
     assert runtime == {
         "historical_package": "V16",
         "historical_status": "consumed-prelaunch-failure",
@@ -106,6 +110,8 @@ def test_state_capsule_represents_v16_incident_and_v17_absence() -> None:
     assert control["composition_valid"] is True
     assert control["shadow_happy_path"] is True
     assert control["failure_matrix_valid"] is True
+    assert control["anti_shadow_lint_valid"] is True
+    assert control["live_effect_conformance_valid"] is True
 
 
 def _goal() -> dict[str, object]:
@@ -157,9 +163,13 @@ def test_capsule_remains_truthful_after_merge_pending_goal_transition() -> None:
     capsule = _capsule()
     assert capsule["external_governance_gate"]["state"] == "consult-external-state"
     assert capsule["external_governance_gate"]["repository_state_grants_authority"] is False
-    assert "if review/merge is pending" in capsule["recommended_action"]
-    assert "if merged" in capsule["recommended_action"]
+    assert "independent exact-head review" in capsule["recommended_action"]
+    assert "only after merge" in capsule["recommended_action"]
     assert "control/incidents/INC-T09-CONTROL-FIXED-TARGET-SELECTION.json" in capsule["provenance"]
+    assert (
+        "control/incidents/INC-T09-CONTROL-SHADOW-SHAPED-LIVE-BOUNDARY.json"
+        in capsule["provenance"]
+    )
 
 
 def test_state_capsule_timestamp_is_explicitly_isolated() -> None:

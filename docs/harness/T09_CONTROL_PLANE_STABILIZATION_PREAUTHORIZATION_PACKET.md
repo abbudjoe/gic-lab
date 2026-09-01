@@ -31,7 +31,21 @@ Review should require:
    raw export, finalization, and cleanup;
 7. the incident ledger links the V16 defect to production assembly, lifecycle
    omission, and zero-effect shadow regressions;
-8. full, parity, static, privacy, and site gates pass.
+8. the exact base shadow-assumption inventory is sealed and the narrow anti-shadow
+   lint reports zero findings in effect-neutral shared source;
+9. runtime-created noncanonical credentials, injected real/fake clock shapes,
+   package-derived budgets, and multi-call/multi-role/multi-action condition traces
+   pass their mutation matrices;
+10. request-bound stage, retained provider-entry, preflight, qualification, dynamic
+    freeze, exact raw seal, qualified-local finalizer, evaluator, and zero-resource
+    cleanup receipts pass their mutations;
+11. an exact temporary package effect path/hash/factory/protocol and externally
+    supplied no-network test grant drive the unchanged shared controller and
+    production assembly while the shared-source byte map remains unchanged;
+12. the current V16 root binds the anti-shadow and live-effect conformance receipts
+    from an immutable implementation ancestor while the legacy V16 root remains
+    historically valid; and
+13. full, parity, static, privacy, and site gates pass.
 
 ## Future package boundary
 
@@ -41,7 +55,9 @@ must include the complete object defined by
 `schemas/t09-control-receipt-bindings.schema.json`: exact control-plane commit/tree,
 the exact bound goal snapshot, registry and lint receipts, composition, capsule,
 production-coupled happy path, all fifteen failure scenarios, aggregate agent-check
-receipt, exact shared-source binding, and incident receipt.
+receipt, exact shared-source binding, anti-shadow lint, live-effect conformance, and
+incident receipt. The binding must also carry the selected package's explicit
+package-effect registration (or exact `null` for historical V3–V16 packages).
 
 Validation must additionally prove that the capsule's historical-or-successor
 runtime state selects the same provider contract, that every scenario reaching
@@ -74,14 +90,20 @@ PR 2 may not change:
 
 ```text
 src/giclab/control/agent_check.py
+src/giclab/control/adapters.py
+src/giclab/control/anti_shadow_lint.py
 src/giclab/control/cli.py
 src/giclab/control/category3.py
 src/giclab/control/production.py
 src/giclab/control/proofs.py
 src/giclab/control/composition.py
 src/giclab/control/consumers.py
+src/giclab/control/contracts.py
+src/giclab/control/effects.py
+src/giclab/control/live_conformance.py
 src/giclab/control/registry_validation.py
 src/giclab/control/shadow.py
+src/giclab/control/shadow_effects.py
 src/giclab/control/state_capsule.py
 src/giclab/control/target.py
 src/giclab/control/version_lint.py

@@ -41,6 +41,7 @@
     "scenario": {"type": "string", "minLength": 1},
     "implementation_flavor": {"const": "production-wrapper"},
     "effect_authority": {"const": "shadow-only"},
+    "effect_authorization_context_sha256": {"$ref": "#/$defs/sha256"},
     "provider_contract_version": {"type": "string", "pattern": "^V[0-9]+$"},
     "repository_commit": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
     "repository_tree": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
@@ -169,11 +170,14 @@
         "resolved_consumers",
         "accounting",
         "evaluations",
-        "deterministic_staging",
         "replacement_history",
         "raw_export_acknowledgements",
         "cleanup_handoff_sha256",
         "cleanup_resume_byte_identical"
+      ],
+      "anyOf": [
+        {"required": ["package_staging"]},
+        {"required": ["deterministic_staging"]}
       ],
       "properties": {
         "implementation_flavor": {"const": "production-wrapper"},
@@ -182,6 +186,7 @@
         "resolved_consumers": {"type": "object"},
         "accounting": {"type": "object"},
         "evaluations": {"type": "object"},
+        "package_staging": {"type": ["object", "null"]},
         "deterministic_staging": {"type": ["object", "null"]},
         "replacement_history": {"type": "object"},
         "raw_export_acknowledgements": {"type": "object"},

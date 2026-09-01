@@ -13,18 +13,20 @@ INCIDENT_PATH = ROOT / "control/incidents/INC-T09-V16-LIFECYCLE-REGISTRY.json"
 def test_v16_incident_validates_and_named_regressions_pass() -> None:
     receipt = validate_incidents(ROOT, execute_regressions=True)
     assert receipt["complete"] is True
-    assert receipt["incident_count"] == 2
+    assert receipt["incident_count"] == 3
     incidents = {
         incident["incident_id"]: incident
         for incident in receipt["incidents"]  # type: ignore[union-attr]
     }
     assert set(incidents) == {
         "INC-T09-CONTROL-FIXED-TARGET-SELECTION",
+        "INC-T09-CONTROL-SHADOW-SHAPED-LIVE-BOUNDARY",
         "INC-T09-V16-LIFECYCLE-REGISTRY",
     }
     assert all(incident["regressions_passed"] is True for incident in incidents.values())
     assert len(incidents["INC-T09-V16-LIFECYCLE-REGISTRY"]["regression_nodes"]) == 3
     assert len(incidents["INC-T09-CONTROL-FIXED-TARGET-SELECTION"]["regression_nodes"]) == 4
+    assert len(incidents["INC-T09-CONTROL-SHADOW-SHAPED-LIVE-BOUNDARY"]["regression_nodes"]) == 8
 
 
 def test_resolved_incident_with_missing_regression_fails() -> None:

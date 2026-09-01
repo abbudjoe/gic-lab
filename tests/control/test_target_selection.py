@@ -61,7 +61,8 @@ def _light_successor(
     repository = tmp_path / "successor"
     repository.mkdir()
     identities = materialize_synthetic_successor(ROOT, repository)
-    contract = synthetic_contract(identities)
+    commit, _tree = commit_repository(repository)
+    contract = synthetic_contract(identities, source_commit=commit)
     install_synthetic_registry(monkeypatch, contract)
     return repository, contract
 

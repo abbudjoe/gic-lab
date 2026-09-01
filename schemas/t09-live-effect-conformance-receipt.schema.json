@@ -1,0 +1,296 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gic-lab.invalid/schemas/t09-live-effect-conformance-receipt.schema.json",
+  "title": "T09 package-effect live-shaped no-network conformance receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "control_implementation_commit",
+    "control_implementation_tree",
+    "effect_protocol_version",
+    "shared_controller_entry_point",
+    "production_assembly_entry_point",
+    "temporary_package",
+    "shared_source_byte_map_unchanged",
+    "actual_v17_artifacts_present",
+    "actual_v17_artifacts_created",
+    "network_provider_cloud_browser_science_effects",
+    "live_authority_created",
+    "scientific_interpretation_allowed",
+    "complete",
+    "semantic_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "control_implementation_commit": {"$ref": "#/$defs/git"},
+    "control_implementation_tree": {"$ref": "#/$defs/git"},
+    "effect_protocol_version": {"const": "1.0.0"},
+    "shared_controller_entry_point": {
+      "const": "giclab.control.category3.execute_category3_transaction"
+    },
+    "production_assembly_entry_point": {
+      "const": "giclab.control.production.build_production_adapter_assembly"
+    },
+    "temporary_package": {"$ref": "#/$defs/temporaryPackage"},
+    "shared_source_byte_map_unchanged": {"const": true},
+    "actual_v17_artifacts_present": {"type": "boolean"},
+    "actual_v17_artifacts_created": {"const": false},
+    "network_provider_cloud_browser_science_effects": {"const": 0},
+    "live_authority_created": {"const": false},
+    "scientific_interpretation_allowed": {"const": false},
+    "complete": {"const": true},
+    "semantic_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "git": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "temporaryPackage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "temporary_repository_commit",
+        "temporary_repository_tree",
+        "provider_contract_version",
+        "plan_id",
+        "command_package_sha256",
+        "effect_implementation",
+        "authorization_context_semantic_sha256",
+        "controller_terminal_state",
+        "metadata",
+        "clock",
+        "condition_traces",
+        "model_call_accounting",
+        "browser_accounting",
+        "typed_failure_accounting",
+        "package_budget",
+        "host_transaction",
+        "raw_finalizer_evaluator_chain",
+        "cleanup",
+        "zero_real_effects",
+        "temporary_conformance_grant_only",
+        "repository_state_grants_authority",
+        "scientific_interpretation_allowed",
+        "projected_real_cost_usd"
+      ],
+      "properties": {
+        "temporary_repository_commit": {"$ref": "#/$defs/git"},
+        "temporary_repository_tree": {"$ref": "#/$defs/git"},
+        "provider_contract_version": {"type": "string", "pattern": "^V[1-9][0-9]*$"},
+        "plan_id": {"type": "string", "minLength": 1},
+        "command_package_sha256": {"$ref": "#/$defs/sha256"},
+        "effect_implementation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path", "bytes", "sha256", "factory_entry_point", "protocol_version"],
+          "properties": {
+            "path": {"type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+\\.py$"},
+            "bytes": {"type": "integer", "minimum": 1},
+            "sha256": {"$ref": "#/$defs/sha256"},
+            "factory_entry_point": {"const": "build_package_effects"},
+            "protocol_version": {"const": "1.0.0"}
+          }
+        },
+        "authorization_context_semantic_sha256": {"$ref": "#/$defs/sha256"},
+        "controller_terminal_state": {"const": "category3-live-complete-clean"},
+        "metadata": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "noncanonical_runtime_credential_reached_channel",
+            "request_count",
+            "zero_retry",
+            "zero_redirect",
+            "zero_pagination",
+            "credential_material_retained"
+          ],
+          "properties": {
+            "noncanonical_runtime_credential_reached_channel": {"const": true},
+            "request_count": {"const": 1},
+            "zero_retry": {"const": true},
+            "zero_redirect": {"const": true},
+            "zero_pagination": {"const": true},
+            "credential_material_retained": {"const": false}
+          }
+        },
+        "clock": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "injected",
+            "wall_sample_count",
+            "monotonic_sample_count",
+            "sleep_calls",
+            "domains_separate"
+          ],
+          "properties": {
+            "injected": {"const": true},
+            "wall_sample_count": {"type": "integer", "minimum": 1},
+            "monotonic_sample_count": {"type": "integer", "minimum": 1},
+            "sleep_calls": {
+              "type": "array",
+              "minItems": 1,
+              "items": {"type": "number", "minimum": 0},
+              "contains": {"const": 0.25}
+            },
+            "domains_separate": {"const": true}
+          }
+        },
+        "condition_traces": {
+          "type": "object",
+          "minProperties": 4,
+          "maxProperties": 4,
+          "additionalProperties": {"$ref": "#/$defs/conditionTrace"}
+        },
+        "model_call_accounting": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "total_calls",
+            "stable_unique_call_ids",
+            "terminal_states_complete",
+            "roles_are_multi_role",
+            "zero_retries"
+          ],
+          "properties": {
+            "total_calls": {"type": "integer", "minimum": 16},
+            "stable_unique_call_ids": {"const": true},
+            "terminal_states_complete": {"const": true},
+            "roles_are_multi_role": {"const": true},
+            "zero_retries": {"const": true}
+          }
+        },
+        "browser_accounting": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["total_actions", "multiple_actions_per_condition"],
+          "properties": {
+            "total_actions": {"type": "integer", "minimum": 8},
+            "multiple_actions_per_condition": {"const": true}
+          }
+        },
+        "typed_failure_accounting": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "known-provider-exception",
+            "ambiguous-task-model-send",
+            "response-accounting-incomplete"
+          ],
+          "properties": {
+            "known-provider-exception": {
+              "$ref": "#/$defs/knownFailure"
+            },
+            "ambiguous-task-model-send": {
+              "$ref": "#/$defs/unknownFailure"
+            },
+            "response-accounting-incomplete": {
+              "$ref": "#/$defs/unknownFailure"
+            }
+          }
+        },
+        "package_budget": {
+          "type": "object",
+          "required": [
+            "plan_sha256",
+            "command_package_sha256",
+            "execution_contract_sha256",
+            "attempt_order",
+            "model_revision",
+            "service_tier",
+            "zero_retry",
+            "aggregate_caps",
+            "condition_caps",
+            "condition_plan_sha256s"
+          ]
+        },
+        "host_transaction": {
+          "const": {
+            "tracked_package_staged_and_acknowledged": true,
+            "retained_provider_entry_consumed": true,
+            "preflight_qualification_freeze_receipts_validated": true,
+            "dynamic_frozen_manifest": true
+          }
+        },
+        "raw_finalizer_evaluator_chain": {
+          "const": {
+            "attempt_count": 4,
+            "raw_files_hash_validated": true,
+            "finalizer_consumed_raw_manifests": true,
+            "effect_answer_reached_finalized_session": true,
+            "evaluator_consumed_finalized_sessions": true
+          }
+        },
+        "cleanup": {
+          "const": {
+            "state": "complete",
+            "resumed": false,
+            "provider_resources_zero": true,
+            "security_restored": true,
+            "privacy_clean": true
+          }
+        },
+        "zero_real_effects": {"const": true},
+        "temporary_conformance_grant_only": {"const": true},
+        "repository_state_grants_authority": {"const": false},
+        "scientific_interpretation_allowed": {"const": false},
+        "projected_real_cost_usd": {"const": "0.00"}
+      }
+    },
+    "knownFailure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "terminal_state",
+        "unknown_outcomes",
+        "model_call_attempts",
+        "zero_retries"
+      ],
+      "properties": {
+        "terminal_state": {"const": "sent_provider_error_reconciled"},
+        "unknown_outcomes": {"const": 0},
+        "model_call_attempts": {"const": 1},
+        "zero_retries": {"const": true}
+      }
+    },
+    "conditionTrace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "model_call_count",
+        "model_roles",
+        "browser_action_count",
+        "stable_unique_call_ids",
+        "terminal_states_complete"
+      ],
+      "properties": {
+        "model_call_count": {"type": "integer", "minimum": 3},
+        "model_roles": {
+          "type": "array",
+          "minItems": 2,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "browser_action_count": {"type": "integer", "minimum": 2},
+        "stable_unique_call_ids": {"const": true},
+        "terminal_states_complete": {"const": true}
+      }
+    },
+    "unknownFailure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "terminal_state",
+        "unknown_outcomes",
+        "model_call_attempts",
+        "zero_retries"
+      ],
+      "properties": {
+        "terminal_state": {"const": "sent_outcome_unknown"},
+        "unknown_outcomes": {"const": 1},
+        "model_call_attempts": {"const": 1},
+        "zero_retries": {"const": true}
+      }
+    }
+  }
+}

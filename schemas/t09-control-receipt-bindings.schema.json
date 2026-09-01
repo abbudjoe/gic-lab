@@ -16,7 +16,7 @@
     "semantic_sha256"
   ],
   "properties": {
-    "schema_version": {"const": "4.0.0"},
+    "schema_version": {"enum": ["4.0.0", "5.0.0"]},
     "repository_slug": {"const": "abbudjoe/gic-lab"},
     "base_commit": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
     "control_plane_revision": {
@@ -71,6 +71,37 @@
         "semantic_sha256": {"$ref": "#/$defs/sha256"}
       }
     },
+    "package_effect_registration": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "implementation_path",
+            "implementation_bytes",
+            "implementation_sha256",
+            "factory_entry_point",
+            "authority_grant_schema_version",
+            "effect_protocol_version"
+          ],
+          "properties": {
+            "implementation_path": {
+              "type": "string",
+              "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+\\.py$"
+            },
+            "implementation_bytes": {"type": "integer", "minimum": 1},
+            "implementation_sha256": {"$ref": "#/$defs/sha256"},
+            "factory_entry_point": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$"
+            },
+            "authority_grant_schema_version": {"const": "1.0.0"},
+            "effect_protocol_version": {"const": "1.0.0"}
+          }
+        }
+      ]
+    },
     "artifacts": {
       "type": "object",
       "additionalProperties": false,
@@ -100,7 +131,9 @@
         },
         "agent_check_receipt": {"$ref": "#/$defs/artifact"},
         "source_binding_receipt": {"$ref": "#/$defs/artifact"},
-        "incident_receipt": {"$ref": "#/$defs/artifact"}
+        "incident_receipt": {"$ref": "#/$defs/artifact"},
+        "anti_shadow_lint_receipt": {"$ref": "#/$defs/artifact"},
+        "live_effect_conformance_receipt": {"$ref": "#/$defs/artifact"}
       }
     },
     "authority": {
@@ -119,6 +152,35 @@
     },
     "semantic_sha256": {"$ref": "#/$defs/sha256"}
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"schema_version": {"const": "5.0.0"}},
+        "required": ["schema_version"]
+      },
+      "then": {
+        "required": ["package_effect_registration"],
+        "properties": {
+          "artifacts": {
+            "required": [
+              "goal_record",
+              "registry_receipt",
+              "active_version_lint_receipt",
+              "composition_receipt",
+              "state_capsule",
+              "shadow_happy_path",
+              "shadow_failures",
+              "agent_check_receipt",
+              "source_binding_receipt",
+              "incident_receipt",
+              "anti_shadow_lint_receipt",
+              "live_effect_conformance_receipt"
+            ]
+          }
+        }
+      }
+    }
+  ],
   "$defs": {
     "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     "version": {"type": "string", "pattern": "^V[1-9][0-9]*$"},

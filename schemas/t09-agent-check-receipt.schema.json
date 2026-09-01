@@ -15,7 +15,7 @@
     "semantic_sha256"
   ],
   "properties": {
-    "schema_version": {"const": "2.0.0"},
+    "schema_version": {"enum": ["2.0.0", "3.0.0"]},
     "repository_commit": {"$ref": "#/$defs/git"},
     "repository_tree": {"$ref": "#/$defs/git"},
     "selected_runtime_target": {"$ref": "#/$defs/target"},
@@ -39,12 +39,39 @@
         "offline_composition": {"type": "object"},
         "category3_shadow": {"type": "object"},
         "state_capsule": {"$ref": "#/$defs/check"},
-        "source_binding": {"$ref": "#/$defs/check"}
+        "source_binding": {"$ref": "#/$defs/check"},
+        "anti_shadow_lint": {"$ref": "#/$defs/check"},
+        "live_effect_conformance": {"$ref": "#/$defs/check"}
       }
     },
     "complete": {"type": "boolean"},
     "semantic_sha256": {"$ref": "#/$defs/sha256"}
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"schema_version": {"const": "3.0.0"}},
+        "required": ["schema_version"]
+      },
+      "then": {
+        "properties": {
+          "checks": {
+            "required": [
+              "active_version_lint",
+              "registry_completeness",
+              "incident_completeness",
+              "offline_composition",
+              "category3_shadow",
+              "state_capsule",
+              "source_binding",
+              "anti_shadow_lint",
+              "live_effect_conformance"
+            ]
+          }
+        }
+      }
+    }
+  ],
   "$defs": {
     "git": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
     "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},

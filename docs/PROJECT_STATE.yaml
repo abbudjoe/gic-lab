@@ -32,8 +32,8 @@ t09_v16_stopped_checkpoint:
   incident: INC-T09-V16-LIFECYCLE-REGISTRY
   evidence_record: experiments/EXP-0001-sira-simulative-vs-reactive/T09_V16_PREFLIGHT_STOPPED_DISPOSITION.json
 t09_control_plane_stabilization_workstream:
-  status: implementation-complete-independent-rereview-required
-  branch: codex/t09-control-target-selection
+  status: live-capable-production-effects-complete-independent-review-required
+  branch: codex/t09-live-capable-production-effects
   selected_runtime_target_source: goal-record
   selected_runtime_package: V16
   selected_runtime_plan: PLAN-EXP0001-PILOT-V16
@@ -42,6 +42,13 @@ t09_control_plane_stabilization_workstream:
   offline_composition_valid: true
   shadow_happy_path_valid: true
   required_failure_matrix_valid: true
+  effect_protocol_version: 1.0.0
+  production_effect_seams_live_capable: true
+  authoritative_condition_accounting: real-time-typed-event-observer
+  anti_shadow_lint_valid: true
+  live_effect_conformance_valid: true
+  package_effect_factory_protocol_valid: true
+  current_control_receipt_rebind_required_before_handoff: true
   live_authorization: false
   scientific_interpretation_allowed: false
   next_runtime_package: not-created

@@ -136,8 +136,8 @@ def test_happy_path_accounting_has_nonzero_fake_usage_and_zero_real_projection(
     receipt = shadow_matrix["happy-path"]
     counts = receipt["call_counts"]
     assert isinstance(counts, dict)
-    assert counts["model_call_attempts"] == 4
-    assert counts["browser_actions"] == 4
+    assert counts["model_call_attempts"] == 16
+    assert counts["browser_actions"] == 8
     assert counts["unknown_model_outcomes"] == 0
     production = receipt["production_control_evidence"]
     assert isinstance(production, dict)

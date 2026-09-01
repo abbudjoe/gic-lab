@@ -9,9 +9,8 @@ from typing import Any
 
 import pytest
 
-from giclab.control.adapters import FakeScenario
 from giclab.control.category3 import Category3Request, execute_category3_transaction
-from giclab.control.production import ProductionCategory3World, build_production_shadow_assembly
+from giclab.control.production import ProductionCategory3World
 from giclab.control.proofs import (
     REPOSITORY_SLUG,
     ControlProofError,
@@ -21,10 +20,20 @@ from giclab.control.proofs import (
     ValidatedStateCapsule,
     validate_state_capsule_document,
 )
+from giclab.control.shadow_effects import (
+    ShadowFaultPlan,
+    build_production_shadow_assembly,
+)
 from giclab.harness.t09_provider_contracts import V16_PROVIDER_CONTRACT
 
 ROOT = Path(__file__).resolve().parents[2]
-TRACKED_PROOFS = ROOT / "control/receipts"
+LEGACY_TRACKED_PROOFS = ROOT / "control/receipts"
+CURRENT_PACKAGE_PROOFS = LEGACY_TRACKED_PROOFS / "packages/v16"
+TRACKED_PROOFS = (
+    CURRENT_PACKAGE_PROOFS
+    if (CURRENT_PACKAGE_PROOFS / "t09-control-receipt-bindings.json").is_file()
+    else LEGACY_TRACKED_PROOFS
+)
 BASE_COMMIT = "450a10a51eda4c428f20b27d6b4aafc4f94d80f4"
 REVIEWED_HEAD = "559d52c9339bf13fae6808178a5a65fe71706f74"
 
@@ -115,11 +124,15 @@ def _repository_identity() -> tuple[str, str]:
     return commit, tree
 
 
-def _world() -> ProductionCategory3World:
+def _world(proof_root: Path = TRACKED_PROOFS) -> ProductionCategory3World:
+    binding = _read(_binding_path(proof_root))
+    semantic = binding.get("semantic_sha256")
+    assert isinstance(semantic, str)
     return build_production_shadow_assembly(
         ROOT,
         V16_PROVIDER_CONTRACT,
-        FakeScenario("happy-path"),
+        ShadowFaultPlan("happy-path"),
+        control_binding_semantic_sha256=semantic,
     )
 
 
@@ -134,7 +147,7 @@ def _assert_no_preparation_effects(world: ProductionCategory3World) -> None:
 
 
 def _execute_forgery(proof_root: Path) -> dict[str, object]:
-    world = _world()
+    world = _world(proof_root)
     commit, tree = _repository_identity()
     receipt = execute_category3_transaction(
         Category3Request(

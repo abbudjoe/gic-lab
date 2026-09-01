@@ -1,0 +1,143 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gic-lab.invalid/schemas/t09-anti-shadow-lint-receipt.schema.json",
+  "title": "T09 effect-neutral anti-shadow lint receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "repository_commit",
+    "repository_tree",
+    "audited_base",
+    "base_assumption_inventory",
+    "shared_effect_neutral_sources",
+    "lint_definition_path",
+    "forbidden_rule_codes",
+    "findings",
+    "assumption_inventory",
+    "classification_counts",
+    "complete",
+    "semantic_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "repository_commit": {"$ref": "#/$defs/git"},
+    "repository_tree": {"$ref": "#/$defs/git"},
+    "audited_base": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commit", "tree"],
+      "properties": {
+        "commit": {"const": "f1d872d59c4952eb98467c2506850af7772f4454"},
+        "tree": {"const": "eb70e20024559d65b3fadd240f72d3522895ef04"}
+      }
+    },
+    "base_assumption_inventory": {
+      "type": "array",
+      "minItems": 12,
+      "maxItems": 12,
+      "items": {"$ref": "#/$defs/baseAssumption"}
+    },
+    "shared_effect_neutral_sources": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/path"}
+    },
+    "lint_definition_path": {"const": "src/giclab/control/anti_shadow_lint.py"},
+    "forbidden_rule_codes": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^T09S[0-9]{3}$"}
+    },
+    "findings": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/finding"}
+    },
+    "assumption_inventory": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/occurrence"}
+    },
+    "classification_counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "legitimate deterministic effect fixture",
+        "shared production-wrapper defect",
+        "historical test fixture",
+        "documentation"
+      ],
+      "properties": {
+        "legitimate deterministic effect fixture": {"type": "integer", "minimum": 0},
+        "shared production-wrapper defect": {"const": 0},
+        "historical test fixture": {"type": "integer", "minimum": 0},
+        "documentation": {"type": "integer", "minimum": 0}
+      }
+    },
+    "complete": {"const": true},
+    "semantic_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "git": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "path": {
+      "type": "string",
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+\\.py$"
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "line", "column", "code", "message"],
+      "properties": {
+        "path": {"$ref": "#/$defs/path"},
+        "line": {"type": "integer", "minimum": 1},
+        "column": {"type": "integer", "minimum": 1},
+        "code": {"type": "string", "pattern": "^T09S[0-9]{3}$"},
+        "message": {"type": "string", "minLength": 1}
+      }
+    },
+    "occurrence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "line", "token", "classification"],
+      "properties": {
+        "path": {"$ref": "#/$defs/inventoryPath"},
+        "line": {"type": "integer", "minimum": 1},
+        "token": {"type": "string", "minLength": 1},
+        "classification": {
+          "enum": [
+            "legitimate deterministic effect fixture",
+            "shared production-wrapper defect",
+            "historical test fixture",
+            "documentation"
+          ]
+        }
+      }
+    },
+    "baseAssumption": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "assumption_id",
+        "path",
+        "source_lines",
+        "classification",
+        "defect",
+        "repair_boundary"
+      ],
+      "properties": {
+        "assumption_id": {"type": "string", "pattern": "^SA-(?:0[1-9]|1[0-2])$"},
+        "path": {"$ref": "#/$defs/path"},
+        "source_lines": {"type": "string", "pattern": "^[0-9, -]+$"},
+        "classification": {"const": "shared production-wrapper defect"},
+        "defect": {"type": "string", "minLength": 1},
+        "repair_boundary": {"type": "string", "minLength": 1}
+      }
+    },
+    "inventoryPath": {
+      "type": "string",
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+\\.(?:json|md|py|ya?ml)$"
+    }
+  }
+}

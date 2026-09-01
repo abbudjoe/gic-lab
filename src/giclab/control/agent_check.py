@@ -9,9 +9,11 @@ from typing import Final
 
 from jsonschema import Draft202012Validator
 
+from giclab.control.anti_shadow_lint import validate_anti_shadow_lint
 from giclab.control.category3 import repository_identity
 from giclab.control.composition import compose_control_plane
 from giclab.control.incidents import validate_incidents
+from giclab.control.live_conformance import run_live_effect_conformance
 from giclab.control.proofs import generate_source_binding_receipt
 from giclab.control.registry_validation import validate_registry_completeness
 from giclab.control.scenarios import HAPPY_PATH
@@ -26,7 +28,7 @@ from giclab.control.version_lint import validate_active_version_dispatch
 from giclab.harness import t09_provider_contracts as provider_contracts
 from giclab.registry import load_json
 
-AGENT_CHECK_SCHEMA_VERSION: Final = "2.0.0"
+AGENT_CHECK_SCHEMA_VERSION: Final = "3.0.0"
 
 
 def _canonical_sha256(value: object) -> str:
@@ -39,11 +41,19 @@ def _schema_valid(repository: Path, schema_path: str, document: object) -> bool:
     return not list(Draft202012Validator(schema).iter_errors(document))
 
 
+def _semantic_valid(document: dict[str, object]) -> bool:
+    projected = dict(document)
+    observed = projected.pop("semantic_sha256", None)
+    return observed == _canonical_sha256(projected)
+
+
 def run_agent_check(
     repository: Path,
     *,
     target: SelectedRuntimeTarget | None = None,
     execute_incident_regressions: bool = True,
+    anti_shadow_lint_receipt: dict[str, object] | None = None,
+    live_effect_conformance_receipt: dict[str, object] | None = None,
 ) -> dict[str, object]:
     """Run all pre-authority checks without reading secrets or using a network."""
 
@@ -68,6 +78,41 @@ def run_agent_check(
     source_binding_files = source_binding.get("files")
     if not isinstance(source_binding_files, list):
         raise ValueError("source-binding receipt files must be a list")
+    anti_shadow = (
+        validate_anti_shadow_lint(root)
+        if anti_shadow_lint_receipt is None
+        else dict(anti_shadow_lint_receipt)
+    )
+    live_conformance = (
+        run_live_effect_conformance(root)
+        if live_effect_conformance_receipt is None
+        else dict(live_effect_conformance_receipt)
+    )
+    anti_shadow_valid = (
+        _schema_valid(
+            root,
+            "schemas/t09-anti-shadow-lint-receipt.schema.json",
+            anti_shadow,
+        )
+        and anti_shadow.get("repository_commit") == commit
+        and anti_shadow.get("repository_tree") == tree
+        and anti_shadow.get("complete") is True
+        and _semantic_valid(anti_shadow)
+    )
+    live_conformance_valid = (
+        _schema_valid(
+            root,
+            "schemas/t09-live-effect-conformance-receipt.schema.json",
+            live_conformance,
+        )
+        and live_conformance.get("control_implementation_commit") == commit
+        and live_conformance.get("control_implementation_tree") == tree
+        and live_conformance.get("complete") is True
+        and live_conformance.get("network_provider_cloud_browser_science_effects") == 0
+        and live_conformance.get("scientific_interpretation_allowed") is False
+        and _semantic_valid(live_conformance)
+    )
+    anti_shadow_findings = anti_shadow.get("findings")
     compositions: list[dict[str, object]] = []
     all_compositions_valid = True
     selected_composition: dict[str, object] | None = None
@@ -140,6 +185,8 @@ def run_agent_check(
         version_lint_valid=lint.get("complete") is True,
         shadow_happy_path=happy_valid,
         failure_matrix_valid=failure_matrix_valid,
+        anti_shadow_lint_valid=anti_shadow_valid,
+        live_effect_conformance_valid=live_conformance_valid,
         target=selected_target,
         deterministic=True,
     )
@@ -155,6 +202,8 @@ def run_agent_check(
             failure_matrix_valid,
             capsule_valid,
             source_binding.get("live_execution_performed") is False,
+            anti_shadow_valid,
+            live_conformance_valid,
         )
     )
     aggregate: dict[str, object] = {
@@ -208,6 +257,26 @@ def run_agent_check(
                 "complete": True,
                 "file_count": len(source_binding_files),
                 "semantic_sha256": source_binding["semantic_sha256"],
+            },
+            "anti_shadow_lint": {
+                "complete": anti_shadow_valid,
+                "finding_count": (
+                    len(anti_shadow_findings) if isinstance(anti_shadow_findings, list) else -1
+                ),
+                "semantic_sha256": anti_shadow.get("semantic_sha256"),
+            },
+            "live_effect_conformance": {
+                "complete": live_conformance_valid,
+                "shared_controller_entry_point": live_conformance.get(
+                    "shared_controller_entry_point"
+                ),
+                "production_assembly_entry_point": live_conformance.get(
+                    "production_assembly_entry_point"
+                ),
+                "zero_real_effects": (
+                    live_conformance.get("network_provider_cloud_browser_science_effects") == 0
+                ),
+                "semantic_sha256": live_conformance.get("semantic_sha256"),
             },
         },
         "complete": complete,

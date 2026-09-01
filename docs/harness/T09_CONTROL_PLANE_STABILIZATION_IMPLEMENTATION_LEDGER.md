@@ -676,3 +676,107 @@ node ID is retained while its assertions now prove nullable technical-blocker st
 resolved-incident provenance, the external governance gate, and V17 absence. This is
 a test-identity preservation descendant only; it does not alter bound implementation
 source or receipts. Final exact-head parity must be rerun after this correction.
+
+## PR 1.2 live-capable production-effects repair assembly
+
+Status: **implementation/focused conformance complete — immutable receipt refresh,
+full gates, and draft-PR review pending**
+
+Target contract: the same `execute_category3_transaction` state machine and
+`build_production_adapter_assembly` must accept an effect-neutral execution context,
+package-specific low-level effects, and an externally validated fully bound authority
+grant. Shared production source owns policy, validation, transitions, and accounting;
+effects perform only requested typed operations. Deterministic CI binds the same
+interfaces and assembly with no network or real effects.
+
+```text
+repository: abbudjoe/gic-lab
+destination: phase-1/sira-pilot-autonomous-r2
+branch: codex/t09-live-capable-production-effects
+worktree: /Users/joseph/.codex/worktrees/t09-live-capable-production-effects
+commit: f1d872d59c4952eb98467c2506850af7772f4454
+tree: eb70e20024559d65b3fadd240f72d3522895ef04
+parent_1: d0aff8a47e92013773d9d05b2cd90fb741658b03
+parent_2: 658a5f21cc24b914c6fc494f391cefe35d0fa334
+operator_attests_model: gpt-5.6-sol
+operator_attests_effort: max
+runtime_model_introspection_required: false
+implementation_delegated: false
+live_authorization: false
+scientific_interpretation_allowed: false
+```
+
+PR #13 is merged at the exact base; its reviewed head is exact parent two. The
+original checkout and fresh worktree were clean. The requested branch and worktree
+did not exist. No actual V17 plan/profile/condition/command package/authorization/
+receipt root/run root or `AUTONOMOUS-0010` artifact exists. Retained public state
+records external-and-not-present current authority and zero active provider instances.
+
+### PR 1.2 assembly ledger
+
+The authoritative LE-01 through LE-23 checklist, evidence requirements, and mapping
+are in `docs/exec-plans/active/T09_CONTROL_PLANE_STABILIZATION.md`. LE-01 through
+LE-21 are met by the exact immutable-base audit, implementation, and focused
+conformance evidence. LE-22 and LE-23 remain pending until the immutable receipt
+descendant, final-head local gates, draft PR, and exact-head GitHub Actions complete.
+Direct Sol/max self-review is mandatory; no subagent, model, thread, or task may
+perform implementation, testing, review, Git, architecture, or scientific work.
+
+### PR 1.2 planned source contracts
+
+| Workstream | Source contract | Mapped DoD | Status |
+|---|---|---|---|
+| Shadow inventory | Every fake/scenario/canned/fixed assumption classified and moved below the shared effect-neutral boundary when behaviorally active | LE-02, LE-12, LE-16 | met |
+| Runtime time | One injected monotonic/wall/sleep protocol with finite, nondecreasing, nonoverflow validation | LE-03 | met |
+| Metadata/secret | Exact mutable credential buffer reaches one injected channel and is destroyed on every path | LE-04 | met |
+| Package budgets | Exact aggregate/per-condition/order/model/tier/retry caps loaded from selected package documents | LE-05 | met |
+| Condition session | Typed exact request and real-time typed event observer; shared retained budget boundary is the sole authoritative accountant | LE-06, LE-07 | met |
+| Host transaction | Typed tracked archive, provider-entry, host qualification, image/runtime/browser/finalizer, and dynamic freeze receipts | LE-08 | met |
+| Evidence chain | Exact file-backed raw manifest/receipt/ledgers feed offline finalizer and evaluator | LE-09, LE-10, LE-11 | met |
+| Effect separation | Scenario-free live production assembly; shadow fault plan lives only in deterministic effects | LE-12 | met |
+| Authority/loader | Fully bound authorization context plus exact path/hash/factory/protocol package-effect loading | LE-13, LE-14 | met |
+| Conformance/control proof | No-network live-shaped temporary package, anti-shadow lint, schema/receipt/agent-check binding | LE-15, LE-16, LE-17, LE-18 | met |
+| Preservation/handoff | Historical V16 proof and no-V17/false boundaries pass; tracked rebind/full gates/draft PR/CI remain | LE-19 through LE-23 | partial |
+
+The host transaction additionally gates bounded replacement on
+`ReplacementEligibleFailure`, which is emitted only after the production wrapper has
+validated a retained provider-entry or host-preflight closeout. Generic failures and
+receipt mutations cannot authorize a second launch.
+
+### Authoritative condition-accounting decision
+
+Option A, real-time typed event observation, is selected. The package condition
+engine emits stable call/action/output/process/raw-publication events through an
+observer supplied by the shared production wrapper. The wrapper applies the retained
+`ProviderBudgetBoundary` in event order and validates the final outcome against that
+single ledger. The effect may execute the exact remote runner but cannot maintain a
+second authoritative accountant or choose caps/scientific policy. This decision must
+be proven by multiple-call, multiple-role, known-error, ambiguous-send,
+response-known/accounting-incomplete, admission, and zero-retry regressions.
+
+### Exact-base shadow-assumption inventory
+
+The machine receipt records these twelve source-proven assumptions against base
+`f1d872d59c4952eb98467c2506850af7772f4454`, tree
+`eb70e20024559d65b3fadd240f72d3522895ef04`. Each was a shared
+production-wrapper defect at that base; deterministic equivalents are legitimate only
+in `shadow_effects.py`, tests, or historical documentation.
+
+| ID | Exact base source | Defect | Repair boundary |
+|---|---|---|---|
+| SA-01 | `production.py:73-74,105,160-163,415-417` | fake credential constants/equality and preconstructed metadata response | exact mutable parser credential to injected one-send metadata channel |
+| SA-02 | `production.py:568-580,1305-1314,1670` | synthetic clock/sleep and fixed freeze/checkpoint epochs | validated injected monotonic, wall, and sleep domains |
+| SA-03 | `production.py:1027-1076` | synthetic three-field stage payload | tracked-only archive plus request-bound acknowledgement and host rehash |
+| SA-04 | `production.py:1238-1272` | reconstructed reduced provider-entry document | exact retained launch receipt consumed by typed preflight |
+| SA-05 | `production.py:1274-1314` | synthetic qualification/freeze identities | request-bound host receipts and dynamic manifest hash |
+| SA-06 | `production.py:1404-1503` | fixed caps, one CRITIC call, one browser action, shadow call IDs | exact package caps and arbitrary valid typed condition event stream |
+| SA-07 | `production.py:1505-1543` | in-memory synthetic raw identities | exact file seal, call/action ledgers, process/completion evidence, export acknowledgement |
+| SA-08 | `production.py:1545-1591` | synthetic finalizer paths/interpreter/dependencies | qualified-local effect request, pre/post raw seal, exact completion binding |
+| SA-09 | `production.py:82-89,1593-1651` | canned task answers replaced condition output | evaluator consumes effect-produced finalized session |
+| SA-10 | `production.py:38,148-286,568,979-1025,1743-1785` | `FakeScenario` required by and branched within production | `ShadowFaultPlan` exists only in deterministic effects |
+| SA-11 | `adapters.py:25-74` | authority bound only a version/revision surface | full control/package/proof/effect/root/external authorization context |
+| SA-12 | `production.py:75-76,249,286-382,614` | synthetic network/model/browser/image/provider fixture data in shared source | all fixture values below the effect boundary |
+
+Current scanning classifies every retained occurrence as one of: legitimate
+deterministic effect fixture, historical test fixture, documentation, or shared
+production-wrapper defect. The last class is required to remain zero.

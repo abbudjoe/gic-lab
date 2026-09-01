@@ -100,14 +100,58 @@ command package. The happy path must also carry nonzero reconciled fake accounti
 and zero projected real cost. It does not accept caller proof booleans or hash-shaped
 receipt tuples.
 
-The controller is the single control flow for the shadow and future live effect
-channels. Its production-wrapper assembly calls the retained metadata, provider
-launch/replacement, reservation/accounting, evidence, finalizer/evaluator, and
-cleanup primitives. Public CI injects deterministic fake network, model, browser,
-clock, filesystem, subprocess, and provider channels beneath those wrappers. This PR
-contains no live-authority factory, credential-bearing adapter, endpoint, or fallback;
-a future package must supply its own externally reviewed authority and low-level
-effects to this same assembly and controller.
+The controller is the single control flow for deterministic conformance and future
+live effect channels. `ProductionCategory3World` and
+`build_production_adapter_assembly` own transitions, package and grant validation,
+package-derived budgets, the retained provider-accounting boundary, typed receipt
+validation, evidence ordering, and the infrastructure/science distinction. They call
+only effect-neutral interfaces from `giclab.control.effects`:
+
+```text
+execute_category3_transaction
+        -> ProductionCategory3World / build_production_adapter_assembly
+        -> typed clock, metadata, provider, host, condition, finalizer, evaluator,
+           and cleanup requests and receipts
+        -> exact package-specific LowLevelEffects plus one externally validated grant
+```
+
+`RuntimeClock` keeps monotonic time, wall time, and sleep in separate validated
+domains. The strict mixed-dotenv parser's exact mutable OpenAI credential reaches one
+injected `ModelMetadataChannel` request and is destroyed on success and failure. The
+selected plan, execution contract, condition plans, and command manifests—not shared
+literals—supply aggregate and condition call/token/cost/action/output/wall caps,
+attempt order, model, service tier, and zero-retry policy.
+
+Condition accounting uses one authority: a real-time typed event observer supplied by
+the production wrapper. The effect emits each stable call, browser action, output-byte
+total, process exit, completion, and raw-publication event; the wrapper applies the
+retained `ProviderBudgetBoundary` and reconciles the effect's file-backed ledgers and
+outcome. There is no second authoritative runner ledger. Stage, provider-entry,
+preflight, host/image/runtime/browser/finalizer qualification, dynamic freeze, raw
+seal/export, qualified-local finalization, evaluation, and cleanup all return exact
+request-bound receipts. Raw files are revalidated before and after finalization, and
+the evaluator consumes the effect-produced finalized session.
+
+Bounded provider replacement also uses a typed outcome. Only a validated retained
+pre-empirical closeout may raise `ReplacementEligibleFailure`; an arbitrary adapter
+failure or a mutated receipt is terminated and stopped without authorizing another
+launch.
+
+Public CI injects `shadow_effects` beneath this same assembly. Fake clocks,
+runtime-created credential canaries, deterministic provider/model/browser traces,
+canned fixture answers, and `ShadowFaultPlan` exist only below the effect boundary.
+The shared assembly never branches on a scenario name. The static anti-shadow gate
+records the base defect inventory and rejects fixture constants, fixed epochs, canned
+answers, fixed caps, and scenario-driven branches from effect-neutral source.
+
+An `EffectAuthorizationContext` binds the exact control commit/tree, provider
+contract, plan and command package, validated control proof, effect path/bytes/SHA/
+factory/protocol, transaction root, and external authorization identity. Shared code
+can mint only an exact shadow-only grant. A package-bound successor must centrally
+declare its effect implementation; the loader rejects path escape, symlink, untracked
+or changed bytes, wrong factory/module/protocol/package, and any missing or mismatched
+external live grant. This PR defines and tests that boundary but contains no live
+grant, live adapter, endpoint, secret, or provider operation.
 
 Scientific-attempt consumption, provider capability consumption, metadata allowance,
 evidence completeness, cleanup state, and interpretation permission remain separate
@@ -130,10 +174,12 @@ validated package-specific `EffectAuthorityGrant`, add a V17 receipt root and
 binding, and update V17 documents/tests. It must not reuse consumed V16 authority,
 and this foundation itself creates no successor package identity.
 
-That package-only PR must not change `agent_check.py`, `cli.py`, `category3.py`,
-`production.py`, `proofs.py`, `composition.py`, `consumers.py`,
-`registry_validation.py`, `shadow.py`, `state_capsule.py`, `target.py`, the shared
-controller state machine, or the validated-proof architecture. The package-only
-allowlist also excludes `version_lint.py`, `Makefile`, and `.github/workflows/ci.yml`;
-none is a V17 package-data surface. If a successor requires any such shared change,
-package generation stops and a separate Category 1 control-plane repair is required.
+That package-only PR must not change `adapters.py`, `agent_check.py`,
+`anti_shadow_lint.py`, `category3.py`, `cli.py`, `composition.py`, `consumers.py`,
+`contracts.py`, `effects.py`, `live_conformance.py`, `production.py`, `proofs.py`,
+`registry_validation.py`, `shadow.py`, `shadow_effects.py`, `state_capsule.py`,
+`target.py`, the shared controller state machine, effect protocol, or validated-proof
+architecture. The package-only allowlist also excludes `version_lint.py`, `Makefile`,
+and `.github/workflows/ci.yml`; none is a V17 package-data surface. If a successor
+requires any such shared change, package generation stops and a separate Category 1
+control-plane repair is required.

@@ -18,7 +18,10 @@ from giclab.harness import (
     t09_provider_contracts,
     t09_sira_pilot,
 )
-from giclab.harness.t09_provider_contracts import T09ProviderContract
+from giclab.harness.t09_provider_contracts import (
+    PackageEffectRegistration,
+    T09ProviderContract,
+)
 from giclab.harness.t09_sira_pilot import command_argv_sha256
 
 _EXPERIMENT = "experiments/EXP-0001-sira-simulative-vs-reactive"
@@ -28,7 +31,43 @@ _V16_EXECUTION = f"{_EXPERIMENT}/contracts/proposals/T09_PILOT_EXECUTION_CONTRAC
 _V17_EXECUTION = f"{_EXPERIMENT}/contracts/proposals/T09_PILOT_EXECUTION_CONTRACT_V17.json"
 _V16_COMMAND = f"{_EXPERIMENT}/contracts/proposals/T09_PILOT_COMMAND_MANIFESTS_V16.json"
 _V17_COMMAND = f"{_EXPERIMENT}/contracts/proposals/T09_PILOT_COMMAND_MANIFESTS_V17.json"
+_V17_EFFECT = f"{_EXPERIMENT}/runtime/t09_package_effects_v17.py"
+_V17_EFFECT_FACTORY = "build_package_effects"
 _HEX_IDENTITY_LENGTHS = {40, 64}
+
+
+def _package_effect_source() -> bytes:
+    return f'''"""Temporary no-network package effect used only by control tests."""
+
+from pathlib import Path
+
+from giclab.control.effects import EffectAuthorityKind
+from giclab.control.shadow_effects import build_live_shaped_no_network_effects
+
+
+class PackageEffectGrant:
+    """Test-owned stand-in for externally validated package authority."""
+
+    kind = EffectAuthorityKind.LIVE_AUTHORIZED
+    source = "temporary-package-external-validator"
+
+    def __init__(self, context):
+        self._context = context
+
+    def authorizes(self, context):
+        return context == self._context
+
+
+def build_package_effects(*, repository, contract, authorization_context, authority):
+    return build_live_shaped_no_network_effects(
+        repository=repository,
+        contract=contract,
+        implementation_path=Path(__file__),
+        factory_entry_point="{_V17_EFFECT_FACTORY}",
+        authorization_context=authorization_context,
+        authority=authority,
+    )
+'''.encode()
 
 
 def _json_bytes(value: object) -> bytes:
@@ -165,6 +204,15 @@ def materialize_synthetic_successor(source: Path, repository: Path) -> dict[str,
     command = _successor_value(json.loads((source / _V16_COMMAND).read_bytes()))
     assert isinstance(plan, dict) and isinstance(execution, dict) and isinstance(command, dict)
 
+    encoded_plan = yaml.safe_dump(plan, sort_keys=False).encode()
+    _write_relative(repository, _V17_PLAN, encoded_plan)
+    plan_sha256 = hashlib.sha256(encoded_plan).hexdigest()
+    bindings = execution["contract_bindings"]
+    assert isinstance(bindings, dict) and isinstance(bindings["plan"], dict)
+    bindings["plan"].update(
+        {"path": _V17_PLAN, "sha256": plan_sha256, "size_bytes": len(encoded_plan)}
+    )
+
     raw_attempts = execution["attempts"]
     assert isinstance(raw_attempts, list)
     condition_identities: dict[str, tuple[int, str]] = {}
@@ -175,6 +223,7 @@ def materialize_synthetic_successor(source: Path, repository: Path) -> dict[str,
             yaml.safe_load((source / source_condition).read_text(encoding="utf-8"))
         )
         assert isinstance(condition, dict)
+        condition["profile_sha256"] = plan_sha256
         authorization = condition["execution"]["authorization"]
         assert isinstance(authorization, dict)
         authorization["command_sha256"] = _canonical_sha256(attempt["upstream_argv"])
@@ -187,15 +236,6 @@ def materialize_synthetic_successor(source: Path, repository: Path) -> dict[str,
             len(encoded_condition),
             condition_sha256,
         )
-
-    encoded_plan = yaml.safe_dump(plan, sort_keys=False).encode()
-    _write_relative(repository, _V17_PLAN, encoded_plan)
-    plan_sha256 = hashlib.sha256(encoded_plan).hexdigest()
-    bindings = execution["contract_bindings"]
-    assert isinstance(bindings, dict) and isinstance(bindings["plan"], dict)
-    bindings["plan"].update(
-        {"path": _V17_PLAN, "sha256": plan_sha256, "size_bytes": len(encoded_plan)}
-    )
 
     encoded_execution = _json_bytes(execution)
     _write_relative(repository, _V17_EXECUTION, encoded_execution)
@@ -232,12 +272,19 @@ def materialize_synthetic_successor(source: Path, repository: Path) -> dict[str,
     encoded_command = _json_bytes(command)
     _write_relative(repository, _V17_COMMAND, encoded_command)
     command_sha256 = hashlib.sha256(encoded_command).hexdigest()
+    encoded_effect = _package_effect_source()
+    _write_relative(repository, _V17_EFFECT, encoded_effect)
+    effect_sha256 = hashlib.sha256(encoded_effect).hexdigest()
     return {
         "plan_bytes": len(encoded_plan),
         "plan_sha256": plan_sha256,
         "execution_sha256": execution_sha256,
         "command_sha256": command_sha256,
         "condition_identities": condition_identities,
+        "effect_path": _V17_EFFECT,
+        "effect_bytes": len(encoded_effect),
+        "effect_sha256": effect_sha256,
+        "effect_factory": _V17_EFFECT_FACTORY,
     }
 
 
@@ -278,6 +325,14 @@ def synthetic_contract(
         active_image_qualification_id="QUAL-T09-PILOT-V17-IMAGE-AUTONOMOUS-0010",
         replacement_image_tag="giclab/t09-pilot-v17:synthetic-autonomous-0010",
         container_prefix="giclab-t09-pilot-v17-autonomous-",
+        effect_registration=PackageEffectRegistration(
+            implementation_path=str(identities["effect_path"]),
+            implementation_bytes=int(identities["effect_bytes"]),
+            implementation_sha256=str(identities["effect_sha256"]),
+            factory_entry_point=str(identities["effect_factory"]),
+            authority_grant_schema_version="1.0.0",
+            effect_protocol_version="1.0.0",
+        ),
     )
 
 
